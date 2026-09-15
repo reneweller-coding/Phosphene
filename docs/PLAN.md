@@ -220,8 +220,34 @@ Form-Grammatik in Phase 5. Der Limiter hat 77 Samples Latenz (`Engine::latencySa
 
 Gesamt: 147 Selbsttest-Prüfungen, Vektortests 9 von 9 in drei Pfaden.
 
-Nächster Schritt: Phase 5 (Komponist: Form-Grammatik mit Pre-Drop-Vakuum, Energiebogen, Tonartenreise,
-Übergänge, Sperren und Neuwürfeln, Stilprofile, `.phosset`).
+**16.09.2026, Literaturrunde vor Phase 5.** Der Nutzer brachte eine Zusammenstellung musikwissenschaftlicher
+Quellen und ein SOTA-Review. Primärquellen gelesen, soweit erreichbar; Ergebnis nach Verlässlichkeit:
+
+| Quelle | Gelesen | Befund für Phosphene |
+|---|---|---|
+| Grosz, Solberg, Katz, Vu, Jensenius, Patel-Grosz, "An outline of the narrative grammar of electronic dance music", Musicae Scientiae 2025 | ja (Volltext) | Kategorien Intro/Breakdown → Buildup → **Pre-Drop Break (PDB)** → Core → **Cut**/Outro; Notwendigkeit Core > {Buildup, Cut/Outro} > {Breakdown/Intro, PDB}; Zwei-Drop-Standardform; PDB 1,5 bis 2,5 s (Snare-Roll auf jeder dritten Sechzehntel, Uplifter, Bass-Slide); Cut 1 bis 3 s am Ende eines Core. **Übernehmen als Form-Grammatik.** |
+| Solberg und Dibben, "Peak experiences with EDM", Music Perception 2019 | ja (Volltext) | Break-Routine 32 bis 97 s; U-förmige Amplitude (Breakdown tief, Build steigend, Drop = Maximum); Entzug von Bass und Kick im Breakdown; aufsteigende Riser, dann absteigender Sweep als Drop-Marker; Hautleitwert im Drop am höchsten; der beliebteste Track hatte nach dem Drop **mindestens die Lautheit und den spektralen Fluss von vor dem Break**. **Übernehmen als messbare Regeln** (Amplitude, Fluss, Bassband je Sektion). |
+| Easwaran, "Psytrance and the Spirituality of Electronics", 2004 | ja (Nachdruck) | 6 bis 12 min, meist 7 bis 8; etwa 30 s atmosphärische Einleitung; zwei Hälften mit je einem Höhepunkt; neue Klänge alle 4 oder 8 Takte; eine Melodie wiederholt ein bis zwei Viertakter, bevor sie sich wandelt; Drone-Grundton, implizierte Skala, ♭2 und übermäßige Sekunde; 135 bis 145 BPM. **Übernehmen.** |
+| Butler, "Unlocking the Groove", 2006 | Sekundärzitat | Hypermetrik in Zweierpotenzen, Core als "the track in its most essential form". Bereits im Plan (2.1, 6.2). |
+| Cole und Hannan, "Goa Trance", Perfect Beat 3(3), 1997 (mit Chans Kritik) | nicht erreichbar | Modale Ostinati statt Kadenzen: deckt sich mit dem Korpus (88 % Akkordverbleib). |
+| Farrell, Diss. Sussex 2019; "Musical Psychedelia", Routledge 2023 | nur Abstract | Klangfarbenmodulation als Narrativ. Deckt sich mit den Filterbögen; Phase 5 weitet sie auf Lead-Cutoff und Pad-Position je Sektion aus. |
+| "Studie der Universität Helsinki" zur Mikro-Evolution | nicht gefunden | Gefunden ist nur eine kulturhistorische Arbeit zu Goa in Finnland. Die Regel "kein identischer Loop" ist plausibel und schon Bauprinzip (Phrasen-Figuren, Bögen), gilt aber **ohne Quelle**. |
+| "9,6 Hz Alpha-Resonanz / ASSR" | keine Primärquelle | 144 BPM × 4 / 60 = 9,6 Hz ist Arithmetik, kein Befund. **Nicht übernehmen**, keine Behauptung in Doku oder GUI. |
+| Pendel-Harmonik i↔♭II, i↔♭VII | keine Korpus-Zahl in der Zusammenstellung | Unser Korpus zeigt 0↔5, 0↔7, 0↔8 (IV, V, ♭VI) als häufigste Wechsel. ♭II und ♭VII kommen als **Stilprofil-Gewichte** (Goa) dazu, ersetzen die Korpus-Übergänge nicht. |
+
+SOTA-Review, bewertet: (1) Filter/ADAA/Halbband und Kick–Bass: bestätigt, nichts zu tun. (2) Supersaw per
+gemipmappter Wavetable statt PolyBLEP: seit Phase 4 vorhanden (`WaveTable` Classic, Sägezahn-Frame) und
+**messbar** — Aufgabe: Aliasing der PolyBLEP-Supersaw bei hohen Noten gegen den Tabellen-Sägezahn messen und
+den saubereren Weg zum Standard machen. (3) Velvet Noise für Hats: das Review schreibt es dem Plan zu, gebaut
+ist weißes Rauschen; als Option prüfen (Välimäki, Alary, Politis 2017), Entscheidung nach Messung an den
+Referenz-Hats. (4) Phase 8: Transformer mit 512 Tokens gegen Selective State Space Model (Gu und Dao, Mamba
+2023/2024) mit hierarchischen Tokens (Meta-Token je 4 Takte, Mikro-Token je Sechzehntel). Entscheidung
+**nach Held-out-NLL beider Modelle auf demselben Token-Raum**, nicht nach Reputation; der SSM-Inferenzzustand
+ohne KV-Cache passt zur Quest. Kein Bau vor Phase 7.
+
+Nächster Schritt: Phase 5 (Komponist: Form-Grammatik nach Grosz et al. mit PDB und Cut, Energiebogen,
+Sektionsregeln nach Solberg und Dibben, Tonartenreise, Übergänge, Sperren und Neuwürfeln, Stilprofile,
+`.phosset`); parallel Phase 6 (JUCE-Plugin) und Phase 7 (Quest-Build) in eigenen Arbeitsbäumen.
 
 ## 0. Kurzfassung
 
