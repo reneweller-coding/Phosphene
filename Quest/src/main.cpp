@@ -631,6 +631,9 @@ GLuint compile(GLenum type, const char* src)
  */
 class Scene {
 public:
+    /** @brief Display pixels per radian on the Quest 2's render target (about 1830 px over 90 deg). */
+    static constexpr float kPixelsPerRadian = 1150.0f;
+
     bool init()
     {
         program_ = glCreateProgram();
@@ -668,7 +671,13 @@ public:
             p.origin.z + p.right.z * u + p.up.z * v, r, g, b, a, size);
     }
 
-    /** @brief Text on a panel, one point per lit pixel of the 5x7 font; @p cell is the pixel pitch. */
+    /**
+     * @brief Text on a panel, one point per lit pixel of the 5x7 font; @p cell is the pixel pitch.
+     *
+     * The point size is `cell * kPixelsPerRadian / w`: a cell of `cell` metres at `w` metres
+     * subtends `cell / w` radians, and the Quest 2 renders about 1150 pixels per radian (roughly
+     * 1830 pixels over 90 degrees per eye), so the dots of a glyph just touch at any distance.
+     */
     void addText(const Panel& p, float u, float v, float cell, const char* text,
                  float r, float g, float b, float a)
     {
@@ -678,7 +687,7 @@ public:
                 for (int col = 0; col < 5; ++col)
                     if (gl[row] & (0x10 >> col))
                         addOn(p, u + static_cast<float>(col) * cell, v - static_cast<float>(row) * cell,
-                              r, g, b, a, cell * 900.0f);
+                              r, g, b, a, cell * kPixelsPerRadian);
             u += 6.0f * cell;
         }
     }
@@ -1094,6 +1103,18 @@ private:
         p.set(acidBase_ + acid::Cutoff, acidCutoffBase_ * std::pow(2.0f, 4.0f * (right.macro - 0.5f)));
     }
 
+    /**
+     * @brief Geometry of the panel.
+     *
+     * A glyph is 7 cells high and a character 6 cells wide, so at kCell and kPanelDistance a line of
+     * 20 characters spans 0.50 m -- about 29 degrees -- and a glyph stands 1.7 degrees tall, roughly
+     * print at reading distance. Every line drawn below stays inside 20 characters. These are design
+     * values and untuned: nobody has put the headset on yet.
+     */
+    static constexpr float kCell = 0.0042f;         ///< pitch of one font pixel, metres
+    static constexpr float kRow = 0.040f;           ///< distance between text rows, metres
+    static constexpr float kPanelDistance = 1.0f;   ///< how far in front of the eyes the panel sits
+
     /** @brief The head-locked panel: in front of the eyes, following the yaw only. */
     Panel headPanel() const
     {
@@ -1103,9 +1124,12 @@ private:
         const Vec3 f{ fwd.x / len, 0.0f, fwd.z / len };
         p.right = { -f.z, 0.0f, f.x };
         p.up = { 0.0f, 1.0f, 0.0f };
-        p.origin = { headPose_.position.x + f.x * 0.9f - p.right.x * 0.26f,
-                     headPose_.position.y + 0.14f,
-                     headPose_.position.z + f.z * 0.9f - p.right.z * 0.26f };
+        // Shifted half a 16-character line to the left (the lines are left aligned and 13 to 20
+        // characters long), so the block of text sits roughly centred in front of the eyes.
+        const float half = 0.5f * 16.0f * 6.0f * kCell;
+        p.origin = { headPose_.position.x + f.x * kPanelDistance - p.right.x * half,
+                     headPose_.position.y + 0.12f,
+                     headPose_.position.z + f.z * kPanelDistance - p.right.z * half };
         return p;
     }
 
@@ -1126,43 +1150,46 @@ private:
         if (!headValid_) return;
 
         const Panel p = headPanel();
-        const float cell = 0.0058f;                 // 5x7 glyphs about 3.3 cm high at 0.9 m
         const DisplayState d = player_.display();
-        char line[96];
+        char line[64];
 
         if (!player_.ready()) {
-            scene_.addText(p, 0.0f, 0.0f, cell * 1.6f, "PHOSPHENE", 0.95f, 0.75f, 0.45f, 1.0f);
-            scene_.addText(p, 0.0f, -0.07f, cell, "PLANNING THE SET", 0.6f, 0.7f, 0.9f, 0.8f);
+            scene_.addText(p, 0.0f, 0.0f, kCell * 1.8f, "PHOSPHENE", 0.95f, 0.75f, 0.45f, 1.0f);
+            scene_.addText(p, 0.0f, -0.08f, kCell, "PLANNING THE SET", 0.6f, 0.7f, 0.9f, 0.8f);
             return;
         }
 
         const int bar = player_.currentBar();
         const int inTrack = std::max(0, bar - d.firstBar);
-        std::snprintf(line, sizeof(line), "TRACK %02d   BAR %04d/%04d", d.track + 1, inTrack + 1, d.trackBars);
-        scene_.addText(p, 0.0f, 0.0f, cell, line, 0.95f, 0.80f, 0.50f, 1.0f);
+        float row = 0.0f;
+        auto text = [&](const char* s, float r, float g, float b, float a) {
+            scene_.addText(p, 0.0f, row, kCell, s, r, g, b, a);
+            row -= kRow;
+        };
 
+        std::snprintf(line, sizeof(line), "TRACK %02d  %.1f BPM", d.track + 1, d.bpm);
+        text(line, 0.95f, 0.80f, 0.50f, 1.0f);
+        std::snprintf(line, sizeof(line), "BAR %04d/%04d", inTrack + 1, d.trackBars);
+        text(line, 0.95f, 0.80f, 0.50f, 0.9f);
         std::snprintf(line, sizeof(line), "%s %s", kKeyNames[d.key], kScaleNames[d.scale]);
-        scene_.addText(p, 0.0f, -0.052f, cell, line, 0.70f, 0.85f, 1.00f, 0.9f);
-        std::snprintf(line, sizeof(line), "%.1f BPM", d.bpm);
-        scene_.addText(p, 0.30f, -0.052f, cell, line, 0.70f, 0.85f, 1.00f, 0.9f);
-
-        // The 16-bar block stands in for the section until the form grammar of Phase 5 is there.
-        std::snprintf(line, sizeof(line), "BLOCK %02d  %s%s%s%s%s", inTrack / 16 + 1,
-                      (d.blockParts & 1) ? "ACID " : "", (d.blockParts & 2) ? "LEAD " : "",
-                      (d.blockParts & 4) ? "ARP " : "", (d.blockParts & 8) ? "PAD " : "",
-                      d.padGate ? "GATE" : "");
-        scene_.addText(p, 0.0f, -0.104f, cell, line, 0.80f, 0.70f, 1.00f, 0.9f);
-
+        text(line, 0.70f, 0.85f, 1.00f, 0.9f);
+        // The 16-bar block stands in for the section until the form grammar of Phase 5 is there:
+        // one letter per melodic part, a dash where it is silent.
+        std::snprintf(line, sizeof(line), "BLK %02d  %s%s%s%s%s", inTrack / 16 + 1,
+                      (d.blockParts & 1) ? "A" : "-", (d.blockParts & 2) ? "L" : "-",
+                      (d.blockParts & 4) ? "R" : "-", (d.blockParts & 8) ? "P" : "-",
+                      d.padGate ? " GATE" : "");
+        text(line, 0.80f, 0.70f, 1.00f, 0.9f);
         const float lufs = player_.loudness();
-        std::snprintf(line, sizeof(line), "%+.1f LUFS   %s", static_cast<double>(lufs),
+        std::snprintf(line, sizeof(line), "%+.1f LUFS  %s", static_cast<double>(lufs),
                       config_.mute ? "MUTED" : (player_.playing() ? "PLAY" : "STOP"));
-        scene_.addText(p, 0.0f, -0.156f, cell, line, 0.95f, 0.85f, 0.60f, 0.9f);
+        text(line, 0.95f, 0.85f, 0.60f, 0.9f);
+        std::snprintf(line, sizeof(line), "GAIN %+.1f DB", static_cast<double>(player_.params().get(mixBase_ + mix::TrackGain)));
+        text(line, 0.60f, 0.75f, 0.95f, 0.75f);
+        std::snprintf(line, sizeof(line), "ACID %.0f HZ", static_cast<double>(player_.params().get(acidBase_ + acid::Cutoff)));
+        text(line, 0.60f, 0.75f, 0.95f, 0.75f);
 
-        std::snprintf(line, sizeof(line), "GAIN %+.1f DB   ACID %.0f HZ",
-                      static_cast<double>(player_.params().get(mixBase_ + mix::TrackGain)),
-                      static_cast<double>(player_.params().get(acidBase_ + acid::Cutoff)));
-        scene_.addText(p, 0.0f, -0.208f, cell, line, 0.60f, 0.75f, 0.95f, 0.75f);
-
+        row -= kRow * 0.3f;
         // Four beat lamps. Their brightness is a raised cosine of the distance to the beat, so the
         // pulse is continuous -- no flash, no step (the continuity rule of the scene catalogue).
         const float phase = player_.barPhase() * 4.0f;
@@ -1171,15 +1198,14 @@ private:
             if (dist < 0.0f) dist += 4.0f;
             const float x = dist < 1.0f ? 0.5f + 0.5f * std::cos(3.14159265f * dist) : 0.0f;
             const float level = player_.playing() ? 0.22f + 0.78f * x : 0.18f;
-            scene_.addOn(p, 0.034f * static_cast<float>(b), -0.262f,
-                         1.0f, 0.55f + 0.35f * x, 0.25f, level, 150.0f);
+            scene_.addOn(p, 0.026f * static_cast<float>(b), row, 1.0f, 0.55f + 0.35f * x, 0.25f, level, 150.0f);
         }
-        // Loudness as a row of dots, -30 LUFS to 0.
+        // Loudness as a row of dots, -30 LUFS to 0; the leading dot fades in continuously.
         const float lu = clamp01((lufs + 30.0f) / 30.0f);
-        for (int i = 0; i < 24; ++i) {
-            const float t = static_cast<float>(i) / 23.0f;
+        for (int i = 0; i < 20; ++i) {
+            const float t = static_cast<float>(i) / 19.0f;
             const float on = clamp01((lu - t) * 20.0f);
-            scene_.addOn(p, 0.24f + 0.012f * static_cast<float>(i), -0.262f,
+            scene_.addOn(p, 0.18f + 0.016f * static_cast<float>(i), row,
                          0.4f + 0.6f * t, 0.9f - 0.5f * t, 0.5f, 0.12f + 0.75f * on, 90.0f);
         }
     }
