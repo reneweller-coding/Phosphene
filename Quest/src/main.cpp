@@ -59,6 +59,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <mutex>
@@ -741,6 +742,7 @@ public:
         bool closed = false;    ///< after the Schmitt trigger
         float height = 0.5f;    ///< 0..1 against the head
         float macro = 0.5f;     ///< the smoothed value the macro follows
+        bool everSeen = false;  ///< this hand has been tracked at least once
     };
 
     /** @brief Feeds one hand; @p headY is the head's height in the same space. */
@@ -748,6 +750,7 @@ public:
     {
         Hand& s = hand_[h];
         s.valid = true;
+        s.everSeen = true;
         s.palm = palm;
         s.pinch = clamp01(1.0f - (thumbToIndex - 0.015f) / 0.035f);
         if (thumbToIndex < 0.022f) s.closed = true;
@@ -768,7 +771,9 @@ public:
      */
     void update(double dt, bool& leftPinch, bool& rightPinch)
     {
-        const float k = 1.0f - std::exp(-static_cast<float>(dt) / 0.15f);   // 0.15 s one pole
+        // 0.15 s one pole. dt is capped at 0.1 s so that a long frame -- the first one after the
+        // session resumes, say -- cannot make the coefficient 1 and snap the macro to the hand.
+        const float k = 1.0f - std::exp(-static_cast<float>(std::min(dt, 0.1)) / 0.15f);
         for (int h = 0; h < 2; ++h) {
             Hand& s = hand_[h];
             if (s.valid && !s.closed) s.macro += (s.height - s.macro) * k;
@@ -1097,10 +1102,12 @@ private:
             acidBase_ = p.base(Module::Acid);
             acidCutoffBase_ = p.get(acidBase_ + acid::Cutoff);
         }
+        // A hand that has never been tracked writes nothing: on a headset without hand tracking the
+        // knobs keep whatever phos.cfg set them to instead of being pinned to the centre.
         const Hands::Hand& left = hands_.hand(0);
         const Hands::Hand& right = hands_.hand(1);
-        p.setNormalised(mixBase_ + mix::TrackGain, left.macro);
-        p.set(acidBase_ + acid::Cutoff, acidCutoffBase_ * std::pow(2.0f, 4.0f * (right.macro - 0.5f)));
+        if (left.everSeen) p.setNormalised(mixBase_ + mix::TrackGain, left.macro);
+        if (right.everSeen) p.set(acidBase_ + acid::Cutoff, acidCutoffBase_ * std::pow(2.0f, 4.0f * (right.macro - 0.5f)));
     }
 
     /**
