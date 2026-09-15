@@ -18,7 +18,8 @@ if(NOT ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|x64)")
     endif()
     foreach(variant neon scalar)
         add_executable(phos_vectest_${variant} vectest.cpp ${CMAKE_SOURCE_DIR}/Core/src/Halfband.cpp
-                       ${CMAKE_SOURCE_DIR}/Core/src/Perc.cpp ${CMAKE_SOURCE_DIR}/Core/src/Params.cpp)
+                       ${CMAKE_SOURCE_DIR}/Core/src/Perc.cpp ${CMAKE_SOURCE_DIR}/Core/src/Params.cpp
+                       ${CMAKE_SOURCE_DIR}/Core/src/Poly.cpp)
         target_include_directories(phos_vectest_${variant} PRIVATE ${CMAKE_SOURCE_DIR}/Core/include)
         target_compile_features(phos_vectest_${variant} PRIVATE cxx_std_20)
         add_test(NAME vectest_${variant} COMMAND phos_vectest_${variant})

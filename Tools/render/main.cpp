@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file main.cpp
  * @brief phos_render: renders a set offline, exports its MIDI, measures loudness and speed.
  *
@@ -15,7 +15,7 @@
  *     --set key=value     set a parameter; repeatable; "key=a;key2=b" also works
  *     --preset FILE       read key=value assignments from a file
  *     --tempo-ramp B:BPM  ramp the tempo from compose.bpm at beat 0 to BPM at beat B
- *     --solo kick|bass|perc  mute everything else
+ *     --solo PART         mute everything else: kick, bass, perc, acid, lead or arp
  *     --out FILE.wav      write the audio (32-bit float unless --pcm24)
  *     --pcm24             write 24-bit PCM
  *     --midi FILE.mid     write the score as a Standard MIDI File
@@ -126,10 +126,14 @@ int main(int argc, char** argv)
         if (!params.parseText(s, &err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 2; }
     }
     const int mb = params.base(Module::Mix);
-    if (solo == "kick") { params.set(mb + mix::BassMute, 1.0f); params.set(mb + mix::PercMute, 1.0f); }
-    else if (solo == "bass") { params.set(mb + mix::KickMute, 1.0f); params.set(mb + mix::PercMute, 1.0f); }
-    else if (solo == "perc") { params.set(mb + mix::KickMute, 1.0f); params.set(mb + mix::BassMute, 1.0f); }
-    else if (!solo.empty()) { std::fprintf(stderr, "--solo wants kick, bass or perc\n"); return 2; }
+    if (!solo.empty()) {
+        static const char* const kSoloNames[] = { "kick", "bass", "perc", "acid", "lead", "arp" };
+        static const int kSoloMutes[] = { mix::KickMute, mix::BassMute, mix::PercMute, mix::AcidMute, mix::LeadMute, mix::ArpMute };
+        int which = -1;
+        for (int k = 0; k < 6; ++k) if (solo == kSoloNames[k]) which = k;
+        if (which < 0) { std::fprintf(stderr, "--solo wants kick, bass, perc, acid, lead or arp\n"); return 2; }
+        for (int k = 0; k < 6; ++k) params.set(mb + kSoloMutes[k], k == which ? 0.0f : 1.0f);
+    }
 
     const int cb = params.base(Module::Compose);
     Composer composer(seed);
@@ -167,7 +171,18 @@ int main(int argc, char** argv)
             std::printf("\n          perc: %s, clap backbeat %s, up to %d layers:", kHatModes[p.perc.hatMode], p.perc.clapBackbeat ? "on" : "off", p.perc.layers);
             for (int i = 0; i < p.perc.layers; ++i)
                 std::printf(" %s", kPercRoleNames[params.getInt(params.base(Module::Perc, p.perc.layerOrder[i]) + perc::Role)]);
-            std::printf("\n");
+            const MelodyPlan& m = p.melody;
+            static const char* const kRoman[7] = { "i", "ii", "iii", "iv", "v", "vi", "vii" };
+            static const char* const kArpStyles[4] = { "corpus", "up", "down", "up-down" };
+            std::printf("\n          melody: chords");
+            for (int c = 0; c < 4; ++c) std::printf(" %s", kRoman[m.chordDegree[c]]);
+            std::printf(" (%d bars each); acid %s (%d steps%s), lead %s (osc %d), arp %s (%s)\n", m.chordBars,
+                        m.present[0] ? "yes" : "no", m.acidSteps, m.acidSquelch == 1 ? ", squelch" : "", m.present[1] ? "yes" : "no", m.leadOsc,
+                        m.present[2] ? "yes" : "no", kArpStyles[m.arpStyle]);
+            std::printf("          blocks (A=acid L=lead R=arp):");
+            for (int b = 0; b < p.bars / 16 && b < kMelodyMaxBlocks; ++b)
+                std::printf(" %s%s%s%s", (m.blockParts[b] & 1) ? "A" : "", (m.blockParts[b] & 2) ? "L" : "", (m.blockParts[b] & 4) ? "R" : "", m.blockParts[b] ? "" : "-");
+            std::printf("\n          part gains %+.1f / %+.1f / %+.1f dB\n", static_cast<double>(p.partGainDb[0]), static_cast<double>(p.partGainDb[1]), static_cast<double>(p.partGainDb[2]));
         }
     }
     const uint64_t totalSamples = static_cast<uint64_t>(std::llround(tempo.secondsAt(totalBeats) * sr));

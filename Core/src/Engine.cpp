@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file Engine.cpp
  * @brief Engine implementation.
  */
@@ -27,6 +27,14 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/)
     bassBuf_.assign(static_cast<size_t>(kChunk), 0.0f);
     percL_.assign(static_cast<size_t>(kChunk), 0.0f);
     percR_.assign(static_cast<size_t>(kChunk), 0.0f);
+    acidL_.assign(static_cast<size_t>(kChunk), 0.0f);
+    acidR_.assign(static_cast<size_t>(kChunk), 0.0f);
+    for (int i = 0; i < kPolyInstances; ++i) {
+        polyL_[i].assign(static_cast<size_t>(kChunk), 0.0f);
+        polyR_[i].assign(static_cast<size_t>(kChunk), 0.0f);
+        poly_[i].prepare(sr_);
+    }
+    acid_.prepare(sr_);
     kick_.prepare(sr_);
     bass_.prepare(sr_);
     perc_.prepare(sr_);
@@ -48,6 +56,10 @@ void Engine::reset()
     kick_.reset();
     bass_.reset();
     perc_.reset();
+    acid_.reset();
+    for (Poly& p : poly_) p.reset();
+    // Distinct, fixed phase streams per instance: a render is the same every time.
+    for (int i = 0; i < kPolyInstances; ++i) poly_[i].seedPhases(0x9E3779B97F4A7C15ull * static_cast<uint64_t>(i + 1));
     clipL_.reset();
     clipR_.reset();
 }
@@ -126,6 +138,9 @@ void Engine::applyParams()
     Kick::constrain(kv, slot, keyRoot_);
     kick_.update(kv, keyRoot_);
     bass_.update(bv);
+    const double bpmNow = beatsPerSample_ * 60.0 * sr_;
+    acid_.update(eff_.data() + p.base(Module::Acid), bpmNow);
+    for (int i = 0; i < kPolyInstances; ++i) poly_[i].update(eff_.data() + p.base(Module::Poly, i), bpmNow);
 
     // The kick lock: either the kick's tail meets the bass's own start phase, or the bass starts
     // where the kick's phase is when the first bass note begins.
@@ -148,6 +163,10 @@ void Engine::applyParams()
     bassMute_ = eff_[static_cast<size_t>(mb + mix::BassMute)] >= 0.5f;
     percMute_ = eff_[static_cast<size_t>(mb + mix::PercMute)] >= 0.5f;
     percGain_ = percMute_ ? 0.0f : dbToGain(eff_[static_cast<size_t>(mb + mix::PercLevel)]);
+    auto partGain = [&](int mute, int level) { return eff_[static_cast<size_t>(mb + mute)] >= 0.5f ? 0.0f : dbToGain(eff_[static_cast<size_t>(mb + level)]); };
+    acidGain_ = partGain(mix::AcidMute, mix::AcidLevel);
+    polyGain_[0] = partGain(mix::LeadMute, mix::LeadLevel);
+    polyGain_[1] = partGain(mix::ArpMute, mix::ArpLevel);
     const int ms = p.base(Module::Master);
     masterGain_ = dbToGain(eff_[static_cast<size_t>(ms + master::Gain)] + eff_[static_cast<size_t>(mb + mix::TrackGain)]);
     ceiling_ = dbToGain(eff_[static_cast<size_t>(ms + master::Ceiling)]);
@@ -173,6 +192,18 @@ void Engine::dispatch(const NoteEvent& e, double late)
         perc_.trigger(lane, vel, shift, late);
         break;
     }
+    case Part::Acid: {
+        const double samples = static_cast<double>(e.length) / beatsPerSample_;
+        acid_.noteOn(e.pitch, vel, (e.flags & kNoteAccent) != 0, (e.flags & kNoteSlide) != 0,
+                     std::max(1, static_cast<int>(std::lround(samples))), late);
+        break;
+    }
+    case Part::Lead:
+    case Part::Arp: {
+        const double samples = static_cast<double>(e.length) / beatsPerSample_;
+        poly_[e.part == Part::Lead ? 0 : 1].noteOn(e.pitch, vel, e.length, std::max(1, static_cast<int>(std::lround(samples))), late);
+        break;
+    }
     default:
         break;
     }
@@ -184,13 +215,18 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
     kick_.process(kickBuf_.data(), count);
     bass_.process(bassBuf_.data(), count);
     perc_.process(percL_.data(), percR_.data(), count);
+    acid_.process(acidL_.data(), acidR_.data(), count);
+    for (int k = 0; k < kPolyInstances; ++k) poly_[k].process(polyL_[k].data(), polyR_[k].data(), count);
     const float kg = kickMute_ ? 0.0f : 1.0f, bg = bassMute_ ? 0.0f : 1.0f;
     const float invCeil = 1.0f / ceiling_;
     for (int i = 0; i < count; ++i) {
         // Kick and bass are mono and centred; the percussion brings the stereo.
         const float mono = kg * kickBuf_[static_cast<size_t>(i)] + bg * bassBuf_[static_cast<size_t>(i)];
-        float l = (mono + percGain_ * percL_[static_cast<size_t>(i)]) * masterGain_;
-        float r = (mono + percGain_ * percR_[static_cast<size_t>(i)]) * masterGain_;
+        const size_t si = static_cast<size_t>(i);
+        float l = mono + percGain_ * percL_[si] + acidGain_ * acidL_[si] + polyGain_[0] * polyL_[0][si] + polyGain_[1] * polyL_[1][si];
+        float r = mono + percGain_ * percR_[si] + acidGain_ * acidR_[si] + polyGain_[0] * polyR_[0][si] + polyGain_[1] * polyR_[1][si];
+        l *= masterGain_;
+        r *= masterGain_;
         if (clip_) {
             l = ceiling_ * clipL_(l * invCeil);
             r = ceiling_ * clipR_(r * invCeil);

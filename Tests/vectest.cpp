@@ -7,9 +7,11 @@
  * templates, must equal the float instantiation exactly -- not within a tolerance. If this ever
  * needs a tolerance, an operation has crept in that is not a single IEEE operation per lane.
  */
+#include "phos/DiodeLadder.h"
 #include "phos/Halfband.h"
 #include "phos/Ladder.h"
 #include "phos/Perc.h"
+#include "phos/Poly.h"
 #include "phos/Vec.h"
 #include "TestSupport.h"
 #include <chrono>
@@ -189,6 +191,94 @@ void testPerc()
                 ts * 10.0, kVecPathName, tv * 10.0, ts / tv);
 }
 
+void testDiodeLadder()
+{
+    section("diode ladder lanes against the scalar diode ladder");
+    DiodeLadderT<VecF> vl;
+    DiodeLadderT<float> sl[8];
+    vl.reset();
+    for (auto& s : sl) s.reset();
+    int bad = 0;
+    float maxAbs = 0.0f;
+    float x[8], g[8], k[8], comp[8];
+    for (uint32_t n = 0; n < 20000; ++n) {
+        for (int l = 0; l < 8; ++l) {
+            const float ph = static_cast<float>((n * (l + 5)) % 89) / 89.0f;
+            x[l] = (2.0f * ph - 1.0f) * (0.5f + static_cast<float>(l));
+            g[l] = 0.02f + 1.2f * (0.5f + 0.5f * std::sin(0.0007f * static_cast<float>(n) * static_cast<float>(l + 1)));
+            k[l] = static_cast<float>(l) * 2.4f;
+            comp[l] = 0.3f;
+        }
+        const VecF y = vl.tick(loadLanes<VecF>(x), loadLanes<VecF>(g), loadLanes<VecF>(k), loadLanes<VecF>(comp));
+        for (int l = 0; l < W; ++l) {
+            const float ys = sl[l].tick(x[l], g[l], k[l], comp[l]);
+            if (!sameBits(laneOf(y, l), ys)) ++bad;
+            maxAbs = std::max(maxAbs, std::fabs(ys));
+        }
+    }
+    check(bad == 0, "diode ladder output identical to scalar", fmt("%d differing samples", bad));
+    check(std::isfinite(maxAbs) && maxAbs < 50.0f, "diode ladder bounded under drive and resonance", fmt("max |y| = %.3f", static_cast<double>(maxAbs)));
+}
+
+void testPoly()
+{
+    section("polyphonic engine lanes against the scalar engine");
+    const DenormalGuard guard;
+    ParamStore p;
+    auto a = std::make_unique<Poly>(), b = std::make_unique<Poly>();
+    a->prepare(48000.0);
+    b->prepare(48000.0);
+    int bad = 0;
+    double energy = 0.0;
+    std::vector<float> aL(64), aR(64), bL(64), bR(64);
+    for (int block = 0; block < 3000; ++block) {
+        if (block % 250 == 0) {
+            // A different oscillator and filter every so often, the same on both.
+            p.parseText(fmt("lead.osc=%d lead.resonance=%.2f lead.fm_index=%d lead.wave=0.5", (block / 250) % 3, 0.1 + 0.07 * (block / 250 % 10), block / 250 % 7).c_str());
+            std::vector<float> v(static_cast<size_t>(poly::Count));
+            p.readModule(Module::Poly, 0, v.data());
+            a->update(v.data(), 145.0);
+            b->update(v.data(), 145.0);
+        }
+        if (block % 9 == 0) {
+            const int pitch = 55 + (block * 7) % 30;
+            const double late = static_cast<double>(block % 10) / 10.0;
+            a->noteOn(pitch, 0.8f, 0.25 * (1 + block % 8), 2000 + block % 5000, late);
+            b->noteOn(pitch, 0.8f, 0.25 * (1 + block % 8), 2000 + block % 5000, late);
+        }
+        const int n = 5 + block % 60;
+        a->processWith<float>(aL.data(), aR.data(), n);
+        b->processWith<VecF>(bL.data(), bR.data(), n);
+        for (int i = 0; i < n; ++i) {
+            if (!sameBits(aL[static_cast<size_t>(i)], bL[static_cast<size_t>(i)]) || !sameBits(aR[static_cast<size_t>(i)], bR[static_cast<size_t>(i)])) ++bad;
+            energy += static_cast<double>(aL[static_cast<size_t>(i)]) * aL[static_cast<size_t>(i)];
+        }
+    }
+    check(bad == 0 && energy > 1.0, "56 oscillator slots and 16 voice channels identical to scalar (supersaw, VA, FM)", fmt("%d differing samples, energy %.1f", bad, energy));
+
+    // Cost, not a check: eight voices of a sustained supersaw, ten seconds.
+    auto time = [&](bool vec) {
+        auto e = std::make_unique<Poly>();
+        e->prepare(48000.0);
+        ParamStore q;
+        q.parseText("lead.amp_sustain=1 lead.delay_send=0.3");
+        std::vector<float> v(static_cast<size_t>(poly::Count));
+        q.readModule(Module::Poly, 0, v.data());
+        e->update(v.data(), 145.0);
+        for (int k = 0; k < kPolyVoices; ++k) e->noteOn(60 + 3 * k, 1.0f, 4.0, 1 << 30, 0.0);
+        std::vector<float> L(32), R(32);
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int block = 0; block < 15000; ++block) {
+            if (vec) e->processWith<VecF>(L.data(), R.data(), 32);
+            else e->processWith<float>(L.data(), R.data(), 32);
+        }
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    };
+    const double ts = time(false), tv = time(true);
+    std::printf("         cost of 10 s, eight supersaw voices: scalar %.1f %% of a core, %s %.1f %% (x%.2f)\n",
+                ts * 10.0, kVecPathName, tv * 10.0, ts / tv);
+}
+
 } // namespace
 
 int main()
@@ -201,5 +291,7 @@ int main()
     testLadder();
     testHalfband();
     testPerc();
+    testDiodeLadder();
+    testPoly();
     return finish();
 }

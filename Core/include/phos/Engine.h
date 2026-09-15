@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file Engine.h
  * @brief The engine: plays score events sample-accurately through the generators, mixer and master.
  *
@@ -22,11 +22,13 @@
  * called from one other thread. Parameters may be written from any thread.
  */
 #pragma once
+#include "phos/Acid.h"
 #include "phos/Bass.h"
 #include "phos/Clock.h"
 #include "phos/Kick.h"
 #include "phos/Params.h"
 #include "phos/Perc.h"
+#include "phos/Poly.h"
 #include "phos/Score.h"
 #include <atomic>
 #include <memory>
@@ -77,6 +79,10 @@ public:
     const Bass& bass() const { return bass_; }
     /** @brief The percussion kit, for tests and displays. */
     const PercKit& percKit() const { return perc_; }
+    /** @brief The acid voice, for tests and displays. */
+    const Acid& acid() const { return acid_; }
+    /** @brief A polyphonic engine (lead or arp), for tests and displays. */
+    const Poly& poly(PolyInstance i) const { return poly_[static_cast<int>(i)]; }
     /** @brief Effective value of a parameter as last applied (audio thread view). */
     float effective(int id) const;
 
@@ -129,6 +135,12 @@ private:
     TanhAdaa clipL_, clipR_;
 
     std::vector<float> kickBuf_, bassBuf_;
+
+    Acid acid_;
+    Poly poly_[kPolyInstances];
+    float acidGain_ = 1.0f;
+    float polyGain_[kPolyInstances] = { 1.0f, 1.0f };
+    std::vector<float> acidL_, acidR_, polyL_[kPolyInstances], polyR_[kPolyInstances];
 };
 
 } // namespace phos

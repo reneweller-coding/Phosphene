@@ -41,6 +41,13 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "perc_density",    "Perc Density",    "",      0.0f,   1.0f,   0.6f, Curve::Linear },
     { "perc_variation",  "Perc Variation",  "",      0.0f,   1.0f,   0.5f, Curve::Linear },
     { "swing",           "Swing",           "",      0.0f,   0.3f,   0.0f, Curve::Linear },
+    { "acid_amount",     "Acid Amount",     "",      0.0f,   1.0f,   0.6f, Curve::Linear },
+    { "lead_amount",     "Lead Amount",     "",      0.0f,   1.0f,   0.5f, Curve::Linear },
+    { "arp_amount",      "Arp Amount",      "",      0.0f,   1.0f,   0.5f, Curve::Linear },
+    { "melody_variation","Melody Variation","",      0.0f,   1.0f,   0.5f, Curve::Linear },
+    { "melody_temperature","Melody Temperature","",  0.5f,   2.0f,   1.0f, Curve::Log },
+    { "squelch_chance",  "Squelch Chance",  "",      0.0f,   1.0f,   0.3f, Curve::Linear },
+    { "bass_follows_chords","Bass Follows Chords","", 0.0f,  1.0f,   0.0f, Curve::Toggle },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };
@@ -158,12 +165,90 @@ const ParamDesc kBassParams[bass::Count] = {
     { "level",         "Level",         "dB",  -36.0f,     6.0f,  -5.0f, Curve::Linear },
 };
 
+const char* const kDelayTimeNames[] = { "1/16", "1/8", "3/16", "1/4", "3/8", "1/2" };
+const char* const kPolyOscNames[] = { "Supersaw", "VA", "FM" };
+
+const ParamDesc kAcidParams[acid::Count] = {
+    { "wave",           "Wave",           "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    { "cutoff",         "Cutoff",         "Hz",   80.0f,  8000.0f, 650.0f, Curve::Log },
+    { "resonance",      "Resonance",      "",      0.0f,     1.0f,  0.72f, Curve::Linear },
+    { "env_amount",     "Env Amount",     "oct",   0.0f,     6.0f,   4.0f, Curve::Linear },
+    { "decay",          "Decay",          "ms",   30.0f,  2000.0f, 350.0f, Curve::Log },
+    { "accent",         "Accent",         "",      0.0f,     1.0f,   0.6f, Curve::Linear },
+    { "slide_time",     "Slide Time",     "ms",    5.0f,   200.0f,  55.0f, Curve::Log },
+    { "amp_decay",      "Amp Decay",      "ms",   50.0f,  4000.0f, 900.0f, Curve::Log },
+    { "key_track",      "Key Track",      "",      0.0f,     1.0f,   0.5f, Curve::Linear },
+    { "drive",          "Drive",          "",      0.0f,     1.0f,  0.45f, Curve::Linear },
+    { "squelch",        "Squelch",        "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
+    { "squelch_start",  "Squelch Start",  "x",     2.0f,    32.0f,  12.0f, Curve::Log },
+    { "squelch_time",   "Squelch Time",   "ms",    5.0f,   150.0f,  28.0f, Curve::Log },
+    { "comb_mix",       "Comb Mix",       "",      0.0f,     1.0f,  0.55f, Curve::Linear },
+    { "comb_feedback",  "Comb Feedback",  "",      0.0f,    0.97f,  0.82f, Curve::Linear },
+    { "low_cut",        "Low Cut",        "Hz",  150.0f,  1000.0f, 150.0f, Curve::Log },
+    { "delay_send",     "Delay Send",     "",      0.0f,     1.0f,  0.25f, Curve::Linear },
+    { "delay_left",     "Delay Left",     "",      0.0f,     5.0f,   2.0f, Curve::Choice, kDelayTimeNames },
+    { "delay_right",    "Delay Right",    "",      0.0f,     5.0f,   3.0f, Curve::Choice, kDelayTimeNames },
+    { "delay_feedback", "Delay Feedback", "",      0.0f,     0.9f,  0.45f, Curve::Linear },
+    { "delay_high_pass","Delay High Pass","Hz",  150.0f,  2000.0f, 400.0f, Curve::Log },
+    { "delay_low_pass", "Delay Low Pass", "Hz",  800.0f, 16000.0f,4500.0f, Curve::Log },
+    { "level",          "Level",          "dB",  -36.0f,     6.0f,  -8.0f, Curve::Linear },
+};
+
+const ParamDesc kPolyParams[poly::Count] = {
+    { "osc",            "Oscillator",     "",      0.0f,     2.0f,   0.0f, Curve::Choice, kPolyOscNames },
+    { "detune",         "Detune",         "",      0.0f,     1.0f,  0.55f, Curve::Linear },
+    { "mix",            "Mix",            "",      0.0f,     1.0f,  0.75f, Curve::Linear },
+    { "dynamic_detune", "Dynamic Detune", "",      0.0f,     1.0f,   0.6f, Curve::Linear },
+    { "wave",           "Wave",           "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    { "pulse_width",    "Pulse Width",    "",     0.05f,    0.95f,   0.5f, Curve::Linear },
+    { "fm_ratio",       "FM Ratio",       "",      0.5f,     8.0f,   2.0f, Curve::Linear },
+    { "fm_index",       "FM Index",       "",      0.0f,    10.0f,   2.5f, Curve::Linear },
+    { "fm_decay",       "FM Decay",       "ms",    5.0f,  2000.0f, 250.0f, Curve::Log },
+    { "cutoff",         "Cutoff",         "Hz",  200.0f, 18000.0f,7500.0f, Curve::Log },
+    { "resonance",      "Resonance",      "",      0.0f,     1.0f,  0.15f, Curve::Linear },
+    { "env_amount",     "Env Amount",     "oct",   0.0f,     6.0f,   2.0f, Curve::Linear },
+    { "filter_decay",   "Filter Decay",   "ms",    5.0f,  3000.0f, 400.0f, Curve::Log },
+    { "key_track",      "Key Track",      "",      0.0f,     1.0f,   0.5f, Curve::Linear },
+    { "hp_floor",       "HP Floor",       "Hz",  150.0f,   400.0f, 220.0f, Curve::Log },
+    { "hp_track",       "HP Track",       "x f0",  0.0f,     1.0f,   1.0f, Curve::Linear },
+    { "amp_attack",     "Attack",         "ms",    0.3f,  2000.0f,   4.0f, Curve::Log },
+    { "amp_decay",      "Decay",          "ms",    5.0f,  4000.0f, 500.0f, Curve::Log },
+    { "amp_sustain",    "Sustain",        "",      0.0f,     1.0f,  0.75f, Curve::Linear },
+    { "amp_release",    "Release",        "ms",    5.0f,  4000.0f, 180.0f, Curve::Log },
+    { "width",          "Width",          "",      0.0f,     1.0f,   0.8f, Curve::Linear },
+    { "vel_sens",       "Velocity",       "",      0.0f,     1.0f,   0.4f, Curve::Linear },
+    { "delay_send",     "Delay Send",     "",      0.0f,     1.0f,   0.3f, Curve::Linear },
+    { "delay_left",     "Delay Left",     "",      0.0f,     5.0f,   2.0f, Curve::Choice, kDelayTimeNames },
+    { "delay_right",    "Delay Right",    "",      0.0f,     5.0f,   3.0f, Curve::Choice, kDelayTimeNames },
+    { "delay_feedback", "Delay Feedback", "",      0.0f,     0.9f,   0.4f, Curve::Linear },
+    { "delay_high_pass","Delay High Pass","Hz",  150.0f,  2000.0f, 350.0f, Curve::Log },
+    { "delay_low_pass", "Delay Low Pass", "Hz",  800.0f, 16000.0f,6000.0f, Curve::Log },
+    { "level",          "Level",          "dB",  -36.0f,     6.0f,  -8.0f, Curve::Linear },
+};
+
+/**
+ * @brief Where the two polyphonic instances start: the lead a held supersaw, the arp a plucked one
+ *        with less detune (a short sixteenth smears when its seven saws beat against each other).
+ */
+const char* const kDefaultPoly =
+    "arp.detune=0.3;arp.mix=0.6;arp.cutoff=2200;arp.env_amount=2.8;arp.filter_decay=140;arp.resonance=0.3;"
+    "arp.amp_attack=0.8;arp.amp_decay=220;arp.amp_sustain=0;arp.amp_release=90;arp.delay_send=0.35;"
+    "arp.delay_left=2;arp.delay_right=1;arp.level=-10;arp.width=0.6\n";
+
+const char* const kPolyInstanceNames[kPolyInstances] = { "lead", "arp" };
+
 const ParamDesc kMixParams[mix::Count] = {
     { "kick_mute", "Kick Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
     { "bass_mute", "Bass Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
     { "track_gain", "Track Gain", "dB", -12.0f, 12.0f, 0.0f, Curve::Linear },
     { "perc_mute",  "Perc Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "perc_level", "Perc Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    { "acid_mute",  "Acid Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
+    { "acid_level", "Acid Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    { "lead_mute",  "Lead Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
+    { "lead_level", "Lead Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    { "arp_mute",   "Arp Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
+    { "arp_level",  "Arp Level",  "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
 };
 
 const ParamDesc kMasterParams[master::Count] = {
@@ -172,12 +257,13 @@ const ParamDesc kMasterParams[master::Count] = {
     { "clip",    "Clip",    "",     0.0f,  1.0f,  1.0f, Curve::Toggle },
 };
 
-/** @brief One module: its prefix, table and how many instances exist. */
+/** @brief One module: its prefix, table, how many instances exist, and optionally their names. */
 struct ModuleSpec {
     const char* prefix;
     const ParamDesc* descs;
     int count;
     int instances;
+    const char* const* instanceNames = nullptr;   ///< prefixes of the instances instead of prefix + number
 };
 
 const ModuleSpec kModules[static_cast<int>(Module::Count)] = {
@@ -185,6 +271,8 @@ const ModuleSpec kModules[static_cast<int>(Module::Count)] = {
     { "kick",    kKickParams,    kick::Count,    1 },
     { "bass",    kBassParams,    bass::Count,    1 },
     { "perc",    kPercParams,    perc::Count,    kPercLanes },
+    { "acid",    kAcidParams,    acid::Count,    1 },
+    { "poly",    kPolyParams,    poly::Count,    kPolyInstances, kPolyInstanceNames },
     { "mix",     kMixParams,     mix::Count,     1 },
     { "master",  kMasterParams,  master::Count,  1 },
 };
@@ -210,8 +298,8 @@ ParamStore::ParamStore()
         const ModuleSpec& m = kModules[mi];
         for (int inst = 0; inst < m.instances && inst < kMaxInstances; ++inst) {
             bases_[mi][inst] = static_cast<int>(entries_.size());
-            std::string prefix = m.prefix;
-            if (m.instances > 1) prefix += std::to_string(inst + 1);
+            std::string prefix = m.instanceNames != nullptr ? std::string(m.instanceNames[inst]) : std::string(m.prefix);
+            if (m.instances > 1 && m.instanceNames == nullptr) prefix += std::to_string(inst + 1);
             for (int p = 0; p < m.count; ++p) {
                 Entry e{ &m.descs[p], prefix + "." + m.descs[p].key, static_cast<Module>(mi), inst };
                 index_.emplace(e.key, static_cast<int>(entries_.size()));
@@ -227,6 +315,7 @@ ParamStore::ParamStore()
         values_[static_cast<size_t>(i)].store(desc(i).defValue, std::memory_order_relaxed);
     }
     parseText(kDefaultKit);
+    parseText(kDefaultPoly);
     for (int i = 0; i < count(); ++i) defaults_[static_cast<size_t>(i)] = get(i);
 }
 

@@ -1,4 +1,4 @@
-add_library(PhospheneCore STATIC
+﻿add_library(PhospheneCore STATIC
     src/Params.cpp
     src/Clock.cpp
     src/Score.cpp
@@ -9,7 +9,12 @@ add_library(PhospheneCore STATIC
     src/Kick.cpp
     src/Bass.cpp
     src/Perc.cpp
+    src/Acid.cpp
+    src/Poly.cpp
     src/Rhythm.cpp
+    src/Melody.cpp
+    src/Corpus.cpp
+    src/CorpusTables.cpp
     src/Composer.cpp
     src/Engine.cpp
 )

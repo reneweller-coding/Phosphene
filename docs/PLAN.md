@@ -119,7 +119,55 @@ Referenz-Median: Präsenz 1,5 bis 6 kHz −12,5 dB, Luft 6 bis 16 kHz −15,2 dB
 Gesamt: 98 Selbsttest-Prüfungen, Vektortests mit Kit in drei Pfaden. Kick, Bass und Percussion
 zusammen 1,6 % eines Desktop-Kerns. Auf der Quest noch nicht gemessen.
 
-Nächster Schritt: Phase 3 (Acid mit Squelch, Supersaw-Lead, Arp, Harmonieebene).
+**15.09.2026, Phase 3 fertig: Acid, Lead, Arp, Harmonie, Korpus-Melodik.**
+
+*Erst gemessen, dann gebaut.* Die Korpus-Analyse (`Tools/corpus/build_corpus.py`, nur Zählwerte in
+`Core/src/CorpusTables.cpp`) ergab: Acid 62 melodische Loops mit 3834 Noten, Lead 183 mit 7055, Arp
+421 mit 26185. **Akzente und Slides stehen im Korpus praktisch nicht** (MIDI-Loops speichern sie selten)
+und sind deshalb Entwurfswerte. Akkorde: in 88 % der Takte bleibt der Akkord; Wechsel vor allem
+0↔5, 0↔7, 0↔8. Der Squelch ließ sich an den Mischungen nicht messen (`Tools/ref_sweeps.py`,
+Negativbefund: ein Sweep über mehrere Kilohertz verschmiert im Kurzzeitspektrum wie ein Transient);
+seine Zahlen sind Entwurfswerte mit Stellbereich. Die Supersaw-Konstanten sind aus Szabos Arbeit selbst
+abgelesen (Tabellen 1 bis 3, Abschnitte 3.2 bis 3.4), nicht aus Nachbauten übernommen.
+
+| Baustein | Umsetzung | Messung |
+|---|---|---|
+| Diodenleiter (`DiodeLadder.h`) | Zavalishin rev. 2.1.2, Abschnitt 5.10, Gl. 5.18: gekoppelte Stufen, ZDF von innen nach außen gelöst, algebraische Sigmoide pro Stufe nach Voipio; Cutoff = Resonanzspitze bei ωc/√2 | Kleinsignal gegen Gl. 5.29 auf 0,019 dB (k = 0, 8, 16); Selbstoszillation ab k = 17 genau bei der Spitze (k = 17,5: +73 dB bei 1000,0 Hz; 16,5 und die 4 der Transistorleiter klingen ab); DC-Verstärkung 1/(1+k) |
+| Acid (`Acid.h`) | PolyBLEP 2× → Diodenleiter 2× → Halbband → Kamm (Squelch) → VCA → ADAA-tanh → 24-dB-Low-Cut ≥ 150 Hz; Akzent mit Sweep-Kondensator (Tiefe ∝ Resonanz), Slide als exponentielles Legato-Glide, Squelch als Cutoff-Startwert × Faktor plus auf die Periode gestimmter Kamm; Tempo-Delay | Glide erreicht nach der Slide-Zeit 1 − 1/e (61,425 von 61,425); Akzent +4,0 dB, Sweep nach 1/2/3 Akzenten 0,22/0,32/0,38; Squelch-Anschlag −23,8 dB Leistung über 1,5 kHz, 60 ms später −62,8 dB; D3 mit voller Resonanz und Drive −40,6 dB unter 140 Hz |
+| `Poly` (`Poly.h`, `PolyKernel.h`) | 8 Stimmen × 7 Oszillatoren = 56 Lanes, Säge/Puls/FM-Sinus in einem zweiglosen Kernel; Supersaw nach Szabo (Detune-Polynom 11. Grades, lineare Mitte, parabolische Seiten, Zufallsphase je Note, Hochpass auf dem Grundton), VA, 2-Op-FM; dynamischer Detune über log2 der Notenlänge; SVF-Tiefpass mit Hüllkurve, LR4-Hochpass bei max(Floor, Track × f0); Stimmfilter auf absolutem 16-Sample-Raster | Detune-Kurve gegen Szabos Tabelle 2 höchstens 0,004 daneben, Mix gegen Tabelle 3 0,006; sieben Spektrallinien auf 0,25 Hz, Seiten-zu-Mitte-Verhältnis auf 0,15 dB; FM-Seitenbänder gegen J1/J0 und J2/J0 auf 0,26 dB; Korrelation zweier gleicher Anschläge −0,20; Lead und Arp auf ihren tiefsten Noten −60 dB unter 140 Hz; acht Supersaw-Stimmen 0,9 % eines Kerns (AVX2, 5,9× schneller als skalar) |
+| Tempo-Delay (`TempoDelay.h`) | Stereo, Zeiten in Beats, HP und LP in der Rückkopplung, 15 % Übersprechen, Lesen in double | ohne Leerlauf-Abkürzung, damit die Ausgabe unabhängig von Host-Blöcken bleibt |
+| Constraint-Markov (`Corpus.h`) | Witten-Bell-interpoliertes VMM Ordnung 2 über Intervalle zum Grundton, exakte Stichprobe unter Positions-Constraints nach Pachet und Roy; Rückwärtsschritt nur über erreichbare Zustandspaare | gegen vollständige Aufzählung Totalvariation 0,006 (T = 1) und 0,005 (T = 0,5); ein gieriger Schritt-für-Schritt-Sampler liegt bei 0,20 und 0,27; Modelle summieren in jedem Kontext auf 1 |
+| Melodik (`Melody.h`) | Akkorde: vier Akkorde zu 2 oder 4 Takten, Wechsel nach den Korpus-Übergängen ohne Verbleib, Verbleib mit 0,35; Acid-Muster A/B (B zieht 2 bis 3 Noten bei festen Nachbarn neu); Lead-Phrase A A′ B A″ mit Akkordtönen auf starken Sechzehnteln und Schluss auf Akkordton; Arp auf Akkordtönen (auf, ab, auf-ab oder Korpus-Modell); Schichten pro 16-Takt-Block; Maskierungsregel: Arp oktaviert, bis die Tonräume von Lead und Arp sich höchstens zwei Halbtöne überlappen | 24587 Noten, alle in der Skala; alle 624 starken Lead-Noten und 12416 Arp-Noten Akkordtöne; 1304 Slides, alle überlappend; 18 gemeinsame Blöcke, keiner maskiert; 24 verschiedene Acid-Riffs in 24 Tracks, 23 bewegte Akkordfolgen, alle vier Arp-Stile |
+| Pegelangleich | Fundament (Kick, Bass, Percussion) wie bisher; jede Melodiestimme einzeln geprobt und an dieselbe Stimme im ersten Track angeglichen, Track-Verstärkung herausgerechnet | — |
+| Tiefenregel | Acid ab D3, Lead ab B3, Arp ab G3; LR4-Hochpass bei f0 in `Poly`; Delay-Hochpass ≥ 150 Hz | gerenderte Melodiestimmen zusammen −33,5 dB Leistung unter 140 Hz |
+| MIDI | Slide als überlappende Noten plus CC 65, Akzent als Velocity 120 | Rundlauf geprüft |
+| Memorisierung | `build_corpus.py --memorisation`, jeder Takt gegen jeden Korpustakt der Rolle, transpositionsinvariant | eine Stunde mit allen Stimmen: 0 von 969 Acid-, 0 von 627 Lead-, 0 von 633 Arp-Takten identisch; Positivkontrolle mit transponierten Korpus-Loops: 100 % gefunden |
+
+*Gegenprobe.* Sechs Fehler absichtlich eingebaut, jeder von seiner Prüfung gefunden: halbierte erste
+Diodenstufe (25 dB Abweichung), feste Startphase (Korrelation 1,000), abgeschaltete Maskierungsregel
+(10 von 18 Blöcken maskiert), kein Legato (Tonhöhe springt), Sweep ohne Kondensator (0,178 dreimal),
+Stimmfilter-Koeffizienten pro Segment statt auf dem absoluten Raster (Ausgabe hängt von der
+Blockgröße ab; die bisherige Blockgrößen-Prüfung rendert nur vier Takte ohne Melodik und hätte das
+nicht bemerkt, deshalb gibt es sie jetzt auch mit Acid, Lead und Arp).
+
+*Bandbalance.* Referenz neu über 39 der 40 Tracks gemessen (einer ist in der Mitte stumm), relativ
+zum Band 40 bis 140 Hz: Low-Mid −7,3, Mitten −8,8, Präsenz −9,8, Luft −13,3 dB. Phosphene mit den
+Standardwerten, fünf Seeds über je 512 Takte ganz gemessen: Low-Mid −3,7, Mitten −9,8, Präsenz
+−13,3, Luft −18,9 dB. Die Melodiestimmen sind auf die Mitten kalibriert (Pegel, Acid-Cutoff und
+-Hüllkurve, Hochpass auf dem Grundton wie bei Szabo). **Offen:** Präsenz 3,5 dB und Luft 5,6 dB unter
+der Referenz, Low-Mid 3,6 dB darüber; der Überschuss kommt aus dem Fundament (Bass-Obertöne), nicht
+aus der Melodik. Pads, SFX und die Mischpult-Kalibrierung (Phasen 4 und 5) nehmen das auf.
+
+*Abweichungen vom Plan, bewusst:* Supersaw-Summe auf inkohärente Leistung normiert (der JP-8000 wird
+mit dem Mix-Regler 4 dB lauter). Wavetable-Oszillator mit den Pads in Phase 4; 4-Op-FM und Phase
+Distortion noch nicht gebaut, `Poly` hat 2-Op-FM. Dynamischer Detune folgt vorerst nur der
+Notenlänge, der Sektionstyp kommt mit der Form-Grammatik (Phase 4). Die Schichten pro 16-Takt-Block
+sind ein Platzhalter für die Instrumentierungs-Matrix der Form (6.1, 6.2).
+
+Gesamt: 126 Selbsttest-Prüfungen, Vektortests 9 von 9 in AVX2, NEON-Shim und skalar (Diodenleiter
+und `Poly` bitgleich). Eine Stunde Render mit allen Stimmen und Komposition 3,9 % eines Kerns.
+
+Nächster Schritt: Phase 4 (Form-Grammatik, Energiebogen, Pads mit Wavetables, Übergänge).
 
 ## 0. Kurzfassung
 
@@ -385,9 +433,10 @@ Modalresonatoren alle lane-parallel. Das ist der Ort, wo SoA am meisten bringt.
 - **Squelch-Modus** (Review 15.09.): der "Liquid Lead" von Hallucinogen, Cosmosis, Tristan als
   eigener Modus derselben Stimme: schnelle Tonhöhen-Hüllkurve (Startwert einige kHz, Ziel einige
   hundert Hz, einige zehn ms) durch ein hochresonantes Kammfilter (`VoiceFilter::Comb`, Verzögerung
-  2 bis 6 ms) oder einen Z-Plane-Bandpass, danach die Verzerrung. Die Zahlen sind ein Startpunkt,
-  kalibriert werden sie in Phase 3 an den drei Hallucinogen-Tracks der Sammlung (LSD, Alpha
-  Centauri, Solstice) mit `analyze_ref.py`, nicht geglaubt.
+  2 bis 6 ms) oder einen Z-Plane-Bandpass, danach die Verzerrung. Die Kalibrierung an den drei
+  Hallucinogen-Tracks der Sammlung (LSD, Alpha Centauri, Solstice) ist in Phase 3 versucht worden und
+  gescheitert (`Tools/ref_sweeps.py`, Negativbefund); die Zahlen bleiben Entwurfswerte mit Stellbereich.
+  Umgesetzt: Cutoff-Startwert × Faktor mit Zeitkonstante plus auf die Notenperiode gestimmter Kamm.
 - **Akzent:** erhöht Hüllkurve und Cutoff und lädt einen "Akzent-Sweep"-Kondensator, dessen
   Wirkung mit der Resonanz wächst (das charakteristische "Wow" bei aufeinanderfolgenden Akzenten).
   Modelliert als zweite, langsamere Hüllkurve mit resonanzabhängiger Tiefe.

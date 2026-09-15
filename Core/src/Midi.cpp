@@ -147,10 +147,20 @@ std::vector<uint8_t> encodeMidi(const Score& score)
     for (int p = 0; p < kNumParts; ++p) {
         std::vector<RawEvent> ev;
         const uint8_t ch = static_cast<uint8_t>(midiChannelOf(static_cast<Part>(p)));
+        bool portamento = false;
         for (const NoteEvent& n : score.notes) {
             if (static_cast<int>(n.part) != p) continue;
             const int64_t on = toTick(n.beat);
             const int64_t off = std::max(on + 1, toTick(n.beat + static_cast<double>(n.length)));
+            // Slides: the notes overlap already; CC 65 (portamento) is on from the first sliding note
+            // until the note a slide ends in has finished.
+            if (n.flags & kNoteSlide) {
+                if (!portamento) ev.push_back(RawEvent{ on, 1, { static_cast<uint8_t>(0xB0 | ch), 65, 127 } });
+                portamento = true;
+            } else if (portamento) {
+                ev.push_back(RawEvent{ off, 1, { static_cast<uint8_t>(0xB0 | ch), 65, 0 } });
+                portamento = false;
+            }
             ev.push_back(RawEvent{ on, 2, { static_cast<uint8_t>(0x90 | ch), n.pitch, std::max<uint8_t>(1, n.velocity) } });
             ev.push_back(RawEvent{ off, 1, { static_cast<uint8_t>(0x80 | ch), n.pitch, 0 } });
         }

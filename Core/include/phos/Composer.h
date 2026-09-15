@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file Composer.h
  * @brief The composer: tracks with their own key, tempo, patterns and sound; bars of kick and bass;
  *        and the conductor that feeds the engine.
@@ -34,7 +34,10 @@
  * tracks). When a track is planned, the composer renders two bars of its sound -- kick, primary bass
  * pattern, recipe and constraints -- in a private engine, measures the integrated loudness to
  * ITU-R BS.1770, and gives the track the gain that brings it to the first track's loudness, at most
- * +-9 dB. The composer still never listens to the live output: the probe is a deterministic render of
+ * +-9 dB. The melodic parts come and go inside a track, so they are not part of that measurement; each
+ * of them is probed alone instead (two bars of its own line and sound) and brought to the loudness the
+ * same part had in the first track, so an FM lead after a supersaw or a squelched acid after a dry one
+ * does not jump either. The composer still never listens to the live output: the probe is a deterministic render of
  * its own plan. The measurement uses the knobs as they are when the plan is made.
  *
  * **Distance between tracks.** Each recipe is chosen by Mitchell's best-candidate method ("Spectrally
@@ -46,6 +49,7 @@
  */
 #pragma once
 #include "phos/Clock.h"
+#include "phos/Melody.h"
 #include "phos/Rhythm.h"
 #include "phos/Score.h"
 #include <cstdint>
@@ -80,6 +84,10 @@ struct TrackPlan {
     float  gainDb = 0.0f;           ///< level correction against the first track
     uint64_t percSeed = 0;          ///< seed of the track's percussion decisions
     PercPlan perc;                  ///< the track's percussion plan (Rhythm.h)
+    uint64_t melodySeed = 0;        ///< seed of the track's melodic decisions
+    MelodyPlan melody;              ///< chords, acid, lead, arp and their schedule (Melody.h)
+    double partLoudness[kMelodyParts] = {};   ///< probe loudness of each melodic part alone, LUFS
+    float  partGainDb[kMelodyParts] = {};     ///< level correction of each melodic part against the first track's
 };
 
 /** @brief Composes the set from a seed and the knobs. */
@@ -125,7 +133,8 @@ private:
     TrackPlan makeTrack(const ParamStore& params, int index) const;
     void trackStartControls(const ParamStore& params, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out) const;
     void arcControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, bool ramp, std::vector<ControlEvent>& out) const;
-    double probeLoudness(const ParamStore& params, const TrackPlan& plan) const;
+    double probeLoudness(const ParamStore& params, const TrackPlan& plan, int part = -1) const;
+    void melodyControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, std::vector<ControlEvent>& out) const;
 
     uint64_t seed_;
     mutable std::vector<TrackPlan> plans_;
