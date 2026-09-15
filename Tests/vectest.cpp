@@ -7,7 +7,10 @@
  * templates, must equal the float instantiation exactly -- not within a tolerance. If this ever
  * needs a tolerance, an operation has crept in that is not a single IEEE operation per lane.
  */
+#include "phos/Acid.h"
+#include "phos/Bass.h"
 #include "phos/DiodeLadder.h"
+#include "phos/Kick.h"
 #include "phos/Halfband.h"
 #include "phos/Ladder.h"
 #include "phos/Perc.h"
@@ -284,6 +287,62 @@ void testPoly()
                 ps * 10.0, kVecPathName, pv * 10.0, ps / pv);
 }
 
+/**
+ * @brief Cost of the parts that are not lane templates, for the plan's table.
+ *
+ * Kick, bass and acid have one voice each, so they are not written over a lane type and the scalar
+ * and NEON variants of this executable do not compile them (Tests/CMakeLists.txt gives those
+ * variants a fixed source list). They are measured only in the variant that links the core, which is
+ * the AVX2 build on x86-64. `phos_render --solo <part>` cannot serve here: --solo is a mute in the
+ * mixer, so every engine still renders and every part measures the whole engine.
+ */
+#if !defined(PHOS_FORCE_SCALAR) && !defined(PHOS_NEON_SHIM)
+void testParts()
+{
+    section("cost of kick, bass and acid (no check, a measurement)");
+    const DenormalGuard guard;
+    ParamStore p;
+    const int kb = p.base(Module::Kick), bb = p.base(Module::Bass), ab = p.base(Module::Acid);
+    std::vector<float> kv(static_cast<size_t>(kick::Count)), bv(static_cast<size_t>(bass::Count)), av(static_cast<size_t>(acid::Count));
+    for (int i = 0; i < kick::Count; ++i) kv[static_cast<size_t>(i)] = p.get(kb + i);
+    for (int i = 0; i < bass::Count; ++i) bv[static_cast<size_t>(i)] = p.get(bb + i);
+    for (int i = 0; i < acid::Count; ++i) av[static_cast<size_t>(i)] = p.get(ab + i);
+
+    // 145 BPM: a kick every beat (12414 samples), bass and acid on every sixteenth.
+    const int beat = 19862, sixteenth = beat / 4;
+    Kick kick;
+    Bass bass;
+    kick.prepare(48000.0);
+    bass.prepare(48000.0);
+    kick.update(kv.data(), 6);
+    bass.update(bv.data());
+    std::vector<float> kb2(32), bb2(32);
+    auto t0 = std::chrono::steady_clock::now();
+    for (int block = 0; block < 15000; ++block) {
+        const int n0 = block * 32;
+        if (n0 % beat < 32) { kick.trigger(1.0f, 0.0); bass.duck(0.0); }
+        if (n0 % sixteenth < 32) bass.noteOn(30 + (block % 5), 0.9f, sixteenth - 200, 0.0, 0.0);
+        kick.process(kb2.data(), 32);
+        bass.process(bb2.data(), 32);
+    }
+    const double tkb = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+
+    Acid acid;
+    acid.prepare(48000.0);
+    acid.update(av.data(), 145.0);
+    std::vector<float> aL(32), aR(32);
+    t0 = std::chrono::steady_clock::now();
+    for (int block = 0; block < 15000; ++block) {
+        const int n0 = block * 32;
+        if (n0 % sixteenth < 32) acid.noteOn(45 + (block % 12), 0.9f, block % 4 == 0, block % 3 == 0, sixteenth - 100, 0.0);
+        acid.process(aL.data(), aR.data(), 32);
+    }
+    const double ta = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    std::printf("         cost of 10 s, kick + rolling bass: %s %.2f %% of a core\n", kVecPathName, tkb * 10.0);
+    std::printf("         cost of 10 s, acid on every sixteenth: %s %.2f %% of a core\n", kVecPathName, ta * 10.0);
+}
+#endif
+
 } // namespace
 
 int main()
@@ -298,5 +357,8 @@ int main()
     testPerc();
     testDiodeLadder();
     testPoly();
+#if !defined(PHOS_FORCE_SCALAR) && !defined(PHOS_NEON_SHIM)
+    testParts();
+#endif
     return finish();
 }

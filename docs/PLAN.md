@@ -249,6 +249,143 @@ Nächster Schritt: Phase 5 (Komponist: Form-Grammatik nach Grosz et al. mit PDB 
 Sektionsregeln nach Solberg und Dibben, Tonartenreise, Übergänge, Sperren und Neuwürfeln, Stilprofile,
 `.phosset`); parallel Phase 6 (JUCE-Plugin) und Phase 7 (Quest-Build) in eigenen Arbeitsbäumen.
 
+**16.09.2026, DSP-Qualitätsrunde: Supersaw-Aliasing, Velvet Noise, Lead bei 2×, Kostentabelle.**
+Anlass sind die drei messbaren Punkte des SOTA-Reviews (Absatz Literaturrunde). *Erst gemessen, dann
+entschieden;* die Zahlen stehen unten auch dort, wo das Ergebnis "nichts tun" ist.
+
+*Das Maß.* `inharmonicDb` zählt alles, was keine Harmonische von f0 ist, als Aliasing — bei einer
+verstimmten Supersaw sind das sechs von sieben Oszillatoren. Bei Detune 1 liest es **+7,9 dB, egal
+welcher Oszillator spielt**, und sagt über Aliasing nichts. Die Runde misst deshalb mit
+`supersawAliasDb`: die erlaubten Linien einer Supersaw sind {h · (1 + a_u y) · f0}; alles andere
+zwischen 100 Hz und 18 kHz ist Aliasing. Die Bänder um die erlaubten Linien decken bei den gemessenen
+Noten 4 bis 25 % der Bins ab, das ist unter einem dB Verzerrung des Ergebnisses.
+
+**1. Supersaw: PolyBLEP gegen gemipmappten Tabellen-Sägezahn.** Gehaltene Note, 65536-Fenster 0,2 s
+nach dem Einsatz, 48 kHz, Lead- und Pad-Instanz gleich eingestellt (Cutoff 18 kHz, `hp_track` 0, keine
+Positions-Hüllkurve, kein LFO, Mix 0,75).
+
+| Note | Detune | PolyBLEP 1× | Tabellen-Säge | PolyBLEP 2× + Halbband | `inharmonicDb` (alle drei) |
+|---|---|---|---|---|---|
+| C4 | 1,00 | −49,6 dB | **−76,7 dB** | −71,5 dB | +7,3 dB |
+| C5 | 1,00 | −46,6 dB | **−72,4 dB** | −68,4 dB | +7,9 dB |
+| C6 | 1,00 | −43,3 dB | **−68,9 dB** | −65,1 dB | +7,9 dB |
+| A6 | 1,00 | −40,9 dB | **−61,6 dB** | −62,3 dB | +7,9 dB |
+| C4 | 0,55 | −49,9 dB | **−80,8 dB** | −71,5 dB | −5,6 / −6,7 dB |
+| C5 | 0,55 | −45,8 dB | **−76,0 dB** | −67,6 dB | +0,6 dB |
+| C6 | 0,55 | −43,1 dB | **−73,2 dB** | −64,9 dB | +3,3 dB |
+| A6 | 0,55 | −40,8 dB | **−61,3 dB** | −62,4 dB | +4,0 dB |
+
+Die Tabelle ist ab C5 um 26 bis 30 dB sauberer, bei A6 um 20 dB — weit über der Schwelle von 10 dB.
+Sie ist dabei **nicht dunkler**: Leistung über 8 kHz bei Detune 0,55 PolyBLEP −22,1 / −18,8 / −15,9 /
+−13,6 dB, Tabelle −21,6 / −17,5 / −14,5 / −12,7 dB (C4 bis A6), obwohl die gewählte Mipmap-Stufe bei
+A6 nur acht Harmonische bis 14 kHz führt. **Die Alternative 2× mit dem vorhandenen `HalfbandDown`
+gewinnt nicht:** sie bleibt 3 bis 10 dB hinter der Tabelle und kostet einen zweiten Oszillator-Durchlauf.
+Entscheidung: **Supersaw liest die Säge der Classic-Tabelle** (Frame 2), jeder der sieben Oszillatoren
+auf seiner eigenen Stufe, mit Szabos Detune, Mix, Zufallsphasen und Hochpass unverändert. **PolyBLEP
+bleibt der VA-Typ** (dort wird die Säge in einen Puls geblendet, was eine Tabelle nicht kann).
+
+Ein Tabellen-Frame ist auf `kTargetRms` = 1/(2√2) normiert, die Rampe 2t−1 hat 1/√3; die
+Schacht-Verstärkung trägt deshalb `kSawTableGain` = 2√(2/3). Gemessen bleibt der Pegel des Leads gleich
+(**+0,24 dB** gegen die Rampe), die Phase-4-Kalibrierung gilt weiter.
+
+*Nebenbefund, mitgenommen:* `polySlotKernel` rechnete für **jede** Stimme beide gefalteten
+Taylor-Sinus der Frequenzmodulation, auch für Supersaws und Pads, die `wFm` mit 0 gewichten. Der Kernel
+lässt eine Quelle jetzt aus, wenn die ganze Achtergruppe sie mit 0 gewichtet — dieselbe Entscheidung pro
+Gruppe wie das vorhandene "spielt hier eine Stimme", also auf allen Vektorpfaden gleich und bitgleich.
+
+**2. Velvet Noise für Hats: abgelehnt, Negativbefund.** `Tools/ref_hat_texture.py` misst im Band
+6 bis 16 kHz die spektrale Flachheit (geometrisches durch arithmetisches Mittel, Median über
+1024er-Hann-Fenster), den Crest-Faktor ganz und über 100-ms-Fenster, die Kurtosis und den Anteil der
+Samples innerhalb 20 dB unter dem Spitzenwert. 40 Referenztracks (Album-Tag "Psytrance Collection",
+je 60 s ab 2:30) gegen Phosphene-Renders über 210 s:
+
+| Quelle | Flachheit | Crest | Crest 100 ms | Kurtosis | Duty |
+|---|---|---|---|---|---|
+| **Referenz, Median von 40** | **0,299** | **22,4 dB** | **15,2 dB** | **9,4** | **0,45** |
+| Referenz, Quartile | 0,237–0,336 | 21,3–23,5 | 14,4–16,1 | 6,7–12,3 | 0,36–0,59 |
+| Phosphene, ganzer Mix, weiß | 0,275 | 26,2 dB | 19,0 dB | 18,6 | 0,37 |
+| Phosphene, ganzer Mix, Velvet 1000/s | 0,275 | 26,5 dB | 20,3 dB | 23,7 | 0,44 |
+| Phosphene, ganzer Mix, Velvet 2000/s | 0,277 | 25,8 dB | 19,5 dB | 19,8 | 0,43 |
+| Phosphene, ganzer Mix, Velvet 4000/s | 0,276 | 25,0 dB | 19,0 dB | 17,3 | 0,41 |
+| Phosphene, `--solo perc`, weiß | 0,333 | 26,7 dB | 20,4 dB | 36,1 | 0,15 |
+| weißes Rauschen pur | 0,563 | 11,7 dB | 10,2 dB | −0,3 | 1,00 |
+| Velvet pur, 500 bis 8000 Impulse/s | 0,59 bis 0,56 | 20,8 bis 11,5 dB | 16,4 bis 10,4 dB | 22,6 bis −0,2 | 0,62 bis 1,00 |
+
+Das Ergebnis dreht die Erwartung um: **Phosphenes Hat-Teppich ist bereits transienter als die
+Referenzen**, nicht glatter (Crest 26,2 gegen 22,4 dB, Kurtosis 18,6 gegen 9,4). Velvet Noise erhöht
+Crest und Kurtosis bei geringer Dichte und ist ab 4000 Impulsen pro Sekunde von weißem Rauschen nicht
+mehr zu unterscheiden — es bewegt die Messgrößen also entweder **weiter weg** von der Referenz oder
+gar nicht. Auch der Kostenvorteil bleibt aus: der Prototyp maß 0,49 bis 0,55 % eines Kerns gegen 0,54 %
+mit weißem Rauschen, also nichts über der Streuung, weil in dieser Lane ohnehin ein SVF pro Sample
+läuft und die Sparsamkeit nur die Erzeugung betrifft (in der Literatur zahlt sie sich bei Faltung und
+Dekorrelation aus, nicht als Quelle vor einem Filter). `perc.noise_mode` ist deshalb **nicht** gebaut;
+der Prototyp wurde nach der Messung wieder entfernt. Kontrolle gegen den Codec-Verdacht: derselbe
+Render als MP3 mit 192 kBit/s gemessen ergibt 0,274 / 26,1 dB / 18,8 dB / 17,7 / 0,38 — die
+MP3-Kodierung der Referenzen verfälscht diese Maße nicht. Der verbleibende Abstand zur Referenz liegt
+in der Ereignisdichte und im Mastering, nicht in der Rauschquelle; das gehört zu Phase 5 und zur
+Mischpultrunde, nicht hierher. Literatur dazu: Järveläinen und Karjalainen, "Reverberation modeling
+using velvet noise", AES 30th Int. Conf. 2007; Välimäki, Lehtonen und Takanen, "A perceptual study on
+velvet noise and its variants", IEEE TASLP 21(7), 2013; Alary, Politis und Välimäki, "Velvet-noise
+decorrelator", Proc. DAFx-17, Edinburgh 2017.
+
+**3. Lead bei 2×: nicht nötig, aber der FM-Index bekommt eine Bandbreitengrenze.** Aliasing über
+12 kHz, gegen den Grundton, gemessen gegen die *erlaubten* Linien (bei FM |f_c + k·f_m|, sonst wäre
+jedes Seitenband mit nicht-ganzzahligem Verhältnis "Aliasing"):
+
+| Oszillator | C5 1× / 2× | C6 1× / 2× | A6 1× / 2× | C6 bei Lead-Cutoff 10 kHz |
+|---|---|---|---|---|
+| VA Säge | −37,3 / −53,1 | −34,5 / −48,2 | −32,2 / −51,9 | −46,6 |
+| VA Puls 25 % | −37,3 / −56,4 | −34,3 / −53,5 | −32,6 / −51,2 | −46,3 |
+| FM I = 2,5, r = 2 (**Standard**) | −124,7 / −125,8 | **−125,9** / −135,1 | −104,2 / −109,2 | −132,5 |
+| FM I = 10, r = 2 | −110,3 | −75,0 | −18,9 | — |
+| FM I = 2,5, r = 3,5 | −131,5 | −103,8 | −49,5 | — |
+| FM I = 10, r = 3,5 | −87,2 | **−15,7** | +4,8 | — |
+| FM I = 10, r = 7,3 | −13,6 | **+6,4** | +6,2 | — |
+
+Das Kriterium (über −60 dB bei C6) ist mit den Standardwerten **nicht erfüllt**: FM liegt dort bei
+−126 dB, weil ein ganzzahliges Verhältnis die gefalteten Seitenbänder wieder auf Harmonische legt.
+**2× für den FM-Pfad wird also nicht gebaut.** Die Messung deckt dafür einen echten Fehler auf: mit
+hohem Index und nicht-ganzzahligem Verhältnis aliast die FM-Stimme **lauter als ihr eigener Träger**
+(+6,4 dB bei C6, r = 7,3). 2× half nur bis −39 dB und kostete einen zweiten Durchlauf; die
+Bandbreitengrenze nach Carson (Chowning, "The synthesis of complex audio spectra by means of frequency
+modulation", JAES 21(7), 1973, Abschnitt 3) kostet nichts und wirkt besser: der Index wird pro Note auf
+((0,45·sr) − f_c)/f_m − 1 geklemmt. Danach: C6 r = 7,3 **−52,6 dB**, A6 r = 7,3 **−46,3 dB**, C6
+r = 3,5 **−54,6 dB**. Die Standardwerte (Index 2,5, Verhältnis 2) werden im ganzen Tonumfang des Leads
+**nicht** berührt. Die VA-Säge bleibt bei 1× mit PolyBLEP: der Komponist wählt sie in 15 % der Tracks,
+und hinter dem Lead-Cutoff von 10 kHz liegt ihr Aliasing bei −46 dB.
+
+**4. Kostentabelle** (i9-12900K, ein Kern, 48 kHz, je 10 s; "vorher" = derselbe Messstand mit
+zurückgedrehtem Oszillator und ohne das Auslassen im Kernel). `phos_render --solo <Teil>` taugt dafür
+**nicht**: `--solo` ist eine Stummschaltung im Mischpult, alle Engines rechnen weiter, jeder Teil misst
+5,0 % — deshalb misst `phos_vectest` die Teile jetzt selbst.
+
+| Teil | AVX2 vorher → nachher | skalar vorher → nachher | NEON-Shim vorher → nachher |
+|---|---|---|---|
+| Kick + rollender Bass, Bass auf jeder Sechzehntel | 0,46 → **0,47 %** | — | — |
+| Percussion, alle zwölf Lanes dauerhaft beschäftigt | 0,5 → **0,5 %** | 2,9 → 2,9 % | 2,3 → 2,4 % |
+| Acid auf jeder Sechzehntel, mit Akzent und Slide | 0,75 → **0,75 %** | — | — |
+| Acht Supersaw-Stimmen | 1,0 → **1,4 %** | 4,3 → **2,6 %** | 5,8 → **2,4 %** |
+| Acht Wavetable-Pad-Stimmen | 3,9 → **3,3 %** | 7,1 → **4,3 %** | 8,7 → **4,5 %** |
+| Ganzer Render, 128 Takte, Seed 3 | 4,98 → **5,04 %** | — | — |
+
+Der Tabellen-Sägezahn kostet AVX2 0,4 Prozentpunkte für acht Stimmen (die Tabellenlesung ist ein
+Gather und bleibt skalar); das Auslassen der ungenutzten Quellen im Kernel gibt auf den skalaren Pfaden
+mehr zurück, als die Tabelle nimmt — für die Quest ist die Runde **netto billiger** (Supersaw 5,8 →
+2,4 %, Pad 8,7 → 4,5 % im NEON-Shim). Kick, Bass und Acid sind Einzelstimmen und keine Lane-Templates;
+die skalaren und NEON-Varianten von `phos_vectest` übersetzen sie nicht mit (feste Quellenliste in
+`Tests/CMakeLists.txt`), deshalb stehen dort Striche.
+
+*Gegenprobe.* Sieben Fehler eingebaut, jeder von seiner Prüfung gefunden: Supersaw zurück auf die
+PolyBLEP-Rampe (Aliasing −46,6/−43,3/−40,9 dB, Pegel +3,43 dB, VA-Vergleich fällt zusammen), keine
+RMS-Kompensation (−4,02 dB), keine Carson-Grenze (C6 r = 7,3 **+2,2 dB**), Gruppen-Flags nur aus dem
+ersten Schacht (schwächste der sieben Supersaw-Linien −117,8 dB), Supersaw liest Tabelle und Position
+der Instanz (alle 24000 Samples verschieden), Kernel lässt die Tabellenquelle weg (fünf Prüfungen),
+Supersaw immer aus Stufe 0 (−22,4/−18,9/−16,3 dB). Zwei dieser Fehler fand die erste Runde **nicht** —
+dafür gibt es jetzt zwei zusätzliche Prüfungen (Tabelle und Position rühren die Supersaw nicht an;
+eine FM- und eine Supersaw-Stimme in derselben Achtergruppe, alle sieben Linien noch da).
+
+Gesamt: 153 Selbsttest-Prüfungen, Vektortests 9 von 9 in AVX2, NEON-Shim und skalar.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

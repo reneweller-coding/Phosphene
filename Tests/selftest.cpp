@@ -2365,7 +2365,10 @@ void testWaveTable()
 }
 
 // ---------------------------------------------------------------------------------------------
-// TEMPORARY measurement bench (PHOS_ONLY=testMeasure).
+// The measurement bench of the DSP quality round of 16.09.2026 (docs/PLAN.md): aliasing of the
+// supersaw against the table saw and against two-times oversampling, the top end of both paths, and
+// the aliasing of the FM and the VA oscillator at high notes. It checks nothing, it prints the tables
+// the plan quotes, and it runs only when PHOS_ONLY names it.
 // ---------------------------------------------------------------------------------------------
 
 /** @brief Renders one sustained note of a Poly at @p rate; 96 kHz is decimated to 48 kHz. */
@@ -2868,7 +2871,9 @@ int main()
     // PHOS_ONLY=testName[,testName...] runs only those tests (for work on one building block).
     const char* only = std::getenv("PHOS_ONLY");
     auto run = [&](const char* name, void (*fn)()) { if (only == nullptr || std::strstr(only, name) != nullptr) fn(); };
-    run("testMeasure", testMeasure);
+    // The measurement bench prints tables and checks nothing; it reproduces the numbers of the
+    // DSP quality round of 16.09.2026 (docs/PLAN.md) and runs only when it is named by itself.
+    if (only != nullptr && std::strstr(only, "testMeasure") != nullptr) testMeasure();
     run("testSampler", testSampler);
     run("testDiodeLadder", testDiodeLadder);
     run("testAcid", testAcid);
