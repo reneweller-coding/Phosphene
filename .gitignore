@@ -1,0 +1,9 @@
+build*/
+out/
+*.wav
+*.mid
+!Tests/data/*.mid
+__pycache__/
+.vs/
+*.user
+Tools/corpus/cache/

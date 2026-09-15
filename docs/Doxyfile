@@ -1,0 +1,20 @@
+# Doxygen configuration for Phosphene. Run from the repository root:  doxygen docs/Doxyfile
+PROJECT_NAME           = Phosphene
+PROJECT_BRIEF          = "Generator for complete psytrance sets"
+OUTPUT_DIRECTORY       = build/doxygen
+INPUT                  = Core/include Core/src Tools/render Tests README.md
+FILE_PATTERNS          = *.h *.cpp *.md
+RECURSIVE              = YES
+EXCLUDE                = Tests/neonshim
+USE_MDFILE_AS_MAINPAGE = README.md
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+JAVADOC_AUTOBRIEF      = NO
+MARKDOWN_SUPPORT       = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HAVE_DOT               = NO
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+INPUT_ENCODING         = UTF-8

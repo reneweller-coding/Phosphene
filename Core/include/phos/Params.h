@@ -1,0 +1,157 @@
+/**
+ * @file Params.h
+ * @brief The parameter system: descriptor tables per module, instantiated in blocks.
+ *
+ * Noctuary kept one flat enum of parameters. Phosphene has modules that exist several times -- twelve
+ * percussion lanes, several polyphonic engines -- so parameters are declared once per module as a
+ * table of descriptors, and a module may be instantiated more than once. A parameter's id is the
+ * base index of its module instance plus its index in the table; its text key is
+ * "<prefix>.<key>" or "<prefix><instance>.<key>" ("kick.pitch_start", "perc3.decay").
+ *
+ * From the same tables come the host parameters, OSC addresses, the preset text form, the manual and
+ * the `--list` output of phos_render. The composer never writes parameters; it reads a snapshot.
+ *
+ * Values are stored as std::atomic<float> in their real range (Hz, ms, dB), so the audio thread can
+ * read what another thread wrote without a lock.
+ */
+#pragma once
+#include <atomic>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
+
+namespace phos {
+
+/** @brief How a parameter maps between its real value and the normalised 0..1 of a knob. */
+enum class Curve : uint8_t {
+    Linear,   ///< proportional
+    Log,      ///< logarithmic; minimum must be > 0
+    Int,      ///< integer steps, linear
+    Choice,   ///< integer index into a list of names
+    Toggle,   ///< 0 or 1
+};
+
+/** @brief Static description of one parameter. */
+struct ParamDesc {
+    const char* key;                    ///< identifier inside the module, snake_case
+    const char* name;                   ///< display name (English)
+    const char* unit;                   ///< unit for display, may be empty
+    float minValue;                     ///< lowest real value
+    float maxValue;                     ///< highest real value
+    float defValue;                     ///< default real value
+    Curve curve;                        ///< mapping to the knob
+    const char* const* choices = nullptr;   ///< names for Curve::Choice (maxValue + 1 entries)
+};
+
+/** @brief The modules that own parameters. */
+enum class Module : int { Compose = 0, Kick, Bass, Mix, Master, Count };
+
+/** @brief Parameters of the composer (read as a snapshot when bars are composed). */
+namespace compose {
+enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation, BassRegister, Count };
+}
+/** @brief Parameters of the kick drum. */
+namespace kick {
+enum : int { Engine, Tune, PitchEnd, PitchStart, PitchDecay, Punch, AmpAttack, AmpHold, AmpDecay,
+             Drive, Clip, ClickLevel, ClickTone, ClickDecay, Tone, Level, Count };
+}
+/** @brief Parameters of the bass. */
+namespace bass {
+enum : int { Wave, PulseWidth, Sub, Retrigger, StartPhase, Cutoff, Resonance, EnvAmount, FilterDecay, KeyTrack,
+             VelToCutoff, Drive, AmpAttack, AmpDecay, AmpSustain, AmpRelease, DuckDepth, DuckHold,
+             DuckRelease, Level, Count };
+}
+/** @brief Parameters of the mixer. */
+namespace mix {
+enum : int { KickMute, BassMute, Count };
+}
+/** @brief Parameters of the master section. */
+namespace master {
+enum : int { Gain, Ceiling, Clip, Count };
+}
+
+extern const char* const kKeyNames[12];         ///< C, C#, ... B
+extern const char* const kScaleNames[];         ///< names of compose.scale
+extern const char* const kKickPatternNames[];   ///< names of compose.kick_pattern
+extern const char* const kBassPatternNames[];   ///< names of compose.bass_pattern
+
+/**
+ * @brief All parameter values of one engine, lock-free readable from the audio thread.
+ *
+ * Construction builds the registry from the module tables. Not copyable (atomics); use
+ * copyValuesFrom() for snapshots.
+ */
+class ParamStore {
+public:
+    ParamStore();
+    ParamStore(const ParamStore&) = delete;
+    ParamStore& operator=(const ParamStore&) = delete;
+
+    /** @brief Number of parameters. */
+    int count() const { return static_cast<int>(entries_.size()); }
+    /** @brief First id of a module instance; -1 if it does not exist. */
+    int base(Module m, int instance = 0) const;
+    /** @brief Descriptor of @p id. */
+    const ParamDesc& desc(int id) const { return *entries_[static_cast<size_t>(id)].desc; }
+    /** @brief Full text key of @p id ("kick.pitch_start"). */
+    const std::string& key(int id) const { return entries_[static_cast<size_t>(id)].key; }
+    /** @brief Id for a text key, or -1. */
+    int find(std::string_view key) const;
+
+    /** @brief Current real value. */
+    float get(int id) const { return values_[static_cast<size_t>(id)].load(std::memory_order_relaxed); }
+    /** @brief Current value rounded to an integer (Int, Choice, Toggle). */
+    int getInt(int id) const;
+    /** @brief Current value as a switch. */
+    bool getBool(int id) const { return get(id) >= 0.5f; }
+    /** @brief Sets a real value, clamped to the range (and rounded for discrete curves). */
+    void set(int id, float value);
+    /** @brief Sets from a normalised 0..1 position. */
+    void setNormalised(int id, float norm) { set(id, fromNormalised(id, norm)); }
+
+    /** @brief Real value to normalised 0..1. */
+    float toNormalised(int id, float value) const;
+    /** @brief Normalised 0..1 to real value. */
+    float fromNormalised(int id, float norm) const;
+
+    /** @brief All parameters back to their defaults. */
+    void resetDefaults();
+    /** @brief Copies every value from another store (for snapshots on another thread). */
+    void copyValuesFrom(const ParamStore& other);
+
+    /**
+     * @brief Applies "key=value" assignments separated by whitespace, newlines or ';'.
+     *
+     * Choice parameters accept their name ("compose.key=F#") or index. Lines starting with '#' are
+     * comments.
+     * @param text  the assignments
+     * @param error receives a message for the first bad assignment, may be null
+     * @return false if any assignment failed (the good ones are still applied)
+     */
+    bool parseText(std::string_view text, std::string* error = nullptr);
+    /**
+     * @brief The text form, one "key=value" per line.
+     * @param onlyChanged leave out parameters at their default
+     */
+    std::string toText(bool onlyChanged) const;
+    /** @brief A value formatted for display ("330 Hz", "F#"). */
+    std::string format(int id) const;
+
+private:
+    struct Entry {
+        const ParamDesc* desc;
+        std::string key;
+        Module module;
+        int instance;
+    };
+    std::vector<Entry> entries_;
+    std::unique_ptr<std::atomic<float>[]> values_;
+    std::unordered_map<std::string, int> index_;
+    static constexpr int kMaxInstances = 16;
+    int bases_[static_cast<int>(Module::Count)][kMaxInstances] = {};
+};
+
+} // namespace phos
