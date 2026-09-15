@@ -11,6 +11,7 @@ brightness), and the share of energy below 120 Hz.
 Only numpy and Pillow are needed.
 """
 import argparse
+import math
 import struct
 import sys
 
@@ -103,10 +104,15 @@ def main():
     ap.add_argument("wav")
     ap.add_argument("--bpm", type=float, default=145.0)
     ap.add_argument("--png")
+    ap.add_argument("--start-seconds", type=float, default=None, help="where the pictures start (default: bar 8)")
     a = ap.parse_args()
     x, rate = read_wav(a.wav)
     beat = 60.0 / a.bpm * rate
     bar = 4 * beat
+    if a.start_seconds is not None:
+        # Snap to the next downbeat of the given tempo so the pictures start on a kick.
+        first = a.start_seconds * rate
+        x = x[int(math.ceil(first / bar) * bar):]
 
     img = Image.new("RGB", (1400, 900), (18, 18, 24))
     d = ImageDraw.Draw(img)

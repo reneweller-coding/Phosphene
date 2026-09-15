@@ -50,8 +50,9 @@ struct MidiFileData {
     int ppq = 480;                                     ///< ticks per quarter note
     std::vector<TempoPoint> tempos;                    ///< tempo events (beat, bpm), held steps
     std::vector<std::pair<double, std::string>> markers; ///< marker meta events (beat, text)
-    int keySharps = 0;                                 ///< key signature: sharps (+) or flats (-)
-    bool keyMinor = false;                             ///< key signature mode
+    int keySharps = 0;                                 ///< first key signature: sharps (+) or flats (-)
+    bool keyMinor = false;                             ///< first key signature's mode
+    std::vector<std::pair<double, int>> keys;          ///< every key signature (beat, sharps)
     std::vector<MidiTrackData> tracks;                 ///< all tracks in file order
 };
 

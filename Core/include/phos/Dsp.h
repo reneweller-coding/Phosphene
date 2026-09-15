@@ -126,6 +126,18 @@ public:
     }
     /** @brief Starts the attack from the current level (no reset to zero, so no click). */
     void noteOn()  { stage_ = Stage::Attack; }
+    /**
+     * @brief Advances an attack that has just begun by a fraction of a sample, in closed form.
+     *
+     * The attack is a one-pole towards 1.3, so after s samples the distance to 1.3 has shrunk by
+     * (1 - a)^s -- for any real s. Used for sub-sample note onsets. (Added in Phosphene.)
+     */
+    void advanceAttack(double samples)
+    {
+        if (stage_ != Stage::Attack || samples <= 0.0) return;
+        level_ = static_cast<float>(1.3 - (1.3 - level_) * std::pow(1.0 - static_cast<double>(aCoef_), samples));
+        if (level_ >= 1.0f) { level_ = 1.0f; stage_ = Stage::Decay; }
+    }
     /** @brief Enters the release unless idle. */
     void noteOff() { if (stage_ != Stage::Idle) stage_ = Stage::Release; }
     /** @brief Silences immediately. */
@@ -186,6 +198,8 @@ struct Svf {
     void set(float cutoffHz, float resonance, float sr) { setK(cutoffHz, 2.0f - 1.9f * clampv(resonance, 0.0f, 1.0f), sr); }
     /** @brief Cutoff and quality factor. */
     void setQ(float cutoffHz, float q, float sr) { setK(cutoffHz, 1.0f / std::max(q, 0.05f), sr); }
+    /** @brief Takes another filter's coefficients, keeping this filter's state. */
+    void copyCoefficients(const Svf& o) { a1 = o.a1; a2 = o.a2; a3 = o.a3; k = o.k; }
     /** @brief Cutoff and damping directly. */
     void setK(float cutoffHz, float damping, float sr)
     {

@@ -7,6 +7,8 @@
  *   phos_render [options]
  *     --bars N            bars to render (default 16)
  *     --seconds S         render S seconds instead of a bar count
+ *     --minutes M         render M minutes
+ *     --tracks            print the plan of every track in the render (key, tempo, patterns, recipes)
  *     --sr RATE           sample rate (default 48000)
  *     --block N           block size handed to the engine (default 256)
  *     --seed N            set seed (default 1)
@@ -75,7 +77,7 @@ int main(int argc, char** argv)
     int sr = 48000, block = 256;
     uint64_t seed = 1;
     std::string out, midi, solo;
-    bool report = false, bench = false, pcm24 = false;
+    bool report = false, bench = false, pcm24 = false, listTracks = false;
     double rampBeat = -1.0, rampBpm = 0.0;
     std::vector<std::string> sets;
 
@@ -90,6 +92,8 @@ int main(int argc, char** argv)
         };
         if (a == "--bars") bars = std::atoi(next());
         else if (a == "--seconds") seconds = std::atof(next());
+        else if (a == "--minutes") seconds = 60.0 * std::atof(next());
+        else if (a == "--tracks") listTracks = true;
         else if (a == "--sr") sr = std::atoi(next());
         else if (a == "--block") block = std::atoi(next());
         else if (a == "--seed") seed = std::strtoull(next(), nullptr, 10);
@@ -127,19 +131,40 @@ int main(int argc, char** argv)
     else if (!solo.empty()) { std::fprintf(stderr, "--solo wants kick or bass\n"); return 2; }
 
     const int cb = params.base(Module::Compose);
-    TempoMap tempo;
-    tempo.setConstant(params.get(cb + compose::Bpm));
+    Composer composer(seed);
+    // The composer's tempo map covers the render: per track, ramped between tracks. For a length in
+    // seconds, plan generously (at the fastest tempo the range allows) and cut by time afterwards.
+    const int planBars = seconds > 0.0
+        ? static_cast<int>(seconds * (params.get(cb + compose::Bpm) + params.get(cb + compose::TempoRange)) / 240.0) + 64
+        : bars;
+    TempoMap tempo = composer.tempoMap(params, planBars);
     if (rampBeat > 0.0) {
+        tempo.setConstant(params.get(cb + compose::Bpm));
         tempo.add(0.0, params.get(cb + compose::Bpm), true);
         tempo.add(rampBeat, rampBpm, false);
     }
 
     engine->prepare(sr, block);
     engine->setTempoMap(tempo);
-    Composer composer(seed);
     Conductor conductor(*engine, composer);
 
     const double totalBeats = seconds > 0.0 ? tempo.beatAt(seconds) : static_cast<double>(bars) * kBeatsPerBar;
+    const int totalBars = static_cast<int>(std::ceil(totalBeats / kBeatsPerBar));
+    if (listTracks) {
+        for (int t = 0; composer.track(params, t).firstBar < totalBars; ++t) {
+            const TrackPlan p = composer.track(params, t);
+            std::printf("track %2d  bar %5d  %3d bars  %5.1f BPM  %-2s %-17s  bass %-7s/%-7s gate %.2f  kick %s%s  gain %+.1f dB\n",
+                        t + 1, p.firstBar, p.bars, p.bpm, kKeyNames[p.key], kScaleNames[p.scale],
+                        kBassPatternNames[p.primaryPattern], kBassPatternNames[p.secondaryPattern], static_cast<double>(p.gate),
+                        (p.kickEngine < 0 ? params.getInt(params.base(Module::Kick) + kick::Engine) : p.kickEngine) == 1 ? "resonant" : "sweep",
+                        p.kickClip == 1 ? " hard" : "", static_cast<double>(p.gainDb));
+            std::printf("          kick recipe");
+            for (int m = 0; m < kNumKickMacros; ++m) std::printf(" %s %+.2f", kKickMacroNames[m], static_cast<double>(p.kickMacro[m]));
+            std::printf("\n          bass recipe");
+            for (int m = 0; m < kNumBassMacros; ++m) std::printf(" %s %+.2f", kBassMacroNames[m], static_cast<double>(p.bassMacro[m]));
+            std::printf("\n");
+        }
+    }
     const uint64_t totalSamples = static_cast<uint64_t>(std::llround(tempo.secondsAt(totalBeats) * sr));
 
     WavWriter wav;
@@ -174,8 +199,14 @@ int main(int argc, char** argv)
     if (!midi.empty()) {
         Score score;
         score.tempo = tempo;
-        score.keyRoot = params.getInt(cb + compose::Key);
-        score.scale = params.getInt(cb + compose::Scale);
+        score.keyRoot = composer.track(params, 0).key;
+        score.scale = composer.track(params, 0).scale;
+        for (int t = 0; composer.track(params, t).firstBar < totalBars; ++t) {
+            const TrackPlan p = composer.track(params, t);
+            const double beat = static_cast<double>(p.firstBar) * kBeatsPerBar;
+            if (t > 0 && p.key != composer.track(params, t - 1).key) score.keyChanges.push_back(KeyChange{ beat, p.key });
+            score.sections.push_back(SectionMark{ beat, SectionType::Groove, 0.5f, t });
+        }
         for (const NoteEvent& e : recorded) if (e.beat < totalBeats) score.notes.push_back(e);
         score.sort();
         if (!writeMidiFile(score, midi.c_str())) { std::fprintf(stderr, "cannot write %s\n", midi.c_str()); return 1; }

@@ -44,6 +44,42 @@ Abweichungen vom Plan, bewusst:
   Kick bei der ersten Bass-Sechzehntel erst 6 dB unter ihrem Spitzenwert, jetzt 27 dB. Die
   Bass-Startphase steht auf 0,5 (Nulldurchgang), weil Phase 0 bei jeder Note einen DC-Sprung erzeugte.
 
+**15.09.2026, zweite Runde: Phasen-Grundlagen von Kick und Bass, Variation über die Nacht.**
+Anlass war die Prüfung gegen sechs signaltheoretische Anforderungen des Nutzers (Startphase, Chirp,
+Raster, Überlappung, Perioden, Filterphase). Umgesetzt und gemessen:
+
+| Anforderung | Umsetzung | Messung |
+|---|---|---|
+| Sub-Oszillator | Sinus auf dem Grundton statt eine Oktave tiefer, hinter der Leiter, unmoduliert; Split-Modus mit Linkwitz-Riley-Hochpass 4. Ordnung bei 2·f0 auf dem gefilterten Zweig | Grundton-Phase driftet über 140 ms um 3,8° (vorher −34°, Mixed-Modus 23°) |
+| Gleiche Grundton-Phase | Sägezahn und Sub starten mit derselben Grundton-Phase; Puls invertiert, weil sein Grundton gegenphasig zum Sägezahn lag und die Mischung bei Wave ⅓ den Grundton auslöschte | Einsatzphase auf 0,02° genau |
+| Kick-Chirp | τ1 (Punch) eigener Parameter; Phase in geschlossener Form integriert; Einstellungen pro Schlag eingefroren | Ausgabe folgt der analytischen Phase inklusive Kettenphase auf 0,09° |
+| Sub-Sample-Einsätze | Kick, Bass, Hüllkurven und Ducker beginnen um den Bruchteil eines Samples versetzt | Schwankung der Einsatzphase von Beat zu Beat 0,013° (vorher 0,33°) |
+| Überlappung | Ausklang-Grenze am ersten Bass-Slot unter Einrechnung der Sättigungsanhebung g/tanh(g); Körper-Untergrenze von zwei Grundton-Perioden über −20 dB | Ausklang −26 bis −27 dB bei allen Sättigungsarten |
+| Phasenbedingung Δϕ = 2πk | `bass.kick_lock`: "Kick follows bass" trimmt τ2 der Kick per Bisektion, "Bass follows kick" setzt die Bass-Startphase auf die analytische Kick-Phase | Δϕ am Einsatz +2,9° bis +5,1° bei 138 bis 148 BPM; ohne Kopplung −157° bis +165° |
+| Perioden-Disziplin | Release nie kürzer als eine halbe Grundton-Periode | Release bei F#1 mindestens 10,8 ms |
+| Identische Noten | Leiter, Dezimierer und Hochpass beginnen neu, wenn die vorige Note unter −60 dB liegt | Korrelation zweier Sechzehntel 0,999995 |
+
+Variation (Wunsch des Nutzers: Sets, die eine ganze Nacht laufen und nie langweilig werden):
+- **Track-Ebene:** Länge, Tonart (Quinten, Ganztöne), Modus, Tempo als mittelwertstabiler Zufallsweg
+  innerhalb `compose.tempo_range` mit 16-Takt-Rampen, Primär- und Sekundärmuster, Gate innerhalb der
+  Release-Grenze. Der erste Track spielt exakt die Knöpfe.
+- **Klang-Rezepte:** fünf Wahrnehmungsrichtungen je Instrument (Kick: Länge, Punch, Körper, Grit,
+  Klick; Bass: Helligkeit, Pluck, Squelch, Grit, Gewicht) nach den Timbre-Dimensionen von Grey (1977)
+  und McAdams et al. (1995), gewählt mit Mitchells Best-Candidate-Verfahren (1991) gegen die letzten
+  vier Tracks. Gemessen über 60 Tracks: engster Abstand aufeinanderfolgender Rezepte 1,17 bei
+  mittlerem Abstand 1,80; 11 Tonarten, alle 5 Muster.
+- **Innerhalb eines Tracks:** Filterbögen über 32 Takte, Sekundärmuster in manchen 16-Takt-Blöcken,
+  zweischlägige Bass-Pausen, Figuren mit steigender Häufigkeit.
+- **Pegelangleich:** Messlauf von zwei Takten je Track in einer privaten Engine, BS.1770, Verstärkung
+  gegen Track 1. Über 30 Minuten Lautheitsspanne 1,0 LU statt 3,7 LU.
+- **Steuerereignisse:** zweiter Ereignisring; die Engine spielt Knopf + normierter Offset bzw.
+  Override. Tonart- und Track-Marker gehen in den MIDI-Export.
+
+Bekannte Grenzen: Die Klang-Rezepte stehen noch nicht als MIDI-CCs im Export. Die Pegelmessung nutzt
+die Knöpfe zum Zeitpunkt der Planung; ein live verstellter Knopf ändert bereits geplante Tracks nicht.
+Die Resonanz-Kick trifft die Phasenkopplung etwas ungenauer als die Sweep-Kick, weil ihre Phase eine
+Summe statt eines Integrals ist.
+
 Nächster Schritt: Phase 2 (Percussion-Kit mit 12 Lanes als erster echter Nutzer der Lane-Templates).
 
 ## 0. Kurzfassung

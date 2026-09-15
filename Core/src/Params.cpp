@@ -19,16 +19,23 @@ namespace {
 const char* const kKickEngineNames[] = { "Sweep", "Resonant" };
 const char* const kKickTuneNames[] = { "Free", "Key" };
 const char* const kKickClipNames[] = { "Tanh", "Hard" };
+const char* const kSubModeNames[] = { "Mixed", "Split" };
+const char* const kKickLockNames[] = { "Off", "Bass follows kick", "Kick follows bass" };
 
 const ParamDesc kComposeParams[compose::Count] = {
-    { "bpm",            "Tempo",          "BPM", 100.0f, 190.0f, 145.0f, Curve::Linear },
-    { "key",            "Key",            "",      0.0f,  11.0f,   6.0f, Curve::Choice, kKeyNames },
-    { "scale",          "Scale",          "",      0.0f,   5.0f,   1.0f, Curve::Choice, kScaleNames },
-    { "kick_pattern",   "Kick Pattern",   "",      0.0f,   2.0f,   1.0f, Curve::Choice, kKickPatternNames },
-    { "bass_pattern",   "Bass Pattern",   "",      0.0f,   4.0f,   0.0f, Curve::Choice, kBassPatternNames },
-    { "bass_gate",      "Bass Gate",      "",      0.2f,   1.0f,   0.7f, Curve::Linear },
-    { "bass_variation", "Bass Variation", "",      0.0f,   1.0f,   0.4f, Curve::Linear },
-    { "bass_register",  "Bass Register",  "st",  -12.0f,  12.0f,   0.0f, Curve::Int },
+    { "bpm",             "Tempo",           "BPM", 100.0f, 190.0f, 145.0f, Curve::Linear },
+    { "key",             "Key",             "",      0.0f,  11.0f,   6.0f, Curve::Choice, kKeyNames },
+    { "scale",           "Scale",           "",      0.0f,   5.0f,   1.0f, Curve::Choice, kScaleNames },
+    { "kick_pattern",    "Kick Pattern",    "",      0.0f,   2.0f,   1.0f, Curve::Choice, kKickPatternNames },
+    { "bass_pattern",    "Bass Pattern",    "",      0.0f,   4.0f,   0.0f, Curve::Choice, kBassPatternNames },
+    { "bass_gate",       "Bass Gate",       "",      0.2f,   1.0f,   0.7f, Curve::Linear },
+    { "bass_variation",  "Bass Variation",  "",      0.0f,   1.0f,   0.4f, Curve::Linear },
+    { "bass_register",   "Bass Register",   "st",  -12.0f,  12.0f,   0.0f, Curve::Int },
+    { "track_bars",      "Track Length",    "bars", 32.0f, 512.0f, 256.0f, Curve::Int },
+    { "track_variation", "Track Variation", "",      0.0f,   1.0f,   0.5f, Curve::Linear },
+    { "sound_variation", "Sound Variation", "",      0.0f,   1.0f,   0.5f, Curve::Linear },
+    { "tempo_range",     "Tempo Range",     "BPM",   0.0f,  10.0f,   3.0f, Curve::Linear },
+    { "level_match",     "Level Match",     "",      0.0f,   1.0f,   1.0f, Curve::Toggle },
 };
 
 const ParamDesc kKickParams[kick::Count] = {
@@ -36,7 +43,8 @@ const ParamDesc kKickParams[kick::Count] = {
     { "tune",        "Tune",         "",     0.0f,     1.0f,    1.0f, Curve::Choice, kKickTuneNames },
     { "pitch_end",   "Pitch End",    "Hz",  30.0f,   120.0f,   50.0f, Curve::Log },
     { "pitch_start", "Pitch Start",  "Hz",  60.0f,  1500.0f,  330.0f, Curve::Log },
-    { "pitch_decay", "Pitch Decay",  "ms",   1.0f,   150.0f,   16.0f, Curve::Log },
+    { "pitch_decay", "Body Decay",   "ms",   5.0f,   150.0f,   22.0f, Curve::Log },
+    { "punch_decay", "Punch Decay",  "ms",   0.5f,    20.0f,    4.0f, Curve::Log },
     { "punch",       "Punch",        "",     0.0f,     1.0f,    0.5f, Curve::Linear },
     { "amp_attack",  "Attack",       "ms",   0.0f,    10.0f,    0.2f, Curve::Linear },
     { "amp_hold",    "Hold",         "ms",   0.0f,   150.0f,   12.0f, Curve::Linear },
@@ -48,12 +56,16 @@ const ParamDesc kKickParams[kick::Count] = {
     { "click_decay", "Click Decay",  "ms",   0.5f,    30.0f,    3.0f, Curve::Log },
     { "tone",        "Tone",         "Hz", 200.0f, 20000.0f, 9000.0f, Curve::Log },
     { "level",       "Level",        "dB", -36.0f,     6.0f,   -2.0f, Curve::Linear },
+    { "tail_limit",  "Tail Limit",   "dB", -60.0f,     0.0f,  -24.0f, Curve::Linear },
 };
 
 const ParamDesc kBassParams[bass::Count] = {
     { "wave",          "Wave",          "",      0.0f,     1.0f,  0.15f, Curve::Linear },
     { "pulse_width",   "Pulse Width",   "",     0.05f,    0.95f,   0.5f, Curve::Linear },
-    { "sub",           "Sub",           "",      0.0f,     1.0f,  0.25f, Curve::Linear },
+    { "sub",           "Sub",           "",      0.0f,     1.0f,   0.6f, Curve::Linear },
+    { "sub_mode",      "Sub Mode",      "",      0.0f,     1.0f,   1.0f, Curve::Choice, kSubModeNames },
+    { "split_ratio",   "Split",         "x f0",  1.2f,     3.0f,   2.0f, Curve::Linear },
+    { "kick_lock",     "Kick Lock",     "",      0.0f,     2.0f,   2.0f, Curve::Choice, kKickLockNames },
     { "retrigger",     "Retrigger",     "",      0.0f,     1.0f,   1.0f, Curve::Toggle },
     { "start_phase",   "Start Phase",   "",      0.0f,     1.0f,   0.5f, Curve::Linear },
     { "cutoff",        "Cutoff",        "Hz",   20.0f, 10000.0f, 140.0f, Curve::Log },
@@ -76,6 +88,7 @@ const ParamDesc kBassParams[bass::Count] = {
 const ParamDesc kMixParams[mix::Count] = {
     { "kick_mute", "Kick Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
     { "bass_mute", "Bass Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
+    { "track_gain", "Track Gain", "dB", -12.0f, 12.0f, 0.0f, Curve::Linear },
 };
 
 const ParamDesc kMasterParams[master::Count] = {
@@ -186,6 +199,20 @@ float ParamStore::fromNormalised(int id, float norm) const
 void ParamStore::resetDefaults()
 {
     for (int i = 0; i < count(); ++i) values_[static_cast<size_t>(i)].store(desc(i).defValue, std::memory_order_relaxed);
+}
+
+int ParamStore::moduleCount(Module m)
+{
+    const int mi = static_cast<int>(m);
+    return mi >= 0 && mi < static_cast<int>(Module::Count) ? kModules[mi].count : 0;
+}
+
+void ParamStore::readModule(Module m, int instance, float* out) const
+{
+    const int b = base(m, instance);
+    if (b < 0) return;
+    const int n = moduleCount(m);
+    for (int i = 0; i < n; ++i) out[i] = get(b + i);
 }
 
 void ParamStore::copyValuesFrom(const ParamStore& other)

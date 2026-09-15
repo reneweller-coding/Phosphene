@@ -3,17 +3,26 @@
  * @brief Engine implementation.
  */
 #include "phos/Engine.h"
+#include "phos/Patterns.h"
 #include <algorithm>
 #include <cmath>
 
 namespace phos {
 
-Engine::Engine() : ring_(16384) {}
+namespace {
+constexpr double kPiD = 3.141592653589793;
+bool isDiscreteCurve(Curve c) { return c == Curve::Int || c == Curve::Choice || c == Curve::Toggle; }
+} // namespace
 
-void Engine::prepare(double sampleRate, int maxBlockSize)
+Engine::Engine() : notes_(16384), controls_(16384)
+{
+    var_ = std::make_unique<Variation[]>(static_cast<size_t>(params_.count()));
+    eff_.assign(static_cast<size_t>(params_.count()), 0.0f);
+}
+
+void Engine::prepare(double sampleRate, int /*maxBlockSize*/)
 {
     sr_ = sampleRate;
-    maxBlock_ = std::max(kChunk, maxBlockSize);
     kickBuf_.assign(static_cast<size_t>(kChunk), 0.0f);
     bassBuf_.assign(static_cast<size_t>(kChunk), 0.0f);
     kick_.prepare(sr_);
@@ -24,7 +33,10 @@ void Engine::prepare(double sampleRate, int maxBlockSize)
 void Engine::reset()
 {
     NoteEvent e;
-    while (ring_.pop(e)) {}
+    while (notes_.pop(e)) {}
+    ControlEvent c;
+    while (controls_.pop(c)) {}
+    for (int i = 0; i < params_.count(); ++i) var_[static_cast<size_t>(i)] = Variation{};
     samples_ = 0;
     chunkBeat_ = 0.0;
     chunkPos_ = 0;
@@ -36,35 +48,115 @@ void Engine::reset()
     clipR_.reset();
 }
 
+float Engine::effective(int id) const
+{
+    return id >= 0 && id < static_cast<int>(eff_.size()) ? eff_[static_cast<size_t>(id)] : 0.0f;
+}
+
+void Engine::advanceRamps()
+{
+    for (int i = 0; i < params_.count(); ++i) {
+        Variation& v = var_[static_cast<size_t>(i)];
+        if (v.length <= 0.0) continue;
+        const double x = (chunkBeat_ - v.start) / v.length;
+        if (x >= 1.0) { v.offset = v.to; v.length = 0.0; continue; }
+        const double s = x <= 0.0 ? 0.0 : 0.5 - 0.5 * std::cos(kPiD * x);   // raised cosine: C1 at both ends
+        v.offset = v.from + static_cast<float>(s) * (v.to - v.from);
+    }
+}
+
+void Engine::dispatchControl(const ControlEvent& e)
+{
+    if (e.param < 0 || e.param >= params_.count()) return;
+    Variation& v = var_[static_cast<size_t>(e.param)];
+    if (e.kind == ControlEvent::Kind::Override) {
+        v.override = e.value;
+    } else if (e.length <= 0.0f) {
+        v.offset = e.value;
+        v.length = 0.0;
+    } else {
+        v.from = v.offset;
+        v.to = e.value;
+        v.start = e.beat;
+        v.length = e.length;
+    }
+    applyParams();
+}
+
+double Engine::firstSlotSeconds() const
+{
+    return firstBassSlot(pattern_) / (beatsPerSample_ * sr_);
+}
+
 void Engine::applyParams()
 {
     const ParamStore& p = params_;
+    // Effective values: knob + normalised offset for continuous parameters, override for discrete.
+    for (int i = 0; i < p.count(); ++i) {
+        const Variation& v = var_[static_cast<size_t>(i)];
+        const float knob = p.get(i);
+        float value = knob;
+        if (isDiscreteCurve(p.desc(i).curve)) {
+            if (v.override >= 0.0f) value = v.override;
+        } else if (v.offset != 0.0f) {
+            value = p.fromNormalised(i, p.toNormalised(i, knob) + v.offset);
+        }
+        eff_[static_cast<size_t>(i)] = value;
+    }
+
     const int cb = p.base(Module::Compose);
-    keyRoot_ = p.getInt(cb + compose::Key);
-    const double bpm = useTempoMap_ ? tempo_.bpmAt(chunkBeat_) : static_cast<double>(p.get(cb + compose::Bpm));
-    beatsPerSample_ = bpm / 60.0 / sr_;
-    kick_.update(p, p.base(Module::Kick), keyRoot_);
-    bass_.update(p, p.base(Module::Bass));
+    keyRoot_ = static_cast<int>(std::lround(eff_[static_cast<size_t>(cb + compose::Key)]));
+    pattern_ = static_cast<int>(std::lround(eff_[static_cast<size_t>(cb + compose::BassPattern)]));
+    // The tempo is read at chunk starts only: a control event inside a chunk must not change the
+    // beats per sample the rest of that chunk is timed with.
+    if (chunkPos_ == 0 || beatsPerSample_ <= 0.0) {
+        const double bpm = useTempoMap_ ? tempo_.bpmAt(chunkBeat_) : static_cast<double>(eff_[static_cast<size_t>(cb + compose::Bpm)]);
+        beatsPerSample_ = bpm / 60.0 / sr_;
+    }
+
+    float* kv = eff_.data() + p.base(Module::Kick);
+    float* bv = eff_.data() + p.base(Module::Bass);
+    const double slot = firstSlotSeconds();
+    Kick::constrain(kv, slot, keyRoot_);
+    kick_.update(kv, keyRoot_);
+    bass_.update(bv);
+
+    // The kick lock: either the kick's tail meets the bass's own start phase, or the bass starts
+    // where the kick's phase is when the first bass note begins.
+    lockMode_ = static_cast<int>(std::lround(bv[bass::KickLock]));
+    if (lockMode_ == static_cast<int>(KickLock::KickFollowsBass)) {
+        kick_.setPhaseTarget(slot, bass_.knobPhase());
+        bassPhase_ = bass_.knobPhase();
+    } else {
+        kick_.setPhaseTarget(0.0, 0.0);
+        if (lockMode_ == static_cast<int>(KickLock::BassFollowsKick)) {
+            const double ph = kick_.outputPhaseAt(slot);
+            bassPhase_ = ph - std::floor(ph);
+        } else {
+            bassPhase_ = bass_.knobPhase();
+        }
+    }
+
     const int mb = p.base(Module::Mix);
-    kickMute_ = p.getBool(mb + mix::KickMute);
-    bassMute_ = p.getBool(mb + mix::BassMute);
+    kickMute_ = eff_[static_cast<size_t>(mb + mix::KickMute)] >= 0.5f;
+    bassMute_ = eff_[static_cast<size_t>(mb + mix::BassMute)] >= 0.5f;
     const int ms = p.base(Module::Master);
-    masterGain_ = dbToGain(p.get(ms + master::Gain));
-    ceiling_ = dbToGain(p.get(ms + master::Ceiling));
-    clip_ = p.getBool(ms + master::Clip);
+    masterGain_ = dbToGain(eff_[static_cast<size_t>(ms + master::Gain)] + eff_[static_cast<size_t>(mb + mix::TrackGain)]);
+    ceiling_ = dbToGain(eff_[static_cast<size_t>(ms + master::Ceiling)]);
+    clip_ = eff_[static_cast<size_t>(ms + master::Clip)] >= 0.5f;
 }
 
-void Engine::dispatch(const NoteEvent& e)
+void Engine::dispatch(const NoteEvent& e, double late)
 {
     const float vel = static_cast<float>(e.velocity) / 127.0f;
     switch (e.part) {
     case Part::Kick:
-        kick_.trigger(vel);
-        bass_.duck();
+        kick_.trigger(vel, late);
+        bass_.duck(late);
         break;
     case Part::Bass: {
         const double samples = static_cast<double>(e.length) / beatsPerSample_;
-        bass_.noteOn(e.pitch, vel, std::max(1, static_cast<int>(std::lround(samples))));
+        bass_.noteOn(e.pitch, vel, std::max(1, static_cast<int>(std::lround(samples))), late, bassPhase_);
         break;
     }
     default:
@@ -80,8 +172,7 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
     const float kg = kickMute_ ? 0.0f : 1.0f, bg = bassMute_ ? 0.0f : 1.0f;
     const float invCeil = 1.0f / ceiling_;
     for (int i = 0; i < count; ++i) {
-        // Kick and bass are mono and centred; the master is stereo from here on.
-        float x = (kg * kickBuf_[static_cast<size_t>(i)] + bg * bassBuf_[static_cast<size_t>(i)]) * masterGain_;
+        const float x = (kg * kickBuf_[static_cast<size_t>(i)] + bg * bassBuf_[static_cast<size_t>(i)]) * masterGain_;
         float l = x, r = x;
         if (clip_) {
             l = ceiling_ * clipL_(l * invCeil);
@@ -98,13 +189,21 @@ void Engine::process(float* L, float* R, int n)
 {
     int done = 0;
     while (done < n) {
-        if (chunkPos_ == 0) applyParams();
+        if (chunkPos_ == 0) {
+            advanceRamps();
+            applyParams();
+        }
         int left = std::min(n - done, kChunk - chunkPos_);
 
-        NoteEvent e;
-        while (left > 0 && ring_.peek(e)) {
-            // First sample of this chunk whose beat has reached the event.
-            const double rel = (e.beat - chunkBeat_) / beatsPerSample_;
+        for (;;) {
+            NoteEvent ne;
+            ControlEvent ce;
+            const bool hasNote = notes_.peek(ne), hasCtl = controls_.peek(ce);
+            if ((!hasNote && !hasCtl) || left <= 0) break;
+            // Controls first at equal beats.
+            const bool ctl = hasCtl && (!hasNote || ce.beat <= ne.beat);
+            const double beat = ctl ? ce.beat : ne.beat;
+            const double rel = (beat - chunkBeat_) / beatsPerSample_;
             int m = rel <= 0.0 ? 0 : static_cast<int>(std::ceil(rel - 1e-7));
             if (m < chunkPos_) m = chunkPos_;
             if (m >= chunkPos_ + left) break;
@@ -112,8 +211,11 @@ void Engine::process(float* L, float* R, int n)
             renderSegment(L, R, done, before);
             done += before;
             left -= before;
-            ring_.pop(e);
-            dispatch(e);
+            // How far past the ideal instant this sample lies; late events count as on time.
+            double late = static_cast<double>(m) - rel;
+            if (late < 0.0 || late >= 1.0) late = 0.0;
+            if (ctl) { controls_.pop(ce); dispatchControl(ce); }
+            else { notes_.pop(ne); dispatch(ne, late); }
         }
         renderSegment(L, R, done, left);
         done += left;

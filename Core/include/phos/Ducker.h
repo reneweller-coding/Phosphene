@@ -34,21 +34,26 @@ public:
         hold_ = std::max(0, static_cast<int>(holdMs * 0.001 * sr_));
         release_ = std::max(1, static_cast<int>(releaseMs * 0.001 * sr_));
     }
-    /** @brief Starts a duck now. */
-    void trigger() { stage_ = Stage::Attack; pos_ = 0; from_ = amount_; }
+    /**
+     * @brief Starts a duck.
+     * @param late how many samples ago the trigger ideally happened (0 <= late < 1): the curve is
+     *             evaluated that much further along, so it keeps the same shape relative to the kick
+     *             whatever the kick's position between samples
+     */
+    void trigger(double late = 0.0) { stage_ = Stage::Attack; pos_ = 0; from_ = amount_; late_ = static_cast<float>(late); }
     /** @brief Next gain factor. */
     inline float next()
     {
         switch (stage_) {
         case Stage::Attack:
-            amount_ = from_ + (1.0f - from_) * static_cast<float>(pos_ + 1) / static_cast<float>(attack_);
+            amount_ = from_ + (1.0f - from_) * std::min(1.0f, (static_cast<float>(pos_ + 1) + late_) / static_cast<float>(attack_));
             if (++pos_ >= attack_) { stage_ = Stage::Hold; pos_ = 0; amount_ = 1.0f; }
             break;
         case Stage::Hold:
             if (++pos_ >= hold_) { stage_ = Stage::Release; pos_ = 0; }
             break;
         case Stage::Release:
-            amount_ = 0.5f + 0.5f * std::cos(kPi * static_cast<float>(pos_ + 1) / static_cast<float>(release_));
+            amount_ = 0.5f + 0.5f * std::cos(kPi * std::min(1.0f, (static_cast<float>(pos_ + 1) + late_) / static_cast<float>(release_)));
             if (++pos_ >= release_) { stage_ = Stage::Idle; amount_ = 0.0f; }
             break;
         default: break;
@@ -58,7 +63,7 @@ public:
 private:
     enum class Stage { Idle, Attack, Hold, Release };
     double sr_ = 48000.0;
-    float depth_ = 0.5f, amount_ = 0.0f, from_ = 0.0f;
+    float depth_ = 0.5f, amount_ = 0.0f, from_ = 0.0f, late_ = 0.0f;
     int attack_ = 48, hold_ = 0, release_ = 2880, pos_ = 0;
     Stage stage_ = Stage::Idle;
 };

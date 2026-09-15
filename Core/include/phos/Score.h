@@ -40,6 +40,34 @@ struct NoteEvent {
 /** @brief Sort order of events: beat, then part, then lane, then pitch. */
 bool noteLess(const NoteEvent& a, const NoteEvent& b);
 
+/**
+ * @brief A change of the sound, written by the composer: how a track or a passage departs from the
+ *        knobs.
+ *
+ * The composer never writes parameters. It writes these, and the engine combines them with the
+ * knobs: a continuous parameter plays at knob + offset, both in the knob's normalised 0..1 domain,
+ * so a variation keeps its musical size whatever the knob's range or curve; a discrete parameter
+ * (a choice, a switch) plays the override while one is set. With every offset at zero and no
+ * override, the instrument sounds exactly as the knobs say.
+ */
+struct ControlEvent {
+    enum class Kind : uint8_t {
+        Offset,        ///< ramp the normalised offset to `value` over `length` beats (raised cosine)
+        Override,      ///< play `value` instead of the knob (discrete parameters); value < 0 clears it
+    };
+    double  beat = 0.0;       ///< when the change starts
+    float   length = 0.0f;    ///< ramp length in beats; 0 = immediately
+    float   value = 0.0f;     ///< target offset or override value
+    int16_t param = 0;        ///< global parameter id
+    Kind    kind = Kind::Offset; ///< what `value` means
+};
+
+/** @brief Key signature change (for the MIDI export). */
+struct KeyChange {
+    double beat = 0.0;   ///< position in beats
+    int    root = 6;     ///< pitch class of the minor key
+};
+
 /** @brief Section types of a track's form. */
 enum class SectionType : uint8_t { Intro = 0, Groove, Build, Drop, Break, Outro, Count };
 extern const char* const kSectionNames[static_cast<int>(SectionType::Count)];   ///< display names
@@ -59,6 +87,7 @@ struct Score {
     int scale = 1;                         ///< index into kScaleNames
     std::vector<NoteEvent> notes;          ///< all notes, kept sorted by sort()
     std::vector<SectionMark> sections;     ///< section starts, sorted by beat
+    std::vector<KeyChange> keyChanges;     ///< key changes after the start (keyRoot holds at beat 0)
 
     /** @brief Sorts notes and sections. */
     void sort();

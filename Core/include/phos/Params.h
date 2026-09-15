@@ -51,22 +51,27 @@ enum class Module : int { Compose = 0, Kick, Bass, Mix, Master, Count };
 
 /** @brief Parameters of the composer (read as a snapshot when bars are composed). */
 namespace compose {
-enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation, BassRegister, Count };
+enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation, BassRegister,
+             TrackBars, TrackVariation, SoundVariation, TempoRange, LevelMatch, Count };
 }
 /** @brief Parameters of the kick drum. */
 namespace kick {
-enum : int { Engine, Tune, PitchEnd, PitchStart, PitchDecay, Punch, AmpAttack, AmpHold, AmpDecay,
-             Drive, Clip, ClickLevel, ClickTone, ClickDecay, Tone, Level, Count };
+enum : int { Engine, Tune, PitchEnd, PitchStart, PitchDecay, PunchDecay, Punch, AmpAttack, AmpHold, AmpDecay,
+             Drive, Clip, ClickLevel, ClickTone, ClickDecay, Tone, Level, TailLimit, Count };
 }
 /** @brief Parameters of the bass. */
 namespace bass {
-enum : int { Wave, PulseWidth, Sub, Retrigger, StartPhase, Cutoff, Resonance, EnvAmount, FilterDecay, KeyTrack,
-             VelToCutoff, Drive, AmpAttack, AmpDecay, AmpSustain, AmpRelease, DuckDepth, DuckHold,
-             DuckRelease, Level, Count };
+enum : int { Wave, PulseWidth, Sub, SubMode, SplitRatio, KickLock, Retrigger, StartPhase, Cutoff, Resonance,
+             EnvAmount, FilterDecay, KeyTrack, VelToCutoff, Drive, AmpAttack, AmpDecay, AmpSustain, AmpRelease,
+             DuckDepth, DuckHold, DuckRelease, Level, Count };
 }
+/** @brief Values of bass.sub_mode. */
+enum class SubMode : int { Mixed = 0, Split };
+/** @brief Values of bass.kick_lock. */
+enum class KickLock : int { Off = 0, BassFollowsKick, KickFollowsBass };
 /** @brief Parameters of the mixer. */
 namespace mix {
-enum : int { KickMute, BassMute, Count };
+enum : int { KickMute, BassMute, TrackGain, Count };
 }
 /** @brief Parameters of the master section. */
 namespace master {
@@ -121,6 +126,15 @@ public:
     void resetDefaults();
     /** @brief Copies every value from another store (for snapshots on another thread). */
     void copyValuesFrom(const ParamStore& other);
+    /**
+     * @brief Copies the current values of one module instance into @p out, indexed like its table.
+     * @param m        module
+     * @param instance instance index
+     * @param out      at least as many floats as the module has parameters
+     */
+    void readModule(Module m, int instance, float* out) const;
+    /** @brief Number of parameters of a module. */
+    static int moduleCount(Module m);
 
     /**
      * @brief Applies "key=value" assignments separated by whitespace, newlines or ';'.

@@ -117,6 +117,8 @@ std::vector<uint8_t> encodeMidi(const Score& score)
         ev.push_back(textMeta(0, 0x03, "Phosphene"));
         ev.push_back(meta(0, 0x58, { 4, 2, 24, 8 }));
         ev.push_back(meta(0, 0x59, { static_cast<uint8_t>(static_cast<int8_t>(minorKeySharps(score.keyRoot))), 1 }));
+        for (const KeyChange& k : score.keyChanges)
+            ev.push_back(meta(toTick(k.beat), 0x59, { static_cast<uint8_t>(static_cast<int8_t>(minorKeySharps(k.root))), 1 }));
         const auto& pts = score.tempo.points();
         const double end = std::max(score.endBeat(), pts.back().beat) + 1.0;
         for (size_t i = 0; i < pts.size(); ++i) {
@@ -240,8 +242,11 @@ bool decodeMidi(const uint8_t* d, size_t size, MidiFileData& out, std::string* e
                     const uint32_t mpq = (uint32_t(d[p]) << 16) | (uint32_t(d[p + 1]) << 8) | d[p + 2];
                     if (mpq > 0) out.tempos.push_back(TempoPoint{ beat, 60000000.0 / mpq, false });
                 } else if (type == 0x59 && mlen == 2) {
-                    out.keySharps = static_cast<int8_t>(d[p]);
-                    out.keyMinor = d[p + 1] != 0;
+                    if (out.keys.empty()) {
+                        out.keySharps = static_cast<int8_t>(d[p]);
+                        out.keyMinor = d[p + 1] != 0;
+                    }
+                    out.keys.emplace_back(beat, static_cast<int>(static_cast<int8_t>(d[p])));
                 }
                 p += mlen;
                 continue;

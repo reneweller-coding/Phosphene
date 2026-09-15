@@ -8,8 +8,9 @@ there are no samples.
 The design and the literature behind each building block are in [docs/PLAN.md](docs/PLAN.md) (German).
 
 **Status:** Phase 0 (framework) and Phase 1 (kick, rolling bass, clock) are done. The offline
-renderer plays a composed kick-and-bass loop in five bass patterns and exports it as MIDI. No plugin
-or headset build yet.
+renderer composes sets of any length from kick and bass: every track has its own key, tempo, bass
+patterns and kick and bass sound, levels are matched between tracks, and kick and bass are
+phase-locked at the first bass note. No plugin or headset build yet.
 
 ## Build
 
@@ -30,7 +31,12 @@ build/Tools/render/Release/phos_render.exe --bars 32 --out out/loop.wav --midi o
 build/Tools/render/Release/phos_render.exe --bars 32 --set "compose.bass_pattern=Triplet compose.key=A compose.scale=Double Harmonic kick.engine=Resonant" --out out/goa.wav
 ```
 
-`--list` prints every parameter. `python Tools/inspect_wav.py out/loop.wav --bpm 145` draws the
+```bash
+build/Tools/render/Release/phos_render.exe --minutes 30 --seed 2026 --tracks --report --out out/night.wav --midi out/night.mid
+```
+
+`--tracks` prints each track's key, tempo, patterns, sound recipe and level correction. `--list`
+prints every parameter. `python Tools/inspect_wav.py out/loop.wav --bpm 145` draws the
 render (waveform, one beat, spectrogram) and prints where in the beat the sub band is occupied.
 
 ## Tests
