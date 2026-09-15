@@ -249,6 +249,47 @@ Nächster Schritt: Phase 5 (Komponist: Form-Grammatik nach Grosz et al. mit PDB 
 Sektionsregeln nach Solberg und Dibben, Tonartenreise, Übergänge, Sperren und Neuwürfeln, Stilprofile,
 `.phosset`); parallel Phase 6 (JUCE-Plugin) und Phase 7 (Quest-Build) in eigenen Arbeitsbäumen.
 
+**16.09.2026, Phase 7: Quest-Build, Qualitätsstufen, Performer-App.** Gebaut in einem eigenen
+Arbeitsbaum, parallel zu Phase 5 und 6. **Es war kein Headset angeschlossen**; alle Gerätezahlen
+sind offen, die Toolchain steht fertig gebaut bereit.
+
+| Baustein | Umsetzung | Messung |
+|---|---|---|
+| arm64-Toolchain | NDK r27c, `cmake -G "Unix Makefiles"` mit dem `make.exe` des NDK (dieses SDK hat kein ninja), `ANDROID_ABI=arm64-v8a`, `ANDROID_PLATFORM=android-29`; Android-Zweig im Wurzel-`CMakeLists.txt`, `add_test` fällt auf Android weg (ctest kann arm64 nicht auf dem Host starten), Testziele mit `-Wall -Wextra` wie der Kern | `libPhospheneCore.a` 10,5 MB, `phos_selftest` 8,82 MB, `phos_vectest` 1,78 MB, `phos_render` 5,91 MB, alle ELF aarch64 PIE für Android 29, ungestrippt mit Debug-Info |
+| Ein Compile-Fehler des NDK | `DenormalGuard` (`Dsp.h`) schrieb das FZ-Bit über `fenv_t::__fpcr`; **bionic nennt das Feld `__control`**, glibc `__fpcr`. Jetzt `mrs`/`msr fpcr` direkt — das, was `fesetenv` ohnehin tut, und auf jeder AArch64-libc gleich | sonst fand clang nichts, was MSVC hatte durchgehen lassen; zwei Warnungen bleiben (`Dynamics.h::minFilled_`, `selftest.cpp::engineSwitches`, beide vorbestehend und in fremden Dateien), `Acid.h::combOn_` war tot und ist raus |
+| Qualitätsstufen (`Quality.h`) | Struktur mit Desktop und Quest, gewählt in `Engine::prepare(sr, block, quality)` mit Desktop als Vorgabe, damit Selbsttest, Vektortests und jeder bisherige Aufrufer unverändert rendern. Quest: Acid-Oversampling 2× → 1×, Bass bleibt 2×, Unisono 7 → 3, Pad-Polyphonie 8 → 4. Neu: `phos_render --quality quest|desktop` | Selbsttest 147/147 und Vektortests 9/9 in drei Pfaden unverändert; die Ausgaben der beiden Stufen unterscheiden sich, die Lautheit nicht (beide −9,7 LUFS, True Peak −0,99 dBTP über 64 Takte) |
+| Ersparnis der Stufe Quest | 8 min, alle Stimmen (`compose.{pad,acid,lead,arp}_amount=1`), 48 kHz, Block 256, i9-12900K, AVX2, je drei Läufe | Desktop **7,19 / 7,21 / 7,21 %** eines Kerns, Quest **6,05 / 5,98 / 5,96 %**: **16,9 % weniger**. Die Aufteilung auf die drei Schalter ist offen — ein Knopf wie `acid_amount=0` ändert das ganze Arrangement, also lässt sie sich über die Knöpfe nicht isolieren. Der Gerätewert (Ziel ≤ 30 % eines großen Kerns) ist offen |
+| Oversampling-Schalter | `Bass::setOversampling` / `Acid::setOversampling`: bei 1× ein Oszillator- und ein Leiterschritt je Ausgabesample, kein Halbband, und die Koeffizienten (Filterhüllkurve, Squelch, Akzent-Kondensator) rechnen auf der Basisrate. Die Cutoff-Obergrenze kommt bei 2× aus dem Durchlassband des Dezimierers (0,2 der hohen Rate), bei 1× aus der Stabilität (0,45 fs) — bei 48 kHz liegt beides über der 18-kHz-Kappe, die Stufe verliert also keinen Stellbereich | der Bass behält 2×: seine Leiter wird von einer schnellen Hüllkurve über einen Grundton gefahren, auf den die Kick phasengekoppelt ist, und genau dort landen seine Aliasprodukte |
+| `Poly`-Grenzen ohne `Poly.cpp` | öffentlicher Setter `setQuality(unison, voices)` und `noteOnLimited()`, beides inline im Header, `Engine::dispatch` ruft es statt `noteOn`. **Stimmen:** `noteOn` nimmt die erste freie Stimme und stiehlt erst die älteste, wenn keine frei ist — es genügt also, die oberen Stimmen nie belegen zu lassen: sind alle unter der Grenze aktiv, wird hier die älteste davon stillgelegt und ist damit die erste freie. Eine stumme Stimme kostet nichts, weil `renderSegment` eine Achtergruppe überspringt, wenn keine ihrer Stimmen klingt. **Unisono:** die äußeren Oszillatorpaare bekommen Gain 0, die übrigen werden auf gleiche inkohärente Leistung hochskaliert (Mitte und Szabos engstes Paar bleiben) | 4 von 8 Pad-Stimmen lassen 28 der 56 Oszillator-Slots und eine der beiden Filter-Achtergruppen ungerechnet. **Das Unisono-Limit spart dagegen nichts**: der Kernel rechnet die Slots ohnehin. Es ist heute eine Klangentscheidung, keine Ersparnis |
+| Quest-App (`Quest/`) | NativeActivity + `android_native_app_glue`, OpenXR mit `XR_EXT_hand_tracking`, EGL/GLES 3, Oboe Low-Latency-Float-Stream. Drei Threads: Audio (`Engine::process` plus Blende, ein Compare-and-Exchange, kein Lock, keine Allokation), Komponist (plant, komponiert, füllt die Ringe acht Takte voraus, veröffentlicht die Anzeige), Render (OpenXR-Schleife, Hände, Bild) | APK 3,5 MB, `libphosquest.so` 10,3 MB, mit Debug-Schlüssel signiert, ohne Warnung gebaut |
+| Track-Sprung ohne Kerneingriff | `SetPlayer` ist der `Conductor` mit einem Takt-Versatz: die Engine spielt immer ab ihrem eigenen Beat 0, jedes komponierte Ereignis und die Tempo-Karte werden um den Beat des ersten zu spielenden Takts zurückgeschoben. Damit kann Takt 700 des Sets der erste Takt der Engine sein — `Composer.h` musste nicht angefasst werden | am Trackanfang exakt: dort hält die Quell-Karte das Tempo des neuen Tracks; ein Sprung mitten in eine Rampe verlöre deren Steigung im ersten Segment |
+| Performer-Oberfläche (8.2) | kopffeste Punkte-Tafel (nur Gier, nicht Nicken): Track und Takt, Tonart, Tempo, 16-Takt-Block mit seinen Stimmen, Lautheit, beide Makrowerte, vier Beat-Lampen und eine Lautheitsreihe. Linker Pinch Play/Stop (15-ms-Blende, die Musik hält an, wo sie ist), rechter Pinch nächster Track, linke Handhöhe `mix.track_gain` (−12…+12 dB), rechte Handhöhe Acid-Cutoff (±2 Oktaven um den komponierten Wert) | Höhe wird am Kopf gemessen, nicht am Boden, also gleich im STAGE- und im LOCAL-Raum und für jede Körpergröße; ein Makro folgt nur der *offenen* Hand, damit der Pinch nicht zugleich die Verstärkung mitzieht; 0,15-s-Einpol-Glättung, beide Makros mittig — nichts springt. Beat-Lampen als Raised-Cosine über den Beat-Abstand, kein Blitz |
+| Sektion auf der Tafel | Die Form-Grammatik ist Phase 5 und liegt im Nachbar-Arbeitsbaum. Die Tafel zeigt deshalb den 16-Takt-Block und seine Stimmen (`MelodyPlan::blockParts`, `padGate`) als Platzhalter | tauschen, sobald `Form.*` gemerged ist |
+| OSC-Cue-Brücke (8.3) | gebaut statt weggelassen: `/phos/bar f f` (Takt, BPM) je Takt, `/phos/track f f f` (Track, Tonart, Skala) bei jedem Trackwechsel, Ziel aus `phos.cfg` | aus der Partitur, nie aus einer Audioanalyse |
+| Stumm starten | `phos.cfg mute=1` schaltet den Ausgang stumm, lässt aber Engine, Komponist und Bild laufen, damit ein Testlauf alles durchläuft, ohne zu klingen | Regel „Synth stumm starten" |
+
+*Was `Poly.cpp` für ein echtes Unisono-Limit braucht* (nicht geändert, weil die Datei einem anderen
+Arbeitsbaum gehört): ein Feld `unison_` mit Setter; in `noteOn` die Schleife über die sieben
+Oszillatoren auf die mittleren `unison_` beschränken und die übrigen Slots auf Gain 0 und `dt = 0`
+setzen; in `renderSegment` die Gruppenentscheidung `on = on || voiceOn[s / kPolyUnison]` zusätzlich
+prüfen lassen, ob der Slot innerhalb des Limits liegt, und die Summenschleife über `u` auf `unison_`
+verkürzen. Erst dann spart Unisono 3 die vier Oszillatoren wirklich. Mit einer dichteren
+Slot-Belegung (Stimme × `unison_` statt Stimme × 7) wäre mehr zu holen, das verschiebt aber die
+Lane-Zuordnung und damit die Bitgleichheit der Vektortests.
+
+*Bewusste Abweichungen.* „Reverb-Modus Classic" und „Convolver aus" aus Abschnitt 9 brauchen keinen
+Schalter: die Sends sind ein FDN ohne Modi, einen Convolver gibt es in Phosphene nicht. Der Komponist
+plant beim Start und nach jedem Sprung 1024 Takte (gut eine halbe Stunde) im Voraus, weil die
+Tempo-Karte so weit reichen muss; die Tafel zeigt währenddessen PLANNING, und der Audiostream startet
+erst danach. Die Lautheitsanzeige liest `Engine::meter()` vom Renderthread — im schlimmsten Fall ein
+zerrissener Wert, für eine Anzeige egal.
+
+*Offen und nächster Schritt.* Sobald ein Headset da ist, in dieser Reihenfolge: `phos_vectest` muss
+`path neon` und alle Lanes bitgleich melden; `phos_render --bench` je Qualitätsstufe auf den großen
+Kernen (`taskset f0`) gegen die 30-%-Grenze; dann Session-Zustandsfolge, Swapchain-Format,
+Handtracking-Abfrage, Oboe-Start und die Pinch-Schwellen (22 mm zu, 38 mm auf — aus Noctuary geraten).
+Die genauen Befehle stehen in `Quest/README.md`.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

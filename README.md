@@ -16,7 +16,7 @@ reverse swells), kick sidechain on every channel, a room and a hall, and a maste
 mono bass, soft clipper and true-peak limiter that meets a loudness target. The offline renderer
 composes sets of any length; each track has its own key, tempo, patterns, groove, chords, melodies and
 sound, levels are matched between tracks and parts, and kick and bass are phase-locked at the first
-bass note. No song form grammar, plugin or headset build yet.
+bass note. The headset build is there (below); no song form grammar and no plugin yet.
 
 ## Build
 
@@ -47,6 +47,26 @@ everything else. `PHOS_ONLY=testDynamics` runs only the named self-test sections
 prints every parameter. `python Tools/inspect_wav.py out/loop.wav --bpm 145` draws the
 render (waveform, one beat, spectrogram) and prints where in the beat the sub band is occupied.
 
+## Meta Quest
+
+The whole generator runs on the headset: the composer plans the set on a small core, the engine
+synthesizes it on a big one, and the hands play it — pinch left for play/stop, pinch right for the
+next track, left hand height is the track gain and right hand height the acid cutoff. Native
+OpenXR, no game engine. Build and on-device checks: [Quest/README.md](Quest/README.md).
+
+```powershell
+powershell -File Quest\fetch_thirdparty.ps1
+powershell -File Quest\build_apk.ps1
+adb install -r build-quest\PhospheneQuest.apk
+```
+
+`Quality::Quest` (`Core/include/phos/Quality.h`) is what the engine may spend there: the acid's
+ladder at 1× instead of 2× (the bass keeps its oversampling), three unison oscillators instead of
+seven, four pad voices instead of eight. `Engine::prepare` takes the level and defaults to Desktop,
+so nothing else changes; `phos_render --quality quest` renders and benchmarks at it. On the desktop
+the Quest level costs 16.9 % less for an eight-minute set with every part (7.2 % of a core against
+6.0 %); **the number on the device is still open — no headset has been attached yet.**
+
 ## Tests
 
 ```bash
@@ -68,6 +88,7 @@ requires every lane of the vectorised DSP to equal the scalar computation bit fo
 | Path | Contents |
 |---|---|
 | `Core/` | framework-free engine, `phos::` namespace |
+| `Quest/` | the Meta Quest app: OpenXR, GLES 3, Oboe, no Gradle |
 | `Tools/render/` | `phos_render`: offline render, MIDI export, benchmark |
 | `Tools/inspect_wav.py` | pictures and measurements of a render |
 | `Tools/ref_*.py` | measurements of reference recordings: bass slots, percussion grid, band balance, sweeps |
