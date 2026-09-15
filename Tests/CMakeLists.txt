@@ -1,7 +1,15 @@
+# On Android the executables are cross-compiled for the headset, so ctest must not try to run them
+# on the build machine; they go to the device with adb (Quest/README.md).
+function(phos_add_test name)
+    if(NOT ANDROID)
+        add_test(NAME ${name} COMMAND ${ARGN})
+    endif()
+endfunction()
+
 # The self test: every building block measured, and the engine as a whole.
 add_executable(phos_selftest selftest.cpp)
 target_link_libraries(phos_selftest PRIVATE PhospheneCore)
-add_test(NAME selftest COMMAND phos_selftest)
+phos_add_test(selftest phos_selftest)
 
 # The lane paths against the scalar reference, bit for bit, once per vector path. The main variant
 # is built as the core is (AVX2 on x86-64, NEON on the Quest); on x86 the NEON path also runs through
@@ -9,7 +17,7 @@ add_test(NAME selftest COMMAND phos_selftest)
 # half-band design, which they compile themselves: linking PhospheneCore would bring its AVX2 flags.
 add_executable(phos_vectest vectest.cpp)
 target_link_libraries(phos_vectest PRIVATE PhospheneCore)
-add_test(NAME vectest COMMAND phos_vectest)
+phos_add_test(vectest phos_vectest)
 set(PHOS_TEST_TARGETS phos_selftest phos_vectest)
 
 if(NOT ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|x64)")
@@ -22,7 +30,7 @@ if(NOT ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|x64)")
                        ${CMAKE_SOURCE_DIR}/Core/src/Poly.cpp ${CMAKE_SOURCE_DIR}/Core/src/WaveTable.cpp)
         target_include_directories(phos_vectest_${variant} PRIVATE ${CMAKE_SOURCE_DIR}/Core/include)
         target_compile_features(phos_vectest_${variant} PRIVATE cxx_std_20)
-        add_test(NAME vectest_${variant} COMMAND phos_vectest_${variant})
+        phos_add_test(vectest_${variant} phos_vectest_${variant})
         list(APPEND PHOS_TEST_TARGETS phos_vectest_${variant})
     endforeach()
     target_include_directories(phos_vectest_neon BEFORE PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/neonshim)
@@ -36,5 +44,9 @@ foreach(t ${PHOS_TEST_TARGETS})
     if(MSVC)
         target_compile_options(${t} PRIVATE /W4 /permissive- /utf-8)
         target_compile_definitions(${t} PRIVATE _CRT_SECURE_NO_WARNINGS)
+    else()
+        # The NDK's clang is stricter than MSVC and finds things MSVC does not; the same warnings
+        # the core is built with, so a Quest build does not hide anything the desktop build shows.
+        target_compile_options(${t} PRIVATE -Wall -Wextra)
     endif()
 endforeach()

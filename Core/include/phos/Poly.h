@@ -41,6 +41,7 @@
 #include "phos/PolyKernel.h"
 #include "phos/TempoDelay.h"
 #include "phos/WaveTable.h"
+#include <cmath>
 #include <vector>
 
 namespace phos {
@@ -66,6 +67,51 @@ public:
      * @param late        how many samples ago the note ideally started (0 <= late < 1)
      */
     void noteOn(int pitch, float velocity, double lengthBeats, int gateSamples, double late);
+
+    /**
+     * @brief Sets the quality limits of this instance (Quality.h).
+     * @param unison oscillators per voice, 1 .. kPolyUnison
+     * @param voices voices that may sound at once, 1 .. kPolyVoices
+     *
+     * The defaults (kPolyUnison, kPolyVoices) are "no limit" and are checked for first, so a
+     * default engine runs exactly the code it ran before this existed.
+     */
+    void setQuality(int unison, int voices)
+    {
+        unisonLimit_ = unison < 1 ? 1 : (unison > kPolyUnison ? kPolyUnison : unison);
+        voiceLimit_ = voices < 1 ? 1 : (voices > kPolyVoices ? kPolyVoices : voices);
+    }
+    /** @brief Oscillators per voice this instance plays. */
+    int unisonLimit() const { return unisonLimit_; }
+    /** @brief Voices this instance may sound at once. */
+    int voiceLimit() const { return voiceLimit_; }
+
+    /**
+     * @brief noteOn() with the quality limits applied around it.
+     *
+     * Both limits are enforced from here rather than inside noteOn() so that the allocator and the
+     * render loop in Poly.cpp stay exactly as they are (the vector tests compare them bit for bit).
+     *
+     *  - *Voices.* noteOn() takes the first inactive voice and only steals the oldest one when none
+     *    is free, so voices fill up from index 0. Keeping the top voices permanently silent is
+     *    therefore enough: when every voice below the limit is sounding, the oldest of them is killed
+     *    here, which makes it the first free voice noteOn() finds. A silent voice costs nothing --
+     *    the slot and channel kernels skip a group of eight lanes when none of its voices sounds
+     *    (Poly.cpp, renderSegment) -- so four of eight pad voices really do halve the pad's filters
+     *    and leave 28 of 56 oscillator slots unrendered.
+     *  - *Unison.* The oscillator gains of the outer unison pairs are set to zero and the remaining
+     *    ones are scaled so that the incoherent power of the voice is unchanged; the centre and the
+     *    innermost detuned pair survive, which is the narrow beating the supersaw's body comes from.
+     *    This does not save the kernel any arithmetic (the slots are computed either way, see the
+     *    note in the Phase 7 report), it makes the sound of the level.
+     */
+    void noteOnLimited(int pitch, float velocity, double lengthBeats, int gateSamples, double late)
+    {
+        if (voiceLimit_ < kPolyVoices) freeVoiceWithinLimit();
+        noteOn(pitch, velocity, lengthBeats, gateSamples, late);
+        if (unisonLimit_ < kPolyUnison) applyUnisonLimit();
+    }
+
     /** @brief Renders @p n stereo samples, replacing @p L and @p R. */
     void process(float* L, float* R, int n);
     /** @brief Renders with a chosen lane type (float = scalar reference), for the vector tests. */
@@ -83,11 +129,63 @@ public:
     static double dynamicDetune(double knob, double amount, double lengthBeats);
 
 private:
+    /**
+     * @brief Makes sure a voice below voiceLimit_ is free before noteOn() allocates.
+     *
+     * When one is already free, nothing happens and the note is allocated as always. Otherwise the
+     * oldest voice below the limit is killed, which is the steal noteOn() would have done anyway --
+     * it reuses the voice that started longest ago -- only restricted to the voices this quality
+     * level allows.
+     */
+    void freeVoiceWithinLimit()
+    {
+        int oldest = 0;
+        for (int i = 0; i < voiceLimit_; ++i) {
+            if (!amp_[i].isActive()) return;
+            if (age_[i] < age_[oldest]) oldest = i;
+        }
+        amp_[oldest].kill();
+        gate_[oldest] = 0;
+    }
+
+    /**
+     * @brief Keeps only the innermost unisonLimit_ oscillators of the voice that was just started.
+     *
+     * The voice is the one noteOn() gave the newest age to. The kept oscillators are the middle
+     * block of the seven, so 3 keeps Szabo's centre and the pair at +-0.0195 (his narrowest
+     * detuning); the gains are rescaled by the square root of the ratio of the incoherent powers, so
+     * the voice keeps the loudness the full unison would have had. Voices whose oscillator type only
+     * uses the middle three anyway (VA, FM) come out unchanged.
+     */
+    void applyUnisonLimit()
+    {
+        int voice = 0;
+        for (int i = 1; i < kPolyVoices; ++i) if (age_[i] > age_[voice]) voice = i;
+        const int first = (kPolyUnison - unisonLimit_) / 2;
+        const int last = first + unisonLimit_;
+        double all = 0.0, kept = 0.0;
+        for (int u = 0; u < kPolyUnison; ++u) {
+            const int s = voice * kPolyUnison + u;
+            const double p = static_cast<double>(slots_.gL[s]) * slots_.gL[s] + static_cast<double>(slots_.gR[s]) * slots_.gR[s];
+            all += p;
+            if (u >= first && u < last) kept += p;
+        }
+        const float scale = kept > 0.0 ? static_cast<float>(std::sqrt(all / kept)) : 0.0f;
+        for (int u = 0; u < kPolyUnison; ++u) {
+            const int s = voice * kPolyUnison + u;
+            const bool keep = u >= first && u < last;
+            slots_.gL[s] = keep ? slots_.gL[s] * scale : 0.0f;
+            slots_.gR[s] = keep ? slots_.gR[s] * scale : 0.0f;
+        }
+    }
+
     void voiceCoefs(int voice);
     void lowPassCoefs(int voice, double damping);
     template <class V> void renderSegment(float* L, float* R, int n);
 
     double sr_ = 48000.0;
+    int unisonLimit_ = kPolyUnison;   ///< oscillators per voice (Quality.h)
+    int voiceLimit_ = kPolyVoices;    ///< voices that may sound at once (Quality.h)
     float values_[64] = {};
     PolySlots slots_;
     PolyChannels ch_;

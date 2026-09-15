@@ -33,6 +33,26 @@ if(NOT MSVC)
     add_compile_options(-ffp-contract=off)
 endif()
 
+# Android (the Quest): configured with the NDK toolchain, see Quest/README.md.
+#
+#   cmake -S . -B build-android -G "Unix Makefiles"
+#         -DCMAKE_MAKE_PROGRAM=<ndk>/prebuilt/windows-x86_64/bin/make.exe
+#         -DCMAKE_TOOLCHAIN_FILE=<ndk>/build/cmake/android.toolchain.cmake
+#         -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DCMAKE_BUILD_TYPE=Release
+#
+# This builds PhospheneCore, phos_selftest, phos_vectest and phos_render for the device; the app
+# itself is its own project under Quest/. The NDK's default STL is c++_static, so the executables
+# run from /data/local/tmp without pushing a runtime alongside them.
+if(ANDROID)
+    # NEON comes with arm64 and needs no flag; AVX2 is meaningless here. Forced into the cache so a
+    # dump of it says what was really built rather than the x86 default.
+    set(PHOS_AVX2 OFF CACHE BOOL "" FORCE)
+    if(NOT ANDROID_ABI STREQUAL "arm64-v8a")
+        message(WARNING "ANDROID_ABI=${ANDROID_ABI}: the lane path and the Quest budget assume arm64-v8a")
+    endif()
+    message(STATUS "Phosphene for Android: ${ANDROID_ABI}, API ${ANDROID_PLATFORM_LEVEL}, NDK ${ANDROID_NDK}")
+endif()
+
 add_subdirectory(Core)
 
 if(PHOS_BUILD_TOOLS)

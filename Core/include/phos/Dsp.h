@@ -285,10 +285,11 @@ public:
         saved_ = _mm_getcsr();
         _mm_setcsr(saved_ | 0x8040u);   // FZ (bit 15) and DAZ (bit 6)
 #elif defined(__aarch64__)
-        fegetenv(&saved_);
-        fenv_t e = saved_;
-        e.__fpcr |= (1u << 24);          // FZ; glibc and bionic both name the field __fpcr
-        fesetenv(&e);
+        // FPCR read and written directly rather than through fenv_t: the field that holds it has no
+        // portable name (glibc calls it __fpcr, bionic's arm64 fenv_t calls it __control), and the
+        // two system-register instructions are what fesetenv would end up doing anyway.
+        saved_ = readFpcr();
+        writeFpcr(saved_ | (1ull << 24));   // FZ: flush-to-zero for NEON and scalar alike
 #endif
     }
     ~DenormalGuard()
@@ -296,7 +297,7 @@ public:
 #if defined(_M_X64) || defined(__x86_64__)
         _mm_setcsr(saved_);
 #elif defined(__aarch64__)
-        fesetenv(&saved_);
+        writeFpcr(saved_);
 #endif
     }
     DenormalGuard(const DenormalGuard&) = delete;
@@ -305,7 +306,16 @@ private:
 #if defined(_M_X64) || defined(__x86_64__)
     unsigned int saved_ = 0;
 #elif defined(__aarch64__)
-    fenv_t saved_{};
+    /** @brief The floating-point control register. */
+    static unsigned long long readFpcr()
+    {
+        unsigned long long v;
+        __asm__ __volatile__("mrs %0, fpcr" : "=r"(v));
+        return v;
+    }
+    /** @brief Writes the floating-point control register. */
+    static void writeFpcr(unsigned long long v) { __asm__ __volatile__("msr fpcr, %0" : : "r"(v)); }
+    unsigned long long saved_ = 0;
 #endif
 };
 

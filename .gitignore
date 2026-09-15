@@ -1,5 +1,6 @@
 build*/
 out/
+ThirdParty/
 *.wav
 *.mid
 !Tests/data/*.mid

@@ -34,9 +34,10 @@ Engine::Engine() : notes_(16384), controls_(16384)
     eff_.assign(static_cast<size_t>(params_.count()), 0.0f);
 }
 
-void Engine::prepare(double sampleRate, int /*maxBlockSize*/)
+void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& quality)
 {
     sr_ = sampleRate;
+    quality_ = quality;
     kickBuf_.assign(static_cast<size_t>(kChunk), 0.0f);
     bassBuf_.assign(static_cast<size_t>(kChunk), 0.0f);
     percL_.assign(static_cast<size_t>(kChunk), 0.0f);
@@ -47,10 +48,12 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/)
         polyL_[i].assign(static_cast<size_t>(kChunk), 0.0f);
         polyR_[i].assign(static_cast<size_t>(kChunk), 0.0f);
         poly_[i].prepare(sr_);
+        poly_[i].setQuality(quality_.polyUnison[i], quality_.polyVoices[i]);
     }
     for (auto* b : { &sfxL_, &sfxR_, &roomInL_, &roomInR_, &hallInL_, &hallInR_, &roomOutL_, &roomOutR_, &hallOutL_, &hallOutR_ })
         b->assign(static_cast<size_t>(kChunk), 0.0f);
     acid_.prepare(sr_);
+    acid_.setOversampling(quality_.acidOversampling);
     sfx_.prepare(sr_);
     for (Ducker& d : duck_) d.prepare(sr_);
     returnDuck_.prepare(sr_);
@@ -66,6 +69,7 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/)
     meter_.prepare(sr_);
     kick_.prepare(sr_);
     bass_.prepare(sr_);
+    bass_.setOversampling(quality_.bassOversampling);
     perc_.prepare(sr_);
     reset();
 }
@@ -294,7 +298,9 @@ void Engine::dispatch(const NoteEvent& e, double late)
     case Part::Pad: {
         const double samples = static_cast<double>(e.length) / beatsPerSample_;
         const int inst = e.part == Part::Lead ? 0 : (e.part == Part::Arp ? 1 : 2);
-        poly_[inst].noteOn(e.pitch, vel, e.length, std::max(1, static_cast<int>(std::lround(samples))), late);
+        // noteOnLimited applies the quality level's unison and voice limits (Quality.h, Poly.h); at
+        // the desktop level it is noteOn() itself.
+        poly_[inst].noteOnLimited(e.pitch, vel, e.length, std::max(1, static_cast<int>(std::lround(samples))), late);
         break;
     }
     case Part::Sfx: {

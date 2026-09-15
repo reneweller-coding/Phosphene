@@ -48,6 +48,18 @@ class Acid {
 public:
     /** @brief Prepares for a sample rate. */
     void prepare(double sampleRate);
+    /**
+     * @brief Chooses the rate the oscillator and the diode ladder run at (Quality.h).
+     *
+     * 2 is the default: oscillator and ladder run at twice the sample rate, a half-band decimator
+     * brings the result back. 1 skips both and costs about half; the cutoff ceiling then comes from
+     * stability (0.45 fs) instead of the decimator's passband, which at 48 kHz is the same 18 kHz
+     * limit, so the sound keeps its range. Call it after prepare() and before the first update().
+     * @param factor 1 or 2; anything else is clamped into that range
+     */
+    void setOversampling(int factor);
+    /** @brief The factor set by setOversampling(). */
+    int oversampling() const { return os_; }
     /** @brief Silences and clears all state. */
     void reset();
     /** @brief Reads the effective parameters (indexed by acid::) and the tempo (for the delay). */
@@ -75,6 +87,9 @@ public:
 
 private:
     double sr_ = 48000.0;
+    int    os_ = 2;                  ///< oscillator/ladder rate as a multiple of sr_ (1 or 2)
+    double osRate_ = 96000.0;        ///< sr_ * os_, the rate the voice runs at
+    double nyqFactor_ = 0.2;         ///< cutoff ceiling as a fraction of osRate_: decimator passband at 2x, stability at 1x
     VaOscillator osc_;
     DiodeLadderT<float> ladder_;
     HalfbandDown<float> down_;
@@ -102,7 +117,6 @@ private:
     float sqOct_ = 3.5f, sqDecay_ = 0.999f, combMix_ = 0.5f, combFb_ = 0.8f;
     float pulseDecay_ = 0.999f, sweepCharge_ = 0.001f, level_ = 0.3f, sendAmt_ = 0.25f, resonance_ = 0.7f;
     float ampDecay_ = 0.9f, hz_ = 220.0f, accentSmooth_ = 0.01f;
-    bool  combOn_ = false;
 };
 
 } // namespace phos

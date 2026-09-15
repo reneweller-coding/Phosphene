@@ -43,6 +43,18 @@ class Bass {
 public:
     /** @brief Prepares for a sample rate. */
     void prepare(double sampleRate);
+    /**
+     * @brief Chooses the rate the oscillator and the ladder run at (Quality.h).
+     *
+     * 2 is the default: the voice runs at twice the sample rate and a half-band decimator brings it
+     * back. 1 skips both -- one oscillator and one ladder step per output sample, no decimator -- and
+     * costs about half. Call it after prepare() and before the first update(); the update() that
+     * follows recomputes every coefficient that depends on the rate.
+     * @param factor 1 or 2; anything else is clamped into that range
+     */
+    void setOversampling(int factor);
+    /** @brief The factor set by setOversampling(). */
+    int oversampling() const { return os_; }
     /** @brief Silences and clears all state. */
     void reset();
     /** @brief Reads the effective parameter values, indexed by bass::. */
@@ -71,6 +83,8 @@ private:
     void applyNoteSettings();
 
     double sr_ = 48000.0;
+    int    os_ = 2;                 ///< oscillator/ladder rate as a multiple of sr_ (1 or 2)
+    double osRate_ = 96000.0;       ///< sr_ * os_, the rate the voice runs at
     VaOscillator        osc_;
     LadderT<float>      ladder_;
     HalfbandDown<float> down_;
