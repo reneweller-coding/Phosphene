@@ -1812,6 +1812,90 @@ void testAcid()
     }
 }
 
+/**
+ * @brief Power outside +-6 bins of any line the seven detuned oscillators legitimately make.
+ *
+ * inharmonicDb() counts everything that is not a harmonic of f0 as aliasing, which for a detuned
+ * supersaw is six of its seven oscillators -- at detune 1 it reads +8 dB whatever the oscillator
+ * does, and says nothing about aliasing. The legitimate line set of a supersaw is
+ * {h (1 + a_u y) f0}; everything else between 100 Hz and 18 kHz is aliasing. The bands around the
+ * legitimate lines cover a part of the spectrum (@p coverage), and that part of the aliasing is not
+ * counted; at the notes measured here it is 4 to 25 per cent, less than a dB of bias.
+ */
+double supersawAliasDb(const std::vector<float>& y, size_t offset, double f0, double detuneY, double sr, double* coverage = nullptr)
+{
+    constexpr size_t N = 65536;
+    const std::vector<double> pw = powerSpectrum(y.data() + offset, N);
+    std::vector<char> legit(N / 2 + 1, 0);
+    const double nyq = 0.5 * sr;
+    for (int u = 0; u < kPolyUnison; ++u) {
+        const double fu = f0 * (1.0 + kSupersawOffsets[u] * detuneY);
+        for (int h = 1; static_cast<double>(h) * fu < nyq; ++h) {
+            const double k = static_cast<double>(h) * fu * static_cast<double>(N) / sr;
+            for (int b = static_cast<int>(std::floor(k)) - 6; b <= static_cast<int>(std::ceil(k)) + 6; ++b)
+                if (b >= 0 && b <= static_cast<int>(N / 2)) legit[static_cast<size_t>(b)] = 1;
+        }
+    }
+    double on = 0.0, off = 0.0;
+    size_t bins = 0, onBins = 0;
+    for (size_t k = 1; k < N / 2; ++k) {
+        const double hz = static_cast<double>(k) * sr / N;
+        if (hz < 100.0 || hz > 18000.0) continue;
+        ++bins;
+        if (legit[k] != 0) { on += pw[k]; ++onBins; } else off += pw[k];
+    }
+    if (coverage != nullptr) *coverage = static_cast<double>(onBins) / static_cast<double>(bins);
+    return powDb(off / on);
+}
+
+/**
+ * @brief Power above @p fromHz that sits on none of @p lines, against the power at @p fundHz.
+ *
+ * A two-operator FM spectrum is the carrier plus sidebands at |f_c + k f_m| for every integer k; with
+ * a non-integer ratio those are not harmonics of f_c, so a harmonic mask would count the instrument's
+ * own sidebands as aliasing. Only the sidebands whose *unfolded* frequency lies above Nyquist come
+ * back as aliasing, and they land where no legitimate line is.
+ */
+double lineAliasDb(const std::vector<float>& y, size_t offset, const std::vector<double>& lines, double fundHz, double sr, double fromHz)
+{
+    constexpr size_t N = 65536;
+    const std::vector<double> pw = powerSpectrum(y.data() + offset, N);
+    std::vector<char> legit(N / 2 + 1, 0);
+    for (double hz : lines) {
+        const double k = hz * static_cast<double>(N) / sr;
+        for (int b = static_cast<int>(std::floor(k)) - 6; b <= static_cast<int>(std::ceil(k)) + 6; ++b)
+            if (b >= 0 && b <= static_cast<int>(N / 2)) legit[static_cast<size_t>(b)] = 1;
+    }
+    double rest = 0.0, fund = 0.0;
+    const size_t k1 = static_cast<size_t>(std::lround(fundHz * static_cast<double>(N) / sr));
+    for (size_t k = k1 - 4; k <= k1 + 4; ++k) fund += pw[k];
+    for (size_t k = 1; k < N / 2; ++k) {
+        const double hz = static_cast<double>(k) * sr / N;
+        if (hz < fromHz || hz > 23000.0) continue;
+        if (legit[k] == 0) rest += pw[k];
+    }
+    return powDb(rest / fund);
+}
+
+/** @brief The lines a two-operator voice at @p f0 with modulator ratio @p ratio may legitimately show. */
+std::vector<double> fmLines(double f0, double ratio, double sr)
+{
+    std::vector<double> v;
+    for (int k = -400; k <= 400; ++k) {
+        const double hz = std::fabs(f0 * (1.0 + k * ratio));
+        if (hz > 20.0 && hz < 0.5 * sr) v.push_back(hz);
+    }
+    return v;
+}
+
+/** @brief The harmonics of @p f0 below Nyquist. */
+std::vector<double> harmonicLines(double f0, double sr)
+{
+    std::vector<double> v;
+    for (int h = 1; h * f0 < 0.5 * sr; ++h) v.push_back(h * f0);
+    return v;
+}
+
 /** @brief A polyphonic engine instance with the given settings. */
 std::unique_ptr<Poly> makePoly(const char* settings, ParamStore& p, PolyInstance inst)
 {
@@ -1922,6 +2006,86 @@ void testPoly()
             }
         }
         check(worst < -30.0, "lead and arp at their lowest notes, every oscillator: under -30 dB below 140 Hz", fmt("worst %.1f dB", worst));
+    }
+    // The supersaw reads the mipmapped saw, not a PolyBLEP ramp (measured 16.09.2026: the ramp left
+    // -46.6 / -43.3 / -40.9 dB at C5 / C6 / A6 with detune 1, the table -72.4 / -68.9 / -61.6 dB).
+    {
+        const char* const kBench = "lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 "
+                                   "lead.width=0 lead.delay_send=0 lead.dynamic_detune=0 lead.amp_attack=1 lead.amp_sustain=1 "
+                                   "lead.amp_decay=4000 lead.vel_sens=0 lead.mix=0.75 lead.detune=1";
+        double worst = 1e9, alias[3] = {};
+        int i = 0;
+        for (int pitch : { 72, 84, 93 }) {
+            ParamStore p;
+            auto e = makePoly(kBench, p, PolyInstance::Lead);
+            e->noteOn(pitch, 1.0f, 8.0, 1 << 24, 0.0);
+            const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
+            alias[i] = supersawAliasDb(y, 9600, midiToHz(pitch), Poly::detuneCurve(1.0), sr);
+            worst = std::min(worst, -alias[i]);
+            ++i;
+        }
+        check(worst > 58.0, "supersaw: the mipmapped saw keeps the aliasing of high notes under -58 dB (a PolyBLEP ramp left -41 dB at A6)",
+              fmt("C5 %.1f dB, C6 %.1f dB, A6 %.1f dB", alias[0], alias[1], alias[2]));
+    }
+    // The table frame is normalised to another RMS than the ramp; the compensation keeps the level.
+    {
+        ParamStore p;
+        auto e = makePoly("lead.osc=Supersaw lead.detune=0.55 lead.mix=0.75 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 "
+                          "lead.hp_track=0 lead.hp_floor=150 lead.width=0 lead.delay_send=0 lead.dynamic_detune=0 lead.amp_attack=1 "
+                          "lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0 lead.level=0", p, PolyInstance::Lead);
+        e->noteOn(60, 1.0f, 8.0, 1 << 24, 0.0);
+        const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 4800 + 48000);
+        double e2 = 0.0;
+        for (size_t k = 4800; k < y.size(); ++k) e2 += static_cast<double>(y[k]) * y[k];
+        // Szabo's mix normalises the incoherent sum of the seven oscillators to one, so the voice is
+        // as loud as one ramp: RMS 1/sqrt 3.
+        const double db = 20.0 * std::log10(std::sqrt(e2 / static_cast<double>(y.size() - 4800)) * std::sqrt(3.0));
+        check(std::fabs(db) < 0.5, "supersaw: reading the table instead of the ramp does not change the level",
+              fmt("%+.2f dB against the RMS of the ramp 2t - 1", db));
+    }
+    // PolyBLEP stays the VA oscillator: it reaches harmonics the table's octave levels no longer hold.
+    {
+        auto harmonic = [&](const char* osc, int pitch, int h) {
+            ParamStore p;
+            auto e = makePoly(fmt("lead.osc=%s lead.wave=0 lead.detune=0 lead.mix=0 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 "
+                                  "lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 lead.width=0 lead.delay_send=0 lead.dynamic_detune=0 "
+                                  "lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0", osc).c_str(), p, PolyInstance::Lead);
+            e->noteOn(pitch, 1.0f, 8.0, 1 << 24, 0.0);
+            const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
+            const std::vector<double> pw = powerSpectrum(y.data() + 9600, 65536);
+            const size_t k0 = static_cast<size_t>(std::lround(h * midiToHz(pitch) * 65536.0 / sr));
+            const size_t k1 = static_cast<size_t>(std::lround(midiToHz(pitch) * 65536.0 / sr));
+            double hi = 0.0, lo = 0.0;
+            for (size_t k = k0 - 3; k <= k0 + 3; ++k) hi += pw[k];
+            for (size_t k = k1 - 3; k <= k1 + 3; ++k) lo += pw[k];
+            return powDb(hi / lo);
+        };
+        // A6: the table level that a 1760 Hz cycle reads keeps eight harmonics, so the ninth is gone;
+        // the PolyBLEP ramp of the VA oscillator still has it. A ramp's ninth harmonic is 1/9 of the
+        // fundamental (-19.1 dB), of which the voice's low pass at 18 kHz takes 5 dB at 15.8 kHz.
+        const double va = harmonic("VA", 93, 9), sup = harmonic("Supersaw", 93, 9);
+        check(va > -30.0 && sup < va - 25.0, "VA keeps the PolyBLEP ramp: at A6 it still has the ninth harmonic, the table saw does not",
+              fmt("VA %.1f dB below the fundamental, supersaw %.1f dB", va, sup));
+    }
+    // The FM index is limited per note to the bandwidth Carson's rule allows. Without the limit,
+    // index 10 at ratio 7.3 put 6 dB more power into aliasing than into its own carrier at C6.
+    {
+        struct Case { double ratio; int pitch; const char* what; };
+        double worst = -1e9;
+        std::string detail;
+        for (const Case& c : { Case{ 7.3, 84, "C6 r=7.3" }, Case{ 7.3, 93, "A6 r=7.3" }, Case{ 3.5, 84, "C6 r=3.5" } }) {
+            ParamStore p;
+            auto e = makePoly(fmt("lead.osc=FM lead.fm_index=10 lead.fm_ratio=%g lead.fm_decay=2000 lead.detune=0 lead.mix=0 lead.cutoff=18000 "
+                                  "lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 lead.width=0 "
+                                  "lead.delay_send=0 lead.dynamic_detune=0 lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0",
+                                  c.ratio).c_str(), p, PolyInstance::Lead);
+            e->noteOn(c.pitch, 1.0f, 8.0, 1 << 24, 0.0);
+            const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
+            const double a = lineAliasDb(y, 9600, fmLines(midiToHz(c.pitch), c.ratio, sr), midiToHz(c.pitch), sr, 12000.0);
+            worst = std::max(worst, a);
+            detail += fmt("%s %.1f dB  ", c.what, a);
+        }
+        check(worst < -45.0, "FM: the index is limited to the bandwidth Carson's rule allows, so a high note does not alias over its own carrier", detail);
     }
 }
 
@@ -2147,6 +2311,126 @@ void testWaveTable()
         const double rise = harmonicDb(16, 2) - harmonicDb(0, 2), fall = harmonicDb(0, 6) - harmonicDb(16, 6);
         check(rise > 10.0 && fall > 10.0, "vocal table: the first formant moves from 730 Hz (a) down to 270 Hz (i)",
               fmt("harmonic 2 %+.1f dB, harmonic 6 %+.1f dB", rise, -fall));
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// TEMPORARY measurement bench (PHOS_ONLY=testMeasure).
+// ---------------------------------------------------------------------------------------------
+
+/** @brief Renders one sustained note of a Poly at @p rate; 96 kHz is decimated to 48 kHz. */
+std::vector<float> renderPolyNote(const std::string& settings, PolyInstance inst, int pitch, size_t n, double rate)
+{
+    ParamStore p;
+    p.parseText(settings);
+    auto e = std::make_unique<Poly>();
+    e->prepare(rate);
+    std::vector<float> v = moduleValues(p, Module::Poly, static_cast<int>(inst));
+    e->update(v.data(), 145.0);
+    e->noteOn(pitch, 1.0f, 8.0, 1 << 24, 0.0);
+    if (rate <= 48000.5) return renderMono([&](float* L, float* R, int k) { e->process(L, R, k); }, n);
+    HalfbandDown<float> down;
+    down.setup(designHalfband(96.0, 0.1));
+    const std::vector<float> hi = renderMono([&](float* L, float* R, int k) { e->process(L, R, k); }, n * 2);
+    std::vector<float> out(n);
+    for (size_t i = 0; i < n; ++i) out[i] = down.process(hi[2 * i], hi[2 * i + 1]);
+    return out;
+}
+
+/** @brief The settings both paths share, with an instance prefix. */
+std::string commonPoly(const char* pfx, double detune)
+{
+    std::string s;
+    static const char* const kKeys[] = { "cutoff=18000", "env_amount=0", "key_track=0", "resonance=0", "hp_track=0", "hp_floor=150",
+                                         "width=0", "delay_send=0", "dynamic_detune=0", "amp_attack=1", "amp_sustain=1",
+                                         "amp_decay=4000", "vel_sens=0", "mix=0.75", "gate=0" };
+    for (const char* k : kKeys) s += std::string(pfx) + "." + k + " ";
+    return s + fmt("%s.detune=%g ", pfx, detune);
+}
+
+void testMeasure()
+{
+    section("MEASUREMENT BENCH");
+    const double sr = 48000.0;
+    const int kPitches[4] = { 60, 72, 84, 93 };
+    const char* const kNames[4] = { "C4", "C5", "C6", "A6" };
+    const std::string kWt = "pad.osc=Wavetable pad.table=Classic pad.position=0.5 pad.pos_env=0 pad.pos_lfo_depth=0 ";
+    std::printf("\n  supersaw aliasing, sustained note, 65536-sample window 0.2 s after the onset\n");
+    std::printf("  %-4s %-7s | %-22s | %-22s | %-22s | legit\n", "note", "detune", "lead (supersaw)", "pad path (wavetable)", "lead at 2x + halfband");
+    for (double detune : { 1.0, 0.55 }) {
+        const double yDet = Poly::detuneCurve(detune);
+        for (int i = 0; i < 4; ++i) {
+            const double f0 = midiToHz(kPitches[i]);
+            const std::string lead = commonPoly("lead", detune);
+            const std::string pad = kWt + commonPoly("pad", detune);
+            double cv = 0.0;
+            const std::vector<float> a = renderPolyNote(lead, PolyInstance::Lead, kPitches[i], 9600 + 65536, 48000.0);
+            const std::vector<float> b = renderPolyNote(pad, PolyInstance::Pad, kPitches[i], 9600 + 65536, 48000.0);
+            const std::vector<float> c = renderPolyNote(lead, PolyInstance::Lead, kPitches[i], 9600 + 65536, 96000.0);
+            const double aa = supersawAliasDb(a, 9600, f0, yDet, sr, &cv);
+            const double ab = supersawAliasDb(b, 9600, f0, yDet, sr);
+            const double ac = supersawAliasDb(c, 9600, f0, yDet, sr);
+            const double ia = inharmonicDb(a, 9600, f0, sr), ib = inharmonicDb(b, 9600, f0, sr), ic = inharmonicDb(c, 9600, f0, sr);
+            std::printf("  %-4s %-7.2f | alias %6.1f  inh %5.1f | alias %6.1f  inh %5.1f | alias %6.1f  inh %5.1f | %.0f %%\n",
+                        kNames[i], detune, aa, ia, ab, ib, ac, ic, 100.0 * cv);
+        }
+    }
+    std::printf("\n  top end, detune 0.55: power above 8 kHz relative to 100 Hz .. 18 kHz\n");
+    for (int i = 0; i < 4; ++i) {
+        const double f0 = midiToHz(kPitches[i]);
+        auto share = [&](const std::vector<float>& y) {
+            const std::vector<double> pw = powerSpectrum(y.data() + 9600, 65536);
+            double hi = 0.0, all = 0.0;
+            for (size_t k = 1; k < 32768; ++k) {
+                const double hz = static_cast<double>(k) * sr / 65536.0;
+                if (hz < 100.0 || hz > 18000.0) continue;
+                all += pw[k];
+                if (hz > 8000.0) hi += pw[k];
+            }
+            return powDb(hi / all);
+        };
+        const std::vector<float> a = renderPolyNote(commonPoly("lead", 0.55), PolyInstance::Lead, kPitches[i], 9600 + 65536, 48000.0);
+        const std::vector<float> b = renderPolyNote(kWt + commonPoly("pad", 0.55), PolyInstance::Pad, kPitches[i], 9600 + 65536, 48000.0);
+        const int lvl = waveLevelFor(f0, sr, -1);
+        std::printf("  %-4s f0 %7.1f Hz  level %d keeps %3d harmonics (to %5.0f Hz)  lead %+6.1f dB, pad path %+6.1f dB\n",
+                    kNames[i], f0, lvl, WaveTable::levelHarmonics(lvl), f0 * WaveTable::levelHarmonics(lvl), share(a), share(b));
+    }
+    // Task 3: does the lead need 2x? The FM and VA oscillators, aliasing above 12 kHz against the fundamental.
+    std::printf("\n  FM and VA lead, aliasing above 12 kHz relative to the fundamental (1x, and 2x + halfband)\n");
+    struct Case { const char* name; const char* set; double ratio; };
+    const Case kCases[] = {
+        { "VA saw",        "lead.osc=VA lead.wave=0", 0.0 },
+        { "VA pulse 25 %", "lead.osc=VA lead.wave=1 lead.pulse_width=0.25", 0.0 },
+        { "FM I=2.5 r=2",  "lead.osc=FM lead.fm_index=2.5 lead.fm_ratio=2 lead.fm_decay=2000", 2.0 },
+        { "FM I=10 r=2",   "lead.osc=FM lead.fm_index=10 lead.fm_ratio=2 lead.fm_decay=2000", 2.0 },
+        { "FM I=2.5 r=3.5","lead.osc=FM lead.fm_index=2.5 lead.fm_ratio=3.5 lead.fm_decay=2000", 3.5 },
+        { "FM I=10 r=3.5", "lead.osc=FM lead.fm_index=10 lead.fm_ratio=3.5 lead.fm_decay=2000", 3.5 },
+        { "FM I=10 r=7.3", "lead.osc=FM lead.fm_index=10 lead.fm_ratio=7.3 lead.fm_decay=2000", 7.3 },
+    };
+    for (const Case& c : kCases) {
+        std::printf("  %-14s", c.name);
+        for (int i = 1; i < 4; ++i) {
+            const double f0 = midiToHz(kPitches[i]);
+            const std::string s = std::string(c.set) + " " + commonPoly("lead", 0.0);
+            const std::vector<double> lines = c.ratio > 0.0 ? fmLines(f0, c.ratio, sr) : harmonicLines(f0, sr);
+            const std::vector<float> a = renderPolyNote(s, PolyInstance::Lead, kPitches[i], 9600 + 65536, 48000.0);
+            const std::vector<float> b = renderPolyNote(s, PolyInstance::Lead, kPitches[i], 9600 + 65536, 96000.0);
+            std::printf("  %s 1x %6.1f / 2x %6.1f", kNames[i], lineAliasDb(a, 9600, lines, f0, sr, 12000.0), lineAliasDb(b, 9600, lines, f0, sr, 12000.0));
+        }
+        std::printf("\n");
+    }
+    // The same, with the voice filter where the lead really stands (cutoff 10 kHz, the Phase-4 value).
+    std::printf("\n  the same at the lead's own cutoff of 10 kHz (what actually reaches the mix)\n");
+    for (const Case& c : kCases) {
+        std::printf("  %-14s", c.name);
+        for (int i = 1; i < 4; ++i) {
+            const double f0 = midiToHz(kPitches[i]);
+            std::string s = std::string(c.set) + " " + commonPoly("lead", 0.0) + " lead.cutoff=10000";
+            const std::vector<double> lines = c.ratio > 0.0 ? fmLines(f0, c.ratio, sr) : harmonicLines(f0, sr);
+            const std::vector<float> a = renderPolyNote(s, PolyInstance::Lead, kPitches[i], 9600 + 65536, 48000.0);
+            std::printf("  %s 1x %6.1f", kNames[i], lineAliasDb(a, 9600, lines, f0, sr, 12000.0));
+        }
+        std::printf("\n");
     }
 }
 
@@ -2534,6 +2818,7 @@ int main()
     // PHOS_ONLY=testName[,testName...] runs only those tests (for work on one building block).
     const char* only = std::getenv("PHOS_ONLY");
     auto run = [&](const char* name, void (*fn)()) { if (only == nullptr || std::strstr(only, name) != nullptr) fn(); };
+    run("testMeasure", testMeasure);
     run("testSampler", testSampler);
     run("testDiodeLadder", testDiodeLadder);
     run("testAcid", testAcid);

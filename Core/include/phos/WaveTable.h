@@ -31,6 +31,8 @@
 namespace phos {
 
 constexpr int kNumWaveTables = 6;   ///< built-in tables (names in Params.cpp)
+constexpr int kClassicTable  = 0;   ///< built-in table 0: sine, triangle, saw, square, narrow pulse
+constexpr int kClassicSawFrame = 2; ///< the sawtooth frame of the Classic table (the supersaw reads it)
 
 /** @brief One table: frames at ten levels. */
 struct WaveTable {
@@ -90,6 +92,15 @@ struct WaveTable {
      */
     bool buildFromHarmonics(const std::vector<std::vector<std::complex<double>>>& frameCoefficients);
 };
+
+/**
+ * @brief Gain that lifts a stored frame to the loudness of the ramp 2t - 1.
+ *
+ * buildFromHarmonics() normalises every frame to @c kTargetRms = 1/(2 sqrt 2); the ramp has RMS
+ * 1/sqrt 3. The supersaw reads the saw frame instead of generating a PolyBLEP ramp and multiplies by
+ * this, so the change of oscillator does not change the level of the lead: 2 sqrt(2/3).
+ */
+inline constexpr float kSawTableGain = 1.63299316f;
 
 /**
  * @brief The level a cycle at @p hz reads: the richest whose highest harmonic lies below Nyquist.

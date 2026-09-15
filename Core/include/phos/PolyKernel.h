@@ -77,10 +77,16 @@ inline V laneSin01(V p)
  * @brief Renders @p n samples of the slots [slot, slot + laneWidth<V>()).
  * @param wt        per sample and slot: the wavetable oscillator's sample, read on the scalar side
  *                  (a table read is a gather, which NEON does not have; see Poly.cpp)
+ * @param blep,fm,useWt whether this group of slots weighs the source in at all. Decided per group of
+ *                  eight slots, so every vector width runs the same arithmetic on every lane (as in
+ *                  the percussion kernel). A source weighed in with zero contributes exactly zero, so
+ *                  leaving it out changes nothing but the time it takes -- and it takes a lot: the two
+ *                  folded Taylor sines of the frequency modulation are the most expensive part of a
+ *                  slot, and a supersaw, a VA voice and a pad never use them.
  * @param outL,outR per sample and slot (index i * kPolySlots + slot)
  */
 template <class V>
-void polySlotKernel(PolySlots& s, int slot, int n, const float* wt, float* outL, float* outR)
+void polySlotKernel(PolySlots& s, int slot, int n, const float* wt, bool blep, bool fm, bool useWt, float* outL, float* outR)
 {
     auto at = [slot](const float* a) { return loadLanes<V>(a + slot); };
     const V zero = lanes<V>(0.0f), one = lanes<V>(1.0f), two = lanes<V>(2.0f);
@@ -88,7 +94,7 @@ void polySlotKernel(PolySlots& s, int slot, int n, const float* wt, float* outL,
     V ph = at(s.ph), mph = at(s.mph), idx = at(s.idx);
     const V dt = at(s.dt), inv = at(s.inv), mdt = at(s.mdt), idxDecay = at(s.idxDecay), idxFloor = at(s.idxFloor);
     const V pw = at(s.pw), wSaw = at(s.wSaw), wPulse = at(s.wPulse), wFm = at(s.wFm), wWt = at(s.wWt), gL = at(s.gL), gR = at(s.gR);
-    auto blep = [&](V t) {
+    auto blepAt = [&](V t) {
         const V x1 = t * inv;
         V r = vselect(vlt(t, dt), x1 + x1 - x1 * x1 - one, zero);
         const V x2 = (t - one) * inv;
@@ -96,15 +102,21 @@ void polySlotKernel(PolySlots& s, int slot, int n, const float* wt, float* outL,
     };
     for (int i = 0; i < n; ++i) {
         const V t = ph;
-        const V bt = blep(t);
-        const V saw = two * t - one - bt;
-        V t2 = t + one - pw;
-        t2 = vselect(vge(t2, one), t2 - one, t2);
-        const V pulse = -(vselect(vlt(t, pw), one, -one) + bt - blep(t2));
-        const V m = laneSin01(mph);
-        const V fm = laneSin01(t + (idxFloor + idx) * m * invTwoPi);
         const int row = i * kPolySlots + slot;
-        const V out = wSaw * saw + wPulse * pulse + wFm * fm + wWt * loadLanes<V>(wt + row);
+        V sawTerm = zero, pulseTerm = zero, fmTerm = zero, wtTerm = zero;
+        if (blep) {
+            const V bt = blepAt(t);
+            sawTerm = wSaw * (two * t - one - bt);
+            V t2 = t + one - pw;
+            t2 = vselect(vge(t2, one), t2 - one, t2);
+            pulseTerm = wPulse * -(vselect(vlt(t, pw), one, -one) + bt - blepAt(t2));
+        }
+        if (fm) {
+            const V m = laneSin01(mph);
+            fmTerm = wFm * laneSin01(t + (idxFloor + idx) * m * invTwoPi);
+        }
+        if (useWt) wtTerm = wWt * loadLanes<V>(wt + row);
+        const V out = sawTerm + pulseTerm + fmTerm + wtTerm;
         vstore(outL + row, out * gL);
         vstore(outR + row, out * gR);
         V np = t + dt;

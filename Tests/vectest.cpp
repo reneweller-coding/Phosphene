@@ -256,14 +256,14 @@ void testPoly()
     }
     check(bad == 0 && energy > 1.0, "56 oscillator slots and 16 voice channels identical to scalar (supersaw, VA, FM, wavetable)", fmt("%d differing samples, energy %.1f", bad, energy));
 
-    // Cost, not a check: eight voices of a sustained supersaw, ten seconds.
-    auto time = [&](bool vec) {
+    // Cost, not a check: eight voices held for ten seconds, once as the lead and once as the pad.
+    auto time = [&](const char* settings, PolyInstance inst, bool vec) {
         auto e = std::make_unique<Poly>();
         e->prepare(48000.0);
         ParamStore q;
-        q.parseText("lead.amp_sustain=1 lead.delay_send=0.3");
+        q.parseText(settings);
         std::vector<float> v(static_cast<size_t>(poly::Count));
-        q.readModule(Module::Poly, 0, v.data());
+        q.readModule(Module::Poly, static_cast<int>(inst), v.data());
         e->update(v.data(), 145.0);
         for (int k = 0; k < kPolyVoices; ++k) e->noteOn(60 + 3 * k, 1.0f, 4.0, 1 << 30, 0.0);
         std::vector<float> L(32), R(32);
@@ -274,9 +274,14 @@ void testPoly()
         }
         return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     };
-    const double ts = time(false), tv = time(true);
+    const char* const kLead = "lead.amp_sustain=1 lead.delay_send=0.3";
+    const char* const kPad = "pad.amp_sustain=1 pad.amp_attack=1";
+    const double ts = time(kLead, PolyInstance::Lead, false), tv = time(kLead, PolyInstance::Lead, true);
     std::printf("         cost of 10 s, eight supersaw voices: scalar %.1f %% of a core, %s %.1f %% (x%.2f)\n",
                 ts * 10.0, kVecPathName, tv * 10.0, ts / tv);
+    const double ps = time(kPad, PolyInstance::Pad, false), pv = time(kPad, PolyInstance::Pad, true);
+    std::printf("         cost of 10 s, eight wavetable pad voices: scalar %.1f %% of a core, %s %.1f %% (x%.2f)\n",
+                ps * 10.0, kVecPathName, pv * 10.0, ps / pv);
 }
 
 } // namespace
