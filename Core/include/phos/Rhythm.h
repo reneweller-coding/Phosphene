@@ -67,11 +67,30 @@ struct PercPlan {
  * @param p         knob values (compose.* and the lanes' role, active and density)
  * @param seed      seed of this track's percussion decisions
  * @param firstTrack the first track keeps the kit's sound exactly (no recipe, no overrides)
+ * @param laneSeeds one seed per lane for its Euclidean pattern, or null to derive them from @p seed;
+ *                  a pattern lane is a lockable unit (PLAN 6.8), so its pattern hangs off its own seed
  */
-PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack);
+PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack, const uint64_t* laneSeeds = nullptr);
 
 /** @brief Lanes (by index) that take part in the groove in a given bar of a track. */
 int activeLayers(const PercPlan& plan, float percVariation, uint64_t trackSeed, int barInTrack);
+
+/**
+ * @brief What the form asks of the percussion in one bar (Form.h, the instrumentation matrix).
+ *
+ * Since Phase 5 the number of layers, the fills and the buildup's snare roll come from the section,
+ * not from the bar number: percussion layers grow through an intro, return one per four bars in a
+ * buildup and leave again through an outro.
+ */
+struct PercBarSpec {
+    int   layers = 4;        ///< how many layers of the plan play
+    bool  fills = true;      ///< fills allowed in this bar
+    bool  hatsDense = false; ///< the closed hat plays every sixteenth (buildup)
+    int   rollBar = -1;      ///< 0..3: one of the last four bars of a buildup (the snare roll)
+    bool  pdb = false;       ///< the pre-drop break: the roll ends on beat 3, beat 4 stays empty
+    bool  crash = false;     ///< open the bar with a crash (a drop's downbeat)
+    float cutBeats = 0.0f;   ///< beats of silence at the start of the bar (the cut)
+};
 
 /**
  * @brief Composes one bar of percussion.
@@ -82,11 +101,11 @@ int activeLayers(const PercPlan& plan, float percVariation, uint64_t trackSeed, 
  * @param barInTrack bar index within the track
  * @param bpm        the track's tempo (for per-lane shifts in milliseconds)
  * @param keyRoot,scale the track's key, for tom runs in the mode
- * @param withFills  false for the level-match probe
+ * @param spec       what the form asks for in this bar
  * @param out        receives the notes (Part::Perc, lane, GM pitch plus any shift)
  */
 void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSeed, int bar, int barInTrack,
-                    double bpm, int keyRoot, int scale, bool withFills, std::vector<NoteEvent>& out);
+                    double bpm, int keyRoot, int scale, const PercBarSpec& spec, std::vector<NoteEvent>& out);
 
 /** @brief The fill a phrase ends with (exposed for tests). */
 FillType chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack);

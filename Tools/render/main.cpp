@@ -14,6 +14,11 @@
  *     --seed N            set seed (default 1)
  *     --set key=value     set a parameter; repeatable; "key=a;key2=b" also works
  *     --preset FILE       read key=value assignments from a file
+ *     --set-file FILE     read a .phosset (seed, style, arc, knobs, locks, rerolls)
+ *     --save-set FILE     write the set as a .phosset
+ *     --lock UNIT:INDEX   lock a unit (set, track, section, lane); repeatable
+ *     --reroll UNIT:INDEX reroll a unit; repeatable
+ *     --sections          print the sections of every track in the render
  *     --tempo-ramp B:BPM  ramp the tempo from compose.bpm at beat 0 to BPM at beat B
  *     --solo PART         mute everything else: kick, bass, perc, acid, lead, arp, pad or sfx
  *     --out FILE.wav      write the audio (32-bit float unless --pcm24)
@@ -28,6 +33,7 @@
 #include "phos/Engine.h"
 #include "phos/Loudness.h"
 #include "phos/Midi.h"
+#include "phos/SetFile.h"
 #include "phos/WavWriter.h"
 #include <algorithm>
 #include <chrono>
@@ -76,10 +82,11 @@ int main(int argc, char** argv)
     double seconds = -1.0;
     int sr = 48000, block = 256;
     uint64_t seed = 1;
-    std::string out, midi, solo;
-    bool report = false, bench = false, pcm24 = false, listTracks = false;
+    std::string out, midi, solo, setFile, saveSet;
+    bool report = false, bench = false, pcm24 = false, listTracks = false, listSections = false;
     double rampBeat = -1.0, rampBpm = 0.0;
     std::vector<std::string> sets;
+    std::vector<std::pair<bool, std::string>> unitOps;   // (lock?, "unit:index")
 
     auto engine = std::make_unique<Engine>();
     ParamStore& params = engine->params();
@@ -111,6 +118,11 @@ int main(int argc, char** argv)
             rampBeat = std::atof(v.substr(0, c).c_str());
             rampBpm = std::atof(v.substr(c + 1).c_str());
         }
+        else if (a == "--set-file") setFile = next();
+        else if (a == "--save-set") saveSet = next();
+        else if (a == "--lock") unitOps.emplace_back(true, next());
+        else if (a == "--reroll") unitOps.emplace_back(false, next());
+        else if (a == "--sections") listSections = true;
         else if (a == "--solo") solo = next();
         else if (a == "--out") out = next();
         else if (a == "--pcm24") pcm24 = true;
@@ -137,6 +149,27 @@ int main(int argc, char** argv)
 
     const int cb = params.base(Module::Compose);
     Composer composer(seed);
+    // A set file carries the seed, the style, the arc, the knobs and the curation (locks, rerolls).
+    // It is read before the command line's own --set assignments so that those still win.
+    if (!setFile.empty()) {
+        std::string err;
+        if (!readSetFile(setFile.c_str(), composer, params, &err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 2; }
+        for (const std::string& s : sets) if (!params.parseText(s, &err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 2; }
+    }
+    for (const auto& op : unitOps) {
+        const size_t c = op.second.find(':');
+        if (c == std::string::npos) { std::fprintf(stderr, "--lock/--reroll want UNIT:INDEX\n"); return 2; }
+        int unit = -1;
+        for (int u = 0; u < kNumLockUnits; ++u) if (op.second.compare(0, c, kLockUnitNames[u]) == 0) unit = u;
+        if (unit < 0) { std::fprintf(stderr, "unknown unit %s (set, track, section, lane)\n", op.second.substr(0, c).c_str()); return 2; }
+        const int index = std::atoi(op.second.c_str() + c + 1);
+        if (op.first) composer.setLock(static_cast<LockUnit>(unit), index, true);
+        else composer.reroll(static_cast<LockUnit>(unit), index);
+    }
+    if (!saveSet.empty() && !writeSetFile(saveSet.c_str(), composer, params)) {
+        std::fprintf(stderr, "cannot write %s\n", saveSet.c_str());
+        return 1;
+    }
     // The composer's tempo map covers the render: per track, ramped between tracks. For a length in
     // seconds, plan generously (at the fastest tempo the range allows) and cut by time afterwards.
     const int planBars = seconds > 0.0
@@ -179,16 +212,22 @@ int main(int argc, char** argv)
             std::printf(" (%d bars each); acid %s (%d steps%s), lead %s (osc %d), arp %s (%s)\n", m.chordBars,
                         m.present[0] ? "yes" : "no", m.acidSteps, m.acidSquelch == 1 ? ", squelch" : "", m.present[1] ? "yes" : "no", m.leadOsc,
                         m.present[2] ? "yes" : "no", kArpStyles[m.arpStyle]);
-            std::printf("          blocks (A=acid L=lead R=arp P=pad g=gated):");
-            for (int b = 0; b < p.bars / 16 && b < kMelodyMaxBlocks; ++b)
-                std::printf(" %s%s%s%s%s%s", (m.blockParts[b] & 1) ? "A" : "", (m.blockParts[b] & 2) ? "L" : "", (m.blockParts[b] & 4) ? "R" : "",
-                            (m.blockParts[b] & 8) ? "P" : "", m.padGate[b] ? "g" : "", m.blockParts[b] ? "" : "-");
+            std::printf("          form (%s body, arc %.2f..%.2f):", p.form.body == 0 ? "Full-On" : (p.form.body == 1 ? "Progressive" : "Goa"),
+                        static_cast<double>(p.arcIn), static_cast<double>(p.arcOut));
+            for (int s = 0; s < p.form.count; ++s)
+                std::printf(" %s%d@%d(E%.2f)", kSectionNames[static_cast<int>(p.form.section[s].type)], p.form.section[s].bars,
+                            p.form.section[s].startBar, static_cast<double>(p.form.section[s].energy));
             std::printf("\n          effects:");
-            for (const SfxEvent& s : m.sfx) std::printf(" %s@%g", kSfxTypeNames[s.type], s.beat / kBeatsPerBar);
+            for (const SfxEvent& s : p.form.sfx) std::printf(" %s@%g", kSfxTypeNames[s.type], s.beat / kBeatsPerBar);
             std::printf("\n          part gains %+.1f / %+.1f / %+.1f / %+.1f dB, mix %.1f LUFS before the master offset %+.1f dB\n",
                         static_cast<double>(p.partGainDb[0]), static_cast<double>(p.partGainDb[1]), static_cast<double>(p.partGainDb[2]),
                         static_cast<double>(p.partGainDb[3]), p.mixLoudness, static_cast<double>(p.masterGainDb));
         }
+    }
+    if (listSections) {
+        for (const SectionMark& s : composer.sections(params, totalBars))
+            std::printf("bar %5d  track %2d  %-6s  energy %.2f\n", static_cast<int>(s.beat / kBeatsPerBar) + 1, s.track + 1,
+                        kSectionNames[static_cast<int>(s.type)], static_cast<double>(s.energy));
     }
     const uint64_t totalSamples = static_cast<uint64_t>(std::llround(tempo.secondsAt(totalBeats) * sr));
 
@@ -230,8 +269,8 @@ int main(int argc, char** argv)
             const TrackPlan p = composer.track(params, t);
             const double beat = static_cast<double>(p.firstBar) * kBeatsPerBar;
             if (t > 0 && p.key != composer.track(params, t - 1).key) score.keyChanges.push_back(KeyChange{ beat, p.key });
-            score.sections.push_back(SectionMark{ beat, SectionType::Groove, 0.5f, t });
         }
+        score.sections = composer.sections(params, totalBars);
         for (const NoteEvent& e : recorded) if (e.beat < totalBeats) score.notes.push_back(e);
         score.sort();
         if (!writeMidiFile(score, midi.c_str())) { std::fprintf(stderr, "cannot write %s\n", midi.c_str()); return 1; }

@@ -68,8 +68,15 @@ struct KeyChange {
     int    root = 6;     ///< pitch class of the minor key
 };
 
-/** @brief Section types of a track's form. */
-enum class SectionType : uint8_t { Intro = 0, Groove, Build, Drop, Break, Outro, Count };
+/**
+ * @brief Section types of a track's form (Form.h).
+ *
+ * The first six are the categories the score has always carried; Pdb and Cut were appended in Phase 5
+ * for the two sub-bar categories of Grosz et al. 2025 -- the pre-drop break (the last bar of a buildup)
+ * and the cut (the first beats of a breakdown) -- so that the indices of the older types, and with them
+ * the MIDI markers, did not move.
+ */
+enum class SectionType : uint8_t { Intro = 0, Groove, Build, Drop, Break, Outro, Pdb, Cut, Count };
 extern const char* const kSectionNames[static_cast<int>(SectionType::Count)];   ///< display names
 
 /** @brief Start of a section. */

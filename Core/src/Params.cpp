@@ -12,6 +12,10 @@ namespace phos {
 const char* const kKeyNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 const char* const kScaleNames[] = { "Aeolian", "Phrygian", "Harmonic Minor", "Phrygian Dominant", "Double Harmonic", "Dorian" };
 const char* const kKickPatternNames[] = { "Four", "Four + Fills", "Off" };
+// The names of the style profiles and the dramaturgy presets (Form.h). They live here, with the other
+// choice tables, because the parameter registry is built from them.
+const char* const kStyleNames[] = { "Goa", "Full-On", "Progressive", "Dark Forest", "Hi-Tech" };
+const char* const kArcNames[] = { "Warm-up", "Peak-Time", "Morning", "Closing", "Flat" };
 const char* const kBassPatternNames[] = { "Rolling", "Gallop", "Skip", "Offbeat", "Triplet" };
 const char* const kPercRoleNames[kNumPercRoles] = { "Closed Hat", "Open Hat", "Ride", "Crash", "Clap", "Snare", "Rim",
                                                     "Shaker", "Tom", "Conga", "Zap", "Blip" };
@@ -51,6 +55,11 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "pad_amount",      "Pad Amount",      "",      0.0f,   1.0f,   0.7f, Curve::Linear },
     { "sfx_amount",      "SFX Amount",      "",      0.0f,   1.0f,   0.7f, Curve::Linear },
     { "gate_chance",     "Gate Chance",     "",      0.0f,   1.0f,  0.35f, Curve::Linear },
+    // Phase 5: the style profile, the dramaturgy of the set and the time base of its energy arc.
+    { "style",           "Style",           "",      0.0f,   4.0f,   1.0f, Curve::Choice, kStyleNames },
+    { "arc",             "Energy Arc",      "",      0.0f,   4.0f,   4.0f, Curve::Choice, kArcNames },
+    { "style_tempo",     "Style Tempo",     "",      0.0f,   1.0f,   0.0f, Curve::Toggle },
+    { "set_minutes",     "Set Length",      "min",  10.0f, 300.0f,  60.0f, Curve::Int },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };

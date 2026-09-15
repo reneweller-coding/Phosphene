@@ -1,6 +1,7 @@
 ﻿/**
  * @file CorpusSample.inl
- * @brief Exact constrained sampling from an order-2 Markov model (Pachet and Roy 2011).
+ * @brief Exact constrained sampling from an order-2 Markov model (Pachet and Roy 2011), with
+ *        per-position weights.
  *
  * States are pairs (a, b) of the last two symbols. Backwards, beta_i(a, b) is the total probability of
  * completing positions i..n-1 inside their allowed sets from state (a, b); beta_n = 1. Forwards, the
@@ -28,9 +29,15 @@ bool sampleConstrained(const Model& model, const std::vector<std::vector<uint8_t
     out.clear();
     if (n == 0) return true;
     const double expo = temperature > 0.0 ? 1.0 / temperature : 1.0;
-    auto weight = [&](int a, int b, int c) {
+    // An entry of `allowed` is a relative weight, not only a flag: 0 forbids the symbol, any other
+    // value multiplies the model's probability at that position. A position whose entries are all the
+    // same value (the plain allowed sets, every entry 1) is unchanged, because a constant factor at one
+    // position cancels in both normalisations below. The weights carry the colour of the energy arc
+    // (Melody.h): the flat second and the augmented second get more weight where the arc is high.
+    auto weight = [&](int i, int a, int b, int c) {
         const double p = model.prob(a, b, c);
-        return expo == 1.0 ? p : std::pow(p, expo);
+        const double w = expo == 1.0 ? p : std::pow(p, expo);
+        return i < 0 ? w : w * allowed[static_cast<size_t>(i)][static_cast<size_t>(c)];
     };
     // Allowed symbols per position as index lists.
     std::vector<std::vector<int>> lists(static_cast<size_t>(n));
@@ -52,7 +59,7 @@ bool sampleConstrained(const Model& model, const std::vector<std::vector<uint8_t
         for (int a : at(i - 2)) {
             for (int b : at(i - 1)) {
                 double s = 0.0;
-                for (int c : here) s += weight(a, b, c) * next[static_cast<size_t>(b * A + c)];
+                for (int c : here) s += weight(i, a, b, c) * next[static_cast<size_t>(b * A + c)];
                 cur[static_cast<size_t>(a * A + b)] = s;
                 mx = std::max(mx, s);
             }
@@ -66,7 +73,7 @@ bool sampleConstrained(const Model& model, const std::vector<std::vector<uint8_t
         double total = 0.0;
         std::fill(w.begin(), w.end(), 0.0);
         for (int c : lists[static_cast<size_t>(i)]) {
-            const double x = weight(a, b, c) * beta[static_cast<size_t>(i + 1)][static_cast<size_t>(b * A + c)];
+            const double x = weight(i, a, b, c) * beta[static_cast<size_t>(i + 1)][static_cast<size_t>(b * A + c)];
             w[static_cast<size_t>(c)] = x;
             total += x;
         }

@@ -19,14 +19,29 @@ constexpr uint64_t kSaltChords = 0x43484F5244000001ull;
 constexpr uint64_t kSaltAcid   = 0x4143494400000002ull;
 constexpr uint64_t kSaltLead   = 0x4C45414400000003ull;
 constexpr uint64_t kSaltArp    = 0x4152500000000004ull;
-constexpr uint64_t kSaltLayers = 0x4C41594552000005ull;
 constexpr uint64_t kSaltSound  = 0x534F554E44000006ull;
 constexpr uint64_t kSaltPad    = 0x5041440000000007ull;
-constexpr uint64_t kSaltSfx    = 0x5346580000000008ull;
 
 using Allowed = std::vector<std::vector<uint8_t>>;
 
 int sym(int rel) { return PitchModel::symbol(std::clamp(rel, kCorpusRelMin, kCorpusRelMax)); }
+
+/**
+ * @brief Whether a pitch class is one of the genre's colour tones of @p scale.
+ *
+ * The flat second (one semitone above the root) and the upper note of an augmented second -- a step of
+ * three semitones between two neighbouring degrees, the Hijaz interval of Goa. Easwaran 2004 names both
+ * as what makes a psytrance melody sound like one; Farbood's tension model counts them as dissonance,
+ * which is one of the four quantities the energy arc moves.
+ */
+bool isColourTone(int scale, int pcFromRoot)
+{
+    const int pc = ((pcFromRoot % 12) + 12) % 12;
+    if (pc == 1) return true;
+    for (int d = 1; d < 7; ++d)
+        if (scaleDegree(scale, d) - scaleDegree(scale, d - 1) == 3 && scaleDegree(scale, d) % 12 == pc) return true;
+    return false;
+}
 
 /** @brief Index drawn from non-negative weights. */
 int drawIndex(Rng& r, const double* w, int n)
@@ -39,12 +54,22 @@ int drawIndex(Rng& r, const double* w, int n)
     return n - 1;
 }
 
-/** @brief Allowed symbols: scale tones (relative to the key) in [lo, hi] semitones above the part root. */
-std::vector<uint8_t> scaleSet(int scale, int rootOffset, int lo, int hi)
+/**
+ * @brief Allowed symbols: scale tones (relative to the key) in [lo, hi] semitones above the part root.
+ * @param colour 0 = a plain allowed set (every entry 1, the weight the sampler has always used);
+ *               > 0 = weights, with the colour tones lifted by that much over the base of 8.
+ */
+std::vector<uint8_t> scaleSet(int scale, int rootOffset, int lo, int hi, float colour = 0.0f)
 {
     std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
-    for (int rel = lo; rel <= hi; ++rel)
-        if (rel >= kCorpusRelMin && rel <= kCorpusRelMax && inScale(scale, rel + rootOffset)) a[static_cast<size_t>(sym(rel))] = 1;
+    const int base = colour > 0.0f ? 8 : 1;
+    for (int rel = lo; rel <= hi; ++rel) {
+        if (rel < kCorpusRelMin || rel > kCorpusRelMax || !inScale(scale, rel + rootOffset)) continue;
+        int w = base;
+        if (colour > 0.0f && isColourTone(scale, rel + rootOffset))
+            w = std::clamp(static_cast<int>(std::lround(8.0f * (1.0f + 2.0f * colour))), 1, 255);
+        a[static_cast<size_t>(sym(rel))] = static_cast<uint8_t>(w);
+    }
     return a;
 }
 
@@ -127,7 +152,7 @@ int median(const uint32_t* counts, int n)
 
 // ---------------------------------------------------------------------------------------------
 
-void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature)
+void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, const StyleProfile& style)
 {
     Rng r;
     r.seed(seed ^ kSaltChords);
@@ -140,7 +165,12 @@ void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature)
         for (int d = 0; d < 7; ++d) {
             if (d == prev) continue;
             const double p = chordTransition(scaleDegree(scale, prev), scaleDegree(scale, d));
-            w[d] = p > 0.0 ? std::pow(p, 1.0 / temperature) : 0.0;
+            // The corpus successions are the base (0 to 5, 0 to 7 and 0 to 8 are its commonest moves);
+            // the style profile adds the pendulum moves of the literature -- Goa's i to bII and i to
+            // bVII -- on top of them rather than replacing them. The extras are scaled to a sixth of a
+            // probability, which is the size of a common corpus move.
+            const int move = ((scaleDegree(scale, d) - scaleDegree(scale, prev)) % 12 + 12) % 12;
+            w[d] = (p > 0.0 ? std::pow(p, 1.0 / temperature) : 0.0) + 0.15 * style.chordExtra[move];
         }
         m.chordDegree[i] = drawIndex(r, w, 7);
     }
@@ -207,7 +237,7 @@ int chordAtStep(const MelodyPlan& m, int window, int step)
     return m.chordDegree[chordIndexAt(m, window * 8 + step / 16)];
 }
 
-void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature)
+void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour)
 {
     Rng r;
     r.seed(seed ^ kSaltLead);
@@ -215,6 +245,7 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     const PitchModel& model = corpusPitchModel(CorpusRoleId::Lead);
     const int rootOffset = ((m.root[1] - key) % 12 + 12) % 12;
     constexpr int lo = -5, hi = 14;
+    m.colour = colour;
 
     auto rhythm = [&]() {
         std::vector<int> on;
@@ -228,7 +259,8 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     };
     // Constraints of one note: chord tones on strong steps, scale tones elsewhere.
     auto constraintAt = [&](int window, int step) {
-        return step % 8 == 0 ? chordSet(scale, chordAtStep(m, window, step), rootOffset, lo, hi) : scaleSet(scale, rootOffset, lo, hi);
+        return step % 8 == 0 ? chordSet(scale, chordAtStep(m, window, step), rootOffset, lo, hi)
+                             : scaleSet(scale, rootOffset, lo, hi, colour);
     };
     auto fits = [&](int window, int step, int rel) {
         return constraintAt(window, step)[static_cast<size_t>(sym(rel))] != 0;
@@ -351,84 +383,18 @@ void pitchRange(const std::vector<MelodyNote>& notes, int root, int& lo, int& hi
     for (const MelodyNote& n : notes) { lo = std::min(lo, root + n.rel); hi = std::max(hi, root + n.rel); }
 }
 
-void makeSchedule(MelodyPlan& m, const ParamStore& p, uint64_t seed, int bars)
+/** @brief The pad's gate pattern and the pitch ranges the masking rule works on. */
+void makeRangesAndPad(MelodyPlan& m, uint64_t seed)
 {
-    Rng r;
-    r.seed(seed ^ kSaltLayers);
-    const int blocks = std::min(kMelodyMaxBlocks, std::max(1, bars / 16));
-    // The lead's and the arp's pitch ranges, for the masking rule.
-    int leadLo = 127, leadHi = 0, arpLo = 127, arpHi = 0;
-    for (const auto& ph : m.lead) pitchRange(ph, m.root[1], leadLo, leadHi);
-    for (const auto& cell : m.arp) pitchRange(cell, m.root[2], arpLo, arpHi);
-    if (m.arpOctaveJump) arpHi += 12;
-    (void)p;
-    for (int b = 0; b < blocks; ++b) {
-        const bool last = b == blocks - 1 && blocks > 2;
-        uint8_t parts = 0;
-        if (m.present[0] && (b >= 1 || blocks <= 2) && !(last && r.uniform() < 0.5f) && r.uniform() < 0.85f) parts |= 1;
-        if (m.present[2] && b >= std::min(2, blocks - 1) && r.uniform() < 0.7f) parts |= 4;
-        if (m.present[1] && b >= std::min(3, blocks - 1) && !last && (b - 3) % 3 != 2) parts |= 2;
-        if (parts == 7 && r.uniform() < 0.4f) parts &= r.uniform() < 0.5f ? static_cast<uint8_t>(6) : static_cast<uint8_t>(3);
-        // Never two silent blocks in a row once the intro is over.
-        if (parts == 0 && b >= 2 && !last && b > 0 && m.blockParts[b - 1] == 0) {
-            for (int k : { 0, 2, 1 }) if (m.present[k]) { parts = static_cast<uint8_t>(1 << k); break; }
-        }
-        m.arpShift[b] = 0;
-        if ((parts & 6) == 6) {
-            // Octaves up until the arp's range overlaps the lead's by at most two semitones.
-            int shift = 0;
-            while (arpLo + 12 * shift < leadHi - 2 && arpHi + 12 * shift > leadLo + 2) ++shift;
-            if (arpHi + 12 * shift > 100) parts &= static_cast<uint8_t>(~4);
-            else m.arpShift[b] = static_cast<int8_t>(shift);
-        }
-        m.blockParts[b] = parts;
-        m.acidArc[b] = 2.0f * r.uniform() - 1.0f;
-    }
-    // Pads: they carry the blocks without lead or acid and join some of the others; now and then
-    // they pump through the trance gate where the groove is full.
-    const int cb = p.base(Module::Compose);
-    const float gateChance = p.get(cb + compose::GateChance);
+    for (const auto& ph : m.lead) pitchRange(ph, m.root[1], m.leadLo, m.leadHi);
+    for (const auto& cell : m.arp) pitchRange(cell, m.root[2], m.arpLo, m.arpHi);
+    if (m.arpOctaveJump) m.arpHi += 12;
+    if (m.leadLo > m.leadHi) { m.leadLo = m.root[1]; m.leadHi = m.root[1]; }
+    if (m.arpLo > m.arpHi) { m.arpLo = m.root[2]; m.arpHi = m.root[2]; }
     Rng pr;
     pr.seed(seed ^ kSaltPad);
     static const double kPatternWeights[6] = { 0.35, 0.2, 0.15, 0.1, 0.15, 0.05 };
     m.padGatePattern = drawIndex(pr, kPatternWeights, 6);
-    for (int b = 0; b < blocks; ++b) {
-        const bool lastBlock = b == blocks - 1 && blocks > 2;
-        const bool open = (m.blockParts[b] & 3) == 0;
-        const bool pad = m.present[3] && (open || pr.uniform() < 0.45f) && !(lastBlock && pr.uniform() < 0.3f);
-        if (pad) m.blockParts[b] |= 8;
-        m.padGate[b] = pad && !open && pr.uniform() < gateChance;
-    }
-}
-
-void makeSfx(MelodyPlan& m, const ParamStore& p, uint64_t seed, int bars)
-{
-    Rng r;
-    r.seed(seed ^ kSaltSfx);
-    const float amount = p.get(p.base(Module::Compose) + compose::SfxAmount);
-    const int blocks = std::min(kMelodyMaxBlocks, std::max(1, bars / 16));
-    m.sfx.clear();
-    auto add = [&](double beat, float length, SfxType type) {
-        SfxEvent e;
-        e.beat = beat;
-        e.length = length;
-        e.type = static_cast<int>(type);
-        m.sfx.push_back(e);
-    };
-    for (int b = 1; b < blocks; ++b) {
-        const int before = m.blockParts[b - 1] & 7, now = m.blockParts[b] & 7;
-        const double downbeat = 16.0 * b * kBeatsPerBar;
-        if ((now & ~before) != 0 && r.uniform() < amount) {
-            if (r.uniform() < 0.6f) add(downbeat - 8.0 * kBeatsPerBar, 8.0f * kBeatsPerBar, SfxType::Riser);
-            else add(downbeat - 2.0 * kBeatsPerBar, 2.0f * kBeatsPerBar, SfxType::ReverseSwell);
-            if (r.uniform() < 0.7f) add(downbeat - 1.0, 0.5f, SfxType::FormantShot);   // the last beat before the entry
-            if (r.uniform() < 0.8f) add(downbeat, 4.0f, SfxType::Impact);
-        } else if ((before & ~now) != 0 && r.uniform() < 0.5f * amount) {
-            add(downbeat, 4.0f * kBeatsPerBar, SfxType::Downlifter);
-        }
-    }
-    if (bars >= 16 && r.uniform() < amount) add((bars - 8) * static_cast<double>(kBeatsPerBar), 8.0f * kBeatsPerBar, SfxType::Sweep);
-    std::stable_sort(m.sfx.begin(), m.sfx.end(), [](const SfxEvent& a, const SfxEvent& b) { return a.beat < b.beat; });
 }
 
 } // namespace
@@ -444,7 +410,8 @@ void chordTones(int scale, int degree, int out[3])
     for (int i = 0; i < 3; ++i) out[i] = scaleDegree(scale, degree + 2 * i) % 12;
 }
 
-MelodyPlan makeMelodyPlan(const ParamStore& p, uint64_t seed, int key, int scale, int bars, bool firstTrack)
+MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64_t seed, int key, int scale,
+                          bool firstTrack, float colour)
 {
     const int cb = p.base(Module::Compose);
     const double temperature = p.get(cb + compose::MelodyTemperature);
@@ -452,13 +419,14 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, uint64_t seed, int key, int scale
     MelodyPlan m;
     Rng r;
     r.seed(seed);
-    m.present[0] = r.uniform() < p.get(cb + compose::AcidAmount);
-    m.present[1] = r.uniform() < p.get(cb + compose::LeadAmount);
-    m.present[2] = r.uniform() < p.get(cb + compose::ArpAmount);
-    m.present[3] = r.uniform() < p.get(cb + compose::PadAmount);
+    // The style profile scales the knobs' amounts; Full-On, the default, scales everything by one.
+    const float amounts[4] = { std::clamp(p.get(cb + compose::AcidAmount) * style.partAmount[0], 0.0f, 1.0f),
+                               std::clamp(p.get(cb + compose::LeadAmount) * style.partAmount[1], 0.0f, 1.0f),
+                               std::clamp(p.get(cb + compose::ArpAmount) * style.partAmount[2], 0.0f, 1.0f),
+                               std::clamp(p.get(cb + compose::PadAmount) * style.partAmount[3], 0.0f, 1.0f) };
+    for (int k = 0; k < kMelodyParts; ++k) m.present[k] = r.uniform() < amounts[k];
     // Every track has at least one melodic part unless all three amounts are zero: the likeliest one.
     if (!m.present[0] && !m.present[1] && !m.present[2]) {
-        const float amounts[3] = { p.get(cb + compose::AcidAmount), p.get(cb + compose::LeadAmount), p.get(cb + compose::ArpAmount) };
         int best = 0;
         for (int k = 1; k < 3; ++k) if (amounts[k] * r.uniform() > amounts[best] * r.uniform()) best = k;
         m.present[best] = amounts[best] > 0.0f;
@@ -466,19 +434,18 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, uint64_t seed, int key, int scale
     m.root[0] = kAcidLowest + ((key - 2) % 12 + 12) % 12;   // D3 .. C#4
     m.root[1] = 64 + ((key - 4) % 12 + 12) % 12;            // E4 .. D#5
     m.root[2] = 57 + ((key - 9) % 12 + 12) % 12;            // A3 .. G#4
-    makeChords(m, scale, seed, temperature);
+    makeChords(m, scale, seed, temperature, style);
     makeAcid(m, key, scale, seed, temperature);
-    makeLead(m, key, scale, seed, temperature);
+    makeLead(m, key, scale, seed, temperature, colour);
     makeArp(m, key, scale, seed, temperature);
     for (int c = 0; c < 4; ++c) m.padVoicing[c] = voiceChord(scale, m.chordDegree[c], key, c > 0 ? &m.padVoicing[c - 1] : nullptr);
-    makeSchedule(m, p, seed, bars);
-    makeSfx(m, p, seed, bars);
+    makeRangesAndPad(m, seed);
 
     Rng s;
     s.seed(seed ^ kSaltSound);
     if (!firstTrack) {
         for (float& x : m.recipe) x = (2.0f * s.uniform() - 1.0f) * mv;
-        const float chance = p.get(cb + compose::SquelchChance);
+        const float chance = std::clamp(p.get(cb + compose::SquelchChance) * style.squelchChance, 0.0f, 1.0f);
         m.acidSquelch = s.uniform() < chance ? 1 : 0;
         const float o = s.uniform();
         m.leadOsc = o < 0.65f ? static_cast<int>(PolyOsc::Supersaw) : (o < 0.85f ? static_cast<int>(PolyOsc::Fm) : static_cast<int>(PolyOsc::Va));
@@ -488,24 +455,36 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, uint64_t seed, int key, int scale
     return m;
 }
 
-void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int barInTrack, int scale, bool allParts,
-                      std::vector<NoteEvent>& out)
+BarPlan allPartsBar(const MelodyPlan& m)
+{
+    BarPlan bp;
+    bp.parts = static_cast<uint8_t>((m.present[0] ? 1 : 0) | (m.present[1] ? 2 : 0) | (m.present[2] ? 4 : 0) | (m.present[3] ? 8 : 0));
+    bp.partsNext = bp.parts;
+    bp.type = SectionType::Drop;
+    bp.energy = 1.0f;
+    return bp;
+}
+
+void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int barInTrack, int scale,
+                      const BarPlan& bp, std::vector<NoteEvent>& out)
 {
     (void)scale;
     const int cb = p.base(Module::Compose);
     const float swing = p.get(cb + compose::Swing);
     const double barBeat = static_cast<double>(bar) * kBeatsPerBar;
-    const int block = std::min(kMelodyMaxBlocks - 1, barInTrack / 16);
-    const uint8_t parts = allParts ? static_cast<uint8_t>((m.present[0] ? 1 : 0) | (m.present[1] ? 2 : 0) | (m.present[2] ? 4 : 0) | (m.present[3] ? 8 : 0))
-                                   : m.blockParts[block];
+    const uint8_t parts = bp.parts;
+    // The cut of Grosz et al.: for its first beats a breakdown holds nothing but the reverb tail.
+    const double cut = static_cast<double>(bp.cutBeats);
     auto beatOf = [&](int stepInBar) {
         double b = barBeat + stepInBar * 0.25;
         if (stepInBar % 2 == 1) b += swing * 0.25;
         return b;
     };
     auto emit = [&](Part part, const MelodyNote& n, int stepInBar, int pitch, double lengthBeats) {
+        const double beat = beatOf(stepInBar);
+        if (beat < barBeat + cut) return;
         NoteEvent e;
-        e.beat = beatOf(stepInBar);
+        e.beat = beat;
         e.length = static_cast<float>(lengthBeats);
         e.part = part;
         e.pitch = static_cast<uint8_t>(std::clamp(pitch, 0, 127));
@@ -523,8 +502,13 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         for (const MelodyNote& n : m.acid[variation ? 1 : 0]) {
             if (n.step < offset || n.step >= offset + 16) continue;
             // A slide overlaps the next note by a little; other steps are short, as a 303's gate.
-            const double len = (n.flags & kNoteSlide) ? n.len * 0.25 + 0.03 : std::min<int>(n.len, 2) * 0.25 * 0.55;
-            emit(Part::Acid, n, n.step - offset, m.root[0] + n.rel, len);
+            MelodyNote note = n;
+            // A slide that reaches into the next bar needs a note there to slide into; where the acid
+            // stops at the end of a section it is a plain short note instead.
+            if ((note.flags & kNoteSlide) != 0 && note.step - offset + note.len >= 16 && (bp.partsNext & 1) == 0)
+                note.flags = static_cast<uint8_t>(note.flags & ~kNoteSlide);
+            const double len = (note.flags & kNoteSlide) ? note.len * 0.25 + 0.03 : std::min<int>(note.len, 2) * 0.25 * 0.55;
+            emit(Part::Acid, note, note.step - offset, m.root[0] + note.rel, len);
         }
     }
     if (parts & 2) {
@@ -532,21 +516,24 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         const int stepBase = (barInTrack % 8) * 16;
         for (const MelodyNote& n : m.lead[window]) {
             if (n.step < stepBase || n.step >= stepBase + 16) continue;
-            emit(Part::Lead, n, n.step - stepBase, m.root[1] + n.rel, n.len * 0.25 * 0.92);
+            emit(Part::Lead, n, n.step - stepBase, m.root[1] + n.rel + 12 * bp.leadOctave, n.len * 0.25 * 0.92);
         }
     }
     if (parts & 4) {
         const int c = chordIndexAt(m, barInTrack);
         const int jump = (m.arpOctaveJump && (barInTrack / 2) % 2 == 1) ? 12 : 0;
         for (const MelodyNote& n : m.arp[c])
-            emit(Part::Arp, n, n.step, m.root[2] + n.rel + jump + 12 * m.arpShift[block], 0.25 * 0.5);
+            emit(Part::Arp, n, n.step, m.root[2] + n.rel + jump + 12 * bp.arpOctave, 0.25 * 0.5);
     }
     if ((parts & 8) && barInTrack % m.chordBars == 0) {
         MelodyNote held;
         held.velocity = 90;
         // Held to the next chord, a 64th short of it so a repeated pitch takes a fresh voice cleanly.
+        // After a cut the chord starts where the cut ends, shortened by as much.
+        const double length = m.chordBars * static_cast<double>(kBeatsPerBar) - 1.0 / 16.0 - cut;
+        const int step = static_cast<int>(std::lround(cut * 4.0));
         for (int pitch : m.padVoicing[chordIndexAt(m, barInTrack)])
-            emit(Part::Pad, held, 0, pitch, m.chordBars * static_cast<double>(kBeatsPerBar) - 1.0 / 16.0);
+            emit(Part::Pad, held, step, pitch, length);
     }
 }
 
@@ -585,9 +572,9 @@ int voicingMovement(const std::vector<int>& a, const std::vector<int>& b)
     return s;
 }
 
-void composeSfxBar(const MelodyPlan& m, double trackBeat, int barInTrack, std::vector<NoteEvent>& out)
+void composeSfxBar(const FormPlan& f, double trackBeat, int barInTrack, std::vector<NoteEvent>& out)
 {
-    for (const SfxEvent& s : m.sfx) {
+    for (const SfxEvent& s : f.sfx) {
         if (static_cast<int>(std::floor(s.beat / kBeatsPerBar)) != barInTrack) continue;
         NoteEvent e;
         e.beat = trackBeat + s.beat;

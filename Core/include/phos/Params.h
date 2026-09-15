@@ -60,7 +60,8 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              TrackBars, TrackVariation, SoundVariation, TempoRange, LevelMatch,
              PercDensity, PercVariation, Swing,
              AcidAmount, LeadAmount, ArpAmount, MelodyVariation, MelodyTemperature, SquelchChance,
-             BassFollowsChords, PadAmount, SfxAmount, GateChance, Count };
+             BassFollowsChords, PadAmount, SfxAmount, GateChance,
+             Style, Arc, StyleTempo, SetMinutes, Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
 namespace perc {
@@ -135,6 +136,8 @@ enum : int { Gain, Ceiling, Clip, CompThreshold, CompRatio, CompKnee, CompAttack
 
 extern const char* const kKeyNames[12];         ///< C, C#, ... B
 extern const char* const kScaleNames[];         ///< names of compose.scale
+extern const char* const kStyleNames[];         ///< names of compose.style (Form.h)
+extern const char* const kArcNames[];           ///< names of compose.arc (Form.h)
 extern const char* const kKickPatternNames[];   ///< names of compose.kick_pattern
 extern const char* const kBassPatternNames[];   ///< names of compose.bass_pattern
 
