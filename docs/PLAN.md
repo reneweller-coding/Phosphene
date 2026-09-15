@@ -36,8 +36,8 @@ Abweichungen vom Plan, bewusst:
 - **Halbband** ist ein polyphasiges IIR-Allpass-Paar (Valenzuela und Constantinides 1983) statt
   eines FIR: 6 Koeffizienten für 110 dB, kaum Latenz. Die Phase ist nahe Nyquist nicht linear, was
   für Bass und Acid keine Rolle spielt.
-- **`SourceSlot` von der Noctuary-Engine lösen** ist nach Phase 4 verschoben, weil erst die Pads
-  es brauchen. Kopiert wird nur, was benutzt wird.
+- **`SourceSlot` von der Noctuary-Engine lösen** war zunächst nach Phase 4 verschoben und ist seit
+  dem Review vom 15.09. gestrichen: Pads werden Wavetables in der `Poly`-Engine (5.7).
 - **Composer-Thread** existiert noch nicht als Thread: der `Conductor` füllt den Ring, im
   Offline-Render synchron vor jedem Block. Der Thread kommt mit dem Plugin (Phase 6).
 - **Kick-Defaults** verkürzt (Hold 12 ms, Decay 150 ms): mit den ersten Werten (35/280 ms) lag die
@@ -79,6 +79,20 @@ Bekannte Grenzen: Die Klang-Rezepte stehen noch nicht als MIDI-CCs im Export. Di
 die Knöpfe zum Zeitpunkt der Planung; ein live verstellter Knopf ändert bereits geplante Tracks nicht.
 Die Resonanz-Kick trifft die Phasenkopplung etwas ungenauer als die Sweep-Kick, weil ihre Phase eine
 Summe statt eines Integrals ist.
+
+**15.09.2026, Review-Runde zum Plan.** Ein externes Review schlug sechs Änderungen vor; fünf sind
+übernommen und in die Abschnitte eingearbeitet, eine ist nach Messung abgelehnt:
+
+| Vorschlag | Entscheidung | Wo |
+|---|---|---|
+| Supersaw als Standard-Lead, dynamischer Detune, Key-Tracking-Hochpass | übernommen, Hochpass als Tiefenregel für alles außer Kick und Bass | 5.5 |
+| Wavetables statt Noctuary-`SourceSlot` für Pads | übernommen, `SourceSlot` gestrichen | 5.7, Tabelle Abschnitt 4 |
+| Psy-Squelch als eigener Modus | übernommen, Zahlen werden an Hallucinogen kalibriert | 5.4 |
+| Bass-Slot-Hüllkurve "Note 2 kürzer und leiser" | **abgelehnt als Regel**: neun Referenztracks innerhalb ±1,2 dB; als Stilprofil-Parameter mit flachem Standard | 6.6 |
+| Trance-Gate als Kanaleffekt | übernommen | 5.9 |
+| Pre-Drop-Vakuum in der Grammatik | übernommen als feste Regel mit Varianten | 6.2, 5.8 |
+
+Phase 4 wird dadurch um etwa einen Tag kürzer (keine Entkopplung).
 
 Nächster Schritt: Phase 2 (Percussion-Kit mit 12 Lanes als erster echter Nutzer der Lane-Templates).
 
@@ -242,7 +256,7 @@ Richtung; die Module werden nach `Core/` kopiert, in den Namensraum `phos::` ver
 weiterentwickelt. Jede kopierte Datei trägt im Kopf die Herkunft (`Noctuary <Datei>, Stand
 <Commit>`), damit ein Fix in Noctuary später gezielt nachgezogen werden kann. `Params.h`-Abhängige
 (`Modulation.h`, `Score.h`, `Timeline.h`) werden beim Kopieren auf das neue Parametersystem
-umgeschrieben; `SourceSlot` wird ohne `ambient::Engine`-Kontext lebensfähig gemacht.
+umgeschrieben. `SourceSlot` wird nicht kopiert (5.7).
 
 | Noctuary-Modul | Einsatz hier | Anpassung beim Kopieren |
 |---|---|---|
@@ -267,7 +281,8 @@ umgeschrieben; `SourceSlot` wird ohne `ambient::Engine`-Kontext lebensfähig gem
 | `Osc.h` (OSC-Server, EventQueue) | Kaleidoscope-Kopplung, Remote | Adress-Namensraum `/phos/...` |
 | `Recorder.h`, `WavFile.h` | Quest-Aufnahme, Nutzer-Samples | keine |
 | `Timeline.h`, `Score.h` | Live-Aufzeichnung und Automations-Textform | auf Beat-Zeit statt Sekunden |
-| `Sources.h` (Additiv, Cloud, Spectral) | Pad/Atmos-Ebene | `SourceSlot` vom Engine-Kontext lösen; Texture (Sample-Quelle) entfällt, da keine Samples |
+| `Sources.h` (Additiv, Cloud, Spectral) | **entfällt** (Entscheidung 15.09., siehe 5.7); höchstens `Cloud` später für Breakdown-Texturen | keine Kopie |
+| `Tools/WavetableLib` (608 Tabellen) + `WavetableGen` | Pad- und Lead-Wavetables | Tabellen und Generator kopieren, Dateiformat bleibt |
 | `Quest/` (OpenXR, Oboe, Handmenü, APK-Skript), `Deploy/` (Inno Setup, build_release.ps1), `Tests/` (selftest, hosttest, racetest, Shim-Varianten) | Gerüste kopieren und anpassen | Projektname, Pfade |
 
 Nicht übernommen: ClusterBrain, Cosmos, Near, Journey, Memory, Presets-Bibliothek (alles
@@ -342,6 +357,12 @@ Modalresonatoren alle lane-parallel. Das ist der Ort, wo SoA am meisten bringt.
 ### 5.4 Acid
 - PolyBLEP-Sägezahn/Rechteck → **Diodenleiter** (4 Stufen) nach Zavalishin (Kapitel Diode Ladder)
   mit Sättigung in der Rückkopplung → Verzerrung (ADAA) → Delay-Send.
+- **Squelch-Modus** (Review 15.09.): der "Liquid Lead" von Hallucinogen, Cosmosis, Tristan als
+  eigener Modus derselben Stimme: schnelle Tonhöhen-Hüllkurve (Startwert einige kHz, Ziel einige
+  hundert Hz, einige zehn ms) durch ein hochresonantes Kammfilter (`VoiceFilter::Comb`, Verzögerung
+  2 bis 6 ms) oder einen Z-Plane-Bandpass, danach die Verzerrung. Die Zahlen sind ein Startpunkt,
+  kalibriert werden sie in Phase 3 an den drei Hallucinogen-Tracks der Sammlung (LSD, Alpha
+  Centauri, Solstice) mit `analyze_ref.py`, nicht geglaubt.
 - **Akzent:** erhöht Hüllkurve und Cutoff und lädt einen "Akzent-Sweep"-Kondensator, dessen
   Wirkung mit der Resonanz wächst (das charakteristische "Wow" bei aufeinanderfolgenden Akzenten).
   Modelliert als zweite, langsamere Hüllkurve mit resonanzabhängiger Tiefe.
@@ -352,13 +373,21 @@ Modalresonatoren alle lane-parallel. Das ist der Ort, wo SoA am meisten bringt.
 
 ### 5.5 Lead
 Eine polyphone Engine `Poly` (8 Stimmen × bis 8 Unisono), instanziiert für Lead, Arp und Pad:
-- Oszillatoren pro Unisono-Lane: PolyBLEP-VA, `CycleTable`-Wavetable, 4-op FM (Algorithmen wie
-  bei den Klassikern, Operator-Feedback), Phase Distortion (Casio-CZ-Prinzip). **Supersaw** mit
-  der Detune- und Mix-Kurve aus Szabo (2010, "How to Emulate the Super Saw"), Stereo-Verteilung
-  der Lanes.
+- **Supersaw als Standard-Oszillator der Lead-Instanz** (Review 15.09.): sieben verstimmte
+  Sägezähne mit der Detune- und Mix-Kurve aus Szabo (2010, "How to Emulate the Super Saw"),
+  Stereo-Verteilung der Lanes. **Dynamischer Detune:** die Verstimmung folgt der Notenlänge und
+  dem Sektionstyp, eng bei schnellen Sechzehnteln (sonst verschmiert der Anschlag), weit auf
+  gehaltenen Tönen und in Breaks; der Komponist schreibt das als Offset, keine Handarbeit.
+- Weitere Oszillatoren pro Unisono-Lane: PolyBLEP-VA, `CycleTable`-Wavetable, 4-op FM
+  (Algorithmen wie bei den Klassikern, Operator-Feedback), Phase Distortion (Casio-CZ-Prinzip).
 - Filter: `VoiceFilter` (10 Modelle) oder Z-Plane; ZDF-Leiter aus 5.2 als weitere Option.
-- Hüllkurven ADSR (Noctuary `Envelope`, kurze Zeiten), Vibrato, Portamento, Trance-Gate.
+- Hüllkurven ADSR (Noctuary `Envelope`, kurze Zeiten), Vibrato, Portamento.
 - Verbreiterung: `Ensemble` (Chorus/Microshift/Velvet), Send-Delay, Reverb.
+- **Tiefenregel für alles außer Kick und Bass:** jede `Poly`-Instanz und jeder SFX läuft durch
+  einen Key-Tracking-Hochpass, der unter 200 bis 350 Hz nichts durchlässt. Das ist nicht nur
+  Mischhygiene: die Phasenkopplung von Kick und Bass (Umsetzungsstand oben) gilt nur, solange im
+  Band 40 bis 140 Hz nichts anderes spielt. Szabo fand denselben Hochpass hinter den verstimmten
+  Stimmen des JP-8000.
 
 Vektorisierung: 8 Unisono-Lanes einer Stimme = ein AVX-Register (NEON: zwei), Filter über
 Stimmen. PolyBLEP-Korrektur zweiglos über Masken (Vergleich → Blend).
@@ -366,16 +395,25 @@ Stimmen. PolyBLEP-Korrektur zweiglos über Masken (Vergleich → Blend).
 ### 5.6 Arpeggio
 Gleiche `Poly`-Engine, eigener Pattern-Generator: Akkordtöne (aus der Harmonieebene), Modi
 Up/Down/UpDown/Random/Order, 1 bis 3 Oktaven, Sechzehntel/Zweiunddreißigstel, Gate,
-Trance-Gate-Lane (rhythmische Amplitudenmaske), Oktavwechsel alle 2 Takte, Verkettung mit dem
-Lead (Arp pausiert, wenn das Lead im selben Register spielt: Maskierungsregel).
+Oktavwechsel alle 2 Takte, Verkettung mit dem Lead (Arp pausiert, wenn das Lead im selben
+Register spielt: Maskierungsregel). Das Trance-Gate ist kein Arp-Merkmal mehr, sondern ein
+Kanaleffekt (5.9).
 
 ### 5.7 Pad / Atmos
-Die Noctuary-Quellen (`SourceSlot`: Additiv-Bank, Harmonic Table, Cycle Table, Cloud/Granular,
-Spectral) für Pads und die Atmosphären der Intros und Breakdowns, mit Noctuarys Reverb und
-Convolver. Akkorde aus der Harmonieebene mit Stimmführungs-Constraint (minimale Bewegung).
-Sidechain vom Kick ("pumpende" Pads im Drop) über den Ducker. Ob `SourceSlot` außerhalb von
-`ambient::Engine` sauber lebt, ist die erste Prüfung in Phase 0; sonst eigene `Poly`-Instanz mit
-Wavetable + Ensemble als Rückfall.
+**Entscheidung 15.09. (Review):** Pads sind eine dritte `Poly`-Instanz mit `CycleTable`-Wavetables
+als Standard-Oszillator, nicht die Noctuary-Quellen. Der Noctuary-`SourceSlot` (Additiv-Bank,
+Harmonic Table, Cloud, Spectral) wird **nicht** kopiert und nicht entkoppelt. Zwei Gründe:
+- **Genre:** Psytrance-Flächen sind Wavetable-Pads der Virus-, Microwave- und Serum-Ästhetik
+  (Vokal-, Chor-, Glas- und Sweep-Tabellen), keine mikrotonalen Teiltonwolken. Die 608 generierten
+  Tabellen aus Noctuarys `Tools/WavetableLib` (2048-Sample-Frames, Serum-Layout) kommen mit.
+- **Quest-Budget:** ein Noctuary-Additiv-Slot kostet gemessen 4,9 % eines Desktop-Kerns, auf der
+  Quest also etwa 25 %; acht Pad-Stimmen wären dort unmöglich. Der Wavetable-Leser liegt dagegen
+  im Lane-Muster von `Vec.h`.
+Bewegung kommt aus Tabellen-Position (LFO, Hüllkurve, Sektionsbogen), `Ensemble` (Velvet-
+Dekorrelation), Reverb und Convolver. Akkorde aus der Harmonieebene mit Stimmführungs-Constraint
+(minimale Bewegung). Sidechain vom Kick ("pumpende" Pads im Drop) über den Ducker; Trance-Gate im
+Kanalzug (5.9). Sollten die Breakdowns später sich entwickelnde Texturen brauchen, ist Noctuarys
+`Cloud` (Granular ohne Sample, aus dem eigenen Pad-Bus) der Kandidat, nicht die Additiv-Bank.
 
 ### 5.8 SFX (psychedelische Effekte)
 Ein Generator mit Ereignistypen, die der Komponist an Formpunkte setzt:
@@ -391,7 +429,7 @@ Ein Generator mit Ereignistypen, die der Komponist an Formpunkte setzt:
 | Reverse-Reverb | Reverb der kommenden Note vorab gerendert und rückwärts eingespielt (möglich, weil der Komponist voraus ist) | Breakdown → Build |
 | Vocal-Formant | Puls/Sägezahn durch Formantfilter mit Vokalfolge; kein Sample, kein Text | Breakdowns |
 | Tape-Stop / Pitch-Drop | Wiedergaberate-Rampe eines Bus-Puffers | Break-Anfang |
-| Spectral Freeze | Noctuary Spectral-Quelle | Breakdown |
+| Pre-Drop-Abriss | Reverse-Reverb-Fahne oder Formant-Schuss auf dem vierten Beat vor der Drop-Eins (6.2) | Build → Drop |
 | Pitch-Delay | StereoDelay mit `Shifter` in der Rückkopplung (Quinte, Oktave) | Acid, Lead |
 | Phaser / Flanger | ZDF-Phaser nach Zavalishin; Kiiski, Esqueda, Välimäki 2016 als Referenz für Zeitvarianz | Pads, Hats |
 | Bitcrush / Downsample | mit Anti-Aliasing (Tiefpass vor Dezimation), Trocken/Nass | Hi-Tech |
@@ -399,6 +437,10 @@ Ein Generator mit Ereignistypen, die der Komponist an Formpunkte setzt:
 ### 5.9 Mixer und Master
 - Kanalzug je Erzeuger (Percussion: je Lane + Gruppe): Gain, Pan, 3-Band-EQ (SVF), Hochpass,
   Sends A (Reverb kurz), B (Reverb lang / Convolver), C (Delay), Sidechain-Eingang.
+- **Trance-Gate als Kanaleffekt** (Review 15.09.) für Pad und Lead: tempo-synchrone
+  Amplitudenmaske (Sechzehntel, Achtel, Triolen, eigene Muster) mit Raised-Cosine-Flanken und
+  einstellbarem Cutoff-Duck auf dem Kanalfilter. Der Komponist schaltet es an Formpunkten: ein
+  schwebendes Pad, das im Breakdown plötzlich im Sechzehntel-Staccato pumpt.
 - **Sidechain-Matrix:** Quelle Kick (oder Snare) → Ziele Bass, Pads, Leads, Delay-Return;
   Ducker mit Attack/Hold/Release/Tiefe, Hüllkurve statt echter Kompression (deterministischer
   und billiger). Kompressor für Busse nach Giannoulis, Massberg, Reiss (JAES 2012).
@@ -432,7 +474,14 @@ Body    → Groove Build Drop Break Build Drop         (Full-On-Standard)
 Drop    → Drop16 Drop16 Var | Drop32 Var             (Var = variierte Wiederholung)
 ```
 Längen aus einer Verteilung über {8, 16, 32, 64}; harte Regeln als Constraints (kein Drop
-kürzer als 16, Build 8 oder 16, Break-Anteil 15 bis 30 %). Referenz für grammatikbasierte
+kürzer als 16, Build 8 oder 16, Break-Anteil 15 bis 30 %).
+
+**Pre-Drop-Vakuum** (Review 15.09., feste Regel): der letzte Takt eines Builds bündelt die
+Spannung. Kick und Bass setzen aus, die Snare-Roll endet auf Beat 3, und Beat 4 ist leer bis auf
+einen einzelnen Abriss (Reverse-Reverb-Fahne oder Formant-Schuss, 5.8). Varianten mit
+Gewichten im Stilprofil: ganzer Takt leer, halber Takt, nur Beat 4, Kick allein auf Beat 4. Die
+Kick-Ausklang-Grenze macht das Vakuum wirklich still: nach dem letzten Schlag ist innerhalb eines
+Slots nichts mehr da. Referenz für grammatikbasierte
 Formmodelle: Rohrmeier 2011 (Harmonie), Steedman 1984; für EDM-Struktur die eigene Messung an
 Referenzmaterial (2.5).
 
@@ -468,6 +517,21 @@ Sioros et al. 2014 zum Zusammenhang Synkope/Groove) als Zielgröße pro Lane und
 ist weitgehend quantisiert; Mikro-Timing nur als kleine, feste Offsets pro Lane (Hats leicht
 spät), Velocity-Muster als Akzentmodelle. GrooVAE (Gillick et al. 2019) ist die Referenz für
 gelerntes Mikro-Timing, hier bewusst nicht nötig.
+
+**Bass-Slot-Hüllkurve: Parameter, keine Regel.** Ein Review vom 15.09. empfahl, die erste Bassnote
+nach der Kick kürzer (Gate 65 %) und 1,5 dB leiser zu setzen als die beiden folgenden ("Astrix-
+Trick"). Nachgemessen an neun Referenztracks (60 s aus der Mitte, Band 40 bis 200 Hz, Tempo per
+Autokorrelation, Energie in 16 Slices pro Beat gefaltet): Note 2 gegen Note 3 liegt bei Astrix
+−0,7 und −0,6 dB, Astral Projection −0,1, Hallucinogen −0,2, Juno Reactor +1,2, 1200 Mics +0,4
+und +0,5 dB. Alle neun innerhalb von ±1,2 dB; die scheinbar lautere Note 4 ist die anschwellende
+nächste Kick in den letzten beiden Slices. Die Referenzen spielen drei gleich laute Noten, und die
+phasengleichen, identischen Sechzehntel des Umsetzungsstands entsprechen genau dem. Die
+Slot-Hüllkurve (Gate und Velocity je Slot, Velocity wirkt über `vel_to_cutoff` auch auf die
+Helligkeit) kommt als Parameter des Stilprofils mit flachem Standard, damit sie formbar bleibt.
+
+Nebenbefund derselben Messung: die Kick liegt im Bassband nach 40 bis 50 ms erst 3 bis 5 dB unter
+ihrem Maximum, die Bassnoten liegen 6 bis 9 dB unter der Kick. Der Render zeigt dieselben
+Verhältnisse; die Ausklang-Grenze ist nicht zu streng.
 
 ### 6.7 Übergänge zwischen Tracks
 Da alle Tracks aus einer Hand kommen, sind Übergänge kompositorisch, nicht nur DJ-Blenden:
@@ -711,9 +775,9 @@ verbindlicher als die Zahlen.
 | **0 Gerüst** | Repo, CMake, Noctuary-Modulkopie, `Vec.h` + Shim, Parametersystem, Clock/Sequencer, Partitur-Datenmodell, `phos_render`, Selbsttest-Skelett, `SourceSlot` von der Engine lösen | `phos_render` gibt Stille mit Tempo-Karte aus; Vec-Tests grün auf drei Pfaden | 2 |
 | **1 Fundament** | Kick (parametrisch + Bridged-T), Bass (PolyBLEP + ZDF-Leiter + OS), Ducker, Bass-Pattern-Familien, Referenzmessung an Nutzer-Tracks | 4-Takt-Loop, der rollt; Kick–Bass-Metrik im Referenzfenster; erste CPU-Zahlen | 4 |
 | **2 Rhythmus** | Percussion-Kit (5 Engines, 12 Lanes, SoA), Euklid/Synkope, Fill-Bank, Groove | 16-Takt-Groove mit Fills; Kit-Presets; Lane-Pfad = skalar | 4 |
-| **3 Melodik** | Acid (Diodenleiter, Akzent, Slide), `Poly` (VA, Wavetable, 4-op FM, PD, Supersaw), Lead-/Arp-Generatoren, Harmonieebene, Constraint-Markov | 32-Takt-Drop mit allen Erzeugern; Skalentreue-Test | 5 |
-| **4 Fläche + FX** | Pad/Atmos (Noctuary-Quellen), SFX-Generator, Sends, Sidechain-Matrix, Bus-Kompressor, Master-Limiter, Meter, Auto-Gain-Staging | kompletter Track 8 min offline, LUFS im Ziel | 4 |
-| **5 Komponist** | Korpus-Aufbereitung (`Tools/corpus`), Markov-Stufe A je Rolle, Form-Grammatik, Energiebogen, Tonartenreise, Übergänge, Sperren/Neuwürfeln, Stilprofile (5, Goa/Full-On aus `analyze_ref.py`), `.phosset`, MIDI-Export | 60-Minuten-Set aus einem Seed; MIDI in einer DAW geöffnet; Determinismus-Test; Memorisierungsabstand | 6 |
+| **3 Melodik** | Acid (Diodenleiter, Akzent, Slide, Squelch-Modus), `Poly` (Supersaw als Standard mit dynamischem Detune, Wavetable, VA, 4-op FM, PD), Key-Tracking-Hochpass für alles außer Kick/Bass, Lead-/Arp-Generatoren, Harmonieebene, Constraint-Markov, Squelch-Kalibrierung an Hallucinogen | 32-Takt-Drop mit allen Erzeugern; Skalentreue-Test; Bassband unter 140 Hz nur Kick und Bass | 5 |
+| **4 Fläche + FX** | Pad als Wavetable-`Poly` mit WavetableLib, SFX-Generator inkl. Pre-Drop-Abriss, Trance-Gate im Kanalzug, Sends, Sidechain-Matrix, Bus-Kompressor, Master-Limiter, Meter, Auto-Gain-Staging | kompletter Track 8 min offline, LUFS im Ziel | 3 |
+| **5 Komponist** | Korpus-Aufbereitung (`Tools/corpus`), Markov-Stufe A je Rolle, Form-Grammatik mit Pre-Drop-Vakuum, Bass-Slot-Hüllkurve im Stilprofil, Energiebogen, Tonartenreise, Übergänge, Sperren/Neuwürfeln, Stilprofile (5, Goa/Full-On aus `analyze_ref.py`), `.phosset`, MIDI-Export | 60-Minuten-Set aus einem Seed; MIDI in einer DAW geöffnet; Determinismus-Test; Memorisierungsabstand | 6 |
 | **6 GUI** | JUCE-Tabs, Arrange-Zeitleiste, Step-Vorschauen, Perform-Makros, Export-Tab, Screenshot-Modus, Handbuch-Generator | Standalone + VST3 bedienbar; pluginval grün | 6 |
 | **7 Quest** | NDK-Build, Qualitätsstufen, NEON-Messung auf Gerät, Performer-UI, Hand-Makros, OSC-Bridge | Set läuft auf der Quest 2 unter 30 % eines Kerns | 4 |
 | **8 Transformer** | Tokenisierung, Training (PyTorch, PC), int8-Export, C++-Inferenz über `Vec.h`, Constraint-Dekodierung, A/B gegen Stufe A, Ranker | Stufe B auf PC und Quest; Held-out-NLL und Hörvergleich dokumentiert | 5 |
@@ -729,9 +793,9 @@ Constraints benutzt: Stufe B ersetzt nur das Vorhersagemodell, nichts drumherum.
 
 1. **Musikalische Qualität des Regelwerks** (größtes Risiko). Gegenmittel: früher Prüfstein
    (Phase 1), Metriken gegen Referenz, Sperren/Neuwürfeln als Kuratierungsschleife, Ranker.
-2. **Kopplung an `NoctuaryCore`**: `Modulation.h` und `SourceSlot` hängen an Noctuarys
-   `ParamId`/Engine. Gegenmittel: Prüfung in Phase 0; Rückfall eigene `Poly` für Pads und
-   eigene Matrix.
+2. **Kopplung an `NoctuaryCore`**: `Modulation.h` hängt an Noctuarys `ParamId`. Gegenmittel:
+   beim Kopieren auf das Block-Parametersystem umschreiben. `SourceSlot` ist kein Risiko mehr,
+   weil er nicht kopiert wird (5.7).
 3. **Quest-2-Budget**: Oversampling und Unisono sind teuer. Gegenmittel: Qualitätsstufen von
    Anfang an im Code, Messung auf dem Gerät ab Phase 1 (`adb`).
 4. **Determinismus zwischen Pfaden**: AVX2/NEON/skalar unterscheiden sich im letzten Bit; ein
