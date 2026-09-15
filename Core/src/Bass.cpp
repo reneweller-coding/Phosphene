@@ -22,10 +22,20 @@ constexpr float kSubScale = 0.7f;       ///< sub knob to amplitude: at 0.6 the s
 void Bass::prepare(double sampleRate)
 {
     sr_ = sampleRate;
+    osRate_ = sr_ * os_;
     amp_.setSampleRate(sr_);
     ducker_.prepare(sr_);
     down_.setup(bassHalfband());
     reset();
+}
+
+void Bass::setOversampling(int factor)
+{
+    os_ = factor <= 1 ? 1 : 2;
+    osRate_ = sr_ * os_;
+    // The decimator's state belongs to the 2x path; at 1x it is not used, but a later switch back
+    // must not start from a ringing it never heard.
+    down_.reset();
 }
 
 void Bass::reset()
@@ -86,7 +96,7 @@ void Bass::noteOn(int pitch, float velocity, int gateSamples, double late, doubl
     velocity_ = clampv(velocity, 0.0f, 1.0f);
     gate_ = std::max(1, gateSamples);
     const double f0 = midiToHz(pitch_);
-    osc_.set(f0, 2.0 * sr_, wave_, pw_);
+    osc_.set(f0, osRate_, wave_, pw_);
     if (retrigger_) {
         // When the previous note has died away (-60 dB), the filters start from rest as well: the
         // oscillator keeps running between notes, and its ringing in the ladder, the decimator and
@@ -98,7 +108,7 @@ void Bass::noteOn(int pitch, float velocity, int gateSamples, double late, doubl
             hp1_.reset();
             hp2_.reset();
         }
-        osc_.restart(fundamentalPhase, 2.0 * late);
+        osc_.restart(fundamentalPhase, static_cast<double>(os_) * late);
         const double p = fundamentalPhase + f0 * late / sr_;
         subPhase_ = p - std::floor(p);
     }
@@ -112,10 +122,9 @@ void Bass::noteOn(int pitch, float velocity, int gateSamples, double late, doubl
 
 void Bass::process(float* out, int n)
 {
-    const double sr2 = 2.0 * sr_;
-    const float nyq = static_cast<float>(0.45 * sr2);
+    const float nyq = static_cast<float>(0.45 * osRate_);
     const double f0 = midiToHz(pitch_);
-    osc_.set(f0, sr2, wave_, pw_);
+    osc_.set(f0, osRate_, wave_, pw_);
     const double subInc = f0 / sr_;
     // Key tracking relative to E1 (MIDI 28), the bottom of the usual psytrance bass register.
     const float track = keyTrack_ * static_cast<float>(pitch_ - 28) / 12.0f;
@@ -123,14 +132,22 @@ void Bass::process(float* out, int n)
     for (int i = 0; i < n; ++i) {
         const float oct = envOct_ * fenv_ * velScale + track;
         const float fc = clampv(cutoff_ * std::pow(2.0f, oct), 20.0f, nyq);
-        const float g = std::tan(kPi * fc / static_cast<float>(sr2));
+        const float g = std::tan(kPi * fc / static_cast<float>(osRate_));
         fenv_ *= fDecay_;
 
+        // 2x: two ladder steps, decimated back. 1x (Quality::Quest, not used for the bass today):
+        // one step, no decimator -- the PolyBLEP oscillator still band-limits its own discontinuity,
+        // only the ladder's distortion products are no longer kept out of the audible band.
         const float x0 = osc_.next() * driveIn_;
         const float o0 = ladder_.tick(x0, g, k_, 0.5f);
-        const float x1 = osc_.next() * driveIn_;
-        const float o1 = ladder_.tick(x1, g, k_, 0.5f);
-        float y = down_.process(o0, o1) * driveOut_;
+        float y;
+        if (os_ == 2) {
+            const float x1 = osc_.next() * driveIn_;
+            const float o1 = ladder_.tick(x1, g, k_, 0.5f);
+            y = down_.process(o0, o1) * driveOut_;
+        } else {
+            y = o0 * driveOut_;
+        }
         if (subMode_ == static_cast<int>(SubMode::Split)) {
             float lp, bp, hp;
             hp1_.tick(y, lp, bp, hp);

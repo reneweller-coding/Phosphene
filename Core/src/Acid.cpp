@@ -25,9 +25,21 @@ const HalfbandDesign& acidHalfband()
 }
 } // namespace
 
+void Acid::setOversampling(int factor)
+{
+    os_ = factor <= 1 ? 1 : 2;
+    osRate_ = sr_ * os_;
+    // At 2x the cutoff must stay inside the decimator's passband (0.2 of the high rate); at 1x there
+    // is no decimator and the only limit is the ladder's stability at 0.45 fs. At 48 kHz both land
+    // above the 18 kHz cap below, so the two levels reach the same highest cutoff.
+    nyqFactor_ = os_ == 2 ? 0.2 : 0.45;
+    down_.reset();
+}
+
 void Acid::prepare(double sampleRate)
 {
     sr_ = sampleRate;
+    osRate_ = sr_ * os_;
     amp_.setSampleRate(sr_);
     down_.setup(acidHalfband());
     delay_.prepare(sr_);
@@ -61,7 +73,7 @@ void Acid::reset()
 
 void Acid::update(const float* v, double bpm)
 {
-    const double sr2 = 2.0 * sr_;
+    const double sr2 = osRate_;
     wave_ = v[acid::Wave];
     cutoff_ = v[acid::Cutoff];
     resonance_ = v[acid::Resonance];
@@ -111,8 +123,9 @@ void Acid::noteOn(int pitch, float velocity, bool accent, bool slide, int gateSa
     if (!legato_) {
         pitchNow_ = pitch;
         hz_ = static_cast<float>(f0);
-        fenv_ = static_cast<float>(std::pow(static_cast<double>(fDecayNote_), 2.0 * late));
-        sq_ = static_cast<float>(std::pow(static_cast<double>(sqDecay_), 2.0 * late));
+        // The envelopes step once per oversampled sample, so `late` counts in those steps too.
+        fenv_ = static_cast<float>(std::pow(static_cast<double>(fDecayNote_), static_cast<double>(os_) * late));
+        sq_ = static_cast<float>(std::pow(static_cast<double>(sqDecay_), static_cast<double>(os_) * late));
         if (accent) pulse_ = 1.0f;
         amp_.noteOn();
         amp_.advanceAttack(late);
@@ -123,8 +136,8 @@ void Acid::noteOn(int pitch, float velocity, bool accent, bool slide, int gateSa
 
 void Acid::process(float* L, float* R, int total)
 {
-    const double sr2 = 2.0 * sr_;
-    const float nyq = static_cast<float>(std::min(18000.0, 0.2 * sr2));
+    const double sr2 = osRate_;
+    const float nyq = static_cast<float>(std::min(18000.0, nyqFactor_ * sr2));
     const float sweepDepth = kSweepOctaves * accentAmt_ * resonance_;
     const float accentOct = accent_ ? 1.0f + accentAmt_ : 1.0f;
     const float velGain = 0.7f + 0.3f * velocity_;
@@ -139,8 +152,9 @@ void Acid::process(float* L, float* R, int total)
             }
             osc_.set(hz_, sr2, wave_, 0.5f);
             accentGain_ += (accentGainTarget_ - accentGain_) * accentSmooth_;
-            float o[2];
-            for (int j = 0; j < 2; ++j) {
+            // 2x: two ladder steps, decimated back. 1x (Quality::Quest): one step, no decimator.
+            float o[2] = { 0.0f, 0.0f };
+            for (int j = 0; j < os_; ++j) {
                 float oct = envOct_ * fenv_ * accentOct + keyTrack_ * static_cast<float>(pitchNow_ - 57.0) / 12.0f + sweepDepth * sweep_;
                 if (squelch_) oct += sqOct_ * sq_;
                 const float fc = clampv(cutoff_ * std::pow(2.0f, oct), 20.0f, nyq);
@@ -151,7 +165,7 @@ void Acid::process(float* L, float* R, int total)
                 sweep_ += (pulse_ - sweep_) * sweepCharge_;
                 o[j] = ladder_.tick(osc_.next(), g, k_, kLadderComp);
             }
-            float y = down_.process(o[0], o[1]);
+            float y = os_ == 2 ? down_.process(o[0], o[1]) : o[0];
             if (squelch_) {
                 // Feedback comb tuned to the period, read with linear interpolation.
                 const double d = std::clamp(sr_ / static_cast<double>(hz_), 2.0, static_cast<double>(mask - 2));

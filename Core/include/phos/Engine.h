@@ -42,6 +42,7 @@
 #include "phos/Params.h"
 #include "phos/Perc.h"
 #include "phos/Poly.h"
+#include "phos/Quality.h"
 #include "phos/Score.h"
 #include <atomic>
 #include <memory>
@@ -60,8 +61,12 @@ public:
      * @brief Prepares for playback.
      * @param sampleRate   output rate
      * @param maxBlockSize largest block the host will use (any size works; larger ones are split)
+     * @param quality      what the engine may spend per part (Quality.h); the default is the desktop
+     *                     level, which is what the engine did before quality levels existed
      */
-    void prepare(double sampleRate, int maxBlockSize);
+    void prepare(double sampleRate, int maxBlockSize, const Quality& quality = Quality::desktop());
+    /** @brief The level prepare() was called with. */
+    const Quality& quality() const { return quality_; }
     /** @brief Back to beat 0; clears events, offsets, overrides and all sound. */
     void reset();
 
@@ -120,6 +125,7 @@ private:
 
     ParamStore params_;
     double sr_ = 48000.0;
+    Quality quality_;
 
     TempoMap tempo_;
     bool useTempoMap_ = false;

@@ -11,6 +11,7 @@
  *     --tracks            print the plan of every track in the render (key, tempo, patterns, recipes)
  *     --sr RATE           sample rate (default 48000)
  *     --block N           block size handed to the engine (default 256)
+ *     --quality LEVEL     desktop (default) or quest: what the engine may spend per part (Quality.h)
  *     --seed N            set seed (default 1)
  *     --set key=value     set a parameter; repeatable; "key=a;key2=b" also works
  *     --preset FILE       read key=value assignments from a file
@@ -28,6 +29,7 @@
 #include "phos/Engine.h"
 #include "phos/Loudness.h"
 #include "phos/Midi.h"
+#include "phos/Quality.h"
 #include "phos/WavWriter.h"
 #include <algorithm>
 #include <chrono>
@@ -78,6 +80,7 @@ int main(int argc, char** argv)
     uint64_t seed = 1;
     std::string out, midi, solo;
     bool report = false, bench = false, pcm24 = false, listTracks = false;
+    Quality quality = Quality::desktop();
     double rampBeat = -1.0, rampBpm = 0.0;
     std::vector<std::string> sets;
 
@@ -96,6 +99,10 @@ int main(int argc, char** argv)
         else if (a == "--tracks") listTracks = true;
         else if (a == "--sr") sr = std::atoi(next());
         else if (a == "--block") block = std::atoi(next());
+        else if (a == "--quality") {
+            const char* level = next();
+            if (!Quality::fromName(level, quality)) { std::fprintf(stderr, "--quality wants desktop or quest\n"); return 2; }
+        }
         else if (a == "--seed") seed = std::strtoull(next(), nullptr, 10);
         else if (a == "--set") sets.push_back(next());
         else if (a == "--preset") {
@@ -149,7 +156,7 @@ int main(int argc, char** argv)
         tempo.add(rampBeat, rampBpm, false);
     }
 
-    engine->prepare(sr, block);
+    engine->prepare(sr, block, quality);
     engine->setTempoMap(tempo);
     Conductor conductor(*engine, composer);
 
@@ -239,8 +246,8 @@ int main(int argc, char** argv)
 
     const double audioSeconds = static_cast<double>(totalSamples) / sr;
     if (bench || report) {
-        std::printf("path %s, %.1f s of audio in %.3f s: %.1fx realtime (%.2f %% of a core)\n",
-                    kVecPathName, audioSeconds, elapsed, audioSeconds / elapsed, 100.0 * elapsed / audioSeconds);
+        std::printf("path %s, quality %s, %.1f s of audio in %.3f s: %.1fx realtime (%.2f %% of a core)\n",
+                    kVecPathName, quality.name(), audioSeconds, elapsed, audioSeconds / elapsed, 100.0 * elapsed / audioSeconds);
     }
     if (report && !bench) {
         const LoudnessReading r = meter.read();
