@@ -4,6 +4,7 @@
  * @note Copied from Noctuary `Core/src/Loudness.cpp` at b60a2fe (15.09.2026), sone model removed.
  */
 #include "phos/Loudness.h"
+#include "phos/Dynamics.h"
 #include "phos/Dsp.h"
 #include <algorithm>
 #include <cmath>
@@ -64,7 +65,7 @@ void LoudnessMeter::reset()
     hopL_ = hopR_ = 0.0; hopSamples_ = 0;
     blocks_.clear(); shortBlocks_.clear();
     truePeak_ = 0.0; seconds_ = 0.0; lastShort_ = -120.0f;
-    for (int i = 0; i < 4; ++i) { tpHistL_[i] = 0.0f; tpHistR_[i] = 0.0f; }
+    for (int i = 0; i < 12; ++i) { tpHistL_[i] = 0.0f; tpHistR_[i] = 0.0f; }
 }
 
 namespace {
@@ -74,24 +75,6 @@ inline float lufs(double msL, double msR)
 {
     const double s = msL + msR;
     return s > 1.0e-12 ? static_cast<float>(-0.691 + 10.0 * std::log10(s)) : -120.0f;
-}
-
-/**
- * @brief Inter-sample peak estimate by four-point Lagrange interpolation at quarter samples.
- *
- * Not the standard's 48-tap filter; within a few tenths of a decibel of it on programme material,
- * which is enough to tell "fine" from "will clip after encoding".
- */
-inline double interPeak(const float* h)
-{
-    double peak = std::fabs(static_cast<double>(h[1]));
-    for (int k = 1; k < 4; ++k) {
-        const double t = k * 0.25;
-        const double a = h[0], b = h[1], c = h[2], d = h[3];
-        const double v = b + 0.5 * t * (c - a + t * (2.0 * a - 5.0 * b + 4.0 * c - d + t * (3.0 * (b - c) + d - a)));
-        peak = std::max(peak, std::fabs(v));
-    }
-    return peak;
 }
 
 } // namespace
@@ -129,9 +112,13 @@ void LoudnessMeter::process(const float* L, const float* R, int n)
 {
     for (int i = 0; i < n; ++i) {
         const float l = L[i], r = R[i];
-        tpHistL_[0] = tpHistL_[1]; tpHistL_[1] = tpHistL_[2]; tpHistL_[2] = tpHistL_[3]; tpHistL_[3] = l;
-        tpHistR_[0] = tpHistR_[1]; tpHistR_[1] = tpHistR_[2]; tpHistR_[2] = tpHistR_[3]; tpHistR_[3] = r;
-        truePeak_ = std::max(truePeak_, std::max(interPeak(tpHistL_), interPeak(tpHistR_)));
+        // True peak with the 4x Kaiser-sinc interpolator of Dynamics.h, the same estimate the limiter
+        // holds its ceiling with (the 4-point Lagrange of Noctuary's meter read up to 0.1 dB higher).
+        for (int k = 0; k < 11; ++k) { tpHistL_[k] = tpHistL_[k + 1]; tpHistR_[k] = tpHistR_[k + 1]; }
+        tpHistL_[11] = l;
+        tpHistR_[11] = r;
+        truePeak_ = std::max({ truePeak_, std::fabs(static_cast<double>(tpHistL_[5])), std::fabs(static_cast<double>(tpHistR_[5])),
+                               tpInterp_.between(tpHistL_ + 5), tpInterp_.between(tpHistR_ + 5) });
 
         const float kl = kL_.process(l), kr = kR_.process(r);
         hopL_ += static_cast<double>(kl) * kl;

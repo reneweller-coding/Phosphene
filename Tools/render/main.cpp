@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file main.cpp
  * @brief phos_render: renders a set offline, exports its MIDI, measures loudness and speed.
  *
@@ -15,7 +15,7 @@
  *     --set key=value     set a parameter; repeatable; "key=a;key2=b" also works
  *     --preset FILE       read key=value assignments from a file
  *     --tempo-ramp B:BPM  ramp the tempo from compose.bpm at beat 0 to BPM at beat B
- *     --solo PART         mute everything else: kick, bass, perc, acid, lead or arp
+ *     --solo PART         mute everything else: kick, bass, perc, acid, lead, arp, pad or sfx
  *     --out FILE.wav      write the audio (32-bit float unless --pcm24)
  *     --pcm24             write 24-bit PCM
  *     --midi FILE.mid     write the score as a Standard MIDI File
@@ -127,12 +127,12 @@ int main(int argc, char** argv)
     }
     const int mb = params.base(Module::Mix);
     if (!solo.empty()) {
-        static const char* const kSoloNames[] = { "kick", "bass", "perc", "acid", "lead", "arp" };
-        static const int kSoloMutes[] = { mix::KickMute, mix::BassMute, mix::PercMute, mix::AcidMute, mix::LeadMute, mix::ArpMute };
+        static const char* const kSoloNames[] = { "kick", "bass", "perc", "acid", "lead", "arp", "pad", "sfx" };
+        static const int kSoloMutes[] = { mix::KickMute, mix::BassMute, mix::PercMute, mix::AcidMute, mix::LeadMute, mix::ArpMute, mix::PadMute, mix::SfxMute };
         int which = -1;
-        for (int k = 0; k < 6; ++k) if (solo == kSoloNames[k]) which = k;
-        if (which < 0) { std::fprintf(stderr, "--solo wants kick, bass, perc, acid, lead or arp\n"); return 2; }
-        for (int k = 0; k < 6; ++k) params.set(mb + kSoloMutes[k], k == which ? 0.0f : 1.0f);
+        for (int k = 0; k < 8; ++k) if (solo == kSoloNames[k]) which = k;
+        if (which < 0) { std::fprintf(stderr, "--solo wants kick, bass, perc, acid, lead, arp, pad or sfx\n"); return 2; }
+        for (int k = 0; k < 8; ++k) params.set(mb + kSoloMutes[k], k == which ? 0.0f : 1.0f);
     }
 
     const int cb = params.base(Module::Compose);
@@ -179,10 +179,15 @@ int main(int argc, char** argv)
             std::printf(" (%d bars each); acid %s (%d steps%s), lead %s (osc %d), arp %s (%s)\n", m.chordBars,
                         m.present[0] ? "yes" : "no", m.acidSteps, m.acidSquelch == 1 ? ", squelch" : "", m.present[1] ? "yes" : "no", m.leadOsc,
                         m.present[2] ? "yes" : "no", kArpStyles[m.arpStyle]);
-            std::printf("          blocks (A=acid L=lead R=arp):");
+            std::printf("          blocks (A=acid L=lead R=arp P=pad g=gated):");
             for (int b = 0; b < p.bars / 16 && b < kMelodyMaxBlocks; ++b)
-                std::printf(" %s%s%s%s", (m.blockParts[b] & 1) ? "A" : "", (m.blockParts[b] & 2) ? "L" : "", (m.blockParts[b] & 4) ? "R" : "", m.blockParts[b] ? "" : "-");
-            std::printf("\n          part gains %+.1f / %+.1f / %+.1f dB\n", static_cast<double>(p.partGainDb[0]), static_cast<double>(p.partGainDb[1]), static_cast<double>(p.partGainDb[2]));
+                std::printf(" %s%s%s%s%s%s", (m.blockParts[b] & 1) ? "A" : "", (m.blockParts[b] & 2) ? "L" : "", (m.blockParts[b] & 4) ? "R" : "",
+                            (m.blockParts[b] & 8) ? "P" : "", m.padGate[b] ? "g" : "", m.blockParts[b] ? "" : "-");
+            std::printf("\n          effects:");
+            for (const SfxEvent& s : m.sfx) std::printf(" %s@%g", kSfxTypeNames[s.type], s.beat / kBeatsPerBar);
+            std::printf("\n          part gains %+.1f / %+.1f / %+.1f / %+.1f dB, mix %.1f LUFS before the master offset %+.1f dB\n",
+                        static_cast<double>(p.partGainDb[0]), static_cast<double>(p.partGainDb[1]), static_cast<double>(p.partGainDb[2]),
+                        static_cast<double>(p.partGainDb[3]), p.mixLoudness, static_cast<double>(p.masterGainDb));
         }
     }
     const uint64_t totalSamples = static_cast<uint64_t>(std::llround(tempo.secondsAt(totalBeats) * sr));

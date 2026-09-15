@@ -167,7 +167,61 @@ sind ein Platzhalter für die Instrumentierungs-Matrix der Form (6.1, 6.2).
 Gesamt: 126 Selbsttest-Prüfungen, Vektortests 9 von 9 in AVX2, NEON-Shim und skalar (Diodenleiter
 und `Poly` bitgleich). Eine Stunde Render mit allen Stimmen und Komposition 3,9 % eines Kerns.
 
-Nächster Schritt: Phase 4 (Form-Grammatik, Energiebogen, Pads mit Wavetables, Übergänge).
+**16.09.2026, Phase 4 fertig: Fläche, Effekte, Sends, Sidechain und Master.**
+
+Reihenfolge nach der Phasentabelle (Abschnitt 12): Phase 4 ist "Fläche + FX". Der vorige Satz an dieser
+Stelle nannte Form-Grammatik, Energiebogen und Übergänge als Phase 4; das war falsch, sie gehören zu
+Phase 5.
+
+*Erst gemessen, dann gebaut.* Die Referenzlautheit der 40 Tracks (ffmpeg `ebur128`, ganze Tracks) liegt
+im Median bei **−13,3 LUFS** (Quartile −14,1 bis −12,8), True Peak −1,8 dBTP, LRA 6,3 LU. Die Dateien
+tragen nur ReplayGain-Tags, die beim Dekodieren nicht angewendet werden; die Sammlung ist also leiser
+gemastert als heutige Psytrance-Veröffentlichungen (−8 bis −6 LUFS). Das Lautheitsziel ist deshalb ein
+Entwurfswert: **−9 LUFS**, einstellbar. Die Bandbalance-Referenz ist über 39 Tracks neu gemessen
+(einer ist in der Mitte stumm): Low-Mid −7,3, Mitten −8,8, Präsenz −9,8, Luft −13,3 dB zum Band 40 bis
+140 Hz. Solo-Messungen zeigten, dass der Low-Mid-Überschuss aus Phase 3 von der **Kick** kommt (Pitch
+Start 330 Hz: −3,6 dB Low-Mid im Kick-Solo), nicht vom Bass (−11,1 dB).
+
+| Baustein | Umsetzung | Messung |
+|---|---|---|
+| Wavetables (`WaveTable.h`) | Noctuarys `CycleTable`-Schema (zehn Oktav-Stufen, acht Samples je Oberton, Catmull-Rom, Hysterese), sechs Tabellen **im Code aus Spektren erzeugt**: Classic, Vocal (Formanten nach Peterson und Barney), Glass, PWM, Sync (65536-fach analysiert), Formant Saw | Sägezahn-Frame 1/h bis zur 256. Harmonischen exakt; A6 aus der gewählten Stufe −61 dB unharmonisch, aus Stufe 0 −16 dB; über die Pad-Engine −57,7 dB; Vocal: 2. Harmonische +13 dB, 6. −28 dB von a nach i |
+| `Poly` Wavetable + Pad-Instanz | vierter Oszillatortyp (sieben Oszillatoren mit Szabos Detune und Mix), Tabellenposition mit Hüllkurve und LFO in Beats; Tabellenlesen skalar (Gather), Kernel bitgleich | Vektortests mit Wavetable 9 von 9 in drei Pfaden |
+| Pads (`Melody.h`) | Vier-Stimmen-Voicings G3 bis G5 aus allen Akkordton-Kombinationen mit allen drei Tonklassen und minimaler Stimmbewegung; Pads tragen die Blöcke ohne Lead und Acid; Gate pro Block | 200 Zufallsfälle gleich der Brute-Force-Suche; 592 Pad-Noten, alle Akkordtöne |
+| Trance-Gate (`TranceGate.h`) | Kanaleffekt für Lead, Arp, Pad: Öffnung als Funktion der Beat-Position (sechs Muster), Raised-Cosine-Flanken, Tone-Duck gegen 700-Hz-Tiefpass; Komponist schaltet es pro Block | halb offen genau in der Flankenmitte; Tiefe 0,9 → −19,9 dB (Soll −20,0) |
+| Sidechain-Matrix | ereignisgesteuerte Ducker (`Ducker.h`) auf Acid, Lead, Arp, Pad, SFX und den Hall-Returns, Tiefe je Kanal | Pad bei Tiefe 0,5: −5,8 dB während des Holds |
+| Sends (`Reverb.h`) | Noctuarys FDN (acht Linien, Streuung, farblose Linienlängen), als Raum und Halle; Pre-Delay in Beats; Return-Low-Cut ≥ 150 Hz | T60 1,78 s bei Einstellung 2,0 s; Rauschen durch den Return −30,2 dB unter 140 Hz |
+| Master (`Dynamics.h`) | Bus-Kompressor nach Giannoulis, Massberg, Reiss 2012 (Soft Knee, Detektor im Log-Bereich), Mono-Bass (Seite mit LR4-Hochpass), **2×-Knie-Clipper** (unter 0,7 T unberührt), Lookahead-True-Peak-Limiter (Kaiser-Sinc 4×, gleitendes Minimum + gleitender Mittelwert, 1,5 ms), Sicherheits-Clip, BS.1770-Meter mit demselben Interpolator | Kennlinie exakt; True Peak bis 0,25 fs innerhalb 0,10 dB (Grenze der 4×-Abtastung 0,17 dB); 12 dB zu heißes Programm → −0,95 dBTP (Sample-Clip allein +1,57 dBTP); Gain als Rampe über 72 Samples (größte Änderung 0,0098 je Sample) |
+| Auto-Gain | Master-Probe über acht gleichmäßig verteilte Takte des Tracks mit allen Korrekturen durch die Masterkette, Sekantenschritt | fünf Seeds −9,1 bis −9,6 LUFS bei Ziel −9 (der dichteste Block allein las 0,8 LU zu laut) |
+| SFX (`Sfx.h`) | Riser, Downlifter, Impact (ohne Sub: Tiefenregel), Sweep, Formant-Schuss (Pre-Drop-Abriss), Reverse Swell (vorwärts synthetisiert, gleiches Leistungsspektrum wie umgekehrtes Rauschen), Zap; 24-dB-Low-Cut | Riser +44,9 dB und Schwerpunkt 670 → 4448 Hz bis zum Ziel, danach still; Swell am lautesten in den letzten 100 ms; alle Typen < −32 dB unter 140 Hz |
+| SFX-Platzierung | wo ein Block eine Stimme bringt: Riser über 8 Takte oder Swell über 2, Formant-Schuss auf dem letzten Beat davor, Impact auf der Eins; Downlifter wo Stimmen gehen; Sweep in den letzten 8 Takten | 30 Impacts, 24 Formant-Schüsse, 20 Riser, alle am richtigen Ort |
+| Prüfstein | kompletter Track, 288 Takte (7:57), Standardwerte | −9,95 LUFS bei Ziel −9, True Peak −0,99 dBTP, LRA 2,2 LU |
+
+*Kalibrierung der Bandbalance* (Solos ohne Masterdynamik, Pegel per Kleinste-Quadrate gegen die
+Referenz, dann gemastert an fünf Seeds nachgemessen): Kick Pitch Start 330 → 220 Hz, Lead −8 → −4 dB und
+Cutoff 7,5 → 10 kHz, Arp −10 → −5 dB und Cutoff 2,2 → 3,5 kHz, Pad −16 dB bei 5 kHz, Acid −9 dB,
+Percussion +1 dB. Ergebnis im Median: **Low-Mid −7,0 (Ref. −7,3), Mitten −9,2 (−8,8), Präsenz −12,2
+(−9,8), Luft −13,1 (−13,3)**. Offen bleibt die Präsenz mit 2,4 dB (vorher 3,5 dB).
+
+*Gegenprobe.* Sechs Fehler eingebaut, jeder gefunden: Limiter ohne gleitenden Mittelwert (Gain-Sprung
+0,67 je Sample; die True-Peak-Prüfung allein hätte ihn nicht bemerkt), Voicing ohne Stimmführung (93 von
+200 falsch), Wavetable immer aus Stufe 0 (−12 dB), Gate-Flanke als Sprung, Hall-Gains für die doppelte
+Nachhallzeit (T60 3,53 s), Auto-Gain-Probe nur aus der Trackmitte (−10,7 LUFS).
+
+*Laufzeit.* Render mit Standardwerten 5,4 % eines Kerns, mit allen Stimmen in jedem Track 7,3 %. Der
+Selbsttest dauerte durch die neuen Proben 392 s; Tests, die nicht den Pegelangleich prüfen, schalten
+die Proben jetzt ab (155 s), `PHOS_ONLY` wählt einzelne Abschnitte.
+
+*Abweichungen vom Plan, bewusst:* Die 608 Tabellen aus Noctuarys WavetableLib werden nicht kopiert (keine
+Dateien, keine Samples, Quest-Speicher); sechs Tabellen entstehen im Code. Der Clipper vor dem Limiter
+ist neu: ohne ihn erreichte der Mix bei +8 dB nur −9,9 LUFS, mit ihm −8,6. Nicht gebaut: Stutter,
+Tape-Stop, Pitch-Delay, Phaser, Bitcrush (Bus-Effekte), Kanal-EQ, Convolver; das Pre-Drop-Vakuum als
+Regel (nur der Abriss wird gesetzt) und die Platzierung an echten Sektionsgrenzen kommen mit der
+Form-Grammatik in Phase 5. Der Limiter hat 77 Samples Latenz (`Engine::latencySamples()`).
+
+Gesamt: 147 Selbsttest-Prüfungen, Vektortests 9 von 9 in drei Pfaden.
+
+Nächster Schritt: Phase 5 (Komponist: Form-Grammatik mit Pre-Drop-Vakuum, Energiebogen, Tonartenreise,
+Übergänge, Sperren und Neuwürfeln, Stilprofile, `.phosset`).
 
 ## 0. Kurzfassung
 

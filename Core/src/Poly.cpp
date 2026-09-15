@@ -64,6 +64,9 @@ void Poly::prepare(double sampleRate)
     chanAmp_.assign(static_cast<size_t>(kPolyBlock * kPolyLanes), 0.0f);
     chanOut_.assign(static_cast<size_t>(kPolyBlock * kPolyLanes), 0.0f);
     sendBuf_.assign(static_cast<size_t>(kPolyBlock), 0.0f);
+    wtRow_.assign(static_cast<size_t>(kPolyBlock * kPolySlots), 0.0f);
+    for (int i = 0; i < kNumWaveTables; ++i) builtinWaveTable(i);   // built here, never on the audio thread
+    table_ = &builtinWaveTable(0);
     reset();
 }
 
@@ -71,7 +74,7 @@ void Poly::reset()
 {
     slots_ = PolySlots{};
     ch_ = PolyChannels{};
-    for (int s = 0; s < kPolySlots; ++s) { slots_.dt[s] = 0.001f; slots_.inv[s] = 1000.0f; slots_.idxDecay[s] = 1.0f; slots_.pw[s] = 0.5f; }
+    for (int s = 0; s < kPolySlots; ++s) { slots_.dt[s] = 0.001f; slots_.inv[s] = 1000.0f; slots_.idxDecay[s] = 1.0f; slots_.pw[s] = 0.5f; wtPh_[s] = 0.0; wtDt_[s] = 0.0; wtLevel_[s] = 0; }
     for (int v = 0; v < kPolyVoices; ++v) {
         amp_[v].kill();
         fenv_[v] = 0.0f;
@@ -79,6 +82,8 @@ void Poly::reset()
         age_[v] = 0;
         pitch_[v] = 60;
         hpHz_[v] = 220.0f;
+        posEnv_[v] = 0.0f;
+        lfoPh_[v] = 0.0;
         voiceCoefs(v);
     }
     counter_ = 0;
@@ -93,6 +98,10 @@ void Poly::update(const float* v, double bpm)
     fDecay_ = static_cast<float>(std::exp(std::log(1.0e-3) / (v[poly::FilterDecay] * 0.001 * sr_)));
     for (Envelope& e : amp_)
         e.setTimes(v[poly::AmpAttack] * 0.001f, v[poly::AmpDecay] * 0.001f, v[poly::AmpSustain], std::max(0.005f, v[poly::AmpRelease] * 0.001f));
+    table_ = &builtinWaveTable(static_cast<int>(std::lround(v[poly::Table])));
+    posDecay_ = static_cast<float>(std::exp(std::log(1.0e-3) / (std::max(1.0f, v[poly::PosDecay]) * 0.001 * sr_)));
+    bpm_ = bpm;
+    lfoInc_ = static_cast<float>(bpm / 60.0 / (std::max(0.05f, v[poly::PosLfoBeats]) * sr_));
     send_ = v[poly::DelaySend];
     level_ = dbToGain(v[poly::Level]);
     const int dl = std::clamp(static_cast<int>(std::lround(v[poly::DelayLeft])), 0, kNumDelayTimes - 1);
@@ -145,6 +154,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     double gains[kPolyUnison] = {}, detuneScale = 1.0;
     switch (static_cast<PolyOsc>(osc)) {
     case PolyOsc::Supersaw:
+    case PolyOsc::Wavetable:
         for (int u = 0; u < kPolyUnison; ++u) gains[u] = u == 3 ? center : side;
         break;
     case PolyOsc::Va:
@@ -172,7 +182,15 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         slots_.mdt[s] = static_cast<float>(mdt);
         slots_.pw[s] = v[poly::PulseWidth];
         const bool fm = osc == static_cast<int>(PolyOsc::Fm);
-        slots_.wSaw[s] = fm ? 0.0f : static_cast<float>(osc == static_cast<int>(PolyOsc::Va) ? 1.0 - wave : 1.0);
+        const bool wt = osc == static_cast<int>(PolyOsc::Wavetable);
+        slots_.wWt[s] = wt ? 1.0f : 0.0f;
+        wtDt_[s] = hz / sr_;
+        wtLevel_[s] = waveLevelFor(hz, sr_, -1);
+        {
+            const double wp = static_cast<double>(phaseRng_.uniform()) + wtDt_[s] * late;
+            wtPh_[s] = wp - std::floor(wp);
+        }
+        slots_.wSaw[s] = (fm || wt) ? 0.0f : static_cast<float>(osc == static_cast<int>(PolyOsc::Va) ? 1.0 - wave : 1.0);
         slots_.wPulse[s] = osc == static_cast<int>(PolyOsc::Va) ? static_cast<float>(wave) : 0.0f;
         slots_.wFm[s] = fm ? 1.0f : 0.0f;
         slots_.idxFloor[s] = static_cast<float>(0.3 * fmI);
@@ -197,6 +215,8 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     }
     voiceCoefs(voice);
     fenv_[voice] = static_cast<float>(std::pow(static_cast<double>(fDecay_), late));
+    posEnv_[voice] = static_cast<float>(std::pow(static_cast<double>(posDecay_), late));
+    lfoPh_[voice] = 0.0;
     lowPassCoefs(voice, 2.0 - 1.9 * std::clamp(static_cast<double>(v[poly::Resonance]), 0.0, 1.0));
     amp_[voice].noteOn();
     amp_[voice].advanceAttack(late);
@@ -226,13 +246,37 @@ void Poly::renderSegment(float* L, float* R, int n)
             fenv_[voice] *= fDecay_;
         }
     }
+    // Wavetable rows, on the scalar side (a table read is a gather): position from the knob, the
+    // voice's envelope and its LFO, one position per voice per sample.
+    for (int voice = 0; voice < kPolyVoices; ++voice) {
+        const int s0 = voice * kPolyUnison;
+        const bool wt = voiceOn[voice] && slots_.wWt[s0] != 0.0f;
+        if (!wt) {
+            for (int i = 0; i < n; ++i)
+                for (int u = 0; u < kPolyUnison; ++u) wtRow_[static_cast<size_t>(i * kPolySlots + s0 + u)] = 0.0f;
+            continue;
+        }
+        for (int i = 0; i < n; ++i) {
+            const float lfo = static_cast<float>(std::sin(2.0 * kPiD * lfoPh_[voice]));
+            const float pos = v[poly::Position] + v[poly::PosEnv] * posEnv_[voice] + v[poly::PosLfoDepth] * lfo;
+            posEnv_[voice] *= posDecay_;
+            lfoPh_[voice] += lfoInc_;
+            if (lfoPh_[voice] >= 1.0) lfoPh_[voice] -= 1.0;
+            for (int u = 0; u < kPolyUnison; ++u) {
+                const int s = s0 + u;
+                wtRow_[static_cast<size_t>(i * kPolySlots + s)] = table_->sampleAt(wtLevel_[s], pos, wtPh_[s]);
+                wtPh_[s] += wtDt_[s];
+                if (wtPh_[s] >= 1.0) wtPh_[s] -= 1.0;
+            }
+        }
+    }
     // Groups of eight slots and eight channels run when any of their voices sounds: the same decision
     // on every vector path.
     for (int g = 0; g < kPolySlots / 8; ++g) {
         bool on = false;
         for (int s = g * 8; s < g * 8 + 8; ++s) on = on || voiceOn[s / kPolyUnison];
         if (on) {
-            for (int s = g * 8; s < g * 8 + 8; s += width) polySlotKernel<V>(slots_, s, n, slotL_.data(), slotR_.data());
+            for (int s = g * 8; s < g * 8 + 8; s += width) polySlotKernel<V>(slots_, s, n, wtRow_.data(), slotL_.data(), slotR_.data());
         } else {
             for (int i = 0; i < n; ++i)
                 for (int s = g * 8; s < g * 8 + 8; ++s) slotL_[static_cast<size_t>(i * kPolySlots + s)] = slotR_[static_cast<size_t>(i * kPolySlots + s)] = 0.0f;

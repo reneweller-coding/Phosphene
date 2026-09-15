@@ -38,7 +38,18 @@
  * two semitones -- masking would otherwise blur both (the plan's masking rule) -- or it sits the block
  * out.
  *
- * **Depth rule.** Acid lines stay at or above D3 (147 Hz), leads above B3 and arps above G3.
+ * **Pads.** Four-note voicings of the chords between G3 and G5, each chosen from every combination of
+ * chord tones that contains all three pitch classes by the smallest total movement of the voices from
+ * the voicing before -- the voice-leading rule of the plan (5.7), exact rather than greedy. Pads hold
+ * each chord, carry the blocks without lead or acid, and in some blocks play through the trance gate.
+ *
+ * **Effects.** Where a block brings in a part the block before did not have, the track may place a
+ * riser over the eight bars before it (or a reverse swell over the last two), a formant shot on the
+ * last beat before it -- the pre-drop "Abriss" -- and an impact on its downbeat; where parts leave, a
+ * downlifter; over the last eight bars of the track, a sweep. The form grammar of Phase 5 will move
+ * these to its own section boundaries; the effects and their timing stay.
+ *
+ * **Depth rule.** Acid lines stay at or above D3 (147 Hz), leads above B3, arps and pads above G3.
  */
 #pragma once
 #include "phos/Params.h"
@@ -52,12 +63,14 @@ class PitchModel;
 enum class CorpusRoleId : int;
 
 /** @brief The melodic parts. */
-enum class MelodyPart : int { Acid = 0, Lead, Arp, Count };
+enum class MelodyPart : int { Acid = 0, Lead, Arp, Pad, Count };
 constexpr int kMelodyParts = static_cast<int>(MelodyPart::Count);   ///< number of melodic parts
 constexpr int kMelodyMaxBlocks = 64;                                ///< 16-bar blocks a track can have
 constexpr int kAcidLowest = 50;                                     ///< D3: lowest acid note
 constexpr int kLeadLowest = 59;                                     ///< B3: lowest lead note
 constexpr int kArpLowest = 55;                                      ///< G3: lowest arp note
+constexpr int kPadLowest = 55;                                      ///< G3: lowest pad note
+constexpr int kPadHighest = 79;                                     ///< G5: highest pad note
 
 /** @brief One note of a pattern: position and length in sixteenths, pitch relative to the part's root. */
 struct MelodyNote {
@@ -68,12 +81,19 @@ struct MelodyNote {
     uint8_t flags = 0;       ///< NoteFlag bits
 };
 
+/** @brief An effect placed in a track: start and length in beats from the track's first bar. */
+struct SfxEvent {
+    double beat = 0.0;     ///< start, beats after the track starts
+    float  length = 4.0f;  ///< beats
+    int    type = 0;       ///< SfxType
+};
+
 /** @brief Everything melodic that is decided once per track. */
 struct MelodyPlan {
     bool present[kMelodyParts] = {};         ///< which parts the track uses at all
     int  chordBars = 2;                       ///< bars per chord (2 or 4)
     int  chordDegree[4] = {};                 ///< scale degree of each chord
-    int  root[kMelodyParts] = { 50, 64, 57 }; ///< MIDI root of each part
+    int  root[kMelodyParts] = { 50, 64, 57, 55 }; ///< MIDI root of each part (the pad's is unused)
     int  acidSteps = 16;                      ///< acid pattern length (16 or 32)
     std::vector<MelodyNote> acid[2];          ///< acid pattern A and variation B
     std::vector<MelodyNote> lead[2];          ///< two eight-bar lead phrases (128 steps)
@@ -85,7 +105,11 @@ struct MelodyPlan {
     float acidArc[kMelodyMaxBlocks] = {};     ///< normalised acid cutoff offset reached at the end of each block
     int  acidSquelch = -1;                    ///< override of acid.squelch, -1 = the knob
     int  leadOsc = -1;                        ///< override of lead.osc, -1 = the knob
-    int  delay[kMelodyParts][2] = { { -1, -1 }, { -1, -1 }, { -1, -1 } };   ///< overrides of the delay times
+    int  delay[kMelodyParts][2] = { { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 } };   ///< overrides of the delay times
+    std::vector<int> padVoicing[4];           ///< MIDI notes of each chord's pad voicing
+    bool padGate[kMelodyMaxBlocks] = {};      ///< trance gate on the pad in this block
+    int  padGatePattern = 0;                  ///< the track's gate pattern
+    std::vector<SfxEvent> sfx;                ///< effects, sorted by start
     float recipe[kMelodyParts] = {};          ///< one sound direction per part, -1..1 (brightness)
 };
 
@@ -120,6 +144,27 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, uint64_t seed, int key, int scale
  */
 void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int barInTrack, int scale, bool allParts,
                       std::vector<NoteEvent>& out);
+
+/**
+ * @brief The pad voicing of a chord: four chord tones in [kPadLowest, kPadHighest] containing all three
+ *        pitch classes, with the least total movement from @p previous (or from a centred reference).
+ * @param scale,degree the chord
+ * @param key          the key's pitch class
+ * @param previous     the voicing before, or null
+ */
+std::vector<int> voiceChord(int scale, int degree, int key, const std::vector<int>* previous);
+
+/** @brief Total movement of the voices between two sorted voicings of equal size, in semitones. */
+int voicingMovement(const std::vector<int>& a, const std::vector<int>& b);
+
+/**
+ * @brief Composes the effects that start in one bar.
+ * @param m          the track's plan
+ * @param trackBeat  beat at which the track starts
+ * @param barInTrack bar within the track
+ * @param out        receives Part::Sfx notes (pitch kSfxBaseNote + type)
+ */
+void composeSfxBar(const MelodyPlan& m, double trackBeat, int barInTrack, std::vector<NoteEvent>& out);
 
 /** @brief Semitones the bass moves in @p barInTrack when it follows the chords (0 on the tonic). */
 int bassChordShift(const MelodyPlan& m, int scale, int barInTrack, int bassRoot);

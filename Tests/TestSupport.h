@@ -3,6 +3,7 @@
  * @brief A minimal check framework and measurement helpers for the self tests.
  */
 #pragma once
+#include <chrono>
 #include <cmath>
 #include <complex>
 #include <cstdio>
@@ -42,8 +43,21 @@ inline std::string fmt(const char* f, A... args)
     return buf;
 }
 
-/** @brief Prints a section header. */
-inline void section(const char* name) { std::printf("\n%s\n", name); }
+/** @brief Seconds since the previous section began (steady clock). */
+inline double sectionSeconds()
+{
+    static auto last = std::chrono::steady_clock::now();
+    const auto now = std::chrono::steady_clock::now();
+    const double s = std::chrono::duration<double>(now - last).count();
+    last = now;
+    return s;
+}
+
+/** @brief Prints a section header, with the time the previous section took. */
+inline void section(const char* name)
+{
+    std::printf("         (%.1f s)\n%s\n", sectionSeconds(), name);
+}
 
 /** @brief Ends the run: prints totals and returns the process exit code. */
 inline int finish()

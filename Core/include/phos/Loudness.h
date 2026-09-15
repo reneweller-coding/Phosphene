@@ -11,6 +11,7 @@
  *       Zwicker sone model (and therefore without its FFT). Comments in Doxygen form.
  */
 #pragma once
+#include "phos/Dynamics.h"
 #include <atomic>
 #include <cstddef>
 #include <vector>
@@ -125,7 +126,8 @@ private:
     double truePeak_ = 0.0;
     double seconds_ = 0.0;
     float  lastShort_ = -120.0f;
-    float  tpHistL_[4] = {}, tpHistR_[4] = {};
+    float  tpHistL_[12] = {}, tpHistR_[12] = {};   ///< the last twelve samples, for the true-peak interpolator
+    TruePeakInterpolator tpInterp_;
 };
 
 } // namespace phos

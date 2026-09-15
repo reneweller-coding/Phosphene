@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file Params.h
  * @brief The parameter system: descriptor tables per module, instantiated in blocks.
  *
@@ -47,12 +47,12 @@ struct ParamDesc {
 };
 
 /** @brief The modules that own parameters. */
-enum class Module : int { Compose = 0, Kick, Bass, Perc, Acid, Poly, Mix, Master, Count };
+enum class Module : int { Compose = 0, Kick, Bass, Perc, Acid, Poly, Sfx, Fx, Mix, Master, Count };
 
 constexpr int kPercLanes = 12;   ///< instances of the percussion lane module
-constexpr int kPolyInstances = 2; ///< instances of the polyphonic engine module: "lead" and "arp"
+constexpr int kPolyInstances = 3; ///< instances of the polyphonic engine module: "lead", "arp" and "pad"
 /** @brief The instances of Module::Poly. */
-enum class PolyInstance : int { Lead = 0, Arp };
+enum class PolyInstance : int { Lead = 0, Arp, Pad };
 
 /** @brief Parameters of the composer (read as a snapshot when bars are composed). */
 namespace compose {
@@ -60,7 +60,7 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              TrackBars, TrackVariation, SoundVariation, TempoRange, LevelMatch,
              PercDensity, PercVariation, Swing,
              AcidAmount, LeadAmount, ArpAmount, MelodyVariation, MelodyTemperature, SquelchChance,
-             BassFollowsChords, Count };
+             BassFollowsChords, PadAmount, SfxAmount, GateChance, Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
 namespace perc {
@@ -89,17 +89,30 @@ enum : int { Wave, PulseWidth, Sub, SubMode, SplitRatio, KickLock, Retrigger, St
 namespace acid {
 enum : int { Wave, Cutoff, Resonance, EnvAmount, Decay, Accent, SlideTime, AmpDecay, KeyTrack, Drive,
              Squelch, SquelchStart, SquelchTime, CombMix, CombFeedback, LowCut,
-             DelaySend, DelayLeft, DelayRight, DelayFeedback, DelayHighPass, DelayLowPass, Level, Count };
+             DelaySend, DelayLeft, DelayRight, DelayFeedback, DelayHighPass, DelayLowPass,
+             RoomSend, HallSend, Duck, Level, Count };
 }
 /** @brief Parameters of a polyphonic engine (module Poly, instances "lead" and "arp"). */
 namespace poly {
 enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex, FmDecay,
+             Table, Position, PosEnv, PosDecay, PosLfoDepth, PosLfoBeats,
              Cutoff, Resonance, EnvAmount, FilterDecay, KeyTrack, HpFloor, HpTrack,
              AmpAttack, AmpDecay, AmpSustain, AmpRelease, Width, VelSens,
-             DelaySend, DelayLeft, DelayRight, DelayFeedback, DelayHighPass, DelayLowPass, Level, Count };
+             DelaySend, DelayLeft, DelayRight, DelayFeedback, DelayHighPass, DelayLowPass,
+             RoomSend, HallSend, Duck, Gate, GatePattern, GateDepth, GateDuty, GateAttack, GateRelease, GateTone,
+             Level, Count };
+}
+/** @brief Parameters of the effect generator (module Sfx, prefix "sfx"). */
+namespace sfx {
+enum : int { Level, Noise, Resonance, Brightness, ImpactDecay, Vowel, SwellDecay, Width, RoomSend, HallSend, Duck, Count };
+}
+/** @brief Parameters of the send effects (module Fx, prefix "fx"): a short room and a long hall. */
+namespace fx {
+enum : int { RoomSize, RoomDecay, RoomDamping, HallSize, HallDecay, HallDamping, HallPreDelay, LowCut, HighCut,
+             RoomReturn, HallReturn, ReturnDuck, Count };
 }
 /** @brief Values of poly.osc. */
-enum class PolyOsc : int { Supersaw = 0, Va, Fm, Count };
+enum class PolyOsc : int { Supersaw = 0, Va, Fm, Wavetable, Count };
 /** @brief Delay times offered by the delay-time choices, in beats. */
 inline constexpr float kDelayBeats[] = { 0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f };
 constexpr int kNumDelayTimes = 6;   ///< entries of kDelayBeats
@@ -111,11 +124,13 @@ enum class KickLock : int { Off = 0, BassFollowsKick, KickFollowsBass };
 /** @brief Parameters of the mixer. */
 namespace mix {
 enum : int { KickMute, BassMute, TrackGain, PercMute, PercLevel, AcidMute, AcidLevel, LeadMute, LeadLevel,
-             ArpMute, ArpLevel, Count };
+             ArpMute, ArpLevel, PadMute, PadLevel, SfxMute, SfxLevel, PercRoom, PercHall,
+             DuckAttack, DuckHold, DuckRelease, Count };
 }
 /** @brief Parameters of the master section. */
 namespace master {
-enum : int { Gain, Ceiling, Clip, Count };
+enum : int { Gain, Ceiling, Clip, CompThreshold, CompRatio, CompKnee, CompAttack, CompRelease, MonoBass,
+             Limiter, LimiterRelease, TargetLufs, AutoGain, Clipper, ClipperThreshold, Count };
 }
 
 extern const char* const kKeyNames[12];         ///< C, C#, ... B

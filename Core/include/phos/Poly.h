@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file Poly.h
  * @brief The polyphonic engine of the lead and the arp: eight voices of up to seven unison oscillators.
  *
@@ -27,7 +27,11 @@
  * log2 of the length.
  *
  * **VA** plays the centre and the inner pair of oscillators as saw-to-pulse blends; **FM** plays
- * two-operator phase modulation on the same three oscillators (PolyKernel.h).
+ * two-operator phase modulation on the same three oscillators (PolyKernel.h). **Wavetable** (the pad
+ * instance's default) plays all seven oscillators with Szabo's detune and mix, each reading a built-in
+ * table (WaveTable.h) at its own random phase; the table position moves with an envelope and a slow LFO
+ * whose period is given in beats. A table read is a gather, so it runs on the scalar side and hands the
+ * kernel a row of samples -- the same code for every vector path, so the lanes stay bit-identical.
  *
  * The voice filter is a resonant 12 dB state-variable low pass with its own envelope and key
  * tracking; the amplitude envelope is the ADSR of Dsp.h. After the voices a tempo delay (TempoDelay.h).
@@ -36,6 +40,7 @@
 #include "phos/Dsp.h"
 #include "phos/PolyKernel.h"
 #include "phos/TempoDelay.h"
+#include "phos/WaveTable.h"
 #include <vector>
 
 namespace phos {
@@ -93,12 +98,20 @@ private:
     int   gate_[kPolyVoices] = {};
     uint64_t age_[kPolyVoices] = {};
     float hpHz_[kPolyVoices] = {};
+    float posEnv_[kPolyVoices] = {};          ///< table-position envelope per voice
+    double lfoPh_[kPolyVoices] = {};          ///< table-position LFO phase per voice
+    double wtPh_[kPolySlots] = {};            ///< wavetable phase per slot (double: long pads)
+    double wtDt_[kPolySlots] = {};            ///< wavetable phase step per slot
+    int wtLevel_[kPolySlots] = {};            ///< table level per slot
+    const WaveTable* table_ = nullptr;
+    float posDecay_ = 0.999f, lfoInc_ = 0.0f;
+    double bpm_ = 145.0;
     uint64_t counter_ = 0;
     uint64_t pos_ = 0;          ///< samples rendered since reset (the coefficient grid)
     Rng phaseRng_;
     TempoDelay delay_;
     float send_ = 0.0f, level_ = 1.0f;
-    std::vector<float> slotL_, slotR_, chanIn_, chanAmp_, chanOut_, sendBuf_;
+    std::vector<float> slotL_, slotR_, chanIn_, chanAmp_, chanOut_, sendBuf_, wtRow_;
 };
 
 } // namespace phos

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file Composer.h
  * @brief The composer: tracks with their own key, tempo, patterns and sound; bars of kick and bass;
  *        and the conductor that feeds the engine.
@@ -37,7 +37,14 @@
  * +-9 dB. The melodic parts come and go inside a track, so they are not part of that measurement; each
  * of them is probed alone instead (two bars of its own line and sound) and brought to the loudness the
  * same part had in the first track, so an FM lead after a supersaw or a squelched acid after a dry one
- * does not jump either. The composer still never listens to the live output: the probe is a deterministic render of
+ * does not jump either.
+ *
+ * **Loudness target.** With master.auto_gain on, a last probe renders the whole mix -- eight bars spread
+ * evenly over the track as its blocks really play, with every correction, through the bus compressor,
+ * the clipper and the limiter -- and the master gain is offset so that the output meets
+ * master.target_lufs (measured on five seeds: within 0.6 LU). The limiter makes the
+ * relation between gain and loudness non-linear, so the probe runs twice: once to measure, once at the
+ * corrected gain, and the second reading refines the offset (a secant step). The composer still never listens to the live output: the probe is a deterministic render of
  * its own plan. The measurement uses the knobs as they are when the plan is made.
  *
  * **Distance between tracks.** Each recipe is chosen by Mitchell's best-candidate method ("Spectrally
@@ -88,6 +95,8 @@ struct TrackPlan {
     MelodyPlan melody;              ///< chords, acid, lead, arp and their schedule (Melody.h)
     double partLoudness[kMelodyParts] = {};   ///< probe loudness of each melodic part alone, LUFS
     float  partGainDb[kMelodyParts] = {};     ///< level correction of each melodic part against the first track's
+    double mixLoudness = 0.0;       ///< probe loudness of the whole mix after the master, before the loudness offset
+    float  masterGainDb = 0.0f;     ///< the offset that brings the mix to master.target_lufs (Auto Gain)
 };
 
 /** @brief Composes the set from a seed and the knobs. */
@@ -133,7 +142,8 @@ private:
     TrackPlan makeTrack(const ParamStore& params, int index) const;
     void trackStartControls(const ParamStore& params, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out) const;
     void arcControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, bool ramp, std::vector<ControlEvent>& out) const;
-    double probeLoudness(const ParamStore& params, const TrackPlan& plan, int part = -1) const;
+    double probeLoudness(const ParamStore& params, const TrackPlan& plan, int part = -1, float masterGainDb = 0.0f) const;
+    void matchMaster(const ParamStore& params, TrackPlan& plan) const;
     void melodyControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, std::vector<ControlEvent>& out) const;
 
     uint64_t seed_;

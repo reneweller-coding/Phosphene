@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file Composer.cpp
  * @brief Track plans, sound recipes, bars of kick and bass, and the conductor.
  */
@@ -99,6 +99,23 @@ void Composer::recipeOffsets(bool kickModule, const float* macros, float amount,
     for (size_t i = 0; i < count; ++i) out[table[i].param] += amount * table[i].weight * macros[table[i].macro];
 }
 
+void Composer::matchMaster(const ParamStore& p, TrackPlan& t) const
+{
+    const int ms = p.base(Module::Master);
+    t.masterGainDb = 0.0f;
+    if (!p.getBool(ms + master::AutoGain)) return;
+    const double target = p.get(ms + master::TargetLufs);
+    // Measure, correct, measure again, and take a secant step between the two readings.
+    const double l0 = probeLoudness(p, t, -2, 0.0f);
+    t.mixLoudness = l0;
+    if (l0 < -60.0) return;
+    const double g1 = std::clamp(target - l0, -18.0, 18.0);
+    const double l1 = probeLoudness(p, t, -2, static_cast<float>(g1));
+    const double slope = std::fabs(g1) > 0.05 ? (l1 - l0) / g1 : 1.0;
+    const double g2 = g1 + (target - l1) / std::clamp(slope, 0.2, 1.0);
+    t.masterGainDb = static_cast<float>(std::clamp(g2, -18.0, 18.0));
+}
+
 void Composer::validate(const ParamStore& p) const
 {
     // The plans depend on these knobs; when any of them moves, the plans are made again.
@@ -146,6 +163,7 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
             t.loudness = probeLoudness(p, t);
             for (int k = 0; k < kMelodyParts; ++k) t.partLoudness[k] = probeLoudness(p, t, k);
         }
+        matchMaster(p, t);
         return t;   // the first track is the knobs, exactly
     }
 
@@ -233,11 +251,15 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
         // Each melodic part against the same part in the first track; the track gain applies to it as
         // well, so it is taken back out.
         for (int k = 0; k < kMelodyParts; ++k) {
+            // A part the track does not use needs no correction (the first track measures all of them:
+            // it is the reference for every later one).
+            if (!t.melody.present[k]) { t.partLoudness[k] = -120.0; t.partGainDb[k] = 0.0f; continue; }
             t.partLoudness[k] = probeLoudness(p, t, k);
             const bool measurable = plans_[0].partLoudness[k] > -60.0 && t.partLoudness[k] > -60.0;
             t.partGainDb[k] = measurable ? static_cast<float>(std::clamp(plans_[0].partLoudness[k] - t.partLoudness[k] - t.gainDb, -12.0, 12.0)) : 0.0f;
         }
     }
+    matchMaster(p, t);
     return t;
 }
 
@@ -284,12 +306,15 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
     const int ab = p.base(Module::Acid), lb = p.base(Module::Poly, 0), rb = p.base(Module::Poly, 1);
     push(ab + acid::Squelch, ControlEvent::Kind::Override, static_cast<float>(m.acidSquelch));
     push(lb + poly::Osc, ControlEvent::Kind::Override, static_cast<float>(m.leadOsc));
-    const int delayBase[kMelodyParts][2] = { { ab + acid::DelayLeft, ab + acid::DelayRight }, { lb + poly::DelayLeft, lb + poly::DelayRight },
+    const int delayBase[3][2] = { { ab + acid::DelayLeft, ab + acid::DelayRight }, { lb + poly::DelayLeft, lb + poly::DelayRight },
                                              { rb + poly::DelayLeft, rb + poly::DelayRight } };
-    const int levelParam[kMelodyParts] = { mb + mix::AcidLevel, mb + mix::LeadLevel, mb + mix::ArpLevel };
+    const int levelParam[kMelodyParts] = { mb + mix::AcidLevel, mb + mix::LeadLevel, mb + mix::ArpLevel, mb + mix::PadLevel };
+    const int pb = p.base(Module::Poly, 2);
     for (int k = 0; k < kMelodyParts; ++k) {
-        push(delayBase[k][0], ControlEvent::Kind::Override, static_cast<float>(m.delay[k][0]));
-        push(delayBase[k][1], ControlEvent::Kind::Override, static_cast<float>(m.delay[k][1]));
+        if (k < 3) {
+            push(delayBase[k][0], ControlEvent::Kind::Override, static_cast<float>(m.delay[k][0]));
+            push(delayBase[k][1], ControlEvent::Kind::Override, static_cast<float>(m.delay[k][1]));
+        }
         const ParamDesc& d = p.desc(levelParam[k]);
         push(levelParam[k], ControlEvent::Kind::Offset, plan.partGainDb[k] / (d.maxValue - d.minValue));
     }
@@ -299,6 +324,11 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
     push(lb + poly::Cutoff, ControlEvent::Kind::Offset, 0.10f * sv * m.recipe[1]);
     push(rb + poly::FilterDecay, ControlEvent::Kind::Offset, 0.15f * sv * m.recipe[2]);
     push(rb + poly::Detune, ControlEvent::Kind::Offset, 0.12f * sv * m.recipe[2]);
+    push(pb + poly::Position, ControlEvent::Kind::Offset, 0.25f * sv * m.recipe[3]);
+    push(pb + poly::GatePattern, ControlEvent::Kind::Override, static_cast<float>(m.padGatePattern));
+    // The loudness offset of Auto Gain, in the normalised domain of master.gain's 36 dB range.
+    const ParamDesc& mg = p.desc(p.base(Module::Master) + master::Gain);
+    push(p.base(Module::Master) + master::Gain, ControlEvent::Kind::Offset, plan.masterGainDb / (mg.maxValue - mg.minValue));
 }
 
 void Composer::melodyControls(const ParamStore& p, const TrackPlan& plan, int inTrack, double beat, std::vector<ControlEvent>& out) const
@@ -321,6 +351,14 @@ void Composer::melodyControls(const ParamStore& p, const TrackPlan& plan, int in
         out.push_back(c);
     };
     if (inTrack == 0) push(ab + acid::Cutoff, plan.index == 0 ? 0.0f : base, 0.0f);
+    {
+        ControlEvent g;
+        g.beat = beat;
+        g.param = static_cast<int16_t>(p.base(Module::Poly, 2) + poly::Gate);
+        g.kind = ControlEvent::Kind::Override;
+        g.value = m.padGate[block] ? 1.0f : 0.0f;
+        out.push_back(g);
+    }
     push(ab + acid::Cutoff, target, 16.0f * kBeatsPerBar);
     push(ab + acid::EnvAmount, 0.5f * (target - base), 16.0f * kBeatsPerBar);
 }
@@ -352,10 +390,13 @@ void Composer::arcControls(const ParamStore& p, const TrackPlan& plan, int inTra
     }
 }
 
-double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int part) const
+double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int part, float masterGainDb) const
 {
     constexpr double sr = 48000.0;
-    constexpr int bars = 2;
+    // Two bars for the foundation and the parts. For the whole mix eight bars spread evenly over the track,
+    // as its blocks really play -- intro and outro included, since the gated integrated loudness counts
+    // them: the densest block alone over-read a track by 0.8 LU, four bars from its middle by 0.6 LU.
+    const int bars = part == -2 ? 8 : 2;
     auto engine = std::make_unique<Engine>();
     engine->prepare(sr, 512);
     engine->params().copyValuesFrom(p);
@@ -364,9 +405,19 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     engine->params().set(mb + mix::BassMute, 0.0f);
     engine->params().set(mb + mix::TrackGain, 0.0f);
     engine->params().set(mb + mix::PercMute, 0.0f);
-    // The foundation (part < 0): kick, bass and percussion. A melodic part: that part alone.
-    const int mutes[kMelodyParts] = { mix::AcidMute, mix::LeadMute, mix::ArpMute };
-    for (int k = 0; k < kMelodyParts; ++k) engine->params().set(mb + mutes[k], k == part ? 0.0f : 1.0f);
+    // The foundation (part -1): kick, bass and percussion. A melodic part: that part alone. The whole mix
+    // (part -2): everything with its corrections, through the master. The first two are measured before
+    // the master's dynamics, which would bend the relation between gain and loudness.
+    const int mutes[kMelodyParts] = { mix::AcidMute, mix::LeadMute, mix::ArpMute, mix::PadMute };
+    for (int k = 0; k < kMelodyParts; ++k) engine->params().set(mb + mutes[k], (k == part || part == -2) ? 0.0f : 1.0f);
+    engine->params().set(mb + mix::SfxMute, 1.0f);
+    const int ms = p.base(Module::Master);
+    if (part != -2) {
+        engine->params().set(ms + master::CompRatio, 1.0f);
+        engine->params().set(ms + master::Limiter, 0.0f);
+        engine->params().set(ms + master::Clip, 0.0f);
+        engine->params().set(ms + master::Clipper, 0.0f);
+    }
     if (part >= 0) {
         engine->params().set(mb + mix::KickMute, 1.0f);
         engine->params().set(mb + mix::BassMute, 1.0f);
@@ -378,8 +429,11 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
 
     std::vector<ControlEvent> controls;
     TrackPlan neutral = plan;
-    neutral.gainDb = 0.0f;
-    for (float& g : neutral.partGainDb) g = 0.0f;
+    neutral.masterGainDb = masterGainDb;
+    if (part != -2) {
+        neutral.gainDb = 0.0f;
+        for (float& g : neutral.partGainDb) g = 0.0f;
+    }
     trackStartControls(p, neutral, 0.0, controls);
     arcControls(p, neutral, 0, 0.0, false, controls);
     for (const ControlEvent& c : controls) engine->pushControl(c);
@@ -404,15 +458,21 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
             notes.push_back(n);
         }
     }
-    // The percussion as it plays once its layers have come in (bars 49 and 50 of the track), without fills.
+    // Which bar of the track each probe bar is: 49 and 50 (the percussion's layers are in) for the foundation
+    // and the parts, the middle bar of the block at each fifth of the track for the whole mix.
+    auto sourceBar = [&](int b) {
+        if (part != -2) return 49 + b;
+        const int at = (2 * b + 1) * plan.bars / 16;
+        return (at / 16) * 16 + 8;
+    };
     for (int b = 0; b < bars; ++b)
-        composePercBar(p, plan.perc, plan.percSeed, b, 49 + b, plan.bpm, plan.key, plan.scale, false, notes);
-    // The melodic parts as they play in a full block (bars 49 and 50), each on its own measurement.
-    if (part >= 0) {
+        composePercBar(p, plan.perc, plan.percSeed, b, sourceBar(b), plan.bpm, plan.key, plan.scale, false, notes);
+    // The melodic parts: in a full block for their own measurement, as scheduled for the whole mix.
+    if (part >= 0 || part == -2) {
         std::vector<NoteEvent> mel;
-        for (int b = 0; b < bars; ++b) composeMelodyBar(p, plan.melody, b, 48 + b, plan.scale, true, mel);
-        const Part wanted = part == 0 ? Part::Acid : (part == 1 ? Part::Lead : Part::Arp);
-        for (const NoteEvent& n : mel) if (n.part == wanted) notes.push_back(n);
+        for (int b = 0; b < bars; ++b) composeMelodyBar(p, plan.melody, b, part == -2 ? sourceBar(b) : 48 + b, plan.scale, part != -2, mel);
+        static const Part kParts[kMelodyParts] = { Part::Acid, Part::Lead, Part::Arp, Part::Pad };
+        for (const NoteEvent& n : mel) if (part == -2 || n.part == kParts[part]) notes.push_back(n);
     }
     // One ring, so one order: the engine plays from the head of the ring.
     std::stable_sort(notes.begin(), notes.end(), noteLess);
@@ -561,6 +621,7 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         }
         composePercBar(p, plan.perc, plan.percSeed, bar, inTrack, plan.bpm, plan.key, plan.scale, true, out);
         composeMelodyBar(p, plan.melody, bar, inTrack, plan.scale, false, out);
+        composeSfxBar(plan.melody, static_cast<double>(plan.firstBar) * kBeatsPerBar, inTrack, out);
     }
     std::stable_sort(out.begin() + static_cast<long>(noteStart), out.end(), noteLess);
     if (controls != nullptr)

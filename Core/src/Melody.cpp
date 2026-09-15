@@ -7,6 +7,7 @@
 #include "phos/Dsp.h"
 #include "phos/Harmony.h"
 #include "phos/Rhythm.h"
+#include "phos/Sfx.h"
 #include <algorithm>
 #include <cmath>
 
@@ -20,6 +21,8 @@ constexpr uint64_t kSaltLead   = 0x4C45414400000003ull;
 constexpr uint64_t kSaltArp    = 0x4152500000000004ull;
 constexpr uint64_t kSaltLayers = 0x4C41594552000005ull;
 constexpr uint64_t kSaltSound  = 0x534F554E44000006ull;
+constexpr uint64_t kSaltPad    = 0x5041440000000007ull;
+constexpr uint64_t kSaltSfx    = 0x5346580000000008ull;
 
 using Allowed = std::vector<std::vector<uint8_t>>;
 
@@ -381,6 +384,51 @@ void makeSchedule(MelodyPlan& m, const ParamStore& p, uint64_t seed, int bars)
         m.blockParts[b] = parts;
         m.acidArc[b] = 2.0f * r.uniform() - 1.0f;
     }
+    // Pads: they carry the blocks without lead or acid and join some of the others; now and then
+    // they pump through the trance gate where the groove is full.
+    const int cb = p.base(Module::Compose);
+    const float gateChance = p.get(cb + compose::GateChance);
+    Rng pr;
+    pr.seed(seed ^ kSaltPad);
+    static const double kPatternWeights[6] = { 0.35, 0.2, 0.15, 0.1, 0.15, 0.05 };
+    m.padGatePattern = drawIndex(pr, kPatternWeights, 6);
+    for (int b = 0; b < blocks; ++b) {
+        const bool lastBlock = b == blocks - 1 && blocks > 2;
+        const bool open = (m.blockParts[b] & 3) == 0;
+        const bool pad = m.present[3] && (open || pr.uniform() < 0.45f) && !(lastBlock && pr.uniform() < 0.3f);
+        if (pad) m.blockParts[b] |= 8;
+        m.padGate[b] = pad && !open && pr.uniform() < gateChance;
+    }
+}
+
+void makeSfx(MelodyPlan& m, const ParamStore& p, uint64_t seed, int bars)
+{
+    Rng r;
+    r.seed(seed ^ kSaltSfx);
+    const float amount = p.get(p.base(Module::Compose) + compose::SfxAmount);
+    const int blocks = std::min(kMelodyMaxBlocks, std::max(1, bars / 16));
+    m.sfx.clear();
+    auto add = [&](double beat, float length, SfxType type) {
+        SfxEvent e;
+        e.beat = beat;
+        e.length = length;
+        e.type = static_cast<int>(type);
+        m.sfx.push_back(e);
+    };
+    for (int b = 1; b < blocks; ++b) {
+        const int before = m.blockParts[b - 1] & 7, now = m.blockParts[b] & 7;
+        const double downbeat = 16.0 * b * kBeatsPerBar;
+        if ((now & ~before) != 0 && r.uniform() < amount) {
+            if (r.uniform() < 0.6f) add(downbeat - 8.0 * kBeatsPerBar, 8.0f * kBeatsPerBar, SfxType::Riser);
+            else add(downbeat - 2.0 * kBeatsPerBar, 2.0f * kBeatsPerBar, SfxType::ReverseSwell);
+            if (r.uniform() < 0.7f) add(downbeat - 1.0, 0.5f, SfxType::FormantShot);   // the last beat before the entry
+            if (r.uniform() < 0.8f) add(downbeat, 4.0f, SfxType::Impact);
+        } else if ((before & ~now) != 0 && r.uniform() < 0.5f * amount) {
+            add(downbeat, 4.0f * kBeatsPerBar, SfxType::Downlifter);
+        }
+    }
+    if (bars >= 16 && r.uniform() < amount) add((bars - 8) * static_cast<double>(kBeatsPerBar), 8.0f * kBeatsPerBar, SfxType::Sweep);
+    std::stable_sort(m.sfx.begin(), m.sfx.end(), [](const SfxEvent& a, const SfxEvent& b) { return a.beat < b.beat; });
 }
 
 } // namespace
@@ -407,11 +455,12 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, uint64_t seed, int key, int scale
     m.present[0] = r.uniform() < p.get(cb + compose::AcidAmount);
     m.present[1] = r.uniform() < p.get(cb + compose::LeadAmount);
     m.present[2] = r.uniform() < p.get(cb + compose::ArpAmount);
+    m.present[3] = r.uniform() < p.get(cb + compose::PadAmount);
     // Every track has at least one melodic part unless all three amounts are zero: the likeliest one.
     if (!m.present[0] && !m.present[1] && !m.present[2]) {
-        const float amounts[kMelodyParts] = { p.get(cb + compose::AcidAmount), p.get(cb + compose::LeadAmount), p.get(cb + compose::ArpAmount) };
+        const float amounts[3] = { p.get(cb + compose::AcidAmount), p.get(cb + compose::LeadAmount), p.get(cb + compose::ArpAmount) };
         int best = 0;
-        for (int k = 1; k < kMelodyParts; ++k) if (amounts[k] * r.uniform() > amounts[best] * r.uniform()) best = k;
+        for (int k = 1; k < 3; ++k) if (amounts[k] * r.uniform() > amounts[best] * r.uniform()) best = k;
         m.present[best] = amounts[best] > 0.0f;
     }
     m.root[0] = kAcidLowest + ((key - 2) % 12 + 12) % 12;   // D3 .. C#4
@@ -421,7 +470,9 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, uint64_t seed, int key, int scale
     makeAcid(m, key, scale, seed, temperature);
     makeLead(m, key, scale, seed, temperature);
     makeArp(m, key, scale, seed, temperature);
+    for (int c = 0; c < 4; ++c) m.padVoicing[c] = voiceChord(scale, m.chordDegree[c], key, c > 0 ? &m.padVoicing[c - 1] : nullptr);
     makeSchedule(m, p, seed, bars);
+    makeSfx(m, p, seed, bars);
 
     Rng s;
     s.seed(seed ^ kSaltSound);
@@ -432,7 +483,7 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, uint64_t seed, int key, int scale
         const float o = s.uniform();
         m.leadOsc = o < 0.65f ? static_cast<int>(PolyOsc::Supersaw) : (o < 0.85f ? static_cast<int>(PolyOsc::Fm) : static_cast<int>(PolyOsc::Va));
         static const int kLeft[3] = { 2, 1, 4 }, kRight[3] = { 3, 2, 1 };
-        for (auto& d : m.delay) { d[0] = kLeft[s.below(3)]; d[1] = kRight[s.below(3)]; }
+        for (int k = 0; k < 3; ++k) { m.delay[k][0] = kLeft[s.below(3)]; m.delay[k][1] = kRight[s.below(3)]; }
     }
     return m;
 }
@@ -445,7 +496,7 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
     const float swing = p.get(cb + compose::Swing);
     const double barBeat = static_cast<double>(bar) * kBeatsPerBar;
     const int block = std::min(kMelodyMaxBlocks - 1, barInTrack / 16);
-    const uint8_t parts = allParts ? static_cast<uint8_t>((m.present[0] ? 1 : 0) | (m.present[1] ? 2 : 0) | (m.present[2] ? 4 : 0))
+    const uint8_t parts = allParts ? static_cast<uint8_t>((m.present[0] ? 1 : 0) | (m.present[1] ? 2 : 0) | (m.present[2] ? 4 : 0) | (m.present[3] ? 8 : 0))
                                    : m.blockParts[block];
     auto beatOf = [&](int stepInBar) {
         double b = barBeat + stepInBar * 0.25;
@@ -489,6 +540,62 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         const int jump = (m.arpOctaveJump && (barInTrack / 2) % 2 == 1) ? 12 : 0;
         for (const MelodyNote& n : m.arp[c])
             emit(Part::Arp, n, n.step, m.root[2] + n.rel + jump + 12 * m.arpShift[block], 0.25 * 0.5);
+    }
+    if ((parts & 8) && barInTrack % m.chordBars == 0) {
+        MelodyNote held;
+        held.velocity = 90;
+        // Held to the next chord, a 64th short of it so a repeated pitch takes a fresh voice cleanly.
+        for (int pitch : m.padVoicing[chordIndexAt(m, barInTrack)])
+            emit(Part::Pad, held, 0, pitch, m.chordBars * static_cast<double>(kBeatsPerBar) - 1.0 / 16.0);
+    }
+}
+
+std::vector<int> voiceChord(int scale, int degree, int key, const std::vector<int>* previous)
+{
+    int pcs[3];
+    chordTones(scale, degree, pcs);
+    std::vector<int> cand;
+    for (int n = kPadLowest; n <= kPadHighest; ++n) {
+        const int pc = ((n - key) % 12 + 12) % 12;
+        if (pc == pcs[0] || pc == pcs[1] || pc == pcs[2]) cand.push_back(n);
+    }
+    static const std::vector<int> kReference = { 58, 63, 67, 72 };
+    std::vector<int> best;
+    int bestCost = 1 << 30;
+    const int c = static_cast<int>(cand.size());
+    for (int a = 0; a < c; ++a)
+        for (int b = a + 1; b < c; ++b)
+            for (int d = b + 1; d < c; ++d)
+                for (int e = d + 1; e < c; ++e) {
+                    const std::vector<int> v = { cand[static_cast<size_t>(a)], cand[static_cast<size_t>(b)], cand[static_cast<size_t>(d)], cand[static_cast<size_t>(e)] };
+                    bool has[3] = {};
+                    for (int x : v) for (int k = 0; k < 3; ++k) has[k] = has[k] || ((x - key) % 12 + 12) % 12 == pcs[k];
+                    if (!(has[0] && has[1] && has[2])) continue;
+                    if (v[1] - v[0] > 12 || v[2] - v[1] > 12 || v[3] - v[2] > 12) continue;   // no holes wider than an octave
+                    const int cost = voicingMovement(v, previous != nullptr && previous->size() == 4 ? *previous : kReference);
+                    if (cost < bestCost) { bestCost = cost; best = v; }
+                }
+    return best;
+}
+
+int voicingMovement(const std::vector<int>& a, const std::vector<int>& b)
+{
+    int s = 0;
+    for (size_t i = 0; i < a.size() && i < b.size(); ++i) s += std::abs(a[i] - b[i]);
+    return s;
+}
+
+void composeSfxBar(const MelodyPlan& m, double trackBeat, int barInTrack, std::vector<NoteEvent>& out)
+{
+    for (const SfxEvent& s : m.sfx) {
+        if (static_cast<int>(std::floor(s.beat / kBeatsPerBar)) != barInTrack) continue;
+        NoteEvent e;
+        e.beat = trackBeat + s.beat;
+        e.length = s.length;
+        e.part = Part::Sfx;
+        e.pitch = static_cast<uint8_t>(kSfxBaseNote + s.type);
+        e.velocity = 110;
+        out.push_back(e);
     }
 }
 

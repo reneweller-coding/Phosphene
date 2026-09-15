@@ -10,6 +10,7 @@
 #include "phos/Composer.h"
 #include "phos/Corpus.h"
 #include "phos/DiodeLadder.h"
+#include "phos/Dynamics.h"
 #include "phos/Dsp.h"
 #include "phos/Engine.h"
 #include "phos/Halfband.h"
@@ -22,11 +23,16 @@
 #include "phos/Melody.h"
 #include "phos/Perc.h"
 #include "phos/Poly.h"
+#include "phos/Reverb.h"
 #include "phos/Rhythm.h"
+#include "phos/Sfx.h"
+#include "phos/TranceGate.h"
+#include "phos/WaveTable.h"
 #include "phos/WavWriter.h"
 #include "TestSupport.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -82,7 +88,8 @@ void testParams()
     ParamStore p;
     const int expected = static_cast<int>(compose::Count) + static_cast<int>(kick::Count) + static_cast<int>(bass::Count)
                        + static_cast<int>(mix::Count) + static_cast<int>(master::Count) + kPercLanes * static_cast<int>(perc::Count)
-                       + static_cast<int>(acid::Count) + kPolyInstances * static_cast<int>(poly::Count);
+                       + static_cast<int>(acid::Count) + kPolyInstances * static_cast<int>(poly::Count)
+                       + static_cast<int>(sfx::Count) + static_cast<int>(fx::Count);
     check(p.count() == expected, "every module table registered", fmt("%d parameters", p.count()));
     check(p.find("lead.detune") == p.base(Module::Poly, 0) + poly::Detune && p.find("arp.detune") == p.base(Module::Poly, 1) + poly::Detune
           && p.find("acid.cutoff") == p.base(Module::Acid) + acid::Cutoff && p.get(p.find("arp.amp_sustain")) == 0.0f,
@@ -266,6 +273,7 @@ void testMidi()
 {
     section("MIDI export");
     ParamStore p;
+    p.parseText("compose.level_match=Off master.auto_gain=Off");
     Composer c(5);
     Score s;
     s.tempo.add(0.0, 140.0, true);
@@ -812,7 +820,7 @@ void testComposer()
 {
     section("composer");
     ParamStore p;
-    p.parseText("compose.bass_variation=0");
+    p.parseText("compose.bass_variation=0 compose.level_match=Off master.auto_gain=Off");
     Composer c(7);
     std::vector<NoteEvent> ev;
     c.composeBars(p, 0, 16, ev);
@@ -831,7 +839,7 @@ void testComposer()
     // Every note in its track's scale, over several tracks with everything varying.
     {
         ParamStore q;
-        q.parseText("compose.bass_variation=1 compose.track_variation=1 compose.track_bars=32");
+        q.parseText("compose.bass_variation=1 compose.track_variation=1 compose.track_bars=32 compose.level_match=Off master.auto_gain=Off");
         Composer cc(9);
         std::vector<NoteEvent> e;
         cc.composeBars(q, 0, 320, e);
@@ -848,7 +856,7 @@ void testComposer()
     // Bars and their control events are the same composed alone or in sequence.
     {
         ParamStore q;
-        q.parseText("compose.track_bars=32");
+        q.parseText("compose.track_bars=32 compose.level_match=Off master.auto_gain=Off");
         Composer cc(13);
         std::vector<NoteEvent> seqN, oneN;
         std::vector<ControlEvent> seqC, oneC;
@@ -883,7 +891,9 @@ void testComposer()
 void testVariety()
 {
     section("variety over a night");
+    // The probes of the level match are not what this looks at (they have their own check below).
     ParamStore p;
+    p.parseText("compose.level_match=Off master.auto_gain=Off");
     const int cb = p.base(Module::Compose);
     Composer c(2026);
     const int tracks = 60;
@@ -928,7 +938,7 @@ void testVariety()
     // Variation at zero: every track is the knobs.
     {
         ParamStore q;
-        q.parseText("compose.track_variation=0 compose.sound_variation=0");
+        q.parseText("compose.track_variation=0 compose.sound_variation=0 compose.level_match=Off master.auto_gain=Off");
         Composer cz(2026);
         bool allKnobs = true;
         for (int i = 0; i < 20; ++i) {
@@ -949,7 +959,7 @@ void testVariety()
         auto trackLoudness = [&](bool match, double& spread) {
             auto e = std::make_unique<Engine>();
             e->prepare(48000.0, 512);
-            e->params().parseText(fmt("compose.track_bars=32 compose.sound_variation=1 compose.track_variation=1 compose.level_match=%s", match ? "On" : "Off").c_str());
+            e->params().parseText(fmt("compose.track_bars=32 compose.sound_variation=1 compose.track_variation=1 master.auto_gain=Off master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1 compose.level_match=%s", match ? "On" : "Off").c_str());
             Composer ce(31);
             const int tracksN = 6;
             const TempoMap tm = ce.tempoMap(e->params(), tracksN * 32);
@@ -991,7 +1001,7 @@ void testVariety()
     {
         auto e = std::make_unique<Engine>();
         e->prepare(48000.0, 256);
-        e->params().parseText("compose.track_bars=32 compose.sound_variation=1");
+        e->params().parseText("compose.track_bars=32 compose.sound_variation=1 compose.level_match=Off master.auto_gain=Off");
         Composer ce(77);
         const TempoMap tm = ce.tempoMap(e->params(), 64);
         e->setTempoMap(tm);
@@ -1043,8 +1053,8 @@ void testEngine()
     e->process(L.data(), R.data(), 96000);
     size_t first = 0;
     while (first < L.size() && L[first] == 0.0f) ++first;
-    const double expect = 3.3 * 60.0 / 145.0 * sr;
-    check(std::fabs(static_cast<double>(first) - expect) <= 2.0, "event fires on its sample", fmt("first sound at %zu, beat 3.3 is sample %.2f", first, expect));
+    const double expect = 3.3 * 60.0 / 145.0 * sr + e->latencySamples();
+    check(std::fabs(static_cast<double>(first) - expect) <= 2.0, "event fires on its sample (plus the limiter's reported latency)", fmt("first sound at %zu, beat 3.3 is sample %.2f", first, expect));
 
     auto er = std::make_unique<Engine>();
     er->prepare(sr, 512);
@@ -1061,7 +1071,7 @@ void testEngine()
     er->process(RL.data(), RR.data(), static_cast<int>(total));
     size_t onset = 0;
     while (onset < RL.size() && RL[onset] == 0.0f) ++onset;
-    const double expectRamp = tm.secondsAt(60.0) * sr;
+    const double expectRamp = tm.secondsAt(60.0) * sr + er->latencySamples();
     check(std::fabs(static_cast<double>(onset) - expectRamp) <= 32.0, "event in a tempo ramp lands within a chunk of the integral", fmt("sample %zu vs %.1f", onset, expectRamp));
 
     auto e1 = std::make_unique<Engine>(), e2 = std::make_unique<Engine>();
@@ -1133,7 +1143,7 @@ double measureLock(const char* settings, double bpm, double& spread, double& coh
     auto render = [&](const char* solo, bool keepKick) {
         auto e = std::make_unique<Engine>();
         e->prepare(sr, 256);
-        e->params().parseText(fmt("compose.bpm=%g compose.bass_variation=0 compose.kick_pattern=Four master.clip=Off %s %s", bpm, settings, solo).c_str());
+        e->params().parseText(fmt("compose.bpm=%g compose.bass_variation=0 compose.kick_pattern=Four master.clip=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.auto_gain=Off compose.level_match=Off %s %s", bpm, settings, solo).c_str());
         Composer c(1);
         std::vector<float> y = renderEngine(*e, c, 32.0, 256, sr);
         if (keepKick) { kickModel = e->kick(); kickPhaseAtSlot = e->kick().outputPhaseAt(slotT); }
@@ -1506,6 +1516,7 @@ void testRhythm()
     // Over a night: hat modes, backbeat claps, layer counts and recipes all vary.
     {
         ParamStore q;
+        q.parseText("compose.level_match=Off master.auto_gain=Off");
         Composer c(4242);
         int modes[3] = {}, backbeat = 0, minLayers = 99, maxLayers = 0, overrides = 0;
         double macroSpread = 0.0;
@@ -1918,7 +1929,7 @@ void testMelody()
 {
     section("melody: chords, acid, lead, arp");
     ParamStore p;
-    p.parseText("compose.track_bars=128 compose.acid_amount=0.8 compose.lead_amount=0.8 compose.arp_amount=0.8");
+    p.parseText("compose.track_bars=128 compose.acid_amount=0.8 compose.lead_amount=0.8 compose.arp_amount=0.8 compose.level_match=Off master.auto_gain=Off");
     Composer c(606);
     std::vector<NoteEvent> ev;
     const int tracks = 16;
@@ -1970,6 +1981,7 @@ void testMelody()
     // Variety over a night.
     {
         ParamStore q;
+        q.parseText("compose.level_match=Off master.auto_gain=Off");
         Composer cv(4711);
         std::vector<uint64_t> acids;
         int progressions = 0, styles[4] = {}, oscs[3] = {}, squelch = 0, silent = 0;
@@ -2014,7 +2026,9 @@ void testMelody()
         for (int block : { 1, 77, 1000, 4096 }) {
             auto e = std::make_unique<Engine>();
             e->prepare(48000.0, block);
-            e->params().parseText("compose.track_bars=32 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1");
+            // With pads, the trance gate, effects, both reverbs, the clipper and the limiter as well.
+            e->params().parseText("compose.track_bars=32 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
+                                  "compose.pad_amount=1 compose.gate_chance=1 compose.sfx_amount=1");
             Composer cb(21);
             renders.push_back(renderEngine(*e, cb, 20.0 * kBeatsPerBar, block, 48000.0));
         }
@@ -2046,32 +2060,508 @@ void testMelody()
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Phase 4: wavetables, pads, gate, sidechain, reverb, dynamics, effects, the finished master
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * @brief Power share of everything outside +-6 bins of the harmonics of @p f0 between 100 Hz and 18 kHz.
+ *
+ * Six bins, not three: the Blackman-Harris window's main lobe is four bins either side, and at three the
+ * leakage of the fundamental counted as aliasing (-39 dB where the signal had -80).
+ */
+double inharmonicDb(const std::vector<float>& y, size_t offset, double f0, double sr, double relTolerance = 0.0)
+{
+    constexpr size_t N = 65536;
+    const std::vector<double> pw = powerSpectrum(y.data() + offset, N);
+    double harm = 0.0, rest = 0.0;
+    for (size_t k = 1; k < N / 2; ++k) {
+        const double hz = static_cast<double>(k) * sr / N;
+        if (hz < 100.0 || hz > 18000.0) continue;
+        const double h = std::round(hz / f0);
+        const bool onHarmonic = h >= 1.0 && std::fabs(hz - h * f0) <= 6.0 * sr / N + relTolerance * hz;
+        (onHarmonic ? harm : rest) += pw[k];
+    }
+    return powDb(rest / harm);
+}
+
+void testWaveTable()
+{
+    section("wavetables");
+    const double sr = 48000.0;
+    // The classic table's saw frame: harmonic h at 1/h, phases of a saw.
+    {
+        const WaveTable& t = builtinWaveTable(0);
+        std::vector<float> cyc(4096);
+        for (int n = 0; n < 4096; ++n) cyc[static_cast<size_t>(n)] = t.cycle(0, 2)[n];
+        std::vector<std::complex<double>> a(4096);
+        for (int n = 0; n < 4096; ++n) a[static_cast<size_t>(n)] = cyc[static_cast<size_t>(n)];
+        fft(a);
+        double worst = 0.0;
+        const double a1 = std::abs(a[1]);
+        for (int h = 2; h <= 256; ++h) worst = std::max(worst, std::fabs(20.0 * std::log10(std::abs(a[static_cast<size_t>(h)]) * h / a1)));
+        check(t.frames == 5 && worst < 0.01, "classic table: the saw frame has its harmonics at 1/h up to the 256th", fmt("largest deviation %.4f dB", worst));
+    }
+    // Anti-aliasing: a saw read at A6 from the level the note chooses, against the same saw read from
+    // the full-resolution level.
+    {
+        const WaveTable& t = builtinWaveTable(0);
+        const double f0 = 1760.0;
+        auto render = [&](int level) {
+            std::vector<float> y(65536 + 128);
+            double ph = 0.0;
+            for (size_t i = 0; i < y.size(); ++i) { y[i] = t.sample(level, 2, ph); ph += f0 / sr; if (ph >= 1.0) ph -= 1.0; }
+            return y;
+        };
+        const int lvl = waveLevelFor(f0, sr, -1);
+        const double chosen = inharmonicDb(render(lvl), 64, f0, sr);
+        const double full = inharmonicDb(render(0), 64, f0, sr);
+        // -55 dB: what the Catmull-Rom read leaves with eight samples per cycle of the top harmonic.
+        check(chosen < -55.0 && full > chosen + 30.0, "a note reads the level whose harmonics stay under Nyquist (the full table aliases)",
+              fmt("inharmonic power %.1f dB at the chosen level, %.1f dB from level 0", chosen, full));
+    }
+    // The same through the pad engine: every oscillator of a voice reads the level its own pitch allows.
+    {
+        ParamStore p;
+        auto e = makePoly("pad.table=Classic pad.position=0.5 pad.pos_env=0 pad.pos_lfo_depth=0 pad.detune=0 pad.cutoff=18000 pad.amp_attack=0.3 "
+                          "pad.hp_track=0 pad.hp_floor=150 pad.delay_send=0 pad.width=0", p, PolyInstance::Pad);
+        e->noteOn(93, 1.0f, 8.0, 1 << 20, 0.0);   // A6
+        const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
+        // Szabo's detune polynomial is 0.003 at its zero, so the seven oscillators still spread each harmonic by
+        // 0.03 % of its frequency: that much is counted as the harmonic.
+        const double inh = inharmonicDb(y, 9600, midiToHz(93), 48000.0, 0.0004);
+        check(inh < -55.0, "pad engine at A6: the wavetable oscillators alias no more than the table read itself", fmt("inharmonic power %.1f dB", inh));
+    }
+    // Vocal table: the second formant moves up from a to i.
+    {
+        const WaveTable& t = builtinWaveTable(1);
+        auto harmonicDb = [&](int frame, int h) {
+            std::vector<std::complex<double>> a(4096);
+            for (int n = 0; n < 4096; ++n) a[static_cast<size_t>(n)] = t.cycle(0, frame)[n];
+            fft(a);
+            return 20.0 * std::log10(std::abs(a[static_cast<size_t>(h)]) * h);   // relative to the saw's 1/h
+        };
+        // Frame 16 of 32 lies at vowel i, frame 0 at a. The first formant falls from 730 Hz (a) to 270 Hz (i):
+        // harmonic 2 of C3 (262 Hz) must grow and harmonic 6 (785 Hz) fall. (The second formant is a poor
+        // witness: the third formant of a sits next to the second of i.)
+        const double rise = harmonicDb(16, 2) - harmonicDb(0, 2), fall = harmonicDb(0, 6) - harmonicDb(16, 6);
+        check(rise > 10.0 && fall > 10.0, "vocal table: the first formant moves from 730 Hz (a) down to 270 Hz (i)",
+              fmt("harmonic 2 %+.1f dB, harmonic 6 %+.1f dB", rise, -fall));
+    }
+}
+
+void testPads()
+{
+    section("pads: voicings");
+    // Voice leading against an independent enumeration.
+    Rng r;
+    r.seed(99);
+    int mismatches = 0, badNotes = 0, cases = 0;
+    for (int trial = 0; trial < 200; ++trial) {
+        const int scale = r.below(kNumScales), key = r.below(12);
+        std::vector<int> prev = voiceChord(scale, r.below(7), key, nullptr);
+        const int degree = r.below(7);
+        const std::vector<int> got = voiceChord(scale, degree, key, &prev);
+        int pcs[3];
+        chordTones(scale, degree, pcs);
+        int best = 1 << 30;
+        for (int a = kPadLowest; a <= kPadHighest; ++a)
+            for (int b = a + 1; b <= kPadHighest; ++b)
+                for (int c = b + 1; c <= kPadHighest; ++c)
+                    for (int d = c + 1; d <= kPadHighest; ++d) {
+                        const int v[4] = { a, b, c, d };
+                        bool ok = b - a <= 12 && c - b <= 12 && d - c <= 12, has[3] = {};
+                        for (int x : v) {
+                            const int pc = ((x - key) % 12 + 12) % 12;
+                            bool tone = false;
+                            for (int k = 0; k < 3; ++k) if (pc == pcs[k]) { has[k] = true; tone = true; }
+                            ok = ok && tone;
+                        }
+                        if (!ok || !(has[0] && has[1] && has[2])) continue;
+                        best = std::min(best, std::abs(a - prev[0]) + std::abs(b - prev[1]) + std::abs(c - prev[2]) + std::abs(d - prev[3]));
+                    }
+        ++cases;
+        if (got.size() != 4 || voicingMovement(got, prev) != best) ++mismatches;
+        for (int x : got) if (x < kPadLowest || x > kPadHighest) ++badNotes;
+    }
+    check(mismatches == 0 && badNotes == 0, "every pad voicing moves the voices as little as any valid voicing could",
+          fmt("%d of %d differ from brute force, %d notes out of range", mismatches, cases, badNotes));
+
+    // In the score: pad notes are chord tones of their bar, held to the next chord.
+    ParamStore p;
+    p.parseText("compose.track_bars=64 compose.pad_amount=1 compose.level_match=Off master.auto_gain=Off");
+    Composer c(515);
+    std::vector<NoteEvent> ev;
+    c.composeBars(p, 0, 8 * 64, ev);
+    int pads = 0, off = 0;
+    for (const NoteEvent& e : ev) {
+        if (e.part != Part::Pad) continue;
+        const int bar = static_cast<int>(e.beat / kBeatsPerBar);
+        const TrackPlan& t = c.track(p, c.trackOfBar(p, bar));
+        int pcs[3];
+        chordTones(t.scale, t.melody.chordDegree[chordIndexAt(t.melody, bar - t.firstBar)], pcs);
+        const int pc = ((e.pitch - t.key) % 12 + 12) % 12;
+        ++pads;
+        if (!(pc == pcs[0] || pc == pcs[1] || pc == pcs[2]) || e.pitch < kPadLowest) ++off;
+    }
+    check(pads > 100 && off == 0, "pad notes are chord tones of their bar, G3 and above", fmt("%d of %d off", off, pads));
+}
+
+void testGateAndDuck()
+{
+    section("trance gate and sidechain");
+    // The gate's opening: raised-cosine edges, open for the duty cycle, closed after.
+    {
+        const double a = 0.02, rel = 0.03;
+        const float mid = TranceGate::open(0.0 + 0.5 * a, 0, 0.5f, a, rel);
+        const float held = TranceGate::open(0.1, 0, 0.5f, a, rel);
+        const float falling = TranceGate::open(0.125 + 0.5 * rel, 0, 0.5f, a, rel);
+        const float closed = TranceGate::open(0.2, 0, 0.5f, a, rel);
+        const float offStep = TranceGate::open(0.01, 2, 0.5f, a, rel);   // rolling: the first sixteenth of a beat is off
+        check(std::fabs(mid - 0.5f) < 1e-6f && held == 1.0f && std::fabs(falling - 0.5f) < 1e-6f && closed == 0.0f && offStep == 0.0f,
+              "gate: half open halfway up each raised-cosine edge, open for the duty cycle, shut after and on pattern rests",
+              fmt("%.3f %.3f %.3f %.3f %.3f", static_cast<double>(mid), static_cast<double>(held), static_cast<double>(falling), static_cast<double>(closed), static_cast<double>(offStep)));
+    }
+    // The gate and the duck in the engine, on a held pad chord.
+    auto render = [](const char* settings) {
+        auto e = std::make_unique<Engine>();
+        e->prepare(48000.0, 256);
+        e->params().parseText(fmt("mix.kick_mute=1 mix.bass_mute=1 mix.perc_mute=1 master.limiter=Off master.clipper=Off master.clip=Off "
+                                  "master.comp_ratio=1 fx.hall_return=-36 fx.room_return=-36 pad.hall_send=0 pad.amp_attack=1 %s", settings).c_str());
+        for (int pitch : { 60, 64, 67, 71 }) {
+            NoteEvent n;
+            n.part = Part::Pad; n.pitch = static_cast<uint8_t>(pitch); n.length = 64.0f; n.velocity = 100;
+            e->pushEvent(n);
+        }
+        for (int b = 0; b < 32; ++b) {
+            NoteEvent k;
+            k.part = Part::Kick; k.beat = b; k.velocity = 127;
+            e->pushEvent(k);
+        }
+        std::vector<float> L(48000 * 12), R(48000 * 12);
+        e->process(L.data(), R.data(), static_cast<int>(L.size()));
+        return L;
+    };
+    const double beat = 60.0 / 145.0 * 48000.0;
+    auto windowDb = [&](const std::vector<float>& y, double fromBeat, double toBeat) {
+        double s = 0.0;
+        size_t n = 0;
+        for (int b = 8; b < 24; ++b)
+            for (size_t i = static_cast<size_t>((b + fromBeat) * beat); i < static_cast<size_t>((b + toBeat) * beat); ++i) { s += static_cast<double>(y[i]) * y[i]; ++n; }
+        return 10.0 * std::log10(s / n);
+    };
+    {
+        const std::vector<float> gated = render("pad.duck=0 pad.gate=On pad.gate_pattern=Eighths pad.gate_depth=0.9 pad.gate_duty=0.5 pad.gate_tone=0");
+        // Eighths: open in the first half of each eighth (0 .. 0.25 beats), shut in the second.
+        const double open = windowDb(gated, 0.03, 0.22), shut = windowDb(gated, 0.28, 0.47);
+        const double want = 20.0 * std::log10(1.0 - 0.9);
+        check(std::fabs((shut - open) - want) < 1.0, "gate at depth 0.9 takes the closed half of each eighth 20 dB down", fmt("%.1f dB (expected %.1f)", shut - open, want));
+    }
+    {
+        const std::vector<float> ducked = render("pad.duck=0.5 mix.duck_attack=1 mix.duck_hold=40 mix.duck_release=100");
+        const double early = windowDb(ducked, 0.01, 0.08), late = windowDb(ducked, 0.6, 0.9);
+        check(std::fabs((early - late) - 20.0 * std::log10(0.5)) < 0.7, "kick sidechain: the pad sits 6 dB down while the duck holds, back after",
+              fmt("%.2f dB", early - late));
+    }
+}
+
+void testReverb()
+{
+    section("send reverbs");
+    const double sr = 48000.0;
+    Reverb rv;
+    rv.prepare(sr);
+    rv.set(1.6f, 2.0f, 0.2f, 0.0f, 150.0f, 20000.0f);
+    const size_t n = static_cast<size_t>(sr * 4.0);
+    std::vector<float> inL(n, 0.0f), inR(n, 0.0f), outL(n), outR(n);
+    // A burst of noise, so the tail is dense from the start.
+    Rng r;
+    for (size_t i = 0; i < 480; ++i) { inL[i] = r.bipolar(); inR[i] = r.bipolar(); }
+    rv.process(inL.data(), inR.data(), outL.data(), outR.data(), static_cast<int>(n));
+    // Schroeder backward integration of the energy, T20 fitted between -5 and -25 dB, times three.
+    std::vector<double> edc(n);
+    double acc = 0.0;
+    for (size_t i = n; i-- > 0;) { acc += static_cast<double>(outL[i]) * outL[i] + static_cast<double>(outR[i]) * outR[i]; edc[i] = acc; }
+    size_t i5 = 0, i25 = 0;
+    for (size_t i = 0; i < n; ++i) {
+        const double db = 10.0 * std::log10(edc[i] / edc[0]);
+        if (i5 == 0 && db <= -5.0) i5 = i;
+        if (i25 == 0 && db <= -25.0) { i25 = i; break; }
+    }
+    const double t60 = 3.0 * static_cast<double>(i25 - i5) / sr;
+    check(std::fabs(t60 / 2.0 - 1.0) < 0.15, "hall: measured decay time within 15 % of the setting", fmt("T60 %.2f s for 2.00 s", t60));
+    std::vector<float> mono(n);
+    for (size_t i = 0; i < n; ++i) mono[i] = 0.5f * (outL[i] + outR[i]);
+    // Noise in, so the return's own spectrum shows.
+    Reverb rv2;
+    rv2.prepare(sr);
+    rv2.set(1.6f, 4.0f, 0.4f, 0.0f, 300.0f, 9000.0f);
+    for (size_t i = 0; i < n; ++i) { inL[i] = r.bipolar(); inR[i] = r.bipolar(); }
+    rv2.process(inL.data(), inR.data(), outL.data(), outR.data(), static_cast<int>(n));
+    for (size_t i = 0; i < n; ++i) mono[i] = 0.5f * (outL[i] + outR[i]);
+    const double low = lowShareDb(std::vector<float>(mono.begin() + 48000, mono.begin() + 48000 + 131072), 140.0, true);
+    check(low < -30.0, "reverb return with white noise in: under -30 dB of its power below 140 Hz", fmt("%.1f dB", low));
+}
+
+void testDynamics()
+{
+    section("master dynamics");
+    const double sr = 48000.0;
+    // Compressor: the static curve against Giannoulis et al. eq. 4, and the settled gain on steady input.
+    {
+        BusCompressor c;
+        c.prepare(sr);
+        c.set(-20.0f, 4.0f, 10.0f, 5.0f, 50.0f);
+        const double knee = c.curve(-20.0), above = c.curve(-5.0), below = c.curve(-30.0);
+        const bool formula = std::fabs(knee - (-20.0 - 0.75 * 25.0 / 20.0)) < 1e-9 && std::fabs(above - (-20.0 + 15.0 / 4.0)) < 1e-9 && below == -30.0;
+        double worst = 0.0;
+        for (double level : { -40.0, -24.0, -20.0, -15.0, -6.0, 0.0 }) {
+            BusCompressor d;
+            d.prepare(sr);
+            d.set(-20.0f, 4.0f, 10.0f, 5.0f, 50.0f);
+            std::vector<float> L(48000, static_cast<float>(std::pow(10.0, level / 20.0))), R = L;
+            d.process(L.data(), R.data(), 48000);
+            worst = std::max(worst, std::fabs(20.0 * std::log10(L.back()) - d.curve(level)));
+        }
+        check(formula && worst < 0.01, "bus compressor: soft-knee curve of Giannoulis et al. and the gain it settles to", fmt("largest deviation %.4f dB", worst));
+    }
+    // True-peak estimate on sines between the samples.
+    {
+        TruePeakInterpolator tp;
+        double worst = 0.0, naive = 1.0;
+        for (double f : { 0.02, 0.05, 0.13, 0.2, 0.25 }) {
+            for (double phase : { 0.0, 0.3, 0.785398, 1.7 }) {
+                std::vector<float> x(64);
+                for (int i = 0; i < 64; ++i) x[static_cast<size_t>(i)] = static_cast<float>(std::sin(2.0 * kPiD * f * i + phase));
+                double est = 0.0, samplePeak = 0.0;
+                for (int i = 8; i < 56; ++i) {
+                    est = std::max({ est, std::fabs(static_cast<double>(x[static_cast<size_t>(i)])), tp.between(x.data() + i) });
+                    samplePeak = std::max(samplePeak, std::fabs(static_cast<double>(x[static_cast<size_t>(i)])));
+                }
+                worst = std::max(worst, std::fabs(20.0 * std::log10(est)));
+                naive = std::min(naive, samplePeak);
+            }
+        }
+        // Four points per sample cannot see the crest of a sine at 0.25 fs to better than cos(pi/16): 0.17 dB.
+        check(worst < 0.17 && naive < 0.75, "true peak of sines up to 0.25 fs within the 0.17 dB of 4x sampling (their largest samples read up to 3 dB low)",
+              fmt("worst %.3f dB; lowest sample peak %.2f dB", worst, 20.0 * std::log10(naive)));
+    }
+    // Limiter: program 12 dB over the ceiling comes out at the ceiling, measured with an exact band-limited
+    // 16x interpolation; below the ceiling the signal passes, only delayed.
+    {
+        constexpr size_t N = 1u << 15;
+        // Program-like material: a decaying 60 Hz kick every beat, tones at 7 and 9 kHz and noise low-passed
+        // at 10 kHz (music has little energy near Nyquist, where 4x interpolation cannot see the peaks).
+        Rng r;
+        Svf nlL, nlR;
+        nlL.setQ(10000.0f, 0.707f, 48000.0f);
+        nlR.copyCoefficients(nlL);
+        std::vector<float> L(N), R(N);
+        for (size_t i = 0; i < N; ++i) {
+            const double t = static_cast<double>(i) / sr;
+            const double beatPos = std::fmod(t * 145.0 / 60.0, 1.0);
+            const double kick = std::exp(-beatPos * 40.0) * std::sin(2.0 * kPiD * 60.0 * t);
+            const float nl = nlL.lp(r.bipolar()), nr = nlR.lp(r.bipolar());
+            L[i] = static_cast<float>(3.5 * (0.6 * kick + 0.3 * std::sin(2.0 * kPiD * 7000.0 * t + 0.7) + 0.3 * nl));
+            R[i] = static_cast<float>(3.5 * (0.6 * kick + 0.3 * std::sin(2.0 * kPiD * 9000.0 * t) + 0.3 * nr));
+        }
+        auto exactTruePeak = [&](const std::vector<float>& x, size_t from) {
+            constexpr size_t M = 1u << 13;
+            double peak = 0.0;
+            for (size_t start = from; start + M <= x.size(); start += M / 2) {
+                std::vector<std::complex<double>> a(M), b(M * 16);
+                for (size_t i = 0; i < M; ++i) a[i] = x[start + i];
+                fft(a);
+                for (size_t k = 0; k < M / 2; ++k) { b[k] = a[k]; b[M * 16 - 1 - k] = a[M - 1 - k]; }
+                // inverse by forward FFT of the reversed spectrum: b holds X(k); x(t) = (1/M) sum X(k) e^{+j..}
+                std::vector<std::complex<double>> c(M * 16);
+                for (size_t k = 0; k < M * 16; ++k) c[k] = b[(M * 16 - k) % (M * 16)];
+                fft(c);
+                for (size_t i = M * 4; i < M * 12; ++i) peak = std::max(peak, std::fabs(c[i].real()) / M);
+            }
+            return peak;
+        };
+        TruePeakLimiter lim;
+        lim.prepare(sr, 1.5f);
+        lim.set(-1.0f, 20.0f);
+        std::vector<float> yl = L, yr = R;
+        lim.process(yl.data(), yr.data(), static_cast<int>(N));
+        const double tpOut = 20.0 * std::log10(std::max(exactTruePeak(yl, 4096), exactTruePeak(yr, 4096)));
+        // The same program only sample-clipped at the ceiling shows what the true-peak estimate is for.
+        std::vector<float> cl = L;
+        const float ceil1 = dbToGain(-1.0f);
+        for (float& v : cl) v = clampv(v, -ceil1, ceil1);
+        const double tpClip = 20.0 * std::log10(exactTruePeak(cl, 4096));
+        // Below the ceiling: delayed by the latency, otherwise untouched.
+        TruePeakLimiter quiet;
+        quiet.prepare(sr, 1.5f);
+        quiet.set(-1.0f, 20.0f);
+        std::vector<float> ql(4096), qr(4096);
+        for (size_t i = 0; i < 4096; ++i) { ql[i] = 0.1f * static_cast<float>(std::sin(0.01 * i)); qr[i] = ql[i]; }
+        std::vector<float> ol = ql, orr = qr;
+        quiet.process(ol.data(), orr.data(), 4096);
+        bool passes = true;
+        const int lat = quiet.latency();
+        for (size_t i = static_cast<size_t>(lat); i < 4096; ++i) passes = passes && ol[i] == ql[i - static_cast<size_t>(lat)];
+        // The gain falls as a ramp over the lookahead window, not as a step: a quiet constant with one spike
+        // shows the gain directly (output over the delayed input).
+        TruePeakLimiter ramp;
+        ramp.prepare(sr, 1.5f);
+        ramp.set(-1.0f, 20.0f);
+        std::vector<float> dl(4096, 0.1f), dr(4096, 0.1f);
+        dl[2000] = dr[2000] = 3.0f;
+        std::vector<float> gl = dl, gr = dr;
+        ramp.process(gl.data(), gr.data(), 4096);
+        double largestStep = 0.0, deepest = 1.0;
+        for (size_t i = static_cast<size_t>(lat) + 1; i < 4096; ++i) {
+            const size_t src = i - static_cast<size_t>(lat);
+            if (src == 2000 || src - 1 == 2000) continue;
+            const double g0 = gl[i - 1] / dl[src - 1], g1 = gl[i] / dl[src];
+            largestStep = std::max(largestStep, std::fabs(g1 - g0));
+            deepest = std::min(deepest, g1);
+        }
+        const int window = lat - TruePeakInterpolator::kHalf + 1;
+        check(largestStep <= (1.0 - deepest) / window * 1.05 + 1e-6, "limiter: the gain ramps down over the lookahead window instead of stepping",
+              fmt("largest change %.4f per sample, reduction to %.3f over %d samples", largestStep, deepest, window));
+        check(tpOut <= -1.0 + 0.17 && tpClip > 0.0 && passes, "limiter: 12 dB over the ceiling comes out at -1 dBTP within 4x sampling (a sample clip leaves intersample overs); quiet input only delayed",
+              fmt("true peak %.2f dBTP limited, %+.2f dBTP sample-clipped; latency %d samples", tpOut, tpClip, lat));
+    }
+}
+
+void testSfx()
+{
+    section("effects");
+    const double sr = 48000.0;
+    ParamStore p;
+    auto renderType = [&](SfxType type, double seconds, double tail) {
+        Sfx s;
+        s.prepare(sr);
+        std::vector<float> v = moduleValues(p, Module::Sfx);
+        s.update(v.data(), 6);
+        s.trigger(type, static_cast<int>(seconds * sr), 1.0f, 0.0);
+        return renderMono([&](float* L, float* R, int n) { s.process(L, R, n); }, static_cast<size_t>((seconds + tail) * sr));
+    };
+    auto rms = [](const std::vector<float>& y, size_t a, size_t n) { double e = 0.0; for (size_t i = a; i < a + n && i < y.size(); ++i) e += static_cast<double>(y[i]) * y[i]; return 10.0 * std::log10(e / n + 1e-30); };
+    {
+        const std::vector<float> y = renderType(SfxType::Riser, 4.0, 0.2);
+        const double first = rms(y, 4800, 19200), last = rms(y, 172800, 19200), after = rms(y, 196800, 4800);
+        std::vector<float> a(y.begin() + 9600, y.begin() + 9600 + 4096), b(y.begin() + 180000, y.begin() + 180000 + 4096);
+        const double c0 = centroid(a.data(), sr, 4096), c1 = centroid(b.data(), sr, 4096);
+        check(last > first + 20.0 && c1 > 3.0 * c0 && after < last - 40.0, "riser: louder and brighter to its end, silent 20 ms after it",
+              fmt("%+.1f dB, centroid %.0f -> %.0f Hz, %.1f dB after the end", last - first, c0, c1, after - last));
+    }
+    {
+        const std::vector<float> y = renderType(SfxType::ReverseSwell, 2.0, 0.1);
+        double best = -1e9;
+        size_t at = 0;
+        for (size_t i = 0; i + 2400 <= 96000; i += 2400) { const double v = rms(y, i, 2400); if (v > best) { best = v; at = i; } }
+        check(at >= 96000 - 4800, "reverse swell: loudest in the last 100 ms before its target", fmt("loudest window at %.2f s of 2.00 s", at / sr));
+    }
+    {
+        const std::vector<float> y = renderType(SfxType::Impact, 0.5, 1.5);
+        double best = -1e9;
+        size_t at = 0;
+        for (size_t i = 0; i + 240 <= 48000; i += 240) { const double v = rms(y, i, 240); if (v > best) { best = v; at = i; } }
+        check(at < 960 && rms(y, 48000, 4800) < rms(y, 0, 4800) - 20.0, "impact: loudest 5 ms window within the first 20 ms, 20 dB down after a second",
+              fmt("loudest window at %.1f ms", 1000.0 * at / sr));
+    }
+    {
+        double worst = -1e9;
+        for (int k = 0; k < kNumSfxTypes; ++k) {
+            const std::vector<float> y = renderType(static_cast<SfxType>(k), 2.0, 0.8);
+            worst = std::max(worst, lowShareDb(y, 140.0, true));
+        }
+        check(worst < -30.0, "every effect type: under -30 dB of its power below 140 Hz", fmt("worst %.1f dB", worst));
+    }
+    // Placement: impacts on block downbeats where a part enters, the formant shot a beat before, risers ending there.
+    {
+        ParamStore q;
+        q.parseText("compose.sfx_amount=1 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off");
+        Composer c(303);
+        int impacts = 0, misplaced = 0, shots = 0, risers = 0;
+        for (int ti = 0; ti < 8; ++ti) {
+            const TrackPlan t = c.track(q, ti);
+            for (const SfxEvent& s : t.melody.sfx) {
+                const double end = s.beat + s.length;
+                const int blockAt = static_cast<int>(std::lround(s.beat / (16.0 * kBeatsPerBar)));
+                if (s.type == static_cast<int>(SfxType::Impact)) {
+                    ++impacts;
+                    const int b = static_cast<int>(s.beat / (16.0 * kBeatsPerBar));
+                    const bool onDownbeat = std::fmod(s.beat, 16.0 * kBeatsPerBar) == 0.0;
+                    const bool enters = b >= 1 && ((t.melody.blockParts[b] & 7) & ~(t.melody.blockParts[b - 1] & 7)) != 0;
+                    if (!onDownbeat || !enters) ++misplaced;
+                }
+                if (s.type == static_cast<int>(SfxType::FormantShot)) { ++shots; if (std::fmod(s.beat + 1.0, 16.0 * kBeatsPerBar) != 0.0) ++misplaced; }
+                if (s.type == static_cast<int>(SfxType::Riser)) { ++risers; if (std::fmod(end, 16.0 * kBeatsPerBar) != 0.0) ++misplaced; }
+                (void)blockAt;
+            }
+        }
+        check(impacts > 0 && shots > 0 && risers > 0 && misplaced == 0, "effects sit on the block where a part enters: impact on its downbeat, formant shot a beat before, riser ending on it",
+              fmt("%d impacts, %d formant shots, %d risers, %d misplaced", impacts, shots, risers, misplaced));
+    }
+}
+
+void testMaster()
+{
+    section("the finished track (Phase 4 milestone)");
+    // A complete track of eight minutes at the defaults, through the whole master.
+    auto e = std::make_unique<Engine>();
+    e->prepare(48000.0, 512);
+    e->params().parseText("compose.track_bars=288 compose.pad_amount=1 compose.sfx_amount=1");
+    Composer c(8);
+    const double target = e->params().get(e->params().base(Module::Master) + master::TargetLufs);
+    const TempoMap tm = c.tempoMap(e->params(), 288);
+    e->setTempoMap(tm);
+    Conductor cond(*e, c);
+    const uint64_t total = static_cast<uint64_t>(tm.secondsAt(288.0 * kBeatsPerBar) * 48000.0);
+    std::vector<float> L(512), R(512);
+    while (e->samplePosition() < total) {
+        cond.pump(e->params(), 32.0);
+        e->process(L.data(), R.data(), static_cast<int>(std::min<uint64_t>(512, total - e->samplePosition())));
+    }
+    const LoudnessReading rd = e->meter();
+    check(std::fabs(rd.integrated - target) < 1.0 && rd.truePeak <= -0.9f && rd.seconds > 470.0f,
+          "eight-minute track at the defaults: integrated loudness within 1 LU of the target, true peak at the -1 dBTP ceiling",
+          fmt("%.1f s, %.2f LUFS (target %.1f), true peak %.2f dBTP, range %.1f LU", static_cast<double>(rd.seconds), static_cast<double>(rd.integrated), target,
+              static_cast<double>(rd.truePeak), static_cast<double>(rd.range)));
+}
+
 } // namespace
 
 int main()
 {
     std::printf("phos_selftest (vector path %s)\n", kVecPathName);
-    testSampler();
-    testDiodeLadder();
-    testAcid();
-    testPoly();
-    testMelody();
-    testParams();
-    testTempo();
-    testHalfband();
-    testOscillator();
-    testLadder();
-    testKick();
-    testBass();
-    testComposer();
-    testVariety();
-    testEngine();
-    testPhaseLock();
-    testPercKit();
-    testRhythm();
-    testMidi();
-    testMidiKeys();
-    testWav();
-    testLoudness();
+    // PHOS_ONLY=testName[,testName...] runs only those tests (for work on one building block).
+    const char* only = std::getenv("PHOS_ONLY");
+    auto run = [&](const char* name, void (*fn)()) { if (only == nullptr || std::strstr(only, name) != nullptr) fn(); };
+    run("testSampler", testSampler);
+    run("testDiodeLadder", testDiodeLadder);
+    run("testAcid", testAcid);
+    run("testPoly", testPoly);
+    run("testMelody", testMelody);
+    run("testWaveTable", testWaveTable);
+    run("testPads", testPads);
+    run("testGateAndDuck", testGateAndDuck);
+    run("testReverb", testReverb);
+    run("testDynamics", testDynamics);
+    run("testSfx", testSfx);
+    run("testMaster", testMaster);
+    run("testParams", testParams);
+    run("testTempo", testTempo);
+    run("testHalfband", testHalfband);
+    run("testOscillator", testOscillator);
+    run("testLadder", testLadder);
+    run("testKick", testKick);
+    run("testBass", testBass);
+    run("testComposer", testComposer);
+    run("testVariety", testVariety);
+    run("testEngine", testEngine);
+    run("testPhaseLock", testPhaseLock);
+    run("testPercKit", testPercKit);
+    run("testRhythm", testRhythm);
+    run("testMidi", testMidi);
+    run("testMidiKeys", testMidiKeys);
+    run("testWav", testWav);
+    run("testLoudness", testLoudness);
     return finish();
 }

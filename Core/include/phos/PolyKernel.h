@@ -42,7 +42,7 @@ struct PolySlots {
     alignas(32) float idxDecay[kPolySlots] = {}; ///< FM index factor per sample
     alignas(32) float idxFloor[kPolySlots] = {}; ///< FM index that remains
     alignas(32) float pw[kPolySlots] = {};       ///< pulse width
-    alignas(32) float wSaw[kPolySlots] = {}, wPulse[kPolySlots] = {}, wFm[kPolySlots] = {};   ///< source weights
+    alignas(32) float wSaw[kPolySlots] = {}, wPulse[kPolySlots] = {}, wFm[kPolySlots] = {}, wWt[kPolySlots] = {};   ///< source weights
     alignas(32) float gL[kPolySlots] = {}, gR[kPolySlots] = {};   ///< slot gain and pan
 };
 
@@ -75,17 +75,19 @@ inline V laneSin01(V p)
 
 /**
  * @brief Renders @p n samples of the slots [slot, slot + laneWidth<V>()).
+ * @param wt        per sample and slot: the wavetable oscillator's sample, read on the scalar side
+ *                  (a table read is a gather, which NEON does not have; see Poly.cpp)
  * @param outL,outR per sample and slot (index i * kPolySlots + slot)
  */
 template <class V>
-void polySlotKernel(PolySlots& s, int slot, int n, float* outL, float* outR)
+void polySlotKernel(PolySlots& s, int slot, int n, const float* wt, float* outL, float* outR)
 {
     auto at = [slot](const float* a) { return loadLanes<V>(a + slot); };
     const V zero = lanes<V>(0.0f), one = lanes<V>(1.0f), two = lanes<V>(2.0f);
     const V invTwoPi = lanes<V>(0.159154943f);
     V ph = at(s.ph), mph = at(s.mph), idx = at(s.idx);
     const V dt = at(s.dt), inv = at(s.inv), mdt = at(s.mdt), idxDecay = at(s.idxDecay), idxFloor = at(s.idxFloor);
-    const V pw = at(s.pw), wSaw = at(s.wSaw), wPulse = at(s.wPulse), wFm = at(s.wFm), gL = at(s.gL), gR = at(s.gR);
+    const V pw = at(s.pw), wSaw = at(s.wSaw), wPulse = at(s.wPulse), wFm = at(s.wFm), wWt = at(s.wWt), gL = at(s.gL), gR = at(s.gR);
     auto blep = [&](V t) {
         const V x1 = t * inv;
         V r = vselect(vlt(t, dt), x1 + x1 - x1 * x1 - one, zero);
@@ -101,8 +103,8 @@ void polySlotKernel(PolySlots& s, int slot, int n, float* outL, float* outR)
         const V pulse = -(vselect(vlt(t, pw), one, -one) + bt - blep(t2));
         const V m = laneSin01(mph);
         const V fm = laneSin01(t + (idxFloor + idx) * m * invTwoPi);
-        const V out = wSaw * saw + wPulse * pulse + wFm * fm;
         const int row = i * kPolySlots + slot;
+        const V out = wSaw * saw + wPulse * pulse + wFm * fm + wWt * loadLanes<V>(wt + row);
         vstore(outL + row, out * gL);
         vstore(outR + row, out * gR);
         V np = t + dt;

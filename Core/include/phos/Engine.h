@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file Engine.h
  * @brief The engine: plays score events sample-accurately through the generators, mixer and master.
  *
@@ -18,12 +18,25 @@
  * are applied that depend on tempo and pattern: the kick's tail limit at the first bass slot, and
  * the kick lock between the kick's phase and the bass's start phase.
  *
+ * **Signal flow.** Every generator renders into its own buffer. Its channel strip applies the level, the
+ * kick's sidechain duck (event-driven, Ducker.h), the trance gate for lead, arp and pad (TranceGate.h),
+ * and sends to a short room and a long hall (Reverb.h), whose returns are ducked as well. The master
+ * sums everything, applies the gain (knob, the track's level match and the composer's loudness offset),
+ * the bus compressor, mono bass (the side signal high-passed), the lookahead true-peak limiter and a
+ * final safety clip at the ceiling, and meters the result to BS.1770 (Dynamics.h, Loudness.h). With the
+ * limiter on, the output is delayed by latencySamples().
+ *
  * **Threads.** process() runs on the audio thread and never allocates. The push functions may be
  * called from one other thread. Parameters may be written from any thread.
  */
 #pragma once
 #include "phos/Acid.h"
 #include "phos/Bass.h"
+#include "phos/Dynamics.h"
+#include "phos/Loudness.h"
+#include "phos/Reverb.h"
+#include "phos/Sfx.h"
+#include "phos/TranceGate.h"
 #include "phos/Clock.h"
 #include "phos/Kick.h"
 #include "phos/Params.h"
@@ -83,6 +96,17 @@ public:
     const Acid& acid() const { return acid_; }
     /** @brief A polyphonic engine (lead or arp), for tests and displays. */
     const Poly& poly(PolyInstance i) const { return poly_[static_cast<int>(i)]; }
+    /** @brief The effect generator, for tests and displays. */
+    const Sfx& sfx() const { return sfx_; }
+    /** @brief Samples by which the output lags the events (the limiter's lookahead; 0 when it is off). */
+    int latencySamples() const { return limiterOn_ ? limiter_.latency() : 0; }
+    /** @brief The meter on the master output (audio thread; read it when not processing). */
+    LoudnessReading meter() const { return meter_.read(); }
+    /** @brief Restarts the meter. */
+    void resetMeter() { meter_.reset(); }
+    /** @brief Gain reduction of the bus compressor and the limiter at the end of the last block, dB. */
+    float compReduction() const { return comp_.reduction(); }
+    float limiterReduction() const { return limiter_.reduction(); }   ///< @copydoc compReduction
     /** @brief Effective value of a parameter as last applied (audio thread view). */
     float effective(int id) const;
 
@@ -138,9 +162,34 @@ private:
 
     Acid acid_;
     Poly poly_[kPolyInstances];
-    float acidGain_ = 1.0f;
-    float polyGain_[kPolyInstances] = { 1.0f, 1.0f };
-    std::vector<float> acidL_, acidR_, polyL_[kPolyInstances], polyR_[kPolyInstances];
+    Sfx sfx_;
+    std::vector<float> acidL_, acidR_, polyL_[kPolyInstances], polyR_[kPolyInstances], sfxL_, sfxR_;
+
+    /** @brief Channel strips of the parts after kick and bass, in this order. */
+    enum Strip : int { StripPerc = 0, StripAcid, StripLead, StripArp, StripPad, StripSfx, StripCount };
+    float stripGain_[StripCount] = {};
+    float stripRoom_[StripCount] = {}, stripHall_[StripCount] = {};
+    Ducker duck_[StripCount];
+    Ducker returnDuck_;
+    TranceGate gate_[kPolyInstances];
+    bool  gateOn_[kPolyInstances] = {};
+    int   gatePattern_[kPolyInstances] = {};
+    float gateDepth_[kPolyInstances] = {}, gateDuty_[kPolyInstances] = {}, gateTone_[kPolyInstances] = {};
+    double gateAttack_[kPolyInstances] = {}, gateRelease_[kPolyInstances] = {};
+
+    Reverb room_, hall_;
+    float roomReturn_ = 0.5f, hallReturn_ = 0.5f;
+    std::vector<float> roomInL_, roomInR_, hallInL_, hallInR_, roomOutL_, roomOutR_, hallOutL_, hallOutR_;
+
+    BusCompressor comp_;
+    Svf sideHp1_, sideHp2_;
+    HalfbandUp<float> clipUpL_, clipUpR_;
+    HalfbandDown<float> clipDownL_, clipDownR_;
+    bool clipperOn_ = true;
+    float clipperT_ = 1.0f;
+    TruePeakLimiter limiter_;
+    bool limiterOn_ = true;
+    LoudnessMeter meter_;
 };
 
 } // namespace phos
