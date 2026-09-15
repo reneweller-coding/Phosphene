@@ -2087,6 +2087,56 @@ void testPoly()
         }
         check(worst < -45.0, "FM: the index is limited to the bandwidth Carson's rule allows, so a high note does not alias over its own carrier", detail);
     }
+    // The supersaw reads the saw frame, not the instance's table and position: two engines whose
+    // table, position, position envelope and LFO stand at opposite ends must give the same samples.
+    {
+        auto render = [&](const char* tablePos) {
+            ParamStore p;
+            auto e = makePoly(fmt("lead.osc=Supersaw lead.detune=0.55 %s lead.pos_env=0.7 lead.pos_lfo_depth=0.4 lead.delay_send=0 "
+                                  "lead.amp_attack=1 lead.amp_sustain=1", tablePos).c_str(), p, PolyInstance::Lead);
+            e->noteOn(69, 1.0f, 2.0, 1 << 20, 0.0);
+            return renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 24000);
+        };
+        const std::vector<float> a = render("lead.table=Classic lead.position=0");
+        const std::vector<float> b = render("lead.table=Vocal lead.position=1");
+        size_t bad = 0;
+        double energy = 0.0;
+        for (size_t i = 0; i < a.size(); ++i) { bad += a[i] != b[i] ? 1u : 0u; energy += static_cast<double>(a[i]) * a[i]; }
+        check(bad == 0 && energy > 1.0, "supersaw: table, position, its envelope and its LFO belong to the wavetable oscillator and do not touch it",
+              fmt("%zu of %zu samples differ, energy %.1f", bad, a.size(), energy));
+    }
+    // A group of eight oscillator slots can hold two voices of different types; every source the
+    // group needs must be weighed in for the whole group, not only for its first slot.
+    {
+        ParamStore p;
+        // Voice 0 is FM (slots 0..6), voice 1 a supersaw (slots 7..13): slot 7 is the supersaw's
+        // outermost oscillator and lies in the first group, whose first slot belongs to the FM voice.
+        // The FM voice plays at velocity 0 and full velocity sensitivity, so its gain is zero and its
+        // own spectrum cannot stand in for a supersaw line that has gone missing -- only its source
+        // weights remain, which is what decides the group's flags.
+        auto e = makePoly("lead.osc=FM lead.fm_index=3 lead.fm_ratio=2 lead.detune=1 lead.dynamic_detune=0 lead.mix=0.75 lead.cutoff=18000 "
+                          "lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 lead.width=0 "
+                          "lead.delay_send=0 lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=1", p, PolyInstance::Lead);
+        e->noteOn(48, 0.0f, 8.0, 1 << 24, 0.0);
+        p.parseText("lead.osc=Supersaw lead.vel_sens=0");
+        std::vector<float> v = moduleValues(p, Module::Poly, 0);
+        e->update(v.data(), 145.0);
+        e->noteOn(69, 1.0f, 8.0, 1 << 24, 0.0);
+        const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
+        const std::vector<double> pw = powerSpectrum(y.data() + 9600, 65536);
+        const double y1 = Poly::detuneCurve(1.0);
+        auto line = [&](double hz) {
+            const size_t k0 = static_cast<size_t>(std::lround(hz * 65536.0 / sr));
+            double best = 0.0;
+            for (size_t k = k0 - 3; k <= k0 + 3; ++k) best = std::max(best, pw[k]);
+            return best;
+        };
+        double weakest = 1e30;
+        for (int u = 0; u < kPolyUnison; ++u) weakest = std::min(weakest, line(440.0 * (1.0 + kSupersawOffsets[u] * y1)));
+        const double db = powDb(weakest / line(440.0));
+        check(db > -12.0, "an FM voice and a supersaw voice sharing a slot group: all seven supersaw lines still sound",
+              fmt("weakest of the seven %.1f dB under the centre", db));
+    }
 }
 
 void testMelody()
