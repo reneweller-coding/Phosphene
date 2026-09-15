@@ -16,12 +16,15 @@
 #include "phos/Midi.h"
 #include "phos/Oscillator.h"
 #include "phos/Patterns.h"
+#include "phos/Perc.h"
+#include "phos/Rhythm.h"
 #include "phos/WavWriter.h"
 #include "TestSupport.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <tuple>
 
 using namespace phos;
 using namespace phostest;
@@ -72,7 +75,7 @@ void testParams()
     section("parameters");
     ParamStore p;
     const int expected = static_cast<int>(compose::Count) + static_cast<int>(kick::Count) + static_cast<int>(bass::Count)
-                       + static_cast<int>(mix::Count) + static_cast<int>(master::Count);
+                       + static_cast<int>(mix::Count) + static_cast<int>(master::Count) + kPercLanes * static_cast<int>(perc::Count);
     check(p.count() == expected, "every module table registered", fmt("%d parameters", p.count()));
     const int id = p.find("kick.pitch_start");
     check(id == p.base(Module::Kick) + kick::PitchStart, "key lookup gives base + index");
@@ -284,6 +287,23 @@ void testMidi()
     }
     check(match && kickN > 0 && bassN > 0, "every note back with its beat, length, pitch and velocity", fmt("%zu kick, %zu bass", kickN, bassN));
     check(d.keySharps == 3 && d.keyMinor, "key signature F# minor (three sharps)");
+    {
+        size_t percNotes = 0;
+        bool gm = true;
+        for (const NoteEvent& n : s.notes) if (n.part == Part::Perc) ++percNotes;
+        const MidiTrackData* pt = nullptr;
+        for (const MidiTrackData& t : d.tracks) if (t.name == "Perc") pt = &t;
+        if (pt != nullptr) {
+            for (const NoteEvent& n : pt->notes) {
+                bool known = false;
+                for (int note : kPercRoleNote) known = known || n.pitch == note;
+                const bool tomRun = n.pitch <= kPercRoleNote[static_cast<int>(PercRole::Tom)] && n.pitch >= kPercRoleNote[static_cast<int>(PercRole::Tom)] - 12;
+                gm = gm && (known || tomRun);
+            }
+        }
+        check(pt != nullptr && pt->channel == 9 && pt->notes.size() == percNotes && percNotes > 0 && gm,
+              "percussion track on the drum channel with General MIDI notes", fmt("%zu notes", percNotes));
+    }
     check(d.markers.size() == 1 && d.markers[0].first == 16.0 && d.markers[0].second.rfind("Drop", 0) == 0, "section marker");
 
     // The stepped tempo events reproduce the ramp's timing at every beat.
@@ -351,10 +371,10 @@ void testLoudness()
 // ---------------------------------------------------------------------------------------------
 
 /** @brief Current values of one module as an array indexed like its table. */
-std::vector<float> moduleValues(const ParamStore& p, Module m)
+std::vector<float> moduleValues(const ParamStore& p, Module m, int instance = 0)
 {
     std::vector<float> v(static_cast<size_t>(ParamStore::moduleCount(m)));
-    p.readModule(m, 0, v.data());
+    p.readModule(m, instance, v.data());
     return v;
 }
 
@@ -1040,7 +1060,7 @@ void testEngine()
 
     auto eb = std::make_unique<Engine>();
     eb->prepare(sr, 256);
-    eb->params().parseText("mix.kick_mute=1");
+    eb->params().parseText("mix.kick_mute=1 mix.perc_mute=1");
     const std::vector<float> bassOnly = renderEngine(*eb, comp, 64.0, 256, sr);
     const double beatSamples = 60.0 / 145.0 * sr;
     double inWindow = 0.0, all = 0.0;
@@ -1180,6 +1200,310 @@ void testMidiKeys()
     check(d.keys.size() == 3 && d.keys[1].first == 128.0 && d.keys[1].second == minorKeySharps(1) && d.keys[2].second == minorKeySharps(8),
           "key signature changes at track starts", fmt("%zu key signatures", d.keys.size()));
 }
+// ---------------------------------------------------------------------------------------------
+// Percussion kit and rhythm
+// ---------------------------------------------------------------------------------------------
+
+/** @brief A kit prepared from a parameter store (all lanes updated). */
+std::unique_ptr<PercKit> makeKit(const ParamStore& p, int key = 6, int scale = 1)
+{
+    auto kit = std::make_unique<PercKit>();
+    kit->prepare(48000.0);
+    for (int l = 0; l < kPercLanes; ++l) {
+        std::vector<float> v = moduleValues(p, Module::Perc, l);
+        kit->update(l, v.data(), key, scale);
+    }
+    return kit;
+}
+
+/** @brief Renders @p n samples of a kit into mono (L + R) / 2. */
+std::vector<float> renderKit(PercKit& kit, size_t n)
+{
+    const DenormalGuard guard;
+    std::vector<float> L(n), R(n), m(n);
+    for (size_t done = 0; done < n;) {
+        const int k = static_cast<int>(std::min<size_t>(64, n - done));
+        kit.process(L.data() + done, R.data() + done, k);
+        done += static_cast<size_t>(k);
+    }
+    for (size_t i = 0; i < n; ++i) m[i] = 0.5f * (L[i] + R[i]);
+    return m;
+}
+
+/** @brief Share of power below @p hz, in dB relative to the total. */
+double lowShareDb(const std::vector<float>& x, double hz)
+{
+    size_t n = 1;
+    while (n * 2 <= x.size()) n *= 2;
+    std::vector<std::complex<double>> a(n);
+    for (size_t i = 0; i < n; ++i) a[i] = x[i];
+    fft(a);
+    double lo = 0.0, all = 0.0;
+    for (size_t k = 1; k < n / 2; ++k) {
+        const double pw = std::norm(a[k]);
+        all += pw;
+        if (static_cast<double>(k) * 48000.0 / n < hz) lo += pw;
+    }
+    return powDb(lo / all);
+}
+
+void testPercKit()
+{
+    section("percussion kit");
+    const double sr = 48000.0;
+    ParamStore p;
+
+    // Every lane of the default kit, one hit each: level, and nothing below 140 Hz.
+    double worstLow = -1e9;
+    std::string detail;
+    for (int l = 0; l < kPercLanes; ++l) {
+        ParamStore q;
+        for (int j = 0; j < kPercLanes; ++j) if (j != l) q.set(q.base(Module::Perc, j) + perc::Active, 0.0f);
+        auto kit = makeKit(q);
+        kit->trigger(l, 1.0f, 0, 0.0);
+        const std::vector<float> y = renderKit(*kit, 32768);
+        double pk = 0.0, e = 0.0;
+        for (size_t i = 0; i < y.size(); ++i) { pk = std::max(pk, std::fabs(static_cast<double>(y[i]))); if (i < 4800) e += static_cast<double>(y[i]) * y[i]; }
+        const double low = lowShareDb(y, 140.0);
+        worstLow = std::max(worstLow, low);
+        detail += fmt("%s %.1f/%.1f (low %.1f, <100 Hz %.1f)  ", kPercRoleNames[static_cast<int>(kit->role(l))], 20.0 * std::log10(pk + 1e-12), 10.0 * std::log10(e / 4800.0 + 1e-20), low, lowShareDb(y, 100.0));
+    }
+    std::printf("         hit peak/RMS(100 ms) dBFS per lane: %s\n", detail.c_str());
+    check(worstLow < -30.0, "no lane puts more than -30 dB of its power below 140 Hz", fmt("worst %.1f dB", worstLow));
+
+    // Choke: the open hat is silenced by the closed hat within 10 ms -- and without a shared choke
+    // group it is not, or the measure would not tell a choke from the open hat's own decay.
+    {
+        auto chokeDrop = [&](bool grouped) {
+            ParamStore q;
+            for (int j = 0; j < kPercLanes; ++j) if (j != 1) q.set(q.base(Module::Perc, j) + perc::Level, -36.0f);
+            q.set(q.base(Module::Perc, 0) + perc::Active, 0.0f);   // the closed hat itself silent, its choke still acts
+            if (!grouped) q.set(q.base(Module::Perc, 0) + perc::Choke, 0.0f);
+            auto kit = makeKit(q);
+            kit->trigger(1, 1.0f, 0, 0.0);
+            std::vector<float> y = renderKit(*kit, 2400);
+            kit->trigger(0, 1.0f, 0, 0.0);
+            const std::vector<float> z = renderKit(*kit, 4800);
+            auto rms = [](const float* s, size_t n) { double e = 0.0; for (size_t i = 0; i < n; ++i) e += static_cast<double>(s[i]) * s[i]; return std::sqrt(e / n); };
+            return 20.0 * std::log10(rms(z.data() + 480, 480) / rms(y.data() + 1920, 480) + 1e-12);
+        };
+        const double with = chokeDrop(true), without = chokeDrop(false);
+        check(with < -40.0 && without > -10.0, "closed hat chokes the open hat by 40 dB within 10 ms (unchoked it keeps ringing)",
+              fmt("%.1f dB choked, %.1f dB without the group", with, without));
+    }
+
+    // Clap: four bursts, nine milliseconds apart.
+    {
+        ParamStore q;
+        for (int j = 0; j < kPercLanes; ++j) if (j != 4) q.set(q.base(Module::Perc, j) + perc::Active, 0.0f);
+        q.parseText("perc5.filter=High Pass perc5.cutoff=150 perc5.low_cut=150");   // the bursts, not the band-pass's ring
+        auto kit = makeKit(q);
+        kit->trigger(4, 1.0f, 0, 0.0);
+        const std::vector<float> y = renderKit(*kit, 2400);
+        // Envelope in 0.5 ms steps; count rises above half the peak after a fall below it.
+        std::vector<double> env;
+        for (size_t i = 0; i + 24 <= y.size(); i += 24) {
+            double e = 0.0;
+            for (size_t j = i; j < i + 24; ++j) e = std::max(e, std::fabs(static_cast<double>(y[j])));
+            env.push_back(e);
+        }
+        const double pk = *std::max_element(env.begin(), env.end());
+        int bursts = 0;
+        bool below = true;
+        std::vector<size_t> starts;
+        for (size_t i = 0; i < env.size() && i < 80; ++i) {
+            if (below && env[i] > 0.5 * pk) { ++bursts; starts.push_back(i); below = false; }
+            if (env[i] < 0.25 * pk) below = true;
+        }
+        const double spacing = starts.size() >= 2 ? (starts.back() - starts.front()) * 0.5 / (starts.size() - 1) : 0.0;
+        check(bursts == 4 && std::fabs(spacing - 9.0) < 1.0, "clap: four bursts nine milliseconds apart", fmt("%d bursts, %.1f ms apart", bursts, spacing));
+    }
+
+    // Modal tom: the membrane's first two modes at 1 : 1.593 of the tuned pitch.
+    {
+        ParamStore q;
+        for (int j = 0; j < kPercLanes; ++j) if (j != 8) q.set(q.base(Module::Perc, j) + perc::Active, 0.0f);
+        q.parseText("perc9.noise=0 perc9.decay=1500 perc9.filter=Low Pass perc9.cutoff=18000");
+        auto kit = makeKit(q);
+        kit->trigger(8, 1.0f, 0, 0.0);
+        const std::vector<float> y = renderKit(*kit, 1u << 16);
+        const double f0 = kit->laneHz(8);
+        const std::vector<double> pw = powerSpectrum(y.data(), 1u << 16);
+        auto peakNear = [&](double hz) {
+            const size_t c = static_cast<size_t>(hz * 65536.0 / sr);
+            size_t best = c;
+            for (size_t k = c - c / 20; k <= c + c / 20; ++k) if (pw[k] > pw[best]) best = k;
+            return static_cast<double>(best) * sr / 65536.0;
+        };
+        const double m1 = peakNear(f0), m2 = peakNear(1.593 * f0);
+        check(std::fabs(m1 / f0 - 1.0) < 0.01 && std::fabs(m2 / m1 - 1.593) < 0.01, "tom: membrane modes at 1 and 1.593",
+              fmt("%.1f Hz and %.1f Hz (ratio %.3f), tuned to %.1f Hz", m1, m2, m2 / m1, f0));
+        check(PercKit::tuneToScale(180.0, 6, 1) == midiToHz(54), "tune to key: 180 Hz goes to F#3 in F# Phrygian",
+              fmt("%.2f Hz", PercKit::tuneToScale(180.0, 6, 1)));
+    }
+
+    // Tone lanes: the phasor holds its amplitude over seconds, and a sub-sample start shifts the phase.
+    {
+        ParamStore q;
+        for (int j = 0; j < kPercLanes; ++j) if (j != 11) q.set(q.base(Module::Perc, j) + perc::Active, 0.0f);
+        q.parseText("perc12.tune=0 perc12.pitch=1000 perc12.pitch_amount=1 perc12.decay=3000 perc12.filter=High Pass perc12.cutoff=150 perc12.pan=0 perc12.level=0");
+        auto kit = makeKit(q);
+        kit->trigger(11, 1.0f, 0, 0.0);
+        const std::vector<float> y = renderKit(*kit, 96000 + 4800);
+        auto amp = [&](size_t at) { double e = 0.0; for (size_t i = at; i < at + 4800; ++i) e += static_cast<double>(y[i]) * y[i]; return std::sqrt(2.0 * e / 4800.0); };
+        const double drop = 20.0 * std::log10(amp(96000) / amp(4800));
+        const double expect = -60.0 * (2.05 - 0.15) / 3.0;   // -60 dB per 3 s, window centres at 0.15 s and 2.05 s
+        check(std::fabs(drop - expect) < 0.5, "tone lane: amplitude follows its decay over two seconds (phasor renormalised)",
+              fmt("%.2f dB, expected %.2f dB", drop, expect));
+
+        auto kit2 = makeKit(q), kit3 = makeKit(q);
+        kit2->trigger(11, 1.0f, 0, 0.0);
+        kit3->trigger(11, 1.0f, 0, 0.5);
+        const std::vector<float> a = renderKit(*kit2, 9600), b = renderKit(*kit3, 9600);
+        const double pa = phaseAgainst(a.data() + 4800, 480, [&](size_t i) { return 1000.0 * static_cast<double>(4800 + i) / sr; });
+        const double pb = phaseAgainst(b.data() + 4800, 480, [&](size_t i) { return 1000.0 * static_cast<double>(4800 + i) / sr; });
+        const double diff = wrapDeg(pb - pa), want = 360.0 * 1000.0 * 0.5 / sr;
+        check(std::fabs(diff - want) < 0.2, "tone lane: half a sample late starts 3.75 degrees ahead", fmt("%.3f degrees", diff));
+    }
+
+    // Zap: the pitch falls.
+    {
+        ParamStore q;
+        for (int j = 0; j < kPercLanes; ++j) if (j != 10) q.set(q.base(Module::Perc, j) + perc::Active, 0.0f);
+        q.parseText("perc11.fm_index=0 perc11.decay=400 perc11.filter=High Pass perc11.cutoff=150");
+        auto kit = makeKit(q);
+        kit->trigger(10, 1.0f, 0, 0.0);
+        const std::vector<float> y = renderKit(*kit, 9600);
+        auto rate = [&](size_t a, size_t n) { int zc = 0; for (size_t i = a + 1; i < a + n; ++i) if (y[i - 1] < 0.0f && y[i] >= 0.0f) ++zc; return zc * sr / n; };
+        const double early = rate(0, 480), late = rate(6000, 2400);
+        check(early > 3.0 * late && late > 300.0, "zap: pitch sweeps down to its end pitch", fmt("%.0f Hz in the first 10 ms, %.0f Hz after 125 ms", early, late));
+    }
+}
+
+void testRhythm()
+{
+    section("rhythm");
+    // Euclidean necklaces against Toussaint's table (rotation does not matter).
+    auto necklace = [](const std::vector<bool>& e) {
+        std::string s;
+        for (bool b : e) s += b ? 'x' : '.';
+        std::string best = s;
+        for (size_t r = 1; r < s.size(); ++r) best = std::min(best, s.substr(r) + s.substr(0, r));
+        return best;
+    };
+    auto canon = [&](const char* t) { std::vector<bool> e; for (const char* c = t; *c; ++c) e.push_back(*c == 'x'); return necklace(e); };
+    bool ok = true;
+    std::string detail;
+    for (auto [k, n, t] : { std::tuple{ 3, 8, "x..x..x." }, std::tuple{ 5, 8, "x.xx.xx." }, std::tuple{ 2, 5, "x.x.." },
+                            std::tuple{ 4, 9, "x.x.x.x.." }, std::tuple{ 5, 12, "x..x.x..x.x." }, std::tuple{ 7, 16, "x..x.x.x..x.x.x." } }) {
+        const bool m = necklace(euclid(k, n, 0)) == canon(t) && necklace(euclid(k, n, 3)) == canon(t);
+        ok = ok && m;
+        if (!m) detail += fmt("E(%d,%d) wrong  ", k, n);
+    }
+    check(ok, "Euclidean rhythms match Toussaint's table (E(3,8), E(5,8), E(2,5), E(4,9), E(5,12), E(7,16))", detail);
+
+    bool four[16] = {}, off[16] = {}, clave[16] = {};
+    for (int s : { 0, 4, 8, 12 }) four[s] = true;
+    for (int s : { 2, 6, 10, 14 }) off[s] = true;
+    for (int s : { 0, 3, 6, 10, 12 }) clave[s] = true;
+    check(lhlSyncopation(four) == 0 && lhlSyncopation(off) == 7 && lhlSyncopation(clave) == 4,
+          "LHL syncopation: four on the floor 0, offbeat eighths 7, son clave 4",
+          fmt("%d, %d, %d", lhlSyncopation(four), lhlSyncopation(off), lhlSyncopation(clave)));
+
+    // The hat of the measured references: offbeat eighth loudest, the other sixteenths softer, never the beat.
+    {
+        ParamStore q;
+        q.parseText("compose.perc_density=0");
+        PercPlan plan = makePercPlan(q, 12345, true);
+        plan.hatMode = 0;
+        std::vector<NoteEvent> e;
+        composePercBar(q, plan, 12345, 0, 1, 145.0, 6, 1, false, e);
+        int onAnd = 0, elsewhere = 0;
+        for (const NoteEvent& n : e) {
+            if (n.lane != 0) continue;
+            const int step = static_cast<int>(std::lround(n.beat * 4.0));
+            if (step % 4 == 2) ++onAnd; else ++elsewhere;
+        }
+        check(onAnd == 4 && elsewhere == 0, "closed hat on the four offbeat eighths (density 0: no sixteenth layer)", fmt("%d on the offbeat, %d elsewhere", onAnd, elsewhere));
+    }
+
+    // Layers enter one per sixteen bars; fills at eight-bar ends; a roll with 32nds at sixteen; crash after it.
+    {
+        ParamStore q;
+        q.parseText("compose.perc_variation=0 compose.perc_density=1");
+        const PercPlan plan = makePercPlan(q, 777, true);
+        bool ramp = true;
+        for (int block = 0; block < 6; ++block) ramp = ramp && activeLayers(plan, 0.0f, 777, block * 16) == std::min(plan.layers, 2 + block);
+        check(ramp && plan.layers >= 4, "one percussion layer enters per sixteen-bar block", fmt("up to %d layers", plan.layers));
+        int fillBars = 0, otherFills = 0;
+        for (int b = 0; b < 64; ++b) {
+            const FillType f = chooseFill(q, 777, b);
+            if (b % 8 == 7) fillBars += f != FillType::None ? 1 : 0; else otherFills += f != FillType::None ? 1 : 0;
+        }
+        std::vector<NoteEvent> e15, e16;
+        composePercBar(q, plan, 777, 15, 15, 145.0, 6, 1, true, e15);
+        composePercBar(q, plan, 777, 16, 16, 145.0, 6, 1, true, e16);
+        int thirtySeconds = 0;
+        for (const NoteEvent& n : e15) if (n.lane == 5 && n.beat >= 63.0 && std::fabs(n.beat * 8.0 - std::round(n.beat * 8.0)) < 1e-9 && std::fabs(n.beat * 4.0 - std::round(n.beat * 4.0)) > 1e-9) ++thirtySeconds;
+        check(fillBars == 8 && otherFills == 0 && thirtySeconds == 4, "fills in every eighth bar, a 32nd roll at bar sixteen",
+              fmt("%d fills, %d elsewhere, %d 32nds", fillBars, otherFills, thirtySeconds));
+    }
+
+    // Euclidean lanes: never on the kick's beats, and at a syncopation between their extremes.
+    {
+        ParamStore q;
+        int onBeat = 0, extremes = 0, checked = 0;
+        for (uint64_t s = 1; s <= 40; ++s) {
+            const PercPlan plan = makePercPlan(q, s, false);
+            for (int l = 0; l < kPercLanes; ++l) {
+                if (plan.pulses[l] == 0) continue;
+                const std::vector<bool> e = euclid(plan.pulses[l], 16, plan.rotation[l]);
+                int lo = 1000, hi = -1000, chosen = 0;
+                for (int rot = 0; rot < 16; ++rot) {
+                    const std::vector<bool> er = euclid(plan.pulses[l], 16, rot);
+                    bool st[16] = {};
+                    for (int i = 0; i < 16; ++i) st[i] = er[static_cast<size_t>(i)] && i % 4 != 0;
+                    const int v = lhlSyncopation(st);
+                    lo = std::min(lo, v);
+                    hi = std::max(hi, v);
+                    if (rot == plan.rotation[l]) chosen = v;
+                }
+                ++checked;
+                if (hi > lo && (chosen == lo || chosen == hi)) ++extremes;
+            }
+            std::vector<NoteEvent> notes;
+            composePercBar(q, plan, s, 0, 40, 145.0, 6, 1, false, notes);
+            for (const NoteEvent& n : notes) {
+                const PercRole role = static_cast<PercRole>(q.getInt(q.base(Module::Perc, n.lane) + perc::Role));
+                const bool euclidRole = role == PercRole::Rim || role == PercRole::Tom || role == PercRole::Conga || role == PercRole::Zap || role == PercRole::Blip;
+                if (euclidRole && std::lround(n.beat * 4.0) % 4 == 0) ++onBeat;
+            }
+        }
+        check(onBeat == 0 && extremes < checked / 4, "Euclidean lanes avoid the beats and mostly sit between least and most syncopated",
+              fmt("%d on a beat, %d of %d at an extreme", onBeat, extremes, checked));
+    }
+
+    // Over a night: hat modes, backbeat claps, layer counts and recipes all vary.
+    {
+        ParamStore q;
+        Composer c(4242);
+        int modes[3] = {}, backbeat = 0, minLayers = 99, maxLayers = 0, overrides = 0;
+        double macroSpread = 0.0;
+        for (int t = 0; t < 40; ++t) {
+            const TrackPlan tp = c.track(q, t);
+            ++modes[tp.perc.hatMode];
+            backbeat += tp.perc.clapBackbeat ? 1 : 0;
+            minLayers = std::min(minLayers, tp.perc.layers);
+            maxLayers = std::max(maxLayers, tp.perc.layers);
+            for (float m : tp.perc.macro) macroSpread = std::max(macroSpread, static_cast<double>(std::fabs(m)));
+            for (int l = 0; l < kPercLanes; ++l) overrides += (tp.perc.engineOverride[l] >= 0 || tp.perc.modeSetOverride[l] >= 0) ? 1 : 0;
+        }
+        check(modes[0] > 0 && modes[1] > 0 && modes[2] > 0 && backbeat > 5 && backbeat < 35 && maxLayers - minLayers >= 2 && macroSpread > 0.5 && overrides > 0,
+              "percussion varies over the night: hat modes, backbeat, layers, kit recipe",
+              fmt("hat modes %d/%d/%d, clap backbeat in %d of 40, layers %d..%d, %d lane switches", modes[0], modes[1], modes[2], backbeat, minLayers, maxLayers, overrides));
+    }
+}
+
 } // namespace
 
 int main()
@@ -1196,6 +1520,8 @@ int main()
     testVariety();
     testEngine();
     testPhaseLock();
+    testPercKit();
+    testRhythm();
     testMidi();
     testMidiKeys();
     testWav();

@@ -26,6 +26,7 @@
 #include "phos/Clock.h"
 #include "phos/Kick.h"
 #include "phos/Params.h"
+#include "phos/Perc.h"
 #include "phos/Score.h"
 #include <atomic>
 #include <memory>
@@ -74,6 +75,8 @@ public:
     const Kick& kick() const { return kick_; }
     /** @brief The bass, for tests and displays. */
     const Bass& bass() const { return bass_; }
+    /** @brief The percussion kit, for tests and displays. */
+    const PercKit& percKit() const { return perc_; }
     /** @brief Effective value of a parameter as last applied (audio thread view). */
     float effective(int id) const;
 
@@ -111,7 +114,12 @@ private:
 
     Kick kick_;
     Bass bass_;
+    PercKit perc_;
     int keyRoot_ = 6;
+    int scale_ = 1;
+    bool percMute_ = false;
+    float percGain_ = 1.0f;
+    std::vector<float> percL_, percR_;
     int pattern_ = 0;
     int lockMode_ = 2;
     double bassPhase_ = 0.0;               ///< fundamental phase for the next bass note

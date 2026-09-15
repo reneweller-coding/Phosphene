@@ -46,6 +46,7 @@
  */
 #pragma once
 #include "phos/Clock.h"
+#include "phos/Rhythm.h"
 #include "phos/Score.h"
 #include <cstdint>
 #include <vector>
@@ -77,6 +78,8 @@ struct TrackPlan {
     float  bassMacro[kNumBassMacros] = {};   ///< recipe, each -1..1
     double loudness = 0.0;          ///< probe loudness of the track's sound, LUFS (0 when Level Match is off)
     float  gainDb = 0.0f;           ///< level correction against the first track
+    uint64_t percSeed = 0;          ///< seed of the track's percussion decisions
+    PercPlan perc;                  ///< the track's percussion plan (Rhythm.h)
 };
 
 /** @brief Composes the set from a seed and the knobs. */

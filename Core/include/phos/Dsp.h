@@ -12,6 +12,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#if defined(_M_X64) || defined(__x86_64__)
+  #include <xmmintrin.h>
+#elif defined(__aarch64__)
+  #include <fenv.h>
+#endif
 
 namespace phos {
 
@@ -261,6 +266,47 @@ struct DcBlocker {
     inline float process(float x) { const float y = x - x1 + r * y1; x1 = x; y1 = y; return y; }
     /** @brief Clears the states. */
     void reset() { x1 = y1 = 0.0f; }
+};
+
+/**
+ * @brief Flush-to-zero and denormals-are-zero for the lifetime of the object, restored afterwards.
+ *
+ * A percussion lane that has died away keeps decaying towards zero, and below about 1e-38 the values
+ * become subnormal, where every multiply costs a hundred times more. Rather than clamping each state
+ * in the loop, the processor is told to treat those values as zero. The mode applies to scalar and
+ * vector code alike (on x86-64 all float arithmetic is SSE; on AArch64 the FZ bit covers NEON and
+ * scalar), so the lane paths stay identical to each other. (Added in Phosphene.)
+ */
+class DenormalGuard {
+public:
+    DenormalGuard()
+    {
+#if defined(_M_X64) || defined(__x86_64__)
+        saved_ = _mm_getcsr();
+        _mm_setcsr(saved_ | 0x8040u);   // FZ (bit 15) and DAZ (bit 6)
+#elif defined(__aarch64__)
+        fegetenv(&saved_);
+        fenv_t e = saved_;
+        e.__fpcr |= (1u << 24);          // FZ; glibc and bionic both name the field __fpcr
+        fesetenv(&e);
+#endif
+    }
+    ~DenormalGuard()
+    {
+#if defined(_M_X64) || defined(__x86_64__)
+        _mm_setcsr(saved_);
+#elif defined(__aarch64__)
+        fesetenv(&saved_);
+#endif
+    }
+    DenormalGuard(const DenormalGuard&) = delete;
+    DenormalGuard& operator=(const DenormalGuard&) = delete;
+private:
+#if defined(_M_X64) || defined(__x86_64__)
+    unsigned int saved_ = 0;
+#elif defined(__aarch64__)
+    fenv_t saved_{};
+#endif
 };
 
 /** @brief Cubic soft clip, flat beyond +-1.5. */

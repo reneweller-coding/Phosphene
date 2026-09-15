@@ -7,10 +7,10 @@ there are no samples.
 
 The design and the literature behind each building block are in [docs/PLAN.md](docs/PLAN.md) (German).
 
-**Status:** Phase 0 (framework) and Phase 1 (kick, rolling bass, clock) are done. The offline
-renderer composes sets of any length from kick and bass: every track has its own key, tempo, bass
-patterns and kick and bass sound, levels are matched between tracks, and kick and bass are
-phase-locked at the first bass note. No plugin or headset build yet.
+**Status:** Phases 0 to 2 are done: framework, kick and rolling bass, and a twelve-lane percussion
+kit. The offline renderer composes sets of any length: every track has its own key, tempo, bass
+patterns, percussion groove and sound, levels are matched between tracks, and kick and bass are
+phase-locked at the first bass note. No leads, pads, plugin or headset build yet.
 
 ## Build
 
@@ -58,6 +58,7 @@ requires every lane of the vectorised DSP to equal the scalar computation bit fo
 | `Core/` | framework-free engine, `phos::` namespace |
 | `Tools/render/` | `phos_render`: offline render, MIDI export, benchmark |
 | `Tools/inspect_wav.py` | pictures and measurements of a render |
+| `Tools/ref_*.py` | measurements of reference recordings: bass slots, percussion grid, band balance |
 | `Tests/` | self test, vector-path tests, NEON shim |
 | `docs/` | plan, Doxygen configuration |
 

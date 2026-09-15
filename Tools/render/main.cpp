@@ -15,7 +15,7 @@
  *     --set key=value     set a parameter; repeatable; "key=a;key2=b" also works
  *     --preset FILE       read key=value assignments from a file
  *     --tempo-ramp B:BPM  ramp the tempo from compose.bpm at beat 0 to BPM at beat B
- *     --solo kick|bass    mute everything else
+ *     --solo kick|bass|perc  mute everything else
  *     --out FILE.wav      write the audio (32-bit float unless --pcm24)
  *     --pcm24             write 24-bit PCM
  *     --midi FILE.mid     write the score as a Standard MIDI File
@@ -126,9 +126,10 @@ int main(int argc, char** argv)
         if (!params.parseText(s, &err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 2; }
     }
     const int mb = params.base(Module::Mix);
-    if (solo == "kick") params.set(mb + mix::BassMute, 1.0f);
-    else if (solo == "bass") params.set(mb + mix::KickMute, 1.0f);
-    else if (!solo.empty()) { std::fprintf(stderr, "--solo wants kick or bass\n"); return 2; }
+    if (solo == "kick") { params.set(mb + mix::BassMute, 1.0f); params.set(mb + mix::PercMute, 1.0f); }
+    else if (solo == "bass") { params.set(mb + mix::KickMute, 1.0f); params.set(mb + mix::PercMute, 1.0f); }
+    else if (solo == "perc") { params.set(mb + mix::KickMute, 1.0f); params.set(mb + mix::BassMute, 1.0f); }
+    else if (!solo.empty()) { std::fprintf(stderr, "--solo wants kick, bass or perc\n"); return 2; }
 
     const int cb = params.base(Module::Compose);
     Composer composer(seed);
@@ -162,6 +163,10 @@ int main(int argc, char** argv)
             for (int m = 0; m < kNumKickMacros; ++m) std::printf(" %s %+.2f", kKickMacroNames[m], static_cast<double>(p.kickMacro[m]));
             std::printf("\n          bass recipe");
             for (int m = 0; m < kNumBassMacros; ++m) std::printf(" %s %+.2f", kBassMacroNames[m], static_cast<double>(p.bassMacro[m]));
+            static const char* const kHatModes[3] = { "closed offbeat", "open offbeat + closed 16ths", "closed offbeat + shaker" };
+            std::printf("\n          perc: %s, clap backbeat %s, up to %d layers:", kHatModes[p.perc.hatMode], p.perc.clapBackbeat ? "on" : "off", p.perc.layers);
+            for (int i = 0; i < p.perc.layers; ++i)
+                std::printf(" %s", kPercRoleNames[params.getInt(params.base(Module::Perc, p.perc.layerOrder[i]) + perc::Role)]);
             std::printf("\n");
         }
     }

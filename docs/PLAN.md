@@ -94,7 +94,32 @@ Summe statt eines Integrals ist.
 
 Phase 4 wird dadurch um etwa einen Tag kürzer (keine Entkopplung).
 
-Nächster Schritt: Phase 2 (Percussion-Kit mit 12 Lanes als erster echter Nutzer der Lane-Templates).
+**15.09.2026, Phase 2 fertig: Percussion-Kit mit zwölf Lanes, Rhythmus, Variation.**
+
+*Erst gemessen, dann gebaut.* `Tools/ref_perc_profile.py` faltet die Einsatzstärke (positiver
+spektraler Fluss) von zwölf Referenztracks ins Sechzehntel-Raster, ausgerichtet an der
+Sechzehntel-Gruppe, die im Kick-Band am stärksten heraussticht (eine einzelne Slice-Spitze war
+mehrdeutig, weil der rollende Bass auf jeder Sechzehntel ebenfalls Tiefton-Einsätze setzt). Ergebnis
+im Hat-Band 6 bis 14 kHz: in sieben von zwölf Tracks ist die Achtel-Offbeat-Position die stärkste
+(31 bis 49 % der Einsätze), die beiden anderen Sechzehntel tragen je 10 bis 25 %. Das ist das
+Standardmuster: Offbeat-Hat laut, Sechzehntel-Schicht bei etwa der halben Stärke.
+`Tools/ref_band_balance.py` misst die Bandbalance gegenüber dem Kick-Bass-Band 40 bis 140 Hz;
+Referenz-Median: Präsenz 1,5 bis 6 kHz −12,5 dB, Luft 6 bis 16 kHz −15,2 dB.
+
+| Baustein | Umsetzung | Messung |
+|---|---|---|
+| Lane-Kernel (`PercKernel.h`) | eine universelle Stimme für alle Rollen: Ton mit Tonhöhen-Hüllkurve und FM (Taylor-Rotation 7. Ordnung + Newton-Renormierung), vier Moden (Membran, Balken, Tabla nach Fletcher/Rossing), sechs 808-Rechtecke mit maskenbasiertem PolyBLEP, Rauschen mit Clap-Bursts, SVF, Low-Cut 24 dB/Okt ab 150 Hz, Drive, Choke, Panorama | zwölf Lanes bitgleich über AVX2, NEON-Shim und skalar; AVX2 5,6× schneller als skalar (0,5 % gegen 3,0 % eines Kerns, alle Lanes dauerhaft beschäftigt) |
+| Kit (`Perc.h`) | Standard-Kit aus Instanz-Standardwerten (neu im Parametersystem), Stimmen auf die Tonart, Tonhöhen-Shift pro Schlag, Sub-Sample-Einsätze, `DenormalGuard` statt Klemmen | Tom-Moden bei 1 : 1,589 (Soll 1,593); Clap 4 Bursts im Abstand 9,0 ms; Choke −92 dB in 10 ms; Ton-Amplitude über 2 s auf 0,01 dB genau |
+| Tiefenregel | Low-Cut nie unter 150 Hz, Tom auf 220 Hz, Low-Cuts für Tom und Conga höher | jede Lane unter −30 dB Leistungsanteil unter 140 Hz (vorher Tom −22,9 dB) |
+| Pegel | kalibriert auf die Referenz-Bandbalance, knapp darunter, damit die Leads in Phase 3 Platz haben | drei Seeds, Median Präsenz −18,0 dB, Luft −17,2 dB (vorher −27,3 und −31,9) |
+| Rhythmus (`Rhythm.h`) | Euklid (Bresenham-Form, gleiche Ketten wie Bjorklund), LHL-Synkopenmaß, Rotation der euklidischen Lanes auf mittlere Synkope (Sioros et al. 2014), Entscheidungen pro Vier-Takt-Phrase, Fills (Snare-Roll mit 32teln, Tom-Lauf in der Skala, Zap-Burst, Clap-Triole, Hat-Drop), Crash nach 16-Takt-Fill, Schichten-Aufbau pro 16 Takte | Euklid gegen Toussaints Tabelle; LHL: 4-on-the-floor 0, Offbeat-Achtel 7, Son-Clave 4; euklidische Lanes nie auf der Kick |
+| Variation | Hat-Modus, Clap-Backbeat, Schichten-Reihenfolge und -Zahl, Klang-Rezept (Helligkeit, Kürze, Grit) für das ganze Kit, Engine- und Moden-Wechsel einzelner Lanes; Pegelmessung schließt die Percussion ein | über 40 Tracks alle drei Hat-Modi, Backbeat in 22 von 40, 4 bis 7 Schichten; Pegelspanne zwischen Tracks 0,39 LU |
+| MIDI | Percussion-Spur auf Kanal 10, General-MIDI-Noten je Rolle, Tom-Lauf als tiefere Noten | Rundlauf geprüft |
+
+Gesamt: 98 Selbsttest-Prüfungen, Vektortests mit Kit in drei Pfaden. Kick, Bass und Percussion
+zusammen 1,6 % eines Desktop-Kerns. Auf der Quest noch nicht gemessen.
+
+Nächster Schritt: Phase 3 (Acid mit Squelch, Supersaw-Lead, Arp, Harmonieebene).
 
 ## 0. Kurzfassung
 

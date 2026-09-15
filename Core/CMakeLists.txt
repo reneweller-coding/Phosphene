@@ -8,6 +8,8 @@ add_library(PhospheneCore STATIC
     src/Halfband.cpp
     src/Kick.cpp
     src/Bass.cpp
+    src/Perc.cpp
+    src/Rhythm.cpp
     src/Composer.cpp
     src/Engine.cpp
 )

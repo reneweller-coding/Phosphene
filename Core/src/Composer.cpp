@@ -24,6 +24,7 @@ constexpr uint64_t kSaltRecipe = 0x5245434950450002ull;
 constexpr uint64_t kSaltBlock  = 0x424C4F434B000003ull;
 constexpr uint64_t kSaltPhrase = 0x5048524153450004ull;
 constexpr uint64_t kSaltArc    = 0x4152430000000005ull;
+constexpr uint64_t kSaltPerc   = 0x5045524300000006ull;
 
 /** @brief One move of a perceptual direction: parameter (module table index), direction, weight. */
 struct Loading { int param; int macro; float weight; };
@@ -106,6 +107,11 @@ void Composer::validate(const ParamStore& p) const
     knobs.push_back(p.get(p.base(Module::Kick) + kick::Engine));
     knobs.push_back(p.get(p.base(Module::Kick) + kick::Clip));
     knobs.push_back(p.get(p.base(Module::Bass) + bass::AmpRelease));
+    for (int l = 0; l < kPercLanes; ++l) {
+        const int b = p.base(Module::Perc, l);
+        for (int k : { static_cast<int>(perc::Active), static_cast<int>(perc::Role), static_cast<int>(perc::Density), static_cast<int>(perc::Engine) })
+            knobs.push_back(p.get(b + k));
+    }
     if (knobs != planKnobs_) { plans_.clear(); planKnobs_ = std::move(knobs); }
 }
 
@@ -122,6 +128,8 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
 
     TrackPlan t;
     t.index = index;
+    t.percSeed = mixSeed(seed_ ^ kSaltPerc, static_cast<uint64_t>(index));
+    t.perc = makePercPlan(p, t.percSeed, index == 0);
     if (index == 0) {
         t.firstBar = 0;
         t.bars = baseBars;
@@ -240,6 +248,19 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
     // The track's level correction, in the normalised domain of a linear 24 dB range.
     const ParamDesc& g = p.desc(mb + mix::TrackGain);
     push(mb + mix::TrackGain, ControlEvent::Kind::Offset, plan.gainDb / (g.maxValue - g.minValue));
+    // Percussion: one recipe for the whole kit, so the lanes keep sounding like one kit, and the
+    // track's engine and mode-set switches.
+    float percOff[perc::Count] = {};
+    percRecipeOffsets(plan.perc.macro, sv, percOff);
+    for (int l = 0; l < kPercLanes; ++l) {
+        const int pb = p.base(Module::Perc, l);
+        for (int k : { static_cast<int>(perc::Cutoff), static_cast<int>(perc::MetalScale), static_cast<int>(perc::Decay),
+                       static_cast<int>(perc::NoiseDecay), static_cast<int>(perc::BurstSpacing), static_cast<int>(perc::Drive),
+                       static_cast<int>(perc::Resonance) })
+            push(pb + k, ControlEvent::Kind::Offset, percOff[k]);
+        push(pb + perc::Engine, ControlEvent::Kind::Override, static_cast<float>(plan.perc.engineOverride[l]));
+        push(pb + perc::ModeSet, ControlEvent::Kind::Override, static_cast<float>(plan.perc.modeSetOverride[l]));
+    }
     (void)bb;
 }
 
@@ -281,6 +302,7 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan) const
     engine->params().set(mb + mix::KickMute, 0.0f);
     engine->params().set(mb + mix::BassMute, 0.0f);
     engine->params().set(mb + mix::TrackGain, 0.0f);
+    engine->params().set(mb + mix::PercMute, 0.0f);
     TempoMap tm;
     tm.setConstant(plan.bpm);
     engine->setTempoMap(tm);
@@ -294,12 +316,13 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan) const
 
     const int root = bassRootNote(plan.key, p.getInt(p.base(Module::Compose) + compose::BassRegister));
     const BassPatternDef& pat = kBassPatterns[plan.primaryPattern];
+    std::vector<NoteEvent> notes;
     for (int beat = 0; beat < bars * kBeatsPerBar; ++beat) {
         NoteEvent k;
         k.beat = beat;
         k.part = Part::Kick;
         k.velocity = 127;
-        engine->pushEvent(k);
+        notes.push_back(k);
         for (int s = 0; s < pat.count; ++s) {
             const double next = s + 1 < pat.count ? pat.pos[s + 1] : 1.0;
             NoteEvent n;
@@ -308,9 +331,15 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan) const
             n.part = Part::Bass;
             n.pitch = static_cast<uint8_t>(root);
             n.velocity = 110;
-            engine->pushEvent(n);
+            notes.push_back(n);
         }
     }
+    // The percussion as it plays once its layers have come in (bars 49 and 50 of the track), without fills.
+    for (int b = 0; b < bars; ++b)
+        composePercBar(p, plan.perc, plan.percSeed, b, 49 + b, plan.bpm, plan.key, plan.scale, false, notes);
+    // One ring, so one order: the engine plays from the head of the ring.
+    std::stable_sort(notes.begin(), notes.end(), noteLess);
+    for (const NoteEvent& n : notes) engine->pushEvent(n);
     const int total = static_cast<int>(tm.secondsAt(bars * kBeatsPerBar) * sr);
     LoudnessMeter meter;
     meter.prepare(sr);
@@ -447,6 +476,7 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
                 out.push_back(n);
             }
         }
+        composePercBar(p, plan.perc, plan.percSeed, bar, inTrack, plan.bpm, plan.key, plan.scale, true, out);
     }
     std::stable_sort(out.begin() + static_cast<long>(noteStart), out.end(), noteLess);
     if (controls != nullptr)

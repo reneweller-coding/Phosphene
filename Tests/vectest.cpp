@@ -9,10 +9,13 @@
  */
 #include "phos/Halfband.h"
 #include "phos/Ladder.h"
+#include "phos/Perc.h"
 #include "phos/Vec.h"
 #include "TestSupport.h"
+#include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 
 using namespace phos;
 using namespace phostest;
@@ -123,6 +126,69 @@ void testHalfband()
     check(bad == 0, "decimator and interpolator identical to scalar", fmt("%d differing samples", bad));
 }
 
+void testPerc()
+{
+    section("percussion kit lanes against the scalar kit");
+    const DenormalGuard guard;
+    ParamStore p;
+    // The default kit, with every lane pushed somewhere else so all engines and filters differ.
+    p.parseText("perc1.drive=0.7 perc3.fm_index=3 perc3.engine=FM perc4.resonance=0.9 perc6.pitch_amount=6 "
+                "perc9.mode_set=Bar perc10.filter=Band Pass perc11.fm_index=8 perc12.engine=Modal perc5.bursts=6");
+    auto a = std::make_unique<PercKit>(), b = std::make_unique<PercKit>();
+    a->prepare(48000.0);
+    b->prepare(48000.0);
+    for (int l = 0; l < kPercLanes; ++l) {
+        std::vector<float> v(static_cast<size_t>(perc::Count));
+        p.readModule(Module::Perc, l, v.data());
+        a->update(l, v.data(), 6, 1);
+        b->update(l, v.data(), 6, 1);
+    }
+    int bad = 0;
+    double energy = 0.0;
+    std::vector<float> aL(64), aR(64), bL(64), bR(64);
+    for (int block = 0; block < 1500; ++block) {
+        // Hits on changing lanes, with velocities, shifts and sub-sample offsets.
+        if (block % 7 == 0) {
+            const int lane = (block / 7) % kPercLanes;
+            const float vel = 0.4f + 0.05f * static_cast<float>(block % 13);
+            const int shift = (block % 5) - 2;
+            const double late = static_cast<double>(block % 10) / 10.0;
+            a->trigger(lane, vel, shift, late);
+            b->trigger(lane, vel, shift, late);
+        }
+        const int n = 17 + block % 48;
+        a->processWith<float>(aL.data(), aR.data(), n);
+        b->processWith<VecF>(bL.data(), bR.data(), n);
+        for (int i = 0; i < n; ++i) {
+            if (!sameBits(aL[static_cast<size_t>(i)], bL[static_cast<size_t>(i)]) || !sameBits(aR[static_cast<size_t>(i)], bR[static_cast<size_t>(i)])) ++bad;
+            energy += static_cast<double>(aL[static_cast<size_t>(i)]) * aL[static_cast<size_t>(i)];
+        }
+    }
+    check(bad == 0 && energy > 1.0, "twelve lanes identical to the scalar kit", fmt("%d differing samples, energy %.1f", bad, energy));
+
+    // Cost, not a check: ten seconds of all twelve lanes kept busy, scalar against this path.
+    auto time = [&](bool vec) {
+        auto k = std::make_unique<PercKit>();
+        k->prepare(48000.0);
+        for (int l = 0; l < kPercLanes; ++l) {
+            std::vector<float> v(static_cast<size_t>(perc::Count));
+            p.readModule(Module::Perc, l, v.data());
+            k->update(l, v.data(), 6, 1);
+        }
+        std::vector<float> L(32), R(32);
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int block = 0; block < 15000; ++block) {
+            if (block % 50 == 0) for (int l = 0; l < kPercLanes; ++l) k->trigger(l, 1.0f, 0, 0.0);
+            if (vec) k->processWith<VecF>(L.data(), R.data(), 32);
+            else k->processWith<float>(L.data(), R.data(), 32);
+        }
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    };
+    const double ts = time(false), tv = time(true);
+    std::printf("         cost of 10 s, all lanes busy: scalar %.1f %% of a core, %s %.1f %% (x%.2f)\n",
+                ts * 10.0, kVecPathName, tv * 10.0, ts / tv);
+}
+
 } // namespace
 
 int main()
@@ -134,5 +200,6 @@ int main()
     testOps();
     testLadder();
     testHalfband();
+    testPerc();
     return finish();
 }

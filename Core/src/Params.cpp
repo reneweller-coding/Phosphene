@@ -13,6 +13,8 @@ const char* const kKeyNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "
 const char* const kScaleNames[] = { "Aeolian", "Phrygian", "Harmonic Minor", "Phrygian Dominant", "Double Harmonic", "Dorian" };
 const char* const kKickPatternNames[] = { "Four", "Four + Fills", "Off" };
 const char* const kBassPatternNames[] = { "Rolling", "Gallop", "Skip", "Offbeat", "Triplet" };
+const char* const kPercRoleNames[kNumPercRoles] = { "Closed Hat", "Open Hat", "Ride", "Crash", "Clap", "Snare", "Rim",
+                                                    "Shaker", "Tom", "Conga", "Zap", "Blip" };
 
 namespace {
 
@@ -36,7 +38,78 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "sound_variation", "Sound Variation", "",      0.0f,   1.0f,   0.5f, Curve::Linear },
     { "tempo_range",     "Tempo Range",     "BPM",   0.0f,  10.0f,   3.0f, Curve::Linear },
     { "level_match",     "Level Match",     "",      0.0f,   1.0f,   1.0f, Curve::Toggle },
+    { "perc_density",    "Perc Density",    "",      0.0f,   1.0f,   0.6f, Curve::Linear },
+    { "perc_variation",  "Perc Variation",  "",      0.0f,   1.0f,   0.5f, Curve::Linear },
+    { "swing",           "Swing",           "",      0.0f,   0.3f,   0.0f, Curve::Linear },
 };
+
+const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };
+const char* const kModeSetNames[] = { "Membrane", "Bar", "Harmonic" };
+const char* const kPercFilterNames[] = { "Low Pass", "Band Pass", "High Pass" };
+
+const ParamDesc kPercParams[perc::Count] = {
+    { "active",        "Active",        "",      0.0f,     1.0f,    1.0f, Curve::Toggle },
+    { "role",          "Role",          "",      0.0f,    11.0f,    0.0f, Curve::Choice, kPercRoleNames },
+    { "engine",        "Engine",        "",      0.0f,     4.0f,    0.0f, Curve::Choice, kPercEngineNames },
+    { "pitch",         "Pitch",         "Hz",   40.0f, 12000.0f,  400.0f, Curve::Log },
+    { "pitch_amount",  "Pitch Amount",  "x",     1.0f,    16.0f,    1.0f, Curve::Log },
+    { "pitch_decay",   "Pitch Decay",   "ms",    0.5f,   300.0f,   10.0f, Curve::Log },
+    { "fm_ratio",      "FM Ratio",      "",     0.25f,     8.0f,   1.41f, Curve::Linear },
+    { "fm_index",      "FM Index",      "",      0.0f,     8.0f,    0.0f, Curve::Linear },
+    { "mode_set",      "Modes",         "",      0.0f,     2.0f,    0.0f, Curve::Choice, kModeSetNames },
+    { "mode_damp",     "Mode Damping",  "",      0.0f,     1.0f,    0.5f, Curve::Linear },
+    { "metal_scale",   "Metal Scale",   "x",    0.25f,     4.0f,    1.0f, Curve::Log },
+    { "noise",         "Noise",         "",      0.0f,     1.0f,    0.0f, Curve::Linear },
+    { "noise_decay",   "Noise Decay",   "ms",    2.0f,  3000.0f,   60.0f, Curve::Log },
+    { "bursts",        "Bursts",        "",      1.0f,     6.0f,    1.0f, Curve::Int },
+    { "burst_spacing", "Burst Spacing", "ms",    2.0f,    40.0f,   10.0f, Curve::Linear },
+    { "decay",         "Decay",         "ms",    2.0f,  3000.0f,  120.0f, Curve::Log },
+    { "filter",        "Filter",        "",      0.0f,     2.0f,    2.0f, Curve::Choice, kPercFilterNames },
+    { "cutoff",        "Cutoff",        "Hz",  100.0f, 18000.0f, 8000.0f, Curve::Log },
+    { "resonance",     "Resonance",     "",      0.0f,     1.0f,    0.2f, Curve::Linear },
+    { "low_cut",       "Low Cut",       "Hz",  150.0f,  4000.0f,  150.0f, Curve::Log },
+    { "drive",         "Drive",         "",      0.0f,     1.0f,    0.0f, Curve::Linear },
+    { "level",         "Level",         "dB",  -36.0f,     6.0f,  -12.0f, Curve::Linear },
+    { "pan",           "Pan",           "",     -1.0f,     1.0f,    0.0f, Curve::Linear },
+    { "choke",         "Choke Group",   "",      0.0f,     4.0f,    0.0f, Curve::Int },
+    { "shift",         "Shift",         "ms",  -10.0f,    10.0f,    0.0f, Curve::Linear },
+    { "density",       "Density",       "",      0.0f,     1.0f,    0.5f, Curve::Linear },
+    { "tune",          "Tune to Key",   "",      0.0f,     1.0f,    0.0f, Curve::Toggle },
+};
+
+/**
+ * @brief The default kit: what each of the twelve lanes starts as.
+ *
+ * Levels and positions follow the reference measurement of 15.09.2026 (docs/PLAN.md, 6.6): the
+ * offbeat hat is the loudest top-end event, the sixteenth layer (shaker, closed-hat ghosts) sits
+ * around half of it. Low cuts never go under 150 Hz: below that only kick and bass may play.
+ */
+const char* const kDefaultKit =
+    "perc1.role=Closed Hat;perc1.engine=Metal;perc1.decay=45;perc1.noise=0.35;perc1.noise_decay=35;perc1.filter=High Pass;"
+    "perc1.cutoff=7500;perc1.resonance=0.25;perc1.level=5;perc1.pan=0.15;perc1.choke=1;perc1.density=0.6\n"
+    "perc2.role=Open Hat;perc2.engine=Metal;perc2.decay=260;perc2.noise=0.35;perc2.noise_decay=220;perc2.filter=High Pass;"
+    "perc2.cutoff=6500;perc2.level=2;perc2.pan=-0.1;perc2.choke=1\n"
+    "perc3.role=Ride;perc3.engine=Metal;perc3.metal_scale=0.72;perc3.decay=700;perc3.noise=0.2;perc3.noise_decay=400;"
+    "perc3.filter=Band Pass;perc3.cutoff=5200;perc3.resonance=0.35;perc3.level=-3;perc3.pan=0.35\n"
+    "perc4.role=Crash;perc4.engine=Metal;perc4.metal_scale=0.5;perc4.decay=1600;perc4.noise=0.6;perc4.noise_decay=1400;"
+    "perc4.filter=High Pass;perc4.cutoff=3000;perc4.level=-5;perc4.pan=-0.3\n"
+    "perc5.role=Clap;perc5.engine=Noise;perc5.noise=1;perc5.bursts=4;perc5.burst_spacing=9;perc5.noise_decay=180;"
+    "perc5.filter=Band Pass;perc5.cutoff=1400;perc5.resonance=0.35;perc5.level=-4;perc5.low_cut=300\n"
+    "perc6.role=Snare;perc6.engine=Tone;perc6.pitch=190;perc6.pitch_amount=1.6;perc6.pitch_decay=25;perc6.decay=90;"
+    "perc6.noise=0.8;perc6.noise_decay=140;perc6.filter=High Pass;perc6.cutoff=250;perc6.level=-6;perc6.low_cut=160\n"
+    "perc7.role=Rim;perc7.engine=FM;perc7.pitch=1700;perc7.fm_ratio=2.61;perc7.fm_index=2.2;perc7.decay=28;perc7.pitch_decay=6;"
+    "perc7.filter=Band Pass;perc7.cutoff=2200;perc7.resonance=0.3;perc7.level=-10;perc7.pan=-0.25\n"
+    "perc8.role=Shaker;perc8.engine=Noise;perc8.noise=1;perc8.noise_decay=45;perc8.filter=High Pass;perc8.cutoff=6000;"
+    "perc8.resonance=0.1;perc8.level=-1;perc8.pan=0.25\n"
+    "perc9.role=Tom;perc9.engine=Modal;perc9.pitch=220;perc9.low_cut=190;perc9.mode_set=Membrane;perc9.mode_damp=0.6;perc9.decay=280;"
+    "perc9.noise=0.08;perc9.noise_decay=15;perc9.filter=Low Pass;perc9.cutoff=6000;perc9.level=-8;perc9.pan=-0.2;perc9.tune=1\n"
+    "perc10.role=Conga;perc10.engine=Modal;perc10.pitch=330;perc10.mode_set=Harmonic;perc10.mode_damp=0.4;perc10.decay=180;"
+    "perc10.noise=0.05;perc10.noise_decay=8;perc10.filter=Low Pass;perc10.cutoff=8000;perc10.low_cut=220;perc10.level=-10;perc10.pan=0.3;perc10.tune=1\n"
+    "perc11.role=Zap;perc11.engine=FM;perc11.pitch=420;perc11.pitch_amount=8;perc11.pitch_decay=35;perc11.fm_ratio=1.5;"
+    "perc11.fm_index=3;perc11.decay=110;perc11.filter=Low Pass;perc11.cutoff=9000;perc11.resonance=0.4;perc11.drive=0.3;"
+    "perc11.level=-12;perc11.pan=0.4\n"
+    "perc12.role=Blip;perc12.engine=Tone;perc12.pitch=1100;perc12.pitch_amount=1.3;perc12.pitch_decay=4;perc12.decay=45;"
+    "perc12.filter=Band Pass;perc12.cutoff=1800;perc12.resonance=0.2;perc12.level=-12;perc12.pan=-0.4;perc12.tune=1\n";
 
 const ParamDesc kKickParams[kick::Count] = {
     { "engine",      "Engine",       "",     0.0f,     1.0f,    0.0f, Curve::Choice, kKickEngineNames },
@@ -89,6 +162,8 @@ const ParamDesc kMixParams[mix::Count] = {
     { "kick_mute", "Kick Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
     { "bass_mute", "Bass Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
     { "track_gain", "Track Gain", "dB", -12.0f, 12.0f, 0.0f, Curve::Linear },
+    { "perc_mute",  "Perc Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
+    { "perc_level", "Perc Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
 };
 
 const ParamDesc kMasterParams[master::Count] = {
@@ -109,6 +184,7 @@ const ModuleSpec kModules[static_cast<int>(Module::Count)] = {
     { "compose", kComposeParams, compose::Count, 1 },
     { "kick",    kKickParams,    kick::Count,    1 },
     { "bass",    kBassParams,    bass::Count,    1 },
+    { "perc",    kPercParams,    perc::Count,    kPercLanes },
     { "mix",     kMixParams,     mix::Count,     1 },
     { "master",  kMasterParams,  master::Count,  1 },
 };
@@ -144,7 +220,14 @@ ParamStore::ParamStore()
         }
     }
     values_ = std::make_unique<std::atomic<float>[]>(entries_.size());
-    resetDefaults();
+    // Defaults: the descriptors', then the instance-specific ones of the default kit on top.
+    defaults_.resize(entries_.size());
+    for (int i = 0; i < count(); ++i) {
+        defaults_[static_cast<size_t>(i)] = desc(i).defValue;
+        values_[static_cast<size_t>(i)].store(desc(i).defValue, std::memory_order_relaxed);
+    }
+    parseText(kDefaultKit);
+    for (int i = 0; i < count(); ++i) defaults_[static_cast<size_t>(i)] = get(i);
 }
 
 int ParamStore::base(Module m, int instance) const
@@ -169,7 +252,7 @@ void ParamStore::set(int id, float value)
 {
     if (id < 0 || id >= count()) return;
     const ParamDesc& d = desc(id);
-    if (!(value == value)) value = d.defValue;   // NaN
+    if (!(value == value)) value = defaults_.empty() ? d.defValue : defaults_[static_cast<size_t>(id)];   // NaN
     float v = value < d.minValue ? d.minValue : (value > d.maxValue ? d.maxValue : value);
     if (isDiscrete(d.curve)) v = std::round(v);
     values_[static_cast<size_t>(id)].store(v, std::memory_order_relaxed);
@@ -198,7 +281,7 @@ float ParamStore::fromNormalised(int id, float norm) const
 
 void ParamStore::resetDefaults()
 {
-    for (int i = 0; i < count(); ++i) values_[static_cast<size_t>(i)].store(desc(i).defValue, std::memory_order_relaxed);
+    for (int i = 0; i < count(); ++i) values_[static_cast<size_t>(i)].store(defaults_[static_cast<size_t>(i)], std::memory_order_relaxed);
 }
 
 int ParamStore::moduleCount(Module m)
@@ -302,7 +385,7 @@ std::string ParamStore::toText(bool onlyChanged) const
     char buf[64];
     for (int i = 0; i < count(); ++i) {
         const float v = get(i);
-        if (onlyChanged && v == desc(i).defValue) continue;
+        if (onlyChanged && v == defaults_[static_cast<size_t>(i)]) continue;
         // %.9g round-trips every float exactly.
         std::snprintf(buf, sizeof(buf), "%.9g", static_cast<double>(v));
         out += key(i);

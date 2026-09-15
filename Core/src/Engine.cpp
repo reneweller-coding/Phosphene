@@ -25,8 +25,11 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/)
     sr_ = sampleRate;
     kickBuf_.assign(static_cast<size_t>(kChunk), 0.0f);
     bassBuf_.assign(static_cast<size_t>(kChunk), 0.0f);
+    percL_.assign(static_cast<size_t>(kChunk), 0.0f);
+    percR_.assign(static_cast<size_t>(kChunk), 0.0f);
     kick_.prepare(sr_);
     bass_.prepare(sr_);
+    perc_.prepare(sr_);
     reset();
 }
 
@@ -44,6 +47,7 @@ void Engine::reset()
     beatNow_.store(0.0, std::memory_order_relaxed);
     kick_.reset();
     bass_.reset();
+    perc_.reset();
     clipL_.reset();
     clipR_.reset();
 }
@@ -107,6 +111,8 @@ void Engine::applyParams()
     const int cb = p.base(Module::Compose);
     keyRoot_ = static_cast<int>(std::lround(eff_[static_cast<size_t>(cb + compose::Key)]));
     pattern_ = static_cast<int>(std::lround(eff_[static_cast<size_t>(cb + compose::BassPattern)]));
+    scale_ = static_cast<int>(std::lround(eff_[static_cast<size_t>(cb + compose::Scale)]));
+    for (int l = 0; l < kPercLanes; ++l) perc_.update(l, eff_.data() + p.base(Module::Perc, l), keyRoot_, scale_);
     // The tempo is read at chunk starts only: a control event inside a chunk must not change the
     // beats per sample the rest of that chunk is timed with.
     if (chunkPos_ == 0 || beatsPerSample_ <= 0.0) {
@@ -140,6 +146,8 @@ void Engine::applyParams()
     const int mb = p.base(Module::Mix);
     kickMute_ = eff_[static_cast<size_t>(mb + mix::KickMute)] >= 0.5f;
     bassMute_ = eff_[static_cast<size_t>(mb + mix::BassMute)] >= 0.5f;
+    percMute_ = eff_[static_cast<size_t>(mb + mix::PercMute)] >= 0.5f;
+    percGain_ = percMute_ ? 0.0f : dbToGain(eff_[static_cast<size_t>(mb + mix::PercLevel)]);
     const int ms = p.base(Module::Master);
     masterGain_ = dbToGain(eff_[static_cast<size_t>(ms + master::Gain)] + eff_[static_cast<size_t>(mb + mix::TrackGain)]);
     ceiling_ = dbToGain(eff_[static_cast<size_t>(ms + master::Ceiling)]);
@@ -159,6 +167,12 @@ void Engine::dispatch(const NoteEvent& e, double late)
         bass_.noteOn(e.pitch, vel, std::max(1, static_cast<int>(std::lround(samples))), late, bassPhase_);
         break;
     }
+    case Part::Perc: {
+        const int lane = e.lane < kPercLanes ? e.lane : 0;
+        const int shift = static_cast<int>(e.pitch) - kPercRoleNote[static_cast<int>(perc_.role(lane))];
+        perc_.trigger(lane, vel, shift, late);
+        break;
+    }
     default:
         break;
     }
@@ -169,11 +183,14 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
     if (count <= 0) return;
     kick_.process(kickBuf_.data(), count);
     bass_.process(bassBuf_.data(), count);
+    perc_.process(percL_.data(), percR_.data(), count);
     const float kg = kickMute_ ? 0.0f : 1.0f, bg = bassMute_ ? 0.0f : 1.0f;
     const float invCeil = 1.0f / ceiling_;
     for (int i = 0; i < count; ++i) {
-        const float x = (kg * kickBuf_[static_cast<size_t>(i)] + bg * bassBuf_[static_cast<size_t>(i)]) * masterGain_;
-        float l = x, r = x;
+        // Kick and bass are mono and centred; the percussion brings the stereo.
+        const float mono = kg * kickBuf_[static_cast<size_t>(i)] + bg * bassBuf_[static_cast<size_t>(i)];
+        float l = (mono + percGain_ * percL_[static_cast<size_t>(i)]) * masterGain_;
+        float r = (mono + percGain_ * percR_[static_cast<size_t>(i)]) * masterGain_;
         if (clip_) {
             l = ceiling_ * clipL_(l * invCeil);
             r = ceiling_ * clipR_(r * invCeil);
@@ -187,6 +204,7 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
 
 void Engine::process(float* L, float* R, int n)
 {
+    const DenormalGuard guard;
     int done = 0;
     while (done < n) {
         if (chunkPos_ == 0) {

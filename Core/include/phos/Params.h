@@ -47,13 +47,28 @@ struct ParamDesc {
 };
 
 /** @brief The modules that own parameters. */
-enum class Module : int { Compose = 0, Kick, Bass, Mix, Master, Count };
+enum class Module : int { Compose = 0, Kick, Bass, Perc, Mix, Master, Count };
+
+constexpr int kPercLanes = 12;   ///< instances of the percussion lane module
 
 /** @brief Parameters of the composer (read as a snapshot when bars are composed). */
 namespace compose {
 enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation, BassRegister,
-             TrackBars, TrackVariation, SoundVariation, TempoRange, LevelMatch, Count };
+             TrackBars, TrackVariation, SoundVariation, TempoRange, LevelMatch,
+             PercDensity, PercVariation, Swing, Count };
 }
+/** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
+namespace perc {
+enum : int { Active, Role, Engine, Pitch, PitchAmount, PitchDecay, FmRatio, FmIndex, ModeSet, ModeDamp,
+             MetalScale, Noise, NoiseDecay, Bursts, BurstSpacing, Decay, Filter, Cutoff, Resonance, LowCut,
+             Drive, Level, Pan, Choke, Shift, Density, Tune, Count };
+}
+/** @brief What a percussion lane plays in the groove; decides its patterns and its MIDI note. */
+enum class PercRole : int { ClosedHat = 0, OpenHat, Ride, Crash, Clap, Snare, Rim, Shaker, Tom, Conga, Zap, Blip, Count };
+constexpr int kNumPercRoles = static_cast<int>(PercRole::Count);   ///< number of roles
+/** @brief Sound sources of a percussion lane. */
+enum class PercEngine : int { Noise = 0, Metal, Modal, Tone, Fm, Count };
+extern const char* const kPercRoleNames[kNumPercRoles];   ///< display names of perc.role
 /** @brief Parameters of the kick drum. */
 namespace kick {
 enum : int { Engine, Tune, PitchEnd, PitchStart, PitchDecay, PunchDecay, Punch, AmpAttack, AmpHold, AmpDecay,
@@ -71,7 +86,7 @@ enum class SubMode : int { Mixed = 0, Split };
 enum class KickLock : int { Off = 0, BassFollowsKick, KickFollowsBass };
 /** @brief Parameters of the mixer. */
 namespace mix {
-enum : int { KickMute, BassMute, TrackGain, Count };
+enum : int { KickMute, BassMute, TrackGain, PercMute, PercLevel, Count };
 }
 /** @brief Parameters of the master section. */
 namespace master {
@@ -124,6 +139,11 @@ public:
 
     /** @brief All parameters back to their defaults. */
     void resetDefaults();
+    /**
+     * @brief Default of @p id: the descriptor's default, or the instance's own where a module's
+     *        instances start from different values (the twelve lanes of the percussion kit).
+     */
+    float defaultValue(int id) const { return defaults_[static_cast<size_t>(id)]; }
     /** @brief Copies every value from another store (for snapshots on another thread). */
     void copyValuesFrom(const ParamStore& other);
     /**
@@ -163,6 +183,7 @@ private:
     };
     std::vector<Entry> entries_;
     std::unique_ptr<std::atomic<float>[]> values_;
+    std::vector<float> defaults_;
     std::unordered_map<std::string, int> index_;
     static constexpr int kMaxInstances = 16;
     int bases_[static_cast<int>(Module::Count)][kMaxInstances] = {};
