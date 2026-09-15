@@ -67,6 +67,7 @@ void Poly::prepare(double sampleRate)
     wtRow_.assign(static_cast<size_t>(kPolyBlock * kPolySlots), 0.0f);
     for (int i = 0; i < kNumWaveTables; ++i) builtinWaveTable(i);   // built here, never on the audio thread
     table_ = &builtinWaveTable(0);
+    sawTable_ = &builtinWaveTable(kClassicTable);
     reset();
 }
 
@@ -84,6 +85,7 @@ void Poly::reset()
         hpHz_[v] = 220.0f;
         posEnv_[v] = 0.0f;
         lfoPh_[v] = 0.0;
+        sawVoice_[v] = false;
         voiceCoefs(v);
     }
     counter_ = 0;
@@ -148,7 +150,18 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     const double velGain = 1.0 - v[poly::VelSens] + v[poly::VelSens] * vel_[voice];
     const double width = v[poly::Width];
     const double wave = v[poly::Wave];
-    const double fmI = v[poly::FmIndex];
+    // Frequency modulation is band-limited by Carson's rule instead of by oversampling: the significant
+    // sidebands of a two-operator pair reach f_c + (I + 1) f_m, so an index above
+    // ((0.45 sr) - f_c) / f_m - 1 folds its outer sidebands back as aliasing. Measured on 16.09.2026 at
+    // C6 with ratio 3.5: index 10 left aliasing 15.7 dB under the carrier, index 2.5 (the knob's
+    // default) 103.8 dB under it; at ratio 7.3 the aliasing was 6 dB *above* the carrier. Two-times
+    // oversampling with the half-band only moved that to -39 dB and costs a second oscillator pass,
+    // while clamping the index costs nothing and is where the classic instruments draw the line as well
+    // (Chowning, "The synthesis of complex audio spectra by means of frequency modulation", JAES 21(7),
+    // 1973, section 3, on the bandwidth of the modulated spectrum).
+    const double fmRatio = std::max(0.0625, static_cast<double>(v[poly::FmRatio]));
+    const double fmRoom = std::max(0.0, (0.45 * sr_ - f0) / (f0 * fmRatio) - 1.0);
+    const double fmI = std::min(static_cast<double>(v[poly::FmIndex]), fmRoom);
     const float idxDecay = static_cast<float>(std::exp(-3.0 / (std::max(1.0, v[poly::FmDecay] * 0.001 * sr_))));
 
     double gains[kPolyUnison] = {}, detuneScale = 1.0;
@@ -172,6 +185,12 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     for (double g : gains) power += g * g;
     const double norm = power > 0.0 ? 1.0 / std::sqrt(power) : 0.0;
 
+    // The supersaw reads the mipmapped saw of the Classic table; only the VA blends a PolyBLEP ramp
+    // into a pulse. A table frame is normalised to another RMS than the ramp, hence kSawTableGain.
+    const bool sup = osc == static_cast<int>(PolyOsc::Supersaw);
+    sawVoice_[voice] = sup;
+    const double tableGain = sup ? static_cast<double>(kSawTableGain) : 1.0;
+
     for (int u = 0; u < kPolyUnison; ++u) {
         const int s = voice * kPolyUnison + u;
         const double hz = f0 * (1.0 + kSupersawOffsets[u] * y * detuneScale);
@@ -182,7 +201,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         slots_.mdt[s] = static_cast<float>(mdt);
         slots_.pw[s] = v[poly::PulseWidth];
         const bool fm = osc == static_cast<int>(PolyOsc::Fm);
-        const bool wt = osc == static_cast<int>(PolyOsc::Wavetable);
+        const bool wt = osc == static_cast<int>(PolyOsc::Wavetable) || sup;
         slots_.wWt[s] = wt ? 1.0f : 0.0f;
         wtDt_[s] = hz / sr_;
         wtLevel_[s] = waveLevelFor(hz, sr_, -1);
@@ -196,7 +215,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         slots_.idxFloor[s] = static_cast<float>(0.3 * fmI);
         slots_.idxDecay[s] = idxDecay;
         const double theta = (std::clamp(width * kUnisonPan[u], -1.0, 1.0) + 1.0) * kPiD / 4.0;
-        const double g = gains[u] * norm * velGain;
+        const double g = gains[u] * norm * velGain * tableGain;
         slots_.gL[s] = static_cast<float>(g * std::cos(theta) * std::sqrt(2.0));
         slots_.gR[s] = static_cast<float>(g * std::sin(theta) * std::sqrt(2.0));
         // Szabo: a new random phase for every oscillator at every note. `late` samples already passed.
@@ -256,6 +275,18 @@ void Poly::renderSegment(float* L, float* R, int n)
                 for (int u = 0; u < kPolyUnison; ++u) wtRow_[static_cast<size_t>(i * kPolySlots + s0 + u)] = 0.0f;
             continue;
         }
+        if (sawVoice_[voice]) {
+            // Supersaw: one frame, no position, no LFO -- a single Catmull-Rom read per slot.
+            for (int i = 0; i < n; ++i) {
+                for (int u = 0; u < kPolyUnison; ++u) {
+                    const int s = s0 + u;
+                    wtRow_[static_cast<size_t>(i * kPolySlots + s)] = sawTable_->sample(wtLevel_[s], kClassicSawFrame, wtPh_[s]);
+                    wtPh_[s] += wtDt_[s];
+                    if (wtPh_[s] >= 1.0) wtPh_[s] -= 1.0;
+                }
+            }
+            continue;
+        }
         for (int i = 0; i < n; ++i) {
             const float lfo = static_cast<float>(std::sin(2.0 * kPiD * lfoPh_[voice]));
             const float pos = v[poly::Position] + v[poly::PosEnv] * posEnv_[voice] + v[poly::PosLfoDepth] * lfo;
@@ -273,10 +304,15 @@ void Poly::renderSegment(float* L, float* R, int n)
     // Groups of eight slots and eight channels run when any of their voices sounds: the same decision
     // on every vector path.
     for (int g = 0; g < kPolySlots / 8; ++g) {
-        bool on = false;
-        for (int s = g * 8; s < g * 8 + 8; ++s) on = on || voiceOn[s / kPolyUnison];
+        bool on = false, blep = false, fm = false, wt = false;
+        for (int s = g * 8; s < g * 8 + 8; ++s) {
+            on = on || voiceOn[s / kPolyUnison];
+            blep = blep || slots_.wSaw[s] != 0.0f || slots_.wPulse[s] != 0.0f;
+            fm = fm || slots_.wFm[s] != 0.0f;
+            wt = wt || slots_.wWt[s] != 0.0f;
+        }
         if (on) {
-            for (int s = g * 8; s < g * 8 + 8; s += width) polySlotKernel<V>(slots_, s, n, wtRow_.data(), slotL_.data(), slotR_.data());
+            for (int s = g * 8; s < g * 8 + 8; s += width) polySlotKernel<V>(slots_, s, n, wtRow_.data(), blep, fm, wt, slotL_.data(), slotR_.data());
         } else {
             for (int i = 0; i < n; ++i)
                 for (int s = g * 8; s < g * 8 + 8; ++s) slotL_[static_cast<size_t>(i * kPolySlots + s)] = slotR_[static_cast<size_t>(i * kPolySlots + s)] = 0.0f;

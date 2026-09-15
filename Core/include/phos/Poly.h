@@ -4,7 +4,12 @@
  *
  * **Supersaw** (the default of the lead). Seven sawtooth oscillators after Szabo's measurement of the
  * Roland JP-8000 ("How to emulate the super saw", thesis, Stockholm 2010), all four of its findings
- * adopted and each number taken from the thesis itself:
+ * adopted and each number taken from the thesis itself. Each of the seven reads the *mipmapped* saw
+ * of the Classic table (WaveTable.h) rather than generating a PolyBLEP ramp: measured on 16.09.2026,
+ * the table saw leaves 30 dB less aliasing at C5 and C6 and 20 dB less at A6 (docs/PLAN.md). PolyBLEP
+ * remains the VA oscillator, where one saw per voice is blended into a pulse and a table cannot give
+ * the pulse width. The table frame is normalised to a different RMS than the ramp, so the slot gains
+ * carry kSawTableGain and the lead keeps its calibrated level.
  *  - *Detune.* The side oscillators sit at 1 + a_i y(x) times the centre frequency with
  *    a = (-0.11002313, -0.06288439, -0.01952356, 0, 0.01991221, 0.06216538, 0.10745242) (table 1),
  *    where the detune knob x goes through the eleventh-degree polynomial y(x) fitted to the
@@ -27,7 +32,9 @@
  * log2 of the length.
  *
  * **VA** plays the centre and the inner pair of oscillators as saw-to-pulse blends; **FM** plays
- * two-operator phase modulation on the same three oscillators (PolyKernel.h). **Wavetable** (the pad
+ * two-operator phase modulation on the same three oscillators (PolyKernel.h), with the index limited
+ * per note so that the outer sidebands Carson's rule predicts still fit under Nyquist -- an FM voice
+ * is otherwise the one oscillator that can alias louder than its own carrier (Poly.cpp). **Wavetable** (the pad
  * instance's default) plays all seven oscillators with Szabo's detune and mix, each reading a built-in
  * table (WaveTable.h) at its own random phase; the table position moves with an envelope and a slow LFO
  * whose period is given in beats. A table read is a gather, so it runs on the scalar side and hands the
@@ -201,7 +208,9 @@ private:
     double wtPh_[kPolySlots] = {};            ///< wavetable phase per slot (double: long pads)
     double wtDt_[kPolySlots] = {};            ///< wavetable phase step per slot
     int wtLevel_[kPolySlots] = {};            ///< table level per slot
+    bool  sawVoice_[kPolyVoices] = {};        ///< voice plays the supersaw: the Classic saw frame, no position
     const WaveTable* table_ = nullptr;
+    const WaveTable* sawTable_ = nullptr;     ///< the Classic table, whose frame kClassicSawFrame is the saw
     float posDecay_ = 0.999f, lfoInc_ = 0.0f;
     double bpm_ = 145.0;
     uint64_t counter_ = 0;
