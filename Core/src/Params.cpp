@@ -77,6 +77,10 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "melody_model",    "Melody Model",    "",      0.0f,   1.0f,   0.0f, Curve::Choice, kMelodyModelNames },
     // Phase 8, bass round: the pattern families or the learned fourth role behind the bass pitches.
     { "bass_model",      "Bass Model",      "",      0.0f,   1.0f,   0.0f, Curve::Choice, kBassModelNames },
+    // 16.09.2026: modal interchange. A section may borrow another mode over the track's tonic pedal
+    // -- Dorian in the groove, Phrygian in the drive, Phrygian dominant at the peak (Form.h). On by
+    // default because that is what the genre does; the bass does not move with it either way.
+    { "modal_interchange","Modal Interchange","",     0.0f,   1.0f,   1.0f, Curve::Toggle },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };

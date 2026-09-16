@@ -475,12 +475,19 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     t.arcIn = static_cast<float>(arcEnergy(arc, t.firstBar / setBars));
     t.arcOut = static_cast<float>(arcEnergy(arc, (t.firstBar + w.bars) / setBars));
 
-    // The form: a track's own decision, so it hangs off the track's seed and is rerollable.
+    // The form: a track's own decision, so it hangs off the track's seed and is rerollable. The
+    // section seeds are made first, because since 16.09.2026 the form draws each section's borrowed
+    // mode from the section's own seed (Form.h) -- a section is a lockable unit and its mode has to
+    // move with it. They do not depend on the form, only on the track, so nothing is circular.
+    for (int s = 0; s < kMaxSections; ++s) t.sectionSeed[s] = sectionSeedOf(index, s);
     t.formSeed = mixSeed(trackSeed(index) ^ kSaltFormU, 0);
-    t.form = makeFormPlan(style, t.formSeed, w.bars, t.arcIn, t.arcOut);
+    // Modal interchange off: a style profile whose chance is zero, which makes every section keep
+    // the track's mode. That is the A/B the self test uses to prove the bass does not move.
+    StyleProfile interchange = style;
+    if (!p.getBool(cb + compose::ModalInterchange)) interchange.interchangeChance = 0.0f;
+    t.form = makeFormPlan(interchange, t.formSeed, w.bars, t.arcIn, t.arcOut, t.scale, t.sectionSeed);
     makeFormSfx(t.form, t.formSeed, p.get(cb + compose::SfxAmount));
     t.bars = t.form.bars;
-    for (int s = 0; s < kMaxSections; ++s) t.sectionSeed[s] = sectionSeedOf(index, s);
 
     uint64_t laneSeeds[kPercLanes];
     for (int l = 0; l < kPercLanes; ++l) laneSeeds[l] = laneSeedOf(index, l);
@@ -490,7 +497,9 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     // The colour of the lead -- how much weight the flat second and the augmented second get -- follows
     // the style profile and the track's place on the energy arc (Farbood's dissonance).
     const float colour = std::clamp(style.colour * (0.4f + 0.6f * 0.5f * (t.arcIn + t.arcOut)), 0.0f, 1.0f);
-    t.melody = makeMelodyPlan(p, style, t.melodySeed, t.key, t.scale, index == 0, colour);
+    // The form's scale mask says which modes need recoloured material; with interchange off it holds
+    // the track's mode alone and makeMelodyPlan does exactly what it did before.
+    t.melody = makeMelodyPlan(p, style, t.melodySeed, t.key, t.scale, index == 0, colour, t.form.scaleMask);
 
     if (index == 0) {
         t.primaryPattern = std::clamp(p.getInt(cb + compose::BassPattern), 0, kNumBassPatterns - 1);

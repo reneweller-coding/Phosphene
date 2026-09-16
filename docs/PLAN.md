@@ -2756,6 +2756,166 @@ Breite gemessen statt behauptet wird.
 **eine Schranke in `testReverb`** von −30 auf −29,5 dB, siehe oben), `Tools/metrics.py`. Neu:
 `Tools/ref_width.py`, `Tools/ref_width.json`.
 
+**16.09.2026, Modaler Wechsel, gemessene Spannungskurve, motivische Operatoren**
+
+Vier Punkte aus einem Review des Nutzers, in dieser Reihenfolge. Selbsttest danach **249 Prüfungen
+(237 + 12), 0 Fehler**.
+
+*1. Modaler Wechsel über dem Grundton-Pedal.* `Section` trug bisher keine Tonleiter; innerhalb eines
+Tracks stand der Modus über die ganze Länge fest, und `StyleProfile::scaleWeight` gewichtete nur die
+Tonartenreise **zwischen** Tracks. In Goa und Full-On bleibt der Bass aber auf dem Grundton, während
+die melodische Schicht den Modus wechselt — Dorisch im Groove, Phrygisch im Hauptzug,
+phrygisch-dominant (die erhöhte Terz, die Hijaz-Farbe) im Höhepunkt. Das Pedal ist das, was den
+Modus wandern lässt, ohne das Fundament zu verlieren.
+
+Jede Sektion trägt jetzt ihren eigenen `scale`. Er wird aus dem **Sektions-Seed** gezogen (eine
+Sektion ist eine sperrbare Einheit, PLAN 6.8), aus `StyleProfile::interchangeWeight` und
+`interchangeChance` — Goa greift zu phrygisch-dominant und doppelt-harmonisch, Progressive bleibt bei
+Dorisch und Äolisch — und die **Energie der Sektion** entscheidet, wie weit sie greifen darf: das
+Gewicht eines Modus wird mit `exp(kInterchangeEnergy * (energy − 0,7) * Farbtöne(Modus))`
+multipliziert. Gemessen über 400 Formen je Stil: der Hijaz-Anteil der geborgten Modi liegt bei Goa
+bei **0,541 in Sektionen mit hoher Energie gegen 0,228 bei niedriger**; Progressive verlässt Dorisch,
+Äolisch und Phrygisch in keiner von 3471 Sektionen. Die Farbtonzahl eines Modus wird gerechnet, nicht
+tabelliert (`scaleColourTones`, Harmony.h), und ergibt genau die Rangfolge der Literatur: Äolisch und
+Dorisch 0, Phrygisch und harmonisch Moll 1, phrygisch-dominant 2, doppelt-harmonisch 3.
+
+Das Material einer geborgten Tonleiter entsteht, indem dieselben Macher mit **demselben Seed** und
+einem anderen Modus noch einmal laufen: Rhythmus, Akzente und Slides kommen identisch heraus, nur die
+Tonhöhen sind umgefärbt. Das ist genau „eine Änderung der erlaubten Menge, kein neues Subsystem".
+`FormPlan::scaleMask` sagt `makeMelodyPlan`, welche Modi gebraucht werden; ohne Wechsel steht dort
+nur der Track-Modus, und dann passiert nichts Neues. Intro und Outro behalten immer den Track-Modus:
+sie sind die DJ-freundlichen Enden, über die das nächste Intro geschrieben wird (PLAN 6.7).
+
+**Der Bass bewegt sich nicht.** Bassgrundton, Register, Gate-Grenze, die gelernte Bass-Phrase und die
+Akkordverschiebung von `compose.bass_follows_chords` lesen alle den Modus des **Tracks**, nie den
+einer Sektion. Nachgewiesen, nicht behauptet: derselbe Seed mit `compose.modal_interchange=On` und
+`=Off`, sechs Tracks à 128 Takte, Goa, `bass_follows_chords=On` — **6698 Kick- und Bassnoten, davon 0
+verschoben**, auch die jeweils erste Bassnote eines Tracks (an der die Kick-Phase hängt) auf
+derselben Zeit und Tonhöhe, während 3428 melodische Tonhöhen sich unterscheiden. Ohne den zweiten
+Teil wäre der erste wertlos.
+
+*Nutzt das Modell den neuen Ton?* Das neuronale Modell ist auf Rolle, Stil, Takte, Step, Takt, Lücke
+und Index konditioniert — **nicht auf den Modus**; nur die Maske erzwingt ihn. Gemessen über zwölf
+Tracks: der Anteil der Noten, die auf einer vom geborgten Modus **neu** zugelassenen Tonhöhenklasse
+liegen, gegen die Nullhypothese „jede zugelassene Stufe gleich wahrscheinlich" (aus der Zahl der
+Symbole im Fenster gerechnet). Markov **0,086 gegen 0,162, Verhältnis 0,53**; das neuronale Modell
+**0,075 gegen 0,162, Verhältnis 0,47**. Beide *weichen dem neuen Ton aus* — das neuronale stärker —
+und greifen ihn nur halb so oft, wie eine mode-blinde Gleichverteilung es täte. Das ist der
+interessante Befund: die Maske lässt die Hijaz-Terz zu, das Modell hat keinen Grund, sie zu erwarten,
+und routet um sie herum. Die Abhilfe — Konditionierung auf den Modus, Nachtraining — gehört in eine
+spätere Runde, nicht in diese.
+
+*MIDI-Export.* Ein Moduswechsel ohne Tonartwechsel wird **nicht** als `FF 59` geschrieben. Das
+Key-Signature-Meta-Ereignis der SMF-Spezifikation trägt nur eine Zahl von Kreuzen oder Ben und ein
+Dur/Moll-Byte; es kann phrygisch-dominant nicht ausdrücken. Bei gleichem Grundton käme byteweise
+dasselbe Ereignis noch einmal heraus (ein Nichts), und eine andere Vorzeichenzahl zu schreiben würde
+über den Grundton lügen, der sich gerade nicht bewegt hat. `Score::keyChanges` bleibt den echten
+Tonartwechseln an Trackgrenzen vorbehalten.
+
+*2. Die Spannungskurve: gemessen, nicht behauptet.* Das Review schlug Lerdahls Stabilitätshierarchie
+(*Tonal Pitch Space*, Oxford 2001) vor — die ist solide — und dazu einen Fahrplan über acht Takte:
+Takt 1–4 stabil, 5–6 steigend, Takt 7 der Gipfel, Takt 8 auflösend auf Grundton oder Quinte. Der
+Fahrplan ist eine Design-Behauptung und **messbar**. `Tools/corpus/measure_tension.py` zählt Lerdahls
+Instabilität (5 minus die Tiefe im Basic Space: 0 Grundton, 1 Quinte, 2 kleine Terz, 3 übrige
+diatonische Stufen, 4 chromatisch) gegen die Position in der Phrase, über **655 entduplizierte
+Korpus-Linien** (666 minus 11 Beinah-Dubletten), mit **gepaarten** Kontrasten je Linie und
+Bootstrap-Intervallen über Linien, nicht über Noten.
+
+Was der Korpus zeigt:
+
+| Rolle | Zählzeit 4 − Zählzeit 1 (gepaart, 95 %) | Takt-Parität ungerade − gerade (gepaart, 95 %) |
+|---|---|---|
+| Acid | +0,446 [+0,164, +0,760] | +0,139 [+0,044, +0,248] |
+| Lead | +0,552 [+0,318, +0,788] | +0,199 [+0,074, +0,323] |
+| Arp  | +0,287 [+0,212, +0,360] | +0,116 [+0,089, +0,144] |
+
+Alle sechs Intervalle schließen die Null aus. Die Kurve ist also: **Instabilität steigt innerhalb des
+Taktes** von Zählzeit 1 zu 4, und sie **alterniert mit Periode zwei Takte** — der zweite Takt eines
+Zweitakt-Paares ist der unruhigere. Was der Korpus **nicht** zeigt: den Achttakt-Bogen. Es gibt keinen
+Gipfel in Takt 7, und die letzte Note eines Taktes ist *seltener* Grundton oder Quinte, je weiter die
+Viertaktgruppe fortschreitet (Arp 0,731 → 0,596, Acid 0,638 → 0,538, Lead 0,582 → 0,484) — das
+Gegenteil einer phrasenschließenden Auflösung. Umgesetzt ist deshalb genau das Gemessene und sonst
+nichts: ein exponentieller Tilt `exp(tilt · D(Zählzeit, Taktparität) · Instabilität)` auf **denselben**
+Positionsgewichten, die der Energiebogen für seine Farbe benutzt. Ein konstanter Faktor an einer
+Position kürzt sich im Sampler (CorpusSample.inl) heraus, also ändert der Tilt nur die *Form* der
+Verteilung, und die beiden Gewichtungen multiplizieren sich, statt sich zu bekämpfen.
+
+Die Stärke wurde **rückwärts aus der Messung** kalibriert, über 400 Tracks je Einstellung. Die
+Theorie (Tilt · D · Var(Instabilität), Var ≈ 1,27) hätte 0,8 gesagt; gemessen überschießt das um das
+Dreifache, weil die Modellverteilung viel schärfer auf einen Tilt reagiert als eine Gleichverteilung.
+
+| Tilt | Acid Zählzeit | Lead Zählzeit | Acid Parität | Lead Parität |
+|---|---|---|---|---|
+| 0,00 (vorher) | +0,147 | +0,381 | +0,062 | +0,203 |
+| **0,20** | **+0,228** | **+0,558** | **+0,079** | **+0,276** |
+| 0,28 | +0,235 | +0,603 | +0,106 | +0,316 |
+| 0,40 | +0,265 | +0,696 | +0,101 | +0,376 |
+| Korpus | +0,446 | +0,552 | +0,139 | +0,199 |
+
+0,20 legt den Zählzeit-Kontrast des Leads auf den Korpuswert und alle vier Werte in die
+Korpus-Intervalle; 0,40 drückt die Lead-Parität heraus, 0 — das Verhalten vorher — lässt den
+Acid-Kontrast darunter. Der Paritätsterm trägt nur die **halbe** Verstärkung (`kParityGain`), auch das
+gemessen: ein konstanter Versatz über einen ganzen Takt bewegt den Mittelwert einer Linie etwa doppelt
+so stark wie eine Differenz *innerhalb* eines Taktes, und mit gleicher Verstärkung lag die Parität
+außerhalb ihres Intervalls. **Für das Arp ist der Tilt 0**, mit Grund: seine erlaubte Menge ist der
+Akkord und sonst nichts (PLAN 6.5), und innerhalb eines Dreiklangs tragen die drei Tonhöhenklassen
+Instabilitäten von nur 0, 2 und 1 — bei Tilt 0,8 kam ein Kontrast von +0,017 gegen den Korpuswert
++0,287 heraus. Die Kurve dort zu tragen hieße, das Arp vom Akkord zu lösen; das ist mehr, als die
+Kurve wert ist. Also: gemessen, berichtet, nicht umgesetzt. Der Farbanteil des Energiebogens (7,4 %
+bis 46,0 %) bleibt grün, die beiden Gewichtungen multiplizieren sich wie vorgesehen.
+
+*3. Motivische Operatoren.* Die Lead-Phrase `A A' B A''` variierte nur durch teilweises Neuziehen.
+A'' nimmt jetzt zusätzlich **eine** systematische Transformation, pro Phrase gezogen (Gewichte
+0,40 / 0,20 / 0,20 / 0,20): **rhythmische Phasenverschiebung** des Zweitakt-Motivs um eine
+Sechzehntel (zyklische Rotation innerhalb der 32 Steps — das Motiv loopt, also ist das *die*
+Phasenverschiebung; jede Note, die auf einer Zählzeit saß, sitzt danach knapp daneben),
+**konturerhaltende Spreizung** (jede Note auf das erste von ihrer Position erlaubte Symbol, das
+*echt weiter* vom Vorgänger entfernt liegt als im Elternteil, in derselben Richtung — das kann die
+Kontur nie umdrehen) und **Oktavsprünge** (einzelne Offbeat-Sechzehntel um +12 versetzt, das
+Goa-Lead-Idiom; eine Oktave behält die Tonhöhenklasse, also bleibt die Note in der Tonleiter und ein
+Akkordton ein Akkordton). Lässt sich ein Intervall nicht spreizen, wird das Elternintervall genommen,
+und geht auch das nicht, wird die ganze Variante verworfen und das Elternteil behalten: eine
+Spreizung, die *verengt*, ist keine. Geprüft an 1200 synthetischen Elternlinien über alle sechs Modi:
+**0 Konturvorzeichen gebrochen, 0 Intervalle verengt**, 37 % verworfen (zufällige Eltern, die den
+Ambitus schon ausfüllen). Bezug: Schoenbergs entwickelnde Variation, wie Frisch sie liest ("Brahms
+and the Principle of Developing Variation", University of California Press 1984).
+
+*4. Euklidische und polymetrische Arpeggien.* `arpStyle` hat zwei Familien mehr, beide über **den
+vorhandenen** Euklid-Generator der Percussion (`euclid`, `lhlSyncopation`, Rhythm.h), kein zweiter:
+**Euklid** wählt die Steps eines Taktes als E(5,16), E(7,16) oder deren Nachbarn E(4,16) bis E(8,16)
+(Toussaint 2005), und die Rotation wird — wie bei einer euklidischen Percussion-Lane — auf eine
+**mittlere** Synkopierung gelegt statt auf ein Extrem (Sioros et al. 2014: Groove steigt mit
+moderater Synkope). **Polymeter** ist eine Zelle von drei Sechzehnteln gegen den 4/4-Takt: gelesen am
+absoluten Sechzehntel des Tracks beginnt sie in jedem Takt einen Step später (16 mod 3 = 1) und kommt
+alle drei Takte heim; ihr Akzent — die erste Note der Zelle — präzediert mit, und das ist der hörbare
+Punkt. Gemessen, was das Polymeter kostet: das Arp wird in **0,378 der Drops** von der
+Maskierungsregel stummgeschaltet gegen **0,453** bei den übrigen Tracks (45 bzw. 329 Drops), mittlere
+Oktavverschiebung 1,73 gegen 1,50, tiefste Arp-Note in beiden Fällen MIDI 57 (A3, 220 Hz) — die
+Tiefenregel (unter 140 Hz nur Kick und Bass) ist nicht einmal in der Nähe.
+
+*Unterwegs gefunden.* Die **Oktavsprünge trieben die Maskierungsregel**. `leadHi` wurde aus allen
+Lead-Noten gebildet, also auch aus den gesprungenen; die Regel schob das Arp daraufhin eine ganze
+Oktave höher und über die Decke, wo sie es abschaltet. Gemessen: das Arp war in **53 % der Drops**
+stumm, mit ausgenommenen Sprüngen in **26 %**. Eine einzelne versetzte Sechzehntel ist eine
+Ausschweifung, kein Register; `pitchRange` lässt sie für den Lead jetzt weg (jede *gezogene*
+Lead-Note liegt unter `kLeadRelHi`, alles darüber ist ein Sprung und sonst nichts). — Zweitens war
+die Schranke in `testSectionRules` für das Präsenzband (1,5 bis 6 kHz nach dem Drop gegen vor dem
+Break, Solberg und Dibben) mit 0,5 dB zu eng: bei einem Modus pro Track spielten Core und Drop
+dieselben Noten im selben Register und das Band stimmte auf ein Zehntel dB; mit geborgtem Modus
+spielen sie berechtigterweise andere Noten. Nachgemessen über je zwölf Tracks: schlechtester Fall
+**−0,64 dB mit Wechsel, −0,50 dB ohne** — die alte Schranke lag in beiden Fällen innerhalb der
+Streuung. Sie steht jetzt bei 1,0 dB, hergeleitet aus dieser Messung; eine fehlende Stimme bricht die
+Regel um ein Vielfaches davon.
+
+*Dateien.* Geändert: `Core/include/phos/Harmony.h` (Farbtöne, Lerdahl-Instabilität, `isColourTone`
+hierher gezogen), `Core/include/phos/Form.h` und `Core/src/Form.cpp` (Sektions-Modus,
+Stilprofil-Gewichte, `scaleMask`), `Core/include/phos/Melody.h` und `Core/src/Melody.cpp`
+(Spannungskurve, Modus-Material, Operatoren, Arp-Familien), `Core/src/Composer.cpp` (Sektions-Seeds
+vor der Form, Knopf, Maske), `Core/include/phos/Params.h` und `Core/src/Params.cpp` (nur angehängt:
+`compose.modal_interchange`), `Tests/selftest.cpp` (vier neue Abschnitte; `testMelody` und
+`testPads` prüfen jetzt gegen den Modus der **Sektion**, `testSectionRules` mit der gemessenen
+Schranke). Neu: `Tools/corpus/measure_tension.py`.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

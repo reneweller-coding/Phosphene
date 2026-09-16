@@ -68,7 +68,10 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              MelodyModel,
              // Phase 8, bass round: where the pitch of each bass note comes from -- the pattern
              // families of Patterns.h with their phrase figures, or the learned fourth role (Model.h).
-             BassModel, Count };
+             BassModel,
+             // 16.09.2026: modal interchange over the tonic pedal (Form.h). Off reproduces every
+             // note the program played before that date, which is what the self test measures against.
+             ModalInterchange, Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
 namespace perc {
