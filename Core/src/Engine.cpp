@@ -68,6 +68,8 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
     room_.prepare(sr_);
     hall_.prepare(sr_);
     comp_.prepare(sr_);
+    bandLimitL_.prepare(sr_);
+    bandLimitR_.prepare(sr_);
     limiter_.prepare(sr_, 1.5f);
     {
         const HalfbandDesign d = designHalfband(96.0, 0.1);
@@ -111,6 +113,8 @@ void Engine::reset()
     comp_.reset();
     sideHp1_.reset();
     sideHp2_.reset();
+    bandLimitL_.reset();
+    bandLimitR_.reset();
     limiter_.reset();
     clipUpL_.reset(); clipUpR_.reset(); clipDownL_.reset(); clipDownR_.reset();
     meter_.reset();
@@ -397,6 +401,14 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
             clipUpR_.process(outR[i], a, b);
             outR[i] = clipDownR_.process(kneeClip(a, T), kneeClip(b, T));
         }
+    }
+    // The upper end of the programme, before the limiter reads it. Everything above 20 kHz is cost
+    // without a listener: it throws the true-peak estimate off by 0.9 dB, it folds down when anything
+    // resamples the render to 44.1 kHz, and the clipper above turns it into difference tones inside
+    // the mix. See Dsp.h (BandLimit) for the measurements behind the corner.
+    for (int i = 0; i < count; ++i) {
+        outL[i] = bandLimitL_.process(outL[i]);
+        outR[i] = bandLimitR_.process(outR[i]);
     }
     if (limiterOn_) limiter_.process(outL, outR, count);
     if (clip_) {

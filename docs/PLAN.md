@@ -1858,6 +1858,393 @@ Runde hat verdrahtet und gemessen.
 des fertigen APK), `Quest/README.md`, `Tests/hosttest.cpp`, `Tests/vst3test.cpp`,
 `Tests/selftest.cpp` (`testWaveTableQuality`), `Tests/CMakeLists.txt`.
 
+**16.09.2026, Rauschgrenze und Stereobreite.** Zwei Kalibriergrößen, die die Mischungsrunde offen
+gelassen hat. Die erste war eine Ursache: das Programm hörte oben nicht auf. Die zweite war der
+nächste Punkt auf ihrer Liste und teilt sich mit der ersten das Messwerkzeug.
+
+### 1. Das Rauschen lief flach bis Nyquist
+
+*Der Befund, zuerst nachgemessen.* Acht Minuten Seed 7, Standardwerte, Anteile an der Gesamtleistung
+und — weil ein schmaleres Band schon durch seine Breite leiser liest — dieselben Zahlen je Hertz:
+
+| Band | Anteil | je Hertz |
+|---|---|---|
+| 16–20 kHz | −27,42 dB | −63,44 dB |
+| 20–22 kHz | −32,24 | −65,25 |
+| 22–24 kHz | −32,52 | **−65,53** |
+
+Die letzten beiden Dichten liegen **0,28 dB** auseinander: das Spektrum endet nicht, es läuft flach
+in die Nyquist-Frequenz.
+
+*Welche Quellen.* Jeder Erzeuger allein, acht Minuten, flache Masterkette (`--solo` ist eine
+Stummschaltung, aber bitgenau — das hat die Mischungsrunde mit 5 084 690 Samples belegt, für ein
+Spektrum taugt sie also). Leistung im Band 22–24 kHz auf einer gemeinsamen Skala:
+
+| Teil | 22–24 kHz | | Teil | 22–24 kHz |
+|---|---|---|---|---|
+| **Percussion** | **39,81 dB** | | Acid | −15,10 |
+| ganze Mischung (flach) | 39,82 | | Bass | −34,94 |
+| Lead | 13,13 | | Pad | −36,01 |
+| SFX | 1,82 | | Kick | −64,62 |
+
+Die Percussion **ist** das Band: sie trifft die ganze Mischung auf 0,01 dB. Innerhalb des Kits, jede
+Lane einzeln (vier Minuten, die anderen elf stumm):
+
+| Lane | Rolle | Hauptfilter | 22–24 kHz | je Hertz 16–20 / 20–22 / 22–24 |
+|---|---|---|---|---|
+| perc6 | Snare | **Hochpass 250 Hz** | **39,89 dB** | −45,64 / −45,63 / **−45,55** |
+| perc4 | Crash | **Hochpass 3000 Hz** | 27,22 | −43,22 / −43,44 / **−42,87** |
+| perc3 | Ride | Bandpass 5200 Hz | 12,59 | −58,49 / −65,15 / −73,68 |
+| perc11 | Zap | Tiefpass 9 kHz, Drive 0,3 | 11,98 | −64,63 / −63,20 / −66,69 |
+| perc5 | Clap | Bandpass 1400 Hz | 8,27 | −59,72 / −66,19 / −74,77 |
+| perc1 | Closed Hat | Tiefpass 12 kHz | 2,74 | −54,41 / −67,08 / −82,11 |
+| perc8 | Shaker | Tiefpass 11 kHz | 2,56 | −54,59 / −66,77 / −81,67 |
+| perc2 | Open Hat | Tiefpass 12 kHz | −4,65 | −54,78 / −67,38 / −82,47 |
+| perc7/9/10/12 | Rim, Tom, Conga, Blip | Band-/Tiefpass | −31 … −48 | fallend |
+
+Das ist **dieselbe Fehlerfamilie, die Phase 9 gefunden hat, in den zwei Lanes, die sie nicht
+angefasst hat**: ein Hochpass auf einer spektral flachen Quelle hat keine obere Grenze. Die drei
+Lanes, die damals einen Bandpass bekamen (perc1, perc2, perc8), sind genau die drei, deren Spektrum
+steil endet — 28 dB Abfall über die drei Bänder. Die Snare (Hochpass bei 250 Hz auf 80 % weißem
+Rauschen) trägt allein 13 dB mehr als alles andere zusammen.
+
+*Was es kostet — die Zurechnung selbst nachgemessen, und sie fällt anders aus als vermutet.* Der
+True-Peak-Schätzer der Engine ist eine bandbegrenzte Rekonstruktion bis 0,45 fs = 21,6 kHz
+(`Dynamics.h`, Nachtrag von heute früh). Auf demselben Render:
+
+| Messung | Wert |
+|---|---|
+| `Engine::meter()` / `--report` | **−0,98 dBTP** |
+| derselbe Bank in Python nachgebaut | −0,983 (die Umsetzung **ist** der Entwurf) |
+| exakt (FFT, 16-fach, mittlere Hälfte je Block) | **−0,075 dBTP** |
+| derselbe Render hart auf 21,6 kHz geschnitten, exakt | −0,182 |
+| derselbe Schnitt, vom Bank gemessen | −0,218 |
+
+Innerhalb seines Bandes ist der Schätzer auf **0,036 dB** genau; über dem ganzen Render irrt er um
+**0,905 dB**. Der ganze Fehler liegt also über 0,45 fs, und der Render lag **0,925 dB über der
+Decke**, während die Anzeige −0,98 meldete. Damit ist die Vermutung der Koordination bestätigt, aber
+mit einer Korrektur: es sind nicht „0,9 dB Inhalt über 22 kHz", die zur Spitze dazukommen — dieser
+Inhalt hebt die echte Spitze nur um 0,107 dB (−0,182 gegen −0,075). Die übrigen 0,8 dB sind, dass der
+Limiter mit einem Schätzer arbeitet, der dieses Material nicht rekonstruieren kann, und die Decke
+deshalb gar nicht erst hält. **Eine Decke in dBTP ist eine Aussage über die analoge Welle; sie ist
+nur wahr, wenn das Programm in dem Band liegt, das der Schätzer abdeckt.**
+
+Dazu die beiden anderen Kosten, beide unbestreitbar und keine Messung wert: über 20 kHz hört niemand
+etwas (Ashihara, *Hearing thresholds for pure tones above 16 kHz*, JASA 122(3), 2007 — die Schwelle
+steigt über 20 kHz über 90 dB SPL), und jeder Abtastratenwandler nach 44,1 kHz legt seinen
+Übergangsbereich auf etwa 20 bis 22,05 kHz, faltet also alles darüber als Alias nach unten.
+
+*Die Reparatur, und warum sie nicht bei den Lanes sitzt.* Der naheliegende Schritt wäre, die zwei
+Hochpässe umzudrehen, wie Phase 9 es bei den Hats getan hat. Drei Zahlen sprechen dagegen:
+
+1. Phase 9 hat genau das gemessen und **verworfen**: „Snare Tiefpass 9 kHz, Crash Bandpass 6 kHz"
+   verschlechterte den Terzabstand von 0,98 auf 1,19 dB rms.
+2. Ein Lane-Filter ist zweipolig. Ein Tiefpass bei 16 kHz liegt bei 20 kHz erst 13,5 dB tiefer; um
+   das Band wirklich zu beenden, müsste er so tief stehen, dass er das kalibrierte Luftband trifft.
+3. **Standardwerte können eine obere Grenze gar nicht versprechen.** Der Komponist legt auf jede
+   Lane je Track einen Versatz auf `cutoff` von ±0,10 im normierten Raum — bei einem Bereich von
+   100 Hz bis 18 kHz sind das ±68 % — und bis zu +0,30 auf `drive` (`Rhythm.cpp`,
+   `percRecipeOffsets`). Und die Percussion ist nicht die einzige Quelle: Lead und SFX reichen
+   ebenfalls über 20 kHz, und der Soft-Clipper der Masterkette macht dort eigene Harmonische.
+
+Die Grenze gehört deshalb dorthin, wo sie gilt, egal was die Erzeuger tun: **`BandLimit` in `Dsp.h`,
+ein Butterworth-Tiefpass vierter Ordnung bei 18 kHz aus zwei trapezförmigen SVF-Abschnitten
+(Dämpfungen 2 cos π/8 und 2 cos 3π/8), in `Engine::renderSegment` zwischen Clipper und Limiter.**
+Nach dem Clipper, weil er die letzte Stufe ist, die neue Obertöne macht; vor dem Limiter, weil der
+Limiter nur eine Decke halten kann, die er sieht.
+
+*Warum 18 kHz und vierte Ordnung.* Der trapezförmige Tiefpass trägt eine doppelte Nullstelle bei
+Nyquist, vier Pole bringen also vier Nullstellen mit, und das letzte Band vor Nyquist bricht
+zusammen. Gemessen am Kit-Solo, Kosten gegen Nutzen:
+
+| Entwurf | 16–20 kHz | 20–22 kHz | 22–24 kHz | Terzband 16 kHz | Terzkurve 2–16 kHz |
+|---|---|---|---|---|---|
+| ohne | −14,12 | −17,80 | −17,82 | ±0 | 0,000 dB rms |
+| 2-polig 18 kHz | −16,79 | −29,76 | −44,50 | −1,11 | 0,355 |
+| 4-polig 16 kHz | −22,08 | −50,85 | −78,39 | −2,87 | 0,910 |
+| **4-polig 18 kHz** | **−16,71** | **−39,48** | **−66,96** | **−0,51** | **0,162** |
+| 4-polig 19 kHz | −15,23 | −32,87 | −60,08 | −0,13 | 0,040 |
+| 6-polig 18 kHz | −18,66 | −49,13 | −88,42 | −1,54 | 0,490 |
+
+19 kHz kostet weniger, lässt aber 20–22 kHz nur 15 dB fallen — das ist kein Ende. Sechste Ordnung
+kauft 20 dB, die niemand ausgeben kann, für das Dreifache im Durchlassbereich. 18 kHz vierter
+Ordnung ist der Punkt, an dem das Programm vor 20 kHz aufhört — der Bank misst am Impuls **−15,27 dB
+bei 20 kHz und −39,81 bei 22 kHz** gegen die geschlossene Form des Butterworth-Prototyps unter der
+bilinearen Abbildung (−15,26 und −39,82; schlechteste Abweichung über fünf Frequenzen 0,017 dB) —
+und die kalibrierte Terzkurve sich dabei um 0,16 dB rms bewegt.
+
+### 2. Stereobreite
+
+*Die Referenzen zuerst, richtig vermessen.* `Tools/ref_width.py`, 40 Aufnahmen mit dem Albumtag
+„Psytrance Collection", je **vier Fenster zu 45 s** aus den mittleren 80 % des Tracks. Gemessen wird
+nicht eine Zahl, sondern drei, aus einem Durchgang: Seite-zu-Mitte je Band, die Korrelation zwischen
+den Kanälen, die sie erzeugt (für zwei Kanäle ist Seite/Mitte = (1−ρ)/(1+ρ), wenn beide gleich laut
+sind — das ist keine Messung, das folgt aus M = (L+R)/2 und S = (L−R)/2), und zwei Kurzfenster-Maße
+über 85 ms, die sagen **woher** die Breite kommt.
+
+| Band | Median | Q1 | Q3 | min | max | ρ | Pegeldifferenz rms | \|ρ\| über 85 ms |
+|---|---|---|---|---|---|---|---|---|
+| tief 40–140 Hz | −24,73 | −28,26 | −18,17 | −37,72 | −3,72 | +0,995 | 1,46 dB | 0,997 |
+| low-mid | −9,80 | −12,71 | −7,42 | −22,80 | −1,27 | +0,800 | 2,01 | 0,838 |
+| Mitten | −5,89 | −8,29 | −4,35 | −20,06 | −1,00 | +0,592 | 2,15 | 0,588 |
+| Präsenz | −5,83 | −8,12 | −4,80 | −21,65 | −2,29 | +0,590 | 1,86 | 0,589 |
+| Luft 6–16 kHz | −8,45 | −10,57 | −6,24 | −24,33 | −0,53 | +0,751 | 1,74 | 0,728 |
+
+Zwei Dinge, die diese Messung geklärt hat, bevor irgendetwas geändert wurde.
+
+**Breite braucht viele Fenster.** *Innerhalb* einer fertigen Aufnahme schwankt die Fünf-Band-Zahl
+zwischen ihren eigenen 45-Sekunden-Fenstern im Median um **6,26 dB** (schlechtestes Terzband 9,68 dB,
+schlimmster Fall 28,6). Die *Bandbalance* derselben Aufnahmen schwankt über das Fenster um höchstens
+0,6 dB. Breite ist also eine viel unruhigere Größe als Balance, und jede Zahl hier ist ein Median
+über Fenster und dann über Aufnahmen.
+
+**Die Aufnahmen sind breit bei gleichem Pegel.** Die Pegeldifferenz zwischen den Kanälen liegt über
+85-ms-Fenster in jedem Band bei 1,5 bis 2,2 dB rms, und die Kurzfenster-Korrelation ist die lange.
+Ihre Breite ist also **Dekorrelation zweier gleich lauter Kanäle**, nicht hart nach außen gelegtes
+Material — was Stereohall, Unisono-Verstimmung und doppelt eingespielte Stimmen erzeugen, und was ein
+Panoramaregler allein nicht erzeugt.
+
+*Unsere Messung, je Erzeuger* (Seed 7, acht Minuten, Solo mit flacher Masterkette):
+
+| Teil | low-mid | Mitten | Präsenz | Luft | ρ (Luft) |
+|---|---|---|---|---|---|
+| **Percussion** | −18,38 | −19,07 | −19,39 | **−18,06** | **+0,98** |
+| Acid | −18,39 | −14,33 | −15,64 | −25,45 | +0,99 |
+| Lead | −7,07 | −6,56 | −6,54 | −7,09 | +0,67 |
+| Pad | −5,13 | −5,18 | −4,88 | −5,22 | +0,54 |
+| SFX | −5,14 | −7,35 | −7,59 | −7,85 | +0,72 |
+| ganze Mischung | −11,87 | −5,89 | −7,00 | −12,52 | +0,90 |
+| **Referenz-Median** | **−9,80** | **−5,89** | **−5,83** | **−8,45** | **+0,75** |
+
+*Der Negativbefund, und er widerspricht dem Hörbericht der Mischungsrunde.* „Die Stereobreite liegt
+in jedem Band unter der Referenz" stimmt so nicht. **Mitten treffen den Median exakt** (−5,89 gegen
+−5,89), Präsenz und low-mid liegen innerhalb des unteren Quartils der Aufnahmen. Zu schmal ist
+**allein das Luftband**, und zwar um 4,1 dB. Und das Luftband ist das Kit: in der Solo-Tabelle von
+Phase 9 gehören ihm 60 % davon, 95 % in einem Track ohne Lead. Lead und Pad sind bereits so breit wie
+die Referenzen oder breiter.
+
+*Warum das Kit schmal war.* Die Lanes stehen im Panorama, aber die beiden **lautesten** des oberen
+Endes standen fast in der Mitte: Closed Hat (+5 dB) bei 0,15, Open Hat (+2 dB) bei −0,10. Bei
+Konstantleistungs-Panorama ist der Beitrag einer Lane zur Seite (1 − cos(pπ/2)) und zur Mitte
+(1 + cos(pπ/2)), gewichtet mit ihrer Leistung — zwei zentrale laute Lanes halten die Summe schmal,
+egal wie weit die leisen außen stehen.
+
+*Änderung 1: die Positionen des Kits* (`Params.cpp`, nur Standardwerte, keine Codezeile):
+
+| Lane | vorher | nachher | | Lane | vorher | nachher |
+|---|---|---|---|---|---|---|
+| perc1 Closed Hat | +0,15 | **+0,45** | | perc8 Shaker | +0,25 | **+0,55** |
+| perc2 Open Hat | −0,10 | **−0,40** | | perc9 Tom | −0,20 | **−0,35** |
+| perc3 Ride | +0,35 | **+0,60** | | perc10 Conga | +0,30 | **+0,50** |
+| perc4 Crash | −0,30 | **−0,55** | | perc11 Zap | +0,40 | **+0,60** |
+| perc7 Rim | −0,25 | **−0,45** | | perc12 Blip | −0,40 | **−0,60** |
+
+Clap und Snare bleiben in der Mitte: der Backbeat ist das eine, was eine Psytrance-Mischung dort
+verankert, und das Präsenzband, in dem sie leben, lag ohnehin innerhalb der Quartile.
+
+**Was die Bandbalance dabei nicht tut, und zwar beweisbar nicht.** Das Panorama ist
+konstantleistungs-normiert (`Perc.cpp`): cos²θ + sin²θ = 1, die Summe der beiden Kanalleistungen ist
+also von der Position unabhängig. Alle Zahlen der Mischungsrunde summieren Kanalleistungen — sie
+**können** sich nicht bewegen, und über acht Seeds gemessen tun sie es auch nicht.
+
+*Änderung 2: die Hall-Rückwege waren nicht dasselbe Instrument* (`Reverb.cpp`). Das FDN gibt seine
+beiden Ausgänge aus verschiedenen Verzögerungsleitungen, dekorreliert also von selbst — aber der
+Leitungssatz ist **nach Länge geordnet** (29,7 bis 89,0 ms), und die Aufteilung „erste Hälfte links,
+zweite Hälfte rechts" gab dem linken Kanal alle vier kurzen und dem rechten alle vier langen. Die
+Länge einer Leitung ist aber, wo ihre Kammzähne stehen. Gemessen mit Mono-Rauschen am Eingang, über
+die Terzbänder 500 Hz bis 8 kHz:
+
+| | Breite | ρ | Kanalbalance rms | schlechtestes Band |
+|---|---|---|---|---|
+| Room, vorher | −1,18 dB | +0,136 | **1,45 dB** | 2,05 dB |
+| Room, nachher | −1,26 | +0,144 | **0,65** | 1,25 |
+| Hall, vorher | −1,56 | +0,179 | **1,36** | 2,55 |
+| Hall, nachher | −1,75 | +0,199 | **0,53** | 1,42 |
+
+Jeder Kanal nimmt jetzt zwei kurze und zwei lange Leitungen ({29,7; 46,6; 58,6; 68,4} gegen {31,4;
+39,3; 55,1; 89,0}). Die Rückwege teilen sich weiterhin **keine** Leitung, sind also genauso
+dekorreliert wie vorher — sie haben nur dieselbe Farbe bekommen.
+
+*Ergebnis.* Das Kit allein (Selbsttest, eigenes Sechzehntel-Muster) geht im Luftband von **−17,64 auf
+−8,66 dB** und seine Korrelation von **+0,977 auf +0,794** — der Referenz-Median ist −8,45 bei
++0,751. In der ganzen Mischung über drei Seeds zu 96 Takten: low-mid −11,04 → −10,98, Mitten
+−5,84 → −5,82, Präsenz −7,55 → −7,07, **Luft −13,77 → −9,98**, tief −47,84 → −46,59 (die Tiefenregel
+steht). Die Zahlen über acht Achtminüter stehen in der Tabelle unten.
+
+*Dekorrelation oder echtes Material?* **Echtes Material.** Es wurde kein Allpass, keine Verzögerung
+und kein Mitte-Seite-Trick gebaut. Was die Korrelation von 0,977 auf 0,794 gebracht hat, ist, dass
+zwölf Lanes mit **eigenen Rauschgeneratoren** jetzt weit genug auseinanderstehen, dass die beiden
+Kanäle in jedem Augenblick andere Anschläge tragen: die Hi-Hat ist rechts, der Shaker links, und das
+sind zwei verschiedene Ereignisse, keine zwei Kopien eines. Die Mono-Probe bestätigt es von der
+anderen Seite: gegen das Kickband gerechnet kostet die Mono-Summe die Präsenz **0,78 dB** und die
+Luft **0,42 dB**, wo dieselbe Messung die Referenzaufnahmen 1,2 dB Präsenz kostet. Was sich in der
+Summe aufhebt, war nie da.
+
+### Ergebnis über acht Seeds
+
+Acht Seeds (1, 2, 3, 5, 7, 11, 31, 2026), je acht Minuten, ganze Renders, Standardwerte,
+Kanalleistungen summiert. **Ein einzelner Render ist keine Kalibriergröße** — das steht seit der
+Mischungsrunde im Plan —, deshalb sind alle Zahlen Mediane, und `Tools/metrics.py --median` rechnet
+sie jetzt selbst aus.
+
+| Größe | vorher | nachher | Referenz |
+|---|---|---|---|
+| Bandbalance low-mid | −6,55 | −6,55 | −6,88 |
+| Bandbalance Mitten | −5,64 | −5,61 | −8,03 |
+| **Bandbalance Präsenz** | **−8,27** | **−8,34** | −8,58 |
+| **Bandbalance Luft** | **−13,37** | **−13,55** | −12,59 |
+| Terzkurve, Abstand zum Median | 2,11 | **2,10** dB rms | — |
+| Lautheit integriert | −9,05 | **−9,10** LUFS | Ziel −9 |
+| LRA | 5,5 | 5,3 LU | — |
+| **16–20 kHz (Anteil / je Hz)** | −27,36 / −63,38 | **−29,76 / −65,78** | — |
+| **20–22 kHz** | −32,07 / −65,08 | **−53,38 / −86,39** | — |
+| **22–24 kHz** | −32,56 / −65,57 | **−81,24 / −114,25** | — |
+| **True Peak, exakt gemessen** | **−0,044 dBTP** | **−0,970** | Decke −1,00 |
+| derselbe, schlechtester Seed | **+0,096** | **−0,957** | |
+| Breite tief | −44,78 | −43,82 | −24,73 |
+| Breite low-mid | −11,97 | −11,59 | −9,80 |
+| Breite Mitten | −6,35 | −6,24 | −5,89 |
+| Breite Präsenz | −7,87 | −7,27 | −5,83 |
+| **Breite Luft** | **−12,35** | **−9,18** | **−8,45** |
+| **Korrelation Luft** | **+0,896** | **+0,811** | **+0,751** |
+| Mono-Summe kostet Präsenz | +0,66 | +0,75 | 1,2 |
+| Mono-Summe kostet Luft | +0,25 | +0,50 | — |
+
+Und dieselben acht Renders noch einmal **mit demselben Verfahren wie die Aufnahmen** gemessen (vier
+Fenster zu 45 s je Render, `Tools/ref_width.py --files`), damit die Verteilungen vergleichbar sind:
+
+| Band | vorher (Q1 / Q3) | nachher (Q1 / Q3) | Referenz (Q1 / Q3) |
+|---|---|---|---|
+| tief | −43,44 | −42,68 | −24,73 (−28,26 / −18,17) |
+| low-mid | −11,31 (−13,24 / −10,80) | −11,33 | −9,80 (−12,71 / −7,42) |
+| Mitten | −6,63 (−7,47 / −6,51) | −6,51 | −5,89 (−8,29 / −4,35) |
+| Präsenz | −7,94 (−9,06 / −6,94) | −7,32 (−8,47 / −6,64) | −5,83 (−8,12 / −4,80) |
+| **Luft** | **−12,42** (−13,41 / −10,48) | **−8,88** (−9,43 / −8,32) | **−8,45** (−10,57 / −6,24) |
+| ρ Luft | +0,893 | +0,817 | +0,751 |
+| Pegeldifferenz Luft, 85 ms | 2,02 dB | **3,99** | 1,74 |
+| Fensterschwankung, fünf Bänder | 6,95 dB | 6,76 | 6,26 |
+
+Das Luftband liegt jetzt auf dem Referenz-Median, und die Streuung über acht Renders ist enger als
+die der Aufnahmen. **Ehrlich dazugesagt:** die Pegeldifferenz über 85-ms-Fenster steigt im Luftband
+von 2,0 auf 4,0 dB, wo die Aufnahmen bei 1,7 liegen. Unsere Breite dort kommt also **mehr aus
+Position** als ihre; ihre kommt zusätzlich aus Stereohall und doppelt eingespielten Stimmen, die ein
+Kit aus zwölf Einzellanes nicht hat. Vier Dezibel rms über 85 ms sind keine harte Seitenlage — die
+Fensterschwankung eines Achtminüters (6,8 dB) liegt jetzt auf der einer fertigen Aufnahme (6,3) —,
+aber es ist der Unterschied, und die nächste Runde wüsste damit, wo sie ansetzt.
+
+Die drei Dichten je Hertz gehen von **0,49 dB Abstand** (−63,38 / −65,08 / −65,57 — flach) auf
+**48,5 dB** (−65,78 / −86,39 / −114,25). Das Programm endet. Der exakt gemessene True Peak geht von
+**0,96 dB über der Decke auf 0,03 dB darunter**, im schlechtesten der acht Seeds von 1,10 dB darüber
+auf 0,04 darunter: **0,93 dB Headroom**, die vorher niemand sehen konnte.
+
+*Und die Kalibrierung der Mischungsrunde steht.* Präsenz bewegt sich um **0,07 dB**, Luft um
+**0,18 dB** (die Bandgrenze bei 18 kHz kostet das Terzband 16 kHz 0,3 dB, und das liegt im Luftband),
+der Abstand der ganzen Terzkurve zum Referenz-Median um **0,01 dB rms**, die Lautheit um 0,05 LUFS.
+Dass die Panorama-Änderung daran nichts tut, ist keine Messung, sondern Algebra (Konstantleistung,
+siehe oben) — dass die Bandgrenze fast nichts tut, ist gemessen.
+
+*Abgelehnt, mit Zahlen:*
+- **Ein Mitte-Seite-Verbreiterer im Master.** Er addiert auf *jedes* Band exakt 20 log g. Die
+  fehlenden 3,8 dB im Luftband würden die Mitten von −5,84 auf −2,0 und die Präsenz von −7,55 auf
+  −3,75 treiben — beides über das obere Quartil der Aufnahmen (−4,35 und −4,80) und die Mitten über
+  ihr Maximum (−1,00). Die Lücke ist bandweise, ein flacher Verbreiterer ist es nicht.
+- **Das Kit über den Room-Send dekorrelieren.** `fx.high_cut` steht bei 9 kHz, der Room erreicht das
+  Luftband also gar nicht. Rechnet man nach, wie viel vollständig dekorrelierter Rückweg nötig wäre,
+  um von Seite/Mitte 0,0158 auf 0,1413 zu kommen — (0,0158 + q/2)/(1 + q/2) = 0,1413 —, kommt
+  q = 0,29 heraus: knapp ein Drittel der Luftbandleistung des Kits als Hall. Das ist die Art von
+  Breite, die den Crest und die Einsatzdichte frisst, die Phase 9 kalibriert hat. Nicht gebaut.
+- **Clap und Snare ins Panorama.** Siehe oben: das Präsenzband liegt bereits innerhalb der Quartile,
+  und der Backbeat gehört in die Mitte.
+- **Die Acid verbreitern** (−18,39 im low-mid, +0,97 Korrelation). Sie ist die schmalste melodische
+  Stimme, aber `Acid.cpp` ist nicht die Datei dieser Runde, und low-mid liegt mit −10,98 innerhalb
+  des unteren Quartils der Aufnahmen. Offen für die nächste Runde.
+
+### Das Messwerkzeug, und die Fallen
+
+`Tools/metrics.py` hat sieben neue Maße bekommen, alle mit einer Prüfung in `--selftest` gegen ein
+Signal, dessen Antwort feststeht (jetzt **35 Prüfungen**): die drei Bänder über dem Luftband als
+Anteil **und je Hertz** (weißes Rauschen: −7,78 / −10,78 / −10,79 dB, drei gleiche Dichten auf
+0,018 dB); Auto- und Kreuzspektrum in einem Durchgang; Breite und Korrelation je Band gegen ein Paar
+mit **vorher festgelegtem ρ** — für gleiche Kanalleistungen ist Seite/Mitte = (1−ρ)/(1+ρ) exakt, also
+ein Sollwert ohne Messung (ρ = 0 / 0,5 / 0,9 / −0,5 auf 0,15 dB und 0,02 getroffen); die beiden
+Kurzfenster-Maße gegen zwei Signale, die **beide 0,00 dB breit** sind und die nur sie auseinander
+halten (dekorreliertes Rauschen: Pegeldifferenz 0,38 dB, |ρ| 0,03 — abwechselnd hart gelegtes
+Material: 293 dB, |ρ| 0,00); die Mono-Kosten (mittiges Signal 0,00 dB, hart gelegtes **auch** 0,00 —
+das Maß sieht Auslöschung, nicht das Panoramagesetz —, gegenphasiges 185 dB); und der exakte True
+Peak gegen drei Signale mit geschlossener Lösung (Sinus bei 0,25 fs mit 45 Grad: +0,000; Impuls:
++0,001; Sinus bei 0,49 fs: +0,010 dB).
+
+`Tools/ref_width.py` ist neu und macht dasselbe mit den Aufnahmen: Auswahl über den Albumtag wie
+`ref_style.py`, vier Fenster je Track, nur Statistik in `Tools/ref_width.json`.
+
+*Die Fallen dieses Projekts, einzeln geprüft.* **Leistung statt Betrag** — jede Summe hier ist eine
+Leistungssumme, unverändert aus der Mischungsrunde. **Blackman-Harris, ±4 Bins** — die Bandsummen im
+Selbsttest gehen über Bänder von 2 kHz und mehr, bei 0,73 Hz je Bin also 2700 Bins; die einzige
+schmale Messung, der Frequenzgang von `BandLimit`, wird an der **Impulsantwort ohne Fenster**
+genommen, hat also gar keine Fensterfunktion. **MP3-Kante bei 18,8 kHz** — genau deshalb konnten die
+Referenzen zur oberen Grenze nichts sagen; das Argument kommt aus Hörbarkeit, Schätzerband und
+Umtastung, und die Breitenmessung endet bei 16 kHz. **Mono-Summe** — keine Messung dieser Runde
+summiert Kanäle, die Mono-Kosten sind ein eigenes, geprüftes Maß. **Tonart F#** — alle acht Seeds
+laufen mit dem Standardschlüssel, ihre Obertöne fallen also in dieselben Terzbänder; deshalb steht
+oben nur die *Differenz* der Terzkurve (2,11 → 2,10 dB rms), in der sich der Zackenkamm heraushebt,
+und die Fünf-Band-Summen sind davon ohnehin unberührt (gemessen in der Mischungsrunde). Breite ist
+keine harmonische Größe. **`--solo` ist eine Stummschaltung** — hier nur für *Spektren* benutzt, wie
+die Mischungsrunde es freigegeben hat; keine Kostenzahl stammt daraus.
+
+### Prüfungen
+
+`testBandLimit` (vier) und `testStereoWidth` (sechs), alle gegen unabhängig hergeleitete Zahlen, und
+**acht davon erst gegen den unveränderten Stand fallen gesehen**:
+
+| Prüfung | gegen den alten Stand | jetzt |
+|---|---|---|
+| `BandLimit` ist ein Butterworth vierter Ordnung bei 18 kHz | — (die Klasse gab es nicht) | 0,017 dB schlechteste Abweichung von der geschlossenen Form |
+| der Limiter hält die Decke nur auf einem Programm, das in 0,45 fs endet | — | endet: −0,963; mit Rauschen darüber: **−0,269**; dasselbe hinter der Bandgrenze: −0,977 |
+| das Spektrum endet (je Hertz) | **4,81 dB** Abfall | **49,69 dB** |
+| die Anzeige sagt die Wahrheit, die Decke hält | Anzeige −0,994, exakt **−0,621** | −1,000 / **−0,984** |
+| die Sends kommen als dasselbe Instrument zurück (Room) | Kanalbalance **1,45 dB rms** | **0,65** |
+| dasselbe (Hall) | **1,36** | **0,53** |
+| das Kit ist über 6 kHz so breit wie die Aufnahmen | **−17,64 dB** (ρ +0,977) | **−8,66** (ρ +0,794) |
+| die Mischung erreicht in jedem Band über 140 Hz das untere Quartil | Luft **−13,77** gegen −10,57 | **−9,98** |
+| die Tiefenregel überlebt die Verbreiterung | (galt) −47,84 | −46,59 |
+| die Mono-Summe kostet nicht mehr als bei den Aufnahmen | (galt) +0,70 / +0,18 | +0,78 / +0,42 gegen 1,2 |
+
+Die beiden letzten sind Wächter, keine Beweise: sie galten vorher auch. Sie stehen da, weil die
+Verbreiterung genau sie hätte brechen können.
+
+### Gegenprobe (Mutationsrunde)
+
+Sieben Fehler einzeln eingebaut, sechs von ihrer Prüfung gefunden, `git diff` danach sauber:
+
+| Mutation | Wer merkt es |
+|---|---|
+| Eckfrequenz 22 statt 18 kHz | Butterworth-Prüfung (8,45 dB daneben; −7,55 statt −15,26 bei 20 kHz) |
+| die Bandgrenze gerechnet und weggeworfen | „das Spektrum endet" (4,52 dB Abfall) **und** die True-Peak-Prüfung (Anzeige −0,994, exakt −0,622) |
+| die Bandgrenze **hinter** den Limiter statt davor | True-Peak-Prüfung: **+0,039 dBTP**, über der Decke — ein Filter hinter dem Limiter hebt die Spitze wieder an, die er gerade festgehalten hat |
+| nur einer der beiden Butterworth-Abschnitte | Butterworth-Prüfung (19,3 dB daneben) |
+| Hall zurück auf „kurze Leitungen links, lange rechts" | **beide** Send-Prüfungen (1,45 und 1,36 dB rms Kanalbalance) |
+| die zwei lautesten Hat-Lanes zurück Richtung Mitte | Kit-Breite (−10,90 statt −8,66) **und** die Mischung (Luft −11,49, unter dem Quartil) |
+| die beiden Butterworth-Abschnitte in der anderen Reihenfolge | **niemand — und zu Recht:** zwei LTI-Abschnitte in Kaskade kommutieren, die Übertragungsfunktion ist dieselbe. |
+
+*Kosten.* Vier SVF-Schritte je Sample auf zwei Kanälen. Zwei Minuten Audio, zweimal gemessen, mit
+der Bandgrenze **10,49 / 10,62 s**, ohne sie **10,65 / 11,07 s** — der Unterschied liegt unter dem
+Rauschen der Messung. Keine zusätzliche Latenz (ein IIR-Tiefpass, kein Vorhören), keine Allokation,
+keine neuen Parameter.
+
+Gesamt: **247 Selbsttest-Prüfungen** (zehn neue) in **402 s**, Vektortests 16 von 16 in AVX2,
+NEON-Shim und skalar, bitgleich in allen drei Pfaden. Die beiden neuen Abschnitte kosten rund
+**75 s**: der 24-Takt-Render mit der exakten Spitzenmessung 14 s, und die drei 96-Takt-Renders der
+Breitenprüfung 60 — dieselben drei, die `testMixBalance` schon fährt, aber eine Breitenmessung
+braucht Kreuzspektren, die der Bandakkumulator dieser Runde nicht führt. Der Preis dafür, dass die
+Breite gemessen statt behauptet wird.
+
+*Dateien.* Geändert: `Core/include/phos/Dsp.h` (`BandLimit`), `Core/include/phos/Engine.h` und
+`Core/src/Engine.cpp` (die Stufe zwischen Clipper und Limiter), `Core/include/phos/Reverb.h` und
+`Core/src/Reverb.cpp` (`kLeft`), `Core/src/Params.cpp` (zehn Panorama-Standardwerte),
+`Tests/selftest.cpp` (`testBandLimit`, `testStereoWidth`, `StereoBandAccumulator`, `exactPeak`; dazu
+**eine Schranke in `testReverb`** von −30 auf −29,5 dB, siehe oben), `Tools/metrics.py`. Neu:
+`Tools/ref_width.py`, `Tools/ref_width.json`.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

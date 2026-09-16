@@ -196,6 +196,212 @@ def width(f_unused=None, x=None, sr=SR, band=None):
     return 10.0 * np.log10(max(np.mean(s ** 2), 1e-300) / max(np.mean(m ** 2), 1e-300))
 
 
+#: The three bands above the air band. The first is still inside the reference material's reach, the
+#: second is above every encoder's cliff, the third is above the 44.1 kHz Nyquist frequency -- so a
+#: spectrum that reads the same in the last two does not end, it runs flat into Nyquist.
+TOP_BANDS = [("16-20k", 16000.0, 20000.0), ("20-22k", 20000.0, 22000.0), ("22-24k", 22000.0, 24000.0)]
+
+
+def top_bands(f, p, total=None):
+    """Power of the three top bands as a share of the whole spectrum, in dB, and per hertz.
+
+    Two numbers per band, because the share alone cannot tell a spectrum that ends from one that only
+    got narrower: 20 .. 22 kHz is half as wide as 16 .. 20 kHz, so an honestly falling spectrum reads
+    3 dB lower there by width alone. The density per hertz divides that out; when the last two
+    densities are level, the spectrum is flat into Nyquist.
+    """
+    tot = float(p.sum()) if total is None else total
+    out = {}
+    for name, lo, hi in TOP_BANDS:
+        s = float(p[(f >= lo) & (f < hi)].sum())
+        out[name] = (10.0 * np.log10(max(s, 1e-300) / max(tot, 1e-300)),
+                     10.0 * np.log10(max(s / (hi - lo), 1e-300) / max(tot, 1e-300)))
+    return out
+
+
+# ------------------------------------------------------------------- stereo: width and where it comes from
+
+def cross_spectra(x, sr=SR, n=1 << 15):
+    """Welch auto- and cross-spectra of a stereo signal: (f, P_L, P_R, Re C_LR).
+
+    Everything the side-to-mid ratio is made of, in one pass. For two channels
+    P_M = (P_L + P_R + 2 Re C) / 4 and P_S = (P_L + P_R - 2 Re C) / 4, so a width figure and the
+    inter-channel correlation that produced it come out of the same three sums and cannot contradict
+    each other (Blauert, "Spatial Hearing", MIT Press 1997, ch. 3, on interaural coherence).
+    """
+    win = np.hanning(n)
+    f = np.fft.rfftfreq(n, 1.0 / sr)
+    pl = np.zeros(len(f))
+    pr = np.zeros(len(f))
+    cc = np.zeros(len(f))
+    frames = 0
+    for i in range(0, x.shape[1] - n + 1, n // 2):
+        a = np.fft.rfft(x[0, i:i + n] * win)
+        b = np.fft.rfft(x[1, i:i + n] * win)
+        pl += np.abs(a) ** 2
+        pr += np.abs(b) ** 2
+        cc += (a * np.conj(b)).real
+        frames += 1
+    if frames == 0:
+        pad = np.zeros((2, n))
+        pad[:, :x.shape[1]] = x[:, :n]
+        a = np.fft.rfft(pad[0] * win)
+        b = np.fft.rfft(pad[1] * win)
+        pl, pr, cc, frames = np.abs(a) ** 2, np.abs(b) ** 2, (a * np.conj(b)).real, 1
+    return f, pl / frames, pr / frames, cc / frames
+
+
+def band_width_rho(f, pl, pr, cc, lo, hi):
+    """(side/mid in dB, zero-lag inter-channel correlation) inside one band.
+
+    The correlation is the quantity the width *is*: for two channels of equal power,
+    side/mid = (1 - rho) / (1 + rho) exactly. Reporting both says whether a wide band is wide because
+    the two channels carry different material (rho low) or only because one of them is louder.
+    """
+    sel = (f >= lo) & (f < hi)
+    a, b, c = float(pl[sel].sum()), float(pr[sel].sum()), float(cc[sel].sum())
+    pm, ps = (a + b + 2.0 * c) / 4.0, (a + b - 2.0 * c) / 4.0
+    rho = c / max(np.sqrt(a * b), 1e-300)
+    return 10.0 * np.log10(max(ps, 1e-300) / max(pm, 1e-300)), float(rho)
+
+
+def short_pan_bands(x, bands, sr=SR, n=4096):
+    """Short-window panning per band: arrays of (rms level difference in dB, median |rho|).
+
+    The discriminator between the two ways of being wide. A width made of *decorrelated noise* keeps
+    the two channels at the same level at every instant and merely removes their correlation: the
+    level difference stays near zero and the short-window correlation stays near zero too. A width
+    made of *different material in the two channels* -- a hat left, a shaker right, a delay that
+    repeats on one side -- swings the level difference from window to window, and inside any one
+    window a single dominant source drives the correlation towards +-1. Window 4096 samples = 85 ms,
+    long enough for a third-octave band at 100 Hz and short enough that one hit dominates it.
+
+    @param bands list of (lo, hi) in Hz. The short-time transform is taken once for all of them:
+                 doing it per band costs the same transform thirty times over.
+    """
+    win = np.hanning(n)
+    f = np.fft.rfftfreq(n, 1.0 / sr)
+    sel = [(f >= lo) & (f < hi) for lo, hi in bands]
+    frames = range(0, x.shape[1] - n + 1, n // 2)
+    pa = np.zeros((len(bands), len(frames)))
+    pb = np.zeros_like(pa)
+    cr = np.zeros_like(pa)
+    for j, i in enumerate(frames):
+        a = np.fft.rfft(x[0, i:i + n] * win)
+        b = np.fft.rfft(x[1, i:i + n] * win)
+        aa, bb, cc = np.abs(a) ** 2, np.abs(b) ** 2, (a * np.conj(b)).real
+        for k, s in enumerate(sel):
+            pa[k, j] = aa[s].sum()
+            pb[k, j] = bb[s].sum()
+            cr[k, j] = cc[s].sum()
+    ild = np.zeros(len(bands))
+    rho = np.zeros(len(bands))
+    for k in range(len(bands)):
+        live = (pa[k] + pb[k]) > 1e-16            # silence carries no panning information
+        if not live.any():
+            continue
+        d = 10.0 * np.log10(np.maximum(pa[k][live], 1e-30) / np.maximum(pb[k][live], 1e-30))
+        ild[k] = float(np.sqrt(np.mean(d ** 2)))
+        rho[k] = float(np.median(np.abs(cr[k][live] / np.maximum(np.sqrt(pa[k][live] * pb[k][live]), 1e-300))))
+    return ild, rho
+
+
+def short_pan(x, lo, hi, sr=SR, n=4096):
+    """`short_pan_bands` for a single band: (rms level difference in dB, median |rho|)."""
+    ild, rho = short_pan_bands(x, [(lo, hi)], sr, n)
+    return float(ild[0]), float(rho[0])
+
+
+def width_profile(x, sr=SR, centres=None, short=False):
+    """Width per third octave: side/mid in dB, correlation, and (optionally) the short-window pair.
+
+    One number for the whole spectrum averages a deliberately mono low end with a deliberately wide
+    top into nothing, and five bands still hide a tilt. The third-octave curve is the resolution the
+    band balance already uses, so width and balance can be read off the same axis.
+    """
+    c = THIRD_CENTRES if centres is None else centres
+    f, pl, pr, cc = cross_spectra(x, sr)
+    edges = [(fc / 2.0 ** (1.0 / 6.0), fc * 2.0 ** (1.0 / 6.0)) for fc in c]
+    w = np.empty(len(c))
+    r = np.empty(len(c))
+    for i, (lo, hi) in enumerate(edges):
+        w[i], r[i] = band_width_rho(f, pl, pr, cc, lo, hi)
+    ild, sr_rho = short_pan_bands(x, edges, sr) if short else (np.zeros(len(c)), np.zeros(len(c)))
+    return w, r, ild, sr_rho
+
+
+def mono_loss(x, sr=SR):
+    """What a mono downmix costs each band *relative to the kick-and-bass band*, in dB.
+
+    Mono compatibility is a measurement, not an assumption: a width built out of anti-phase content
+    disappears on a club's mono subwoofer feed and on a phone speaker, and this is the number that
+    says so. The figure is taken relative to 40 .. 140 Hz because that band is mono by construction
+    here and so cannot cancel -- which also makes the measure blind to the panning law itself: a
+    hard-panned but otherwise centred-in-phase mix reads 0.00 dB in every band, and only material
+    that actually cancels moves it. That is the same convention the mix round's trap table used
+    (the references lose 1.2 dB of presence to a mono sum, a Phosphene render 0.3 dB).
+    """
+    f, p = welch(x, sr)
+    _, pm = welch(x.mean(axis=0)[None, :], sr)
+    def ratio(lo, hi):
+        sel = (f >= lo) & (f < hi)
+        return 10.0 * np.log10(max(p[sel].sum(), 1e-300) / max(pm[sel].sum(), 1e-300))
+    ref = ratio(BANDS[0][1], BANDS[0][2])
+    return {name: ratio(lo, hi) - ref for name, lo, hi in BANDS}
+
+
+# ------------------------------------------------------------------------------------ true peak
+
+def true_peak_exact(x, block=1 << 13, over=16, screen_db=6.0):
+    """Exact band-limited peak of the signal between the samples, in dBTP.
+
+    Not an interpolator with taps but the reconstruction itself: each block's spectrum is padded with
+    zeros to `over` times the length and transformed back, which is sinc interpolation with every tap
+    (Smith, "Mathematics of the DFT", ch. 8). Only the middle half of each block is trusted, so the
+    circular wrap at the block edges never carries into the answer. This is the same computation the
+    self test calls `exactTruePeak`; it exists here so that the engine's own meter can be held against
+    a measurement that shares no code with it.
+
+    `screen_db` skips the blocks whose own largest sample is more than that far below the file's --
+    an eight-minute render is 2800 blocks and all but a handful are nowhere near the peak. It is a
+    screen, not an approximation of the arithmetic: what it assumes is that the waveform between the
+    samples does not rise `screen_db` above the samples around it, which for a limited programme it
+    never does (the measured margin on these renders is under 1 dB). Set it to None to transform
+    every block.
+    """
+    peak = 0.0
+    thr = 0.0 if screen_db is None else float(np.max(np.abs(x))) * 10.0 ** (-screen_db / 20.0)
+    for ch in range(x.shape[0]):
+        y = x[ch]
+        for start in range(0, max(len(y) - block + 1, 0), block // 2):
+            seg = y[start:start + block]
+            if np.max(np.abs(seg[block // 4:block * 3 // 4])) < thr:
+                continue
+            a = np.fft.rfft(seg)
+            b = np.zeros(block * over // 2 + 1, dtype=complex)
+            b[:len(a)] = a
+            c = np.fft.irfft(b, block * over) * over
+            peak = max(peak, float(np.max(np.abs(c[block * over // 4:block * over * 3 // 4]))))
+    return 20.0 * np.log10(max(peak, 1e-300))
+
+
+def band_limited(x, hz, sr=SR):
+    """The signal with every bin above `hz` removed, exactly (one FFT over the whole signal).
+
+    The instrument for attributing a true-peak error to a band: if the exact peak of the whole signal
+    is 0.9 dB above the exact peak of the same signal cut at the estimator's band edge, then that
+    0.9 dB lives above the edge and no estimator of that bandwidth can see it.
+    """
+    n = x.shape[1]
+    f = np.fft.rfftfreq(n, 1.0 / sr)
+    out = np.empty_like(x)
+    for ch in range(x.shape[0]):
+        a = np.fft.rfft(x[ch])
+        a[f > hz] = 0.0
+        out[ch] = np.fft.irfft(a, n)
+    return out
+
+
 def transient_density(x, sr=SR, band=(1500.0, 16000.0), n=1024):
     """Onsets per second from the positive spectral flux in one band (Bello et al. 2005).
 
@@ -325,13 +531,23 @@ def report(path, seconds=None, want_third=False, mono=False, prof=None, start=No
     print(f"  centroid (power) {centroid(f, p):7.0f} Hz   bandwidth {bandwidth(f, p):6.0f} Hz"
           f"   transient density {transient_density(x):5.2f} /s"
           + (f"   (reference {prof['density_median']:.2f})" if prof else ""))
-    print("  stereo width (side/mid dB)       "
-          + "  ".join(f"{k} {width(x=x, band=(lo, hi)):+6.1f}" for k, lo, hi in BANDS))
+    fx, pl, pr, cc = cross_spectra(x)
+    wr = [band_width_rho(fx, pl, pr, cc, lo, hi) for _, lo, hi in BANDS]
+    print("  stereo width (side/mid dB)       " + "  ".join(f"{k} {w:+6.1f}" for (k, _, _), (w, _) in zip(BANDS, wr)))
+    print("  inter-channel correlation        " + "  ".join(f"{k} {r:+6.3f}" for (k, _, _), (_, r) in zip(BANDS, wr)))
     if prof:
         print("  reference median                 "
               + "  ".join(f"{k} {v:+6.1f}" for (k, _, _), v in zip(BANDS, prof["width_median"])))
+    ml = mono_loss(x)
+    print("  cost of a mono sum (dB, to 40..140 Hz)  "
+          + "  ".join(f"{k} {ml[k]:+5.2f}" for k, _, _ in BANDS if k != "low"))
+    tb = top_bands(f, p)
+    print("  above the air band (share of total / per hertz, dB)  "
+          + "  ".join(f"{k} {tb[k][0]:+6.2f}/{tb[k][1]:+7.2f}" for k, _, _ in TOP_BANDS))
     i, lra, tp = loudness(path)
-    print(f"  loudness {i:6.2f} LUFS   LRA {lra:4.1f} LU   true peak {tp:6.2f} dBTP")
+    print(f"  loudness {i:6.2f} LUFS   LRA {lra:4.1f} LU   true peak {tp:6.2f} dBTP (ffmpeg)"
+          f"   exact {true_peak_exact(x):6.3f} dBTP"
+          f"   cut at 0.45 fs {true_peak_exact(band_limited(x, 0.45 * SR)):6.3f}")
     if want_third:
         print("  1/3 octave (dB to 40..140 Hz)" + ("   vs reference median" if prof else ""))
         med = np.array(prof["third_median"]) if prof else None
@@ -342,7 +558,10 @@ def report(path, seconds=None, want_third=False, mono=False, prof=None, start=No
             if med is not None:
                 line += f"   ref {med[i2]:+7.2f}   diff {third[i2] - med[i2]:+6.2f}"
             print(line)
-    return {"band": bal, "third": third}
+    return {"band": bal, "third": third, "width": {k: w for (k, _, _), (w, _) in zip(BANDS, wr)},
+            "rho": {k: r for (k, _, _), (_, r) in zip(BANDS, wr)}, "top": tb, "mono": ml,
+            "lufs": i, "lra": lra, "exact_tp": true_peak_exact(x),
+            "distance": spectral_distance(third, prof) if prof else float("nan")}
 
 
 # ------------------------------------------------------------------------------------- self test
@@ -423,6 +642,70 @@ def selftest():
     f, p = welch(lp)
     check("bandwidth of a signal cut at 9 kHz", bandwidth(f, p), 9000.0, 300.0)
 
+    # 8. The top bands of white noise: the share of a band is its share of the width, so
+    #    16 .. 20 kHz reads 10 log10 (4000 / 24000) and the per-hertz densities are all equal.
+    f, p = welch(w)
+    tb = top_bands(f, p)
+    for name, lo, hi in TOP_BANDS:
+        check(f"white noise top band {name}", tb[name][0], 10.0 * np.log10((hi - lo) / 24000.0), 0.35)
+    flat = max(abs(tb["20-22k"][1] - tb["22-24k"][1]), abs(tb["16-20k"][1] - tb["20-22k"][1]))
+    check("white noise: the three densities per hertz are level", flat, 0.0, 0.35)
+    # The same noise cut at 20 kHz: the two bands above the cut must be gone, and the measure has to
+    # say so by a margin no real programme reaches. This is the fault the round was called for.
+    cut = band_limited(w, 20000.0)
+    f, p = welch(cut)
+    check_beyond("a spectrum that ends: 22 .. 24 kHz after a cut at 20 kHz", top_bands(f, p)["22-24k"][0], -100.0, False)
+
+    # 9. Width and correlation: build a pair with a correlation that is known in advance. With equal
+    #    channel powers the side-to-mid ratio is (1 - rho) / (1 + rho) exactly -- no measurement
+    #    involved, it follows from M = (L+R)/2 and S = (L-R)/2.
+    for rho in (0.0, 0.5, 0.9, -0.5):
+        a, b = w[0], w[1]
+        pair = np.vstack([a, rho * a + np.sqrt(1.0 - rho * rho) * b])
+        f, pl, pr, cc = cross_spectra(pair)
+        got_w, got_r = band_width_rho(f, pl, pr, cc, 200.0, 16000.0)
+        check(f"width of a pair with rho = {rho:+.1f}", got_w,
+              10.0 * np.log10((1.0 - rho) / (1.0 + rho)), 0.15)
+        check(f"correlation of that pair", got_r, rho, 0.02)
+
+    # 10. The two ways of being wide, told apart. Both signals below measure 0.00 dB wide; only the
+    #     short-window numbers say which is which.
+    ild_d, rho_d = short_pan(np.vstack([w[0], w[1]]), 2000.0, 8000.0)
+    blocks = np.zeros((2, n))
+    half = SR // 4                                   # a quarter second hard left, then hard right
+    for k in range(n // half):
+        blocks[k % 2, k * half:(k + 1) * half] = w[0, k * half:(k + 1) * half]
+    ild_p, rho_p = short_pan(blocks, 2000.0, 8000.0)
+    print(f"  ---- decorrelated noise: ILD rms {ild_d:.2f} dB, |rho| over 85 ms {rho_d:.3f}")
+    print(f"  ---- alternately panned material: ILD rms {ild_p:.2f} dB, |rho| over 85 ms {rho_p:.3f}")
+    check_beyond("decorrelated noise keeps the channels level", ild_d, 3.0, False)
+    check_beyond("panned material does not", ild_p, 20.0, True)
+
+    # 11. Mono compatibility: identical channels lose nothing, anti-phase channels lose everything,
+    #     and a hard-panned but in-phase signal loses nothing either -- the measure sees cancellation,
+    #     not the panning law.
+    same = mono_loss(np.vstack([w[0], w[0]]))
+    # A mix that is mono in the low band (as the depth rule demands) and anti-phase above it: the
+    # reference band survives the sum and the presence band vanishes, which is what the measure is for.
+    lo_part, hi_part = band_limited(w[:1], 140.0)[0], w[1] - band_limited(w[1:], 1500.0)[0]
+    anti2 = mono_loss(np.vstack([lo_part + hi_part, lo_part - hi_part]))
+    panned = mono_loss(np.vstack([w[0], np.zeros(n)]))
+    check("mono downmix of a centred signal costs nothing", same["presence"], 0.0, 0.01)
+    check_beyond("mono downmix of an anti-phase signal costs everything", anti2["presence"], 60.0, True)
+    check("mono downmix of a hard-panned signal costs nothing", panned["presence"], 0.0, 0.01)
+
+    # 12. The exact true peak against signals whose peak between the samples is known in closed form.
+    #     A sine at 0.25 fs sampled at 45 degrees has its largest sample 3.01 dB below its own peak;
+    #     a unit impulse is its own peak; a sine just under Nyquist likewise.
+    k = np.arange(1 << 14)
+    q = np.sin(2 * np.pi * 0.25 * k + np.pi / 4.0)
+    check("exact true peak, sine at 0.25 fs sampled at 45 deg", true_peak_exact(np.vstack([q, q])), 0.0, 0.01)
+    imp = np.zeros(1 << 14)
+    imp[1 << 13] = 1.0
+    check("exact true peak of a unit impulse", true_peak_exact(np.vstack([imp, imp])), 0.0, 0.01)
+    q2 = np.sin(2 * np.pi * 0.49 * k + 0.3)
+    check("exact true peak, sine at 0.49 fs", true_peak_exact(np.vstack([q2, q2])), 0.0, 0.05)
+
     print(f"\n{'all measures agree with theory' if fails == 0 else str(fails) + ' FAILURES'}")
     return fails
 
@@ -435,6 +718,7 @@ def main(argv):
     ap.add_argument("--middle", action="store_true", help="take the window from the middle of the file")
     ap.add_argument("--third", action="store_true", help="print the 1/3-octave curve")
     ap.add_argument("--mono", action="store_true", help="decode to mono first (to show what that costs)")
+    ap.add_argument("--median", action="store_true", help="print the median over the files given (one render is not a calibration quantity)")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--ref-build", action="store_true", help="build the cached reference profile")
     ap.add_argument("--refs", default=None, help="JSON list of reference files (path per entry)")
@@ -452,10 +736,29 @@ def main(argv):
         print(__doc__)
         return 2
     prof = None if args.no_ref else load_profile()
+    rows = []
     for path in args.files:
-        report(path, args.seconds if args.middle or args.seconds else None,
-               args.third, args.mono, prof, None if args.middle else args.start)
+        rows.append(report(path, args.seconds if args.middle or args.seconds else None,
+                           args.third, args.mono, prof, None if args.middle else args.start))
         print()
+    if args.median and len(rows) > 1:
+        # A single render is one throw of the arrangement lottery: over eight seeds the presence band
+        # of this engine swings from -7.5 to -14.3 dB (docs/PLAN.md, Phase 9). Only the median over
+        # several seeds is a calibration quantity, so the tool prints it rather than leaving it to be
+        # eyeballed from the rows above.
+        def med(f):
+            return float(np.median([f(r) for r in rows]))
+        print(f"median over {len(rows)} files")
+        print("  band balance   " + "  ".join(f"{k} {med(lambda r, k=k: r['band'][k]):+6.2f}" for k, _, _ in BANDS if k != "low"))
+        print("  stereo width   " + "  ".join(f"{k} {med(lambda r, k=k: r['width'][k]):+6.2f}" for k, _, _ in BANDS))
+        print("  correlation    " + "  ".join(f"{k} {med(lambda r, k=k: r['rho'][k]):+6.3f}" for k, _, _ in BANDS))
+        print("  mono sum cost  " + "  ".join(f"{k} {med(lambda r, k=k: r['mono'][k]):+6.2f}" for k, _, _ in BANDS if k != "low"))
+        print("  top bands      " + "  ".join(f"{k} {med(lambda r, k=k: r['top'][k][0]):+7.2f}/{med(lambda r, k=k: r['top'][k][1]):+8.2f}"
+                                              for k, _, _ in TOP_BANDS))
+        print(f"  third-octave distance {med(lambda r: r['distance']):.2f} dB rms"
+              f"   loudness {med(lambda r: r['lufs']):.2f} LUFS   LRA {med(lambda r: r['lra']):.1f} LU"
+              f"   exact true peak {med(lambda r: r['exact_tp']):+.3f} dBTP"
+              f"   worst {max(r['exact_tp'] for r in rows):+.3f}")
     return 0
 
 
