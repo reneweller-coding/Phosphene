@@ -673,9 +673,12 @@ acht Takte, Live-Pfad) bzw. ab Takt 16 (Notenzahl am Host-Playhead). Das Plugin 
 korrekt: bitgleich zu `phos_render`. Zweiter Befund: der Hosttest darf nicht unter `PHOS_MUTE=1` laufen
 (dieselbe Lehre wie bei Noctuary), das Plugin bleibt dann absichtlich stumm.
 
-Die Bildschirmfotos in `docs/screenshots/` sind nach dem Merge neu erzeugt, damit die Phase-5-Knöpfe
-(Style, Arc, Style Tempo, Set Minutes) darauf erscheinen; die Oberfläche generiert sich aus den Tabellen,
-deshalb war dafür keine Codeänderung nötig.
+Die Phase-5-Knöpfe (Style, Arc, Style Tempo, Set Minutes) fehlten im Set-Tab: die Seite nimmt ihre
+Gruppen als Tabellenausschnitte, und der neue Ausschnitt war keiner Gruppe zugeteilt. Eine Gruppe "Form"
+(zwei Spalten, damit die untere Reihe mit Loudness, Plan und Export weiter passt) ergänzt; die
+Bildschirmfotos in `docs/screenshots/` sind danach neu erzeugt. Der Notenzähler des Host-Tests verlangt
+nur noch 20 statt 50 Note-Ons in zehn Sekunden: die Planung des ersten Tracks frisst je nach Last drei
+Sekunden davon, und mit 47 lag ein Lauf unter der Schwelle, ohne dass etwas falsch war.
 
 Nächster Schritt: Phase 8 (Tokenisierung, Transformer gegen SSM per Held-out-NLL, C++-Inferenz) und Phase 9
 (Hörrunden je Erzeuger, pluginval, Gerätemessung auf der Quest, Arrange-Zeitleiste, Nachkalibrierung der

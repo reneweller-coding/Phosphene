@@ -102,15 +102,17 @@ void PhospheneEditor::buildSetPage()
     page->addModuleGroup(proc_, Module::Compose, 0, "Set", tint, 5, compose::Bpm, 13);
     page->addModuleGroup(proc_, Module::Compose, 0, "Rhythm", tint, 3, compose::PercDensity, 3);
     page->addModuleGroup(proc_, Module::Compose, 0, "Melody", tint, 5, compose::AcidAmount, 10);
+    // The form (Phase 5): style profile, energy arc, whether tracks run at the profile's tempo, set length.
+    page->addModuleGroup(proc_, Module::Compose, 0, "Form", tint, 2, compose::Style, -1);   // two columns, so the row below still holds four groups
 
     // ---------------------------------------------------------------- meters, plan, export
-    const int gm = page->addGroup("Loudness", tint, 4);
+    const int gm = page->addGroup("Loudness", tint, 3);
     {
         auto meter = std::make_unique<LoudnessDisplay>();
         loudness_ = meter.get();
-        page->addControl(gm, std::move(meter), "", 4, true, 2);
+        page->addControl(gm, std::move(meter), "", 3, true, 2);
     }
-    const int gp = page->addGroup("Plan", tint, 7);
+    const int gp = page->addGroup("Plan", tint, 5);
     {
         auto list = std::make_unique<TrackDisplay>();
         list->onJump = [this](int bar) { proc_.seekToBar(bar); };
