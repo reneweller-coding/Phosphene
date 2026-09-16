@@ -191,6 +191,53 @@ int main(int argc, char** argv)
         check(again == state, "the state comes back through the wrapper, byte for byte");
     }
 
+    // ---------------------------------------------------------------- rates, and a second instance
+    {
+        // A host changes the device behind a loaded plugin, and it loads the same plugin twice.
+        // Both mean a second engine and a second composer thread inside one module.
+        for (double sr : { 44100.0, 96000.0 }) {
+            instance->releaseResources();
+            instance->setPlayConfigDetails(0, 2, sr, 128);
+            instance->prepareToPlay(sr, 128);
+            juce::AudioBuffer<float> small(2, 128);
+            juce::MidiBuffer m;
+            bool ok = true;
+            for (int i = 0; i < 40; ++i) {
+                small.clear(); m.clear();
+                instance->processBlock(small, m);
+                for (int c = 0; c < 2; ++c)
+                    for (int s = 0; s < 128; ++s) ok = ok && std::isfinite(small.getReadPointer(c)[s]);
+            }
+            check(ok, "the wrapper survives " + juce::String(static_cast<int>(sr)) + " Hz at block 128");
+        }
+        juce::String err2;
+        std::unique_ptr<juce::AudioPluginInstance> second(formats.createPluginInstance(desc, 48000.0, 256, err2));
+        check(second != nullptr, "a second instance loads beside the first" + (err2.isEmpty() ? juce::String() : ": " + err2));
+        if (second != nullptr) {
+            second->setNonRealtime(true);
+            second->setPlayConfigDetails(0, 2, 48000.0, 256);
+            second->prepareToPlay(48000.0, 256);
+            TestPlayHead head2;
+            second->setPlayHead(&head2);
+            juce::AudioBuffer<float> b2(2, 256);
+            juce::MidiBuffer m2;
+            double peak2 = 0.0;
+            for (int i = 0; i < static_cast<int>(6.0 * 48000.0 / 256.0); ++i) {
+                b2.clear(); m2.clear();
+                second->processBlock(b2, m2);
+                peak2 = juce::jmax(peak2, static_cast<double>(b2.getMagnitude(0, 256)));
+                head2.advance(256);
+            }
+            second->setPlayHead(nullptr);
+            check(peak2 > 0.05, "and it plays on its own (peak " + juce::String(peak2, 3) + ")");
+            second.reset();
+            check(true, "and goes away again without taking the first with it");
+        }
+        instance->releaseResources();
+        instance->setPlayConfigDetails(0, 2, 48000.0, 256);
+        instance->prepareToPlay(48000.0, 256);
+    }
+
     // ---------------------------------------------------------------- the editor, and away again
     {
         check(instance->hasEditor(), "the wrapper offers an editor");

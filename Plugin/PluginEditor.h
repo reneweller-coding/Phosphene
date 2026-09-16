@@ -48,8 +48,10 @@ public:
     void update(const phos::LoudnessReading& r, float compDb, float limitDb, float target);
 
 private:
-    phos::LoudnessReading reading_;
-    float comp_ = 0.0f, limit_ = 0.0f, target_ = -8.0f;
+    phos::LoudnessReading reading_;   ///< what the engine's meter last said
+    float comp_ = 0.0f;               ///< gain reduction of the bus compressor, dB
+    float limit_ = 0.0f;              ///< gain reduction of the limiter, dB
+    float target_ = -8.0f;            ///< master.target_lufs, drawn as the mark to hit
 };
 
 /** @brief The set as a list of tracks: key, tempo, patterns and where the play head is. */
@@ -72,8 +74,8 @@ public:
     std::function<void(int)> onJump;
 
 private:
-    std::vector<Row> rows_;
-    int bar_ = 0;
+    std::vector<Row> rows_;   ///< the tracks the composer has published
+    int bar_ = 0;             ///< where the play head stands, in bars from the start of the set
 };
 
 /**
@@ -93,10 +95,12 @@ public:
     void paint(juce::Graphics&) override;
 
 private:
-    std::vector<phos::NoteEvent> notes_;
-    phos::Part part_ = phos::Part::Kick;
-    int lane_ = -1, firstBar_ = 0, bars_ = 4;
-    double beat_ = 0.0;
+    std::vector<phos::NoteEvent> notes_;    ///< the window's notes, in musical beats
+    phos::Part part_ = phos::Part::Kick;    ///< which part is drawn
+    int lane_ = -1;                         ///< percussion: the lane whose knobs are on screen
+    int firstBar_ = 0;                      ///< first bar of the window
+    int bars_ = 4;                          ///< how many bars it shows
+    double beat_ = 0.0;                     ///< where the engine stands, for the play head
 };
 
 /** @brief The Phosphene editor. */

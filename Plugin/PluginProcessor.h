@@ -281,7 +281,9 @@ public:
     double recordedSeconds() const { return static_cast<double>(recordedSamples_.load(std::memory_order_relaxed)) / juce::jmax(1.0, sampleRate_); }
 
 private:
+    /** @brief Makes one host parameter per entry of the store, named from its module and descriptor. */
     void buildParameters();
+    /** @brief The composer thread's body: service the handshake, pump, plan ahead, sleep 2 ms. */
     void composerLoop();
     /**
      * @brief One step of the composer's side of the handshake.
@@ -291,7 +293,15 @@ private:
     void serviceComposer(bool warmUp);
     /** @brief Asks for a restart at @p bar with engine beat 0 meaning bar @p bar (audio thread). */
     void requestSeek(int bar, double beatOffset);
+    /**
+      * @brief Writes the notes of this block into the host's MIDI buffer, with their note-offs.
+      * @param midi          the host's buffer
+      * @param beatAtStart   engine beat at sample 0 of the block
+      * @param beatsPerSample how fast the block runs
+      * @param n             samples in the block
+      */
     void emitMidi(juce::MidiBuffer& midi, double beatAtStart, double beatsPerSample, int n);
+    /** @brief The seed, the host-sync switch and every parameter value, as XML. */
     void writeStateTo(juce::MemoryBlock& dest) const;
     /** @brief Message thread: the limiter's lookahead is a switchable latency; tell the host when it moves. */
     void timerCallback() override;
@@ -313,12 +323,12 @@ private:
     mutable std::mutex engineLock_;
     /** @brief The track plans the composer has published, for the editor. */
     mutable std::mutex plansLock_;
-    std::vector<phos::TrackPlan> plans_;
+    std::vector<phos::TrackPlan> plans_;   ///< the published copy; the editor reads only this
     static constexpr int kPublishedTracks = 24;   ///< how many tracks the warm-up plans ahead
     int publishedTracks_ = 0;                  ///< composer thread: how far the warm-up has got
     std::atomic<bool> plansStale_{ true };     ///< the seed or the knobs changed; plan again
     float composeFingerprint_ = 0.0f;          ///< message thread: watches the composer's knobs for a change
-    std::vector<StoreParameter*> byId_;
+    std::vector<StoreParameter*> byId_;   ///< host parameters by global id, for the editor
 
     double sampleRate_ = 48000.0;
     std::atomic<uint64_t> seed_{ 1 };
@@ -338,27 +348,27 @@ private:
     std::atomic<double> hostBpm_{ 0.0 };         ///< tempo the host reported, 0 = none
 
     std::thread composerThread_;
-    std::atomic<bool> composerRun_{ false };
+    std::atomic<bool> composerRun_{ false };   ///< false asks the composer thread to end
     std::atomic<bool> offline_{ false };   ///< non-realtime: the composer thread idles
 
     // ---- transport
-    std::atomic<bool> playRequest_{ false };
-    bool  wasPlaying_ = false;
-    bool  followHost_ = true;
-    std::atomic<bool> followHostAtomic_{ true };
-    std::atomic<double> musicalBeat_{ 0.0 };
-    std::atomic<double> bpmNow_{ 145.0 };
+    std::atomic<bool> playRequest_{ false };     ///< the standalone's play button
+    bool  wasPlaying_ = false;                   ///< audio thread: whether the last block played
+    bool  followHost_ = true;                    ///< message thread's copy, for the state and the editor
+    std::atomic<bool> followHostAtomic_{ true }; ///< the same, as the audio thread reads it
+    std::atomic<double> musicalBeat_{ 0.0 };     ///< where we are in the set, for the editor
+    std::atomic<double> bpmNow_{ 145.0 };        ///< the tempo actually being played
 
     // ---- MIDI out
-    phos::EventRing<phos::NoteEvent> midiRing_{ 4096 };
+    phos::EventRing<phos::NoteEvent> midiRing_{ 4096 };   ///< composer to audio thread, for the MIDI out
     /** @brief A note waiting for its note-off, in engine beats. */
     struct HeldNote { double endBeat = 0.0; int channel = 0; int pitch = 0; bool active = false; };
-    static constexpr int kMaxHeld = 128;
-    HeldNote held_[kMaxHeld];
+    static constexpr int kMaxHeld = 128;   ///< notes that may sound at once on the MIDI output
+    HeldNote held_[kMaxHeld];              ///< audio thread only
 
     // ---- mute and recording
-    std::atomic<bool> mute_{ false };
-    bool forceMute_ = false;
+    std::atomic<bool> mute_{ false };   ///< the output is silenced at the very end of processBlock
+    bool forceMute_ = false;            ///< `PHOS_MUTE=1`: the switch is stuck on
     /** @brief `PHOS_TRACE=1`: processBlock reports the transport and the handshake on stderr. */
     bool trace_ = false;
     unsigned traceCount_ = 0;   ///< @copydoc trace_

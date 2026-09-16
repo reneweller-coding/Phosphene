@@ -102,10 +102,11 @@ public:
     void paint(juce::Graphics&) override;
 
 private:
+    /** @brief Builds the control a descriptor asks for -- knob, switch or chooser -- and attaches it. */
     void addParamCell(PhospheneProcessor& proc, int groupIndex, int paramId);
-    std::vector<Cell> cells_;
-    std::vector<Group> groups_;
-    int contentHeight_ = 0;
+    std::vector<Cell> cells_;    ///< every control on the page, in the order it was added
+    std::vector<Group> groups_;  ///< the boxes, each naming the cells that belong to it
+    int contentHeight_ = 0;      ///< what the last layout() needed
 };
 
 } // namespace phosui
