@@ -3,6 +3,7 @@
  * @brief Module descriptor tables and the parameter store.
  */
 #include "phos/Params.h"
+#include "phos/Disperser.h"        // kDisperseStages: the upper end of the disperse parameters
 #include "phos/WaveTableFile.h"   // kNumWaveTables and the names of the shipped library tables
 #include <cmath>
 #include <cstdio>
@@ -268,6 +269,10 @@ const ParamDesc kAcidParams[acid::Count] = {
     { "hall_send",      "Hall Send",      "",      0.0f,     1.0f,  0.05f, Curve::Linear },
     { "duck",           "Duck",           "",      0.0f,     1.0f,  0.15f, Curve::Linear },
     { "level",          "Level",          "dB",  -36.0f,     6.0f,  -9.0f, Curve::Linear },
+    // Appended 16.09.2026 (acid colour round). Off by default: an all-pass chain changes no band's
+    // power, but it does smear the attack, and no measurement asks for that to be the default sound.
+    { "disperse",       "Disperse",       "x",     0.0f, static_cast<float>(kDisperseStages), 0.0f, Curve::Int },
+    { "disperse_freq",  "Disperse Freq",  "Hz",  200.0f,  8000.0f, 1250.0f, Curve::Log },
 };
 
 const ParamDesc kPolyParams[poly::Count] = {
@@ -316,6 +321,12 @@ const ParamDesc kPolyParams[poly::Count] = {
     { "gate_release",   "Gate Release",   "ms",    0.5f,   120.0f,  12.0f, Curve::Log },
     { "gate_tone",      "Gate Tone",      "",      0.0f,     1.0f,   0.4f, Curve::Linear },
     { "level",          "Level",          "dB",  -36.0f,     6.0f,  -4.0f, Curve::Linear },
+    // Appended 16.09.2026 (acid colour round).
+    { "disperse",       "Disperse",       "x",     0.0f, static_cast<float>(kDisperseStages), 0.0f, Curve::Int },
+    { "disperse_freq",  "Disperse Freq",  "Hz",  200.0f,  8000.0f, 1250.0f, Curve::Log },
+    // Thermal drift: the standard deviation of the slow random walk, in cents (Poly.h). 1 cent is
+    // +-2 cents at two sigma, the range the analogue literature gives for a warmed-up VCO.
+    { "drift",          "Drift",          "ct",    0.0f,     8.0f,   1.0f, Curve::Linear },
 };
 
 /**

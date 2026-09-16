@@ -6,7 +6,8 @@
  * Signal path:
  * @code
  *   glide -> PolyBLEP saw/pulse (2 fs) -> diode ladder (2 fs) -> half-band -> [tuned comb] -> VCA
- *         -> ADAA tanh drive -> 24 dB low cut (>= 150 Hz) -> level -> centre + tempo delay
+ *         -> ADAA tanh drive -> 24 dB low cut (>= 150 Hz) -> [disperser] -> level
+ *         -> centre + tempo delay
  * @endcode
  *
  * The behaviour follows the TB-303 as described in the circuit analyses collected around Open303
@@ -27,7 +28,12 @@
  *    tuned to the note's period adds a pitched, vowel-like ring. A comb tuned to the period has its
  *    peaks on the harmonics, so the output is scaled by (1 - feedback) to keep the harmonics at their
  *    level. The numbers are design values: a measurement on the reference tracks found no detectable
- *    sweeps in the finished mixes (Tools/ref_sweeps.py, negative result of 15.09.2026).
+ *    sweeps in the finished mixes (Tools/ref_sweeps.py, negative result of 15.09.2026). The delay
+ *    line is read with **third-order Lagrange interpolation**, not linear; combTaps() carries the
+ *    measurement that chose it.
+ *  - **Disperser** (Disperser.h). A chain of second-order all-passes turns the attack into a short
+ *    downward chirp -- the "pew" of a modern psytrance stab -- without touching the magnitude of any
+ *    band. Off by default (acid.disperse = 0 sections), because no measurement asks for it to be on.
  *
  * **Depth rule.** The low cut never goes below 150 Hz, and the composer keeps acid lines at or above
  * D3 (147 Hz): under 140 Hz only kick and bass may play.
@@ -35,6 +41,7 @@
 #pragma once
 #include "phos/Adaa.h"
 #include "phos/DiodeLadder.h"
+#include "phos/Disperser.h"
 #include "phos/Dsp.h"
 #include "phos/Halfband.h"
 #include "phos/Oscillator.h"
@@ -42,6 +49,48 @@
 #include <vector>
 
 namespace phos {
+
+/**
+ * @brief The four weights of a third-order Lagrange fractional delay, for the fraction @p x in [0, 1).
+ *
+ * The taps belong to the samples at offsets -1, 0, +1, +2 from the integer part, and the weights are
+ * the Lagrange basis polynomials on the nodes (-1, 0, 1, 2) evaluated at @p x. At x = 0 the weights
+ * are (0, 1, 0, 0) and at x = 1 they are (0, 0, 1, 0), so the interpolator reproduces the integer
+ * delays exactly and never introduces a gain step as the tuning crosses a sample.
+ *
+ * **Why this and not linear interpolation, and why not an all-pass.** Linear interpolation is a
+ * two-tap low pass whose damping depends on the fraction, so a comb tuned to the note period loses
+ * its top by an amount that changes with the note -- exactly where the resonance is supposed to be
+ * sharpest. Measured at 48 kHz for a fraction of 0.5: linear loses 0.47 dB at 5 kHz and 2.01 dB at
+ * 10 kHz, and with the default feedback of 0.82 that pulls the comb's resonance peak from 14.89 dB
+ * down to 13.01 dB and 9.13 dB. The third-order Lagrange interpolator (Laakso, Valimaki, Karjalainen
+ * and Laine, "Splitting the unit delay -- tools for fractional delay filter design", IEEE Signal
+ * Processing Magazine 13(1), 1996, section on Lagrange interpolation, where it is the maximally flat
+ * FIR fractional-delay filter) loses 0.04 dB and 0.53 dB instead, for peaks of 14.73 dB and 12.81 dB
+ * against an ideal 14.89 dB.
+ *
+ * The literature's own preference in that same paper is the first-order all-pass, whose magnitude is
+ * exactly 1. It is not used here, and the reason is a trade rather than a defect:
+ *  - What it would buy is small where it matters. Against Lagrange it is 0.00 dB better at 2 kHz,
+ *    0.13 dB at 5 kHz and 2.31 dB at 10 kHz -- and at 10 kHz an acid note has been through a
+ *    four-pole ladder whose cutoff is a few hundred hertz.
+ *  - What it costs is state, in a comb that is retuned at *every note*. Its coefficient
+ *    a = (1 - frac)/(1 + frac) approaches 1 as the fraction approaches zero, which puts its pole on
+ *    the unit circle at z = -1, and the filter then stops forgetting. Measured in the self test
+ *    (section "acid colour"): 100 ms after a retune, with the input taken away and the comb itself
+ *    136 dB down, the all-pass version still stands at -108 dB of the steady state where the Lagrange
+ *    version is at -184 dB. That residue is far too quiet to hear; what it shows is that the state
+ *    would have to be reset or crossfaded at every note, and a stateless interpolator that already
+ *    removes 91 % of the linear error at 5 kHz makes that machinery pointless.
+ */
+inline void combTaps(float x, float& wm1, float& w0, float& w1, float& w2)
+{
+    const float xm1 = x - 1.0f, xm2 = x - 2.0f, xp1 = x + 1.0f;
+    wm1 = -x * xm1 * xm2 * (1.0f / 6.0f);
+    w0 = xp1 * xm1 * xm2 * 0.5f;
+    w1 = -xp1 * x * xm2 * 0.5f;
+    w2 = xp1 * x * xm1 * (1.0f / 6.0f);
+}
 
 /** @brief Monophonic acid synthesizer. */
 class Acid {
@@ -96,6 +145,8 @@ private:
     Envelope amp_;
     TanhAdaa shaper_;
     Svf lc1_, lc2_;
+    Disperser disperse_;             ///< all-pass chain coefficients (Disperser.h)
+    DisperserChannel dispState_;     ///< its state; the acid is mono until the delay
     TempoDelay delay_;
     std::vector<float> comb_;
     size_t combPos_ = 0;

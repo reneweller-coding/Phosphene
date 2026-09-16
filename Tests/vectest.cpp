@@ -241,8 +241,15 @@ void testPoly()
     std::vector<float> aL(64), aR(64), bL(64), bR(64);
     for (int block = 0; block < 3000; ++block) {
         if (block % 250 == 0) {
-            // A different oscillator and filter every so often, the same on both.
-            p.parseText(fmt("lead.osc=%d lead.table=%d lead.pos_env=0.4 lead.pos_lfo_beats=0.5 lead.resonance=%.2f lead.fm_index=%d lead.wave=0.5", (block / 250) % 4, (block / 250) % 6, 0.1 + 0.07 * (block / 250 % 10), block / 250 % 7).c_str());
+            // A different oscillator and filter every so often, the same on both. Thermal drift and
+            // the disperser are switched on here on purpose (16.09.2026): the drift moves the phase
+            // step of every one of the 56 slots and the disperser sits on the summed output, and both
+            // are computed on the scalar side precisely so that the lane paths cannot diverge -- a run
+            // with them off would never notice if one day they did.
+            p.parseText(fmt("lead.osc=%d lead.table=%d lead.pos_env=0.4 lead.pos_lfo_beats=0.5 lead.resonance=%.2f lead.fm_index=%d "
+                            "lead.wave=0.5 lead.drift=4 lead.disperse=%d lead.disperse_freq=900",
+                            (block / 250) % 4, (block / 250) % 6, 0.1 + 0.07 * (block / 250 % 10), block / 250 % 7,
+                            1 + (block / 250) % 8).c_str());
             std::vector<float> v(static_cast<size_t>(poly::Count));
             p.readModule(Module::Poly, 0, v.data());
             a->update(v.data(), 145.0);
@@ -262,7 +269,7 @@ void testPoly()
             energy += static_cast<double>(aL[static_cast<size_t>(i)]) * aL[static_cast<size_t>(i)];
         }
     }
-    check(bad == 0 && energy > 1.0, "56 oscillator slots and 16 voice channels identical to scalar (supersaw, VA, FM, wavetable)", fmt("%d differing samples, energy %.1f", bad, energy));
+    check(bad == 0 && energy > 1.0, "56 oscillator slots and 16 voice channels identical to scalar (supersaw, VA, FM, wavetable, with drift and disperser)", fmt("%d differing samples, energy %.1f", bad, energy));
 
     // Cost, not a check: eight voices held for ten seconds, once as the lead and once as the pad,
     // each at the full unison of the desktop level and at the three oscillators of the Quest level

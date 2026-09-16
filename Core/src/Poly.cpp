@@ -17,6 +17,19 @@ constexpr double kPiD = 3.141592653589793;
 /** @brief Pan position of each unison oscillator: low and high partners on opposite sides. */
 constexpr double kUnisonPan[kPolyUnison] = { -1.0, 0.67, -0.33, 0.0, 0.33, -0.67, 1.0 };
 
+/**
+ * @brief Frequency factor of a drift of @p cents, as 1 + cents ln2 / 1200.
+ *
+ * The first two terms of 2^(cents/1200). At the parameter's ceiling of 8 cents the walk practically
+ * never leaves +-5 standard deviations, that is +-40 cents, where the truncation error of the
+ * expansion is 2.7e-4 -- 0.46 cents. At the default of 1 cent and the +-4 cents a walk actually
+ * covers the error is 5.4e-6, that is 0.009 cents, three orders under the smallest pitch difference
+ * anyone hears. A pow() per slot per note would be correct to the last bit and would also be fine
+ * here; the expansion is kept because it is the same arithmetic on every platform and no library's
+ * pow() is.
+ */
+inline double driftFactor(double cents) { return 1.0 + cents * (0.6931471805599453 / 1200.0); }
+
 void svfCoefs(double fc, double damping, double sr, float& a1, float& a2, float& a3)
 {
     const double g = std::tan(kPiD * std::clamp(fc, 10.0, 0.45 * sr) / sr);
@@ -97,8 +110,18 @@ void Poly::reset()
     counter_ = 0;
     pos_ = 0;
     tableReads_ = 0;
-    phaseRng_.seed(0x504F4C59ull);
+    seedPhases(0x504F4C59ull);
+    for (float& d : driftSlot_) d = 0.0f;
+    for (float& d : driftVoice_) d = 0.0f;
+    dispL_.reset();
+    dispR_.reset();
     delay_.reset();
+}
+
+void Poly::advanceDrift()
+{
+    for (int s = 0; s < kPolySlots; ++s) driftSlot_[s] += (driftRng_.bipolar() - driftSlot_[s]) * driftAlpha_;
+    for (int v = 0; v < kPolyVoices; ++v) driftVoice_[v] += (driftRng_.bipolar() - driftVoice_[v]) * driftAlpha_;
 }
 
 void Poly::update(const float* v, double bpm)
@@ -114,6 +137,15 @@ void Poly::update(const float* v, double bpm)
     posDecay_ = static_cast<float>(std::exp(std::log(1.0e-3) / (std::max(1.0f, v[poly::PosDecay]) * 0.001 * sr_)));
     bpm_ = bpm;
     lfoInc_ = static_cast<float>(bpm / 60.0 / (std::max(0.05f, v[poly::PosLfoBeats]) * sr_));
+    // Thermal drift (Poly.h). The walks step once per kPolyBlock samples, so their corner frequency
+    // is kDriftHz against that grid rate; driftNorm_ turns the process's standing deviation,
+    // sqrt(alpha / ((2 - alpha) * 3)) for a uniform excitation, into the drift depth in cents.
+    const double gridRate = sr_ / static_cast<double>(kPolyBlock);
+    driftAlpha_ = static_cast<float>(1.0 - std::exp(-2.0 * kPiD * kDriftHz / gridRate));
+    const double sd = std::sqrt(static_cast<double>(driftAlpha_) / ((2.0 - driftAlpha_) * 3.0));
+    drift_ = v[poly::Drift];
+    driftNorm_ = static_cast<float>(sd > 0.0 ? drift_ / sd : 0.0);
+    disperse_.set(static_cast<int>(std::lround(v[poly::Disperse])), v[poly::DisperseFreq], sr_);
     send_ = v[poly::DelaySend];
     level_ = dbToGain(v[poly::Level]);
     const int dl = std::clamp(static_cast<int>(std::lround(v[poly::DelayLeft])), 0, kNumDelayTimes - 1);
@@ -226,7 +258,9 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
             wtLevel_[s] = 0;
             continue;
         }
-        const double hz = f0 * (1.0 + kSupersawOffsets[u] * y * detuneScale);
+        // Thermal drift: each unison slot has its own walk, so the seven saws of a supersaw age
+        // against each other. The walk is read once here and held for the note (Poly.h).
+        const double hz = f0 * (1.0 + kSupersawOffsets[u] * y * detuneScale) * driftFactor(slotDrift(s));
         const double dt = std::min(hz / sr_, 0.45);
         const double mdt = std::min(hz * v[poly::FmRatio] / sr_, 0.45);
         slots_.dt[s] = static_cast<float>(dt);
@@ -269,6 +303,17 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     fenv_[voice] = static_cast<float>(std::pow(static_cast<double>(fDecay_), late));
     posEnv_[voice] = static_cast<float>(std::pow(static_cast<double>(posDecay_), late));
     lfoPh_[voice] = 0.0;
+    // The voice's own walk: the filter moves by a quarter of the pitch deviation and the attack by
+    // one per cent per cent, both held for the note (Poly.h). update() has already given every voice
+    // the written envelope times; this replaces them for this voice only, so a voice with drift 0
+    // keeps exactly the times update() set.
+    const double vDrift = voiceDrift(voice);
+    driftOct_[voice] = static_cast<float>(vDrift * kDriftCutoffRatio / 1200.0);
+    if (drift_ > 0.0f) {
+        const float attack = v[poly::AmpAttack] * 0.001f * static_cast<float>(1.0 + vDrift * kDriftAttackRatio);
+        amp_[voice].setTimes(std::max(1.0e-5f, attack), v[poly::AmpDecay] * 0.001f, v[poly::AmpSustain],
+                             std::max(0.005f, v[poly::AmpRelease] * 0.001f));
+    }
     lowPassCoefs(voice, 2.0 - 1.9 * std::clamp(static_cast<double>(v[poly::Resonance]), 0.0, 1.0));
     amp_[voice].noteOn();
     amp_[voice].advanceAttack(late);
@@ -280,6 +325,11 @@ void Poly::renderSegment(float* L, float* R, int n)
     const int width = laneWidth<V>();
     const float* v = values_;
     const double damping = 2.0 - 1.9 * std::clamp(static_cast<double>(v[poly::Resonance]), 0.0, 1.0);
+    // The drift walks step on the absolute grid, for every slot and voice whether it sounds or not:
+    // a walk that only advanced while a note was held would depend on the note history and would no
+    // longer be a function of the sample index. processWith() cuts every segment at the grid, so this
+    // runs exactly once per kPolyBlock samples however the host splits its blocks.
+    if (drift_ > 0.0f && pos_ % kPolyBlock == 0) advanceDrift();
     bool voiceOn[kPolyVoices] = {};
     for (int voice = 0; voice < kPolyVoices; ++voice) {
         voiceOn[voice] = amp_[voice].isActive();
@@ -399,6 +449,10 @@ void Poly::renderSegment(float* L, float* R, int n)
             l += chanOut_[static_cast<size_t>(i * kPolyLanes + voice * 2)];
             r += chanOut_[static_cast<size_t>(i * kPolyLanes + voice * 2 + 1)];
         }
+        if (disperse_.stages > 0) {
+            l = dispL_.tick(l, disperse_.c, disperse_.d, disperse_.stages);
+            r = dispR_.tick(r, disperse_.c, disperse_.d, disperse_.stages);
+        }
         L[i] = l * level_;
         R[i] = r * level_;
         sendBuf_[static_cast<size_t>(i)] = 0.5f * (L[i] + R[i]) * send_;
@@ -410,7 +464,8 @@ void Poly::renderSegment(float* L, float* R, int n)
 void Poly::lowPassCoefs(int voice, double damping)
 {
     const float* v = values_;
-    const double oct = v[poly::EnvAmount] * fenv_[voice] + v[poly::KeyTrack] * (pitch_[voice] - 60) / 12.0;
+    const double oct = v[poly::EnvAmount] * fenv_[voice] + v[poly::KeyTrack] * (pitch_[voice] - 60) / 12.0
+                     + static_cast<double>(driftOct_[voice]);
     const double fc = std::min(static_cast<double>(v[poly::Cutoff]) * std::pow(2.0, oct), 0.45 * sr_);
     svfCoefs(fc, damping, sr_, ch_.a1[voice * 2], ch_.a2[voice * 2], ch_.a3[voice * 2]);
     ch_.a1[voice * 2 + 1] = ch_.a1[voice * 2];
