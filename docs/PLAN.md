@@ -353,8 +353,8 @@ Prüfungen, die jetzt in einem Core statt in Takt 0 messen müssen (Phasenkopplu
 deshalb bis dorthin rendern. Beide sind so eingestellt, dass sie nur rendern, was sie messen: ohne
 Melodik, und die Phasenkopplung sucht sich den ersten Seed mit einem achttaktigen Intro.
 
-Nächster Schritt: Phase 6 (JUCE-Plugin) und Phase 7 (Quest-Build) laufen in eigenen Arbeitsbäumen;
-danach Phase 8 (Transformer) und Phase 9 (Qualität). Offen aus Phase 5: die Profil-Reise (Morph
+Nächster Schritt (Stand nach Phase 5): Phase 6 und 7 sind in derselben Nacht in eigenen Arbeitsbäumen
+entstanden und gemergt (Blöcke unten); danach Phase 8 (Transformer) und Phase 9 (Qualität). Offen aus Phase 5: die Profil-Reise (Morph
 zwischen Stilprofilen über das Set), der Ranker aus 6.9, Stems je Erzeuger und das Ausrollen der
 Partitur in die `.phosset`-Datei.
 
@@ -659,6 +659,27 @@ Weitere bewusste Abweichungen:
 Nächster Schritt für Phase 6: Arrange-Zeitleiste über das ganze Set (PLAN 8.1), Perform-Makros,
 Handbuch-Generator; und nach dem Merge von Phase 5 die Kopplung an `.phosset` und die Stilprofile.
 
+**16.09.2026, Nachtlauf zusammengeführt (Koordination).** Vier Arbeitsbäume von master 5099ffd, jeder mit
+eigenem Agenten, in dieser Reihenfolge nach master gemergt und gepusht: Phase 7 (233f7d8), DSP-Qualität
+(6a072df), Unisono-Nachtrag (b5d00bd), Phase 5 (2cf8858), Phase 6 (ac15f13). Konflikte gab es nur in
+`docs/PLAN.md`, `README.md`, `Tools/render/main.cpp` und `.gitignore`; alle Blöcke sind erhalten. Stand:
+**178 Selbsttest-Prüfungen, Vektortests 9 von 9 in drei Pfaden, Hosttest 74 von 74, VST3-Test 28 von 28**,
+`ctest` 6 von 6.
+
+Ein Merge-Befund: Phase 6 hatte gegen den Stand vor Phase 5 getestet. Die Form-Grammatik beginnt jeden
+Track mit einem Intro, dessen erste vier Takte nur Atmosphäre tragen (Kick ab Takt 5 bis 9); Host- und
+VST3-Test verglichen und zählten ab Takt 0 und fanden Stille. Die Tests messen jetzt ab Takt 8 (Orakel über
+acht Takte, Live-Pfad) bzw. ab Takt 16 (Notenzahl am Host-Playhead). Das Plugin selbst war unverändert
+korrekt: bitgleich zu `phos_render`. Zweiter Befund: der Hosttest darf nicht unter `PHOS_MUTE=1` laufen
+(dieselbe Lehre wie bei Noctuary), das Plugin bleibt dann absichtlich stumm.
+
+Die Bildschirmfotos in `docs/screenshots/` sind nach dem Merge neu erzeugt, damit die Phase-5-Knöpfe
+(Style, Arc, Style Tempo, Set Minutes) darauf erscheinen; die Oberfläche generiert sich aus den Tabellen,
+deshalb war dafür keine Codeänderung nötig.
+
+Nächster Schritt: Phase 8 (Tokenisierung, Transformer gegen SSM per Held-out-NLL, C++-Inferenz) und Phase 9
+(Hörrunden je Erzeuger, pluginval, Gerätemessung auf der Quest, Arrange-Zeitleiste, Nachkalibrierung der
+Präsenz um 2,4 dB, Release).
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

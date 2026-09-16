@@ -7,7 +7,7 @@ there are no samples.
 
 The design and the literature behind each building block are in [docs/PLAN.md](docs/PLAN.md) (German).
 
-**Status:** Phases 0 to 5 are done: framework, kick and rolling bass, a twelve-lane percussion kit,
+**Status:** Phases 0 to 7 are done: framework, kick and rolling bass, a twelve-lane percussion kit,
 the melodic layer (an acid voice on a diode ladder with accent, slide and squelch; a polyphonic
 supersaw/VA/FM/wavetable engine for lead, arp and pads; chords, riffs, phrases and arps drawn from
 statistics of a local MIDI corpus under musical constraints), the space and the master (wavetable pads
