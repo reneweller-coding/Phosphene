@@ -724,6 +724,15 @@ ihr Spektrum monoton bis Nyquist. Gemessen als Leistung 14 bis 20 kHz gegen 4 bi
 **hellste der 39 Aufnahmen kommt auf −1,2**. Die ganze Mischung lag bei −1,1 dB, also heller über
 14 kHz als jede einzelne Referenzaufnahme.
 
+*Dichte oder Helligkeit?* Die Frage lässt sich trennen: **Helligkeit.** Die Einsatzdichte (positiver
+spektraler Fluss über 1,5 kHz, Schwelle Median + 1,5 MAD, 40-ms-Sperre) liegt bei **11,16 Einsätzen
+je Sekunde** im Median über acht Seeds gegen **10,37** in den 39 Aufnahmen — Phosphene setzt eher
+etwas *mehr* Ereignisse, nicht weniger, und die Bandbegrenzung ändert daran nichts (11,15 danach).
+Auch der Crest über 100-ms-Fenster passt bereits (10,76 gegen 10,67 dB Referenz, danach 10,50). Die
+Hats sind nicht zu dünn gesät, sie standen im falschen Band. Das deckt sich mit dem Negativbefund der
+DSP-Runde vom selben Tag, dass Velvet Noise nichts bringt: die Quelle war nie das Problem, das Filter
+dahinter war es.
+
 Damit ist die Lücke keine Kerbe bei 2 bis 6 kHz, sondern eine **Neigung**: die Terzkurve liegt von
 2 bis 10 kHz 2 bis 3,8 dB unter der Referenz und ab 12,7 kHz darüber (+0,7 und +5,0 dB bei 16 kHz).
 Und sie war deshalb so lange unerklärt, weil das Luftband 6 bis 16 kHz, an dem Phase 2 und 4 den
