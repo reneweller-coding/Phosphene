@@ -247,11 +247,34 @@ void PlugConductor::pump(const ParamStore& params, double horizonBeats, EventRin
         if (gTrace && nextBar_ % 32 == 0)
             std::fprintf(stderr, "[phos conductor] composing bar %d, filled to beat %.1f\n", nextBar_, target);
         composer_.composeBars(params, nextBar_, 1, notes_, &controls_);
+        {
+            // A copy for the editor's pattern preview, in musical beats and before the offset is
+            // taken off: what the display draws is what the composer wrote, not where it landed in
+            // the engine's timeline. Old bars fall off the front.
+            const std::lock_guard<std::mutex> lock(previewLock_);
+            const double oldest = static_cast<double>(nextBar_ - kPreviewBars) * kBeatsPerBar;
+            const auto cut = std::find_if(preview_.begin(), preview_.end(),
+                                          [oldest](const NoteEvent& e) { return e.beat >= oldest; });
+            preview_.erase(preview_.begin(), cut);
+            preview_.insert(preview_.end(), notes_.begin(), notes_.end());
+        }
         if (writeTempo_) tempoControls(params, nextBar_, controls_);
         std::sort(controls_.begin(), controls_.end(),
                   [](const ControlEvent& a, const ControlEvent& b) { return a.beat < b.beat; });
         ++nextBar_;
     }
+}
+
+bool PlugConductor::readPreview(int firstBar, int bars, std::vector<NoteEvent>& out) const
+{
+    out.clear();
+    const std::lock_guard<std::mutex> lock(previewLock_);
+    if (preview_.empty()) return false;
+    const double from = static_cast<double>(firstBar) * kBeatsPerBar;
+    const double to = static_cast<double>(firstBar + bars) * kBeatsPerBar;
+    if (preview_.front().beat > from || preview_.back().beat < from) return false;
+    for (const NoteEvent& e : preview_) if (e.beat >= from && e.beat < to) out.push_back(e);
+    return true;
 }
 
 // ==================================================================== PhospheneProcessor

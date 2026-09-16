@@ -353,6 +353,18 @@ int main()
                                                + juce::String(loudBlocks) + " of " + juce::String(blocks) + " blocks sounding)");
         check(worstRun * block / sr < 0.15, "no gap longer than 150 ms while it plays (worst "
                                                 + juce::String(worstRun * block / sr * 1000.0, 1) + " ms)");
+        // What the editor's pattern rolls draw: the bars the conductor has composed, by part.
+        std::vector<NoteEvent> pattern;
+        const bool got = p->readPattern(0, 4, pattern);
+        int kicks = 0, percs = 0;
+        for (const NoteEvent& e : pattern) {
+            kicks += e.part == Part::Kick ? 1 : 0;
+            percs += e.part == Part::Perc ? 1 : 0;
+        }
+        check(got && !pattern.empty(), "the pattern preview has the first four bars in it ("
+                                           + juce::String(static_cast<int>(pattern.size())) + " notes)");
+        check(kicks >= 12, "and the kick is in it (" + juce::String(kicks) + " notes in four bars)");
+        check(percs > 0, "and the percussion kit too (" + juce::String(percs) + " notes)");
     }
 
     // ---------------------------------------------------------------- state round trip

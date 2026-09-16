@@ -132,7 +132,21 @@ public:
     /** @brief Nudges the offset by a fraction of a beat (host drift correction). */
     void nudgeOffset(double delta) { beatOffset_ += delta; }
 
+    /**
+     * @brief The notes of the bars last composed, for the editor's pattern preview.
+     *
+     * The conductor keeps the last #kPreviewBars bars it composed, in musical beats. Reading them
+     * is a copy under a short lock -- the editor never asks the composer itself, which would mean
+     * waiting for a probe render.
+     * @param firstBar first bar wanted
+     * @param bars     how many
+     * @param out      receives the notes whose bar falls in that range
+     * @return false if nothing of that range has been composed yet
+     */
+    bool readPreview(int firstBar, int bars, std::vector<phos::NoteEvent>& out) const;
+
     static constexpr int kCatchUpBars = 128;   ///< how far back seek() looks for a track's sound
+    static constexpr int kPreviewBars = 24;    ///< bars kept for the editor's pattern preview
 
 private:
     bool flush(phos::EventRing<phos::NoteEvent>* midiOut);
@@ -148,6 +162,8 @@ private:
     std::vector<phos::NoteEvent> notes_;
     std::vector<phos::ControlEvent> controls_;
     size_t notePos_ = 0, controlPos_ = 0;
+    mutable std::mutex previewLock_;               ///< guards #preview_ (composer writes, editor reads)
+    std::vector<phos::NoteEvent> preview_;         ///< the last kPreviewBars bars, in musical beats
 };
 
 /** @brief What the editor needs to know about the transport, in one lump. */
@@ -214,6 +230,12 @@ public:
      * @return false if that track has not been planned yet (the editor then shows what it has)
      */
     bool tryReadTrack(int index, phos::TrackPlan& out) const;
+    /**
+     * @brief The notes of @p bars bars from @p firstBar, for the editor's pattern preview.
+     * @return false if the conductor has not composed that range (the display then keeps its own)
+     */
+    bool readPattern(int firstBar, int bars, std::vector<phos::NoteEvent>& out) const
+    { return conductor_->readPreview(firstBar, bars, out); }
     /** @brief Asks the composer to re-plan: the knobs that shape the set have changed. */
     void requestRestart() { plansStale_.store(true, std::memory_order_release); restartRequest_.store(true, std::memory_order_release); }
 

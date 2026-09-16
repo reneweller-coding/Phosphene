@@ -76,6 +76,29 @@ private:
     int bar_ = 0;
 };
 
+/**
+ * @brief The notes of one part over the next bars, as a step grid or a small piano roll.
+ *
+ * Every generator page carries one, so what the knobs are shaping can be seen as well as heard:
+ * percussion as twelve lanes, everything else as pitches over time. The notes come from the
+ * conductor's copy of the bars it last composed, which is the score the engine is about to play --
+ * so the roll runs a little ahead of the sound, by exactly the horizon the rings are kept at.
+ */
+class PatternDisplay final : public juce::Component {
+public:
+    /** @brief Which part to draw; percussion draws its twelve lanes instead of pitches. */
+    void setPart(phos::Part part, int highlightLane = -1) { part_ = part; lane_ = highlightLane; }
+    /** @brief New notes and where the play head stands, in bars and beats (message thread). */
+    void update(std::vector<phos::NoteEvent> notes, int firstBar, int bars, double beat);
+    void paint(juce::Graphics&) override;
+
+private:
+    std::vector<phos::NoteEvent> notes_;
+    phos::Part part_ = phos::Part::Kick;
+    int lane_ = -1, firstBar_ = 0, bars_ = 4;
+    double beat_ = 0.0;
+};
+
 /** @brief The Phosphene editor. */
 class PhospheneEditor final : public juce::AudioProcessorEditor, private juce::Timer {
 public:
@@ -103,6 +126,7 @@ private:
     void buildPages();
     void buildSetPage();          // EditorSetTab.cpp
     void refreshSetPage();        // EditorSetTab.cpp: meters, transport, track list
+    void refreshPattern();        // the pattern roll of the tab that is open
     void timerCallback() override;
     phosui::ControlPage* activePage() const;
     void layoutContent();
@@ -116,6 +140,10 @@ private:
 
     std::vector<std::unique_ptr<phosui::ControlPage>> pages_;   ///< one per tab; the percussion tab's is a stand-in
     std::vector<std::unique_ptr<phosui::ControlPage>> percPages_;
+    /** @brief The pattern preview of each tab (null for the Set tab, which has the plan instead). */
+    std::vector<PatternDisplay*> patterns_;
+    std::vector<PatternDisplay*> percPatterns_;   ///< one per lane page, each lighting its own lane
+    std::vector<phos::NoteEvent> patternNotes_;   ///< scratch for the timer's read
     juce::OwnedArray<juce::TextButton> tabButtons_, laneButtons_;
     juce::Viewport viewport_;
     int tab_ = 0, percLane_ = 0;

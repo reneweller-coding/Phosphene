@@ -102,7 +102,8 @@ void LoudnessDisplay::paint(juce::Graphics& g)
     };
     bar(area.removeFromTop(rowH), "Short", reading_.shortTerm, green, target_ + 3.0f);
     bar(area.removeFromTop(rowH), "Integr.", reading_.integrated, accent, target_ + 2.0f);
-    bar(area.removeFromTop(rowH), "Peak", reading_.truePeak, green, -1.0f);
+    // The limiter's ceiling is -1 dBTP, so exactly -1.0 is the target and not an overshoot.
+    bar(area.removeFromTop(rowH), "Peak", reading_.truePeak, green, -0.9f);
     g.setColour(faint);
     g.setFont(phosui::body(9.5f));
     g.drawText("comp " + juce::String(comp_, 1) + " dB   limit " + juce::String(limit_, 1) + " dB   target "
@@ -153,6 +154,112 @@ void TrackDisplay::mouseDown(const juce::MouseEvent& e)
     const int rowH = juce::jlimit(13, 20, area.getHeight() / juce::jmax(1, static_cast<int>(rows_.size())));
     const int index = (e.y - area.getY()) / juce::jmax(1, rowH);
     if (index >= 0 && index < static_cast<int>(rows_.size())) onJump(rows_[static_cast<size_t>(index)].bar);
+}
+
+// ==================================================================== PatternDisplay
+
+void PatternDisplay::update(std::vector<NoteEvent> notes, int firstBar, int bars, double beat)
+{
+    notes_ = std::move(notes);
+    firstBar_ = firstBar;
+    bars_ = juce::jmax(1, bars);
+    beat_ = beat;
+    repaint();
+}
+
+void PatternDisplay::paint(juce::Graphics& g)
+{
+    const juce::Rectangle<int> r = getLocalBounds().reduced(4, 3);
+    g.setColour(bg0.withAlpha(0.6f));
+    g.fillRoundedRectangle(r.toFloat(), 5.0f);
+    juce::Rectangle<int> area = r.reduced(8, 6);
+    g.setColour(dim);
+    g.setFont(title(10.0f));
+    g.drawText(juce::String(kPartNames[static_cast<int>(part_)]).toUpperCase() + "   bars "
+                   + juce::String(firstBar_ + 1) + " to " + juce::String(firstBar_ + bars_),
+               area.removeFromTop(13), juce::Justification::topLeft, false);
+    const juce::Rectangle<float> plot = area.toFloat();
+    if (plot.getHeight() < 12.0f) return;
+
+    const double from = static_cast<double>(firstBar_) * kBeatsPerBar;
+    const double span = static_cast<double>(bars_) * kBeatsPerBar;
+    auto xOf = [&](double beat) { return plot.getX() + static_cast<float>((beat - from) / span) * plot.getWidth(); };
+
+    // The grid: a hairline every sixteenth, brighter on beats, brightest on bars.
+    for (int s = 0; s <= bars_ * kBeatsPerBar * 4; ++s) {
+        const double beat = from + s * 0.25;
+        const bool bar = s % (kBeatsPerBar * 4) == 0, beatLine = s % 4 == 0;
+        g.setColour(bar ? edge.brighter(0.5f) : (beatLine ? edge : edge.withAlpha(0.35f)));
+        g.drawVerticalLine(juce::roundToInt(xOf(beat)), plot.getY(), plot.getBottom());
+    }
+
+    if (notes_.empty()) {
+        g.setColour(faint);
+        g.setFont(phosui::body(11.0f));
+        g.drawText("nothing composed here yet", plot, juce::Justification::centred, false);
+    } else if (part_ == Part::Perc) {
+        // Twelve lanes, named by the role each lane plays; the lane whose knobs are on screen is lit.
+        const float rowH = plot.getHeight() / kPercLanes;
+        for (int lane = 0; lane < kPercLanes; ++lane) {
+            const juce::Rectangle<float> row(plot.getX(), plot.getY() + lane * rowH, plot.getWidth(), rowH);
+            if (lane == lane_) {
+                g.setColour(accent.withAlpha(0.10f));
+                g.fillRect(row);
+            }
+            g.setColour(faint.withAlpha(0.6f));
+            g.setFont(phosui::body(juce::jlimit(7.0f, 9.5f, rowH * 0.7f)));
+            g.drawText(juce::String(lane + 1), row.withWidth(14.0f), juce::Justification::centredRight, false);
+        }
+        for (const NoteEvent& e : notes_) {
+            if (e.part != Part::Perc || e.lane >= kPercLanes) continue;
+            const juce::Rectangle<float> row(xOf(e.beat), plot.getY() + e.lane * rowH + 1.5f,
+                                             juce::jmax(3.0f, xOf(e.beat + 0.22) - xOf(e.beat)), rowH - 3.0f);
+            g.setColour((e.lane == lane_ ? accent : partColour(3)).withAlpha(0.35f + 0.65f * e.velocity / 127.0f));
+            g.fillRoundedRectangle(row, 1.5f);
+        }
+    } else {
+        // A piano roll over whatever pitches this part uses, with two semitones of air.
+        int lo = 127, hi = 0;
+        for (const NoteEvent& e : notes_) if (e.part == part_) { lo = juce::jmin(lo, static_cast<int>(e.pitch)); hi = juce::jmax(hi, static_cast<int>(e.pitch)); }
+        if (lo > hi) {
+            g.setColour(faint);
+            g.setFont(phosui::body(11.0f));
+            g.drawText("this part is silent here", plot, juce::Justification::centred, false);
+            return;
+        }
+        lo -= 2;
+        hi += 2;
+        const float rowH = plot.getHeight() / juce::jmax(1, hi - lo + 1);
+        // The black keys as darker stripes, so the pitches can be read off.
+        for (int p = lo; p <= hi; ++p) {
+            static const bool black[12] = { false, true, false, true, false, false, true, false, true, false, true, false };
+            if (!black[((p % 12) + 12) % 12]) continue;
+            g.setColour(edge.withAlpha(0.25f));
+            g.fillRect(plot.getX(), plot.getBottom() - (p - lo + 1) * rowH, plot.getWidth(), rowH);
+        }
+        for (const NoteEvent& e : notes_) {
+            if (e.part != part_) continue;
+            const float y = plot.getBottom() - (e.pitch - lo + 1) * rowH;
+            const juce::Rectangle<float> box(xOf(e.beat), y + 0.5f,
+                                             juce::jmax(3.0f, xOf(e.beat + e.length) - xOf(e.beat) - 1.0f),
+                                             juce::jmax(2.0f, rowH - 1.0f));
+            const juce::Colour c = partColour(static_cast<int>(part_) + 1);
+            g.setColour((e.flags & kNoteAccent) ? c.brighter(0.5f) : c.withAlpha(0.45f + 0.55f * e.velocity / 127.0f));
+            g.fillRoundedRectangle(box, 1.5f);
+            // A slide is drawn as a line into the next note, which is what it does.
+            if (e.flags & kNoteSlide) {
+                g.setColour(c.withAlpha(0.7f));
+                g.drawLine(box.getRight(), box.getCentreY(), box.getRight() + 5.0f, box.getCentreY(), 1.2f);
+            }
+        }
+    }
+
+    // Where the engine is. It sits behind the composed bars by the horizon the rings are kept at,
+    // so most of the time the line stands at the very left of the window the display is showing.
+    if (beat_ >= from && beat_ <= from + span) {
+        g.setColour(accent.withAlpha(0.85f));
+        g.drawVerticalLine(juce::roundToInt(xOf(beat_)), plot.getY(), plot.getBottom());
+    }
 }
 
 // ==================================================================== PhospheneEditor
@@ -219,9 +326,28 @@ PhospheneEditor::~PhospheneEditor()
     setLookAndFeel(nullptr);
 }
 
+namespace {
+/** @brief Which part a generator tab shows in its pattern preview; Count = none. */
+Part partOfTab(int tab)
+{
+    switch (tab) {
+    case 1: return Part::Kick;
+    case 2: return Part::Bass;
+    case 3: return Part::Perc;
+    case 4: return Part::Acid;
+    case 5: return Part::Lead;
+    case 6: return Part::Arp;
+    case 7: return Part::Pad;
+    case 8: return Part::Sfx;
+    default: return Part::Count;
+    }
+}
+} // namespace
+
 void PhospheneEditor::buildPages()
 {
     pages_.resize(static_cast<size_t>(tabNames().size()));
+    patterns_.assign(static_cast<size_t>(tabNames().size()), nullptr);
     for (int t = 0; t < tabNames().size(); ++t) {
         if (t == 3) continue;   // percussion: one page per lane, built below
         auto page = std::make_unique<ControlPage>();
@@ -244,12 +370,29 @@ void PhospheneEditor::buildPages()
             break;
         default: break;
         }
+        // Every generator page ends with the notes it is shaping, so the knobs and the pattern are
+        // on the same screen (PLAN 8.1).
+        if (partOfTab(t) != Part::Count) {
+            auto roll = std::make_unique<PatternDisplay>();
+            roll->setPart(partOfTab(t));
+            patterns_[static_cast<size_t>(t)] = roll.get();
+            const int g = page->addGroup("Pattern", tint, 12);
+            page->addControl(g, std::move(roll), "", 12, true, 2);
+        }
         pages_[static_cast<size_t>(t)] = std::move(page);
     }
     percPages_.resize(kPercLanes);
+    percPatterns_.assign(kPercLanes, nullptr);
     for (int lane = 0; lane < kPercLanes; ++lane) {
         auto page = std::make_unique<ControlPage>();
         addSlices(*page, proc_, Module::Perc, lane, kPercSlices, partColour(3));
+        // The whole kit on every lane's page: the twelve lanes are one pattern, and only the lit
+        // row moves as the lane is changed.
+        auto roll = std::make_unique<PatternDisplay>();
+        roll->setPart(Part::Perc, lane);
+        percPatterns_[static_cast<size_t>(lane)] = roll.get();
+        const int g = page->addGroup("Kit pattern", partColour(3), 12);
+        page->addControl(g, std::move(roll), "", 12, true, 3);
         percPages_[static_cast<size_t>(lane)] = std::move(page);
     }
     buildSetPage();
@@ -269,6 +412,7 @@ void PhospheneEditor::setTab(int index)
     for (int i = 0; i < laneButtons_.size(); ++i) laneButtons_[i]->setToggleState(i == percLane_, juce::dontSendNotification);
     viewport_.setViewedComponent(activePage(), false);
     layoutContent();
+    refreshPattern();
     content_.repaint();
 }
 
@@ -348,9 +492,26 @@ void PhospheneEditor::paintContent(juce::Graphics& g)
     g.fillRoundedRectangle(viewport_.getBounds().toFloat(), 8.0f);
 }
 
+void PhospheneEditor::refreshPattern()
+{
+    // Only the roll that is on screen is fed; the others are filled the moment their tab opens,
+    // which is also what makes a screenshot of a tab show its pattern without waiting for a tick.
+    PatternDisplay* roll = tab_ == 3 ? percPatterns_[static_cast<size_t>(juce::jlimit(0, kPercLanes - 1, percLane_))]
+                                     : (tab_ < static_cast<int>(patterns_.size()) ? patterns_[static_cast<size_t>(tab_)] : nullptr);
+    if (roll == nullptr) return;
+    const TransportView t = proc_.transport();
+    constexpr int bars = 4;
+    // The window starts at the bar the engine is in, rounded down to a group of four, so the
+    // picture does not slide sideways at every tick.
+    const int firstBar = juce::jmax(0, (t.bar / bars) * bars);
+    if (proc_.readPattern(firstBar, bars, patternNotes_)) roll->update(patternNotes_, firstBar, bars, t.musicalBeat);
+    else roll->update({}, firstBar, bars, t.musicalBeat);
+}
+
 void PhospheneEditor::timerCallback()
 {
     refreshSetPage();
+    refreshPattern();
     content_.repaint(0, 0, designW_, 64);
 }
 
@@ -389,8 +550,11 @@ void PhospheneEditor::runScreenshotMode()
     if (one.isEmpty() && all.isEmpty()) return;
     // At design size: the pixels of the picture are then the layout's own measurements.
     setSize(designW_, designH_);
+    // Playing, and silent: PHOS_SHOT implies PHOS_MUTE, and the pictures are meant to show the
+    // meters and the pattern rolls doing something rather than an instrument that has not started.
+    proc_.play();
     // A moment for the composer to plan the first tracks, so the Set tab's list is not "planning...".
-    juce::Timer::callAfterDelay(2500, [safe = juce::Component::SafePointer<PhospheneEditor>(this), one, all] {
+    juce::Timer::callAfterDelay(6000, [safe = juce::Component::SafePointer<PhospheneEditor>(this), one, all] {
         if (safe == nullptr) return;
         if (all.isNotEmpty()) {
             const juce::File dir(all);
