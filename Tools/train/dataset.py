@@ -27,6 +27,22 @@ them changes the distribution the model is supposed to learn. Cyclic rotation by
 valid (a loop repeats, which is also why ``build_corpus`` counts its n-grams cyclically) and it is
 the only one implemented. It is applied to the training side only, after the split.
 
+**Where the lines come from.** Two collectors, and the second is the subject of the role-detection
+round of 16.09.2026:
+
+* :func:`collect` walks a pack, asks ``build_corpus.role_of`` for the role of each *file*, and
+  extracts the top voice of the whole file. This is what the held-out set is built from and it does
+  not change, because changing it would change the test set and make every number of this project
+  incomparable with the ones before it.
+* :func:`collect_tracks` walks the same material **per track** (``Tools/corpus/roledetect.py``) and
+  takes the role from the file name *or the MIDI track name*. The track name was never read before,
+  and it carries a role on 9 530 of the corpus's 19 307 note-carrying tracks where the path carries
+  one on 5 671; on the 3 685 that carry both, the two agree 98.2 % of the time. For the third of the
+  VORTEX bundle that is whole arrangements rather than loops this is also a correctness fix, not
+  only a quantity one: merging an arrangement's tracks and taking the top voice yields a line that
+  jumps between the pad and the lead as they cross, and no instrument ever played it. New material
+  still enters on the **training side only** (``train.py --extra tracks,trancetracks``).
+
 Usage:
     python Tools/train/dataset.py --root M:/Midi --report
     python Tools/train/dataset.py --root M:/Midi --packs all --report
@@ -40,7 +56,7 @@ import random
 import re
 import struct
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _CORPUS = os.path.normpath(os.path.join(_HERE, "..", "corpus"))
@@ -118,13 +134,23 @@ def extract(path, role):
     """
     try:
         ppq, notes = bc.read_midi(path)
-    except (IndexError, struct.error, TypeError):
-        # build_corpus catches IndexError and struct.error; the vendor super pack adds a third case,
-        # a track that opens with a running-status data byte and no status byte before it, on which
-        # read_midi raises TypeError. build_corpus itself is left alone -- it generates the shipped
-        # stage-A tables from three packs that contain no such file, and changing it would mean
-        # regenerating CorpusTables.cpp for nothing.
+    except (IndexError, struct.error):
+        # The third case this used to catch, a TypeError from a running-status data byte with no
+        # status byte before it, is gone: build_corpus.read_midi handles running status properly
+        # since the role-detection round and ends such a track instead of raising
+        # (Tools/corpus/test_build_corpus.py). The two remaining cases are genuine truncation.
         return None
+    return extract_notes(ppq, notes, role, path)
+
+
+def extract_notes(ppq, notes, role, path):
+    """The same extraction from an already-parsed note list, for one track of a file.
+
+    Split out of :func:`extract` when the role detector moved from the file to the track: a third of
+    the VORTEX bundle is whole arrangements, and merging their tracks and taking the top voice gives
+    a line no instrument played (``Tools/corpus/roledetect.py``). ``path`` is still passed because
+    ``estimate_key`` reads a key out of the file name when there is one; the notes are the track's.
+    """
     if not ppq or len(notes) < 4:
         return None
     tonic, _src = bc.estimate_key(notes, path)
@@ -299,13 +325,22 @@ def assemble_extra(root, extra, holdout, trance_weight=1.0, log=None):
             pool = load(root, packs_for("superpsy", root))
         elif which == "supertrance":
             pool = load(root, packs_for("supertrance", root))
+        elif which == "tracks":
+            pool = collect_tracks(root, TRACK_PSY_SOURCES, "name")
+        elif which == "trancetracks":
+            pool = collect_tracks(root, TRACK_TRANCE_SOURCES, "name")
+        elif which == "clf":
+            pool = collect_tracks(root, TRACK_PSY_SOURCES, "clf")
+        elif which == "tranceclf":
+            pool = collect_tracks(root, TRACK_TRANCE_SOURCES, "clf")
         else:
             raise SystemExit(f"unknown --extra {which}")
         k = exclude_near(pool, holdout)
         if log:
             print(f"  + {len(k)} {which} lines ({len(pool) - len(k)} dropped as near duplicates of a "
                   f"held-out line); val and test stay the psytrance ones", file=log)
-        (trance_side if which in ("trance", "supertrance") else psy_side).extend(k)
+        (trance_side if which in ("trance", "supertrance", "trancetracks", "tranceclf")
+         else psy_side).extend(k)
     if trance_side:
         weighed = weigh(trance_side, trance_weight)
         if log:
@@ -498,6 +533,86 @@ def packs_for(name, root="M:/Midi"):
         return super_dirs(root, "trance")
     return {"psy": PSY_PACKS, "trance": TRANCE_PACKS, "star": STAR_PACKS,
             "all": PSY_PACKS + TRANCE_PACKS + STAR_PACKS}[name]
+
+
+#: Which of ``roledetect``'s sources count as psytrance and which as the trance class. The split is
+#: the one the previous round measured: trance material helps but saturates, psytrance material is
+#: worth several times as much per line, so the two carry different weights (``--trance-weight``).
+TRACK_PSY_SOURCES = ("psy", "star", "superpsy")
+TRACK_TRANCE_SOURCES = ("trance",)
+
+
+def _roledetect():
+    """Imports Tools/corpus/roledetect.py, which is not on a package path either."""
+    spec = importlib.util.spec_from_file_location("roledetect", os.path.join(_CORPUS, "roledetect.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def collect_tracks(root, sources, how="name", threshold=0.70, refresh=False):
+    """Melodic lines taken **per track**, with the role from the evidence ``how`` names.
+
+    ``how="name"`` takes the role the file name or the *track* name states -- the track name being
+    the evidence source nobody had read, available on 9 530 of the corpus's 19 307 note-carrying
+    tracks against 5 671 for the path, and agreeing with the path name on 98.2 % of the tracks that
+    carry both (``Tools/corpus/rolemodel.py --audit``). ``how="clf"`` takes what the content
+    classifier admits above ``threshold`` from the tracks no name covers.
+
+    The two are kept apart because they are worth different amounts and the difference is the point
+    of this round: a track name is the vendor's own word, while the classifier is measured at 97.4 %
+    precision against vendor names but only 50 % against the hand-labelled unnamed sample, because
+    the unnamed population is mostly rhythm patterns, pads and basslines
+    (``Tools/corpus/labelsample.py``). Whether either is worth admitting is decided by the held-out
+    NLL and not here.
+    """
+    rd = _roledetect()
+    recs = rd.load(root, tuple(sources), refresh)
+    if how == "name":
+        want = [(r, (r["name_role"] or r["path_role"])) for r in recs]
+        want = [(r, c) for r, c in want if c in rd.MELODIC]
+    else:
+        import numpy as np                                       # noqa: PLC0415
+        if _CORPUS not in sys.path:
+            sys.path.insert(0, _CORPUS)
+        import labelsample                                       # noqa: PLC0415
+        import rolemodel as rm                                   # noqa: PLC0415
+        full = rd.load(root)                                     # the classifier sees the whole corpus
+        labels = labelsample.load_labels()
+        tracks, ys = rm.labelled_tracks(full, set(labels))
+        model, _names, order = rm.fit_full(full, tracks, ys)
+        prior = np.array([Counter(ys)[c] for c in rm.CLASSES], dtype=float)
+        scores, _priors = rd_scores = rm.unnamed_scores(model, order, full, prior, adjust=False)
+        del rd_scores
+        want = []
+        for r in recs:
+            row = scores.get(r["id"])
+            if row is None or row.max() < threshold:
+                continue
+            cls = rm.CLASSES[int(row.argmax())]
+            if cls in rd.MELODIC:
+                want.append((r, cls))
+    by_path = defaultdict(list)
+    for r, cls in want:
+        by_path[r["path"]].append((r["track"], cls, r["source"]))
+    out = []
+    for rel, wanted in sorted(by_path.items()):
+        try:
+            ppq, tracks_ = bc.read_midi_tracks(os.path.join(root, rel))
+        except (IndexError, struct.error, OSError):
+            continue
+        if not ppq:
+            continue
+        for ti, cls, src in wanted:
+            if ti >= len(tracks_):
+                continue
+            rec = extract_notes(ppq, tracks_[ti]["notes"], ROLES.index(cls), os.path.join(root, rel))
+            if rec is None:
+                continue
+            rec["pack"] = list(sources).index(src) if src in sources else 0
+            rec["file"] = hashlib.sha1(f"{rel}|{ti}".encode("utf-8", "replace")).hexdigest()[:16]
+            out.append(rec)
+    return out
 
 
 def collect_synth_loops(root, packs=None, melodic_roles=("lead",), refresh=False):

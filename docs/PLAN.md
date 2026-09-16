@@ -2201,6 +2201,158 @@ oder seinen Platz verändert), `Core/CMakeLists.txt` (`ws2_32` unter Windows),
 durch den gemeinsamen ersetzt), `Tests/selftest.cpp` (`testCues`, plus die Modulzählung in
 `testParams`), `Tests/CMakeLists.txt`, dieser Block.
 
+**16.09.2026, Rollenerkennung: der Engpass des Korpus.** Von 28 121 begangenen `.mid`-Dateien
+erreichten 6 623 Linien die Modelle, und die vorige Runde hatte den Grund benannt: nicht die Menge des
+Materials, sondern der Detektor. `role_of` liest die Rolle aus dem Pfad; steht sie dort nicht, gibt es
+sie nicht. Diese Runde hat zuerst gemessen, was im Korpus überhaupt zu holen ist, dann einen besseren
+Klassifikator gebaut, und am Ende **eine Sache ausgeliefert und eine abgelehnt** — beide mit Zahl.
+
+*Zuerst die Handstichprobe, sonst weiß niemand, ob etwas besser wurde.* Grundgesamtheit sind alle
+19 307 notenführenden **Spuren** der vier Quellen. Acht Schichten (vier Quellen × „ein Name nennt eine
+Klasse" / „keiner nennt eine"), aus jeder **50 Spuren** ohne Zurücklegen, gezogen aus einer festen
+Mischung der Spur-IDs unter Seed 20260916: **400 Spuren**, bewusst nicht proportional, weil das
+VORTEX-Bündel sonst die ganze Stichprobe schlucken würde (13 997 von 19 307). Jede Aussage über den
+Gesamtkorpus wird mit der Schichtgröße zurückgewichtet. Die 200 **benannten** tragen das Wort des
+Herstellers — unabhängig von jedem Merkmal, das der Klassifikator sieht, denn der bekommt nie einen
+Namen — und sie sind die ehrliche Messung. Die 200 **unbenannten** sind von Hand etikettiert: eine vor
+dem Etikettieren aufgeschriebene Regel (`labelsample.LABEL_RULE`) auf eine Beweiskarte je Spur
+(Register, Polyphonie, Notenlänge, Kick-Raster, Intervalle, Rang im eigenen Ordner, Klassen der
+benannten Geschwister), dann **alle 200 Karten gelesen**; das änderte die Regel einmal (eine vier Takte
+gehaltene Note war „Rhythmus" statt Fläche) und ergab **14 Einzelkorrekturen**, jede mit Begründung in
+`labels.json`. Diese Hälfte ist *nicht* unabhängig vom Klassifikator und wird darum nicht als Präzision
+gelesen, sondern als das, was nur sie liefern kann: die **Klassenzusammensetzung der Grundgesamtheit,
+auf die der Klassifikator losgelassen wird**. `labels.json` enthält Hashes, Schicht, Etikett und die
+16 Zahlen, aus denen es gelesen wurde — keinen Pfad, keinen Dateinamen, keine Note.
+
+*Was die Stichprobe sofort zeigte.* Das Unbenannte ist überwiegend **nichts, was ein melodisches
+Modell brauchen kann**: psy 32 von 50 Ein-Ton-Rhythmusfiguren („Step and Hold"), star 23 von 50
+Akkordbetten, trance 11 Flächen und 8 Bässe. Melodisch sind je nach Quelle 14 bis 38 %.
+
+*Der eigentliche Fund liegt nicht im Klassifikator, sondern in den Namen, die niemand gelesen hatte.*
+Ein Drittel des VORTEX-Bündels sind keine Loops, sondern **ganze Arrangements** — und die benennen ihre
+Spuren („Bass", „Lead", „Melody", „Pads"). 9 530 der 19 307 Spuren tragen ein Instrumentenwort im
+**MIDI-Spurnamen**, gegen 5 671 im Pfad; wo beides da ist (3 685 Spuren), stimmen sie zu **98,2 %**
+überein. Für die 2 652 mehrspurigen Dateien ist die Spur außerdem eine *Korrektur*: `read_midi`
+verschmolz alle Spuren und `top_line` nahm die höchste Note je Schritt, was bei einem Arrangement eine
+Linie ergibt, die zwischen Fläche und Lead hin- und herspringt und die nie jemand gespielt hat.
+`build_corpus.read_midi_tracks` liest jetzt spurweise, `read_midi` ist die Zusammenfassung davon —
+die ausgelieferten Stufe-A-Tabellen bleiben **byteidentisch**.
+
+*Zwei Fallen dabei, beide gemessen statt geglaubt.* (1) **Teilzeichenketten in freiem Text**, dieselbe
+Falle wie „psy" in *Gypsy* eine Runde zuvor, eine Ebene tiefer: `daft_punk__around_the_world` wurde ein
+Lead (das „ld" von *world*), `kyau_vs_albert__kiksu` und `ultrabeat` wurden Schlagzeug. Die Regel prüft
+jetzt **ganze Token** (Präfix oder exaktes Wort), und der Dateiname einer **mehrspurigen** Datei zählt
+gar nicht mehr als Rollenbeleg — er ist ein Songtitel, kein Instrument. Danach stieg die Übereinstimmung
+Pfad/Spurname von 90,9 % auf 98,2 %. (2) **Der General-MIDI-Programmwechsel ist kein Etikett.** 7 226
+Spuren wählen ein Programm; es stimmt mit dem Spurnamen nur zu **73,8 %** überein und mit dem Pfad zu
+77,5 % — das Niveau einer DAW-Voreinstellung. Er geht als schwaches Merkmal ein, nie als Label.
+
+*Der Klassifikator, und was den Unterschied macht.* Spurweise, 32 Inhaltsmerkmale (darunter die drei
+gegen die benannte Schwachstelle Acid-gegen-Bass: Anteil der Anschläge auf den Kick-Sechzehnteln, die
+Intervallverteilung, und ob die Linie eine Tonleiter ausspielt), plus Registerrang in Datei und Ordner,
+plus die Klassen der **benannten Geschwister** desselben Ordners und derselben Datei, plus das Programm.
+Histogramm-Gradient-Boosting, fünf Faltungen **nach Ordner** gruppiert. Gegen die Herstellernamen:
+**melodisch 89,0 % Präzision bei 80,7 % Trefferquote** ohne Abstinenz, **94,3 % / 67,9 %** ab Schwelle
+0,70 — die vorige Runde stand bei 78,4 % für {acid, lead, arp} und 92,0 % / 71,1 % für `lead` allein.
+Auf der benannten Hälfte der Handstichprobe, die kein Fit je gesehen hat: **97,4 % Präzision, 94,9 %
+Trefferquote**. Die Ablation sagt, **woher das kommt**, und die Antwort ist nicht die, die man erwartet:
+
+| gemessen (fünf Faltungen, nach Ordner) | melodisch P | melodisch R | acid P |
+|---|---|---|---|
+| alle Blöcke | 85,1 % | 86,4 % | 94,6 % |
+| ohne Inhaltsmerkmale | 62,8 % | 86,2 % | 87,0 % |
+| **ohne Ordner-Geschwister** | 82,9 % | 85,0 % | **28,2 %** |
+| ohne Registerrang | 85,8 % | 85,0 % | 95,4 % |
+| ohne Programm | 84,8 % | 86,9 % | 95,0 % |
+| **logistische Regression statt Bäumen** | 84,9 % | 84,6 % | **48,6 %** |
+
+**Acid gegen Bass wird nicht vom Inhalt getrennt, sondern vom Ordner.** Ohne die Klassen der benannten
+Nachbarspuren fällt die Acid-Präzision von 94,6 % auf **28,2 %**. Auf der melodischen Klasse insgesamt
+kostet der Ordner nur zwei Punkte — er entscheidet nicht, *ob* eine Spur melodisch ist, sondern
+*welche* melodische Rolle sie hat. Die zweite Hälfte derselben Antwort ist die Modellklasse, und zwar
+ebenfalls nur auf `acid`: die logistische Regression der vorigen Runde erreicht mit **denselben**
+Merkmalen 84,9 % melodisch, aber nur 48,6 % Acid-Präzision — die Entscheidung ist eine Schwelle
+("Median-Notenlänge mindestens vier Sechzehntel"), die ein Baum ausspricht und eine Gerade annähert.
+
+*Drei Ideen gemessen und verworfen.* **Kalibrierung**: isotone Regression auf inneren Faltungen ist das
+Lehrbuchmittel für eine Abstinenzschwelle und verliert hier auf der ganzen Kurve — bei 93,5 %
+Präzision erreichen die rohen Ensemble-Scores 70,3 % Trefferquote, die kalibrierten 57,4 %; der innere
+Drei-Faltungs-Split ist nicht gruppenbewusst und schrumpft zu stark. **Prior-Anpassung** je Quelle
+(Saerens, Latinne, Decaestecker, Neural Computation 14(1), 2002): auf der unbenannten Stichprobe
+50,0 % gegen 50,0 % bei Schwelle 0,70 — kein messbarer Unterschied. **Sequenzmodell** statt
+Kennzahlen (`roleseq.py`, gestapelte dilatierte Faltungen über die Notenfolge): **74,6 % / 82,3 %**
+gegen 82,5 % / 84,7 % der Inhaltskennzahlen und 85,1 % / 86,4 % aller Blöcke. Die Reihenfolge trägt
+etwas, und zwar genau dort, wo man es vermutet — auf `acid` verdoppelt sie die Präzision der
+Kennzahlen (54,1 % gegen 23,6 %) —, bleibt aber weit unter dem, was der Ordner ohnehin liefert.
+
+*Wo er weiter versagt, und das ist die Zahl, die zählt.* Auf der **unbenannten** Hälfte der
+Handstichprobe fällt die melodische Präzision von 94,3 % auf **50,0 %** (Trefferquote 44,9 %, bestenfalls
+56,8 % bei Schwelle 0,80). Die Fehlzulassungen sind acht Rhythmusfiguren, sieben Flächen, vier
+„unsicher" und drei Bässe. Je Quelle: psy 46,7 %, trance 60,0 %, superpsy 47,4 %, **star 0 zugelassen**.
+Der Grund ist keine Schwäche des Fits, sondern die Grundgesamtheit: der Klassifikator wird auf Namen
+angepasst und auf Namenlose losgelassen, und die sind anderes Material. **Ohne die Handstichprobe wäre
+ein 94-%-Klassifikator ausgeliefert worden, der in Wahrheit 50 % trifft.**
+
+*Ein echter Defekt, unterwegs gefunden.* Beim Aufbau der einen Merkmalsmatrix: `fit` rechnete die
+Geschwister-Merkmale über die 11 316 Trainingsspuren, `predict` über alle 19 307. Im flachen
+Star-Samples-Ordner verschob das `sib_dir_bass` von 0,48682 auf 0,48707 — und ein Baum, der genau an
+dieser Konstanten getrennt hatte, kippte **alle 2 581 Spuren des Ordners auf einmal**. Präzision
+in-sample 30 % mit Fehlanpassung, 100 % ohne. Die Merkmale werden jetzt einmal über den ganzen Korpus
+gebaut und nur noch indiziert (`rolemodel.corpus_matrix`); der Docstring von `build_matrix` warnt.
+
+*Die Entscheidung, nach demselben Maß wie vorher und nur nach dem.* Testsatz unverändert: die
+Loop-Gruppen-Aufteilung der drei Psy-Packs, 102 Linien, 5 700 Noten. Neues Material nur auf der
+Trainingsseite. `confidence.py` liest seit dieser Runde auch eine **exportierte `.phosmdl`**, damit der
+gepaarte Bootstrap gegen die *installierte Datei* läuft und nicht gegen eine Nachbildung — die
+ausgelieferte `melody.phosmdl` misst 1,2141 auf diesem Testsatz, die 1,2143 des Plans nach int8.
+
+| Aufbau | Trainingslinien | Validierung | Test |
+|---|---|---|---|
+| F (bisher: Packs dateiweise + VORTEX) | 2 142 | 1,1704 | 1,1900 |
+| **G F + Spurnamen, spurweise extrahiert** | **3 536** | **1,1269** | **1,1532** |
+| H G + die Zulassungen des Klassifikators | 4 256 | 1,1583 | 1,1699 |
+
+**G gegen das ausgelieferte Modell: +0,0609 nats, 95 % KI [0,0143, 0,1310], P(Differenz ≤ 0) =
+0,0008**, besser auf 55 von 102 Linien. G gegen F, also der Wert der Spurnamen allein: **+0,0368 nats,
+KI [0,0037, 0,0737], P = 0,0152**. Fünf Seeds von G bei festgehaltener Aufteilung: 1,1502 / 1,1492 /
+1,1532 / 1,1951 / 1,1761, Mittel 1,1648, Standardabweichung 0,0202; ausgeliefert wird wie immer der
+Seed mit der besten **Validierung** (Test 1,1532), nicht der mit dem besten Test.
+
+**H, also die Zulassungen des Klassifikators, sind abgelehnt.** G gegen H: **+0,0167 nats, KI
+[−0,0119, +0,0487], P = 0,139** — das Intervall enthält die Null, und auf der Validierung, die
+entscheidet, sind sie klar schlechter (1,1269 gegen 1,1583). Damit steht dieselbe Entscheidung wie in
+der vorigen Runde, aber jetzt mit einem gemessenen Grund statt einer Vermutung: nicht weil der
+Klassifikator schwach wäre (97,4 % gegen Herstellernamen), sondern weil die Grundgesamtheit ohne Namen
+zu drei Vierteln aus Rhythmusfiguren, Flächen und Bässen besteht.
+
+*Memorisierung, gegen die 3 536 Linien, auf denen wirklich trainiert wurde:* **0,00 % exakte
+Taktkopien** gegen **8,75 %** der echten Held-out-Loops, Achtnoten-Fenster im Abstand 0 **9,15 % gegen
+20,58 %**. Positivkontrolle (absichtlich überangepasst): **69,54 %** Taktkopien, 78,85 % im Abstand 0 —
+das Maß schlägt aus. int8 kostet +0,04 % (1,1532 → 1,1536). `export.py --check-pair
+Core/data/melody.phosmdl Core/data/melody.phosmdl.ref.txt` meldet Differenz **0,000e+00**. ctest 4/4.
+
+*Nebenbefund, sauber repariert:* `read_midi` warf `TypeError` auf 26 Dateien des Star-Samples-Super-Packs
+(„DMS … Single Patches" — 192-Byte-Klangdumps: eine SysEx-Nachricht und dann Füllbytes). Die vorige
+Runde hatte das im eigenen Code abgefangen; jetzt steht es im Parser. **Laufender Status ist legales
+MIDI** (MIDI 1.0 Detailed Specification 2.1.2) und bleibt es; was nicht dekodierbar ist, ist ein
+Datenbyte, über dem nie ein Statusbyte stand, und das beendet jetzt die *Spur* statt die ganze Datei.
+Zwei weitere Regeln derselben Stelle: eine SysEx-Nachricht **löscht** den laufenden Status (sonst erbt
+der Müll dahinter den Status davor und die Datei bekommt Noten, die niemand geschrieben hat), und ein
+Ereignis, das über das Chunk-Ende hinausragt, beendet die Spur, statt die Kopfbytes des nächsten MTrk
+als Notendaten zu lesen. `Tools/corpus/test_build_corpus.py` deckt sechs Fälle ab; gegen den alten
+Parser fallen drei davon durch (`--module` zeigt auf eine Kopie der alten Datei), gegen den neuen
+keiner. **Die ausgelieferten Stufe-A-Tabellen ändern sich dadurch nicht** — `CorpusTables.cpp` neu
+erzeugt ist byteidentisch, `Core/src/CorpusTables.cpp` und `Core/include/phos/Corpus.h` bleiben
+unangetastet.
+
+*Berührte Dateien.* Neu: `Tools/corpus/roledetect.py`, `Tools/corpus/rolemodel.py`,
+`Tools/corpus/labelsample.py`, `Tools/corpus/labels.json`, `Tools/corpus/roleseq.py`,
+`Tools/corpus/test_build_corpus.py`. Geändert: `Tools/corpus/build_corpus.py` (`read_midi_tracks`,
+`read_midi` als dessen Zusammenfassung), `Tools/train/dataset.py` (`extract_notes`, `collect_tracks`,
+vier neue `--extra`-Quellen), `Tools/train/confidence.py` (`.phosmdl` als Seite des Bootstraps),
+`Tools/train/rolecheck.py` (nur Docstring: abgelöst), `Core/data/melody.phosmdl` und `.ref.txt`,
+`Tools/train/model/phos_pitch_tf.phosmdl` und `.ref.txt`.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

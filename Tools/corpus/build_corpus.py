@@ -55,8 +55,36 @@ def read_vlq(d, i):
             return v, i
 
 
-def read_midi(path):
-    """Returns (ppq, notes) with notes as (start_tick, end_tick, pitch, velocity), drums excluded."""
+def read_midi_tracks(path):
+    """Returns (ppq, tracks): one entry per MTrk chunk, keeping what the chunk says about itself.
+
+    Each track is a dict with ``notes`` (the melodic notes, as :func:`read_midi` yields them),
+    ``name`` (the first track-name meta event, 0x03), ``programs`` (the GM program numbers the track
+    selects) , ``channels`` and ``drum_notes`` (note-ons on channel 10, which are percussion and are
+    not in ``notes``).
+
+    **Why per track.** A third of the VORTEX bundle's files are not loops but whole arrangements --
+    bass, lead, pad and drums side by side in one file. Merging them and taking the top voice, which
+    is what the file-level reader does, produces a line that no instrument ever played. The track is
+    the unit that has a role, and the track name and the program change are two label sources that
+    sit inside the file and that a detector reading only the path never sees.
+
+    The reader follows running status (MIDI 1.0 Detailed Specification, section 2.1.2): a channel
+    event may omit its status byte and inherit the last one. Three rules keep a malformed track from
+    corrupting the file's note list rather than aborting the whole read, each of them a case seen in
+    the bought packs and covered by ``test_build_corpus.py``:
+
+    * **A System Exclusive message cancels running status** (same section). Without that, the bytes
+      after an F0 message are decoded under the status that preceded it and the file gains notes
+      nobody wrote.
+    * **A data byte whose status was never established ends the track.** 26 files of the Star Samples
+      super pack ("DMS ... Single Patches") are synthesiser patch dumps: one SysEx and then trailing
+      bytes. There is no status to decode them under, and no amount of guessing makes one; the track
+      stops there and the rest of the file is kept. The old reader masked ``None`` and raised
+      ``TypeError``, which threw away every track of the file including the good ones.
+    * **An event running past the end of its chunk ends the track**, instead of reading the header
+      bytes of the next MTrk as note data.
+    """
     d = open(path, "rb").read()
     if d[:4] != b"MThd":
         return None, []
@@ -64,43 +92,77 @@ def read_midi(path):
     if div & 0x8000:
         return None, []
     i = 8 + struct.unpack(">I", d[4:8])[0]
-    notes = []
+    tracks = []
     for _ in range(ntrk):
         if d[i:i + 4] != b"MTrk":
             break
         ln = struct.unpack(">I", d[i + 4:i + 8])[0]
         j, end, t, run = i + 8, i + 8 + ln, 0, None
         open_notes = {}
+        tr = {"notes": [], "name": "", "programs": [], "channels": set(), "drum_notes": 0}
         while j < end:
             dt, j = read_vlq(d, j)
             t += dt
             st = d[j]
-            if st == 0xFF:
+            if st == 0xFF:              # meta event: SMF-only, carries no status and cancels none
+                ty = d[j + 1] if j + 1 < end else 0
                 l, j2 = read_vlq(d, j + 2)
+                if ty == 0x03 and not tr["name"]:
+                    tr["name"] = d[j2:j2 + l].decode("latin1", "replace")
                 j = j2 + l
                 continue
             if st in (0xF0, 0xF7):
                 l, j2 = read_vlq(d, j + 1)
                 j = j2 + l
+                run = None              # SysEx cancels running status
                 continue
             if st & 0x80:
+                if st >= 0xF0:          # other system messages have no place in an SMF track
+                    break
                 run = st
                 j += 1
-            st = run
-            hi, ch = st & 0xF0, st & 0x0F
+            if run is None:
+                break                   # a data byte no status ever covered: undecodable from here
+            hi, ch = run & 0xF0, run & 0x0F
             n = 1 if hi in (0xC0, 0xD0) else 2
+            if j + n > end:
+                break                   # the event is cut off by the end of the chunk
             a = d[j]
             b = d[j + 1] if n == 2 else 0
             j += n
+            if hi == 0xC0:
+                tr["programs"].append(a)
             if ch == 9:
+                if hi == 0x90 and b > 0:
+                    tr["drum_notes"] += 1
                 continue
+            if hi in (0x80, 0x90):
+                tr["channels"].add(ch)
             if hi == 0x90 and b > 0:
                 open_notes.setdefault(a, []).append((t, b))
             elif hi == 0x80 or (hi == 0x90 and b == 0):
                 if open_notes.get(a):
                     s, v = open_notes[a].pop(0)
-                    notes.append((s, t, a, v))
+                    tr["notes"].append((s, t, a, v))
+        tr["channels"] = sorted(tr["channels"])
+        tracks.append(tr)
         i = end
+    return div, tracks
+
+
+def read_midi(path):
+    """Returns (ppq, notes) with notes as (start_tick, end_tick, pitch, velocity), drums excluded.
+
+    The file-level view: every track's notes merged and sorted. It is what the stage-A tables and the
+    stage-B tokens are built from, and it stays the definition it always was; :func:`read_midi_tracks`
+    is the same parse with the tracks kept apart.
+    """
+    div, tracks = read_midi_tracks(path)
+    if not div:
+        return div, []
+    notes = []
+    for tr in tracks:
+        notes += tr["notes"]
     return div, sorted(notes)
 
 

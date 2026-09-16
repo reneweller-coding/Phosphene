@@ -34,6 +34,16 @@ median 0.00 and ``poly`` median 1.00 in every class, melodic and non-melodic ali
 single-line stems, so "synth loop" cannot be a chord bed in the first place -- the question is
 whether it is a melody or a bassline.
 
+**Superseded, and kept for the record.** The round of 16.09.2026 replaced this with
+``Tools/corpus/rolemodel.py``, which asks the same question over the whole corpus rather than one
+folder, decides per *track* rather than per file, and adds the evidence this file never looked at:
+the MIDI track name, and the classes of the other tracks of the same folder. It reaches 97.4 %
+melodic precision against vendor names where this file reached 78.4 %. The conclusion of this file
+nevertheless survived that round: content-admitted lines were measured again, on a hand-labelled
+sample of the population they are actually drawn from, at 50 % precision, and adding them to the
+training set made the held-out NLL worse. This file stays so that the first measurement can still be
+reproduced next to the second.
+
 Usage:
     python Tools/train/rolecheck.py --report
     python Tools/train/rolecheck.py --report --dump-threshold 0.9
