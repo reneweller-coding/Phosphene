@@ -393,9 +393,9 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     for (int g = 0; g <= groupInSection; ++g) {
         Rng rr;
         rr.seed(mixSeed(ss ^ kSaltGroup, static_cast<uint64_t>(g)));
-        int f = rr.below(4);
-        if (g > 0 && f == figure) f = (f + 1) % 4;
-        figure = f;
+        int draw = rr.below(4);
+        if (g > 0 && draw == figure) draw = (draw + 1) % 4;
+        figure = draw;
     }
     rg.below(4);                                    // the same draw the walk above made for this group
     const int layerNudge = rg.below(3) - 1;         // -1, 0 or +1 layer for this group
