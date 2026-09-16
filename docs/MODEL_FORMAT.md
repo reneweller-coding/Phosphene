@@ -118,7 +118,9 @@ change per position.
 ## 4. Tensors
 
 `E` is `dim`. Two-dimensional weights are stored **output-major**: `W[out][in]`, so `y = W x + b`
-reads row by row. Every tensor listed is present; the order in the file is the order below.
+reads row by row. Every tensor listed is present. The order in the file is: the **nine embedding
+tables**, then the **blocks** `0 .. layers-1` (each block's tensors in the order of its table below),
+then `norm.w`, `norm.b`, `head.w`, `head.b`. A reader should still look tensors up by name.
 
 ### Common to both architectures
 
@@ -136,7 +138,8 @@ reads row by row. Every tensor listed is present; the order in the file is the o
 | `norm.w`, `norm.b` | `[E]` | final LayerNorm |
 | `head.w`, `head.b` | `[37, E]`, `[37]` | output projection (untied from `tok.emb`) |
 
-The input of block 0 is the **sum** of all nine embeddings above.
+The input of block 0 is the **sum** of the nine embedding rows above (`tok.emb` through `idx.emb`);
+`norm` and `head` are the two tensors after the last block.
 
 ### `arch=transformer`
 
@@ -152,8 +155,12 @@ Pre-LayerNorm blocks, `n = 0 .. layers-1`:
 | `blocks.n.ffn.down.w`, `blocks.n.ffn.down.b` | `[E, ffn]`, `[E]` |
 
 ```
-h  = x + Attn(LN(x, norm1))
-x  = h + Down(gelu(Up(LN(h, norm2))))
+u        = LN(x, norm1.w, norm1.b)
+[q|k|v]  = qkv.w * u + qkv.b
+a        = causal_softmax_attention(q, k, v)
+x       <- x + (out.w * a + out.b)
+u        = LN(x, norm2.w, norm2.b)
+x       <- x + (ffn.down.w * gelu(ffn.up.w * u + ffn.up.b) + ffn.down.b)
 ```
 
 `qkv` produces `[q | k | v]` in that order, each `E` wide; head `i` of `q` is
@@ -244,7 +251,12 @@ case 1
 ```
 
 Fields inside a case may be read in any order; a case ends at the next `case` line or at end of
-file. `logits` come from the **same tensors that are in the file** — that is, when `quant=int8` the
+file. The contexts are **synthetic**, from a fixed seed in `Tools/train/export.py` — a held-out loop
+would be a more musical context, but a loop written out as symbols and step positions *is* the loop,
+and the bought packs do not leave the machine (PLAN 6.9). The cases cover all three roles, lengths
+from one position to past the positional clamp, every gap code and every note-index bucket, which is
+all an oracle over a deterministic forward pass needs. `logits` come from the **same tensors that
+are in the file** — that is, when `quant=int8` the
 reference was produced from the dequantised weights, so a correct C++ reader reproduces them
 without a quantisation allowance. Tolerance for the C++ side: `max |logit_cpp - logit_ref| < 1e-3`
 and `max |prob_cpp - prob_ref| < 1e-5` in float32 arithmetic; a larger difference is an

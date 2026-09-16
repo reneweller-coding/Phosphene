@@ -1,0 +1,251 @@
+"""Trains and measures the two stage-B candidates of PLAN 6.9 on the same tokens and the same split.
+
+The decision the plan asks for is made here and nowhere else: **held-out NLL per token**, on the
+honest split, against the stage-A Markov model refit on the same training lines. Reputation does not
+enter it (PLAN, literature round of 16.09.2026, point 4).
+
+Protocol:
+
+* the split is three-way by loop group (``dataset.split``): the validation set chooses the early
+  stopping step, the test set is read once per model;
+* both models get the same budget -- same tokens, same conditioning, same optimiser, same number of
+  steps, parameter counts within a few per cent -- so that the comparison is of architectures and
+  not of training effort;
+* regularisation is strong, because the corpus is 37 000 notes and the models have of the order of a
+  million parameters: dropout, weight decay, and early stopping on the validation NLL.
+
+Usage:
+    python Tools/train/train.py --arch transformer --out Tools/train/runs/tf
+    python Tools/train/train.py --arch ssm --out Tools/train/runs/ssm
+    python Tools/train/train.py --compare          # both, plus the Markov baselines, one table
+"""
+import argparse
+import json
+import math
+import os
+import random
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import torch                                                  # noqa: E402
+import torch.nn.functional as F                               # noqa: E402
+
+import dataset                                                # noqa: E402
+import markov                                                 # noqa: E402
+import models                                                 # noqa: E402
+
+PAD = -100
+
+
+def device_of(want):
+    if want == "cpu" or not torch.cuda.is_available():
+        return torch.device("cpu")
+    return torch.device("cuda")
+
+
+def batches(records, bs, ctx, device, shuffle=True, seed=0):
+    """Length-bucketed batches; right padding is safe because both models are causal."""
+    order = sorted(range(len(records)), key=lambda i: len(records[i]["syms"]))
+    chunks = [order[i:i + bs] for i in range(0, len(order), bs)]
+    if shuffle:
+        random.Random(seed).shuffle(chunks)
+    for ch in chunks:
+        enc = [dataset.encode(records[i], ctx=ctx) for i in ch]
+        T = max(len(e["tok"]) for e in enc)
+        out = {}
+        for k in ("tok", "step", "bar", "gap", "idx"):
+            out[k] = torch.tensor([e[k] + [0] * (T - len(e[k])) for e in enc], dtype=torch.long, device=device)
+        out["tgt"] = torch.tensor([e["tgt"] + [PAD] * (T - len(e["tgt"])) for e in enc], dtype=torch.long, device=device)
+        for k in ("role", "style", "bars"):
+            out[k] = torch.tensor([e[k] for e in enc], dtype=torch.long, device=device)
+        yield out
+
+
+@torch.no_grad()
+def evaluate(model, records, ctx, device, bs=64, per_role=False):
+    """Held-out NLL per token in nats (the plan's decision metric)."""
+    model.eval()
+    total, n = 0.0, 0
+    byrole = {r: [0.0, 0] for r in range(len(dataset.ROLES))}
+    for b in batches(records, bs, ctx, device, shuffle=False):
+        logits = model(b)
+        loss = F.cross_entropy(logits.reshape(-1, models.ALPHABET), b["tgt"].reshape(-1),
+                               ignore_index=PAD, reduction="none").reshape(b["tgt"].shape)
+        mask = b["tgt"] != PAD
+        total += float(loss[mask].sum())
+        n += int(mask.sum())
+        if per_role:
+            for r in range(len(dataset.ROLES)):
+                sel = mask & (b["role"][:, None] == r)
+                byrole[r][0] += float(loss[sel].sum())
+                byrole[r][1] += int(sel.sum())
+    model.train()
+    nll = total / max(1, n)
+    if per_role:
+        return nll, {dataset.ROLES[r]: (v[0] / v[1] if v[1] else float("nan")) for r, v in byrole.items()}
+    return nll
+
+
+def train(model, train_recs, val_recs, *, steps, bs, ctx, lr, wd, device, warmup=200, eval_every=100,
+          log=None, seed=0):
+    """AdamW with a cosine schedule; keeps the parameters of the best validation NLL."""
+    model.to(device).train()
+    # Weight decay on the matrices only. A_log and D are not weights but the SSM's time constants and
+    # skip gains: decaying A_log pulls every channel towards A = -1, one and the same decay rate,
+    # which is the opposite of what the S4D initialisation sets up. The first run of this file had
+    # them in the decayed group and the SSM's validation NLL stopped improving after 200 steps.
+    no_decay = {"A_log", "D"}
+    decay = [p for n, p in model.named_parameters() if p.dim() >= 2 and n.rsplit(".", 1)[-1] not in no_decay]
+    plain = [p for n, p in model.named_parameters() if p.dim() < 2 or n.rsplit(".", 1)[-1] in no_decay]
+    opt = torch.optim.AdamW([{"params": decay, "weight_decay": wd}, {"params": plain, "weight_decay": 0.0}],
+                            lr=lr, betas=(0.9, 0.95))
+    best, best_state, best_step = float("inf"), None, 0
+    curve, step, t0 = [], 0, time.time()
+    epoch = 0
+    while step < steps:
+        for b in batches(train_recs, bs, ctx, device, seed=seed * 1000 + epoch):
+            if step >= steps:
+                break
+            frac = step / max(1, steps)
+            scale = (step + 1) / warmup if step < warmup else 0.5 * (1.0 + math.cos(math.pi * frac))
+            for g in opt.param_groups:
+                g["lr"] = lr * max(scale, 0.02)
+            logits = model(b)
+            loss = F.cross_entropy(logits.reshape(-1, models.ALPHABET), b["tgt"].reshape(-1), ignore_index=PAD)
+            opt.zero_grad(set_to_none=True)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            opt.step()
+            step += 1
+            if step % eval_every == 0 or step == steps:
+                v = evaluate(model, val_recs, ctx, device)
+                curve.append({"step": step, "train": loss.detach().item(), "val": v})
+                if log:
+                    print(f"    step {step:5d}  train {loss.detach().item():.4f}  val {v:.4f}", file=log, flush=True)
+                if v < best:
+                    best, best_step = v, step
+                    best_state = {k: t.detach().clone() for k, t in model.state_dict().items()}
+        epoch += 1
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    return {"best_val": best, "best_step": best_step, "curve": curve, "seconds": time.time() - t0}
+
+
+def _fields(cond):
+    """Which conditioning tables an ablation run may use (models.Conditioning explains why)."""
+    if cond == "full":
+        return models.ALL_FIELDS
+    if cond == "role":          # exactly what the stage-A Markov model sees: symbols plus the role
+        return ("role",)
+    if cond == "nometre":       # everything except the metrical position of the note
+        return ("pos", "role", "style", "bars", "gap", "idx")
+    raise SystemExit(f"unknown --cond {cond}")
+
+
+def run_one(arch, tr, va, te, args, device, log=sys.stdout):
+    torch.manual_seed(args.seed)
+    kw = dict(ctx=args.ctx, dropout=args.dropout, layers=args.layers, fields=_fields(args.cond))
+    if arch == "transformer":
+        kw.update(dim=args.dim, heads=args.heads, ffn=args.ffn)
+    else:
+        kw.update(dim=args.ssm_dim, state=args.state)
+    model = models.build(arch, **kw)
+    print(f"  {arch}: {models.n_params(model):,} parameters", file=log, flush=True)
+    hist = train(model, tr, va, steps=args.steps, bs=args.bs, ctx=args.ctx, lr=args.lr, wd=args.wd,
+                 device=device, log=log, seed=args.seed)
+    test_nll, per_role = evaluate(model, te, args.ctx, device, per_role=True)
+    hist.update({"arch": arch, "params": models.n_params(model), "test": test_nll, "test_per_role": per_role})
+    return model, hist
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--root", default="M:/Midi")
+    ap.add_argument("--packs", default="psy", choices=["psy", "trance", "all"])
+    ap.add_argument("--split", default="group", choices=["group", "file", "naive"])
+    ap.add_argument("--arch", default="transformer", choices=["transformer", "ssm"])
+    ap.add_argument("--compare", action="store_true", help="both architectures and the baselines")
+    ap.add_argument("--dim", type=int, default=192)
+    ap.add_argument("--heads", type=int, default=4)
+    ap.add_argument("--ffn", type=int, default=512)
+    ap.add_argument("--ssm-dim", type=int, default=224)   # matches the transformer to 1.4 % of parameters
+    ap.add_argument("--state", type=int, default=16)
+    ap.add_argument("--layers", type=int, default=4)
+    ap.add_argument("--ctx", type=int, default=256)
+    ap.add_argument("--dropout", type=float, default=0.3)
+    ap.add_argument("--steps", type=int, default=4000)
+    ap.add_argument("--bs", type=int, default=32)
+    ap.add_argument("--lr", type=float, default=1.5e-3)
+    ap.add_argument("--wd", type=float, default=0.1)
+    ap.add_argument("--rotations", type=int, default=1)
+    ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--device", default="cuda")
+    ap.add_argument("--out", default="Tools/train/runs/compare")
+    ap.add_argument("--extra", default="none", choices=["none", "trance"],
+                    help="add material to the TRAINING side only, keeping the psy split for val/test "
+                         "(PLAN 6.9: trance with a lower weight); near duplicates of held-out lines are dropped")
+    ap.add_argument("--cond", default="full", choices=["full", "role", "nometre"],
+                    help="ablation over the conditioning inputs; only 'full' may be exported")
+    ap.add_argument("--style-from-pack", action="store_true",
+                    help="label the style slot with the source pack (the side experiment of MODEL_FORMAT 3)")
+    a = ap.parse_args()
+
+    device = device_of(a.device)
+    print(f"torch {torch.__version__}, cuda {torch.version.cuda}, available {torch.cuda.is_available()}, "
+          f"device {device}" + (f" ({torch.cuda.get_device_name(0)})" if device.type == "cuda" else ""))
+
+    recs = dataset.load(a.root, dataset.packs_for(a.packs))
+    tr, va, te = dataset.build_split(recs, a.split, rotations=a.rotations, seed=a.seed * 7919 + 12345)
+    if a.extra == "trance":
+        extra = dataset.load(a.root, dataset.TRANCE_PACKS)
+        kept = dataset.exclude_near(extra, va + te)
+        tr = tr + kept
+        print(f"  + {len(kept)} trance lines added to training ({len(extra) - len(kept)} dropped as near "
+              f"duplicates of a held-out line); val and test stay the psytrance ones")
+    if a.style_from_pack:
+        for r in tr + va + te:
+            r["style"] = 1 + r["pack"] % (dataset.N_STYLE - 1)
+    print(f"{a.packs} corpus, split by {a.split}: {len(tr)} train / {len(va)} val / {len(te)} test lines; "
+          f"{sum(len(r['syms']) for r in te)} test notes; "
+          f"{100 * dataset.sibling_leak(tr, te):.1f} % of test lines have a sibling in train")
+
+    # The Markov baseline is fit on the *unaugmented* training lines. A bar rotation leaves the
+    # cyclic n-gram types of a loop unchanged and only doubles their counts, which would sharpen
+    # Witten-Bell's escape and make the baseline look worse than the model that is actually shipped.
+    if a.split == "naive":
+        tr_raw = tr
+    else:
+        itr, _iva, _ite = dataset.split(recs, a.split, seed=a.seed * 7919 + 12345)
+        tr_raw = [recs[i] for i in itr] + ([] if a.extra == "none" else kept)
+
+    out = {}
+    out["markov_order0"] = markov.nll(tr_raw, te, order=0)
+    out["markov_order1"] = markov.nll(tr_raw, te, order=1)
+    out["markov_fair"] = markov.nll(tr_raw, te, per_role=True, order=2)
+    out["markov_shipped"] = markov.nll(recs, te, per_role=True, order=2)
+    print(f"  stage A order 0, on train  NLL {out['markov_order0']:.4f}")
+    print(f"  stage A order 1, on train  NLL {out['markov_order1']:.4f}")
+    print(f"  stage A order 2, on train  NLL {out['markov_fair'][0]:.4f}  {out['markov_fair'][1]}")
+    print(f"  stage A order 2, shipped   NLL {out['markov_shipped'][0]:.4f}  (contaminated: the test "
+          f"lines are inside these counts)")
+
+    archs = ["transformer", "ssm"] if a.compare else [a.arch]
+    os.makedirs(a.out, exist_ok=True)
+    for arch in archs:
+        model, hist = run_one(arch, tr, va, te, a, device)
+        print(f"  {arch:12s} params {hist['params']:,}  val {hist['best_val']:.4f} @ {hist['best_step']}  "
+              f"test {hist['test']:.4f}  {hist['test_per_role']}  {hist['seconds']:.0f} s")
+        out[arch] = {k: v for k, v in hist.items() if k != "curve"}
+        out[arch + "_curve"] = hist["curve"]
+        torch.save({"state": model.state_dict(), "header": model.header(), "args": vars(a)},
+                   os.path.join(a.out, f"{arch}.pt"))
+    with open(os.path.join(a.out, "result.json"), "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(out, fh, indent=1)
+    print("written", os.path.join(a.out, "result.json"))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
