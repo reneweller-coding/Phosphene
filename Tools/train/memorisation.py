@@ -231,6 +231,9 @@ def main():
     ap.add_argument("--root", default="M:/Midi")
     ap.add_argument("--packs", default="psy")
     ap.add_argument("--split", default="group")
+    ap.add_argument("--extra", default="none", choices=["none", "trance"],
+                    help="the model was trained with this extra material; it must be in the set the "
+                         "generated lines are compared against, or the copy rates are understated")
     ap.add_argument("--temperature", type=float, default=1.0)
     ap.add_argument("--control", action="store_true")
     ap.add_argument("--device", default="cuda")
@@ -242,6 +245,8 @@ def main():
     recs = dataset.load(a.root, dataset.packs_for(a.packs))
     tr, va, te = dataset.build_split(recs, a.split, rotations=args["rotations"],
                                      seed=args["seed"] * 7919 + 12345)
+    if a.extra == "trance":
+        tr = tr + dataset.exclude_near(dataset.load(a.root, dataset.TRANCE_PACKS), va + te)
 
     corpus_bars = {r: set() for r in range(len(dataset.ROLES))}
     for rec in tr:

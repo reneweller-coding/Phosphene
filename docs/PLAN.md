@@ -683,6 +683,125 @@ Sekunden davon, und mit 47 lag ein Lauf unter der Schwelle, ohne dass etwas fals
 Nächster Schritt: Phase 8 (Tokenisierung, Transformer gegen SSM per Held-out-NLL, C++-Inferenz) und Phase 9
 (Hörrunden je Erzeuger, pluginval, Gerätemessung auf der Quest, Arrange-Zeitleiste, Nachkalibrierung der
 Präsenz um 2,4 dB, Release).
+
+**16.09.2026, Phase 8 (Training): Transformer gegen Zustandsraum-Modell, gemessen.** Gebaut in
+`Tools/train/` (PyTorch, nur PC), Gewichtsformat in `docs/MODEL_FORMAT.md`, C++-Inferenz in einem
+zweiten Arbeitsbaum. **Stufe B ersetzt nur das Vorhersagemodell**: dasselbe Alphabet wie Stufe A
+(37 Symbole, Intervall zum Grundton −12 bis +24, `kCorpusAlphabet`), dieselben drei Rollen, dieselbe
+Reihenfolge. Was die REMI-/Compound-Word-Ströme (Hsiao et al. 2021) als eigene Token-Familien führen
+— Sechzehntelposition, Abstand zur nächsten Note, Stelle im Pattern — kommt als **Konditionierung**
+in den Eingang, nie in die Ausgabeverteilung.
+
+*Umgebung.* Vorhandene Umgebung `G:\Tools\SortFiles\venv` benutzt, nichts installiert:
+**torch 2.12.1+cu130, CUDA 13.0, `torch.cuda.is_available()` = True, RTX 5090 (sm_120)**.
+Trainingszeit je Lauf über 4 000 Schritte: **Transformer 58 s, SSM 1 103 s**; gleiche Daten,
+gleicher Optimierer, Parameterzahlen 1 460 325 gegen 1 439 685 (Abstand 1,4 %).
+
+*Was vom Korpus ankommt.* Vier Packs begangen, 8 134 `.mid`-Dateien, **1 576 melodische Linien mit
+155 092 Noten** erreichen das Modell:
+
+| Pack | Dateien | ohne Rolle | Rolle erkannt | verworfen (Kopf/< 4 Noten) | verworfen (< 3 Tonhöhen) | **behalten** |
+|---|---|---|---|---|---|---|
+| EMP + Sonicspore + TOTAL_MIDI_PSY | 1 264 | 533 | 731 | 4 | 61 | **666** (Acid 62/3 834, Lead 183/7 055, Arp 421/26 185) |
+| VORTEX Trance | 6 870 | 5 901 | 969 | 0 | 59 | **910** (Acid 99/14 507, Lead 583/74 079, Arp 228/29 432) |
+
+Der große Verlust ist nicht die Qualitätsfilterung, sondern die Rollenerkennung aus Pfad und Namen:
+von den 6 434 Dateien ohne Rolle tragen 4 877 (alle aus VORTEX) **gar kein Instrumentenwort** im
+Namen, 723 heißen „bass“, 375 „chord“, 306 „pad“, 100 „step and hold“. Bass, Pad, Akkord und
+Perkussion sind in diesem Modell bewusst nicht enthalten (siehe unten). Fast-Dubletten werden nicht
+entfernt, sondern nur auf eine Seite des Schnitts gelegt: 11 von 666 im Psy-Korpus, **217 von 910**
+im VORTEX-Bündel.
+
+| Baustein | Umsetzung | Messung |
+|---|---|---|
+| Datensatz | `Tools/train/dataset.py` importiert `build_corpus.py` (Parsen, Rolle, Tonart, Oberstimme) und behält Sequenz und Herkunftsdatei | 666 Psy-Linien, 37 074 Noten, identisch zu den Zahlen der Stufe-A-Tabellen |
+| Ehrlicher Schnitt | dreiteilig (Training/Validierung/Test) über **Loop-Gruppen**: Fast-Dubletten per Union-Find, Augmentierung erst nach dem Schnitt und nur auf der Trainingsseite | 930/99/102 Linien, 5 700 Testnoten, 377 Takte |
+| Baseline (Stufe A) | Witten-Bell-Ordnung 2 aus `Core/src/Corpus.cpp`, auf der Trainingsseite neu gezählt | Ordnung 0 **2,3670**, Ordnung 1 **2,3944**, Ordnung 2 **2,5084** nats/Token |
+| Transformer | 4 Schichten, Breite 192, 4 Köpfe, FFN 512, Pre-LN, gelernte Positionen statt relativer Attention (Huang et al. 2018) | **Test-NLL 1,4361**, 95 % KI [1,2664, 1,6230]; Validierung 1,2453 bei Schritt 800 |
+| Zustandsraum-Modell | 4 selektive SSM-Blöcke (Gu und Dao 2023), **reelles diagonales A**, Breite 224, Zustand 16, Faltung 4 — der Scan ist zehn Zeilen C++, Inferenzzustand 7 168 floats, kein KV-Cache | **Test-NLL 2,0833**, 95 % KI [1,9516, 2,2125]; Validierung 1,9758 bei Schritt 300 |
+| Entscheidung | gepaarter Bootstrap über **Linien** (nicht Tokens), 10 000 Ziehungen, `Tools/train/confidence.py` | Abstand **0,6472 nats**, 95 % KI [0,5108, 0,7810], P(Abstand ≤ 0) = 0,0000; der Transformer ist auf **87 von 102** Linien besser |
+| Mehr Daten | die 910 Trance-Linien des VORTEX-Bündels **nur auf der Trainingsseite**, Fast-Dubletten der Testlinien vorher entfernt (0 gefunden) | Transformer **1,3457** statt 1,4361 (−6,3 %); die Markov-Baseline wird davon **schlechter** (2,5638), weil die Zählungen verdünnen |
+| int8-Export | eine Skala je Ausgabezeile, `.phosmdl` nach `docs/MODEL_FORMAT.md` | NLL float32 1,3457 → int8 **1,3451** (−0,04 %), größte Logit-Differenz 0,065; 1 484 KiB statt 5 710 KiB |
+| Orakel | `<name>.ref.txt`, 12 Fälle, Logits und Wahrscheinlichkeiten in `%.9g` | NumPy-Leser (liest das Dokument wörtlich) gegen PyTorch: **3,3e−6** (Transformer), **2,4e−6** (SSM) |
+| Memorisierung | exakte Taktkopien, längster geteilter Lauf, Nächster-Nachbar-Verteilung über 8-Noten-Fenster, jeweils **gegen die Held-out-Linien als Referenz** | Modell **0,00 %** exakte Taktkopien gegen **4,24 %** der echten Held-out-Loops; Fenster im Abstand 0: **8,50 %** gegen 16,67 % |
+| Positivkontrolle | absichtlich überangepasstes Modell (kein Dropout, kein Weight Decay, 40 Linien) | **80,43 %** exakte Taktkopien, 87,14 % der Fenster im Abstand 0, Median-Abstand 0 — die Metrik schlägt aus |
+
+**Der Transformer gewinnt klar, nicht knapp.** 0,65 nats je Token sind ein Faktor 1,9 in der
+Perplexität, und das Konfidenzintervall des gepaarten Bootstraps berührt die Null nicht. Beide
+Architekturen haben denselben Schnitt, dieselben Tokens, dieselbe Konditionierung, dieselbe
+Schrittzahl und eine **symmetrische Rastersuche** (Dropout 0,3/0,5/0,65 × Lernrate 5e−4/1,5e−3,
+Auswahl über die Validierung): Transformer am besten bei 0,3/5e−4, SSM bei 0,5/5e−4. Das SSM
+verliert nicht an zu wenig Regularisierung — es überanpasst *härter*: sein Trainingsverlust fällt
+auf 0,2, während die Validierung auf 3,57 steigt, der Transformer bleibt bei 1,0 gegen 1,27. Ein
+Befund am Rande, der hierher gehört: im ersten Lauf lagen `A_log` und `D` in der
+Weight-Decay-Gruppe; das zieht alle Kanäle auf dieselbe Zeitkonstante, und das SSM blieb bei 2,1638
+stehen. Nach der Korrektur 2,0833. Der Quest-Vorteil des SSM (Zustand statt KV-Cache) ist real,
+aber er kostet hier 0,65 nats, und ein 8-Takt-Pattern sind wenige hundert Tokens — der KV-Cache des
+Transformers ist auf der Quest kein Engpass. **Ausgeliefert wird der Transformer**; das SSM liegt
+trotzdem als `.phosmdl` bei, damit der zweite C++-Pfad geprüft werden kann. Die Intervalle decken
+die Streuung der Held-out-Menge ab, **nicht die des Trainings-Seeds**: je Architektur lief ein Seed.
+
+**Stufe A verliert gegen sich selbst.** Ehrlich gemessen ist die Ordnung 2, die das Programm heute
+benutzt, **schlechter als die Ordnung 0 derselben Tabellen** (2,5084 gegen 2,3670). Auf 30 000
+Trainingsnoten und 50 653 möglichen Trigramm-Kontexten ist fast jeder Kontext einmal gesehen;
+Witten-Bell legt dann die halbe Wahrscheinlichkeit auf diese eine Beobachtung. Die Tabellen, wie sie
+in `CorpusTables.cpp` stehen, lesen 1,7319 — aber darin stecken die Testlinien selbst; der Abstand
+zwischen beiden Zahlen ist genau das Maß der Überanpassung. Für Phase 9: die Interpolationsgewichte
+der Stufe A gehören nachgemessen, oder die Ordnung 2 gehört bei knapper Datenlage abgeschaltet.
+
+**Was der ehrliche Schnitt kostet.** Die Augmentierung ist eine Takt-Rotation (Oktavversatz ist in
+dieser Darstellung wirkungslos, weil sich der Bezugston mitverschiebt; diatonische Verschiebung ist
+unzulässig, weil die Symbole *Intervalle zum Grundton* sind). Wird über die augmentierten Records
+zufällig geschnitten, haben **72 % der Testlinien eine Rotations-Schwester im Training** — gemessen,
+nicht behauptet. Dieselbe Architektur meldet dann **1,1241 statt 1,4361** nats (0,31 zu gut), die
+Markov-Baseline **1,9941 statt 2,5084** (0,51 zu gut). Der Unterschied zwischen Schnitt nach Datei
+und nach Loop-Gruppe ist im Psy-Korpus klein (11 Fast-Dubletten unter 666 Linien; 1,2470 gegen
+1,4361, wobei beide Zahlen auf *verschiedenen* Testmengen von rund 100 Linien stehen und der Abstand
+von der Streuung der Menge nicht zu trennen ist). Die Regel bleibt trotzdem die Loop-Gruppe, weil sie
+im VORTEX-Bündel **217 von 910** Linien als Kopien erkennt, darunter 178 von 228 Arp-Linien: dort
+wäre ein Schnitt nach Datei eine Messung des Korpus, nicht des Modells.
+
+**Woher der Gewinn kommt.** Zwei Ablationen auf demselben Schnitt: mit der Konditionierung auf Rolle
+allein — genau das, was das Markov-Modell sieht — kommt der Transformer auf **1,9702**; ohne
+Sechzehntelposition und Taktindex auf **1,7483**. Von den 1,07 nats Vorsprung vor Stufe A trägt die
+Architektur also rund 0,54, die metrische Konditionierung rund 0,31 und der Rest (Abstand zur
+nächsten Note, Notenindex, Taktzahl, absolute Position) rund 0,22. Der Stil-Steckplatz dagegen
+bringt nichts: mit dem Herkunfts-Pack als Stil-Label misst der Transformer **1,4455** statt 1,4361.
+Er bleibt im Format als `style = 0` (unbekannt) reserviert, und die C++-Seite übergibt 0, bis ein
+wirklich stilbeschrifteter Korpus vorliegt — die Packs tragen keine Beschriftung, die auf die fünf
+Stilprofile aus `Form.h` abbildet.
+
+**Was nicht modelliert wird, und warum.** `ROLES` ist Acid, Lead, Arp. `role_of` gibt für
+Bass, Kick, Drum, Perc, „Step and Hold“, Pad, Stab und Chord `None` zurück, und `read_midi`
+verwirft Kanal 10 (Schlagzeug) ohnehin; die Unison-Drum-Collection wird gar nicht erst begangen.
+**Der Bass läuft nicht über Stufe A** — er hat seinen eigenen Weg (`Bass.cpp`, Slot-Hüllkurve aus
+dem Stilprofil, Kick-Lücke), hat `PitchModel` nie benutzt und bekommt von Stufe B nichts ab. Eine
+Bass-Stufe-B wäre eine **vierte Rolle** (723 Dateien liegen dafür bereit) mit eigener
+Konditionierung auf die Kick-Lücke; das Format bräuchte `roles=4`, sonst nichts. Pads und Akkorde
+bleiben bei der Stimmführungsregel aus `Melody.h`, Perkussion bei Euklid und Fill-Bank.
+
+*Was noch nicht geht.* Die exakte Constraint-Dekodierung nach Pachet und Roy (`CorpusSample.inl`)
+setzt einen endlichen Zustand voraus; ein Transformer hat keinen. Die C++-Inferenz maskiert deshalb
+links nach rechts und normiert neu (MODEL_FORMAT 6): jede harte Nebenbedingung gilt weiter für jede
+Note, verloren geht nur die Exaktheit des bedingten Maßes. Ein Hörvergleich gegen Stufe A und der
+Ranker aus 6.9 stehen aus, ebenso die Gerätemessung auf der Quest. Nächste Schritte für das
+Training, nach Ertrag geordnet: (1) die 4 877 unbeschrifteten VORTEX-Dateien über eine
+Inhaltsklassifikation statt über den Dateinamen erschließen — das ist mit Abstand der größte
+ungenutzte Vorrat; (2) Seed-Streuung messen (fünf Seeds je Architektur, rund 100 Minuten);
+(3) Interpolationsgewichte der Stufe A nachmessen; (4) den Trance-Anteil gewichten statt ihn
+gleichberechtigt anzuhängen; (5) Bass als vierte Rolle. Die Fremdgenre-Sammlungen (Piano 50k,
+Midi Klowd 13k, Atmos 5,7k, Star Samples) sind **nicht** benutzt: die Symbole sind Intervalle zum
+Grundton und die Konditionierung setzt ein psytrance-typisches Sechzehntelraster voraus, beides
+müsste für fremdes Material erst geprüft werden, und der Memorisierungs-Prüfstand müsste die
+Vortrainingsmenge mit abdecken.
+
+*Dateien.* `Tools/train/{dataset,markov,models,train,export,memorisation,confidence}.py`,
+`Tools/train/model/phos_pitch_tf.phosmdl` (+ `.ref.txt`, 1,5 MB, aus dem Lauf mit Trance-Zusatz) und
+`Tools/train/model/phos_pitch_ssm.phosmdl` (+ `.ref.txt`, Psy allein). Korpus-Cache, Prüfpunkte und
+Läufe sind gitignoriert: aus ihnen ließe sich die Trainingsschleife nachbauen, und die gekauften
+MIDI-Packs bleiben lokal. Auch die Referenzfälle sind **synthetisch** — ein halber Held-out-Loop,
+als Symbole und Schrittpositionen ausgeschrieben, *ist* der Loop.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
@@ -1368,7 +1487,7 @@ verbindlicher als die Zahlen.
 | **5 Komponist** | Korpus-Aufbereitung (`Tools/corpus`), Markov-Stufe A je Rolle, Form-Grammatik mit Pre-Drop-Vakuum, Bass-Slot-Hüllkurve im Stilprofil, Energiebogen, Tonartenreise, Übergänge, Sperren/Neuwürfeln, Stilprofile (5, Goa/Full-On aus `analyze_ref.py`), `.phosset`, MIDI-Export | 60-Minuten-Set aus einem Seed; MIDI in einer DAW geöffnet; Determinismus-Test; Memorisierungsabstand | 6 |
 | **6 GUI** | JUCE-Tabs, Arrange-Zeitleiste, Step-Vorschauen, Perform-Makros, Export-Tab, Screenshot-Modus, Handbuch-Generator | Standalone + VST3 bedienbar; pluginval grün | 6 |
 | **7 Quest** | NDK-Build, Qualitätsstufen, NEON-Messung auf Gerät, Performer-UI, Hand-Makros, OSC-Bridge | Set läuft auf der Quest 2 unter 30 % eines Kerns | 4 |
-| **8 Transformer** | Tokenisierung, Training (PyTorch, PC), int8-Export, C++-Inferenz über `Vec.h`, Constraint-Dekodierung, A/B gegen Stufe A, Ranker | Stufe B auf PC und Quest; Held-out-NLL und Hörvergleich dokumentiert | 5 |
+| **8 Transformer** | Tokenisierung, Training (PyTorch, PC), int8-Export, C++-Inferenz über `Vec.h`, Constraint-Dekodierung, A/B gegen Stufe A, Ranker | **Training fertig 16.09.**: Held-out-NLL 1,3457 gegen 2,0833 (SSM) und 2,5084 (Stufe A), `.phosmdl` und Orakel liegen bei; offen: C++-Inferenz, Quest, Hörvergleich, Ranker | 5 |
 | **9 Qualität** | Hörrunden je Erzeuger, Nachkalibrierung, Kaleidoscope-Cues, Release (Inno Setup, README, PDF-Handbuch) | v1.0 | 5 |
 
 Nach Phase 1 gibt es den ersten hörbaren Prüfstein; nach Phase 5 ist das Produkt inhaltlich
