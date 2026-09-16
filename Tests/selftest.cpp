@@ -985,7 +985,9 @@ void testVariety()
         auto trackLoudness = [&](bool match, double& spread) {
             auto e = std::make_unique<Engine>();
             e->prepare(48000.0, 512);
-            e->params().parseText(fmt("compose.track_bars=128 compose.sound_variation=1 compose.track_variation=1 master.auto_gain=Off master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1 compose.level_match=%s", match ? "On" : "Off").c_str());
+            e->params().parseText(fmt("compose.track_bars=128 compose.sound_variation=1 compose.track_variation=1 master.auto_gain=Off master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 "
+                                      "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 "
+                                      "mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1 compose.level_match=%s", match ? "On" : "Off").c_str());
             Composer ce(31);
             const int tracksN = 4, trackBars = 128;
             const TempoMap tm = ce.tempoMap(e->params(), tracksN * trackBars);
@@ -1182,13 +1184,21 @@ double measureLock(const char* settings, double bpm, double& spread, double& coh
     const double slotT = 0.25 * 60.0 / bpm;
     double kickPhaseAtSlot = 0.0;
     Kick kickModel;
-    // Measured inside the first core: in the intro neither kick nor bass has started (Form.h).
+    // Measured inside the first core: in the intro neither kick nor bass has started (Form.h). The set
+    // seed is the first whose track begins its core after an eight-bar intro, so that the window is
+    // reached with the shortest possible render -- this test runs twelve of them.
     int coreBeat = 0;
+    uint64_t seed = 1;
     auto render = [&](const char* solo, bool keepKick) {
         auto e = std::make_unique<Engine>();
         e->prepare(sr, 256);
-        e->params().parseText(fmt("compose.bpm=%g compose.bass_variation=0 compose.kick_pattern=Four master.clip=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.auto_gain=Off compose.level_match=Off %s %s", bpm, settings, solo).c_str());
-        Composer c(1);
+        e->params().parseText(fmt("compose.bpm=%g compose.bass_variation=0 compose.kick_pattern=Four master.clip=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.auto_gain=Off compose.level_match=Off "
+                                  "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 %s %s", bpm, settings, solo).c_str());
+        for (uint64_t k = 1; k <= 40; ++k) {
+            Composer probe(k);
+            if (firstCoreBar(e->params(), probe) <= 8) { seed = k; break; }
+        }
+        Composer c(seed);
         coreBeat = firstCoreBar(e->params(), c) * kBeatsPerBar;
         std::vector<float> y = renderEngine(*e, c, coreBeat + 32.0, 256, sr);
         if (keepKick) { kickModel = e->kick(); kickPhaseAtSlot = e->kick().outputPhaseAt(slotT); }
