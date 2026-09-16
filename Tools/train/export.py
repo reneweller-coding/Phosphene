@@ -200,6 +200,12 @@ def numpy_forward(header, W, case):
          + W["role.emb"][case["role"]] + W["style.emb"][case["style"]] + W["bars.emb"][case["bars"]]
          + W["step.emb"][case["step"]] + W["bar.emb"][case["bar"]]
          + W["gap.emb"][case["gap"]] + W["idx.emb"][case["idx"]]).astype(np.float32)
+    # The bass role (MODEL_FORMAT: roles=4) adds the kick's occupancy of the sixteenth grid as a
+    # tenth embedding. It is optional, so a model without it is read exactly as before; a model with
+    # it whose case carries no "kick" would be scored against the wrong conditioning, which is the
+    # error _conditioning_gap below refuses to make silently.
+    if "kick.emb" in W:
+        x = (x + W["kick.emb"][case["kick"]]).astype(np.float32)
     layers, E = int(header["layers"]), int(header["dim"])
     if header["arch"] == "transformer":
         heads = int(header["heads"])
@@ -284,11 +290,37 @@ def read_ref(path):
         k, _, v = line.partition("=")
         if k in ("role", "style", "bars", "len"):
             cur[k] = int(v)
-        elif k in ("tok", "step", "bar", "gap", "idx"):
+        elif k in ("tok", "step", "bar", "gap", "idx", "kick"):
             cur[k] = [int(x) for x in v.split()]
         elif k in ("logits", "probs"):
             cur[k] = [float(x) for x in v.split()]
     return cases
+
+
+#: Embedding tables numpy_forward() knows how to add. A tensor outside this set means the file was
+#: written by a newer exporter than this checker, and any verdict it produced would be arithmetic on
+#: an incomplete sum -- which is worse than no verdict, because it also passes when it should fail.
+_KNOWN_EMB = {"tok.emb", "pos.emb", "role.emb", "style.emb", "bars.emb",
+              "step.emb", "bar.emb", "gap.emb", "idx.emb", "kick.emb"}
+
+
+def _conditioning_gap(header, W, cases):
+    """Why this checker must not judge this model, or "" when it may.
+
+    Two ways to be out of date, both of which used to read as a failed model: a tensor this forward
+    pass never adds, and a conditioning input the reference cases do not carry. Measured on
+    16.09.2026: `bass.phosmdl` (roles=4, condKick=3, tenth table `kick.emb`) was reported at a logit
+    difference of 3.474 by a checker that simply left the kick out, while the C++ reader agreed with
+    PyTorch to 9.78e-06. The model was right and the checker was wrong.
+    """
+    unknown = sorted(n for n in W if n.endswith(".emb") and n not in _KNOWN_EMB)
+    if unknown:
+        return "the file carries embedding tables it does not know: " + ", ".join(unknown)
+    missing = sorted({"kick"} - set(cases[0])) if "kick.emb" in W and cases else []
+    if missing:
+        return ("the model conditions on " + ", ".join(missing)
+                + " but the reference cases do not record it")
+    return ""
 
 
 def check_pair(model_path, ref_path):
@@ -301,6 +333,10 @@ def check_pair(model_path, ref_path):
     """
     header, W = _read_phosmdl(model_path)
     cases = read_ref(ref_path)
+    gap = _conditioning_gap(header, W, cases)
+    if gap:
+        raise SystemExit(f"{model_path}: this checker cannot verify the model -- {gap}. "
+                         "Teach numpy_forward the missing conditioning before trusting a verdict.")
     worst_l = worst_p = 0.0
     for c in cases:
         got = numpy_forward(header, W, c)[-1]
