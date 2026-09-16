@@ -309,7 +309,7 @@ verdeckt; erst mit der Bass-Maske schlagen beide Prüfungen an.
 
 - **9 Tracks**, 2272 Takte, 139,5 bis 144,5 BPM (Goa-Profil, Mitte 143), Tonarten F#, E, B (Quinten
   und Ganztöne), Körper Full-On und Goa gemischt, 8 bis 9 Sektionen je Track.
-- **Laufzeit 238 s für 3600 s Audio: 15,1-fache Echtzeit, 6,6 % eines Kerns** (Phase 4: 5,4 % ohne
+- **Laufzeit 234 s für 3600 s Audio: 15,4-fache Echtzeit, 6,5 % eines Kerns** (Phase 4: 5,4 % ohne
   Form, 7,3 % mit allen Stimmen in jedem Track).
 - **Lautheit −9,5 LUFS integriert** bei Ziel −9, True Peak −0,98 dBTP, **LRA 6,7 LU** (Referenz-Median
   6,3 LU -- die Form bringt den Dynamikumfang echter Tracks). Je Track gespielt: −8,1 bis −10,6 LUFS,
