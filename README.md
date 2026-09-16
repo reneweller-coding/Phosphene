@@ -7,16 +7,18 @@ there are no samples.
 
 The design and the literature behind each building block are in [docs/PLAN.md](docs/PLAN.md) (German).
 
-**Status:** Phases 0 to 4 are done: framework, kick and rolling bass, a twelve-lane percussion kit,
+**Status:** Phases 0 to 5 are done: framework, kick and rolling bass, a twelve-lane percussion kit,
 the melodic layer (an acid voice on a diode ladder with accent, slide and squelch; a polyphonic
 supersaw/VA/FM/wavetable engine for lead, arp and pads; chords, riffs, phrases and arps drawn from
-statistics of a local MIDI corpus under musical constraints), and the space and the master: wavetable
-pads with voice-led chords and a trance gate, synthesised effects (risers, impacts, formant shots,
-reverse swells), kick sidechain on every channel, a room and a hall, and a master of bus compressor,
-mono bass, soft clipper and true-peak limiter that meets a loudness target. The offline renderer
-composes sets of any length; each track has its own key, tempo, patterns, groove, chords, melodies and
-sound, levels are matched between tracks and parts, and kick and bass are phase-locked at the first
-bass note. No song form grammar, plugin or headset build yet.
+statistics of a local MIDI corpus under musical constraints), the space and the master (wavetable pads
+with voice-led chords and a trance gate, synthesised effects, kick sidechain on every channel, a room
+and a hall, bus compressor, mono bass, soft clipper and true-peak limiter on a loudness target), and
+the composer: every track is built from a weighted grammar over intro, groove, buildup, pre-drop break,
+drop, breakdown, cut and outro, an energy arc over the whole set moves loudness, density, register and
+dissonance, five style profiles weight everything from tempo to chord moves, transitions between tracks
+are written rather than mixed, and any unit of a set can be locked or rerolled and saved as a
+`.phosset`. A sixty-minute set comes out of one seed as audio and as a Standard MIDI File. No plugin or
+headset build yet.
 
 ## Build
 

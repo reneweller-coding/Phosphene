@@ -2755,32 +2755,41 @@ void testForm()
         ParamStore q;
         q.parseText("compose.track_bars=256 compose.bass_variation=0 compose.level_match=Off master.auto_gain=Off");
         Composer c(1234);
-        int groups = 0, identical = 0;
+        int groups = 0, identical = 0, sameBass = 0;
         for (int ti = 0; ti < 6; ++ti) {
             const TrackPlan t = c.track(q, ti);
             for (int si = 0; si < t.form.count; ++si) {
                 const Section& s = t.form.section[si];
                 if (s.type != SectionType::Groove && s.type != SectionType::Drop) continue;
-                std::vector<uint64_t> hash;
+                // Two hashes per group: over everything, and over the bass alone. The second isolates
+                // the rule itself -- with Bass Variation at zero the only thing that may move the bass
+                // from group to group is the group's own figure, so a broken rule shows there even
+                // when a percussion fill happens to differ.
+                std::vector<uint64_t> hash, bassHash;
                 for (int g = 0; g * 8 + 8 <= s.bars; ++g) {
                     std::vector<NoteEvent> ev;
                     c.composeBars(q, t.firstBar + s.startBar + g * 8, 8, ev);
-                    // A hash of the notes' positions within the group, pitches, parts and lengths.
-                    uint64_t h = 1469598103934665603ull;
+                    uint64_t h = 1469598103934665603ull, hb = h;
                     const double base = static_cast<double>(t.firstBar + s.startBar + g * 8) * kBeatsPerBar;
                     for (const NoteEvent& e : ev) {
                         const uint64_t k = static_cast<uint64_t>(std::llround((e.beat - base) * 960.0)) * 1024
                                          + static_cast<uint64_t>(e.pitch) * 8 + static_cast<uint64_t>(e.part);
                         h = (h ^ k) * 1099511628211ull;
                         h = (h ^ static_cast<uint64_t>(std::llround(e.length * 960.0))) * 1099511628211ull;
+                        if (e.part == Part::Bass) hb = (hb ^ k) * 1099511628211ull;
                     }
                     hash.push_back(h);
+                    bassHash.push_back(hb);
                 }
-                for (size_t g = 1; g < hash.size(); ++g) { ++groups; if (hash[g] == hash[g - 1]) ++identical; }
+                for (size_t g = 1; g < hash.size(); ++g) {
+                    ++groups;
+                    if (hash[g] == hash[g - 1]) ++identical;
+                    if (bassHash[g] == bassHash[g - 1]) ++sameBass;
+                }
             }
         }
-        check(groups > 30 && identical == 0, "no two consecutive eight-bar groups of a core hold the same notes",
-              fmt("%d consecutive pairs, %d identical", groups, identical));
+        check(groups > 30 && identical == 0 && sameBass == 0, "no two consecutive eight-bar groups of a core hold the same notes, the bass alone included",
+              fmt("%d consecutive pairs, %d identical, %d with the same bass", groups, identical, sameBass));
     }
 
     // The instrumentation matrix: a breakdown has neither kick nor bass, an intro starts without a

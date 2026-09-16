@@ -385,11 +385,19 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     const int groupInSection = b / 8;
     Rng rg;
     rg.seed(mixSeed(ss ^ kSaltGroup, static_cast<uint64_t>(groupInSection)));
-    Rng rgPrev;
-    rgPrev.seed(mixSeed(ss ^ kSaltGroup, static_cast<uint64_t>(std::max(0, groupInSection - 1))));
-    const int prevFigure = rgPrev.below(4);
-    int figure = rg.below(4);
-    if (groupInSection > 0 && figure == prevFigure) figure = (figure + 1) % 4;
+    // The figure is walked from the section's first group, because "differs from the group before"
+    // has to compare against what that group really played: a group whose draw was already pushed
+    // aside would otherwise be compared against its raw draw, and one pair in sixteen would repeat
+    // (measured: 7 of 91).
+    int figure = 0;
+    for (int g = 0; g <= groupInSection; ++g) {
+        Rng rr;
+        rr.seed(mixSeed(ss ^ kSaltGroup, static_cast<uint64_t>(g)));
+        int f = rr.below(4);
+        if (g > 0 && f == figure) f = (f + 1) % 4;
+        figure = f;
+    }
+    rg.below(4);                                    // the same draw the walk above made for this group
     const int layerNudge = rg.below(3) - 1;         // -1, 0 or +1 layer for this group
 
     const int maxLayers = std::max(1, a.percLayers);

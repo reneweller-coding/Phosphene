@@ -246,17 +246,29 @@ int main(int argc, char** argv)
     const auto t0 = std::chrono::steady_clock::now();
     uint64_t renderedSamples = 0;
     double peak = 0.0;
+    // The loudness of each track on its own, so that a set can be checked for jumps between tracks.
+    LoudnessMeter trackMeter;
+    trackMeter.prepare(sr);
+    int meteredTrack = 0;
     while (renderedSamples < totalSamples) {
         const int n = static_cast<int>(std::min<uint64_t>(static_cast<uint64_t>(block), totalSamples - renderedSamples));
         conductor.pump(params, 8.0 * kBeatsPerBar, midi.empty() ? nullptr : &recorded);
         engine->process(L.data(), R.data(), n);
         if (!bench) {
             meter.process(L.data(), R.data(), n);
+            const int at = composer.trackOfBar(params, static_cast<int>(engine->beatPosition() / kBeatsPerBar));
+            if (at != meteredTrack) {
+                if (listTracks) std::printf("track %2d played: %.1f LUFS integrated\n", meteredTrack + 1, static_cast<double>(trackMeter.read().integrated));
+                trackMeter.reset();
+                meteredTrack = at;
+            }
+            trackMeter.process(L.data(), R.data(), n);
             for (int i = 0; i < n; ++i) peak = std::max(peak, static_cast<double>(std::max(std::fabs(L[static_cast<size_t>(i)]), std::fabs(R[static_cast<size_t>(i)]))));
             if (!out.empty()) wav.write(L.data(), R.data(), n);
         }
         renderedSamples += static_cast<uint64_t>(n);
     }
+    if (listTracks && !bench) std::printf("track %2d played: %.1f LUFS integrated\n", meteredTrack + 1, static_cast<double>(trackMeter.read().integrated));
     const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     wav.close();
 
