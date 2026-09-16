@@ -22,9 +22,18 @@
  * kick's sidechain duck (event-driven, Ducker.h), the trance gate for lead, arp and pad (TranceGate.h),
  * and sends to a short room and a long hall (Reverb.h), whose returns are ducked as well. The master
  * sums everything, applies the gain (knob, the track's level match and the composer's loudness offset),
- * the bus compressor, mono bass (the side signal high-passed), the lookahead true-peak limiter and a
- * final safety clip at the ceiling, and meters the result to BS.1770 (Dynamics.h, Loudness.h). With the
+ * the bus compressor, mono bass (the side signal high-passed), the soft clipper, the band limit that
+ * gives the programme an upper end (Dsp.h, BandLimit), the lookahead true-peak limiter and a final
+ * safety clip at the ceiling, and meters the result to BS.1770 (Dynamics.h, Loudness.h). With the
  * limiter on, the output is delayed by latencySamples().
+ *
+ * **Why the band limit sits between the clipper and the limiter.** After the clipper, because the
+ * clipper is the last stage that makes new harmonics; before the limiter, because a true-peak ceiling
+ * is a claim about the analogue waveform and a true-peak estimate is a band-limited reconstruction --
+ * a limiter handed a programme that runs past its estimator's band cannot hold the ceiling it reports.
+ * Measured on eight minutes of seed 7 before this was there: the meter read -0.98 dBTP, the exact peak
+ * was -0.075, and the same render cut at the estimator's 0.45 fs read -0.182 exact against -0.218
+ * estimated -- the whole error lived above the band.
  *
  * **Threads.** process() runs on the audio thread and never allocates. The push functions may be
  * called from one other thread. Parameters may be written from any thread.
@@ -193,6 +202,11 @@ private:
     HalfbandDown<float> clipDownL_, clipDownR_;
     bool clipperOn_ = true;
     float clipperT_ = 1.0f;
+    /// The upper end of the programme (Dsp.h, BandLimit). It sits after the clipper and before the
+    /// limiter on purpose: the limiter's ceiling is a true-peak claim, and a true-peak estimate is a
+    /// band-limited reconstruction, so the limiter has to be handed a signal that lives inside its
+    /// own band -- otherwise it reads 0.9 dB low and lets the ceiling through (measured 16.09.2026).
+    BandLimit bandLimitL_, bandLimitR_;
     TruePeakLimiter limiter_;
     bool limiterOn_ = true;
     LoudnessMeter meter_;

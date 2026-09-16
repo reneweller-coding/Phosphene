@@ -128,33 +128,52 @@ const ParamDesc kPercParams[perc::Count] = {
  * 3.8 dB short at 8 kHz and 5.1 dB *over* at 16 kHz. Real cymbals are band limited (Fletcher and
  * Rossing, "The Physics of Musical Instruments", ch. 19: the modes of a thin plate crowd towards a
  * finite upper region and are damped hardest there), and so is every reference track measured here.
+ *
+ * **The positions across the stereo field (16.09.2026).** The kit owns the air band -- in the solo
+ * table of Phase 9 it is 60 % of 6 .. 16 kHz and 95 % of it in a track without a lead -- so the width
+ * of the mix up there is the width of the kit, and the kit was 9 dB narrower than the recordings:
+ * side over mid -17.6 dB against a reference median of -8.5 (`Tools/ref_width.py`, forty recordings,
+ * four windows each). The cause was in these lines: the two loudest lanes of the top end, closed hat
+ * at +5 dB and open hat at +2, sat at 0.15 and -0.10, close enough to the middle that the rest of the
+ * kit could not widen the sum. The positions of the ten lanes that are not the backbeat are now
+ * 0.35 .. 0.60 of full deflection, alternating side by side as they did before, and the kit measures
+ * -8.7 dB with an inter-channel correlation of +0.79 against the recordings' +0.75.
+ *
+ * Three things this does not disturb, two of them by construction. Panning here is constant power
+ * (`Perc.cpp`), so cos^2 + sin^2 = 1 and the two channels' powers **sum** to the same figure at any
+ * position: the band balance of Phase 9 cannot move, and measured over eight seeds it does not.
+ * Summing to mono cannot cancel a panned source either, only a phase-inverted one, and the measured
+ * cost of a mono downmix stays at 0.8 dB of presence against the recordings' 1.2. And the depth rule
+ * is untouched: no lane's low cut goes under 150 Hz, so nothing below 140 Hz is being placed anywhere.
+ * Clap and snare stay in the middle -- the backbeat is the one thing a psytrance mix anchors there,
+ * and the presence band they live in already measured inside the recordings' quartiles.
  */
 const char* const kDefaultKit =
     "perc1.role=Closed Hat;perc1.engine=Metal;perc1.decay=45;perc1.noise=0.35;perc1.noise_decay=35;perc1.filter=Low Pass;"
-    "perc1.cutoff=12000;perc1.low_cut=3500;perc1.resonance=0.25;perc1.level=5;perc1.pan=0.15;perc1.choke=1;perc1.density=0.6\n"
+    "perc1.cutoff=12000;perc1.low_cut=3500;perc1.resonance=0.25;perc1.level=5;perc1.pan=0.45;perc1.choke=1;perc1.density=0.6\n"
     "perc2.role=Open Hat;perc2.engine=Metal;perc2.decay=260;perc2.noise=0.35;perc2.noise_decay=220;perc2.filter=Low Pass;"
-    "perc2.cutoff=12000;perc2.low_cut=3000;perc2.level=2;perc2.pan=-0.1;perc2.choke=1\n"
+    "perc2.cutoff=12000;perc2.low_cut=3000;perc2.level=2;perc2.pan=-0.4;perc2.choke=1\n"
     "perc3.role=Ride;perc3.engine=Metal;perc3.metal_scale=0.72;perc3.decay=700;perc3.noise=0.2;perc3.noise_decay=400;"
-    "perc3.filter=Band Pass;perc3.cutoff=5200;perc3.resonance=0.35;perc3.level=-3;perc3.pan=0.35\n"
+    "perc3.filter=Band Pass;perc3.cutoff=5200;perc3.resonance=0.35;perc3.level=-3;perc3.pan=0.6\n"
     "perc4.role=Crash;perc4.engine=Metal;perc4.metal_scale=0.5;perc4.decay=1600;perc4.noise=0.6;perc4.noise_decay=1400;"
-    "perc4.filter=High Pass;perc4.cutoff=3000;perc4.level=-5;perc4.pan=-0.3\n"
+    "perc4.filter=High Pass;perc4.cutoff=3000;perc4.level=-5;perc4.pan=-0.55\n"
     "perc5.role=Clap;perc5.engine=Noise;perc5.noise=1;perc5.bursts=4;perc5.burst_spacing=9;perc5.noise_decay=180;"
     "perc5.filter=Band Pass;perc5.cutoff=1400;perc5.resonance=0.35;perc5.level=-4;perc5.low_cut=300\n"
     "perc6.role=Snare;perc6.engine=Tone;perc6.pitch=190;perc6.pitch_amount=1.6;perc6.pitch_decay=25;perc6.decay=90;"
     "perc6.noise=0.8;perc6.noise_decay=140;perc6.filter=High Pass;perc6.cutoff=250;perc6.level=-6;perc6.low_cut=160\n"
     "perc7.role=Rim;perc7.engine=FM;perc7.pitch=1700;perc7.fm_ratio=2.61;perc7.fm_index=2.2;perc7.decay=28;perc7.pitch_decay=6;"
-    "perc7.filter=Band Pass;perc7.cutoff=2200;perc7.resonance=0.3;perc7.level=-10;perc7.pan=-0.25\n"
+    "perc7.filter=Band Pass;perc7.cutoff=2200;perc7.resonance=0.3;perc7.level=-10;perc7.pan=-0.45\n"
     "perc8.role=Shaker;perc8.engine=Noise;perc8.noise=1;perc8.noise_decay=45;perc8.filter=Low Pass;perc8.cutoff=11000;"
-    "perc8.low_cut=3000;perc8.resonance=0.1;perc8.level=-1;perc8.pan=0.25\n"
+    "perc8.low_cut=3000;perc8.resonance=0.1;perc8.level=-1;perc8.pan=0.55\n"
     "perc9.role=Tom;perc9.engine=Modal;perc9.pitch=220;perc9.low_cut=190;perc9.mode_set=Membrane;perc9.mode_damp=0.6;perc9.decay=280;"
-    "perc9.noise=0.08;perc9.noise_decay=15;perc9.filter=Low Pass;perc9.cutoff=6000;perc9.level=-8;perc9.pan=-0.2;perc9.tune=1\n"
+    "perc9.noise=0.08;perc9.noise_decay=15;perc9.filter=Low Pass;perc9.cutoff=6000;perc9.level=-8;perc9.pan=-0.35;perc9.tune=1\n"
     "perc10.role=Conga;perc10.engine=Modal;perc10.pitch=330;perc10.mode_set=Harmonic;perc10.mode_damp=0.4;perc10.decay=180;"
-    "perc10.noise=0.05;perc10.noise_decay=8;perc10.filter=Low Pass;perc10.cutoff=8000;perc10.low_cut=220;perc10.level=-10;perc10.pan=0.3;perc10.tune=1\n"
+    "perc10.noise=0.05;perc10.noise_decay=8;perc10.filter=Low Pass;perc10.cutoff=8000;perc10.low_cut=220;perc10.level=-10;perc10.pan=0.5;perc10.tune=1\n"
     "perc11.role=Zap;perc11.engine=FM;perc11.pitch=420;perc11.pitch_amount=8;perc11.pitch_decay=35;perc11.fm_ratio=1.5;"
     "perc11.fm_index=3;perc11.decay=110;perc11.filter=Low Pass;perc11.cutoff=9000;perc11.resonance=0.4;perc11.drive=0.3;"
-    "perc11.level=-12;perc11.pan=0.4\n"
+    "perc11.level=-12;perc11.pan=0.6\n"
     "perc12.role=Blip;perc12.engine=Tone;perc12.pitch=1100;perc12.pitch_amount=1.3;perc12.pitch_decay=4;perc12.decay=45;"
-    "perc12.filter=Band Pass;perc12.cutoff=1800;perc12.resonance=0.2;perc12.level=-12;perc12.pan=-0.4;perc12.tune=1\n";
+    "perc12.filter=Band Pass;perc12.cutoff=1800;perc12.resonance=0.2;perc12.level=-12;perc12.pan=-0.6;perc12.tune=1\n";
 
 const ParamDesc kKickParams[kick::Count] = {
     { "engine",      "Engine",       "",     0.0f,     1.0f,    0.0f, Curve::Choice, kKickEngineNames },

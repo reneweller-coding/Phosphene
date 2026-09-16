@@ -269,6 +269,51 @@ struct DcBlocker {
 };
 
 /**
+ * @brief Fourth-order Butterworth low pass: the upper end of the programme.
+ *
+ * **Why a programme needs an upper end at all.** Three costs, all of them paid above 20 kHz where
+ * nothing can be heard (Ashihara, "Hearing thresholds for pure tones above 16 kHz", J. Acoust. Soc.
+ * Am. 122(3), 2007: the threshold rises past 90 dB SPL above 20 kHz, i.e. out of reach at any sane
+ * playback level):
+ *  - **Headroom.** The true-peak estimator of ITU-R BS.1770-4 is a band-limited reconstruction --
+ *    ours to 0.45 fs = 21.6 kHz (Dynamics.h). Content above that does not merely hide from it, it
+ *    throws it off: measured on an eight-minute render, the meter read -0.98 dBTP where the exact
+ *    peak was -0.075, and the same render cut at 21.6 kHz read -0.218 against an exact -0.182. The
+ *    ceiling is a claim about the analogue waveform, and it is only true if the programme lives
+ *    inside the band the estimator covers.
+ *  - **Resampling.** Every distributed recording is 44.1 kHz, Nyquist 22.05 kHz, and a sample-rate
+ *    converter puts its transition band at roughly 20 .. 22.05 kHz. Whatever sits above 20 kHz is
+ *    either removed there or folded down into the audible band as an alias.
+ *  - **Nonlinear stages.** A clipper or a saturator downstream mixes the ultrasonic content with the
+ *    audible one and puts the difference frequencies back in the middle of the mix.
+ *
+ * **Why fourth order at 18 kHz.** Two cascaded trapezoidal SVF low passes with the Butterworth
+ * dampings 2 cos(pi/8) and 2 cos(3 pi/8). The trapezoidal (bilinear) low pass carries a double zero
+ * at Nyquist, so four poles bring four zeros with them and the last band before Nyquist collapses:
+ * measured on the percussion kit the share of 22 .. 24 kHz falls by 49 dB and 20 .. 22 kHz by 22 dB,
+ * while the calibrated 2 .. 16 kHz third-octave curve moves by 0.16 dB rms and the 16 kHz band by
+ * 0.51 dB. A corner at 19 kHz costs less (0.04 dB rms) but leaves 20 .. 22 kHz only 15 dB down,
+ * which is not an end; a sixth order at 18 kHz buys another 20 dB nobody can spend and costs three
+ * times as much in the passband.
+ */
+struct BandLimit {
+    Svf a, b;   ///< the two Butterworth sections, in cascade
+
+    /** @brief Sets the corner; it never goes above 0.4 fs, so a low sample rate degrades gracefully. */
+    void prepare(double sr, float cornerHz = 18000.0f)
+    {
+        const float fc = clampv(cornerHz, 1000.0f, static_cast<float>(0.4 * sr));
+        a.setK(fc, 1.8477590f, static_cast<float>(sr));   // 2 cos(pi/8)
+        b.setK(fc, 0.7653669f, static_cast<float>(sr));   // 2 cos(3 pi/8)
+        reset();
+    }
+    /** @brief One sample. */
+    inline float process(float x) { return b.lp(a.lp(x)); }
+    /** @brief Clears the states. */
+    void reset() { a.reset(); b.reset(); }
+};
+
+/**
  * @brief Flush-to-zero and denormals-are-zero for the lifetime of the object, restored afterwards.
  *
  * A percussion lane that has died away keeps decaying towards zero, and below about 1e-38 the values

@@ -2,8 +2,14 @@
  * @file Reverb.h
  * @brief Eight-line feedback delay network reverb for the send buses (room and hall).
  *
- * Each channel passes its own pre-delay and a four-stage Schroeder all-pass diffusion into its half of
- * the network (left into lines 0-3, right into 4-7); a Householder reflection mixes all eight lines.
+ * Each channel passes its own pre-delay and a four-stage Schroeder all-pass diffusion into four of the
+ * eight lines, and reads those same four back (Reverb.cpp, kLeft); a Householder reflection mixes all
+ * eight. The four are not the first half or the second: the line set is ordered by length, so that
+ * split handed one channel every short line and the other every long one and the two returns came out
+ * with different colours (16.09.2026: 1.45 dB rms between the third octaves 500 Hz .. 8 kHz in the
+ * room, 1.36 in the hall, worst band 2.55). Interleaved so that each channel holds two short lines and
+ * two long ones, the returns are as decorrelated as before -- they share no line -- and now differ by
+ * 0.65 and 0.53 dB rms.
  * Every line carries a short all-pass inside its loop, which scatters each echo into many so the echo
  * density grows quickly (Schlecht and Habets, "Scattering in feedback delay networks", IEEE/ACM TASLP
  * 2020), and the line lengths are the set Noctuary's optimiser found for the flattest third-octave
