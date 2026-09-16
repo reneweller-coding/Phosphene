@@ -37,6 +37,19 @@ else()
 endif()
 option(PHOS_AVX2 "Build the x86-64 core with AVX2 + FMA" ON)
 option(PHOS_STATIC_RUNTIME "Link the MSVC runtime statically (for distribution)" OFF)
+# A build whose binaries are meant for other machines. It does one thing: it stops Core/CMakeLists.txt
+# compiling this checkout's Core/data path into PhospheneCore as the last step of the core's lookup
+# for library.phoswt, melody.phosmdl and bass.phosmdl.
+#
+# That path is a development convenience and a shipping hazard. It puts the build machine's directory
+# layout inside every binary anybody downloads and -- far worse -- it makes a missing data file
+# invisible *on the build machine*: a staged binary finds the source tree whatever was staged beside
+# it, so a package with a model deleted renders exactly like a correct one. That is not a thought
+# experiment, it is what the release round of 16.09.2026 measured (Tools/release/check_package.ps1,
+# the note above check F: a deleted bass.phosmdl and a flipped byte both went through).
+# Deploy/build_release.ps1 sets this ON, ctest runs in that configuration, and the package check then
+# catches a missing model the way it always should have.
+option(PHOS_SHIP "A build for other machines: no path into this source tree inside the binaries" OFF)
 set(PHOS_JUCE_TAG "9.0.1" CACHE STRING "JUCE git tag to fetch when ThirdParty/JUCE is absent")
 
 if(MSVC)

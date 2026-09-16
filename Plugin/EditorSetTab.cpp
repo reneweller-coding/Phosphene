@@ -23,6 +23,25 @@ std::unique_ptr<juce::TextButton> makeToggle(const juce::String& caption)
     b->setClickingTogglesState(true);
     return b;
 }
+
+/**
+ * @brief One line about one part's pitch source: what is really loaded, not what the knob asks for.
+ *
+ * @param part      "Melody" or "Bass", as the two knobs above are named
+ * @param fallback  what the part plays without a weight file ("Markov", "Pattern")
+ * @param learned   whether the model really loaded in this process
+ * @param nll       the held-out nats per token the file declares, for a loaded model
+ * @param source    true when it loaded from somewhere this build was not installed into
+ */
+juce::String modelLine(const char* part, const char* fallback, bool learned, double nll, bool source)
+{
+    juce::String s;
+    s << part << ":  ";
+    if (!learned) return s + juce::String("not installed -- ") + fallback;
+    s << "learned, " << juce::String(nll, 2) << " nats";
+    if (source) s << "  (from the build tree, not from an installed copy)";
+    return s;
+}
 } // namespace
 
 void PhospheneEditor::buildSetPage()
@@ -104,6 +123,42 @@ void PhospheneEditor::buildSetPage()
     page->addModuleGroup(proc_, Module::Compose, 0, "Melody", tint, 5, compose::AcidAmount, 10);
     // The form (Phase 5): style profile, energy arc, whether tracks run at the profile's tempo, set length.
     page->addModuleGroup(proc_, Module::Compose, 0, "Form", tint, 2, compose::Style, -1);   // two columns, so the row below still holds four groups
+
+    // ---------------------------------------------------------------- what Phase 8 really is here
+    // The two knobs above say what is *asked for*; these two lines say what the process *has*. They
+    // are wanted because the failure they describe is silent: `melody.phosmdl` or `bass.phosmdl` not
+    // installed means the composer draws from the Markov model and the pattern families instead,
+    // sounds perfectly healthy, and reports it on stderr -- which a plug-in inside a DAW never shows
+    // anyone. The chooser entries are marked "(missing)" as well (EditorLayout.cpp), but a mark
+    // inside a closed combo box is only seen by somebody already looking; a line on the page is seen
+    // by somebody who is not.
+    //
+    // Text and not a lamp, because the useful part is the *reason*: which of the two files, and
+    // whether the one that loaded came from an installation or from this machine's source tree,
+    // which is the case that works here and nowhere else. It is built once and never refreshed:
+    // both models are loaded once per process, before the first engine, and cannot change afterwards
+    // (PluginProcessor.cpp, installSearchPaths()).
+    const PhospheneProcessor::LearnedModels m = proc_.learnedModels();
+    const int gn = page->addGroup("Pitch models", tint, 6);
+    {
+        struct Line { const char* part; const char* fallback; bool learned; double nll; juce::String note; };
+        const Line lines[2] = { { "Melody", "Markov",  m.melody, m.melodyNll, m.melodyNote },
+                                { "Bass",   "Pattern", m.bass,   m.bassNll,   m.bassNote } };
+        for (const Line& l : lines) {
+            auto lab = std::make_unique<juce::Label>(juce::String(),
+                                                     modelLine(l.part, l.fallback, l.learned, l.nll, m.fromSourceTree));
+            lab->setJustificationType(juce::Justification::centredLeft);
+            // The palette's own "over" colour, the one the loudness meter uses when a reading is not
+            // what it should be: a fallback is not an error, but it is not the product either.
+            lab->setColour(juce::Label::textColourId, l.learned ? dim : red);
+            // The whole truth, for anyone who wants it: the directory the plugin looked in, or the
+            // core's own message naming every path it tried.
+            lab->setTooltip(l.learned ? (m.directory.isEmpty() ? juce::String("found outside this installation")
+                                                              : m.directory)
+                                      : l.note);
+            page->addControl(gn, std::move(lab), "", 6, true);
+        }
+    }
 
     // ---------------------------------------------------------------- meters, plan, export
     const int gm = page->addGroup("Loudness", tint, 3);

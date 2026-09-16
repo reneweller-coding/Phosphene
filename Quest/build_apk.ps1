@@ -37,14 +37,20 @@ New-Item -ItemType Directory -Force $libDir | Out-Null
 Copy-Item (Join-Path $build "libphosquest.so") $libDir -Force
 Copy-Item (Join-Path $root "ThirdParty\openxr-loader\prefab\modules\openxr_loader\libs\android.arm64-v8a\libopenxr_loader.so") $libDir -Force
 
-# 3. assets: the shipped wavetable library (Core/data/library.phoswt, 750 KB). It is staged rather
-#    than kept under Quest/ so that the APK and the plugin ship the one file the self test measures.
-#    The app unpacks it into its private directory on the first start, because the core opens its
-#    resources by name and an asset in the APK has none (Quest/src/main.cpp, prepareWaveTables).
+# 3. assets: the three files the core opens by bare name -- the wavetable library (750 KB) and the
+#    two learned models of Phase 8 (1.5 MB each). They are staged rather than kept under Quest\ so
+#    that the APK, the plugin and the self test all ship the one copy in Core\data. The app unpacks
+#    them into its private directory on the first start, because the core opens its resources by
+#    name and an asset in the APK has none (Quest\src\main.cpp, prepareAsset / prepareModels).
+#
+#    The two models cost 3 MB of APK and 3 MB of the headset's internal storage. Without them the
+#    Quest build loses the whole of Phase 8 -- and it is the one surface with no stderr for anybody
+#    to read, so nothing at all would say so.
+$assetFiles = @("library.phoswt", "melody.phosmdl", "bass.phosmdl")
 $assets = Join-Path $out "assets"
 if (Test-Path $assets) { Remove-Item -Recurse -Force $assets }
 New-Item -ItemType Directory -Force $assets | Out-Null
-Copy-Item (Join-Path $root "Core\data\library.phoswt") $assets -Force
+foreach ($f in $assetFiles) { Copy-Item (Join-Path $root "Core\data\$f") $assets -Force }
 
 # 4. resources (the launcher icon at five densities) -> compiled, then the manifest -> base.apk (no code)
 $resZip = Join-Path $out "res.zip"
@@ -76,20 +82,24 @@ $final = Join-Path $build "PhospheneQuest.apk"
 & (Join-Path $bt "apksigner.bat") sign --ks $keystore --ks-pass pass:android --key-pass pass:android --out $final $aligned
 if ($LASTEXITCODE -ne 0) { throw "apksigner failed" }
 
-# 7. what the finished APK carries. The wavetable pack has to be *in* it, not only in the staging
-#    folder: without it the app finds no library on the device and falls back to the six built-in
-#    tables -- which is audible, not fatal, and therefore exactly the kind of failure that ships
+# 7. what the finished APK carries. All three files have to be *in* it, not only in the staging
+#    folder: without the pack the app finds no library on the device and falls back to the six
+#    built-in tables, and without the two models the composer falls back to the Markov model and the
+#    pattern families -- audible, not fatal, and therefore exactly the kind of failure that ships
 #    unnoticed. Nothing else can check it here, because no headset is attached to this machine.
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::OpenRead($final)
-$entry = $zip.Entries | Where-Object { $_.FullName -eq "assets/library.phoswt" }
-$packedBytes = 0
-$storedBytes = 0
-if ($entry) { $packedBytes = $entry.Length; $storedBytes = $entry.CompressedLength }
+$carried = @{}
+foreach ($e in $zip.Entries) { if ($e.FullName.StartsWith("assets/")) { $carried[$e.FullName] = @($e.Length, $e.CompressedLength) } }
 $zip.Dispose()
-$wantBytes = (Get-Item (Join-Path $root "Core\data\library.phoswt")).Length
-if ($packedBytes -ne $wantBytes) { throw "the APK carries $packedBytes bytes of library.phoswt, not the $wantBytes of Core\data" }
-Write-Host ("assets:   library.phoswt {0:N0} bytes, {1:N0} in the APK" -f $packedBytes, $storedBytes)
+foreach ($f in $assetFiles) {
+    $key = "assets/$f"
+    $wantBytes = (Get-Item (Join-Path $root "Core\data\$f")).Length
+    if (-not $carried.ContainsKey($key)) { throw "the APK carries no $key, so the device would fall back without saying so" }
+    $packedBytes = $carried[$key][0]
+    if ($packedBytes -ne $wantBytes) { throw "the APK carries $packedBytes bytes of $f, not the $wantBytes of Core\data" }
+    Write-Host ("assets:   {0} {1:N0} bytes, {2:N0} in the APK" -f $f, $packedBytes, $carried[$key][1])
+}
 Write-Host ("APK size: {0:N0} bytes" -f (Get-Item $final).Length)
 Write-Host "APK: $final"
 Write-Host "install:  adb install -r `"$final`""

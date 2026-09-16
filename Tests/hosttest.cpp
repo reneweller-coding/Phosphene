@@ -194,6 +194,52 @@ juce::ComboBox* findCombo(juce::Component& root, const juce::String& key)
     return nullptr;
 }
 
+/** @brief The first label in a component tree whose text starts with @p prefix. */
+juce::Label* findLabel(juce::Component& root, const juce::String& prefix)
+{
+    if (auto* l = dynamic_cast<juce::Label*>(&root))
+        if (l->getText().startsWith(prefix)) return l;
+    for (juce::Component* child : root.getChildren())
+        if (child != nullptr)
+            if (juce::Label* found = findLabel(*child, prefix)) return found;
+    return nullptr;
+}
+
+/**
+ * @brief The `--probe-models` mode: what one fresh process made of Phase 8, on one line.
+ *
+ * Why a whole process. phos::sharedMelodyModel() and phos::sharedBassModel() load once and are never
+ * unloaded, and the plugin resolves its resource directory once, so "the models are there" and "the
+ * models are not there" cannot both be staged inside one run -- unlike the wavetable library, which
+ * has resetWaveTableLibrary(). The absence is therefore staged the only way it can be: a copy of
+ * this executable in an empty directory, started as a child, reporting back through its stdout.
+ */
+int probeModels()
+{
+    auto p = std::make_unique<PhospheneProcessor>();
+    p->setFollowHost(false);
+    p->setNonRealtime(true);
+    p->setPlayConfigDetails(0, 2, 48000.0, 256);
+    p->prepareToPlay(48000.0, 256);
+    p->play();
+    const PhospheneProcessor::LearnedModels m = p->learnedModels();
+    // Eight bars: a track opens with a sparse intro and the kick enters between bars five and nine,
+    // so anything shorter would measure the atmosphere and not the set.
+    const int samples = static_cast<int>(8.0 * kBeatsPerBar * 60.0 / 145.0 * 48000.0);
+    const double rms = renderRms(*p, 256, samples);
+    int marks = 0;
+    std::unique_ptr<juce::AudioProcessorEditor> editor(p->createEditor());
+    for (const char* key : { "compose.melody_model", "compose.bass_model" }) {
+        juce::ComboBox* cb = editor != nullptr ? findCombo(*editor, key) : nullptr;
+        if (cb != nullptr && cb->getNumItems() == 2 && cb->getItemText(1).contains("missing")) ++marks;
+    }
+    editor.reset();
+    std::printf("probe melody=%d bass=%d source=%d marks=%d rms=%.5f dir=%s\n",
+                m.melody ? 1 : 0, m.bass ? 1 : 0, m.fromSourceTree ? 1 : 0, marks, rms,
+                m.directory.isEmpty() ? "(none)" : m.directory.toRawUTF8());
+    return 0;
+}
+
 /** @brief A mouse click on a component that has no peer, as the editor's own would arrive. */
 void clickAt(juce::Component& c, int x, int y)
 {
@@ -244,9 +290,11 @@ ArrangeDisplay::Snapshot bigSet()
 
 } // namespace
 
-int main()
+int main(int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
+    // The child half of the learned-model section below; it prints one line and checks nothing.
+    if (argc > 1 && juce::String(argv[1]) == "--probe-models") return probeModels();
     std::printf("Phosphene host test\n");
 
     // ---------------------------------------------------------------- the shipped wavetable pack
@@ -321,6 +369,100 @@ int main()
     // Back to the shipped library for everything that follows -- no engine is alive here.
     phos::resetWaveTableLibrary();
     phos::loadWaveTableLibrary();
+
+    // ---------------------------------------------------------------- the two learned models
+    //
+    // The same failure as the missing pack, one level up: without `melody.phosmdl` and
+    // `bass.phosmdl` the composer draws from the Markov model and the pattern families, the whole of
+    // Phase 8 is gone, and the only word about it is one line on stderr -- which in a DAW is
+    // nowhere. Until this round nothing in the plugin called setModelSearchPath() at all, so that was
+    // the state of every installed copy.
+    //
+    // Both files are copied next to this executable by Tests/CMakeLists.txt, exactly as
+    // Plugin/CMakeLists.txt copies them next to the artefacts, so what is measured is the plugin's
+    // own path resolution.
+    {
+        const juce::File beside = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+        check(beside.getChildFile("melody.phosmdl").existsAsFile() && beside.getChildFile("bass.phosmdl").existsAsFile(),
+              "both weight files are installed beside the binary (" + beside.getFullPathName() + ")");
+        auto p = std::make_unique<PhospheneProcessor>();
+        p->setPlayConfigDetails(0, 2, 48000.0, 256);
+        p->prepareToPlay(48000.0, 256);
+        const PhospheneProcessor::LearnedModels m = p->learnedModels();
+        check(juce::File(m.directory) == beside,
+              "the plugin points the core at its own directory, not at a source tree (found \"" + m.directory + "\")");
+        check(m.melody && m.bass && !m.fromSourceTree,
+              "and both learned models really loaded (melody " + juce::String(m.melody ? "yes" : "no")
+                  + ", bass " + juce::String(m.bass ? "yes" : "no") + ", from the source tree "
+                  + juce::String(m.fromSourceTree ? "yes" : "no") + ")");
+        check(m.melodyNll > 0.0 && m.bassNll > 0.0,
+              "with the held-out score out of the files themselves (" + juce::String(m.melodyNll, 3)
+                  + " / " + juce::String(m.bassNll, 3) + " nats)");
+
+        // And the Set tab says so, which is the whole point: the knob says what is asked for, the
+        // line says what the process has.
+        std::unique_ptr<juce::AudioProcessorEditor> editor(p->createEditor());
+        auto* phos = dynamic_cast<PhospheneEditor*>(editor.get());
+        if (phos != nullptr) phos->setTab(TabSet);
+        juce::Label* melodyLine = editor != nullptr ? findLabel(*editor, "Melody:") : nullptr;
+        juce::Label* bassLine = editor != nullptr ? findLabel(*editor, "Bass:") : nullptr;
+        check(melodyLine != nullptr && bassLine != nullptr, "the Set tab carries a line for each of the two parts");
+        check(melodyLine != nullptr && melodyLine->getText().contains("learned")
+                  && bassLine != nullptr && bassLine->getText().contains("learned"),
+              "and both say learned (\"" + (melodyLine != nullptr ? melodyLine->getText() : juce::String())
+                  + "\" / \"" + (bassLine != nullptr ? bassLine->getText() : juce::String()) + "\")");
+        int marked = 0;
+        for (const char* key : { "compose.melody_model", "compose.bass_model" }) {
+            juce::ComboBox* cb = editor != nullptr ? findCombo(*editor, key) : nullptr;
+            if (cb != nullptr && cb->getNumItems() == 2 && cb->getItemText(1).contains("missing")) ++marked;
+        }
+        check(marked == 0, "and neither chooser marks its learned entry as missing");
+        editor.reset();
+    }
+
+    // The other half: a plugin with no resource directory of its own. Staged as a copy of this
+    // executable in an empty temporary directory, run as a child process -- see probeModels() for
+    // why it cannot be done inside this process.
+    {
+        const juce::File exe = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+        const juce::File dir = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                   .getChildFile("phos-nodata-" + juce::String(juce::Random::getSystemRandom().nextInt(1 << 30)));
+        dir.createDirectory();
+        const juce::File copy = dir.getChildFile(exe.getFileName());
+        juce::String out;
+        if (!exe.copyFileTo(copy)) {
+            check(false, "the no-data case could not be staged: " + exe.getFullPathName() + " -> " + copy.getFullPathName());
+        } else {
+            juce::ChildProcess child;
+            juce::StringArray args;
+            args.add(copy.getFullPathName());
+            args.add("--probe-models");
+            if (!child.start(args, juce::ChildProcess::wantStdOut | juce::ChildProcess::wantStdErr))
+                check(false, "the no-data child would not start");
+            else out = child.readAllProcessOutput();
+        }
+        const bool melody = out.contains("melody=1");
+        const bool bass = out.contains("bass=1");
+        const bool source = out.contains("source=1");
+        const bool marks = out.contains("marks=2");
+        const double rms = out.fromFirstOccurrenceOf("rms=", false, false).getDoubleValue();
+        const juce::String line = out.fromFirstOccurrenceOf("probe ", true, false).upToFirstOccurrenceOf("\n", false, false);
+#if defined(PHOS_SOURCE_DATA_DIR)
+        // A development build. PhospheneCore still carries this checkout's Core/data as the last
+        // step of the lookup (Core/CMakeLists.txt), so the copy in an empty directory finds the
+        // models anyway -- and reports that it found them outside its own installation. That is
+        // asserted rather than tolerated, because it is exactly the state that made a missing data
+        // file invisible on the build machine; PHOS_SHIP removes it and the #else below is then what
+        // runs, in the configuration Deploy/build_release.ps1 ships and tests.
+        check(melody && bass && source && !marks && rms > 0.01,
+              "a development build finds the models in its own source tree and says so (" + line + ")");
+#else
+        check(!melody && !bass, "with no search path and no files beside it the plugin reports the fallback (" + line + ")");
+        check(marks, "and marks both learned chooser entries as missing (" + line + ")");
+        check(rms > 0.01, "and it still makes sound, on the Markov model and the pattern families (" + line + ")");
+#endif
+        dir.deleteRecursively();
+    }
 
     // ---------------------------------------------------------------- rates and block sizes
     for (double sr : { 44100.0, 48000.0, 96000.0 }) {

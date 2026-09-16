@@ -24,10 +24,49 @@ if(NOT ANDROID)
     set_tests_properties(questguard PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
 endif()
 
+# The three files the core opens by bare name. A test executable is not an installed product and has
+# no resource directory of its own, so it is given what a portable installation has: the files beside
+# the binary, and a working directory that is that directory. That works in both configurations --
+# with PHOS_SHIP the core has no compiled-in Core/data to fall back on, and without it the fallback
+# is simply never reached -- which is the point: the suite must measure the same thing in the
+# configuration that ships as in the one worked in.
+set(PHOS_DATA_FILES library.phoswt melody.phosmdl bass.phosmdl)
+
+# Under PHOS_SHIP the core withholds PHOS_SOURCE_DATA_DIR (Core/CMakeLists.txt), but the tests name
+# Core/data at compile time -- vectest opens melody.phosmdl by full path, selftest's modelPath()
+# builds every reference case's path from it. They are development tools and may know where the
+# sources are; the library may not.
+function(phos_test_data_dir target)
+    if(PHOS_SHIP)
+        target_compile_definitions(${target} PRIVATE PHOS_SOURCE_DATA_DIR="${CMAKE_SOURCE_DIR}/Core/data")
+    endif()
+endfunction()
+
+# Copies the shipped data beside a test binary, the way Plugin/CMakeLists.txt copies it beside the
+# artefacts.
+function(phos_copy_data target)
+    foreach(f ${ARGN})
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${CMAKE_SOURCE_DIR}/Core/data/${f}" "$<TARGET_FILE_DIR:${target}>/${f}"
+            VERBATIM)
+    endforeach()
+endfunction()
+
 # The self test: every building block measured, and the engine as a whole.
 add_executable(phos_selftest selftest.cpp)
 target_link_libraries(phos_selftest PRIVATE PhospheneCore)
+phos_test_data_dir(phos_selftest)
+phos_copy_data(phos_selftest ${PHOS_DATA_FILES})
 phos_add_test(selftest phos_selftest)
+# Run it from beside its own binary: that is where the copies above are, and the bare-name loads
+# (sharedMelodyModel, sharedBassModel, loadWaveTableLibrary) then find them through the working
+# directory -- the same step of the lookup a portable installation uses. It also keeps the one
+# relative file the suite writes, phos_selftest_tmp.wav, out of whatever directory ctest was started
+# in.
+if(NOT ANDROID)
+    set_tests_properties(selftest PROPERTIES WORKING_DIRECTORY "$<TARGET_FILE_DIR:phos_selftest>")
+endif()
 
 # The lane paths against the scalar reference, bit for bit, once per vector path. The main variant
 # is built as the core is (AVX2 on x86-64, NEON on the Quest); on x86 the NEON path also runs through
@@ -39,6 +78,7 @@ phos_add_test(selftest phos_selftest)
 # runs that script. On Android nothing here runs on the build machine anyway (phos_add_test).
 add_executable(phos_cuedemo cuedemo.cpp)
 target_link_libraries(phos_cuedemo PRIVATE PhospheneCore)
+phos_test_data_dir(phos_cuedemo)
 if(NOT ANDROID)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_FOUND)
@@ -49,6 +89,7 @@ endif()
 
 add_executable(phos_vectest vectest.cpp)
 target_link_libraries(phos_vectest PRIVATE PhospheneCore)
+phos_test_data_dir(phos_vectest)
 phos_add_test(vectest phos_vectest)
 set(PHOS_TEST_TARGETS phos_selftest phos_vectest phos_cuedemo)
 
@@ -112,14 +153,16 @@ if(TARGET Phosphene)
         # The composer's probe renders put whole engines on the stack.
         target_link_options(phos_hosttest PRIVATE "LINKER:/STACK:16777216")
     endif()
-    # The shipped pack beside the test binary, exactly as Plugin/CMakeLists.txt installs it beside
-    # the artefacts. Without it the host test could only ever see the development build's
-    # PHOS_SOURCE_DATA_DIR, and the plugin's own path resolution -- the thing a user depends on --
-    # would go untested.
-    add_custom_command(TARGET phos_hosttest POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_SOURCE_DIR}/Core/data/library.phoswt" "$<TARGET_FILE_DIR:phos_hosttest>/library.phoswt"
-        VERBATIM)
+    # The shipped data beside the test binary, exactly as Plugin/CMakeLists.txt installs it beside
+    # the artefacts: the pack and, since the models reached the plugin, the two .phosmdl as well.
+    # Without them the host test could only ever see the development build's PHOS_SOURCE_DATA_DIR,
+    # and the plugin's own path resolution -- the thing a user depends on -- would go untested.
+    #
+    # Deliberately NOT phos_test_data_dir(): the host test asks `#if defined(PHOS_SOURCE_DATA_DIR)`
+    # to know which build it is in -- a development one, where a plugin with nothing beside it still
+    # finds this checkout, or a shipping one, where it falls back and has to say so. Handing it the
+    # define would answer that question wrongly. It names no path of its own, so it needs none.
+    phos_copy_data(phos_hosttest ${PHOS_DATA_FILES})
     add_test(NAME hosttest COMMAND phos_hosttest)
 endif()
 

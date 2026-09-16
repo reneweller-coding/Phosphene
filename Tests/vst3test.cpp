@@ -60,16 +60,22 @@ int main(int argc, char** argv)
 
     // ---------------------------------------------------------------- what the bundle carries
     //
-    // The shipped wavetable pack travels inside the bundle, in the directory the VST3 specification
-    // keeps a plugin's data in. The host test proves that the plugin finds a pack beside its own
-    // binary; this proves that the packaging put one there. The two together are what a user gets.
+    // The three files the core opens by bare name travel inside the bundle, in the directory the
+    // VST3 specification keeps a plugin's data in: the wavetable pack and, since Phase 8 reached the
+    // plugin, the two learned models. The host test proves that the plugin finds them beside its own
+    // binary; this proves that the packaging put them there. The two together are what a user gets,
+    // and of the two places the plugin looks this is the one that survives a host copying the bundle
+    // somewhere of its own.
+    //
     // `plugin` is the module inside the bundle (Contents/<arch>/Phosphene.vst3), so Resources is one
     // level up from the architecture directory.
     {
         const juce::File resources = plugin.getParentDirectory().getParentDirectory().getChildFile("Resources");
-        const juce::File pack = resources.getChildFile("library.phoswt");
-        check(pack.existsAsFile(), "the bundle carries the wavetable pack in " + resources.getFullPathName());
-        check(pack.getSize() > 100000, "and it is the whole file (" + juce::String(pack.getSize()) + " bytes)");
+        for (const char* name : { "library.phoswt", "melody.phosmdl", "bass.phosmdl" }) {
+            const juce::File f = resources.getChildFile(name);
+            check(f.existsAsFile(), "the bundle carries " + juce::String(name) + " in " + resources.getFullPathName());
+            check(f.getSize() > 100000, juce::String(name) + " is the whole file (" + juce::String(f.getSize()) + " bytes)");
+        }
     }
 
     // ---------------------------------------------------------------- the module and its factory

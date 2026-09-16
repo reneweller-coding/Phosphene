@@ -27,11 +27,26 @@ add_library(PhospheneCore STATIC
     src/Engine.cpp
 )
 target_include_directories(PhospheneCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-# Phase 8: where the neural melody model lives in the source tree. It is the *last* place
-# NeuralModel::load() looks -- after the host's own resource directory (setModelSearchPath(), which
-# the plugin and the Quest app set) and the working directory -- so that a development build and the
-# self test find Core/data/ without a copy step, while a shipped build never depends on it.
-target_compile_definitions(PhospheneCore PUBLIC PHOS_SOURCE_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+# Where the shipped data lies in the source tree: the wavetable pack and the two learned models of
+# Phase 8. It is the *last* place WaveTableFile.cpp and NeuralModel::load() look -- after the host's
+# own resource directory (setWaveTableSearchPath() / setModelSearchPath(), which the plugin and the
+# Quest app now both set) and the working directory -- so that a development build finds Core/data
+# without a copy step.
+#
+# **Only a development build.** The comment this replaces claimed "a shipped build never depends on
+# it", and that was wrong in the one way that mattered: the define was unconditional, so every
+# shipped binary carried this machine's absolute path *and used it*. On the build machine that made a
+# missing data file unobservable -- the release round of 16.09.2026 deleted a staged bass.phosmdl and
+# flipped a byte of a staged melody.phosmdl, and the end-to-end render check passed both times,
+# because the binary quietly read Core/data instead. PHOS_SHIP (the root CMakeLists.txt) turns it
+# off, Deploy/build_release.ps1 sets PHOS_SHIP, and Tools/release/check_package.ps1 check F2 fails
+# the package when the string is in a staged binary anyway.
+#
+# The tests name Core/data at compile time and must keep doing so in both configurations, so they
+# get the same define on their own targets from Tests/CMakeLists.txt.
+if(NOT PHOS_SHIP)
+    target_compile_definitions(PhospheneCore PUBLIC PHOS_SOURCE_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+endif()
 target_compile_features(PhospheneCore PUBLIC cxx_std_20)
 set_target_properties(PhospheneCore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 find_package(Threads)

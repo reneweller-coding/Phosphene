@@ -83,20 +83,33 @@ set=compose.pad_amount=1;compose.acid_amount=1     any knobs, repeatable
 The cue bridge sends `/phos/bar f f` (bar, BPM) once per bar and `/phos/track f f f`
 (track, key, scale) at each track change — from the score, never from an analysis of the audio.
 
-## The wavetable library
+## The shipped data: the wavetable library and the two learned models
 
-`Core/data/library.phoswt` (750 KB, twelve tables) rides in the APK as an asset — `build_apk.ps1`
-stages it and `aapt2 link -A` packs it, which adds 648 KB to the APK (3.71 MB → 4.34 MB; the pack
-deflates to 662 KB). The core opens its resources by name and an asset inside the APK has none, so
-the app unpacks it once into its private directory on the first start and points
-`setWaveTableSearchPath()` there (`prepareWaveTables` in `src/main.cpp`); afterwards the copy is
-recognised by its length and nothing is written. A `library.phoswt` pushed into the external data
-folder beside `phos.cfg` wins over the one in the APK, which is how another selection is tried on
-the device without building an APK for it:
+Three files ride in the APK as assets — `Core/data/library.phoswt` (750 KB, twelve tables) and the
+two weight files of Phase 8, `melody.phosmdl` and `bass.phosmdl` (1.5 MB each). `build_apk.ps1`
+stages them and `aapt2 link -A` packs them. The pack deflates to 662 KB; the two models are stored
+uncompressed, because int8 weights are noise as far as deflate is concerned. Measured on this
+machine: the APK goes from **4.59 MB to 7.63 MB**, 3.04 MB for the whole of Phase 8 on the headset.
+
+The core opens its resources by name and an asset inside the APK has none, so the app unpacks each
+one into its private directory on the first start and points `setWaveTableSearchPath()` and
+`setModelSearchPath()` there (`prepareAsset` and `prepareModels` in `src/main.cpp`); afterwards a
+copy is recognised by its length and nothing is written. That costs about 3.8 MB of the headset's
+internal storage, once.
+
+A file of the same name pushed into the external data folder beside `phos.cfg` wins over the one in
+the APK, which is how another table selection or another trained model is tried on the device
+without building an APK for it:
 
 ```
 adb push library.phoswt /sdcard/Android/data/com.reneweller.phosphene.quest/files/library.phoswt
+adb push melody.phosmdl /sdcard/Android/data/com.reneweller.phosphene.quest/files/melody.phosmdl
 ```
+
+Without the two models the composer falls back to the Markov model and the pattern families — the
+whole of Phase 8 — and the only word about it is a line in `logcat`. That is why `build_apk.ps1`
+refuses to finish when an asset is missing or is the wrong length, and why the package check has a
+section of its own for it (`Tools/release/check_package.ps1`, check H).
 
 At the `quest` quality level the tables are built with 32 of their 64 frames
 (`Core/include/phos/Quality.h`), which takes the expanded mip levels from 23.3 MB to 12.1 MB and the
