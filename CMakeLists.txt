@@ -14,7 +14,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(PHOS_BUILD_TOOLS "Build phos_render and the tests" ON)
-option(PHOS_BUILD_PLUGIN "Build the JUCE plugin (VST3 + Standalone)" ON)
+# The plugin is a desktop artefact and JUCE builds a host-side helper (juceaide) to make it, which
+# a cross-compiler cannot produce: configuring for Android with the plugin on fails inside JUCE with
+# "No CMAKE_C_COMPILER could be found", a message that says nothing about the real cause. So the
+# default follows the platform. Quest/build_apk.ps1 passed -DPHOS_BUILD_PLUGIN=OFF and worked; a
+# hand-written Android configure did not, and the error sent the reader into JUCE instead of here.
+if(ANDROID)
+    option(PHOS_BUILD_PLUGIN "Build the JUCE plugin (VST3 + Standalone)" OFF)
+else()
+    option(PHOS_BUILD_PLUGIN "Build the JUCE plugin (VST3 + Standalone)" ON)
+endif()
 option(PHOS_AVX2 "Build the x86-64 core with AVX2 + FMA" ON)
 option(PHOS_STATIC_RUNTIME "Link the MSVC runtime statically (for distribution)" OFF)
 set(PHOS_JUCE_TAG "9.0.1" CACHE STRING "JUCE git tag to fetch when ThirdParty/JUCE is absent")
