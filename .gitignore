@@ -9,3 +9,11 @@ __pycache__/
 .vs/
 *.user
 Tools/corpus/cache/
+# Phase 8 training: the dataset cache is derived from the bought MIDI packs and stays local, and so
+# do the checkpoints, from which the training data could be read back. Only the exported .phosmdl,
+# its .ref.txt and the statistics are committed.
+Tools/train/runs/
+Tools/train/cache/
+*.pt
+*.ckpt
+*.npz
