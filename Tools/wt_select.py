@@ -500,8 +500,10 @@ def select(measures, allow_measured=True):
                 continue
         pool_all.append({"id": key, "m": m, "v": feature_vector(m)})
 
-    print("eligible candidates: %d of %d measured   (tables whose sidecar names a sample source: "
-          "%d -- included, the material is the user's own)" % (len(pool_all), len(measures), excluded_measured))
+    print("eligible candidates: %d of %d measured   (tables whose sidecar names a sample source: %d, %s --"
+          " the material is the user's own)"
+          % (len(pool_all), len(measures), excluded_measured,
+             "left out by --no-measured" if not allow_measured else "included"))
 
     chosen, used = {}, set()
     for lane in ("pad", "lead", "arp"):
