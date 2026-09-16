@@ -2353,6 +2353,22 @@ vier neue `--extra`-Quellen), `Tools/train/confidence.py` (`.phosmdl` als Seite 
 `Tools/train/rolecheck.py` (nur Docstring: abgelöst), `Core/data/melody.phosmdl` und `.ref.txt`,
 `Tools/train/model/phos_pitch_tf.phosmdl` und `.ref.txt`.
 
+**16.09.2026, offen: ein einmaliger Selbsttest-Fehler ohne Spur.** Beim Merge der Cues-Runde
+scheiterte `phos_selftest` unter `ctest` **einmal**, nach 146 s statt der üblichen 300 bis 440 --
+also ein Abbruch, kein Zeitüberschreiten. Danach: 12 Läufe von `PHOS_ONLY=testCues`, 4 volle
+Läufe und ein `ctest -R selftest` alle grün, 257 von 257. **Nicht reproduziert in 17 Versuchen.**
+
+Welche Prüfung fehlschlug, ist **unbekannt**, und das ist der eigentliche Mangel: `ctest` schreibt
+`build/Testing/Temporary/LastTest.log` und überschreibt es beim nächsten Lauf. Der erste Griff
+nach einem sporadischen Fehler ist, die Suite noch einmal laufen zu lassen -- und genau der löscht
+den Beweis. `Deploy/build_release.ps1` legt jetzt bei einem Fehlschlag eine Kopie mit Zeitstempel ab.
+
+Verdächtig bleibt die Zeitabhängigkeit der neuen Cue-Prüfungen (Socket, hochauflösender Timer,
+Wartezeit gegen `now + (block + latency + offset)/sr`) unter fünf gleichzeitig arbeitenden Agenten;
+der Cues-Agent hatte eine feste 60-ms-Wartezeit in einer Prüfung bereits durch das Zählen der
+gesendeten Datagramme ersetzt. Bewiesen ist das nicht. Wer den Fehler wiedersieht, hat jetzt das
+Protokoll.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
