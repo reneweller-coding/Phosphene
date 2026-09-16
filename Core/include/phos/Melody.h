@@ -32,26 +32,26 @@
  * **Arp.** One bar per chord, on the chord tones over one or two octaves: up, down, up-down, or drawn
  * from the corpus arp model with every note constrained to the chord.
  *
- * **Layers.** Per 16-bar block the track decides which parts play: acid from the second block, arp
- * from the third, the lead from the fourth in two of every three blocks, none in the first block. When
- * lead and arp play together the arp moves by octaves until its range and the lead's overlap by at most
- * two semitones -- masking would otherwise blur both (the plan's masking rule) -- or it sits the block
- * out.
+ * **Layers.** Which parts play in which bar is no longer decided here. Since Phase 5 the
+ * instrumentation matrix of the form grammar (Form.h) answers that per bar from the section type and
+ * the energy arc, including the masking rule between lead and arp; this file only builds the material
+ * and plays the bar it is handed.
  *
  * **Pads.** Four-note voicings of the chords between G3 and G5, each chosen from every combination of
  * chord tones that contains all three pitch classes by the smallest total movement of the voices from
  * the voicing before -- the voice-leading rule of the plan (5.7), exact rather than greedy. Pads hold
- * each chord, carry the blocks without lead or acid, and in some blocks play through the trance gate.
+ * each chord and carry the sections without lead or acid.
  *
- * **Effects.** Where a block brings in a part the block before did not have, the track may place a
- * riser over the eight bars before it (or a reverse swell over the last two), a formant shot on the
- * last beat before it -- the pre-drop "Abriss" -- and an impact on its downbeat; where parts leave, a
- * downlifter; over the last eight bars of the track, a sweep. The form grammar of Phase 5 will move
- * these to its own section boundaries; the effects and their timing stay.
+ * **Colour (dissonance).** Farbood's tension model counts dissonance among the four quantities an
+ * energy arc should move. The lead's constraint sets therefore carry weights rather than plain flags:
+ * the flat second and the upper note of an augmented second -- the two intervals Easwaran names as the
+ * genre's colour -- get more weight the higher the track's place on the arc and the more the style
+ * profile asks for.
  *
  * **Depth rule.** Acid lines stay at or above D3 (147 Hz), leads above B3, arps and pads above G3.
  */
 #pragma once
+#include "phos/Form.h"
 #include "phos/Params.h"
 #include "phos/Score.h"
 #include <cstdint>
@@ -65,7 +65,6 @@ enum class CorpusRoleId : int;
 /** @brief The melodic parts. */
 enum class MelodyPart : int { Acid = 0, Lead, Arp, Pad, Count };
 constexpr int kMelodyParts = static_cast<int>(MelodyPart::Count);   ///< number of melodic parts
-constexpr int kMelodyMaxBlocks = 64;                                ///< 16-bar blocks a track can have
 constexpr int kAcidLowest = 50;                                     ///< D3: lowest acid note
 constexpr int kLeadLowest = 59;                                     ///< B3: lowest lead note
 constexpr int kArpLowest = 55;                                      ///< G3: lowest arp note
@@ -81,13 +80,6 @@ struct MelodyNote {
     uint8_t flags = 0;       ///< NoteFlag bits
 };
 
-/** @brief An effect placed in a track: start and length in beats from the track's first bar. */
-struct SfxEvent {
-    double beat = 0.0;     ///< start, beats after the track starts
-    float  length = 4.0f;  ///< beats
-    int    type = 0;       ///< SfxType
-};
-
 /** @brief Everything melodic that is decided once per track. */
 struct MelodyPlan {
     bool present[kMelodyParts] = {};         ///< which parts the track uses at all
@@ -100,17 +92,15 @@ struct MelodyPlan {
     std::vector<MelodyNote> arp[4];           ///< one bar per chord
     int  arpStyle = 0;                        ///< 0 corpus, 1 up, 2 down, 3 up-down
     bool arpOctaveJump = false;               ///< every other two bars an octave up
-    uint8_t blockParts[kMelodyMaxBlocks] = {};///< bit per MelodyPart for each 16-bar block
-    int8_t  arpShift[kMelodyMaxBlocks] = {};  ///< octave shift of the arp per block (masking rule)
-    float acidArc[kMelodyMaxBlocks] = {};     ///< normalised acid cutoff offset reached at the end of each block
+    int  leadLo = 127, leadHi = 0;            ///< the lead's pitch range (for the masking rule)
+    int  arpLo = 127, arpHi = 0;              ///< the arp's pitch range
     int  acidSquelch = -1;                    ///< override of acid.squelch, -1 = the knob
     int  leadOsc = -1;                        ///< override of lead.osc, -1 = the knob
     int  delay[kMelodyParts][2] = { { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 } };   ///< overrides of the delay times
     std::vector<int> padVoicing[4];           ///< MIDI notes of each chord's pad voicing
-    bool padGate[kMelodyMaxBlocks] = {};      ///< trance gate on the pad in this block
     int  padGatePattern = 0;                  ///< the track's gate pattern
-    std::vector<SfxEvent> sfx;                ///< effects, sorted by start
     float recipe[kMelodyParts] = {};          ///< one sound direction per part, -1..1 (brightness)
+    float colour = 0.0f;                      ///< how much the lead leaned on the flat second (0..1, for tests)
 };
 
 /** @brief The shared pitch model of a corpus role (built on first use). */
@@ -125,12 +115,14 @@ inline int chordIndexAt(const MelodyPlan& m, int barInTrack) { return (barInTrac
 /**
  * @brief Makes the melodic plan of a track.
  * @param p          knob values (compose.* amounts and variation)
+ * @param style      the style profile (part amounts, squelch chance, chord moves, colour)
  * @param seed       the track's melody seed
  * @param key,scale  the track's key and mode
- * @param bars       the track's length
  * @param firstTrack the first track plays the knobs' sounds (no overrides)
+ * @param colour     0..1: how much weight the flat second and the augmented second get in the lead
  */
-MelodyPlan makeMelodyPlan(const ParamStore& p, uint64_t seed, int key, int scale, int bars, bool firstTrack);
+MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64_t seed, int key, int scale,
+                          bool firstTrack, float colour);
 
 /**
  * @brief Composes one bar of the melodic parts.
@@ -139,11 +131,14 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, uint64_t seed, int key, int scale
  * @param bar        absolute bar
  * @param barInTrack bar within the track
  * @param scale      the track's scale (for the lead's and arp's chords)
- * @param allParts   play every present part regardless of the block schedule (the level probe)
+ * @param bp         what the instrumentation matrix says plays in this bar
  * @param out        receives the notes
  */
-void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int barInTrack, int scale, bool allParts,
-                      std::vector<NoteEvent>& out);
+void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int barInTrack, int scale,
+                      const BarPlan& bp, std::vector<NoteEvent>& out);
+
+/** @brief A bar plan that plays every part the track has (the level-match probe). */
+BarPlan allPartsBar(const MelodyPlan& m);
 
 /**
  * @brief The pad voicing of a chord: four chord tones in [kPadLowest, kPadHighest] containing all three
@@ -159,12 +154,12 @@ int voicingMovement(const std::vector<int>& a, const std::vector<int>& b);
 
 /**
  * @brief Composes the effects that start in one bar.
- * @param m          the track's plan
+ * @param f          the track's form (its effects sit at the section boundaries)
  * @param trackBeat  beat at which the track starts
  * @param barInTrack bar within the track
  * @param out        receives Part::Sfx notes (pitch kSfxBaseNote + type)
  */
-void composeSfxBar(const MelodyPlan& m, double trackBeat, int barInTrack, std::vector<NoteEvent>& out);
+void composeSfxBar(const FormPlan& f, double trackBeat, int barInTrack, std::vector<NoteEvent>& out);
 
 /** @brief Semitones the bass moves in @p barInTrack when it follows the chords (0 on the tonic). */
 int bassChordShift(const MelodyPlan& m, int scale, int barInTrack, int bassRoot);

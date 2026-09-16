@@ -7,16 +7,17 @@ there are no samples.
 
 The design and the literature behind each building block are in [docs/PLAN.md](docs/PLAN.md) (German).
 
-**Status:** Phases 0 to 4 are done: framework, kick and rolling bass, a twelve-lane percussion kit,
+**Status:** Phases 0 to 5 are done: framework, kick and rolling bass, a twelve-lane percussion kit,
 the melodic layer (an acid voice on a diode ladder with accent, slide and squelch; a polyphonic
 supersaw/VA/FM/wavetable engine for lead, arp and pads; chords, riffs, phrases and arps drawn from
-statistics of a local MIDI corpus under musical constraints), and the space and the master: wavetable
-pads with voice-led chords and a trance gate, synthesised effects (risers, impacts, formant shots,
-reverse swells), kick sidechain on every channel, a room and a hall, and a master of bus compressor,
-mono bass, soft clipper and true-peak limiter that meets a loudness target. The offline renderer
-composes sets of any length; each track has its own key, tempo, patterns, groove, chords, melodies and
-sound, levels are matched between tracks and parts, and kick and bass are phase-locked at the first
-bass note. The headset build is there (below); no song form grammar and no plugin yet.
+statistics of a local MIDI corpus under musical constraints), the space and the master (wavetable pads
+with voice-led chords and a trance gate, synthesised effects, kick sidechain on every channel, a room
+and a hall, bus compressor, mono bass, soft clipper and true-peak limiter on a loudness target), and
+the composer: every track is built from a weighted grammar over intro, groove, buildup, pre-drop break,
+drop, breakdown, cut and outro, an energy arc over the whole set moves loudness, density, register and
+dissonance, five style profiles weight everything from tempo to chord moves, transitions between tracks
+are written rather than mixed, and any unit of a set can be locked or rerolled and saved as a
+`.phosset`. A sixty-minute set comes out of one seed as audio and as a Standard MIDI File. The headset build is there (below); no plugin yet.
 
 ## Build
 
@@ -38,13 +39,17 @@ build/Tools/render/Release/phos_render.exe --bars 32 --set "compose.bass_pattern
 ```
 
 ```bash
-build/Tools/render/Release/phos_render.exe --minutes 30 --seed 2026 --tracks --report --out out/night.wav --midi out/night.mid
+build/Tools/render/Release/phos_render.exe --minutes 60 --seed 2026 --tracks --sections --report \
+    --set "compose.style=Goa compose.style_tempo=On compose.arc=Peak-Time compose.set_minutes=60" \
+    --out out/night.wav --midi out/night.mid --save-set out/night.phosset
 ```
 
-`--tracks` prints each track's key, tempo, patterns, sound recipe, chords, melodic parts per 16-bar
-block, the effects and level corrections. `--solo acid` (or kick, bass, perc, lead, arp, pad, sfx) mutes
-everything else. `PHOS_ONLY=testDynamics` runs only the named self-test sections. `--list`
-prints every parameter. `python Tools/inspect_wav.py out/loop.wav --bpm 145` draws the
+`--tracks` prints each track's key, tempo, patterns, sound recipe, chords, form, effects, level
+corrections and, after the render, the loudness it really played; `--sections` lists every section of
+the set. `--set-file night.phosset` plays a saved set again, `--lock track:3` and `--reroll track:5`
+curate it (the units are set, track, section and lane). `--solo acid` (or kick, bass, perc, lead, arp,
+pad, sfx) mutes everything else. `PHOS_ONLY=testDynamics` runs only the named self-test sections.
+`--list` prints every parameter. `python Tools/inspect_wav.py out/loop.wav --bpm 145` draws the
 render (waveform, one beat, spectrogram) and prints where in the beat the sub band is occupied.
 
 ## Meta Quest
@@ -78,9 +83,13 @@ analytic responses (the diode ladder against Zavalishin's transfer function and 
 at k = 17), the supersaw against Szabo's JP-8000 tables, FM sidebands against Bessel functions, the
 constrained Markov sampler against brute-force enumeration, pad voicings against exhaustive search, the
 compressor against Giannoulis et al., the limiter's output against an exact band-limited true peak, the
-hall's decay time, an eight-minute track against the loudness target, the tempo integral, the half-band stopband, oscillator aliasing, the kick's pitch
-sweep, sample-accurate event timing, bit-identical output across block sizes, the MIDI round trip and
-BS.1770 loudness. `phos_vectest` runs in three builds (AVX2, NEON through an x86 shim, scalar) and
+hall's decay time, an eight-minute track against the loudness target, the tempo integral, the half-band
+stopband, oscillator aliasing, the kick's pitch sweep, sample-accurate event timing, bit-identical
+output across block sizes, the MIDI round trip and BS.1770 loudness. The form is measured on a rendered
+track against the findings of Solberg and Dibben (2019): the breakdown at least 6 dB under the core
+before it, the buildup rising over every four-bar window, the kick-and-bass band 20 dB down in the
+breakdown, beat 4 of the pre-drop break 30 dB under a core beat, and the drop at least as loud and as
+bright as what stood before the break. `phos_vectest` runs in three builds (AVX2, NEON through an x86 shim, scalar) and
 requires every lane of the vectorised DSP to equal the scalar computation bit for bit.
 
 ## Layout
@@ -91,7 +100,7 @@ requires every lane of the vectorised DSP to equal the scalar computation bit fo
 | `Quest/` | the Meta Quest app: OpenXR, GLES 3, Oboe, no Gradle |
 | `Tools/render/` | `phos_render`: offline render, MIDI export, benchmark |
 | `Tools/inspect_wav.py` | pictures and measurements of a render |
-| `Tools/ref_*.py` | measurements of reference recordings: bass slots, percussion grid, band balance, sweeps |
+| `Tools/ref_*.py` | measurements of reference recordings: bass slots, percussion grid, band balance, sweeps, tempo per style and the shape of a break |
 | `Tools/corpus/` | `build_corpus.py`: melodic statistics from a local MIDI corpus (the MIDI files stay local), memorisation check |
 | `Tests/` | self test, vector-path tests, NEON shim |
 | `docs/` | plan, Doxygen configuration |

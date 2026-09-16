@@ -16,10 +16,12 @@ add_library(PhospheneCore STATIC
     src/Dynamics.cpp
     src/Sfx.cpp
     src/Rhythm.cpp
+    src/Form.cpp
     src/Melody.cpp
     src/Corpus.cpp
     src/CorpusTables.cpp
     src/Composer.cpp
+    src/SetFile.cpp
     src/Engine.cpp
 )
 target_include_directories(PhospheneCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

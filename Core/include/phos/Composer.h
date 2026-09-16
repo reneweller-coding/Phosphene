@@ -53,13 +53,29 @@
  * wins. Random choices cluster; best-candidate choices spread out like blue noise, so two consecutive
  * tracks never land on nearly the same sound, and the normal draw keeps the recipes from piling up
  * at the corners of the space.
+ *
+ * **The set walk and the track's own decisions (Phase 5).** What belongs to the journey through the
+ * night -- the length, key, mode and tempo of every track and its two sound recipes -- is a walk
+ * computed from the set seed alone, track after track. What belongs to a single track -- its form, its
+ * percussion, its melodic material, its bass patterns -- hangs off that track's own seed. The split is
+ * what makes rerolling work (PLAN 6.8): rerolling one track leaves every other track bit-identical,
+ * because no later track reads anything the rerolled one decided, and a locked unit keeps the seed it
+ * had before any reroll.
+ *
+ * **Form.** Since Phase 5 a track is a sequence of sections drawn from a weighted grammar (Form.h), and
+ * the instrumentation matrix of that form decides bar by bar what plays. The composer turns the
+ * sections into control events: the energy of a section moves the track gain by at most +-2 dB, the
+ * acid and lead cutoffs, the pad's table position and the hall sends, each as a ramp over the section
+ * (Farbood's four quantities; timbre as narrative after Farrell).
  */
 #pragma once
 #include "phos/Clock.h"
+#include "phos/Form.h"
 #include "phos/Melody.h"
 #include "phos/Rhythm.h"
 #include "phos/Score.h"
 #include <cstdint>
+#include <map>
 #include <vector>
 
 namespace phos {
@@ -67,16 +83,36 @@ namespace phos {
 class Engine;
 class ParamStore;
 
+/** @brief The units that can be locked and rerolled (PLAN 6.8). */
+enum class LockUnit : int { Set = 0, Track, Section, PatternLane, Count };
+constexpr int kNumLockUnits = static_cast<int>(LockUnit::Count);   ///< number of lockable unit kinds
+extern const char* const kLockUnitNames[kNumLockUnits];            ///< "set", "track", "section", "lane"
+
+/** @brief Index of a section unit: the section @p si of track @p track. */
+constexpr int sectionUnitIndex(int track, int si) { return track * kMaxSections + si; }
+/** @brief Index of a pattern-lane unit: percussion lane @p lane of track @p track. */
+constexpr int laneUnitIndex(int track, int lane) { return track * kPercLanes + lane; }
+
 constexpr int kNumKickMacros = 5;   ///< length, punch, body, grit, click
 constexpr int kNumBassMacros = 5;   ///< brightness, pluck, squelch, grit, weight
 extern const char* const kKickMacroNames[kNumKickMacros];   ///< display names
 extern const char* const kBassMacroNames[kNumBassMacros];   ///< display names
 
+/** @brief What the set walk decides for a track: the journey through the night. */
+struct TrackWalk {
+    int    bars = 256;              ///< length in bars (a multiple of 32)
+    int    key = 6;                 ///< pitch class of the key
+    int    scale = 1;               ///< index into kScaleNames
+    double bpm = 145.0;             ///< tempo the track settles on
+    float  kickMacro[5] = {};       ///< kick recipe, each -1..1
+    float  bassMacro[5] = {};       ///< bass recipe, each -1..1
+};
+
 /** @brief Everything that is decided once per track. */
 struct TrackPlan {
     int    index = 0;               ///< track number in the set
     int    firstBar = 0;            ///< bar the track starts on
-    int    bars = 256;              ///< length in bars (a multiple of 16)
+    int    bars = 256;              ///< length in bars (a multiple of 32)
     int    key = 6;                 ///< pitch class of the key
     int    scale = 1;               ///< index into kScaleNames
     double bpm = 145.0;             ///< tempo the track settles on
@@ -92,7 +128,11 @@ struct TrackPlan {
     uint64_t percSeed = 0;          ///< seed of the track's percussion decisions
     PercPlan perc;                  ///< the track's percussion plan (Rhythm.h)
     uint64_t melodySeed = 0;        ///< seed of the track's melodic decisions
-    MelodyPlan melody;              ///< chords, acid, lead, arp and their schedule (Melody.h)
+    MelodyPlan melody;              ///< chords, acid, lead, arp and pad material (Melody.h)
+    uint64_t formSeed = 0;          ///< seed of the track's form
+    FormPlan form;                  ///< sections, their energies and the effects on their boundaries
+    uint64_t sectionSeed[kMaxSections] = {};   ///< seed of each section (lockable, rerollable)
+    float  arcIn = 0.7f, arcOut = 0.7f;        ///< the set's energy arc where the track starts and ends
     double partLoudness[kMelodyParts] = {};   ///< probe loudness of each melodic part alone, LUFS
     float  partGainDb[kMelodyParts] = {};     ///< level correction of each melodic part against the first track's
     double mixLoudness = 0.0;       ///< probe loudness of the whole mix after the master, before the loudness offset
@@ -105,7 +145,7 @@ public:
     /** @brief @p seed identifies the set. */
     explicit Composer(uint64_t seed = 1) : seed_(seed) {}
     /** @brief Changes the set seed (forgets cached plans). */
-    void setSeed(uint64_t seed) { seed_ = seed; plans_.clear(); }
+    void setSeed(uint64_t seed) { seed_ = seed; plans_.clear(); walk_.clear(); }
     /** @brief The set seed. */
     uint64_t seed() const { return seed_; }
 
@@ -115,6 +155,30 @@ public:
     int trackOfBar(const ParamStore& params, int bar) const;
     /** @brief The tempo map of the first @p bars bars: held per track, ramped over the last 16 bars into the next. */
     TempoMap tempoMap(const ParamStore& params, int bars) const;
+    /** @brief Every section mark of the first @p bars bars, for the MIDI export and the arrange view. */
+    std::vector<SectionMark> sections(const ParamStore& params, int bars) const;
+
+    /** @name Locks and rerolls (PLAN 6.8)
+     *  A locked unit keeps the seed it had before any reroll; rerolling a unit advances its own
+     *  variation counter, which is mixed into its seed and into nothing else.
+     *  @{ */
+    /** @brief Locks or unlocks a unit. */
+    void setLock(LockUnit unit, int index, bool locked);
+    /** @brief Whether a unit is locked. */
+    bool isLocked(LockUnit unit, int index) const;
+    /** @brief Advances the variation counter of an unlocked unit (a locked one does not move). */
+    void reroll(LockUnit unit, int index);
+    /** @brief The variation counter of a unit (0 = never rerolled). */
+    uint32_t variation(LockUnit unit, int index) const;
+    /** @brief Sets a variation counter directly (used when a .phosset is read). */
+    void setVariation(LockUnit unit, int index, uint32_t value);
+    /** @brief Forgets every lock and every reroll. */
+    void clearLocks();
+    /** @brief The locks, for serialisation: unit -> indices. */
+    const std::map<int, uint8_t>& locks(LockUnit unit) const { return locked_[static_cast<int>(unit)]; }
+    /** @brief The variation counters, for serialisation. */
+    const std::map<int, uint32_t>& variations(LockUnit unit) const { return variation_[static_cast<int>(unit)]; }
+    /** @} */
 
     /**
      * @brief Composes whole bars.
@@ -140,15 +204,29 @@ public:
 private:
     void validate(const ParamStore& params) const;
     TrackPlan makeTrack(const ParamStore& params, int index) const;
+    const TrackWalk& walkAt(const ParamStore& params, int index) const;
     void trackStartControls(const ParamStore& params, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out) const;
     void arcControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, bool ramp, std::vector<ControlEvent>& out) const;
     double probeLoudness(const ParamStore& params, const TrackPlan& plan, int part = -1, float masterGainDb = 0.0f) const;
     void matchMaster(const ParamStore& params, TrackPlan& plan) const;
-    void melodyControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, std::vector<ControlEvent>& out) const;
+    void sectionControls(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar, double beat,
+                         std::vector<ControlEvent>& out) const;
+    void transitionBar(const ParamStore& params, int track, int inTrack, int bar, std::vector<NoteEvent>& out) const;
+    /** @brief The set seed after the set unit's rerolls. */
+    uint64_t setSeed() const;
+    /** @brief The seed of a track: frozen at the original when the track is locked. */
+    uint64_t trackSeed(int index) const;
+    /** @brief The seed of one section of a track. */
+    uint64_t sectionSeedOf(int track, int si) const;
+    /** @brief The seed of one percussion lane of a track. */
+    uint64_t laneSeedOf(int track, int lane) const;
 
     uint64_t seed_;
     mutable std::vector<TrackPlan> plans_;
+    mutable std::vector<TrackWalk> walk_;
     mutable std::vector<float> planKnobs_;
+    std::map<int, uint8_t> locked_[kNumLockUnits];     ///< unit index -> locked
+    std::map<int, uint32_t> variation_[kNumLockUnits]; ///< unit index -> reroll counter
 };
 
 /**

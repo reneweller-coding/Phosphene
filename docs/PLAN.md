@@ -245,9 +245,118 @@ Referenz-Hats. (4) Phase 8: Transformer mit 512 Tokens gegen Selective State Spa
 **nach Held-out-NLL beider Modelle auf demselben Token-Raum**, nicht nach Reputation; der SSM-Inferenzzustand
 ohne KV-Cache passt zur Quest. Kein Bau vor Phase 7.
 
-Nächster Schritt: Phase 5 (Komponist: Form-Grammatik nach Grosz et al. mit PDB und Cut, Energiebogen,
-Sektionsregeln nach Solberg und Dibben, Tonartenreise, Übergänge, Sperren und Neuwürfeln, Stilprofile,
-`.phosset`); parallel Phase 6 (JUCE-Plugin) und Phase 7 (Quest-Build) in eigenen Arbeitsbäumen.
+**16.09.2026, Phase 5 fertig: Form-Grammatik, Energiebogen, Sektionsregeln, Stilprofile, Sperren,
+`.phosset`.** Der Komponist baut einen Track nicht mehr aus 16-Takt-Blöcken, sondern aus Sektionen.
+
+*Erst gemessen, dann gebaut.* `Tools/ref_style.py` liest den Künstler-Tag der 40 Referenzaufnahmen
+(Auswahl über den Album-Tag) und schätzt das Tempo aus der Autokorrelation der Einsatzhüllkurve im
+Kick-Band, wie `ref_slot_profile.py` es tut. Ergebnis: **Goa 142,8 BPM Median** über 13 Tracks
+(Quartile 137,9 / 145,0; Spanne 128,0 bis 151,9), **Full-On 144,6** über 18 (Quartile 140,4 / 145,7;
+14 der 18 sind 1200 Micrograms, der Median ist also von einem Projekt geprägt), Länge im Median 8,6
+bzw. 7,7 Minuten. Neun weitere Künstler (Afgin, Cwithe, Electric Universe, Kingpink, S.U.N. Project,
+Spectral) sind bewusst **nicht** zugeordnet; für Progressive, Dark/Forest und Hi-Tech gibt es weiter
+keine Referenzen, deren Tempofenster stehen aus der Literatur (2.1).
+
+Dieselbe Messung mit `--form` bestimmt die Gestalt einer Break-Routine in den Referenzen: kurzzeitige
+Lautheit (3 s, 1 s Schritt) und Band 40 bis 140 Hz über den ganzen Track, tiefste 8 s in den mittleren
+80 % als Breakdown genommen, alles gegen die 20 s Core davor. **Median: Breakdown −7,4 dB, Bassband
+−20,6 dB, nach dem Drop +0,1 dB; 33 von 40 Tracks sind nach dem Drop innerhalb 1 dB des Core vor dem
+Break oder lauter.** Das bestätigt Solberg und Dibben an diesem Material und liefert die Zahlen, gegen
+die die Sektionsregeln unten prüfen. (Ein Track ist in der Mitte stumm und liest −184 dB; er verzerrt
+den Median nicht.)
+
+| Baustein | Umsetzung | Messung |
+|---|---|---|
+| Form-Grammatik (`Form.h`, `Form.cpp`) | gewichtete kontextfreie Grammatik mit den drei Körpern aus 6.2; Längen als **Constraint-Problem** gelöst statt per Reparaturschleife: Intro, Outro, Builds und Breaks aus ihren erlaubten Mengen aufgezählt, die Cores tragen den Rest als Summe aus {16, 32, 64} (aus 16a+32b+64c = R und a+b+c = n folgt b+3c = R/16 − n), gewählt wird die Kombination, die dem gewürfelten Wunsch am nächsten liegt | 1400 Formen (5 Stile × 7 Ziellängen × 40 Seeds): 0 verletzen eine Regel, 0 verfehlen die Ziellänge, Break-Anteil 0,17 bis 0,29, alle drei Körper kommen vor |
+| Kategorien nach Grosz et al. | `SectionType` um **Pdb** und **Cut** erweitert (angehängt, damit die MIDI-Marker der alten Typen stehen bleiben); PDB = letzter Takt eines Builds mit vier Varianten (ganzer Takt, halber Takt, nur Beat 4, Kick allein auf 4), Cut = 1 oder 2 Beats am Kopf eines Breakdowns, in denen außer der Hallfahne nichts steht | 200 Tracks: alle haben ≥ 2 Cores (Zwei-Drop-Standard), Intro und Outro immer 8 oder 16 Takte, alle vier PDB-Varianten gezogen (103/82/74/73 von 332 Builds), 234 Cuts |
+| Energiebogen | E(t) über das Set aus fünf Dramaturgien (Warm-up, Peak-Time, Morning, Closing, Flat) als Raised-Cosine-Segmente; Sektionsenergie = Typenergie × (0,55 + 0,45·E), Builds laufen von der Energie davor zur Energie des Drops | größter Sprung über ein Tausendstel des Sets 0,0013, Wertebereich 0,20 bis 1,00, Ordnung Drop > Groove > Breakdown an jedem Punkt jedes Bogens; über ein 60-Minuten-Set: Peak-Time 0,64 → 0,68, Closing 0,61 → 0,52 |
+| Farbood-Größen | Lautheit als Rampe auf `mix.track_gain` (höchstens ±2 dB, der Pegelangleich bleibt), Dichte über Percussion-Schichten und anwesende Stimmen, Register über Arp- und Lead-Oktave (immer innerhalb der Tiefenregel), Dissonanz als **Gewicht** auf ♭2 und übermäßige Sekunde in den Constraint-Mengen des Leads | Farbanteil im Lead 7,4 % bei Farbe 0, 46,0 % bei Farbe 1 |
+| Constraint-Sampler mit Gewichten | `allowed[i][s]` ist nicht mehr Flagge, sondern **relatives Gewicht** (0 verbietet); ein Faktor, der an einer Position für alle Symbole gleich ist, kürzt sich in beiden Normierungen, deshalb ist das alte Verhalten (überall 1) bitgleich | Sampler-Prüfungen gegen die vollständige Aufzählung unverändert (Totalvariation 0,006 / 0,005) |
+| Instrumentierungs-Matrix | ersetzt `blockParts`: Intro schichtet Percussion von null auf und lässt die Kick zwischen Takt 5 und 9 einsetzen, Groove ist der Kern ohne Lead in der ersten Hälfte, Build holt pro 4 Takte eine Schicht zurück mit dichteren Hats und Snare-Roll in den letzten 4 Takten, **Drop bringt alles auf einmal**, Breakdown nimmt Kick und Bass heraus und dünnt Lead/Arp aus, Outro nimmt pro 4 oder 8 Takte eine Schicht weg | im Score über 4 Tracks: 0 Kicks und 0 Bassnoten in Breakdowns, Intro-Kick in 4 von 4 Fällen zwischen Takt 5 und 9, 9 von 9 Drops mit Kick, Bass und Melodik, 0 Noten auf Beat 4 von 8 PDBs |
+| Alle 4 oder 8 Takte etwas Neues | jede Achttaktgruppe einer Sektion zieht ihre Änderung (Schicht, Figur, Fill, Register) und nie dieselbe wie die Gruppe davor; die Bassfigur am Gruppenende kommt aus einer Menge, deren Glieder sich **in der letzten Note für jedes Bassmuster** unterscheiden, damit die Garantie auch für die einnotigen Muster gilt | 91 aufeinanderfolgende Gruppenpaare in Cores, 0 identisch -- geprüft mit zwei Hashes, über alles und **nur über den Bass**; der zweite deckte auf, dass ein Paar von sechzehn sich wiederholte (siehe Gegenprobe) |
+| Sektionsregeln, gerendert (Solberg und Dibben 2019) | ganzer Track gerendert und zurückgelesen | U-Form: Core −13,3 dB, Breakdown −23,3 dB (**10,0 dB tiefer**), nach dem Drop −13,2 dB (**+0,1 dB**); Build steigt über alle vier Viertakt-Fenster (−15,6 → −14,3 dB, 0 fallende); Band 40 bis 140 Hz im Breakdown **65,3 dB** unter dem Core; Beat 4 des PDB **57,9 dB** unter einem Core-Beat; Präsenz 1,5 bis 6 kHz nach dem Drop **+0,6 dB** gegen vor dem Break |
+| Stilprofile (`compose.style`) | fünf Profile als Gewichtsvektoren: Tempomitte und -spanne (gemessen für Goa und Full-On), Skalengewichte der Tonartenreise, Körpergewichte der Grammatik, zusätzliche Akkordzüge (Goa i↔♭II und i↔♭VII **zusätzlich** zu den Korpus-Übergängen), Multiplikatoren auf Acid/Lead/Arp/Pad, Squelch-Chance, Hat-Dichte, PDB-Varianten, Bass-Slot-Hüllkurve (flach als Standard, 6.6), Break-Anteil, Farbe, Introlänge | Full-On ist der Standard mit lauter Einsen, deshalb spielen die Knöpfe unverändert, was sie sagen; `compose.style_tempo` schaltet auf die Profil-Tempi um |
+| Set-Walk gegen Track-Entscheidungen | Länge, Tonart, Modus, Tempo und die beiden Klang-Rezepte kommen aus einem Walk, der **nur** am Set-Seed hängt; Form, Percussion, Melodik, Bassmuster und Gate hängen am Seed des Tracks. Ohne diese Trennung würde ein neu gewürfelter Track alle folgenden verschieben | Tracklängen sind Vielfache von 32 Takten, jede Trackgrenze liegt auf dem 32er-Raster (5 von 5 Übergängen) |
+| Sperren und Neuwürfeln (6.8) | `setLock`/`reroll`/`variation` für Set, Track, Sektion und Pattern-Lane; ein gesperrter Baustein ist auf seinem ursprünglichen Seed eingefroren, ein neu gewürfelter mischt seinen Zähler in seinen Seed | Track 3 neu gewürfelt: 4 von 4 anderen Tracks bitgleich in Noten und Steuerereignissen (gemessen außerhalb der 16-Takt-Überblendfenster, die ein Übergang absichtlich mit dem Nachbarn teilt), Track 3 geändert; gesperrte Sektion behält ihren Seed |
+| `.phosset` (7) | Kopfzeile `phosset 1`, dann `seed=`, `style=`, `arc=`, die geänderten Knöpfe aus `ParamStore::toText(true)` und `lock.<einheit>.<index>` / `reroll.<einheit>.<index>`; `phos_render --set-file` und `--save-set`, dazu `--lock`/`--reroll` auf der Kommandozeile | Rundlauf: 0 Knopfunterschiede, gleiche Sperren und Zähler, gleiche Partitur in 4 Tracks |
+| Übergänge zwischen Tracks (6.7) | Überblendfenster von 16 Takten: die Hats des nächsten Tracks laufen über das Outro des vorigen ein, dessen Pads bleiben 16 Takte stehen — aber nur, wenn die Tonarten verwandt sind (Prim, Quart, Quint; harmonisches Mixen nach Ishizaki et al. 2009), sonst hören sie auf; der Tonartwechsel liegt auf der 32er-Grenze und wird vom Sweep des Outros, der genau dort endet, und einem Impact verdeckt | 5 von 5 Übergängen mit vorgezogenen Hats, 3 von 3 verwandten Tonarten mit bleibenden Pads, 5 von 5 Tonartwechseln maskiert |
+| SFX an Formgrenzen | Riser über die letzten 8 Takte eines Builds, endet auf dem Drop; Formant-Schuss auf dem letzten Beat des PDB; absteigender Sweep in den Drop (Solberg und Dibben: der Sweep ist die Drop-Marke); Impact auf der Eins; Downlifter und Reverse Swell am Breakdown; Sweep über die letzten 8 Takte des Tracks | 16 Impacts, 14 Formant-Schüsse, 14 Riser, 20 Sweeps über 8 Tracks, 0 am falschen Ort |
+| Auto-Gain nachgeschärft | die Mix-Probe nimmt jetzt **vier zusammenhängende Vier-Takt-Fenster**, das erste auf Takt 0 und das letzte am Trackende, und hört die Lautheitsseite des Energiebogens mit | vorher 8 Einzeltakte aus der Mitte: fünf Seeds −10,3 bis −9,9 LUFS bei Ziel −9; jetzt **−9,9 bis −8,7**, Median −9,5 |
+
+*Gegenprobe (Mutationsrunde).* Sieben Fehler einzeln eingebaut, jeder von seiner
+Prüfung gefunden -- zwei davon erst, nachdem Prüfung oder Regel geschärft wurden:
+
+| Mutation | Wer merkt es |
+|---|---|
+| Längenlöser ignoriert den Break-Anteil | 343 von 1400 Formen verletzen die Regeln, Anteil 0,11 bis 0,40 |
+| jede Achttaktgruppe endet auf derselben Figur | 91 von 91 Paaren mit gleichem Bass |
+| Breakdown behält Kick und Bass | 987 Kicks und 2963 Bassnoten in Breakdowns; U-Form nur noch 2,1 dB tief; Bassband nur 3,3 dB unter dem Core |
+| PDB behält Kick und Bass auf allen vier Beats | 18 Noten auf Beat 4; Bassband auf Beat 4 **1,6 dB über** einem Core-Beat statt 30 dB darunter |
+| Neuwürfeln erreicht den Track-Seed nicht | Track 3 ändert sich nicht |
+| Energie bewegt die Verstärkung nicht | Build fällt in 2 von 4 Fenstern |
+| `.phosset` schreibt Sperren und Zähler nicht | Rundlauf verliert Sperren und Zähler |
+
+Zwei Befunde aus der Gegenprobe sind echte Korrekturen: (1) Die Gruppenprüfung *bestand* mit
+ausgebauter Regel, weil zufällig ein Percussion-Fill verschieden war; sie hasht jetzt zusätzlich **nur
+den Bass**, und das deckte sofort ein echtes Loch auf -- eine Gruppe, deren Figur schon verschoben
+worden war, wurde gegen ihren *rohen* Wurf verglichen, also wiederholte sich ein Paar von sechzehn (7
+von 91). Die Figur wird jetzt von der ersten Gruppe der Sektion an durchgelaufen. (2) Die erste
+PDB-Mutation traf nur die Kick-Maske, die das Standard-Kickmuster "Four + Fills" auf Beat 4 ohnehin
+verdeckt; erst mit der Bass-Maske schlagen beide Prüfungen an.
+
+*Prüfstein: ein Set aus einem Seed.* `phos_render --minutes 60 --seed 20260916 --tracks --sections --report --midi --save-set` mit
+`compose.style=Goa compose.style_tempo=On compose.arc=Peak-Time compose.set_minutes=60`:
+
+- **9 Tracks**, 2272 Takte, 139,5 bis 144,5 BPM (Goa-Profil, Mitte 143), Tonarten F#, E, B (Quinten
+  und Ganztöne), Körper Full-On und Goa gemischt, 8 bis 9 Sektionen je Track.
+- **Laufzeit 234 s für 3600 s Audio: 15,4-fache Echtzeit, 6,5 % eines Kerns** (Phase 4: 5,4 % ohne
+  Form, 7,3 % mit allen Stimmen in jedem Track).
+- **Lautheit −9,5 LUFS integriert** bei Ziel −9, True Peak −0,98 dBTP, **LRA 6,7 LU** (Referenz-Median
+  6,3 LU -- die Form bringt den Dynamikumfang echter Tracks). Je Track gespielt: −8,1 bis −10,6 LUFS,
+  Spanne 2,5 LU; der Pegelangleich hält den *Klang* zusammen, der Energiebogen darf die Tracks
+  bewusst um ±2 dB auseinanderziehen.
+- **MIDI: 76550 Ereignisse**, 676 kB. Unabhängig nachgelesen (eigener Parser in Python, nicht der
+  Leser des Projekts): SMF **Format 1**, PPQ 960, 9 benannte Spuren (Phosphene, Kick, Bass, Perc,
+  Acid, Lead, Arp, Pad, Sfx), **99 Sektionsmarken** in allen acht Kategorien (15 Intro, 3 Groove,
+  15 Build, 15 PDB, 23 Drop, 10 Cut, 10 Break, 8 Outro), 5 Tonartwechsel, 586 Tempo-Ereignisse,
+  76342 Note-Ons.
+- **Memorisierung 0,00 %**: 0 von 669 Acid-, 0 von 136 Lead- und 0 von 253 Arp-Takten stimmen
+  transpositionsinvariant mit einem Korpustakt überein.
+- **`.phosset`**: die gespeicherte Datei (7 Zeilen) rendert dieselben 64 Takte **byteweise identisch**
+  wie die Kommandozeile, aus der sie entstand.
+
+*Abweichungen vom Plan, bewusst:*
+- **Tracklängen liegen zwischen 128 und 320 Takten** (3:32 bis 8:50 bei 145 BPM). Der Knopf
+  `compose.track_bars` wird in dieses Fenster geklemmt. Grund: die Grammatik muss jede Ziellänge mit
+  **jedem** Körper exakt treffen, weil die Länge zum Set-Walk gehört und der Körper zum Track; das
+  gemeinsame Fenster der drei Körper ist genau dieses. Die Referenzaufnahmen laufen im Median 7,7 bis
+  8,6 Minuten, liegen also darin.
+- **Breakdowns sind nie 8 Takte lang.** Solberg und Dibben messen Break-Routinen von 32 bis 97 s; 8
+  Takte sind 13 s. Erlaubt sind 16, 32 und 64.
+- **Der Standard-Bogen ist "Flat"** und `compose.style_tempo` steht auf Aus, damit die Knöpfe ohne
+  weitere Einstellung genau das spielen, was sie sagen. Ein Set mit Dramaturgie braucht
+  `compose.arc=Peak-Time` (o. ä.) und `compose.set_minutes`.
+- **Register und Maskierungsregel sind Sektions-, nicht Taktentscheidungen.** Innerhalb eines Builds
+  steigt die Energie; eine Lead-Oktave, die auf halber Strecke springt, hätte die Maskierungsregel
+  gebrochen, mit der die Sektion geplant wurde.
+- **Der Pegelangleich misst weiter den Klang, nicht die Form:** die Proben je Stimme spielen alles, was
+  der Track hat, nur die Mix-Probe folgt der Instrumentierungs-Matrix.
+- **Nicht gebaut:** die Profil-Reise (Morph zwischen Stilprofilen über das Set), der Ranker aus 6.9,
+  das Ausrollen der Partitur in die `.phosset`-Datei, und Stems je Erzeuger. Die Bass-Slot-Hüllkurve
+  ist als Profilparameter da, aber in allen fünf Profilen flach, weil die Messung vom 15.09. keine
+  andere rechtfertigt.
+
+Gesamt: 170 Selbsttest-Prüfungen (24 neue in vier Abschnitten: `testForm`, `testSectionRules`,
+`testCuration`, `testTransitions`), Vektortests 9 von 9 in AVX2, NEON-Shim und skalar. Der Selbsttest
+dauert 231 s statt 155 s: 17 s kostet der gerenderte Track der Sektionsregeln, den Rest die beiden
+Prüfungen, die jetzt in einem Core statt in Takt 0 messen müssen (Phasenkopplung, Pegelangleich) und
+deshalb bis dorthin rendern. Beide sind so eingestellt, dass sie nur rendern, was sie messen: ohne
+Melodik, und die Phasenkopplung sucht sich den ersten Seed mit einem achttaktigen Intro.
+
+Nächster Schritt: Phase 6 (JUCE-Plugin) und Phase 7 (Quest-Build) laufen in eigenen Arbeitsbäumen;
+danach Phase 8 (Transformer) und Phase 9 (Qualität). Offen aus Phase 5: die Profil-Reise (Morph
+zwischen Stilprofilen über das Set), der Ranker aus 6.9, Stems je Erzeuger und das Ausrollen der
+Partitur in die `.phosset`-Datei.
 
 **16.09.2026, Phase 7: Quest-Build, Qualitätsstufen, Performer-App.** Gebaut in einem eigenen
 Arbeitsbaum, parallel zu Phase 5 und 6. **Es war kein Headset angeschlossen**; alle Gerätezahlen

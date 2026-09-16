@@ -9,6 +9,7 @@
 #include "phos/Loudness.h"
 #include "phos/Params.h"
 #include "phos/Patterns.h"
+#include "phos/Sfx.h"
 #include <algorithm>
 #include <cmath>
 
@@ -16,6 +17,7 @@ namespace phos {
 
 const char* const kKickMacroNames[kNumKickMacros] = { "length", "punch", "body", "grit", "click" };
 const char* const kBassMacroNames[kNumBassMacros] = { "brightness", "pluck", "squelch", "grit", "weight" };
+const char* const kLockUnitNames[kNumLockUnits] = { "set", "track", "section", "lane" };
 
 namespace {
 
@@ -26,6 +28,11 @@ constexpr uint64_t kSaltPhrase = 0x5048524153450004ull;
 constexpr uint64_t kSaltArc    = 0x4152430000000005ull;
 constexpr uint64_t kSaltPerc   = 0x5045524300000006ull;
 constexpr uint64_t kSaltMelody = 0x4D454C4F44590007ull;
+constexpr uint64_t kSaltWalk   = 0x57414C4B00000008ull;
+constexpr uint64_t kSaltFormU  = 0x464F524D55000009ull;
+constexpr uint64_t kSaltSectU  = 0x5345435455000010ull;
+constexpr uint64_t kSaltLaneU  = 0x4C414E4555000011ull;
+constexpr uint64_t kSaltReroll = 0x5245524F4C4C0012ull;
 
 /** @brief One move of a perceptual direction: parameter (module table index), direction, weight. */
 struct Loading { int param; int macro; float weight; };
@@ -88,7 +95,121 @@ float gateLimit(int pattern, double bpm, int lowestNote, float releaseKnobMs)
     return static_cast<float>(1.0 - (release + 0.004) / slot);
 }
 
+/**
+ * @brief The loudness side of Farbood's tension model: what a section's energy does to the track gain.
+ *
+ * At most +-2 dB around the level the track was matched to, so that the energy is audible without
+ * undoing the level match between tracks.
+ */
+float energyGainDb(float energy)
+{
+    return std::clamp((energy - 0.7f) * 5.0f, -2.0f, 2.0f);
+}
+
+/** @brief Length of the whole set in bars, from compose.set_minutes and the tempo: the arc's time base. */
+double setLengthBars(const ParamStore& p)
+{
+    const int cb = p.base(Module::Compose);
+    const double minutes = std::max(1.0, static_cast<double>(p.getInt(cb + compose::SetMinutes)));
+    const double bpm = p.getBool(cb + compose::StyleTempo) ? styleProfile(styleOf(p)).bpmCentre
+                                                           : std::max(20.0, static_cast<double>(p.get(cb + compose::Bpm)));
+    return std::max(32.0, minutes * bpm / kBeatsPerBar);
+}
+
 } // namespace
+
+/** @brief What a track can offer the instrumentation matrix. */
+static PartAvailability availabilityOf(const TrackPlan& plan)
+{
+    PartAvailability a;
+    for (int k = 0; k < kMelodyParts; ++k) a.part[k] = plan.melody.present[k];
+    a.leadLo = plan.melody.leadLo;
+    a.leadHi = plan.melody.leadHi;
+    a.arpLo = plan.melody.arpLo;
+    a.arpHi = plan.melody.arpHi;
+    a.percLayers = plan.perc.layers;
+    return a;
+}
+
+void Composer::setLock(LockUnit unit, int index, bool locked)
+{
+    if (locked) locked_[static_cast<int>(unit)][index] = 1;
+    else locked_[static_cast<int>(unit)].erase(index);
+    plans_.clear();
+    walk_.clear();
+}
+
+bool Composer::isLocked(LockUnit unit, int index) const
+{
+    const auto& m = locked_[static_cast<int>(unit)];
+    return m.find(index) != m.end();
+}
+
+void Composer::reroll(LockUnit unit, int index)
+{
+    if (isLocked(unit, index)) return;
+    ++variation_[static_cast<int>(unit)][index];
+    plans_.clear();
+    walk_.clear();
+}
+
+uint32_t Composer::variation(LockUnit unit, int index) const
+{
+    const auto& m = variation_[static_cast<int>(unit)];
+    const auto it = m.find(index);
+    return it == m.end() ? 0u : it->second;
+}
+
+void Composer::setVariation(LockUnit unit, int index, uint32_t value)
+{
+    if (value == 0) variation_[static_cast<int>(unit)].erase(index);
+    else variation_[static_cast<int>(unit)][index] = value;
+    plans_.clear();
+    walk_.clear();
+}
+
+void Composer::clearLocks()
+{
+    for (int u = 0; u < kNumLockUnits; ++u) { locked_[u].clear(); variation_[u].clear(); }
+    plans_.clear();
+    walk_.clear();
+}
+
+uint64_t Composer::setSeed() const
+{
+    const uint32_t v = variation(LockUnit::Set, 0);
+    return v == 0 ? seed_ : mixSeed(seed_ ^ kSaltReroll, v);
+}
+
+uint64_t Composer::trackSeed(int index) const
+{
+    // A locked track is frozen at the seed it had before any reroll, of the set or of itself; an
+    // unlocked one follows the set's rerolls and adds its own variation counter.
+    if (isLocked(LockUnit::Track, index)) return mixSeed(seed_ ^ kSaltTrack, static_cast<uint64_t>(index));
+    const uint64_t base = mixSeed(setSeed() ^ kSaltTrack, static_cast<uint64_t>(index));
+    const uint32_t v = variation(LockUnit::Track, index);
+    return v == 0 ? base : mixSeed(base ^ kSaltReroll, v);
+}
+
+uint64_t Composer::sectionSeedOf(int track, int si) const
+{
+    const int idx = sectionUnitIndex(track, si);
+    if (isLocked(LockUnit::Section, idx))
+        return mixSeed(mixSeed(seed_ ^ kSaltTrack, static_cast<uint64_t>(track)) ^ kSaltSectU, static_cast<uint64_t>(si));
+    const uint64_t base = mixSeed(trackSeed(track) ^ kSaltSectU, static_cast<uint64_t>(si));
+    const uint32_t v = variation(LockUnit::Section, idx);
+    return v == 0 ? base : mixSeed(base ^ kSaltReroll, v);
+}
+
+uint64_t Composer::laneSeedOf(int track, int lane) const
+{
+    const int idx = laneUnitIndex(track, lane);
+    if (isLocked(LockUnit::PatternLane, idx))
+        return mixSeed(mixSeed(seed_ ^ kSaltTrack, static_cast<uint64_t>(track)) ^ kSaltLaneU, static_cast<uint64_t>(lane));
+    const uint64_t base = mixSeed(trackSeed(track) ^ kSaltLaneU, static_cast<uint64_t>(lane));
+    const uint32_t v = variation(LockUnit::PatternLane, idx);
+    return v == 0 ? base : mixSeed(base ^ kSaltReroll, v);
+}
 
 void Composer::recipeOffsets(bool kickModule, const float* macros, float amount, float* out)
 {
@@ -130,7 +251,87 @@ void Composer::validate(const ParamStore& p) const
         for (int k : { static_cast<int>(perc::Active), static_cast<int>(perc::Role), static_cast<int>(perc::Density), static_cast<int>(perc::Engine) })
             knobs.push_back(p.get(b + k));
     }
-    if (knobs != planKnobs_) { plans_.clear(); planKnobs_ = std::move(knobs); }
+    if (knobs != planKnobs_) { plans_.clear(); walk_.clear(); planKnobs_ = std::move(knobs); }
+}
+
+/**
+ * @brief The set walk: length, key, mode, tempo and the two sound recipes of every track.
+ *
+ * These are the journey through the night, so they come from the set seed alone and not from any
+ * track's own seed. Rerolling one track therefore leaves the walk -- and with it every other track --
+ * untouched (PLAN 6.8); rerolling the set moves the whole walk.
+ */
+const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
+{
+    const int cb = p.base(Module::Compose);
+    const float tv = p.get(cb + compose::TrackVariation);
+    const StyleProfile& style = styleProfile(styleOf(p));
+    const bool styleTempo = p.getBool(cb + compose::StyleTempo);
+    const double baseBpm = styleTempo ? style.bpmCentre : p.get(cb + compose::Bpm);
+    const double range = styleTempo ? style.bpmRange : p.get(cb + compose::TempoRange);
+    // Track lengths are multiples of 32 bars, so that every track boundary -- the bass swap of a
+    // transition -- falls on a 32-bar grid (PLAN 6.7).
+    const int baseBars = std::clamp((p.getInt(cb + compose::TrackBars) / 32) * 32, kMinTrackBars, kMaxTrackBars);
+
+    while (static_cast<int>(walk_.size()) <= index) {
+        const int i = static_cast<int>(walk_.size());
+        TrackWalk w;
+        if (i == 0) {
+            w.bars = baseBars;
+            w.key = p.getInt(cb + compose::Key);
+            w.scale = p.getInt(cb + compose::Scale);
+            w.bpm = styleTempo ? std::round(style.bpmCentre * 2.0) * 0.5 : baseBpm;
+            walk_.push_back(w);
+            continue;   // the first track is the knobs, exactly
+        }
+        const TrackWalk& prev = walk_[static_cast<size_t>(i - 1)];
+        Rng r;
+        r.seed(mixSeed(setSeed() ^ kSaltWalk, static_cast<uint64_t>(i)));
+
+        // Length: the knob, give or take up to two 32-bar blocks.
+        w.bars = baseBars;
+        if (r.uniform() < tv) w.bars = std::clamp(baseBars + 32 * (r.below(3) - 1), kMinTrackBars, kMaxTrackBars);
+
+        // Key: by fifths and whole tones, now and then a semitone.
+        w.key = prev.key;
+        if (r.uniform() < tv) {
+            static const int kMoves[6] = { 7, 5, 2, -2, 1, -1 };
+            static const double kWeights[6] = { 0.3, 0.3, 0.15, 0.15, 0.05, 0.05 };
+            w.key = ((prev.key + kMoves[pick(r, kWeights, 6)]) % 12 + 12) % 12;
+        }
+        // Mode: mostly kept; when it changes, the style profile's weights decide.
+        w.scale = prev.scale;
+        if (r.uniform() < 0.25f * tv) w.scale = pick(r, style.scaleWeight, kNumScales);
+        // Tempo: mean-reverting walk around the centre, inside the range, on half-BPM steps.
+        const double walk = baseBpm + 0.6 * (prev.bpm - baseBpm) + (2.0 * r.uniform() - 1.0) * range * tv;
+        w.bpm = std::round(std::clamp(walk, baseBpm - range, baseBpm + range) * 2.0) * 0.5;
+
+        // Recipes by best candidate against the last four tracks.
+        Rng rr;
+        rr.seed(mixSeed(setSeed() ^ kSaltRecipe, static_cast<uint64_t>(i)));
+        auto chooseRecipe = [&](float* out, int n, bool kickSide) {
+            float best[kNumKickMacros] = {};
+            double bestScore = -1.0;
+            for (int c = 0; c < 12; ++c) {
+                float cand[kNumKickMacros] = {};
+                drawRecipe(rr, cand, n);
+                double score = 1e9;
+                for (int back = 1; back <= 4 && i - back >= 0; ++back) {
+                    const TrackWalk& o = walk_[static_cast<size_t>(i - back)];
+                    const float* om = kickSide ? o.kickMacro : o.bassMacro;
+                    double d = 0.0;
+                    for (int k = 0; k < n; ++k) d += (cand[k] - om[k]) * (cand[k] - om[k]);
+                    score = std::min(score, std::sqrt(d));
+                }
+                if (score > bestScore) { bestScore = score; std::copy(cand, cand + n, best); }
+            }
+            std::copy(best, best + n, out);
+        };
+        chooseRecipe(w.kickMacro, kNumKickMacros, true);
+        chooseRecipe(w.bassMacro, kNumBassMacros, false);
+        walk_.push_back(w);
+    }
+    return walk_[static_cast<size_t>(index)];
 }
 
 TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
@@ -138,27 +339,47 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     const int cb = p.base(Module::Compose);
     const float tv = p.get(cb + compose::TrackVariation);
     const float sv = p.get(cb + compose::SoundVariation);
-    const double baseBpm = p.get(cb + compose::Bpm);
-    const double range = p.get(cb + compose::TempoRange);
-    const int baseBars = std::max(32, (p.getInt(cb + compose::TrackBars) / 16) * 16);
     const int reg = p.getInt(cb + compose::BassRegister);
     const float releaseKnob = p.get(p.base(Module::Bass) + bass::AmpRelease);
+    const StyleProfile& style = styleProfile(styleOf(p));
+    const TrackWalk& w = walkAt(p, index);
 
     TrackPlan t;
     t.index = index;
-    t.percSeed = mixSeed(seed_ ^ kSaltPerc, static_cast<uint64_t>(index));
-    t.perc = makePercPlan(p, t.percSeed, index == 0);
+    t.firstBar = index == 0 ? 0 : plans_[static_cast<size_t>(index - 1)].firstBar + plans_[static_cast<size_t>(index - 1)].bars;
+    t.key = w.key;
+    t.scale = w.scale;
+    t.bpm = w.bpm;
+    std::copy(w.kickMacro, w.kickMacro + kNumKickMacros, t.kickMacro);
+    std::copy(w.bassMacro, w.bassMacro + kNumBassMacros, t.bassMacro);
+
+    // Where the track sits on the set's energy arc (Form.h).
+    const double setBars = setLengthBars(p);
+    const ArcId arc = arcOf(p);
+    t.arcIn = static_cast<float>(arcEnergy(arc, t.firstBar / setBars));
+    t.arcOut = static_cast<float>(arcEnergy(arc, (t.firstBar + w.bars) / setBars));
+
+    // The form: a track's own decision, so it hangs off the track's seed and is rerollable.
+    t.formSeed = mixSeed(trackSeed(index) ^ kSaltFormU, 0);
+    t.form = makeFormPlan(style, t.formSeed, w.bars, t.arcIn, t.arcOut);
+    makeFormSfx(t.form, t.formSeed, p.get(cb + compose::SfxAmount));
+    t.bars = t.form.bars;
+    for (int s = 0; s < kMaxSections; ++s) t.sectionSeed[s] = sectionSeedOf(index, s);
+
+    uint64_t laneSeeds[kPercLanes];
+    for (int l = 0; l < kPercLanes; ++l) laneSeeds[l] = laneSeedOf(index, l);
+    t.percSeed = mixSeed(trackSeed(index) ^ kSaltPerc, 0);
+    t.perc = makePercPlan(p, t.percSeed, index == 0, laneSeeds);
+    t.melodySeed = mixSeed(trackSeed(index) ^ kSaltMelody, 0);
+    // The colour of the lead -- how much weight the flat second and the augmented second get -- follows
+    // the style profile and the track's place on the energy arc (Farbood's dissonance).
+    const float colour = std::clamp(style.colour * (0.4f + 0.6f * 0.5f * (t.arcIn + t.arcOut)), 0.0f, 1.0f);
+    t.melody = makeMelodyPlan(p, style, t.melodySeed, t.key, t.scale, index == 0, colour);
+
     if (index == 0) {
-        t.firstBar = 0;
-        t.bars = baseBars;
-        t.key = p.getInt(cb + compose::Key);
-        t.scale = p.getInt(cb + compose::Scale);
-        t.bpm = baseBpm;
         t.primaryPattern = std::clamp(p.getInt(cb + compose::BassPattern), 0, kNumBassPatterns - 1);
         t.secondaryPattern = t.primaryPattern == 0 ? 1 : 0;
         t.gate = p.get(cb + compose::BassGate);
-        t.melodySeed = mixSeed(seed_ ^ kSaltMelody, 0);
-        t.melody = makeMelodyPlan(p, t.melodySeed, t.key, t.scale, t.bars, true);
         if (p.getBool(cb + compose::LevelMatch)) {
             t.loudness = probeLoudness(p, t);
             for (int k = 0; k < kMelodyParts; ++k) t.partLoudness[k] = probeLoudness(p, t, k);
@@ -167,42 +388,19 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
         return t;   // the first track is the knobs, exactly
     }
 
-    const TrackPlan& prev = plans_[static_cast<size_t>(index - 1)];
     Rng r;
-    r.seed(mixSeed(seed_ ^ kSaltTrack, static_cast<uint64_t>(index)));
-    t.firstBar = prev.firstBar + prev.bars;
-
-    // Length: the knob, give or take up to two 16-bar blocks.
-    t.bars = baseBars;
-    if (r.uniform() < tv) t.bars = std::max(32, baseBars + 16 * (r.below(5) - 2));
-
-    // Key: by fifths and whole tones, now and then a semitone.
-    t.key = prev.key;
-    if (r.uniform() < tv) {
-        static const int kMoves[6] = { 7, 5, 2, -2, 1, -1 };
-        static const double kWeights[6] = { 0.3, 0.3, 0.15, 0.15, 0.05, 0.05 };
-        t.key = ((prev.key + kMoves[pick(r, kWeights, 6)]) % 12 + 12) % 12;
-    }
-    // Mode: mostly kept; when it changes, the dark ones are likelier.
-    t.scale = prev.scale;
-    if (r.uniform() < 0.25f * tv) {
-        static const double kWeights[kNumScales] = { 0.25, 0.30, 0.15, 0.15, 0.10, 0.05 };
-        t.scale = pick(r, kWeights, kNumScales);
-    }
-    // Tempo: mean-reverting walk around the knob, inside the range, on half-BPM steps.
-    const double walk = baseBpm + 0.6 * (prev.bpm - baseBpm) + (2.0 * r.uniform() - 1.0) * range * tv;
-    t.bpm = std::round(std::clamp(walk, baseBpm - range, baseBpm + range) * 2.0) * 0.5;
+    r.seed(trackSeed(index));
 
     // Patterns.
-    t.primaryPattern = prev.primaryPattern;
+    t.primaryPattern = std::clamp(p.getInt(cb + compose::BassPattern), 0, kNumBassPatterns - 1);
     if (r.uniform() < tv) {
         static const double kWeights[kNumBassPatterns] = { 0.45, 0.20, 0.12, 0.08, 0.15 };
         t.primaryPattern = pick(r, kWeights, kNumBassPatterns);
     }
     {
-        double w[kNumBassPatterns] = { 0.40, 0.30, 0.20, 0.05, 0.05 };
-        w[t.primaryPattern] = 0.0;
-        t.secondaryPattern = pick(r, w, kNumBassPatterns);
+        double wp[kNumBassPatterns] = { 0.40, 0.30, 0.20, 0.05, 0.05 };
+        wp[t.primaryPattern] = 0.0;
+        t.secondaryPattern = pick(r, wp, kNumBassPatterns);
     }
 
     // Gate, within what lets the lowest note (the seventh below the root) finish its release.
@@ -216,33 +414,6 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     t.kickEngine = -1;
     if (r.uniform() < 0.15f * sv) t.kickEngine = 1 - p.getInt(p.base(Module::Kick) + kick::Engine);
     t.kickClip = r.uniform() < 0.3f * sv ? 1 : -1;
-
-    // Recipes by best candidate against the last four tracks.
-    Rng rr;
-    rr.seed(mixSeed(seed_ ^ kSaltRecipe, static_cast<uint64_t>(index)));
-    auto chooseRecipe = [&](float* out, int n, bool kickSide) {
-        float best[kNumKickMacros] = {};
-        double bestScore = -1.0;
-        for (int c = 0; c < 12; ++c) {
-            float cand[kNumKickMacros] = {};
-            drawRecipe(rr, cand, n);
-            double score = 1e9;
-            for (int back = 1; back <= 4 && index - back >= 0; ++back) {
-                const TrackPlan& o = plans_[static_cast<size_t>(index - back)];
-                const float* om = kickSide ? o.kickMacro : o.bassMacro;
-                double d = 0.0;
-                for (int i = 0; i < n; ++i) d += (cand[i] - om[i]) * (cand[i] - om[i]);
-                score = std::min(score, std::sqrt(d));
-            }
-            if (score > bestScore) { bestScore = score; std::copy(cand, cand + n, best); }
-        }
-        std::copy(best, best + n, out);
-    };
-    chooseRecipe(t.kickMacro, kNumKickMacros, true);
-    chooseRecipe(t.bassMacro, kNumBassMacros, false);
-
-    t.melodySeed = mixSeed(seed_ ^ kSaltMelody, static_cast<uint64_t>(index));
-    t.melody = makeMelodyPlan(p, t.melodySeed, t.key, t.scale, t.bars, false);
 
     if (p.getBool(cb + compose::LevelMatch)) {
         t.loudness = probeLoudness(p, t);
@@ -331,36 +502,83 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
     push(p.base(Module::Master) + master::Gain, ControlEvent::Kind::Offset, plan.masterGainDb / (mg.maxValue - mg.minValue));
 }
 
-void Composer::melodyControls(const ParamStore& p, const TrackPlan& plan, int inTrack, double beat, std::vector<ControlEvent>& out) const
+/**
+ * @brief The control events of a section: timbre as narrative, and the energy's three audible sides.
+ *
+ * Farrell's thesis (Sussex 2019) reads psychedelic music as a narrative told with timbre; Farbood's
+ * tension model (2012) names the quantities a listener reads as tension. What the section can change
+ * without touching a note is therefore: the filter openings of acid and lead, the pad's table position
+ * and the hall sends (timbre), and the track gain (loudness, at most +-2 dB so the level match stays
+ * intact). Every one of them is written as a ramp over the section, so nothing steps.
+ *
+ * The energy of a buildup runs from its own value to the drop's, which is exactly the "filter arcs
+ * opening" the plan asks for; a breakdown opens the hall and closes the filters.
+ */
+void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const BarPlan& bar, double beat,
+                               std::vector<ControlEvent>& out) const
 {
-    // The acid cutoff travels in arcs: at every 16-bar block it sets out for a new target, reached at
-    // the end of the block. The first track starts from the knob.
-    const int cb = p.base(Module::Compose), ab = p.base(Module::Acid);
+    const int cb = p.base(Module::Compose), ab = p.base(Module::Acid), mb = p.base(Module::Mix);
+    const int lb = p.base(Module::Poly, 0), pb = p.base(Module::Poly, 2);
     const float sv = p.get(cb + compose::SoundVariation), mv = p.get(cb + compose::MelodyVariation);
     const MelodyPlan& m = plan.melody;
-    const int block = std::min(kMelodyMaxBlocks - 1, inTrack / 16);
-    const float base = 0.10f * sv * m.recipe[0];
-    const float target = (plan.index == 0 && block == 0) ? 0.0f : base + 0.12f * mv * m.acidArc[block];
-    auto push = [&](int id, float value, float length) {
+    const Section& s = plan.form.section[bar.index];
+    const float length = static_cast<float>(s.bars) * kBeatsPerBar;
+    auto push = [&](int id, float value, float len) {
         ControlEvent c;
         c.beat = beat;
         c.param = static_cast<int16_t>(id);
         c.kind = ControlEvent::Kind::Offset;
         c.value = value;
-        c.length = length;
+        c.length = len;
         out.push_back(c);
     };
-    if (inTrack == 0) push(ab + acid::Cutoff, plan.index == 0 ? 0.0f : base, 0.0f);
-    {
-        ControlEvent g;
-        g.beat = beat;
-        g.param = static_cast<int16_t>(p.base(Module::Poly, 2) + poly::Gate);
-        g.kind = ControlEvent::Kind::Override;
-        g.value = m.padGate[block] ? 1.0f : 0.0f;
-        out.push_back(g);
+    auto pushNow = [&](int id, ControlEvent::Kind kind, float value) {
+        ControlEvent c;
+        c.beat = beat;
+        c.param = static_cast<int16_t>(id);
+        c.kind = kind;
+        c.value = value;
+        out.push_back(c);
+    };
+
+    // A cutoff arc per section: the recipe's base plus a target drawn from the section's own seed and
+    // lifted by the energy. The first section of the first track starts from the knobs exactly.
+    Rng r;
+    r.seed(mixSeed(plan.sectionSeed[std::clamp(bar.index, 0, kMaxSections - 1)] ^ kSaltArc, 0));
+    const float wobble = (2.0f * r.uniform() - 1.0f);
+    const float acidBase = 0.10f * sv * m.recipe[0];
+    const bool knobs = plan.index == 0 && bar.index == 0;
+    const float e0 = s.energy, e1 = s.energyTo;
+    auto cutoffAt = [&](float base, float scale, float energy) {
+        return knobs ? 0.0f : base + scale * (0.35f * (energy - 0.7f) + 0.12f * mv * wobble);
+    };
+    if (bar.index == 0) {
+        push(ab + acid::Cutoff, cutoffAt(acidBase, 1.0f, e0), 0.0f);
+        push(lb + poly::Cutoff, cutoffAt(0.10f * sv * m.recipe[1], 0.8f, e0), 0.0f);
+        push(pb + poly::Position, cutoffAt(0.25f * sv * m.recipe[3], 0.6f, e0), 0.0f);
     }
-    push(ab + acid::Cutoff, target, 16.0f * kBeatsPerBar);
-    push(ab + acid::EnvAmount, 0.5f * (target - base), 16.0f * kBeatsPerBar);
+    push(ab + acid::Cutoff, cutoffAt(acidBase, 1.0f, e1), length);
+    push(ab + acid::EnvAmount, 0.5f * (cutoffAt(acidBase, 1.0f, e1) - acidBase), length);
+    push(lb + poly::Cutoff, cutoffAt(0.10f * sv * m.recipe[1], 0.8f, e1), length);
+    push(pb + poly::Position, cutoffAt(0.25f * sv * m.recipe[3], 0.6f, e1), length);
+
+    // The hall opens where the floor empties: a breakdown is the wettest part of a track.
+    const float wet = s.type == SectionType::Break ? 0.22f : (s.type == SectionType::Intro || s.type == SectionType::Outro ? 0.10f : 0.0f);
+    const ParamDesc& hs = p.desc(pb + poly::HallSend);
+    const float wetNorm = wet / (hs.maxValue - hs.minValue);
+    for (int id : { ab + acid::HallSend, lb + poly::HallSend, p.base(Module::Poly, 1) + poly::HallSend, pb + poly::HallSend })
+        push(id, knobs ? 0.0f : wetNorm, length);
+
+    // Loudness (Farbood): at most +-2 dB around the section's energy, on top of the track's level match.
+    const ParamDesc& g = p.desc(mb + mix::TrackGain);
+    const float span = g.maxValue - g.minValue;
+    push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e0))) / span, 0.0f);
+    // A buildup's energy runs from the section before it to the drop, so the gain ramps with it; every
+    // other section holds one value (e0 == e1 there).
+    if (e1 != e0) push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e1))) / span, length);
+
+    // The pad's trance gate is a property of the section, not of a 16-bar block.
+    pushNow(pb + poly::Gate, ControlEvent::Kind::Override, bar.padGate ? 1.0f : 0.0f);
 }
 
 void Composer::arcControls(const ParamStore& p, const TrackPlan& plan, int inTrack, double beat, bool ramp, std::vector<ControlEvent>& out) const
@@ -396,7 +614,7 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     // Two bars for the foundation and the parts. For the whole mix eight bars spread evenly over the track,
     // as its blocks really play -- intro and outro included, since the gated integrated loudness counts
     // them: the densest block alone over-read a track by 0.8 LU, four bars from its middle by 0.6 LU.
-    const int bars = part == -2 ? 8 : 2;
+    const int bars = part == -2 ? 16 : 2;
     auto engine = std::make_unique<Engine>();
     engine->prepare(sr, 512);
     engine->params().copyValuesFrom(p);
@@ -460,17 +678,56 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     }
     // Which bar of the track each probe bar is: 49 and 50 (the percussion's layers are in) for the foundation
     // and the parts, the middle bar of the block at each fifth of the track for the whole mix.
+    // Four contiguous windows of four bars, spread evenly over the track. Contiguous, because a pad
+    // holds its chord over several bars and a reverb tail runs on: single bars cut from the middle of a
+    // breakdown read far quieter than the same bar does in the track.
     auto sourceBar = [&](int b) {
         if (part != -2) return 49 + b;
-        const int at = (2 * b + 1) * plan.bars / 16;
-        return (at / 16) * 16 + 8;
+        // The first window starts on bar 0 and the last ends on the last bar, so that the intro and
+        // the outro count: they are a tenth of the track and quieter than everything else, and a probe
+        // that skipped them aimed about 1 LU too high.
+        const int window = ((b / 4) * (plan.bars - 4) / 3) / 4 * 4;
+        return window + b % 4;
     };
-    for (int b = 0; b < bars; ++b)
-        composePercBar(p, plan.perc, plan.percSeed, b, sourceBar(b), plan.bpm, plan.key, plan.scale, false, notes);
-    // The melodic parts: in a full block for their own measurement, as scheduled for the whole mix.
+    // The bar plan of a probe bar: the real instrumentation matrix for the whole mix, everything the
+    // track has for a single part or the foundation (those measure a sound, not an arrangement).
+    auto probeBar = [&](int source) {
+        if (part != -2) {
+            BarPlan bp = allPartsBar(plan.melody);
+            bp.percLayers = plan.perc.layers;
+            return bp;
+        }
+        return planBar(plan.form, availabilityOf(plan), plan.sectionSeed, source);
+    };
+    for (int b = 0; b < bars; ++b) {
+        const BarPlan bp = probeBar(sourceBar(b));
+        // The whole-mix probe has to hear the loudness side of the energy arc as well, or Auto Gain
+        // would aim at a track that is louder than the one the form really plays (measured: 1.3 LU).
+        if (part == -2) {
+            const Section& sec = plan.form.section[std::clamp(bp.index, 0, kMaxSections - 1)];
+            const ParamDesc& g = p.desc(mb + mix::TrackGain);
+            ControlEvent c;
+            c.beat = static_cast<double>(b) * kBeatsPerBar;
+            c.param = static_cast<int16_t>(mb + mix::TrackGain);
+            c.kind = ControlEvent::Kind::Offset;
+            c.value = (plan.gainDb + energyGainDb(0.5f * (sec.energy + sec.energyTo))) / (g.maxValue - g.minValue);
+            engine->pushControl(c);
+        }
+        PercBarSpec spec;
+        spec.layers = bp.percLayers;
+        spec.fills = false;
+        spec.hatsDense = bp.hatsDense;
+        spec.rollBar = bp.rollBar;
+        spec.pdb = bp.pdb;
+        spec.cutBeats = bp.cutBeats;
+        composePercBar(p, plan.perc, plan.percSeed, b, sourceBar(b), plan.bpm, plan.key, plan.scale, spec, notes);
+    }
+    // The melodic parts: everything the track has for their own measurement, as the form plays them
+    // for the whole mix.
     if (part >= 0 || part == -2) {
         std::vector<NoteEvent> mel;
-        for (int b = 0; b < bars; ++b) composeMelodyBar(p, plan.melody, b, part == -2 ? sourceBar(b) : 48 + b, plan.scale, part != -2, mel);
+        for (int b = 0; b < bars; ++b)
+            composeMelodyBar(p, plan.melody, b, part == -2 ? sourceBar(b) : 48 + b, plan.scale, probeBar(sourceBar(b)), mel);
         static const Part kParts[kMelodyParts] = { Part::Acid, Part::Lead, Part::Arp, Part::Pad };
         for (const NoteEvent& n : mel) if (part == -2 || n.part == kParts[part]) notes.push_back(n);
     }
@@ -527,6 +784,106 @@ TempoMap Composer::tempoMap(const ParamStore& p, int bars) const
     return m;
 }
 
+std::vector<SectionMark> Composer::sections(const ParamStore& p, int bars) const
+{
+    std::vector<SectionMark> out;
+    for (int i = 0;; ++i) {
+        // By value: computing the next plan may move the cached ones.
+        const TrackPlan t = track(p, i);
+        for (int s = 0; s < t.form.count; ++s) {
+            const Section& sec = t.form.section[s];
+            const int startBar = t.firstBar + sec.startBar;
+            if (startBar >= bars) break;
+            SectionMark m;
+            m.beat = static_cast<double>(startBar) * kBeatsPerBar;
+            m.type = sec.type;
+            m.energy = sec.energy;
+            m.track = i;
+            // The cut sits at the head of the breakdown it belongs to, the pre-drop break in the last
+            // bar of its buildup; both are sub-bar categories of Grosz et al. and get their own mark.
+            if (sec.type == SectionType::Break && sec.cutBeats > 0.0f) {
+                SectionMark c = m;
+                c.type = SectionType::Cut;
+                out.push_back(c);
+            }
+            out.push_back(m);
+            if (sec.type == SectionType::Build) {
+                SectionMark d = m;
+                d.type = SectionType::Pdb;
+                d.beat = static_cast<double>(startBar + sec.bars - 1) * kBeatsPerBar;
+                if (startBar + sec.bars - 1 < bars) out.push_back(d);
+            }
+        }
+        if (t.firstBar + t.bars >= bars) break;
+    }
+    std::stable_sort(out.begin(), out.end(), [](const SectionMark& a, const SectionMark& b) { return a.beat < b.beat; });
+    return out;
+}
+
+/**
+ * @brief The compositional transition between two tracks (PLAN 6.7).
+ *
+ * All the tracks come from one hand, so a transition is written rather than mixed: the hats of the
+ * next track come in sixteen bars early, over the outro of this one; the pads of the previous track
+ * hold on sixteen bars into this one's intro; and the key change at the swap -- always a 32-bar
+ * boundary, because every track is a multiple of 32 bars long -- is masked by the outro's sweep, which
+ * ends exactly on it, and by an impact on the downbeat.
+ */
+void Composer::transitionBar(const ParamStore& p, int ti, int inTrack, int bar, std::vector<NoteEvent>& out) const
+{
+    const TrackPlan& plan = plans_[static_cast<size_t>(ti)];
+    const double barBeat = static_cast<double>(bar) * kBeatsPerBar;
+    constexpr int kOverlap = 16;
+
+    if (inTrack >= plan.bars - kOverlap && ti + 1 < static_cast<int>(plans_.size())) {
+        const TrackPlan& next = plans_[static_cast<size_t>(ti + 1)];
+        const int bIn = inTrack - (plan.bars - kOverlap);
+        std::vector<NoteEvent> tmp;
+        PercBarSpec spec;
+        spec.layers = 1;
+        spec.fills = false;
+        composePercBar(p, next.perc, next.percSeed, bar, bIn, plan.bpm, next.key, next.scale, spec, tmp);
+        const int hatLane = next.perc.layerOrder[0];
+        const float fade = static_cast<float>(bIn + 1) / (kOverlap + 1);   // the hats grow into the swap
+        for (NoteEvent& n : tmp) {
+            if (n.lane != static_cast<uint8_t>(hatLane)) continue;
+            n.velocity = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(n.velocity * fade)), 1, 127));
+            out.push_back(n);
+        }
+    }
+    if (inTrack < kOverlap && ti > 0) {
+        const TrackPlan& prev = plans_[static_cast<size_t>(ti - 1)];
+        // The pads keep their own pitches -- that is what "the pads of A stay" means -- so they only
+        // carry over when the two keys are close enough for that to be consonant: the same key, a
+        // fourth or a fifth. That is the harmonic-mixing rule of the DJ literature (Ishizaki, Hoashi
+        // and Takishima 2009), applied to a transition we write rather than mix.
+        const int move = ((plan.key - prev.key) % 12 + 12) % 12;
+        if (prev.melody.present[3] && (move == 0 || move == 5 || move == 7)) {
+            std::vector<NoteEvent> tmp;
+            BarPlan pad;
+            pad.parts = 8;
+            pad.type = SectionType::Outro;
+            composeMelodyBar(p, prev.melody, bar, prev.bars + inTrack, prev.scale, pad, tmp);
+            const float fade = static_cast<float>(kOverlap - inTrack) / (kOverlap + 1);   // and the pads fade out
+            for (NoteEvent& n : tmp) {
+                if (n.part != Part::Pad) continue;
+                n.velocity = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(n.velocity * fade)), 1, 127));
+                out.push_back(n);
+            }
+        }
+    }
+    if (inTrack == 0 && ti > 0) {
+        // The impact on the key change, together with the sweep that ends on this beat.
+        NoteEvent e;
+        e.beat = barBeat;
+        e.length = 4.0f;
+        e.part = Part::Sfx;
+        e.pitch = static_cast<uint8_t>(kSfxBaseNote + static_cast<int>(SfxType::Impact));
+        e.velocity = 110;
+        out.push_back(e);
+    }
+}
+
 void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::vector<NoteEvent>& out,
                            std::vector<ControlEvent>* controls) const
 {
@@ -539,6 +896,9 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
     const size_t ctlStart = controls ? controls->size() : 0;
     for (int bar = firstBar; bar < firstBar + count; ++bar) {
         const int ti = trackOfBar(p, bar);
+        // The overlap window needs the next track's plan; making it may move the cache, so it is made
+        // before any reference into the cache is taken.
+        { const TrackPlan& t0 = track(p, ti); if (bar - t0.firstBar >= t0.bars - 16) track(p, ti + 1); }
         const TrackPlan& plan = track(p, ti);
         const int inTrack = bar - plan.firstBar;
         const float progress = static_cast<float>(inTrack) / static_cast<float>(plan.bars);
@@ -556,6 +916,9 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         const int pattern = (secondaryBlock && inTrack % 16 >= 12) ? plan.secondaryPattern : plan.primaryPattern;
         const BassPatternDef& pat = kBassPatterns[pattern];
 
+        // What the form says plays in this bar (Form.h).
+        const BarPlan bp = planBar(plan.form, availabilityOf(plan), plan.sectionSeed, inTrack);
+
         if (controls != nullptr) {
             if (inTrack == 0) {
                 trackStartControls(p, plan, barBeat, *controls);
@@ -563,7 +926,7 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
             } else if (inTrack % 32 == 0) {
                 arcControls(p, plan, inTrack, barBeat, true, *controls);
             }
-            if (inTrack % 16 == 0) melodyControls(p, plan, inTrack, barBeat, *controls);
+            if (bp.barInSection == 0) sectionControls(p, plan, bp, barBeat, *controls);
             ControlEvent c;
             c.beat = barBeat;
             c.param = static_cast<int16_t>(cb + compose::BassPattern);
@@ -583,10 +946,13 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         const int figure2 = phrase.below(7), figure4 = phrase.below(7);
         const int barInPhrase = inTrack % 4;
 
+        const StyleProfile& style = styleProfile(styleOf(p));
         for (int beat = 0; beat < kBeatsPerBar; ++beat) {
             const double b = barBeat + beat;
             const bool fillGap = kickPattern == 1 && inTrack % 8 == 7 && beat == 3;
-            if (kickPattern != 2 && !fillGap) {
+            // The form decides per beat whether kick and bass play: a breakdown removes both (Solberg
+            // and Dibben 2019), a pre-drop break removes them for part or all of its bar.
+            if (kickPattern != 2 && !fillGap && ((bp.kickBeats >> beat) & 1) != 0 && static_cast<double>(beat) >= bp.cutBeats) {
                 NoteEvent k;
                 k.beat = b;
                 k.length = 0.25f;
@@ -595,11 +961,15 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
                 k.velocity = 127;
                 out.push_back(k);
             }
+            if (((bp.bassBeats >> beat) & 1) == 0 || static_cast<double>(beat) < bp.cutBeats) continue;
             if (bassBreak && inTrack % 16 == 15 && beat >= 2) continue;
 
             int figure = -1;
             if (beat == 3 && barInPhrase == 1 && varyBar2) figure = figure2;
             if (beat == 3 && barInPhrase == 3 && varyBar4) figure = figure4;
+            // The group's own change: every eight-bar group of a core ends on a figure that differs
+            // from the previous group's, so two consecutive groups can never be the same bars.
+            if (beat == 1 && bp.groupFigure >= 0) figure = bp.groupFigure;
             for (int s = 0; s < pat.count; ++s) {
                 const double pos = pat.pos[s];
                 const double next = s + 1 < pat.count ? pat.pos[s + 1] : 1.0;   // the last note ends before the next kick
@@ -610,18 +980,30 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
                     pitch = root + scaleDegree(plan.scale, chordDeg + kFigureDegrees[figure][idx]) - scaleDegree(plan.scale, chordDeg)
                           + 12 * kFigureOctaves[figure][idx];
                 }
+                // The bass slot envelope of the style profile (PLAN 6.6): flat by default, because nine
+                // reference tracks play three equally loud notes within +-1.2 dB.
+                const int slot = std::min(s, kBassSlots - 1);
                 NoteEvent n;
                 n.beat = b + pos;
-                n.length = static_cast<float>((next - pos) * plan.gate);
+                n.length = static_cast<float>((next - pos) * plan.gate * style.slotGate[slot]);
                 n.part = Part::Bass;
                 n.pitch = static_cast<uint8_t>(std::clamp(pitch, 0, 127));
-                n.velocity = 110;
+                n.velocity = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(110.0f * style.slotVel[slot])), 1, 127));
                 out.push_back(n);
             }
         }
-        composePercBar(p, plan.perc, plan.percSeed, bar, inTrack, plan.bpm, plan.key, plan.scale, true, out);
-        composeMelodyBar(p, plan.melody, bar, inTrack, plan.scale, false, out);
-        composeSfxBar(plan.melody, static_cast<double>(plan.firstBar) * kBeatsPerBar, inTrack, out);
+        PercBarSpec spec;
+        spec.layers = bp.percLayers;
+        spec.fills = bp.fills;
+        spec.hatsDense = bp.hatsDense;
+        spec.rollBar = bp.rollBar;
+        spec.pdb = bp.pdb;
+        spec.cutBeats = bp.cutBeats;
+        spec.crash = bp.barInSection == 0 && bp.type == SectionType::Drop;
+        composePercBar(p, plan.perc, plan.percSeed, bar, inTrack, plan.bpm, plan.key, plan.scale, spec, out);
+        composeMelodyBar(p, plan.melody, bar, inTrack, plan.scale, bp, out);
+        composeSfxBar(plan.form, static_cast<double>(plan.firstBar) * kBeatsPerBar, inTrack, out);
+        transitionBar(p, ti, inTrack, bar, out);
     }
     std::stable_sort(out.begin() + static_cast<long>(noteStart), out.end(), noteLess);
     if (controls != nullptr)

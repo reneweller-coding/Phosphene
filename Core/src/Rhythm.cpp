@@ -15,8 +15,8 @@ namespace {
 
 constexpr uint64_t kSaltPlan   = 0x5045524350000001ull;
 constexpr uint64_t kSaltPhrase = 0x5045524350000002ull;
-constexpr uint64_t kSaltLayer  = 0x5045524350000003ull;
 constexpr uint64_t kSaltFill   = 0x5045524350000004ull;
+constexpr uint64_t kSaltLane   = 0x5045524350000005ull;
 
 double normal(Rng& r)
 {
@@ -114,7 +114,7 @@ void percRecipeOffsets(const float* macro, float amount, float* out)
     out[perc::Resonance]    += amount * 0.10f * macro[2];
 }
 
-PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack)
+PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack, const uint64_t* laneSeeds)
 {
     const int cb = p.base(Module::Compose);
     const float pv = p.get(cb + compose::PercVariation);
@@ -174,7 +174,10 @@ PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack)
         if (!isEuclidRole(role)) continue;
         static const int kChoices[kNumPercRoles][2] = {
             { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 3, 5 }, { 0, 0 }, { 3, 5 }, { 5, 7 }, { 2, 3 }, { 3, 5 } };
-        const int pulses = kChoices[static_cast<int>(role)][r.below(2)];
+        // Each lane draws from its own stream, so that one lane can be rerolled or locked on its own.
+        Rng lr;
+        lr.seed(laneSeeds != nullptr ? laneSeeds[l] : mixSeed(seed ^ kSaltLane, static_cast<uint64_t>(l)));
+        const int pulses = kChoices[static_cast<int>(role)][lr.below(2)];
         int lo = 1000, hi = -1000;
         int syn[16] = {};
         for (int rot = 0; rot < 16; ++rot) {
@@ -185,7 +188,7 @@ PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack)
             lo = std::min(lo, syn[rot]);
             hi = std::max(hi, syn[rot]);
         }
-        const double target = lo + (hi - lo) * std::clamp(0.5 + (2.0 * r.uniform() - 1.0) * 0.25 * pv, 0.0, 1.0);
+        const double target = lo + (hi - lo) * std::clamp(0.5 + (2.0 * lr.uniform() - 1.0) * 0.25 * pv, 0.0, 1.0);
         int best = 0;
         for (int rot = 1; rot < 16; ++rot) if (std::fabs(syn[rot] - target) < std::fabs(syn[best] - target)) best = rot;
         plan.pulses[l] = pulses;
@@ -208,16 +211,6 @@ PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack)
         }
     }
     return plan;
-}
-
-int activeLayers(const PercPlan& plan, float percVariation, uint64_t trackSeed, int barInTrack)
-{
-    const int block = barInTrack / 16;
-    int n = std::min(plan.layers, 2 + block);
-    Rng r;
-    r.seed(mixSeed(trackSeed ^ kSaltLayer, static_cast<uint64_t>(block)));
-    if (block >= 3 && r.uniform() < 0.25f * percVariation) n = std::max(std::min(2, plan.layers), n - 1 - (r.uniform() < 0.5f ? 1 : 0));
-    return n;
 }
 
 FillType chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack)
@@ -244,22 +237,23 @@ FillType chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack)
 }
 
 void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSeed, int bar, int barInTrack,
-                    double bpm, int keyRoot, int scale, bool withFills, std::vector<NoteEvent>& out)
+                    double bpm, int keyRoot, int scale, const PercBarSpec& spec, std::vector<NoteEvent>& out)
 {
     const int cb = p.base(Module::Compose);
     const float density = p.get(cb + compose::PercDensity);
-    const float pv = p.get(cb + compose::PercVariation);
     const float swing = p.get(cb + compose::Swing);
     const double barBeat = static_cast<double>(bar) * kBeatsPerBar;
     Rng phrase;
     phrase.seed(mixSeed(trackSeed ^ kSaltPhrase, static_cast<uint64_t>(barInTrack / 4)));
 
-    const int layers = activeLayers(plan, pv, trackSeed, barInTrack);
+    const int layers = std::clamp(spec.layers, 0, kPercLanes);
     bool inGroove[kPercLanes] = {};
     for (int i = 0; i < layers; ++i) inGroove[plan.layerOrder[i]] = true;
-    const FillType fill = withFills ? chooseFill(p, trackSeed, barInTrack) : FillType::None;
+    // A buildup's roll replaces the phrase fill; everything else keeps the fill bank.
+    const FillType fill = (spec.fills && spec.rollBar < 0) ? chooseFill(p, trackSeed, barInTrack) : FillType::None;
 
     auto emit = [&](int lane, double beatInBar, float velocity, int shift) {
+        if (beatInBar < static_cast<double>(spec.cutBeats)) return;
         const int b = p.base(Module::Perc, lane);
         const PercRole role = static_cast<PercRole>(p.getInt(b + perc::Role));
         double beat = barBeat + beatInBar;
@@ -295,7 +289,10 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
                 float vel = 0.0f;
                 switch (role) {
                 case PercRole::ClosedHat:
-                    if (plan.hatMode == 1) vel = (pos == 1 || pos == 3) ? 0.55f : 0.0f;
+                    // In a buildup the hats close up to every sixteenth, which is the densest the lane
+                    // ever plays; that rise is one of the buildup's cues.
+                    if (spec.hatsDense) vel = pos == 2 ? 1.0f : 0.55f;
+                    else if (plan.hatMode == 1) vel = (pos == 1 || pos == 3) ? 0.55f : 0.0f;
                     else vel = pos == 2 ? 1.0f : ((pos == 1 || pos == 3) && plan.hatMode == 0 && keep[s] ? 0.5f : 0.0f);
                     break;
                 case PercRole::OpenHat:
@@ -320,9 +317,10 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
                 if (vel > 0.0f) emit(l, s * 0.25, vel, 0);
             }
         }
-        // Phrase marks outside the layers: the crash after a sixteen-bar fill, the snare's ghost note.
-        if (role == PercRole::Crash && withFills && barInTrack % 16 == 0 && barInTrack > 0 && phrase.uniform() < 0.6f) emit(l, 0.0, 0.9f, 0);
-        if (role == PercRole::Snare && fill == FillType::None && barInTrack % 4 == 3 && keep[15] && phrase.uniform() < 0.5f) emit(l, 3.75, 0.35f, 0);
+        // Phrase marks outside the layers: the crash on a drop, the snare's ghost note.
+        if (role == PercRole::Crash && spec.crash) emit(l, 0.0, 0.9f, 0);
+        if (role == PercRole::Snare && fill == FillType::None && spec.rollBar < 0 && barInTrack % 4 == 3 && keep[15] && phrase.uniform() < 0.5f)
+            emit(l, 3.75, 0.35f, 0);
     }
 
     // Fills.
@@ -358,6 +356,21 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
         if (openHat >= 0) emit(openHat, 3.5, 0.9f, 0);
         break;
     default: break;
+    }
+
+    // The buildup's snare roll over the last four bars: sixteenths, then thirty-seconds, and in the
+    // pre-drop break the roll stops on beat 3, leaving beat 4 to the formant shot alone (Grosz et al.
+    // 2025 describe the roll of a PDB on every third sixteenth; the plan asks for 1/16 -> 1/32 -> 1/64).
+    if (spec.rollBar >= 0 && snare >= 0) {
+        const int r = std::clamp(spec.rollBar, 0, 3);
+        const double step = r == 0 ? 0.5 : (r == 1 ? 0.25 : 0.125);
+        // The pre-drop break's roll ends exactly on beat 3; every other roll bar fills its four beats.
+        const double last = spec.pdb ? 3.0 : 4.0 - step;
+        int k = 0;
+        for (double b = 0.0; b <= last + 1e-9; b += step, ++k) {
+            const float vel = std::clamp(0.35f + 0.3f * static_cast<float>(r) + 0.02f * static_cast<float>(k), 0.2f, 1.0f);
+            emit(snare, b, vel, 0);
+        }
     }
 }
 

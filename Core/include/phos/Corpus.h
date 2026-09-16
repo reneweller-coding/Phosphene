@@ -85,7 +85,9 @@ private:
  * @brief Draws a sequence from an order-2 model under per-position allowed sets (Pachet and Roy).
  * @tparam Model  anything with int alphabet() and double prob(a, b, c) (PitchModel, or a toy model in the tests)
  * @param model   the model
- * @param allowed allowed[i][s] != 0 when symbol s may stand at position i
+ * @param allowed allowed[i][s] != 0 when symbol s may stand at position i; the value is a relative
+ *                weight, so that one symbol may be preferred over another at the same position (all
+ *                entries equal = the plain constraint, which is what a set of ones gives)
  * @param start2,start1 context before the first position (symbols)
  * @param temperature exponent 1/T applied to the model's probabilities (1 = the model as it is)
  * @param uniform source of uniform numbers in [0, 1)

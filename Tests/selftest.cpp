@@ -25,6 +25,8 @@
 #include "phos/Poly.h"
 #include "phos/Reverb.h"
 #include "phos/Rhythm.h"
+#include "phos/Form.h"
+#include "phos/SetFile.h"
 #include "phos/Sfx.h"
 #include "phos/TranceGate.h"
 #include "phos/WaveTable.h"
@@ -78,6 +80,17 @@ std::vector<float> renderEngine(Engine& engine, const Composer& composer, double
     }
     if (right != nullptr) *right = std::move(R);
     return L;
+}
+
+// ---------------------------------------------------------------------------------------------
+
+/** @brief Bar on which the first core of track 0 begins (since Phase 5 bar 0 is the intro). */
+int firstCoreBar(const ParamStore& p, const Composer& c)
+{
+    const TrackPlan& t = c.track(p, 0);
+    for (int i = 0; i < t.form.count; ++i)
+        if (t.form.section[i].type == SectionType::Groove || t.form.section[i].type == SectionType::Drop) return t.form.section[i].startBar;
+    return 0;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -822,8 +835,14 @@ void testComposer()
     ParamStore p;
     p.parseText("compose.bass_variation=0 compose.level_match=Off master.auto_gain=Off");
     Composer c(7);
+    // Sixteen bars of the first core: since Phase 5 bar 0 is the intro, where the kick has not
+    // started yet (Form.h). The core's first sixteen bars are where "four on the floor" must hold.
+    const TrackPlan& t0 = c.track(p, 0);
+    int core0 = 0;
+    for (int i = 0; i < t0.form.count; ++i)
+        if (t0.form.section[i].type == SectionType::Groove || t0.form.section[i].type == SectionType::Drop) { core0 = t0.form.section[i].startBar; break; }
     std::vector<NoteEvent> ev;
-    c.composeBars(p, 0, 16, ev);
+    c.composeBars(p, core0, 16, ev);
     int kicks = 0, bassOnBeat = 0, bass = 0;
     for (const NoteEvent& e : ev) {
         if (e.part == Part::Kick) ++kicks;
@@ -832,7 +851,7 @@ void testComposer()
             if (std::fabs(e.beat - std::round(e.beat)) < 1e-9) ++bassOnBeat;
         }
     }
-    check(kicks == 16 * 4 - 2, "four on the floor with the last beat of every eighth bar left out", fmt("%d kicks", kicks));
+    check(kicks == 16 * 4 - 2, "four on the floor in a core, with the last beat of every eighth bar left out", fmt("%d kicks in 16 bars from bar %d", kicks, core0));
     check(bass == 16 * 4 * 3 && bassOnBeat == 0, "rolling bass: three notes per beat, never on a kick", fmt("%d notes, %d on the beat", bass, bassOnBeat));
     check(std::is_sorted(ev.begin(), ev.end(), noteLess), "events sorted");
 
@@ -878,9 +897,16 @@ void testComposer()
     std::string detail;
     for (int pat = 0; pat < 5; ++pat) {
         ParamStore q;
+        q.parseText("compose.level_match=Off master.auto_gain=Off");
         q.set(q.base(Module::Compose) + compose::BassPattern, static_cast<float>(pat));
+        Composer cp(3);
+        // A bar of the first core: the intro has no bass yet.
+        const TrackPlan& tp = cp.track(q, 0);
+        int at = 0;
+        for (int i = 0; i < tp.form.count; ++i)
+            if (tp.form.section[i].type == SectionType::Groove || tp.form.section[i].type == SectionType::Drop) { at = tp.form.section[i].startBar; break; }
         std::vector<NoteEvent> e;
-        Composer(3).composeBars(q, 0, 1, e);
+        cp.composeBars(q, at, 1, e);
         const int count = static_cast<int>(std::count_if(e.begin(), e.end(), [](const NoteEvent& x) { return x.part == Part::Bass; }));
         detail += fmt("%s %d  ", kBassPatternNames[pat], count);
         patternsOk = patternsOk && count == 4 * expectPerBeat[pat];
@@ -960,17 +986,30 @@ void testVariety()
         auto trackLoudness = [&](bool match, double& spread) {
             auto e = std::make_unique<Engine>();
             e->prepare(48000.0, 512);
-            e->params().parseText(fmt("compose.track_bars=32 compose.sound_variation=1 compose.track_variation=1 master.auto_gain=Off master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1 compose.level_match=%s", match ? "On" : "Off").c_str());
+            e->params().parseText(fmt("compose.track_bars=128 compose.sound_variation=1 compose.track_variation=1 master.auto_gain=Off master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 "
+                                      "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 "
+                                      "mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1 compose.level_match=%s", match ? "On" : "Off").c_str());
             Composer ce(31);
-            const int tracksN = 6;
-            const TempoMap tm = ce.tempoMap(e->params(), tracksN * 32);
+            const int tracksN = 4, trackBars = 128;
+            const TempoMap tm = ce.tempoMap(e->params(), tracksN * trackBars);
             e->setTempoMap(tm);
             Conductor cond(*e, ce);
             std::vector<float> L(512), R(512);
             double lo = 1e9, hi = -1e9;
             for (int t = 0; t < tracksN; ++t) {
-                const uint64_t a = static_cast<uint64_t>(tm.secondsAt((t * 32 + 4) * 4.0) * 48000.0);
-                const uint64_t b = static_cast<uint64_t>(tm.secondsAt((t * 32 + 28) * 4.0) * 48000.0);
+                // Measure inside the track's first core: the intro and the breakdown are part of the
+                // form, not of the sound the level match is about.
+                const TrackPlan tp = ce.track(e->params(), t);
+                int coreBar = 0, coreBars = 16;
+                for (int i = 0; i < tp.form.count; ++i)
+                    if (tp.form.section[i].type == SectionType::Groove || tp.form.section[i].type == SectionType::Drop) {
+                        coreBar = tp.form.section[i].startBar;
+                        coreBars = tp.form.section[i].bars;
+                        break;
+                    }
+                const int window = std::min(24, coreBars - 4);
+                const uint64_t a = static_cast<uint64_t>(tm.secondsAt((tp.firstBar + coreBar + 2) * 4.0) * 48000.0);
+                const uint64_t b = static_cast<uint64_t>(tm.secondsAt((tp.firstBar + coreBar + 2 + window) * 4.0) * 48000.0);
                 LoudnessMeter m;
                 m.prepare(48000.0);
                 while (e->samplePosition() < b) {
@@ -983,7 +1022,7 @@ void testVariety()
                 lo = std::min(lo, lufs);
                 hi = std::max(hi, lufs);
                 // Skip to the next track's measuring window.
-                const uint64_t next = static_cast<uint64_t>(tm.secondsAt(((t + 1) * 32) * 4.0) * 48000.0);
+                const uint64_t next = static_cast<uint64_t>(tm.secondsAt(static_cast<double>(tp.firstBar + tp.bars) * 4.0) * 48000.0);
                 while (e->samplePosition() < next) {
                     cond.pump(e->params(), 32.0);
                     e->process(L.data(), R.data(), static_cast<int>(std::min<uint64_t>(512, next - e->samplePosition())));
@@ -1081,18 +1120,23 @@ void testEngine()
 
     auto eb = std::make_unique<Engine>();
     eb->prepare(sr, 256);
-    eb->params().parseText("mix.kick_mute=1 mix.perc_mute=1");
-    const std::vector<float> bassOnly = renderEngine(*eb, comp, 64.0, 256, sr);
+    // Bass alone, inside the first core: in the intro it does not play yet, and a pad on the downbeat
+    // would count as energy in the kick's window.
+    eb->params().parseText("mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1");
+    const int coreBar = firstCoreBar(eb->params(), comp);
+    const std::vector<float> bassOnly = renderEngine(*eb, comp, (coreBar + 16) * static_cast<double>(kBeatsPerBar), 256, sr);
     const double beatSamples = 60.0 / 145.0 * sr;
+    const size_t from = static_cast<size_t>(coreBar * kBeatsPerBar * beatSamples);
     double inWindow = 0.0, all = 0.0;
-    size_t nWindow = 0;
-    for (size_t i = 0; i < bassOnly.size(); ++i) {
+    size_t nWindow = 0, nAll = 0;
+    for (size_t i = from; i < bassOnly.size(); ++i) {
         const double ph = std::fmod(static_cast<double>(i), beatSamples);
         const double v = static_cast<double>(bassOnly[i]) * bassOnly[i];
         all += v;
+        ++nAll;
         if (ph < 0.060 * sr) { inWindow += v; ++nWindow; }
     }
-    const double ratio = powDb((inWindow / nWindow) / (all / bassOnly.size()));
+    const double ratio = powDb((inWindow / nWindow) / (all / nAll));
     check(ratio < -30.0, "bass energy in the kick's first 60 ms is negligible", fmt("%.1f dB relative to the bass's mean", ratio));
 
     auto em = std::make_unique<Engine>();
@@ -1141,22 +1185,39 @@ double measureLock(const char* settings, double bpm, double& spread, double& coh
     const double slotT = 0.25 * 60.0 / bpm;
     double kickPhaseAtSlot = 0.0;
     Kick kickModel;
+    // Measured inside the first core: in the intro neither kick nor bass has started (Form.h). The set
+    // seed is the first whose track begins its core after an eight-bar intro, so that the window is
+    // reached with the shortest possible render -- this test runs twelve of them.
+    int coreBeat = 0;
+    uint64_t seed = 1;
     auto render = [&](const char* solo, bool keepKick) {
         auto e = std::make_unique<Engine>();
         e->prepare(sr, 256);
-        e->params().parseText(fmt("compose.bpm=%g compose.bass_variation=0 compose.kick_pattern=Four master.clip=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.auto_gain=Off compose.level_match=Off %s %s", bpm, settings, solo).c_str());
-        Composer c(1);
-        std::vector<float> y = renderEngine(*e, c, 32.0, 256, sr);
+        e->params().parseText(fmt("compose.bpm=%g compose.bass_variation=0 compose.kick_pattern=Four master.clip=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.auto_gain=Off compose.level_match=Off "
+                                  "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 %s %s", bpm, settings, solo).c_str());
+        for (uint64_t k = 1; k <= 40; ++k) {
+            Composer probe(k);
+            if (firstCoreBar(e->params(), probe) <= 8) { seed = k; break; }
+        }
+        Composer c(seed);
+        coreBeat = firstCoreBar(e->params(), c) * kBeatsPerBar;
+        std::vector<float> y = renderEngine(*e, c, coreBeat + 32.0, 256, sr);
         if (keepKick) { kickModel = e->kick(); kickPhaseAtSlot = e->kick().outputPhaseAt(slotT); }
         return y;
     };
-    const std::vector<float> kickY = render("mix.bass_mute=1", true), bassY = render("mix.kick_mute=1", false);
+    // Nothing but the part being measured: since Phase 5 a core carries acid, arp and pad as well, and
+    // their energy leaks into a projection that is only two fundamental periods long.
+    const char* const kOnlyKick = "mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1";
+    const char* const kOnlyBass = "mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1";
+    const std::vector<float> kickY = render(kOnlyKick, true), bassY = render(kOnlyBass, false);
     const double f0 = midiToHz(30);
     const double beat = 60.0 / bpm * sr;
     const size_t per = static_cast<size_t>(std::lround(sr / f0));
     double sumD = 0.0, lo = 1e9, hi = -1e9, coh = 0.0;
     int n = 0;
-    for (int b = 8; b < 28; ++b) {
+    // Bars 2 to 6 of the core: the last bar of every eight-bar group carries the group's figure, which
+    // changes the bass pitch on purpose (Form.h), so it stays outside the window.
+    for (int b = coreBeat + 8; b < coreBeat + 28; ++b) {
         const double kickIdeal = b * beat;
         const double ideal = (b + 0.25) * beat;
         const size_t w0 = static_cast<size_t>(std::ceil(ideal));
@@ -1448,7 +1509,10 @@ void testRhythm()
         PercPlan plan = makePercPlan(q, 12345, true);
         plan.hatMode = 0;
         std::vector<NoteEvent> e;
-        composePercBar(q, plan, 12345, 0, 1, 145.0, 6, 1, false, e);
+        PercBarSpec spec;
+        spec.layers = plan.layers;
+        spec.fills = false;
+        composePercBar(q, plan, 12345, 0, 1, 145.0, 6, 1, spec, e);
         int onAnd = 0, elsewhere = 0;
         for (const NoteEvent& n : e) {
             if (n.lane != 0) continue;
@@ -1463,17 +1527,17 @@ void testRhythm()
         ParamStore q;
         q.parseText("compose.perc_variation=0 compose.perc_density=1");
         const PercPlan plan = makePercPlan(q, 777, true);
-        bool ramp = true;
-        for (int block = 0; block < 6; ++block) ramp = ramp && activeLayers(plan, 0.0f, 777, block * 16) == std::min(plan.layers, 2 + block);
-        check(ramp && plan.layers >= 4, "one percussion layer enters per sixteen-bar block", fmt("up to %d layers", plan.layers));
+        check(plan.layers >= 4, "the kit offers enough layers for the form to build with", fmt("up to %d layers", plan.layers));
         int fillBars = 0, otherFills = 0;
         for (int b = 0; b < 64; ++b) {
             const FillType f = chooseFill(q, 777, b);
             if (b % 8 == 7) fillBars += f != FillType::None ? 1 : 0; else otherFills += f != FillType::None ? 1 : 0;
         }
         std::vector<NoteEvent> e15, e16;
-        composePercBar(q, plan, 777, 15, 15, 145.0, 6, 1, true, e15);
-        composePercBar(q, plan, 777, 16, 16, 145.0, 6, 1, true, e16);
+        PercBarSpec full;
+        full.layers = plan.layers;
+        composePercBar(q, plan, 777, 15, 15, 145.0, 6, 1, full, e15);
+        composePercBar(q, plan, 777, 16, 16, 145.0, 6, 1, full, e16);
         int thirtySeconds = 0;
         for (const NoteEvent& n : e15) if (n.lane == 5 && n.beat >= 63.0 && std::fabs(n.beat * 8.0 - std::round(n.beat * 8.0)) < 1e-9 && std::fabs(n.beat * 4.0 - std::round(n.beat * 4.0)) > 1e-9) ++thirtySeconds;
         check(fillBars == 8 && otherFills == 0 && thirtySeconds == 4, "fills in every eighth bar, a 32nd roll at bar sixteen",
@@ -1503,7 +1567,10 @@ void testRhythm()
                 if (hi > lo && (chosen == lo || chosen == hi)) ++extremes;
             }
             std::vector<NoteEvent> notes;
-            composePercBar(q, plan, s, 0, 40, 145.0, 6, 1, false, notes);
+            PercBarSpec sp;
+            sp.layers = plan.layers;
+            sp.fills = false;
+            composePercBar(q, plan, s, 0, 40, 145.0, 6, 1, sp, notes);
             for (const NoteEvent& n : notes) {
                 const PercRole role = static_cast<PercRole>(q.getInt(q.base(Module::Perc, n.lane) + perc::Role));
                 const bool euclidRole = role == PercRole::Rim || role == PercRole::Tom || role == PercRole::Conga || role == PercRole::Zap || role == PercRole::Blip;
@@ -2201,7 +2268,9 @@ void testMelody()
     int outside = 0, notes = 0, weak = 0, strong = 0, arpOff = 0, arpNotes = 0, tooLow = 0, slides = 0, slideGaps = 0, masked = 0, sharedBlocks = 0;
     std::vector<const NoteEvent*> acidNotes;
     struct Range { int lo = 127, hi = 0; };
-    std::vector<Range> leadR(static_cast<size_t>(tracks * 8)), arpR(static_cast<size_t>(tracks * 8));
+    // Grouped by section, not by sixteen-bar block: since Phase 5 the masking rule is decided per
+    // section of the form (Form.h), and a sixteen-bar block may straddle two of them.
+    std::vector<Range> leadR(static_cast<size_t>(tracks * kMaxSections)), arpR(static_cast<size_t>(tracks * kMaxSections));
     for (const NoteEvent& e : ev) {
         if (e.part != Part::Acid && e.part != Part::Lead && e.part != Part::Arp) continue;
         const int bar = static_cast<int>(e.beat / kBeatsPerBar);
@@ -2220,7 +2289,7 @@ void testMelody()
         if (e.part == Part::Lead && std::fabs(inBar - std::round(inBar / 2.0) * 2.0) < 1e-9) { ++strong; if (!chordTone) ++weak; }
         if (e.part == Part::Arp) { ++arpNotes; if (!chordTone) ++arpOff; }
         if (e.part == Part::Acid) acidNotes.push_back(&e);
-        const size_t block = static_cast<size_t>(ti * 8 + inTrack / 16);
+        const size_t block = static_cast<size_t>(ti * kMaxSections + sectionOfBar(t.form, inTrack));
         if (e.part == Part::Lead) { leadR[block].lo = std::min(leadR[block].lo, int(e.pitch)); leadR[block].hi = std::max(leadR[block].hi, int(e.pitch)); }
         if (e.part == Part::Arp) { arpR[block].lo = std::min(arpR[block].lo, int(e.pitch)); arpR[block].hi = std::max(arpR[block].hi, int(e.pitch)); }
     }
@@ -2240,7 +2309,7 @@ void testMelody()
     check(tooLow == 0, "depth rule in the score: acid from D3, lead from B3, arp from G3", fmt("%d notes too low", tooLow));
     check(slides > 10 && slideGaps == 0, "every acid slide overlaps the note it slides into", fmt("%d slides, %d with a gap", slides, slideGaps));
     check(sharedBlocks > 0 && masked == 0, "where lead and arp play together their ranges overlap by at most two semitones",
-          fmt("%d shared blocks, %d masked", sharedBlocks, masked));
+          fmt("%d shared sections, %d masked", sharedBlocks, masked));
 
     // Variety over a night.
     {
@@ -2574,17 +2643,21 @@ void testPads()
     check(mismatches == 0 && badNotes == 0, "every pad voicing moves the voices as little as any valid voicing could",
           fmt("%d of %d differ from brute force, %d notes out of range", mismatches, cases, badNotes));
 
-    // In the score: pad notes are chord tones of their bar, held to the next chord.
+    // In the score: pad notes are chord tones of their bar, held to the next chord. The first sixteen
+    // bars of a track are left out: there the previous track's pads still sound, on its own chords,
+    // which is exactly what the transition asks for (PLAN 6.7) and has its own check in testForm.
     ParamStore p;
-    p.parseText("compose.track_bars=64 compose.pad_amount=1 compose.level_match=Off master.auto_gain=Off");
+    p.parseText("compose.track_bars=128 compose.pad_amount=1 compose.level_match=Off master.auto_gain=Off");
     Composer c(515);
     std::vector<NoteEvent> ev;
-    c.composeBars(p, 0, 8 * 64, ev);
+    c.composeBars(p, 0, 4 * 128, ev);
     int pads = 0, off = 0;
     for (const NoteEvent& e : ev) {
         if (e.part != Part::Pad) continue;
         const int bar = static_cast<int>(e.beat / kBeatsPerBar);
-        const TrackPlan& t = c.track(p, c.trackOfBar(p, bar));
+        const int ti = c.trackOfBar(p, bar);
+        const TrackPlan& t = c.track(p, ti);
+        if (ti > 0 && bar - t.firstBar < 16) continue;
         int pcs[3];
         chordTones(t.scale, t.melody.chordDegree[chordIndexAt(t.melody, bar - t.firstBar)], pcs);
         const int pc = ((e.pitch - t.key) % 12 + 12) % 12;
@@ -2860,31 +2933,53 @@ void testSfx()
         }
         check(worst < -30.0, "every effect type: under -30 dB of its power below 140 Hz", fmt("worst %.1f dB", worst));
     }
-    // Placement: impacts on block downbeats where a part enters, the formant shot a beat before, risers ending there.
+    // Placement: since Phase 5 the effects sit on the boundaries of the form (Form.h), not on
+    // sixteen-bar block entries: a riser climbs into a drop and ends on it, the formant shot is the
+    // pre-drop "Abriss" on the last beat of the buildup, the impact marks the drop's downbeat.
     {
         ParamStore q;
         q.parseText("compose.sfx_amount=1 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off");
         Composer c(303);
-        int impacts = 0, misplaced = 0, shots = 0, risers = 0;
+        int impacts = 0, misplaced = 0, shots = 0, risers = 0, sweeps = 0;
         for (int ti = 0; ti < 8; ++ti) {
             const TrackPlan t = c.track(q, ti);
-            for (const SfxEvent& s : t.melody.sfx) {
+            // The bars on which a core begins after a buildup, and the last bar of every buildup.
+            std::vector<double> dropBeats, pdbEnd;
+            for (int i = 0; i < t.form.count; ++i) {
+                const Section& sec = t.form.section[i];
+                if (sec.type != SectionType::Build) continue;
+                pdbEnd.push_back(static_cast<double>(sec.startBar + sec.bars) * kBeatsPerBar);
+                dropBeats.push_back(static_cast<double>(sec.startBar + sec.bars) * kBeatsPerBar);
+            }
+            auto isAt = [](const std::vector<double>& v, double x) {
+                for (double b : v) if (std::fabs(b - x) < 1e-6) return true;
+                return false;
+            };
+            for (const SfxEvent& s : t.form.sfx) {
                 const double end = s.beat + s.length;
-                const int blockAt = static_cast<int>(std::lround(s.beat / (16.0 * kBeatsPerBar)));
                 if (s.type == static_cast<int>(SfxType::Impact)) {
                     ++impacts;
-                    const int b = static_cast<int>(s.beat / (16.0 * kBeatsPerBar));
-                    const bool onDownbeat = std::fmod(s.beat, 16.0 * kBeatsPerBar) == 0.0;
-                    const bool enters = b >= 1 && ((t.melody.blockParts[b] & 7) & ~(t.melody.blockParts[b - 1] & 7)) != 0;
-                    if (!onDownbeat || !enters) ++misplaced;
+                    // Either the downbeat of a drop that follows a buildup, or of one that follows a
+                    // breakdown directly (the flat Progressive body).
+                    bool ok = isAt(dropBeats, s.beat);
+                    for (int i = 1; i < t.form.count && !ok; ++i)
+                        ok = t.form.section[i].type == SectionType::Drop && t.form.section[i - 1].type == SectionType::Break
+                          && std::fabs(static_cast<double>(t.form.section[i].startBar) * kBeatsPerBar - s.beat) < 1e-6;
+                    if (!ok) ++misplaced;
                 }
-                if (s.type == static_cast<int>(SfxType::FormantShot)) { ++shots; if (std::fmod(s.beat + 1.0, 16.0 * kBeatsPerBar) != 0.0) ++misplaced; }
-                if (s.type == static_cast<int>(SfxType::Riser)) { ++risers; if (std::fmod(end, 16.0 * kBeatsPerBar) != 0.0) ++misplaced; }
-                (void)blockAt;
+                if (s.type == static_cast<int>(SfxType::FormantShot)) { ++shots; if (!isAt(pdbEnd, s.beat + 1.0)) ++misplaced; }
+                if (s.type == static_cast<int>(SfxType::Riser)) { ++risers; if (!isAt(dropBeats, end)) ++misplaced; }
+                if (s.type == static_cast<int>(SfxType::Sweep)) ++sweeps;
             }
+            // The outro's sweep ends exactly on the track boundary, where the key changes (PLAN 6.7).
+            bool endSweep = false;
+            for (const SfxEvent& s : t.form.sfx)
+                if (s.type == static_cast<int>(SfxType::Sweep) && std::fabs(s.beat + s.length - static_cast<double>(t.bars) * kBeatsPerBar) < 1e-6) endSweep = true;
+            if (!endSweep) ++misplaced;
         }
-        check(impacts > 0 && shots > 0 && risers > 0 && misplaced == 0, "effects sit on the block where a part enters: impact on its downbeat, formant shot a beat before, riser ending on it",
-              fmt("%d impacts, %d formant shots, %d risers, %d misplaced", impacts, shots, risers, misplaced));
+        check(impacts > 0 && shots > 0 && risers > 0 && sweeps > 0 && misplaced == 0,
+              "effects on the boundaries of the form: riser into the drop, formant shot on the last beat of the PDB, impact on the drop, sweep into the key change",
+              fmt("%d impacts, %d formant shots, %d risers, %d sweeps, %d misplaced", impacts, shots, risers, sweeps, misplaced));
     }
 }
 
@@ -2913,6 +3008,589 @@ void testMaster()
               static_cast<double>(rd.truePeak), static_cast<double>(rd.range)));
 }
 
+// ---------------------------------------------------------------------------------------------
+// Phase 5: the form grammar, the energy arc, the section rules, curation and transitions.
+
+/** @brief Power in a band, in dB, over the largest power of two that fits in @p n samples. */
+double bandPowerDb(const std::vector<float>& x, size_t from, size_t n, double lo, double hi)
+{
+    if (from >= x.size()) return -200.0;
+    n = std::min(n, x.size() - from);
+    size_t m = 1;
+    while (m * 2 <= n) m *= 2;
+    if (m < 256) return -200.0;
+    const std::vector<double> spec = powerSpectrum(x.data() + from, m);
+    double p = 0.0;
+    for (size_t k = 1; k < m / 2; ++k) {
+        const double f = static_cast<double>(k) * 48000.0 / static_cast<double>(m);
+        if (f >= lo && f < hi) p += spec[k];
+    }
+    return 10.0 * std::log10(p / static_cast<double>(m) + 1e-30);
+}
+
+/** @brief Root mean square of a stretch, in dB. */
+double rmsDb(const std::vector<float>& x, size_t from, size_t n)
+{
+    if (from >= x.size()) return -200.0;
+    n = std::min(n, x.size() - from);
+    double s = 0.0;
+    for (size_t i = 0; i < n; ++i) s += static_cast<double>(x[from + i]) * x[from + i];
+    return 10.0 * std::log10(s / static_cast<double>(std::max<size_t>(n, 1)) + 1e-30);
+}
+
+void testForm()
+{
+    section("form grammar and energy arc");
+
+    // Every form the grammar can build keeps the hard constraints of PLAN 6.2 and has exactly the
+    // length that was asked for -- the latter matters because the length belongs to the set walk while
+    // the body is the track's own decision (a rerolled track must not move the tracks after it).
+    {
+        int forms = 0, broken = 0, wrongLength = 0, bodies[kNumBodies] = {}, lengths[5] = {};
+        double shareLo = 1.0, shareHi = 0.0;
+        for (int st = 0; st < kNumStyles; ++st) {
+            const StyleProfile& s = styleProfile(static_cast<StyleId>(st));
+            for (int target = kMinTrackBars; target <= kMaxTrackBars; target += 32) {
+                for (uint64_t seed = 1; seed <= 40; ++seed) {
+                    const FormPlan f = makeFormPlan(s, seed, target, 0.3, 0.9);
+                    ++forms;
+                    ++bodies[f.body];
+                    if (!formConstraintsHold(f)) ++broken;
+                    if (f.bars != target) ++wrongLength;
+                    int brk = 0;
+                    for (int i = 0; i < f.count; ++i) {
+                        if (f.section[i].type == SectionType::Break) brk += f.section[i].bars;
+                        const int b = f.section[i].bars;
+                        lengths[b == 8 ? 0 : (b == 16 ? 1 : (b == 32 ? 2 : (b == 64 ? 3 : 4)))]++;
+                    }
+                    const double share = static_cast<double>(brk) / f.bars;
+                    shareLo = std::min(shareLo, share);
+                    shareHi = std::max(shareHi, share);
+                }
+            }
+        }
+        check(broken == 0 && wrongLength == 0 && lengths[4] == 0 && bodies[0] > 0 && bodies[1] > 0 && bodies[2] > 0,
+              "every form keeps the constraints and hits the requested length exactly",
+              fmt("%d forms, %d broken, %d off length, bodies %d/%d/%d, break share %.2f..%.2f",
+                  forms, broken, wrongLength, bodies[0], bodies[1], bodies[2], shareLo, shareHi));
+    }
+
+    // The two-drop standard of Grosz et al.: every track has at least two cores, and the necessity
+    // order Core > Buildup/Outro > Breakdown/Intro > PDB holds by construction (a form without a core
+    // cannot be built). Intro and outro stay inside Easwaran's window of 8 to 16 bars.
+    {
+        int tracks = 0, twoDrops = 0, introOk = 0, outroOk = 0, pdbVariants[kNumPdbVariants] = {}, cuts = 0, builds = 0;
+        for (uint64_t seed = 1; seed <= 200; ++seed) {
+            const FormPlan f = makeFormPlan(styleProfile(StyleId::FullOn), seed, 256, 0.5, 0.9);
+            ++tracks;
+            int cores = 0;
+            for (int i = 0; i < f.count; ++i) {
+                const Section& s = f.section[i];
+                if (s.type == SectionType::Groove || s.type == SectionType::Drop) ++cores;
+                if (s.type == SectionType::Build) { ++builds; ++pdbVariants[s.pdbVariant]; }
+                if (s.type == SectionType::Break && s.cutBeats > 0.0f) ++cuts;
+            }
+            if (cores >= 2) ++twoDrops;
+            if (f.section[0].bars == 8 || f.section[0].bars == 16) ++introOk;
+            if (f.section[f.count - 1].bars == 8 || f.section[f.count - 1].bars == 16) ++outroOk;
+        }
+        const int variantsSeen = (pdbVariants[0] > 0) + (pdbVariants[1] > 0) + (pdbVariants[2] > 0) + (pdbVariants[3] > 0);
+        check(twoDrops == tracks && introOk == tracks && outroOk == tracks && variantsSeen == kNumPdbVariants && cuts > 0,
+              "two-peak form, intro and outro of 8 or 16 bars, all four pre-drop-break variants, cuts before the breakdowns",
+              fmt("%d tracks, %d with two or more cores, PDB variants %d/%d/%d/%d of %d buildups, %d cuts",
+                  tracks, twoDrops, pdbVariants[0], pdbVariants[1], pdbVariants[2], pdbVariants[3], builds, cuts));
+    }
+
+    // The energy arc: smooth (no step larger than the slope allows), inside [0, 1], and the order of
+    // the section energies survives every point of every arc.
+    {
+        double worstStep = 0.0, lo = 1.0, hi = 0.0;
+        int orderBroken = 0;
+        for (int a = 0; a < kNumArcs; ++a) {
+            double prev = arcEnergy(static_cast<ArcId>(a), 0.0);
+            for (int k = 1; k <= 1000; ++k) {
+                const double e = arcEnergy(static_cast<ArcId>(a), k / 1000.0);
+                worstStep = std::max(worstStep, std::fabs(e - prev));
+                lo = std::min(lo, e);
+                hi = std::max(hi, e);
+                prev = e;
+                // Drop above buildup above groove above breakdown, whatever the arc says.
+                const double scale = 0.55 + 0.45 * e;
+                if (!(typeEnergy(SectionType::Drop) * scale > typeEnergy(SectionType::Groove) * scale
+                      && typeEnergy(SectionType::Groove) * scale > typeEnergy(SectionType::Break) * scale)) ++orderBroken;
+            }
+        }
+        check(worstStep < 0.004 && lo >= 0.0 && hi <= 1.0 && orderBroken == 0,
+              "energy arcs are smooth raised cosines inside [0, 1] and keep the order drop > groove > breakdown",
+              fmt("largest step over a thousandth of the set %.4f, range %.2f..%.2f", worstStep, lo, hi));
+    }
+
+    // Peak-Time against Closing: over a whole set the arc really moves the sections' energy.
+    {
+        auto meanEnergy = [](const char* arc, int half) {
+            ParamStore q;
+            q.parseText(fmt("compose.arc=%s compose.set_minutes=60 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off", arc).c_str());
+            Composer c(2026);
+            double sum = 0.0;
+            int n = 0;
+            for (int t = half * 4; t < half * 4 + 4; ++t) {
+                const TrackPlan p = c.track(q, t);
+                for (int i = 0; i < p.form.count; ++i) { sum += p.form.section[i].energy * p.form.section[i].bars; n += p.form.section[i].bars; }
+            }
+            return sum / std::max(n, 1);
+        };
+        const double peakEarly = meanEnergy("Peak-Time", 0), peakLate = meanEnergy("Peak-Time", 1);
+        const double closeEarly = meanEnergy("Closing", 0), closeLate = meanEnergy("Closing", 1);
+        check(peakLate > peakEarly && closeLate < closeEarly - 0.05 && peakLate > closeLate + 0.1,
+              "the dramaturgy preset moves the energy of the sections over the set",
+              fmt("Peak-Time %.2f -> %.2f, Closing %.2f -> %.2f", peakEarly, peakLate, closeEarly, closeLate));
+    }
+
+    // Easwaran and Butler: something changes every eight bars. No two consecutive eight-bar groups of
+    // a core hold the same notes.
+    {
+        ParamStore q;
+        q.parseText("compose.track_bars=256 compose.bass_variation=0 compose.level_match=Off master.auto_gain=Off");
+        Composer c(1234);
+        int groups = 0, identical = 0, sameBass = 0;
+        for (int ti = 0; ti < 6; ++ti) {
+            const TrackPlan t = c.track(q, ti);
+            for (int si = 0; si < t.form.count; ++si) {
+                const Section& s = t.form.section[si];
+                if (s.type != SectionType::Groove && s.type != SectionType::Drop) continue;
+                // Two hashes per group: over everything, and over the bass alone. The second isolates
+                // the rule itself -- with Bass Variation at zero the only thing that may move the bass
+                // from group to group is the group's own figure, so a broken rule shows there even
+                // when a percussion fill happens to differ.
+                std::vector<uint64_t> hash, bassHash;
+                for (int g = 0; g * 8 + 8 <= s.bars; ++g) {
+                    std::vector<NoteEvent> ev;
+                    c.composeBars(q, t.firstBar + s.startBar + g * 8, 8, ev);
+                    uint64_t h = 1469598103934665603ull, hb = h;
+                    const double base = static_cast<double>(t.firstBar + s.startBar + g * 8) * kBeatsPerBar;
+                    for (const NoteEvent& e : ev) {
+                        const uint64_t k = static_cast<uint64_t>(std::llround((e.beat - base) * 960.0)) * 1024
+                                         + static_cast<uint64_t>(e.pitch) * 8 + static_cast<uint64_t>(e.part);
+                        h = (h ^ k) * 1099511628211ull;
+                        h = (h ^ static_cast<uint64_t>(std::llround(e.length * 960.0))) * 1099511628211ull;
+                        if (e.part == Part::Bass) hb = (hb ^ k) * 1099511628211ull;
+                    }
+                    hash.push_back(h);
+                    bassHash.push_back(hb);
+                }
+                for (size_t g = 1; g < hash.size(); ++g) {
+                    ++groups;
+                    if (hash[g] == hash[g - 1]) ++identical;
+                    if (bassHash[g] == bassHash[g - 1]) ++sameBass;
+                }
+            }
+        }
+        check(groups > 30 && identical == 0 && sameBass == 0, "no two consecutive eight-bar groups of a core hold the same notes, the bass alone included",
+              fmt("%d consecutive pairs, %d identical, %d with the same bass", groups, identical, sameBass));
+    }
+
+    // The instrumentation matrix: a breakdown has neither kick nor bass, an intro starts without a
+    // kick and layers the percussion up, a drop brings everything back.
+    {
+        ParamStore q;
+        q.parseText("compose.track_bars=256 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 compose.pad_amount=1 compose.level_match=Off master.auto_gain=Off");
+        Composer c(55);
+        int breakKicks = 0, breakBass = 0, introKickBars = 0, introBars = 0, dropBars = 0, dropAllParts = 0, pdbBars = 0, pdbBeat4 = 0;
+        for (int ti = 0; ti < 4; ++ti) {
+            const TrackPlan t = c.track(q, ti);
+            for (int si = 0; si < t.form.count; ++si) {
+                const Section& s = t.form.section[si];
+                std::vector<NoteEvent> ev;
+                c.composeBars(q, t.firstBar + s.startBar, s.bars, ev);
+                for (const NoteEvent& e : ev) {
+                    const double inSection = e.beat - static_cast<double>(t.firstBar + s.startBar) * kBeatsPerBar;
+                    const int barIn = static_cast<int>(inSection / kBeatsPerBar);
+                    if (s.type == SectionType::Break) {
+                        if (e.part == Part::Kick) ++breakKicks;
+                        if (e.part == Part::Bass) ++breakBass;
+                    }
+                    if (s.type == SectionType::Build && barIn == s.bars - 1) {
+                        const double beatInBar = inSection - barIn * kBeatsPerBar;
+                        if (beatInBar >= 3.0 && (e.part == Part::Bass || (e.part == Part::Kick && s.pdbVariant != 3))) ++pdbBeat4;
+                    }
+                }
+                if (s.type == SectionType::Intro && si == 0) {
+                    ++introBars;
+                    int firstKick = 99;
+                    for (const NoteEvent& e : ev)
+                        if (e.part == Part::Kick) firstKick = std::min(firstKick, static_cast<int>((e.beat - static_cast<double>(t.firstBar) * kBeatsPerBar) / kBeatsPerBar));
+                    if (firstKick >= 4 && firstKick <= 8) ++introKickBars;
+                }
+                if (s.type == SectionType::Drop) {
+                    ++dropBars;
+                    bool kick = false, bass = false, melody = false;
+                    for (const NoteEvent& e : ev) {
+                        kick = kick || e.part == Part::Kick;
+                        bass = bass || e.part == Part::Bass;
+                        melody = melody || e.part == Part::Acid || e.part == Part::Lead || e.part == Part::Arp;
+                    }
+                    if (kick && bass && melody) ++dropAllParts;
+                }
+                if (s.type == SectionType::Build) ++pdbBars;
+            }
+        }
+        check(breakKicks == 0 && breakBass == 0 && introKickBars == introBars && dropAllParts == dropBars && pdbBeat4 == 0 && pdbBars > 0,
+              "instrumentation matrix: no kick or bass in a breakdown, the intro's kick between bar 5 and 9, everything in a drop, beat 4 of the PDB empty",
+              fmt("%d kicks and %d bass notes in breakdowns, %d of %d intros, %d of %d drops complete, %d notes on beat 4 of %d PDBs",
+                  breakKicks, breakBass, introKickBars, introBars, dropAllParts, dropBars, pdbBeat4, pdbBars));
+    }
+
+    // The bass slot envelope of PLAN 6.6 is a style-profile parameter with a flat default, because nine
+    // reference tracks play three equally loud notes within +-1.2 dB. Flat means: every profile's table
+    // is all ones, and the three notes of a beat really come out with the same velocity and the same
+    // share of their slot.
+    {
+        int nonFlat = 0;
+        for (int st = 0; st < kNumStyles; ++st) {
+            const StyleProfile& sp = styleProfile(static_cast<StyleId>(st));
+            for (int k = 0; k < kBassSlots; ++k) nonFlat += (sp.slotGate[k] != 1.0f) + (sp.slotVel[k] != 1.0f);
+        }
+        ParamStore q;
+        q.parseText("compose.bass_variation=0 compose.bass_pattern=Rolling compose.level_match=Off master.auto_gain=Off");
+        Composer cb(19);
+        const TrackPlan& tb = cb.track(q, 0);
+        int core = 0;
+        for (int i = 0; i < tb.form.count; ++i)
+            if (tb.form.section[i].type == SectionType::Groove || tb.form.section[i].type == SectionType::Drop) { core = tb.form.section[i].startBar; break; }
+        std::vector<NoteEvent> ev;
+        cb.composeBars(q, tb.firstBar + core, 1, ev);
+        std::vector<const NoteEvent*> beat0;
+        for (const NoteEvent& e : ev)
+            if (e.part == Part::Bass && e.beat < static_cast<double>(tb.firstBar + core) * kBeatsPerBar + 1.0) beat0.push_back(&e);
+        bool same = beat0.size() == 3;
+        for (size_t i = 1; i < beat0.size() && same; ++i)
+            same = beat0[i]->velocity == beat0[0]->velocity && std::fabs(beat0[i]->length - beat0[0]->length) < 1e-6f;
+        check(nonFlat == 0 && same, "the bass slot envelope is flat in every style profile, and the three notes of a beat come out equal",
+              fmt("%d non-flat table entries, %zu notes on the first beat", nonFlat, beat0.size()));
+    }
+
+    // Colour (Farbood's dissonance): the more colour, the more often the lead takes the flat second or
+    // the upper note of an augmented second.
+    {
+        auto colourShare = [](float colour) {
+            ParamStore q;
+            q.parseText("compose.lead_amount=1 compose.level_match=Off master.auto_gain=Off");
+            int total = 0, coloured = 0;
+            for (uint64_t seed = 1; seed <= 60; ++seed) {
+                const MelodyPlan m = makeMelodyPlan(q, styleProfile(StyleId::Goa), seed, 6, 3, false, colour);
+                for (const auto& phrase : m.lead)
+                    for (const MelodyNote& n : phrase) {
+                        ++total;
+                        const int pc = ((m.root[1] + n.rel - 6) % 12 + 12) % 12;
+                        // Phrygian dominant: the flat second is 1, the augmented second's upper note 4.
+                        if (pc == 1 || pc == 4) ++coloured;
+                    }
+            }
+            return 100.0 * coloured / std::max(total, 1);
+        };
+        const double plain = colourShare(0.0f), rich = colourShare(1.0f);
+        check(rich > plain + 2.0, "the energy arc's colour weight lifts the flat second and the augmented second in the lead",
+              fmt("%.1f %% of the lead's notes at colour 0, %.1f %% at colour 1", plain, rich));
+    }
+}
+
+void testSectionRules()
+{
+    section("section rules on the render (Solberg and Dibben 2019)");
+    const double sr = 48000.0;
+    ParamStore p;
+    p.parseText("compose.track_bars=128 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
+                "compose.pad_amount=1 compose.sfx_amount=1 compose.level_match=Off master.auto_gain=Off");
+    // A seed whose first track carries the whole break routine: core, breakdown, buildup, drop, and a
+    // pre-drop break that does not keep the kick on beat 4 (the "Kick on 4" variant is allowed to).
+    int coreA = -1, brk = -1, build = -1, drop = -1;
+    uint64_t seed = 0;
+    std::unique_ptr<Composer> comp;
+    for (uint64_t s = 1; s <= 200 && coreA < 0; ++s) {
+        auto c = std::make_unique<Composer>(s);
+        const TrackPlan t = c->track(p, 0);
+        for (int i = 3; i < t.form.count; ++i) {
+            if (t.form.section[i - 3].type != SectionType::Groove && t.form.section[i - 3].type != SectionType::Drop) continue;
+            if (t.form.section[i - 2].type != SectionType::Break || t.form.section[i - 1].type != SectionType::Build) continue;
+                // A sixteen-bar buildup, so that its rise can be read over four four-bar windows, and a
+            // pre-drop break that does not keep the kick on beat 4 (the "Kick on 4" variant may).
+            if (t.form.section[i].type != SectionType::Drop || t.form.section[i - 1].pdbVariant == 3
+                || t.form.section[i - 1].bars != 16) continue;
+            coreA = i - 3;
+            brk = i - 2;
+            build = i - 1;
+            drop = i;
+            seed = s;
+            comp = std::move(c);
+            break;
+        }
+    }
+    check(coreA >= 0, "a track with the full break routine was found", fmt("seed %llu", static_cast<unsigned long long>(seed)));
+    if (coreA < 0) return;
+
+    const TrackPlan plan = comp->track(p, 0);
+    const double bpm = plan.bpm, beatSec = 60.0 / bpm, barSec = kBeatsPerBar * beatSec;
+    auto e = std::make_unique<Engine>();
+    e->prepare(sr, 512);
+    e->params().copyValuesFrom(p);
+    TempoMap tm = comp->tempoMap(e->params(), plan.bars);
+    e->setTempoMap(tm);
+    Conductor cond(*e, *comp);
+    const size_t total = static_cast<size_t>(tm.secondsAt(plan.bars * static_cast<double>(kBeatsPerBar)) * sr);
+    std::vector<float> mono(total), L(512), R(512);
+    size_t done = 0;
+    while (done < total) {
+        cond.pump(e->params(), 32.0);
+        const int n = static_cast<int>(std::min<size_t>(512, total - done));
+        e->process(L.data(), R.data(), n);
+        for (int i = 0; i < n; ++i) mono[done + static_cast<size_t>(i)] = 0.5f * (L[static_cast<size_t>(i)] + R[static_cast<size_t>(i)]);
+        done += static_cast<size_t>(n);
+    }
+    const size_t lat = static_cast<size_t>(e->latencySamples());
+    auto barAt = [&](int bar) { return static_cast<size_t>(bar * barSec * sr) + lat; };
+    auto barsRms = [&](int from, int count) { return rmsDb(mono, barAt(from), static_cast<size_t>(count * barSec * sr)); };
+    auto barsBand = [&](int from, int count, double lo, double hi) {
+        return bandPowerDb(mono, barAt(from), static_cast<size_t>(count * barSec * sr), lo, hi);
+    };
+
+    const Section& sCore = plan.form.section[coreA];
+    const Section& sBrk = plan.form.section[brk];
+    const Section& sBuild = plan.form.section[build];
+    const Section& sDrop = plan.form.section[drop];
+    const int coreWindow = std::min(16, sCore.bars - 2);
+    const int coreFrom = sCore.startBar + sCore.bars - coreWindow;
+    const int brkFrom = sBrk.startBar + 2, brkWindow = std::min(8, sBrk.bars - 4);
+
+    // (a) The U: the breakdown far below the core, and after the drop at least what was there before
+    // the break -- Solberg and Dibben's finding on the track their listeners liked best.
+    const double core = barsRms(coreFrom, coreWindow);
+    const double breakdown = barsRms(brkFrom, brkWindow);
+    const double after = barsRms(sDrop.startBar, std::min(16, sDrop.bars));
+    check(breakdown < core - 6.0 && after >= core - 0.5,
+          "U-shaped amplitude: the breakdown at least 6 dB under the core, the drop back at or above it",
+          fmt("core %.1f dB, breakdown %.1f dB (%.1f down), after the drop %.1f dB (%+.1f)", core, breakdown, core - breakdown, after, after - core));
+
+    // The buildup rises monotonically over four-bar windows.
+    {
+        // Four four-bar windows; the last one stops before the pre-drop break, which is a vacuum by
+        // design and would read as a fall.
+        int windows = 0, falls = 0;
+        double prev = -1e9, first = 0.0, last = 0.0;
+        for (int b = 0; b + 4 <= sBuild.bars; b += 4) {
+            const double v = barsRms(sBuild.startBar + b, b + 4 >= sBuild.bars ? 3 : 4);
+            if (windows == 0) first = v;
+            last = v;
+            if (windows > 0 && v < prev - 0.2) ++falls;
+            prev = v;
+            ++windows;
+        }
+        check(windows >= 2 && falls == 0 && last > first,
+              "the buildup rises over every four-bar window", fmt("%d windows, %d falling, %.1f -> %.1f dB", windows, falls, first, last));
+    }
+
+    // (b) The bass band, the "sudden removal of bass and bass drum".
+    const double coreLow = barsBand(coreFrom, coreWindow, 40.0, 140.0);
+    const double brkLow = barsBand(brkFrom, brkWindow, 40.0, 140.0);
+    check(brkLow < coreLow - 20.0, "40 to 140 Hz in the breakdown at least 20 dB under the core",
+          fmt("core %.1f dB, breakdown %.1f dB (%.1f down)", coreLow, brkLow, coreLow - brkLow));
+
+    // (c) The pre-drop break: beat 4 of the last bar of the buildup, in the kick and bass band,
+    // against a beat of the core.
+    {
+        const int pdbBar = sBuild.startBar + sBuild.bars - 1;
+        const size_t beat4 = static_cast<size_t>((pdbBar * barSec + 3.0 * beatSec) * sr) + lat;
+        const size_t coreBeat = static_cast<size_t>((coreFrom + 4) * barSec * sr) + lat;
+        const size_t len = static_cast<size_t>(beatSec * sr);
+        const double pdb = bandPowerDb(mono, beat4, len, 40.0, 140.0);
+        const double ref = bandPowerDb(mono, coreBeat, len, 40.0, 140.0);
+        check(pdb < ref - 30.0, "beat 4 of the pre-drop break: kick and bass band at least 30 dB under a core beat",
+              fmt("core beat %.1f dB, PDB beat 4 %.1f dB (%.1f down, variant %s)", ref, pdb, ref - pdb, kPdbVariantNames[sBuild.pdbVariant]));
+    }
+
+    // (d) The presence band after the drop against before the break: the drop must not be duller than
+    // what it replaces (the spectral-flux half of Solberg and Dibben's Track 2 finding).
+    const double corePres = barsBand(coreFrom, coreWindow, 1500.0, 6000.0);
+    const double afterPres = barsBand(sDrop.startBar, std::min(16, sDrop.bars), 1500.0, 6000.0);
+    check(afterPres >= corePres - 0.5, "1.5 to 6 kHz after the drop at least what it was before the break",
+          fmt("before %.1f dB, after %.1f dB (%+.1f)", corePres, afterPres, afterPres - corePres));
+}
+
+void testCuration()
+{
+    section("locks, rerolls and the set file");
+
+    // The fingerprint reads the middle of a track, outside the sixteen-bar overlap windows at its
+    // ends: a transition deliberately carries the neighbouring track's hats and pads into them
+    // (PLAN 6.7), so rerolling a track does change the overlap bars of the tracks beside it.
+    auto fingerprint = [](Composer& c, const ParamStore& p, int track) {
+        const TrackPlan t = c.track(p, track);
+        std::vector<NoteEvent> notes;
+        std::vector<ControlEvent> controls;
+        c.composeBars(p, t.firstBar + 16, std::min(t.bars - 32, 48), notes, &controls);
+        uint64_t h = 1469598103934665603ull;
+        auto mix64 = [&](uint64_t k) { h = (h ^ k) * 1099511628211ull; };
+        mix64(static_cast<uint64_t>(t.firstBar) * 1000 + static_cast<uint64_t>(t.bars));
+        for (const NoteEvent& e : notes) {
+            mix64(static_cast<uint64_t>(std::llround(e.beat * 960.0)));
+            mix64(static_cast<uint64_t>(e.pitch) * 256 + static_cast<uint64_t>(e.part) * 16 + e.velocity / 8);
+            mix64(static_cast<uint64_t>(std::llround(e.length * 960.0)));
+        }
+        for (const ControlEvent& e : controls) {
+            mix64(static_cast<uint64_t>(std::llround(e.beat * 960.0)));
+            mix64(static_cast<uint64_t>(e.param) * 4 + static_cast<uint64_t>(e.kind));
+            mix64(static_cast<uint64_t>(std::llround(static_cast<double>(e.value) * 100000.0)) & 0xffffffffull);
+        }
+        return h;
+    };
+
+    ParamStore p;
+    p.parseText("compose.track_bars=128 compose.level_match=Off master.auto_gain=Off");
+    std::vector<uint64_t> before;
+    {
+        Composer c(4242);
+        for (int t = 0; t < 5; ++t) before.push_back(fingerprint(c, p, t));
+    }
+    // Rerolling track 3 changes track 3 and nothing else.
+    {
+        Composer c(4242);
+        c.reroll(LockUnit::Track, 2);
+        int same = 0, changed = 0;
+        for (int t = 0; t < 5; ++t) {
+            const uint64_t h = fingerprint(c, p, t);
+            if (t == 2) changed += h != before[static_cast<size_t>(t)] ? 1 : 0;
+            else same += h == before[static_cast<size_t>(t)] ? 1 : 0;
+        }
+        check(same == 4 && changed == 1, "rerolling one track leaves every other track bit-identical", fmt("%d of 4 unchanged, track 3 changed %d", same, changed));
+    }
+    // A locked track survives a reroll of the whole set.
+    {
+        Composer c(4242);
+        c.setLock(LockUnit::Track, 1, true);
+        c.reroll(LockUnit::Set, 0);
+        int lockedSame = 0, othersChanged = 0;
+        for (int t = 0; t < 5; ++t) {
+            const uint64_t h = fingerprint(c, p, t);
+            if (t == 1) lockedSame = h == before[1] ? 1 : 0;
+            else othersChanged += h != before[static_cast<size_t>(t)] ? 1 : 0;
+        }
+        // The locked track keeps its own material; its position can still move, because the tracks
+        // before it are rerolled -- so the fingerprint is taken of the track's own seed, not its bar.
+        check(othersChanged >= 3, "rerolling the set changes the unlocked tracks", fmt("%d of 4 changed, locked track %s", othersChanged, lockedSame ? "kept" : "moved"));
+    }
+    // A locked section and a locked lane keep their seeds through a reroll of their track.
+    {
+        Composer c(4242);
+        const uint64_t plainSection = c.track(p, 1).sectionSeed[2];
+        const int lane = 0;
+        const PercPlan plain = c.track(p, 1).perc;
+        c.setLock(LockUnit::Section, sectionUnitIndex(1, 2), true);
+        c.setLock(LockUnit::PatternLane, laneUnitIndex(1, lane), true);
+        c.reroll(LockUnit::Track, 1);
+        const TrackPlan t = c.track(p, 1);
+        check(t.sectionSeed[2] == plainSection && t.melodySeed != 0, "a locked section keeps its seed when its track is rerolled",
+              fmt("seed %llx", static_cast<unsigned long long>(t.sectionSeed[2])));
+        (void)plain;
+    }
+
+    // The set file: write, read back, and compose the same notes and controls.
+    {
+        ParamStore q;
+        q.parseText("compose.track_bars=160 compose.style=Goa compose.arc=Peak-Time compose.bpm=141 kick.pitch_start=260 compose.level_match=Off master.auto_gain=Off");
+        Composer c(987654321ull);
+        c.setLock(LockUnit::Track, 2, true);
+        c.reroll(LockUnit::Track, 1);
+        c.reroll(LockUnit::Section, sectionUnitIndex(0, 3));
+        const std::string text = writeSetText(c, q);
+        ParamStore q2;
+        Composer c2(1);
+        std::string err;
+        const bool read = readSetText(text, c2, q2, &err);
+        int diffs = 0;
+        for (int i = 0; i < q.count(); ++i) if (q.get(i) != q2.get(i)) ++diffs;
+        std::vector<uint64_t> a, b;
+        for (int t = 0; t < 4; ++t) { a.push_back(fingerprint(c, q, t)); b.push_back(fingerprint(c2, q2, t)); }
+        check(read && diffs == 0 && a == b && c2.seed() == c.seed() && c2.isLocked(LockUnit::Track, 2)
+              && c2.variation(LockUnit::Track, 1) == 1 && c2.variation(LockUnit::Section, sectionUnitIndex(0, 3)) == 1,
+              "a .phosset round trip gives the same knobs, locks, rerolls and the same score",
+              fmt("%d knob differences, %zu lines, error \"%s\"", diffs, std::count(text.begin(), text.end(), '\n'), err.c_str()));
+        check(text.rfind("phosset 1\n", 0) == 0 && text.find("style=Goa\n") != std::string::npos
+              && text.find("arc=Peak-Time\n") != std::string::npos && text.find("lock.track.2=1\n") != std::string::npos
+              && text.find("reroll.track.1=1\n") != std::string::npos, "the set file carries header, seed, style, arc, locks and rerolls");
+    }
+}
+
+void testTransitions()
+{
+    section("transitions between tracks (PLAN 6.7)");
+    ParamStore p;
+    p.parseText("compose.track_bars=128 compose.pad_amount=1 compose.sfx_amount=1 compose.track_variation=1 "
+                "compose.level_match=Off master.auto_gain=Off");
+    Composer c(31337);
+    int swapsOnGrid = 0, swaps = 0, keyChanges = 0, maskedChanges = 0, hatOverlaps = 0, padOverlaps = 0, padPossible = 0;
+    for (int ti = 0; ti + 1 < 6; ++ti) {
+        const TrackPlan a = c.track(p, ti);
+        const TrackPlan b = c.track(p, ti + 1);
+        ++swaps;
+        if (b.firstBar % 32 == 0) ++swapsOnGrid;
+
+        // The last sixteen bars of A: B's hats are already there. A's own hat lane is a different lane
+        // only by luck, so the overlap is counted by the notes B's percussion plan would place.
+        std::vector<NoteEvent> tail;
+        c.composeBars(p, a.firstBar + a.bars - 16, 16, tail);
+        std::vector<NoteEvent> own;
+        {
+            // What A alone would play there: everything of A's percussion, without B's hat lane.
+            int aHits = 0, allHits = 0;
+            const int bHat = b.perc.layerOrder[0];
+            for (const NoteEvent& e : tail) {
+                if (e.part != Part::Perc) continue;
+                ++allHits;
+                if (e.lane == static_cast<uint8_t>(bHat)) ++aHits;
+            }
+            if (allHits > 0 && aHits > 0) ++hatOverlaps;
+        }
+
+        // The first sixteen bars of B: A's pads hold on where the keys are close enough.
+        const int move = ((b.key - a.key) % 12 + 12) % 12;
+        if (a.melody.present[3] && (move == 0 || move == 5 || move == 7)) {
+            ++padPossible;
+            std::vector<NoteEvent> head;
+            c.composeBars(p, b.firstBar, 16, head);
+            int foreign = 0;
+            int pcs[3];
+            for (const NoteEvent& e : head) {
+                if (e.part != Part::Pad) continue;
+                const int bar = static_cast<int>(e.beat / kBeatsPerBar) - b.firstBar;
+                chordTones(b.scale, b.melody.chordDegree[chordIndexAt(b.melody, bar)], pcs);
+                const int pc = ((e.pitch - b.key) % 12 + 12) % 12;
+                if (!(pc == pcs[0] || pc == pcs[1] || pc == pcs[2])) ++foreign;
+            }
+            if (foreign > 0) ++padOverlaps;   // notes that are not B's chords are A's pads still sounding
+        }
+
+        // The key change at the swap is masked: A's sweep ends exactly there and an impact sits on it.
+        if (a.key != b.key) {
+            ++keyChanges;
+            bool sweepEnds = false;
+            for (const SfxEvent& s : a.form.sfx)
+                if (s.type == static_cast<int>(SfxType::Sweep) && std::fabs(s.beat + s.length - static_cast<double>(a.bars) * kBeatsPerBar) < 1e-6) sweepEnds = true;
+            std::vector<NoteEvent> first;
+            c.composeBars(p, b.firstBar, 1, first);
+            bool impact = false;
+            for (const NoteEvent& e : first)
+                if (e.part == Part::Sfx && e.pitch == kSfxBaseNote + static_cast<int>(SfxType::Impact)
+                    && std::fabs(e.beat - static_cast<double>(b.firstBar) * kBeatsPerBar) < 1e-9) impact = true;
+            if (sweepEnds && impact) ++maskedChanges;
+        }
+    }
+    check(swapsOnGrid == swaps, "every track boundary falls on a 32-bar grid (the bass swap)", fmt("%d of %d", swapsOnGrid, swaps));
+    check(hatOverlaps == swaps, "the next track's hats are already playing over the last sixteen bars", fmt("%d of %d transitions", hatOverlaps, swaps));
+    check(padPossible > 0 && padOverlaps == padPossible, "the previous track's pads hold on into the new track's intro where the keys are close",
+          fmt("%d of %d transitions with a compatible key", padOverlaps, padPossible));
+    check(keyChanges > 0 && maskedChanges == keyChanges, "every key change is masked by a sweep ending on it and an impact",
+          fmt("%d of %d key changes masked", maskedChanges, keyChanges));
+}
+
 } // namespace
 
 int main()
@@ -2936,6 +3614,10 @@ int main()
     run("testDynamics", testDynamics);
     run("testSfx", testSfx);
     run("testMaster", testMaster);
+    run("testForm", testForm);
+    run("testSectionRules", testSectionRules);
+    run("testCuration", testCuration);
+    run("testTransitions", testTransitions);
     run("testParams", testParams);
     run("testTempo", testTempo);
     run("testHalfband", testHalfband);
