@@ -189,8 +189,10 @@ int main()
     {
         const double sr = 48000.0;
         const int block = 256;
-        // Four bars at the default tempo, plus a little, so the comparison covers whole bars.
-        const int samples = static_cast<int>(4.0 * kBeatsPerBar * 60.0 / 145.0 * sr);
+        // Eight bars at the default tempo: since Phase 5 a track opens with an intro whose first bars
+        // carry only the atmosphere (the kick enters between bars 5 and 9), so four bars could be
+        // silence on both sides and prove nothing.
+        const int samples = static_cast<int>(8.0 * kBeatsPerBar * 60.0 / 145.0 * sr);
         const std::vector<float> a = referenceRender(1, sr, block, samples, 16);
         const std::vector<float> b = pluginRender(1, sr, block, samples);
         check(a.size() == b.size(), "the plugin renders as many samples as phos_render");
@@ -202,7 +204,7 @@ int main()
         }
         check(peak > 0.05, "the reference render is not silence");
         check(firstDiff == a.size(),
-              "the plugin equals phos_render bit for bit over the first four bars"
+              "the plugin equals phos_render bit for bit over the first eight bars"
                   + (firstDiff == a.size() ? juce::String() : " (first difference at sample " + juce::String(static_cast<int>(firstDiff / 2)) + ")"));
         // And with a different block size, because the engine's grid is absolute.
         const std::vector<float> c = pluginRender(1, sr, 64, samples);
@@ -220,6 +222,10 @@ int main()
         p->prepareToPlay(sr, 512);
         TestPlayHead head;
         head.sampleRate = sr;
+        // From bar 16: the intro before it is sparse by design (Phase 5: the atmosphere first, the kick
+        // from bar 5 to 9, layers one by one), and this test counts notes.
+        head.ppq = 64.0;
+        head.samples = 64.0 * 60.0 / 145.0 * sr;
         p->setPlayHead(&head);
         juce::AudioBuffer<float> buf(2, 512);
         juce::MidiBuffer midi;
@@ -254,7 +260,7 @@ int main()
             head.advance(n);
             rendered += n;
             // A seek in the middle, the way a host jumps when the user clicks the ruler.
-            if (rendered > total / 2 && head.ppq < 40.0) { head.ppq = 512.0; head.samples = 512.0 * 60.0 / 145.0 * sr; }
+            if (rendered > total / 2 && head.ppq < 90.0) { head.ppq = 512.0; head.samples = 512.0 * 60.0 / 145.0 * sr; }
         }
         stopThread.store(true);
         writer.join();
@@ -315,6 +321,7 @@ int main()
         p->setPlayConfigDetails(0, 2, sr, block);
         p->prepareToPlay(sr, block);
         p->play();
+        p->seekToBar(8);   // past the sparse intro (Phase 5): the groove is what has to keep sounding
         juce::AudioBuffer<float> buf(2, block);
         juce::MidiBuffer midi;
         // Starting a set plans its first track, which measures its level by rendering it -- about
@@ -355,13 +362,13 @@ int main()
                                                 + juce::String(worstRun * block / sr * 1000.0, 1) + " ms)");
         // What the editor's pattern rolls draw: the bars the conductor has composed, by part.
         std::vector<NoteEvent> pattern;
-        const bool got = p->readPattern(0, 4, pattern);
+        const bool got = p->readPattern(8, 4, pattern);
         int kicks = 0, percs = 0;
         for (const NoteEvent& e : pattern) {
             kicks += e.part == Part::Kick ? 1 : 0;
             percs += e.part == Part::Perc ? 1 : 0;
         }
-        check(got && !pattern.empty(), "the pattern preview has the first four bars in it ("
+        check(got && !pattern.empty(), "the pattern preview has bars 8 to 12 in it ("
                                            + juce::String(static_cast<int>(pattern.size())) + " notes)");
         check(kicks >= 12, "and the kick is in it (" + juce::String(kicks) + " notes in four bars)");
         check(percs > 0, "and the percussion kit too (" + juce::String(percs) + " notes)");

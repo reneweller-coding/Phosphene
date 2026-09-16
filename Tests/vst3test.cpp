@@ -100,6 +100,8 @@ int main(int argc, char** argv)
           "the instance has no inputs and a stereo output");
     TestPlayHead head;
     head.bpm = 132.0;   // not the default: if compose.bpm follows, the play head really arrived
+    head.ppq = 32.0;    // bar 8: the intro before it is sparse by design (Phase 5)
+    head.samples = 32.0 * 60.0 / 132.0 * 48000.0;
     instance->setPlayHead(&head);
     juce::AudioProcessorParameter* tempoParam = nullptr;
     for (auto* p : params) if (p->getName(64) == "Set Tempo") tempoParam = p;
@@ -218,6 +220,8 @@ int main(int argc, char** argv)
             second->setPlayConfigDetails(0, 2, 48000.0, 256);
             second->prepareToPlay(48000.0, 256);
             TestPlayHead head2;
+            head2.ppq = 32.0;   // past the sparse intro, as above
+            head2.samples = 32.0 * 60.0 / 145.0 * 48000.0;
             second->setPlayHead(&head2);
             juce::AudioBuffer<float> b2(2, 256);
             juce::MidiBuffer m2;
