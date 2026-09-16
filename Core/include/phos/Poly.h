@@ -80,8 +80,10 @@ public:
      * @param unison oscillators per voice, 1 .. kPolyUnison
      * @param voices voices that may sound at once, 1 .. kPolyVoices
      *
-     * The defaults (kPolyUnison, kPolyVoices) are "no limit" and are checked for first, so a
-     * default engine runs exactly the code it ran before this existed.
+     * The defaults (kPolyUnison, kPolyVoices) are "no limit", so a default engine runs exactly the
+     * code it ran before this existed. Set once before the first note (Engine::prepare): the unison
+     * limit decides which slots a note sets up, so changing it while notes sound would leave the
+     * running notes with slots the render loop no longer sums.
      */
     void setQuality(int unison, int voices)
     {
@@ -94,10 +96,7 @@ public:
     int voiceLimit() const { return voiceLimit_; }
 
     /**
-     * @brief noteOn() with the quality limits applied around it.
-     *
-     * Both limits are enforced from here rather than inside noteOn() so that the allocator and the
-     * render loop in Poly.cpp stay exactly as they are (the vector tests compare them bit for bit).
+     * @brief noteOn() with the voice limit applied around it.
      *
      *  - *Voices.* noteOn() takes the first inactive voice and only steals the oldest one when none
      *    is free, so voices fill up from index 0. Keeping the top voices permanently silent is
@@ -105,18 +104,19 @@ public:
      *    here, which makes it the first free voice noteOn() finds. A silent voice costs nothing --
      *    the slot and channel kernels skip a group of eight lanes when none of its voices sounds
      *    (Poly.cpp, renderSegment) -- so four of eight pad voices really do halve the pad's filters
-     *    and leave 28 of 56 oscillator slots unrendered.
-     *  - *Unison.* The oscillator gains of the outer unison pairs are set to zero and the remaining
-     *    ones are scaled so that the incoherent power of the voice is unchanged; the centre and the
-     *    innermost detuned pair survive, which is the narrow beating the supersaw's body comes from.
-     *    This does not save the kernel any arithmetic (the slots are computed either way, see the
-     *    note in the Phase 7 report), it makes the sound of the level.
+     *    and leave 28 of 56 oscillator slots unrendered. The limit is enforced from here rather than
+     *    inside noteOn() so that the allocator stays exactly as it is.
+     *  - *Unison.* noteOn() itself sets up only the middle unisonLimit_ oscillators of a voice and
+     *    leaves the rest at gain 0 with no phase step and no source weight, and renderSegment() then
+     *    reads no wavetable for them, keeps no slot group alive for them and leaves them out of the
+     *    voice's sum (Poly.cpp). The centre and the innermost detuned pair survive, which is the
+     *    narrow beating the supersaw's body comes from, and the kept gains are normalised by their
+     *    own incoherent power, so the level does not jump.
      */
     void noteOnLimited(int pitch, float velocity, double lengthBeats, int gateSamples, double late)
     {
         if (voiceLimit_ < kPolyVoices) freeVoiceWithinLimit();
         noteOn(pitch, velocity, lengthBeats, gateSamples, late);
-        if (unisonLimit_ < kPolyUnison) applyUnisonLimit();
     }
 
     /** @brief Renders @p n stereo samples, replacing @p L and @p R. */
@@ -127,6 +127,17 @@ public:
     int activeVoices() const;
     /** @brief Seeds the random start phases (deterministic renders). */
     void seedPhases(uint64_t seed) { phaseRng_.seed(seed); }
+    /**
+     * @brief Wavetable reads the scalar pre-pass has done since prepare(), for the tests.
+     *
+     * The pre-pass reads one table sample per sounding wavetable slot per sample, and each read is a
+     * mipmap choice plus a Catmull-Rom interpolation -- the most expensive scalar work of the engine.
+     * The counter is raised once per voice and segment by the number of reads the segment did, never
+     * inside the sample loop, so it costs nothing measurable. It is the only property that tells a
+     * real unison limit from one that merely zeroes the outer gains: the sound is the same, the work
+     * is not.
+     */
+    uint64_t tableReads() const { return tableReads_; }
 
     /** @brief Szabo's detune curve y(x), x in [0, 1]. */
     static double detuneCurve(double x);
@@ -153,37 +164,6 @@ private:
         }
         amp_[oldest].kill();
         gate_[oldest] = 0;
-    }
-
-    /**
-     * @brief Keeps only the innermost unisonLimit_ oscillators of the voice that was just started.
-     *
-     * The voice is the one noteOn() gave the newest age to. The kept oscillators are the middle
-     * block of the seven, so 3 keeps Szabo's centre and the pair at +-0.0195 (his narrowest
-     * detuning); the gains are rescaled by the square root of the ratio of the incoherent powers, so
-     * the voice keeps the loudness the full unison would have had. Voices whose oscillator type only
-     * uses the middle three anyway (VA, FM) come out unchanged.
-     */
-    void applyUnisonLimit()
-    {
-        int voice = 0;
-        for (int i = 1; i < kPolyVoices; ++i) if (age_[i] > age_[voice]) voice = i;
-        const int first = (kPolyUnison - unisonLimit_) / 2;
-        const int last = first + unisonLimit_;
-        double all = 0.0, kept = 0.0;
-        for (int u = 0; u < kPolyUnison; ++u) {
-            const int s = voice * kPolyUnison + u;
-            const double p = static_cast<double>(slots_.gL[s]) * slots_.gL[s] + static_cast<double>(slots_.gR[s]) * slots_.gR[s];
-            all += p;
-            if (u >= first && u < last) kept += p;
-        }
-        const float scale = kept > 0.0 ? static_cast<float>(std::sqrt(all / kept)) : 0.0f;
-        for (int u = 0; u < kPolyUnison; ++u) {
-            const int s = voice * kPolyUnison + u;
-            const bool keep = u >= first && u < last;
-            slots_.gL[s] = keep ? slots_.gL[s] * scale : 0.0f;
-            slots_.gR[s] = keep ? slots_.gR[s] * scale : 0.0f;
-        }
     }
 
     void voiceCoefs(int voice);
@@ -215,6 +195,7 @@ private:
     double bpm_ = 145.0;
     uint64_t counter_ = 0;
     uint64_t pos_ = 0;          ///< samples rendered since reset (the coefficient grid)
+    uint64_t tableReads_ = 0;   ///< wavetable reads of the scalar pre-pass (tests, see tableReads())
     Rng phaseRng_;
     TempoDelay delay_;
     float send_ = 0.0f, level_ = 1.0f;

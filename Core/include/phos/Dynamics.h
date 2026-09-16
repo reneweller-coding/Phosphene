@@ -140,7 +140,6 @@ private:
     int dqHead_ = 0, dqTail_ = 0;
     std::vector<double> minRing_;
     double minSum_ = 0.0;
-    int minFilled_ = 0;
     long long t_ = 0;
     int sinceRecompute_ = 0;
     double gain_ = 1.0;

@@ -260,7 +260,7 @@ sind offen, die Toolchain steht fertig gebaut bereit.
 | Qualitätsstufen (`Quality.h`) | Struktur mit Desktop und Quest, gewählt in `Engine::prepare(sr, block, quality)` mit Desktop als Vorgabe, damit Selbsttest, Vektortests und jeder bisherige Aufrufer unverändert rendern. Quest: Acid-Oversampling 2× → 1×, Bass bleibt 2×, Unisono 7 → 3, Pad-Polyphonie 8 → 4. Neu: `phos_render --quality quest|desktop` | Selbsttest 147/147 und Vektortests 9/9 in drei Pfaden unverändert; die Ausgaben der beiden Stufen unterscheiden sich, die Lautheit nicht (beide −9,7 LUFS, True Peak −0,99 dBTP über 64 Takte) |
 | Ersparnis der Stufe Quest | 8 min, alle Stimmen (`compose.{pad,acid,lead,arp}_amount=1`), 48 kHz, Block 256, i9-12900K, AVX2, je drei Läufe | Desktop **7,19 / 7,21 / 7,21 %** eines Kerns, Quest **6,05 / 5,98 / 5,96 %**: **16,9 % weniger**. Die Aufteilung auf die drei Schalter ist offen — ein Knopf wie `acid_amount=0` ändert das ganze Arrangement, also lässt sie sich über die Knöpfe nicht isolieren. Der Gerätewert (Ziel ≤ 30 % eines großen Kerns) ist offen |
 | Oversampling-Schalter | `Bass::setOversampling` / `Acid::setOversampling`: bei 1× ein Oszillator- und ein Leiterschritt je Ausgabesample, kein Halbband, und die Koeffizienten (Filterhüllkurve, Squelch, Akzent-Kondensator) rechnen auf der Basisrate. Die Cutoff-Obergrenze kommt bei 2× aus dem Durchlassband des Dezimierers (0,2 der hohen Rate), bei 1× aus der Stabilität (0,45 fs) — bei 48 kHz liegt beides über der 18-kHz-Kappe, die Stufe verliert also keinen Stellbereich | der Bass behält 2×: seine Leiter wird von einer schnellen Hüllkurve über einen Grundton gefahren, auf den die Kick phasengekoppelt ist, und genau dort landen seine Aliasprodukte |
-| `Poly`-Grenzen ohne `Poly.cpp` | öffentlicher Setter `setQuality(unison, voices)` und `noteOnLimited()`, beides inline im Header, `Engine::dispatch` ruft es statt `noteOn`. **Stimmen:** `noteOn` nimmt die erste freie Stimme und stiehlt erst die älteste, wenn keine frei ist — es genügt also, die oberen Stimmen nie belegen zu lassen: sind alle unter der Grenze aktiv, wird hier die älteste davon stillgelegt und ist damit die erste freie. Eine stumme Stimme kostet nichts, weil `renderSegment` eine Achtergruppe überspringt, wenn keine ihrer Stimmen klingt. **Unisono:** die äußeren Oszillatorpaare bekommen Gain 0, die übrigen werden auf gleiche inkohärente Leistung hochskaliert (Mitte und Szabos engstes Paar bleiben) | Gegenprobe mit acht sich überlappenden Pad-Noten: Spitzenzahl klingender Stimmen 8 (Desktop) gegen 4 (Quest), also greift die Grenze; 4 von 8 Stimmen lassen 28 der 56 Oszillator-Slots und eine der beiden Filter-Achtergruppen ungerechnet. Eine einzelne Note ist auf beiden Stufen gleich laut (−27,56 gegen −27,49 dB RMS): die Renormierung des verkürzten Unisonos stimmt. **Das Unisono-Limit spart dagegen nichts**: der Kernel rechnet die Slots ohnehin. Es ist heute eine Klangentscheidung |
+| `Poly`-Grenzen ohne `Poly.cpp` | öffentlicher Setter `setQuality(unison, voices)` und `noteOnLimited()`, beides inline im Header, `Engine::dispatch` ruft es statt `noteOn`. **Stimmen:** `noteOn` nimmt die erste freie Stimme und stiehlt erst die älteste, wenn keine frei ist — es genügt also, die oberen Stimmen nie belegen zu lassen: sind alle unter der Grenze aktiv, wird hier die älteste davon stillgelegt und ist damit die erste freie. Eine stumme Stimme kostet nichts, weil `renderSegment` eine Achtergruppe überspringt, wenn keine ihrer Stimmen klingt. **Unisono:** die äußeren Oszillatorpaare bekommen Gain 0, die übrigen werden auf gleiche inkohärente Leistung hochskaliert (Mitte und Szabos engstes Paar bleiben) | Gegenprobe mit acht sich überlappenden Pad-Noten: Spitzenzahl klingender Stimmen 8 (Desktop) gegen 4 (Quest), also greift die Grenze; 4 von 8 Stimmen lassen 28 der 56 Oszillator-Slots und eine der beiden Filter-Achtergruppen ungerechnet. Eine einzelne Note ist auf beiden Stufen gleich laut (−27,56 gegen −27,49 dB RMS): die Renormierung des verkürzten Unisonos stimmt. **Das Unisono-Limit spart dagegen nichts**: der Kernel rechnet die Slots ohnehin. Es ist heute eine Klangentscheidung (erledigt am 16.09., siehe *Nachtrag Unisono-Begrenzung* am Ende der DSP-Qualitätsrunde) |
 | Quest-App (`Quest/`) | NativeActivity + `android_native_app_glue`, OpenXR mit `XR_EXT_hand_tracking`, EGL/GLES 3, Oboe Low-Latency-Float-Stream. Drei Threads: Audio (`Engine::process` plus Blende, ein Compare-and-Exchange, kein Lock, keine Allokation), Komponist (plant, komponiert, füllt die Ringe acht Takte voraus, veröffentlicht die Anzeige), Render (OpenXR-Schleife, Hände, Bild) | APK 3,5 MB, `libphosquest.so` 10,3 MB, mit Debug-Schlüssel signiert, ohne Warnung gebaut |
 | Track-Sprung ohne Kerneingriff | `SetPlayer` ist der `Conductor` mit einem Takt-Versatz: die Engine spielt immer ab ihrem eigenen Beat 0, jedes komponierte Ereignis und die Tempo-Karte werden um den Beat des ersten zu spielenden Takts zurückgeschoben. Damit kann Takt 700 des Sets der erste Takt der Engine sein — `Composer.h` musste nicht angefasst werden | am Trackanfang exakt: dort hält die Quell-Karte das Tempo des neuen Tracks; ein Sprung mitten in eine Rampe verlöre deren Steigung im ersten Segment |
 | Performer-Oberfläche (8.2) | kopffeste Punkte-Tafel (nur Gier, nicht Nicken): Track und Takt, Tonart, Tempo, 16-Takt-Block mit seinen Stimmen, Lautheit, beide Makrowerte, vier Beat-Lampen und eine Lautheitsreihe. Linker Pinch Play/Stop (15-ms-Blende, die Musik hält an, wo sie ist), rechter Pinch nächster Track, linke Handhöhe `mix.track_gain` (−12…+12 dB), rechte Handhöhe Acid-Cutoff (±2 Oktaven um den komponierten Wert) | Höhe wird am Kopf gemessen, nicht am Boden, also gleich im STAGE- und im LOCAL-Raum und für jede Körpergröße; ein Makro folgt nur der *offenen* Hand, damit der Pinch nicht zugleich die Verstärkung mitzieht; 0,15-s-Einpol-Glättung, beide Makros mittig — nichts springt. Beat-Lampen als Raised-Cosine über den Beat-Abstand, kein Blitz |
@@ -268,8 +268,9 @@ sind offen, die Toolchain steht fertig gebaut bereit.
 | OSC-Cue-Brücke (8.3) | gebaut statt weggelassen: `/phos/bar f f` (Takt, BPM) je Takt, `/phos/track f f f` (Track, Tonart, Skala) bei jedem Trackwechsel, Ziel aus `phos.cfg` | aus der Partitur, nie aus einer Audioanalyse |
 | Stumm starten | `phos.cfg mute=1` schaltet den Ausgang stumm, lässt aber Engine, Komponist und Bild laufen, damit ein Testlauf alles durchläuft, ohne zu klingen | Regel „Synth stumm starten" |
 
-*Was `Poly.cpp` für ein echtes Unisono-Limit braucht* (nicht geändert, weil die Datei einem anderen
-Arbeitsbaum gehört): ein Feld `unison_` mit Setter; in `noteOn` die Schleife über die sieben
+*Was `Poly.cpp` für ein echtes Unisono-Limit braucht* (damals nicht geändert, weil die Datei einem
+anderen Arbeitsbaum gehörte; am 16.09. so gebaut und gemessen, siehe *Nachtrag Unisono-Begrenzung*
+am Ende der DSP-Qualitätsrunde): ein Feld `unison_` mit Setter; in `noteOn` die Schleife über die sieben
 Oszillatoren auf die mittleren `unison_` beschränken und die übrigen Slots auf Gain 0 und `dt = 0`
 setzen; in `renderSegment` die Gruppenentscheidung `on = on || voiceOn[s / kPolyUnison]` zusätzlich
 prüfen lassen, ob der Slot innerhalb des Limits liegt, und die Summenschleife über `u` auf `unison_`
@@ -432,6 +433,58 @@ dafür gibt es jetzt zwei zusätzliche Prüfungen (Tabelle und Position rühren 
 eine FM- und eine Supersaw-Stimme in derselben Achtergruppe, alle sieben Linien noch da).
 
 Gesamt: 153 Selbsttest-Prüfungen, Vektortests 9 von 9 in AVX2, NEON-Shim und skalar.
+
+*Nachtrag Unisono-Begrenzung (Quest-Stufe).* Die Stufe Quest bat `Poly` bisher um drei statt sieben
+Unisono-Oszillatoren, sparte damit aber nichts: der Setter nullte nur die Verstärkung der äußeren
+Oszillatoren, gerechnet wurden sie weiter (Phase-7-Bericht). Jetzt richtet `noteOn` nur noch die
+mittleren `unison_` Schächte ein und lässt die übrigen mit Verstärkung 0, `dt = 0` und ohne
+Quellengewicht stehen; `renderSegment` liest für sie keine Wavetable, hält für sie keine Achtergruppe
+wach und summiert sie nicht mit. Die Normierung läuft über die Leistung der *behaltenen*
+Oszillatoren, der Pegel bleibt also gleich. Die Schacht-Belegung (Stimme × 7) bleibt, damit die
+Vektortests bitgleich bleiben. Gemessen, `phos_vectest`, i9-12900K, ein Kern, 48 kHz, je 10 s,
+acht Stimmen gehalten, zwei Läufe je Pfad:
+
+| Messstand | AVX2 | skalar | NEON-Shim |
+|---|---|---|---|
+| Acht Supersaw-Stimmen, Unisono 7 | 1,5–1,6 % | 2,3–2,6 % | 2,2–2,5 % |
+| dieselben, Unisono 3, **vorher** | 1,4 % (−4 %) | 2,3 % (+2 %) | 2,3 % (+2 %) |
+| dieselben, Unisono 3, **nachher** | **1,1 %** (−27 bis −31 %) | **1,9–2,0 %** (−18 bis −28 %) | **1,8–1,9 %** (−21 bis −22 %) |
+| Acht Wavetable-Pad-Stimmen, Unisono 7 | 3,2–3,4 % | 4,1–4,2 % | 4,1–4,3 % |
+| dieselben, Unisono 3, **vorher** | 3,2 % (+2 %) | 4,1 % (−0 %) | 4,0 % (−1 %) |
+| dieselben, Unisono 3, **nachher** | **2,0–2,1 %** (−37 bis −38 %) | **2,8 %** (−31 bis −34 %) | **2,8–3,0 %** (−27 bis −32 %) |
+
+Am ganzen Arrangement (`phos_render --minutes 8 --block 256`, alle Stimmen auf 1, je drei Läufe):
+Desktop **7,23 / 7,26 / 7,30 %** eines Kerns, Quest **5,54 / 5,55 / 5,72 %** — **23 % weniger** statt
+der 16,9 % des Phase-7-Berichts, in dem das Unisono-Limit nichts beitrug.
+
+*Wie weit die Schacht-Belegung die Ersparnis begrenzt, ehrlich gesagt.* Die Kernel-Gruppen sind acht
+Schächte breit, eine Stimme belegt sieben; behält man die mittleren drei, enthält **jede** der sieben
+Gruppen behaltene Schächte von einer oder zwei Stimmen. Eine Gruppe lässt sich deshalb nie wegen des
+Limits überspringen, sondern weiterhin nur, wenn die Stimmen dahinter schweigen — das Limit schärft
+diese Entscheidung nur (Gruppe 0 hängt jetzt an Stimme 0 statt an Stimme 0 *oder* 1). Die Ersparnis
+kommt fast ganz aus dem skalaren Wavetable-Vorlauf (vier von sieben Catmull-Rom-Lesungen je Stimme und
+Sample fallen weg, deshalb ist das Pad, das für jede Stimme eine Position mitführt, der größere
+Gewinn) und aus der verkürzten Summenschleife. Eine dichte Belegung (Stimme × `unison_`) würde vier
+der sieben Gruppen ganz freistellen, verschiebt aber die Lane-Zuordnung und damit die Bitgleichheit
+der Vektortests; sie bleibt liegen.
+
+*Die Prüfung, die den Unterschied sieht.* Spektrum und Pegel taugen dafür nicht: das alte Verhalten
+klang **genau gleich** (die neue Prüfung misst 123,4 dB Abstand der behaltenen zu den fallengelassenen
+Linien und +0,04 dB Pegel gegen Unisono 7 — vorher wie nachher, weil die Zufallsphasen für alle sieben
+gezogen bleiben). Gezählt wird deshalb die Arbeit: `Poly::tableReads()` zählt die Lesungen des
+Vorlaufs (einmal je Stimme und Segment, nicht in der Sample-Schleife). Gegen den alten Code schlug die
+Prüfung an — 492352 Lesungen bei Unisono 3 statt 211008, also alle sieben Schächte —, mit dem neuen
+Code stimmt sie. Cost-Zeilen für Unisono 3 stehen jetzt dauerhaft in `phos_vectest`.
+
+*Nebenbefund beim Absichern.* Der volle Selbsttest stürzte danach ab (Zugriffsfehler in `snprintf`),
+der einzelne Abschnitt nicht: in `selftest.cpp` stand in der Tiefenregel-Prüfung des Leads seit je ein
+`fmt`-Aufruf mit drei `%s` und nur zwei Namen. Die dritte Umwandlung las, was gerade auf dem Stack lag
+— bisher zufällig harmlos, mit der geänderten Belegung ein Absturz; nebenbei kam `amp_sustain` nie an.
+Argument ergänzt. Dazu die beiden Warnungen des Quest-Zweigs: `Dynamics.h::minFilled_` war unbenutzt
+und ist raus, `selftest.cpp::engineSwitches` steht jetzt im Detailtext seiner Prüfung.
+
+Gesamt danach: 155 Selbsttest-Prüfungen, Vektortests weiterhin 9 von 9 in AVX2, NEON-Shim und skalar,
+alle Lanes bitgleich; die Blockgrößen-Prüfungen (1 / 64 / 1000 / 4096) unverändert grün.
 
 ## 0. Kurzfassung
 

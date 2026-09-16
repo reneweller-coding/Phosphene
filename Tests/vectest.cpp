@@ -259,16 +259,20 @@ void testPoly()
     }
     check(bad == 0 && energy > 1.0, "56 oscillator slots and 16 voice channels identical to scalar (supersaw, VA, FM, wavetable)", fmt("%d differing samples, energy %.1f", bad, energy));
 
-    // Cost, not a check: eight voices held for ten seconds, once as the lead and once as the pad.
-    auto time = [&](const char* settings, PolyInstance inst, bool vec) {
+    // Cost, not a check: eight voices held for ten seconds, once as the lead and once as the pad,
+    // each at the full unison of the desktop level and at the three oscillators of the Quest level
+    // (Quality.h). The limited runs go through setQuality() and noteOnLimited(), which is the path
+    // Engine::dispatch takes; the voice limit stays at eight so that only the unison differs.
+    auto time = [&](const char* settings, PolyInstance inst, bool vec, int unison) {
         auto e = std::make_unique<Poly>();
         e->prepare(48000.0);
+        e->setQuality(unison, kPolyVoices);
         ParamStore q;
         q.parseText(settings);
         std::vector<float> v(static_cast<size_t>(poly::Count));
         q.readModule(Module::Poly, static_cast<int>(inst), v.data());
         e->update(v.data(), 145.0);
-        for (int k = 0; k < kPolyVoices; ++k) e->noteOn(60 + 3 * k, 1.0f, 4.0, 1 << 30, 0.0);
+        for (int k = 0; k < kPolyVoices; ++k) e->noteOnLimited(60 + 3 * k, 1.0f, 4.0, 1 << 30, 0.0);
         std::vector<float> L(32), R(32);
         const auto t0 = std::chrono::steady_clock::now();
         for (int block = 0; block < 15000; ++block) {
@@ -279,12 +283,18 @@ void testPoly()
     };
     const char* const kLead = "lead.amp_sustain=1 lead.delay_send=0.3";
     const char* const kPad = "pad.amp_sustain=1 pad.amp_attack=1";
-    const double ts = time(kLead, PolyInstance::Lead, false), tv = time(kLead, PolyInstance::Lead, true);
+    const double ts = time(kLead, PolyInstance::Lead, false, kPolyUnison), tv = time(kLead, PolyInstance::Lead, true, kPolyUnison);
     std::printf("         cost of 10 s, eight supersaw voices: scalar %.1f %% of a core, %s %.1f %% (x%.2f)\n",
                 ts * 10.0, kVecPathName, tv * 10.0, ts / tv);
-    const double ps = time(kPad, PolyInstance::Pad, false), pv = time(kPad, PolyInstance::Pad, true);
+    const double ts3 = time(kLead, PolyInstance::Lead, false, 3), tv3 = time(kLead, PolyInstance::Lead, true, 3);
+    std::printf("         cost of 10 s, eight supersaw voices, unison 3 (quest): scalar %.1f %% of a core, %s %.1f %% (x%.2f); %s %+.0f %% against unison 7\n",
+                ts3 * 10.0, kVecPathName, tv3 * 10.0, ts3 / tv3, kVecPathName, (tv3 / tv - 1.0) * 100.0);
+    const double ps = time(kPad, PolyInstance::Pad, false, kPolyUnison), pv = time(kPad, PolyInstance::Pad, true, kPolyUnison);
     std::printf("         cost of 10 s, eight wavetable pad voices: scalar %.1f %% of a core, %s %.1f %% (x%.2f)\n",
                 ps * 10.0, kVecPathName, pv * 10.0, ps / pv);
+    const double ps3 = time(kPad, PolyInstance::Pad, false, 3), pv3 = time(kPad, PolyInstance::Pad, true, 3);
+    std::printf("         cost of 10 s, eight wavetable pad voices, unison 3 (quest): scalar %.1f %% of a core, %s %.1f %% (x%.2f); %s %+.0f %% against unison 7\n",
+                ps3 * 10.0, kVecPathName, pv3 * 10.0, ps3 / pv3, kVecPathName, (pv3 / pv - 1.0) * 100.0);
 }
 
 /**
