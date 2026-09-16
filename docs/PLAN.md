@@ -1858,6 +1858,231 @@ Runde hat verdrahtet und gemessen.
 des fertigen APK), `Quest/README.md`, `Tests/hosttest.cpp`, `Tests/vst3test.cpp`,
 `Tests/selftest.cpp` (`testWaveTableQuality`), `Tests/CMakeLists.txt`.
 
+**16.09.2026, Release-Weg und Build-Wächter**
+
+Zwei Dinge, die nichts miteinander zu tun haben außer der Reihenfolge: ein Wächter gegen Artefakte,
+die still kaputtgehen, und Phase 9, der Weg von der Arbeitskopie zum Installer.
+
+**Der Anlass.** An diesem Tag fielen zwei Defekte auf, die kein Test hätte finden können, weil
+nichts im Repository die Artefakte baut, in denen sie sitzen:
+
+1. `Quest/src/main.cpp` kompilierte **seit Phase 5 nicht mehr**. Es benutzte noch
+   `kMelodyMaxBlocks` und `MelodyPlan::blockParts`/`padGate`, die die Form-Grammatik entfernt hat.
+   Die Quest-App ist ein eigenes CMake-Projekt, das `Quest/build_apk.ps1` baut; kein `ctest`-Ziel
+   fasst diese Datei an. Der Bruch kam heraus, weil jemand von Hand ein APK gebaut hat.
+2. Die Android-Konfiguration des Wurzelprojekts scheiterte, weil `PHOS_BUILD_PLUGIN` auf ON stand
+   und JUCE seinen Wirtsrechner-Helfer `juceaide` nicht kreuzkompilieren kann. Die Meldung lautete
+   „No CMAKE_C_COMPILER could be found" und schickt den Leser in die NDK-Toolchain statt zur
+   Option. Repariert in master f0733e0 — und nichts hätte gemerkt, wenn der Default zurückkäme.
+
+**Abgewogen.** Drei Bauarten, mit den auf dieser Maschine gemessenen Kosten:
+
+| Ansatz | Kosten | Fängt | Entscheidung |
+|---|---|---|---|
+| Stub-Header (`<openxr/openxr.h>`, `<oboe/Oboe.h>`, `<android/*>`, EGL, GLES3, JNI nachbauen) und die Quest-Datei mit MSVC `/Zs` parsen | einmalig groß, dann dauerhaft | (1), aber nur solange die Stubs zur echten API passen | **verworfen**: OpenXR allein sind Tausende Deklarationen; jeder neue Aufruf in `main.cpp` bräuchte einen neuen Stub. Ein Wächter, den man reparieren muss, sobald sich das Bewachte ändert, wird abgeschaltet. |
+| GitHub-Actions-Workflow | Minuten, bezahlt | (1) und (2) | **verworfen**: das Repository ist privat, die stehende Regel ist „CI, die Minuten kostet, bleibt aus, solange sie nicht verlangt ist". Dazu: NDK r27, OpenXR-Loader und Oboe (hier Junctions in Noctuary) und ein 500-MB-JUCE müssten je Job geladen werden. Das eine, was ein fremder Runner wirklich besser kann — merken, was nur auf einer sauberen Maschine bricht —, erledigt die Laufzeit-Abhängigkeitsprüfung der Paketprüfung. |
+| NDK-eigener clang, nur Syntax (`-fsyntax-only`), plus eine Android-Konfiguration mit **Default**-Optionen | **4,95 s** allein, 14,8 s als `ctest`-Eintrag im ersten Lauf (von 636 s Gesamtsuite) | (1) und (2) | **gebaut** |
+
+**Gebaut: `Tools/release/quest_guard.cmake`**, in der Suite als Test `questguard`
+(`Tests/CMakeLists.txt`). Er konfiguriert das Wurzelprojekt für arm64-v8a/android-29 **ohne**
+`-DPHOS_BUILD_PLUGIN` — der Default ist das, was zurückfallen kann, also wird der Default geprüft —,
+liest `PHOS_BUILD_PLUGIN` aus dem entstandenen Cache zurück, und übersetzt danach jede Datei unter
+`Quest/src/*.cpp` mit dem clang des NDK, nur Syntax, mit denselben Flags wie `Quest/CMakeLists.txt`
+(inklusive `-ffp-contract=off`, weil ein unter anderen Regeln übersetzter Wächter etwas anderes
+bewacht). Ohne NDK oder ohne `ThirdParty` endet er mit 77; `SKIP_RETURN_CODE` macht daraus ein
+sichtbares „Skipped" mit Begründung statt eines roten Laufs, den man sich abgewöhnt zu lesen.
+
+Er bindet nicht. Ein fehlendes Symbol in `libphosquest.so` fängt erst der Matrix-Lauf.
+
+**Gegenprobe.** Beide Defekte in einer Kopie des Baums (im Scratch, damit keine fremde Datei
+angefasst wird) absichtlich wieder eingebaut:
+
+| Wieder eingebaut | Der Wächter sagt |
+|---|---|
+| `kMelodyMaxBlocks`, `plan.melody.blockParts[block]`, `plan.melody.padGate[block]` in `publish()` | die drei echten Fehler von damals (`use of undeclared identifier 'kMelodyMaxBlocks'`, `no member named 'blockParts'`, `no member named 'padGate'`) und danach „Quest/src/main.cpp does not compile for the headset" |
+| `option(PHOS_BUILD_PLUGIN ... ON)` unbedingt, wie vor f0733e0 | JUCEs „No CMAKE_C_COMPILER could be found", und darunter die Übersetzung: „the root project no longer configures for Android with its default options … read it as JUCE and not as the NDK … PHOS_BUILD_PLUGIN has to default OFF when ANDROID is set" |
+
+**Die teure Hälfte: `Tools/release/build_matrix.ps1`.** Sechs Konfigurationen, die dieses Repository
+hat und von denen ein Alltagsbau eine anfasst: Desktop mit Plugin, Desktop ohne Plugin (die
+Framework-Freiheit von `Core/` ist eine Behauptung, solange sie niemand so baut), Desktop ohne AVX2,
+Desktop mit statischer Laufzeit, das Wurzelprojekt über die NDK-Toolchain und die Quest-App selbst.
+Danach laufen die drei Vektor-Varianten. Am Ende eine Tabelle mit Zeiten und Ergebnis je Eintrag.
+
+Gemessen, ein vollständiger Lauf mit `-Jobs 3` auf dem i9-12900K, leere Bauverzeichnisse:
+
+| Eintrag | konfig. s | bauen s | Ergebnis |
+|---|---|---|---|
+| `desktop-plugin` | 35,5 | 112,7 | ok |
+| `desktop-tools` (`-DPHOS_BUILD_PLUGIN=OFF`) | 6,7 | 13,1 | ok |
+| `desktop-noavx2` (`-DPHOS_AVX2=OFF`) | 5,0 | 11,4 | ok |
+| `desktop-static` (`-DPHOS_STATIC_RUNTIME=ON`) | 5,0 | 13,0 | ok |
+| `android` (NDK, Wurzelprojekt, Default-Optionen) | 3,6 | 41,6 | ok |
+| `quest` (`libphosquest.so`, gebunden) | 2,7 | 31,1 | ok |
+| **gesamt** | **58,5** | **222,9** | **≈ 4,7 min** |
+
+| Vektor-Variante | Pfad | Ergebnis |
+|---|---|---|
+| `phos_vectest` | avx2 | bitgleich zum skalaren Pfad |
+| `phos_vectest_neon` | neon-shim | bitgleich zum skalaren Pfad |
+| `phos_vectest_scalar` | scalar | bitgleich zum skalaren Pfad |
+
+Vier von den sechs Einträgen sind billig, weil ohne Plugin nur Kern, Werkzeuge und Tests gebaut
+werden; das teure ist JUCE. Fünf Minuten für alles, was das Repository behauptet zu haben.
+
+**Phase 9: der Release-Weg.**
+
+Version **1.0.0** — Abschnitt 12 nennt als Ergebnis von Phase 9 „v1.0", und es gibt noch keine
+Veröffentlichung, hinter der man zurückbleiben könnte. Eine Quelle: die `project()`-Zeile in
+`CMakeLists.txt`. Von dort kommt die Version des Plugins (über `juce_add_plugin VERSION`), das
+`PHOS_VERSION` jeder Übersetzungseinheit (neu, `add_compile_definitions`), die Ausgabe von
+`phos_render --version` (neu) und, weil `build_release.ps1` die Zeile zurückliest, der Name und die
+Versionsressource des Installers. `check_package.ps1` liest alle vier wieder aus den gebauten
+Dateien heraus — Noctuary hat eine 1.1.0 mit 1.0.0 im Executable ausgeliefert, weil zwei Stellen die
+Version hielten und nur eine geändert wurde.
+
+`Deploy/build_release.ps1` geht in einem Lauf: Wächter → konfigurieren und Release bauen (eigener
+Baum `build-release`, `PHOS_STATIC_RUNTIME=ON`, `PHOS_AVX2=ON`) → die **ganze** `ctest`-Suite in
+genau dieser Konfiguration → Referenz-Render → Handbuch aus dem eben gebauten Plugin → Quest-APK →
+Staging → Paketprüfung → Inno Setup → portables Archiv → Manifest mit Größen und SHA-256. Jeder
+fehlschlagende Schritt bricht ab; es gibt keinen Schalter, der aus einem Bau, der seine Tests nicht
+bestanden hat, einen Installer macht.
+
+**Nicht Intel.** Abschnitt 10 verlangt „Intel-Baum wie Noctuary". Für Noctuary war das richtig; für
+Phosphene nicht. Das Offline-Render ist hier das Determinismus-Orakel — der Hosttest verlangt, dass
+das Plugin Sample für Sample dasselbe erzeugt wie `phos_render`, und die drei Vektorbauten werden
+bitgleich gegen den skalaren Pfad geprüft. Ein anderer Compiler setzt den Generator auf eine andere
+Fließkomma-Bahn (in Noctuary gemessen: jedes Render weicht ab). Das wäre kein schnelleres Phosphene,
+sondern ein anderes, und es würde das Orakel stumm schalten. MSVC ist, was ausgeliefert wird.
+
+**Wo die Dateien hinkommen, und warum dorthin.** Der Kern öffnet `library.phoswt`, `melody.phosmdl`
+und `bass.phosmdl` beim bloßen Namen und sucht in dieser Reihenfolge: der Name relativ zum
+Arbeitsverzeichnis, das Verzeichnis, das ein Wirt angemeldet hat, dann `PHOS_SOURCE_DATA_DIR`, das
+nur je einen Quellbaum benennt. Für ein installiertes Programm zählt nur das mittlere, und die
+Artefakte melden verschiedene an: die Standalone und `phos_render` ihr eigenes Verzeichnis, das VST3
+sein `Contents\Resources`. Also liegen alle drei Dateien zweimal im Paket (3,7 MB) — billiger als ein
+Plugin, das still die sechs eingebauten Wavetables und den Markov-Komponisten spielt, weil ein Wirt
+das Bundle ohne den Ordner daneben kopiert hat.
+
+`phos_render` meldete bisher gar nichts an und fand seine Daten nur, wenn man es zufällig aus dem
+richtigen Verzeichnis startete. `Tools/render/main.cpp` bekam dafür `installDataSearchPath()`
+(`GetModuleFileNameA` bzw. `/proc/self/exe`), das Gegenstück zu dem, was das Plugin für sich tut.
+Im Entwicklungsbau liegt neben der Binärdatei nichts, der Suchpfad greift ins Leere und die Suche
+fällt wie bisher auf `PHOS_SOURCE_DATA_DIR` zurück: **das Default-Render ist bitgleich geblieben**
+(64 Takte; WAV und MIDI, SHA-256 gegen einen aus HEAD gebauten `phos_render` verglichen —
+WAV `0F56C811…`, 40.677.600 Bytes, beide Seiten gleich, MIDI ebenso). `ctest` bleibt grün: 7 von 7,
+636 s im Alltagsbaum, 586 s im Release-Baum.
+
+Messfalle dabei, die bekannte: `Copy-Item` übernimmt die Änderungszeit der Quelle, also war die
+zurückkopierte `main.cpp` älter als ihr `.obj`, MSVC übersetzte sie nicht neu — und der erste
+„bitgleich"-Vergleich verglich zweimal dieselbe Binärdatei und bewies gar nichts. Aufgefallen ist es
+nur, weil `phos_render --version` in diesem Baum danach „unknown option" sagte. Die Zahlen oben
+stammen aus dem Wiederholungslauf mit erzwungenem Zeitstempel; dass die beiden Binärdateien
+wirklich verschieden sind, ist vorher per SHA-256 geprüft.
+
+**Der Installer** (`Deploy/Phosphene.iss`, Inno Setup 7) hat, anders als Noctuarys, einen
+`[InstallDelete]`-Abschnitt: dort löscht ein Update die vorigen Kopien der Datendateien, des
+Handbuchs, des APK und des ganzen VST3-Bundles, bevor eine einzige Datei geschrieben wird. Noctuary
+hatte nur `[UninstallDelete]`, also blieb alles, was seither umbenannt oder gestrichen wurde, für
+immer liegen — eine veraltete `library.phoswt` neben einer neuen Binärdatei ist kein Fehler, den
+jemand sieht, sondern ein falscher Klang. Gelöscht wird nur, was dieser Installer selbst anlegt;
+`{app}` wird nie pauschal geleert, weil dort die `.phosset`-Dateien und Renders des Nutzers liegen
+können.
+
+**Die Paketprüfung** (`Tools/release/check_package.ps1`) ist das Gegenstück zur Regel des
+Handbuch-Generators, der ein unvollständiges Handbuch nicht druckt. Sie öffnet das
+Staging-Verzeichnis und beweist: **A** jede gebrauchte Datei ist da, groß genug und keine, die
+niemand deklariert hat; **B** jede Datendatei ist byteweise die aus `Core/data`; **C** das APK trägt
+`assets/library.phoswt` in der richtigen Länge; **D** die Version steht in `phos_render --version`
+und in beiden Windows-Versionsressourcen gleich; **E** keine Binärdatei will noch eine VC++- oder
+Intel-Laufzeit-DLL; **F** der gestagte Renderer, aus einem fremden Verzeichnis gestartet und mit
+beiden neuronalen Modellen eingeschaltet (per Default stehen sie auf Markov), rendert die Referenz
+bitgleich; **G** das Handbuch ist ein echtes PDF. Am Schluss das Manifest.
+
+**Was F *nicht* beweist, und wie das herauskam.** F war als die eine Prüfung gedacht, die den ganzen
+Datenpfad abdeckt: gestagter Renderer, fremdes Verzeichnis, Referenz bitgleich — also hat er die
+gestagten Dateien gefunden. Stimmt nicht. Gegenprobe: mit gelöschtem `bass.phosmdl` im Staging ging
+F durch, und mit einem umgekippten Byte in `melody.phosmdl` auch. Der Grund ist der dritte Schritt
+der Kernsuche, `PHOS_SOURCE_DATA_DIR`, das `Core/CMakeLists.txt` als **absoluten Pfad in den
+Quellbaum des Entwicklers** in jede Binärdatei backt: auf der Maschine, die gebaut hat, findet jede
+Phosphene-Binärdatei `Core/data`, egal was neben ihr liegt. Kein Laufzeittest auf dieser Maschine
+kann „hat die gestagte Kopie geöffnet" von „hat die Quellkopie geöffnet" unterscheiden.
+
+F ist deshalb auf das zurechtgestutzt, was es wirklich zeigt — der gestagte Stand ist der, den
+`ctest` bestanden hat, er startet ohne eigenes Arbeitsverzeichnis, und der Bau mit statischer
+Laufzeit rendert genau wie der geprüfte. Dass die Datendateien da, an beiden angemeldeten Orten und
+byteidentisch sind, leisten A und B — und **die fallen durch**: A benannte die fehlende
+`bass.phosmdl`, B das gekippte Byte.
+
+Dazu kam **F2**: sucht den Quellpfad in den gestagten Binärdateien. Ergebnis auf diesem Lauf: alle
+drei (`Phosphene.exe`, `phos_render.exe`, das VST3-Modul) tragen
+`G:/Tools/VRAudio/PhospheneWork/phos-release/Core/data` in sich. Als Warnung gemeldet, nicht als
+Fehler, weil die Reparatur in `Core/CMakeLists.txt` gehört (siehe Loch 3). Auch F2 hatte beim ersten
+Versuch einen Fehlalarm in der harmlosen Richtung: es suchte nur die Backslash-Schreibweise, CMake
+schreibt das Define aber mit Schrägstrichen, und die Prüfung meldete zufrieden „nichts eingebettet".
+Eine Prüfung, die nicht durchfallen kann, ist schlimmer als keine — beide Schreibweisen stehen jetzt
+ausdrücklich im Skript.
+
+**Gemessen, ein vollständiger Lauf auf dem i9-12900K (drei andere Agenten arbeiteten gleichzeitig):**
+
+| Schritt | s |
+|---|---|
+| Wächter (Quest-Quellen + Android-Konfiguration) | 5 |
+| konfigurieren + Release bauen (statische Laufzeit, AVX2), `--parallel 2` | 153 |
+| `ctest`, ganze Suite, 7 von 7 bestanden | 586 |
+| Referenz-Render (64 Takte, beide Modelle) | 15,2 |
+| Handbuch (Screenshots aus dem Plugin, HTML und PDF; 616 Parameter, 12 Tabs) | 32,2 |
+| Quest-APK (NDK, aapt2, zipalign, apksigner) | 49,9 |
+| Staging | 0,1 |
+| Paketprüfung | 16,5 |
+| portables Archiv | 2,2 |
+| Inno Setup | 7,7 |
+| **gesamt** | **≈ 868 (14,5 min)** |
+
+| Artefakt | Bytes |
+|---|---|
+| `Phosphene-1.0.0-Setup.exe` | 17.147.152 (16,4 MB) |
+| `Phosphene-1.0.0-portable.zip` | 21.170.176 (20,2 MB) |
+| `MANIFEST-1.0.0.txt`, `SHA256SUMS.txt` | 1.809 / 275 |
+| Staging gesamt | 16 Dateien, 34.498.630 |
+| darin `Phosphene.exe` | 9.953.280 |
+| `Phosphene.vst3\Contents\x86_64-win\Phosphene.vst3` | 10.177.024 |
+| `phos_render.exe` | 792.576 |
+| `PhospheneQuest.apk` | 4.555.729 (davon `assets/library.phoswt` 750.264, komprimiert 662.195) |
+| `Phosphene-Manual.pdf` | 1.355.155 |
+| `library.phoswt` / `melody.phosmdl` / `bass.phosmdl` (je zweimal) | 750.264 / 1.519.612 / 1.520.476 |
+
+**Zwei Löcher, offen und benannt.**
+
+1. **Weder das Plugin noch die Quest-App rufen jemals `setModelSearchPath()`.**
+   `Core/CMakeLists.txt` behauptet in seinem Kommentar das Gegenteil („after the host's own resource
+   directory (setModelSearchPath(), which the plugin and the Quest app set)"), und
+   `Plugin/PluginProcessor.cpp` setzt nur `setWaveTableSearchPath()`. Ein installiertes Plugin findet
+   `melody.phosmdl` und `bass.phosmdl` deshalb nicht, `sharedMelodyModel()`/`sharedBassModel()`
+   fallen auf Markov und die Mustermengen zurück und schreiben je eine Zeile auf stderr, die in einer
+   DAW niemand sieht — die ganze Phase-8-Arbeit wäre im Produkt still abgeschaltet. Der Installer
+   legt die Dateien bereits an beide Stellen, an denen gesucht würde; auf der Windows-Seite fehlt
+   nur eine Zeile neben dem vorhandenen `setWaveTableSearchPath()`-Aufruf in
+   `Plugin/PluginProcessor.cpp` (`installWaveTableSearchPath()`). Auf der Quest ist es mehr: dort
+   müssten die beiden `.phosmdl` erst als Assets ins APK (`Quest/build_apk.ps1`), dann von
+   `prepareWaveTables()` mit ausgepackt und der Pfad in `App::init()` angemeldet werden — 3 MB, die
+   ohne den C++-Teil totes Gewicht wären, deshalb sind sie hier nicht schon ins APK gelegt worden.
+   `Plugin/**` und `Quest/src/**` gehören anderen Agenten, deshalb hier nur notiert.
+2. **`PHOS_SOURCE_DATA_DIR` steht in jeder ausgelieferten Binärdatei.**
+   `Core/CMakeLists.txt` definiert es als absoluten Pfad in den Quellbaum, und der Kern benutzt es
+   als letzten Suchschritt. Zwei Folgen: der Installer verrät das Verzeichnislayout der Baumaschine,
+   und — schlimmer — eine fehlende Datendatei bleibt auf genau dieser Maschine unsichtbar, weil der
+   Quellbaum einspringt. Vorschlag: `PHOS_SOURCE_DATA_DIR` nur definieren, wenn nicht für die
+   Auslieferung gebaut wird (etwa an `PHOS_STATIC_RUNTIME` oder eine eigene Option `PHOS_SHIPPING`
+   gehängt). `Core/**` gehört einem anderen Agenten; die Paketprüfung meldet den Fund bis dahin als
+   Warnung (F2).
+3. **Keine Code-Signatur.** Auf dieser Maschine liegt kein Zertifikat. `-SignWith` ist gebaut und
+   ungetestet; jeder hier gebaute Installer ist unsigniert, Windows nennt den Herausgeber unbekannt,
+   und was stattdessen prüfbar ist, sind die SHA-256-Zeilen des Manifests. Auch nicht geprüft: der
+   Installer wurde nicht ausgeführt (kein zweiter Rechner, und eine echte Installation hier würde
+   das VST3-Verzeichnis der Maschine anfassen), das APK nicht auf einer Quest (kein Headset
+   angeschlossen) und pluginval nicht (nicht auf der Maschine; `phos_vst3test` deckt den Teil ab,
+   der im Repository leben kann).
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

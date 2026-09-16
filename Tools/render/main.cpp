@@ -28,15 +28,28 @@
  *     --report            print loudness, peak and timing
  *     --bench             render without writing and report the realtime factor
  *     --list              print every parameter with range and default
+ *     --version           print the version, the vector path and the wavetable pack, then exit
  * @endcode
  */
 #include "phos/Composer.h"
 #include "phos/Engine.h"
 #include "phos/Loudness.h"
 #include "phos/Midi.h"
+#include "phos/Model.h"
 #include "phos/Quality.h"
 #include "phos/SetFile.h"
+#include "phos/Vec.h"
+#include "phos/WaveTableFile.h"
 #include "phos/WavWriter.h"
+#if defined(_WIN32)
+// Only for GetModuleFileNameA (executableDirectory below). NOMINMAX is not optional: without it
+// windows.h defines min and max as macros and every std::max in this file stops compiling.
+#  define WIN32_LEAN_AND_MEAN
+#  define NOMINMAX
+#  include <windows.h>
+#else
+#  include <unistd.h>
+#endif
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -65,6 +78,76 @@ void printList(const ParamStore& p)
     }
 }
 
+/**
+ * @brief The directory this executable lies in, or an empty string when it cannot be determined.
+ *
+ * Not `argv[0]`: that is whatever the caller typed, and on a shell that resolved the name through
+ * PATH it is a bare name with no directory in it at all.
+ */
+std::string executableDirectory()
+{
+#if defined(_WIN32)
+    char buf[MAX_PATH];
+    const DWORD n = GetModuleFileNameA(nullptr, buf, static_cast<DWORD>(sizeof(buf)));
+    if (n == 0 || n >= sizeof(buf)) return {};
+    std::string path(buf, n);
+#else
+    char buf[4096];
+    const ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n <= 0) return {};
+    std::string path(buf, static_cast<size_t>(n));
+#endif
+    const size_t cut = path.find_last_of("/\\");
+    return cut == std::string::npos ? std::string{} : path.substr(0, cut);
+}
+
+/**
+ * @brief Points the core at the data files installed beside this executable.
+ *
+ * The core opens `library.phoswt`, `melody.phosmdl` and `bass.phosmdl` by bare name. Its lookup is
+ * (1) the name as given, relative to the working directory, (2) the directory a host declared with
+ * setWaveTableSearchPath()/setModelSearchPath(), (3) `PHOS_SOURCE_DATA_DIR`, which only ever names
+ * a source tree. An installed `phos_render.exe` has neither (1) -- the working directory is
+ * wherever the user's shell happens to be -- nor (3), so without this it would fall back to the six
+ * built-in wavetables and to the Markov model and say so only on stderr, which is the kind of
+ * failure that ships unnoticed. The plugin does the same thing for itself
+ * (Plugin/PluginProcessor.cpp, installWaveTableSearchPath).
+ *
+ * A development build is unaffected: nothing is installed beside the built binary, the search path
+ * finds nothing, and the lookup falls through to `PHOS_SOURCE_DATA_DIR` exactly as before. That
+ * matters -- the default render is the determinism oracle and has to stay byte-identical.
+ */
+void installDataSearchPath()
+{
+    const std::string home = executableDirectory();
+    if (home.empty()) return;
+    setWaveTableSearchPath(home);
+    setModelSearchPath(home);
+}
+
+/**
+ * @brief What this binary is, in two lines meant to be read by a person and by a script.
+ *
+ * The version comes from `PHOS_VERSION`, which the root CMakeLists.txt defines out of its
+ * `project(... VERSION ...)` line -- the one place that spells it out. Without the definition the
+ * build is not one of ours (a hand-made compile of this file, say), and it says so rather than
+ * pretending to a number.
+ *
+ * The second line is the vector path the core was compiled for. It is not decoration: the release
+ * build turns AVX2 on, an AVX2 binary dies with an illegal instruction on a processor without it,
+ * and Tools/release/check_package.ps1 reads this line back to prove the staged binary is the one
+ * that was meant to be staged.
+ */
+void printVersion()
+{
+#if defined(PHOS_VERSION)
+    std::printf("phos_render %s\n", PHOS_VERSION);
+#else
+    std::printf("phos_render unversioned\n");
+#endif
+    std::printf("vector path: %s\n", kVecPathName);
+}
+
 bool readFile(const char* path, std::string& out)
 {
     FILE* f = std::fopen(path, "rb");
@@ -90,6 +173,10 @@ int main(int argc, char** argv)
     double rampBeat = -1.0, rampBpm = 0.0;
     std::vector<std::string> sets;
     std::vector<std::pair<bool, std::string>> unitOps;   // (lock?, "unit:index")
+
+    // Before the engine: the first Engine::prepare() anywhere in the process is the one that loads
+    // the wavetable library, so the search path has to be in place before there is an engine at all.
+    installDataSearchPath();
 
     auto engine = std::make_unique<Engine>();
     ParamStore& params = engine->params();
@@ -137,6 +224,7 @@ int main(int argc, char** argv)
         else if (a == "--report") report = true;
         else if (a == "--bench") bench = true;
         else if (a == "--list") { printList(params); return 0; }
+        else if (a == "--version") { printVersion(); return 0; }
         else { std::fprintf(stderr, "unknown option %s\n", a.c_str()); return 2; }
     }
 

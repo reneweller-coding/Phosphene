@@ -21,3 +21,9 @@ Tools/train/cache/
 # library, is 1.4 MB, is rebuilt in 56 s, and only means anything on a machine that has that
 # library. What is committed is the choice it led to (Tools/wt_selection.json) and the pack.
 Tools/wt_measure.json
+# Phase 9, the release path: everything Deploy/build_release.ps1 makes. The staging folder is a copy
+# of build outputs, Deploy/out holds the setup and the archive (covered by "out/" above), and the
+# reference render is a .wav (covered by "*.wav"). What is committed is the scripts, the Inno Setup
+# script and the icon.
+Deploy/stage/
+Deploy/manual-work/
