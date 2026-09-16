@@ -3184,11 +3184,19 @@ void testMixBalance()
         check(std::fabs(top + 9.3) <= 1.2,
               "the top end above 2.5 kHz carries the same weight against the kick band as in the recordings (reference median -9.3 dB, quartiles -11.0..-7.3)",
               fmt("%.2f dB", top));
-        // A guard, not a discriminator: this one already held before the round (presence -9.55, air
-        // -13.69 dB) and is here so a later change cannot drift the two named bands unnoticed.
-        check(std::fabs(presence + 8.9) <= 2.0 && std::fabs(air + 12.6) <= 2.0,
-              "presence and air within 2 dB of the reference median (-8.9 and -12.6 dB against 40..140 Hz)",
-              fmt("presence %.2f dB, air %.2f dB", presence, air));
+        // The air band is where the kit's *level* lives: above 6 kHz the melodic voices add little
+        // (in this round's solo table lead and arp are 18 and 21 % of the air band against the kit's
+        // 60 %, and in a track without a lead the kit owns 95 % of it), so air moves almost one for
+        // one with `mix.perc_level` where the wider 2.5 kHz figure above moves by a third of that.
+        // 1.0 dB is well inside the recordings' own quartiles (-14.0 .. -11.2).
+        check(std::fabs(air + 12.6) <= 1.0,
+              "the air band sits on the reference median (-12.6 dB against 40..140 Hz, quartiles -14.0..-11.2)",
+              fmt("%.2f dB", air));
+        // Presence is a guard rather than a discriminator: it held before the round too (-9.55 dB),
+        // because half of it belongs to the melodic voices and so to the arrangement, not the mix.
+        check(std::fabs(presence + 8.9) <= 2.0,
+              "presence within 2 dB of the reference median (-8.9 dB against 40..140 Hz)",
+              fmt("%.2f dB", presence));
     }
 }
 

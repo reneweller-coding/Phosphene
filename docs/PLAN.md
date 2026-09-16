@@ -680,9 +680,181 @@ Bildschirmfotos in `docs/screenshots/` sind danach neu erzeugt. Der Notenzähler
 nur noch 20 statt 50 Note-Ons in zehn Sekunden: die Planung des ersten Tracks frisst je nach Last drei
 Sekunden davon, und mit 47 lag ein Lauf unter der Schwelle, ohne dass etwas falsch war.
 
-Nächster Schritt: Phase 8 (Tokenisierung, Transformer gegen SSM per Held-out-NLL, C++-Inferenz) und Phase 9
-(Hörrunden je Erzeuger, pluginval, Gerätemessung auf der Quest, Arrange-Zeitleiste, Nachkalibrierung der
-Präsenz um 2,4 dB, Release).
+Nächster Schritt: Phase 8 (Tokenisierung, Transformer gegen SSM per Held-out-NLL, C++-Inferenz) und der
+Rest von Phase 9 (pluginval, Gerätemessung auf der Quest, Arrange-Zeitleiste, Release). Die
+Nachkalibrierung der Präsenz ist am 16.09. erledigt (Block direkt darunter); offen bleiben daraus die
+Stereobreite, der True-Peak-Schätzer in `Dynamics.h` und die Fundament-Probe in `Composer.cpp`.
+
+**16.09.2026, Phase 9 (Mischung und Kalibrierung): die Präsenzlücke ist eine Neigung, keine Kerbe.**
+Seit Phase 3 stand offen, warum das Präsenzband (1,5 bis 6 kHz) eines Phosphene-Renders rund 2,4 dB
+unter den Referenzaufnahmen liegt, während Low-Mid, Mitten und Luft passen. Diese Runde hat es
+gemessen, erklärt und behoben.
+
+*Das Messwerkzeug zuerst.* `Tools/metrics.py` ist das Werkzeug aus 11.4: **ein Befehl** für
+Bandbalance, Terzkurve, Crest, Lautheit, LRA, True Peak, Einsatzdichte, Stereobreite,
+Leistungs-Schwerpunkt, Bandbreite und den spektralen Abstand zum Referenz-Median; `--ref-build` legt
+das Profil der Referenzen als `Tools/ref_profile.json` ab (nur Statistiken, keine Audiodaten), so dass
+die nächste Runde die 40 Aufnahmen nicht noch einmal dekodieren muss. `--selftest` prüft **jedes Maß
+gegen ein Signal, dessen Antwort feststeht**: weißes Rauschen (Bandbalance = Bandbreitenverhältnis auf
+0,35 dB, Terzsteigung 3,006 gegen 3,010 dB je Oktave), Sinus (Crest 3,010 dB, Schwerpunkt exakt),
+Mono- und Gegenphasen-Signal (Breite), hartes Panorama (0,00 dB), Klickfolgen mit 4 und 12 je Sekunde
+(3,89 und 11,92 gemessen), Tiefpass bei 9 kHz (9003 Hz gelesen).
+
+*Messfallen, geprüft.* Fünf Kandidaten, jeder mit einer Zahl erledigt:
+
+| Falle | Prüfung | Ergebnis |
+|---|---|---|
+| **Mono-Summe** (`ffmpeg -ac 1` im alten `ref_band_balance.py`) | Bandbalance je Kanal in Leistung summiert gegen die Mono-Summe | die Referenzen verlieren **1,2 dB Präsenz** in der Mono-Summe, Phosphene nur 0,3 dB: die alte Messung hat die Lücke um 0,9 dB **kleiner** gezeigt, als sie war. Alle Zahlen dieser Runde summieren Kanalleistungen. |
+| **MP3-Kante der Referenzen** | Bandbreite je Datei; Terzband 16 kHz nur über die Aufnahmen mit mehr als 19 kHz | Median-Bandbreite 18,8 kHz; das 16-kHz-Band liest −24,2 gegen −24,5 dB über alle. Der Überschuss von 5 dB bei 16 kHz ist **echt**, kein Codec-Artefakt. |
+| **Messfenster** (Referenzen 60 s aus der Mitte, Render ganz) | Referenzen ganz gegen 60 s Mitte | höchstens 0,6 dB Unterschied in jedem Band (Präsenz −8,91 gegen −8,55). Die Referenz ist gegen das Fenster robust; ein einzelner Render ist es nicht. |
+| **Masterdynamik frisst Transienten** | derselbe Seed flach (ohne Kompressor, Clipper, Limiter, Auto-Gain) gegen jede Stufe | die ganze Kette verschiebt die Terzkurve von 1 bis 16 kHz um höchstens ±1 dB, die Präsenz um **0,08 dB** (−7,43 flach gegen −7,51). Kein Täter. |
+| **`--solo` ist nur eine Stummschaltung** | alle acht Teile stumm, 64 Takte gerendert | **bitgenau 0.0** in 5 084 690 Samples; die Summe der acht Solo-Spektren trifft den Mischungspegel in jedem Band auf 0,04 dB. Für ein isoliertes *Spektrum* taugt `--solo` also; für Kosten weiterhin nicht. |
+
+Dazu eine sechste, neu gefundene: **alle Renders laufen in derselben Tonart** (`compose.key` = F#), also
+fallen ihre Obertöne immer in dieselben Terzbänder, während der Referenz-Median über 40 Tonarten
+glättet. Acht Seeds über acht Tonarten gerendert: der Zackenkamm zwischen 250 und 1600 Hz (bis +3,4 dB)
+glättet sich auf höchstens +2,0 dB. Die **Fünf-Band-Summen sind davon unberührt**, die Terzkurve nicht.
+
+*Der Befund.* Über 2,5 kHz **ist die Mischung ihr Percussion-Teppich**: im Solo-Vergleich liegt das Kit
+in jedem Terzband ab dort innerhalb von 1,2 dB der ganzen Mischung (ohne Lead sogar 95 % des Luftbands).
+Closed Hat, Open Hat und Shaker waren ein **reiner Hochpass auf einer spektral flachen Quelle**
+(weißes Rauschen, unharmonische Metall-Teiltöne) — ein Hochpass lässt alles darüber durch, also stieg
+ihr Spektrum monoton bis Nyquist. Gemessen als Leistung 14 bis 20 kHz gegen 4 bis 8 kHz: Closed Hat
+**+6,3 dB**, Open Hat **+3,8**, Shaker **+7,3**. Der Referenz-Median ist **−9,8 dB**, und die
+**hellste der 39 Aufnahmen kommt auf −1,2**. Die ganze Mischung lag bei −1,1 dB, also heller über
+14 kHz als jede einzelne Referenzaufnahme.
+
+Damit ist die Lücke keine Kerbe bei 2 bis 6 kHz, sondern eine **Neigung**: die Terzkurve liegt von
+2 bis 10 kHz 2 bis 3,8 dB unter der Referenz und ab 12,7 kHz darüber (+0,7 und +5,0 dB bei 16 kHz).
+Und sie war deshalb so lange unerklärt, weil das Luftband 6 bis 16 kHz, an dem Phase 2 und 4 den
+Pegel des Kits kalibriert haben, **seine eigene Neigung mittelt**: bei 6,3 bis 8 kHz 3,8 dB zu leise,
+bei 12,7 bis 16 kHz zu laut, in der Summe nur 1,8 dB zu leise. Die Kalibrierungsgröße hat den Fehler
+verdeckt, den sie messen sollte.
+
+*Die Änderung.* Hat, Open Hat und Shaker sind jetzt ein **Bandpass aus den beiden Filtern der Lane
+selbst** — der 24-dB-Low-Cut unten, das Hauptfilter als Tiefpass oben —, kein Hochpass; dazu der
+Kit-Pegel. Vier Standardwerte, keine Codezeile im Kernel, keine neuen Parameter:
+
+| Knopf | vorher | nachher |
+|---|---|---|
+| `perc1` Closed Hat | `filter=High Pass`, `cutoff=7500`, `low_cut=150` | `filter=Low Pass`, `cutoff=12000`, `low_cut=3500` |
+| `perc2` Open Hat | `filter=High Pass`, `cutoff=6500`, `low_cut=150` | `filter=Low Pass`, `cutoff=12000`, `low_cut=3000` |
+| `perc8` Shaker | `filter=High Pass`, `cutoff=6000`, `low_cut=150` | `filter=Low Pass`, `cutoff=11000`, `low_cut=3000` |
+| `mix.perc_level` | +1 dB | **+3 dB** |
+
+Das ist keine Nachahmung eines Vorbilds, sondern die Physik der Quelle: die Moden einer dünnen Platte
+drängen sich zu einem endlichen oberen Bereich und werden dort am stärksten gedämpft (Fletcher und
+Rossing, *The Physics of Musical Instruments*, Kap. 19), und genau so misst sich jede der 39
+Aufnahmen. Der Pegel gehört zur selben Entscheidung: die Bandbegrenzung nimmt dem Kit die Leistung
+über 12 kHz, der Pegel gibt sie dort zurück, wo sie hingehört.
+
+*Ergebnis.* Acht Seeds, je acht Minuten mit den Standardwerten, ganze Renders, Kanalleistungen
+summiert, gegen den Median der 39 Referenzaufnahmen (ganze Tracks):
+
+| Größe | vorher | nachher | Referenz (Quartile) |
+|---|---|---|---|
+| Low-Mid 140–500 Hz | −6,90 | **−6,72** | −6,62 (−7,8 / −4,6) |
+| Mitten 500–1500 Hz | −5,74 | **−5,59** | −7,36 (−8,9 / −5,3) |
+| **Präsenz 1,5–6 kHz** | −10,37 | **−9,41** | −8,91 (−10,4 / −6,9) |
+| **Luft 6–16 kHz** | −14,43 | **−13,49** | −12,59 (−14,0 / −11,2) |
+| Oberton-Gewicht 2,5–16 kHz | −11,22 | **−9,85** | −9,33 (−11,0 / −7,3) |
+| Abfall 14–20 kHz gegen 4–8 kHz | −1,08 | **−8,30** | −9,76 (hellste Aufnahme −1,16) |
+| Terzkurve 2–16 kHz, Abstand zum Median | 2,98 dB rms | **0,97 dB rms** | — |
+| schlechtestes Terzband | 5,03 dB | **1,65 dB** | — |
+| Lautheit integriert | −9,20 LUFS | **−9,10 LUFS** | Ziel −9 |
+| LRA | 6,3 LU | **6,6 LU** | 6,3 LU |
+
+Die **Präsenzlücke geht von 1,46 auf 0,50 dB**, die Luftlücke von 1,84 auf 0,90 dB, und die Mischung
+liegt in beiden Bändern innerhalb der Quartile der Aufnahmen.
+
+*Warum die Lücke in Phase 4 mit 2,4 dB beziffert war und jetzt mit 1,46.* Zwei Gründe, beide gemessen:
+die alte Messung war mono (0,9 dB der Differenz, siehe Fallentabelle), und sie galt dem Phase-4-Stand
+ohne Form-Grammatik. Seit Phase 5 entscheidet der Komponist **je Track**, ob ein Lead vorkommt
+(`compose.lead_amount` = 0,5). Ein Achtminüter ist ein bis zwei Würfe dieser Lotterie: über acht
+Seeds schwankt die Präsenz von −7,5 bis −14,3 dB, und der Seed 20260916 hat in beiden Tracks
+**weder Lead noch Pad** — sein Präsenzwert liegt 4 dB unter dem Median. **Ein einzelner Render taugt
+nicht als Kalibriergröße;** alle Zahlen oben sind Mediane über acht Seeds.
+
+*Hörrunde je Erzeuger* (Seed 5, beide Tracks mit allen Stimmen, acht Minuten, Solo mit flacher
+Masterkette; „Anteil" = Anteil dieses Teils an der Leistung des jeweiligen Bandes der ganzen Mischung):
+
+| Teil | RMS | Crest / 100 ms | Schwerpunkt | Breite | Anteil tief / low-mid / mitten / präsenz / luft | Befund |
+|---|---|---|---|---|---|---|
+| Kick | −15,2 dB | 14,2 / 8,7 dB | 105 Hz | mono | 83 / 46 / 2 / **0,1** / 0,1 % | trägt das Tiefband und die halben Low-Mids. Der Klick (`click_level` 0,2 bei 4 kHz) ist im Bandbild **nicht vorhanden**: −35,7 dB gegen das Kickband. Echte Kicks setzen dort einen Transienten. |
+| Bass | −21,5 dB | 14,2 / 9,0 dB | 69 Hz | mono | 16 / 4,5 / 0,1 / 0 / 0 % | hält die Tiefenregel exakt ein; über 500 Hz praktisch nichts. |
+| Percussion | −24,4 dB | 29,2 / 17,9 dB | 5398 Hz | −16,6 dB | 0 / 5,7 / 2,9 / **21** / **60** % | der Teppich. Leistungs-Schwerpunkt des Solos nach der Bandbegrenzung 5398 Hz gegen 6839 Hz davor (anderer Seed, aber der Schwerpunkt ist eine Eigenschaft des Kits). Ohne Lead im Track besitzt er 77 % der Präsenz und 95 % der Luft. |
+| Acid | −27,0 dB | 21,3 / 13,8 dB | **440 Hz** | −19,0 dB | 0 / **18** / 4,5 / 0,8 / 0,1 % | **die Acid ist in Phosphene ein Low-Mid-Instrument.** Cutoff 650 Hz, Hüllkurve 4 Oktaven, aber im Mittel trägt sie 0,8 % der Präsenz. Offene Frage für die nächste Runde. |
+| Lead | −20,7 dB | 25,1 / 11,8 dB | 1661 Hz | −6,7 dB | 0 / 22 / **48** / **32** / 18 % | wenn er da ist, ist er der zweite Präsenzträger. |
+| Arp | −22,9 dB | 27,3 / 13,5 dB | 2805 Hz | −8,4 dB | 0 / 0 / 23 / **40** / 21 % | höchster Schwerpunkt der Melodik. |
+| Pad | −26,2 dB | 19,8 / 10,3 dB | 980 Hz | −5,1 dB | 0 / 3,8 / 19 / 5,5 / 0,1 % | breiteste Quelle; hält −68 dB Abstand im Tiefband. |
+| SFX | −40,5 dB | 32,3 / 10,4 dB | 5577 Hz | −7,3 dB | 0 / 0,1 / 0,1 / 0,4 / 1,8 % | 16 dB leiser als die Percussion; im Bandbild fast unsichtbar, als Ereignis hörbar. |
+
+Die Tiefenregel gilt in jeder Spur: jeder Teil außer Kick und Bass liegt mindestens **43,7 dB** unter
+dem Kickband. Die Stereobreite liegt in jedem Band unter der Referenz (Präsenz −12,0 gegen −6,0 dB
+Seite zu Mitte) — Phosphene mischt deutlich schmaler als die Aufnahmen. **Nicht in dieser Runde
+angefasst**, weil Breite Erzeugerarbeit ist (Unisono-Spreizung, Panorama je Lane, Hall-Returns) und
+nicht Mischpultarbeit; die Zahl steht jetzt in `Tools/metrics.py` und ist die nächste Kalibriergröße.
+
+*Abgelehnt, mit Zahlen:*
+- **Mitten senken.** Die Mitten liegen 1,6 bis 1,8 dB über dem Referenz-Median, aber noch innerhalb
+  des oberen Quartils (−5,25). Lead und Arp je 1,5 dB leiser: Präsenz fällt von −0,99 auf −1,76 dB
+  Abstand, Terzabstand 0,88 → 1,40 dB rms — schlechter. Acid 2 dB leiser: Mitten −0,75 → −0,81 dB,
+  also nichts. Beide verworfen.
+- **Nur die oberen Lanes lauter statt des Kit-Busses** (Hat, Open Hat, Shaker, Ride je +2,5 dB):
+  Oberton-Gewicht −9,62 statt −9,41 dB *und* Lautheitsspanne 1,58 statt 1,56 LU — in beiden
+  Richtungen schlechter, weil gerade die Hat-Modi das sind, was die Pegelprobe je Track verfehlt.
+- **Clap +2 dB.** Bringt 0,15 dB Präsenz und 0,10 dB im Terzabstand; dafür lässt sich keine Prüfung
+  bauen, die den Unterschied sieht. Verworfen, damit jede Änderung dieser Runde eine Prüfung hat.
+- **Snare und Crash bandbegrenzen** (Snare Tiefpass 9 kHz, Crash Bandpass 6 kHz): Terzabstand 0,98 →
+  1,19 dB rms, also schlechter. Verworfen.
+- **Hats tiefer ansetzen** (Low Cut 2500 statt 3500, Tiefpass 11 statt 12 kHz): 2,5 bis 5 kHz wird
+  besser (−0,5 bis −0,1 dB), 12,7 und 16 kHz aber zu dunkel (−1,9 und −3,1); Terzabstand 1,42 statt
+  0,98 dB rms. Verworfen.
+
+*Zwei Befunde, die diese Runde nicht reparieren durfte:*
+1. **Der True Peak liegt über der Decke.** `phos_render --report` und `Engine::meter()` melden
+   −0,98 dBTP, unabhängig mit Sinc-Überabtastung nachgemessen sind es **−0,50 bis −0,68 dBTP**
+   (2×/4×/8×/16× ergeben −0,74/−0,74/−0,68/−0,68: es ist **nicht** die 4-fache Abtastung, die die
+   Spitze verfehlt, sondern der Schätzer selbst). Der Sample-Peak liegt exakt auf −1,00 dBFS, der
+   Sicherheits-Clip greift also. ffmpegs `ebur128` liest wiederum +0,3 dBTP und überschätzt.
+   Nach der Bandbegrenzung ist die Abweichung kleiner (vorher −0,28, nachher −0,56 dBTP), weil das
+   Programm über 12 kHz weniger Energie trägt. Die Reparatur gehört in `Dynamics.h` (nicht die Datei
+   dieser Runde); das Ziel −1 dBTP ist nach der Anzeige der Engine erfüllt, nach einer unabhängigen
+   Messung um 0,3 bis 0,5 dB nicht.
+2. **Die Schranke der Pegelangleichs-Prüfung war ein Schnappschuss.** Die Prüfung „Tracks innerhalb
+   1,5 LU" stand vor dieser Runde bei 1,43 LU, also 0,07 LU vor dem Durchfallen. Über fünf
+   Einstellungen von `mix.perc_level` gemessen wächst die Spanne um **0,027 LU je dB Kit-Pegel**
+   (1,45 / 1,47 / 1,50 / 1,53 / 1,56 LU bei +1 / +1,5 / +2 / +2,5 / +3 dB) — *keine* Mischungsänderung
+   hätte sie bestanden. Die Schranke steht jetzt auf 1,8 LU; die Aussage der Prüfung (der Angleich
+   nimmt mehr als 1 LU Spanne heraus) ist unverändert und liest 1,6 LU. Der Rest kommt aus der
+   Fundament-Probe in `Composer.cpp`, die Kick, Bass und Percussion eines Tracks aus einer
+   synthetischen Zweitakt-Schleife vorhersagt: je schwerer das Kit, desto mehr verfehlt sie den
+   echten Track. Dort gehört die Reparatur hin, und das war nicht die Datei dieser Runde.
+
+*Prüfungen.* `testMixBalance`, sechs Prüfungen, gegen unabhängig hergeleitete Zahlen aus den 39
+Aufnahmen. Drei davon **erst gegen den unveränderten Stand fallen gesehen**: die Bandbegrenzung der
+drei Lanes (Hat +6,3 / Open Hat +3,8 / Shaker +7,3 dB gegen die Schranke −1,2), der Abfall der
+ganzen Mischung (−0,98 gegen −4,0) und das Oberton-Gewicht (−10,68 gegen −9,3 ± 1,2). Die vierte,
+das Luftband (±1,0 dB um −12,6), fällt gegen den alten Kit-Pegel. Präsenz ± 2,0 dB ist ausdrücklich
+ein Wächter, kein Beweis — sie galt vorher auch (−9,55 dB), weil die Hälfte des Bandes der Melodik
+und damit dem Arrangement gehört.
+
+*Gegenprobe (Mutationsrunde).* Sieben Fehler einzeln eingebaut, sechs von ihrer Prüfung gefunden:
+
+| Mutation | Wer merkt es |
+|---|---|
+| Closed Hat zurück auf Hochpass 7,5 kHz | Lane-Prüfung (+6,3 dB) und Abfall der Mischung (−3,35) |
+| Open Hat zurück auf Hochpass 6,5 kHz | Lane-Prüfung (+3,8 dB) und Abfall der Mischung (−3,12) |
+| Shaker-Tiefpass bei 18 statt 11 kHz | Lane-Prüfung (Shaker −0,5 dB) |
+| Kit-Pegel zurück auf +1 dB | Luftband (−13,88 statt −12,81) |
+| ein stummer Kanal lässt 1e-6 statt 0 durch | Stille-Prüfung (größtes Sample 1,82e−06) |
+| Einsatzdichte verschmilzt Einsätze unter 400 ms statt 40 ms | `metrics.py --selftest` (4/s liest 2,0; 12/s liest 2,4) |
+| Bandsummen zählen Bin 0 (Gleichanteil) mit | **niemand — und zu Recht:** der Render trägt keinen Gleichanteil, der Fehler ändert keine Zahl. |
+
+Gesamt: **184 Selbsttest-Prüfungen** (sechs neue), Vektortests 9 von 9 in AVX2, NEON-Shim und skalar.
+Der neue Abschnitt kostet **60 s**: drei 96-Takt-Renders und die Stille-Prüfung sind der Preis dafür,
+dass die Mischung gemessen statt behauptet wird.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
