@@ -37,6 +37,7 @@ import importlib.util
 import json
 import os
 import random
+import re
 import struct
 import sys
 from collections import Counter
@@ -60,6 +61,24 @@ ALPHABET = bc.ALPHABET                # 37
 REL_MIN, REL_MAX = bc.REL_MIN, bc.REL_MAX
 PSY_PACKS = list(bc.PACKS)            # the three psytrance packs the stage-A tables are built from
 TRANCE_PACKS = ["VORTEX ULTIMATE TRANCE BUNDLE"]
+# A fourth psytrance source, found after the first training round: 3266 flat files whose role sits in
+# the file name. It is kept OUT of PSY_PACKS on purpose. PSY_PACKS defines the held-out set of every
+# measurement made so far; adding a pack to it would change the test set and make the new numbers
+# incomparable with the shipped model's 1.3457 and unusable for a paired bootstrap. New material
+# therefore enters on the training side only, the way the trance bundle does (train.py --extra).
+STAR_PACKS = [os.path.join("Star Samples", "Psy Trance Midis")]
+# A vendor collection of collections: 19 794 directories three levels deep, each a resold pack. The
+# genre is in the directory name and nowhere else, so the packs are found by name and only those
+# directories are walked -- a recursive scan of 370 000 files to find 21 000 would cost minutes of a
+# slow drive for nothing.
+SUPER_PACK = os.path.join("Star Samples", "Various Midi 370.000 Super Pack")
+# "psy" as a substring is a trap: it matches Gypsy, Psycho, Psynap. The rule is therefore a whole
+# token ("psy trance", "PsyTrance", "goa"), plus two audited lists -- 34 candidate directories is a
+# human-scale list and a curated one is more honest than a regex that pretends to know the genre.
+_PSY_TOKENS = ("psy", "goa", "psytrance", "psytrances")
+_PSY_ALLOW = ("psyload",)          # Psyload Twisted Reaction: a psytrance pack the token rule misses
+_PSY_DENY = ("gypsy", "psycho", "psynap", "money", "trapstep", "psychodelic")
+_TRANCE_TOKENS = ("trance",)
 
 START_SYMBOL = 0 - REL_MIN            # 12: the symbol of the interval 0, the sampler's start context
 CACHE_DIR = os.path.join(_CORPUS, "cache")
@@ -99,7 +118,12 @@ def extract(path, role):
     """
     try:
         ppq, notes = bc.read_midi(path)
-    except (IndexError, struct.error):                # the same catch build_corpus applies
+    except (IndexError, struct.error, TypeError):
+        # build_corpus catches IndexError and struct.error; the vendor super pack adds a third case,
+        # a track that opens with a running-status data byte and no status byte before it, on which
+        # read_midi raises TypeError. build_corpus itself is left alone -- it generates the shipped
+        # stage-A tables from three packs that contain no such file, and changing it would mean
+        # regenerating CorpusTables.cpp for nothing.
         return None
     if not ppq or len(notes) < 4:
         return None
@@ -253,6 +277,75 @@ def build_split(records, mode="group", frac_val=0.15, frac_test=0.15, seed=12345
     return (augment(records, tr, rotations), [records[i] for i in va], [records[i] for i in te])
 
 
+def assemble_extra(root, extra, holdout, trance_weight=1.0, log=None):
+    """The extra training material named by ``extra``, ready to be merged with the psytrance lines.
+
+    Shared by train.py and memorisation.py: the memorisation battery compares generated lines against
+    the set the model was *actually* trained on, so the two must build that set the same way or the
+    copy rates are measured against the wrong corpus and read too low.
+
+    ``holdout`` is validation plus test; every candidate that is a near duplicate of one of those is
+    dropped, which is what keeps extra material from re-introducing the held-out lines.
+    """
+    psy_side, trance_side = [], []
+    for which in [w for w in (extra or "none").split(",") if w and w != "none"]:
+        if which == "trance":
+            pool = load(root, TRANCE_PACKS)
+        elif which == "star":
+            pool = load(root, STAR_PACKS)
+        elif which == "starsynth":
+            pool = collect_synth_loops(root)
+        elif which == "superpsy":
+            pool = load(root, packs_for("superpsy", root))
+        elif which == "supertrance":
+            pool = load(root, packs_for("supertrance", root))
+        else:
+            raise SystemExit(f"unknown --extra {which}")
+        k = exclude_near(pool, holdout)
+        if log:
+            print(f"  + {len(k)} {which} lines ({len(pool) - len(k)} dropped as near duplicates of a "
+                  f"held-out line); val and test stay the psytrance ones", file=log)
+        (trance_side if which in ("trance", "supertrance") else psy_side).extend(k)
+    if trance_side:
+        weighed = weigh(trance_side, trance_weight)
+        if log:
+            print(f"  trance class: {len(trance_side)} lines at weight {trance_weight} "
+                  f"-> {len(weighed)}", file=log)
+        psy_side += weighed
+    return psy_side
+
+
+def dedupe(records):
+    """One line per loop group over the **merged** corpus; returns (kept, removed).
+
+    A vendor collection resells the same loop in several packs, so a per-pack duplicate pass misses
+    exactly the duplicates that matter. Running the union-find over everything at once also keeps a
+    loop that appears in three vendors from counting three times in the training distribution.
+    """
+    groups = loop_groups(records)
+    kept = [records[min(g)] for g in groups]
+    return kept, len(records) - len(kept)
+
+
+def weigh(records, weight, seed=4242):
+    """Repeats or subsamples a class of material to give it a weight other than one.
+
+    PLAN 6.9 says trance counts with a lower weight, and once trance outnumbers psytrance ten to one
+    that stops being a detail. A weight below 1 keeps that fraction of the lines (drawn once, with a
+    fixed seed, so a run is reproducible); a weight above 1 repeats them.
+    """
+    if weight == 1.0 or not records:
+        return list(records)
+    rng = random.Random(seed)
+    order = list(range(len(records)))
+    rng.shuffle(order)
+    whole = int(weight)
+    out = [records[i] for _ in range(whole) for i in range(len(records))]
+    rest = int(round((weight - whole) * len(records)))
+    out += [records[i] for i in order[:rest]]
+    return out
+
+
 def exclude_near(candidates, holdout):
     """Candidate lines that are not a near duplicate of anything in ``holdout``.
 
@@ -268,6 +361,18 @@ def exclude_near(candidates, holdout):
         if not any(near_duplicate(c, h) for h in buckets.get((c["role"], tuple(c["steps"])), ())):
             keep.append(c)
     return keep
+
+
+def split_seed_of(args):
+    """The split seed of a run, from its stored arguments.
+
+    ``--seed`` varies the weight initialisation and the batch order; ``--split-seed`` varies the
+    held-out set. They were one knob until the seed-variance measurement needed the split held fixed
+    -- otherwise five "seeds" would each be scored on a different test set and the spread would be
+    the spread of the corpus, not of the training. Runs made before the split existed as its own
+    knob fall back to ``--seed``, which is what they used.
+    """
+    return args.get("split_seed", args["seed"]) * 7919 + 12345
 
 
 def sibling_leak(train, test):
@@ -342,8 +447,97 @@ def load(root="M:/Midi", packs=None, refresh=False):
     return recs
 
 
-def packs_for(name):
-    return {"psy": PSY_PACKS, "trance": TRANCE_PACKS, "all": PSY_PACKS + TRANCE_PACKS}[name]
+def super_dirs(root, kind, depth=3):
+    """Directories of the super pack whose *name* says psytrance ("psy"/"goa") or trance.
+
+    Only the topmost match is returned: a pack called "... PsyTrance ..." with a "Psytrance Bass"
+    subfolder is one pack, and walking both would count its files twice. A directory that says psy
+    or goa is never also counted as trance, so the two kinds do not overlap.
+    """
+    base = os.path.join(root, SUPER_PACK)
+    if not os.path.isdir(base):
+        return []
+    out, matched = [], []
+
+    def is_psy(low):
+        if any(w in low for w in _PSY_DENY):
+            return False
+        if any(w in low for w in _PSY_ALLOW):
+            return True
+        toks = set(re.split(r"[^a-z0-9]+", low))
+        return bool(toks & set(_PSY_TOKENS))
+
+    def walk(path, level):
+        try:
+            entries = sorted(os.scandir(path), key=lambda e: e.name)
+        except OSError:
+            return
+        for e in entries:
+            if not e.is_dir():
+                continue
+            low = e.name.lower()
+            if any(m == os.path.commonpath([m, e.path]) for m in matched):
+                continue                      # inside a pack that already matched
+            psy = is_psy(low)
+            hit = psy if kind == "psy" else (any(w in low for w in _TRANCE_TOKENS) and not psy)
+            if hit:
+                matched.append(e.path)
+                out.append(os.path.relpath(e.path, root))
+                continue
+            if level < depth:
+                walk(e.path, level + 1)
+
+    walk(base, 1)
+    return out
+
+
+def packs_for(name, root="M:/Midi"):
+    if name == "superpsy":
+        return super_dirs(root, "psy")
+    if name == "supertrance":
+        return super_dirs(root, "trance")
+    return {"psy": PSY_PACKS, "trance": TRANCE_PACKS, "star": STAR_PACKS,
+            "all": PSY_PACKS + TRANCE_PACKS + STAR_PACKS}[name]
+
+
+def collect_synth_loops(root, packs=None, melodic_roles=("lead",), refresh=False):
+    """Files whose name says only "synth ..." and whose **content** says lead, admitted as lead.
+
+    The name gives no role, so ``rolecheck`` decides: a one-vs-rest logistic regression over eight
+    content features, fitted on the files of the same folder whose names do state a role, and scored
+    on a held-out third before it is used. With the melodic class restricted to ``lead`` it reaches
+    92 % precision and 71 % recall on that third; with acid and arp in the melodic class it reaches
+    only 78 %, because an acid line legitimately sits low and repeats and is hard to tell from a
+    bassline by content. See rolecheck.py.
+
+    Whether the class is worth admitting is not settled by that precision alone -- it is settled by
+    training with and without it and reading the held-out NLL, which is what train.py --extra star
+    against --extra starsynth measures.
+    """
+    import rolecheck
+    rolecheck.MELODIC_ROLES = list(melodic_roles)
+    out = []
+    for pi, pack in enumerate(packs or STAR_PACKS):
+        base = os.path.join(root, pack)
+        if not os.path.isdir(base):
+            continue
+        labelled, ambiguous = rolecheck.scan(base)
+        rows = [(f, l) for _p, f, l in labelled]
+        rows.sort(key=lambda t: (t[1], t[0]["mean_pitch"], t[0]["span"]))
+        mu, sd = rolecheck.standardise([r for r, _l in rows])
+        heads = {c: rolecheck.fit([r for r, _l in rows], [1 if l == c else 0 for _r, l in rows], mu, sd)
+                 for c in ("melodic", "bass", "padlike")}
+        for path, fe, _l in ambiguous:
+            scores = {c: rolecheck.predict(fe, w, b, mu, sd) for c, (w, b) in heads.items()}
+            if max(scores, key=scores.get) != "melodic":
+                continue
+            rec = extract(path, ROLES.index("lead"))
+            if rec is None:
+                continue
+            rec["pack"] = pi
+            rec["file"] = hashlib.sha1(os.path.relpath(path, root).encode("utf-8", "replace")).hexdigest()[:16]
+            out.append(rec)
+    return out
 
 
 def report(records):

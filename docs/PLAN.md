@@ -684,6 +684,95 @@ Nächster Schritt: Phase 8 (Tokenisierung, Transformer gegen SSM per Held-out-NL
 (Hörrunden je Erzeuger, pluginval, Gerätemessung auf der Quest, Arrange-Zeitleiste, Nachkalibrierung der
 Präsenz um 2,4 dB, Release).
 
+**16.09.2026, Phase 8 (Training), zweite Runde: zwei übersehene Quellen, ein Negativbefund, ein
+neues Modell.** Der Nutzer wies auf Material hin, das die erste Runde nicht begangen hatte.
+
+*Was dazukam.* Der Testsatz bleibt unverändert die Loop-Gruppen-Aufteilung der drei ursprünglichen
+Psy-Packs (102 Linien, 5 700 Noten) — jedes neue Material geht **nur auf die Trainingsseite**, sonst
+wäre keine Zahl dieser Runde mit 1,3457 vergleichbar und kein gepaarter Bootstrap möglich.
+
+| Quelle | Dateien | ohne Rolle | verworfen | **behalten** | Noten |
+|---|---|---|---|---|---|
+| `Star Samples\Psy Trance Midis` | 3 266 | 2 708 | 51 | **507** (Acid 163, Lead 280, Arp 64) | 49 457 |
+| Super-Pack, 22 Psy-/Goa-Verzeichnisse | 570 | 402 | 6 | **162** (Acid 40, Lead 63, Arp 59) | 16 717 |
+| Super-Pack, 190 Trance-Verzeichnisse | 16 021 | — | — | **4 378** (Acid 1 355, Lead 2 207, Arp 816) | 473 591 |
+
+Damit sind es **1 335 Psy-Linien (103 248 Noten)** und **5 288 Trance-Linien (592 000 Noten)** gegen
+1 576 Linien in der ersten Runde. Zwei Fallen im Verzeichnisbaum eines Wiederverkäufers, beide
+gemessen: (1) **„psy" als Teilzeichenkette** trifft *Gypsy*, *Psycho*, *Psynap* — von 34 Treffern
+waren zwölf falsch (Flamenco, Trapstep, Hip-Hop). Die Regel ist jetzt ein ganzes Token plus zwei
+geprüfte Listen; 22 Verzeichnisse bleiben, alle echt. (2) **Dubletten über Verkäufer hinweg**: der
+Duplikatlauf geht seit dieser Runde über den **zusammengeführten** Korpus, nicht je Pack. Er entfernt
+1 191 von 6 883 Linien (17 %) im größten Aufbau und 363 von 2 505 im ausgelieferten — eine
+Prüfung je Pack hätte jede davon stehen lassen. Die dritte Falle, **Construction Kits**, kann hier
+nicht zuschlagen: ein Kit legt Bass, Lead, Arp und Pad derselben acht Takte nebeneinander, aber
+neues Material erreicht Validierung und Test nie, und `exclude_near` wirft jede Fast-Dublette einer
+Held-out-Linie ohnehin vorher weg (4 Linien betroffen).
+
+*Ergebnisse, alle auf demselben Psy-Testsatz, 4 000 Schritte, Dropout 0,3, Lernrate 5e−4:*
+
+| Aufbau | Trainingslinien | Validierung | Test |
+|---|---|---|---|
+| A nur Psy (die drei Packs) | 836 | 1,2344 | 1,4338 |
+| B + Star Samples + Super-Pack-Psy | 1 449 | 1,2049 | 1,2696 |
+| C B + volle Trance-Klasse, Gewicht 1,0 | 5 692 | 1,1521 | 1,1762 |
+| D B + Trance-Klasse, Gewicht 0,25 | 2 661 | 1,1560 | 1,1948 |
+| E B + Trance-Klasse, Gewicht 0,05 | 1 706 | 1,1661 | 1,2321 |
+| **F B + nur VORTEX, Gewicht 1,0** | **2 142** | **1,1459** | **1,1811** |
+
+**Der Negativbefund, den der Nutzer sehen wollte: die 4 378 Trance-Linien des Super-Packs bringen
+nichts.** F gegen C, gepaarter Bootstrap über Linien: **−0,0050 nats, 95 % KI [−0,0550, +0,0379],
+P(Differenz ≤ 0) = 0,56**. Ein Korpus, der die Trance-Seite verfünffacht (473 591 zusätzliche Noten),
+verbessert die Held-out-NLL auf Psytrance nicht messbar. Trance als Klasse hilft durchaus — F gegen B
+(ohne Trance) sind **+0,0885 nats, KI [0,0358, 0,1571]** —, aber die 910 VORTEX-Linien schöpfen das
+bereits aus; alles darüber ist Wiederholung derselben Statistik. Dagegen sind die **162 Psy-Linien des
+Super-Packs +0,0870 nats wert, KI [0,0188, 0,1718], P = 0,0011** (F gegen denselben Aufbau ohne sie).
+**162 Linien der richtigen Musik schlagen 4 378 Linien der benachbarten.** Das ist die Lehre für
+Phase 9: nicht mehr Material suchen, sondern Psytrance-Material.
+
+*„Synth Loop": abgelehnt, gemessener Negativbefund.* 545 Dateien der Star-Samples-Sammlung heißen nur
+„synth loop"; der Name sagt nichts. Entschieden wurde nach Inhalt (`Tools/train/rolecheck.py`): acht
+Merkmale (Polyphonie, Akkordanteil, Ambitus, Dichte, Notenlänge, Bewegungsanteil, mittlere Tonhöhe,
+Tonklassen), eine Eins-gegen-Rest-Regression je Klasse, angepasst an die Dateien desselben Ordners,
+deren Name die Rolle *nennt*, geprüft auf einem **zurückgehaltenen Drittel**. Zwei Zwischenbefunde
+gehören dazu: die Klassen „melodisch/nicht melodisch" zusammenzuwerfen ergab 100 % Präzision bei
+7,7 % Trefferquote — eine Zahl, die nichts sagt, weil 1 765 von 1 815 Negativen Bässe sind. Und mit
+Acid und Arp in der melodischen Klasse bleibt die Präzision bei **78,4 %**, weil eine Acid-Linie
+zu Recht tief liegt und sich wiederholt und vom Bass inhaltlich kaum zu trennen ist. Erst auf
+`lead` allein wird es sauber: **92,0 % Präzision, 71,1 % Trefferquote**. Damit ließen sich 176 Linien
+zulassen — und sie bringen nichts: mit ihnen misst das Modell 1,2577 gegen 1,2657, **+0,0080 nats,
+KI [−0,0198, +0,0396], P = 0,31**, und auf der *Validierung*, die entscheidet, sind sie schlechter
+(1,1785 gegen 1,1705). Bei 8 % Beimischung von Bass und Pad in die Lead-Rolle für null messbaren
+Gewinn: **nicht zugelassen.** Der Code bleibt, die Entscheidung steht in seiner Dokumentation.
+
+*Seed-Streuung, die in der ersten Runde fehlte.* Fünf Seeds des Aufbaus F, Aufteilung festgehalten
+(`--split-seed` ist seit dieser Runde ein eigener Knopf, sonst wäre jede „Seed"-Zahl auf einem
+anderen Testsatz gemessen): Test **1,1811 / 1,2050 / 1,2143 / 1,2112 / 1,2111**, Mittel **1,2045,
+Standardabweichung 0,0138**. Zum Vergleich: der Abstand zum SSM ist 0,65 nats, also das
+Siebenundvierzigfache dieser Streuung — das Architektur-Urteil der ersten Runde steht. Fünf Seeds
+des SSM wären 95 Minuten gewesen und hätten an einem Abstand dieser Größe nichts geändert; sie sind
+**nicht** gelaufen.
+
+*Ausgeliefert* wird der Seed mit der besten **Validierung** (nicht dem besten Test — das wäre
+Auswahl auf der Messgröße): Test **1,2143**, gegen das bisher ausgelieferte Modell **+0,1314 nats,
+95 % KI [0,0488, 0,2341], P(Differenz ≤ 0) = 0,0000**, besser auf 62 von 102 Linien. int8 kostet
+−0,02 % (1,2143 → 1,2141), größte Logit-Differenz 0,056. Memorisierung gegen die 2 142 Linien, auf
+denen es wirklich trainiert wurde: **0,00 % exakte Taktkopien gegen 8,75 %** der echten
+Held-out-Loops, Fenster im Abstand 0 **7,78 % gegen 19,96 %**; Positivkontrolle **82,61 %** und
+84,50 %. Die Datei liegt als `Tools/train/model/phos_pitch_tf.phosmdl` und als
+`Core/data/melody.phosmdl`; `export.py --check-pair` rechnet alle zwölf Referenzfälle aus der
+installierten Datei nach (Differenz 0,000e+00), damit Gewichte und Orakel nie auseinanderlaufen.
+
+*Was weiter ungenutzt bleibt, und warum.* Von 28 121 begangenen `.mid`-Dateien erreichen **6 623
+Linien** das Modell. Der Rest scheitert fast vollständig an **einem** Punkt: die Rolle steht nur im
+Datei- oder Verzeichnisnamen, und wo sie dort nicht steht, gibt es sie nicht. Allein im
+VORTEX-Bündel tragen 4 877 Dateien überhaupt kein Instrumentenwort; dazu kommen 723 Bass-Dateien
+(Bass ist keine Rolle dieses Modells, siehe erste Runde), 375 Chord- und 306 Pad-Dateien, und die
+545 „synth loop" oben. Der Inhaltsklassifikator, der das lösen müsste, ist gebaut und gemessen —
+92 % auf `lead`, und das reicht messbar nicht. Der nächste Schritt wäre daher nicht mehr Material,
+sondern ein besserer Klassifikator oder eine vierte Rolle für den Bass; beides ist eigene Arbeit und
+steht nicht in dieser Runde.
+
 **16.09.2026, Phase 8 (Training): Transformer gegen Zustandsraum-Modell, gemessen.** Gebaut in
 `Tools/train/` (PyTorch, nur PC), Gewichtsformat in `docs/MODEL_FORMAT.md`, C++-Inferenz in einem
 zweiten Arbeitsbaum. **Stufe B ersetzt nur das Vorhersagemodell**: dasselbe Alphabet wie Stufe A

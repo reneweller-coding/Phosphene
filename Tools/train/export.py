@@ -268,6 +268,47 @@ def write_ref(path, model_name, header, cases, logits):
         fh.write("\n".join(lines) + "\n")
 
 
+def read_ref(path):
+    """Parses a <name>.ref.txt back into cases -- the reader the C++ self test has to agree with."""
+    cases, cur = [], None
+    for line in open(path, "r", encoding="ascii"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("case "):
+            cur = {}
+            cases.append(cur)
+            continue
+        if cur is None or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        if k in ("role", "style", "bars", "len"):
+            cur[k] = int(v)
+        elif k in ("tok", "step", "bar", "gap", "idx"):
+            cur[k] = [int(x) for x in v.split()]
+        elif k in ("logits", "probs"):
+            cur[k] = [float(x) for x in v.split()]
+    return cases
+
+
+def check_pair(model_path, ref_path):
+    """Recomputes every reference case from the .phosmdl on disk. Returns the worst differences.
+
+    This is the check the installed pair in Core/data has to pass: the weights and the oracle next to
+    them must be the same model. Copying one without the other is a silent failure -- the C++ self
+    test would then measure one model against another model's logits and report a reader bug that
+    is not there.
+    """
+    header, W = _read_phosmdl(model_path)
+    cases = read_ref(ref_path)
+    worst_l = worst_p = 0.0
+    for c in cases:
+        got = numpy_forward(header, W, c)[-1]
+        worst_l = max(worst_l, float(np.abs(got - np.array(c["logits"], np.float32)).max()))
+        worst_p = max(worst_p, float(np.abs(softmax(got) - np.array(c["probs"], np.float32)).max()))
+    return len(cases), worst_l, worst_p
+
+
 def make_cases(ctx=256, seed=20260916):
     """Conditioning sets and contexts for the oracle: every role, short and long, every gap code.
 
@@ -315,14 +356,24 @@ def main():
     import train as trainmod
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ckpt", required=True)
-    ap.add_argument("--out", required=True, help="the .phosmdl path")
+    ap.add_argument("--ckpt")
+    ap.add_argument("--check-pair", nargs=2, metavar=("MODEL", "REF"),
+                    help="verify that a .phosmdl and the .ref.txt next to it are the same model")
+    ap.add_argument("--out", help="the .phosmdl path")
     ap.add_argument("--quant", default="int8", choices=["int8", "float32"])
     ap.add_argument("--root", default="M:/Midi")
     ap.add_argument("--packs", default="psy")
     ap.add_argument("--split", default="group")
     ap.add_argument("--verify", action="store_true", help="read the file back and check it with NumPy")
     a = ap.parse_args()
+
+    if a.check_pair:
+        n, wl, wp = check_pair(*a.check_pair)
+        print(f"{a.check_pair[0]}: {n} reference cases, max |logit difference| {wl:.3e}, "
+              f"max |probability difference| {wp:.3e}")
+        return 0 if (wl < 1e-3 and wp < 1e-5) else 1
+    if not a.ckpt:
+        raise SystemExit("--ckpt is required unless --check-pair is given")
 
     ck = torch.load(a.ckpt, map_location="cpu", weights_only=False)
     args = ck["args"]
@@ -337,7 +388,7 @@ def main():
 
     recs = dataset.load(a.root, dataset.packs_for(a.packs))
     tr, va, te = dataset.build_split(recs, a.split, rotations=args["rotations"],
-                                     seed=args["seed"] * 7919 + 12345)
+                                     seed=dataset.split_seed_of(args))
     dev = torch.device("cpu")
     nll_f32 = trainmod.evaluate(model, te, args["ctx"], dev)
 
