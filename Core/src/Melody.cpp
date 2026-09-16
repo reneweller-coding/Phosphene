@@ -4,12 +4,15 @@
  */
 #include "phos/Melody.h"
 #include "phos/Corpus.h"
+#include "phos/Model.h"
 #include "phos/Dsp.h"
 #include "phos/Harmony.h"
 #include "phos/Rhythm.h"
 #include "phos/Sfx.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <string>
 
 namespace phos {
 
@@ -124,11 +127,66 @@ struct Uniform {
     double operator()() const { return static_cast<double>(r->uniform()); }
 };
 
-/** @brief Draws pitches for a sequence of allowed sets; falls back to the lowest allowed symbol of each. */
-std::vector<int> drawPitches(const PitchModel& model, const Allowed& allowed, int ctx2, int ctx1, double temperature, Rng& r)
+/**
+ * @brief Which predictive model a track's lines are drawn from (compose.melody_model).
+ *
+ * Phase 8 puts a trained transformer (Model.h) where the order-2 Markov model of the corpus stood.
+ * Everything around it -- the alphabet, the constraint sets, the rhythms, the phrase structure -- is
+ * unchanged; only the distribution the pitches come from is another one, and with it the decoder:
+ * stage A samples exactly from the constrained distribution, stage B masks position by position and
+ * gives that guarantee up (Model.h, sampleMasked). `nn` is null whenever the knob says Markov or no
+ * weight file was found, and then nothing at all changes.
+ */
+struct DrawSource {
+    NeuralModel* nn = nullptr;   ///< the neural model, or null for the corpus Markov model
+    int style = 0;               ///< the style label of the conditioning; 0 ("unknown") is all the
+                                 ///< trained model was ever shown (docs/MODEL_FORMAT.md, section 3)
+};
+
+/**
+ * @brief The per-note conditioning of a line, from the onset steps the maker has already drawn.
+ *
+ * docs/MODEL_FORMAT.md section 3: the stage-B model is told, for the note it is about to predict,
+ * where in the bar it sits, which bar of the pattern that is, how far the next note is and roughly
+ * how far into the line it stands. All four are known before any pitch exists, because all three
+ * makers here draw the rhythm first. The steps are relative to the pattern the line belongs to --
+ * one acid pattern, one two-bar lead window, one arp cell -- not to the track.
+ */
+std::vector<NoteCond> noteConds(const std::vector<int>& steps)
+{
+    std::vector<NoteCond> c(steps.size());
+    for (size_t i = 0; i < steps.size(); ++i) {
+        const int s = steps[i];
+        const bool hasNext = i + 1 < steps.size();
+        c[i].step = (s % 16 + 16) % 16;
+        c[i].bar = (s / 16 % 8 + 8) % 8;
+        c[i].gap = noteGapCode(s, hasNext ? steps[i + 1] : 0, hasNext);
+        c[i].idx = noteIndexBucket(static_cast<int>(i));
+    }
+    return c;
+}
+
+/**
+ * @brief Draws pitches for a sequence of allowed sets; falls back to the lowest allowed symbol of each.
+ * @param steps the onset step of each position inside its pattern (the conditioning of stage B)
+ * @param bars  the pattern's length in bars
+ */
+std::vector<int> drawPitches(const PitchModel& model, CorpusRoleId role, const DrawSource& src,
+                             const Allowed& allowed, const std::vector<int>& steps, int bars,
+                             int ctx2, int ctx1, double temperature, Rng& r)
 {
     std::vector<int> syms;
-    if (!sampleConstrained(model, allowed, sym(ctx2), sym(ctx1), temperature, Uniform{ &r }, syms)) {
+    bool ok = false;
+    if (src.nn != nullptr && steps.size() == allowed.size()) {
+        const std::vector<NoteCond> cond = noteConds(steps);
+        NeuralStepper stepper{ src.nn, static_cast<int>(role), src.style, bars, &cond, 0 };
+        // Stage B has no order-2 state: it is primed with the previous symbol only, and before the
+        // first note that is the start token docs/MODEL_FORMAT.md section 3 fixes at the interval 0.
+        ok = sampleMasked(stepper, allowed, sym(ctx2), sym(ctx1), temperature, Uniform{ &r }, syms);
+    } else {
+        ok = sampleConstrained(model, allowed, sym(ctx2), sym(ctx1), temperature, Uniform{ &r }, syms);
+    }
+    if (!ok) {
         syms.clear();
         for (const auto& a : allowed) {
             int s = 0;
@@ -176,7 +234,7 @@ void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, con
     }
 }
 
-void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature)
+void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, const DrawSource& src)
 {
     Rng r;
     r.seed(seed ^ kSaltAcid);
@@ -195,7 +253,7 @@ void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     const int rootOffset = ((m.root[0] - key) % 12 + 12) % 12;
     Allowed allowed;
     for (size_t i = 0; i < on.size(); ++i) allowed.push_back(i == 0 ? single(0) : scaleSet(scale, rootOffset, 0, ambitus));
-    const std::vector<int> rels = drawPitches(model, allowed, 0, 0, temperature, r);
+    const std::vector<int> rels = drawPitches(model, CorpusRoleId::Acid, src, allowed, on, steps / 16, 0, 0, temperature, r);
 
     std::vector<MelodyNote>& a = m.acid[0];
     a.clear();
@@ -223,7 +281,7 @@ void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
         for (int c = 0; c < changes; ++c) redraw[static_cast<size_t>(1 + r.below(static_cast<int>(a.size()) - 1))] = 1;
         Allowed vary;
         for (size_t i = 0; i < a.size(); ++i) vary.push_back(redraw[i] ? scaleSet(scale, rootOffset, 0, ambitus) : single(a[i].rel));
-        const std::vector<int> vr = drawPitches(model, vary, 0, 0, temperature, r);
+        const std::vector<int> vr = drawPitches(model, CorpusRoleId::Acid, src, vary, on, steps / 16, 0, 0, temperature, r);
         for (size_t i = 0; i < b.size(); ++i) b[i].rel = static_cast<int8_t>(vr[i]);
         MelodyNote& moved = b[static_cast<size_t>(r.below(static_cast<int>(b.size())))];
         moved.flags ^= kNoteAccent;
@@ -237,7 +295,7 @@ int chordAtStep(const MelodyPlan& m, int window, int step)
     return m.chordDegree[chordIndexAt(m, window * 8 + step / 16)];
 }
 
-void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour)
+void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour, const DrawSource& src)
 {
     Rng r;
     r.seed(seed ^ kSaltLead);
@@ -275,13 +333,13 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
         // A (bars 0-1).
         Allowed al;
         for (int s : motifRhythm) al.push_back(constraintAt(w, s));
-        if (motif.empty()) motif = drawPitches(model, al, 0, 0, temperature, r);
+        if (motif.empty()) motif = drawPitches(model, CorpusRoleId::Lead, src, al, motifRhythm, 2, 0, 0, temperature, r);
         {
             // A keeps the motif where it fits this window's chords and redraws the rest.
             Allowed keep;
             for (size_t i = 0; i < motifRhythm.size(); ++i)
                 keep.push_back(fits(w, motifRhythm[i], motif[i]) ? single(motif[i]) : al[i]);
-            const std::vector<int> a = drawPitches(model, keep, 0, 0, temperature, r);
+            const std::vector<int> a = drawPitches(model, CorpusRoleId::Lead, src, keep, motifRhythm, 2, 0, 0, temperature, r);
             for (size_t i = 0; i < a.size(); ++i) { steps.push_back(motifRhythm[i]); rels.push_back(a[i]); }
         }
         // A' (bars 2-3): same rhythm, notes kept where they fit.
@@ -292,7 +350,7 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
                 keep.push_back(fits(w, s, motif[i]) ? single(motif[i]) : constraintAt(w, s));
             }
             const int c1 = rels.size() >= 1 ? rels.back() : 0, c2 = rels.size() >= 2 ? rels[rels.size() - 2] : c1;
-            const std::vector<int> a = drawPitches(model, keep, c2, c1, temperature, r);
+            const std::vector<int> a = drawPitches(model, CorpusRoleId::Lead, src, keep, motifRhythm, 2, c2, c1, temperature, r);
             for (size_t i = 0; i < a.size(); ++i) { steps.push_back(motifRhythm[i] + 32); rels.push_back(a[i]); }
         }
         // B (bars 4-5): its own rhythm, continuing from A'.
@@ -300,7 +358,7 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
             const std::vector<int> br = rhythm();
             Allowed al2;
             for (int s : br) al2.push_back(constraintAt(w, s + 64));
-            const std::vector<int> a = drawPitches(model, al2, rels[rels.size() - 2], rels.back(), temperature, r);
+            const std::vector<int> a = drawPitches(model, CorpusRoleId::Lead, src, al2, br, 2, rels[rels.size() - 2], rels.back(), temperature, r);
             for (size_t i = 0; i < a.size(); ++i) { steps.push_back(br[i] + 64); rels.push_back(a[i]); }
         }
         // A'' (bars 6-7): the motif, its last notes redrawn, ending on a chord tone.
@@ -314,7 +372,7 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
                 else if (i + free >= n || !fits(w, s, motif[i])) keep.push_back(constraintAt(w, s));
                 else keep.push_back(single(motif[i]));
             }
-            const std::vector<int> a = drawPitches(model, keep, rels[rels.size() - 2], rels.back(), temperature, r);
+            const std::vector<int> a = drawPitches(model, CorpusRoleId::Lead, src, keep, motifRhythm, 2, rels[rels.size() - 2], rels.back(), temperature, r);
             for (size_t i = 0; i < a.size(); ++i) { steps.push_back(motifRhythm[i] + 96); rels.push_back(a[i]); }
         }
         for (size_t i = 0; i < steps.size(); ++i) {
@@ -329,7 +387,7 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     }
 }
 
-void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature)
+void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, const DrawSource& src)
 {
     Rng r;
     r.seed(seed ^ kSaltArp);
@@ -353,7 +411,7 @@ void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatur
         std::vector<int> rels;
         if (m.arpStyle == 0) {
             Allowed al(on.size(), set);
-            rels = drawPitches(model, al, tones[0], tones[0], temperature, r);
+            rels = drawPitches(model, CorpusRoleId::Arp, src, al, on, 1, tones[0], tones[0], temperature, r);
         } else {
             const int t = static_cast<int>(tones.size());
             for (size_t i = 0; i < on.size(); ++i) {
@@ -435,9 +493,25 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     m.root[1] = 64 + ((key - 4) % 12 + 12) % 12;            // E4 .. D#5
     m.root[2] = 57 + ((key - 9) % 12 + 12) % 12;            // A3 .. G#4
     makeChords(m, scale, seed, temperature, style);
-    makeAcid(m, key, scale, seed, temperature);
-    makeLead(m, key, scale, seed, temperature, colour);
-    makeArp(m, key, scale, seed, temperature);
+    // The predictive model of the melodic lines (Phase 8). Loaded once, on whichever thread composes
+    // first -- never the audio thread -- and null whenever the knob says Markov or no weight file is
+    // there, in which case every draw below is exactly the Phase 5 draw.
+    DrawSource src;
+    if (p.getInt(cb + compose::MelodyModel) == 1) {
+        std::string note;
+        src.nn = sharedMelodyModel(&note);
+        if (src.nn == nullptr) {
+            static bool told = false;
+            if (!told) { told = true; std::printf("%s\n", note.c_str()); }
+        }
+    }
+    // The style slot stays 0, "unknown": the MIDI packs carry no label that maps onto the five
+    // style profiles, so every training line was labelled 0 and the inference side must match
+    // (docs/MODEL_FORMAT.md section 3, the warning). The slot exists for a labelled corpus later.
+    src.style = 0;
+    makeAcid(m, key, scale, seed, temperature, src);
+    makeLead(m, key, scale, seed, temperature, colour, src);
+    makeArp(m, key, scale, seed, temperature, src);
     for (int c = 0; c < 4; ++c) m.padVoicing[c] = voiceChord(scale, m.chordDegree[c], key, c > 0 ? &m.padVoicing[c - 1] : nullptr);
     makeRangesAndPad(m, seed);
 

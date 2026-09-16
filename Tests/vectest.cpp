@@ -13,6 +13,7 @@
 #include "phos/Kick.h"
 #include "phos/Halfband.h"
 #include "phos/Ladder.h"
+#include "phos/Model.h"
 #include "phos/Perc.h"
 #include "phos/Poly.h"
 #include "phos/Vec.h"
@@ -20,7 +21,11 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <cstdlib>
+#include <fstream>
 #include <memory>
+#include <sstream>
+#include <string>
 
 using namespace phos;
 using namespace phostest;
@@ -298,6 +303,205 @@ void testPoly()
 }
 
 /**
+ * @brief The neural model's kernels: the lane instantiation against the scalar one, bit for bit.
+ *
+ * Every kernel of ModelKernel.h is a template over the lane type, so both instantiations exist in
+ * this one executable and can be compared directly -- and because the weights are packed for the
+ * lane width the kernel will be run with, the comparison is of the whole contract (pack, then
+ * multiply) rather than of one loop. A matrix-vector product is where bit-identity is easiest to
+ * lose: the lanes hold output rows and the input dimension is walked in order, so lane l does what
+ * the scalar path does for row l, in the same order. If a partial-sum reduction ever creeps in, this
+ * is the check that fails.
+ */
+void testModelKernels()
+{
+    section("the model's lane kernels against their scalar instantiation");
+    constexpr int kRows = 53, kCols = 71;   // neither a multiple of 8 nor of 4
+
+    // The exponential, tanh, GELU: elementwise, so they must agree on every lane.
+    int bad = 0, total = 0;
+    float in[8], outV[8];
+    for (uint32_t round = 0; round < 4000; ++round) {
+        for (int i = 0; i < 8; ++i) in[i] = testValue(round * 8 + i) * (round % 3 == 0 ? 30.0f : 1.0f);
+        const VecF v = loadLanes<VecF>(in);
+        const VecF r[] = { laneExp(v), laneTanh(v), laneGelu(v), lanePow2i(vfloor(v)), laneAct(v, ModelAct::Relu), laneAct(v, ModelAct::Silu) };
+        for (int l = 0; l < W; ++l) {
+            const float x = in[l];
+            const float s[] = { laneExp(x), laneTanh(x), laneGelu(x), lanePow2i(vfloor(x)), laneAct(x, ModelAct::Relu), laneAct(x, ModelAct::Silu) };
+            for (size_t k = 0; k < sizeof(s) / sizeof(s[0]); ++k) {
+                ++total;
+                if (!sameBits(laneOf(r[k], l), s[k])) ++bad;
+            }
+        }
+    }
+    check(bad == 0, "exp, tanh, GELU, 2^k, ReLU and SiLU identical to scalar", fmt("%d of %d lanes differ", bad, total));
+    (void)outV;
+
+    // The matrix-vector product with the output rows in the lanes, packed each way.
+    std::vector<float> w(static_cast<size_t>(kRows) * kCols), b(static_cast<size_t>(roundUpTo(kRows, 8))), x(kCols);
+    for (size_t i = 0; i < w.size(); ++i) w[i] = testValue(static_cast<uint32_t>(i) + 7);
+    for (size_t i = 0; i < b.size(); ++i) b[i] = testValue(static_cast<uint32_t>(i) + 101);
+    for (size_t i = 0; i < x.size(); ++i) x[i] = testValue(static_cast<uint32_t>(i) + 303);
+    std::vector<float> panelV(static_cast<size_t>(roundUpTo(kRows, W)) * kCols, 0.0f), panelS(static_cast<size_t>(kRows) * kCols, 0.0f);
+    std::vector<float> yv(static_cast<size_t>(roundUpTo(kRows, W)), 0.0f), ys(static_cast<size_t>(kRows), 0.0f);
+    packPanels<VecF>(w.data(), nullptr, kRows, kCols, panelV.data());
+    packPanels<float>(w.data(), nullptr, kRows, kCols, panelS.data());
+    matvecPanel<VecF>(panelV.data(), b.data(), x.data(), kRows, kCols, yv.data());
+    matvecPanel<float>(panelS.data(), b.data(), x.data(), kRows, kCols, ys.data());
+    int mv = 0;
+    for (int i = 0; i < kRows; ++i) if (!sameBits(yv[static_cast<size_t>(i)], ys[static_cast<size_t>(i)])) ++mv;
+    check(mv == 0, "matvecPanel identical to scalar for every output row", fmt("%d of %d rows differ", mv, kRows));
+
+    // The same with int8 weights and one scale per row, which is how a quantized model is packed.
+    std::vector<int8_t> q(static_cast<size_t>(kRows) * kCols);
+    std::vector<float> scale(static_cast<size_t>(kRows));
+    for (size_t i = 0; i < q.size(); ++i) q[i] = static_cast<int8_t>(static_cast<int>(testValue(static_cast<uint32_t>(i) + 55) * 90.0f) % 127);
+    for (int i = 0; i < kRows; ++i) scale[static_cast<size_t>(i)] = 1e-3f * (1.0f + static_cast<float>(i));
+    packPanels<VecF>(q.data(), scale.data(), kRows, kCols, panelV.data());
+    packPanels<float>(q.data(), scale.data(), kRows, kCols, panelS.data());
+    matvecPanel<VecF>(panelV.data(), b.data(), x.data(), kRows, kCols, yv.data());
+    matvecPanel<float>(panelS.data(), b.data(), x.data(), kRows, kCols, ys.data());
+    int mq = 0;
+    for (int i = 0; i < kRows; ++i) if (!sameBits(yv[static_cast<size_t>(i)], ys[static_cast<size_t>(i)])) ++mq;
+    check(mq == 0, "int8 weights with per-row scales identical to scalar", fmt("%d of %d rows differ", mq, kRows));
+
+    // Layer norm, softmax, the accumulate and the scale.
+    const int n = 40, nP = roundUpTo(n, 8);
+    std::vector<float> xs(static_cast<size_t>(nP)), gw(static_cast<size_t>(nP)), gb(static_cast<size_t>(nP));
+    std::vector<float> lv(static_cast<size_t>(nP), 0.0f), ls(static_cast<size_t>(nP), 0.0f);
+    for (int i = 0; i < nP; ++i) { xs[static_cast<size_t>(i)] = testValue(static_cast<uint32_t>(i) + 11); gw[static_cast<size_t>(i)] = 1.0f + 0.1f * testValue(static_cast<uint32_t>(i)); gb[static_cast<size_t>(i)] = testValue(static_cast<uint32_t>(i) + 3); }
+    laneLayerNorm<VecF>(xs.data(), gw.data(), gb.data(), 1e-5f, n, lv.data());
+    laneLayerNorm<float>(xs.data(), gw.data(), gb.data(), 1e-5f, n, ls.data());
+    int ln = 0;
+    for (int i = 0; i < n; ++i) if (!sameBits(lv[static_cast<size_t>(i)], ls[static_cast<size_t>(i)])) ++ln;
+
+    std::vector<float> sv(xs), ss(xs);
+    laneSoftmax<VecF>(sv.data(), n);
+    laneSoftmax<float>(ss.data(), n);
+    int sm = 0;
+    for (int i = 0; i < n; ++i) if (!sameBits(sv[static_cast<size_t>(i)], ss[static_cast<size_t>(i)])) ++sm;
+
+    std::vector<float> av(static_cast<size_t>(nP), 0.25f), as(static_cast<size_t>(nP), 0.25f);
+    for (int t = 0; t < 7; ++t) {
+        laneAccumulate<VecF>(av.data(), xs.data(), 0.1f * static_cast<float>(t + 1), nP);
+        laneAccumulate<float>(as.data(), xs.data(), 0.1f * static_cast<float>(t + 1), nP);
+    }
+    laneScale<VecF>(av.data(), 0.3f, nP);
+    laneScale<float>(as.data(), 0.3f, nP);
+    int ac = 0;
+    for (int i = 0; i < nP; ++i) if (!sameBits(av[static_cast<size_t>(i)], as[static_cast<size_t>(i)])) ++ac;
+    check(ln == 0 && sm == 0 && ac == 0, "layer norm, softmax, accumulate and scale identical to scalar",
+          fmt("%d norm, %d softmax, %d accumulate entries differ", ln, sm, ac));
+
+    // Attention: the key cache written in time panels, then scored by the same matmul kernel.
+    const int headDim = 24, steps = 37;
+    std::vector<float> kv(static_cast<size_t>(roundUpTo(steps, W)) * headDim, 0.0f), ksc(static_cast<size_t>(steps) * headDim, 0.0f);
+    std::vector<float> key(static_cast<size_t>(headDim)), qq(static_cast<size_t>(headDim));
+    for (int i = 0; i < headDim; ++i) qq[static_cast<size_t>(i)] = testValue(static_cast<uint32_t>(i) + 91);
+    for (int t = 0; t < steps; ++t) {
+        for (int i = 0; i < headDim; ++i) key[static_cast<size_t>(i)] = testValue(static_cast<uint32_t>(t * headDim + i) + 17);
+        storeKey<VecF>(kv.data(), t, key.data(), headDim);
+        storeKey<float>(ksc.data(), t, key.data(), headDim);
+    }
+    std::vector<float> scv(static_cast<size_t>(roundUpTo(steps, W)), 0.0f), scs(static_cast<size_t>(steps), 0.0f);
+    matvecPanel<VecF>(kv.data(), nullptr, qq.data(), steps, headDim, scv.data());
+    matvecPanel<float>(ksc.data(), nullptr, qq.data(), steps, headDim, scs.data());
+    int at = 0;
+    for (int t = 0; t < steps; ++t) if (!sameBits(scv[static_cast<size_t>(t)], scs[static_cast<size_t>(t)])) ++at;
+    check(at == 0, "attention scores over the time-panelled key cache identical to scalar", fmt("%d of %d steps differ", at, steps));
+}
+
+/**
+ * @brief The whole forward pass on this path: against the reference vectors, and as bits.
+ *
+ * NeuralModel is compiled for one lane type, so the three builds of this test cannot compare it
+ * against each other inside one process. Each compares itself against the trainer's float64
+ * reference instead, and prints its logits as bits so that the three outputs can also be diffed.
+ * The cost line is the other half of what this is for: the scalar number is what the Quest's NEON
+ * path will resemble. PHOS_MODEL_BENCH points at a larger model than the one in the repository.
+ */
+void testModelForward()
+{
+    section("the model's forward pass, on this path, against the trainer's reference vectors");
+    const char* bench = std::getenv("PHOS_MODEL_BENCH");
+    const std::string file = bench != nullptr ? std::string(bench) : std::string(PHOS_SOURCE_DATA_DIR "/melody.phosmdl");
+    NeuralModel model;
+    std::string error;
+    if (!model.load(file.c_str(), error)) { check(false, "loads the model", error); return; }
+
+    // The last case of the reference file (docs/MODEL_FORMAT.md section 5): the conditioning, the
+    // tokens and what PyTorch computed. Read with the smallest parser that can read it.
+    int role = 0, style = 0, bars = 0;
+    std::vector<int> tok, stepOf, barOf, gapOf, idxOf;
+    std::vector<double> want;
+    {
+        std::ifstream in(file + ".ref.txt");
+        std::string line;
+        auto ints = [](std::istringstream& v, std::vector<int>& dst) { dst.clear(); int x; while (v >> x) dst.push_back(x); };
+        while (std::getline(in, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            const size_t eq = line.find('=');
+            if (eq == std::string::npos || line.empty() || line[0] == '#') continue;
+            const std::string key = line.substr(0, eq);
+            std::istringstream vals(line.substr(eq + 1));
+            if (key == "role") vals >> role;
+            else if (key == "style") vals >> style;
+            else if (key == "bars") vals >> bars;
+            else if (key == "tok") ints(vals, tok);
+            else if (key == "step") ints(vals, stepOf);
+            else if (key == "bar") ints(vals, barOf);
+            else if (key == "gap") ints(vals, gapOf);
+            else if (key == "idx") ints(vals, idxOf);
+            else if (key == "logits") { want.clear(); double x; while (vals >> x) want.push_back(x); }
+        }
+    }
+    const size_t n = tok.size();
+    if (n == 0 || want.empty() || stepOf.size() != n || barOf.size() != n || gapOf.size() != n || idxOf.size() != n) {
+        check(false, "reads the reference vectors", file + ".ref.txt");
+        return;
+    }
+    model.begin(role, style, bars + 1);
+    for (size_t i = 0; i < n; ++i) {
+        NoteCond c;
+        c.step = stepOf[i];
+        c.bar = barOf[i];
+        c.gap = gapOf[i];
+        c.idx = idxOf[i];
+        if (!model.step(tok[i], c)) { check(false, "feeds the reference context", fmt("stopped at position %zu", i)); return; }
+    }
+    double worst = 0.0;
+    std::string bits;
+    for (size_t c = 0; c < want.size(); ++c) {
+        worst = std::max(worst, std::fabs(static_cast<double>(model.logits()[c]) - want[c]));
+        uint32_t u;
+        const float v = model.logits()[c];
+        std::memcpy(&u, &v, 4);
+        bits += fmt("%08x", u);
+    }
+    check(worst < 1e-3, "the whole forward pass matches PyTorch on this path",
+          fmt("%zu positions, largest logit error %.2e (the format allows 1e-3)", n, worst));
+    // Printed as bits as well: the three builds of this test are diffed against each other, and the
+    // line has to be character for character the same.
+    std::printf("         logits after %zu positions: %s\n", n, bits.c_str());
+
+    const auto t0 = std::chrono::steady_clock::now();
+    const int lines = 40, notes = 16;
+    for (int d = 0; d < lines; ++d) {
+        model.begin(d % 3, 0, 1 + d % 8);
+        for (int i = 0; i < notes; ++i) {
+            NoteCond c;
+            c.step = i % 16;
+            c.gap = 1 + i % 8;
+            c.idx = noteIndexBucket(i);
+            model.step((i * 7 + d) % model.alphabet(), c);
+        }
+    }
+    const double us = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() * 1e6;
+    std::printf("         cost %s, %zu parameters: %.2f us per symbol, %.2f ms per 16-note line\n",
+                kVecPathName, model.info().parameters, us / (lines * notes), us / lines / 1000.0);
+}
+
+/**
  * @brief Cost of the parts that are not lane templates, for the plan's table.
  *
  * Kick, bass and acid have one voice each, so they are not written over a lane type and the scalar
@@ -367,6 +571,8 @@ int main()
     testPerc();
     testDiodeLadder();
     testPoly();
+    testModelKernels();
+    testModelForward();
 #if !defined(PHOS_FORCE_SCALAR) && !defined(PHOS_NEON_SHIM)
     testParts();
 #endif

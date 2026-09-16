@@ -683,6 +683,103 @@ Sekunden davon, und mit 47 lag ein Lauf unter der Schwelle, ohne dass etwas fals
 Nächster Schritt: Phase 8 (Tokenisierung, Transformer gegen SSM per Held-out-NLL, C++-Inferenz) und Phase 9
 (Hörrunden je Erzeuger, pluginval, Gerätemessung auf der Quest, Arrange-Zeitleiste, Nachkalibrierung der
 Präsenz um 2,4 dB, Release).
+
+**16.09.2026, Phase 8 (Inferenz): die C++-Seite des gelernten Modells.** Stufe B aus 6.9 läuft:
+`Core/include/phos/Model.h`, `Core/src/Model.cpp` und `Core/include/phos/ModelKernel.h` lesen die
+`.phosmdl`-Datei, die die Trainingsseite schreibt (`docs/MODEL_FORMAT.md` ist der Vertrag und hat
+Vorrang vor allem hier), rechnen einen Vorwärtsschritt über `Vec.h` und hängen an derselben
+Constraint-Dekodierung, mit der Stufe A zeichnet. Der Knopf `compose.melody_model`
+(Markov / Neural, Vorgabe **Markov**) schaltet um; fehlt die Gewichtsdatei, fällt der Komponist mit
+einer gedruckten Zeile auf Stufe A zurück.
+
+| Prüfstein | Ergebnis |
+|---|---|
+| Trainiertes Modell (`melody.phosmdl`, 4 Schichten, Breite 192, 4 Köpfe, ffn 512, ctx 256, int8, 1,46 Mio. Parameter) gegen seine PyTorch-Referenz | 12 Fälle, längster 256 Positionen: größter Logit-Fehler **8,35e-6**, größter Wahrscheinlichkeitsfehler **1,05e-6** (das Format erlaubt 1e-3 bzw. 1e-5) |
+| Zufallsmodelle aus `Tools/model/make_test_model.py` (zweite, unabhängige NumPy-Umsetzung des Formats) | int8 4,99e-7, float32 3,56e-7 auf dem Logit |
+| AVX2 / NEON-Shim / skalar | Die 37 Logits nach 256 Positionen sind auf allen drei Pfaden **bitgleich** (als Hex gedruckt und verglichen); dazu je Kernel ein Lane-gegen-Skalar-Vergleich, 0 von 192 000 Lanes weichen ab |
+| `laneExp` gegen `std::exp` in double | 8,3e-8 relativ (0,7 ulp), ohne `std::exp`, ohne Bit-Tricks am Exponenten |
+| Kosten je Symbol, 1,46 Mio. Parameter, ein Kern | AVX2 **141 µs**, skalar **1565 µs** (Faktor 11) |
+| Kosten je Linie | AVX2 2,3 ms für 16 Noten, 8,5 ms für eine Acht-Takt-Leadphrase (vier Fenster); skalar 25 ms bzw. 88 ms |
+| Rückfallrate der Dekodierung | 1200 Ziehungen, 16 000 Symbole, **0 Wiederholungen, 0 Rückfälle** |
+| Selbsttest / ctest | 205 von 205 Prüfungen, 4 von 4 Testprogrammen |
+
+**Wie die Bitgleichheit erreicht wird.** Ein Skalarprodukt ist genau die Operation, die sie
+zerstört: acht Teilsummen am Ende addiert sind nicht dieselbe Zahl wie eine Summe in Reihenfolge.
+Deshalb stehen in den Lanes **Ausgabezeilen**, nicht Eingabeelemente: `matvecPanel` legt W Neuronen
+in die W Lanes und läuft die Eingangsdimension der Reihe nach ab, also rechnet Lane l genau die
+Folge, die der skalare Pfad für Zeile l rechnet. Die Gewichte liegen dafür in "Panels", einmal beim
+Laden umsortiert. Elementweise Arbeit (Exponential, Aktivierung, der affine Teil der Normierung, die
+Mischung der Value-Vektoren) läuft ohnehin lane-parallel; **Reduktionen bleiben skalar** — Mittelwert
+und Varianz der LayerNorm über `dim`, die Summe des Softmax über die Kontextlänge, beides O(dim)
+neben Matmuls in O(dim²). Die Attention passt in dieselben zwei Formen: die Scores eines Kopfes sind
+K (Zeilen = Zeitschritte) mal q, der Key-Cache liegt also in Panels **über die Zeit** und wird mit
+demselben Kernel gerechnet. `sumOrdered()` kommt hier nirgends vor.
+
+**Das Exponential.** `std::exp` fällt aus (keine Einzeloperation, und die libm des Desktops ist
+nicht die der Quest). `laneExp` ist die Cephes-Bereichsreduktion exp(x) = 2^k·exp(r) mit Moshiers
+Polynom; das übliche Hineinschreiben von k ins Exponentenfeld braucht Ganzzahloperationen, die
+`Vec.h` nicht hat, also baut `lanePow2i` die Zweierpotenz aus den sieben Binärstellen von |k| und
+den exakt darstellbaren Faktoren 2^-1 … 2^-64. Jede Multiplikation mit einer Zweierpotenz ist exakt,
+der einzige Fehler ist der des Polynoms. Gemessen gegen `ldexp` bitgleich für alle 255 Werte von k.
+
+**Was die Exaktheit gekostet hat — ehrlich.** `sampleConstrained` (Pachet und Roy 2011) zieht
+*exakt* aus dem auf die Constraints bedingten Modell, und kann das nur, weil eine Kette zweiter
+Ordnung einen endlichen Zustand hat: die Rückwärtstabelle beta_i(a, b) zählt ihn auf. Der Zustand
+eines Transformers ist das ganze Präfix; diese Rekursion gibt es nicht mehr. Stufe B zieht darum
+**maskiert von links nach rechts** (`sampleMasked`): je Position die Verteilung des Modells auf die
+erlaubten Symbole eingeschränkt, mit den Gewichten des Energiebogens multipliziert, neu normiert,
+gezogen. Jede harte Nebenbedingung gilt weiter für jede Note — Skala, Ambitus, Akkordton auf dem
+starken Schritt, Start- und Endton —, und weil die erlaubten Mengen unär und nie leer sind, kann
+sich eine Linie nicht in eine Ecke malen. **Weg ist nur, dass die Linie aus der richtigen Verteilung
+stammt.** Gemessen am Spielzeugmodell des Selbsttests, 300 000 Ziehungen, fünf Positionen: die
+Totalvariation zu der Verteilung, die Stufe A zieht, ist **0,1997**; zu dem Produkt der
+Positionsnormierungen, das Stufe B wirklich zieht, 0,0060. Das ist derselbe Abstand, den der
+Stufe-A-Test seit Phase 5 als *Fehler* eines naiven Samplers ausweist — hier ist er der Preis.
+Numerisch scheitern kann die Ziehung nur, wenn ein Modell seiner ganzen erlaubten Menge praktisch
+keine Masse gibt (Schwelle 1e-6); dann wird bis zu viermal neu gezogen und danach entscheiden die
+Constraint-Gewichte allein. **Gemessen mit den Mengen, die der Komponist wirklich baut** (Acid: Grundton
+plus Skalentöne über zwölf Halbtöne; Lead: Skalentöne mit Farbgewichten, Akkordtöne auf jedem
+achten Schritt; Arp: Akkordtöne über eine Oktave), 1200 Ziehungen über alle sechs Modi und alle
+Rollen: **0 Wiederholungen, 0 Rückfälle**. Die kleinste vorkommende erlaubte Menge hat ein Symbol
+(der Grundton am Anfang einer Acid-Linie), und auch die trägt Masse.
+
+**Wo das Modell liegt und warum nicht im Programm.** `Core/data/melody.phosmdl`, als Datei. Für die
+Quest spricht dasselbe: int8 auf der Platte, aber beim Laden nach float32 entpackt, damit die
+Kernel rein float rechnen — 1,5 MB Datei werden 7,0 MB im Speicher. Als Array im Programm läge
+derselbe Inhalt im `.rodata` der Bibliothek, würde beim Laden der Anwendung mit abgebildet und
+wäre nicht austauschbar; als Datei kann der A/B-Vergleich gegen Stufe A ein anderes Modell
+einlegen, und die Quest kann ein kleineres bekommen als der Desktop (`Quality.h` braucht dafür
+keinen Schalter: die Datei entscheidet). Gesucht wird in dieser Reihenfolge: der Pfad wie
+angegeben, dann das Ressourcenverzeichnis, das der Host per `setModelSearchPath()` setzt, dann
+`Core/data` aus dem Quellbaum (nur in Entwicklungsbauten einkompiliert).
+
+**Vorlaufzeit.** Der Komponist plant auf seinem eigenen Thread einen ganzen Track im Voraus, nie
+auf dem Audio-Thread. Ein Track-Plan zieht etwa 170 Symbole (zwei Acid-Linien, acht Lead-Fenster,
+vier Arp-Zellen): 24 ms auf AVX2, 270 ms skalar. Ein Takt bei 145 BPM dauert 1,66 s, ein Track 256
+Takte. Auf dem kleinen Quest-Kern ist mit dem Zwei- bis Dreifachen der skalaren Zahl zu rechnen,
+also unter einer Sekunde je Track-Plan — weit innerhalb des Vorlaufs. Gegenprobe am ganzen Programm:
+ein Offline-Render von acht Minuten braucht 48,2 s mit Markov und 45,9 s mit Neural, die Planung geht
+also im Rauschen des Renderns unter. Der Determinismus bleibt: der
+Komponist liest nie Audio, und dieselbe Linie kommt nach einer längeren Linie genauso heraus wie
+allein (der Key-Value-Cache wird nicht gelöscht, aber jenseits der aktuellen Position auch nie
+gelesen; der Selbsttest misst das).
+
+**Nicht gebaut: `arch=ssm`.** Das Format beschreibt auch einen selektiven Zustandsraum-Block
+(Gu und Dao 2023). Der Trainingslauf misst ihn bei 2,16 nats je Token gegen 1,49 des Transformers
+und hat nur den Transformer exportiert; der Lader prüft einen `arch=ssm`-Kopf und lehnt ihn mit
+Namen ab. Was fehlt, steht am Kopf von `Model.cpp`: ein Zweig in `step()`, elf Tensoren je Block
+und ein Lane-Logarithmus für den Softplus — der Rest (Normierungen, Matmul-Kernel, Aktivierungen,
+Packen) ist da.
+
+**Offen.** Der A/B-Hörvergleich gegen Stufe A und der Ranker aus 6.9 sind nicht gemacht; deshalb
+steht `compose.melody_model` auf Markov. Die Held-out-NLL des trainierten Modells (1,489 nats je
+Token gegen 2,369 für Markov nullter und 2,434 für erster Ordnung, gemessen von der Trainingsseite)
+sagt, dass es besser vorhersagt — nicht, dass es besser klingt. `Core/data/melody.phosmdl` ist eine
+Kopie des Exports vom 16.09.2026 und gehört ersetzt, sobald die Trainingsseite einen neueren
+schreibt.
+
+Nächster Schritt: der A/B-Hörvergleich zwischen Stufe A und Stufe B, der Ranker aus 6.9, und Phase 9.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

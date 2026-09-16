@@ -20,11 +20,17 @@ add_library(PhospheneCore STATIC
     src/Melody.cpp
     src/Corpus.cpp
     src/CorpusTables.cpp
+    src/Model.cpp
     src/Composer.cpp
     src/SetFile.cpp
     src/Engine.cpp
 )
 target_include_directories(PhospheneCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# Phase 8: where the neural melody model lives in the source tree. It is the *last* place
+# NeuralModel::load() looks -- after the host's own resource directory (setModelSearchPath(), which
+# the plugin and the Quest app set) and the working directory -- so that a development build and the
+# self test find Core/data/ without a copy step, while a shipped build never depends on it.
+target_compile_definitions(PhospheneCore PUBLIC PHOS_SOURCE_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 target_compile_features(PhospheneCore PUBLIC cxx_std_20)
 set_target_properties(PhospheneCore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 find_package(Threads)

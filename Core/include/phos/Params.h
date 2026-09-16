@@ -61,7 +61,9 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              PercDensity, PercVariation, Swing,
              AcidAmount, LeadAmount, ArpAmount, MelodyVariation, MelodyTemperature, SquelchChance,
              BassFollowsChords, PadAmount, SfxAmount, GateChance,
-             Style, Arc, StyleTempo, SetMinutes, Count };
+             Style, Arc, StyleTempo, SetMinutes,
+             // Phase 8: which predictive model the melodic lines are drawn from (Model.h).
+             MelodyModel, Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
 namespace perc {
@@ -140,6 +142,7 @@ extern const char* const kStyleNames[];         ///< names of compose.style (For
 extern const char* const kArcNames[];           ///< names of compose.arc (Form.h)
 extern const char* const kKickPatternNames[];   ///< names of compose.kick_pattern
 extern const char* const kBassPatternNames[];   ///< names of compose.bass_pattern
+extern const char* const kMelodyModelNames[];   ///< names of compose.melody_model (Model.h)
 
 /**
  * @brief All parameter values of one engine, lock-free readable from the audio thread.

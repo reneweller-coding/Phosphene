@@ -25,10 +25,16 @@ if(NOT ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|x64)")
         target_compile_definitions(phos_vectest PRIVATE PHOS_EXPECT_PATH="avx2")
     endif()
     foreach(variant neon scalar)
+        # Model.cpp joins the fixed source list of the variants (Phase 8): it is the one file that
+        # turns the model's lane kernels into a whole forward pass, and the scalar variant's timing
+        # of it is what the Quest's NEON path will resemble. It needs nothing from the core but
+        # kCorpusAlphabet, which is a constant in a header.
         add_executable(phos_vectest_${variant} vectest.cpp ${CMAKE_SOURCE_DIR}/Core/src/Halfband.cpp
                        ${CMAKE_SOURCE_DIR}/Core/src/Perc.cpp ${CMAKE_SOURCE_DIR}/Core/src/Params.cpp
-                       ${CMAKE_SOURCE_DIR}/Core/src/Poly.cpp ${CMAKE_SOURCE_DIR}/Core/src/WaveTable.cpp)
+                       ${CMAKE_SOURCE_DIR}/Core/src/Poly.cpp ${CMAKE_SOURCE_DIR}/Core/src/WaveTable.cpp
+                       ${CMAKE_SOURCE_DIR}/Core/src/Model.cpp)
         target_include_directories(phos_vectest_${variant} PRIVATE ${CMAKE_SOURCE_DIR}/Core/include)
+        target_compile_definitions(phos_vectest_${variant} PRIVATE PHOS_SOURCE_DATA_DIR="${CMAKE_SOURCE_DIR}/Core/data")
         target_compile_features(phos_vectest_${variant} PRIVATE cxx_std_20)
         phos_add_test(vectest_${variant} phos_vectest_${variant})
         list(APPEND PHOS_TEST_TARGETS phos_vectest_${variant})

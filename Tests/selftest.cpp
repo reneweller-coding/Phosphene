@@ -18,6 +18,7 @@
 #include "phos/Ladder.h"
 #include "phos/Loudness.h"
 #include "phos/Midi.h"
+#include "phos/Model.h"
 #include "phos/Oscillator.h"
 #include "phos/Patterns.h"
 #include "phos/Melody.h"
@@ -36,7 +37,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <functional>
+#include <sstream>
 #include <memory>
 #include <tuple>
 
@@ -1701,6 +1705,658 @@ void testSampler()
             }
     }
     check(worst < 1e-9, "Witten-Bell pitch models sum to one in every context", fmt("largest deviation %.2e", worst));
+}
+
+// ================================================================================================
+// Phase 8: the neural sequence model (Model.h, ModelKernel.h, docs/MODEL_FORMAT.md).
+// ================================================================================================
+
+/** @brief One case of a `<model>.ref.txt`: what the trainer's PyTorch computed for that input. */
+struct RefCase {
+    int role = 0, style = 0, bars = 0;
+    std::vector<int> tok, step, bar, idx, gap;
+    std::vector<double> logits, probs;
+};
+
+/**
+ * @brief Reads a reference file (docs/MODEL_FORMAT.md, section 5).
+ *
+ * Deliberately forgiving about everything it does not know, because the file is written by another
+ * program on the other side of the contract: unknown keys are skipped and fields inside a case may
+ * come in any order.
+ */
+std::vector<RefCase> readRefCases(const std::string& path)
+{
+    std::vector<RefCase> cases;
+    std::ifstream in(path);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty() || line[0] == '#') continue;
+        if (line.compare(0, 5, "case ") == 0) { cases.push_back(RefCase{}); continue; }
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos || cases.empty()) continue;
+        const std::string key = line.substr(0, eq);
+        std::istringstream vals(line.substr(eq + 1));
+        RefCase& c = cases.back();
+        auto ints = [&](std::vector<int>& dst) { dst.clear(); int v; while (vals >> v) dst.push_back(v); };
+        auto reals = [&](std::vector<double>& dst) { dst.clear(); double v; while (vals >> v) dst.push_back(v); };
+        if (key == "role") vals >> c.role;
+        else if (key == "style") vals >> c.style;
+        else if (key == "bars") vals >> c.bars;
+        else if (key == "tok") ints(c.tok);
+        else if (key == "step") ints(c.step);
+        else if (key == "bar") ints(c.bar);
+        else if (key == "gap") ints(c.gap);
+        else if (key == "idx") ints(c.idx);
+        else if (key == "logits") reals(c.logits);
+        else if (key == "probs") reals(c.probs);
+    }
+    return cases;
+}
+
+/** @brief The directory the models live in (Core/data, compiled in by Core/CMakeLists.txt). */
+std::string modelPath(const char* name) { return std::string(PHOS_SOURCE_DATA_DIR) + "/" + name; }
+
+/** @brief Feeds one reference case into a model; false when the file and the case disagree. */
+bool feedRefCase(NeuralModel& model, const RefCase& c)
+{
+    const size_t n = c.tok.size();
+    if (n == 0 || c.step.size() != n || c.bar.size() != n || c.gap.size() != n || c.idx.size() != n) return false;
+    model.begin(c.role, c.style, c.bars + 1);   // the file stores bars - 1
+    for (size_t t = 0; t < n; ++t) {
+        NoteCond cond;
+        cond.step = c.step[t];
+        cond.bar = c.bar[t];
+        cond.gap = c.gap[t];
+        cond.idx = c.idx[t];
+        if (!model.step(c.tok[t], cond)) return false;
+    }
+    return true;
+}
+
+void testModelKernel()
+{
+    section("the model's lane kernels (exponential, matmul, norm, softmax)");
+
+    // 2^k has to be exact -- it is the whole reason laneExp() does not touch the exponent bits.
+    int pow2Bad = 0;
+    for (int k = -127; k <= 127; ++k) {
+        const float got = lanePow2i<float>(static_cast<float>(k));
+        const float want = std::ldexp(1.0f, k);
+        if (std::memcmp(&got, &want, sizeof(float)) != 0) ++pow2Bad;
+    }
+    check(pow2Bad == 0, "lanePow2i is exactly ldexp(1, k) for every k in -127..127", fmt("%d of 255 differ", pow2Bad));
+
+    // The exponential against std::exp in double, over the range a softmax can produce. The argument
+    // is rounded to float first and the reference taken of *that*: exp'(x) = exp(x), so the last bit
+    // of a float near -85 is already 4e-6 of the answer, and comparing against exp of the unrounded
+    // argument would measure that instead of the kernel.
+    double worstExp = 0.0, atX = 0.0;
+    for (int i = 0; i <= 40000; ++i) {
+        const float x = static_cast<float>(-87.0 + 174.0 * i / 40000.0);
+        const double want = std::exp(static_cast<double>(x));
+        const double got = static_cast<double>(laneExp<float>(x));
+        const double rel = std::fabs(got - want) / want;
+        if (rel > worstExp) { worstExp = rel; atX = x; }
+    }
+    check(worstExp < 3e-7, "laneExp is within an ulp of std::exp over -87..87",
+          fmt("largest relative error %.2e at x = %.3f (float eps 1.19e-7)", worstExp, atX));
+
+    // GELU in the tanh form, against the same formula in double. Measured absolutely: for a very
+    // negative argument the tanh form is 1 + tanh(...) with tanh at -1, and no float32 evaluation of
+    // it has relative accuracy there -- what matters is that the answer is near zero, and it is.
+    double worstGelu = 0.0;
+    for (int i = 0; i <= 20000; ++i) {
+        const double x = -12.0 + 24.0 * i / 20000.0;
+        const double want = 0.5 * x * (1.0 + std::tanh(0.7978845608028654 * (x + 0.044715 * x * x * x)));
+        const double got = static_cast<double>(laneGelu<float>(static_cast<float>(x)));
+        worstGelu = std::max(worstGelu, std::fabs(got - want));
+    }
+    check(worstGelu < 2e-6, "laneGelu matches the tanh form of GELU", fmt("largest absolute error %.2e over -12..12", worstGelu));
+
+    // A matrix-vector product with the output rows in the lanes, against double.
+    Rng r;
+    r.seed(4711);
+    const int rows = 53, cols = 71;   // neither a multiple of 8 nor of 4: the padding must not leak
+    std::vector<double> w(static_cast<size_t>(rows) * cols), b(static_cast<size_t>(rows)), x(static_cast<size_t>(cols));
+    std::vector<float> wf(w.size()), bf(static_cast<size_t>(roundUpTo(rows, kVecWidth))), xf(static_cast<size_t>(cols));
+    for (size_t i = 0; i < w.size(); ++i) { w[i] = 2.0 * r.uniform() - 1.0; wf[i] = static_cast<float>(w[i]); }
+    for (int i = 0; i < rows; ++i) { b[static_cast<size_t>(i)] = 2.0 * r.uniform() - 1.0; bf[static_cast<size_t>(i)] = static_cast<float>(b[static_cast<size_t>(i)]); }
+    for (int i = 0; i < cols; ++i) { x[static_cast<size_t>(i)] = 2.0 * r.uniform() - 1.0; xf[static_cast<size_t>(i)] = static_cast<float>(x[static_cast<size_t>(i)]); }
+    std::vector<float> panels(static_cast<size_t>(roundUpTo(rows, kVecWidth)) * cols, 0.0f), out(bf.size(), 0.0f);
+    packPanels<VecF>(wf.data(), nullptr, rows, cols, panels.data());
+    matvecPanel<VecF>(panels.data(), bf.data(), xf.data(), rows, cols, out.data());
+    // Accuracy is measured against the size of the terms, not against the size of the sum: a row of
+    // random signs cancels down to near zero, and a relative error on that says nothing.
+    double worstMv = 0.0;
+    for (int i = 0; i < rows; ++i) {
+        double want = b[static_cast<size_t>(i)], mag = std::fabs(b[static_cast<size_t>(i)]);
+        for (int c = 0; c < cols; ++c) {
+            const double term = w[static_cast<size_t>(i) * static_cast<size_t>(cols) + static_cast<size_t>(c)] * x[static_cast<size_t>(c)];
+            want += term;
+            mag += std::fabs(term);
+        }
+        worstMv = std::max(worstMv, std::fabs(out[static_cast<size_t>(i)] - want) / mag);
+    }
+    check(worstMv < 1e-6, "matvecPanel equals a double-precision matrix-vector product",
+          fmt("largest error %.2e of the row's term magnitude, over %d rows of %d", worstMv, rows, cols));
+
+    // And -- the reason the panels exist -- it equals, bit for bit, the sequential scalar loop that
+    // the scalar build of this kernel performs. If this ever needs a tolerance, matvecPanel has
+    // started summing across lanes and the three vector paths have stopped agreeing.
+    int mvBits = 0;
+    for (int i = 0; i < rows; ++i) {
+        float acc = bf[static_cast<size_t>(i)];
+        for (int c = 0; c < cols; ++c) acc = vfmadd(wf[static_cast<size_t>(i) * static_cast<size_t>(cols) + static_cast<size_t>(c)], xf[static_cast<size_t>(c)], acc);
+        if (std::memcmp(&acc, &out[static_cast<size_t>(i)], sizeof(float)) != 0) ++mvBits;
+    }
+    check(mvBits == 0, "matvecPanel is bit-identical to the sequential scalar loop for every row", fmt("%d of %d rows differ", mvBits, rows));
+
+    // Layer norm and softmax against the same formulas in double.
+    const int n = 40;
+    std::vector<float> xs(static_cast<size_t>(roundUpTo(n, kVecWidth))), gw(xs.size(), 0.0f), gb(xs.size(), 0.0f), ln(xs.size(), 0.0f);
+    std::vector<double> xd(static_cast<size_t>(n)), gwd(static_cast<size_t>(n)), gbd(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) {
+        xd[static_cast<size_t>(i)] = 4.0 * r.uniform() - 2.0;
+        gwd[static_cast<size_t>(i)] = 0.5 + r.uniform();
+        gbd[static_cast<size_t>(i)] = r.uniform() - 0.5;
+        xs[static_cast<size_t>(i)] = static_cast<float>(xd[static_cast<size_t>(i)]);
+        gw[static_cast<size_t>(i)] = static_cast<float>(gwd[static_cast<size_t>(i)]);
+        gb[static_cast<size_t>(i)] = static_cast<float>(gbd[static_cast<size_t>(i)]);
+    }
+    laneLayerNorm<VecF>(xs.data(), gw.data(), gb.data(), 1e-5f, n, ln.data());
+    double mean = 0.0;
+    for (int i = 0; i < n; ++i) mean += xd[static_cast<size_t>(i)];
+    mean /= n;
+    double var = 0.0;
+    for (int i = 0; i < n; ++i) var += (xd[static_cast<size_t>(i)] - mean) * (xd[static_cast<size_t>(i)] - mean);
+    var /= n;
+    double worstLn = 0.0;
+    for (int i = 0; i < n; ++i) {
+        const double v = (xd[static_cast<size_t>(i)] - mean) / std::sqrt(var + 1e-5) * gwd[static_cast<size_t>(i)] + gbd[static_cast<size_t>(i)];
+        worstLn = std::max(worstLn, std::fabs(ln[static_cast<size_t>(i)] - v) / std::max(1e-3, std::fabs(v)));
+    }
+    check(worstLn < 1e-5, "laneLayerNorm equals the double-precision layer norm", fmt("largest relative error %.2e", worstLn));
+
+    std::vector<float> sm(xs.size(), 0.0f);
+    for (int i = 0; i < n; ++i) sm[static_cast<size_t>(i)] = static_cast<float>(6.0 * xd[static_cast<size_t>(i)]);
+    laneSoftmax<VecF>(sm.data(), n);
+    double mx = -1e300, tot = 0.0;
+    std::vector<double> sd(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) mx = std::max(mx, 6.0 * xd[static_cast<size_t>(i)]);
+    for (int i = 0; i < n; ++i) { sd[static_cast<size_t>(i)] = std::exp(6.0 * xd[static_cast<size_t>(i)] - mx); tot += sd[static_cast<size_t>(i)]; }
+    double worstSm = 0.0, sumSm = 0.0;
+    for (int i = 0; i < n; ++i) {
+        sumSm += sm[static_cast<size_t>(i)];
+        worstSm = std::max(worstSm, std::fabs(sm[static_cast<size_t>(i)] - sd[static_cast<size_t>(i)] / tot));
+    }
+    check(worstSm < 1e-6 && std::fabs(sumSm - 1.0) < 1e-5, "laneSoftmax equals the double-precision softmax and sums to one",
+          fmt("largest absolute error %.2e, total %.7f", worstSm, sumSm));
+}
+
+void testModelFile()
+{
+    section("the weight file and the forward pass against the trainer's reference vectors");
+    // melody.phosmdl is the trained export of 16.09.2026, copied from Tools/train/runs; the two tiny
+    // models come from Tools/model/make_test_model.py, which implements docs/MODEL_FORMAT.md a second
+    // time in NumPy -- a disagreement between the two implementations is what catches a misread of
+    // the document rather than a slip in the arithmetic. PHOS_MODEL_BENCH adds a fourth.
+    std::vector<std::string> models{ modelPath("melody.phosmdl"), modelPath("test_tiny.phosmdl"),
+                                     modelPath("test_tiny_f32.phosmdl") };
+    if (const char* extra = std::getenv("PHOS_MODEL_BENCH")) models.push_back(extra);
+    for (const std::string& full : models) {
+        const std::string name = full.substr(full.find_last_of("/\\") + 1);
+        NeuralModel model;
+        std::string error;
+        if (!model.load(full.c_str(), error)) { check(false, "loads the model", name + ": " + error); continue; }
+        const std::vector<RefCase> cases = readRefCases(full + ".ref.txt");
+        if (cases.empty()) { check(false, "reads the reference cases", name); continue; }
+        double worstLogit = 0.0, worstProb = 0.0;
+        size_t longest = 0;
+        bool fed = true;
+        for (const RefCase& c : cases) {
+            if (!feedRefCase(model, c)) { fed = false; break; }
+            longest = std::max(longest, c.tok.size());
+            for (size_t i = 0; i < c.logits.size(); ++i) {
+                worstLogit = std::max(worstLogit, std::fabs(model.logits()[i] - c.logits[i]));
+                worstProb = std::max(worstProb, std::fabs(model.prob(static_cast<int>(i)) - c.probs[i]));
+            }
+        }
+        // The tolerance of docs/MODEL_FORMAT.md section 5: 1e-3 on a logit, 1e-5 on a probability.
+        check(fed && worstLogit < 1e-3 && worstProb < 1e-5, fmt("%s: matches the reference vectors", name.c_str()).c_str(),
+              fmt("%zu cases, longest %zu positions, largest logit error %.2e, largest probability error %.2e",
+                  cases.size(), longest, worstLogit, worstProb));
+        if (name == "melody.phosmdl") {
+            const ModelInfo& in = model.info();
+            check(in.arch == ModelArch::Transformer && in.vocab == kCorpusAlphabet && in.tokenVersion == 1
+                      && in.relMin == kCorpusRelMin && in.relMax == kCorpusRelMax && in.roles == kNumCorpusRoles,
+                  "the trained model's header agrees with the composer's alphabet and roles",
+                  fmt("%d layers, dim %d, %d heads, ffn %d, ctx %d, %zu parameters, %zu kB packed, held-out NLL %.3f nats",
+                      in.layers, in.dim, in.heads, in.ffn, in.ctx, in.parameters, in.bytes / 1024, in.nll));
+        }
+    }
+
+    // A line longer than the file's positional table is refused, not guessed at (Model.cpp).
+    {
+        NeuralModel tiny;
+        std::string err;
+        if (tiny.load(modelPath("test_tiny.phosmdl").c_str(), err)) {
+            tiny.begin(0, 0, 1);
+            int fed = 0;
+            const NoteCond cond;
+            while (tiny.step(12, cond)) ++fed;
+            check(fed == tiny.info().ctx, "a line stops at the file's ctx positions instead of folding onto the last one",
+                  fmt("%d positions accepted, ctx is %d", fed, tiny.info().ctx));
+        } else {
+            check(false, "loads the tiny model for the ctx check", err);
+        }
+    }
+
+    // A broken file must say which field and where, not read garbage. Ten mutations of a good one.
+    std::vector<uint8_t> good;
+    {
+        std::ifstream in(modelPath("test_tiny.phosmdl"), std::ios::binary);
+        good.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "phos_model_test";
+    std::filesystem::create_directories(dir);
+    auto headerEnd = [](const std::vector<uint8_t>& f) { return static_cast<size_t>(16) + f[12] + (static_cast<size_t>(f[13]) << 8); };
+    struct Mutation { const char* what; const char* expect; std::function<void(std::vector<uint8_t>&)> apply; };
+    const std::vector<Mutation> mutations = {
+        { "magic", "magic", [](std::vector<uint8_t>& f) { f[3] = 'X'; } },
+        { "version", "version", [](std::vector<uint8_t>& f) { f[8] = 2; } },
+        { "headerLen", "headerLen", [](std::vector<uint8_t>& f) { f[13] = 0xFF; } },
+        { "a tensor's reserved field", "reserved", [&](std::vector<uint8_t>& f) { f[headerEnd(f) + 48 + 2] = 1; } },
+        { "a tensor's dtype", "dtype", [&](std::vector<uint8_t>& f) { f[headerEnd(f) + 48] = 7; } },
+        { "a width the tensors do not have", "asks for", [](std::vector<uint8_t>& f) {
+              const std::string s(reinterpret_cast<const char*>(f.data()), std::min<size_t>(f.size(), 4096));
+              const size_t at = s.find("\ndim=32");
+              if (at != std::string::npos) f[at + 6] = '6'; } },
+        { "the end marker", "past the end", [](std::vector<uint8_t>& f) { f[f.size() - 1] = 'X'; } },
+        { "the alphabet in the header", "alphabet", [](std::vector<uint8_t>& f) {
+              const std::string s(reinterpret_cast<const char*>(f.data()), std::min<size_t>(f.size(), 4096));
+              const size_t at = s.find("vocab=37");
+              if (at != std::string::npos) f[at + 7] = '9'; } },
+        { "an architecture nobody wrote", "transformer nor ssm", [](std::vector<uint8_t>& f) {
+              const std::string s(reinterpret_cast<const char*>(f.data()), std::min<size_t>(f.size(), 4096));
+              const size_t at = s.find("arch=transformer");
+              if (at != std::string::npos) f[at + 5] = 'X'; } },
+        { "arch=ssm", "not implemented", [](std::vector<uint8_t>& f) {
+              const std::string s(reinterpret_cast<const char*>(f.data()), std::min<size_t>(f.size(), 4096));
+              const size_t at = s.find("arch=transformer");
+              if (at != std::string::npos) { const char* r = "ssm\n"; for (int i = 0; i < 4; ++i) f[at + 5 + static_cast<size_t>(i)] = static_cast<uint8_t>(r[i]); } } },
+    };
+    int caught = 0, named = 0;
+    std::string missed;
+    for (const Mutation& m : mutations) {
+        std::vector<uint8_t> bad = good;
+        m.apply(bad);
+        const std::filesystem::path p = dir / "broken.phosmdl";
+        { std::ofstream out(p, std::ios::binary); out.write(reinterpret_cast<const char*>(bad.data()), static_cast<std::streamsize>(bad.size())); }
+        NeuralModel model;
+        std::string error;
+        const bool ok = model.load(p.string().c_str(), error);
+        if (!ok) ++caught;
+        if (!ok && error.find(m.expect) != std::string::npos) ++named;
+        else if (missed.empty()) missed = std::string(m.what) + " -> \"" + error + "\"";
+    }
+    check(caught == static_cast<int>(mutations.size()) && named == caught,
+          "a damaged or unsupported weight file is refused with the field that is wrong",
+          fmt("%d of %zu refused, %d named the field%s%s", caught, mutations.size(), named,
+              missed.empty() ? "" : "; missed: ", missed.c_str()));
+
+    // The search path a host sets, and the fallback when there is no model at all.
+    std::filesystem::copy_file(modelPath("test_tiny.phosmdl"), dir / "named.phosmdl",
+                               std::filesystem::copy_options::overwrite_existing);
+    setModelSearchPath(dir.string());
+    NeuralModel byName;
+    std::string err1, err2;
+    const bool found = byName.load("named.phosmdl", err1);
+    NeuralModel missing;
+    const bool absent = missing.load("there-is-no-such-model.phosmdl", err2);
+    check(found && !absent, "a bare name is found in the host's search path, and a missing one is reported",
+          fmt("%s / %s", found ? "found" : err1.c_str(), absent ? "loaded a file that is not there" : "reported missing"));
+    setModelSearchPath(std::string());
+}
+
+/** @brief The order-2 toy model of testSampler, driven the way sampleMasked() drives a network. */
+struct ToyStepper {
+    const ToyModel* model = nullptr;
+    int a = 0, b = 0;
+    int alphabet() const { return model->alphabet(); }
+    void begin(int start2, int start1) { a = start2; b = start1; }
+    bool advance(int) { return true; }
+    void observe(int s) { a = b; b = s; }
+    double prob(int c) const { return model->prob(a, b, c); }
+};
+
+/** @brief A stepper whose distribution sits entirely on one symbol: the numerical failure case. */
+struct PeakedStepper {
+    int n = 4, peak = 0;
+    int alphabet() const { return n; }
+    void begin(int, int) {}
+    bool advance(int) { return true; }
+    void observe(int) {}
+    double prob(int c) const { return c == peak ? 1.0 - 3e-9 : 1e-9; }
+};
+
+/** @brief Scale tones in [lo, hi] semitones above the root, with the colour weight on the flat second. */
+std::vector<uint8_t> scaleAllowed(int scale, int lo, int hi, int colour)
+{
+    std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
+    for (int rel = lo; rel <= hi; ++rel) {
+        if (rel < kCorpusRelMin || rel > kCorpusRelMax || !inScale(scale, rel)) continue;
+        a[static_cast<size_t>(PitchModel::symbol(rel))] = static_cast<uint8_t>(((rel % 12 + 12) % 12) == 1 ? colour : 8);
+    }
+    return a;
+}
+
+/** @brief The tones of the chord on @p degree of @p scale, in [lo, hi]. */
+std::vector<uint8_t> chordAllowed(int scale, int degree, int lo, int hi)
+{
+    int pcs[3];
+    chordTones(scale, degree, pcs);
+    std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
+    for (int rel = lo; rel <= hi; ++rel) {
+        if (rel < kCorpusRelMin || rel > kCorpusRelMax) continue;
+        const int pc = ((rel % 12) + 12) % 12;
+        if (pc == pcs[0] || pc == pcs[1] || pc == pcs[2]) a[static_cast<size_t>(PitchModel::symbol(rel))] = 1;
+    }
+    return a;
+}
+
+void testModelDecode()
+{
+    section("masked decoding: what it samples, and what stage A's guarantee cost");
+    const ToyModel toy(99);
+    const int len = 5, A = toy.alphabet();
+    std::vector<std::vector<uint8_t>> allowed(static_cast<size_t>(len), std::vector<uint8_t>(static_cast<size_t>(A), 1));
+    allowed[1][0] = 0; allowed[2][1] = 0; allowed[2][2] = 0; allowed[4] = { 0, 0, 0, 1 };
+
+    // The two distributions, by enumeration: the exact constrained one (what stage A samples) and
+    // the product of per-position renormalisations (what masked ancestral sampling samples).
+    const size_t codes = static_cast<size_t>(std::pow(A, len));
+    std::vector<double> exact(codes, 0.0), product(codes, 0.0);
+    double z = 0.0;
+    for (size_t code = 0; code < codes; ++code) {
+        int s[8], a = 0, b = 0;
+        size_t c = code;
+        for (int i = 0; i < len; ++i) { s[i] = static_cast<int>(c % static_cast<size_t>(A)); c /= static_cast<size_t>(A); }
+        double w = 1.0, q = 1.0;
+        for (int i = 0; i < len; ++i) {
+            if (!allowed[static_cast<size_t>(i)][static_cast<size_t>(s[i])]) { w = 0.0; q = 0.0; break; }
+            double mass = 0.0;
+            for (int d = 0; d < A; ++d) if (allowed[static_cast<size_t>(i)][static_cast<size_t>(d)]) mass += toy.prob(a, b, d);
+            w *= toy.prob(a, b, s[i]);
+            q *= toy.prob(a, b, s[i]) / mass;
+            a = b; b = s[i];
+        }
+        exact[code] = w;
+        product[code] = q;
+        z += w;
+    }
+    for (double& e : exact) e /= z;
+
+    Rng r;
+    r.seed(5);
+    auto uniform = [&]() { return static_cast<double>(r.uniform()); };
+    ToyStepper stepper{ &toy, 0, 0 };
+    const int draws = 300000;
+    std::vector<double> got(codes, 0.0);
+    std::vector<int> out;
+    int violations = 0, retries = 0;
+    MaskedDrawStats stats;
+    for (int d = 0; d < draws; ++d) {
+        sampleMasked(stepper, allowed, 0, 0, 1.0, uniform, out, &stats);
+        retries += stats.retries;
+        size_t code = 0, mul = 1;
+        for (int i = 0; i < len; ++i) {
+            if (!allowed[static_cast<size_t>(i)][static_cast<size_t>(out[static_cast<size_t>(i)])]) ++violations;
+            code += static_cast<size_t>(out[static_cast<size_t>(i)]) * mul;
+            mul *= static_cast<size_t>(A);
+        }
+        got[code] += 1.0 / draws;
+    }
+    double tvProduct = 0.0, tvExact = 0.0;
+    for (size_t k = 0; k < codes; ++k) { tvProduct += 0.5 * std::fabs(got[k] - product[k]); tvExact += 0.5 * std::fabs(got[k] - exact[k]); }
+    check(violations == 0 && tvProduct < 0.02, "masked decoding always stays inside the constraints and samples the per-position product",
+          fmt("%d violations, total variation to the product %.4f, %d retries", violations, tvProduct, retries));
+    // The honest part: this is not stage A's distribution, and by how much.
+    check(tvExact > 4.0 * tvProduct, "and it is NOT the exactly constrained distribution stage A draws from",
+          fmt("total variation to the exact constrained distribution %.4f, against %.4f to the product it really samples", tvExact, tvProduct));
+
+    // The one failure masked decoding can have: a model so sure of a forbidden symbol that its whole
+    // allowed set underflows. The draw is restarted, and after kMaskedRetries the weights decide.
+    PeakedStepper peaked;
+    std::vector<std::vector<uint8_t>> narrow(3, std::vector<uint8_t>(4, 0));
+    for (auto& a : narrow) { a[1] = 1; a[2] = 3; }   // the peak (symbol 0) is forbidden everywhere
+    MaskedDrawStats ps;
+    bool inside = true;
+    int fellBack = 0;
+    for (int d = 0; d < 200; ++d) {
+        sampleMasked(peaked, narrow, 0, 0, 1.0, uniform, out, &ps);
+        if (ps.fellBack) ++fellBack;
+        for (int i = 0; i < 3; ++i) if (!narrow[static_cast<size_t>(i)][static_cast<size_t>(out[static_cast<size_t>(i)])]) inside = false;
+    }
+    check(inside && fellBack == 200 && ps.retries == kMaskedRetries + 1,
+          "a model whose allowed set has no mass left is retried and then the constraints decide alone",
+          fmt("%d of 200 draws fell back after %d retries; every symbol still inside the constraints: %s",
+              fellBack, ps.retries, inside ? "yes" : "no"));
+
+    // The trained model with the composer's own constraint sets: the retry rate, and what it costs.
+    NeuralModel model;
+    std::string error;
+    const char* bench = std::getenv("PHOS_MODEL_BENCH");
+    const std::string path = bench != nullptr ? std::string(bench) : modelPath("melody.phosmdl");
+    if (!model.load(path.c_str(), error)) { check(false, "loads the model for the decoding measurement", error); return; }
+    const ModelInfo& in = model.info();
+
+    int totalDraws = 0, totalRetries = 0, totalFallbacks = 0, totalSymbols = 0, smallest = 99;
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int d = 0; d < 1200; ++d) {
+        const int role = d % 3;
+        const int scale = d % 6;
+        std::vector<std::vector<uint8_t>> sets;
+        std::vector<int> steps;
+        int bars = 1;
+        if (role == 0) {          // acid: the root, then scale tones over an ambitus of 12
+            bars = 1 + (d % 2);
+            sets.push_back(std::vector<uint8_t>(static_cast<size_t>(kCorpusAlphabet), 0));
+            sets.back()[static_cast<size_t>(PitchModel::symbol(0))] = 1;
+            for (int i = 1; i < 16; ++i) sets.push_back(scaleAllowed(scale, 0, 12, 8));
+            for (int i = 0; i < 16; ++i) steps.push_back(i * bars);
+        } else if (role == 1) {   // lead: scale tones with colour, chord tones every eighth step
+            bars = 2;
+            for (int i = 0; i < 12; ++i) {
+                sets.push_back(i % 4 == 0 ? chordAllowed(scale, (d / 6) % 7, -5, 14) : scaleAllowed(scale, -5, 14, 24));
+                steps.push_back(i * 2 + (i % 3));
+            }
+        } else {                  // arp: chord tones over an octave
+            for (int i = 0; i < 12; ++i) { sets.push_back(chordAllowed(scale, (d / 6) % 7, 0, 12)); steps.push_back(i); }
+        }
+        for (const auto& s : sets) {
+            int count = 0;
+            for (uint8_t v : s) if (v) ++count;
+            smallest = std::min(smallest, count);
+        }
+        std::vector<NoteCond> cond(sets.size());
+        for (size_t i = 0; i < sets.size(); ++i) {
+            cond[i].step = steps[i] % 16;
+            cond[i].bar = (steps[i] / 16) % 8;
+            cond[i].gap = noteGapCode(steps[i], i + 1 < steps.size() ? steps[i + 1] : 0, i + 1 < steps.size());
+            cond[i].idx = noteIndexBucket(static_cast<int>(i));
+        }
+        NeuralStepper st{ &model, role, 0, bars, &cond, 0 };
+        MaskedDrawStats ds;
+        sampleMasked(st, sets, PitchModel::symbol(0), PitchModel::symbol(0), 1.0, uniform, out, &ds);
+        ++totalDraws;
+        totalRetries += ds.retries;
+        totalFallbacks += ds.fellBack ? 1 : 0;
+        totalSymbols += static_cast<int>(out.size());
+    }
+    const double micros = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() * 1e6;
+    check(totalFallbacks == 0, "the composer's own constraint sets never exhaust the model's mass",
+          fmt("%d draws, %d symbols, %d retries, %d fallbacks; smallest allowed set %d of %d symbols",
+              totalDraws, totalSymbols, totalRetries, totalFallbacks, smallest, kCorpusAlphabet));
+    std::printf("         cost (%s, %s, dim %d x %d layers, %zu parameters): %.1f us per symbol, %.2f ms per 8-bar lead phrase (4 windows of 14 notes)\n",
+                kVecPathName, bench != nullptr ? "bench model" : "melody.phosmdl", in.dim, in.layers, in.parameters,
+                micros / totalSymbols, micros / totalSymbols * 56.0 / 1000.0);
+
+    // Every drawn symbol has to reach the model as the next position's token. Reproduced here by
+    // hand -- the same random stream, the same weights, but the token passed explicitly -- so that a
+    // sampler that forgot to feed its own output back would part company at the second position.
+    {
+        Rng ra, rb;
+        ra.seed(20260916);
+        rb.seed(20260916);
+        auto ua = [&]() { return static_cast<double>(ra.uniform()); };
+        const int start = PitchModel::symbol(0);
+        std::vector<std::vector<uint8_t>> sets(14, scaleAllowed(1, -5, 14, 8));
+        std::vector<NoteCond> cond(sets.size());
+        for (size_t i = 0; i < cond.size(); ++i) {
+            cond[i].step = static_cast<int>(i) * 2 % 16;
+            cond[i].bar = static_cast<int>(i) / 8;
+            cond[i].gap = noteGapCode(static_cast<int>(i) * 2, static_cast<int>(i) * 2 + 2, i + 1 < cond.size());
+            cond[i].idx = noteIndexBucket(static_cast<int>(i));
+        }
+        NeuralStepper st{ &model, 1, 0, 2, &cond, 0 };
+        std::vector<int> viaSampler;
+        MaskedDrawStats st2;
+        sampleMasked(st, sets, start, start, 1.0, ua, viaSampler, &st2);
+
+        std::vector<int> byHand;
+        model.begin(1, 0, 2);
+        int previous = start;
+        bool fed = true;
+        for (size_t i = 0; i < sets.size() && fed; ++i) {
+            fed = model.step(previous, cond[i]);
+            double total = 0.0;
+            std::vector<double> w(static_cast<size_t>(kCorpusAlphabet), 0.0);
+            for (int c = 0; c < kCorpusAlphabet; ++c) {
+                if (sets[i][static_cast<size_t>(c)] == 0) continue;
+                w[static_cast<size_t>(c)] = model.prob(c) * sets[i][static_cast<size_t>(c)];
+                total += w[static_cast<size_t>(c)];
+            }
+            double x = static_cast<double>(rb.uniform()) * total;
+            int chosen = -1;
+            for (int c = 0; c < kCorpusAlphabet; ++c) {
+                if (w[static_cast<size_t>(c)] <= 0.0) continue;
+                chosen = c;
+                if (x < w[static_cast<size_t>(c)]) break;
+                x -= w[static_cast<size_t>(c)];
+            }
+            byHand.push_back(chosen);
+            previous = chosen;
+        }
+        // And the same line drawn again with a different first token must be a different line: if it
+        // were not, the context would not be reaching the model at all.
+        Rng rc;
+        rc.seed(20260916);
+        auto uc = [&]() { return static_cast<double>(rc.uniform()); };
+        std::vector<int> otherStart;
+        sampleMasked(st, sets, start, PitchModel::symbol(7), 1.0, uc, otherStart, &st2);
+        check(fed && viaSampler == byHand && viaSampler != otherStart,
+              "the sampler feeds every drawn symbol back as the next token, and the context reaches the model",
+              fmt("%zu symbols; by hand identical: %s; another first token gives another line: %s",
+                  viaSampler.size(), viaSampler == byHand ? "yes" : "no", viaSampler != otherStart ? "yes" : "no"));
+    }
+
+    // The key/value cache is not cleared between lines, so this has to be true: what a draw produces
+    // may not depend on the draw before it.
+    Rng r1, r2;
+    r1.seed(1234);
+    r2.seed(1234);
+    auto u1 = [&]() { return static_cast<double>(r1.uniform()); };
+    auto u2 = [&]() { return static_cast<double>(r2.uniform()); };
+    std::vector<std::vector<uint8_t>> shortSets(20, scaleAllowed(1, 0, 12, 8)), longSets(100, scaleAllowed(3, -5, 14, 8));
+    std::vector<NoteCond> shortCond(20), longCond(100);
+    for (size_t i = 0; i < shortCond.size(); ++i) { shortCond[i].step = static_cast<int>(i) % 16; shortCond[i].gap = 1; shortCond[i].idx = noteIndexBucket(static_cast<int>(i)); }
+    for (size_t i = 0; i < longCond.size(); ++i) { longCond[i].step = static_cast<int>(i) % 16; longCond[i].bar = (static_cast<int>(i) / 16) % 8; longCond[i].gap = 1; longCond[i].idx = noteIndexBucket(static_cast<int>(i)); }
+    NeuralStepper s1{ &model, 1, 0, 2, &shortCond, 0 };
+    NeuralStepper s2{ &model, 1, 0, 8, &longCond, 0 };
+    std::vector<int> alone, after, dummy;
+    MaskedDrawStats ds;
+    sampleMasked(s1, shortSets, 3, 7, 1.0, u1, alone, &ds);
+    sampleMasked(s2, longSets, 0, 0, 1.0, u2, dummy, &ds);   // a longer line first, filling the cache
+    r2.seed(1234);
+    sampleMasked(s1, shortSets, 3, 7, 1.0, u2, after, &ds);
+    check(alone == after && !alone.empty(), "a line is the same after a longer line as it is alone (the cache cannot leak)",
+          fmt("%zu symbols, first three %d %d %d", alone.size(), alone.empty() ? -1 : alone[0],
+              alone.size() > 1 ? alone[1] : -1, alone.size() > 2 ? alone[2] : -1));
+}
+
+void testMelodyModelWiring()
+{
+    section("compose.melody_model: the composer on the trained model");
+    ParamStore p;
+    const int cb = p.base(Module::Compose);
+    check(p.getInt(cb + compose::MelodyModel) == 0,
+          "the melody model defaults to Markov until the trained model is measured to be better",
+          fmt("default %s", kMelodyModelNames[p.getInt(cb + compose::MelodyModel)]));
+
+    const StyleProfile& style = styleProfile(styleOf(p));
+    const MelodyPlan markov = makeMelodyPlan(p, style, 0xBEEF1234u, 6, 1, false, 0.5f);
+
+    std::string note;
+    const bool haveModel = sharedMelodyModel(&note) != nullptr;
+    check(haveModel, "the shared melody model loads (Core/data/melody.phosmdl)", note);
+
+    p.parseText("compose.melody_model=Neural");
+    check(p.getInt(cb + compose::MelodyModel) == 1, "the knob takes its name from a preset line");
+    const MelodyPlan a = makeMelodyPlan(p, style, 0xBEEF1234u, 6, 1, false, 0.5f);
+    const MelodyPlan b = makeMelodyPlan(p, style, 0xBEEF1234u, 6, 1, false, 0.5f);
+    bool same = a.acid[0].size() == b.acid[0].size() && a.lead[0].size() == b.lead[0].size();
+    for (size_t i = 0; same && i < a.acid[0].size(); ++i) same = a.acid[0][i].rel == b.acid[0][i].rel;
+    for (size_t i = 0; same && i < a.lead[0].size(); ++i) same = a.lead[0][i].rel == b.lead[0][i].rel;
+    check(same, "two plans from the same seed are the same plan (the neural draw is deterministic)");
+
+    // Every drawn pitch still obeys the constraints the composer set: in the scale, in the register.
+    int outside = 0, notes = 0;
+    for (const MelodyNote& n : a.acid[0]) { ++notes; if (!inScale(1, a.root[0] + n.rel - 6)) ++outside; }
+    for (const MelodyNote& n : a.lead[0]) { ++notes; if (!inScale(1, a.root[1] + n.rel - 6)) ++outside; }
+    check(outside == 0 && notes > 0, "every neural pitch is still a scale tone (the constraint masks hold)",
+          fmt("%d notes, %d outside the scale", notes, outside));
+
+    int changed = 0;
+    for (size_t i = 0; i < std::min(a.acid[0].size(), markov.acid[0].size()); ++i)
+        if (a.acid[0][i].rel != markov.acid[0][i].rel) ++changed;
+    check(changed > 0, "the neural model really replaces the Markov model (the line is another line)",
+          fmt("%d of %zu acid notes differ from the Markov plan", changed, markov.acid[0].size()));
+
+    // The two models are each other's control: over many tracks the neural lines have to be *lines*,
+    // not a constant or a random walk. The step-size distribution is the cheapest thing to compare.
+    auto stepStats = [&](bool neural, double& meanStep, double& repeats, int& distinct) {
+        ParamStore q;
+        q.parseText(neural ? "compose.melody_model=Neural" : "compose.melody_model=Markov");
+        double total = 0.0, same2 = 0.0;
+        int count = 0;
+        std::vector<int> seen(64, 0);
+        for (int t = 0; t < 24; ++t) {
+            const MelodyPlan m = makeMelodyPlan(q, style, 0x51EEDu + static_cast<uint64_t>(t) * 977u, t % 12, t % 6, false, 0.4f);
+            for (const auto& ph : m.lead)
+                for (size_t i = 1; i < ph.size(); ++i) {
+                    const int d = ph[i].rel - ph[i - 1].rel;
+                    total += std::fabs(static_cast<double>(d));
+                    if (d == 0) same2 += 1.0;
+                    ++count;
+                    const size_t k = static_cast<size_t>(std::clamp(ph[i].rel + 12, 0, 63));
+                    seen[k] = 1;
+                }
+        }
+        meanStep = count > 0 ? total / count : 0.0;
+        repeats = count > 0 ? same2 / count : 0.0;
+        distinct = 0;
+        for (int v : seen) distinct += v;
+    };
+    double mStep = 0.0, mRep = 0.0, nStep = 0.0, nRep = 0.0;
+    int mDist = 0, nDist = 0;
+    stepStats(false, mStep, mRep, mDist);
+    stepStats(true, nStep, nRep, nDist);
+    check(nStep > 0.3 && nStep < 2.0 * mStep && nDist >= 6,
+          "the neural lead moves in steps of a musical size and uses a range of pitches",
+          fmt("mean step %.2f semitones against Markov's %.2f, repeated notes %.0f%% against %.0f%%, %d distinct pitches against %d",
+              nStep, mStep, 100.0 * nRep, 100.0 * mRep, nDist, mDist));
 }
 
 /** @brief Steady-state amplitude of a filter's response to a sine (amplitude @p amp) after @p settle samples. */
@@ -3603,6 +4259,10 @@ int main()
     // DSP quality round of 16.09.2026 (docs/PLAN.md) and runs only when it is named by itself.
     if (only != nullptr && std::strstr(only, "testMeasure") != nullptr) testMeasure();
     run("testSampler", testSampler);
+    run("testModelKernel", testModelKernel);
+    run("testModelFile", testModelFile);
+    run("testModelDecode", testModelDecode);
+    run("testMelodyModelWiring", testMelodyModelWiring);
     run("testDiodeLadder", testDiodeLadder);
     run("testAcid", testAcid);
     run("testPoly", testPoly);
