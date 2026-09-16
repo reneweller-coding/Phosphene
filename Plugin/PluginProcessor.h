@@ -32,6 +32,20 @@
  * run (offline bounce, the host test) the audio thread performs the composer's steps itself, so a
  * block is self-contained and the output is bit-identical to phos_render.
  *
+ * **Curation.** Locking and rerolling (PLAN 6.8) belong to phos::Composer, which only the composer
+ * thread may touch, and a reroll may cost a probe render. The editor therefore does not call the
+ * composer: it pushes a CurationCommand into a lock-free ring and keeps a mirror of the locks for
+ * its own drawing, and the composer thread applies the command the next time it comes round. Nothing
+ * on the message thread waits for a plan.
+ *
+ * **Perform macros.** They are immediate parameter moves, not score events, and that is a measured
+ * decision rather than a shortcut: phos::Engine's control ring is strictly first in, first out and
+ * the conductor keeps it filled eight bars ahead, so an event pushed now would fire only after every
+ * event already queued -- about thirteen seconds at 145 BPM. A macro instead writes the *knob*, in
+ * the knob's normalised domain and as an offset from the value it had (#macroBase_), which is the
+ * language a phos::ControlEvent speaks; the composer's own offsets keep riding on top, and letting
+ * go puts every knob back exactly where it was. See #Macro.
+ *
  * **Environment.** `PHOS_MUTE=1` starts the output muted and the plugin never unmutes itself, so
  * tests and the screenshot export are silent. `PHOS_SHOT` is read by the editor (PluginEditor.h).
  */
@@ -44,10 +58,31 @@
 #include "phos/Params.h"
 #include "phos/Score.h"
 #include <atomic>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
+
+/**
+ * @brief The live macros of the Perform tab (PLAN 8.1).
+ *
+ * Four, because a macro that nobody can describe in one line is a knob with a nickname. Each one
+ * names a handful of parameters and the size of its move; the manual generator prints that table
+ * from #macroTargets, so what the manual says is what the plugin does.
+ */
+enum class Macro : int {
+    FilterSweep = 0,   ///< -1..+1: opens or closes the acid, lead and arp filters together
+    GateDepth,         ///< 0..1: the trance gate of lead, arp and pad, on and as deep as this
+    DropOut,           ///< momentary: kick and bass gone until the next bar line
+    Stutter,           ///< held: lead, arp and pad chopped on sixteenths at full depth
+    Count
+};
+constexpr int kNumMacros = static_cast<int>(Macro::Count);   ///< number of macros
+extern const char* const kMacroNames[kNumMacros];            ///< display names
+extern const char* const kMacroHelp[kNumMacros];             ///< one line each, for the manual and the tooltip
+/** @brief Whether a macro is a momentary press (as opposed to a value that is held). */
+bool macroIsMomentary(Macro m);
 
 /**
  * @brief One host parameter, backed by one entry of phos::ParamStore.
@@ -115,7 +150,8 @@ public:
      * pushed as an immediate change. A ramp that was in flight lands at its target, which is where
      * it was heading.
      */
-    void seek(const phos::ParamStore& params, int startBar, double beatOffset, bool writeTempo);
+    void seek(const phos::ParamStore& params, int startBar, double beatOffset, bool writeTempo,
+              std::mutex& engineLock);
     /**
      * @brief Composes and pushes until @p horizonBeats beyond the engine's position are covered.
      * @param params       knob values to compose with
@@ -239,6 +275,57 @@ public:
     /** @brief Asks the composer to re-plan: the knobs that shape the set have changed. */
     void requestRestart() { plansStale_.store(true, std::memory_order_release); restartRequest_.store(true, std::memory_order_release); }
 
+    // ------------------------------------------------------------------ curation (PLAN 6.8)
+    /**
+     * @brief Locks or unlocks a unit (message thread).
+     *
+     * The command travels to the composer thread through #curation_; what the editor draws comes
+     * from the mirror this keeps, so a lock toggles under the mouse even while a track is being
+     * planned. A locked unit is frozen on the seed it had, so rerolling anything around it leaves
+     * it bit-identical.
+     */
+    void setLock(phos::LockUnit unit, int index, bool locked);
+    /** @brief Whether a unit is locked, from the editor's mirror. */
+    bool isLocked(phos::LockUnit unit, int index) const;
+    /** @brief Draws that unit again from a fresh seed; a locked unit does not move. */
+    void reroll(phos::LockUnit unit, int index);
+    /** @brief How often a unit has been rerolled (0 = never), from the mirror. */
+    uint32_t variation(phos::LockUnit unit, int index) const;
+    /** @brief Forgets every lock and every reroll. */
+    void clearCuration();
+
+    // ------------------------------------------------------------------ perform macros
+    /**
+     * @brief Moves a macro (message thread).
+     * @param m     which macro
+     * @param value 0 is neutral for all of them; #Macro::FilterSweep runs -1..+1, the rest 0..1
+     */
+    void setMacro(Macro m, float value);
+    /** @brief Where a macro stands. */
+    float macroValue(Macro m) const { return macro_[static_cast<size_t>(m)].value; }
+    /**
+     * @brief The macro tick (message thread): applies what is held and releases what has run out.
+     *
+     * Called by #timerCallback at about 30 Hz. It is public because a test has no message loop and
+     * has to turn the crank itself.
+     */
+    void serviceMacros();
+    /** @brief The parameters one macro moves and how far, for the editor and the manual generator. */
+    struct MacroTarget {
+        int   param = -1;      ///< global parameter id
+        float value = 0.0f;    ///< normalised delta, or the absolute normalised value
+        bool  absolute = false;   ///< true: set the knob to @ref value instead of adding it
+    };
+    /**
+     * @brief What macro @p m at @p value wants of the parameters.
+     * @param m     the macro
+     * @param value its position
+     * @param out   receives at most #kMaxMacroTargets entries
+     * @return how many were written
+     */
+    int macroTargets(Macro m, float value, MacroTarget* out) const;
+    static constexpr int kMaxMacroTargets = 12;   ///< most parameters one macro touches
+
     // ------------------------------------------------------------------ transport
     /** @brief Standalone: starts at the top (or resumes after a pause). */
     void play();
@@ -303,6 +390,12 @@ private:
     void emitMidi(juce::MidiBuffer& midi, double beatAtStart, double beatsPerSample, int n);
     /** @brief The seed, the host-sync switch and every parameter value, as XML. */
     void writeStateTo(juce::MemoryBlock& dest) const;
+    /** @brief Composer thread: applies whatever the editor has asked for since the last turn. */
+    bool drainCuration();
+    /** @brief Message thread: copies the composer's locks into the mirror (after reading a file). */
+    void syncCurationMirror();
+    /** @brief Message thread: remembers where the play head is, so a restart lands there again. */
+    void markCurrentPosition();
     /** @brief Message thread: the limiter's lookahead is a switchable latency; tell the host when it moves. */
     void timerCallback() override;
 
@@ -365,6 +458,36 @@ private:
     struct HeldNote { double endBeat = 0.0; int channel = 0; int pitch = 0; bool active = false; };
     static constexpr int kMaxHeld = 128;   ///< notes that may sound at once on the MIDI output
     HeldNote held_[kMaxHeld];              ///< audio thread only
+
+    // ---- curation: the editor asks, the composer thread does it
+    /** @brief One thing the editor wants done to a lockable unit. */
+    struct CurationCommand {
+        uint8_t unit = 0;    ///< phos::LockUnit
+        uint8_t op = 0;      ///< 0 unlock, 1 lock, 2 reroll, 3 clear everything
+        int32_t index = 0;   ///< unit index (Composer::sectionUnitIndex and friends)
+    };
+    phos::EventRing<CurationCommand> curation_{ 64 };   ///< message thread -> composer thread
+    mutable std::mutex curationLock_;                   ///< guards the two mirrors below
+    std::map<int, uint8_t> lockMirror_[phos::kNumLockUnits];      ///< what the editor draws
+    std::map<int, uint32_t> variationMirror_[phos::kNumLockUnits];   ///< @copydoc lockMirror_
+
+    // ---- perform macros (message thread only)
+    /** @brief One macro's position and, for a momentary one, when it ends. */
+    struct MacroState {
+        float  value = 0.0f;         ///< where it stands; 0 is neutral
+        double releaseBeat = -1.0;   ///< musical beat at which it lets go, < 0 = not timed
+    };
+    MacroState macro_[kNumMacros];
+    /**
+     * @brief The knob values the macros found, by parameter id, in their real units.
+     *
+     * A macro writes knobs, so it has to be able to put them back: the first macro to touch a
+     * parameter records what was there, the last one to let go writes it back. Without this a
+     * filter sweep would leave the cutoff wherever the hand stopped. The real value is kept rather
+     * than a normalised position, because a round trip through a logarithmic mapping is not exact.
+     */
+    std::map<int, float> macroBase_;
+    unsigned macroTicks_ = 0;   ///< message thread: how many ticks since the slow jobs last ran
 
     // ---- mute and recording
     std::atomic<bool> mute_{ false };   ///< the output is silenced at the very end of processBlock

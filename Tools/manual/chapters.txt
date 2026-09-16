@@ -1,0 +1,165 @@
+# The prose of the Phosphene manual, one block per tab of the plugin.
+#
+# Everything else in the manual -- the parameter tables, the pictures, the macro table, the list of
+# groups on each page -- is generated from the plugin itself (PHOS_MANUAL writes manual.json and one
+# picture per tab). Only the text that explains *why* lives here, because no table can say it.
+#
+# Format: a line "== Tab name ==" starts a block, and the tab name must be the name the tab wears in
+# the plugin. Blank lines separate paragraphs. A line indented by four spaces is printed as it
+# stands (a formula, a small table). Lines starting with '#' are comments and are not printed.
+
+== About ==
+
+Phosphene composes and plays complete psytrance sets. You give it a seed, a style and an energy arc;
+it writes the tracks -- their keys, tempi, forms, patterns and sounds -- and synthesises them in real
+time. There is no sample library and no loop pool: every sound is made by the engine, and every note
+is decided by the composer.
+
+Two ideas run through the whole instrument. The first is that the same seed always gives the same
+set: bar 3000 is bar 3000 whether the night was played from the start or joined in the middle, which
+is what makes a set something you can save in seven lines of text and hand to someone else. The
+second is that the composer never writes a knob. It writes offsets from the knobs, so with every
+offset at zero the instrument sounds exactly as the panel says, and a variation keeps its musical
+size whatever you have set the ranges to.
+
+The panel has a tab per generator, plus four that are about the set rather than the sound: Set,
+Arrange, Mixer / Master and Perform. Every control on every page is generated from the engine's own
+parameter tables, and so is this manual.
+
+== Set ==
+
+The Set tab is where a night begins. The seed names the set; Randomize seed draws another one. Play
+and Stop run Phosphene's own clock, and Follow host hands the transport to the DAW instead -- under a
+host the tempo knob follows the host's tempo and the play head follows its position.
+
+Starting a set is not instant. Planning a track measures its loudness by rendering two bars of it, so
+the first sound arrives about two seconds after the button; the header says "planning" rather than
+going quiet without explanation. In the standalone this has usually happened before you press
+anything, because the composer thread starts working when the window opens.
+
+The composer's own knobs are here: how long a track is, how far the key and tempo may wander, how
+much of each voice there is, which style profile weights the grammar, which dramaturgy the energy arc
+follows and how long the whole set should be. The first track of a set plays exactly these knobs;
+variation starts with the second.
+
+Export MIDI writes the score of the first N bars as a Standard MIDI File with a named track per part,
+section markers and the tempo map. Export set writes a .phosset -- the seed, the style, the arc, the
+knobs that differ from their defaults, and every lock and reroll -- which phos_render will play back
+byte for byte.
+
+== Arrange ==
+
+The Arrange tab is the whole planned set on one page, and the curation loop that goes with it.
+
+The strip across the top is the night: every planned track a block in the order it plays, the energy
+arc drawn over it, the play head in it. Underneath, each track gets a row of its own in which its own
+form fills the full width, so a section stays readable no matter how long the set is. The colours are
+the section categories: intro and outro grey, groove green, buildup amber, the pre-drop break violet,
+the drop red, the breakdown blue. Clicking any block jumps there.
+
+The two small glyphs on every track and every section are the answer to the oldest complaint about
+generators, which is that they are boring. The padlock freezes that unit on the seed it has; the die
+draws it again. Because a locked unit keeps its old seed and nothing later reads anything an earlier
+one decided, rerolling one track leaves every other track bit-identical -- so you can keep what you
+like and reroll what you do not, one section at a time, until the set is yours. Reroll the set draws
+the whole journey again and leaves the locked tracks exactly where they were.
+
+== Kick ==
+
+The kick is the floor of the genre and the first thing to get right. Two engines: a swept sine whose
+pitch falls from Pitch Start to Pitch End with its own decay, and a damped phasor resonator with the
+retrigger behaviour of a TR-808. Punch is a second, much faster pitch envelope on top of the first;
+Click adds the attack transient; Drive and Clip decide how much of the body survives.
+
+Two of its numbers are not free. The tail is limited so that the kick has fallen far enough by the
+time the first bass note starts, and the phase lock (on the Bass tab) can trim the kick's decay so
+that the kick and the bass fundamental meet in phase. Both are applied in the engine, after every
+knob and every variation.
+
+== Bass ==
+
+The rolling bass and the kick are one instrument with two halves. The oscillator is a PolyBLEP saw
+and pulse with a sine sub on the fundamental -- on the fundamental, not an octave down, because the
+octave-down sub fought the kick -- and the filter is a non-linear zero-delay ladder.
+
+Kick Lock decides which of the two gives way: Bass follows kick sets the bass start phase to the
+kick's phase at that instant, Kick follows bass trims the kick's decay by bisection until the two
+agree. Off leaves them where they fall, which at 145 BPM means anything between -157 and +165
+degrees.
+
+Pattern and Gate are the note side: which of the five bass patterns the track prefers, and how long a
+note is as a fraction of its slot. The gate is never allowed to run shorter than half a period of the
+fundamental.
+
+== Percussion ==
+
+Twelve lanes, each a complete voice: a tone with its own pitch envelope and FM, four modal sets, the
+808 square stack, noise with clap bursts, a filter, a low cut, drive, choke and panning. The role of
+a lane decides what it plays in the groove and which General MIDI note it exports as.
+
+The patterns are euclidean, rotated to a middle amount of syncopation rather than to none, and the
+decisions are made per four-bar phrase. Every lane is high-passed at 150 Hz at the least: the bottom
+of the mix belongs to the kick and the bass, and a tom that reaches into it takes the floor away.
+
+== Acid ==
+
+A diode ladder after Zavalishin, solved from the inside out, with an accent that charges a sweep
+capacitor the way the original did -- three accents in a row open further than one. Slide is an
+exponential glide into the next note, Squelch a cutoff start value plus a comb tuned to the note's
+period. The tempo delay is in beats, so it follows the set.
+
+== Lead ==
+
+A supersaw after Szabo's measurements of the JP-8000 -- the detune curve, the mix law and the random
+phase per note -- with a dynamic detune that follows the length of the note. The other three
+oscillator types are a virtual-analogue saw and pulse, two-operator FM and a wavetable.
+
+Everything but the kick and the bass is high-passed at its own fundamental, which is what keeps eight
+voices of supersaw out of the bass register.
+
+== Arp ==
+
+The same engine as the lead, with its own knobs. The arpeggio runs on chord tones, and when its pitch
+range would overlap the lead's by more than two semitones it is octaved away: two voices playing in
+the same two octaves mask each other, and the composer checks that before it writes the notes.
+
+== Pad ==
+
+Four-voice voicings with the smallest voice movement between chords, through the wavetable engine.
+The pads carry the blocks that have no lead and no acid, and the trance gate gives them their
+movement.
+
+== SFX / FX ==
+
+The effect generator makes risers, downlifters, impacts, sweeps, formant shots, reverse swells and
+zaps; the composer places them at the form's boundaries -- a riser over the last eight bars of a
+buildup, ending exactly on the drop, the formant shot on the last beat of the pre-drop break, a
+descending sweep into the drop.
+
+The two send effects are a short room and a long hall, both feedback delay networks. Their returns
+are ducked with the kick like everything else, and high-passed: a reverb tail in the bass register is
+mud.
+
+== Mixer / Master ==
+
+Level, mute and sends per part, the sidechain matrix, and the master chain: bus compressor, mono
+bass, a two-times oversampled knee clipper, a lookahead true-peak limiter and a safety clip, metered
+to ITU-R BS.1770.
+
+Auto Gain renders four four-bar windows of the track through the whole master chain, measures them
+and offsets the master gain so that the output meets the loudness target. It runs when a track is
+planned, so it uses the knobs as they stand at that moment.
+
+== Perform ==
+
+Four macros, meant for a hand rather than a mouse.
+
+They are immediate parameter moves rather than score events, and that is measured rather than
+convenient: the engine's control ring is first in, first out and the composer keeps it filled eight
+bars ahead, so an event pushed into it now would not be heard for about thirteen seconds. A macro
+therefore writes the knob itself, as an offset in the knob's normalised domain, and puts it back
+exactly where it was when you let go. The composer's own ramps keep riding on top.
+
+Drop-out is a press, not a hold: it takes the kick and the bass out and lets them back in on the next
+bar line. Stutter is held. Filter Sweep and Gate Depth stay where you leave them, and a double click
+puts them back to neutral.

@@ -2,8 +2,8 @@
  * @file PluginEditor.h
  * @brief The editor: a header, one tab per generator, and pages built from the parameter tables.
  *
- * The tabs follow PLAN 8.1: Set, Kick, Bass, Percussion (twelve lanes behind a lane bar), Acid,
- * Lead, Arp, Pad, SFX + FX, Mixer + Master. None of the pages knows a coordinate; each is a
+ * The tabs follow PLAN 8.1: Set, Arrange, Kick, Bass, Percussion (twelve lanes behind a lane bar),
+ * Acid, Lead, Arp, Pad, SFX + FX, Mixer + Master, Perform. None of the pages knows a coordinate; each is a
  * phosui::ControlPage that is handed slices of a module's descriptor table and measures itself
  * (EditorLayout.h). The window has a design size -- the size at which every page fits without
  * scrolling -- and is scaled to whatever the screen or the host offers.
@@ -17,11 +17,23 @@
  */
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "EditorArrange.h"
 #include "EditorLayout.h"
 #include "PhospheneLookAndFeel.h"
 #include "PluginProcessor.h"
 #include <memory>
 #include <vector>
+
+/**
+ * @brief The tabs, by name rather than by number.
+ *
+ * They were plain indices until the Arrange and Perform tabs arrived in the middle of the row and
+ * every `tab_ == 3` in the file meant something else.
+ */
+enum Tab : int {
+    TabSet = 0, TabArrange, TabKick, TabBass, TabPerc, TabAcid, TabLead, TabArp, TabPad,
+    TabFx, TabMix, TabPerform, TabCount
+};
 
 /**
  * @brief The editor's fixed-size body.
@@ -125,11 +137,26 @@ public:
      * @return false if the file cannot be written
      */
     bool writeScreenshot(const juce::File& file);
+    /**
+     * @brief Writes everything the manual generator needs into @p dir (`PHOS_MANUAL`).
+     *
+     * One picture per tab, and a `manual.json` holding the parameter tables and -- which is the
+     * point -- the groups each tab really built, straight out of the pages. Tools/manual/make_manual.py
+     * turns that into the manual and refuses to print one in which a parameter appears on no tab.
+     * That is the bug of the last round (four new parameters that no group claimed) made impossible
+     * to miss.
+     * @return false if the folder cannot be written
+     */
+    bool writeManual(const juce::File& dir);
 
 private:
     void buildPages();
     void buildSetPage();          // EditorSetTab.cpp
     void refreshSetPage();        // EditorSetTab.cpp: meters, transport, track list
+    void buildArrangePage();      // EditorArrange.cpp
+    void refreshArrangePage();    // EditorArrange.cpp: the timeline and the play head
+    void buildPerformPage();      // EditorPerform.cpp
+    void refreshPerformPage();    // EditorPerform.cpp: what the macros are doing
     void refreshPattern();        // the pattern roll of the tab that is open
     void timerCallback() override;
     phosui::ControlPage* activePage() const;
@@ -169,6 +196,18 @@ private:
     /** @brief The track list as the composer has published it so far. */
     std::vector<TrackDisplay::Row> trackRows_;
     size_t rowsSeed_ = 0;   ///< how many rows the display was last given, so it repaints only when it grows
+
+    // ---- the Arrange tab
+    ArrangeDisplay* arrange_ = nullptr;      ///< the timeline
+    juce::Label*    arrangeNote_ = nullptr;  ///< where the play head is, in words
+    bool arrangeDirty_ = true;               ///< a lock or a reroll: read the plans again
+    unsigned arrangeTicks_ = 0;              ///< the timeline reads the plans once a second, the head every tick
+    uint64_t arrangeHash_ = 0;               ///< what the timeline is drawing, so an unchanged plan is not redrawn
+
+    // ---- the Perform tab
+    juce::Slider*     macroSlider_[kNumMacros] = {};   ///< the macros that are held at a value
+    juce::TextButton* macroButton_[kNumMacros] = {};   ///< the macros that are pressed
+    juce::Label*      macroNote_ = nullptr;            ///< what they are doing now
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PhospheneEditor)
 };

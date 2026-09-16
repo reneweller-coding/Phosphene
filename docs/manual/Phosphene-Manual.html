@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Phosphene Manual</title>
+<style>
+@page { size: A4; margin: 17mm 15mm 15mm 15mm; }
+body { font: 10.5pt/1.55 "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: #15181f;
+       background: #fff; margin: 0; }
+h1 { font-size: 30pt; margin: 0 0 2mm 0; letter-spacing: -0.5pt; }
+h2 { font-size: 16pt; margin: 0 0 3mm 0; padding-bottom: 2mm; border-bottom: 1px solid #ccd2dc;
+     color: #1d6f86; }
+h3 { font-size: 10.5pt; margin: 6mm 0 1.5mm 0; color: #1d6f86; letter-spacing: 0.6pt;
+     text-transform: uppercase; }
+p { margin: 0 0 3.2mm 0; text-align: justify; hyphens: auto; }
+.cover { page-break-after: always; text-align: center; padding-top: 24mm; }
+.cover img { width: 100%; border: 1px solid #ccd2dc; border-radius: 3px; margin-top: 10mm; }
+.sub { color: #5b6470; font-size: 12pt; margin: 0; }
+.facts { margin-top: 7mm; color: #5b6470; font-size: 9.5pt; }
+.toc { page-break-after: always; }
+.toc ol { padding-left: 6mm; }
+.toc li { margin: 1.2mm 0; }
+.topic { page-break-before: always; }
+figure { margin: 4mm 0 5mm 0; page-break-inside: avoid; }
+figure img { max-width: 100%; border: 1px solid #d4d9e1; border-radius: 3px; display: block; }
+figcaption { font-size: 8.5pt; color: #6b7480; margin-top: 1.2mm; }
+pre { font: 8.4pt/1.35 Consolas, "DejaVu Sans Mono", monospace; background: #f3f5f8;
+      border: 1px solid #e1e5eb; border-radius: 3px; padding: 3mm; white-space: pre-wrap;
+      page-break-inside: avoid; margin: 0 0 4mm 0; }
+table { border-collapse: collapse; width: 100%; font-size: 8.8pt; margin: 0 0 5mm 0;
+        page-break-inside: auto; }
+th { text-align: left; font-weight: 600; color: #46506080; border-bottom: 1px solid #ccd2dc;
+     padding: 1mm 2mm 1mm 0; color: #46506d; }
+td { padding: 0.9mm 2mm 0.9mm 0; border-bottom: 1px solid #eef1f5; vertical-align: top; }
+td.key { font-family: Consolas, monospace; color: #6b7480; white-space: nowrap; }
+td.rng { color: #46506d; white-space: nowrap; }
+h4 { font-size: 11pt; margin: 6mm 0 1.5mm 0; color: #15181f; page-break-after: avoid; }
+.hole { color: #a3272c; }
+footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; color: #6b7480;
+         font-size: 8.5pt; }
+</style></head><body>
+<div class="cover">
+<h1>Phosphene</h1>
+<p class="sub">Manual &middot; version 0.1.0</p>
+<img src="../screenshots/tab-0-set.png" alt="">
+<p class="facts">614 parameters &middot; 12 tabs &middot; 4 perform macros &middot; every picture in this manual is the plugin drawing itself at design size</p>
+</div>
+<div class="toc"><h2>Contents</h2><ol>
+<li>About</li>
+<li>Set</li>
+<li>Arrange</li>
+<li>Kick</li>
+<li>Bass</li>
+<li>Percussion</li>
+<li>Acid</li>
+<li>Lead</li>
+<li>Arp</li>
+<li>Pad</li>
+<li>SFX / FX</li>
+<li>Mixer / Master</li>
+<li>Perform</li>
+</ol></div>
+<div class="topic">
+<h2>1. About</h2>
+<p>Phosphene composes and plays complete psytrance sets. You give it a seed, a style and an energy arc; it writes the tracks -- their keys, tempi, forms, patterns and sounds -- and synthesises them in real time. There is no sample library and no loop pool: every sound is made by the engine, and every note is decided by the composer.</p>
+<p>Two ideas run through the whole instrument. The first is that the same seed always gives the same set: bar 3000 is bar 3000 whether the night was played from the start or joined in the middle, which is what makes a set something you can save in seven lines of text and hand to someone else. The second is that the composer never writes a knob. It writes offsets from the knobs, so with every offset at zero the instrument sounds exactly as the panel says, and a variation keeps its musical size whatever you have set the ranges to.</p>
+<p>The panel has a tab per generator, plus four that are about the set rather than the sound: Set, Arrange, Mixer / Master and Perform. Every control on every page is generated from the engine&#x27;s own parameter tables, and so is this manual.</p>
+</div>
+<div class="topic">
+<h2>2. Set</h2>
+<p>The Set tab is where a night begins. The seed names the set; Randomize seed draws another one. Play and Stop run Phosphene&#x27;s own clock, and Follow host hands the transport to the DAW instead -- under a host the tempo knob follows the host&#x27;s tempo and the play head follows its position.</p>
+<p>Starting a set is not instant. Planning a track measures its loudness by rendering two bars of it, so the first sound arrives about two seconds after the button; the header says &quot;planning&quot; rather than going quiet without explanation. In the standalone this has usually happened before you press anything, because the composer thread starts working when the window opens.</p>
+<p>The composer&#x27;s own knobs are here: how long a track is, how far the key and tempo may wander, how much of each voice there is, which style profile weights the grammar, which dramaturgy the energy arc follows and how long the whole set should be. The first track of a set plays exactly these knobs; variation starts with the second.</p>
+<p>Export MIDI writes the score of the first N bars as a Standard MIDI File with a named track per part, section markers and the tempo map. Export set writes a .phosset -- the seed, the style, the arc, the knobs that differ from their defaults, and every lock and reroll -- which phos_render will play back byte for byte.</p>
+<figure><img src="../screenshots/tab-0-set.png" alt=""><figcaption>The Set tab.</figcaption></figure>
+<h3>Set</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Tempo</td><td class="key">compose.bpm</td><td class="rng">100 .. 190 BPM</td><td class="rng">145</td></tr>
+<tr><td>Key</td><td class="key">compose.key</td><td class="rng">C | C# | D | D# | E | F | F# | G | G# | A | A# | B</td><td class="rng">F#</td></tr>
+<tr><td>Scale</td><td class="key">compose.scale</td><td class="rng">Aeolian | Phrygian | Harmonic Minor | Phrygian Dominant | Double Harmonic | Dorian</td><td class="rng">Phrygian</td></tr>
+<tr><td>Kick Pattern</td><td class="key">compose.kick_pattern</td><td class="rng">Four | Four + Fills | Off</td><td class="rng">Four + Fills</td></tr>
+<tr><td>Bass Pattern</td><td class="key">compose.bass_pattern</td><td class="rng">Rolling | Gallop | Skip | Offbeat | Triplet</td><td class="rng">Rolling</td></tr>
+<tr><td>Bass Gate</td><td class="key">compose.bass_gate</td><td class="rng">0.2 .. 1</td><td class="rng">0.7</td></tr>
+<tr><td>Bass Variation</td><td class="key">compose.bass_variation</td><td class="rng">0 .. 1</td><td class="rng">0.4</td></tr>
+<tr><td>Bass Register</td><td class="key">compose.bass_register</td><td class="rng">-12 .. 12 st</td><td class="rng">0</td></tr>
+<tr><td>Track Length</td><td class="key">compose.track_bars</td><td class="rng">32 .. 512 bars</td><td class="rng">256</td></tr>
+<tr><td>Track Variation</td><td class="key">compose.track_variation</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Sound Variation</td><td class="key">compose.sound_variation</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Tempo Range</td><td class="key">compose.tempo_range</td><td class="rng">0 .. 10 BPM</td><td class="rng">3</td></tr>
+<tr><td>Level Match</td><td class="key">compose.level_match</td><td class="rng">off / on</td><td class="rng">on</td></tr>
+</table>
+<h3>Rhythm</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Perc Density</td><td class="key">compose.perc_density</td><td class="rng">0 .. 1</td><td class="rng">0.6</td></tr>
+<tr><td>Perc Variation</td><td class="key">compose.perc_variation</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Swing</td><td class="key">compose.swing</td><td class="rng">0 .. 0.3</td><td class="rng">0</td></tr>
+</table>
+<h3>Melody</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Acid Amount</td><td class="key">compose.acid_amount</td><td class="rng">0 .. 1</td><td class="rng">0.6</td></tr>
+<tr><td>Lead Amount</td><td class="key">compose.lead_amount</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Arp Amount</td><td class="key">compose.arp_amount</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Melody Variation</td><td class="key">compose.melody_variation</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Melody Temperature</td><td class="key">compose.melody_temperature</td><td class="rng">0.5 .. 2</td><td class="rng">1</td></tr>
+<tr><td>Squelch Chance</td><td class="key">compose.squelch_chance</td><td class="rng">0 .. 1</td><td class="rng">0.3</td></tr>
+<tr><td>Bass Follows Chords</td><td class="key">compose.bass_follows_chords</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Pad Amount</td><td class="key">compose.pad_amount</td><td class="rng">0 .. 1</td><td class="rng">0.7</td></tr>
+<tr><td>SFX Amount</td><td class="key">compose.sfx_amount</td><td class="rng">0 .. 1</td><td class="rng">0.7</td></tr>
+<tr><td>Gate Chance</td><td class="key">compose.gate_chance</td><td class="rng">0 .. 1</td><td class="rng">0.35</td></tr>
+</table>
+<h3>Form</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Style</td><td class="key">compose.style</td><td class="rng">Goa | Full-On | Progressive | Dark Forest | Hi-Tech</td><td class="rng">Full-On</td></tr>
+<tr><td>Energy Arc</td><td class="key">compose.arc</td><td class="rng">Warm-up | Peak-Time | Morning | Closing | Flat</td><td class="rng">Flat</td></tr>
+<tr><td>Style Tempo</td><td class="key">compose.style_tempo</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Set Length</td><td class="key">compose.set_minutes</td><td class="rng">10 .. 300 min</td><td class="rng">60</td></tr>
+</table>
+</div>
+<div class="topic">
+<h2>3. Arrange</h2>
+<p>The Arrange tab is the whole planned set on one page, and the curation loop that goes with it.</p>
+<p>The strip across the top is the night: every planned track a block in the order it plays, the energy arc drawn over it, the play head in it. Underneath, each track gets a row of its own in which its own form fills the full width, so a section stays readable no matter how long the set is. The colours are the section categories: intro and outro grey, groove green, buildup amber, the pre-drop break violet, the drop red, the breakdown blue. Clicking any block jumps there.</p>
+<p>The two small glyphs on every track and every section are the answer to the oldest complaint about generators, which is that they are boring. The padlock freezes that unit on the seed it has; the die draws it again. Because a locked unit keeps its old seed and nothing later reads anything an earlier one decided, rerolling one track leaves every other track bit-identical -- so you can keep what you like and reroll what you do not, one section at a time, until the set is yours. Reroll the set draws the whole journey again and leaves the locked tracks exactly where they were.</p>
+<figure><img src="../screenshots/tab-1-arrange.png" alt=""><figcaption>The Arrange tab.</figcaption></figure>
+</div>
+<div class="topic">
+<h2>4. Kick</h2>
+<p>The kick is the floor of the genre and the first thing to get right. Two engines: a swept sine whose pitch falls from Pitch Start to Pitch End with its own decay, and a damped phasor resonator with the retrigger behaviour of a TR-808. Punch is a second, much faster pitch envelope on top of the first; Click adds the attack transient; Drive and Clip decide how much of the body survives.</p>
+<p>Two of its numbers are not free. The tail is limited so that the kick has fallen far enough by the time the first bass note starts, and the phase lock (on the Bass tab) can trim the kick&#x27;s decay so that the kick and the bass fundamental meet in phase. Both are applied in the engine, after every knob and every variation.</p>
+<figure><img src="../screenshots/tab-2-kick.png" alt=""><figcaption>The Kick tab.</figcaption></figure>
+<h3>Pitch</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Engine</td><td class="key">kick.engine</td><td class="rng">Sweep | Resonant</td><td class="rng">Sweep</td></tr>
+<tr><td>Tune</td><td class="key">kick.tune</td><td class="rng">Free | Key</td><td class="rng">Key</td></tr>
+<tr><td>Pitch End</td><td class="key">kick.pitch_end</td><td class="rng">30 .. 120 Hz</td><td class="rng">50</td></tr>
+<tr><td>Pitch Start</td><td class="key">kick.pitch_start</td><td class="rng">60 .. 1500 Hz</td><td class="rng">220</td></tr>
+<tr><td>Body Decay</td><td class="key">kick.pitch_decay</td><td class="rng">5 .. 150 ms</td><td class="rng">22</td></tr>
+<tr><td>Punch Decay</td><td class="key">kick.punch_decay</td><td class="rng">0.5 .. 20 ms</td><td class="rng">4</td></tr>
+<tr><td>Punch</td><td class="key">kick.punch</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+</table>
+<h3>Amplitude</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Attack</td><td class="key">kick.amp_attack</td><td class="rng">0 .. 10 ms</td><td class="rng">0.2</td></tr>
+<tr><td>Hold</td><td class="key">kick.amp_hold</td><td class="rng">0 .. 150 ms</td><td class="rng">12</td></tr>
+<tr><td>Decay</td><td class="key">kick.amp_decay</td><td class="rng">20 .. 1500 ms</td><td class="rng">150</td></tr>
+</table>
+<h3>Drive</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Drive</td><td class="key">kick.drive</td><td class="rng">0 .. 1</td><td class="rng">0.35</td></tr>
+<tr><td>Clip</td><td class="key">kick.clip</td><td class="rng">Tanh | Hard</td><td class="rng">Tanh</td></tr>
+</table>
+<h3>Click</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Click</td><td class="key">kick.click_level</td><td class="rng">0 .. 1</td><td class="rng">0.2</td></tr>
+<tr><td>Click Tone</td><td class="key">kick.click_tone</td><td class="rng">500 .. 12000 Hz</td><td class="rng">4000</td></tr>
+<tr><td>Click Decay</td><td class="key">kick.click_decay</td><td class="rng">0.5 .. 30 ms</td><td class="rng">3</td></tr>
+</table>
+<h3>Output</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Tone</td><td class="key">kick.tone</td><td class="rng">200 .. 20000 Hz</td><td class="rng">9000</td></tr>
+<tr><td>Level</td><td class="key">kick.level</td><td class="rng">-36 .. 6 dB</td><td class="rng">-2</td></tr>
+<tr><td>Tail Limit</td><td class="key">kick.tail_limit</td><td class="rng">-60 .. 0 dB</td><td class="rng">-24</td></tr>
+</table>
+</div>
+<div class="topic">
+<h2>5. Bass</h2>
+<p>The rolling bass and the kick are one instrument with two halves. The oscillator is a PolyBLEP saw and pulse with a sine sub on the fundamental -- on the fundamental, not an octave down, because the octave-down sub fought the kick -- and the filter is a non-linear zero-delay ladder.</p>
+<p>Kick Lock decides which of the two gives way: Bass follows kick sets the bass start phase to the kick&#x27;s phase at that instant, Kick follows bass trims the kick&#x27;s decay by bisection until the two agree. Off leaves them where they fall, which at 145 BPM means anything between -157 and +165 degrees.</p>
+<p>Pattern and Gate are the note side: which of the five bass patterns the track prefers, and how long a note is as a fraction of its slot. The gate is never allowed to run shorter than half a period of the fundamental.</p>
+<figure><img src="../screenshots/tab-3-bass.png" alt=""><figcaption>The Bass tab.</figcaption></figure>
+<h3>Oscillator</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Wave</td><td class="key">bass.wave</td><td class="rng">0 .. 1</td><td class="rng">0.15</td></tr>
+<tr><td>Pulse Width</td><td class="key">bass.pulse_width</td><td class="rng">0.05 .. 0.95</td><td class="rng">0.5</td></tr>
+<tr><td>Sub</td><td class="key">bass.sub</td><td class="rng">0 .. 1</td><td class="rng">0.6</td></tr>
+<tr><td>Sub Mode</td><td class="key">bass.sub_mode</td><td class="rng">Mixed | Split</td><td class="rng">Split</td></tr>
+<tr><td>Split</td><td class="key">bass.split_ratio</td><td class="rng">1.2 .. 3 x f0</td><td class="rng">2</td></tr>
+<tr><td>Kick Lock</td><td class="key">bass.kick_lock</td><td class="rng">Off | Bass follows kick | Kick follows bass</td><td class="rng">Kick follows bass</td></tr>
+<tr><td>Retrigger</td><td class="key">bass.retrigger</td><td class="rng">off / on</td><td class="rng">on</td></tr>
+<tr><td>Start Phase</td><td class="key">bass.start_phase</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+</table>
+<h3>Filter</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Cutoff</td><td class="key">bass.cutoff</td><td class="rng">20 .. 10000 Hz</td><td class="rng">140</td></tr>
+<tr><td>Resonance</td><td class="key">bass.resonance</td><td class="rng">0 .. 1</td><td class="rng">0.3</td></tr>
+<tr><td>Env Amount</td><td class="key">bass.env_amount</td><td class="rng">0 .. 8 oct</td><td class="rng">4</td></tr>
+<tr><td>Filter Decay</td><td class="key">bass.filter_decay</td><td class="rng">3 .. 1000 ms</td><td class="rng">75</td></tr>
+<tr><td>Key Track</td><td class="key">bass.key_track</td><td class="rng">0 .. 1</td><td class="rng">0.6</td></tr>
+<tr><td>Vel &gt; Cutoff</td><td class="key">bass.vel_to_cutoff</td><td class="rng">0 .. 1</td><td class="rng">0.25</td></tr>
+<tr><td>Drive</td><td class="key">bass.drive</td><td class="rng">0 .. 1</td><td class="rng">0.3</td></tr>
+</table>
+<h3>Amplitude</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Attack</td><td class="key">bass.amp_attack</td><td class="rng">0.1 .. 50 ms</td><td class="rng">0.8</td></tr>
+<tr><td>Decay</td><td class="key">bass.amp_decay</td><td class="rng">5 .. 2000 ms</td><td class="rng">180</td></tr>
+<tr><td>Sustain</td><td class="key">bass.amp_sustain</td><td class="rng">0 .. 1</td><td class="rng">0.55</td></tr>
+<tr><td>Release</td><td class="key">bass.amp_release</td><td class="rng">1 .. 500 ms</td><td class="rng">10</td></tr>
+</table>
+<h3>Duck &amp; Level</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Duck Depth</td><td class="key">bass.duck_depth</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Duck Hold</td><td class="key">bass.duck_hold</td><td class="rng">0 .. 200 ms</td><td class="rng">25</td></tr>
+<tr><td>Duck Release</td><td class="key">bass.duck_release</td><td class="rng">5 .. 500 ms</td><td class="rng">60</td></tr>
+<tr><td>Level</td><td class="key">bass.level</td><td class="rng">-36 .. 6 dB</td><td class="rng">-5</td></tr>
+</table>
+</div>
+<div class="topic">
+<h2>6. Percussion</h2>
+<p>Twelve lanes, each a complete voice: a tone with its own pitch envelope and FM, four modal sets, the 808 square stack, noise with clap bursts, a filter, a low cut, drive, choke and panning. The role of a lane decides what it plays in the groove and which General MIDI note it exports as.</p>
+<p>The patterns are euclidean, rotated to a middle amount of syncopation rather than to none, and the decisions are made per four-bar phrase. Every lane is high-passed at 150 Hz at the least: the bottom of the mix belongs to the kick and the bass, and a tom that reaches into it takes the floor away.</p>
+<figure><img src="../screenshots/tab-4-percussion.png" alt=""><figcaption>The Percussion tab.</figcaption></figure>
+<p>The 12 lanes of the kit share one table; lane 1 is printed here and the others are the same controls under the keys <code>perc2.*</code> to <code>perc12.*</code>.</p>
+<h3>Lane</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Active</td><td class="key">perc1.active</td><td class="rng">off / on</td><td class="rng">on</td></tr>
+<tr><td>Role</td><td class="key">perc1.role</td><td class="rng">Closed Hat | Open Hat | Ride | Crash | Clap | Snare | Rim | Shaker | Tom | Conga | Zap | Blip</td><td class="rng">Closed Hat</td></tr>
+<tr><td>Engine</td><td class="key">perc1.engine</td><td class="rng">Noise | Metal | Modal | Tone | FM</td><td class="rng">Metal</td></tr>
+</table>
+<h3>Source</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Pitch</td><td class="key">perc1.pitch</td><td class="rng">40 .. 12000 Hz</td><td class="rng">400</td></tr>
+<tr><td>Pitch Amount</td><td class="key">perc1.pitch_amount</td><td class="rng">1 .. 16 x</td><td class="rng">1</td></tr>
+<tr><td>Pitch Decay</td><td class="key">perc1.pitch_decay</td><td class="rng">0.5 .. 300 ms</td><td class="rng">10</td></tr>
+<tr><td>FM Ratio</td><td class="key">perc1.fm_ratio</td><td class="rng">0.25 .. 8</td><td class="rng">1.41</td></tr>
+<tr><td>FM Index</td><td class="key">perc1.fm_index</td><td class="rng">0 .. 8</td><td class="rng">0</td></tr>
+<tr><td>Modes</td><td class="key">perc1.mode_set</td><td class="rng">Membrane | Bar | Harmonic</td><td class="rng">Membrane</td></tr>
+<tr><td>Mode Damping</td><td class="key">perc1.mode_damp</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Metal Scale</td><td class="key">perc1.metal_scale</td><td class="rng">0.25 .. 4 x</td><td class="rng">1</td></tr>
+</table>
+<h3>Noise</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Noise</td><td class="key">perc1.noise</td><td class="rng">0 .. 1</td><td class="rng">0.35</td></tr>
+<tr><td>Noise Decay</td><td class="key">perc1.noise_decay</td><td class="rng">2 .. 3000 ms</td><td class="rng">35</td></tr>
+<tr><td>Bursts</td><td class="key">perc1.bursts</td><td class="rng">1 .. 6</td><td class="rng">1</td></tr>
+<tr><td>Burst Spacing</td><td class="key">perc1.burst_spacing</td><td class="rng">2 .. 40 ms</td><td class="rng">10</td></tr>
+</table>
+<h3>Shape</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Decay</td><td class="key">perc1.decay</td><td class="rng">2 .. 3000 ms</td><td class="rng">45</td></tr>
+<tr><td>Filter</td><td class="key">perc1.filter</td><td class="rng">Low Pass | Band Pass | High Pass</td><td class="rng">High Pass</td></tr>
+<tr><td>Cutoff</td><td class="key">perc1.cutoff</td><td class="rng">100 .. 18000 Hz</td><td class="rng">7500</td></tr>
+<tr><td>Resonance</td><td class="key">perc1.resonance</td><td class="rng">0 .. 1</td><td class="rng">0.25</td></tr>
+<tr><td>Low Cut</td><td class="key">perc1.low_cut</td><td class="rng">150 .. 4000 Hz</td><td class="rng">150</td></tr>
+<tr><td>Drive</td><td class="key">perc1.drive</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+</table>
+<h3>Output</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Level</td><td class="key">perc1.level</td><td class="rng">-36 .. 6 dB</td><td class="rng">5</td></tr>
+<tr><td>Pan</td><td class="key">perc1.pan</td><td class="rng">-1 .. 1</td><td class="rng">0.15</td></tr>
+<tr><td>Choke Group</td><td class="key">perc1.choke</td><td class="rng">0 .. 4</td><td class="rng">1</td></tr>
+<tr><td>Shift</td><td class="key">perc1.shift</td><td class="rng">-10 .. 10 ms</td><td class="rng">0</td></tr>
+<tr><td>Density</td><td class="key">perc1.density</td><td class="rng">0 .. 1</td><td class="rng">0.6</td></tr>
+<tr><td>Tune to Key</td><td class="key">perc1.tune</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+</table>
+</div>
+<div class="topic">
+<h2>7. Acid</h2>
+<p>A diode ladder after Zavalishin, solved from the inside out, with an accent that charges a sweep capacitor the way the original did -- three accents in a row open further than one. Slide is an exponential glide into the next note, Squelch a cutoff start value plus a comb tuned to the note&#x27;s period. The tempo delay is in beats, so it follows the set.</p>
+<figure><img src="../screenshots/tab-5-acid.png" alt=""><figcaption>The Acid tab.</figcaption></figure>
+<h3>Voice</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Wave</td><td class="key">acid.wave</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Cutoff</td><td class="key">acid.cutoff</td><td class="rng">80 .. 8000 Hz</td><td class="rng">650</td></tr>
+<tr><td>Resonance</td><td class="key">acid.resonance</td><td class="rng">0 .. 1</td><td class="rng">0.72</td></tr>
+<tr><td>Env Amount</td><td class="key">acid.env_amount</td><td class="rng">0 .. 6 oct</td><td class="rng">4</td></tr>
+<tr><td>Decay</td><td class="key">acid.decay</td><td class="rng">30 .. 2000 ms</td><td class="rng">350</td></tr>
+<tr><td>Accent</td><td class="key">acid.accent</td><td class="rng">0 .. 1</td><td class="rng">0.6</td></tr>
+<tr><td>Slide Time</td><td class="key">acid.slide_time</td><td class="rng">5 .. 200 ms</td><td class="rng">55</td></tr>
+<tr><td>Amp Decay</td><td class="key">acid.amp_decay</td><td class="rng">50 .. 4000 ms</td><td class="rng">900</td></tr>
+<tr><td>Key Track</td><td class="key">acid.key_track</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Drive</td><td class="key">acid.drive</td><td class="rng">0 .. 1</td><td class="rng">0.45</td></tr>
+</table>
+<h3>Squelch</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Squelch</td><td class="key">acid.squelch</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Squelch Start</td><td class="key">acid.squelch_start</td><td class="rng">2 .. 32 x</td><td class="rng">12</td></tr>
+<tr><td>Squelch Time</td><td class="key">acid.squelch_time</td><td class="rng">5 .. 150 ms</td><td class="rng">28</td></tr>
+<tr><td>Comb Mix</td><td class="key">acid.comb_mix</td><td class="rng">0 .. 1</td><td class="rng">0.55</td></tr>
+<tr><td>Comb Feedback</td><td class="key">acid.comb_feedback</td><td class="rng">0 .. 0.97</td><td class="rng">0.82</td></tr>
+<tr><td>Low Cut</td><td class="key">acid.low_cut</td><td class="rng">150 .. 1000 Hz</td><td class="rng">150</td></tr>
+</table>
+<h3>Delay</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Delay Send</td><td class="key">acid.delay_send</td><td class="rng">0 .. 1</td><td class="rng">0.25</td></tr>
+<tr><td>Delay Left</td><td class="key">acid.delay_left</td><td class="rng">1/16 | 1/8 | 3/16 | 1/4 | 3/8 | 1/2</td><td class="rng">3/16</td></tr>
+<tr><td>Delay Right</td><td class="key">acid.delay_right</td><td class="rng">1/16 | 1/8 | 3/16 | 1/4 | 3/8 | 1/2</td><td class="rng">1/4</td></tr>
+<tr><td>Delay Feedback</td><td class="key">acid.delay_feedback</td><td class="rng">0 .. 0.9</td><td class="rng">0.45</td></tr>
+<tr><td>Delay High Pass</td><td class="key">acid.delay_high_pass</td><td class="rng">150 .. 2000 Hz</td><td class="rng">400</td></tr>
+<tr><td>Delay Low Pass</td><td class="key">acid.delay_low_pass</td><td class="rng">800 .. 16000 Hz</td><td class="rng">4500</td></tr>
+</table>
+<h3>Sends &amp; Level</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Room Send</td><td class="key">acid.room_send</td><td class="rng">0 .. 1</td><td class="rng">0.1</td></tr>
+<tr><td>Hall Send</td><td class="key">acid.hall_send</td><td class="rng">0 .. 1</td><td class="rng">0.05</td></tr>
+<tr><td>Duck</td><td class="key">acid.duck</td><td class="rng">0 .. 1</td><td class="rng">0.15</td></tr>
+<tr><td>Level</td><td class="key">acid.level</td><td class="rng">-36 .. 6 dB</td><td class="rng">-9</td></tr>
+</table>
+</div>
+<div class="topic">
+<h2>8. Lead</h2>
+<p>A supersaw after Szabo&#x27;s measurements of the JP-8000 -- the detune curve, the mix law and the random phase per note -- with a dynamic detune that follows the length of the note. The other three oscillator types are a virtual-analogue saw and pulse, two-operator FM and a wavetable.</p>
+<p>Everything but the kick and the bass is high-passed at its own fundamental, which is what keeps eight voices of supersaw out of the bass register.</p>
+<figure><img src="../screenshots/tab-6-lead.png" alt=""><figcaption>The Lead tab.</figcaption></figure>
+<h3>Oscillator</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Oscillator</td><td class="key">lead.osc</td><td class="rng">Supersaw | VA | FM | Wavetable</td><td class="rng">Supersaw</td></tr>
+<tr><td>Detune</td><td class="key">lead.detune</td><td class="rng">0 .. 1</td><td class="rng">0.55</td></tr>
+<tr><td>Mix</td><td class="key">lead.mix</td><td class="rng">0 .. 1</td><td class="rng">0.75</td></tr>
+<tr><td>Dynamic Detune</td><td class="key">lead.dynamic_detune</td><td class="rng">0 .. 1</td><td class="rng">0.6</td></tr>
+<tr><td>Wave</td><td class="key">lead.wave</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Pulse Width</td><td class="key">lead.pulse_width</td><td class="rng">0.05 .. 0.95</td><td class="rng">0.5</td></tr>
+<tr><td>FM Ratio</td><td class="key">lead.fm_ratio</td><td class="rng">0.5 .. 8</td><td class="rng">2</td></tr>
+<tr><td>FM Index</td><td class="key">lead.fm_index</td><td class="rng">0 .. 10</td><td class="rng">2.5</td></tr>
+<tr><td>FM Decay</td><td class="key">lead.fm_decay</td><td class="rng">5 .. 2000 ms</td><td class="rng">250</td></tr>
+<tr><td>Table</td><td class="key">lead.table</td><td class="rng">Classic | Vocal | Glass | PWM | Sync | Formant Saw</td><td class="rng">Vocal</td></tr>
+<tr><td>Position</td><td class="key">lead.position</td><td class="rng">0 .. 1</td><td class="rng">0.3</td></tr>
+<tr><td>Position Env</td><td class="key">lead.pos_env</td><td class="rng">-1 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Position Decay</td><td class="key">lead.pos_decay</td><td class="rng">10 .. 8000 ms</td><td class="rng">1500</td></tr>
+<tr><td>Position LFO</td><td class="key">lead.pos_lfo_depth</td><td class="rng">0 .. 0.5</td><td class="rng">0.15</td></tr>
+<tr><td>LFO Period</td><td class="key">lead.pos_lfo_beats</td><td class="rng">0.25 .. 64 beats</td><td class="rng">16</td></tr>
+</table>
+<h3>Filter</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Cutoff</td><td class="key">lead.cutoff</td><td class="rng">200 .. 18000 Hz</td><td class="rng">10000</td></tr>
+<tr><td>Resonance</td><td class="key">lead.resonance</td><td class="rng">0 .. 1</td><td class="rng">0.15</td></tr>
+<tr><td>Env Amount</td><td class="key">lead.env_amount</td><td class="rng">0 .. 6 oct</td><td class="rng">2</td></tr>
+<tr><td>Filter Decay</td><td class="key">lead.filter_decay</td><td class="rng">5 .. 3000 ms</td><td class="rng">400</td></tr>
+<tr><td>Key Track</td><td class="key">lead.key_track</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>HP Floor</td><td class="key">lead.hp_floor</td><td class="rng">150 .. 400 Hz</td><td class="rng">220</td></tr>
+<tr><td>HP Track</td><td class="key">lead.hp_track</td><td class="rng">0 .. 1 x f0</td><td class="rng">1</td></tr>
+</table>
+<h3>Amplitude</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Attack</td><td class="key">lead.amp_attack</td><td class="rng">0.3 .. 2000 ms</td><td class="rng">4</td></tr>
+<tr><td>Decay</td><td class="key">lead.amp_decay</td><td class="rng">5 .. 4000 ms</td><td class="rng">500</td></tr>
+<tr><td>Sustain</td><td class="key">lead.amp_sustain</td><td class="rng">0 .. 1</td><td class="rng">0.75</td></tr>
+<tr><td>Release</td><td class="key">lead.amp_release</td><td class="rng">5 .. 4000 ms</td><td class="rng">180</td></tr>
+<tr><td>Width</td><td class="key">lead.width</td><td class="rng">0 .. 1</td><td class="rng">0.8</td></tr>
+<tr><td>Velocity</td><td class="key">lead.vel_sens</td><td class="rng">0 .. 1</td><td class="rng">0.4</td></tr>
+</table>
+<h3>Delay</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Delay Send</td><td class="key">lead.delay_send</td><td class="rng">0 .. 1</td><td class="rng">0.3</td></tr>
+<tr><td>Delay Left</td><td class="key">lead.delay_left</td><td class="rng">1/16 | 1/8 | 3/16 | 1/4 | 3/8 | 1/2</td><td class="rng">3/16</td></tr>
+<tr><td>Delay Right</td><td class="key">lead.delay_right</td><td class="rng">1/16 | 1/8 | 3/16 | 1/4 | 3/8 | 1/2</td><td class="rng">1/4</td></tr>
+<tr><td>Delay Feedback</td><td class="key">lead.delay_feedback</td><td class="rng">0 .. 0.9</td><td class="rng">0.4</td></tr>
+<tr><td>Delay High Pass</td><td class="key">lead.delay_high_pass</td><td class="rng">150 .. 2000 Hz</td><td class="rng">350</td></tr>
+<tr><td>Delay Low Pass</td><td class="key">lead.delay_low_pass</td><td class="rng">800 .. 16000 Hz</td><td class="rng">6000</td></tr>
+</table>
+<h3>Sends</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Room Send</td><td class="key">lead.room_send</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Hall Send</td><td class="key">lead.hall_send</td><td class="rng">0 .. 1</td><td class="rng">0.25</td></tr>
+<tr><td>Duck</td><td class="key">lead.duck</td><td class="rng">0 .. 1</td><td class="rng">0.2</td></tr>
+</table>
+<h3>Trance Gate</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Trance Gate</td><td class="key">lead.gate</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Gate Pattern</td><td class="key">lead.gate_pattern</td><td class="rng">Sixteenths | Eighths | Rolling | Gallop | 3-3-2 | Triplets</td><td class="rng">Sixteenths</td></tr>
+<tr><td>Gate Depth</td><td class="key">lead.gate_depth</td><td class="rng">0 .. 1</td><td class="rng">0.85</td></tr>
+<tr><td>Gate Duty</td><td class="key">lead.gate_duty</td><td class="rng">0.05 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Gate Attack</td><td class="key">lead.gate_attack</td><td class="rng">0.5 .. 60 ms</td><td class="rng">3</td></tr>
+<tr><td>Gate Release</td><td class="key">lead.gate_release</td><td class="rng">0.5 .. 120 ms</td><td class="rng">12</td></tr>
+<tr><td>Gate Tone</td><td class="key">lead.gate_tone</td><td class="rng">0 .. 1</td><td class="rng">0.4</td></tr>
+</table>
+<h3>Level</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Level</td><td class="key">lead.level</td><td class="rng">-36 .. 6 dB</td><td class="rng">-4</td></tr>
+</table>
+</div>
+<div class="topic">
+<h2>9. Arp</h2>
+<p>The same engine as the lead, with its own knobs. The arpeggio runs on chord tones, and when its pitch range would overlap the lead&#x27;s by more than two semitones it is octaved away: two voices playing in the same two octaves mask each other, and the composer checks that before it writes the notes.</p>
+<figure><img src="../screenshots/tab-7-arp.png" alt=""><figcaption>The Arp tab.</figcaption></figure>
+<h3>Oscillator</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Oscillator</td><td class="key">arp.osc</td><td class="rng">Supersaw | VA | FM | Wavetable</td><td class="rng">Supersaw</td></tr>
+<tr><td>Detune</td><td class="key">arp.detune</td><td class="rng">0 .. 1</td><td class="rng">0.3</td></tr>
+<tr><td>Mix</td><td class="key">arp.mix</td><td class="rng">0 .. 1</td><td class="rng">0.6</td></tr>
+<tr><td>Dynamic Detune</td><td class="key">arp.dynamic_detune</td><td class="rng">0 .. 1</td><td class="rng">0.6</td></tr>
+<tr><td>Wave</td><td class="key">arp.wave</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Pulse Width</td><td class="key">arp.pulse_width</td><td class="rng">0.05 .. 0.95</td><td class="rng">0.5</td></tr>
+<tr><td>FM Ratio</td><td class="key">arp.fm_ratio</td><td class="rng">0.5 .. 8</td><td class="rng">2</td></tr>
+<tr><td>FM Index</td><td class="key">arp.fm_index</td><td class="rng">0 .. 10</td><td class="rng">2.5</td></tr>
+<tr><td>FM Decay</td><td class="key">arp.fm_decay</td><td class="rng">5 .. 2000 ms</td><td class="rng">250</td></tr>
+<tr><td>Table</td><td class="key">arp.table</td><td class="rng">Classic | Vocal | Glass | PWM | Sync | Formant Saw</td><td class="rng">Vocal</td></tr>
+<tr><td>Position</td><td class="key">arp.position</td><td class="rng">0 .. 1</td><td class="rng">0.3</td></tr>
+<tr><td>Position Env</td><td class="key">arp.pos_env</td><td class="rng">-1 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Position Decay</td><td class="key">arp.pos_decay</td><td class="rng">10 .. 8000 ms</td><td class="rng">1500</td></tr>
+<tr><td>Position LFO</td><td class="key">arp.pos_lfo_depth</td><td class="rng">0 .. 0.5</td><td class="rng">0.15</td></tr>
+<tr><td>LFO Period</td><td class="key">arp.pos_lfo_beats</td><td class="rng">0.25 .. 64 beats</td><td class="rng">16</td></tr>
+</table>
+<h3>Filter</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Cutoff</td><td class="key">arp.cutoff</td><td class="rng">200 .. 18000 Hz</td><td class="rng">3500</td></tr>
+<tr><td>Resonance</td><td class="key">arp.resonance</td><td class="rng">0 .. 1</td><td class="rng">0.3</td></tr>
+<tr><td>Env Amount</td><td class="key">arp.env_amount</td><td class="rng">0 .. 6 oct</td><td class="rng">2.8</td></tr>
+<tr><td>Filter Decay</td><td class="key">arp.filter_decay</td><td class="rng">5 .. 3000 ms</td><td class="rng">140</td></tr>
+<tr><td>Key Track</td><td class="key">arp.key_track</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>HP Floor</td><td class="key">arp.hp_floor</td><td class="rng">150 .. 400 Hz</td><td class="rng">220</td></tr>
+<tr><td>HP Track</td><td class="key">arp.hp_track</td><td class="rng">0 .. 1 x f0</td><td class="rng">1</td></tr>
+</table>
+<h3>Amplitude</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Attack</td><td class="key">arp.amp_attack</td><td class="rng">0.3 .. 2000 ms</td><td class="rng">0.8</td></tr>
+<tr><td>Decay</td><td class="key">arp.amp_decay</td><td class="rng">5 .. 4000 ms</td><td class="rng">220</td></tr>
+<tr><td>Sustain</td><td class="key">arp.amp_sustain</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Release</td><td class="key">arp.amp_release</td><td class="rng">5 .. 4000 ms</td><td class="rng">90</td></tr>
+<tr><td>Width</td><td class="key">arp.width</td><td class="rng">0 .. 1</td><td class="rng">0.6</td></tr>
+<tr><td>Velocity</td><td class="key">arp.vel_sens</td><td class="rng">0 .. 1</td><td class="rng">0.4</td></tr>
+</table>
+<h3>Delay</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Delay Send</td><td class="key">arp.delay_send</td><td class="rng">0 .. 1</td><td class="rng">0.35</td></tr>
+<tr><td>Delay Left</td><td class="key">arp.delay_left</td><td class="rng">1/16 | 1/8 | 3/16 | 1/4 | 3/8 | 1/2</td><td class="rng">3/16</td></tr>
+<tr><td>Delay Right</td><td class="key">arp.delay_right</td><td class="rng">1/16 | 1/8 | 3/16 | 1/4 | 3/8 | 1/2</td><td class="rng">1/8</td></tr>
+<tr><td>Delay Feedback</td><td class="key">arp.delay_feedback</td><td class="rng">0 .. 0.9</td><td class="rng">0.4</td></tr>
+<tr><td>Delay High Pass</td><td class="key">arp.delay_high_pass</td><td class="rng">150 .. 2000 Hz</td><td class="rng">350</td></tr>
+<tr><td>Delay Low Pass</td><td class="key">arp.delay_low_pass</td><td class="rng">800 .. 16000 Hz</td><td class="rng">6000</td></tr>
+</table>
+<h3>Sends</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Room Send</td><td class="key">arp.room_send</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Hall Send</td><td class="key">arp.hall_send</td><td class="rng">0 .. 1</td><td class="rng">0.15</td></tr>
+<tr><td>Duck</td><td class="key">arp.duck</td><td class="rng">0 .. 1</td><td class="rng">0.25</td></tr>
+</table>
+<h3>Trance Gate</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Trance Gate</td><td class="key">arp.gate</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Gate Pattern</td><td class="key">arp.gate_pattern</td><td class="rng">Sixteenths | Eighths | Rolling | Gallop | 3-3-2 | Triplets</td><td class="rng">Sixteenths</td></tr>
+<tr><td>Gate Depth</td><td class="key">arp.gate_depth</td><td class="rng">0 .. 1</td><td class="rng">0.85</td></tr>
+<tr><td>Gate Duty</td><td class="key">arp.gate_duty</td><td class="rng">0.05 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Gate Attack</td><td class="key">arp.gate_attack</td><td class="rng">0.5 .. 60 ms</td><td class="rng">3</td></tr>
+<tr><td>Gate Release</td><td class="key">arp.gate_release</td><td class="rng">0.5 .. 120 ms</td><td class="rng">12</td></tr>
+<tr><td>Gate Tone</td><td class="key">arp.gate_tone</td><td class="rng">0 .. 1</td><td class="rng">0.4</td></tr>
+</table>
+<h3>Level</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Level</td><td class="key">arp.level</td><td class="rng">-36 .. 6 dB</td><td class="rng">-5</td></tr>
+</table>
+</div>
+<div class="topic">
+<h2>10. Pad</h2>
+<p>Four-voice voicings with the smallest voice movement between chords, through the wavetable engine. The pads carry the blocks that have no lead and no acid, and the trance gate gives them their movement.</p>
+<figure><img src="../screenshots/tab-8-pad.png" alt=""><figcaption>The Pad tab.</figcaption></figure>
+<h3>Oscillator</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Oscillator</td><td class="key">pad.osc</td><td class="rng">Supersaw | VA | FM | Wavetable</td><td class="rng">Wavetable</td></tr>
+<tr><td>Detune</td><td class="key">pad.detune</td><td class="rng">0 .. 1</td><td class="rng">0.35</td></tr>
+<tr><td>Mix</td><td class="key">pad.mix</td><td class="rng">0 .. 1</td><td class="rng">0.7</td></tr>
+<tr><td>Dynamic Detune</td><td class="key">pad.dynamic_detune</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Wave</td><td class="key">pad.wave</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Pulse Width</td><td class="key">pad.pulse_width</td><td class="rng">0.05 .. 0.95</td><td class="rng">0.5</td></tr>
+<tr><td>FM Ratio</td><td class="key">pad.fm_ratio</td><td class="rng">0.5 .. 8</td><td class="rng">2</td></tr>
+<tr><td>FM Index</td><td class="key">pad.fm_index</td><td class="rng">0 .. 10</td><td class="rng">2.5</td></tr>
+<tr><td>FM Decay</td><td class="key">pad.fm_decay</td><td class="rng">5 .. 2000 ms</td><td class="rng">250</td></tr>
+<tr><td>Table</td><td class="key">pad.table</td><td class="rng">Classic | Vocal | Glass | PWM | Sync | Formant Saw</td><td class="rng">Vocal</td></tr>
+<tr><td>Position</td><td class="key">pad.position</td><td class="rng">0 .. 1</td><td class="rng">0.3</td></tr>
+<tr><td>Position Env</td><td class="key">pad.pos_env</td><td class="rng">-1 .. 1</td><td class="rng">0.3</td></tr>
+<tr><td>Position Decay</td><td class="key">pad.pos_decay</td><td class="rng">10 .. 8000 ms</td><td class="rng">3000</td></tr>
+<tr><td>Position LFO</td><td class="key">pad.pos_lfo_depth</td><td class="rng">0 .. 0.5</td><td class="rng">0.15</td></tr>
+<tr><td>LFO Period</td><td class="key">pad.pos_lfo_beats</td><td class="rng">0.25 .. 64 beats</td><td class="rng">16</td></tr>
+</table>
+<h3>Filter</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Cutoff</td><td class="key">pad.cutoff</td><td class="rng">200 .. 18000 Hz</td><td class="rng">5000</td></tr>
+<tr><td>Resonance</td><td class="key">pad.resonance</td><td class="rng">0 .. 1</td><td class="rng">0.1</td></tr>
+<tr><td>Env Amount</td><td class="key">pad.env_amount</td><td class="rng">0 .. 6 oct</td><td class="rng">0</td></tr>
+<tr><td>Filter Decay</td><td class="key">pad.filter_decay</td><td class="rng">5 .. 3000 ms</td><td class="rng">400</td></tr>
+<tr><td>Key Track</td><td class="key">pad.key_track</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>HP Floor</td><td class="key">pad.hp_floor</td><td class="rng">150 .. 400 Hz</td><td class="rng">200</td></tr>
+<tr><td>HP Track</td><td class="key">pad.hp_track</td><td class="rng">0 .. 1 x f0</td><td class="rng">1</td></tr>
+</table>
+<h3>Amplitude</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Attack</td><td class="key">pad.amp_attack</td><td class="rng">0.3 .. 2000 ms</td><td class="rng">700</td></tr>
+<tr><td>Decay</td><td class="key">pad.amp_decay</td><td class="rng">5 .. 4000 ms</td><td class="rng">2000</td></tr>
+<tr><td>Sustain</td><td class="key">pad.amp_sustain</td><td class="rng">0 .. 1</td><td class="rng">1</td></tr>
+<tr><td>Release</td><td class="key">pad.amp_release</td><td class="rng">5 .. 4000 ms</td><td class="rng">1800</td></tr>
+<tr><td>Width</td><td class="key">pad.width</td><td class="rng">0 .. 1</td><td class="rng">1</td></tr>
+<tr><td>Velocity</td><td class="key">pad.vel_sens</td><td class="rng">0 .. 1</td><td class="rng">0.4</td></tr>
+</table>
+<h3>Delay</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Delay Send</td><td class="key">pad.delay_send</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Delay Left</td><td class="key">pad.delay_left</td><td class="rng">1/16 | 1/8 | 3/16 | 1/4 | 3/8 | 1/2</td><td class="rng">3/16</td></tr>
+<tr><td>Delay Right</td><td class="key">pad.delay_right</td><td class="rng">1/16 | 1/8 | 3/16 | 1/4 | 3/8 | 1/2</td><td class="rng">1/4</td></tr>
+<tr><td>Delay Feedback</td><td class="key">pad.delay_feedback</td><td class="rng">0 .. 0.9</td><td class="rng">0.4</td></tr>
+<tr><td>Delay High Pass</td><td class="key">pad.delay_high_pass</td><td class="rng">150 .. 2000 Hz</td><td class="rng">350</td></tr>
+<tr><td>Delay Low Pass</td><td class="key">pad.delay_low_pass</td><td class="rng">800 .. 16000 Hz</td><td class="rng">6000</td></tr>
+</table>
+<h3>Sends</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Room Send</td><td class="key">pad.room_send</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Hall Send</td><td class="key">pad.hall_send</td><td class="rng">0 .. 1</td><td class="rng">0.45</td></tr>
+<tr><td>Duck</td><td class="key">pad.duck</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+</table>
+<h3>Trance Gate</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Trance Gate</td><td class="key">pad.gate</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Gate Pattern</td><td class="key">pad.gate_pattern</td><td class="rng">Sixteenths | Eighths | Rolling | Gallop | 3-3-2 | Triplets</td><td class="rng">Sixteenths</td></tr>
+<tr><td>Gate Depth</td><td class="key">pad.gate_depth</td><td class="rng">0 .. 1</td><td class="rng">0.85</td></tr>
+<tr><td>Gate Duty</td><td class="key">pad.gate_duty</td><td class="rng">0.05 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Gate Attack</td><td class="key">pad.gate_attack</td><td class="rng">0.5 .. 60 ms</td><td class="rng">3</td></tr>
+<tr><td>Gate Release</td><td class="key">pad.gate_release</td><td class="rng">0.5 .. 120 ms</td><td class="rng">12</td></tr>
+<tr><td>Gate Tone</td><td class="key">pad.gate_tone</td><td class="rng">0 .. 1</td><td class="rng">0.4</td></tr>
+</table>
+<h3>Level</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Level</td><td class="key">pad.level</td><td class="rng">-36 .. 6 dB</td><td class="rng">-16</td></tr>
+</table>
+</div>
+<div class="topic">
+<h2>11. SFX / FX</h2>
+<p>The effect generator makes risers, downlifters, impacts, sweeps, formant shots, reverse swells and zaps; the composer places them at the form&#x27;s boundaries -- a riser over the last eight bars of a buildup, ending exactly on the drop, the formant shot on the last beat of the pre-drop break, a descending sweep into the drop.</p>
+<p>The two send effects are a short room and a long hall, both feedback delay networks. Their returns are ducked with the kick like everything else, and high-passed: a reverb tail in the bass register is mud.</p>
+<figure><img src="../screenshots/tab-9-sfx-fx.png" alt=""><figcaption>The SFX / FX tab.</figcaption></figure>
+<h3>Effect Generator</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Level</td><td class="key">sfx.level</td><td class="rng">-36 .. 6 dB</td><td class="rng">-12</td></tr>
+<tr><td>Noise</td><td class="key">sfx.noise</td><td class="rng">0 .. 1</td><td class="rng">0.6</td></tr>
+<tr><td>Resonance</td><td class="key">sfx.resonance</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Brightness</td><td class="key">sfx.brightness</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Impact Decay</td><td class="key">sfx.impact_decay</td><td class="rng">200 .. 4000 ms</td><td class="rng">1400</td></tr>
+<tr><td>Vowel</td><td class="key">sfx.vowel</td><td class="rng">0 .. 1</td><td class="rng">0.3</td></tr>
+<tr><td>Swell Decay</td><td class="key">sfx.swell_decay</td><td class="rng">200 .. 6000 ms</td><td class="rng">1500</td></tr>
+<tr><td>Width</td><td class="key">sfx.width</td><td class="rng">0 .. 1</td><td class="rng">0.7</td></tr>
+<tr><td>Room Send</td><td class="key">sfx.room_send</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Hall Send</td><td class="key">sfx.hall_send</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+<tr><td>Duck</td><td class="key">sfx.duck</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+</table>
+<h3>Room</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Room Size</td><td class="key">fx.room_size</td><td class="rng">0.3 .. 3</td><td class="rng">0.5</td></tr>
+<tr><td>Room Decay</td><td class="key">fx.room_decay</td><td class="rng">0.1 .. 4 s</td><td class="rng">0.7</td></tr>
+<tr><td>Room Damping</td><td class="key">fx.room_damping</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+</table>
+<h3>Hall</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Hall Size</td><td class="key">fx.hall_size</td><td class="rng">0.3 .. 3</td><td class="rng">1.6</td></tr>
+<tr><td>Hall Decay</td><td class="key">fx.hall_decay</td><td class="rng">0.3 .. 20 s</td><td class="rng">4.5</td></tr>
+<tr><td>Hall Damping</td><td class="key">fx.hall_damping</td><td class="rng">0 .. 1</td><td class="rng">0.45</td></tr>
+<tr><td>Hall Pre-Delay</td><td class="key">fx.hall_pre_delay</td><td class="rng">0 .. 0.5 beats</td><td class="rng">0.25</td></tr>
+</table>
+<h3>Returns</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Return Low Cut</td><td class="key">fx.low_cut</td><td class="rng">150 .. 1000 Hz</td><td class="rng">300</td></tr>
+<tr><td>Return High Cut</td><td class="key">fx.high_cut</td><td class="rng">1000 .. 20000 Hz</td><td class="rng">9000</td></tr>
+<tr><td>Room Return</td><td class="key">fx.room_return</td><td class="rng">-36 .. 6 dB</td><td class="rng">-6</td></tr>
+<tr><td>Hall Return</td><td class="key">fx.hall_return</td><td class="rng">-36 .. 6 dB</td><td class="rng">-6</td></tr>
+<tr><td>Return Duck</td><td class="key">fx.return_duck</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+</table>
+</div>
+<div class="topic">
+<h2>12. Mixer / Master</h2>
+<p>Level, mute and sends per part, the sidechain matrix, and the master chain: bus compressor, mono bass, a two-times oversampled knee clipper, a lookahead true-peak limiter and a safety clip, metered to ITU-R BS.1770.</p>
+<p>Auto Gain renders four four-bar windows of the track through the whole master chain, measures them and offsets the master gain so that the output meets the loudness target. It runs when a track is planned, so it uses the knobs as they stand at that moment.</p>
+<figure><img src="../screenshots/tab-10-mixer-master.png" alt=""><figcaption>The Mixer / Master tab.</figcaption></figure>
+<h3>Channels</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Kick Mute</td><td class="key">mix.kick_mute</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Bass Mute</td><td class="key">mix.bass_mute</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Track Gain</td><td class="key">mix.track_gain</td><td class="rng">-12 .. 12 dB</td><td class="rng">0</td></tr>
+<tr><td>Perc Mute</td><td class="key">mix.perc_mute</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Perc Level</td><td class="key">mix.perc_level</td><td class="rng">-24 .. 12 dB</td><td class="rng">1</td></tr>
+<tr><td>Acid Mute</td><td class="key">mix.acid_mute</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Acid Level</td><td class="key">mix.acid_level</td><td class="rng">-24 .. 12 dB</td><td class="rng">0</td></tr>
+<tr><td>Lead Mute</td><td class="key">mix.lead_mute</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Lead Level</td><td class="key">mix.lead_level</td><td class="rng">-24 .. 12 dB</td><td class="rng">0</td></tr>
+<tr><td>Arp Mute</td><td class="key">mix.arp_mute</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Arp Level</td><td class="key">mix.arp_level</td><td class="rng">-24 .. 12 dB</td><td class="rng">0</td></tr>
+<tr><td>Pad Mute</td><td class="key">mix.pad_mute</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Pad Level</td><td class="key">mix.pad_level</td><td class="rng">-24 .. 12 dB</td><td class="rng">0</td></tr>
+<tr><td>SFX Mute</td><td class="key">mix.sfx_mute</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>SFX Level</td><td class="key">mix.sfx_level</td><td class="rng">-24 .. 12 dB</td><td class="rng">0</td></tr>
+<tr><td>Perc Room</td><td class="key">mix.perc_room</td><td class="rng">0 .. 1</td><td class="rng">0.12</td></tr>
+<tr><td>Perc Hall</td><td class="key">mix.perc_hall</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+</table>
+<h3>Sidechain</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Duck Attack</td><td class="key">mix.duck_attack</td><td class="rng">0.5 .. 30 ms</td><td class="rng">2</td></tr>
+<tr><td>Duck Hold</td><td class="key">mix.duck_hold</td><td class="rng">0 .. 200 ms</td><td class="rng">20</td></tr>
+<tr><td>Duck Release</td><td class="key">mix.duck_release</td><td class="rng">10 .. 800 ms</td><td class="rng">180</td></tr>
+</table>
+<h3>Gain</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Gain</td><td class="key">master.gain</td><td class="rng">-24 .. 24 dB</td><td class="rng">0</td></tr>
+<tr><td>Ceiling</td><td class="key">master.ceiling</td><td class="rng">-12 .. 0 dBTP</td><td class="rng">-1</td></tr>
+<tr><td>Clip</td><td class="key">master.clip</td><td class="rng">off / on</td><td class="rng">on</td></tr>
+</table>
+<h3>Compressor</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Comp Threshold</td><td class="key">master.comp_threshold</td><td class="rng">-40 .. 0 dB</td><td class="rng">-8</td></tr>
+<tr><td>Comp Ratio</td><td class="key">master.comp_ratio</td><td class="rng">1 .. 10 :1</td><td class="rng">1.5</td></tr>
+<tr><td>Comp Knee</td><td class="key">master.comp_knee</td><td class="rng">0 .. 24 dB</td><td class="rng">6</td></tr>
+<tr><td>Comp Attack</td><td class="key">master.comp_attack</td><td class="rng">0.1 .. 100 ms</td><td class="rng">30</td></tr>
+<tr><td>Comp Release</td><td class="key">master.comp_release</td><td class="rng">10 .. 2000 ms</td><td class="rng">200</td></tr>
+</table>
+<h3>Output</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Mono Bass</td><td class="key">master.mono_bass</td><td class="rng">40 .. 300 Hz</td><td class="rng">120</td></tr>
+<tr><td>Limiter</td><td class="key">master.limiter</td><td class="rng">off / on</td><td class="rng">on</td></tr>
+<tr><td>Limiter Release</td><td class="key">master.limiter_release</td><td class="rng">2 .. 1000 ms</td><td class="rng">20</td></tr>
+<tr><td>Target Loudness</td><td class="key">master.target_lufs</td><td class="rng">-20 .. -4 LUFS</td><td class="rng">-9</td></tr>
+<tr><td>Auto Gain</td><td class="key">master.auto_gain</td><td class="rng">off / on</td><td class="rng">on</td></tr>
+<tr><td>Clipper</td><td class="key">master.clipper</td><td class="rng">off / on</td><td class="rng">on</td></tr>
+<tr><td>Clipper Threshold</td><td class="key">master.clipper_threshold</td><td class="rng">-6 .. 6 dB</td><td class="rng">0</td></tr>
+</table>
+</div>
+<div class="topic">
+<h2>13. Perform</h2>
+<p>Four macros, meant for a hand rather than a mouse.</p>
+<p>They are immediate parameter moves rather than score events, and that is measured rather than convenient: the engine&#x27;s control ring is first in, first out and the composer keeps it filled eight bars ahead, so an event pushed into it now would not be heard for about thirteen seconds. A macro therefore writes the knob itself, as an offset in the knob&#x27;s normalised domain, and puts it back exactly where it was when you let go. The composer&#x27;s own ramps keep riding on top.</p>
+<p>Drop-out is a press, not a hold: it takes the kick and the bass out and lets them back in on the next bar line. Stutter is held. Filter Sweep and Gate Depth stay where you leave them, and a double click puts them back to neutral.</p>
+<figure><img src="../screenshots/tab-11-perform.png" alt=""><figcaption>The Perform tab.</figcaption></figure>
+<h4>Filter Sweep</h4>
+<p>Opens or closes the acid, lead and arp filters together, by up to a third of their range in each direction. Centre is neutral.</p>
+<p><i>Moves:</i> <code>acid.cutoff +0.35, lead.cutoff +0.35, arp.cutoff +0.35</code></p>
+<h4>Gate Depth</h4>
+<p>Switches the trance gate on for lead, arp and pad and sets its depth; at 1.0 the gate closes completely between its steps.</p>
+<p><i>Moves:</i> <code>lead.gate = 1, lead.gate_depth = 1, arp.gate = 1, arp.gate_depth = 1, pad.gate = 1, pad.gate_depth = 1</code></p>
+<h4>Drop-out (press)</h4>
+<p>Takes kick and bass out until the next bar line and lets them back in on the downbeat. One press, one bar.</p>
+<p><i>Moves:</i> <code>mix.kick_mute = 1, mix.bass_mute = 1</code></p>
+<h4>Stutter (press)</h4>
+<p>Held: lead, arp and pad run through the gate on sixteenths at full depth and the shortest duty. Phosphene has no buffer repeat, so this is the gate&#x27;s stutter, not a tape one.</p>
+<p><i>Moves:</i> <code>lead.gate = 1, lead.gate_pattern = 0, lead.gate_depth = 1, lead.gate_duty = 0, arp.gate = 1, arp.gate_pattern = 0, arp.gate_depth = 1, arp.gate_duty = 0, pad.gate = 1, pad.gate_pattern = 0, pad.gate_depth = 1, pad.gate_duty = 0</code></p>
+</div>
+<footer>Phosphene 0.1.0 &middot; generated from the plugin: the parameter tables and the pictures come out of the running editor (Tools/manual/make_manual.py).</footer>
+</body></html>

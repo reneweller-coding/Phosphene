@@ -24,6 +24,8 @@ target_sources(Phosphene PRIVATE
     PluginEditor.cpp
     EditorLayout.cpp
     EditorSetTab.cpp
+    EditorArrange.cpp
+    EditorPerform.cpp
     PhospheneLookAndFeel.cpp)
 
 target_compile_definitions(Phosphene PUBLIC

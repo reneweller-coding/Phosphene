@@ -683,6 +683,49 @@ Sekunden davon, und mit 47 lag ein Lauf unter der Schwelle, ohne dass etwas fals
 Nächster Schritt: Phase 8 (Tokenisierung, Transformer gegen SSM per Held-out-NLL, C++-Inferenz) und Phase 9
 (Hörrunden je Erzeuger, pluginval, Gerätemessung auf der Quest, Arrange-Zeitleiste, Nachkalibrierung der
 Präsenz um 2,4 dB, Release).
+
+**16.09.2026, Phase 6 (zweite Runde): Arrange-Zeitleiste, Kuratieren in der Oberfläche,
+Perform-Makros, pluginval, Handbuch-Generator.** Die vier offenen Punkte aus dem Phase-6-Block oben,
+gebaut im Arbeitsbaum `phase6-arrange` gegen master 0430a48. Die Oberfläche hat jetzt zwölf Tabs
+(Arrange hinter Set, Perform am Ende); an `Core/` ist **keine Zeile** geändert.
+
+| Baustein | Umsetzung | Messung |
+|---|---|---|
+| Arrange-Zeitleiste (8.1) | Zwei Ebenen, beide vermessen statt gesetzt: oben ein **Set-Streifen**, in dem ein Pixel viele Takte ist — die Tracks als Blöcke, der Energiebogen der Nacht darüber, der Spielkopf darin; darunter **eine Zeile je Track**, in der jeder Track die volle Breite bekommt, damit eine Sektion lesbar bleibt, egal wie lang das Set ist (in einem einzigen Lineal über 2300 Takte wäre eine 16-Takt-Sektion acht Pixel breit). Farben sind die Sektionskategorien aus 6.2. Die Daten sind die vom Composer-Thread veröffentlichten `TrackPlan`s (`form.section[]`), auf dem Message-Thread kopiert — der Editor fragt nie den Komponisten und wartet nie auf einen Probe-Render. Gezeichnet wird einmal in ein `juce::Image`; ein Tick schiebt nur den Spielkopf darüber, und neu gezeichnet wird erst, wenn ein Hash über alles Sichtbare sich ändert | 9 Tracks, 2304 Takte, 90 Sektionen: **voller Neuaufbau 8,1 bis 8,3 ms, ein Tick 0,44 bis 0,61 ms** (zwei Läufe, der zweite neben einem Render eines anderen Agenten). Bei 12 Hz sind das 0,5 bis 0,7 % eines Kerns, solange der Plan steht. Im Host-Test über die ganze Höhe abgetastet: alle 9 Zeilen anklickbar, alle 9 Track-Schlösser und die Sektions-Knöpfe erreichbar |
+| Sperren und Neuwürfeln (6.8) in der Oberfläche | Vorhängeschloss und Würfel an **jedem Track und jeder Sektion** der Zeitleiste, dazu vier Knöpfe für das, was keinen Block hat (Set neu würfeln, diesen Track, diesen Track sperren, alle Sperren löschen). `phos::Composer` gehört dem Composer-Thread und ein Neuwürfeln wirft alle Pläne weg, deshalb schickt der Editor **Kommandos durch einen lock-freien Ring** und zeichnet aus einem eigenen Spiegel; der Composer-Thread führt sie aus und fordert einen Neustart an dem Takt an, auf dem der Spielkopf beim Druck stand | Host-Test: Track 1 neu gewürfelt → Track 1 ändert sich, **Track 0 bleibt in `melodySeed`, `formSeed`, `percSeed` und Tempo identisch**; ein gesperrter Track lässt sich nicht würfeln; das Schloss schaltet sofort um, ohne auf die Planung zu warten |
+| Perform-Makros (8.1) | Vier, weil ein Makro einen Namen verdienen muss: **Filter Sweep** (−1…+1, Acid-, Lead- und Arp-Cutoff zusammen um bis zu 0,35 des normierten Bereichs), **Gate Depth** (0…1, Trance-Gate von Lead, Arp und Pad an und so tief), **Drop-out** (ein Druck: Kick und Bass weg bis zur nächsten Taktlinie), **Stutter** (gehalten: Lead, Arp und Pad durch das Gate auf Sechzehnteln, volle Tiefe, kürzeste Öffnung). Jedes nennt seine Parameter in einer Tabelle, die die Seite *und* das Handbuch aus derselben Funktion drucken | Host-Test: Filter Sweep bewegt den Acid-Cutoff von 650 Hz auf **130 bzw. 3258 Hz** (±2,3 Oktaven) und stellt den Knopf beim Loslassen **exakt auf 650 Hz** zurück; Stutter schaltet `lead.gate` mit Tiefe 1,00; **Drop-out macht den Takt um 5,8 dB leiser** und lässt auf der nächsten Taktlinie von selbst los |
+| Warum die Makros **keine** Steuerereignisse sind | Gemessen, nicht bequem entschieden: der Steuer-Ring der Engine ist streng FIFO (`Engine::process` sieht nur den Kopf) und der Conductor hält ihn acht Takte voraus gefüllt. Ein jetzt eingeworfenes Ereignis läge hinter allem, was schon drinsteht, würde bei 145 BPM erst **rund 13 s später** gehört und bis dahin jedes Ereignis vor sich her schieben. Ein Makro schreibt deshalb den **Knopf**: in dessen normiertem Bereich, als Abstand zu dem Wert, den er hatte, und beim Loslassen exakt zurück. Das ist die Sprache eines `ControlEvent`, nur ohne dessen Terminkalender; die Offsets des Komponisten reiten weiter obendrauf | 8 Takte × 4 Beats / 145 BPM = 13,2 s; die Ringtiefe steht als `kHorizonBeats` in `PluginProcessor.cpp` |
+| `pluginval` | Von Tracktions GitHub-Releases geholt (**nicht eingecheckt**, liegt im Scratchpad), gegen das gebaute VST3 gefahren, ohne `PHOS_MUTE`: `pluginval.exe --strictness-level 10 --timeout-ms 900000 --validate build\Plugin\Phosphene_artefacts\Release\VST3\Phosphene.vst3` | **pluginval 1.0.4, Strenge 10, 25 Testabschnitte, `SUCCESS`, Rückgabewert 0** — keine Beanstandung, auch nicht in "Fuzz parameters", "Non-releasing audio processing", "Plugin state restoration" und den Bus-Runden. Die Protokollzeile `Reported latency: 0` ist kein Fehler: pluginval liest die Latenz vor `prepareToPlay`, und der Lookahead des Limiters steht erst danach fest (der Host-Test prüft ihn danach und findet ihn > 0) |
+| Handbuch-Generator | Zweistufig wie bei Noctuary: `PHOS_MANUAL=<ordner>` lässt die **Oberfläche selbst** ein Bild je Tab und ein `manual.json` schreiben — jeden Eintrag der Deskriptor-Tabellen (Schlüssel, Name, Einheit, Bereich, Vorgabe, Kurve, Auswahlnamen) und **die Gruppen, die jede Seite wirklich gebaut hat**, aus den `ControlPage`s zurückgelesen; `Tools/manual/make_manual.py` macht daraus HTML und, über Edge `--headless=new` mit frischem Profilordner, ein PDF. Handgeschrieben ist nur die Prosa in `Tools/manual/chapters.txt` | `docs/manual/Phosphene-Manual.html` (61 kB) und `Phosphene-Manual.pdf` (1,4 MB), 13 Kapitel, 614 Parameter; die Bilder bleiben in `docs/screenshots/` und liegen nicht ein zweites Mal daneben |
+| Die Falle der letzten Runde, automatisiert | `manual.json` trägt die Liste **aller** Parameter und die Liste derer, die auf irgendeiner Seite stehen (alle zwölf Percussion-Lanes eingerechnet). Der Generator zieht sie voneinander ab und **druckt kein vollständiges Handbuch**, wenn etwas übrig bleibt, sondern nennt die Lücken und gibt 1 zurück | heute **0 von 614** Parametern ohne Platz in der Oberfläche |
+| `.phosset` im Plugin | "Export set…"/"Load set…" schrieben eine eigene Kommentarform und verloren damit genau das, was die Kuratier-Schleife erzeugt. Beide gehen jetzt durch `phos::writeSetFile`/`readSetFile` (7) | Host-Test: die geschriebene Datei beginnt mit `phosset 1` und enthält `lock.track.2=1` und `reroll.track.3=1`; eine zweite Instanz liest Seed, Knöpfe und Sperren zurück |
+| Ein Nebenbefund | Alles, was in den Steuer-Ring schreibt, hält jetzt `engineLock_` — `PlugConductor::seek` tat es nicht. Solange nur der Composer-Thread schreibt, ist das folgenlos; als Regel formuliert ist es die Bedingung, unter der der Ring ein Single-Producer-Ring bleibt | — |
+
+*Bewusste Abweichungen und Grenzen.*
+- **Stutter ist der Gate-Stutter**, kein Bandwiederholer: Phosphene hat keinen Puffer-Repeat (Phase 4,
+  "nicht gebaut"). Das Handbuch sagt das in dem Satz, der das Makro beschreibt.
+- **Ein Makro schreibt den Knopf.** Wer währenddessen denselben Knopf dreht, verliert seine Änderung
+  beim Loslassen; ein Zustand, der mit gehaltenem Makro gespeichert wird, speichert den ausgelenkten
+  Wert. Beides ist der Preis dafür, dass ein Makro sofort klingt.
+- **Das Loslassen des Drop-out** liegt auf dem Message-Thread-Takt von 33 ms, also innerhalb eines
+  64tels bei 145 BPM auf der Taktlinie. Sample-genau wäre es nur über die Partitur zu haben, und die
+  ist acht Takte voraus.
+- **Die Zeitleiste zeigt, was geplant ist.** Der Composer-Thread plant 24 Tracks voraus, einen je
+  Runde, und ein Track kostet rund zwei Sekunden; nach einer halben Minute steht ein 60-Minuten-Set
+  vollständig da. `PHOS_SHOT_WAIT=<sekunden>` gibt den Bildläufen diese Zeit (die Bilder in
+  `docs/screenshots/` sind mit 26 s erzeugt, also mit fünf geplanten Tracks).
+- **Nicht gebaut:** Sperre und Würfel für Percussion-Lanes (die Einheit `lane` gibt es im Kern, in der
+  Oberfläche fehlt ihr der Ort — sie gehört auf den Percussion-Tab, nicht auf die Zeitleiste), die
+  Instrumentierungs-Matrix als eigene Spur der Zeitleiste, MIDI-Learn für die Makros, und ein
+  DAW-Test: auf dieser Maschine steht weiterhin kein Host.
+
+Gesamt nach dieser Runde: **Hosttest 101 von 101** (74 vorher; neu sind die Zeitleiste mit ihren
+Klickflächen und ihrer Zeichenzeit, die Kuratier-Schleife, die vier Makros und der `.phosset`-Rundlauf
+durch das Plugin), **VST3-Test 30 von 30** (28 vorher; neu ist, was der Editor tut, wenn der Host sein
+Fenster zieht), Selbsttest 178 und Vektortests 9 von 9 in drei Pfaden unverändert, **`ctest` 6 von 6**
+(723 s, davon Selbsttest 279 s und Hosttest 406 s — beide Zahlen neben den Läufen dreier anderer
+Agenten gemessen).
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
