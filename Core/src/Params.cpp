@@ -17,6 +17,11 @@ const char* const kKickPatternNames[] = { "Four", "Four + Fills", "Off" };
 const char* const kStyleNames[] = { "Goa", "Full-On", "Progressive", "Dark Forest", "Hi-Tech" };
 const char* const kArcNames[] = { "Warm-up", "Peak-Time", "Morning", "Closing", "Flat" };
 const char* const kBassPatternNames[] = { "Rolling", "Gallop", "Skip", "Offbeat", "Triplet" };
+// Phase 8: the predictive model behind the melodic lines. "Markov" is the measured order-2 model of
+// the corpus (Corpus.h), "Neural" the trained transformer (Model.h). Markov stays the default until
+// the trained model has been measured to be better -- and Neural falls back to it when no weight
+// file is there.
+const char* const kMelodyModelNames[] = { "Markov", "Neural" };
 const char* const kPercRoleNames[kNumPercRoles] = { "Closed Hat", "Open Hat", "Ride", "Crash", "Clap", "Snare", "Rim",
                                                     "Shaker", "Tom", "Conga", "Zap", "Blip" };
 
@@ -60,6 +65,8 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "arc",             "Energy Arc",      "",      0.0f,   4.0f,   4.0f, Curve::Choice, kArcNames },
     { "style_tempo",     "Style Tempo",     "",      0.0f,   1.0f,   0.0f, Curve::Toggle },
     { "set_minutes",     "Set Length",      "min",  10.0f, 300.0f,  60.0f, Curve::Int },
+    // Phase 8: stage A or stage B behind the melodic lines.
+    { "melody_model",    "Melody Model",    "",      0.0f,   1.0f,   0.0f, Curve::Choice, kMelodyModelNames },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };
