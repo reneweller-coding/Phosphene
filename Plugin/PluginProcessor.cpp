@@ -15,6 +15,9 @@ namespace {
 /** @brief How far ahead of the play position the rings are kept filled (PLAN 3: never under 8 bars). */
 constexpr double kHorizonBeats = 8.0 * kBeatsPerBar;
 
+/** @brief `PHOS_TRACE=1`, shared with the conductor so its bar-by-bar work can be followed. */
+bool gTrace = false;
+
 /**
  * @brief "kick" -> "Kick", "perc3" -> "Perc 3", "compose" -> "Set".
  *
@@ -241,6 +244,8 @@ void PlugConductor::pump(const ParamStore& params, double horizonBeats, EventRin
         notes_.clear();
         controls_.clear();
         notePos_ = controlPos_ = 0;
+        if (gTrace && nextBar_ % 32 == 0)
+            std::fprintf(stderr, "[phos conductor] composing bar %d, filled to beat %.1f\n", nextBar_, target);
         composer_.composeBars(params, nextBar_, 1, notes_, &controls_);
         if (writeTempo_) tempoControls(params, nextBar_, controls_);
         std::sort(controls_.begin(), controls_.end(),
@@ -265,6 +270,8 @@ PhospheneProcessor::PhospheneProcessor()
               || juce::SystemStats::getEnvironmentVariable("PHOS_SHOT", "").isNotEmpty()
               || juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_ALL", "").isNotEmpty();
     mute_.store(forceMute_);
+    trace_ = juce::SystemStats::getEnvironmentVariable("PHOS_TRACE", "").isNotEmpty();
+    gTrace = trace_;
 
     followHost_ = wrapperType != wrapperType_Standalone;
     followHostAtomic_.store(followHost_);
@@ -349,7 +356,11 @@ void PhospheneProcessor::setNonRealtime(bool offline) noexcept
 
 void PhospheneProcessor::composerLoop()
 {
+    unsigned turns = 0;
     while (composerRun_.load(std::memory_order_acquire)) {
+        if (trace_ && ++turns % 500 == 0)
+            std::fprintf(stderr, "[phos composer] turn %u, generation %d, next bar %d, %d tracks planned\n",
+                         turns, genLocal_, conductor_->nextBar(), publishedTracks_);
         if (!offline_.load(std::memory_order_acquire)) serviceComposer(true);
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
@@ -359,6 +370,9 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
 {
     const std::lock_guard<std::mutex> lock(composeLock_);
     const int want = genWanted_.load(std::memory_order_acquire);
+    if (trace_ && want != genLocal_)
+        std::fprintf(stderr, "[phos composer] generation %d wanted, was %d, engine reset for %d\n",
+                     want, genLocal_, genReset_.load());
     if (want != genLocal_) {
         // Step 2 of the handshake: position the conductor. The engine's own tempo map is never
         // used -- the tempo arrives as control events (PlugConductor::tempoControls) -- so nothing
@@ -536,6 +550,15 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         }
     }
     hostSyncNow_.store(hostSync, std::memory_order_relaxed);
+    // PHOS_TRACE=1: a line every hundred blocks on stderr saying what the transport and the
+    // handshake are doing. The only way to see inside a plugin that a host has loaded and that is
+    // not making a sound.
+    if (trace_ && ++traceCount_ % 100 == 0)
+        std::fprintf(stderr, "[phos] play=%d sync=%d beat=%.2f want=%d ack=%d reset=%d primed=%d mute=%d follow=%d wrapper=%d\n",
+                     static_cast<int>(playing), static_cast<int>(hostSync), hostBeat,
+                     genWanted_.load(), genAck_.load(), genReset_.load(), genPrimed_.load(),
+                     static_cast<int>(mute_.load()), static_cast<int>(followHostAtomic_.load()),
+                     static_cast<int>(wrapperType));
     // Under a host the tempo is the host's. compose.bpm is written directly rather than through the
     // host parameter, so the value the user sees follows the transport without an automation fight;
     // "Follow host" in the Set tab switches the whole arrangement off.
@@ -546,25 +569,31 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     }
 
     // ---------------------------------------------------------------- restarts
+    //
+    // Never ask for a second restart while one is in flight. The composer can need seconds for the
+    // first bar of a track it has not planned yet, and the host's play head keeps running through
+    // all of them -- so the distance between the two clocks grows while we wait, and asking again
+    // for every block of that wait would cancel the answer just before it arrived, over and over.
+    // That livelock is what the VST3 test caught: the plugin planned forever and never played.
+    const bool restarting = genPrimed_.load(std::memory_order_acquire) != genWanted_.load(std::memory_order_acquire);
     if (restartRequest_.exchange(false, std::memory_order_acq_rel)) {
         requestSeek(pendingBar_.load(std::memory_order_relaxed), pendingOffset_.load(std::memory_order_relaxed));
         wasPlaying_ = false;
-    }
-    if (hostSync) {
+    } else if (hostSync && !restarting) {
         const double expected = engine_->beatPosition() + conductor_->beatOffset();
         const double drift = hostBeat - expected;
-        if (playing && !wasPlaying_) {
-            requestSeek(static_cast<int>(std::floor(hostBeat / kBeatsPerBar)), hostBeat);
-        } else if (playing && std::fabs(drift) > 0.25) {
-            // A real jump: the host moved the playhead. Everything below a bar is cheap to redo,
-            // because composeBars is deterministic per bar.
+        if (playing && (!wasPlaying_ || std::fabs(drift) > 0.25)) {
+            // The transport started, or the host moved the play head. Everything below a bar is
+            // cheap to redo, because composeBars is deterministic per bar. If the plan for that bar
+            // is not cached yet this takes a moment, and the next block's drift check picks up
+            // whatever the host moved on by in the meantime.
             requestSeek(static_cast<int>(std::floor(hostBeat / kBeatsPerBar)), hostBeat);
         } else if (playing && std::fabs(drift) > 1.0e-9) {
             // Rounding between two clocks, not a jump: slide the offset instead of resetting, so
             // the events stay where the host expects them and nothing clicks.
             conductor_->nudgeOffset(drift);
         }
-    } else if (playing && !wasPlaying_) {
+    } else if (!hostSync && playing && !wasPlaying_ && !restarting) {
         requestSeek(pendingBar_.load(std::memory_order_relaxed), pendingOffset_.load(std::memory_order_relaxed));
     }
     const bool justStopped = wasPlaying_ && !playing;

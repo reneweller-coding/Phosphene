@@ -337,6 +337,9 @@ private:
     // ---- mute and recording
     std::atomic<bool> mute_{ false };
     bool forceMute_ = false;
+    /** @brief `PHOS_TRACE=1`: processBlock reports the transport and the handshake on stderr. */
+    bool trace_ = false;
+    unsigned traceCount_ = 0;   ///< @copydoc trace_
     juce::TimeSliceThread recordThread_{ "Phosphene recorder" };
     std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> recordWriter_;
     juce::CriticalSection recordLock_;

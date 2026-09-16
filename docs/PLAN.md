@@ -268,8 +268,20 @@ unverändert ohne). Gemessen auf dem i9-12900K, 48 kHz, Block 256:
 | `PHOS_MUTE=1` | Standalone startet stumm und hebt die Stummschaltung nie von selbst auf; der Schalter ist dann gesperrt und die Kopfzeile sagt es. | Screenshot-Läufe sind stumm |
 | `PHOS_SHOT` | `PHOS_SHOT=<datei.png>` zeichnet die Oberfläche in Designgröße in ein PNG und beendet sich (Exit 0), `PHOS_TAB=<n>` wählt den Tab, `PHOS_SHOT_ALL=<ordner>` schreibt alle zehn. Immer `createComponentSnapshot`, nie ein Bildschirmabzug. | `docs/screenshots/` |
 | `PHOS_PLAY` | `PHOS_PLAY=<sekunden>` mit `PHOS_RECORD=<datei.wav>`: spielt, nimmt auf, beendet sich — der Weg, den Live-Pfad ohne Maus zu hören. | 25-s-Aufnahme, siehe oben |
-| Host-Test | `Tests/hosttest.cpp` → `phos_hosttest` (nur mit Plugin gebaut, hängt an der Shared-Code-Bibliothek). Enthält das Orakel: derselbe Seed, eigene Uhr, offline — muss **bitgleich** zu `phos_render` sein. | 71 Prüfungen, 0 Fehler; `ctest` 5/5 grün (257 s für den Host-Test) |
+| Host-Test | `Tests/hosttest.cpp` → `phos_hosttest` (nur mit Plugin gebaut, hängt an der Shared-Code-Bibliothek). Enthält das Orakel: derselbe Seed, eigene Uhr, offline — muss **bitgleich** zu `phos_render` sein. | 71 Prüfungen, 0 Fehler |
+| VST3-Test | `Tests/vst3test.cpp` → `phos_vst3test` lädt das **gebaute VST3 von der Platte**, wie ein DAW es lädt: Modul, Factory, Instanz, Parameterliste, Transport, MIDI-Ausgabe, Zustand, Editor, Abbau. Das ist der Teil von pluginval, der im Repo leben kann. | 23 Prüfungen, 0 Fehler; `ctest` 6/6 grün (250 s Host-Test, 12 s VST3-Test) |
+| `PHOS_TRACE` | `PHOS_TRACE=1` lässt `processBlock`, den Composer-Thread und den Conductor auf stderr sagen, was sie tun. Der einzige Weg, in ein Plugin zu sehen, das ein Host geladen hat und das schweigt. | hat den Livelock unten gefunden |
 | CPU | 48 kHz, Block 256, ein Kern | Audio-Thread allein (Composer auf eigenem Thread): **5,4 bis 6,1 %** über drei Läufe; offline mit Komponieren auf demselben Thread: 4,6 % (21,9× Echtzeit). Beide Zahlen auf einer Maschine gemessen, auf der drei weitere Agenten bauten |
+
+**Ein Fehler, den erst der VST3-Test gefunden hat — und der in jedem DAW zugeschlagen hätte.** Der
+erste Druck auf Play lässt den Komponisten den ersten Track planen; das dauert zwei Sekunden, und die
+Uhr des Hosts läuft dabei weiter. Der Audio-Thread verglich seine Position mit der des Hosts,
+sah den wachsenden Abstand und forderte **in jedem Block einen neuen Neustart an** — jede Anforderung
+verwarf die Antwort, die gerade fertig wurde. Ergebnis: das Plugin plante endlos und spielte nie.
+Im Standalone war nichts zu sehen, weil dort die eigene Uhr erst mit dem Ton losläuft. Behoben: solange
+ein Neustart unterwegs ist, wird kein zweiter angefordert (`restarting` in `processBlock`); nach dem
+Neustart holt die nächste Abstandsprüfung nach, was der Host inzwischen weitergelaufen ist, und weil
+der Plan dann im Cache liegt, konvergiert das in ein bis zwei Runden.
 
 Weitere bewusste Abweichungen:
 - **Tempo-Karte nur im Offline-Render.** Folge: ein Set, das mitten in einem Track begonnen wird,
@@ -284,6 +296,11 @@ Weitere bewusste Abweichungen:
   Track plant und dafür einen Pegel-Probe-Render fährt. Im Standalone ist das meist schon erledigt,
   bevor der Knopf gedrückt wird: der Composer-Thread füllt die Ringe ab dem Öffnen des Fensters. Die
   Oberfläche sagt „planning" statt zu schweigen.
+- **Ein VST3-Parameter, den das Plugin selbst schreibt, erreicht den Host nicht.** `compose.bpm`
+  folgt unter einem Host dem Transport, aber der Host zeigt weiter den Wert, den der Nutzer gestellt
+  hat — JUCEs VST3-Wrapper meldet nur Parameter, die über `setValueNotifyingHost` laufen. Das ist so
+  gewollt (ein Plugin, das seinen eigenen Tempo-Knopf automatisiert, streitet mit dem Host darum);
+  im VST3-Test steht es als gemessene Tatsache.
 - **pluginval liegt nicht auf dieser Maschine** (wie bei Noctuary wird es bei Bedarf von GitHub
   geholt). Strenge 10 ist deshalb **ungeprüft**; der Host-Test deckt den Teil ab, der im Repo leben
   kann. Aufruf, sobald es da ist:

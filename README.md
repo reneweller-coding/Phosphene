@@ -51,7 +51,8 @@ Environment variables, for tests and documentation: `PHOS_MUTE=1` starts the sta
 never unmutes itself; `PHOS_SHOT=<file.png>` renders the editor at design size into a PNG and exits
 (`PHOS_TAB=<index>` picks the tab, `PHOS_SHOT_ALL=<folder>` writes one picture per tab, see
 [docs/screenshots](docs/screenshots)); `PHOS_PLAY=<seconds>` with `PHOS_RECORD=<file.wav>` plays for a
-while, records, and exits.
+while, records, and exits; `PHOS_TRACE=1` makes the plugin report its transport and its composer on
+stderr, which is the way to see inside it when a host has loaded it and it is silent.
 
 ## Try it
 
@@ -84,6 +85,10 @@ blocks that change size in the middle of a set, parameters written from another 
 that starts, jumps and stops, a state that comes back exactly as it went out, and every tab laid out
 and painted. Its oracle is the offline renderer: with its own clock the plugin has to produce the
 same samples `phos_render` produces, bit for bit.
+
+`phos_vst3test` goes one step further and loads the **built VST3 off the disk**, the way a DAW loads
+it: the module, the factory, an instance, the parameter list, a transport, the MIDI it produces, the
+state, the editor, and the teardown. That is the part of pluginval that can live in the repository.
 
 `phos_selftest` measures every building block against independently derived values: the ladders'
 analytic responses (the diode ladder against Zavalishin's transfer function and its self-oscillation

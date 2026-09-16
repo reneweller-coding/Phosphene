@@ -63,3 +63,25 @@ if(TARGET Phosphene)
     endif()
     add_test(NAME hosttest COMMAND phos_hosttest)
 endif()
+
+# The built VST3 loaded the way a DAW loads it (Tests/vst3test.cpp): the module off the disk, the
+# factory, an instance, a transport, the state and the editor. It is the part of pluginval that can
+# live in the repository -- pluginval itself is not on this machine (docs/PLAN.md, Phase 6).
+if(TARGET Phosphene_VST3)
+    add_executable(phos_vst3test vst3test.cpp)
+    target_link_libraries(phos_vst3test PRIVATE juce::juce_audio_utils juce::juce_recommended_config_flags)
+    # A modal loop is allowed here: a VST3 tells its controller about a restored state through the
+    # message queue, and a test with no window has to run that queue by hand to see the result.
+    target_compile_definitions(phos_vst3test PRIVATE JUCE_STANDALONE_APPLICATION=1 JUCE_PLUGINHOST_VST3=1
+                               JUCE_MODAL_LOOPS_PERMITTED=1
+                               JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0)
+    add_dependencies(phos_vst3test Phosphene_VST3)
+    if(MSVC)
+        target_compile_options(phos_vst3test PRIVATE /W4 /permissive- /utf-8)
+        target_compile_definitions(phos_vst3test PRIVATE _CRT_SECURE_NO_WARNINGS)
+        target_link_options(phos_vst3test PRIVATE "LINKER:/STACK:16777216")
+    endif()
+    # The module inside the .vst3 bundle: on Windows that file is what the host loads, and it is
+    # the one CMake can name (the bundle itself is a directory made by a post-build step).
+    add_test(NAME vst3test COMMAND phos_vst3test "$<TARGET_FILE:Phosphene_VST3>")
+endif()
