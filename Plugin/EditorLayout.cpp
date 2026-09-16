@@ -4,6 +4,7 @@
  */
 #include "EditorLayout.h"
 #include "PhospheneLookAndFeel.h"
+#include "phos/WaveTableFile.h"
 #include <cmath>
 
 using namespace phos;
@@ -47,7 +48,23 @@ void ControlPage::addParamCell(PhospheneProcessor& proc, int groupIndex, int par
     }
     case Curve::Choice: {
         auto cb = std::make_unique<juce::ComboBox>();
-        for (int i = 0; d.choices != nullptr && i <= static_cast<int>(d.maxValue); ++i) cb->addItem(d.choices[i], i + 1);
+        // The wavetable choice is the one list whose entries can be absent: indices from
+        // kNumBuiltinWaveTables up come out of the shipped pack, and where that file was not
+        // installed waveTable() quietly hands out the built-in table the descriptor names
+        // (WaveTableFile.h). Quiet is right for the audio -- a set saved elsewhere goes on playing
+        // -- and wrong for the chooser, which would otherwise show twelve tables that are not there.
+        //
+        // They are **marked, not removed**. ComboBoxParameterAttachment maps the parameter on to the
+        // *position* of an item (index / (count - 1), juce_ParameterAttachments.cpp), so dropping
+        // one would renumber every table behind it: "lead.table=7" would select a different table in
+        // an installation with the pack than in one without, and a state saved in the one would load
+        // wrong in the other. The contract is that the index is the table.
+        const bool isTable = juce::String(proc.params().key(paramId)).endsWith(".table");
+        for (int i = 0; d.choices != nullptr && i <= static_cast<int>(d.maxValue); ++i) {
+            juce::String text = d.choices[i];
+            if (isTable && waveTableIsLibrary(i) && !waveTableLoaded(i)) text += " (missing)";
+            cb->addItem(text, i + 1);
+        }
         cb->setTooltip(juce::String(proc.params().key(paramId)));
         addAndMakeVisible(*cb);
         c.combo = std::make_unique<juce::ComboBoxParameterAttachment>(*param, *cb);

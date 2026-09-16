@@ -1733,6 +1733,131 @@ Gesamt: **211 Selbsttest-Prüfungen** in **331 s**, Vektortests 15 von 15 in AVX
 skalar, Hosttest 101, VST3-Test 30. Der Selbsttest ist durch die längere Bank rund 5 s langsamer; es
 kam keine Probe und kein Render hinzu.
 
+**16.09.2026, Nachtrag: die Bibliothek erreicht Plugin und Quest.** Die Wavetable-Runde hat die
+zwölf Tabellen gemessen, gepackt und verdrahtet, aber zwei Enden offen gelassen, weil `Plugin/` und
+`Quest/` ihr nicht gehörten: **niemand rief `setWaveTableSearchPath()`**, und `Quality.h` kannte
+`setWaveTableFrameLimit()` nicht. Ein Entwicklungsbau fand die Datei trotzdem — über
+`PHOS_SOURCE_DATA_DIR`, den Pfad in den Quellbaum — und genau das ist die Falle: alles klang
+richtig, während ein ausgeliefertes Plugin auf die sechs eingebauten Tabellen zurückfiel, ohne ein
+Wort zu sagen. Diese Runde schließt beide Enden und macht den Rückfall sichtbar.
+
+*Wie jede der drei Oberflächen die Datei findet.* Der Kern öffnet seine Ressourcen über `fopen` und
+sucht in dieser Reihenfolge: das Arbeitsverzeichnis, den Suchpfad, `PHOS_SOURCE_DATA_DIR`. Ein
+Plugin hat kein brauchbares Arbeitsverzeichnis (es ist das des Hosts) und keinen Quellbaum, also
+bleibt der Suchpfad — und woher der kommt, ist je Oberfläche eine andere Frage.
+
+| Oberfläche | Woher der Pfad kommt | Wo die Datei liegt |
+|---|---|---|
+| Standalone | `currentExecutableFile`, Elternverzeichnis | neben `Phosphene.exe` |
+| VST3 | `currentExecutableFile` ist das Modul im Bundle; von `Contents/<arch>` eine Ebene hoch | `Phosphene.vst3/Contents/Resources` |
+| Quest | Asset im APK, beim ersten Start einmal in `internalDataPath` ausgepackt | `<internalDataPath>`, oder `<externalDataPath>`, wenn dort eine liegt |
+
+`resolveWaveTableDirectory()` (PluginProcessor.cpp) probiert die Kandidaten der Reihe nach und nimmt
+den ersten, in dem die Datei **wirklich liegt** — geprüft wird die Datei, nicht das Verzeichnis, so
+dass eine halb kopierte Installation nicht auf ein leeres `Resources` zeigt. Aufgerufen wird das im
+Konstruktor des Prozessors, **vor** dem Start des Composer-Threads: dieser Thread bereitet eigene
+Probe-Engines vor, und geladen wird die Bibliothek vom ersten `Engine::prepare()` im Prozess,
+gleichgültig welcher Thread das ist. Später wäre ein Rennen, zweimal wäre wirkungslos.
+`Contents/Resources` ist die Stelle, die die VST3-Spezifikation für Plugin-Daten vorsieht, und die
+einzige, die ein Host beim Kopieren eines Bundles mitnimmt. Die APK-Seite ist ein Zwischenschritt
+mehr: ein Asset im APK hat **keinen Dateinamen**, es ist ein deflatiertes Zip-Glied, an das nur der
+`AAssetManager` kommt. `prepareWaveTables()` packt es deshalb einmal aus (750 KB, `.part` und
+`rename`, damit eine abgebrochene Installation nie unter dem endgültigen Namen steht) und übergibt
+dieses Verzeichnis. Eine per `adb push` daneben gelegte `library.phoswt` gewinnt — dieselbe Regel,
+der `phos.cfg` schon folgt.
+
+*Was der Editor zeigt, wenn nichts da ist.* Die Tabellen bleiben in der Liste und werden
+**markiert**, nicht entfernt: `lead.table` bekommt hinter dem Namen ein `(missing)`. Entfernen wäre
+die schlechtere Wahl, und zwar nicht aus Bequemlichkeit — `ComboBoxParameterAttachment` bildet den
+Parameter auf die *Position* eines Eintrags ab (`index / (count - 1)`,
+juce\_ParameterAttachments.cpp). Fiele ein Eintrag weg, verschöben sich alle dahinter: "7" wäre auf
+einer Installation mit Pack eine andere Tabelle als auf einer ohne, und ein dort gespeicherter
+Zustand lüde hier falsch. Der Vertrag der Runde ist, dass der Index die Tabelle ist; er gilt auch
+dann, wenn die Tabelle fehlt. Hörbar ändert sich nichts: `waveTable()` gibt weiter die eingebaute
+Tabelle heraus, die der Deskriptor nennt, ein anderswo gespeichertes Set spielt weiter. Der
+Prozessor beantwortet dieselbe Frage auch als Zahl (`waveTableLibrary()`: Verzeichnis, wie viele
+ausgeliefert, wie viele wirklich geladen) — der Hosttest liest genau das.
+
+*Das Framelimit: 32, und warum nicht 16.* `Quality::quest()` setzt `waveTableFrames = 32`,
+`Quality::desktop()` lässt 0 (jeder Frame); `Engine::prepare()` reicht das an
+`setWaveTableFrameLimit()` weiter, **vor** der ersten `Poly::prepare()`, weil das Limit beim Bau der
+Bibliothek gelesen wird. Das ist die einzige Quest-Stellschraube, die keine Rechenzeit spart,
+sondern **Körnung** kostet: der Positionsregler blendet zwischen zwei Nachbarframes über, Ausdünnen
+macht jeden Schritt größer — und "stuft statt zu gleiten" war der Befund der Auswahlrunde. Gemessen
+wird deshalb mit deren eigenem Maß (`testWaveTableQuality`, Median der totalen Variation zwischen
+den Leistungsspektren benachbarter Frames), über die fünf Flächentabellen:
+
+| Limit | schlechtester Median-Schritt der Fläche | wer | Speicher | `Engine::prepare` |
+|---|---|---|---|---|
+| 64 (alle) | 0,074 | WaveEdit Sohler52 | 23,33 MB | 110 ms |
+| 48 | 0,112 | WaveEdit Sohler52 | — | — |
+| **32 (gewählt)** | **0,173** | WaveEdit Sohler52 | **12,09 MB** | **71 ms** |
+| 24 | 0,169 | WaveEdit Sohler52 | — | — |
+| 16 | 0,261 | WaveEdit Sohler52 | — | — |
+
+Die Schranke kommt aus derselben Quelle wie das Maß: die WaveEdit-Bänke, die die erste Auswahl
+fälschlich für die Fläche nahm, hatten Median-Schritte ab **0,49**. 32 Frames holen die ganze
+Speicherersparnis und bleiben bei einem Drittel davon; 16 gingen die halbe verbleibende Strecke in
+den verworfenen Bereich, für Speicher, den das Quest-Budget nicht verlangt. `directness`
+(`travel / path`) leidet beim Ausdünnen überhaupt nicht — beide Enden bleiben, `travel` ist
+unverändert und `path` kann nur schrumpfen, die schlechteste Flächen-`directness` steigt von 0,089
+auf 0,116. Die Schranke gilt **nur für die Fläche**: `directness` war für Lead und Arp nie gefordert
+(eine Sechzehntel ist vorbei, ehe ein Sweep ankommt), und drei jener sieben Tabellen springen bei
+jeder Framezahl um 0,5 und mehr — sie daran zu messen hieße, die Auswahl zu messen und nicht das
+Ausdünnen. 12,09 MB sind nicht genau die Hälfte von 23,33, weil `AKWF 0004-hollow-01` nur 37 Frames
+hat und von 32 kaum berührt wird.
+
+*Was im APK dazukommt.* `build_apk.ps1` legt die Datei in ein Staging-Verzeichnis und gibt `aapt2
+link` ein `-A`; ausgeliefert wird dieselbe `Core/data/library.phoswt`, die der Selbsttest misst, und
+nicht eine Kopie unter `Quest/`. **3 892 110 → 4 555 729 Byte (+648 KB, +17 %)**; im Zip deflatiert
+der Pack auf 662 195 Byte. Der letzte Schritt des Skripts liest das fertige, signierte APK wieder
+und besteht darauf, dass `assets/library.phoswt` darin steht und so groß ist wie das Original — ohne
+Headset ist das die einzige Prüfung, die die Quest-Seite überhaupt zulässt, und sie fängt genau den
+Fehler, der sonst erst auf dem Gerät und nur als "klingt anders" auffällt.
+
+*Die Prüfungen, jede zuerst rot gesehen.* Hosttest: dass das Plugin den Pack **neben seiner eigenen
+Binärdatei** findet (die Datei wird dazu neben `phos_hosttest` installiert, sonst sähe der Test nur
+`PHOS_SOURCE_DATA_DIR`) — rot mit "found \"\"", ehe der Konstruktor den Suchpfad setzte. Dann der
+Gegenfall: die Bibliothek wird absichtlich verfehlt (ein Name, den es nicht gibt, danach meldet
+jeder Ladeversuch im Prozess nichts — der Zustand einer Installation ohne Ressourcen), und das
+Plugin muss trotzdem klingen (RMS über acht Takte, weil ein Track mit einem dünnen Intro beginnt)
+und im Chooser genau die zwölf Bibliothekseinträge markieren und keinen der sechs eingebauten — rot
+mit "0 of 12 marked". Selbsttest: `Engine::prepare` mit `Quality::quest()` muss auf 32 Frames
+kommen und beide Enden behalten — rot mit "quest 64". Dazu die Messung selbst, als Tabelle im
+Protokoll. VST3-Test: das gebaute Bundle trägt den Pack in `Contents/Resources`. **Mutationsrunde,
+sechs Fehler, jeder gefangen, jeder zurückgenommen, `git diff` sauber:** den Konstruktoraufruf
+entfernt (Hosttest 1 Fehler), die Markierungsbedingung umgedreht (Hosttest 1), `waveTableFrames` auf
+64 (Selbsttest 2), `setWaveTableFrameLimit` hinter die erste `Poly::prepare()` geschoben
+(Selbsttest 2), die Bundle-Kopie ein Verzeichnis daneben (VST3-Test 2), `-A` aus `aapt2 link`
+entfernt (das Skript bricht ab).
+
+*Nichts ist zurückgegangen.* Standard-Render 90 s, Seed 20260916: bytegleich vor und nach der Runde
+(MD5 `1774e3a3…`). `phos_vectest`, `_neon` und `_scalar` je 16 von 16 und die Bass-Logits identisch,
+ctest 6 von 6, Selbsttest 237 Prüfungen (234 + 3), Hosttest 109, VST3-Test 32. Der Desktop-Pfad ist
+unberührt: `Quality::desktop()` fragt 0 Frames, was das Limit ohnehin ist.
+
+*Unterwegs gefunden.* `Quest/src/main.cpp` ließ sich **gar nicht mehr übersetzen**: `publish()` las
+`kMelodyMaxBlocks` und `MelodyPlan::blockParts/padGate`, die es seit der Formgrammatik aus Phase 5
+nicht mehr gibt. Repariert über `planBar()` (Form.h), also über dieselbe Instrumentierungsmatrix,
+aus der der Composer seine Bar-Entscheidungen zieht; das Panel zeigt jetzt den **Takt** statt des
+16-Takt-Blocks und weiß damit auch von Buildups, Cuts und dem Pre-Drop-Break. Dass es niemandem
+aufgefallen war, sagt etwas: die Quest-App wird von keinem ctest gebaut.
+
+*Offen.* Es hängt **kein Headset** an der Maschine: gebaut und gepackt ist alles, gelaufen ist auf
+dem Gerät nichts — das Auspacken beim ersten Start, die Zeile `wavetables: unpacked …` im Logcat und
+dass der zweite Start sie nicht wiederholt, sind ungeprüft, ebenso alle Punkte, die `Quest/README.md`
+schon offen führt. Ebenso ungeprüft: ein **echter DAW** — `phos_vst3test` lädt das Modul wie ein
+Host, aber kein Reaper oder Bitwig hat das Bundle je installiert; dass `Contents/Resources` die
+Kopie eines Hosts überlebt, ist Spezifikation, nicht Messung. Und gehört wurde wieder nicht: diese
+Runde hat verdrahtet und gemessen.
+
+*Dateien.* Geändert: `Plugin/PluginProcessor.h/.cpp` (Suchpfad, `waveTableLibrary()`),
+`Plugin/EditorLayout.cpp` (Markierung), `Plugin/CMakeLists.txt` (Kopie neben die Artefakte),
+`Core/include/phos/Quality.h` (`waveTableFrames`), `Core/src/Engine.cpp` (eine Zeile in `prepare()`),
+`Quest/src/main.cpp` (Asset, Suchpfad, `publish()` repariert), `Quest/build_apk.ps1` (Assets, Prüfung
+des fertigen APK), `Quest/README.md`, `Tests/hosttest.cpp`, `Tests/vst3test.cpp`,
+`Tests/selftest.cpp` (`testWaveTableQuality`), `Tests/CMakeLists.txt`.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

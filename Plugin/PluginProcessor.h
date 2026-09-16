@@ -254,6 +254,22 @@ public:
     /** @brief The host parameter for a global id. */
     StoreParameter* parameterFor(int id) const { return id >= 0 && id < static_cast<int>(byId_.size()) ? byId_[static_cast<size_t>(id)] : nullptr; }
 
+    /**
+     * @brief What became of the shipped wavetable pack in this process.
+     *
+     * The library is loaded once for the whole process, by whichever Engine::prepare() runs first,
+     * so this says nothing about *this* instance -- it says what every instance has. The editor
+     * draws it (a library table whose file is missing is marked in the chooser) and the host test
+     * reads it, because "it fell back silently" is exactly the failure that has to be visible.
+     */
+    struct WaveTableLibrary {
+        juce::String directory;   ///< where the plugin pointed the core; empty when it found no pack
+        int shipped = 0;          ///< library tables this build knows about
+        int loaded = 0;           ///< of those, the ones whose data is really there
+    };
+    /** @brief The state of the library now; counted freshly, so it is valid after prepareToPlay(). */
+    WaveTableLibrary waveTableLibrary() const;
+
     /** @brief The set seed. */
     uint64_t seed() const { return seed_.load(std::memory_order_relaxed); }
     /** @brief Chooses another set (message thread); restarts playback from the top. */

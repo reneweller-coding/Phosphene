@@ -27,6 +27,7 @@
 #include "PluginEditor.h"
 #include "phos/Composer.h"
 #include "phos/Engine.h"
+#include "phos/WaveTableFile.h"
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -182,6 +183,17 @@ double renderRms(PhospheneProcessor& p, int block, int samples)
     return std::sqrt(sum / juce::jmax(1, done));
 }
 
+/** @brief The first combo box in a component tree whose tooltip is the parameter key @p key. */
+juce::ComboBox* findCombo(juce::Component& root, const juce::String& key)
+{
+    if (auto* cb = dynamic_cast<juce::ComboBox*>(&root))
+        if (cb->getTooltip() == key) return cb;
+    for (juce::Component* child : root.getChildren())
+        if (child != nullptr)
+            if (juce::ComboBox* found = findCombo(*child, key)) return found;
+    return nullptr;
+}
+
 /** @brief A mouse click on a component that has no peer, as the editor's own would arrive. */
 void clickAt(juce::Component& c, int x, int y)
 {
@@ -236,6 +248,79 @@ int main()
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     std::printf("Phosphene host test\n");
+
+    // ---------------------------------------------------------------- the shipped wavetable pack
+    //
+    // A development build finds `library.phoswt` beside the sources through PHOS_SOURCE_DATA_DIR,
+    // which is exactly why the shipped case has to be tested on purpose: what a user installs has
+    // no source tree. The pack is copied next to this executable by Tests/CMakeLists.txt, the way
+    // it is copied next to the plugin's artefacts, so what is measured here is the plugin's own
+    // path resolution and nothing else. Both sections run before any other processor is built --
+    // the library is loaded once per process, by the first Engine::prepare() that happens.
+    {
+        const juce::File beside = juce::File::getSpecialLocation(juce::File::currentExecutableFile)
+                                      .getParentDirectory().getChildFile("library.phoswt");
+        check(beside.existsAsFile(), "the pack is installed beside the binary (" + beside.getFullPathName() + ")");
+        auto p = std::make_unique<PhospheneProcessor>();
+        p->setPlayConfigDetails(0, 2, 48000.0, 256);
+        p->prepareToPlay(48000.0, 256);
+        const PhospheneProcessor::WaveTableLibrary lib = p->waveTableLibrary();
+        check(juce::File(lib.directory) == beside.getParentDirectory(),
+              "the plugin looks for the pack beside its own binary, not in a source tree (found \""
+                  + lib.directory + "\")");
+        check(lib.shipped > 0 && lib.loaded == lib.shipped,
+              "and it has every table this build ships (" + juce::String(lib.loaded) + " of "
+                  + juce::String(lib.shipped) + ")");
+    }
+
+    // The other half: no pack at all. The library is process-global and is loaded once, so the
+    // absence is staged by asking for a name that cannot be found -- after that every load in this
+    // process reports nothing, which is precisely the state of a plugin whose resources were not
+    // installed. It must still make sound, and it must not pretend in the editor.
+    {
+        phos::resetWaveTableLibrary();
+        std::string why;
+        const int loaded = phos::loadWaveTableLibrary("phosphene-no-such-pack.phoswt", &why);
+        check(loaded == 0, "the missing-pack case is really staged (" + juce::String(why.c_str()) + ")");
+        auto p = std::make_unique<PhospheneProcessor>();
+        p->setFollowHost(false);
+        p->setNonRealtime(true);
+        p->setPlayConfigDetails(0, 2, 48000.0, 256);
+        p->prepareToPlay(48000.0, 256);
+        p->play();
+        const PhospheneProcessor::WaveTableLibrary lib = p->waveTableLibrary();
+        check(lib.loaded == 0 && lib.shipped > 0,
+              "with no pack the plugin says so: " + juce::String(lib.loaded) + " of "
+                  + juce::String(lib.shipped) + " library tables");
+        // Eight bars, because a track opens with a sparse intro (the kick enters between bars 5
+        // and 9): four bars of atmosphere would prove nothing about the fallback.
+        const int samples = static_cast<int>(8.0 * kBeatsPerBar * 60.0 / 145.0 * 48000.0);
+        const double rms = renderRms(*p, 256, samples);
+        check(rms > 0.01, "and it still makes sound, on the built-in tables (RMS " + juce::String(rms, 4) + ")");
+
+        std::unique_ptr<juce::AudioProcessorEditor> editor(p->createEditor());
+        auto* phos = dynamic_cast<PhospheneEditor*>(editor.get());
+        if (phos != nullptr) phos->setTab(TabPad);
+        juce::ComboBox* table = editor != nullptr ? findCombo(*editor, "pad.table") : nullptr;
+        check(table != nullptr && table->getNumItems() == phos::kNumWaveTables,
+              "the table chooser offers every index the parameter has");
+        if (table != nullptr) {
+            int marked = 0, builtinMarked = 0;
+            for (int i = 0; i < table->getNumItems(); ++i) {
+                const bool mark = table->getItemText(i).contains("missing");
+                if (i >= phos::kNumBuiltinWaveTables) marked += mark ? 1 : 0;
+                else builtinMarked += mark ? 1 : 0;
+            }
+            check(marked == phos::kNumLibraryWaveTables && builtinMarked == 0,
+                  "and marks exactly the library entries that are not there ("
+                      + juce::String(marked) + " of " + juce::String(phos::kNumLibraryWaveTables) + " marked, "
+                      + juce::String(builtinMarked) + " built-in tables wrongly marked)");
+        }
+        editor.reset();
+    }
+    // Back to the shipped library for everything that follows -- no engine is alive here.
+    phos::resetWaveTableLibrary();
+    phos::loadWaveTableLibrary();
 
     // ---------------------------------------------------------------- rates and block sizes
     for (double sr : { 44100.0, 48000.0, 96000.0 }) {

@@ -36,9 +36,17 @@
  *               osc_host=192.168.1.20   optional cue bridge to Kaleidoscope (PLAN 8.3)
  *               osc_port=9000
  *               set=compose.bpm=146;compose.pad_amount=1     any knobs, repeatable
+ *   library.phoswt   optional: a wavetable pack pushed to the device, used instead of the one in
+ *                    the APK (see prepareWaveTables)
  * @endcode
+ *
+ * **The shipped wavetable library** rides in the APK as an asset and is unpacked once into the
+ * app's private directory, because the core opens its resources by name and an asset has none. At
+ * the Quest quality level it is built with 32 of its 64 frames (Quality.h), which takes the
+ * expanded mip levels from 23.3 MB to 12.1 MB and the load from 110 ms to 71 ms.
  */
 
+#include <android/asset_manager.h>
 #include <android/log.h>
 #include <android_native_app_glue.h>
 #include <EGL/egl.h>
@@ -70,6 +78,7 @@
 #include "phos/Composer.h"
 #include "phos/Engine.h"
 #include "phos/Quality.h"
+#include "phos/WaveTableFile.h"
 
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "Phosphene", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "Phosphene", __VA_ARGS__)
@@ -241,6 +250,78 @@ private:
     sockaddr_in to_{};
 };
 
+// ---------------------------------------------------------------- shipped resources
+
+/** @brief The shipped wavetable pack: an APK asset here, a file beside the sources on a desktop. */
+constexpr const char* kWaveTablePack = "library.phoswt";
+
+/**
+ * @brief Puts the shipped wavetable pack where the core can open it, and returns that directory.
+ *
+ * The core opens its resources with `fopen` (WaveTableFile.cpp), and an asset inside an APK has no
+ * file name at all: it is a deflated member of a zip that only `AAssetManager` can reach. So the
+ * asset is unpacked once, into the app's own private directory, and *that* is what
+ * `setWaveTableSearchPath()` is given. It costs 750 KB of internal storage and happens on the first
+ * start; afterwards the copy is recognised by its length and nothing is written.
+ *
+ * `<externalDataPath>` wins when it holds a pack of its own, which is the rule `phos.cfg` already
+ * follows: `adb push` is then all it takes to try another selection on the device without building
+ * an APK for it. A missing pack is not an error -- the engine has its six built-in tables
+ * (WaveTableFile.h) -- but it is logged, because silence about it is exactly how a shipped app ends
+ * up quietly playing something else.
+ *
+ * @return the directory to hand the core, or empty when there is no pack anywhere
+ */
+std::string prepareWaveTables(AAssetManager* assets, const char* internalDir, const std::string& externalDir)
+{
+    if (!externalDir.empty()) {
+        const std::string p = externalDir + "/" + kWaveTablePack;
+        if (FILE* f = std::fopen(p.c_str(), "rb")) {
+            std::fclose(f);
+            LOGI("wavetables: %s (pushed to the device)", p.c_str());
+            return externalDir;
+        }
+    }
+    if (assets == nullptr || internalDir == nullptr) { LOGE("wavetables: no asset manager"); return {}; }
+    AAsset* a = AAssetManager_open(assets, kWaveTablePack, AASSET_MODE_STREAMING);
+    if (a == nullptr) { LOGE("wavetables: the APK carries no %s", kWaveTablePack); return {}; }
+    const off64_t want = AAsset_getLength64(a);
+    const std::string out = std::string(internalDir) + "/" + kWaveTablePack;
+    // An unpacked copy of the same length is taken as it is. The length is the whole check on
+    // purpose: the pack's own reader refuses a broken file and says why (a truncated one is what a
+    // first start that was killed halfway leaves behind), and the unpacking below writes a `.part`
+    // and renames it, so a half-written file never carries the final name in the first place.
+    long have = -1;
+    if (FILE* f = std::fopen(out.c_str(), "rb")) {
+        std::fseek(f, 0, SEEK_END);
+        have = std::ftell(f);
+        std::fclose(f);
+    }
+    if (have != static_cast<long>(want)) {
+        const std::string tmp = out + ".part";
+        FILE* f = std::fopen(tmp.c_str(), "wb");
+        if (f == nullptr) { AAsset_close(a); LOGE("wavetables: cannot write %s", tmp.c_str()); return {}; }
+        std::vector<char> buf(64 * 1024);
+        bool ok = true;
+        for (;;) {
+            const int n = AAsset_read(a, buf.data(), buf.size());
+            if (n < 0) { ok = false; break; }
+            if (n == 0) break;
+            if (std::fwrite(buf.data(), 1, static_cast<size_t>(n), f) != static_cast<size_t>(n)) { ok = false; break; }
+        }
+        std::fclose(f);
+        if (!ok || std::rename(tmp.c_str(), out.c_str()) != 0) {
+            std::remove(tmp.c_str());
+            AAsset_close(a);
+            LOGE("wavetables: unpacking %s failed", kWaveTablePack);
+            return {};
+        }
+        LOGI("wavetables: unpacked %lld bytes to %s", static_cast<long long>(want), out.c_str());
+    }
+    AAsset_close(a);
+    return internalDir;
+}
+
 // ---------------------------------------------------------------- config
 
 /** @brief What `phos.cfg` can say. */
@@ -293,8 +374,8 @@ struct DisplayState {
     int  key = 6;               ///< pitch class
     int  scale = 1;             ///< index into kScaleNames
     double bpm = 145.0;         ///< the track's tempo
-    int  blockParts = 0;        ///< bits 1/2/4/8 = acid, lead, arp, pad in the current 16-bar block
-    bool padGate = false;       ///< trance gate on the pad in this block
+    int  blockParts = 0;        ///< bits 1/2/4/8 = acid, lead, arp, pad in the bar now playing
+    bool padGate = false;       ///< trance gate on the pad in that bar
     int  bar = 0;               ///< absolute bar now playing
 };
 
@@ -493,8 +574,21 @@ private:
         const int bar = currentBar();
         const int ti = composer_.trackOfBar(p, bar);
         const TrackPlan& plan = composer_.track(p, ti);
-        const int inTrack = bar - plan.firstBar;
-        const int blk = std::clamp(inTrack / 16, 0, kMelodyMaxBlocks - 1);
+        const int inTrack = std::clamp(bar - plan.firstBar, 0, std::max(0, plan.bars - 1));
+        // What plays now comes from the instrumentation matrix (Form.h), evaluated for this bar.
+        // It used to be read out of a per-16-bar table in MelodyPlan; the form grammar of Phase 5
+        // replaced that table with planBar(), which is a bar at a time and knows about buildups,
+        // cuts and the pre-drop break -- so the panel now shows the bar it is in rather than the
+        // block it is in. PartAvailability is assembled here exactly as Composer.cpp assembles it
+        // (availabilityOf); it is four lines of a track's own plan, not a decision.
+        PartAvailability avail;
+        for (int k = 0; k < kMelodyParts; ++k) avail.part[k] = plan.melody.present[k];
+        avail.leadLo = plan.melody.leadLo;
+        avail.leadHi = plan.melody.leadHi;
+        avail.arpLo = plan.melody.arpLo;
+        avail.arpHi = plan.melody.arpHi;
+        avail.percLayers = plan.perc.layers;
+        const BarPlan bp = planBar(plan.form, avail, plan.sectionSeed, inTrack);
         DisplayState d;
         d.planning = false;
         d.track = ti;
@@ -505,8 +599,8 @@ private:
         // in the table cannot turn this display into an out-of-bounds read.
         d.scale = std::clamp(plan.scale, 0, static_cast<int>(p.desc(p.base(Module::Compose) + compose::Scale).maxValue));
         d.bpm = plan.bpm;
-        d.blockParts = plan.melody.blockParts[blk];
-        d.padGate = plan.melody.padGate[blk] != 0;
+        d.blockParts = bp.parts;
+        d.padGate = bp.padGate;
         d.bar = bar;
         std::lock_guard<std::mutex> lock(displayMutex_);
         display_ = d;
@@ -809,6 +903,11 @@ public:
     {
         dataDir_ = app_->activity->externalDataPath ? app_->activity->externalDataPath : "";
         config_ = readConfig(dataDir_.c_str());
+        // Before the composer thread exists: it is the thread that prepares the engine, and the
+        // wavetable library is loaded by the first Engine::prepare() in the process.
+        const std::string tables = prepareWaveTables(app_->activity->assetManager,
+                                                     app_->activity->internalDataPath, dataDir_);
+        if (!tables.empty()) setWaveTableSearchPath(tables);
         if (!config_.oscHost.empty()) {
             if (osc_.open(config_.oscHost, config_.oscPort)) LOGI("cue bridge: OSC to %s:%d", config_.oscHost.c_str(), config_.oscPort);
             else LOGE("cue bridge: bad host %s", config_.oscHost.c_str());

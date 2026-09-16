@@ -43,6 +43,27 @@ target_link_libraries(Phosphene
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
 
+# The shipped wavetable pack, installed beside the artefacts (PluginProcessor.cpp,
+# resolveWaveTableDirectory()). Without this the plugin has nothing to find: PHOS_SOURCE_DATA_DIR
+# only ever points at a source tree, so an installed plugin would fall back to the six built-in
+# tables and never say why. The standalone gets it beside its executable; the VST3 gets it in
+# Contents/Resources, which is where the VST3 specification keeps a plugin's data and the one place
+# a host copying a bundle takes with it.
+set(PHOS_WT_PACK "${CMAKE_CURRENT_SOURCE_DIR}/../Core/data/library.phoswt")
+if(TARGET Phosphene_Standalone)
+    add_custom_command(TARGET Phosphene_Standalone POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${PHOS_WT_PACK}" "$<TARGET_FILE_DIR:Phosphene_Standalone>/library.phoswt"
+        VERBATIM)
+endif()
+if(TARGET Phosphene_VST3)
+    add_custom_command(TARGET Phosphene_VST3 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Phosphene_VST3>/../Resources"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${PHOS_WT_PACK}" "$<TARGET_FILE_DIR:Phosphene_VST3>/../Resources/library.phoswt"
+        VERBATIM)
+endif()
+
 # The composer's probe renders put whole Engine objects on the stack (see Composer.cpp); the
 # standalone's message thread gets the same 16 MB the offline tools get.
 if(MSVC)
