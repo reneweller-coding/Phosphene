@@ -172,9 +172,12 @@ int main(int argc, char** argv)
     }
     // The composer's tempo map covers the render: per track, ramped between tracks. For a length in
     // seconds, plan generously (at the fastest tempo the range allows) and cut by time afterwards.
-    const int planBars = seconds > 0.0
-        ? static_cast<int>(seconds * (params.get(cb + compose::Bpm) + params.get(cb + compose::TempoRange)) / 240.0) + 64
-        : bars;
+    // With Style Tempo on, the tracks run at the style profile's centre, not at compose.bpm; planning
+    // at the slower of the two would leave the end of a long set without its tempo points.
+    const StyleProfile& style = styleProfile(styleOf(params));
+    const bool styleTempo = params.getBool(cb + compose::StyleTempo);
+    const double planBpm = (styleTempo ? style.bpmCentre + style.bpmRange : params.get(cb + compose::Bpm) + params.get(cb + compose::TempoRange));
+    const int planBars = seconds > 0.0 ? static_cast<int>(seconds * planBpm / 240.0) + 64 : bars;
     TempoMap tempo = composer.tempoMap(params, planBars);
     if (rampBeat > 0.0) {
         tempo.setConstant(params.get(cb + compose::Bpm));

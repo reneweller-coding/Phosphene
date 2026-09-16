@@ -315,8 +315,11 @@ verdeckt; erst mit der Bass-Maske schlagen beide Prüfungen an.
   6,3 LU -- die Form bringt den Dynamikumfang echter Tracks). Je Track gespielt: −8,1 bis −10,6 LUFS,
   Spanne 2,5 LU; der Pegelangleich hält den *Klang* zusammen, der Energiebogen darf die Tracks
   bewusst um ±2 dB auseinanderziehen.
-- **MIDI: 76550 Ereignisse**, 676 kB, mit Marken für jede Sektion (Intro, Groove, Build, PDB, Drop,
-  Cut, Break, Outro), Tonartwechseln und Tempo-Karte.
+- **MIDI: 76550 Ereignisse**, 676 kB. Unabhängig nachgelesen (eigener Parser in Python, nicht der
+  Leser des Projekts): SMF **Format 1**, PPQ 960, 9 benannte Spuren (Phosphene, Kick, Bass, Perc,
+  Acid, Lead, Arp, Pad, Sfx), **99 Sektionsmarken** in allen acht Kategorien (15 Intro, 3 Groove,
+  15 Build, 15 PDB, 23 Drop, 10 Cut, 10 Break, 8 Outro), 5 Tonartwechsel, 586 Tempo-Ereignisse,
+  76342 Note-Ons.
 - **Memorisierung 0,00 %**: 0 von 669 Acid-, 0 von 136 Lead- und 0 von 253 Arp-Takten stimmen
   transpositionsinvariant mit einem Korpustakt überein.
 - **`.phosset`**: die gespeicherte Datei (7 Zeilen) rendert dieselben 64 Takte **byteweise identisch**
