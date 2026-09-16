@@ -26,6 +26,7 @@ constexpr uint64_t kSaltForm    = 0x464F524D00000001ull;
 constexpr uint64_t kSaltSection = 0x5345435449000002ull;
 constexpr uint64_t kSaltGroup   = 0x47524F5550000003ull;
 constexpr uint64_t kSaltSfx     = 0x5346580000000004ull;
+constexpr uint64_t kSaltMode    = 0x4D4F44450000005ull;   ///< the section's borrowed mode (16.09.2026)
 
 /** @brief Index drawn from non-negative weights. */
 int drawIndex(Rng& r, const double* w, int n)
@@ -51,6 +52,13 @@ int drawIndex(Rng& r, const double* w, int n)
  * minor. chordExtra adds the pendulum moves the literature round asked for -- i to bII (1 semitone) and
  * i to bVII (10) -- on top of the corpus successions, which measured 0 to 5, 0 to 7 and 0 to 8 as the
  * commonest; the extras do not replace them (see the literature table of 16.09.2026).
+ *
+ * interchangeWeight and interchangeChance are the modal interchange of 16.09.2026 (Form.h). They are
+ * deliberately *not* the key-journey weights above: the journey moves between tracks and may change
+ * the tonic with the mode, while an interchange happens over a fixed tonic pedal inside one track, so
+ * Goa borrows the Hijaz modes but Progressive borrows almost nothing and Hi-Tech borrows only the
+ * darker minors. Progressive's chance is small on purpose -- its literature is a genre of one mode
+ * held for eight minutes -- rather than zero, so the path is exercised in every style.
  */
 const StyleProfile kProfiles[kNumStyles] = {
     // Goa
@@ -60,7 +68,8 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 0.0, 0.5, 0.0, 0.0, 0.0, 0.2, 0.0, 0.1, 0.0, 0.0, 0.4, 0.0 },   // i-bII and i-bVII
       { 1.15f, 1.10f, 1.25f, 1.20f }, 0.9f, 0.95f,
       { 0.35, 0.20, 0.25, 0.20 },
-      { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.26f, 1.0f, 16.0f },
+      { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.26f, 1.0f, 16.0f,
+      { 0.15, 0.25, 0.10, 0.30, 0.15, 0.05 }, 0.45f },   // interchange: the Hijaz modes at the peak
     // Full-On: the default, every multiplier 1, so the knobs play as they are set.
     { "Full-On", 145.0, 4.0,
       { 0.30, 0.25, 0.15, 0.15, 0.05, 0.10 },
@@ -68,7 +77,8 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 0.0, 0.1, 0.0, 0.0, 0.0, 0.1, 0.0, 0.1, 0.0, 0.0, 0.1, 0.0 },
       { 1.0f, 1.0f, 1.0f, 1.0f }, 1.0f, 1.0f,
       { 0.30, 0.25, 0.25, 0.20 },
-      { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.22f, 1.0f, 16.0f },
+      { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.22f, 1.0f, 16.0f,
+      { 0.30, 0.30, 0.15, 0.15, 0.05, 0.05 }, 0.30f },
     // Progressive: flatter form, fewer leads, more pad, Dorian and Aeolian.
     { "Progressive", 137.0, 3.0,
       { 0.35, 0.10, 0.05, 0.05, 0.00, 0.45 },
@@ -76,7 +86,8 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.2, 0.0, 0.0, 0.2, 0.0 },
       { 0.9f, 0.55f, 0.8f, 1.3f }, 0.6f, 0.9f,
       { 0.45, 0.25, 0.20, 0.10 },
-      { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.28f, 0.6f, 16.0f },
+      { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.28f, 0.6f, 16.0f,
+      { 0.45, 0.05, 0.00, 0.00, 0.00, 0.50 }, 0.12f },   // Dorian and Aeolian only
     // Dark / Forest: darker modes, less lead, denser percussion, short intros.
     { "Dark Forest", 149.0, 3.0,
       { 0.20, 0.40, 0.25, 0.10, 0.05, 0.00 },
@@ -84,7 +95,8 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 0.0, 0.4, 0.0, 0.0, 0.0, 0.1, 0.0, 0.1, 0.0, 0.0, 0.3, 0.0 },
       { 1.2f, 0.4f, 0.9f, 0.8f }, 1.2f, 1.1f,
       { 0.25, 0.25, 0.35, 0.15 },
-      { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.18f, 1.3f, 8.0f },
+      { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.18f, 1.3f, 8.0f,
+      { 0.20, 0.40, 0.30, 0.10, 0.00, 0.00 }, 0.35f },
     // Hi-Tech: fastest, busiest, shortest sections.
     { "Hi-Tech", 158.0, 4.0,
       { 0.20, 0.35, 0.25, 0.15, 0.05, 0.00 },
@@ -92,7 +104,8 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 0.0, 0.3, 0.0, 0.0, 0.0, 0.1, 0.0, 0.1, 0.0, 0.0, 0.3, 0.0 },
       { 1.3f, 0.6f, 1.1f, 0.6f }, 1.4f, 1.2f,
       { 0.20, 0.30, 0.35, 0.15 },
-      { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.16f, 1.4f, 8.0f },
+      { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.16f, 1.4f, 8.0f,
+      { 0.20, 0.35, 0.30, 0.15, 0.00, 0.00 }, 0.40f },
 };
 
 /** @brief Control points of the arcs: (t, E) pairs, interpolated with raised cosines. */
@@ -230,7 +243,38 @@ float typeEnergy(SectionType type)
     }
 }
 
-FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double arcIn, double arcOut)
+/**
+ * @brief The mode one section borrows over the tonic pedal, or @p trackScale when it borrows nothing.
+ *
+ * The style profile says which modes are available at all and how often a section borrows; the
+ * section's energy says how far it may reach, by multiplying each mode's weight with
+ * @c exp(kInterchangeEnergy * (energy - 0.7) * colourTones(mode)). At a drop (energy near 1) that
+ * lifts double harmonic by a factor of about 1.6 and Phrygian dominant by 1.4 over Aeolian; in a
+ * breakdown (0.3) it presses them down by the same amount, so the Hijaz colour arrives where the
+ * literature puts it -- at the peak (Easwaran 2004) -- rather than at random.
+ *
+ * Everything hangs off the section's own seed, because a section is a lockable unit (PLAN 6.8).
+ */
+static int borrowedMode(const StyleProfile& s, uint64_t sectionSeed, int trackScale, float energy)
+{
+    if (s.interchangeChance <= 0.0f) return trackScale;
+    Rng r;
+    r.seed(mixSeed(sectionSeed ^ kSaltMode, 0));
+    if (r.uniform() >= s.interchangeChance) return trackScale;
+    double w[kNumScales];
+    double total = 0.0;
+    for (int m = 0; m < kNumScales; ++m) {
+        w[m] = s.interchangeWeight[m] * std::exp(kInterchangeEnergy * (static_cast<double>(energy) - 0.7)
+                                                 * scaleColourTones(m));
+        if (m == trackScale) w[m] = 0.0;   // "borrowing" the mode the track already has is not a borrow
+        total += w[m];
+    }
+    if (total <= 0.0) return trackScale;
+    return drawIndex(r, w, kNumScales);
+}
+
+FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double arcIn, double arcOut,
+                      int trackScale, const uint64_t* sectionSeed)
 {
     Rng r;
     r.seed(mixSeed(seed, kSaltForm));
@@ -336,6 +380,22 @@ FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double a
         if (sec.type == SectionType::Break && i > 0 && isCore(f.section[i - 1].type))
             sec.cutBeats = d.uniform() < 0.5f ? 1.0f : 2.0f;   // Grosz et al.: 1 to 3 s
     }
+    // The mode of each section, over the tonic pedal (Form.h). It is drawn after the energies,
+    // because the energy is what decides how far a section may reach for the Hijaz colour, and from
+    // the section's own seed, so that locking or rerolling a section moves its mode with it. The
+    // intro and the outro always keep the track's mode: they are the DJ-friendly ends of the track
+    // and the next track's intro is written over them (PLAN 6.7).
+    trackScale = std::clamp(trackScale, 0, kNumScales - 1);
+    f.scaleMask = 1u << trackScale;
+    for (int i = 0; i < f.count; ++i) {
+        Section& sec = f.section[i];
+        const bool ends = sec.type == SectionType::Intro || sec.type == SectionType::Outro;
+        const uint64_t ss = sectionSeed != nullptr ? sectionSeed[std::clamp(i, 0, kMaxSections - 1)]
+                                                   : mixSeed(seed ^ kSaltMode, static_cast<uint64_t>(i));
+        sec.scale = ends ? trackScale
+                         : borrowedMode(s, ss, trackScale, 0.5f * (sec.energy + sec.energyTo));
+        f.scaleMask |= 1u << std::clamp(sec.scale, 0, kNumScales - 1);
+    }
     return f;
 }
 
@@ -359,6 +419,7 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     const double u = s.bars > 1 ? static_cast<double>(b) / (s.bars - 1) : 0.0;
     bp.energy = static_cast<float>(s.energy + (s.energyTo - s.energy) * u);
     bp.pdbVariant = s.pdbVariant;
+    bp.scale = static_cast<int8_t>(s.scale);   // the melodic layer's mode here; the bass ignores it
 
     // Section-level draws, in a fixed order, so the same bar always gets the same answer.
     const uint64_t ss = sectionSeed[std::clamp(si, 0, kMaxSections - 1)];

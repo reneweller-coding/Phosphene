@@ -55,6 +55,26 @@
  * The tempo centres of Goa and Full-On are measured, not assumed: Tools/ref_style.py reads the artist
  * tag of the 40 reference recordings and estimates the tempo from the autocorrelation of the kick
  * band's onset envelope (Goa median 142.8 BPM over 13 tracks, Full-On 144.6 over 18).
+ *
+ * **Modal interchange over a static bass pedal** (16.09.2026). A track's key is fixed, but its
+ * *mode* need not be: in Goa and full-on the bass rolls on the tonic while the melodic layer moves
+ * between Dorian or Aeolian in the groove, Phrygian in the main drive and Phrygian dominant or
+ * double harmonic -- the raised third, the Hijaz colour -- at the peak. The pedal is what lets the
+ * mode move without losing the low end (Easwaran 2004 on the drone; the technique itself is common
+ * modal interchange over a pedal point, Persichetti, "Twentieth-Century Harmony", 1961, ch. 2).
+ *
+ * Each section therefore carries its own @c scale. It is drawn from the section's own seed out of
+ * the style profile's @c interchangeWeight -- Goa reaches for Phrygian dominant and double harmonic,
+ * Progressive stays on Dorian and Aeolian -- and the energy of the section decides how far it may
+ * reach: a mode's weight is multiplied by @c exp(kInterchangeEnergy * (energy - 0.7) * colourTones),
+ * so the colourful modes are only really available where the arc is high. @c interchangeChance is
+ * how often a section borrows at all; at 0 every section keeps the track's mode and the whole
+ * feature is off, which is what the self test compares against.
+ *
+ * **The bass never moves.** The mode is a property of the melodic layer alone. The bass root, the
+ * bass register, its gate limit, the learned bass phrase and the chord shift of
+ * compose.bass_follows_chords all read the *track's* mode, never a section's, so the bass part of a
+ * render with interchange on is bit-identical to one with it off (self test, "modal interchange").
  */
 #pragma once
 #include "phos/Harmony.h"
@@ -113,7 +133,17 @@ struct StyleProfile {
     float  breakShare = 0.22f;              ///< share of the body the breakdowns should take (0.15..0.30)
     float  colour = 1.0f;                   ///< how much weight the flat second and augmented second may get
     float  introBars = 16.0f;               ///< preferred intro length in bars (8 or 16)
+    /**
+     * @name Modal interchange (16.09.2026)
+     * Which modes a section of this style may borrow over the tonic pedal, and how often it does.
+     * @{ */
+    double interchangeWeight[kNumScales] = {};   ///< weight of each mode as a section's borrowed mode
+    float  interchangeChance = 0.0f;             ///< 0..1: how often a section borrows a mode at all
+    /** @} */
 };
+
+/** @brief How much a section's energy lifts the colourful modes when a mode is borrowed. */
+constexpr double kInterchangeEnergy = 1.6;
 
 /** @brief The profile of a style (a static table). */
 const StyleProfile& styleProfile(StyleId id);
@@ -142,6 +172,7 @@ struct Section {
     float energyTo = 0.5f;   ///< energy at the end of the section (buildups rise towards the drop)
     int   pdbVariant = 0;    ///< buildups: which pre-drop break the last bar plays
     float cutBeats = 0.0f;   ///< breakdowns: beats of silence at the start (the cut of Grosz et al.)
+    int   scale = 0;         ///< the mode the *melodic* layer takes here; the bass ignores it entirely
 };
 
 /** @brief An effect placed in a track: start and length in beats from the track's first bar. */
@@ -158,17 +189,24 @@ struct FormPlan {
     int     bars = 0;                 ///< total length (a multiple of 32)
     int     body = 0;                 ///< which grammar body was drawn
     std::vector<SfxEvent> sfx;        ///< effects at the section boundaries, sorted by start
+    /** @brief Bit per mode: which modes the melodic layer needs material for (bit @c trackScale always set). */
+    uint32_t scaleMask = 0;
 };
 
 /**
  * @brief Draws a track's form.
- * @param s        the style profile (body weights, PDB weights, break share)
- * @param seed     the track's form seed
- * @param target   preferred length in bars; the result is the nearest length the grammar can build
- * @param arcIn    the set's energy arc where the track starts
- * @param arcOut   the set's energy arc where the track ends
+ * @param s          the style profile (body weights, PDB weights, break share, interchange weights)
+ * @param seed       the track's form seed
+ * @param target     preferred length in bars; the result is the nearest length the grammar can build
+ * @param arcIn      the set's energy arc where the track starts
+ * @param arcOut     the set's energy arc where the track ends
+ * @param trackScale the track's own mode: what a section keeps when it does not borrow
+ * @param sectionSeed one seed per section (kMaxSections entries), or null to derive the borrowed
+ *                   modes from @p seed; a section is a lockable unit, so its mode hangs off its own
+ *                   seed exactly as its instrumentation does
  */
-FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double arcIn, double arcOut);
+FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double arcIn, double arcOut,
+                      int trackScale = 0, const uint64_t* sectionSeed = nullptr);
 
 /** @brief Index of the section that contains @p barInTrack (the last one if the bar is past the end). */
 int sectionOfBar(const FormPlan& f, int barInTrack);
@@ -210,6 +248,7 @@ struct BarPlan {
     int         groupFigure = -1;       ///< bass figure at beat 1 of the group's last bar, -1 = none
     int         group = 0;              ///< eight-bar group within the track
     uint8_t     partsNext = 0;          ///< the parts of the following bar (an acid slide needs a note to slide into)
+    int8_t      scale = -1;             ///< the section's mode for the melodic layer, -1 = the track's
 };
 
 /**

@@ -24,26 +24,109 @@ constexpr uint64_t kSaltLead   = 0x4C45414400000003ull;
 constexpr uint64_t kSaltArp    = 0x4152500000000004ull;
 constexpr uint64_t kSaltSound  = 0x534F554E44000006ull;
 constexpr uint64_t kSaltPad    = 0x5041440000000007ull;
+constexpr uint64_t kSaltMode   = 0x4D4F44450000008ull;   ///< the material of a borrowed mode (16.09.2026)
 
 using Allowed = std::vector<std::vector<uint8_t>>;
+
+/** @name The lead's ambitus: the window every lead note is drawn in, as intervals to its root. @{ */
+constexpr int kLeadRelLo = -5;
+constexpr int kLeadRelHi = 14;
+/** @} */
 
 int sym(int rel) { return PitchModel::symbol(std::clamp(rel, kCorpusRelMin, kCorpusRelMax)); }
 
 /**
- * @brief Whether a pitch class is one of the genre's colour tones of @p scale.
+ * @brief The measured tension curve of a role: deviation of Lerdahl instability from the role's mean.
  *
- * The flat second (one semitone above the root) and the upper note of an augmented second -- a step of
- * three semitones between two neighbouring degrees, the Hijaz interval of Goa. Easwaran 2004 names both
- * as what makes a psytrance melody sound like one; Farbood's tension model counts them as dissonance,
- * which is one of the four quantities the energy arc moves.
+ * Counted by Tools/corpus/measure_tension.py over 655 deduplicated corpus lines (655 of 666; the
+ * near-duplicate pass of Tools/train/dataset.py). @c beat holds the mean instability of each beat of
+ * the bar minus the role's own mean over the four beats, and @c parity half the paired per-line
+ * difference between the odd and the even bar of a two-bar pair, so that the even bar gets
+ * @c -parity and the odd bar @c +parity.
+ *
+ * | role | beat 1 | beat 2 | beat 3 | beat 4 | beat 4 - beat 1 (paired, 95 %) | bar parity (paired, 95 %) |
+ * |------|--------|--------|--------|--------|--------------------------------|---------------------------|
+ * | acid | 0.994  | 1.198  | 1.270  | 1.230  | +0.446 [+0.164, +0.760]        | +0.139 [+0.044, +0.248]   |
+ * | lead | 1.169  | 1.318  | 1.406  | 1.636  | +0.552 [+0.318, +0.788]        | +0.199 [+0.074, +0.323]   |
+ * | arp  | 0.960  | 1.000  | 1.048  | 1.219  | +0.287 [+0.212, +0.360]        | +0.116 [+0.089, +0.144]   |
+ *
+ * Every interval excludes zero, so both effects are real. What the corpus does **not** show is the
+ * eight-bar schedule the review proposed: there is no peak in bar 7, and the last note of a bar is
+ * *less* often a tonic or a fifth as a four-bar group goes on (arp 0.731 to 0.596, acid 0.638 to
+ * 0.538, lead 0.582 to 0.484), the opposite of a phrase-final resolution. So only these two effects
+ * are implemented.
  */
-bool isColourTone(int scale, int pcFromRoot)
+struct TensionCurve { double beat[4]; double parity; };
+constexpr TensionCurve kTensionCurve[kNumCorpusRoles] = {
+    { { -0.179, 0.025, 0.097, 0.057 }, 0.070 },   // acid
+    { { -0.213, -0.064, 0.024, 0.254 }, 0.100 },  // lead
+    { { -0.097, -0.057, -0.009, 0.162 }, 0.058 }, // arp
+};
+
+/**
+ * @brief How hard the measured curve tilts a position's weights, per role.
+ *
+ * The weights are an exponential tilt @c exp(kTensionTilt * D * instability). A first-order estimate
+ * says the expected instability at a position then moves by about @c tilt * D * Var(instability)
+ * over the position's allowed set, which for the seven degrees of a minor mode is roughly 1.27 and
+ * would put the tilt near 0.8. **Measured, that overshoots by three to one**: at 0.8 the composer's
+ * own lines came out at a lead beat contrast of +1.13 against the corpus's +0.55 and a lead parity
+ * of +0.74 against +0.20 -- the model's own distribution reacts far more sharply to a tilt than a
+ * uniform allowed set would. The tilt was therefore calibrated backwards from the measurement, over
+ * 400 tracks per setting:
+ *
+ * | tilt   | acid beat | lead beat | acid parity | lead parity |
+ * |--------|-----------|-----------|-------------|-------------|
+ * | 0.00   | +0.147    | +0.381    | +0.062      | +0.203      |
+ * | 0.20   | +0.228    | +0.558    | +0.079      | +0.276      |
+ * | 0.28   | +0.235    | +0.603    | +0.106      | +0.316      |
+ * | 0.40   | +0.265    | +0.696    | +0.101      | +0.376      |
+ * | corpus | +0.446    | +0.552    | +0.139      | +0.199      |
+ *
+ * 0.20 puts the lead's beat contrast on the corpus value and all four inside the corpus's own 95 %
+ * intervals; 0.40 pushes the lead's parity out of its interval, and 0 -- the behaviour before this
+ * round -- leaves the acid's beat contrast below its interval. The acid moves least, because its own
+ * corpus model already dominates its within-bar shape. The self test re-measures all four.
+ *
+ * **The arp is 0 on purpose.** Its allowed set is the chord and nothing else (PLAN 6.5: every arp
+ * note is a chord tone), and within one triad the three pitch classes carry Lerdahl instabilities of
+ * only 0, 2 and 1. At a tilt of 0.8 the arp's measured beat contrast came out at +0.017 against a
+ * corpus value of +0.287: there is simply not enough stability variance inside a triad for the curve
+ * to act on. Carrying it would mean letting the arp off the chord, which is a bigger change than the
+ * curve is worth, so the arp's curve is reported and not implemented.
+ */
+constexpr double kTensionTilt[kNumCorpusRoles] = { 0.20, 0.20, 0.0 };
+
+/**
+ * @brief How much of the tilt the bar-parity term carries, relative to the within-bar term.
+ *
+ * Measured, not assumed. With one gain for both halves of the curve the calibrated tilt put the beat
+ * contrast where the corpus has it (+0.47 against +0.45 for the acid, +0.43 against +0.55 for the
+ * lead) but the bar parity at +0.33 and +0.37 against corpus means of +0.14 and +0.20 -- outside the
+ * corpus's own intervals. The reason is structural: the parity term is a constant offset over a
+ * whole bar and moves a line's mean about twice as hard as a difference *within* a bar does. So the
+ * parity term carries half the gain, which is what puts both contrasts inside both intervals.
+ */
+constexpr double kParityGain = 0.5;
+
+/**
+ * @brief The curve's tilt at one step of a pattern: the measured deviation times the role's tilt.
+ * @param role  which role's measured curve
+ * @param step  sixteenths from the start of the pattern
+ * @param bars  the pattern's length in bars; under two the bar-parity term has nowhere to live and
+ *              is dropped, because a one-bar cell is replayed in every bar and would otherwise be
+ *              biased to the stable side of a contrast that is about the *pair* of bars.
+ * @return 0 where the curve is not implemented (the arp), which leaves the allowed sets exactly as
+ *         they were before 16.09.2026.
+ */
+double tensionAt(CorpusRoleId role, int step, int bars)
 {
-    const int pc = ((pcFromRoot % 12) + 12) % 12;
-    if (pc == 1) return true;
-    for (int d = 1; d < 7; ++d)
-        if (scaleDegree(scale, d) - scaleDegree(scale, d - 1) == 3 && scaleDegree(scale, d) % 12 == pc) return true;
-    return false;
+    const int r = static_cast<int>(role);
+    if (kTensionTilt[r] == 0.0) return 0.0;
+    const TensionCurve& c = kTensionCurve[r];
+    double d = c.beat[((step % 16) + 16) % 16 / 4];
+    if (bars >= 2) d += kParityGain * (((step / 16) % 2 == 0) ? -c.parity : c.parity);
+    return kTensionTilt[r] * d;
 }
 
 /** @brief Index drawn from non-negative weights. */
@@ -58,35 +141,73 @@ int drawIndex(Rng& r, const double* w, int n)
 }
 
 /**
- * @brief Allowed symbols: scale tones (relative to the key) in [lo, hi] semitones above the part root.
- * @param colour 0 = a plain allowed set (every entry 1, the weight the sampler has always used);
- *               > 0 = weights, with the colour tones lifted by that much over the base of 8.
+ * @brief Quantises real per-position weights into the sampler's uint8 entries.
+ *
+ * A constant factor at one position cancels in both normalisations of the sampler
+ * (CorpusSample.inl), so the scale is free and the largest weight is put at 200: that spends the
+ * whole of the uint8 range on the *shape* of the position, which is all that matters, and still
+ * leaves room above for nothing at all -- 255 would only cost resolution to no purpose. A weight
+ * more than 200 times smaller than the position's largest lands on 1 rather than on 0, so the tilt
+ * can never forbid a tone the constraint allows.
  */
-std::vector<uint8_t> scaleSet(int scale, int rootOffset, int lo, int hi, float colour = 0.0f)
+void quantise(const std::vector<double>& w, std::vector<uint8_t>& out)
+{
+    double mx = 0.0;
+    for (double v : w) mx = std::max(mx, v);
+    if (mx <= 0.0) return;
+    for (size_t i = 0; i < w.size(); ++i)
+        if (w[i] > 0.0) out[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(200.0 * w[i] / mx)), 1, 255));
+}
+
+/**
+ * @brief Allowed symbols: scale tones (relative to the key) in [lo, hi] semitones above the part root.
+ * @param colour  0 = no colour weighting; > 0 = the colour tones lifted by 1 + 2 * colour (the
+ *                dissonance side of the energy arc, Farbood 2012)
+ * @param tension the measured tension curve's deviation at this position (tensionAt); 0 leaves the
+ *                plain integer weights the sampler has used since Phase 5 exactly as they were
+ */
+std::vector<uint8_t> scaleSet(int scale, int rootOffset, int lo, int hi, float colour = 0.0f, double tension = 0.0)
 {
     std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
-    const int base = colour > 0.0f ? 8 : 1;
+    if (tension == 0.0) {
+        const int base = colour > 0.0f ? 8 : 1;
+        for (int rel = lo; rel <= hi; ++rel) {
+            if (rel < kCorpusRelMin || rel > kCorpusRelMax || !inScale(scale, rel + rootOffset)) continue;
+            int w = base;
+            if (colour > 0.0f && isColourTone(scale, rel + rootOffset))
+                w = std::clamp(static_cast<int>(std::lround(8.0f * (1.0f + 2.0f * colour))), 1, 255);
+            a[static_cast<size_t>(sym(rel))] = static_cast<uint8_t>(w);
+        }
+        return a;
+    }
+    // The two weightings multiply: the arc's colour lifts the genre's colour tones wherever the arc
+    // is high, the measured curve tilts the whole position towards or away from instability.
+    std::vector<double> w(static_cast<size_t>(kCorpusAlphabet), 0.0);
     for (int rel = lo; rel <= hi; ++rel) {
         if (rel < kCorpusRelMin || rel > kCorpusRelMax || !inScale(scale, rel + rootOffset)) continue;
-        int w = base;
-        if (colour > 0.0f && isColourTone(scale, rel + rootOffset))
-            w = std::clamp(static_cast<int>(std::lround(8.0f * (1.0f + 2.0f * colour))), 1, 255);
-        a[static_cast<size_t>(sym(rel))] = static_cast<uint8_t>(w);
+        double v = std::exp(tension * lerdahlInstability(rel + rootOffset));
+        if (colour > 0.0f && isColourTone(scale, rel + rootOffset)) v *= 1.0 + 2.0 * static_cast<double>(colour);
+        w[static_cast<size_t>(sym(rel))] = v;
     }
+    quantise(w, a);
     return a;
 }
 
-/** @brief Allowed symbols: the chord's tones in [lo, hi]. */
-std::vector<uint8_t> chordSet(int scale, int degree, int rootOffset, int lo, int hi)
+/** @brief Allowed symbols: the chord's tones in [lo, hi], optionally tilted by the tension curve. */
+std::vector<uint8_t> chordSet(int scale, int degree, int rootOffset, int lo, int hi, double tension = 0.0)
 {
     int pcs[3];
     chordTones(scale, degree, pcs);
     std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
+    std::vector<double> w(static_cast<size_t>(kCorpusAlphabet), 0.0);
     for (int rel = lo; rel <= hi; ++rel) {
         if (rel < kCorpusRelMin || rel > kCorpusRelMax) continue;
         const int pc = ((rel + rootOffset) % 12 + 12) % 12;
-        if (pc == pcs[0] || pc == pcs[1] || pc == pcs[2]) a[static_cast<size_t>(sym(rel))] = 1;
+        if (pc != pcs[0] && pc != pcs[1] && pc != pcs[2]) continue;
+        if (tension == 0.0) a[static_cast<size_t>(sym(rel))] = 1;
+        else w[static_cast<size_t>(sym(rel))] = std::exp(tension * lerdahlInstability(rel + rootOffset));
     }
+    if (tension != 0.0) quantise(w, a);
     return a;
 }
 
@@ -251,9 +372,12 @@ void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     if (static_cast<int>(on.size()) * 10 < steps * 4) { on.clear(); for (int s = 0; s < steps; s += 2) on.push_back(s); }
     const int ambitus = std::clamp(median(role.ambitus, 37), 7, 19);
     const int rootOffset = ((m.root[0] - key) % 12 + 12) % 12;
+    const int bars = steps / 16;
     Allowed allowed;
-    for (size_t i = 0; i < on.size(); ++i) allowed.push_back(i == 0 ? single(0) : scaleSet(scale, rootOffset, 0, ambitus));
-    const std::vector<int> rels = drawPitches(model, CorpusRoleId::Acid, src, allowed, on, steps / 16, 0, 0, temperature, r);
+    for (size_t i = 0; i < on.size(); ++i)
+        allowed.push_back(i == 0 ? single(0)
+                                 : scaleSet(scale, rootOffset, 0, ambitus, 0.0f, tensionAt(CorpusRoleId::Acid, on[i], bars)));
+    const std::vector<int> rels = drawPitches(model, CorpusRoleId::Acid, src, allowed, on, bars, 0, 0, temperature, r);
 
     std::vector<MelodyNote>& a = m.acid[0];
     a.clear();
@@ -280,8 +404,10 @@ void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
         std::vector<uint8_t> redraw(a.size(), 0);
         for (int c = 0; c < changes; ++c) redraw[static_cast<size_t>(1 + r.below(static_cast<int>(a.size()) - 1))] = 1;
         Allowed vary;
-        for (size_t i = 0; i < a.size(); ++i) vary.push_back(redraw[i] ? scaleSet(scale, rootOffset, 0, ambitus) : single(a[i].rel));
-        const std::vector<int> vr = drawPitches(model, CorpusRoleId::Acid, src, vary, on, steps / 16, 0, 0, temperature, r);
+        for (size_t i = 0; i < a.size(); ++i)
+            vary.push_back(redraw[i] ? scaleSet(scale, rootOffset, 0, ambitus, 0.0f, tensionAt(CorpusRoleId::Acid, on[i], bars))
+                                     : single(a[i].rel));
+        const std::vector<int> vr = drawPitches(model, CorpusRoleId::Acid, src, vary, on, bars, 0, 0, temperature, r);
         for (size_t i = 0; i < b.size(); ++i) b[i].rel = static_cast<int8_t>(vr[i]);
         MelodyNote& moved = b[static_cast<size_t>(r.below(static_cast<int>(b.size())))];
         moved.flags ^= kNoteAccent;
@@ -302,7 +428,7 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     const CorpusRole& role = kCorpusRoles[static_cast<int>(CorpusRoleId::Lead)];
     const PitchModel& model = corpusPitchModel(CorpusRoleId::Lead);
     const int rootOffset = ((m.root[1] - key) % 12 + 12) % 12;
-    constexpr int lo = -5, hi = 14;
+    constexpr int lo = kLeadRelLo, hi = kLeadRelHi;
     m.colour = colour;
 
     auto rhythm = [&]() {
@@ -315,10 +441,12 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
         if (on.size() > 14) on.resize(14);
         return on;
     };
-    // Constraints of one note: chord tones on strong steps, scale tones elsewhere.
+    // Constraints of one note: chord tones on strong steps, scale tones elsewhere. Both carry the
+    // measured tension curve of the lead; the motif is two bars long, so the bar-parity term applies.
     auto constraintAt = [&](int window, int step) {
-        return step % 8 == 0 ? chordSet(scale, chordAtStep(m, window, step), rootOffset, lo, hi)
-                             : scaleSet(scale, rootOffset, lo, hi, colour);
+        const double t = tensionAt(CorpusRoleId::Lead, step, 2);
+        return step % 8 == 0 ? chordSet(scale, chordAtStep(m, window, step), rootOffset, lo, hi, t)
+                             : scaleSet(scale, rootOffset, lo, hi, colour, t);
     };
     auto fits = [&](int window, int step, int rel) {
         return constraintAt(window, step)[static_cast<size_t>(sym(rel))] != 0;
@@ -361,19 +489,55 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
             const std::vector<int> a = drawPitches(model, CorpusRoleId::Lead, src, al2, br, 2, rels[rels.size() - 2], rels.back(), temperature, r);
             for (size_t i = 0; i < a.size(); ++i) { steps.push_back(br[i] + 64); rels.push_back(a[i]); }
         }
-        // A'' (bars 6-7): the motif, its last notes redrawn, ending on a chord tone.
+        // A'' (bars 6-7): the motif, its last notes redrawn, ending on a chord tone -- and since
+        // 16.09.2026 one systematic transformation on top of that (Melody.h, MotifOperator). The
+        // operator is drawn per phrase from the phrase's own point in the lead's random stream, so it
+        // is as deterministic as everything else here.
         {
-            const size_t n = motifRhythm.size();
+            static const double kOperatorWeights[kNumMotifOperators] = { 0.40, 0.20, 0.20, 0.20 };
+            const int op = drawIndex(r, kOperatorWeights, kNumMotifOperators);
+            m.leadOperator[w] = op;
+            // The phase shift is a rotation of the two-bar cell by one sixteenth: the motif loops
+            // every two bars, so moving it on by one step and letting the last note wrap round is
+            // what "displaced by a sixteenth" means for a loop. Every note that sat on a beat then
+            // sits just after one, which is the syncopation the operator exists for.
+            std::vector<int> rh = motifRhythm;
+            if (op == static_cast<int>(MotifOperator::PhaseShift)) {
+                for (int& s : rh) s = (s + 1) % 32;
+                std::sort(rh.begin(), rh.end());
+            }
+            const size_t n = rh.size();
             const size_t free = std::max<size_t>(2, (n * 2) / 5);
-            Allowed keep;
+            Allowed keep, cons;
             for (size_t i = 0; i < n; ++i) {
-                const int s = motifRhythm[i] + 96;
-                if (i + 1 == n) keep.push_back(chordSet(scale, chordAtStep(m, w, s), rootOffset, lo, hi));
-                else if (i + free >= n || !fits(w, s, motif[i])) keep.push_back(constraintAt(w, s));
+                const int s = rh[i] + 96;
+                const double t = tensionAt(CorpusRoleId::Lead, s, 2);
+                cons.push_back(i + 1 == n ? chordSet(scale, chordAtStep(m, w, s), rootOffset, lo, hi, t)
+                                          : constraintAt(w, s));
+                if (i + free >= n || i >= motif.size() || !fits(w, s, motif[i])) keep.push_back(cons.back());
                 else keep.push_back(single(motif[i]));
             }
-            const std::vector<int> a = drawPitches(model, CorpusRoleId::Lead, src, keep, motifRhythm, 2, rels[rels.size() - 2], rels.back(), temperature, r);
-            for (size_t i = 0; i < a.size(); ++i) { steps.push_back(motifRhythm[i] + 96); rels.push_back(a[i]); }
+            std::vector<int> a = drawPitches(model, CorpusRoleId::Lead, src, keep, rh, 2, rels[rels.size() - 2], rels.back(), temperature, r);
+            if (op == static_cast<int>(MotifOperator::Expand)) {
+                std::vector<int> ex;
+                // The expansion runs against the *constraint* sets, not against `keep`: a position
+                // that keeps the motif's note is a single symbol and could not be widened at all.
+                if (expandContour(a, cons, lo, hi, ex)) a = ex;
+                else m.leadOperator[w] = static_cast<int>(MotifOperator::None);
+            }
+            if (op == static_cast<int>(MotifOperator::OctaveJump)) {
+                // Single offbeat sixteenths thrown an octave up: the Goa lead idiom. An octave keeps
+                // the pitch class, so a jumped note is still in the mode and still a chord tone where
+                // it was one; the ceiling keeps the masking rule against the arp workable.
+                int jumps = 0;
+                for (size_t i = 0; i < a.size(); ++i) {
+                    if (rh[i] % 2 == 0 || a[i] + 12 > kCorpusRelMax || m.root[1] + a[i] + 12 > 96) continue;
+                    if (r.uniform() < 0.5f) { a[i] += 12; ++jumps; }
+                }
+                m.leadJumps[w] = jumps;
+                if (jumps == 0) m.leadOperator[w] = static_cast<int>(MotifOperator::None);
+            }
+            for (size_t i = 0; i < a.size(); ++i) { steps.push_back(rh[i] + 96); rels.push_back(a[i]); }
         }
         for (size_t i = 0; i < steps.size(); ++i) {
             const int next = i + 1 < steps.size() ? steps[i + 1] : 128;
@@ -394,23 +558,67 @@ void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatur
     const CorpusRole& role = kCorpusRoles[static_cast<int>(CorpusRoleId::Arp)];
     const PitchModel& model = corpusPitchModel(CorpusRoleId::Arp);
     const int rootOffset = ((m.root[2] - key) % 12 + 12) % 12;
-    m.arpStyle = r.uniform() < 0.5f ? 0 : 1 + r.below(3);
+    // 16.09.2026: two more step families. Euclidean selection (Toussaint, "The Euclidean algorithm
+    // generates traditional musical rhythms", BRIDGES 2005) reuses the percussion's own generator,
+    // and the polymeter is a three-sixteenth cell that precesses against the 4/4 bar.
+    static const double kArpStyleWeights[kNumArpStyles] = { 0.30, 0.12, 0.10, 0.12, 0.24, 0.12 };
+    m.arpStyle = drawIndex(r, kArpStyleWeights, kNumArpStyles);
+    m.arpPolymeter = m.arpStyle == static_cast<int>(ArpStyle::Polymeter);
     m.arpOctaveJump = r.uniform() < 0.3f;
     const int span = r.uniform() < 0.6f ? 12 : 19;
     std::vector<int> on;
-    for (int tries = 0; tries < 12; ++tries) {
-        on = drawOnsets(r, role, 16);
-        if (on.size() >= 10) break;
+    if (m.arpStyle == static_cast<int>(ArpStyle::Euclid)) {
+        // E(5,16) and E(7,16) are the two the plan names; their neighbours E(4,16), E(6,16) and
+        // E(8,16) are the rest of the family and carry a third of the weight between them.
+        static const double kPulseWeights[5] = { 0.10, 0.30, 0.15, 0.30, 0.15 };
+        m.arpPulses = 4 + drawIndex(r, kPulseWeights, 5);
+        // The rotation at a moderate syncopation, exactly as a Euclidean percussion lane chooses
+        // its own (Rhythm.cpp): Sioros, Miron, Davies, Gouyon and Madison ("Syncopation creates the
+        // sensation of groove in synthesized music examples", Frontiers in Psychology 2014) found
+        // groove rising with moderate syncopation, so neither extreme is taken. Ties go to the
+        // lowest rotation, so the choice is a function of the pulses alone and cannot drift.
+        auto syncOf = [&](int rot) {
+            const std::vector<bool> e = euclid(m.arpPulses, kStepsPerBar, rot);
+            bool st[kStepsPerBar];
+            for (int i = 0; i < kStepsPerBar; ++i) st[i] = e[static_cast<size_t>(i)];
+            return lhlSyncopation(st);
+        };
+        int lo = 1 << 30, hi = -(1 << 30);
+        for (int rot = 0; rot < kStepsPerBar; ++rot) { const int s = syncOf(rot); lo = std::min(lo, s); hi = std::max(hi, s); }
+        const int target = (lo + hi) / 2;
+        int best = 0, bestD = 1 << 30;
+        for (int rot = 0; rot < kStepsPerBar; ++rot) {
+            const int d = std::abs(syncOf(rot) - target);
+            if (d < bestD) { bestD = d; best = rot; }
+        }
+        m.arpRotation = best;
+        const std::vector<bool> e = euclid(m.arpPulses, kStepsPerBar, m.arpRotation);
+        for (int s = 0; s < kStepsPerBar; ++s) if (e[static_cast<size_t>(s)]) on.push_back(s);
+        if (on.empty()) on.push_back(0);
+    } else if (m.arpPolymeter) {
+        // The cell is three sixteenths long; composeMelodyBar reads it at the absolute sixteenth of
+        // the track, so it starts one step later in every bar and comes home every three bars.
+        on = { 0, 1, 2 };
+    } else {
+        for (int tries = 0; tries < 12; ++tries) {
+            on = drawOnsets(r, role, 16);
+            if (on.size() >= 10) break;
+        }
+        if (on.size() < 10) { on.clear(); for (int s = 0; s < 16; ++s) on.push_back(s); }
     }
-    if (on.size() < 10) { on.clear(); for (int s = 0; s < 16; ++s) on.push_back(s); }
+    const bool drawn = m.arpStyle == static_cast<int>(ArpStyle::Corpus)
+                    || m.arpStyle == static_cast<int>(ArpStyle::Euclid) || m.arpPolymeter;
     for (int c = 0; c < 4; ++c) {
         const std::vector<uint8_t> set = chordSet(scale, m.chordDegree[c], rootOffset, 0, span);
         std::vector<int> tones;
         for (int s = 0; s < kCorpusAlphabet; ++s) if (set[static_cast<size_t>(s)]) tones.push_back(PitchModel::rel(s));
         if (tones.empty()) tones.push_back(0);
         std::vector<int> rels;
-        if (m.arpStyle == 0) {
-            Allowed al(on.size(), set);
+        if (drawn) {
+            // The arp's cell is one bar, so only the beat half of the measured tension curve applies.
+            Allowed al;
+            for (int s : on) al.push_back(chordSet(scale, m.chordDegree[c], rootOffset, 0, span,
+                                                   tensionAt(CorpusRoleId::Arp, s, 1)));
             rels = drawPitches(model, CorpusRoleId::Arp, src, al, on, 1, tones[0], tones[0], temperature, r);
         } else {
             const int t = static_cast<int>(tones.size());
@@ -436,16 +644,40 @@ void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatur
     }
 }
 
-void pitchRange(const std::vector<MelodyNote>& notes, int root, int& lo, int& hi)
+/**
+ * @brief Widens [lo, hi] to hold every note of @p notes over @p root.
+ * @param relCeiling notes whose interval to the root is above this are left out; that is how the
+ *                   lead's octave jumps stay out of the range the masking rule works with.
+ */
+void pitchRange(const std::vector<MelodyNote>& notes, int root, int& lo, int& hi, int relCeiling = 127)
 {
-    for (const MelodyNote& n : notes) { lo = std::min(lo, root + n.rel); hi = std::max(hi, root + n.rel); }
+    for (const MelodyNote& n : notes) {
+        if (n.rel > relCeiling) continue;
+        lo = std::min(lo, root + n.rel);
+        hi = std::max(hi, root + n.rel);
+    }
 }
 
 /** @brief The pad's gate pattern and the pitch ranges the masking rule works on. */
 void makeRangesAndPad(MelodyPlan& m, uint64_t seed)
 {
-    for (const auto& ph : m.lead) pitchRange(ph, m.root[1], m.leadLo, m.leadHi);
+    // Octave-jumped notes (MotifOperator::OctaveJump) are left out of the lead's range on purpose.
+    // The range exists for one thing: the masking rule that keeps the arp out of the lead's register
+    // (Form.cpp). A single displaced sixteenth is an excursion, not a register, and letting it drive
+    // the rule pushed the arp a whole octave higher and past the ceiling -- measured, the arp was
+    // silenced in 53 % of drops with the jumps counted and in 26 % without. Every drawn lead note
+    // sits at or under kLeadRelHi, so anything above it is a jump and nothing else.
+    for (const auto& ph : m.lead) pitchRange(ph, m.root[1], m.leadLo, m.leadHi, kLeadRelHi);
     for (const auto& cell : m.arp) pitchRange(cell, m.root[2], m.arpLo, m.arpHi);
+    // Every borrowed mode counts towards the ranges as well. The masking rule between lead and arp
+    // is decided once per section from these numbers (Form.cpp), and a section may be playing a
+    // borrowed mode; taking the union keeps the rule conservative rather than letting a recoloured
+    // note slip past it.
+    for (const ModeMaterial& mm : m.mode) {
+        if (!mm.built) continue;
+        for (const auto& ph : mm.lead) pitchRange(ph, m.root[1], m.leadLo, m.leadHi, kLeadRelHi);
+        for (const auto& cell : mm.arp) pitchRange(cell, m.root[2], m.arpLo, m.arpHi);
+    }
     if (m.arpOctaveJump) m.arpHi += 12;
     if (m.leadLo > m.leadHi) { m.leadLo = m.root[1]; m.leadHi = m.root[1]; }
     if (m.arpLo > m.arpHi) { m.arpLo = m.root[2]; m.arpHi = m.root[2]; }
@@ -468,8 +700,62 @@ void chordTones(int scale, int degree, int out[3])
     for (int i = 0; i < 3; ++i) out[i] = scaleDegree(scale, degree + 2 * i) % 12;
 }
 
+/**
+ * @brief Widens every interval of a line while keeping its contour sign for sign.
+ *
+ * The contour-preserving expansion of PLAN 6.5: Schoenberg's developing variation as Frisch reads it
+ * ("Brahms and the Principle of Developing Variation", University of California Press 1984) varies a
+ * motif by keeping what makes it recognisable -- here the sequence of up, down and same -- and
+ * changing the size of its steps. Each note is put at the first symbol its position allows that lies
+ * *strictly further* from the note before than the parent's interval did, in the parent's direction;
+ * that widens the step and can never turn the contour round. Where there is no room to widen, the
+ * next allowed symbol in the same direction is taken, which keeps the sign but not the widening.
+ * Where even that does not exist the whole expansion is refused, and the caller keeps the parent.
+ */
+bool expandContour(const std::vector<int>& parent, const std::vector<std::vector<uint8_t>>& allowed,
+                   int lo, int hi, std::vector<int>& out)
+{
+    if (parent.size() < 2 || parent.size() != allowed.size()) return false;
+    auto ok = [&](size_t i, int rel) {
+        return rel >= lo && rel <= hi && rel >= kCorpusRelMin && rel <= kCorpusRelMax
+            && allowed[i][static_cast<size_t>(sym(rel))] != 0;
+    };
+    out.assign(1, parent[0]);
+    bool widened = false;
+    for (size_t i = 1; i < parent.size(); ++i) {
+        const int d = parent[i] - parent[i - 1];
+        if (d == 0) {
+            if (!ok(i, out.back())) { out.clear(); return false; }
+            out.push_back(out.back());
+            continue;
+        }
+        const int dir = d > 0 ? 1 : -1;
+        int got = 0;
+        bool found = false;
+        for (int c = out.back() + d + dir; c >= lo && c <= hi; c += dir)
+            if (ok(i, c)) { got = c; found = true; widened = true; break; }
+        // No room to widen: the parent's own interval, if the position allows it. Anything nearer
+        // would *narrow* the step, and an expansion that narrows is not an expansion, so the whole
+        // variant is refused instead and the caller keeps the parent.
+        if (!found && ok(i, out.back() + d)) { got = out.back() + d; found = true; }
+        if (!found) { out.clear(); return false; }
+        out.push_back(got);
+    }
+    return widened && out.size() == parent.size();
+}
+
+std::vector<int> melodyContour(const std::vector<MelodyNote>& notes)
+{
+    std::vector<int> out;
+    for (size_t i = 1; i < notes.size(); ++i) {
+        const int d = notes[i].rel - notes[i - 1].rel;
+        out.push_back(d > 0 ? 1 : (d < 0 ? -1 : 0));
+    }
+    return out;
+}
+
 MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64_t seed, int key, int scale,
-                          bool firstTrack, float colour)
+                          bool firstTrack, float colour, uint32_t scaleMask)
 {
     const int cb = p.base(Module::Compose);
     const double temperature = p.get(cb + compose::MelodyTemperature);
@@ -509,10 +795,30 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     // style profiles, so every training line was labelled 0 and the inference side must match
     // (docs/MODEL_FORMAT.md section 3, the warning). The slot exists for a labelled corpus later.
     src.style = 0;
+    m.scale = std::clamp(scale, 0, kNumScales - 1);
     makeAcid(m, key, scale, seed, temperature, src);
     makeLead(m, key, scale, seed, temperature, colour, src);
     makeArp(m, key, scale, seed, temperature, src);
     for (int c = 0; c < 4; ++c) m.padVoicing[c] = voiceChord(scale, m.chordDegree[c], key, c > 0 ? &m.padVoicing[c - 1] : nullptr);
+    // Modal interchange (Form.h): the material of every mode a section of the form borrows. The
+    // makers are run again with the *same* seed and another mode, so the rhythm, the accents and the
+    // slides come out identical and only the pitches are recoloured -- interchange rather than a
+    // second riff. The scratch plan carries the chords, the roots and the part switches, which are
+    // the track's and do not belong to a mode. Nothing here can move the base mode's material: the
+    // makers above have already run, and each of these calls starts its own Rng.
+    for (int sc = 0; sc < kNumScales; ++sc) {
+        if (sc == m.scale || (scaleMask & (1u << sc)) == 0) continue;
+        MelodyPlan tmp = m;
+        makeAcid(tmp, key, sc, seed, temperature, src);
+        makeLead(tmp, key, sc, seed, temperature, colour, src);
+        makeArp(tmp, key, sc, seed, temperature, src);
+        for (int c = 0; c < 4; ++c)
+            tmp.padVoicing[c] = voiceChord(sc, tmp.chordDegree[c], key, c > 0 ? &tmp.padVoicing[c - 1] : nullptr);
+        ModeMaterial& mm = m.mode[sc];
+        for (int i = 0; i < 2; ++i) { mm.acid[i] = tmp.acid[i]; mm.lead[i] = tmp.lead[i]; }
+        for (int c = 0; c < 4; ++c) { mm.arp[c] = tmp.arp[c]; mm.padVoicing[c] = tmp.padVoicing[c]; }
+        mm.built = true;
+    }
     makeRangesAndPad(m, seed);
 
     Rng s;
@@ -539,10 +845,29 @@ BarPlan allPartsBar(const MelodyPlan& m)
     return bp;
 }
 
+/**
+ * @brief The material a bar plays: the section's borrowed mode where it has one, else the track's.
+ *
+ * A section's mode is a property of the melodic layer alone (Form.h). A bar plan that names no mode
+ * (-1: the transition's pad bar, the level-match probe of a single part) or names a mode the track
+ * never built falls back to the track's own material, which is what every caller before 16.09.2026
+ * got.
+ */
+static const ModeMaterial* materialOf(const MelodyPlan& m, int scale)
+{
+    if (scale < 0 || scale >= kNumScales || scale == m.scale) return nullptr;
+    return m.mode[scale].built ? &m.mode[scale] : nullptr;
+}
+
 void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int barInTrack, int scale,
                       const BarPlan& bp, std::vector<NoteEvent>& out)
 {
     (void)scale;
+    const ModeMaterial* mat = materialOf(m, bp.scale);
+    const std::vector<MelodyNote>* acid = mat != nullptr ? mat->acid : m.acid;
+    const std::vector<MelodyNote>* lead = mat != nullptr ? mat->lead : m.lead;
+    const std::vector<MelodyNote>* arp = mat != nullptr ? mat->arp : m.arp;
+    const std::vector<int>* voicing = mat != nullptr ? mat->padVoicing : m.padVoicing;
     const int cb = p.base(Module::Compose);
     const float swing = p.get(cb + compose::Swing);
     const double barBeat = static_cast<double>(bar) * kBeatsPerBar;
@@ -573,7 +898,7 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         const int inPhrase = barInTrack % phraseBars;
         const bool variation = steps == 16 ? inPhrase == 3 : inPhrase >= 6;
         const int offset = steps == 16 ? 0 : (inPhrase % 2) * 16;
-        for (const MelodyNote& n : m.acid[variation ? 1 : 0]) {
+        for (const MelodyNote& n : acid[variation ? 1 : 0]) {
             if (n.step < offset || n.step >= offset + 16) continue;
             // A slide overlaps the next note by a little; other steps are short, as a 303's gate.
             MelodyNote note = n;
@@ -588,7 +913,7 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
     if (parts & 2) {
         const int window = (barInTrack / 8) % 2;
         const int stepBase = (barInTrack % 8) * 16;
-        for (const MelodyNote& n : m.lead[window]) {
+        for (const MelodyNote& n : lead[window]) {
             if (n.step < stepBase || n.step >= stepBase + 16) continue;
             emit(Part::Lead, n, n.step - stepBase, m.root[1] + n.rel + 12 * bp.leadOctave, n.len * 0.25 * 0.92);
         }
@@ -596,8 +921,20 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
     if (parts & 4) {
         const int c = chordIndexAt(m, barInTrack);
         const int jump = (m.arpOctaveJump && (barInTrack / 2) % 2 == 1) ? 12 : 0;
-        for (const MelodyNote& n : m.arp[c])
-            emit(Part::Arp, n, n.step, m.root[2] + n.rel + jump + 12 * bp.arpOctave, 0.25 * 0.5);
+        const std::vector<MelodyNote>& cell = arp[c];
+        if (m.arpPolymeter && cell.size() == 3) {
+            // A three-sixteenth cell against a sixteen-sixteenth bar: the cell is read at the
+            // *absolute* sixteenth of the track, so it starts one step later in every bar (16 mod 3
+            // = 1) and comes home every three bars. Its accent -- the cell's first note -- precesses
+            // with it, which is the whole audible point of a polymeter.
+            for (int s = 0; s < kStepsPerBar; ++s) {
+                const MelodyNote& n = cell[static_cast<size_t>((barInTrack + s) % 3)];
+                emit(Part::Arp, n, s, m.root[2] + n.rel + jump + 12 * bp.arpOctave, 0.25 * 0.5);
+            }
+        } else {
+            for (const MelodyNote& n : cell)
+                emit(Part::Arp, n, n.step, m.root[2] + n.rel + jump + 12 * bp.arpOctave, 0.25 * 0.5);
+        }
     }
     if ((parts & 8) && barInTrack % m.chordBars == 0) {
         MelodyNote held;
@@ -606,7 +943,7 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         // After a cut the chord starts where the cut ends, shortened by as much.
         const double length = m.chordBars * static_cast<double>(kBeatsPerBar) - 1.0 / 16.0 - cut;
         const int step = static_cast<int>(std::lround(cut * 4.0));
-        for (int pitch : m.padVoicing[chordIndexAt(m, barInTrack)])
+        for (int pitch : voicing[chordIndexAt(m, barInTrack)])
             emit(Part::Pad, held, step, pitch, length);
     }
 }
