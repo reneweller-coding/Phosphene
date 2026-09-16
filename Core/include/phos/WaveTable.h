@@ -11,12 +11,20 @@
  * measurement). The copies are made from each frame's Fourier coefficients, so a level is the same
  * waveform with its upper octave of harmonics taken away, phases intact.
  *
- * **Tables without files.** Phosphene uses no samples, and the Quest has no room for a library of
- * table files. The built-in tables are written as spectra in code at start-up (WaveTable.cpp) in the
+ * **The six built-in tables.** They are written as spectra in code at start-up (WaveTable.cpp) in the
  * Virus, Microwave and Serum pad idiom the plan asks for: Classic (sine to pulse), Vocal (a saw through
  * the formants of five vowels, a to u), Glass (sparse, brightening partials), PWM (pulse width 50 % to
  * 5 %), Sync (a hard-synced saw, slave ratio 1 to 8) and Formant Saw (a saw with a resonant peak moving
- * up the harmonics).
+ * up the harmonics). They cost no file, they are always there, and `kClassicSawFrame` of table 0 is
+ * what the supersaw reads (Poly.h), so they stay whatever else is added beside them.
+ *
+ * **The library beside them.** Since 16.09.2026 a shipped file (`Core/data/library.phoswt`,
+ * WaveTableFile.h) adds tables chosen by measurement from Noctuary's own 2191-table library. They are
+ * addressed by the same `table` parameter, at indices from `kNumBuiltinWaveTables` up, and they end in
+ * the same `buildFromHarmonics()` -- nothing downstream can tell a loaded table from a built-in one.
+ * "No samples" was always about sample *playback*; a wavetable is a spectrum, and this one is the
+ * user's own (PLAN 5.7 says as much: the generated tables of Noctuary's `Tools/WavetableLib` "kommen
+ * mit").
  *
  * @note Adapted from Noctuary `Core/include/ambient/CycleTable.h` at b60a2fe (15.09.2026): the level
  *       scheme, the guards, the Catmull-Rom read, the level hysteresis and buildFromHarmonics() are
@@ -30,7 +38,7 @@
 
 namespace phos {
 
-constexpr int kNumWaveTables = 6;   ///< built-in tables (names in Params.cpp)
+constexpr int kNumBuiltinWaveTables = 6;   ///< tables written as spectra in code (names in Params.cpp)
 constexpr int kClassicTable  = 0;   ///< built-in table 0: sine, triangle, saw, square, narrow pulse
 constexpr int kClassicSawFrame = 2; ///< the sawtooth frame of the Classic table (the supersaw reads it)
 
@@ -110,7 +118,7 @@ inline constexpr float kSawTableGain = 1.63299316f;
  */
 int waveLevelFor(double hz, double sampleRate, int current);
 
-/** @brief A built-in table (0 .. kNumWaveTables-1), built on first use -- in prepare(), never on the audio thread. */
+/** @brief A built-in table (0 .. kNumBuiltinWaveTables-1), built on first use -- in prepare(), never on the audio thread. */
 const WaveTable& builtinWaveTable(int index);
 
 } // namespace phos

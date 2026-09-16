@@ -50,7 +50,7 @@ const std::complex<double> kSine(0.0, -1.0);   ///< sin x = cos(x - pi/2)
 std::complex<double> sawHarmonic(int h) { return kSine * (-2.0 / (kPiD * h)); }
 
 struct Builtins {
-    WaveTable t[kNumWaveTables];
+    WaveTable t[kNumBuiltinWaveTables];
     Builtins()
     {
         const int H = WaveTable::levelHarmonics(0);
@@ -203,7 +203,7 @@ int waveLevelFor(double hz, double sampleRate, int current)
 const WaveTable& builtinWaveTable(int index)
 {
     static const Builtins b;
-    return b.t[index < 0 ? 0 : (index >= kNumWaveTables ? kNumWaveTables - 1 : index)];
+    return b.t[index < 0 ? 0 : (index >= kNumBuiltinWaveTables ? kNumBuiltinWaveTables - 1 : index)];
 }
 
 } // namespace phos

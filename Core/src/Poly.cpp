@@ -4,6 +4,7 @@
  */
 #include "phos/Poly.h"
 #include "phos/Params.h"
+#include "phos/WaveTableFile.h"
 #include <algorithm>
 #include <cmath>
 
@@ -65,8 +66,13 @@ void Poly::prepare(double sampleRate)
     chanOut_.assign(static_cast<size_t>(kPolyBlock * kPolyLanes), 0.0f);
     sendBuf_.assign(static_cast<size_t>(kPolyBlock), 0.0f);
     wtRow_.assign(static_cast<size_t>(kPolyBlock * kPolySlots), 0.0f);
-    for (int i = 0; i < kNumWaveTables; ++i) builtinWaveTable(i);   // built here, never on the audio thread
-    table_ = &builtinWaveTable(0);
+    // Every table this engine can be pointed at is built here, never on the audio thread: a build
+    // is ten inverse FFTs per frame. loadWaveTableLibrary() is idempotent, so the three Poly
+    // instances share the one load; a missing file is not an error, the built-in tables are the
+    // fallback and waveTable() hands one out in its place.
+    for (int i = 0; i < kNumBuiltinWaveTables; ++i) builtinWaveTable(i);
+    loadWaveTableLibrary();
+    table_ = &waveTable(0);
     sawTable_ = &builtinWaveTable(kClassicTable);
     reset();
 }
@@ -101,7 +107,10 @@ void Poly::update(const float* v, double bpm)
     fDecay_ = static_cast<float>(std::exp(std::log(1.0e-3) / (v[poly::FilterDecay] * 0.001 * sr_)));
     for (Envelope& e : amp_)
         e.setTimes(v[poly::AmpAttack] * 0.001f, v[poly::AmpDecay] * 0.001f, v[poly::AmpSustain], std::max(0.005f, v[poly::AmpRelease] * 0.001f));
-    table_ = &builtinWaveTable(static_cast<int>(std::lround(v[poly::Table])));
+    // waveTable() addresses the built-in tables and the library with one index, and hands back a
+    // built-in when a library table's file is missing -- so this stays a pointer swap with no
+    // branch on the audio thread and no chance of a null table.
+    table_ = &waveTable(static_cast<int>(std::lround(v[poly::Table])));
     posDecay_ = static_cast<float>(std::exp(std::log(1.0e-3) / (std::max(1.0f, v[poly::PosDecay]) * 0.001 * sr_)));
     bpm_ = bpm;
     lfoInc_ = static_cast<float>(bpm / 60.0 / (std::max(0.05f, v[poly::PosLfoBeats]) * sr_));
