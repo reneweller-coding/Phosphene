@@ -3,7 +3,8 @@
 Phase 8 of PLAN 6.9 replaces the prediction model of the melodic layer, **not** the representation.
 Stage B draws from exactly the alphabet stage A draws from: 37 symbols, the interval to the tonic in
 semitones from −12 to +24 (`kCorpusRelMin`/`kCorpusRelMax` in `Core/include/phos/Corpus.h`), in the
-same order, with the same three roles (acid, lead, arp). Everything the token stream of Hsiao et al.
+same order, with the same roles — **acid, lead, arp, and since the bass round of 16.09.2026 the bass
+as role 3**. Everything the token stream of Hsiao et al.
 ("Compound Word Transformer", AAAI 2021) would carry in extra token families — step in the bar,
 length, position in the pattern — enters this model as **conditioning inputs**, never as extra
 symbols in the output distribution. A `.phosmdl` file therefore always ends in a softmax over 37
@@ -69,12 +70,13 @@ always present.
 | `state` | SSM state size per inner channel (`0` for `arch=transformer`) |
 | `vocab` | always `37` in token version 1 |
 | `ctx` | rows of `pos.emb`; positions beyond it clamp to the last row |
-| `roles` | always `3` (acid, lead, arp — the order of `phos::CorpusRoleId`) |
+| `roles` | `3` (acid, lead, arp — the order of `phos::CorpusRoleId`) or `4` (those three plus the bass as role 3) |
 | `styles` | always `6` (0 = unknown, then `phos::StyleId` + 1) |
 | `tokenVersion` | `1` — the alphabet and the conditioning fields of section 3 |
 | `quant` | `int8` or `float32`; the dtype the exporter used for two-dimensional tensors |
 | `relMin`, `relMax` | `-12`, `24` — the alphabet's range, for a sanity check against `Corpus.h` |
 | `condStep`, `condBar`, `condGap`, `condIdx`, `condBars` | sizes of the conditioning tables of section 3 |
+| `condKick` | rows of `kick.emb` (`3`). **Absent in a `roles=3` file** and then there is no `kick.emb` and no `kick` input; **required** when `roles` is 4 |
 | `eps` | LayerNorm / RMSNorm epsilon |
 | `act` | `gelu_tanh` (transformer) or `silu` (ssm) |
 | `expand`, `dtRank`, `convK` | SSM only: inner expansion factor, rank of the Δ projection, depthwise kernel width |
@@ -98,16 +100,31 @@ Let the line have notes `s_0 .. s_{N-1}`. At input position `t` (`0 <= t < N`):
 
 | Field | Values | Where the composer has it |
 |---|---|---|
-| `role` | 0 acid, 1 lead, 2 arp | the maker that is running (`CorpusRoleId`) |
+| `role` | 0 acid, 1 lead, 2 arp, 3 bass (only when `roles` is 4) | the maker that is running (`CorpusRoleId`), or `phos::kBassRole` |
 | `style` | 0 unknown, 1 + `StyleId` (Goa, FullOn, Progressive, DarkForest, HiTech) | `styleOf(p)`; **see the warning below** |
 | `bars` | `clamp(bars_of_pattern, 1, 8) - 1` | `m.acidSteps / 16`, 2 for a lead window, 1 for an arp cell |
 | `step` | `step_of_note % 16` | the onset list `on` |
 | `bar` | `(step_of_note / 16) % 8` | the onset list `on` |
 | `gap` | `0` for the last note of the line, otherwise `clamp(next_step - step, 1, 8)`, and `9` for a gap above 8 | the onset list `on` |
 | `idx` | bucket of the note index `t`: `0,1,2,3` for `t = 0,1,2,3`, `4` for `t` in 4..5, `5` for 6..9, `6` for 10..15, `7` for 16 and above | the loop counter |
+| `kick` | `0` on a kick step (`step % 4 == 0`), `1` on the sixteenth after it, `2` elsewhere in the gap — `phos::kickClass()`. **Only in a file with `condKick`**; a `roles=3` reader has no such input and must not invent one | `Composer::composeBars` places the kick on every beat of the bar before it draws any bass pitch |
 
-`role`, `style` and `bars` are the same for every position of a line; `step`, `bar`, `gap` and `idx`
-change per position.
+`role`, `style` and `bars` are the same for every position of a line; `step`, `bar`, `gap`, `idx` and
+`kick` change per position.
+
+> **The bass (role 3).** Added additively on 16.09.2026 and measured first: on the local corpus a
+> psytrance bass line has an order-0 pitch entropy of 2.76 bits per note against 3.44 to 3.48 for
+> acid, lead and arp, and plays the root in 59 % of its notes — but it is also the only role whose
+> held-out cross-entropy really *falls* with context (3.07 → 1.71 → 1.54 bits per note for orders 0,
+> 1, 2, against less than a third of a bit of movement in either direction for the melodic three).
+> The `kick` input is there because the genre is defined by the interlock of the bass with a
+> four-on-the-floor kick (Solberg and Dibben, "Peak experiences with electronic dance music", Music
+> Perception 36(4), 2019): a bass onset falls on a kick step in 22.5 % of corpus bars against 62.4 %
+> on the steps between them. Three classes and not sixteen distances, because `step` already carries
+> the exact position; what `kick` adds is the relation, which stays meaningful in the bars where the
+> composer takes kicks away — **and which, on this corpus, measures at zero (see the end of section 7).**
+> A `roles=4` file carries a `role.emb` with four rows and the tenth embedding table `kick.emb`;
+> everything else — the alphabet, the output distribution, the block tensors — is unchanged.
 
 > **Warning about `style`.** The MIDI packs carry no style label that maps onto the five style
 > profiles of `Form.h`. Every training line was therefore labelled `style = 0` (unknown), and the
@@ -128,18 +145,19 @@ then `norm.w`, `norm.b`, `head.w`, `head.b`. A reader should still look tensors 
 |---|---|---|
 | `tok.emb` | `[37, E]` | embedding of the input token `s_{t-1}` |
 | `pos.emb` | `[ctx, E]` | embedding of `min(t, ctx-1)` |
-| `role.emb` | `[3, E]` | |
+| `role.emb` | `[roles, E]` | `[3, E]`, or `[4, E]` with the bass |
 | `style.emb` | `[6, E]` | |
 | `bars.emb` | `[8, E]` | |
 | `step.emb` | `[16, E]` | |
 | `bar.emb` | `[8, E]` | |
 | `gap.emb` | `[10, E]` | |
 | `idx.emb` | `[8, E]` | |
+| `kick.emb` | `[condKick, E]` | **only when the header carries `condKick`**; it follows `idx.emb` |
 | `norm.w`, `norm.b` | `[E]` | final LayerNorm |
 | `head.w`, `head.b` | `[37, E]`, `[37]` | output projection (untied from `tok.emb`) |
 
-The input of block 0 is the **sum** of the nine embedding rows above (`tok.emb` through `idx.emb`);
-`norm` and `head` are the two tensors after the last block.
+The input of block 0 is the **sum** of the nine embedding rows above (`tok.emb` through `idx.emb`),
+plus `kick.emb` when the file has one; `norm` and `head` are the two tensors after the last block.
 
 ### `arch=transformer`
 
@@ -235,7 +253,7 @@ quant=<int8|float32>
 cases=<n>
 
 case 0
-role=<0..2>
+role=<0..roles-1>
 style=<0..5>
 bars=<0..7>
 len=<L>
@@ -244,6 +262,7 @@ step=<L integers, 0..15>
 bar=<L integers, 0..7>
 gap=<L integers, 0..9>
 idx=<L integers, 0..7>
+kick=<L integers, 0..2>       # only in a file with condKick; absent otherwise
 logits=<37 floats, %.9g>      # at the last position, L-1
 probs=<37 floats, %.9g>       # softmax of the above
 case 1
@@ -253,9 +272,12 @@ case 1
 Fields inside a case may be read in any order; a case ends at the next `case` line or at end of
 file. The contexts are **synthetic**, from a fixed seed in `Tools/train/export.py` — a held-out loop
 would be a more musical context, but a loop written out as symbols and step positions *is* the loop,
-and the bought packs do not leave the machine (PLAN 6.9). The cases cover all three roles, lengths
+and the bought packs do not leave the machine (PLAN 6.9). The cases cover every role, lengths
 from one position to past the positional clamp, every gap code and every note-index bucket, which is
-all an oracle over a deterministic forward pass needs. `logits` come from the **same tensors that
+all an oracle over a deterministic forward pass needs. A bass file's cases also walk `kick` through
+its three values, and in the last two cases they do so **independently of `step`**, so a reader that
+quietly recomputes the kick class from the step instead of reading it fails the oracle instead of
+passing it by luck (`Tools/train/export_bass.py`). `logits` come from the **same tensors that
 are in the file** — that is, when `quant=int8` the
 reference was produced from the dequantised weights, so a correct C++ reader reproduces them
 without a quantisation allowance. Tolerance for the C++ side: `max |logit_cpp - logit_ref| < 1e-3`
@@ -290,7 +312,23 @@ sampler mask it, rather than pretending to be order 2.
 
 * `Core/include/phos/Corpus.h` — the alphabet (`kCorpusRelMin`, `kCorpusAlphabet`) and the role
   order.
-* `Core/src/Melody.cpp` — where the conditioning of section 3 comes from.
+* `Core/src/Melody.cpp` — where the conditioning of section 3 comes from for roles 0 to 2.
+* `Core/src/Composer.cpp` — where it comes from for role 3 (`drawBassPhrase`).
 * `Tools/train/export.py` — the writer; its `_read_phosmdl` is a literal NumPy implementation of
-  section 1 and is the second opinion on any disagreement.
-* `Tools/train/models.py` — the forward pass of section 4 in PyTorch, in the same order.
+  section 1 and is the second opinion on any disagreement. `Tools/train/export_bass.py` writes a
+  `roles=4` file through the same primitives and adds only `kick.emb` and `condKick`.
+* `Tools/train/models.py` — the forward pass of section 4 in PyTorch, in the same order. The kick
+  table is optional there too (`n_kick=0` by default), so a melodic model built without it is the
+  same model, tensor for tensor, that it was before the bass existed.
+
+> **What `kick` was measured to be worth: nothing, so far.** The bass round trained the same model
+> twice, with and without the kick table, on the same split: 0.4323 against 0.4293 nats, and a paired
+> bootstrap over the same held-out lines puts the difference at −0.0030 nats with a 95 % interval of
+> [−0.0208, +0.0150] and the ablation ahead on 109 of 220 lines — a coin flip. The reason is in the arithmetic,
+> not in the music: with a four-on-the-floor kick the kick class is a *function of `step`*, which the
+> model already has, so the table carries no information the model was missing. It would carry some
+> only for a corpus in which the kick is actually present and sometimes not on the beat, and no such
+> corpus exists here — the loops are single-instrument exports and `read_midi` drops channel 10. The
+> table stays in the format because it costs 576 parameters and because a labelled corpus could fill
+> it without a format change; a later round may drop it, and `condKick` is optional precisely so that
+> dropping it is not a format break.

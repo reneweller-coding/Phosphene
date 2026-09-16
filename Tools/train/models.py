@@ -39,6 +39,12 @@ EPS = 1e-5
 
 ALL_FIELDS = ("pos", "role", "style", "bars", "step", "bar", "gap", "idx")
 
+#: The melodic roles (acid, lead, arp) plus the bass. ``n_role`` and ``n_kick`` below default to the
+#: melodic configuration, so a model built without them is bit-for-bit the model of the melodic
+#: round; the bass round passes ``n_role=4, n_kick=3`` and gets one more row in ``role.emb`` and one
+#: extra table. See ``Tools/train/bass.py`` for what the kick classes are and why the bass needs them.
+BASS_FIELDS = ALL_FIELDS + ("kick",)
+
 
 class Conditioning(nn.Module):
     """The nine embedding tables whose sum is the input of block 0 (MODEL_FORMAT section 4).
@@ -49,21 +55,29 @@ class Conditioning(nn.Module):
     architecture and how much is the extra conditioning. An exported file always carries all nine
     tables; a table that was switched off exports as its (untrained) initial values, which is why an
     ablation run is never exported.
+
+    ``n_kick`` adds a **tenth** table, the kick class of the note being predicted, and ``n_role``
+    widens the role table. Both default to the melodic values and the tenth table is not created at
+    all when ``n_kick`` is 0, so a melodic model has exactly the parameters and the tensor list it
+    had before the bass existed.
     """
 
-    def __init__(self, dim, ctx, dropout, fields=ALL_FIELDS):
+    def __init__(self, dim, ctx, dropout, fields=ALL_FIELDS, n_role=N_ROLE, n_kick=0):
         super().__init__()
         self.ctx = ctx
         self.fields = tuple(fields)
+        self.n_role, self.n_kick = n_role, n_kick
         self.tok = nn.Embedding(ALPHABET, dim)
         self.pos = nn.Embedding(ctx, dim)
-        self.role = nn.Embedding(N_ROLE, dim)
+        self.role = nn.Embedding(n_role, dim)
         self.style = nn.Embedding(N_STYLE, dim)
         self.bars = nn.Embedding(N_BARS, dim)
         self.step = nn.Embedding(N_STEP, dim)
         self.bar = nn.Embedding(N_BAR, dim)
         self.gap = nn.Embedding(N_GAP, dim)
         self.idx = nn.Embedding(N_IDX, dim)
+        if n_kick:
+            self.kick = nn.Embedding(n_kick, dim)
         self.drop = nn.Dropout(dropout)
 
     def forward(self, b):
@@ -77,6 +91,8 @@ class Conditioning(nn.Module):
         for f in ("step", "bar", "gap", "idx"):             # one value per position
             if f in self.fields:
                 x = x + getattr(self, f)(b[f])
+        if self.n_kick and "kick" in self.fields:           # one value per position (the bass only)
+            x = x + self.kick(b["kick"])
         return self.drop(x)
 
 
@@ -108,10 +124,12 @@ class Block(nn.Module):
 class Transformer(nn.Module):
     arch = "transformer"
 
-    def __init__(self, dim=192, layers=4, heads=4, ffn=512, ctx=256, dropout=0.3, fields=ALL_FIELDS):
+    def __init__(self, dim=192, layers=4, heads=4, ffn=512, ctx=256, dropout=0.3, fields=ALL_FIELDS,
+                 n_role=N_ROLE, n_kick=0):
         super().__init__()
         self.dim, self.layers, self.heads, self.ffn, self.ctx, self.state = dim, layers, heads, ffn, ctx, 0
-        self.emb = Conditioning(dim, ctx, dropout, fields)
+        self.n_role, self.n_kick = n_role, n_kick
+        self.emb = Conditioning(dim, ctx, dropout, fields, n_role, n_kick)
         self.blocks = nn.ModuleList([Block(dim, heads, ffn, dropout) for _ in range(layers)])
         self.norm = nn.LayerNorm(dim, eps=EPS)
         self.head = nn.Linear(dim, ALPHABET)
@@ -124,8 +142,11 @@ class Transformer(nn.Module):
         return self.head(self.norm(x))
 
     def header(self):
-        return {"arch": "transformer", "layers": self.layers, "dim": self.dim, "heads": self.heads,
-                "ffn": self.ffn, "state": 0, "ctx": self.ctx, "act": "gelu_tanh"}
+        h = {"arch": "transformer", "layers": self.layers, "dim": self.dim, "heads": self.heads,
+             "ffn": self.ffn, "state": 0, "ctx": self.ctx, "act": "gelu_tanh"}
+        if self.n_kick:
+            h["condKick"] = self.n_kick
+        return h
 
 
 # ---------------------------------------------------------------------------------------- selective SSM

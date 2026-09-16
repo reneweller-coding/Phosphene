@@ -206,6 +206,9 @@ bool NeuralModel::load(const char* path, std::string& error)
     info.condGap = headerInt(header, "condGap", 0);
     info.condIdx = headerInt(header, "condIdx", 0);
     info.condBars = headerInt(header, "condBars", 0);
+    // Absent in a three-role melodic file, and then the tenth embedding table is not looked for and
+    // NoteCond::kick is ignored (docs/MODEL_FORMAT.md, section 3, the bass paragraph).
+    info.condKick = headerInt(header, "condKick", 0);
     info.expand = headerInt(header, "expand", 0);
     info.dtRank = headerInt(header, "dtRank", 0);
     info.convK = headerInt(header, "convK", 0);
@@ -237,6 +240,12 @@ bool NeuralModel::load(const char* path, std::string& error)
         || info.roles <= 0 || info.styles <= 0 || info.condStep <= 0 || info.condBar <= 0
         || info.condGap <= 0 || info.condIdx <= 0 || info.condBars <= 0) {
         error = "header is missing one of layers, dim, heads, ffn, ctx, roles, styles, cond*";
+        return false;
+    }
+    if (info.condKick < 0) { error = "header condKick is negative"; return false; }
+    if (info.roles > kBassRole && info.condKick <= 0) {
+        error = "header says roles=4 (the bass is in) but carries no condKick; docs/MODEL_FORMAT.md "
+                "section 3 makes the kick class part of the bass role's conditioning";
         return false;
     }
     if (info.dim % info.heads != 0) { error = "header dim is not a multiple of heads"; return false; }
@@ -310,7 +319,8 @@ bool NeuralModel::load(const char* path, std::string& error)
     ctxP_ = roundUpTo(info.ctx, kLanes);
     qkvP_ = roundUpTo(3 * d, kLanes);
 
-    // The nine embedding tables (MODEL_FORMAT.md section 4). Their rows are summed into the input.
+    // The nine embedding tables (MODEL_FORMAT.md section 4), and kick.emb as a tenth when the header
+    // declares condKick. Their rows are summed into the input.
     struct Emb { const char* name; int rows; std::vector<float>* dst; };
     const Emb embeddings[] = {
         { "tok.emb",   info.vocab,     &tok_ },
@@ -322,8 +332,10 @@ bool NeuralModel::load(const char* path, std::string& error)
         { "bar.emb",   info.condBar,   &barE_ },
         { "gap.emb",   info.condGap,   &gapE_ },
         { "idx.emb",   info.condIdx,   &idxE_ },
+        { "kick.emb",  info.condKick,  &kickE_ },
     };
     for (const Emb& e : embeddings) {
+        if (e.rows <= 0) { e.dst->clear(); continue; }       // only kick.emb can be absent
         if (!need(e.name, e.rows, d)) return false;
         copyRows(*t, e.rows, d, dimP_, *e.dst);
     }
@@ -366,7 +378,7 @@ bool NeuralModel::load(const char* path, std::string& error)
     for (const Block& b : blocks_)
         bytes += (b.qkv.size() + b.out.size() + b.up.size() + b.down.size() + b.kCache.size() + b.vCache.size()) * sizeof(float);
     bytes += (tok_.size() + posE_.size() + roleE_.size() + styleE_.size() + barsE_.size() + stepE_.size()
-              + barE_.size() + gapE_.size() + idxE_.size() + head_.size()) * sizeof(float);
+              + barE_.size() + gapE_.size() + idxE_.size() + kickE_.size() + head_.size()) * sizeof(float);
     info.bytes = bytes;
     info_ = info;
     loaded_ = true;
@@ -397,8 +409,8 @@ bool NeuralModel::step(int token, const NoteCond& cond)
     // a false into a clean failure, and the composer falls back to the Markov model.
     if (pos_ >= info_.ctx) return false;
     const int d = info_.dim;
-    // The nine embedding rows, summed. Table reads are gathers and stay on the scalar side (Vec.h
-    // has no gather on NEON); the adds are lanes.
+    // The nine embedding rows -- ten with the bass's kick table -- summed. Table reads are gathers
+    // and stay on the scalar side (Vec.h has no gather on NEON); the adds are lanes.
     const int posRow = pos_;
     const size_t stride = static_cast<size_t>(dimP_);
     std::memcpy(x_.data(), tok_.data() + static_cast<size_t>(token) * stride, stride * sizeof(float));
@@ -410,6 +422,8 @@ bool NeuralModel::step(int token, const NoteCond& cond)
     laneAdd<V>(x_.data(), barE_.data() + static_cast<size_t>(clampRow(cond.bar, info_.condBar)) * stride, dimP_);
     laneAdd<V>(x_.data(), gapE_.data() + static_cast<size_t>(clampRow(cond.gap, info_.condGap)) * stride, dimP_);
     laneAdd<V>(x_.data(), idxE_.data() + static_cast<size_t>(clampRow(cond.idx, info_.condIdx)) * stride, dimP_);
+    if (info_.condKick > 0)
+        laneAdd<V>(x_.data(), kickE_.data() + static_cast<size_t>(clampRow(cond.kick, info_.condKick)) * stride, dimP_);
 
     forwardTransformer(posRow);
     ++pos_;
@@ -487,6 +501,26 @@ NeuralModel* sharedMelodyModel(std::string* note)
         std::string error;
         if (!model.load(kMelodyModelFile, error))
             message = "phosphene: no neural melody model (" + error + "); the composer stays on the Markov model";
+    });
+    if (note != nullptr) *note = message;
+    return model.loaded() ? &model : nullptr;
+}
+
+NeuralModel* sharedBassModel(std::string* note)
+{
+    static NeuralModel model;
+    static std::string message;
+    static std::once_flag once;
+    std::call_once(once, [] {
+        std::string error;
+        if (!model.load(kBassModelFile, error))
+            message = "phosphene: no neural bass model (" + error + "); the composer keeps the pattern families";
+        else if (model.info().roles <= kBassRole) {
+            message = "phosphene: " + std::string(kBassModelFile) + " has roles=" +
+                      std::to_string(model.info().roles) + ", so it carries no bass role; the composer "
+                      "keeps the pattern families";
+            model = NeuralModel{};
+        }
     });
     if (note != nullptr) *note = message;
     return model.loaded() ? &model : nullptr;
