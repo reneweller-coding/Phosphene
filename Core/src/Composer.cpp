@@ -570,7 +570,11 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
 
     // Loudness (Farbood): at most +-2 dB around the section's energy, on top of the track's level match.
     const ParamDesc& g = p.desc(mb + mix::TrackGain);
-    push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(0.5f * (e0 + e1)))) / (g.maxValue - g.minValue), 0.0f);
+    const float span = g.maxValue - g.minValue;
+    push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e0))) / span, 0.0f);
+    // A buildup's energy runs from the section before it to the drop, so the gain ramps with it; every
+    // other section holds one value (e0 == e1 there).
+    if (e1 != e0) push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e1))) / span, length);
 
     // The pad's trance gate is a property of the section, not of a 16-bar block.
     pushNow(pb + poly::Gate, ControlEvent::Kind::Override, bar.padGate ? 1.0f : 0.0f);

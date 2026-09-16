@@ -324,9 +324,12 @@ FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double a
         sec.energyTo = scaled(typeEnergy(sec.type), a1);
         if (sec.type == SectionType::Build) {
             // A buildup rises from the section before it to the drop that follows.
-            const float from = i > 0 ? f.section[i - 1].energy : 0.5f;
+            // A buildup starts where the section before it ended and arrives at the drop's energy, so
+            // that everything the energy drives -- the gain, the filter arcs -- really rises through it
+            // (Solberg and Dibben 2019: the rising middle of the U).
+            const float from = i > 0 ? f.section[i - 1].energyTo : 0.5f;
             const float to = i + 1 < f.count ? scaled(typeEnergy(f.section[i + 1].type), a1) : 1.0f;
-            sec.energy = 0.5f * (from + to);
+            sec.energy = from;
             sec.energyTo = to;
             sec.pdbVariant = drawIndex(d, s.pdbWeight, kNumPdbVariants);
         }
@@ -361,10 +364,17 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     const uint64_t ss = sectionSeed[std::clamp(si, 0, kMaxSections - 1)];
     Rng rs;
     rs.seed(mixSeed(ss ^ kSaltSection, 0));
-    const int introKickBar = 4 + rs.below(5);       // the kick joins between bar 5 and bar 9
-    const bool useAcid = a.part[0] && rs.uniform() < 0.9f;
-    const bool useLead = a.part[1] && rs.uniform() < 0.85f;
-    const bool useArp = a.part[2] && rs.uniform() < 0.8f;
+    // The kick joins between bar 5 and bar 9, and never after the intro is over (an eight-bar intro
+    // cannot wait until bar 9).
+    const int introKickBar = std::min(4 + rs.below(5), std::max(1, s.bars - 1));
+    // A drop brings everything back at once (the instrumentation matrix of PLAN 6.1), which is also
+    // what makes Solberg and Dibben's Track 2 rule hold: after the drop the spectrum must be at least
+    // as full as it was before the break. Every other section may leave a voice out.
+    const bool drop = s.type == SectionType::Drop;
+    const bool drawAcid = rs.uniform() < 0.9f, drawLead = rs.uniform() < 0.85f, drawArp = rs.uniform() < 0.8f;
+    const bool useAcid = a.part[0] && (drop || drawAcid);
+    const bool useLead = a.part[1] && (drop || drawLead);
+    const bool useArp = a.part[2] && (drop || drawArp);
     const bool breakLead = rs.uniform() < 0.5f;     // a breakdown keeps the lead or the arp, not both
     const bool padExtra = rs.uniform() < 0.45f;     // pads join a section that already has lead or acid
     const bool gate = rs.uniform() < 0.35f;
