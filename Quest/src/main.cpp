@@ -35,6 +35,8 @@
  *               quality=quest   quest (default here) or desktop
  *               osc_host=192.168.1.20   optional cue bridge to Kaleidoscope (PLAN 8.3)
  *               osc_port=9000
+ *               osc_beats=0     leave out /phos/beat, the busiest of the five messages
+ *               osc_lead_ms=12  trim: how much deeper the device's own buffering is than one block
  *               set=compose.bpm=146;compose.pad_amount=1     any knobs, repeatable
  *   library.phoswt   optional: a wavetable pack pushed to the device, used instead of the one in
  *                    the APK (see prepareWaveTables)
@@ -76,6 +78,7 @@
 #include <vector>
 
 #include "phos/Composer.h"
+#include "phos/Cue.h"
 #include "phos/Engine.h"
 #include "phos/Quality.h"
 #include "phos/WaveTableFile.h"
@@ -196,60 +199,6 @@ const unsigned char* glyph(char c)
     return kFont[48];
 }
 
-// ---------------------------------------------------------------- OSC cue bridge
-
-/**
- * @brief The smallest possible OSC sender: one UDP socket, float arguments only.
- *
- * Used for the Kaleidoscope cues of PLAN 8.3 (`/phos/beat`, `/phos/bar`, `/phos/track`). The cues
- * come from the score, never from an analysis of the audio, which is the whole point: the visuals
- * do not have to guess where the bar is.
- */
-class OscOut {
-public:
-    bool open(const std::string& host, int port)
-    {
-        close();
-        sock_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (sock_ < 0) return false;
-        std::memset(&to_, 0, sizeof(to_));
-        to_.sin_family = AF_INET;
-        to_.sin_port = htons(static_cast<uint16_t>(port));
-        if (inet_pton(AF_INET, host.c_str(), &to_.sin_addr) != 1) { close(); return false; }
-        return true;
-    }
-    void close() { if (sock_ >= 0) ::close(sock_); sock_ = -1; }
-    bool ok() const { return sock_ >= 0; }
-    void send(const char* address, const float* args, int n)
-    {
-        if (sock_ < 0 || n > 8) return;
-        char buf[256];
-        size_t pos = 0;
-        auto putStr = [&](const char* s) {
-            const size_t l = std::strlen(s) + 1;
-            std::memcpy(buf + pos, s, l);
-            pos += l;
-            while (pos & 3) buf[pos++] = 0;
-        };
-        putStr(address);
-        char tags[16];
-        tags[0] = ',';
-        for (int i = 0; i < n; ++i) tags[1 + i] = 'f';
-        tags[1 + n] = 0;
-        putStr(tags);
-        for (int i = 0; i < n; ++i) {
-            uint32_t u;
-            std::memcpy(&u, &args[i], 4);
-            buf[pos++] = static_cast<char>(u >> 24); buf[pos++] = static_cast<char>(u >> 16);
-            buf[pos++] = static_cast<char>(u >> 8);  buf[pos++] = static_cast<char>(u);
-        }
-        ::sendto(sock_, buf, pos, 0, reinterpret_cast<sockaddr*>(&to_), sizeof(to_));
-    }
-private:
-    int sock_ = -1;
-    sockaddr_in to_{};
-};
-
 // ---------------------------------------------------------------- shipped resources
 
 /** @brief The shipped wavetable pack: an APK asset here, a file beside the sources on a desktop. */
@@ -330,7 +279,9 @@ struct Config {
     uint64_t seed = 1;              ///< set seed
     Quality quality = Quality::quest();   ///< quality level, `quest` unless the file says otherwise
     std::string oscHost;            ///< cue bridge target, empty = off
-    int oscPort = 9000;             ///< cue bridge port
+    int oscPort = kCueDefaultPort;  ///< cue bridge port
+    bool oscBeats = true;           ///< send /phos/beat as well as /phos/bar
+    float oscLeadMs = 0.0f;         ///< trim on the lead the tap computes from the block (Cue.h)
     std::string sets;               ///< knob assignments, "key=value" separated by ';' or newlines
 };
 
@@ -355,6 +306,8 @@ Config readConfig(const char* dir)
         else if (k == "quality") { if (!Quality::fromName(v.c_str(), c.quality)) LOGE("quality: %s?", v.c_str()); }
         else if (k == "osc_host") c.oscHost = v;
         else if (k == "osc_port") c.oscPort = std::atoi(v.c_str());
+        else if (k == "osc_beats") c.oscBeats = v != "0";
+        else if (k == "osc_lead_ms") c.oscLeadMs = static_cast<float>(std::atof(v.c_str()));
         else if (k == "set") { c.sets += v; c.sets += ";"; }
         else LOGE("phos.cfg: unknown key %s", k.c_str());
     }
@@ -407,6 +360,9 @@ public:
             if (!engine_.params().parseText(cfg.sets, &err)) LOGE("phos.cfg set: %s", err.c_str());
         }
         gainCoef_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.015 * sampleRate)));   // 15 ms
+        sr_ = static_cast<double>(sampleRate);
+        cueTap_.setSendBeats(cfg.oscBeats);
+        cueLeadMs_ = cfg.oscLeadMs;
         rebase(0);
         display_.planning = false;
         ready_.store(true, std::memory_order_release);
@@ -429,6 +385,7 @@ public:
             std::fill(L, L + n, 0.0f);
             std::fill(R, R + n, 0.0f);
         } else {
+            const double from = engine_.beatPosition();
             engine_.process(L, R, n);
             const float out = muted_ ? 0.0f : 1.0f;
             for (int i = 0; i < n; ++i) {
@@ -436,9 +393,13 @@ public:
                 L[i] *= gain_ * out;
                 R[i] *= gain_ * out;
             }
+            sendCues(from, engine_.beatPosition(), n);
         }
         state_.store(kIdle, std::memory_order_release);
     }
+
+    /** @brief Binds the cue bridge; null leaves it off. Call before the audio stream starts. */
+    void setCueSender(CueSender* sender) { cues_ = sender; }
 
     /** @brief Play or stop (any thread; takes effect over the fade). */
     void setPlaying(bool on) { playing_.store(on, std::memory_order_relaxed); }
@@ -473,6 +434,16 @@ public:
             const double shift = -static_cast<double>(barOffset_) * kBeatsPerBar;
             for (NoteEvent& e : notes_) e.beat += shift;
             for (ControlEvent& e : controls_) e.beat += shift;
+            // The cue marks of this bar, in musical beats (PLAN 8.3). They are written here, bars
+            // ahead of the sound, and read by the audio thread when the play position reaches them.
+            // rebase() has already described the bar it landed on; describing it twice would be two
+            // scene changes where the music has one.
+            if (nextBar_ == cueLandingBar_) {
+                cueLandingBar_ = -1;
+            } else {
+                const TrackPlan& plan = composer_.track(p, composer_.trackOfBar(p, nextBar_));
+                cueMarksForBar(plan.form, plan.firstBar, plan.key, plan.scale, nextBar_, cueKey_, cueMarks_);
+            }
             ++nextBar_;
         }
         publish();
@@ -503,6 +474,30 @@ private:
     enum : int { kIdle = 0, kProcessing, kBlocked };
     /** @brief How many bars of the set are planned ahead: about half an hour at 145 BPM. */
     static constexpr int kPlanBars = 1024;
+
+    /**
+     * @brief Turns the beat range this block covered into cues. Audio thread (PLAN 8.3).
+     *
+     * The same place the plugin taps, for the same reason: the composer thread below knows every
+     * boundary bars in advance -- which is why the marks travel through a ring -- but the only
+     * instant a beat has is the one at which its samples are rendered. What the listener hears lags
+     * that by the limiter's lookahead and by the device's own buffering, so the tap stamps each cue
+     * with `now + lead` and the sender's thread waits for it. On Oboe the buffering is deeper than
+     * one burst, which is what `osc_lead_ms` is for.
+     * @param from musical beat at sample 0 of the block
+     * @param to   musical beat just past its last sample
+     * @param n    samples in the block
+     */
+    void sendCues(double from, double to, int n)
+    {
+        if (cues_ == nullptr || !cues_->running()) return;
+        const double shift = static_cast<double>(barOffset_.load(std::memory_order_relaxed)) * kBeatsPerBar;
+        const double lead = static_cast<double>(n + engine_.latencySamples()) / sr_ + 0.001 * cueLeadMs_;
+        cueTap_.scan(from + shift, to + shift, cueNowNanos(),
+                     static_cast<int64_t>(lead * 1.0e9),
+                     static_cast<int64_t>(static_cast<double>(n) / sr_ * 1.0e9),
+                     cueMarks_, cues_->queue());
+    }
 
     /** @brief Beat of a set bar in the engine's own, rebased time. */
     double localBeatOfBar(int bar) const
@@ -542,7 +537,17 @@ private:
         engine_.setTempoMap(map);
         gain_ = 0.0f;               // fade in again wherever we land
         barOffset_.store(bar, std::memory_order_relaxed);
+        // The marks in the ring describe beats that are behind us now; the tap would send them all
+        // at once, a burst of sections that are over. Clearing is the consumer's end of the ring,
+        // and this is the composer thread -- safe only here, while the audio thread is still held
+        // at kBlocked and writing silence.
+        cueMarks_.clear();
         state_.store(kIdle, std::memory_order_release);
+        cueKey_ = -1;
+        // Where we landed, so a visualiser is not left without a section until the next boundary.
+        const TrackPlan& landing = composer_.track(p, composer_.trackOfBar(p, bar));
+        cueLandingMark(landing.form, landing.firstBar, landing.key, landing.scale, bar, cueKey_, cueMarks_);
+        cueLandingBar_ = bar;
         nextBar_ = bar;
         notes_.clear();
         controls_.clear();
@@ -616,6 +621,15 @@ private:
     std::atomic<int> state_{ kIdle };
     std::atomic<bool> ready_{ false }, playing_{ false }, jumpRequest_{ false };
     bool muted_ = false;
+    double sr_ = 48000.0;                 ///< the rate the stream really gave (for the cue lead)
+    /** @name The cue bridge (PLAN 8.3, Cue.h): marks written by the composer, sent from the play position @{ */
+    CueSender* cues_ = nullptr;           ///< the socket and its thread, owned by the app; null = off
+    CueTap cueTap_;                       ///< audio thread: beat range -> cues
+    CueMarkRing cueMarks_{ 512 };         ///< composer thread -> audio thread
+    int cueKey_ = -1;                     ///< the key the last mark carried, -1 = none sent yet
+    int cueLandingBar_ = -1;              ///< rebase() already described this bar
+    float cueLeadMs_ = 0.0f;              ///< `osc_lead_ms`
+    /** @} */
     float gain_ = 0.0f, gainCoef_ = 0.002f;
     mutable std::mutex displayMutex_;
     DisplayState display_;
@@ -908,9 +922,13 @@ public:
         const std::string tables = prepareWaveTables(app_->activity->assetManager,
                                                      app_->activity->internalDataPath, dataDir_);
         if (!tables.empty()) setWaveTableSearchPath(tables);
+        // The cue bridge of PLAN 8.3, off unless phos.cfg names a host. A visualiser that is not
+        // there changes nothing here: the datagrams go to a port nobody reads and the set plays on.
         if (!config_.oscHost.empty()) {
-            if (osc_.open(config_.oscHost, config_.oscPort)) LOGI("cue bridge: OSC to %s:%d", config_.oscHost.c_str(), config_.oscPort);
-            else LOGE("cue bridge: bad host %s", config_.oscHost.c_str());
+            if (cues_.start(config_.oscHost, config_.oscPort))
+                LOGI("cue bridge: OSC to %s:%d", config_.oscHost.c_str(), config_.oscPort);
+            else LOGE("cue bridge: cannot reach %s:%d", config_.oscHost.c_str(), config_.oscPort);
+            player_.setCueSender(&cues_);
         }
         if (!initLoader()) return false;
         if (!initInstance()) return false;
@@ -952,7 +970,8 @@ public:
         if (stageSpace_ != XR_NULL_HANDLE) xrDestroySpace(stageSpace_);
         if (session_ != XR_NULL_HANDLE) xrDestroySession(session_);
         if (instance_ != XR_NULL_HANDLE) xrDestroyInstance(instance_);
-        osc_.close();
+        // After the audio stream has stopped: the sender's thread reads a queue the audio thread fills.
+        cues_.stop();
     }
 
 private:
@@ -1316,23 +1335,6 @@ private:
         }
     }
 
-    /** @brief Score cues for Kaleidoscope (PLAN 8.3): one message per bar, and the track. */
-    void sendCues()
-    {
-        if (!osc_.ok() || !player_.ready()) return;
-        const int bar = player_.currentBar();
-        if (bar == lastCueBar_) return;
-        lastCueBar_ = bar;
-        const DisplayState d = player_.display();
-        const float barArgs[2] = { static_cast<float>(bar), static_cast<float>(d.bpm) };
-        osc_.send("/phos/bar", barArgs, 2);
-        if (d.track != lastCueTrack_) {
-            lastCueTrack_ = d.track;
-            const float t[3] = { static_cast<float>(d.track), static_cast<float>(d.key), static_cast<float>(d.scale) };
-            osc_.send("/phos/track", t, 3);
-        }
-    }
-
     void frame()
     {
         XrFrameWaitInfo wi{ XR_TYPE_FRAME_WAIT_INFO };
@@ -1351,7 +1353,6 @@ private:
             if (leftPinch) player_.setPlaying(!player_.playing());
             if (rightPinch) player_.requestNextTrack();
             applyMacros();
-            sendCues();
         }
 
         std::vector<XrCompositionLayerProjectionView> projViews;
@@ -1420,8 +1421,15 @@ private:
     std::atomic<bool> stopComposer_{ false };
     Scene scene_;
     Hands hands_;
-    OscOut osc_;
-    int lastCueBar_ = -1, lastCueTrack_ = -1;
+    /**
+     * @brief The cue bridge's socket and thread (PLAN 8.3, Cue.h).
+     *
+     * It used to be one message a frame, read off the display state: a bar number whenever the
+     * render thread noticed it had changed, which is a frame's worth of jitter and no beats at all.
+     * The cues now come off the play position on the audio thread, stamped with the instant the
+     * listener hears them, which is the only stamp a visualiser can act on.
+     */
+    CueSender cues_;
     int mixBase_ = -1, acidBase_ = -1;
     float acidCutoffBase_ = 650.0f;
 

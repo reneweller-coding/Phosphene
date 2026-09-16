@@ -53,6 +53,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "phos/Composer.h"
+#include "phos/Cue.h"
 #include "phos/Engine.h"
 #include "phos/Midi.h"
 #include "phos/Params.h"
@@ -161,6 +162,16 @@ public:
      */
     void pump(const phos::ParamStore& params, double horizonBeats, phos::EventRing<phos::NoteEvent>* midiOut,
               std::mutex& engineLock);
+    /**
+     * @brief Binds the ring the cue tap drains (PLAN 8.3); null switches mark generation off.
+     *
+     * Section boundaries and keys are decisions, not arithmetic, so the audio thread cannot work
+     * them out for itself -- but they must not be *sent* from here either, because this runs bars
+     * ahead of the sound. The conductor therefore writes what it knows into a ring in beat order,
+     * and phos::CueTap pops a mark when the play position reaches it (Cue.h).
+     */
+    void setCueMarks(phos::CueMarkRing* marks) { marks_ = marks; }
+
     /** @brief Index of the next bar to be composed. */
     int nextBar() const { return nextBar_; }
     /** @brief The musical beat that engine beat 0 stands for. */
@@ -190,6 +201,19 @@ private:
     /** @brief The tempo of the track that @p bar belongs to, as control events on compose.bpm. */
     void tempoControls(const phos::ParamStore& params, int bar, std::vector<phos::ControlEvent>& out) const;
 
+    /**
+     * @brief Pushes the cue marks of bar @p bar, in the order phos::Composer::sections() lists them.
+     *
+     * The same three rules that build a SectionMark there: the cut at the head of a breakdown, the
+     * section itself, and the pre-drop break in the last bar of a buildup. Matching that function
+     * exactly is what the offline demo checks -- the cues a listener receives and the score the
+     * composer wrote have to be the same list of boundaries, bar for bar.
+     * @param params knob values to plan with
+     * @param bar    musical bar
+     * @param first  true: also send the key, whatever the bar is (after a seek nothing is known yet)
+     */
+    void cueMarks(const phos::ParamStore& params, int bar, bool first);
+
     phos::Engine& engine_;
     const phos::Composer& composer_;
     int nextBar_ = 0;
@@ -200,6 +224,9 @@ private:
     size_t notePos_ = 0, controlPos_ = 0;
     mutable std::mutex previewLock_;               ///< guards #preview_ (composer writes, editor reads)
     std::vector<phos::NoteEvent> preview_;         ///< the last kPreviewBars bars, in musical beats
+    phos::CueMarkRing* marks_ = nullptr;           ///< where the cue marks go, null = the bridge is off
+    int cueKey_ = -1;                              ///< the key the last mark carried, -1 = none sent yet
+    int cueLandingBar_ = -1;                       ///< seek() already described this bar; pump must not repeat it
 };
 
 /** @brief What the editor needs to know about the transport, in one lump. */
@@ -358,6 +385,32 @@ public:
     /** @brief Turns host sync off (then the standalone clock runs even inside a host). */
     void setFollowHost(bool on);
 
+    // ------------------------------------------------------------------ the cue bridge (PLAN 8.3)
+    /**
+     * @brief Where the cues go: a host name or address (the port is the parameter `cue.port`).
+     *
+     * Not a parameter, because a parameter is a float and an address is not. It is saved with the
+     * state, and `PHOS_CUE_HOST` overrides it for an automated run.
+     */
+    juce::String cueHost() const;
+    /** @brief Sets the destination; takes effect at the next timer tick. @param host name or address */
+    void setCueHost(const juce::String& host);
+    /** @brief Whether the sender thread is running (the switch is `cue.send`). */
+    bool cueRunning() const { return cues_.running(); }
+    /** @brief Datagrams sent since the bridge was switched on, for the editor and the tests. */
+    juce::uint64 cuesSent() const { return static_cast<juce::uint64>(cues_.sent()); }
+    /** @brief Cues lost to a full queue, which is the only way one can be lost. */
+    juce::uint64 cuesDropped() const { return static_cast<juce::uint64>(cues_.dropped()); }
+    /** @brief The sender, for the offline demo and the tests. */
+    phos::CueSender& cueSender() { return cues_; }
+    /**
+     * @brief Opens or closes the bridge to match `cue.send` and `cue.port` (message thread).
+     *
+     * Called from the timer; public because a test has no message loop and has to turn the crank
+     * itself, the same reason #serviceMacros is public.
+     */
+    void serviceCueBridge();
+
     /** @brief Output muted; forced on by `PHOS_MUTE=1`. */
     bool muted() const { return mute_.load(std::memory_order_relaxed); }
     /** @brief Mutes or unmutes; does nothing while `PHOS_MUTE` forces it. */
@@ -504,6 +557,27 @@ private:
      */
     std::map<int, float> macroBase_;
     unsigned macroTicks_ = 0;   ///< message thread: how many ticks since the slow jobs last ran
+
+    // ---- the cue bridge (PLAN 8.3, Cue.h)
+    /**
+     * @brief The cues of a set, sent from the play position rather than from the composer.
+     *
+     * The chain is: the composer thread writes marks into #cueMarks_ bars ahead; processBlock hands
+     * #cueTap_ the beat range the block covers and it pushes cues into the sender's queue with the
+     * instant the listener will hear them; the sender's own thread waits for that instant and calls
+     * sendto(). Nothing on the audio thread allocates, locks or touches a socket.
+     */
+    phos::CueSender cues_;
+    phos::CueTap cueTap_;                       ///< @copydoc cues_
+    phos::CueMarkRing cueMarks_{ 256 };         ///< @copydoc cues_
+    juce::String cueHost_{ phos::kCueDefaultHost };   ///< message thread's copy of the destination
+    mutable std::mutex cueHostLock_;            ///< guards #cueHost_ (the editor writes, the timer reads)
+    bool cueWanted_ = false;                    ///< message thread: what `cue.send` said at the last tick
+    int  cuePort_ = phos::kCueDefaultPort;      ///< message thread: what `cue.port` said at the last tick
+    juce::String cuePortHost_;                  ///< message thread: the host the socket was opened with
+    std::atomic<float> cueLeadMs_{ 0.0f };      ///< `cue.lead_ms`, as the audio thread reads it
+    std::atomic<bool> cueBeats_{ true };        ///< `cue.beats`, as the audio thread reads it
+    std::atomic<bool> cueAnnounce_{ false };    ///< the bridge just opened: say which section is playing
 
     // ---- mute and recording
     std::atomic<bool> mute_{ false };   ///< the output is silenced at the very end of processBlock

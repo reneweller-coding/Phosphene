@@ -38,6 +38,11 @@ find_package(Threads)
 if(Threads_FOUND)
     target_link_libraries(PhospheneCore PUBLIC Threads::Threads)
 endif()
+# The cue bridge of PLAN 8.3 (include/phos/Cue.h) is header-only, so whoever includes it needs the
+# socket library. PUBLIC on the core, which every consumer already links.
+if(WIN32)
+    target_link_libraries(PhospheneCore PUBLIC ws2_32)
+endif()
 if(MSVC)
     target_compile_options(PhospheneCore PRIVATE /W4 /permissive- /utf-8)
     target_compile_definitions(PhospheneCore PRIVATE _CRT_SECURE_NO_WARNINGS)

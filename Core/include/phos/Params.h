@@ -47,7 +47,9 @@ struct ParamDesc {
 };
 
 /** @brief The modules that own parameters. */
-enum class Module : int { Compose = 0, Kick, Bass, Perc, Acid, Poly, Sfx, Fx, Mix, Master, Count };
+enum class Module : int { Compose = 0, Kick, Bass, Perc, Acid, Poly, Sfx, Fx, Mix, Master,
+                          /** The cue bridge of PLAN 8.3; appended, so no existing id moved. */
+                          Cue, Count };
 
 constexpr int kPercLanes = 12;   ///< instances of the percussion lane module
 constexpr int kPolyInstances = 3; ///< instances of the polyphonic engine module: "lead", "arp" and "pad"
@@ -132,6 +134,17 @@ namespace mix {
 enum : int { KickMute, BassMute, TrackGain, PercMute, PercLevel, AcidMute, AcidLevel, LeadMute, LeadLevel,
              ArpMute, ArpLevel, PadMute, PadLevel, SfxMute, SfxLevel, PercRoom, PercHall,
              DuckAttack, DuckHold, DuckRelease, Count };
+}
+/**
+ * @brief Parameters of the cue bridge (module Cue, prefix "cue"; PLAN 8.3).
+ *
+ * Off by default: a generator that starts talking to the network because it was installed would be
+ * a surprise, and a visualiser that is not there is the normal case. The destination *address* is
+ * not here because a parameter is a float and an address is not; it lives in the plugin's state and
+ * in the Quest's `phos.cfg`, next to the port.
+ */
+namespace cue {
+enum : int { Send, Port, Beats, LeadMs, Count };
 }
 /** @brief Parameters of the master section. */
 namespace master {
