@@ -40,13 +40,17 @@ build/Tools/render/Release/phos_render.exe --bars 32 --set "compose.bass_pattern
 ```
 
 ```bash
-build/Tools/render/Release/phos_render.exe --minutes 30 --seed 2026 --tracks --report --out out/night.wav --midi out/night.mid
+build/Tools/render/Release/phos_render.exe --minutes 60 --seed 2026 --tracks --sections --report \
+    --set "compose.style=Goa compose.style_tempo=On compose.arc=Peak-Time compose.set_minutes=60" \
+    --out out/night.wav --midi out/night.mid --save-set out/night.phosset
 ```
 
-`--tracks` prints each track's key, tempo, patterns, sound recipe, chords, melodic parts per 16-bar
-block, the effects and level corrections. `--solo acid` (or kick, bass, perc, lead, arp, pad, sfx) mutes
-everything else. `PHOS_ONLY=testDynamics` runs only the named self-test sections. `--list`
-prints every parameter. `python Tools/inspect_wav.py out/loop.wav --bpm 145` draws the
+`--tracks` prints each track's key, tempo, patterns, sound recipe, chords, form, effects, level
+corrections and, after the render, the loudness it really played; `--sections` lists every section of
+the set. `--set-file night.phosset` plays a saved set again, `--lock track:3` and `--reroll track:5`
+curate it (the units are set, track, section and lane). `--solo acid` (or kick, bass, perc, lead, arp,
+pad, sfx) mutes everything else. `PHOS_ONLY=testDynamics` runs only the named self-test sections.
+`--list` prints every parameter. `python Tools/inspect_wav.py out/loop.wav --bpm 145` draws the
 render (waveform, one beat, spectrogram) and prints where in the beat the sub band is occupied.
 
 ## Tests
@@ -60,9 +64,13 @@ analytic responses (the diode ladder against Zavalishin's transfer function and 
 at k = 17), the supersaw against Szabo's JP-8000 tables, FM sidebands against Bessel functions, the
 constrained Markov sampler against brute-force enumeration, pad voicings against exhaustive search, the
 compressor against Giannoulis et al., the limiter's output against an exact band-limited true peak, the
-hall's decay time, an eight-minute track against the loudness target, the tempo integral, the half-band stopband, oscillator aliasing, the kick's pitch
-sweep, sample-accurate event timing, bit-identical output across block sizes, the MIDI round trip and
-BS.1770 loudness. `phos_vectest` runs in three builds (AVX2, NEON through an x86 shim, scalar) and
+hall's decay time, an eight-minute track against the loudness target, the tempo integral, the half-band
+stopband, oscillator aliasing, the kick's pitch sweep, sample-accurate event timing, bit-identical
+output across block sizes, the MIDI round trip and BS.1770 loudness. The form is measured on a rendered
+track against the findings of Solberg and Dibben (2019): the breakdown at least 6 dB under the core
+before it, the buildup rising over every four-bar window, the kick-and-bass band 20 dB down in the
+breakdown, beat 4 of the pre-drop break 30 dB under a core beat, and the drop at least as loud and as
+bright as what stood before the break. `phos_vectest` runs in three builds (AVX2, NEON through an x86 shim, scalar) and
 requires every lane of the vectorised DSP to equal the scalar computation bit for bit.
 
 ## Layout
@@ -72,7 +80,7 @@ requires every lane of the vectorised DSP to equal the scalar computation bit fo
 | `Core/` | framework-free engine, `phos::` namespace |
 | `Tools/render/` | `phos_render`: offline render, MIDI export, benchmark |
 | `Tools/inspect_wav.py` | pictures and measurements of a render |
-| `Tools/ref_*.py` | measurements of reference recordings: bass slots, percussion grid, band balance, sweeps |
+| `Tools/ref_*.py` | measurements of reference recordings: bass slots, percussion grid, band balance, sweeps, tempo per style and the shape of a break |
 | `Tools/corpus/` | `build_corpus.py`: melodic statistics from a local MIDI corpus (the MIDI files stay local), memorisation check |
 | `Tests/` | self test, vector-path tests, NEON shim |
 | `docs/` | plan, Doxygen configuration |
