@@ -4,6 +4,7 @@
  */
 #include "phos/Engine.h"
 #include "phos/Patterns.h"
+#include "phos/WaveTableFile.h"
 #include <algorithm>
 #include <cmath>
 
@@ -44,6 +45,12 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
     percR_.assign(static_cast<size_t>(kChunk), 0.0f);
     acidL_.assign(static_cast<size_t>(kChunk), 0.0f);
     acidR_.assign(static_cast<size_t>(kChunk), 0.0f);
+    // The library's frame limit is read when the library is built, and that happens in the first
+    // Poly::prepare() below -- for the whole process, whichever engine gets there first. The
+    // desktop level asks for every frame (0), which is what the limit already is, so a desktop
+    // build is untouched by this line; a Quest build has to get here before the first load, which
+    // is why it sits in prepare() and not in the audio path.
+    setWaveTableFrameLimit(quality_.waveTableFrames);
     for (int i = 0; i < kPolyInstances; ++i) {
         polyL_[i].assign(static_cast<size_t>(kChunk), 0.0f);
         polyR_[i].assign(static_cast<size_t>(kChunk), 0.0f);

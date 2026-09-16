@@ -14,6 +14,18 @@
  * | Acid oversampling | 2x | 1x | The acid sits above D3 and is high-passed at 150 Hz; its aliasing folds into a band that the percussion and the leads already occupy. Halving its ladder saves the most of any single switch. |
  * | Unison oscillators per voice | 7 | 3 | Szabo's supersaw keeps its centre and its inner detuned pair (offsets -0.0195 and +0.0199); the wide pair and the outer pair fall away. The remaining gains are renormalised by incoherent power, so the level does not jump. |
  * | Pad voices | 8 | 4 | Pads play four-voice voicings (Melody.h), so four voices is what the part actually needs; the fifth to eighth exist for overlapping chord changes. Lead and arp stay at 8 -- they are monophonic lines whose voices only overlap during releases. |
+ * | Wavetable frames | 64 (all) | 32 | The shipped library is the engine's largest block of memory: 741 frames at 33 KB each are 23.3 MB once the ten mip levels are expanded, and 111 ms to build. Halving the frames halves both. |
+ *
+ * **Why 32 frames and not 16.** This is the one setting that costs no arithmetic at all, only
+ * *grain*: the position knob crossfades between two neighbouring frames, so thinning makes every
+ * step of the morph bigger. The selection of 16.09.2026 threw out tables that step instead of
+ * gliding, and the measure it used is the one the self test repeats (`testWaveTableQuality`): the
+ * median total variation between the power spectra of neighbouring frames. Over the five pad tables
+ * the worst of those is 0.074 with all 64 frames, 0.173 at 32 and 0.261 at 16 -- against the 0.49
+ * that marked a bank as a shaker. 32 frames buy the whole saving while the pad still glides; 16
+ * would spend half the remaining distance to the rejected range for memory the Quest budget does not
+ * ask for. `directness` (travel / path) is not harmed by thinning at all: both ends of the table are
+ * kept, so `travel` is unchanged and `path` can only shrink.
  *
  * **What is not here.** The plan also lists "reverb mode Classic" and "convolver off". Phosphene's
  * send effects are one FDN with no mode switch (Reverb.h) and there is no convolver at all, so both
@@ -41,6 +53,7 @@ struct Quality {
     int acidOversampling = 2;       ///< ladder rate of the acid, 1 or 2 times the sample rate
     int polyUnison[kPolyInstances] = { kPolyUnison, kPolyUnison, kPolyUnison };   ///< oscillators per voice, per Poly instance
     int polyVoices[kPolyInstances] = { kPolyVoices, kPolyVoices, kPolyVoices };   ///< voices that may sound, per Poly instance
+    int waveTableFrames = 0;        ///< frames a library table is built with; 0 = every frame (setWaveTableFrameLimit)
 
     /** @brief Everything at full: what the engine did before quality levels existed. */
     static Quality desktop() { return Quality{}; }
@@ -54,6 +67,7 @@ struct Quality {
         q.acidOversampling = 1;
         for (int i = 0; i < kPolyInstances; ++i) q.polyUnison[i] = 3;
         q.polyVoices[static_cast<int>(PolyInstance::Pad)] = 4;
+        q.waveTableFrames = 32;
         return q;
     }
 

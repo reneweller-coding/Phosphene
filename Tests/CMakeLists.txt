@@ -80,6 +80,14 @@ if(TARGET Phosphene)
         # The composer's probe renders put whole engines on the stack.
         target_link_options(phos_hosttest PRIVATE "LINKER:/STACK:16777216")
     endif()
+    # The shipped pack beside the test binary, exactly as Plugin/CMakeLists.txt installs it beside
+    # the artefacts. Without it the host test could only ever see the development build's
+    # PHOS_SOURCE_DATA_DIR, and the plugin's own path resolution -- the thing a user depends on --
+    # would go untested.
+    add_custom_command(TARGET phos_hosttest POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/Core/data/library.phoswt" "$<TARGET_FILE_DIR:phos_hosttest>/library.phoswt"
+        VERBATIM)
     add_test(NAME hosttest COMMAND phos_hosttest)
 endif()
 

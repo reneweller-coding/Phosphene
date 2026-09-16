@@ -3819,6 +3819,194 @@ void testWaveTableLibrary()
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Phase "wavetable library", Nachtrag (16.09.2026): the Quest lever. What thinning a table costs
+// in the measure the selection was made with, and that Engine::prepare() pulls the lever -- which
+// is the path the plugin and the Quest app take, not setWaveTableFrameLimit() by hand.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * @brief Normalised power spectrum of one frame at level 0, as `Tools/wt_select.py` computes it.
+ *
+ * The selection measured the source `.wav` cycles; this measures the stored level-0 cycle, which is
+ * the same waveform after buildFromHarmonics(). The absolute numbers therefore need not equal the
+ * table in docs/PLAN.md to the last digit -- what is compared here is one frame limit against
+ * another *inside this one measurement*, and for that both sides go through the same code.
+ * @return bins 1 .. 512 (harmonic h in element h-1), summing to 1; empty for a silent frame
+ */
+std::vector<double> framePowerSpectrum(const WaveTable& t, int frame)
+{
+    const size_t n = static_cast<size_t>(WaveTable::levelLength(0));
+    std::vector<std::complex<double>> a(n);
+    const float* c = t.cycle(0, frame);
+    for (size_t i = 0; i < n; ++i) a[i] = c[i];
+    fft(a);
+    std::vector<double> p(static_cast<size_t>(WaveTable::levelHarmonics(0)), 0.0);
+    double total = 0.0;
+    for (size_t h = 1; h <= p.size() && h < n / 2; ++h) { p[h - 1] = std::norm(a[h]); total += p[h - 1]; }
+    if (total <= 0.0) return {};
+    for (double& x : p) x /= total;
+    return p;
+}
+
+/** @brief The spectral-evolution numbers of one table: the steps between neighbouring frames. */
+struct MorphMeasure {
+    int frames = 0;
+    double move = 0.0;        ///< median total variation between neighbouring frames, in [0, 1]
+    double moveMax = 0.0;     ///< the largest single step: the worst jump the position knob walks over
+    double travel = 0.0;      ///< total variation between the first and the last frame
+    double path = 0.0;        ///< the sum of all the steps
+    double directness = 0.0;  ///< travel / path, at most 1 by the triangle inequality
+};
+
+/** @brief measure_table()'s `move`, `travel`, `path` and `directness` for a built table. */
+MorphMeasure measureMorph(const WaveTable& t)
+{
+    MorphMeasure m;
+    m.frames = t.frames;
+    std::vector<std::vector<double>> spec;
+    for (int f = 0; f < t.frames; ++f) {
+        std::vector<double> p = framePowerSpectrum(t, f);
+        if (!p.empty()) spec.push_back(std::move(p));
+    }
+    if (spec.size() < 2) return m;
+    std::vector<double> step;
+    for (size_t f = 1; f < spec.size(); ++f) {
+        double d = 0.0;
+        for (size_t h = 0; h < spec[f].size(); ++h) d += std::fabs(spec[f][h] - spec[f - 1][h]);
+        step.push_back(0.5 * d);
+    }
+    for (size_t h = 0; h < spec.back().size(); ++h) m.travel += std::fabs(spec.back()[h] - spec.front()[h]);
+    m.travel *= 0.5;
+    for (double s : step) m.path += s;
+    m.moveMax = *std::max_element(step.begin(), step.end());
+    std::vector<double> sorted = step;
+    std::sort(sorted.begin(), sorted.end());
+    m.move = sorted[sorted.size() / 2];
+    m.directness = m.path > 1e-12 ? m.travel / m.path : 0.0;
+    return m;
+}
+
+void testWaveTableQuality()
+{
+    section("wavetable library: the Quest lever");
+
+    // What thinning costs, in the measure the selection was made with. Thinning cannot hurt
+    // `directness` -- the first and the last frame stay, so `travel` is unchanged, and `path` can
+    // only shrink (triangle inequality), so directness can only rise. The number that gets worse is
+    // the *step*: the position knob reads two neighbouring frames and crossfades between them, so
+    // the step between them is the grain of the morph, and a table that steps instead of gliding is
+    // exactly what the selection's `directness` gate threw out. The bound comes from the same
+    // place: the WaveEdit banks the first selection wrongly chose for the pad had a median step of
+    // 0.49 and up, and thinning must not walk a chosen pad table into that range.
+    //
+    // The bound is the **pad lane's** and no other. `directness` was never asked of the lead or the
+    // arp -- a sixteenth note is over before a sweep arrives (docs/PLAN.md, 16.09.2026) -- and three
+    // of those seven tables step by 0.5 and more at every frame count, thinned or not. Holding them
+    // to a gliding table's bound would measure the selection, not the thinning.
+    constexpr double kShakerMove = 0.49;
+    const int kLimits[] = { 0, 48, 32, 24, 16 };
+    std::map<int, std::vector<MorphMeasure>> byLimit;
+    for (int limit : kLimits) {
+        resetWaveTableLibrary();
+        setWaveTableFrameLimit(limit);
+        loadWaveTableLibrary();
+        std::vector<MorphMeasure> ms;
+        for (int i = 0; i < kNumLibraryWaveTables; ++i) ms.push_back(measureMorph(waveTable(kNumBuiltinWaveTables + i)));
+        byLimit[limit] = std::move(ms);
+    }
+    std::printf("  what the frame limit costs the morph (median step / largest single step, per frame limit)\n");
+    std::printf("  %-22s %-5s", "table", "lane");
+    for (int limit : kLimits) std::printf("  %11s", limit == 0 ? "64 (all)" : fmt("%d", limit).c_str());
+    std::printf("\n");
+    for (int i = 0; i < kNumLibraryWaveTables; ++i) {
+        const char* lane = kLibraryTables[i].lane == WaveTableLane::Pad ? "pad"
+                         : (kLibraryTables[i].lane == WaveTableLane::Lead ? "lead" : "arp");
+        std::printf("  %-22s %-5s", kLibraryTables[i].name, lane);
+        for (int limit : kLimits) {
+            const MorphMeasure& m = byLimit[limit][static_cast<size_t>(i)];
+            std::printf("  %.3f/%.3f", m.move, m.moveMax);
+        }
+        std::printf("\n");
+    }
+    {
+        double worstMove = 0.0, wholeMove = 0.0, worstDirect = 1.0, wholeDirect = 1.0, worst16 = 0.0;
+        const char* worstName = "";
+        for (int i = 0; i < kNumLibraryWaveTables; ++i) {
+            if (kLibraryTables[i].lane != WaveTableLane::Pad) continue;
+            const MorphMeasure& m = byLimit[32][static_cast<size_t>(i)];
+            const MorphMeasure& all = byLimit[0][static_cast<size_t>(i)];
+            if (m.move > worstMove) { worstMove = m.move; wholeMove = all.move; worstName = kLibraryTables[i].name; }
+            worst16 = std::max(worst16, byLimit[16][static_cast<size_t>(i)].move);
+            worstDirect = std::min(worstDirect, m.directness);
+            wholeDirect = std::min(wholeDirect, all.directness);
+        }
+        check(worstMove < kShakerMove && worstDirect >= wholeDirect - 1e-9,
+              "at 32 frames the pad tables still glide: no step near the ones the selection rejected",
+              fmt("worst median pad step %.3f (%s, %.3f with all 64 frames) against the %.2f of a rejected bank;"
+                  " 16 frames would make it %.3f. Worst pad directness %.3f, and %.3f unthinned",
+                  worstMove, worstName, wholeMove, kShakerMove, worst16, worstDirect, wholeDirect));
+    }
+
+    // The lever itself, through the path a host takes: Engine::prepare(sr, block, quality). The
+    // Quest level thins, the desktop level does not, and the first and the last frame stay -- the
+    // ends of the table are what a position sweep starts and finishes on.
+    {
+        std::vector<float> first, last;
+        int desktopFrames = 0, questFrames = 0;
+        size_t desktopBytes = 0, questBytes = 0;
+        double desktopMs = 0.0, questMs = 0.0;
+        {
+            resetWaveTableLibrary();
+            setWaveTableFrameLimit(0);
+            Engine e;
+            const auto t0 = std::chrono::steady_clock::now();
+            e.prepare(48000.0, 256, Quality::desktop());
+            desktopMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            const WaveTable& t = waveTable(kNumBuiltinWaveTables);
+            desktopFrames = t.frames;
+            desktopBytes = waveTableLibraryBytes();
+            const int len = WaveTable::levelLength(0);
+            first.assign(t.cycle(0, 0), t.cycle(0, 0) + len);
+            last.assign(t.cycle(0, t.frames - 1), t.cycle(0, t.frames - 1) + len);
+        }
+        double dFirst = 0.0, dLast = 0.0;
+        {
+            resetWaveTableLibrary();
+            setWaveTableFrameLimit(0);
+            Engine e;
+            const auto t0 = std::chrono::steady_clock::now();
+            e.prepare(48000.0, 256, Quality::quest());
+            questMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            const WaveTable& t = waveTable(kNumBuiltinWaveTables);
+            questFrames = t.frames;
+            questBytes = waveTableLibraryBytes();
+            for (int i = 0; i < WaveTable::levelLength(0); ++i) {
+                dFirst = std::max(dFirst, std::fabs(static_cast<double>(first[static_cast<size_t>(i)]) - t.cycle(0, 0)[i]));
+                dLast = std::max(dLast, std::fabs(static_cast<double>(last[static_cast<size_t>(i)]) - t.cycle(0, t.frames - 1)[i]));
+            }
+        }
+        // Not bit-equal: the table is scaled by its loudest frame and thinning can drop that frame
+        // (the same tolerance the frame-limit check of the library section uses).
+        check(desktopFrames == WaveTable::kMaxFrames && questFrames == 32 && dFirst < 1e-3 && dLast < 1e-3,
+              "Engine::prepare pulls the lever: the Quest level thins to 32 frames, the desktop level keeps all 64",
+              fmt("desktop %d frames, quest %d; the kept ends differ by %.2e / %.2e", desktopFrames, questFrames, dFirst, dLast));
+        check(questBytes * 3 < desktopBytes * 2,
+              "and the Quest level really costs the memory back",
+              fmt("%.2f MB against %.2f MB, loaded in %.0f ms against %.0f ms",
+                  questBytes / (1024.0 * 1024.0), desktopBytes / (1024.0 * 1024.0), questMs, desktopMs));
+        std::printf("  quality levels: desktop %d frames, %.2f MB, Engine::prepare %.0f ms;"
+                    " quest %d frames, %.2f MB, %.0f ms\n",
+                    desktopFrames, desktopBytes / (1024.0 * 1024.0), desktopMs,
+                    questFrames, questBytes / (1024.0 * 1024.0), questMs);
+    }
+
+    // Whatever this section did to the library, every test after it must see the shipped one.
+    resetWaveTableLibrary();
+    setWaveTableFrameLimit(0);
+    loadWaveTableLibrary();
+}
+
 void testPads()
 {
     section("pads: voicings");
@@ -5012,6 +5200,7 @@ int main()
     run("testMelody", testMelody);
     run("testWaveTable", testWaveTable);
     run("testWaveTableLibrary", testWaveTableLibrary);
+    run("testWaveTableQuality", testWaveTableQuality);
     run("testPads", testPads);
     run("testGateAndDuck", testGateAndDuck);
     run("testReverb", testReverb);

@@ -37,23 +37,32 @@ New-Item -ItemType Directory -Force $libDir | Out-Null
 Copy-Item (Join-Path $build "libphosquest.so") $libDir -Force
 Copy-Item (Join-Path $root "ThirdParty\openxr-loader\prefab\modules\openxr_loader\libs\android.arm64-v8a\libopenxr_loader.so") $libDir -Force
 
-# 3. resources (the launcher icon at five densities) -> compiled, then the manifest -> base.apk (no code)
+# 3. assets: the shipped wavetable library (Core/data/library.phoswt, 750 KB). It is staged rather
+#    than kept under Quest/ so that the APK and the plugin ship the one file the self test measures.
+#    The app unpacks it into its private directory on the first start, because the core opens its
+#    resources by name and an asset in the APK has none (Quest/src/main.cpp, prepareWaveTables).
+$assets = Join-Path $out "assets"
+if (Test-Path $assets) { Remove-Item -Recurse -Force $assets }
+New-Item -ItemType Directory -Force $assets | Out-Null
+Copy-Item (Join-Path $root "Core\data\library.phoswt") $assets -Force
+
+# 4. resources (the launcher icon at five densities) -> compiled, then the manifest -> base.apk (no code)
 $resZip = Join-Path $out "res.zip"
 if (Test-Path $resZip) { Remove-Item $resZip -Force }
 & (Join-Path $bt "aapt2.exe") compile --dir (Join-Path $quest "res") -o $resZip
 if ($LASTEXITCODE -ne 0) { throw "aapt2 compile failed" }
 $base = Join-Path $out "base.apk"
 if (Test-Path $base) { Remove-Item $base -Force }
-& (Join-Path $bt "aapt2.exe") link -o $base --manifest (Join-Path $quest "AndroidManifest.xml") -R $resZip -I $androidJar --min-sdk-version 29 --target-sdk-version 32
+& (Join-Path $bt "aapt2.exe") link -o $base --manifest (Join-Path $quest "AndroidManifest.xml") -R $resZip -A $assets -I $androidJar --min-sdk-version 29 --target-sdk-version 32
 if ($LASTEXITCODE -ne 0) { throw "aapt2 link failed" }
 
-# 4. add the libraries (jar keeps the zip valid; extractNativeLibs=true allows compressed .so)
+# 5. add the libraries (jar keeps the zip valid; extractNativeLibs=true allows compressed .so)
 Push-Location $out
 & (Join-Path $Jdk "bin\jar.exe") uf $base lib\arm64-v8a\libphosquest.so lib\arm64-v8a\libopenxr_loader.so
 Pop-Location
 if ($LASTEXITCODE -ne 0) { throw "jar failed" }
 
-# 5. align and sign with a debug key (created once)
+# 6. align and sign with a debug key (created once)
 $aligned = Join-Path $out "aligned.apk"
 & (Join-Path $bt "zipalign.exe") -f 4 $base $aligned
 if ($LASTEXITCODE -ne 0) { throw "zipalign failed" }
@@ -66,6 +75,22 @@ if (-not (Test-Path $keystore)) {
 $final = Join-Path $build "PhospheneQuest.apk"
 & (Join-Path $bt "apksigner.bat") sign --ks $keystore --ks-pass pass:android --key-pass pass:android --out $final $aligned
 if ($LASTEXITCODE -ne 0) { throw "apksigner failed" }
+
+# 7. what the finished APK carries. The wavetable pack has to be *in* it, not only in the staging
+#    folder: without it the app finds no library on the device and falls back to the six built-in
+#    tables -- which is audible, not fatal, and therefore exactly the kind of failure that ships
+#    unnoticed. Nothing else can check it here, because no headset is attached to this machine.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip = [IO.Compression.ZipFile]::OpenRead($final)
+$entry = $zip.Entries | Where-Object { $_.FullName -eq "assets/library.phoswt" }
+$packedBytes = 0
+$storedBytes = 0
+if ($entry) { $packedBytes = $entry.Length; $storedBytes = $entry.CompressedLength }
+$zip.Dispose()
+$wantBytes = (Get-Item (Join-Path $root "Core\data\library.phoswt")).Length
+if ($packedBytes -ne $wantBytes) { throw "the APK carries $packedBytes bytes of library.phoswt, not the $wantBytes of Core\data" }
+Write-Host ("assets:   library.phoswt {0:N0} bytes, {1:N0} in the APK" -f $packedBytes, $storedBytes)
+Write-Host ("APK size: {0:N0} bytes" -f (Get-Item $final).Length)
 Write-Host "APK: $final"
 Write-Host "install:  adb install -r `"$final`""
 Write-Host "config:   adb push phos.cfg /sdcard/Android/data/com.reneweller.phosphene.quest/files/phos.cfg"

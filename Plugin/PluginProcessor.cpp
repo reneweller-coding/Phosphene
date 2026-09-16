@@ -6,6 +6,7 @@
 #include "PluginEditor.h"
 #include "phos/Clock.h"
 #include "phos/SetFile.h"
+#include "phos/WaveTableFile.h"
 #include <chrono>
 #include <cmath>
 
@@ -15,6 +16,68 @@ namespace {
 
 /** @brief How far ahead of the play position the rings are kept filled (PLAN 3: never under 8 bars). */
 constexpr double kHorizonBeats = 8.0 * kBeatsPerBar;
+
+/** @brief The shipped wavetable pack, installed beside the artefacts by Plugin/CMakeLists.txt. */
+constexpr const char* kWaveTablePack = "library.phoswt";
+
+/**
+ * @brief The directory the shipped pack lies in, looked for the way a plugin has to look.
+ *
+ * A plugin has no working directory worth the name -- it is whatever the host was started in -- and
+ * no source tree, so `PHOS_SOURCE_DATA_DIR` (Core/CMakeLists.txt) only ever helps a development
+ * build. What a plugin does have is its own module: JUCE hands the loaded binary back through
+ * `currentExecutableFile`, and the bundle around it through `currentApplicationFile` (on macOS
+ * these differ, on Windows they are the same file). From there the candidates are the three places
+ * a resource can sit in the formats this plugin is built in:
+ *
+ * | Format | Binary | The pack |
+ * |---|---|---|
+ * | Standalone (Windows, Linux) | `Phosphene.exe` | beside it |
+ * | Standalone (macOS) | `Phosphene.app/Contents/MacOS/Phosphene` | `Contents/Resources` |
+ * | VST3 (Windows) | `Phosphene.vst3/Contents/x86_64-win/Phosphene.vst3` | `Contents/Resources` |
+ * | VST3 (macOS) | `Phosphene.vst3/Contents/MacOS/Phosphene` | `Contents/Resources` |
+ *
+ * `Contents/Resources` is where the VST3 specification puts a plugin's data, and it is the one
+ * place a host will not strip when it copies a bundle. The directory beside the binary is kept as
+ * the first candidate because it is what the standalone and a plain copy of the build tree have.
+ *
+ * Nothing is loaded here and nothing fails here: an absent pack is not an error, it is the
+ * built-in tables (WaveTableFile.h), and the editor says so.
+ */
+juce::String resolveWaveTableDirectory()
+{
+    juce::Array<juce::File> dirs;
+    const juce::File binaries[] = { juce::File::getSpecialLocation(juce::File::currentExecutableFile),
+                                    juce::File::getSpecialLocation(juce::File::currentApplicationFile) };
+    for (const juce::File& f : binaries) {
+        if (f == juce::File()) continue;
+        const juce::File dir = f.isDirectory() ? f : f.getParentDirectory();
+        dirs.addIfNotAlreadyThere(dir);                                        // beside the binary
+        dirs.addIfNotAlreadyThere(dir.getParentDirectory().getChildFile("Resources"));   // .../Contents/<arch>/..
+        dirs.addIfNotAlreadyThere(dir.getChildFile("Contents").getChildFile("Resources"));   // the bundle itself
+    }
+    for (const juce::File& d : dirs)
+        if (d.getChildFile(kWaveTablePack).existsAsFile()) return d.getFullPathName();
+    return {};
+}
+
+juce::String gWaveTablePackDirectory;   ///< where installWaveTableSearchPath() found the pack, or empty
+
+/**
+ * @brief Points the core at the shipped pack, once per process.
+ *
+ * Called from the processor's constructor, before its composer thread starts: that thread prepares
+ * probe engines of its own, and the first Engine::prepare() anywhere in the process is the one that
+ * loads the library. Setting the path afterwards would be both a race and too late.
+ */
+void installWaveTableSearchPath()
+{
+    static std::once_flag once;
+    std::call_once(once, [] {
+        gWaveTablePackDirectory = resolveWaveTableDirectory();
+        if (gWaveTablePackDirectory.isNotEmpty()) setWaveTableSearchPath(gWaveTablePackDirectory.toStdString());
+    });
+}
 
 /** @brief `PHOS_TRACE=1`, shared with the conductor so its bar-by-bar work can be followed. */
 bool gTrace = false;
@@ -301,6 +364,10 @@ bool PlugConductor::readPreview(int firstBar, int bars, std::vector<NoteEvent>& 
 PhospheneProcessor::PhospheneProcessor()
     : juce::AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true))
 {
+    // Before anything prepares an engine -- this instance's, or one of the composer thread's probe
+    // renders -- the core has to know where the shipped tables are. The load itself happens in the
+    // first Engine::prepare() and only once for the process.
+    installWaveTableSearchPath();
     engine_ = std::make_unique<Engine>();
     composer_ = std::make_unique<Composer>(seed_.load());
     conductor_ = std::make_unique<PlugConductor>(*engine_, *composer_);
@@ -342,6 +409,16 @@ void PhospheneProcessor::buildParameters()
         byId_[static_cast<size_t>(i)] = param;
         addParameter(param);
     }
+}
+
+PhospheneProcessor::WaveTableLibrary PhospheneProcessor::waveTableLibrary() const
+{
+    WaveTableLibrary s;
+    s.directory = gWaveTablePackDirectory;
+    s.shipped = kNumLibraryWaveTables;
+    for (int i = 0; i < kNumLibraryWaveTables; ++i)
+        if (waveTableLoaded(kNumBuiltinWaveTables + i)) ++s.loaded;
+    return s;
 }
 
 bool PhospheneProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const

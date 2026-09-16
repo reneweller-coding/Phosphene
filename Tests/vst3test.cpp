@@ -58,6 +58,20 @@ int main(int argc, char** argv)
     check(plugin.exists(), "the built VST3 is where the build says it is");
     if (!plugin.exists()) { std::printf("%d checks, %d failures\n", checks, failures); return 1; }
 
+    // ---------------------------------------------------------------- what the bundle carries
+    //
+    // The shipped wavetable pack travels inside the bundle, in the directory the VST3 specification
+    // keeps a plugin's data in. The host test proves that the plugin finds a pack beside its own
+    // binary; this proves that the packaging put one there. The two together are what a user gets.
+    // `plugin` is the module inside the bundle (Contents/<arch>/Phosphene.vst3), so Resources is one
+    // level up from the architecture directory.
+    {
+        const juce::File resources = plugin.getParentDirectory().getParentDirectory().getChildFile("Resources");
+        const juce::File pack = resources.getChildFile("library.phoswt");
+        check(pack.existsAsFile(), "the bundle carries the wavetable pack in " + resources.getFullPathName());
+        check(pack.getSize() > 100000, "and it is the whole file (" + juce::String(pack.getSize()) + " bytes)");
+    }
+
     // ---------------------------------------------------------------- the module and its factory
     juce::VST3PluginFormat format;
     juce::OwnedArray<juce::PluginDescription> found;

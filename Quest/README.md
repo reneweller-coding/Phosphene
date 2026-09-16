@@ -83,6 +83,26 @@ set=compose.pad_amount=1;compose.acid_amount=1     any knobs, repeatable
 The cue bridge sends `/phos/bar f f` (bar, BPM) once per bar and `/phos/track f f f`
 (track, key, scale) at each track change — from the score, never from an analysis of the audio.
 
+## The wavetable library
+
+`Core/data/library.phoswt` (750 KB, twelve tables) rides in the APK as an asset — `build_apk.ps1`
+stages it and `aapt2 link -A` packs it, which adds 648 KB to the APK (3.71 MB → 4.34 MB; the pack
+deflates to 662 KB). The core opens its resources by name and an asset inside the APK has none, so
+the app unpacks it once into its private directory on the first start and points
+`setWaveTableSearchPath()` there (`prepareWaveTables` in `src/main.cpp`); afterwards the copy is
+recognised by its length and nothing is written. A `library.phoswt` pushed into the external data
+folder beside `phos.cfg` wins over the one in the APK, which is how another selection is tried on
+the device without building an APK for it:
+
+```
+adb push library.phoswt /sdcard/Android/data/com.reneweller.phosphene.quest/files/library.phoswt
+```
+
+At the `quest` quality level the tables are built with 32 of their 64 frames
+(`Core/include/phos/Quality.h`), which takes the expanded mip levels from 23.3 MB to 12.1 MB and the
+load from 110 ms to 71 ms. With no pack at all the engine falls back to its six built-in tables and
+says so in the log — it does not go silent.
+
 ## Checks on the headset
 
 The NEON lane path is only run through an x86 stand-in on the desktop (`Tests/neonshim`). The arm64
@@ -138,5 +158,7 @@ versions, the swapchain sizes, the Oboe rate and burst, and every track jump.
 Builds and packages (arm64-v8a, APK signed with a debug key), but **nothing has run on a device
 yet**: no headset was attached to the build machine on 16.09.2026. Open, in this order: the vector
 test's `path neon` line, the two `--bench` numbers against the 30 % budget, session state flow and
-swapchain format, the hand-tracking permission prompt, the Oboe stream start, and how the two pinch
-gestures feel in practice (the thresholds are 22 mm closed / 38 mm open, a guess from Noctuary's).
+swapchain format, the hand-tracking permission prompt, the Oboe stream start, the
+`wavetables: unpacked …` line of the first start (and that the second start does not repeat it),
+and how the two pinch gestures feel in practice (the thresholds are 22 mm closed / 38 mm open, a
+guess from Noctuary's).
