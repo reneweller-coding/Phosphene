@@ -107,6 +107,15 @@ int ControlPage::addControl(int groupIndex, std::unique_ptr<juce::Component> com
     return static_cast<int>(cells_.size()) - 1;
 }
 
+std::vector<int> ControlPage::groupParams(int index) const
+{
+    std::vector<int> out;
+    if (index < 0 || index >= static_cast<int>(groups_.size())) return out;
+    for (int ci : groups_[static_cast<size_t>(index)].cells)
+        if (cells_[static_cast<size_t>(ci)].param >= 0) out.push_back(cells_[static_cast<size_t>(ci)].param);
+    return out;
+}
+
 int ControlPage::minimumWidth() const
 {
     int widest = 0;

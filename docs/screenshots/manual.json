@@ -1,0 +1,8212 @@
+{
+  "version": "0.1.0",
+  "name": "Phosphene",
+  "designWidth": 1290,
+  "designHeight": 1032,
+  "params": [
+    {
+      "key": "compose.bpm",
+      "module": "compose",
+      "name": "Tempo",
+      "unit": "BPM",
+      "min": 100.0,
+      "max": 190.0,
+      "default": 145.0,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.key",
+      "module": "compose",
+      "name": "Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 6.0,
+      "curve": "choice",
+      "choices": [
+        "C",
+        "C#",
+        "D",
+        "D#",
+        "E",
+        "F",
+        "F#",
+        "G",
+        "G#",
+        "A",
+        "A#",
+        "B"
+      ]
+    },
+    {
+      "key": "compose.scale",
+      "module": "compose",
+      "name": "Scale",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Aeolian",
+        "Phrygian",
+        "Harmonic Minor",
+        "Phrygian Dominant",
+        "Double Harmonic",
+        "Dorian"
+      ]
+    },
+    {
+      "key": "compose.kick_pattern",
+      "module": "compose",
+      "name": "Kick Pattern",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Four",
+        "Four + Fills",
+        "Off"
+      ]
+    },
+    {
+      "key": "compose.bass_pattern",
+      "module": "compose",
+      "name": "Bass Pattern",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Rolling",
+        "Gallop",
+        "Skip",
+        "Offbeat",
+        "Triplet"
+      ]
+    },
+    {
+      "key": "compose.bass_gate",
+      "module": "compose",
+      "name": "Bass Gate",
+      "unit": "",
+      "min": 0.200000002980232,
+      "max": 1.0,
+      "default": 0.699999988079071,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.bass_variation",
+      "module": "compose",
+      "name": "Bass Variation",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.bass_register",
+      "module": "compose",
+      "name": "Bass Register",
+      "unit": "st",
+      "min": -12.0,
+      "max": 12.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "compose.track_bars",
+      "module": "compose",
+      "name": "Track Length",
+      "unit": "bars",
+      "min": 32.0,
+      "max": 512.0,
+      "default": 256.0,
+      "curve": "int"
+    },
+    {
+      "key": "compose.track_variation",
+      "module": "compose",
+      "name": "Track Variation",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.sound_variation",
+      "module": "compose",
+      "name": "Sound Variation",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.tempo_range",
+      "module": "compose",
+      "name": "Tempo Range",
+      "unit": "BPM",
+      "min": 0.0,
+      "max": 10.0,
+      "default": 3.0,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.level_match",
+      "module": "compose",
+      "name": "Level Match",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "compose.perc_density",
+      "module": "compose",
+      "name": "Perc Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.perc_variation",
+      "module": "compose",
+      "name": "Perc Variation",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.swing",
+      "module": "compose",
+      "name": "Swing",
+      "unit": "",
+      "min": 0.0,
+      "max": 0.300000011920929,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.acid_amount",
+      "module": "compose",
+      "name": "Acid Amount",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.lead_amount",
+      "module": "compose",
+      "name": "Lead Amount",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.arp_amount",
+      "module": "compose",
+      "name": "Arp Amount",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.melody_variation",
+      "module": "compose",
+      "name": "Melody Variation",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.melody_temperature",
+      "module": "compose",
+      "name": "Melody Temperature",
+      "unit": "",
+      "min": 0.5,
+      "max": 2.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "compose.squelch_chance",
+      "module": "compose",
+      "name": "Squelch Chance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.bass_follows_chords",
+      "module": "compose",
+      "name": "Bass Follows Chords",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "compose.pad_amount",
+      "module": "compose",
+      "name": "Pad Amount",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.699999988079071,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.sfx_amount",
+      "module": "compose",
+      "name": "SFX Amount",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.699999988079071,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.gate_chance",
+      "module": "compose",
+      "name": "Gate Chance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.349999994039536,
+      "curve": "linear"
+    },
+    {
+      "key": "compose.style",
+      "module": "compose",
+      "name": "Style",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Goa",
+        "Full-On",
+        "Progressive",
+        "Dark Forest",
+        "Hi-Tech"
+      ]
+    },
+    {
+      "key": "compose.arc",
+      "module": "compose",
+      "name": "Energy Arc",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 4.0,
+      "curve": "choice",
+      "choices": [
+        "Warm-up",
+        "Peak-Time",
+        "Morning",
+        "Closing",
+        "Flat"
+      ]
+    },
+    {
+      "key": "compose.style_tempo",
+      "module": "compose",
+      "name": "Style Tempo",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "compose.set_minutes",
+      "module": "compose",
+      "name": "Set Length",
+      "unit": "min",
+      "min": 10.0,
+      "max": 300.0,
+      "default": 60.0,
+      "curve": "int"
+    },
+    {
+      "key": "kick.engine",
+      "module": "kick",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Sweep",
+        "Resonant"
+      ]
+    },
+    {
+      "key": "kick.tune",
+      "module": "kick",
+      "name": "Tune",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Free",
+        "Key"
+      ]
+    },
+    {
+      "key": "kick.pitch_end",
+      "module": "kick",
+      "name": "Pitch End",
+      "unit": "Hz",
+      "min": 30.0,
+      "max": 120.0,
+      "default": 50.0,
+      "curve": "log"
+    },
+    {
+      "key": "kick.pitch_start",
+      "module": "kick",
+      "name": "Pitch Start",
+      "unit": "Hz",
+      "min": 60.0,
+      "max": 1500.0,
+      "default": 220.0,
+      "curve": "log"
+    },
+    {
+      "key": "kick.pitch_decay",
+      "module": "kick",
+      "name": "Body Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 150.0,
+      "default": 22.0,
+      "curve": "log"
+    },
+    {
+      "key": "kick.punch_decay",
+      "module": "kick",
+      "name": "Punch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 20.0,
+      "default": 4.0,
+      "curve": "log"
+    },
+    {
+      "key": "kick.punch",
+      "module": "kick",
+      "name": "Punch",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "kick.amp_attack",
+      "module": "kick",
+      "name": "Attack",
+      "unit": "ms",
+      "min": 0.0,
+      "max": 10.0,
+      "default": 0.200000002980232,
+      "curve": "linear"
+    },
+    {
+      "key": "kick.amp_hold",
+      "module": "kick",
+      "name": "Hold",
+      "unit": "ms",
+      "min": 0.0,
+      "max": 150.0,
+      "default": 12.0,
+      "curve": "linear"
+    },
+    {
+      "key": "kick.amp_decay",
+      "module": "kick",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 20.0,
+      "max": 1500.0,
+      "default": 150.0,
+      "curve": "log"
+    },
+    {
+      "key": "kick.drive",
+      "module": "kick",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.349999994039536,
+      "curve": "linear"
+    },
+    {
+      "key": "kick.clip",
+      "module": "kick",
+      "name": "Clip",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Tanh",
+        "Hard"
+      ]
+    },
+    {
+      "key": "kick.click_level",
+      "module": "kick",
+      "name": "Click",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.200000002980232,
+      "curve": "linear"
+    },
+    {
+      "key": "kick.click_tone",
+      "module": "kick",
+      "name": "Click Tone",
+      "unit": "Hz",
+      "min": 500.0,
+      "max": 12000.0,
+      "default": 4000.0,
+      "curve": "log"
+    },
+    {
+      "key": "kick.click_decay",
+      "module": "kick",
+      "name": "Click Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 30.0,
+      "default": 3.0,
+      "curve": "log"
+    },
+    {
+      "key": "kick.tone",
+      "module": "kick",
+      "name": "Tone",
+      "unit": "Hz",
+      "min": 200.0,
+      "max": 20000.0,
+      "default": 9000.0,
+      "curve": "log"
+    },
+    {
+      "key": "kick.level",
+      "module": "kick",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -2.0,
+      "curve": "linear"
+    },
+    {
+      "key": "kick.tail_limit",
+      "module": "kick",
+      "name": "Tail Limit",
+      "unit": "dB",
+      "min": -60.0,
+      "max": 0.0,
+      "default": -24.0,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.wave",
+      "module": "bass",
+      "name": "Wave",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.150000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.pulse_width",
+      "module": "bass",
+      "name": "Pulse Width",
+      "unit": "",
+      "min": 0.050000000745058,
+      "max": 0.949999988079071,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.sub",
+      "module": "bass",
+      "name": "Sub",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.sub_mode",
+      "module": "bass",
+      "name": "Sub Mode",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Mixed",
+        "Split"
+      ]
+    },
+    {
+      "key": "bass.split_ratio",
+      "module": "bass",
+      "name": "Split",
+      "unit": "x f0",
+      "min": 1.200000047683716,
+      "max": 3.0,
+      "default": 2.0,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.kick_lock",
+      "module": "bass",
+      "name": "Kick Lock",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "Bass follows kick",
+        "Kick follows bass"
+      ]
+    },
+    {
+      "key": "bass.retrigger",
+      "module": "bass",
+      "name": "Retrigger",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "bass.start_phase",
+      "module": "bass",
+      "name": "Start Phase",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.cutoff",
+      "module": "bass",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 10000.0,
+      "default": 140.0,
+      "curve": "log"
+    },
+    {
+      "key": "bass.resonance",
+      "module": "bass",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.env_amount",
+      "module": "bass",
+      "name": "Env Amount",
+      "unit": "oct",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 4.0,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.filter_decay",
+      "module": "bass",
+      "name": "Filter Decay",
+      "unit": "ms",
+      "min": 3.0,
+      "max": 1000.0,
+      "default": 75.0,
+      "curve": "log"
+    },
+    {
+      "key": "bass.key_track",
+      "module": "bass",
+      "name": "Key Track",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.vel_to_cutoff",
+      "module": "bass",
+      "name": "Vel > Cutoff",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.25,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.drive",
+      "module": "bass",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.amp_attack",
+      "module": "bass",
+      "name": "Attack",
+      "unit": "ms",
+      "min": 0.100000001490116,
+      "max": 50.0,
+      "default": 0.800000011920929,
+      "curve": "log"
+    },
+    {
+      "key": "bass.amp_decay",
+      "module": "bass",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 2000.0,
+      "default": 180.0,
+      "curve": "log"
+    },
+    {
+      "key": "bass.amp_sustain",
+      "module": "bass",
+      "name": "Sustain",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.550000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.amp_release",
+      "module": "bass",
+      "name": "Release",
+      "unit": "ms",
+      "min": 1.0,
+      "max": 500.0,
+      "default": 10.0,
+      "curve": "log"
+    },
+    {
+      "key": "bass.duck_depth",
+      "module": "bass",
+      "name": "Duck Depth",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.duck_hold",
+      "module": "bass",
+      "name": "Duck Hold",
+      "unit": "ms",
+      "min": 0.0,
+      "max": 200.0,
+      "default": 25.0,
+      "curve": "linear"
+    },
+    {
+      "key": "bass.duck_release",
+      "module": "bass",
+      "name": "Duck Release",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 500.0,
+      "default": 60.0,
+      "curve": "log"
+    },
+    {
+      "key": "bass.level",
+      "module": "bass",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -5.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc1.active",
+      "module": "perc1",
+      "name": "Active",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc1.role",
+      "module": "perc1",
+      "name": "Role",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Closed Hat",
+        "Open Hat",
+        "Ride",
+        "Crash",
+        "Clap",
+        "Snare",
+        "Rim",
+        "Shaker",
+        "Tom",
+        "Conga",
+        "Zap",
+        "Blip"
+      ]
+    },
+    {
+      "key": "perc1.engine",
+      "module": "perc1",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Noise",
+        "Metal",
+        "Modal",
+        "Tone",
+        "FM"
+      ]
+    },
+    {
+      "key": "perc1.pitch",
+      "module": "perc1",
+      "name": "Pitch",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 12000.0,
+      "default": 400.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc1.pitch_amount",
+      "module": "perc1",
+      "name": "Pitch Amount",
+      "unit": "x",
+      "min": 1.0,
+      "max": 16.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc1.pitch_decay",
+      "module": "perc1",
+      "name": "Pitch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 300.0,
+      "default": 10.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc1.fm_ratio",
+      "module": "perc1",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.25,
+      "max": 8.0,
+      "default": 1.409999966621399,
+      "curve": "linear"
+    },
+    {
+      "key": "perc1.fm_index",
+      "module": "perc1",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc1.mode_set",
+      "module": "perc1",
+      "name": "Modes",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Membrane",
+        "Bar",
+        "Harmonic"
+      ]
+    },
+    {
+      "key": "perc1.mode_damp",
+      "module": "perc1",
+      "name": "Mode Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc1.metal_scale",
+      "module": "perc1",
+      "name": "Metal Scale",
+      "unit": "x",
+      "min": 0.25,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc1.noise",
+      "module": "perc1",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.349999994039536,
+      "curve": "linear"
+    },
+    {
+      "key": "perc1.noise_decay",
+      "module": "perc1",
+      "name": "Noise Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 35.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc1.bursts",
+      "module": "perc1",
+      "name": "Bursts",
+      "unit": "",
+      "min": 1.0,
+      "max": 6.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc1.burst_spacing",
+      "module": "perc1",
+      "name": "Burst Spacing",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 40.0,
+      "default": 10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc1.decay",
+      "module": "perc1",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 45.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc1.filter",
+      "module": "perc1",
+      "name": "Filter",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass"
+      ]
+    },
+    {
+      "key": "perc1.cutoff",
+      "module": "perc1",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 100.0,
+      "max": 18000.0,
+      "default": 7500.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc1.resonance",
+      "module": "perc1",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.25,
+      "curve": "linear"
+    },
+    {
+      "key": "perc1.low_cut",
+      "module": "perc1",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 4000.0,
+      "default": 150.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc1.drive",
+      "module": "perc1",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc1.level",
+      "module": "perc1",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": 5.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc1.pan",
+      "module": "perc1",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.150000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "perc1.choke",
+      "module": "perc1",
+      "name": "Choke Group",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc1.shift",
+      "module": "perc1",
+      "name": "Shift",
+      "unit": "ms",
+      "min": -10.0,
+      "max": 10.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc1.density",
+      "module": "perc1",
+      "name": "Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "perc1.tune",
+      "module": "perc1",
+      "name": "Tune to Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc2.active",
+      "module": "perc2",
+      "name": "Active",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc2.role",
+      "module": "perc2",
+      "name": "Role",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Closed Hat",
+        "Open Hat",
+        "Ride",
+        "Crash",
+        "Clap",
+        "Snare",
+        "Rim",
+        "Shaker",
+        "Tom",
+        "Conga",
+        "Zap",
+        "Blip"
+      ]
+    },
+    {
+      "key": "perc2.engine",
+      "module": "perc2",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Noise",
+        "Metal",
+        "Modal",
+        "Tone",
+        "FM"
+      ]
+    },
+    {
+      "key": "perc2.pitch",
+      "module": "perc2",
+      "name": "Pitch",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 12000.0,
+      "default": 400.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc2.pitch_amount",
+      "module": "perc2",
+      "name": "Pitch Amount",
+      "unit": "x",
+      "min": 1.0,
+      "max": 16.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc2.pitch_decay",
+      "module": "perc2",
+      "name": "Pitch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 300.0,
+      "default": 10.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc2.fm_ratio",
+      "module": "perc2",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.25,
+      "max": 8.0,
+      "default": 1.409999966621399,
+      "curve": "linear"
+    },
+    {
+      "key": "perc2.fm_index",
+      "module": "perc2",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc2.mode_set",
+      "module": "perc2",
+      "name": "Modes",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Membrane",
+        "Bar",
+        "Harmonic"
+      ]
+    },
+    {
+      "key": "perc2.mode_damp",
+      "module": "perc2",
+      "name": "Mode Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc2.metal_scale",
+      "module": "perc2",
+      "name": "Metal Scale",
+      "unit": "x",
+      "min": 0.25,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc2.noise",
+      "module": "perc2",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.349999994039536,
+      "curve": "linear"
+    },
+    {
+      "key": "perc2.noise_decay",
+      "module": "perc2",
+      "name": "Noise Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 220.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc2.bursts",
+      "module": "perc2",
+      "name": "Bursts",
+      "unit": "",
+      "min": 1.0,
+      "max": 6.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc2.burst_spacing",
+      "module": "perc2",
+      "name": "Burst Spacing",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 40.0,
+      "default": 10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc2.decay",
+      "module": "perc2",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 260.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc2.filter",
+      "module": "perc2",
+      "name": "Filter",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass"
+      ]
+    },
+    {
+      "key": "perc2.cutoff",
+      "module": "perc2",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 100.0,
+      "max": 18000.0,
+      "default": 6500.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc2.resonance",
+      "module": "perc2",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.200000002980232,
+      "curve": "linear"
+    },
+    {
+      "key": "perc2.low_cut",
+      "module": "perc2",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 4000.0,
+      "default": 150.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc2.drive",
+      "module": "perc2",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc2.level",
+      "module": "perc2",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": 2.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc2.pan",
+      "module": "perc2",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": -0.100000001490116,
+      "curve": "linear"
+    },
+    {
+      "key": "perc2.choke",
+      "module": "perc2",
+      "name": "Choke Group",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc2.shift",
+      "module": "perc2",
+      "name": "Shift",
+      "unit": "ms",
+      "min": -10.0,
+      "max": 10.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc2.density",
+      "module": "perc2",
+      "name": "Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc2.tune",
+      "module": "perc2",
+      "name": "Tune to Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc3.active",
+      "module": "perc3",
+      "name": "Active",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc3.role",
+      "module": "perc3",
+      "name": "Role",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "Closed Hat",
+        "Open Hat",
+        "Ride",
+        "Crash",
+        "Clap",
+        "Snare",
+        "Rim",
+        "Shaker",
+        "Tom",
+        "Conga",
+        "Zap",
+        "Blip"
+      ]
+    },
+    {
+      "key": "perc3.engine",
+      "module": "perc3",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Noise",
+        "Metal",
+        "Modal",
+        "Tone",
+        "FM"
+      ]
+    },
+    {
+      "key": "perc3.pitch",
+      "module": "perc3",
+      "name": "Pitch",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 12000.0,
+      "default": 400.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc3.pitch_amount",
+      "module": "perc3",
+      "name": "Pitch Amount",
+      "unit": "x",
+      "min": 1.0,
+      "max": 16.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc3.pitch_decay",
+      "module": "perc3",
+      "name": "Pitch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 300.0,
+      "default": 10.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc3.fm_ratio",
+      "module": "perc3",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.25,
+      "max": 8.0,
+      "default": 1.409999966621399,
+      "curve": "linear"
+    },
+    {
+      "key": "perc3.fm_index",
+      "module": "perc3",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc3.mode_set",
+      "module": "perc3",
+      "name": "Modes",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Membrane",
+        "Bar",
+        "Harmonic"
+      ]
+    },
+    {
+      "key": "perc3.mode_damp",
+      "module": "perc3",
+      "name": "Mode Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc3.metal_scale",
+      "module": "perc3",
+      "name": "Metal Scale",
+      "unit": "x",
+      "min": 0.25,
+      "max": 4.0,
+      "default": 0.720000028610229,
+      "curve": "log"
+    },
+    {
+      "key": "perc3.noise",
+      "module": "perc3",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.200000002980232,
+      "curve": "linear"
+    },
+    {
+      "key": "perc3.noise_decay",
+      "module": "perc3",
+      "name": "Noise Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 400.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc3.bursts",
+      "module": "perc3",
+      "name": "Bursts",
+      "unit": "",
+      "min": 1.0,
+      "max": 6.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc3.burst_spacing",
+      "module": "perc3",
+      "name": "Burst Spacing",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 40.0,
+      "default": 10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc3.decay",
+      "module": "perc3",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 700.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc3.filter",
+      "module": "perc3",
+      "name": "Filter",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass"
+      ]
+    },
+    {
+      "key": "perc3.cutoff",
+      "module": "perc3",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 100.0,
+      "max": 18000.0,
+      "default": 5200.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc3.resonance",
+      "module": "perc3",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.349999994039536,
+      "curve": "linear"
+    },
+    {
+      "key": "perc3.low_cut",
+      "module": "perc3",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 4000.0,
+      "default": 150.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc3.drive",
+      "module": "perc3",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc3.level",
+      "module": "perc3",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -3.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc3.pan",
+      "module": "perc3",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.349999994039536,
+      "curve": "linear"
+    },
+    {
+      "key": "perc3.choke",
+      "module": "perc3",
+      "name": "Choke Group",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc3.shift",
+      "module": "perc3",
+      "name": "Shift",
+      "unit": "ms",
+      "min": -10.0,
+      "max": 10.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc3.density",
+      "module": "perc3",
+      "name": "Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc3.tune",
+      "module": "perc3",
+      "name": "Tune to Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc4.active",
+      "module": "perc4",
+      "name": "Active",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc4.role",
+      "module": "perc4",
+      "name": "Role",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 3.0,
+      "curve": "choice",
+      "choices": [
+        "Closed Hat",
+        "Open Hat",
+        "Ride",
+        "Crash",
+        "Clap",
+        "Snare",
+        "Rim",
+        "Shaker",
+        "Tom",
+        "Conga",
+        "Zap",
+        "Blip"
+      ]
+    },
+    {
+      "key": "perc4.engine",
+      "module": "perc4",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Noise",
+        "Metal",
+        "Modal",
+        "Tone",
+        "FM"
+      ]
+    },
+    {
+      "key": "perc4.pitch",
+      "module": "perc4",
+      "name": "Pitch",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 12000.0,
+      "default": 400.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc4.pitch_amount",
+      "module": "perc4",
+      "name": "Pitch Amount",
+      "unit": "x",
+      "min": 1.0,
+      "max": 16.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc4.pitch_decay",
+      "module": "perc4",
+      "name": "Pitch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 300.0,
+      "default": 10.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc4.fm_ratio",
+      "module": "perc4",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.25,
+      "max": 8.0,
+      "default": 1.409999966621399,
+      "curve": "linear"
+    },
+    {
+      "key": "perc4.fm_index",
+      "module": "perc4",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc4.mode_set",
+      "module": "perc4",
+      "name": "Modes",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Membrane",
+        "Bar",
+        "Harmonic"
+      ]
+    },
+    {
+      "key": "perc4.mode_damp",
+      "module": "perc4",
+      "name": "Mode Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc4.metal_scale",
+      "module": "perc4",
+      "name": "Metal Scale",
+      "unit": "x",
+      "min": 0.25,
+      "max": 4.0,
+      "default": 0.5,
+      "curve": "log"
+    },
+    {
+      "key": "perc4.noise",
+      "module": "perc4",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "perc4.noise_decay",
+      "module": "perc4",
+      "name": "Noise Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 1400.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc4.bursts",
+      "module": "perc4",
+      "name": "Bursts",
+      "unit": "",
+      "min": 1.0,
+      "max": 6.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc4.burst_spacing",
+      "module": "perc4",
+      "name": "Burst Spacing",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 40.0,
+      "default": 10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc4.decay",
+      "module": "perc4",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 1600.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc4.filter",
+      "module": "perc4",
+      "name": "Filter",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass"
+      ]
+    },
+    {
+      "key": "perc4.cutoff",
+      "module": "perc4",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 100.0,
+      "max": 18000.0,
+      "default": 3000.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc4.resonance",
+      "module": "perc4",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.200000002980232,
+      "curve": "linear"
+    },
+    {
+      "key": "perc4.low_cut",
+      "module": "perc4",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 4000.0,
+      "default": 150.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc4.drive",
+      "module": "perc4",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc4.level",
+      "module": "perc4",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -5.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc4.pan",
+      "module": "perc4",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": -0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "perc4.choke",
+      "module": "perc4",
+      "name": "Choke Group",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc4.shift",
+      "module": "perc4",
+      "name": "Shift",
+      "unit": "ms",
+      "min": -10.0,
+      "max": 10.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc4.density",
+      "module": "perc4",
+      "name": "Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc4.tune",
+      "module": "perc4",
+      "name": "Tune to Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc5.active",
+      "module": "perc5",
+      "name": "Active",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc5.role",
+      "module": "perc5",
+      "name": "Role",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 4.0,
+      "curve": "choice",
+      "choices": [
+        "Closed Hat",
+        "Open Hat",
+        "Ride",
+        "Crash",
+        "Clap",
+        "Snare",
+        "Rim",
+        "Shaker",
+        "Tom",
+        "Conga",
+        "Zap",
+        "Blip"
+      ]
+    },
+    {
+      "key": "perc5.engine",
+      "module": "perc5",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Noise",
+        "Metal",
+        "Modal",
+        "Tone",
+        "FM"
+      ]
+    },
+    {
+      "key": "perc5.pitch",
+      "module": "perc5",
+      "name": "Pitch",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 12000.0,
+      "default": 400.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc5.pitch_amount",
+      "module": "perc5",
+      "name": "Pitch Amount",
+      "unit": "x",
+      "min": 1.0,
+      "max": 16.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc5.pitch_decay",
+      "module": "perc5",
+      "name": "Pitch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 300.0,
+      "default": 10.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc5.fm_ratio",
+      "module": "perc5",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.25,
+      "max": 8.0,
+      "default": 1.409999966621399,
+      "curve": "linear"
+    },
+    {
+      "key": "perc5.fm_index",
+      "module": "perc5",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc5.mode_set",
+      "module": "perc5",
+      "name": "Modes",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Membrane",
+        "Bar",
+        "Harmonic"
+      ]
+    },
+    {
+      "key": "perc5.mode_damp",
+      "module": "perc5",
+      "name": "Mode Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc5.metal_scale",
+      "module": "perc5",
+      "name": "Metal Scale",
+      "unit": "x",
+      "min": 0.25,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc5.noise",
+      "module": "perc5",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc5.noise_decay",
+      "module": "perc5",
+      "name": "Noise Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 180.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc5.bursts",
+      "module": "perc5",
+      "name": "Bursts",
+      "unit": "",
+      "min": 1.0,
+      "max": 6.0,
+      "default": 4.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc5.burst_spacing",
+      "module": "perc5",
+      "name": "Burst Spacing",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 40.0,
+      "default": 9.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc5.decay",
+      "module": "perc5",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 120.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc5.filter",
+      "module": "perc5",
+      "name": "Filter",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass"
+      ]
+    },
+    {
+      "key": "perc5.cutoff",
+      "module": "perc5",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 100.0,
+      "max": 18000.0,
+      "default": 1400.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc5.resonance",
+      "module": "perc5",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.349999994039536,
+      "curve": "linear"
+    },
+    {
+      "key": "perc5.low_cut",
+      "module": "perc5",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 4000.0,
+      "default": 300.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc5.drive",
+      "module": "perc5",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc5.level",
+      "module": "perc5",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -4.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc5.pan",
+      "module": "perc5",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc5.choke",
+      "module": "perc5",
+      "name": "Choke Group",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc5.shift",
+      "module": "perc5",
+      "name": "Shift",
+      "unit": "ms",
+      "min": -10.0,
+      "max": 10.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc5.density",
+      "module": "perc5",
+      "name": "Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc5.tune",
+      "module": "perc5",
+      "name": "Tune to Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc6.active",
+      "module": "perc6",
+      "name": "Active",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc6.role",
+      "module": "perc6",
+      "name": "Role",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 5.0,
+      "curve": "choice",
+      "choices": [
+        "Closed Hat",
+        "Open Hat",
+        "Ride",
+        "Crash",
+        "Clap",
+        "Snare",
+        "Rim",
+        "Shaker",
+        "Tom",
+        "Conga",
+        "Zap",
+        "Blip"
+      ]
+    },
+    {
+      "key": "perc6.engine",
+      "module": "perc6",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 3.0,
+      "curve": "choice",
+      "choices": [
+        "Noise",
+        "Metal",
+        "Modal",
+        "Tone",
+        "FM"
+      ]
+    },
+    {
+      "key": "perc6.pitch",
+      "module": "perc6",
+      "name": "Pitch",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 12000.0,
+      "default": 190.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc6.pitch_amount",
+      "module": "perc6",
+      "name": "Pitch Amount",
+      "unit": "x",
+      "min": 1.0,
+      "max": 16.0,
+      "default": 1.600000023841858,
+      "curve": "log"
+    },
+    {
+      "key": "perc6.pitch_decay",
+      "module": "perc6",
+      "name": "Pitch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 300.0,
+      "default": 25.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc6.fm_ratio",
+      "module": "perc6",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.25,
+      "max": 8.0,
+      "default": 1.409999966621399,
+      "curve": "linear"
+    },
+    {
+      "key": "perc6.fm_index",
+      "module": "perc6",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc6.mode_set",
+      "module": "perc6",
+      "name": "Modes",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Membrane",
+        "Bar",
+        "Harmonic"
+      ]
+    },
+    {
+      "key": "perc6.mode_damp",
+      "module": "perc6",
+      "name": "Mode Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc6.metal_scale",
+      "module": "perc6",
+      "name": "Metal Scale",
+      "unit": "x",
+      "min": 0.25,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc6.noise",
+      "module": "perc6",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.800000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "perc6.noise_decay",
+      "module": "perc6",
+      "name": "Noise Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 140.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc6.bursts",
+      "module": "perc6",
+      "name": "Bursts",
+      "unit": "",
+      "min": 1.0,
+      "max": 6.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc6.burst_spacing",
+      "module": "perc6",
+      "name": "Burst Spacing",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 40.0,
+      "default": 10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc6.decay",
+      "module": "perc6",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 90.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc6.filter",
+      "module": "perc6",
+      "name": "Filter",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass"
+      ]
+    },
+    {
+      "key": "perc6.cutoff",
+      "module": "perc6",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 100.0,
+      "max": 18000.0,
+      "default": 250.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc6.resonance",
+      "module": "perc6",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.200000002980232,
+      "curve": "linear"
+    },
+    {
+      "key": "perc6.low_cut",
+      "module": "perc6",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 4000.0,
+      "default": 160.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc6.drive",
+      "module": "perc6",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc6.level",
+      "module": "perc6",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -6.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc6.pan",
+      "module": "perc6",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc6.choke",
+      "module": "perc6",
+      "name": "Choke Group",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc6.shift",
+      "module": "perc6",
+      "name": "Shift",
+      "unit": "ms",
+      "min": -10.0,
+      "max": 10.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc6.density",
+      "module": "perc6",
+      "name": "Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc6.tune",
+      "module": "perc6",
+      "name": "Tune to Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc7.active",
+      "module": "perc7",
+      "name": "Active",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc7.role",
+      "module": "perc7",
+      "name": "Role",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 6.0,
+      "curve": "choice",
+      "choices": [
+        "Closed Hat",
+        "Open Hat",
+        "Ride",
+        "Crash",
+        "Clap",
+        "Snare",
+        "Rim",
+        "Shaker",
+        "Tom",
+        "Conga",
+        "Zap",
+        "Blip"
+      ]
+    },
+    {
+      "key": "perc7.engine",
+      "module": "perc7",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 4.0,
+      "curve": "choice",
+      "choices": [
+        "Noise",
+        "Metal",
+        "Modal",
+        "Tone",
+        "FM"
+      ]
+    },
+    {
+      "key": "perc7.pitch",
+      "module": "perc7",
+      "name": "Pitch",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 12000.0,
+      "default": 1700.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc7.pitch_amount",
+      "module": "perc7",
+      "name": "Pitch Amount",
+      "unit": "x",
+      "min": 1.0,
+      "max": 16.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc7.pitch_decay",
+      "module": "perc7",
+      "name": "Pitch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 300.0,
+      "default": 6.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc7.fm_ratio",
+      "module": "perc7",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.25,
+      "max": 8.0,
+      "default": 2.609999895095825,
+      "curve": "linear"
+    },
+    {
+      "key": "perc7.fm_index",
+      "module": "perc7",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 2.200000047683716,
+      "curve": "linear"
+    },
+    {
+      "key": "perc7.mode_set",
+      "module": "perc7",
+      "name": "Modes",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Membrane",
+        "Bar",
+        "Harmonic"
+      ]
+    },
+    {
+      "key": "perc7.mode_damp",
+      "module": "perc7",
+      "name": "Mode Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc7.metal_scale",
+      "module": "perc7",
+      "name": "Metal Scale",
+      "unit": "x",
+      "min": 0.25,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc7.noise",
+      "module": "perc7",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc7.noise_decay",
+      "module": "perc7",
+      "name": "Noise Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 60.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc7.bursts",
+      "module": "perc7",
+      "name": "Bursts",
+      "unit": "",
+      "min": 1.0,
+      "max": 6.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc7.burst_spacing",
+      "module": "perc7",
+      "name": "Burst Spacing",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 40.0,
+      "default": 10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc7.decay",
+      "module": "perc7",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 28.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc7.filter",
+      "module": "perc7",
+      "name": "Filter",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass"
+      ]
+    },
+    {
+      "key": "perc7.cutoff",
+      "module": "perc7",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 100.0,
+      "max": 18000.0,
+      "default": 2200.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc7.resonance",
+      "module": "perc7",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "perc7.low_cut",
+      "module": "perc7",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 4000.0,
+      "default": 150.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc7.drive",
+      "module": "perc7",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc7.level",
+      "module": "perc7",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc7.pan",
+      "module": "perc7",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": -0.25,
+      "curve": "linear"
+    },
+    {
+      "key": "perc7.choke",
+      "module": "perc7",
+      "name": "Choke Group",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc7.shift",
+      "module": "perc7",
+      "name": "Shift",
+      "unit": "ms",
+      "min": -10.0,
+      "max": 10.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc7.density",
+      "module": "perc7",
+      "name": "Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc7.tune",
+      "module": "perc7",
+      "name": "Tune to Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc8.active",
+      "module": "perc8",
+      "name": "Active",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc8.role",
+      "module": "perc8",
+      "name": "Role",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 7.0,
+      "curve": "choice",
+      "choices": [
+        "Closed Hat",
+        "Open Hat",
+        "Ride",
+        "Crash",
+        "Clap",
+        "Snare",
+        "Rim",
+        "Shaker",
+        "Tom",
+        "Conga",
+        "Zap",
+        "Blip"
+      ]
+    },
+    {
+      "key": "perc8.engine",
+      "module": "perc8",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Noise",
+        "Metal",
+        "Modal",
+        "Tone",
+        "FM"
+      ]
+    },
+    {
+      "key": "perc8.pitch",
+      "module": "perc8",
+      "name": "Pitch",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 12000.0,
+      "default": 400.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc8.pitch_amount",
+      "module": "perc8",
+      "name": "Pitch Amount",
+      "unit": "x",
+      "min": 1.0,
+      "max": 16.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc8.pitch_decay",
+      "module": "perc8",
+      "name": "Pitch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 300.0,
+      "default": 10.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc8.fm_ratio",
+      "module": "perc8",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.25,
+      "max": 8.0,
+      "default": 1.409999966621399,
+      "curve": "linear"
+    },
+    {
+      "key": "perc8.fm_index",
+      "module": "perc8",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc8.mode_set",
+      "module": "perc8",
+      "name": "Modes",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Membrane",
+        "Bar",
+        "Harmonic"
+      ]
+    },
+    {
+      "key": "perc8.mode_damp",
+      "module": "perc8",
+      "name": "Mode Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc8.metal_scale",
+      "module": "perc8",
+      "name": "Metal Scale",
+      "unit": "x",
+      "min": 0.25,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc8.noise",
+      "module": "perc8",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc8.noise_decay",
+      "module": "perc8",
+      "name": "Noise Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 45.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc8.bursts",
+      "module": "perc8",
+      "name": "Bursts",
+      "unit": "",
+      "min": 1.0,
+      "max": 6.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc8.burst_spacing",
+      "module": "perc8",
+      "name": "Burst Spacing",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 40.0,
+      "default": 10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc8.decay",
+      "module": "perc8",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 120.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc8.filter",
+      "module": "perc8",
+      "name": "Filter",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass"
+      ]
+    },
+    {
+      "key": "perc8.cutoff",
+      "module": "perc8",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 100.0,
+      "max": 18000.0,
+      "default": 6000.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc8.resonance",
+      "module": "perc8",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.100000001490116,
+      "curve": "linear"
+    },
+    {
+      "key": "perc8.low_cut",
+      "module": "perc8",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 4000.0,
+      "default": 150.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc8.drive",
+      "module": "perc8",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc8.level",
+      "module": "perc8",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc8.pan",
+      "module": "perc8",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.25,
+      "curve": "linear"
+    },
+    {
+      "key": "perc8.choke",
+      "module": "perc8",
+      "name": "Choke Group",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc8.shift",
+      "module": "perc8",
+      "name": "Shift",
+      "unit": "ms",
+      "min": -10.0,
+      "max": 10.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc8.density",
+      "module": "perc8",
+      "name": "Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc8.tune",
+      "module": "perc8",
+      "name": "Tune to Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc9.active",
+      "module": "perc9",
+      "name": "Active",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc9.role",
+      "module": "perc9",
+      "name": "Role",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 8.0,
+      "curve": "choice",
+      "choices": [
+        "Closed Hat",
+        "Open Hat",
+        "Ride",
+        "Crash",
+        "Clap",
+        "Snare",
+        "Rim",
+        "Shaker",
+        "Tom",
+        "Conga",
+        "Zap",
+        "Blip"
+      ]
+    },
+    {
+      "key": "perc9.engine",
+      "module": "perc9",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "Noise",
+        "Metal",
+        "Modal",
+        "Tone",
+        "FM"
+      ]
+    },
+    {
+      "key": "perc9.pitch",
+      "module": "perc9",
+      "name": "Pitch",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 12000.0,
+      "default": 220.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc9.pitch_amount",
+      "module": "perc9",
+      "name": "Pitch Amount",
+      "unit": "x",
+      "min": 1.0,
+      "max": 16.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc9.pitch_decay",
+      "module": "perc9",
+      "name": "Pitch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 300.0,
+      "default": 10.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc9.fm_ratio",
+      "module": "perc9",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.25,
+      "max": 8.0,
+      "default": 1.409999966621399,
+      "curve": "linear"
+    },
+    {
+      "key": "perc9.fm_index",
+      "module": "perc9",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc9.mode_set",
+      "module": "perc9",
+      "name": "Modes",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Membrane",
+        "Bar",
+        "Harmonic"
+      ]
+    },
+    {
+      "key": "perc9.mode_damp",
+      "module": "perc9",
+      "name": "Mode Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "perc9.metal_scale",
+      "module": "perc9",
+      "name": "Metal Scale",
+      "unit": "x",
+      "min": 0.25,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc9.noise",
+      "module": "perc9",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.079999998211861,
+      "curve": "linear"
+    },
+    {
+      "key": "perc9.noise_decay",
+      "module": "perc9",
+      "name": "Noise Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 15.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc9.bursts",
+      "module": "perc9",
+      "name": "Bursts",
+      "unit": "",
+      "min": 1.0,
+      "max": 6.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc9.burst_spacing",
+      "module": "perc9",
+      "name": "Burst Spacing",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 40.0,
+      "default": 10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc9.decay",
+      "module": "perc9",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 280.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc9.filter",
+      "module": "perc9",
+      "name": "Filter",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass"
+      ]
+    },
+    {
+      "key": "perc9.cutoff",
+      "module": "perc9",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 100.0,
+      "max": 18000.0,
+      "default": 6000.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc9.resonance",
+      "module": "perc9",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.200000002980232,
+      "curve": "linear"
+    },
+    {
+      "key": "perc9.low_cut",
+      "module": "perc9",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 4000.0,
+      "default": 190.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc9.drive",
+      "module": "perc9",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc9.level",
+      "module": "perc9",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -8.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc9.pan",
+      "module": "perc9",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": -0.200000002980232,
+      "curve": "linear"
+    },
+    {
+      "key": "perc9.choke",
+      "module": "perc9",
+      "name": "Choke Group",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc9.shift",
+      "module": "perc9",
+      "name": "Shift",
+      "unit": "ms",
+      "min": -10.0,
+      "max": 10.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc9.density",
+      "module": "perc9",
+      "name": "Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc9.tune",
+      "module": "perc9",
+      "name": "Tune to Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc10.active",
+      "module": "perc10",
+      "name": "Active",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc10.role",
+      "module": "perc10",
+      "name": "Role",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 9.0,
+      "curve": "choice",
+      "choices": [
+        "Closed Hat",
+        "Open Hat",
+        "Ride",
+        "Crash",
+        "Clap",
+        "Snare",
+        "Rim",
+        "Shaker",
+        "Tom",
+        "Conga",
+        "Zap",
+        "Blip"
+      ]
+    },
+    {
+      "key": "perc10.engine",
+      "module": "perc10",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "Noise",
+        "Metal",
+        "Modal",
+        "Tone",
+        "FM"
+      ]
+    },
+    {
+      "key": "perc10.pitch",
+      "module": "perc10",
+      "name": "Pitch",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 12000.0,
+      "default": 330.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc10.pitch_amount",
+      "module": "perc10",
+      "name": "Pitch Amount",
+      "unit": "x",
+      "min": 1.0,
+      "max": 16.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc10.pitch_decay",
+      "module": "perc10",
+      "name": "Pitch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 300.0,
+      "default": 10.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc10.fm_ratio",
+      "module": "perc10",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.25,
+      "max": 8.0,
+      "default": 1.409999966621399,
+      "curve": "linear"
+    },
+    {
+      "key": "perc10.fm_index",
+      "module": "perc10",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc10.mode_set",
+      "module": "perc10",
+      "name": "Modes",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "Membrane",
+        "Bar",
+        "Harmonic"
+      ]
+    },
+    {
+      "key": "perc10.mode_damp",
+      "module": "perc10",
+      "name": "Mode Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "perc10.metal_scale",
+      "module": "perc10",
+      "name": "Metal Scale",
+      "unit": "x",
+      "min": 0.25,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc10.noise",
+      "module": "perc10",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.050000000745058,
+      "curve": "linear"
+    },
+    {
+      "key": "perc10.noise_decay",
+      "module": "perc10",
+      "name": "Noise Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 8.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc10.bursts",
+      "module": "perc10",
+      "name": "Bursts",
+      "unit": "",
+      "min": 1.0,
+      "max": 6.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc10.burst_spacing",
+      "module": "perc10",
+      "name": "Burst Spacing",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 40.0,
+      "default": 10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc10.decay",
+      "module": "perc10",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 180.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc10.filter",
+      "module": "perc10",
+      "name": "Filter",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass"
+      ]
+    },
+    {
+      "key": "perc10.cutoff",
+      "module": "perc10",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 100.0,
+      "max": 18000.0,
+      "default": 8000.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc10.resonance",
+      "module": "perc10",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.200000002980232,
+      "curve": "linear"
+    },
+    {
+      "key": "perc10.low_cut",
+      "module": "perc10",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 4000.0,
+      "default": 220.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc10.drive",
+      "module": "perc10",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc10.level",
+      "module": "perc10",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc10.pan",
+      "module": "perc10",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "perc10.choke",
+      "module": "perc10",
+      "name": "Choke Group",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc10.shift",
+      "module": "perc10",
+      "name": "Shift",
+      "unit": "ms",
+      "min": -10.0,
+      "max": 10.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc10.density",
+      "module": "perc10",
+      "name": "Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc10.tune",
+      "module": "perc10",
+      "name": "Tune to Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc11.active",
+      "module": "perc11",
+      "name": "Active",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc11.role",
+      "module": "perc11",
+      "name": "Role",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 10.0,
+      "curve": "choice",
+      "choices": [
+        "Closed Hat",
+        "Open Hat",
+        "Ride",
+        "Crash",
+        "Clap",
+        "Snare",
+        "Rim",
+        "Shaker",
+        "Tom",
+        "Conga",
+        "Zap",
+        "Blip"
+      ]
+    },
+    {
+      "key": "perc11.engine",
+      "module": "perc11",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 4.0,
+      "curve": "choice",
+      "choices": [
+        "Noise",
+        "Metal",
+        "Modal",
+        "Tone",
+        "FM"
+      ]
+    },
+    {
+      "key": "perc11.pitch",
+      "module": "perc11",
+      "name": "Pitch",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 12000.0,
+      "default": 420.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc11.pitch_amount",
+      "module": "perc11",
+      "name": "Pitch Amount",
+      "unit": "x",
+      "min": 1.0,
+      "max": 16.0,
+      "default": 8.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc11.pitch_decay",
+      "module": "perc11",
+      "name": "Pitch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 300.0,
+      "default": 35.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc11.fm_ratio",
+      "module": "perc11",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.25,
+      "max": 8.0,
+      "default": 1.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc11.fm_index",
+      "module": "perc11",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 3.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc11.mode_set",
+      "module": "perc11",
+      "name": "Modes",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Membrane",
+        "Bar",
+        "Harmonic"
+      ]
+    },
+    {
+      "key": "perc11.mode_damp",
+      "module": "perc11",
+      "name": "Mode Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc11.metal_scale",
+      "module": "perc11",
+      "name": "Metal Scale",
+      "unit": "x",
+      "min": 0.25,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc11.noise",
+      "module": "perc11",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc11.noise_decay",
+      "module": "perc11",
+      "name": "Noise Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 60.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc11.bursts",
+      "module": "perc11",
+      "name": "Bursts",
+      "unit": "",
+      "min": 1.0,
+      "max": 6.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc11.burst_spacing",
+      "module": "perc11",
+      "name": "Burst Spacing",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 40.0,
+      "default": 10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc11.decay",
+      "module": "perc11",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 110.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc11.filter",
+      "module": "perc11",
+      "name": "Filter",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass"
+      ]
+    },
+    {
+      "key": "perc11.cutoff",
+      "module": "perc11",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 100.0,
+      "max": 18000.0,
+      "default": 9000.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc11.resonance",
+      "module": "perc11",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "perc11.low_cut",
+      "module": "perc11",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 4000.0,
+      "default": 150.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc11.drive",
+      "module": "perc11",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "perc11.level",
+      "module": "perc11",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -12.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc11.pan",
+      "module": "perc11",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "perc11.choke",
+      "module": "perc11",
+      "name": "Choke Group",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc11.shift",
+      "module": "perc11",
+      "name": "Shift",
+      "unit": "ms",
+      "min": -10.0,
+      "max": 10.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc11.density",
+      "module": "perc11",
+      "name": "Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc11.tune",
+      "module": "perc11",
+      "name": "Tune to Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc12.active",
+      "module": "perc12",
+      "name": "Active",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "perc12.role",
+      "module": "perc12",
+      "name": "Role",
+      "unit": "",
+      "min": 0.0,
+      "max": 11.0,
+      "default": 11.0,
+      "curve": "choice",
+      "choices": [
+        "Closed Hat",
+        "Open Hat",
+        "Ride",
+        "Crash",
+        "Clap",
+        "Snare",
+        "Rim",
+        "Shaker",
+        "Tom",
+        "Conga",
+        "Zap",
+        "Blip"
+      ]
+    },
+    {
+      "key": "perc12.engine",
+      "module": "perc12",
+      "name": "Engine",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 3.0,
+      "curve": "choice",
+      "choices": [
+        "Noise",
+        "Metal",
+        "Modal",
+        "Tone",
+        "FM"
+      ]
+    },
+    {
+      "key": "perc12.pitch",
+      "module": "perc12",
+      "name": "Pitch",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 12000.0,
+      "default": 1100.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc12.pitch_amount",
+      "module": "perc12",
+      "name": "Pitch Amount",
+      "unit": "x",
+      "min": 1.0,
+      "max": 16.0,
+      "default": 1.299999952316284,
+      "curve": "log"
+    },
+    {
+      "key": "perc12.pitch_decay",
+      "module": "perc12",
+      "name": "Pitch Decay",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 300.0,
+      "default": 4.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc12.fm_ratio",
+      "module": "perc12",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.25,
+      "max": 8.0,
+      "default": 1.409999966621399,
+      "curve": "linear"
+    },
+    {
+      "key": "perc12.fm_index",
+      "module": "perc12",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc12.mode_set",
+      "module": "perc12",
+      "name": "Modes",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Membrane",
+        "Bar",
+        "Harmonic"
+      ]
+    },
+    {
+      "key": "perc12.mode_damp",
+      "module": "perc12",
+      "name": "Mode Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc12.metal_scale",
+      "module": "perc12",
+      "name": "Metal Scale",
+      "unit": "x",
+      "min": 0.25,
+      "max": 4.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc12.noise",
+      "module": "perc12",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc12.noise_decay",
+      "module": "perc12",
+      "name": "Noise Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 60.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc12.bursts",
+      "module": "perc12",
+      "name": "Bursts",
+      "unit": "",
+      "min": 1.0,
+      "max": 6.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc12.burst_spacing",
+      "module": "perc12",
+      "name": "Burst Spacing",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 40.0,
+      "default": 10.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc12.decay",
+      "module": "perc12",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 3000.0,
+      "default": 45.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc12.filter",
+      "module": "perc12",
+      "name": "Filter",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass"
+      ]
+    },
+    {
+      "key": "perc12.cutoff",
+      "module": "perc12",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 100.0,
+      "max": 18000.0,
+      "default": 1800.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc12.resonance",
+      "module": "perc12",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.200000002980232,
+      "curve": "linear"
+    },
+    {
+      "key": "perc12.low_cut",
+      "module": "perc12",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 4000.0,
+      "default": 150.0,
+      "curve": "log"
+    },
+    {
+      "key": "perc12.drive",
+      "module": "perc12",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc12.level",
+      "module": "perc12",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -12.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc12.pan",
+      "module": "perc12",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": -0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "perc12.choke",
+      "module": "perc12",
+      "name": "Choke Group",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "perc12.shift",
+      "module": "perc12",
+      "name": "Shift",
+      "unit": "ms",
+      "min": -10.0,
+      "max": 10.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "perc12.density",
+      "module": "perc12",
+      "name": "Density",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "perc12.tune",
+      "module": "perc12",
+      "name": "Tune to Key",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "acid.wave",
+      "module": "acid",
+      "name": "Wave",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.cutoff",
+      "module": "acid",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 80.0,
+      "max": 8000.0,
+      "default": 650.0,
+      "curve": "log"
+    },
+    {
+      "key": "acid.resonance",
+      "module": "acid",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.720000028610229,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.env_amount",
+      "module": "acid",
+      "name": "Env Amount",
+      "unit": "oct",
+      "min": 0.0,
+      "max": 6.0,
+      "default": 4.0,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.decay",
+      "module": "acid",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 30.0,
+      "max": 2000.0,
+      "default": 350.0,
+      "curve": "log"
+    },
+    {
+      "key": "acid.accent",
+      "module": "acid",
+      "name": "Accent",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.slide_time",
+      "module": "acid",
+      "name": "Slide Time",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 200.0,
+      "default": 55.0,
+      "curve": "log"
+    },
+    {
+      "key": "acid.amp_decay",
+      "module": "acid",
+      "name": "Amp Decay",
+      "unit": "ms",
+      "min": 50.0,
+      "max": 4000.0,
+      "default": 900.0,
+      "curve": "log"
+    },
+    {
+      "key": "acid.key_track",
+      "module": "acid",
+      "name": "Key Track",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.drive",
+      "module": "acid",
+      "name": "Drive",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.449999988079071,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.squelch",
+      "module": "acid",
+      "name": "Squelch",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "acid.squelch_start",
+      "module": "acid",
+      "name": "Squelch Start",
+      "unit": "x",
+      "min": 2.0,
+      "max": 32.0,
+      "default": 12.0,
+      "curve": "log"
+    },
+    {
+      "key": "acid.squelch_time",
+      "module": "acid",
+      "name": "Squelch Time",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 150.0,
+      "default": 28.0,
+      "curve": "log"
+    },
+    {
+      "key": "acid.comb_mix",
+      "module": "acid",
+      "name": "Comb Mix",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.550000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.comb_feedback",
+      "module": "acid",
+      "name": "Comb Feedback",
+      "unit": "",
+      "min": 0.0,
+      "max": 0.970000028610229,
+      "default": 0.819999992847443,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.low_cut",
+      "module": "acid",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 1000.0,
+      "default": 150.0,
+      "curve": "log"
+    },
+    {
+      "key": "acid.delay_send",
+      "module": "acid",
+      "name": "Delay Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.25,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.delay_left",
+      "module": "acid",
+      "name": "Delay Left",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "1/16",
+        "1/8",
+        "3/16",
+        "1/4",
+        "3/8",
+        "1/2"
+      ]
+    },
+    {
+      "key": "acid.delay_right",
+      "module": "acid",
+      "name": "Delay Right",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 3.0,
+      "curve": "choice",
+      "choices": [
+        "1/16",
+        "1/8",
+        "3/16",
+        "1/4",
+        "3/8",
+        "1/2"
+      ]
+    },
+    {
+      "key": "acid.delay_feedback",
+      "module": "acid",
+      "name": "Delay Feedback",
+      "unit": "",
+      "min": 0.0,
+      "max": 0.899999976158142,
+      "default": 0.449999988079071,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.delay_high_pass",
+      "module": "acid",
+      "name": "Delay High Pass",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 2000.0,
+      "default": 400.0,
+      "curve": "log"
+    },
+    {
+      "key": "acid.delay_low_pass",
+      "module": "acid",
+      "name": "Delay Low Pass",
+      "unit": "Hz",
+      "min": 800.0,
+      "max": 16000.0,
+      "default": 4500.0,
+      "curve": "log"
+    },
+    {
+      "key": "acid.room_send",
+      "module": "acid",
+      "name": "Room Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.100000001490116,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.hall_send",
+      "module": "acid",
+      "name": "Hall Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.050000000745058,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.duck",
+      "module": "acid",
+      "name": "Duck",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.150000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "acid.level",
+      "module": "acid",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -9.0,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.osc",
+      "module": "lead",
+      "name": "Oscillator",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Supersaw",
+        "VA",
+        "FM",
+        "Wavetable"
+      ]
+    },
+    {
+      "key": "lead.detune",
+      "module": "lead",
+      "name": "Detune",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.550000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.mix",
+      "module": "lead",
+      "name": "Mix",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.75,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.dynamic_detune",
+      "module": "lead",
+      "name": "Dynamic Detune",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.wave",
+      "module": "lead",
+      "name": "Wave",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.pulse_width",
+      "module": "lead",
+      "name": "Pulse Width",
+      "unit": "",
+      "min": 0.050000000745058,
+      "max": 0.949999988079071,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.fm_ratio",
+      "module": "lead",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.5,
+      "max": 8.0,
+      "default": 2.0,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.fm_index",
+      "module": "lead",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 10.0,
+      "default": 2.5,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.fm_decay",
+      "module": "lead",
+      "name": "FM Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 2000.0,
+      "default": 250.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.table",
+      "module": "lead",
+      "name": "Table",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Classic",
+        "Vocal",
+        "Glass",
+        "PWM",
+        "Sync",
+        "Formant Saw"
+      ]
+    },
+    {
+      "key": "lead.position",
+      "module": "lead",
+      "name": "Position",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.pos_env",
+      "module": "lead",
+      "name": "Position Env",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.pos_decay",
+      "module": "lead",
+      "name": "Position Decay",
+      "unit": "ms",
+      "min": 10.0,
+      "max": 8000.0,
+      "default": 1500.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.pos_lfo_depth",
+      "module": "lead",
+      "name": "Position LFO",
+      "unit": "",
+      "min": 0.0,
+      "max": 0.5,
+      "default": 0.150000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.pos_lfo_beats",
+      "module": "lead",
+      "name": "LFO Period",
+      "unit": "beats",
+      "min": 0.25,
+      "max": 64.0,
+      "default": 16.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.cutoff",
+      "module": "lead",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 200.0,
+      "max": 18000.0,
+      "default": 10000.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.resonance",
+      "module": "lead",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.150000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.env_amount",
+      "module": "lead",
+      "name": "Env Amount",
+      "unit": "oct",
+      "min": 0.0,
+      "max": 6.0,
+      "default": 2.0,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.filter_decay",
+      "module": "lead",
+      "name": "Filter Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 3000.0,
+      "default": 400.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.key_track",
+      "module": "lead",
+      "name": "Key Track",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.hp_floor",
+      "module": "lead",
+      "name": "HP Floor",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 400.0,
+      "default": 220.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.hp_track",
+      "module": "lead",
+      "name": "HP Track",
+      "unit": "x f0",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.amp_attack",
+      "module": "lead",
+      "name": "Attack",
+      "unit": "ms",
+      "min": 0.300000011920929,
+      "max": 2000.0,
+      "default": 4.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.amp_decay",
+      "module": "lead",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 4000.0,
+      "default": 500.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.amp_sustain",
+      "module": "lead",
+      "name": "Sustain",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.75,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.amp_release",
+      "module": "lead",
+      "name": "Release",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 4000.0,
+      "default": 180.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.width",
+      "module": "lead",
+      "name": "Width",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.800000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.vel_sens",
+      "module": "lead",
+      "name": "Velocity",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.delay_send",
+      "module": "lead",
+      "name": "Delay Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.delay_left",
+      "module": "lead",
+      "name": "Delay Left",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "1/16",
+        "1/8",
+        "3/16",
+        "1/4",
+        "3/8",
+        "1/2"
+      ]
+    },
+    {
+      "key": "lead.delay_right",
+      "module": "lead",
+      "name": "Delay Right",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 3.0,
+      "curve": "choice",
+      "choices": [
+        "1/16",
+        "1/8",
+        "3/16",
+        "1/4",
+        "3/8",
+        "1/2"
+      ]
+    },
+    {
+      "key": "lead.delay_feedback",
+      "module": "lead",
+      "name": "Delay Feedback",
+      "unit": "",
+      "min": 0.0,
+      "max": 0.899999976158142,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.delay_high_pass",
+      "module": "lead",
+      "name": "Delay High Pass",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 2000.0,
+      "default": 350.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.delay_low_pass",
+      "module": "lead",
+      "name": "Delay Low Pass",
+      "unit": "Hz",
+      "min": 800.0,
+      "max": 16000.0,
+      "default": 6000.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.room_send",
+      "module": "lead",
+      "name": "Room Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.hall_send",
+      "module": "lead",
+      "name": "Hall Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.25,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.duck",
+      "module": "lead",
+      "name": "Duck",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.200000002980232,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.gate",
+      "module": "lead",
+      "name": "Trance Gate",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "lead.gate_pattern",
+      "module": "lead",
+      "name": "Gate Pattern",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Sixteenths",
+        "Eighths",
+        "Rolling",
+        "Gallop",
+        "3-3-2",
+        "Triplets"
+      ]
+    },
+    {
+      "key": "lead.gate_depth",
+      "module": "lead",
+      "name": "Gate Depth",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.850000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.gate_duty",
+      "module": "lead",
+      "name": "Gate Duty",
+      "unit": "",
+      "min": 0.050000000745058,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.gate_attack",
+      "module": "lead",
+      "name": "Gate Attack",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 60.0,
+      "default": 3.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.gate_release",
+      "module": "lead",
+      "name": "Gate Release",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 120.0,
+      "default": 12.0,
+      "curve": "log"
+    },
+    {
+      "key": "lead.gate_tone",
+      "module": "lead",
+      "name": "Gate Tone",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "lead.level",
+      "module": "lead",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -4.0,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.osc",
+      "module": "arp",
+      "name": "Oscillator",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Supersaw",
+        "VA",
+        "FM",
+        "Wavetable"
+      ]
+    },
+    {
+      "key": "arp.detune",
+      "module": "arp",
+      "name": "Detune",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.mix",
+      "module": "arp",
+      "name": "Mix",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.dynamic_detune",
+      "module": "arp",
+      "name": "Dynamic Detune",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.wave",
+      "module": "arp",
+      "name": "Wave",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.pulse_width",
+      "module": "arp",
+      "name": "Pulse Width",
+      "unit": "",
+      "min": 0.050000000745058,
+      "max": 0.949999988079071,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.fm_ratio",
+      "module": "arp",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.5,
+      "max": 8.0,
+      "default": 2.0,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.fm_index",
+      "module": "arp",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 10.0,
+      "default": 2.5,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.fm_decay",
+      "module": "arp",
+      "name": "FM Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 2000.0,
+      "default": 250.0,
+      "curve": "log"
+    },
+    {
+      "key": "arp.table",
+      "module": "arp",
+      "name": "Table",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Classic",
+        "Vocal",
+        "Glass",
+        "PWM",
+        "Sync",
+        "Formant Saw"
+      ]
+    },
+    {
+      "key": "arp.position",
+      "module": "arp",
+      "name": "Position",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.pos_env",
+      "module": "arp",
+      "name": "Position Env",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.pos_decay",
+      "module": "arp",
+      "name": "Position Decay",
+      "unit": "ms",
+      "min": 10.0,
+      "max": 8000.0,
+      "default": 1500.0,
+      "curve": "log"
+    },
+    {
+      "key": "arp.pos_lfo_depth",
+      "module": "arp",
+      "name": "Position LFO",
+      "unit": "",
+      "min": 0.0,
+      "max": 0.5,
+      "default": 0.150000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.pos_lfo_beats",
+      "module": "arp",
+      "name": "LFO Period",
+      "unit": "beats",
+      "min": 0.25,
+      "max": 64.0,
+      "default": 16.0,
+      "curve": "log"
+    },
+    {
+      "key": "arp.cutoff",
+      "module": "arp",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 200.0,
+      "max": 18000.0,
+      "default": 3500.0,
+      "curve": "log"
+    },
+    {
+      "key": "arp.resonance",
+      "module": "arp",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.env_amount",
+      "module": "arp",
+      "name": "Env Amount",
+      "unit": "oct",
+      "min": 0.0,
+      "max": 6.0,
+      "default": 2.799999952316284,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.filter_decay",
+      "module": "arp",
+      "name": "Filter Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 3000.0,
+      "default": 140.0,
+      "curve": "log"
+    },
+    {
+      "key": "arp.key_track",
+      "module": "arp",
+      "name": "Key Track",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.hp_floor",
+      "module": "arp",
+      "name": "HP Floor",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 400.0,
+      "default": 220.0,
+      "curve": "log"
+    },
+    {
+      "key": "arp.hp_track",
+      "module": "arp",
+      "name": "HP Track",
+      "unit": "x f0",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.amp_attack",
+      "module": "arp",
+      "name": "Attack",
+      "unit": "ms",
+      "min": 0.300000011920929,
+      "max": 2000.0,
+      "default": 0.800000011920929,
+      "curve": "log"
+    },
+    {
+      "key": "arp.amp_decay",
+      "module": "arp",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 4000.0,
+      "default": 220.0,
+      "curve": "log"
+    },
+    {
+      "key": "arp.amp_sustain",
+      "module": "arp",
+      "name": "Sustain",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.amp_release",
+      "module": "arp",
+      "name": "Release",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 4000.0,
+      "default": 90.0,
+      "curve": "log"
+    },
+    {
+      "key": "arp.width",
+      "module": "arp",
+      "name": "Width",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.vel_sens",
+      "module": "arp",
+      "name": "Velocity",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.delay_send",
+      "module": "arp",
+      "name": "Delay Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.349999994039536,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.delay_left",
+      "module": "arp",
+      "name": "Delay Left",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "1/16",
+        "1/8",
+        "3/16",
+        "1/4",
+        "3/8",
+        "1/2"
+      ]
+    },
+    {
+      "key": "arp.delay_right",
+      "module": "arp",
+      "name": "Delay Right",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "1/16",
+        "1/8",
+        "3/16",
+        "1/4",
+        "3/8",
+        "1/2"
+      ]
+    },
+    {
+      "key": "arp.delay_feedback",
+      "module": "arp",
+      "name": "Delay Feedback",
+      "unit": "",
+      "min": 0.0,
+      "max": 0.899999976158142,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.delay_high_pass",
+      "module": "arp",
+      "name": "Delay High Pass",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 2000.0,
+      "default": 350.0,
+      "curve": "log"
+    },
+    {
+      "key": "arp.delay_low_pass",
+      "module": "arp",
+      "name": "Delay Low Pass",
+      "unit": "Hz",
+      "min": 800.0,
+      "max": 16000.0,
+      "default": 6000.0,
+      "curve": "log"
+    },
+    {
+      "key": "arp.room_send",
+      "module": "arp",
+      "name": "Room Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.hall_send",
+      "module": "arp",
+      "name": "Hall Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.150000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.duck",
+      "module": "arp",
+      "name": "Duck",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.25,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.gate",
+      "module": "arp",
+      "name": "Trance Gate",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "arp.gate_pattern",
+      "module": "arp",
+      "name": "Gate Pattern",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Sixteenths",
+        "Eighths",
+        "Rolling",
+        "Gallop",
+        "3-3-2",
+        "Triplets"
+      ]
+    },
+    {
+      "key": "arp.gate_depth",
+      "module": "arp",
+      "name": "Gate Depth",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.850000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.gate_duty",
+      "module": "arp",
+      "name": "Gate Duty",
+      "unit": "",
+      "min": 0.050000000745058,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.gate_attack",
+      "module": "arp",
+      "name": "Gate Attack",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 60.0,
+      "default": 3.0,
+      "curve": "log"
+    },
+    {
+      "key": "arp.gate_release",
+      "module": "arp",
+      "name": "Gate Release",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 120.0,
+      "default": 12.0,
+      "curve": "log"
+    },
+    {
+      "key": "arp.gate_tone",
+      "module": "arp",
+      "name": "Gate Tone",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "arp.level",
+      "module": "arp",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -5.0,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.osc",
+      "module": "pad",
+      "name": "Oscillator",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 3.0,
+      "curve": "choice",
+      "choices": [
+        "Supersaw",
+        "VA",
+        "FM",
+        "Wavetable"
+      ]
+    },
+    {
+      "key": "pad.detune",
+      "module": "pad",
+      "name": "Detune",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.349999994039536,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.mix",
+      "module": "pad",
+      "name": "Mix",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.699999988079071,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.dynamic_detune",
+      "module": "pad",
+      "name": "Dynamic Detune",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.wave",
+      "module": "pad",
+      "name": "Wave",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.pulse_width",
+      "module": "pad",
+      "name": "Pulse Width",
+      "unit": "",
+      "min": 0.050000000745058,
+      "max": 0.949999988079071,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.fm_ratio",
+      "module": "pad",
+      "name": "FM Ratio",
+      "unit": "",
+      "min": 0.5,
+      "max": 8.0,
+      "default": 2.0,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.fm_index",
+      "module": "pad",
+      "name": "FM Index",
+      "unit": "",
+      "min": 0.0,
+      "max": 10.0,
+      "default": 2.5,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.fm_decay",
+      "module": "pad",
+      "name": "FM Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 2000.0,
+      "default": 250.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.table",
+      "module": "pad",
+      "name": "Table",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 1.0,
+      "curve": "choice",
+      "choices": [
+        "Classic",
+        "Vocal",
+        "Glass",
+        "PWM",
+        "Sync",
+        "Formant Saw"
+      ]
+    },
+    {
+      "key": "pad.position",
+      "module": "pad",
+      "name": "Position",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.pos_env",
+      "module": "pad",
+      "name": "Position Env",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.pos_decay",
+      "module": "pad",
+      "name": "Position Decay",
+      "unit": "ms",
+      "min": 10.0,
+      "max": 8000.0,
+      "default": 3000.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.pos_lfo_depth",
+      "module": "pad",
+      "name": "Position LFO",
+      "unit": "",
+      "min": 0.0,
+      "max": 0.5,
+      "default": 0.150000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.pos_lfo_beats",
+      "module": "pad",
+      "name": "LFO Period",
+      "unit": "beats",
+      "min": 0.25,
+      "max": 64.0,
+      "default": 16.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.cutoff",
+      "module": "pad",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 200.0,
+      "max": 18000.0,
+      "default": 5000.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.resonance",
+      "module": "pad",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.100000001490116,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.env_amount",
+      "module": "pad",
+      "name": "Env Amount",
+      "unit": "oct",
+      "min": 0.0,
+      "max": 6.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.filter_decay",
+      "module": "pad",
+      "name": "Filter Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 3000.0,
+      "default": 400.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.key_track",
+      "module": "pad",
+      "name": "Key Track",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.hp_floor",
+      "module": "pad",
+      "name": "HP Floor",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 400.0,
+      "default": 200.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.hp_track",
+      "module": "pad",
+      "name": "HP Track",
+      "unit": "x f0",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.amp_attack",
+      "module": "pad",
+      "name": "Attack",
+      "unit": "ms",
+      "min": 0.300000011920929,
+      "max": 2000.0,
+      "default": 700.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.amp_decay",
+      "module": "pad",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 4000.0,
+      "default": 2000.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.amp_sustain",
+      "module": "pad",
+      "name": "Sustain",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.amp_release",
+      "module": "pad",
+      "name": "Release",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 4000.0,
+      "default": 1800.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.width",
+      "module": "pad",
+      "name": "Width",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.vel_sens",
+      "module": "pad",
+      "name": "Velocity",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.delay_send",
+      "module": "pad",
+      "name": "Delay Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.delay_left",
+      "module": "pad",
+      "name": "Delay Left",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "1/16",
+        "1/8",
+        "3/16",
+        "1/4",
+        "3/8",
+        "1/2"
+      ]
+    },
+    {
+      "key": "pad.delay_right",
+      "module": "pad",
+      "name": "Delay Right",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 3.0,
+      "curve": "choice",
+      "choices": [
+        "1/16",
+        "1/8",
+        "3/16",
+        "1/4",
+        "3/8",
+        "1/2"
+      ]
+    },
+    {
+      "key": "pad.delay_feedback",
+      "module": "pad",
+      "name": "Delay Feedback",
+      "unit": "",
+      "min": 0.0,
+      "max": 0.899999976158142,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.delay_high_pass",
+      "module": "pad",
+      "name": "Delay High Pass",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 2000.0,
+      "default": 350.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.delay_low_pass",
+      "module": "pad",
+      "name": "Delay Low Pass",
+      "unit": "Hz",
+      "min": 800.0,
+      "max": 16000.0,
+      "default": 6000.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.room_send",
+      "module": "pad",
+      "name": "Room Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.hall_send",
+      "module": "pad",
+      "name": "Hall Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.449999988079071,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.duck",
+      "module": "pad",
+      "name": "Duck",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.gate",
+      "module": "pad",
+      "name": "Trance Gate",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "pad.gate_pattern",
+      "module": "pad",
+      "name": "Gate Pattern",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Sixteenths",
+        "Eighths",
+        "Rolling",
+        "Gallop",
+        "3-3-2",
+        "Triplets"
+      ]
+    },
+    {
+      "key": "pad.gate_depth",
+      "module": "pad",
+      "name": "Gate Depth",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.850000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.gate_duty",
+      "module": "pad",
+      "name": "Gate Duty",
+      "unit": "",
+      "min": 0.050000000745058,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.gate_attack",
+      "module": "pad",
+      "name": "Gate Attack",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 60.0,
+      "default": 3.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.gate_release",
+      "module": "pad",
+      "name": "Gate Release",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 120.0,
+      "default": 12.0,
+      "curve": "log"
+    },
+    {
+      "key": "pad.gate_tone",
+      "module": "pad",
+      "name": "Gate Tone",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "pad.level",
+      "module": "pad",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -16.0,
+      "curve": "linear"
+    },
+    {
+      "key": "sfx.level",
+      "module": "sfx",
+      "name": "Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -12.0,
+      "curve": "linear"
+    },
+    {
+      "key": "sfx.noise",
+      "module": "sfx",
+      "name": "Noise",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "sfx.resonance",
+      "module": "sfx",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "sfx.brightness",
+      "module": "sfx",
+      "name": "Brightness",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "sfx.impact_decay",
+      "module": "sfx",
+      "name": "Impact Decay",
+      "unit": "ms",
+      "min": 200.0,
+      "max": 4000.0,
+      "default": 1400.0,
+      "curve": "log"
+    },
+    {
+      "key": "sfx.vowel",
+      "module": "sfx",
+      "name": "Vowel",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.300000011920929,
+      "curve": "linear"
+    },
+    {
+      "key": "sfx.swell_decay",
+      "module": "sfx",
+      "name": "Swell Decay",
+      "unit": "ms",
+      "min": 200.0,
+      "max": 6000.0,
+      "default": 1500.0,
+      "curve": "log"
+    },
+    {
+      "key": "sfx.width",
+      "module": "sfx",
+      "name": "Width",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.699999988079071,
+      "curve": "linear"
+    },
+    {
+      "key": "sfx.room_send",
+      "module": "sfx",
+      "name": "Room Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "sfx.hall_send",
+      "module": "sfx",
+      "name": "Hall Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "sfx.duck",
+      "module": "sfx",
+      "name": "Duck",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "fx.room_size",
+      "module": "fx",
+      "name": "Room Size",
+      "unit": "",
+      "min": 0.300000011920929,
+      "max": 3.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "fx.room_decay",
+      "module": "fx",
+      "name": "Room Decay",
+      "unit": "s",
+      "min": 0.100000001490116,
+      "max": 4.0,
+      "default": 0.699999988079071,
+      "curve": "log"
+    },
+    {
+      "key": "fx.room_damping",
+      "module": "fx",
+      "name": "Room Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "fx.hall_size",
+      "module": "fx",
+      "name": "Hall Size",
+      "unit": "",
+      "min": 0.300000011920929,
+      "max": 3.0,
+      "default": 1.600000023841858,
+      "curve": "linear"
+    },
+    {
+      "key": "fx.hall_decay",
+      "module": "fx",
+      "name": "Hall Decay",
+      "unit": "s",
+      "min": 0.300000011920929,
+      "max": 20.0,
+      "default": 4.5,
+      "curve": "log"
+    },
+    {
+      "key": "fx.hall_damping",
+      "module": "fx",
+      "name": "Hall Damping",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.449999988079071,
+      "curve": "linear"
+    },
+    {
+      "key": "fx.hall_pre_delay",
+      "module": "fx",
+      "name": "Hall Pre-Delay",
+      "unit": "beats",
+      "min": 0.0,
+      "max": 0.5,
+      "default": 0.25,
+      "curve": "linear"
+    },
+    {
+      "key": "fx.low_cut",
+      "module": "fx",
+      "name": "Return Low Cut",
+      "unit": "Hz",
+      "min": 150.0,
+      "max": 1000.0,
+      "default": 300.0,
+      "curve": "log"
+    },
+    {
+      "key": "fx.high_cut",
+      "module": "fx",
+      "name": "Return High Cut",
+      "unit": "Hz",
+      "min": 1000.0,
+      "max": 20000.0,
+      "default": 9000.0,
+      "curve": "log"
+    },
+    {
+      "key": "fx.room_return",
+      "module": "fx",
+      "name": "Room Return",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -6.0,
+      "curve": "linear"
+    },
+    {
+      "key": "fx.hall_return",
+      "module": "fx",
+      "name": "Hall Return",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -6.0,
+      "curve": "linear"
+    },
+    {
+      "key": "fx.return_duck",
+      "module": "fx",
+      "name": "Return Duck",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "mix.kick_mute",
+      "module": "mix",
+      "name": "Kick Mute",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "mix.bass_mute",
+      "module": "mix",
+      "name": "Bass Mute",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "mix.track_gain",
+      "module": "mix",
+      "name": "Track Gain",
+      "unit": "dB",
+      "min": -12.0,
+      "max": 12.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "mix.perc_mute",
+      "module": "mix",
+      "name": "Perc Mute",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "mix.perc_level",
+      "module": "mix",
+      "name": "Perc Level",
+      "unit": "dB",
+      "min": -24.0,
+      "max": 12.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "mix.acid_mute",
+      "module": "mix",
+      "name": "Acid Mute",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "mix.acid_level",
+      "module": "mix",
+      "name": "Acid Level",
+      "unit": "dB",
+      "min": -24.0,
+      "max": 12.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "mix.lead_mute",
+      "module": "mix",
+      "name": "Lead Mute",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "mix.lead_level",
+      "module": "mix",
+      "name": "Lead Level",
+      "unit": "dB",
+      "min": -24.0,
+      "max": 12.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "mix.arp_mute",
+      "module": "mix",
+      "name": "Arp Mute",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "mix.arp_level",
+      "module": "mix",
+      "name": "Arp Level",
+      "unit": "dB",
+      "min": -24.0,
+      "max": 12.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "mix.pad_mute",
+      "module": "mix",
+      "name": "Pad Mute",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "mix.pad_level",
+      "module": "mix",
+      "name": "Pad Level",
+      "unit": "dB",
+      "min": -24.0,
+      "max": 12.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "mix.sfx_mute",
+      "module": "mix",
+      "name": "SFX Mute",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "mix.sfx_level",
+      "module": "mix",
+      "name": "SFX Level",
+      "unit": "dB",
+      "min": -24.0,
+      "max": 12.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "mix.perc_room",
+      "module": "mix",
+      "name": "Perc Room",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.119999997317791,
+      "curve": "linear"
+    },
+    {
+      "key": "mix.perc_hall",
+      "module": "mix",
+      "name": "Perc Hall",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "mix.duck_attack",
+      "module": "mix",
+      "name": "Duck Attack",
+      "unit": "ms",
+      "min": 0.5,
+      "max": 30.0,
+      "default": 2.0,
+      "curve": "log"
+    },
+    {
+      "key": "mix.duck_hold",
+      "module": "mix",
+      "name": "Duck Hold",
+      "unit": "ms",
+      "min": 0.0,
+      "max": 200.0,
+      "default": 20.0,
+      "curve": "linear"
+    },
+    {
+      "key": "mix.duck_release",
+      "module": "mix",
+      "name": "Duck Release",
+      "unit": "ms",
+      "min": 10.0,
+      "max": 800.0,
+      "default": 180.0,
+      "curve": "log"
+    },
+    {
+      "key": "master.gain",
+      "module": "master",
+      "name": "Gain",
+      "unit": "dB",
+      "min": -24.0,
+      "max": 24.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "master.ceiling",
+      "module": "master",
+      "name": "Ceiling",
+      "unit": "dBTP",
+      "min": -12.0,
+      "max": 0.0,
+      "default": -1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "master.clip",
+      "module": "master",
+      "name": "Clip",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "master.comp_threshold",
+      "module": "master",
+      "name": "Comp Threshold",
+      "unit": "dB",
+      "min": -40.0,
+      "max": 0.0,
+      "default": -8.0,
+      "curve": "linear"
+    },
+    {
+      "key": "master.comp_ratio",
+      "module": "master",
+      "name": "Comp Ratio",
+      "unit": ":1",
+      "min": 1.0,
+      "max": 10.0,
+      "default": 1.5,
+      "curve": "log"
+    },
+    {
+      "key": "master.comp_knee",
+      "module": "master",
+      "name": "Comp Knee",
+      "unit": "dB",
+      "min": 0.0,
+      "max": 24.0,
+      "default": 6.0,
+      "curve": "linear"
+    },
+    {
+      "key": "master.comp_attack",
+      "module": "master",
+      "name": "Comp Attack",
+      "unit": "ms",
+      "min": 0.100000001490116,
+      "max": 100.0,
+      "default": 30.0,
+      "curve": "log"
+    },
+    {
+      "key": "master.comp_release",
+      "module": "master",
+      "name": "Comp Release",
+      "unit": "ms",
+      "min": 10.0,
+      "max": 2000.0,
+      "default": 200.0,
+      "curve": "log"
+    },
+    {
+      "key": "master.mono_bass",
+      "module": "master",
+      "name": "Mono Bass",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 300.0,
+      "default": 120.0,
+      "curve": "log"
+    },
+    {
+      "key": "master.limiter",
+      "module": "master",
+      "name": "Limiter",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "master.limiter_release",
+      "module": "master",
+      "name": "Limiter Release",
+      "unit": "ms",
+      "min": 2.0,
+      "max": 1000.0,
+      "default": 20.0,
+      "curve": "log"
+    },
+    {
+      "key": "master.target_lufs",
+      "module": "master",
+      "name": "Target Loudness",
+      "unit": "LUFS",
+      "min": -20.0,
+      "max": -4.0,
+      "default": -9.0,
+      "curve": "linear"
+    },
+    {
+      "key": "master.auto_gain",
+      "module": "master",
+      "name": "Auto Gain",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "master.clipper",
+      "module": "master",
+      "name": "Clipper",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "master.clipper_threshold",
+      "module": "master",
+      "name": "Clipper Threshold",
+      "unit": "dB",
+      "min": -6.0,
+      "max": 6.0,
+      "default": 0.0,
+      "curve": "linear"
+    }
+  ],
+  "tabs": [
+    {
+      "index": 0,
+      "name": "Set",
+      "image": "tab-0-set.png",
+      "groups": [
+        {
+          "title": "Transport",
+          "params": []
+        },
+        {
+          "title": "Set",
+          "params": [
+            "compose.bpm",
+            "compose.key",
+            "compose.scale",
+            "compose.kick_pattern",
+            "compose.bass_pattern",
+            "compose.bass_gate",
+            "compose.bass_variation",
+            "compose.bass_register",
+            "compose.track_bars",
+            "compose.track_variation",
+            "compose.sound_variation",
+            "compose.tempo_range",
+            "compose.level_match"
+          ]
+        },
+        {
+          "title": "Rhythm",
+          "params": [
+            "compose.perc_density",
+            "compose.perc_variation",
+            "compose.swing"
+          ]
+        },
+        {
+          "title": "Melody",
+          "params": [
+            "compose.acid_amount",
+            "compose.lead_amount",
+            "compose.arp_amount",
+            "compose.melody_variation",
+            "compose.melody_temperature",
+            "compose.squelch_chance",
+            "compose.bass_follows_chords",
+            "compose.pad_amount",
+            "compose.sfx_amount",
+            "compose.gate_chance"
+          ]
+        },
+        {
+          "title": "Form",
+          "params": [
+            "compose.style",
+            "compose.arc",
+            "compose.style_tempo",
+            "compose.set_minutes"
+          ]
+        },
+        {
+          "title": "Loudness",
+          "params": []
+        },
+        {
+          "title": "Plan",
+          "params": []
+        },
+        {
+          "title": "Export",
+          "params": []
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "name": "Arrange",
+      "image": "tab-1-arrange.png",
+      "groups": [
+        {
+          "title": "Set timeline",
+          "params": []
+        },
+        {
+          "title": "Curation",
+          "params": []
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "name": "Kick",
+      "image": "tab-2-kick.png",
+      "groups": [
+        {
+          "title": "Pitch",
+          "params": [
+            "kick.engine",
+            "kick.tune",
+            "kick.pitch_end",
+            "kick.pitch_start",
+            "kick.pitch_decay",
+            "kick.punch_decay",
+            "kick.punch"
+          ]
+        },
+        {
+          "title": "Amplitude",
+          "params": [
+            "kick.amp_attack",
+            "kick.amp_hold",
+            "kick.amp_decay"
+          ]
+        },
+        {
+          "title": "Drive",
+          "params": [
+            "kick.drive",
+            "kick.clip"
+          ]
+        },
+        {
+          "title": "Click",
+          "params": [
+            "kick.click_level",
+            "kick.click_tone",
+            "kick.click_decay"
+          ]
+        },
+        {
+          "title": "Output",
+          "params": [
+            "kick.tone",
+            "kick.level",
+            "kick.tail_limit"
+          ]
+        },
+        {
+          "title": "Pattern",
+          "params": []
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "name": "Bass",
+      "image": "tab-3-bass.png",
+      "groups": [
+        {
+          "title": "Oscillator",
+          "params": [
+            "bass.wave",
+            "bass.pulse_width",
+            "bass.sub",
+            "bass.sub_mode",
+            "bass.split_ratio",
+            "bass.kick_lock",
+            "bass.retrigger",
+            "bass.start_phase"
+          ]
+        },
+        {
+          "title": "Filter",
+          "params": [
+            "bass.cutoff",
+            "bass.resonance",
+            "bass.env_amount",
+            "bass.filter_decay",
+            "bass.key_track",
+            "bass.vel_to_cutoff",
+            "bass.drive"
+          ]
+        },
+        {
+          "title": "Amplitude",
+          "params": [
+            "bass.amp_attack",
+            "bass.amp_decay",
+            "bass.amp_sustain",
+            "bass.amp_release"
+          ]
+        },
+        {
+          "title": "Duck & Level",
+          "params": [
+            "bass.duck_depth",
+            "bass.duck_hold",
+            "bass.duck_release",
+            "bass.level"
+          ]
+        },
+        {
+          "title": "Pattern",
+          "params": []
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "name": "Percussion",
+      "image": "tab-4-percussion.png",
+      "groups": [
+        {
+          "title": "Lane",
+          "params": [
+            "perc1.active",
+            "perc1.role",
+            "perc1.engine"
+          ]
+        },
+        {
+          "title": "Source",
+          "params": [
+            "perc1.pitch",
+            "perc1.pitch_amount",
+            "perc1.pitch_decay",
+            "perc1.fm_ratio",
+            "perc1.fm_index",
+            "perc1.mode_set",
+            "perc1.mode_damp",
+            "perc1.metal_scale"
+          ]
+        },
+        {
+          "title": "Noise",
+          "params": [
+            "perc1.noise",
+            "perc1.noise_decay",
+            "perc1.bursts",
+            "perc1.burst_spacing"
+          ]
+        },
+        {
+          "title": "Shape",
+          "params": [
+            "perc1.decay",
+            "perc1.filter",
+            "perc1.cutoff",
+            "perc1.resonance",
+            "perc1.low_cut",
+            "perc1.drive"
+          ]
+        },
+        {
+          "title": "Output",
+          "params": [
+            "perc1.level",
+            "perc1.pan",
+            "perc1.choke",
+            "perc1.shift",
+            "perc1.density",
+            "perc1.tune"
+          ]
+        },
+        {
+          "title": "Kit pattern",
+          "params": []
+        }
+      ],
+      "lanes": 12
+    },
+    {
+      "index": 5,
+      "name": "Acid",
+      "image": "tab-5-acid.png",
+      "groups": [
+        {
+          "title": "Voice",
+          "params": [
+            "acid.wave",
+            "acid.cutoff",
+            "acid.resonance",
+            "acid.env_amount",
+            "acid.decay",
+            "acid.accent",
+            "acid.slide_time",
+            "acid.amp_decay",
+            "acid.key_track",
+            "acid.drive"
+          ]
+        },
+        {
+          "title": "Squelch",
+          "params": [
+            "acid.squelch",
+            "acid.squelch_start",
+            "acid.squelch_time",
+            "acid.comb_mix",
+            "acid.comb_feedback",
+            "acid.low_cut"
+          ]
+        },
+        {
+          "title": "Delay",
+          "params": [
+            "acid.delay_send",
+            "acid.delay_left",
+            "acid.delay_right",
+            "acid.delay_feedback",
+            "acid.delay_high_pass",
+            "acid.delay_low_pass"
+          ]
+        },
+        {
+          "title": "Sends & Level",
+          "params": [
+            "acid.room_send",
+            "acid.hall_send",
+            "acid.duck",
+            "acid.level"
+          ]
+        },
+        {
+          "title": "Pattern",
+          "params": []
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "name": "Lead",
+      "image": "tab-6-lead.png",
+      "groups": [
+        {
+          "title": "Oscillator",
+          "params": [
+            "lead.osc",
+            "lead.detune",
+            "lead.mix",
+            "lead.dynamic_detune",
+            "lead.wave",
+            "lead.pulse_width",
+            "lead.fm_ratio",
+            "lead.fm_index",
+            "lead.fm_decay",
+            "lead.table",
+            "lead.position",
+            "lead.pos_env",
+            "lead.pos_decay",
+            "lead.pos_lfo_depth",
+            "lead.pos_lfo_beats"
+          ]
+        },
+        {
+          "title": "Filter",
+          "params": [
+            "lead.cutoff",
+            "lead.resonance",
+            "lead.env_amount",
+            "lead.filter_decay",
+            "lead.key_track",
+            "lead.hp_floor",
+            "lead.hp_track"
+          ]
+        },
+        {
+          "title": "Amplitude",
+          "params": [
+            "lead.amp_attack",
+            "lead.amp_decay",
+            "lead.amp_sustain",
+            "lead.amp_release",
+            "lead.width",
+            "lead.vel_sens"
+          ]
+        },
+        {
+          "title": "Delay",
+          "params": [
+            "lead.delay_send",
+            "lead.delay_left",
+            "lead.delay_right",
+            "lead.delay_feedback",
+            "lead.delay_high_pass",
+            "lead.delay_low_pass"
+          ]
+        },
+        {
+          "title": "Sends",
+          "params": [
+            "lead.room_send",
+            "lead.hall_send",
+            "lead.duck"
+          ]
+        },
+        {
+          "title": "Trance Gate",
+          "params": [
+            "lead.gate",
+            "lead.gate_pattern",
+            "lead.gate_depth",
+            "lead.gate_duty",
+            "lead.gate_attack",
+            "lead.gate_release",
+            "lead.gate_tone"
+          ]
+        },
+        {
+          "title": "Level",
+          "params": [
+            "lead.level"
+          ]
+        },
+        {
+          "title": "Pattern",
+          "params": []
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "name": "Arp",
+      "image": "tab-7-arp.png",
+      "groups": [
+        {
+          "title": "Oscillator",
+          "params": [
+            "arp.osc",
+            "arp.detune",
+            "arp.mix",
+            "arp.dynamic_detune",
+            "arp.wave",
+            "arp.pulse_width",
+            "arp.fm_ratio",
+            "arp.fm_index",
+            "arp.fm_decay",
+            "arp.table",
+            "arp.position",
+            "arp.pos_env",
+            "arp.pos_decay",
+            "arp.pos_lfo_depth",
+            "arp.pos_lfo_beats"
+          ]
+        },
+        {
+          "title": "Filter",
+          "params": [
+            "arp.cutoff",
+            "arp.resonance",
+            "arp.env_amount",
+            "arp.filter_decay",
+            "arp.key_track",
+            "arp.hp_floor",
+            "arp.hp_track"
+          ]
+        },
+        {
+          "title": "Amplitude",
+          "params": [
+            "arp.amp_attack",
+            "arp.amp_decay",
+            "arp.amp_sustain",
+            "arp.amp_release",
+            "arp.width",
+            "arp.vel_sens"
+          ]
+        },
+        {
+          "title": "Delay",
+          "params": [
+            "arp.delay_send",
+            "arp.delay_left",
+            "arp.delay_right",
+            "arp.delay_feedback",
+            "arp.delay_high_pass",
+            "arp.delay_low_pass"
+          ]
+        },
+        {
+          "title": "Sends",
+          "params": [
+            "arp.room_send",
+            "arp.hall_send",
+            "arp.duck"
+          ]
+        },
+        {
+          "title": "Trance Gate",
+          "params": [
+            "arp.gate",
+            "arp.gate_pattern",
+            "arp.gate_depth",
+            "arp.gate_duty",
+            "arp.gate_attack",
+            "arp.gate_release",
+            "arp.gate_tone"
+          ]
+        },
+        {
+          "title": "Level",
+          "params": [
+            "arp.level"
+          ]
+        },
+        {
+          "title": "Pattern",
+          "params": []
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "name": "Pad",
+      "image": "tab-8-pad.png",
+      "groups": [
+        {
+          "title": "Oscillator",
+          "params": [
+            "pad.osc",
+            "pad.detune",
+            "pad.mix",
+            "pad.dynamic_detune",
+            "pad.wave",
+            "pad.pulse_width",
+            "pad.fm_ratio",
+            "pad.fm_index",
+            "pad.fm_decay",
+            "pad.table",
+            "pad.position",
+            "pad.pos_env",
+            "pad.pos_decay",
+            "pad.pos_lfo_depth",
+            "pad.pos_lfo_beats"
+          ]
+        },
+        {
+          "title": "Filter",
+          "params": [
+            "pad.cutoff",
+            "pad.resonance",
+            "pad.env_amount",
+            "pad.filter_decay",
+            "pad.key_track",
+            "pad.hp_floor",
+            "pad.hp_track"
+          ]
+        },
+        {
+          "title": "Amplitude",
+          "params": [
+            "pad.amp_attack",
+            "pad.amp_decay",
+            "pad.amp_sustain",
+            "pad.amp_release",
+            "pad.width",
+            "pad.vel_sens"
+          ]
+        },
+        {
+          "title": "Delay",
+          "params": [
+            "pad.delay_send",
+            "pad.delay_left",
+            "pad.delay_right",
+            "pad.delay_feedback",
+            "pad.delay_high_pass",
+            "pad.delay_low_pass"
+          ]
+        },
+        {
+          "title": "Sends",
+          "params": [
+            "pad.room_send",
+            "pad.hall_send",
+            "pad.duck"
+          ]
+        },
+        {
+          "title": "Trance Gate",
+          "params": [
+            "pad.gate",
+            "pad.gate_pattern",
+            "pad.gate_depth",
+            "pad.gate_duty",
+            "pad.gate_attack",
+            "pad.gate_release",
+            "pad.gate_tone"
+          ]
+        },
+        {
+          "title": "Level",
+          "params": [
+            "pad.level"
+          ]
+        },
+        {
+          "title": "Pattern",
+          "params": []
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "name": "SFX / FX",
+      "image": "tab-9-sfx-fx.png",
+      "groups": [
+        {
+          "title": "Effect Generator",
+          "params": [
+            "sfx.level",
+            "sfx.noise",
+            "sfx.resonance",
+            "sfx.brightness",
+            "sfx.impact_decay",
+            "sfx.vowel",
+            "sfx.swell_decay",
+            "sfx.width",
+            "sfx.room_send",
+            "sfx.hall_send",
+            "sfx.duck"
+          ]
+        },
+        {
+          "title": "Room",
+          "params": [
+            "fx.room_size",
+            "fx.room_decay",
+            "fx.room_damping"
+          ]
+        },
+        {
+          "title": "Hall",
+          "params": [
+            "fx.hall_size",
+            "fx.hall_decay",
+            "fx.hall_damping",
+            "fx.hall_pre_delay"
+          ]
+        },
+        {
+          "title": "Returns",
+          "params": [
+            "fx.low_cut",
+            "fx.high_cut",
+            "fx.room_return",
+            "fx.hall_return",
+            "fx.return_duck"
+          ]
+        },
+        {
+          "title": "Pattern",
+          "params": []
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "name": "Mixer / Master",
+      "image": "tab-10-mixer-master.png",
+      "groups": [
+        {
+          "title": "Channels",
+          "params": [
+            "mix.kick_mute",
+            "mix.bass_mute",
+            "mix.track_gain",
+            "mix.perc_mute",
+            "mix.perc_level",
+            "mix.acid_mute",
+            "mix.acid_level",
+            "mix.lead_mute",
+            "mix.lead_level",
+            "mix.arp_mute",
+            "mix.arp_level",
+            "mix.pad_mute",
+            "mix.pad_level",
+            "mix.sfx_mute",
+            "mix.sfx_level",
+            "mix.perc_room",
+            "mix.perc_hall"
+          ]
+        },
+        {
+          "title": "Sidechain",
+          "params": [
+            "mix.duck_attack",
+            "mix.duck_hold",
+            "mix.duck_release"
+          ]
+        },
+        {
+          "title": "Gain",
+          "params": [
+            "master.gain",
+            "master.ceiling",
+            "master.clip"
+          ]
+        },
+        {
+          "title": "Compressor",
+          "params": [
+            "master.comp_threshold",
+            "master.comp_ratio",
+            "master.comp_knee",
+            "master.comp_attack",
+            "master.comp_release"
+          ]
+        },
+        {
+          "title": "Output",
+          "params": [
+            "master.mono_bass",
+            "master.limiter",
+            "master.limiter_release",
+            "master.target_lufs",
+            "master.auto_gain",
+            "master.clipper",
+            "master.clipper_threshold"
+          ]
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "name": "Perform",
+      "image": "tab-11-perform.png",
+      "groups": [
+        {
+          "title": "Macros",
+          "params": []
+        },
+        {
+          "title": "What they move",
+          "params": []
+        },
+        {
+          "title": "State",
+          "params": []
+        }
+      ]
+    }
+  ],
+  "shown": [
+    "compose.bpm",
+    "compose.key",
+    "compose.scale",
+    "compose.kick_pattern",
+    "compose.bass_pattern",
+    "compose.bass_gate",
+    "compose.bass_variation",
+    "compose.bass_register",
+    "compose.track_bars",
+    "compose.track_variation",
+    "compose.sound_variation",
+    "compose.tempo_range",
+    "compose.level_match",
+    "compose.perc_density",
+    "compose.perc_variation",
+    "compose.swing",
+    "compose.acid_amount",
+    "compose.lead_amount",
+    "compose.arp_amount",
+    "compose.melody_variation",
+    "compose.melody_temperature",
+    "compose.squelch_chance",
+    "compose.bass_follows_chords",
+    "compose.pad_amount",
+    "compose.sfx_amount",
+    "compose.gate_chance",
+    "compose.style",
+    "compose.arc",
+    "compose.style_tempo",
+    "compose.set_minutes",
+    "kick.engine",
+    "kick.tune",
+    "kick.pitch_end",
+    "kick.pitch_start",
+    "kick.pitch_decay",
+    "kick.punch_decay",
+    "kick.punch",
+    "kick.amp_attack",
+    "kick.amp_hold",
+    "kick.amp_decay",
+    "kick.drive",
+    "kick.clip",
+    "kick.click_level",
+    "kick.click_tone",
+    "kick.click_decay",
+    "kick.tone",
+    "kick.level",
+    "kick.tail_limit",
+    "bass.wave",
+    "bass.pulse_width",
+    "bass.sub",
+    "bass.sub_mode",
+    "bass.split_ratio",
+    "bass.kick_lock",
+    "bass.retrigger",
+    "bass.start_phase",
+    "bass.cutoff",
+    "bass.resonance",
+    "bass.env_amount",
+    "bass.filter_decay",
+    "bass.key_track",
+    "bass.vel_to_cutoff",
+    "bass.drive",
+    "bass.amp_attack",
+    "bass.amp_decay",
+    "bass.amp_sustain",
+    "bass.amp_release",
+    "bass.duck_depth",
+    "bass.duck_hold",
+    "bass.duck_release",
+    "bass.level",
+    "acid.wave",
+    "acid.cutoff",
+    "acid.resonance",
+    "acid.env_amount",
+    "acid.decay",
+    "acid.accent",
+    "acid.slide_time",
+    "acid.amp_decay",
+    "acid.key_track",
+    "acid.drive",
+    "acid.squelch",
+    "acid.squelch_start",
+    "acid.squelch_time",
+    "acid.comb_mix",
+    "acid.comb_feedback",
+    "acid.low_cut",
+    "acid.delay_send",
+    "acid.delay_left",
+    "acid.delay_right",
+    "acid.delay_feedback",
+    "acid.delay_high_pass",
+    "acid.delay_low_pass",
+    "acid.room_send",
+    "acid.hall_send",
+    "acid.duck",
+    "acid.level",
+    "lead.osc",
+    "lead.detune",
+    "lead.mix",
+    "lead.dynamic_detune",
+    "lead.wave",
+    "lead.pulse_width",
+    "lead.fm_ratio",
+    "lead.fm_index",
+    "lead.fm_decay",
+    "lead.table",
+    "lead.position",
+    "lead.pos_env",
+    "lead.pos_decay",
+    "lead.pos_lfo_depth",
+    "lead.pos_lfo_beats",
+    "lead.cutoff",
+    "lead.resonance",
+    "lead.env_amount",
+    "lead.filter_decay",
+    "lead.key_track",
+    "lead.hp_floor",
+    "lead.hp_track",
+    "lead.amp_attack",
+    "lead.amp_decay",
+    "lead.amp_sustain",
+    "lead.amp_release",
+    "lead.width",
+    "lead.vel_sens",
+    "lead.delay_send",
+    "lead.delay_left",
+    "lead.delay_right",
+    "lead.delay_feedback",
+    "lead.delay_high_pass",
+    "lead.delay_low_pass",
+    "lead.room_send",
+    "lead.hall_send",
+    "lead.duck",
+    "lead.gate",
+    "lead.gate_pattern",
+    "lead.gate_depth",
+    "lead.gate_duty",
+    "lead.gate_attack",
+    "lead.gate_release",
+    "lead.gate_tone",
+    "lead.level",
+    "arp.osc",
+    "arp.detune",
+    "arp.mix",
+    "arp.dynamic_detune",
+    "arp.wave",
+    "arp.pulse_width",
+    "arp.fm_ratio",
+    "arp.fm_index",
+    "arp.fm_decay",
+    "arp.table",
+    "arp.position",
+    "arp.pos_env",
+    "arp.pos_decay",
+    "arp.pos_lfo_depth",
+    "arp.pos_lfo_beats",
+    "arp.cutoff",
+    "arp.resonance",
+    "arp.env_amount",
+    "arp.filter_decay",
+    "arp.key_track",
+    "arp.hp_floor",
+    "arp.hp_track",
+    "arp.amp_attack",
+    "arp.amp_decay",
+    "arp.amp_sustain",
+    "arp.amp_release",
+    "arp.width",
+    "arp.vel_sens",
+    "arp.delay_send",
+    "arp.delay_left",
+    "arp.delay_right",
+    "arp.delay_feedback",
+    "arp.delay_high_pass",
+    "arp.delay_low_pass",
+    "arp.room_send",
+    "arp.hall_send",
+    "arp.duck",
+    "arp.gate",
+    "arp.gate_pattern",
+    "arp.gate_depth",
+    "arp.gate_duty",
+    "arp.gate_attack",
+    "arp.gate_release",
+    "arp.gate_tone",
+    "arp.level",
+    "pad.osc",
+    "pad.detune",
+    "pad.mix",
+    "pad.dynamic_detune",
+    "pad.wave",
+    "pad.pulse_width",
+    "pad.fm_ratio",
+    "pad.fm_index",
+    "pad.fm_decay",
+    "pad.table",
+    "pad.position",
+    "pad.pos_env",
+    "pad.pos_decay",
+    "pad.pos_lfo_depth",
+    "pad.pos_lfo_beats",
+    "pad.cutoff",
+    "pad.resonance",
+    "pad.env_amount",
+    "pad.filter_decay",
+    "pad.key_track",
+    "pad.hp_floor",
+    "pad.hp_track",
+    "pad.amp_attack",
+    "pad.amp_decay",
+    "pad.amp_sustain",
+    "pad.amp_release",
+    "pad.width",
+    "pad.vel_sens",
+    "pad.delay_send",
+    "pad.delay_left",
+    "pad.delay_right",
+    "pad.delay_feedback",
+    "pad.delay_high_pass",
+    "pad.delay_low_pass",
+    "pad.room_send",
+    "pad.hall_send",
+    "pad.duck",
+    "pad.gate",
+    "pad.gate_pattern",
+    "pad.gate_depth",
+    "pad.gate_duty",
+    "pad.gate_attack",
+    "pad.gate_release",
+    "pad.gate_tone",
+    "pad.level",
+    "sfx.level",
+    "sfx.noise",
+    "sfx.resonance",
+    "sfx.brightness",
+    "sfx.impact_decay",
+    "sfx.vowel",
+    "sfx.swell_decay",
+    "sfx.width",
+    "sfx.room_send",
+    "sfx.hall_send",
+    "sfx.duck",
+    "fx.room_size",
+    "fx.room_decay",
+    "fx.room_damping",
+    "fx.hall_size",
+    "fx.hall_decay",
+    "fx.hall_damping",
+    "fx.hall_pre_delay",
+    "fx.low_cut",
+    "fx.high_cut",
+    "fx.room_return",
+    "fx.hall_return",
+    "fx.return_duck",
+    "mix.kick_mute",
+    "mix.bass_mute",
+    "mix.track_gain",
+    "mix.perc_mute",
+    "mix.perc_level",
+    "mix.acid_mute",
+    "mix.acid_level",
+    "mix.lead_mute",
+    "mix.lead_level",
+    "mix.arp_mute",
+    "mix.arp_level",
+    "mix.pad_mute",
+    "mix.pad_level",
+    "mix.sfx_mute",
+    "mix.sfx_level",
+    "mix.perc_room",
+    "mix.perc_hall",
+    "mix.duck_attack",
+    "mix.duck_hold",
+    "mix.duck_release",
+    "master.gain",
+    "master.ceiling",
+    "master.clip",
+    "master.comp_threshold",
+    "master.comp_ratio",
+    "master.comp_knee",
+    "master.comp_attack",
+    "master.comp_release",
+    "master.mono_bass",
+    "master.limiter",
+    "master.limiter_release",
+    "master.target_lufs",
+    "master.auto_gain",
+    "master.clipper",
+    "master.clipper_threshold",
+    "perc1.active",
+    "perc1.role",
+    "perc1.engine",
+    "perc1.pitch",
+    "perc1.pitch_amount",
+    "perc1.pitch_decay",
+    "perc1.fm_ratio",
+    "perc1.fm_index",
+    "perc1.mode_set",
+    "perc1.mode_damp",
+    "perc1.metal_scale",
+    "perc1.noise",
+    "perc1.noise_decay",
+    "perc1.bursts",
+    "perc1.burst_spacing",
+    "perc1.decay",
+    "perc1.filter",
+    "perc1.cutoff",
+    "perc1.resonance",
+    "perc1.low_cut",
+    "perc1.drive",
+    "perc1.level",
+    "perc1.pan",
+    "perc1.choke",
+    "perc1.shift",
+    "perc1.density",
+    "perc1.tune",
+    "perc2.active",
+    "perc2.role",
+    "perc2.engine",
+    "perc2.pitch",
+    "perc2.pitch_amount",
+    "perc2.pitch_decay",
+    "perc2.fm_ratio",
+    "perc2.fm_index",
+    "perc2.mode_set",
+    "perc2.mode_damp",
+    "perc2.metal_scale",
+    "perc2.noise",
+    "perc2.noise_decay",
+    "perc2.bursts",
+    "perc2.burst_spacing",
+    "perc2.decay",
+    "perc2.filter",
+    "perc2.cutoff",
+    "perc2.resonance",
+    "perc2.low_cut",
+    "perc2.drive",
+    "perc2.level",
+    "perc2.pan",
+    "perc2.choke",
+    "perc2.shift",
+    "perc2.density",
+    "perc2.tune",
+    "perc3.active",
+    "perc3.role",
+    "perc3.engine",
+    "perc3.pitch",
+    "perc3.pitch_amount",
+    "perc3.pitch_decay",
+    "perc3.fm_ratio",
+    "perc3.fm_index",
+    "perc3.mode_set",
+    "perc3.mode_damp",
+    "perc3.metal_scale",
+    "perc3.noise",
+    "perc3.noise_decay",
+    "perc3.bursts",
+    "perc3.burst_spacing",
+    "perc3.decay",
+    "perc3.filter",
+    "perc3.cutoff",
+    "perc3.resonance",
+    "perc3.low_cut",
+    "perc3.drive",
+    "perc3.level",
+    "perc3.pan",
+    "perc3.choke",
+    "perc3.shift",
+    "perc3.density",
+    "perc3.tune",
+    "perc4.active",
+    "perc4.role",
+    "perc4.engine",
+    "perc4.pitch",
+    "perc4.pitch_amount",
+    "perc4.pitch_decay",
+    "perc4.fm_ratio",
+    "perc4.fm_index",
+    "perc4.mode_set",
+    "perc4.mode_damp",
+    "perc4.metal_scale",
+    "perc4.noise",
+    "perc4.noise_decay",
+    "perc4.bursts",
+    "perc4.burst_spacing",
+    "perc4.decay",
+    "perc4.filter",
+    "perc4.cutoff",
+    "perc4.resonance",
+    "perc4.low_cut",
+    "perc4.drive",
+    "perc4.level",
+    "perc4.pan",
+    "perc4.choke",
+    "perc4.shift",
+    "perc4.density",
+    "perc4.tune",
+    "perc5.active",
+    "perc5.role",
+    "perc5.engine",
+    "perc5.pitch",
+    "perc5.pitch_amount",
+    "perc5.pitch_decay",
+    "perc5.fm_ratio",
+    "perc5.fm_index",
+    "perc5.mode_set",
+    "perc5.mode_damp",
+    "perc5.metal_scale",
+    "perc5.noise",
+    "perc5.noise_decay",
+    "perc5.bursts",
+    "perc5.burst_spacing",
+    "perc5.decay",
+    "perc5.filter",
+    "perc5.cutoff",
+    "perc5.resonance",
+    "perc5.low_cut",
+    "perc5.drive",
+    "perc5.level",
+    "perc5.pan",
+    "perc5.choke",
+    "perc5.shift",
+    "perc5.density",
+    "perc5.tune",
+    "perc6.active",
+    "perc6.role",
+    "perc6.engine",
+    "perc6.pitch",
+    "perc6.pitch_amount",
+    "perc6.pitch_decay",
+    "perc6.fm_ratio",
+    "perc6.fm_index",
+    "perc6.mode_set",
+    "perc6.mode_damp",
+    "perc6.metal_scale",
+    "perc6.noise",
+    "perc6.noise_decay",
+    "perc6.bursts",
+    "perc6.burst_spacing",
+    "perc6.decay",
+    "perc6.filter",
+    "perc6.cutoff",
+    "perc6.resonance",
+    "perc6.low_cut",
+    "perc6.drive",
+    "perc6.level",
+    "perc6.pan",
+    "perc6.choke",
+    "perc6.shift",
+    "perc6.density",
+    "perc6.tune",
+    "perc7.active",
+    "perc7.role",
+    "perc7.engine",
+    "perc7.pitch",
+    "perc7.pitch_amount",
+    "perc7.pitch_decay",
+    "perc7.fm_ratio",
+    "perc7.fm_index",
+    "perc7.mode_set",
+    "perc7.mode_damp",
+    "perc7.metal_scale",
+    "perc7.noise",
+    "perc7.noise_decay",
+    "perc7.bursts",
+    "perc7.burst_spacing",
+    "perc7.decay",
+    "perc7.filter",
+    "perc7.cutoff",
+    "perc7.resonance",
+    "perc7.low_cut",
+    "perc7.drive",
+    "perc7.level",
+    "perc7.pan",
+    "perc7.choke",
+    "perc7.shift",
+    "perc7.density",
+    "perc7.tune",
+    "perc8.active",
+    "perc8.role",
+    "perc8.engine",
+    "perc8.pitch",
+    "perc8.pitch_amount",
+    "perc8.pitch_decay",
+    "perc8.fm_ratio",
+    "perc8.fm_index",
+    "perc8.mode_set",
+    "perc8.mode_damp",
+    "perc8.metal_scale",
+    "perc8.noise",
+    "perc8.noise_decay",
+    "perc8.bursts",
+    "perc8.burst_spacing",
+    "perc8.decay",
+    "perc8.filter",
+    "perc8.cutoff",
+    "perc8.resonance",
+    "perc8.low_cut",
+    "perc8.drive",
+    "perc8.level",
+    "perc8.pan",
+    "perc8.choke",
+    "perc8.shift",
+    "perc8.density",
+    "perc8.tune",
+    "perc9.active",
+    "perc9.role",
+    "perc9.engine",
+    "perc9.pitch",
+    "perc9.pitch_amount",
+    "perc9.pitch_decay",
+    "perc9.fm_ratio",
+    "perc9.fm_index",
+    "perc9.mode_set",
+    "perc9.mode_damp",
+    "perc9.metal_scale",
+    "perc9.noise",
+    "perc9.noise_decay",
+    "perc9.bursts",
+    "perc9.burst_spacing",
+    "perc9.decay",
+    "perc9.filter",
+    "perc9.cutoff",
+    "perc9.resonance",
+    "perc9.low_cut",
+    "perc9.drive",
+    "perc9.level",
+    "perc9.pan",
+    "perc9.choke",
+    "perc9.shift",
+    "perc9.density",
+    "perc9.tune",
+    "perc10.active",
+    "perc10.role",
+    "perc10.engine",
+    "perc10.pitch",
+    "perc10.pitch_amount",
+    "perc10.pitch_decay",
+    "perc10.fm_ratio",
+    "perc10.fm_index",
+    "perc10.mode_set",
+    "perc10.mode_damp",
+    "perc10.metal_scale",
+    "perc10.noise",
+    "perc10.noise_decay",
+    "perc10.bursts",
+    "perc10.burst_spacing",
+    "perc10.decay",
+    "perc10.filter",
+    "perc10.cutoff",
+    "perc10.resonance",
+    "perc10.low_cut",
+    "perc10.drive",
+    "perc10.level",
+    "perc10.pan",
+    "perc10.choke",
+    "perc10.shift",
+    "perc10.density",
+    "perc10.tune",
+    "perc11.active",
+    "perc11.role",
+    "perc11.engine",
+    "perc11.pitch",
+    "perc11.pitch_amount",
+    "perc11.pitch_decay",
+    "perc11.fm_ratio",
+    "perc11.fm_index",
+    "perc11.mode_set",
+    "perc11.mode_damp",
+    "perc11.metal_scale",
+    "perc11.noise",
+    "perc11.noise_decay",
+    "perc11.bursts",
+    "perc11.burst_spacing",
+    "perc11.decay",
+    "perc11.filter",
+    "perc11.cutoff",
+    "perc11.resonance",
+    "perc11.low_cut",
+    "perc11.drive",
+    "perc11.level",
+    "perc11.pan",
+    "perc11.choke",
+    "perc11.shift",
+    "perc11.density",
+    "perc11.tune",
+    "perc12.active",
+    "perc12.role",
+    "perc12.engine",
+    "perc12.pitch",
+    "perc12.pitch_amount",
+    "perc12.pitch_decay",
+    "perc12.fm_ratio",
+    "perc12.fm_index",
+    "perc12.mode_set",
+    "perc12.mode_damp",
+    "perc12.metal_scale",
+    "perc12.noise",
+    "perc12.noise_decay",
+    "perc12.bursts",
+    "perc12.burst_spacing",
+    "perc12.decay",
+    "perc12.filter",
+    "perc12.cutoff",
+    "perc12.resonance",
+    "perc12.low_cut",
+    "perc12.drive",
+    "perc12.level",
+    "perc12.pan",
+    "perc12.choke",
+    "perc12.shift",
+    "perc12.density",
+    "perc12.tune"
+  ],
+  "macros": [
+    {
+      "name": "Filter Sweep",
+      "help": "Opens or closes the acid, lead and arp filters together, by up to a third of their range in each direction. Centre is neutral.",
+      "momentary": false,
+      "moves": [
+        {
+          "key": "acid.cutoff",
+          "value": 0.349999994039536,
+          "absolute": false
+        },
+        {
+          "key": "lead.cutoff",
+          "value": 0.349999994039536,
+          "absolute": false
+        },
+        {
+          "key": "arp.cutoff",
+          "value": 0.349999994039536,
+          "absolute": false
+        }
+      ]
+    },
+    {
+      "name": "Gate Depth",
+      "help": "Switches the trance gate on for lead, arp and pad and sets its depth; at 1.0 the gate closes completely between its steps.",
+      "momentary": false,
+      "moves": [
+        {
+          "key": "lead.gate",
+          "value": 1.0,
+          "absolute": true
+        },
+        {
+          "key": "lead.gate_depth",
+          "value": 1.0,
+          "absolute": true
+        },
+        {
+          "key": "arp.gate",
+          "value": 1.0,
+          "absolute": true
+        },
+        {
+          "key": "arp.gate_depth",
+          "value": 1.0,
+          "absolute": true
+        },
+        {
+          "key": "pad.gate",
+          "value": 1.0,
+          "absolute": true
+        },
+        {
+          "key": "pad.gate_depth",
+          "value": 1.0,
+          "absolute": true
+        }
+      ]
+    },
+    {
+      "name": "Drop-out",
+      "help": "Takes kick and bass out until the next bar line and lets them back in on the downbeat. One press, one bar.",
+      "momentary": true,
+      "moves": [
+        {
+          "key": "mix.kick_mute",
+          "value": 1.0,
+          "absolute": true
+        },
+        {
+          "key": "mix.bass_mute",
+          "value": 1.0,
+          "absolute": true
+        }
+      ]
+    },
+    {
+      "name": "Stutter",
+      "help": "Held: lead, arp and pad run through the gate on sixteenths at full depth and the shortest duty. Phosphene has no buffer repeat, so this is the gate's stutter, not a tape one.",
+      "momentary": true,
+      "moves": [
+        {
+          "key": "lead.gate",
+          "value": 1.0,
+          "absolute": true
+        },
+        {
+          "key": "lead.gate_pattern",
+          "value": 0.0,
+          "absolute": true
+        },
+        {
+          "key": "lead.gate_depth",
+          "value": 1.0,
+          "absolute": true
+        },
+        {
+          "key": "lead.gate_duty",
+          "value": 0.0,
+          "absolute": true
+        },
+        {
+          "key": "arp.gate",
+          "value": 1.0,
+          "absolute": true
+        },
+        {
+          "key": "arp.gate_pattern",
+          "value": 0.0,
+          "absolute": true
+        },
+        {
+          "key": "arp.gate_depth",
+          "value": 1.0,
+          "absolute": true
+        },
+        {
+          "key": "arp.gate_duty",
+          "value": 0.0,
+          "absolute": true
+        },
+        {
+          "key": "pad.gate",
+          "value": 1.0,
+          "absolute": true
+        },
+        {
+          "key": "pad.gate_pattern",
+          "value": 0.0,
+          "absolute": true
+        },
+        {
+          "key": "pad.gate_depth",
+          "value": 1.0,
+          "absolute": true
+        },
+        {
+          "key": "pad.gate_duty",
+          "value": 0.0,
+          "absolute": true
+        }
+      ]
+    }
+  ]
+}

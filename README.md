@@ -18,9 +18,11 @@ drop, breakdown, cut and outro, an energy arc over the whole set moves loudness,
 dissonance, five style profiles weight everything from tempo to chord moves, transitions between tracks
 are written rather than mixed, and any unit of a set can be locked or rerolled and saved as a
 `.phosset`. A sixty-minute set comes out of one seed as audio and as a Standard MIDI File. Phase 6 adds the plugin: a
-VST3 and a standalone with ten tabs of controls generated from the parameter tables, the composer on a
-thread of its own, host transport and tempo, MIDI output of the score, and a recorder; the standalone
-renders exactly what the offline renderer renders, sample for sample. The headset build is there (below).
+VST3 and a standalone with twelve tabs of controls generated from the parameter tables, an arrange
+timeline of the whole set with a lock and a reroll on every track and every section, four perform
+macros, the composer on a thread of its own, host transport and tempo, MIDI output of the score, and a
+recorder; the standalone renders exactly what the offline renderer renders, sample for sample. The
+headset build is there (below).
 
 ## Build
 
@@ -51,9 +53,27 @@ meter, the plan of the set, a recorder and the exports.
 Environment variables, for tests and documentation: `PHOS_MUTE=1` starts the standalone silent and it
 never unmutes itself; `PHOS_SHOT=<file.png>` renders the editor at design size into a PNG and exits
 (`PHOS_TAB=<index>` picks the tab, `PHOS_SHOT_ALL=<folder>` writes one picture per tab, see
-[docs/screenshots](docs/screenshots)); `PHOS_PLAY=<seconds>` with `PHOS_RECORD=<file.wav>` plays for a
-while, records, and exits; `PHOS_TRACE=1` makes the plugin report its transport and its composer on
-stderr, which is the way to see inside it when a host has loaded it and it is silent.
+[docs/screenshots](docs/screenshots)); `PHOS_SHOT_WAIT=<seconds>` is how long the composer is given to
+plan before the pictures are taken, which the arrange timeline needs (26 seconds plans a whole
+sixty-minute set); `PHOS_MANUAL=<folder>` writes those pictures plus a `manual.json` of the parameter
+tables; `PHOS_PLAY=<seconds>` with `PHOS_RECORD=<file.wav>` plays for a while, records, and exits;
+`PHOS_TRACE=1` makes the plugin report its transport and its composer on stderr, which is the way to
+see inside it when a host has loaded it and it is silent.
+
+### Manual
+
+The manual is generated from the plugin itself -- the parameter tables and the groups each tab really
+built, read back out of the running editor, plus one picture per tab -- with the prose in
+`Tools/manual/chapters.txt`:
+
+```bash
+PHOS_MANUAL=docs/screenshots PHOS_SHOT_WAIT=26 build/.../Phosphene.exe
+python Tools/manual/make_manual.py
+```
+
+That writes [docs/manual/Phosphene-Manual.html](docs/manual/Phosphene-Manual.html) and, through Edge
+in headless mode, the PDF beside it. The generator refuses to call a manual complete when a parameter
+exists in the engine but appears on no tab.
 
 ## Try it
 
@@ -114,6 +134,9 @@ same samples `phos_render` produces, bit for bit.
 `phos_vst3test` goes one step further and loads the **built VST3 off the disk**, the way a DAW loads
 it: the module, the factory, an instance, the parameter list, a transport, the MIDI it produces, the
 state, the editor, and the teardown. That is the part of pluginval that can live in the repository.
+pluginval itself is not in the repository (it is a binary); fetched from Tracktion's releases and run
+as `pluginval --strictness-level 10 --timeout-ms 900000 --validate <the .vst3>`, version 1.0.4 passes
+all 25 of its test sections.
 
 `phos_selftest` measures every building block against independently derived values: the ladders'
 analytic responses (the diode ladder against Zavalishin's transfer function and its self-oscillation
@@ -139,7 +162,8 @@ requires every lane of the vectorised DSP to equal the scalar computation bit fo
 | `Tools/inspect_wav.py` | pictures and measurements of a render |
 | `Tools/ref_*.py` | measurements of reference recordings: bass slots, percussion grid, band balance, sweeps, tempo per style and the shape of a break |
 | `Tools/corpus/` | `build_corpus.py`: melodic statistics from a local MIDI corpus (the MIDI files stay local), memorisation check |
-| `Plugin/` | JUCE 9 VST3 and standalone: processor, editor, layout engine |
+| `Plugin/` | JUCE 9 VST3 and standalone: processor, editor, layout engine, arrange timeline, perform macros |
+| `Tools/manual/` | `make_manual.py` and the manual's prose: HTML and PDF out of the plugin's own tables |
 | `Tests/` | self test, host test, VST3 test, vector-path tests, NEON shim |
 | `docs/screenshots/` | one picture per tab of the editor |
 | `docs/` | plan, Doxygen configuration |

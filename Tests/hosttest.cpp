@@ -15,6 +15,11 @@
  * paths carry the same limiter lookahead, so no shift is applied; the latency is checked separately
  * against phos::Engine::latencySamples().
  *
+ * Since the second Phase 6 round it also measures the three things that round built: that the
+ * arrange timeline of a sixty-minute set is drawn from a cached picture rather than from scratch at
+ * every tick, that a lock and a reroll made in the editor reach the composer and move exactly the
+ * track they name, and that a perform macro moves what it says it moves and puts every knob back.
+ *
  * This is not a replacement for pluginval, which exercises the VST3 wrapper itself; it is the part
  * that lives in the repository and runs on every build.
  */
@@ -142,6 +147,87 @@ std::vector<float> pluginRender(uint64_t seed, double sr, int block, int samples
         done += n;
     }
     return out;
+}
+
+/** @brief Feeds blocks until the composer has published @p want tracks, or the time runs out. */
+bool waitForPlans(PhospheneProcessor& p, juce::AudioBuffer<float>& buf, int want, double seconds)
+{
+    const auto t0 = std::chrono::steady_clock::now();
+    phos::TrackPlan plan;
+    while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < seconds) {
+        feed(p, buf, 1);
+        if (p.tryReadTrack(want - 1, plan)) return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(4));
+    }
+    return false;
+}
+
+/** @brief Root mean square of what the processor renders over @p samples samples. */
+double renderRms(PhospheneProcessor& p, int block, int samples)
+{
+    juce::AudioBuffer<float> buf(2, block);
+    juce::MidiBuffer midi;
+    double sum = 0.0;
+    int done = 0;
+    while (done < samples) {
+        buf.clear();
+        midi.clear();
+        p.processBlock(buf, midi);
+        for (int i = 0; i < block; ++i) {
+            const double v = buf.getReadPointer(0)[i];
+            sum += v * v;
+        }
+        done += block;
+    }
+    return std::sqrt(sum / juce::jmax(1, done));
+}
+
+/** @brief A mouse click on a component that has no peer, as the editor's own would arrive. */
+void clickAt(juce::Component& c, int x, int y)
+{
+    const juce::Point<float> at(static_cast<float>(x), static_cast<float>(y));
+    const juce::MouseEvent e(juce::Desktop::getInstance().getMainMouseSource(), at,
+                             juce::ModifierKeys::leftButtonModifier, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                             &c, &c, juce::Time::getCurrentTime(), at, juce::Time::getCurrentTime(), 1, false);
+    c.mouseDown(e);
+}
+
+/** @brief A sixty-minute set as the editor copies it out of the published plans. */
+ArrangeDisplay::Snapshot bigSet()
+{
+    static const SectionType kinds[] = { SectionType::Intro, SectionType::Groove, SectionType::Build,
+                                         SectionType::Pdb,   SectionType::Drop,   SectionType::Cut,
+                                         SectionType::Break, SectionType::Build,  SectionType::Drop,
+                                         SectionType::Outro };
+    ArrangeDisplay::Snapshot s;
+    int bar = 0;
+    for (int t = 0; t < 9; ++t) {
+        ArrangeDisplay::Trk trk;
+        trk.index = t;
+        trk.firstBar = bar;
+        trk.bars = 256;
+        trk.key = (t * 7) % 12;
+        trk.bpm = 139.5 + 0.5 * t;
+        int in = 0;
+        for (int i = 0; i < 11; ++i) {
+            ArrangeDisplay::Sec sec;
+            sec.index = i;
+            sec.bar = bar + in;
+            sec.bars = i == 10 ? 256 - in : (i % 3 == 0 ? 16 : 32);
+            if (sec.bars <= 0) break;
+            sec.type = kinds[i % 10];
+            sec.energy = 0.3f + 0.06f * (i % 8);
+            sec.energyTo = sec.energy + 0.05f;
+            trk.sections.push_back(sec);
+            in += sec.bars;
+            if (in >= 256) break;
+        }
+        bar += trk.bars;
+        s.tracks.push_back(std::move(trk));
+    }
+    s.bars = bar;
+    s.minutes = 60;
+    return s;
 }
 
 } // namespace
@@ -478,6 +564,194 @@ int main()
         }
         editor.reset();
         check(true, "the editor closes");
+    }
+
+    // ---------------------------------------------------------------- the arrange timeline
+    {
+        // Nine tracks, 2304 bars, ninety-nine sections: the sixty-minute set of PLAN 8.1. The point
+        // of the measurement is the difference between the two numbers below. Drawing the set costs
+        // what it costs; a tick must not cost that, because the editor ticks twelve times a second
+        // and the only thing that changes between two ticks is the play head.
+        ArrangeDisplay view;
+        ArrangeDisplay::Snapshot snap = bigSet();
+        int sections = 0;
+        for (const auto& t : snap.tracks) sections += static_cast<int>(t.sections.size());
+        view.setSize(1216, 420);
+        const auto r0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 20; ++i) view.setSnapshot(snap);
+        const double redraw = std::chrono::duration<double>(std::chrono::steady_clock::now() - r0).count() / 20.0;
+
+        juce::Image img(juce::Image::ARGB, view.getWidth(), view.getHeight(), true);
+        int moved = 0;
+        const auto p0 = std::chrono::steady_clock::now();
+        const int frames = 120;
+        for (int i = 0; i < frames; ++i) {
+            moved += view.setPosition(i * 4.0 * kBeatsPerBar / 3.0) ? 1 : 0;
+            juce::Graphics g(img);
+            view.paintEntireComponent(g, true);
+        }
+        const double tick = std::chrono::duration<double>(std::chrono::steady_clock::now() - p0).count() / frames;
+        std::printf("arrange: %d tracks, %d bars, %d sections -- full redraw %.2f ms, a tick %.3f ms\n",
+                    static_cast<int>(snap.tracks.size()), snap.bars, sections, redraw * 1000.0, tick * 1000.0);
+        check(sections >= 90, "the timeline holds a whole night (" + juce::String(sections) + " sections)");
+        check(tick < 0.004, "a tick of the timeline costs under 4 ms (" + juce::String(tick * 1000.0, 3) + " ms)");
+        check(tick < redraw, "and less than drawing the set again (" + juce::String(redraw * 1000.0, 2) + " ms)");
+        check(moved > frames / 2, "the play head reports when it has moved far enough to repaint");
+
+        // What a click means, at every height of the view: the rows are reachable, and so are the
+        // two small buttons on each of them.
+        int seeks = 0, lastBar = -1;
+        juce::SortedSet<int> tracksReached, locksReached, sectionLocks, sectionRolls;
+        view.onSeek = [&](int bar) { ++seeks; lastBar = bar; tracksReached.add(bar / 256); };
+        view.onLock = [&](LockUnit unit, int index, bool) {
+            if (unit == LockUnit::Track) locksReached.add(index);
+            else sectionLocks.add(index);
+        };
+        view.onReroll = [&](LockUnit unit, int index) { if (unit == LockUnit::Section) sectionRolls.add(index); };
+        for (int y = 0; y < view.getHeight(); ++y) {
+            clickAt(view, view.getWidth() - 20, y);   // the end of a row: its last section
+            clickAt(view, 156, y);                    // the track's own lock, at the end of its name
+            clickAt(view, 190, y);                    // the lock of the row's first section
+            clickAt(view, 190 + 130, y);              // and a reroll somewhere along it
+        }
+        check(seeks > 0 && lastBar >= 0, "clicking the timeline asks for a jump");
+        check(tracksReached.size() >= 9, "every track can be reached by clicking (" + juce::String(tracksReached.size()) + ")");
+        check(locksReached.size() >= 9, "every track has its own lock (" + juce::String(locksReached.size()) + ")");
+        check(sectionLocks.size() >= 9 && sectionRolls.size() >= 1,
+              "sections carry a lock and a reroll of their own (" + juce::String(sectionLocks.size()) + " locks, "
+                  + juce::String(sectionRolls.size()) + " rerolls)");
+    }
+
+    // ---------------------------------------------------------------- locks and rerolls
+    {
+        // The curation loop of PLAN 6.8 as the editor drives it: the editor pushes a command, the
+        // composer thread carries it out, and the published plans come back changed -- the rerolled
+        // track and nothing else.
+        const double sr = 48000.0;
+        const int block = 512;
+        auto p = std::make_unique<PhospheneProcessor>();
+        p->setFollowHost(false);
+        p->setPlayConfigDetails(0, 2, sr, block);
+        p->prepareToPlay(sr, block);
+        p->play();
+        juce::AudioBuffer<float> buf(2, block);
+        check(waitForPlans(*p, buf, 2, 60.0), "the composer publishes the plans the editor draws");
+        TrackPlan first0, first1;
+        p->tryReadTrack(0, first0);
+        p->tryReadTrack(1, first1);
+
+        p->setLock(LockUnit::Track, 0, true);
+        check(p->isLocked(LockUnit::Track, 0), "a lock shows at once, without waiting for the composer");
+        p->reroll(LockUnit::Track, 1);
+        check(p->variation(LockUnit::Track, 1) == 1, "a reroll counts up");
+        p->reroll(LockUnit::Track, 0);
+        check(p->variation(LockUnit::Track, 0) == 0, "and a locked unit refuses to be rerolled");
+
+        // Wait for the composer to publish the plans again.
+        const auto t0 = std::chrono::steady_clock::now();
+        TrackPlan now0, now1;
+        bool changed = false;
+        while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 90.0) {
+            feed(*p, buf, 1);
+            if (p->tryReadTrack(1, now1) && now1.melodySeed != first1.melodySeed) { changed = true; break; }
+            std::this_thread::sleep_for(std::chrono::milliseconds(4));
+        }
+        check(changed, "rerolling a track reaches the composer and changes that track");
+        check(p->tryReadTrack(0, now0) && now0.melodySeed == first0.melodySeed && now0.formSeed == first0.formSeed
+                  && now0.percSeed == first0.percSeed && now0.bpm == first0.bpm,
+              "and leaves the track before it exactly as it was");
+        p->stop();
+    }
+
+    // ---------------------------------------------------------------- the perform macros
+    {
+        const double sr = 48000.0;
+        const int block = 256;
+        const int bar = static_cast<int>(kBeatsPerBar * 60.0 / 145.0 * sr / block) * block;
+        auto p = std::make_unique<PhospheneProcessor>();
+        p->setFollowHost(false);
+        p->setNonRealtime(true);
+        p->setPlayConfigDetails(0, 2, sr, block);
+        p->prepareToPlay(sr, block);
+        p->play();
+        juce::AudioBuffer<float> warm(2, block);
+        feed(*p, warm, 12);
+        // Past the sparse intro the form grammar writes: there is nothing to take away in bar 1.
+        while (p->transport().bar < 24) feed(*p, warm, 1);
+
+        ParamStore& store = p->params();
+        const int cutoffId = store.base(Module::Acid) + acid::Cutoff;
+        const int gateId = store.base(Module::Poly, static_cast<int>(PolyInstance::Lead)) + poly::Gate;
+        const int depthId = store.base(Module::Poly, static_cast<int>(PolyInstance::Lead)) + poly::GateDepth;
+        const int kickMuteId = store.base(Module::Mix) + mix::KickMute;
+        const float cutoffWas = store.get(cutoffId), gateWas = store.get(gateId), depthWas = store.get(depthId);
+
+        // Filter Sweep: one gesture, three filters, and the knobs come back to the value they had.
+        p->setMacro(Macro::FilterSweep, 1.0f);
+        const float cutoffUp = store.get(cutoffId);
+        p->setMacro(Macro::FilterSweep, -1.0f);
+        const float cutoffDown = store.get(cutoffId);
+        p->setMacro(Macro::FilterSweep, 0.0f);
+        std::printf("filter sweep: acid cutoff %.0f .. %.0f .. %.0f Hz, back to %.0f\n",
+                    cutoffDown, cutoffWas, cutoffUp, store.get(cutoffId));
+        check(cutoffUp > cutoffWas * 1.2f && cutoffDown < cutoffWas * 0.9f,
+              "the filter sweep opens and closes the acid cutoff (" + juce::String(cutoffDown, 0) + " .. "
+                  + juce::String(cutoffWas, 0) + " .. " + juce::String(cutoffUp, 0) + " Hz)");
+        check(store.get(cutoffId) == cutoffWas, "and letting go puts the knob back exactly");
+
+        // Stutter: held, and it takes the gate with it.
+        p->setMacro(Macro::Stutter, 1.0f);
+        check(store.get(gateId) >= 0.5f && store.get(depthId) >= 0.99f, "stutter switches the gate on at full depth");
+        p->setMacro(Macro::Stutter, 0.0f);
+        check(store.get(gateId) == gateWas && store.get(depthId) == depthWas, "and gives the gate back");
+
+        // Drop-out: measured, not asserted. One bar with the low end, one without.
+        const double loud = renderRms(*p, block, bar);
+        p->setMacro(Macro::DropOut, 1.0f);
+        check(store.get(kickMuteId) >= 0.5f, "a drop-out takes the kick out");
+        const double gone = renderRms(*p, block, bar);
+        const double drop = 20.0 * std::log10(juce::jmax(1.0e-9, gone) / juce::jmax(1.0e-9, loud));
+        std::printf("drop-out: one bar %.1f dB quieter (%.4f -> %.4f rms)\n", drop, loud, gone);
+        check(drop < -2.5, "and the bar really is quieter for it (" + juce::String(drop, 1) + " dB)");
+        // It lets go on the bar line by itself: the macro tick is what a message loop would run.
+        p->serviceMacros();
+        check(store.get(kickMuteId) == 0.0f, "and it lets go on the next bar line without being asked");
+        check(p->macroValue(Macro::DropOut) == 0.0f, "the macro reports that it has let go");
+    }
+
+    // ---------------------------------------------------------------- a set through the editor
+    {
+        // Export and import go through the core's own `.phosset` (SetFile.h), so what the plugin
+        // writes phos_render plays -- locks and rerolls included.
+        auto p = std::make_unique<PhospheneProcessor>();
+        p->setSeed(20260916);
+        ParamStore& store = p->params();
+        const int bpmId = store.base(Module::Compose) + compose::Bpm;
+        store.set(bpmId, 139.0f);
+        p->setLock(LockUnit::Track, 2, true);
+        p->reroll(LockUnit::Track, 3);
+        const juce::File file = juce::File::createTempFile("phosset");
+        bool wrote = false;
+        const auto t0 = std::chrono::steady_clock::now();
+        while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 60.0) {
+            // The composer applies the commands on its own turn; the file is written from the
+            // composer's own state, so it is asked again until the commands have landed.
+            wrote = p->exportSet(file);
+            if (wrote && file.loadFileAsString().contains("lock.track.2=1")) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        const juce::String text = file.loadFileAsString();
+        check(wrote && text.startsWith("phosset "), "Export set writes the core's own .phosset");
+        check(text.contains("lock.track.2=1") && text.contains("reroll.track.3=1"),
+              "with the locks and rerolls the curation made");
+
+        auto q = std::make_unique<PhospheneProcessor>();
+        const bool read = q->importSet(file);
+        check(read && q->seed() == 20260916, "Load set reads the seed back");
+        check(q->params().get(q->params().base(Module::Compose) + compose::Bpm) == 139.0f, "and the knobs");
+        check(q->isLocked(LockUnit::Track, 2) && q->variation(LockUnit::Track, 3) == 1,
+              "and the locks, in the editor's own mirror");
+        file.deleteFile();
     }
 
     // ---------------------------------------------------------------- what it costs

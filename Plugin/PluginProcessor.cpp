@@ -5,6 +5,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "phos/Clock.h"
+#include "phos/SetFile.h"
 #include <chrono>
 #include <cmath>
 
@@ -55,6 +56,20 @@ juce::String formatValue(const ParamDesc& d, float v)
 }
 
 } // namespace
+
+const char* const kMacroNames[kNumMacros] = { "Filter Sweep", "Gate Depth", "Drop-out", "Stutter" };
+const char* const kMacroHelp[kNumMacros] = {
+    "Opens or closes the acid, lead and arp filters together, by up to a third of their range in "
+    "each direction. Centre is neutral.",
+    "Switches the trance gate on for lead, arp and pad and sets its depth; at 1.0 the gate closes "
+    "completely between its steps.",
+    "Takes kick and bass out until the next bar line and lets them back in on the downbeat. One "
+    "press, one bar.",
+    "Held: lead, arp and pad run through the gate on sixteenths at full depth and the shortest "
+    "duty. Phosphene has no buffer repeat, so this is the gate's stutter, not a tape one.",
+};
+
+bool macroIsMomentary(Macro m) { return m == Macro::DropOut || m == Macro::Stutter; }
 
 // ==================================================================== StoreParameter
 
@@ -171,7 +186,8 @@ void PlugConductor::tempoControls(const ParamStore& params, int bar, std::vector
     }
 }
 
-void PlugConductor::seek(const ParamStore& params, int startBar, double beatOffset, bool writeTempo)
+void PlugConductor::seek(const ParamStore& params, int startBar, double beatOffset, bool writeTempo,
+                         std::mutex& engineLock)
 {
     nextBar_ = juce::jmax(0, startBar);
     beatOffset_ = beatOffset;
@@ -201,7 +217,10 @@ void PlugConductor::seek(const ParamStore& params, int startBar, double beatOffs
         immediate.push_back(e);
     }
     // Last value wins, and it arrives at once: a ramp that was in flight lands where it was
-    // heading, which is the state the following bars are written against.
+    // heading, which is the state the following bars are written against. Under the engine lock,
+    // because that lock is what makes the control ring a single-producer queue: everything that
+    // ever pushes into it -- this, the pump, nothing else -- holds the lock while it does.
+    const std::lock_guard<std::mutex> lock(engineLock);
     for (ControlEvent& e : immediate) {
         e.beat = 0.0;
         e.length = 0.0f;
@@ -291,7 +310,8 @@ PhospheneProcessor::PhospheneProcessor()
     // every automated run -- tests, the screenshot export -- is that nothing makes a sound.
     forceMute_ = juce::SystemStats::getEnvironmentVariable("PHOS_MUTE", "").isNotEmpty()
               || juce::SystemStats::getEnvironmentVariable("PHOS_SHOT", "").isNotEmpty()
-              || juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_ALL", "").isNotEmpty();
+              || juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_ALL", "").isNotEmpty()
+              || juce::SystemStats::getEnvironmentVariable("PHOS_MANUAL", "").isNotEmpty();
     mute_.store(forceMute_);
     trace_ = juce::SystemStats::getEnvironmentVariable("PHOS_TRACE", "").isNotEmpty();
     gTrace = trace_;
@@ -301,7 +321,7 @@ PhospheneProcessor::PhospheneProcessor()
 
     composerRun_.store(true);
     composerThread_ = std::thread([this] { composerLoop(); });
-    startTimer(250);
+    startTimer(33);
 }
 
 PhospheneProcessor::~PhospheneProcessor()
@@ -354,6 +374,10 @@ void PhospheneProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
 void PhospheneProcessor::timerCallback()
 {
+    // The fast job is the macros: a drop-out has to let go on the bar line, and 33 ms is a
+    // sixty-fourth note at 145 BPM. Everything else here is housekeeping and runs every eighth tick.
+    serviceMacros();
+    if (++macroTicks_ % 8 != 0) return;
     const int latency = engine_->latencySamples();
     if (latency != getLatencySamples()) setLatencySamples(latency);
     // The composer's own knobs decide how the set is planned, and the composer throws its cached
@@ -389,9 +413,33 @@ void PhospheneProcessor::composerLoop()
     }
 }
 
+bool PhospheneProcessor::drainCuration()
+{
+    CurationCommand c;
+    bool any = false;
+    while (curation_.pop(c)) {
+        const LockUnit unit = static_cast<LockUnit>(juce::jlimit(0, kNumLockUnits - 1, static_cast<int>(c.unit)));
+        switch (c.op) {
+        case 0: composer_->setLock(unit, c.index, false); break;
+        case 1: composer_->setLock(unit, c.index, true); break;
+        case 2: composer_->reroll(unit, c.index); break;
+        default: composer_->clearLocks(); break;
+        }
+        any = true;
+    }
+    if (!any) return false;
+    // Every cached plan is gone (Composer::setLock clears them), so the editor's published copy has
+    // to be built again, and the bars already in the rings were composed under the old decisions:
+    // the transport restarts at the bar the editor marked when the button was pressed.
+    plansStale_.store(true, std::memory_order_release);
+    restartRequest_.store(true, std::memory_order_release);
+    return true;
+}
+
 void PhospheneProcessor::serviceComposer(bool warmUp)
 {
     const std::lock_guard<std::mutex> lock(composeLock_);
+    drainCuration();
     const int want = genWanted_.load(std::memory_order_acquire);
     if (trace_ && want != genLocal_)
         std::fprintf(stderr, "[phos composer] generation %d wanted, was %d, engine reset for %d\n",
@@ -408,7 +456,7 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
             const std::lock_guard<std::mutex> eng(engineLock_);
             engine_->clearTempoMap();
         }
-        conductor_->seek(params(), bar, offset, ownClock);
+        conductor_->seek(params(), bar, offset, ownClock, engineLock_);
         genLocal_ = want;
         genAck_.store(want, std::memory_order_release);
         return;
@@ -497,6 +545,191 @@ bool PhospheneProcessor::tryReadTrack(int index, TrackPlan& out) const
     return true;
 }
 
+// ------------------------------------------------------------------ curation (PLAN 6.8)
+
+void PhospheneProcessor::markCurrentPosition()
+{
+    // Where the music is now, so that the restart a curation command triggers lands here again
+    // rather than at the top of the set. Under a host the drift check corrects it a block later.
+    const int bar = juce::jmax(0, static_cast<int>(musicalBeat_.load(std::memory_order_relaxed) / kBeatsPerBar));
+    pendingBar_.store(bar, std::memory_order_relaxed);
+    pendingOffset_.store(static_cast<double>(bar) * kBeatsPerBar, std::memory_order_relaxed);
+}
+
+void PhospheneProcessor::setLock(LockUnit unit, int index, bool locked)
+{
+    {
+        const std::lock_guard<std::mutex> lock(curationLock_);
+        auto& m = lockMirror_[static_cast<int>(unit)];
+        if (locked) m[index] = 1;
+        else m.erase(index);
+    }
+    // A lock changes no note by itself -- it only decides what a later reroll may move -- so it
+    // does not restart the transport; the mirror is enough for the editor, and the composer picks
+    // the command up on its next turn.
+    curation_.push(CurationCommand{ static_cast<uint8_t>(unit), static_cast<uint8_t>(locked ? 1 : 0), index });
+}
+
+bool PhospheneProcessor::isLocked(LockUnit unit, int index) const
+{
+    const std::lock_guard<std::mutex> lock(curationLock_);
+    const auto& m = lockMirror_[static_cast<int>(unit)];
+    return m.find(index) != m.end();
+}
+
+void PhospheneProcessor::reroll(LockUnit unit, int index)
+{
+    {
+        const std::lock_guard<std::mutex> lock(curationLock_);
+        if (lockMirror_[static_cast<int>(unit)].count(index) != 0) return;   // a locked unit does not move
+        ++variationMirror_[static_cast<int>(unit)][index];
+    }
+    markCurrentPosition();
+    curation_.push(CurationCommand{ static_cast<uint8_t>(unit), 2, index });
+}
+
+uint32_t PhospheneProcessor::variation(LockUnit unit, int index) const
+{
+    const std::lock_guard<std::mutex> lock(curationLock_);
+    const auto& m = variationMirror_[static_cast<int>(unit)];
+    const auto it = m.find(index);
+    return it == m.end() ? 0u : it->second;
+}
+
+void PhospheneProcessor::clearCuration()
+{
+    {
+        const std::lock_guard<std::mutex> lock(curationLock_);
+        for (int u = 0; u < kNumLockUnits; ++u) { lockMirror_[u].clear(); variationMirror_[u].clear(); }
+    }
+    markCurrentPosition();
+    curation_.push(CurationCommand{ 0, 3, 0 });
+}
+
+void PhospheneProcessor::syncCurationMirror()
+{
+    // After a .phosset has been read the composer holds locks the editor has never seen.
+    const std::lock_guard<std::mutex> lock(curationLock_);
+    for (int u = 0; u < kNumLockUnits; ++u) {
+        lockMirror_[u] = composer_->locks(static_cast<LockUnit>(u));
+        variationMirror_[u] = composer_->variations(static_cast<LockUnit>(u));
+    }
+}
+
+// ------------------------------------------------------------------ perform macros
+
+int PhospheneProcessor::macroTargets(Macro m, float value, MacroTarget* out) const
+{
+    const ParamStore& p = params();
+    const int acidBase = p.base(Module::Acid);
+    const int lead = p.base(Module::Poly, static_cast<int>(PolyInstance::Lead));
+    const int arp = p.base(Module::Poly, static_cast<int>(PolyInstance::Arp));
+    const int pad = p.base(Module::Poly, static_cast<int>(PolyInstance::Pad));
+    const int mixBase = p.base(Module::Mix);
+    int n = 0;
+    auto add = [&](int id, float v, bool absolute) {
+        if (id >= 0 && n < kMaxMacroTargets) out[n++] = MacroTarget{ id, v, absolute };
+    };
+    if (value == 0.0f) return 0;   // neutral: the macro wants nothing, and its knobs go back
+    switch (m) {
+    case Macro::FilterSweep: {
+        // A third of the normalised range each way. The three melodic filters move together,
+        // which is what makes it one gesture instead of three knobs.
+        const float d = juce::jlimit(-1.0f, 1.0f, value) * 0.35f;
+        add(acidBase + acid::Cutoff, d, false);
+        add(lead + poly::Cutoff, d, false);
+        add(arp + poly::Cutoff, d, false);
+        break;
+    }
+    case Macro::GateDepth: {
+        const float v = juce::jlimit(0.0f, 1.0f, value);
+        for (int base : { lead, arp, pad }) {
+            add(base + poly::Gate, 1.0f, true);
+            add(base + poly::GateDepth, v, true);
+        }
+        break;
+    }
+    case Macro::DropOut:
+        add(mixBase + mix::KickMute, 1.0f, true);
+        add(mixBase + mix::BassMute, 1.0f, true);
+        break;
+    case Macro::Stutter:
+        for (int base : { lead, arp, pad }) {
+            add(base + poly::Gate, 1.0f, true);
+            add(base + poly::GatePattern, 0.0f, true);   // Sixteenths
+            add(base + poly::GateDepth, 1.0f, true);
+            add(base + poly::GateDuty, 0.0f, true);      // the shortest opening the knob allows
+        }
+        break;
+    default: break;
+    }
+    return n;
+}
+
+void PhospheneProcessor::setMacro(Macro m, float value)
+{
+    const int i = static_cast<int>(m);
+    if (i < 0 || i >= kNumMacros) return;
+    macro_[i].value = juce::jlimit(m == Macro::FilterSweep ? -1.0f : 0.0f, 1.0f, value);
+    // A drop-out is one press and one bar: it lets go on the next bar line, wherever the press
+    // fell. The release is a message-thread job, so it lands within a tick of the downbeat.
+    if (m == Macro::DropOut && macro_[i].value > 0.0f) {
+        const double beat = musicalBeat_.load(std::memory_order_relaxed);
+        macro_[i].releaseBeat = (std::floor(beat / kBeatsPerBar) + 1.0) * kBeatsPerBar;
+    } else if (macro_[i].value == 0.0f) {
+        macro_[i].releaseBeat = -1.0;
+    }
+    serviceMacros();
+}
+
+void PhospheneProcessor::serviceMacros()
+{
+    const double beat = musicalBeat_.load(std::memory_order_relaxed);
+    const bool playing = playRequest_.load(std::memory_order_relaxed) || hostSyncNow_.load(std::memory_order_relaxed);
+    for (MacroState& s : macro_) {
+        if (s.releaseBeat < 0.0) continue;
+        // A transport that is not running has no bar line to wait for.
+        if (beat >= s.releaseBeat || !playing) { s.value = 0.0f; s.releaseBeat = -1.0; }
+    }
+
+    // What the macros want, summed: two macros may ask for the same knob (gate depth and stutter
+    // both do), and the stronger wish wins rather than the later one.
+    MacroTarget want[kNumMacros * kMaxMacroTargets];
+    int n = 0;
+    for (int i = 0; i < kNumMacros; ++i) {
+        MacroTarget t[kMaxMacroTargets];
+        const int c = macroTargets(static_cast<Macro>(i), macro_[static_cast<size_t>(i)].value, t);
+        for (int k = 0; k < c; ++k) {
+            int found = -1;
+            for (int j = 0; j < n; ++j) if (want[j].param == t[k].param) { found = j; break; }
+            if (found < 0) { want[n++] = t[k]; continue; }
+            if (t[k].absolute && want[found].absolute) want[found].value = juce::jmax(want[found].value, t[k].value);
+            else if (t[k].absolute) want[found] = t[k];
+            else want[found].value += t[k].value;
+        }
+    }
+
+    ParamStore& p = params();
+    for (int i = 0; i < n; ++i) {
+        const int id = want[i].param;
+        // The value is remembered as the store keeps it, not as a normalised position: putting a
+        // knob back must be exact, and a round trip through a logarithmic mapping is not.
+        const auto it = macroBase_.find(id);
+        const float base = it != macroBase_.end() ? it->second : (macroBase_[id] = p.get(id));
+        const float target = juce::jlimit(0.0f, 1.0f, want[i].absolute ? want[i].value
+                                                                       : p.toNormalised(id, base) + want[i].value);
+        p.setNormalised(id, target);
+    }
+    // Everything no macro wants any more goes back to the value it had before any macro touched it.
+    for (auto it = macroBase_.begin(); it != macroBase_.end();) {
+        bool wanted = false;
+        for (int i = 0; i < n; ++i) if (want[i].param == it->first) { wanted = true; break; }
+        if (wanted) { ++it; continue; }
+        p.set(it->first, it->second);
+        it = macroBase_.erase(it);
+    }
+}
+
 TransportView PhospheneProcessor::transport() const
 {
     TransportView v;
@@ -506,6 +739,13 @@ TransportView PhospheneProcessor::transport() const
     v.bpm = bpmNow_.load(std::memory_order_relaxed);
     v.bar = static_cast<int>(v.musicalBeat / kBeatsPerBar);
     v.restarting = genPrimed_.load(std::memory_order_relaxed) != genWanted_.load(std::memory_order_relaxed);
+    // Which track that bar belongs to, from the published plans rather than from the composer: the
+    // editor asks for this at every tick and must never wait behind a probe render.
+    {
+        const std::lock_guard<std::mutex> lock(plansLock_);
+        for (const TrackPlan& p : plans_)
+            if (v.bar >= p.firstBar && v.bar < p.firstBar + p.bars) { v.track = p.index; v.barInTrack = v.bar - p.firstBar; break; }
+    }
     return v;
 }
 
@@ -741,22 +981,27 @@ bool PhospheneProcessor::exportMidi(const juce::File& file, int bars)
 
 bool PhospheneProcessor::exportSet(const juce::File& file)
 {
-    juce::String text;
-    text << "# Phosphene set\n";
-    text << "# seed=" << juce::String(seed_.load()) << "\n";
-    text << juce::String(params().toText(false));
-    return file.replaceWithText(text);
+    // The core's own `.phosset` writer (SetFile.h), not a private format: seed, style, arc, the
+    // knobs that differ from their defaults and -- since the curation loop exists in the editor --
+    // every lock and every reroll counter. What this writes, `phos_render --set-file` plays.
+    const std::lock_guard<std::mutex> lock(composeLock_);
+    return writeSetFile(file.getFullPathName().toRawUTF8(), *composer_, params());
 }
 
 bool PhospheneProcessor::importSet(const juce::File& file)
 {
-    const juce::String text = file.loadFileAsString();
-    if (text.isEmpty()) return false;
-    uint64_t s = seed_.load();
-    for (const auto& line : juce::StringArray::fromLines(text))
-        if (line.trim().startsWithIgnoreCase("# seed=")) s = static_cast<uint64_t>(line.fromFirstOccurrenceOf("=", false, false).getLargeIntValue());
-    const bool ok = params().parseText(text.toStdString());
-    setSeed(juce::jmax<uint64_t>(1, s));
+    bool ok = false;
+    {
+        // Blocks on the composer, which a user action with a file dialog in front of it may do.
+        const std::lock_guard<std::mutex> lock(composeLock_);
+        std::string error;
+        ok = readSetFile(file.getFullPathName().toRawUTF8(), *composer_, params(), &error);
+        if (!ok && !error.empty()) juce::Logger::writeToLog("phosset: " + juce::String(error));
+        seed_.store(composer_->seed(), std::memory_order_relaxed);
+    }
+    syncCurationMirror();
+    plansStale_.store(true, std::memory_order_release);
+    seekToBar(0);
     return ok;
 }
 

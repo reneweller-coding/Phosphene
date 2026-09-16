@@ -247,7 +247,21 @@ int main(int argc, char** argv)
         check(instance->hasEditor(), "the wrapper offers an editor");
         std::unique_ptr<juce::AudioProcessorEditor> editor(instance->createEditorAndMakeActive());
         check(editor != nullptr, "the editor opens through the wrapper");
-        if (editor != nullptr) check(editor->getWidth() > 400, "and has a size");
+        if (editor != nullptr) {
+            check(editor->getWidth() > 400, "and has a size");
+            // A host drags the window's corner, which for this editor is a zoom: the body is laid
+            // out once at design size and scaled, so the shape has to survive the drag.
+            const double ratio = static_cast<double>(editor->getWidth()) / juce::jmax(1, editor->getHeight());
+            editor->setBounds(0, 0, editor->getWidth() * 2 / 3, editor->getHeight() * 2 / 3);
+            const double after = static_cast<double>(editor->getWidth()) / juce::jmax(1, editor->getHeight());
+            check(editor->getWidth() > 200 && std::fabs(after - ratio) < 0.05,
+                  "and keeps its shape when the host resizes it (" + juce::String(ratio, 3) + " -> "
+                      + juce::String(after, 3) + ")");
+            juce::Image img(juce::Image::ARGB, editor->getWidth(), editor->getHeight(), true);
+            juce::Graphics g(img);
+            editor->paintEntireComponent(g, true);
+            check(img.isValid(), "and paints at the size it was given");
+        }
         editor.reset();
     }
     instance->releaseResources();

@@ -266,8 +266,9 @@ void PatternDisplay::paint(juce::Graphics& g)
 
 const juce::StringArray& PhospheneEditor::tabNames()
 {
-    static const juce::StringArray names{ "Set", "Kick", "Bass", "Percussion", "Acid",
-                                          "Lead", "Arp", "Pad", "SFX / FX", "Mixer / Master" };
+    static const juce::StringArray names{ "Set", "Arrange", "Kick", "Bass", "Percussion", "Acid",
+                                          "Lead", "Arp", "Pad", "SFX / FX", "Mixer / Master", "Perform" };
+    jassert(names.size() == TabCount);
     return names;
 }
 
@@ -331,14 +332,14 @@ namespace {
 Part partOfTab(int tab)
 {
     switch (tab) {
-    case 1: return Part::Kick;
-    case 2: return Part::Bass;
-    case 3: return Part::Perc;
-    case 4: return Part::Acid;
-    case 5: return Part::Lead;
-    case 6: return Part::Arp;
-    case 7: return Part::Pad;
-    case 8: return Part::Sfx;
+    case TabKick: return Part::Kick;
+    case TabBass: return Part::Bass;
+    case TabPerc: return Part::Perc;
+    case TabAcid: return Part::Acid;
+    case TabLead: return Part::Lead;
+    case TabArp:  return Part::Arp;
+    case TabPad:  return Part::Pad;
+    case TabFx:   return Part::Sfx;
     default: return Part::Count;
     }
 }
@@ -349,22 +350,24 @@ void PhospheneEditor::buildPages()
     pages_.resize(static_cast<size_t>(tabNames().size()));
     patterns_.assign(static_cast<size_t>(tabNames().size()), nullptr);
     for (int t = 0; t < tabNames().size(); ++t) {
-        if (t == 3) continue;   // percussion: one page per lane, built below
+        if (t == TabPerc) continue;   // percussion: one page per lane, built below
         auto page = std::make_unique<ControlPage>();
         const juce::Colour tint = partColour(t);
         switch (t) {
-        case 0: break;   // the Set page is built in EditorSetTab.cpp, after this loop
-        case 1: addSlices(*page, proc_, Module::Kick, 0, kKickSlices, tint); break;
-        case 2: addSlices(*page, proc_, Module::Bass, 0, kBassSlices, tint); break;
-        case 4: addSlices(*page, proc_, Module::Acid, 0, kAcidSlices, tint); break;
-        case 5: addSlices(*page, proc_, Module::Poly, static_cast<int>(PolyInstance::Lead), kPolySlices, tint); break;
-        case 6: addSlices(*page, proc_, Module::Poly, static_cast<int>(PolyInstance::Arp), kPolySlices, tint); break;
-        case 7: addSlices(*page, proc_, Module::Poly, static_cast<int>(PolyInstance::Pad), kPolySlices, tint); break;
-        case 8:
+        case TabSet: break;       // built in EditorSetTab.cpp, after this loop
+        case TabArrange: break;   // built in EditorArrange.cpp
+        case TabPerform: break;   // built in EditorPerform.cpp
+        case TabKick: addSlices(*page, proc_, Module::Kick, 0, kKickSlices, tint); break;
+        case TabBass: addSlices(*page, proc_, Module::Bass, 0, kBassSlices, tint); break;
+        case TabAcid: addSlices(*page, proc_, Module::Acid, 0, kAcidSlices, tint); break;
+        case TabLead: addSlices(*page, proc_, Module::Poly, static_cast<int>(PolyInstance::Lead), kPolySlices, tint); break;
+        case TabArp:  addSlices(*page, proc_, Module::Poly, static_cast<int>(PolyInstance::Arp), kPolySlices, tint); break;
+        case TabPad:  addSlices(*page, proc_, Module::Poly, static_cast<int>(PolyInstance::Pad), kPolySlices, tint); break;
+        case TabFx:
             page->addModuleGroup(proc_, Module::Sfx, 0, "Effect Generator", tint, 5);
             addSlices(*page, proc_, Module::Fx, 0, kFxSlices, tint);
             break;
-        case 9:
+        case TabMix:
             addSlices(*page, proc_, Module::Mix, 0, kMixSlices, tint);
             addSlices(*page, proc_, Module::Master, 0, kMasterSlices, tint);
             break;
@@ -396,11 +399,13 @@ void PhospheneEditor::buildPages()
         percPages_[static_cast<size_t>(lane)] = std::move(page);
     }
     buildSetPage();
+    buildArrangePage();
+    buildPerformPage();
 }
 
 ControlPage* PhospheneEditor::activePage() const
 {
-    if (tab_ == 3) return percPages_[static_cast<size_t>(juce::jlimit(0, kPercLanes - 1, percLane_))].get();
+    if (tab_ == TabPerc) return percPages_[static_cast<size_t>(juce::jlimit(0, kPercLanes - 1, percLane_))].get();
     return tab_ >= 0 && tab_ < static_cast<int>(pages_.size()) ? pages_[static_cast<size_t>(tab_)].get() : nullptr;
 }
 
@@ -408,10 +413,15 @@ void PhospheneEditor::setTab(int index)
 {
     tab_ = juce::jlimit(0, tabNames().size() - 1, index);
     for (int i = 0; i < tabButtons_.size(); ++i) tabButtons_[i]->setToggleState(i == tab_, juce::dontSendNotification);
-    for (int i = 0; i < laneButtons_.size(); ++i) laneButtons_[i]->setVisible(tab_ == 3);
+    for (int i = 0; i < laneButtons_.size(); ++i) laneButtons_[i]->setVisible(tab_ == TabPerc);
     for (int i = 0; i < laneButtons_.size(); ++i) laneButtons_[i]->setToggleState(i == percLane_, juce::dontSendNotification);
     viewport_.setViewedComponent(activePage(), false);
     layoutContent();
+    // Feed the page that has just opened before it is seen for the first time, so a screenshot of
+    // a tab shows what it has to say rather than an empty frame waiting for the next tick.
+    if (tab_ == TabSet) refreshSetPage();
+    else if (tab_ == TabArrange) { arrangeDirty_ = true; refreshArrangePage(); }
+    else if (tab_ == TabPerform) refreshPerformPage();
     refreshPattern();
     content_.repaint();
 }
@@ -442,7 +452,7 @@ void PhospheneEditor::layoutContent()
     juce::Rectangle<int> tabs = r.removeFromTop(34).reduced(10, 4);
     const int tw = tabs.getWidth() / juce::jmax(1, tabButtons_.size());
     for (auto* b : tabButtons_) b->setBounds(tabs.removeFromLeft(tw).reduced(2, 0));
-    if (tab_ == 3) {
+    if (tab_ == TabPerc) {
         juce::Rectangle<int> lanes = r.removeFromTop(30).reduced(12, 4);
         const int lw = juce::jmin(52, lanes.getWidth() / juce::jmax(1, laneButtons_.size()));
         for (auto* b : laneButtons_) b->setBounds(lanes.removeFromLeft(lw).reduced(2, 0));
@@ -496,7 +506,7 @@ void PhospheneEditor::refreshPattern()
 {
     // Only the roll that is on screen is fed; the others are filled the moment their tab opens,
     // which is also what makes a screenshot of a tab show its pattern without waiting for a tick.
-    PatternDisplay* roll = tab_ == 3 ? percPatterns_[static_cast<size_t>(juce::jlimit(0, kPercLanes - 1, percLane_))]
+    PatternDisplay* roll = tab_ == TabPerc ? percPatterns_[static_cast<size_t>(juce::jlimit(0, kPercLanes - 1, percLane_))]
                                      : (tab_ < static_cast<int>(patterns_.size()) ? patterns_[static_cast<size_t>(tab_)] : nullptr);
     if (roll == nullptr) return;
     const TransportView t = proc_.transport();
@@ -510,7 +520,11 @@ void PhospheneEditor::refreshPattern()
 
 void PhospheneEditor::timerCallback()
 {
-    refreshSetPage();
+    // Only the page that is on screen is fed. The arrange timeline in particular draws a whole set,
+    // and a set that is not being looked at costs nothing at all this way.
+    if (tab_ == TabSet) refreshSetPage();
+    else if (tab_ == TabArrange) refreshArrangePage();
+    else if (tab_ == TabPerform) refreshPerformPage();
     refreshPattern();
     content_.repaint(0, 0, designW_, 64);
 }
@@ -526,6 +540,133 @@ bool PhospheneEditor::writeScreenshot(const juce::File& file)
     if (out == nullptr) return false;
     juce::PNGImageFormat png;
     return png.writeImageToStream(img, *out);
+}
+
+namespace {
+/** @brief The file name a tab's picture gets, from the tab's own name. */
+juce::String shotName(int index)
+{
+    return "tab-" + juce::String(index) + "-"
+         + PhospheneEditor::tabNames()[index].toLowerCase().replace(" / ", "-").replace(" ", "-") + ".png";
+}
+/** @brief The name of a curve, for the manual. */
+const char* curveName(Curve c)
+{
+    switch (c) {
+    case Curve::Linear: return "linear";
+    case Curve::Log: return "log";
+    case Curve::Int: return "int";
+    case Curve::Choice: return "choice";
+    default: return "toggle";
+    }
+}
+} // namespace
+
+bool PhospheneEditor::writeManual(const juce::File& dir)
+{
+    if (!dir.createDirectory()) return false;
+    const ParamStore& p = proc_.params();
+
+    // ---------------------------------------------------------------- the pictures
+    for (int i = 0; i < tabNames().size(); ++i) {
+        setTab(i);
+        setSize(designW_, designH_);
+        if (!writeScreenshot(dir.getChildFile(shotName(i)))) return false;
+    }
+
+    // ---------------------------------------------------------------- every parameter
+    juce::Array<juce::var> params;
+    for (int i = 0; i < p.count(); ++i) {
+        const ParamDesc& d = p.desc(i);
+        auto* o = new juce::DynamicObject();
+        const juce::String key(p.key(i));
+        o->setProperty("key", key);
+        o->setProperty("module", key.upToFirstOccurrenceOf(".", false, false));
+        o->setProperty("name", juce::String(d.name));
+        o->setProperty("unit", juce::String(d.unit));
+        o->setProperty("min", d.minValue);
+        o->setProperty("max", d.maxValue);
+        o->setProperty("default", p.defaultValue(i));
+        o->setProperty("curve", juce::String(curveName(d.curve)));
+        if (d.curve == Curve::Choice && d.choices != nullptr) {
+            juce::Array<juce::var> choices;
+            for (int c = 0; c <= static_cast<int>(d.maxValue); ++c) choices.add(juce::String(d.choices[c]));
+            o->setProperty("choices", choices);
+        }
+        params.add(juce::var(o));
+    }
+
+    // ---------------------------------------------------------------- the tabs, as they were built
+    auto groupsOf = [&p](const phosui::ControlPage* page) {
+        juce::Array<juce::var> out;
+        if (page == nullptr) return out;
+        for (int g = 0; g < page->groupCount(); ++g) {
+            auto* o = new juce::DynamicObject();
+            o->setProperty("title", page->groupTitle(g));
+            juce::Array<juce::var> keys;
+            for (int id : page->groupParams(g)) keys.add(juce::String(p.key(id)));
+            o->setProperty("params", keys);
+            out.add(juce::var(o));
+        }
+        return out;
+    };
+    juce::Array<juce::var> tabs;
+    for (int i = 0; i < tabNames().size(); ++i) {
+        auto* o = new juce::DynamicObject();
+        o->setProperty("index", i);
+        o->setProperty("name", tabNames()[i]);
+        o->setProperty("image", shotName(i));
+        // The percussion tab is twelve pages behind one bar; its table is the same twelve times, so
+        // the manual prints lane 1 and says so.
+        o->setProperty("groups", groupsOf(i == TabPerc ? percPages_[0].get() : pages_[static_cast<size_t>(i)].get()));
+        if (i == TabPerc) o->setProperty("lanes", kPercLanes);
+        tabs.add(juce::var(o));
+    }
+
+    // Which parameters are on a page somewhere, all twelve percussion lanes included. The generator
+    // compares this with the full list; what is in neither is a parameter the editor cannot reach.
+    juce::Array<juce::var> shown;
+    juce::StringArray seen;
+    auto collect = [&](const phosui::ControlPage* page) {
+        if (page == nullptr) return;
+        for (int g = 0; g < page->groupCount(); ++g)
+            for (int id : page->groupParams(g)) seen.addIfNotAlreadyThere(juce::String(p.key(id)));
+    };
+    for (auto& page : pages_) collect(page.get());
+    for (auto& page : percPages_) collect(page.get());
+    for (const juce::String& s : seen) shown.add(s);
+
+    // ---------------------------------------------------------------- the macros
+    juce::Array<juce::var> macros;
+    for (int i = 0; i < kNumMacros; ++i) {
+        auto* o = new juce::DynamicObject();
+        o->setProperty("name", juce::String(kMacroNames[i]));
+        o->setProperty("help", juce::String(kMacroHelp[i]));
+        o->setProperty("momentary", macroIsMomentary(static_cast<Macro>(i)));
+        juce::Array<juce::var> moves;
+        PhospheneProcessor::MacroTarget t[PhospheneProcessor::kMaxMacroTargets];
+        const int n = proc_.macroTargets(static_cast<Macro>(i), 1.0f, t);
+        for (int k = 0; k < n; ++k) {
+            auto* m = new juce::DynamicObject();
+            m->setProperty("key", juce::String(p.key(t[k].param)));
+            m->setProperty("value", t[k].value);
+            m->setProperty("absolute", t[k].absolute);
+            moves.add(juce::var(m));
+        }
+        o->setProperty("moves", moves);
+        macros.add(juce::var(o));
+    }
+
+    auto* root = new juce::DynamicObject();
+    root->setProperty("version", juce::String(JucePlugin_VersionString));
+    root->setProperty("name", juce::String(JucePlugin_Name));
+    root->setProperty("designWidth", designW_);
+    root->setProperty("designHeight", designH_);
+    root->setProperty("params", params);
+    root->setProperty("tabs", tabs);
+    root->setProperty("shown", shown);
+    root->setProperty("macros", macros);
+    return dir.getChildFile("manual.json").replaceWithText(juce::JSON::toString(juce::var(root), false));
 }
 
 void PhospheneEditor::runScreenshotMode()
@@ -547,14 +688,19 @@ void PhospheneEditor::runScreenshotMode()
     }
     const juce::String one = juce::SystemStats::getEnvironmentVariable("PHOS_SHOT", "");
     const juce::String all = juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_ALL", "");
-    if (one.isEmpty() && all.isEmpty()) return;
+    const juce::String man = juce::SystemStats::getEnvironmentVariable("PHOS_MANUAL", "");
+    if (one.isEmpty() && all.isEmpty() && man.isEmpty()) return;
     // At design size: the pixels of the picture are then the layout's own measurements.
     setSize(designW_, designH_);
     // Playing, and silent: PHOS_SHOT implies PHOS_MUTE, and the pictures are meant to show the
     // meters and the pattern rolls doing something rather than an instrument that has not started.
     proc_.play();
-    // A moment for the composer to plan the first tracks, so the Set tab's list is not "planning...".
-    juce::Timer::callAfterDelay(6000, [safe = juce::Component::SafePointer<PhospheneEditor>(this), one, all] {
+    // A moment for the composer to plan the first tracks, so the Set tab's list is not "planning..."
+    // and the arrange timeline has a set to draw. A track's first plan costs a probe render of about
+    // two seconds, so a picture of a nine-track set needs `PHOS_SHOT_WAIT=25`.
+    const double wait = juce::jlimit(1.0, 600.0, juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_WAIT", "6").getDoubleValue());
+    juce::Timer::callAfterDelay(static_cast<int>(wait * 1000.0),
+                                [safe = juce::Component::SafePointer<PhospheneEditor>(this), one, all, man] {
         if (safe == nullptr) return;
         if (all.isNotEmpty()) {
             const juce::File dir(all);
@@ -562,10 +708,10 @@ void PhospheneEditor::runScreenshotMode()
             for (int i = 0; i < tabNames().size(); ++i) {
                 safe->setTab(i);
                 safe->setSize(safe->designW_, safe->designH_);
-                const juce::String name = tabNames()[i].toLowerCase().replace(" / ", "-").replace(" ", "-");
-                safe->writeScreenshot(dir.getChildFile("tab-" + juce::String(i) + "-" + name + ".png"));
+                safe->writeScreenshot(dir.getChildFile(shotName(i)));
             }
         }
+        if (man.isNotEmpty()) safe->writeManual(juce::File(man));
         if (one.isNotEmpty()) safe->writeScreenshot(juce::File(one));
         juce::JUCEApplicationBase::quit();
     });

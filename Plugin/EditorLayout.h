@@ -98,6 +98,17 @@ public:
     /** @brief The narrowest width that still lets the widest group fit. */
     int minimumWidth() const;
 
+    /** @name What the page ended up holding
+     *  The manual generator reads this back: a page is asked which groups it built and which
+     *  parameters went into them, so the manual is the layout rather than a description of it, and
+     *  a parameter that no group claimed shows up as a hole.
+     *  @{ */
+    int groupCount() const { return static_cast<int>(groups_.size()); }   ///< number of groups
+    const juce::String& groupTitle(int index) const { return groups_[static_cast<size_t>(index)].title; }
+    /** @brief The global parameter ids of a group, in the order they are drawn (-1 cells left out). */
+    std::vector<int> groupParams(int index) const;
+    /** @} */
+
     void resized() override;
     void paint(juce::Graphics&) override;
 
