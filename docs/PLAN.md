@@ -595,6 +595,70 @@ und ist raus, `selftest.cpp::engineSwitches` steht jetzt im Detailtext seiner Pr
 Gesamt danach: 155 Selbsttest-Prüfungen, Vektortests weiterhin 9 von 9 in AVX2, NEON-Shim und skalar,
 alle Lanes bitgleich; die Blockgrößen-Prüfungen (1 / 64 / 1000 / 4096) unverändert grün.
 
+**16.09.2026, Phase 6: JUCE-Plugin (VST3 + Standalone) mit Oberfläche.** Gebaut in `Plugin/`
+(JUCE 9.0.1 über FetchContent, Option `PHOS_BUILD_PLUGIN`, Standardwert an; der Werkzeug-Bau läuft
+unverändert ohne). Gemessen auf dem i9-12900K, 48 kHz, Block 256:
+
+| Baustein | Umsetzung | Prüfung |
+|---|---|---|
+| Host-Parameter | `StoreParameter` je Eintrag der Deskriptor-Tabellen: `RangedAudioParameter` mit dem `ParamStore` als einziger Wertablage (`toNormalised`/`fromNormalised`, Choice-Namen, Schrittzahl aus der Kurve). Kein zweiter Wert, der driften könnte. | 610 Parameter, alle Ids eindeutig, jeder Default im Bereich, jeder diskrete Parameter liest seinen eigenen Text zurück |
+| Oberfläche | Zehn Tabs (Set, Kick, Bass, Percussion mit zwölf Lanes hinter einer Lane-Leiste, Acid, Lead, Arp, Pad, SFX/FX, Mixer/Master). Jede Seite ist eine `ControlPage`, die Tabellenausschnitte bekommt und sich selbst vermisst: Zellen fließen in Gruppen, Gruppen in die Seite, Name unter dem Knopf, Wert im Ring. Keine Koordinate im Code. | Alle zehn Tabs legen sich aus und zeichnen (Host-Test); `docs/screenshots/tab-*.png` je Tab |
+| Muster-Vorschau | Jede Erzeuger-Seite endet mit den Noten, die sie formt (PLAN 8.1): Percussion als zwölf Lanes mit der gewählten hervorgehoben, alles andere als kleine Piano-Roll mit Akzent, Slide, Velocity und Spielkopf. Gezeichnet werden die Takte, die der Conductor zuletzt komponiert hat — die Partitur, die gleich gespielt wird —, gelesen als Kopie unter einem kurzen Schloss. | Host-Test: die ersten vier Takte enthalten Kick und Kit; in `docs/screenshots` sichtbar |
+| Composer-Thread | Eigener `std::thread` "composer": `PlugConductor::pump` füllt die zwei lock-freien Ringe acht Takte voraus und plant in der freien Zeit die nächsten Tracks für die Liste im Set-Tab. `Engine::process` allokiert nicht und nimmt kein Schloss. | 3 s Live-Betrieb mit echtem Gerät: 562 von 562 Blöcken klingen, längste Lücke 0 ms; Aufnahme 23,3 s, Spitze 0,89, −10,8 dBFS, keine stille 256er-Gruppe |
+| Neustart als Handschlag | Transportstart, Sprung, neuer Seed: drei Schritte zwischen Audio- und Composer-Thread (`genWanted_`/`genAck_`/`genReset_`/`genPrimed_`). Audio gibt solange Stille aus. Offline macht der Audio-Thread die Composer-Schritte selbst. | Host-Test: Blockgrößen 37 bis 2048, Parameterschreiber auf einem zweiten Thread, Sprung mittendrin — alles endlich, kein Absturz |
+| Host-Sync (VST3) | Der Playhead ist die Uhr. `beatOffset` = musikalischer Beat, für den der Engine-Beat 0 steht; ein Sprung setzt die Engine zurück und der Conductor beginnt am Takt der neuen Position (`composeBars` ist je Takt deterministisch). Kleine Uhr-Differenzen verschieben nur den Offset, sie lösen keinen Neustart aus. | Host bei ppq 64 und 132 BPM: Plugin sitzt nach 200 Blöcken auf unter 0,25 Beat genau auf der Hostposition, `compose.bpm` folgt, Stop lässt Stille |
+| Tempo | **Abweichung:** das Plugin benutzt `Engine::setTempoMap` nicht. Eine Tempo-Karte zu bauen plant jeden Track, den sie abdeckt, und ein Trackplan misst seinen Pegel durch einen Probe-Render (rund zwei Sekunden) — eine halbe Stunde Set hieße eine halbe Minute Stille vor dem ersten Ton. Stattdessen schreibt der Conductor das Tempo je Track als Kontrollereignis auf `compose.bpm`, wie jede andere Abweichung vom Knopf auch. Die Rampe zwischen zwei Tracks ist damit eine Raised-Cosine statt einer Geraden. | Bitgleichheit mit `phos_render` über vier Takte (Track 1 spielt exakt den Knopf); Startzeit bis zum ersten Ton 2,1 s statt 11 s |
+| MIDI-Out | Die gespielten Noten gehen als VST3-MIDI hinaus, Kanal je Part nach `midiChannelOf`, Note-Off aus der Notenlänge, 128 gleichzeitig offene Noten; Transportstop beendet jede offene Note. | 10 s Lauf: Note-Ons vorhanden, zu jedem ein Off |
+| Latenz | `Engine::latencySamples()` (Lookahead des Limiters) wird gemeldet und nachgeführt, wenn der Limiter geschaltet wird. | gemeldete Latenz = Engine-Latenz, > 0 |
+| Zustand | `.phosset`-Text aller 610 Werte (`%.9g`, exakt) plus Seed und Host-Sync-Schalter, in XML verpackt. | Zufallszustand raus, Defaults gesetzt, wieder rein: jeder Wert identisch; zweite Instanz liest denselben Zustand; Müll wird ignoriert |
+| Export | „Export MIDI…" schreibt die Partitur der geplanten Takte über `writeMidiFile`, „Export set…"/„Load set…" die Parametertextform. Beides blockiert auf dem Composer, nie umgekehrt. | im Host-Test nicht geprüft (Dateidialog); von Hand ausgelöst |
+| `PHOS_MUTE=1` | Standalone startet stumm und hebt die Stummschaltung nie von selbst auf; der Schalter ist dann gesperrt und die Kopfzeile sagt es. | Screenshot-Läufe sind stumm |
+| `PHOS_SHOT` | `PHOS_SHOT=<datei.png>` zeichnet die Oberfläche in Designgröße in ein PNG und beendet sich (Exit 0), `PHOS_TAB=<n>` wählt den Tab, `PHOS_SHOT_ALL=<ordner>` schreibt alle zehn. Immer `createComponentSnapshot`, nie ein Bildschirmabzug. | `docs/screenshots/` |
+| `PHOS_PLAY` | `PHOS_PLAY=<sekunden>` mit `PHOS_RECORD=<datei.wav>`: spielt, nimmt auf, beendet sich — der Weg, den Live-Pfad ohne Maus zu hören. | 25-s-Aufnahme, siehe oben |
+| Host-Test | `Tests/hosttest.cpp` → `phos_hosttest` (nur mit Plugin gebaut, hängt an der Shared-Code-Bibliothek). Enthält das Orakel: derselbe Seed, eigene Uhr, offline — muss **bitgleich** zu `phos_render` sein. | 74 Prüfungen, 0 Fehler |
+| VST3-Test | `Tests/vst3test.cpp` → `phos_vst3test` lädt das **gebaute VST3 von der Platte**, wie ein DAW es lädt: Modul, Factory, Instanz, Parameterliste, Transport, MIDI-Ausgabe, Zustand, Editor, Abbau. Das ist der Teil von pluginval, der im Repo leben kann. | 28 Prüfungen, 0 Fehler (darunter 44,1 und 96 kHz, Blockwechsel und eine zweite Instanz neben der ersten); `ctest` 6/6 grün (250 s Host-Test, 12 s VST3-Test) |
+| `PHOS_TRACE` | `PHOS_TRACE=1` lässt `processBlock`, den Composer-Thread und den Conductor auf stderr sagen, was sie tun. Der einzige Weg, in ein Plugin zu sehen, das ein Host geladen hat und das schweigt. | hat den Livelock unten gefunden |
+| CPU | 48 kHz, Block 256, ein Kern | Audio-Thread allein (Composer auf eigenem Thread): **5,4 bis 6,1 %** über drei Läufe; offline mit Komponieren auf demselben Thread: 4,6 % (21,9× Echtzeit). Beide Zahlen auf einer Maschine gemessen, auf der drei weitere Agenten bauten |
+
+**Ein Fehler, den erst der VST3-Test gefunden hat — und der in jedem DAW zugeschlagen hätte.** Der
+erste Druck auf Play lässt den Komponisten den ersten Track planen; das dauert zwei Sekunden, und die
+Uhr des Hosts läuft dabei weiter. Der Audio-Thread verglich seine Position mit der des Hosts,
+sah den wachsenden Abstand und forderte **in jedem Block einen neuen Neustart an** — jede Anforderung
+verwarf die Antwort, die gerade fertig wurde. Ergebnis: das Plugin plante endlos und spielte nie.
+Im Standalone war nichts zu sehen, weil dort die eigene Uhr erst mit dem Ton losläuft. Behoben: solange
+ein Neustart unterwegs ist, wird kein zweiter angefordert (`restarting` in `processBlock`); nach dem
+Neustart holt die nächste Abstandsprüfung nach, was der Host inzwischen weitergelaufen ist, und weil
+der Plan dann im Cache liegt, konvergiert das in ein bis zwei Runden.
+
+Weitere bewusste Abweichungen:
+- **Tempo-Karte nur im Offline-Render.** Folge: ein Set, das mitten in einem Track begonnen wird,
+  bekommt beim Sprung das Tempo dieses Tracks sofort gesetzt; die Rampe der letzten 16 Takte vor
+  einem Trackwechsel kommt als Kontrollrampe. Wer Bitgleichheit mit `phos_render` über einen
+  Trackwechsel hinweg braucht, muss `Engine` einen sperrfreien Tausch der Tempo-Karte bekommen —
+  das ist die einzige Stelle, an der ein Kern-Eingriff dem Plugin etwas brächte.
+- **Sprung in die Mitte eines Tracks:** die Klangzustände des Tracks werden nachgeholt, indem bis zu
+  128 Takte davor nur wegen ihrer Kontrollereignisse komponiert werden; der letzte Wert je Parameter
+  wird sofort gesetzt. Eine laufende Rampe landet damit auf ihrem Ziel.
+- **Start dauert.** Der erste Ton kommt 2,1 s nach dem Druck auf Play, weil der Komponist den ersten
+  Track plant und dafür einen Pegel-Probe-Render fährt. Im Standalone ist das meist schon erledigt,
+  bevor der Knopf gedrückt wird: der Composer-Thread füllt die Ringe ab dem Öffnen des Fensters. Die
+  Oberfläche sagt „planning" statt zu schweigen.
+- **Ein VST3-Parameter, den das Plugin selbst schreibt, erreicht den Host nicht.** `compose.bpm`
+  folgt unter einem Host dem Transport, aber der Host zeigt weiter den Wert, den der Nutzer gestellt
+  hat — JUCEs VST3-Wrapper meldet nur Parameter, die über `setValueNotifyingHost` laufen. Das ist so
+  gewollt (ein Plugin, das seinen eigenen Tempo-Knopf automatisiert, streitet mit dem Host darum);
+  im VST3-Test steht es als gemessene Tatsache.
+- **pluginval liegt nicht auf dieser Maschine** (wie bei Noctuary wird es bei Bedarf von GitHub
+  geholt). Strenge 10 ist deshalb **ungeprüft**; der Host-Test deckt den Teil ab, der im Repo leben
+  kann. Aufruf, sobald es da ist:
+  `pluginval.exe --strictness-level 10 --timeout-ms 900000 --validate build\Plugin\Phosphene_artefacts\Release\VST3\Phosphene.vst3`
+  (ohne `PHOS_MUTE`).
+- **Kein DAW-Test.** Auf der Maschine steht kein Host; Host-Sync, MIDI-Out und Automation sind gegen
+  einen eigenen `AudioPlayHead` und über `AudioProcessor` geprüft, nicht in Bitwig oder Reaper.
+
+Nächster Schritt für Phase 6: Arrange-Zeitleiste über das ganze Set (PLAN 8.1), Perform-Makros,
+Handbuch-Generator; und nach dem Merge von Phase 5 die Kopplung an `.phosset` und die Stilprofile.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
