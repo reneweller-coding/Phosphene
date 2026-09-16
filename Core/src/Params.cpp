@@ -381,6 +381,19 @@ const ParamDesc kMasterParams[master::Count] = {
     { "clipper_threshold","Clipper Threshold","dB", -6.0f, 6.0f, 0.0f, Curve::Linear },
 };
 
+// The cue bridge of PLAN 8.3. Appended after the master block, so no parameter that existed before
+// changed its id, its default or its place in the host's list.
+const ParamDesc kCueParams[cue::Count] = {
+    { "send",    "Send Cues", "",      0.0f,     1.0f,    0.0f, Curve::Toggle },
+    { "port",    "Port",      "",   1024.0f, 65535.0f, 9000.0f, Curve::Int },
+    { "beats",   "Beat Cues", "",      0.0f,     1.0f,    1.0f, Curve::Toggle },
+    // A trim on the lead the sender already computes from the block size and the limiter's lookahead
+    // (Cue.h). Positive moves the cue later. It exists because the one part of the chain the plugin
+    // cannot ask about is how deep the driver's own buffering is; zero is right for the common case
+    // of a single buffer in flight.
+    { "lead_ms", "Lead Trim", "ms",  -50.0f,    50.0f,    0.0f, Curve::Linear },
+};
+
 /** @brief One module: its prefix, table, how many instances exist, and optionally their names. */
 struct ModuleSpec {
     const char* prefix;
@@ -401,6 +414,7 @@ const ModuleSpec kModules[static_cast<int>(Module::Count)] = {
     { "fx",      kFxParams,      fx::Count,      1 },
     { "mix",     kMixParams,     mix::Count,     1 },
     { "master",  kMasterParams,  master::Count,  1 },
+    { "cue",     kCueParams,     cue::Count,     1 },
 };
 
 bool isDiscrete(Curve c) { return c == Curve::Int || c == Curve::Choice || c == Curve::Toggle; }

@@ -15,10 +15,24 @@ phos_add_test(selftest phos_selftest)
 # is built as the core is (AVX2 on x86-64, NEON on the Quest); on x86 the NEON path also runs through
 # neonshim/arm_neon.h, and the scalar path is forced. The variants are header-only apart from the
 # half-band design, which they compile themselves: linking PhospheneCore would bring its AVX2 flags.
+# The Kaleidoscope bridge demonstrated without ears (PLAN 8.3): the same chain the plugin builds,
+# assembled by hand, so the cues of a whole track can be captured and compared with the score. It
+# opens a socket, which is why it is not part of the self test; Tools/cue_check.py drives it and ctest
+# runs that script. On Android nothing here runs on the build machine anyway (phos_add_test).
+add_executable(phos_cuedemo cuedemo.cpp)
+target_link_libraries(phos_cuedemo PRIVATE PhospheneCore)
+if(NOT ANDROID)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_FOUND)
+        add_test(NAME cuecheck COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/cue_check.py
+                 --demo $<TARGET_FILE:phos_cuedemo>)
+    endif()
+endif()
+
 add_executable(phos_vectest vectest.cpp)
 target_link_libraries(phos_vectest PRIVATE PhospheneCore)
 phos_add_test(vectest phos_vectest)
-set(PHOS_TEST_TARGETS phos_selftest phos_vectest)
+set(PHOS_TEST_TARGETS phos_selftest phos_vectest phos_cuedemo)
 
 if(NOT ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|x64)")
     if(PHOS_AVX2)

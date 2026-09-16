@@ -249,6 +249,18 @@ void PlugConductor::tempoControls(const ParamStore& params, int bar, std::vector
     }
 }
 
+void PlugConductor::cueMarks(const ParamStore& params, int bar, bool first)
+{
+    if (marks_ == nullptr) return;
+    // seek() has already described the bar it landed on. Describing it again here would send the
+    // same section twice, which for a visualiser is two scene changes where the music has one.
+    if (bar == cueLandingBar_) { cueLandingBar_ = -1; return; }
+    if (first) cueKey_ = -1;
+    // By value: planning the next track may move the cached ones (see Composer::tempoMap).
+    const TrackPlan plan = composer_.track(params, composer_.trackOfBar(params, bar));
+    cueMarksForBar(plan.form, plan.firstBar, plan.key, plan.scale, bar, cueKey_, *marks_);
+}
+
 void PlugConductor::seek(const ParamStore& params, int startBar, double beatOffset, bool writeTempo,
                          std::mutex& engineLock)
 {
@@ -258,6 +270,20 @@ void PlugConductor::seek(const ParamStore& params, int startBar, double beatOffs
     notes_.clear();
     controls_.clear();
     notePos_ = controlPos_ = 0;
+    // The marks in the ring describe beats that are behind us now. The tap would send them all at
+    // once the moment it saw them -- a burst of sections that are over. Clearing is the consumer's
+    // end of the ring, and this is the producer's thread; it is safe only because a seek is a step
+    // of the restart handshake, during which processBlock renders silence and never calls the tap
+    // (see the file comment, #genWanted_).
+    if (marks_ != nullptr) {
+        marks_->clear();
+        cueKey_ = -1;
+        // Where we landed, so a visualiser that joins in the middle is not left without a section
+        // until the next boundary comes round -- the same reason the sound state is replayed above.
+        const TrackPlan plan = composer_.track(params, composer_.trackOfBar(params, nextBar_));
+        cueLandingMark(plan.form, plan.firstBar, plan.key, plan.scale, nextBar_, cueKey_, *marks_);
+        cueLandingBar_ = nextBar_;
+    }
 
     std::vector<ControlEvent> immediate;
     // The sound of the track we are landing in. Everything a track departs from its knobs by is
@@ -341,6 +367,7 @@ void PlugConductor::pump(const ParamStore& params, double horizonBeats, EventRin
             preview_.insert(preview_.end(), notes_.begin(), notes_.end());
         }
         if (writeTempo_) tempoControls(params, nextBar_, controls_);
+        cueMarks(params, nextBar_, false);
         std::sort(controls_.begin(), controls_.end(),
                   [](const ControlEvent& a, const ControlEvent& b) { return a.beat < b.beat; });
         ++nextBar_;
@@ -371,7 +398,15 @@ PhospheneProcessor::PhospheneProcessor()
     engine_ = std::make_unique<Engine>();
     composer_ = std::make_unique<Composer>(seed_.load());
     conductor_ = std::make_unique<PlugConductor>(*engine_, *composer_);
+    conductor_->setCueMarks(&cueMarks_);
     buildParameters();
+
+    // The cue bridge (PLAN 8.3) is off until `cue.send` is switched on. `PHOS_CUE_HOST` and
+    // `PHOS_CUE_PORT` are for an automated run, which has no state file to carry a destination.
+    const juce::String envHost = juce::SystemStats::getEnvironmentVariable("PHOS_CUE_HOST", "");
+    if (envHost.isNotEmpty()) cueHost_ = envHost;
+    const juce::String envPort = juce::SystemStats::getEnvironmentVariable("PHOS_CUE_PORT", "");
+    if (envPort.isNotEmpty()) params().set(params().base(Module::Cue) + cue::Port, static_cast<float>(envPort.getIntValue()));
 
     // PHOS_MUTE=1: silent from the first sample and never unmuted from inside. The house rule for
     // every automated run -- tests, the screenshot export -- is that nothing makes a sound.
@@ -395,6 +430,9 @@ PhospheneProcessor::~PhospheneProcessor()
 {
     stopTimer();
     stopRecording();
+    // Before the composer thread ends: the sender's thread is the only other one that outlives the
+    // audio thread, and it must not be running while the queue it reads is destroyed.
+    cues_.stop();
     composerRun_.store(false, std::memory_order_release);
     if (composerThread_.joinable()) composerThread_.join();
 }
@@ -455,6 +493,7 @@ void PhospheneProcessor::timerCallback()
     // sixty-fourth note at 145 BPM. Everything else here is housekeeping and runs every eighth tick.
     serviceMacros();
     if (++macroTicks_ % 8 != 0) return;
+    serviceCueBridge();
     const int latency = engine_->latencySamples();
     if (latency != getLatencySamples()) setLatencySamples(latency);
     // The composer's own knobs decide how the set is planned, and the composer throws its cached
@@ -468,6 +507,49 @@ void PhospheneProcessor::timerCallback()
         composeFingerprint_ = sum;
         plansStale_.store(true, std::memory_order_release);
     }
+}
+
+// ------------------------------------------------------------------ the cue bridge (PLAN 8.3)
+
+juce::String PhospheneProcessor::cueHost() const
+{
+    const std::lock_guard<std::mutex> lock(cueHostLock_);
+    return cueHost_;
+}
+
+void PhospheneProcessor::setCueHost(const juce::String& host)
+{
+    const std::lock_guard<std::mutex> lock(cueHostLock_);
+    cueHost_ = host.trim().isEmpty() ? juce::String(kCueDefaultHost) : host.trim();
+}
+
+void PhospheneProcessor::serviceCueBridge()
+{
+    const ParamStore& p = params();
+    const int base = p.base(Module::Cue);
+    cueBeats_.store(p.getBool(base + cue::Beats), std::memory_order_relaxed);
+    cueLeadMs_.store(p.get(base + cue::LeadMs), std::memory_order_relaxed);
+
+    const bool want = p.getBool(base + cue::Send);
+    const int port = p.getInt(base + cue::Port);
+    const juce::String host = cueHost();
+    if (want == cueWanted_ && port == cuePort_ && host == cuePortHost_) return;
+    cueWanted_ = want;
+    cuePort_ = port;
+    cuePortHost_ = host;
+
+    cues_.stop();
+    if (!want) return;
+    // A destination that cannot be resolved is not an error and is not reported to the user: the
+    // whole contract of this bridge is that a visualiser which is not there changes nothing. It is
+    // traced, because a silent failure that nobody can see is the other way to get this wrong.
+    // Offline (a bounce, the demo) the due times describe a timeline nobody is living through, so
+    // the sender does not wait for them.
+    const bool ok = cues_.start(host.toStdString(), port, !isNonRealtime());
+    if (ok) cueAnnounce_.store(true, std::memory_order_release);
+    if (trace_)
+        std::fprintf(stderr, "[phos cues] %s %s:%d\n", ok ? "sending to" : "cannot reach",
+                     host.toRawUTF8(), port);
 }
 
 // ------------------------------------------------------------------ the composer thread
@@ -995,6 +1077,34 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 
     emitMidi(midiMessages, beatAtStart, beatsPerSample, n);
 
+    // ---------------------------------------------------------------- the cue bridge (PLAN 8.3)
+    //
+    // Here, and nowhere earlier. The composer knows every boundary bars in advance -- which is why
+    // the marks travel ahead in a ring -- but a cue is an instant, and the only instant a beat has
+    // is the one at which its samples are rendered. What is rendered now is not what is heard now,
+    // by two known amounts, and both make the cue early rather than late: the limiter's lookahead
+    // (engine->latencySamples()) and the buffers between this block and the device. The portable
+    // part of the second is the block itself -- on the usual double-buffered stream the block being
+    // filled is the one after the block being played -- and `cue.lead_ms` trims whatever the
+    // driver's own queue adds, the one number a plugin is never told. The tap stamps every cue with
+    // that instant; the sender's thread waits for it.
+    {
+        cueTap_.setSendBeats(cueBeats_.load(std::memory_order_relaxed));
+        const double offset = conductor_->beatOffset();
+        const int64_t now = phos::cueNowNanos();
+        const double leadSeconds = static_cast<double>(n + engine_->latencySamples()) / sampleRate_
+                                 + 0.001 * static_cast<double>(cueLeadMs_.load(std::memory_order_relaxed));
+        const int64_t leadNanos = static_cast<int64_t>(leadSeconds * 1.0e9);
+        const int64_t blockNanos = static_cast<int64_t>(static_cast<double>(n) / sampleRate_ * 1.0e9);
+        if (cueAnnounce_.exchange(false, std::memory_order_acq_rel))
+            cueTap_.announce(now + leadNanos, cues_.queue());
+        cueTap_.scan(beatAtStart + offset, beatAfter + offset, now, leadNanos, blockNanos, cueMarks_, cues_.queue());
+        // With the bridge off the tap still runs -- it costs a handful of comparisons, it keeps the
+        // mark ring empty, and it remembers the section that is playing, so switching the bridge on
+        // says where we are at once instead of waiting for the next boundary.
+        if (!cues_.running()) cues_.queue().clear();
+    }
+
     {
         const juce::ScopedTryLock lock(recordLock_);
         if (lock.isLocked() && recordWriter_ != nullptr) {
@@ -1013,6 +1123,8 @@ void PhospheneProcessor::writeStateTo(juce::MemoryBlock& dest) const
     xml.setAttribute("version", 1);
     xml.setAttribute("seed", juce::String(seed_.load()));
     xml.setAttribute("followHost", followHost_);
+    // The cue destination is not a parameter (a parameter is a float); the port and the switch are.
+    xml.setAttribute("cueHost", cueHost());
     // Every value, not only the changed ones: "%.9g" round-trips a float exactly, and a state that
     // leaves defaults out would silently change meaning if a default ever moved.
     xml.createNewChildElement("params")->addTextElement(juce::String(params().toText(false)));
@@ -1027,6 +1139,7 @@ void PhospheneProcessor::setStateInformation(const void* data, int sizeInBytes)
     if (xml == nullptr || !xml->hasTagName("PHOSPHENE")) return;
     if (auto* p = xml->getChildByName("params")) params().parseText(p->getAllSubText().toStdString());
     followHost_ = xml->getBoolAttribute("followHost", followHost_);
+    setCueHost(xml->getStringAttribute("cueHost", cueHost()));
     followHostAtomic_.store(followHost_, std::memory_order_release);
     const uint64_t s = static_cast<uint64_t>(xml->getStringAttribute("seed", "1").getLargeIntValue());
     setSeed(juce::jmax<uint64_t>(1, s));

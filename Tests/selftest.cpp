@@ -9,6 +9,7 @@
 #include "phos/Acid.h"
 #include "phos/Composer.h"
 #include "phos/Corpus.h"
+#include "phos/Cue.h"
 #include "phos/DiodeLadder.h"
 #include "phos/Dynamics.h"
 #include "phos/Dsp.h"
@@ -110,7 +111,7 @@ void testParams()
     const int expected = static_cast<int>(compose::Count) + static_cast<int>(kick::Count) + static_cast<int>(bass::Count)
                        + static_cast<int>(mix::Count) + static_cast<int>(master::Count) + kPercLanes * static_cast<int>(perc::Count)
                        + static_cast<int>(acid::Count) + kPolyInstances * static_cast<int>(poly::Count)
-                       + static_cast<int>(sfx::Count) + static_cast<int>(fx::Count);
+                       + static_cast<int>(sfx::Count) + static_cast<int>(fx::Count) + static_cast<int>(cue::Count);
     check(p.count() == expected, "every module table registered", fmt("%d parameters", p.count()));
     check(p.find("lead.detune") == p.base(Module::Poly, 0) + poly::Detune && p.find("arp.detune") == p.base(Module::Poly, 1) + poly::Detune
           && p.find("acid.cutoff") == p.base(Module::Acid) + acid::Cutoff && p.get(p.find("arp.amp_sustain")) == 0.0f,
@@ -5275,6 +5276,303 @@ void testCuration()
     }
 }
 
+/**
+ * @brief Drains a cue ring into a vector, so a test can look at what a block produced.
+ */
+std::vector<Cue> drainCues(CueRing& ring)
+{
+    std::vector<Cue> out;
+    Cue c;
+    while (ring.pop(c)) out.push_back(c);
+    return out;
+}
+
+/**
+ * @brief The cue bridge of PLAN 8.3: the OSC bytes, the tap, the queue, and silence on failure.
+ *
+ * The oracle for the encoder is the OSC 1.0 byte layout worked out by hand below -- address string,
+ * type tag string, big-endian arguments, every piece padded with nulls to a multiple of four -- not
+ * a recording of what the encoder once produced. The oracle for the tap is the score:
+ * phos::Composer::sections() is what the composer wrote, and the section cues a listener receives
+ * have to be that list, in that order, on those bars.
+ */
+void testCues()
+{
+    section("cue bridge (PLAN 8.3)");
+
+    // ---------------------------------------------------------------- the OSC bytes
+    //
+    // "/phos/beat" is ten characters, so the address takes 11 bytes with its terminator and is
+    // padded to 12; the tag string ",i" takes 3 and is padded to 4; the argument is 4. 20 in all.
+    char buf[128];
+    Cue beat;
+    beat.kind = Cue::Kind::Beat;
+    beat.index = 7;
+    int n = cueToOsc(beat, buf, sizeof(buf));
+    check(n == 20, "/phos/beat is 20 bytes (12 address + 4 tags + 4 argument)", fmt("%d", n));
+    check(std::memcmp(buf, "/phos/beat\0\0", 12) == 0 && std::memcmp(buf + 12, ",i\0\0", 4) == 0,
+          "address and type tag string, terminated and padded with nulls");
+    check(buf[16] == 0 && buf[17] == 0 && buf[18] == 0 && buf[19] == 7, "int32 argument big-endian");
+
+    Cue bar;
+    bar.kind = Cue::Kind::Bar;
+    bar.index = 258;   // 0x00000102: two non-zero bytes, so a byte order mistake cannot hide
+    n = cueToOsc(bar, buf, sizeof(buf));
+    check(n == 20 && std::memcmp(buf, "/phos/bar\0\0\0", 12) == 0 && std::memcmp(buf + 12, ",i\0\0", 4) == 0
+          && buf[16] == 0 && buf[17] == 0 && buf[18] == 1 && buf[19] == 2,
+          "/phos/bar i, most significant byte first", fmt("%d bytes", n));
+
+    // "/phos/section" is 13 characters: 14 with the terminator, padded to 16. ",sf" is 4 with its
+    // terminator and needs no padding. "Drop" is 5 with its terminator and is padded to 8. The float
+    // is 4. 32 in all, and 0.75 is exactly 0x3F400000 in IEEE 754.
+    Cue sec;
+    sec.kind = Cue::Kind::Section;
+    sec.section = static_cast<uint8_t>(SectionType::Drop);
+    sec.energy = 0.75f;
+    n = cueToOsc(sec, buf, sizeof(buf));
+    check(n == 32, "/phos/section is 32 bytes (16 + 4 + 8 + 4)", fmt("%d", n));
+    check(std::memcmp(buf, "/phos/section\0\0\0", 16) == 0 && std::memcmp(buf + 16, ",sf\0", 4) == 0
+          && std::memcmp(buf + 20, "Drop\0\0\0\0", 8) == 0,
+          "the section type travels as an OSC string, padded to four");
+    check(static_cast<unsigned char>(buf[28]) == 0x3F && static_cast<unsigned char>(buf[29]) == 0x40
+          && buf[30] == 0 && buf[31] == 0, "float32 argument big-endian (0.75 = 3F 40 00 00)");
+
+    // "/phos/key" 12, ",s" 4, "F# Phrygian" is 11 characters -> 12 with the terminator: 28 in all.
+    Cue key;
+    key.kind = Cue::Kind::Key;
+    key.key = 6;      // F#
+    key.scale = 1;    // Phrygian
+    n = cueToOsc(key, buf, sizeof(buf));
+    check(n == 28 && std::memcmp(buf, "/phos/key\0\0\0", 12) == 0 && std::memcmp(buf + 12, ",s\0\0", 4) == 0
+          && std::memcmp(buf + 16, "F# Phrygian\0", 12) == 0, "/phos/key s", fmt("%d bytes", n));
+
+    // A message with no arguments still carries a type tag string: "," alone, padded to four.
+    Cue drop;
+    drop.kind = Cue::Kind::Drop;
+    n = cueToOsc(drop, buf, sizeof(buf));
+    check(n == 16 && std::memcmp(buf, "/phos/drop\0\0", 12) == 0 && std::memcmp(buf + 12, ",\0\0\0", 4) == 0,
+          "/phos/drop carries the empty type tag string", fmt("%d bytes", n));
+
+    {
+        int sizes = 0;
+        for (int k = 0; k < static_cast<int>(Cue::Kind::Count); ++k) {
+            Cue c;
+            c.kind = static_cast<Cue::Kind>(k);
+            const int m = cueToOsc(c, buf, sizeof(buf));
+            if (m > 0 && m % 4 == 0) ++sizes;
+        }
+        check(sizes == static_cast<int>(Cue::Kind::Count), "every message is a multiple of four bytes",
+              fmt("%d of %d", sizes, static_cast<int>(Cue::Kind::Count)));
+    }
+
+    // ---------------------------------------------------------------- the tap
+    //
+    // Sixteen bars of beat positions, cut into blocks of an awkward length so that block boundaries
+    // fall inside beats: every integer beat must appear exactly once and every fourth one must
+    // bring its bar. The expected numbers come from the arithmetic, not from a run: 64 beats,
+    // 16 bars, indices 0..63 and 0..15.
+    {
+        CueTap tap;
+        CueMarkRing marks(64);
+        CueRing out(4096);
+        const double bpm = 145.0, sr = 48000.0;
+        const double beatsPerSample = bpm / 60.0 / sr;
+        const int block = 137;   // not a divisor of anything musical
+        double beat = 0.0;
+        while (beat < 64.0) {
+            const double to = std::min(64.0, beat + beatsPerSample * block);
+            tap.scan(beat, to, 0, 0, 1, marks, out);
+            beat = to;
+        }
+        const std::vector<Cue> cues = drainCues(out);
+        std::vector<int> beats, bars;
+        for (const Cue& c : cues) {
+            if (c.kind == Cue::Kind::Beat) beats.push_back(c.index);
+            if (c.kind == Cue::Kind::Bar) bars.push_back(c.index);
+        }
+        bool beatsRight = beats.size() == 64;
+        for (size_t i = 0; i < beats.size() && beatsRight; ++i) beatsRight = beats[i] == static_cast<int>(i);
+        bool barsRight = bars.size() == 16;
+        for (size_t i = 0; i < bars.size() && barsRight; ++i) barsRight = bars[i] == static_cast<int>(i);
+        check(beatsRight, "every beat of sixteen bars once, in order, over blocks that straddle them",
+              fmt("%d beats", static_cast<int>(beats.size())));
+        check(barsRight, "every bar once, numbered from zero", fmt("%d bars", static_cast<int>(bars.size())));
+    }
+
+    // Due times: a cue must be stamped with the instant its sample is *heard*, which is the block's
+    // own start plus the lead plus its offset inside the block. The value is derived from the block
+    // geometry here, not from the tap.
+    {
+        CueTap tap;
+        CueMarkRing marks(16);
+        CueRing out(64);
+        const double sr = 48000.0;
+        const int block = 512;
+        const double beatsPerSample = 145.0 / 60.0 / sr;
+        const int64_t blockNanos = static_cast<int64_t>(static_cast<double>(block) / sr * 1.0e9);
+        const int64_t lead = 7000000;   // 7 ms
+        const int64_t now = 1000000000;
+        // Place beat 12 a quarter of the way into the block: its sample offset is then 128 of the
+        // 512 samples, so it is heard 128 / 48000 = 2.667 ms after the block starts to play.
+        const double span = beatsPerSample * block;
+        const double from = 12.0 - 0.25 * span;
+        tap.scan(from, from + span, now, lead, blockNanos, marks, out);
+        const double offsetSamples = 0.25 * block;
+        const int64_t want = now + lead + static_cast<int64_t>(offsetSamples / sr * 1.0e9);
+        const std::vector<Cue> cues = drainCues(out);
+        int64_t got = 0;
+        for (const Cue& c : cues) if (c.kind == Cue::Kind::Beat && c.index == 12) got = c.dueNanos;
+        check(got != 0 && std::llabs(got - want) < 50000,
+              "a cue is due when its sample is heard: block start + lead + offset in the block",
+              fmt("%.3f ms off", static_cast<double>(got - want) * 1.0e-6));
+    }
+
+    // ---------------------------------------------------------------- the score is the oracle
+    //
+    // The section cues a listener receives have to be phos::Composer::sections(), in that order, on
+    // those bars -- the cut before its breakdown, the pre-drop break in the last bar of its buildup,
+    // everything else where the form says. The bar a cue belongs to is read the way a receiver reads
+    // it: the last /phos/bar that arrived.
+    {
+        ParamStore p;
+        p.parseText("compose.track_bars=128 compose.level_match=Off master.auto_gain=Off");
+        Composer comp(4711);
+        const int bars = 160;
+        const std::vector<SectionMark> score = comp.sections(p, bars);
+
+        CueTap tap;
+        CueMarkRing marks(512);
+        CueRing out(8192);
+        std::vector<Cue> received;
+        int lastKey = -1;
+        int barSeen = -1;
+        std::vector<std::pair<int, int>> got;   // bar, SectionType
+        const double sr = 48000.0;
+        const double beatsPerSample = 145.0 / 60.0 / sr;
+        const int block = 256;
+        double beat = 0.0;
+        int nextBar = 0;
+        while (beat < static_cast<double>(bars) * kBeatsPerBar) {
+            // The composer runs ahead: four bars of marks are always in the ring before the play
+            // position reaches them, exactly as the conductor keeps the engine's rings filled.
+            while (static_cast<double>(nextBar) * kBeatsPerBar < beat + 4 * kBeatsPerBar && nextBar < bars) {
+                const TrackPlan plan = comp.track(p, comp.trackOfBar(p, nextBar));
+                cueMarksForBar(plan.form, plan.firstBar, plan.key, plan.scale, nextBar, lastKey, marks);
+                ++nextBar;
+            }
+            const double to = beat + beatsPerSample * block;
+            tap.scan(beat, to, 0, 0, 1, marks, out);
+            Cue c;
+            while (out.pop(c)) {
+                if (c.kind == Cue::Kind::Bar) barSeen = c.index;
+                if (c.kind == Cue::Kind::Section) got.emplace_back(barSeen, static_cast<int>(c.section));
+                received.push_back(c);
+            }
+            beat = to;
+        }
+        std::vector<std::pair<int, int>> want;
+        for (const SectionMark& m : score) {
+            const int b = static_cast<int>(m.beat / kBeatsPerBar);
+            if (b < bars) want.emplace_back(b, static_cast<int>(m.type));
+        }
+        check(!want.empty() && got == want, "every section boundary of the score arrives as a cue, bar for bar",
+              fmt("%d cues against %d marks of the score", static_cast<int>(got.size()), static_cast<int>(want.size())));
+
+        // A drop accompanies every core and nothing else -- that is the message a flash cut hangs on.
+        int drops = 0, cores = 0;
+        for (const Cue& c : received) if (c.kind == Cue::Kind::Drop) ++drops;
+        for (const auto& w : want) if (static_cast<SectionType>(w.second) == SectionType::Drop) ++cores;
+        check(cores > 0 && drops == cores, "/phos/drop accompanies every core section and no other",
+              fmt("%d drops, %d cores", drops, cores));
+
+        // The key travels once per track, not once per section.
+        int keys = 0;
+        for (const Cue& c : received) if (c.kind == Cue::Kind::Key) ++keys;
+        int tracks = 0;
+        for (int i = 0;; ++i) {
+            const TrackPlan t = comp.track(p, i);
+            ++tracks;
+            if (t.firstBar + t.bars >= bars) break;
+        }
+        check(keys == tracks, "/phos/key once per track", fmt("%d keys, %d tracks", keys, tracks));
+    }
+
+    // ---------------------------------------------------------------- silence on failure
+    {
+        CueSender s;
+        check(!s.start("this-host-does-not-exist.invalid", 9000), "an unresolvable host does not start the bridge");
+        check(!s.running() && !s.push(Cue{}), "and pushing into a bridge that is not running is refused, not an error");
+
+        // A port nobody listens on: the datagram is dropped by the operating system and the sender
+        // neither blocks nor reports anything. 9 is discard, and this machine is not running it.
+        CueSender live;
+        const bool opened = live.start("127.0.0.1", 9, true);
+        if (opened) {
+            for (int i = 0; i < 32; ++i) {
+                Cue c;
+                c.kind = Cue::Kind::Beat;
+                c.index = i;
+                c.dueNanos = 0;
+                live.push(c);
+            }
+            // Wait for the sender's thread rather than guessing how long it needs: it wakes at most
+            // every millisecond, and a machine under load can make a fixed sleep a flake.
+            for (int i = 0; i < 400 && live.sent() < 32; ++i)
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            live.stop();
+        }
+        check(opened && live.sent() == 32 && live.dropped() == 0,
+              "thirty-two datagrams to a port with no listener: all sent, nothing reported",
+              fmt("%llu sent, %llu dropped", static_cast<unsigned long long>(live.sent()),
+                  static_cast<unsigned long long>(live.dropped())));
+    }
+
+    // ---------------------------------------------------------------- the engine does not hear it
+    //
+    // The tap reads the beat position and nothing else, so a render with the bridge on must be the
+    // same render. Bit for bit, because "nearly the same" is how a silent dependency hides.
+    {
+        ParamStore p;
+        p.parseText("compose.track_bars=128 compose.level_match=Off master.auto_gain=Off");
+        auto render = [&](bool withCues, std::vector<float>& outL) {
+            Engine e;
+            e.prepare(48000.0, 256);
+            e.params().copyValuesFrom(p);
+            Composer comp(4711);
+            Conductor cond(e, comp);
+            CueTap tap;
+            CueMarkRing marks(256);
+            CueRing cues(4096);
+            int lastKey = -1;
+            int nextBar = 0;
+            outL.clear();
+            std::vector<float> L(256), R(256);
+            const int blocks = 48000 * 8 / 256;
+            for (int i = 0; i < blocks; ++i) {
+                cond.pump(e.params(), 8 * kBeatsPerBar);
+                const double from = e.beatPosition();
+                e.process(L.data(), R.data(), 256);
+                if (withCues) {
+                    while (nextBar < cond.nextBar()) {
+                        const TrackPlan plan = comp.track(p, comp.trackOfBar(p, nextBar));
+                        cueMarksForBar(plan.form, plan.firstBar, plan.key, plan.scale, nextBar, lastKey, marks);
+                        ++nextBar;
+                    }
+                    tap.scan(from, e.beatPosition(), cueNowNanos(), 0, 5333333, marks, cues);
+                    Cue junk;
+                    while (cues.pop(junk)) {}
+                }
+                outL.insert(outL.end(), L.begin(), L.end());
+            }
+        };
+        std::vector<float> plain, tapped;
+        render(false, plain);
+        render(true, tapped);
+        check(plain.size() == tapped.size() && std::memcmp(plain.data(), tapped.data(), plain.size() * sizeof(float)) == 0,
+              "eight seconds of audio are bit-identical with the cue tap running");
+    }
+}
+
 void testTransitions()
 {
     section("transitions between tracks (PLAN 6.7)");
@@ -5382,6 +5680,7 @@ int main()
     run("testSectionRules", testSectionRules);
     run("testCuration", testCuration);
     run("testTransitions", testTransitions);
+    run("testCues", testCues);
     run("testParams", testParams);
     run("testTempo", testTempo);
     run("testHalfband", testHalfband);

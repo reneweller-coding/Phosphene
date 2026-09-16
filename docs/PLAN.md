@@ -1858,6 +1858,124 @@ Runde hat verdrahtet und gemessen.
 des fertigen APK), `Quest/README.md`, `Tests/hosttest.cpp`, `Tests/vst3test.cpp`,
 `Tests/selftest.cpp` (`testWaveTableQuality`), `Tests/CMakeLists.txt`.
 
+**16.09.2026, Kaleidoscope-Kopplung (8.3).** Phosphene sagt Kaleidoscope, wo die Takte, die
+Sektionen und die Drops sind, statt es raten zu lassen. Fünf OSC-Nachrichten über UDP,
+voreingestellt aus, auf beiden Seiten.
+
+| Prüfstein | Ergebnis |
+|---|---|
+| Selbsttest `testCues` | 20 von 20; Bytelayout gegen die OSC-1.0-Spezifikation von Hand hergeleitet |
+| `Tools/cue_check.py` (ctest `cuecheck`) | 15 von 15 über 491 echte Datagramme |
+| Kaleidoscope `Kaleidoscope.exe -q` | 32 von 32 |
+| Sektionsgrenzen der Partitur = empfangene Cues | 9 von 9, Takt für Takt, plus Energie, Tonart, Drop |
+| Ende-zu-Ende-Verzögerung gegen den *gehörten* Augenblick, localhost | Median **0,44 ms**, Mittel 0,54 ms, p95 1,56 ms, Maximum 1,65 ms (42 Cues) |
+| Standardrender `--bars 32 --seed 1` gegen master f0733e0 | bitgleich (SHA-256 `01FC8810…`) |
+| ctest gesamt | 7 von 7 (Selbsttest, cuecheck, drei Vektorpfade, Hosttest, VST3-Test) |
+| Quest, `libphosquest.so` (arm64, NDK 27) | baut ohne Warnung |
+
+### Wo der Cue entsteht — die eigentliche Entscheidung
+
+Drei Stellen der Kette kämen in Frage, zwei davon sind falsch:
+
+- **Der Komponist** kennt jede Sektionsgrenze lange vorher — und genau das ist das Problem. Der
+  `Conductor` hält die Ereignisringe der Engine rund acht Takte vor der Spielposition gefüllt; bei
+  145 BPM sind das **dreizehn Sekunden**. Ein Cue von dort erreichte den Visualizer eine Viertelminute
+  vor dem Drop.
+- **Die Partitur** hat überhaupt keine Uhr. Ein `SectionMark` ist eine Taktzahl, kein Augenblick.
+- **Die Spielposition** ist die einzige Stelle, an der ein Beat ein Augenblick ist:
+  `Engine::beatPosition()` sagt, welchen Beat das nächste zu rendernde Sample trägt. `CueTap::scan`
+  bekommt deshalb den Beat-Bereich, den ein Block abdeckt — den Wert vor und nach
+  `Engine::process()` — und gibt die Grenzen aus, die hineinfallen. Im Plugin steht der Aufruf
+  unmittelbar neben `emitMidi()`, aus demselben Grund.
+
+Das ist noch nicht, was der *Hörer* hört, und zwar aus zwei Gründen, die beide in dieselbe Richtung
+zeigen und beide bekannte Zahlen sind statt Schätzungen: der True-Peak-Limiter der Engine schaut
+voraus (`Engine::latencySamples()`, 83 Samples = 1,7 ms bei 48 kHz), und der Block, der jetzt
+gerendert wird, ist nicht der Block, der jetzt gespielt wird. Beides ist ein **Vorlauf**: der Cue
+wäre zu früh, nie zu spät. Der Tap stempelt darum jeden Cue mit dem Augenblick, an dem der Hörer ihn
+hört — `jetzt + (Ausgabepuffer + Limiter-Lookahead + Sample-Offset im Block) / Abtastrate` — und der
+Senderthread hält ihn bis dahin zurück. Der portable Teil des Ausgabepuffers ist der Block selbst
+(beim üblichen doppelt gepufferten Strom ist der Block, der gefüllt wird, der nach dem, der gespielt
+wird); was die Treiberwarteschlange darüber hinaus tiefer ist, trimmt `cue.lead_ms` — die eine Zahl,
+die einem Plugin niemand sagt. Zu früh ist bewusst der hinzunehmende Fehler: ein Bild lässt sich
+planen, aber nicht zurücknehmen.
+
+**Warten mit einer Uhr, die es auch kann.** `std::this_thread::sleep_for` ist unter Windows `Sleep()`,
+dessen Granularität der Systemtimer ist — 15,6 ms, sofern kein anderer Prozess ihn hochgesetzt hat,
+also eine Viertelnote bei 145 BPM. Der Senderthread nimmt deshalb einen
+`CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`-Timer; die globale Timerauflösung anzuheben wäre ein
+systemweiter Eingriff und nicht die Sache eines Generators. Die gemessenen 0,44 ms Median sind die
+ganze Kette: Stempel, Warteschlange, Warten, Kodierer, `sendto()`, Loopback, `recvfrom()`.
+
+**Der Audiothread sendet nichts.** Der Komponist schreibt `CueMark`s Takte im Voraus in einen
+lock-freien Ring (dieselbe `EventRing` wie Noten und Kontrollereignisse); der Tap zieht sie, wenn die
+Spielposition sie erreicht, und schiebt Cues wartefrei in die Warteschlange des Senders; dessen
+eigener Thread ruft `sendto()`. Kein Socket, keine Allokation, kein Lock auf dem Audiothread.
+
+### Die Leitung
+
+`/phos/beat i`, `/phos/bar i`, `/phos/section s f`, `/phos/key s`, `/phos/drop` — OSC 1.0 von Hand
+kodiert (Adressmuster, Typkennungszeichenkette, Vier-Byte-Ausrichtung, Big-Endian), rund vierzig
+Zeilen statt einer Abhängigkeit für fünf Nachrichtentypen. Ein Drop begleitet jede Core-Sektion und
+sonst nichts; die Tonart reist einmal je Track. Der Beweis, dass beide Enden dasselbe Format meinen,
+sind **drei unabhängige Dekodierer über dieselben Bytes**: das Bytelayout im Selbsttest von Hand aus
+der Spezifikation hergeleitet, ein Python-Dekodierer in `Tools/cue_check.py`, und Kaleidoscopes
+eigener Empfänger, dem die aufgezeichneten 491 Datagramme über `KALEIDO_CUE_DECODE` vorgelegt werden.
+Alle drei lesen dasselbe, Nachricht für Nachricht.
+
+Das Orakel für den Inhalt ist die Partitur selbst: `Composer::sections()` ist, was der Komponist
+geschrieben hat, und die empfangenen Sektions-Cues müssen genau diese Liste sein — mit dem Cut am
+Kopf seines Breakdowns und dem Pre-Drop-Break im letzten Takt seines Buildups, auf denselben Takten,
+in derselben Reihenfolge. Die Taktzahl reist nicht mit der Sektion mit; sie wird gelesen, wie ein
+Visualizer sie liest, nämlich aus dem zuletzt eingetroffenen `/phos/bar`.
+
+### Ausfall ist still
+
+UDP auf einen Port ohne Zuhörer ist nirgends ein Fehler: das Datagramm verfällt, der Generator
+spielt weiter (32 Datagramme an Port 9, alle gesendet, nichts gemeldet). Ein nicht auflösbarer Host
+lässt `CueSender::start()` false zurückgeben, mehr passiert nicht. Umgekehrt: schweigt der Sender
+zwei Sekunden, übernimmt in Kaleidoscope wieder die Audioanalyse.
+
+### Die andere Seite
+
+In Kaleidoscope (eigener Zweig `phos-cues`, eigenes Repo) sitzt ein `CueReceiver` neben dem
+Web-Remote: ein schlichtes `QObject` mit `QUdpSocket` auf dem Qt-Hauptthread, eingeschaltet über
+`cuePort` in der ini, vorbelegt mit 0 = aus. Die Cues füttern **genau die zwei steigenden Flanken**,
+die die Audioanalyse dort seit jeher füttert (`Tick::sectionCount`, `Tick::dropCount`) plus die
+Downbeat-Flagge. Damit greifen alle Sicherungen des Schedulers unverändert — ein Cue mitten in einer
+Überblendung kann sie nicht umlenken, ein Drop verkürzt die laufende Blende statt eine zweite zu
+bestellen, und Kamera, Zoom und Rotation bleiben von Audio unberührt, weil kein Code angefasst wurde,
+der sie bewegt. Eine Ausnahme ist nötig und eingebaut: `sectionKnown` wird bei Cue-Betrieb hart auf
+false gezogen, weil das Song-Struktur-Gedächtnis dort an einer recycelten Acht-Slot-LRU-Id hängt und
+stattdessen den Sektions*typ* einzusetzen hieße, jeder Drop eines Sets teilte sich einen Speicherplatz
+— genau das „immer dieselben Szenen", das dieser Index dort schon einmal erzeugt hat.
+
+### Gegenprobe (Mutationsrunde)
+
+Sechs Fehler eingebaut, jeder von einer Prüfung gefangen, jeder zurückgenommen, `git diff` danach
+sauber in beiden Repos:
+
+| Fehler | gefangen von |
+|---|---|
+| OSC-Zeichenketten nicht mehr auf vier Byte aufgefüllt | 10 Prüfungen des Bytelayouts |
+| Argumente little-endian statt Netzwerk-Byte-Reihenfolge | „int32 big-endian", „/phos/bar MSB zuerst", „float32 big-endian" |
+| Pre-Drop-Break nicht mehr gemeldet | „jede Sektionsgrenze der Partitur, Takt für Takt" (12 gegen 14) |
+| Fälligkeit ohne den Vorlauf gestempelt | „ein Cue ist fällig, wenn sein Sample gehört wird" (−7,000 ms) |
+| Empfänger prüft die Null-Auffüllung nicht mehr | „Auffüllung, die keine Nullen sind, wird abgelehnt" |
+| Aus-Zweig schreibt *ein* Feld des Ticks | „ein Scheduler-Tick kommt byteweise so heraus, wie er hineinging" |
+
+Nebenbefund der Runde: die Prüfung „32 Datagramme an einen Port ohne Zuhörer" schlief feste 60 ms
+und war damit eine Wackelkandidatin; sie wartet jetzt auf den Zähler des Senders.
+
+*Dateien.* Neu: `Core/include/phos/Cue.h` (header-only: Kodierer, Tap, Sender),
+`Tests/cuedemo.cpp` (`phos_cuedemo`), `Tools/cue_check.py`. Geändert:
+`Core/include/phos/Params.h` und `Core/src/Params.cpp` (Modul `cue` angehängt: `cue.send`,
+`cue.port`, `cue.beats`, `cue.lead_ms` — kein bestehender Parameter hat seine Id, seinen Vorgabewert
+oder seinen Platz verändert), `Core/CMakeLists.txt` (`ws2_32` unter Windows),
+`Plugin/PluginProcessor.h/.cpp`, `Quest/src/main.cpp` (der alte Ein-Nachricht-pro-Frame-Sender ist
+durch den gemeinsamen ersetzt), `Tests/selftest.cpp` (`testCues`, plus die Modulzählung in
+`testParams`), `Tests/CMakeLists.txt`, dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
