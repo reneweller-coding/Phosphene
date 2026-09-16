@@ -72,6 +72,7 @@ struct ModelInfo {
     int condGap = 0;         ///< @c condGap: rows of gap.emb (10)
     int condIdx = 0;         ///< @c condIdx: rows of idx.emb (8)
     int condBars = 0;        ///< @c condBars: rows of bars.emb (8)
+    int condKick = 0;        ///< @c condKick: rows of kick.emb (3), or 0 in a file without the bass role
     int expand = 0;          ///< @c expand: SSM inner expansion factor
     int dtRank = 0;          ///< @c dtRank: SSM rank of the delta projection
     int convK = 0;           ///< @c convK: SSM depthwise kernel width
@@ -94,7 +95,38 @@ struct NoteCond {
     int bar = 0;    ///< bar in the pattern, 0..7
     int gap = 0;    ///< 0 for the last note, else the distance to the next capped at 8, 9 above that
     int idx = 0;    ///< bucket of the note's index in the line, 0..7
+    int kick = 0;   ///< kick class of the step (kickClass()); read only by a file with @c condKick
 };
+
+/**
+ * @brief Where a note sits relative to the kick: 0 on it, 1 the sixteenth after it, 2 the rest.
+ *
+ * The fifth conditioning input. A psytrance bass is defined by
+ * its interlock with a four-on-the-floor kick -- it plays in the gaps and leans on the sixteenth
+ * right after the beat (Solberg and Dibben, "Peak experiences with electronic dance music", Music
+ * Perception 36(4), 2019). Measured on the corpus before it was built in: a bass onset falls on one
+ * of the four kick steps in 22.5 % of the bars against 62.4 % of the steps between them.
+ *
+ * Three classes and not sixteen distances, because @c step already carries the exact position; what
+ * this adds is the relation to the kick, which survives the bars in which `Composer` takes kicks away
+ * (a breakdown, the pre-drop bar) and which a model can therefore generalise over.
+ *
+ * **What it was measured to be worth: nothing, so far.** The same model trained with and without this
+ * table scores 0.4323 against 0.4293 nats on the same held-out split -- a paired bootstrap over lines
+ * puts the difference at -0.0030 nats, 95 % interval [-0.0208, +0.0150]. With a kick on every beat
+ * the class is a *function of* @c step, so it carries nothing the model was missing -- and class 0
+ * never even occurs in this composer, because none of the five pattern families of Patterns.h puts
+ * a bass note on the beat at all. It is kept
+ * because it costs 576 parameters, because the self test proves it reaches the output, and because a
+ * corpus that really contains a kick could fill it without a format change (docs/MODEL_FORMAT.md 7).
+ */
+inline int kickClass(int step)
+{
+    const int s = ((step % 16) + 16) % 16;
+    if (s % 4 == 0) return 0;
+    if (s % 4 == 1) return 1;
+    return 2;
+}
 
 /** @brief The index bucket of note number @p t (MODEL_FORMAT.md, section 3). */
 inline int noteIndexBucket(int t)
@@ -143,7 +175,7 @@ public:
 
     /**
      * @brief Starts a line.
-     * @param role  0 acid, 1 lead, 2 arp
+     * @param role  0 acid, 1 lead, 2 arp, 3 bass (only in a file whose header says @c roles=4)
      * @param style 0 unknown, else StyleId + 1 -- the trained corpus carries no style label, so the
      *              composer passes 0 (MODEL_FORMAT.md, the warning in section 3)
      * @param bars  the pattern's length in bars, 1..8 (stored as bars - 1)
@@ -186,7 +218,7 @@ private:
     };
     std::vector<Block> blocks_;
     /** @brief The nine embedding tables, in the order of MODEL_FORMAT.md section 4. */
-    std::vector<float> tok_, posE_, roleE_, styleE_, barsE_, stepE_, barE_, gapE_, idxE_;
+    std::vector<float> tok_, posE_, roleE_, styleE_, barsE_, stepE_, barE_, gapE_, idxE_, kickE_;
     std::vector<float> normW_, normB_, head_, headB_;
     std::vector<float> x_, nx_, qkvBuf_, att_, ff_, accum_, scores_, logits_;
     std::vector<double> probs_;
@@ -203,6 +235,12 @@ void setModelSearchPath(const std::string& directory);
 /** @brief The file name of the melody model inside the search path. */
 constexpr const char* kMelodyModelFile = "melody.phosmdl";
 
+/** @brief The file name of the bass model inside the search path. */
+constexpr const char* kBassModelFile = "bass.phosmdl";
+
+/** @brief The role index of the bass in a four-role file (acid, lead, arp, bass). */
+constexpr int kBassRole = 3;
+
 /**
  * @brief The melody model, loaded once on first use.
  * @param note receives a line for the log when the model could not be loaded (empty otherwise)
@@ -214,10 +252,22 @@ constexpr const char* kMelodyModelFile = "melody.phosmdl";
  */
 NeuralModel* sharedMelodyModel(std::string* note = nullptr);
 
+/**
+ * @brief The bass model, loaded once on first use (Core/data/bass.phosmdl).
+ * @param note receives a line for the log when the model could not be loaded (empty otherwise)
+ * @return the model, or null when there is none -- the composer then keeps the pattern families.
+ *
+ * A second instance and not the melody model's, although both files may carry all four roles: one
+ * NeuralModel holds one line's key/value cache, and the bass and the melodic parts are drawn in the
+ * same composing pass. Loaded lazily on whichever thread composes first -- the composer thread in the
+ * plugin, never the audio thread -- and never unloaded.
+ */
+NeuralModel* sharedBassModel(std::string* note = nullptr);
+
 /** @brief Drives one model over one line; what sampleMasked() talks to. */
 struct NeuralStepper {
     NeuralModel* model = nullptr;             ///< the model (mutable: the cache is per line)
-    int role = 0;                             ///< 0 acid, 1 lead, 2 arp
+    int role = 0;                             ///< 0 acid, 1 lead, 2 arp, 3 bass
     int style = 0;                            ///< 0 unknown (the trained corpus has no style label)
     int bars = 1;                             ///< the pattern's length in bars
     const std::vector<NoteCond>* cond = nullptr;   ///< one entry per position, from the onset list

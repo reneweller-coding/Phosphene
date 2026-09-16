@@ -95,6 +95,23 @@ constexpr int laneUnitIndex(int track, int lane) { return track * kPercLanes + l
 
 constexpr int kNumKickMacros = 5;   ///< length, punch, body, grit, click
 constexpr int kNumBassMacros = 5;   ///< brightness, pluck, squelch, grit, weight
+
+/**
+ * @brief Bars of the learned bass phrase (compose.bass_model = Neural).
+ *
+ * **Eight, and the number was measured rather than chosen.** The model's `bars` input is what it was
+ * told about the loop it was reading, and the corpus taught it that a short bass loop is a static one
+ * and a long one moves. Sampled on the composer's own rolling rhythm and constraint set, the trained
+ * model plays the root in 79 % of a four-bar phrase and in 58 % of an eight-bar one, against 53 % for
+ * real psytrance bass lines whose every bar is that same rolling figure
+ * (`Tools/train/bass_stats.py`, and the control runs recorded in docs/PLAN.md 6.9). Four bars is
+ * therefore the one length at which the learned bass would come out barely less static than the
+ * pattern families it replaces. Eight is also the length of the form's group (Form.cpp), so the bass
+ * repeats on the same boundary everything else does.
+ */
+constexpr int kBassPhraseBars = 8;
+/** @brief Slots of a bass phrase: eight bars, four beats, at most three notes a beat (Patterns.h). */
+constexpr int kBassPhraseSlots = kBassPhraseBars * 4 * 3;
 extern const char* const kKickMacroNames[kNumKickMacros];   ///< display names
 extern const char* const kBassMacroNames[kNumBassMacros];   ///< display names
 
@@ -137,6 +154,16 @@ struct TrackPlan {
     float  partGainDb[kMelodyParts] = {};     ///< level correction of each melodic part against the first track's
     double mixLoudness = 0.0;       ///< probe loudness of the whole mix after the master, before the loudness offset
     float  masterGainDb = 0.0f;     ///< the offset that brings the mix to master.target_lufs (Auto Gain)
+    /** @name The learned bass phrase (compose.bass_model = Neural; PLAN 6.9, stage B, role 3)
+     *  Two phrases of kBassPhraseBars bars, one for the track's primary and one for its secondary
+     *  bass pattern, drawn once per track on the composer's thread. Each entry is the interval in semitones from
+     *  the bass root of the note in slot `s` of beat `beat` of bar `barInPhrase`, at index
+     *  `(barInPhrase * 4 + beat) * 3 + s`. `bassNeural` is false whenever the knob says Pattern or no
+     *  weight file was found, and then nothing here is read and the bass is what it always was.
+     *  @{ */
+    bool   bassNeural = false;                       ///< whether the phrases below were drawn
+    int8_t bassRel[2][kBassPhraseSlots] = {};        ///< [primary, secondary][slot] semitones from the root
+    /** @} */
 };
 
 /** @brief Composes the set from a seed and the knobs. */
@@ -204,6 +231,8 @@ public:
 private:
     void validate(const ParamStore& params) const;
     TrackPlan makeTrack(const ParamStore& params, int index) const;
+    /** @brief Draws the track's two learned bass phrases, or leaves the plan on the pattern families. */
+    void makeBassPhrases(const ParamStore& params, TrackPlan& plan) const;
     const TrackWalk& walkAt(const ParamStore& params, int index) const;
     void trackStartControls(const ParamStore& params, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out) const;
     void arcControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, bool ramp, std::vector<ControlEvent>& out) const;
@@ -225,6 +254,7 @@ private:
     mutable std::vector<TrackPlan> plans_;
     mutable std::vector<TrackWalk> walk_;
     mutable std::vector<float> planKnobs_;
+    mutable bool bassModelReported_ = false;           ///< the missing-weight-file line is printed once
     std::map<int, uint8_t> locked_[kNumLockUnits];     ///< unit index -> locked
     std::map<int, uint32_t> variation_[kNumLockUnits]; ///< unit index -> reroll counter
 };

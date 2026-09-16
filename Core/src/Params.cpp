@@ -22,6 +22,13 @@ const char* const kBassPatternNames[] = { "Rolling", "Gallop", "Skip", "Offbeat"
 // the trained model has been measured to be better -- and Neural falls back to it when no weight
 // file is there.
 const char* const kMelodyModelNames[] = { "Markov", "Neural" };
+// Phase 8, bass round: where a bass note's pitch comes from. "Pattern" is the root plus the phrase
+// figures of Composer.cpp, which is what the program has always played; "Neural" is the learned
+// fourth role of Model.h, drawn under the same register and scale constraints. Pattern stays the
+// default until a listening comparison exists -- the held-out measurement says the learned bass
+// predicts real basslines far better, which is not the same as saying it sounds better -- and
+// Neural falls back to Pattern when no weight file is there.
+const char* const kBassModelNames[] = { "Pattern", "Neural" };
 const char* const kPercRoleNames[kNumPercRoles] = { "Closed Hat", "Open Hat", "Ride", "Crash", "Clap", "Snare", "Rim",
                                                     "Shaker", "Tom", "Conga", "Zap", "Blip" };
 
@@ -67,6 +74,8 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "set_minutes",     "Set Length",      "min",  10.0f, 300.0f,  60.0f, Curve::Int },
     // Phase 8: stage A or stage B behind the melodic lines.
     { "melody_model",    "Melody Model",    "",      0.0f,   1.0f,   0.0f, Curve::Choice, kMelodyModelNames },
+    // Phase 8, bass round: the pattern families or the learned fourth role behind the bass pitches.
+    { "bass_model",      "Bass Model",      "",      0.0f,   1.0f,   0.0f, Curve::Choice, kBassModelNames },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };

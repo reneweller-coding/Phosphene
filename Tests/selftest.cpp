@@ -41,7 +41,9 @@
 #include <fstream>
 #include <functional>
 #include <sstream>
+#include <map>
 #include <memory>
+#include <set>
 #include <tuple>
 
 using namespace phos;
@@ -918,6 +920,210 @@ void testComposer()
     check(patternsOk, "every bass pattern has its notes per bar", detail);
 }
 
+/**
+ * @brief compose.bass_model: the learned fourth role inside the composer.
+ *
+ * What this section has to establish is not that a network runs -- testModelFile does that -- but
+ * that switching the knob changes *only* what it is allowed to change. The bass is the one part with
+ * hard contracts hanging off it: the engine derives the kick's tail limit and the kick phase lock
+ * from the first bass slot of the bar's pattern (Engine::firstSlotSeconds, Patterns.h), the gate is
+ * computed from the lowest note's release, and the form's rule that two consecutive eight-bar groups
+ * of a core never hold the same bass is measured elsewhere in this file. A learned bass may move
+ * pitches; it may not move a single onset, length or velocity, and it may not go below the note the
+ * gate limit was computed for.
+ */
+void testBassModel()
+{
+    section("compose.bass_model: the learned bass as the fourth role");
+    ParamStore def;
+    const int cb = def.base(Module::Compose);
+    check(def.getInt(cb + compose::BassModel) == 0,
+          "the bass model defaults to Pattern until a listening comparison exists",
+          fmt("default %s", kBassModelNames[def.getInt(cb + compose::BassModel)]));
+
+    std::string note;
+    const bool haveModel = sharedBassModel(&note) != nullptr;
+    check(haveModel, "the shared bass model loads (Core/data/bass.phosmdl)", note);
+
+    const char* kBase = "compose.level_match=Off master.auto_gain=Off compose.track_bars=64";
+    auto composeWith = [&](const char* extra, uint64_t seed, int bars, std::vector<NoteEvent>& out) {
+        ParamStore q;
+        q.parseText(kBase);
+        q.parseText(extra);
+        Composer c(seed);
+        c.composeBars(q, 0, bars, out);
+    };
+
+    // 1. The rhythm is untouched. Every bass onset, its length and its velocity must be bit-identical
+    //    to what the pattern generator places; only the pitch may differ. This is what keeps
+    //    Engine::firstSlotSeconds, the kick tail limit and the phase lock valid without a line of
+    //    change in the engine.
+    {
+        std::vector<NoteEvent> pat, neu;
+        composeWith("", 4242, 64, pat);
+        composeWith("compose.bass_model=Neural", 4242, 64, neu);
+        std::vector<const NoteEvent*> pb, nb;
+        for (const NoteEvent& e : pat) if (e.part == Part::Bass) pb.push_back(&e);
+        for (const NoteEvent& e : neu) if (e.part == Part::Bass) nb.push_back(&e);
+        bool sameRhythm = pb.size() == nb.size() && !pb.empty();
+        int pitchChanges = 0;
+        for (size_t i = 0; sameRhythm && i < pb.size(); ++i) {
+            sameRhythm = pb[i]->beat == nb[i]->beat && pb[i]->length == nb[i]->length
+                         && pb[i]->velocity == nb[i]->velocity;
+            if (pb[i]->pitch != nb[i]->pitch) ++pitchChanges;
+        }
+        check(sameRhythm && pitchChanges > 0,
+              "the learned bass moves pitches and nothing else: every onset, length and velocity is identical",
+              fmt("%zu bass notes against %zu, %d pitches changed", nb.size(), pb.size(), pitchChanges));
+        // The kick is not the bass's business either.
+        int kickPat = 0, kickNeu = 0;
+        for (const NoteEvent& e : pat) if (e.part == Part::Kick) ++kickPat;
+        for (const NoteEvent& e : neu) if (e.part == Part::Kick) ++kickNeu;
+        check(kickPat == kickNeu && kickPat > 0, "the kick is unchanged by the bass model",
+              fmt("%d kicks against %d", kickNeu, kickPat));
+    }
+
+    // 2. Determinism from the seed alone, and a bar composed alone equals the same bar in sequence --
+    //    the phrase is a function of the track's seed and of nothing that was composed before it.
+    {
+        std::vector<NoteEvent> a, b;
+        composeWith("compose.bass_model=Neural", 77, 32, a);
+        composeWith("compose.bass_model=Neural", 77, 32, b);
+        bool same = a.size() == b.size();
+        for (size_t i = 0; same && i < a.size(); ++i)
+            same = a[i].beat == b[i].beat && a[i].pitch == b[i].pitch && a[i].part == b[i].part;
+        ParamStore q;
+        q.parseText(kBase);
+        q.parseText("compose.bass_model=Neural");
+        Composer fresh(77);
+        std::vector<NoteEvent> one;
+        fresh.composeBars(q, 21, 1, one);
+        std::vector<NoteEvent> slice;
+        for (const NoteEvent& x : a) if (x.beat >= 84.0 && x.beat < 88.0) slice.push_back(x);
+        bool sliceSame = slice.size() == one.size();
+        for (size_t i = 0; sliceSame && i < slice.size(); ++i)
+            sliceSame = slice[i].beat == one[i].beat && slice[i].pitch == one[i].pitch;
+        check(same && sliceSame && !one.empty(),
+              "the learned bass is deterministic from the seed, and one bar alone equals that bar in sequence",
+              fmt("%zu notes twice, bar 21 alone %zu notes", a.size(), one.size()));
+    }
+
+    // 3. The constraint masks hold: every pitch is a scale tone, never below the note the gate limit
+    //    was computed for (root + the seventh degree - an octave), never above an octave over the root.
+    {
+        int notes = 0, outside = 0, tooLow = 0, tooHigh = 0, lowestSeen = 127, highestSeen = 0;
+        std::set<int> distinct;
+        for (uint64_t seed : { 1ull, 19ull, 2026ull, 90210ull }) {
+            ParamStore q;
+            q.parseText(kBase);
+            q.parseText("compose.bass_model=Neural");
+            Composer c(seed);
+            for (int ti = 0; ti < 3; ++ti) {
+                const TrackPlan t = c.track(q, ti);
+                if (!t.bassNeural) continue;
+                const int root = bassRootNote(t.key, q.getInt(cb + compose::BassRegister));
+                const int lowest = root + scaleDegree(t.scale, 6) - 12;
+                std::vector<NoteEvent> e;
+                c.composeBars(q, t.firstBar, std::min(48, t.bars), e);
+                for (const NoteEvent& n : e) {
+                    if (n.part != Part::Bass) continue;
+                    ++notes;
+                    const int rel = static_cast<int>(n.pitch) - root;
+                    distinct.insert(rel);
+                    lowestSeen = std::min(lowestSeen, static_cast<int>(n.pitch));
+                    highestSeen = std::max(highestSeen, static_cast<int>(n.pitch));
+                    if (!inScale(t.scale, rel)) ++outside;
+                    if (n.pitch < lowest) ++tooLow;
+                    if (rel > 12) ++tooHigh;
+                }
+            }
+        }
+        check(notes > 0 && outside == 0 && tooLow == 0 && tooHigh == 0,
+              "every learned bass note is a scale tone inside the register the gate limit is computed for",
+              fmt("%d notes, %d outside the scale, %d below the lowest note, %d above an octave "
+                  "(MIDI %d..%d, %zu distinct intervals)",
+                  notes, outside, tooLow, tooHigh, lowestSeen, highestSeen, distinct.size()));
+        check(distinct.size() >= 3,
+              "the learned bass is a line, not a root held down: it uses several intervals",
+              fmt("%zu distinct intervals from the root", distinct.size()));
+    }
+
+    // 4. Against the pattern generator, measured the way Tools/train/bass_stats.py measures the corpus:
+    //    the pattern families play the root in 97 % of their notes, and the whole point of the fourth
+    //    role is that a real psytrance bass plays it in 59 %.
+    {
+        auto rootShare = [&](const char* extra, double& entropyBits) {
+            std::map<int, int> hist;
+            int total = 0;
+            for (uint64_t seed : { 5ull, 55ull, 555ull, 5555ull }) {
+                ParamStore q;
+                q.parseText(kBase);
+                q.parseText(extra);
+                Composer c(seed);
+                for (int ti = 0; ti < 3; ++ti) {
+                    const TrackPlan t = c.track(q, ti);
+                    const int root = bassRootNote(t.key, q.getInt(cb + compose::BassRegister));
+                    std::vector<NoteEvent> e;
+                    c.composeBars(q, t.firstBar, std::min(48, t.bars), e);
+                    for (const NoteEvent& n : e)
+                        if (n.part == Part::Bass) { ++hist[static_cast<int>(n.pitch) - root]; ++total; }
+                }
+            }
+            entropyBits = 0.0;
+            for (const auto& kv : hist) {
+                const double p = static_cast<double>(kv.second) / std::max(1, total);
+                if (p > 0.0) entropyBits -= p * std::log2(p);
+            }
+            return total > 0 ? static_cast<double>(hist[0]) / total : 1.0;
+        };
+        double hPat = 0.0, hNeu = 0.0;
+        const double rPat = rootShare("", hPat);
+        const double rNeu = rootShare("compose.bass_model=Neural", hNeu);
+        // The corpus measurement is 0.589 root share and 2.755 bits; the pattern generator sits at
+        // 0.972 and 0.237, and over the forty full tracks of the plan's A/B the learned bass sits at
+        // 0.704 and 1.824. Twelve short tracks are a small sample of two phrases each, so the bounds
+        // here are wide on purpose: what they forbid is a bass that is still a held-down root, and a
+        // bass that has wandered out of the register altogether.
+        check(rNeu < 0.85 && rNeu > 0.35 && hNeu > 0.8 && hNeu > 2.0 * hPat,
+              "the learned bass leaves the root the way the corpus does, the pattern families do not",
+              fmt("root share %.3f against %.3f (corpus 0.589), entropy %.3f against %.3f bits (corpus 2.755)",
+                  rNeu, rPat, hNeu, hPat));
+    }
+
+    // 5. The documented limit: the alphabet is intervals to the *tonic*, so a learned line cannot be
+    //    re-transposed by a chord degree without leaving the scale, and compose.bass_follows_chords
+    //    therefore does nothing to it. Measured here so the limit is a fact and not a sentence.
+    {
+        std::vector<NoteEvent> off, on, patOff, patOn;
+        composeWith("compose.bass_model=Neural", 31337, 48, off);
+        composeWith("compose.bass_model=Neural compose.bass_follows_chords=1", 31337, 48, on);
+        composeWith("", 31337, 48, patOff);
+        composeWith("compose.bass_follows_chords=1", 31337, 48, patOn);
+        auto bassOnly = [](const std::vector<NoteEvent>& v) {
+            std::vector<const NoteEvent*> out;
+            for (const NoteEvent& e : v) if (e.part == Part::Bass) out.push_back(&e);
+            return out;
+        };
+        const auto a = bassOnly(off), b = bassOnly(on), c = bassOnly(patOff), d = bassOnly(patOn);
+        // The group figure of Form.cpp is applied in both modes and does count from the chord's
+        // degree, so it is the one thing a learned bass still lets the chord move. It sits on beat 1
+        // of a bar; anything that moves anywhere else would mean the learned line itself was
+        // transposed, which is what this check exists to forbid.
+        int neuralMoved = 0, neuralMovedOffGroupBeat = 0, patternMoved = 0;
+        for (size_t i = 0; i < std::min(a.size(), b.size()); ++i)
+            if (a[i]->pitch != b[i]->pitch) {
+                ++neuralMoved;
+                const double inBar = a[i]->beat - 4.0 * std::floor(a[i]->beat / 4.0);
+                if (!(inBar >= 1.0 && inBar < 2.0)) ++neuralMovedOffGroupBeat;
+            }
+        for (size_t i = 0; i < std::min(c.size(), d.size()); ++i) if (c[i]->pitch != d[i]->pitch) ++patternMoved;
+        check(neuralMovedOffGroupBeat == 0 && patternMoved > 20 * neuralMoved,
+              "compose.bass_follows_chords moves the pattern bass; of the learned one it moves only the group figure",
+              fmt("%d of %zu learned notes moved, all on beat 1 (the group figure); "
+                  "%d of %zu pattern notes moved", neuralMoved, a.size(), patternMoved, c.size()));
+    }
+}
+
 void testVariety()
 {
     section("variety over a night");
@@ -1715,6 +1921,7 @@ void testSampler()
 struct RefCase {
     int role = 0, style = 0, bars = 0;
     std::vector<int> tok, step, bar, idx, gap;
+    std::vector<int> kick;   ///< empty in a reference file of a three-role model (MODEL_FORMAT 3)
     std::vector<double> logits, probs;
 };
 
@@ -1749,6 +1956,7 @@ std::vector<RefCase> readRefCases(const std::string& path)
         else if (key == "bar") ints(c.bar);
         else if (key == "gap") ints(c.gap);
         else if (key == "idx") ints(c.idx);
+        else if (key == "kick") ints(c.kick);
         else if (key == "logits") reals(c.logits);
         else if (key == "probs") reals(c.probs);
     }
@@ -1763,6 +1971,9 @@ bool feedRefCase(NeuralModel& model, const RefCase& c)
 {
     const size_t n = c.tok.size();
     if (n == 0 || c.step.size() != n || c.bar.size() != n || c.gap.size() != n || c.idx.size() != n) return false;
+    // A four-role file's cases carry a kick class per position; a three-role file's do not, and then
+    // the model has no kick.emb either and the field is not read (docs/MODEL_FORMAT.md, section 3).
+    if (!c.kick.empty() && c.kick.size() != n) return false;
     model.begin(c.role, c.style, c.bars + 1);   // the file stores bars - 1
     for (size_t t = 0; t < n; ++t) {
         NoteCond cond;
@@ -1770,6 +1981,7 @@ bool feedRefCase(NeuralModel& model, const RefCase& c)
         cond.bar = c.bar[t];
         cond.gap = c.gap[t];
         cond.idx = c.idx[t];
+        cond.kick = c.kick.empty() ? 0 : c.kick[t];
         if (!model.step(c.tok[t], cond)) return false;
     }
     return true;
@@ -1902,8 +2114,8 @@ void testModelFile()
     // models come from Tools/model/make_test_model.py, which implements docs/MODEL_FORMAT.md a second
     // time in NumPy -- a disagreement between the two implementations is what catches a misread of
     // the document rather than a slip in the arithmetic. PHOS_MODEL_BENCH adds a fourth.
-    std::vector<std::string> models{ modelPath("melody.phosmdl"), modelPath("test_tiny.phosmdl"),
-                                     modelPath("test_tiny_f32.phosmdl") };
+    std::vector<std::string> models{ modelPath("melody.phosmdl"), modelPath("bass.phosmdl"),
+                                     modelPath("test_tiny.phosmdl"), modelPath("test_tiny_f32.phosmdl") };
     if (const char* extra = std::getenv("PHOS_MODEL_BENCH")) models.push_back(extra);
     for (const std::string& full : models) {
         const std::string name = full.substr(full.find_last_of("/\\") + 1);
@@ -1934,6 +2146,48 @@ void testModelFile()
                   "the trained model's header agrees with the composer's alphabet and roles",
                   fmt("%d layers, dim %d, %d heads, ffn %d, ctx %d, %zu parameters, %zu kB packed, held-out NLL %.3f nats",
                       in.layers, in.dim, in.heads, in.ffn, in.ctx, in.parameters, in.bytes / 1024, in.nll));
+            check(in.condKick == 0, "a three-role melodic file carries no kick table",
+                  fmt("condKick %d", in.condKick));
+        }
+        if (name == "bass.phosmdl") {
+            const ModelInfo& in = model.info();
+            check(in.arch == ModelArch::Transformer && in.vocab == kCorpusAlphabet && in.tokenVersion == 1
+                      && in.relMin == kCorpusRelMin && in.relMax == kCorpusRelMax
+                      && in.roles == kNumCorpusRoles + 1 && in.condKick == 3,
+                  "the bass model's header is the melodic one plus the fourth role and the kick table",
+                  fmt("roles %d, condKick %d, %d layers, dim %d, ctx %d, %zu parameters, %zu kB packed, "
+                      "held-out NLL %.4f nats",
+                      in.roles, in.condKick, in.layers, in.dim, in.ctx, in.parameters, in.bytes / 1024, in.nll));
+        }
+    }
+
+    // The kick class is an input of its own, not a second copy of the step: feeding the same line with
+    // a different kick class has to move the logits. Two of the reference cases were written with a
+    // kick that does not follow from the step for exactly this reason (Tools/train/export_bass.py).
+    {
+        NeuralModel model;
+        std::string error;
+        if (model.load(modelPath("bass.phosmdl").c_str(), error)) {
+            const std::vector<RefCase> cases = readRefCases(modelPath("bass.phosmdl") + ".ref.txt");
+            double worst = 0.0;
+            int moved = 0;
+            for (const RefCase& c : cases) {
+                if (c.kick.empty() || !feedRefCase(model, c)) continue;
+                std::vector<double> base(static_cast<size_t>(kCorpusAlphabet));
+                for (int i = 0; i < kCorpusAlphabet; ++i) base[static_cast<size_t>(i)] = model.logits()[i];
+                RefCase shifted = c;
+                for (int& k : shifted.kick) k = (k + 1) % 3;
+                if (!feedRefCase(model, shifted)) continue;
+                double d = 0.0;
+                for (int i = 0; i < kCorpusAlphabet; ++i) d = std::max(d, std::fabs(model.logits()[i] - base[static_cast<size_t>(i)]));
+                worst = std::max(worst, d);
+                if (d > 1e-4) ++moved;
+            }
+            check(moved == static_cast<int>(cases.size()) && worst > 1e-3,
+                  "the kick class reaches the output: rotating it moves every reference case's logits",
+                  fmt("%d of %zu cases moved, largest change %.4f", moved, cases.size(), worst));
+        } else {
+            check(false, "loads bass.phosmdl for the kick-input check", error);
         }
     }
 
@@ -3803,10 +4057,13 @@ void testForm()
     }
 
     // Easwaran and Butler: something changes every eight bars. No two consecutive eight-bar groups of
-    // a core hold the same notes.
-    {
+    // a core hold the same notes. Measured in **both** bass modes: the learned bass phrase repeats
+    // every kBassPhraseBars bars and could not satisfy the rule by itself, which is why the group
+    // figure of Form.cpp stays in force when compose.bass_model is Neural (Composer.cpp says so).
+    for (const char* bassModel : { "Pattern", "Neural" }) {
         ParamStore q;
         q.parseText("compose.track_bars=256 compose.bass_variation=0 compose.level_match=Off master.auto_gain=Off");
+        q.parseText(fmt("compose.bass_model=%s", bassModel).c_str());
         Composer c(1234);
         int groups = 0, identical = 0, sameBass = 0;
         for (int ti = 0; ti < 6; ++ti) {
@@ -3841,7 +4098,8 @@ void testForm()
                 }
             }
         }
-        check(groups > 30 && identical == 0 && sameBass == 0, "no two consecutive eight-bar groups of a core hold the same notes, the bass alone included",
+        check(groups > 30 && identical == 0 && sameBass == 0,
+              fmt("bass_model=%s: no two consecutive eight-bar groups of a core hold the same notes, the bass alone included", bassModel).c_str(),
               fmt("%d consecutive pairs, %d identical, %d with the same bass", groups, identical, sameBass));
     }
 
@@ -4286,6 +4544,7 @@ int main()
     run("testKick", testKick);
     run("testBass", testBass);
     run("testComposer", testComposer);
+    run("testBassModel", testBassModel);
     run("testVariety", testVariety);
     run("testEngine", testEngine);
     run("testPhaseLock", testPhaseLock);

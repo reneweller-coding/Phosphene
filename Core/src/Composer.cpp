@@ -3,15 +3,19 @@
  * @brief Track plans, sound recipes, bars of kick and bass, and the conductor.
  */
 #include "phos/Composer.h"
+#include "phos/Corpus.h"
 #include "phos/Dsp.h"
 #include "phos/Engine.h"
 #include "phos/Harmony.h"
 #include "phos/Loudness.h"
+#include "phos/Model.h"
 #include "phos/Params.h"
 #include "phos/Patterns.h"
 #include "phos/Sfx.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <string>
 
 namespace phos {
 
@@ -116,7 +120,119 @@ double setLengthBars(const ParamStore& p)
     return std::max(32.0, minutes * bpm / kBeatsPerBar);
 }
 
+/** @brief Salt of the learned bass phrase: its own, so it does not move any other draw. */
+constexpr uint64_t kSaltBassLine = 0x424153534C4E0013ull;
+
+/** @brief The uniform source sampleMasked() draws from. */
+struct BassUniform {
+    Rng* r;
+    double operator()() const { return static_cast<double>(r->uniform()); }
+};
+
+/**
+ * @brief Sixteenth step of slot @p s of @p beat in @p pat, inside a bar.
+ *
+ * The pattern slots are positions in beats, and three of the five families land on sixteenths
+ * exactly. The Triplet family does not -- its 1/3 and 2/3 round to the first and the third sixteenth
+ * -- so what the model is told about a triplet bass is the nearest sixteenth. That is a real
+ * approximation and it is the only one available: the whole conditioning of docs/MODEL_FORMAT.md
+ * section 3, and the corpus it was counted on, live on a sixteenth grid. It affects the `step`,
+ * `bar`, `gap` and `kick` the model sees, never where the note is actually played.
+ */
+int bassSlotStep(const BassPatternDef& pat, int beat, int s)
+{
+    return beat * 4 + static_cast<int>(std::lround(pat.pos[s] * 4.0));
+}
+
+/**
+ * @brief Draws one bass phrase (kBassPhraseBars bars) for a pattern family from the learned role.
+ *
+ * The line is the whole phrase -- `kBassPhraseBars` bars of `pat.count` notes a beat -- drawn in one
+ * masked pass, because that is the unit the model was trained on: a bass loop, not a bar. It is a
+ * function of the track's seed and of nothing else, so bar 3000 is bar 3000 whether the night was
+ * played from the start or rendered in pieces (Composer.h, determinism).
+ *
+ * **The constraint set.** Scale tones only, and the register the pattern families already reach:
+ * from the seventh below the root down an octave -- the note `makeTrack` computes its gate limit for
+ * -- up to an octave above it. Held against the corpus, that window holds 90.2 % of real psytrance
+ * bass notes (`Tools/train/bass_stats.py`); the 7.4 % below it and the 2.3 % above are given up on
+ * purpose, because a lower note would invalidate the release floor the gate limit is computed from
+ * and the bass would start cutting its own tail.
+ *
+ * @param pat   the pattern family whose slots the phrase fills
+ * @param scale the track's mode
+ * @param seed  the track's bass-line seed
+ * @param out   kBassPhraseSlots entries; slots past `pat.count` of a beat are left at 0
+ * @return false when the model refuses a step or the masked draw fails; the caller then stays on the
+ *         pattern generator for the whole track rather than mixing two sources within one phrase.
+ */
+bool drawBassPhrase(NeuralModel& model, const BassPatternDef& pat, int scale, uint64_t seed, int8_t* out)
+{
+    const int lowRel = scaleDegree(scale, 6) - 12;     // the same note gateLimit() is computed for
+    const int highRel = 12;
+    std::vector<std::vector<uint8_t>> allowed;
+    std::vector<NoteCond> cond;
+    std::vector<int> steps;
+    for (int bar = 0; bar < kBassPhraseBars; ++bar)
+        for (int beat = 0; beat < kBeatsPerBar; ++beat)
+            for (int s = 0; s < pat.count; ++s)
+                steps.push_back(bar * 16 + bassSlotStep(pat, beat, s));
+    const size_t n = steps.size();
+    allowed.assign(n, std::vector<uint8_t>(static_cast<size_t>(kCorpusAlphabet), 0));
+    cond.resize(n);
+    for (size_t i = 0; i < n; ++i) {
+        for (int rel = lowRel; rel <= highRel; ++rel)
+            if (inScale(scale, rel)) allowed[i][static_cast<size_t>(PitchModel::symbol(rel))] = 1;
+        const int step = steps[i];
+        cond[i].step = step % 16;
+        cond[i].bar = (step / 16) % 8;
+        cond[i].gap = noteGapCode(step, i + 1 < n ? steps[i + 1] : 0, i + 1 < n);
+        cond[i].idx = noteIndexBucket(static_cast<int>(i));
+        cond[i].kick = kickClass(step);
+    }
+    Rng r;
+    r.seed(seed);
+    NeuralStepper stepper{ &model, kBassRole, 0, kBassPhraseBars, &cond, 0 };
+    std::vector<int> syms;
+    if (!sampleMasked(stepper, allowed, PitchModel::symbol(0), PitchModel::symbol(0), 1.0,
+                      BassUniform{ &r }, syms) || syms.size() != n)
+        return false;
+    size_t i = 0;
+    for (int bar = 0; bar < kBassPhraseBars; ++bar)
+        for (int beat = 0; beat < kBeatsPerBar; ++beat)
+            for (int s = 0; s < pat.count; ++s, ++i)
+                out[(bar * kBeatsPerBar + beat) * 3 + s] = static_cast<int8_t>(PitchModel::rel(syms[i]));
+    return true;
+}
+
 } // namespace
+
+/**
+ * @brief Fills a track's learned bass phrases, or leaves the plan on the pattern generator.
+ *
+ * Called once per track, on the composer's thread, after the track's two bass patterns are decided.
+ * The model is loaded lazily on first use and never on the audio thread; a missing weight file
+ * prints one line and leaves `bassNeural` false, which is exactly the behaviour the melodic side
+ * has when `melody.phosmdl` is not there.
+ */
+void Composer::makeBassPhrases(const ParamStore& p, TrackPlan& t) const
+{
+    t.bassNeural = false;
+    if (p.getInt(p.base(Module::Compose) + compose::BassModel) != 1) return;
+    std::string note;
+    NeuralModel* model = sharedBassModel(&note);
+    if (model == nullptr) {
+        if (!note.empty() && !bassModelReported_) { std::fprintf(stderr, "%s\n", note.c_str()); bassModelReported_ = true; }
+        return;
+    }
+    const uint64_t seed = mixSeed(trackSeed(t.index) ^ kSaltBassLine, 0);
+    const int patterns[2] = { t.primaryPattern, t.secondaryPattern };
+    for (int k = 0; k < 2; ++k)
+        if (!drawBassPhrase(*model, kBassPatterns[patterns[k]], t.scale,
+                            mixSeed(seed, static_cast<uint64_t>(k)), t.bassRel[k]))
+            return;
+    t.bassNeural = true;
+}
 
 /** @brief What a track can offer the instrumentation matrix. */
 static PartAvailability availabilityOf(const TrackPlan& plan)
@@ -380,6 +496,7 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
         t.primaryPattern = std::clamp(p.getInt(cb + compose::BassPattern), 0, kNumBassPatterns - 1);
         t.secondaryPattern = t.primaryPattern == 0 ? 1 : 0;
         t.gate = p.get(cb + compose::BassGate);
+        makeBassPhrases(p, t);
         if (p.getBool(cb + compose::LevelMatch)) {
             t.loudness = probeLoudness(p, t);
             for (int k = 0; k < kMelodyParts; ++k) t.partLoudness[k] = probeLoudness(p, t, k);
@@ -409,6 +526,10 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     const float gateMax = std::min(gateLimit(t.primaryPattern, t.bpm, lowest, releaseKnob),
                                    gateLimit(t.secondaryPattern, t.bpm, lowest, releaseKnob));
     t.gate = std::clamp(p.get(cb + compose::BassGate) + (2.0f * r.uniform() - 1.0f) * 0.12f * tv, 0.35f, std::max(0.35f, gateMax));
+
+    // The learned bass phrases, after the patterns they fill and before any probe render, so that the
+    // level match hears the track the way it will be played.
+    makeBassPhrases(p, t);
 
     // Kick character switches.
     t.kickEngine = -1;
@@ -671,7 +792,15 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
             n.beat = beat + pat.pos[s];
             n.length = static_cast<float>((next - pat.pos[s]) * plan.gate);
             n.part = Part::Bass;
-            n.pitch = static_cast<uint8_t>(root);
+            // The probe plays the track's own bass line, because a learned phrase is not the root
+            // over and over: a bar of octaves is measurably quieter through the same ladder than a
+            // bar of roots, and the level match between tracks would inherit that error. With the
+            // pattern generator the phrase is absent and this is the root, as it always was.
+            const int rel = plan.bassNeural
+                                ? plan.bassRel[0][((beat / kBeatsPerBar % kBassPhraseBars) * kBeatsPerBar
+                                                   + beat % kBeatsPerBar) * 3 + s]
+                                : 0;   // beat runs over the whole probe, so beat/4 is its bar
+            n.pitch = static_cast<uint8_t>(std::clamp(root + rel, 0, 127));
             n.velocity = 110;
             notes.push_back(n);
         }
@@ -913,7 +1042,8 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         block.seed(mixSeed(seed_ ^ kSaltBlock, (static_cast<uint64_t>(ti) << 32) | static_cast<uint64_t>(inTrack / 16)));
         const bool secondaryBlock = inTrack >= 16 && block.uniform() < 0.35f * bassVar;
         const bool bassBreak = block.uniform() < 0.3f * bassVar;
-        const int pattern = (secondaryBlock && inTrack % 16 >= 12) ? plan.secondaryPattern : plan.primaryPattern;
+        const bool secondary = secondaryBlock && inTrack % 16 >= 12;
+        const int pattern = secondary ? plan.secondaryPattern : plan.primaryPattern;
         const BassPatternDef& pat = kBassPatterns[pattern];
 
         // What the form says plays in this bar (Form.h).
@@ -945,6 +1075,10 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         static const int kFigureOctaves[7][3] = { { 0, 0, 1 }, { 0, 1, 0 }, { 1, 0, 0 }, { 0, 0, 0 }, { -1, 0, 0 }, { 0, 0, 0 }, { 0, 1, 0 } };
         const int figure2 = phrase.below(7), figure4 = phrase.below(7);
         const int barInPhrase = inTrack % 4;
+        // The learned bass has a phrase of its own length (kBassPhraseBars, eight bars) and reads the
+        // bar of the track with it; the figures above keep their four-bar phrase, so switching the
+        // knob cannot move a single note the pattern generator places.
+        const int barInBassPhrase = inTrack % kBassPhraseBars;
 
         const StyleProfile& style = styleProfile(styleOf(p));
         for (int beat = 0; beat < kBeatsPerBar; ++beat) {
@@ -965,8 +1099,13 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
             if (bassBreak && inTrack % 16 == 15 && beat >= 2) continue;
 
             int figure = -1;
-            if (beat == 3 && barInPhrase == 1 && varyBar2) figure = figure2;
-            if (beat == 3 && barInPhrase == 3 && varyBar4) figure = figure4;
+            // With the learned bass the phrase figures are gone: they are the pattern generator's one
+            // source of pitch variation, and the model is there to replace exactly that. The *group*
+            // figure stays in both modes, because it is not a pitch idea but a form rule -- it is what
+            // makes two consecutive eight-bar groups of a core differ (Form.cpp, kGroupFigures), and
+            // the learned phrase repeats every kBassPhraseBars bars and could not do that by itself.
+            if (!plan.bassNeural && beat == 3 && barInPhrase == 1 && varyBar2) figure = figure2;
+            if (!plan.bassNeural && beat == 3 && barInPhrase == 3 && varyBar4) figure = figure4;
             // The group's own change: every eight-bar group of a core ends on a figure that differs
             // from the previous group's, so two consecutive groups can never be the same bars.
             if (beat == 1 && bp.groupFigure >= 0) figure = bp.groupFigure;
@@ -974,6 +1113,14 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
                 const double pos = pat.pos[s];
                 const double next = s + 1 < pat.count ? pat.pos[s + 1] : 1.0;   // the last note ends before the next kick
                 int pitch = root;
+                // The learned phrase (Composer.h): the interval of this slot from the bass root. It is
+                // read against `baseRoot` and not against `root`, because the alphabet of the model is
+                // intervals to the *tonic* -- adding a chord degree on top would carry a learned
+                // interval out of the scale. compose.bass_follows_chords therefore has no effect on a
+                // learned bass, which the self test checks and docs/PLAN.md 6.9 records as a limit.
+                if (plan.bassNeural)
+                    pitch = baseRoot + plan.bassRel[secondary ? 1 : 0]
+                                             [(barInBassPhrase * kBeatsPerBar + beat) * 3 + s];
                 if (figure >= 0) {
                     const int idx = 3 - pat.count + s;
                     // Figure degrees count from the chord's degree, so they stay in the scale when the bass follows the chords.

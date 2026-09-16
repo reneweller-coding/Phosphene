@@ -802,6 +802,238 @@ Läufe sind gitignoriert: aus ihnen ließe sich die Trainingsschleife nachbauen,
 MIDI-Packs bleiben lokal. Auch die Referenzfälle sind **synthetisch** — ein halber Held-out-Loop,
 als Symbole und Schrittpositionen ausgeschrieben, *ist* der Loop.
 
+**16.09.2026, Phase 8 (Bass): erst gemessen, dann gebaut — der Bass als vierte Rolle.** Der Bass
+war bis heute in keiner Stufe gelernt: `role_of` in `Tools/corpus/build_corpus.py` gibt für ihn
+`None` zurück, er hat `PitchModel` nie benutzt, und seine Tonhöhe ist in `Core/src/Composer.cpp` der
+Grundton plus ein paar Phrasenfiguren. Bevor irgendetwas trainiert wurde, sind drei Dinge gemessen
+worden (`Tools/train/bass_stats.py`, `Tools/train/bass.py`); die Entscheidung, was gebaut wird,
+steht auf diesen Zahlen und auf nichts sonst.
+
+*Der Bass-Korpus.* Vier Psytrance-Packs begangen — die drei aus `PACKS` plus
+`Star Samples/Psy Trance Midis`, das allein 1 247 der Linien stellt: **1 551 Bass-Linien,
+96 677 Noten, 11 507 Takte**. Davon 375 exakte Dubletten und 249 Fast-Dubletten (Union-Find über den
+ganzen zusammengeführten Korpus, `dataset.loop_groups`). Die Extraktion ist die melodische, mit drei
+begründeten Abweichungen: die **untere** Stimme je Schritt statt der oberen (von 1 557 gelesenen
+Dateien haben nur 30 gleichzeitige Anschläge, es ändert also wenig — aber was es ändert, änderte es
+vorher falsch herum); die Regel „unter drei Tonhöhen ist Rhythmus, keine Melodie" ist **aufgehoben**,
+weil sie genau das typischste Material wegwürfe (337 Dateien haben eine Tonhöhe, 257 haben zwei);
+und ganz leere Takte am Anfang und Ende werden abgeschnitten, weil `top_line` das Raster auf ganze
+Takte aufrundet.
+
+**Messung 1: Wie viel ist in der Tonhöhe überhaupt zu holen?**
+
+| Rolle | Linien | Noten | Entropie 0. Ordnung | je Linie (Mittel/Median) | Anteil Grundton | Tonhöhen je Linie |
+|---|---|---|---|---|---|---|
+| Acid | 62 | 3 834 | 3,444 bit | 1,897 / 1,842 | 0,391 | 5 |
+| Lead | 183 | 7 055 | 3,477 bit | 1,934 / 1,918 | 0,410 | 5 |
+| Arp | 421 | 26 185 | 3,445 bit | 2,229 / 2,239 | 0,349 | 7 |
+| **Bass** | **1 551** | **96 677** | **2,755 bit** | **1,226 / 1,387** | **0,589** | **3** |
+
+Der Bass ist die flachste der vier Rollen — und zugleich die einzige, deren **Held-out-Kreuzentropie
+mit dem Kontext wirklich fällt** (bit je Note, Ordnung 0/1/2, ehrlicher Schnitt je Rolle, derselbe
+Schnitt-Seed wie im Training weiter unten): Acid 3,703 / 3,384 / 3,485; Lead 3,505 / 3,640 / 3,808;
+Arp 3,374 / 3,279 / 3,359; **Bass 3,073 / 1,712 / 1,544**. Bei den drei melodischen Rollen bewegt
+sich zwischen Ordnung 0 und Ordnung 2 weniger als ein Drittel Bit in irgendeine Richtung — auf 3 800
+bis 26 000 Noten trägt der Korpus die zweite Ordnung nicht. Beim Bass mit 96 677 Noten trägt er sie:
+Faktor **2,9** in der Perplexität. Ein Tonhöhenmodell ist hier also nicht deshalb interessant, weil
+viel Entropie da wäre, sondern weil die vorhandene **vorhersagbar** ist.
+
+**Messung 2: Wie viel ist im Anschlagsmuster zu holen, und wie viel davon sagt schon der Kick?**
+11 507 Takte, Anschlagsdichte 0,525. Die Wahrscheinlichkeit eines Anschlags je Sechzehntel:
+
+```
+0,32 0,59 0,64 0,65 | 0,18 0,55 0,74 0,57 | 0,21 0,61 0,67 0,64 | 0,19 0,55 0,75 0,53
+```
+
+Die vier Kick-Schritte sind dreimal seltener besetzt als die übrigen — die Kick-Lücke ist damit am
+Korpus **belegt** und nicht angenommen, obwohl in keiner dieser Dateien ein Kick steht (`read_midi`
+verwirft Kanal 10, und die Loops sind Einzelinstrument-Exporte). Bedingte Entropien, bit je Schritt:
+
+| Was man weiß | H |
+|---|---|
+| nur die Dichte | 0,9982 |
+| die Kick-Klasse des Schritts (auf dem Kick / Sechzehntel danach / Rest der Lücke) | 0,9062 |
+| den genauen Schritt | 0,8945 |
+| Schritt und ob der vorige Schritt besetzt war | 0,8709 |
+
+**Der Kick allein erklärt fast nichts**: 0,09 bit je Schritt, 1,5 bit je Takt von 16. Das ist die
+erste unbequeme Zahl dieser Runde und sie steht hier, weil sie später die Ablation erklärt. Die
+Struktur steckt nicht in der Ausrichtung am Kick, sondern im **gemeinsamen** Muster des Taktes.
+Held-out-Kreuzentropie je Takt (16 026 / 1 970 / 1 509 Takte): gleichverteilt über 2^16 **16,000**;
+unabhängig je Schritt **14,007**; Nachschlagetabelle über 16-Bit-Taktmuster mit Rückfall **7,532**
+(509 Muster im Training gesehen, 18,6 % der Testtakte nie); bestes **parametrisches** Modell, das
+keinen Takt auswendig lernen kann (P(Anschlag | Schritt, drei vorige, derselbe Schritt einen und
+zwei Beats früher), Krichevsky-Trofimov-Glättung) **7,604**. Ein lernendes Anschlagsmodell ist also
+rund **6,4 bit je Takt** wert — und es braucht dafür kein Netz.
+
+**Messung 3: Was `Composer::composeBars` heute produziert.** 10 235 Takte, fünf Stilprofile × acht
+Seeds × 256 Takte, als MIDI exportiert und mit denselben Funktionen vermessen:
+
+| | Korpus | `composeBars` |
+|---|---|---|
+| Anschlagsdichte | 0,525 | 0,534 |
+| verschiedene 16-Bit-Taktmuster | 641 | **7** |
+| Plug-in-Entropie des Taktmusters | 6,059 bit | **1,062 bit** |
+| Anteil Grundton | 0,589 | **0,972** |
+| Entropie der Tonhöhe (0. Ordnung) | 2,755 bit | **0,237 bit** |
+
+Sieben Muster über fünf Stile und acht Seeds, davon `.xxx.xxx.xxx.xxx` (Rolling) 69,4 %, ganz leer
+27,8 %, Gallop 2,0 %, alles andere unter 1 %. Der Grund steht in `makeTrack`: das primäre Muster
+wird nur mit Wahrscheinlichkeit *Track Variation* neu gewürfelt und fällt dann mit 0,45 wieder auf
+Rolling, und das sekundäre Muster erscheint nur in den letzten vier Takten mancher 16-Takt-Blöcke.
+**Die Stilprofile bewegen den Bassrhythmus praktisch nicht.**
+
+Und die entscheidende Zahl — der heutige Generator als Wahrscheinlichkeitsmodell über dieselben
+Ereignisse, gegen die held-out Korpus-Takte gerechnet:
+
+| Modell | bit je Takt |
+|---|---|
+| `composeBars` + Rückfall auf die Gleichverteilung | **14,304** |
+| `composeBars` + Rückfall auf sein eigenes Schritt-Modell | 25,925 |
+| korpus-angepasste Nachschlagetabelle + Gleichverteilung | 7,532 |
+
+**61,5 % der held-out Korpus-Takte kann der Generator überhaupt nicht spielen.** Diese Zahl braucht
+keine Glättung und ist deshalb die ehrliche; die beiden Kreuzentropien daneben brauchen eine, und
+welche es ist, steht im Kopf von `bass_stats.py` statt in einer Fußnote. Für die Tonhöhe, bit je
+Note: `composeBars` **6,429** gegen 1,544 für ein korpus-angepasstes Modell zweiter Ordnung.
+
+**Die Entscheidung, und warum sie so ausfällt.** Beide Lücken sind groß. Aber pro Takt gerechnet —
+der Korpus-Bass hat 8,4 Noten je Takt — ist die **Tonhöhenlücke rund 41 bit je Takt** (4,9 bit je
+Note) gegen **6,8 bit je Takt** beim Anschlagsmuster, also sechsmal so groß; gegen das, was am Ende
+wirklich gebaut wurde, sind es 49 bit je Takt. Dazu kommt, dass ein Tonhöhenmodell in die
+bestehenden Verträge hineinpasst und ein Anschlagsmodell sie brechen würde: die Engine leitet die
+Schwanzgrenze des Kicks und den Kick-Phasenschluss aus `firstBassSlot(pattern_)` her
+(`Engine::firstSlotSeconds`), und sie erfährt das Muster über ein `Override`-Steuerereignis auf
+`compose.bass_pattern`. Ein gelerntes Taktmuster hat keine Nummer in `kBassPatterns`. **Gebaut wurde
+also das Tonhöhenmodell.** Was für das Anschlagsmodell bewegt werden müsste, ist genau aufzählbar
+und steht unten unter „Offen".
+
+*Das Modell.* Vierte Rolle im unveränderten Alphabet: `vocab` bleibt 37, der Kopf sagt `roles=4`,
+der Bass ist `role=3`. Additiv dazu eine **zehnte** Einbettungstabelle `kick.emb` mit drei Zeilen
+und der Kopfschlüssel `condKick`; eine Datei mit `roles=3` hat beides nicht und wird weiter gelesen.
+`docs/MODEL_FORMAT.md` beschreibt das an Ort und Stelle. Gleiche Architektur wie die melodische
+(4 Schichten, Breite 192, 4 Köpfe, ffn 512, ctx 256), **1 461 093** Parameter gegen 1 460 325.
+
+| Prüfstein | Ergebnis |
+|---|---|
+| Schnitt | dreiteilig über Loop-Gruppen, Augmentierung (Takt-Rotation, jetzt **mit** dem Anschlagsraster) nur auf der Trainingsseite: 2 182 / 225 / 220 Linien, 13 513 Testnoten, **0,0 %** der Testlinien haben eine Schwester im Training |
+| Stufe A, hätte sie je eine Bass-Rolle gehabt | Witten-Bell auf den Bass-Trainingslinien: Ordnung 0 **2,1296**, Ordnung 1 **1,2117**, Ordnung 2 **1,1007** nats |
+| `Composer::composeBars` als Modell | Ordnung 0 über 87 417 erzeugte Noten, Add-One geglättet: **4,4560** nats |
+| Transformer, Psy allein | Test-NLL **0,4323** nats, 95 % KI [0,3689, 0,5018], 65 s Training |
+| gegen Stufe A Ordnung 2 | Abstand **0,6684** nats, 95 % KI [0,5514, 0,7894], P(Abstand ≤ 0) = 0,0000, besser auf **204 von 220** Linien |
+| gegen `composeBars` | Abstand **4,0237** nats, 95 % KI [3,4585, 4,5384], P(Abstand ≤ 0) = 0,0000, besser auf **199 von 220** Linien |
+| **Ablation: ohne Kick-Konditionierung** | **0,4293** nats. Gepaarter Bootstrap über dieselben Linien: Abstand **−0,0030** nats, 95 % KI [−0,0208, +0,0150], besser auf **109 von 220** Linien — ein Münzwurf, also **nichts** |
+| Mehr Daten | 252 Trance-Basslinien nur auf der Trainingsseite (2 als Fast-Dubletten von Testlinien entfernt): **0,3994** nats statt 0,4323 (−7,6 %) — das ist das ausgelieferte Modell |
+| int8-Export | NLL 0,3994 → **0,3994** (−0,01 %), 1 485 KiB; NumPy-Leser gegen PyTorch **9,54e−06** auf dem Logit |
+| C++-Inferenz gegen die PyTorch-Referenz | 12 Fälle, längster 256 Positionen: größter Logit-Fehler **9,78e−06**, größter Wahrscheinlichkeitsfehler **8,21e−07** |
+
+**Die Kick-Konditionierung bringt null, und das ist erklärbar.** Bei einem Kick auf jedem Viertel ist
+die Kick-Klasse eine **Funktion des Schritts**, den das Modell ohnehin bekommt — genau das, was
+Messung 2 schon sagte (0,9062 gegen 0,8945 bit). Neue Information wäre sie nur, wenn der Kick nicht
+vier auf dem Boden stünde, und das kommt im Korpus nicht vor: in diesen Dateien steht gar kein Kick.
+Und es kommt noch eines dazu: **die Klasse 0 (Note auf dem Kick) kommt im Komponisten gar nicht vor.**
+Keine der fünf Pattern-Familien setzt eine Bassnote auf den Schlag — die früheste Position ist das
+erste Sechzehntel danach —, also sieht das Modell beim Ziehen nur die Klassen 1 und 2, und die
+unterscheiden sich für ein Rolling-Muster genau so wie die Sechzehntel 1, 2 und 3, die es ohnehin
+als `step` bekommt.
+Die Tabelle bleibt trotzdem im Format und im Leser, weil sie 576 Parameter kostet, weil der Selbsttest
+nachweist, dass sie den Ausgang wirklich erreicht (die Klasse rotieren bewegt jeden Referenzfall), und
+weil ein Korpus mit echtem Kick sie ohne Formatwechsel füllen könnte. Sie ist damit **belegt wirkungslos
+und nicht belegt nützlich** — wer sie streichen will, darf: `condKick` darf fehlen.
+
+*Memorisierung* (`Tools/train/memorisation_bass.py`, Batterie und Positivkontrolle der melodischen
+Runde, mit einer Anpassung: die Takt-Definition verlangt **zwei** statt drei verschiedene Tonhöhen,
+weil ein Psytrance-Bass-Takt sonst fast nie gezählt würde; von 1 509 Held-out-Takten bleiben 729):
+
+| | exakte Taktkopien | längster geteilter Lauf | 8-Noten-Fenster im Abstand 0 |
+|---|---|---|---|
+| Held-out-Loops (die Referenz) | 39,37 % | 18 Noten (max. 24) | 81,72 % |
+| **Modell, T = 1** | **21,15 %** | 19 Noten (max. 24) | 83,83 % |
+| Trainingslinien gegen sich selbst | 100,00 % | 24 Noten | 100,00 % |
+| **Positivkontrolle** (überangepasst) | **90,32 %** | 24 Noten | 98,58 % |
+
+Das Modell kopiert **weniger** als zwei echte Psytrance-Basslinien einander gleichen. Die absoluten
+Zahlen sind für alle hoch, weil ein Bass-Takt ein Objekt niedriger Entropie ist; genau deshalb steht
+neben jeder eine Referenz und darunter eine Kontrolle, die ausschlägt.
+
+*Die Phrasenlänge ist gemessen, nicht gewählt.* Das Modell bekommt mit `bars`, wie lang der Loop
+ist, den es liest, und der Korpus hat ihm beigebracht: ein kurzer Bass-Loop ist ein statischer.
+Auf dem Rolling-Rhythmus und der Constraint-Menge des Komponisten gezogen, spielt es bei **vier**
+Takten den Grundton in **79 %** der Noten (Entropie 1,17 bit), bei **acht** Takten in **58 %**
+(2,08 bit) — gegen **53 %** und 2,99 bit für echte Basslinien, deren jeder Takt dieselbe
+Rolling-Figur ist. Vier Takte wäre die eine Länge gewesen, bei der der gelernte Bass kaum weniger
+statisch herauskäme als die Pattern-Familien. `kBassPhraseBars` ist deshalb **8** — und acht ist
+auch die Länge der Gruppe der Form.
+
+*Einbau.* `compose.bass_model` (Choice `Pattern`/`Neural`, Vorgabe **Pattern**, ans Ende der
+Compose-Tabelle gehängt). Das Modell wird einmal auf dem Komponisten-Thread geladen, nie auf dem
+Audio-Thread; fehlt die Datei, steht eine Zeile auf stderr und der Bass bleibt der alte. Je Track
+werden zwei Acht-Takt-Phrasen gezogen — eine für das primäre, eine für das sekundäre Muster —,
+beide allein aus dem Track-Seed, also ist Takt 3000 Takt 3000, ob die Nacht von vorn gespielt oder
+in Stücken gerendert wird. Constraint-Menge: Skalentöne von der Septime unter dem Grundton minus
+einer Oktave (**genau die Note, für die `gateLimit` gerechnet wird**) bis eine Oktave darüber; in
+diesem Fenster liegen **90,2 %** aller echten Bassnoten des Korpus, und die 7,4 % darunter werden
+bewusst aufgegeben, weil eine tiefere Note die Release-Untergrenze ungültig machte, aus der die Gate-
+Länge folgt.
+
+| Was nicht kaputtgehen durfte | Nachweis |
+|---|---|
+| Pattern-Modus unverändert | ein Render von 256 Takten ist **byte-gleich** mit demselben Render vor dieser Runde |
+| Kick-Phasenschluss und Schwanzgrenze | der gelernte Bass bewegt **nur Tonhöhen**: über 64 Takte 564 Bassnoten gegen 564, jeder Anschlag, jede Länge und jede Velocity identisch, 244 Tonhöhen anders; die Kicks ebenfalls identisch |
+| Register und Skala | 5 079 Noten über vier Seeds: 0 außerhalb der Skala, 0 unter der Note der Gate-Grenze, 0 über einer Oktave |
+| Determinismus | zwei Läufe mit demselben Seed sind gleich, und ein allein komponierter Takt ist derselbe Takt wie in der Folge |
+| Vorlaufzeit | zwei Phrasen zu 96 Noten je Track = 192 Symbole; bei 122,7 µs je Symbol (AVX2, gemessen im Vektortest) **23,5 ms je Track-Plan**, skalar 248 ms, NEON-Shim 173 ms. Ein Track-Plan kostet ohnehin rund zwei Sekunden, ein Track dauert bei 145 BPM sieben Minuten |
+| „Keine zwei aufeinanderfolgenden Acht-Takt-Gruppen eines Kerns sind gleich" | in **beiden** Modi geprüft; die Gruppenfigur aus `Form.cpp` bleibt deshalb auch im Neural-Modus in Kraft, die Phrasenfiguren nicht |
+
+*Und was am Ende wirklich herauskommt.* Dieselben 40 Renders — fünf Stilprofile × acht Seeds ×
+256 Takte, **10 235 Takte, 87 417 Bassnoten** — einmal mit `Pattern` und einmal mit `Neural`,
+mit denselben Funktionen vermessen, mit denen oben der Korpus vermessen wurde:
+
+| | `Pattern` | `Neural` | Korpus |
+|---|---|---|---|
+| Anteil Grundton | 0,972 | **0,704** | 0,589 |
+| Grundton + Oktaven | 0,983 | 0,764 | 0,619 |
+| Entropie der Tonhöhe (0. Ordnung) | 0,237 bit | **1,824 bit** | 2,755 bit |
+| Kreuzentropie der held-out Korpusnoten unter dieser Tonhöhenverteilung | 6,429 bit | **4,738 bit** | — |
+| Anschläge je Sechzehntel, Takt-Muster, Anschlagsdichte | — | **Zeichen für Zeichen dieselben** | — |
+
+Die letzte Zeile ist der Vertrag, über 10 235 Takte statt über die 64 des Selbsttests: die
+Rhythmik der beiden Läufe ist identisch, es bewegen sich nur Tonhöhen. Die Tonhöhenverteilung
+geht etwa ein Drittel des Weges von den Pattern-Familien zum Korpus. Weiter kommt sie nicht,
+weil der Komponist je Track **zwei** Phrasen zieht und sie wiederholt, und weil die
+Constraint-Menge die 7,4 % der Korpusnoten unter der Septime nicht zulässt.
+
+**Was der gelernte Bass nicht kann.** (1) Er ändert **kein** Anschlagsmuster — die 61,5 % der
+Korpus-Takte, die der Generator nicht spielen kann, kann er weiterhin nicht. (2)
+`compose.bass_follows_chords` wirkt auf ihn nicht: das Alphabet sind Intervalle zum **Grundton**, und
+eine gelernte Linie um eine Akkordstufe zu transponieren trüge sie aus der Skala; der Selbsttest hält
+diese Grenze als Messung fest (von 480 Noten bewegen sich 6, und die liegen alle auf Beat 1 — das ist
+die Gruppenfigur). (3) Die Phrase wiederholt sich alle acht Takte; über einen ganzen Track gibt es
+zwei Basslinien, nicht zwanzig. (4) Der `style`-Steckplatz ist weiter 0: die Packs tragen keine
+Stilbeschriftung. (5) Die Dreiolen-Familie liegt nicht auf dem Sechzehntelraster; was das Modell
+über eine Dreiole erfährt, ist das nächste Sechzehntel.
+
+**Offen — und was ein Anschlagsmodell kosten würde.** Die Messung sagt, dass 6,4 bit je Takt in der
+Rhythmik liegen und dass 61,5 % der echten Bass-Takte heute unerreichbar sind. Um das zu heben,
+müsste sich bewegen: (a) `Engine::firstSlotSeconds()` darf das erste Slot nicht mehr aus
+`firstBassSlot(pattern_)` ziehen, sondern muss es je Takt gesagt bekommen — also ein neuer
+Steuerkanal neben dem `Override` auf `compose.bass_pattern`, den `Kick::constrain` und
+`setPhaseTarget` lesen; (b) `shortestBassSlot` und damit `gateLimit` müssten über das gezogene Muster
+laufen statt über die Familie; (c) `probeLoudness` müsste dasselbe Muster spielen. Ein gelerntes
+Anschlagsmodell braucht dafür kein zweites Netz: das beste **parametrische** Modell dieser Messung
+(7,604 bit je Takt) ist eine Tabelle von Bernoulli-Parametern über Schritt und fünf Nachbarschritte
+und passte in dieselbe Form wie `CorpusTables.cpp`. Ebenfalls offen: der A/B-Hörvergleich (deshalb
+steht der Knopf auf `Pattern`), Seed-Streuung (je Modell lief ein Seed), und die Gerätemessung auf
+der Quest.
+
+*Dateien.* Neu: `Tools/train/{bass,bass_stats,train_bass,export_bass,memorisation_bass}.py`,
+`Core/data/bass.phosmdl` (+ `.ref.txt`). Additiv geändert: `Tools/train/models.py` (eine optionale
+zehnte Tabelle, Vorgabe aus — ein melodisches Modell hat unverändert 1 460 325 Parameter und
+denselben Kopf), `docs/MODEL_FORMAT.md`, `Core/include/phos/Model.h`, `Core/src/Model.cpp`,
+`Core/include/phos/Composer.h`, `Core/src/Composer.cpp`, `Core/include/phos/Params.h`,
+`Core/src/Params.cpp`, `Tests/selftest.cpp`. `build_corpus.py`, `dataset.py`, `train.py` und
+`export.py` sind **nicht** angefasst; was der Bass von ihnen braucht, importiert er.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
@@ -1487,7 +1719,7 @@ verbindlicher als die Zahlen.
 | **5 Komponist** | Korpus-Aufbereitung (`Tools/corpus`), Markov-Stufe A je Rolle, Form-Grammatik mit Pre-Drop-Vakuum, Bass-Slot-Hüllkurve im Stilprofil, Energiebogen, Tonartenreise, Übergänge, Sperren/Neuwürfeln, Stilprofile (5, Goa/Full-On aus `analyze_ref.py`), `.phosset`, MIDI-Export | 60-Minuten-Set aus einem Seed; MIDI in einer DAW geöffnet; Determinismus-Test; Memorisierungsabstand | 6 |
 | **6 GUI** | JUCE-Tabs, Arrange-Zeitleiste, Step-Vorschauen, Perform-Makros, Export-Tab, Screenshot-Modus, Handbuch-Generator | Standalone + VST3 bedienbar; pluginval grün | 6 |
 | **7 Quest** | NDK-Build, Qualitätsstufen, NEON-Messung auf Gerät, Performer-UI, Hand-Makros, OSC-Bridge | Set läuft auf der Quest 2 unter 30 % eines Kerns | 4 |
-| **8 Transformer** | Tokenisierung, Training (PyTorch, PC), int8-Export, C++-Inferenz über `Vec.h`, Constraint-Dekodierung, A/B gegen Stufe A, Ranker | **Training fertig 16.09.**: Held-out-NLL 1,3457 gegen 2,0833 (SSM) und 2,5084 (Stufe A), `.phosmdl` und Orakel liegen bei; offen: C++-Inferenz, Quest, Hörvergleich, Ranker | 5 |
+| **8 Transformer** | Tokenisierung, Training (PyTorch, PC), int8-Export, C++-Inferenz über `Vec.h`, Constraint-Dekodierung, A/B gegen Stufe A, Ranker | **Training fertig 16.09.**: Held-out-NLL 1,3457 gegen 2,0833 (SSM) und 2,5084 (Stufe A), `.phosmdl` und Orakel liegen bei; offen: C++-Inferenz, Quest, Hörvergleich, Ranker. **Bass als vierte Rolle 16.09.**: 0,3994 gegen 1,1007 (Stufe A) und 4,4560 nats (Pattern-Familien), `compose.bass_model` auf Pattern bis zum Hörvergleich | 5 |
 | **9 Qualität** | Hörrunden je Erzeuger, Nachkalibrierung, Kaleidoscope-Cues, Release (Inno Setup, README, PDF-Handbuch) | v1.0 | 5 |
 
 Nach Phase 1 gibt es den ersten hörbaren Prüfstein; nach Phase 5 ist das Produkt inhaltlich

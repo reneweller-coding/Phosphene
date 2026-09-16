@@ -420,19 +420,17 @@ void testModelKernels()
  * The cost line is the other half of what this is for: the scalar number is what the Quest's NEON
  * path will resemble. PHOS_MODEL_BENCH points at a larger model than the one in the repository.
  */
-void testModelForward()
+void testModelForwardFile(const std::string& file, const char* label, bool bench)
 {
-    section("the model's forward pass, on this path, against the trainer's reference vectors");
-    const char* bench = std::getenv("PHOS_MODEL_BENCH");
-    const std::string file = bench != nullptr ? std::string(bench) : std::string(PHOS_SOURCE_DATA_DIR "/melody.phosmdl");
     NeuralModel model;
     std::string error;
-    if (!model.load(file.c_str(), error)) { check(false, "loads the model", error); return; }
+    if (!model.load(file.c_str(), error)) { check(false, fmt("%s: loads the model", label).c_str(), error); return; }
 
     // The last case of the reference file (docs/MODEL_FORMAT.md section 5): the conditioning, the
-    // tokens and what PyTorch computed. Read with the smallest parser that can read it.
+    // tokens and what PyTorch computed. Read with the smallest parser that can read it. `kick` is
+    // present only in a four-role file's cases and stays empty otherwise.
     int role = 0, style = 0, bars = 0;
-    std::vector<int> tok, stepOf, barOf, gapOf, idxOf;
+    std::vector<int> tok, stepOf, barOf, gapOf, idxOf, kickOf;
     std::vector<double> want;
     {
         std::ifstream in(file + ".ref.txt");
@@ -452,12 +450,14 @@ void testModelForward()
             else if (key == "bar") ints(vals, barOf);
             else if (key == "gap") ints(vals, gapOf);
             else if (key == "idx") ints(vals, idxOf);
+            else if (key == "kick") ints(vals, kickOf);
             else if (key == "logits") { want.clear(); double x; while (vals >> x) want.push_back(x); }
         }
     }
     const size_t n = tok.size();
-    if (n == 0 || want.empty() || stepOf.size() != n || barOf.size() != n || gapOf.size() != n || idxOf.size() != n) {
-        check(false, "reads the reference vectors", file + ".ref.txt");
+    if (n == 0 || want.empty() || stepOf.size() != n || barOf.size() != n || gapOf.size() != n || idxOf.size() != n
+        || (!kickOf.empty() && kickOf.size() != n)) {
+        check(false, fmt("%s: reads the reference vectors", label).c_str(), file + ".ref.txt");
         return;
     }
     model.begin(role, style, bars + 1);
@@ -467,7 +467,8 @@ void testModelForward()
         c.bar = barOf[i];
         c.gap = gapOf[i];
         c.idx = idxOf[i];
-        if (!model.step(tok[i], c)) { check(false, "feeds the reference context", fmt("stopped at position %zu", i)); return; }
+        c.kick = kickOf.empty() ? 0 : kickOf[i];
+        if (!model.step(tok[i], c)) { check(false, fmt("%s: feeds the reference context", label).c_str(), fmt("stopped at position %zu", i)); return; }
     }
     double worst = 0.0;
     std::string bits;
@@ -478,11 +479,12 @@ void testModelForward()
         std::memcpy(&u, &v, 4);
         bits += fmt("%08x", u);
     }
-    check(worst < 1e-3, "the whole forward pass matches PyTorch on this path",
+    check(worst < 1e-3, fmt("%s: the whole forward pass matches PyTorch on this path", label).c_str(),
           fmt("%zu positions, largest logit error %.2e (the format allows 1e-3)", n, worst));
     // Printed as bits as well: the three builds of this test are diffed against each other, and the
     // line has to be character for character the same.
-    std::printf("         logits after %zu positions: %s\n", n, bits.c_str());
+    std::printf("         %s logits after %zu positions: %s\n", label, n, bits.c_str());
+    if (!bench) return;
 
     const auto t0 = std::chrono::steady_clock::now();
     const int lines = 40, notes = 16;
@@ -499,6 +501,17 @@ void testModelForward()
     const double us = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() * 1e6;
     std::printf("         cost %s, %zu parameters: %.2f us per symbol, %.2f ms per 16-note line\n",
                 kVecPathName, model.info().parameters, us / (lines * notes), us / lines / 1000.0);
+}
+
+void testModelForward()
+{
+    section("the model's forward pass, on this path, against the trainer's reference vectors");
+    const char* bench = std::getenv("PHOS_MODEL_BENCH");
+    testModelForwardFile(bench != nullptr ? std::string(bench) : std::string(PHOS_SOURCE_DATA_DIR "/melody.phosmdl"),
+                         "melody", true);
+    // The bass file is the same architecture with a fourth role and a tenth embedding table, so its
+    // extra laneAdd has to be bit-identical across the paths for the same reason every other one is.
+    if (bench == nullptr) testModelForwardFile(PHOS_SOURCE_DATA_DIR "/bass.phosmdl", "bass", false);
 }
 
 /**
