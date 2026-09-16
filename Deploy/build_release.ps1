@@ -151,7 +151,20 @@ if (-not $SkipTests) {
         # release build to exactly this.
         Remove-Item env:PHOS_MUTE -ErrorAction SilentlyContinue
         & ctest --test-dir $buildDir -C Release --output-on-failure
-        if ($LASTEXITCODE -ne 0) { throw "the test suite failed in the release configuration -- nothing is packaged" }
+        $code = $LASTEXITCODE
+        # Keep the evidence. ctest writes Testing\Temporary\LastTest.log and overwrites it on the
+        # next run, so the log of a failure is gone the moment anyone re-runs the suite to see
+        # whether it was transient -- which is the first thing anyone does. On 16.09.2026 the self
+        # test failed once in a run of eight and was green in the seventeen runs that followed; by
+        # then the only record of which check had failed had been overwritten, and the cause is
+        # still unknown. A timestamped copy costs nothing and makes the next one answerable.
+        $last = Join-Path $buildDir "Testing\Temporary\LastTest.log"
+        if ($code -ne 0 -and (Test-Path $last)) {
+            $kept = Join-Path $root ("build-release-failure-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
+            Copy-Item $last $kept -Force
+            Write-Warning "the failing run's log is kept at $kept"
+        }
+        if ($code -ne 0) { throw "the test suite failed in the release configuration -- nothing is packaged" }
     }
 } else {
     Write-Warning "ctest skipped"
