@@ -59,10 +59,27 @@ void ControlPage::addParamCell(PhospheneProcessor& proc, int groupIndex, int par
         // one would renumber every table behind it: "lead.table=7" would select a different table in
         // an installation with the pack than in one without, and a state saved in the one would load
         // wrong in the other. The contract is that the index is the table.
-        const bool isTable = juce::String(proc.params().key(paramId)).endsWith(".table");
+        //
+        // Phase 8 has the same shape one step further on. `compose.melody_model` and
+        // `compose.bass_model` each offer a learned entry that means nothing at all when the weight
+        // file was not installed: the composer then draws exactly what "Markov" and "Pattern" draw
+        // and says so on stderr, which in a DAW is nowhere. Marked for the same reason as a missing
+        // table, and left in place for the same reason -- the index is the contract.
+        const juce::String key(proc.params().key(paramId));
+        const bool isTable = key.endsWith(".table");
+        const bool isMelodyModel = key == "compose.melody_model";
+        const bool isBassModel = key == "compose.bass_model";
+        bool learnedMissing = false;
+        if (isMelodyModel || isBassModel) {
+            const PhospheneProcessor::LearnedModels models = proc.learnedModels();
+            learnedMissing = isMelodyModel ? !models.melody : !models.bass;
+        }
         for (int i = 0; d.choices != nullptr && i <= static_cast<int>(d.maxValue); ++i) {
             juce::String text = d.choices[i];
             if (isTable && waveTableIsLibrary(i) && !waveTableLoaded(i)) text += " (missing)";
+            // Index 1 of both model lists is the learned draw; index 0 is the generator that is
+            // always there (Params.cpp, kMelodyModelNames and kBassModelNames).
+            if (learnedMissing && i == 1) text += " (missing)";
             cb->addItem(text, i + 1);
         }
         cb->setTooltip(juce::String(proc.params().key(paramId)));

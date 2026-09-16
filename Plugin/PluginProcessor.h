@@ -297,6 +297,39 @@ public:
     /** @brief The state of the library now; counted freshly, so it is valid after prepareToPlay(). */
     WaveTableLibrary waveTableLibrary() const;
 
+    /**
+     * @brief What became of the two learned models of Phase 8 in this process.
+     *
+     * The same shape of answer as WaveTableLibrary and for the same reason: `melody.phosmdl` and
+     * `bass.phosmdl` are opened by bare name, a file that is not there is not an error but a quiet
+     * fall back to the Markov model and the pattern families, and the one line the core prints about
+     * it goes to stderr -- which inside a DAW is nowhere. So the plugin asks the question once, at
+     * start-up, and the Set tab shows the answer (EditorSetTab.cpp).
+     *
+     * Process-wide and not per instance: phos::sharedMelodyModel() and phos::sharedBassModel() load
+     * once and are never unloaded, so every instance has exactly this.
+     */
+    struct LearnedModels {
+        juce::String directory;    ///< where the plugin found the two files; empty when it found none
+        bool melody = false;       ///< the learned melody model really loaded (else: the Markov model)
+        bool bass = false;         ///< the learned bass role really loaded (else: the pattern families)
+        double melodyNll = 0.0;    ///< held-out nats per token the melody file declares
+        double bassNll = 0.0;      ///< the same, out of the bass file
+        juce::String melodyNote;   ///< the core's own message when the melody model did not load
+        juce::String bassNote;     ///< the same for the bass model
+        /**
+         * @brief A model loaded although nothing was installed beside the binary.
+         *
+         * Only a development build can reach this: there PhospheneCore still carries
+         * PHOS_SOURCE_DATA_DIR and therefore finds Core/data on the machine that compiled it
+         * (Core/CMakeLists.txt). It is shown, because a build that works only here looks from the
+         * outside exactly like one that works everywhere.
+         */
+        bool fromSourceTree = false;
+    };
+    /** @brief What the two models are in this process; settled once, before the first engine. */
+    LearnedModels learnedModels() const;
+
     /** @brief The set seed. */
     uint64_t seed() const { return seed_.load(std::memory_order_relaxed); }
     /** @brief Chooses another set (message thread); restarts playback from the top. */

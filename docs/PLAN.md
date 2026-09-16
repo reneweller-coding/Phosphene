@@ -2756,6 +2756,123 @@ Breite gemessen statt behauptet wird.
 **eine Schranke in `testReverb`** von −30 auf −29,5 dB, siehe oben), `Tools/metrics.py`. Neu:
 `Tools/ref_width.py`, `Tools/ref_width.json`.
 
+**16.09.2026, Nachtrag: die gelernten Modelle erreichen Plugin und Quest**
+
+Die beiden offenen Löcher der Release-Runde, beide geschlossen. Sie gehören zusammen: das erste
+schaltete Phase 8 im Produkt still ab, das zweite sorgte dafür, dass genau das auf der Baumaschine
+niemandem auffiel.
+
+**1. Niemand rief `setModelSearchPath()`.** `Plugin/PluginProcessor.cpp` setzte nur den
+Wavetable-Pfad. Jetzt tut `installSearchPaths()` beides — im Konstruktor des Prozessors, vor dem
+Composer-Thread, also vor dem ersten `Engine::prepare()` und vor der ersten Kompositionsrunde im
+Prozess. Gesucht wird wie beim Pack: neben der Binärdatei, dann `Contents/Resources` (VST3), beides
+aus `currentExecutableFile` und `currentApplicationFile`; `Plugin/CMakeLists.txt` legt jetzt alle drei
+Dateien an beide Stellen, nicht nur das Pack. Die Quest packt die beiden `.phosmdl` wie das Pack als
+APK-Asset einmalig nach `internalDataPath` aus (`prepareAsset`, `prepareModels`) und meldet den Pfad
+in `App::init()` an, vor dem Composer-Thread.
+
+**Die Modelle werden dabei sofort geladen, nicht erst wenn der Knopf sie verlangt** — sonst wüsste
+der Set-Reiter genau in dem Zustand nichts, in dem der Nutzer es wissen muss (Modelle aus, Dateien
+fehlen). Kosten: rund 13 MB gepackte Gewichte und etwa eine Zehntelsekunde je Prozess, einmal; das
+Laden ist idempotent, der Composer findet die Arbeit später getan vor.
+
+**Sichtbar statt still.** Der Wavetable-Runde folgend, aber eine Stufe weiter: der Set-Reiter trägt
+eine Gruppe „Pitch models" mit einer Zeile je Teil — `Melody:  learned, 1.15 nats` (was die Datei
+selbst als gehaltene NLL angibt; die Bassdatei sagt 0.40) beziehungsweise
+`Melody:  not installed -- Markov` in der Warnfarbe des Mischpults, mit dem Verzeichnis oder der
+Fehlermeldung des Kerns im Tooltip. Zusätzlich markieren beide Auswahlfelder ihren gelernten Eintrag
+als `Neural (missing)`, nach derselben Regel und aus demselben Grund wie eine fehlende
+Bibliothekstabelle: **markiert, nicht entfernt**, weil ein Choice-Index ein Vertrag ist (eine
+entfernte Zeile nummeriert alles dahinter um, und ein anderswo gespeicherter Zustand lädt falsch).
+Warum beides: eine Markierung in einem zugeklappten Auswahlfeld sieht nur, wer schon hinschaut; eine
+Zeile auf der Seite sieht auch, wer nicht hinschaut. Und nützlich ist nicht die Lampe, sondern der
+Grund — welche der beiden Dateien fehlt, und ob die geladene aus einer Installation kam oder aus dem
+Quellbaum dieser Maschine (`fromSourceTree`, der Fall, der hier funktioniert und sonst nirgends).
+
+**2. `PHOS_SOURCE_DATA_DIR` steht nicht mehr in ausgelieferten Binärdateien.** Neue Option
+`PHOS_SHIP` (Wurzel-`CMakeLists.txt`); `Core/CMakeLists.txt` definiert den Pfad nur ohne sie,
+`Deploy/build_release.ps1` setzt sie, und `ctest` läuft in genau dieser Konfiguration — nicht in
+einer anderen. Die Testprogramme bekommen den Pfad weiter, aber auf ihren eigenen Zielen
+(`Tests/CMakeLists.txt`): ein Testprogramm darf wissen, wo die Quellen liegen, die Bibliothek nicht.
+Die Namenssuche des Kerns bedienen die Tests so, wie eine portable Installation es tut — die drei
+Dateien liegen neben der Binärdatei, und das Arbeitsverzeichnis des Selbsttests ist dieses
+Verzeichnis. Die Referenzaufnahme des Release-Laufs entstand bisher im Build-Baum *ohne* Daten
+daneben und funktionierte nur, weil jede Binärdatei heimlich den Quellbaum las; sie bekommt jetzt ein
+eigenes Verzeichnis mit einer Kopie von `Core/data`. Und Prüfung F2 der Paketprüfung **scheitert**,
+statt zu warnen: ein Paket, in dem der Pfad noch steckt, ist ein falsch gebautes Paket, und Prüfung F
+misst dann nichts.
+
+*Der Nachweis ist der Fehler, den es verdeckte.* Dieselbe Staging-Kopie, dieselbe gelöschte
+`bass.phosmdl`, dieselbe Prüfung — einmal mit dem Define und einmal ohne:
+
+| Build | alles gestaged | `bass.phosmdl` gelöscht |
+|---|---|---|
+| `PHOS_SHIP=OFF` (wie bisher jedes Release) | identisch zur Referenz | **identisch zur Referenz** — der Fehler ist unsichtbar, Prüfung F geht durch |
+| `PHOS_SHIP=ON` | identisch zur Referenz | **anders als die Referenz** — Prüfung F scheitert |
+
+Beide Builds rendern mit vollständigem Staging denselben Hash (`5FF2961CFF3C6D32…`), die Umstellung
+ändert also nichts am Klang; sie ändert nur, ob der Fehler messbar ist. Am echten Skript
+nachgefahren: mit gelöschter gestagter `bass.phosmdl` meldet `check_package.ps1` jetzt **drei**
+Fehler (A „missing", F „does not render the reference", H „that runtime loses Phase 8"), und mit
+einer ohne `PHOS_SHIP` gebauten `phos_render.exe` im Staging meldet F2 „embeds
+G:/…/Core/data — built without -DPHOS_SHIP=ON, so check F above proves nothing".
+
+**Neue Prüfung H** in `Tools/release/check_package.ps1`: die beiden `.phosmdl` an *jeder* Stelle, an
+der eine Laufzeit sucht — neben den Binärdateien, in `Phosphene.vst3\Contents\Resources`, als
+`assets/` im APK. A, B und C prüfen die Dateien einzeln; H schreibt die Suchreihenfolge als
+Paketanforderung auf, damit eine vierte Oberfläche einen Ort hat, an dem sie stehen muss, und damit
+der Fehler sagt, *welche Laufzeit* Phase 8 verliert.
+
+*Gemessen.* Der ganze `ctest` in der Konfiguration, die ausgeliefert wird
+(`-DPHOS_SHIP=ON -DPHOS_STATIC_RUNTIME=ON -DPHOS_AVX2=ON`): **8 von 8**, 685 s — Selbsttest 267 von
+267, Cue-Prüfung 13, Vektortests 16/16/16 in AVX2, NEON-Shim und skalar, Hosttest **119 Prüfungen,
+0 Fehler**, VST3-Test 36. Im Entwicklungsbuild dieselben acht grün mit 117 Hosttest-Prüfungen; der
+Unterschied sind die zwei zusätzlichen Prüfungen, die nur ohne Quellbaum-Rückfall etwas zu messen
+haben. Neu: sechs im Hosttest (zwei Hälften — Dateien daneben, Dateien nirgends), vier im VST3-Test,
+sechs Zeilen Prüfung H im Paket-Check. Ein Standard-Render ist bitgleich zur Basis be3130f
+(`2DB1EAF16D4EBAB4851DF0D3073ADA4B`, 64 Takte).
+
+**Jede zuerst scheitern gesehen.** Gegen den unreparierten Stand — `setModelSearchPath()` übersprungen
+— fielen genau die sechs neuen Hosttest-Prüfungen, mit `Melody:  not installed -- Markov` im
+Set-Reiter und `marks=2` im Kindprozess. Danach fünf Mutationen, jede gefangen, jede
+zurückgenommen, `git diff` sauber: (1) der `setModelSearchPath()`-Aufruf weg → 4 Hosttest-Fehler;
+(2) die Set-Reiter-Zeile sagt nie „learned" → 1; (3) `melody.phosmdl` nicht mehr ins VST3-Bundle
+kopiert → 2 VST3-Fehler; (4) `melody.phosmdl` nicht mehr neben die Binärdateien gestaged → 3
+Paketfehler, darunter F; (5) `bass.phosmdl` nicht mehr ins APK → 2 Paketfehler (C und H). Eine sechste
+Mutation wurde verworfen, weil sie **kein** Fehler war: die Staging-Kopie ins Bundle ist redundant,
+seit `Plugin/CMakeLists.txt` dieselben Dateien schon dorthin legt und das Bundle als Ganzes gestaged
+wird. Das APK wächst von **4.588.497 auf 7.631.957 Bytes**.
+
+*Die Prüfungen selbst.* „Da" und „nicht da" lassen sich für die Modelle nicht im selben Prozess
+inszenieren: `sharedMelodyModel()` lädt einmal und entlädt nie, und das Plugin löst sein
+Ressourcenverzeichnis einmal auf — anders als die Wavetable-Bibliothek, die ein
+`resetWaveTableLibrary()` hat. Die Abwesenheit wird deshalb so gestellt, wie sie nur zu stellen ist:
+eine Kopie der Hosttest-Binärdatei in einem leeren Verzeichnis, als Kindprozess gestartet
+(`--probe-models`), die eine Zeile zurückmeldet. Und weil ein Entwicklungsbuild dort den Quellbaum
+findet, prüft der Elternprozess `#if defined(PHOS_SOURCE_DATA_DIR)` **beide** Ausgänge: im
+Entwicklungsbuild muss das Kind die Modelle finden *und* sagen, dass sie von außerhalb der
+Installation kamen; im Auslieferungsbuild muss es den Rückfall melden, beide Auswahlfelder markieren
+und trotzdem klingen.
+
+*Nicht geprüft.* Kein Headset am Rechner: das APK ist gebaut, signiert und auf seine Assets geprüft,
+aber nicht installiert — `prepareModels()` ist nie auf einem Gerät gelaufen. Keine DAW auf der
+Maschine: der VST3-Pfad ist über `phos_vst3test` und das Bundle geprüft, nicht in einem Host.
+
+*Dateien.* Geändert: `Plugin/PluginProcessor.cpp` und `.h` (`resolveResourceDirectory`,
+`installSearchPaths`, `LearnedModels`), `Plugin/EditorSetTab.cpp` (Gruppe „Pitch models"),
+`Plugin/EditorLayout.cpp` (die Markierung), `Plugin/CMakeLists.txt` (alle drei Dateien neben beide
+Artefakte), `Quest/src/main.cpp` (`prepareAsset`, `prepareModels`), `Quest/build_apk.ps1` und
+`Quest/README.md` (drei Assets statt einem), `CMakeLists.txt` und `Core/CMakeLists.txt` (`PHOS_SHIP`),
+`Tests/CMakeLists.txt` (Daten neben die Testbinärdateien, Arbeitsverzeichnis des Selbsttests,
+`phos_test_data_dir`), `Tests/hosttest.cpp` (`probeModels`, `findLabel`, zwei Abschnitte),
+`Tests/vst3test.cpp` (alle drei Bundle-Dateien), `Deploy/build_release.ps1` (`-DPHOS_SHIP=ON`,
+Referenzaufnahme mit eigenen Daten), `Tools/release/check_package.ps1` (C erweitert, F2 scheitert
+statt zu warnen, neue Prüfung H), `Tools/render/main.cpp` (nur ein Kommentar).
+
+*Nicht aufgeräumt.* `Core/include/phos/WaveTableFile.h` sagt in seinem Doxygen-Kommentar noch, ein
+Build ohne Suchpfad finde die Datei „beside the sources through `PHOS_SOURCE_DATA_DIR`"; das gilt nur
+noch für einen Entwicklungsbuild. Die Datei gehörte in dieser Runde einem anderen Agenten.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

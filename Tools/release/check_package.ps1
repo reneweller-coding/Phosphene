@@ -18,7 +18,7 @@
 #
 #   A  every file the runtime needs is there and is not empty;
 #   B  every data file is byte-for-byte the one in Core/data (a truncated or stale copy is caught);
-#   C  the APK really carries the wavetable pack as an asset, at the right length;
+#   C  the APK really carries all three data files as assets, at the right length;
 #   D  the version is the same in the renderer, in the standalone's version resource and in the
 #      VST3's -- one number, four places, which is where Noctuary once shipped 1.1.0 with 1.0.0
 #      inside the binary;
@@ -26,7 +26,9 @@
 #   F  the staged renderer runs from an unrelated directory and renders the reference bit for bit,
 #      with both neural models switched on. Read what this does and does not prove -- the comment at
 #      check F below is there because the first version of it proved nothing at all;
-#   G  the manual is there, carries this version, and has no unreachable-parameter hole in it.
+#   G  the manual is there, carries this version, and has no unreachable-parameter hole in it;
+#   H  the two learned models of Phase 8 are in every place the three runtimes look for them, which
+#      since 16.09.2026 is the only way they are found at all.
 #
 # It then writes the manifest -- every staged file with its size and SHA-256 -- which is what goes
 # into the release notes and what anybody can check a download against.
@@ -110,23 +112,31 @@ Get-ChildItem -LiteralPath $Stage -Recurse -File | ForEach-Object {
     if (-not $declared.ContainsKey($rel.ToLower())) { Fail ("not declared, but staged: $rel") }
 }
 
-# ---------------------------------------------------------------- C: the APK's asset
-Write-Host "C    the APK's wavetable asset"
+# ---------------------------------------------------------------- C: the APK's assets
+# All three, because the headset unpacks all three (Quest/src/main.cpp, prepareAsset). A missing pack
+# is the six built-in tables; a missing model is the Markov composer and the pattern families. Both
+# are audible and neither is fatal, and the Quest is the one surface with no stderr for anybody to
+# read -- so nothing at all would say so.
+Write-Host "C    the APK's assets"
 $apk = Join-Path $Stage "PhospheneQuest.apk"
+$apkAssets = @{}
 if (Test-Path -LiteralPath $apk) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip = [IO.Compression.ZipFile]::OpenRead($apk)
     try {
-        $entry = $zip.Entries | Where-Object { $_.FullName -eq "assets/library.phoswt" }
-        $want = (Get-Item -LiteralPath (Join-Path $data "library.phoswt")).Length
-        if (-not $entry) {
-            Fail "the APK carries no assets/library.phoswt -- on the headset that is the six built-in tables, which is audible and not fatal, so it would ship unnoticed"
-        } elseif ($entry.Length -ne $want) {
-            Fail ("the APK's assets/library.phoswt is {0:N0} bytes, not the {1:N0} of Core/data" -f $entry.Length, $want)
-        } else {
-            Ok ("assets/library.phoswt  {0:N0} bytes, {1:N0} compressed" -f $entry.Length, $entry.CompressedLength)
-        }
+        foreach ($e in $zip.Entries) { if ($e.FullName.StartsWith("assets/")) { $apkAssets[$e.FullName] = @($e.Length, $e.CompressedLength) } }
     } finally { $zip.Dispose() }
+    foreach ($f in @("library.phoswt", "melody.phosmdl", "bass.phosmdl")) {
+        $key = "assets/$f"
+        $want = (Get-Item -LiteralPath (Join-Path $data $f)).Length
+        if (-not $apkAssets.ContainsKey($key)) {
+            Fail "the APK carries no $key -- on the headset that is a silent fallback, which is audible and not fatal, so it would ship unnoticed"
+        } elseif ($apkAssets[$key][0] -ne $want) {
+            Fail ("the APK's {0} is {1:N0} bytes, not the {2:N0} of Core/data" -f $key, $apkAssets[$key][0], $want)
+        } else {
+            Ok ("{0}  {1:N0} bytes, {2:N0} compressed" -f $key, $apkAssets[$key][0], $apkAssets[$key][1])
+        }
+    }
 }
 
 # ---------------------------------------------------------------- D: one version, everywhere
@@ -169,27 +179,28 @@ if (-not $dumpbin) {
 }
 
 # ---------------------------------------------------------------- F: the data path, end to end
-# WHAT THIS PROVES, AND WHAT IT DOES NOT.
+# WHAT THIS PROVES -- AND WHAT IT DID NOT, UNTIL THE PATH INTO THE SOURCE TREE WAS TAKEN OUT.
 #
-# It was written to prove the whole data path at once -- staged renderer, started somewhere else,
-# renders the reference, therefore it found the staged data files. It does not, and the way that was
-# found out is worth writing down: with the staged bass.phosmdl deleted outright, and again with one
-# byte of the staged melody.phosmdl flipped, this check still passed. The core's lookup has a third
-# step, PHOS_SOURCE_DATA_DIR, which Core/CMakeLists.txt bakes into the binary as an absolute path
-# into the developer's own source tree -- so on the machine that built it, every Phosphene binary
-# finds Core/data no matter what is or is not staged beside it. No run-time test on the build
-# machine can tell "opened the staged copy" from "opened the source copy".
+# It was written to prove the whole data path at once: staged renderer, started somewhere else,
+# renders the reference, therefore it found the staged data files. On 16.09.2026 it did not, and the
+# way that was found out is worth keeping: with the staged bass.phosmdl deleted outright, and again
+# with one byte of the staged melody.phosmdl flipped, this check still passed. The core's lookup had
+# a third step, PHOS_SOURCE_DATA_DIR, which Core/CMakeLists.txt baked into every binary as an
+# absolute path into the developer's own source tree -- so on the machine that built it, a Phosphene
+# binary found Core/data no matter what was or was not staged beside it, and no run-time test on the
+# build machine could tell "opened the staged copy" from "opened the source copy".
 #
-# So it is scoped to what it really does prove, which is still worth the fifteen seconds: the staged
-# binary is the build that ctest passed and not a stale or half-copied one, it starts and runs with
-# no working directory of its own, the static-runtime build renders exactly what the tested build
-# renders, and both neural models load and are used (they are off by default, hence the --set).
+# A shipping build no longer defines it (PHOS_SHIP, which Deploy/build_release.ps1 sets), so the
+# staged binary now has exactly two places to look: beside itself and its working directory. This
+# check gives it a working directory with nothing in it, which leaves only the staged files -- and a
+# deleted or stale model therefore changes the render and is caught here. F2 below is what keeps it
+# that way: it *fails* the package if the string is in a staged binary after all.
 #
-# That the data files are present, in both declared directories, and byte-identical to Core/data is
-# checks A and B -- and those DO fail: A named the missing bass.phosmdl, B named the flipped byte.
-# What is left unproven is only the last step, and the fix for that is not here: PhospheneCore should
-# not carry a path into a source tree in a shipping build at all (see F2 below).
-Write-Host "F    the staged renderer is the build that was tested"
+# What it proves besides: the staged binary is the build ctest passed and not a stale or half-copied
+# one, it starts with no working directory of its own, the static-runtime build renders exactly what
+# the tested build renders, and both learned models load and are used -- they are off by default,
+# hence the --set, because a model file that nothing opens proves nothing by being present.
+Write-Host "F    the staged renderer is the build that was tested, reading the staged data"
 if (-not $Reference) {
     Write-Warning "  no -Reference render given -- NOT checked: that the staged binary renders what the tested one renders."
 } elseif (-not (Test-Path -LiteralPath $Reference)) {
@@ -214,9 +225,10 @@ if (-not $Reference) {
         $h2 = (Get-FileHash -LiteralPath $Reference -Algorithm SHA256).Hash
         if ($h1 -ne $h2) {
             Fail ("the staged renderer does not render the reference: $($h1.Substring(0,16)) against $($h2.Substring(0,16)). " +
-                  "The reference came from the build tree minutes ago, so a staged binary from an older build, " +
-                  "a half-finished copy, or a Release configuration that does not render what the tested one renders " +
-                  "are the things to look at.")
+                  "A shipping build has no source tree to fall back on, so the first thing to look at is the staged " +
+                  "data itself -- a missing, stale or truncated library.phoswt or .phosmdl beside the binary, which " +
+                  "checks A, B and H name. After that: a staged binary from an older build, a half-finished copy, " +
+                  "or a Release configuration that does not render what the tested one renders.")
         } else {
             Ok ("64 bars with both neural models, rendered from ${tmp}: identical to the reference ($($h1.Substring(0,16)))")
         }
@@ -225,15 +237,18 @@ if (-not $Reference) {
 }
 
 # ---------------------------------------------------------------- F2: the path into somebody's disk
-# A shipping binary should not carry an absolute path into the machine that built it. Here it is not
+# A shipping binary must not carry an absolute path into the machine that built it. Here it is not
 # only untidy, it is a live code path: PHOS_SOURCE_DATA_DIR is the last step of the core's lookup for
 # library.phoswt and the two models (Core/CMakeLists.txt), so on the build machine a binary with a
 # missing data file quietly reads the source tree instead and looks perfectly healthy -- which is
-# exactly why check F above cannot see a missing data file.
+# why check F above could not see a missing data file at all.
 #
-# Reported, not failed: the fix belongs in Core/CMakeLists.txt (do not define PHOS_SOURCE_DATA_DIR
-# when the build is a shipping one), which is not this script's to make. Until then, the staged
-# payload is guarded by checks A and B and not by anything the binaries do at run time.
+# **A failure, not a warning, since 16.09.2026.** It was reported and tolerated while the fix was
+# somebody else's to make; the fix now exists (configure with -DPHOS_SHIP=ON, which
+# Deploy/build_release.ps1 does), so a package that still embeds the path is a package built the
+# wrong way, and check F is measuring nothing. A warning here would be a check that cannot fail,
+# which this file has already learned once is worse than no check at all -- see the note about the
+# two separators below.
 Write-Host "F2   whether the binaries still carry the build machine's source path"
 # Both separators. CMake writes the define with forward slashes -- "G:/.../Core/data" -- and the
 # first version of this check looked for the backslash spelling only and cheerfully reported that
@@ -247,7 +262,7 @@ foreach ($rel in @("Phosphene.exe", "phos_render.exe", "Phosphene.vst3\Contents\
     $ascii = [Text.Encoding]::ASCII.GetString($bytes)
     $wide = [Text.Encoding]::Unicode.GetString($bytes)
     $hit = $needles | Where-Object { $ascii.Contains($_) -or $wide.Contains($_) } | Select-Object -First 1
-    if ($hit) { Write-Warning ("  $rel embeds $hit -- see the note above check F2") }
+    if ($hit) { Fail ("$rel embeds $hit -- built without -DPHOS_SHIP=ON, so check F above proves nothing: this binary reads the source tree whatever is staged beside it") }
     else { Ok "$rel carries no path into the source tree" }
 }
 
@@ -265,6 +280,42 @@ if (Test-Path -LiteralPath $pdf) {
     try { [void]$fs.Read($head, 0, 5) } finally { $fs.Dispose() }
     if ([Text.Encoding]::ASCII.GetString($head) -ne "%PDF-") { Fail "Phosphene-Manual.pdf does not start with %PDF- -- the browser did not print it" }
     else { Ok ("Phosphene-Manual.pdf  {0:N1} MB, a real PDF" -f ((Get-Item -LiteralPath $pdf).Length / 1MB)) }
+}
+
+# ---------------------------------------------------------------- H: every place the runtime looks
+# The two learned models of Phase 8 are opened by bare name, and since 16.09.2026 the only places
+# they are found are the ones a host points the core at -- the plugin and the renderer at their own
+# directory (Plugin/PluginProcessor.cpp, resolveResourceDirectory; Tools/render/main.cpp,
+# installDataSearchPath) and the Quest app at its unpacked assets (Quest/src/main.cpp,
+# prepareModels). PHOS_SOURCE_DATA_DIR used to be a fourth, and is no longer one; F2 above is what
+# keeps it that way.
+#
+# So the list below is the runtime's lookup written out as a payload requirement. A and B already
+# hash two of these entries and C the third; this section exists so that the *set* is stated in one
+# place: if a fourth surface ever learns to find the models, it belongs here, and if one of the three
+# quietly stops being filled, this says which runtime lost Phase 8 rather than which file is missing.
+Write-Host "H    both learned models in every place a runtime looks"
+$modelPlaces = @(
+    @{ Runtime = "Phosphene.exe, phos_render.exe (beside the binary)"; Path = ""; Kind = "stage" }
+    @{ Runtime = "Phosphene.vst3 (the bundle's Contents\Resources)";   Path = "Phosphene.vst3\Contents\Resources"; Kind = "stage" }
+    @{ Runtime = "PhospheneQuest.apk (unpacked on the first start)";   Path = "assets/"; Kind = "apk" }
+)
+foreach ($place in $modelPlaces) {
+    foreach ($f in @("melody.phosmdl", "bass.phosmdl")) {
+        $want = (Get-Item -LiteralPath (Join-Path $data $f)).Length
+        if ($place.Kind -eq "apk") {
+            if (-not (Test-Path -LiteralPath $apk)) { continue }
+            $key = $place.Path + $f
+            if (-not $apkAssets.ContainsKey($key)) { Fail ("{0}: no {1} -- that runtime loses Phase 8 and says so to nobody" -f $place.Runtime, $f) }
+            elseif ($apkAssets[$key][0] -ne $want) { Fail ("{0}: {1} is {2:N0} bytes, not the {3:N0} of Core/data" -f $place.Runtime, $f, $apkAssets[$key][0], $want) }
+            else { Ok ("{0}: {1}" -f $place.Runtime, $f) }
+        } else {
+            $p = if ($place.Path) { Join-Path (Join-Path $Stage $place.Path) $f } else { Join-Path $Stage $f }
+            if (-not (Test-Path -LiteralPath $p)) { Fail ("{0}: no {1} -- that runtime loses Phase 8 and says so only on stderr" -f $place.Runtime, $f) }
+            elseif ((Get-Item -LiteralPath $p).Length -ne $want) { Fail ("{0}: {1} is not the {2:N0} bytes of Core/data" -f $place.Runtime, $f, $want) }
+            else { Ok ("{0}: {1}" -f $place.Runtime, $f) }
+        }
+    }
 }
 
 # ---------------------------------------------------------------- the manifest

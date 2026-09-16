@@ -13,8 +13,15 @@
 # not shortcuts for a real release: each one prints a line saying what has not been verified, and
 # the manifest at the end says which of them was on.
 #
-# THREE THINGS MAKE THIS BUILD DIFFERENT FROM AN EVERYDAY ONE
+# FOUR THINGS MAKE THIS BUILD DIFFERENT FROM AN EVERYDAY ONE
 #
+#   * PHOS_SHIP=ON takes this checkout's Core\data path out of the binaries (Core\CMakeLists.txt).
+#     Everyday builds keep it as the last step of the core's lookup, which is convenient here and a
+#     hazard everywhere else: it puts this machine's directory layout inside every downloaded binary,
+#     and on this machine it makes a missing data file invisible -- a staged binary reads the source
+#     tree whatever is staged beside it, so a package with a model deleted renders exactly like a
+#     correct one. Set here and checked afterwards (check_package.ps1, check F2, which now fails
+#     rather than warns). ctest below runs in this configuration, not in a different one.
 #   * PHOS_STATIC_RUNTIME=ON links the MSVC runtime in, so nothing has to be installed first -- no
 #     redistributable, no DLL beside the executable. Checked afterwards rather than assumed
 #     (Tools\release\check_package.ps1, check E).
@@ -129,7 +136,7 @@ if (-not $SkipBuild) {
         # GitHub. The root CMakeLists points FETCHCONTENT_SOURCE_DIR_JUCE at ThirdParty/JUCE by
         # itself when that exists; this says it again for a tree where it does not.
         $juce = Join-Path $root "ThirdParty\JUCE"
-        $common = @("-DPHOS_STATIC_RUNTIME=ON", "-DPHOS_AVX2=ON", "-DPHOS_BUILD_TOOLS=ON", "-DPHOS_BUILD_PLUGIN=ON")
+        $common = @("-DPHOS_SHIP=ON", "-DPHOS_STATIC_RUNTIME=ON", "-DPHOS_AVX2=ON", "-DPHOS_BUILD_TOOLS=ON", "-DPHOS_BUILD_PLUGIN=ON")
         if (Test-Path (Join-Path $juce "CMakeLists.txt")) { $common += "-DFETCHCONTENT_SOURCE_DIR_JUCE=$juce" }
 
         & cmake -S $root -B $buildDir -G "Visual Studio 18 2026" -A x64 @common
@@ -171,15 +178,28 @@ if (-not $SkipTests) {
 }
 
 # ---------------------------------------------------------------- 3. the reference render
-# Made by the binary that is about to be staged, from the build tree, where none of the three data
-# files lies beside it -- so the core falls back to PHOS_SOURCE_DATA_DIR and reads Core/data. The
-# package check renders the same thing with the staged copy of the same binary from an unrelated
-# directory and requires the two to be identical; anything else means the staged data files are not
-# found, are stale, or are truncated. Both neural models are switched on because they are off by
-# default, and a model file that nothing opens proves nothing by being present.
+# Made by the binary that is about to be staged, reading a copy of Core\data that is not the staging
+# directory. The package check then renders the same thing with the *staged* copy of the same binary,
+# from an unrelated directory with nothing in it, and requires the two to be identical; anything else
+# means the staged data files are not found, are stale, or are truncated.
+#
+# A working directory of its own, filled here, and not $buildDir as before. Until 16.09.2026 this
+# render was made in the build tree with no data file beside it at all, and it worked only because
+# every binary carried PHOS_SOURCE_DATA_DIR and quietly read the source tree -- the very thing
+# PHOS_SHIP now removes. With that gone, a reference render from an empty directory would be a
+# fallback render, and comparing two fallback renders proves nothing about the models.
+#
+# Both neural models are switched on because they are off by default, and a model file that nothing
+# opens proves nothing by being present.
 Step "reference render (64 bars, both neural models)" {
     if (Test-Path $refWav) { Remove-Item $refWav -Force }
-    Push-Location $buildDir
+    $refDir = Join-Path $buildDir "refdata"
+    if (Test-Path $refDir) { Remove-Item $refDir -Recurse -Force }
+    New-Item -ItemType Directory -Force $refDir | Out-Null
+    foreach ($f in @("library.phoswt", "melody.phosmdl", "bass.phosmdl")) {
+        Copy-Item (Join-Path $root "Core\data\$f") $refDir -Force
+    }
+    Push-Location $refDir
     try {
         & $render --bars 64 --set "compose.melody_model=Neural compose.bass_model=Neural" --out $refWav
         if ($LASTEXITCODE -ne 0) { throw "the reference render failed" }
@@ -284,8 +304,9 @@ Step "stage" {
 
     # The three files the engine opens by bare name, into both places a binary looks: beside the
     # executables, and inside the VST3 bundle's Contents\Resources. The plugin's own post-build step
-    # already puts library.phoswt in both; the two models are not copied by any build step, which is
-    # exactly why they are copied here and checked afterwards.
+    # puts all three in both places already; they are copied again from Core\data here so that the
+    # staging directory is built from the repository rather than from whatever is in the build tree,
+    # and check A/B then hashes each copy against Core\data.
     $dataDir = Join-Path $root "Core\data"
     $res = Join-Path $stage "Phosphene.vst3\Contents\Resources"
     New-Item -ItemType Directory -Force $res | Out-Null
@@ -315,9 +336,11 @@ WHAT IS HERE
   library.phoswt       the wavetable pack, and
   melody.phosmdl       the two learned models the composer can use.
   bass.phosmdl         KEEP THESE THREE BESIDE Phosphene.exe AND phos_render.exe. Without them the
-                       engine falls back to six built-in wavetables and to the Markov composer, and
-                       says so only on stderr -- which in a DAW is nowhere. The copies inside
-                       Phosphene.vst3\Contents\Resources are the plug-in's own; leave them there.
+                       engine falls back to six built-in wavetables and to the Markov composer. The
+                       Set tab says which pitch model each part is really using and the choosers mark
+                       an entry whose file is missing, so you can see it -- phos_render only says it
+                       on stderr. The copies inside Phosphene.vst3\Contents\Resources are the
+                       plug-in's own; leave them there.
   Phosphene-Manual.pdf the manual. Every picture in it is the plugin drawing itself.
   PhospheneQuest.apk   the Meta Quest build. Developer mode, a cable, then
                          adb install -r PhospheneQuest.apk

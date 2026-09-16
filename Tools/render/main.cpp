@@ -111,11 +111,13 @@ std::string executableDirectory()
  * wherever the user's shell happens to be -- nor (3), so without this it would fall back to the six
  * built-in wavetables and to the Markov model and say so only on stderr, which is the kind of
  * failure that ships unnoticed. The plugin does the same thing for itself
- * (Plugin/PluginProcessor.cpp, installWaveTableSearchPath).
+ * (Plugin/PluginProcessor.cpp, installSearchPaths).
  *
  * A development build is unaffected: nothing is installed beside the built binary, the search path
  * finds nothing, and the lookup falls through to `PHOS_SOURCE_DATA_DIR` exactly as before. That
- * matters -- the default render is the determinism oracle and has to stay byte-identical.
+ * matters -- the default render is the determinism oracle and has to stay byte-identical. A
+ * shipping build has no step (3) at all (PHOS_SHIP, Core/CMakeLists.txt), which is what makes a
+ * missing data file observable instead of silently repaired by the build machine's source tree.
  */
 void installDataSearchPath()
 {

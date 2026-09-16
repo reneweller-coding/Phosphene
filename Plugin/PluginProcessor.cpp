@@ -5,6 +5,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "phos/Clock.h"
+#include "phos/Model.h"
 #include "phos/SetFile.h"
 #include "phos/WaveTableFile.h"
 #include <chrono>
@@ -21,7 +22,7 @@ constexpr double kHorizonBeats = 8.0 * kBeatsPerBar;
 constexpr const char* kWaveTablePack = "library.phoswt";
 
 /**
- * @brief The directory the shipped pack lies in, looked for the way a plugin has to look.
+ * @brief The directory a shipped resource lies in, looked for the way a plugin has to look.
  *
  * A plugin has no working directory worth the name -- it is whatever the host was started in -- and
  * no source tree, so `PHOS_SOURCE_DATA_DIR` (Core/CMakeLists.txt) only ever helps a development
@@ -30,7 +31,7 @@ constexpr const char* kWaveTablePack = "library.phoswt";
  * these differ, on Windows they are the same file). From there the candidates are the three places
  * a resource can sit in the formats this plugin is built in:
  *
- * | Format | Binary | The pack |
+ * | Format | Binary | The resources |
  * |---|---|---|
  * | Standalone (Windows, Linux) | `Phosphene.exe` | beside it |
  * | Standalone (macOS) | `Phosphene.app/Contents/MacOS/Phosphene` | `Contents/Resources` |
@@ -41,10 +42,13 @@ constexpr const char* kWaveTablePack = "library.phoswt";
  * place a host will not strip when it copies a bundle. The directory beside the binary is kept as
  * the first candidate because it is what the standalone and a plain copy of the build tree have.
  *
- * Nothing is loaded here and nothing fails here: an absent pack is not an error, it is the
- * built-in tables (WaveTableFile.h), and the editor says so.
+ * Nothing is loaded here and nothing fails here: an absent file is not an error -- it is the
+ * built-in tables (WaveTableFile.h) or the Markov composer (Model.h) -- and the editor says so.
+ *
+ * @param file the bare name to look for, e.g. `library.phoswt` or `melody.phosmdl`
+ * @return the directory holding it, or an empty string
  */
-juce::String resolveWaveTableDirectory()
+juce::String resolveResourceDirectory(const char* file)
 {
     juce::Array<juce::File> dirs;
     const juce::File binaries[] = { juce::File::getSpecialLocation(juce::File::currentExecutableFile),
@@ -57,25 +61,61 @@ juce::String resolveWaveTableDirectory()
         dirs.addIfNotAlreadyThere(dir.getChildFile("Contents").getChildFile("Resources"));   // the bundle itself
     }
     for (const juce::File& d : dirs)
-        if (d.getChildFile(kWaveTablePack).existsAsFile()) return d.getFullPathName();
+        if (d.getChildFile(file).existsAsFile()) return d.getFullPathName();
     return {};
 }
 
-juce::String gWaveTablePackDirectory;   ///< where installWaveTableSearchPath() found the pack, or empty
+juce::String gWaveTablePackDirectory;   ///< where installSearchPaths() found the pack, or empty
+PhospheneProcessor::LearnedModels gLearnedModels;   ///< what installSearchPaths() made of Phase 8
 
 /**
- * @brief Points the core at the shipped pack, once per process.
+ * @brief Points the core at the shipped resources and settles Phase 8, once per process.
  *
  * Called from the processor's constructor, before its composer thread starts: that thread prepares
  * probe engines of its own, and the first Engine::prepare() anywhere in the process is the one that
- * loads the library. Setting the path afterwards would be both a race and too late.
+ * loads the wavetable library, while the first compose pass is the one that loads the two models.
+ * Setting either path afterwards would be both a race and too late.
+ *
+ * **Why the models are opened here and not left to the composer.** They would load by themselves on
+ * the composer's thread the first time the knob asks for them, and the Set tab could ask afterwards
+ * -- but then the Set tab's answer would be "not yet" for as long as nobody had switched the models
+ * on, which is precisely the state in which a user needs to be told that the files are missing. So
+ * the question is asked once, eagerly, on the thread that constructs the processor. It costs about
+ * 13 MB of packed weights and a tenth of a second per process, once, against Phase 8 disappearing
+ * without a word. The load is idempotent (phos::sharedMelodyModel), so the composer later finds the
+ * work already done rather than doing it twice.
  */
-void installWaveTableSearchPath()
+void installSearchPaths()
 {
     static std::once_flag once;
     std::call_once(once, [] {
-        gWaveTablePackDirectory = resolveWaveTableDirectory();
+        gWaveTablePackDirectory = resolveResourceDirectory(kWaveTablePack);
         if (gWaveTablePackDirectory.isNotEmpty()) setWaveTableSearchPath(gWaveTablePackDirectory.toStdString());
+
+        // The models are looked for under the melody file: the installer and Plugin/CMakeLists.txt
+        // put both into the same directory, and when only one of them is there the core's own
+        // message below names the one that is missing, which is more use than a second directory.
+        gLearnedModels.directory = resolveResourceDirectory(kMelodyModelFile);
+        if (gLearnedModels.directory.isNotEmpty()) setModelSearchPath(gLearnedModels.directory.toStdString());
+
+        std::string note;
+        if (const NeuralModel* m = sharedMelodyModel(&note)) {
+            gLearnedModels.melody = true;
+            gLearnedModels.melodyNll = m->info().nll;
+        } else {
+            gLearnedModels.melodyNote = juce::String(note);
+        }
+        if (const NeuralModel* m = sharedBassModel(&note)) {
+            gLearnedModels.bass = true;
+            gLearnedModels.bassNll = m->info().nll;
+        } else {
+            gLearnedModels.bassNote = juce::String(note);
+        }
+        // Loaded, but from nowhere this plugin pointed at: a development build's PHOS_SOURCE_DATA_DIR
+        // (Core/CMakeLists.txt) or the working directory it happened to be started in. Worth saying,
+        // because it is the one case that works on this machine and on no other.
+        gLearnedModels.fromSourceTree = gLearnedModels.directory.isEmpty()
+                                     && (gLearnedModels.melody || gLearnedModels.bass);
     });
 }
 
@@ -392,9 +432,9 @@ PhospheneProcessor::PhospheneProcessor()
     : juce::AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true))
 {
     // Before anything prepares an engine -- this instance's, or one of the composer thread's probe
-    // renders -- the core has to know where the shipped tables are. The load itself happens in the
-    // first Engine::prepare() and only once for the process.
-    installWaveTableSearchPath();
+    // renders -- the core has to know where the shipped tables and the two learned models are. The
+    // table load itself happens in the first Engine::prepare() and only once for the process.
+    installSearchPaths();
     engine_ = std::make_unique<Engine>();
     composer_ = std::make_unique<Composer>(seed_.load());
     conductor_ = std::make_unique<PlugConductor>(*engine_, *composer_);
@@ -457,6 +497,12 @@ PhospheneProcessor::WaveTableLibrary PhospheneProcessor::waveTableLibrary() cons
     for (int i = 0; i < kNumLibraryWaveTables; ++i)
         if (waveTableLoaded(kNumBuiltinWaveTables + i)) ++s.loaded;
     return s;
+}
+
+PhospheneProcessor::LearnedModels PhospheneProcessor::learnedModels() const
+{
+    // Settled by installSearchPaths() in the constructor, so this is a copy and never a load.
+    return gLearnedModels;
 }
 
 bool PhospheneProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const

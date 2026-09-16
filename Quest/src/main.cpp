@@ -80,6 +80,7 @@
 #include "phos/Composer.h"
 #include "phos/Cue.h"
 #include "phos/Engine.h"
+#include "phos/Model.h"
 #include "phos/Quality.h"
 #include "phos/WaveTableFile.h"
 
@@ -205,41 +206,49 @@ const unsigned char* glyph(char c)
 constexpr const char* kWaveTablePack = "library.phoswt";
 
 /**
- * @brief Puts the shipped wavetable pack where the core can open it, and returns that directory.
+ * @brief Puts one shipped resource where the core can open it, and returns that directory.
  *
- * The core opens its resources with `fopen` (WaveTableFile.cpp), and an asset inside an APK has no
- * file name at all: it is a deflated member of a zip that only `AAssetManager` can reach. So the
- * asset is unpacked once, into the app's own private directory, and *that* is what
- * `setWaveTableSearchPath()` is given. It costs 750 KB of internal storage and happens on the first
- * start; afterwards the copy is recognised by its length and nothing is written.
+ * The core opens its resources with `fopen` (WaveTableFile.cpp, Model.cpp), and an asset inside an
+ * APK has no file name at all: it is a deflated member of a zip that only `AAssetManager` can reach.
+ * So the asset is unpacked once, into the app's own private directory, and *that* is what
+ * `setWaveTableSearchPath()` and `setModelSearchPath()` are given. It happens on the first start;
+ * afterwards the copy is recognised by its length and nothing is written.
  *
- * `<externalDataPath>` wins when it holds a pack of its own, which is the rule `phos.cfg` already
- * follows: `adb push` is then all it takes to try another selection on the device without building
- * an APK for it. A missing pack is not an error -- the engine has its six built-in tables
- * (WaveTableFile.h) -- but it is logged, because silence about it is exactly how a shipped app ends
- * up quietly playing something else.
+ * `<externalDataPath>` wins when it holds a file of that name, which is the rule `phos.cfg` already
+ * follows: `adb push` is then all it takes to try another selection or another trained model on the
+ * device without building an APK for it.
  *
- * @return the directory to hand the core, or empty when there is no pack anywhere
+ * A missing file is not an error -- the engine has its six built-in tables (WaveTableFile.h) and the
+ * composer has the Markov model and the pattern families (Model.h) -- but it is logged, because
+ * silence about it is exactly how a shipped app ends up quietly playing something else.
+ *
+ * @param assets      the APK's asset manager, or null
+ * @param internalDir `internalDataPath`, where an unpacked copy is kept
+ * @param externalDir `externalDataPath`, searched first
+ * @param name        the bare file name, e.g. `library.phoswt` or `melody.phosmdl`
+ * @param what        what to call it in the log
+ * @return the directory to hand the core, or empty when there is no such file anywhere
  */
-std::string prepareWaveTables(AAssetManager* assets, const char* internalDir, const std::string& externalDir)
+std::string prepareAsset(AAssetManager* assets, const char* internalDir, const std::string& externalDir,
+                         const char* name, const char* what)
 {
     if (!externalDir.empty()) {
-        const std::string p = externalDir + "/" + kWaveTablePack;
+        const std::string p = externalDir + "/" + name;
         if (FILE* f = std::fopen(p.c_str(), "rb")) {
             std::fclose(f);
-            LOGI("wavetables: %s (pushed to the device)", p.c_str());
+            LOGI("%s: %s (pushed to the device)", what, p.c_str());
             return externalDir;
         }
     }
-    if (assets == nullptr || internalDir == nullptr) { LOGE("wavetables: no asset manager"); return {}; }
-    AAsset* a = AAssetManager_open(assets, kWaveTablePack, AASSET_MODE_STREAMING);
-    if (a == nullptr) { LOGE("wavetables: the APK carries no %s", kWaveTablePack); return {}; }
+    if (assets == nullptr || internalDir == nullptr) { LOGE("%s: no asset manager", what); return {}; }
+    AAsset* a = AAssetManager_open(assets, name, AASSET_MODE_STREAMING);
+    if (a == nullptr) { LOGE("%s: the APK carries no %s", what, name); return {}; }
     const off64_t want = AAsset_getLength64(a);
-    const std::string out = std::string(internalDir) + "/" + kWaveTablePack;
+    const std::string out = std::string(internalDir) + "/" + name;
     // An unpacked copy of the same length is taken as it is. The length is the whole check on
-    // purpose: the pack's own reader refuses a broken file and says why (a truncated one is what a
-    // first start that was killed halfway leaves behind), and the unpacking below writes a `.part`
-    // and renames it, so a half-written file never carries the final name in the first place.
+    // purpose: both readers refuse a broken file and say why (a truncated one is what a first start
+    // that was killed halfway leaves behind), and the unpacking below writes a `.part` and renames
+    // it, so a half-written file never carries the final name in the first place.
     long have = -1;
     if (FILE* f = std::fopen(out.c_str(), "rb")) {
         std::fseek(f, 0, SEEK_END);
@@ -249,7 +258,7 @@ std::string prepareWaveTables(AAssetManager* assets, const char* internalDir, co
     if (have != static_cast<long>(want)) {
         const std::string tmp = out + ".part";
         FILE* f = std::fopen(tmp.c_str(), "wb");
-        if (f == nullptr) { AAsset_close(a); LOGE("wavetables: cannot write %s", tmp.c_str()); return {}; }
+        if (f == nullptr) { AAsset_close(a); LOGE("%s: cannot write %s", what, tmp.c_str()); return {}; }
         std::vector<char> buf(64 * 1024);
         bool ok = true;
         for (;;) {
@@ -262,13 +271,38 @@ std::string prepareWaveTables(AAssetManager* assets, const char* internalDir, co
         if (!ok || std::rename(tmp.c_str(), out.c_str()) != 0) {
             std::remove(tmp.c_str());
             AAsset_close(a);
-            LOGE("wavetables: unpacking %s failed", kWaveTablePack);
+            LOGE("%s: unpacking %s failed", what, name);
             return {};
         }
-        LOGI("wavetables: unpacked %lld bytes to %s", static_cast<long long>(want), out.c_str());
+        LOGI("%s: unpacked %lld bytes to %s", what, static_cast<long long>(want), out.c_str());
     }
     AAsset_close(a);
     return internalDir;
+}
+
+/**
+ * @brief Unpacks the two learned models of Phase 8 and points the core at them.
+ *
+ * Both files or neither: they are unpacked separately, because each falls back on its own -- a
+ * headset with only `melody.phosmdl` gets learned melodies over the pattern bass -- but they are
+ * shipped side by side and `setModelSearchPath()` takes one directory. The melody file decides which
+ * that is, and the bass is unpacked into the same place.
+ *
+ * Costs 3.0 MB of internal storage, once, on the first start. Logged either way, because an absent
+ * model is silent in exactly the way a wrong sound is not.
+ */
+void prepareModels(AAssetManager* assets, const char* internalDir, const std::string& externalDir)
+{
+    const std::string melody = prepareAsset(assets, internalDir, externalDir, kMelodyModelFile, "melody model");
+    const std::string bass = prepareAsset(assets, internalDir, externalDir, kBassModelFile, "bass model");
+    const std::string dir = !melody.empty() ? melody : bass;
+    if (dir.empty()) {
+        LOGE("models: neither %s nor %s is on this device; the composer keeps the Markov model and "
+             "the pattern families", kMelodyModelFile, kBassModelFile);
+        return;
+    }
+    setModelSearchPath(dir);
+    LOGI("models: %s", dir.c_str());
 }
 
 // ---------------------------------------------------------------- config
@@ -918,10 +952,12 @@ public:
         dataDir_ = app_->activity->externalDataPath ? app_->activity->externalDataPath : "";
         config_ = readConfig(dataDir_.c_str());
         // Before the composer thread exists: it is the thread that prepares the engine, and the
-        // wavetable library is loaded by the first Engine::prepare() in the process.
-        const std::string tables = prepareWaveTables(app_->activity->assetManager,
-                                                     app_->activity->internalDataPath, dataDir_);
+        // wavetable library is loaded by the first Engine::prepare() in the process, while the two
+        // learned models are loaded by the first compose pass on that same thread.
+        const std::string tables = prepareAsset(app_->activity->assetManager, app_->activity->internalDataPath,
+                                                dataDir_, kWaveTablePack, "wavetables");
         if (!tables.empty()) setWaveTableSearchPath(tables);
+        prepareModels(app_->activity->assetManager, app_->activity->internalDataPath, dataDir_);
         // The cue bridge of PLAN 8.3, off unless phos.cfg names a host. A visualiser that is not
         // there changes nothing here: the datagrams go to a port nobody reads and the set plays on.
         if (!config_.oscHost.empty()) {
