@@ -26,9 +26,17 @@ double besselI0(double x)
 
 TruePeakInterpolator::TruePeakInterpolator()
 {
-    constexpr double beta = 8.0, half = 6.5;
-    for (int k = 0; k < 3; ++k) {
-        const double t = (k + 1) * 0.25;
+    // beta = 4 (Kaiser, "Nonrecursive digital filter design using the I0-sinh window function",
+    // Proc. IEEE ISCAS 1974). The reasoning for the value is in Dynamics.h: only the passband matters
+    // for a fractional-delay filter read at one point, and a larger beta trades passband flatness for a
+    // stopband that has nothing to suppress. Measured over 0 .. 0.45 fs, twenty-four taps: beta 4 is
+    // flat within 0.14 dB, beta 5 within 0.51 dB, beta 8 (what this was) within 1.79 dB.
+    // The window's half width is half the tap span plus half a sample, so the outermost tap of every
+    // phase still carries weight rather than being multiplied by an exact zero.
+    constexpr double beta = 4.0;
+    constexpr double half = kTaps / 2.0 + 0.5;
+    for (int k = 0; k < kPhases - 1; ++k) {
+        const double t = static_cast<double>(k + 1) / static_cast<double>(kPhases);
         double sum = 0.0;
         for (int m = 0; m < kTaps; ++m) {
             const double u = t - static_cast<double>(m - kHalf + 1);   // distance from the tap's sample
@@ -38,7 +46,12 @@ TruePeakInterpolator::TruePeakInterpolator()
             h_[k][m] = sinc * w;
             sum += h_[k][m];
         }
-        for (int m = 0; m < kTaps; ++m) h_[k][m] /= sum;   // unity at DC
+        double absSum = 0.0;
+        for (int m = 0; m < kTaps; ++m) {
+            h_[k][m] /= sum;   // unity at DC; the sums are 1.000000000 before this, so it changes nothing
+            absSum += std::fabs(h_[k][m]);
+        }
+        bound_ = std::max(bound_, absSum);
     }
 }
 
@@ -46,8 +59,10 @@ void TruePeakLimiter::prepare(double sampleRate, float lookaheadMs)
 {
     sr_ = sampleRate;
     window_ = std::max(8, static_cast<int>(std::lround(lookaheadMs * 0.001 * sampleRate)));
-    histL_.assign(static_cast<size_t>(TruePeakInterpolator::kTaps), 0.0f);
-    histR_.assign(static_cast<size_t>(TruePeakInterpolator::kTaps), 0.0f);
+    // Twice the filter's length: every sample is written into both halves, so the window the filter
+    // needs is always a contiguous run and process() needs neither a modulo nor a copy per sample.
+    histL_.assign(static_cast<size_t>(2 * TruePeakInterpolator::kTaps), 0.0f);
+    histR_.assign(static_cast<size_t>(2 * TruePeakInterpolator::kTaps), 0.0f);
     req_.assign(static_cast<size_t>(window_), 1.0);
     dq_.assign(static_cast<size_t>(window_ + 1), 0);
     minRing_.assign(static_cast<size_t>(window_), 1.0);
@@ -86,20 +101,35 @@ void TruePeakLimiter::set(float ceilingDb, float releaseMs)
 void TruePeakLimiter::process(float* L, float* R, int n)
 {
     constexpr int T = TruePeakInterpolator::kTaps;
+    constexpr int H = TruePeakInterpolator::kHalf;
     const int W = window_;
     const int D = static_cast<int>(delayL_.size());
-    float tmpL[T], tmpR[T];
+    const double bound = interp_.gainBound();
     for (int i = 0; i < n; ++i) {
-        // Input history, oldest first in tmp: tmp[5] is the sample under examination, tmp[11] the newest.
+        // The window the filter reads, oldest first: w[H - 1] is the sample under examination, w[T - 1]
+        // the newest. Writing every sample into both halves of the double-length buffer keeps that
+        // window contiguous.
         histL_[static_cast<size_t>(histPos_)] = L[i];
+        histL_[static_cast<size_t>(histPos_ + T)] = L[i];
         histR_[static_cast<size_t>(histPos_)] = R[i];
-        histPos_ = (histPos_ + 1) % T;
-        for (int m = 0; m < T; ++m) {
-            tmpL[m] = histL_[static_cast<size_t>((histPos_ + m) % T)];
-            tmpR[m] = histR_[static_cast<size_t>((histPos_ + m) % T)];
-        }
-        const double between = std::max(interp_.between(tmpL + 5), interp_.between(tmpR + 5));
-        const double sample = std::max(std::fabs(static_cast<double>(tmpL[5])), std::fabs(static_cast<double>(tmpR[5])));
+        histR_[static_cast<size_t>(histPos_ + T)] = R[i];
+        const float* wl = histL_.data() + histPos_ + 1;
+        const float* wr = histR_.data() + histPos_ + 1;
+        histPos_ = histPos_ + 1 == T ? 0 : histPos_ + 1;
+
+        // The bank is 7 x 24 multiplies per channel, and most of a master's samples cannot reach the
+        // ceiling at all. No interpolated point can exceed gainBound() times the largest sample the
+        // filter sees, so when that product stays at or below the ceiling the bank is skipped and the
+        // interpolated peak recorded as zero. That is exact rather than approximate: every value so
+        // dropped is at or below the ceiling, and a peak at or below the ceiling asks for a gain of 1,
+        // which is what the maximum below then yields. Measured on an eight-minute render the bank runs
+        // for 30 % of the samples.
+        double between = 0.0;
+        if (static_cast<double>(TruePeakInterpolator::windowPeak(wl + H - 1)) * bound > ceiling_)
+            between = interp_.between(wl + H - 1);
+        if (static_cast<double>(TruePeakInterpolator::windowPeak(wr + H - 1)) * bound > ceiling_)
+            between = std::max(between, interp_.between(wr + H - 1));
+        const double sample = std::max(std::fabs(static_cast<double>(wl[H - 1])), std::fabs(static_cast<double>(wr[H - 1])));
         const double peak = std::max({ sample, between, prevBetween_ });
         prevBetween_ = between;
         const double r = peak > ceiling_ ? ceiling_ / peak : 1.0;

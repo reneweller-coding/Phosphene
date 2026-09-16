@@ -65,7 +65,8 @@ void LoudnessMeter::reset()
     hopL_ = hopR_ = 0.0; hopSamples_ = 0;
     blocks_.clear(); shortBlocks_.clear();
     truePeak_ = 0.0; seconds_ = 0.0; lastShort_ = -120.0f;
-    for (int i = 0; i < 12; ++i) { tpHistL_[i] = 0.0f; tpHistR_[i] = 0.0f; }
+    for (int i = 0; i < 2 * TruePeakInterpolator::kHistory; ++i) { tpHistL_[i] = 0.0f; tpHistR_[i] = 0.0f; }
+    tpPos_ = 0;
 }
 
 namespace {
@@ -110,15 +111,28 @@ void LoudnessMeter::pushBlock()
 
 void LoudnessMeter::process(const float* L, const float* R, int n)
 {
+    constexpr int T = TruePeakInterpolator::kHistory;
+    constexpr int H = TruePeakInterpolator::kHalf;
+    const double bound = tpInterp_.gainBound();
     for (int i = 0; i < n; ++i) {
         const float l = L[i], r = R[i];
-        // True peak with the 4x Kaiser-sinc interpolator of Dynamics.h, the same estimate the limiter
+        // True peak with the 8x Kaiser-sinc interpolator of Dynamics.h, the same estimate the limiter
         // holds its ceiling with (the 4-point Lagrange of Noctuary's meter read up to 0.1 dB higher).
-        for (int k = 0; k < 11; ++k) { tpHistL_[k] = tpHistL_[k + 1]; tpHistR_[k] = tpHistR_[k + 1]; }
-        tpHistL_[11] = l;
-        tpHistR_[11] = r;
-        truePeak_ = std::max({ truePeak_, std::fabs(static_cast<double>(tpHistL_[5])), std::fabs(static_cast<double>(tpHistR_[5])),
-                               tpInterp_.between(tpHistL_ + 5), tpInterp_.between(tpHistR_ + 5) });
+        tpHistL_[tpPos_] = l;
+        tpHistL_[tpPos_ + T] = l;
+        tpHistR_[tpPos_] = r;
+        tpHistR_[tpPos_ + T] = r;
+        const float* wl = tpHistL_ + tpPos_ + 1;
+        const float* wr = tpHistR_ + tpPos_ + 1;
+        tpPos_ = tpPos_ + 1 == T ? 0 : tpPos_ + 1;
+        // Only a window whose largest sample could reach the running maximum can raise it: no
+        // interpolated point exceeds gainBound() times that sample (TruePeakInterpolator::gainBound).
+        // Skipping the rest leaves the reported maximum exactly what the full computation gives.
+        truePeak_ = std::max({ truePeak_, std::fabs(static_cast<double>(wl[H - 1])), std::fabs(static_cast<double>(wr[H - 1])) });
+        if (static_cast<double>(TruePeakInterpolator::windowPeak(wl + H - 1)) * bound > truePeak_)
+            truePeak_ = std::max(truePeak_, tpInterp_.between(wl + H - 1));
+        if (static_cast<double>(TruePeakInterpolator::windowPeak(wr + H - 1)) * bound > truePeak_)
+            truePeak_ = std::max(truePeak_, tpInterp_.between(wr + H - 1));
 
         const float kl = kL_.process(l), kr = kR_.process(r);
         hopL_ += static_cast<double>(kl) * kl;

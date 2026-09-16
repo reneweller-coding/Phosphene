@@ -24,7 +24,7 @@ struct LoudnessReading {
     float shortTerm  = -120.0f;   ///< LUFS over the last 3 s
     float integrated = -120.0f;   ///< LUFS, gated (absolute -70, relative -10), since reset
     float range      = 0.0f;      ///< LU: 10th to 95th centile of the short-term values
-    float truePeak   = -120.0f;   ///< dBTP, 4x interpolated, since reset
+    float truePeak   = -120.0f;   ///< dBTP, 8x interpolated (TruePeakInterpolator), since reset
     float crest      = 0.0f;      ///< dB: true peak over short-term loudness
     float seconds    = 0.0f;      ///< time measured
 };
@@ -126,7 +126,11 @@ private:
     double truePeak_ = 0.0;
     double seconds_ = 0.0;
     float  lastShort_ = -120.0f;
-    float  tpHistL_[12] = {}, tpHistR_[12] = {};   ///< the last twelve samples, for the true-peak interpolator
+    /// The last TruePeakInterpolator::kHistory samples of each channel. Every sample is written into
+    /// both halves of the buffer, so the window the interpolator reads is contiguous and the meter
+    /// needs neither a shift nor a modulo per sample (the same arrangement as TruePeakLimiter).
+    float  tpHistL_[2 * TruePeakInterpolator::kHistory] = {}, tpHistR_[2 * TruePeakInterpolator::kHistory] = {};
+    int    tpPos_ = 0;
     TruePeakInterpolator tpInterp_;
 };
 
