@@ -61,6 +61,36 @@ def per_line(model, records, ctx, device):
     return np.array(out, dtype=np.float64)
 
 
+def per_line_phosmdl(path, records, log=None):
+    """(summed NLL, token count) of every line under an **exported** ``.phosmdl``.
+
+    Why read the shipped file rather than a checkpoint: the question this round has to answer is
+    whether a new model beats *what is installed*, and what is installed is
+    ``Core/data/melody.phosmdl`` -- int8, with whatever seed and whatever training set produced it.
+    The checkpoint it came from is gitignored and is not on this machine, and reproducing it by
+    retraining would compare against a reconstruction rather than against the artefact. The forward
+    pass is ``export.numpy_forward``, the same literal NumPy implementation of MODEL_FORMAT section 4
+    that ``--check-pair`` validates the reference cases with, so the model is scored by the reader
+    the format contract is written against and not by the trainer that wrote it.
+    """
+    import export                                               # noqa: PLC0415
+    header, W = export._read_phosmdl(path)
+    if int(header.get("roles", 3)) != len(dataset.ROLES) or "kick.emb" in W:
+        raise SystemExit(f"{path} is not a three-role melodic model (roles={header.get('roles')})")
+    ctx = int(header["ctx"])
+    out = []
+    for n, rec in enumerate(records):
+        e = dataset.encode(rec, ctx=ctx)
+        logits = export.numpy_forward(header, W, e)
+        tgt = np.array(e["tgt"])
+        m = logits.max(-1, keepdims=True)
+        lse = m[:, 0] + np.log(np.exp(logits - m).sum(-1))
+        out.append((float((lse - logits[np.arange(len(tgt)), tgt]).sum()), len(tgt)))
+        if log and (n + 1) % 25 == 0:
+            print(f"    {n + 1}/{len(records)} lines", file=log, flush=True)
+    return np.array(out, dtype=np.float64)
+
+
 def per_line_markov(train_recs, records, order=2):
     ms = {r: markov.MarkovModel(train_recs, r) for r in range(len(dataset.ROLES))}
     out = []
@@ -86,7 +116,7 @@ def boot(x, n=10000, seed=7):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--a", required=True)
-    ap.add_argument("--b", required=True, help="a checkpoint, or 'markov' / 'markov0'")
+    ap.add_argument("--b", required=True, help="a .pt checkpoint, a .phosmdl, or markov / markov0")
     ap.add_argument("--root", default="M:/Midi")
     ap.add_argument("--packs", default="psy")
     ap.add_argument("--split", default="group")
@@ -95,18 +125,26 @@ def main():
     o = ap.parse_args()
 
     dev = torch.device("cuda" if o.device == "cuda" and torch.cuda.is_available() else "cpu")
-    ma, args = load(o.a)
-    ma.to(dev)
+    # The split is the one the checkpoint under test was made with; when neither side is a checkpoint
+    # (a .phosmdl against the stage-A baseline) it is the default of train.py, which is what every
+    # number of this project has been measured on.
+    args = {"rotations": 1, "seed": 1, "split_seed": 1, "ctx": 256}
+    if o.a.endswith(".pt"):
+        ma, args = load(o.a)
+        ma.to(dev)
     recs = dataset.load(o.root, dataset.packs_for(o.packs))
     tr, va, te = dataset.build_split(recs, o.split, rotations=args["rotations"],
                                      seed=dataset.split_seed_of(args))
     itr, _, _ = dataset.split(recs, o.split, seed=dataset.split_seed_of(args))
     tr_raw = [recs[i] for i in itr]
 
-    xa = per_line(ma, te, args["ctx"], dev)
+    xa = per_line(ma, te, args["ctx"], dev) if o.a.endswith(".pt") else per_line_phosmdl(o.a, te)
     if o.b.startswith("markov"):
         xb = per_line_markov(tr_raw, te, 0 if o.b.endswith("0") else 2)
         name_b = f"stage A order {'0' if o.b.endswith('0') else '2'}"
+    elif o.b.endswith(".phosmdl"):
+        xb = per_line_phosmdl(o.b, te)
+        name_b = os.path.basename(o.b)
     else:
         mb, _ = load(o.b)
         mb.to(dev)
