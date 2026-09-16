@@ -99,8 +99,8 @@ def main():
     ma.to(dev)
     recs = dataset.load(o.root, dataset.packs_for(o.packs))
     tr, va, te = dataset.build_split(recs, o.split, rotations=args["rotations"],
-                                     seed=args["seed"] * 7919 + 12345)
-    itr, _, _ = dataset.split(recs, o.split, seed=args["seed"] * 7919 + 12345)
+                                     seed=dataset.split_seed_of(args))
+    itr, _, _ = dataset.split(recs, o.split, seed=dataset.split_seed_of(args))
     tr_raw = [recs[i] for i in itr]
 
     xa = per_line(ma, te, args["ctx"], dev)

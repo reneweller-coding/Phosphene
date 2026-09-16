@@ -180,12 +180,25 @@ def main():
     ap.add_argument("--lr", type=float, default=1.5e-3)
     ap.add_argument("--wd", type=float, default=0.1)
     ap.add_argument("--rotations", type=int, default=1)
-    ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--seed", type=int, default=1, help="weight init and batch order")
+    ap.add_argument("--split-seed", type=int, default=1,
+                    help="the held-out split; kept at 1 so every run is scored on the same test set "
+                         "and the bootstrap against earlier models stays paired")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out", default="Tools/train/runs/compare")
-    ap.add_argument("--extra", default="none", choices=["none", "trance"],
-                    help="add material to the TRAINING side only, keeping the psy split for val/test "
-                         "(PLAN 6.9: trance with a lower weight); near duplicates of held-out lines are dropped")
+    ap.add_argument("--extra", default="none",
+                    help="comma-separated extra material for the TRAINING side only, keeping the psy "
+                         "split for val/test so every number stays comparable and the bootstrap stays "
+                         "paired: 'trance' (VORTEX), 'star' (the Star Samples psy folder, names that "
+                         "state a role), 'starsynth' (its 'synth ...' files admitted as lead by "
+                         "content, see rolecheck.py). Near duplicates of held-out lines are dropped.")
+    ap.add_argument("--no-baseline", action="store_true",
+                    help="skip the Markov baselines. They are the decision metric against stage A, "
+                         "but they are recounted from scratch per run and cost minutes once the "
+                         "training corpus is half a million notes; a weighting sweep does not need them")
+    ap.add_argument("--trance-weight", type=float, default=1.0,
+                    help="weight of the trance class (VORTEX + the super pack's trance directories) "
+                         "relative to the psytrance lines; below 1 subsamples, above 1 repeats")
     ap.add_argument("--cond", default="full", choices=["full", "role", "nometre"],
                     help="ablation over the conditioning inputs; only 'full' may be exported")
     ap.add_argument("--style-from-pack", action="store_true",
@@ -197,13 +210,15 @@ def main():
           f"device {device}" + (f" ({torch.cuda.get_device_name(0)})" if device.type == "cuda" else ""))
 
     recs = dataset.load(a.root, dataset.packs_for(a.packs))
-    tr, va, te = dataset.build_split(recs, a.split, rotations=a.rotations, seed=a.seed * 7919 + 12345)
-    if a.extra == "trance":
-        extra = dataset.load(a.root, dataset.TRANCE_PACKS)
-        kept = dataset.exclude_near(extra, va + te)
-        tr = tr + kept
-        print(f"  + {len(kept)} trance lines added to training ({len(extra) - len(kept)} dropped as near "
-              f"duplicates of a held-out line); val and test stay the psytrance ones")
+    tr, va, te = dataset.build_split(recs, a.split, rotations=a.rotations,
+                                     seed=a.split_seed * 7919 + 12345)
+    kept = dataset.assemble_extra(a.root, a.extra, va + te, a.trance_weight, log=sys.stdout)
+    # The duplicate pass runs over the merged corpus, not per pack: the same loop is resold across
+    # vendors, and a per-pack pass would leave every copy of it in the training distribution.
+    merged, removed = dataset.dedupe(tr + kept)
+    print(f"  merged corpus: {len(tr) + len(kept)} lines -> {len(merged)} after the cross-vendor "
+          f"duplicate pass ({removed} removed)")
+    tr = merged
     if a.style_from_pack:
         for r in tr + va + te:
             r["style"] = 1 + r["pack"] % (dataset.N_STYLE - 1)
@@ -217,19 +232,20 @@ def main():
     if a.split == "naive":
         tr_raw = tr
     else:
-        itr, _iva, _ite = dataset.split(recs, a.split, seed=a.seed * 7919 + 12345)
-        tr_raw = [recs[i] for i in itr] + ([] if a.extra == "none" else kept)
+        itr, _iva, _ite = dataset.split(recs, a.split, seed=a.split_seed * 7919 + 12345)
+        tr_raw = dataset.dedupe([recs[i] for i in itr] + kept)[0]
 
     out = {}
-    out["markov_order0"] = markov.nll(tr_raw, te, order=0)
-    out["markov_order1"] = markov.nll(tr_raw, te, order=1)
-    out["markov_fair"] = markov.nll(tr_raw, te, per_role=True, order=2)
-    out["markov_shipped"] = markov.nll(recs, te, per_role=True, order=2)
-    print(f"  stage A order 0, on train  NLL {out['markov_order0']:.4f}")
-    print(f"  stage A order 1, on train  NLL {out['markov_order1']:.4f}")
-    print(f"  stage A order 2, on train  NLL {out['markov_fair'][0]:.4f}  {out['markov_fair'][1]}")
-    print(f"  stage A order 2, shipped   NLL {out['markov_shipped'][0]:.4f}  (contaminated: the test "
-          f"lines are inside these counts)")
+    if not a.no_baseline:
+        out["markov_order0"] = markov.nll(tr_raw, te, order=0)
+        out["markov_order1"] = markov.nll(tr_raw, te, order=1)
+        out["markov_fair"] = markov.nll(tr_raw, te, per_role=True, order=2)
+        out["markov_shipped"] = markov.nll(recs, te, per_role=True, order=2)
+        print(f"  stage A order 0, on train  NLL {out['markov_order0']:.4f}")
+        print(f"  stage A order 1, on train  NLL {out['markov_order1']:.4f}")
+        print(f"  stage A order 2, on train  NLL {out['markov_fair'][0]:.4f}  {out['markov_fair'][1]}")
+        print(f"  stage A order 2, shipped   NLL {out['markov_shipped'][0]:.4f}  (contaminated: the test "
+              f"lines are inside these counts)")
 
     archs = ["transformer", "ssm"] if a.compare else [a.arch]
     os.makedirs(a.out, exist_ok=True)
