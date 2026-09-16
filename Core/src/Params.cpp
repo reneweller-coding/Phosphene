@@ -102,12 +102,21 @@ const ParamDesc kPercParams[perc::Count] = {
  * Levels and positions follow the reference measurement of 15.09.2026 (docs/PLAN.md, 6.6): the
  * offbeat hat is the loudest top-end event, the sixteenth layer (shaker, closed-hat ghosts) sits
  * around half of it. Low cuts never go under 150 Hz: below that only kick and bass may play.
+ *
+ * **Band limits on the top-end lanes (16.09.2026, Phase 9).** Hat, open hat and shaker are a
+ * band pass built from the lane's own two filters -- the 24 dB/octave low cut below, the main
+ * filter as a low pass above -- not a plain high pass. A high pass on a spectrally flat source
+ * (white noise, inharmonic metal partials) rises all the way to Nyquist, which put the kit's energy
+ * above the air band instead of inside it: measured against the 39 reference recordings the mix was
+ * 3.8 dB short at 8 kHz and 5.1 dB *over* at 16 kHz. Real cymbals are band limited (Fletcher and
+ * Rossing, "The Physics of Musical Instruments", ch. 19: the modes of a thin plate crowd towards a
+ * finite upper region and are damped hardest there), and so is every reference track measured here.
  */
 const char* const kDefaultKit =
-    "perc1.role=Closed Hat;perc1.engine=Metal;perc1.decay=45;perc1.noise=0.35;perc1.noise_decay=35;perc1.filter=High Pass;"
-    "perc1.cutoff=7500;perc1.resonance=0.25;perc1.level=5;perc1.pan=0.15;perc1.choke=1;perc1.density=0.6\n"
-    "perc2.role=Open Hat;perc2.engine=Metal;perc2.decay=260;perc2.noise=0.35;perc2.noise_decay=220;perc2.filter=High Pass;"
-    "perc2.cutoff=6500;perc2.level=2;perc2.pan=-0.1;perc2.choke=1\n"
+    "perc1.role=Closed Hat;perc1.engine=Metal;perc1.decay=45;perc1.noise=0.35;perc1.noise_decay=35;perc1.filter=Low Pass;"
+    "perc1.cutoff=12000;perc1.low_cut=3500;perc1.resonance=0.25;perc1.level=5;perc1.pan=0.15;perc1.choke=1;perc1.density=0.6\n"
+    "perc2.role=Open Hat;perc2.engine=Metal;perc2.decay=260;perc2.noise=0.35;perc2.noise_decay=220;perc2.filter=Low Pass;"
+    "perc2.cutoff=12000;perc2.low_cut=3000;perc2.level=2;perc2.pan=-0.1;perc2.choke=1\n"
     "perc3.role=Ride;perc3.engine=Metal;perc3.metal_scale=0.72;perc3.decay=700;perc3.noise=0.2;perc3.noise_decay=400;"
     "perc3.filter=Band Pass;perc3.cutoff=5200;perc3.resonance=0.35;perc3.level=-3;perc3.pan=0.35\n"
     "perc4.role=Crash;perc4.engine=Metal;perc4.metal_scale=0.5;perc4.decay=1600;perc4.noise=0.6;perc4.noise_decay=1400;"
@@ -118,8 +127,8 @@ const char* const kDefaultKit =
     "perc6.noise=0.8;perc6.noise_decay=140;perc6.filter=High Pass;perc6.cutoff=250;perc6.level=-6;perc6.low_cut=160\n"
     "perc7.role=Rim;perc7.engine=FM;perc7.pitch=1700;perc7.fm_ratio=2.61;perc7.fm_index=2.2;perc7.decay=28;perc7.pitch_decay=6;"
     "perc7.filter=Band Pass;perc7.cutoff=2200;perc7.resonance=0.3;perc7.level=-10;perc7.pan=-0.25\n"
-    "perc8.role=Shaker;perc8.engine=Noise;perc8.noise=1;perc8.noise_decay=45;perc8.filter=High Pass;perc8.cutoff=6000;"
-    "perc8.resonance=0.1;perc8.level=-1;perc8.pan=0.25\n"
+    "perc8.role=Shaker;perc8.engine=Noise;perc8.noise=1;perc8.noise_decay=45;perc8.filter=Low Pass;perc8.cutoff=11000;"
+    "perc8.low_cut=3000;perc8.resonance=0.1;perc8.level=-1;perc8.pan=0.25\n"
     "perc9.role=Tom;perc9.engine=Modal;perc9.pitch=220;perc9.low_cut=190;perc9.mode_set=Membrane;perc9.mode_damp=0.6;perc9.decay=280;"
     "perc9.noise=0.08;perc9.noise_decay=15;perc9.filter=Low Pass;perc9.cutoff=6000;perc9.level=-8;perc9.pan=-0.2;perc9.tune=1\n"
     "perc10.role=Conga;perc10.engine=Modal;perc10.pitch=330;perc10.mode_set=Harmonic;perc10.mode_damp=0.4;perc10.decay=180;"
@@ -307,7 +316,9 @@ const ParamDesc kMixParams[mix::Count] = {
     { "bass_mute", "Bass Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
     { "track_gain", "Track Gain", "dB", -12.0f, 12.0f, 0.0f, Curve::Linear },
     { "perc_mute",  "Perc Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
-    { "perc_level", "Perc Level", "dB", -24.0f, 12.0f, 1.0f, Curve::Linear },
+    // +3 dB instead of +1 (16.09.2026, Phase 9): with the band-limited hats the kit no longer spends
+    // its level above 12 kHz, and the presence and air bands land on the reference median.
+    { "perc_level", "Perc Level", "dB", -24.0f, 12.0f, 3.0f, Curve::Linear },
     { "acid_mute",  "Acid Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "acid_level", "Acid Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     { "lead_mute",  "Lead Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
