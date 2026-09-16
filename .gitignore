@@ -1,5 +1,7 @@
 build*/
 out/
+# The JUCE checkout for the plugin (Phase 6): fetched, or copied from a sibling build.
+ThirdParty/
 *.wav
 *.mid
 !Tests/data/*.mid

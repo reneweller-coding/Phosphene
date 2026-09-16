@@ -38,3 +38,28 @@ foreach(t ${PHOS_TEST_TARGETS})
         target_compile_definitions(${t} PRIVATE _CRT_SECURE_NO_WARNINGS)
     endif()
 endforeach()
+
+# The host contract (Tests/hosttest.cpp): the plugin's side of what a DAW does, plus the oracle --
+# the plugin's own clock has to render exactly what phos_render renders. Only built with the plugin,
+# because it links the plugin's shared code.
+#
+# juce_add_plugin makes `Phosphene` the shared-code library (it builds as Phosphene_SharedCode.lib),
+# so linking that one target gives the processor, the editor and the JucePlugin_* definitions; the
+# JUCE modules are linked to it privately, so the test asks for them again.
+if(TARGET Phosphene)
+    add_executable(phos_hosttest hosttest.cpp)
+    target_link_libraries(phos_hosttest PRIVATE Phosphene PhospheneCore
+                          juce::juce_audio_utils juce::juce_recommended_config_flags)
+    # An application, not a plugin: it may run a dispatch loop, which is how the editor's timers get
+    # their chance while it is open.
+    target_compile_definitions(phos_hosttest PRIVATE JUCE_STANDALONE_APPLICATION=1
+                               JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0)
+    target_include_directories(phos_hosttest PRIVATE ${CMAKE_SOURCE_DIR}/Plugin)
+    if(MSVC)
+        target_compile_options(phos_hosttest PRIVATE /W4 /permissive- /utf-8)
+        target_compile_definitions(phos_hosttest PRIVATE _CRT_SECURE_NO_WARNINGS)
+        # The composer's probe renders put whole engines on the stack.
+        target_link_options(phos_hosttest PRIVATE "LINKER:/STACK:16777216")
+    endif()
+    add_test(NAME hosttest COMMAND phos_hosttest)
+endif()

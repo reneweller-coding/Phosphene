@@ -16,7 +16,10 @@ reverse swells), kick sidechain on every channel, a room and a hall, and a maste
 mono bass, soft clipper and true-peak limiter that meets a loudness target. The offline renderer
 composes sets of any length; each track has its own key, tempo, patterns, groove, chords, melodies and
 sound, levels are matched between tracks and parts, and kick and bass are phase-locked at the first
-bass note. No song form grammar, plugin or headset build yet.
+bass note. Phase 6 adds the plugin: a VST3 and a standalone with ten tabs of controls generated from
+the parameter tables, the composer on a thread of its own, host transport and tempo, MIDI output of
+the score, and a recorder -- the standalone renders exactly what the offline renderer renders, sample
+for sample. No song form grammar or headset build yet.
 
 ## Build
 
@@ -26,6 +29,29 @@ Visual Studio 2026 and CMake 3.22 or newer:
 cmake -S . -B build -G "Visual Studio 18 2026" -A x64
 cmake --build build --config Release
 ```
+
+### Plugin
+
+The VST3 and the standalone are built with the rest and need JUCE 9.0.1, which CMake fetches from
+GitHub on the first configure. To use a checkout you already have, copy it to `ThirdParty/JUCE`
+(ignored by git) and it is taken from there. `-DPHOS_BUILD_PLUGIN=OFF` builds the tools alone.
+
+```bash
+cmake --build build --config Release --target Phosphene_Standalone Phosphene_VST3
+build/Plugin/Phosphene_artefacts/Release/Standalone/Phosphene.exe
+```
+
+The VST3 is `build/Plugin/Phosphene_artefacts/Release/VST3/Phosphene.vst3`; copy it to
+`C:\Program Files\Common Files\VST3`. In a host the playhead is the clock -- tempo and position
+come from the transport, a jump is followed to the bar -- and the score's notes leave the plugin as
+MIDI, one channel per part. The standalone has its own clock, a play and stop button, a loudness
+meter, the plan of the set, a recorder and the exports.
+
+Environment variables, for tests and documentation: `PHOS_MUTE=1` starts the standalone silent and it
+never unmutes itself; `PHOS_SHOT=<file.png>` renders the editor at design size into a PNG and exits
+(`PHOS_TAB=<index>` picks the tab, `PHOS_SHOT_ALL=<folder>` writes one picture per tab, see
+[docs/screenshots](docs/screenshots)); `PHOS_PLAY=<seconds>` with `PHOS_RECORD=<file.wav>` plays for a
+while, records, and exits.
 
 ## Try it
 
@@ -53,6 +79,12 @@ render (waveform, one beat, spectrogram) and prints where in the beat the sub ba
 ctest --test-dir build -C Release
 ```
 
+`phos_hosttest` measures the plugin around the engine: rates and block sizes no one develops at,
+blocks that change size in the middle of a set, parameters written from another thread, a transport
+that starts, jumps and stops, a state that comes back exactly as it went out, and every tab laid out
+and painted. Its oracle is the offline renderer: with its own clock the plugin has to produce the
+same samples `phos_render` produces, bit for bit.
+
 `phos_selftest` measures every building block against independently derived values: the ladders'
 analytic responses (the diode ladder against Zavalishin's transfer function and its self-oscillation
 at k = 17), the supersaw against Szabo's JP-8000 tables, FM sidebands against Bessel functions, the
@@ -72,7 +104,9 @@ requires every lane of the vectorised DSP to equal the scalar computation bit fo
 | `Tools/inspect_wav.py` | pictures and measurements of a render |
 | `Tools/ref_*.py` | measurements of reference recordings: bass slots, percussion grid, band balance, sweeps |
 | `Tools/corpus/` | `build_corpus.py`: melodic statistics from a local MIDI corpus (the MIDI files stay local), memorisation check |
-| `Tests/` | self test, vector-path tests, NEON shim |
+| `Plugin/` | JUCE 9 VST3 and standalone: processor, editor, layout engine |
+| `Tests/` | self test, host test, vector-path tests, NEON shim |
+| `docs/screenshots/` | one picture per tab of the editor |
 | `docs/` | plan, Doxygen configuration |
 
 Some modules are copied from [Noctuary](https://github.com/reneweller-coding/Noctuary) and name their
