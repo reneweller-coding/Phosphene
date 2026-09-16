@@ -60,6 +60,7 @@ void Acid::reset()
     shaper_.reset();
     lc1_.reset();
     lc2_.reset();
+    dispState_.reset();
     delay_.reset();
     std::fill(comb_.begin(), comb_.end(), 0.0f);
     combPos_ = 0;
@@ -97,6 +98,7 @@ void Acid::update(const float* v, double bpm)
     combFb_ = v[acid::CombFeedback];
     lc1_.setQ(std::max(150.0f, v[acid::LowCut]), 0.70710678f, static_cast<float>(sr_));
     lc2_.copyCoefficients(lc1_);
+    disperse_.set(static_cast<int>(std::lround(v[acid::Disperse])), v[acid::DisperseFreq], sr_);
     pulseDecay_ = static_cast<float>(std::exp(-1.0 / (kSweepPulseTau * sr2)));
     sweepCharge_ = static_cast<float>(1.0 - std::exp(-1.0 / (kSweepTau * sr2)));
     accentSmooth_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.004 * sr_)));
@@ -167,13 +169,20 @@ void Acid::process(float* L, float* R, int total)
             }
             float y = os_ == 2 ? down_.process(o[0], o[1]) : o[0];
             if (squelch_) {
-                // Feedback comb tuned to the period, read with linear interpolation.
-                const double d = std::clamp(sr_ / static_cast<double>(hz_), 2.0, static_cast<double>(mask - 2));
+                // Feedback comb tuned to the period, read with a third-order Lagrange interpolator
+                // (Acid.h, combTaps()). Its four taps sit at -1 .. +2 around the integer part, so the
+                // delay is clamped to at least 3 samples: the tap at +2 must still lie behind the
+                // write position, otherwise it would read what the previous lap of the buffer left.
+                const double d = std::clamp(sr_ / static_cast<double>(hz_), 3.0, static_cast<double>(mask - 3));
                 const double pos = static_cast<double>(combPos_) - d;
                 const double fl = std::floor(pos);
-                const float fr = static_cast<float>(pos - fl);
-                const size_t i0 = static_cast<size_t>(static_cast<long long>(fl)) & mask;
-                const float delayed = comb_[i0] + fr * (comb_[(i0 + 1) & mask] - comb_[i0]);
+                const long long i0 = static_cast<long long>(fl);
+                float wm1, w0, w1, w2;
+                combTaps(static_cast<float>(pos - fl), wm1, w0, w1, w2);
+                const float delayed = wm1 * comb_[static_cast<size_t>(i0 - 1) & mask]
+                                    + w0 * comb_[static_cast<size_t>(i0) & mask]
+                                    + w1 * comb_[static_cast<size_t>(i0 + 1) & mask]
+                                    + w2 * comb_[static_cast<size_t>(i0 + 2) & mask];
                 const float yc = y + combFb_ * delayed;
                 comb_[combPos_] = yc;
                 combPos_ = (combPos_ + 1) & mask;
@@ -185,6 +194,10 @@ void Acid::process(float* L, float* R, int total)
             float lp, bp, hp;
             lc1_.tick(v, lp, bp, hp);
             lc2_.tick(hp, lp, bp, v);
+            // Dispersion after the low cut: an all-pass changes no band's power, so the order cannot
+            // matter for the depth rule, but running it on the cut signal keeps the chain from
+            // spending sections on a band that is already gone.
+            if (disperse_.stages > 0) v = dispState_.tick(v, disperse_.c, disperse_.d, disperse_.stages);
             v *= level_;
             L[done + i] = v;
             R[done + i] = v;

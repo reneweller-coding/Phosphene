@@ -3192,6 +3192,639 @@ void testPoly()
     }
 }
 
+/**
+ * @brief Magnitude of a partial: the root of the summed power of its main lobe around @p hz.
+ *
+ * The same estimator as Tools/ref_harmonics.py, and for the same reason: a Blackman-Harris main lobe
+ * is eight bins wide and a partial almost never sits on a bin centre, so the largest single bin
+ * underestimates it by a frequency-dependent amount that would go straight into a ratio of two
+ * partials.
+ */
+double partialMag(const std::vector<double>& pw, double hz, double sr, size_t n)
+{
+    const double k = hz * static_cast<double>(n) / sr;
+    const int lo = std::max(0, static_cast<int>(std::lround(k)) - 4);
+    const int hi = std::min(static_cast<int>(n / 2), static_cast<int>(std::lround(k)) + 4);
+    double s = 0.0;
+    for (int b = lo; b <= hi; ++b) s += pw[static_cast<size_t>(b)];
+    return std::sqrt(s);
+}
+
+/**
+ * @brief Slope-free evenness at @p f0: 20 log10(a_n / sqrt(a_(n-1) a_(n+1))) for the even harmonic @p n.
+ *
+ * Comparing an even partial with the geometric mean of its two odd neighbours divides out any smooth
+ * spectral envelope through that region, so the number says how much more or less even content there
+ * is than a smoothly falling series would carry -- not how bright the signal is. For a sawtooth
+ * (a_n = 1/n) the value is 10 log10(1 - 1/n^2): -1.249 dB at n = 2, -0.280 dB at n = 4; for a square
+ * wave it is minus infinity. It is the measure of Tools/ref_harmonics.py, so our renders and the
+ * reference recordings produce the same kind of number.
+ */
+double evennessDb(const std::vector<float>& y, size_t offset, double f0, double sr, int n)
+{
+    constexpr size_t N = 32768;
+    const std::vector<double> pw = powerSpectrum(y.data() + offset, N);
+    const double a = partialMag(pw, static_cast<double>(n - 1) * f0, sr, N);
+    const double b = partialMag(pw, static_cast<double>(n) * f0, sr, N);
+    const double c = partialMag(pw, static_cast<double>(n + 1) * f0, sr, N);
+    return 20.0 * std::log10(b / (std::sqrt(a * c) + 1e-30) + 1e-30);
+}
+
+/** @brief |H| in dB and the group delay in ms of a disperser chain at @p hz, from its coefficients. */
+void disperserResponse(const Disperser& d, double hz, double sr, double& magDb, double& gdMs)
+{
+    auto at = [&](double f) {
+        const double w = 2.0 * kPiD * f / sr;
+        const std::complex<double> z1 = std::polar(1.0, -w), z2 = z1 * z1;
+        std::complex<double> h(1.0, 0.0);
+        for (int i = 0; i < d.stages; ++i)
+            h *= (static_cast<double>(d.c[i]) + static_cast<double>(d.d[i]) * z1 + z2)
+               / (1.0 + static_cast<double>(d.d[i]) * z1 + static_cast<double>(d.c[i]) * z2);
+        return h;
+    };
+    const std::complex<double> h = at(hz);
+    magDb = 20.0 * std::log10(std::abs(h));
+    const double e = std::max(0.5, hz * 1e-3);
+    gdMs = -std::arg(at(hz + e) / h) / (2.0 * kPiD * e) * 1000.0;
+}
+
+/**
+ * @brief Power between 100 Hz and 18 kHz that sits on none of @p lines, against the power that does.
+ *
+ * The same rule as supersawAliasDb() -- +-6 bins of a 65536-point spectrum around every legitimate
+ * line -- but with the line set handed in rather than reconstructed from f0 and the detune, so that
+ * a drifted oscillator can be measured against the lines it actually makes.
+ */
+double maskedAliasDb(const std::vector<float>& y, size_t offset, const std::vector<double>& lines, double sr)
+{
+    constexpr size_t N = 65536;
+    const std::vector<double> pw = powerSpectrum(y.data() + offset, N);
+    std::vector<char> legit(N / 2 + 1, 0);
+    for (double hz : lines) {
+        const double k = hz * static_cast<double>(N) / sr;
+        for (int b = static_cast<int>(std::floor(k)) - 6; b <= static_cast<int>(std::ceil(k)) + 6; ++b)
+            if (b >= 0 && b <= static_cast<int>(N / 2)) legit[static_cast<size_t>(b)] = 1;
+    }
+    double on = 0.0, off = 0.0;
+    for (size_t k = 1; k < N / 2; ++k) {
+        const double hz = static_cast<double>(k) * sr / N;
+        if (hz < 100.0 || hz > 18000.0) continue;
+        if (legit[k] != 0) on += pw[k]; else off += pw[k];
+    }
+    return powDb(off / on);
+}
+
+/**
+ * @brief Resonance peak of a feedback comb read with four interpolation weights, in the time domain.
+ * @param taps  weights of the samples at offsets -1, 0, +1, +2 from the integer read position
+ * @param delay integer part of the delay in samples
+ * @param fb    feedback
+ * @param nearHz the comb peak nearest this frequency is the one reported
+ * @return the peak's gain in dB over the direct path
+ *
+ * The comb is excited with a unit impulse and its response transformed without a window, so the
+ * measured spectrum is the transfer function itself and the reference is the unit input.
+ */
+double combPeakDb(const float taps[4], int delay, float fb, double nearHz, double sr)
+{
+    constexpr size_t N = 32768;
+    std::vector<float> buf(4096, 0.0f);
+    std::vector<std::complex<double>> y(N);
+    size_t pos = 0;
+    const size_t mask = buf.size() - 1;
+    for (size_t i = 0; i < N; ++i) {
+        const long long i0 = static_cast<long long>(pos) - delay;
+        float d = 0.0f;
+        for (int t = 0; t < 4; ++t) d += taps[t] * buf[static_cast<size_t>(i0 - 1 + t) & mask];
+        const float v = (i == 0 ? 1.0f : 0.0f) + fb * d;
+        buf[pos] = v;
+        pos = (pos + 1) & mask;
+        y[i] = v;
+    }
+    fft(y);
+    // Half the peak spacing (sr / delay) on both sides, so exactly one peak is always inside.
+    const int span = static_cast<int>(N) / (2 * delay) + 2;
+    const int k0 = static_cast<int>(std::lround(nearHz * static_cast<double>(N) / sr));
+    double best = 0.0;
+    for (int k = std::max(1, k0 - span); k <= std::min(static_cast<int>(N / 2), k0 + span); ++k)
+        best = std::max(best, std::abs(y[static_cast<size_t>(k)]));
+    return 20.0 * std::log10(best);
+}
+
+/**
+ * @brief The acid's colour, the dispersion and the analogue movement (round of 16.09.2026).
+ *
+ * Five subjects, each measured against a value derived somewhere other than in the code under test:
+ * the clustering of the accents, the all-pass disperser, the comb's fractional-delay interpolator,
+ * the even harmonic content of our acid line, and the thermal drift of the polyphonic engine.
+ */
+void testAcidColour()
+{
+    section("acid colour, dispersion and analogue movement");
+    const double sr = 48000.0;
+
+    // ------------------------------------------------------------------ the evenness measure itself
+    // Before measuring our acid with it: the measure reproduces its analytic values. A synthetic
+    // sawtooth must give 10 log10(1 - 1/n^2) and a square wave must fall off the bottom.
+    {
+        std::vector<float> saw(40000, 0.0f), sq(40000, 0.0f);
+        const double f0 = 220.0;
+        for (int h = 1; h <= 40; ++h)
+            for (size_t i = 0; i < saw.size(); ++i) {
+                const double s = std::sin(2.0 * kPiD * h * f0 * static_cast<double>(i) / sr) / h;
+                saw[i] += static_cast<float>(s);
+                if (h % 2 == 1) sq[i] += static_cast<float>(s);
+            }
+        const double s2 = evennessDb(saw, 0, f0, sr, 2), s4 = evennessDb(saw, 0, f0, sr, 4);
+        const double q2 = evennessDb(sq, 0, f0, sr, 2);
+        const double w2 = 10.0 * std::log10(0.75), w4 = 10.0 * std::log10(1.0 - 1.0 / 16.0);
+        check(std::fabs(s2 - w2) < 0.05 && std::fabs(s4 - w4) < 0.05 && q2 < -40.0,
+              "the evenness measure reproduces its analytic values (sawtooth, square wave)",
+              fmt("saw E2 %.3f (want %.3f), E4 %.3f (want %.3f); square E2 %.1f dB", s2, w2, s4, w4, q2));
+    }
+
+    // ------------------------------------------------------------------ accents cluster
+    // Measured in the corpus (Tools/ref_accent_runs.py, 16.09.2026): for the acid role the next onset
+    // after an accent is accented with probability 0.493 against 0.197 after a plain note -- a lift of
+    // 2.51. Melody.cpp draws the accent from a two-state chain with that lift and holds the
+    // per-position marginal where it was, so the *number* of accents must not move, only their order.
+    {
+        long long runAfterAcc = 0, nAfterAcc = 0, runAfterPlain = 0, nAfterPlain = 0, accents = 0, onsets = 0;
+        double wantMarginal = 0.0;
+        ParamStore q;
+        q.parseText("compose.level_match=Off master.auto_gain=Off");
+        for (uint64_t s = 0; s < 8; ++s) {
+            Composer c(1000 + s);
+            for (int i = 0; i < 40; ++i) {
+                const std::vector<MelodyNote>& a = c.track(q, i).melody.acid[0];
+                for (size_t k = 0; k < a.size(); ++k) {
+                    const bool acc = (a[k].flags & kNoteAccent) != 0;
+                    const int pos = a[k].step % 4;
+                    wantMarginal += pos == 2 ? 0.32 : (pos == 0 ? 0.12 : 0.2);
+                    ++onsets;
+                    accents += acc ? 1 : 0;
+                    if (k + 1 < a.size()) {
+                        const bool nxt = (a[k + 1].flags & kNoteAccent) != 0;
+                        if (acc) { ++nAfterAcc; runAfterAcc += nxt ? 1 : 0; }
+                        else { ++nAfterPlain; runAfterPlain += nxt ? 1 : 0; }
+                    }
+                }
+            }
+        }
+        const double pa = static_cast<double>(runAfterAcc) / static_cast<double>(nAfterAcc);
+        const double pp = static_cast<double>(runAfterPlain) / static_cast<double>(nAfterPlain);
+        const double marg = static_cast<double>(accents) / static_cast<double>(onsets);
+        wantMarginal /= static_cast<double>(onsets);
+        // The realised lift is a little under the 2.51 the chain is built with, and must be: the chain's
+        // two probabilities are position-dependent, consecutive onsets sit on different positions, and a
+        // ratio of two mixtures is not the mixture of the ratios. 2.36 is what that mixture gives.
+        check(pa / pp > 2.2 && pa / pp < 2.7,
+              "acid accents cluster with the lift measured in the corpus (2.51), instead of being drawn independently",
+              fmt("after an accent %.3f, after a plain note %.3f, lift %.2f over the mixture of step positions "
+                  "(n = %lld and %lld)", pa, pp, pa / pp, static_cast<long long>(nAfterAcc), static_cast<long long>(nAfterPlain)));
+        // The independent draw produced exactly the per-position mean; the chain holds the marginal
+        // only up to the same mixture effect, and it comes out 8 % under it. That is the whole change
+        // in the amount of accenting -- the rest of the change is where the accents sit.
+        check(marg > wantMarginal - 0.025 && marg < wantMarginal + 0.025,
+              "clustering rearranges the accents and barely changes how many there are",
+              fmt("%.4f against the independent draw's %.4f (%+.1f %%) over %lld onsets",
+                  marg, wantMarginal, 100.0 * (marg / wantMarginal - 1.0), static_cast<long long>(onsets)));
+
+        // And what it was all for: the sweep capacitor. The composed patterns are played into a real
+        // acid voice **on their own step grid** -- a note only where the pattern puts one, silence
+        // where it does not -- and the charge is read at the end of every sixteenth. A lone accent
+        // cannot get the capacitor past 0.216 at the end of its own sixteenth (the value the accent
+        // check of testAcid measures), so a higher reading is a second accent arriving before the
+        // first has discharged. What is measured is the charge *the accented notes themselves see*,
+        // because that is what lifts their cutoff: kSweepOctaves x Accent x Resonance x charge.
+        {
+            ParamStore q;
+            q.parseText("compose.level_match=Off master.auto_gain=Off");
+            const size_t sixteenth = static_cast<size_t>(0.25 * 60.0 / 145.0 * sr);
+            std::vector<float> L(sixteenth), R(sixteenth);
+            double peak = 0.0, sumAcc = 0.0;
+            long long nAcc = 0;
+            ParamStore ap;
+            auto voice = makeAcid("acid.delay_send=0", ap);
+            for (uint64_t s = 0; s < 6; ++s) {
+                Composer c(2000 + s);
+                for (int i = 0; i < 20; ++i) {
+                    const MelodyPlan& m = c.track(q, i).melody;
+                    const std::vector<MelodyNote>& a = m.acid[0];
+                    voice->reset();
+                    size_t next = 0;
+                    for (int step = 0; step < m.acidSteps; ++step) {
+                        bool accented = false;
+                        if (next < a.size() && a[next].step == step) {
+                            accented = (a[next].flags & kNoteAccent) != 0;
+                            voice->noteOn(50 + a[next].rel, a[next].velocity / 127.0f, accented, false,
+                                          static_cast<int>(sixteenth / 2), 0.0);
+                            ++next;
+                        }
+                        voice->process(L.data(), R.data(), static_cast<int>(sixteenth));
+                        const double sw = voice->accentSweep();
+                        peak = std::max(peak, sw);
+                        if (accented) { ++nAcc; sumAcc += sw; }
+                    }
+                }
+            }
+            const double mean = nAcc ? sumAcc / static_cast<double>(nAcc) : 0.0;
+            // This is a guard, not a proof, and the measurement says why. The independent draw already
+            // reached a mean charge of 0.248 and a peak of 0.406; the chain reaches 0.261 and 0.405.
+            // The clustering nearly doubles the number of accents that follow an accent (0.20 -> 0.39)
+            // and moves the charge under an accented note by 5 %, that is 0.011 of an octave of cutoff
+            // at the default Accent and Resonance -- inaudible. The reason is the time constant: at
+            // 145 BPM a sixteenth is 103 ms and the capacitor's tau is 150 ms, so accents *two* steps
+            // apart already find it far from discharged. The physical argument for clustering is right
+            // about the mechanism and wrong about the size of it at this tempo.
+            check(peak > 0.35 && mean > 0.20,
+                  "acid: the accented notes sit on a sweep charge above a lone accent's (a guard -- the "
+                  "independent draw reached 0.248 and 0.406 too)",
+                  fmt("highest charge %.3f (a lone accent reaches 0.216); mean charge under the %lld accented "
+                      "notes %.3f, against 0.248 under 284 with independent draws", peak,
+                      static_cast<long long>(nAcc), mean));
+        }
+    }
+
+    // --------------------------------------------------------------- the disperser is an all-pass
+    {
+        Disperser d;
+        d.set(kDisperseStages, 1250.0, sr);
+        DisperserChannel ch;
+        constexpr size_t N = 32768;
+        std::vector<std::complex<double>> a(N);
+        std::vector<float> ir(N);
+        for (size_t i = 0; i < N; ++i) { ir[i] = ch.tick(i == 0 ? 1.0f : 0.0f, d.c, d.d, d.stages); a[i] = ir[i]; }
+        fft(a);
+        double worst = 0.0, worstHz = 0.0;
+        for (size_t k = 1; k < N / 2; ++k) {
+            const double hz = static_cast<double>(k) * sr / N;
+            if (hz < 50.0 || hz > 20000.0) continue;
+            const double db = std::fabs(20.0 * std::log10(std::abs(a[k])));
+            if (db > worst) { worst = db; worstHz = hz; }
+        }
+        check(worst < 0.01, "disperser: the magnitude response is flat -- an all-pass moves energy in time, never between bands",
+              fmt("worst deviation %.4f dB at %.0f Hz (eight sections over 395 to 3953 Hz)", worst, worstHz));
+
+        // The group delay from the impulse response against the closed form of the coefficients.
+        const double at[5] = { 140.0, 400.0, 1250.0, 4000.0, 16000.0 };
+        double gd[5] = {}, want[5] = {}, mag = 0.0, worstGd = 0.0;
+        auto dft = [&](double hz) {
+            std::complex<double> s(0.0, 0.0);
+            for (size_t n2 = 0; n2 < N; ++n2) s += static_cast<double>(ir[n2]) * std::polar(1.0, -2.0 * kPiD * hz * static_cast<double>(n2) / sr);
+            return s;
+        };
+        for (int i = 0; i < 5; ++i) {
+            disperserResponse(d, at[i], sr, mag, want[i]);
+            const double e = std::max(0.5, at[i] * 1e-3);
+            gd[i] = -std::arg(dft(at[i] + e) / dft(at[i])) / (2.0 * kPiD * e) * 1000.0;
+            worstGd = std::max(worstGd, std::fabs(gd[i] - want[i]));
+        }
+        check(worstGd < 0.05 && gd[1] > gd[0] && gd[1] > 3.0 && gd[4] < 0.1,
+              "disperser: the group delay is the designed one -- largest inside the band, small above it, "
+              "and smaller under 140 Hz than at the band's foot",
+              fmt("140 Hz %.2f ms, 400 %.2f, 1250 %.2f, 4000 %.2f, 16k %.2f (closed form %.2f/%.2f/%.2f/%.2f/%.2f)",
+                  gd[0], gd[1], gd[2], gd[3], gd[4], want[0], want[1], want[2], want[3], want[4]));
+    }
+
+    // --------------------------------------------- what the disperser costs: crest factor and level
+    {
+        auto line = [&](const char* extra) {
+            ParamStore p;
+            auto a = makeAcid(fmt("acid.delay_send=0 acid.level=0 %s", extra).c_str(), p);
+            std::vector<float> out;
+            for (int n = 0; n < 8; ++n) {
+                a->noteOn(57 + (n % 3) * 4, 1.0f, n % 2 == 0, false, 2400, 0.0);
+                const std::vector<float> y = renderMono([&](float* L, float* R, int k) { a->process(L, R, k); }, 4800);
+                out.insert(out.end(), y.begin(), y.end());
+            }
+            return out;
+        };
+        const std::vector<float> dry = line("acid.disperse=0"), wet = line("acid.disperse=8");
+        auto crest = [](const std::vector<float>& y) {
+            double e = 0.0, pk = 0.0;
+            for (float v : y) { e += static_cast<double>(v) * v; pk = std::max(pk, std::fabs(static_cast<double>(v))); }
+            return 20.0 * std::log10(pk / std::sqrt(e / static_cast<double>(y.size())));
+        };
+        auto rms = [](const std::vector<float>& y) {
+            double e = 0.0;
+            for (float v : y) e += static_cast<double>(v) * v;
+            return 10.0 * std::log10(e / static_cast<double>(y.size()) + 1e-30);
+        };
+        const double cd = crest(dry), cw = crest(wet);
+        const double rd = rms(dry), rw = rms(wet);
+        check(std::fabs(rw - rd) < 0.25 && cw < cd - 0.5,
+              "disperser: the loudness survives (an all-pass moves no energy) while the crest factor falls -- "
+              "the price a peak-matched chain pays for the colour",
+              fmt("RMS %+.2f -> %+.2f dB (%+.2f), crest %.2f -> %.2f dB (%+.2f)", rd, rw, rw - rd, cd, cw, cw - cd));
+
+        ParamStore p;
+        auto a = makeAcid("acid.disperse=8 acid.drive=1 acid.resonance=1 acid.delay_send=0", p);
+        a->noteOn(kAcidLowest, 1.0f, true, false, 30000, 0.0);
+        const std::vector<float> y = renderMono([&](float* L, float* R, int n) { a->process(L, R, n); }, 32768);
+        const double low = lowShareDb(y, 140.0, true);
+        check(low < -30.0, "disperser: the depth rule holds with the chain at full length",
+              fmt("%.1f dB under 140 Hz at D3 with full drive and resonance", low));
+    }
+
+    // ------------------------------------------------------- the comb's fractional-delay interpolator
+    {
+        const float fb = 0.82f;
+        const int delay = 61;
+        float lag0[4], lag5[4], lin5[4] = { 0.0f, 0.5f, 0.5f, 0.0f };
+        combTaps(0.0f, lag0[0], lag0[1], lag0[2], lag0[3]);
+        combTaps(0.5f, lag5[0], lag5[1], lag5[2], lag5[3]);
+        double worstLag = 0.0, worstLin = 0.0;
+        std::string detail;
+        for (double hz : { 2000.0, 5000.0, 10000.0 }) {
+            const double ideal = combPeakDb(lag0, delay, fb, hz, sr);
+            const double lag = combPeakDb(lag5, delay, fb, hz, sr);
+            const double lin = combPeakDb(lin5, delay, fb, hz, sr);
+            worstLag = std::max(worstLag, ideal - lag);
+            worstLin = std::max(worstLin, ideal - lin);
+            detail += fmt("%.0fk %.2f/%.2f/%.2f  ", hz / 1000.0, ideal, lag, lin);
+        }
+        check(worstLag < 2.5 && worstLin > 5.0 && worstLag < 0.5 * worstLin,
+              "comb: a half-sample tuning keeps its resonance with Lagrange 3 where linear interpolation loses it",
+              fmt("peak in dB, integer / Lagrange / linear -- %s(worst loss %.2f dB against %.2f dB)",
+                  detail.c_str(), worstLag, worstLin));
+
+        // Against the closed form: the peak of a comb is 1 / (1 - fb |H_interp|).
+        double worstErr = 0.0;
+        for (double hz : { 2000.0, 5000.0, 10000.0 }) {
+            std::complex<double> h(0.0, 0.0);
+            for (int t = 0; t < 4; ++t) h += static_cast<double>(lag5[t]) * std::polar(1.0, -2.0 * kPiD * hz / sr * t);
+            const double want = 20.0 * std::log10(1.0 / (1.0 - static_cast<double>(fb) * std::abs(h)));
+            worstErr = std::max(worstErr, std::fabs(combPeakDb(lag5, delay, fb, hz, sr) - want));
+        }
+        check(worstErr < 0.5, "comb: the measured resonance is the one the interpolator's magnitude predicts",
+              fmt("worst deviation from 1 / (1 - fb |H|): %.2f dB", worstErr));
+
+        // What the all-pass interpolator the literature prefers would cost here. It is exact in
+        // magnitude, but it has state, and this comb is retuned at every note. Worse, its coefficient
+        // a = (1 - fr) / (1 + fr) goes to 1 as the fraction goes to 0, which puts its pole on the unit
+        // circle at z = -1: at that tuning the filter no longer forgets. The test drives the comb with
+        // noise, retunes it and takes the noise away in the same sample, and asks what is left 100 ms
+        // later -- by then the comb itself has decayed by 0.82^(100 ms / 1.3 ms) = -136 dB.
+        auto ring = [&](bool allpass, double newDelay, double& after5ms) {
+            std::vector<float> buf(4096, 0.0f);
+            size_t pos = 0;
+            const size_t mask = buf.size() - 1;
+            float apState = 0.0f, w[4];
+            double d = 61.5, steady = 0.0, tail = 0.0;
+            after5ms = 0.0;
+            Rng r;
+            r.seed(7);
+            for (size_t i = 0; i < 24000; ++i) {
+                if (i == 12000) d = newDelay;                   // the retune a new note performs
+                const int di = static_cast<int>(d);
+                const float fr = static_cast<float>(d - di);
+                const long long i0 = static_cast<long long>(pos) - di;
+                float del;
+                if (allpass) {
+                    // First-order all-pass interpolator (Laakso et al. 1996, the Thiran form):
+                    // y[n] = a x[n] + x[n-1] - a y[n-1] with a = (1 - fr) / (1 + fr).
+                    const float av = (1.0f - fr) / (1.0f + fr);
+                    del = av * buf[static_cast<size_t>(i0) & mask] + buf[static_cast<size_t>(i0 - 1) & mask] - av * apState;
+                    apState = del;
+                } else {
+                    combTaps(fr, w[0], w[1], w[2], w[3]);
+                    del = 0.0f;
+                    for (int t = 0; t < 4; ++t) del += w[t] * buf[static_cast<size_t>(i0 - 1 + t) & mask];
+                }
+                const float v = (i < 12000 ? 0.05f * r.bipolar() : 0.0f) + fb * del;
+                buf[pos] = v;
+                pos = (pos + 1) & mask;
+                if (i >= 11000 && i < 12000) steady = std::max(steady, std::fabs(static_cast<double>(v)));
+                if (i >= 12000 && i < 12240) after5ms = std::max(after5ms, std::fabs(static_cast<double>(v)));
+                if (i >= 16800) tail = std::max(tail, std::fabs(static_cast<double>(v)));
+            }
+            after5ms = 20.0 * std::log10(after5ms / steady + 1e-30);
+            return 20.0 * std::log10(tail / steady + 1e-30);
+        };
+        double worstAp = -300.0, worstLg = -300.0, apEarly = 0.0, lgEarly = 0.0, e = 0.0;
+        double atFrac = 0.0;
+        for (double frac : { 0.02, 0.25, 0.5, 0.98 }) {
+            const double a = ring(true, 47.0 + frac, e);
+            if (a > worstAp) { worstAp = a; apEarly = e; atFrac = frac; }
+            const double l = ring(false, 47.0 + frac, e);
+            if (l > worstLg) { worstLg = l; lgEarly = e; }
+        }
+        check(worstAp > worstLg + 40.0 && worstLg < -100.0,
+              "comb: the all-pass interpolator keeps ringing after a retune -- which happens at every note -- "
+              "because its pole walks onto the unit circle as the fraction goes to zero; Lagrange has no state to ring",
+              fmt("100 ms after the retune and with the input taken away: all-pass %+.0f dB (worst at fraction %.2f, "
+                  "%+.1f dB in the first 5 ms), Lagrange %+.0f dB (%+.1f dB)",
+                  worstAp, atFrac, apEarly, worstLg, lgEarly));
+    }
+
+    // ---------------------------------------- and the acid's own comb is the one that uses it
+    // The checks above measure the interpolator; this one measures that Acid.cpp reads its delay line
+    // with it. A note's comb delay is sr / f0, and its fractional part is whatever the tuning happens
+    // to give: at A4 (pitch 69) it is 109.091 samples, almost on a sample, and one semitone lower
+    // (pitch 68) it is 115.578, more than half a sample between two taps. The measure is the depth of
+    // the comb's teeth -- for every comb period between 6 and 11 kHz the ratio of the largest to the
+    // smallest bin -- which is a local contrast and therefore blind to the ladder's slope. An
+    // interpolator that damps the top makes the teeth shallow, and it does so only at the tuning with
+    // the large fraction, so the *difference* between the two notes is the fingerprint.
+    {
+        auto teeth = [&](int pitch) {
+            ParamStore p;
+            auto a = makeAcid("acid.squelch=On acid.env_amount=0 acid.key_track=0 acid.cutoff=8000 acid.drive=0 "
+                              "acid.comb_feedback=0.9 acid.comb_mix=1 acid.amp_decay=4000 acid.delay_send=0 "
+                              "acid.squelch_start=2 acid.low_cut=150", p);
+            a->noteOn(pitch, 1.0f, false, false, 1 << 20, 0.0);
+            const std::vector<float> y = renderMono([&](float* L, float* R, int n) { a->process(L, R, n); }, 9600 + 32768);
+            constexpr size_t N = 32768;
+            const std::vector<double> pw = powerSpectrum(y.data() + 9600, N);
+            const double f0 = midiToHz(pitch), bin = sr / static_cast<double>(N);
+            // The comb's peaks against its own harmonic series: the power of the band 6 to 11 kHz
+            // against the power of the band one octave under the cutoff, which the comb damps equally
+            // whatever the interpolator does. A ratio of two band powers has no numerical floor in it,
+            // unlike a peak-to-valley depth, whose valleys sit in the denormal range.
+            double hi = 0.0, lo = 0.0;
+            for (size_t k = 1; k < N / 2; ++k) {
+                const double hz = static_cast<double>(k) * bin;
+                if (hz >= 6000.0 && hz < 11000.0) hi += pw[k];
+                if (hz >= 1000.0 && hz < 2000.0) lo += pw[k];
+            }
+            (void)f0;
+            return 10.0 * std::log10(hi / lo);
+        };
+        const double onSample = teeth(69), between = teeth(68);
+        check(between > onSample - 3.0,
+              "acid: the squelch comb reads its delay line with the Lagrange taps -- its top survives "
+              "a half-sample tuning as well as a whole-sample one",
+              fmt("power 6 to 11 kHz against 1 to 2 kHz: %.1f dB at A4 (fraction 0.09), %.1f dB at G#4 "
+                  "(fraction 0.58), difference %+.1f dB", onSample, between, between - onSample));
+    }
+
+    // ------------------------------------------------ even harmonics of our acid (the bias question)
+    {
+        ParamStore p;
+        auto a = makeAcid("acid.delay_send=0 acid.squelch=Off acid.env_amount=0 acid.cutoff=3000 acid.drive=0.45", p);
+        a->noteOn(57, 1.0f, false, false, 1 << 20, 0.0);
+        const std::vector<float> y = renderMono([&](float* L, float* R, int n) { a->process(L, R, n); }, 4800 + 32768);
+        const double f0 = midiToHz(57);
+        const double e2 = evennessDb(y, 4800, f0, sr, 2), e4 = evennessDb(y, 4800, f0, sr, 4);
+        check(e2 > -6.0 && e4 > -6.0,
+              "acid: the line already carries its even harmonics -- a sawtooth through a point-symmetric filter "
+              "is not an odd-only spectrum",
+              fmt("E2 %.2f dB, E4 %.2f dB (a sawtooth gives -1.25 and -0.28, a square wave minus infinity)", e2, e4));
+    }
+
+    // ------------------------------------------------------------------------------- thermal drift
+    {
+        // The standing deviation of a walk is the parameter, in cents. Independently derived: for
+        // x += (w - x) alpha with w uniform on [-1, 1] the standing variance is alpha / (2 - alpha)
+        // times var(w) = 1/3, and update() divides exactly that out again.
+        ParamStore p;
+        auto e = makePoly("lead.drift=2 lead.delay_send=0", p, PolyInstance::Lead);
+        std::vector<float> L(4800), R(4800);
+        double s = 0.0, s2 = 0.0, worst = 0.0;
+        int n = 0;
+        for (int b = 0; b < 400; ++b) {          // 40 s: about fifty correlation times
+            e->process(L.data(), R.data(), 4800);
+            for (int slot = 0; slot < kPolySlots; ++slot) {
+                const double v = e->slotDrift(slot);
+                s += v;
+                s2 += v * v;
+                ++n;
+                worst = std::max(worst, std::fabs(v));
+            }
+        }
+        const double sd = std::sqrt(s2 / n - (s / n) * (s / n));
+        check(std::fabs(sd / 2.0 - 1.0) < 0.2 && worst < 12.0,
+              "drift: the standing deviation of a walk is the parameter in cents, and it stays inside a few sigma",
+              fmt("%.2f cents for a parameter of 2 (largest excursion %.2f cents over 40 s and 56 slots)", sd, worst));
+    }
+    {
+        // Determinism from the seed and independence of the block size: the walks step on the absolute
+        // sample grid, so cutting the render differently must change nothing at all.
+        auto render = [&](uint64_t seed, int block) {
+            ParamStore p;
+            auto e = makePoly("lead.drift=3 lead.delay_send=0.4", p, PolyInstance::Lead);
+            e->seedPhases(seed);
+            std::vector<float> L(48000), R(48000);
+            int done = 0, note = 0;
+            while (done < 48000) {
+                if (done % 3000 == 0) e->noteOnLimited(60 + (note++ % 5), 1.0f, 0.5, 2000, 0.0);
+                const int k = std::min(block, 48000 - done);
+                e->process(L.data() + done, R.data() + done, k);
+                done += k;
+            }
+            return L;
+        };
+        const std::vector<float> a1 = render(11, 1000), a2 = render(11, 1000);
+        const std::vector<float> b1 = render(11, 3), b2 = render(11, 125), c1 = render(12, 1000);
+        auto differing = [](const std::vector<float>& x, const std::vector<float>& y) {
+            int n = 0;
+            for (size_t i = 0; i < x.size(); ++i) n += x[i] != y[i] ? 1 : 0;
+            return n;
+        };
+        const int d3 = differing(a1, b1), d125 = differing(a1, b2), dseed = differing(a1, c1);
+        check(a1 == a2 && d3 == 0 && d125 == 0 && dseed > 1000,
+              "drift: the same seed gives the same samples at every block size; a different seed gives different samples",
+              fmt("against block 1000: block 3 differs in %d samples, block 125 in %d, a repeat in %d; seed 12 differs in %d of %d",
+                  d3, d125, differing(a1, a2), dseed, static_cast<int>(c1.size())));
+    }
+    {
+        // With the drift switched off nothing drifts at all, and the start phases are untouched either
+        // way -- the drift has its own generator, so drift 0 is the engine that never had one.
+        ParamStore p;
+        auto off = makePoly("lead.drift=0 lead.delay_send=0", p, PolyInstance::Lead);
+        std::vector<float> L(9600), R(9600);
+        off->process(L.data(), R.data(), 9600);
+        double worst = 0.0;
+        for (int s2 = 0; s2 < kPolySlots; ++s2) worst = std::max(worst, std::fabs(static_cast<double>(off->slotDrift(s2))));
+        for (int v = 0; v < kPolyVoices; ++v) worst = std::max(worst, std::fabs(static_cast<double>(off->voiceDrift(v))));
+        check(worst == 0.0, "drift: at 0 cents no walk ever leaves zero, so the sound from before it existed is reachable exactly",
+              fmt("largest walk value %g after 0.2 s", worst));
+    }
+    {
+        // The drift must not spoil the supersaw's aliasing figures, and this is the only place that
+        // can say so: the benchmark in testPoly starts its note at sample 0, where every walk is still
+        // at zero, so it never sees a drifted oscillator at all. Here the engine runs for a second
+        // first, so the walks stand at their full spread when the note begins.
+        //
+        // The mask must be the *drifted* line set, and that is the whole point rather than a
+        // convenience: a drift held for the note multiplies one oscillator's entire harmonic series by
+        // one constant, so the series stays a series and only its spacing changes. Measured against
+        // the undrifted lines the same signal reads -22.9 dB, because +-6 bins is +-4.4 Hz and one
+        // cent at the tenth harmonic of A6 is already 10 Hz -- which is exactly the reading a drift
+        // applied *during* the note would deserve, and the reason it is held (Poly.h).
+        const char* const kBench = "lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 "
+                                   "lead.hp_floor=150 lead.width=0 lead.delay_send=0 lead.dynamic_detune=0 lead.amp_attack=1 "
+                                   "lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0 lead.mix=0.75 lead.detune=1";
+        double worst = 1e9, worstNominal = 1e9;
+        std::string detail;
+        for (int pitch : { 84, 93 }) {
+            ParamStore p;
+            auto e = makePoly(fmt("%s lead.drift=1", kBench).c_str(), p, PolyInstance::Lead);
+            e->seedPhases(4711);
+            std::vector<float> warm(48000), warmR(48000);
+            e->process(warm.data(), warmR.data(), 48000);      // the walks reach their standing spread
+            e->noteOnLimited(pitch, 1.0f, 8.0, 1 << 24, 0.0);
+            // The voice the allocator took is voice 0 (every voice is idle), so its seven slots are 0..6.
+            const double f0 = midiToHz(pitch), yDet = Poly::detuneCurve(1.0);
+            std::vector<double> lines;
+            double moved = 0.0;
+            for (int u = 0; u < kPolyUnison; ++u) {
+                const double cents = e->slotDrift(u);
+                moved = std::max(moved, std::fabs(cents));
+                const double fu = f0 * (1.0 + kSupersawOffsets[u] * yDet) * (1.0 + cents * (0.6931471805599453 / 1200.0));
+                for (int h = 1; static_cast<double>(h) * fu < 0.5 * sr; ++h) lines.push_back(static_cast<double>(h) * fu);
+            }
+            const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
+            const double a = maskedAliasDb(y, 9600, lines, sr);
+            const double nominal = supersawAliasDb(y, 9600, f0, yDet, sr);
+            worst = std::min(worst, -a);
+            worstNominal = std::min(worstNominal, -nominal);
+            detail += fmt("%s %.1f dB (drift up to %.2f ct)  ", pitch == 84 ? "C6" : "A6", a, moved);
+        }
+        check(worst > 58.0 && worstNominal < 40.0,
+              "drift: a drifted supersaw still keeps its aliasing under -58 dB -- the pitch is held for the note, "
+              "so each oscillator's harmonics stay a harmonic series",
+              fmt("after a second of drifting at 1 cent: %s(against the *undrifted* line set the same signal "
+                  "reads only -%.1f dB, which is what a drift inside a note would cost)", detail.c_str(), worstNominal));
+    }
+    {
+        // It really moves the pitch, by cents, and only when it is switched on.
+        const char* kOne = "lead.osc=Va lead.detune=0 lead.mix=0 lead.width=0 lead.delay_send=0 lead.cutoff=18000 "
+                           "lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 "
+                           "lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0 lead.dynamic_detune=0";
+        auto f0Of = [&](double drift, uint64_t seed) {
+            ParamStore p;
+            auto e = makePoly(fmt("%s lead.drift=%g", kOne, drift).c_str(), p, PolyInstance::Lead);
+            e->seedPhases(seed);
+            std::vector<float> L(96000), R(96000);
+            e->process(L.data(), R.data(), 48000);            // let the walk reach its standing spread
+            e->noteOnLimited(69, 1.0f, 8.0, 1 << 20, 0.0);
+            e->process(L.data(), R.data(), 96000);
+            constexpr size_t N = 65536;
+            const std::vector<double> pw = powerSpectrum(L.data() + 4800, N);
+            const int k0 = static_cast<int>(std::lround(440.0 * static_cast<double>(N) / sr));
+            int best = k0;
+            for (int k = k0 - 40; k <= k0 + 40; ++k) if (pw[static_cast<size_t>(k)] > pw[static_cast<size_t>(best)]) best = k;
+            const double lm = std::log(pw[static_cast<size_t>(best - 1)] + 1e-30);
+            const double l0 = std::log(pw[static_cast<size_t>(best)] + 1e-30);
+            const double lp = std::log(pw[static_cast<size_t>(best + 1)] + 1e-30);
+            return (static_cast<double>(best) + 0.5 * (lm - lp) / (lm - 2.0 * l0 + lp)) * sr / static_cast<double>(N);
+        };
+        const double plain = f0Of(0.0, 5);
+        double spread = 0.0;
+        std::string detail;
+        for (uint64_t seed : { 5ull, 6ull, 7ull, 8ull }) {
+            const double cents = 1200.0 * std::log2(f0Of(6.0, seed) / plain);
+            spread = std::max(spread, std::fabs(cents));
+            detail += fmt("%+.2f ", cents);
+        }
+        check(std::fabs(1200.0 * std::log2(f0Of(0.0, 9) / plain)) < 0.02 && spread > 1.0 && spread < 40.0,
+              "drift: the pitch of a note really moves, and only when the drift is on",
+              fmt("at 6 cents over four seeds: %scents; at 0 cents the same note to 0.02 cents", detail.c_str()));
+    }
+}
+
 void testMelody()
 {
     section("melody: chords, acid, lead, arp");
@@ -6106,6 +6739,7 @@ int main()
     run("testDiodeLadder", testDiodeLadder);
     run("testAcid", testAcid);
     run("testPoly", testPoly);
+    run("testAcidColour", testAcidColour);
     run("testMelody", testMelody);
     run("testWaveTable", testWaveTable);
     run("testWaveTableLibrary", testWaveTableLibrary);

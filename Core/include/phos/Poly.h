@@ -41,9 +41,42 @@
  * kernel a row of samples -- the same code for every vector path, so the lanes stay bit-identical.
  *
  * The voice filter is a resonant 12 dB state-variable low pass with its own envelope and key
- * tracking; the amplitude envelope is the ADSR of Dsp.h. After the voices a tempo delay (TempoDelay.h).
+ * tracking; the amplitude envelope is the ADSR of Dsp.h. After the voices a tempo delay (TempoDelay.h)
+ * and, when it is switched on, the all-pass disperser (Disperser.h).
+ *
+ * **Thermal drift.** A real analogue voice is never twice in the same place: its VCOs wander by a few
+ * cents, its filter by a fraction of a semitone, its envelope by a few per cent, all on a time scale
+ * of seconds -- the effect the analogue literature attributes to the temperature drift of the
+ * exponential converter and which Pirkle ("Designing Software Synthesizer Plug-Ins in C++", 2nd ed.
+ * 2019, chapter on analogue modelling) models exactly this way: a very low-frequency noise source per
+ * oscillator. Phosphene runs one first-order low-pass filtered noise source per unison slot and per
+ * voice (kDriftHz, so a correlation time of about 0.8 s), normalised so that its standing deviation
+ * is poly.drift cents, and:
+ *
+ *  - the walks advance on the **absolute sample grid** -- once per kPolyBlock samples, in
+ *    renderSegment(), for every slot and voice whether it sounds or not. They are therefore a
+ *    function of the sample index and of the seed alone, and nothing about them changes when the host
+ *    hands over its samples in different blocks;
+ *  - they are **read once, at note on**, and held for the note. At 0.2 Hz a walk moves by about half
+ *    its standing deviation within a sixteenth at 145 BPM, so holding it is not an approximation of
+ *    the physics but a statement of it -- and it keeps the pitch of a sounding oscillator constant,
+ *    which matters: a pitch that wanders *within* a note smears every harmonic, and the supersaw's
+ *    aliasing figures are measured in narrow bands around the lines the oscillators should produce
+ *    (the measurement is in docs/PLAN.md, 16.09.2026);
+ *  - they are computed **on the scalar side**, like the wavetable rows, and reach the kernels only as
+ *    coefficients, so the AVX2, NEON and scalar lane paths stay bit-identical;
+ *  - the **bass does not drift**, and cannot: it is not a Poly instance. The phase lock of kick and
+ *    bass sits on the bass's first note, and a drifting bass would break it.
+ *
+ * Three quantities drift per note: the pitch of each unison slot (its own walk, so the seven saws of
+ * a supersaw move against each other, which is what a unison of real oscillators does), the voice's
+ * filter cutoff (a quarter of the pitch deviation in cents, a design ratio), and the amplitude
+ * envelope's attack (one per cent per cent of drift, likewise a design ratio -- the walk is a pitch
+ * measure and the other two are scaled from it rather than given their own depths, so one knob moves
+ * the whole ageing of the instrument).
  */
 #pragma once
+#include "phos/Disperser.h"
 #include "phos/Dsp.h"
 #include "phos/PolyKernel.h"
 #include "phos/TempoDelay.h"
@@ -55,6 +88,13 @@ namespace phos {
 
 /** @brief Szabo's detune offsets of the seven supersaw oscillators (thesis, table 1). */
 inline constexpr double kSupersawOffsets[kPolyUnison] = { -0.11002313, -0.06288439, -0.01952356, 0.0, 0.01991221, 0.06216538, 0.10745242 };
+
+/** @brief Corner frequency of the thermal drift walks, Hz (a correlation time of about 0.8 s). */
+inline constexpr double kDriftHz = 0.2;
+/** @brief Filter drift in cents per cent of pitch drift (design ratio, see Poly.h). */
+inline constexpr double kDriftCutoffRatio = 0.25;
+/** @brief Attack drift, relative, per cent of pitch drift (design ratio, see Poly.h). */
+inline constexpr double kDriftAttackRatio = 0.01;
 
 /** @brief Polyphonic engine. */
 class Poly {
@@ -125,8 +165,22 @@ public:
     template <class V> void processWith(float* L, float* R, int n);
     /** @brief Voices whose envelope is open. */
     int activeVoices() const;
-    /** @brief Seeds the random start phases (deterministic renders). */
-    void seedPhases(uint64_t seed) { phaseRng_.seed(seed); }
+    /**
+     * @brief Seeds the random start phases and the thermal drift walks (deterministic renders).
+     *
+     * The drift gets its own generator, salted against the phase one, so that switching the drift on
+     * or off does not move the start phases -- a render with drift 0 is bit-identical to a render
+     * from before the drift existed.
+     */
+    void seedPhases(uint64_t seed)
+    {
+        phaseRng_.seed(seed);
+        driftRng_.seed(seed ^ 0x44524946'54574C4Bull);   // "DRIFTWLK"
+    }
+    /** @brief The drift walk of one unison slot, in cents (tests). */
+    float slotDrift(int slot) const { return driftSlot_[slot] * driftNorm_; }
+    /** @brief The drift walk of one voice, in cents (tests). */
+    float voiceDrift(int voice) const { return driftVoice_[voice] * driftNorm_; }
     /**
      * @brief Wavetable reads the scalar pre-pass has done since prepare(), for the tests.
      *
@@ -168,6 +222,15 @@ private:
 
     void voiceCoefs(int voice);
     void lowPassCoefs(int voice, double damping);
+    /**
+     * @brief Advances every drift walk by one kPolyBlock grid step.
+     *
+     * One first-order low pass per walk, x += (w - x) * kDriftAlpha with w uniform in [-1, 1]. The
+     * standing variance of that process is alpha / (2 - alpha) times the variance of w, which is
+     * 1/3; driftNorm_ divides it out and multiplies the drift depth back in, so the walk's standing
+     * deviation is exactly the drift parameter in cents whatever the sample rate.
+     */
+    void advanceDrift();
     template <class V> void renderSegment(float* L, float* R, int n);
 
     double sr_ = 48000.0;
@@ -197,6 +260,15 @@ private:
     uint64_t pos_ = 0;          ///< samples rendered since reset (the coefficient grid)
     uint64_t tableReads_ = 0;   ///< wavetable reads of the scalar pre-pass (tests, see tableReads())
     Rng phaseRng_;
+    Rng driftRng_;                            ///< the thermal drift walks, salted against phaseRng_
+    float driftSlot_[kPolySlots] = {};        ///< drift walk per unison slot, before driftNorm_
+    float driftVoice_[kPolyVoices] = {};      ///< drift walk per voice, before driftNorm_
+    float driftOct_[kPolyVoices] = {};         ///< the voice's cutoff drift in octaves, held for the note
+    float driftAlpha_ = 0.0f;                 ///< one-pole coefficient of a walk, per grid step
+    float driftNorm_ = 0.0f;                  ///< walk -> cents, so the standing deviation is drift_
+    float drift_ = 0.0f;                      ///< poly.drift in cents (standing deviation)
+    Disperser disperse_;                      ///< all-pass chain coefficients (Disperser.h)
+    DisperserChannel dispL_, dispR_;          ///< its state, one per output channel
     TempoDelay delay_;
     float send_ = 0.0f, level_ = 1.0f;
     std::vector<float> slotL_, slotR_, chanIn_, chanAmp_, chanOut_, sendBuf_, wtRow_;

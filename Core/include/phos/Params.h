@@ -98,7 +98,11 @@ namespace acid {
 enum : int { Wave, Cutoff, Resonance, EnvAmount, Decay, Accent, SlideTime, AmpDecay, KeyTrack, Drive,
              Squelch, SquelchStart, SquelchTime, CombMix, CombFeedback, LowCut,
              DelaySend, DelayLeft, DelayRight, DelayFeedback, DelayHighPass, DelayLowPass,
-             RoomSend, HallSend, Duck, Level, Count };
+             RoomSend, HallSend, Duck, Level,
+             // Appended 16.09.2026 (acid colour round). New entries go at the end: the index of a
+             // parameter is its position in this list and every stored set, preset and automation
+             // slot refers to it by that index.
+             Disperse, DisperseFreq, Count };
 }
 /** @brief Parameters of a polyphonic engine (module Poly, instances "lead" and "arp"). */
 namespace poly {
@@ -108,7 +112,9 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
              AmpAttack, AmpDecay, AmpSustain, AmpRelease, Width, VelSens,
              DelaySend, DelayLeft, DelayRight, DelayFeedback, DelayHighPass, DelayLowPass,
              RoomSend, HallSend, Duck, Gate, GatePattern, GateDepth, GateDuty, GateAttack, GateRelease, GateTone,
-             Level, Count };
+             Level,
+             // Appended 16.09.2026 (acid colour round), at the end for the same reason as above.
+             Disperse, DisperseFreq, Drift, Count };
 }
 /** @brief Parameters of the effect generator (module Sfx, prefix "sfx"). */
 namespace sfx {

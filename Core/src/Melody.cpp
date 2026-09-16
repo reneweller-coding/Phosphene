@@ -257,6 +257,45 @@ void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
 
     std::vector<MelodyNote>& a = m.acid[0];
     a.clear();
+    /**
+     * Accents cluster; they are not drawn independently. The TB-303's accent charges a capacitor with
+     * a time constant of 150 ms (Acid.cpp, kSweepTau), so a lone accent charges the sweep and lets it
+     * discharge again while accents that follow one another charge it before it has fallen and their
+     * sweeps climb -- the "wow" of an accented run. An independent draw produces that run only by
+     * chance.
+     *
+     * The size of the clustering is measured, not assumed (Tools/ref_accent_runs.py, 16.09.2026, on
+     * the bought MIDI packs, per track and restricted to loops of at most eight bars so that the
+     * section dynamics of whole arrangements cannot pose as accents). For the acid role, with the
+     * accent definition the corpus tables already use -- a velocity at or above the loop's median
+     * plus 10 -- the probability of an accent on the next onset is 0.493 after an accent (34 of 69)
+     * against 0.197 after a plain note (35 of 178): a lift of 2.51, with 95 % Wilson intervals of
+     * [0.378, 0.608] and [0.145, 0.261] that do not overlap. The scale-free two-means definition of
+     * the same tool gives 0.686 against 0.241, a lift of 2.84, on the same nine loops. kAccentLift is
+     * the smaller and more conservative of the two.
+     *
+     * The base is thin and is stated as thin: 62 of the 74 acid loops in the packs carry no velocity
+     * variation at all (spread 0 to 4), which is why the acid row of CorpusTables.cpp counts zero
+     * accents, and the lift rests on the nine that do. It does *not* support the 0.75 an external
+     * review proposed for the follow-up probability; the measured follow-up probability is 0.49.
+     *
+     * The chain keeps the marginal accent rate of each step position where it was, so this changes how
+     * the accents are *distributed* and not how many there are: for a target rate m at a position and
+     * the lift L, the probability after a plain note is m / (1 - m + L m) and after an accent L times
+     * that. With the rates below (0.12, 0.2, 0.32) that is 0.102/0.256, 0.154/0.386 and 0.216/0.542.
+     *
+     * **What it does to the sweep, measured rather than assumed, and it is less than the argument
+     * promises.** Playing the composed patterns into a real acid voice on their own step grid (self
+     * test, section "acid colour"), the mean charge of the sweep capacitor under an accented note goes
+     * from 0.248 to 0.261 and its peak from 0.406 to 0.405 -- 5 % more charge, that is 0.011 of an
+     * octave of cutoff at the default Accent and Resonance. The mechanism of the argument is right and
+     * its size is not: at 145 BPM a sixteenth lasts 103 ms against the capacitor's 150 ms, so accents
+     * two steps apart already find it far from discharged, and nearly doubling the number of
+     * *adjacent* accents (0.20 to 0.39) adds little to what was already there. The change stays
+     * because the corpus says the accents cluster, not because it makes the sweep climb.
+     */
+    constexpr float kAccentLift = 2.51f;
+    bool prevAccent = false;
     for (size_t i = 0; i < on.size(); ++i) {
         const int step = on[i];
         const int next = i + 1 < on.size() ? on[i + 1] : steps;
@@ -267,7 +306,9 @@ void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
         n.len = static_cast<int16_t>(drawLength(r, role, step, gap));
         const int pos = step % 4;
         const float pAccent = pos == 2 ? 0.32f : (pos == 0 ? 0.12f : 0.2f);
-        if (r.uniform() < pAccent) n.flags |= kNoteAccent;
+        const float pPlain = pAccent / (1.0f - pAccent + kAccentLift * pAccent);
+        prevAccent = r.uniform() < (prevAccent ? std::min(1.0f, kAccentLift * pPlain) : pPlain);
+        if (prevAccent) n.flags |= kNoteAccent;
         if (gap <= 2 && i + 1 < on.size() && r.uniform() < 0.2f) { n.flags |= kNoteSlide; n.len = static_cast<int16_t>(gap); }
         n.velocity = (n.flags & kNoteAccent) ? 120 : 88;
         a.push_back(n);

@@ -2756,6 +2756,281 @@ Breite gemessen statt behauptet wird.
 **eine Schranke in `testReverb`** von −30 auf −29,5 dB, siehe oben), `Tools/metrics.py`. Neu:
 `Tools/ref_width.py`, `Tools/ref_width.json`.
 
+**16.09.2026, Acid-Farbe, Dispersion und analoge Bewegung**
+
+Ein Review des Nutzers schlug fünf Änderungen an Acid und Lead vor. Vier sind gebaut, eine ist nach
+Messung **abgelehnt**. Jede Zahl unten ist gemessen, keine ist übernommen.
+
+### 1. Akzente hängen zusammen — gemessen, nicht angenommen
+
+Der Akzent der TB-303 lädt einen Kondensator mit 150 ms (`Acid.cpp`, `kSweepTau`); `Melody.cpp` zog
+ihn bisher je Step **unabhängig**. Das Review schlug 75 % Folgewahrscheinlichkeit vor. Diese Zahl ist
+nicht übernommen, sondern gemessen: `Tools/ref_accent_runs.py` liest die gekauften MIDI-Pakete (die
+drei Psytrance-Pakete plus Midi Klowd), je Spur statt je Datei, und wirft alles über acht Takte weg.
+
+*Die Falle, die zuerst gefunden werden musste.* Ohne diese Längengrenze meldet die Arp-Rolle einen
+Lift von **63**. Das ist keine Akzentstruktur, sondern die Sektionsdynamik ganzer Arrangements: eine
+leise A- und eine laute B-Hälfte, eine Schwelle dazwischen, und jede Note der B-Hälfte gilt als
+Akzent. Mit der Grenze fällt derselbe Wert auf 1,14.
+
+*Die zweite Falle.* Die Akzentdefinition der Korpus-Tabellen — Velocity ≥ Median + 10 — findet in der
+Acid-Rolle **null** Akzente (`CorpusTables.cpp`, `k_acid_accent` ist eine Spalte aus Nullen). Der
+Grund steht jetzt in der Messung: **62 von 74 Acid-Loops haben überhaupt keine Velocity-Streuung**
+(Spanne 0 bis 4). Das Werkzeug meldet deshalb beide Definitionen, die des Korpus und eine skalenfreie
+Zwei-Mittelwert-Trennung (Lloyd).
+
+| Rolle, Regel | P(A) | P(A am nächsten Onset \| A) | gegen P(… \| kein Akzent) | Lift |
+|---|---|---|---|---|
+| **acid, Korpus-Regel** | 0,280 | **0,493** (34 von 69) | 0,197 (35 von 178) | **2,51** |
+| acid, Zwei-Mittelwerte | 0,443 | 0,686 (96 von 140) | 0,241 (42 von 174) | 2,84 |
+| lead, Korpus-Regel | 0,193 | 0,225 (n = 289) | 0,176 (n = 1200) | 1,28 |
+| arp, Korpus-Regel | 0,210 | 0,147 (n = 715) | 0,225 (n = 2707) | 0,65 |
+
+Die Wilson-Intervalle der beiden Acid-Anteile überlappen nicht ([0,378; 0,608] gegen [0,145; 0,261]),
+der Lift liegt also mit 95 % zwischen 1,45 und 4,2. **Die Basis ist dünn und wird als dünn gemeldet:
+neun Loops.** Für lead und arp trägt die Messung gar nichts (1,28 und 0,65 — letzteres unter 1).
+
+Gebaut ist eine **Zwei-Zustands-Kette mit Lift 2,51**, dem kleineren der beiden Werte, und mit der
+Randwahrscheinlichkeit je Step-Position dort, wo sie war: p(nach Ruhe) = m/(1−m+Lm), p(nach Akzent)
+das L-fache. Die Kette ändert also, **wo** die Akzente sitzen, nicht wie viele es sind. Gemessen über
+3 614 Onsets aus 240 Tracks: realisierter Lift **0,90 → 2,36** (nicht 2,51: aufeinanderfolgende
+Onsets stehen auf verschiedenen Positionen, und ein Quotient zweier Mischungen ist nicht die Mischung
+der Quotienten), Akzentanteil 0,2117 → 0,1956 (−7,6 %).
+
+*Und was das mit dem Sweep macht — weniger, als das Argument verspricht.* Die komponierten Muster in
+eine echte Acid-Stimme gespielt, **auf ihrem eigenen Step-Raster**, und die Ladung am Ende jeder
+Sechzehntel gelesen:
+
+| | mittlere Ladung unter einer Akzentnote | höchste Ladung |
+|---|---|---|
+| unabhängige Ziehung | 0,248 (284 Akzente) | 0,406 |
+| Kette mit Lift 2,51 | **0,261** (249 Akzente) | 0,405 |
+
+Ein einzelner Akzent erreicht 0,216. Der Zuwachs sind 5 % Ladung, also **0,011 Oktaven** Cutoff bei
+den Standardwerten von Accent und Resonance — unhörbar. Der Grund ist die Zeitkonstante: bei 145 BPM
+dauert eine Sechzehntel 103 ms gegen 150 ms Kondensator, Akzente **zwei** Steps auseinander finden
+ihn also längst nicht entladen. Der Mechanismus des Arguments stimmt, seine Größe nicht. Die Änderung
+bleibt, weil der Korpus die Häufung zeigt, nicht weil der Sweep davon steigt.
+
+### 2. Allpass-Disperser auf Acid und Lead
+
+Das „Pew" moderner Psytrance-Leads ist Gruppenlaufzeit, keine Filterung. `Disperser.h`: bis zu acht
+Allpässe zweiter Ordnung, logarithmisch über eine Dekade um `disperse_freq` (Standard 1250 Hz, also
+395 bis 3953 Hz), Q = 1 (Zölzer, DAFX 2011, Kapitel 2; Bristow-Johnsons Kochbuchformel für den
+Allpass). Neue Parameter `acid.disperse`/`acid.disperse_freq` und `lead|arp|pad.disperse`/`…_freq`,
+**Standard 0 Stufen** — keine Messung verlangt, dass er an ist.
+
+| Gemessen (48 kHz, acht Stufen) | Ergebnis |
+|---|---|
+| Betragsgang 50 Hz bis 20 kHz (der ganze Anspruch) | **0,0003 dB** schlechteste Abweichung von 0 dB |
+| Gruppenlaufzeit 140 / 400 / 1250 / 4000 / 16000 Hz | **3,00 / 4,44 / 2,00 / 0,45 / 0,02 ms**, aus der Impulsantwort; geschlossene Form 3,00 / 4,44 / 2,00 / 0,45 / 0,02 |
+| Lautheit einer Acid-Linie | −13,04 → **−13,04 dB** (−0,00) — ein Allpass verschiebt keine Energie zwischen Bändern |
+| Crest-Faktor derselben Linie | 15,09 → **11,62 dB** (−3,47) — der Preis, den eine spitzenwertgeführte Kette zahlt |
+| Tiefenregel bei D3, voller Drive und Resonanz | **−48,2 dB** unter 140 Hz |
+
+Q = 1 statt der glatteren 0,7 aus einem Grund: bei Q = 1 liegt das Maximum der Laufzeit **im Band**
+(4,44 ms bei 400 Hz gegen 3,00 ms bei 140 Hz), bei Q = 0,7 steigt sie weiter zu DC (4,07 gegen 3,95)
+und bei Q = 0,4 bekommt das Subband am meisten (5,69 gegen 3,62). Genau dafür nimmt man einen
+Abschnitt zweiter statt erster Ordnung, dessen Laufzeit immer bei DC gipfelt.
+
+### 3. Der Kamm liest jetzt mit Lagrange dritter Ordnung
+
+Lineare Interpolation ist ein Tiefpass, dessen Dämpfung vom Bruchteil abhängt — der gestimmte
+Squelch-Kamm verlor also seine Spitze genau dort, wo er am schärfsten sein soll (Laakso, Välimäki,
+Karjalainen, Laine, „Splitting the unit delay", IEEE Signal Processing Magazine 13(1), 1996).
+Gemessen an einem Kamm mit Rückkopplung 0,82 und halbsamplig gestimmt, Resonanzspitze in dB:
+
+| | 2 kHz | 5 kHz | 10 kHz |
+|---|---|---|---|
+| ganzzahlig gestimmt (Ideal) | 14,89 | 14,89 | 14,89 |
+| **Lagrange 3** | **14,89** | **14,76** | **12,58** |
+| linear (vorher) | 14,43 | 13,17 | **8,88** |
+
+Die gemessene Spitze trifft die geschlossene Form 1/(1 − fb·|H|) auf 0,22 dB.
+
+*Der Haken, den das Review nennt, ist behandelt und hat nicht entschieden.* Die Literatur bevorzugt
+den Allpass-Interpolator (Betrag exakt 1), aber sein Zustand muss bei **jeder Note** neu gestimmt
+werden, und sein Koeffizient a = (1−frac)/(1+frac) wandert bei frac → 0 auf den Einheitskreis
+(Pol bei z = −1). Gemessen: 100 ms nach einer Umstimmung, mit weggenommener Anregung und einem Kamm,
+der selbst 136 dB abgeklungen ist, steht die Allpass-Fassung noch bei **−108 dB** der
+Ruheamplitude, die Lagrange-Fassung bei **−184 dB**. Das ist viel zu leise, um es zu hören — was es
+zeigt, ist, dass der Zustand bei jeder Note zurückgesetzt oder übergeblendet werden müsste. Dafür ist
+der Gewinn zu klein: **0,00 dB bei 2 kHz, 0,13 dB bei 5 kHz, 2,31 dB bei 10 kHz** — und bei 10 kHz
+hat eine Acid-Note eine vierpolige Leiter mit einigen hundert Hertz Cutoff hinter sich. Lagrange hat
+keinen Zustand und nimmt 91 % des linearen Fehlers bei 5 kHz weg. Das ist die Begründung, und es ist
+ausdrücklich **nicht** die Präferenz der Literatur.
+
+Nebenbei: die Verzögerung ist jetzt auf mindestens **3** Samples geklemmt statt 2, weil der Tap bei
++2 hinter dem Schreibzeiger liegen muss. Musikalisch unerreichbar (die tiefste Acid-Note gibt 327).
+
+### 4. Die asymmetrische Vorspannung — **abgelehnt**, mit Zahlen
+
+Das Review schlug vor, die punktsymmetrische Sättigung der Leiter durch `v + α v²` (α ≈ 0,06) zu
+ersetzen, um gerade Obertöne zu gewinnen und „digitale Kälte" zu nehmen; Wirkung „extrem hoch".
+Das ist eine Behauptung über das Spektrum der Referenzen, also messbar.
+
+*Das Maß.* `Tools/ref_harmonics.py` misst nicht „Summe gerade durch Summe ungerade" — das misst vor
+allem Helligkeit —, sondern eine **steigungsfreie Geradheit**: E_n = 20 log10(a_n / √(a_{n−1}·a_{n+1}))
+für n = 2 und 4, also einen geraden Teilton gegen das geometrische Mittel seiner beiden ungeraden
+Nachbarn. Das kürzt jede glatte Hüllkurve heraus. Die Sollwerte sind analytisch und in `--selftest`
+geprüft: Sägezahn 10 log10(1 − 1/n²), also −1,249 dB bei n = 2 und −0,280 bei n = 4 (getroffen auf
+0,001 dB), Rechteck −102 dB, gleiche Teiltöne 0,000 dB.
+
+*Was die Messung stützen kann und was nicht.* Sie isoliert die Acid **nicht**. Sie beschränkt sich auf
+Rahmen, in denen das Band über dem Kick-Bass-Bereich **eine** starke, stabile, tonale Grundfrequenz
+trägt (8192-Punkt-STFT, Bins unter 250 Hz genullt, f0 per Oberton-Summation mit Suboktav-Vorzug und
+Oktav-Sperre, Salienzschwelle, f0 in drei aufeinanderfolgenden Rahmen auf 3 % gleich). Das ist
+irgendein tonales Instrument in diesem Band, und ein fertiger Master hat Sättigung und Limiter hinter
+sich. Und vor allem: **ein Sägezahn führt ohnehin jeden ganzzahligen Oberton.** Eine punktsymmetrische
+Kennlinie liefert nur aus einem *Sinus* ausschließlich ungerade Obertöne; aus einem Sägezahn liefert
+sie alle. Die Messung kann also sagen, ob wir im Bereich der Aufnahmen liegen — und den Vorschlag
+damit erledigen —, sie kann umgekehrt nicht beweisen, welche Kennlinie eine Referenzzahl erzeugt hat.
+
+*Ergebnis, 40 Aufnahmen mit Albumtag „Psytrance Collection", vier 45-s-Fenster je Titel:*
+
+| | Median | Quartile | Spanne |
+|---|---|---|---|
+| E2 der Referenzen | **−0,28 dB** | −0,84 / +0,79 | −2,64 … +3,06 |
+| E4 der Referenzen | **+0,58 dB** | −0,31 / +1,32 | −4,32 … +3,84 |
+| gerade/ungerade (die Formulierung des Reviews) | −1,34 dB | −2,41 / −0,51 | −6,93 … +0,85 |
+| **unsere Acid, dasselbe Maß** | **E2 −0,50 dB, E4 −0,18 dB** | — | — |
+
+Unsere Acid liegt in **beiden** Maßen innerhalb des Interquartilbereichs der Aufnahmen. Es gibt keine
+Lücke an geraden Obertönen, die zu schließen wäre.
+
+*Die beiden genannten Risiken, einzeln geprüft* (Versuchsprogramm mit beiden Kennlinien, σ(v) mit
+w = v + αv², lokale Verstärkung (1 + αv)/√(1 + w²)):
+
+| | α = 0 | α = 0,06 |
+|---|---|---|
+| Selbstoszillationsschwelle k, Anregung 1e−4 | **17,000** | **17,000** |
+| dieselbe bei Anregung 0,5 | 17,006 | 17,006 |
+| Ausschwingen bei k = 17,51 / 16,49 | +73,4 / −393,0 dB | +73,5 / −393,0 dB |
+| Gleichanteil, Sägezahn Amplitude 1, k = 16 | +0,06642 (0,367 des Effektivwerts) | +0,06858 (0,380) |
+| E2 / E4 desselben Signals | −0,748 / −0,552 dB | −0,634 / **+0,230** dB |
+| 1 kHz gegen 500 Hz (die Resonanz) | −12,08 dB | **−11,08 dB** |
+
+Die **analytische k = 17-Prüfung bewegt sich nicht** — und zwar aus einem Grund, der auch erklärt,
+warum der Vorschlag wenig bringt: `v + αv²` ist zweiter Ordnung, σ'(0) bleibt 1, die linearisierte
+Schleifenverstärkung am Arbeitspunkt ist unverändert. Das genannte Regressionsrisiko tritt also nicht
+ein. Der Gleichanteil verschiebt sich um 3 %. Was sich wirklich bewegt, ist E4 um 0,78 dB und die
+**Resonanz um 1,0 dB** — das heißt, die Vorspannung ändert die Charakteristik des Filters, also genau
+das, was sie laut Review nicht anfasst, und der Gewinn an geraden Obertönen (0,11 dB bei E2)
+verschwindet in einer Referenzstreuung von 5,7 dB.
+
+**Entscheidung: nicht gebaut.** Weder als Ersatz noch als Parameter: ein Parameter mit gemessenem
+Standard wäre nur zu rechtfertigen, wenn die Messung einen Standard nennen könnte, und sie nennt
+keinen. Die TB-303 ist nasal und aggressiv, nicht warm; das war die Vermutung, und die Messung
+widerspricht ihr nicht.
+
+### 5. Thermische Drift
+
+Je Unisono-Schacht und je Stimme ein sehr langsamer Zufallsweg (`kDriftHz` = 0,2 Hz, also rund 0,8 s
+Korrelationszeit), normiert, so dass seine **stehende Streuung** genau `poly.drift` in Cent ist
+(Standard **1 Cent**, das sind ±2 Cent bei zwei Sigma). Die Tonhöhe jedes Schachts, der Cutoff der
+Stimme (ein Viertel der Cent-Abweichung) und der Attack der Hüllkurve (1 % je Cent) laufen davon.
+Pirkle, „Designing Software Synthesizer Plug-Ins in C++", 2. Aufl. 2019, modelliert die Drift genauso:
+eine sehr tieffrequente Rauschquelle je Oszillator.
+
+Die drei harten Bedingungen sind Konstruktion, nicht Hoffnung:
+
+- **Nur aus dem Seed.** Eigener Generator `driftRng_`, gegen `phaseRng_` gesalzen, damit ein Render
+  mit Drift 0 bitgleich zu einem Stand ohne Drift ist (geprüft, siehe unten).
+- **Absolutes Sample-Raster.** Die Wege gehen einen Schritt je `kPolyBlock` = 16 Samples, in
+  `renderSegment` und für **alle** Schächte und Stimmen, ob sie klingen oder nicht — ein Weg, der nur
+  während gehaltener Noten liefe, wäre eine Funktion der Notengeschichte statt des Sample-Index.
+- **Bitgleichheit der Lane-Pfade.** Alles wird skalar gerechnet und erreicht die Kernel nur als
+  Koeffizient. Der Vektortest fährt die Drift jetzt **eingeschaltet** (4 Cent) samt Disperser.
+
+*Warum die Drift für die Dauer einer Note festgehalten wird, mit der Zahl dahinter.* Bei 0,2 Hz
+bewegt sich ein Weg innerhalb einer Sechzehntel um etwa eine halbe Streuung — die Physik sagt also
+selbst, dass innerhalb einer Note fast nichts passiert. Gebaut ist trotzdem das Festhalten, und der
+Grund ist messbar: eine Drift **während** der Note verschmiert jede Oberreihe. Gegenprobe (Mutation 7
+unten, Drift durchgehend auf `dt` angewandt): das Aliasing-Maß der Supersaw fällt bei Standard-Drift
+von **−69,0 auf −17,0 dB bei C6** und von **−61,6 auf −14,8 dB bei A6**. Eine gehaltene Drift
+multipliziert dagegen die ganze Oberreihe eines Oszillators mit einer Konstanten — aus einer Reihe
+wird wieder eine Reihe, und die Zahlen der DSP-Runde bleiben stehen: **C5 −72,4, C6 −68,9, A6
+−61,6 dB** bei Detune 1,00, und nach einer Sekunde Drift bei 1 Cent **C6 −69,0 und A6 −61,6 dB**.
+
+**Der Bass driftet nicht** — er kann es nicht, er ist keine `Poly`-Instanz. Die Phasenkopplung von
+Kick und Bass sitzt auf der ersten Bassnote.
+
+### Prüfungen
+
+Ein neuer Abschnitt `testAcidColour`, **18 Prüfungen**, jede gegen einen anderswo hergeleiteten Wert:
+
+| Prüfung | gegen den alten Stand | jetzt |
+|---|---|---|
+| das Geradheitsmaß trifft seine analytischen Werte | — (gab es nicht) | Sägezahn −1,249 / −0,280 dB (Soll −1,2494 / −0,2803), Rechteck −120,8 dB |
+| Akzente häufen sich mit dem gemessenen Lift | **0,90** (unabhängige Ziehung) | **2,36** |
+| die Häufung fügt keine Akzente hinzu | 0,2117 (exakt der Positionsmittelwert) | 0,1956 (−7,6 %) |
+| Akzentnoten stehen auf geladenem Kondensator (Wächter) | 0,248 / 0,406 | 0,261 / 0,405 |
+| Disperser: Betragsgang flach | — | **0,0003 dB** |
+| Disperser: Gruppenlaufzeit wie entworfen | — | 3,00 / 4,44 / 2,00 / 0,45 / 0,02 ms, geschlossene Form gleich |
+| Disperser: Lautheit bleibt, Crest fällt | — | −0,00 dB / −3,47 dB |
+| Disperser: Tiefenregel bei voller Kette | — | −48,2 dB |
+| Kamm: halbsamplige Stimmung behält die Resonanz | **6,02 dB** Verlust (linear) | **2,31 dB** |
+| Kamm: gemessene Resonanz = 1/(1 − fb\|H\|) | — | 0,22 dB |
+| Kamm: der Allpass klingelt nach der Umstimmung | — | −108 dB gegen −184 dB |
+| die Acid-Stimme benutzt die Lagrange-Taps | **−3,9 dB** (linear) | **−1,6 dB** |
+| die Acid führt ihre geraden Obertöne bereits | — | E2 −0,50, E4 −0,18 dB |
+| Drift: stehende Streuung ist der Parameter | — | 1,98 Cent für Parameter 2 |
+| Drift: Seed und Blockgröße | — | Blöcke 3 / 125 / 1000 bitgleich, anderer Seed 48000 von 48000 verschieden |
+| Drift: bei 0 bewegt sich nichts | — | größter Wegwert exakt 0 |
+| Drift: die Supersaw aliast nicht mehr als vorher | — | C6 −69,0, A6 −61,6 dB (gegen das *undriftete* Liniennetz: −21,5 dB) |
+| Drift: die Tonhöhe bewegt sich wirklich | — | bei 6 Cent über vier Seeds −3,40 / −3,84 / −3,67 / +0,74 Cent |
+
+Dazu im Vektortest: die Poly-Prüfung fährt jetzt Drift 4 Cent und einen Disperser mit 1 bis 8 Stufen
+mit — **0 abweichende Samples** in AVX2, NEON-Shim und skalar, und in allen drei Pfaden dieselbe
+Energie 62054,3.
+
+### Gegenprobe (Mutationsrunde)
+
+Sieben Fehler einzeln eingebaut, alle sieben von ihrer Prüfung gefunden, `git diff` danach sauber:
+
+| Mutation | Wer merkt es |
+|---|---|
+| Akzent wieder unabhängig gezogen | Lift-Prüfung: **0,90** statt 2,36 |
+| Kamm wieder linear interpoliert | „die Acid-Stimme benutzt die Lagrange-Taps": **−3,9 dB** statt −1,6 |
+| Disperser-Q von 1 auf 0,4 | Gruppenlaufzeit: **5,69 ms bei 140 Hz gegen 3,62 bei 400** — das Subband bekäme die meiste Verzögerung |
+| Allpass-Zähler `z^-2` von 1 auf 0,9 (Spiegelsymmetrie gebrochen) | Betragsgang **74,1 dB** daneben, Lautheit **+72 dB**, Gruppenlaufzeit daneben — drei Prüfungen |
+| Drift-Weg je Segment statt je Rasterschritt | Blockgrößen-Prüfung: Block 3 und 125 weichen ab |
+| Drift-Weg nicht auf seine stehende Streuung normiert | drei Prüfungen: Streuung **0,02** statt 1,98 Cent, Tonhöhe bewegt sich nicht, Aliasing-Wächter schlägt an |
+| Drift durchgehend statt für die Note gehalten | Supersaw-Aliasing **−17,0 / −14,8 dB** statt −69,0 / −61,6 |
+
+*Eine Falle dieser Runde, für das Protokoll.* Beim Zurücknehmen einer Mutation mit
+`git checkout -- <datei>` verschwinden auch die *eigenen* Änderungen der Runde, weil HEAD der
+Ausgangs-Commit ist. Zwei Dateien mussten neu geschrieben werden; danach wurde mit Kopien aus einem
+Sicherungsordner zurückgesetzt und die Zeitstempel angefasst (MSVC baut eine mit altem Zeitstempel
+zurückgespielte Datei nicht neu).
+
+### Der geänderte Standard-Render, mit der Zahl
+
+Zwei Standardwerte sind bewusst geändert: die Akzentziehung (kein Parameter, eine Regel) und
+`*.drift` = 1 Cent. Der Disperser steht auf 0 Stufen, ändert also nichts.
+
+| 96 Takte, Seed 1 | gegen den Ausgangsstand |
+|---|---|
+| Drift 0 (nur Akzentkette und Kamm) | **−34,3 dB** relativ zum Programm |
+| Drift 1 Cent (der Standard) | **−22,0 dB** relativ zum Programm |
+| Integrated / True Peak | **−8,9 LUFS / −1,00 dBTP**, beide unverändert |
+| Seed 7, 64 Takte, Drift 0 | **bitgleich** — dieser Track hat keine Acid |
+| Acid solo, Seed 1, 96 Takte, Drift 0 | −19,3 dB relativ zur Acid; Seed 42 bitgleich |
+
+Rechenzeit 96 Takte: **9,5× Echtzeit vorher, 9,3× jetzt** (Drift an). Der Disperser kostet nur, wenn
+er an ist (acht Biquads je Kanal).
+
+*Dateien.* Geändert: `Core/include/phos/Acid.h` (`combTaps`, Disperser-Zustand), `Core/src/Acid.cpp`
+(Lagrange-Kamm, Disperser), `Core/include/phos/Poly.h` und `Core/src/Poly.cpp` (Drift, Disperser),
+`Core/src/Melody.cpp` (**nur die Akzentziehung in `makeAcid`**), `Core/include/phos/Params.h` und
+`Core/src/Params.cpp` (fünf **angehängte** Parameter, keine Umsortierung, kein geänderter Standardwert
+außer den oben genannten), `Tests/selftest.cpp` (`testAcidColour`, `partialMag`, `evennessDb`,
+`disperserResponse`, `maskedAliasDb`, `combPeakDb`), `Tests/vectest.cpp` (Drift und Disperser im
+Poly-Lauf). Neu: `Core/include/phos/Disperser.h`, `Tools/ref_accent_runs.py`, `Tools/ref_harmonics.py`.
+`Core/include/phos/DiodeLadder.h` ist **unverändert** — das ist das Ergebnis von Punkt 4.
+
+Gesamt: **285 Selbsttest-Prüfungen** in **454 s**, Vektortests 16 von 16 in allen drei Pfaden.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
