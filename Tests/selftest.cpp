@@ -928,7 +928,8 @@ void testVariety()
     const int keys = static_cast<int>(std::count_if(keyUse.begin(), keyUse.end(), [](int n) { return n > 0; }));
     const int pats = static_cast<int>(std::count_if(patUse.begin(), patUse.end(), [](int n) { return n > 0; }));
     const double base = p.get(cb + compose::Bpm), range = p.get(cb + compose::TempoRange);
-    check(keys >= 6 && pats >= 4, "keys and bass patterns spread over the night", fmt("%d keys, %d primary patterns in %d tracks", keys, pats, tracks));
+    check(keys >= 6 && pats >= 4, "keys and bass patterns spread over the night",
+          fmt("%d keys, %d primary patterns, %d kick engine switches in %d tracks", keys, pats, engineSwitches, tracks));
     check(bpmLo >= base - range && bpmHi <= base + range && bpmHi - bpmLo >= range, "tempo wanders inside the range", fmt("%.1f .. %.1f BPM", bpmLo, bpmHi));
     check(minKick > 0.35 && minBass > 0.35, "no two consecutive tracks share a sound (best-candidate spread)",
           fmt("closest consecutive recipes: kick %.2f, bass %.2f; mean kick distance %.2f", minKick, minBass, sumKick / (tracks - 2)));
@@ -1998,7 +1999,10 @@ void testPoly()
             for (int osc = 0; osc < 3; ++osc) {
                 ParamStore p;
                 const char* name = inst == PolyInstance::Lead ? "lead" : "arp";
-                auto e = makePoly(fmt("%s.osc=%d %s.delay_send=0.5 %s.amp_sustain=1", name, osc, name).c_str(), p, inst);
+                // Three %s, three names: the third argument was missing here, so the third conversion
+                // read whatever stood on the stack. It happened not to crash until the allocations of
+                // this file changed; a garbage module name also meant amp_sustain was never set.
+                auto e = makePoly(fmt("%s.osc=%d %s.delay_send=0.5 %s.amp_sustain=1", name, osc, name, name).c_str(), p, inst);
                 e->noteOn(inst == PolyInstance::Lead ? kLeadLowest : kArpLowest, 1.0f, 1.0, 30000, 0.0);
                 e->noteOn((inst == PolyInstance::Lead ? kLeadLowest : kArpLowest) + 3, 1.0f, 1.0, 30000, 0.0);
                 const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 32768);
@@ -2136,6 +2140,52 @@ void testPoly()
         const double db = powDb(weakest / line(440.0));
         check(db > -12.0, "an FM voice and a supersaw voice sharing a slot group: all seven supersaw lines still sound",
               fmt("weakest of the seven %.1f dB under the centre", db));
+    }
+    // The unison limit of the Quest level (Quality.h): the middle three of Szabo's seven lines at the
+    // level of all seven -- and the work really left out, not only its gain set to zero. The second
+    // check is the one that tells the two apart: zeroing the outer gains gives exactly the same
+    // spectrum and the same level while the pre-pass still reads seven tables per sample.
+    {
+        const char* const kLimit = "lead.osc=Supersaw lead.detune=1 lead.dynamic_detune=0 lead.mix=0.75 lead.cutoff=18000 lead.env_amount=0 "
+                                   "lead.key_track=0 lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 lead.width=0 lead.delay_send=0 "
+                                   "lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0";
+        constexpr size_t kSkip = 4800, kLen = 65536;
+        double rms[2] = {};
+        uint64_t reads[2] = {};
+        std::vector<float> y[2];
+        int which = 0;
+        for (int unison : { kPolyUnison, 3 }) {
+            ParamStore p;
+            auto e = makePoly(kLimit, p, PolyInstance::Lead);
+            e->setQuality(unison, kPolyVoices);
+            e->noteOnLimited(69, 1.0f, 8.0, 1 << 24, 0.0);
+            y[which] = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, kSkip + kLen);
+            double e2 = 0.0;
+            for (size_t k = kSkip; k < y[which].size(); ++k) e2 += static_cast<double>(y[which][k]) * y[which][k];
+            rms[which] = std::sqrt(e2 / static_cast<double>(y[which].size() - kSkip));
+            reads[which] = e->tableReads();
+            ++which;
+        }
+        const std::vector<double> pw = powerSpectrum(y[1].data() + kSkip, kLen);
+        const double y1 = Poly::detuneCurve(1.0);
+        auto line = [&](int u) {
+            const size_t k0 = static_cast<size_t>(std::lround(440.0 * (1.0 + kSupersawOffsets[u] * y1) * static_cast<double>(kLen) / sr));
+            double best = 0.0;
+            for (size_t k = k0 - 3; k <= k0 + 3; ++k) best = std::max(best, pw[k]);
+            return best;
+        };
+        double kept = 1e30, dropped = 0.0;
+        for (int u : { 2, 3, 4 }) kept = std::min(kept, line(u));
+        for (int u : { 0, 1, 5, 6 }) dropped = std::max(dropped, line(u));
+        const double sep = powDb(kept / dropped), level = 20.0 * std::log10(rms[1] / rms[0]);
+        check(sep > 30.0 && std::fabs(level) < 0.5, "quest unison 3: only the middle three lines (Szabo's +-0.01952356 y and 0), at the level of all seven",
+              fmt("weakest kept line %.1f dB over the loudest dropped one, level %+.2f dB against unison 7", sep, level));
+        const uint64_t want = static_cast<uint64_t>(kSkip + kLen);
+        check(reads[1] == want * 3 && reads[0] == want * static_cast<uint64_t>(kPolyUnison),
+              "quest unison 3: the wavetable pre-pass reads three tables per sample, not seven of which four are multiplied by zero",
+              fmt("%llu reads at unison 3 (want %llu), %llu at unison 7 (want %llu)",
+                  static_cast<unsigned long long>(reads[1]), static_cast<unsigned long long>(want * 3),
+                  static_cast<unsigned long long>(reads[0]), static_cast<unsigned long long>(want * kPolyUnison)));
     }
 }
 

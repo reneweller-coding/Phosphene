@@ -90,6 +90,7 @@ void Poly::reset()
     }
     counter_ = 0;
     pos_ = 0;
+    tableReads_ = 0;
     phaseRng_.seed(0x504F4C59ull);
     delay_.reset();
 }
@@ -181,8 +182,15 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         break;
     default: break;
     }
+    // The unison limit of the quality level (Quality.h). Only the middle unisonLimit_ of the seven
+    // oscillators are set up; the rest get gain 0, dt 0 and no source weight, so their slots produce
+    // exactly zero and the render loop can leave them out (renderSegment). The power that normalises
+    // the mix is then the power of the kept oscillators alone, which is the same renormalisation the
+    // level needs: the voice stays as loud as the full unison. At the default limit uFirst is 0 and
+    // uLast is kPolyUnison, and every loop below is the loop over all seven it always was.
+    const int uFirst = (kPolyUnison - unisonLimit_) / 2, uLast = uFirst + unisonLimit_;
     double power = 0.0;
-    for (double g : gains) power += g * g;
+    for (int u = uFirst; u < uLast; ++u) power += gains[u] * gains[u];
     const double norm = power > 0.0 ? 1.0 / std::sqrt(power) : 0.0;
 
     // The supersaw reads the mipmapped saw of the Classic table; only the VA blends a PolyBLEP ramp
@@ -193,6 +201,22 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
 
     for (int u = 0; u < kPolyUnison; ++u) {
         const int s = voice * kPolyUnison + u;
+        // Szabo: a new random phase for every oscillator at every note. Both draws happen for all
+        // seven slots even when the limit plays three, so the oscillators that are kept start on the
+        // same phases they would have on the desktop level and the two levels stay comparable.
+        const float wtRand = phaseRng_.uniform(), phRand = phaseRng_.uniform();
+        if (u < uFirst || u >= uLast) {
+            slots_.dt[s] = slots_.inv[s] = slots_.mdt[s] = 0.0f;
+            slots_.ph[s] = slots_.mph[s] = 0.0f;
+            slots_.idx[s] = slots_.idxFloor[s] = 0.0f;
+            slots_.idxDecay[s] = 1.0f;
+            slots_.pw[s] = 0.5f;
+            slots_.wSaw[s] = slots_.wPulse[s] = slots_.wFm[s] = slots_.wWt[s] = 0.0f;
+            slots_.gL[s] = slots_.gR[s] = 0.0f;
+            wtPh_[s] = wtDt_[s] = 0.0;
+            wtLevel_[s] = 0;
+            continue;
+        }
         const double hz = f0 * (1.0 + kSupersawOffsets[u] * y * detuneScale);
         const double dt = std::min(hz / sr_, 0.45);
         const double mdt = std::min(hz * v[poly::FmRatio] / sr_, 0.45);
@@ -206,7 +230,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         wtDt_[s] = hz / sr_;
         wtLevel_[s] = waveLevelFor(hz, sr_, -1);
         {
-            const double wp = static_cast<double>(phaseRng_.uniform()) + wtDt_[s] * late;
+            const double wp = static_cast<double>(wtRand) + wtDt_[s] * late;
             wtPh_[s] = wp - std::floor(wp);
         }
         slots_.wSaw[s] = (fm || wt) ? 0.0f : static_cast<float>(osc == static_cast<int>(PolyOsc::Va) ? 1.0 - wave : 1.0);
@@ -218,8 +242,8 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         const double g = gains[u] * norm * velGain * tableGain;
         slots_.gL[s] = static_cast<float>(g * std::cos(theta) * std::sqrt(2.0));
         slots_.gR[s] = static_cast<float>(g * std::sin(theta) * std::sqrt(2.0));
-        // Szabo: a new random phase for every oscillator at every note. `late` samples already passed.
-        double ph = static_cast<double>(phaseRng_.uniform()) + dt * late;
+        // `late` samples have already passed since the note ideally started.
+        double ph = static_cast<double>(phRand) + dt * late;
         slots_.ph[s] = static_cast<float>(ph - std::floor(ph));
         const double mp = mdt * late;
         slots_.mph[s] = static_cast<float>(mp - std::floor(mp));
@@ -266,19 +290,34 @@ void Poly::renderSegment(float* L, float* R, int n)
         }
     }
     // Wavetable rows, on the scalar side (a table read is a gather): position from the knob, the
-    // voice's envelope and its LFO, one position per voice per sample.
+    // voice's envelope and its LFO, one position per voice per sample. This is the most expensive
+    // scalar work of the engine, so the unison limit of the quality level is worth the most here:
+    // only the middle unisonLimit_ slots of a voice are read, the rest are stores of zero.
+    const int uFirst = (kPolyUnison - unisonLimit_) / 2, uLast = uFirst + unisonLimit_;
     for (int voice = 0; voice < kPolyVoices; ++voice) {
         const int s0 = voice * kPolyUnison;
-        const bool wt = voiceOn[voice] && slots_.wWt[s0] != 0.0f;
+        // The source weight is read from a slot inside the limit: noteOn() clears the weights of the
+        // slots outside it, so slot 0 of a limited voice says nothing about its oscillator type.
+        const bool wt = voiceOn[voice] && slots_.wWt[s0 + uFirst] != 0.0f;
         if (!wt) {
             for (int i = 0; i < n; ++i)
                 for (int u = 0; u < kPolyUnison; ++u) wtRow_[static_cast<size_t>(i * kPolySlots + s0 + u)] = 0.0f;
             continue;
         }
+        // The silent slots share their lane group with kept ones, so their row must hold a number
+        // rather than what the last note left there -- one store against a mipmap choice and a
+        // Catmull-Rom read.
+        if (unisonLimit_ < kPolyUnison) {
+            for (int i = 0; i < n; ++i) {
+                for (int u = 0; u < uFirst; ++u) wtRow_[static_cast<size_t>(i * kPolySlots + s0 + u)] = 0.0f;
+                for (int u = uLast; u < kPolyUnison; ++u) wtRow_[static_cast<size_t>(i * kPolySlots + s0 + u)] = 0.0f;
+            }
+        }
+        tableReads_ += static_cast<uint64_t>(n) * static_cast<uint64_t>(unisonLimit_);
         if (sawVoice_[voice]) {
             // Supersaw: one frame, no position, no LFO -- a single Catmull-Rom read per slot.
             for (int i = 0; i < n; ++i) {
-                for (int u = 0; u < kPolyUnison; ++u) {
+                for (int u = uFirst; u < uLast; ++u) {
                     const int s = s0 + u;
                     wtRow_[static_cast<size_t>(i * kPolySlots + s)] = sawTable_->sample(wtLevel_[s], kClassicSawFrame, wtPh_[s]);
                     wtPh_[s] += wtDt_[s];
@@ -293,7 +332,7 @@ void Poly::renderSegment(float* L, float* R, int n)
             posEnv_[voice] *= posDecay_;
             lfoPh_[voice] += lfoInc_;
             if (lfoPh_[voice] >= 1.0) lfoPh_[voice] -= 1.0;
-            for (int u = 0; u < kPolyUnison; ++u) {
+            for (int u = uFirst; u < uLast; ++u) {
                 const int s = s0 + u;
                 wtRow_[static_cast<size_t>(i * kPolySlots + s)] = table_->sampleAt(wtLevel_[s], pos, wtPh_[s]);
                 wtPh_[s] += wtDt_[s];
@@ -302,11 +341,17 @@ void Poly::renderSegment(float* L, float* R, int n)
         }
     }
     // Groups of eight slots and eight channels run when any of their voices sounds: the same decision
-    // on every vector path.
+    // on every vector path. A slot outside the unison limit is silent whatever its voice does, so it
+    // no longer keeps its group alive. With seven slots per voice and the middle three kept, every
+    // one of the seven groups still holds kept slots of one or two voices, so the limit frees a group
+    // only when those voices are silent -- a denser layout (voice x unisonLimit_) would free four of
+    // the seven outright, but it moves the lane assignment and with it the bit-identity of the vector
+    // tests (docs/PLAN.md).
     for (int g = 0; g < kPolySlots / 8; ++g) {
         bool on = false, blep = false, fm = false, wt = false;
         for (int s = g * 8; s < g * 8 + 8; ++s) {
-            on = on || voiceOn[s / kPolyUnison];
+            const int u = s % kPolyUnison;
+            on = on || (voiceOn[s / kPolyUnison] && u >= uFirst && u < uLast);
             blep = blep || slots_.wSaw[s] != 0.0f || slots_.wPulse[s] != 0.0f;
             fm = fm || slots_.wFm[s] != 0.0f;
             wt = wt || slots_.wWt[s] != 0.0f;
@@ -321,7 +366,7 @@ void Poly::renderSegment(float* L, float* R, int n)
     for (int voice = 0; voice < kPolyVoices; ++voice) {
         for (int i = 0; i < n; ++i) {
             float sl = 0.0f, sr = 0.0f;
-            for (int u = 0; u < kPolyUnison; ++u) {
+            for (int u = uFirst; u < uLast; ++u) {   // the slots outside the limit are exactly zero
                 sl += slotL_[static_cast<size_t>(i * kPolySlots + voice * kPolyUnison + u)];
                 sr += slotR_[static_cast<size_t>(i * kPolySlots + voice * kPolyUnison + u)];
             }
