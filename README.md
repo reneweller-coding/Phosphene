@@ -22,7 +22,9 @@ VST3 and a standalone with twelve tabs of controls generated from the parameter 
 timeline of the whole set with a lock and a reroll on every track and every section, four perform
 macros, the composer on a thread of its own, host transport and tempo, MIDI output of the score, and a
 recorder; the standalone renders exactly what the offline renderer renders, sample for sample. The
-headset build is there (below).
+headset build is there (below). Phase 9 adds the release path: one script from a checkout to an
+installer, a package check that refuses an incomplete payload, and a build guard in `ctest` for the
+two artefacts nothing else builds (see [Install](#install) and [Tests](#tests)).
 
 ## Build
 
@@ -32,6 +34,20 @@ Visual Studio 2026 and CMake 3.22 or newer:
 cmake -S . -B build -G "Visual Studio 18 2026" -A x64
 cmake --build build --config Release
 ```
+
+That builds one of six configurations this repository has. Before a release, or after anything in
+`Core/` changes shape, build them all:
+
+```powershell
+powershell -File Tools\release\build_matrix.ps1
+```
+
+It configures and builds the desktop with and without the plugin, without AVX2, with the static
+runtime, the root project through the Android NDK, and the Quest app itself, runs the three vector
+builds, and prints a table of what came out and what each entry cost. Five minutes from empty build
+directories on a 12900K, most of it the one entry that has JUCE in it. Nothing else builds the Quest
+app or the Android configure, which is how both of them broke unnoticed once; the cheap half of that
+check runs in every `ctest` as `questguard` (below).
 
 ### Plugin
 
@@ -74,6 +90,40 @@ python Tools/manual/make_manual.py
 That writes [docs/manual/Phosphene-Manual.html](docs/manual/Phosphene-Manual.html) and, through Edge
 in headless mode, the PDF beside it. The generator refuses to call a manual complete when a parameter
 exists in the engine but appears on no tab.
+
+## Install
+
+Releases are made by one script, from a clean checkout to the artefacts:
+
+```powershell
+powershell -File Deploy\build_release.ps1
+```
+
+It runs the build guard, configures and builds Release with the static MSVC runtime and AVX2 in a
+tree of its own, runs the whole `ctest` suite in that configuration, renders a reference, prints the
+manual out of the freshly built plugin, builds the Quest APK, stages everything into `Deploy\stage`,
+checks the staging directory, and only then compiles the installer and the portable archive into
+`Deploy\out`. Every step that fails stops the run; there is no switch that makes an installer out of
+a build that did not pass its tests. It prints a manifest of every file with its size and SHA-256.
+
+The package check ([`Tools/release/check_package.ps1`](Tools/release/check_package.ps1)) is what
+stands between a green build and a bad release. It proves that every file the runtime needs is
+there, that each data file is byte for byte the one in `Core/data`, that the APK really carries the
+wavetable pack, that the version is the same in the renderer and in both Windows version resources,
+that no binary still wants a Visual C++ runtime DLL, and — the one that covers the whole data path
+at once — that the *staged* renderer, started from an unrelated directory and with both neural
+models switched on, renders the reference bit for bit.
+
+The installer puts the standalone, `phos_render.exe`, the manual, the APK and the data files into
+`%ProgramFiles%\Phosphene`, and the VST3 bundle into the common VST3 folder. `library.phoswt`,
+`melody.phosmdl` and `bass.phosmdl` are installed twice, beside the executables and inside the
+bundle's `Contents\Resources`, because those are the two directories the artefacts declare as their
+search path; without them the engine falls back to six built-in wavetables and to the Markov
+composer and says so only on stderr. An update deletes the previous copies before installing rather
+than writing over them, so a file that was renamed or dropped cannot linger.
+
+Nothing built here is code-signed — there is no certificate on this machine — so Windows calls the
+publisher unknown on first run. The manifest's hashes are what can be checked instead.
 
 ## Try it
 
@@ -125,6 +175,14 @@ the Quest level costs 16.9 % less for an eight-minute set with every part (7.2 %
 ctest --test-dir build -C Release
 ```
 
+`questguard` is the cheapest test in the suite and the only one that looks outside the desktop build:
+it configures the root project for Android with its **default** options, asserts that the JUCE plugin
+is off there (JUCE cannot cross-compile the host-side helper it needs, and its error names the
+compiler rather than the cause), and compiles every `Quest/src/*.cpp` with the NDK's own clang in
+syntax-only mode. Nothing else in `ctest` builds those; `Quest/src/main.cpp` had not compiled since
+Phase 5 before this existed. Five seconds on this machine, and it reports itself as skipped, with the
+reason, on a machine without the NDK or without `ThirdParty` rather than failing.
+
 `phos_hosttest` measures the plugin around the engine: rates and block sizes no one develops at,
 blocks that change size in the middle of a set, parameters written from another thread, a transport
 that starts, jumps and stops, a state that comes back exactly as it went out, and every tab laid out
@@ -164,7 +222,9 @@ requires every lane of the vectorised DSP to equal the scalar computation bit fo
 | `Tools/corpus/` | `build_corpus.py`: melodic statistics from a local MIDI corpus (the MIDI files stay local), memorisation check |
 | `Plugin/` | JUCE 9 VST3 and standalone: processor, editor, layout engine, arrange timeline, perform macros |
 | `Tools/manual/` | `make_manual.py` and the manual's prose: HTML and PDF out of the plugin's own tables |
-| `Tests/` | self test, host test, VST3 test, vector-path tests, NEON shim |
+| `Tools/release/` | the build guard (`quest_guard.cmake`), the target matrix and the package check |
+| `Deploy/` | `build_release.ps1`, the Inno Setup script, the icon; `stage/` and `out/` are made by the script |
+| `Tests/` | self test, host test, VST3 test, vector-path tests, NEON shim, the build guard |
 | `docs/screenshots/` | one picture per tab of the editor |
 | `docs/` | plan, Doxygen configuration |
 

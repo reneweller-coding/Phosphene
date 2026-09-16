@@ -7,11 +7,22 @@
 #   Plugin/       JUCE VST3 + Standalone (Phase 6)
 #   Quest/        native OpenXR app (Phase 7)
 cmake_minimum_required(VERSION 3.22)
-project(Phosphene VERSION 0.1.0 LANGUAGES C CXX)
+project(Phosphene VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# One source of truth for the version: this project() line. It reaches
+#   * the plugin, through juce_add_plugin's VERSION ${PROJECT_VERSION} (Plugin/CMakeLists.txt),
+#     which is what a DAW shows and what lands in the Windows version resource;
+#   * every C++ translation unit as PHOS_VERSION, which is what `phos_render --version` prints;
+#   * the installer and the manifest, because Deploy/build_release.ps1 reads the line back out of
+#     this file when it is not given a -Version.
+# Nothing else may spell the version out. Noctuary shipped a 1.1.0 with 1.0.0 inside the executable
+# because two places held it and only one was changed; the version is checked against the binary in
+# Tools/release/check_package.ps1 so that cannot happen silently here.
+add_compile_definitions(PHOS_VERSION="${PROJECT_VERSION}")
 
 option(PHOS_BUILD_TOOLS "Build phos_render and the tests" ON)
 # The plugin is a desktop artefact and JUCE builds a host-side helper (juceaide) to make it, which

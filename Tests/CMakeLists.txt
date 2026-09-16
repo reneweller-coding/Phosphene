@@ -6,6 +6,24 @@ function(phos_add_test name)
     endif()
 endfunction()
 
+# The build guard (Tools/release/quest_guard.cmake): the Quest sources still compile for the
+# headset, and the root project still configures for Android with its default options. Neither is
+# reachable from anything else in this file -- the Quest app is a CMake project of its own and no
+# target here builds it -- which is how both broke unnoticed on 16.09.2026. Five seconds measured
+# on this machine (3.5 s configure, 1.6 s syntax check) against a suite of about 450, so it is
+# cheap enough to stay on.
+#
+# Only on the build machine: an Android ctest run does not cross-check itself, and a second Android
+# toolchain inside one is nonsense. 77 is the exit code the script uses when it cannot run at all
+# (no NDK, no ThirdParty headers); SKIP_RETURN_CODE turns that into a visible "Skipped" with the
+# reason instead of a red suite for anybody without the NDK.
+if(NOT ANDROID)
+    add_test(NAME questguard COMMAND ${CMAKE_COMMAND}
+             "-DPHOS_ROOT=${CMAKE_SOURCE_DIR}" "-DPHOS_SCRATCH=${CMAKE_BINARY_DIR}/guard"
+             -P "${CMAKE_SOURCE_DIR}/Tools/release/quest_guard.cmake")
+    set_tests_properties(questguard PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+endif()
+
 # The self test: every building block measured, and the engine as a whole.
 add_executable(phos_selftest selftest.cpp)
 target_link_libraries(phos_selftest PRIVATE PhospheneCore)
