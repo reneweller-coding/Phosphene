@@ -111,7 +111,8 @@ double setLengthBars(const ParamStore& p)
 {
     const int cb = p.base(Module::Compose);
     const double minutes = std::max(1.0, static_cast<double>(p.getInt(cb + compose::SetMinutes)));
-    const double bpm = std::max(20.0, static_cast<double>(p.get(cb + compose::Bpm)));
+    const double bpm = p.getBool(cb + compose::StyleTempo) ? styleProfile(styleOf(p)).bpmCentre
+                                                           : std::max(20.0, static_cast<double>(p.get(cb + compose::Bpm)));
     return std::max(32.0, minutes * bpm / kBeatsPerBar);
 }
 

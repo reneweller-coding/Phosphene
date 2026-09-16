@@ -2843,6 +2843,35 @@ void testForm()
                   breakKicks, breakBass, introKickBars, introBars, dropAllParts, dropBars, pdbBeat4, pdbBars));
     }
 
+    // The bass slot envelope of PLAN 6.6 is a style-profile parameter with a flat default, because nine
+    // reference tracks play three equally loud notes within +-1.2 dB. Flat means: every profile's table
+    // is all ones, and the three notes of a beat really come out with the same velocity and the same
+    // share of their slot.
+    {
+        int nonFlat = 0;
+        for (int st = 0; st < kNumStyles; ++st) {
+            const StyleProfile& sp = styleProfile(static_cast<StyleId>(st));
+            for (int k = 0; k < kBassSlots; ++k) nonFlat += (sp.slotGate[k] != 1.0f) + (sp.slotVel[k] != 1.0f);
+        }
+        ParamStore q;
+        q.parseText("compose.bass_variation=0 compose.bass_pattern=Rolling compose.level_match=Off master.auto_gain=Off");
+        Composer cb(19);
+        const TrackPlan& tb = cb.track(q, 0);
+        int core = 0;
+        for (int i = 0; i < tb.form.count; ++i)
+            if (tb.form.section[i].type == SectionType::Groove || tb.form.section[i].type == SectionType::Drop) { core = tb.form.section[i].startBar; break; }
+        std::vector<NoteEvent> ev;
+        cb.composeBars(q, tb.firstBar + core, 1, ev);
+        std::vector<const NoteEvent*> beat0;
+        for (const NoteEvent& e : ev)
+            if (e.part == Part::Bass && e.beat < static_cast<double>(tb.firstBar + core) * kBeatsPerBar + 1.0) beat0.push_back(&e);
+        bool same = beat0.size() == 3;
+        for (size_t i = 1; i < beat0.size() && same; ++i)
+            same = beat0[i]->velocity == beat0[0]->velocity && std::fabs(beat0[i]->length - beat0[0]->length) < 1e-6f;
+        check(nonFlat == 0 && same, "the bass slot envelope is flat in every style profile, and the three notes of a beat come out equal",
+              fmt("%d non-flat table entries, %zu notes on the first beat", nonFlat, beat0.size()));
+    }
+
     // Colour (Farbood's dissonance): the more colour, the more often the lead takes the flat second or
     // the upper note of an augmented second.
     {

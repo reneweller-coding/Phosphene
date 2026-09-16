@@ -15,7 +15,6 @@ namespace {
 
 constexpr uint64_t kSaltPlan   = 0x5045524350000001ull;
 constexpr uint64_t kSaltPhrase = 0x5045524350000002ull;
-constexpr uint64_t kSaltLayer  = 0x5045524350000003ull;
 constexpr uint64_t kSaltFill   = 0x5045524350000004ull;
 constexpr uint64_t kSaltLane   = 0x5045524350000005ull;
 
@@ -212,16 +211,6 @@ PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack, const
         }
     }
     return plan;
-}
-
-int activeLayers(const PercPlan& plan, float percVariation, uint64_t trackSeed, int barInTrack)
-{
-    const int block = barInTrack / 16;
-    int n = std::min(plan.layers, 2 + block);
-    Rng r;
-    r.seed(mixSeed(trackSeed ^ kSaltLayer, static_cast<uint64_t>(block)));
-    if (block >= 3 && r.uniform() < 0.25f * percVariation) n = std::max(std::min(2, plan.layers), n - 1 - (r.uniform() < 0.5f ? 1 : 0));
-    return n;
 }
 
 FillType chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack)

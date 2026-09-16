@@ -65,7 +65,6 @@ enum class CorpusRoleId : int;
 /** @brief The melodic parts. */
 enum class MelodyPart : int { Acid = 0, Lead, Arp, Pad, Count };
 constexpr int kMelodyParts = static_cast<int>(MelodyPart::Count);   ///< number of melodic parts
-constexpr int kMelodyMaxBlocks = 64;                                ///< 16-bar blocks a track can have
 constexpr int kAcidLowest = 50;                                     ///< D3: lowest acid note
 constexpr int kLeadLowest = 59;                                     ///< B3: lowest lead note
 constexpr int kArpLowest = 55;                                      ///< G3: lowest arp note

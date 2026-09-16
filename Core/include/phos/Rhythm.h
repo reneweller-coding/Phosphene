@@ -72,9 +72,6 @@ struct PercPlan {
  */
 PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack, const uint64_t* laneSeeds = nullptr);
 
-/** @brief Lanes (by index) that take part in the groove in a given bar of a track. */
-int activeLayers(const PercPlan& plan, float percVariation, uint64_t trackSeed, int barInTrack);
-
 /**
  * @brief What the form asks of the percussion in one bar (Form.h, the instrumentation matrix).
  *
