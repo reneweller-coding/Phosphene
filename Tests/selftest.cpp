@@ -986,6 +986,24 @@ void testVariety()
 
     // Level match: tracks with very different sounds reach the same loudness. Measured on the real
     // render, bars 4..28 of each 32-bar track, with every variation at full strength.
+    //
+    // **The loudness side of the energy arc is taken out of every reading.** The composer adds
+    // `energyGainDb(section energy)` -- at most +-2 dB, the loudness half of Farbood's tension model --
+    // to the track gain of every section, and that is the form speaking, not the level match. The
+    // window below is each track's first core, and a core can be a Groove (energy 0.61) or a Drop
+    // (0.87); those two are 1.30 dB apart *by design*. Before 16.09.2026 this check compared them
+    // anyway, so most of what it called level-match error was the form: measured over three seeds and
+    // six tracks each, the raw spread was 1.92 / 0.49 / 1.59 LU and the same readings with the arc
+    // taken out are 0.62 / 0.49 / 0.29 LU. On this check's own four tracks the arc accounts for
+    // 1.30 of the 1.56 LU. That is why the bound stood at 1.8 and had to be raised from 1.5 when the
+    // kit got heavier: it was not measuring the probe.
+    //
+    // The foundation probe of `Composer.cpp` was not the culprit, and probing the real bars instead of
+    // the synthetic loop made it worse, not better (docs/PLAN.md, 16.09.2026 Nachtrag; the bench is
+    // `PHOS_ONLY=testProbeAudit`). What is left after the arc *is* the probe, and it does grow with the
+    // kit -- 0.15 / 0.20 / 0.26 LU at mix.perc_level +1 / +2 / +3 dB -- at 0.056 LU per dB. The bound
+    // is 0.8 LU: three times what this check reads at the default kit level, and above the 0.62 LU
+    // worst case over the three seeds.
     {
         auto trackLoudness = [&](bool match, double& spread) {
             auto e = std::make_unique<Engine>();
@@ -1005,10 +1023,12 @@ void testVariety()
                 // form, not of the sound the level match is about.
                 const TrackPlan tp = ce.track(e->params(), t);
                 int coreBar = 0, coreBars = 16;
+                float energy = 0.5f;
                 for (int i = 0; i < tp.form.count; ++i)
                     if (tp.form.section[i].type == SectionType::Groove || tp.form.section[i].type == SectionType::Drop) {
                         coreBar = tp.form.section[i].startBar;
                         coreBars = tp.form.section[i].bars;
+                        energy = 0.5f * (tp.form.section[i].energy + tp.form.section[i].energyTo);
                         break;
                     }
                 const int window = std::min(24, coreBars - 4);
@@ -1022,7 +1042,10 @@ void testVariety()
                     e->process(L.data(), R.data(), n);
                     if (e->samplePosition() > a) m.process(L.data(), R.data(), n);
                 }
-                const double lufs = m.read().integrated;
+                // The section's own gain, written out here rather than taken from the composer, so that
+                // a change to either side shows up as a disagreement instead of cancelling out.
+                const double arc = std::clamp((static_cast<double>(energy) - 0.7) * 5.0, -2.0, 2.0);
+                const double lufs = m.read().integrated - arc;
                 lo = std::min(lo, lufs);
                 hi = std::max(hi, lufs);
                 // Skip to the next track's measuring window.
@@ -1037,17 +1060,7 @@ void testVariety()
         double withMatch = 0.0, without = 0.0;
         trackLoudness(true, withMatch);
         trackLoudness(false, without);
-        // 1.8 LU, not the 1.5 this bound started at (changed 16.09.2026, Phase 9, and it is the one
-        // check of another round this round touches). The bound was a snapshot of one kit level, not
-        // a property of the level match: measured at five settings of `mix.perc_level` the spread
-        // grows by 0.027 LU per dB of kit level (1.45 / 1.47 / 1.50 / 1.53 / 1.56 LU at +1 / +1.5 /
-        // +2 / +2.5 / +3 dB), so before this round it already stood 0.07 LU from failing and *no*
-        // mix change of any size could pass it. The substance of the check -- that the match removes
-        // more than a LU of spread -- is untouched and still reads 1.6 LU. The residual is the
-        // foundation probe of `Composer.cpp`, which predicts a track's kick, bass and percussion from
-        // a synthetic two-bar loop: the heavier the kit, the more that loop misses the real one. That
-        // is where the repair belongs, and it was not this round's file to change.
-        check(withMatch < 1.8 && without > withMatch + 1.0, "level match keeps the tracks within 1.8 LU (without it they spread wider)",
+        check(withMatch < 0.8 && without > withMatch + 1.0, "level match keeps the tracks within 0.8 LU of each other once the form's own energy gain is taken out (without it they spread wider)",
               fmt("spread %.2f LU with, %.2f LU without", withMatch, without));
     }
 
@@ -3186,6 +3199,103 @@ std::string commonPoly(const char* pfx, double detune)
     return s + fmt("%s.detune=%g ", pfx, detune);
 }
 
+/**
+ * @brief Measurement bench for the foundation probe: what it predicts against what the track plays.
+ *
+ * The level match gives track @em i the gain `reference - probe_i`, so after the match its measured
+ * loudness is `reference - (probe_i - real_i)`: the spread that survives the match is exactly the
+ * spread of the probe's error @c e_i = probe_i - real_i. This bench prints @c e_i per track over
+ * several seeds, which is the quantity `testVariety`'s bound sees, and alongside it the same spread
+ * with the section's own energy gain taken out -- the decomposition of 16.09.2026 that showed most of
+ * what the bound used to see was the form, not the probe. Runs only when named.
+ * PHOS_PROBE_LEVELS sweeps mix.perc_level on one seed instead, to see how the spread moves with the kit.
+ */
+void testProbeAudit()
+{
+    section("PROBE AUDIT BENCH");
+    const bool levelSweep = std::getenv("PHOS_PROBE_LEVELS") != nullptr;
+    const uint64_t seedsWide[] = { 31, 7, 2026 };
+    const char* levelsOne[] = { "1", "2", "3" };
+    const int cases = 3;
+    for (int c = 0; c < cases; ++c) {
+        const uint64_t seed = levelSweep ? 31 : seedsWide[c];
+        const char* lv = levelSweep ? levelsOne[c] : "3";
+        const int tracksN = levelSweep ? 4 : 6;
+        const std::string knobs = fmt("compose.track_bars=128 compose.sound_variation=1 compose.track_variation=1 master.auto_gain=Off master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 "
+                                      "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 "
+                                      "mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1 mix.perc_level=%s ", lv);
+        // The probes, with the level match on.
+        auto pe = std::make_unique<Engine>();
+        pe->prepare(48000.0, 512);
+        pe->params().parseText((knobs + "compose.level_match=On").c_str());
+        Composer pc(seed);
+        std::vector<double> probe(static_cast<size_t>(tracksN));
+        for (int t = 0; t < tracksN; ++t) probe[static_cast<size_t>(t)] = pc.track(pe->params(), t).loudness;
+        // The real tracks, measured in their first core, with the match off.
+        auto e = std::make_unique<Engine>();
+        e->prepare(48000.0, 512);
+        e->params().parseText((knobs + "compose.level_match=Off").c_str());
+        Composer ce(seed);
+        const TempoMap tm = ce.tempoMap(e->params(), tracksN * 128);
+        e->setTempoMap(tm);
+        Conductor cond(*e, ce);
+        std::vector<float> L(512), R(512);
+        std::vector<double> real(static_cast<size_t>(tracksN));
+        for (int t = 0; t < tracksN; ++t) {
+            const TrackPlan tp = ce.track(e->params(), t);
+            int coreBar = 0, coreBars = 16;
+            for (int i = 0; i < tp.form.count; ++i)
+                if (tp.form.section[i].type == SectionType::Groove || tp.form.section[i].type == SectionType::Drop) {
+                    coreBar = tp.form.section[i].startBar;
+                    coreBars = tp.form.section[i].bars;
+                    break;
+                }
+            const int window = std::min(24, coreBars - 4);
+            const uint64_t a = static_cast<uint64_t>(tm.secondsAt((tp.firstBar + coreBar + 2) * 4.0) * 48000.0);
+            const uint64_t b = static_cast<uint64_t>(tm.secondsAt((tp.firstBar + coreBar + 2 + window) * 4.0) * 48000.0);
+            LoudnessMeter m;
+            m.prepare(48000.0);
+            while (e->samplePosition() < b) {
+                cond.pump(e->params(), 32.0);
+                const int n = static_cast<int>(std::min<uint64_t>(512, b - e->samplePosition()));
+                e->process(L.data(), R.data(), n);
+                if (e->samplePosition() > a) m.process(L.data(), R.data(), n);
+            }
+            real[static_cast<size_t>(t)] = m.read().integrated;
+            const uint64_t next = static_cast<uint64_t>(tm.secondsAt(static_cast<double>(tp.firstBar + tp.bars) * 4.0) * 48000.0);
+            while (e->samplePosition() < next) {
+                cond.pump(e->params(), 32.0);
+                e->process(L.data(), R.data(), static_cast<int>(std::min<uint64_t>(512, next - e->samplePosition())));
+            }
+        }
+        double lo = 1e9, hi = -1e9, nlo = 1e9, nhi = -1e9;
+        std::string line;
+        for (int t = 0; t < tracksN; ++t) {
+            const double err = probe[static_cast<size_t>(t)] - real[static_cast<size_t>(t)];
+            lo = std::min(lo, err);
+            hi = std::max(hi, err);
+            // The loudness side of the energy arc: the real render adds energyGainDb(core energy) to the
+            // track gain, the foundation probe does not. Taking it back out shows what is left.
+            const TrackPlan tp = ce.track(e->params(), t);
+            float energy = 0.5f;
+            int coreType = 0;
+            for (int i = 0; i < tp.form.count; ++i)
+                if (tp.form.section[i].type == SectionType::Groove || tp.form.section[i].type == SectionType::Drop) {
+                    energy = 0.5f * (tp.form.section[i].energy + tp.form.section[i].energyTo);
+                    coreType = static_cast<int>(tp.form.section[i].type);
+                    break;
+                }
+            const double arc = std::clamp((static_cast<double>(energy) - 0.7) * 5.0, -2.0, 2.0);
+            nlo = std::min(nlo, err + arc);
+            nhi = std::max(nhi, err + arc);
+            line += fmt("  t%d %7.2f/%7.2f e%+6.2f ty%d en%.2f arc%+5.2f", t, probe[static_cast<size_t>(t)], real[static_cast<size_t>(t)], err, coreType, static_cast<double>(energy), arc);
+        }
+        std::printf("      spread without the energy arc: %.3f LU\n", nhi - nlo);
+        std::printf("  seed %4llu perc_level %s dB:%s   spread %.3f LU\n",
+                    static_cast<unsigned long long>(seed), lv, line.c_str(), hi - lo);
+    }
+}
+
 void testMeasure()
 {
     section("MEASUREMENT BENCH");
@@ -3451,46 +3561,92 @@ void testDynamics()
         }
         check(formula && worst < 0.01, "bus compressor: soft-knee curve of Giannoulis et al. and the gain it settles to", fmt("largest deviation %.4f dB", worst));
     }
-    // True-peak estimate on sines between the samples.
+    // True-peak estimate against signals whose true peak is known analytically.
+    //
+    // The old check swept a sine over a hundred samples and took the largest reading anywhere in it.
+    // That is not what a limiter does and it hides the error: over a hundred samples the sample grid
+    // itself wanders through the sine's phase and lands close to some crest by luck, so the reading
+    // came out within 0.11 dB even for an estimator that misreads a single crest by 4 dB (measured
+    // 16.09.2026). The crest is therefore placed deliberately: the sine's maximum is put at a chosen
+    // fraction of the way between two samples, and the estimate is read only in the interval that
+    // holds it -- the three samples a limiter has in hand when it decides that sample's gain.
     {
         TruePeakInterpolator tp;
-        double worst = 0.0, naive = 1.0;
-        for (double f : { 0.02, 0.05, 0.13, 0.2, 0.25 }) {
-            for (double phase : { 0.0, 0.3, 0.785398, 1.7 }) {
-                std::vector<float> x(64);
-                for (int i = 0; i < 64; ++i) x[static_cast<size_t>(i)] = static_cast<float>(std::sin(2.0 * kPiD * f * i + phase));
+        constexpr int kMid = 64;
+        double lo = 0.0, hi = 0.0, worstF = 0.0, worstOff = 0.0, naive = 1.0;
+        for (double f : { 0.05, 0.11, 0.17, 0.23, 0.29, 0.35, 0.41, 0.45 }) {
+            for (double off : { 0.0, 0.125, 0.25, 0.375, 0.5 }) {
+                // Crest of sin(2 pi f t + phi) at t = kMid + off, so the true peak is exactly 1.
+                const double phase = 0.5 * kPiD - 2.0 * kPiD * f * (kMid + off);
+                std::vector<float> x(128);
+                for (int i = 0; i < 128; ++i) x[static_cast<size_t>(i)] = static_cast<float>(std::sin(2.0 * kPiD * f * i + phase));
                 double est = 0.0, samplePeak = 0.0;
-                for (int i = 8; i < 56; ++i) {
+                for (int i = kMid - 1; i <= kMid + 1; ++i) {
                     est = std::max({ est, std::fabs(static_cast<double>(x[static_cast<size_t>(i)])), tp.between(x.data() + i) });
                     samplePeak = std::max(samplePeak, std::fabs(static_cast<double>(x[static_cast<size_t>(i)])));
                 }
-                worst = std::max(worst, std::fabs(20.0 * std::log10(est)));
+                const double db = 20.0 * std::log10(est);
+                if (db < lo) { lo = db; worstF = f; worstOff = off; }
+                hi = std::max(hi, db);
                 naive = std::min(naive, samplePeak);
             }
         }
-        // Four points per sample cannot see the crest of a sine at 0.25 fs to better than cos(pi/16): 0.17 dB.
-        check(worst < 0.17 && naive < 0.75, "true peak of sines up to 0.25 fs within the 0.17 dB of 4x sampling (their largest samples read up to 3 dB low)",
-              fmt("worst %.3f dB; lowest sample peak %.2f dB", worst, 20.0 * std::log10(naive)));
+        // A band-limited crest that falls between two samples by construction: sinc(0.9 (t - 0.5)) is
+        // band-limited to 0.45 fs and is exactly 1 at t = 0.5, while its largest sample is sinc(0.45)
+        // = -3.11 dBFS. Nothing here depends on the estimator's own filter shape.
+        std::vector<float> s(256);
+        for (int i = 0; i < 256; ++i) {
+            const double u = 0.9 * (static_cast<double>(i - 128) - 0.5);
+            s[static_cast<size_t>(i)] = static_cast<float>(std::fabs(u) < 1e-12 ? 1.0 : std::sin(kPiD * u) / (kPiD * u));
+        }
+        double sincEst = 0.0, sincSample = 0.0;
+        for (int i = 120; i < 136; ++i) {
+            sincEst = std::max({ sincEst, std::fabs(static_cast<double>(s[static_cast<size_t>(i)])), tp.between(s.data() + i) });
+            sincSample = std::max(sincSample, std::fabs(static_cast<double>(s[static_cast<size_t>(i)])));
+        }
+        const double sincDb = 20.0 * std::log10(sincEst);
+        // 0.15 dB up to 0.45 fs (21.6 kHz at 48 kHz). The bound is what the design allows and no more:
+        // with eight points per sample the grid alone can miss a crest of a sine at 0.45 fs by
+        // cos(pi * 0.45 / 8) = 0.136 dB, and the interpolating filter's own passband deviation over
+        // 0 .. 0.45 fs is 0.14 dB. Above 0.45 fs no claim is made: reconstruction there needs a filter
+        // far longer than a limiter can afford, and the residual is quantified in docs/PLAN.md.
+        check(lo > -0.15 && hi < 0.15 && std::fabs(sincDb) < 0.15 && naive < 0.75,
+              "true peak of a crest placed between samples, up to 0.45 fs, within 0.15 dB (its samples read up to 16 dB low)",
+              fmt("sine %+.3f .. %+.3f dB (worst at f = %.2f fs, crest %.3f samples in); band-limited sinc %+.3f dB; lowest sample peak %.2f dB",
+                  lo, hi, worstF, worstOff, sincDb, 20.0 * std::log10(naive)));
     }
     // Limiter: program 12 dB over the ceiling comes out at the ceiling, measured with an exact band-limited
     // 16x interpolation; below the ceiling the signal passes, only delayed.
     {
         constexpr size_t N = 1u << 15;
-        // Program-like material: a decaying 60 Hz kick every beat, tones at 7 and 9 kHz and noise low-passed
-        // at 10 kHz (music has little energy near Nyquist, where 4x interpolation cannot see the peaks).
+        // Program-like material: a decaying 60 Hz kick every beat, tones at 7 and 9 kHz, and noise --
+        // the whole thing then band-limited to exactly 0.45 fs (21.6 kHz) by zeroing the spectrum above
+        // it, which is the band the estimator claims. The old material stopped at 10 kHz with a
+        // two-pole filter, well inside where even a twelve-tap interpolator is right; anything the
+        // limiter got wrong between 10 and 21.6 kHz was invisible to this check.
         Rng r;
-        Svf nlL, nlR;
-        nlL.setQ(10000.0f, 0.707f, 48000.0f);
-        nlR.copyCoefficients(nlL);
         std::vector<float> L(N), R(N);
         for (size_t i = 0; i < N; ++i) {
             const double t = static_cast<double>(i) / sr;
             const double beatPos = std::fmod(t * 145.0 / 60.0, 1.0);
             const double kick = std::exp(-beatPos * 40.0) * std::sin(2.0 * kPiD * 60.0 * t);
-            const float nl = nlL.lp(r.bipolar()), nr = nlR.lp(r.bipolar());
-            L[i] = static_cast<float>(3.5 * (0.6 * kick + 0.3 * std::sin(2.0 * kPiD * 7000.0 * t + 0.7) + 0.3 * nl));
-            R[i] = static_cast<float>(3.5 * (0.6 * kick + 0.3 * std::sin(2.0 * kPiD * 9000.0 * t) + 0.3 * nr));
+            L[i] = static_cast<float>(3.5 * (0.6 * kick + 0.3 * std::sin(2.0 * kPiD * 7000.0 * t + 0.7) + 0.3 * r.bipolar()));
+            R[i] = static_cast<float>(3.5 * (0.6 * kick + 0.3 * std::sin(2.0 * kPiD * 9000.0 * t) + 0.3 * r.bipolar()));
         }
+        // Zero every bin above 0.45 fs, both halves of the spectrum, and transform back. Exact, so the
+        // material carries no energy at all where the estimate is not claimed to hold.
+        auto bandLimit = [&](std::vector<float>& x) {
+            std::vector<std::complex<double>> a(N);
+            for (size_t i = 0; i < N; ++i) a[i] = x[i];
+            fft(a);
+            for (size_t k = static_cast<size_t>(0.45 * N); k <= N - static_cast<size_t>(0.45 * N); ++k) a[k] = 0.0;
+            std::vector<std::complex<double>> c(N);
+            for (size_t k = 0; k < N; ++k) c[k] = a[(N - k) % N];
+            fft(c);
+            for (size_t i = 0; i < N; ++i) x[i] = static_cast<float>(c[i].real() / static_cast<double>(N));
+        };
+        bandLimit(L);
+        bandLimit(R);
         auto exactTruePeak = [&](const std::vector<float>& x, size_t from) {
             constexpr size_t M = 1u << 13;
             double peak = 0.0;
@@ -3513,6 +3669,15 @@ void testDynamics()
         std::vector<float> yl = L, yr = R;
         lim.process(yl.data(), yr.data(), static_cast<int>(N));
         const double tpOut = 20.0 * std::log10(std::max(exactTruePeak(yl, 4096), exactTruePeak(yr, 4096)));
+        // And the same output through the meter, which holds the *same* estimator. The independent
+        // measurement above can only be asked to agree within the estimator's own 0.15 dB, so a fault
+        // in how the limiter uses the estimate -- a window off by one, a skip test that bounds by the
+        // wrong sample -- hides inside that tolerance. Against its own estimator the limiter has no
+        // tolerance at all: whatever the bank reports, the gain has to have held it at the ceiling.
+        LoudnessMeter own;
+        own.prepare(sr);
+        own.process(yl.data() + 4096, yr.data() + 4096, static_cast<int>(N - 4096));
+        const double tpOwn = static_cast<double>(own.read().truePeak);
         // The same program only sample-clipped at the ceiling shows what the true-peak estimate is for.
         std::vector<float> cl = L;
         const float ceil1 = dbToGain(-1.0f);
@@ -3549,8 +3714,12 @@ void testDynamics()
         const int window = lat - TruePeakInterpolator::kHalf + 1;
         check(largestStep <= (1.0 - deepest) / window * 1.05 + 1e-6, "limiter: the gain ramps down over the lookahead window instead of stepping",
               fmt("largest change %.4f per sample, reduction to %.3f over %d samples", largestStep, deepest, window));
-        check(tpOut <= -1.0 + 0.17 && tpClip > 0.0 && passes, "limiter: 12 dB over the ceiling comes out at -1 dBTP within 4x sampling (a sample clip leaves intersample overs); quiet input only delayed",
-              fmt("true peak %.2f dBTP limited, %+.2f dBTP sample-clipped; latency %d samples", tpOut, tpClip, lat));
+        // The ceiling has to hold against a measurement that shares nothing with the estimator: the
+        // 16x band-limited interpolation above is an exact spectral one, not a filter bank. 0.15 dB is
+        // the estimator's own worst case over 0 .. 0.45 fs, which is the band this material occupies.
+        check(tpOut <= -1.0 + 0.15 && tpOwn <= -1.0 + 0.02 && tpClip > 0.0 && passes,
+              "limiter: program band-limited to 0.45 fs and driven 12 dB over the ceiling comes out at or below -1 dBTP, measured independently and by its own estimator (a sample clip leaves intersample overs); quiet input only delayed",
+              fmt("true peak %.2f dBTP independently, %.2f dBTP by the meter, %+.2f dBTP sample-clipped; latency %d samples", tpOut, tpOwn, tpClip, lat));
     }
 }
 
@@ -4450,6 +4619,7 @@ int main()
     // The measurement bench prints tables and checks nothing; it reproduces the numbers of the
     // DSP quality round of 16.09.2026 (docs/PLAN.md) and runs only when it is named by itself.
     if (only != nullptr && std::strstr(only, "testMeasure") != nullptr) testMeasure();
+    if (only != nullptr && std::strstr(only, "testProbeAudit") != nullptr) testProbeAudit();
     run("testSampler", testSampler);
     run("testModelKernel", testModelKernel);
     run("testModelFile", testModelFile);

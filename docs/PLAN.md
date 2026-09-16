@@ -864,6 +864,174 @@ Gesamt: **184 Selbsttest-Prüfungen** (sechs neue), Vektortests 9 von 9 in AVX2,
 Der neue Abschnitt kostet **60 s**: drei 96-Takt-Renders und die Stille-Prüfung sind der Preis dafür,
 dass die Mischung gemessen statt behauptet wird.
 
+**16.09.2026, Nachtrag: True Peak und Fundament-Probe.** Zwei Befunde der Mischungsrunde, die dort
+nicht repariert werden durften. Der erste war größer als gemeldet, der zweite war kein Fehler der
+Probe.
+
+### 1. Der True-Peak-Schätzer: das Fenster war falsch entworfen, nicht zu kurz
+
+*Das Maß zuerst.* Die unabhängige Messung ist eine **exakte bandbegrenzte Interpolation** (Spektrum
+per FFT mit Nullen aufgefüllt, 16-fach, nur die mittlere Hälfte jedes Blocks gewertet), gegen vier
+Signale geprüft, deren Spitze feststeht: Sinus bei 0,25 fs mit 45 Grad Phase (größtes Sample
+−3,010 dBFS, gelesen **+0,000 dBTP**), Sinus bei 0,49 fs (+0,007), Einheitsimpuls (+0,000),
+Nyquist-Wechsel (+0,000). Dieselbe Rechnung steckt schon als `exactTruePeak` im Selbsttest.
+
+*Der Befund.* Acht Minuten Render, Seed 1, Standardwerte: `Engine::meter()` meldet **−0,98 dBTP**,
+die exakte Messung sagt **+0,888 dBTP**. Nicht 0,3 bis 0,5 dB daneben, sondern **1,87 dB** — die
+Sinc-Überabtastung der Mischungsrunde (−0,50 bis −0,68) hat selbst zu niedrig gelesen. ffmpegs
+`ebur128` (+0,3) liegt dazwischen, weil es mit dem Filter von BS.1770-4 vierfach abtastet.
+
+*Die vier Verdächtigen, einzeln mit einer Zahl erledigt:*
+
+| Verdacht | Messung | Urteil |
+|---|---|---|
+| **Normalisierung** („unity at DC") | Die Tap-Summen jeder Phase sind **1,000000000**, bevor geteilt wird | **freigesprochen**: die Division ist ein No-op. Sie bleibt stehen, damit ein anderes Fenster den Gleichanteil nicht stillschweigend verschiebt. |
+| **Fensterlänge und β** | Durchlass des alten Banks: **−1,32 dB bei 0,40 fs, −5,58 dB bei 0,45 fs** | **der Haupttäter — aber β, nicht die Länge.** Siehe unten. |
+| **Nur drei Phasen** | Das Gitter allein verfehlt eine Spitze um cos(π f / 4): **0,44 dB bei 0,40 fs** | **mitschuldig**, etwa ein Viertel des Fehlers. |
+| **Der Gebrauch im Limiter** | `prevBetween_` deckt das Intervall vor dem Sample, `between` das danach; die Ausrichtung von Schiebeminimum, gleitendem Mittel und Verzögerung wurde nachgerechnet: die Verstärkung zum Zeitpunkt *t* liegt unter der Anforderung **jedes** der W Minima, weil das Sample, das sie trägt, in jedem ihrer Fenster liegt | **freigesprochen** |
+
+*Warum β = 8 falsch war.* Das ist ein **Bruchverzögerungs-Filter**, an einem Punkt ausgewertet, kein
+interpolierendes Tiefpassfilter. Für ein solches ist nur die **Durchlassabweichung** |H(f)| − 1 über
+0 bis 0,5 fs ein Fehler: das Eingangssignal ist bereits bandbegrenzt, es gibt kein Spiegelbild, das
+ein Sperrband unterdrücken müsste (Laakso, Välimäki, Karjalainen und Laine, *Splitting the unit
+delay*, IEEE Signal Processing Magazine 13(1), 1996). Ein Kaiser-Fenster mit β = 8 kauft rund 80 dB
+Sperrdämpfung, die niemand braucht, und bezahlt sie mit einem Übergangsbereich, der den Durchlass
+frisst. Bei 24 Taps gemessen (schlechteste Durchlassabweichung über 0 bis 0,45 fs): **β = 4: 0,14 dB;
+β = 5: 0,51 dB; β = 8: 1,79 dB.** Das Optimum liegt bei jeder Länge zwischen 3,5 und 5, nie bei 8.
+
+*Die Änderung.* `TruePeakInterpolator` ist jetzt **acht Phasen zu 24 Taps, Kaiser β = 4** (vorher vier
+Phasen zu 12 Taps, β = 8). Nichts daran ist eine neue Idee — es ist dasselbe Verfahren von
+ITU-R BS.1770-4 Annex 2 mit einem Filter, das für seine Aufgabe entworfen ist. Über 0,45 fs
+(21,6 kHz bei 48 kHz) wird **nichts behauptet**; dort bräuchte die Rekonstruktion hunderte Taps je
+Phase, weil die Samples eines Sinus nahe Nyquist seine Amplitude kaum noch tragen.
+
+*Die Prüfung, erst fallen gesehen.* Die alte Prüfung fuhr einen Sinus über hundert Samples und nahm
+den größten Messwert irgendwo darin — dabei wandert das Sample-Gitter durch die Phase und trifft
+**zufällig** einen Kamm: sie las 0,11 dB für einen Schätzer, der einen einzelnen Kamm um 4 dB
+verfehlt. Jetzt wird der Kamm **gelegt**: das Maximum des Sinus liegt an einem gewählten Bruchteil
+zwischen zwei Samples, und gemessen wird nur in dem Intervall, das ihn enthält — die drei Samples,
+die ein Limiter in der Hand hat, wenn er über dieses Sample entscheidet. Dazu ein `sinc(0,9·(t−0,5))`,
+bandbegrenzt auf 0,45 fs, Spitze exakt 1 bei t = 0,5, größtes Sample −3,11 dBFS.
+
+| Prüfung | alt | neu |
+|---|---|---|
+| Kamm zwischen den Samples, bis 0,45 fs | **−4,234 dB** (bei 0,45 fs, Kamm mittig) | **−0,115 … +0,068 dB** |
+| bandbegrenzter Sinc, Spitze zwischen den Samples | **−0,351 dB** | **+0,028 dB** |
+| Limiter, Programm auf 0,45 fs bandbegrenzt, 12 dB über der Decke, unabhängig gemessen | **−0,37 dBTP** (0,63 dB über der Decke) | **−0,98 dBTP** |
+| dasselbe, vom eigenen Schätzer gemessen | — | **−1,00 dBTP** |
+
+Das Material der alten Limiter-Prüfung endete bei 10 kHz (Zweipol-Tiefpass), also dort, wo selbst
+zwölf Taps recht haben; alles, was der Limiter zwischen 10 und 21,6 kHz falsch machte, war ihr
+unsichtbar. Es ist jetzt per FFT **exakt** auf 0,45 fs bandbegrenzt.
+
+*Gegenprobe am echten Render.* Eine Nachbildung des neuen Banks in Python liest auf dem
+Acht-Minuten-Render **−0,983 dBTP**, die Engine meldet −0,98: die Implementierung ist der Entwurf.
+Denselben Render hart auf 21,6 kHz beschnitten liest die Nachbildung **−0,188** gegen exakt
+**−0,200** — innerhalb ihres Bandes ist der Schätzer auf **0,012 dB** genau.
+
+*Was übrig bleibt, und warum es nicht dem Limiter gehört.* Der Render trägt **−33 dB seiner
+Gesamtleistung zwischen 22 und 24 kHz** (je Hertz mehr als zwischen 18 und 20 kHz): ein flacher
+Rauschteppich bis Nyquist aus den Rauschquellen der Percussion und den nichtlinearen Stufen. Genau
+dieses Band hebt die echte Spitze um rund 1,0 dB, und kein bezahlbares Filter sieht es:
+
+| Bank | liest auf dem Render |
+|---|---|
+| 12 Taps β 8, 4-fach (alt) | −0,993 dBTP |
+| **24 Taps β 4, 8-fach (neu)** | **+0,305 dBTP** |
+| 48 Taps β 12, 8-fach | +0,334 |
+| 96 Taps β 14, 16-fach | +0,674 |
+| 256 Taps β 18, 16-fach | +0,862 |
+| exakt | +0,888 |
+
+Der Render geht damit von **+0,888 auf +0,083 dBTP** (unabhängig gemessen, Seed 1, acht Minuten):
+**1,30 dB weniger Überschreitung**, aber noch 1,08 dB über der Decke. Die Reparatur des Restes gehört
+zu den Quellen (Bandbegrenzung des Percussion-Rauschens in `Perc.cpp`), nicht zum Limiter, und ist
+die nächste Kalibriergröße.
+
+*Kosten.* Der Bank ist 4,7-fach größer (7 × 24 statt 3 × 12 Multiplikationen je Kanal), der Render
+wurde trotzdem nur **3,9 %** langsamer (120 s Audio in **5,999 → 6,232 s**, 20,0-fach → 19,3-fach
+Echtzeit). Zwei Dinge dazwischen, beide gemessen:
+
+- **Die Summation war eine Kette.** Naiv geschrieben hängen bei 24 Taps 24 Additionen voneinander ab,
+  und der Bank ist latenzgebunden, nicht durchsatzgebunden: der Render kostete **+64 %** (5,999 →
+  10,448 s). Vier unabhängige Teilsummen zu je sechs Additionen bringen das auf ein Viertel.
+- **Ein exakter Überspringer.** Kein interpolierter Punkt kann `max_k Σ_m |h_k[m]|` mal das größte
+  Sample im Fenster überschreiten (die ℓ1-Norm des Banks, `gainBound()`; hier 2,458). Liegt dieses
+  Produkt unter der Decke, wird der Bank übersprungen und der Zwischenwert als Null vermerkt —
+  **exakt, nicht näherungsweise**: jeder so verworfene Wert liegt unter der Decke, und unter der Decke
+  ist die verlangte Verstärkung ohnehin 1. Auf dem Render läuft der Bank dadurch bei **30 %** der
+  Samples. Zusammen mit dem Wegfall des Modulo-Rings (jedes Sample wird in beide Hälften eines doppelt
+  langen Puffers geschrieben, das Fenster ist dadurch immer zusammenhängend) kostet der Limiter
+  **weniger als vorher**: 0,127 s → 0,083 s je zwei Minuten Audio. Der Rest der 3,9 % ist die
+  Lautheitsanzeige, die denselben Schätzer auf jedem Sample führt.
+
+*Latenz.* `kHalf` 6 → 12, also `TruePeakLimiter::latency()` **77 → 83 Samples**. Hosttest (101
+Prüfungen, **ohne** `PHOS_MUTE`) und VST3-Test (30 Prüfungen) grün; der Host liest 83.
+
+### 2. Die Fundament-Probe: die Schranke maß die Form, nicht die Probe
+
+*Die Zerlegung.* Der Pegelangleich gibt Track *i* die Verstärkung `Referenz − Probe_i`, also ist die
+Spanne nach dem Angleich genau die Spanne des Probenfehlers `e_i = Probe_i − echt_i`. Der Prüfstand
+dafür ist `PHOS_ONLY=testProbeAudit`. Drei Seeds, je sechs Tracks, `mix.perc_level` +3 dB:
+
+| Seed | Spanne | Spanne ohne den Energie-Zuschlag der Sektion |
+|---|---|---|
+| 31 | 1,92 LU | **0,62 LU** |
+| 7 | 0,49 LU | **0,49 LU** |
+| 2026 | 1,59 LU | **0,29 LU** |
+
+*Der Grund.* Der Komponist legt auf jede Sektion `energyGainDb(Energie)` — die Lautheitsseite von
+Farboods Spannungsmodell, höchstens ±2 dB. Ein **Groove** hat Energie 0,61 und bekommt **−0,47 dB**,
+ein **Drop** hat 0,87 und bekommt **+0,83 dB**: die beiden liegen **1,30 dB auseinander, und zwar mit
+Absicht**. Die Prüfung maß jeden Track in seinem ersten Kern — „Groove **oder** Drop" — und verglich
+damit einen Groove mit einem Drop. Auf ihren eigenen vier Tracks sind **1,30 der 1,56 LU** dieser
+Zuschlag. Deshalb musste die Schranke wachsen, als das Kit schwerer wurde: sie maß nicht die Probe.
+
+*Die Probe ist nicht der Täter, und sie besser zu machen hat geschadet.* Was nach Abzug des Zuschlags
+bleibt, ist der Probenfehler, und der wächst tatsächlich mit dem Kit: **0,15 / 0,20 / 0,26 LU** bei
+`mix.perc_level` +1 / +2 / +3 dB, also 0,056 LU je dB. Der Mechanismus ist gemessen: die Probe fährt
+die Lanes des Kits immer **voll** (`plan.perc.layers`), während der echte Kern je nach Form nur einen
+Teil spielt (Seed 31: 2 von 6, 2 von 6, 4 von 5, 2 von 7). Der naheliegende Umbau — die Probe fährt
+**echte Takte** (vier Fenster zu zwei Takten über den Track verteilt, mit `planBar`, und Kick und Bass
+nach `kickBeats`/`bassBeats`/`cutBeats` der Form) — sah auf Seed 31 aus wie ein Gewinn
+(1,56 → 0,75 LU) und war über drei Seeds **schlechter**: 0,91 / 2,08 / 0,78 LU gegen 0,62 / 0,49 /
+0,29. Ein Seed ist keine Stichprobe; der Umbau ist **verworfen und zurückgenommen**, `Composer.cpp`
+ist unverändert.
+
+*Die Änderung.* Die Prüfung zieht den Energie-Zuschlag der gemessenen Sektion von jedem Messwert ab —
+die Formel steht **ausgeschrieben im Test**, nicht aus dem Komponisten geholt, damit eine Änderung auf
+einer der beiden Seiten als Widerspruch auffällt statt sich wegzukürzen. Die Schranke geht von **1,8
+auf 0,8 LU** (dreimal der Messwert am Standard-Kit, und über der 0,62 LU des schlechtesten der drei
+Seeds), und die Prüfung liest **0,26 LU mit, 3,17 LU ohne** den Angleich. Der zweite Teil der Aussage
+— der Angleich nimmt mehr als 1 LU heraus — steht unverändert. **Keine zusätzliche Probe, keine
+zusätzliche Prüfzeit.**
+
+### Gegenprobe (Mutationsrunde)
+
+Acht Fehler einzeln eingebaut, sieben von ihrer Prüfung gefunden:
+
+| Mutation | Wer merkt es |
+|---|---|
+| Kaiser-β zurück auf 8 | Kamm-Prüfung (−1,288 statt −0,115 dB) |
+| vier Phasen statt acht | Kamm-Prüfung (−0,275) **und** Limiter (−0,82 dBTP) |
+| Fenster des linken Kanals um eins verschoben | Limiter, am eigenen Schätzer (−0,97 statt −1,00 dBTP) |
+| der Überspringer schätzt mit dem mittleren Sample statt mit dem Fenster ab | Limiter, am eigenen Schätzer (−0,85 dBTP) |
+| die gespiegelte Hälfte der Historie nicht geschrieben | Limiter (+0,07 dBTP) |
+| `energyGainDb` steiler als die Formel im Test | Pegelangleich (1,04 statt 0,26 LU) |
+| der Pegelangleich vergibt keine Verstärkung | Pegelangleich (3,17 LU, so weit wie ohne ihn) |
+| `prevBetween_` aus dem Maximum des Limiters entfernt | **niemand — und zu Recht:** das Intervall zwischen Sample *i* und *i+1* wird schon bei Sample *i* bewertet, und das gleitende Mittel trägt die Verstärkung über beide. Der Term ist Gürtel und Hosenträger, nicht tragend. |
+
+Zwei dieser Mutationen (Fenster verschoben, Überspringer falsch abgeschätzt) fielen zuerst **nicht**
+auf: gegen die **unabhängige** Messung darf der Limiter nur auf 0,15 dB genau sein — die Genauigkeit
+des Schätzers —, und darin verstecken sich Fehler im *Gebrauch* des Schätzers. Gegen den **eigenen**
+Schätzer hat er gar keine Toleranz: was der Bank meldet, muss die Verstärkung an der Decke gehalten
+haben (0,02 dB). Beide Messungen stehen jetzt in derselben Prüfung; das ist die Lehre dieser Runde für
+jede Prüfung, die eine Toleranz aus der Genauigkeit ihres eigenen Messmittels zieht.
+
+Gesamt: **211 Selbsttest-Prüfungen** in **331 s**, Vektortests 15 von 15 in AVX2, NEON-Shim und
+skalar, Hosttest 101, VST3-Test 30. Der Selbsttest ist durch die längere Bank rund 5 s langsamer; es
+kam keine Probe und kein Render hinzu.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
