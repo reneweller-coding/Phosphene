@@ -17,3 +17,7 @@ Tools/train/cache/
 *.pt
 *.ckpt
 *.npz
+# The wavetable round: the measurement cache of Tools/wt_select.py holds all 2191 rows of Noctuary's
+# library, is 1.4 MB, is rebuilt in 56 s, and only means anything on a machine that has that
+# library. What is committed is the choice it led to (Tools/wt_selection.json) and the pack.
+Tools/wt_measure.json

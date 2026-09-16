@@ -1438,6 +1438,133 @@ denselben Kopf), `docs/MODEL_FORMAT.md`, `Core/include/phos/Model.h`, `Core/src/
 `Core/src/Params.cpp`, `Tests/selftest.cpp`. `build_corpus.py`, `dataset.py`, `train.py` und
 `export.py` sind **nicht** angefasst; was der Bass von ihnen braucht, importiert er.
 
+**16.09.2026, Wavetable-Bibliothek aus Noctuary.** Die sechs Tabellen des Pads standen bis hierher
+als Spektren im Code. Die Regel "keine Samples" betrifft die Sample-*Wiedergabe* und hat die
+Wavetable-Bibliothek des Schwesterprojekts Noctuary nie ausgeschlossen: sie ist die eigene Arbeit des
+Nutzers, Phosphenes `WaveTable.h` stammt ohnehin aus Noctuarys `CycleTable.h` (b60a2fe), und 5.7
+sagt es bereits — die generierten Tabellen aus Noctuarys `Tools/WavetableLib` "kommen mit".
+
+*Die Kandidaten.* `Library/Wavetables` hält **2191 Tabellen** (918 MB) in drei Ordnern: `Classic`
+(640, aus AKWF und WaveEdit Online gebaut, beide CC0 1.0), `Harmonic` (551) und `Ambient` (1000).
+890 Beipackzettel tragen ein `source`-Feld; 640 davon nennen die CC0-Quelle der `Classic`-Tabellen,
+250 (`ambient_sampled`) nennen eine Audiodatei und sind Spektralanalysen **eigenen** Materials des
+Nutzers (Stable Audio 3 medium aus der eigenen Pipeline, Stability Community License, die die
+Ausgaben dem Nutzer zuschreibt — umsatzgedeckelt: kommerzielle Nutzung frei unterhalb einer Million
+US-Dollar Jahresumsatz). Es wurde zuerst mit einer Sperre für diese 250 gerechnet; der Nutzer hat
+korrigiert, und alle 2191 sind zugelassen. **Die Messung hat also nichts ausgeschlossen; zugelassen
+wären mit Sperre 1941 gewesen, ohne sie sind es 2191.**
+
+*Die Auswahl (`Tools/wt_select.py`).* Gemessen wird jede Kandidatentabelle, 26 ms pro Tabelle, 56 s
+für die ganze Bibliothek: spektraler Schwerpunkt je Frame (Median, Spanne), `move` (Median der
+totalen Variation zwischen benachbarten Frames), `travel` (erster gegen letzten Frame), `path`
+(Summe aller Schritte), **`directness = travel / path`**, Grundtonanteil, Ungerade/Gerade, und das
+Aliasing, das die Tabelle nach dem Mipmapping bei C5 und C6 wirklich erzeugt — gemessen mit
+demselben Stufenwahl-, Catmull-Rom- und Guard-Modell wie im C++, bei einer Tonhöhe, die genau auf
+einem Bin der 65536-Analyse liegt, so dass jeder Bin, der kein Vielfaches des Grundtons ist, Alias
+ist und nichts Leckage.
+
+**`directness` ist der Befund der Runde.** Die erste Fassung belohnte nur Bewegung und wählte für
+die Fläche WaveEdit-Bänke mit `move` 0,49 bis 0,93 aus: 64 unverwandte Wellen hintereinander. Das
+ist keine Fahrt, das ist ein Schüttelbecher — unter einem langsamen Positions-LFO stuft so eine
+Tabelle, statt zu gleiten. `travel / path` trennt beides sauber (Dreiecksungleichung: höchstens 1):
+die gewählte `WaveEdit Hyperbol` hat `move` 0,012 bei `travel` 0,748 und damit `directness` 1,00,
+die zuvor gewählte `Sohler35` 0,022. Für das Lead ist `directness` **nicht** gefordert — eine
+Sechzehntelnote ist vorbei, ehe ein Sweep ankommt.
+
+Nach den Toren (Fläche: >= 32 Frames, `travel` >= 0,30, `directness` >= 0,08, Alias C6 <= -60 dB;
+Lead: Schwerpunkt >= 8, Alias C6 <= -60 dB; Arp: Schwerpunkt 4..24, Alias C6 <= -62 dB) bleiben 496
+/ 124 / 173 Kandidaten. Gewählt wird darin **nicht nach Rang, sondern nach Spannweite**: der beste
+Punkt, dann jeweils der, dessen normierter Merkmalsvektor am weitesten von allem bereits Gewählten
+entfernt ist (Gonzalez, "Clustering to minimize the maximum intercluster distance", TCS 38, 1985).
+Zwölf Tabellen, die in einer Ecke des Raums klumpen, wären eine Tabelle zwölfmal.
+
+| # | Lane | Tabelle | Herkunft | Schwerpkt. | Spanne | move | travel | direct | f1 | C5 | C6 | Frames |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 6 | pad | WaveEdit Hyperbol | CC0 | 8,25 | 3,69 | 0,012 | 0,748 | 1,000 | 0,519 | -64,6 | -64,4 | 64 |
+| 7 | pad | Sampled 210 | SA3-Analyse | 2,60 | 0,57 | 0,027 | 0,386 | 0,188 | 0,050 | -91,5 | -79,0 | 64 |
+| 8 | pad | WaveEdit Sohler52 | CC0 | 3,30 | 5,08 | 0,074 | 0,974 | 0,089 | 0,444 | -88,0 | -77,3 | 64 |
+| 9 | pad | Organ 034 | generiert | 5,74 | 0,28 | 0,007 | 0,397 | 0,977 | 0,217 | -80,4 | -66,6 | 64 |
+| 10 | pad | Otmorph 069 | generiert | 2,55 | 0,61 | 0,015 | 0,414 | 0,438 | 0,677 | -80,6 | -76,1 | 64 |
+| 11 | lead | WaveEdit Hienharm | CC0 | 31,76 | 6,52 | 0,926 | 0,000 | 0,000 | 0,030 | -115,8 | -111,5 | 64 |
+| 12 | lead | WaveEdit Junox_ho | CC0 | 17,47 | 1,35 | 0,025 | 0,823 | 0,425 | 0,010 | -69,2 | -69,1 | 64 |
+| 13 | lead | WaveEdit Euclidea | CC0 | 11,08 | 0,74 | 0,629 | 0,934 | 0,021 | 0,004 | -71,9 | -69,4 | 64 |
+| 14 | lead | WaveEdit Sohler49 | CC0 | 38,25 | 6,22 | 0,372 | 0,853 | 0,033 | 0,024 | -80,4 | -74,3 | 64 |
+| 15 | arp | Consonant 129 | generiert | 4,55 | 2,34 | 0,017 | 0,822 | 0,751 | 0,343 | -92,7 | -80,6 | 64 |
+| 16 | arp | AKWF 0004-hollow-01 | CC0 | 14,00 | 5,84 | 0,526 | 0,988 | 0,053 | 0,001 | -102,0 | -88,2 | 37 |
+| 17 | arp | WaveEdit Pd104 | CC0 | 20,50 | 0,26 | 0,047 | 0,309 | 0,112 | 0,000 | -64,9 | -72,2 | 64 |
+
+(C5/C6 sind hier die Werte von Frame 0, die auch der Selbsttest prüft; die Auswahl gattert gegen das
+Maximum über drei Frames.) Der Raum wird gespannt: Schwerpunkt 2,55 bis 38,25, Grundtonanteil 0,000
+bis 0,677, Helligkeitsspanne 0,26 bis 6,52 Oktaven. Fünf der zwölf sind nicht aus `Classic`: drei
+generierte und zwei aus den gemessenen Familien — und die beste Flächen-`directness` nach `Hyperbol`
+hat `Organ 034` (0,977), gefolgt von `Consonant 129` (0,751). Die Korrektur des Koordinators war
+inhaltlich richtig: die gemessenen und generierten Familien gewinnen genau dort, wo eine Fläche
+gleiten soll.
+
+*Das Format: gemessen, nicht geraten.* Die Dateien liegen in zwei Layouts — `Classic` als
+16-Bit-PCM mit `clm `-Chunk, `Harmonic`/`Ambient` als 32-Bit-Float ohne jeden Hinweis auf die
+Framelänge, 512 KB je Tabelle. Statt der `.wav` schreibt `Tools/wt_pack.py` eine **`.phoswt`**
+(Byte-Layout normativ in `Core/include/phos/WaveTableFile.h`, in der Form von `MODEL_FORMAT.md`),
+die genau das trägt, was `buildFromHarmonics()` frisst: die Fourier-Koeffizienten je Frame, unter
+-110 dB des lautesten Harmonischen des Frames abgeschnitten, als int16 gegen **eine Skala je
+Oktavband**.
+
+| Variante | Größe | Rückweg |
+|---|---|---|
+| die `.wav` wie sie liegen | 4 084 784 B | — |
+| float32-Koeffizienten, Schwelle -110 dB | 1 449 796 B | 100,7 dB |
+| int16, **eine** Skala je Frame, -110 dB | 730 036 B | 82,7 dB |
+| **int16, eine Skala je Oktavband, -110 dB (gewählt)** | **750 200 B** | **92,2 dB** |
+
+(Die ausgelieferte Datei misst 750 264 B; der Unterschied ist der Text im Kopf.) Die Oktavbänder
+kosten höchstens zehn Floats je Frame und bringen 10 dB: mit einer Skala je Frame ist der
+Quantisierungsfehler jeder Harmonischen gleich groß, und 512 davon summieren sich weit über den
+Fehler einer einzelnen. 92,2 dB liegen drei dB unter dem 16-Bit-PCM, in dem die `Classic`-Dateien
+ohnehin gespeichert sind. **Geladen** wird die Datei in 111,0 ms gegen 137,1 ms für dieselben zwölf
+Tabellen aus den `.wav` (gemessen im Selbsttest; `PHOS_WT_SOURCE` zeigt auf Noctuarys Bibliothek):
+der Mip-Aufbau — zehn inverse FFTs je Frame — ist der Löwenanteil, die gesparte Analyse macht 19 %.
+Auf der Platte spart der Pack das 5,4-fache, im APK also 3,3 MB.
+
+*Speicher.* 741 Frames × 33 016 Byte = **23,33 MB** nach dem Mip-Aufbau, dazu die 5,3 MB der sechs
+eingebauten Tabellen. Das ist der größte Speicherblock der Engine. Der Quest-Hebel dafür ist
+`setWaveTableFrameLimit(n)`: die Frames werden gleichmäßig ausgedünnt (beide Enden bleiben, wie es
+Noctuarys `CycleTable::build` tut), 32 halbiert Speicher und Ladezeit und vergröbert den Morph —
+dieselbe Art Handel wie das Unisono-Limit, und wie dieses per Vorgabe aus.
+
+*Verdrahtung und Verträglichkeit.* Der `table`-Parameter adressiert beides mit **einem** Index: 0..5
+sind die sechs eingebauten Tabellen, ab 6 die Bibliothek. Namen und Reihenfolge stehen zur Bauzeit
+in `Core/include/phos/WaveTableList.inl` (generiert), so dass `Params.cpp` eine statische Liste
+bleibt. Das ist der Vertrag: `.phosset` und Plugin-Zustand speichern den Index als Zahl
+(`lead.table=1`), also muss "1" weiter Vocal heißen — der Selbsttest prüft es. Fehlt die Datei,
+liefert `waveTable()` die eingebaute Tabelle, die der Deskriptor als Rückfall nennt (nach Lane
+gewählt, nicht Index 0), so dass ein anderswo gespeichertes Set weiter spielt. Der Supersaw hält
+unverändert seinen eigenen Zeiger auf die Classic-Säge (Frame 2); ein eigener Check zeigt, dass
+`pad.table=6` daran bitgleich nichts ändert.
+
+*Nichts ist zurückgegangen.* Standard-Render 90 s, Seed 20260916: **bytegleich** (MD5
+`8ea91a57…`) mit demselben Render aus master 36c1cc8. Supersaw-Aliasing unverändert: C4 -76,7,
+C5 -72,4, C6 -68,9, A6 -61,6 dB bei Detune 1,00 und -80,8 / -76,0 / -73,2 / -61,3 bei 0,55.
+`phos_vectest`, `_neon` und `_scalar` bitgleich (0 abweichende Samples in 56 Schächten und 16
+Kanälen), ctest 4 von 4, Selbsttest 234 Prüfungen. Kosten von acht Wavetable-Pad-Stimmen: vorher
+skalar 4,2 % / AVX2 3,4 %, nachher 4,1 % / 3,4 %; ein voller Render kostet mit einer eingebauten
+Tabelle 7,88–8,11 % und mit einer Bibliothekstabelle 7,82–8,01 % eines Kerns — der Lesevorgang ist
+derselbe, die Tabelle ist ihm gleich.
+
+*Offen.* Das Plugin und die Quest-App rufen `setWaveTableSearchPath()` nicht, weil `Plugin/` und
+`Quest/` dieser Runde nicht gehören; ein Entwicklungsbau findet die Datei über
+`PHOS_SOURCE_DATA_DIR`, ein ausgeliefertes Plugin fällt bis dahin auf die eingebauten Tabellen
+zurück. Ebenfalls offen: `Quality.h` kennt `setWaveTableFrameLimit` noch nicht (dieselbe
+Eigentumsgrenze), und eine Hörprüfung der zwölf Tabellen im Arrangement gab es nicht — diese Runde
+hat gemessen, nicht gehört.
+
+*Dateien.* Neu: `Core/include/phos/WaveTableFile.h`, `Core/src/WaveTableFile.cpp`,
+`Core/include/phos/WaveTableList.inl` (generiert), `Core/data/library.phoswt`,
+`Core/data/CREDITS-wavetables.md`, `Tools/wt_select.py`, `Tools/wt_pack.py`,
+`Tools/wt_selection.json`. Geändert: `Core/include/phos/WaveTable.h` (`kNumWaveTables` heißt jetzt
+`kNumBuiltinWaveTables`), `Core/src/WaveTable.cpp`, `Core/src/Poly.cpp` (zwei Stellen: laden in
+`prepare()`, `waveTable()` statt `builtinWaveTable()` in `update()`), `Core/src/Params.cpp`,
+`Core/CMakeLists.txt`, `Tests/CMakeLists.txt`, `Tests/selftest.cpp`, `.gitignore`.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

@@ -12,6 +12,7 @@ add_library(PhospheneCore STATIC
     src/Acid.cpp
     src/Poly.cpp
     src/WaveTable.cpp
+    src/WaveTableFile.cpp
     src/Reverb.cpp
     src/Dynamics.cpp
     src/Sfx.cpp
