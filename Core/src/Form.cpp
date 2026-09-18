@@ -27,6 +27,7 @@ constexpr uint64_t kSaltSection = 0x5345435449000002ull;
 constexpr uint64_t kSaltGroup   = 0x47524F5550000003ull;
 constexpr uint64_t kSaltSfx     = 0x5346580000000004ull;
 constexpr uint64_t kSaltMode    = 0x4D4F44450000005ull;   ///< the section's borrowed mode (16.09.2026)
+constexpr uint64_t kSaltRide    = 0x5249444500000006ull;   ///< the section's macro ride (16.09.2026)
 
 /** @brief Index drawn from non-negative weights. */
 int drawIndex(Rng& r, const double* w, int n)
@@ -616,6 +617,108 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount)
         }
     }
     std::stable_sort(f.sfx.begin(), f.sfx.end(), [](const SfxEvent& a, const SfxEvent& b) { return a.beat < b.beat; });
+}
+
+/**
+ * @brief The macro automation of a section: the acid's ride and the buildup's send (Form.h).
+ *
+ * **The acid's ride.** A section gets a chain of ramps on @c acid.cutoff and @c acid.resonance whose
+ * period is eight or sixteen bars, drawn from the section's own seed. The shape is asymmetric -- three
+ * quarters of the period climbing, one quarter falling -- because that is what a hand on a filter knob
+ * does and what the shape of a phrase asks for: the same sawtooth that Huron ("Sweet Anticipation",
+ * 2006, ch. 12) describes as the arousal contour of a build, rather than a symmetric wobble that
+ * sounds like an LFO. Resonance travels with the cutoff, a quarter as far, because on a real 303 the
+ * two knobs are turned together and because opening the filter alone loses the squelch the line is
+ * recognised by. A breakdown does the opposite: one dive down over the first half and a return over
+ * the second.
+ *
+ * **Why it cannot fight the accent sweep.** The 303's accent charges a capacitor with kSweepTau =
+ * 150 ms (Acid.cpp), so the accent's own movement lives inside a sixteenth (103 ms at 145 BPM) and is
+ * gone within two; the ride's shortest segment is two bars, three hundred times longer. The two are
+ * separated in *rate*, not in amount, and the measurement that proves it is separated the same way:
+ * `Tools/ref_arrange.py --ride` folds the centroid of every sixteenth onto its bar and reports the
+ * deviation inside a bar and the movement between bars as two numbers.
+ *
+ * **Why the level match survives.** A wide-open filter is louder, and Composer's loudness probe
+ * measures two bars of the track with the *knobs* rather than with the automation, so a ride that
+ * added level on average would bias every track's gain. It does not, and that is a property of the
+ * shape rather than a hope: the ride swings *around* the section's own line, from half the excursion
+ * below it to half above and back, and a raised cosine is antisymmetric about its own midpoint in
+ * value, so every segment contributes a mean of zero however long its two halves are. What is left is
+ * the last segment, which returns to the line rather than below it so that the next section starts
+ * where its own arc says; that leaves a mean of about a twentieth of the excursion -- measured in the
+ * self test, +0.006 normalised on a ride of 0.12, which is 0.04 octaves of cutoff.
+ *
+ * **The buildup's send.** The third strand of the review's snare roll: over the last four bars of a
+ * buildup the percussion's hall send climbs to kRollSend and is cut back to nothing at the section
+ * that follows, which is the drop. Nothing else is needed for the cut -- the pre-drop break already
+ * empties beat 4 (Form.h) -- and a send that is still open into the drop would smear exactly the
+ * transient the whole gesture exists to sharpen.
+ */
+void sectionAutomation(const ParamStore& p, const Section& s, uint64_t seed, double beat,
+                       float base0, float base1, bool knobs, std::vector<ControlEvent>& out)
+{
+    const int ab = p.base(Module::Acid), mb = p.base(Module::Mix);
+    auto push = [&](int id, float value, double at, float len) {
+        ControlEvent c;
+        c.beat = at;
+        c.param = static_cast<int16_t>(id);
+        c.kind = ControlEvent::Kind::Offset;
+        c.value = value;
+        c.length = len;
+        out.push_back(c);
+    };
+    // The percussion's hall send: down at the start of every section, up over the last four bars of a
+    // buildup. Writing the zero unconditionally is what makes the cut at the drop exact -- the drop is
+    // a section like any other and its first event closes the send.
+    push(mb + mix::PercHall, 0.0f, beat, 0.0f);
+    const double bars = static_cast<double>(s.bars);
+    if (s.type == SectionType::Build && !knobs) {
+        const double rollBars = std::min(static_cast<double>(kRollBars), bars);
+        push(mb + mix::PercHall, kRollSend, beat + (bars - rollBars) * kBeatsPerBar,
+             static_cast<float>(rollBars * kBeatsPerBar));
+    }
+    if (knobs) return;
+
+    // The acid's ride. Sections shorter than four bars have nothing to ride on.
+    if (bars < 4.0) return;
+    Rng r;
+    r.seed(mixSeed(seed ^ kSaltRide, 0));
+    const double period = bars >= 32.0 ? (r.uniform() < 0.5f ? 16.0 : 8.0) : std::min(8.0, bars);
+    // Where the straight line of the section's own arc stands at bar b, so the ride is an excursion
+    // from it and not a replacement for it.
+    auto base = [&](double b) { return base0 + (base1 - base0) * static_cast<float>(b / bars); };
+    const float depth = 0.6f + 0.4f * r.uniform();   ///< how hard this section is ridden
+    if (s.type == SectionType::Break) {
+        // The dive: down over the first half, back over the second. A breakdown is where a psytrance
+        // track closes the filter, and the return is what makes the following section open.
+        const double half = bars / 2.0;
+        const float len = static_cast<float>(half * kBeatsPerBar);
+        push(ab + acid::Cutoff, base(half) - depth * kRideDive, beat, len);
+        push(ab + acid::Resonance, -depth * kRideReso, beat, len);
+        push(ab + acid::Cutoff, base1, beat + half * kBeatsPerBar, len);
+        push(ab + acid::Resonance, 0.0f, beat + half * kBeatsPerBar, len);
+        return;
+    }
+    // Everything else rides: climb over three quarters of the period, fall back over one quarter, and
+    // start again. The last segment is dropped when it would run past the end of the section, so the
+    // section always hands the next one the value its own arc promised.
+    const float halfC = 0.5f * depth * kRideCutoff, halfR = 0.5f * depth * kRideReso;
+    for (double start = 0.0; start + period <= bars + 1e-9; start += period) {
+        const double up = 0.75 * period, down = 0.25 * period;
+        // Each event starts its own ramp: the climb begins where the segment begins and takes `up`
+        // bars to reach half the excursion above the line, the fall takes `down` bars to half below.
+        // The last segment falls back onto the line itself, so the section hands the next one exactly
+        // the value its own arc promised.
+        const bool last = start + 2.0 * period > bars + 1e-9;
+        push(ab + acid::Cutoff, base(start + up) + halfC, beat + start * kBeatsPerBar,
+             static_cast<float>(up * kBeatsPerBar));
+        push(ab + acid::Resonance, halfR, beat + start * kBeatsPerBar, static_cast<float>(up * kBeatsPerBar));
+        push(ab + acid::Cutoff, base(start + period) + (last ? 0.0f : -halfC), beat + (start + up) * kBeatsPerBar,
+             static_cast<float>(down * kBeatsPerBar));
+        push(ab + acid::Resonance, last ? 0.0f : -halfR, beat + (start + up) * kBeatsPerBar,
+             static_cast<float>(down * kBeatsPerBar));
+    }
 }
 
 } // namespace phos

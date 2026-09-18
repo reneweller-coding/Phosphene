@@ -827,6 +827,12 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
     // other section holds one value (e0 == e1 there).
     if (e1 != e0) push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e1))) / span, length);
 
+    // The macro ride of this section and the buildup's hall send (Form.h, 16.09.2026). The only line
+    // of this file the arrangement-dynamics round of 16.09.2026 added: everything it writes is made
+    // in Form.cpp out of the section, its seed and the arc values computed just above.
+    sectionAutomation(p, s, plan.sectionSeed[std::clamp(bar.index, 0, kMaxSections - 1)], beat,
+                      cutoffAt(acidBase, 1.0f, e0), cutoffAt(acidBase, 1.0f, e1), knobs, out);
+
     // The pad's trance gate is a property of the section, not of a 16-bar block.
     pushNow(pb + poly::Gate, ControlEvent::Kind::Override, bar.padGate ? 1.0f : 0.0f);
 }

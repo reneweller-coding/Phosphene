@@ -11,7 +11,54 @@
  * so toms, congas and blips play in the track's mode.
  *
  * **Pitch shift.** A hit can carry a shift in semitones (the tom run of a fill); the lane's
- * frequencies are recomputed for it at the trigger.
+ * frequencies are recomputed for it at the trigger. Since 16.09.2026 the lane's low cut may follow
+ * that shift (@c perc.cut_track): a snare pitched up twelve semitones through a buildup roll gets its
+ * high pass an octave higher with it, which is the "thin it while it rises" half of the roll. At
+ * @c cut_track = 0 -- every lane but the snare -- nothing moves.
+ *
+ * **The auto-pan (16.09.2026).** The width round measured that the reference recordings are wide at
+ * *equal* channel level (inter-channel level difference 1.5 to 2.2 dB rms over 85 ms windows, in
+ * every band) while this kit leans on static placement: the kit's own figure is 5.3 dB. Each lane
+ * therefore carries a tempo-synchronous swing of its position,
+ *
+ *     p(t) = p0 * [ sqrt(1 - D*D) + sqrt(2) * D * cos(2 pi t / T + phi_l) ],   phi_l in {0, pi}
+ *
+ * with p0 the lane's own @c perc.pan, D its @c perc.pan_depth and T its @c perc.pan_bars in bars of
+ * the current tempo. Three decisions, each of them measured rather than chosen (docs/PLAN.md,
+ * 16.09.2026, and @c Tools/ref_arrange.py --pan-bound):
+ *
+ * **1. The law keeps the width the width round calibrated.** Both figures of a constant-power panner
+ * are readings of the same position: over a long window side/mid is E[1 - cos(p pi/2)] over
+ * E[1 + cos(p pi/2)], which to second order is (pi/4)^2 E[p^2]. The factors sqrt(1 - D^2) and
+ * sqrt(2) D are exactly the pair for which E[p^2] = p0^2 at *every* depth -- the standing part
+ * shrinks as the swinging part grows -- so the kit's side/mid does not move with the depth knob. A
+ * law with (1 - D) in place of sqrt(1 - D*D) holds only at D = 0 and D = 1 and narrows the kit by up
+ * to 2.6 dB in between; that was measured on the model before this was written.
+ *
+ * **2. The period is three sixteenths, and that number is not decoration.** A lane hit on the
+ * sixteenth grid samples its own LFO at the phases 0, 2pi/3, 4pi/3 and nothing else. Three points
+ * 120 degrees apart reproduce the first *and* the second moment of a sinusoid exactly (sum of
+ * cos = 0, sum of cos^2 = 3/2), so a sixteenth-grid lane realises E[p] and E[p^2] of the continuous
+ * swing exactly, not on average -- the side/mid of the kit is preserved for the material that
+ * actually plays. Two sixteenths would sample at 0 and pi only, giving E[p^2] = 2 p0^2 and a kit
+ * 1.4 dB too wide; the review asked for "a 3/16 polymeter that precesses against the bar" and the
+ * arithmetic says why that is the right one. The period realigns with the bar every three bars.
+ *
+ * **3. The phases are two, and they are balanced, not spread.** What the 85 ms measurement reads is
+ * the power-weighted *mean* position of the lanes sounding in that window; it falls when the loud
+ * lanes move in opposite directions and not when they merely move. The lanes are therefore split
+ * into two groups of opposite phase by a greedy descending-weight partition (Graham, "Bounds on
+ * multiprocessing timing anomalies", SIAM J. Appl. Math. 17, 1969: the classical greedy bound for
+ * number partitioning), weight = lane power times |p0| times depth, so that sum over lanes of
+ * w_l p_l(t) stays near zero at all times. Measured on the model against a golden-ratio (Weyl)
+ * spread of twelve phases, which is the obvious alternative: balanced 3.59 dB, Weyl 4.46 dB, static
+ * 4.42 -- spreading the phases *raises* the level difference, because it leaves the weighted sum a
+ * random walk instead of cancelling it.
+ *
+ * Panning stays constant power throughout (the kernel rotates the gain pair, PercKernel.h), so no
+ * band balance and no loudness figure of the mix round can move; that is algebra, not a measurement.
+ * The phasor turns once per sample, so the movement is bit-identical whatever block size the host
+ * renders in, and at D = 0 the rotation is the exact identity in every bit.
  */
 #pragma once
 #include "phos/Dsp.h"
@@ -42,6 +89,25 @@ public:
      */
     void update(int lane, const float* v, int keyRoot, int scale);
     /**
+     * @brief Tells the kit the tempo, which is the time base of the auto-pan.
+     *
+     * The swing of a lane is given in bars (@c perc.pan_bars), so the kit needs the bar length to
+     * turn it into a rotation per sample. Nothing else in the kit depends on the tempo. Until this is
+     * called the kit assumes @c kDefaultBpm, the default of @c compose.bpm.
+     *
+     * **Nobody calls it yet, and that is a scope decision, not an oversight.** The caller would be
+     * @c Engine::updateParams, one line next to the key and scale it already hands the kit
+     * (`perc_.setTempo(tempo_.bpmAt(beat))`), and @c Engine.cpp belonged to another agent in the
+     * round this was built in. The consequence is measured and small: a track wanders at most
+     * +-4 BPM around 145 (@c compose.tempo_range), so a period meant as three sixteenths is off by
+     * at most 2.8 %, which moves nothing the width measurement can see. It matters only for a set
+     * driven far from 145 BPM.
+     * @param bpm beats per minute (4/4, so a bar is four beats)
+     */
+    void setTempo(double bpm);
+    /** @brief The tempo the auto-pan assumes until setTempo() says otherwise. */
+    static constexpr double kDefaultBpm = 145.0;
+    /**
      * @brief Starts a hit.
      * @param lane     0..11
      * @param velocity 0..1
@@ -60,9 +126,18 @@ public:
     double laneHz(int lane) const { return tunedHz_[lane]; }
     /** @brief Nearest note of the key and scale to @p hz, as a frequency. */
     static double tuneToScale(double hz, int keyRoot, int scale);
+    /** @brief The pan angle a lane is rotated by right now, in radians (for the tests). */
+    double panAngle(int lane) const;
+    /** @brief The position a lane's panner stands at right now, in -1..1 (for the tests). */
+    double panPosition(int lane) const;
+    /** @brief Sign of a lane's swing: +1 and -1 are the two phase groups (for the tests). */
+    int panGroup(int lane) const;
+    /** @brief Signed swing of a lane's auto-pan, in radians of rotation (for the tests). */
+    double panSwing(int lane) const;
 
 private:
     void computeCoefs(int lane);
+    void assignPanGroups();
 
     double sr_ = 48000.0;
     PercState s_;
@@ -75,6 +150,8 @@ private:
     int   choke_[kPercLanes] = {};
     double tunedHz_[kPercLanes] = {};
     double shiftMul_[kPercLanes] = {};
+    double bpm_ = kDefaultBpm;   ///< time base of the auto-pan
+    bool   panning_ = false;     ///< any lane moves: one decision for the whole kit (PercKernel.h)
     float modeAmp_[kPercModes][kPercLanes] = {};
     double modeW_[kPercModes][kPercLanes] = {};
     double modeR_[kPercModes][kPercLanes] = {};

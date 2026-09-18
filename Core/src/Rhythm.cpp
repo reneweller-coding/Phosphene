@@ -361,6 +361,19 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
     // The buildup's snare roll over the last four bars: sixteenths, then thirty-seconds, and in the
     // pre-drop break the roll stops on beat 3, leaving beat 4 to the formant shot alone (Grosz et al.
     // 2025 describe the roll of a PDB on every third sixteenth; the plan asks for 1/16 -> 1/32 -> 1/64).
+    //
+    // **The lift (16.09.2026.)** A roll that only gets faster and louder does not lift; what a
+    // psytrance buildup does over it is raise the snare's pitch continuously towards an octave and
+    // thin it while it rises. Both are written here, into the note, and not as per-hit randomness:
+    // the shift is a function of where the hit sits in the four bars, so the same bar always lifts the
+    // same way, the MIDI export carries it, and a listener hears a single line rather than a jitter.
+    // The thinning is the lane's own business -- @c perc.cut_track ties its high pass to this shift
+    // (Perc.h) -- so nothing here has to know how the snare is built.
+    //
+    // Why a rising pitch reads as rising tension at all: Huron ("Sweet Anticipation", 2006, ch. 12)
+    // and Juslin and Laukka ("Communication of emotions in vocal expression", Psych. Bull. 2003)
+    // collect the evidence that rising pitch together with rising loudness and rate is the
+    // cross-cultural signal of increasing arousal, which is exactly what a buildup is for.
     if (spec.rollBar >= 0 && snare >= 0) {
         const int r = std::clamp(spec.rollBar, 0, 3);
         const double step = r == 0 ? 0.5 : (r == 1 ? 0.25 : 0.125);
@@ -369,7 +382,10 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
         int k = 0;
         for (double b = 0.0; b <= last + 1e-9; b += step, ++k) {
             const float vel = std::clamp(0.35f + 0.3f * static_cast<float>(r) + 0.02f * static_cast<float>(k), 0.2f, 1.0f);
-            emit(snare, b, vel, 0);
+            // Position within the whole four-bar roll, 0 at its first hit and 1 at the drop. The ramp
+            // is over the roll, not over the bar, so the four bars form one gesture.
+            const double u = (static_cast<double>(r) + b / kBeatsPerBar) / 4.0;
+            emit(snare, b, vel, static_cast<int>(std::lround(kRollSemitones * u)));
         }
     }
 }
