@@ -166,6 +166,17 @@ private:
     float percGain_ = 1.0f;
     std::vector<float> percL_, percR_;
     int pattern_ = 0;
+    /**
+     * @brief The first sounding bass slot of the current beat in beats, or <= 0 for "derive it".
+     *
+     * Set by a `ControlEvent::Kind::BassSlot` and read by firstSlotSeconds(). While it is <= 0 --
+     * which it is on every bar the composer plays from a pattern family, because such a bar sends a
+     * clearing event of -1 -- the engine derives the slot from `firstBassSlot(pattern_)` exactly as
+     * it did before 16.09.2026, so a Pattern render is bit-identical to every earlier one. That
+     * clearing event is what lets `compose.bass_rhythm` be switched back *during* playback: without
+     * it the engine could not tell "nothing sent yet" from "nothing sent any more".
+     */
+    double slotBeats_ = -1.0;
     int lockMode_ = 2;
     double bassPhase_ = 0.0;               ///< fundamental phase for the next bass note
     bool kickMute_ = false, bassMute_ = false;

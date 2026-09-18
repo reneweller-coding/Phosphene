@@ -71,7 +71,11 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              BassModel,
              // 16.09.2026: modal interchange over the tonic pedal (Form.h). Off reproduces every
              // note the program played before that date, which is what the self test measures against.
-             ModalInterchange, Count };
+             ModalInterchange,
+             // 16.09.2026, bass rhythm round: where the *onset pattern* of a bar comes from -- the
+             // five pattern families of Patterns.h, or a bar drawn from the corpus onset model
+             // (Corpus.h, BassRhythm). Pattern is the default and reproduces every note bit for bit.
+             BassRhythm, Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
 namespace perc {
@@ -169,6 +173,7 @@ extern const char* const kKickPatternNames[];   ///< names of compose.kick_patte
 extern const char* const kBassPatternNames[];   ///< names of compose.bass_pattern
 extern const char* const kMelodyModelNames[];   ///< names of compose.melody_model (Model.h)
 extern const char* const kBassModelNames[];     ///< names of compose.bass_model (Model.h)
+extern const char* const kBassRhythmNames[];    ///< names of compose.bass_rhythm (Corpus.h)
 
 /**
  * @brief All parameter values of one engine, lock-free readable from the audio thread.

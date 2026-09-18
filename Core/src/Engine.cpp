@@ -93,6 +93,7 @@ void Engine::reset()
     samples_ = 0;
     chunkBeat_ = 0.0;
     chunkPos_ = 0;
+    slotBeats_ = -1.0;
     beatsPerSample_ = 0.0;
     beatNow_.store(0.0, std::memory_order_relaxed);
     kick_.reset();
@@ -139,6 +140,15 @@ void Engine::advanceRamps()
 
 void Engine::dispatchControl(const ControlEvent& e)
 {
+    if (e.kind == ControlEvent::Kind::BassSlot) {
+        // The composer says where the first bass note of this beat is (Score.h). It arrives at the
+        // beat itself, before that beat's kick, because controls are dispatched before notes at
+        // equal beats -- so Kick::constrain and setPhaseTarget below see the gap this kick really
+        // has, and bassPhase_ is the kick's phase at the instant the note really starts.
+        slotBeats_ = static_cast<double>(e.value);
+        applyParams();
+        return;
+    }
     if (e.param < 0 || e.param >= params_.count()) return;
     Variation& v = var_[static_cast<size_t>(e.param)];
     if (e.kind == ControlEvent::Kind::Override) {
@@ -157,7 +167,10 @@ void Engine::dispatchControl(const ControlEvent& e)
 
 double Engine::firstSlotSeconds() const
 {
-    return firstBassSlot(pattern_) / (beatsPerSample_ * sr_);
+    // The slot the composer sent for this beat, or -- while none has been sent -- the one the bass
+    // pattern family implies, which is what this function always returned (Engine.h, slotBeats_).
+    const double beats = slotBeats_ > 0.0 ? slotBeats_ : firstBassSlot(pattern_);
+    return beats / (beatsPerSample_ * sr_);
 }
 
 void Engine::applyParams()
