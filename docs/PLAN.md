@@ -3918,6 +3918,43 @@ und `Core/src/Rhythm.cpp` (`kRollSemitones`, die Rampe der Rolle), `Core/include
 die `sectionAutomation()` ruft — ohne sie erreicht die Automation den Render nicht, und alles, was sie
 schreibt, entsteht in `Form.cpp`.
 
+**18.09.2026, Merge-Integrationsfehler: `Conductor::pump` verschluckte fällige Bass-Slot-Events.**
+Nach dem Merge von `bass-rhythm` und `arrange-dynamics` schlug `testBassRhythm` — „the kick phase still
+meets the bass" — real fehl (142 BPM: +24,5° statt +10,8°; 148 BPM: +40,8° statt −2,8°; beide Bassrunden
+für sich allein waren sauber grün). Ursache lag in keiner der beiden Runden selbst, sondern in ihrer
+Kombination: `sectionAutomation()` (Arrangement-Dynamik) datiert Ride-Keyframes bis zu 16 Takte in die
+Zukunft, alle auf einmal im ersten Takt der Sektion. `Conductor::pump` (`Composer.cpp`) komponierte bis
+dahin **einen Takt auf einmal** und schob dessen gesamten Kontroll-Event-Stapel sofort vollständig in die
+Engine, bevor der nächste Takt überhaupt komponiert war — ein Ride-Event mit Beat +24 lief damit den
+Bass-Slot-Events der Takte 1–5 (Beat +4 bis +23) voraus, obwohl deren Zeitstempel kleiner sind. Die Engine
+konsumiert die Warteschlange strikt zeitlich aufsteigend; ein verfrüht eingetroffenes Zukunfts-Ereignis
+blockiert alles dahinter Wartende bis zu seiner eigenen Fälligkeit — genau der gemessene, gemäßigte
+Phasenfehler, kein Totalausfall.
+
+**Fix, zwei Stellen:** `Composer::composeBars` sortierte bisher nur die neu angehängten Ereignisse eines
+Aufrufs (`stable_sort` über `[ctlStart, end())`), nicht global; jetzt folgt ein `std::inplace_merge` gegen
+den bereits sortierten Präfix, für `out` (Noten) ebenso wie für `controls`. Das allein genügte nicht, weil
+`Conductor::pump` die Puffer nach jedem Takt komplett leerte und zurücksetzte (`ctlStart` damit immer 0) —
+das eigentliche Gedächtnis fehlte. `pump` akkumuliert die Puffer jetzt takteübergreifend und gibt nur noch
+Ereignisse frei, deren Beat **echt kleiner** ist als der Beginn des nächsten, noch nicht komponierten
+Takts (`safeBeat = nextBar_ * kBeatsPerBar`) — der einzige Punkt, vor dem garantiert nichts Kleineres mehr
+nachkommen kann, weil jeder Takt ausschließlich Ereignisse ab seinem eigenen `barBeat` erzeugt. Bereits
+ausgelieferte Pufferanteile werden ab 256 Einträgen abgeschnitten, damit ein langer Render nicht
+unbegrenzt wächst.
+
+**Bestätigt:** `testBassRhythm` wieder exakt bei +10,8°/−2,8° (25/25); voller Selbsttest 333/0 (vorher
+332/1 mit demselben Fehlschlag); alle drei Vektorpfade 17/17; `ctest` komplett grün inklusive Hosttest.
+Betroffen ist die reale Wiedergabe (Standalone, VST3, Quest), nicht nur der Test: Jeder Track mit einer
+Build- oder Drop-Sektion ab vier Takten durchläuft `sectionAutomation` und hätte denselben Effekt gehabt,
+sobald `compose.bass_rhythm=Corpus` lief.
+
+**Why:** Zwei für sich korrekte und einzeln getestete Runden konnten kombiniert eine reale Zeitordnungs-
+Garantie brechen, die keine der beiden Aufgabenstellungen kannte; das gehört dokumentiert, damit eine
+künftige Runde, die ebenfalls weit vorausdatierte Kontroll-Events einführt, das Muster wiedererkennt.
+**How to apply:** Jede Stelle, die Kontroll- oder Notenereignisse mit einem Beat schreibt, der über den
+eigenen Takt hinausreicht, braucht entweder denselben `safeBeat`-Schutz oder eine explizite Prüfung, dass
+`Conductor::pump` sie nicht vorzeitig ausliefert. Siehe [[phosphene-round-phase8]] (Merge-Fallen).
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

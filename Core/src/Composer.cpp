@@ -1335,9 +1335,24 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         transitionBar(p, ti, inTrack, bar, out);
     }
     std::stable_sort(out.begin() + static_cast<long>(noteStart), out.end(), noteLess);
-    if (controls != nullptr)
-        std::stable_sort(controls->begin() + static_cast<long>(ctlStart), controls->end(),
-                         [](const ControlEvent& a, const ControlEvent& b) { return a.beat < b.beat; });
+    std::inplace_merge(out.begin(), out.begin() + static_cast<long>(noteStart), out.end(), noteLess);
+    if (controls != nullptr) {
+        // Sorting only this call's new slice is not enough: `controls` accumulates across repeated
+        // composeBars calls (Conductor::pump chunks a render into several), and the caller consumes it
+        // as one beat-ordered stream. 18.09.2026: sectionAutomation (Form.h) can append a ride keyframe
+        // whose beat lies many bars ahead, inside the FIRST chunk that enters its section -- sorted
+        // correctly within that chunk's own slice, but still ahead in the vector of the near-term
+        // events a LATER chunk appends for the bars in between. Conductor::pump and the engine's control
+        // queue both assume the stream they are handed is globally non-decreasing in beat, so that one
+        // future-dated event stalls everything queued behind it until its own beat finally arrives --
+        // measured as the kick losing its lock to a freely drawn bass by tens of degrees (testBassRhythm,
+        // "the kick phase still meets the bass..."). The prefix before ctlStart is the invariant this
+        // function maintains call to call; merging restores it in the one case that can break it,
+        // without re-touching the notes this file already sorts and hands over per call the same way.
+        auto beatLess = [](const ControlEvent& a, const ControlEvent& b) { return a.beat < b.beat; };
+        std::stable_sort(controls->begin() + static_cast<long>(ctlStart), controls->end(), beatLess);
+        std::inplace_merge(controls->begin(), controls->begin() + static_cast<long>(ctlStart), controls->end(), beatLess);
+    }
 }
 
 Conductor::Conductor(Engine& engine, const Composer& composer) : engine_(engine), composer_(composer) {}
@@ -1354,19 +1369,31 @@ void Conductor::pump(const ParamStore& params, double horizonBeats, std::vector<
 {
     const double target = engine_.beatPosition() + horizonBeats;
     for (;;) {
-        while (controlPos_ < controls_.size()) {
+        // sectionAutomation (Form.h, 18.09.2026) can date a control event many bars into its section's
+        // future, all pushed in the one bar that opens the section -- composeBars keeps everything it
+        // has produced so far sorted (see the merge there), but a bar this Conductor has not composed
+        // yet can still turn out to owe an event of its own an EARLIER beat than one already sitting in
+        // the buffer from a section-opening bar behind it. The one point before which nothing still to
+        // come can ever land is the start of that next, uncomposed bar, so only events strictly before
+        // it may be handed to the engine: engine_.pushControl feeds a queue the engine drains assuming a
+        // non-decreasing stream, and one early arrival stalls everything queued behind it until its own
+        // beat finally comes around -- measured as the kick losing its lock to a freely drawn bass by
+        // tens of degrees (testBassRhythm, "the kick phase still meets the bass...").
+        const double safeBeat = static_cast<double>(nextBar_) * kBeatsPerBar;
+        while (controlPos_ < controls_.size() && controls_[controlPos_].beat < safeBeat) {
             if (!engine_.pushControl(controls_[controlPos_])) return;
             ++controlPos_;
         }
-        while (notePos_ < notes_.size()) {
+        while (notePos_ < notes_.size() && notes_[notePos_].beat < safeBeat) {
             if (!engine_.pushEvent(notes_[notePos_])) return;
             if (record != nullptr) record->push_back(notes_[notePos_]);
             ++notePos_;
         }
-        if (static_cast<double>(nextBar_) * kBeatsPerBar >= target) return;
-        notes_.clear();
-        controls_.clear();
-        notePos_ = controlPos_ = 0;
+        // Reclaim the drained prefix so a long render does not grow these buffers without bound; the
+        // threshold is well above a bar's usual handful of events, so this runs rarely.
+        if (controlPos_ > 256) { controls_.erase(controls_.begin(), controls_.begin() + static_cast<long>(controlPos_)); controlPos_ = 0; }
+        if (notePos_ > 256) { notes_.erase(notes_.begin(), notes_.begin() + static_cast<long>(notePos_)); notePos_ = 0; }
+        if (safeBeat >= target) return;
         composer_.composeBars(params, nextBar_, 1, notes_, &controls_);
         ++nextBar_;
     }
