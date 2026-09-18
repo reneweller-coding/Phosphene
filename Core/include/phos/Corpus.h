@@ -23,8 +23,11 @@
  * Constraints 16(2), 2011). With an order-2 model the state is the pair of the last two pitches.
  */
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <vector>
+
+#include "phos/Patterns.h"
 
 namespace phos {
 
@@ -100,6 +103,161 @@ bool sampleConstrained(const Model& model, const std::vector<std::vector<uint8_t
 
 /** @brief Chord-root succession probabilities (with add-one smoothing over the roots seen at all). */
 double chordTransition(int fromRel, int toRel);
+
+// ------------------------------------------------------------------------------------ bass rhythm
+
+/** @brief One entry of the bass bar-pattern lookup: a 16-bit onset mask and its count. */
+struct CorpusBassBar { uint16_t mask; uint32_t count; };
+/** @brief One context of the parametric bass onset chain: a packed key and its two outcomes. */
+struct CorpusBassStep { uint16_t key; uint32_t miss; uint32_t hit; };
+
+extern const CorpusBassBar* const kCorpusBassBars;   ///< bar patterns, sorted by mask
+extern const int kNumCorpusBassBars;                 ///< entries of kCorpusBassBars
+extern const uint32_t kCorpusBassBarTotal;           ///< bars the lookup was counted on
+extern const CorpusBassStep* const kCorpusBassSteps; ///< chain contexts, sorted by key
+extern const int kNumCorpusBassSteps;                ///< entries of kCorpusBassSteps
+extern const int kCorpusBassMixPerMille;             ///< weight of the lookup in the mixture, per mille
+extern const int kCorpusBassHomePerMille;            ///< share of corpus bars equal to their line's most common bar
+extern const int kCorpusBassRepeatPerMille;          ///< share of corpus bars equal to the bar before them
+extern const int kCorpusBassLines;                   ///< bass lines the tables were counted on
+extern const int kCorpusBassTrainBars;               ///< bars the tables were counted on
+
+/**
+ * @brief The learned bass onset model: a bar-pattern lookup mixed with a parametric chain.
+ *
+ * **Why a mixture, and why this one.** Two candidates were measured against the same held-out split
+ * of the bass corpus (`Tools/corpus/bass_rhythm.py`, and the table in docs/PLAN.md, block
+ * "Bass-Rhythmus: die 61,5-Prozent-Lücke"): a lookup over 16-bit bar patterns, which is sharp on the
+ * bars it has seen and blind to the rest, and a parametric chain
+ * `P(onset_s | s, s-1, s-2, s-3, s-4, s-8)`, which can produce every bar and can memorise none. They
+ * fail on disjoint sets of bars, so the mixture
+ *
+ *     P(bar) = w P_lookup(bar) + (1 - w) P_chain(bar)
+ *
+ * beats both, and it is exactly as easy to sample as its parts: one coin, then either a stored
+ * pattern drawn by its count or sixteen Bernoulli steps. `w` was fitted on the validation split and
+ * is stored as `kCorpusBassMixPerMille`.
+ *
+ * The chain is smoothed with the Krichevsky-Trofimov estimator -- add one half per binary outcome,
+ * the minimax-optimal add-constant for a binary alphabet (Krichevsky and Trofimov, "The performance
+ * of universal encoding", IEEE Trans. Inf. Theory 27(2), 1981) -- so an unseen context costs a
+ * bounded number of bits instead of an infinity, and so every clean bar has a positive probability.
+ * The five neighbours are the three sixteenths before the step and the same step one and two beats
+ * earlier: the periodicities a rolling psytrance figure is built from.
+ *
+ * **The kick step is not in the alphabet.** `Kick::constrainTail` and `Kick::setPhaseTarget` both
+ * switch themselves off when the slot they are given is zero or less (Core/src/Kick.cpp), so a bass
+ * onset landing exactly on a kick would silently disable the tail limit and the phase lock -- and a
+ * bass fundamental starting together with the kick is the masking case the depth rule of PLAN 5.2
+ * exists to avoid. Both tables are therefore counted on, and the model only ever produces, bars with
+ * no onset on steps 0, 4, 8 and 12. What that costs is measured rather than assumed: **64.4 %** of
+ * the 11 507 corpus bars are already in that subspace, and inside it the held-out cross-entropy of
+ * this mixture is 4.993 bit/bar against 5.458 for the lookup alone and 5.201 for the chain alone.
+ */
+class BassRhythm {
+public:
+    static constexpr int kSteps = 16;          ///< sixteenths in a bar
+    static constexpr int kContext = 5;         ///< neighbours in a chain context
+    /** @brief Step offsets of a chain context: three sixteenths back, one beat back, two beats back. */
+    static constexpr int kContextDelta[kContext] = { 1, 2, 3, 4, 8 };
+
+    /** @brief True when no onset sits on a kick step -- the subspace the model lives in. */
+    static bool clean(unsigned mask) { return (mask & 0x1111u) == 0; }
+
+    /**
+     * @brief The onset mask of one of the five pattern families of Patterns.h.
+     *
+     * The families are the prior the drawn rhythm strays from (`Composer::makeBassRhythm`), so they
+     * have to live in the same alphabet as the drawn bars. Three of them do exactly: Rolling is
+     * 0xEEEE, Gallop 0xCCCC, Offbeat 0x4444. Skip is 0xAAAA, and the Triplet family has no image on
+     * the sixteenth grid at all -- its 1/3 and 2/3 round to the first and the third sixteenth, which
+     * is the Skip mask. That is the same approximation `Composer::bassSlotStep` already makes when it
+     * tells the pitch model where a triplet bass note sits, and it is the only one available: the
+     * onset model, its corpus and the control event of Score.h all live on sixteenths. A track whose
+     * knob says Triplet and whose rhythm knob says Corpus therefore plays Skip, not triplets, which
+     * `kBassRhythmNames` (Params.cpp) says in as many words.
+     */
+    static unsigned familyMask(int pattern);
+
+    /** @brief Sixteenth of the first onset of @p mask at or after @p step, or -1. */
+    static int firstOnsetFrom(unsigned mask, int step)
+    {
+        for (int s = step; s < kSteps; ++s) if ((mask >> s) & 1u) return s;
+        return -1;
+    }
+
+    /**
+     * @brief Sixteenths from the onset on @p step to the end of its note: the next onset or the next
+     *        kick, whichever comes first.
+     *
+     * The second half of that rule is the genre's kick-bass interlock and not a detail: the pattern
+     * families end every note before the next kick (`Composer::composeBars` passes `1.0` as the last
+     * slot's successor), and the depth rule of PLAN 5.2 -- below 140 Hz only kick and bass -- is a
+     * statement about a band that two overlapping sources share badly. A drawn rhythm keeps it, so
+     * the shortest gap on a sixteenth grid is one sixteenth, exactly the Rolling family's.
+     */
+    static int noteSpan(unsigned mask, int step)
+    {
+        const int kick = (step / 4 + 1) * 4;
+        const int next = firstOnsetFrom(mask, step + 1);
+        return (next >= 0 && next < kick ? next : kick) - step;
+    }
+
+    /** @brief Shortest note span of a bar in sixteenths, or @p none for a bar without onsets. */
+    static int shortestSpan(unsigned mask, int none = 4)
+    {
+        int best = none;
+        for (int s = 0; s < kSteps; ++s) if ((mask >> s) & 1u) best = std::min(best, noteSpan(mask, s));
+        return best;
+    }
+    /** @brief Packed key of the chain context of @p step in @p mask (see Tools/corpus/bass_rhythm.py). */
+    static int contextKey(unsigned mask, int step);
+    /** @brief P(onset at @p step | the earlier steps of @p mask) under the smoothed chain. */
+    static double stepProbability(unsigned mask, int step);
+    /** @brief log2 P(bar) under the chain alone. */
+    static double chainLogProbability(unsigned mask);
+    /** @brief P(bar) under the mixture; zero for a bar with an onset on a kick step. */
+    static double barProbability(unsigned mask);
+    /** @brief The mixture weight of the lookup. */
+    static double mixWeight() { return kCorpusBassMixPerMille / 1000.0; }
+    /** @brief The share of a line's bars that repeat its most common bar (corpus, for the phrase). */
+    static double homeShare() { return kCorpusBassHomePerMille / 1000.0; }
+
+    /**
+     * @brief Draws one bar from the mixture.
+     * @tparam Uniform anything callable returning a double in [0, 1)
+     * @return a 16-bit onset mask with no onset on a kick step and at least one onset
+     *
+     * A bar with no onset at all is redrawn up to @p kEmptyRetries times and then replaced by the
+     * rolling family, because an empty bar drawn as a track's home figure would silence the bass for
+     * the whole track. The corpus does play empty bars -- 3.2 % of all its bars, 5.4 % of the clean
+     * ones, and they are the second commonest entry of the lookup -- but it plays them inside a
+     * line, which is what the form's per-beat mask already does here.
+     */
+    template <class Uniform>
+    static unsigned draw(Uniform&& uniform)
+    {
+        constexpr int kEmptyRetries = 8;
+        for (int attempt = 0; attempt < kEmptyRetries; ++attempt) {
+            unsigned mask = 0;
+            if (uniform() < mixWeight() && kNumCorpusBassBars > 0) {
+                double x = uniform() * static_cast<double>(kCorpusBassBarTotal);
+                mask = kCorpusBassBars[kNumCorpusBassBars - 1].mask;
+                for (int i = 0; i < kNumCorpusBassBars; ++i) {
+                    if (x < kCorpusBassBars[i].count) { mask = kCorpusBassBars[i].mask; break; }
+                    x -= kCorpusBassBars[i].count;
+                }
+            } else {
+                for (int s = 0; s < kSteps; ++s) {
+                    if (s % 4 == 0) continue;               // never on the kick
+                    if (uniform() < stepProbability(mask, s)) mask |= 1u << s;
+                }
+            }
+            if (mask != 0) return mask;
+        }
+        return 0xEEEEu;   // .xxx.xxx.xxx.xxx -- the rolling family, see Patterns.h
+    }
+};
 
 } // namespace phos
 

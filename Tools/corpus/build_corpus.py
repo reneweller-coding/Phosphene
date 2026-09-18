@@ -410,11 +410,47 @@ def write_tables(stats, out):
         nbi, ntri = max(1, len(st["bi"])), max(1, len(st["tri"]))
         lines.append(f"    {{ \"{r}\", {st['files']}, k_{r}_uni, k_{r}_bi, {nbi}, k_{r}_tri, {ntri}, k_{r}_onset, k_{r}_accent, k_{r}_slide, k_{r}_length, k_{r}_ambitus }},")
     lines.append("};")
+    lines += bass_rhythm_lines(stats.get("root", "M:/Midi"))
     lines.append("")
     lines.append("} // namespace phos")
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lines) + "\n")
     print("written", out)
+
+
+#: First line of the generated bass-rhythm block; :func:`splice_bass_rhythm` cuts the file here.
+BASS_MARKER = "// ---------------------------------------------------------------------------- bass rhythm"
+
+
+def bass_rhythm_lines(root):
+    """The bass onset model's block, from :mod:`bass_rhythm`.
+
+    Imported inside the call and not at module level: ``bass_rhythm`` reaches the bass corpus through
+    ``Tools/train/bass.py``, which imports ``dataset``, which imports *this* module.
+    """
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import bass_rhythm                                         # noqa: E402
+    return bass_rhythm.emit_lines(root)
+
+
+def splice_bass_rhythm(out, root):
+    """Rewrites only the bass-rhythm block of an existing ``CorpusTables.cpp``.
+
+    The melodic tables above it take a full walk of the MIDI packs to rebuild and must not move when
+    only the bass onset model is refitted, so everything from :data:`BASS_MARKER` to the closing
+    namespace is replaced and nothing above it is touched. Writing the whole file (``--out`` without
+    ``--bass-rhythm-only``) emits the same block through the same function, so the two routes agree
+    line for line.
+    """
+    with open(out, "r", encoding="utf-8") as fh:
+        text = fh.read()
+    head = text.split(BASS_MARKER)[0].rstrip("\n")
+    if head.endswith("} // namespace phos"):
+        head = head[:-len("} // namespace phos")].rstrip("\n")
+    body = "\n".join(bass_rhythm_lines(root))
+    with open(out, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(head + body + "\n\n} // namespace phos\n")
+    print("bass rhythm block written into", out)
 
 
 # ------------------------------------------------------------------------------------------------ memorisation
@@ -490,8 +526,17 @@ def main():
     ap.add_argument("--out")
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--memorisation")
+    ap.add_argument("--bass-rhythm-only", action="store_true",
+                    help="refit only the bass onset model and splice it into --out")
     a = ap.parse_args()
+    if a.bass_rhythm_only:
+        if not a.out:
+            print("--bass-rhythm-only needs --out", file=sys.stderr)
+            return 2
+        splice_bass_rhythm(a.out, a.root)
+        return 0
     stats = analyse(a.root, a.report or bool(a.out))
+    stats["root"] = a.root
     if a.out:
         write_tables(stats, a.out)
     if a.memorisation:

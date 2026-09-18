@@ -164,6 +164,18 @@ struct TrackPlan {
     bool   bassNeural = false;                       ///< whether the phrases below were drawn
     int8_t bassRel[2][kBassPhraseSlots] = {};        ///< [primary, secondary][slot] semitones from the root
     /** @} */
+    /** @name The drawn bass rhythm (compose.bass_rhythm = Corpus; Corpus.h, BassRhythm)
+     *  Two rhythm phrases of kBassPhraseBars bars, one for the track's primary and one for its
+     *  secondary slot, drawn once per track from the track's own seed. Each entry is a 16-bit onset
+     *  mask over the sixteenths of a bar, never with an onset on a kick step. `bassRhythm` is false
+     *  whenever the knob says Pattern, and then nothing here is read and the bass plays the five
+     *  pattern families of Patterns.h exactly as it always did -- bit for bit, which the self test
+     *  section `bassRhythm` measures against a render made with the knob off.
+     *  @{ */
+    bool     bassRhythm = false;                       ///< whether the masks below are used
+    uint16_t bassMask[2][kBassPhraseBars] = {};        ///< [primary, secondary][bar in phrase] onset mask
+    float    bassShortestSlot = 0.25f;                 ///< tightest note span in the two phrases, in beats
+    /** @} */
 };
 
 /** @brief Composes the set from a seed and the knobs. */
@@ -233,6 +245,8 @@ private:
     TrackPlan makeTrack(const ParamStore& params, int index) const;
     /** @brief Draws the track's two learned bass phrases, or leaves the plan on the pattern families. */
     void makeBassPhrases(const ParamStore& params, TrackPlan& plan) const;
+    /** @brief Draws the track's two bass *rhythm* phrases, or leaves the plan on the pattern families. */
+    void makeBassRhythm(const ParamStore& params, TrackPlan& plan) const;
     const TrackWalk& walkAt(const ParamStore& params, int index) const;
     void trackStartControls(const ParamStore& params, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out) const;
     void arcControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, bool ramp, std::vector<ControlEvent>& out) const;

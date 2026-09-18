@@ -31,6 +31,17 @@ const char* const kMelodyModelNames[] = { "Markov", "Neural" };
 // predicts real basslines far better, which is not the same as saying it sounds better -- and
 // Neural falls back to Pattern when no weight file is there.
 const char* const kBassModelNames[] = { "Pattern", "Neural" };
+// 16.09.2026, bass rhythm round: where the onset pattern of a bar comes from. "Pattern" is the five
+// hard-wired families of Patterns.h, which is what the program has always played and what every
+// earlier render stays bit-identical to; "Corpus" draws the bar from the onset model of Corpus.h --
+// a bar-pattern lookup mixed with a parametric chain, both counted on the local bass corpus --
+// around the family as the track's home figure, and how far it strays is compose.bass_variation
+// times the style profile's hatDensity. Two consequences worth knowing before turning it on: a bar
+// drawn this way never puts a note on a kick step, and the Triplet family has no image on the
+// sixteenth grid, so a Triplet track plays the Skip mask under "Corpus".
+// Pattern stays the default for the reason bass_model does: the held-out measurement says the
+// corpus model predicts real bass bars far better, which is not the same as saying it sounds better.
+const char* const kBassRhythmNames[] = { "Pattern", "Corpus" };
 const char* const kPercRoleNames[kNumPercRoles] = { "Closed Hat", "Open Hat", "Ride", "Crash", "Clap", "Snare", "Rim",
                                                     "Shaker", "Tom", "Conga", "Zap", "Blip" };
 
@@ -82,6 +93,9 @@ const ParamDesc kComposeParams[compose::Count] = {
     // -- Dorian in the groove, Phrygian in the drive, Phrygian dominant at the peak (Form.h). On by
     // default because that is what the genre does; the bass does not move with it either way.
     { "modal_interchange","Modal Interchange","",     0.0f,   1.0f,   1.0f, Curve::Toggle },
+    // 16.09.2026, bass rhythm round: the pattern families or the corpus onset model behind the bass
+    // *rhythm*. Appended, so no parameter above it moves; Pattern is the default.
+    { "bass_rhythm",     "Bass Rhythm",     "",      0.0f,   1.0f,   0.0f, Curve::Choice, kBassRhythmNames },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };

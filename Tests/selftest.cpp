@@ -1501,6 +1501,441 @@ void testPhaseLock()
     check(worstSpread < 0.05, "bass onset phase constant from beat to beat (sub-sample onsets)", fmt("spread %.3f degrees", worstSpread));
 }
 
+// ---------------------------------------------------------------------------------------------
+// The drawn bass rhythm (compose.bass_rhythm = Corpus)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * @brief The phase of the kick against the bass at the **first onset of every beat**, with a rhythm
+ *        whose first onset is a different sixteenth from beat to beat.
+ *
+ * testPhaseLock measures the same thing for the pattern families and can assume the onset is always
+ * a quarter beat after the kick; here the instant moves, which is the whole point of the round, so
+ * the onsets are read from the composer's own note list and each one is fitted against a reference
+ * sine at its own pitch. "Bass follows kick" is the mode measured because there the kick is not
+ * retrimmed for a phase target (`Kick::setPhaseTarget(0, 0)` in `Engine::applyParams`), so one kick
+ * model describes every beat and the kick's own phase at an arbitrary instant can be predicted.
+ *
+ * The measurement carries a bias of its own that has nothing to do with the lock: the fit runs over
+ * two periods of the note's fundamental, during which the bass's own filter envelope moves, and how
+ * far it moves depends on how long the note is -- which under a drawn rhythm is no longer the same
+ * for every note. The caller therefore runs the same function over the **pattern families** as well
+ * and compares the two, instead of holding the free rhythm against an absolute bound that would be
+ * measuring the envelope as much as the lock.
+ *
+ * @param bpm           tempo
+ * @param rhythm        "Pattern" or "Corpus" for compose.bass_rhythm
+ * @param onsets        receives how many onsets were measured
+ * @param distinctSlots receives how many different sixteenths carried the first onset of a beat
+ * @return the mean of kick phase minus bass phase at the onsets, degrees
+ */
+double measureFreeLock(double bpm, const char* rhythm, int& onsets, int& distinctSlots)
+{
+    const double sr = 48000.0;
+    Kick kickModel;
+    int coreBeat = 0;
+    uint64_t seed = 1;
+    std::vector<NoteEvent> notes;
+    const std::string base =
+        fmt("compose.bpm=%g compose.bass_rhythm=%s compose.bass_variation=1 bass.kick_lock=Bass follows kick "
+            "compose.kick_pattern=Four master.clip=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 "
+            "master.auto_gain=Off compose.level_match=Off compose.acid_amount=0 compose.lead_amount=0 "
+            "compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0", bpm, rhythm);
+    auto render = [&](const char* solo, bool keepKick) {
+        auto e = std::make_unique<Engine>();
+        e->prepare(sr, 256);
+        e->params().parseText((base + " " + solo).c_str());
+        for (uint64_t k = 1; k <= 40; ++k) {
+            Composer probe(k);
+            if (firstCoreBar(e->params(), probe) <= 8) { seed = k; break; }
+        }
+        Composer c(seed);
+        coreBeat = firstCoreBar(e->params(), c) * kBeatsPerBar;
+        if (notes.empty()) c.composeBars(e->params(), 0, coreBeat / kBeatsPerBar + 32, notes);
+        std::vector<float> y = renderEngine(*e, c, coreBeat + 32.0, 256, sr);
+        if (keepKick) kickModel = e->kick();
+        return y;
+    };
+    const char* const kOnlyKick = "mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1";
+    const char* const kOnlyBass = "mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1";
+    const std::vector<float> kickY = render(kOnlyKick, true), bassY = render(kOnlyBass, false);
+
+    // The first bass onset of every beat of the window, with its pitch.
+    std::map<int, std::pair<double, int>> first;   // beat -> (offset in beats, pitch)
+    for (const NoteEvent& n : notes) {
+        if (n.part != Part::Bass) continue;
+        const int b = static_cast<int>(std::floor(n.beat + 1e-9));
+        const double off = n.beat - b;
+        auto it = first.find(b);
+        if (it == first.end() || off < it->second.first) first[b] = { off, static_cast<int>(n.pitch) };
+    }
+    const double beatSamples = 60.0 / bpm * sr;
+    double sumD = 0.0;
+    std::set<int> slots;
+    int n = 0;
+    for (int b = coreBeat + 8; b < coreBeat + 28; ++b) {
+        auto it = first.find(b);
+        if (it == first.end()) continue;
+        const double slot = it->second.first;
+        const double f0 = midiToHz(it->second.second);
+        const double kickIdeal = b * beatSamples;
+        const double ideal = (b + slot) * beatSamples;
+        const size_t w0 = static_cast<size_t>(std::ceil(ideal));
+        const size_t win = static_cast<size_t>(std::lround(2.0 * sr / f0)) + 8;
+        if (w0 + win >= bassY.size() || w0 + win >= kickY.size()) continue;
+        auto refBass = [&](size_t i) { return f0 * (static_cast<double>(w0 + i) - ideal) / sr; };
+        auto refKick = [&](size_t i) { return kickModel.outputPhaseAt((static_cast<double>(w0 + i) - kickIdeal) / sr); };
+        const double dk = phaseAgainst(kickY.data() + w0, win, refKick);
+        const double pb = phaseAgainst(bassY.data() + w0, win, refBass);
+        const double atSlot = kickModel.outputPhaseAt(slot * beatSamples / sr);
+        const double pk = 360.0 * (atSlot - std::floor(atSlot)) + dk;
+        sumD += wrapDeg(pk - pb);
+        slots.insert(static_cast<int>(std::lround(slot * 4.0)));
+        ++n;
+    }
+    onsets = n;
+    distinctSlots = static_cast<int>(slots.size());
+    return n > 0 ? sumD / n : 1e9;
+}
+
+/** @brief The bass notes of a composed stretch. */
+std::vector<NoteEvent> bassNotesOf(const std::vector<NoteEvent>& all)
+{
+    std::vector<NoteEvent> out;
+    for (const NoteEvent& n : all) if (n.part == Part::Bass) out.push_back(n);
+    return out;
+}
+
+/** @brief Onset mask per bar of a composed stretch, from the note beats alone. */
+std::map<int, unsigned> barMasksOf(const std::vector<NoteEvent>& all)
+{
+    std::map<int, unsigned> bars;
+    for (const NoteEvent& n : all) {
+        if (n.part != Part::Bass) continue;
+        const int bar = static_cast<int>(std::floor(n.beat / kBeatsPerBar + 1e-9));
+        const int step = static_cast<int>(std::lround((n.beat - static_cast<double>(bar) * kBeatsPerBar) * 4.0));
+        if (step >= 0 && step < 16) bars[bar] |= 1u << step;
+    }
+    return bars;
+}
+
+void testBassRhythm()
+{
+    section("compose.bass_rhythm: the drawn bass rhythm");
+    ParamStore def;
+    const int cb = def.base(Module::Compose);
+    check(def.getInt(cb + compose::BassRhythm) == 0,
+          "the bass rhythm defaults to Pattern, so every earlier render is reproduced",
+          fmt("default %s", kBassRhythmNames[def.getInt(cb + compose::BassRhythm)]));
+
+    // 1. The tables. Sorted (both are searched by bisection), inside the clean subspace, and the
+    //    counts add up to the number the header claims they were counted on.
+    {
+        bool sortedBars = true, cleanBars = true, sortedSteps = true, keysInRange = true;
+        unsigned long long total = 0;
+        for (int i = 0; i < kNumCorpusBassBars; ++i) {
+            total += kCorpusBassBars[i].count;
+            if (!BassRhythm::clean(kCorpusBassBars[i].mask)) cleanBars = false;
+            if (i > 0 && kCorpusBassBars[i - 1].mask >= kCorpusBassBars[i].mask) sortedBars = false;
+        }
+        const int keyMax = 16 * 3 * 3 * 3 * 3 * 3;
+        for (int i = 0; i < kNumCorpusBassSteps; ++i) {
+            if (kCorpusBassSteps[i].key >= keyMax) keysInRange = false;
+            if (i > 0 && kCorpusBassSteps[i - 1].key >= kCorpusBassSteps[i].key) sortedSteps = false;
+        }
+        const size_t bytes = sizeof(CorpusBassBar) * static_cast<size_t>(kNumCorpusBassBars)
+                           + sizeof(CorpusBassStep) * static_cast<size_t>(kNumCorpusBassSteps);
+        check(sortedBars && cleanBars && sortedSteps && keysInRange
+              && total == kCorpusBassBarTotal && kNumCorpusBassBars > 0 && kNumCorpusBassSteps > 0,
+              "the bass onset tables are sorted, clean and add up",
+              fmt("%d bars / %d contexts, %llu counted, %zu bytes", kNumCorpusBassBars, kNumCorpusBassSteps, total, bytes));
+        check(bytes < 8192, "the tables fit a Quest build without thinking about it", fmt("%zu bytes", bytes));
+    }
+
+    // 2. The context packing, against two keys worked out by hand from the rule in Corpus.h (base
+    //    three per neighbour, most distant first, then the step in base sixteen).
+    //    Step 10 of a bar with onsets on 2, 6, 7 and 9: the neighbours 8, 4, 3, 2 and 1 steps back are
+    //    struck, struck, struck, silent, struck, so ((((1*3+1)*3+1)*3+0)*3+1) * 16 + 10 = 1898.
+    //    Step 1 of an empty bar: every neighbour but step 0 is outside the bar, so
+    //    ((((2*3+2)*3+2)*3+2)*3+0) * 16 + 1 = 3841.
+    {
+        const unsigned mask = (1u << 2) | (1u << 6) | (1u << 7) | (1u << 9);
+        check(BassRhythm::contextKey(mask, 10) == 1898 && BassRhythm::contextKey(0u, 1) == 3841,
+              "the chain context is packed exactly as Tools/corpus/bass_rhythm.py packs it",
+              fmt("%d and %d", BassRhythm::contextKey(mask, 10), BassRhythm::contextKey(0u, 1)));
+    }
+
+    // 3. The mixture is a probability distribution: over the 4096 bars with no onset on a kick step --
+    //    the whole subspace the model lives in -- the probabilities add up to one. That checks both
+    //    halves at once: the lookup only if its counts are complete, the chain only if every step's
+    //    two outcomes are complemented correctly.
+    {
+        double sum = 0.0, chain = 0.0;
+        for (unsigned bits = 0; bits < 4096u; ++bits) {
+            unsigned mask = 0;
+            for (int s = 0, k = 0; s < 16; ++s) if (s % 4 != 0) { if ((bits >> k) & 1u) mask |= 1u << s; ++k; }
+            sum += BassRhythm::barProbability(mask);
+            chain += std::exp2(BassRhythm::chainLogProbability(mask));
+        }
+        check(std::fabs(sum - 1.0) < 1e-9 && std::fabs(chain - 1.0) < 1e-9,
+              "the mixture and the chain are proper distributions over the 4096 clean bars",
+              fmt("mixture %.12f, chain alone %.12f, lookup weight %.3f", sum, chain, BassRhythm::mixWeight()));
+        check(BassRhythm::barProbability(0x1111u) == 0.0 && BassRhythm::barProbability(0xEEEFu) == 0.0,
+              "a bar with an onset on a kick step has probability zero", "");
+    }
+
+    // 4. The families live in the same alphabet as the drawn bars, and a note ends at the next onset
+    //    or at the next kick, whichever comes first.
+    {
+        const unsigned rolling = BassRhythm::familyMask(0), gallop = BassRhythm::familyMask(1);
+        const unsigned skip = BassRhythm::familyMask(2), offbeat = BassRhythm::familyMask(3);
+        const unsigned triplet = BassRhythm::familyMask(4);
+        check(rolling == 0xEEEEu && gallop == 0xCCCCu && skip == 0xAAAAu && offbeat == 0x4444u && triplet == skip,
+              "the pattern families as onset masks (the Triplet family has no sixteenth image and takes Skip's)",
+              fmt("%04X %04X %04X %04X %04X", rolling, gallop, skip, offbeat, triplet));
+        // Rolling: every note one sixteenth. Offbeat: two, because the note on step 6 runs to the kick
+        // on step 8. A note on step 3 ends on step 4 even when step 5 is struck.
+        check(BassRhythm::noteSpan(rolling, 1) == 1 && BassRhythm::noteSpan(rolling, 3) == 1
+              && BassRhythm::noteSpan(offbeat, 6) == 2 && BassRhythm::noteSpan(0x0028u, 3) == 1
+              && BassRhythm::shortestSpan(rolling) == 1 && BassRhythm::shortestSpan(offbeat) == 2,
+              "a note ends at the next onset or at the next kick, whichever is first", "");
+    }
+
+    // 5. Ten thousand drawn bars: all clean, none empty, no gap tighter than a sixteenth -- the reason
+    //    a drawn rhythm can only relax the gate limit and the release floor, never tighten them.
+    {
+        Rng r;
+        r.seed(0xBA55ull);
+        auto u = [&r]() { return static_cast<double>(r.uniform()); };
+        int dirty = 0, empty = 0, tight = 0;
+        std::set<unsigned> seen;
+        for (int i = 0; i < 10000; ++i) {
+            const unsigned m = BassRhythm::draw(u);
+            if (!BassRhythm::clean(m)) ++dirty;
+            if (m == 0) ++empty;
+            if (BassRhythm::shortestSpan(m) < 1) ++tight;
+            seen.insert(m);
+        }
+        check(dirty == 0 && empty == 0 && tight == 0 && seen.size() > 100,
+              "every drawn bar is clean, non-empty and on the sixteenth grid",
+              fmt("%zu distinct bars in 10000 draws, %d dirty, %d empty", seen.size(), dirty, empty));
+    }
+
+    const char* kBase = "compose.level_match=Off master.auto_gain=Off compose.track_bars=64";
+    auto composeSet = [&](const char* extra, uint64_t seed, int bars, std::vector<NoteEvent>& notes,
+                          std::vector<ControlEvent>* controls = nullptr) {
+        ParamStore q;
+        q.parseText(kBase);
+        q.parseText(extra);
+        Composer c(seed);
+        c.composeBars(q, 0, bars, notes, controls);
+    };
+
+    // 6. The prior is kept exactly. With Bass Variation at zero the phrase never leaves its home bar
+    //    and the home bar is the pattern family itself, so a Corpus render of a Rolling track is the
+    //    Pattern render note for note -- onset, length, pitch and velocity.
+    {
+        const std::string rolling = "compose.bass_pattern=Rolling compose.track_variation=0 compose.bass_variation=0";
+        std::vector<NoteEvent> pat, cor;
+        composeSet(rolling.c_str(), 31337, 64, pat);
+        composeSet((rolling + " compose.bass_rhythm=Corpus").c_str(), 31337, 64, cor);
+        const std::vector<NoteEvent> pb = bassNotesOf(pat), cn = bassNotesOf(cor);
+        bool same = pb.size() == cn.size() && !pb.empty();
+        for (size_t i = 0; same && i < pb.size(); ++i)
+            same = pb[i].beat == cn[i].beat && pb[i].length == cn[i].length
+                   && pb[i].pitch == cn[i].pitch && pb[i].velocity == cn[i].velocity;
+        check(same, "with no variation the drawn rhythm is the pattern family, note for note",
+              fmt("%zu bass notes against %zu", cn.size(), pb.size()));
+    }
+
+    // 7. The knob off changes nothing at all and emits no event: a Pattern render is what it was before
+    //    16.09.2026, which is what keeps every older render reproducible.
+    {
+        std::vector<NoteEvent> a, b;
+        std::vector<ControlEvent> ca, cbv;
+        composeSet("", 4242, 64, a, &ca);
+        composeSet("compose.bass_rhythm=Pattern", 4242, 64, b, &cbv);
+        bool same = a.size() == b.size() && ca.size() == cbv.size();
+        for (size_t i = 0; same && i < a.size(); ++i)
+            same = a[i].beat == b[i].beat && a[i].length == b[i].length && a[i].pitch == b[i].pitch
+                   && a[i].part == b[i].part && a[i].velocity == b[i].velocity;
+        int slotEvents = 0, clearing = 0;
+        for (const ControlEvent& e : ca)
+            if (e.kind == ControlEvent::Kind::BassSlot) { ++slotEvents; if (e.value <= 0.0f) ++clearing; }
+        check(same && slotEvents == 64 && clearing == slotEvents,
+              "with the knob on Pattern the score is unchanged and every slot event clears the slot",
+              fmt("%zu notes, %zu controls, %d slot events, %d of them clearing", a.size(), ca.size(), slotEvents, clearing));
+    }
+
+    // 8. The event the round is about. Every beat of the stretch carries exactly one BassSlot, its
+    //    value lies between a quarter and three quarters of a beat, and for a beat that plays it is the
+    //    offset of that beat's first bass note -- recomputed here from the note list, which is the only
+    //    place the engine's tail limit and phase lock may read it from.
+    {
+        int wrong = 0, outOfRange = 0, playing = 0, beats = 0, doubled = 0, sets = 0;
+        std::set<int> values;
+        for (uint64_t seed : { 909ull, 4ull, 64ull, 1024ull, 66000ull }) {
+            std::vector<NoteEvent> notes;
+            std::vector<ControlEvent> controls;
+            composeSet("compose.bass_rhythm=Corpus compose.bass_variation=1", seed, 64, notes, &controls);
+            std::map<int, double> firstNote;
+            for (const NoteEvent& n : notes) {
+                if (n.part != Part::Bass) continue;
+                const int b = static_cast<int>(std::floor(n.beat + 1e-9));
+                const double off = n.beat - b;
+                auto it = firstNote.find(b);
+                if (it == firstNote.end() || off < it->second) firstNote[b] = off;
+            }
+            std::map<int, int> perBeat;
+            for (const ControlEvent& e : controls) {
+                if (e.kind != ControlEvent::Kind::BassSlot) continue;
+                const int b = static_cast<int>(std::lround(e.beat));
+                ++perBeat[b];
+                if (e.value < 0.25f || e.value > 0.75f) ++outOfRange;
+                values.insert(static_cast<int>(std::lround(e.value * 4.0f)));
+                auto it = firstNote.find(b);
+                if (it == firstNote.end()) continue;
+                ++playing;
+                if (std::fabs(static_cast<double>(e.value) - it->second) > 1e-9) ++wrong;
+            }
+            beats += static_cast<int>(perBeat.size());
+            for (const auto& kv : perBeat) if (kv.second != 1) ++doubled;
+            ++sets;
+        }
+        check(beats == sets * 64 * kBeatsPerBar && doubled == 0 && wrong == 0 && outOfRange == 0
+              && playing > 0 && values.size() >= 2,
+              "one slot event per beat, inside the grid, and equal to that beat's first bass note",
+              fmt("%d beats over %d sets, %d of them playing, %d wrong, %d out of range, %zu different slots",
+                  beats, sets, playing, wrong, outOfRange, values.size()));
+    }
+
+    // 9. What the notes themselves may do: never on a kick, never ringing into the next one.
+    {
+        int onKick = 0, overrun = 0, total = 0;
+        std::set<unsigned> bars;
+        for (uint64_t seed : { 3ull, 33ull, 333ull, 3333ull }) {
+            std::vector<NoteEvent> notes;
+            composeSet("compose.bass_rhythm=Corpus compose.bass_variation=1", seed, 64, notes);
+            for (const NoteEvent& n : notes) {
+                if (n.part != Part::Bass) continue;
+                ++total;
+                const double off = n.beat - std::floor(n.beat + 1e-9);
+                if (std::fabs(off) < 1e-9) ++onKick;
+                if (n.beat + n.length > std::floor(n.beat + 1e-9) + 1.0 + 1e-9) ++overrun;
+            }
+            for (const auto& kv : barMasksOf(notes)) bars.insert(kv.second);
+        }
+        check(total > 0 && onKick == 0 && overrun == 0,
+              "no drawn bass note starts on a kick or rings past the next one",
+              fmt("%d notes, %d on a kick, %d overrunning, %zu distinct bar patterns", total, onKick, overrun, bars.size()));
+    }
+
+    // 10. Determinism, and a bar composed alone equal to that bar in sequence.
+    {
+        std::vector<NoteEvent> a, b;
+        composeSet("compose.bass_rhythm=Corpus", 77, 32, a);
+        composeSet("compose.bass_rhythm=Corpus", 77, 32, b);
+        bool same = a.size() == b.size();
+        for (size_t i = 0; same && i < a.size(); ++i)
+            same = a[i].beat == b[i].beat && a[i].pitch == b[i].pitch && a[i].length == b[i].length;
+        ParamStore q;
+        q.parseText(kBase);
+        q.parseText("compose.bass_rhythm=Corpus");
+        Composer fresh(77);
+        std::vector<NoteEvent> one;
+        std::vector<ControlEvent> oneCtl;
+        fresh.composeBars(q, 21, 1, one, &oneCtl);
+        std::vector<NoteEvent> slice;
+        for (const NoteEvent& x : a) if (x.beat >= 84.0 && x.beat < 88.0) slice.push_back(x);
+        bool sliceSame = slice.size() == one.size();
+        for (size_t i = 0; sliceSame && i < slice.size(); ++i)
+            sliceSame = slice[i].beat == one[i].beat && slice[i].pitch == one[i].pitch;
+        int slots = 0;
+        for (const ControlEvent& e : oneCtl) if (e.kind == ControlEvent::Kind::BassSlot) ++slots;
+        check(same && sliceSame && !one.empty() && slots == kBeatsPerBar,
+              "the drawn rhythm is deterministic, and one bar alone carries its own four slot events",
+              fmt("%zu notes twice, bar 21 alone %zu notes and %d slot events", a.size(), one.size(), slots));
+    }
+
+    // 11. Block-size independence with an event on every beat: the engine must render the same samples
+    //     whether the blocks are 64 or 256 long.
+    {
+        const double sr = 48000.0;
+        const char* kSet = "compose.bass_rhythm=Corpus compose.bass_variation=1 compose.level_match=Off "
+                           "master.auto_gain=Off compose.track_bars=64";
+        auto renderAt = [&](int block) {
+            auto e = std::make_unique<Engine>();
+            e->prepare(sr, block);
+            e->params().parseText(kSet);
+            Composer c(11);
+            return renderEngine(*e, c, 64.0, block, sr);
+        };
+        const std::vector<float> a = renderAt(64), b = renderAt(256);
+        size_t differ = 0;
+        const size_t n = std::min(a.size(), b.size());
+        for (size_t i = 0; i < n; ++i) if (a[i] != b[i]) ++differ;
+        check(n > 0 && differ == 0, "the drawn rhythm renders bit-identically at any block size",
+              fmt("%zu samples, %zu different", n, differ));
+    }
+
+    // 12. The lock itself, measured acoustically at the first onset of every beat while that onset
+    //     moves from beat to beat. Without the event the engine would lock every beat to a quarter
+    //     beat and the notes on the second and third sixteenth would be out by whole cycles.
+    {
+        std::string detail;
+        double worst = 0.0;
+        int slotsSeen = 0, measured = 0;
+        for (double bpm : { 142.0, 148.0 }) {
+            int onsets = 0, slots = 0, refOnsets = 0, refSlots = 0;
+            const double free = measureFreeLock(bpm, "Corpus", onsets, slots);
+            const double ref = measureFreeLock(bpm, "Pattern", refOnsets, refSlots);
+            worst = std::max(worst, std::fabs(free) - std::fabs(ref));
+            slotsSeen = std::max(slotsSeen, slots);
+            measured += onsets;
+            detail += fmt("%.0f BPM: %+.1f deg over %d onsets on %d sixteenths, families %+.1f deg on %d   ",
+                          bpm, free, onsets, slots, ref, refSlots);
+        }
+        // The bound is what breaking the event costs, not what a perfect measurement would read: with
+        // the slot frozen at a quarter beat a note on the second sixteenth is locked to the kick's
+        // phase a quarter beat too early, which at 46 Hz and 142 BPM is 4.9 cycles away -- a wrap of
+        // well over a hundred degrees. Ten degrees over the families' own reading separates the two
+        // by an order of magnitude and still leaves room for the envelope bias the fit carries.
+        check(measured > 20 && slotsSeen >= 2 && worst < 10.0,
+              "the kick phase still meets the bass at the first onset of every beat, wherever it is", detail);
+    }
+
+    // 13. What was won, and that the roll still rolls. The corpus plays 641 distinct bar patterns at
+    //     6.059 bit/bar and the pattern families reach a handful of them; a corpus line, though,
+    //     repeats one bar in 86.8 % of its bars (Tools/corpus/bass_rhythm.py, section 2), so more
+    //     patterns per set must not become more patterns per track.
+    {
+        auto survey = [&](const char* extra, double& modalShare) {
+            std::set<unsigned> all;
+            double shares = 0.0;
+            int sets = 0;
+            for (uint64_t seed : { 7ull, 17ull, 71ull, 107ull, 171ull, 701ull, 1007ull, 1701ull }) {
+                std::vector<NoteEvent> notes;
+                composeSet((std::string("compose.bass_variation=1 ") + extra).c_str(), seed, 64, notes);
+                std::map<unsigned, int> hist;
+                int n = 0;
+                for (const auto& kv : barMasksOf(notes)) { all.insert(kv.second); ++hist[kv.second]; ++n; }
+                int best = 0;
+                for (const auto& kv : hist) best = std::max(best, kv.second);
+                if (n > 0) { shares += static_cast<double>(best) / n; ++sets; }
+            }
+            modalShare = sets > 0 ? shares / sets : 0.0;
+            return all.size();
+        };
+        double modalPat = 0.0, modalCor = 0.0;
+        const size_t nPat = survey("", modalPat);
+        const size_t nCor = survey("compose.bass_rhythm=Corpus", modalCor);
+        check(nCor > 3 * nPat && modalCor > 0.55,
+              "the drawn rhythm multiplies the patterns of a set without breaking up the track's figure",
+              fmt("%zu distinct bars against %zu, the commonest bar of a set still %.0f %% of its bars "
+                  "(pattern families %.0f %%)", nCor, nPat, 100.0 * modalCor, 100.0 * modalPat));
+    }
+}
+
 void testMidiKeys()
 {
     section("MIDI key changes");
@@ -7651,6 +8086,7 @@ int main()
     run("testVariety", testVariety);
     run("testEngine", testEngine);
     run("testPhaseLock", testPhaseLock);
+    run("testBassRhythm", testBassRhythm);
     run("testPercKit", testPercKit);
     run("testRhythm", testRhythm);
     run("testMidi", testMidi);

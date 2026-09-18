@@ -54,6 +54,22 @@ struct ControlEvent {
     enum class Kind : uint8_t {
         Offset,        ///< ramp the normalised offset to `value` over `length` beats (raised cosine)
         Override,      ///< play `value` instead of the knob (discrete parameters); value < 0 clears it
+        /**
+         * @brief The first sounding bass slot of the coming beat, in beats after that beat's kick
+         *        (`param` is not read; a value <= 0 hands the engine back its own derivation).
+         *
+         * Two computations in the engine need the instant of the first bass note after a kick and
+         * have to agree with the composer exactly: how long the kick may ring before it
+         * (`Kick::constrainTail`) and the kick's phase at that instant (`Kick::setPhaseTarget` and
+         * the bass's start phase). Until 16.09.2026 the engine derived that instant from the bass
+         * pattern family, carried over an `Override` on `compose.bass_pattern` -- which works only
+         * while every bar is one of five families with a fixed first slot. A bar drawn from the
+         * corpus onset model has no number in `kBassPatterns`, so the number itself travels instead
+         * of the family it used to be looked up from. One event per beat, at the beat: that is the
+         * latest instant at which it is still in force for that beat's kick (controls are dispatched
+         * before notes at equal beats) and the earliest at which it is not still the previous beat's.
+         */
+        BassSlot,
     };
     double  beat = 0.0;       ///< when the change starts
     float   length = 0.0f;    ///< ramp length in beats; 0 = immediately

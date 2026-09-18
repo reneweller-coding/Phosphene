@@ -3467,6 +3467,141 @@ Maker geben den Modus der Sektion durch), `Core/data/melody.phosmdl` und `.ref.t
 `Tests/vectest.cpp` (jede Zeile von `mode.emb` durch denselben Kontext, bitgleich auf allen drei
 Pfaden).
 
+**16.09.2026, Bass-Rhythmus: die 61,5-Prozent-Lücke.** Die Bass-Runde von Phase 8 hat den Bass zur
+vierten gelernten Rolle gemacht und **nur seine Tonhöhe** gelernt; sein Anschlagsmuster blieb bei den
+fünf fest verdrahteten Familien aus `Core/include/phos/Patterns.h`. Dieselbe Runde hat auch
+aufgeschrieben, warum sie es nicht anfasste: `Engine::firstSlotSeconds` leitet die Schwanzgrenze des
+Kicks und den Phasenschluss aus `firstBassSlot(pattern_)` her, und die Muster-Nummer kommt über ein
+`Override` auf `compose.bass_pattern` — ein gelernter Takt hat keine Nummer in `kBassPatterns`. Diese
+Runde schließt die Lücke. Alle Zahlen unten sind neu gemessen (`Tools/corpus/bass_rhythm.py`, neu),
+nicht aus der vorigen Runde übernommen.
+
+**Messung 1: Was der Korpus spielt.** 1 551 Bass-Linien, 11 507 Takte: **641** verschiedene
+16-Bit-Taktmuster, Plug-in-Entropie **6,059 bit/Takt** — beides auf die dritte Stelle gleich der
+vorigen Runde, Korpus und Extraktion sind also dieselben. Neu daneben: **64,4 %** der Takte haben
+**keinen** Anschlag auf einem Kick-Schritt, und dieser „saubere" Unterraum allein hat 187 Muster und
+4,171 bit/Takt. Je Rolle (der Korpus trägt kein Stil-Label): Acid 81 Muster / 2,553 bit / 70,9 %
+sauber, Lead 236 / 7,087 / 11,1 %, Arp 104 / 2,131 / 5,9 %, Bass 641 / 6,059 / 64,4 %. Je Pack, dem
+Nächsten an einem Stil, was der Korpus hat: `Star Samples` 10 305 Takte / 613 Muster / H 6,291,
+`EMP` 478 / 37 / 3,033, `TOTAL_MIDI` 396 / 19 / 2,511, `PSYTRANCE MIDI BUNDLE` 328 / **3** / 0,107 —
+oben steht überall `.xxx.xxx.xxx.xxx`.
+
+**Messung 2: Eine Linie ist eine Figur, kein Taktband.** 1 515 Linien mit mindestens zwei Takten,
+11 471 Takte: verschiedene Taktmuster je Linie im Mittel **1,34**, Median **1**, 90. Perzentil 2. Ein
+Takt gleicht dem Takt davor in **79,0 %** der Paare und dem häufigsten Takt seiner Linie in
+**86,8 %** der Takte. Diese zweite Zahl baut den Generator: ein Modell, das acht unabhängige Takte
+zieht, wäre kein Psytrance-Bass, sondern Brei.
+
+**Messung 3: Welches Modell.** Ehrlicher Schnitt über Loop-Gruppen, derselbe Schnitt-Seed wie in der
+Tonhöhenrunde, 15 587 / 1 495 / 2 204 Takte; das Mischgewicht wird auf dem Validierungs-, nie auf dem
+Testschnitt angepasst. Kreuzentropie in bit je Takt:
+
+| Modell | alle Takte | nur der saubere Unterraum |
+|---|---|---|
+| Gleichverteilung über 2^16 | 16,000 | 16,000 |
+| Nachschlagetabelle + Gleichverteilungs-Rückfall | 7,899 (482 Muster, **21,6 %** der Testtakte nie gesehen) | 5,458 (139 Muster, 13,4 % nie gesehen) |
+| parametrische Kette, Schritt + (1) | 13,622 | 10,293 |
+| parametrische Kette, Schritt + (1, 2, 3) | 10,695 | 7,509 |
+| parametrische Kette, Schritt + (1, 4) | 12,038 | 9,517 |
+| parametrische Kette, Schritt + (1, 2, 3, 4, 8) | 7,793 (330 Kontexte) | 5,201 (151 Kontexte) |
+| **Mischung aus beiden** (w = 0,480 bzw. **0,485**) | **7,449** | **4,993** |
+
+Die Mischung, die in der vorigen Runde niemand gemessen hatte, schlägt beide Bestandteile — um 0,34
+bzw. 0,21 bit je Takt — und tut es aus dem Grund, aus dem sie vorgeschlagen war: die beiden scheitern
+an **verschiedenen** Takten, die Tabelle an den nie gesehenen, die Kette an den scharf wiederholten.
+Geglättet ist die Kette mit dem Krichevsky-Trofimov-Schätzer (add ½ je binärem Ausgang, die
+minimax-optimale Add-Konstante für ein binäres Alphabet; Krichevsky und Trofimov, „The performance of
+universal encoding", IEEE Trans. Inf. Theory 27(2), 1981); die Tabelle hat keine eigene Glättung, die
+Kette **ist** ihre Glättung. Plug-in-Entropien stehen überall nur als Beschreibung einer Stichprobe,
+nie als Vergleich zwischen Modellen: über 2^16 Muster aus zehntausend Takten sind sie um rund
+(K−1)/(2N ln 2) nach unten verzerrt (Miller 1955; Paninski, Neural Computation 15(6), 2003).
+
+**Warum der Kick-Schritt nicht im Alphabet ist.** `Kick::constrainTail` und `Kick::setPhaseTarget`
+schalten sich beide ab, wenn der Slot null oder kleiner ist. Eine Bassnote **auf** dem Kick würde die
+Schwanzgrenze und den Phasenschluss also stillschweigend abschalten — und sie ist genau der
+Maskierungsfall, für den die Tiefenregel (5.2) da ist. Der Generator arbeitet deshalb im sauberen
+Unterraum. Das ist keine Notlösung: 64,4 % der Korpustakte liegen ohnehin darin, und der Preis steht
+in der Tabelle oben statt in einer Annahme.
+
+**Was gebaut wurde.** `compose.bass_rhythm` (Choice `Pattern`/`Corpus`, Vorgabe **Pattern**, ans Ende
+der Compose-Tabelle gehängt). Zwei Zähltabellen in `Core/src/CorpusTables.cpp`, aus
+`Tools/corpus/bass_rhythm.py` über `build_corpus.py --bass-rhythm-only` erzeugt und **nur auf dem
+Trainingsschnitt** angepasst: 139 Taktmuster und 151 Kettenkontexte, zusammen **2 924 Byte** — für
+die Quest keine Frage. Kontext-Schlüssel sind in ein `uint16_t` gepackt (Basis drei je Nachbar:
+abwesend/still/angeschlagen, dann der Schritt in Basis sechzehn), beide Tabellen werden per Bisektion
+gefunden wie `CorpusGram`. `--bass-rhythm-only` schreibt **nur** diesen Block neu, weil die
+melodischen Tabellen darüber einen vollen Gang durch `M:\Midi` kosten.
+
+**Die Freigabe: der erste Slot als Steuerereignis.** Neu ist `ControlEvent::Kind::BassSlot` in
+`Score.h`: der Komponist schickt **je Beat, auf dem Beat**, den ersten klingenden Bass-Slot dieses
+Beats in Beats. Auf dem Beat, weil Steuerereignisse bei gleichem Beat **vor** den Noten zugestellt
+werden — das ist der späteste Zeitpunkt, an dem der Wert für den Kick dieses Beats noch gilt, und der
+früheste, an dem er nicht mehr der des vorigen Beats ist. `Engine::firstSlotSeconds` nimmt den
+gesendeten Wert, solange einer positiv ist, und sonst weiter `firstBassSlot(pattern_)`. Ein Takt aus
+einer Pattern-Familie schickt **ein** löschendes Ereignis (Wert −1) je Takt; ohne das könnte der
+Komponist den Knopf nicht mitten im Lauf zurückstellen, weil die Engine „noch nichts geschickt" nicht
+von „nichts mehr geschickt" unterscheiden kann. Ein Beat ohne Bassnote meldet eine Viertel-Beat — den
+engsten Slot, den das Sechzehntel-Raster hergibt —, damit ein ruhender Bass den Kick nicht länger
+klingen lässt als die Beats um ihn herum. Jeder gesendete Wert liegt damit in [0,25; 0,75]: der Kick
+klingt nie über den nächsten Kick hinaus, und die Grenze ist nie enger als bei Rolling.
+
+**Die Gate-Grenze und die Release-Untergrenze.** `gateLimit` rechnete aus `shortestBassSlot(pattern)`;
+sie rechnet jetzt aus dem **wirklich gezogenen** kürzesten Abstand der beiden Phrasen
+(`gateLimitSlot`). Dieselbe Formel auf einer gemessenen Zahl — und sie kann nur lockerer werden: eine
+Note endet am nächsten Anschlag oder am nächsten Kick, beides Vielfache eines Sechzehntels, also ist
+der kürzeste mögliche Abstand **ein** Sechzehntel, genau der von Rolling.
+
+**Damit der Roll rollt.** Eine Phrase ist ein **Heimtakt** plus seltene Ausflüge, beide Zahlen aus
+Messung 2: der Heimtakt ist mit Wahrscheinlichkeit `stray` aus dem Modell gezogen und sonst die Maske
+der Pattern-Familie des Tracks; jeder der acht Takte wiederholt den Heimtakt, außer eine zweite Münze
+(1 − 0,868) sagt etwas anderes. Beide Münzen werden mit `compose.bass_variation` × `hatDensity` des
+Stilprofils skaliert — dem einzigen rhythmischen Dichte-Multiplikator, den ein `StyleProfile` trägt
+(Progressive 0,9 … Hi-Tech 1,2). Bei Bass Variation 0 ist der gezogene Rhythmus **exakt** der der
+Pattern-Familie, Note für Note; das prüft der Selbsttest. Ein eigenes Feld auf `StyleProfile` wäre
+ehrlicher — `Form.h` gehörte in dieser Runde einem anderen Agenten.
+
+**Was dabei herauskommt.** 24 Seeds × 96 Takte, je einmal mit `Pattern` und einmal mit `Corpus`
+exportiert, **2 216 Takte** je Seite, mit denselben Funktionen vermessen wie der Korpus oben (die
+Zahlen der Pattern-Seite weichen leicht von den 7 Mustern / 1,062 bit der vorigen Runde ab, weil das
+dort fünf Stile × acht Seeds × 256 Takte waren; beide Seiten hier sind mit **demselben** Protokoll
+gemessen):
+
+| | `Pattern` | `Corpus` | Korpus |
+|---|---|---|---|
+| verschiedene Taktmuster | 6 | **25** | 641 |
+| Plug-in-Entropie des Taktmusters | 0,595 bit | **2,293 bit** | 6,059 bit |
+| Anschlagsdichte | 0,691 | **0,604** | 0,525 |
+| Anteil der held-out Korpustakte, die überhaupt spielbar sind | 35,5 % | **52,0 %** | — |
+| … davon im sauberen Unterraum (der Decke des Generators) | 51,2 % | **75,0 %** | — |
+| als Wahrscheinlichkeitsmodell der held-out Takte (+ Gleichverteilungs-Rückfall) | 11,506 bit | **10,046 bit** | 7,449 (die Mischung) |
+| häufigster Takt eines Renders, Anteil an dessen Takten | 89,7 % | **87,7 %** | 86,8 % (je Korpuslinie) |
+
+Die 61,5-Prozent-Lücke ist damit auf **48,0 %** gefallen, und 30,7 der verbleibenden Prozentpunkte
+sind die Takte mit Anschlag auf dem Kick, die der Generator **mit Absicht** nicht spielt: innerhalb
+dessen, was er spielen darf, ist die Lücke von 48,8 % auf **25,0 %** gefallen. Die musikalisch
+wichtigste Zeile ist die letzte: der häufigste Takt eines Renders trägt immer noch 87,7 % von dessen
+Takten — einen Prozentpunkt neben echten Basslinien und weniger starr als die Pattern-Familien, die
+bei 89,7 % lagen. Der Bass kann jetzt mehr, und er tut es nicht die ganze Zeit.
+
+**Was nicht kaputtgehen durfte.**
+
+| | Nachweis |
+|---|---|
+| Pattern-Modus unverändert | drei Renders zu 96 Takten (Seeds 1–3) sind **byte-gleich** mit denselben Renders aus dem Basis-Commit 126ad1f, gebaut in einem eigenen Worktree; dazu 24 MIDI-Exporte byte-gleich |
+| Kick-Phasenschluss | akustisch am **ersten Anschlag jedes Beats** gemessen, während dieser Anschlag von Beat zu Beat wandert: 142 BPM **+10,8°** über 20 Anschläge auf zwei verschiedenen Sechzehnteln (Familien +5,2° auf einem), 148 BPM **−2,8°** (Familien +1,2°). Mit eingefrorenem Slot läge eine Note auf dem zweiten Sechzehntel um rund 4,9 Kick-Zyklen daneben; die Mutationsrunde zeigt es |
+| Schwanzgrenze | jeder gesendete Slot in [0,25; 0,75] Beats, also nie lockerer als der nächste Kick und nie enger als Rolling |
+| Tiefenregel, Gate, Release | kein gezogener Takt setzt eine Note auf einen Kick-Schritt, keine Note klingt über den nächsten Kick; kürzester Abstand nie unter einem Sechzehntel; die Gate-Grenze folgt den gezogenen Masken |
+| Determinismus, Takt allein = Takt in Folge | eigener Salt, Phrase nur aus dem Track-Seed; ein allein komponierter Takt trägt seine vier eigenen Slot-Ereignisse |
+| Blockgrößen-Unabhängigkeit | ein Render mit Blöcken 64 und 256 ist bei einem Ereignis **je Beat** bitgleich (1 271 172 Samples) |
+| −9 LUFS / −1 dBTP | ein 32-Takt-Render mit `Corpus`: integriert −9,5 LUFS, True Peak −1,00 dBTP |
+
+*Offen und bewusst.* Die Triplet-Familie hat kein Bild auf dem Sechzehntel-Raster; mit `Corpus` spielt
+ein Triplet-Track die Skip-Maske. Das ist dieselbe Näherung, die `bassSlotStep` dem Tonhöhenmodell
+schon immer zumutet, und sie steht im Kommentar der Auswahl. Der ganz leere Takt (3,2 % aller
+Korpustakte, 5,4 % der sauberen) wird nie gezogen — leere Takte macht die Form, nicht das
+Anschlagsmodell. Und die Wahl von `hatDensity` als Streuungsmaß ist eine
+Anleihe: das richtige wäre ein eigenes Feld auf `StyleProfile`.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

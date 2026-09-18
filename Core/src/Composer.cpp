@@ -90,13 +90,22 @@ int pick(Rng& r, const double* weights, int n)
     return n - 1;
 }
 
-/** @brief Longest gate that still lets the lowest note's release finish before the next slot. */
-float gateLimit(int pattern, double bpm, int lowestNote, float releaseKnobMs)
+/**
+ * @brief Longest gate that still lets the lowest note's release finish before the next slot.
+ * @param slotBeats the shortest gap from a note to whatever ends it, in beats
+ */
+float gateLimitSlot(double slotBeats, double bpm, int lowestNote, float releaseKnobMs)
 {
     const double f0 = midiToHz(lowestNote);
     const double release = std::max(releaseKnobMs * 0.001, 0.5 / f0);   // the bass's release floor
-    const double slot = shortestBassSlot(pattern) * 60.0 / bpm;
+    const double slot = slotBeats * 60.0 / bpm;
     return static_cast<float>(1.0 - (release + 0.004) / slot);
+}
+
+/** @brief The same limit for a pattern family. */
+float gateLimit(int pattern, double bpm, int lowestNote, float releaseKnobMs)
+{
+    return gateLimitSlot(shortestBassSlot(pattern), bpm, lowestNote, releaseKnobMs);
 }
 
 /**
@@ -122,6 +131,9 @@ double setLengthBars(const ParamStore& p)
 
 /** @brief Salt of the learned bass phrase: its own, so it does not move any other draw. */
 constexpr uint64_t kSaltBassLine = 0x424153534C4E0013ull;
+
+/** @brief Salt of the drawn bass rhythm: its own, for the same reason. */
+constexpr uint64_t kSaltBassRhythm = 0x424153535248546Dull;
 
 /** @brief The uniform source sampleMasked() draws from. */
 struct BassUniform {
@@ -159,25 +171,24 @@ int bassSlotStep(const BassPatternDef& pat, int beat, int s)
  * purpose, because a lower note would invalidate the release floor the gate limit is computed from
  * and the bass would start cutting its own tail.
  *
- * @param pat   the pattern family whose slots the phrase fills
+ * @param steps the sixteenths of the phrase that carry a note, ascending, `bar * 16 + step`; with a
+ *              pattern family those are its slots, with a drawn rhythm the onsets of its masks
+ * @param slots one entry per step: where in `out` that note's interval goes
  * @param scale the track's mode
  * @param seed  the track's bass-line seed
- * @param out   kBassPhraseSlots entries; slots past `pat.count` of a beat are left at 0
+ * @param out   kBassPhraseSlots entries; slots the phrase does not use are left at 0
  * @return false when the model refuses a step or the masked draw fails; the caller then stays on the
  *         pattern generator for the whole track rather than mixing two sources within one phrase.
  */
-bool drawBassPhrase(NeuralModel& model, const BassPatternDef& pat, int scale, uint64_t seed, int8_t* out)
+bool drawBassPhrase(NeuralModel& model, const std::vector<int>& steps, const std::vector<int>& slots,
+                    int scale, uint64_t seed, int8_t* out)
 {
     const int lowRel = scaleDegree(scale, 6) - 12;     // the same note gateLimit() is computed for
     const int highRel = 12;
     std::vector<std::vector<uint8_t>> allowed;
     std::vector<NoteCond> cond;
-    std::vector<int> steps;
-    for (int bar = 0; bar < kBassPhraseBars; ++bar)
-        for (int beat = 0; beat < kBeatsPerBar; ++beat)
-            for (int s = 0; s < pat.count; ++s)
-                steps.push_back(bar * 16 + bassSlotStep(pat, beat, s));
     const size_t n = steps.size();
+    if (n == 0 || slots.size() != n) return false;
     allowed.assign(n, std::vector<uint8_t>(static_cast<size_t>(kCorpusAlphabet), 0));
     cond.resize(n);
     for (size_t i = 0; i < n; ++i) {
@@ -197,12 +208,45 @@ bool drawBassPhrase(NeuralModel& model, const BassPatternDef& pat, int scale, ui
     if (!sampleMasked(stepper, allowed, PitchModel::symbol(0), PitchModel::symbol(0), 1.0,
                       BassUniform{ &r }, syms) || syms.size() != n)
         return false;
-    size_t i = 0;
-    for (int bar = 0; bar < kBassPhraseBars; ++bar)
-        for (int beat = 0; beat < kBeatsPerBar; ++beat)
-            for (int s = 0; s < pat.count; ++s, ++i)
-                out[(bar * kBeatsPerBar + beat) * 3 + s] = static_cast<int8_t>(PitchModel::rel(syms[i]));
+    for (size_t i = 0; i < n; ++i) out[slots[i]] = static_cast<int8_t>(PitchModel::rel(syms[i]));
     return true;
+}
+
+/**
+ * @brief Where the notes of one phrase sit: the steps the model is asked about and the slots they
+ *        land in.
+ *
+ * One function for both rhythm sources, so the learned pitch phrase is laid out the same way whether
+ * its rhythm comes from a family or from a drawn mask, and `composeBars` reads it with one index
+ * either way. The slot is the note's **ordinal within its beat**, which is what the pattern path has
+ * always written -- for the Rolling family the ordinal is the sixteenth, for Gallop it is not, and
+ * the Triplet family has no sixteenth at all. The ordinal is also what the style profile's slot
+ * envelope (PLAN 6.6) and the phrase figures are indexed by, so a drawn bar of three notes is the
+ * same three slots a rolling bar is.
+ *
+ * @param masks kBassPhraseBars onset masks, or null for the pattern family @p pat
+ */
+void phraseSlots(const BassPatternDef& pat, const uint16_t* masks, std::vector<int>& steps, std::vector<int>& slots)
+{
+    steps.clear();
+    slots.clear();
+    for (int bar = 0; bar < kBassPhraseBars; ++bar)
+        for (int beat = 0; beat < kBeatsPerBar; ++beat) {
+            if (masks == nullptr) {
+                for (int s = 0; s < pat.count; ++s) {
+                    steps.push_back(bar * 16 + bassSlotStep(pat, beat, s));
+                    slots.push_back((bar * kBeatsPerBar + beat) * 3 + s);
+                }
+            } else {
+                int ordinal = 0;
+                for (int k = 1; k < 4; ++k)
+                    if ((masks[bar] >> (beat * 4 + k)) & 1u) {
+                        steps.push_back(bar * 16 + beat * 4 + k);
+                        slots.push_back((bar * kBeatsPerBar + beat) * 3 + ordinal);
+                        ++ordinal;
+                    }
+            }
+        }
 }
 
 } // namespace
@@ -227,11 +271,74 @@ void Composer::makeBassPhrases(const ParamStore& p, TrackPlan& t) const
     }
     const uint64_t seed = mixSeed(trackSeed(t.index) ^ kSaltBassLine, 0);
     const int patterns[2] = { t.primaryPattern, t.secondaryPattern };
-    for (int k = 0; k < 2; ++k)
-        if (!drawBassPhrase(*model, kBassPatterns[patterns[k]], t.scale,
-                            mixSeed(seed, static_cast<uint64_t>(k)), t.bassRel[k]))
+    std::vector<int> steps, slots;
+    for (int k = 0; k < 2; ++k) {
+        // With a drawn rhythm the model is asked about the steps that will really sound, not about the
+        // family's: `step`, `gap` and `kick` are three of its five conditioning inputs
+        // (docs/MODEL_FORMAT.md 3), so telling it the family's slots and then playing other ones would
+        // throw away exactly the part of the conditioning the rhythm round is about.
+        phraseSlots(kBassPatterns[patterns[k]], t.bassRhythm ? t.bassMask[k] : nullptr, steps, slots);
+        if (!drawBassPhrase(*model, steps, slots, t.scale, mixSeed(seed, static_cast<uint64_t>(k)), t.bassRel[k]))
             return;
+    }
     t.bassNeural = true;
+}
+
+/**
+ * @brief Draws a track's two bass rhythm phrases, or leaves the plan on the pattern families.
+ *
+ * **The roll has to keep rolling.** The onset model of Corpus.h is a distribution over *bars*, and
+ * drawing eight independent bars from it would be a bass that plays something else every bar -- which
+ * is not what the corpus does and not what the genre does. The corpus was measured instead
+ * (`Tools/corpus/bass_rhythm.py`, section 2): over its 1515 multi-bar bass lines a bar equals its
+ * line's most common bar in **86.8 %** of the cases and the bar before it in 79.0 %, and the median
+ * line has exactly **one** distinct bar pattern. A line is a figure, not a sequence of bars. So a
+ * phrase here is a *home bar* plus rare departures, and both numbers come from the table:
+ *
+ * * the home bar is the track's pattern family with probability `1 - stray`, and a bar drawn from the
+ *   model with probability `stray`. The families are the prior the round was told to keep, and this
+ *   is where they are kept: with `stray` at zero the drawn rhythm *is* the pattern generator's.
+ * * every bar of the phrase repeats the home bar unless a second coin -- `1 - kCorpusBassHomePerMille`
+ *   scaled the same way -- says it departs, and a departure draws its own bar from the model.
+ *
+ * **What decides how far a track strays.** `compose.bass_variation`, the knob that already decides
+ * how often the bass leaves its primary pattern and how often it drops out, times the style profile's
+ * `hatDensity` -- the one rhythmic-busyness multiplier a `StyleProfile` carries (Form.h). Progressive
+ * (0.9) therefore strays least and Hi-Tech (1.2) most, which is the ordering the profiles already use
+ * for percussion density and for squelch. A field of its own on `StyleProfile` would say this more
+ * plainly; Form.h belongs to another agent this round, and the report says so.
+ *
+ * The phrase is a function of the track's seed and of nothing else, under a salt of its own, so
+ * turning the knob on moves no other draw and bar N is bar N however the set is rendered.
+ */
+void Composer::makeBassRhythm(const ParamStore& p, TrackPlan& t) const
+{
+    t.bassRhythm = false;
+    t.bassShortestSlot = 0.25f;
+    const int cb = p.base(Module::Compose);
+    if (p.getInt(cb + compose::BassRhythm) != 1) return;
+    const StyleProfile& style = styleProfile(styleOf(p));
+    const float amount = std::clamp(p.get(cb + compose::BassVariation) * style.hatDensity, 0.0f, 1.0f);
+    const double stray = amount;
+    const double depart = (1.0 - BassRhythm::homeShare()) * amount;
+    const int patterns[2] = { t.primaryPattern, t.secondaryPattern };
+    int shortest = 4;
+    for (int k = 0; k < 2; ++k) {
+        Rng r;
+        r.seed(mixSeed(trackSeed(t.index) ^ kSaltBassRhythm, static_cast<uint64_t>(k)));
+        BassUniform u{ &r };
+        const unsigned home = u() < stray ? BassRhythm::draw(u) : BassRhythm::familyMask(patterns[k]);
+        for (int bar = 0; bar < kBassPhraseBars; ++bar) {
+            const unsigned mask = u() < depart ? BassRhythm::draw(u) : home;
+            t.bassMask[k][bar] = static_cast<uint16_t>(mask);
+            shortest = std::min(shortest, BassRhythm::shortestSpan(mask));
+        }
+    }
+    // Every span is a whole number of sixteenths and at least one, so the shortest slot a drawn rhythm
+    // can produce is a quarter beat -- exactly the Rolling family's. The gate limit and the release
+    // floor of gateLimitSlot() can therefore only relax against the default, never tighten.
+    t.bassShortestSlot = static_cast<float>(shortest) * 0.25f;
+    t.bassRhythm = true;
 }
 
 /** @brief What a track can offer the instrumentation matrix. */
@@ -505,6 +612,11 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
         t.primaryPattern = std::clamp(p.getInt(cb + compose::BassPattern), 0, kNumBassPatterns - 1);
         t.secondaryPattern = t.primaryPattern == 0 ? 1 : 0;
         t.gate = p.get(cb + compose::BassGate);
+        // The rhythm before the pitches, because the learned phrase is drawn for the steps the rhythm
+        // decides. The first track takes the gate knob as it is -- "the knobs, exactly" -- and a drawn
+        // rhythm cannot make that worse: its shortest slot is a quarter beat, which is what the
+        // default Rolling family already asks of the knob.
+        makeBassRhythm(p, t);
         makeBassPhrases(p, t);
         if (p.getBool(cb + compose::LevelMatch)) {
             t.loudness = probeLoudness(p, t);
@@ -529,15 +641,23 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
         t.secondaryPattern = pick(r, wp, kNumBassPatterns);
     }
 
-    // Gate, within what lets the lowest note (the seventh below the root) finish its release.
+    // The rhythm, after the patterns it strays from and before the gate limit it decides.
+    makeBassRhythm(p, t);
+
+    // Gate, within what lets the lowest note (the seventh below the root) finish its release. With a
+    // drawn rhythm the limit is computed from the shortest span the two phrases really contain
+    // instead of from the families' -- which is the exact same computation on a measured number, and
+    // is never tighter than a quarter beat because the grid has no finer gap (Composer.h).
     const int root = bassRootNote(t.key, reg);
     const int lowest = root + scaleDegree(t.scale, 6) - 12;
-    const float gateMax = std::min(gateLimit(t.primaryPattern, t.bpm, lowest, releaseKnob),
-                                   gateLimit(t.secondaryPattern, t.bpm, lowest, releaseKnob));
+    const float gateMax = t.bassRhythm
+        ? gateLimitSlot(t.bassShortestSlot, t.bpm, lowest, releaseKnob)
+        : std::min(gateLimit(t.primaryPattern, t.bpm, lowest, releaseKnob),
+                   gateLimit(t.secondaryPattern, t.bpm, lowest, releaseKnob));
     t.gate = std::clamp(p.get(cb + compose::BassGate) + (2.0f * r.uniform() - 1.0f) * 0.12f * tv, 0.35f, std::max(0.35f, gateMax));
 
-    // The learned bass phrases, after the patterns they fill and before any probe render, so that the
-    // level match hears the track the way it will be played.
+    // The learned bass phrases, after the patterns and the rhythm they fill and before any probe
+    // render, so that the level match hears the track the way it will be played.
     makeBassPhrases(p, t);
 
     // Kick character switches.
@@ -1054,6 +1174,9 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         const bool secondary = secondaryBlock && inTrack % 16 >= 12;
         const int pattern = secondary ? plan.secondaryPattern : plan.primaryPattern;
         const BassPatternDef& pat = kBassPatterns[pattern];
+        // The bar's onset mask when the rhythm is drawn (Composer.h). The masks live on the learned
+        // phrase's eight-bar cycle, the same one the pitches use.
+        const unsigned mask = plan.bassRhythm ? plan.bassMask[secondary ? 1 : 0][inTrack % kBassPhraseBars] : 0u;
 
         // What the form says plays in this bar (Form.h).
         const BarPlan bp = planBar(plan.form, availabilityOf(plan), plan.sectionSeed, inTrack);
@@ -1072,6 +1195,19 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
             c.kind = ControlEvent::Kind::Override;
             c.value = static_cast<float>(pattern);
             controls->push_back(c);
+            if (!plan.bassRhythm) {
+                // One clearing event a bar while the rhythm comes from a family. Without it a switch
+                // of compose.bass_rhythm from Corpus back to Pattern *during* playback would leave
+                // `Engine::slotBeats_` holding the last drawn slot for ever: the composer would stop
+                // sending, and the engine has no way of telling "nothing sent yet" from "nothing sent
+                // any more". A value <= 0 hands the engine back its own derivation (Score.h), so a
+                // Pattern render sounds exactly as it did before 16.09.2026 -- the extra event only
+                // recomputes, at a beat that already carries the Override above, the same values
+                // `applyParams` has just written.
+                c.kind = ControlEvent::Kind::BassSlot;
+                c.value = -1.0f;
+                controls->push_back(c);
+            }
         }
 
         // Phrase figures, likelier as the track goes on.
@@ -1104,8 +1240,33 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
                 k.velocity = 127;
                 out.push_back(k);
             }
-            if (((bp.bassBeats >> beat) & 1) == 0 || static_cast<double>(beat) < bp.cutBeats) continue;
-            if (bassBreak && inTrack % 16 == 15 && beat >= 2) continue;
+            const bool bassBeat = ((bp.bassBeats >> beat) & 1) != 0 && static_cast<double>(beat) >= bp.cutBeats
+                               && !(bassBreak && inTrack % 16 == 15 && beat >= 2);
+            // How many notes this beat carries and where the first one is. With a pattern family the
+            // answer is the family's; with a drawn rhythm it is the mask's, and it is a different
+            // answer on every beat -- which is the whole reason the first slot has to travel to the
+            // engine as an event of its own (Score.h, ControlEvent::Kind::BassSlot).
+            int onsets = pat.count;
+            int step[3] = { 0, 0, 0 };
+            if (plan.bassRhythm) {
+                onsets = 0;
+                for (int k = 1; k < 4; ++k) if ((mask >> (beat * 4 + k)) & 1u) step[onsets++] = k;
+            }
+            if (plan.bassRhythm && controls != nullptr) {
+                // One event per beat, at the beat, whether or not the beat plays. Unconditional,
+                // because a bar composed on its own has to carry everything the engine needs for it:
+                // an event pushed only on a change would leave a window that starts mid-track with the
+                // slot of whatever was rendered before it. A beat with no bass note reports a quarter
+                // beat -- the tightest slot the sixteenth grid can produce -- so that a resting bass
+                // never lets the kick ring longer than it does in the beats around it, and so that the
+                // limit is never looser than the Rolling family's.
+                ControlEvent c;
+                c.beat = b;
+                c.kind = ControlEvent::Kind::BassSlot;
+                c.value = bassBeat && onsets > 0 ? 0.25f * static_cast<float>(step[0]) : 0.25f;
+                controls->push_back(c);
+            }
+            if (!bassBeat) continue;
 
             int figure = -1;
             // With the learned bass the phrase figures are gone: they are the pattern generator's one
@@ -1118,9 +1279,15 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
             // The group's own change: every eight-bar group of a core ends on a figure that differs
             // from the previous group's, so two consecutive groups can never be the same bars.
             if (beat == 1 && bp.groupFigure >= 0) figure = bp.groupFigure;
-            for (int s = 0; s < pat.count; ++s) {
-                const double pos = pat.pos[s];
-                const double next = s + 1 < pat.count ? pat.pos[s + 1] : 1.0;   // the last note ends before the next kick
+            for (int s = 0; s < onsets; ++s) {
+                // Where the note starts and what ends it. The pattern families read their own table;
+                // a drawn bar reads its mask, and its note ends at the next onset or at the next kick,
+                // whichever comes first (Corpus.h, noteSpan) -- the same rule the families follow,
+                // where the last note of a beat ends at 1.0.
+                const double pos = plan.bassRhythm ? 0.25 * step[s] : pat.pos[s];
+                const double next = plan.bassRhythm
+                    ? 0.25 * (step[s] + BassRhythm::noteSpan(mask, beat * 4 + step[s]))
+                    : (s + 1 < pat.count ? pat.pos[s + 1] : 1.0);
                 int pitch = root;
                 // The learned phrase (Composer.h): the interval of this slot from the bass root. It is
                 // read against `baseRoot` and not against `root`, because the alphabet of the model is
@@ -1131,7 +1298,7 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
                     pitch = baseRoot + plan.bassRel[secondary ? 1 : 0]
                                              [(barInBassPhrase * kBeatsPerBar + beat) * 3 + s];
                 if (figure >= 0) {
-                    const int idx = 3 - pat.count + s;
+                    const int idx = 3 - onsets + s;
                     // Figure degrees count from the chord's degree, so they stay in the scale when the bass follows the chords.
                     pitch = root + scaleDegree(plan.scale, chordDeg + kFigureDegrees[figure][idx]) - scaleDegree(plan.scale, chordDeg)
                           + 12 * kFigureOctaves[figure][idx];
