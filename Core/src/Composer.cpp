@@ -384,6 +384,31 @@ static MelodyContext melodyContext(const TrackPlan& plan, const BarPlan& bp, int
     return c;
 }
 
+/**
+ * @brief The arp in the bars where the lead rests, which the form's masking rule would silence.
+ *
+ * Form.cpp keeps arp and lead apart by moving the arp up in octaves for a whole section and drops it
+ * from the section once that would pass MIDI 100. Since 18.09.2026 the arp stays in G3..G5 and the
+ * lead in B3..A5 (Melody.h, rules 14 and 17): the two registers cannot clear each other, so the form
+ * now drops the arp from every section it shares with the lead -- on the listening seed the whole
+ * arp of track 2, the breakdown's included, where the lead does not even play. The arp never
+ * changes octave inside a section any more, which is what the section-wide decision protected, so
+ * the bar can decide: the bar is planned once more as if the track had no lead, and the arp comes
+ * back where that plan has it and the real bar has no lead. Only the arp bit and its octave are taken
+ * from the second plan; everything else is the form's own bar. The masking itself (no arp note under
+ * a lead note) is untouched, and composeMelodyBar still silences an arp whose octave does not fit.
+ */
+static void restoreArp(const TrackPlan& plan, int inTrack, BarPlan& bp)
+{
+    if (!plan.melody.present[1] || !plan.melody.present[2] || (bp.parts & 4) != 0 || (bp.parts & 2) != 0) return;
+    PartAvailability a = availabilityOf(plan);
+    a.part[1] = false;
+    const BarPlan alone = planBar(plan.form, a, plan.sectionSeed, inTrack);
+    if ((alone.parts & 4) == 0) return;
+    bp.parts = static_cast<uint8_t>(bp.parts | 4);
+    bp.arpOctave = alone.arpOctave;
+}
+
 static PartAvailability availabilityOf(const TrackPlan& plan)
 {
     PartAvailability a;
@@ -1229,7 +1254,8 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         const unsigned mask = plan.bassRhythm ? plan.bassMask[secondary ? 1 : 0][inTrack % kBassPhraseBars] : 0u;
 
         // What the form says plays in this bar (Form.h).
-        const BarPlan bp = planBar(plan.form, availabilityOf(plan), plan.sectionSeed, inTrack);
+        BarPlan bp = planBar(plan.form, availabilityOf(plan), plan.sectionSeed, inTrack);
+        restoreArp(plan, inTrack, bp);
 
         if (controls != nullptr) {
             if (inTrack == 0) {

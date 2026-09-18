@@ -3965,7 +3965,7 @@ innerhalb der Regeln (Melody.h, Abschnitt „Genre rules above the corpus“). G
 | Acid T1 | Takthälften 1296/162, 97 % Grundton, 73 % Tonwiederholung, 311 Dreierläufe, 1 Tonklasse/Takt, F#3..F#4 | 972/810, 1 42 % / 5 30 % / b3 8 % / b2 8 %, 16 %, 0 Läufe, 4 Tonklassen, E3..F#4 |
 | Acid T3 | 954/1272, 96 % Grundton, 76 %, 318 Läufe, C#4..C#5 | 1113/954, 1 53 % / b7 26 %, 33 %, 0 Läufe, F3..C#5 |
 | Arp T1 („up“) | 10 von 16 Sechzehnteln, Hälften 1520/380 | 16 von 16, 1520/1520, zwei Ströme (41 % Oktavsprünge), B3..F#5 |
-| Arp T2 (Korpus) | G#5..B6 | spielt nicht: die Formmaskierung (Form.cpp) schaltet ihn neben der Lead ab, s. u. |
+| Arp T2 (Korpus) | 150 Takte, G#5..B6 | 54 Takte (nur wo die Lead schweigt), G#3..F#5, s. u. |
 | Lead T2 | 552 Noten in 96 Takten, 6/Takt, b2 47 %, 5 2 % | 1290 Noten, 13/Takt, 1 56 %, b2 13 % (nur als Nebenton), Quinte als Halteton in jeder Phrase |
 | Lead T3 | Median D5, Spitze D6 | Median C#5, Spitze A5 |
 | Pad | tiefster Ton G3/A3, Grundton unten in 24/96 Akkorden (T1) | Grundlage D3..C#4, Grundton unten 96/96, Sub-Grundton in 39 Akkorden der Breakdowns |
@@ -3986,10 +3986,14 @@ mehr als vier Stimmen je Akkord). Der Hochpass wird pro Takt per Kontroll-Event 
 dafür reicht `hp_floor` jetzt bis 40 Hz (Bereich, nicht Reihenfolge). Der Sub endet einen Takt vor dem
 Wiedereinsatz; gerendert: Anteil unter 140 Hz im Breakdown -14,9 dB (vorher -31,1), nach dem Drop -83 dB.
 
-**Offen / Nebenwirkung:** Arp (G3..G5) und Lead (Median A4..C5) teilen zwangsläufig ein Register; die
-Maskierungsregel in Form.cpp schiebt den Arp oktavweise hoch und schaltet ihn ab, sobald er über 100 käme.
-In Track 2 des Hör-Seeds spielt der Arp deshalb gar nicht mehr. Form.cpp gehört dieser Runde nicht — eine
-Folgerunde sollte dort „Arp spielt in den Takten ohne Lead“ statt „Arp schweigt die ganze Sektion“ erlauben.
+**Arp gegen Lead:** Arp (G3..G5) und Lead (Median A4..C5) teilen zwangsläufig ein Register; die
+Maskierungsregel in Form.cpp schiebt den Arp oktavweise hoch und streicht ihn aus der ganzen Sektion,
+sobald er über MIDI 100 käme — in Track 2 des Hör-Seeds verschwand er damit ganz, auch im Breakdown ohne
+Lead. Ohne Form.cpp anzufassen plant `Composer::restoreArp` den Takt ein zweites Mal ohne Lead und gibt
+den Arp dort zurück, wo der echte Takt keine Lead hat (die Sektionsentscheidung schützte nur vor
+Oktavsprüngen innerhalb der Sektion, und die gibt es nicht mehr). Ergebnis: Arp und Lead klingen nie
+gleichzeitig (Maskierungstest jetzt taktweise, 0 gemeinsame Takte). Eine Folgerunde in Form.cpp könnte
+das direkt dort ausdrücken.
 
 ## 0. Kurzfassung
 

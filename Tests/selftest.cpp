@@ -8964,6 +8964,21 @@ void testGenreRules()
               fmt("%d runs of three, %d tracks above D5", acidRun3, acidTopBad));
         check(leadMedianBad == 0 && leadTopBad == 0 && arpRegBad == 0, "seed 864566672: lead median A4..C5 and never above A5, arp inside G3..G5",
               fmt("%d lead medians and %d lead tops off, %d arp tracks outside", leadMedianBad, leadTopBad, arpRegBad));
+        // Track 2 has lead and arp. The form's masking rule used to drop the arp from every section it
+        // shared with the lead; the arp now plays in the bars where the lead rests (Composer.cpp,
+        // restoreArp) and never together with it.
+        std::set<int> leadBars2, arpBars2;
+        const TrackPlan& t2 = c.track(q, 1);
+        for (const NoteEvent& e : ev) {
+            const int bar = static_cast<int>(std::floor(e.beat / kBeatsPerBar));
+            if (bar < t2.firstBar || bar >= t2.firstBar + t2.bars) continue;
+            if (e.part == Part::Lead) leadBars2.insert(bar);
+            if (e.part == Part::Arp) arpBars2.insert(bar);
+        }
+        int together = 0;
+        for (int b : arpBars2) together += leadBars2.count(b) ? 1 : 0;
+        check(!arpBars2.empty() && together == 0, "seed 864566672, track 2: the arp plays where the lead rests, never together with it",
+              fmt("%zu arp bars, %zu lead bars, %d together", arpBars2.size(), leadBars2.size(), together));
     }
 
     // ---- the arp's gate: 15 to 35 % of a sixteenth, as the arp is really played (rule 15)
