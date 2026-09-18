@@ -262,13 +262,18 @@ struct BarPlan {
 BarPlan planBar(const FormPlan& f, const PartAvailability& a, const uint64_t* sectionSeed, int barInTrack);
 
 /**
- * @brief Places the effects at the section boundaries (PLAN 5.8, Solberg and Dibben 2019).
+ * @brief Places the effects: a marker at every section transition and ear candy inside the long
+ *        sections (PLAN 5.8, Solberg and Dibben 2019; 18.09.2026 round "mix-foundation").
  *
  * Risers climb over the last eight bars of a buildup and end exactly on the drop; the formant shot is
- * the pre-drop "Abriss" on the last beat before it; an impact marks the drop, and a sweep falls into
- * it (Solberg and Dibben found the descending sweep to be the drop marker). Where a core gives way to
- * a breakdown a downlifter runs, and the last eight bars of the track carry the sweep that masks the
- * key change into the next track.
+ * the pre-drop "Abriss" on the last beat before it; an impact marks every drop, and a sweep falls into
+ * it (Solberg and Dibben found the descending sweep to be the drop marker). A reverse swell leads into
+ * every buildup and breakdown, a downlifter falls into breakdowns and the outro, and the last eight
+ * bars of the track carry the sweep that masks the key change into the next track. Inside every
+ * section but the buildup, a zap, a short sweep, a reverse swell or a noise wash closes eight- or
+ * sixteen-bar groups; the palette and the period are the track's own. Form.cpp has the details.
+ * @param amount compose.sfx_amount: transition markers are certain from 0.5 up and thin out below it;
+ *               each group boundary carries ear candy with this probability
  */
 void makeFormSfx(FormPlan& f, uint64_t seed, float amount);
 
@@ -287,11 +292,43 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount);
  * between them, so the energy arc of Phase 5 still decides where a section sits and the ride only
  * decides how it moves inside that.
  * @{ */
-constexpr float kRideCutoff = 0.12f;    ///< peak-to-peak cutoff excursion, normalised (0.80 octaves)
-constexpr float kRideReso   = 0.07f;    ///< peak-to-peak resonance excursion, in phase with the cutoff
+constexpr float kRideCutoff = 0.60f;    ///< peak-to-peak cutoff excursion of the acid ride, normalised (4.0 octaves)
+constexpr float kRideReso   = 0.07f;    ///< how far a breakdown's dive lowers the resonance
+constexpr float kRideResoMedium  = 0.55f;   ///< the ride's resonance in stages 1 and 2 ("medium"; at most the knob)
+constexpr float kRideResoSquelch = 0.85f;   ///< the ride's resonance from stage 3 on (the rule's 80 .. 90 %; at least the knob)
+constexpr float kRideDecayShort  = 1.0f / 3.0f;   ///< stage 1 filter decay as a ratio of the knob (dry, percussive)
+constexpr float kRideDecayLong   = 1.7f;    ///< stages 3 and 4 filter decay as a ratio of the knob
 constexpr float kRideDive   = 0.22f;    ///< how far a breakdown dives, normalised
 constexpr float kRollSend   = 0.30f;    ///< hall send the buildup's snare roll rises to
 constexpr int   kRollBars   = 4;        ///< bars of a buildup the roll and its send ramp run over
+
+/**
+ * @brief The four-stage acid ride of the user's rule text of 18.09.2026, as key points in time.
+ *
+ * Over a cycle of 32 bars (or a whole shorter section, so a buildup's cycle ends on the drop):
+ *  1. bars 1-8: cutoff almost closed, resonance medium, short filter decay -- a dry, percussive click;
+ *  2. bars 9-16: the decay returns to the knob and the cutoff starts to open;
+ *  3. bars 17-24: the resonance climbs to 80-90 % -- the squelch;
+ *  4. bars 25-32: the cutoff opens fully (by bar 28) and holds, then dives back to closed over the
+ *     last bar -- the "radical filter dive just before the drop".
+ *
+ * The cutoff points are in units of half the excursion and already **centred**: the raw shape
+ * (-1, -1, -0.2, 0.5, 1, 1, -1) spends more time closed than open, and its mean over the cycle
+ * (meanRaw, -0.175 for 32 bars) is subtracted, so the ride swings around the section's own line. That
+ * is what keeps Composer's level match honest, which measures the knobs and not the automation.
+ */
+struct RideShape {
+    static constexpr int kPoints = 7;
+    double length = 32.0;       ///< bars of one cycle
+    double stage[4] = {};       ///< first bar of each stage within the cycle
+    double bar[kPoints] = {};   ///< when each cutoff key point is reached, bars into the cycle
+    double hold[kPoints] = {};  ///< bars after reaching point k before the ramp to point k+1 starts
+    float  cutoff[kPoints] = {};///< cutoff at each point, in half-excursions, centred on the line
+    float  meanRaw = 0.0f;      ///< the mean of the uncentred shape that was subtracted
+};
+
+/** @brief The ride's shape for a section of @p sectionBars bars (32-bar cycles, or one shorter one). */
+RideShape acidRideShape(double sectionBars);
 /** @} */
 
 /**

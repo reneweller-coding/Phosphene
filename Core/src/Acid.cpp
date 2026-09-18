@@ -17,6 +17,21 @@ constexpr double kAccentDecayMax = 0.2;      ///< an accented note's filter enve
 constexpr double kSweepPulseTau = 0.06;      ///< accent pulse
 constexpr double kSweepTau = 0.15;           ///< accent sweep capacitor
 constexpr float kSweepOctaves = 2.0f;        ///< sweep depth at full accent, resonance and charge
+/**
+ * @brief Input gain of the drive stage at Drive = 1, in dB (18.09.2026, round "mix-foundation").
+ *
+ * Until this round the drive ran 1 + 5 d into the tanh (at most 15.6 dB) and 1 / (1 + 1.5 d) out.
+ * Measured on the listening seed, four bars of the first drop, acid alone and dry: crest 25.6 dB at
+ * drive 0, 22.2 at the default 0.45 and 19.4 at 1, and the band 3 .. 8 kHz moved by 0.7 dB between
+ * 0.45 and 1. The body of a line with a resonant diode ladder sits 20 dB and more under the ladder's
+ * resonant peaks, so a stage that only saturates at the peaks never touches the body: the knob did
+ * almost nothing to the tone. The psytrance acid is a 303 into a distortion pedal, whose point is
+ * exactly that the peaks clip and the body comes up. 30 dB in, sqrt of it out: a quiet body gains
+ * 15 dB at full drive while a saturating peak loses 15, so the crest collapses the way a pedal's does.
+ * At the old default of 0.45 the small-signal gain is +6.8 dB against the old +5.8 dB, so the default
+ * line keeps its level.
+ */
+constexpr float kDriveMaxDb = 30.0f;
 
 const HalfbandDesign& acidHalfband()
 {
@@ -86,9 +101,11 @@ void Acid::update(const float* v, double bpm)
     glide_ = static_cast<float>(1.0 - std::exp(-1.0 / (v[acid::SlideTime] * 0.001 * sr_)));
     ampDecay_ = v[acid::AmpDecay] * 0.001f;
     keyTrack_ = v[acid::KeyTrack];
+    // Drive: up to kDriveMaxDb into the saturator, and back out by half of that in dB, so a quiet
+    // body gains half the drive and a peak that saturates loses the other half (see kDriveMaxDb).
     const float drive = v[acid::Drive];
-    driveIn_ = 1.0f + 5.0f * drive;
-    driveOut_ = 1.0f / (1.0f + 1.5f * drive);
+    driveIn_ = dbToGain(kDriveMaxDb * drive);
+    driveOut_ = 1.0f / std::sqrt(driveIn_);
     const bool sq = v[acid::Squelch] >= 0.5f;
     if (sq && !squelch_) std::fill(comb_.begin(), comb_.end(), 0.0f);   // no stale ring from long ago
     squelch_ = sq;

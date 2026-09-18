@@ -1479,6 +1479,103 @@ double measureLock(const char* settings, double bpm, double& spread, double& coh
     return sumD / n;
 }
 
+/**
+ * @brief The default kick against the kicks of the reference recordings (18.09.2026, "mix-foundation").
+ *
+ * The reference numbers are `Tools/ref_kick.py` on the 40 recordings of the collection: in 24 of them
+ * the first 90 s hold a stretch of eight or more beats where kick and bass play nearly alone (power
+ * above 300 Hz at least 8 dB under the power at 30 .. 150 Hz), and the kicks there were measured one
+ * by one over the window from the onset to the first bass slot, a quarter beat later. Medians over
+ * the recordings (quartiles in brackets): power under 60 Hz against 60 .. 120 Hz -4.7 dB (-9 .. 0),
+ * the click band 2 .. 5 kHz against 40 .. 120 Hz -27.7 dB (-31 .. -23), crest 7.1 dB (6 .. 8).
+ * The Phosphene kick measured -7.0, -38.7 and 6.0 by the same tool before this round.
+ *
+ * The same quantities are computed here from the kick's own output, independently of the tool but
+ * with its window: flat, with a 3 ms half-cosine fade at the end (a Hann window would weigh the click
+ * -- the first milliseconds -- with nearly zero), zero-padded, a plain DFT. The bounds: at least the
+ * reference median of sub (the user heard "hardly any sub"), the click inside the references'
+ * quartiles, the crest at least their lower quartile.
+ */
+void testKickReference()
+{
+    section("the kick against the reference kicks");
+    const double sr = 48000.0;
+    const double slot = 0.25 * 60.0 / 145.0;
+    ParamStore p;
+    std::vector<float> kv = moduleValues(p, Module::Kick);
+    Kick::constrain(kv.data(), slot, 6);
+    Kick k;
+    k.prepare(sr);
+    k.update(kv.data(), 6);
+    k.trigger(1.0f);
+    const size_t n = static_cast<size_t>(slot * sr);
+    std::vector<float> y(n);
+    k.process(y.data(), static_cast<int>(n));
+    const size_t fade = static_cast<size_t>(0.003 * sr);
+    std::vector<double> w(n);
+    for (size_t i = 0; i < n; ++i) {
+        const double g = i + fade >= n ? 0.5 + 0.5 * std::cos(3.141592653589793 * static_cast<double>(i + fade - n) / fade) : 1.0;
+        w[i] = g * y[i];
+    }
+    const size_t N = 16384;
+    auto band = [&](double lo, double hi) {
+        double pw = 0.0;
+        for (size_t kb = 1; kb < N / 2; ++kb) {
+            const double f = static_cast<double>(kb) * sr / N;
+            if (f < lo || f >= hi) continue;
+            double re = 0.0, im = 0.0;
+            const double dw = -2.0 * 3.141592653589793 * static_cast<double>(kb) / N;
+            for (size_t i = 0; i < n; ++i) { re += w[i] * std::cos(dw * i); im += w[i] * std::sin(dw * i); }
+            pw += re * re + im * im;
+        }
+        return pw;
+    };
+    const double low = band(60.0, 120.0);
+    const double subLow = 10.0 * std::log10(band(20.0, 60.0) / low);
+    const double click = 10.0 * std::log10(band(2000.0, 5000.0) / band(40.0, 120.0));
+    double peak = 0.0, ms = 0.0;
+    for (size_t i = 0; i < n; ++i) { peak = std::max(peak, std::fabs(static_cast<double>(y[i]))); ms += static_cast<double>(y[i]) * y[i]; }
+    const double crest = 20.0 * std::log10(peak / std::sqrt(ms / n));
+    check(subLow >= -4.7 && click >= -31.0 && click <= -23.0 && crest >= 6.0,
+          "the default kick has the reference kicks' sub, click and crest (Tools/ref_kick.py, 24 recordings)",
+          fmt("sub under 60 Hz against 60-120 Hz %+.1f dB (references: median -4.7, at least that), click 2-5 kHz against 40-120 Hz %+.1f dB "
+              "(quartiles -31 .. -23), crest %.1f dB (lower quartile 6)", subLow, click, crest));
+}
+
+/**
+ * @brief The engine tells the kit its tempo, and the auto-pan's period follows (18.09.2026).
+ *
+ * The swing's period is perc.pan_bars bars, 0.1875 by default: three sixteenths, 0.375 s at 120 BPM
+ * and 0.310 s at the 145 BPM the kit assumed while nobody called PercKit::setTempo. The period is
+ * read off the lane's pan angle, sampled every 16 samples while the engine runs, as the mean distance
+ * between upward crossings of its own mean.
+ */
+void testPercTempo()
+{
+    section("the kit's auto-pan runs at the engine's tempo");
+    const double sr = 48000.0;
+    auto e = std::make_unique<Engine>();
+    e->prepare(sr, 512);
+    e->params().parseText("compose.bpm=120");
+    std::vector<float> L(16), R(16), a;
+    for (int i = 0; i < static_cast<int>(2.0 * sr / 16); ++i) {
+        e->process(L.data(), R.data(), 16);
+        a.push_back(static_cast<float>(e->percKit().panAngle(0)));
+    }
+    double mean = 0.0;
+    for (float v : a) mean += v;
+    mean /= static_cast<double>(a.size());
+    std::vector<double> ups;
+    for (size_t i = 1; i < a.size(); ++i)
+        if (a[i - 1] < mean && a[i] >= mean) ups.push_back((static_cast<double>(i) - (a[i] - mean) / (a[i] - a[i - 1])) * 16.0 / sr);
+    const double period = ups.size() >= 2 ? (ups.back() - ups.front()) / static_cast<double>(ups.size() - 1) : 0.0;
+    const double expect = 0.1875 * 4.0 * 60.0 / 120.0;
+    check(std::fabs(e->percKit().tempo() - 120.0) < 1e-6 && std::fabs(period - expect) < 0.01 * expect,
+          "at 120 BPM the kit's auto-pan swings with three sixteenths of 120 BPM, not of 145",
+          fmt("kit tempo %.2f BPM; swing period %.4f s over %d cycles (expected %.4f s, at 145 BPM it would be %.4f s)",
+              e->percKit().tempo(), period, static_cast<int>(ups.size()) - 1, expect, 0.1875 * 4.0 * 60.0 / 145.0));
+}
+
 void testPhaseLock()
 {
     section("kick and bass phase at the first sixteenth");
@@ -5624,11 +5721,11 @@ void testSfx()
                 const double end = s.beat + s.length;
                 if (s.type == static_cast<int>(SfxType::Impact)) {
                     ++impacts;
-                    // Either the downbeat of a drop that follows a buildup, or of one that follows a
-                    // breakdown directly (the flat Progressive body).
+                    // The downbeat of a drop: one that follows a buildup, or since 18.09.2026 any other
+                    // drop too (out of a breakdown, a groove, or a first drop into a second).
                     bool ok = isAt(dropBeats, s.beat);
                     for (int i = 1; i < t.form.count && !ok; ++i)
-                        ok = t.form.section[i].type == SectionType::Drop && t.form.section[i - 1].type == SectionType::Break
+                        ok = t.form.section[i].type == SectionType::Drop
                           && std::fabs(static_cast<double>(t.form.section[i].startBar) * kBeatsPerBar - s.beat) < 1e-6;
                     if (!ok) ++misplaced;
                 }
@@ -5645,6 +5742,78 @@ void testSfx()
         check(impacts > 0 && shots > 0 && risers > 0 && sweeps > 0 && misplaced == 0,
               "effects on the boundaries of the form: riser into the drop, formant shot on the last beat of the PDB, impact on the drop, sweep into the key change",
               fmt("%d impacts, %d formant shots, %d risers, %d sweeps, %d misplaced", impacts, shots, risers, sweeps, misplaced));
+    }
+    // 18.09.2026 (round "mix-foundation"): a marker at *every* transition, ear candy inside the long
+    // sections, and nothing inside a buildup but its own markers -- the pre-drop vacuum stays empty.
+    // The expectations are read off the form itself, section by section, not off Form.cpp's code.
+    {
+        auto run = [](float amount, int& transitions, int& marked, int& intrusions, int& candy, double& candyBars,
+                      std::vector<std::array<int, kNumSfxTypes>>& perTrack) {
+            ParamStore q;
+            q.parseText(fmt("compose.sfx_amount=%.2f compose.track_bars=256 compose.level_match=Off master.auto_gain=Off", amount));
+            Composer c(303);
+            for (int ti = 0; ti < 8; ++ti) {
+                const TrackPlan t = c.track(q, ti);
+                std::array<int, kNumSfxTypes> hist{};
+                auto has = [&](SfxType type, double beat, bool atEnd) {
+                    for (const SfxEvent& s : t.form.sfx)
+                        if (s.type == static_cast<int>(type) && std::fabs((atEnd ? s.beat + s.length : s.beat) - beat) < 1e-6) return true;
+                    return false;
+                };
+                for (int i = 1; i < t.form.count; ++i) {
+                    const Section& s = t.form.section[i];
+                    const double at = static_cast<double>(s.startBar) * kBeatsPerBar;
+                    bool ok = true;
+                    if (s.type == SectionType::Build) ok = has(SfxType::ReverseSwell, at, true);
+                    else if (s.type == SectionType::Break) ok = has(SfxType::ReverseSwell, at, true) && has(SfxType::Downlifter, at, false);
+                    else if (s.type == SectionType::Drop) ok = has(SfxType::Impact, at, false);
+                    else if (s.type == SectionType::Outro) ok = has(SfxType::Downlifter, at, false);
+                    else continue;
+                    ++transitions;
+                    if (ok) ++marked;
+                }
+                for (int i = 0; i < t.form.count; ++i) {
+                    const Section& s = t.form.section[i];
+                    const double a = static_cast<double>(s.startBar) * kBeatsPerBar, z = a + s.bars * kBeatsPerBar;
+                    if (s.type != SectionType::Build) { candyBars += s.bars; continue; }
+                    for (const SfxEvent& e : t.form.sfx) {
+                        if (e.beat < a - 1e-9 || e.beat >= z - 1e-9) continue;
+                        // Inside a buildup only its own four: the riser and the sweep that end on the drop,
+                        // the formant shot on the last beat, and nothing else.
+                        const bool own = (e.type == static_cast<int>(SfxType::Riser) && std::fabs(e.beat + e.length - z) < 1e-6)
+                                      || (e.type == static_cast<int>(SfxType::Sweep) && std::fabs(e.beat + e.length - z) < 1e-6
+                                          && e.length <= 2.0f * kBeatsPerBar + 1e-6)
+                                      || (e.type == static_cast<int>(SfxType::FormantShot) && std::fabs(e.beat - (z - 1.0)) < 1e-6);
+                        if (!own) ++intrusions;
+                    }
+                }
+                for (const SfxEvent& e : t.form.sfx) {
+                    ++hist[static_cast<size_t>(e.type)];
+                    if (e.type == static_cast<int>(SfxType::Zap) || (e.length <= 2.0f * kBeatsPerBar + 1e-6
+                        && (e.type == static_cast<int>(SfxType::Sweep) || e.type == static_cast<int>(SfxType::ReverseSwell)))) ++candy;
+                }
+                perTrack.push_back(hist);
+            }
+        };
+        int tr = 0, mk = 0, intr = 0, candy = 0;
+        double bars = 0.0;
+        std::vector<std::array<int, kNumSfxTypes>> hist;
+        run(0.7f, tr, mk, intr, candy, bars, hist);
+        int tr0 = 0, mk0 = 0, intr0 = 0, candy0 = 0;
+        double bars0 = 0.0;
+        std::vector<std::array<int, kNumSfxTypes>> hist0;
+        run(0.0f, tr0, mk0, intr0, candy0, bars0, hist0);
+        // Distinct palettes: at least two tracks whose type histograms differ in shape.
+        int differing = 0;
+        for (size_t i = 1; i < hist.size(); ++i) differing += hist[i] != hist[0] ? 1 : 0;
+        const double perSixteen = 16.0 * candy / std::max(1.0, bars);
+        // At 0.7 a group boundary carries candy seven times in ten; with sixteen-bar groups that is
+        // 0.7 per sixteen bars and with eight-bar groups 1.4, less the transition bars. 0.4 is the floor.
+        check(tr > 20 && mk == tr && intr == 0 && perSixteen > 0.4 && differing >= 4 && mk0 == 0 && candy0 == 0,
+              "a marker at every transition, ear candy inside the long sections, nothing inside a buildup but its own markers",
+              fmt("%d of %d transitions marked; %d intrusions into buildups; %d short effects over %.0f bars outside buildups = %.2f per 16 bars; "
+                  "%d of 7 tracks with another type mix than track 1; at sfx_amount 0: %d marked, %d short effects",
+                  mk, tr, intr, candy, bars, perSixteen, differing, mk0, candy0));
     }
 }
 
@@ -5740,6 +5909,98 @@ struct BandAccumulator {
  * scores averages that lottery out; forcing every amount to one would remove it, but then the test
  * would no longer measure the product as it ships.
  */
+/**
+ * @brief The drop's markers are heard: riser and impact against the mix (18.09.2026, "mix-foundation").
+ *
+ * The listening seed of the user (864566672), its first buildup into the first drop, rendered twice
+ * with the master's dynamics off: the whole mix, and the SFX strip alone (the mixer's mutes, exact by
+ * testMixBalance (a2)). At the loudest 400 ms of the riser (bars 32 .. 40) and of the impact (bar 40)
+ * the strip's power is compared with the mix's in the same window. Before this round the riser
+ * peaked 9.4 dB and the impact 14.9 dB under the mix (the round's measurement script, which designs
+ * its K-weighting from the analogue prototypes; this check uses the standard's tabulated 48 kHz
+ * coefficients and its own windowing). The bound is "within 8 dB of the mix": a marker that far under
+ * is still clearly heard, one 15 dB under is not.
+ */
+void testSfxLevel()
+{
+    section("the drop's markers against the mix");
+    const double sr = 48000.0;
+    auto render = [&](bool solo) {
+        auto e = std::make_unique<Engine>();
+        e->prepare(sr, 512);
+        e->params().parseText("master.auto_gain=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.clip=Off");
+        if (solo) e->params().parseText("mix.kick_mute=On mix.bass_mute=On mix.perc_mute=On mix.acid_mute=On mix.lead_mute=On "
+                                        "mix.arp_mute=On mix.pad_mute=On");
+        Composer c(864566672ull);
+        const TempoMap tm = c.tempoMap(e->params(), 78);
+        e->setTempoMap(tm);
+        Conductor cond(*e, c);
+        const uint64_t total = static_cast<uint64_t>(tm.secondsAt(78.0 * kBeatsPerBar) * sr);
+        std::vector<float> L(512), R(512), p;
+        p.reserve(static_cast<size_t>(total));
+        // K-weighting with the coefficients ITU-R BS.1770-4 tabulates for 48 kHz (pre-filter shelf,
+        // then the RLB high pass), so a riser's top end counts the way a listener's loudness does.
+        struct Biquad { double b0, b1, b2, a1, a2, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+            double tick(double x) { const double y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; } };
+        Biquad kw[2][2];
+        for (auto& ch : kw) {
+            ch[0] = { 1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241, 0.73248077421585 };
+            ch[1] = { 1.0, -2.0, 1.0, -1.99004745483398, 0.99007225036621 };
+        }
+        while (e->samplePosition() < total) {
+            cond.pump(e->params(), 32.0);
+            const int n = static_cast<int>(std::min<uint64_t>(512, total - e->samplePosition()));
+            e->process(L.data(), R.data(), n);
+            for (int i = 0; i < n; ++i) {
+                const double l = kw[0][1].tick(kw[0][0].tick(L[static_cast<size_t>(i)]));
+                const double r = kw[1][1].tick(kw[1][0].tick(R[static_cast<size_t>(i)]));
+                p.push_back(static_cast<float>(l * l + r * r));
+            }
+        }
+        return std::make_pair(p, tm);
+    };
+    const auto mix = render(false);
+    const auto sfx = render(true);
+    const size_t win = static_cast<size_t>(0.4 * sr), hop = static_cast<size_t>(0.05 * sr);
+    auto windowDb = [&](const std::vector<float>& p, size_t a) {
+        double s = 0.0;
+        for (size_t i = a; i < a + win && i < p.size(); ++i) s += p[i];
+        return 10.0 * std::log10(s / win + 1e-30);
+    };
+    // The loudest window of the SFX strip between two bars, and the mix in the same window.
+    auto marker = [&](double bar0, double bar1) {
+        const size_t a = static_cast<size_t>(mix.second.secondsAt(bar0 * kBeatsPerBar) * sr);
+        const size_t z = static_cast<size_t>(mix.second.secondsAt(bar1 * kBeatsPerBar) * sr);
+        double best = -1e9;
+        size_t at = a;
+        for (size_t i = a; i + win <= z; i += hop) { const double v = windowDb(sfx.first, i); if (v > best) { best = v; at = i; } }
+        return best - windowDb(mix.first, at);
+    };
+    const double riser = marker(32.0, 40.0), impact = marker(40.0, 41.0);
+    check(riser > -8.0 && impact > -8.0,
+          "the riser into the first drop and the impact on it stand within 8 dB of the mix at their loudest",
+          fmt("riser %+.1f dB, impact %+.1f dB against the mix in the same 400 ms (before the round: -9.4 and -14.9)", riser, impact));
+    // The other side of the per-type table: a downlifter is loud by construction (it starts at full
+    // level) and opens a breakdown, whose first beats are the cut -- there the mix *is* the effects, so
+    // it is compared with the drop it follows instead: the loudest 400 ms of the downlifter against the
+    // mean power of the eight bars before the break. With the types sharing one gain it would reach
+    // 4 dB under the drop; the table puts it about 12 under -- a fall, not a second drop. Track 1 of
+    // this seed breaks at bar 72.
+    double downPeak = -1e9, dropMean = 0.0;
+    {
+        const size_t a = static_cast<size_t>(mix.second.secondsAt(72.0 * kBeatsPerBar) * sr);
+        const size_t z = static_cast<size_t>(mix.second.secondsAt(76.0 * kBeatsPerBar) * sr);
+        for (size_t i = a; i + win <= z; i += hop) downPeak = std::max(downPeak, windowDb(sfx.first, i));
+        const size_t d0 = static_cast<size_t>(mix.second.secondsAt(64.0 * kBeatsPerBar) * sr);
+        for (size_t i = d0; i < a; ++i) dropMean += mix.first[i];
+        dropMean = 10.0 * std::log10(dropMean / static_cast<double>(a - d0) + 1e-30);
+    }
+    const double down = downPeak - dropMean;
+    check(down < -6.0 && down > -20.0,
+          "the downlifter into the first breakdown is heard, and falls well under the drop it follows",
+          fmt("downlifter peak %+.1f dB against the last eight bars of the drop", down));
+}
+
 void testMixBalance()
 {
     section("mix balance against the reference recordings (Phase 9)");
@@ -7813,10 +8074,11 @@ void testArrangeDynamics()
         return out;
     };
 
-    // (j) A core section is ridden: the cutoff leaves the straight line of the section's own arc by a
-    //     real amount, comes back to it at every segment boundary, and averages to it. The last is
-    //     what keeps Composer's loudness probe honest -- it measures the knobs, so a ride with a mean
-    //     would bias the track's gain.
+    // (j) The four-stage ride of the user's rule text (18.09.2026), read back from the trajectory the
+    //     engine would play, in the parameters' own units. The rule: bars 1-8 cutoff almost closed,
+    //     resonance medium, short decay; bars 9-16 decay longer, cutoff opening; bars 17-24 resonance
+    //     up to 80-90 %; bars 25-32 cutoff fully open, then a radical dive just before the drop. And the
+    //     cutoff still averages to the section's own line, which keeps the level match honest.
     {
         ParamStore p;
         Section s;
@@ -7825,14 +8087,61 @@ void testArrangeDynamics()
         s.energy = s.energyTo = 0.87f;
         std::vector<ControlEvent> ev;
         sectionAutomation(p, s, 0x5EEDu, 0.0, 0.0f, 0.0f, false, ev);
-        const std::vector<double> y = trajectory(ev, p.base(Module::Acid) + acid::Cutoff, 0.0, 32.0, 8);
-        double lo = 1e9, hi = -1e9, mean = 0.0;
-        for (double v : y) { lo = std::min(lo, v); hi = std::max(hi, v); mean += v; }
-        mean /= static_cast<double>(y.size());
-        check(hi - lo > 0.5 * kRideCutoff && std::fabs(mean) < 0.1 * kRideCutoff && std::fabs(y.back()) < 1e-6,
-              "a core's acid ride is a real excursion that averages back to the section's own arc",
-              fmt("cutoff offset %+.4f .. %+.4f normalised (peak to peak allowed %.4f), mean %+.4f, value at the section end %+.6f",
-                  lo, hi, kRideCutoff, mean, y.back()));
+        const int ab = p.base(Module::Acid);
+        const std::vector<double> cut = trajectory(ev, ab + acid::Cutoff, 0.0, 32.0, 8);
+        const std::vector<double> res = trajectory(ev, ab + acid::Resonance, 0.0, 32.0, 8);
+        const std::vector<double> dec = trajectory(ev, ab + acid::Decay, 0.0, 32.0, 8);
+        // Absolute values: resonance is linear, decay logarithmic, cutoff in octaves from the knob.
+        const ParamDesc& dd = p.desc(ab + acid::Decay);
+        const ParamDesc& cd = p.desc(ab + acid::Cutoff);
+        const double knobR = p.get(ab + acid::Resonance), knobD = p.get(ab + acid::Decay);
+        auto decMs = [&](double off) { return knobD * std::pow(static_cast<double>(dd.maxValue) / dd.minValue, off); };
+        auto octaves = [&](double off) { return off * std::log2(static_cast<double>(cd.maxValue) / cd.minValue); };
+        auto meanOf = [](const std::vector<double>& v, double b0, double b1) {
+            double m = 0.0;
+            int n = 0;
+            for (int i = static_cast<int>(b0 * 8); i < static_cast<int>(b1 * 8); ++i) { m += v[static_cast<size_t>(i)]; ++n; }
+            return m / std::max(1, n);
+        };
+        // Stage 1 from bar 2 on (the first bar is the approach from wherever the section began).
+        const double c1 = meanOf(cut, 1, 8), c2end = cut[16 * 8], c3end = cut[24 * 8];
+        double c4max = -1e9;
+        for (int i = 24 * 8; i < 31 * 8; ++i) c4max = std::max(c4max, cut[static_cast<size_t>(i)]);
+        const double cEnd = cut.back();
+        double mean = 0.0;
+        for (double v : cut) mean += v;
+        mean /= static_cast<double>(cut.size());
+        const double r1 = knobR + meanOf(res, 1, 16), r3 = knobR + meanOf(res, 22, 31);
+        const double d1 = decMs(meanOf(dec, 1, 8)), d2end = decMs(dec[16 * 8]), d4 = decMs(meanOf(dec, 28, 32));
+        const bool cutoffOk = octaves(c4max - c1) > 2.5 && c2end > c1 && c3end > c2end && c4max > c3end
+                           && octaves(c4max - cEnd) > 2.5 && std::fabs(cEnd - c1) < 0.02
+                           && std::fabs(mean) < 0.05 * kRideCutoff;
+        const bool resoOk = r1 >= 0.5 && r1 <= 0.6 && r3 >= 0.8 && r3 <= 0.9;
+        const bool decayOk = d1 < 0.5 * knobD && d2end > 2.0 * d1 && d4 > knobD;
+        check(cutoffOk && resoOk && decayOk,
+              "the acid ride's four stages: closed and dry, opening, squelch at 80-90 % resonance, fully open, dive; centred on the section's line",
+              fmt("cutoff (octaves from the line) stage 1 %+.2f, end of 2 %+.2f, end of 3 %+.2f, stage 4 peak %+.2f, after the dive %+.2f, "
+                  "section mean %+.4f normalised; resonance stages 1-2 %.2f, stage 3-4 %.2f; decay stage 1 %.0f ms, end of 2 %.0f ms, stage 4 %.0f ms (knob %.0f)",
+                  octaves(c1), octaves(c2end), octaves(c3end), octaves(c4max), octaves(cEnd), mean, r1, r3, d1, d2end, d4, knobD));
+    }
+
+    // (j2) A sixteen-bar buildup plays the whole cycle in its sixteen bars, so that the dive lands on the
+    //      drop: the peak falls in its last quarter and the last bar goes from there back to closed.
+    {
+        ParamStore p;
+        Section s;
+        s.type = SectionType::Build;
+        s.bars = 16;
+        std::vector<ControlEvent> ev;
+        sectionAutomation(p, s, 0xB1D5u, 0.0, 0.0f, 0.0f, false, ev);
+        const std::vector<double> cut = trajectory(ev, p.base(Module::Acid) + acid::Cutoff, 0.0, 16.0, 8);
+        size_t peak = 0;
+        for (size_t i = 0; i < cut.size(); ++i) if (cut[i] > cut[peak]) peak = i;
+        const double fall = cut[15 * 8] - cut.back();
+        check(peak >= 12 * 8 && peak <= 15 * 8 && fall > 0.6 * kRideCutoff * 0.75 && std::fabs(cut.back() - cut[2 * 8]) < 0.02,
+              "a sixteen-bar buildup rides the whole cycle and dives over its last bar, onto the drop",
+              fmt("peak at bar %.2f, fall over the last bar %.3f normalised (kRideCutoff %.2f), end %+.3f against stage 1 %+.3f",
+                  peak / 8.0, fall, kRideCutoff, cut.back(), cut[2 * 8]));
     }
 
     // (k) A breakdown dives instead, and returns. Bound: at least 0.6 of kRideDive down (the depth is
@@ -7894,7 +8203,9 @@ void testArrangeDynamics()
         for (const ControlEvent& e : ev)
             if (e.param == p.base(Module::Acid) + acid::Cutoff && e.length > 0.0f) shortest = std::min(shortest, static_cast<double>(e.length));
         const double seconds = shortest * 60.0 / 145.0;
-        check(seconds / 0.15 > 20.0,
+        // Since 18.09.2026 the fastest move is the ride's dive, one bar long; everything else is two bars
+        // and longer in a 32-bar cycle. One bar is still ten times the capacitor's time constant.
+        check(seconds / 0.15 > 10.0,
               "the ride's fastest move is slower than the accent's capacitor by more than an order of magnitude",
               fmt("shortest ramp %.2f beats = %.2f s against kSweepTau 0.15 s: a factor of %.0f", shortest, seconds, seconds / 0.15));
     }
@@ -8559,6 +8870,7 @@ int main()
     run("testDynamics", testDynamics);
     run("testSfx", testSfx);
     run("testMaster", testMaster);
+    run("testSfxLevel", testSfxLevel);
     run("testMixBalance", testMixBalance);
     run("testBandLimit", testBandLimit);
     run("testStereoWidth", testStereoWidth);
@@ -8584,6 +8896,8 @@ int main()
     run("testBassModel", testBassModel);
     run("testVariety", testVariety);
     run("testEngine", testEngine);
+    run("testKickReference", testKickReference);
+    run("testPercTempo", testPercTempo);
     run("testPhaseLock", testPhaseLock);
     run("testBassRhythm", testBassRhythm);
     run("testPercKit", testPercKit);

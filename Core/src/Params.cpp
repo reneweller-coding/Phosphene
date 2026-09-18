@@ -176,6 +176,18 @@ const ParamDesc kPercParams[perc::Count] = {
  * is untouched: no lane's low cut goes under 150 Hz, so nothing below 140 Hz is being placed anywhere.
  * Clap and snare stay in the middle -- the backbeat is the one thing a psytrance mix anchors there,
  * and the presence band they live in already measured inside the recordings' quartiles.
+ *
+ * **Levels per role (18.09.2026, round "mix-foundation").** The user heard only hats and kick. The
+ * kit was composed -- 770 congas and 288 toms in track 1 of the listening seed -- but not heard:
+ * rendered lane by lane in the first drop (all lanes active so the composition does not move, the
+ * others at -36 dB, the floor subtracted), tom and conga stood at -0.7 and -1.3 dB against the rest of
+ * the mix in their own octave (250 .. 500 Hz), where arp and acid live. Tom +6 dB, conga +7, clap +3,
+ * snare +2, ride +3, rim, zap and blip +4; the arp gives 2 dB back (mix.arp_level). The acid, whose
+ * driven default also lives in that octave, takes back part of it. Two more dB on tom and conga
+ * would have bought more, and were tried: they push the level match of testVariety (spread of four
+ * tracks, perc, kick and bass only) from 0.75 to 0.85 LU, over its 0.8 bound -- the composer's
+ * loudness probe does not see how much of a track the toms and congas play. The measurements
+ * before and after are in docs/PLAN.md.
  */
 const char* const kDefaultKit =
     "perc1.role=Closed Hat;perc1.engine=Metal;perc1.decay=45;perc1.noise=0.35;perc1.noise_decay=35;perc1.filter=Low Pass;"
@@ -183,41 +195,41 @@ const char* const kDefaultKit =
     "perc2.role=Open Hat;perc2.engine=Metal;perc2.decay=260;perc2.noise=0.35;perc2.noise_decay=220;perc2.filter=Low Pass;"
     "perc2.cutoff=12000;perc2.low_cut=3000;perc2.level=2;perc2.pan=-0.4;perc2.pan_depth=1;perc2.choke=1\n"
     "perc3.role=Ride;perc3.engine=Metal;perc3.metal_scale=0.72;perc3.decay=700;perc3.noise=0.2;perc3.noise_decay=400;"
-    "perc3.filter=Band Pass;perc3.cutoff=5200;perc3.resonance=0.35;perc3.level=-3;perc3.pan=0.6;perc3.pan_depth=1\n"
+    "perc3.filter=Band Pass;perc3.cutoff=5200;perc3.resonance=0.35;perc3.level=0;perc3.pan=0.6;perc3.pan_depth=1\n"
     "perc4.role=Crash;perc4.engine=Metal;perc4.metal_scale=0.5;perc4.decay=1600;perc4.noise=0.6;perc4.noise_decay=1400;"
     "perc4.filter=High Pass;perc4.cutoff=3000;perc4.level=-5;perc4.pan=-0.55;perc4.pan_depth=1\n"
     "perc5.role=Clap;perc5.engine=Noise;perc5.noise=1;perc5.bursts=4;perc5.burst_spacing=9;perc5.noise_decay=180;"
-    "perc5.filter=Band Pass;perc5.cutoff=1400;perc5.resonance=0.35;perc5.level=-4;perc5.low_cut=300\n"
+    "perc5.filter=Band Pass;perc5.cutoff=1400;perc5.resonance=0.35;perc5.level=-1;perc5.low_cut=300\n"
     "perc6.role=Snare;perc6.engine=Tone;perc6.pitch=190;perc6.pitch_amount=1.6;perc6.pitch_decay=25;perc6.decay=90;"
-    "perc6.noise=0.8;perc6.noise_decay=140;perc6.filter=High Pass;perc6.cutoff=250;perc6.level=-6;perc6.low_cut=160;perc6.cut_track=2\n"
+    "perc6.noise=0.8;perc6.noise_decay=140;perc6.filter=High Pass;perc6.cutoff=250;perc6.level=-4;perc6.low_cut=160;perc6.cut_track=2\n"
     "perc7.role=Rim;perc7.engine=FM;perc7.pitch=1700;perc7.fm_ratio=2.61;perc7.fm_index=2.2;perc7.decay=28;perc7.pitch_decay=6;"
-    "perc7.filter=Band Pass;perc7.cutoff=2200;perc7.resonance=0.3;perc7.level=-10;perc7.pan=-0.45;perc7.pan_depth=1\n"
+    "perc7.filter=Band Pass;perc7.cutoff=2200;perc7.resonance=0.3;perc7.level=-6;perc7.pan=-0.45;perc7.pan_depth=1\n"
     "perc8.role=Shaker;perc8.engine=Noise;perc8.noise=1;perc8.noise_decay=45;perc8.filter=Low Pass;perc8.cutoff=11000;"
     "perc8.low_cut=3000;perc8.resonance=0.1;perc8.level=-1;perc8.pan=0.55;perc8.pan_depth=1\n"
     "perc9.role=Tom;perc9.engine=Modal;perc9.pitch=220;perc9.low_cut=190;perc9.mode_set=Membrane;perc9.mode_damp=0.6;perc9.decay=280;"
-    "perc9.noise=0.08;perc9.noise_decay=15;perc9.filter=Low Pass;perc9.cutoff=6000;perc9.level=-8;perc9.pan=-0.35;perc9.pan_depth=1;perc9.tune=1\n"
+    "perc9.noise=0.08;perc9.noise_decay=15;perc9.filter=Low Pass;perc9.cutoff=6000;perc9.level=-2;perc9.pan=-0.35;perc9.pan_depth=1;perc9.tune=1\n"
     "perc10.role=Conga;perc10.engine=Modal;perc10.pitch=330;perc10.mode_set=Harmonic;perc10.mode_damp=0.4;perc10.decay=180;"
-    "perc10.noise=0.05;perc10.noise_decay=8;perc10.filter=Low Pass;perc10.cutoff=8000;perc10.low_cut=220;perc10.level=-10;perc10.pan=0.5;perc10.pan_depth=1;perc10.tune=1\n"
+    "perc10.noise=0.05;perc10.noise_decay=8;perc10.filter=Low Pass;perc10.cutoff=8000;perc10.low_cut=220;perc10.level=-3;perc10.pan=0.5;perc10.pan_depth=1;perc10.tune=1\n"
     "perc11.role=Zap;perc11.engine=FM;perc11.pitch=420;perc11.pitch_amount=8;perc11.pitch_decay=35;perc11.fm_ratio=1.5;"
     "perc11.fm_index=3;perc11.decay=110;perc11.filter=Low Pass;perc11.cutoff=9000;perc11.resonance=0.4;perc11.drive=0.3;"
-    "perc11.level=-12;perc11.pan=0.6;perc11.pan_depth=1\n"
+    "perc11.level=-8;perc11.pan=0.6;perc11.pan_depth=1\n"
     "perc12.role=Blip;perc12.engine=Tone;perc12.pitch=1100;perc12.pitch_amount=1.3;perc12.pitch_decay=4;perc12.decay=45;"
-    "perc12.filter=Band Pass;perc12.cutoff=1800;perc12.resonance=0.2;perc12.level=-12;perc12.pan=-0.6;perc12.pan_depth=1;perc12.tune=1\n";
+    "perc12.filter=Band Pass;perc12.cutoff=1800;perc12.resonance=0.2;perc12.level=-8;perc12.pan=-0.6;perc12.pan_depth=1;perc12.tune=1\n";
 
 const ParamDesc kKickParams[kick::Count] = {
     { "engine",      "Engine",       "",     0.0f,     1.0f,    0.0f, Curve::Choice, kKickEngineNames },
     { "tune",        "Tune",         "",     0.0f,     1.0f,    1.0f, Curve::Choice, kKickTuneNames },
     { "pitch_end",   "Pitch End",    "Hz",  30.0f,   120.0f,   50.0f, Curve::Log },
-    { "pitch_start", "Pitch Start",  "Hz",  60.0f,  1500.0f,  220.0f, Curve::Log },
-    { "pitch_decay", "Body Decay",   "ms",   5.0f,   150.0f,   22.0f, Curve::Log },
+    { "pitch_start", "Pitch Start",  "Hz",  60.0f,  1500.0f,  330.0f, Curve::Log },
+    { "pitch_decay", "Body Decay",   "ms",   5.0f,   150.0f,   13.0f, Curve::Log },
     { "punch_decay", "Punch Decay",  "ms",   0.5f,    20.0f,    4.0f, Curve::Log },
     { "punch",       "Punch",        "",     0.0f,     1.0f,    0.5f, Curve::Linear },
     { "amp_attack",  "Attack",       "ms",   0.0f,    10.0f,    0.2f, Curve::Linear },
     { "amp_hold",    "Hold",         "ms",   0.0f,   150.0f,   12.0f, Curve::Linear },
     { "amp_decay",   "Decay",        "ms",  20.0f,  1500.0f,  150.0f, Curve::Log },
-    { "drive",       "Drive",        "",     0.0f,     1.0f,   0.35f, Curve::Linear },
+    { "drive",       "Drive",        "",     0.0f,     1.0f,   0.30f, Curve::Linear },
     { "clip",        "Clip",         "",     0.0f,     1.0f,    0.0f, Curve::Choice, kKickClipNames },
-    { "click_level", "Click",        "",     0.0f,     1.0f,    0.2f, Curve::Linear },
+    { "click_level", "Click",        "",     0.0f,     1.0f,    0.5f, Curve::Linear },
     { "click_tone",  "Click Tone",   "Hz", 500.0f, 12000.0f, 4000.0f, Curve::Log },
     { "click_decay", "Click Decay",  "ms",   0.5f,    30.0f,    3.0f, Curve::Log },
     { "tone",        "Tone",         "Hz", 200.0f, 20000.0f, 9000.0f, Curve::Log },
@@ -266,33 +278,39 @@ static_assert(sizeof(kWaveTableNames) / sizeof(kWaveTableNames[0]) == kNumWaveTa
               "the table choice list and kNumWaveTables have come apart");
 const char* const kGatePatternNames[] = { "Sixteenths", "Eighths", "Rolling", "Gallop", "3-3-2", "Triplets" };
 
+// 18.09.2026 (round "mix-foundation"): the default voicing is the "driven" one of three candidates
+// rendered for the user -- a 303 into a distortion pedal. Cutoff 650 -> 900 Hz, env 4 -> 3.5 oct,
+// decay 350 -> 220 ms, accent 0.6 -> 0.7, slide 55 -> 70 ms (the 60 .. 80 ms of the rule text), drive
+// 0.45 -> 0.85 on the new, stronger drive curve (Acid.cpp, kDriveMaxDb), low cut 150 -> 250 Hz so the
+// distortion does not thicken the low mids, delay feedback 0.45 -> 0.5, hall 0.05 -> 0.08, and the
+// level -9 -> -2.3 dB, which puts the acid alone at -20 LUFS in the first drop, level with the arp.
 const ParamDesc kAcidParams[acid::Count] = {
     { "wave",           "Wave",           "",      0.0f,     1.0f,   0.0f, Curve::Linear },
-    { "cutoff",         "Cutoff",         "Hz",   80.0f,  8000.0f, 650.0f, Curve::Log },
+    { "cutoff",         "Cutoff",         "Hz",   80.0f,  8000.0f, 900.0f, Curve::Log },
     { "resonance",      "Resonance",      "",      0.0f,     1.0f,  0.72f, Curve::Linear },
-    { "env_amount",     "Env Amount",     "oct",   0.0f,     6.0f,   4.0f, Curve::Linear },
-    { "decay",          "Decay",          "ms",   30.0f,  2000.0f, 350.0f, Curve::Log },
-    { "accent",         "Accent",         "",      0.0f,     1.0f,   0.6f, Curve::Linear },
-    { "slide_time",     "Slide Time",     "ms",    5.0f,   200.0f,  55.0f, Curve::Log },
+    { "env_amount",     "Env Amount",     "oct",   0.0f,     6.0f,   3.5f, Curve::Linear },
+    { "decay",          "Decay",          "ms",   30.0f,  2000.0f, 220.0f, Curve::Log },
+    { "accent",         "Accent",         "",      0.0f,     1.0f,   0.7f, Curve::Linear },
+    { "slide_time",     "Slide Time",     "ms",    5.0f,   200.0f,  70.0f, Curve::Log },
     { "amp_decay",      "Amp Decay",      "ms",   50.0f,  4000.0f, 900.0f, Curve::Log },
     { "key_track",      "Key Track",      "",      0.0f,     1.0f,   0.5f, Curve::Linear },
-    { "drive",          "Drive",          "",      0.0f,     1.0f,  0.45f, Curve::Linear },
+    { "drive",          "Drive",          "",      0.0f,     1.0f,  0.85f, Curve::Linear },
     { "squelch",        "Squelch",        "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
     { "squelch_start",  "Squelch Start",  "x",     2.0f,    32.0f,  12.0f, Curve::Log },
     { "squelch_time",   "Squelch Time",   "ms",    5.0f,   150.0f,  28.0f, Curve::Log },
     { "comb_mix",       "Comb Mix",       "",      0.0f,     1.0f,  0.55f, Curve::Linear },
     { "comb_feedback",  "Comb Feedback",  "",      0.0f,    0.97f,  0.82f, Curve::Linear },
-    { "low_cut",        "Low Cut",        "Hz",  150.0f,  1000.0f, 150.0f, Curve::Log },
+    { "low_cut",        "Low Cut",        "Hz",  150.0f,  1000.0f, 250.0f, Curve::Log },
     { "delay_send",     "Delay Send",     "",      0.0f,     1.0f,  0.25f, Curve::Linear },
     { "delay_left",     "Delay Left",     "",      0.0f,     5.0f,   2.0f, Curve::Choice, kDelayTimeNames },
     { "delay_right",    "Delay Right",    "",      0.0f,     5.0f,   3.0f, Curve::Choice, kDelayTimeNames },
-    { "delay_feedback", "Delay Feedback", "",      0.0f,     0.9f,  0.45f, Curve::Linear },
+    { "delay_feedback", "Delay Feedback", "",      0.0f,     0.9f,  0.50f, Curve::Linear },
     { "delay_high_pass","Delay High Pass","Hz",  150.0f,  2000.0f, 400.0f, Curve::Log },
     { "delay_low_pass", "Delay Low Pass", "Hz",  800.0f, 16000.0f,4500.0f, Curve::Log },
     { "room_send",      "Room Send",      "",      0.0f,     1.0f,   0.1f, Curve::Linear },
-    { "hall_send",      "Hall Send",      "",      0.0f,     1.0f,  0.05f, Curve::Linear },
+    { "hall_send",      "Hall Send",      "",      0.0f,     1.0f,  0.08f, Curve::Linear },
     { "duck",           "Duck",           "",      0.0f,     1.0f,  0.15f, Curve::Linear },
-    { "level",          "Level",          "dB",  -36.0f,     6.0f,  -9.0f, Curve::Linear },
+    { "level",          "Level",          "dB",  -36.0f,     6.0f,  -2.3f, Curve::Linear },
     // Appended 16.09.2026 (acid colour round). Off by default: an all-pass chain changes no band's
     // power, but it does smear the attack, and no measurement asks for that to be the default sound.
     { "disperse",       "Disperse",       "x",     0.0f, static_cast<float>(kDisperseStages), 0.0f, Curve::Int },
@@ -367,8 +385,10 @@ const char* const kDefaultPoly =
 
 const char* const kPolyInstanceNames[kPolyInstances] = { "lead", "arp", "pad" };
 
+// sfx.level -12 -> -3 dB (18.09.2026): the SFX strip measured -27.6 LUFS over the first drop and its
+// events 5 to 15 dB under the mix at their loudest; the per-type balance is in Sfx.cpp (kTypeGainDb).
 const ParamDesc kSfxParams[sfx::Count] = {
-    { "level",        "Level",         "dB", -36.0f,   6.0f, -12.0f, Curve::Linear },
+    { "level",        "Level",         "dB", -36.0f,   6.0f,  -3.0f, Curve::Linear },
     { "noise",        "Noise",         "",     0.0f,   1.0f,   0.6f, Curve::Linear },
     { "resonance",    "Resonance",     "",     0.0f,   1.0f,   0.5f, Curve::Linear },
     { "brightness",   "Brightness",    "",     0.0f,   1.0f,   0.5f, Curve::Linear },
@@ -409,7 +429,9 @@ const ParamDesc kMixParams[mix::Count] = {
     { "lead_mute",  "Lead Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "lead_level", "Lead Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     { "arp_mute",   "Arp Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
-    { "arp_level",  "Arp Level",  "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    // -2 dB (18.09.2026): the arp was the loudest melodic part and owned 300 Hz .. 2 kHz, where the
+    // congas, toms and the clap have to be heard (kDefaultKit).
+    { "arp_level",  "Arp Level",  "dB", -24.0f, 12.0f, -2.0f, Curve::Linear },
     { "pad_mute",   "Pad Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "pad_level",  "Pad Level",  "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     { "sfx_mute",   "SFX Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },

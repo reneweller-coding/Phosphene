@@ -103,7 +103,10 @@ void PercKit::setTempo(double bpm)
     const double b = std::clamp(bpm, 20.0, 400.0);
     if (b == bpm_) return;
     bpm_ = b;
-    for (int l = 0; l < kPercLanes; ++l) if (valid_[l]) computeCoefs(l);
+    // Only the phasor's step depends on the tempo. The engine calls this at every 32-sample chunk,
+    // and during a tempo ramp between tracks the value changes at every one of them, so the full
+    // coefficient set (filters, modes, the pan groups) is not recomputed here.
+    for (int l = 0; l < kPercLanes; ++l) if (valid_[l]) updatePanRate(l);
 }
 
 /**
@@ -318,11 +321,16 @@ void PercKit::computeCoefs(int l)
     if (span > kPanMaxAngle) { const double k = kPanMaxAngle / span; a *= k; b *= k; }
     c_.panA[l] = static_cast<float>(a);
     c_.panB[l] = static_cast<float>(b);
-    const double bars = std::clamp(static_cast<double>(v[perc::PanBars]), 0.0625, 64.0);
+    updatePanRate(l);
+    assignPanGroups();
+}
+
+void PercKit::updatePanRate(int l)
+{
+    const double bars = std::clamp(static_cast<double>(values_[l][perc::PanBars]), 0.0625, 64.0);
     const double w = 2.0 * kPiD / std::max(1.0, bars * 4.0 * 60.0 / bpm_ * sr_);
     c_.panC[l] = static_cast<float>(std::cos(w));
     c_.panS[l] = static_cast<float>(std::sin(w));
-    assignPanGroups();
 }
 
 void PercKit::trigger(int l, float velocity, int shift, double late)
