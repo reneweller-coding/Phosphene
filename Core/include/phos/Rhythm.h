@@ -37,6 +37,16 @@ namespace phos {
 
 constexpr int kStepsPerBar = 16;   ///< the sixteenth grid of a 4/4 bar
 
+/**
+ * @brief Semitones the buildup's snare roll rises by from its first hit to the drop (16.09.2026).
+ *
+ * An octave, because that is the gesture's own name and the size a rising roll is written at; the
+ * rise is linear in the position within the four roll bars, so the last hit before the pre-drop
+ * break's silence stands about eleven semitones up. The lane's high pass follows the same shift
+ * through @c perc.cut_track (Perc.h), which is the thinning half of the gesture.
+ */
+constexpr int kRollSemitones = 12;
+
 /** @brief Bjorklund's Euclidean rhythm E(pulses, steps), rotated right by @p rotation steps. */
 std::vector<bool> euclid(int pulses, int steps, int rotation);
 

@@ -272,6 +272,46 @@ BarPlan planBar(const FormPlan& f, const PartAvailability& a, const uint64_t* se
  */
 void makeFormSfx(FormPlan& f, uint64_t seed, float amount);
 
+/**
+ * @name The macro automation of a section (16.09.2026)
+ *
+ * Phase 5 gives every section *one* filter target and ramps to it over the whole section. For a
+ * 32-bar core that is a straight line, and a 303 that holds one cutoff for 32 bars tires the ear
+ * however well its accents are placed -- a real acid line lives from a hand on the knob. These
+ * constants and @c sectionAutomation() are that hand, written as control events so that the movement
+ * is a continuous ramp in the score, deterministic from the section's seed, and visible to the MIDI
+ * export and to every host that reads automation.
+ *
+ * It is **added on top of** the section's own arc, never instead of it: the caller passes the base
+ * value at the start and at the end of the section and the ride is measured from the straight line
+ * between them, so the energy arc of Phase 5 still decides where a section sits and the ride only
+ * decides how it moves inside that.
+ * @{ */
+constexpr float kRideCutoff = 0.12f;    ///< peak-to-peak cutoff excursion, normalised (0.80 octaves)
+constexpr float kRideReso   = 0.07f;    ///< peak-to-peak resonance excursion, in phase with the cutoff
+constexpr float kRideDive   = 0.22f;    ///< how far a breakdown dives, normalised
+constexpr float kRollSend   = 0.30f;    ///< hall send the buildup's snare roll rises to
+constexpr int   kRollBars   = 4;        ///< bars of a buildup the roll and its send ramp run over
+/** @} */
+
+/**
+ * @brief Writes the macro automation of one section: the acid's ride and the buildup's send.
+ *
+ * Called once at the first bar of a section, after the section's own controls. Everything it writes
+ * is a @c ControlEvent::Kind::Offset with a ramp length, so nothing steps.
+ *
+ * @param p        the knobs (only to look parameter ids up)
+ * @param s        the section
+ * @param seed     the section's own seed: the ride is a lockable section's property
+ * @param beat     the beat the section starts on
+ * @param base0    the acid cutoff offset the section starts at (normalised), as the caller computed it
+ * @param base1    the same at the end of the section
+ * @param knobs    true for the first section of the first track, which plays the knobs exactly
+ * @param out      receives the events
+ */
+void sectionAutomation(const ParamStore& p, const Section& s, uint64_t seed, double beat,
+                       float base0, float base1, bool knobs, std::vector<ControlEvent>& out);
+
 /** @brief Weights of the bass figures that a group may end on; they differ in their last note. */
 extern const int kGroupFigures[4];
 

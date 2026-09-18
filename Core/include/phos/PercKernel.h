@@ -30,6 +30,17 @@
  * phase lock depends on it), an algebraic-sigmoid drive, a choke gain (an open hat silenced by the
  * closed hat) and constant-power panning.
  *
+ * **The auto-pan (16.09.2026).** The panning gains are no longer constants. Each lane carries a
+ * rotating phasor at the tempo-synchronous rate of Perc.h, and the pair (gL, gR) is *rotated* by an
+ * angle d(t) = panA * cos(phase) + panB rather than recomputed. Rotation is the right operation: a
+ * constant-power pan law is the point (cos theta, sin theta) on the unit circle, so moving the
+ * position is turning that point, and the sum of the two channel powers -- which every calibration
+ * figure of the mix round sums -- is exactly invariant under a rotation. cos d and sin d come from
+ * the same Taylor series the carrier uses, followed by one Newton step of 1/sqrt on the pair, so
+ * cos^2 + sin^2 is unity to float precision and the invariance survives the arithmetic and not only
+ * the algebra. At d = 0 the series yields exactly (1, 0) and the rotation is the identity in every
+ * bit, which is why a kit with the auto-pan off renders bit-identically to the state before it.
+ *
  * Subnormal floats are prevented by the caller's DenormalGuard, not by clamps in the loop.
  */
 #pragma once
@@ -54,6 +65,7 @@ struct PercState {
     alignas(32) float lb1[kPercLaneSlots] = {}, lb2[kPercLaneSlots] = {};  ///< low cut, second section
     alignas(32) float zr[kPercModes][kPercLaneSlots] = {}, zi[kPercModes][kPercLaneSlots] = {};   ///< mode phasors
     alignas(32) float mt[kPercMetalOsc][kPercLaneSlots] = {};             ///< metal oscillator phases
+    alignas(32) float pr[kPercLaneSlots] = {}, pi[kPercLaneSlots] = {};   ///< auto-pan phasor (16.09.2026)
 };
 
 /** @brief Per-lane coefficients, constant within a rendered segment. */
@@ -73,6 +85,16 @@ struct PercCoefs {
     alignas(32) float chokeD[kPercLaneSlots] = {};
     alignas(32) float gL[kPercLaneSlots] = {}, gR[kPercLaneSlots] = {};
     alignas(32) float dt[kPercMetalOsc][kPercLaneSlots] = {}, inv[kPercMetalOsc][kPercLaneSlots] = {};
+    /**
+     * @name The auto-pan (16.09.2026)
+     * panC and panS turn the lane's LFO phasor by one sample of its period; the angle the pan gains
+     * are rotated by is @c panA * pr + panB, so panA is the swing and panB the standing offset that
+     * puts the lane's own position (perc.pan) at the middle of the swing. Both are zero when the lane
+     * does not move, and then the rotation below is the exact identity.
+     * @{ */
+    alignas(32) float panC[kPercLaneSlots] = {}, panS[kPercLaneSlots] = {};
+    alignas(32) float panA[kPercLaneSlots] = {}, panB[kPercLaneSlots] = {};
+    /** @} */
 };
 
 /**
@@ -86,11 +108,15 @@ struct PercCoefs {
  * @param dNoise per sample and lane: noise envelope factor
  * @param tone,modal,metal whether this lane group uses the source at all (decided per group of 8
  *               lanes so every vector width runs the same arithmetic on every lane)
+ * @param pan    whether *any* lane of the kit moves in the panorama. It is one decision for the whole
+ *               kit rather than per group of eight, so that every lane's pan phasor advances in step
+ *               whatever the other lanes are set to: a phasor that stopped while its group had no
+ *               moving lane would make the phase depend on the history of the knobs.
  * @param outL,outR per sample and lane outputs
  */
 template <class V>
 void percKernel(PercState& s, const PercCoefs& c, int lane, int n, const float* noise, const float* reset,
-                const float* dNoise, bool tone, bool modal, bool metal, float* outL, float* outR)
+                const float* dNoise, bool tone, bool modal, bool metal, bool pan, float* outL, float* outR)
 {
     auto at = [lane](const float* a) { return loadLanes<V>(a + lane); };
     const V zero = lanes<V>(0.0f), one = lanes<V>(1.0f), two = lanes<V>(2.0f), half = lanes<V>(0.5f), threeHalves = lanes<V>(1.5f);
@@ -111,6 +137,8 @@ void percKernel(PercState& s, const PercCoefs& c, int lane, int n, const float* 
     const V a1 = at(c.a1), a2 = at(c.a2), a3 = at(c.a3), kk = at(c.k), mLp = at(c.mLp), mBp = at(c.mBp), mHp = at(c.mHp);
     const V c1 = at(c.c1), c2 = at(c.c2), c3 = at(c.c3), drvG = at(c.drvG), drvN = at(c.drvN), chokeD = at(c.chokeD);
     const V gL = at(c.gL), gR = at(c.gR);
+    V pr = at(s.pr), pi = at(s.pi);
+    const V panC = at(c.panC), panS = at(c.panS), panA = at(c.panA), panB = at(c.panB);
 
     for (int i = 0; i < n; ++i) {
         const int row = i * kPercLaneSlots + lane;
@@ -196,11 +224,31 @@ void percKernel(PercState& s, const PercCoefs& c, int lane, int n, const float* 
         y = yg / vsqrt(one + yg * yg) * drvN;
         y = y * choke;
         choke = choke * chokeD;
-        vstore(outL + row, y * gL);
-        vstore(outR + row, y * gR);
+        // The auto-pan: turn (gL, gR) on the unit circle by d = panA * cos(phase) + panB. The phasor
+        // is renormalised the same way the carrier is, and so is the (cos d, sin d) pair, which is
+        // what makes the two channel powers sum to a constant to float precision.
+        V gl = gL, gr = gR;
+        if (pan) {
+            const V npr = pr * panC - pi * panS, npi = pr * panS + pi * panC;
+            V fix = threeHalves - half * (npr * npr + npi * npi);
+            pr = npr * fix;
+            pi = npi * fix;
+            const V d = panA * pr + panB;
+            const V q = d * d;
+            V cs = one - q * (t2 - q * (t24 - q * t720));
+            V sn = d * (one - q * (t6 - q * (t120 - q * t5040)));
+            fix = threeHalves - half * (cs * cs + sn * sn);
+            cs = cs * fix;
+            sn = sn * fix;
+            gl = gL * cs - gR * sn;
+            gr = gR * cs + gL * sn;
+        }
+        vstore(outL + row, y * gl);
+        vstore(outR + row, y * gr);
     }
 
     auto put = [lane](float* a, V v) { vstore(a + lane, v); };
+    put(s.pr, pr); put(s.pi, pi);
     put(s.cr, cr); put(s.ci, ci); put(s.mr, mr); put(s.mi, mi);
     put(s.envA, envA); put(s.envP, envP); put(s.envN, envN); put(s.choke, choke);
     put(s.ic1, ic1); put(s.ic2, ic2); put(s.la1, la1); put(s.la2, la2); put(s.lb1, lb1); put(s.lb2, lb2);

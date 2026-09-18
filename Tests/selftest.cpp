@@ -6720,6 +6720,504 @@ void testForm()
     }
 }
 
+/**
+ * @brief Arrangement dynamics (16.09.2026): the rising snare roll, the acid's macro ride, the auto-pan.
+ *
+ * Every bound here is derived somewhere other than in the code it tests: from the closed form of the
+ * swing law, from the geometry of a constant-power panner, from the filter order of the lane's low
+ * cut, or from the raised-cosine ramp the engine plays a control event with.
+ */
+void testArrangeDynamics()
+{
+    section("arrangement dynamics: the roll that lifts, the acid's ride, movement in the panorama");
+    constexpr double kPi = 3.141592653589793;
+
+    // ---------------------------------------------------------------------------------------------
+    // The auto-pan.
+    // ---------------------------------------------------------------------------------------------
+
+    // (a) The swing law keeps E[p^2] at p0^2 at every depth. This is what makes the depth knob leave
+    //     the width the width round calibrated alone -- side/mid is (pi/4)^2 E[p^2] to second order --
+    //     and it is a closed form, so it is checked against the closed form and not against a render.
+    {
+        double worstMean = 0.0, worstRms = 0.0;
+        std::string detail;
+        for (double p0 : { 0.45, -0.40, 0.60 }) {
+            for (double d : { 0.25, 0.5, 0.7, 1.0 }) {
+                double sum = 0.0, sum2 = 0.0;
+                constexpr int kSteps = 4096;
+                for (int i = 0; i < kSteps; ++i) {
+                    const double ph = 2.0 * kPi * i / kSteps;
+                    const double p = p0 * (std::sqrt(1.0 - d * d) + std::sqrt(2.0) * d * std::cos(ph));
+                    sum += p;
+                    sum2 += p * p;
+                }
+                const double mean = sum / kSteps, rms = std::sqrt(sum2 / kSteps);
+                worstMean = std::max(worstMean, std::fabs(mean - p0 * std::sqrt(1.0 - d * d)));
+                worstRms = std::max(worstRms, std::fabs(rms - std::fabs(p0)));
+            }
+        }
+        detail = fmt("worst deviation of the rms position from |p0| %.2e, of the mean from p0 sqrt(1-D^2) %.2e",
+                     worstRms, worstMean);
+        check(worstRms < 1e-6 && worstMean < 1e-6,
+              "the swing law leaves the root mean square position at the standing one, at every depth",
+              detail.c_str());
+    }
+
+    // (b) A lane on the sixteenth grid samples a three-sixteenth swing at three phases 120 degrees
+    //     apart, and three such points carry the first and the second moment of a sinusoid exactly.
+    //     That is the reason for the period, so it is measured: the sampled moments against the
+    //     continuous ones, and against what two sixteenths (the obvious alternative) would give.
+    {
+        const double p0 = 0.45, d = 1.0;
+        auto moments = [&](double periodSixteenths, int n, double& mean, double& ms) {
+            mean = ms = 0.0;
+            for (int i = 0; i < n; ++i) {
+                const double ph = 2.0 * kPi * i / periodSixteenths;
+                const double p = p0 * (std::sqrt(1.0 - d * d) + std::sqrt(2.0) * d * std::cos(ph));
+                mean += p;
+                ms += p * p;
+            }
+            mean /= n;
+            ms /= n;
+        };
+        double m3 = 0.0, s3 = 0.0, m2 = 0.0, s2 = 0.0;
+        moments(3.0, 48, m3, s3);      // the built period: three sixteenths
+        moments(2.0, 48, m2, s2);      // two sixteenths, commensurate with the eighth
+        check(std::fabs(m3) < 1e-9 && std::fabs(s3 - p0 * p0) < 1e-9 && std::fabs(s2 - 2.0 * p0 * p0) < 1e-9,
+              "a sixteenth-grid lane realises the swing's moments exactly at three sixteenths, and twice too wide at two",
+              fmt("three sixteenths: mean %.2e, mean square %.4f (p0^2 = %.4f); two sixteenths: mean square %.4f (2 p0^2 = %.4f)",
+                  m3, s3, p0 * p0, s2, 2.0 * p0 * p0));
+    }
+
+    // (c) The kit's phase groups are balanced, not spread: the power-weighted swing of the twelve
+    //     lanes has to cancel, because what the 85 ms measurement reads is that weighted sum. The
+    //     bound is the greedy partition's own guarantee -- the residual cannot exceed the largest
+    //     single weight -- and the largest lane here is the closed hat.
+    {
+        ParamStore p;
+        auto kit = makeKit(p);
+        double signedSum = 0.0, absSum = 0.0, largest = 0.0;
+        std::string groups;
+        for (int l = 0; l < kPercLanes; ++l) {
+            const std::vector<float> v = moduleValues(p, Module::Perc, l);
+            const double w = std::pow(10.0, static_cast<double>(v[perc::Level]) / 10.0);
+            const double a = w * kit->panSwing(l);
+            signedSum += a;
+            absSum += std::fabs(a);
+            largest = std::max(largest, std::fabs(a));
+            if (kit->panGroup(l) != 0) groups += kit->panGroup(l) > 0 ? '+' : '-';
+            else groups += '.';
+        }
+        check(absSum > 0.0 && std::fabs(signedSum) <= largest && std::fabs(signedSum) < 0.35 * absSum,
+              "the auto-pan's two phase groups balance the kit's power-weighted movement",
+              fmt("groups %s, residual %.4f of %.4f moved (largest lane %.4f)", groups.c_str(), std::fabs(signedSum), absSum, largest));
+    }
+
+    // (d) Constant power: while a lane swings, the two channel powers still sum to what the lane would
+    //     have made standing still, sample for sample. Every band balance and loudness figure of the
+    //     mix round is a sum of channel powers, so this is the guarantee that none of them can move.
+    {
+        // The lane is pushed to 0.9 of full deflection, which is the largest angle the field allows a
+        // swinging lane to ask the kernel's series for (1.49 rad, against the guard at 1.6): the
+        // worst case is where a truncation shows, and the default kit's own 0.45 is not it.
+        // The lane is pushed to 0.9 of full deflection, which is the largest angle the field allows a
+        // swinging lane to ask the kernel's series for (1.49 rad, against the guard at 1.6), and its
+        // decay is stretched to two seconds. Both matter: a closed hat is gone after 45 ms, a twelfth
+        // of the swing's period, so a hit left as it is would never sound at the angle where a
+        // truncated series shows.
+        const char* longTail = "perc1.pan=0.9 perc1.decay=2000 perc1.noise_decay=2000";
+        ParamStore p;
+        p.parseText(longTail);
+        auto moving = makeKit(p);
+        ParamStore q;
+        q.parseText(longTail);
+        q.parseText("perc1.pan_depth=0");
+        auto still = makeKit(q);
+        const DenormalGuard guard;
+        constexpr int kN = 24000;
+        std::vector<float> aL(kN), aR(kN), bL(kN), bR(kN);
+        moving->trigger(0, 1.0f, 0, 0.0);
+        still->trigger(0, 1.0f, 0, 0.0);
+        moving->process(aL.data(), aR.data(), kN);
+        still->process(bL.data(), bR.data(), kN);
+        // The error is read *relative to the power at that sample*, not to the loudest one: the
+        // rotation's worst angle and the lane's loudest moment are different instants, and an
+        // absolute bound against the peak would let a per-sample error of a part in ten thousand
+        // through. What the bound has to catch is the truncation of the kernel's cos and sin series,
+        // which without the Newton step leaves cos^2 + sin^2 about 6e-5 off unity at the largest
+        // angle a default lane asks for (1.14 rad: the first dropped term is d^8/8!).
+        double worst = 0.0, peak = 0.0, diff = 0.0;
+        for (int i = 0; i < kN; ++i) {
+            const double pa = static_cast<double>(aL[i]) * aL[i] + static_cast<double>(aR[i]) * aR[i];
+            const double pb = static_cast<double>(bL[i]) * bL[i] + static_cast<double>(bR[i]) * bR[i];
+            peak = std::max(peak, pb);
+            diff += std::fabs(static_cast<double>(aL[i]) - bL[i]);
+        }
+        for (int i = 0; i < kN; ++i) {
+            const double pa = static_cast<double>(aL[i]) * aL[i] + static_cast<double>(aR[i]) * aR[i];
+            const double pb = static_cast<double>(bL[i]) * bL[i] + static_cast<double>(bR[i]) * bR[i];
+            if (pb < 1e-8 * peak) continue;
+            worst = std::max(worst, std::fabs(pa - pb) / pb);
+        }
+        check(worst < 1e-5 && diff > 0.0,
+              "a swinging lane and a standing one carry the same power in the two channels together",
+              fmt("worst per-sample difference of L^2+R^2 %.3e relative (allowed 1e-5); the channels do differ (sum |dL| %.3f)",
+                  worst, diff));
+    }
+
+    // (e) The movement is bit-identical whatever block size the host renders in (the phasor turns once
+    //     per sample), and identical to nothing at all when the depth is zero.
+    {
+        ParamStore p;
+        auto render = [&](const ParamStore& knobs, int block) {
+            auto kit = makeKit(knobs);
+            const DenormalGuard guard;
+            std::vector<float> L(48000), R(48000), tmp(static_cast<size_t>(block));
+            std::vector<float> tmp2(static_cast<size_t>(block));
+            int next = 0, k = 0, pos = 0;
+            // The hits land on their own sample, not on the block boundary that follows them: a test
+            // that quantised them to the block would measure its own loop and not the phasor.
+            while (pos < 48000) {
+                if (pos == next) {
+                    kit->trigger(0, 0.9f, 0, 0.0);
+                    if (k % 4 == 2) kit->trigger(1, 0.8f, 0, 0.0);
+                    next += 3103;
+                    ++k;
+                }
+                const int n = std::min({ block, 48000 - pos, next - pos });
+                kit->process(tmp.data(), tmp2.data(), n);
+                std::copy(tmp.begin(), tmp.begin() + n, L.begin() + pos);
+                std::copy(tmp2.begin(), tmp2.begin() + n, R.begin() + pos);
+                pos += n;
+            }
+            return std::make_pair(L, R);
+        };
+        const auto a = render(p, 64);
+        const auto b = render(p, 7);
+        const auto c = render(p, 1000);
+        size_t bad = 0;
+        for (size_t i = 0; i < a.first.size(); ++i)
+            if (a.first[i] != b.first[i] || a.second[i] != b.second[i] || a.first[i] != c.first[i] || a.second[i] != c.second[i]) ++bad;
+        check(bad == 0, "the auto-pan is bit-identical at block sizes 64, 7 and 1000", fmt("%d of %d samples differ", static_cast<int>(bad), static_cast<int>(a.first.size())));
+    }
+
+    // (f) The measurement the round is judged by: the kit's inter-channel level difference over 85 ms
+    //     windows falls, and the side/mid ratio the width round calibrated does not move. The kit
+    //     plays its own sixteenth pattern, as in the width round's test, so the two are comparable.
+    {
+        auto play = [&](const char* knobs, double& ildRms, double& width, double& rho) {
+            ParamStore p;
+            if (knobs != nullptr) p.parseText(knobs);
+            auto kit = makeKit(p);
+            const DenormalGuard guard;
+            StereoBandAccumulator acc;
+            constexpr int kBlock = 64;
+            std::vector<float> L(kBlock), R(kBlock);
+            // Two fourth-order high passes at 6 kHz, so the level difference is read in the air band
+            // the width round found short, and not broadband.
+            Svf hpL[2], hpR[2];
+            for (int i = 0; i < 2; ++i) { hpL[i].setQ(6000.0f, i == 0 ? 0.541f : 1.307f, 48000.0f); hpR[i].copyCoefficients(hpL[i]); }
+            const int win = 4080;   // 85 ms at 48 kHz
+            double wl = 0.0, wr = 0.0, sum = 0.0;
+            int windows = 0, filled = 0;
+            int next = 0, k = 0;
+            for (size_t done = 0; done < static_cast<size_t>(StereoBandAccumulator::kN) * 6; done += kBlock) {
+                while (next < static_cast<int>(done) + kBlock) {
+                    const int s = k % 16;
+                    kit->trigger(0, 0.9f, 0, 0.0);
+                    if (s % 4 == 2) kit->trigger(1, 0.8f, 0, 0.0);
+                    if (s % 8 == 4) kit->trigger(4, 1.0f, 0, 0.0);
+                    if (s % 2 == 1) kit->trigger(7, 0.7f, 0, 0.0);
+                    if (s == 12) kit->trigger(2, 0.6f, 0, 0.0);
+                    if (s % 8 == 6) kit->trigger(6, 0.7f, 0, 0.0);
+                    next += 3103;
+                    ++k;
+                }
+                kit->process(L.data(), R.data(), kBlock);
+                acc.push(L.data(), R.data(), kBlock);
+                for (int i = 0; i < kBlock; ++i) {
+                    float l = L[i], r = R[i], lp, bp, hp;
+                    for (int j = 0; j < 2; ++j) { hpL[j].tick(l, lp, bp, hp); l = hp; hpR[j].tick(r, lp, bp, hp); r = hp; }
+                    wl += static_cast<double>(l) * l;
+                    wr += static_cast<double>(r) * r;
+                    if (++filled == win) {
+                        if (wl > 1e-12 && wr > 1e-12) { const double d = 10.0 * std::log10(wl / wr); sum += d * d; ++windows; }
+                        wl = wr = 0.0;
+                        filled = 0;
+                    }
+                }
+            }
+            ildRms = std::sqrt(sum / std::max(windows, 1));
+            width = acc.width(6000.0, 16000.0);
+            rho = acc.rho(6000.0, 16000.0);
+        };
+        const char* off = "perc1.pan_depth=0 perc2.pan_depth=0 perc3.pan_depth=0 perc4.pan_depth=0 perc7.pan_depth=0 "
+                          "perc8.pan_depth=0 perc9.pan_depth=0 perc10.pan_depth=0 perc11.pan_depth=0 perc12.pan_depth=0";
+        double ild0 = 0.0, w0 = 0.0, r0 = 0.0, ild1 = 0.0, w1 = 0.0, r1 = 0.0;
+        play(off, ild0, w0, r0);
+        play(nullptr, ild1, w1, r1);
+        check(ild1 < ild0 - 0.5 && std::fabs(w1 - w0) < 0.6,
+              "the auto-pan lowers the kit's 85 ms level difference in the air band without moving its side/mid",
+              fmt("level difference %.2f -> %.2f dB rms (recordings 1.74), side/mid %+.2f -> %+.2f dB (width round -8.66), rho %+.3f -> %+.3f",
+                  ild0, ild1, w0, w1, r0, r1));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The snare roll that lifts.
+    // ---------------------------------------------------------------------------------------------
+
+    // (g) The roll's pitch is a ramp over the four bars, written into the notes. Checked against the
+    //     closed form the ramp is defined by -- round(12 u) at u = (bar + beat/4)/4 -- and for the
+    //     three properties that matter musically: it starts at the lane's own note, it rises
+    //     monotonically, and it arrives within a semitone of the octave before the drop.
+    {
+        ParamStore p;
+        const PercPlan plan = makePercPlan(p, 1234u, true);
+        int first = -1, last = -1, steps = 0, wrong = 0;
+        bool monotone = true;
+        for (int r = 0; r < 4; ++r) {
+            std::vector<NoteEvent> out;
+            PercBarSpec spec;
+            spec.rollBar = r;
+            spec.pdb = r == 3;
+            spec.fills = false;
+            composePercBar(p, plan, 1234u, 100 + r, 100 + r, 145.0, 6, 1, spec, out);
+            for (const NoteEvent& n : out) {
+                if (n.lane != 5) continue;   // the snare is lane 6, index 5 in the default kit
+                const double beatInBar = n.beat - static_cast<double>(100 + r) * kBeatsPerBar;
+                const double u = (static_cast<double>(r) + beatInBar / kBeatsPerBar) / 4.0;
+                const int want = kPercRoleNote[static_cast<int>(PercRole::Snare)] + static_cast<int>(std::lround(kRollSemitones * u));
+                if (std::abs(static_cast<int>(n.pitch) - want) > 1) ++wrong;
+                if (first < 0) first = n.pitch;
+                if (last >= 0 && n.pitch < last) monotone = false;
+                last = n.pitch;
+                ++steps;
+            }
+        }
+        const int base = kPercRoleNote[static_cast<int>(PercRole::Snare)];
+        check(steps > 40 && wrong == 0 && monotone && first == base && last >= base + kRollSemitones - 2,
+              "the buildup's snare roll rises an octave, as a ramp over its four bars and not per hit",
+              fmt("%d hits, first %d, last %d (lane note %d, target %d), %d off the closed form, monotone %s",
+                  steps, first, last, base, base + kRollSemitones, wrong, monotone ? "yes" : "no"));
+    }
+
+    // (h) The thinning: with cut_track = 2 the lane's low cut climbs two octaves for the roll's one,
+    //     so the snare loses its body as it rises. The bound comes from the filter, not from a
+    //     listening impression: the low cut is 24 dB/octave, the corner moves from 160 Hz to 640, so
+    //     a partial at 200 Hz that stood in the pass band ends two octaves below the corner and must
+    //     lose tens of decibels. The same measurement with cut_track = 0 is the control.
+    {
+        auto bodyDb = [&](const char* knobs, int shift) {
+            ParamStore p;
+            p.parseText(knobs);
+            auto kit = makeKit(p);
+            kit->trigger(5, 1.0f, shift, 0.0);
+            const std::vector<float> y = renderKit(*kit, 16384);
+            return std::make_pair(bandPowerDb(y, 0, y.size(), 150.0, 400.0), bandPowerDb(y, 0, y.size(), 2000.0, 8000.0));
+        };
+        const auto flat0 = bodyDb("perc6.cut_track=0", 0), flat12 = bodyDb("perc6.cut_track=0", 12);
+        const auto trk0 = bodyDb("perc6.cut_track=2", 0), trk12 = bodyDb("perc6.cut_track=2", 12);
+        const double flatBal = (flat12.second - flat12.first) - (flat0.second - flat0.first);
+        const double trkBal = (trk12.second - trk12.first) - (trk0.second - trk0.first);
+        check(trkBal > flatBal + 10.0 && std::fabs(flatBal) < 6.0,
+              "the tracking low cut thins the snare as it rises, and leaves it alone when it is off",
+              fmt("balance 2-8k against 150-400 Hz, octave up minus unshifted: cut_track 0 %+.2f dB, cut_track 2 %+.2f dB", flatBal, trkBal));
+    }
+
+    // (i) The gesture as a whole, on the lane that plays it: the roll's own band balance from its
+    //     first quarter to its last. This is the render measurement of Tools/ref_arrange.py --roll
+    //     shrunk to one lane, and it is the number that says the roll lifts rather than only
+    //     accelerating. The control is the same roll without the pitch ramp and without the tracking.
+    {
+        auto rollBalance = [&](const char* knobs, bool ramp) {
+            ParamStore p;
+            p.parseText(knobs);
+            auto kit = makeKit(p);
+            const DenormalGuard guard;
+            const PercPlan plan = makePercPlan(p, 1234u, true);
+            // The four roll bars at 145 BPM: 1.655 s each, 79448 samples.
+            const double sr = 48000.0, secPerBeat = 60.0 / 145.0;
+            std::vector<float> L(4 * 79448), R(4 * 79448);
+            std::vector<NoteEvent> notes;
+            for (int r = 0; r < 4; ++r) {
+                PercBarSpec spec;
+                spec.rollBar = r;
+                spec.pdb = r == 3;
+                spec.fills = false;
+                composePercBar(p, plan, 1234u, r, r, 145.0, 6, 1, spec, notes);
+            }
+            size_t pos = 0;
+            for (const NoteEvent& n : notes) {
+                if (n.lane != 5) continue;
+                const size_t at = static_cast<size_t>(n.beat * secPerBeat * sr);
+                if (at >= L.size()) continue;
+                while (pos < at) {
+                    const int step = static_cast<int>(std::min<size_t>(64, at - pos));
+                    kit->process(L.data() + pos, R.data() + pos, step);
+                    pos += static_cast<size_t>(step);
+                }
+                const int shift = static_cast<int>(n.pitch) - kPercRoleNote[static_cast<int>(PercRole::Snare)];
+                kit->trigger(5, n.velocity / 127.0f, ramp ? shift : 0, 0.0);
+            }
+            while (pos + 64 < L.size()) { kit->process(L.data() + pos, R.data() + pos, 64); pos += 64; }
+            std::vector<float> m(L.size());
+            for (size_t i = 0; i < L.size(); ++i) m[i] = 0.5f * (L[i] + R[i]);
+            const size_t quarter = m.size() / 4;
+            auto bal = [&](size_t from) { return bandPowerDb(m, from, quarter, 2000.0, 8000.0) - bandPowerDb(m, from, quarter, 150.0, 500.0); };
+            return bal(3 * quarter) - bal(0);
+        };
+        const double plainRoll = rollBalance("perc6.cut_track=0", false);
+        const double lifted = rollBalance("perc6.cut_track=2", true);
+        check(lifted > plainRoll + 5.0,
+              "over its four bars the roll moves its weight from the body to the top",
+              fmt("2-8k against 150-500 Hz, last quarter minus first: flat roll %+.2f dB, with the ramp and the tracking %+.2f dB",
+                  plainRoll, lifted));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The acid's macro ride and the buildup's send.
+    // ---------------------------------------------------------------------------------------------
+
+    // The trajectory a chain of control events plays, sampled per bar: the engine ramps with a raised
+    // cosine from wherever it is to the event's value (Engine.cpp), so the same arithmetic reproduces
+    // it here without an engine.
+    auto trajectory = [](const std::vector<ControlEvent>& events, int param, double beat0, double bars, int perBar) {
+        std::vector<double> out;
+        double value = 0.0, from = 0.0, to = 0.0, start = 0.0, length = 0.0;
+        size_t next = 0;
+        const int n = static_cast<int>(bars) * perBar;
+        for (int i = 0; i <= n; ++i) {
+            const double b = beat0 + static_cast<double>(i) * kBeatsPerBar / perBar;
+            while (next < events.size() && events[next].beat <= b + 1e-9) {
+                const ControlEvent& e = events[next++];
+                if (e.param != param || e.kind != ControlEvent::Kind::Offset) continue;
+                if (e.length <= 0.0f) { value = e.value; length = 0.0; }
+                else { from = value; to = e.value; start = e.beat; length = e.length; }
+            }
+            if (length > 0.0) {
+                const double x = (b - start) / length;
+                if (x >= 1.0) { value = to; length = 0.0; }
+                else value = from + (to - from) * (x <= 0.0 ? 0.0 : 0.5 - 0.5 * std::cos(3.141592653589793 * x));
+            }
+            out.push_back(value);
+        }
+        return out;
+    };
+
+    // (j) A core section is ridden: the cutoff leaves the straight line of the section's own arc by a
+    //     real amount, comes back to it at every segment boundary, and averages to it. The last is
+    //     what keeps Composer's loudness probe honest -- it measures the knobs, so a ride with a mean
+    //     would bias the track's gain.
+    {
+        ParamStore p;
+        Section s;
+        s.type = SectionType::Drop;
+        s.bars = 32;
+        s.energy = s.energyTo = 0.87f;
+        std::vector<ControlEvent> ev;
+        sectionAutomation(p, s, 0x5EEDu, 0.0, 0.0f, 0.0f, false, ev);
+        const std::vector<double> y = trajectory(ev, p.base(Module::Acid) + acid::Cutoff, 0.0, 32.0, 8);
+        double lo = 1e9, hi = -1e9, mean = 0.0;
+        for (double v : y) { lo = std::min(lo, v); hi = std::max(hi, v); mean += v; }
+        mean /= static_cast<double>(y.size());
+        check(hi - lo > 0.5 * kRideCutoff && std::fabs(mean) < 0.1 * kRideCutoff && std::fabs(y.back()) < 1e-6,
+              "a core's acid ride is a real excursion that averages back to the section's own arc",
+              fmt("cutoff offset %+.4f .. %+.4f normalised (peak to peak allowed %.4f), mean %+.4f, value at the section end %+.6f",
+                  lo, hi, kRideCutoff, mean, y.back()));
+    }
+
+    // (k) A breakdown dives instead, and returns. Bound: at least 0.6 of kRideDive down (the depth is
+    //     drawn from the seed between 0.6 and 1) and back to the section's own end value.
+    {
+        ParamStore p;
+        Section s;
+        s.type = SectionType::Break;
+        s.bars = 16;
+        s.energy = s.energyTo = 0.26f;
+        std::vector<ControlEvent> ev;
+        sectionAutomation(p, s, 0xBEEFu, 0.0, 0.0f, 0.0f, false, ev);
+        const std::vector<double> y = trajectory(ev, p.base(Module::Acid) + acid::Cutoff, 0.0, 16.0, 8);
+        double lo = 1e9;
+        for (double v : y) lo = std::min(lo, v);
+        check(lo < -0.5 * kRideDive && std::fabs(y.back()) < 1e-6,
+              "a breakdown dives and comes back",
+              fmt("deepest %+.4f normalised (allowed %.4f), value at the section end %+.6f", lo, -kRideDive, y.back()));
+    }
+
+    // (l) The ride is the section's own property: the same seed writes the same events, a different
+    //     seed writes different ones, and the first section of the first track plays the knobs.
+    {
+        ParamStore p;
+        Section s;
+        s.type = SectionType::Drop;
+        s.bars = 32;
+        std::vector<ControlEvent> a, b, c, knobs;
+        sectionAutomation(p, s, 11u, 0.0, 0.0f, 0.0f, false, a);
+        sectionAutomation(p, s, 11u, 0.0, 0.0f, 0.0f, false, b);
+        sectionAutomation(p, s, 12u, 0.0, 0.0f, 0.0f, false, c);
+        sectionAutomation(p, s, 11u, 0.0, 0.0f, 0.0f, true, knobs);
+        bool same = a.size() == b.size();
+        for (size_t i = 0; same && i < a.size(); ++i)
+            same = a[i].beat == b[i].beat && a[i].param == b[i].param && a[i].value == b[i].value && a[i].length == b[i].length;
+        bool differs = a.size() != c.size();
+        for (size_t i = 0; !differs && i < a.size(); ++i) differs = a[i].value != c[i].value;
+        bool knobsClean = true;
+        for (const ControlEvent& e : knobs) knobsClean = knobsClean && e.value == 0.0f;
+        check(same && differs && knobsClean && knobs.size() == 1,
+              "the ride is deterministic from the section's seed, differs with it, and is silent on the very first section",
+              fmt("%d events, same seed identical %s, other seed differs %s, first section writes %d event(s), all zero %s",
+                  static_cast<int>(a.size()), same ? "yes" : "no", differs ? "yes" : "no", static_cast<int>(knobs.size()), knobsClean ? "yes" : "no"));
+    }
+
+    // (m) The ride cannot fight the 303's accent, because the two live three orders of magnitude apart
+    //     in rate: the accent charges a capacitor with 150 ms (Acid.cpp, kSweepTau) and is gone within
+    //     two sixteenths, while the fastest thing the ride does is the falling quarter of its shortest
+    //     period. Measured as a ratio of times, which is the only way two movements of the same
+    //     parameter can be told apart at all.
+    {
+        ParamStore p;
+        Section s;
+        s.type = SectionType::Groove;
+        s.bars = 8;
+        std::vector<ControlEvent> ev;
+        sectionAutomation(p, s, 7u, 0.0, 0.0f, 0.0f, false, ev);
+        double shortest = 1e9;
+        for (const ControlEvent& e : ev)
+            if (e.param == p.base(Module::Acid) + acid::Cutoff && e.length > 0.0f) shortest = std::min(shortest, static_cast<double>(e.length));
+        const double seconds = shortest * 60.0 / 145.0;
+        check(seconds / 0.15 > 20.0,
+              "the ride's fastest move is slower than the accent's capacitor by more than an order of magnitude",
+              fmt("shortest ramp %.2f beats = %.2f s against kSweepTau 0.15 s: a factor of %.0f", shortest, seconds, seconds / 0.15));
+    }
+
+    // (n) The buildup's send: the percussion's hall climbs over the last four bars of a buildup and is
+    //     cut at the section that follows. Both halves are checked, because a send left open into the
+    //     drop would smear the transient the whole gesture exists to sharpen.
+    {
+        ParamStore p;
+        Section build;
+        build.type = SectionType::Build;
+        build.bars = 16;
+        Section drop;
+        drop.type = SectionType::Drop;
+        drop.bars = 32;
+        std::vector<ControlEvent> ev;
+        sectionAutomation(p, build, 3u, 0.0, 0.0f, 0.0f, false, ev);
+        sectionAutomation(p, drop, 4u, 16.0 * kBeatsPerBar, 0.0f, 0.0f, false, ev);
+        std::stable_sort(ev.begin(), ev.end(), [](const ControlEvent& a, const ControlEvent& b) { return a.beat < b.beat; });
+        const std::vector<double> y = trajectory(ev, p.base(Module::Mix) + mix::PercHall, 0.0, 20.0, 8);
+        // One eighth of a bar before the drop, and exactly on it: the drop's own first event is the cut.
+        const size_t atPdb = 16 * 8 - 1, atDrop = 16 * 8;
+        double before = 0.0;
+        for (size_t i = 0; i < 12 * 8; ++i) before = std::max(before, y[i]);
+        check(y[atPdb] > 0.9 * kRollSend && before < 1e-9 && y[atDrop] < 1e-9,
+              "the roll's hall send climbs over the last four bars of the buildup and is cut at the drop",
+              fmt("send %.3f at the end of the buildup (target %.2f), %.3f over the twelve bars before it, %.3f one eighth into the drop",
+                  y[atPdb], kRollSend, before, y[atDrop]));
+    }
+}
+
 void testSectionRules()
 {
     section("section rules on the render (Solberg and Dibben 2019)");
@@ -7361,6 +7859,7 @@ int main()
     run("testMotifOperators", testMotifOperators);
     run("testArpPatterns", testArpPatterns);
     run("testForm", testForm);
+    run("testArrangeDynamics", testArrangeDynamics);
     run("testSectionRules", testSectionRules);
     run("testCuration", testCuration);
     run("testTransitions", testTransitions);

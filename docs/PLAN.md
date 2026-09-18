@@ -3308,6 +3308,322 @@ statt zu warnen, neue Prüfung H), `Tools/render/main.cpp` (nur ein Kommentar).
 Build ohne Suchpfad finde die Datei „beside the sources through `PHOS_SOURCE_DATA_DIR`"; das gilt nur
 noch für einen Entwicklungsbuild. Die Datei gehörte in dieser Runde einem anderen Agenten.
 
+**16.09.2026, Arrangement-Dynamik: Snare-Rampe, Acid-Fahrten, Bewegung im Panorama**
+
+Drei Punkte aus einem Review des Nutzers. Alle drei sind gebaut, jeder mit der Zahl, die über ihn
+entscheidet, und einer davon liefert weniger, als das Review erwartet hat — das steht unten mit der
+Herleitung, warum. Ein vierter Punkt des Reviews, die Vorher-Leere vor dem Drop, **war schon gebaut**
+(`kPdbVariantNames`, vier Varianten; `testSectionRules` misst Beat 4 des Pre-Drop-Breaks 57,9 dB unter
+einem Kern-Beat) und ist unangetastet geblieben.
+
+### 1. Die Snare-Rolle, die wirklich hebt
+
+*Vorher.* Die Rolle der letzten vier Buildup-Takte wird schneller (1/8 → 1/16 → 1/32) und lauter, mehr
+nicht. Gemessen auf der Snare allein (Seed 1, 96 Takte, nur `perc6` aktiv, `--solo perc`): über die
+vier Takte steigt ihr Schwerpunkt um **5,4 Halbtöne** und ihre Bandbalance 2–8 kHz gegen 150–500 Hz um
+**1,55 dB** — beides Nebenwirkung der steigenden Dichte, keine Gestik.
+
+*Gebaut.* Die Tonhöhe der Rolle ist eine **Rampe über alle vier Takte**, in die Noten geschrieben
+(`Rhythm.cpp`, `kRollSemitones = 12`): Verschiebung = round(12·u) mit u der Position in der Rolle. Kein
+Zufall pro Anschlag, sondern eine Funktion der Position — der MIDI-Export trägt sie mit, und zwei
+Buildups desselben Seeds heben identisch. Dazu ein neuer Lane-Parameter `perc.cut_track` (0..2,
+angehängt): der Tiefschnitt der Lane folgt der Verschiebung des Anschlags mit dem Exponenten
+`cut_track`. Der nützliche Wert ist **größer als eins**, und das ist der Punkt: bei genau 1 wandern
+Eckfrequenz und Note gemeinsam, das transponiert die Lane und dünnt sie *nicht* aus; bei 2 steigt der
+Hochpass zwei Oktaven, während die Note eine steigt, der Grundton der Snare landet unter ihrem eigenen
+Filter, und übrig bleibt das Rauschen. Standard der Snare: 2. Der harte Schnitt am Ende existierte
+schon (der PDB räumt Beat 4).
+
+*Nachher, dieselbe Messung.*
+
+| Snare allein, über die vier Rollentakte | Schwerpunkt | 2–8 k gegen 150–500 Hz |
+|---|---|---|
+| vorher | +5,39 Halbtöne | +1,55 dB |
+| nur die Tonhöhen-Rampe (`cut_track=0`) | **+2,23** | +1,03 |
+| Rampe und mitlaufender Tiefschnitt (Standard) | **+8,93** | **+8,92** |
+
+**Ein Zwischenergebnis, das erklärt werden muss:** die Tonhöhen-Rampe *allein* macht die Rolle nicht
+heller, sie macht sie sogar etwas dumpfer. Der Grund ist, wo das Oberende einer Snare sitzt: im
+Rauschanteil, nicht im Ton. Eine Transposition des Tons verschiebt den Körper und lässt das Rauschen
+stehen. Was die Rolle ausdünnt, ist der mitlaufende Hochpass; was die Tonhöhe beiträgt, ist die
+Gestik — steigende Tonhöhe zusammen mit steigender Lautstärke und Rate ist das kulturübergreifende
+Signal für steigende Erregung (Huron, „Sweet Anticipation", 2006, Kap. 12; Juslin und Laukka,
+Psych. Bull. 2003) — und die Steuergröße, aus der der Hochpass seine Bewegung nimmt. Beides gehört
+zusammen, keins von beiden trägt allein.
+
+*Der dritte Strang, der Hallweg.* Über die letzten vier Takte eines Buildups fährt `mix.perc_hall` auf
+**0,30** und wird am Drop auf null geschnitten (`sectionAutomation` in `Form.cpp`; der Schnitt ist das
+erste Ereignis der folgenden Sektion, liegt also exakt auf dem Drop). Ein Send, der in den Drop hinein
+offen bliebe, würde genau den Transienten verschmieren, für den die ganze Geste existiert.
+
+*Und die Zahl, die entscheidet* — der Kontrast vom letzten Buildup-Takt in den Drop, in der ganzen
+Mischung, `Tools/ref_arrange.py --contrast`:
+
+| 96 Takte, PDB auf Takt 88 | Lautheit PDB → Drop | Schwerpunkt-Verhältnis | Hub der Rolle (Schwerpunkt) |
+|---|---|---|---|
+| Seed 1, vorher | +2,49 dB | 0,30× | 3,58× |
+| Seed 1, nachher | **+2,69** | **0,26×** | **4,08×** |
+| Seed 3, vorher | +1,63 | 0,36× | 4,16× |
+| Seed 3, nachher | **+1,90** | 0,35× | 4,14× |
+
+**Ehrlich dazugesagt:** in der ganzen Mischung sind das zwei bis drei Zehntel Dezibel. Die Snare ist
+dort ein Instrument unter acht, und der Buildup lebt auch von Hats, Riser und Gate. Auf der Lane
+selbst ist die Geste groß (8,9 statt 1,6 dB Bandverschiebung), im Summensignal ist sie eine Nuance.
+Wer mehr will, dreht `perc6.cut_track` oder `kRollSemitones` — beides steht offen.
+
+### 2. Makro-Fahrten auf der Acid
+
+*Vorher.* `Composer::sectionControls` schreibt pro Sektion **eine** Filter-Zielgröße und rampt über die
+ganze Sektion dorthin. In einem 32-Takt-Kern ist das eine Gerade: der Basis-Cutoff steht 32 Takte
+lang. Gemessen (Acid solo, Seed 1, Takte 16–80): Bewegung *zwischen* den Takten Spanne 0,173 Oktaven
+bei einer Streuung von 0,045; Bewegung *innerhalb* eines Taktes — Akzent-Sweep und Notenhüllkurve —
+Streuung 0,478 Oktaven. Die Makro-Ebene war leer.
+
+*Gebaut.* `sectionAutomation()` in `Form.cpp` (neu, von `Composer::sectionControls` mit einer Zeile
+aufgerufen) schreibt eine Kette von Rampen auf `acid.cutoff` und `acid.resonance`:
+- Periode **8 oder 16 Takte**, aus dem eigenen Seed der Sektion gezogen; die Sektion ist eine sperrbare
+  Einheit, ihre Fahrt hängt also an ihrem Seed und nicht am Track.
+- Form **asymmetrisch**: drei Viertel der Periode aufwärts, ein Viertel zurück. Das ist, was eine Hand
+  am Knopf tut, und die Kontur, die Huron (2006) als Erregungsverlauf eines Aufbaus beschreibt; ein
+  symmetrisches Dreieck klingt nach LFO.
+- Resonanz fährt mit, knapp zwei Drittel so weit, weil auf einer echten 303 beide Knöpfe zusammen
+  gedreht werden.
+- Ein **Breakdown taucht** stattdessen: über die erste Hälfte hinunter, über die zweite zurück.
+- Alles ist ein Zuschlag **auf** den Sektionsbogen der Phase 5, nie sein Ersatz: `base0` und `base1`
+  kommen vom Aufrufer, die Fahrt wird von der Geraden dazwischen aus gemessen, und das letzte Segment
+  endet exakt auf ihr.
+
+*Warum sie den Akzent-Sweep nicht stören kann.* Der Kondensator des Akzents hat 150 ms (`kSweepTau`),
+seine Bewegung lebt also innerhalb einer Sechzehntel (103 ms bei 145 BPM). Die kürzeste Rampe der
+Fahrt ist zwei Takte, **3,3 s — ein Faktor 22**. Die beiden sind in der *Rate* getrennt, nicht im
+Betrag, und genau so trennt die Messung sie auch: `Tools/ref_arrange.py --ride` faltet die
+Sechzehntel-Schwerpunkte auf ihren Takt und meldet beide Streuungen getrennt.
+
+*Gemessen, Acid solo, Seed 1, Takte 16–80:*
+
+| | vorher | nachher |
+|---|---|---|
+| Bewegung **innerhalb** eines Taktes (Akzent, Hüllkurve) | 0,478 oct sd | **0,478** oct sd |
+| Bewegung **zwischen** den Takten | 0,045 oct sd, Spanne 0,173 | **0,063** oct sd, Spanne **0,234** |
+| dieselbe aus den gefalteten Sechzehnteln | 0,069 oct sd | 0,078 oct sd |
+| Helligkeit 1–8 k gegen 0,1–1 k | 0,51 dB sd, Spanne 2,03 | **0,76** dB sd, Spanne **2,78** |
+
+Die Makro-Ebene wächst um 40 % in der Streuung und 35 % in der Spanne, die Bewegung innerhalb eines
+Taktes steht auf drei Nachkommastellen still. Genau das war die Frage des Reviews — nicht „ist mehr
+Bewegung da", sondern „stört das Neue das Alte" —, und die Antwort ist gemessen: nein.
+
+**Die Falle dieser Messung, und sie ist die interessanteste des Abschnitts.** Der Leistungs-Schwerpunkt
+einer resonanten 303-Linie ist ein *schlechter* Detektor für ihren Cutoff: die Energie sitzt im
+Grundton, wo auch immer die Ecke steht. Gegengeprobt mit drei statischen Renders (`acid.cutoff` = 393,
+650 und 1093 Hz, also ±0,56 Oktaven um den Standard): die Takt-Schwerpunkte gehen von 315–332 über
+360–381 auf 417–445 Hz, **±0,56 Oktaven Knopf ergeben ±0,21 Oktaven Schwerpunkt**. Die Fahrt liefert
+also, was sie verspricht; die Anzeige ist um den Faktor 2,7 gedämpft. Wer eine Filterfahrt messen will,
+misst die Bandbalance über dem Grundton — `ref_arrange.py --ride` meldet sie deshalb jetzt mit.
+
+*Und der Pegelangleich hält.* Die Lautheitsprobe des Composers misst zwei Takte mit den **Knöpfen**,
+nicht mit der Automation; eine Fahrt mit Mittelwert würde jeden Track verstimmen. Sie hat keinen: die
+Fahrt schwingt *um* die Gerade, von einer halben Auslenkung darunter zu einer halben darüber, und eine
+erhobene Kosinus-Rampe ist um ihren eigenen Mittelpunkt wertsymmetrisch. Übrig bleibt das letzte
+Segment, das auf die Gerade zurückkehrt statt unter sie: Mittelwert **+0,006** normiert auf eine Fahrt
+von 0,12, also 0,04 Oktaven. Gemessen im Selbsttest, nicht behauptet.
+
+### 3. Tempo-synchrones Auto-Pan auf der Percussion
+
+Der Teil mit dem meisten Rechenweg, weil das Review hier eine Größe nennt, die ein Panoramaregler
+allein **nicht** erreichen kann, und der Weg dorthin entscheidet, wie gebaut wird.
+
+*Die Aufgabe.* Die Aufnahmen sind breit bei gleichem Pegel: Pegeldifferenz zwischen den Kanälen über
+85-ms-Fenster **1,5 bis 2,2 dB rms** in jedem Band, Luftband 1,74. Nach der Breitenrunde steht dieses
+Kit bei **3,89 dB** (vier Seeds, ganze Renders) und die Seite/Mitte bei −9,14 gegen −8,45 der
+Aufnahmen. Der *Betrag* stimmt, der *Charakter* nicht.
+
+*Die Schranke, hergeleitet statt angenommen* (`ref_arrange.py --pan-bound`). Für eine **mono** Quelle
+hinter einem Konstantleistungs-Panorama sind beide Zahlen Lesungen desselben Winkels; über ein Fenster,
+das kurz gegen den LFO ist, liest die Kurzfenster-Messung den Momentanwert. Minimiert man E[ILD²] unter
+der Nebenbedingung E[cos(p·π/2)] = m, ist das Infimum √((1−m)·2·(20/ln10)²) — bei Seite/Mitte −9,35 dB
+sind das **5,60 dB rms**. Ein *langsames* Panorama kann die beiden Größen also nicht gegeneinander
+tauschen. Dass das Kit trotzdem unter dieser Schranke liegt, ist kein Widerspruch: zwölf unkorrelierte
+Lanes mitteln sich im Fenster, und genau dieser Mittelungsgewinn ist der Hebel.
+
+*Das Modell vor der ersten Codezeile.* Ein Leistungsmodell des Luftbands (jede Lane eine unkorrelierte
+Quelle mit Hüllkurve, Konstantleistungs-Panorama, dieselben Pegel, Positionen und Dichten wie das
+Standard-Kit) reproduziert den Ausgangsstand (ILD 4,42 dB, Seite/Mitte −8,09 gegen gemessene 5,3 und
+−10,1) und beantwortet drei Entwurfsfragen, bevor sie Code kosten:
+
+| Entwurf | ILD 85 ms | Seite/Mitte |
+|---|---|---|
+| statisch (Stand der Breitenrunde) | 4,42 dB | −8,09 |
+| Weyl-Phasen (goldener Schnitt), 3 Takte | **4,99** | −8,24 |
+| Weyl-Phasen, 3/16 Takt | 4,46 | −8,20 |
+| **zwei balancierte Phasen, 3/16 Takt** | **3,59** | −8,23 |
+| zwei balancierte Phasen, 2/16 Takt | 3,00 | **−6,73** (1,5 dB zu breit) |
+
+Drei Befunde, und alle drei stehen im Code:
+
+**(a) Zwölf gespreizte Phasen sind schlechter als zwei.** Was die 85-ms-Messung liest, ist die
+leistungsgewichtete *mittlere* Position der Lanes, die im Fenster klingen. Eine Weyl-Folge über den
+Kreis — die naheliegende, „hübsche" Wahl — lässt diese Summe als Zufallsweg stehen; sie erhöht die
+Pegeldifferenz sogar (4,99 gegen 4,42). Die Lanes werden deshalb in **zwei gegenphasige Gruppen**
+geteilt, durch eine gierige absteigende Gewichtszerlegung (Graham, SIAM J. Appl. Math. 17, 1969), so
+dass Σ w_l·p_l(t) stehen bleibt, während jede Lane fährt. Beim Standard-Kit bleiben **0,031 von 3,548**
+bewegter Gewichtssumme übrig.
+
+**(b) Drei Sechzehntel sind die richtige Periode, und zwar aus Arithmetik.** Eine Lane auf dem
+Sechzehntel-Raster tastet ihren eigenen LFO bei einer Periode von 3/16 Takt an genau **drei Phasen**
+120° auseinander ab. Drei solche Punkte tragen das erste *und* das zweite Moment eines Sinus exakt
+(Σcos = 0, Σcos² = 3/2) — die Breite, die die Breitenrunde kalibriert hat, bleibt für das Material,
+das wirklich spielt, **exakt** erhalten und nicht nur im Mittel. Zwei Sechzehntel täten das nicht: sie
+tasten bei 0 und π ab, E[p²] = 2p0², und das Kit wäre 1,4 dB zu breit — im Modell nachgemessen. Die
+Periode fällt erst nach drei Takten wieder mit dem Takt zusammen, was die Präzession ist, die das
+Review wollte.
+
+**(c) Das Gesetz muss die Breite bei jeder Tiefe halten.** p(t) = p0·[√(1−D²) + √2·D·cos(…)]. Die
+beiden Faktoren sind genau das Paar, für das E[p²] = p0² bei *jeder* Tiefe gilt. Ein Gesetz mit (1−D)
+statt √(1−D²) stimmt nur bei 0 und 1 und macht das Kit dazwischen bis zu 2,6 dB schmaler.
+
+*Gebaut* in `Perc.cpp` und `PercKernel.h`: das Verstärkerpaar (gL, gR) wird pro Sample **gedreht**,
+nicht neu gerechnet. Eine Konstantleistungs-Position ist der Punkt (cos θ, sin θ) auf dem Einheitskreis,
+Bewegung ist Drehung, und die Summe der beiden Kanalleistungen ist unter einer Drehung exakt invariant —
+jede Bandbalance- und Lautheitszahl der Mischungsrunde summiert Kanalleistungen und **kann** sich also
+nicht bewegen. Das ist Algebra; gemessen ist zusätzlich, dass die Arithmetik sie nicht kaputt macht
+(Newton-Schritt auf das (cos d, sin d)-Paar, schlechteste Abweichung von L²+R² gegen dieselbe Lane im
+Stand **5,5e−7 relativ**, bei einer Lane auf 0,9 Auslenkung und zwei Sekunden Ausklang, also im
+schlechtesten Winkel, den das Feld zulässt). Bei Tiefe 0 ist die Drehung bitweise die Identität:
+ein Render mit `pan_depth=0` auf allen Lanes ist **bitgleich** zum Stand vor dieser Runde (md5 geprüft).
+Neue Parameter: `perc.pan_depth` (0..1, Standard 0 in der Tabelle, 1 auf den zehn nicht-mittigen Lanes
+des Standard-Kits) und `perc.pan_bars` (Standard 0,1875 = drei Sechzehntel). Clap und Snare stehen
+weiter in der Mitte — der Backbeat ist, was eine Psytrance-Mischung dort verankert —, und eine Lane
+ohne Position fährt auch nicht, weil der Hub proportional zu p0 ist.
+
+*Gemessen.* Auf dem Kit allein (Selbsttest, eigenes Sechzehntel-Muster, Luftband über zwei Butterworth
+vierter Ordnung bei 6 kHz):
+
+| Kit allein, Luftband | vorher | nachher | Aufnahmen |
+|---|---|---|---|
+| **Pegeldifferenz 85 ms** | **5,23 dB rms** | **3,19** | **1,74** |
+| Seite/Mitte | −8,66 dB | −8,80 | −8,45 |
+| Korrelation | +0,794 | +0,769 | +0,751 |
+
+In der ganzen Mischung, vier Seeds zu acht Minuten, je vier Fenster zu 45 s (`ref_width.py --short`,
+das Verfahren der Breitenrunde):
+
+| Band | Pegeldiff. vorher | nachher | Seite/Mitte vorher | nachher | ρ vorher | nachher |
+|---|---|---|---|---|---|---|
+| tief | 0,77 | 0,77 | −43,84 | −44,02 | +1,000 | +1,000 |
+| low-mid | 2,33 | 2,34 | −10,71 | −10,67 | +0,843 | +0,842 |
+| Mitten | 2,24 | 2,22 | −6,43 | −6,43 | +0,629 | +0,629 |
+| Präsenz | 2,91 | **2,68** | −7,62 | −7,59 | +0,703 | +0,698 |
+| **Luft** | **3,89** | **3,51** | **−9,14** | **−8,97** | **+0,843** | **+0,772** |
+
+**Das Urteil, ehrlich.** Die Bewegung geht in die richtige Richtung und ist keine Kosmetik: auf dem Kit
+schließt sie **58 %** der Lücke zwischen 5,23 und den 1,74 der Aufnahmen, in der Mischung **18 %**,
+und die Korrelation im Luftband geht von +0,843 auf +0,772 bei einem Referenzwert von +0,751 — das ist
+die Größe, die sagt „die Breite kommt aus Dekorrelation", und sie trifft die Aufnahmen jetzt fast. Die
+1,7 dB selbst werden **nicht** erreicht, und nach der Schranke oben werden sie von einem Panoramaregler
+auch nicht erreicht: der Rest ihrer Breite ist Stereohall und doppelt eingespieltes Material, das ein
+Kit aus zwölf Einzel-Lanes nicht hat. Seite/Mitte, Korrelation und Tiefenregel bewegen sich dabei um
+höchstens 0,17 dB.
+
+*Mono-Verträglichkeit.* Was eine Bewegung im Panorama kaputt machen könnte, ist die Summe zu Mono. Sie
+kostet unverändert **+0,49 dB** Luft und **+0,72 dB** Präsenz gegen das Kickband (vorher +0,49 / +0,72;
+die Aufnahmen verlieren 1,2 dB Präsenz). Was sich in der Summe aufhebt, war nie da — eine Drehung
+erzeugt keine Gegenphase.
+
+### Was nicht gebaut wurde, und was es kosten würde
+
+- **Auto-Pan auf den Arps.** Das Review wollte es; die Messung sagt, der Mangel sitzt im Luftband, also
+  im Kit. Der Arp ist eine `Poly`-Instanz an einem Mixer-Strip in `Engine.cpp`, der in dieser Runde
+  einem anderen Agenten gehörte. Die Änderung wäre: `poly.width` bleibt, was es ist, und der Strip
+  bekommt vor dem Summieren dieselbe Drehung wie eine Perc-Lane — ein Phasor je Instanz in
+  `Engine::renderSegment`, Winkel `panA·cos(phase) + panB` aus zwei neuen `poly`-Parametern, und
+  `Engine::updateParams` rechnet die Rate aus `tempo_.bpmAt()`. Zehn Zeilen, aber in einer fremden
+  Datei.
+- **`PercKit::setTempo()` ist gebaut und wird von niemandem gerufen.** Der Aufrufer wäre eine Zeile in
+  `Engine::updateParams` neben Tonart und Skala: `perc_.setTempo(bpmNow)`. Bis dahin läuft die Fahrt auf
+  145 BPM statt auf dem Tempo des Tracks. Die Folge ist gemessen klein — ein Track wandert höchstens
+  ±4 BPM (`compose.tempo_range`), die Periode ist also um höchstens 2,8 % daneben — und wird erst bei
+  einem Set weit weg von 145 BPM hörbar.
+
+### Die Kalibrierung steht
+
+Vier Seeds zu acht Minuten, Mediane, Kanalleistungen summiert:
+
+| Größe | vorher | nachher |
+|---|---|---|
+| Bandbalance low-mid | −6,54 | −6,56 |
+| Bandbalance Mitten | −6,26 | −6,24 |
+| Bandbalance Präsenz | −10,17 | −10,13 |
+| Bandbalance Luft | −13,92 | −13,79 |
+| Terzkurve, Abstand zum Median | 1,94 | **1,94** dB rms |
+| Lautheit integriert | −9,10 | **−9,10** LUFS |
+| True Peak, exakt | −0,970 | −0,968 dBTP (schlechtester −0,963) |
+| LRA | 6,2 | 6,2 LU |
+
+Nichts davon ist Zufall: das Panorama ist konstantleistungs-normiert (Algebra, siehe oben), die
+Acid-Fahrt hat Mittelwert ~0, und die Snare-Rampe betrifft vier Takte je Buildup. Der **Standard-Render
+ändert sich** trotzdem — er soll es —, und die Zahl dazu steht oben: Luft-Seite/Mitte +0,17 dB,
+Pegeldifferenz −0,38 dB, Lautheit 0,00, True Peak +0,002 dB.
+
+### Prüfungen
+
+Ein neuer Abschnitt `testArrangeDynamics`, **14 Prüfungen**, jede gegen einen anderswo hergeleiteten
+Wert, und jede erst gegen den unveränderten Stand fallen gesehen:
+
+| Prüfung | gegen den alten Stand | jetzt |
+|---|---|---|
+| das Schwunggesetz lässt die rms-Position bei p0 | — | 7,8e−16 schlechteste Abweichung, bei vier Tiefen und drei Positionen |
+| drei Sechzehntel tragen beide Momente exakt, zwei nicht | — | E[p²] = 0,2025 = p0² gegen 0,4050 = 2p0² |
+| die zwei Phasengruppen balancieren das Kit | — | Rest 0,031 von 3,548 bewegter Gewichtssumme |
+| eine fahrende Lane trägt dieselbe Leistung wie eine stehende | — | 5,5e−7 relativ, Schranke 1e−5 |
+| die Bewegung ist blockgrößenunabhängig | — | 0 von 48000 Samples bei Blöcken 64 / 7 / 1000 |
+| **die Pegeldifferenz fällt, die Breite bleibt** | **5,23 dB rms** | **3,19** (Seite/Mitte −8,66 → −8,80, ρ +0,794 → +0,769) |
+| die Rolle steigt um eine Oktave, als Rampe | Verschiebung überall 0 | 81 Anschläge, 38 → 49, 0 neben der geschlossenen Form |
+| der mitlaufende Tiefschnitt dünnt aus | +2,61 dB (`cut_track=0`) | **+20,82** |
+| die Rolle verlagert ihr Gewicht nach oben | −0,23 dB | **+7,58** |
+| die Acid-Fahrt ist eine echte Auslenkung mit Mittelwert null | — | −0,045 … +0,046 normiert, Mittel +0,006, Sektionsende exakt auf dem Bogen |
+| ein Breakdown taucht und kommt zurück | — | −0,173 normiert, Ende exakt auf dem Bogen |
+| die Fahrt hängt am Seed der Sektion | — | gleicher Seed identisch, anderer Seed anders, erste Sektion schreibt nur Nullen |
+| die Fahrt ist langsamer als der Akzent-Kondensator | — | kürzeste Rampe 3,31 s gegen 0,15 s: Faktor 22 |
+| der Hallweg steigt im Buildup und wird am Drop geschnitten | — | 0,299 am Buildup-Ende, 0,000 zwölf Takte davor und auf dem Drop |
+
+Gesamt: **311 Selbsttest-Prüfungen**, 0 Fehler. Vektortests 16 von 16 in AVX2, NEON-Shim und skalar,
+bitgleich in allen drei Pfaden — der Perc-Lauf der Vektortests fährt das Auto-Pan mit, weil er mit den
+Standardwerten läuft.
+
+### Gegenprobe (Mutationsrunde)
+
+Sechs Fehler einzeln eingebaut, jeder gebaut und nur mit `PHOS_ONLY=testArrangeDynamics` gefahren,
+danach aus Kopien zurückgespielt und die Zeitstempel angefasst (MSVC baut eine zurückgespielte Datei
+mit altem Zeitstempel nicht neu). `git diff` danach sauber.
+
+| Mutation | Wer merkt es |
+|---|---|
+| Schwung-Amplitude √2 → 1 | die Breitenprüfung: Seite/Mitte **−11,94 statt −8,80** (die Pegeldifferenz fällt sogar weiter auf 2,19 — genau der Tausch, den das Gesetz verhindern soll) |
+| die zwei Phasengruppen zu einer zusammengelegt | **zwei** Prüfungen: Balance (Rest **1,447** von 3,548 statt 0,031) und Pegeldifferenz (**5,18** statt 3,19 — die Bewegung bringt dann nichts) |
+| das (cos d, sin d)-Paar nicht renormiert | Konstantleistung: **2,9e−4** relativ statt 5,5e−7 |
+| die Tonhöhen-Rampe der Rolle entfernt | zwei Prüfungen: 77 von 81 Anschlägen neben der geschlossenen Form, und die Rolle verlagert **−0,23 statt +7,58 dB** |
+| der Tiefschnitt folgt der Verschiebung nicht mehr | zwei Prüfungen: Ausdünnung **+2,61 statt +20,82 dB**, Verlagerung **+0,38 statt +7,58** |
+| der Hallweg wird am Sektionsanfang nicht geschlossen | zwei Prüfungen: der Send steht **0,300 im Drop** statt 0,000, und die Sektion schreibt ein Ereignis weniger |
+
+**Eine der sechs hat beim ersten Versuch niemand gemerkt, und das ist der Befund dieser Runde.** Die
+fehlende Renormierung des Drehpaares lief zunächst durch: die Prüfung maß den Fehler gegen den
+*Spitzenwert* der Lane statt gegen die Leistung im selben Sample, und sie schlug eine Closed Hat an,
+die nach 45 ms weg ist — einem Zwölftel der Schwingungsperiode. Die Lane hat den Winkel, bei dem eine
+abgebrochene Reihe sichtbar wird, nie erreicht. Mit relativem Maß, einer Lane bei 0,9 Auslenkung
+(1,49 rad, der größte Winkel, den das Feld zulässt) und zwei Sekunden Ausklang meldet dieselbe Prüfung
+**2,9e−4 gegen 5,5e−7**. Eine Prüfung, die den schlechtesten Fall nicht spielt, prüft ihn nicht.
+
+*Dateien.* Geändert: `Core/include/phos/Perc.h`, `Core/src/Perc.cpp` (Auto-Pan, `cut_track`, die zwei
+Phasengruppen), `Core/include/phos/PercKernel.h` (die Drehung im Kernel), `Core/include/phos/Rhythm.h`
+und `Core/src/Rhythm.cpp` (`kRollSemitones`, die Rampe der Rolle), `Core/include/phos/Form.h` und
+`Core/src/Form.cpp` (`sectionAutomation`), `Core/include/phos/Params.h` und `Core/src/Params.cpp`
+(drei **angehängte** Lane-Parameter, keine Umsortierung; Standardwerte: `pan_depth` auf zehn Lanes,
+`cut_track` auf der Snare), `Tests/selftest.cpp` (`testArrangeDynamics`), `Tools/metrics.py` ist
+**unverändert**. Neu: `Tools/ref_arrange.py`. **Außerhalb der Dateien dieser Runde geändert:**
+`Core/src/Composer.cpp`, **eine Anweisung** (vier Zeilen mit Kommentar) am Ende von `sectionControls`,
+die `sectionAutomation()` ruft — ohne sie erreicht die Automation den Render nicht, und alles, was sie
+schreibt, entsteht in `Form.cpp`.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

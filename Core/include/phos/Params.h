@@ -77,7 +77,13 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
 namespace perc {
 enum : int { Active, Role, Engine, Pitch, PitchAmount, PitchDecay, FmRatio, FmIndex, ModeSet, ModeDamp,
              MetalScale, Noise, NoiseDecay, Bursts, BurstSpacing, Decay, Filter, Cutoff, Resonance, LowCut,
-             Drive, Level, Pan, Choke, Shift, Density, Tune, Count };
+             Drive, Level, Pan, Choke, Shift, Density, Tune,
+             // 16.09.2026, arrangement dynamics. Appended, never reordered: the indices above sit in
+             // saved presets, in .phosset files and in the plugin's state.
+             PanDepth,   ///< 0..1: how far the tempo-synchronous auto-pan swings the lane (Perc.h)
+             PanBars,    ///< the period of that swing in bars (PercKit::setTempo; 145 BPM until it is called)
+             CutTrack,   ///< 0..2: the exponent with which the low cut follows a hit's pitch shift (Perc.h)
+             Count };
 }
 /** @brief What a percussion lane plays in the groove; decides its patterns and its MIDI note. */
 enum class PercRole : int { ClosedHat = 0, OpenHat, Ride, Crash, Clap, Snare, Rim, Shaker, Tom, Conga, Zap, Blip, Count };
