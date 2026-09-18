@@ -1948,6 +1948,7 @@ struct RefCase {
     int role = 0, style = 0, bars = 0;
     std::vector<int> tok, step, bar, idx, gap;
     std::vector<int> kick;   ///< empty in a reference file of a three-role model (MODEL_FORMAT 3)
+    int mode = -1;           ///< -1 when the case records no mode, i.e. a file without condMode
     std::vector<double> logits, probs;
 };
 
@@ -1977,6 +1978,7 @@ std::vector<RefCase> readRefCases(const std::string& path)
         if (key == "role") vals >> c.role;
         else if (key == "style") vals >> c.style;
         else if (key == "bars") vals >> c.bars;
+        else if (key == "mode") vals >> c.mode;
         else if (key == "tok") ints(c.tok);
         else if (key == "step") ints(c.step);
         else if (key == "bar") ints(c.bar);
@@ -2000,7 +2002,12 @@ bool feedRefCase(NeuralModel& model, const RefCase& c)
     // A four-role file's cases carry a kick class per position; a three-role file's do not, and then
     // the model has no kick.emb either and the field is not read (docs/MODEL_FORMAT.md, section 3).
     if (!c.kick.empty() && c.kick.size() != n) return false;
-    model.begin(c.role, c.style, c.bars + 1);   // the file stores bars - 1
+    // A model that declares condMode has to be fed the case's mode, and a case that records none
+    // cannot judge such a model at all: the logits would be recomputed under a row the trainer never
+    // used and the mismatch would read as a reader bug. Refusing instead is the rule the other side
+    // of the contract follows too (_conditioning_gap in Tools/train/export.py).
+    if (model.info().condMode > 0 && c.mode < 0) return false;
+    model.begin(c.role, c.style, c.bars + 1, c.mode < 0 ? 0 : c.mode);   // the file stores bars - 1
     for (size_t t = 0; t < n; ++t) {
         NoteCond cond;
         cond.step = c.step[t];
@@ -2174,6 +2181,11 @@ void testModelFile()
                       in.layers, in.dim, in.heads, in.ffn, in.ctx, in.parameters, in.bytes / 1024, in.nll));
             check(in.condKick == 0, "a three-role melodic file carries no kick table",
                   fmt("condKick %d", in.condKick));
+            // The eleventh table (18.09.2026). The installed melody model carries it; the bass file
+            // and the two tiny test models do not, and the loop above reads all four with the same
+            // loader -- which is the whole claim of "additive" in docs/MODEL_FORMAT.md section 3.
+            check(in.condMode == kNumScales, "the trained melody model carries the mode table",
+                  fmt("condMode %d against the composer's %d modes", in.condMode, kNumScales));
         }
         if (name == "bass.phosmdl") {
             const ModelInfo& in = model.info();
@@ -6125,6 +6137,267 @@ void testModalInterchange()
 }
 
 /**
+ * @brief The mode's colour: what the model plays once it is told which mode it is in.
+ *
+ * **The finding this measures.** The modal-interchange round of 16.09.2026 gave every section its own
+ * mode and then asked whether the composer's lines use the tone the mode newly admits. They did not:
+ * the share of notes on a newly admitted pitch class came out at 0.086 for the Markov model and 0.075
+ * for the trained transformer against a mode-blind null of 0.162 -- ratios of 0.53 and 0.47. The cause
+ * was structural: the model was conditioned on role, style, bars, step, bar, gap and index, and not on
+ * the mode, so the mask admitted the note and the model's own distribution pushed it back down.
+ *
+ * The answer of 18.09.2026 is an eleventh embedding table, `mode.emb` (docs/MODEL_FORMAT.md section
+ * 3), and this section measures what it bought. It also measures what the *alternative* answer -- a
+ * calibrated multiplicative lift on the colour tones inside the allowed sets -- was worth; that was
+ * built, calibrated, measured and **rejected**, and docs/PLAN.md has the table it was rejected on.
+ *
+ * Four measurements, all against values derived outside this program.
+ *
+ * **1. The colour-tone share against the corpus, per role.** `Tools/train/mode.py` estimates the mode
+ * of every line of the local MIDI corpus and counts what share of the notes of the lines in a
+ * *colourful* mode (Phrygian, harmonic minor, Phrygian dominant, double harmonic -- the four whose
+ * `scaleColourTones` is not zero) falls on that mode's own colour tones. Over 377 lines and 20 939
+ * notes that is **0.1539, 95 % bootstrap interval over lines [0.1442, 0.1640]**, and per role
+ * acid 0.1372 [0.1137, 0.1671], lead 0.1411 [0.1189, 0.1653], arp 0.1569 [0.1453, 0.1685]. Those
+ * intervals were counted from bought loops, not from anything this program produced.
+ *
+ * The composer's melodic notes are counted by exactly the same rule -- `isColourTone` of the mode the
+ * *section* plays -- and **per role**, because an aggregate can be put on the target by one role
+ * running far past it while another sits at zero. The claim is the acid, the role that was furthest
+ * off: a model that is told the mode has to give the colour at least the share the corpus's acid
+ * lines give it. The mode-blind transformer gives it 0.039, which is how this check was seen to fail
+ * before it passed.
+ *
+ * **2. The composer is mode-blind without the table.** The corpus gives the colour 0.0874 of *all* its
+ * notes when the mode is not conditioned on at all (`mode.py`, 666 lines) against 0.1539 inside the
+ * mode. The Markov model -- which cannot be told the mode -- reproduces the first number in sections
+ * that play the second, which is the finding in one line.
+ *
+ * **3. The ratio against the mode-blind null**, the measurement the modal-interchange round left open:
+ * over the sections that borrow a mode, the share of notes on a pitch class the borrowed mode admits
+ * and the track's own mode does not, split by whether that class is a colour tone at all -- a section
+ * that borrows Aeolian over Phrygian gains the *natural* second, which is not a colour tone and which
+ * nothing in this round addresses.
+ *
+ * **4. What the mode row does to the model's own distribution.** The point of a mode table is not that
+ * it changes the logits (a random table would) but that it changes them *in the direction the label
+ * means*: at one and the same context, the row of a mode that contains the flat second has to put more
+ * probability on the flat second than the row of a mode that does not. Measured here over the real
+ * shipped model, Phrygian (row 1) against Aeolian (row 0), with no constraint mask in the way.
+ */
+void testModeColour()
+{
+    section("the mode's colour: what the model plays once it is told the mode");
+
+    // The corpus, per role: share, then the 95 % bootstrap interval over lines. `mode.py --report`
+    // prints the shares; the intervals are its bootstrap over lines.
+    struct Target { const char* name; double share, lo, hi; };
+    static const Target kCorpus[3] = { { "acid", 0.1372, 0.1137, 0.1671 },
+                                       { "lead", 0.1411, 0.1189, 0.1653 },
+                                       { "arp",  0.1569, 0.1453, 0.1685 } };
+
+    // 1 and 2. The colour-tone share of the composer's own lines, by the corpus's rule.
+    // Four styles, because the style profile decides how often a section borrows at all and which
+    // modes it may reach; a Goa-only measurement would be about Goa and not about the model.
+    static const char* kStyles[4] = { "Goa", "FullOn", "DarkForest", "HiTech" };
+    {
+        for (int which = 0; which < 2; ++which) {
+            long long colourNotes = 0, allNotes = 0;
+            long long perRole[3] = {}, perRoleAll[3] = {};
+            long long own[2] = {}, ownAll[2] = {};   // [0] the track's own mode, [1] a borrowed one
+            for (int s = 0; s < 4; ++s) {
+                ParamStore p;
+                p.parseText("compose.track_bars=128 compose.lead_amount=1 compose.acid_amount=1 "
+                            "compose.arp_amount=1 compose.modal_interchange=On compose.level_match=Off "
+                            "master.auto_gain=Off");
+                p.parseText(std::string("compose.style=") + kStyles[s]);
+                p.parseText(which == 0 ? "compose.melody_model=Markov" : "compose.melody_model=Neural");
+                Composer c(4711 + s);
+                std::vector<NoteEvent> ev;
+                c.composeBars(p, 0, 8 * 128, ev);
+                for (const NoteEvent& e : ev) {
+                    int role = -1;
+                    if (e.part == Part::Acid) role = 0;
+                    else if (e.part == Part::Lead) role = 1;
+                    else if (e.part == Part::Arp) role = 2;
+                    if (role < 0) continue;
+                    const int bar = static_cast<int>(e.beat / kBeatsPerBar);
+                    const TrackPlan& t = c.track(p, c.trackOfBar(p, bar));
+                    const int sc = t.form.section[sectionOfBar(t.form, bar - t.firstBar)].scale;
+                    if (scaleColourTones(sc) == 0) continue;   // the mode has no colour to give
+                    const int b = sc == t.scale ? 0 : 1;
+                    ++allNotes;
+                    ++perRoleAll[role];
+                    ++ownAll[b];
+                    if (isColourTone(sc, ((e.pitch - t.key) % 12 + 12) % 12)) { ++colourNotes; ++perRole[role]; ++own[b]; }
+                }
+            }
+            const double share = allNotes > 0 ? static_cast<double>(colourNotes) / allNotes : 0.0;
+            double roleShare[3] = {};
+            for (int k = 0; k < 3; ++k)
+                roleShare[k] = perRoleAll[k] > 0 ? static_cast<double>(perRole[k]) / perRoleAll[k] : 0.0;
+            std::printf("         %s: %lld of %lld notes = %.4f overall (corpus 0.1539 in the mode, "
+                        "0.0874 mode-blind); acid %.4f/%lld, lead %.4f/%lld, arp %.4f/%lld against the "
+                        "corpus's %.4f, %.4f, %.4f; the track's own mode %.4f (%lld), a borrowed one "
+                        "%.4f (%lld)\n",
+                        which == 0 ? "Markov" : "neural", colourNotes, allNotes, share,
+                        roleShare[0], perRoleAll[0], roleShare[1], perRoleAll[1], roleShare[2], perRoleAll[2],
+                        kCorpus[0].share, kCorpus[1].share, kCorpus[2].share,
+                        ownAll[0] > 0 ? static_cast<double>(own[0]) / ownAll[0] : 0.0, ownAll[0],
+                        ownAll[1] > 0 ? static_cast<double>(own[1]) / ownAll[1] : 0.0, ownAll[1]);
+            if (which == 0)
+                check(allNotes > 5000 && std::fabs(share - 0.0874) < 0.02,
+                      "the Markov model, which cannot be told the mode, still sounds mode-blind",
+                      fmt("%.4f against the corpus's mode-blind 0.0874 and its in-mode 0.1539: the "
+                          "order-2 chain gives the colour the share a corpus line gives it *on "
+                          "average over all modes*, not the share it gives it *in this mode*", share));
+            else
+                check(perRoleAll[0] > 2000 && roleShare[0] >= kCorpus[0].lo,
+                      "told the mode, the neural model's acid reaches the corpus's colour-tone share",
+                      fmt("%lld of %lld acid notes = %.4f, at or above the corpus's acid interval "
+                          "[%.4f, %.4f] around %.4f; the same model without the mode table gives 0.039",
+                          perRole[0], perRoleAll[0], roleShare[0], kCorpus[0].lo, kCorpus[0].hi,
+                          kCorpus[0].share));
+        }
+    }
+
+    // 3. The ratio against the mode-blind null, over the borrowed sections only. Same counting rule
+    // as testModalInterchange, so the two numbers are comparable with the ones recorded there.
+    {
+        for (int which = 0; which < 2; ++which) {
+            ParamStore p;
+            p.parseText("compose.track_bars=128 compose.lead_amount=1 compose.acid_amount=1 compose.arp_amount=1 "
+                        "compose.style=Goa compose.modal_interchange=On compose.level_match=Off master.auto_gain=Off");
+            p.parseText(which == 0 ? "compose.melody_model=Markov" : "compose.melody_model=Neural");
+            Composer c(31337);
+            std::vector<NoteEvent> ev;
+            c.composeBars(p, 0, 12 * 128, ev);
+            long long newNotes[2] = {}, allNotes[2] = {};
+            double expected[2] = {};
+            long long roleNew[3] = {}, roleAll[3] = {};
+            double roleExp[3] = {};
+            for (const NoteEvent& e : ev) {
+                int role = -1;
+                if (e.part == Part::Acid) role = 0;
+                else if (e.part == Part::Lead) role = 1;
+                else if (e.part == Part::Arp) role = 2;
+                if (role < 0) continue;
+                const int bar = static_cast<int>(e.beat / kBeatsPerBar);
+                const TrackPlan& t = c.track(p, c.trackOfBar(p, bar));
+                const int sc = t.form.section[sectionOfBar(t.form, bar - t.firstBar)].scale;
+                if (sc == t.scale) continue;
+                int fresh = 0, total = 0, freshColour = 0;
+                bool isNew[12] = {};
+                for (int pc = 0; pc < 12; ++pc) {
+                    const bool now = inScale(sc, pc), before = inScale(t.scale, pc);
+                    isNew[pc] = now && !before;
+                    if (now) { ++total; fresh += isNew[pc] ? 1 : 0; }
+                    if (isNew[pc] && isColourTone(sc, pc)) ++freshColour;
+                }
+                if (fresh == 0) continue;
+                const int k = freshColour > 0 ? 1 : 0;
+                const bool hit = isNew[((e.pitch - t.key) % 12 + 12) % 12];
+                ++allNotes[k];
+                expected[k] += static_cast<double>(fresh) / total;
+                if (hit) ++newNotes[k];
+                if (k == 1) {
+                    ++roleAll[role];
+                    roleExp[role] += static_cast<double>(fresh) / total;
+                    if (hit) ++roleNew[role];
+                }
+            }
+            double share[2] = {}, null[2] = {}, ratio[2] = {};
+            for (int k = 0; k < 2; ++k) {
+                share[k] = allNotes[k] > 0 ? static_cast<double>(newNotes[k]) / allNotes[k] : 0.0;
+                null[k] = allNotes[k] > 0 ? expected[k] / allNotes[k] : 0.0;
+                ratio[k] = null[k] > 0.0 ? share[k] / null[k] : 0.0;
+            }
+            double roleRatio[3] = {};
+            for (int k = 0; k < 3; ++k)
+                roleRatio[k] = roleExp[k] > 0.0 ? static_cast<double>(roleNew[k]) / roleExp[k] : 0.0;
+            std::printf("         %s, borrowed sections: a newly admitted *colour* class in %lld of "
+                        "%lld notes = %.3f against the null %.3f, ratio %.2f (per role acid %.2f/%lld, "
+                        "lead %.2f/%lld, arp %.2f/%lld); a newly admitted class that is not a colour "
+                        "tone %lld of %lld = %.3f against %.3f, ratio %.2f\n",
+                        which == 0 ? "Markov" : "neural", newNotes[1], allNotes[1], share[1], null[1], ratio[1],
+                        roleRatio[0], roleAll[0], roleRatio[1], roleAll[1], roleRatio[2], roleAll[2],
+                        newNotes[0], allNotes[0], share[0], null[0], ratio[0]);
+            if (which == 1)
+                check(allNotes[1] > 500 && ratio[1] > 0.50,
+                      "and the mode table moves the borrowed-colour ratio the right way",
+                      fmt("%.2f against the mode-blind null, from the 0.47 the same measurement gave "
+                          "the model that was not told the mode. It is not 1.00: the acid's own ratio "
+                          "is %.2f and the lead's %.2f, and it is the arp (%.2f) that carries the "
+                          "number -- see docs/PLAN.md for which pitch class each role does and does "
+                          "not reach", ratio[1], roleRatio[0], roleRatio[1], roleRatio[2]));
+        }
+    }
+
+    // 4. What the mode row does to the model's own distribution, with no mask in the way.
+    {
+        std::string note;
+        NeuralModel* nn = sharedMelodyModel(&note);
+        if (nn == nullptr) {
+            check(false, "the trained model is there to ask what a mode row does", note);
+        } else if (nn->info().condMode <= 0) {
+            check(false, "the installed melody model carries the mode table",
+                  "the file has no condMode; docs/MODEL_FORMAT.md section 3 makes it optional, so this "
+                  "is a model from before 18.09.2026 and the round's claim cannot be measured on it");
+        } else {
+            // The flat second is the one pitch class Phrygian (row 1) has and Aeolian (row 0) has not,
+            // and it is a colour tone in every mode that holds it (Harmony.h). So the Phrygian row has
+            // to raise it, at the same context, or the table does not mean what it is labelled with.
+            const int flatSecond = PitchModel::symbol(1);
+            int positions = 0, raised = 0;
+            double sumA = 0.0, sumP = 0.0, worstDrop = 0.0;
+            for (int role = 0; role < 3; ++role) {
+                for (int startStep = 0; startStep < 4; ++startStep) {
+                    std::vector<NoteCond> cond;
+                    for (int i = 0; i < 12; ++i) {
+                        NoteCond nc;
+                        nc.step = (startStep + 3 * i) % 16;
+                        nc.bar = (startStep + 3 * i) / 16 % 8;
+                        nc.gap = noteGapCode(0, 3, true);
+                        nc.idx = noteIndexBucket(i);
+                        cond.push_back(nc);
+                    }
+                    // The same token sequence under both rows, so nothing but the row differs. The
+                    // tokens are a plain minor run rather than the model's own argmax, because the
+                    // argmax would itself diverge and the two runs would stop being one comparison.
+                    static const int kRun[12] = { 0, 3, 5, 7, 8, 7, 5, 3, 0, 7, 10, 12 };
+                    double pa[12] = {}, pp[12] = {};
+                    for (int md = 0; md < 2; ++md) {
+                        nn->begin(role, 0, 2, md);   // row 0 Aeolian, row 1 Phrygian
+                        int token = NeuralModel::startToken();
+                        for (size_t i = 0; i < cond.size(); ++i) {
+                            if (!nn->step(token, cond[i])) break;
+                            (md == 0 ? pa : pp)[i] = nn->prob(flatSecond);
+                            token = PitchModel::symbol(kRun[i]);
+                        }
+                    }
+                    // Counted position by position, so that one outlier cannot carry the mean.
+                    for (size_t i = 0; i < cond.size(); ++i) {
+                        ++positions;
+                        sumA += pa[i];
+                        sumP += pp[i];
+                        if (pp[i] > pa[i]) ++raised;
+                        worstDrop = std::max(worstDrop, pa[i] - pp[i]);
+                    }
+                }
+            }
+            const double meanA = positions > 0 ? sumA / positions : 0.0;
+            const double meanP = positions > 0 ? sumP / positions : 0.0;
+            check(positions > 100 && raised * 4 >= positions * 3 && meanP > 2.0 * meanA,
+                  "the Phrygian row raises the flat second over the Aeolian row, as its label says",
+                  fmt("mean probability of the flat second %.5f under Aeolian against %.5f under "
+                      "Phrygian (a factor of %.2f), higher at %d of %d positions; the largest drop "
+                      "the other way is %.5f", meanA, meanP, meanA > 0.0 ? meanP / meanA : 0.0,
+                      raised, positions, worstDrop));
+        }
+    }
+}
+
+/**
  * @brief The measured tension curve (Melody.h, Tools/corpus/measure_tension.py).
  *
  * The composer's lines are measured exactly the way the corpus was measured: the paired per-line
@@ -7357,6 +7630,7 @@ int main()
     run("testBandLimit", testBandLimit);
     run("testStereoWidth", testStereoWidth);
     run("testModalInterchange", testModalInterchange);
+    run("testModeColour", testModeColour);
     run("testTensionCurve", testTensionCurve);
     run("testMotifOperators", testMotifOperators);
     run("testArpPatterns", testArpPatterns);

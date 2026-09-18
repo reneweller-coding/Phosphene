@@ -31,6 +31,15 @@
  * draw the rhythm first. Nine embedding rows are summed into the input; the output is a
  * distribution over the 37 symbols and nothing else.
  *
+ * **The mode (`condMode`, 18.09.2026).** An eleventh table, optional exactly as the bass's
+ * `kick.emb` is: a file without `condMode` has no `mode.emb`, the argument of begin() is ignored, and
+ * the file is the model it was before. The row is the mode of the line -- one value per line, like
+ * the role -- and the composer has it because the section's mode is fixed by the form before any
+ * pitch is drawn (Form.h, modal interchange). The *training* label has to be estimated from the
+ * notes (Tools/train/mode.py), because the corpus is transposed to a common tonic and no file says
+ * which minor it is; how much of that label is noise is measured there and in
+ * docs/MODEL_FORMAT.md section 3.
+ *
  * **Threading.** A model is loaded once, on the composer's thread, and is read-only afterwards
  * except for its own scratch buffers -- so one NeuralModel serves one thread. The audio thread never
  * touches it. Nothing allocates after load().
@@ -73,6 +82,7 @@ struct ModelInfo {
     int condIdx = 0;         ///< @c condIdx: rows of idx.emb (8)
     int condBars = 0;        ///< @c condBars: rows of bars.emb (8)
     int condKick = 0;        ///< @c condKick: rows of kick.emb (3), or 0 in a file without the bass role
+    int condMode = 0;        ///< @c condMode: rows of mode.emb (6), or 0 in a file trained mode-blind
     int expand = 0;          ///< @c expand: SSM inner expansion factor
     int dtRank = 0;          ///< @c dtRank: SSM rank of the delta projection
     int convK = 0;           ///< @c convK: SSM depthwise kernel width
@@ -179,9 +189,11 @@ public:
      * @param style 0 unknown, else StyleId + 1 -- the trained corpus carries no style label, so the
      *              composer passes 0 (MODEL_FORMAT.md, the warning in section 3)
      * @param bars  the pattern's length in bars, 1..8 (stored as bars - 1)
+     * @param mode  the line's mode, 0..5 in the order of @c phos::kScaleSteps; read only by a file
+     *              whose header carries @c condMode, ignored (and harmless) by every older file
      * Every argument is clamped into the range the file declares.
      */
-    void begin(int role, int style, int bars);
+    void begin(int role, int style, int bars, int mode = 0);
 
     /**
      * @brief Computes the distribution of the next note.
@@ -206,7 +218,7 @@ private:
 
     ModelInfo info_;
     bool loaded_ = false;
-    int role_ = 0, style_ = 0, bars_ = 0, pos_ = 0;
+    int role_ = 0, style_ = 0, bars_ = 0, mode_ = 0, pos_ = 0;
     int headDim_ = 0;
     int dimP_ = 0, ffnP_ = 0, vocabP_ = 0, headDimP_ = 0, ctxP_ = 0, qkvP_ = 0;
 
@@ -217,8 +229,9 @@ private:
         std::vector<float> kCache, vCache;                          ///< keys in time panels, values row major
     };
     std::vector<Block> blocks_;
-    /** @brief The nine embedding tables, in the order of MODEL_FORMAT.md section 4. */
-    std::vector<float> tok_, posE_, roleE_, styleE_, barsE_, stepE_, barE_, gapE_, idxE_, kickE_;
+    /** @brief The nine embedding tables, in the order of MODEL_FORMAT.md section 4, plus the two
+     *         optional ones (kick.emb, mode.emb) that are empty in a file that does not carry them. */
+    std::vector<float> tok_, posE_, roleE_, styleE_, barsE_, stepE_, barE_, gapE_, idxE_, kickE_, modeE_;
     std::vector<float> normW_, normB_, head_, headB_;
     std::vector<float> x_, nx_, qkvBuf_, att_, ff_, accum_, scores_, logits_;
     std::vector<double> probs_;
@@ -272,10 +285,14 @@ struct NeuralStepper {
     int bars = 1;                             ///< the pattern's length in bars
     const std::vector<NoteCond>* cond = nullptr;   ///< one entry per position, from the onset list
     int previous = 0;                         ///< the symbol drawn last
+    int mode = 0;                             ///< the section's mode (kScaleSteps); ignored by a file
+                                              ///< without @c condMode. **Last on purpose**: the bass
+                                              ///< draw in Composer.cpp initialises this aggregate
+                                              ///< positionally and does not name the mode.
 
     int alphabet() const { return model->alphabet(); }
     /** @brief Resets; an order-2 context's older symbol means nothing to a long-context model. */
-    void begin(int, int start1) { model->begin(role, style, bars); previous = start1; }
+    void begin(int, int start1) { model->begin(role, style, bars, mode); previous = start1; }
     bool advance(int i) { return model->step(previous, (*cond)[static_cast<size_t>(i)]); }
     void observe(int symbol) { previous = symbol; }
     double prob(int c) const { return model->prob(c); }

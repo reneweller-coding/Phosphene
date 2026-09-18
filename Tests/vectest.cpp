@@ -435,8 +435,9 @@ void testModelForwardFile(const std::string& file, const char* label, bool bench
 
     // The last case of the reference file (docs/MODEL_FORMAT.md section 5): the conditioning, the
     // tokens and what PyTorch computed. Read with the smallest parser that can read it. `kick` is
-    // present only in a four-role file's cases and stays empty otherwise.
-    int role = 0, style = 0, bars = 0;
+    // present only in a four-role file's cases and stays empty otherwise; `mode` only in a file
+    // whose header carries condMode, and -1 stands for "the case records none".
+    int role = 0, style = 0, bars = 0, modeOf = -1;
     std::vector<int> tok, stepOf, barOf, gapOf, idxOf, kickOf;
     std::vector<double> want;
     {
@@ -452,6 +453,7 @@ void testModelForwardFile(const std::string& file, const char* label, bool bench
             if (key == "role") vals >> role;
             else if (key == "style") vals >> style;
             else if (key == "bars") vals >> bars;
+            else if (key == "mode") vals >> modeOf;   // only in a file with condMode
             else if (key == "tok") ints(vals, tok);
             else if (key == "step") ints(vals, stepOf);
             else if (key == "bar") ints(vals, barOf);
@@ -467,7 +469,7 @@ void testModelForwardFile(const std::string& file, const char* label, bool bench
         check(false, fmt("%s: reads the reference vectors", label).c_str(), file + ".ref.txt");
         return;
     }
-    model.begin(role, style, bars + 1);
+    model.begin(role, style, bars + 1, modeOf < 0 ? 0 : modeOf);
     for (size_t i = 0; i < n; ++i) {
         NoteCond c;
         c.step = stepOf[i];
@@ -491,6 +493,44 @@ void testModelForwardFile(const std::string& file, const char* label, bool bench
     // Printed as bits as well: the three builds of this test are diffed against each other, and the
     // line has to be character for character the same.
     std::printf("         %s logits after %zu positions: %s\n", label, n, bits.c_str());
+
+    // The eleventh embedding table (condMode) is one more laneAdd into the same accumulator, so it
+    // has to be bit-identical across the paths for the same reason every other one is -- and it has
+    // to *reach* the output, which a wrong row index or a table read past its rows would not. Both
+    // are checked here: every row of mode.emb is fed through the same context, the logits are
+    // printed as bits for the cross-path diff, and no two rows may leave the same output.
+    if (model.info().condMode > 0) {
+        std::vector<std::string> perMode;
+        for (int md = 0; md < model.info().condMode; ++md) {
+            model.begin(role, style, bars + 1, md);
+            bool fine = true;
+            for (size_t i = 0; i < n && fine; ++i) {
+                NoteCond c;
+                c.step = stepOf[i];
+                c.bar = barOf[i];
+                c.gap = gapOf[i];
+                c.idx = idxOf[i];
+                c.kick = kickOf.empty() ? 0 : kickOf[i];
+                fine = model.step(tok[i], c);
+            }
+            std::string b;
+            for (size_t c = 0; c < want.size(); ++c) {
+                uint32_t u;
+                const float v = model.logits()[c];
+                std::memcpy(&u, &v, 4);
+                b += fmt("%08x", u);
+            }
+            perMode.push_back(b);
+            std::printf("         %s mode %d logits: %s\n", label, md, b.c_str());
+        }
+        int same = 0;
+        for (size_t i = 0; i < perMode.size(); ++i)
+            for (size_t j = i + 1; j < perMode.size(); ++j)
+                if (perMode[i] == perMode[j]) ++same;
+        check(same == 0, fmt("%s: every row of mode.emb reaches the output on this path", label).c_str(),
+              fmt("%zu rows fed through the same context, %d pairs of them with identical logits",
+                  perMode.size(), same));
+    }
     if (!bench) return;
 
     const auto t0 = std::chrono::steady_clock::now();

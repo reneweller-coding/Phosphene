@@ -77,6 +77,7 @@ always present.
 | `relMin`, `relMax` | `-12`, `24` — the alphabet's range, for a sanity check against `Corpus.h` |
 | `condStep`, `condBar`, `condGap`, `condIdx`, `condBars` | sizes of the conditioning tables of section 3 |
 | `condKick` | rows of `kick.emb` (`3`). **Absent in a `roles=3` file** and then there is no `kick.emb` and no `kick` input; **required** when `roles` is 4 |
+| `condMode` | rows of `mode.emb` (`6`, the modes of `phos::kScaleSteps`). **Absent in a file trained mode-blind** and then there is no `mode.emb` and the `mode` input is ignored; a reader that meets a value other than 6 must refuse the file rather than clamp into it |
 | `eps` | LayerNorm / RMSNorm epsilon |
 | `act` | `gelu_tanh` (transformer) or `silu` (ssm) |
 | `expand`, `dtRank`, `convK` | SSM only: inner expansion factor, rank of the Δ projection, depthwise kernel width |
@@ -107,9 +108,10 @@ Let the line have notes `s_0 .. s_{N-1}`. At input position `t` (`0 <= t < N`):
 | `bar` | `(step_of_note / 16) % 8` | the onset list `on` |
 | `gap` | `0` for the last note of the line, otherwise `clamp(next_step - step, 1, 8)`, and `9` for a gap above 8 | the onset list `on` |
 | `idx` | bucket of the note index `t`: `0,1,2,3` for `t = 0,1,2,3`, `4` for `t` in 4..5, `5` for 6..9, `6` for 10..15, `7` for 16 and above | the loop counter |
+| `mode` | the line's mode, `0..5` in the order of `phos::kScaleSteps` (Aeolian, Phrygian, harmonic minor, Phrygian dominant, double harmonic, Dorian). **Only in a file with `condMode`**. One value per line, like `role` | the section's mode, which the form grammar fixes before any pitch is drawn (`Form.h`, modal interchange); `makeAcid`/`makeLead`/`makeArp` pass the scale they were called with |
 | `kick` | `0` on a kick step (`step % 4 == 0`), `1` on the sixteenth after it, `2` elsewhere in the gap — `phos::kickClass()`. **Only in a file with `condKick`**; a `roles=3` reader has no such input and must not invent one | `Composer::composeBars` places the kick on every beat of the bar before it draws any bass pitch |
 
-`role`, `style` and `bars` are the same for every position of a line; `step`, `bar`, `gap`, `idx` and
+`role`, `style`, `bars` and `mode` are the same for every position of a line; `step`, `bar`, `gap`, `idx` and
 `kick` change per position.
 
 > **The bass (role 3).** Added additively on 16.09.2026 and measured first: on the local corpus a
@@ -125,6 +127,38 @@ Let the line have notes `s_0 .. s_{N-1}`. At input position `t` (`0 <= t < N`):
 > composer takes kicks away — **and which, on this corpus, measures at zero (see the end of section 7).**
 > A `roles=4` file carries a `role.emb` with four rows and the tenth embedding table `kick.emb`;
 > everything else — the alphabet, the output distribution, the block tensors — is unchanged.
+
+> **The mode (`condMode`, 18.09.2026), and the honest warning about it.** The composer picks a
+> section's mode before it draws a note, so at generation time this is legitimate *control* and not
+> side information. On the training side it is neither: `Tools/corpus/build_corpus.py` transposes
+> every line to its own tonic with a Krumhansl-Schmuckler key estimate (Krumhansl, *Cognitive
+> Foundations of Musical Pitch*, Oxford University Press 1990) and nothing in the corpus says **which
+> minor** that is — of 1 264 file names in the three psytrance packs, six say "min" or "minor" and
+> none names a mode. The label therefore has to be *estimated from the notes*, which
+> `Tools/train/mode.py` does with the Bayesian key-profile model of Temperley (*Music and
+> Probability*, MIT Press 2007, chapter 4) reduced to scale membership. Three consequences, all
+> measured on 16.–18.09.2026 and all of them limits on what this table can be:
+>
+> * **The label is decided on about a third of the corpus.** The posterior is above 0.9 for 36.6 % of
+>   the 666 lines; the rest is an exact tie between two to four modes, because the degrees that tell
+>   the modes apart are rarely played (22 % of lines ever play the natural second, 5 % the major
+>   seventh, 3 % the natural sixth). Ties break towards the *least* colourful fitting mode, so a label
+>   can under-call a line's colour and can never claim colour the line does not play. Split-half
+>   agreement (odd notes against even notes of the same line) is 73.3 %, Cohen's kappa 0.579; on
+>   synthetic lines of known mode the estimator is 62.0 % right overall and 100 % right on the lines
+>   it calls decided.
+> * **Three of the six rows are nearly empty.** Estimated over the corpus: Aeolian 42.2 %, Phrygian
+>   33.6 %, Phrygian dominant 18.8 %, harmonic minor 3.9 % (26 lines), Dorian 1.2 % (8 lines), double
+>   harmonic 0.3 % (2 lines). A composer that asks for double harmonic is asking a row trained on two
+>   lines.
+> * **A held-out NLL measured with this label is an oracle number.** The label of a held-out line is
+>   computed from that line's own notes, so it summarises the answer. The shipped mode model scores
+>   1.1279 nats on the 102 held-out lines against the previous file's 1.1536 (+0.0257, 95 % paired
+>   bootstrap [0.0093, 0.0423], P(difference ≤ 0) = 0.0012, better on 68 of 102 lines) — and 1.2099,
+>   i.e. **worse than the mode-blind file**, when the same model is scored with the mode rows
+>   permuted across the held-out lines. The whole gain is the label. That is the right measurement for
+>   the task (the composer really does know the mode) and the wrong one for the claim "a better model
+>   of the corpus"; `Tools/train/confidence.py --mode-eval` exists to keep the two apart.
 
 > **Warning about `style`.** The MIDI packs carry no style label that maps onto the five style
 > profiles of `Form.h`. Every training line was therefore labelled `style = 0` (unknown), and the
@@ -153,11 +187,12 @@ then `norm.w`, `norm.b`, `head.w`, `head.b`. A reader should still look tensors 
 | `gap.emb` | `[10, E]` | |
 | `idx.emb` | `[8, E]` | |
 | `kick.emb` | `[condKick, E]` | **only when the header carries `condKick`**; it follows `idx.emb` |
+| `mode.emb` | `[condMode, E]` | **only when the header carries `condMode`**; it follows `kick.emb`, or `idx.emb` in a file without one |
 | `norm.w`, `norm.b` | `[E]` | final LayerNorm |
 | `head.w`, `head.b` | `[37, E]`, `[37]` | output projection (untied from `tok.emb`) |
 
 The input of block 0 is the **sum** of the nine embedding rows above (`tok.emb` through `idx.emb`),
-plus `kick.emb` when the file has one; `norm` and `head` are the two tensors after the last block.
+plus `kick.emb` and `mode.emb` when the file has them; `norm` and `head` are the two tensors after the last block.
 
 ### `arch=transformer`
 
@@ -256,6 +291,7 @@ case 0
 role=<0..roles-1>
 style=<0..5>
 bars=<0..7>
+mode=<0..5>                   # only in a file with condMode; absent otherwise
 len=<L>
 tok=<L integers, 0..36>       # the input tokens, tok[0] is always 12 (the start context)
 step=<L integers, 0..15>
@@ -274,7 +310,7 @@ file. The contexts are **synthetic**, from a fixed seed in `Tools/train/export.p
 would be a more musical context, but a loop written out as symbols and step positions *is* the loop,
 and the bought packs do not leave the machine (PLAN 6.9). The cases cover every role, lengths
 from one position to past the positional clamp, every gap code and every note-index bucket, which is
-all an oracle over a deterministic forward pass needs. A bass file's cases also walk `kick` through
+all an oracle over a deterministic forward pass needs. A mode file's cases walk `mode` through its six rows, so a reader that never adds the table fails the oracle instead of passing it. A bass file's cases also walk `kick` through
 its three values, and in the last two cases they do so **independently of `step`**, so a reader that
 quietly recomputes the kick class from the step instead of reading it fails the oracle instead of
 passing it by luck (`Tools/train/export_bass.py`). `logits` come from the **same tensors that
@@ -319,7 +355,10 @@ sampler mask it, rather than pretending to be order 2.
   `roles=4` file through the same primitives and adds only `kick.emb` and `condKick`.
 * `Tools/train/models.py` — the forward pass of section 4 in PyTorch, in the same order. The kick
   table is optional there too (`n_kick=0` by default), so a melodic model built without it is the
-  same model, tensor for tensor, that it was before the bass existed.
+  same model, tensor for tensor, that it was before the bass existed, and `n_mode=0` does the same
+  for the mode table.
+* `Tools/train/mode.py` — where a training line's `mode` label comes from, and the measurement of
+  how much of it is noise.
 
 > **What `kick` was measured to be worth: nothing, so far.** The bass round trained the same model
 > twice, with and without the kick table, on the same split: 0.4323 against 0.4293 nats, and a paired
