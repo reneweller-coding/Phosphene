@@ -102,6 +102,45 @@ int firstCoreBar(const ParamStore& p, const Composer& c)
     return 0;
 }
 
+/**
+ * @brief The genre rules' own reference: pitch classes derived straight from the scale table.
+ *
+ * Nothing here calls the code under test. The colour tones are the flat second and the upper note
+ * of every three-semitone step between neighbouring degrees; a chord is the degrees d, d+2, d+4.
+ */
+struct RuleRef {
+    /** @brief Semitones of degree @p d of @p scale above the tonic, octaves folded in. */
+    static int deg(int scale, int d) { return kScaleSteps[scale][d % 7] + 12 * (d / 7); }   // d >= 0
+    /** @brief Whether pitch class @p pc (above the tonic) is a colour tone of @p scale. */
+    static bool colour(int scale, int pc)
+    {
+        pc = ((pc % 12) + 12) % 12;
+        bool in = false;
+        for (int d = 0; d < 7; ++d) in = in || kScaleSteps[scale][d] == pc;
+        if (!in) return false;
+        if (pc == 1) return true;
+        for (int d = 1; d < 7; ++d)
+            if (kScaleSteps[scale][d] - kScaleSteps[scale][d - 1] == 3 && kScaleSteps[scale][d] == pc) return true;
+        return false;
+    }
+    /** @brief Pitch class (above the tonic) of the root of the chord on degree @p d. */
+    static int chordRoot(int scale, int d) { return ((deg(scale, d) % 12) + 12) % 12; }
+};
+
+/** @brief Longest run of identical consecutive values, the sequence read as a loop when @p cyclic. */
+int longestRun(const std::vector<int>& v, bool cyclic)
+{
+    if (v.empty()) return 0;
+    const size_t n = v.size();
+    int best = 1, run = 1;
+    const size_t len = cyclic ? 2 * n : n;
+    for (size_t i = 1; i < len; ++i) {
+        run = v[i % n] == v[(i - 1) % n] ? run + 1 : 1;
+        best = std::max(best, std::min(run, static_cast<int>(n)));
+    }
+    return best;
+}
+
 // ---------------------------------------------------------------------------------------------
 
 void testParams()
@@ -3807,10 +3846,18 @@ void testAcidColour()
                 for (size_t k = 0; k < a.size(); ++k) {
                     const bool acc = (a[k].flags & kNoteAccent) != 0;
                     const int pos = a[k].step % 4;
-                    wantMarginal += pos == 2 ? 0.32 : (pos == 0 ? 0.12 : 0.2);
+                    // 18.09.2026, rule 8 of the genre rules: accents on the "e" and the "a", none on
+                    // the beat (the kick step), few on the "and" (Melody.cpp, makeAcid).
+                    wantMarginal += (pos == 1 || pos == 3) ? 0.36 : (pos == 2 ? 0.06 : 0.0);
                     ++onsets;
                     accents += acc ? 1 : 0;
-                    if (k + 1 < a.size()) {
+                    // The lift is measured where it is defined: at the "e" and the "a", the positions
+                    // that carry accents at all. Pooled over positions with rates of 0, 0.06 and 0.36
+                    // the ratio of two mixtures says more about the positions than about clustering.
+                    // Both onsets on an "e" or an "a": then both carry the same target rate and the
+                    // chain's ratio is its lift exactly (Melody.cpp); a kick step before would mix in a
+                    // rate of 0.
+                    if (k + 1 < a.size() && a[k + 1].step % 2 == 1 && a[k].step % 2 == 1) {
                         const bool nxt = (a[k + 1].flags & kNoteAccent) != 0;
                         if (acc) { ++nAfterAcc; runAfterAcc += nxt ? 1 : 0; }
                         else { ++nAfterPlain; runAfterPlain += nxt ? 1 : 0; }
@@ -3822,12 +3869,11 @@ void testAcidColour()
         const double pp = static_cast<double>(runAfterPlain) / static_cast<double>(nAfterPlain);
         const double marg = static_cast<double>(accents) / static_cast<double>(onsets);
         wantMarginal /= static_cast<double>(onsets);
-        // The realised lift is a little under the 2.51 the chain is built with, and must be: the chain's
-        // two probabilities are position-dependent, consecutive onsets sit on different positions, and a
-        // ratio of two mixtures is not the mixture of the ratios. 2.36 is what that mixture gives.
-        check(pa / pp > 2.2 && pa / pp < 2.7,
+        // Measured at the "e" and the "a" (the positions of rule 8), the lift is the chain's own 2.51 up
+        // to the sampling error and the mixture over the rate of the onset before (Melody.cpp).
+        check(pa / pp > 2.1 && pa / pp < 2.9,
               "acid accents cluster with the lift measured in the corpus (2.51), instead of being drawn independently",
-              fmt("after an accent %.3f, after a plain note %.3f, lift %.2f over the mixture of step positions "
+              fmt("at the e and the a: after an accent %.3f, after a plain note %.3f, lift %.2f "
                   "(n = %lld and %lld)", pa, pp, pa / pp, static_cast<long long>(nAfterAcc), static_cast<long long>(nAfterPlain)));
         // The independent draw produced exactly the per-position mean; the chain holds the marginal
         // only up to the same mixture effect, and it comes out 8 % under it. That is the whole change
@@ -4286,7 +4332,9 @@ void testMelody()
     struct Range { int lo = 127, hi = 0; };
     // Grouped by section, not by sixteen-bar block: since Phase 5 the masking rule is decided per
     // section of the form (Form.h), and a sixteen-bar block may straddle two of them.
-    std::vector<Range> leadR(static_cast<size_t>(tracks * kMaxSections)), arpR(static_cast<size_t>(tracks * kMaxSections));
+    // 18.09.2026: grouped by bar -- the arp stays in its own register now and never changes octave
+    // inside a section, so the masking that matters is what sounds together (Melody.cpp).
+    std::vector<Range> leadR(static_cast<size_t>(tracks * 128)), arpR(static_cast<size_t>(tracks * 128));
     for (const NoteEvent& e : ev) {
         if (e.part != Part::Acid && e.part != Part::Lead && e.part != Part::Arp) continue;
         const int bar = static_cast<int>(e.beat / kBeatsPerBar);
@@ -4307,9 +4355,21 @@ void testMelody()
         const bool chordTone = pc == pcs[0] || pc == pcs[1] || pc == pcs[2];
         const double inBar = e.beat - bar * kBeatsPerBar;
         if (e.part == Part::Lead && std::fabs(inBar - std::round(inBar / 2.0) * 2.0) < 1e-9) { ++strong; if (!chordTone) ++weak; }
-        if (e.part == Part::Arp) { ++arpNotes; if (!chordTone) ++arpOff; }
+        if (e.part == Part::Arp) {
+            // Since 18.09.2026 (rule 13) the arp plays sus2 / sus4 / add9 material over the chord root --
+            // over the tonic where the chord root is itself a colour tone -- and a colour tone only as a
+            // glint; RuleRef derives the material from the scale table.
+            ++arpNotes;
+            const int d0 = t.melody.chordDegree[chordIndexAt(t.melody, inTrack)];
+            const int d = RuleRef::colour(sc, RuleRef::chordRoot(sc, d0)) ? 0 : d0;
+            std::set<int> material = { RuleRef::chordRoot(sc, d), RuleRef::deg(sc, d + 4) % 12 };
+            if (t.melody.arpTones == 0) material.insert(RuleRef::deg(sc, d + 1) % 12);
+            if (t.melody.arpTones == 1) material.insert(RuleRef::deg(sc, d + 3) % 12);
+            if (t.melody.arpTones == 2) { material.insert(RuleRef::deg(sc, d + 2) % 12); material.insert(RuleRef::deg(sc, d + 1) % 12); }
+            if (material.count(pc) == 0 && !RuleRef::colour(sc, pc)) ++arpOff;
+        }
         if (e.part == Part::Acid) acidNotes.push_back(&e);
-        const size_t block = static_cast<size_t>(ti * kMaxSections + sectionOfBar(t.form, inTrack));
+        const size_t block = static_cast<size_t>(bar);
         if (e.part == Part::Lead) { leadR[block].lo = std::min(leadR[block].lo, int(e.pitch)); leadR[block].hi = std::max(leadR[block].hi, int(e.pitch)); }
         if (e.part == Part::Arp) { arpR[block].lo = std::min(arpR[block].lo, int(e.pitch)); arpR[block].hi = std::max(arpR[block].hi, int(e.pitch)); }
     }
@@ -4324,12 +4384,16 @@ void testMelody()
         if (std::min(leadR[b].hi, arpR[b].hi) - std::max(leadR[b].lo, arpR[b].lo) > 2) ++masked;
     }
     check(notes > 1000 && outside == 0, "every acid, lead and arp note in its track's scale", fmt("%d of %d outside", outside, notes));
-    check(weak == 0 && arpOff == 0 && strong > 50, "lead on the strong beats and every arp note are chord tones",
-          fmt("%d of %d strong lead notes, %d of %d arp notes off the chord", weak, strong, arpOff, arpNotes));
+    check(weak == 0 && arpOff == 0 && strong > 50, "lead on the strong beats chord tones, every arp note on its chord's sus / add9 material",
+          fmt("%d of %d strong lead notes off the chord, %d of %d arp notes off the material", weak, strong, arpOff, arpNotes));
     check(tooLow == 0, "depth rule in the score: acid from D3, lead from B3, arp from G3", fmt("%d notes too low", tooLow));
     check(slides > 10 && slideGaps == 0, "every acid slide overlaps the note it slides into", fmt("%d slides, %d with a gap", slides, slideGaps));
-    check(sharedBlocks > 0 && masked == 0, "where lead and arp play together their ranges overlap by at most two semitones",
-          fmt("%d shared sections, %d masked", sharedBlocks, masked));
+    // Since 18.09.2026 the arp stays inside G3..G5 (rule 14) and the lead inside B3..A5 (rule 17): the
+    // masking rule's octave shift no longer fits, so where the form moves the arp to clear the lead
+    // the arp sits the section out (Melody.cpp). The check is the rule itself; how many sections
+    // still share both is reported, not required.
+    check(masked == 0, "where lead and arp play together their ranges overlap by at most two semitones",
+          fmt("%d shared bars, %d masked", sharedBlocks, masked));
 
     // Variety over a night.
     {
@@ -5218,11 +5282,16 @@ void testPads()
         int pcs[3];
         chordTones(scale, degree, pcs);
         int best = 1 << 30;
+        // Since 18.09.2026 (rule 19) a voicing is in root position: the chord root lowest (D3 .. C#4),
+        // the fifth directly above it, then two chord tones completing the triad.
+        const int rootPc = (key + RuleRef::chordRoot(scale, degree)) % 12;
+        const int fifth = RuleRef::deg(scale, degree + 4) - RuleRef::deg(scale, degree);
         for (int a = kPadLowest; a <= kPadHighest; ++a)
             for (int b = a + 1; b <= kPadHighest; ++b)
                 for (int c = b + 1; c <= kPadHighest; ++c)
                     for (int d = c + 1; d <= kPadHighest; ++d) {
                         const int v[4] = { a, b, c, d };
+                        if (a % 12 != rootPc || a > kPadLowest + 11 || b - a != fifth) continue;
                         bool ok = b - a <= 12 && c - b <= 12 && d - c <= 12, has[3] = {};
                         for (int x : v) {
                             const int pc = ((x - key) % 12 + 12) % 12;
@@ -5248,6 +5317,9 @@ void testPads()
     Composer c(515);
     std::vector<NoteEvent> ev;
     c.composeBars(p, 0, 4 * 128, ev);
+    // Under D3 only the sub foundation (rule 20): the chord root, in a bar without kick and bass.
+    std::set<int> loud;
+    for (const NoteEvent& e : ev) if (e.part == Part::Kick || e.part == Part::Bass) loud.insert(static_cast<int>(e.beat / kBeatsPerBar));
     int pads = 0, off = 0;
     for (const NoteEvent& e : ev) {
         if (e.part != Part::Pad) continue;
@@ -5262,9 +5334,11 @@ void testPads()
         chordTones(sc, t.melody.chordDegree[chordIndexAt(t.melody, bar - t.firstBar)], pcs);
         const int pc = ((e.pitch - t.key) % 12 + 12) % 12;
         ++pads;
-        if (!(pc == pcs[0] || pc == pcs[1] || pc == pcs[2]) || e.pitch < kPadLowest) ++off;
+        const bool sub = e.pitch < kPadLowest;
+        if (!(pc == pcs[0] || pc == pcs[1] || pc == pcs[2]) || (sub && (loud.count(bar) != 0 || pc != pcs[0] || e.pitch < kPadFoundationLowest))) ++off;
     }
-    check(pads > 100 && off == 0, "pad notes are chord tones of their bar, G3 and above", fmt("%d of %d off", off, pads));
+    check(pads > 100 && off == 0, "pad notes are chord tones of their bar, D3 and above -- under it only the sub root where kick and bass rest",
+          fmt("%d of %d off", off, pads));
 }
 
 void testGateAndDuck()
@@ -6635,6 +6709,7 @@ void testModeColour()
     // Four styles, because the style profile decides how often a section borrows at all and which
     // modes it may reach; a Goa-only measurement would be about Goa and not about the model.
     static const char* kStyles[4] = { "Goa", "FullOn", "DarkForest", "HiTech" };
+    double markovAcidShare = 0.0;
     {
         for (int which = 0; which < 2; ++which) {
             long long colourNotes = 0, allNotes = 0;
@@ -6687,15 +6762,19 @@ void testModeColour()
                           "order-2 chain gives the colour the share a corpus line gives it *on "
                           "average over all modes*, not the share it gives it *in this mode*", share));
             else
-                check(perRoleAll[0] > 2000 && roleShare[0] >= kCorpus[0].lo,
-                      "told the mode, the neural model's acid reaches the corpus's colour-tone share",
-                      fmt("%lld of %lld acid notes = %.4f, at or above the corpus's acid interval "
-                          "[%.4f, %.4f] around %.4f; the same model without the mode table gives 0.039",
-                          perRole[0], perRoleAll[0], roleShare[0], kCorpus[0].lo, kCorpus[0].hi,
-                          kCorpus[0].share));
+                // Since 18.09.2026 the colour share is the genre rules' one mechanism (Melody.cpp,
+                // kColourShare): colour tones are out of every sampler set and are placed at colour
+                // slots, so the neural model's mode table can no longer lift them. What is checked is
+                // that the share no longer depends on the model -- the rule decides it, not the corpus.
+                check(perRoleAll[0] > 2000 && std::fabs(roleShare[0] - markovAcidShare) < 0.03,
+                      "the acid's colour share is the rule's, whichever model draws the line",
+                      fmt("neural %.4f against Markov %.4f (%lld notes; the corpus's acid interval [%.4f, %.4f] "
+                          "no longer decides it)", roleShare[0], markovAcidShare, perRoleAll[0], kCorpus[0].lo, kCorpus[0].hi));
+            if (which == 0) markovAcidShare = roleShare[0];
         }
     }
 
+    double markovRatio = 0.0;
     // 3. The ratio against the mode-blind null, over the borrowed sections only. Same counting rule
     // as testModalInterchange, so the two numbers are comparable with the ones recorded there.
     {
@@ -6757,14 +6836,15 @@ void testModeColour()
                         which == 0 ? "Markov" : "neural", newNotes[1], allNotes[1], share[1], null[1], ratio[1],
                         roleRatio[0], roleAll[0], roleRatio[1], roleAll[1], roleRatio[2], roleAll[2],
                         newNotes[0], allNotes[0], share[0], null[0], ratio[0]);
-            if (which == 1)
-                check(allNotes[1] > 500 && ratio[1] > 0.50,
-                      "and the mode table moves the borrowed-colour ratio the right way",
-                      fmt("%.2f against the mode-blind null, from the 0.47 the same measurement gave "
-                          "the model that was not told the mode. It is not 1.00: the acid's own ratio "
-                          "is %.2f and the lead's %.2f, and it is the arp (%.2f) that carries the "
-                          "number -- see docs/PLAN.md for which pitch class each role does and does "
-                          "not reach", ratio[1], roleRatio[0], roleRatio[1], roleRatio[2]));
+            // Since 18.09.2026 a colour tone is a neighbour tone at a drawn slot (Melody.cpp), so the
+            // borrowed-colour ratio is the rule's and the mode table has no say in it any more; the
+            // check is that both models land on the same ratio.
+            if (which == 0) markovRatio = ratio[1];
+            else
+                check(allNotes[1] > 500 && std::fabs(ratio[1] - markovRatio) < 0.15,
+                      "the borrowed-colour ratio is the rule's, whichever model draws the line",
+                      fmt("neural %.2f against Markov %.2f (per role acid %.2f, lead %.2f, arp %.2f)",
+                          ratio[1], markovRatio, roleRatio[0], roleRatio[1], roleRatio[2]));
         }
     }
 
@@ -6909,9 +6989,18 @@ void testTensionCurve()
     const double acidBeat = mean(role[0].beat), leadBeat = mean(role[1].beat);
     const double acidPar = mean(role[0].parity), leadPar = mean(role[1].parity);
     auto inside = [](double v, const Target& t) { return v >= t.lo && v <= t.hi; };
-    check(inside(acidBeat, beatTarget[0]) && inside(leadBeat, beatTarget[1])
-              && inside(acidPar, parityTarget[0]) && inside(leadPar, parityTarget[1]),
-          "the composer's acid and lead carry the tension curve the corpus was measured to have", detail);
+    // Since 18.09.2026 the genre rules stand above the corpus (docs/PLAN.md): the lead rests on the
+    // tonic and the fifth, its colour tones are neighbour tones resolving at once, and the acid's
+    // pitch classes and repetitions are bounded. The tilt still acts inside those sets, but the
+    // rules take away most of the instability it tilts towards, and the lead's contrasts and both
+    // bar parities fall to about zero (before: lead beat +0.558, parities +0.079 / +0.276). That is
+    // the corpus disagreeing with a rule, which is reported, not a veto; what is still required is
+    // the acid's within-bar rise, which the rules leave room for.
+    std::printf("         (%s; the lead's beat contrast and both parities are reported only since the genre rules)\n",
+                inside(leadBeat, beatTarget[1]) && inside(acidPar, parityTarget[0]) && inside(leadPar, parityTarget[1])
+                    ? "lead and parities inside the corpus intervals" : "lead and parities outside the corpus intervals");
+    check(inside(acidBeat, beatTarget[0]),
+          "the composer's acid still rises in instability from beat 1 to beat 4, as the corpus was measured to", detail);
 }
 
 /**
@@ -7058,8 +7147,10 @@ void testArpPatterns()
             const std::vector<bool> e = euclid(m.arpPulses, kStepsPerBar, m.arpRotation);
             std::vector<int> want;
             for (int s = 0; s < kStepsPerBar; ++s) if (e[static_cast<size_t>(s)]) want.push_back(s);
+            // Since 18.09.2026 (rule 12) the arp plays every sixteenth and the Euclidean pulses are the
+            // steps that jump up into the high stream.
             std::vector<int> got;
-            for (const MelodyNote& n : m.arp[0]) got.push_back(n.step);
+            for (int s = 0; s < kStepsPerBar; ++s) if ((m.arpHigh >> s) & 1u) got.push_back(s);
             if (want != got || m.arpPulses < 4 || m.arpPulses > 8) ++euclidWrong;
             // The rotation has to be one that minimises the distance to the midpoint between the
             // least and the most syncopated rotation -- Sioros et al. 2014, moderate syncopation --
@@ -7106,7 +7197,10 @@ void testArpPatterns()
             ParamStore q;
             std::vector<std::vector<int>> bars;
             bool sized = true;
-            for (int b = 0; b < 4; ++b) {
+            // Bars 0, 1 and 48: bar 48 has the cell phase of bar 0 (48 mod 3 = 0), the same variant of
+            // the A A A' A'' phrase (48 mod 4 = 0), the same chord for two- and four-bar chords and the
+            // same octave-jump state -- since 18.09.2026 bar 3 is the phrase's A'' and differs on purpose.
+            for (int b : { 0, 1, 48 }) {
                 std::vector<NoteEvent> ev;
                 composeMelodyBar(q, t.melody, b, b, t.scale, bp, ev);
                 std::vector<int> pitches;
@@ -7121,7 +7215,7 @@ void testArpPatterns()
             const bool oneNote = t.melody.arp[0][0].rel == t.melody.arp[0][1].rel
                               && t.melody.arp[0][1].rel == t.melody.arp[0][2].rel;
             if (!oneNote && bars[0] == bars[1]) ++notPrecessing;
-            if (t.melody.chordBars == 4 && !t.melody.arpOctaveJump && bars[0] != bars[3]) ++notReturning;
+            if (bars[0] != bars[2]) ++notReturning;
         }
         check(tracks > 4 && wrongCount == 0 && notPrecessing == 0 && notReturning == 0 && lowest >= kArpLowest,
               "a 3/16 arp cell moves on by a sixteenth every bar and comes home every third",
@@ -8528,6 +8622,536 @@ void testTransitions()
           fmt("%d of %d key changes masked", maskedChanges, keyChanges));
 }
 
+// ------------------------------------------------------------------------ genre rules, 18.09.2026
+
+/**
+ * @brief The melodic rules of 18.09.2026 (docs/PLAN.md, "Melodik nach Regeln"): acid, arp, lead, pad.
+ *
+ * Measured two ways. Over a population of plans (every mode, random keys and seeds) each rule is
+ * checked on the material itself, where a violation can be named exactly; and on the user's
+ * listening seed 864566672 (three tracks, default settings) the score is measured with the same
+ * statistics the brief's table used, so the before and after of the report come from here.
+ */
+void testGenreRules()
+{
+    section("genre rules: acid, arp and lead inside the rules, colour tones as neighbours");
+    ParamStore p;
+    const StyleProfile& style = styleProfile(styleOf(p));
+    Rng r;
+    r.seed(18092026);
+    constexpr int kTrials = 240;
+    // Acid.
+    int acidWin = 0, acidDense = 0, acidRests = 0, acidPcs = 0, acidReg = 0, acidRuns = 0, acidHalves = 0;
+    int accents = 0, accentsOnKick = 0, accentsOnEa = 0, acidNotes = 0, slides = 0, jumps = 0;
+    // Arp.
+    int arpCells = 0, arpNotContinuous = 0, arpReg = 0, arpStreamBad = 0, arpMaterialBad = 0, arpCellsSeen = 0;
+    // Lead.
+    int leadBars = 0, leadSparse = 0, leadHoles = 0, leadReg = 0, leadRuns = 0, leadNoFifth = 0, leadPhrases = 0;
+    std::vector<int> leadPitches;
+    // Colour: [role][mode] notes and colour notes; and the neighbour rule itself.
+    long colourN[3][kNumScales] = {}, colourC[3][kNumScales] = {};
+    int colourBad = 0, colourSeen = 0;
+    // Pads.
+    int padVoicings = 0, padBad = 0;
+    // Variation.
+    int variantPairs = 0, variantSame = 0, variantWide = 0, setsSame = 0;
+
+    auto colourRule = [&](const std::vector<MelodyNote>& cell, int root, int key, int scale, bool loop, int cellSteps) {
+        for (size_t i = 0; i < cell.size(); ++i) {
+            const int pc = ((root + cell[i].rel - key) % 12 + 12) % 12;
+            if (!RuleRef::colour(scale, pc)) continue;
+            ++colourSeen;
+            const bool last = i + 1 == cell.size();
+            if (last && !loop) { ++colourBad; continue; }
+            const MelodyNote& nx = cell[last ? 0 : i + 1];
+            const int nextStep = last ? nx.step + cellSteps : nx.step;
+            const int npc = ((root + nx.rel - key) % 12 + 12) % 12;
+            if (cell[i].step % 2 == 0 || cell[i].len != 1 || nextStep != cell[i].step + 1 || npc != 0) {
+                ++colourBad;
+                if (std::getenv("PHOS_DEBUG_RULES")) std::printf("DBG colour: root %d scale %d step %d len %d next %d npc %d cellsize %zu loop %d\n", root, scale, cell[i].step, cell[i].len, nextStep, npc, cell.size(), loop ? 1 : 0);
+            }
+        }
+    };
+
+    for (int trial = 0; trial < kTrials; ++trial) {
+        const int scale = trial % kNumScales, key = r.below(12);
+        const uint64_t seed = 0x5EED0000ull + static_cast<uint64_t>(trial) * 7919ull;
+        const MelodyPlan m = makeMelodyPlan(p, style, seed, key, scale, false, 0.82f, 0);
+        // ---- acid
+        const int aRoot = m.root[0];
+        for (int k = 0; k < kAcidCells; ++k) {
+            const std::vector<MelodyNote>& cell = m.acid[k];
+            if (cell.empty()) continue;
+            std::vector<int> pitches;
+            for (const MelodyNote& n : cell) pitches.push_back(aRoot + n.rel);
+            if (longestRun(pitches, true) > 2) ++acidRuns;
+            colourRule(cell, aRoot, key, scale, true, m.acidSteps);
+            for (int w = 0; w < m.acidSteps / 16; ++w) {
+                ++acidWin;
+                bool covered[16] = {};
+                int onsets = 0, firstHalf = 0;
+                std::set<int> pcs;
+                for (const MelodyNote& n : cell) {
+                    if (n.step < 16 * w || n.step >= 16 * w + 16) continue;
+                    const int s = n.step - 16 * w;
+                    ++onsets;
+                    firstHalf += s < 8 ? 1 : 0;
+                    for (int x = s; x < std::min(16, s + std::max<int>(1, n.len)); ++x) covered[x] = true;
+                    pcs.insert(((aRoot + n.rel - key) % 12 + 12) % 12);
+                }
+                int rests = 0;
+                for (bool c : covered) rests += c ? 0 : 1;
+                if (onsets < 11 || onsets > 14) ++acidDense;
+                if (rests > 3) ++acidRests;
+                if (pcs.size() < 3 || pcs.size() > 5) ++acidPcs;
+                if (std::abs(firstHalf - (onsets - firstHalf)) > 2) ++acidHalves;
+            }
+            for (const MelodyNote& n : cell) {
+                const int pitch = aRoot + n.rel;
+                const bool jump = pitch > kAcidHighest;
+                if (pitch < 50 || pitch > 74 || (jump && n.step % 2 == 0)) ++acidReg;
+                jumps += jump ? 1 : 0;
+                ++acidNotes;
+                slides += (n.flags & kNoteSlide) ? 1 : 0;
+                if (n.flags & kNoteAccent) {
+                    ++accents;
+                    if (n.step % 4 == 0) ++accentsOnKick;
+                    if (n.step % 2 == 1) ++accentsOnEa;
+                }
+                const int pc = ((pitch - key) % 12 + 12) % 12;
+                ++colourN[0][scale];
+                colourC[0][scale] += RuleRef::colour(scale, pc) ? 1 : 0;
+            }
+        }
+        // Variation: A' and A'' vary A minimally, and the second set is new material.
+        for (int set = 0; set < kMaterialSets; ++set)
+            for (int v = 1; v < kAcidVariants; ++v) {
+                const std::vector<MelodyNote>& a = m.acid[acidCell(set, v - 1)];
+                const std::vector<MelodyNote>& b = m.acid[acidCell(set, v)];
+                if (a.empty() || a.size() != b.size()) { ++variantPairs; ++variantSame; continue; }
+                int diff = 0;
+                for (size_t i = 0; i < a.size(); ++i) diff += a[i].rel != b[i].rel ? 1 : 0;
+                ++variantPairs;
+                if (diff == 0) ++variantSame;
+                if (diff > 4) ++variantWide;
+            }
+        {
+            const std::vector<MelodyNote>& a = m.acid[acidCell(0, 0)];
+            const std::vector<MelodyNote>& b = m.acid[acidCell(1, 0)];
+            bool same = a.size() == b.size();
+            for (size_t i = 0; same && i < a.size(); ++i) same = a[i].rel == b[i].rel;
+            if (same) ++setsSame;
+        }
+        // ---- arp
+        for (int k = 0; k < kArpCells; ++k) {
+            const std::vector<MelodyNote>& cell = m.arp[k];
+            if (cell.empty()) continue;
+            ++arpCellsSeen;
+            const int chord = k % 4;
+            // A chord whose root is a colour tone is arpeggiated over the tonic (rule 1: no parked b2).
+            const int degree = RuleRef::colour(scale, RuleRef::chordRoot(scale, m.chordDegree[chord])) ? 0 : m.chordDegree[chord];
+            const int rootPc = (key + RuleRef::chordRoot(scale, degree)) % 12;
+            // The chord's tone material, from the scale table: sus2 = 1 2 5, sus4 = 1 4 5, add9 = 1 3 5 9.
+            std::set<int> material = { rootPc, (key + RuleRef::deg(scale, degree + 4)) % 12 };
+            if (m.arpTones == 0) material.insert((key + RuleRef::deg(scale, degree + 1)) % 12);
+            if (m.arpTones == 1) material.insert((key + RuleRef::deg(scale, degree + 3)) % 12);
+            if (m.arpTones == 2) { material.insert((key + RuleRef::deg(scale, degree + 2)) % 12); material.insert((key + RuleRef::deg(scale, degree + 1)) % 12); }
+            const size_t want = m.arpPolymeter ? 3u : 16u;
+            ++arpCells;
+            bool continuous = cell.size() == want;
+            for (size_t i = 0; continuous && i < cell.size(); ++i) continuous = cell[i].step == static_cast<int>(i);
+            if (!continuous) ++arpNotContinuous;
+            int lowest = 127;
+            for (const MelodyNote& n : cell) lowest = std::min(lowest, m.root[2] + n.rel);
+            colourRule(cell, m.root[2], key, scale, true, m.arpPolymeter ? 3 : 16);
+            for (size_t i = 0; i < cell.size(); ++i) {
+                const MelodyNote& n = cell[i];
+                const int pitch = m.root[2] + n.rel;
+                if (pitch < kArpLowest || pitch > kArpHighest) ++arpReg;
+                const int pc = ((pitch % 12) + 12) % 12;
+                const bool glint = RuleRef::colour(scale, pitch - key);
+                if (!glint && material.count(pc) == 0) ++arpMaterialBad;
+                // Two streams: a high note sits at least a fifth above the cell's lowest note.
+                const bool high = m.arpPolymeter ? i == 0 : ((m.arpHigh >> n.step) & 1u) != 0;
+                if ((high && !glint && pitch < lowest + 7) || (!high && !glint && pitch >= lowest + 7)) {
+                    ++arpStreamBad;
+                    if (std::getenv("PHOS_DEBUG_RULES")) {
+                        std::printf("DBG stream: style %d scale %d key %d degree %d cell %d step %d pitch %d lowest %d high %d mask %04x:", m.arpStyle, scale, key, m.chordDegree[chord], k, n.step, pitch, lowest, high ? 1 : 0, m.arpHigh);
+                        for (const MelodyNote& x : cell) std::printf(" %d", m.root[2] + x.rel);
+                        std::printf("\n");
+                    }
+                }
+                ++colourN[2][scale];
+                colourC[2][scale] += glint ? 1 : 0;
+            }
+        }
+        // ---- lead
+        for (int w = 0; w < 2; ++w) {
+            const std::vector<MelodyNote>& ph = m.lead[w];
+            if (ph.empty()) continue;
+            ++leadPhrases;
+            std::vector<int> pitches;
+            bool fifthRests = false;
+            for (const MelodyNote& n : ph) {
+                const int pitch = m.root[1] + n.rel;
+                pitches.push_back(pitch);
+                leadPitches.push_back(pitch);
+                if (pitch < kLeadLowest || pitch > kLeadHighest) ++leadReg;
+                if (((pitch - key) % 12 + 12) % 12 == 7 && n.len >= 2) fifthRests = true;
+                ++colourN[1][scale];
+                colourC[1][scale] += RuleRef::colour(scale, pitch - key) ? 1 : 0;
+            }
+            if (!fifthRests) ++leadNoFifth;
+            if (longestRun(pitches, false) > 2) ++leadRuns;
+            colourRule(ph, m.root[1], key, scale, false, 128);
+            for (int b = 0; b < 8; ++b) {
+                ++leadBars;
+                bool on[16] = {};
+                int onsets = 0;
+                for (const MelodyNote& n : ph) if (n.step >= 16 * b && n.step < 16 * b + 16) { on[n.step - 16 * b] = true; ++onsets; }
+                int longest = 0, cur = 0;
+                for (bool o : on) { cur = o ? 0 : cur + 1; longest = std::max(longest, cur); }
+                if (onsets < 8) ++leadSparse;
+                if (longest >= 6) ++leadHoles;
+            }
+        }
+        // ---- pad: root position, the fifth next, from D3
+        for (int c = 0; c < 4; ++c) {
+            const std::vector<int>& v = m.padVoicing[c];
+            ++padVoicings;
+            const int rootPc = (key + RuleRef::chordRoot(scale, m.chordDegree[c])) % 12;
+            const int fifth = RuleRef::deg(scale, m.chordDegree[c] + 4) - RuleRef::deg(scale, m.chordDegree[c]);
+            bool ok = v.size() == 4 && std::is_sorted(v.begin(), v.end());
+            ok = ok && v[0] % 12 == rootPc && v[1] - v[0] == fifth && v[0] >= kPadLowest && v.back() <= kPadHighest;
+            if (!ok) ++padBad;
+        }
+    }
+    std::sort(leadPitches.begin(), leadPitches.end());
+    const int leadMedian = leadPitches.empty() ? 0 : leadPitches[leadPitches.size() / 2];
+    const int leadTop = leadPitches.empty() ? 0 : leadPitches.back();
+
+    check(acidWin > 200 && acidDense == 0 && acidRests == 0 && acidHalves == 0,
+          "acid: 11 to 14 onsets in every sixteen steps, at most three rests, both halves of the bar alike (rules 3, 5)",
+          fmt("%d windows: %d outside 11..14 onsets, %d with more than three rests, %d with the halves more than two onsets apart",
+              acidWin, acidDense, acidRests, acidHalves));
+    check(acidPcs == 0 && acidRuns == 0, "acid: three to five pitch classes a bar, never one pitch three times in a row (rules 6, 7)",
+          fmt("%d windows outside 3..5 pitch classes, %d cells with a run of three", acidPcs, acidRuns));
+    check(acidReg == 0 && jumps > 0, "acid: D3 to D4, octave jumps up to D5 only on offbeat sixteenths (rules 6, 10)",
+          fmt("%d of %d notes outside, %d octave jumps", acidReg, acidNotes, jumps));
+    check(accents > 0 && accentsOnKick == 0 && accentsOnEa >= accents * 8 / 10,
+          "acid: accents on the e and the a of the beat, never on a kick step (rule 8)",
+          fmt("%d accents, %d on kick steps, %.0f %% on e/a", accents, accentsOnKick, 100.0 * accentsOnEa / std::max(1, accents)));
+    check(slides * 100 >= acidNotes * 18, "acid: slides are deliberate and frequent (rule 9)",
+          fmt("%d slides on %d notes (%.0f %%)", slides, acidNotes, 100.0 * slides / std::max(1, acidNotes)));
+    check(variantSame == 0 && variantWide == 0 && setsSame == 0,
+          "variation per phrase: A' and A'' differ from the cell before in one to four notes, the second set is new (rule 4)",
+          fmt("%d pairs, %d identical, %d changed in more than four notes; %d second sets equal to the first", variantPairs, variantSame, variantWide, setsSame));
+    check(arpCells > 100 && arpNotContinuous == 0, "arp: continuous sixteenths (rule 11)", fmt("%d of %d cells not one note per sixteenth", arpNotContinuous, arpCells));
+    check(arpStreamBad == 0 && arpMaterialBad == 0,
+          "arp: a low anchor stream and a high stream a fifth or more above it, on sus2 / sus4 / add9 material (rules 12, 13)",
+          fmt("%d notes in the wrong stream, %d notes off the material", arpStreamBad, arpMaterialBad));
+    check(arpReg == 0, "arp: every note between G3 and G5 (rule 14)", fmt("%d notes outside", arpReg));
+    check(leadSparse == 0 && leadHoles == 0, "lead: a dense riff -- at least eight onsets in every bar, no hole of six sixteenths (rules 3, 16)",
+          fmt("%d bars: %d with fewer than eight onsets, %d with a hole", leadBars, leadSparse, leadHoles));
+    check(leadReg == 0 && leadMedian >= 67 && leadMedian <= 73 && leadTop <= kLeadHighest,
+          "lead: median around A4..C5, never above A5 (rule 17)", fmt("median MIDI %d, top %d, %d notes outside B3..A5", leadMedian, leadTop, leadReg));
+    check(leadNoFifth == 0 && leadRuns == 0, "lead: the fifth appears as a resting tone in every phrase, no pitch three times in a row (rules 1, 18)",
+          fmt("%d of %d phrases without a held fifth, %d with a run of three", leadNoFifth, leadPhrases, leadRuns));
+    check(colourSeen > 0 && colourBad == 0,
+          "colour tones only as neighbours: weak sixteenth, one sixteenth long, the tonic directly after (rule 1)",
+          fmt("%d colour notes, %d break the rule", colourSeen, colourBad));
+    {
+        static const char* const kRole[3] = { "acid", "lead", "arp" };
+        std::string table;
+        bool plain = true, bounded = true;
+        for (int role = 0; role < 3; ++role) {
+            table += fmt("\n         %-4s", kRole[role]);
+            for (int sc = 0; sc < kNumScales; ++sc) {
+                const double share = colourN[role][sc] > 0 ? static_cast<double>(colourC[role][sc]) / static_cast<double>(colourN[role][sc]) : 0.0;
+                table += fmt("  %s %.3f", kScaleNames[sc], share);
+                bool any = false;
+                for (int pc = 0; pc < 12; ++pc) any = any || RuleRef::colour(sc, pc);
+                if (!any && share > 0.0) plain = false;
+                if (share > 0.2) bounded = false;
+            }
+        }
+        std::printf("         colour share per role and mode:%s\n", table.c_str());
+        check(plain && bounded, "the colour share is one calibrated number: zero in modes without colour tones, never above 0.2 (rule 2)",
+              "table above");
+    }
+    check(padBad == 0, "pad: root position -- the chord root lowest, the fifth above it, D3 and up (rule 19)",
+          fmt("%d of %d voicings break it", padBad, padVoicings));
+
+    // ---- the user's listening seed, in the score, with the brief's statistics
+    {
+        ParamStore q;
+        Composer c(864566672ull);
+        std::vector<NoteEvent> ev;
+        c.composeBars(q, 0, 768, ev);
+        struct PartStats {
+            int first = 0, second = 0, notes = 0, repeats = 0, runs3 = 0, holes = 0, bars = 0, octave = 0;
+            std::vector<int> pitches, pcsPerBar;
+            std::map<int, int> degrees;
+        };
+        std::printf("         seed 864566672, per track (first/second half of the bar, holes = bars with >= 6 silent sixteenths):\n");
+        int acidRatioBad = 0, arpRatioBad = 0, leadMedianBad = 0, leadTopBad = 0, acidRun3 = 0, arpRegBad = 0, acidTopBad = 0;
+        for (int ti = 0; ti < 3; ++ti) {
+            const TrackPlan& t = c.track(q, ti);
+            PartStats st[3];
+            const Part parts[3] = { Part::Acid, Part::Lead, Part::Arp };
+            for (int k = 0; k < 3; ++k) {
+                std::map<int, std::vector<const NoteEvent*>> byBar;
+                int prev = -1, run = 1;
+                for (const NoteEvent& e : ev) {
+                    if (e.part != parts[k]) continue;
+                    const int bar = static_cast<int>(std::floor(e.beat / kBeatsPerBar));
+                    if (bar < t.firstBar || bar >= t.firstBar + t.bars) continue;
+                    byBar[bar].push_back(&e);
+                    PartStats& s = st[k];
+                    const double inBar = e.beat - bar * kBeatsPerBar;
+                    (inBar < 2.0 ? s.first : s.second)++;
+                    ++s.notes;
+                    s.pitches.push_back(e.pitch);
+                    s.degrees[((e.pitch - t.key) % 12 + 12) % 12]++;
+                    if (prev == e.pitch) { ++s.repeats; if (++run == 3) ++s.runs3; } else run = 1;
+                    if (prev >= 0 && std::abs(prev - e.pitch) == 12) ++s.octave;
+                    prev = e.pitch;
+                }
+                for (const auto& kv : byBar) {
+                    PartStats& s = st[k];
+                    ++s.bars;
+                    bool on[16] = {};
+                    std::set<int> pcs;
+                    for (const NoteEvent* e : kv.second) {
+                        on[std::clamp(static_cast<int>(std::floor((e->beat - kv.first * kBeatsPerBar) * 4.0 + 0.3)), 0, 15)] = true;
+                        pcs.insert(e->pitch % 12);
+                    }
+                    int longest = 0, cur = 0;
+                    for (bool o : on) { cur = o ? 0 : cur + 1; longest = std::max(longest, cur); }
+                    if (longest >= 6) ++s.holes;
+                    s.pcsPerBar.push_back(static_cast<int>(pcs.size()));
+                }
+            }
+            static const char* const kPartName[3] = { "acid", "lead", "arp" };
+            static const char* const kDeg[12] = { "1", "b2", "2", "b3", "3", "4", "#4", "5", "b6", "6", "b7", "7" };
+            for (int k = 0; k < 3; ++k) {
+                PartStats& s = st[k];
+                if (s.notes == 0) { std::printf("           track %d %-4s --\n", ti + 1, kPartName[k]); continue; }
+                std::vector<int> ps = s.pitches, pc = s.pcsPerBar;
+                std::sort(ps.begin(), ps.end());
+                std::sort(pc.begin(), pc.end());
+                std::string deg;
+                std::vector<std::pair<int, int>> dv(s.degrees.begin(), s.degrees.end());
+                std::sort(dv.begin(), dv.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+                for (const auto& d : dv) if (d.second * 100 >= s.notes) deg += fmt(" %s %.0f%%", kDeg[d.first], 100.0 * d.second / s.notes);
+                std::printf("           track %d %-4s %4d notes in %3d bars, halves %d/%d, holes %.1f%%, repeated %.0f%%, runs of 3: %d, "
+                            "octave leaps %.0f%%, MIDI %d..%d..%d, pitch classes/bar %d;%s\n",
+                            ti + 1, kPartName[k], s.notes, s.bars, s.first, s.second, 100.0 * s.holes / std::max(1, s.bars),
+                            100.0 * s.repeats / std::max(1, s.notes - 1), s.runs3, 100.0 * s.octave / std::max(1, s.notes - 1),
+                            ps.front(), ps[ps.size() / 2], ps.back(), pc[pc.size() / 2], deg.c_str());
+                const double ratio = static_cast<double>(s.second) / std::max(1, s.first);
+                if (k == 0 && (ratio < 0.8 || ratio > 1.25)) ++acidRatioBad;
+                if (k == 2 && (ratio < 0.8 || ratio > 1.25)) ++arpRatioBad;
+                if (k == 0) { acidRun3 += s.runs3; if (ps.back() > kAcidJumpHighest) ++acidTopBad; }
+                if (k == 1 && (ps[ps.size() / 2] < 67 || ps[ps.size() / 2] > 73)) ++leadMedianBad;
+                if (k == 1 && ps.back() > kLeadHighest) ++leadTopBad;
+                if (k == 2 && (ps.front() < kArpLowest || ps.back() > kArpHighest)) ++arpRegBad;
+            }
+        }
+        check(acidRatioBad == 0 && arpRatioBad == 0, "seed 864566672: acid and arp carry the second half of the bar like the first (rule 3)",
+              fmt("%d acid and %d arp tracks outside 0.8..1.25", acidRatioBad, arpRatioBad));
+        check(acidRun3 == 0 && acidTopBad == 0, "seed 864566672: no acid pitch three times in a row, nothing above D5",
+              fmt("%d runs of three, %d tracks above D5", acidRun3, acidTopBad));
+        check(leadMedianBad == 0 && leadTopBad == 0 && arpRegBad == 0, "seed 864566672: lead median A4..C5 and never above A5, arp inside G3..G5",
+              fmt("%d lead medians and %d lead tops off, %d arp tracks outside", leadMedianBad, leadTopBad, arpRegBad));
+    }
+
+    // ---- the arp's gate: 15 to 35 % of a sixteenth, as the arp is really played (rule 15)
+    {
+        ParamStore q;
+        Composer c(864566672ull);
+        std::vector<NoteEvent> ev;
+        c.composeBars(q, 0, 256, ev);
+        double length = -1.0;
+        for (const NoteEvent& e : ev) if (e.part == Part::Arp) { length = e.length; break; }
+        // The voice itself: the tempo delay's echoes are a send effect and not the note's gate.
+        ParamStore ap;
+        auto e = makePoly("arp.delay_send=0", ap, PolyInstance::Arp);
+        const double bpm = 145.0, sr = 48000.0, sixteenth = 60.0 / bpm / 4.0;
+        const int gateSamples = static_cast<int>(std::lround(length * 60.0 / bpm * sr));
+        e->noteOn(69, 1.0f, length, gateSamples, 0.0);
+        const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 24000);
+        // The audible length: from the onset until the 1-ms RMS falls 20 dB under its peak for good.
+        std::vector<double> rms;
+        for (size_t i = 0; i + 48 <= y.size(); i += 48) {
+            double acc = 0.0;
+            for (size_t k = i; k < i + 48; ++k) acc += static_cast<double>(y[k]) * y[k];
+            rms.push_back(std::sqrt(acc / 48.0));
+        }
+        const double peak = *std::max_element(rms.begin(), rms.end());
+        size_t last = 0;
+        for (size_t i = 0; i < rms.size(); ++i) if (rms[i] > 0.1 * peak) last = i;
+        const double audible = static_cast<double>(last + 1) * 0.001;
+        const double gate = audible / sixteenth;
+        check(length > 0.0 && gate >= 0.15 && gate <= 0.35, "arp: the note sounds for 15 to 35 % of a sixteenth (rule 15)",
+              fmt("note %.3f beats, audible %.1f ms of a %.1f ms sixteenth = %.0f %%", length, audible * 1000.0, sixteenth * 1000.0, 100.0 * gate));
+    }
+}
+
+/**
+ * @brief The pad's foundation (rules 19 and 20): root position everywhere, and where the form
+ *        silences kick and bass a real root an octave lower, faded in and out by the pad's own
+ *        envelope, with the pad's high pass opened for it by control events.
+ */
+void testFoundation()
+{
+    section("pad foundation: root position, a sub root where kick and bass rest");
+    // The score of the listening seed: every pad chord in root position, a sub note wherever the
+    // form removes kick and bass, and never a pad note under D3 while either of them plays.
+    ParamStore q;
+    Composer c(864566672ull);
+    std::vector<NoteEvent> ev;
+    c.composeBars(q, 0, 768, ev);
+    std::set<int> kickBars, bassBars;
+    for (const NoteEvent& e : ev) {
+        const int bar = static_cast<int>(std::floor(e.beat / kBeatsPerBar));
+        if (e.part == Part::Kick) kickBars.insert(bar);
+        if (e.part == Part::Bass) bassBars.insert(bar);
+    }
+    std::map<double, std::vector<int>> chords;
+    for (const NoteEvent& e : ev) if (e.part == Part::Pad) chords[e.beat].push_back(e.pitch);
+    int onsets = 0, rootLow = 0, foundationOnsets = 0, withSub = 0, subUnderKick = 0, tooMany = 0;
+    for (const auto& kv : chords) {
+        const int bar = static_cast<int>(std::floor(kv.first / kBeatsPerBar));
+        const int ti = c.trackOfBar(q, bar);
+        const TrackPlan& t = c.track(q, ti);
+        if (ti > 0 && bar - t.firstBar < 16) continue;   // the previous track's pads still sound there
+        std::vector<int> v = kv.second;
+        std::sort(v.begin(), v.end());
+        if (v.size() > 4) ++tooMany;
+        const bool silent = kickBars.count(bar) == 0 && bassBars.count(bar) == 0;
+        const bool sub = v[0] < kPadLowest;
+        if (sub && !silent) ++subUnderKick;
+        if (silent) { ++foundationOnsets; if (sub) ++withSub; }
+        const int sc = t.form.section[sectionOfBar(t.form, bar - t.firstBar)].scale;
+        const int rootPc = (t.key + RuleRef::chordRoot(sc, t.melody.chordDegree[chordIndexAt(t.melody, bar - t.firstBar)])) % 12;
+        ++onsets;
+        // The chord's root is the lowest note: the sub where there is one, the voicing's bass otherwise.
+        if (v[0] % 12 == rootPc && (!sub || v[1] % 12 == rootPc)) ++rootLow;
+    }
+    check(onsets > 20 && rootLow == onsets && tooMany == 0, "pad chords in root position, never more than four voices (rule 19)",
+          fmt("%d of %d chords with the root at the bottom, %d with more than four notes", rootLow, onsets, tooMany));
+    check(foundationOnsets > 0 && withSub == foundationOnsets && subUnderKick == 0,
+          "a sub root under every pad chord in bars without kick and bass, and never while they play (rule 20)",
+          fmt("%d of %d chords in silent bars have one; %d sub notes while kick or bass play", withSub, foundationOnsets, subUnderKick));
+
+    // Rendered: the pad alone through a track with a breakdown. Its high pass opens for the
+    // breakdown and closes again, and the band under 140 Hz fades in and out with the pad's own
+    // envelope instead of stepping.
+    {
+        ParamStore p;
+        p.parseText("compose.pad_amount=1 compose.level_match=Off master.auto_gain=Off");
+        uint64_t seed = 0;
+        int breakStart = -1, breakEnd = -1;
+        for (uint64_t s = 1; s < 400 && breakStart < 0; ++s) {
+            Composer probe(s);
+            const TrackPlan& t = probe.track(p, 0);
+            if (!t.melody.present[3]) continue;
+            for (int i = 0; i + 1 < t.form.count; ++i) {
+                const Section& sec = t.form.section[i];
+                if (sec.type == SectionType::Break && sec.startBar <= 80 && sec.bars >= 16
+                    && t.form.section[i + 1].startBar == sec.startBar + sec.bars) {
+                    breakStart = sec.startBar; breakEnd = sec.startBar + sec.bars; seed = s;
+                    break;
+                }
+            }
+        }
+        auto engine = std::make_unique<Engine>();
+        engine->prepare(48000.0, 512);
+        engine->params().copyValuesFrom(p);
+        const int mb = engine->params().base(Module::Mix);
+        for (int id : { mix::KickMute, mix::BassMute, mix::PercMute, mix::AcidMute, mix::LeadMute, mix::ArpMute, mix::SfxMute })
+            engine->params().set(mb + id, 1.0f);
+        Composer cm(seed);
+        // Which bars the form leaves without kick and bass, from the score itself.
+        std::set<int> loud;
+        {
+            std::vector<NoteEvent> sc;
+            cm.composeBars(p, 0, breakEnd + 4, sc);
+            for (const NoteEvent& e : sc)
+                if (e.part == Part::Kick || e.part == Part::Bass) loud.insert(static_cast<int>(std::floor(e.beat / kBeatsPerBar)));
+        }
+        Conductor conductor(*engine, cm);
+        const double bpm = engine->params().get(engine->params().base(Module::Compose) + compose::Bpm);
+        const double sr = 48000.0, barSec = 4.0 * 60.0 / bpm;
+        const int endBar = breakEnd + 4;
+        const size_t total = static_cast<size_t>(std::llround(endBar * barSec * sr));
+        std::vector<float> L(total), R(total);
+        const int hp = engine->params().base(Module::Poly, 2) + poly::HpFloor;
+        int hpBad = 0, hpBars = 0;
+        size_t done = 0;
+        int lastBar = -1;
+        while (done < total) {
+            const int n = static_cast<int>(std::min<size_t>(512, total - done));
+            conductor.pump(engine->params(), 32.0);
+            engine->process(L.data() + done, R.data() + done, n);
+            done += static_cast<size_t>(n);
+            const int bar = static_cast<int>(engine->beatPosition() / kBeatsPerBar);
+            if (bar != lastBar && engine->beatPosition() - bar * kBeatsPerBar > 1.0) {
+                lastBar = bar;
+                const double f = engine->effective(hp);
+                const bool silent = loud.count(bar) == 0;
+                ++hpBars;
+                if (silent ? std::fabs(f - 40.0) > 0.5 : std::fabs(f - 140.0) > 0.5) ++hpBad;
+                if (bar >= breakStart && bar < breakEnd && !silent) ++hpBad;   // the breakdown itself is silent
+            }
+        }
+        double pk = 0.0;
+        for (size_t i = 0; i < total; ++i) pk = std::max(pk, static_cast<double>(std::fabs(L[i])));
+        std::printf("         rendered pad solo: peak %.3f\n", pk);
+        check(breakStart >= 0 && hpBad == 0, "the pad's high pass floor opens to 40 Hz where the form silences kick and bass (the breakdown) and returns to 140 Hz",
+              fmt("seed %llu, breakdown bars %d..%d: %d of %d bars off", static_cast<unsigned long long>(seed), breakStart, breakEnd, hpBad, hpBars));
+        // The band under 140 Hz: a second-order low pass twice (24 dB/octave), then 20-ms RMS.
+        std::vector<float> mono(total);
+        for (size_t i = 0; i < total; ++i) mono[i] = 0.5f * (L[i] + R[i]);
+        auto lowPass = [&](std::vector<float>& x) {
+            const double w = std::tan(kPiD * 140.0 / sr), k = std::sqrt(2.0), a0 = 1.0 + k * w + w * w;
+            const double b0 = w * w / a0, b1 = 2.0 * b0, b2 = b0, a1 = 2.0 * (w * w - 1.0) / a0, a2 = (1.0 - k * w + w * w) / a0;
+            double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+            for (float& v : x) {
+                const double y = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+                x2 = x1; x1 = v; y2 = y1; y1 = y;
+                v = static_cast<float>(y);
+            }
+        };
+        std::vector<float> low = mono;
+        lowPass(low);
+        lowPass(low);
+        auto rmsDb = [&](const std::vector<float>& x, double t0, double t1) {
+            const size_t a = static_cast<size_t>(std::max(0.0, t0) * sr), b = std::min(x.size(), static_cast<size_t>(t1 * sr));
+            double acc = 0.0;
+            for (size_t i = a; i < b; ++i) acc += static_cast<double>(x[i]) * x[i];
+            return 10.0 * std::log10(acc / std::max<size_t>(1, b - a) + 1e-30);
+        };
+        const double t0 = breakStart * barSec, t1 = breakEnd * barSec;
+        const double steady = rmsDb(low, t0 + 4.0 * barSec, t0 + 8.0 * barSec);
+        const double all = rmsDb(mono, t0 + 4.0 * barSec, t0 + 8.0 * barSec);
+        const double first = rmsDb(low, t0, t0 + 0.1);
+        const double afterDrop = rmsDb(low, t1 + 0.25 * barSec, t1 + 2.0 * barSec);
+        const double beforeBreak = rmsDb(low, t0 - 2.0 * barSec, t0);
+        // The pad before this round, measured on the same seed and bars: -55.7 dB under 140 Hz against
+        // -24.6 dB in all, a share of -31.1 dB -- nothing but leakage. The foundation has to lift that
+        // share by more than 12 dB; the hall's return (low cut 300 Hz) is part of "all", so the sub's
+        // own voice carries more than the share says.
+        check(steady - all > -19.0, "in the breakdown the pad carries a real foundation: the band under 140 Hz 12 dB above the old pad's share (-31.1 dB)",
+              fmt("%.1f dB under 140 Hz against %.1f dB in all (%.1f dB)", steady, all, steady - all));
+        check(first < steady - 6.0 && afterDrop < steady - 25.0 && beforeBreak < steady - 25.0,
+              "the foundation fades in with the pad's attack and is gone a beat after kick and bass return (no step)",
+              fmt("under 140 Hz: first 100 ms %.1f dB, steady %.1f dB; two bars before the breakdown %.1f dB, from a beat after it %.1f dB",
+                  first, steady, beforeBreak, afterDrop));
+    }
+}
+
 } // namespace
 
 int main()
@@ -8567,6 +9191,8 @@ int main()
     run("testTensionCurve", testTensionCurve);
     run("testMotifOperators", testMotifOperators);
     run("testArpPatterns", testArpPatterns);
+    run("testGenreRules", testGenreRules);
+    run("testFoundation", testFoundation);
     run("testForm", testForm);
     run("testArrangeDynamics", testArrangeDynamics);
     run("testSectionRules", testSectionRules);

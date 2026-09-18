@@ -3955,6 +3955,42 @@ künftige Runde, die ebenfalls weit vorausdatierte Kontroll-Events einführt, da
 eigenen Takt hinausreicht, braucht entweder denselben `safeBeat`-Schutz oder eine explizite Prüfung, dass
 `Conductor::pump` sie nicht vorzeitig ausliefert. Siehe [[phosphene-round-phase8]] (Merge-Fallen).
 
+**18.09.2026, Melodik nach Regeln: Acid, Arp, Lead, Pad-Fundament.** Grundsatz des Nutzers vom selben Tag:
+die Genre-Regeln stehen über den trainierten MIDI-Daten; Markov-Kette und Transformer wählen nur noch
+innerhalb der Regeln (Melody.h, Abschnitt „Genre rules above the corpus“). Gemessen am Hör-Seed 864566672
+(Selbsttest `testGenreRules`, dieselben Kennzahlen wie die Tabelle des Auftrags), vorher → nachher:
+
+| Teil | vorher | nachher |
+|---|---|---|
+| Acid T1 | Takthälften 1296/162, 97 % Grundton, 73 % Tonwiederholung, 311 Dreierläufe, 1 Tonklasse/Takt, F#3..F#4 | 972/810, 1 42 % / 5 30 % / b3 8 % / b2 8 %, 16 %, 0 Läufe, 4 Tonklassen, E3..F#4 |
+| Acid T3 | 954/1272, 96 % Grundton, 76 %, 318 Läufe, C#4..C#5 | 1113/954, 1 53 % / b7 26 %, 33 %, 0 Läufe, F3..C#5 |
+| Arp T1 („up“) | 10 von 16 Sechzehnteln, Hälften 1520/380 | 16 von 16, 1520/1520, zwei Ströme (41 % Oktavsprünge), B3..F#5 |
+| Arp T2 (Korpus) | G#5..B6 | spielt nicht: die Formmaskierung (Form.cpp) schaltet ihn neben der Lead ab, s. u. |
+| Lead T2 | 552 Noten in 96 Takten, 6/Takt, b2 47 %, 5 2 % | 1290 Noten, 13/Takt, 1 56 %, b2 13 % (nur als Nebenton), Quinte als Halteton in jeder Phrase |
+| Lead T3 | Median D5, Spitze D6 | Median C#5, Spitze A5 |
+| Pad | tiefster Ton G3/A3, Grundton unten in 24/96 Akkorden (T1) | Grundlage D3..C#4, Grundton unten 96/96, Sub-Grundton in 39 Akkorden der Breakdowns |
+
+Farbtonanteil je Rolle (Population, 240 Pläne, Tonart-Mix): vorher Lead 0,34 (Phrygisch) bis 0,42 (Doppelt
+harmonisch), Acid ≤ 0,014, Arp bis 0,19; nachher Acid 0,10–0,11, Lead 0,11, Arp 0,02–0,03, in Äolisch und
+Dorisch 0. **Ein Mechanismus:** Farbtöne sind in keiner Sampler-Menge mehr; sie stehen an gezogenen
+„Farbslots“ (schwache Sechzehntel, eine Sechzehntel lang, danach sofort die Tonika), deren Zahl ein
+Zielanteil je Rolle ist (`kColourShare`, 0,11/0,13/0,055, skaliert vom Bogen 0,6..1,0). Markov und
+Transformer liefern damit denselben Anteil (0,1055 beide), die Modustabelle des Modells hat keinen
+Einfluss mehr. **Wo das Korpus widerspricht (Information, kein Veto):** Acid-Korpus 2 Tonklassen/Takt,
+59 % Wiederholungen; die gemessene Spannungskurve (16.09.) hält nur noch beim Acid (+0,23), Lead-Kontrast
+und Taktparität fallen unter die Regeln auf ≈ 0; der Akzent-Clustering-Lift gilt weiter (2,5 an e/a).
+
+**Pad-Fundament:** Grundstellung mit Quinte darüber ab D3 (`pad.hp_floor` 200 → 140 Hz), und wo die Form
+Kick und Bass schweigen lässt, der Grundton eine Oktave tiefer (D2..C#3) statt der zweiten Oberstimme (nie
+mehr als vier Stimmen je Akkord). Der Hochpass wird pro Takt per Kontroll-Event geöffnet (40 Hz, 0,5 × f0);
+dafür reicht `hp_floor` jetzt bis 40 Hz (Bereich, nicht Reihenfolge). Der Sub endet einen Takt vor dem
+Wiedereinsatz; gerendert: Anteil unter 140 Hz im Breakdown -14,9 dB (vorher -31,1), nach dem Drop -83 dB.
+
+**Offen / Nebenwirkung:** Arp (G3..G5) und Lead (Median A4..C5) teilen zwangsläufig ein Register; die
+Maskierungsregel in Form.cpp schiebt den Arp oktavweise hoch und schaltet ihn ab, sobald er über 100 käme.
+In Track 2 des Hör-Seeds spielt der Arp deshalb gar nicht mehr. Form.cpp gehört dieser Runde nicht — eine
+Folgerunde sollte dort „Arp spielt in den Takten ohne Lead“ statt „Arp schweigt die ganze Sektion“ erlauben.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

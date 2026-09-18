@@ -18,38 +18,41 @@
  * chord tone at the end of a lead phrase. **Rhythm** comes from the corpus onset and length counts per
  * sixteenth step of the same role.
  *
- * **Acid.** A one- or two-bar pattern A and its variation B, which redraws two or three of A's notes
- * from the model given their neighbours (the same sampler with every other note fixed) and moves one
- * accent. A A A B per phrase. The corpus carries no usable accents or slides (a MIDI loop rarely
- * records them), so these are design probabilities: accents likelier on the offbeat eighths, slides
- * only into a note that follows directly.
+ * **Acid.** A one- or two-bar cell A and its variations A' and A'', each redrawing one or two notes
+ * of the one before from the model given their neighbours (the same sampler with every other note
+ * fixed); A' also moves one accent. A A A' A'' per phrase, and a second set of cells after the
+ * track's first breakdown. The corpus carries no usable accents or slides (a MIDI loop rarely
+ * records them), so these are design values, set by the genre rules below.
  *
  * **Lead.** An eight-bar phrase A A' B A'': A is a two-bar motif; A' keeps its rhythm and every note
  * that still fits the new chords, redrawing only strong notes that do not; B has its own rhythm and
  * continues from A'; A'' is A again with its last notes redrawn towards a chord tone at the end. Two
  * phrases per track, alternating by eight bars.
  *
- * **Arp.** One bar per chord, on the chord tones over one or two octaves: up, down, up-down, or drawn
- * from the corpus arp model with every note constrained to the chord.
+ * **Arp.** One bar per chord, every sixteenth, a low anchor under a high stream of sus2 / sus4 / add9
+ * tones: up, down, up-down, Euclidean or polymetric, or drawn from the corpus arp model inside those
+ * streams (see the genre rules below).
  *
  * **Layers.** Which parts play in which bar is no longer decided here. Since Phase 5 the
  * instrumentation matrix of the form grammar (Form.h) answers that per bar from the section type and
  * the energy arc, including the masking rule between lead and arp; this file only builds the material
  * and plays the bar it is handed.
  *
- * **Pads.** Four-note voicings of the chords between G3 and G5, each chosen from every combination of
- * chord tones that contains all three pitch classes by the smallest total movement of the voices from
- * the voicing before -- the voice-leading rule of the plan (5.7), exact rather than greedy. Pads hold
- * each chord and carry the sections without lead or acid.
+ * **Pads.** Four-note voicings in root position -- the root between D3 and C#4, the fifth above it,
+ * two upper voices that complete the triad -- the upper pair chosen by the smallest total movement
+ * of the voices from the voicing before, the voice-leading rule of the plan (5.7), exact rather than
+ * greedy. Pads hold each chord and carry the sections without lead or acid; where kick and bass
+ * rest they add the root an octave lower (the sub foundation, 18.09.2026).
  *
  * **Colour (dissonance).** Farbood's tension model counts dissonance among the four quantities an
- * energy arc should move. The lead's constraint sets therefore carry weights rather than plain flags:
- * the flat second and the upper note of an augmented second -- the two intervals Easwaran names as the
- * genre's colour -- get more weight the higher the track's place on the arc and the more the style
- * profile asks for.
+ * energy arc should move. The flat second and the upper note of an augmented second -- the two
+ * intervals Easwaran names as the genre's colour -- therefore get a share of the notes that grows
+ * with the track's place on the arc and with the style profile. Since 18.09.2026 that share is a
+ * calibrated target per role, met by placing the colour tones as neighbour tones (see the genre
+ * rules below), and no longer a weight in the sampler's sets.
  *
- * **Colour (tension curve, measured 16.09.2026).** On top of the arc's colour the per-position
- * weights carry the tension curve the corpus was measured to have. A review proposed a schedule over
+ * **Colour (tension curve, measured 16.09.2026).** The per-position weights also carry the tension
+ * curve the corpus was measured to have. A review proposed a schedule over
  * an eight-bar phrase (stable to bar 4, rising, peak in bar 7, resolving in bar 8) from Lerdahl's
  * stability hierarchy (*Tonal Pitch Space*, Oxford 2001). Tools/corpus/measure_tension.py counted
  * the hierarchy against position in 655 deduplicated corpus lines and found something else: within
@@ -63,7 +66,7 @@
  * @c exp(kTensionTilt * D(beat, bar parity) * instability(pitch class)) on the same per-position
  * weights the arc's colour uses, where D is the measured deviation. A constant factor at a position
  * cancels in the sampler (CorpusSample.inl), so the tilt changes the *shape* of a position's
- * distribution and nothing else, and the two weightings multiply rather than fight.
+ * distribution and nothing else.
  *
  * **Motivic operators** (16.09.2026). Partial redrawing alone is not how a composer varies a motif.
  * A'' now also takes one systematic transformation, drawn per phrase: a rhythmic phase shift of the
@@ -74,7 +77,33 @@
  * operators are the ones PLAN 6.5 names. Every one of them stays inside the scale, the ambitus and
  * the register the masking rule works with.
  *
- * **Depth rule.** Acid lines stay at or above D3 (147 Hz), leads above B3, arps and pads above G3.
+ * **Depth rule.** Acid lines stay at or above D3 (147 Hz), leads above B3, arps above G3, pads at or
+ * above D3 -- except the pad's sub foundation, which exists only where kick and bass are silent.
+ *
+ * **Genre rules above the corpus (18.09.2026).** The user decided that genre rules stand *above* the
+ * trained MIDI data: "Die Regeln sollten auf jeden Fall über den trainierten Midi-Dateien stehen! Die
+ * Midi-Dateien können Mist enthalten." Everything described above still happens, but only inside the
+ * rules below, which are hard constraints the learned models cannot leave:
+ *  - *Colour tones are neighbour tones.* The flat second and the upper note of an augmented second
+ *    appear only on weak sixteenths, one sixteenth long, and the next note is the tonic. They are
+ *    kept out of every sampler set and placed at drawn "colour slots" instead, whose number is a
+ *    target share per role (kColourShare in Melody.cpp) scaled by the arc's colour. That is the one
+ *    mechanism for colour: before this round the arc's weight and the neural model's mode table both
+ *    lifted the same tones, and the lead ended up parked on the flat second (0.41 of its notes).
+ *  - *No mid-bar collapse, variation per phrase.* Every part fills both halves of the bar; a cell
+ *    plays A A A' A'' over four (or eight) bars, and a second set of cells takes over after the
+ *    track's first breakdown (MelodyContext::material), so new material arrives at section boundaries.
+ *  - *Acid:* 11 to 14 onsets in 16, at most three rests (preferably on kick steps), three to five
+ *    pitch classes around 1, 5, b3 and b7, no pitch three times in a row (an octave counts as a
+ *    change), accents on the "e" and "a" sixteenths, more slides, D3 to D4 with octave jumps to D5.
+ *  - *Arp:* sixteen sixteenths, split into a low anchor stream and a high stream an octave up
+ *    (Bregman, *Auditory Scene Analysis*, MIT Press 1990: a fast alternation between two registers
+ *    is heard as two streams); the Euclidean and polymetric styles decide which steps jump up; sus2,
+ *    sus4 and add9 material; G3 to G5; a short gate.
+ *  - *Lead:* a dense one- or two-bar riff (sixteenths, eighths with pickups, or a gallop) in A A' B
+ *    A''; the fifth as a resting tone; median around A4 to C5 and never above A5.
+ *  - *Pad:* root position with the fifth above the root at the bottom, from D3; where the form
+ *    silences kick and bass the root an octave lower as well (the sub foundation).
  */
 #pragma once
 #include "phos/Form.h"
@@ -92,10 +121,51 @@ enum class CorpusRoleId : int;
 enum class MelodyPart : int { Acid = 0, Lead, Arp, Pad, Count };
 constexpr int kMelodyParts = static_cast<int>(MelodyPart::Count);   ///< number of melodic parts
 constexpr int kAcidLowest = 50;                                     ///< D3: lowest acid note
+constexpr int kAcidHighest = 62;                                    ///< D4: top of the acid's own register
+constexpr int kAcidJumpHighest = 74;                                ///< D5: highest octave jump of the acid
 constexpr int kLeadLowest = 59;                                     ///< B3: lowest lead note
+constexpr int kLeadHighest = 81;                                    ///< A5: highest lead note
 constexpr int kArpLowest = 55;                                      ///< G3: lowest arp note
-constexpr int kPadLowest = 55;                                      ///< G3: lowest pad note
+constexpr int kArpHighest = 79;                                     ///< G5: highest arp note
+constexpr int kPadLowest = 50;                                      ///< D3: lowest pad note while kick and bass play
 constexpr int kPadHighest = 79;                                     ///< G5: highest pad note
+constexpr int kPadFoundationLowest = 38;                            ///< D2: lowest note of the sub foundation
+constexpr int kAcidVariants = 3;                                    ///< A, A', A'' of one acid cell
+constexpr int kMaterialSets = 2;                                    ///< cell sets: before and after the first breakdown
+constexpr int kAcidCells = kMaterialSets * kAcidVariants;           ///< entries of MelodyPlan::acid
+constexpr int kArpCells = kMaterialSets * kAcidVariants * 4;        ///< entries of MelodyPlan::arp (set, variant, chord)
+constexpr double kArpGate = 0.2;                                    ///< arp note length, in sixteenths (rule: 15-35 %)
+
+/** @brief Index of an acid cell: material set @p set (0, 1), variant @p variant (0 = A, 1 = A', 2 = A''). */
+constexpr int acidCell(int set, int variant) { return set * kAcidVariants + variant; }
+/** @brief Index of an arp cell: material set, variant (A, A', A'') and chord (0..3). */
+constexpr int arpCell(int set, int variant, int chord) { return (set * kAcidVariants + variant) * 4 + chord; }
+
+/**
+ * @brief Which variant of a cell a bar plays: A A A' A'' over a phrase of four cell lengths.
+ * @param barInPhrase bar within the part's phrase
+ * @param cellBars    the cell's length in bars (1 or 2)
+ */
+constexpr int variantOfBar(int barInPhrase, int cellBars)
+{
+    const int cell = barInPhrase / (cellBars < 1 ? 1 : cellBars);
+    return cell <= 1 ? 0 : (cell == 2 ? 1 : 2);
+}
+
+/**
+ * @brief What a bar needs to know beyond its BarPlan, decided by the composer from the whole form.
+ *
+ * Both fields are functions of the track's plan and the bar's place in it, never of what was played
+ * before, so a bar composed alone is the bar composed in sequence.
+ */
+struct MelodyContext {
+    int material = 0;         ///< 0 before the track's first breakdown, 1 after it (new cells at a boundary)
+    int foundationBars = 0;   ///< > 0 where a pad chord starts in a bar without kick and bass: how many
+                              ///< consecutive bars from here on keep kick and bass silent
+    bool arpMasked = false;   ///< the form moved the arp up to clear the lead (more octaves than the
+                              ///< section's energy alone asks for); where that cannot be played inside
+                              ///< G3..G5 the arp sits the bar out
+};
 
 /**
  * @brief How an arp picks its steps and its notes (MelodyPlan::arpStyle).
@@ -131,9 +201,9 @@ struct MelodyNote {
  * only the mode they happen in.)
  */
 struct ModeMaterial {
-    std::vector<MelodyNote> acid[2];    ///< acid pattern A and variation B in this mode
+    std::vector<MelodyNote> acid[kAcidCells];   ///< acid cells in this mode (acidCell)
     std::vector<MelodyNote> lead[2];    ///< the two eight-bar lead phrases
-    std::vector<MelodyNote> arp[4];     ///< one bar per chord
+    std::vector<MelodyNote> arp[kArpCells];     ///< arp cells (arpCell)
     std::vector<int> padVoicing[4];     ///< the pad voicings
     bool built = false;                 ///< false: this mode is not used by the track's form
 };
@@ -145,9 +215,11 @@ struct MelodyPlan {
     int  chordDegree[4] = {};                 ///< scale degree of each chord
     int  root[kMelodyParts] = { 50, 64, 57, 55 }; ///< MIDI root of each part (the pad's is unused)
     int  acidSteps = 16;                      ///< acid pattern length (16 or 32)
-    std::vector<MelodyNote> acid[2];          ///< acid pattern A and variation B
+    std::vector<MelodyNote> acid[kAcidCells]; ///< acid cells: set 0/1 x A, A', A'' (acidCell); [0] is A
     std::vector<MelodyNote> lead[2];          ///< two eight-bar lead phrases (128 steps)
-    std::vector<MelodyNote> arp[4];           ///< one bar per chord
+    std::vector<MelodyNote> arp[kArpCells];   ///< one bar per chord, per set and variant (arpCell); [0..3] are A
+    int  arpTones = 0;                        ///< the arp's tone material: 0 sus2, 1 sus4, 2 add9
+    uint16_t arpHigh = 0;                     ///< bit per sixteenth: the step belongs to the high stream
     int  arpStyle = 0;                        ///< ArpStyle: corpus, up, down, up-down, Euclid, polymeter
     bool arpOctaveJump = false;               ///< every other two bars an octave up
     int  leadLo = 127, leadHi = 0;            ///< the lead's pitch range (for the masking rule)
@@ -158,7 +230,7 @@ struct MelodyPlan {
     std::vector<int> padVoicing[4];           ///< MIDI notes of each chord's pad voicing
     int  padGatePattern = 0;                  ///< the track's gate pattern
     float recipe[kMelodyParts] = {};          ///< one sound direction per part, -1..1 (brightness)
-    float colour = 0.0f;                      ///< how much the lead leaned on the flat second (0..1, for tests)
+    float colour = 0.0f;                      ///< the arc's colour (0..1): scales the target colour share
     int  scale = 0;                           ///< the track's own mode; the arrays above are its material
     ModeMaterial mode[kNumScales];            ///< material of every *borrowed* mode the form uses
     int  leadOperator[2] = { 0, 0 };          ///< the motivic operator of each lead phrase (MotifOperator)
@@ -219,7 +291,7 @@ inline int chordIndexAt(const MelodyPlan& m, int barInTrack) { return (barInTrac
  * @param seed       the track's melody seed
  * @param key,scale  the track's key and mode
  * @param firstTrack the first track plays the knobs' sounds (no overrides)
- * @param colour     0..1: how much weight the flat second and the augmented second get in the lead
+ * @param colour     0..1: scales the target share of colour tones in acid, lead and arp (0.6..1.0 of it)
  * @param scaleMask  bit per mode: the modes the form's sections borrow (FormPlan::scaleMask). Every
  *                   bit other than @p scale gets its own recoloured material; 0 means the track
  *                   stays in one mode, which is exactly the behaviour before 16.09.2026.
@@ -236,16 +308,37 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
  * @param scale      the track's scale (for the lead's and arp's chords)
  * @param bp         what the instrumentation matrix says plays in this bar
  * @param out        receives the notes
+ * @param ctx        the cell set and the pad foundation of this bar (Composer::melodyContext); the
+ *                   default is the first cell set without a foundation, which is what every caller
+ *                   that plays material outside the form (probes, the transition's pads) wants
  */
 void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int barInTrack, int scale,
-                      const BarPlan& bp, std::vector<NoteEvent>& out);
+                      const BarPlan& bp, std::vector<NoteEvent>& out, const MelodyContext& ctx = {});
+
+/**
+ * @brief The pad voicing of a bar without kick and bass: the root an octave under the voicing's
+ *        root, then the root, the fifth and the voicing's third (the other upper voice is dropped,
+ *        so the pad never needs more than four voices per chord and a chord change never steals).
+ * @param voicing a root-position voicing of voiceChord (root, fifth, two upper voices)
+ */
+std::vector<int> foundationVoicing(const std::vector<int>& voicing);
+
+/**
+ * @brief The tones an arp cell may use over a chord: the anchor (the chord root in the low
+ *        octave) and the sus2 / sus4 / add9 material an octave above it (Melody.h, rule 13).
+ * @param tones  0 sus2 (1 2 5), 1 sus4 (1 4 5), 2 add9 (1 3 5 9)
+ * @param anchor receives the anchor as a MIDI note
+ * @return the high stream's MIDI notes, ascending, all in [kArpLowest, kArpHighest]
+ */
+std::vector<int> arpHighTones(int scale, int degree, int key, int tones, int& anchor);
 
 /** @brief A bar plan that plays every part the track has (the level-match probe). */
 BarPlan allPartsBar(const MelodyPlan& m);
 
 /**
- * @brief The pad voicing of a chord: four chord tones in [kPadLowest, kPadHighest] containing all three
- *        pitch classes, with the least total movement from @p previous (or from a centred reference).
+ * @brief The pad voicing of a chord in root position: the root in [kPadLowest, kPadLowest + 11], the
+ *        fifth above it, then two chord tones up to kPadHighest that complete the triad, with the least
+ *        total movement from @p previous (or from a centred reference).
  * @param scale,degree the chord
  * @param key          the key's pitch class
  * @param previous     the voicing before, or null
