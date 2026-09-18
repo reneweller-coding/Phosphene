@@ -51,6 +51,11 @@ def tensor_list(state, header):
                       ("bar.emb", "emb.bar.weight"), ("gap.emb", "emb.gap.weight"),
                       ("idx.emb", "emb.idx.weight")):
         add(name, key)
+    # The mode table follows idx.emb (and kick.emb, which a melodic model does not have), exactly
+    # where MODEL_FORMAT section 4 puts it. Absent from a model built without --mode-cond, and then
+    # the file is byte for byte the file that exporter wrote before this round.
+    if "emb.mode.weight" in state:
+        add("mode.emb", "emb.mode.weight")
     for n in range(header["layers"]):
         p = f"blocks.{n}"
         add(f"{p}.norm1.w", f"blocks.{n}.norm1.weight")
@@ -206,6 +211,10 @@ def numpy_forward(header, W, case):
     # error _conditioning_gap below refuses to make silently.
     if "kick.emb" in W:
         x = (x + W["kick.emb"][case["kick"]]).astype(np.float32)
+    # The mode of the line, an eleventh table with the same optionality (condMode, 18.09.2026). Like
+    # role and bars it is one value for the whole line, so it broadcasts over the positions.
+    if "mode.emb" in W:
+        x = (x + W["mode.emb"][case["mode"]]).astype(np.float32)
     layers, E = int(header["layers"]), int(header["dim"])
     if header["arch"] == "transformer":
         heads = int(header["heads"])
@@ -266,8 +275,10 @@ def write_ref(path, model_name, header, cases, logits):
     fmt = lambda a: " ".join(f"{float(x):.9g}" for x in a)          # noqa: E731
     ints = lambda a: " ".join(str(int(x)) for x in a)               # noqa: E731
     for i, (c, lg) in enumerate(zip(cases, logits)):
-        lines += [f"case {i}", f"role={c['role']}", f"style={c['style']}", f"bars={c['bars']}",
-                  f"len={len(c['tok'])}", f"tok={ints(c['tok'])}", f"step={ints(c['step'])}",
+        lines += [f"case {i}", f"role={c['role']}", f"style={c['style']}", f"bars={c['bars']}"]
+        if "mode" in c:
+            lines += [f"mode={c['mode']}"]
+        lines += [f"len={len(c['tok'])}", f"tok={ints(c['tok'])}", f"step={ints(c['step'])}",
                   f"bar={ints(c['bar'])}", f"gap={ints(c['gap'])}", f"idx={ints(c['idx'])}",
                   f"logits={fmt(lg)}", f"probs={fmt(softmax(lg))}"]
     with open(path, "w", encoding="ascii", newline="\n") as fh:
@@ -288,7 +299,7 @@ def read_ref(path):
         if cur is None or "=" not in line:
             continue
         k, _, v = line.partition("=")
-        if k in ("role", "style", "bars", "len"):
+        if k in ("role", "style", "bars", "len", "mode"):
             cur[k] = int(v)
         elif k in ("tok", "step", "bar", "gap", "idx", "kick"):
             cur[k] = [int(x) for x in v.split()]
@@ -301,7 +312,7 @@ def read_ref(path):
 #: written by a newer exporter than this checker, and any verdict it produced would be arithmetic on
 #: an incomplete sum -- which is worse than no verdict, because it also passes when it should fail.
 _KNOWN_EMB = {"tok.emb", "pos.emb", "role.emb", "style.emb", "bars.emb",
-              "step.emb", "bar.emb", "gap.emb", "idx.emb", "kick.emb"}
+              "step.emb", "bar.emb", "gap.emb", "idx.emb", "kick.emb", "mode.emb"}
 
 
 def _conditioning_gap(header, W, cases):
@@ -316,7 +327,12 @@ def _conditioning_gap(header, W, cases):
     unknown = sorted(n for n in W if n.endswith(".emb") and n not in _KNOWN_EMB)
     if unknown:
         return "the file carries embedding tables it does not know: " + ", ".join(unknown)
-    missing = sorted({"kick"} - set(cases[0])) if "kick.emb" in W and cases else []
+    want = set()
+    if "kick.emb" in W:
+        want.add("kick")
+    if "mode.emb" in W:
+        want.add("mode")
+    missing = sorted(want - set(cases[0])) if want and cases else []
     if missing:
         return ("the model conditions on " + ", ".join(missing)
                 + " but the reference cases do not record it")
@@ -345,7 +361,7 @@ def check_pair(model_path, ref_path):
     return len(cases), worst_l, worst_p
 
 
-def make_cases(ctx=256, seed=20260916):
+def make_cases(ctx=256, seed=20260916, n_mode=0):
     """Conditioning sets and contexts for the oracle: every role, short and long, every gap code.
 
     The contexts are **synthetic** and come from a fixed seed, never from the corpus. A held-out loop
@@ -380,6 +396,11 @@ def make_cases(ctx=256, seed=20260916):
             "idx": [dataset.idx_bucket(t) for t in range(L)],
             "role": role, "style": i % dataset.N_STYLE, "bars": bars,
         })
+        # Walk the mode through its rows the way role and style are walked, so that every row of
+        # mode.emb is exercised by at least one case and a reader that silently ignores the table
+        # fails the oracle instead of passing it (the lesson of the bass file, _conditioning_gap).
+        if n_mode:
+            cases[-1]["mode"] = i % n_mode
     return cases
 
 
@@ -413,9 +434,11 @@ def main():
 
     ck = torch.load(a.ckpt, map_location="cpu", weights_only=False)
     args = ck["args"]
-    kw = dict(ctx=args["ctx"], dropout=0.0, layers=args["layers"])
+    kw = dict(ctx=args["ctx"], dropout=0.0, layers=args["layers"],
+              fields=trainmod._fields(args.get("cond", "full"), args.get("mode_cond", False)))
     if ck["header"]["arch"] == "transformer":
-        kw.update(dim=args["dim"], heads=args["heads"], ffn=args["ffn"])
+        kw.update(dim=args["dim"], heads=args["heads"], ffn=args["ffn"],
+                  n_mode=dataset.N_MODE if args.get("mode_cond") else 0)
     else:
         kw.update(dim=args["ssm_dim"], state=args["state"])
     model = models.build(ck["header"]["arch"], **kw)
@@ -435,9 +458,11 @@ def main():
                    "condStep": dataset.N_STEP, "condBar": dataset.N_BAR, "condGap": dataset.N_GAP,
                    "condIdx": dataset.N_IDX, "condBars": dataset.N_BARS, "eps": models.EPS,
                    "nll": f"{nll_f32:.6f}"})
+    if args.get("mode_cond"):
+        header["condMode"] = dataset.N_MODE
     order = ["arch", "layers", "dim", "heads", "ffn", "state", "vocab", "ctx", "roles", "styles",
              "tokenVersion", "quant", "relMin", "relMax", "condStep", "condBar", "condGap",
-             "condIdx", "condBars", "eps", "act", "expand", "dtRank", "convK", "nll"]
+             "condIdx", "condBars", "condMode", "eps", "act", "expand", "dtRank", "convK", "nll"]
     header = {k: header[k] for k in order if k in header}
 
     tensors = tensor_list(ck["state"], header)
@@ -455,7 +480,7 @@ def main():
     print(f"  held-out NLL float32 {nll_f32:.4f}  {a.quant} {nll_q:.4f}  "
           f"({100 * (nll_q - nll_f32) / nll_f32:+.2f} %)")
 
-    cases = make_cases(ctx=args["ctx"])
+    cases = make_cases(ctx=args["ctx"], n_mode=dataset.N_MODE if args.get("mode_cond") else 0)
     hdr, W = _read_phosmdl(a.out)
     logits = [numpy_forward(hdr, W, c)[-1] for c in cases]
     write_ref(a.out + ".ref.txt", os.path.basename(a.out), header, cases, logits)
@@ -465,18 +490,25 @@ def main():
         with torch.no_grad():
             worst = 0.0
             for c, ref in zip(cases, logits):
-                b = {k: torch.tensor([c[k]], dtype=torch.long) for k in ("tok", "step", "bar", "gap", "idx")}
-                b.update({k: torch.tensor([c[k]], dtype=torch.long) for k in ("role", "style", "bars")})
+                b = _case_batch(c, torch)
                 got = qmodel(b)[0, -1].numpy()
                 worst = max(worst, float(np.abs(got - ref).max()))
             print(f"  numpy reader vs torch, max |logit difference| {worst:.3e}")
             worst32 = 0.0
             for c, ref in zip(cases, logits):
-                b = {k: torch.tensor([c[k]], dtype=torch.long) for k in ("tok", "step", "bar", "gap", "idx")}
-                b.update({k: torch.tensor([c[k]], dtype=torch.long) for k in ("role", "style", "bars")})
+                b = _case_batch(c, torch)
                 worst32 = max(worst32, float(np.abs(model(b)[0, -1].numpy() - ref).max()))
             print(f"  float32 model vs the exported {a.quant} file, max |logit difference| {worst32:.4f}")
     return 0
+
+
+def _case_batch(case, torch):
+    """One oracle case as the batch ``models.Transformer.forward`` expects (per-position, per-line)."""
+    b = {k: torch.tensor([case[k]], dtype=torch.long) for k in ("tok", "step", "bar", "gap", "idx")}
+    b.update({k: torch.tensor([case[k]], dtype=torch.long) for k in ("role", "style", "bars")})
+    if "mode" in case:
+        b["mode"] = torch.tensor([case["mode"]], dtype=torch.long)
+    return b
 
 
 def _name_to_key(state, header):
@@ -488,6 +520,8 @@ def _name_to_key(state, header):
                       ("bar.emb", "emb.bar.weight"), ("gap.emb", "emb.gap.weight"),
                       ("idx.emb", "emb.idx.weight")):
         keys.append((name, key))
+    if "emb.mode.weight" in state:
+        keys.append(("mode.emb", "emb.mode.weight"))
     for n in range(int(header["layers"])):
         p = f"blocks.{n}"
         keys += [(f"{p}.norm1.w", f"blocks.{n}.norm1.weight"), (f"{p}.norm1.b", f"blocks.{n}.norm1.bias")]

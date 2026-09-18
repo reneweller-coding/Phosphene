@@ -60,13 +60,17 @@ class Conditioning(nn.Module):
     widens the role table. Both default to the melodic values and the tenth table is not created at
     all when ``n_kick`` is 0, so a melodic model has exactly the parameters and the tensor list it
     had before the bass existed.
+
+    ``n_mode`` adds an **eleventh** table, the mode of the line -- one value per line, like ``role``.
+    It follows the same rule: 0 by default, no table, no parameters, no change to any model trained
+    before the mode round.
     """
 
-    def __init__(self, dim, ctx, dropout, fields=ALL_FIELDS, n_role=N_ROLE, n_kick=0):
+    def __init__(self, dim, ctx, dropout, fields=ALL_FIELDS, n_role=N_ROLE, n_kick=0, n_mode=0):
         super().__init__()
         self.ctx = ctx
         self.fields = tuple(fields)
-        self.n_role, self.n_kick = n_role, n_kick
+        self.n_role, self.n_kick, self.n_mode = n_role, n_kick, n_mode
         self.tok = nn.Embedding(ALPHABET, dim)
         self.pos = nn.Embedding(ctx, dim)
         self.role = nn.Embedding(n_role, dim)
@@ -78,6 +82,8 @@ class Conditioning(nn.Module):
         self.idx = nn.Embedding(N_IDX, dim)
         if n_kick:
             self.kick = nn.Embedding(n_kick, dim)
+        if n_mode:
+            self.mode = nn.Embedding(n_mode, dim)
         self.drop = nn.Dropout(dropout)
 
     def forward(self, b):
@@ -88,6 +94,8 @@ class Conditioning(nn.Module):
         for f in ("role", "style", "bars"):                 # one value per line
             if f in self.fields:
                 x = x + getattr(self, f)(b[f])[:, None]
+        if self.n_mode and "mode" in self.fields:           # one value per line as well
+            x = x + self.mode(b["mode"])[:, None]
         for f in ("step", "bar", "gap", "idx"):             # one value per position
             if f in self.fields:
                 x = x + getattr(self, f)(b[f])
@@ -125,11 +133,11 @@ class Transformer(nn.Module):
     arch = "transformer"
 
     def __init__(self, dim=192, layers=4, heads=4, ffn=512, ctx=256, dropout=0.3, fields=ALL_FIELDS,
-                 n_role=N_ROLE, n_kick=0):
+                 n_role=N_ROLE, n_kick=0, n_mode=0):
         super().__init__()
         self.dim, self.layers, self.heads, self.ffn, self.ctx, self.state = dim, layers, heads, ffn, ctx, 0
-        self.n_role, self.n_kick = n_role, n_kick
-        self.emb = Conditioning(dim, ctx, dropout, fields, n_role, n_kick)
+        self.n_role, self.n_kick, self.n_mode = n_role, n_kick, n_mode
+        self.emb = Conditioning(dim, ctx, dropout, fields, n_role, n_kick, n_mode)
         self.blocks = nn.ModuleList([Block(dim, heads, ffn, dropout) for _ in range(layers)])
         self.norm = nn.LayerNorm(dim, eps=EPS)
         self.head = nn.Linear(dim, ALPHABET)
@@ -146,6 +154,8 @@ class Transformer(nn.Module):
              "ffn": self.ffn, "state": 0, "ctx": self.ctx, "act": "gelu_tanh"}
         if self.n_kick:
             h["condKick"] = self.n_kick
+        if self.n_mode:
+            h["condMode"] = self.n_mode
         return h
 
 

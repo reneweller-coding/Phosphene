@@ -165,8 +165,14 @@ void quantise(const std::vector<double>& w, std::vector<uint8_t>& out)
  *                dissonance side of the energy arc, Farbood 2012)
  * @param tension the measured tension curve's deviation at this position (tensionAt); 0 leaves the
  *                plain integer weights the sampler has used since Phase 5 exactly as they were
+ *
+ * The two weightings multiply and neither can forbid a tone the mode allows (`quantise`). Where both
+ * are neutral the old integer path runs unchanged, bit for bit -- the sampler draws from the
+ * *weights*, not only from their ratios, so re-deriving an identical distribution through another
+ * arithmetic path would move every existing line.
  */
-std::vector<uint8_t> scaleSet(int scale, int rootOffset, int lo, int hi, float colour = 0.0f, double tension = 0.0)
+std::vector<uint8_t> scaleSet(int scale, int rootOffset, int lo, int hi, float colour = 0.0f,
+                              double tension = 0.0)
 {
     std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
     if (tension == 0.0) {
@@ -262,6 +268,9 @@ struct DrawSource {
     NeuralModel* nn = nullptr;   ///< the neural model, or null for the corpus Markov model
     int style = 0;               ///< the style label of the conditioning; 0 ("unknown") is all the
                                  ///< trained model was ever shown (docs/MODEL_FORMAT.md, section 3)
+    int mode = 0;                ///< the mode of the line, as the section plays it (kScaleSteps). Read
+                                 ///< only by a weight file whose header carries @c condMode; every
+                                 ///< older file ignores it, which is why the makers may always set it.
 };
 
 /**
@@ -300,7 +309,7 @@ std::vector<int> drawPitches(const PitchModel& model, CorpusRoleId role, const D
     bool ok = false;
     if (src.nn != nullptr && steps.size() == allowed.size()) {
         const std::vector<NoteCond> cond = noteConds(steps);
-        NeuralStepper stepper{ src.nn, static_cast<int>(role), src.style, bars, &cond, 0 };
+        NeuralStepper stepper{ src.nn, static_cast<int>(role), src.style, bars, &cond, 0, src.mode };
         // Stage B has no order-2 state: it is primed with the previous symbol only, and before the
         // first note that is the start token docs/MODEL_FORMAT.md section 3 fixes at the interval 0.
         ok = sampleMasked(stepper, allowed, sym(ctx2), sym(ctx1), temperature, Uniform{ &r }, syms);
@@ -355,8 +364,9 @@ void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, con
     }
 }
 
-void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, const DrawSource& src)
+void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, DrawSource src)
 {
+    src.mode = std::clamp(scale, 0, kNumScales - 1);   // what the section plays, for a model that asks
     Rng r;
     r.seed(seed ^ kSaltAcid);
     const CorpusRole& role = kCorpusRoles[static_cast<int>(CorpusRoleId::Acid)];
@@ -462,8 +472,9 @@ int chordAtStep(const MelodyPlan& m, int window, int step)
     return m.chordDegree[chordIndexAt(m, window * 8 + step / 16)];
 }
 
-void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour, const DrawSource& src)
+void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour, DrawSource src)
 {
+    src.mode = std::clamp(scale, 0, kNumScales - 1);
     Rng r;
     r.seed(seed ^ kSaltLead);
     const CorpusRole& role = kCorpusRoles[static_cast<int>(CorpusRoleId::Lead)];
@@ -592,8 +603,9 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     }
 }
 
-void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, const DrawSource& src)
+void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, DrawSource src)
 {
+    src.mode = std::clamp(scale, 0, kNumScales - 1);
     Rng r;
     r.seed(seed ^ kSaltArp);
     const CorpusRole& role = kCorpusRoles[static_cast<int>(CorpusRoleId::Arp)];

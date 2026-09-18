@@ -3308,6 +3308,165 @@ statt zu warnen, neue Prüfung H), `Tools/render/main.cpp` (nur ein Kommentar).
 Build ohne Suchpfad finde die Datei „beside the sources through `PHOS_SOURCE_DATA_DIR`"; das gilt nur
 noch für einen Entwicklungsbuild. Die Datei gehörte in dieser Runde einem anderen Agenten.
 
+**16.09.2026, Modus-Konditionierung: das Modell lernt die geliehene Farbe.** Die
+Modal-Interchange-Runde gab jeder Sektion einen eigenen Modus und maß dann nach, ob der Komponist den
+Ton, den der geliehene Modus neu zulässt, überhaupt spielt. Er tat es nicht: Anteil 0,086 beim
+Markov-Modell und 0,075 beim trainierten Transformer gegen eine modusblinde Erwartung von 0,162 --
+Verhältnisse von 0,53 und 0,47. Der Grund ist strukturell: Rolle, Stil, Takte, Schritt, Takt, Lücke
+und Index sind die Konditionierung, **der Modus nicht**. Die Maske lässt die Note zu, die eigene
+Verteilung des Modells drückt sie zurück. Diese Runde hat beides gebaut, was der Auftrag verlangte --
+eine kalibrierte Anhebung ohne Nachtraining und eine elfte Einbettungstabelle mit Nachtraining -- und
+das erste davon **gemessen und verworfen**.
+
+*Das Ziel, auf dem Korpus gemessen.* `Tools/train/mode.py` (neu) schätzt den Modus jeder Korpuslinie
+mit dem Bayes-Tonartmodell von Temperley (*Music and Probability*, MIT Press 2007, Kapitel 4), auf
+Skalenzugehörigkeit reduziert, und zählt, welchen Anteil ihrer Noten die Linien in einem *farbigen*
+Modus auf dessen eigene Farbtöne legen: **0,1539, 95-%-Bootstrap über Linien [0,1442, 0,1640]**, aus
+377 Linien und 20 939 Noten, und über die Rollen erstaunlich gleich -- Acid 0,1372 [0,1137, 0,1671],
+Lead 0,1411 [0,1189, 0,1653], Arp 0,1569 [0,1453, 0,1685]. Dieselbe Zählung ohne Modusbedingung, über
+alle 666 Linien, ergibt **0,0874**. Das zweite Maß ist das, was der Komponist heute reproduziert
+(0,0843 mit dem Markov-Modell) -- die deutlichste Einzelbeobachtung dafür, dass seine farbigen
+Sektionen modusblind gezogen werden.
+
+*Stufe 1, die kalibrierte Anhebung: gebaut, kalibriert, verworfen.* Ein multiplikatives Gewicht auf
+die Farbtöne des gespielten Modus, innerhalb der Positionsgewichte, die der Sampler ohnehin trägt
+(`scaleSet`, `chordSet`), kalibriert gegen das gemessene Ziel statt gewählt. Gemessen über vier Stile
+und je acht 128-Takt-Tracks, rund 45 000 melodische Noten je Einstellung:
+
+| Rolle | Korpus-Ziel | Markov, Anhebung 1 | Markov, Anhebung 3 | neuronal, Anhebung 1 | neuronal, Anhebung 3 |
+|---|---|---|---|---|---|
+| Acid | 0,1372 | 0,0008 | 0,005 | 0,039 | **0,133** |
+| Lead | 0,1411 | **0,325** | 0,735 | **0,215** | 0,467 |
+| Arp | 0,1569 | 0,065 | 0,091 | **0,196** | 0,211 |
+
+Die Obergrenze 3 ist nicht neu, sondern genau die größte Anhebung, die der Energiebogen denselben
+Tönen ohnehin gibt (`1 + 2 * colour`). Genau **eine** Zelle ist ein Erfolg: das Acid des neuronalen
+Modells trifft sein Ziel an der Obergrenze. Markov-Acid und Markov-Arp sind bei 3 noch um das 27- und
+das 1,7-Fache zu tief, und beide Kurven sind dort fast flach (Arp 0,088 bei 2 gegen 0,091 bei 3); das
+Lead beider Modelle liegt schon *über* dem Korpus, weil der Energiebogen genau diese Töne in genau
+dieser Rolle anhebt. **Ein gemeinsamer Wert über alle Rollen sieht nur deshalb wie eine Kalibrierung
+aus, weil er aggregiert:** eine Anhebung von 2,0 legt den *Gesamtanteil* des Markov-Modells auf 0,1520
+-- sauber im Korpusintervall -- indem sie das Lead auf 0,638 treibt, während das Acid bei 0,004 bleibt.
+Der Aggregatwert wurde deshalb als Kalibrierziel abgelehnt. Was von Stufe 1 danach übrig blieb, war
+eine einzige Zahl, und die macht Stufe 2 überflüssig (siehe unten: das Acid erreicht sein Ziel dort ohne jede Anhebung); **die Anhebung ist nicht
+ausgeliefert**, `Melody.cpp` steht wieder auf den Mengen von vorher. Die Kosten wurden trotzdem
+gemessen, in der Währung, die der Abschnitt „maskiertes Decodieren" von Phase 8 verwendet: totale
+Variation zwischen der gezogenen Verteilung mit und ohne Anhebung, Mittel 0,0473, schlechtester Fall
+0,1102, gegen die analytische Decke (L−1)/L = 0,6667.
+
+*Wie verlässlich die Modusschätzung ist -- die Zahl, die über Stufe 2 entscheidet.* Die Korpuslinien
+sind auf ihren eigenen Grundton transponiert, und keine Datei sagt, **welches** Moll das ist (1 264
+Dateinamen der drei Psy-Packs: sechs sagen „min"/„minor", keiner nennt einen Modus). Der Label muss
+also geschätzt werden, und drei unabhängige Messungen sagen, wie gut:
+
+* **Entschieden auf etwa einem Drittel.** Posterior über 0,9 bei 36,6 % der 666 Linien; der Rest ist
+  ein exaktes Unentschieden zwischen zwei bis vier Modi, weil die unterscheidenden Stufen selten
+  gespielt werden (große Sekunde 22 % der Linien, große Septime 5 %, große Sexte 3 %). Der
+  Gleichstand fällt auf den *farbärmsten* passenden Modus, der Label kann die Farbe einer Linie also
+  unterschätzen und ihr nie eine Farbe andichten, die sie nicht spielt -- die Richtung, in die ein
+  Fehler hier zeigen muss.
+* **Split-Half** (Modus der ungeraden gegen den der geraden Noten derselben Linie): **73,3 %**
+  Übereinstimmung, Zufall 36,7 %, Cohens Kappa 0,579.
+* **Rückgewinnung** auf 3 996 synthetischen Linien bekannten Modus (echte Linien auf die Stufen eines
+  Zielmodus abgebildet, Rhythmus und Notenzahl bleiben): **62,0 % richtig insgesamt, 100 % auf den
+  1 416, die der Schätzer als entschieden meldet.**
+
+Verteilung der Label: Aeolisch 42,2 %, Phrygisch 33,6 %, Phrygisch-Dominant 18,8 %, harmonisch Moll
+3,9 % (26 Linien), Dorisch 1,2 % (8), doppelharmonisch 0,3 % (2). **Drei der sechs Zeilen sind also
+praktisch unbesetzt** -- wer doppelharmonisch verlangt, fragt eine Zeile, die zwei Linien gesehen hat.
+Das ist die offene Schwäche dieser Runde.
+
+*Stufe 2, das Format.* Elfte Tabelle `mode.emb`, Kopfzeile `condMode=6`, additiv wie `kick.emb` beim
+Bass: eine Datei ohne `condMode` hat keine `mode.emb`, ignoriert das Argument von `begin()` und ist
+Tensor für Tensor das Modell, das sie vorher war (`export.py --check-pair` meldet für die alte
+`melody.phosmdl` und die `bass.phosmdl` unverändert 0,000e+00). Der Komponist gibt den Modus der
+Sektion durch, den die Form-Grammatik festlegt, bevor irgendeine Tonhöhe gezogen wird. Neu gelernt
+haben es auch die Werkzeuge: `export.py` schreibt die Tabelle, führt `mode` durch alle sechs Zeilen
+der Orakel-Fälle und **verweigert** weiterhin ein Urteil über eine Konditionierung, die es nicht
+kennt; `confidence.py`, `memorisation.py` und `dataset.py` reichen den Label durch.
+
+*Die Entscheidung, nach demselben Maß wie immer.* Testsatz unverändert: 102 Psy-Linien, 5 700 Token.
+Dieselbe Trainingsrezeptur (`--extra trance,tracks,trancetracks`, 3 469 Linien) drei Seeds lang mit
+und ohne Tabelle; ausgeliefert wird wie immer der Seed mit der besten **Validierung**.
+
+| Seed | ohne Tabelle: Val / Test | mit Tabelle: Val / Test | Kontrolle (Label gemischt): Val / Test |
+|---|---|---|---|
+| 1 | 1,1663 / 1,1630 | 1,1767 / 1,1560 | 1,1595 / 1,1584 |
+| 2 | 1,1404 / 1,1613 | **1,1362 / 1,1283** | 1,1609 / 1,1910 |
+| 3 | 1,1586 / 1,1683 | 1,1657 / 1,1580 | -- |
+
+**Die exportierte Datei gegen die ausgelieferte: 1,1279 gegen 1,1536, Differenz +0,0257 nats, 95-%-KI
+des gepaarten Bootstraps [0,0093, 0,0423], P(Differenz ≤ 0) = 0,0012**, besser auf 68 von 102 Linien.
+int8 kostet −0,03 % (1,1283 → 1,1279). Memorisierung gegen die 3 469 Trainingslinien: **0,00 % exakte
+Taktkopien** gegen 8,75 % der echten Held-out-Loops, Achtnoten-Fenster im Abstand 0 **9,27 % gegen
+20,44 %**; Positivkontrolle 74,03 % bzw. 82,32 %, das Maß schlägt also aus.
+
+*Und die unbequeme Hälfte derselben Messung.* Der Label einer Held-out-Linie wird **aus deren eigenen
+Noten** berechnet; er ist auf dem Testsatz keine Nebeninformation, sondern eine Zusammenfassung der
+Antwort. `confidence.py --mode-eval` hält das auseinander: mit über die Testlinien **permutierten**
+Modus-Zeilen misst dieselbe Datei **1,2099**, also 0,0563 nats *schlechter* als die ausgelieferte, mit
+allen Zeilen auf Aeolisch festgenagelt 1,2006. Der ganze Gewinn ist der Label. Für die Aufgabe ist das
+die richtige Messung -- der Komponist kennt den Modus der Sektion wirklich, bevor er zieht --, für die
+Behauptung „das bessere Modell des Korpus" ist es die falsche, und beides steht jetzt in
+`docs/MODEL_FORMAT.md` 3.
+
+*Was es in der Erzeugung bewirkt -- der eigentliche Punkt der Runde.* Ohne jede Anhebung, nur durch
+die Tabelle (Anteil der Noten in farbigen Sektionen auf den Farbtönen des gespielten Modus):
+
+| Rolle | Korpus | modusblindes Modell | Modell mit `mode.emb` |
+|---|---|---|---|
+| Acid | 0,1372 [0,1137, 0,1671] | 0,039 | **0,168** |
+| Lead | 0,1411 [0,1189, 0,1653] | 0,215 | 0,407 |
+| Arp | 0,1569 [0,1453, 0,1685] | 0,196 | 0,213 |
+| gesamt | 0,1539 [0,1442, 0,1640] | 0,131 | 0,229 |
+
+Das Acid -- die Rolle, die am weitesten daneben lag und die einzige, für die eine Anhebung überhaupt
+kalibrierbar war -- erreicht das Korpusziel jetzt **ohne jede von Hand gesetzte Konstante**. Dass die
+Phrygisch-Zeile auch tut, was ihr Etikett sagt, ist direkt gemessen: bei identischem Kontext hebt sie
+die kleine Sekunde von 0,01058 auf 0,08826 mittlerer Wahrscheinlichkeit, Faktor **8,34**, an **144 von
+144** Positionen, nie in die Gegenrichtung.
+
+**Und die Kennzahl, für die die Runde da war, erreicht ihr Ziel nicht.** Das Verhältnis gegen die
+modusblinde Null geht über die geliehenen Sektionen von 0,47 auf **0,53** (Markov unverändert 0,48) --
+statt gegen 1,0. Pro Rolle zeigt sich, warum: Arp 1,05, Lead 0,26, Acid 0,07. Die neu zugelassene
+Klasse ist in Goas Entlehnungen meistens die **große Terz** (Phrygisch-Dominant über Phrygisch), und
+die heben Tabelle wie Anhebung kaum an, während die kleine Sekunde -- die Klasse, die die obige
+Farbtabelle dominiert -- in vielen dieser Sektionen schon zum eigenen Modus des Tracks gehört. Zwei
+Nebenbefunde derselben Messung: der Gesamtanteil schießt mit 0,229 über das Korpusziel 0,1539 hinaus,
+und das Lead mit 0,407 um fast das Dreifache über seines -- der Energiebogen hebt dieselben Töne in
+derselben Rolle an und zählt jetzt doppelt. **Offen für eine nächste Runde**, ausdrücklich nicht in
+dieser erledigt: die Farbe des Energiebogens gegen ein Modell nachkalibrieren, das den Modus kennt,
+und ein Korpus-Label für die drei fast leeren Modus-Zeilen.
+
+*Nachweise.* ctest 6/6 (Selbsttest, Cue-Prüfung, drei Vektorpfade, Quest-Wächter). Die drei
+Vektorbauten schicken jede der sechs Zeilen von `mode.emb` durch denselben Kontext und geben ihre
+Logits als Bits aus: alle drei Pfade Zeichen für Zeichen gleich, und keine zwei Zeilen liefern
+dasselbe Ergebnis. `export.py --check-pair` meldet für die neue `melody.phosmdl` 0,000e+00, der
+NumPy-Leser stimmt mit PyTorch auf 1,3e-05 überein, der C++-Leser auf 6,4e-06; der Prüfer
+**verweigert** ein Urteil, wenn man ihm dieselbe Datei mit einer Referenz ohne `mode=` vorlegt, statt
+eine Differenz zu melden.
+
+*Mutationsrunde, sechs Fehler, jeder gefangen und zurückgenommen.* (1) Die elfte Tabelle wird nicht
+in die Eingangssumme addiert -- Vektortest: Vorwärtspass 3,32 daneben, 15 von 15 Zeilenpaaren
+identisch. (2) `begin()` wirft den Modus weg -- dasselbe Paar. (3) Der Kopfzeilenschlüssel ist
+verschrieben (`condmode`) -- Selbsttest: Referenzvektoren 4,12 daneben, „trägt die Modustabelle"
+meldet `condMode 0`. (4) `mode.emb` wird mit der falschen Zeilenzahl gesucht -- der Lader nennt Tensor
+und Form („ist 6x192x1x1, die Kopfzeile verlangt 8x192"), 7 Prüfungen fallen. (5) Der Komponist gibt
+statt des Sektionsmodus die Zeile 0 durch -- der Farbtonanteil des Acid fällt auf **0,0210**, also
+noch unter die 0,039 des modusblinden Modells, weil die Aeolisch-Zeile die Farbe aktiv unterdrückt.
+(6) `numpy_forward` vergisst `mode.emb` -- `--check-pair` meldet 4,123e+00 statt 0,000e+00. Nach jeder
+Rücknahme sind die Dateien byteidentisch zur Vorlage, `git diff` unverändert.
+
+*Dateien.* Neu: `Tools/train/mode.py`. Geändert: `Core/include/phos/Model.h` und `Core/src/Model.cpp`
+(`condMode`, `mode.emb`, `begin(..., mode)`), `Core/src/Melody.cpp` (`DrawSource::mode`, die drei
+Maker geben den Modus der Sektion durch), `Core/data/melody.phosmdl` und `.ref.txt` (das neue Modell),
+`docs/MODEL_FORMAT.md` (2, 3, 4, 5, 7), `Tools/train/dataset.py` (`N_MODE`, `mode_of`, `encode`),
+`Tools/train/models.py` (`n_mode`, elfte Tabelle), `Tools/train/train.py` (`--mode-cond`,
+`--mode-shuffle`), `Tools/train/export.py`, `Tools/train/confidence.py` (`--mode-eval`),
+`Tools/train/memorisation.py`, `Tests/selftest.cpp` (`testModeColour` neu geschrieben),
+`Tests/vectest.cpp` (jede Zeile von `mode.emb` durch denselben Kontext, bitgleich auf allen drei
+Pfaden).
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

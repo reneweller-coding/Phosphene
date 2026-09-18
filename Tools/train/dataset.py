@@ -102,6 +102,11 @@ TOKEN_VERSION = 1
 
 # Conditioning table sizes; mirrored in docs/MODEL_FORMAT.md section 3 and in the .phosmdl header.
 N_ROLE, N_STYLE, N_BARS, N_STEP, N_BAR, N_GAP, N_IDX = 3, 6, 8, 16, 8, 10, 8
+#: Rows of ``mode.emb``: the six modes of ``phos::kScaleSteps``. The mode of a corpus line is
+#: **estimated**, not read -- see ``Tools/train/mode.py`` for the estimator and for how much of the
+#: label is noise. Optional in the format exactly as ``condKick`` is, so a file without it still
+#: loads and is the model it was before this round.
+N_MODE = 6
 
 
 def idx_bucket(t):
@@ -421,13 +426,21 @@ def sibling_leak(train, test):
 
 
 def rotate(rec, bars_shift):
-    """Cyclic rotation of a loop by whole bars -- the one admissible augmentation (see the docstring)."""
+    """Cyclic rotation of a loop by whole bars -- the one admissible augmentation (see the docstring).
+
+    The mode label rides along: a rotation permutes the notes and changes none of them, so the
+    pitch-class histogram the estimator reads is the same one and re-estimating would return the
+    same label at the cost of another pass.
+    """
     total = rec["bars"] * 16
     shift = (bars_shift * 16) % total
     order = sorted(range(len(rec["syms"])), key=lambda i: (rec["steps"][i] - shift) % total)
-    return {"role": rec["role"], "pack": rec["pack"], "bars": rec["bars"], "file": rec["file"],
-            "syms": [rec["syms"][i] for i in order],
-            "steps": [(rec["steps"][i] - shift) % total for i in order]}
+    out = {"role": rec["role"], "pack": rec["pack"], "bars": rec["bars"], "file": rec["file"],
+           "syms": [rec["syms"][i] for i in order],
+           "steps": [(rec["steps"][i] - shift) % total for i in order]}
+    if "mode" in rec:
+        out["mode"] = rec["mode"]
+    return out
 
 
 def augment(records, indices, rotations=1):
@@ -444,11 +457,27 @@ def augment(records, indices, rotations=1):
     return out
 
 
+def mode_of(rec):
+    """The estimated mode of a line (0..N_MODE-1), computed once and kept in the record.
+
+    Imported lazily because ``mode`` imports this module: the estimator needs ``REL_MIN`` to read a
+    symbol back as an interval, and this module needs the estimator only when a record is encoded.
+    The label is **not** part of the cached line (``cache_path``): it is derived from ``syms`` alone,
+    so a cache written before this round produces the same labels as one written after it, and no
+    measurement made on the old cache becomes incomparable.
+    """
+    if "mode" not in rec:
+        import mode as _mode                                    # noqa: PLC0415
+        rec["mode"] = _mode.estimate(rec["syms"])[0]
+    return rec["mode"]
+
+
 def encode(rec, style=None, ctx=256):
     """One record as parallel arrays, as docs/MODEL_FORMAT.md section 3 defines them.
 
-    Returns (tokens, targets, step, bar, gap, idx, role, style, bars) with tokens[t] = s_{t-1}
-    (s_{-1} = START_SYMBOL) and targets[t] = s_t.
+    Returns (tokens, targets, step, bar, gap, idx, role, style, bars, mode) with tokens[t] = s_{t-1}
+    (s_{-1} = START_SYMBOL) and targets[t] = s_t. ``mode`` is one value for the whole line, like
+    ``role``, ``style`` and ``bars``; a model built without the mode table simply never reads it.
     """
     syms, steps = rec["syms"][:ctx], rec["steps"][:ctx]
     n = len(syms)
@@ -460,7 +489,8 @@ def encode(rec, style=None, ctx=256):
     if style is None:
         style = rec.get("style", 0)   # 0 = unknown; the corpus carries no style label (MODEL_FORMAT 3)
     return {"tok": tok, "tgt": syms, "step": st, "bar": br, "gap": gp, "idx": ix,
-            "role": rec["role"], "style": style, "bars": min(max(rec["bars"], 1), 8) - 1}
+            "role": rec["role"], "style": style, "bars": min(max(rec["bars"], 1), 8) - 1,
+            "mode": mode_of(rec)}
 
 
 def cache_path(root, packs):

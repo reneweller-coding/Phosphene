@@ -37,9 +37,12 @@ import models                                                 # noqa: E402
 def load(ckpt):
     ck = torch.load(ckpt, map_location="cpu", weights_only=False)
     a = ck["args"]
-    kw = dict(ctx=a["ctx"], dropout=0.0, layers=a["layers"])
+    import train as trainmod                                   # noqa: PLC0415
+    kw = dict(ctx=a["ctx"], dropout=0.0, layers=a["layers"],
+              fields=trainmod.fields_for(a.get("cond", "full"), a.get("mode_cond", False)))
     if ck["header"]["arch"] == "transformer":
-        kw.update(dim=a["dim"], heads=a["heads"], ffn=a["ffn"])
+        kw.update(dim=a["dim"], heads=a["heads"], ffn=a["ffn"],
+                  n_mode=dataset.N_MODE if a.get("mode_cond") else 0)
     else:
         kw.update(dim=a["ssm_dim"], state=a["state"])
     m = models.build(ck["header"]["arch"], **kw)
@@ -54,7 +57,7 @@ def per_line(model, records, ctx, device):
     for rec in records:
         e = dataset.encode(rec, ctx=ctx)
         b = {k: torch.tensor([e[k]], dtype=torch.long, device=device) for k in ("tok", "step", "bar", "gap", "idx")}
-        b.update({k: torch.tensor([e[k]], dtype=torch.long, device=device) for k in ("role", "style", "bars")})
+        b.update({k: torch.tensor([e[k]], dtype=torch.long, device=device) for k in ("role", "style", "bars", "mode")})
         tgt = torch.tensor([e["tgt"]], dtype=torch.long, device=device)
         loss = F.cross_entropy(model(b).reshape(-1, models.ALPHABET), tgt.reshape(-1), reduction="sum")
         out.append((float(loss), len(e["tgt"])))
@@ -77,6 +80,8 @@ def per_line_phosmdl(path, records, log=None):
     header, W = export._read_phosmdl(path)
     if int(header.get("roles", 3)) != len(dataset.ROLES) or "kick.emb" in W:
         raise SystemExit(f"{path} is not a three-role melodic model (roles={header.get('roles')})")
+    # A file with mode.emb is scored with the label ``dataset.encode`` puts on the line, which is the
+    # estimator's; see the warning in the module docstring about what that does to the comparison.
     ctx = int(header["ctx"])
     out = []
     for n, rec in enumerate(records):
@@ -122,6 +127,9 @@ def main():
     ap.add_argument("--split", default="group")
     ap.add_argument("--resamples", type=int, default=10000)
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--mode-eval", default="line", choices=["line", "shuffle", "aeolian"],
+                    help="what the mode slot of the held-out lines is filled with; see the module "
+                         "docstring. Ignored by a model without mode.emb, which never reads it")
     o = ap.parse_args()
 
     dev = torch.device("cuda" if o.device == "cuda" and torch.cuda.is_available() else "cpu")
@@ -137,6 +145,23 @@ def main():
                                      seed=dataset.split_seed_of(args))
     itr, _, _ = dataset.split(recs, o.split, seed=dataset.split_seed_of(args))
     tr_raw = [recs[i] for i in itr]
+
+    # The mode label lives in the record, so setting it here reaches both models -- and a model
+    # without mode.emb reads none of it, which is what makes the two sides comparable at all.
+    for rec in te:
+        dataset.mode_of(rec)
+    if o.mode_eval == "aeolian":
+        for rec in te:
+            rec["mode"] = 0
+    elif o.mode_eval == "shuffle":
+        rng0 = np.random.default_rng(20260918)
+        for role in range(len(dataset.ROLES)):
+            sel = [r for r in te if r["role"] == role]
+            lab = [r["mode"] for r in sel]
+            rng0.shuffle(lab)
+            for rec, m in zip(sel, lab):
+                rec["mode"] = m
+    print(f"mode slot: {o.mode_eval}")
 
     xa = per_line(ma, te, args["ctx"], dev) if o.a.endswith(".pt") else per_line_phosmdl(o.a, te)
     if o.b.startswith("markov"):

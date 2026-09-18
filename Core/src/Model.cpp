@@ -25,6 +25,7 @@
  * the attention.
  */
 #include "phos/Model.h"
+#include "phos/Harmony.h"   // kNumScales: the rows mode.emb is allowed to have
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -209,6 +210,9 @@ bool NeuralModel::load(const char* path, std::string& error)
     // Absent in a three-role melodic file, and then the tenth embedding table is not looked for and
     // NoteCond::kick is ignored (docs/MODEL_FORMAT.md, section 3, the bass paragraph).
     info.condKick = headerInt(header, "condKick", 0);
+    // Absent in every file written before 18.09.2026, and then the eleventh embedding table is not
+    // looked for and the mode argument of begin() is ignored (docs/MODEL_FORMAT.md, section 3).
+    info.condMode = headerInt(header, "condMode", 0);
     info.expand = headerInt(header, "expand", 0);
     info.dtRank = headerInt(header, "dtRank", 0);
     info.convK = headerInt(header, "convK", 0);
@@ -243,6 +247,14 @@ bool NeuralModel::load(const char* path, std::string& error)
         return false;
     }
     if (info.condKick < 0) { error = "header condKick is negative"; return false; }
+    if (info.condMode < 0) { error = "header condMode is negative"; return false; }
+    if (info.condMode > 0 && info.condMode != kNumScales) {
+        std::snprintf(buf, sizeof(buf), "header condMode=%d, but the composer has %d modes (Harmony.h, "
+                                        "kScaleSteps) and passes one of them as a row index",
+                      info.condMode, kNumScales);
+        error = buf;
+        return false;
+    }
     if (info.roles > kBassRole && info.condKick <= 0) {
         error = "header says roles=4 (the bass is in) but carries no condKick; docs/MODEL_FORMAT.md "
                 "section 3 makes the kick class part of the bass role's conditioning";
@@ -319,8 +331,9 @@ bool NeuralModel::load(const char* path, std::string& error)
     ctxP_ = roundUpTo(info.ctx, kLanes);
     qkvP_ = roundUpTo(3 * d, kLanes);
 
-    // The nine embedding tables (MODEL_FORMAT.md section 4), and kick.emb as a tenth when the header
-    // declares condKick. Their rows are summed into the input.
+    // The nine embedding tables (MODEL_FORMAT.md section 4), kick.emb as a tenth when the header
+    // declares condKick and mode.emb as an eleventh when it declares condMode. Their rows are summed
+    // into the input.
     struct Emb { const char* name; int rows; std::vector<float>* dst; };
     const Emb embeddings[] = {
         { "tok.emb",   info.vocab,     &tok_ },
@@ -333,9 +346,10 @@ bool NeuralModel::load(const char* path, std::string& error)
         { "gap.emb",   info.condGap,   &gapE_ },
         { "idx.emb",   info.condIdx,   &idxE_ },
         { "kick.emb",  info.condKick,  &kickE_ },
+        { "mode.emb",  info.condMode,  &modeE_ },
     };
     for (const Emb& e : embeddings) {
-        if (e.rows <= 0) { e.dst->clear(); continue; }       // only kick.emb can be absent
+        if (e.rows <= 0) { e.dst->clear(); continue; }       // only kick.emb and mode.emb can be absent
         if (!need(e.name, e.rows, d)) return false;
         copyRows(*t, e.rows, d, dimP_, *e.dst);
     }
@@ -378,7 +392,8 @@ bool NeuralModel::load(const char* path, std::string& error)
     for (const Block& b : blocks_)
         bytes += (b.qkv.size() + b.out.size() + b.up.size() + b.down.size() + b.kCache.size() + b.vCache.size()) * sizeof(float);
     bytes += (tok_.size() + posE_.size() + roleE_.size() + styleE_.size() + barsE_.size() + stepE_.size()
-              + barE_.size() + gapE_.size() + idxE_.size() + kickE_.size() + head_.size()) * sizeof(float);
+              + barE_.size() + gapE_.size() + idxE_.size() + kickE_.size() + modeE_.size()
+              + head_.size()) * sizeof(float);
     info.bytes = bytes;
     info_ = info;
     loaded_ = true;
@@ -386,11 +401,14 @@ bool NeuralModel::load(const char* path, std::string& error)
     return true;
 }
 
-void NeuralModel::begin(int role, int style, int bars)
+void NeuralModel::begin(int role, int style, int bars, int mode)
 {
     role_ = clampRow(role, info_.roles);
     style_ = clampRow(style, info_.styles);
     bars_ = clampRow(bars - 1, info_.condBars);
+    // Clamped like every other row index, and simply not read by a file without mode.emb -- so a
+    // composer that always passes the section's mode works with both generations of weight file.
+    mode_ = info_.condMode > 0 ? clampRow(mode, info_.condMode) : 0;
     pos_ = 0;
     // The key/value cache is not cleared: only the first pos_ entries are ever read (the attention
     // runs over 0..pos_, and the scores past it are pushed below the softmax's maximum in
@@ -409,8 +427,8 @@ bool NeuralModel::step(int token, const NoteCond& cond)
     // a false into a clean failure, and the composer falls back to the Markov model.
     if (pos_ >= info_.ctx) return false;
     const int d = info_.dim;
-    // The nine embedding rows -- ten with the bass's kick table -- summed. Table reads are gathers
-    // and stay on the scalar side (Vec.h has no gather on NEON); the adds are lanes.
+    // The nine embedding rows -- ten with the bass's kick table, eleven with mode.emb -- summed.
+    // Table reads are gathers and stay on the scalar side (Vec.h has no gather on NEON); the adds are lanes.
     const int posRow = pos_;
     const size_t stride = static_cast<size_t>(dimP_);
     std::memcpy(x_.data(), tok_.data() + static_cast<size_t>(token) * stride, stride * sizeof(float));
@@ -424,6 +442,10 @@ bool NeuralModel::step(int token, const NoteCond& cond)
     laneAdd<V>(x_.data(), idxE_.data() + static_cast<size_t>(clampRow(cond.idx, info_.condIdx)) * stride, dimP_);
     if (info_.condKick > 0)
         laneAdd<V>(x_.data(), kickE_.data() + static_cast<size_t>(clampRow(cond.kick, info_.condKick)) * stride, dimP_);
+    // The mode's row is per line, not per note, so it is read from the state begin() fixed; the add
+    // still happens here because the sum is one vector per position (MODEL_FORMAT.md section 4).
+    if (info_.condMode > 0)
+        laneAdd<V>(x_.data(), modeE_.data() + static_cast<size_t>(mode_) * stride, dimP_);
 
     forwardTransformer(posRow);
     ++pos_;

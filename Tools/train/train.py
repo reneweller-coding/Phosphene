@@ -58,7 +58,7 @@ def batches(records, bs, ctx, device, shuffle=True, seed=0):
         for k in ("tok", "step", "bar", "gap", "idx"):
             out[k] = torch.tensor([e[k] + [0] * (T - len(e[k])) for e in enc], dtype=torch.long, device=device)
         out["tgt"] = torch.tensor([e["tgt"] + [PAD] * (T - len(e["tgt"])) for e in enc], dtype=torch.long, device=device)
-        for k in ("role", "style", "bars"):
+        for k in ("role", "style", "bars", "mode"):
             out[k] = torch.tensor([e[k] for e in enc], dtype=torch.long, device=device)
         yield out
 
@@ -133,22 +133,44 @@ def train(model, train_recs, val_recs, *, steps, bs, ctx, lr, wd, device, warmup
     return {"best_val": best, "best_step": best_step, "curve": curve, "seconds": time.time() - t0}
 
 
-def _fields(cond):
+def fields_for(cond, with_mode=False):
     """Which conditioning tables an ablation run may use (models.Conditioning explains why)."""
+    extra = ("mode",) if with_mode else ()
     if cond == "full":
-        return models.ALL_FIELDS
+        return models.ALL_FIELDS + extra
     if cond == "role":          # exactly what the stage-A Markov model sees: symbols plus the role
-        return ("role",)
+        return ("role",) + extra
     if cond == "nometre":       # everything except the metrical position of the note
-        return ("pos", "role", "style", "bars", "gap", "idx")
+        return ("pos", "role", "style", "bars", "gap", "idx") + extra
     raise SystemExit(f"unknown --cond {cond}")
+
+
+def shuffle_modes(records, seed):
+    """Permutes the mode labels within each role -- the negative control for ``--mode-cond``.
+
+    The marginal distribution of the labels is kept exactly (it is a permutation) and the relation
+    between a label and the notes of its line is destroyed. Permuting **within** the role and not
+    across it matters: the roles have different mode distributions, and a permutation across roles
+    would also destroy that, so a model could recover part of the signal from the role it already
+    has and the control would be weaker than it looks.
+    """
+    for rec in records:
+        dataset.mode_of(rec)
+    rng = random.Random(seed * 31 + 7)
+    for role in range(len(dataset.ROLES)):
+        sel = [r for r in records if r["role"] == role]
+        labels = [r["mode"] for r in sel]
+        rng.shuffle(labels)
+        for rec, m in zip(sel, labels):
+            rec["mode"] = m
 
 
 def run_one(arch, tr, va, te, args, device, log=sys.stdout):
     torch.manual_seed(args.seed)
-    kw = dict(ctx=args.ctx, dropout=args.dropout, layers=args.layers, fields=_fields(args.cond))
+    kw = dict(ctx=args.ctx, dropout=args.dropout, layers=args.layers,
+              fields=fields_for(args.cond, args.mode_cond))
     if arch == "transformer":
-        kw.update(dim=args.dim, heads=args.heads, ffn=args.ffn)
+        kw.update(dim=args.dim, heads=args.heads, ffn=args.ffn, n_mode=dataset.N_MODE if args.mode_cond else 0)
     else:
         kw.update(dim=args.ssm_dim, state=args.state)
     model = models.build(arch, **kw)
@@ -203,16 +225,36 @@ def main():
                     help="ablation over the conditioning inputs; only 'full' may be exported")
     ap.add_argument("--style-from-pack", action="store_true",
                     help="label the style slot with the source pack (the side experiment of MODEL_FORMAT 3)")
+    ap.add_argument("--mode-cond", action="store_true",
+                    help="condition on the mode of the line as an eleventh embedding table "
+                         "(condMode in the .phosmdl header). This is what Core/data/melody.phosmdl "
+                         "carries since 18.09.2026. The label is estimated by Tools/train/mode.py "
+                         "and is decided on only about a third of the corpus's lines, so read the "
+                         "warning in docs/MODEL_FORMAT.md 3 before comparing NLLs across it; "
+                         "transformer only")
+    ap.add_argument("--mode-shuffle", action="store_true",
+                    help="the negative control for --mode-cond: the same labels, permuted across "
+                         "lines within each role. A mode table that helps must stop helping here, "
+                         "or what it learned was capacity and not the mode")
     a = ap.parse_args()
+
+    if (a.mode_cond or a.mode_shuffle) and (a.compare or a.arch != "transformer"):
+        raise SystemExit("--mode-cond and --mode-shuffle are implemented for --arch transformer only; "
+                         "the state-space model was measured at 2.16 nats against 1.49 and is not "
+                         "the model this project ships (docs/MODEL_FORMAT.md section 4)")
 
     device = device_of(a.device)
     print(f"torch {torch.__version__}, cuda {torch.version.cuda}, available {torch.cuda.is_available()}, "
           f"device {device}" + (f" ({torch.cuda.get_device_name(0)})" if device.type == "cuda" else ""))
 
     recs = dataset.load(a.root, dataset.packs_for(a.packs))
+    if a.mode_shuffle:
+        shuffle_modes(recs, a.seed)
     tr, va, te = dataset.build_split(recs, a.split, rotations=a.rotations,
                                      seed=a.split_seed * 7919 + 12345)
     kept = dataset.assemble_extra(a.root, a.extra, va + te, a.trance_weight, log=sys.stdout)
+    if a.mode_shuffle:
+        shuffle_modes(kept, a.seed + 1)
     # The duplicate pass runs over the merged corpus, not per pack: the same loop is resold across
     # vendors, and a per-pack pass would leave every copy of it in the training distribution.
     merged, removed = dataset.dedupe(tr + kept)

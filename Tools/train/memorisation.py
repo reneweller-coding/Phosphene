@@ -67,7 +67,9 @@ def generate(model, template, device, temperature=1.0, seed=0):
         b = {"tok": torch.tensor([toks], dtype=torch.long, device=device)}
         for k in ("step", "bar", "gap", "idx"):
             b[k] = torch.tensor([enc[k][:t + 1]], dtype=torch.long, device=device)
-        for k in ("role", "style", "bars"):
+        # The mode rides with the rest of the line's conditioning: the template is a real held-out
+        # loop and the generated line is asked for *its* mode, so the comparison stays about pitches.
+        for k in ("role", "style", "bars", "mode"):
             b[k] = torch.tensor([enc[k]], dtype=torch.long, device=device)
         logits = model(b)[0, -1].float().cpu() / max(temperature, 1e-3)
         nxt = int(torch.multinomial(torch.softmax(logits, -1), 1, generator=g))
@@ -199,9 +201,12 @@ def measure(name, lines, train_recs, corpus_bars, runs, windows):
 def load_model(ckpt, device):
     ck = torch.load(ckpt, map_location="cpu", weights_only=False)
     args = ck["args"]
-    kw = dict(ctx=args["ctx"], dropout=0.0, layers=args["layers"])
+    import train as trainmod                                   # noqa: PLC0415
+    kw = dict(ctx=args["ctx"], dropout=0.0, layers=args["layers"],
+              fields=trainmod.fields_for(args.get("cond", "full"), args.get("mode_cond", False)))
     if ck["header"]["arch"] == "transformer":
-        kw.update(dim=args["dim"], heads=args["heads"], ffn=args["ffn"])
+        kw.update(dim=args["dim"], heads=args["heads"], ffn=args["ffn"],
+                  n_mode=dataset.N_MODE if args.get("mode_cond") else 0)
     else:
         kw.update(dim=args["ssm_dim"], state=args["state"])
     m = models.build(ck["header"]["arch"], **kw)
@@ -218,8 +223,13 @@ def overfit_control(tr, va, args, device, lines=40, steps=3000):
     """
     import train as trainmod
     small = tr[::max(1, len(tr) // lines)][:lines]
+    # The control has to be the model under test with its regularisation removed, conditioning tables
+    # and all: a control built without the mode table would be a different architecture, and the copy
+    # rates it lights up with would not be the ceiling for the model actually being measured.
     m = models.build("transformer", ctx=args["ctx"], dropout=0.0, layers=args["layers"],
-                     dim=args["dim"], heads=args["heads"], ffn=args["ffn"])
+                     dim=args["dim"], heads=args["heads"], ffn=args["ffn"],
+                     fields=trainmod.fields_for(args.get("cond", "full"), args.get("mode_cond", False)),
+                     n_mode=dataset.N_MODE if args.get("mode_cond") else 0)
     trainmod.train(m, small, small, steps=steps, bs=8, ctx=args["ctx"], lr=1e-3, wd=0.0,
                    device=device, eval_every=steps, log=None)
     return m.to(device).eval(), small
