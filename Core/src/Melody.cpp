@@ -28,11 +28,6 @@ constexpr uint64_t kSaltMode   = 0x4D4F44450000008ull;   ///< the material of a 
 
 using Allowed = std::vector<std::vector<uint8_t>>;
 
-/** @name The lead's ambitus: the window every lead note is drawn in, as intervals to its root. @{ */
-constexpr int kLeadRelLo = -5;
-constexpr int kLeadRelHi = 14;
-/** @} */
-
 int sym(int rel) { return PitchModel::symbol(std::clamp(rel, kCorpusRelMin, kCorpusRelMax)); }
 
 /**
@@ -159,48 +154,80 @@ void quantise(const std::vector<double>& w, std::vector<uint8_t>& out)
         if (w[i] > 0.0) out[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(200.0 * w[i] / mx)), 1, 255));
 }
 
+constexpr uint64_t kSaltColour = 0x434F4C4F55520009ull;   ///< the colour slots of a line (18.09.2026)
+
 /**
- * @brief Allowed symbols: scale tones (relative to the key) in [lo, hi] semitones above the part root.
- * @param colour  0 = no colour weighting; > 0 = the colour tones lifted by 1 + 2 * colour (the
- *                dissonance side of the energy arc, Farbood 2012)
- * @param tension the measured tension curve's deviation at this position (tensionAt); 0 leaves the
- *                plain integer weights the sampler has used since Phase 5 exactly as they were
+ * @brief The share of a role's notes that are colour tones, at the arc's full colour (rule 2).
  *
- * The two weightings multiply and neither can forbid a tone the mode allows (`quantise`). Where both
- * are neutral the old integer path runs unchanged, bit for bit -- the sampler draws from the
- * *weights*, not only from their ratios, so re-deriving an identical distribution through another
- * arithmetic path would move every existing line.
+ * The one mechanism for colour since 18.09.2026. The flat second and the upper note of an augmented
+ * second are kept out of every sampler set and are placed only at drawn colour slots -- a weak
+ * sixteenth followed at once by the tonic -- so the share is what these numbers ask for and nothing
+ * the model or the arc could push on top. Before, the arc lifted the colour tones by 1 + 2 * colour
+ * in the lead's sets and the neural model's mode table lifted the same tones again; the lead came
+ * out at 0.34 to 0.42 in the colourful modes (self test, section "genre rules", before) against the
+ * corpus's 0.14 (section "the mode's colour"), and in Phrygian that meant a lead parked on the b2.
+ *
+ * The values sit a little under the corpus's in-mode shares (acid 0.137, lead 0.141, arp 0.157,
+ * measured by the mode-colour section on the three packs) because a colour tone is now always a
+ * passing note: the corpus counts every b2, held ones included, and the rules allow none of those.
+ * The arp's is the smallest because rule 13 asks for the b2 only as a "short glint". The arc's
+ * colour (Composer.cpp: style x arc, 0.82 at the default) scales the target between 0.6 and 1.0 of
+ * these values: Farbood's dissonance as one of the quantities an energy arc moves.
  */
-std::vector<uint8_t> scaleSet(int scale, int rootOffset, int lo, int hi, float colour = 0.0f,
-                              double tension = 0.0)
+constexpr double kColourShare[kNumCorpusRoles] = { 0.11, 0.13, 0.055 };
+
+/** @brief The target colour share of a role at the arc's colour @p colour (0..1). */
+double colourTarget(CorpusRoleId role, float colour)
+{
+    return kColourShare[static_cast<int>(role)] * (0.6 + 0.4 * std::clamp(static_cast<double>(colour), 0.0, 1.0));
+}
+
+/** @brief The colour tones of a mode as pitch classes above the tonic (Harmony.h, isColourTone). */
+std::vector<int> colourPcs(int scale)
+{
+    std::vector<int> out;
+    for (int d = 0; d < 7; ++d) {
+        const int pc = scaleDegree(scale, d) % 12;
+        if (isColourTone(scale, pc)) out.push_back(pc);
+    }
+    return out;
+}
+
+/**
+ * @brief Allowed symbols with a weight per interval to the part root: @p weight(rel) > 0 admits it.
+ * @param tension the measured tension curve's tilt at this position (tensionAt), multiplied on
+ *
+ * Every weight goes through `quantise`, so no admitted tone can be quantised away. An empty set is
+ * returned only when @p weight admits nothing, which the callers never ask for.
+ */
+template <class F>
+std::vector<uint8_t> weightedSet(int rootOffset, int lo, int hi, F weight, double tension)
 {
     std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
-    if (tension == 0.0) {
-        const int base = colour > 0.0f ? 8 : 1;
-        for (int rel = lo; rel <= hi; ++rel) {
-            if (rel < kCorpusRelMin || rel > kCorpusRelMax || !inScale(scale, rel + rootOffset)) continue;
-            int w = base;
-            if (colour > 0.0f && isColourTone(scale, rel + rootOffset))
-                w = std::clamp(static_cast<int>(std::lround(8.0f * (1.0f + 2.0f * colour))), 1, 255);
-            a[static_cast<size_t>(sym(rel))] = static_cast<uint8_t>(w);
-        }
-        return a;
-    }
-    // The two weightings multiply: the arc's colour lifts the genre's colour tones wherever the arc
-    // is high, the measured curve tilts the whole position towards or away from instability.
     std::vector<double> w(static_cast<size_t>(kCorpusAlphabet), 0.0);
-    for (int rel = lo; rel <= hi; ++rel) {
-        if (rel < kCorpusRelMin || rel > kCorpusRelMax || !inScale(scale, rel + rootOffset)) continue;
-        double v = std::exp(tension * lerdahlInstability(rel + rootOffset));
-        if (colour > 0.0f && isColourTone(scale, rel + rootOffset)) v *= 1.0 + 2.0 * static_cast<double>(colour);
-        w[static_cast<size_t>(sym(rel))] = v;
+    for (int rel = std::max(lo, kCorpusRelMin); rel <= std::min(hi, kCorpusRelMax); ++rel) {
+        const double v = weight(rel);
+        if (v <= 0.0) continue;
+        w[static_cast<size_t>(sym(rel))] = v * std::exp(tension * lerdahlInstability(rel + rootOffset));
     }
     quantise(w, a);
     return a;
 }
 
-/** @brief Allowed symbols: the chord's tones in [lo, hi], optionally tilted by the tension curve. */
-std::vector<uint8_t> chordSet(int scale, int degree, int rootOffset, int lo, int hi, double tension = 0.0)
+/** @brief Whether a set admits nothing at all. */
+bool emptySet(const std::vector<uint8_t>& a)
+{
+    for (uint8_t v : a) if (v != 0) return false;
+    return true;
+}
+
+/**
+ * @brief Allowed symbols: the chord's tones in [lo, hi], optionally tilted by the tension curve.
+ * @param noColour leave out the chord tones that are colour tones of the mode (rule 1: those are
+ *                 neighbour tones and are placed only at colour slots)
+ */
+std::vector<uint8_t> chordSet(int scale, int degree, int rootOffset, int lo, int hi, double tension = 0.0,
+                              bool noColour = false)
 {
     int pcs[3];
     chordTones(scale, degree, pcs);
@@ -210,6 +237,7 @@ std::vector<uint8_t> chordSet(int scale, int degree, int rootOffset, int lo, int
         if (rel < kCorpusRelMin || rel > kCorpusRelMax) continue;
         const int pc = ((rel + rootOffset) % 12 + 12) % 12;
         if (pc != pcs[0] && pc != pcs[1] && pc != pcs[2]) continue;
+        if (noColour && isColourTone(scale, pc)) continue;
         if (tension == 0.0) a[static_cast<size_t>(sym(rel))] = 1;
         else w[static_cast<size_t>(sym(rel))] = std::exp(tension * lerdahlInstability(rel + rootOffset));
     }
@@ -222,6 +250,88 @@ std::vector<uint8_t> single(int rel)
     std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
     a[static_cast<size_t>(sym(rel))] = 1;
     return a;
+}
+
+/**
+ * @brief The colour slots of a line: where a neighbour tone may stand (rule 1).
+ *
+ * A slot is a note on a weak (odd) sixteenth, one sixteenth long, whose next note follows directly
+ * on the next sixteenth -- the next note will be the tonic, so the colour tone is heard on the way
+ * to it and never held, never on a strong step. Two slots never share a note. The number is the
+ * role's target share of the line's notes, rounded at random so that the share holds on average.
+ *
+ * @param steps  onset of each note; @param lens its length in sixteenths
+ * @param taken  positions that are already fixed (and may be neither slot nor resolution)
+ * @param loop   the line repeats, so its last note resolves into its first
+ * @param cellSteps the loop's length in sixteenths
+ * @param resolves  resolves(i) says whether the tonic may stand at position i (a lead's strong step
+ *                  must be a chord tone, and not every chord has the tonic)
+ */
+template <class R>
+std::vector<int> colourSlots(const std::vector<int>& steps, const std::vector<int>& lens, const std::vector<uint8_t>& taken,
+                             bool loop, int cellSteps, double target, Rng& cr, R resolves)
+{
+    const int n = static_cast<int>(steps.size());
+    std::vector<int> cand;
+    for (int i = 0; i < n; ++i) {
+        if (steps[static_cast<size_t>(i)] % 2 == 0 || lens[static_cast<size_t>(i)] != 1 || taken[static_cast<size_t>(i)]) continue;
+        const bool last = i + 1 == n;
+        if (last && !loop) continue;
+        const int nx = last ? 0 : i + 1;
+        const int nextStep = last ? steps[0] + cellSteps : steps[static_cast<size_t>(nx)];
+        if (nextStep != steps[static_cast<size_t>(i)] + 1 || taken[static_cast<size_t>(nx)] || !resolves(nx)) continue;
+        cand.push_back(i);
+    }
+    const double expected = target * n;
+    int count = static_cast<int>(std::floor(expected));
+    if (cr.uniform() < expected - count) ++count;
+    std::vector<int> out;
+    std::vector<uint8_t> used(static_cast<size_t>(n), 0);
+    while (count > 0 && !cand.empty()) {
+        const int k = cr.below(static_cast<int>(cand.size()));
+        const int i = cand[static_cast<size_t>(k)];
+        cand.erase(cand.begin() + k);
+        const int nx = (i + 1) % n;
+        if (used[static_cast<size_t>(i)] || used[static_cast<size_t>(nx)]) continue;
+        used[static_cast<size_t>(i)] = used[static_cast<size_t>(nx)] = 1;
+        if (i > 0) used[static_cast<size_t>(i - 1)] = 1;
+        out.push_back(i);
+        --count;
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+/**
+ * @brief Where a colour tone and its resolution stand: the colour pitch nearest to @p near inside
+ *        [lo, hi], and the tonic nearest to it inside [lo, resHi].
+ * @return false where the mode has no colour tone or neither fits the window
+ */
+bool placeColour(int scale, int rootOffset, int lo, int hi, int resHi, int near, Rng& cr, int& colourRel, int& tonicRel)
+{
+    const std::vector<int> pcs = colourPcs(scale);
+    if (pcs.empty()) return false;
+    // The sampler's alphabet ends at kCorpusRelMin / kCorpusRelMax: a pitch outside it could not be
+    // written into a set (sym() would clamp it onto another pitch -- the arp's glint under a G#3
+    // anchor landed on the anchor itself).
+    lo = std::max(lo, kCorpusRelMin);
+    hi = std::min(hi, kCorpusRelMax);
+    resHi = std::min(resHi, kCorpusRelMax);
+    // The flat second is the genre's signature interval (Easwaran 2004): twice as likely as the others.
+    std::vector<double> w;
+    for (int pc : pcs) w.push_back(pc == 1 ? 2.0 : 1.0);
+    const int pc = pcs[static_cast<size_t>(drawIndex(cr, w.data(), static_cast<int>(w.size())))];
+    int best = 1 << 20;
+    for (int rel = lo; rel <= hi; ++rel)
+        if ((((rel + rootOffset) % 12) + 12) % 12 == pc && std::abs(rel - near) < std::abs(best - near)) best = rel;
+    if (best == (1 << 20)) return false;
+    int tonic = 1 << 20;
+    for (int rel = lo; rel <= resHi; ++rel)
+        if ((((rel + rootOffset) % 12) + 12) % 12 == 0 && std::abs(rel - best) < std::abs(tonic - best)) tonic = rel;
+    if (tonic == (1 << 20)) return false;
+    colourRel = best;
+    tonicRel = tonic;
+    return true;
 }
 
 /** @brief Onsets over @p steps sixteenths from the role's corpus counts; the first step always sounds. */
@@ -329,6 +439,129 @@ std::vector<int> drawPitches(const PitchModel& model, CorpusRoleId role, const D
     return rels;
 }
 
+/**
+ * @brief The rules of a line that no per-position set can express, because they are about pairs and
+ *        windows of notes rather than about one note (rules 6 and 7).
+ */
+struct LineRules {
+    bool loop = false;     ///< the line repeats: its end runs on into its start
+    int  maxRun = 2;       ///< at most this many identical pitches in a row (an octave is a change)
+    int  window = 16;      ///< sixteenths per window of the pitch-class rule
+    int  pcLo = 0;         ///< at least this many pitch classes per window (0 = no rule)
+    int  pcHi = 12;        ///< at most this many
+};
+
+/**
+ * @brief Redraws single notes of a drawn line until it keeps @p rules.
+ *
+ * Each repair redraws one note from the same model, with every other note of the line fixed -- the
+ * constrained sampler then draws that note from the model's distribution given both its neighbours,
+ * which is how the variations of the acid have always been drawn. The note's own set loses exactly
+ * what the rule forbids there (the pitch of a run, or the pitch classes a window already has too
+ * many or too few of), so the learned model still chooses; it only chooses inside the rule. The
+ * rules win where the model disagrees: the acid corpus plays two pitch classes a bar and repeats
+ * 59 % of its notes (docs/PLAN.md, 18.09.2026), and that is exactly what the brake is there for.
+ *
+ * @param fixed positions no repair may touch (the tonic that opens a cell, colour slots and their
+ *              resolutions, the fifth a lead rests on, the notes a variation keeps)
+ */
+void enforceLine(const PitchModel& model, CorpusRoleId role, const DrawSource& src, const Allowed& allowed,
+                 const std::vector<int>& steps, int bars, std::vector<uint8_t> fixed, const LineRules& rules,
+                 int ctx2, int ctx1, double temperature, Rng& r, std::vector<int>& rels)
+{
+    const size_t n = rels.size();
+    if (n < 2) return;
+    auto pcOf = [](int rel) { return ((rel % 12) + 12) % 12; };
+    for (int iter = 0; iter < 96; ++iter) {
+        int pos = -1;
+        std::vector<uint8_t> set;
+        // Runs: the last free note of a run of maxRun + 1 loses the run's pitch.
+        const size_t len = rules.loop ? n + static_cast<size_t>(rules.maxRun) : n;
+        for (size_t k = static_cast<size_t>(rules.maxRun); k < len && pos < 0; ++k) {
+            bool run = true;
+            for (int d = 1; d <= rules.maxRun && run; ++d) run = rels[k % n] == rels[(k - static_cast<size_t>(d)) % n];
+            if (!run) continue;
+            for (int d = 0; d <= rules.maxRun; ++d) {
+                const size_t c = (k - static_cast<size_t>(d)) % n;
+                if (fixed[c]) continue;
+                set = allowed[c];
+                set[static_cast<size_t>(sym(rels[c]))] = 0;
+                if (emptySet(set)) continue;
+                pos = static_cast<int>(c);
+                break;
+            }
+        }
+        // Pitch classes per window.
+        if (pos < 0 && rules.pcLo > 0) {
+            const int windows = std::max(1, (steps.empty() ? 0 : steps.back()) / rules.window + 1);
+            for (int w = 0; w < windows && pos < 0; ++w) {
+                int count[12] = {};
+                std::vector<size_t> idx;
+                for (size_t i = 0; i < n; ++i)
+                    if (steps[i] / rules.window == w) { idx.push_back(i); ++count[pcOf(rels[i])]; }
+                int distinct = 0;
+                for (int c : count) distinct += c > 0 ? 1 : 0;
+                if (idx.empty() || (distinct >= rules.pcLo && distinct <= rules.pcHi)) continue;
+                const bool tooFew = distinct < rules.pcLo;
+                // Too few: the commonest class gives a note away to a class the window lacks.
+                // Too many: the rarest class's note moves onto a class the window already has.
+                std::vector<size_t> order(idx.rbegin(), idx.rend());
+                std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+                    return tooFew ? count[pcOf(rels[a])] > count[pcOf(rels[b])] : count[pcOf(rels[a])] < count[pcOf(rels[b])];
+                });
+                for (size_t c : order) {
+                    if (fixed[c]) continue;
+                    set = allowed[c];
+                    for (size_t s = 0; s < set.size(); ++s) {
+                        if (!set[s]) continue;
+                        const int pc = pcOf(PitchModel::rel(static_cast<int>(s)));
+                        const bool keep = tooFew ? count[pc] == 0 : (count[pc] > 0 && pc != pcOf(rels[c]));
+                        if (!keep) set[s] = 0;
+                    }
+                    if (emptySet(set)) continue;
+                    pos = static_cast<int>(c);
+                    break;
+                }
+            }
+        }
+        if (pos < 0) return;
+        Allowed one;
+        for (size_t i = 0; i < n; ++i) one.push_back(static_cast<int>(i) == pos ? set : single(rels[i]));
+        const std::vector<int> redrawn = drawPitches(model, role, src, one, steps, bars, ctx2, ctx1, temperature, r);
+        if (redrawn[static_cast<size_t>(pos)] == rels[static_cast<size_t>(pos)]) { fixed[static_cast<size_t>(pos)] = 1; continue; }
+        rels = redrawn;
+    }
+}
+
+/** @brief Whether a line keeps @p rules (the check enforceLine works towards). */
+bool lineKeeps(const std::vector<int>& rels, const std::vector<int>& steps, const LineRules& rules)
+{
+    const size_t n = rels.size();
+    if (n >= static_cast<size_t>(rules.maxRun) + 1) {
+        const size_t len = rules.loop ? n + static_cast<size_t>(rules.maxRun) : n;
+        for (size_t k = static_cast<size_t>(rules.maxRun); k < len; ++k) {
+            bool run = true;
+            for (int d = 1; d <= rules.maxRun && run; ++d) run = rels[k % n] == rels[(k - static_cast<size_t>(d)) % n];
+            if (run) return false;
+        }
+    }
+    if (rules.pcLo > 0 && n > 0) {
+        const int windows = steps.back() / rules.window + 1;
+        for (int w = 0; w < windows; ++w) {
+            bool seen[12] = {};
+            int distinct = 0, notes = 0;
+            for (size_t i = 0; i < n; ++i) {
+                if (steps[i] / rules.window != w) continue;
+                ++notes;
+                const int pc = ((rels[i] % 12) + 12) % 12;
+                if (!seen[pc]) { seen[pc] = true; ++distinct; }
+            }
+            if (notes > 0 && (distinct < rules.pcLo || distinct > rules.pcHi)) return false;
+        }
+    }
+    return true;
+}
+
 int median(const uint32_t* counts, int n)
 {
     uint64_t total = 0;
@@ -364,33 +597,89 @@ void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, con
     }
 }
 
-void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, DrawSource src)
+/**
+ * @brief The acid line: a one- or two-bar cell inside the TB-303 rules of 18.09.2026 (Melody.h).
+ *
+ * **Rhythm first, and dense** (rules 3 and 5). Each bar gets two to five sixteenths without an
+ * onset -- 11 to 14 onsets -- split evenly between the halves of the bar, never two side by side and
+ * never the downbeat. Up to three of them are rests, kick steps first; the rest are ties that hold
+ * the note before. Which steps they are is weighted by how often the corpus leaves each step empty,
+ * so the learned rhythm still chooses; it only chooses inside the density. The old draw followed the
+ * corpus's onset chain freely and came out at 5.4 onsets a bar, 29 % of the cells front-loaded.
+ *
+ * **Accents** (rule 8) on the "e" and the "a" of each beat, never on a kick step, clustering with the
+ * lift measured in the corpus (below). **Slides** (rule 9) into any note that follows within two
+ * sixteenths without a rest between, with probability 0.4 (0.2 before), the last note of the cell
+ * included -- it slides across the barline into the cell's first note.
+ *
+ * **Pitches** (rules 1, 6, 7, 10): the tonic opens the cell; held notes rest on the tonic or the
+ * fifth; every other note is drawn by the corpus model from 1, b3 (or 3), 5 and b7 (or 7), with the
+ * fourth and the sixth as rarer passing notes, inside D3..D4 -- plus, on offbeat sixteenths, the
+ * tonic, the fifth and the seventh an octave up, as far as D5. Colour tones stand only at colour
+ * slots, resolving to the tonic. Then enforceLine keeps three to five pitch classes a bar and no
+ * pitch three times in a row.
+ *
+ * **Variation** (rule 4): A' redraws one or two notes of A, A'' one or two of A' in its last beat;
+ * the second set (after the first breakdown) redraws a third of A's free notes and varies that the
+ * same way. The first two notes are never redrawn, so a run cannot form across a cell boundary.
+ */
+void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour, DrawSource src)
 {
     src.mode = std::clamp(scale, 0, kNumScales - 1);   // what the section plays, for a model that asks
     Rng r;
     r.seed(seed ^ kSaltAcid);
+    Rng cr;
+    cr.seed(seed ^ kSaltColour ^ 1u);
     const CorpusRole& role = kCorpusRoles[static_cast<int>(CorpusRoleId::Acid)];
     const PitchModel& model = corpusPitchModel(CorpusRoleId::Acid);
     m.acidSteps = r.uniform() < 0.7f ? 16 : 32;
     const int steps = m.acidSteps;
-    // Acid lines are busy: at least 40 % of the steps sound.
-    std::vector<int> on;
-    for (int tries = 0; tries < 12; ++tries) {
-        on = drawOnsets(r, role, steps);
-        if (static_cast<int>(on.size()) * 10 >= steps * 4) break;
-    }
-    if (static_cast<int>(on.size()) * 10 < steps * 4) { on.clear(); for (int s = 0; s < steps; s += 2) on.push_back(s); }
-    const int ambitus = std::clamp(median(role.ambitus, 37), 7, 19);
-    const int rootOffset = ((m.root[0] - key) % 12 + 12) % 12;
     const int bars = steps / 16;
-    Allowed allowed;
-    for (size_t i = 0; i < on.size(); ++i)
-        allowed.push_back(i == 0 ? single(0)
-                                 : scaleSet(scale, rootOffset, 0, ambitus, 0.0f, tensionAt(CorpusRoleId::Acid, on[i], bars)));
-    const std::vector<int> rels = drawPitches(model, CorpusRoleId::Acid, src, allowed, on, bars, 0, 0, temperature, r);
+    const int root = m.root[0];
+    const int rootOffset = ((root - key) % 12 + 12) % 12;
 
-    std::vector<MelodyNote>& a = m.acid[0];
-    a.clear();
+    // ---- rhythm: 0 onset, 1 tie (the note before holds), 2 rest
+    std::vector<uint8_t> kind(static_cast<size_t>(steps), 0);
+    for (int b = 0; b < bars; ++b) {
+        const int off = 2 + r.below(4);                    // 11..14 onsets
+        const int rests = std::min(off, 1 + r.below(3));   // at most three deliberate rests
+        const int half1 = off / 2 + ((off % 2) != 0 && r.uniform() < 0.5f ? 1 : 0);
+        std::vector<int> chosen;
+        for (int h = 0; h < 2; ++h) {
+            double w[16] = {};
+            for (int s = h * 8; s < h * 8 + 8; ++s) {
+                if (s == 0) continue;   // the bar's downbeat always sounds
+                const auto& c = role.onset[s];
+                const double total = static_cast<double>(c[0][0]) + c[0][1] + c[1][0] + c[1][1];
+                const double pOff = total > 0.0 ? (static_cast<double>(c[0][0]) + c[1][0]) / total : 0.3;
+                w[s] = (0.05 + pOff) * (s % 4 == 0 ? 2.5 : 1.0);   // kick steps are where a 303 rests
+            }
+            const int want = h == 0 ? half1 : off - half1;
+            for (int k = 0; k < want; ++k) {
+                double any = 0.0;
+                for (double v : w) any += v;
+                if (any <= 0.0) break;
+                const int s = drawIndex(r, w, 16);
+                chosen.push_back(s);
+                w[s] = 0.0;
+                if (s > 0) w[s - 1] = 0.0;
+                if (s < 15) w[s + 1] = 0.0;
+            }
+        }
+        std::stable_sort(chosen.begin(), chosen.end(), [](int a, int c) { return (a % 4 == 0) > (c % 4 == 0); });
+        for (size_t k = 0; k < chosen.size(); ++k)
+            kind[static_cast<size_t>(b * 16 + chosen[k])] = static_cast<uint8_t>(static_cast<int>(k) < rests ? 2 : 1);
+    }
+    std::vector<int> on, lens;
+    for (int s = 0; s < steps; ++s) {
+        if (kind[static_cast<size_t>(s)] != 0) continue;
+        int l = 1;
+        while (s + l < steps && kind[static_cast<size_t>(s + l)] == 1) ++l;
+        on.push_back(s);
+        lens.push_back(l);
+    }
+    const size_t n = on.size();
+
     /**
      * Accents cluster; they are not drawn independently. The TB-303's accent charges a capacitor with
      * a time constant of 150 ms (Acid.cpp, kSweepTau), so a lone accent charges the sweep and lets it
@@ -410,59 +699,159 @@ void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
      *
      * The base is thin and is stated as thin: 62 of the 74 acid loops in the packs carry no velocity
      * variation at all (spread 0 to 4), which is why the acid row of CorpusTables.cpp counts zero
-     * accents, and the lift rests on the nine that do. It does *not* support the 0.75 an external
-     * review proposed for the follow-up probability; the measured follow-up probability is 0.49.
+     * accents, and the lift rests on the nine that do.
      *
-     * The chain keeps the marginal accent rate of each step position where it was, so this changes how
-     * the accents are *distributed* and not how many there are: for a target rate m at a position and
-     * the lift L, the probability after a plain note is m / (1 - m + L m) and after an accent L times
-     * that. With the rates below (0.12, 0.2, 0.32) that is 0.102/0.256, 0.154/0.386 and 0.216/0.542.
-     *
-     * **What it does to the sweep, measured rather than assumed, and it is less than the argument
-     * promises.** Playing the composed patterns into a real acid voice on their own step grid (self
-     * test, section "acid colour"), the mean charge of the sweep capacitor under an accented note goes
-     * from 0.248 to 0.261 and its peak from 0.406 to 0.405 -- 5 % more charge, that is 0.011 of an
-     * octave of cutoff at the default Accent and Resonance. The mechanism of the argument is right and
-     * its size is not: at 145 BPM a sixteenth lasts 103 ms against the capacitor's 150 ms, so accents
-     * two steps apart already find it far from discharged, and nearly doubling the number of
-     * *adjacent* accents (0.20 to 0.39) adds little to what was already there. The change stays
-     * because the corpus says the accents cluster, not because it makes the sweep climb.
+     * The chain keeps the marginal accent rate of each step position where it is asked to be. Since
+     * 18.09.2026 the rates follow rule 8 -- 0.36 on the "e" and the "a" of the beat, 0.06 on the "and",
+     * none on the beat itself, where the kick is (before: 0.12 on the beat, 0.32 on the "and", 0.2
+     * elsewhere) -- and with rates that differ this much from one onset to the next the chain has to
+     * know the rate of the onset before: for a target m at this position, a rate m' at the previous
+     * onset and the lift L, P(accent) = x (1 + (L - 1) m') must equal m, so the probability after a
+     * plain note is x = m / (1 + (L - 1) m') and after an accent L x. Where m' = m this is the
+     * m / (1 - m + L m) of before. Without the correction the "e" and "a" came out at 0.24 instead of
+     * 0.36, because the onset before them is mostly a kick step that is never accented.
      */
     constexpr float kAccentLift = 2.51f;
+    auto accentRate = [](int step) { const int pos = step % 4; return (pos == 1 || pos == 3) ? 0.36f : (pos == 2 ? 0.06f : 0.0f); };
+    std::vector<uint8_t> flags(n, 0);
     bool prevAccent = false;
-    for (size_t i = 0; i < on.size(); ++i) {
-        const int step = on[i];
-        const int next = i + 1 < on.size() ? on[i + 1] : steps;
-        const int gap = next - step;
-        MelodyNote n;
-        n.step = static_cast<int16_t>(step);
-        n.rel = static_cast<int8_t>(rels[i]);
-        n.len = static_cast<int16_t>(drawLength(r, role, step, gap));
-        const int pos = step % 4;
-        const float pAccent = pos == 2 ? 0.32f : (pos == 0 ? 0.12f : 0.2f);
-        const float pPlain = pAccent / (1.0f - pAccent + kAccentLift * pAccent);
-        prevAccent = r.uniform() < (prevAccent ? std::min(1.0f, kAccentLift * pPlain) : pPlain);
-        if (prevAccent) n.flags |= kNoteAccent;
-        if (gap <= 2 && i + 1 < on.size() && r.uniform() < 0.2f) { n.flags |= kNoteSlide; n.len = static_cast<int16_t>(gap); }
-        n.velocity = (n.flags & kNoteAccent) ? 120 : 88;
-        a.push_back(n);
+    for (size_t i = 0; i < n; ++i) {
+        const float pAccent = accentRate(on[i]);
+        const float prevRate = accentRate(on[i == 0 ? n - 1 : i - 1]);
+        const float pPlain = pAccent / (1.0f + (kAccentLift - 1.0f) * prevRate);
+        prevAccent = pAccent > 0.0f && r.uniform() < (prevAccent ? std::min(1.0f, kAccentLift * pPlain) : pPlain);
+        if (prevAccent) flags[i] |= kNoteAccent;
+        const bool last = i + 1 == n;
+        const int gap = (last ? steps + on[0] : on[i + 1]) - on[i];
+        if (gap <= 2 && lens[i] == gap && r.uniform() < 0.4f) flags[i] |= kNoteSlide;
     }
-    // B: two or three notes redrawn given their neighbours, one accent moved.
-    std::vector<MelodyNote>& b = m.acid[1];
-    b = a;
-    if (a.size() >= 4) {
-        const int changes = 2 + r.below(2);
-        std::vector<uint8_t> redraw(a.size(), 0);
-        for (int c = 0; c < changes; ++c) redraw[static_cast<size_t>(1 + r.below(static_cast<int>(a.size()) - 1))] = 1;
-        Allowed vary;
-        for (size_t i = 0; i < a.size(); ++i)
-            vary.push_back(redraw[i] ? scaleSet(scale, rootOffset, 0, ambitus, 0.0f, tensionAt(CorpusRoleId::Acid, on[i], bars))
-                                     : single(a[i].rel));
-        const std::vector<int> vr = drawPitches(model, CorpusRoleId::Acid, src, vary, on, bars, 0, 0, temperature, r);
-        for (size_t i = 0; i < b.size(); ++i) b[i].rel = static_cast<int8_t>(vr[i]);
-        MelodyNote& moved = b[static_cast<size_t>(r.below(static_cast<int>(b.size())))];
-        moved.flags ^= kNoteAccent;
-        moved.velocity = (moved.flags & kNoteAccent) ? 120 : 88;
+    // A' moves one accent from one "e"/"a" to another (drawn now, before any pitch, so that a borrowed
+    // mode keeps the rhythm, the accents and the slides of the track's own).
+    int accentFrom = -1, accentTo = -1;
+    {
+        std::vector<int> acc, plain;
+        for (size_t i = 0; i < n; ++i)
+            if (on[i] % 2 == 1) ((flags[i] & kNoteAccent) ? acc : plain).push_back(static_cast<int>(i));
+        if (!acc.empty() && !plain.empty()) {
+            accentFrom = acc[static_cast<size_t>(r.below(static_cast<int>(acc.size())))];
+            accentTo = plain[static_cast<size_t>(r.below(static_cast<int>(plain.size())))];
+        }
+    }
+
+    // ---- pitches
+    const int lo = kAcidLowest - root, hi = kAcidHighest - root, jumpHi = kAcidJumpHighest - root;
+    double core[12] = {}, rest[12] = {}, jump[12] = {};
+    const struct { int degree; double w; } kCore[] = { { 0, 6.0 }, { 2, 3.0 }, { 4, 4.0 }, { 6, 3.0 }, { 3, 1.0 }, { 5, 1.0 } };
+    for (const auto& c : kCore) core[scaleDegree(scale, c.degree) % 12] = c.w;
+    rest[0] = 6.0;
+    rest[7] = 4.0;
+    jump[0] = jump[7] = 1.0;
+    jump[scaleDegree(scale, 6) % 12] = 0.6;
+    for (int pc = 0; pc < 12; ++pc)
+        if (isColourTone(scale, pc)) core[pc] = rest[pc] = jump[pc] = 0.0;
+    auto pcOf = [&](int rel) { return ((rel + rootOffset) % 12 + 12) % 12; };
+    Allowed allowed;
+    for (size_t i = 0; i < n; ++i) {
+        const double t = tensionAt(CorpusRoleId::Acid, on[i], bars);
+        const bool odd = on[i] % 2 == 1;
+        if (i == 0) allowed.push_back(single(0));
+        else if (lens[i] >= 2) allowed.push_back(weightedSet(rootOffset, lo, hi, [&](int rel) { return rest[pcOf(rel)]; }, t));
+        else allowed.push_back(weightedSet(rootOffset, lo, odd ? jumpHi : hi, [&](int rel) {
+            // Octave jumps are occasional: a quarter of the weight a note in the register gets.
+            return rel <= hi ? core[pcOf(rel)] : 0.25 * jump[pcOf(rel)];
+        }, t));
+    }
+    std::vector<uint8_t> fixed(n, 0);
+    fixed[0] = 1;
+    {
+        std::vector<uint8_t> taken(n, 0);
+        taken[0] = 1;
+        const std::vector<int> slots = colourSlots(on, lens, taken, true, steps, colourTarget(CorpusRoleId::Acid, colour), cr,
+                                                   [&](int i) { return i == 0 || !emptySet(allowed[static_cast<size_t>(i)]); });
+        for (int i : slots) {
+            const size_t nx = (static_cast<size_t>(i) + 1) % n;
+            int c = 0, t = 0;
+            if (!placeColour(scale, rootOffset, lo, hi, nx == 0 ? 0 : jumpHi, 0, cr, c, t)) continue;
+            if (nx == 0 && t != 0) continue;
+            allowed[static_cast<size_t>(i)] = single(c);
+            allowed[nx] = single(t);
+            fixed[static_cast<size_t>(i)] = fixed[nx] = 1;
+        }
+    }
+    LineRules rules;
+    rules.loop = true;
+    rules.pcLo = 3;
+    rules.pcHi = 5;
+    // The draw and its repair, repeated where a repair got stuck (a note whose set the rules empty):
+    // a fresh draw is a fresh start, and eight of them have never all failed in the self test.
+    std::vector<int> base;
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        base = drawPitches(model, CorpusRoleId::Acid, src, allowed, on, bars, 0, 0, temperature, r);
+        enforceLine(model, CorpusRoleId::Acid, src, allowed, on, bars, fixed, rules, 0, 0, temperature, r, base);
+        if (lineKeeps(base, on, rules)) break;
+    }
+
+    // A variation: `changes` free notes (from step `fromStep` on) redrawn, each forbidden its old pitch.
+    // Tried again with other notes where the rules cannot be kept with the ones drawn first. The first
+    // two notes are never redrawn, so a run cannot form across the boundary between two cells.
+    std::vector<uint8_t> held = fixed;
+    if (n > 1) held[1] = 1;
+    auto vary = [&](const std::vector<int>& from, int changes, int fromStep) {
+        std::vector<int> out;
+        for (int attempt = 0; attempt < 8; ++attempt) {
+            std::vector<int> cand;
+            for (size_t i = 0; i < n; ++i) if (!held[i] && on[i] >= fromStep) cand.push_back(static_cast<int>(i));
+            if (cand.empty() || attempt >= 4) {
+                cand.clear();
+                for (size_t i = 0; i < n; ++i) if (!held[i]) cand.push_back(static_cast<int>(i));
+            }
+            std::vector<uint8_t> keep(n, 1);
+            Allowed al;
+            for (size_t i = 0; i < n; ++i) al.push_back(single(from[i]));
+            for (int c = 0; c < changes && !cand.empty(); ++c) {
+                const int k = r.below(static_cast<int>(cand.size()));
+                const size_t i = static_cast<size_t>(cand[static_cast<size_t>(k)]);
+                cand.erase(cand.begin() + k);
+                std::vector<uint8_t> set = allowed[i];
+                set[static_cast<size_t>(sym(from[i]))] = 0;
+                if (emptySet(set)) { --c; continue; }
+                al[i] = set;
+                keep[i] = 0;
+            }
+            out = drawPitches(model, CorpusRoleId::Acid, src, al, on, bars, 0, 0, temperature, r);
+            enforceLine(model, CorpusRoleId::Acid, src, al, on, bars, keep, rules, 0, 0, temperature, r, out);
+            if (lineKeeps(out, on, rules) && out != from) break;
+        }
+        return out;
+    };
+    std::vector<int> cells[kAcidCells];
+    cells[acidCell(0, 0)] = base;
+    cells[acidCell(1, 0)] = vary(base, std::max(2, static_cast<int>(n) / 3), 0);
+    for (int set = 0; set < kMaterialSets; ++set) {
+        cells[acidCell(set, 1)] = vary(cells[acidCell(set, 0)], 1 + r.below(2), 0);
+        cells[acidCell(set, 2)] = vary(cells[acidCell(set, 1)], 1 + r.below(2), steps - 4);
+    }
+    for (int k = 0; k < kAcidCells; ++k) {
+        std::vector<MelodyNote>& a = m.acid[k];
+        a.clear();
+        const int variant = k % kAcidVariants;
+        for (size_t i = 0; i < n; ++i) {
+            MelodyNote note;
+            note.step = static_cast<int16_t>(on[i]);
+            note.rel = static_cast<int8_t>(cells[k][i]);
+            note.flags = flags[i];
+            if (variant > 0 && accentFrom >= 0) {
+                if (static_cast<int>(i) == accentFrom) note.flags = static_cast<uint8_t>(note.flags & ~kNoteAccent);
+                if (static_cast<int>(i) == accentTo) note.flags = static_cast<uint8_t>(note.flags | kNoteAccent);
+            }
+            // A slide lasts to the next note; everything else is the 303's own gate (a tie holds).
+            const bool last = i + 1 == n;
+            note.len = static_cast<int16_t>((note.flags & kNoteSlide) ? (last ? steps + on[0] : on[i + 1]) - on[i] : lens[i]);
+            // A colour tone is never held: one sixteenth, whatever it follows (rule 1).
+            if (isColourTone(scale, pcOf(note.rel))) { note.len = 1; note.flags = static_cast<uint8_t>(note.flags & ~kNoteSlide); }
+            note.velocity = (note.flags & kNoteAccent) ? 120 : 88;
+            a.push_back(note);
+        }
     }
 }
 
@@ -472,39 +861,146 @@ int chordAtStep(const MelodyPlan& m, int window, int step)
     return m.chordDegree[chordIndexAt(m, window * 8 + step / 16)];
 }
 
+/** @name The lead's register (rule 17): a soft centre between A4 and C5, a hard ceiling at A5. @{ */
+constexpr double kLeadCentre = 70.5;   ///< MIDI: between A#4 and B4
+constexpr double kLeadSigma = 5.0;     ///< semitones: the register weight falls to 0.6 at +-5, 0.14 at +-10
+/** @} */
+
+/**
+ * @brief The lead's rhythm over a two-bar motif: a dense figure, not a scatter of notes (rule 16).
+ *
+ * Three families, drawn once per track so that the motif and B share a character:
+ *  - 0, *sixteenths*: every sixteenth, with two to four ties per bar (never on a strong step, never
+ *    side by side) -- the rolling Goa lead, 12 to 14 onsets a bar;
+ *  - 1, *eighths with pickups*: every eighth, with two to four sixteenth pickups -- 10 to 12;
+ *  - 2, *gallop*: a one-beat cell (x.xx, xx.x or xxx.) on every beat, one beat per bar opened to four
+ *    sixteenths -- 12 or 13.
+ * The second bar repeats the first and redraws only its last beat: the figure is clear because it
+ * repeats (rule 4), and the last beat turns the motif round. Which steps get ties or pickups is
+ * weighted by the corpus's onset counts, so the learned rhythm chooses inside the density.
+ */
+std::vector<int> leadRhythm(Rng& r, const CorpusRole& role, int family)
+{
+    auto pOn = [&](int s) {
+        const auto& c = role.onset[s];
+        const double total = static_cast<double>(c[0][0]) + c[0][1] + c[1][0] + c[1][1];
+        return total > 0.0 ? (static_cast<double>(c[0][1]) + c[1][1]) / total : 0.5;
+    };
+    static const bool kGallop[3][4] = { { true, false, true, true }, { true, true, false, true }, { true, true, true, false } };
+    const int cell = r.below(3);
+    bool on[32] = {};
+    // Fills steps [from, 16) of the first bar with the family's figure.
+    auto fill = [&](int from) {
+        const int span = 16 - from;
+        if (family == 0) {
+            for (int s = from; s < 16; ++s) on[s] = true;
+            int ties = span >= 8 ? 2 + r.below(3) : r.below(2);
+            double w[16] = {};
+            for (int s = std::max(from, 1); s < 16; ++s) w[s] = s % 8 == 0 ? 0.0 : 1.05 - pOn(s);
+            while (ties-- > 0) {
+                double any = 0.0;
+                for (double v : w) any += v;
+                if (any <= 0.0) break;
+                const int s = drawIndex(r, w, 16);
+                on[s] = false;
+                w[s] = 0.0;
+                if (s > 0) w[s - 1] = 0.0;
+                if (s < 15) w[s + 1] = 0.0;
+            }
+        } else if (family == 1) {
+            for (int s = from; s < 16; ++s) on[s] = s % 2 == 0;
+            int picks = span >= 8 ? 2 + r.below(3) : 1 + r.below(2);
+            double w[16] = {};
+            for (int s = from; s < 16; ++s) w[s] = s % 2 == 1 ? 0.05 + pOn(s) : 0.0;
+            while (picks-- > 0) {
+                double any = 0.0;
+                for (double v : w) any += v;
+                if (any <= 0.0) break;
+                const int s = drawIndex(r, w, 16);
+                on[s] = true;
+                w[s] = 0.0;
+            }
+        } else {
+            for (int s = from; s < 16; ++s) on[s] = kGallop[cell][s % 4];
+            const int firstBeat = from / 4;
+            if (firstBeat < 4) {
+                const int open = firstBeat == 0 ? 1 + r.below(3) : firstBeat + r.below(4 - firstBeat);
+                for (int s = open * 4; s < open * 4 + 4; ++s) if (s >= from) on[s] = true;
+            }
+        }
+    };
+    fill(0);
+    for (int s = 0; s < 16; ++s) on[16 + s] = on[s];
+    // The second bar's last beat, redrawn with the same family: the turn of the motif.
+    const bool keep[16] = { on[0], on[1], on[2], on[3], on[4], on[5], on[6], on[7], on[8], on[9], on[10], on[11], on[12], on[13], on[14], on[15] };
+    fill(12);
+    for (int s = 12; s < 16; ++s) { on[16 + s] = on[s]; on[s] = keep[s]; }
+    std::vector<int> out;
+    for (int s = 0; s < 32; ++s) if (on[s]) out.push_back(s);
+    return out;
+}
+
+/**
+ * @brief The lead: A A' B A'' over eight bars, a dense two-bar riff inside the rules (rules 1, 16-18).
+ *
+ * The phrase structure and the motif operators are the ones of 16.09.2026 (Melody.h): A keeps the
+ * motif where it fits the window's chords, A' repeats it over the next chords, B has its own rhythm,
+ * A'' takes one operator. What changed on 18.09.2026 is what they work on:
+ *  - the rhythm is a dense figure (leadRhythm) instead of 4 to 14 onsets on 32 steps truncated to the
+ *    first 14, which made the lead sparse and front-loaded;
+ *  - the pitches are drawn inside B3..A5 with a soft register centre between A4 and C5 (the old
+ *    window reached D6 and the seed's third track peaked at C#6, with the form's octave on top);
+ *  - no colour tone is in any set: they are placed afterwards at colour slots, the same motif slots
+ *    in every repetition of the motif, each resolving to the tonic (rule 1);
+ *  - the fifth is fixed on the motif's longest note wherever the chord allows it, in every
+ *    repetition: the resting tone of rule 18 (the seed's second track played it on 2 % of its notes);
+ *  - a last pass redraws single notes so that no pitch sounds three times in a row.
+ */
 void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour, DrawSource src)
 {
     src.mode = std::clamp(scale, 0, kNumScales - 1);
     Rng r;
     r.seed(seed ^ kSaltLead);
+    Rng cr;
+    cr.seed(seed ^ kSaltColour ^ 2u);
     const CorpusRole& role = kCorpusRoles[static_cast<int>(CorpusRoleId::Lead)];
     const PitchModel& model = corpusPitchModel(CorpusRoleId::Lead);
-    const int rootOffset = ((m.root[1] - key) % 12 + 12) % 12;
-    constexpr int lo = kLeadRelLo, hi = kLeadRelHi;
+    const int root = m.root[1];
+    const int rootOffset = ((root - key) % 12 + 12) % 12;
+    const int lo = std::max(kLeadLowest - root, kCorpusRelMin), hi = std::min(kLeadHighest - root, kCorpusRelMax);
+    const double centre = kLeadCentre - root;
     m.colour = colour;
-
-    auto rhythm = [&]() {
-        std::vector<int> on;
-        for (int tries = 0; tries < 12; ++tries) {
-            on = drawOnsets(r, role, 32);
-            if (on.size() >= 4 && on.size() <= 14) break;
-        }
-        if (on.size() < 4) on = { 0, 6, 12, 16, 22, 28 };
-        if (on.size() > 14) on.resize(14);
-        return on;
-    };
-    // Constraints of one note: chord tones on strong steps, scale tones elsewhere. Both carry the
-    // measured tension curve of the lead; the motif is two bars long, so the bar-parity term applies.
+    const int family = r.below(3);
+    auto pcOf = [&](int rel) { return ((rel + rootOffset) % 12 + 12) % 12; };
+    auto registerW = [&](int rel) { const double z = (rel - centre) / kLeadSigma; return std::exp(-0.5 * z * z); };
+    double scaleW[12] = {};
+    for (int d = 0; d < 7; ++d) {
+        const int pc = scaleDegree(scale, d) % 12;
+        scaleW[pc] = isColourTone(scale, pc) ? 0.0 : (pc == 0 || pc == 7 ? 1.3 : 1.0);
+    }
+    // Constraints of one note: chord tones on strong steps, scale tones elsewhere, colour tones never.
+    // Both carry the measured tension curve of the lead; the motif is two bars long, so the bar-parity
+    // term applies.
     auto constraintAt = [&](int window, int step) {
         const double t = tensionAt(CorpusRoleId::Lead, step, 2);
-        return step % 8 == 0 ? chordSet(scale, chordAtStep(m, window, step), rootOffset, lo, hi, t)
-                             : scaleSet(scale, rootOffset, lo, hi, colour, t);
+        if (step % 8 == 0) {
+            int pcs[3];
+            chordTones(scale, chordAtStep(m, window, step), pcs);
+            const std::vector<uint8_t> s = weightedSet(rootOffset, lo, hi, [&](int rel) {
+                const int pc = pcOf(rel);
+                return (pc == pcs[0] || pc == pcs[1] || pc == pcs[2]) ? scaleW[pc] * registerW(rel) : 0.0;
+            }, t);
+            if (!emptySet(s)) return s;
+        }
+        return weightedSet(rootOffset, lo, hi, [&](int rel) { return scaleW[pcOf(rel)] * registerW(rel); }, t);
     };
     auto fits = [&](int window, int step, int rel) {
-        return constraintAt(window, step)[static_cast<size_t>(sym(rel))] != 0;
+        return rel >= kCorpusRelMin && rel <= kCorpusRelMax && constraintAt(window, step)[static_cast<size_t>(sym(rel))] != 0;
     };
+    LineRules rules;
 
-    const std::vector<int> motifRhythm = rhythm();
+    const std::vector<int> motifRhythm = leadRhythm(r, role, family);
+    const size_t motifN = motifRhythm.size();
     std::vector<int> motif;   // A's pitches, drawn once for window 0
     for (int w = 0; w < 2; ++w) {
         std::vector<MelodyNote>& ph = m.lead[w];
@@ -513,11 +1009,14 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
         // A (bars 0-1).
         Allowed al;
         for (int s : motifRhythm) al.push_back(constraintAt(w, s));
-        if (motif.empty()) motif = drawPitches(model, CorpusRoleId::Lead, src, al, motifRhythm, 2, 0, 0, temperature, r);
+        if (motif.empty()) {
+            motif = drawPitches(model, CorpusRoleId::Lead, src, al, motifRhythm, 2, 0, 0, temperature, r);
+            enforceLine(model, CorpusRoleId::Lead, src, al, motifRhythm, 2, std::vector<uint8_t>(motifN, 0), rules, 0, 0, temperature, r, motif);
+        }
         {
             // A keeps the motif where it fits this window's chords and redraws the rest.
             Allowed keep;
-            for (size_t i = 0; i < motifRhythm.size(); ++i)
+            for (size_t i = 0; i < motifN; ++i)
                 keep.push_back(fits(w, motifRhythm[i], motif[i]) ? single(motif[i]) : al[i]);
             const std::vector<int> a = drawPitches(model, CorpusRoleId::Lead, src, keep, motifRhythm, 2, 0, 0, temperature, r);
             for (size_t i = 0; i < a.size(); ++i) { steps.push_back(motifRhythm[i]); rels.push_back(a[i]); }
@@ -525,22 +1024,24 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
         // A' (bars 2-3): same rhythm, notes kept where they fit.
         {
             Allowed keep;
-            for (size_t i = 0; i < motifRhythm.size(); ++i) {
+            for (size_t i = 0; i < motifN; ++i) {
                 const int s = motifRhythm[i] + 32;
                 keep.push_back(fits(w, s, motif[i]) ? single(motif[i]) : constraintAt(w, s));
             }
-            const int c1 = rels.size() >= 1 ? rels.back() : 0, c2 = rels.size() >= 2 ? rels[rels.size() - 2] : c1;
+            const int c1 = rels.back(), c2 = rels.size() >= 2 ? rels[rels.size() - 2] : c1;
             const std::vector<int> a = drawPitches(model, CorpusRoleId::Lead, src, keep, motifRhythm, 2, c2, c1, temperature, r);
             for (size_t i = 0; i < a.size(); ++i) { steps.push_back(motifRhythm[i] + 32); rels.push_back(a[i]); }
         }
-        // B (bars 4-5): its own rhythm, continuing from A'.
+        // B (bars 4-5): its own rhythm of the same family, continuing from A'.
+        const size_t bStart = steps.size();
         {
-            const std::vector<int> br = rhythm();
+            const std::vector<int> br = leadRhythm(r, role, family);
             Allowed al2;
             for (int s : br) al2.push_back(constraintAt(w, s + 64));
             const std::vector<int> a = drawPitches(model, CorpusRoleId::Lead, src, al2, br, 2, rels[rels.size() - 2], rels.back(), temperature, r);
             for (size_t i = 0; i < a.size(); ++i) { steps.push_back(br[i] + 64); rels.push_back(a[i]); }
         }
+        const size_t a2Start = steps.size();
         // A'' (bars 6-7): the motif, its last notes redrawn, ending on a chord tone -- and since
         // 16.09.2026 one systematic transformation on top of that (Melody.h, MotifOperator). The
         // operator is drawn per phrase from the phrase's own point in the lead's random stream, so it
@@ -558,15 +1059,19 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
                 for (int& s : rh) s = (s + 1) % 32;
                 std::sort(rh.begin(), rh.end());
             }
-            const size_t n = rh.size();
-            const size_t free = std::max<size_t>(2, (n * 2) / 5);
+            const size_t nn = rh.size();
+            const size_t free = std::max<size_t>(2, (nn * 2) / 5);
             Allowed keep, cons;
-            for (size_t i = 0; i < n; ++i) {
+            for (size_t i = 0; i < nn; ++i) {
                 const int s = rh[i] + 96;
                 const double t = tensionAt(CorpusRoleId::Lead, s, 2);
-                cons.push_back(i + 1 == n ? chordSet(scale, chordAtStep(m, w, s), rootOffset, lo, hi, t)
-                                          : constraintAt(w, s));
-                if (i + free >= n || i >= motif.size() || !fits(w, s, motif[i])) keep.push_back(cons.back());
+                if (i + 1 == nn) {
+                    const std::vector<uint8_t> end = chordSet(scale, chordAtStep(m, w, s), rootOffset, lo, hi, t, true);
+                    cons.push_back(emptySet(end) ? constraintAt(w, s) : end);
+                } else {
+                    cons.push_back(constraintAt(w, s));
+                }
+                if (i + free >= nn || i >= motif.size() || !fits(w, s, motif[i])) keep.push_back(cons.back());
                 else keep.push_back(single(motif[i]));
             }
             std::vector<int> a = drawPitches(model, CorpusRoleId::Lead, src, keep, rh, 2, rels[rels.size() - 2], rels.back(), temperature, r);
@@ -580,10 +1085,10 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
             if (op == static_cast<int>(MotifOperator::OctaveJump)) {
                 // Single offbeat sixteenths thrown an octave up: the Goa lead idiom. An octave keeps
                 // the pitch class, so a jumped note is still in the mode and still a chord tone where
-                // it was one; the ceiling keeps the masking rule against the arp workable.
+                // it was one; the ceiling is the lead's register (A5, rule 17).
                 int jumps = 0;
                 for (size_t i = 0; i < a.size(); ++i) {
-                    if (rh[i] % 2 == 0 || a[i] + 12 > kCorpusRelMax || m.root[1] + a[i] + 12 > 96) continue;
+                    if (rh[i] % 2 == 0 || a[i] + 12 > hi) continue;
                     if (r.uniform() < 0.5f) { a[i] += 12; ++jumps; }
                 }
                 m.leadJumps[w] = jumps;
@@ -591,26 +1096,138 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
             }
             for (size_t i = 0; i < a.size(); ++i) { steps.push_back(rh[i] + 96); rels.push_back(a[i]); }
         }
-        for (size_t i = 0; i < steps.size(); ++i) {
-            const int next = i + 1 < steps.size() ? steps[i + 1] : 128;
-            MelodyNote n;
-            n.step = static_cast<int16_t>(steps[i]);
-            n.len = static_cast<int16_t>(drawLength(r, role, steps[i], next - steps[i]));
-            n.rel = static_cast<int8_t>(rels[i]);
-            n.velocity = steps[i] % 8 == 0 ? 104 : 92;
-            ph.push_back(n);
+        const size_t n = steps.size();
+        std::vector<int> lens(n);
+        for (size_t i = 0; i < n; ++i) lens[i] = (i + 1 < n ? steps[i + 1] : 128) - steps[i];
+        // Where the motif's notes are in this phrase: A, A' and (unless it was shifted) A''.
+        std::vector<size_t> repeats = { 0, motifN };
+        if (m.leadOperator[w] != static_cast<int>(MotifOperator::PhaseShift) && n - a2Start == motifN) repeats.push_back(a2Start);
+        std::vector<uint8_t> fixed(n, 0);
+        // Rule 18: the fifth rests on the motif's longest note (the latest of the longest), in every
+        // repetition whose chord takes it.
+        {
+            size_t best = motifN;
+            int bestLen = 1;
+            for (size_t k = 0; k < motifN; ++k) if (lens[k] >= bestLen && lens[k] >= 2) { bestLen = lens[k]; best = k; }
+            if (best < motifN) {
+                int fifth = 1 << 20;
+                for (int rel = lo; rel <= hi; ++rel)
+                    if (pcOf(rel) == 7 && std::fabs(rel - centre) < std::fabs(fifth - centre)) fifth = rel;
+                for (size_t start : repeats) {
+                    const size_t i = start + best;
+                    if (i >= n || lens[i] < 2 || fifth == (1 << 20) || !fits(w, steps[i], fifth)) continue;
+                    rels[i] = fifth;
+                    fixed[i] = 1;
+                }
+                // Where no chord of the phrase took it, the longest held note that can.
+                bool any = false;
+                for (size_t i = 0; i < n; ++i) any = any || (fixed[i] && lens[i] >= 2);
+                for (size_t i = 0; !any && i < n; ++i) {
+                    if (lens[i] < 2 || fifth == (1 << 20) || !fits(w, steps[i], fifth)) continue;
+                    rels[i] = fifth;
+                    fixed[i] = 1;
+                    any = true;
+                }
+            }
         }
+        // Rule 1: the colour slots, chosen on the motif and on B, the same motif slots in every
+        // repetition, each followed by the tonic.
+        {
+            const double target = colourTarget(CorpusRoleId::Lead, colour);
+            auto placeAll = [&](size_t first, size_t count, const std::vector<size_t>& starts) {
+                std::vector<int> st, ln;
+                std::vector<uint8_t> taken;
+                for (size_t k = 0; k < count; ++k) {
+                    st.push_back(steps[first + k] - steps[first] + (steps[first] % 32));
+                    ln.push_back(lens[first + k]);
+                    taken.push_back(fixed[first + k]);
+                }
+                const std::vector<int> slots = colourSlots(st, ln, taken, false, 32, target, cr, [](int) { return true; });
+                for (int k : slots) {
+                    int c = 0, t = 0;
+                    if (!placeColour(scale, rootOffset, lo, hi, hi, rels[first + static_cast<size_t>(k)], cr, c, t)) continue;
+                    for (size_t start : starts) {
+                        const size_t i = start + static_cast<size_t>(k);
+                        if (i + 1 >= n || fixed[i] || fixed[i + 1] || steps[i] % 2 == 0 || steps[i + 1] != steps[i] + 1) continue;
+                        if (!fits(w, steps[i + 1], t)) continue;
+                        rels[i] = c;
+                        rels[i + 1] = t;
+                        fixed[i] = fixed[i + 1] = 1;
+                    }
+                }
+            };
+            placeAll(0, motifN, repeats);
+            placeAll(bStart, a2Start - bStart, { bStart });
+        }
+        // The last pass: no pitch three times in a row, anywhere in the phrase.
+        {
+            Allowed all;
+            for (size_t i = 0; i < n; ++i) all.push_back(constraintAt(w, steps[i]));
+            enforceLine(model, CorpusRoleId::Lead, src, all, steps, 2, fixed, rules, 0, 0, temperature, r, rels);
+        }
+        for (size_t i = 0; i < n; ++i) {
+            MelodyNote note;
+            note.step = static_cast<int16_t>(steps[i]);
+            note.len = static_cast<int16_t>(lens[i]);
+            note.rel = static_cast<int8_t>(rels[i]);
+            note.velocity = steps[i] % 8 == 0 ? 104 : 92;
+            ph.push_back(note);
+        }
+    }
+    // Across the phrase boundaries: the lead plays phrase 0, 1, 0, 1, ..., so the end of each runs on
+    // into the start of the other. Where that makes one pitch sound three times in a row, the last
+    // note of the phrase moves to the nearest other tone its position allows (it is not a colour
+    // tone's resolution: those stay).
+    for (int w = 0; w < 2; ++w) {
+        std::vector<MelodyNote>& a = m.lead[w];
+        const std::vector<MelodyNote>& b = m.lead[1 - w];
+        const size_t n = a.size();
+        if (n < 2 || b.size() < 2) continue;
+        const int x1 = a[n - 2].rel, x2 = a[n - 1].rel, y1 = b[0].rel, y2 = b[1].rel;
+        if (!((x1 == x2 && x2 == y1) || (x2 == y1 && y1 == y2))) continue;
+        if (isColourTone(scale, pcOf(x1))) continue;
+        // A'' ends on a chord tone; the replacement is one as well wherever the chord offers another.
+        std::vector<uint8_t> set = chordSet(scale, chordAtStep(m, w, a[n - 1].step), rootOffset, lo, hi, 0.0, true);
+        if (emptySet(set)) set = constraintAt(w, a[n - 1].step);
+        int best = x2, bestD = 1 << 20;
+        for (int s = 0; s < kCorpusAlphabet; ++s) {
+            const int rel = PitchModel::rel(s);
+            if (!set[static_cast<size_t>(s)] || rel == x2 || rel == x1) continue;
+            if (std::abs(rel - x2) < bestD) { bestD = std::abs(rel - x2); best = rel; }
+        }
+        a[n - 1].rel = static_cast<int8_t>(best);
     }
 }
 
-void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, DrawSource src)
+/**
+ * @brief The arp: continuous sixteenths split into a low anchor stream and a high stream (rules 11-14).
+ *
+ * Every sixteenth sounds (the corpus's arps play 16 of 16). Which of them belong to the high stream
+ * is what the style decides: up, down and up-down alternate low and high on every other sixteenth;
+ * a Euclidean arp puts its E(k,16) pulses up and keeps the rest on the anchor, so E(5,16) is five high
+ * notes in a continuous line, not five notes and eleven holes; the polymeter's three-sixteenth cell
+ * is one high note and two anchors, and the high note precesses against the bar; the corpus style
+ * takes a Euclidean mask of five to eight pulses and lets the corpus arp model choose the high notes.
+ * Bregman (*Auditory Scene Analysis*, MIT Press 1990) is why the octave split works: a fast
+ * alternation between registers an octave apart is heard as two streams, a pedal and a figure.
+ *
+ * The low stream is the chord root between G3 and F#4 (the tonic where the chord root is itself a
+ * colour tone -- the bII of the Phrygian pendulum then sounds over a tonic pedal rather than putting
+ * the b2 on every other sixteenth); the high stream is sus2, sus4 or add9 material an octave up
+ * (arpHighTones), never above G5. A colour tone appears only as a glint: one weak sixteenth, over the
+ * tonic chord, straight back to the anchor. A' moves the last beat's high notes one tone up, A''
+ * also takes the bar's last high note to the top; the second set reverses the high stream.
+ */
+void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour, DrawSource src)
 {
     src.mode = std::clamp(scale, 0, kNumScales - 1);
     Rng r;
     r.seed(seed ^ kSaltArp);
-    const CorpusRole& role = kCorpusRoles[static_cast<int>(CorpusRoleId::Arp)];
+    Rng cr;
+    cr.seed(seed ^ kSaltColour ^ 3u);
     const PitchModel& model = corpusPitchModel(CorpusRoleId::Arp);
-    const int rootOffset = ((m.root[2] - key) % 12 + 12) % 12;
+    const int root = m.root[2];
+    const int rootOffset = ((root - key) % 12 + 12) % 12;
     // 16.09.2026: two more step families. Euclidean selection (Toussaint, "The Euclidean algorithm
     // generates traditional musical rhythms", BRIDGES 2005) reuses the percussion's own generator,
     // and the polymeter is a three-sixteenth cell that precesses against the 4/4 bar.
@@ -618,20 +1235,15 @@ void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatur
     m.arpStyle = drawIndex(r, kArpStyleWeights, kNumArpStyles);
     m.arpPolymeter = m.arpStyle == static_cast<int>(ArpStyle::Polymeter);
     m.arpOctaveJump = r.uniform() < 0.3f;
-    const int span = r.uniform() < 0.6f ? 12 : 19;
-    std::vector<int> on;
-    if (m.arpStyle == static_cast<int>(ArpStyle::Euclid)) {
-        // E(5,16) and E(7,16) are the two the plan names; their neighbours E(4,16), E(6,16) and
-        // E(8,16) are the rest of the family and carry a third of the weight between them.
-        static const double kPulseWeights[5] = { 0.10, 0.30, 0.15, 0.30, 0.15 };
-        m.arpPulses = 4 + drawIndex(r, kPulseWeights, 5);
-        // The rotation at a moderate syncopation, exactly as a Euclidean percussion lane chooses
-        // its own (Rhythm.cpp): Sioros, Miron, Davies, Gouyon and Madison ("Syncopation creates the
-        // sensation of groove in synthesized music examples", Frontiers in Psychology 2014) found
-        // groove rising with moderate syncopation, so neither extreme is taken. Ties go to the
-        // lowest rotation, so the choice is a function of the pulses alone and cannot drift.
+    m.arpTones = r.below(3);
+    // The rotation at a moderate syncopation, exactly as a Euclidean percussion lane chooses its own
+    // (Rhythm.cpp): Sioros, Miron, Davies, Gouyon and Madison ("Syncopation creates the sensation of
+    // groove in synthesized music examples", Frontiers in Psychology 2014) found groove rising with
+    // moderate syncopation, so neither extreme is taken. Ties go to the lowest rotation, so the choice
+    // is a function of the pulses alone and cannot drift.
+    auto euclidMask = [&](int pulses, int& rotation) {
         auto syncOf = [&](int rot) {
-            const std::vector<bool> e = euclid(m.arpPulses, kStepsPerBar, rot);
+            const std::vector<bool> e = euclid(pulses, kStepsPerBar, rot);
             bool st[kStepsPerBar];
             for (int i = 0; i < kStepsPerBar; ++i) st[i] = e[static_cast<size_t>(i)];
             return lhlSyncopation(st);
@@ -644,55 +1256,123 @@ void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatur
             const int d = std::abs(syncOf(rot) - target);
             if (d < bestD) { bestD = d; best = rot; }
         }
-        m.arpRotation = best;
-        const std::vector<bool> e = euclid(m.arpPulses, kStepsPerBar, m.arpRotation);
-        for (int s = 0; s < kStepsPerBar; ++s) if (e[static_cast<size_t>(s)]) on.push_back(s);
-        if (on.empty()) on.push_back(0);
+        rotation = best;
+        const std::vector<bool> e = euclid(pulses, kStepsPerBar, best);
+        uint16_t mask = 0;
+        for (int s = 0; s < kStepsPerBar; ++s) if (e[static_cast<size_t>(s)]) mask = static_cast<uint16_t>(mask | (1u << s));
+        return mask;
+    };
+    uint16_t high = 0xAAAA;   // up, down, up-down: every other sixteenth up
+    if (m.arpStyle == static_cast<int>(ArpStyle::Euclid)) {
+        // E(5,16) and E(7,16) are the two the plan names; their neighbours E(4,16), E(6,16) and
+        // E(8,16) are the rest of the family and carry a third of the weight between them.
+        static const double kPulseWeights[5] = { 0.10, 0.30, 0.15, 0.30, 0.15 };
+        m.arpPulses = 4 + drawIndex(r, kPulseWeights, 5);
+        high = euclidMask(m.arpPulses, m.arpRotation);
+    } else if (m.arpStyle == static_cast<int>(ArpStyle::Corpus)) {
+        static const double kPulseWeights[4] = { 0.25, 0.20, 0.30, 0.25 };
+        const int pulses = 5 + drawIndex(r, kPulseWeights, 4);
+        int rot = 0;
+        high = pulses == 8 ? static_cast<uint16_t>(0xAAAA) : euclidMask(pulses, rot);
     } else if (m.arpPolymeter) {
-        // The cell is three sixteenths long; composeMelodyBar reads it at the absolute sixteenth of
-        // the track, so it starts one step later in every bar and comes home every three bars.
-        on = { 0, 1, 2 };
-    } else {
-        for (int tries = 0; tries < 12; ++tries) {
-            on = drawOnsets(r, role, 16);
-            if (on.size() >= 10) break;
-        }
-        if (on.size() < 10) { on.clear(); for (int s = 0; s < 16; ++s) on.push_back(s); }
+        high = 0;   // the three-sixteenth cell carries its own: one high note, two anchors
     }
-    const bool drawn = m.arpStyle == static_cast<int>(ArpStyle::Corpus)
-                    || m.arpStyle == static_cast<int>(ArpStyle::Euclid) || m.arpPolymeter;
+    m.arpHigh = high;
+    const int lo = kArpLowest - root, hi = kArpHighest - root;
+    const double target = colourTarget(CorpusRoleId::Arp, colour);
     for (int c = 0; c < 4; ++c) {
-        const std::vector<uint8_t> set = chordSet(scale, m.chordDegree[c], rootOffset, 0, span);
-        std::vector<int> tones;
-        for (int s = 0; s < kCorpusAlphabet; ++s) if (set[static_cast<size_t>(s)]) tones.push_back(PitchModel::rel(s));
-        if (tones.empty()) tones.push_back(0);
-        std::vector<int> rels;
-        if (drawn) {
-            // The arp's cell is one bar, so only the beat half of the measured tension curve applies.
-            Allowed al;
-            for (int s : on) al.push_back(chordSet(scale, m.chordDegree[c], rootOffset, 0, span,
-                                                   tensionAt(CorpusRoleId::Arp, s, 1)));
-            rels = drawPitches(model, CorpusRoleId::Arp, src, al, on, 1, tones[0], tones[0], temperature, r);
-        } else {
-            const int t = static_cast<int>(tones.size());
-            for (size_t i = 0; i < on.size(); ++i) {
-                const int k = static_cast<int>(i);
-                int idx = 0;
-                if (m.arpStyle == 1) idx = k % t;
-                else if (m.arpStyle == 2) idx = t - 1 - k % t;
-                else { const int period = std::max(1, 2 * t - 2); const int ph = k % period; idx = ph < t ? ph : period - ph; }
-                rels.push_back(tones[static_cast<size_t>(idx)]);
+        int anchor = 0;
+        const std::vector<int> tones = arpHighTones(scale, m.chordDegree[c], key, m.arpTones, anchor);
+        const int t = static_cast<int>(tones.size());
+        const int aRel = anchor - root;
+        const bool tonicChord = ((anchor - key) % 12 + 12) % 12 == 0;
+        const int cellSteps = m.arpPolymeter ? 3 : kStepsPerBar;
+        std::vector<int> steps;
+        for (int s = 0; s < cellSteps; ++s) steps.push_back(s);
+        auto isHigh = [&](int s) { return m.arpPolymeter ? s == 0 : ((high >> s) & 1u) != 0; };
+        // The glints: weak sixteenths straight before a low step, over the tonic chord only.
+        std::vector<int> glintAt;
+        int glintRel = 0;
+        if (tonicChord && !m.arpPolymeter) {
+            int res = 0;
+            if (placeColour(scale, rootOffset, lo, hi, hi, aRel, cr, glintRel, res) && res == aRel) {
+                const std::vector<int> ones(static_cast<size_t>(cellSteps), 1);
+                const std::vector<uint8_t> taken(static_cast<size_t>(cellSteps), 0);
+                glintAt = colourSlots(steps, ones, taken, true, cellSteps, target, cr, [&](int i) { return !isHigh(i); });
             }
         }
-        std::vector<MelodyNote>& cell = m.arp[c];
-        cell.clear();
-        for (size_t i = 0; i < on.size(); ++i) {
-            MelodyNote n;
-            n.step = static_cast<int16_t>(on[i]);
-            n.len = 1;
-            n.rel = static_cast<int8_t>(rels[i]);
-            n.velocity = on[i] % 4 == 0 ? 104 : 84;
-            cell.push_back(n);
+        for (int set = 0; set < kMaterialSets; ++set) {
+            // The high stream's order: up, down or up-down through the tones (the second set reverses it).
+            const bool reverse = set == 1;
+            auto seqAt = [&](int k) {
+                int idx;
+                if (m.arpStyle == static_cast<int>(ArpStyle::UpDown) || m.arpPolymeter) {
+                    const int period = std::max(1, 2 * t - 2);
+                    const int ph = (k + (reverse ? t - 1 : 0)) % period;
+                    idx = ph < t ? ph : period - ph;
+                } else {
+                    const bool down = (m.arpStyle == static_cast<int>(ArpStyle::Down)) != reverse;
+                    idx = down ? t - 1 - k % t : k % t;
+                }
+                return tones[static_cast<size_t>(std::clamp(idx, 0, t - 1))];
+            };
+            std::vector<int> pitch(static_cast<size_t>(cellSteps));
+            if (m.arpStyle == static_cast<int>(ArpStyle::Corpus)) {
+                // The corpus arp model chooses the high notes; the anchor and the glints are fixed.
+                Allowed al;
+                for (int s = 0; s < cellSteps; ++s) {
+                    if (std::find(glintAt.begin(), glintAt.end(), s) != glintAt.end()) al.push_back(single(glintRel));
+                    else if (!isHigh(s)) al.push_back(single(aRel));
+                    else al.push_back(weightedSet(rootOffset, lo, hi, [&](int rel) {
+                        return std::find(tones.begin(), tones.end(), root + rel) != tones.end() ? 1.0 : 0.0;
+                    }, 0.0));
+                }
+                const std::vector<int> rels = drawPitches(model, CorpusRoleId::Arp, src, al, steps, 1, aRel, aRel, temperature, r);
+                for (int s = 0; s < cellSteps; ++s) pitch[static_cast<size_t>(s)] = root + rels[static_cast<size_t>(s)];
+                if (reverse) {
+                    // The second set: the same high notes in the opposite order (the glints stay put).
+                    auto moves = [&](int s) { return isHigh(s) && std::find(glintAt.begin(), glintAt.end(), s) == glintAt.end(); };
+                    std::vector<int> hs;
+                    for (int s = 0; s < cellSteps; ++s) if (moves(s)) hs.push_back(pitch[static_cast<size_t>(s)]);
+                    std::reverse(hs.begin(), hs.end());
+                    size_t k = 0;
+                    for (int s = 0; s < cellSteps; ++s) if (moves(s)) pitch[static_cast<size_t>(s)] = hs[k++];
+                }
+            } else {
+                int k = 0;
+                for (int s = 0; s < cellSteps; ++s) pitch[static_cast<size_t>(s)] = isHigh(s) ? seqAt(k++) : anchor;
+                for (int s : glintAt) pitch[static_cast<size_t>(s)] = root + glintRel;
+            }
+            for (int v = 0; v < kAcidVariants; ++v) {
+                std::vector<int> p = pitch;
+                if (v >= 1) {
+                    // A': the last beat's high notes one tone up (the top wraps to the bottom).
+                    for (int s = std::max(0, cellSteps - 4); s < cellSteps; ++s) {
+                        if (!isHigh(s) || std::find(glintAt.begin(), glintAt.end(), s) != glintAt.end()) continue;
+                        const auto it = std::find(tones.begin(), tones.end(), p[static_cast<size_t>(s)]);
+                        const int idx = it == tones.end() ? 0 : static_cast<int>(it - tones.begin());
+                        p[static_cast<size_t>(s)] = tones[static_cast<size_t>((idx + 1) % t)];
+                    }
+                }
+                if (v == 2) {
+                    // A'': and the bar's last high note to the top (or, already there, to the bottom).
+                    for (int s = cellSteps - 1; s >= 0; --s) {
+                        if (!isHigh(s) || std::find(glintAt.begin(), glintAt.end(), s) != glintAt.end()) continue;
+                        p[static_cast<size_t>(s)] = p[static_cast<size_t>(s)] == tones.back() ? tones.front() : tones.back();
+                        break;
+                    }
+                }
+                std::vector<MelodyNote>& cell = m.arp[arpCell(set, v, c)];
+                cell.clear();
+                for (int s = 0; s < cellSteps; ++s) {
+                    MelodyNote n;
+                    n.step = static_cast<int16_t>(s);
+                    n.len = 1;
+                    n.rel = static_cast<int8_t>(p[static_cast<size_t>(s)] - root);
+                    n.velocity = s % 4 == 0 ? 104 : (isHigh(s) ? 92 : 80);
+                    cell.push_back(n);
+                }
+            }
         }
     }
 }
@@ -714,13 +1394,10 @@ void pitchRange(const std::vector<MelodyNote>& notes, int root, int& lo, int& hi
 /** @brief The pad's gate pattern and the pitch ranges the masking rule works on. */
 void makeRangesAndPad(MelodyPlan& m, uint64_t seed)
 {
-    // Octave-jumped notes (MotifOperator::OctaveJump) are left out of the lead's range on purpose.
-    // The range exists for one thing: the masking rule that keeps the arp out of the lead's register
-    // (Form.cpp). A single displaced sixteenth is an excursion, not a register, and letting it drive
-    // the rule pushed the arp a whole octave higher and past the ceiling -- measured, the arp was
-    // silenced in 53 % of drops with the jumps counted and in 26 % without. Every drawn lead note
-    // sits at or under kLeadRelHi, so anything above it is a jump and nothing else.
-    for (const auto& ph : m.lead) pitchRange(ph, m.root[1], m.leadLo, m.leadHi, kLeadRelHi);
+    // The ranges exist for one thing: the masking rule that keeps the arp out of the lead's register
+    // (Form.cpp). Until 18.09.2026 the lead's octave jumps were left out of them; since the lead's
+    // register rule (A5 at most, jumps included) every lead note is part of its register.
+    for (const auto& ph : m.lead) pitchRange(ph, m.root[1], m.leadLo, m.leadHi);
     for (const auto& cell : m.arp) pitchRange(cell, m.root[2], m.arpLo, m.arpHi);
     // Every borrowed mode counts towards the ranges as well. The masking rule between lead and arp
     // is decided once per section from these numbers (Form.cpp), and a section may be playing a
@@ -728,10 +1405,11 @@ void makeRangesAndPad(MelodyPlan& m, uint64_t seed)
     // note slip past it.
     for (const ModeMaterial& mm : m.mode) {
         if (!mm.built) continue;
-        for (const auto& ph : mm.lead) pitchRange(ph, m.root[1], m.leadLo, m.leadHi, kLeadRelHi);
+        for (const auto& ph : mm.lead) pitchRange(ph, m.root[1], m.leadLo, m.leadHi);
         for (const auto& cell : mm.arp) pitchRange(cell, m.root[2], m.arpLo, m.arpHi);
     }
-    if (m.arpOctaveJump) m.arpHi += 12;
+    // No `arpHi += 12` for the octave jump any more: composeMelodyBar plays a shift only where the whole
+    // cell stays inside G3..G5 (rule 14), and the cells already span most of that register.
     if (m.leadLo > m.leadHi) { m.leadLo = m.root[1]; m.leadHi = m.root[1]; }
     if (m.arpLo > m.arpHi) { m.arpLo = m.root[2]; m.arpHi = m.root[2]; }
     Rng pr;
@@ -849,9 +1527,9 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     // (docs/MODEL_FORMAT.md section 3, the warning). The slot exists for a labelled corpus later.
     src.style = 0;
     m.scale = std::clamp(scale, 0, kNumScales - 1);
-    makeAcid(m, key, scale, seed, temperature, src);
+    makeAcid(m, key, scale, seed, temperature, colour, src);
     makeLead(m, key, scale, seed, temperature, colour, src);
-    makeArp(m, key, scale, seed, temperature, src);
+    makeArp(m, key, scale, seed, temperature, colour, src);
     for (int c = 0; c < 4; ++c) m.padVoicing[c] = voiceChord(scale, m.chordDegree[c], key, c > 0 ? &m.padVoicing[c - 1] : nullptr);
     // Modal interchange (Form.h): the material of every mode a section of the form borrows. The
     // makers are run again with the *same* seed and another mode, so the rhythm, the accents and the
@@ -862,14 +1540,16 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     for (int sc = 0; sc < kNumScales; ++sc) {
         if (sc == m.scale || (scaleMask & (1u << sc)) == 0) continue;
         MelodyPlan tmp = m;
-        makeAcid(tmp, key, sc, seed, temperature, src);
+        makeAcid(tmp, key, sc, seed, temperature, colour, src);
         makeLead(tmp, key, sc, seed, temperature, colour, src);
-        makeArp(tmp, key, sc, seed, temperature, src);
+        makeArp(tmp, key, sc, seed, temperature, colour, src);
         for (int c = 0; c < 4; ++c)
             tmp.padVoicing[c] = voiceChord(sc, tmp.chordDegree[c], key, c > 0 ? &tmp.padVoicing[c - 1] : nullptr);
         ModeMaterial& mm = m.mode[sc];
-        for (int i = 0; i < 2; ++i) { mm.acid[i] = tmp.acid[i]; mm.lead[i] = tmp.lead[i]; }
-        for (int c = 0; c < 4; ++c) { mm.arp[c] = tmp.arp[c]; mm.padVoicing[c] = tmp.padVoicing[c]; }
+        for (int i = 0; i < kAcidCells; ++i) mm.acid[i] = tmp.acid[i];
+        for (int i = 0; i < 2; ++i) mm.lead[i] = tmp.lead[i];
+        for (int i = 0; i < kArpCells; ++i) mm.arp[i] = tmp.arp[i];
+        for (int c = 0; c < 4; ++c) mm.padVoicing[c] = tmp.padVoicing[c];
         mm.built = true;
     }
     makeRangesAndPad(m, seed);
@@ -913,7 +1593,7 @@ static const ModeMaterial* materialOf(const MelodyPlan& m, int scale)
 }
 
 void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int barInTrack, int scale,
-                      const BarPlan& bp, std::vector<NoteEvent>& out)
+                      const BarPlan& bp, std::vector<NoteEvent>& out, const MelodyContext& ctx)
 {
     (void)scale;
     const ModeMaterial* mat = materialOf(m, bp.scale);
@@ -921,6 +1601,7 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
     const std::vector<MelodyNote>* lead = mat != nullptr ? mat->lead : m.lead;
     const std::vector<MelodyNote>* arp = mat != nullptr ? mat->arp : m.arp;
     const std::vector<int>* voicing = mat != nullptr ? mat->padVoicing : m.padVoicing;
+    const int set = std::clamp(ctx.material, 0, kMaterialSets - 1);
     const int cb = p.base(Module::Compose);
     const float swing = p.get(cb + compose::Swing);
     const double barBeat = static_cast<double>(bar) * kBeatsPerBar;
@@ -946,12 +1627,12 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
     };
 
     if (parts & 1) {
+        // A A A' A'' over four cell lengths (rule 4): four bars for a one-bar cell, eight for two.
         const int steps = m.acidSteps;
-        const int phraseBars = steps == 16 ? 4 : 8;
-        const int inPhrase = barInTrack % phraseBars;
-        const bool variation = steps == 16 ? inPhrase == 3 : inPhrase >= 6;
-        const int offset = steps == 16 ? 0 : (inPhrase % 2) * 16;
-        for (const MelodyNote& n : acid[variation ? 1 : 0]) {
+        const int cellBars = steps / 16;
+        const int inPhrase = barInTrack % (4 * cellBars);
+        const int offset = (inPhrase % cellBars) * 16;
+        for (const MelodyNote& n : acid[acidCell(set, variantOfBar(inPhrase, cellBars))]) {
             if (n.step < offset || n.step >= offset + 16) continue;
             // A slide overlaps the next note by a little; other steps are short, as a 303's gate.
             MelodyNote note = n;
@@ -966,27 +1647,49 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
     if (parts & 2) {
         const int window = (barInTrack / 8) % 2;
         const int stepBase = (barInTrack % 8) * 16;
+        // The form's octave for the lead only where the whole phrase stays inside B3..A5 (rule 17).
+        int shift = 12 * bp.leadOctave;
+        for (const MelodyNote& n : lead[window]) {
+            const int pitch = m.root[1] + n.rel + shift;
+            if (pitch < kLeadLowest || pitch > kLeadHighest) { shift = 0; break; }
+        }
         for (const MelodyNote& n : lead[window]) {
             if (n.step < stepBase || n.step >= stepBase + 16) continue;
-            emit(Part::Lead, n, n.step - stepBase, m.root[1] + n.rel + 12 * bp.leadOctave, n.len * 0.25 * 0.92);
+            emit(Part::Lead, n, n.step - stepBase, m.root[1] + n.rel + shift, n.len * 0.25 * 0.92);
         }
     }
     if (parts & 4) {
         const int c = chordIndexAt(m, barInTrack);
-        const int jump = (m.arpOctaveJump && (barInTrack / 2) % 2 == 1) ? 12 : 0;
-        const std::vector<MelodyNote>& cell = arp[c];
-        if (m.arpPolymeter && cell.size() == 3) {
+        const std::vector<MelodyNote>& cell = arp[arpCell(set, variantOfBar(barInTrack % 4, 1), c)];
+        // G3..G5 whatever the form's octave and the octave jump ask for (rule 14): a shift is played
+        // only where the whole cell stays inside, and the cells already span most of the register.
+        // Where the form moved the arp up to clear the lead's register (the masking rule, Form.cpp) and
+        // the move does not fit, the arp sits out the bars the lead plays in -- it cannot clear the
+        // lead inside G3..G5.
+        int shift = ((m.arpOctaveJump && (barInTrack / 2) % 2 == 1) ? 12 : 0) + 12 * bp.arpOctave;
+        for (const MelodyNote& n : cell) {
+            const int pitch = m.root[2] + n.rel + shift;
+            if (pitch < kArpLowest || pitch > kArpHighest) { shift = 0; break; }
+        }
+        // Silent only in the bars where the lead really plays: the form decides the masking per
+        // section so that an arp never jumps an octave inside one, and an arp that stays in its own
+        // register never jumps at all -- so where the lead rests within such a section the arp plays.
+        const bool silent = shift == 0 && ctx.arpMasked && (parts & 2) != 0;
+        // The gate (rule 15): kArpGate of a sixteenth; the arp's own release (Params.cpp) finishes it.
+        const double gate = 0.25 * kArpGate;
+        if (silent) {
+            // nothing: the masking rule could not be kept inside the register
+        } else if (m.arpPolymeter && cell.size() == 3) {
             // A three-sixteenth cell against a sixteen-sixteenth bar: the cell is read at the
             // *absolute* sixteenth of the track, so it starts one step later in every bar (16 mod 3
-            // = 1) and comes home every three bars. Its accent -- the cell's first note -- precesses
-            // with it, which is the whole audible point of a polymeter.
+            // = 1) and comes home every three bars. Its high note precesses with it, which is the
+            // whole audible point of a polymeter.
             for (int s = 0; s < kStepsPerBar; ++s) {
                 const MelodyNote& n = cell[static_cast<size_t>((barInTrack + s) % 3)];
-                emit(Part::Arp, n, s, m.root[2] + n.rel + jump + 12 * bp.arpOctave, 0.25 * 0.5);
+                emit(Part::Arp, n, s, m.root[2] + n.rel + shift, gate);
             }
         } else {
-            for (const MelodyNote& n : cell)
-                emit(Part::Arp, n, n.step, m.root[2] + n.rel + jump + 12 * bp.arpOctave, 0.25 * 0.5);
+            for (const MelodyNote& n : cell) emit(Part::Arp, n, n.step, m.root[2] + n.rel + shift, gate);
         }
     }
     if ((parts & 8) && barInTrack % m.chordBars == 0) {
@@ -996,37 +1699,109 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         // After a cut the chord starts where the cut ends, shortened by as much.
         const double length = m.chordBars * static_cast<double>(kBeatsPerBar) - 1.0 / 16.0 - cut;
         const int step = static_cast<int>(std::lround(cut * 4.0));
-        for (int pitch : voicing[chordIndexAt(m, barInTrack)])
-            emit(Part::Pad, held, step, pitch, length);
+        const std::vector<int>& v = voicing[chordIndexAt(m, barInTrack)];
+        if (ctx.foundationBars > 0 && v.size() == 4) {
+            // The sub foundation (rule 20): the root an octave under the voicing, only where the form
+            // silences kick and bass. It fades in with the pad's attack. Where the silence ends inside
+            // this chord it stops a bar early, so the pad's release (1.8 s to -43 dB, a bar at 145 BPM)
+            // has taken it away by the time the kick returns -- the band under 140 Hz is the kick's and
+            // the bass's again from their first beat.
+            const std::vector<int> f = foundationVoicing(v);
+            const double silentBeats = ctx.foundationBars * static_cast<double>(kBeatsPerBar);
+            const double subLength = ctx.foundationBars > m.chordBars
+                ? length
+                : std::max(0.5 * kBeatsPerBar, silentBeats - kBeatsPerBar) - 1.0 / 16.0 - cut;
+            // The sub a little louder than the chord (velocity 118 against 90: +1 dB at the pad's
+            // velocity sensitivity of 0.4): it is one voice carrying the whole register under the chord.
+            MelodyNote sub = held;
+            sub.velocity = 118;
+            for (size_t i = 0; i < f.size(); ++i) emit(Part::Pad, i == 0 ? sub : held, step, f[i], i == 0 ? subLength : length);
+        } else {
+            for (int pitch : v) emit(Part::Pad, held, step, pitch, length);
+        }
     }
 }
 
+/**
+ * @brief The pad voicing of a chord: root position, the fifth above the root, two upper voices.
+ *
+ * Rule 19 (18.09.2026): the chord's root is the lowest pad note, between D3 and C#4 -- as low as the
+ * depth rule allows while kick and bass play (D3 is 147 Hz) -- with the fifth directly above it, so
+ * the low register is full rather than a single note. The two upper voices are chosen from every pair
+ * of chord tones above the fifth that completes the triad (the third must be one of them), with no
+ * gap wider than an octave, by the smallest total movement from the voicing before -- the voice
+ * leading of PLAN 5.7, exact rather than greedy. The bass voice itself moves as the roots do: that is
+ * what root position means, and it is what the user asked for ("Auf jeden Fall den Pad-Grundton!").
+ * Before this round the pad started at G3 and took any inversion, and the seed the user heard had
+ * the root at the bottom of 24 of 96 chords in its first track.
+ */
 std::vector<int> voiceChord(int scale, int degree, int key, const std::vector<int>* previous)
 {
     int pcs[3];
     chordTones(scale, degree, pcs);
+    const int rootPc = ((key + pcs[0]) % 12 + 12) % 12;
+    const int root = kPadLowest + ((rootPc - kPadLowest) % 12 + 12) % 12;   // D3 .. C#4
+    const int fifth = root + (scaleDegree(scale, degree + 4) - scaleDegree(scale, degree));
+    const int thirdPc = ((key + pcs[1]) % 12 + 12) % 12;
     std::vector<int> cand;
-    for (int n = kPadLowest; n <= kPadHighest; ++n) {
+    for (int n = fifth + 1; n <= kPadHighest; ++n) {
         const int pc = ((n - key) % 12 + 12) % 12;
         if (pc == pcs[0] || pc == pcs[1] || pc == pcs[2]) cand.push_back(n);
     }
-    static const std::vector<int> kReference = { 58, 63, 67, 72 };
+    // Without a voicing before: the one nearest to a centred reference in the same shape.
+    const std::vector<int> reference = { root, fifth, fifth + 5, fifth + 9 };
     std::vector<int> best;
     int bestCost = 1 << 30;
     const int c = static_cast<int>(cand.size());
     for (int a = 0; a < c; ++a)
-        for (int b = a + 1; b < c; ++b)
-            for (int d = b + 1; d < c; ++d)
-                for (int e = d + 1; e < c; ++e) {
-                    const std::vector<int> v = { cand[static_cast<size_t>(a)], cand[static_cast<size_t>(b)], cand[static_cast<size_t>(d)], cand[static_cast<size_t>(e)] };
-                    bool has[3] = {};
-                    for (int x : v) for (int k = 0; k < 3; ++k) has[k] = has[k] || ((x - key) % 12 + 12) % 12 == pcs[k];
-                    if (!(has[0] && has[1] && has[2])) continue;
-                    if (v[1] - v[0] > 12 || v[2] - v[1] > 12 || v[3] - v[2] > 12) continue;   // no holes wider than an octave
-                    const int cost = voicingMovement(v, previous != nullptr && previous->size() == 4 ? *previous : kReference);
-                    if (cost < bestCost) { bestCost = cost; best = v; }
-                }
+        for (int b = a + 1; b < c; ++b) {
+            const std::vector<int> v = { root, fifth, cand[static_cast<size_t>(a)], cand[static_cast<size_t>(b)] };
+            if (v[2] % 12 != thirdPc && v[3] % 12 != thirdPc) continue;
+            if (v[2] - v[1] > 12 || v[3] - v[2] > 12) continue;   // no holes wider than an octave
+            const int cost = voicingMovement(v, previous != nullptr && previous->size() == 4 ? *previous : reference);
+            if (cost < bestCost) { bestCost = cost; best = v; }
+        }
     return best;
+}
+
+std::vector<int> foundationVoicing(const std::vector<int>& voicing)
+{
+    if (voicing.size() != 4) return voicing;
+    // Keep the upper voice that is the third (the pitch class that is neither root nor fifth); the
+    // other upper voice makes room for the sub, so a chord is never more than four voices.
+    const int r = voicing[0] % 12, f = voicing[1] % 12;
+    const int keep = (voicing[2] % 12 != r && voicing[2] % 12 != f) ? voicing[2] : voicing[3];
+    return { voicing[0] - 12, voicing[0], voicing[1], keep };
+}
+
+std::vector<int> arpHighTones(int scale, int degree, int key, int tones, int& anchor)
+{
+    // A chord whose root is itself a colour tone (the bII of the Phrygian pendulum) is arpeggiated
+    // over the tonic: a b2 on every other sixteenth would be the parked colour tone rule 1 forbids.
+    int d = degree;
+    if (isColourTone(scale, scaleDegree(scale, d) % 12)) d = 0;
+    const int rootPc = ((key + scaleDegree(scale, d)) % 12 + 12) % 12;
+    anchor = kArpLowest + ((rootPc - kArpLowest) % 12 + 12) % 12;   // G3 .. F#4
+    auto iv = [&](int k) { return scaleDegree(scale, d + k) - scaleDegree(scale, d); };
+    // Above the anchor: the octave, the fifth above it and the fifth below it (a perfect one only,
+    // so that every high note is at least a fifth above the pedal), and the sus / add9 colour.
+    std::vector<int> above = { 12, 12 + iv(4) };
+    if (iv(4) >= 7) above.push_back(iv(4));
+    if (tones == 0) above.push_back(12 + iv(1));                                  // sus2
+    else if (tones == 1) above.push_back(12 + iv(3));                             // sus4
+    else { above.push_back(12 + iv(2)); above.push_back(12 + iv(1)); }            // add9: the third and the ninth
+    std::vector<int> out;
+    for (int a : above) {
+        int pitch = anchor + a;
+        while (pitch > kArpHighest && pitch - 12 >= anchor + 7) pitch -= 12;
+        if (pitch > kArpHighest || pitch < anchor + 7) continue;
+        if (isColourTone(scale, ((pitch - key) % 12 + 12) % 12)) continue;
+        out.push_back(pitch);
+    }
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    if (out.empty()) out.push_back(anchor + 12);
+    return out;
 }
 
 int voicingMovement(const std::vector<int>& a, const std::vector<int>& b)

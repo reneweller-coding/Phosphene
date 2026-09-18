@@ -338,7 +338,11 @@ const ParamDesc kPolyParams[poly::Count] = {
     { "env_amount",     "Env Amount",     "oct",   0.0f,     6.0f,   2.0f, Curve::Linear },
     { "filter_decay",   "Filter Decay",   "ms",    5.0f,  3000.0f, 400.0f, Curve::Log },
     { "key_track",      "Key Track",      "",      0.0f,     1.0f,   0.5f, Curve::Linear },
-    { "hp_floor",       "HP Floor",       "Hz",  150.0f,   400.0f, 220.0f, Curve::Log },
+    // The floor reaches down to 40 Hz since 18.09.2026: the pad's sub foundation (Melody.h, rule 20)
+    // needs its high pass under 73 Hz where kick and bass rest, and a range that stopped at 150 Hz
+    // could not be reached by a control event. The defaults of lead and arp (220 Hz) keep the depth
+    // rule where they always did; a text or a state that stores 150..400 Hz reads back unchanged.
+    { "hp_floor",       "HP Floor",       "Hz",   40.0f,   400.0f, 220.0f, Curve::Log },
     { "hp_track",       "HP Track",       "x f0",  0.0f,     1.0f,   1.0f, Curve::Linear },
     { "amp_attack",     "Attack",         "ms",    0.3f,  2000.0f,   4.0f, Curve::Log },
     { "amp_decay",      "Decay",          "ms",    5.0f,  4000.0f, 500.0f, Curve::Log },
@@ -374,13 +378,20 @@ const ParamDesc kPolyParams[poly::Count] = {
 /**
  * @brief Where the two polyphonic instances start: the lead a held supersaw, the arp a plucked one
  *        with less detune (a short sixteenth smears when its seven saws beat against each other).
+ *
+ * 18.09.2026 (Melody.h, genre rules): the arp's release is 12 ms instead of 90 ms. The arp plays
+ * every sixteenth now, and rule 15 asks for a gate of 15 to 35 % of a sixteenth; with the note at a
+ * fifth of a sixteenth and 90 ms of release it sounded for 3.5 sixteenths (self test, section "genre
+ * rules", measured before). The pad's high-pass floor is 140 Hz instead of 200 Hz: its voicings now
+ * start at D3 (147 Hz) in root position (rule 19), and at 200 Hz the root lost 11 dB; with the floor
+ * under it the tracking high pass at f0 treats the root like every other voice.
  */
 const char* const kDefaultPoly =
     "arp.detune=0.3;arp.mix=0.6;arp.cutoff=3500;arp.env_amount=2.8;arp.filter_decay=140;arp.resonance=0.3;"
-    "arp.amp_attack=0.8;arp.amp_decay=220;arp.amp_sustain=0;arp.amp_release=90;arp.delay_send=0.35;"
+    "arp.amp_attack=0.8;arp.amp_decay=220;arp.amp_sustain=0;arp.amp_release=12;arp.delay_send=0.35;"
     "arp.delay_left=2;arp.delay_right=1;arp.level=-5;arp.width=0.6;arp.hall_send=0.15;arp.duck=0.25\n"
     "pad.osc=Wavetable;pad.table=Vocal;pad.detune=0.35;pad.mix=0.7;pad.dynamic_detune=0;pad.cutoff=5000;pad.env_amount=0;pad.resonance=0.1;"
-    "pad.amp_attack=700;pad.amp_decay=2000;pad.amp_sustain=1;pad.amp_release=1800;pad.hp_floor=200;pad.hp_track=1;pad.width=1;"
+    "pad.amp_attack=700;pad.amp_decay=2000;pad.amp_sustain=1;pad.amp_release=1800;pad.hp_floor=140;pad.hp_track=1;pad.width=1;"
     "pad.delay_send=0;pad.hall_send=0.45;pad.duck=0.5;pad.pos_env=0.3;pad.pos_decay=3000;pad.gate_pattern=Sixteenths;pad.level=-16\n";
 
 const char* const kPolyInstanceNames[kPolyInstances] = { "lead", "arp", "pad" };

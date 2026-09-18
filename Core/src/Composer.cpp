@@ -342,6 +342,73 @@ void Composer::makeBassRhythm(const ParamStore& p, TrackPlan& t) const
 }
 
 /** @brief What a track can offer the instrumentation matrix. */
+/** @brief Whether the form silences kick and bass for the whole of a bar (Melody.h, the sub foundation). */
+static bool foundationBar(const BarPlan& bp) { return bp.kickBeats == 0 && bp.bassBeats == 0; }
+
+/** @name The pad's high pass while it lays the sub foundation (rule 20 of 18.09.2026). @{ */
+constexpr float kFoundationHpFloor = 40.0f;   ///< Hz: under the lowest sub root (D2, 73 Hz) by nearly an octave
+constexpr float kFoundationHpTrack = 0.5f;    ///< x f0: an octave under each voice, so a sub keeps its fundamental
+/** @} */
+
+static PartAvailability availabilityOf(const TrackPlan& plan);
+
+/**
+ * @brief What a bar needs to know beyond its BarPlan (Melody.h, MelodyContext), from the whole form.
+ *
+ * - *material*: the cell set -- 0 up to the track's first breakdown, 1 after it, 0 again after a
+ *   second one. New material arrives at a section boundary and nowhere else (rule 4), and the riff
+ *   the track opened with comes back in its third part.
+ * - *foundationBars*: at the start of a pad chord in a bar without kick and bass, how many bars the
+ *   silence lasts from here, read from the form's own bar plans. The pad's sub root ends a bar before
+ *   it does (composeMelodyBar), which is why the length has to be known when the chord starts.
+ * - *arpMasked*: the form moved the arp up by more octaves than the section's energy asks for, that
+ *   is, to clear the lead (Form.cpp: an energy of 0.92 or more lifts the arp one octave by itself).
+ *
+ * Every field is a function of the plan and the bar's place in it, so a bar composed alone is the
+ * bar composed in sequence.
+ */
+static MelodyContext melodyContext(const TrackPlan& plan, const BarPlan& bp, int inTrack)
+{
+    MelodyContext c;
+    const int index = std::clamp(bp.index, 0, std::max(0, plan.form.count - 1));
+    int breaks = 0;
+    for (int s = 0; s < index; ++s) breaks += plan.form.section[s].type == SectionType::Break ? 1 : 0;
+    c.material = breaks % kMaterialSets;
+    c.arpMasked = bp.arpOctave > (plan.form.section[index].energy >= 0.92f ? 1 : 0);
+    if ((bp.parts & 8) != 0 && plan.melody.present[3] && foundationBar(bp) && inTrack % plan.melody.chordBars == 0) {
+        const PartAvailability a = availabilityOf(plan);
+        int k = 1;
+        while (inTrack + k < plan.bars && k < 64 && foundationBar(planBar(plan.form, a, plan.sectionSeed, inTrack + k))) ++k;
+        c.foundationBars = k;
+    }
+    return c;
+}
+
+/**
+ * @brief The arp in the bars where the lead rests, which the form's masking rule would silence.
+ *
+ * Form.cpp keeps arp and lead apart by moving the arp up in octaves for a whole section and drops it
+ * from the section once that would pass MIDI 100. Since 18.09.2026 the arp stays in G3..G5 and the
+ * lead in B3..A5 (Melody.h, rules 14 and 17): the two registers cannot clear each other, so the form
+ * now drops the arp from every section it shares with the lead -- on the listening seed the whole
+ * arp of track 2, the breakdown's included, where the lead does not even play. The arp never
+ * changes octave inside a section any more, which is what the section-wide decision protected, so
+ * the bar can decide: the bar is planned once more as if the track had no lead, and the arp comes
+ * back where that plan has it and the real bar has no lead. Only the arp bit and its octave are taken
+ * from the second plan; everything else is the form's own bar. The masking itself (no arp note under
+ * a lead note) is untouched, and composeMelodyBar still silences an arp whose octave does not fit.
+ */
+static void restoreArp(const TrackPlan& plan, int inTrack, BarPlan& bp)
+{
+    if (!plan.melody.present[1] || !plan.melody.present[2] || (bp.parts & 4) != 0 || (bp.parts & 2) != 0) return;
+    PartAvailability a = availabilityOf(plan);
+    a.part[1] = false;
+    const BarPlan alone = planBar(plan.form, a, plan.sectionSeed, inTrack);
+    if ((alone.parts & 4) == 0) return;
+    bp.parts = static_cast<uint8_t>(bp.parts | 4);
+    bp.arpOctave = alone.arpOctave;
+}
+
 static PartAvailability availabilityOf(const TrackPlan& plan)
 {
     PartAvailability a;
@@ -601,8 +668,10 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     t.percSeed = mixSeed(trackSeed(index) ^ kSaltPerc, 0);
     t.perc = makePercPlan(p, t.percSeed, index == 0, laneSeeds);
     t.melodySeed = mixSeed(trackSeed(index) ^ kSaltMelody, 0);
-    // The colour of the lead -- how much weight the flat second and the augmented second get -- follows
-    // the style profile and the track's place on the energy arc (Farbood's dissonance).
+    // The colour -- how many notes of acid, lead and arp are the flat second or the augmented second --
+    // follows the style profile and the track's place on the energy arc (Farbood's dissonance). Since
+    // 18.09.2026 it scales one calibrated target share per role (Melody.cpp, kColourShare) and is the
+    // only thing that decides the colour; it no longer weights the sampler's sets.
     const float colour = std::clamp(style.colour * (0.4f + 0.6f * 0.5f * (t.arcIn + t.arcOut)), 0.0f, 1.0f);
     // The form's scale mask says which modes need recoloured material; with interchange off it holds
     // the track's mode alone and makeMelodyPlan does exactly what it did before.
@@ -1185,7 +1254,8 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         const unsigned mask = plan.bassRhythm ? plan.bassMask[secondary ? 1 : 0][inTrack % kBassPhraseBars] : 0u;
 
         // What the form says plays in this bar (Form.h).
-        const BarPlan bp = planBar(plan.form, availabilityOf(plan), plan.sectionSeed, inTrack);
+        BarPlan bp = planBar(plan.form, availabilityOf(plan), plan.sectionSeed, inTrack);
+        restoreArp(plan, inTrack, bp);
 
         if (controls != nullptr) {
             if (inTrack == 0) {
@@ -1195,6 +1265,24 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
                 arcControls(p, plan, inTrack, barBeat, true, *controls);
             }
             if (bp.barInSection == 0) sectionControls(p, plan, bp, barBeat, *controls);
+            // The pad's high pass for the sub foundation (rule 20): opened to kFoundationHpFloor and
+            // an octave under each voice wherever the form silences kick and bass, the knobs
+            // everywhere else. Every bar carries its state, so a bar composed alone carries it too;
+            // a pad voice reads its high pass once, at its note-on (Poly.cpp), so the switch never
+            // moves a filter under a sounding note and cannot click.
+            if (plan.melody.present[3]) {
+                const int pb = p.base(Module::Poly, 2);
+                const bool open = foundationBar(bp);
+                ControlEvent h;
+                h.beat = barBeat;
+                h.kind = ControlEvent::Kind::Offset;
+                h.param = static_cast<int16_t>(pb + poly::HpFloor);
+                h.value = open ? p.toNormalised(pb + poly::HpFloor, kFoundationHpFloor) - p.toNormalised(pb + poly::HpFloor, p.get(pb + poly::HpFloor)) : 0.0f;
+                controls->push_back(h);
+                h.param = static_cast<int16_t>(pb + poly::HpTrack);
+                h.value = open ? p.toNormalised(pb + poly::HpTrack, kFoundationHpTrack) - p.toNormalised(pb + poly::HpTrack, p.get(pb + poly::HpTrack)) : 0.0f;
+                controls->push_back(h);
+            }
             ControlEvent c;
             c.beat = barBeat;
             c.param = static_cast<int16_t>(cb + compose::BassPattern);
@@ -1330,7 +1418,7 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         spec.cutBeats = bp.cutBeats;
         spec.crash = bp.barInSection == 0 && bp.type == SectionType::Drop;
         composePercBar(p, plan.perc, plan.percSeed, bar, inTrack, plan.bpm, plan.key, plan.scale, spec, out);
-        composeMelodyBar(p, plan.melody, bar, inTrack, plan.scale, bp, out);
+        composeMelodyBar(p, plan.melody, bar, inTrack, plan.scale, bp, out, melodyContext(plan, bp, inTrack));
         composeSfxBar(plan.form, static_cast<double>(plan.firstBar) * kBeatsPerBar, inTrack, out);
         transitionBar(p, ti, inTrack, bar, out);
     }
