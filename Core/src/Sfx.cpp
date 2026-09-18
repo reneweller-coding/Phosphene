@@ -13,6 +13,30 @@ const char* const kSfxTypeNames[kNumSfxTypes] = { "Riser", "Downlifter", "Impact
 
 namespace {
 constexpr double kPiD = 3.141592653589793;
+
+/**
+ * @brief Level of each type relative to sfx.level, in dB (18.09.2026, round "mix-foundation").
+ *
+ * The seven types come out of their synthesis at very different levels -- a narrow band pass over
+ * noise has a fraction of the power of a broad one -- and until this round they all shared one gain.
+ * Measured on the listening seed with the master's dynamics off, as the momentary (400 ms) loudness
+ * of the SFX strip at an event's loudest moment against the mix's in the same window: impacts peaked
+ * 14.9 dB under the mix, the riser 9.4 and sweeps 8.9, while a downlifter reached -4.7 -- and with
+ * sfx.level at -12 dB. sfx.level is now -3 dB, and this table takes the types back apart.
+ * The table evens that out towards two targets: the markers of a transition (riser, impact, formant
+ * shot, downlifter) about 4 to 6 dB under the mix at their peak, which is prominent without covering
+ * the drop, and the short ear candy (sweeps, swells, zaps) about 8 to 10 dB under it, heard as a
+ * detail. The measurement and its targets are in docs/PLAN.md (round "mix-foundation").
+ */
+constexpr float kTypeGainDb[kNumSfxTypes] = {
+    -2.0f,    // Riser
+    -8.0f,    // Downlifter
+    +3.0f,    // Impact
+    -7.0f,    // Sweep
+    +1.0f,    // Formant shot
+    -2.0f,    // Reverse swell
+    +2.0f,    // Zap
+};
 /** @brief Band-pass output of an SVF at unity gain in the centre. */
 inline float bandPass(Svf& f, float x)
 {
@@ -86,6 +110,7 @@ void Sfx::trigger(SfxType type, int samples, float velocity, double late)
         for (int i = 0; i < 3; ++i) v.formant[i].setQ(static_cast<float>(kA[i] + vowel_ * (kU[i] - kA[i])), 6.0f, sr);
     }
     v.panPh = 0.25;
+    v.typeGain = dbToGain(kTypeGainDb[static_cast<int>(type)]);
 }
 
 float Sfx::voiceSample(Voice& v, float& pan)
@@ -181,7 +206,7 @@ float Sfx::voiceSample(Voice& v, float& pan)
     if (v.panPh >= 1.0) v.panPh -= 1.0;
     pan = width_ * static_cast<float>(std::sin(2.0 * kPiD * v.panPh));
     ++v.pos;
-    return s * amp * v.velocity;
+    return s * amp * v.velocity * v.typeGain;
 }
 
 void Sfx::process(float* L, float* R, int n)

@@ -95,18 +95,18 @@ public:
      * turn it into a rotation per sample. Nothing else in the kit depends on the tempo. Until this is
      * called the kit assumes @c kDefaultBpm, the default of @c compose.bpm.
      *
-     * **Nobody calls it yet, and that is a scope decision, not an oversight.** The caller would be
-     * @c Engine::updateParams, one line next to the key and scale it already hands the kit
-     * (`perc_.setTempo(tempo_.bpmAt(beat))`), and @c Engine.cpp belonged to another agent in the
-     * round this was built in. The consequence is measured and small: a track wanders at most
-     * +-4 BPM around 145 (@c compose.tempo_range), so a period meant as three sixteenths is off by
-     * at most 2.8 %, which moves nothing the width measurement can see. It matters only for a set
-     * driven far from 145 BPM.
+     * **The caller** is @c Engine::applyParams (since 18.09.2026, round "mix-foundation"): it hands
+     * the kit the tempo the current chunk is timed with, so the period follows the tempo map and a
+     * ramp between tracks, and never changes inside a chunk. Before that the kit ran at kDefaultBpm
+     * whatever the tempo; at +-4 BPM around 145 that was a 2.8 % error, and for a set driven far from
+     * 145 BPM the "three sixteenths" of the swing were not three sixteenths any more.
      * @param bpm beats per minute (4/4, so a bar is four beats)
      */
     void setTempo(double bpm);
     /** @brief The tempo the auto-pan assumes until setTempo() says otherwise. */
     static constexpr double kDefaultBpm = 145.0;
+    /** @brief The tempo the auto-pan currently runs at, in BPM. */
+    double tempo() const { return bpm_; }
     /**
      * @brief Starts a hit.
      * @param lane     0..11
@@ -137,6 +137,8 @@ public:
 
 private:
     void computeCoefs(int lane);
+    /** @brief The auto-pan phasor's step for @p lane from its period and the tempo (all setTempo() changes). */
+    void updatePanRate(int lane);
     void assignPanGroups();
 
     double sr_ = 48000.0;

@@ -208,6 +208,10 @@ void Engine::applyParams()
     kick_.update(kv, keyRoot_);
     bass_.update(bv);
     const double bpmNow = beatsPerSample_ * 60.0 * sr_;
+    // The kit's auto-pan counts its period in bars (perc.pan_bars), so it needs the bar length. The
+    // tempo here is the one this chunk is timed with (read at chunk starts only, above), so the pan
+    // period follows a tempo ramp between tracks without ever changing inside a chunk.
+    perc_.setTempo(bpmNow);
     acid_.update(eff_.data() + p.base(Module::Acid), bpmNow);
     for (int i = 0; i < kPolyInstances; ++i) poly_[i].update(eff_.data() + p.base(Module::Poly, i), bpmNow);
 

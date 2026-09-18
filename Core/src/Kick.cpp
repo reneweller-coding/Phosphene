@@ -13,6 +13,15 @@ namespace {
 constexpr double kPiD = 3.141592653589793;
 constexpr double kLn1000 = 6.907755278982137;
 constexpr double kDcHz = 3.0;                 ///< DC blocker corner
+/**
+ * @brief Gain of the click layer at Click = 1.
+ *
+ * Until 18.09.2026 the click ran through the saturator with the body and its gain was 1.5; at the
+ * onset the body is near its zero crossing, so the click met the saturator's small-signal slope,
+ * drive * driveNorm (2.9 at the old default drive), and came out at about 4.4. Now that it joins
+ * after the saturator it carries that gain itself, so a Click setting means roughly what it did.
+ */
+constexpr float kClickGain = 4.0f;
 
 /** @brief Drive knob to saturator gain. */
 float driveGain(float drive) { return 0.2f + 7.8f * drive; }
@@ -252,7 +261,7 @@ void Kick::trigger(float velocity, double late)
     voice_ = v;
 }
 
-float Kick::voiceSample(Voice& v)
+float Kick::voiceSample(Voice& v, float& click)
 {
     const Shape& s = v.s;
     const double tSamples = v.n + v.late;
@@ -279,30 +288,33 @@ float Kick::voiceSample(Voice& v)
     }
     v.e1 *= v.d1;
     v.e2 *= v.d2;
-    float click = 0.0f;
+    click = 0.0f;
     if (v.click > 1.0e-5f) {
         const float nz = noise_.bipolar() * v.click + (v.n == 0 ? 1.0f : 0.0f);
         float lp, bp, hp;
         clickFilter_.tick(nz, lp, bp, hp);
-        click = bp * clickFilter_.k * clickLevel_ * 1.5f * v.velocity;
+        click = bp * clickFilter_.k * clickLevel_ * kClickGain * v.velocity;
         v.click *= clickDecay_;
     }
     ++v.n;
-    return body + click;
+    return body;
 }
 
 void Kick::process(float* out, int n)
 {
     for (int i = 0; i < n; ++i) {
-        float x = 0.0f;
-        if (voice_.active) x += voiceSample(voice_);
+        float x = 0.0f, click = 0.0f, c = 0.0f;
+        if (voice_.active) { x += voiceSample(voice_, c); click += c; }
         if (fade_.active && fadeGain_ > 0.0f) {
-            x += voiceSample(fade_) * fadeGain_;
+            x += voiceSample(fade_, c) * fadeGain_;
+            click += c * fadeGain_;
             fadeGain_ -= fadeStep_;
             if (fadeGain_ <= 0.0f) { fadeGain_ = 0.0f; fade_.active = false; }
         }
         const float driven = x * drive_;
-        float y = (clip_ == 0 ? tanh_(driven) : hard_(driven)) * driveNorm_;
+        // The click joins after the saturator (Kick.h, "Click"): inside it, it rode on the body's
+        // crest and was flattened with it.
+        float y = (clip_ == 0 ? tanh_(driven) : hard_(driven)) * driveNorm_ + click;
         y = toneFilter_.lp(y);
         out[i] = dc_.process(y) * level_;
     }

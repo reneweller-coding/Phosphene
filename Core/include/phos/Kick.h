@@ -33,7 +33,26 @@
  * kick's output phase be a whole number of cycles away from a target. The kick trims its body time
  * constant tau_2 to the nearest solution: d phi/d tau_2 = (f_s - f_e)(1 - p)(1 - (1 + T/tau_2) e^(-T/tau_2))
  * is positive, so phi(T) is monotonic in tau_2 and a bisection finds the root. At the default sound
- * one cycle costs about 7 ms of tau_2, so the trim stays within +-3.5 ms.
+ * one cycle costs about 7 ms of tau_2, so the trim stays within +-3.5 ms. (Still true for the defaults
+ * of 18.09.2026: 284 Hz of sweep at half punch and tau_2 = 13 ms give 142 cycles per second of tau_2,
+ * 7.1 ms per cycle, inside the bisection's range of 6.5 .. 26 ms.)
+ *
+ * **Click (18.09.2026).** The click layer -- band-passed noise with a few milliseconds of decay --
+ * joins the body *after* the saturator. Inside it, it rode on whatever the body was doing and was
+ * flattened with it; outside it, it is the transient the ear reads as "punch". It does not touch the
+ * phase lock: the lock is solved on the body's phase at the first bass slot, 100 ms after the click
+ * has decayed by more than 100 dB, and the tail limit concerns the same late window.
+ *
+ * **The default sound against the references (18.09.2026).** `Tools/ref_kick.py` measured the kicks
+ * of 24 of the 40 reference recordings where kick and bass play nearly alone, over the window from the
+ * onset to the first bass slot: power under 60 Hz against 60 .. 120 Hz median -4.7 dB, the click band
+ * 2 .. 5 kHz against 40 .. 120 Hz -27.7 dB, crest 7.1 dB. The kick before this round measured -7.0,
+ * -38.7 and 6.0 there (little sub, no click). The defaults now sweep faster onto the fundamental
+ * (Body Decay 22 -> 13 ms) from higher up (Pitch Start 220 -> 330 Hz), drive the body a little less
+ * (0.35 -> 0.30) and carry the click at 0.5 after the saturator: -3.4, -27.9 and 8.2 dB in the self
+ * test (testKickReference). The end pitch stays at 50 Hz, tuned to the key. The references' kicks
+ * read 62 Hz in that window, but they are still falling there, so the number is not an end pitch and
+ * gives no reason to move ours in either direction.
  *
  * **Tail limit.** constrainTail() shortens hold and decay so that at the first bass slot the kick's
  * output is at least Tail Limit below its peak. The saturation lifts a small tail by its small-signal
@@ -134,7 +153,8 @@ private:
         double zRe = 0.0, zIm = 0.0;            ///< resonant phasor
     };
 
-    float voiceSample(Voice& v);
+    /** @brief The body of one voice for one sample; the click layer's sample goes to @p click. */
+    float voiceSample(Voice& v, float& click);
     Shape currentShape() const;
     double phaseWith(double t, double tau2) const;
     double chainPhase(double hz) const;

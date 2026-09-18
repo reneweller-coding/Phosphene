@@ -70,6 +70,7 @@ private:
         long long pos = 0, length = 1;
         double late = 0.0;
         float velocity = 1.0f;
+        float typeGain = 1.0f;   ///< the type's level against sfx.level (Sfx.cpp, kTypeGainDb)
         Rng rng;
         VaOscillator saw1, saw2;
         Svf bp, lp, formant[3], hpL1, hpL2, hpR1, hpR2;

@@ -3955,6 +3955,175 @@ künftige Runde, die ebenfalls weit vorausdatierte Kontroll-Events einführt, da
 eigenen Takt hinausreicht, braucht entweder denselben `safeBeat`-Schutz oder eine explizite Prüfung, dass
 `Conductor::pump` sie nicht vorzeitig ausliefert. Siehe [[phosphene-round-phase8]] (Merge-Fallen).
 
+**18.09.2026, Fundament und Mix: Kick, Percussion, Effekte, Acid-Klang und Acid-Ride**
+
+Anlass: der Nutzer hörte Seed 864566672 und fand ihn „fürchterlich dünn“ — von der Percussion nur Hats
+und Kick, die Kick ohne Sub und Punch, Effekte kaum, die Acid „klingt nicht gut“. Neu gilt: die Regeln
+stehen über dem Korpus, und das Ohr des Nutzers ist die Abnahme. Alle Messungen dieser Runde: Seed
+864566672, Standardparameter, erster Drop von Track 1 (Takt 40–72), Master-Dynamik aus
+(`auto_gain`, `limiter`, `clipper`, `clip` aus, `comp_ratio=1`), K-gewichtete Lautheit. Skripte in
+`PhospheneWork\scratch\mix-foundation` (Messwerkzeug, nicht im Repo); neu im Repo `Tools/ref_kick.py`.
+
+*Kick.* `Tools/ref_kick.py` sucht in den ersten 90 s jeder Referenz eine Strecke von acht und mehr
+Schlägen, in der Kick und Bass fast allein spielen (über 300 Hz mindestens 8 dB unter 30–150 Hz), und
+misst jede Kick einzeln vom Einsatz bis zum ersten Bass-Slot (Viertelschlag), mit flachem Fenster (ein
+Hann-Fenster wöge den Klick mit fast null). 24 der 40 Aufnahmen haben so eine Strecke, alle „Kick +
+Bass“, keine reine Kick. Die Messung widerspricht dem Auftrag an einer Stelle: die Referenz-Kicks sind
+**nicht tiefer** als unsere (62 Hz im Fenster gegen unsere 52 Hz — beide fallen dort noch); die
+Endtonhöhe bleibt deshalb 50 Hz, auf die Tonart gestimmt. Was fehlte, war Sub im Verhältnis und Klick:
+
+| | Sub < 60 gegen 60–120 Hz | Klick 2–5 kHz gegen 40–120 Hz | Crest |
+|---|---|---|---|
+| Referenzen, Median (Quartile) | −4,7 dB (−9 … 0) | −27,7 dB (−31 … −23) | 7,1 dB (6 … 8) |
+| Kick vorher (Werkzeug / Selbsttest) | −7,0 / −7,3 | −38,7 / −36,6 | 6,0 / 6,0 |
+| Kick nachher (Selbsttest) | −3,4 | −27,9 | 8,2 |
+
+Gebaut: der Klick läuft **hinter** dem Sättiger (vorher ritt er auf dem Körper und wurde mit ihm
+plattgedrückt; `kClickGain` 4 statt 1,5 hält die Bedeutung des Reglers), Body Decay 22 → 13 ms,
+Pitch Start 220 → 330 Hz, Drive 0,35 → 0,30, Click 0,2 → 0,5. Phasenkopplung und Ausklanggrenze sind
+unberührt (ein Zyklus kostet weiterhin 7,1 ms τ2; `testKick`, `testPhaseLock`, `testBassRhythm`,
+`testBass` grün). Im Drop-Solo: 60–120 Hz −15,0 → −17,3 dB, unter 60 Hz −22,0 → −19,5, 2–6 kHz
+−50,2 → −40,7; mit dem Werkzeug auf dem Drop-Solo: Sub −7,0 → −2,2, Klick −38,7 → −28,7, Crest
+6,0 → 8,4. **Offen, als Befund:** der Körper der Referenz-Kicks fällt innerhalb des Fensters nicht um
+20 dB (Median 104 ms, das Fensterende — die Messung ist dort abgeschnitten), unserer nach 76 ms. Die
+Referenzen halten ihre Kick also mindestens bis zum ersten Bass-Slot über −20 dB; unsere Ausklanggrenze
+(`kick.tail_limit` −24 dB am Slot) verbietet das, und der Auftrag sagt, sie exakt zu halten. Eine
+Grenze um −15 dB wäre die Frage an die nächste Runde.
+
+*Percussion.* Die Lanes einzeln per `percN.active=0` zu messen, verschiebt die Komposition (die
+Schichtreihenfolge gibt die Ebene einer abgeschalteten Lane an eine andere — Snare und Crash maßen so
+10–16 dB zu laut). Gemessen wird deshalb mit allen Lanes aktiv, die anderen auf −36 dB, und einem
+Boden-Render mit allen zwölf auf −36 dB, der leistungsmäßig abgezogen wird; die Lane als Wellenform ist
+die Differenz zweier deterministischer Renders. „Hörbarkeit“: Median über die Anschläge des
+Lane-Pegels gegen den Rest des Mixes in ihrer eigenen Oktave. Ride, Rim, Zap und Blip spielen in diesem
+Drop nicht.
+
+| Lane | Lautheit vorher → nachher (LKFS, ungated) | gegen den Rest in der eigenen Oktave |
+|---|---|---|
+| Closed Hat | −23,7 → −23,7 | −0,7 → −0,6 dB (4–8 kHz) |
+| Shaker | −24,0 → −24,0 | −1,7 → −1,4 dB |
+| Clap | −26,5 → −23,5 | +3,0 → +5,8 dB (1–2 kHz) |
+| Snare | −29,5 → −27,5 | +10,3 → +9,7 dB |
+| Tom | −33,1 → −27,2 | −0,7 → +2,7 dB (250–500 Hz; 125–250 Hz +5,8) |
+| Conga | −30,2 → −23,2 | −1,3 → +1,8 dB (250–500 Hz) |
+| Open Hat / Crash | −32,0 / −34,3 unverändert | +8,8 / +13,1 dB |
+
+Pegel: Tom +6 dB, Conga +7, Clap +3, Snare +2, Ride +3, Rim/Zap/Blip +4; `mix.arp_level` −2 dB (die
+Arp war mit −16,4 LUFS der lauteste melodische Teil und besetzte 300 Hz–2 kHz). Einen Teil davon hat
+die lautere Acid in derselben Oktave wieder aufgefressen (warum nicht mehr: siehe „Die Grenze“ unten).
+Percussion-Bus gesamt −18,6 → −16,5 LUFS, Arp −16,4 → −18,4, Acid −21,7 → −20,0.
+
+*Effekte.* Vorher 5 Effekte in Track 1 und 7 in den ersten 168 Takten von Track 2; der Riser des ersten
+Drops fehlte ganz (jede Übergangsmarke wurde einzeln mit `sfx_amount` = 0,7 gewürfelt). Jetzt sitzt an
+**jedem** Sektionswechsel eine Marke (ab `sfx_amount` 0,5 sicher, darunter mit 2 × amount): Reverse Swell
+in jeden Build und jeden Break, Downlifter in Break und Outro, Sweep und Impact auf **jeden** Drop,
+Sweep aus dem Intro; Riser, Sweep, Formant-Shot und Impact am Build→Drop wie bisher. Dazu Ohrenschmaus
+am Ende jeder 8- oder 16-Takt-Gruppe (Wahrscheinlichkeit `sfx_amount`): Zap auf Schlag 4, ein Takt
+Filter-Rauschen, ein Takt Reverse Swell, zwei Takte Rauschwelle; Palette und Periode zieht jeder Track
+selbst. Im Build liegt nichts außer seinen eigenen Marken — das PDB-Vakuum bleibt leer (Prüfung).
+Jetzt 33 Effekte in Track 1 und 21 in den 168 Takten von Track 2. `sfx.level` −12 → −3 dB, dazu eine
+Pegeltabelle je Typ (`kTypeGainDb`). Momentan-Lautheit (400 ms) des SFX-Busses gegen den Mix am lautesten
+Punkt des Effekts, vorher → nachher: Riser −9,4 → −2,6 dB, Impact −14,9 → −5,2, Formant-Shot −14,0 →
+−2,6 (im Vakuum), Sweep −8,9 → −6,3, Reverse Swell −7,8 → −8,4, Downlifter −4,7 → −4,0, Zap (neu) −7,5.
+SFX-Bus über den Drop −27,6 → −16,9 LUFS.
+
+*Acid-Klang.* Die Drive-Stufe tat fast nichts: Crest der Linie 25,6 dB bei Drive 0, 22,2 beim Standard
+0,45, 19,4 bei 1, und 3–8 kHz bewegte sich zwischen 0,45 und 1 um 0,7 dB — der Körper einer Linie hinter
+einer resonanten Diodenleiter liegt 20 dB und mehr unter deren Resonanzspitzen, eine Stufe, die erst an
+den Spitzen sättigt, erreicht ihn nie. Neu: bis 30 dB hinein, die Wurzel davon heraus (`kDriveMaxDb`),
+wie ein Verzerrer hinter einer 303. Slide 55 → 70 ms (die 60–80 ms des Regeltexts); Akzent-Kondensator
+(kSweepTau 150 ms), Diodenleiter und Delay unverändert. Drei Kandidaten, gleiche Noten, alle auf −20,0
+LUFS Solo abgeglichen, als Hörauszüge `A_acid_*.wav`:
+1. **clean303** — kaum Verzerrung (0,1), Resonanz 0,8, Akzent 0,8: die runde, quietschende 303.
+2. **driven** (neuer Standard) — Drive 0,85, Cutoff 900 Hz, Env 3,5 Okt., Decay 220 ms, Akzent 0,7,
+   Low Cut 250 Hz, Delay-Feedback 0,5, Pegel −2,3 dB: 303 in den Verzerrer, dicht und bissig.
+3. **liquid** — halb Puls, Resonanz 0,88, Env 5 Okt., Decay 500 ms, Disperser 4 Stufen: gummiartig, Goa.
+Dazu `A_acid_0_before.wav`: die alten Regler (mit neuer Drive-Kurve und neuem Ride), als Vergleich.
+Messbar trennen die drei sich kaum (Leistungsschwerpunkt 525 / 606 / 500 Hz) — der Unterschied ist
+Textur, nicht Spektrum; das Ohr entscheidet.
+
+*Der 32-Takt-Acid-Ride* (`sectionAutomation`, Signatur unverändert). Jede Sektion außer dem Break
+durchläuft Zyklen von 32 Takten, kürzere Sektionen einen Zyklus ihrer Länge — ein 16-Takt-Build endet
+mit dem Tauchgang genau auf dem Drop. Cutoff, Resonanz und Decay sind eigene Stränge; die
+Cutoff-Form ist um die Linie der Sektion zentriert (ihr Mittel −0,175 der halben Auslenkung wird
+abgezogen), damit der Level-Match, der die Regler misst, ehrlich bleibt. Gemessen im Selbsttest an der
+Trajektorie, die die Engine fährt (32-Takt-Drop, Standardregler, Tiefe dieses Seeds):
+
+| Takte | Cutoff (Oktaven zur Linie) | Resonanz | Filter-Decay |
+|---|---|---|---|
+| 1–8 | −1,42 (fast zu) | 0,55 (mittel) | 73 ms (kurz, trocken) |
+| 9–16 | öffnet bis −0,04 | 0,55 | wieder 220 ms (Regler) |
+| 17–24 | öffnet bis +1,18 | steigt auf 0,85 (Squelch) | wird länger |
+| 25–32 | voll offen +2,06 ab Takt 28, im letzten Takt Tauchgang auf −1,45 | 0,85 | 374 ms |
+
+Mittel über den Zyklus +0,004 normiert (Linie der Sektion = 0). Ein 16-Takt-Build: Spitze in Takt 14,9,
+im letzten Takt 0,51 normiert (≈ 3,4 Oktaven) abwärts, Ende genau auf dem Drop. Der Break taucht wie
+bisher. Tauchgang = ein Takt = 1,66 s, das Elffache von kSweepTau; alle anderen Rampen zwei Takte und
+länger. Der Filter-Decay-Strang zieht den Pegel im Mittel etwas herunter (kürzere Hüllkurve im
+Schnitt), bei allen Tracks gleich; der Level-Match vergleicht Tracks untereinander.
+Folge, die man kennen muss: Resonanz und Decay überschreiben für den Rest der Sektion den Rezept-Offset,
+den `trackStartControls` zu Track-Beginn schreibt — ein Strang hält einen Offset, keine Summe.
+
+*`PercKit::setTempo()`* ruft jetzt `Engine::applyParams` mit dem Tempo des laufenden Chunks; nur die
+Schrittweite des Pan-Phasors wird neu berechnet (während einer Tempo-Rampe ändert sie sich an jedem
+Chunk). Prüfung: bei 120 BPM schwingt der Auto-Pan mit 0,3750 s statt 0,3103 s.
+
+*Gesamtmix gegen die Referenzen* (`Tools/metrics.py`, Abstand zum Median in dB, Low-Mid / Mid / Presence /
+Air, Standard-Master):
+
+| | vorher | nachher |
+|---|---|---|
+| Auszug A | +0,09 / −2,05 / −3,27 / −1,65 (2,20 dB rms) | +2,79 / −1,06 / −2,31 / −0,12 (2,14) |
+| Auszug B | +3,95 / +7,41 / +5,08 / +2,36 (5,08) | +5,71 / +8,31 / +6,10 / +3,84 (6,07) |
+| Auszug C | +6,69 / +11,30 / +7,92 / +4,09 (7,72) | +8,27 / +12,41 / +8,53 / +5,19 (8,78) |
+| ganzer Render (424 Takte) | +1,76 / +3,98 / +0,89 / −0,65 (2,49) | +3,96 / +5,05 / +1,99 / +1,02 (3,61) |
+
+Presence und Air sind in A an den Median herangerückt; Low-Mid ist um 2,7 dB gestiegen (Zerlegung mit den ersten Tom-/Conga-Pegeln gemessen). Zerlegt: 1,7 dB
+davon kommen aus der Kick — ihre Energie wanderte aus 60–120 Hz unter 60 Hz, und das Bezugsband der
+Messung (40–140 Hz) verliert dabei —, 0,8 dB aus Tom und Conga, 0,3 aus der Acid. Die Kick lauter zu
+machen hilft nicht: bei −9 LUFS fängt der Clipper ihre Spitzen, und Presence und Air fallen dafür unter
+den Median (Kick +2 dB: A 2,6 / −1,6 / −3,2 / −0,8). B und der ganze Render sind in Mid und Presence
+schon vorher weit über dem Median (Lead und Arp von Track 2, Runde `melody-rules`). Lautheit −9,2 →
+−9,1 LUFS, True Peak −1,0 dBTP. Nichts in dieser Runde filtert unter 140 Hz, wo die Pads im Break ihr
+Fundament bekommen sollen (Runde `melody-rules`).
+
+*Prüfungen, alle zuerst gegen den alten Code rot gesehen:* `testKickReference` (Sub, Klick, Crest gegen
+die Referenzwerte), `testPercTempo`, `testSfxLevel` (Riser und Impact auf der Hörspur höchstens 8 dB
+unter dem Mix; K-Gewichtung mit den tabellierten 48-kHz-Koeffizienten von BS.1770-4), in `testSfx` die
+Marken an jedem Übergang / Ohrenschmaus / nichts im Build, in `testArrangeDynamics` die vier Stufen (j)
+und der 16-Takt-Build (j2). Angepasst: `testSfx` erlaubt den Impact jetzt auf jedem Drop; (m) verlangt
+vom schnellsten Ride-Schritt (dem Tauchgang, ein Takt) das Zehnfache von kSweepTau statt des
+Zwanzigfachen.
+
+*Die Grenze, die die Percussion begrenzt hat.* Tom und Conga waren zuerst auf +8 / +8 dB; damit maß
+`testVariety` die Lautheitsstreuung von vier Tracks (nur Kick, Bass, Percussion) 0,85 LU gegen die
+Schranke 0,8 — die Lautheitssonde des Composers sieht nicht, wie viel eines Tracks Toms und Congas
+spielen. Mit der alten Kick blieben es 0,81, mit den alten Tom-/Conga-Pegeln 0,67: die Percussion ist die
+Ursache, nicht die Kick. Jetzt Tom +6, Conga +7: 0,75 LU. Wer die Percussion lauter will, muss die Sonde
+(`Composer.cpp`, Runde `melody-rules`) die Percussion des Tracks hören lassen.
+
+*Mutationen* (je eine, eingebaut, gemessen, aus der Kopie zurück, Zeitstempel gesetzt; danach ist der
+`git diff` der Kerndateien identisch mit dem vor der Runde):
+
+| Mutation | Wer merkt es |
+|---|---|
+| Klick wieder vor dem Sättiger | `testKickReference`: Klick um −19 dB, über dem oberen Quartil (−23) |
+| `setTempo` nicht gerufen | `testPercTempo`: 145 BPM, Periode 0,3103 s |
+| Ride-Mittel nicht abgezogen | (j): Mittel und Stufenwerte verschoben |
+| Übergangsmarken mit `amount` statt `2 × amount` gewürfelt | `testSfx`: 38 von 50 Übergängen markiert |
+| Ohrenschmaus auch im Build | `testSfx`: 7 Eindringlinge |
+| Pegeltabelle je Typ nicht angewendet | zuerst **niemand** — Riser und Impact blieben im 8-dB-Fenster, weil `sfx.level` +9 dB das meiste trägt. Nachgerüstet: der Downlifter gegen den Drop davor, −11,7 dB, mit der Mutation −4,0 → rot |
+| Squelch-Resonanz 0,95 statt 0,85 | (j): Resonanz außerhalb 80–90 % |
+
+*Dateien.* `Core/include/phos/Kick.h`, `Core/src/Kick.cpp` (Klick hinter dem Sättiger),
+`Core/include/phos/Perc.h`, `Core/src/Perc.cpp` (`tempo()`, `updatePanRate`), `Core/src/Engine.cpp`
+(eine Zeile `setTempo`), `Core/include/phos/Sfx.h`, `Core/src/Sfx.cpp` (Pegel je Typ),
+`Core/include/phos/Form.h`, `Core/src/Form.cpp` (`makeFormSfx`, `sectionAutomation`, `RideShape`),
+`Core/src/Acid.cpp` (Drive-Kurve), `Core/src/Params.cpp` (nur Standardwerte von `kick.*`, `perc*`,
+`acid.*`, `sfx.*`, `mix.arp_level`; kein Parameter angehängt oder verschoben), `Tests/selftest.cpp`,
+neu `Tools/ref_kick.py`. Außerhalb der Liste dieser Runde: nichts. `Composer.cpp` und die Signatur von
+`sectionAutomation` sind unberührt.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
