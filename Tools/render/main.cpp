@@ -306,7 +306,8 @@ int main(int argc, char** argv)
                 std::printf(" %s", kPercRoleNames[params.getInt(params.base(Module::Perc, p.perc.layerOrder[i]) + perc::Role)]);
             const MelodyPlan& m = p.melody;
             static const char* const kRoman[7] = { "i", "ii", "iii", "iv", "v", "vi", "vii" };
-            static const char* const kArpStyles[4] = { "corpus", "up", "down", "up-down" };
+            static const char* const kArpStyles[] = { "corpus", "up", "down", "up-down", "Euclid", "polymeter" };
+            static_assert(sizeof(kArpStyles) / sizeof(kArpStyles[0]) == kNumArpStyles, "one name per ArpStyle");
             std::printf("\n          melody: chords");
             for (int c = 0; c < 4; ++c) std::printf(" %s", kRoman[m.chordDegree[c]]);
             std::printf(" (%d bars each); acid %s (%d steps%s), lead %s (osc %d), arp %s (%s)\n", m.chordBars,
