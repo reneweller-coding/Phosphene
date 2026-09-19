@@ -4801,6 +4801,176 @@ Rückgabe 77 wie vorgesehen). Die Zeiten sind mit fremder Last gemessen und schw
 *Dateien.* `Tests/selftest.cpp` (nur `main()`), `Tests/selftest_tests.cmake` (neu), `Tests/CMakeLists.txt`,
 `Deploy/build_release.ps1`, `README.md`, `Quest/README.md`, dieser Block.
 
+**19.09.2026, Arrangement: Zwei-Drop-Form, DJ-Intro und -Outro, großer Build, Drop 2 als Höhepunkt**
+
+Anlass: die Arrangement-Regeln des Nutzers vom 19.09.2026 (Makroform in acht Teilen, Mikroform 8/16/24/32,
+Subgenres), die über den gemessenen Formwerten stehen. Dazu zwei Nachträge des Nutzers aus derselben Runde:
+„Die Counter-Lead sollte natürlich einen anderen Sound haben als die Haupt-Lead“ und „Insgesamt ist der Lead
+und auch der Arp zu laut.“ Messungen: Hör-Seed 864566672, Standardregler, sofern nicht anders gesagt;
+Skripte in `PhospheneWork\scratch\arrangement` (nicht im Repo), das Auswertewerkzeug `Tools/arrange_report.py`
+und `phos_render --bar-log/--score-only` im Repo.
+
+*Vorher* (Brief, `phos_render --tracks`): Track 1 Intro16 Intro8 Build16 Drop32 Break64 Build16 Drop32 Drop64
+Outro8, Tracks 2/3 Intro8 Groove64 Build8/16 Drop64 Break64 Build8/16 Drop32/16 Outro8; Kick ab Takt 5–9; Rolle
+nur über die letzten 4 Takte (Achtel, Sechzehntel, 2× Zweiunddreißigstel); Drop 2 mit derselben Energie wie
+Drop 1 (0,87); gesprochene Phrase auf dem ersten Takt jedes Builds; Tracks hintereinander mit 16 Takten
+Hat-/Pad-Überblendung.
+
+*Form* (`Form.cpp`, `kTemplates`): die Grammatik ist durch vier Vorlagen mit denselben acht Plätzen ersetzt
+(Intro, Groove, Build 1, Drop 1, Breakdown, großer Build, Drop 2, Outro), Längen in 16er-Schritten auf die
+Ziellänge gebracht (`fitTemplate`), Constraints neu (`formConstraintsHold`: Vielfache von 8, Intro/Outro ≥ 16,
+genau ein Höhepunkt = letzter Drop; der Break-Anteil 15–30 % entfällt, die Regel gibt ihm 12,5 %).
+
+| Platz | Full-On/Hi-Tech | Progressive | Goa | Dark Forest |
+|---|---|---|---|---|
+| Intro | 1–32 | 1–32 | 1–32 | 1–32 |
+| Groove | 33–64 | 33–96 | 33–64 | 33–64 |
+| Build 1 | 65–80, PDB 77–80 | 97–112 | 65–80 | 65–80 ohne PDB |
+| Drop 1 | 81–112 | 113–144, trocken | 81–112 | 81–128 |
+| Breakdown | 113–144 | 145–176 | 113–144 ohne Cut, Arp-Spirale | 129–144, 2 Perc-Lagen |
+| großer Build | 145–176, Rolle 161–176 | 177–192, Rolle 8 T. | 145–176 | 145–176 |
+| Drop 2 | 177–224 | 193–224, trocken | 177–224 | 177–224 |
+| Outro | 225–256 | 225–256 | 225–256 | 225–256 |
+
+Tempi nach Regel (Style Tempo an): Full-On 144 ± 2, Progressive 136,5 ± 1,5, Goa 145 ± 3, Dark Forest
+151,5 ± 3,5 (Hi-Tech ohne Regel: 158 ± 4); `compose.tempo_range` Standard 3 → 1, damit der Standardset (Full-On,
+145) in 144–146 bleibt. Tracklänge: Walk ±16 statt ±32 Takte (240–272 Takte; die Regel nennt 220–280 Takte
+**und** 7–8,5 min, bei 145 BPM sind 7 min aber 254 Takte – die Taktzahl wurde befolgt, 240 Takte sind 6:37).
+
+*Instrumentierung* (`planBarImpl`): Intro 1–16 ohne Kick, leise Sechzehntel-Hat, Shaker ab Takt 9, Pads/Drone;
+17–32 Kick, Bass, Offbeat-Hat. Groove: je 8 Takte eine Lage mehr – Clap auf 2/4 (jetzt in jedem Track),
+Congas, Ride (feste Reihenfolge hinter den Hats in `makePercPlan`, `PercPlan::hatLayers`, der Shaker zählt zu
+den Hats); erste rhythmische Lead = Acid, Lead 1 erst in Drop 1. Build 1: Bass in den 4 Takten vor dem PDB auf
+Schlag 1+3 ausgedünnt, PDB 77–80 ohne Kick/Bass, Schlag 4 von Takt 80 nur ein Vocal (Voice Chop) oder ein Zap
+(je Build gezogen; FormantShot entfällt, Riser und Sweep enden auf Schlag 4, die Rolle endet in Schlag 3).
+Breakdown: Cut, nach 16 Takten leise Offbeat-Hat. Großer Build: 16-Takt-Rolle, je Viertel der Rolle Viertel →
+Achtel → Sechzehntel → Zweiunddreißigstel (für jede Rollenlänge), Riser über 16 Takte plus einer über die
+letzten 4, Stopp auf Schlag 4 von Takt 176. Drop 2: Open Hats auf jedem Offbeat, Ride, Arp eine Oktave höher
+(bis G6; die Registerregel 14 weicht dort der Nutzerregel, zu breite Zellen falten die obersten Töne), Counter
+als „Lead 2“ ab der zweiten Achtergruppe (Call/Response), FM-Squelches auf freien Sechzehnteln
+(eigener Strom `kSaltClimax`). Outro: alle 8 Takte fällt etwas (Leads sofort, dann Acid und zwei Lagen, dann
+Pads), die letzten 16 Takte nur Kick, Bass, eine Hat, keine Effekte. Mikroform: Takt 8 jedes 32er-Zyklus Snare-
+Fill oder Tom-Run (`chooseFill(…, cycleBar)`), Takt 16/32… Crash auf der Eins im Drop plus neue Lage, Takt 24
+kurzer Acid-Filter-Sweep (`kRideSweep`), Takt 32 Downlifter oder Glitch (Stutter); Gruppenfiguren jetzt auch in
+Intro und Outro, damit die beiden kahlen Achtergruppen nicht identisch sind.
+
+*Drop 2 als Höhepunkt*: Drop 1 trägt 0,88 der Drop-Energie, Drop 2 steht nach der Bogenskalierung
+`kClimaxMargin` = 0,20 über jedem anderen Abschnitt (1 dB mehr Track-Gain auf Kick/Bass/Perc). Mit 0,08 maß
+der Hör-Seed am Ausgang nur +0,17 dB über Drop 1. Gemessen (Ausgangsleistung nach dem Master, nur Takte des
+eigenen Tracks, je Stil 8 gerenderte Tracks, `--bar-log` + `arrange_report.py`):
+
+| Stil | Drop 2 über Drop 1 (Median / min) | über jedem anderen 8-Takt-Fenster (Median / min) |
+|---|---|---|
+| Full-On | +0,52 / +0,38 dB | +0,43 / +0,17 dB |
+| Goa | +0,53 / +0,35 | +0,38 / +0,23 |
+| Progressive | +0,48 / +0,02 | +0,25 / −0,02 (1 von 8 Tracks knapp darunter) |
+| Dark Forest | +0,53 / +0,24 | +0,39 / +0,10 |
+| Hi-Tech | +0,46 / +0,17 | +0,28 / 0,00 |
+
+Vorher (Master 8e1276d, Hör-Seed Track 1, Goa-Body): die späteren Drops standen zufällig +0,35 dB über dem
+ersten. Die Marge ist am Ausgang klein, weil Kompressor und Limiter (−9 LUFS) den 1 dB Gain-Unterschied
+auf etwa +0,5 dB zusammendrücken; hörbar wird der Höhepunkt vor allem durch Dichte. Zugesagte Marge: Drop 2
+mindestens so laut wie jedes andere 8-Takt-Fenster seines Tracks in 39 von 40 Tracks, im Median +0,3 dB,
+geplant (Energie) 0,20 über jedem anderen Abschnitt.
+
+*DJ-Überlappung* (Form.h `kDjOverlap` = 16, Composer `transitionBar`): Track N+1 beginnt 16 Takte vor dem Ende
+von N (`firstBar = vorheriges Ende − 16`). Diese 16 Takte sind N's kahles Outro-Ende und N+1's kickloses
+Intro-Anfang – genau eine Kick und ein Bass zu jeder Zeit; N+1's Kick/Bass kommen am Übergabetakt (= N's Ende =
+N+1's Takt 17). Warum 16 und nicht 32: nur so gelten beide Nutzerregeln wörtlich (Outro „letzte 16 Takte nur
+Kick, Bass, Hat“, Intro „Takte 1–16 ohne Kick“); bei 32 müsste eine der beiden weichen. Zwischen den Drops
+zweier Tracks liegen damit 48 statt 64 dünne Takte. `trackOfBar` gibt im Überlapp den ausgehenden Track,
+`incomingOfBar` den kommenden. Steuerung in zwei Hälften (`ControlScope`): Stimmen des Neuen (Rezepte, Pegel,
+Pad/Drone-Hochpass, Drone-Entwicklung) ab seinem ersten Takt, sein Boden (Tonart, Kick, Bass, Kit, Acid,
+Track-/Master-Gain, Abschnitts-Rides) erst am Übergabetakt – nie ein Ereignis in die Vergangenheit datiert.
+Pads/Drone des Neuen nur bei verträglichen Tonarten (gleich, Quarte, Quinte; Ishizaki et al. 2009, wie zuvor),
+sonst nur Percussion und Effekte; die Didgeridoo-/Maultrommel-Drone des Intros beginnt am Übergabetakt.
+Tempo-Rampe über die 16 Takte (wie bisher über die letzten 16), Tonartvorzeichnung im MIDI-Export am
+Übergabetakt, Cues: die Intro-Marke des Neuen an seinem ersten Takt (Plugin, Quest, cuedemo senden beide
+Tracks). Kit-Spuren sind geteilt: trifft der Neue denselben Lane im selben Moment, bleibt der Schlag des Alten.
+
+*Counter-Lead gegen die Lead* (Composer.cpp, Walk): Palette des Counters nur noch die Vokal-/Formant-Familie
+(Formant Saw, Vocal, Glass), Kandidat mit Oszillator oder Tabelle der Lead desselben Tracks wird verworfen,
+andere Filterantwort und Abstand zur Lead zählen; Rückfall, falls kein Kandidat passt. Vorher (neuer Check,
+rot gesehen): 72 Tracks, 8 mit gleichem Oszillator und Tabelle, 15 mit gleichem Oszillator. Nachher: 0/0;
+Schwerpunkt auf demselben Ton median 1182 ct auseinander (vorher 819), Anteil > 2 kHz median 5,0 dB (vorher
+4,2). `compose.counter_amount` 0,6 → 1,0: jeder Track mit Lead hat seine Lead 2 (vorher 4 von 17 im Hör-Seed).
+
+*Lead und Arp leiser*: `mix.lead_level` −3 → −6 dB, `mix.arp_level` −2 → −5, `counter_level` und `stab_level`
+0 → −3. Drops des Hör-Seeds (Tools/metrics.py, Abstand zum Referenzmedian; gleiche Form, nur die Pegel):
+
+| Drop | Mid alt → neu | Presence alt → neu |
+|---|---|---|
+| Track 1 Drop 1 | −1,13 → −1,99 | −2,32 → −3,08 |
+| Track 1 Drop 2 | +2,27 → +1,97 | −0,28 → −0,99 |
+| Track 2 Drop 1 | +2,40 → +0,53 | +5,41 → +2,76 |
+| Track 2 Drop 2 | +2,73 → +1,05 | +5,98 → +3,74 |
+
+Mitten überall innerhalb 2 dB; Presence in Track 2 noch +2,8/+3,7 dB – ein weiterer globaler Schnitt drückte
+Track 1 (schon −3 dB) und `testMixBalance` (Presence −10,75 dB, Grenze −10,9) unter den Median; der Rest ist
+trackeigen. 4 dB je Stimme (erster Versuch) setzte `testMixBalance` Presence auf −11,06 (rot).
+
+*Prüfungen* – neu `testArrangement` (11 Checks: Plätze je Stil, Längen 128–320, Drop-2-Energie, Überlappung,
+Kick auf Takt 17, Intro-/Outro-Blöcke, Groove-Lagen in Reihenfolge, Rollen, PDB-Schlag 4, Drop 2,
+Mikroregeln, Tempo-Rampe), `testTransitions` neu (Pads des Neuen nur bei verträglicher Tonart), in
+`testVoices` (h2) Counter ≠ Lead. Angepasst, mit Begründung im Code: `testForm` (Längen, Varianten, Kick auf
+Takt 17), Effektplatzierung/-einbrüche (`testSfx`), Stimmenplatzierung, Riser-/Impact-/Downlifter-Fenster
+(`testSfxLevel`, neue Taktpositionen), Tiefenregel nur Acid/Lead/Arp, Pad-Akkordtöne und Grundstellung über
+den Überlapp, Pad-Hochpass/Fundament (PDB kein Boden; Leckage relativ zum Pad), `testSectionRules` bei 256
+Takten ohne Drone, Cue-Orakel mit beiden Tracks, gelernter Bass ab der Übergabe, Kick-Fenster ohne Bett,
+Acid-Voicing ab der Übergabe, Phasen-Lock-Seed nach Rhythmusvielfalt, Clap immer, MIDI ab Takt 16, Counter-
+„Zentrum“ = Tonika + Quinte ≥ 40 %. Sieben `const TrackPlan&` in selftest.cpp, die über `composeBars` hinweg
+gehalten wurden, sind jetzt Kopien (eine davon – die Acid-Ride-Prüfung in `testVoices` – stürzte ab).
+
+*Messungen über 22 Tracks je Stil* (`--score-only`, `arrange_report.py`): Plätze wie in der Tabelle (14×256,
+5×272, 3×240 Takte); Kick des ersten Tracks auf Takt 17 (vorher 5–9); Rolle im großen Build Takt 17–20 Viertel,
+21–24 Achtel, 25–28 Sechzehntel, 29–32 Zweiunddreißigstel (Progressive 8 Takte à 2); Schlag 4 jedes PDB:
+23 Zaps, 21 Voice Chops, sonst nichts (Dark Forest Build 1 ohne PDB: dort spielen Kick/Bass durch, Absicht);
+Intro-Blöcke 1–8/9–16/17–24/25–32: gehörte Lanes 1/2/3/3 (leise Hat, +Shaker, +Offbeat), Kick in 21 von 22
+Tracks schon ab Takt 1 – die des Vortracks im Überlapp; Outro-Blöcke: geplante Lagen 4/3/0/0, Stimmen 2/1/0/0.
+
+*Korpus gegen Regel*: keine neue Korpus-Messung; die Regeln setzen die Formwerte der Phase 5 (Grosz et al.,
+Solberg & Dibben) außer Kraft, wo sie widersprechen – Intro 8–16 Takte (Easwaran), Break-Anteil 15–30 %,
+PDB-Variante „Kick auf 4“, Kick-Eintritt Takt 5–9, gesprochene Phrase am Build-Anfang.
+
+*Mutationen* (eingebaut, gebaut, gelaufen, aus der Kopie zurück, Zeitstempel gesetzt, `git diff` leer):
+
+| Mutation | Wer merkt es |
+|---|---|
+| keine DJ-Überlappung (Tracks hintereinander) | testArrangement: Überlappung, Outro/Intro, Tempo-Rampe (3 Checks) |
+| Rolle mit der alten 4-Takt-Staffel (Achtel zuerst) | Rollen: 414 von 552 Takten falsch |
+| Drop 2 ohne Arp-Oktave | Drop 2 (Arp nicht höher) |
+| Outro nur die letzten 8 Takte kahl | Überlapp-Check, Outro-Blöcke |
+| Vocal auf Schlag 3 statt 4 | PDB: 54 von 54 |
+| Groove: zwei Lagen je Gruppe | Groove: 13 von 30 |
+| Counter ohne harte Bedingung | **niemand** – äquivalent: der Abstandsterm zur Lead hält 72 von 72 Tracks auseinander |
+| Counter ohne Bedingung, Term und Rückfall | testVoices (h2): 6 von 72 mit gleichem Oszillator und Tabelle |
+
+*Hören* (`out\listenrrangement`, 145 BPM = 1,655 s/Takt): A (Takt 24–72, Track 1): Intro-Ende mit Kick,
+ab 13,2 s Groove – Clap 13,2 s, Congas 26,5 s, Ride 39,7 s, weitere Lage 52,9 s, Fill auf Groove-Takt 8 bei
+24,8 s; ab 66,2 s Build 1. B (328–368, Track 2 = Takt 88–128): Drop 1 mit Crash + neuer Lage bei 13,2 s,
+ab 39,7 s Breakdown mit Cut und Bassvakuum. C (392–424, Track 2 Takt 152–184): großer Build, Rolle ab 13,2 s
+(Viertel), Achtel 19,9 s, Sechzehntel 26,5 s, Zweiunddreißigstel 33,1 s, Stopp und Vocal/Zap auf Schlag 4 bei
+38,5 s, Drop 2 bei 39,7 s (Open Hats, Ride, Arp oben, Squelches). Neu: D ganzer Track 1 (Kick 26,5 s, Groove
+53 s, Build 1 105,9 s, PDB 125,8 s, Drop 1 132,4 s, Breakdown 185,4 s mit Hat ab 211,8 s, großer Build 238,3 s,
+Rolle 264,8 s, Drop 2 291,3 s, Outro 370,8 s, kahl + Intro von Track 2 ab 397,2 s); E Übergang Track 1 → 2
+(Takt 208–288): Outro ab 26,5 s, kahl ab 52,9 s mit Track 2's leiser Hat (F# → G#: keine Pads im Überlapp),
+Shaker 66,2 s, Übergabe (Kick/Bass von Track 2) 79,4 s; F großer Build → Drop 2 (Rolle 26,5 s, Stopp 51,7 s,
+Drop 2 52,9 s); G2–G4 Drop 2 der Tracks 2–4, Counter jeweils ab 13,2 s (Track 5 hat keine Lead).
+
+*Endstand*: `ctest -C Release -j 4` im Plugin-Build (Master d3d9101 hineingemergt, ein Test je Abschnitt):
+73 Tests, alle Selbsttest-Abschnitte, `vectest`/`_neon`/`_scalar`, `cuecheck` grün, `questguard` übersprungen
+(kein Quest-Build); der Hosttest fiel zuerst (die Mustervorschau ab Takt 9 erwartete eine Kick, das Intro hat
+dort keine mehr) und ist nach der Anpassung (ab Takt 17) grün. Selbsttest vorher 404/0.
+
+*Dateien.* Core: `Form.h/.cpp`, `Composer.h/.cpp`, `Rhythm.h/.cpp`, `Melody.cpp`, `Params.cpp`, `Sfx.cpp`;
+`Plugin/PluginProcessor.cpp`, `Quest/src/main.cpp`, `Tools/render/main.cpp`, `Tools/arrange_report.py` (neu),
+`Tests/selftest.cpp`, `Tests/cuedemo.cpp`, `Tests/hosttest.cpp`, `Tests/selftest_tests.cmake`.
+
+*Offen*: Presence der Drops von Track 2 +2,8/+3,7 dB über dem Median (trackeigen); Drop 2 nur ~0,5 dB lauter am
+Ausgang; Lead 1 in Drop 1 nur, wo der Track eine Lead hat (`lead_amount` 0,5 unverändert – die Regel verlangt
+sie überall, das wäre ein Eingriff in die kalibrierte Balance); nur 8 gerenderte Tracks je Stil für die
+Energie (Formmessungen über 22).
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

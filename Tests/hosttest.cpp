@@ -636,7 +636,9 @@ int main(int argc, char** argv)
         p->setPlayConfigDetails(0, 2, sr, block);
         p->prepareToPlay(sr, block);
         p->play();
-        p->seekToBar(8);   // past the sparse intro (Phase 5): the groove is what has to keep sounding
+        // Past the sparse intro: since 19.09.2026 (the two-drop form) its first sixteen bars have no kick,
+        // and bar 17 is where kick and bass come in -- that is what has to keep sounding.
+        p->seekToBar(16);
         juce::AudioBuffer<float> buf(2, block);
         juce::MidiBuffer midi;
         // Starting a set plans its first track, which measures its level by rendering it -- about
@@ -677,13 +679,13 @@ int main(int argc, char** argv)
                                                 + juce::String(worstRun * block / sr * 1000.0, 1) + " ms)");
         // What the editor's pattern rolls draw: the bars the conductor has composed, by part.
         std::vector<NoteEvent> pattern;
-        const bool got = p->readPattern(8, 4, pattern);
+        const bool got = p->readPattern(16, 4, pattern);
         int kicks = 0, percs = 0;
         for (const NoteEvent& e : pattern) {
             kicks += e.part == Part::Kick ? 1 : 0;
             percs += e.part == Part::Perc ? 1 : 0;
         }
-        check(got && !pattern.empty(), "the pattern preview has bars 8 to 12 in it ("
+        check(got && !pattern.empty(), "the pattern preview has bars 16 to 20 in it ("
                                            + juce::String(static_cast<int>(pattern.size())) + " notes)");
         check(kicks >= 12, "and the kick is in it (" + juce::String(kicks) + " notes in four bars)");
         check(percs > 0, "and the percussion kit too (" + juce::String(percs) + " notes)");
