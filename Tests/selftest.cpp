@@ -498,6 +498,56 @@ double phaseAgainst(const float* y, size_t n, RefFn&& ref)
     return std::atan2(c, a) * 180.0 / kPiD;
 }
 
+/**
+ * @brief phaseAgainst() with the 2nd to Hth harmonics of the reference in the fit as well (19.09.2026).
+ *
+ * Over a whole number of cycles a *stationary* harmonic is orthogonal to the fundamental, but one whose
+ * amplitude moves is not: over whole cycles u sin(2 x 2 pi ref) -- a second harmonic growing or
+ * shrinking linearly -- has a component along cos(2 pi ref), which the fit reads as a phase of the
+ * fundamental. And a bass note's harmonics do move -- the filter envelope and the bite
+ * envelope sweep them within the two periods the fit spans. That did not matter while the bass was
+ * almost pure sub; with the bite of 19.09.2026 the second harmonic stands within a few dB of the
+ * fundamental, and a note whose fundamental is 48 dB clear of any filtered leak (Split, LR8 at 2 f0)
+ * measured a "drift" of 10 degrees. Each harmonic k therefore gets its own four columns
+ * (a_k + b_k u) sin(2 pi k ref) + (c_k + d_k u) cos(2 pi k ref); the fundamental's phase is read as
+ * before. With H = 1 this is exactly phaseAgainst().
+ */
+template <int H, class RefFn>
+double phaseAgainstH(const float* y, size_t n, RefFn&& ref)
+{
+    constexpr int N = 4 * H;
+    const double r0 = ref(0);
+    const double whole = std::floor(ref(n - 1) - r0);
+    size_t m = n;
+    if (whole >= 1.0) { m = 0; while (m < n && ref(m) - r0 < whole) ++m; }
+    double A[N][N + 1] = {};
+    for (size_t i = 0; i < m; ++i) {
+        const double ph = 2.0 * kPiD * ref(i);
+        const double u = (static_cast<double>(i) + 0.5) / static_cast<double>(m) - 0.5;
+        double col[N];
+        for (int h = 0; h < H; ++h) {
+            const double s = std::sin((h + 1) * ph), c = std::cos((h + 1) * ph);
+            col[4 * h] = s; col[4 * h + 1] = c; col[4 * h + 2] = u * s; col[4 * h + 3] = u * c;
+        }
+        for (int r = 0; r < N; ++r) {
+            for (int c = 0; c < N; ++c) A[r][c] += col[r] * col[c];
+            A[r][N] += col[r] * y[i];
+        }
+    }
+    for (int k = 0; k < N; ++k) {   // Gauss-Jordan with partial pivoting
+        int piv = k;
+        for (int r = k + 1; r < N; ++r) if (std::fabs(A[r][k]) > std::fabs(A[piv][k])) piv = r;
+        for (int c = 0; c <= N; ++c) std::swap(A[k][c], A[piv][c]);
+        for (int r = 0; r < N; ++r) {
+            if (r == k || A[k][k] == 0.0) continue;
+            const double f = A[r][k] / A[k][k];
+            for (int c = k; c <= N; ++c) A[r][c] -= f * A[k][c];
+        }
+    }
+    const double a = A[0][N] / A[0][0], c = A[1][N] / A[1][1];
+    return std::atan2(c, a) * 180.0 / kPiD;
+}
+
 /** @brief Wraps degrees into (-180, 180]. */
 double wrapDeg(double d) { d = std::fmod(d + 180.0, 360.0); if (d < 0.0) d += 360.0; return d - 180.0; }
 
@@ -667,7 +717,7 @@ void testKick()
           fmt("step %.4f, from silence %.4f", static_cast<double>(maxStep), static_cast<double>(freshStep)));
 
     // Tail limit: a long kick is shortened so that at the first sixteenth (103 ms at 145 BPM) its
-    // output, saturation included, is 24 dB under its peak -- for tanh and hard clip, soft and hot.
+    // output, saturation included, is Tail Limit under its peak -- for tanh and hard clip, soft and hot.
     auto tailAt = [&](const char* settings, bool constrain, double slot) {
         ParamStore q;
         q.parseText(settings);
@@ -699,7 +749,10 @@ void testKick()
         loosest = std::min(loosest, without);
         tails += fmt("%.1f/%.1f  ", with, without);
     }
-    check(worstTail < -23.0 && loosest > -24.0, "tail limit holds after saturation (unconstrained these kicks were not)", tails + "dB with/without");
+    // The limit is the knob's default: -15 dB since 19.09.2026, -24 before (docs/PLAN.md, "Kick-Körper").
+    const double limitDb = ParamStore().get(ParamStore().base(Module::Kick) + kick::TailLimit);
+    check(worstTail < limitDb + 1.0 && loosest > limitDb, "tail limit holds after saturation (unconstrained these kicks were not)",
+          tails + fmt("dB with/without, limit %.0f dB", limitDb));
 
     // Body floor: the shortest recipes still give two periods of the end pitch above -20 dB.
     {
@@ -788,7 +841,7 @@ void testBass()
             for (size_t ms : { static_cast<size_t>(0), static_cast<size_t>(11), static_cast<size_t>(22), static_cast<size_t>(44),
                                static_cast<size_t>(88), static_cast<size_t>(140) }) {
                 const size_t w0 = ms * 48;
-                const double d = wrapDeg(phaseAgainst(y.data() + w0, 2 * per + 8, [&](size_t i) { return phase + f0 * (static_cast<double>(w0 + i) + late) / sr; }));
+                const double d = wrapDeg(phaseAgainstH<3>(y.data() + w0, 2 * per + 8, [&](size_t i) { return phase + f0 * (static_cast<double>(w0 + i) + late) / sr; }));
                 if (ms == 0) startErr = std::max(startErr, std::fabs(d));
                 lo = std::min(lo, d);
                 hi = std::max(hi, d);
@@ -797,6 +850,7 @@ void testBass()
         return hi - lo;
     };
     double startSplit = 0.0, startMixed = 0.0;
+
     const double driftSplit = drift("bass.sub_mode=Split bass.amp_sustain=1 bass.amp_decay=5", startSplit);
     const double driftMixed = drift("bass.sub_mode=Mixed bass.amp_sustain=1 bass.amp_decay=5", startMixed);
     check(startSplit < 5.0, "fundamental starts at the requested phase (sub-sample onset)", fmt("worst %.2f degrees", startSplit));
@@ -806,11 +860,16 @@ void testBass()
     // From silence at the knob phase (0.5: saw and sub both at zero) the note starts without a step;
     // phase 0.25 puts the sub at its peak, as the old sub phase did.
     auto onset = [&](double fundamentalPhase) {
-        const std::vector<float> y = bassNote("", pitch, 4000, 2400, 0.0, fundamentalPhase);
+        // Without the bite (19.09.2026): the bite is a driven copy of the oscillator, and the pulse part
+        // of the default wave has its edge exactly at the fundamental's zero crossing -- the bite's
+        // saturator lifts that edge into the attack it exists to give (a band-limited transient under
+        // 2 kHz, not a step). What this check is about is where saw and sub start.
+        const std::vector<float> y = bassNote("bass.bite=0", pitch, 4000, 2400, 0.0, fundamentalPhase);
         float early = 0.0f, pk = 0.0f;
         for (size_t i = 0; i < y.size(); ++i) { pk = std::max(pk, std::fabs(y[i])); if (i < 24) early = std::max(early, std::fabs(y[i])); }
         return early / pk;
     };
+
     const double atZero = onset(0.0), atPeak = onset(0.25);
     check(atZero < 0.5 * atPeak, "note starts at the zero crossing of saw and sub", fmt("first 0.5 ms reaches %.2f of the peak (%.2f with the sub at its peak)", atZero, atPeak));
 
@@ -1499,7 +1558,7 @@ double measureLock(const char* settings, double bpm, double& spread, double& coh
         auto refBass = [&](size_t i) { return f0 * (static_cast<double>(w0 + i) - ideal) / sr; };
         auto refKick = [&](size_t i) { return kickModel.outputPhaseAt((static_cast<double>(w0 + i) - kickIdeal) / sr); };
         const double dk = phaseAgainst(kickY.data() + w0, 2 * per + 8, refKick);   // kick = its course + dk
-        const double pb = phaseAgainst(bassY.data() + w0, 2 * per + 8, refBass);   // bass phase at the onset
+        const double pb = phaseAgainstH<3>(bassY.data() + w0, 2 * per + 8, refBass);   // bass phase at the onset (harmonics fitted too: phaseAgainstH)
         const double pk = 360.0 * (kickPhaseAtSlot - std::floor(kickPhaseAtSlot)) + dk;
         sumD += wrapDeg(pk - pb);
         lo = std::min(lo, pb);
@@ -1581,6 +1640,448 @@ void testKickReference()
               "(quartiles -31 .. -23), crest %.1f dB (lower quartile 6)", subLow, click, crest));
 }
 
+// ---------------------------------------------------------------------------------------------
+// Round "lowend-acid" (19.09.2026): bass bite, kick body, per-track variety. docs/PLAN.md, block
+// "Tiefe und Acid: Bass mit Biss, Kick-Körper, Klangvielfalt je Track".
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * @brief Power of x[a, b) in [lo, hi) Hz, the way Tools/ref_kick.py and Tools/ref_bass.py take it.
+ *
+ * A flat window with a 3 ms half-cosine fade at the end only (a segment that starts on an onset must not
+ * have its attack weighted down), zero-padded to a power of two of at least 2^16, the squared FFT
+ * magnitudes summed over the band. Written out here rather than shared with the tools, so that the self
+ * test and the Python measurement are two implementations of one definition.
+ */
+double lowendBandPower(const std::vector<float>& x, size_t a, size_t b, double lo, double hi, double sr)
+{
+    const size_t len = b - a;
+    size_t n = 1u << 16;
+    while (n < len) n <<= 1;
+    std::vector<std::complex<double>> s(n);
+    const size_t fade = std::min(len / 4, static_cast<size_t>(0.003 * sr));
+    for (size_t i = 0; i < len; ++i) {
+        double w = 1.0;
+        if (fade > 0 && i + fade >= len) w = 0.5 + 0.5 * std::cos(kPiD * static_cast<double>(i + fade - len) / static_cast<double>(fade));
+        s[i] = static_cast<double>(x[a + i]) * w;
+    }
+    fft(s);
+    double p = 0.0;
+    for (size_t k = 1; k < n / 2; ++k) {
+        const double f = static_cast<double>(k) * sr / static_cast<double>(n);
+        if (f >= lo && f < hi) p += std::norm(s[k]);
+    }
+    return p + 1e-30;
+}
+
+/**
+ * @brief The default bass voice, rolling sixteenths on F#1 at 145 BPM with a duck on every beat, as
+ *        the engine plays it (gate 0.7 of the slot, velocity 110), for @p beats beats.
+ */
+std::vector<float> lowendRollingBass(const std::vector<float>& bv, int beats, int pitch = 30)
+{
+    const double sr = 48000.0, beat = 60.0 / 145.0 * sr, slot = beat / 4.0;
+    Bass b;
+    b.prepare(sr);
+    b.update(bv.data());
+    std::vector<float> y(static_cast<size_t>(beats * beat) + 16);
+    size_t done = 0;
+    for (int k = 0; k < beats * 4; ++k) {
+        const double t = k * slot;
+        const size_t at = static_cast<size_t>(std::ceil(t));
+        if (at > done) { b.process(y.data() + done, static_cast<int>(at - done)); done = at; }
+        if (k % 4 == 0) { b.duck(static_cast<double>(at) - t); continue; }   // the kick's step: no note
+        b.noteOn(pitch, 110.0f / 127.0f, static_cast<int>(0.7 * slot), static_cast<double>(at) - t, 0.0);
+    }
+    b.process(y.data() + done, static_cast<int>(y.size() - done));
+    return y;
+}
+
+/**
+ * @brief The bass against the reference basses: the bite layer, the octave, the clean fundamental.
+ *
+ * Reference numbers: `Tools/ref_bass.py` on the 24 of 40 recordings whose first 90 s hold eight or more
+ * beats of kick and bass nearly alone, measured over the second and third sixteenth of every beat (the
+ * first still carries the kick's tail), each band against the window's own 20 .. 120 Hz. Medians and
+ * quartiles: under 60 Hz -7.4 (-10.7 .. -3.9), 60 .. 120 Hz -0.9 (-2.3 .. -0.4), 300 Hz .. 2 kHz
+ * -9.8 (-11.7 .. -8.2) dB. The bass before this round read -0.4, -10.6 and -21.6 there: a sine sub with
+ * the mid band 21 dB under it. The bounds are the reference quartiles, on the voice alone.
+ */
+void testBassBite()
+{
+    section("the bass against the reference basses: bite, octave, clean fundamental");
+    const double sr = 48000.0, beat = 60.0 / 145.0 * sr, slot = beat / 4.0;
+    auto lateBands = [&](const std::vector<float>& y, double& sub, double& oct, double& bite) {
+        double p20 = 0.0, pSub = 0.0, pOct = 0.0, pBite = 0.0;
+        for (int k = 4; k < 60; ++k) {   // beats 4..59, slots 2 and 3 of each
+            const size_t a = static_cast<size_t>(k * beat + 2.0 * slot), b = static_cast<size_t>((k + 1) * beat);
+            p20 += lowendBandPower(y, a, b, 20.0, 120.0, sr);
+            pSub += lowendBandPower(y, a, b, 20.0, 60.0, sr);
+            pOct += lowendBandPower(y, a, b, 60.0, 120.0, sr);
+            pBite += lowendBandPower(y, a, b, 300.0, 2000.0, sr);
+        }
+        sub = powDb(pSub / p20);
+        oct = powDb(pOct / p20);
+        bite = powDb(pBite / p20);
+    };
+    ParamStore p;
+    std::vector<float> bv = moduleValues(p, Module::Bass);
+    bv[bass::DuckDepth] = 0.0f;   // the voice's own spectrum; the duck is a level, not a timbre
+    double sub = 0.0, oct = 0.0, bite = 0.0;
+    lateBands(lowendRollingBass(bv, 64), sub, oct, bite);
+    check(sub >= -10.7 && sub <= -3.9 && oct >= -2.3 && oct <= -0.4 && bite >= -11.7 && bite <= -8.2,
+          "the default bass sits inside the reference basses' quartiles: sub, octave and bite band (Tools/ref_bass.py, 24 recordings)",
+          fmt("under 60 Hz %.1f (-10.7..-3.9), 60-120 Hz %.1f (-2.3..-0.4), 300 Hz-2 kHz %.1f (-11.7..-8.2) dB against 20-120 Hz", sub, oct, bite));
+
+    // The bite is what carries the mid band: without it the band falls back towards the old bass.
+    {
+        std::vector<float> nb = bv;
+        nb[bass::Bite] = 0.0f;
+        double s2 = 0.0, o2 = 0.0, b2 = 0.0;
+        lateBands(lowendRollingBass(nb, 64), s2, o2, b2);
+        check(bite - b2 >= 3.0, "the bite layer carries more than half of the 300 Hz .. 2 kHz band", fmt("%.1f dB with it, %.1f without", bite, b2));
+    }
+
+    // The fundamental is still the one sine: with sub and octave off, what the filtered paths leave at
+    // f0 is the leak of the Split high pass. A fourth-order Butterworth squared at 2 f0 passes f0 at
+    // (1/2)^8 / (1 + (1/2)^8) = -48.2 dB; the old second-order pair passed it at -24.6 dB. The saw
+    // path's own fundamental is about 13 dB above the default sub (a full-scale saw's 2/pi against the
+    // sub's 0.21), which puts the expected leak near -35 dB against the sub. The bound is -30 dB: a leak
+    // there turns the fundamental's phase by at most asin(10^(-30/20)) = 1.8 degrees. Measured on a held
+    // note over whole periods (40 .. 140 ms).
+    {
+        const double f0 = midiToHz(30);
+        std::vector<float> leakV = bv, subV = bv;
+        leakV[bass::Sub] = 0.0f;
+        leakV[bass::SubOctave] = 0.0f;
+        leakV[bass::AmpSustain] = 1.0f;
+        subV[bass::AmpSustain] = 1.0f;
+        subV[bass::Bite] = 0.0f;
+        subV[bass::SubOctave] = 0.0f;
+        subV[bass::Cutoff] = 20.0f;
+        subV[bass::EnvAmount] = 0.0f;
+        subV[bass::KeyTrack] = 0.0f;
+        auto note = [&](const std::vector<float>& v) {
+            Bass b;
+            b.prepare(sr);
+            b.update(v.data());
+            b.noteOn(30, 1.0f, 96000, 0.0, 0.0);
+            std::vector<float> y(12000);
+            b.process(y.data(), static_cast<int>(y.size()));
+            return y;
+        };
+        const std::vector<float> yl = note(leakV), ys = note(subV);
+        const size_t per = static_cast<size_t>(std::lround(sr / f0 * 4.0));   // four periods, whole to 0.1 %
+        double worst = -1e9;
+        for (size_t w0 = 1920; w0 + per <= 6720; w0 += per / 4) {
+            const double leak = toneAmplitude(yl.data() + w0, per, 4.0), s = toneAmplitude(ys.data() + w0, per, 4.0);
+            worst = std::max(worst, 20.0 * std::log10(leak / s));
+        }
+        check(worst < -30.0, "the filtered paths leave the fundamental alone: their leak at f0 is under -30 dB against the sub (at most 1.8 degrees of phase)",
+              fmt("worst %.1f dB over 40..140 ms", worst));
+    }
+
+    // The bite has its own envelope: the top of its band (700 Hz .. 3 kHz) is brightest at a note's
+    // start. Read over whole periods of the fundamental -- the first period of each note against the
+    // third -- because a saw's upper harmonics bunch at its reset once per period, and a window of any
+    // other length measures where the resets fall.
+    {
+        const std::vector<float> y = lowendRollingBass(bv, 64);
+        const size_t per = static_cast<size_t>(std::lround(sr / midiToHz(30)));
+        double early = 0.0, late = 0.0;
+        for (int k = 4; k < 60; ++k)
+            for (int s = 1; s <= 3; ++s) {
+                const size_t a = static_cast<size_t>(k * beat + s * slot);
+                early += lowendBandPower(y, a, a + per, 700.0, 3000.0, sr);
+                late += lowendBandPower(y, a + 2 * per, a + 3 * per, 700.0, 3000.0, sr);
+            }
+        check(powDb(early / late) >= 6.0, "the bite is a pluck: the top of its band falls 6 dB and more from a note's first period to its third",
+              fmt("%.1f dB", powDb(early / late)));
+    }
+}
+
+/**
+ * @brief Kick body and kick against bass, in the engine (first drop of the listening seed).
+ *
+ * The references' kick bodies stay within 20 dB of their peak up to the first bass slot (Tools/ref_kick.py:
+ * median 104 ms, which is where its window ends). The kick before this round fell 20 dB by 76 ms: its
+ * decay knob said so, and a longer decay was cut by a -24 dB tail limit at the slot. Since 19.09.2026
+ * the limit is -15 dB and the decay 240 ms. What must not happen in exchange is that the tail masks the
+ * first bass note, so the check reads the two parts separately in the first sixteenth after the kick.
+ * And the level of the bass against the kick, K-weighted, on the same time base as Tools/ref_bass.py
+ * ("b/k": the three bass sixteenths against the kick's own quarter beat): references -4.7 dB, quartiles
+ * -5.8 .. -2.3; the bass before this round read -12.8.
+ */
+void testKickBody()
+{
+    section("kick body, kick tail against the first bass note, bass against kick");
+    const double sr = 48000.0;
+    // (a) The default kick alone, constrained for the rolling bass at 145 BPM.
+    {
+        const double slot = 0.25 * 60.0 / 145.0;
+        ParamStore p;
+        std::vector<float> kv = moduleValues(p, Module::Kick);
+        Kick::constrain(kv.data(), slot, 6);
+        Kick k;
+        k.prepare(sr);
+        k.update(kv.data(), 6);
+        k.trigger(1.0f);
+        std::vector<float> y(24000);
+        k.process(y.data(), static_cast<int>(y.size()));
+        // Tools/ref_kick.py's "body": the kick band-limited to 20 .. 250 Hz (brick wall, zero-padded to
+        // twice its length), its analytic envelope smoothed over 1 ms and read every millisecond, from
+        // the onset to the first reading 20 dB under the peak.
+        const size_t n = 1u << 16;
+        std::vector<std::complex<double>> s(n);
+        for (size_t i = 0; i < y.size(); ++i) s[i] = y[i];
+        fft(s);
+        for (size_t k = 0; k < n; ++k) {
+            const double f = static_cast<double>(k) * sr / static_cast<double>(n);
+            // analytic signal: positive frequencies doubled, negative ones and everything outside the band gone
+            if (k == 0 || k >= n / 2 || f < 20.0 || f > 250.0) s[k] = 0.0;
+            else s[k] *= 2.0;
+        }
+        for (auto& c : s) c = std::conj(c);   // inverse FFT via conjugation
+        fft(s);
+        const size_t ms = static_cast<size_t>(0.001 * sr);
+        std::vector<double> mag(y.size()), env;
+        for (size_t i = 0; i < y.size(); ++i) mag[i] = std::abs(s[i]) / static_cast<double>(n);
+        for (size_t i = 0; i < y.size(); i += ms) {
+            double m = 0.0;
+            int c = 0;
+            for (size_t j = i >= ms / 2 ? i - ms / 2 : 0; j < std::min(y.size(), i + ms / 2); ++j) { m += mag[j]; ++c; }
+            env.push_back(m / c);
+        }
+        const size_t pk = static_cast<size_t>(std::max_element(env.begin(), env.end()) - env.begin());
+        size_t end = pk;
+        while (end < env.size() && env[end] >= env[pk] * 0.1) ++end;
+        const double body = static_cast<double>(end);
+        check(body >= 100.0, "the kick body holds within 20 dB up to the first bass slot, like the references' (Tools/ref_kick.py: 104 ms)",
+              fmt("%.0f ms (before this round 76 ms)", body));
+    }
+    // (b) and (c) in the engine: kick alone and bass alone over bars 42..70 of the first drop.
+    double latency = 0.0;
+    auto render = [&](const char* solo) {
+        auto e = std::make_unique<Engine>();
+        e->prepare(sr, 512);
+        e->params().parseText("master.auto_gain=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.clip=Off");
+        e->params().parseText(solo);
+        Composer c(864566672ull);
+        const TempoMap tm = c.tempoMap(e->params(), 72);
+        e->setTempoMap(tm);
+        latency = e->latencySamples();
+        return renderEngine(*e, c, 70.0 * kBeatsPerBar, 512, sr);
+    };
+    const std::vector<float> ky = render("mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1");
+    const std::vector<float> by = render("mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1");
+    const double beat = 60.0 / 145.0 * sr, q = beat / 4.0;
+    auto at = [&](double beats) { return static_cast<size_t>(beats * beat + latency); };
+    // K-weighting, ITU-R BS.1770-4's tabulated 48 kHz coefficients (as in testSfxLevel).
+    struct Biquad { double b0, b1, b2, a1, a2, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+        double tick(double x) { const double y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; } };
+    auto kweight = [&](const std::vector<float>& x) {
+        Biquad s{ 1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241, 0.73248077421585 };
+        Biquad h{ 1.0, -2.0, 1.0, -1.99004745483398, 0.99007225036621 };
+        std::vector<float> out(x.size());
+        for (size_t i = 0; i < x.size(); ++i) out[i] = static_cast<float>(h.tick(s.tick(x[i])));
+        return out;
+    };
+    std::vector<float> mix(ky.size());
+    for (size_t i = 0; i < mix.size(); ++i) mix[i] = ky[i] + by[i];
+    const std::vector<float> km = kweight(mix);
+    std::vector<double> mask, bk;
+    for (int bt = 42 * 4; bt < 70 * 4; ++bt) {
+        if (bt % 32 >= 28) continue;   // the last bar of an eight-bar group carries its figure and a missing kick
+        const size_t k0 = at(bt), s0 = at(bt + 0.25), s1 = at(bt + 0.5), e0 = at(bt + 1.0);
+        (void)q;
+        mask.push_back(powDb(lowendBandPower(ky, s0, s1, 30.0, 150.0, sr) / lowendBandPower(by, s0, s1, 30.0, 150.0, sr)));
+        double pk = 0.0, pb = 0.0;
+        for (size_t i = k0; i < s0; ++i) pk += static_cast<double>(km[i]) * km[i];
+        for (size_t i = s0; i < e0; ++i) pb += static_cast<double>(km[i]) * km[i];
+        bk.push_back(powDb((pb / static_cast<double>(e0 - s0)) / (pk / static_cast<double>(s0 - k0))));
+    }
+    std::sort(mask.begin(), mask.end());
+    std::sort(bk.begin(), bk.end());
+    const double maskMed = mask[mask.size() / 2], bkMed = bk[bk.size() / 2];
+    check(maskMed <= -6.0, "the longer kick tail does not mask the first bass note: in its sixteenth the bass is 6 dB and more above the kick (30..150 Hz)",
+          fmt("kick against bass %.1f dB, median over %zu beats", maskMed, mask.size()));
+    check(bkMed >= -5.8 && bkMed <= -2.3, "the bass against the kick, K-weighted, inside the reference quartiles (Tools/ref_bass.py: -5.8 .. -2.3 dB)",
+          fmt("%.1f dB (references median -4.7; before this round -12.8)", bkMed));
+}
+
+/**
+ * @brief The acid voicings of a track: a point in the triangle clean / driven / liquid (19.09.2026).
+ *
+ * Checked against the voicing values written out here, independently of the table in Composer.cpp:
+ * clean = drive 0.1, accent 0.8, low cut 150 Hz; liquid = wave 0.5, cutoff 450 Hz, 4 disperser stages.
+ */
+void testAcidVoicing()
+{
+    section("acid voicings per track");
+    ParamStore p;
+    const int ab = p.base(Module::Acid), cb = p.base(Module::Compose);
+    auto valueAt = [&](int param, const float* off) { const int id = ab + param; return p.fromNormalised(id, p.toNormalised(id, p.get(id)) + off[param]); };
+    // (a) Corners reach the voicings exactly at the default Sound Variation; the first track is the knobs.
+    {
+        float off[acid::Count];
+        int disp = 0;
+        const float clean[3] = { 1.0f, 0.0f, 0.0f }, liquid[3] = { 0.0f, 0.0f, 1.0f }, driven[3] = { 0.0f, 1.0f, 0.0f };
+        Composer::acidVoicingOffsets(p, clean, 0.5f, off, disp);
+        const bool cleanOk = std::fabs(valueAt(acid::Drive, off) - 0.1f) < 1e-3f && std::fabs(valueAt(acid::Accent, off) - 0.8f) < 1e-3f
+                          && std::fabs(valueAt(acid::LowCut, off) - 150.0f) < 0.5f && disp == -1;
+        Composer::acidVoicingOffsets(p, liquid, 0.5f, off, disp);
+        const bool liquidOk = std::fabs(valueAt(acid::Wave, off) - 0.5f) < 1e-3f && std::fabs(valueAt(acid::Cutoff, off) - 450.0f) < 0.5f && disp == 4;
+        Composer::acidVoicingOffsets(p, driven, 0.5f, off, disp);
+        float any = 0.0f;
+        for (float o : off) any += std::fabs(o);
+        const bool drivenOk = any == 0.0f && disp == -1;
+        Composer::acidVoicingOffsets(p, liquid, 0.0f, off, disp);
+        float anyZero = 0.0f;
+        for (float o : off) anyZero += std::fabs(o);
+        Composer c(864566672ull);
+        const TrackPlan& t0 = c.track(p, 0);
+        check(cleanOk && liquidOk && drivenOk && anyZero == 0.0f && disp == -1 && t0.acidVoicing[1] == 1.0f,
+              "a track at a corner plays that voicing exactly, the driven corner and Sound Variation 0 play the knobs, track 1 is driven");
+    }
+    // (b) Over a night the tracks spread over the triangle, and consecutive tracks differ.
+    {
+        ParamStore q;
+        q.parseText("compose.level_match=Off master.auto_gain=Off");
+        Composer c(2026);
+        int dominant[3] = {}, blends = 0;
+        double closest = 1e9;
+        for (int i = 1; i < 40; ++i) {
+            const TrackPlan t = c.track(q, i);
+            const float* w = t.acidVoicing;
+            const int top = static_cast<int>(std::max_element(w, w + 3) - w);
+            ++dominant[top];
+            if (w[top] < 0.7f) ++blends;
+            if (i > 1) {
+                const float* o = c.track(q, i - 1).acidVoicing;
+                double d = 0.0;
+                for (int k = 0; k < 3; ++k) d += (w[k] - o[k]) * (w[k] - o[k]);
+                closest = std::min(closest, std::sqrt(d));
+            }
+            const float sum = w[0] + w[1] + w[2];
+            if (std::fabs(sum - 1.0f) > 1e-4f || *std::min_element(w, w + 3) < 0.0f) closest = -1.0;
+        }
+        check(dominant[0] >= 6 && dominant[1] >= 6 && dominant[2] >= 6 && blends >= 4 && closest > 0.25,
+              "over 39 tracks every voicing leads several of them, some are blends, and no two neighbours share a sound",
+              fmt("clean %d, driven %d, liquid %d leading; %d blends (no weight over 0.7); closest neighbours %.2f apart",
+                  dominant[0], dominant[1], dominant[2], blends, closest));
+        (void)cb;
+    }
+    // (c) The engine plays it: in track 2 of a short-track set the acid's drive and wave are the voicing's.
+    {
+        auto e = std::make_unique<Engine>();
+        e->prepare(48000.0, 256);
+        e->params().parseText("compose.track_bars=32 compose.level_match=Off master.auto_gain=Off");
+        Composer c(77);
+        const TrackPlan t1 = c.track(e->params(), 1);
+        float off[acid::Count];
+        int disp = 0;
+        Composer::acidVoicingOffsets(e->params(), t1.acidVoicing, e->params().get(cb + compose::SoundVariation), off, disp);
+        const float wantDrive = valueAt(acid::Drive, off), wantWave = valueAt(acid::Wave, off);
+        const TempoMap tm = c.tempoMap(e->params(), t1.firstBar + 8);
+        e->setTempoMap(tm);
+        Conductor cond(*e, c);
+        std::vector<float> L(1024), R(1024);
+        float gotDrive = -1.0f, gotWave = -1.0f, gotDisp = -1.0f;
+        const uint64_t end = static_cast<uint64_t>(tm.secondsAt((t1.firstBar + 6.0) * kBeatsPerBar) * 48000.0);
+        while (e->samplePosition() < end) {
+            cond.pump(e->params(), 32.0);
+            e->process(L.data(), R.data(), 1024);
+            if (e->beatPosition() > (t1.firstBar + 4.0) * kBeatsPerBar && gotDrive < 0.0f) {
+                gotDrive = e->effective(ab + acid::Drive);
+                gotWave = e->effective(ab + acid::Wave);
+                gotDisp = e->effective(ab + acid::Disperse);
+            }
+        }
+        const float wantDisp = disp < 0 ? p.get(ab + acid::Disperse) : static_cast<float>(disp);
+        check(std::fabs(gotDrive - wantDrive) < 1e-3f && std::fabs(gotWave - wantWave) < 1e-3f && gotDisp == wantDisp,
+              "the engine plays the track's voicing (drive, wave, disperser in track 2)",
+              fmt("weights %.2f/%.2f/%.2f: drive %.3f (want %.3f), wave %.3f (%.3f), disperse %.0f (%.0f)",
+                  static_cast<double>(t1.acidVoicing[0]), static_cast<double>(t1.acidVoicing[1]), static_cast<double>(t1.acidVoicing[2]),
+                  static_cast<double>(gotDrive), static_cast<double>(wantDrive), static_cast<double>(gotWave), static_cast<double>(wantWave),
+                  static_cast<double>(gotDisp), static_cast<double>(wantDisp)));
+    }
+}
+
+/**
+ * @brief Kick and bass recipes spread audibly over a night, and the kick lock holds for every recipe.
+ *
+ * For 20 tracks of the listening seed, each track's recipe is applied to the knobs the way the engine
+ * applies offsets (normalised domain), a kick and a stretch of rolling bass are rendered, and the spread
+ * over the tracks is read: the kick's click band (2 .. 5 kHz against 40 .. 120 Hz over its first quarter
+ * beat), the bass's bite band, and the bass's pluck (the top of the bite band, 700 Hz .. 3 kHz, in a
+ * note's first period against its third). The bounds, as interquartile ranges over the tracks: the
+ * kicks' click at least half the references' (-31 .. -23 dB, 8 dB); the bite band at least 3 dB --
+ * three times the level JND; the pluck at least 8 dB. The recipe tables before this round, played on
+ * this round's sound, read 3.1, 5.3 and 6.0 dB there: the kick and the pluck fail.
+ */
+void testRecipeSpread()
+{
+    section("kick and bass recipes spread over a night");
+    const double sr = 48000.0, slot = 0.25 * 60.0 / 145.0;
+    ParamStore p;
+    p.parseText("compose.level_match=Off master.auto_gain=Off");
+    const int cb = p.base(Module::Compose);
+    const float sv = p.get(cb + compose::SoundVariation);
+    Composer c(864566672ull);
+    std::vector<double> clicks, bites, plucks;
+    double worstLock = 0.0;
+    for (int i = 1; i <= 20; ++i) {
+        const TrackPlan t = c.track(p, i);
+        auto apply = [&](Module m, const float* off) {
+            std::vector<float> v = moduleValues(p, m);
+            const int base = p.base(m);
+            for (size_t k = 0; k < v.size(); ++k)
+                if (off[k] != 0.0f) v[k] = p.fromNormalised(base + static_cast<int>(k), p.toNormalised(base + static_cast<int>(k), v[k]) + off[k]);
+            return v;
+        };
+        float ko[64] = {}, bo[64] = {};
+        Composer::recipeOffsets(true, t.kickMacro, sv, ko);
+        Composer::recipeOffsets(false, t.bassMacro, sv, bo);
+        std::vector<float> kv = apply(Module::Kick, ko), bv = apply(Module::Bass, bo);
+        if (t.kickEngine >= 0) kv[kick::Engine] = static_cast<float>(t.kickEngine);
+        if (t.kickClip >= 0) kv[kick::Clip] = static_cast<float>(t.kickClip);
+        Kick::constrain(kv.data(), slot, t.key);
+        Kick k;
+        k.prepare(sr);
+        k.update(kv.data(), t.key);
+        // The lock: the kick follows the bass's knob phase at the slot, whatever the recipe.
+        k.setPhaseTarget(slot, 0.0);
+        const double ph = k.outputPhaseAt(slot);
+        worstLock = std::max(worstLock, std::fabs(ph - std::round(ph)));
+        k.trigger(1.0f);
+        std::vector<float> ky(static_cast<size_t>(slot * sr));
+        k.process(ky.data(), static_cast<int>(ky.size()));
+        clicks.push_back(powDb(lowendBandPower(ky, 0, ky.size(), 2000.0, 5000.0, sr) / lowendBandPower(ky, 0, ky.size(), 40.0, 120.0, sr)));
+        bv[bass::DuckDepth] = 0.0f;
+        const std::vector<float> by = lowendRollingBass(bv, 24, bassRootNote(t.key, 0));
+        bites.push_back(powDb(lowendBandPower(by, by.size() / 4, by.size(), 300.0, 2000.0, sr) / lowendBandPower(by, by.size() / 4, by.size(), 20.0, 120.0, sr)));
+        // The pluck: 700 Hz .. 3 kHz in a note's first period against its third (as in testBassBite).
+        {
+            const double bs = 60.0 / 145.0 * sr, sl = bs / 4.0;
+            const size_t per = static_cast<size_t>(std::lround(sr / midiToHz(bassRootNote(t.key, 0))));
+            double e = 0.0, l = 0.0;
+            for (int kk = 6; kk < 22; ++kk)
+                for (int s = 1; s <= 3; ++s) {
+                    const size_t a = static_cast<size_t>(kk * bs + s * sl);
+                    e += lowendBandPower(by, a, a + per, 700.0, 3000.0, sr);
+                    l += lowendBandPower(by, a + 2 * per, a + 3 * per, 700.0, 3000.0, sr);
+                }
+            plucks.push_back(powDb(e / l));
+        }
+    }
+    auto iqr = [](std::vector<double> v) { std::sort(v.begin(), v.end()); return v[v.size() * 3 / 4] - v[v.size() / 4]; };
+    const double kickIqr = iqr(clicks), bassIqr = iqr(bites), pluckIqr = iqr(plucks);
+    check(kickIqr >= 4.0 && bassIqr >= 3.0 && pluckIqr >= 8.0, "twenty tracks' kicks and basses differ audibly: click, bite band and pluck spread over their quartiles",
+          fmt("kick click interquartile range %.1f dB (references 8.0), bass bite band %.1f dB, pluck %.1f dB", kickIqr, bassIqr, pluckIqr));
+    check(worstLock < 1e-3, "every recipe's kick still meets the bass phase at the first slot (the lock finds a whole cycle)",
+          fmt("worst %.2g cycles off", worstLock));
+}
+
 /**
  * @brief The engine tells the kit its tempo, and the auto-pan's period follows (18.09.2026).
  *
@@ -1624,6 +2125,11 @@ void testPhaseLock()
         double spread = 0.0, coh = 0.0;
         const double dk = measureLock("bass.kick_lock=Kick follows bass", bpm, spread, coh);
         worstKick = std::max(worstKick, std::fabs(dk));
+        // The onset spread on the sub alone (19.09.2026): what it checks is that onsets are sub-sample
+        // exact, and since the bite and the sub octave the harmonics of a note depend on its velocity,
+        // which the pattern varies from beat to beat -- a two-period fit then reads 0.1 degree of
+        // "spread" that is timbre, not timing (with every harmonic path closed it reads what it did).
+        measureLock("bass.kick_lock=Kick follows bass bass.bite=0 bass.sub_octave=0 bass.cutoff=20 bass.env_amount=0 bass.key_track=0", bpm, spread, coh);
         worstSpread = std::max(worstSpread, spread);
         const double db = measureLock("bass.kick_lock=Bass follows kick", bpm, spread, coh);
         worstBass = std::max(worstBass, std::fabs(db));
@@ -1722,7 +2228,7 @@ double measureFreeLock(double bpm, const char* rhythm, int& onsets, int& distinc
         auto refBass = [&](size_t i) { return f0 * (static_cast<double>(w0 + i) - ideal) / sr; };
         auto refKick = [&](size_t i) { return kickModel.outputPhaseAt((static_cast<double>(w0 + i) - kickIdeal) / sr); };
         const double dk = phaseAgainst(kickY.data() + w0, win, refKick);
-        const double pb = phaseAgainst(bassY.data() + w0, win, refBass);
+        const double pb = phaseAgainstH<3>(bassY.data() + w0, win, refBass);   // harmonics fitted too (phaseAgainstH)
         const double atSlot = kickModel.outputPhaseAt(slot * beatSamples / sr);
         const double pk = 360.0 * (atSlot - std::floor(atSlot)) + dk;
         sumD += wrapDeg(pk - pb);
@@ -9538,6 +10044,10 @@ int main()
     run("testVariety", testVariety);
     run("testEngine", testEngine);
     run("testKickReference", testKickReference);
+    run("testBassBite", testBassBite);
+    run("testKickBody", testKickBody);
+    run("testAcidVoicing", testAcidVoicing);
+    run("testRecipeSpread", testRecipeSpread);
     run("testPercTempo", testPercTempo);
     run("testPhaseLock", testPhaseLock);
     run("testBassRhythm", testBassRhythm);

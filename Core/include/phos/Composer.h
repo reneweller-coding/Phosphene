@@ -115,6 +115,18 @@ constexpr int kBassPhraseSlots = kBassPhraseBars * 4 * 3;
 extern const char* const kKickMacroNames[kNumKickMacros];   ///< display names
 extern const char* const kBassMacroNames[kNumBassMacros];   ///< display names
 
+/**
+ * @brief The acid voicings a track's acid sound is interpolated between (19.09.2026).
+ *
+ * The three candidates the user heard on 18.09.2026 (docs/PLAN.md, "Fundament und Mix"): a clean,
+ * round 303 ("clean"), the 303 into a distortion pedal that became the default ("driven"), and the
+ * half-pulse, dispersed Goa acid ("liquid"). A track's acid is a point in the triangle they span --
+ * barycentric weights, one per voicing, summing to 1 -- so that tracks differ by more than three
+ * presets and any blend is a legal sound. Driven is the knobs; the first track is driven exactly.
+ */
+constexpr int kNumAcidVoicings = 3;
+extern const char* const kAcidVoicingNames[kNumAcidVoicings];   ///< "clean", "driven", "liquid"
+
 /** @brief What the set walk decides for a track: the journey through the night. */
 struct TrackWalk {
     int    bars = 256;              ///< length in bars (a multiple of 32)
@@ -123,6 +135,7 @@ struct TrackWalk {
     double bpm = 145.0;             ///< tempo the track settles on
     float  kickMacro[5] = {};       ///< kick recipe, each -1..1
     float  bassMacro[5] = {};       ///< bass recipe, each -1..1
+    float  acidVoicing[kNumAcidVoicings] = { 0.0f, 1.0f, 0.0f };   ///< barycentric weights of the acid voicings
 };
 
 /** @brief Everything that is decided once per track. */
@@ -140,7 +153,8 @@ struct TrackPlan {
     int    kickClip = -1;           ///< override of kick.clip, -1 = the knob
     float  kickMacro[kNumKickMacros] = {};   ///< recipe, each -1..1
     float  bassMacro[kNumBassMacros] = {};   ///< recipe, each -1..1
-    double loudness = 0.0;          ///< probe loudness of the track's sound, LUFS (0 when Level Match is off)
+    float  acidVoicing[kNumAcidVoicings] = { 0.0f, 1.0f, 0.0f };   ///< barycentric weights of the acid voicings (clean, driven, liquid)
+    double loudness = 0.0;         ///< probe loudness of the track's sound, LUFS (0 when Level Match is off)
     float  gainDb = 0.0f;           ///< level correction against the first track
     uint64_t percSeed = 0;          ///< seed of the track's percussion decisions
     PercPlan perc;                  ///< the track's percussion plan (Rhythm.h)
@@ -239,6 +253,22 @@ public:
      *                   (must hold ParamStore::moduleCount entries)
      */
     static void recipeOffsets(bool kickModule, const float* macros, float amount, float* out);
+
+    /**
+     * @brief Normalised acid offsets of a point in the voicing triangle (kNumAcidVoicings).
+     *
+     * Each voicing is a set of parameter values; the offset of a parameter is the weighted sum of the
+     * voicings' normalised distances from that parameter's *default* (the driven voicing), times the
+     * reach min(1, 2 x Sound Variation) -- at the default Sound Variation of 0.5 a track at a corner of
+     * the triangle plays that voicing exactly, at 0 every track plays the knobs. Offsets, not values:
+     * a knob the user has moved keeps its meaning, the track moves around it.
+     * @param p        the parameter store (for the normalised domains and the defaults)
+     * @param weights  kNumAcidVoicings barycentric weights
+     * @param amount   Sound Variation
+     * @param out      receives acid::Count offsets, indexed like the acid table
+     * @param disperse receives the Disperse override (a discrete parameter), or -1 for the knob
+     */
+    static void acidVoicingOffsets(const ParamStore& p, const float* weights, float amount, float* out, int& disperse);
 
 private:
     void validate(const ParamStore& params) const;

@@ -4,6 +4,7 @@
  */
 #include "phos/Composer.h"
 #include "phos/Corpus.h"
+#include "phos/Disperser.h"
 #include "phos/Dsp.h"
 #include "phos/Engine.h"
 #include "phos/Harmony.h"
@@ -22,6 +23,7 @@ namespace phos {
 const char* const kKickMacroNames[kNumKickMacros] = { "length", "punch", "body", "grit", "click" };
 const char* const kBassMacroNames[kNumBassMacros] = { "brightness", "pluck", "squelch", "grit", "weight" };
 const char* const kLockUnitNames[kNumLockUnits] = { "set", "track", "section", "lane" };
+const char* const kAcidVoicingNames[kNumAcidVoicings] = { "clean", "driven", "liquid" };
 
 namespace {
 
@@ -42,21 +44,69 @@ constexpr uint64_t kSaltReroll = 0x5245524F4C4C0012ull;
 struct Loading { int param; int macro; float weight; };
 
 // Kick: length, punch, body, grit, click. Weights in normalised knob units at full variation.
+//
+// Widened 19.09.2026 where the reference kicks spread (Tools/ref_kick.py, 24 recordings): the click
+// band against the body has quartiles -31 .. -23 dB, eight decibels, where the old click weights moved
+// it by about two; the length direction reaches further (the tail limit at the first bass slot caps
+// it in the engine, so a long recipe cannot mask the bass); and the body direction now moves the end
+// pitch, whose reference quartiles are 54 .. 71 Hz -- with Tune = Key the end pitch still lands on the
+// key's root or fifth, so a recipe changes *which* of the two, never the tuning.
 const Loading kKickLoadings[] = {
-    { kick::AmpHold,    0,  0.20f }, { kick::AmpDecay,   0,  0.30f }, { kick::PitchDecay, 0,  0.10f },
-    { kick::Punch,      1,  0.30f }, { kick::PunchDecay, 1, -0.20f }, { kick::PitchStart, 1,  0.20f },
-    { kick::PitchDecay, 2,  0.25f }, { kick::Tone,       2,  0.12f }, { kick::PitchStart, 2, -0.10f },
-    { kick::Drive,      3,  0.35f }, { kick::ClickLevel, 3,  0.08f }, { kick::Level,      3, -0.05f },
-    { kick::ClickLevel, 4,  0.25f }, { kick::ClickTone,  4,  0.25f }, { kick::ClickDecay, 4,  0.15f },
+    { kick::AmpHold,    0,  0.25f }, { kick::AmpDecay,   0,  0.45f }, { kick::PitchDecay, 0,  0.10f },
+    { kick::Punch,      1,  0.40f }, { kick::PunchDecay, 1, -0.25f }, { kick::PitchStart, 1,  0.25f },
+    { kick::PitchDecay, 2,  0.30f }, { kick::Tone,       2,  0.15f }, { kick::PitchStart, 2, -0.10f }, { kick::PitchEnd, 2, 0.25f },
+    { kick::Drive,      3,  0.45f }, { kick::ClickLevel, 3,  0.10f }, { kick::Level,      3, -0.05f },
+    { kick::ClickLevel, 4,  0.75f }, { kick::ClickTone,  4,  0.40f }, { kick::ClickDecay, 4,  0.20f },
 };
-// Bass: brightness, pluck, squelch, grit, weight.
+// Bass: brightness, pluck, squelch, grit, weight -- since 19.09.2026 the four bass characters of the
+// round's brief as directions of one space rather than four presets: "clean sub + bite" is the centre
+// and positive weight, "gritty/overdriven" is grit (both drives and the pulse), "rubbery/resonant" is
+// squelch (the ladder's and the bite's resonance, a longer filter decay), "plucky/short" is pluck (every
+// decay shorter, less sustain). The weights are three to four times the old ones: at the default Sound
+// Variation of 0.5 and a typical draw of 0.4 the old table moved no knob by more than 0.06 of its range,
+// which renders a different number and the same sound.
 const Loading kBassLoadings[] = {
-    { bass::Cutoff,      0,  0.12f }, { bass::EnvAmount,   0,  0.15f },
-    { bass::FilterDecay, 1, -0.20f }, { bass::AmpDecay,    1, -0.15f }, { bass::AmpSustain, 1, -0.20f },
-    { bass::Resonance,   2,  0.30f },
-    { bass::Drive,       3,  0.30f }, { bass::Wave,        3,  0.25f }, { bass::PulseWidth, 3,  0.10f }, { bass::Level, 3, -0.03f },
-    { bass::Sub,         4,  0.20f }, { bass::SplitRatio,  4,  0.15f }, { bass::KeyTrack,   4, -0.10f },
+    { bass::Cutoff,      0,  0.25f }, { bass::EnvAmount,   0,  0.20f }, { bass::BiteCutoff, 0,  0.60f }, { bass::BiteEnv, 0, 0.35f },
+    { bass::FilterDecay, 1, -0.40f }, { bass::AmpDecay,    1, -0.50f }, { bass::AmpSustain, 1, -0.60f }, { bass::BiteDecay, 1, -0.70f },
+    { bass::Resonance,   2,  0.70f }, { bass::BiteResonance, 2, 0.90f }, { bass::FilterDecay, 2, 0.15f },
+    { bass::Drive,       3,  0.60f }, { bass::BiteDrive,   3,  0.80f }, { bass::Wave,       3,  0.40f }, { bass::PulseWidth, 3, 0.10f },
+    { bass::Bite,        3,  0.30f }, { bass::Level,       3, -0.03f },
+    { bass::Sub,         4,  0.30f }, { bass::SubOctave,   4,  0.25f }, { bass::Bite,       4, -0.40f }, { bass::SplitRatio, 4, 0.15f },
+    { bass::KeyTrack,    4, -0.10f },
 };
+
+/** @brief Salt of the acid voicing draw: its own, so no other draw of the walk moves. */
+constexpr uint64_t kSaltAcidVoice = 0x4143494456434500ull;
+
+/**
+ * @brief One parameter of the acid voicings: its value in the clean and the liquid voicing.
+ *
+ * The driven voicing is the parameter table's default (Params.cpp, 18.09.2026), so it needs no column.
+ * The values are the candidates the user heard on 18.09.2026 (docs/PLAN.md, "Fundament und Mix",
+ * `A_acid_1_clean303` and `A_acid_3_liquid`), minus what a track cannot own:
+ *  - **Resonance and Decay** are ridden by the section (Form.cpp, `sectionAutomation`): a ride event
+ *    holds an offset rather than adding one, so a track offset on them would last only until the first
+ *    section event. The ride's targets are relative to the knob, so a voicing cannot reach them.
+ *  - **Level** is left to the level match, which probes each part alone with the track's sound and
+ *    corrects it against the first track (Composer.h, "Level match").
+ *  - **Hall Send** is the section's (the breakdown opens it).
+ * Cutoff and Env Amount are also written per section (`sectionControls`); there the voicing's offset is
+ * added to the section's own base, so it survives.
+ */
+struct AcidVoicingParam { int param; float clean, liquid; };
+const AcidVoicingParam kAcidVoicingTable[] = {
+    { acid::Wave,          0.0f,   0.5f },
+    { acid::Cutoff,      600.0f, 450.0f },
+    { acid::EnvAmount,     4.0f,   5.0f },
+    { acid::Accent,        0.8f,   0.6f },
+    { acid::Drive,         0.1f,   0.4f },
+    { acid::LowCut,      150.0f, 150.0f },
+    { acid::DelaySend,     0.3f,  0.35f },
+    { acid::DelayFeedback, 0.45f, 0.55f },
+    { acid::DisperseFreq, 1250.0f, 1500.0f },
+};
+/** @brief Disperser stages of the liquid voicing (a discrete parameter, written as an override). */
+constexpr float kLiquidDisperse = 4.0f;
 
 /** @brief Bass parameters that move in slow arcs within a track, with their arc size at full variation. */
 struct Arc { int param; float size; };
@@ -510,6 +560,24 @@ void Composer::recipeOffsets(bool kickModule, const float* macros, float amount,
     for (size_t i = 0; i < count; ++i) out[table[i].param] += amount * table[i].weight * macros[table[i].macro];
 }
 
+void Composer::acidVoicingOffsets(const ParamStore& p, const float* weights, float amount, float* out, int& disperse)
+{
+    const int ab = p.base(Module::Acid);
+    std::fill(out, out + acid::Count, 0.0f);
+    disperse = -1;
+    const float reach = std::clamp(2.0f * amount, 0.0f, 1.0f);
+    if (reach <= 0.0f) return;
+    for (const AcidVoicingParam& v : kAcidVoicingTable) {
+        const int id = ab + v.param;
+        const float d = p.toNormalised(id, p.defaultValue(id));
+        out[v.param] = reach * (weights[0] * (p.toNormalised(id, v.clean) - d) + weights[2] * (p.toNormalised(id, v.liquid) - d));
+    }
+    // The disperser is a number of stages: the liquid share of the stages, rounded, on top of the knob.
+    const int knob = static_cast<int>(std::lround(p.get(ab + acid::Disperse)));
+    const int stages = std::min(static_cast<int>(kDisperseStages), knob + static_cast<int>(std::lround(reach * weights[2] * kLiquidDisperse)));
+    disperse = stages == knob ? -1 : stages;   // no liquid share: the knob, as an override of -1 says
+}
+
 void Composer::matchMaster(const ParamStore& p, TrackPlan& t) const
 {
     const int ms = p.base(Module::Master);
@@ -619,6 +687,28 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
         };
         chooseRecipe(w.kickMacro, kNumKickMacros, true);
         chooseRecipe(w.bassMacro, kNumBassMacros, false);
+
+        // The acid voicing (19.09.2026): a point in the triangle of the three voicings. Candidates are
+        // uniform on the triangle -- normalised exponential draws, the flat Dirichlet distribution -- and
+        // the one farthest from the previous two tracks' points wins, the same best-candidate rule as
+        // the recipes. Its own generator, so the kick and bass recipes above are the ones they were.
+        Rng ra;
+        ra.seed(mixSeed(setSeed() ^ kSaltAcidVoice, static_cast<uint64_t>(i)));
+        double bestAcid = -1.0;
+        for (int c = 0; c < 12; ++c) {
+            float cand[kNumAcidVoicings];
+            float sum = 0.0f;
+            for (float& x : cand) { x = static_cast<float>(-std::log(1.0 - 0.999999 * static_cast<double>(ra.uniform()))); sum += x; }
+            for (float& x : cand) x /= sum;
+            double score = 1e9;
+            for (int back = 1; back <= 2 && i - back >= 0; ++back) {
+                const float* o = walk_[static_cast<size_t>(i - back)].acidVoicing;
+                double d = 0.0;
+                for (int k = 0; k < kNumAcidVoicings; ++k) d += (cand[k] - o[k]) * (cand[k] - o[k]);
+                score = std::min(score, std::sqrt(d));
+            }
+            if (score > bestAcid) { bestAcid = score; std::copy(cand, cand + kNumAcidVoicings, w.acidVoicing); }
+        }
         walk_.push_back(w);
     }
     return walk_[static_cast<size_t>(index)];
@@ -642,6 +732,7 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     t.bpm = w.bpm;
     std::copy(w.kickMacro, w.kickMacro + kNumKickMacros, t.kickMacro);
     std::copy(w.bassMacro, w.bassMacro + kNumBassMacros, t.bassMacro);
+    std::copy(w.acidVoicing, w.acidVoicing + kNumAcidVoicings, t.acidVoicing);
 
     // Where the track sits on the set's energy arc (Form.h).
     const double setBars = setLengthBars(p);
@@ -808,6 +899,17 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
         const ParamDesc& d = p.desc(levelParam[k]);
         push(levelParam[k], ControlEvent::Kind::Offset, plan.partGainDb[k] / (d.maxValue - d.minValue));
     }
+    // The track's acid voicing (Composer.h, kNumAcidVoicings). Cutoff and Env Amount are written again
+    // by every section with the voicing folded into the section's base (sectionControls); they are
+    // written here as well so that the level match's part probe, which plays the track start alone,
+    // hears the voicing it has to match.
+    {
+        float acidOff[acid::Count] = {};
+        int disperse = -1;
+        acidVoicingOffsets(p, plan.acidVoicing, sv, acidOff, disperse);
+        for (const AcidVoicingParam& v : kAcidVoicingTable) push(ab + v.param, ControlEvent::Kind::Offset, acidOff[v.param]);
+        push(ab + acid::Disperse, ControlEvent::Kind::Override, static_cast<float>(disperse));
+    }
     push(ab + acid::Decay, ControlEvent::Kind::Offset, 0.12f * sv * m.recipe[0]);
     push(ab + acid::Resonance, ControlEvent::Kind::Offset, 0.08f * sv * m.recipe[0]);
     push(lb + poly::Detune, ControlEvent::Kind::Offset, 0.15f * sv * m.recipe[1]);
@@ -865,7 +967,13 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
     Rng r;
     r.seed(mixSeed(plan.sectionSeed[std::clamp(bar.index, 0, kMaxSections - 1)] ^ kSaltArc, 0));
     const float wobble = (2.0f * r.uniform() - 1.0f);
-    const float acidBase = 0.10f * sv * m.recipe[0];
+    // The track's acid voicing moves the cutoff and the envelope depth the section's arc and ride are
+    // centred on (19.09.2026): as a base, not as a separate event, because the arc and the ride write
+    // the same parameters and each event replaces the offset before it.
+    float voicing[acid::Count] = {};
+    int disperseUnused = -1;
+    acidVoicingOffsets(p, plan.acidVoicing, sv, voicing, disperseUnused);
+    const float acidBase = 0.10f * sv * m.recipe[0] + voicing[acid::Cutoff];
     const bool knobs = plan.index == 0 && bar.index == 0;
     const float e0 = s.energy, e1 = s.energyTo;
     auto cutoffAt = [&](float base, float scale, float energy) {
@@ -877,7 +985,7 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
         push(pb + poly::Position, cutoffAt(0.25f * sv * m.recipe[3], 0.6f, e0), 0.0f);
     }
     push(ab + acid::Cutoff, cutoffAt(acidBase, 1.0f, e1), length);
-    push(ab + acid::EnvAmount, 0.5f * (cutoffAt(acidBase, 1.0f, e1) - acidBase), length);
+    push(ab + acid::EnvAmount, 0.5f * (cutoffAt(acidBase, 1.0f, e1) - acidBase) + voicing[acid::EnvAmount], length);
     push(lb + poly::Cutoff, cutoffAt(0.10f * sv * m.recipe[1], 0.8f, e1), length);
     push(pb + poly::Position, cutoffAt(0.25f * sv * m.recipe[3], 0.6f, e1), length);
 
@@ -1032,8 +1140,23 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
         }
         return planBar(plan.form, availabilityOf(plan), plan.sectionSeed, source);
     };
+    // The foundation probe plays as many percussion layers as the track's first core does (19.09.2026).
+    // It used to play all the track has; a core often plays fewer, and the probe then over-read the
+    // track by up to 0.9 LU -- by different amounts from track to track, so the level match matched
+    // the percussion plan instead of the sound. Measured in testVariety's level-match check: 0.81 LU of
+    // spread with all layers, 0.40 with the core's (docs/PLAN.md, 19.09.2026). The round of 18.09.2026
+    // had found the same limit from the other side: louder toms and congas widened the spread because
+    // "the probe does not see how much of a track toms and congas play".
+    int coreLayers = plan.perc.layers;
+    for (int i = 0; i < plan.form.count; ++i)
+        if (plan.form.section[i].type == SectionType::Groove || plan.form.section[i].type == SectionType::Drop) {
+            const Section& core = plan.form.section[i];
+            coreLayers = planBar(plan.form, availabilityOf(plan), plan.sectionSeed, core.startBar + std::min(4, core.bars - 1)).percLayers;
+            break;
+        }
     for (int b = 0; b < bars; ++b) {
-        const BarPlan bp = probeBar(sourceBar(b));
+        BarPlan bp = probeBar(sourceBar(b));
+        if (part == -1) bp.percLayers = std::min(bp.percLayers, coreLayers);
         // The whole-mix probe has to hear the loudness side of the energy arc as well, or Auto Gain
         // would aim at a track that is louder than the one the form really plays (measured: 1.3 LU).
         if (part == -2) {

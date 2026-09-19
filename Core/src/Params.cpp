@@ -226,27 +226,27 @@ const ParamDesc kKickParams[kick::Count] = {
     { "punch",       "Punch",        "",     0.0f,     1.0f,    0.5f, Curve::Linear },
     { "amp_attack",  "Attack",       "ms",   0.0f,    10.0f,    0.2f, Curve::Linear },
     { "amp_hold",    "Hold",         "ms",   0.0f,   150.0f,   12.0f, Curve::Linear },
-    { "amp_decay",   "Decay",        "ms",  20.0f,  1500.0f,  150.0f, Curve::Log },
+    { "amp_decay",   "Decay",        "ms",  20.0f,  1500.0f,  240.0f, Curve::Log },
     { "drive",       "Drive",        "",     0.0f,     1.0f,   0.30f, Curve::Linear },
     { "clip",        "Clip",         "",     0.0f,     1.0f,    0.0f, Curve::Choice, kKickClipNames },
     { "click_level", "Click",        "",     0.0f,     1.0f,    0.5f, Curve::Linear },
     { "click_tone",  "Click Tone",   "Hz", 500.0f, 12000.0f, 4000.0f, Curve::Log },
     { "click_decay", "Click Decay",  "ms",   0.5f,    30.0f,    3.0f, Curve::Log },
     { "tone",        "Tone",         "Hz", 200.0f, 20000.0f, 9000.0f, Curve::Log },
-    { "level",       "Level",        "dB", -36.0f,     6.0f,   -2.0f, Curve::Linear },
-    { "tail_limit",  "Tail Limit",   "dB", -60.0f,     0.0f,  -24.0f, Curve::Linear },
+    { "level",       "Level",        "dB", -36.0f,     6.0f,   -6.0f, Curve::Linear },
+    { "tail_limit",  "Tail Limit",   "dB", -60.0f,     0.0f,  -15.0f, Curve::Linear },
 };
 
 const ParamDesc kBassParams[bass::Count] = {
     { "wave",          "Wave",          "",      0.0f,     1.0f,  0.15f, Curve::Linear },
     { "pulse_width",   "Pulse Width",   "",     0.05f,    0.95f,   0.5f, Curve::Linear },
-    { "sub",           "Sub",           "",      0.0f,     1.0f,   0.6f, Curve::Linear },
+    { "sub",           "Sub",           "",      0.0f,     1.0f,   0.3f, Curve::Linear },
     { "sub_mode",      "Sub Mode",      "",      0.0f,     1.0f,   1.0f, Curve::Choice, kSubModeNames },
     { "split_ratio",   "Split",         "x f0",  1.2f,     3.0f,   2.0f, Curve::Linear },
     { "kick_lock",     "Kick Lock",     "",      0.0f,     2.0f,   2.0f, Curve::Choice, kKickLockNames },
     { "retrigger",     "Retrigger",     "",      0.0f,     1.0f,   1.0f, Curve::Toggle },
     { "start_phase",   "Start Phase",   "",      0.0f,     1.0f,   0.5f, Curve::Linear },
-    { "cutoff",        "Cutoff",        "Hz",   20.0f, 10000.0f, 140.0f, Curve::Log },
+    { "cutoff",        "Cutoff",        "Hz",   20.0f, 10000.0f, 240.0f, Curve::Log },
     { "resonance",     "Resonance",     "",      0.0f,     1.0f,   0.3f, Curve::Linear },
     { "env_amount",    "Env Amount",    "oct",   0.0f,     8.0f,   4.0f, Curve::Linear },
     { "filter_decay",  "Filter Decay",  "ms",    3.0f,  1000.0f,  75.0f, Curve::Log },
@@ -260,7 +260,19 @@ const ParamDesc kBassParams[bass::Count] = {
     { "duck_depth",    "Duck Depth",    "",      0.0f,     1.0f,   0.5f, Curve::Linear },
     { "duck_hold",     "Duck Hold",     "ms",    0.0f,   200.0f,  25.0f, Curve::Linear },
     { "duck_release",  "Duck Release",  "ms",    5.0f,   500.0f,  60.0f, Curve::Log },
-    { "level",         "Level",         "dB",  -36.0f,     6.0f,  -5.0f, Curve::Linear },
+    { "level",         "Level",         "dB",  -36.0f,     6.0f,  -3.0f, Curve::Linear },
+    // Appended 19.09.2026 (round "lowend-acid"): the bite layer, a saturated copy of the oscillator
+    // low-passed around 400 .. 800 Hz with its own envelope (Bass.h, "Bite").
+    { "bite",           "Bite",          "",      0.0f,     1.0f,   0.5f, Curve::Linear },
+    { "bite_cutoff",    "Bite Cutoff",   "Hz",  100.0f,  4000.0f, 500.0f, Curve::Log },
+    { "bite_env",       "Bite Env",      "oct",   0.0f,     5.0f,   3.0f, Curve::Linear },
+    { "bite_decay",     "Bite Decay",    "ms",    5.0f,  1000.0f,  90.0f, Curve::Log },
+    { "bite_drive",     "Bite Drive",    "",      0.0f,     1.0f,   0.5f, Curve::Linear },
+    { "bite_resonance", "Bite Reso",     "",      0.0f,     1.0f,   0.2f, Curve::Linear },
+    // The octave of the sub: a sine at twice the fundamental, phase-locked to it, in the sub's level
+    // units. It carries the 60 .. 120 Hz weight the references have without a filter near the
+    // fundamental (Bass.h, "Sub octave").
+    { "sub_octave",     "Sub Octave",    "",      0.0f,     1.0f,   0.5f, Curve::Linear },
 };
 
 const char* const kDelayTimeNames[] = { "1/16", "1/8", "3/16", "1/4", "3/8", "1/2" };

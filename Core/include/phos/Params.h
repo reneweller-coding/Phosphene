@@ -104,7 +104,10 @@ enum : int { Engine, Tune, PitchEnd, PitchStart, PitchDecay, PunchDecay, Punch, 
 namespace bass {
 enum : int { Wave, PulseWidth, Sub, SubMode, SplitRatio, KickLock, Retrigger, StartPhase, Cutoff, Resonance,
              EnvAmount, FilterDecay, KeyTrack, VelToCutoff, Drive, AmpAttack, AmpDecay, AmpSustain, AmpRelease,
-             DuckDepth, DuckHold, DuckRelease, Level, Count };
+             DuckDepth, DuckHold, DuckRelease, Level,
+             // Appended 19.09.2026 (round "lowend-acid"): the bite layer (Bass.h). New entries go at
+             // the end: stored sets, presets and plugin state refer to a parameter by its index.
+             Bite, BiteCutoff, BiteEnv, BiteDecay, BiteDrive, BiteResonance, SubOctave, Count };
 }
 /** @brief Parameters of the acid voice (module Acid, prefix "acid"). */
 namespace acid {
