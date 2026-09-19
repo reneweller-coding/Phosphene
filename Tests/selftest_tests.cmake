@@ -77,6 +77,7 @@ set(PHOS_SELFTEST_SECONDS
     testDynamics             0.1
     testLoudness             0.1
     testTransitions          0.1
+    testArrangement          0.4
     testReverb               0.1
     testComposer             0.1
     testPercKit              0.1

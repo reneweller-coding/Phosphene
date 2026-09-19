@@ -103,7 +103,10 @@ const ParamDesc kComposeParams[compose::Count] = {
     // 19.09.2026, round "voices": the three new voices' share of the tracks (like lead_amount), and two
     // density knobs of the psychedelic layer the round of the same day could not add (it did not own the
     // composer): 1 is the density that round calibrated, 0 removes the voices or the bed, 2 doubles them.
-    { "counter_amount",  "Counter Amount",  "",      0.0f,   1.0f,   0.6f, Curve::Linear },
+    // 1.0 since 19.09.2026 (round "arrangement"): the user's drop 2 has "lead 1 and lead 2 in call and
+    // response", so every track that has a lead has its counter; it plays in drop 2 only (Form.cpp). At 0.6
+    // four tracks in seventeen of the listening seed had both.
+    { "counter_amount",  "Counter Amount",  "",      0.0f,   1.0f,   1.0f, Curve::Linear },
     { "stab_amount",     "Stab Amount",     "",      0.0f,   1.0f,   0.5f, Curve::Linear },
     { "drone_amount",    "Drone Amount",    "",      0.0f,   1.0f,   0.6f, Curve::Linear },
     { "voice_density",   "Voice Density",   "x",     0.0f,   2.0f,   1.0f, Curve::Linear },
