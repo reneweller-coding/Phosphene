@@ -1348,13 +1348,25 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     // spread with all layers, 0.40 with the core's (docs/PLAN.md, 19.09.2026). The round of 18.09.2026
     // had found the same limit from the other side: louder toms and congas widened the spread because
     // "the probe does not see how much of a track toms and congas play".
+    //
+    // 19.09.2026 (round "voices"): the first *drop*, where the track has one, and the first core only
+    // where it has none. A track whose first core is a groove (the Full-On body) measured the groove's
+    // thinner kit -- two layers plus one per eight-bar group -- and was lifted for it: on the listening
+    // seed track 2 by +2.0 dB where its drop, kick, bass and kit alone, is only 0.3 LU quieter than
+    // track 1's (rendered, master dynamics off: -11.8 against -11.5 LUFS unmatched, -9.8 matched). The
+    // gain acts on kick, bass and percussion only, so the drop stood 1.7 dB hot and the level match of
+    // its melodic parts, which takes the track gain back out, could not see it.
     int coreLayers = plan.perc.layers;
-    for (int i = 0; i < plan.form.count; ++i)
-        if (plan.form.section[i].type == SectionType::Groove || plan.form.section[i].type == SectionType::Drop) {
-            const Section& core = plan.form.section[i];
-            coreLayers = planBar(plan.form, availabilityOf(plan), plan.sectionSeed, core.startBar + std::min(4, core.bars - 1)).percLayers;
-            break;
+    int coreAt = -1;
+    for (int pass = 0; pass < 2 && coreAt < 0; ++pass)
+        for (int i = 0; i < plan.form.count && coreAt < 0; ++i) {
+            const SectionType st = plan.form.section[i].type;
+            if (st == SectionType::Drop || (pass == 1 && st == SectionType::Groove)) coreAt = i;
         }
+    if (coreAt >= 0) {
+        const Section& core = plan.form.section[coreAt];
+        coreLayers = planBar(plan.form, availabilityOf(plan), plan.sectionSeed, core.startBar + std::min(4, core.bars - 1)).percLayers;
+    }
     for (int b = 0; b < bars; ++b) {
         BarPlan bp = probeBar(sourceBar(b));
         if (part == -1) bp.percLayers = std::min(bp.percLayers, coreLayers);

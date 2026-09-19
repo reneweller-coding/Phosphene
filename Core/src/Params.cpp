@@ -543,7 +543,10 @@ const ParamDesc kMixParams[mix::Count] = {
     { "acid_level", "Acid Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     // 19.09.2026, round "voices": the strips in the order of the voices' groups (Params.h, mix::).
     { "lead_mute",  "Lead Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
-    { "lead_level", "Lead Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    // -3 dB (19.09.2026, round "voices"): excerpt B of the listening seed (track 2's drop) sat +9.8 dB over
+    // the reference median in presence once its foundation was no longer over-matched (Composer.cpp,
+    // probeLoudness); with the lead muted it read +1.8, so the lead carried most of it. -3 dB: +7.6.
+    { "lead_level", "Lead Level", "dB", -24.0f, 12.0f, -3.0f, Curve::Linear },
     { "counter_mute",  "Counter Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "counter_level", "Counter Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     { "arp_mute",   "Arp Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
