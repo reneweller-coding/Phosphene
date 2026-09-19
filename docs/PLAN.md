@@ -4513,6 +4513,163 @@ Regler für Stimmen- und Bettdichte bräuchten eine Zeile im Composer. (3) Der T
 (4) Die Phrase wählt die Engine aus der Beat-Position des Ereignisses; ein Composer-Feld (Lane oder Velocity)
 ließe den Seed wählen.
 
+**19.09.2026, Stimmen: geordnete Instanzen, Counter-Lead, Stabs, Tonic Drone, Klangfarbe je Track**
+
+Anlass: dem Nutzer fehlten „die Tonic Drone, die Stabs, Response Leads … komplett“; die Stimmen sollen
+geordnet stehen („der Counter-Lead neben Lead …, Drone bei Pad“, die Presets dürfen dafür brechen), und
+„die anderen Synthesizer können gerne mehr verschiedene Klangfarben haben“. Alle Messungen: Seed 864566672,
+Standardregler, sofern nicht anders gesagt; Skripte in `PhospheneWork\scratch\voices` (nicht im Repo).
+
+*Ordnung.* `PolyInstance` ist jetzt Lead, Counter, Arp, Stab, Pad, Drone (Präfixe `lead`, `counter`,
+`arp`, `stab`, `pad`, `drone`); dieselbe Reihenfolge haben `Part` (Score.h), `MelodyPart` (Form.h, mit
+`partBit()`/`mpIndex()` statt der Bits 1/2/4/8), die Mischpultzüge `mix.*` (`mix::polyMute/polyLevel`),
+die Engine-Strips, die MIDI-Kanäle (Lead 3 … Drone 8, SFX 9, Drums 10, Textur 11, Stimmen 12), die
+Plugin-Seiten (15 Reiter) und die Quest-Anzeige (`ALCRSPD`). Kein Instanzindex steht mehr als Zahl im Code:
+`p.base(PolyInstance::X)`, `static_assert`s binden die Tabellen an die Enums. `poly::FilterType` und fünf
+`compose.*` (Counter-, Stab-, Drone-Menge, Stimmen- und Bettdichte) sind angehängt.
+**Was ein alter Stand jetzt tut:** Plugin-Stand und `.phosset` speichern Text-Schlüssel, nicht Indizes
+(`lead.cutoff=…`); kein Schlüssel hat seine Bedeutung geändert. Neu: Stand-Version 2 und „phosset 2“, und
+beim Lesen wird jeder Regler zuerst auf seinen Standard gesetzt. Ein Stand von vorher lädt seine alten
+Stimmen exakt, die drei neuen mit Standardwerten — vorher hätten sie behalten, was die Sitzung gerade hatte
+(still falsch). Geprüft im Hosttest (Version-1-Stand ohne neue Schlüssel in eine Instanz mit verstelltem
+Counter) und in `testVoices` (b). Host-Automation hängt an den Text-IDs (JUCE hasht sie), nicht am Index.
+Die Komposition selbst ist neu, ein alter Stand klingt also nicht wie früher — das ist der akzeptierte Bruch.
+
+*Counter-Lead* (Melody.cpp, `makeCounter`): antwortet auf die Lead in deren Registeroktave darüber (Grundton
+E5..D#6, Fenster C5..A6): nach A, A′ und A″ im zweiten Takt der Aussage 1–5 Töne, **nur auf Sechzehnteln, auf
+denen die Lead nicht anschlägt** (über einem dichten Riff also ein, zwei gehaltene Töne), und über dem
+B-Teil eine eigene Achtellinie mit Sechzehntel-Auftakten. Regeln der Lead: Tonika als Zentrum, jede Antwort
+endet auf Quinte (wo der Akkord sie hat) oder Tonika, die Phrase auf der Tonika, keine Farbtöne, nie ein Ton
+dreimal. Kein Korpusmodell (das Korpus hat keine solche Rolle — die Regeln entscheiden). Klang: Formant-Saw
+aus dem Wavetable-Oszillator mit Vokal-LFO und Viertel-Echo. Die Form gibt ihn nur in Kernen, in denen die
+Lead spielt, und nie in ihrer ersten Achtergruppe; Counter und Stab teilen sich die Achtergruppen nach Parität.
+Gemessen (`testVoices`, 8 Tracks mit allen neuen Stimmen): 265 Noten, 0 ohne Lead, **0 % der
+Antwortnoten auf einem Lead-Anschlag** (die Lead schlägt ~13 von 16 Sechzehnteln an), 28 % Tonika,
+44 von 46 Antworten enden auf 1 oder 5 (die zwei anderen: der Registerwächter nahm dort die Schlussnote).
+
+*Stabs* (`makeStab`, `stabChord`): Akkorde in Grundstellung aus dem Material der Arp (sus2 1-2-5-8, sus4
+1-4-5-8, add9 1-3-5-9), E(3..5,16) so rotiert, dass kein Anschlag auf einen Schlag fällt, zwei Takte mit
+einer kleinen Antwort; der Track wählt, welche Takte einer Viererphrase (2+4, 4, 1+3 oder alle). Kurze
+Filterhüllkurve (90 ms), Delay- und Hall-Wurf. Nur in Grooves (ab der zweiten Gruppe) und Drops. Gemessen:
+228 Anschläge, 0 auf einem Schlag, 0 nicht in Grundstellung, 0 Farbtöne, in 15 % der Kerntakte.
+
+*Tonic Drone*: Grundton + Quinte (+ Oktave, wo der Track sie hat und das Pad schweigt), ein gehaltener Akkord je
+**Lauf** (zusammenhängende Drone-Takte einer Sektion mit gleicher Oktave; `melodyContext`). Wo Kick und Bass
+ruhen, die tiefe Oktave D2..C#3 — und dann legt das Pad **keinen** Sub-Grundton, die beiden verdoppelten sich
+sonst; zwei Takte vor der Rückkehr der Kick endet die tiefe Note (Release 2,5 s). Wo Kick und Bass spielen, eine
+Oktave höher und −4,7 dB (Velocity), aber nur wo weder Pad (gleicher Grundton, gleiche Quinte) noch Acid (ihre
+Oktave) spielen, und nicht in den ersten 16 Takten eines Tracks (dort halten noch die Pads des Vortracks).
+Langsame Entwicklung: alle 8/16/32 Takte (je Track) neue Ziele für Cutoff, Tabellenposition und Detune, als
+Rampe über die ganze Periode. Hochpass wie beim Pad-Fundament per Taktereignis auf 40 Hz geöffnet.
+Gemessen: 22 tiefe Noten, 0 unter einer Kick, 0 enden weniger als 1,5 Takte vor einer; 0 von 17 oberen
+Noten über Pad oder Acid; Drone unter jedem Breakdown-Takt; gerendert (Drone solo, Seed 9) im Breakdown unter
+140 Hz 21,2 dB gegen 25,9 dB gesamt, in den zwei Takten nach dem Breakdown −29,5 dB (50 dB tiefer).
+
+*Arp neben der Lead* — `Composer::restoreArp` und die Maskierungsregel der Form sind weg. Stattdessen ein
+**Registerwächter** in `composeMelodyBar`: Lead, Counter, Stab, Arp werden in dieser Priorität gesetzt; jede
+spätere Stimme nimmt für den Takt die Oktave mit den wenigsten Kollisionen (die Arp darf dafür unter die Lead
+oder über sie bis G6 — über Regel 14 hinaus, weil der Auftrag „unter oder über die Lead nach Regel“
+verlangt) und gibt einzelne Sechzehntel ab, die dann noch kollidieren (die Verzahnung in die Lücken der Lead).
+Die Regel „nie zwei Stimmen im selben Register zugleich“ ist konkret: an jeder Sechzehntel liegen die
+klingenden Töne zweier Linienstimmen in disjunkten Spannen mit mindestens 3 Halbtönen Abstand (`kRegisterGap`),
+geprüft unabhängig vom Wächter an der Partitur (`RuleRef::registerClashes`). Gemessen: 0 Kollisionen in 1120
+Takten (8 Tracks, alle Stimmen) und in 16 × 128 Takten (`testMelody`); Hör-Seed Track 2: **Arp in 96 von 96
+Lead-Takten** (vorher 0), 0 Kollisionen. Die Acid ist nicht im Wächter (eigene Tasche 140–350 Hz).
+
+*Klangfarbe je Track* (Composer.h, `VoiceRecipe`): je Stimme und Track aus dem Set-Seed ein Oszillator, eine
+Wavetable aus der Palette der Stimme (die Lead-, Arp- und Pad-Spuren der Bibliothek plus passende eingebaute —
+der Counter die Vokal-/Formant-Tabellen, die Drone Orgel und gemessene), eine Filterantwort (neu
+`poly.filter_type`: Tiefpass, Bandpass, Notch; Hochpass wählt kein Rezept) und fünf Richtungen (Helligkeit,
+Weichheit, Dicke, Raum, Bewegung) als Offsets; zwölf Kandidaten, der vom selben Voice der zwei Vortracks
+entfernteste gewinnt. Der erste Track spielt die Regler. Level-Match je Stimme gleicht die Lautheit ab; jede
+Stimmprobe spielt jetzt die Stimme, auch wenn der erste Track sie nicht hat (sonst blieb z. B. jeder Stab
+ungematcht). Gemessen über Track 2–21 des Hör-Seeds, je Stimme ein Ton gerendert (Interquartilsabstand über die
+Tracks; „gleich“ = Nachbartracks mit gleichem Oszillator und Tabelle und < 66 ct Schwerpunkt, < 10 ms Attack,
+< 1 dB Helligkeit):
+
+| Stimme | Schwerpunkt IQR vorher → nachher | Attack IQR | > 2 kHz IQR | Tabellen | Osz. | Nachbarn gleich |
+|---|---|---|---|---|---|---|
+| Lead | 718 → 1129 ct | 0,395 → 0,415 s | 11,7 → 6,0 dB | 0 → 3 | 3 → 4 | 1 → 0 von 19 |
+| Counter | (neu) 1458 ct | 0,085 s | 3,9 dB | 4 | 3 | 0 |
+| Arp | 18 → 505 ct | 0 → 0 | 0,2 → 3,4 dB | 0 → 4 | 1 → 4 | 19 → 0 |
+| Stab | (neu) 1244 ct | 0,015 s | 9,0 dB | 4 | 3 | 0 |
+| Pad | 303 → 348 ct | 0 → 0,160 s | 0,6 → 4,9 dB | 1 → 7 | 1 → 2 | 3 → 0 |
+| Drone | (neu) 906 ct | 0,060 s | 9,2 dB | 5 | 2 | 0 |
+
+„Vorher“ ist dieselbe Messung mit dem, was ein Track bis heute änderte (Lead: Oszillator, Detune, Cutoff; Arp:
+Filter-Decay, Detune; Pad: Tabellenposition). Die Bibliothek bleibt bei 18 Tabellen (6 eingebaut, 12 aus
+Noctuarys 2191) — eine größere Auswahl mit `Tools/wt_select.py` wäre die nächste Stufe, die APK-Größe dagegen.
+
+*Frequenztaschen und Dichte*: Counter über der Lead (500 Hz–1,8 kHz Grundtöne), Stabs dort, wo die Lead sie
+lässt (oft darüber, C6–F#6), Arp unter oder über der Lead, Drone in 70–280 Hz nur ohne Acid/Pad; Counter und
+Stab nie in derselben Achtergruppe. `testMixBalance` bleibt grün: Air −13,20 dB (Grenze −14,0..−11,2), Top
+−9,94, Presence −9,67 (±2 um −8,9); Breite und Tiefenregel unverändert grün.
+
+*Lose Enden.*
+1. **Auto-Pan-Partition** (Perc.cpp): die Phasengruppen hängen jetzt an der **Rolle** (`kRolePanGroup`), nicht
+   an den Pegeln; die Tabelle ist exakt die Greedy-Antwort am Standard-Kit (`++--..--++--`), der Standard also
+   samplegleich. Mit Closed Hat 4 statt 5 dB, Shaker −5 statt −1 oder beiden verschoben bleibt die Reduktion
+   des 85-ms-Pegelunterschieds ≥ 1,40 dB (mit der alten Partition 0,17 dB — als Mutation nachgemessen).
+2. **Haken des Composers**: `composeSfxBar` schreibt Bett und Stimmen als `Part::Texture`/`Part::Vocal`;
+   `compose.voice_density`, `compose.bed_density` (0..2, 1 = kalibriert; jede Ziehung bleibt, nur die
+   Schwelle skaliert, bei 1 also alles wie zuvor); der Tonart-Impact am Trackanfang bekommt einen Sub Drop;
+   welche Phrase spricht, zieht der Form-Seed (`SfxEvent::variant`, in der Lane der Note; Lane 0 = die alte
+   Ableitung aus dem Beat, für ältere MIDI-Dateien).
+3. **B/C heller als der Median — Sonde oder Klang?** Beides, getrennt gemessen. Kick, Bass und Kit allein
+   (Master-Dynamik aus) im ersten Drop: Track 1 −11,5 LUFS, Track 2 ungematcht −11,8, gematcht −9,8 — die
+   Fundament-Sonde las Track 2 an seinem ersten *Kern*, einem Groove mit dünnerem Kit, und hob ihn um 2,0 dB.
+   Jetzt misst sie am ersten *Drop* (sonst am ersten Kern): Track 2 gematcht −11,5, Track-Gain +0,3 dB. Der Rest
+   ist Klang: mit gemuteter Lead fällt B's Presence von +8,1 auf +1,8 dB über dem Median → `mix.lead_level`
+   −3 dB. **Acid-Ride und Voicing**: der Ride läuft jetzt als Auslenkung um die *gevoicte* Resonanz und das
+   gevoicte Decay (`sectionAutomation(…, resoBase, decayBase)`); clean und liquid tragen dafür Resonanz 0,80/0,88
+   und Decay 220/500 ms. Gemessen: in Stufe 2 steht das Decay auf dem Wert des Tracks (13 von 13 Tracks, liquid
+   0,98 → +0,175 normiert gegen erwartet +0,192); Track 1 (driven) und `testArrangeDynamics` (j) unverändert.
+   Nebenwirkung: `testVariety`-Streuung 0,32 → 0,73 LU (Grenze 0,8) — die Sonde misst jetzt den Drop, `testVariety`
+   den ganzen Track.
+
+*Metriken* (`Tools/metrics.py`, Abstand zum Referenzmedian Low-Mid/Mid/Presence/Air, Standard-Master):
+
+| | nach lowend-acid | nachher |
+|---|---|---|
+| A | +1,80 / −1,21 / −3,53 / −1,75 | +1,63 / −1,48 / −3,46 / −1,97 (2,45 dB rms) |
+| B | +6,65 / +10,50 / +8,21 / +2,18 | +1,64 / +3,68 / +6,65 / +3,92 (4,86 dB rms) |
+| C | +9,48 / +12,83 / +9,79 / +2,15 | +9,84 / +9,10 / +9,19 / +4,77 (8,70 dB rms) |
+
+C ist ein Breakdown gegen ein Referenzband 40–140 Hz, in dem Kick und Bass fehlen; die Drone hebt dort
+Low-Mid (ihre Quinte D#3).
+
+*Prüfungen, neu* `testVoices` (13 Checks: Ordnung, alter Stand, Registerregel, Arp neben der Lead, Counter ×2,
+Stabs ×2, Drone ×3, Klangfarbe, Acid-Ride um das Voicing), in `testArrangeDynamics` die Pan-Robustheit, im
+Hosttest der Version-1-Stand. Angepasst: die Maskierungsprüfungen in `testMelody`/`testGenreRules` messen jetzt
+die Sechzehntel-Regel (Arp bis G6 neben der Lead), `testFoundation` nimmt Takte mit tiefer Drone aus, jede
+„nur ein Teil“-Render mutet die drei neuen Stimmen mit, `.phosset`-Kopf „phosset 2“.
+*Mutationen* (eingebaut, gebaut, gelaufen, aus der Kopie zurück, Zeitstempel gesetzt, `git diff` danach leer):
+
+| Mutation | Wer merkt es |
+|---|---|
+| Registerwächter lässt alles durch | (c) 1377 Sechzehntel mit Kollision |
+| Counter-Antworten auch auf Lead-Anschlägen | (d) 81 % auf Anschlägen |
+| Drone-Grundton immer in der tiefen Oktave | (f) 6 unter einer Kick, gerendert −7,7 statt −29,5 dB |
+| Stab-Rotationen mit Anschlag auf dem Schlag | (e) 100 auf einem Schlag |
+| alte Greedy-Partition des Auto-Pans | Pan-Robustheit: 0,17 dB |
+| `readSetText` ohne Rücksetzen | (b) neue Stimmen nicht zurückgesetzt |
+| Ride um das Regler-Decay statt das gevoicte | (i) 0 Tracks mit langem Decay |
+| Form gibt die Drone in jeden Kern | **niemand** — äquivalent: `melodyContext` nimmt die obere Oktave über Pad/Acid ohnehin heraus |
+
+*Endstand:* Selbsttest 404 bestanden, 0 rot (vorher 390/0); `phos_vectest`, `_neon`, `_scalar` je 17/17;
+Hosttest 118 Checks, 0 rot; `ctest -C Release` im Plugin-Build 8/8; Quest-APK gebaut (`build-quest\PhospheneQuest.apk`,
+8,54 MB, `Quest/src/main.cpp` übersetzt).
+
+*Hören* (`out\listen\voices`): A, B, C wie immer; `B2_lead_and_arp_no_stab` (B ohne Stabs: Lead und Arp
+allein nebeneinander); `D_drone_through_breakdown` und `D_drone_solo_through_breakdown` (Takt 392–448: Drop-Ende,
+ab 13,3 s der Breakdown über der tiefen Drone); `E1`–`E3` die ersten 16 Drop-Takte der Tracks 1–3 (Track 1 = die
+Regler), `E4` 32 Takte Drop von Track 4 mit Counter-Lead.
+
+*Dateien.* Core: `Params.h/.cpp`, `Score.h/.cpp`, `Form.h/.cpp`, `Melody.h/.cpp`, `Composer.h/.cpp`,
+`Engine.h/.cpp`, `Poly.h/.cpp`, `PolyKernel.h`, `Quality.h`, `Midi.cpp`, `SetFile.h/.cpp`, `Perc.cpp`; Plugin:
+`PluginProcessor.h/.cpp`, `PluginEditor.h/.cpp`, `EditorSetTab.cpp`, `PhospheneLookAndFeel.cpp`; `Quest/src/main.cpp`;
+`Tools/render/main.cpp`; `Tests/selftest.cpp`, `Tests/hosttest.cpp`.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
