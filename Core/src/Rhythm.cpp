@@ -425,9 +425,15 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
         // nothing (19.09.2026: until then the last hit fell on beat 4's own downbeat); every other roll bar
         // fills its four beats.
         const double last = spec.pdb ? 3.0 - step : 4.0 - step;
+        // The thirty-seconds play at three quarters of the velocity (19.09.2026, round "polish"): twice the
+        // hits of the sixteenths are +3 dB of snare by themselves, and with the full velocity ramp on top the
+        // last quarter of the big buildup was the brightest eight bars of the track, 2.2 dB above drop 2 over
+        // 1.5 kHz (median of 30 tracks) -- the roll must lead into the climax, not outshine it. -2.5 dB per hit
+        // leaves the step from sixteenths to thirty-seconds a rise of about half a decibel, and the rate.
+        const float rollScale = step < 0.25 ? 0.75f : 1.0f;
         int k = 0;
         for (double b = 0.0; b <= last + 1e-9; b += step, ++k) {
-            const float vel = std::clamp(0.35f + 0.3f * stage + 0.02f * static_cast<float>(k), 0.2f, 1.0f);
+            const float vel = rollScale * std::clamp(0.35f + 0.3f * stage + 0.02f * static_cast<float>(k), 0.2f, 1.0f);
             // Position within the whole roll, 0 at its first hit and 1 at the drop. The ramp is over the
             // roll, not over the bar, so its bars form one gesture.
             const double u = (static_cast<double>(r) + b / kBeatsPerBar) / static_cast<double>(n);

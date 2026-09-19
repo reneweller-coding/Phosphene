@@ -317,6 +317,10 @@ int main(int argc, char** argv)
                         kBassPatternNames[p.primaryPattern], kBassPatternNames[p.secondaryPattern], static_cast<double>(p.gate),
                         (p.kickEngine < 0 ? params.getInt(params.base(Module::Kick) + kick::Engine) : p.kickEngine) == 1 ? "resonant" : "sweep",
                         p.kickClip == 1 ? " hard" : "", static_cast<double>(p.gainDb));
+            // The presence match (19.09.2026, round "polish"): the drops' estimate against the reference median
+            // and the gain it put on the lines.
+            std::printf("          presence %+.2f dB against the reference median, lines %+.2f dB\n", p.presenceDb,
+                        static_cast<double>(p.presenceGainDb));
             std::printf("          kick recipe");
             for (int m = 0; m < kNumKickMacros; ++m) std::printf(" %s %+.2f", kKickMacroNames[m], static_cast<double>(p.kickMacro[m]));
             std::printf("\n          bass recipe");

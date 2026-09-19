@@ -99,7 +99,10 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              // 19.09.2026, round "voices": how often a track has each of the three new voices, and the
              // density of the voices (speech, chants) and of the shamanic bed (Form.cpp, placePsychedelia).
              // Appended: the compose block is not part of the reordering, which concerns the voices only.
-             CounterAmount, StabAmount, DroneAmount, VoiceDensity, BedDensity, Count };
+             CounterAmount, StabAmount, DroneAmount, VoiceDensity, BedDensity,
+             // 19.09.2026, round "polish": the presence match -- each track's lines (lead, counter, arp, stab)
+             // brought to a band around the reference median's presence (Composer.cpp, matchPresence).
+             PresenceMatch, Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
 namespace perc {

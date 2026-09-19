@@ -435,6 +435,17 @@ int sectionOfBar(const FormPlan& f, int barInTrack)
     return 0;
 }
 
+float sectionTrimDb(const FormPlan& f, int index, double u)
+{
+    if (index < 0 || index >= f.count) return 0.0f;
+    const Section& s = f.section[index];
+    if (s.type == SectionType::Drop && !s.climax) return -kDrop1HoldDb;
+    if (s.type == SectionType::Intro) return -kIntroTrimDb;
+    if (s.type == SectionType::Build && index + 1 < f.count && f.section[index + 1].climax)
+        return -kBuildHeadroomDb * static_cast<float>(std::clamp(u, 0.0, 1.0));
+    return 0.0f;
+}
+
 /** @brief planBar, with one level of look-ahead for the parts of the following bar. */
 static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const uint64_t* sectionSeed, int barInTrack, bool lookAhead)
 {
@@ -581,7 +592,10 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
         // and bar 17 brings it in with a crash on the one -- the micro rule's "bar 16: a crash on the one
         // and a new percussion element"; the drop's own downbeat has its crash too.
         const int cycleGroup = (b % 32) / 8;
-        layers = maxLayers - (cycleGroup < 2 && maxLayers > 2 ? 1 : 0);
+        // Drop 1 holds one layer more back than drop 2 would (19.09.2026, round "polish": the climax needs
+        // room above it; kDrop1HoldDb), where the kit is big enough to still add one on bar 17.
+        const int hold = !s.climax && maxLayers > 3 ? 1 : 0;
+        layers = maxLayers - hold - (cycleGroup < 2 && maxLayers > 2 ? 1 : 0);
         bp.crash = b % 16 == 0;
         bp.shaker = true;
         if (useAcid) parts |= bAcid;

@@ -111,6 +111,9 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "drone_amount",    "Drone Amount",    "",      0.0f,   1.0f,   0.6f, Curve::Linear },
     { "voice_density",   "Voice Density",   "x",     0.0f,   2.0f,   1.0f, Curve::Linear },
     { "bed_density",     "Bed Density",     "x",     0.0f,   2.0f,   1.0f, Curve::Linear },
+    // 19.09.2026, round "polish" (Composer.cpp, matchPresence): On brings each track's presence band into
+    // a band around the reference recordings' median by the level of its lines; Off plays them as matched.
+    { "presence_match",  "Presence Match",  "",      0.0f,   1.0f,   1.0f, Curve::Toggle },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };
