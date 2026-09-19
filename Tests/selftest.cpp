@@ -1785,8 +1785,12 @@ void testBassBite()
     // start. Read over whole periods of the fundamental -- the first period of each note against the
     // third -- because a saw's upper harmonics bunch at its reset once per period, and a window of any
     // other length measures where the resets fall.
+    // The saw path's own filter envelope is closed for this reading (Env Amount 0), so that what falls is
+    // the bite's envelope and not the ladder's pluck under it.
     {
-        const std::vector<float> y = lowendRollingBass(bv, 64);
+        std::vector<float> pv = bv;
+        pv[bass::EnvAmount] = 0.0f;
+        const std::vector<float> y = lowendRollingBass(pv, 64);
         const size_t per = static_cast<size_t>(std::lround(sr / midiToHz(30)));
         double early = 0.0, late = 0.0;
         for (int k = 4; k < 60; ++k)
