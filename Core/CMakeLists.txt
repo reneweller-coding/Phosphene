@@ -16,6 +16,9 @@ add_library(PhospheneCore STATIC
     src/Reverb.cpp
     src/Dynamics.cpp
     src/Sfx.cpp
+    src/PsyFx.cpp
+    src/Texture.cpp
+    src/Vocal.cpp
     src/Rhythm.cpp
     src/Form.cpp
     src/Melody.cpp

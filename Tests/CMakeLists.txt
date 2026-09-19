@@ -30,7 +30,7 @@ endif()
 # with PHOS_SHIP the core has no compiled-in Core/data to fall back on, and without it the fallback
 # is simply never reached -- which is the point: the suite must measure the same thing in the
 # configuration that ships as in the one worked in.
-set(PHOS_DATA_FILES library.phoswt melody.phosmdl bass.phosmdl)
+set(PHOS_DATA_FILES library.phoswt melody.phosmdl bass.phosmdl voices.phosvx)
 
 # Under PHOS_SHIP the core withholds PHOS_SOURCE_DATA_DIR (Core/CMakeLists.txt), but the tests name
 # Core/data at compile time -- vectest opens melody.phosmdl by full path, selftest's modelPath()

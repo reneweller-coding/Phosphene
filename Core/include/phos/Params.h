@@ -49,7 +49,11 @@ struct ParamDesc {
 /** @brief The modules that own parameters. */
 enum class Module : int { Compose = 0, Kick, Bass, Perc, Acid, Poly, Sfx, Fx, Mix, Master,
                           /** The cue bridge of PLAN 8.3; appended, so no existing id moved. */
-                          Cue, Count };
+                          Cue,
+                          /** 19.09.2026, round "fx-psychedelia": the shamanic bed (Texture.h), the voices
+                           *  (Vocal.h) and the modulation effects of the SFX bus (PsyFx.h). Appended. */
+                          Texture, Vocal, PsyFx,
+                          Count };
 
 constexpr int kPercLanes = 12;   ///< instances of the percussion lane module
 constexpr int kPolyInstances = 3; ///< instances of the polyphonic engine module: "lead", "arp" and "pad"
@@ -131,7 +135,24 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
 }
 /** @brief Parameters of the effect generator (module Sfx, prefix "sfx"). */
 namespace sfx {
-enum : int { Level, Noise, Resonance, Brightness, ImpactDecay, Vowel, SwellDecay, Width, RoomSend, HallSend, Duck, Count };
+enum : int { Level, Noise, Resonance, Brightness, ImpactDecay, Vowel, SwellDecay, Width, RoomSend, HallSend, Duck,
+             // 19.09.2026, round "fx-psychedelia". Appended.
+             SubLevel,     ///< dB: the sub drop against sfx.level (Sfx.h; it plays mono and ducks under the kick)
+             SubDuck,      ///< 0..1: how deep the kick ducks the sub drop
+             Count };
+}
+/** @brief Parameters of the shamanic bed (module Texture, prefix "texture"; Texture.h). */
+namespace texture {
+enum : int { Width, BowlDecay, BowlBright, DidgeFormant, DidgeBreath, JawSweep, RoomSend, HallSend, FxSend, Duck, Count };
+}
+/** @brief Parameters of the voices (module Vocal, prefix "vocal"; Vocal.h). */
+namespace vocal {
+enum : int { Pitch, Drive, ThrowSend, ThrowBeats, ThrowFeedback, FxSend, HallSend, Duck, Width, Count };
+}
+/** @brief Parameters of the modulation effects (module PsyFx, prefix "psyfx"; PsyFx.h). */
+namespace psyfx {
+enum : int { FlangerBeats, FlangerDepth, FlangerFeedback, FlangerMix, PhaserBeats, PhaserDepth, PhaserFeedback,
+             PhaserMix, ShiftHz, ShiftMix, Return, Motion, Count };
 }
 /** @brief Parameters of the send effects (module Fx, prefix "fx"): a short room and a long hall. */
 namespace fx {
@@ -152,7 +173,9 @@ enum class KickLock : int { Off = 0, BassFollowsKick, KickFollowsBass };
 namespace mix {
 enum : int { KickMute, BassMute, TrackGain, PercMute, PercLevel, AcidMute, AcidLevel, LeadMute, LeadLevel,
              ArpMute, ArpLevel, PadMute, PadLevel, SfxMute, SfxLevel, PercRoom, PercHall,
-             DuckAttack, DuckHold, DuckRelease, Count };
+             DuckAttack, DuckHold, DuckRelease,
+             // 19.09.2026, round "fx-psychedelia": the strips of the two new parts. Appended.
+             TextureMute, TextureLevel, VocalMute, VocalLevel, Count };
 }
 /**
  * @brief Parameters of the cue bridge (module Cue, prefix "cue"; PLAN 8.3).

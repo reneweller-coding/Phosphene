@@ -15,8 +15,15 @@
 
 namespace phos {
 
-/** @brief The generators a note can belong to. */
-enum class Part : uint8_t { Kick = 0, Bass, Perc, Acid, Lead, Arp, Pad, Sfx, Count };
+/**
+ * @brief The generators a note can belong to.
+ *
+ * Texture (the shamanic bed, Texture.h) and Vocal (speech phrases and synthetic voices, Vocal.h) were
+ * appended on 19.09.2026, so that no existing part moved. Their notes carry the effect type as their
+ * pitch exactly like Part::Sfx does (kSfxBaseNote + SfxType); the composer may also write them as
+ * Part::Sfx notes, and sfxTypePart() (Sfx.h) says which of the three parts a type really belongs to.
+ */
+enum class Part : uint8_t { Kick = 0, Bass, Perc, Acid, Lead, Arp, Pad, Sfx, Texture, Vocal, Count };
 constexpr int kNumParts = static_cast<int>(Part::Count);   ///< number of parts
 extern const char* const kPartNames[kNumParts];              ///< "Kick", "Bass", ...
 

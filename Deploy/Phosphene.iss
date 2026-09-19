@@ -114,6 +114,8 @@ Type: files;          Name: "{app}\*.phosmdl"
 Type: files;          Name: "{app}\Phosphene-Manual.pdf"
 Type: files;          Name: "{app}\PhospheneQuest.apk"
 Type: files;          Name: "{app}\CREDITS-wavetables.md"
+Type: files;          Name: "{app}\voices.phosvx"
+Type: files;          Name: "{app}\CREDITS-voices.md"
 
 [Files]
 Source: "{#Stage}\Phosphene.exe";  DestDir: "{app}"; Components: standalone; Flags: ignoreversion
@@ -126,6 +128,9 @@ Source: "{#Stage}\library.phoswt";          DestDir: "{app}"; Components: standa
 Source: "{#Stage}\melody.phosmdl";          DestDir: "{app}"; Components: standalone; Flags: ignoreversion
 Source: "{#Stage}\bass.phosmdl";            DestDir: "{app}"; Components: standalone; Flags: ignoreversion
 Source: "{#Stage}\CREDITS-wavetables.md";   DestDir: "{app}"; Components: standalone; Flags: ignoreversion
+; 19.09.2026: the voice pack (spoken phrases, Vocal.h) and its credits.
+Source: "{#Stage}\voices.phosvx";           DestDir: "{app}"; Components: standalone; Flags: ignoreversion
+Source: "{#Stage}\CREDITS-voices.md";       DestDir: "{app}"; Components: standalone; Flags: ignoreversion
 ; The offline renderer. It finds the three files above because it declares its own directory as the
 ; search path (Tools/render/main.cpp, installDataSearchPath) -- so it works from any shell, not only
 ; from the install folder.
@@ -159,6 +164,8 @@ Type: filesandordirs; Name: "{autocf}\VST3\Phosphene.vst3"
 Type: files;          Name: "{app}\library.phoswt"
 Type: files;          Name: "{app}\*.phosmdl"
 Type: files;          Name: "{app}\CREDITS-wavetables.md"
+Type: files;          Name: "{app}\voices.phosvx"
+Type: files;          Name: "{app}\CREDITS-voices.md"
 Type: files;          Name: "{app}\Phosphene-Manual.pdf"
 Type: files;          Name: "{app}\PhospheneQuest.apk"
 Type: files;          Name: "{app}\phosphene.ico"

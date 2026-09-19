@@ -209,6 +209,7 @@ const LibraryTableDesc kLibraryTables[kNumLibraryWaveTables] = {
 #undef PHOS_WT
 
 void setWaveTableSearchPath(const std::string& directory) { searchPath() = directory; }
+const std::string& waveTableSearchPath() { return searchPath(); }
 
 void setWaveTableFrameLimit(int frames)
 {

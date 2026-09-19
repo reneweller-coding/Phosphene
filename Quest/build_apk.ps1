@@ -46,7 +46,9 @@ Copy-Item (Join-Path $root "ThirdParty\openxr-loader\prefab\modules\openxr_loade
 #    The two models cost 3 MB of APK and 3 MB of the headset's internal storage. Without them the
 #    Quest build loses the whole of Phase 8 -- and it is the one surface with no stderr for anybody
 #    to read, so nothing at all would say so.
-$assetFiles = @("library.phoswt", "melody.phosmdl", "bass.phosmdl")
+#    19.09.2026: the voice pack (479 KB, 31 spoken phrases as 4-bit ADPCM; Core\data\CREDITS-voices.md)
+#    rides along the same way.
+$assetFiles = @("library.phoswt", "melody.phosmdl", "bass.phosmdl", "voices.phosvx")
 $assets = Join-Path $out "assets"
 if (Test-Path $assets) { Remove-Item -Recurse -Force $assets }
 New-Item -ItemType Directory -Force $assets | Out-Null

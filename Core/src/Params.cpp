@@ -410,6 +410,52 @@ const ParamDesc kSfxParams[sfx::Count] = {
     { "room_send",    "Room Send",     "",     0.0f,   1.0f,   0.0f, Curve::Linear },
     { "hall_send",    "Hall Send",     "",     0.0f,   1.0f,   0.5f, Curve::Linear },
     { "duck",         "Duck",          "",     0.0f,   1.0f,   0.0f, Curve::Linear },
+    // 19.09.2026, round "fx-psychedelia" (Sfx.h): the sub drop, mono and under the kick's sidechain.
+    { "sub_level",    "Sub Drop",      "dB", -36.0f,   6.0f, -14.0f, Curve::Linear },
+    { "sub_duck",     "Sub Duck",      "",     0.0f,   1.0f,   1.0f, Curve::Linear },
+};
+
+// The shamanic bed (Texture.h), the voices (Vocal.h) and the modulation effects (PsyFx.h), 19.09.2026.
+// Their levels are the calibration of that round (docs/PLAN.md): a bed that is felt rather than heard,
+// voices that stand in a breakdown without covering the pad.
+const ParamDesc kTextureParams[texture::Count] = {
+    { "width",         "Width",          "",     0.0f,   1.0f,   0.8f, Curve::Linear },
+    { "bowl_decay",    "Bowl Decay",     "s",    1.0f,  20.0f,   7.0f, Curve::Log },
+    { "bowl_bright",   "Bowl Brightness","",     0.0f,   1.0f,   0.4f, Curve::Linear },
+    { "didge_formant", "Didge Formant",  "",     0.0f,   1.0f,   0.5f, Curve::Linear },
+    { "didge_breath",  "Didge Breath",   "",     0.0f,   1.0f,   0.5f, Curve::Linear },
+    { "jaw_sweep",     "Jaw Harp Sweep", "",     0.0f,   1.0f,   0.6f, Curve::Linear },
+    { "room_send",     "Room Send",      "",     0.0f,   1.0f,   0.1f, Curve::Linear },
+    { "hall_send",     "Hall Send",      "",     0.0f,   1.0f,   0.35f, Curve::Linear },
+    { "fx_send",       "FX Send",        "",     0.0f,   1.0f,   0.3f, Curve::Linear },
+    { "duck",          "Duck",           "",     0.0f,   1.0f,   0.3f, Curve::Linear },
+};
+
+const ParamDesc kVocalParams[vocal::Count] = {
+    { "pitch",          "Pitch Spread",   "st",   0.0f,  12.0f,   3.0f, Curve::Linear },
+    { "drive",          "Drive",          "",     0.0f,   1.0f,   0.35f, Curve::Linear },
+    { "throw_send",     "Delay Throw",    "",     0.0f,   1.0f,   0.6f, Curve::Linear },
+    { "throw_beats",    "Throw Time",     "",     0.0f,   5.0f,   4.0f, Curve::Choice, kDelayTimeNames },
+    { "throw_feedback", "Throw Feedback", "",     0.0f,   0.9f,   0.55f, Curve::Linear },
+    { "fx_send",        "FX Send",        "",     0.0f,   1.0f,   0.45f, Curve::Linear },
+    { "hall_send",      "Hall Send",      "",     0.0f,   1.0f,   0.3f, Curve::Linear },
+    { "duck",           "Duck",           "",     0.0f,   1.0f,   0.3f, Curve::Linear },
+    { "width",          "Width",          "",     0.0f,   1.0f,   0.5f, Curve::Linear },
+};
+
+const ParamDesc kPsyFxParams[psyfx::Count] = {
+    { "flanger_beats",    "Flanger Period",   "beats", 0.5f, 32.0f,  8.0f, Curve::Log },
+    { "flanger_depth",    "Flanger Depth",    "",      0.0f,  1.0f,  0.7f, Curve::Linear },
+    { "flanger_feedback", "Flanger Feedback", "",     -0.9f,  0.9f,  0.6f, Curve::Linear },
+    { "flanger_mix",      "Flanger Mix",      "",      0.0f,  1.0f,  0.35f, Curve::Linear },
+    { "phaser_beats",     "Phaser Period",    "beats", 0.5f, 32.0f, 16.0f, Curve::Log },
+    { "phaser_depth",     "Phaser Depth",     "",      0.0f,  1.0f,  0.8f, Curve::Linear },
+    { "phaser_feedback",  "Phaser Feedback",  "",      0.0f,  0.9f,  0.5f, Curve::Linear },
+    { "phaser_mix",       "Phaser Mix",       "",      0.0f,  1.0f,  0.3f, Curve::Linear },
+    { "shift_hz",         "Frequency Shift",  "Hz", -500.0f, 500.0f, 0.0f, Curve::Linear },
+    { "shift_mix",        "Shifter Mix",      "",      0.0f,  1.0f,  0.5f, Curve::Linear },
+    { "return",           "Send Return",      "dB",  -36.0f,  6.0f, -3.0f, Curve::Linear },
+    { "motion",           "Motion",           "",      0.0f,  1.0f,  0.7f, Curve::Linear },
 };
 
 const ParamDesc kFxParams[fx::Count] = {
@@ -452,6 +498,11 @@ const ParamDesc kMixParams[mix::Count] = {
     { "duck_attack","Duck Attack","ms",   0.5f, 30.0f, 2.0f, Curve::Log },
     { "duck_hold",  "Duck Hold",  "ms",   0.0f, 200.0f, 20.0f, Curve::Linear },
     { "duck_release","Duck Release","ms", 10.0f, 800.0f, 180.0f, Curve::Log },
+    // 19.09.2026, round "fx-psychedelia": the shamanic bed and the voices get their own strips.
+    { "texture_mute",  "Texture Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
+    { "texture_level", "Texture Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    { "vocal_mute",    "Vocal Mute",    "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
+    { "vocal_level",   "Vocal Level",   "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
 };
 
 const ParamDesc kMasterParams[master::Count] = {
@@ -506,6 +557,9 @@ const ModuleSpec kModules[static_cast<int>(Module::Count)] = {
     { "mix",     kMixParams,     mix::Count,     1 },
     { "master",  kMasterParams,  master::Count,  1 },
     { "cue",     kCueParams,     cue::Count,     1 },
+    { "texture", kTextureParams, texture::Count, 1 },
+    { "vocal",   kVocalParams,   vocal::Count,   1 },
+    { "psyfx",   kPsyFxParams,   psyfx::Count,   1 },
 };
 
 bool isDiscrete(Curve c) { return c == Curve::Int || c == Curve::Choice || c == Curve::Toggle; }

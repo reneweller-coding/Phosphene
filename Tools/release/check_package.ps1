@@ -65,6 +65,8 @@ $payload = @(
     @{ Path = "melody.phosmdl";                      Min = 100KB; What = "melody model (beside the binaries)";     From = "melody.phosmdl" }
     @{ Path = "bass.phosmdl";                        Min = 100KB; What = "bass model (beside the binaries)";       From = "bass.phosmdl" }
     @{ Path = "CREDITS-wavetables.md";               Min = 200;   What = "where the wavetables come from";         From = "CREDITS-wavetables.md" }
+    @{ Path = "voices.phosvx";                       Min = 100KB; What = "voice pack (beside the binaries)";       From = "voices.phosvx" }
+    @{ Path = "CREDITS-voices.md";                   Min = 200;   What = "where the spoken phrases come from";     From = "CREDITS-voices.md" }
     @{ Path = "LICENSE.txt";                         Min = 10KB;  What = "the licence the setup shows" }
     @{ Path = "README.txt";                          Min = 500;   What = "the portable archive's read-me" }
     @{ Path = "phosphene.ico";                       Min = 1KB;   What = "the setup and shortcut icon" }
@@ -72,6 +74,7 @@ $payload = @(
     @{ Path = "Phosphene.vst3\Contents\Resources\library.phoswt";       Min = 100KB; What = "wavetable pack (inside the bundle)"; From = "library.phoswt" }
     @{ Path = "Phosphene.vst3\Contents\Resources\melody.phosmdl";       Min = 100KB; What = "melody model (inside the bundle)";   From = "melody.phosmdl" }
     @{ Path = "Phosphene.vst3\Contents\Resources\bass.phosmdl";         Min = 100KB; What = "bass model (inside the bundle)";     From = "bass.phosmdl" }
+    @{ Path = "Phosphene.vst3\Contents\Resources\voices.phosvx";        Min = 100KB; What = "voice pack (inside the bundle)";     From = "voices.phosvx" }
     # The PDF only, not the HTML: the HTML points at the screenshot PNGs by relative path
     # (Tools/manual/make_manual.py writes them as ../screenshots/...), so shipping it would mean
     # shipping two more megabytes of pictures to say what the PDF already carries inside itself.
@@ -126,7 +129,7 @@ if (Test-Path -LiteralPath $apk) {
     try {
         foreach ($e in $zip.Entries) { if ($e.FullName.StartsWith("assets/")) { $apkAssets[$e.FullName] = @($e.Length, $e.CompressedLength) } }
     } finally { $zip.Dispose() }
-    foreach ($f in @("library.phoswt", "melody.phosmdl", "bass.phosmdl")) {
+    foreach ($f in @("library.phoswt", "melody.phosmdl", "bass.phosmdl", "voices.phosvx")) {
         $key = "assets/$f"
         $want = (Get-Item -LiteralPath (Join-Path $data $f)).Length
         if (-not $apkAssets.ContainsKey($key)) {

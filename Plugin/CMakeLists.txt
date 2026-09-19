@@ -53,7 +53,8 @@ target_link_libraries(Phosphene
 # where the VST3 specification keeps a plugin's data and the one place a host copying a bundle takes
 # with it. The release staging packages exactly these two locations (Deploy/build_release.ps1) and
 # the package check proves both are filled (Tools/release/check_package.ps1).
-set(PHOS_RESOURCES library.phoswt melody.phosmdl bass.phosmdl)
+# 19.09.2026: the voice pack (Vocal.h) beside them; the core finds it through the wavetables' search path.
+set(PHOS_RESOURCES library.phoswt melody.phosmdl bass.phosmdl voices.phosvx)
 foreach(f ${PHOS_RESOURCES})
     if(TARGET Phosphene_Standalone)
         add_custom_command(TARGET Phosphene_Standalone POST_BUILD
