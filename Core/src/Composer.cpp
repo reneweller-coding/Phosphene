@@ -490,10 +490,17 @@ static DroneBar droneBarAt(const TrackPlan& plan, const PartAvailability& a, int
     const BarPlan bp = planBar(plan.form, a, plan.sectionSeed, inTrack);
     d.section = bp.index;
     d.on = (bp.parts & partBit(MelodyPart::Drone)) != 0;
-    if (!d.on || !bp.floorSilent) return d;
-    d.low = true;
+    if (!d.on) return d;
+    d.low = bp.floorSilent;
     for (int k = 1; k <= kDroneLowTail && d.low; ++k)
         d.low = inTrack + k < plan.bars && planBar(plan.form, a, plan.sectionSeed, inTrack + k).floorSilent;
+    // In the tail of a silent floor the drone would move to its upper octave -- the pad's root and fifth,
+    // the acid's octave. Where either of them plays it leaves instead (Form.cpp gives the upper octave only
+    // to bars without them), and its low note's release is the fade.
+    if (!d.low && (bp.parts & (partBit(MelodyPart::Pad) | partBit(MelodyPart::Acid))) != 0) d.on = false;
+    // The same for the first sixteen bars of a track after the first: the previous track's pads may still
+    // hold there (transitionBar), in the octave the upper drone would take.
+    if (!d.low && plan.index > 0 && inTrack < 16) d.on = false;
     return d;
 }
 
@@ -530,7 +537,7 @@ static MelodyContext melodyContext(const TrackPlan& plan, const BarPlan& bp, int
         while (inTrack + k < plan.bars && k < 64 && foundationBar(planBar(plan.form, a, plan.sectionSeed, inTrack + k))) ++k;
         c.foundationBars = k;
     }
-    if (droneHere) {
+    if (droneHere && here.on) {
         const DroneBar before = droneBarAt(plan, a, inTrack - 1);
         const bool start = !before.on || before.section != here.section || before.low != here.low;
         if (start) {

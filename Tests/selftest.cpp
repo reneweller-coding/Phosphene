@@ -10807,7 +10807,30 @@ void testVoices()
     {
         std::vector<double> kicks;
         for (const NoteEvent& e : ev) if (e.part == Part::Kick) kicks.push_back(e.beat);
-        int lowNotes = 0, lowUnderKick = 0, lowLate = 0, breakBars = 0, breakWithDrone = 0;
+        int lowNotes = 0, lowUnderKick = 0, lowLate = 0, breakBars = 0, breakWithDrone = 0, upNotes = 0, upDoubled = 0;
+        std::string upWhere;
+        // Its upper octave (D3 and up) is the pad's root and fifth and the acid's octave: it may sound only
+        // where neither of them does, or it doubles them.
+        // A drone chord is upper when its root -- its lowest note at that onset -- is D3 or higher (a low
+        // chord's fifth and octave also reach past D3).
+        std::map<double, int> droneRoot;
+        for (const NoteEvent& e : ev) if (e.part == Part::Drone) { auto it = droneRoot.find(e.beat); droneRoot[e.beat] = it == droneRoot.end() ? e.pitch : std::min<int>(it->second, e.pitch); }
+        for (const NoteEvent& e : ev) {
+            if (e.part != Part::Drone || droneRoot[e.beat] < kPadLowest) continue;
+            ++upNotes;
+            for (const NoteEvent& o : ev)
+                if ((o.part == Part::Pad || o.part == Part::Acid) && o.beat < e.beat + e.length && o.beat + o.length > e.beat) {
+                    ++upDoubled;
+                    if (upWhere.size() < 160) {
+                        const int bar = static_cast<int>(std::floor(e.beat / kBeatsPerBar)), obar = static_cast<int>(std::floor(o.beat / kBeatsPerBar));
+                        const TrackPlan& t = c.track(q, c.trackOfBar(q, bar));
+                        upWhere += fmt(" drone bar %d (%s, %.0f beats) meets %s of bar %d;", bar,
+                                       kSectionNames[static_cast<int>(t.form.section[sectionOfBar(t.form, bar - t.firstBar)].type)],
+                                       static_cast<double>(e.length), o.part == Part::Pad ? "pad" : "acid", obar);
+                    }
+                    break;
+                }
+        }
         for (const NoteEvent& e : ev) {
             if (e.part != Part::Drone || e.pitch >= kPadLowest) continue;
             ++lowNotes;
@@ -10823,7 +10846,8 @@ void testVoices()
             ++breakBars;
             // A breakdown bar has the drone when one of its notes sounds in it.
             for (const NoteEvent& e : ev)
-                if (e.part == Part::Drone && e.beat < (b + 1) * kBeatsPerBar && e.beat + e.length > b * kBeatsPerBar) { ++breakWithDrone; break; }
+                // (or, in the last two bars, its low note's release: the drone leaves the tail of a silent floor to it)
+                if (e.part == Part::Drone && e.beat < (b + 1) * kBeatsPerBar && e.beat + e.length + 2.0 * kBeatsPerBar > b * kBeatsPerBar) { ++breakWithDrone; break; }
         }
         std::set<float> periods;
         const int droneCutoff = q.base(PolyInstance::Drone) + poly::Cutoff;
@@ -10831,9 +10855,9 @@ void testVoices()
             if (e.param == droneCutoff && e.kind == ControlEvent::Kind::Offset && e.length > 0.0f) periods.insert(e.length / kBeatsPerBar);
         bool periodsOk = !periods.empty();
         for (float pr : periods) periodsOk = periodsOk && pr >= 8.0f && pr <= 32.0f;
-        check(lowNotes > 0 && lowUnderKick == 0 && lowLate == 0,
-              "tonic drone: its low octave (under D3) only where kick and bass rest, released a bar and a half before the kick returns",
-              fmt("%d low notes, %d overlapping a kick, %d ending less than 1.5 bars before one", lowNotes, lowUnderKick, lowLate));
+        check(lowNotes > 0 && lowUnderKick == 0 && lowLate == 0 && upDoubled == 0,
+              "tonic drone: its low octave (under D3) only where kick and bass rest, released a bar and a half before the kick returns; its upper octave never over pad or acid",
+              fmt("%d low notes, %d overlapping a kick, %d ending less than 1.5 bars before one; %d of %d upper notes over a pad or acid note%s", lowNotes, lowUnderKick, lowLate, upDoubled, upNotes, upWhere.c_str()));
         check(breakBars > 0 && breakWithDrone == breakBars && periodsOk,
               "tonic drone: under every breakdown bar of a track that has one, evolving in ramps of 8 to 32 bars",
               fmt("%d of %d breakdown bars, %zu ramp periods (%s)", breakWithDrone, breakBars, periods.size(),
