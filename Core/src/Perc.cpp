@@ -110,53 +110,57 @@ void PercKit::setTempo(double bpm)
 }
 
 /**
- * @brief Splits the lanes into the two phase groups of the auto-pan and signs their swings.
+ * @brief The phase group of each role: +1 keeps a lane's swing outwards-first, -1 turns it round.
+ *
+ * 19.09.2026 (round "voices", a loose end of the arrangement dynamics of 16.09.2026). Until then the
+ * groups were a greedy two-way number partition of the lanes' knob levels (Graham 1969), recomputed
+ * whenever any lane changed. A partition of *levels* flips discontinuously: with the closed hat at 4 dB
+ * instead of 5, or the shaker 4 dB lower, the greedy order changed, the shaker and the conga swapped
+ * groups, and the 85 ms level-difference reduction the auto-pan exists for fell from about 2 dB to
+ * 0.17 (testArrangeDynamics). The coordinator then had to correct the air band with mix.perc_level
+ * instead of the hat, because the hat could not be touched.
+ *
+ * The groups are now a property of the role -- what a lane *plays* -- and do not depend on any level:
+ * the table is exactly the greedy answer at the default kit, so the default kit moves as it did,
+ * sample for sample, and a level change moves the balance continuously instead of re-dealing the kit.
+ * The pairing it encodes is the musical one: the closed hat against the ride and the shaker (the three
+ * steady top-end streams), the open hat with it, conga and tom (the hand drums) with the hat, crash,
+ * rim, zap and blip against it. Clap and snare stand in the centre and do not swing.
+ */
+constexpr int8_t kRolePanGroup[kNumPercRoles] = {
+    +1,   // Closed Hat
+    +1,   // Open Hat
+    -1,   // Ride
+    -1,   // Crash
+    +1,   // Clap (centred: no swing)
+    +1,   // Snare (centred: no swing)
+    -1,   // Rim
+    -1,   // Shaker
+    +1,   // Tom
+    +1,   // Conga
+    -1,   // Zap
+    -1,   // Blip
+};
+
+/**
+ * @brief Signs the auto-pan swings of the lanes by their roles' phase groups (kRolePanGroup).
  *
  * What the 85 ms level difference reads is the power-weighted mean position of whatever sounds in
- * the window (Perc.h). The swinging part of that mean is sum_l w_l s_l |panA_l| with w_l the lane's
- * power and s_l = +-1 its phase; the assignment that keeps the kit's centre still is therefore the
- * one that minimises |sum_l w_l s_l a_l|, a two-way number partitioning. Greedy in descending weight
- * (Graham 1969) is used rather than an exact search: twelve lanes would allow one, but the greedy
- * answer is what a listener hears as "the loud pair swaps sides" and it is stable under a knob
- * moving a little, which an exact partition is not.
- *
- * Runs over all twelve lanes whenever any one of them changes, which happens on a parameter change
- * and not per sample.
+ * the window (Perc.h). The swing of a lane carries the sign of its own position, so that "in phase"
+ * means "swings outwards first", times its role's group. Runs over all twelve lanes whenever any one
+ * of them changes, which happens on a parameter change and not per sample; nothing in it depends on a
+ * level, so no level change can re-deal the groups.
  */
 void PercKit::assignPanGroups()
 {
-    // Weight: the lane's power times the size of its swing. A silent or centred lane weighs nothing
-    // and takes whichever group is left, which is what the sign of its (zero) swing then means.
-    double w[kPercLanes] = {};
-    for (int l = 0; l < kPercLanes; ++l)
-        w[l] = valid_[l] ? std::pow(10.0, static_cast<double>(values_[l][perc::Level]) / 10.0)
-                         * std::fabs(static_cast<double>(c_.panA[l])) : 0.0;
-    int order[kPercLanes];
-    for (int l = 0; l < kPercLanes; ++l) order[l] = l;
-    // Insertion sort by weight, descending, ties by lane index: twelve elements, and the order has to
-    // be the same on every platform, which std::sort does not promise for equal keys.
-    for (int i = 1; i < kPercLanes; ++i) {
-        const int k = order[i];
-        int j = i - 1;
-        while (j >= 0 && w[order[j]] < w[k]) { order[j + 1] = order[j]; --j; }
-        order[j + 1] = k;
-    }
-    double acc = 0.0;
-    for (int i = 0; i < kPercLanes; ++i) {
-        const int l = order[i];
-        // The lane's swing carries the sign of its own position, so that "in phase" means "swings
-        // outwards first"; the group decides whether that is kept or turned round. The sign is set
-        // absolutely and not flipped, so that recomputing one lane cannot invert another.
+    for (int l = 0; l < kPercLanes; ++l) {
         const double dir = values_[l][perc::Pan] < 0.0f ? -1.0 : 1.0;
-        const double a = w[l] * dir;
-        const bool keep = std::fabs(acc + a) <= std::fabs(acc - a);
-        acc += keep ? a : -a;
-        c_.panA[l] = static_cast<float>(std::fabs(static_cast<double>(c_.panA[l])) * dir * (keep ? 1.0 : -1.0));
+        const int role = std::clamp(static_cast<int>(std::lround(values_[l][perc::Role])), 0, kNumPercRoles - 1);
+        c_.panA[l] = static_cast<float>(std::fabs(static_cast<double>(c_.panA[l])) * dir * static_cast<double>(kRolePanGroup[role]));
     }
     panning_ = false;
     for (int l = 0; l < kPercLanes; ++l) panning_ = panning_ || c_.panA[l] != 0.0f || c_.panB[l] != 0.0f;
 }
-
 void PercKit::prepare(double sampleRate)
 {
     sr_ = sampleRate;

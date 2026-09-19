@@ -162,13 +162,13 @@ juce::String formatValue(const ParamDesc& d, float v)
 
 const char* const kMacroNames[kNumMacros] = { "Filter Sweep", "Gate Depth", "Drop-out", "Stutter" };
 const char* const kMacroHelp[kNumMacros] = {
-    "Opens or closes the acid, lead and arp filters together, by up to a third of their range in "
+    "Opens or closes the filters of acid, lead, counter-lead, arp and stab together, by up to a third of their range in "
     "each direction. Centre is neutral.",
-    "Switches the trance gate on for lead, arp and pad and sets its depth; at 1.0 the gate closes "
+    "Switches the trance gate on for lead, counter-lead, arp, stab and pad and sets its depth; at 1.0 the gate closes "
     "completely between its steps.",
     "Takes kick and bass out until the next bar line and lets them back in on the downbeat. One "
     "press, one bar.",
-    "Held: lead, arp and pad run through the gate on sixteenths at full depth and the shortest "
+    "Held: lead, counter-lead, arp, stab and pad run through the gate on sixteenths at full depth and the shortest "
     "duty. Phosphene has no buffer repeat, so this is the gate's stutter, not a tape one.",
 };
 
@@ -827,9 +827,9 @@ int PhospheneProcessor::macroTargets(Macro m, float value, MacroTarget* out) con
 {
     const ParamStore& p = params();
     const int acidBase = p.base(Module::Acid);
-    const int lead = p.base(Module::Poly, static_cast<int>(PolyInstance::Lead));
-    const int arp = p.base(Module::Poly, static_cast<int>(PolyInstance::Arp));
-    const int pad = p.base(Module::Poly, static_cast<int>(PolyInstance::Pad));
+    const int lead = p.base(PolyInstance::Lead), counter = p.base(PolyInstance::Counter);
+    const int arp = p.base(PolyInstance::Arp), stab = p.base(PolyInstance::Stab);
+    const int pad = p.base(PolyInstance::Pad);
     const int mixBase = p.base(Module::Mix);
     int n = 0;
     auto add = [&](int id, float v, bool absolute) {
@@ -844,11 +844,13 @@ int PhospheneProcessor::macroTargets(Macro m, float value, MacroTarget* out) con
         add(acidBase + acid::Cutoff, d, false);
         add(lead + poly::Cutoff, d, false);
         add(arp + poly::Cutoff, d, false);
+        add(counter + poly::Cutoff, d, false);   // 19.09.2026: the counter-lead and the stab move with them
+        add(stab + poly::Cutoff, d, false);
         break;
     }
     case Macro::GateDepth: {
         const float v = juce::jlimit(0.0f, 1.0f, value);
-        for (int base : { lead, arp, pad }) {
+        for (int base : { lead, counter, arp, stab, pad }) {
             add(base + poly::Gate, 1.0f, true);
             add(base + poly::GateDepth, v, true);
         }
@@ -859,7 +861,7 @@ int PhospheneProcessor::macroTargets(Macro m, float value, MacroTarget* out) con
         add(mixBase + mix::BassMute, 1.0f, true);
         break;
     case Macro::Stutter:
-        for (int base : { lead, arp, pad }) {
+        for (int base : { lead, counter, arp, stab, pad }) {
             add(base + poly::Gate, 1.0f, true);
             add(base + poly::GatePattern, 0.0f, true);   // Sixteenths
             add(base + poly::GateDepth, 1.0f, true);
@@ -1166,7 +1168,10 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 void PhospheneProcessor::writeStateTo(juce::MemoryBlock& dest) const
 {
     juce::XmlElement xml("PHOSPHENE");
-    xml.setAttribute("version", 1);
+    // Version 2 since 19.09.2026 (round "voices"): the polyphonic instances were reordered and three
+    // were added (Params.h, PolyInstance). The values travel as "key=value" text, so the order never
+    // reached a state; the number says which voices a state knows about (setStateInformation).
+    xml.setAttribute("version", kStateVersion);
     xml.setAttribute("seed", juce::String(seed_.load()));
     xml.setAttribute("followHost", followHost_);
     // The cue destination is not a parameter (a parameter is a float); the port and the switch are.
@@ -1183,6 +1188,14 @@ void PhospheneProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
     std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
     if (xml == nullptr || !xml->hasTagName("PHOSPHENE")) return;
+    // Every knob back to its default first, then the state's values on top (19.09.2026). A state
+    // holds every value it knew, by key, so for a state of this version this changes nothing; for a
+    // version-1 state (before the counter-lead, the stab and the drone) it is what makes the load safe
+    // rather than silently wrong: the three new voices and their strips start from their defaults
+    // instead of keeping whatever the previous session had left in them, and every older key --
+    // "lead.cutoff", "mix.pad_level" -- still names the knob it named when it was saved.
+    params().resetDefaults();
+    lastStateVersion_ = xml->getIntAttribute("version", 1);
     if (auto* p = xml->getChildByName("params")) params().parseText(p->getAllSubText().toStdString());
     followHost_ = xml->getBoolAttribute("followHost", followHost_);
     setCueHost(xml->getStringAttribute("cueHost", cueHost()));

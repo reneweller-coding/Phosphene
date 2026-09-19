@@ -73,10 +73,10 @@
  * from #macroTargets, so what the manual says is what the plugin does.
  */
 enum class Macro : int {
-    FilterSweep = 0,   ///< -1..+1: opens or closes the acid, lead and arp filters together
-    GateDepth,         ///< 0..1: the trance gate of lead, arp and pad, on and as deep as this
+    FilterSweep = 0,   ///< -1..+1: opens or closes the acid, lead, counter, arp and stab filters together
+    GateDepth,         ///< 0..1: the trance gate of lead, counter, arp, stab and pad, on and as deep as this
     DropOut,           ///< momentary: kick and bass gone until the next bar line
-    Stutter,           ///< held: lead, arp and pad chopped on sixteenths at full depth
+    Stutter,           ///< held: lead, counter, arp, stab and pad chopped on sixteenths at full depth
     Count
 };
 constexpr int kNumMacros = static_cast<int>(Macro::Count);   ///< number of macros
@@ -271,6 +271,13 @@ public:
 
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
+    /**
+     * @brief The version of the state this build writes: 2 since 19.09.2026 (the reordered voices,
+     *        the counter-lead, the stab and the drone; docs/PLAN.md, "Stimmen").
+     */
+    static constexpr int kStateVersion = 2;
+    /** @brief The version of the last state read by setStateInformation (1 for a state older than the voices round). */
+    int lastStateVersion() const { return lastStateVersion_; }
 
     // ------------------------------------------------------------------ the set
     /** @brief The engine's parameters -- the single copy of every value. */
@@ -400,7 +407,7 @@ public:
      * @return how many were written
      */
     int macroTargets(Macro m, float value, MacroTarget* out) const;
-    static constexpr int kMaxMacroTargets = 12;   ///< most parameters one macro touches
+    static constexpr int kMaxMacroTargets = 24;   ///< most parameters one macro touches (Stutter: four each on five voices)
 
     // ------------------------------------------------------------------ transport
     /** @brief Standalone: starts at the top (or resumes after a pause). */
@@ -609,6 +616,7 @@ private:
     int  cuePort_ = phos::kCueDefaultPort;      ///< message thread: what `cue.port` said at the last tick
     juce::String cuePortHost_;                  ///< message thread: the host the socket was opened with
     std::atomic<float> cueLeadMs_{ 0.0f };      ///< `cue.lead_ms`, as the audio thread reads it
+    int lastStateVersion_ = kStateVersion;      ///< the version attribute of the last state that was read
     std::atomic<bool> cueBeats_{ true };        ///< `cue.beats`, as the audio thread reads it
     std::atomic<bool> cueAnnounce_{ false };    ///< the bridge just opened: say which section is playing
 

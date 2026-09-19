@@ -92,12 +92,17 @@ int midiChannelOf(Part part)
     case Part::Kick: case Part::Perc: return 9;
     case Part::Bass: return 0;
     case Part::Acid: return 1;
-    case Part::Lead: return 2;
-    case Part::Arp:  return 3;
-    case Part::Pad:  return 4;
-    case Part::Sfx:  return 5;
-    case Part::Texture: return 6;   // 19.09.2026: the shamanic bed and the voices on their own channels
-    case Part::Vocal:   return 7;
+    // 19.09.2026, round "voices": the six polyphonic voices on channels 3 to 8 in the order of their
+    // groups (Params.h, PolyInstance), then the effects; channel 10 (index 9) stays the drums'.
+    case Part::Lead:    return 2;
+    case Part::Counter: return 3;
+    case Part::Arp:     return 4;
+    case Part::Stab:    return 5;
+    case Part::Pad:     return 6;
+    case Part::Drone:   return 7;
+    case Part::Sfx:     return 8;
+    case Part::Texture: return 10;   // the shamanic bed and the voices on their own channels
+    case Part::Vocal:   return 11;
     default: return 15;
     }
 }

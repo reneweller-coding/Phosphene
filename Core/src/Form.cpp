@@ -32,6 +32,7 @@ constexpr uint64_t kSaltPsy     = 0x5053594300000007ull;   ///< the psychedelic 
 constexpr uint64_t kSaltVoice   = 0x564F494300000008ull;   ///< the voices' placement (19.09.2026)
 constexpr uint64_t kSaltBed     = 0x4245440000000009ull;   ///< the shamanic bed's placement (19.09.2026)
 constexpr uint64_t kSaltFxRide  = 0x46585244000000Aull;    ///< the modulation effects' section ride (19.09.2026)
+constexpr uint64_t kSaltVariant = 0x564152490000000Bull;   ///< the voices' and the bed's variants (19.09.2026, round "voices")
 
 /** @brief Index drawn from non-negative weights. */
 int drawIndex(Rng& r, const double* w, int n)
@@ -71,7 +72,7 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 0.15, 0.20, 0.15, 0.30, 0.15, 0.05 },          // scales: Phrygian dominant and double harmonic lead
       { 0.20, 0.10, 0.70 },                            // bodies: the long second drop
       { 0.0, 0.5, 0.0, 0.0, 0.0, 0.2, 0.0, 0.1, 0.0, 0.0, 0.4, 0.0 },   // i-bII and i-bVII
-      { 1.15f, 1.10f, 1.25f, 1.20f }, 0.9f, 0.95f,
+      { 1.15f, 1.10f, 1.10f, 1.25f, 0.80f, 1.20f, 1.20f }, 0.9f, 0.95f,
       { 0.35, 0.20, 0.25, 0.20 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.26f, 1.0f, 16.0f,
       { 0.15, 0.25, 0.10, 0.30, 0.15, 0.05 }, 0.45f },   // interchange: the Hijaz modes at the peak
@@ -80,7 +81,7 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 0.30, 0.25, 0.15, 0.15, 0.05, 0.10 },
       { 0.65, 0.15, 0.20 },
       { 0.0, 0.1, 0.0, 0.0, 0.0, 0.1, 0.0, 0.1, 0.0, 0.0, 0.1, 0.0 },
-      { 1.0f, 1.0f, 1.0f, 1.0f }, 1.0f, 1.0f,
+      { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f }, 1.0f, 1.0f,
       { 0.30, 0.25, 0.25, 0.20 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.22f, 1.0f, 16.0f,
       { 0.30, 0.30, 0.15, 0.15, 0.05, 0.05 }, 0.30f },
@@ -89,7 +90,7 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 0.35, 0.10, 0.05, 0.05, 0.00, 0.45 },
       { 0.20, 0.70, 0.10 },
       { 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.2, 0.0, 0.0, 0.2, 0.0 },
-      { 0.9f, 0.55f, 0.8f, 1.3f }, 0.6f, 0.9f,
+      { 0.9f, 0.55f, 0.50f, 0.8f, 1.20f, 1.3f, 1.30f }, 0.6f, 0.9f,
       { 0.45, 0.25, 0.20, 0.10 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.28f, 0.6f, 16.0f,
       { 0.45, 0.05, 0.00, 0.00, 0.00, 0.50 }, 0.12f },   // Dorian and Aeolian only
@@ -98,7 +99,7 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 0.20, 0.40, 0.25, 0.10, 0.05, 0.00 },
       { 0.50, 0.30, 0.20 },
       { 0.0, 0.4, 0.0, 0.0, 0.0, 0.1, 0.0, 0.1, 0.0, 0.0, 0.3, 0.0 },
-      { 1.2f, 0.4f, 0.9f, 0.8f }, 1.2f, 1.1f,
+      { 1.2f, 0.4f, 0.50f, 0.9f, 1.00f, 0.8f, 1.30f }, 1.2f, 1.1f,
       { 0.25, 0.25, 0.35, 0.15 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.18f, 1.3f, 8.0f,
       { 0.20, 0.40, 0.30, 0.10, 0.00, 0.00 }, 0.35f },
@@ -107,7 +108,7 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 0.20, 0.35, 0.25, 0.15, 0.05, 0.00 },
       { 0.55, 0.15, 0.30 },
       { 0.0, 0.3, 0.0, 0.0, 0.0, 0.1, 0.0, 0.1, 0.0, 0.0, 0.3, 0.0 },
-      { 1.3f, 0.6f, 1.1f, 0.6f }, 1.4f, 1.2f,
+      { 1.3f, 0.6f, 0.80f, 1.1f, 1.20f, 0.6f, 0.50f }, 1.4f, 1.2f,
       { 0.20, 0.30, 0.35, 0.15 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.16f, 1.4f, 8.0f,
       { 0.20, 0.35, 0.30, 0.15, 0.00, 0.00 }, 0.40f },
@@ -438,13 +439,27 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     // as full as it was before the break. Every other section may leave a voice out.
     const bool drop = s.type == SectionType::Drop;
     const bool drawAcid = rs.uniform() < 0.9f, drawLead = rs.uniform() < 0.85f, drawArp = rs.uniform() < 0.8f;
-    const bool useAcid = a.part[0] && (drop || drawAcid);
-    const bool useLead = a.part[1] && (drop || drawLead);
-    const bool useArp = a.part[2] && (drop || drawArp);
+    const bool useAcid = a.part[mpIndex(MelodyPart::Acid)] && (drop || drawAcid);
+    const bool useLead = a.part[mpIndex(MelodyPart::Lead)] && (drop || drawLead);
+    const bool useArp = a.part[mpIndex(MelodyPart::Arp)] && (drop || drawArp);
     const bool breakLead = rs.uniform() < 0.5f;     // a breakdown keeps the lead or the arp, not both
     const bool padExtra = rs.uniform() < 0.45f;     // pads join a section that already has lead or acid
     const bool gate = rs.uniform() < 0.35f;
     const int layerStep = 4 + 4 * rs.below(2);      // outro: one layer leaves every 4 or 8 bars
+    // 19.09.2026, round "voices": the draws of the three new voices come after every older draw of the
+    // section, so no section decides anything else differently because of them.
+    //  - the counter-lead answers the lead: it joins most sections the lead plays in;
+    //  - the stab is a surprise, so a section carries it less often, and only every other group of it;
+    //  - the drone holds the floor where kick and bass rest, and in a core only where neither the acid
+    //    (its octave, 140 .. 350 Hz) nor the pad (the same root and fifth) plays.
+    const bool useCounter = a.part[mpIndex(MelodyPart::Counter)] && rs.uniform() < 0.75f;
+    const bool useStab = a.part[mpIndex(MelodyPart::Stab)] && rs.uniform() < (drop ? 0.75f : 0.55f);
+    const int voiceParity = rs.below(2);            // which eight-bar groups the counter takes; the stab takes the others
+    const bool droneCore = a.part[mpIndex(MelodyPart::Drone)] && rs.uniform() < 0.5f;
+    const uint8_t bAcid = partBit(MelodyPart::Acid), bLead = partBit(MelodyPart::Lead), bCounter = partBit(MelodyPart::Counter),
+                  bArp = partBit(MelodyPart::Arp), bStab = partBit(MelodyPart::Stab), bPad = partBit(MelodyPart::Pad),
+                  bDrone = partBit(MelodyPart::Drone);
+    const bool hasPad = a.part[mpIndex(MelodyPart::Pad)], hasDrone = a.part[mpIndex(MelodyPart::Drone)];
 
     // Group-level change: inside a section no eight-bar group repeats its predecessor's change
     // (Easwaran 2004: something new every four or eight bars; Butler's hypermetre).
@@ -476,21 +491,21 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
         layers = std::min(maxLayers, b / 4);
         bp.kickBeats = b >= introKickBar ? 0xF : 0;
         bp.bassBeats = b >= introKickBar ? 0xF : 0;
-        if (a.part[3]) parts |= 8;
+        if (hasPad) parts |= bPad;
         bp.fills = false;
         break;
     case SectionType::Groove:
         // The first core: the groove in its essential form, the lead still held back.
         layers = std::min(maxLayers, 2 + groupInSection);
-        if (useAcid) parts |= 1;
-        if (useArp && b >= 8) parts |= 4;
-        if (useLead && b >= s.bars / 2 && s.bars >= 32) parts |= 2;
+        if (useAcid) parts |= bAcid;
+        if (useArp && b >= 8) parts |= bArp;
+        if (useLead && b >= s.bars / 2 && s.bars >= 32) parts |= bLead;
         break;
     case SectionType::Build: {
         // Layers return one per four bars; the snare roll fills the last four bars; hats denser.
         layers = std::min(maxLayers, 1 + b / 4);
-        if (useAcid) parts |= 1;
-        if (useArp && b >= s.bars / 2) parts |= 4;
+        if (useAcid) parts |= bAcid;
+        if (useArp && b >= s.bars / 2) parts |= bArp;
         bp.hatsDense = b >= s.bars / 2;
         if (b >= s.bars - 4) bp.rollBar = 4 - (s.bars - b);
         if (b == s.bars - 1) {
@@ -508,9 +523,9 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     case SectionType::Drop:
         // Everything back at once.
         layers = maxLayers;
-        if (useAcid) parts |= 1;
-        if (useLead) parts |= 2;
-        if (useArp) parts |= 4;
+        if (useAcid) parts |= bAcid;
+        if (useLead) parts |= bLead;
+        if (useArp) parts |= bArp;
         break;
     case SectionType::Break:
         // Solberg and Dibben 2019: the sudden removal of bass and bass drum. Pads carry it, with one
@@ -518,16 +533,16 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
         bp.kickBeats = 0;
         bp.bassBeats = 0;
         layers = b >= s.bars / 2 ? 1 : 0;
-        if (a.part[3]) parts |= 8;
-        if (b >= s.bars / 4) parts |= breakLead ? (useLead ? 2 : 0) : (useArp ? 4 : 0);
+        if (hasPad) parts |= bPad;
+        if (b >= s.bars / 4) parts |= breakLead ? (useLead ? bLead : 0) : (useArp ? bArp : 0);
         bp.fills = false;
         if (b == 0) bp.cutBeats = s.cutBeats;
         break;
     case SectionType::Outro:
         // Layers leave one per four or eight bars; kick and bass hold on for the DJ.
         layers = std::max(0, maxLayers - 1 - b / layerStep);
-        if (useAcid && b < s.bars / 2) parts |= 1;
-        if (a.part[3]) parts |= 8;
+        if (useAcid && b < s.bars / 2) parts |= bAcid;
+        if (hasPad) parts |= bPad;
         bp.fills = false;
         break;
     default: break;
@@ -541,30 +556,48 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     bp.percLayers = std::clamp(layers, 0, maxLayers);
 
     // Pads carry what has neither lead nor acid, and join some of the rest.
-    if (a.part[3] && s.type != SectionType::Build && s.type != SectionType::Intro) {
-        if ((parts & 3) == 0 || padExtra) parts |= 8;
+    if (hasPad && s.type != SectionType::Build && s.type != SectionType::Intro) {
+        if ((parts & (bAcid | bLead)) == 0 || padExtra) parts |= bPad;
     }
-    bp.padGate = (parts & 8) != 0 && (parts & 3) != 0 && gate;
+    bp.padGate = (parts & bPad) != 0 && (parts & (bAcid | bLead)) != 0 && gate;
+
+    // The new voices (19.09.2026, round "voices"), after everything above has been decided, because
+    // each of them is placed *against* the others:
+    //  - Counter-lead and stab share the core's eight-bar groups: the counter takes one parity, the
+    //    stab the other, so they never play at once and every group change brings one of them in or
+    //    out. The counter only where the lead plays (it answers the lead) and never in the lead's first
+    //    group of a section (a response needs a call before it); the stab from the groove's second
+    //    group on. Buildups, breakdowns, intros and outros keep neither -- the pre-drop vacuum stays
+    //    empty and the breakdown stays thin.
+    //  - The drone lies under every bar in which kick and bass rest for the whole bar (the intro before
+    //    the kick, the breakdown), in its low octave; in a bar where they play it may only go an octave
+    //    up (the depth rule), and there it would double the pad's root and fifth or sit on the acid's
+    //    octave -- so it plays there only where neither of them does.
+    const bool core = isCore(s.type);
+    const bool counterGroup = groupInSection >= 1 && (groupInSection + voiceParity) % 2 == 1;
+    if (core && useCounter && (parts & bLead) != 0 && counterGroup) parts |= bCounter;
+    if (core && useStab && !counterGroup && (s.type == SectionType::Drop || b >= 8)) parts |= bStab;
+    bp.floorSilent = bp.kickBeats == 0 && bp.bassBeats == 0 && !bp.pdb;
+    if (hasDrone && s.type != SectionType::Build) {
+        const bool clear = (parts & (bPad | bAcid)) == 0;
+        if (bp.floorSilent) parts |= bDrone;
+        else if (clear && (droneCore || !core)) parts |= bDrone;
+    }
 
     // Register (Farbood): a high-energy section lifts the arp an octave, a low-energy one drops the
-    // lead, always within the depth rule (arp from G3, lead from B3).
-    // The lead's octave moves first, because the masking rule below has to see where the lead really
-    // sits; it only moves down where the depth rule still holds (a lead never sounds under B3).
-    // The register is a decision of the section, not of the bar: inside a buildup the energy rises,
-    // and a lead that changed octave halfway through would break the masking rule the section was
-    // planned with. So both registers read the section's own energy.
+    // lead, always within the depth rule (arp from G3, lead from B3). Both registers are a decision of
+    // the section, not of the bar: inside a buildup the energy rises, and a voice that changed octave
+    // halfway through would jump.
+    //
+    // Since 19.09.2026 there is no masking rule here any more. Until then the form moved the arp up in
+    // octaves until its range cleared the lead's and dropped it from any section where that passed
+    // MIDI 100 -- which, with the arp held to G3..G5 and the lead to B3..A5 (Melody.h), meant every
+    // section the two shared, and a drop could never carry both. The arp is now kept beside the lead
+    // bar by bar, where the lead's real notes are known (Melody.cpp, "arp beside the lead"): split
+    // under the lead's lowest note, else interlocked into the lead's rests.
     const int leadOct = (s.energy < 0.45f && a.leadLo >= 71) ? -1 : 0;
-    const int leadLo = a.leadLo + 12 * leadOct, leadHi = a.leadHi + 12 * leadOct;
     int arpShift = 0;
     if (s.energy >= 0.92f) arpShift = 1;
-    // The masking rule, decided for the whole section rather than bar by bar: octaves up until the
-    // arp's range and the lead's overlap by at most two semitones, or the arp sits the section out.
-    // It has to hold for the section, because a section can bring the arp in before the lead, and an
-    // arp that changed octave when the lead joined would mask the bars before that.
-    if (useLead && useArp && a.part[1] && a.part[2]) {
-        while (a.arpLo + 12 * arpShift < leadHi - 2 && a.arpHi + 12 * arpShift > leadLo + 2) ++arpShift;
-        if (a.arpHi + 12 * arpShift > 100) parts &= static_cast<uint8_t>(~4);
-    }
     bp.arpOctave = static_cast<int8_t>(arpShift);
     bp.leadOctave = static_cast<int8_t>(leadOct);
     bp.parts = parts;
@@ -644,9 +677,12 @@ BarPlan planBar(const FormPlan& f, const PartAvailability& a, const uint64_t* se
  * one per sixteen, alternating between the track's two when it has both; outros a bowl every eight bars
  * and the didgeridoo; a long groove now and then eight bars of jaw harp. Drops never.
  */
-static void placePsychedelia(FormPlan& f, uint64_t seed, float amount)
+static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voiceDensity, float bedDensity)
 {
     if (amount <= 0.0f) return;
+    // 19.09.2026: the densities of the voices and of the bed (compose.voice_density, bed_density) scale
+    // the probabilities below; every draw still happens, so at 1 every event is where it was before.
+    const float dv = std::max(0.0f, voiceDensity), db = std::max(0.0f, bedDensity);
     const double bar = kBeatsPerBar;
     auto add = [&](double beat, float length, SfxType type) {
         SfxEvent e;
@@ -686,6 +722,8 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount)
         add(beat, length, type);
         vocalAt.push_back(beat);
     };
+    // A voice slot whose probability was p before the density knob: taken with min(1, p x density).
+    auto voiceOdds = [&](float p) { return std::min(1.0f, p * dv); };
     Rng v;
     v.seed(mixSeed(seed ^ kSaltVoice, 0));
     for (int i = 0; i < f.count; ++i) {
@@ -694,15 +732,15 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount)
         const float u0 = v.uniform(), u1 = v.uniform(), u2 = v.uniform();
         switch (s.type) {
         case SectionType::Intro:
-            if (u0 < 0.9f * pMark) addVoice(start + (s.bars >= 16 ? 4.0 : 2.0) * bar, 8.0f, SfxType::SpokenWord);
-            if (s.bars >= 16 && u1 < 0.7f * amount)
+            if (u0 < voiceOdds(0.9f * pMark)) addVoice(start + (s.bars >= 16 ? 4.0 : 2.0) * bar, 8.0f, SfxType::SpokenWord);
+            if (s.bars >= 16 && u1 < voiceOdds(0.7f * amount))
                 addVoice(start + 10.0 * bar, 8.0f, u2 < 0.5f ? SfxType::FormantVoice : SfxType::SpokenWord);
             break;
         case SectionType::Break: {
-            if (u0 < pMark) addVoice(start + bar, 8.0f, u1 < 0.7f ? SfxType::SpokenWord : SfxType::FormantVoice);
+            if (u0 < voiceOdds(pMark)) addVoice(start + bar, 8.0f, u1 < 0.7f ? SfxType::SpokenWord : SfxType::FormantVoice);
             for (int b = 9; b + 4 <= s.bars; b += 8) {
                 const float x = v.uniform(), y = v.uniform();
-                if (x >= 0.8f * amount) continue;
+                if (x >= voiceOdds(0.8f * amount)) continue;
                 if (y < 0.45f) addVoice(start + b * bar, 8.0f, SfxType::FormantVoice);
                 else if (y < 0.8f) addVoice(start + b * bar, 8.0f, SfxType::SpokenWord);
                 else addVoice(start + b * bar + 0.5, 4.0f, SfxType::AlienChatter);
@@ -710,10 +748,10 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount)
             break;
         }
         case SectionType::Build:
-            if (u0 < 0.8f * amount && s.bars >= 8) addVoice(start, 8.0f, SfxType::SpokenWord);
+            if (u0 < voiceOdds(0.8f * amount) && s.bars >= 8) addVoice(start, 8.0f, SfxType::SpokenWord);
             break;
         case SectionType::Drop:
-            if (u0 < 0.35f * pMark && s.bars >= 16) {
+            if (u0 < voiceOdds(0.35f * pMark) && s.bars >= 16) {
                 const int groups = s.bars / 8 - 1;   // interior eight-bar ends
                 const int g = 1 + static_cast<int>(u1 * static_cast<float>(std::max(1, groups))) % std::max(1, groups);
                 addVoice(start + 8.0 * g * bar - 2.0, 2.0f, SfxType::VoiceChop);
@@ -753,7 +791,7 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount)
                 switch (kind) {
                 case 0: add(last + kFree[where], 0.5f, SfxType::Squelch); break;
                 case 1: add(last + kFree[where], 1.0f, SfxType::Bubble); break;
-                case 2: if (voiceFree(last + 3.25)) { add(last + 3.25, 0.75f, SfxType::AlienChatter); vocalAt.push_back(last + 3.25); } break;
+                case 2: if (dv > 0.0f && voiceFree(last + 3.25)) { add(last + 3.25, 0.75f, SfxType::AlienChatter); vocalAt.push_back(last + 3.25); } break;
                 default: add(last + kFree[where], 0.5f, SfxType::Zap); break;
                 }
             } else {
@@ -764,7 +802,7 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount)
                     break;
                 case 1: add(last + 2.75, 1.0f, SfxType::Bubble); add(last + 3.5, 0.5f, SfxType::Bubble); break;
                 case 2: add(last + 3.25, 0.25f, SfxType::Squelch); add(last + 3.75, 0.25f, SfxType::Squelch); break;
-                default: if (voiceFree(last + 2.75)) { add(last + 2.75, 1.25f, SfxType::AlienChatter); vocalAt.push_back(last + 2.75); } break;
+                default: if (dv > 0.0f && voiceFree(last + 2.75)) { add(last + 2.75, 1.25f, SfxType::AlienChatter); vocalAt.push_back(last + 2.75); } break;
                 }
             }
         }
@@ -774,6 +812,7 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount)
     Rng t;
     t.seed(mixSeed(seed ^ kSaltBed, 0));
     bool bowl = t.uniform() < 0.65f, didge = t.uniform() < 0.55f, jaw = t.uniform() < 0.5f;
+    auto bedOdds = [&](float p) { return std::min(1.0f, p * db); };
     if (!bowl && !didge && !jaw) {
         const int k = t.below(3);
         bowl = k == 0; didge = k == 1; jaw = k == 2;
@@ -784,14 +823,14 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount)
         switch (s.type) {
         case SectionType::Intro: {
             const SfxType drone = didge ? SfxType::Didgeridoo : SfxType::JawHarp;
-            if ((didge || jaw) && t.uniform() < pMark) add(start, static_cast<float>((s.bars - 1) * bar), drone);
-            if (bowl) for (int b = 0; b < s.bars; b += 4) if (b == 0 || t.uniform() < 0.7f * pMark) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
+            if ((didge || jaw) && t.uniform() < bedOdds(pMark)) add(start, static_cast<float>((s.bars - 1) * bar), drone);
+            if (bowl) for (int b = 0; b < s.bars; b += 4) if (b == 0 ? db > 0.0f : t.uniform() < bedOdds(0.7f * pMark)) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
             break;
         }
         case SectionType::Break: {
             // A bowl after the cut, then now and then on a four-bar line: a strike every four bars for
             // sixty-four bars was one sound too regular to stay in the background.
-            if (bowl) for (int b = 1; b < s.bars - 1; b += 4) if (t.uniform() < (b == 1 ? pMark : 0.55f * pMark)) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
+            if (bowl) for (int b = 1; b < s.bars - 1; b += 4) if (t.uniform() < bedOdds(b == 1 ? pMark : 0.55f * pMark)) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
             // Drones of up to twelve bars from the bar after the cut, one per sixteen bars, alternating
             // between the track's two drones when it has both: a bed that comes and goes rather than
             // one sound held for a minute and a half.
@@ -799,25 +838,25 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount)
                 bool useDidge = didge;
                 for (int b = 1; b + 5 <= s.bars - 1; b += 16) {
                     const int len = std::min(12, s.bars - 1 - b);
-                    if (t.uniform() < pMark) add(start + b * bar, static_cast<float>(len * bar), useDidge ? SfxType::Didgeridoo : SfxType::JawHarp);
+                    if (t.uniform() < bedOdds(pMark)) add(start + b * bar, static_cast<float>(len * bar), useDidge ? SfxType::Didgeridoo : SfxType::JawHarp);
                     if (didge && jaw) useDidge = !useDidge;
                 }
             }
             break;
         }
         case SectionType::Outro:
-            if (bowl) for (int b = 0; b < s.bars; b += 8) if (t.uniform() < pMark) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
-            if (didge && t.uniform() < pMark) add(start, static_cast<float>(s.bars * bar), SfxType::Didgeridoo);
+            if (bowl) for (int b = 0; b < s.bars; b += 8) if (t.uniform() < bedOdds(pMark)) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
+            if (didge && t.uniform() < bedOdds(pMark)) add(start, static_cast<float>(s.bars * bar), SfxType::Didgeridoo);
             break;
         case SectionType::Groove:
-            if (jaw && s.bars >= 24 && t.uniform() < 0.3f * amount) add(start + 8.0 * bar, static_cast<float>(8.0 * bar), SfxType::JawHarp);
+            if (jaw && s.bars >= 24 && t.uniform() < bedOdds(0.3f * amount)) add(start + 8.0 * bar, static_cast<float>(8.0 * bar), SfxType::JawHarp);
             break;
         default: break;
         }
     }
 }
 
-void makeFormSfx(FormPlan& f, uint64_t seed, float amount)
+void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity, float bedDensity)
 {
     Rng r;
     r.seed(mixSeed(seed ^ kSaltSfx, 0));
@@ -893,8 +932,15 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount)
         }
     }
     // The psychedelic layer of 19.09.2026, from streams of its own (placePsychedelia above).
-    placePsychedelia(f, seed, amount);
+    placePsychedelia(f, seed, amount, voiceDensity, bedDensity);
     std::stable_sort(f.sfx.begin(), f.sfx.end(), [](const SfxEvent& a, const SfxEvent& b) { return a.beat < b.beat; });
+    // Which phrase or bed variant each voice and bed event plays (19.09.2026): from the form seed, in the
+    // order of the events, from a generator of its own -- nothing placed above moves. Until then the
+    // engine derived it from the event's beat, so a phrase was a function of where it fell.
+    Rng vr;
+    vr.seed(mixSeed(seed ^ kSaltVariant, 0));
+    for (SfxEvent& e : f.sfx)
+        if (sfxTypePart(static_cast<SfxType>(e.type)) != Part::Sfx) e.variant = static_cast<uint8_t>(1 + vr.below(255));
 }
 
 /**
@@ -937,7 +983,7 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount)
  * transient the whole gesture exists to sharpen.
  */
 void sectionAutomation(const ParamStore& p, const Section& s, uint64_t seed, double beat,
-                       float base0, float base1, bool knobs, std::vector<ControlEvent>& out)
+                       float base0, float base1, bool knobs, std::vector<ControlEvent>& out, float resoBase, float decayBase)
 {
     const int ab = p.base(Module::Acid), mb = p.base(Module::Mix);
     // The strands below are written one after the other; the events are put into time order at the
@@ -1012,25 +1058,32 @@ void sectionAutomation(const ParamStore& p, const Section& s, uint64_t seed, dou
         const double half = bars / 2.0;
         const float len = static_cast<float>(half * kBeatsPerBar);
         push(ab + acid::Cutoff, base(half) - depth * kRideDive, beat, len);
-        push(ab + acid::Resonance, -depth * kRideReso, beat, len);
+        push(ab + acid::Resonance, resoBase - depth * kRideReso, beat, len);
         push(ab + acid::Cutoff, base1, beat + half * kBeatsPerBar, len);
-        push(ab + acid::Resonance, 0.0f, beat + half * kBeatsPerBar, len);
+        push(ab + acid::Resonance, resoBase, beat + half * kBeatsPerBar, len);
         return;
     }
     // Everything else rides the four-stage cycle (Form.h, RideShape): 32 bars, or the whole section
     // when it is shorter, so that a buildup's cycle ends in the dive exactly on the drop.
     const RideShape shape = acidRideShape(bars);
-    const double knobReso = p.get(ab + acid::Resonance);
-    const double knobDecay = p.get(ab + acid::Decay);
-    const ParamDesc& dd = p.desc(ab + acid::Decay);
-    // Decay is a log parameter: a ratio of the knob is a fixed normalised distance.
+    // 19.09.2026 (round "voices"): the ride is an excursion around the *voiced* resonance and decay --
+    // the knob plus the track's acid voicing (resoBase, decayBase) -- instead of around the knob, so a
+    // track's voicing can own the two quantities the section rides. With both bases at zero (the first
+    // track, which plays the knobs) every event below is the one it was.
+    const int resoId = ab + acid::Resonance, decayId = ab + acid::Decay;
+    const double knobReso = p.get(resoId);
+    const double voicedReso = p.fromNormalised(resoId, p.toNormalised(resoId, p.get(resoId)) + resoBase);
+    const double knobDecay = p.get(decayId);
+    const double voicedDecay = p.fromNormalised(decayId, p.toNormalised(decayId, p.get(decayId)) + decayBase);
+    const ParamDesc& dd = p.desc(decayId);
+    // Decay is a log parameter: a ratio of the voiced decay is a fixed normalised distance from it.
     const double decaySpan = std::log(static_cast<double>(dd.maxValue) / dd.minValue);
     auto decayOffset = [&](double ratio) {
-        const double target = std::clamp(knobDecay * ratio, static_cast<double>(dd.minValue), static_cast<double>(dd.maxValue));
+        const double target = std::clamp(voicedDecay * ratio, static_cast<double>(dd.minValue), static_cast<double>(dd.maxValue));
         return static_cast<float>(std::log(target / knobDecay) / decaySpan);
     };
-    const float resoMedium = static_cast<float>(std::min(knobReso, static_cast<double>(kRideResoMedium)) - knobReso);
-    const float resoSquelch = static_cast<float>(std::max(knobReso, static_cast<double>(kRideResoSquelch)) - knobReso);
+    const float resoMedium = static_cast<float>(std::min(voicedReso, static_cast<double>(kRideResoMedium)) - knobReso);
+    const float resoSquelch = static_cast<float>(std::max(voicedReso, static_cast<double>(kRideResoSquelch)) - knobReso);
     const float h = 0.5f * depth * kRideCutoff;   ///< half the peak-to-peak cutoff excursion
     for (double c0 = 0.0; c0 + shape.length <= bars + 1e-9; c0 += shape.length) {
         const double at0 = beat + c0 * kBeatsPerBar;
@@ -1047,7 +1100,7 @@ void sectionAutomation(const ParamStore& p, const Section& s, uint64_t seed, dou
         push(ab + acid::Resonance, resoSquelch, at(shape.stage[2]), len(shape.stage[3] - shape.stage[2]));
         // Decay: short and dry in stage 1, back to the knob over stage 2, longer through 3 and 4.
         push(ab + acid::Decay, decayOffset(kRideDecayShort), at(0.0), len(1.0));
-        push(ab + acid::Decay, 0.0f, at(shape.stage[1]), len(shape.stage[2] - shape.stage[1]));
+        push(ab + acid::Decay, decayOffset(1.0), at(shape.stage[1]), len(shape.stage[2] - shape.stage[1]));
         push(ab + acid::Decay, decayOffset(kRideDecayLong), at(shape.stage[2]), len(shape.stage[3] + (shape.length - shape.stage[3]) * 0.5 - shape.stage[2]));
     }
 }

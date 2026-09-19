@@ -64,7 +64,10 @@ std::string_view trim(std::string_view s)
 std::string writeSetText(const Composer& composer, const ParamStore& p)
 {
     const int cb = p.base(Module::Compose);
-    std::string out = "phosset 1\n";
+    // Version 2 since 19.09.2026 (round "voices"): the counter-lead, the stab and the drone exist and the
+    // voices were reordered (Params.h, PolyInstance). A set names its knobs by key, so that order never
+    // reached a file; the number tells a reader which voices the file knew about (readSetText).
+    std::string out = "phosset 2\n";
     char buf[128];
     std::snprintf(buf, sizeof(buf), "seed=%llu\n", static_cast<unsigned long long>(composer.seed()));
     out += buf;
@@ -93,12 +96,18 @@ bool readSetText(std::string_view text, Composer& composer, ParamStore& p, std::
     const size_t nl = rest.find('\n');
     const std::string_view header = trim(rest.substr(0, nl == std::string_view::npos ? rest.size() : nl));
     if (header.rfind("phosset", 0) != 0) {
-        if (error != nullptr) *error = "not a phosset file (the first line must be \"phosset 1\")";
+        if (error != nullptr) *error = "not a phosset file (the first line must be \"phosset 1\" or \"phosset 2\")";
         return false;
     }
     rest = nl == std::string_view::npos ? std::string_view() : rest.substr(nl + 1);
 
     composer.clearLocks();
+    // A set stores the knobs that differ from their defaults (writeSetText), so every knob it does not
+    // name is at its default -- and is put there before the file's own values are read (19.09.2026).
+    // Without it a set read into a session whose knobs had moved kept those moves, which for a
+    // "phosset 1" file from before the voices round meant the three new voices kept whatever the
+    // session had; now they start from their defaults, and every older key still names the knob it named.
+    p.resetDefaults();
     bool ok = true;
     std::string knobs;
     size_t pos = 0;

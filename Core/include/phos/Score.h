@@ -8,6 +8,7 @@
  */
 #pragma once
 #include "phos/Clock.h"
+#include "phos/Params.h"   // PolyInstance: the polyphonic parts follow its order
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -18,14 +19,30 @@ namespace phos {
 /**
  * @brief The generators a note can belong to.
  *
- * Texture (the shamanic bed, Texture.h) and Vocal (speech phrases and synthetic voices, Vocal.h) were
- * appended on 19.09.2026, so that no existing part moved. Their notes carry the effect type as their
- * pitch exactly like Part::Sfx does (kSfxBaseNote + SfxType); the composer may also write them as
- * Part::Sfx notes, and sfxTypePart() (Sfx.h) says which of the three parts a type really belongs to.
+ * Texture (the shamanic bed, Texture.h) and Vocal (speech phrases and synthetic voices, Vocal.h) carry
+ * the effect type as their pitch exactly like Part::Sfx does (kSfxBaseNote + SfxType); sfxTypePart()
+ * (Sfx.h) says which of the three parts a type belongs to.
+ *
+ * 19.09.2026, round "voices": the polyphonic parts stand in the groups of PolyInstance (Params.h) --
+ * lead and counter-lead, arp and stab, pad and drone -- and the parts after them moved. A part is never
+ * stored as a number (the MIDI export names its tracks with kPartNames, and the import matches names),
+ * so nothing saved depends on these values; the sort order of notes at equal beats does, and with it
+ * every render, which the round accepted.
  */
-enum class Part : uint8_t { Kick = 0, Bass, Perc, Acid, Lead, Arp, Pad, Sfx, Texture, Vocal, Count };
+enum class Part : uint8_t { Kick = 0, Bass, Perc, Acid, Lead, Counter, Arp, Stab, Pad, Drone, Sfx, Texture, Vocal, Count };
 constexpr int kNumParts = static_cast<int>(Part::Count);   ///< number of parts
 extern const char* const kPartNames[kNumParts];              ///< "Kick", "Bass", ...
+
+/** @brief The part a polyphonic instance plays (the two enums run side by side from Lead). */
+constexpr Part polyPart(PolyInstance i) { return static_cast<Part>(static_cast<int>(Part::Lead) + polyIndex(i)); }
+/** @brief The polyphonic instance of a part, or -1 when the part is not played by a Poly. */
+constexpr int polyOfPart(Part p)
+{
+    const int k = static_cast<int>(p) - static_cast<int>(Part::Lead);
+    return k >= 0 && k < kPolyInstances ? k : -1;
+}
+static_assert(polyPart(PolyInstance::Drone) == Part::Drone && polyPart(PolyInstance::Counter) == Part::Counter,
+              "Part and PolyInstance must list the polyphonic voices in the same order");
 
 /** @brief Flags of a note event. */
 enum NoteFlag : uint8_t {

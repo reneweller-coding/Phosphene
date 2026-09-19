@@ -39,18 +39,22 @@ const Slice kAcidSlices[] = {
     { "Voice", acid::Wave, 10, 5 }, { "Squelch", acid::Squelch, 6, 4 },
     { "Delay", acid::DelaySend, 6, 4 }, { "Sends & Level", acid::RoomSend, 4, 4 },
 };
-/** @brief A polyphonic engine's table (lead, arp, pad). */
+/** @brief A polyphonic engine's table (lead, counter-lead, arp, stab, pad, drone). */
 const Slice kPolySlices[] = {
     { "Oscillator", poly::Osc, 15, 5 }, { "Filter", poly::Cutoff, 7, 4 }, { "Amplitude", poly::AmpAttack, 6, 4 },
     { "Delay", poly::DelaySend, 6, 4 }, { "Sends", poly::RoomSend, 3, 3 },
     { "Trance Gate", poly::Gate, 7, 4 }, { "Level", poly::Level, 1, 2 },
+    // Appended parameters: the disperser, the drift and (19.09.2026) the filter response.
+    { "Colour", poly::Disperse, 4, 4 },
 };
 /** @brief The send effects. */
 const Slice kFxSlices[] = {
     { "Room", fx::RoomSize, 3, 3 }, { "Hall", fx::HallSize, 4, 4 }, { "Returns", fx::LowCut, 5, 5 },
 };
 /** @brief The mixer and the master. */
-const Slice kMixSlices[] = { { "Channels", mix::KickMute, 17, 6 }, { "Sidechain", mix::DuckAttack, 3, 3 } };
+// The channels up to the SFX strip, then the sidechain, then the two strips of 19.09.2026 (texture, vocal).
+const Slice kMixSlices[] = { { "Channels", mix::KickMute, mix::PercRoom + 2, 6 }, { "Sidechain", mix::DuckAttack, 3, 3 },
+                             { "Bed & Voices", mix::TextureMute, 4, 4 } };
 const Slice kMasterSlices[] = {
     { "Gain", master::Gain, 3, 3 }, { "Compressor", master::CompThreshold, 5, 5 }, { "Output", master::MonoBass, 7, 4 },
 };
@@ -267,7 +271,7 @@ void PatternDisplay::paint(juce::Graphics& g)
 const juce::StringArray& PhospheneEditor::tabNames()
 {
     static const juce::StringArray names{ "Set", "Arrange", "Kick", "Bass", "Percussion", "Acid",
-                                          "Lead", "Arp", "Pad", "SFX / FX", "Mixer / Master", "Perform" };
+                                          "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "SFX / FX", "Mixer / Master", "Perform" };
     jassert(names.size() == TabCount);
     return names;
 }
@@ -336,9 +340,12 @@ Part partOfTab(int tab)
     case TabBass: return Part::Bass;
     case TabPerc: return Part::Perc;
     case TabAcid: return Part::Acid;
-    case TabLead: return Part::Lead;
-    case TabArp:  return Part::Arp;
-    case TabPad:  return Part::Pad;
+    case TabLead:    return Part::Lead;
+    case TabCounter: return Part::Counter;
+    case TabArp:     return Part::Arp;
+    case TabStab:    return Part::Stab;
+    case TabPad:     return Part::Pad;
+    case TabDrone:   return Part::Drone;
     case TabFx:   return Part::Sfx;
     default: return Part::Count;
     }
@@ -360,9 +367,10 @@ void PhospheneEditor::buildPages()
         case TabKick: addSlices(*page, proc_, Module::Kick, 0, kKickSlices, tint); break;
         case TabBass: addSlices(*page, proc_, Module::Bass, 0, kBassSlices, tint); break;
         case TabAcid: addSlices(*page, proc_, Module::Acid, 0, kAcidSlices, tint); break;
-        case TabLead: addSlices(*page, proc_, Module::Poly, static_cast<int>(PolyInstance::Lead), kPolySlices, tint); break;
-        case TabArp:  addSlices(*page, proc_, Module::Poly, static_cast<int>(PolyInstance::Arp), kPolySlices, tint); break;
-        case TabPad:  addSlices(*page, proc_, Module::Poly, static_cast<int>(PolyInstance::Pad), kPolySlices, tint); break;
+        case TabLead: case TabCounter: case TabArp: case TabStab: case TabPad: case TabDrone:
+            // The six voice pages share one table; the tab order is the instance order (PluginEditor.h).
+            addSlices(*page, proc_, Module::Poly, t - TabLead, kPolySlices, tint);
+            break;
         case TabFx:
             page->addModuleGroup(proc_, Module::Sfx, 0, "Effect Generator", tint, 5);
             addSlices(*page, proc_, Module::Fx, 0, kFxSlices, tint);

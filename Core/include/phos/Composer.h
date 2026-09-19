@@ -140,6 +140,30 @@ extern const char* const kBassMacroNames[kNumBassMacros];   ///< display names
 constexpr int kNumAcidVoicings = 3;
 extern const char* const kAcidVoicingNames[kNumAcidVoicings];   ///< "clean", "driven", "liquid"
 
+/**
+ * @brief The sound of one polyphonic voice in one track (19.09.2026, round "voices").
+ *
+ * The user: "Auch die anderen Synthesizer können gerne mehr verschiedene Klangfarben haben, es sollen
+ * ja nicht alle Stücke gleich klingen." Before this round a track changed the pad's table position and
+ * gate pattern and nothing else of it, the lead's detune and cutoff, the arp's filter decay and detune
+ * -- measured on the listening seed, every pad of the set sounded the same. A recipe is drawn per voice
+ * and per track from the set seed and the style: three discrete choices -- the oscillator, the wavetable
+ * (from the voice's own palette of the built-in and the library tables, Composer.cpp, kVoicePalette)
+ * and the filter's response -- and five perceptual directions in the knobs' normalised domain, the
+ * attack, spectral-centroid and spectral-flux axes timbre research keeps finding (Grey 1977; McAdams et
+ * al. 1995): brightness, softness, thickness, space and motion. Like the kick and bass recipes they are
+ * offsets from the knobs, and the first track plays the knobs exactly.
+ */
+constexpr int kNumVoiceMacros = 5;   ///< brightness, softness, thickness, space, motion
+extern const char* const kVoiceMacroNames[kNumVoiceMacros];   ///< display names
+struct VoiceRecipe {
+    int   osc = -1;                    ///< override of poly.osc, -1 = the knob
+    int   table = -1;                  ///< override of poly.table, -1 = the knob
+    int   filter = -1;                 ///< override of poly.filter_type, -1 = the knob
+    int   delayL = -1, delayR = -1;    ///< overrides of the delay times, -1 = the knob
+    float macro[kNumVoiceMacros] = {}; ///< the five directions, each -1..1
+};
+
 /** @brief What the set walk decides for a track: the journey through the night. */
 struct TrackWalk {
     int    bars = 256;              ///< length in bars (a multiple of 32)
@@ -149,6 +173,7 @@ struct TrackWalk {
     float  kickMacro[5] = {};       ///< kick recipe, each -1..1
     float  bassMacro[5] = {};       ///< bass recipe, each -1..1
     float  acidVoicing[kNumAcidVoicings] = { 0.0f, 1.0f, 0.0f };   ///< barycentric weights of the acid voicings
+    VoiceRecipe voice[kPolyInstances];   ///< the sound of each polyphonic voice (PolyInstance order)
 };
 
 /** @brief Everything that is decided once per track. */
@@ -167,6 +192,7 @@ struct TrackPlan {
     float  kickMacro[kNumKickMacros] = {};   ///< recipe, each -1..1
     float  bassMacro[kNumBassMacros] = {};   ///< recipe, each -1..1
     float  acidVoicing[kNumAcidVoicings] = { 0.0f, 1.0f, 0.0f };   ///< barycentric weights of the acid voicings (clean, driven, liquid)
+    VoiceRecipe voice[kPolyInstances];   ///< the sound of each polyphonic voice (PolyInstance order; 19.09.2026)
     double loudness = 0.0;         ///< probe loudness of the track's sound, LUFS (0 when Level Match is off)
     float  gainDb = 0.0f;           ///< level correction against the first track
     uint64_t percSeed = 0;          ///< seed of the track's percussion decisions
@@ -283,6 +309,15 @@ public:
      */
     static void acidVoicingOffsets(const ParamStore& p, const float* weights, float amount, float* out, int& disperse);
 
+    /**
+     * @brief Normalised offsets of a polyphonic voice's recipe (19.09.2026).
+     * @param voice  which instance (the loadings differ: an arp keeps its short attack, a drone its dark filter)
+     * @param r      the recipe
+     * @param amount Sound Variation
+     * @param out    receives poly::Count offsets, indexed like the poly table
+     */
+    static void voiceRecipeOffsets(PolyInstance voice, const VoiceRecipe& r, float amount, float* out);
+
 private:
     void validate(const ParamStore& params) const;
     TrackPlan makeTrack(const ParamStore& params, int index) const;
@@ -298,6 +333,12 @@ private:
     void sectionControls(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar, double beat,
                          std::vector<ControlEvent>& out) const;
     void transitionBar(const ParamStore& params, int track, int inTrack, int bar, std::vector<NoteEvent>& out) const;
+    /**
+     * @brief The tonic drone's slow evolution (19.09.2026): every MelodyPlan::droneEvolveBars bars a new
+     *        target for its cutoff, table position and detune, ramped over the whole period, around the
+     *        drone's recipe. Every event lies on its own bar, so Conductor::pump never holds one back.
+     */
+    void droneControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, std::vector<ControlEvent>& out) const;
     /** @brief The set seed after the set unit's rerolls. */
     uint64_t setSeed() const;
     /** @brief The seed of a track: frozen at the original when the track is locked. */

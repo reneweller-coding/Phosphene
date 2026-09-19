@@ -259,9 +259,8 @@ void Engine::applyParams()
     const int ab = p.base(Module::Acid), sb = p.base(Module::Sfx), fb = p.base(Module::Fx);
     stripGain_[StripPerc] = percGain_;
     stripGain_[StripAcid] = partGain(mix::AcidMute, mix::AcidLevel);
-    stripGain_[StripLead] = partGain(mix::LeadMute, mix::LeadLevel);
-    stripGain_[StripArp] = partGain(mix::ArpMute, mix::ArpLevel);
-    stripGain_[StripPad] = partGain(mix::PadMute, mix::PadLevel);
+    for (int k = 0; k < kPolyInstances; ++k)
+        stripGain_[StripLead + k] = partGain(mix::polyMute(static_cast<PolyInstance>(k)), mix::polyLevel(static_cast<PolyInstance>(k)));
     stripGain_[StripSfx] = partGain(mix::SfxMute, mix::SfxLevel);
     const float duckA = e(mb + mix::DuckAttack), duckH = e(mb + mix::DuckHold), duckR = e(mb + mix::DuckRelease);
     stripRoom_[StripPerc] = e(mb + mix::PercRoom);
@@ -371,10 +370,13 @@ void Engine::dispatch(const NoteEvent& e, double late)
         break;
     }
     case Part::Lead:
+    case Part::Counter:
     case Part::Arp:
-    case Part::Pad: {
+    case Part::Stab:
+    case Part::Pad:
+    case Part::Drone: {
         const double samples = static_cast<double>(e.length) / beatsPerSample_;
-        const int inst = e.part == Part::Lead ? 0 : (e.part == Part::Arp ? 1 : 2);
+        const int inst = polyOfPart(e.part);
         // noteOnLimited applies the quality level's unison and voice limits (Quality.h, Poly.h); at
         // the desktop level it is noteOn() itself.
         poly_[inst].noteOnLimited(e.pitch, vel, e.length, std::max(1, static_cast<int>(std::lround(samples))), late);
@@ -392,8 +394,13 @@ void Engine::dispatch(const NoteEvent& e, double late)
         const int n = std::max(1, static_cast<int>(std::lround(samples)));
         const double spb = 1.0 / beatsPerSample_;
         // The event's own seed: its position on the sixteenth grid and its type. Everything a texture or
-        // a voice draws hangs off it, so a bar rendered alone sounds like the same bar in the set.
-        const uint64_t pick = mixSeed(static_cast<uint64_t>(std::llround(e.beat * 16.0)), static_cast<uint64_t>(type) + 0x5053ull);
+        // a voice draws hangs off it, so a bar rendered alone sounds like the same bar in the set. Since
+        // 19.09.2026 the composer also sends a variant drawn from the track's seed in the lane (Form.h,
+        // SfxEvent::variant), so which phrase speaks is the seed's decision; a note without one (lane 0:
+        // an older MIDI file, a hand-made test event) keeps the position-only seed it always had.
+        const uint64_t where = static_cast<uint64_t>(std::llround(e.beat * 16.0));
+        const uint64_t pick = e.lane != 0 ? mixSeed(where ^ (static_cast<uint64_t>(e.lane) << 40), static_cast<uint64_t>(type) + 0x5641ull)
+                                          : mixSeed(where, static_cast<uint64_t>(type) + 0x5053ull);
         switch (sfxTypePart(t)) {
         case Part::Texture:
             texture_.trigger(t, n, vel, late, spb, pick);
@@ -479,10 +486,14 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
     // The SFX strip's insert: flanger, phaser, frequency shifter (PsyFx.h).
     sfxFx_.process(sfxL_.data(), sfxR_.data(), count, beat0, beatsPerSample_);
     const float kg = kickMute_ ? 0.0f : 1.0f, bg = bassMute_ ? 0.0f : 1.0f;
-    const float* srcL[StripCount] = { percL_.data(), acidL_.data(), polyL_[0].data(), polyL_[1].data(), polyL_[2].data(), sfxL_.data(),
-                                      texL_.data(), vocL_.data() };
-    const float* srcR[StripCount] = { percR_.data(), acidR_.data(), polyR_[0].data(), polyR_[1].data(), polyR_[2].data(), sfxR_.data(),
-                                      texR_.data(), vocR_.data() };
+    const float* srcL[StripCount] = {};
+    const float* srcR[StripCount] = {};
+    srcL[StripPerc] = percL_.data(); srcR[StripPerc] = percR_.data();
+    srcL[StripAcid] = acidL_.data(); srcR[StripAcid] = acidR_.data();
+    for (int k = 0; k < kPolyInstances; ++k) { srcL[StripLead + k] = polyL_[k].data(); srcR[StripLead + k] = polyR_[k].data(); }
+    srcL[StripSfx] = sfxL_.data(); srcR[StripSfx] = sfxR_.data();
+    srcL[StripTexture] = texL_.data(); srcR[StripTexture] = texR_.data();
+    srcL[StripVocal] = vocL_.data(); srcR[StripVocal] = vocR_.data();
     float* outL = L + offset;
     float* outR = R + offset;
     for (int i = 0; i < count; ++i) {
@@ -492,11 +503,11 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
         const float sub = stripGain_[StripSfx] * subDuck_.next() * subBuf_[si];
         const float mono = kg * kickBuf_[si] + bg * bassBuf_[si] + sub;
         float l = mono, r = mono, rl = 0.0f, rr = 0.0f, hl = 0.0f, hr = 0.0f, fl = 0.0f, fr = 0.0f;
-        float ml = 0.0f, mr = 0.0f;   // the melodic bus a stutter may replace (acid, lead, arp)
+        float ml = 0.0f, mr = 0.0f;   // the melodic bus a stutter may replace (acid, lead, counter, arp, stab)
         const double beat = chunkBeat_ + static_cast<double>(chunkPos_ + i) * beatsPerSample_;
         for (int s = 0; s < StripCount; ++s) {
             float sl = srcL[s][si], sr = srcR[s][si];
-            if (s >= StripLead && s <= StripPad) {
+            if (s >= StripLead && s <= StripDrone) {
                 const int k = s - StripLead;
                 if (gateOn_[k]) {
                     const float o = TranceGate::open(beat, gatePattern_[k], gateDuty_[k], gateAttack_[k], gateRelease_[k]);
@@ -506,7 +517,7 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
             const float g = stripGain_[s] * duck_[s].next();
             sl *= g;
             sr *= g;
-            if (s >= StripAcid && s <= StripArp) { ml += sl; mr += sr; }
+            if (s >= StripAcid && s <= StripStab) { ml += sl; mr += sr; }
             else { l += sl; r += sr; }
             rl += stripRoom_[s] * sl;
             rr += stripRoom_[s] * sr;

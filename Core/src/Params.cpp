@@ -44,6 +44,8 @@ const char* const kBassModelNames[] = { "Pattern", "Neural" };
 const char* const kBassRhythmNames[] = { "Pattern", "Corpus" };
 const char* const kPercRoleNames[kNumPercRoles] = { "Closed Hat", "Open Hat", "Ride", "Crash", "Clap", "Snare", "Rim",
                                                     "Shaker", "Tom", "Conga", "Zap", "Blip" };
+// The prefixes of the polyphonic instances, in the order of PolyInstance (Params.h): the voices' groups.
+const char* const kPolyInstanceNames[kPolyInstances] = { "lead", "counter", "arp", "stab", "pad", "drone" };
 
 namespace {
 
@@ -96,6 +98,14 @@ const ParamDesc kComposeParams[compose::Count] = {
     // 16.09.2026, bass rhythm round: the pattern families or the corpus onset model behind the bass
     // *rhythm*. Appended, so no parameter above it moves; Pattern is the default.
     { "bass_rhythm",     "Bass Rhythm",     "",      0.0f,   1.0f,   0.0f, Curve::Choice, kBassRhythmNames },
+    // 19.09.2026, round "voices": the three new voices' share of the tracks (like lead_amount), and two
+    // density knobs of the psychedelic layer the round of the same day could not add (it did not own the
+    // composer): 1 is the density that round calibrated, 0 removes the voices or the bed, 2 doubles them.
+    { "counter_amount",  "Counter Amount",  "",      0.0f,   1.0f,   0.6f, Curve::Linear },
+    { "stab_amount",     "Stab Amount",     "",      0.0f,   1.0f,   0.5f, Curve::Linear },
+    { "drone_amount",    "Drone Amount",    "",      0.0f,   1.0f,   0.6f, Curve::Linear },
+    { "voice_density",   "Voice Density",   "x",     0.0f,   2.0f,   1.0f, Curve::Linear },
+    { "bed_density",     "Bed Density",     "x",     0.0f,   2.0f,   1.0f, Curve::Linear },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };
@@ -300,6 +310,9 @@ const char* const kWaveTableNames[] = { "Classic", "Vocal", "Glass", "PWM", "Syn
 static_assert(sizeof(kWaveTableNames) / sizeof(kWaveTableNames[0]) == kNumWaveTables,
               "the table choice list and kNumWaveTables have come apart");
 const char* const kGatePatternNames[] = { "Sixteenths", "Eighths", "Rolling", "Gallop", "3-3-2", "Triplets" };
+const char* const kPolyFilterNames[] = { "Low Pass", "Band Pass", "High Pass", "Notch" };
+static_assert(sizeof(kPolyFilterNames) / sizeof(kPolyFilterNames[0]) == static_cast<int>(PolyFilter::Count),
+              "one name per PolyFilter");
 
 // 18.09.2026 (round "mix-foundation"): the default voicing is the "driven" one of three candidates
 // rendered for the user -- a 303 into a distortion pedal. Cutoff 650 -> 900 Hz, env 4 -> 3.5 oct,
@@ -396,6 +409,9 @@ const ParamDesc kPolyParams[poly::Count] = {
     // Thermal drift: the standard deviation of the slow random walk, in cents (Poly.h). 1 cent is
     // +-2 cents at two sigma, the range the analogue literature gives for a warmed-up VCO.
     { "drift",          "Drift",          "ct",    0.0f,     8.0f,   1.0f, Curve::Linear },
+    // 19.09.2026 (round "voices"): which output of the voice's state-variable filter is heard (PolyKernel.h).
+    // Low pass is what every voice played before; the per-track recipes (Composer.cpp) may pick the others.
+    { "filter_type",    "Filter Type",    "",      0.0f,     3.0f,   0.0f, Curve::Choice, kPolyFilterNames },
 };
 
 /**
@@ -415,9 +431,28 @@ const char* const kDefaultPoly =
     "arp.delay_left=2;arp.delay_right=1;arp.level=-5;arp.width=0.6;arp.hall_send=0.15;arp.duck=0.25\n"
     "pad.osc=Wavetable;pad.table=Vocal;pad.detune=0.35;pad.mix=0.7;pad.dynamic_detune=0;pad.cutoff=5000;pad.env_amount=0;pad.resonance=0.1;"
     "pad.amp_attack=700;pad.amp_decay=2000;pad.amp_sustain=1;pad.amp_release=1800;pad.hp_floor=140;pad.hp_track=1;pad.width=1;"
-    "pad.delay_send=0;pad.hall_send=0.45;pad.duck=0.5;pad.pos_env=0.3;pad.pos_decay=3000;pad.gate_pattern=Sixteenths;pad.level=-16\n";
-
-const char* const kPolyInstanceNames[kPolyInstances] = { "lead", "arp", "pad" };
+    "pad.delay_send=0;pad.hall_send=0.45;pad.duck=0.5;pad.pos_env=0.3;pad.pos_decay=3000;pad.gate_pattern=Sixteenths;pad.level=-16\n"
+    // 19.09.2026, round "voices". The counter-lead answers the lead in another timbre -- the user's
+    // inventory names "wavetable / vocal character" -- so it is a formant saw read by the wavetable
+    // oscillator with a slow vowel movement of the position and a quarter-note echo, and no supersaw.
+    "counter.osc=Wavetable;counter.table=Formant Saw;counter.detune=0.25;counter.mix=0.55;counter.dynamic_detune=0.3;"
+    "counter.cutoff=5000;counter.env_amount=1.5;counter.filter_decay=300;counter.resonance=0.2;counter.position=0.4;"
+    "counter.pos_lfo_depth=0.25;counter.pos_lfo_beats=4;counter.amp_attack=3;counter.amp_decay=400;counter.amp_sustain=0.6;"
+    "counter.amp_release=110;counter.delay_send=0.4;counter.delay_left=3;counter.delay_right=2;counter.hall_send=0.3;"
+    "counter.width=0.7;counter.duck=0.25;counter.level=-7\n"
+    // The stab: a short, bright chord -- a narrow supersaw through a filter envelope that closes within
+    // 90 ms, no sustain, and throws into the delay and the hall so the hit leaves an echo behind it.
+    "stab.detune=0.35;stab.mix=0.6;stab.dynamic_detune=0;stab.cutoff=1800;stab.env_amount=3.5;stab.filter_decay=90;"
+    "stab.resonance=0.35;stab.amp_attack=0.5;stab.amp_decay=180;stab.amp_sustain=0;stab.amp_release=60;stab.delay_send=0.45;"
+    "stab.delay_left=2;stab.delay_right=3;stab.delay_feedback=0.45;stab.hall_send=0.35;stab.width=0.9;stab.duck=0.3;stab.level=-7\n"
+    // The tonic drone: a warm organ table held across a section, dark, slow in and slow out (the
+    // cross-fade at section boundaries), with more thermal drift than the other voices. Its high pass
+    // tracks an octave under each voice with a floor at 140 Hz; where kick and bass rest the composer
+    // opens the floor to 40 Hz for its low octave, as it does for the pad's sub foundation.
+    "drone.osc=Wavetable;drone.table=Organ 034;drone.detune=0.2;drone.mix=0.5;drone.dynamic_detune=0;drone.cutoff=900;"
+    "drone.env_amount=0;drone.resonance=0.1;drone.amp_attack=1500;drone.amp_decay=2000;drone.amp_sustain=1;"
+    "drone.amp_release=2500;drone.hp_floor=140;drone.hp_track=0.5;drone.width=1;drone.delay_send=0;drone.hall_send=0.35;"
+    "drone.duck=0.35;drone.position=0.3;drone.pos_lfo_depth=0.1;drone.pos_lfo_beats=32;drone.drift=2;drone.level=-14\n";
 
 // sfx.level -12 -> -3 dB (18.09.2026): the SFX strip measured -27.6 LUFS over the first drop and its
 // events 5 to 15 dB under the mix at their loudest; the per-type balance is in Sfx.cpp (kTypeGainDb).
@@ -506,14 +541,21 @@ const ParamDesc kMixParams[mix::Count] = {
     { "perc_level", "Perc Level", "dB", -24.0f, 12.0f, 2.0f, Curve::Linear },
     { "acid_mute",  "Acid Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "acid_level", "Acid Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    // 19.09.2026, round "voices": the strips in the order of the voices' groups (Params.h, mix::).
     { "lead_mute",  "Lead Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "lead_level", "Lead Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    { "counter_mute",  "Counter Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
+    { "counter_level", "Counter Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     { "arp_mute",   "Arp Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     // -2 dB (18.09.2026): the arp was the loudest melodic part and owned 300 Hz .. 2 kHz, where the
     // congas, toms and the clap have to be heard (kDefaultKit).
     { "arp_level",  "Arp Level",  "dB", -24.0f, 12.0f, -2.0f, Curve::Linear },
+    { "stab_mute",  "Stab Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
+    { "stab_level", "Stab Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     { "pad_mute",   "Pad Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "pad_level",  "Pad Level",  "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    { "drone_mute", "Drone Mute", "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
+    { "drone_level","Drone Level","dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     { "sfx_mute",   "SFX Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "sfx_level",  "SFX Level",  "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     { "perc_room",  "Perc Room",  "",     0.0f,  1.0f, 0.12f, Curve::Linear },

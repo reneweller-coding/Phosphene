@@ -471,6 +471,16 @@ void Poly::lowPassCoefs(int voice, double damping)
     ch_.a1[voice * 2 + 1] = ch_.a1[voice * 2];
     ch_.a2[voice * 2 + 1] = ch_.a2[voice * 2];
     ch_.a3[voice * 2 + 1] = ch_.a3[voice * 2];
+    // The response (PolyKernel.h, PolyChannels::m0): all zero is the low pass.
+    const float k = static_cast<float>(damping);
+    float m0 = 0.0f, m1 = 0.0f, m2 = 0.0f;
+    switch (static_cast<PolyFilter>(std::clamp(static_cast<int>(std::lround(v[poly::FilterType])), 0, static_cast<int>(PolyFilter::Count) - 1))) {
+    case PolyFilter::BandPass: m1 = k; m2 = -1.0f; break;
+    case PolyFilter::HighPass: m0 = 1.0f; m1 = -k; m2 = -2.0f; break;
+    case PolyFilter::Notch:    m0 = 1.0f; m1 = -k; m2 = -1.0f; break;
+    default: break;
+    }
+    for (int c = 0; c < 2; ++c) { ch_.m0[voice * 2 + c] = m0; ch_.m1[voice * 2 + c] = m1; ch_.m2[voice * 2 + c] = m2; }
 }
 
 template <class V>

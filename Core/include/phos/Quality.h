@@ -14,6 +14,7 @@
  * | Acid oversampling | 2x | 1x | The acid sits above D3 and is high-passed at 150 Hz; its aliasing folds into a band that the percussion and the leads already occupy. Halving its ladder saves the most of any single switch. |
  * | Unison oscillators per voice | 7 | 3 | Szabo's supersaw keeps its centre and its inner detuned pair (offsets -0.0195 and +0.0199); the wide pair and the outer pair fall away. The remaining gains are renormalised by incoherent power, so the level does not jump. |
  * | Pad voices | 8 | 4 | Pads play four-voice voicings (Melody.h), so four voices is what the part actually needs; the fifth to eighth exist for overlapping chord changes. Lead and arp stay at 8 -- they are monophonic lines whose voices only overlap during releases. |
+ * | Drone voices | 8 | 6 | (19.09.2026) At most three held notes, and the next three cross-fading in at a boundary. Counter-lead and stab stay at 8. |
  * | Wavetable frames | 64 (all) | 32 | The shipped library is the engine's largest block of memory: 741 frames at 33 KB each are 23.3 MB once the ten mip levels are expanded, and 111 ms to build. Halving the frames halves both. |
  *
  * **Why 32 frames and not 16.** This is the one setting that costs no arithmetic at all, only
@@ -51,9 +52,15 @@ struct Quality {
     Level level = Level::Desktop;   ///< which level this is (for displays and reports)
     int bassOversampling = 2;       ///< ladder rate of the bass, 1 or 2 times the sample rate
     int acidOversampling = 2;       ///< ladder rate of the acid, 1 or 2 times the sample rate
-    int polyUnison[kPolyInstances] = { kPolyUnison, kPolyUnison, kPolyUnison };   ///< oscillators per voice, per Poly instance
-    int polyVoices[kPolyInstances] = { kPolyVoices, kPolyVoices, kPolyVoices };   ///< voices that may sound, per Poly instance
+    int polyUnison[kPolyInstances] = {};   ///< oscillators per voice, per Poly instance (set by the constructor)
+    int polyVoices[kPolyInstances] = {};   ///< voices that may sound, per Poly instance (set by the constructor)
     int waveTableFrames = 0;        ///< frames a library table is built with; 0 = every frame (setWaveTableFrameLimit)
+
+    /** @brief The desktop level: every instance at full unison and every voice (a loop, so a new instance cannot be missed). */
+    Quality()
+    {
+        for (int i = 0; i < kPolyInstances; ++i) { polyUnison[i] = kPolyUnison; polyVoices[i] = kPolyVoices; }
+    }
 
     /** @brief Everything at full: what the engine did before quality levels existed. */
     static Quality desktop() { return Quality{}; }
@@ -66,7 +73,11 @@ struct Quality {
         q.bassOversampling = 2;
         q.acidOversampling = 1;
         for (int i = 0; i < kPolyInstances; ++i) q.polyUnison[i] = 3;
-        q.polyVoices[static_cast<int>(PolyInstance::Pad)] = 4;
+        q.polyVoices[polyIndex(PolyInstance::Pad)] = 4;
+        // 19.09.2026: the drone holds at most three notes (root, fifth, octave) and cross-fades into the
+        // next held chord at a boundary (Melody.h), so six voices cover the overlap; the stab keeps all
+        // eight, because its short chords of four overlap their own releases on close hits.
+        q.polyVoices[polyIndex(PolyInstance::Drone)] = 6;
         q.waveTableFrames = 32;
         return q;
     }

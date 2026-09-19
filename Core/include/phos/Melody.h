@@ -35,8 +35,14 @@
  *
  * **Layers.** Which parts play in which bar is no longer decided here. Since Phase 5 the
  * instrumentation matrix of the form grammar (Form.h) answers that per bar from the section type and
- * the energy arc, including the masking rule between lead and arp; this file only builds the material
- * and plays the bar it is handed.
+ * the energy arc; this file only builds the material and plays the bar it is handed. Since 19.09.2026 the
+ * masking rule between the line voices lives here, at the sixteenth: composeMelodyBar's register guard keeps
+ * lead, counter-lead, stab and arp in disjoint registers wherever two of them sound at once.
+ *
+ * **The new voices (19.09.2026, round "voices").** The counter-lead answers the lead in its held notes and
+ * over its B phrase, an octave above it (makeCounter); the stab plays short root-position chords of the
+ * arp's sus material on off-beat sixteenths (makeStab); the tonic drone holds root and fifth under a whole
+ * run of the form -- its low octave where kick and bass rest, an octave up and quieter where they play.
  *
  * **Pads.** Four-note voicings in root position -- the root between D3 and C#4, the fifth above it,
  * two upper voices that complete the triad -- the upper pair chosen by the smallest total movement
@@ -117,9 +123,8 @@ namespace phos {
 class PitchModel;
 enum class CorpusRoleId : int;
 
-/** @brief The melodic parts. */
-enum class MelodyPart : int { Acid = 0, Lead, Arp, Pad, Count };
-constexpr int kMelodyParts = static_cast<int>(MelodyPart::Count);   ///< number of melodic parts
+// MelodyPart, kMelodyParts, mpIndex() and partBit() live in Form.h, because the instrumentation
+// matrix needs them as well.
 constexpr int kAcidLowest = 50;                                     ///< D3: lowest acid note
 constexpr int kAcidHighest = 62;                                    ///< D4: top of the acid's own register
 constexpr int kAcidJumpHighest = 74;                                ///< D5: highest octave jump of the acid
@@ -135,6 +140,27 @@ constexpr int kMaterialSets = 2;                                    ///< cell se
 constexpr int kAcidCells = kMaterialSets * kAcidVariants;           ///< entries of MelodyPlan::acid
 constexpr int kArpCells = kMaterialSets * kAcidVariants * 4;        ///< entries of MelodyPlan::arp (set, variant, chord)
 constexpr double kArpGate = 0.2;                                    ///< arp note length, in sixteenths (rule: 15-35 %)
+/** @name The new voices' registers (19.09.2026, round "voices")
+ *  The counter-lead answers above the lead, inside the 400 Hz .. 2 kHz pocket of the user's rule; the arp
+ *  may leave G3..G5 upwards only to clear a lead it shares a bar with (composeMelodyBar); the stab's chord
+ *  is rooted where the arp's anchor is and moves by octaves between D3 and C7 to clear the lead; the drone's root lies an octave under the pad's where kick and
+ *  bass rest, and on the pad's own octave where they play.
+ *  @{ */
+constexpr int kCounterLowest = 72;                                  ///< C5: lowest counter-lead note
+constexpr int kCounterHighest = 93;                                 ///< A6: highest counter-lead note (1760 Hz)
+constexpr int kArpOverHighest = 91;                                 ///< G6: the arp's ceiling when it clears a lead from above
+constexpr int kStabLowest = 50;                                     ///< D3: lowest stab note (the depth rule's floor, like the acid's)
+constexpr int kStabHighest = 96;                                    ///< C7: highest stab note (2.1 kHz, the top of the leads' pocket)
+constexpr int kDroneLowest = 38;                                    ///< D2: the drone's root where the floor is silent
+/** @} */
+/**
+ * @brief The minimum distance in semitones between two line voices that sound at the same instant.
+ *
+ * The rule of the brief -- "two voices never double the same register at the same time" -- made
+ * concrete: at every sixteenth, the notes of lead, counter-lead, stab and arp that sound there must lie
+ * in disjoint pitch spans with at least this gap between them (Melody.cpp, the register guard).
+ */
+constexpr int kRegisterGap = 3;
 
 /** @brief Index of an acid cell: material set @p set (0, 1), variant @p variant (0 = A, 1 = A', 2 = A''). */
 constexpr int acidCell(int set, int variant) { return set * kAcidVariants + variant; }
@@ -161,10 +187,19 @@ constexpr int variantOfBar(int barInPhrase, int cellBars)
 struct MelodyContext {
     int material = 0;         ///< 0 before the track's first breakdown, 1 after it (new cells at a boundary)
     int foundationBars = 0;   ///< > 0 where a pad chord starts in a bar without kick and bass: how many
-                              ///< consecutive bars from here on keep kick and bass silent
-    bool arpMasked = false;   ///< the form moved the arp up to clear the lead (more octaves than the
-                              ///< section's energy alone asks for); where that cannot be played inside
-                              ///< G3..G5 the arp sits the bar out
+                              ///< consecutive bars from here on keep kick and bass silent (0 where the
+                              ///< drone lays the floor instead: the two never double it)
+    /**
+     * @brief > 0 where a drone note starts in this bar: how many bars it holds (19.09.2026).
+     *
+     * A drone note is one held chord per *run* -- consecutive bars of the drone with the same floor
+     * (kick and bass silent, or playing) inside one section -- so its length has to be known where it
+     * starts, like the pad's sub foundation. The composer counts it from the form (Composer.cpp,
+     * melodyContext); a probe sets it by hand.
+     */
+    int droneBars = 0;
+    bool droneLow = false;    ///< the drone run lies on a silent floor: its low octave (D2..C#3)
+    int droneTail = 0;        ///< bars before the run's end in which the low root stops (the kick returns after it)
 };
 
 /**
@@ -203,6 +238,7 @@ struct MelodyNote {
 struct ModeMaterial {
     std::vector<MelodyNote> acid[kAcidCells];   ///< acid cells in this mode (acidCell)
     std::vector<MelodyNote> lead[2];    ///< the two eight-bar lead phrases
+    std::vector<MelodyNote> counter[2]; ///< the counter-lead's answers to them (19.09.2026)
     std::vector<MelodyNote> arp[kArpCells];     ///< arp cells (arpCell)
     std::vector<int> padVoicing[4];     ///< the pad voicings
     bool built = false;                 ///< false: this mode is not used by the track's form
@@ -210,10 +246,10 @@ struct ModeMaterial {
 
 /** @brief Everything melodic that is decided once per track. */
 struct MelodyPlan {
-    bool present[kMelodyParts] = {};         ///< which parts the track uses at all
+    bool present[kMelodyParts] = {};         ///< which parts the track uses at all (MelodyPart order)
     int  chordBars = 2;                       ///< bars per chord (2 or 4)
     int  chordDegree[4] = {};                 ///< scale degree of each chord
-    int  root[kMelodyParts] = { 50, 64, 57, 55 }; ///< MIDI root of each part (the pad's is unused)
+    int  root[kMelodyParts] = { 50, 64, 76, 57, 57, 55, 38 }; ///< MIDI root of each part (the pad's, the stab's and the drone's are unused)
     int  acidSteps = 16;                      ///< acid pattern length (16 or 32)
     std::vector<MelodyNote> acid[kAcidCells]; ///< acid cells: set 0/1 x A, A', A'' (acidCell); [0] is A
     std::vector<MelodyNote> lead[2];          ///< two eight-bar lead phrases (128 steps)
@@ -225,13 +261,23 @@ struct MelodyPlan {
     int  leadLo = 127, leadHi = 0;            ///< the lead's pitch range (for the masking rule)
     int  arpLo = 127, arpHi = 0;              ///< the arp's pitch range
     int  acidSquelch = -1;                    ///< override of acid.squelch, -1 = the knob
-    int  leadOsc = -1;                        ///< override of lead.osc, -1 = the knob
-    int  delay[kMelodyParts][2] = { { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 } };   ///< overrides of the delay times
+    int  leadOsc = -1;                        ///< override of lead.osc, -1 = the knob (superseded by the voice recipes, kept for the report)
+    int  delay[kMelodyParts][2] = { { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 } };   ///< overrides of the delay times
     std::vector<int> padVoicing[4];           ///< MIDI notes of each chord's pad voicing
     int  padGatePattern = 0;                  ///< the track's gate pattern
     float recipe[kMelodyParts] = {};          ///< one sound direction per part, -1..1 (brightness)
+    /** @name The new voices (19.09.2026, round "voices"; Melody.cpp, makeCounter, makeStab, makeDrone)
+     *  @{ */
+    std::vector<MelodyNote> counter[2];       ///< the counter-lead's two eight-bar phrases, one per lead phrase
+    uint16_t stabMask[2] = { 0, 0 };          ///< the stab's onsets over two bars, a bit per sixteenth (never a beat)
+    uint8_t stabBars = 0;                     ///< bit per bar of a four-bar phrase: which bars the stab plays
+    int  stabTones = 0;                       ///< the stab chord's material: 0 sus2, 1 sus4, 2 add9 (root position)
+    bool droneOctave = false;                 ///< the drone adds the octave above its root where the pad is silent
+    int  droneEvolveBars = 16;                ///< period of the drone's slow timbral evolution, 8, 16 or 32 bars
+    /** @} */
     float colour = 0.0f;                      ///< the arc's colour (0..1): scales the target colour share
     int  scale = 0;                           ///< the track's own mode; the arrays above are its material
+    int  key = 6;                             ///< the track's key (pitch class of the tonic)
     ModeMaterial mode[kNumScales];            ///< material of every *borrowed* mode the form uses
     int  leadOperator[2] = { 0, 0 };          ///< the motivic operator of each lead phrase (MotifOperator)
     int  leadJumps[2] = { 0, 0 };             ///< notes MotifOperator::OctaveJump lifted in each phrase
@@ -332,6 +378,15 @@ std::vector<int> foundationVoicing(const std::vector<int>& voicing);
  */
 std::vector<int> arpHighTones(int scale, int degree, int key, int tones, int& anchor);
 
+/**
+ * @brief The stab's chord over a chord of the track, in root position (19.09.2026): the arp's anchor
+ *        as the root, then sus2 (1 2 5 8), sus4 (1 4 5 8) or add9 (1 3 5 9) -- no colour tone, no
+ *        imperfect fifth.
+ * @param tones 0 sus2, 1 sus4, 2 add9 (MelodyPlan::stabTones)
+ * @return ascending MIDI notes, the root first
+ */
+std::vector<int> stabChord(int scale, int degree, int key, int tones);
+
 /** @brief A bar plan that plays every part the track has (the level-match probe). */
 BarPlan allPartsBar(const MelodyPlan& m);
 
@@ -353,7 +408,8 @@ int voicingMovement(const std::vector<int>& a, const std::vector<int>& b);
  * @param f          the track's form (its effects sit at the section boundaries)
  * @param trackBeat  beat at which the track starts
  * @param barInTrack bar within the track
- * @param out        receives Part::Sfx notes (pitch kSfxBaseNote + type)
+ * @param out        receives the effect notes (pitch kSfxBaseNote + type) on the part that plays them --
+ *                   Sfx, Texture or Vocal (19.09.2026) -- with a voice's or the bed's variant in the lane
  */
 void composeSfxBar(const FormPlan& f, double trackBeat, int barInTrack, std::vector<NoteEvent>& out);
 

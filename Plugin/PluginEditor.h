@@ -3,7 +3,7 @@
  * @brief The editor: a header, one tab per generator, and pages built from the parameter tables.
  *
  * The tabs follow PLAN 8.1: Set, Arrange, Kick, Bass, Percussion (twelve lanes behind a lane bar),
- * Acid, Lead, Arp, Pad, SFX + FX, Mixer + Master, Perform. None of the pages knows a coordinate; each is a
+ * Acid, Lead, Counter, Arp, Stab, Pad, Drone, SFX + FX, Mixer + Master, Perform. None of the pages knows a coordinate; each is a
  * phosui::ControlPage that is handed slices of a module's descriptor table and measures itself
  * (EditorLayout.h). The window has a design size -- the size at which every page fits without
  * scrolling -- and is scaled to whatever the screen or the host offers.
@@ -31,7 +31,9 @@
  * every `tab_ == 3` in the file meant something else.
  */
 enum Tab : int {
-    TabSet = 0, TabArrange, TabKick, TabBass, TabPerc, TabAcid, TabLead, TabArp, TabPad,
+    TabSet = 0, TabArrange, TabKick, TabBass, TabPerc, TabAcid,
+    // 19.09.2026: the polyphonic voices in their groups (Params.h, PolyInstance), each beside its partner.
+    TabLead, TabCounter, TabArp, TabStab, TabPad, TabDrone,
     TabFx, TabMix, TabPerform, TabCount
 };
 

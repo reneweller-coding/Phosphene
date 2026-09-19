@@ -56,9 +56,25 @@ enum class Module : int { Compose = 0, Kick, Bass, Perc, Acid, Poly, Sfx, Fx, Mi
                           Count };
 
 constexpr int kPercLanes = 12;   ///< instances of the percussion lane module
-constexpr int kPolyInstances = 3; ///< instances of the polyphonic engine module: "lead", "arp" and "pad"
-/** @brief The instances of Module::Poly. */
-enum class PolyInstance : int { Lead = 0, Arp, Pad };
+/**
+ * @brief The instances of Module::Poly, in the order the user sees them.
+ *
+ * 19.09.2026, round "voices": the user asked for the voices to stand in related groups ("der
+ * Counter-Lead neben Lead ..., Drone bei Pad") and accepted that the parameter indices move for it.
+ * So the three new instances are *not* appended: the leads (lead, counter-lead), the rhythmic chord
+ * voices (arp, stab) and the carpets (pad, drone) stand side by side, and every table that follows
+ * this order -- the parts (Score.h), the mix strips, the MIDI tracks, the plugin's pages -- follows it
+ * too. What this does to a state saved before that date is written down in docs/PLAN.md (19.09.2026,
+ * "Stimmen"): every stored text key ("lead.cutoff", "mix.pad_level") still names the same knob, so
+ * such a state loads the old voices unchanged and the new ones at their defaults.
+ *
+ * Nothing may address an instance by a bare number: use polyBase() or `static_cast<int>(PolyInstance::X)`.
+ */
+enum class PolyInstance : int { Lead = 0, Counter, Arp, Stab, Pad, Drone, Count };
+constexpr int kPolyInstances = static_cast<int>(PolyInstance::Count); ///< instances of the polyphonic engine module
+/** @brief The index of an instance, for arrays kept per instance. */
+constexpr int polyIndex(PolyInstance i) { return static_cast<int>(i); }
+extern const char* const kPolyInstanceNames[kPolyInstances];   ///< "lead", "counter", "arp", "stab", "pad", "drone"
 
 /** @brief Parameters of the composer (read as a snapshot when bars are composed). */
 namespace compose {
@@ -79,7 +95,11 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              // 16.09.2026, bass rhythm round: where the *onset pattern* of a bar comes from -- the
              // five pattern families of Patterns.h, or a bar drawn from the corpus onset model
              // (Corpus.h, BassRhythm). Pattern is the default and reproduces every note bit for bit.
-             BassRhythm, Count };
+             BassRhythm,
+             // 19.09.2026, round "voices": how often a track has each of the three new voices, and the
+             // density of the voices (speech, chants) and of the shamanic bed (Form.cpp, placePsychedelia).
+             // Appended: the compose block is not part of the reordering, which concerns the voices only.
+             CounterAmount, StabAmount, DroneAmount, VoiceDensity, BedDensity, Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
 namespace perc {
@@ -124,7 +144,7 @@ enum : int { Wave, Cutoff, Resonance, EnvAmount, Decay, Accent, SlideTime, AmpDe
              // slot refers to it by that index.
              Disperse, DisperseFreq, Count };
 }
-/** @brief Parameters of a polyphonic engine (module Poly, instances "lead" and "arp"). */
+/** @brief Parameters of a polyphonic engine (module Poly, the six instances of PolyInstance). */
 namespace poly {
 enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex, FmDecay,
              Table, Position, PosEnv, PosDecay, PosLfoDepth, PosLfoBeats,
@@ -134,8 +154,13 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
              RoomSend, HallSend, Duck, Gate, GatePattern, GateDepth, GateDuty, GateAttack, GateRelease, GateTone,
              Level,
              // Appended 16.09.2026 (acid colour round), at the end for the same reason as above.
-             Disperse, DisperseFreq, Drift, Count };
+             Disperse, DisperseFreq, Drift,
+             // Appended 19.09.2026 (round "voices"): the voice filter's response (PolyFilter) -- the
+             // per-track recipes of every voice may choose a band pass or a notch instead of the low pass.
+             FilterType, Count };
 }
+/** @brief Values of poly.filter_type: the outputs of the voice's state-variable filter (PolyKernel.h). */
+enum class PolyFilter : int { LowPass = 0, BandPass, HighPass, Notch, Count };
 /** @brief Parameters of the effect generator (module Sfx, prefix "sfx"). */
 namespace sfx {
 enum : int { Level, Noise, Resonance, Brightness, ImpactDecay, Vowel, SwellDecay, Width, RoomSend, HallSend, Duck,
@@ -174,11 +199,22 @@ enum class SubMode : int { Mixed = 0, Split };
 enum class KickLock : int { Off = 0, BassFollowsKick, KickFollowsBass };
 /** @brief Parameters of the mixer. */
 namespace mix {
-enum : int { KickMute, BassMute, TrackGain, PercMute, PercLevel, AcidMute, AcidLevel, LeadMute, LeadLevel,
-             ArpMute, ArpLevel, PadMute, PadLevel, SfxMute, SfxLevel, PercRoom, PercHall,
+// 19.09.2026, round "voices": the strips follow the voices' groups (PolyInstance), so the counter-lead's
+// strip stands beside the lead's, the stab's beside the arp's and the drone's beside the pad's. The keys
+// ("mix.lead_level") did not change, only the indices -- see PolyInstance.
+enum : int { KickMute, BassMute, TrackGain, PercMute, PercLevel, AcidMute, AcidLevel,
+             LeadMute, LeadLevel, CounterMute, CounterLevel, ArpMute, ArpLevel, StabMute, StabLevel,
+             PadMute, PadLevel, DroneMute, DroneLevel,
+             SfxMute, SfxLevel, PercRoom, PercHall,
              DuckAttack, DuckHold, DuckRelease,
-             // 19.09.2026, round "fx-psychedelia": the strips of the two new parts. Appended.
+             // 19.09.2026, round "fx-psychedelia": the strips of the two new parts.
              TextureMute, TextureLevel, VocalMute, VocalLevel, Count };
+/** @brief The mute of a polyphonic instance's strip. */
+constexpr int polyMute(PolyInstance i) { return LeadMute + 2 * static_cast<int>(i); }
+/** @brief The level of a polyphonic instance's strip. */
+constexpr int polyLevel(PolyInstance i) { return LeadLevel + 2 * static_cast<int>(i); }
+static_assert(polyMute(PolyInstance::Drone) == DroneMute && polyLevel(PolyInstance::Stab) == StabLevel,
+              "the mix strips of the polyphonic instances must follow PolyInstance pair by pair");
 }
 /**
  * @brief Parameters of the cue bridge (module Cue, prefix "cue"; PLAN 8.3).
@@ -223,6 +259,8 @@ public:
     int count() const { return static_cast<int>(entries_.size()); }
     /** @brief First id of a module instance; -1 if it does not exist. */
     int base(Module m, int instance = 0) const;
+    /** @brief First id of a polyphonic instance: the one way to address a voice's parameters by name. */
+    int base(PolyInstance i) const { return base(Module::Poly, polyIndex(i)); }
     /** @brief Descriptor of @p id. */
     const ParamDesc& desc(int id) const { return *entries_[static_cast<size_t>(id)].desc; }
     /** @brief Full text key of @p id ("kick.pitch_start"). */

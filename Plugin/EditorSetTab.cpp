@@ -42,6 +42,15 @@ juce::String modelLine(const char* part, const char* fallback, bool learned, dou
     if (source) s << "  (from the build tree, not from an installed copy)";
     return s;
 }
+
+/** @brief The melodic parts a track has, by name, in the order of the voices' groups (Form.h, MelodyPart). */
+juce::String melodicParts(const TrackPlan& plan)
+{
+    static const char* const kNames[kMelodyParts] = { "acid", "lead", "counter", "arp", "stab", "pad", "drone" };
+    juce::String s;
+    for (int k = 0; k < kMelodyParts; ++k) if (plan.melody.present[k]) s << "  " << kNames[k];
+    return s;
+}
 } // namespace
 
 void PhospheneEditor::buildSetPage()
@@ -259,8 +268,7 @@ void PhospheneEditor::refreshSetPage()
                  + kKeyNames[plan.key] + " " + kScaleNames[plan.scale]
                  + "   bass " + kBassPatternNames[plan.primaryPattern]
                  + "   " + juce::String(plan.perc.layers) + " perc"
-                 + (plan.melody.present[0] ? "  acid" : "") + (plan.melody.present[1] ? "  lead" : "")
-                 + (plan.melody.present[2] ? "  arp" : "")
+                 + melodicParts(plan)
                  + "   " + juce::String(plan.gainDb, 1) + " dB";
         trackRows_.push_back(row);
     }

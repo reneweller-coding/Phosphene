@@ -21,7 +21,8 @@
  *     --reroll UNIT:INDEX reroll a unit; repeatable
  *     --sections          print the sections of every track in the render
  *     --tempo-ramp B:BPM  ramp the tempo from compose.bpm at beat 0 to BPM at beat B
- *     --solo PART         mute everything else: kick, bass, perc, acid, lead, arp, pad, sfx, texture or vocal
+ *     --solo PART         mute everything else: kick, bass, perc, acid, lead, counter, arp, stab, pad, drone,
+ *                         sfx, texture or vocal
  *     --out FILE.wav      write the audio (32-bit float unless --pcm24)
  *     --pcm24             write 24-bit PCM
  *     --midi FILE.mid     write the score as a Standard MIDI File
@@ -235,27 +236,36 @@ int main(int argc, char** argv)
         if (!params.parseText(s, &err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 2; }
     }
     const int mb = params.base(Module::Mix);
+    std::vector<int> soloMutes;   // the mutes a --solo sets, to set again after a set file (below)
+    int soloWhich = -1;
     if (!solo.empty()) {
-        // One entry per part, in the order of the Part enum (texture and vocal appended 19.09.2026).
-        static const char* const kSoloNames[] = { "kick", "bass", "perc", "acid", "lead", "arp", "pad", "sfx", "texture", "vocal" };
-        static const int kSoloMutes[] = { mix::KickMute, mix::BassMute, mix::PercMute, mix::AcidMute, mix::LeadMute, mix::ArpMute, mix::PadMute, mix::SfxMute,
-                                          mix::TextureMute, mix::VocalMute };
+        // One entry per part, in the order of the Part enum (19.09.2026: the polyphonic voices in their groups).
+        static const char* const kSoloNames[] = { "kick", "bass", "perc", "acid", "lead", "counter", "arp", "stab", "pad", "drone",
+                                                  "sfx", "texture", "vocal" };
+        static const int kSoloMutes[] = { mix::KickMute, mix::BassMute, mix::PercMute, mix::AcidMute,
+                                          mix::LeadMute, mix::CounterMute, mix::ArpMute, mix::StabMute, mix::PadMute, mix::DroneMute,
+                                          mix::SfxMute, mix::TextureMute, mix::VocalMute };
         static_assert(sizeof(kSoloNames) / sizeof(kSoloNames[0]) == kNumParts, "one solo name per part");
         static_assert(sizeof(kSoloMutes) / sizeof(kSoloMutes[0]) == kNumParts, "one mute per part");
         int which = -1;
         for (int k = 0; k < kNumParts; ++k) if (solo == kSoloNames[k]) which = k;
-        if (which < 0) { std::fprintf(stderr, "--solo wants kick, bass, perc, acid, lead, arp, pad, sfx, texture or vocal\n"); return 2; }
+        if (which < 0) { std::fprintf(stderr, "--solo wants kick, bass, perc, acid, lead, counter, arp, stab, pad, drone, sfx, texture or vocal\n"); return 2; }
         for (int k = 0; k < kNumParts; ++k) params.set(mb + kSoloMutes[k], k == which ? 0.0f : 1.0f);
+        soloMutes.assign(std::begin(kSoloMutes), std::end(kSoloMutes));
+        soloWhich = which;
     }
 
     const int cb = params.base(Module::Compose);
     Composer composer(seed);
     // A set file carries the seed, the style, the arc, the knobs and the curation (locks, rerolls).
-    // It is read before the command line's own --set assignments so that those still win.
+    // It is read before the command line's own --set assignments so that those still win. Reading it
+    // puts every knob it does not name back to its default (SetFile.h, since 19.09.2026), so the solo
+    // is applied again after it.
     if (!setFile.empty()) {
         std::string err;
         if (!readSetFile(setFile.c_str(), composer, params, &err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 2; }
         for (const std::string& s : sets) if (!params.parseText(s, &err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 2; }
+        for (size_t k = 0; k < soloMutes.size(); ++k) params.set(mb + soloMutes[k], static_cast<int>(k) == soloWhich ? 0.0f : 1.0f);
     }
     for (const auto& op : unitOps) {
         const size_t c = op.second.find(':');
@@ -314,9 +324,21 @@ int main(int argc, char** argv)
             static_assert(sizeof(kArpStyles) / sizeof(kArpStyles[0]) == kNumArpStyles, "one name per ArpStyle");
             std::printf("\n          melody: chords");
             for (int c = 0; c < 4; ++c) std::printf(" %s", kRoman[m.chordDegree[c]]);
-            std::printf(" (%d bars each); acid %s (%d steps%s), lead %s (osc %d), arp %s (%s)\n", m.chordBars,
-                        m.present[0] ? "yes" : "no", m.acidSteps, m.acidSquelch == 1 ? ", squelch" : "", m.present[1] ? "yes" : "no", m.leadOsc,
-                        m.present[2] ? "yes" : "no", kArpStyles[m.arpStyle]);
+            auto on = [&](MelodyPart part) { return m.present[mpIndex(part)] ? "yes" : "no"; };
+            std::printf(" (%d bars each); acid %s (%d steps%s), lead %s, counter %s, arp %s (%s), stab %s, pad %s, drone %s\n", m.chordBars,
+                        on(MelodyPart::Acid), m.acidSteps, m.acidSquelch == 1 ? ", squelch" : "", on(MelodyPart::Lead), on(MelodyPart::Counter),
+                        on(MelodyPart::Arp), kArpStyles[m.arpStyle], on(MelodyPart::Stab), on(MelodyPart::Pad), on(MelodyPart::Drone));
+            // 19.09.2026: each polyphonic voice's sound in this track (Composer.h, VoiceRecipe); -1 is the knob.
+            static const char* const kOscNames[] = { "supersaw", "va", "fm", "wavetable" };
+            static_assert(sizeof(kOscNames) / sizeof(kOscNames[0]) == static_cast<int>(PolyOsc::Count), "one name per PolyOsc");
+            for (int v = 0; v < kPolyInstances; ++v) {
+                const VoiceRecipe& rc = p.voice[v];
+                const int tableId = params.base(static_cast<PolyInstance>(v)) + poly::Table;
+                std::printf("          %-8s osc %-9s table %-20s filter %d  ", kPolyInstanceNames[v], rc.osc < 0 ? "knob" : kOscNames[rc.osc],
+                            rc.table < 0 ? "knob" : params.desc(tableId).choices[rc.table], rc.filter);
+                for (int k = 0; k < kNumVoiceMacros; ++k) std::printf(" %s %+.2f", kVoiceMacroNames[k], static_cast<double>(rc.macro[k]));
+                std::printf("\n");
+            }
             std::printf("          form (%s body, arc %.2f..%.2f):", p.form.body == 0 ? "Full-On" : (p.form.body == 1 ? "Progressive" : "Goa"),
                         static_cast<double>(p.arcIn), static_cast<double>(p.arcOut));
             for (int s = 0; s < p.form.count; ++s)
@@ -324,9 +346,9 @@ int main(int argc, char** argv)
                             p.form.section[s].startBar, static_cast<double>(p.form.section[s].energy));
             std::printf("\n          effects:");
             for (const SfxEvent& s : p.form.sfx) std::printf(" %s@%g", kSfxTypeNames[s.type], s.beat / kBeatsPerBar);
-            std::printf("\n          part gains %+.1f / %+.1f / %+.1f / %+.1f dB, mix %.1f LUFS before the master offset %+.1f dB\n",
-                        static_cast<double>(p.partGainDb[0]), static_cast<double>(p.partGainDb[1]), static_cast<double>(p.partGainDb[2]),
-                        static_cast<double>(p.partGainDb[3]), p.mixLoudness, static_cast<double>(p.masterGainDb));
+            std::printf("\n          part gains (acid, lead, counter, arp, stab, pad, drone)");
+            for (int k = 0; k < kMelodyParts; ++k) std::printf(" %+.1f", static_cast<double>(p.partGainDb[k]));
+            std::printf(" dB, mix %.1f LUFS before the master offset %+.1f dB\n", p.mixLoudness, static_cast<double>(p.masterGainDb));
         }
     }
     if (listSections) {

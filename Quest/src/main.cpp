@@ -364,7 +364,7 @@ struct DisplayState {
     int  key = 6;               ///< pitch class
     int  scale = 1;             ///< index into kScaleNames
     double bpm = 145.0;         ///< the track's tempo
-    int  blockParts = 0;        ///< bits 1/2/4/8 = acid, lead, arp, pad in the bar now playing
+    int  blockParts = 0;        ///< one bit per melodic part in the bar now playing (Form.h, partBit)
     bool padGate = false;       ///< trance gate on the pad in that bar
     int  bar = 0;               ///< absolute bar now playing
 };
@@ -1345,10 +1345,12 @@ private:
         text(line, 0.70f, 0.85f, 1.00f, 0.9f);
         // The 16-bar block stands in for the section until the form grammar of Phase 5 is there:
         // one letter per melodic part, a dash where it is silent.
-        std::snprintf(line, sizeof(line), "BLK %02d  %s%s%s%s%s", inTrack / 16 + 1,
-                      (d.blockParts & 1) ? "A" : "-", (d.blockParts & 2) ? "L" : "-",
-                      (d.blockParts & 4) ? "R" : "-", (d.blockParts & 8) ? "P" : "-",
-                      d.padGate ? " GATE" : "");
+        // One letter per melodic part in the order of the voices' groups (Form.h, MelodyPart; 19.09.2026):
+        // Acid, Lead, Counter, aRp, Stab, Pad, Drone.
+        static const char kLetters[kMelodyParts + 1] = "ALCRSPD";
+        char parts[kMelodyParts + 1] = {};
+        for (int k = 0; k < kMelodyParts; ++k) parts[k] = (d.blockParts & partBit(static_cast<MelodyPart>(k))) ? kLetters[k] : '-';
+        std::snprintf(line, sizeof(line), "BLK %02d  %s%s", inTrack / 16 + 1, parts, d.padGate ? " GATE" : "");
         text(line, 0.80f, 0.70f, 1.00f, 0.9f);
         const float lufs = player_.loudness();
         std::snprintf(line, sizeof(line), "%+.1f LUFS  %s", static_cast<double>(lufs),

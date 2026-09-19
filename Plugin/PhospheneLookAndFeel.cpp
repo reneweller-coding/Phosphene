@@ -11,7 +11,10 @@ juce::Colour partColour(int index)
 {
     // One hue per generator page, walked around the wheel so that neighbouring tabs differ; the
     // saturation and brightness stay put, so no page shouts louder than another.
-    static const float hues[] = { 0.55f, 0.06f, 0.10f, 0.33f, 0.78f, 0.62f, 0.47f, 0.88f, 0.16f, 0.71f };
+    // 19.09.2026: five more for the counter-lead, stab and drone pages and the pages that moved behind
+    // them, so that no two of the fifteen tabs share a hue.
+    static const float hues[] = { 0.55f, 0.06f, 0.10f, 0.33f, 0.78f, 0.62f, 0.47f, 0.88f, 0.16f, 0.71f,
+                                  0.25f, 0.95f, 0.40f, 0.02f, 0.52f, 0.84f };
     const int n = static_cast<int>(sizeof(hues) / sizeof(hues[0]));
     return juce::Colour::fromHSV(hues[((index % n) + n) % n], 0.55f, 0.92f, 1.0f);
 }

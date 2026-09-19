@@ -85,6 +85,29 @@
 
 namespace phos {
 
+/**
+ * @brief The melodic parts: the acid and the six polyphonic voices, in the order of PolyInstance.
+ *
+ * 19.09.2026, round "voices": the counter-lead, the stab and the tonic drone joined, each beside the
+ * voice it belongs with. Every array kept per melodic part (MelodyPlan, TrackPlan, StyleProfile) and
+ * the bits of BarPlan::parts follow this order, and nothing may address them by a bare number: use
+ * mpIndex() and partBit().
+ */
+enum class MelodyPart : int { Acid = 0, Lead, Counter, Arp, Stab, Pad, Drone, Count };
+constexpr int kMelodyParts = static_cast<int>(MelodyPart::Count);   ///< number of melodic parts
+/** @brief The index of a melodic part in the arrays kept per part. */
+constexpr int mpIndex(MelodyPart p) { return static_cast<int>(p); }
+/** @brief The bit of a melodic part in BarPlan::parts and BarPlan::partsNext. */
+constexpr uint8_t partBit(MelodyPart p) { return static_cast<uint8_t>(1u << static_cast<int>(p)); }
+/** @brief The polyphonic instance that plays a melodic part (not for the acid, which is no Poly). */
+constexpr PolyInstance melodyPoly(MelodyPart p) { return static_cast<PolyInstance>(static_cast<int>(p) - 1); }
+/** @brief The score part of a melodic part. */
+constexpr Part melodyScorePart(MelodyPart p) { return p == MelodyPart::Acid ? Part::Acid : polyPart(melodyPoly(p)); }
+static_assert(melodyScorePart(MelodyPart::Drone) == Part::Drone && melodyScorePart(MelodyPart::Counter) == Part::Counter
+                  && kMelodyParts == kPolyInstances + 1,
+              "the melodic parts are the acid followed by the polyphonic instances in their order");
+static_assert(kMelodyParts <= 8, "BarPlan::parts holds one bit per melodic part");
+
 /** @brief The style profiles (compose.style). */
 enum class StyleId : int { Goa = 0, FullOn, Progressive, DarkForest, HiTech, Count };
 constexpr int kNumStyles = static_cast<int>(StyleId::Count);   ///< number of style profiles
@@ -124,7 +147,7 @@ struct StyleProfile {
     double scaleWeight[kNumScales] = {};    ///< weight of each mode in the key journey
     double bodyWeight[kNumBodies] = {};     ///< weight of each grammar body
     double chordExtra[12] = {};             ///< extra weight on a chord-root move of n semitones
-    float  partAmount[4] = { 1.0f, 1.0f, 1.0f, 1.0f };   ///< multipliers on acid, lead, arp and pad amount
+    float  partAmount[kMelodyParts] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };   ///< multipliers on each melodic part's amount (MelodyPart order)
     float  squelchChance = 1.0f;            ///< multiplier on compose.squelch_chance
     float  hatDensity = 1.0f;               ///< multiplier on compose.perc_density
     double pdbWeight[kNumPdbVariants] = {}; ///< weights of the pre-drop break variants
@@ -180,6 +203,12 @@ struct SfxEvent {
     double beat = 0.0;     ///< start, beats after the track starts
     float  length = 4.0f;  ///< beats
     int    type = 0;       ///< SfxType
+    /**
+     * @brief Which variant a voice or a bed event plays (1..255; 0 = let the engine derive it from the
+     *        event's beat, as it did before 19.09.2026). Drawn from the track's form seed, so which phrase
+     *        speaks is a decision of the seed and not of where the event happens to fall (Engine.cpp).
+     */
+    uint8_t variant = 0;
 };
 
 /** @brief The form of one track. */
@@ -220,7 +249,7 @@ bool formConstraintsHold(const FormPlan& f);
 
 /** @brief What a track can play at all, and where its parts sit, for the instrumentation matrix. */
 struct PartAvailability {
-    bool part[4] = {};       ///< acid, lead, arp, pad exist in this track
+    bool part[kMelodyParts] = {};   ///< which melodic parts exist in this track (MelodyPart order)
     int  leadLo = 59, leadHi = 79;   ///< the lead's pitch range (the masking rule)
     int  arpLo = 55, arpHi = 74;     ///< the arp's pitch range
     int  percLayers = 4;     ///< percussion layers the track's kit offers
@@ -235,7 +264,7 @@ struct BarPlan {
     uint8_t     kickBeats = 0xF;        ///< bit per beat: does the kick play
     uint8_t     bassBeats = 0xF;        ///< bit per beat: does the bass play
     int         percLayers = 0;         ///< how many percussion layers play
-    uint8_t     parts = 0;              ///< bit per melodic part (1 acid, 2 lead, 4 arp, 8 pad)
+    uint8_t     parts = 0;              ///< bit per melodic part (partBit)
     int8_t      arpOctave = 0;          ///< octave shift of the arp (masking rule and register)
     int8_t      leadOctave = 0;         ///< octave shift of the lead (register)
     bool        padGate = false;        ///< the pad plays through the trance gate
@@ -249,6 +278,9 @@ struct BarPlan {
     int         group = 0;              ///< eight-bar group within the track
     uint8_t     partsNext = 0;          ///< the parts of the following bar (an acid slide needs a note to slide into)
     int8_t      scale = -1;             ///< the section's mode for the melodic layer, -1 = the track's
+    /** @brief Kick and bass rest for the whole bar (and it is no pre-drop break): the floor under 140 Hz
+     *         belongs to the pad's sub foundation or the drone's low octave (19.09.2026). */
+    bool        floorSilent = false;
 };
 
 /**
@@ -274,8 +306,11 @@ BarPlan planBar(const FormPlan& f, const PartAvailability& a, const uint64_t* se
  * sixteen-bar groups; the palette and the period are the track's own. Form.cpp has the details.
  * @param amount compose.sfx_amount: transition markers are certain from 0.5 up and thin out below it;
  *               each group boundary carries ear candy with this probability
+ * @param voiceDensity compose.voice_density (19.09.2026): scales the probability of every spoken phrase,
+ *               chant and chatter the psychedelic layer places; 1 is the calibrated density, 0 none
+ * @param bedDensity compose.bed_density: the same for the shamanic bed (bowls, didgeridoo, jaw harp)
  */
-void makeFormSfx(FormPlan& f, uint64_t seed, float amount);
+void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity = 1.0f, float bedDensity = 1.0f);
 
 /**
  * @name The macro automation of a section (16.09.2026)
@@ -345,9 +380,13 @@ RideShape acidRideShape(double sectionBars);
  * @param base1    the same at the end of the section
  * @param knobs    true for the first section of the first track, which plays the knobs exactly
  * @param out      receives the events
+ * @param resoBase  the track's acid resonance offset (its voicing; normalised, 19.09.2026): the ride's
+ *                  medium and squelch stages are measured from the voiced resonance, not from the knob
+ * @param decayBase the same for the filter decay
  */
 void sectionAutomation(const ParamStore& p, const Section& s, uint64_t seed, double beat,
-                       float base0, float base1, bool knobs, std::vector<ControlEvent>& out);
+                       float base0, float base1, bool knobs, std::vector<ControlEvent>& out,
+                       float resoBase = 0.0f, float decayBase = 0.0f);
 
 /** @brief Weights of the bass figures that a group may end on; they differ in their last note. */
 extern const int kGroupFigures[4];

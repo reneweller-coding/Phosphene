@@ -221,8 +221,16 @@ private:
     Vocal vocal_;
     std::vector<float> texL_, texR_, vocL_, vocR_, vocThrow_, subBuf_, throwIn_, sendL_, sendR_;
 
-    /** @brief Channel strips of the parts after kick and bass, in this order (Texture, Vocal appended). */
-    enum Strip : int { StripPerc = 0, StripAcid, StripLead, StripArp, StripPad, StripSfx, StripTexture, StripVocal, StripCount };
+    /**
+     * @brief Channel strips of the parts after kick and bass, in this order. The six polyphonic strips
+     *        run from StripLead in the order of PolyInstance (19.09.2026), so StripLead + k is instance k.
+     *        StripAcid .. StripStab is the melodic bus a stutter repeats: acid, the two leads, arp and stab;
+     *        pad and drone keep holding underneath the glitch.
+     */
+    enum Strip : int { StripPerc = 0, StripAcid, StripLead, StripCounter, StripArp, StripStab, StripPad, StripDrone,
+                       StripSfx, StripTexture, StripVocal, StripCount };
+    static_assert(StripDrone - StripLead + 1 == kPolyInstances && StripStab - StripLead == static_cast<int>(PolyInstance::Stab),
+                  "the polyphonic strips must follow PolyInstance");
     float stripGain_[StripCount] = {};
     float stripRoom_[StripCount] = {}, stripHall_[StripCount] = {};
     float stripFx_[StripCount] = {};       ///< send into the modulation chain (texture and vocal only)

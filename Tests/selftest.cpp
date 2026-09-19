@@ -36,6 +36,7 @@
 #include "phos/WavWriter.h"
 #include "TestSupport.h"
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -125,6 +126,46 @@ struct RuleRef {
     }
     /** @brief Pitch class (above the tonic) of the root of the chord on degree @p d. */
     static int chordRoot(int scale, int d) { return ((deg(scale, d) % 12) + 12) % 12; }
+    /**
+     * @brief The register rule of 19.09.2026, read off a score: at how many sixteenths of bars
+     *        [@p from, @p to) two of the line voices (lead, counter-lead, stab, arp) sound with their
+     *        pitch spans less than kRegisterGap semitones apart.
+     *
+     * Independent of Melody.cpp's guard: a note sounds at a sixteenth when its onset is at or before the
+     * sixteenth and its written length reaches past it -- nothing about spans in steps or priorities.
+     */
+    static int registerClashes(const std::vector<NoteEvent>& ev, int from, int to)
+    {
+        const Part lines[4] = { Part::Lead, Part::Counter, Part::Stab, Part::Arp };
+        std::map<int, std::array<std::pair<int, int>, 4>> at;   // sixteenth -> (lo, hi) per voice
+        for (const NoteEvent& e : ev) {
+            int v = -1;
+            for (int k = 0; k < 4; ++k) if (e.part == lines[k]) v = k;
+            if (v < 0) continue;
+            const int first = static_cast<int>(std::ceil(e.beat * 4.0 - 1e-6));
+            for (int s = first; s * 0.25 < e.beat + e.length - 1e-6; ++s) {
+                if (s < from * 16 || s >= to * 16) continue;
+                auto it = at.find(s);
+                if (it == at.end()) { std::array<std::pair<int, int>, 4> init; init.fill({ 1000, -1000 }); it = at.emplace(s, init).first; }
+                auto& span = it->second[static_cast<size_t>(v)];
+                span.first = std::min(span.first, static_cast<int>(e.pitch));
+                span.second = std::max(span.second, static_cast<int>(e.pitch));
+            }
+        }
+        int clashes = 0;
+        for (const auto& kv : at) {
+            bool clash = false;
+            for (int a = 0; a < 4; ++a)
+                for (int b = a + 1; b < 4; ++b) {
+                    const auto& x = kv.second[static_cast<size_t>(a)];
+                    const auto& y = kv.second[static_cast<size_t>(b)];
+                    if (x.first > x.second || y.first > y.second) continue;
+                    if (!(x.first - y.second >= kRegisterGap || y.first - x.second >= kRegisterGap)) clash = true;
+                }
+            clashes += clash ? 1 : 0;
+        }
+        return clashes;
+    }
 };
 
 /** @brief Longest run of identical consecutive values, the sequence read as a loop when @p cyclic. */
@@ -154,7 +195,7 @@ void testParams()
                        // 19.09.2026, round "fx-psychedelia": the bed, the voices, the modulation effects
                        + static_cast<int>(texture::Count) + static_cast<int>(vocal::Count) + static_cast<int>(psyfx::Count);
     check(p.count() == expected, "every module table registered", fmt("%d parameters", p.count()));
-    check(p.find("lead.detune") == p.base(Module::Poly, 0) + poly::Detune && p.find("arp.detune") == p.base(Module::Poly, 1) + poly::Detune
+    check(p.find("lead.detune") == p.base(PolyInstance::Lead) + poly::Detune && p.find("arp.detune") == p.base(PolyInstance::Arp) + poly::Detune
           && p.find("acid.cutoff") == p.base(Module::Acid) + acid::Cutoff && p.get(p.find("arp.amp_sustain")) == 0.0f,
           "named instances (lead, arp) with their own defaults");
     const int id = p.find("kick.pitch_start");
@@ -1319,7 +1360,7 @@ void testVariety()
             e->prepare(48000.0, 512);
             e->params().parseText(fmt("compose.track_bars=128 compose.sound_variation=1 compose.track_variation=1 master.auto_gain=Off master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 "
                                       "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 "
-                                      "mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1 compose.level_match=%s", match ? "On" : "Off").c_str());
+                                      "mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1 compose.level_match=%s", match ? "On" : "Off").c_str());
             Composer ce(31);
             const int tracksN = 4, trackBars = 128;
             const TempoMap tm = ce.tempoMap(e->params(), tracksN * trackBars);
@@ -1458,7 +1499,7 @@ void testEngine()
     eb->prepare(sr, 256);
     // Bass alone, inside the first core: in the intro it does not play yet, and a pad on the downbeat
     // would count as energy in the kick's window.
-    eb->params().parseText("mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1");
+    eb->params().parseText("mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1");
     const int coreBar = firstCoreBar(eb->params(), comp);
     const std::vector<float> bassOnly = renderEngine(*eb, comp, (coreBar + 16) * static_cast<double>(kBeatsPerBar), 256, sr);
     const double beatSamples = 60.0 / 145.0 * sr;
@@ -1543,8 +1584,8 @@ double measureLock(const char* settings, double bpm, double& spread, double& coh
     };
     // Nothing but the part being measured: since Phase 5 a core carries acid, arp and pad as well, and
     // their energy leaks into a projection that is only two fundamental periods long.
-    const char* const kOnlyKick = "mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1";
-    const char* const kOnlyBass = "mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1";
+    const char* const kOnlyKick = "mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1";
+    const char* const kOnlyBass = "mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1";
     const std::vector<float> kickY = render(kOnlyKick, true), bassY = render(kOnlyBass, false);
     const double f0 = midiToHz(30);
     const double beat = 60.0 / bpm * sr;
@@ -1878,8 +1919,8 @@ void testKickBody()
         latency = e->latencySamples();
         return renderEngine(*e, c, 70.0 * kBeatsPerBar, 512, sr);
     };
-    const std::vector<float> ky = render("mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1");
-    const std::vector<float> by = render("mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1");
+    const std::vector<float> ky = render("mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1");
+    const std::vector<float> by = render("mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1");
     const double beat = 60.0 / 145.0 * sr, q = beat / 4.0;
     auto at = [&](double beats) { return static_cast<size_t>(beats * beat + latency); };
     // K-weighting, ITU-R BS.1770-4's tabulated 48 kHz coefficients (as in testSfxLevel).
@@ -2212,8 +2253,8 @@ double measureFreeLock(double bpm, const char* rhythm, int& onsets, int& distinc
         if (keepKick) kickModel = e->kick();
         return y;
     };
-    const char* const kOnlyKick = "mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1";
-    const char* const kOnlyBass = "mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1";
+    const char* const kOnlyKick = "mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1";
+    const char* const kOnlyBass = "mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1";
     const std::vector<float> kickY = render(kOnlyKick, true), bassY = render(kOnlyBass, false);
 
     // The first bass onset of every beat of the window, with its pitch.
@@ -4229,7 +4270,7 @@ void testPoly()
                           "lead.delay_send=0 lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=1", p, PolyInstance::Lead);
         e->noteOn(48, 0.0f, 8.0, 1 << 24, 0.0);
         p.parseText("lead.osc=Supersaw lead.vel_sens=0");
-        std::vector<float> v = moduleValues(p, Module::Poly, 0);
+        std::vector<float> v = moduleValues(p, Module::Poly, polyIndex(PolyInstance::Lead));
         e->update(v.data(), 145.0);
         e->noteOn(69, 1.0f, 8.0, 1 << 24, 0.0);
         const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
@@ -5005,12 +5046,15 @@ void testMelody()
           fmt("%d of %d strong lead notes off the chord, %d of %d arp notes off the material", weak, strong, arpOff, arpNotes));
     check(tooLow == 0, "depth rule in the score: acid from D3, lead from B3, arp from G3", fmt("%d notes too low", tooLow));
     check(slides > 10 && slideGaps == 0, "every acid slide overlaps the note it slides into", fmt("%d slides, %d with a gap", slides, slideGaps));
-    // Since 18.09.2026 the arp stays inside G3..G5 (rule 14) and the lead inside B3..A5 (rule 17): the
-    // masking rule's octave shift no longer fits, so where the form moves the arp to clear the lead
-    // the arp sits the section out (Melody.cpp). The check is the rule itself; how many sections
-    // still share both is reported, not required.
-    check(masked == 0, "where lead and arp play together their ranges overlap by at most two semitones",
-          fmt("%d shared bars, %d masked", sharedBlocks, masked));
+    // Since 19.09.2026 (round "voices") lead and arp share bars -- a drop carries both -- and the
+    // masking rule is kept where it matters, at the sixteenth: no two line voices sound in one register
+    // at the same instant (RuleRef::registerClashes, independent of Melody.cpp's guard). The bar-wide
+    // overlap the rule used to be measured by is reported, not required: an arp under the lead in one
+    // half of a bar and over it in the other overlaps the lead's range without ever meeting a note.
+    const int clashes = RuleRef::registerClashes(ev, 0, tracks * 128);
+    check(clashes == 0 && sharedBlocks > 50, "where lead and arp play together they never sound in one register at the same instant",
+          fmt("%d shared bars (%d with overlapping bar ranges), %d sixteenths with two line voices closer than %d semitones",
+              sharedBlocks, masked, clashes, kRegisterGap));
 
     // Variety over a night.
     {
@@ -5018,7 +5062,7 @@ void testMelody()
         q.parseText("compose.level_match=Off master.auto_gain=Off");
         Composer cv(4711);
         std::vector<uint64_t> acids;
-        int progressions = 0, styles[kNumArpStyles] = {}, oscs[3] = {}, squelch = 0, silent = 0;
+        int progressions = 0, styles[kNumArpStyles] = {}, oscs[4] = {}, squelch = 0, silent = 0;
         for (int i = 0; i < 24; ++i) {
             const TrackPlan t = cv.track(q, i);
             uint64_t h = 1469598103934665603ull;
@@ -5026,18 +5070,19 @@ void testMelody()
             acids.push_back(h);
             if (t.melody.chordDegree[1] || t.melody.chordDegree[2] || t.melody.chordDegree[3]) ++progressions;
             ++styles[t.melody.arpStyle];
-            if (t.melody.leadOsc >= 0) ++oscs[t.melody.leadOsc];
+            // Since 19.09.2026 the lead's oscillator is part of its voice recipe (Composer.h, VoiceRecipe).
+            if (t.voice[polyIndex(PolyInstance::Lead)].osc >= 0) ++oscs[t.voice[polyIndex(PolyInstance::Lead)].osc];
             squelch += t.melody.acidSquelch == 1 ? 1 : 0;
-            if (!t.melody.present[0] && !t.melody.present[1] && !t.melody.present[2]) ++silent;
+            if (!t.melody.present[mpIndex(MelodyPart::Acid)] && !t.melody.present[mpIndex(MelodyPart::Lead)] && !t.melody.present[mpIndex(MelodyPart::Arp)]) ++silent;
         }
         std::sort(acids.begin(), acids.end());
         const int distinct = static_cast<int>(std::unique(acids.begin(), acids.end()) - acids.begin());
         int styleCount = 0;
         for (int s : styles) styleCount += s > 0 ? 1 : 0;
-        check(distinct == 24 && progressions >= 12 && styleCount >= 3 && oscs[0] > 0 && oscs[1] + oscs[2] > 0 && squelch > 0 && silent == 0,
+        check(distinct == 24 && progressions >= 12 && styleCount >= 3 && oscs[0] > 0 && oscs[1] + oscs[2] + oscs[3] > 0 && squelch > 0 && silent == 0,
               "melodic identity changes from track to track",
-              fmt("%d distinct acid riffs of 24, %d moving progressions, %d arp styles, lead osc %d/%d/%d, %d squelched, %d without melody",
-                  distinct, progressions, styleCount, oscs[0], oscs[1], oscs[2], squelch, silent));
+              fmt("%d distinct acid riffs of 24, %d moving progressions, %d arp styles, lead osc %d/%d/%d/%d, %d squelched, %d without melody",
+                  distinct, progressions, styleCount, oscs[0], oscs[1], oscs[2], oscs[3], squelch, silent));
     }
 
     // Depth rule in the rendered mix: acid, lead and arp together put nothing under 140 Hz.
@@ -5246,7 +5291,7 @@ void testProbeAudit()
         const int tracksN = levelSweep ? 4 : 6;
         const std::string knobs = fmt("compose.track_bars=128 compose.sound_variation=1 compose.track_variation=1 master.auto_gain=Off master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 "
                                       "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 "
-                                      "mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.sfx_mute=1 mix.perc_level=%s ", lv);
+                                      "mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1 mix.perc_level=%s ", lv);
         // The probes, with the level match on.
         auto pe = std::make_unique<Engine>();
         pe->prepare(48000.0, 512);
@@ -6652,7 +6697,7 @@ void testPsychedelia()
         auto e = std::make_unique<Engine>();
         e->prepare(sr, 512);
         e->params().parseText("compose.bpm=145 mix.kick_mute=On mix.bass_mute=On mix.perc_mute=On mix.acid_mute=On mix.lead_mute=On "
-                              "mix.arp_mute=On mix.pad_mute=On mix.texture_mute=On mix.vocal_mute=On");
+                              "mix.arp_mute=On mix.pad_mute=On mix.texture_mute=On mix.vocal_mute=On mix.counter_mute=On mix.stab_mute=On mix.drone_mute=On");
         // In beat order: the engine plays its ring as a queue (a note pushed after a later one waits).
         std::vector<NoteEvent> ev;
         for (int b = 0; b < 8; ++b) { NoteEvent k; k.beat = b; k.part = Part::Kick; k.velocity = 127; ev.push_back(k); }
@@ -7073,7 +7118,7 @@ void testSfxLevel()
         e->params().parseText("master.auto_gain=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.clip=Off");
         // The SFX strip alone: since 19.09.2026 that means the shamanic bed and the voices muted too.
         if (solo) e->params().parseText("mix.kick_mute=On mix.bass_mute=On mix.perc_mute=On mix.acid_mute=On mix.lead_mute=On "
-                                        "mix.arp_mute=On mix.pad_mute=On mix.texture_mute=On mix.vocal_mute=On");
+                                        "mix.arp_mute=On mix.pad_mute=On mix.texture_mute=On mix.vocal_mute=On mix.counter_mute=On mix.stab_mute=On mix.drone_mute=On");
         Composer c(864566672ull);
         const TempoMap tm = c.tempoMap(e->params(), 78);
         e->setTempoMap(tm);
@@ -7188,7 +7233,9 @@ void testMixBalance()
         e->prepare(48000.0, 512);
         e->params().parseText("compose.track_bars=128 mix.kick_mute=On mix.bass_mute=On mix.perc_mute=On "
                               "mix.acid_mute=On mix.lead_mute=On mix.arp_mute=On mix.pad_mute=On mix.sfx_mute=On "
-                              "mix.texture_mute=On mix.vocal_mute=On");
+                              "mix.texture_mute=On mix.vocal_mute=On "
+                              // 19.09.2026: the three new voices
+                              "mix.counter_mute=On mix.stab_mute=On mix.drone_mute=On");
         Composer c(3);
         const TempoMap tm = c.tempoMap(e->params(), 8);
         e->setTempoMap(tm);
@@ -7202,7 +7249,7 @@ void testMixBalance()
             e->process(L.data(), R.data(), n);
             for (int i = 0; i < n; ++i) worst = std::max(worst, std::max(std::fabs(static_cast<double>(L[i])), std::fabs(static_cast<double>(R[i]))));
         }
-        check(worst == 0.0, "with all ten parts muted the engine writes exact zeros, so a solo render really is one part alone",
+        check(worst == 0.0, "with all thirteen parts muted the engine writes exact zeros, so a solo render really is one part alone",
               fmt("largest sample %.3g over %llu samples", worst, static_cast<unsigned long long>(total)));
     }
 
@@ -8290,7 +8337,7 @@ void testTensionCurve()
             return out;
         };
         const int offs[3] = { ((m.root[0] - t.key) % 12 + 12) % 12, ((m.root[1] - t.key) % 12 + 12) % 12,
-                              ((m.root[2] - t.key) % 12 + 12) % 12 };
+                              ((m.root[mpIndex(MelodyPart::Arp)] - t.key) % 12 + 12) % 12 };
         measure(shifted(m.acid[0], offs[0]), m.acidSteps / 16, role[0]);
         for (int w = 0; w < 2; ++w) measure(shifted(m.lead[w], offs[1]), 2, role[1]);
         for (int k = 0; k < 4; ++k) measure(shifted(m.arp[k], offs[2]), 1, role[2]);
@@ -8523,8 +8570,8 @@ void testArpPatterns()
             if (!t.melody.arpPolymeter) continue;
             ++tracks;
             BarPlan bp;
-            bp.parts = 4;
-            bp.partsNext = 4;
+            bp.parts = partBit(MelodyPart::Arp);
+            bp.partsNext = partBit(MelodyPart::Arp);
             ParamStore q;
             std::vector<std::vector<int>> bars;
             bool sized = true;
@@ -8562,7 +8609,7 @@ void testArpPatterns()
         int polyShift = 0, otherShift = 0, lowestPoly = 127, lowestOther = 127;
         for (int i = 0; i < 160; ++i) {
             const TrackPlan t = c.track(p, i);
-            if (!t.melody.present[1] || !t.melody.present[2]) continue;
+            if (!t.melody.present[mpIndex(MelodyPart::Lead)] || !t.melody.present[mpIndex(MelodyPart::Arp)]) continue;
             const bool poly = t.melody.arpPolymeter;
             PartAvailability a;
             for (int k = 0; k < kMelodyParts; ++k) a.part[k] = t.melody.present[k];
@@ -8575,7 +8622,7 @@ void testArpPatterns()
                 if (t.form.section[s].type != SectionType::Drop) continue;
                 const BarPlan bp = planBar(t.form, a, t.sectionSeed, t.form.section[s].startBar);
                 (poly ? polyDrops : otherDrops)++;
-                if ((bp.parts & 4) == 0) (poly ? polyMasked : otherMasked)++;
+                if ((bp.parts & partBit(MelodyPart::Arp)) == 0) (poly ? polyMasked : otherMasked)++;
                 (poly ? polyShift : otherShift) += bp.arpOctave;
             }
             int& low = poly ? lowestPoly : lowestOther;
@@ -9094,6 +9141,21 @@ void testArrangeDynamics()
               "the auto-pan lowers the kit's 85 ms level difference in the air band without moving its side/mid",
               fmt("level difference %.2f -> %.2f dB rms (recordings 1.74), side/mid %+.2f -> %+.2f dB (width round -8.66), rho %+.3f -> %+.3f",
                   ild0, ild1, w0, w1, r0, r1));
+        // 19.09.2026 (round "voices"): the phase groups are the roles' (Perc.cpp, kRolePanGroup), so a
+        // level correction of the hat or the shaker cannot re-deal them. With the greedy partition of the
+        // knob levels, the closed hat at 4 dB instead of 5 or the shaker at -5 dB instead of -1 flipped
+        // the groups and the reduction fell to 0.17 dB; it has to stay above 1 dB for both.
+        double worst = 1e9;
+        std::string detail;
+        for (const char* change : { "perc1.level=4", "perc8.level=-5", "perc1.level=3 perc8.level=-3" }) {
+            double ildA = 0.0, wA = 0.0, rA = 0.0, ildB = 0.0, wB = 0.0, rB = 0.0;
+            play((std::string(off) + " " + change).c_str(), ildA, wA, rA);
+            play(change, ildB, wB, rB);
+            worst = std::min(worst, ildA - ildB);
+            detail += fmt(" %s: %.2f -> %.2f;", change, ildA, ildB);
+        }
+        check(worst > 1.0, "the auto-pan's reduction survives level corrections of hat and shaker (phase groups by role, not by level)",
+              fmt("smallest reduction %.2f dB;%s", worst, detail.c_str()));
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -9628,7 +9690,7 @@ void testCuration()
               && c2.variation(LockUnit::Track, 1) == 1 && c2.variation(LockUnit::Section, sectionUnitIndex(0, 3)) == 1,
               "a .phosset round trip gives the same knobs, locks, rerolls and the same score",
               fmt("%d knob differences, %zu lines, error \"%s\"", diffs, std::count(text.begin(), text.end(), '\n'), err.c_str()));
-        check(text.rfind("phosset 1\n", 0) == 0 && text.find("style=Goa\n") != std::string::npos
+        check(text.rfind("phosset 2\n", 0) == 0 && text.find("style=Goa\n") != std::string::npos
               && text.find("arc=Peak-Time\n") != std::string::npos && text.find("lock.track.2=1\n") != std::string::npos
               && text.find("reroll.track.1=1\n") != std::string::npos, "the set file carries header, seed, style, arc, locks and rerolls");
     }
@@ -9964,7 +10026,7 @@ void testTransitions()
 
         // The first sixteen bars of B: A's pads hold on where the keys are close enough.
         const int move = ((b.key - a.key) % 12 + 12) % 12;
-        if (a.melody.present[3] && (move == 0 || move == 5 || move == 7)) {
+        if (a.melody.present[mpIndex(MelodyPart::Pad)] && (move == 0 || move == 5 || move == 7)) {
             ++padPossible;
             std::vector<NoteEvent> head;
             c.composeBars(p, b.firstBar, 16, head);
@@ -10143,11 +10205,11 @@ void testGenreRules()
             for (size_t i = 0; continuous && i < cell.size(); ++i) continuous = cell[i].step == static_cast<int>(i);
             if (!continuous) ++arpNotContinuous;
             int lowest = 127;
-            for (const MelodyNote& n : cell) lowest = std::min(lowest, m.root[2] + n.rel);
-            colourRule(cell, m.root[2], key, scale, true, m.arpPolymeter ? 3 : 16);
+            for (const MelodyNote& n : cell) lowest = std::min(lowest, m.root[mpIndex(MelodyPart::Arp)] + n.rel);
+            colourRule(cell, m.root[mpIndex(MelodyPart::Arp)], key, scale, true, m.arpPolymeter ? 3 : 16);
             for (size_t i = 0; i < cell.size(); ++i) {
                 const MelodyNote& n = cell[i];
-                const int pitch = m.root[2] + n.rel;
+                const int pitch = m.root[mpIndex(MelodyPart::Arp)] + n.rel;
                 if (pitch < kArpLowest || pitch > kArpHighest) ++arpReg;
                 const int pc = ((pitch % 12) + 12) % 12;
                 const bool glint = RuleRef::colour(scale, pitch - key);
@@ -10158,7 +10220,7 @@ void testGenreRules()
                     ++arpStreamBad;
                     if (std::getenv("PHOS_DEBUG_RULES")) {
                         std::printf("DBG stream: style %d scale %d key %d degree %d cell %d step %d pitch %d lowest %d high %d mask %04x:", m.arpStyle, scale, key, m.chordDegree[chord], k, n.step, pitch, lowest, high ? 1 : 0, m.arpHigh);
-                        for (const MelodyNote& x : cell) std::printf(" %d", m.root[2] + x.rel);
+                        for (const MelodyNote& x : cell) std::printf(" %d", m.root[mpIndex(MelodyPart::Arp)] + x.rel);
                         std::printf("\n");
                     }
                 }
@@ -10336,18 +10398,21 @@ void testGenreRules()
                 if (k == 0) { acidRun3 += s.runs3; if (ps.back() > kAcidJumpHighest) ++acidTopBad; }
                 if (k == 1 && (ps[ps.size() / 2] < 67 || ps[ps.size() / 2] > 73)) ++leadMedianBad;
                 if (k == 1 && ps.back() > kLeadHighest) ++leadTopBad;
-                if (k == 2 && (ps.front() < kArpLowest || ps.back() > kArpHighest)) ++arpRegBad;
+                // G5 is the arp's own ceiling (rule 14); since 19.09.2026 it may go to G6 to clear a lead it shares a bar with.
+                if (k == 2 && (ps.front() < kArpLowest || ps.back() > kArpOverHighest)) ++arpRegBad;
             }
         }
         check(acidRatioBad == 0 && arpRatioBad == 0, "seed 864566672: acid and arp carry the second half of the bar like the first (rule 3)",
               fmt("%d acid and %d arp tracks outside 0.8..1.25", acidRatioBad, arpRatioBad));
         check(acidRun3 == 0 && acidTopBad == 0, "seed 864566672: no acid pitch three times in a row, nothing above D5",
               fmt("%d runs of three, %d tracks above D5", acidRun3, acidTopBad));
-        check(leadMedianBad == 0 && leadTopBad == 0 && arpRegBad == 0, "seed 864566672: lead median A4..C5 and never above A5, arp inside G3..G5",
+        check(leadMedianBad == 0 && leadTopBad == 0 && arpRegBad == 0, "seed 864566672: lead median A4..C5 and never above A5, arp inside G3..G6 (G5 unless it clears a lead)",
               fmt("%d lead medians and %d lead tops off, %d arp tracks outside", leadMedianBad, leadTopBad, arpRegBad));
-        // Track 2 has lead and arp. The form's masking rule used to drop the arp from every section it
-        // shared with the lead; the arp now plays in the bars where the lead rests (Composer.cpp,
-        // restoreArp) and never together with it.
+        // Track 2 has lead and arp. Until 19.09.2026 the form dropped the arp from every section it
+        // shared with the lead and Composer::restoreArp gave it back only in the lead's rests, so the
+        // two never played in one bar. Now a drop carries both (round "voices"): the arp must share bars
+        // with the lead, and the register rule is measured on the score itself, independently of the
+        // guard in Melody.cpp -- testVoices checks it over many tracks and every line voice.
         std::set<int> leadBars2, arpBars2;
         const TrackPlan& t2 = c.track(q, 1);
         for (const NoteEvent& e : ev) {
@@ -10358,8 +10423,11 @@ void testGenreRules()
         }
         int together = 0;
         for (int b : arpBars2) together += leadBars2.count(b) ? 1 : 0;
-        check(!arpBars2.empty() && together == 0, "seed 864566672, track 2: the arp plays where the lead rests, never together with it",
-              fmt("%zu arp bars, %zu lead bars, %d together", arpBars2.size(), leadBars2.size(), together));
+        const int clashes = RuleRef::registerClashes(ev, t2.firstBar, t2.firstBar + t2.bars);
+        check(!arpBars2.empty() && together >= 16 && clashes == 0,
+              "seed 864566672, track 2: the arp plays beside the lead in the drops, never in the lead's register at the same time",
+              fmt("%zu arp bars, %zu lead bars, %d together, %d sixteenths with two line voices closer than %d semitones",
+                  arpBars2.size(), leadBars2.size(), together, clashes, kRegisterGap));
     }
 
     // ---- the arp's gate: 15 to 35 % of a sixteenth, as the arp is really played (rule 15)
@@ -10416,7 +10484,14 @@ void testFoundation()
     }
     std::map<double, std::vector<int>> chords;
     for (const NoteEvent& e : ev) if (e.part == Part::Pad) chords[e.beat].push_back(e.pitch);
-    int onsets = 0, rootLow = 0, foundationOnsets = 0, withSub = 0, subUnderKick = 0, tooMany = 0;
+    // Since 19.09.2026 the drone may lay the floor instead (Melody.h, MelodyContext::foundationBars):
+    // where a drone note under D3 sounds at the chord's onset the pad must *not* add its own sub.
+    auto droneLowAt = [&](double beat) {
+        for (const NoteEvent& e : ev)
+            if (e.part == Part::Drone && e.pitch < kPadLowest && e.beat <= beat + 1e-9 && e.beat + e.length > beat) return true;
+        return false;
+    };
+    int onsets = 0, rootLow = 0, foundationOnsets = 0, withSub = 0, subUnderKick = 0, tooMany = 0, doubled = 0;
     for (const auto& kv : chords) {
         const int bar = static_cast<int>(std::floor(kv.first / kBeatsPerBar));
         const int ti = c.trackOfBar(q, bar);
@@ -10428,7 +10503,8 @@ void testFoundation()
         const bool silent = kickBars.count(bar) == 0 && bassBars.count(bar) == 0;
         const bool sub = v[0] < kPadLowest;
         if (sub && !silent) ++subUnderKick;
-        if (silent) { ++foundationOnsets; if (sub) ++withSub; }
+        if (silent && droneLowAt(kv.first)) { if (sub) ++doubled; }
+        else if (silent) { ++foundationOnsets; if (sub) ++withSub; }
         const int sc = t.form.section[sectionOfBar(t.form, bar - t.firstBar)].scale;
         const int rootPc = (t.key + RuleRef::chordRoot(sc, t.melody.chordDegree[chordIndexAt(t.melody, bar - t.firstBar)])) % 12;
         ++onsets;
@@ -10437,22 +10513,24 @@ void testFoundation()
     }
     check(onsets > 20 && rootLow == onsets && tooMany == 0, "pad chords in root position, never more than four voices (rule 19)",
           fmt("%d of %d chords with the root at the bottom, %d with more than four notes", rootLow, onsets, tooMany));
-    check(foundationOnsets > 0 && withSub == foundationOnsets && subUnderKick == 0,
-          "a sub root under every pad chord in bars without kick and bass, and never while they play (rule 20)",
-          fmt("%d of %d chords in silent bars have one; %d sub notes while kick or bass play", withSub, foundationOnsets, subUnderKick));
+    check(foundationOnsets > 0 && withSub == foundationOnsets && subUnderKick == 0 && doubled == 0,
+          "a sub root under every pad chord in bars without kick and bass (unless the drone lays the floor there), never while they play (rule 20)",
+          fmt("%d of %d chords in silent bars have one; %d sub notes while kick or bass play; %d doubling the drone's low root",
+              withSub, foundationOnsets, subUnderKick, doubled));
 
     // Rendered: the pad alone through a track with a breakdown. Its high pass opens for the
     // breakdown and closes again, and the band under 140 Hz fades in and out with the pad's own
     // envelope instead of stepping.
     {
         ParamStore p;
-        p.parseText("compose.pad_amount=1 compose.level_match=Off master.auto_gain=Off");
+        // No drone: this measures the pad's own foundation, which the drone replaces where it plays (19.09.2026).
+        p.parseText("compose.pad_amount=1 compose.drone_amount=0 compose.level_match=Off master.auto_gain=Off");
         uint64_t seed = 0;
         int breakStart = -1, breakEnd = -1;
         for (uint64_t s = 1; s < 400 && breakStart < 0; ++s) {
             Composer probe(s);
             const TrackPlan& t = probe.track(p, 0);
-            if (!t.melody.present[3]) continue;
+            if (!t.melody.present[mpIndex(MelodyPart::Pad)]) continue;
             for (int i = 0; i + 1 < t.form.count; ++i) {
                 const Section& sec = t.form.section[i];
                 if (sec.type == SectionType::Break && sec.startBar <= 80 && sec.bars >= 16
@@ -10466,7 +10544,8 @@ void testFoundation()
         engine->prepare(48000.0, 512);
         engine->params().copyValuesFrom(p);
         const int mb = engine->params().base(Module::Mix);
-        for (int id : { mix::KickMute, mix::BassMute, mix::PercMute, mix::AcidMute, mix::LeadMute, mix::ArpMute, mix::SfxMute })
+        for (int id : { mix::KickMute, mix::BassMute, mix::PercMute, mix::AcidMute, mix::LeadMute, mix::CounterMute, mix::ArpMute, mix::StabMute,
+                        mix::DroneMute, mix::SfxMute })
             engine->params().set(mb + id, 1.0f);
         Composer cm(seed);
         // Which bars the form leaves without kick and bass, from the score itself.
@@ -10483,7 +10562,7 @@ void testFoundation()
         const int endBar = breakEnd + 4;
         const size_t total = static_cast<size_t>(std::llround(endBar * barSec * sr));
         std::vector<float> L(total), R(total);
-        const int hp = engine->params().base(Module::Poly, 2) + poly::HpFloor;
+        const int hp = engine->params().base(PolyInstance::Pad) + poly::HpFloor;
         int hpBad = 0, hpBars = 0;
         size_t done = 0;
         int lastBar = -1;
@@ -10548,6 +10627,419 @@ void testFoundation()
     }
 }
 
+/**
+ * @brief The voices round of 19.09.2026: ordered instances, the counter-lead, the stab, the tonic drone,
+ *        the arp beside the lead, and a sound of its own for every voice in every track.
+ *
+ * Every check reads the score or renders audio and compares against a value derived here, never
+ * against a number the code under test reports about itself: the register rule is RuleRef's reading
+ * of the score, the scale material comes from the scale table, the depth rule is a filtered render.
+ */
+void testVoices()
+{
+    section("voices: order, counter-lead, stabs, tonic drone, arp beside the lead, a sound per track");
+
+    // (a) The order the user asked for: related voices side by side, in every table that lists them.
+    {
+        ParamStore p;
+        static const char* const kWant[kPolyInstances] = { "lead", "counter", "arp", "stab", "pad", "drone" };
+        static const Part kParts[kPolyInstances] = { Part::Lead, Part::Counter, Part::Arp, Part::Stab, Part::Pad, Part::Drone };
+        static const char* const kPartWant[kPolyInstances] = { "Lead", "Counter", "Arp", "Stab", "Pad", "Drone" };
+        bool names = true, ids = true, strips = true, parts = true;
+        std::set<int> channels;
+        const int mb = p.base(Module::Mix);
+        for (int i = 0; i < kPolyInstances; ++i) {
+            const PolyInstance inst = static_cast<PolyInstance>(i);
+            names = names && std::string(kPolyInstanceNames[i]) == kWant[i];
+            ids = ids && p.find(std::string(kWant[i]) + ".cutoff") == p.base(inst) + poly::Cutoff
+                  && (i == 0 || p.base(inst) == p.base(static_cast<PolyInstance>(i - 1)) + poly::Count);
+            strips = strips && p.find(std::string("mix.") + kWant[i] + "_level") == mb + mix::polyLevel(inst)
+                     && p.find(std::string("mix.") + kWant[i] + "_mute") == mb + mix::polyMute(inst);
+            parts = parts && static_cast<int>(kParts[i]) == static_cast<int>(Part::Lead) + i && std::string(kPartNames[static_cast<int>(kParts[i])]) == kPartWant[i];
+            channels.insert(midiChannelOf(kParts[i]));
+        }
+        check(names && ids && strips && parts && channels.size() == static_cast<size_t>(kPolyInstances),
+              "the voices stand in groups -- lead, counter, arp, stab, pad, drone -- in the parameters, the strips, the parts and the MIDI channels",
+              fmt("names %d, ids %d, strips %d, parts %d, %zu channels", names, ids, strips, parts, channels.size()));
+    }
+
+    // (b) A set saved before this round: its keys still mean what they meant, and the new voices come up
+    //     at their defaults -- not at whatever the session had moved them to.
+    {
+        ParamStore q, fresh;
+        q.parseText("counter.cutoff=600 stab.level=-20 drone.table=Glass lead.cutoff=3000");
+        Composer c(1);
+        std::string err;
+        const bool ok = readSetText("phosset 1\nseed=5\nlead.cutoff=2000\npad.level=-10\nmix.arp_level=-4\n", c, q, &err);
+        const bool old = q.get(q.find("lead.cutoff")) == 2000.0f && q.get(q.find("pad.level")) == -10.0f && q.get(q.find("mix.arp_level")) == -4.0f;
+        const bool reset = q.get(q.find("counter.cutoff")) == fresh.get(fresh.find("counter.cutoff"))
+                           && q.get(q.find("stab.level")) == fresh.get(fresh.find("stab.level"))
+                           && q.get(q.find("drone.table")) == fresh.get(fresh.find("drone.table"));
+        check(ok && old && reset && c.seed() == 5, "a set of the old format loads safely: old keys keep their meaning, the new voices start from their defaults",
+              fmt("read %d (%s), old keys %d, new voices reset %d", ok, err.c_str(), old, reset));
+    }
+
+    // A set with all three new voices in every track, short tracks so that many forms are seen.
+    ParamStore q;
+    q.parseText("compose.counter_amount=1 compose.stab_amount=1 compose.drone_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
+                "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off");
+    Composer c(20260919ull);
+    std::vector<NoteEvent> ev;
+    std::vector<ControlEvent> ctl;
+    const int tracks = 8;
+    int bars = 0;
+    for (int t = 0; t < tracks; ++t) bars = c.track(q, t).firstBar + c.track(q, t).bars;
+    c.composeBars(q, 0, bars, ev, &ctl);
+    std::map<int, std::vector<const NoteEvent*>> byBar;
+    for (const NoteEvent& e : ev) byBar[static_cast<int>(std::floor(e.beat / kBeatsPerBar + 1e-9))].push_back(&e);
+    auto barHas = [&](int bar, Part part) {
+        const auto it = byBar.find(bar);
+        if (it == byBar.end()) return false;
+        for (const NoteEvent* e : it->second) if (e->part == part) return true;
+        return false;
+    };
+
+    // (c) The register rule over every line voice, and the arp beside the lead.
+    {
+        const int clashes = RuleRef::registerClashes(ev, 0, bars);
+        int together = 0, leadBars = 0, arpOut = 0;
+        for (int b = 0; b < bars; ++b) {
+            if (!barHas(b, Part::Lead)) continue;
+            ++leadBars;
+            if (barHas(b, Part::Arp)) ++together;
+        }
+        for (const NoteEvent& e : ev) if (e.part == Part::Arp && (e.pitch < kArpLowest || e.pitch > kArpOverHighest)) ++arpOut;
+        check(clashes == 0, "no two of lead, counter-lead, stab and arp sound in one register at the same time",
+              fmt("%d sixteenths of %d bars with two line voices closer than %d semitones", clashes, bars, kRegisterGap));
+        check(leadBars > 0 && together >= leadBars / 3 && arpOut == 0, "a drop carries lead and arp together: the arp plays in bars with the lead, inside G3..G6",
+              fmt("%d of %d lead bars also have the arp, %d arp notes outside G3..G6", together, leadBars, arpOut));
+    }
+
+    // (d) The counter-lead: only where the lead plays, in its held notes rather than on its attacks,
+    //     no colour tone, the tonic its centre, every answer ending on the tonic or the fifth.
+    {
+        int notes = 0, alone = 0, onAttack = 0, answerNotes = 0, colour = 0, tonic = 0, answers = 0, answersResting = 0;
+        std::vector<const NoteEvent*> counter;
+        std::set<long long> leadOnsets;
+        std::string offRest;
+        for (const NoteEvent& e : ev) {
+            if (e.part == Part::Lead) leadOnsets.insert(std::llround(e.beat * 4.0));
+            if (e.part == Part::Counter) counter.push_back(&e);
+        }
+        for (size_t i = 0; i < counter.size(); ++i) {
+            const NoteEvent& e = *counter[i];
+            const int bar = static_cast<int>(std::floor(e.beat / kBeatsPerBar));
+            const TrackPlan& t = c.track(q, c.trackOfBar(q, bar));
+            const int sc = t.form.section[sectionOfBar(t.form, bar - t.firstBar)].scale;
+            const int pc = ((e.pitch - t.key) % 12 + 12) % 12;
+            ++notes;
+            if (!barHas(bar, Part::Lead)) ++alone;
+            // The answers (outside the lead's B phrase, bars 4 and 5 of its eight) sit on the lead's held notes;
+            // over B the counter plays a line of its own and may meet the lead's attacks an octave above.
+            const int inPhrase = (bar - t.firstBar) % 8;
+            if (inPhrase != 4 && inPhrase != 5) {
+                ++answerNotes;
+                if (leadOnsets.count(std::llround(e.beat * 4.0)) != 0) ++onAttack;
+            }
+            if (RuleRef::colour(sc, pc)) ++colour;
+            if (pc == 0) ++tonic;
+            // An answer ends where the next counter note is more than a beat away.
+            const bool last = i + 1 == counter.size() || counter[i + 1]->beat - e.beat > 1.0 + 1e-9;
+            if (last) {
+                ++answers;
+                if (pc == 0 || pc == 7) ++answersResting;
+                else if (offRest.size() < 80) offRest += fmt(" bar %d step %.0f pc %d;", bar, (e.beat - bar * kBeatsPerBar) * 4.0, pc);
+            }
+        }
+        const double attackShare = answerNotes > 0 ? static_cast<double>(onAttack) / answerNotes : 1.0;
+        check(notes > 100 && alone == 0 && attackShare < 0.25,
+              "counter-lead: only where the lead plays, its answers on the lead's held notes rather than its attacks",
+              fmt("%d notes, %d in bars without the lead, %.0f %% of %d answer notes on a lead attack (the lead strikes about 13 of 16 sixteenths)",
+                  notes, alone, 100.0 * attackShare, answerNotes));
+        // Every answer is written to end on the tonic or the fifth (makeCounter); the register guard may
+        // still give up that last note where a lead note sits on it in every octave the counter has, and
+        // the note before it then ends the answer -- measured: 2 of 46 on this set, hence nine in ten.
+        check(colour == 0 && tonic * 4 >= notes && answers > 10 && answersResting * 10 >= answers * 9,
+              "counter-lead: the lead's genre rules -- no colour tone, the tonic as its centre, nine in ten answers ending on the tonic or the fifth",
+              fmt("%d colour tones, tonic %.0f %% of %d notes, %d of %d answers end on 1 or 5%s", colour, notes > 0 ? 100.0 * tonic / notes : 0.0, notes,
+                  answersResting, answers, offRest.c_str()));
+    }
+
+    // (e) The stab: short chords in root position, never on a beat, only in grooves and drops, sparse.
+    {
+        std::map<double, std::vector<int>> hits;
+        for (const NoteEvent& e : ev) if (e.part == Part::Stab) hits[e.beat].push_back(e.pitch);
+        int onBeat = 0, notRoot = 0, tooMany = 0, wrongSection = 0, colourNotes = 0;
+        std::set<int> stabBars;
+        int coreBars = 0;
+        for (const auto& kv : hits) {
+            const int bar = static_cast<int>(std::floor(kv.first / kBeatsPerBar));
+            stabBars.insert(bar);
+            const double inBar = kv.first - bar * kBeatsPerBar;
+            if (std::fabs(inBar - std::round(inBar)) < 1e-6) ++onBeat;
+            const TrackPlan& t = c.track(q, c.trackOfBar(q, bar));
+            const Section& s = t.form.section[sectionOfBar(t.form, bar - t.firstBar)];
+            if (s.type != SectionType::Groove && s.type != SectionType::Drop) ++wrongSection;
+            std::vector<int> v = kv.second;
+            std::sort(v.begin(), v.end());
+            if (v.size() > 4) ++tooMany;
+            // The chord's root from the scale table: the chord's own, or the tonic where it is a colour tone.
+            int rootPc = RuleRef::chordRoot(s.scale, t.melody.chordDegree[chordIndexAt(t.melody, bar - t.firstBar)]);
+            if (RuleRef::colour(s.scale, rootPc)) rootPc = 0;
+            if (((v[0] - t.key - rootPc) % 12 + 12) % 12 != 0) ++notRoot;
+            for (int x : v) if (RuleRef::colour(s.scale, x - t.key)) ++colourNotes;
+        }
+        for (int b = 0; b < bars; ++b) {
+            const TrackPlan& t = c.track(q, c.trackOfBar(q, b));
+            const SectionType st = t.form.section[sectionOfBar(t.form, b - t.firstBar)].type;
+            if (st == SectionType::Groove || st == SectionType::Drop) ++coreBars;
+        }
+        const double share = coreBars > 0 ? static_cast<double>(stabBars.size()) / coreBars : 0.0;
+        check(hits.size() > 20 && onBeat == 0 && notRoot == 0 && tooMany == 0 && colourNotes == 0,
+              "stabs: chords of at most four notes in root position on off-beat sixteenths, never on the kick, no colour tone",
+              fmt("%zu hits, %d on a beat, %d not in root position, %d with more than four notes, %d colour notes", hits.size(), onBeat, notRoot, tooMany, colourNotes));
+        check(wrongSection == 0 && share > 0.05 && share < 0.5, "stabs only in grooves and drops, and sparse enough to stay a surprise",
+              fmt("%d hits outside a core, stabs in %.0f %% of the core bars", wrongSection, 100.0 * share));
+    }
+
+    // (f) The drone: its low octave only where kick and bass rest, gone well before they return; its
+    //     slow evolution written as ramps of 8 to 32 bars.
+    {
+        std::vector<double> kicks;
+        for (const NoteEvent& e : ev) if (e.part == Part::Kick) kicks.push_back(e.beat);
+        int lowNotes = 0, lowUnderKick = 0, lowLate = 0, breakBars = 0, breakWithDrone = 0;
+        for (const NoteEvent& e : ev) {
+            if (e.part != Part::Drone || e.pitch >= kPadLowest) continue;
+            ++lowNotes;
+            const double end = e.beat + e.length;
+            const auto next = std::lower_bound(kicks.begin(), kicks.end(), e.beat + 1e-9);
+            if (next != kicks.end() && *next < end) ++lowUnderKick;
+            if (next != kicks.end() && *next < end + 1.5 * kBeatsPerBar) ++lowLate;
+        }
+        for (int b = 0; b < bars; ++b) {
+            const TrackPlan& t = c.track(q, c.trackOfBar(q, b));
+            if (!t.melody.present[mpIndex(MelodyPart::Drone)]) continue;
+            if (t.form.section[sectionOfBar(t.form, b - t.firstBar)].type != SectionType::Break) continue;
+            ++breakBars;
+            // A breakdown bar has the drone when one of its notes sounds in it.
+            for (const NoteEvent& e : ev)
+                if (e.part == Part::Drone && e.beat < (b + 1) * kBeatsPerBar && e.beat + e.length > b * kBeatsPerBar) { ++breakWithDrone; break; }
+        }
+        std::set<float> periods;
+        const int droneCutoff = q.base(PolyInstance::Drone) + poly::Cutoff;
+        for (const ControlEvent& e : ctl)
+            if (e.param == droneCutoff && e.kind == ControlEvent::Kind::Offset && e.length > 0.0f) periods.insert(e.length / kBeatsPerBar);
+        bool periodsOk = !periods.empty();
+        for (float pr : periods) periodsOk = periodsOk && pr >= 8.0f && pr <= 32.0f;
+        check(lowNotes > 0 && lowUnderKick == 0 && lowLate == 0,
+              "tonic drone: its low octave (under D3) only where kick and bass rest, released a bar and a half before the kick returns",
+              fmt("%d low notes, %d overlapping a kick, %d ending less than 1.5 bars before one", lowNotes, lowUnderKick, lowLate));
+        check(breakBars > 0 && breakWithDrone == breakBars && periodsOk,
+              "tonic drone: under every breakdown bar of a track that has one, evolving in ramps of 8 to 32 bars",
+              fmt("%d of %d breakdown bars, %zu ramp periods (%s)", breakWithDrone, breakBars, periods.size(),
+                  periods.empty() ? "none" : fmt("%.0f..%.0f bars", static_cast<double>(*periods.begin()), static_cast<double>(*periods.rbegin())).c_str()));
+    }
+
+    // (g) Rendered depth rule for the drone: the drone alone through a breakdown into the section after it.
+    {
+        ParamStore p;
+        p.parseText("compose.drone_amount=1 compose.pad_amount=0 compose.level_match=Off master.auto_gain=Off master.limiter=Off master.clipper=Off "
+                    "master.clip=Off master.comp_ratio=1");
+        uint64_t seed = 0;
+        int breakStart = -1, breakEnd = -1;
+        for (uint64_t s = 1; s < 400 && breakStart < 0; ++s) {
+            Composer probe(s);
+            const TrackPlan& t = probe.track(p, 0);
+            if (!t.melody.present[mpIndex(MelodyPart::Drone)]) continue;
+            for (int i = 0; i + 1 < t.form.count; ++i) {
+                const Section& sec = t.form.section[i];
+                if (sec.type == SectionType::Break && sec.startBar <= 80 && sec.bars >= 16) {
+                    breakStart = sec.startBar; breakEnd = sec.startBar + sec.bars; seed = s;
+                    break;
+                }
+            }
+        }
+        auto engine = std::make_unique<Engine>();
+        engine->prepare(48000.0, 512);
+        engine->params().copyValuesFrom(p);
+        const int mb = engine->params().base(Module::Mix);
+        for (int m = 0; m < mix::Count; ++m)
+            if (engine->params().desc(mb + m).curve == Curve::Toggle && m != mix::DroneMute) engine->params().set(mb + m, 1.0f);
+        Composer cm(seed);
+        Conductor conductor(*engine, cm);
+        const double bpm = engine->params().get(engine->params().base(Module::Compose) + compose::Bpm);
+        const double sr = 48000.0, barSec = 4.0 * 60.0 / bpm;
+        const size_t total = static_cast<size_t>(std::llround((breakEnd + 4) * barSec * sr));
+        std::vector<float> L(total), R(total);
+        for (size_t done = 0; done < total;) {
+            const int n = static_cast<int>(std::min<size_t>(512, total - done));
+            conductor.pump(engine->params(), 32.0);
+            engine->process(L.data() + done, R.data() + done, n);
+            done += static_cast<size_t>(n);
+        }
+        std::vector<float> mono(total);
+        for (size_t i = 0; i < total; ++i) mono[i] = 0.5f * (L[i] + R[i]);
+        const double t0 = breakStart * barSec, t1 = breakEnd * barSec;
+        // Mean power per sample in a band, in dB, so windows of different lengths compare.
+        auto bandDb = [&](double from, double to, double lo, double hi) {
+            const size_t a = static_cast<size_t>(from * sr), b = std::min(mono.size(), static_cast<size_t>(to * sr));
+            return powDb(lowendBandPower(mono, a, b, lo, hi, sr) / static_cast<double>(std::max<size_t>(1, b - a)));
+        };
+        const double lowBreak = bandDb(t0 + 4.0 * barSec, t0 + 8.0 * barSec, 20.0, 140.0);
+        const double allBreak = bandDb(t0 + 4.0 * barSec, t0 + 8.0 * barSec, 20.0, 20000.0);
+        const double lowAfter = bandDb(t1, t1 + 2.0 * barSec, 20.0, 140.0);
+        check(breakStart >= 0 && lowBreak - allBreak > -12.0 && lowAfter < lowBreak - 40.0,
+              "tonic drone rendered: a real floor under 140 Hz in the breakdown, gone when kick and bass return",
+              fmt("seed %llu: under 140 Hz %.1f dB against %.1f dB in all in the breakdown, %.1f dB in the two bars after it",
+                  static_cast<unsigned long long>(seed), lowBreak, allBreak, lowAfter));
+    }
+
+    // (h) A sound of its own per track: each voice's recipe rendered on one note for twenty tracks of
+    //     the listening seed -- the spread of the power centroid, the attack and the brightness, the
+    //     tables used, and whether two neighbouring tracks ever share a voice's sound. The same bench
+    //     is run on what a track changed before this round (the lead's oscillator, detune and cutoff,
+    //     the arp's filter decay and detune, the pad's table position; nothing of the new voices), and
+    //     printed as the "before" line: the measurement the round started from.
+    {
+        ParamStore p;
+        Composer lc(864566672ull);
+        const float sv = p.get(p.base(Module::Compose) + compose::SoundVariation);
+        static const int kPitch[kPolyInstances] = { 69, 81, 64, 60, 57, 50 };
+        const size_t n = 32768;
+        struct Row { double ci, ai, bi; size_t tables, oscs; int alike; };
+        // One voice over twenty tracks; `before` applies the old per-track changes instead of the recipe.
+        auto bench = [&](int v, bool before) {
+            const PolyInstance inst = static_cast<PolyInstance>(v);
+            std::vector<double> cents, attack, bright;
+            std::set<int> tables, oscs;
+            std::vector<std::array<double, 3>> feat;
+            std::vector<std::pair<int, int>> kinds;
+            for (int ti = 1; ti <= 20; ++ti) {
+                const TrackPlan& plan = lc.track(p, ti);
+                const VoiceRecipe& rc = plan.voice[v];
+                ParamStore s;
+                float off[poly::Count] = {};
+                const int b = s.base(inst);
+                if (before) {
+                    // Composer.cpp before 19.09.2026, trackStartControls and sectionControls' bases.
+                    if (inst == PolyInstance::Lead) {
+                        const float r = plan.melody.recipe[mpIndex(MelodyPart::Lead)];
+                        off[poly::Detune] = 0.15f * sv * r;
+                        off[poly::Cutoff] = 0.10f * sv * r;
+                        if (plan.melody.leadOsc >= 0) s.set(b + poly::Osc, static_cast<float>(plan.melody.leadOsc));
+                    } else if (inst == PolyInstance::Arp) {
+                        const float r = plan.melody.recipe[mpIndex(MelodyPart::Arp)];
+                        off[poly::FilterDecay] = 0.15f * sv * r;
+                        off[poly::Detune] = 0.12f * sv * r;
+                    } else if (inst == PolyInstance::Pad) {
+                        off[poly::Position] = 0.25f * sv * plan.melody.recipe[mpIndex(MelodyPart::Pad)];
+                    }
+                } else {
+                    Composer::voiceRecipeOffsets(inst, rc, sv, off);
+                    if (rc.osc >= 0) s.set(b + poly::Osc, static_cast<float>(rc.osc));
+                    if (rc.table >= 0) s.set(b + poly::Table, static_cast<float>(rc.table));
+                    if (rc.filter >= 0) s.set(b + poly::FilterType, static_cast<float>(rc.filter));
+                }
+                for (int k = 0; k < poly::Count; ++k)
+                    if (off[k] != 0.0f) s.set(b + k, s.fromNormalised(b + k, s.toNormalised(b + k, s.get(b + k)) + off[k]));
+                s.set(b + poly::DelaySend, 0.0f);   // the dry voice: the echoes are the space direction's, not the timbre's
+                s.set(b + poly::Drift, 0.0f);
+                auto e = std::make_unique<Poly>();
+                e->prepare(48000.0);
+                std::vector<float> vals = moduleValues(s, Module::Poly, v);
+                e->update(vals.data(), 145.0);
+                e->noteOn(kPitch[v], 1.0f, 4.0, 1 << 24, 0.0);
+                const std::vector<float> y = renderMono([&](float* L, float* R, int k) { e->process(L, R, k); }, n + 4800);
+                const double cHz = centroid(y.data() + 4800, 48000.0, n);
+                // Attack: 90 % of the peak of the 5-ms RMS envelope.
+                std::vector<double> env;
+                for (size_t i = 0; i + 240 <= y.size(); i += 240) {
+                    double acc = 0.0;
+                    for (size_t k = i; k < i + 240; ++k) acc += static_cast<double>(y[k]) * y[k];
+                    env.push_back(std::sqrt(acc / 240.0));
+                }
+                const double pk = *std::max_element(env.begin(), env.end());
+                size_t at = 0;
+                while (at < env.size() && env[at] < 0.9 * pk) ++at;
+                const std::vector<double> pw = powerSpectrum(y.data() + 4800, n);
+                double hi = 0.0, all = 0.0;
+                for (size_t k = 1; k < pw.size(); ++k) { all += pw[k]; if (k * 48000.0 / n > 2000.0) hi += pw[k]; }
+                cents.push_back(1200.0 * std::log2(cHz));
+                attack.push_back(static_cast<double>(at) * 0.005);
+                bright.push_back(powDb(hi / all));
+                const int osc = s.getInt(b + poly::Osc);
+                oscs.insert(osc);
+                if (osc == static_cast<int>(PolyOsc::Wavetable)) tables.insert(s.getInt(b + poly::Table));
+                feat.push_back({ cents.back(), attack.back(), bright.back() });
+                kinds.emplace_back(osc, osc == static_cast<int>(PolyOsc::Wavetable) ? s.getInt(b + poly::Table) : -1);
+            }
+            auto iqr = [](std::vector<double> x) { std::sort(x.begin(), x.end()); return x[x.size() * 3 / 4] - x[x.size() / 4]; };
+            int alike = 0;
+            for (size_t i = 1; i < feat.size(); ++i) {
+                // Two neighbours are alike when they share oscillator and table and differ by less than a
+                // third of a tone in centroid, 10 ms in attack and 1 dB in brightness.
+                const bool same = kinds[i] == kinds[i - 1] && std::fabs(feat[i][0] - feat[i - 1][0]) < 66.0
+                                  && std::fabs(feat[i][1] - feat[i - 1][1]) < 0.01 && std::fabs(feat[i][2] - feat[i - 1][2]) < 1.0;
+                alike += same ? 1 : 0;
+            }
+            return Row{ iqr(cents), iqr(attack), iqr(bright), tables.size(), oscs.size(), alike };
+        };
+        std::printf("         voice             centroid IQR   attack IQR   >2 kHz IQR   tables  osc  neighbours alike\n");
+        int badSpread = 0, alikeTotal = 0, fewTables = 0;
+        for (int v = 0; v < kPolyInstances; ++v) {
+            const Row old = bench(v, true), now = bench(v, false);
+            std::printf("         %-8s before %7.0f ct   %8.3f s   %7.1f dB   %4zu    %3zu   %d of 19\n", kPolyInstanceNames[v], old.ci, old.ai, old.bi,
+                        old.tables, old.oscs, old.alike);
+            std::printf("         %-8s after  %7.0f ct   %8.3f s   %7.1f dB   %4zu    %3zu   %d of 19\n", kPolyInstanceNames[v], now.ci, now.ai, now.bi,
+                        now.tables, now.oscs, now.alike);
+            if (now.ci < 200.0 && now.bi < 2.0) ++badSpread;
+            if (now.oscs < 2 || now.tables < 3) ++fewTables;
+            alikeTotal += now.alike;
+        }
+        check(badSpread == 0 && fewTables == 0 && alikeTotal == 0,
+              "every voice sounds different from track to track: spread in centroid or brightness, several oscillators and tables, no two neighbours alike",
+              fmt("%d voices without spread, %d with too few oscillators or tables, %d neighbouring pairs alike", badSpread, fewTables, alikeTotal));
+    }
+    // (i) The acid's voicing owns resonance and decay (a loose end of round "lowend-acid"): the section
+    //     ride swings around the voiced values. Read off the control stream: in stage 2 of a drop's ride
+    //     the decay returns to the track's own value -- for a mostly liquid track (500 ms against the
+    //     knob's 220) that is ln(500/220) / ln(2000/30) = 0.195 of the range times the liquid weight
+    //     above the knob, for a mostly driven one about the knob -- and never above the voiced squelch.
+    {
+        ParamStore ap;
+        ap.parseText("compose.level_match=Off master.auto_gain=Off");
+        Composer ac(864566672ull);
+        const int decayId = ap.base(Module::Acid) + acid::Decay;
+        int tracksSeen = 0, tracksOk = 0, longDecay = 0;
+        std::string seen;
+        for (int ti = 1; ti <= 16; ++ti) {
+            const TrackPlan& t = ac.track(ap, ti);
+            std::vector<NoteEvent> nev;
+            std::vector<ControlEvent> cev;
+            ac.composeBars(ap, t.firstBar, t.bars, nev, &cev);
+            // Stage 2 of the first ride cycle of the track's first drop (a quarter of the cycle in).
+            double want = std::log(500.0 / 220.0) / std::log(2000.0 / 30.0) * t.acidVoicing[2];
+            double got = 1e9;
+            for (int s = 0; s < t.form.count && got > 1e8; ++s) {
+                const Section& sec = t.form.section[s];
+                if (sec.type != SectionType::Drop || sec.bars < 16) continue;
+                const double at = (t.firstBar + sec.startBar + acidRideShape(sec.bars).stage[1]) * kBeatsPerBar;
+                for (const ControlEvent& e : cev) if (e.param == decayId && std::fabs(e.beat - at) < 1e-6) got = e.value;
+            }
+            if (got > 1e8) continue;
+            // The old per-track direction rides along (0.12 x sound variation x the recipe), so it is allowed for.
+            const double slack = 0.12 * 0.5 + 0.03;
+            ++tracksSeen;
+            if (std::fabs(got - want) <= slack) ++tracksOk;
+            if (want > 0.05 && got > 0.05) ++longDecay;
+            if (seen.size() < 160) seen += fmt(" t%d liquid %.2f: %+.3f (want %+.3f);", ti + 1, static_cast<double>(t.acidVoicing[2]), got, want);
+        }
+        check(tracksSeen >= 6 && tracksOk == tracksSeen && longDecay >= 2,
+              "acid: the section ride swings around the track's voiced decay and resonance, so a liquid track keeps its long decay",
+              fmt("%d of %d tracks on their voiced decay, %d of them clearly longer than the knob's;%s", tracksOk, tracksSeen, longDecay, seen.c_str()));
+    }
+}
+
 } // namespace
 
 int main()
@@ -10591,6 +11083,7 @@ int main()
     run("testArpPatterns", testArpPatterns);
     run("testGenreRules", testGenreRules);
     run("testFoundation", testFoundation);
+    run("testVoices", testVoices);
     run("testForm", testForm);
     run("testArrangeDynamics", testArrangeDynamics);
     run("testSectionRules", testSectionRules);

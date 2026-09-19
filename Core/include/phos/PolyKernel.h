@@ -17,7 +17,8 @@
  *    6e-8 (-144 dB). Only multiplies, adds, floors and comparisons: lanes stay bit-identical.
  *
  * **Voice channels.** Each voice has a left and a right channel, 16 lanes: a trapezoidal state-variable
- * low pass with resonance, then two Butterworth high-pass sections (24 dB/octave) at the voice's
+ * filter with resonance -- a low pass unless poly.filter_type chooses its band-pass, high-pass or notch
+ * output (19.09.2026) -- then two Butterworth high-pass sections (24 dB/octave) at the voice's
  * key-tracked high-pass frequency, then the amplitude envelope.
  */
 #pragma once
@@ -53,6 +54,15 @@ struct PolyChannels {
     alignas(32) float hb1[kPolyLanes] = {}, hb2[kPolyLanes] = {};   ///< high pass, second section
     alignas(32) float a1[kPolyLanes] = {}, a2[kPolyLanes] = {}, a3[kPolyLanes] = {};   ///< low-pass coefficients
     alignas(32) float c1[kPolyLanes] = {}, c2[kPolyLanes] = {}, c3[kPolyLanes] = {};   ///< high-pass coefficients (damping sqrt 2)
+    /**
+     * @name The filter's response (poly.filter_type, 19.09.2026)
+     * The output is v2 + (m0 x + m1 v1 + m2 v2), the textbook mixing of a state-variable filter's
+     * outputs (band = v1, low = v2, high = x - k band - low, notch = low + high): low pass (0, 0, 0),
+     * band pass normalised to unity at the centre (0, k, -1), high pass (1, -k, -2), notch (1, -k, -1),
+     * with k the damping. Zero is the low pass the kernel always had: v2 + 0 is v2.
+     * @{ */
+    alignas(32) float m0[kPolyLanes] = {}, m1[kPolyLanes] = {}, m2[kPolyLanes] = {};
+    /** @} */
 };
 
 /** @brief sin(2 pi p) for any p, from the Taylor series on the folded phase (see the file comment). */
@@ -143,6 +153,7 @@ void polyChannelKernel(PolyChannels& c, int lane, int n, const float* in, const 
     const V two = lanes<V>(2.0f), sqrt2 = lanes<V>(1.41421356f);
     V ic1 = at(c.ic1), ic2 = at(c.ic2), ha1 = at(c.ha1), ha2 = at(c.ha2), hb1 = at(c.hb1), hb2 = at(c.hb2);
     const V a1 = at(c.a1), a2 = at(c.a2), a3 = at(c.a3), c1 = at(c.c1), c2 = at(c.c2), c3 = at(c.c3);
+    const V m0 = at(c.m0), m1 = at(c.m1), m2 = at(c.m2);
     for (int i = 0; i < n; ++i) {
         const int row = i * kPolyLanes + lane;
         const V x = loadLanes<V>(in + row);
@@ -151,7 +162,7 @@ void polyChannelKernel(PolyChannels& c, int lane, int n, const float* in, const 
         V v2 = ic2 + a2 * ic1 + a3 * v3;
         ic1 = two * v1 - ic1;
         ic2 = two * v2 - ic2;
-        V y = v2;
+        V y = v2 + (m0 * x + m1 * v1 + m2 * v2);   // the response (see PolyChannels::m0)
         v3 = y - ha2;
         v1 = c1 * ha1 + c2 * v3;
         v2 = ha2 + c2 * ha1 + c3 * v3;
