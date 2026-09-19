@@ -57,11 +57,19 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
         poly_[i].prepare(sr_);
         poly_[i].setQuality(quality_.polyUnison[i], quality_.polyVoices[i]);
     }
-    for (auto* b : { &sfxL_, &sfxR_, &roomInL_, &roomInR_, &hallInL_, &hallInR_, &roomOutL_, &roomOutR_, &hallOutL_, &hallOutR_ })
+    for (auto* b : { &sfxL_, &sfxR_, &roomInL_, &roomInR_, &hallInL_, &hallInR_, &roomOutL_, &roomOutR_, &hallOutL_, &hallOutR_,
+                     &texL_, &texR_, &vocL_, &vocR_, &vocThrow_, &subBuf_, &throwIn_, &sendL_, &sendR_ })
         b->assign(static_cast<size_t>(kChunk), 0.0f);
     acid_.prepare(sr_);
     acid_.setOversampling(quality_.acidOversampling);
     sfx_.prepare(sr_);
+    texture_.prepare(sr_);
+    vocal_.prepare(sr_);   // loads the voice pack on the first call (Vocal.h); never on the audio thread
+    sfxFx_.prepare(sr_);
+    sendFx_.prepare(sr_);
+    throw_.prepare(sr_);
+    stutter_.prepare(sr_);
+    subDuck_.prepare(sr_);
     for (Ducker& d : duck_) d.prepare(sr_);
     returnDuck_.prepare(sr_);
     for (TranceGate& g : gate_) g.prepare(sr_);
@@ -106,6 +114,16 @@ void Engine::reset()
     clipL_.reset();
     clipR_.reset();
     sfx_.reset();
+    texture_.reset();
+    vocal_.reset();
+    sfxFx_.reset();
+    sendFx_.reset();
+    throw_.reset();
+    stutter_.reset();
+    subDuck_.reset();
+    sfxShift_ = Motion{};
+    sfxFlange_ = Motion{};
+    sendMotion_ = Motion{};
     for (Ducker& d : duck_) d.reset();
     returnDuck_.reset();
     for (TranceGate& g : gate_) g.reset();
@@ -256,6 +274,36 @@ void Engine::applyParams()
     stripHall_[StripSfx] = e(sb + sfx::HallSend);
     duck_[StripSfx].set(e(sb + sfx::Duck), duckA, duckH, duckR);
     sfx_.update(eff_.data() + sb, keyRoot_);
+    // The psychedelic layer (Engine.h): the bed's and the voices' strips, their sends, the modulation
+    // chains, the delay throw and the sub drop's own duck.
+    {
+        const int tb = p.base(Module::Texture), vb = p.base(Module::Vocal), xb = p.base(Module::PsyFx);
+        stripGain_[StripTexture] = partGain(mix::TextureMute, mix::TextureLevel);
+        stripGain_[StripVocal] = partGain(mix::VocalMute, mix::VocalLevel);
+        stripRoom_[StripTexture] = e(tb + texture::RoomSend);
+        stripHall_[StripTexture] = e(tb + texture::HallSend);
+        stripFx_[StripTexture] = e(tb + texture::FxSend);
+        duck_[StripTexture].set(e(tb + texture::Duck), duckA, duckH, duckR);
+        stripRoom_[StripVocal] = 0.0f;
+        stripHall_[StripVocal] = e(vb + vocal::HallSend);
+        stripFx_[StripVocal] = e(vb + vocal::FxSend);
+        duck_[StripVocal].set(e(vb + vocal::Duck), duckA, duckH, duckR);
+        texture_.update(eff_.data() + tb, keyRoot_);
+        vocal_.update(eff_.data() + vb, keyRoot_);
+        sfxFx_.update(eff_.data() + xb);
+        sendFx_.update(eff_.data() + xb);
+        sendReturn_ = dbToGain(e(xb + psyfx::Return));
+        motion_ = e(xb + psyfx::Motion);
+        throwSend_ = e(vb + vocal::ThrowSend);
+        const int tIdx = std::clamp(static_cast<int>(std::lround(e(vb + vocal::ThrowBeats))), 0, kNumDelayTimes - 1);
+        // The throw: the knob's time on the left, the next shorter one on the right (a dotted eighth
+        // against a quarter at the default), so the echoes of a word bounce across the field; a band of
+        // 300 Hz .. 3.5 kHz inside the loop thins them out like a radio instead of piling up body.
+        throw_.set(kDelayBeats[tIdx], kDelayBeats[std::max(0, tIdx - 1)], beatsPerSample_ > 0.0 ? beatsPerSample_ * 60.0 * sr_ : 145.0,
+                   e(vb + vocal::ThrowFeedback), 300.0f, 3500.0f);
+        // The kick's hold on the sub drop: the kit's duck times, 40 ms more hold for the kick's body.
+        subDuck_.set(e(sb + sfx::SubDuck), duckA, duckH + 40.0f, duckR);
+    }
     const double beatSeconds = beatsPerSample_ > 0.0 ? 1.0 / (beatsPerSample_ * sr_) : 60.0 / 145.0;
     for (int k = 0; k < kPolyInstances; ++k) {
         const int pb = p.base(Module::Poly, k);
@@ -303,6 +351,7 @@ void Engine::dispatch(const NoteEvent& e, double late)
         bass_.duck(late);
         for (Ducker& d : duck_) d.trigger(late);
         returnDuck_.trigger(late);
+        subDuck_.trigger(late);
         break;
     case Part::Bass: {
         const double samples = static_cast<double>(e.length) / beatsPerSample_;
@@ -331,17 +380,88 @@ void Engine::dispatch(const NoteEvent& e, double late)
         poly_[inst].noteOnLimited(e.pitch, vel, e.length, std::max(1, static_cast<int>(std::lround(samples))), late);
         break;
     }
-    case Part::Sfx: {
+    case Part::Sfx:
+    case Part::Texture:
+    case Part::Vocal: {
+        // Routed by type, not by the note's part (Sfx.h, sfxTypePart): the composer writes every effect
+        // as a Part::Sfx note, a MIDI file may carry the bed and the voices on tracks of their own.
         const int type = static_cast<int>(e.pitch) - kSfxBaseNote;
-        if (type >= 0 && type < kNumSfxTypes) {
-            const double samples = static_cast<double>(e.length) / beatsPerSample_;
-            sfx_.trigger(static_cast<SfxType>(type), std::max(1, static_cast<int>(std::lround(samples))), vel, late);
+        if (type < 0 || type >= kNumSfxTypes) break;
+        const SfxType t = static_cast<SfxType>(type);
+        const double samples = static_cast<double>(e.length) / beatsPerSample_;
+        const int n = std::max(1, static_cast<int>(std::lround(samples)));
+        const double spb = 1.0 / beatsPerSample_;
+        // The event's own seed: its position on the sixteenth grid and its type. Everything a texture or
+        // a voice draws hangs off it, so a bar rendered alone sounds like the same bar in the set.
+        const uint64_t pick = mixSeed(static_cast<uint64_t>(std::llround(e.beat * 16.0)), static_cast<uint64_t>(type) + 0x5053ull);
+        switch (sfxTypePart(t)) {
+        case Part::Texture:
+            texture_.trigger(t, n, vel, late, spb, pick);
+            break;
+        case Part::Vocal: {
+            vocal_.trigger(t, n, vel, late, spb, pick);
+            // The send chain detunes each phrase by its own few hertz, up or down, and opens the flanger.
+            Rng r;
+            r.seed(pick ^ 0x4D4F54ull);
+            const float hz = (8.0f + 17.0f * r.uniform()) * (r.below(2) == 0 ? 1.0f : -1.0f);
+            sendMotion_ = Motion{ e.beat, std::max(1.0, static_cast<double>(e.length)), hz, 0.3f };
+            break;
+        }
+        default:
+            if (t == SfxType::Stutter) {
+                // A sixteenth repeated, or a thirty-second for a stutter of half a beat or less.
+                const int slice = static_cast<int>(std::lround(spb * (e.length <= 0.5f ? 0.125 : 0.25)));
+                stutter_.trigger(n, slice);
+                break;
+            }
+            sfx_.trigger(t, n, vel, late);
+            // The event half of the SFX chain's automation: a riser drags the shifter up with it, a
+            // downlifter down, the reverse effects lift it a little, and a sweep opens the flanger.
+            // The shift and the flanger are separate strands, so that the sweep that falls into a drop
+            // opens the flanger without taking the riser's climb away from its last two bars.
+            switch (t) {
+            case SfxType::Riser:        sfxShift_ = Motion{ e.beat, e.length, 150.0f, 0.0f }; sfxFlange_ = Motion{ e.beat, e.length, 0.0f, 0.2f }; break;
+            case SfxType::Downlifter:   sfxShift_ = Motion{ e.beat, e.length, -120.0f, 0.0f }; sfxFlange_ = Motion{ e.beat, e.length, 0.0f, 0.2f }; break;
+            case SfxType::ReverseSwell: sfxShift_ = Motion{ e.beat, e.length, 40.0f, 0.0f }; sfxFlange_ = Motion{ e.beat, e.length, 0.0f, 0.3f }; break;
+            case SfxType::ReverseCrash: sfxShift_ = Motion{ e.beat, e.length, 80.0f, 0.0f }; sfxFlange_ = Motion{ e.beat, e.length, 0.0f, 0.3f }; break;
+            case SfxType::Sweep:        sfxFlange_ = Motion{ e.beat, e.length, 0.0f, 0.5f }; break;
+            default: break;
+            }
+            applyMotion();
+            break;
         }
         break;
     }
     default:
         break;
     }
+}
+
+void Engine::applyMotion()
+{
+    // The event half of the chains' automation (Engine.h): evaluated from the chunk's beat, so it is a
+    // function of the score alone. The shift ramps with the event (a riser's shift climbs to its end),
+    // the flanger opens and closes on a half sine; once the event is over both are back at zero.
+    auto eval = [&](const Motion& m, float& hz, float& flange) {
+        hz = 0.0f;
+        flange = 0.0f;
+        if (m.length <= 0.0) return;
+        const double x = (chunkBeat_ - m.start) / m.length;
+        if (x < 0.0 || x >= 1.0) return;
+        hz = static_cast<float>(m.shiftHz * x) * motion_;
+        flange = static_cast<float>(m.flange * std::sin(kPiD * x)) * motion_;
+    };
+    float hz, fl, unused;
+    eval(sfxShift_, hz, unused);
+    eval(sfxFlange_, unused, fl);
+    sfxFx_.setMotion(hz, fl);
+    // A phrase's detune holds while it speaks and fades over its last quarter.
+    eval(sendMotion_, hz, fl);
+    if (sendMotion_.length > 0.0 && sendMotion_.shiftHz != 0.0f) {
+        const double x = (chunkBeat_ - sendMotion_.start) / sendMotion_.length;
+        hz = (x >= 0.0 && x < 1.0) ? sendMotion_.shiftHz * motion_ * static_cast<float>(std::min(1.0, 4.0 * (1.0 - x))) : 0.0f;
+    }
+    sendFx_.setMotion(hz, fl);
 }
 
 void Engine::renderSegment(float* L, float* R, int offset, int count)
@@ -352,17 +472,27 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
     perc_.process(percL_.data(), percR_.data(), count);
     acid_.process(acidL_.data(), acidR_.data(), count);
     for (int k = 0; k < kPolyInstances; ++k) poly_[k].process(polyL_[k].data(), polyR_[k].data(), count);
-    sfx_.process(sfxL_.data(), sfxR_.data(), count);
+    sfx_.processSplit(sfxL_.data(), sfxR_.data(), subBuf_.data(), count);
+    texture_.process(texL_.data(), texR_.data(), count);
+    vocal_.process(vocL_.data(), vocR_.data(), vocThrow_.data(), count);
+    const double beat0 = chunkBeat_ + static_cast<double>(chunkPos_) * beatsPerSample_;
+    // The SFX strip's insert: flanger, phaser, frequency shifter (PsyFx.h).
+    sfxFx_.process(sfxL_.data(), sfxR_.data(), count, beat0, beatsPerSample_);
     const float kg = kickMute_ ? 0.0f : 1.0f, bg = bassMute_ ? 0.0f : 1.0f;
-    const float* srcL[StripCount] = { percL_.data(), acidL_.data(), polyL_[0].data(), polyL_[1].data(), polyL_[2].data(), sfxL_.data() };
-    const float* srcR[StripCount] = { percR_.data(), acidR_.data(), polyR_[0].data(), polyR_[1].data(), polyR_[2].data(), sfxR_.data() };
+    const float* srcL[StripCount] = { percL_.data(), acidL_.data(), polyL_[0].data(), polyL_[1].data(), polyL_[2].data(), sfxL_.data(),
+                                      texL_.data(), vocL_.data() };
+    const float* srcR[StripCount] = { percR_.data(), acidR_.data(), polyR_[0].data(), polyR_[1].data(), polyR_[2].data(), sfxR_.data(),
+                                      texR_.data(), vocR_.data() };
     float* outL = L + offset;
     float* outR = R + offset;
     for (int i = 0; i < count; ++i) {
         const size_t si = static_cast<size_t>(i);
-        // Kick and bass are mono and centred; everything else brings the stereo.
-        const float mono = kg * kickBuf_[si] + bg * bassBuf_[si];
-        float l = mono, r = mono, rl = 0.0f, rr = 0.0f, hl = 0.0f, hr = 0.0f;
+        // Kick and bass are mono and centred, and so is the sub drop, under its own duck; everything
+        // else brings the stereo.
+        const float sub = stripGain_[StripSfx] * subDuck_.next() * subBuf_[si];
+        const float mono = kg * kickBuf_[si] + bg * bassBuf_[si] + sub;
+        float l = mono, r = mono, rl = 0.0f, rr = 0.0f, hl = 0.0f, hr = 0.0f, fl = 0.0f, fr = 0.0f;
+        float ml = 0.0f, mr = 0.0f;   // the melodic bus a stutter may replace (acid, lead, arp)
         const double beat = chunkBeat_ + static_cast<double>(chunkPos_ + i) * beatsPerSample_;
         for (int s = 0; s < StripCount; ++s) {
             float sl = srcL[s][si], sr = srcR[s][si];
@@ -376,20 +506,34 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
             const float g = stripGain_[s] * duck_[s].next();
             sl *= g;
             sr *= g;
-            l += sl;
-            r += sr;
+            if (s >= StripAcid && s <= StripArp) { ml += sl; mr += sr; }
+            else { l += sl; r += sr; }
             rl += stripRoom_[s] * sl;
             rr += stripRoom_[s] * sr;
             hl += stripHall_[s] * sl;
             hr += stripHall_[s] * sr;
+            fl += stripFx_[s] * sl;
+            fr += stripFx_[s] * sr;
+            if (s == StripVocal) throwIn_[si] = 0.5f * (sl + sr) * vocThrow_[si] * throwSend_;
         }
-        outL[i] = l;
-        outR[i] = r;
+        // The glitch: while a stutter runs, the melodic bus is its repeat (the sends above keep the
+        // live signal, so the reverb tails run on underneath).
+        stutter_.tick(ml, mr);
+        outL[i] = l + ml;
+        outR[i] = r + mr;
         roomInL_[si] = rl; roomInR_[si] = rr;
         hallInL_[si] = hl; hallInR_[si] = hr;
+        sendL_[si] = fl; sendR_[si] = fr;
     }
     room_.process(roomInL_.data(), roomInR_.data(), roomOutL_.data(), roomOutR_.data(), count);
     hall_.process(hallInL_.data(), hallInR_.data(), hallOutL_.data(), hallOutR_.data(), count);
+    // The modulation send of the bed and the voices, and the voices' delay throw.
+    sendFx_.process(sendL_.data(), sendR_.data(), count, beat0, beatsPerSample_);
+    for (int i = 0; i < count; ++i) {
+        outL[i] += sendReturn_ * sendL_[static_cast<size_t>(i)];
+        outR[i] += sendReturn_ * sendR_[static_cast<size_t>(i)];
+    }
+    throw_.process(throwIn_.data(), outL, outR, count);
     for (int i = 0; i < count; ++i) {
         const size_t si = static_cast<size_t>(i);
         const float d = returnDuck_.next();
@@ -454,6 +598,7 @@ void Engine::process(float* L, float* R, int n)
         if (chunkPos_ == 0) {
             advanceRamps();
             applyParams();
+            applyMotion();
         }
         int left = std::min(n - done, kChunk - chunkPos_);
 

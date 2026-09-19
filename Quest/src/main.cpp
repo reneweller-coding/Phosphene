@@ -82,6 +82,7 @@
 #include "phos/Engine.h"
 #include "phos/Model.h"
 #include "phos/Quality.h"
+#include "phos/Vocal.h"
 #include "phos/WaveTableFile.h"
 
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "Phosphene", __VA_ARGS__)
@@ -204,6 +205,8 @@ const unsigned char* glyph(char c)
 
 /** @brief The shipped wavetable pack: an APK asset here, a file beside the sources on a desktop. */
 constexpr const char* kWaveTablePack = "library.phoswt";
+/** @brief The shipped voice pack (Vocal.h; 19.09.2026): an APK asset like the wavetables. */
+constexpr const char* kVoicePack = "voices.phosvx";
 
 /**
  * @brief Puts one shipped resource where the core can open it, and returns that directory.
@@ -957,6 +960,12 @@ public:
         const std::string tables = prepareAsset(app_->activity->assetManager, app_->activity->internalDataPath,
                                                 dataDir_, kWaveTablePack, "wavetables");
         if (!tables.empty()) setWaveTableSearchPath(tables);
+        // The voice pack of 19.09.2026 (Vocal.h): the spoken phrases. Unpacked on its own, because the
+        // wavetables may come from a pushed file in another directory; without it only the spoken
+        // types fall silent.
+        const std::string voices = prepareAsset(app_->activity->assetManager, app_->activity->internalDataPath,
+                                                dataDir_, kVoicePack, "voices");
+        if (!voices.empty()) setVoicePackSearchPath(voices);
         prepareModels(app_->activity->assetManager, app_->activity->internalDataPath, dataDir_);
         // The cue bridge of PLAN 8.3, off unless phos.cfg names a host. A visualiser that is not
         // there changes nothing here: the datagrams go to a port nobody reads and the set plays on.

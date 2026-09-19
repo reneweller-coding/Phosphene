@@ -122,6 +122,13 @@ extern const LibraryTableDesc kLibraryTables[kNumLibraryWaveTables];
  * `PHOS_SOURCE_DATA_DIR`, and a build that finds nothing at all falls back to the built-in tables.
  */
 void setWaveTableSearchPath(const std::string& directory);
+/**
+ * @brief The directory setWaveTableSearchPath() was given (empty when none).
+ *
+ * Added 19.09.2026 so the voice pack (Vocal.h), which ships beside the wavetable pack, is found
+ * wherever a host told the core its resources are, without every host learning a second call.
+ */
+const std::string& waveTableSearchPath();
 
 /**
  * @brief Caps the frames a library table is built with; the Quest lever.

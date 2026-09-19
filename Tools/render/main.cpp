@@ -21,7 +21,7 @@
  *     --reroll UNIT:INDEX reroll a unit; repeatable
  *     --sections          print the sections of every track in the render
  *     --tempo-ramp B:BPM  ramp the tempo from compose.bpm at beat 0 to BPM at beat B
- *     --solo PART         mute everything else: kick, bass, perc, acid, lead, arp, pad or sfx
+ *     --solo PART         mute everything else: kick, bass, perc, acid, lead, arp, pad, sfx, texture or vocal
  *     --out FILE.wav      write the audio (32-bit float unless --pcm24)
  *     --pcm24             write 24-bit PCM
  *     --midi FILE.mid     write the score as a Standard MIDI File
@@ -236,12 +236,16 @@ int main(int argc, char** argv)
     }
     const int mb = params.base(Module::Mix);
     if (!solo.empty()) {
-        static const char* const kSoloNames[] = { "kick", "bass", "perc", "acid", "lead", "arp", "pad", "sfx" };
-        static const int kSoloMutes[] = { mix::KickMute, mix::BassMute, mix::PercMute, mix::AcidMute, mix::LeadMute, mix::ArpMute, mix::PadMute, mix::SfxMute };
+        // One entry per part, in the order of the Part enum (texture and vocal appended 19.09.2026).
+        static const char* const kSoloNames[] = { "kick", "bass", "perc", "acid", "lead", "arp", "pad", "sfx", "texture", "vocal" };
+        static const int kSoloMutes[] = { mix::KickMute, mix::BassMute, mix::PercMute, mix::AcidMute, mix::LeadMute, mix::ArpMute, mix::PadMute, mix::SfxMute,
+                                          mix::TextureMute, mix::VocalMute };
+        static_assert(sizeof(kSoloNames) / sizeof(kSoloNames[0]) == kNumParts, "one solo name per part");
+        static_assert(sizeof(kSoloMutes) / sizeof(kSoloMutes[0]) == kNumParts, "one mute per part");
         int which = -1;
-        for (int k = 0; k < 8; ++k) if (solo == kSoloNames[k]) which = k;
-        if (which < 0) { std::fprintf(stderr, "--solo wants kick, bass, perc, acid, lead, arp, pad or sfx\n"); return 2; }
-        for (int k = 0; k < 8; ++k) params.set(mb + kSoloMutes[k], k == which ? 0.0f : 1.0f);
+        for (int k = 0; k < kNumParts; ++k) if (solo == kSoloNames[k]) which = k;
+        if (which < 0) { std::fprintf(stderr, "--solo wants kick, bass, perc, acid, lead, arp, pad, sfx, texture or vocal\n"); return 2; }
+        for (int k = 0; k < kNumParts; ++k) params.set(mb + kSoloMutes[k], k == which ? 0.0f : 1.0f);
     }
 
     const int cb = params.base(Module::Compose);

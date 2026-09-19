@@ -3,6 +3,7 @@
  * @brief Standard MIDI File encoder and decoder.
  */
 #include "phos/Midi.h"
+#include "phos/Sfx.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -95,6 +96,8 @@ int midiChannelOf(Part part)
     case Part::Arp:  return 3;
     case Part::Pad:  return 4;
     case Part::Sfx:  return 5;
+    case Part::Texture: return 6;   // 19.09.2026: the shamanic bed and the voices on their own channels
+    case Part::Vocal:   return 7;
     default: return 15;
     }
 }
@@ -143,13 +146,15 @@ std::vector<uint8_t> encodeMidi(const Score& score)
         tracks.push_back(std::move(ev));
     }
 
-    // One track per part that has notes.
+    // One track per part that has notes. Effect notes go to the track of the part their type belongs
+    // to (Sfx.h, routedPart): the composer writes the shamanic bed and the voices as Part::Sfx notes,
+    // and a producer opening the file wants them on tracks of their own.
     for (int p = 0; p < kNumParts; ++p) {
         std::vector<RawEvent> ev;
         const uint8_t ch = static_cast<uint8_t>(midiChannelOf(static_cast<Part>(p)));
         bool portamento = false;
         for (const NoteEvent& n : score.notes) {
-            if (static_cast<int>(n.part) != p) continue;
+            if (static_cast<int>(routedPart(n)) != p) continue;
             const int64_t on = toTick(n.beat);
             const int64_t off = std::max(on + 1, toTick(n.beat + static_cast<double>(n.length)));
             // Slides: the notes overlap already; CC 65 (portamento) is on from the first sliding note

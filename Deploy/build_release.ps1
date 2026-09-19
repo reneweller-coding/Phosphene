@@ -196,7 +196,7 @@ Step "reference render (64 bars, both neural models)" {
     $refDir = Join-Path $buildDir "refdata"
     if (Test-Path $refDir) { Remove-Item $refDir -Recurse -Force }
     New-Item -ItemType Directory -Force $refDir | Out-Null
-    foreach ($f in @("library.phoswt", "melody.phosmdl", "bass.phosmdl")) {
+    foreach ($f in @("library.phoswt", "melody.phosmdl", "bass.phosmdl", "voices.phosvx")) {
         Copy-Item (Join-Path $root "Core\data\$f") $refDir -Force
     }
     Push-Location $refDir
@@ -310,9 +310,10 @@ Step "stage" {
     $dataDir = Join-Path $root "Core\data"
     $res = Join-Path $stage "Phosphene.vst3\Contents\Resources"
     New-Item -ItemType Directory -Force $res | Out-Null
-    foreach ($f in @("library.phoswt", "melody.phosmdl", "bass.phosmdl", "CREDITS-wavetables.md")) {
+    # 19.09.2026: the voice pack (Vocal.h) and its credits travel the same way.
+    foreach ($f in @("library.phoswt", "melody.phosmdl", "bass.phosmdl", "voices.phosvx", "CREDITS-wavetables.md", "CREDITS-voices.md")) {
         Copy-Item (Join-Path $dataDir $f) $stage -Force
-        if ($f -ne "CREDITS-wavetables.md") { Copy-Item (Join-Path $dataDir $f) $res -Force }
+        if ($f -notlike "CREDITS-*") { Copy-Item (Join-Path $dataDir $f) $res -Force }
     }
 
     # The read-me for the portable archive: what each file is and where it has to go for anybody who
@@ -323,7 +324,8 @@ Phosphene $Version
 
 A generator for complete psytrance sets: kick, bass, percussion, acid, leads, arpeggios, pads and
 effects, composed and synthesised from a seed, a style profile and an energy arc. Everything is
-synthesised; there are no samples.
+synthesised except the spoken phrases of voices.phosvx (public-domain and free-to-reuse recordings,
+credited in CREDITS-voices.md).
 
 WHAT IS HERE
 
@@ -335,7 +337,8 @@ WHAT IS HERE
                        --list prints every parameter, --version says which build this is.
   library.phoswt       the wavetable pack, and
   melody.phosmdl       the two learned models the composer can use.
-  bass.phosmdl         KEEP THESE THREE BESIDE Phosphene.exe AND phos_render.exe. Without them the
+  bass.phosmdl         KEEP THESE BESIDE Phosphene.exe AND phos_render.exe (and voices.phosvx, the
+                       spoken phrases -- without it the voices speak only in synthetic formants). Without them the
                        engine falls back to six built-in wavetables and to the Markov composer. The
                        Set tab says which pitch model each part is really using and the choosers mark
                        an entry whose file is missing, so you can see it -- phos_render only says it

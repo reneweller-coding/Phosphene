@@ -1,0 +1,281 @@
+[
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 11 - We have a lift-off.flac",
+  "text": "Ignition sequence starts",
+  "start": 0.0,
+  "end": 1.76,
+  "last_word": 1.18,
+  "first_word_end": 0.58
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 11 - We have a lift-off.flac",
+  "text": "We have a lift-off",
+  "start": 12.5,
+  "end": 13.62,
+  "last_word": 13.22,
+  "first_word_end": 12.62
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 11 - One small step.flac",
+  "text": "That's one small step for man",
+  "start": 3.88,
+  "end": 6.44,
+  "last_word": 6.04,
+  "first_word_end": 4.5
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 13 - Houston weve had a problem.flac",
+  "text": "We have a problem here",
+  "start": 1.04,
+  "end": 2.22,
+  "last_word": 1.96,
+  "first_word_end": 1.36
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 8 - Merry Christmas.flac",
+  "text": "All of you on the good Earth",
+  "start": 9.6,
+  "end": 11.58,
+  "last_word": 11.36,
+  "first_word_end": 10.18
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\JFK - Return him safely to Earth.flac",
+  "text": "Landing a man on the moon",
+  "start": 7.14,
+  "end": 8.48,
+  "last_word": 8.2,
+  "first_word_end": 7.52
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\JFK - We choose the moon.flac",
+  "text": "We choose to go to the moon",
+  "start": 0.0,
+  "end": 1.8,
+  "last_word": 1.52,
+  "first_word_end": 0.28
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\JFK - We choose the moon.flac",
+  "text": "The best of our energies and skills",
+  "start": 12.64,
+  "end": 15.28,
+  "last_word": 14.8,
+  "first_word_end": 12.84
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Mercury 6 - Godspeed.flac",
+  "text": "Godspeed, John Glenn",
+  "start": 0.0,
+  "end": 1.66,
+  "last_word": 1.36,
+  "first_word_end": 0.28
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Mercury 6 - Zero G.flac",
+  "text": "I feel fine",
+  "start": 2.24,
+  "end": 3.1,
+  "last_word": 2.66,
+  "first_word_end": 2.38
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Mercury 6 - Zero G.flac",
+  "text": "Capsule is turning around",
+  "start": 3.34,
+  "end": 4.56,
+  "last_word": 4.1,
+  "first_word_end": 3.62
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Mercury 9 - Cooper comments.flac",
+  "text": "This is a new and strange environment",
+  "start": 0.0,
+  "end": 1.78,
+  "last_word": 1.16,
+  "first_word_end": 0.34
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Mercury 9 - Cooper comments.flac",
+  "text": "Suddenly finding yourself in orbit",
+  "start": 3.78,
+  "end": 5.32,
+  "last_word": 5.02,
+  "first_word_end": 4.1
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Mercury 4 - Clock started.flac",
+  "text": "Reading you loud and clear",
+  "start": 4.34,
+  "end": 5.34,
+  "last_word": 5.08,
+  "first_word_end": 4.48
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Computers are in control.flac",
+  "text": "Four computers now have primary control",
+  "start": 0.44,
+  "end": 2.34,
+  "last_word": 1.96,
+  "first_word_end": 0.56
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - On its way to orbit.flac",
+  "text": "Still on its way to orbit",
+  "start": 1.66,
+  "end": 2.94,
+  "last_word": 2.76,
+  "first_word_end": 2.16
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - STS-26 liftoff.flac",
+  "text": "Americans return to space",
+  "start": 6.82,
+  "end": 8.28,
+  "last_word": 8.0,
+  "first_word_end": 7.24
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Countdown to launch.flac",
+  "text": "All three engines up and burning",
+  "start": 6.92,
+  "end": 8.94,
+  "last_word": 8.64,
+  "first_word_end": 7.42
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Countdown to launch.flac",
+  "text": "America will continue the dream",
+  "start": 17.74,
+  "end": 19.48,
+  "last_word": 19.22,
+  "first_word_end": 18.06
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Landing comments.flac",
+  "text": "Having fired the imagination of a generation",
+  "start": 5.44,
+  "end": 8.2,
+  "last_word": 7.62,
+  "first_word_end": 6.04
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Launch commentary.flac",
+  "text": "A sentimental journey into history",
+  "start": 11.82,
+  "end": 13.44,
+  "last_word": 13.06,
+  "first_word_end": 11.9
+ },
+ {
+  "category": 1,
+  "file": "LoC\\Screening-Room\\The-Atom-Comes-to-Town_mbrs02319804_011_00-28-33.flac",
+  "text": "There are no bounds",
+  "start": 0.0,
+  "end": 0.8,
+  "last_word": 0.44,
+  "first_word_end": 0.08
+ },
+ {
+  "category": 1,
+  "file": "LoC\\Screening-Room\\The-Atom-Comes-to-Town_mbrs02319804_011_00-28-33.flac",
+  "text": "Atomic energy can bring us electric power",
+  "start": 5.92,
+  "end": 8.86,
+  "last_word": 8.32,
+  "first_word_end": 6.16
+ },
+ {
+  "category": 1,
+  "file": "LoC\\Screening-Room\\The-Atom-Comes-to-Town_mbrs02319804_006_00-17-07.flac",
+  "text": "The atom has come",
+  "start": 0.0,
+  "end": 0.76,
+  "last_word": 0.56,
+  "first_word_end": 0.12
+ },
+ {
+  "category": 1,
+  "file": "LoC\\Screening-Room\\The-Atom-Comes-to-Town_mbrs02319804_005_00-16-53.flac",
+  "text": "The healing power of the atom",
+  "start": 2.32,
+  "end": 3.7,
+  "last_word": 3.48,
+  "first_word_end": 2.48
+ },
+ {
+  "category": 1,
+  "file": "LoC\\Tony-Schwartz\\Instant-information_1306665_005_00-02-29.flac",
+  "text": "The increase of consciousness during this electric phase",
+  "start": 1.26,
+  "end": 4.48,
+  "last_word": 4.16,
+  "first_word_end": 1.44
+ },
+ {
+  "category": 1,
+  "file": "LoC\\Tony-Schwartz\\Tony-Schwartz-discusses-his-agoraphobia-with-an-unidentified-man_191870_001_00-04-02.flac",
+  "text": "I bring you back to reality",
+  "start": 1.7,
+  "end": 3.18,
+  "last_word": 2.66,
+  "first_word_end": 1.82
+ },
+ {
+  "category": 1,
+  "file": "LoC\\Tony-Schwartz\\Tony-Schwartz-discusses-his-agoraphobia-with-an-unidentified-man_191870_005_00-09-52.flac",
+  "text": "You are going off to another world so fast",
+  "start": 7.76,
+  "end": 10.36,
+  "last_word": 10.04,
+  "first_word_end": 8.34
+ },
+ {
+  "category": 1,
+  "file": "LoC\\Tony-Schwartz\\Tony-Schwartz-discusses-his-agoraphobia-with-an-unidentified-man_191870_006_00-18-20.flac",
+  "text": "You may know that that's not real",
+  "start": 0.0,
+  "end": 1.4,
+  "last_word": 1.08,
+  "first_word_end": 0.1
+ },
+ {
+  "category": 1,
+  "file": "LoC\\Screening-Room\\Communism_mbrs01964101_012_00-30-23.flac",
+  "text": "Over the mind of man",
+  "start": 14.3,
+  "end": 16.7,
+  "last_word": 16.34,
+  "first_word_end": 15.08
+ },
+ {
+  "category": 1,
+  "file": "LoC\\Screening-Room\\Negro-colleges-in-war-time_2020600704_008_00-03-07.flac",
+  "text": "Celestial navigation",
+  "start": 18.82,
+  "end": 19.74,
+  "last_word": 19.22,
+  "first_word_end": 19.22
+ }
+]

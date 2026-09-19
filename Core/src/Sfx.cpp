@@ -9,7 +9,10 @@
 
 namespace phos {
 
-const char* const kSfxTypeNames[kNumSfxTypes] = { "Riser", "Downlifter", "Impact", "Sweep", "Formant Shot", "Reverse Swell", "Zap" };
+const char* const kSfxTypeNames[kNumSfxTypes] = { "Riser", "Downlifter", "Impact", "Sweep", "Formant Shot", "Reverse Swell", "Zap",
+                                                  "Squelch", "Bubble", "Stutter", "Sub Drop", "Reverse Crash",
+                                                  "Formant Voice", "Alien Chatter", "Spoken Word", "Voice Chop",
+                                                  "Singing Bowl", "Didgeridoo", "Jaw Harp" };
 
 namespace {
 constexpr double kPiD = 3.141592653589793;
@@ -28,7 +31,7 @@ constexpr double kPiD = 3.141592653589793;
  * the drop, and the short ear candy (sweeps, swells, zaps) about 8 to 10 dB under it, heard as a
  * detail. The measurement and its targets are in docs/PLAN.md (round "mix-foundation").
  */
-constexpr float kTypeGainDb[kNumSfxTypes] = {
+constexpr float kTypeGainDb[] = {
     -2.0f,    // Riser
     -8.0f,    // Downlifter
     +3.0f,    // Impact
@@ -36,7 +39,17 @@ constexpr float kTypeGainDb[kNumSfxTypes] = {
     +1.0f,    // Formant shot
     -2.0f,    // Reverse swell
     +2.0f,    // Zap
+    // 19.09.2026, round "fx-psychedelia": short ear candy, heard as a detail like the zap (docs/PLAN.md
+    // has the measurement against the mix). The types of the other two generators carry 0 here.
+    +0.0f,    // Squelch
+    +0.0f,    // Bubble
+     0.0f,    // Stutter (the engine's buffer repeat; this generator stays silent)
+     0.0f,    // Sub drop (its own level, sfx.sub_level)
+    -4.0f,    // Reverse crash
+     0.0f, 0.0f, 0.0f, 0.0f,   // Vocal types
+     0.0f, 0.0f, 0.0f,         // Texture types
 };
+static_assert(sizeof(kTypeGainDb) / sizeof(kTypeGainDb[0]) == kNumSfxTypes, "one gain per effect type");
 /** @brief Band-pass output of an SVF at unity gain in the centre. */
 inline float bandPass(Svf& f, float x)
 {
@@ -72,6 +85,7 @@ void Sfx::update(const float* v, int keyRoot)
     vowel_ = v[sfx::Vowel];
     swellDecay_ = v[sfx::SwellDecay] * 0.001f;
     width_ = v[sfx::Width];
+    subLevel_ = dbToGain(v[sfx::SubLevel]);
 }
 
 int Sfx::active() const
@@ -83,6 +97,8 @@ int Sfx::active() const
 
 void Sfx::trigger(SfxType type, int samples, float velocity, double late)
 {
+    // The stutter is the engine's, and the voices and the bed have generators of their own.
+    if (type == SfxType::Stutter || sfxTypePart(type) != Part::Sfx || type >= SfxType::Count) return;
     int slot = 0;
     for (int i = 0; i < kVoices; ++i) {
         if (!voice_[i].on) { slot = i; break; }
@@ -101,7 +117,25 @@ void Sfx::trigger(SfxType type, int samples, float velocity, double late)
     if (type == SfxType::Impact) seconds = std::max(seconds, static_cast<double>(impactDecay_));
     if (type == SfxType::FormantShot) seconds = clampv(seconds, 0.08, 0.6);
     if (type == SfxType::Zap) seconds = std::max(seconds, 0.25);
+    if (type == SfxType::Squelch) seconds = clampv(seconds, 0.06, 0.5);
+    if (type == SfxType::Bubble) seconds = clampv(seconds, 0.12, 0.8);
+    if (type == SfxType::SubDrop) seconds = std::max(seconds, 1.2);
     v.length = std::max<long long>(1, static_cast<long long>(seconds * sr_));
+    if (type == SfxType::Bubble) {
+        // Three to seven bubbles spread over the first two thirds of the event, each drawn once here
+        // from the voice's own stream: onset, start frequency (1.2 .. 4 kHz), decay (12 .. 40 ms) and a
+        // rise of 60 .. 160 % of the start frequency per second of its life -- small bubbles are high and
+        // short, which the draw keeps by tying the decay to the frequency.
+        v.bubbles = 3 + v.rng.below(5);
+        for (int b = 0; b < v.bubbles; ++b) {
+            const double u = v.rng.uniform();
+            v.bubT[b] = b == 0 ? 0.0 : (2.0 / 3.0) * seconds * v.rng.uniform();
+            v.bubF[b] = 1200.0 * std::pow(4000.0 / 1200.0, u);
+            v.bubTau[b] = 0.040 - 0.028 * u;
+            v.bubRise[b] = (0.6 + v.rng.uniform()) / (4.0 * v.bubTau[b]);   // over ~4 tau the pitch rises 0.6 .. 1.6 x
+            v.bubPh[b] = 0.0;
+        }
+    }
     const float sr = static_cast<float>(sr_);
     for (Svf* f : { &v.hpL1, &v.hpL2, &v.hpR1, &v.hpR2 }) f->setQ(150.0f, 0.70710678f, sr);
     if (type == SfxType::FormantShot) {
@@ -192,11 +226,67 @@ float Sfx::voiceSample(Voice& v, float& pan)
         panRate = 0.0;
         break;
     }
+    case SfxType::Squelch: {
+        // A saw two octaves over the key's root (a bright, harmonic-rich source) through a resonant band
+        // pass that sweeps from 3 kHz up to 3 * 2^1.3 = 7.4 kHz and back on a half sine: the squelch is
+        // the resonance, so the resonance is what has to sit in the 3 .. 8 kHz pocket (a sweep from
+        // 1.4 kHz measured 29 % of the power there, the saw's fundamental taking the rest). A small
+        // upward pitch blip in the first 30 ms makes it liquid rather than a filter sweep.
+        const double hz = 4.0 * rootHz * (1.0 + 0.5 * std::exp(-t / 0.03));
+        v.saw1.set(hz, sr_, 0.0f, 0.5f);
+        const double sweep = std::sin(kPiD * x);
+        v.bp.setQ(static_cast<float>(3000.0 * std::pow(2.0, 1.3 * sweep)), static_cast<float>(4.0 + 6.0 * resonance_), sr);
+        s = bandPass(v.bp, v.saw1.next());
+        amp = static_cast<float>(std::min(1.0, t / 0.002) * std::exp(-2.0 * x));
+        panRate = 0.0;
+        break;
+    }
+    case SfxType::Bubble: {
+        // van den Doel's bubble: a decaying sinusoid whose frequency rises, f(t) = f0 (1 + rise t).
+        s = 0.0f;
+        for (int b = 0; b < v.bubbles; ++b) {
+            const double tb = t - v.bubT[b];
+            if (tb < 0.0 || tb > 6.0 * v.bubTau[b]) continue;
+            v.bubPh[b] += v.bubF[b] * (1.0 + v.bubRise[b] * tb) / sr_;
+            if (v.bubPh[b] >= 1.0) v.bubPh[b] -= 1.0;
+            s += static_cast<float>(std::sin(2.0 * kPiD * v.bubPh[b]) * std::min(1.0, tb / 0.001) * std::exp(-tb / v.bubTau[b]));
+        }
+        amp = 0.6f;
+        panRate = 2.0;
+        break;
+    }
+    case SfxType::SubDrop: {
+        // A sine falling from 110 Hz to 32 Hz with a time constant of 0.3 s; its phase is integrated, so
+        // the glide never steps. It is the effect that lives where the kick lives -- processSplit sends
+        // it to the engine on its own output, which ducks it under every kick (Engine.cpp).
+        const double f = 32.0 + 78.0 * std::exp(-t / 0.3);
+        v.sinePh += f / sr_;
+        if (v.sinePh >= 1.0) v.sinePh -= 1.0;
+        s = static_cast<float>(std::sin(2.0 * kPiD * v.sinePh));
+        const double lenS = static_cast<double>(v.length) / sr_;
+        amp = static_cast<float>(std::min(1.0, t / 0.005) * std::exp(-2.5 * t / lenS));
+        panRate = 0.0;
+        break;
+    }
+    case SfxType::ReverseCrash: {
+        // A cymbal wash: noise above 5 kHz, ring-modulated by two inharmonic square waves (the metallic
+        // partials), under an envelope that rises exponentially -- a reversed crash ends on its beat.
+        v.bp.setQ(7000.0f, 0.8f, sr);
+        const float n = bandPass(v.bp, v.rng.bipolar());
+        v.chordPh[0] += 540.0 / sr_; if (v.chordPh[0] >= 1.0) v.chordPh[0] -= 1.0;
+        v.chordPh[1] += 1173.0 / sr_; if (v.chordPh[1] >= 1.0) v.chordPh[1] -= 1.0;
+        const float sq = (v.chordPh[0] < 0.5 ? 1.0f : -1.0f) * (v.chordPh[1] < 0.5 ? 1.0f : -1.0f);
+        v.lp.set(10000.0f, 0.1f, sr);
+        s = v.lp.lp(n * (0.6f + 0.4f * sq));
+        amp = static_cast<float>(std::exp(-5.0 * (1.0 - x)));
+        panRate = 0.2;
+        break;
+    }
     default: break;
     }
     // Rising effects end on their beat with a short fade; the others end when they have decayed.
     if (v.pos >= v.length) {
-        const bool riseToEnd = v.type == SfxType::Riser || v.type == SfxType::ReverseSwell;
+        const bool riseToEnd = v.type == SfxType::Riser || v.type == SfxType::ReverseSwell || v.type == SfxType::ReverseCrash;
         const double fade = riseToEnd ? 0.02 : 0.005;
         const double over = static_cast<double>(v.pos - v.length) / sr_;
         amp *= static_cast<float>(std::max(0.0, 1.0 - over / fade));
@@ -211,9 +301,27 @@ float Sfx::voiceSample(Voice& v, float& pan)
 
 void Sfx::process(float* L, float* R, int n)
 {
-    for (int i = 0; i < n; ++i) { L[i] = 0.0f; R[i] = 0.0f; }
+    float sub[64];
+    for (int done = 0; done < n; done += 64) {
+        const int m = std::min(64, n - done);
+        processSplit(L + done, R + done, sub, m);
+        for (int i = 0; i < m; ++i) { L[done + i] += sub[i]; R[done + i] += sub[i]; }
+    }
+}
+
+void Sfx::processSplit(float* L, float* R, float* sub, int n)
+{
+    for (int i = 0; i < n; ++i) { L[i] = 0.0f; R[i] = 0.0f; sub[i] = 0.0f; }
     for (Voice& v : voice_) {
         if (!v.on) continue;
+        if (v.type == SfxType::SubDrop) {
+            // Mono and unfiltered: the engine puts it in the centre with kick and bass.
+            for (int i = 0; i < n && v.on; ++i) {
+                float pan = 0.0f;
+                sub[i] += voiceSample(v, pan) * level_ * subLevel_;
+            }
+            continue;
+        }
         for (int i = 0; i < n && v.on; ++i) {
             float pan = 0.0f;
             const float s = voiceSample(v, pan) * level_;

@@ -4363,6 +4363,156 @@ Bass kosten jetzt 0,74 % eines Kerns (`phos_vectest`, AVX2).
 für das Anhängen nötig, sonst unberührt), `Tests/selftest.cpp`, neu `Tools/ref_bass.py`. Nicht angefasst:
 `Engine.cpp`, `Acid.*`, `Kick.cpp`, `DiodeLadder.h`, `Ladder.h`, `Halfband.h`.
 
+**19.09.2026, Psychedelische Schicht: Effekte, FX-Modulation, schamanisches Bett, Stimmen**
+
+Anlass: der Nutzer vermisste „einiges an Effekten“ — FM-Zaps und Glitches auf freien Sechzehnteln, Squelches
+und Blasen, Sub-Drops unter Impacts, Reverse-Crashes, Sprachsamples mit Delay, Flanger und Frequency Shifter,
+dazu ein organisches, schamanisches Bett. Gemessen am Hör-Seed 864566672 (Standardregler, Master-Dynamik aus,
+K-gewichtet); Skripte in `PhospheneWork\scratch\fx-psychedelia` (nicht im Repo), neu im Repo
+`Tools/voice_pack.py` und `Tools/voice_selection.json`.
+
+*Neue Effekttypen* (`SfxType` angehängt, MIDI-Noten 55–66; `sfxTypePart` sagt, welcher Generator spielt):
+Squelch (Sägezahn durch einen resonanten Bandpass, der in einer halben Sinuswelle von 3 auf 7,4 kHz und
+zurück fährt, mit kurzem Tonhöhen-Blip), Bubble (drei bis sieben Blasen: abklingende Sinus mit *steigender*
+Frequenz — die Form des Modells von van den Doel 2005, eigene Konstanten), Stutter (die Engine wiederholt die
+erste Sechzehntel/Zweiunddreißigstel des Melodie-Busses Acid+Lead+Arp für die Dauer des Ereignisses, im letzten
+Viertel halbiert; die Sends behalten das Live-Signal, die Hallfahnen laufen weiter), Sub Drop (Sinus 110 → 32 Hz,
+τ 0,3 s, mono, als einziger Effekt unter 140 Hz — eigener Ausgang, eigener Ducker, den jede Kick auslöst:
+`sfx.sub_duck` = 1 heißt Stille während Attack + Hold), Reverse Crash (Rauschen über 5 kHz, ringmoduliert mit
+zwei unharmonischen Rechtecken, exponentiell ansteigend bis auf den Zielschlag). Dazu die Stimmen und das Bett
+als eigene Parts.
+
+*Neue Parts* `Texture` und `Vocal` (an `Part` angehängt, eigene MIDI-Spuren auf Kanal 7 und 8, eigene
+Mischpultzüge `mix.texture_*`, `mix.vocal_*`, neue Module `texture`, `vocal`, `psyfx` nach `cue`). Der Composer
+schreibt weiter alle Effekte als `Part::Sfx`-Noten (Melody.cpp, nicht angefasst); Engine und MIDI-Export routen
+nach Typ.
+
+*Schamanisches Bett* (Texture.h): Klangschale modal — die Biegemoden eines dünnen Rings n(n²−1)/√(n²+1),
+n = 2..5 (Rayleigh 1894), Verhältnisse 1 : 2,83 : 5,42 : 8,77, jede Mode ein Dublett 0,2–0,4 % auseinander
+(die Schwebung; die beiden Partialtöne eines Dubletts liegen links und rechts); Didgeridoo additiv mit starken
+ungeraden Harmonischen und einem Formanten, der einem Achtel-Akzentmuster folgt, Atemzug alle zwei Takte;
+Maultrommel als hell summende Zunge, deren Mundresonanz (Q 10) bei jedem Anschlag die Richtung wechselt.
+Tiefenregel: Didgeridoo und Maultrommel enden in 36 dB/Okt. Hochpässen bei 200 bzw. 300 Hz (mit 24 dB/Okt. bei
+150 Hz lagen noch −23 dB unter 140 Hz — rot gesehen).
+
+*Stimmen* (Vocal.h): 31 Sprachphrasen aus dem AmbientSynth-Archiv (21 NASA, gemeinfrei; 10 Library of
+Congress Citizen DJ: Screening Room gemeinfrei, Tony Schwartz zur Wiederverwendung freigegeben), 59,6 s,
+16 kHz, 4-Bit-IMA-ADPCM: **478 740 Byte** mehr im APK (die Wavetables: 750 264). Ausgewählt über ein
+Wort-Transkript (faster-whisper base, CPU), jede Phrase nach dem Packen unabhängig dekodiert und neu
+transkribiert; eine Edison-Walze fiel dabei durch. Nicht verwendet, mit Begründung in
+`Core/data/CREDITS-voices.md`: Radio/Quiet-Please (nur EU-Frist + Uploader-Tag, US-Status offen), Joe Smith
+(erkennbare, oft lebende Musikmanager — Anschein einer Befürwortung), Variety-Stage/Edison (Sketche, Lieder),
+NASA-Klänge ohne Sprache. Behandlung: Bandpass 250 Hz–4,5 kHz, Sättigung, Tonhöhe per Resampling (0, −3, −1,5,
++1,5 Halbtöne), Delay-Throw auf das letzte Wort (Marke aus dem Transkript; links punktierte Achtel, rechts
+Viertel, 300 Hz–3,5 kHz in der Schleife), Send in die Modulationskette. Synthetisch: Formantstimme (Sägezahn mit
+Glottis-Neigung durch drei Formantfilter nach Peterson & Barney 1952, drei Vokale, Quinte auf/Quarte ab,
+Vibrato) und Alien-Geplapper (Silben 45–90 ms, Formanten um ein Drittel höher, Ringmodulation 400–1100 Hz).
+Einstimmig: eine neue Phrase übernimmt, die alte blendet in 10 ms aus.
+
+*FX-Bus-Modulation* (PsyFx.h): Flanger (0,3–6 ms, Feedback), Phaser (sechs Allpässe), Frequency Shifter
+(zwei Allpassketten mit 90° Differenz — gemessen innerhalb 0,69° von 50 Hz bis 20 kHz, Spiegelband 49 dB
+unter dem Nutzband). Alle LFO-Phasen aus dem absoluten Beat: taktsynchron, Takt-allein = Takt-in-Folge,
+blockgrößenunabhängig. Als Insert auf dem SFX-Zug und als Send für Bett und Stimmen. Automation pro Sektion
+(`sectionAutomation`, Signatur unverändert: Drop öffnet den Flanger und setzt den Shift auf dem Downbeat auf
+null, Build zieht den Shift über seine ganze Länge auf +60..120 Hz, Break öffnet den Phaser und lässt den Shift
+um ±10..40 Hz driften) und pro Ereignis (Riser zieht den Shifter mit bis +150 Hz × `psyfx.motion`, Downlifter
+−120 Hz, Sweeps öffnen den Flanger, jede Phrase verstimmt den Send um ±8..25 Hz).
+
+*Platzierung* (Form.cpp, `placePsychedelia`, aus eigenen Zufallsströmen — nichts Bisheriges verschiebt sich):
+Sub Drop unter jedem Impact und am Cut jedes Breaks; Reverse Crash in jeden Drop ohne Build davor und in jede
+16-Takt-Gruppe eines Drops (halbe Wahrscheinlichkeit), nie in einen Build (das PDB-Vakuum bleibt leer).
+Ohrenschmaus am Ende jeder Zwei-Takt-Gruppe, die kein Acht-Takt-Ende ist, auf einer freien Sechzehntel
+(2,75 / 3,25 / 3,5 / 3,75 im letzten Takt, nie auf einem Schlag): Squelch, Blasen, Geplapper oder Zap; an
+Vier-Takt-Enden größere Gesten (Stutter nur in Groove und Drop, Blasenschwarm, Squelch-Paar, längeres
+Geplapper). Dichte je Sektion Drop 0,8 / Groove 0,6 / Outro, Break 0,3 / Intro 0,25, mal `sfx_amount`, mal einer
+Trackdichte 0,7–1,3; Palette je Track. Stimmen im Intro, nach dem Cut jedes Breaks und dann alle acht Takte,
+auf dem ersten Downbeat eines Builds, gelegentlich ein Chop in einem Drop — nie zwei näher als vier Takte.
+Bett: Intro (Drone + Schalen), Break (Schale nach dem Cut, dann auf etwa jeder zweiten Vier-Takt-Linie; Drones
+bis zwölf Takte, einer je 16 Takte, abwechselnd), Outro, selten Maultrommel in einem langen Groove; nie im Drop
+oder Build.
+
+*Taschen, Pegel, Häufigkeit* (Hör-Seed, 136 Takte, Master-Dynamik aus; Pegel = lautestes 400-ms-Fenster des
+eigenen Zugs gegen den Rest des Mixes im selben Fenster, K-gewichtet, Median über die Ereignisse; Band = Anteil
+der Leistung des Ereignisses im Stem):
+
+| Klang | Tasche (gemessen) | Pegel gegen den Rest | im 424-Takt-Render |
+|---|---|---|---|
+| Squelch | 87 % in 3–8 kHz (Selbsttest) | Ohrenschmaus-Stufe wie Zap | 15 |
+| Bubble | 57 % 350 Hz–2 kHz, 43 % 2–8 kHz | −8,1 dB | 22 |
+| Stutter | der Melodie-Bus selbst | — (ersetzt, fügt nichts hinzu) | 4 |
+| Sub Drop | 69 % unter 100 Hz, mono, unter der Kick exakt still | +2,6 dB (im Cut, wo sonst fast nichts klingt) | 6 |
+| Reverse Crash | 81 % über 4 kHz | −4 dB Tabelle | 4 |
+| Spoken Word | 84 % 350 Hz–2 kHz | −2,9 dB | 9 |
+| Voice Chop | 85 % 350 Hz–2 kHz | −7,8 dB (im Drop) | 1 |
+| Formant Voice / Alien Chatter | 96 % 350 Hz–2 kHz / 250 Hz–4 kHz 99 % | 0,0 dB (ein Ereignis, im Cut) / −6 dB Tabelle | 1 / 17 |
+| Klangschale | 92 % 350 Hz–2 kHz | −10,4 dB | 18 |
+| Didgeridoo / Maultrommel | 90 % 350 Hz–2 kHz, < 140 Hz −45 / −56 dB | −10,1 dB | 9 / 1 |
+
+Vorher stand das Bett 11–13 dB **über** dem Rest eines Intros/Breaks und die gesprochene Phrase auf
+−0,9 dB — beide per Pegelkonstante (`kBowlGain`, `kDroneGain`, `vocalTypeGain`) zurückgenommen. Der Downlifter
+(+10 dB gegen den Rest) liest sich so hoch, weil der Rest im Cut fast stumm ist; `testSfxLevel` misst ihn wie
+bisher gegen den Drop davor: −11,9 dB (vorher −11,6).
+
+*Prüfungen*, neu `testPsychedelia` (14 Checks): Hilbert-Paar in Quadratur; Shifter verschiebt, Spiegel > 35 dB
+unter; Flanger-Verzögerung am Beat bei 145 und 120 BPM gleich (14,40 / 205,92 Samples wie die Formel);
+Phaser löscht bei 200 Hz (−114,7 dB), Identität bei Mix 0; Stutter-Slices sampelgenau (Rampe als Eingang);
+Taschen und Tiefenregel je Klang; Klangschale in Rayleighs Moden (> 100 dB über dem Zwischenraum); Sub Drop
+mono und unter jeder Kick −3000 dB (exakt null); Stimmenpaket (31 Phrasen, ADPCM-Vektor 11/−19/−15 von Hand
+gerechnet, fehlendes Paket: nur die Sprachtypen verstummen); eine Stimme zugleich, Throw nur auf dem letzten
+Wort; Platzierung über acht Tracks; Takt allein = Takt in Folge und MIDI-Routing; Blockgrößen 37 und 512
+bitgleich mit allen neuen Generatoren; Automation pro Ereignis und Sektion. Angepasst (je begründet im Code):
+`testSfx` nimmt den Sub Drop aus der 140-Hz-Prüfung und erlaubt die Phrase auf dem ersten Downbeat eines
+Builds; `testSfxLevel` und `testMixBalance` (a2) schalten die zwei neuen Züge mit stumm; `testParams` zählt die
+drei neuen Module.
+
+*Mutationen* (je eine, gebaut, `testPsychedelia` gelaufen, aus der Kopie zurück, Zeitstempel gesetzt; danach
+`git diff` unverändert):
+
+| Mutation | Wer merkt es |
+|---|---|
+| Hilbert-Paar ohne die Ein-Sample-Verzögerung auf Kette A | (a) 75,6° neben 90°, (b) Spiegel nur 24 dB unter |
+| Stutter ohne Halbierung im letzten Viertel | (e) 404 von 3520 Samples falsch |
+| Kick löst den Sub-Ducker nicht aus | (h) nach der Kick nur 1,5 dB unter dem Pegel dazwischen |
+| Geplapper im Ohrenschmaus hält keinen Abstand zu den Stimmen | (k) 9 Stimmen näher als vier Takte |
+| Ereignis-Bewegung nicht an Chunk-Anfängen ausgewertet | (n) Riser +0,0 statt +52,5 Hz |
+| MIDI-Export routet nicht nach Typ | (l) 22 Noten auf der falschen Spur |
+| Hochpass der Drones auf 120 Hz | (f) Didgeridoo −19 dB, Maultrommel −17 dB unter 140 Hz |
+| Ohrenschmaus auf dem Schlag statt auf freien Sechzehnteln | (k) 61 auf einem Schlag |
+| Sweep nimmt dem Riser den Shift (die erste Fassung, ein gemeinsamer Strang) | (n) +0,0 statt +78,8 Hz |
+
+Drei Mutationen überlebten zuerst, und alle drei waren lehrreich: die Kick-Mutation, weil die Prüfung (h) ihre
+Noten unsortiert in die Engine schob — der Sub Drop kam hinter der letzten Kick und klang nie, 0/0 las sich als
+−3000 dB (die Prüfung verlangt jetzt Pegel zwischen den Kicks); die Abstands-Mutation im Stimmen-Setzer, weil
+die Form die Stimmen ohnehin vier Takte auseinanderhält (äquivalent — ersetzt durch die im Geplapper, wo der
+erste Entwurf wirklich 3 Verstöße hatte); der 24-dB-Hochpass bei 200/300 Hz, weil er die Grenze ebenfalls hält
+(ersetzt durch 120 Hz). Rot vor dem Fix gesehen: Squelch-Tasche (29 % statt ≥ 50 % bei 3–8 kHz, Sweep ab
+1,4 kHz), Drones unter 140 Hz (−23/−24 dB bei 24 dB/Okt. an 150 Hz), Stimmenabstand (3 Verstöße: das Geplapper
+prüfte den Taktanfang statt seines eigenen Beats), Riser-Shift unter dem Sweep (0 Hz), `testParams` (706
+Parameter), `testMixBalance` (a2) und `testSfxLevel` (neue Züge nicht stumm: 0,891 statt 0; Downlifter +3,7 dB).
+
+*Kalibrierung*: `testMixBalance` mit den Werten dieses Zweigs Air −11,95 dB (vorher −11,68), Top −8,63 (−8,40),
+Presence −8,31 (−8,32); mit den Master-Werten (`mix.perc_level` 2, perc1 5 dB, perc8 −1 dB) Air −12,12, Top −8,79,
+Presence −8,45 — beides in den Grenzen. Der Sub Drop hebt das Bezugsband 40–140 Hz und senkt so alle Verhältnisse
+ein wenig. Breite: Low-Mid −9,48, Mid −6,15, Presence −7,50, Air −9,71 dB (vorher −9,38 / −6,09 / −7,67 / −9,97).
+
+*Dateien.* Neu: `Core/include/phos/{PsyFx,Texture,Vocal}.h`, `Core/src/{PsyFx,Texture,Vocal}.cpp`,
+`Core/data/voices.phosvx`, `Core/data/CREDITS-voices.md`, `Tools/voice_pack.py`, `Tools/voice_selection.json`.
+Geändert: `Sfx.h/.cpp`, `Form.cpp`, `Engine.h/.cpp`, `Score.h/.cpp`, `Midi.cpp`, `Params.h/.cpp` (nur `sfx.*`
+und `mix.*` angehängt, drei Module angehängt), `Core/CMakeLists.txt`, `Tests/selftest.cpp`, Verpackung
+(`Plugin/CMakeLists.txt`, `Quest/build_apk.ps1`, `Quest/src/main.cpp`, `Deploy/build_release.ps1`,
+`Deploy/Phosphene.iss`). Außerhalb der Liste: `WaveTableFile.h/.cpp` (ein Getter `waveTableSearchPath()`,
+damit das Stimmenpaket neben den Wavetables gefunden wird), `Tools/render/main.cpp` (`--solo texture|vocal`,
+an `kNumParts` gebunden), `Tests/CMakeLists.txt` (Paket neben die Testbinaries),
+`Tools/release/check_package.ps1` (Paket in Prüfung A/B/C). `Composer.cpp`, `Melody.cpp`, Kick/Bass/Acid:
+unberührt.
+
+*Offen / Haken für den Composer.* (1) `composeSfxBar` (Melody.cpp) könnte `routedPart()` setzen, dann trüge die
+Partitur Texture/Vocal direkt statt als Sfx-Noten. (2) `makeFormSfx` bekommt nur `compose.sfx_amount`; eigene
+Regler für Stimmen- und Bettdichte bräuchten eine Zeile im Composer. (3) Der Tonart-Impact, den
+`Composer::transitionBar` an jeden Trackanfang setzt, bekommt keinen Sub Drop (die Form kennt ihn nicht).
+(4) Die Phrase wählt die Engine aus der Beat-Position des Ereignisses; ein Composer-Feld (Lane oder Velocity)
+ließe den Seed wählen.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

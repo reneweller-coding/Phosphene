@@ -28,6 +28,10 @@ constexpr uint64_t kSaltGroup   = 0x47524F5550000003ull;
 constexpr uint64_t kSaltSfx     = 0x5346580000000004ull;
 constexpr uint64_t kSaltMode    = 0x4D4F44450000005ull;   ///< the section's borrowed mode (16.09.2026)
 constexpr uint64_t kSaltRide    = 0x5249444500000006ull;   ///< the section's macro ride (16.09.2026)
+constexpr uint64_t kSaltPsy     = 0x5053594300000007ull;   ///< the psychedelic ear candy (19.09.2026)
+constexpr uint64_t kSaltVoice   = 0x564F494300000008ull;   ///< the voices' placement (19.09.2026)
+constexpr uint64_t kSaltBed     = 0x4245440000000009ull;   ///< the shamanic bed's placement (19.09.2026)
+constexpr uint64_t kSaltFxRide  = 0x46585244000000Aull;    ///< the modulation effects' section ride (19.09.2026)
 
 /** @brief Index drawn from non-negative weights. */
 int drawIndex(Rng& r, const double* w, int n)
@@ -609,6 +613,210 @@ BarPlan planBar(const FormPlan& f, const PartAvailability& a, const uint64_t* se
  * Only the effect types the engine already has are used, and Impact and Riser stay reserved for the
  * drop: the self test checks that they sit nowhere else.
  */
+/**
+ * @brief The psychedelic layer's placement (19.09.2026, round "fx-psychedelia"), appended to what
+ *        makeFormSfx placed before; every draw comes from streams of its own, so nothing that was
+ *        placed before moves.
+ *
+ * **Around the transitions.** A sub drop under every impact (the kick's ducker keeps it off the
+ * kick's transient, Engine.h) and at the cut of every breakdown, where kick and bass have just left
+ * the floor to it; a reverse crash into every drop that no buildup announced and into every
+ * sixteen-bar group of a drop (half the time). Never inside a buildup: its last bar is the vacuum.
+ *
+ * **Ear candy on free sixteenths, answering the phrase.** At the end of every two-bar group that is
+ * not an eight-bar end (those keep their own candy): a squelch, a bubble, a burst of alien chatter or
+ * a zap, on one of the free sixteenths of the group's last bar (2.75, 3.25, 3.5, 3.75 beats in --
+ * never on a beat, which is where the kick is). The end of a four-bar group gets a larger gesture:
+ * a stutter of the melodic bus on the last half beat (grooves and drops only), a bubble burst, a
+ * squelch pair or a longer chatter. How likely a group gets one follows the section: drop 0.8,
+ * groove 0.6, outro and breakdown 0.3, intro 0.25 -- times compose.sfx_amount and a density of the
+ * track's own (0.7 .. 1.3); the palette is the track's own like the older candy's.
+ *
+ * **Voices** (never two at once: no two vocal events closer than four bars). A spoken phrase in the
+ * intro and, in longer intros, a formant chant or another phrase; a phrase (or, one time in three, a
+ * chant) after the cut of every breakdown and then one voice per eight bars (spoken, chant or chatter); a phrase on the first
+ * downbeat of a buildup (the "start of builds" -- the only thing added inside a buildup, and eight
+ * or more bars before its pre-drop break); in a drop now and then a voice chop into an eight-bar end.
+ *
+ * **The shamanic bed.** Each track picks its instruments (bowl, didgeridoo, jaw harp; at least one).
+ * Intros carry a drone (didgeridoo, else jaw harp) and bowls on some of the four-bar lines; breakdowns
+ * a bowl after the cut and then on about half of the four-bar lines, and drones of up to twelve bars,
+ * one per sixteen, alternating between the track's two when it has both; outros a bowl every eight bars
+ * and the didgeridoo; a long groove now and then eight bars of jaw harp. Drops never.
+ */
+static void placePsychedelia(FormPlan& f, uint64_t seed, float amount)
+{
+    if (amount <= 0.0f) return;
+    const double bar = kBeatsPerBar;
+    auto add = [&](double beat, float length, SfxType type) {
+        SfxEvent e;
+        e.beat = std::max(0.0, beat);
+        e.length = length;
+        e.type = static_cast<int>(type);
+        f.sfx.push_back(e);
+    };
+    const float pMark = std::min(1.0f, 2.0f * amount);
+
+    // Around the transitions.
+    Rng m;
+    m.seed(mixSeed(seed ^ kSaltPsy, 0));
+    const size_t placed = f.sfx.size();
+    for (size_t k = 0; k < placed; ++k)
+        if (f.sfx[k].type == static_cast<int>(SfxType::Impact)) add(f.sfx[k].beat, 4.0f, SfxType::SubDrop);
+    for (int i = 0; i < f.count; ++i) {
+        const Section& s = f.section[i];
+        const double start = static_cast<double>(s.startBar) * bar;
+        const SectionType prev = i > 0 ? f.section[i - 1].type : SectionType::Intro;
+        if (s.type == SectionType::Break && i > 0 && m.uniform() < pMark) add(start, static_cast<float>(2.0 * bar), SfxType::SubDrop);
+        if (s.type == SectionType::Drop && i > 0 && prev != SectionType::Build && m.uniform() < pMark)
+            add(start - bar, static_cast<float>(bar), SfxType::ReverseCrash);
+        if (s.type == SectionType::Drop)
+            for (int b = 16; b < s.bars; b += 16)
+                if (m.uniform() < 0.5f * amount) add(start + b * bar - 2.0, 2.0f, SfxType::ReverseCrash);
+    }
+
+    // Voices first, so that the chatter of the ear candy can keep its distance from them.
+    std::vector<double> vocalAt;
+    auto voiceFree = [&](double beat) {
+        for (double b : vocalAt) if (std::fabs(b - beat) < 4.0 * bar - 1e-9) return false;
+        return true;
+    };
+    auto addVoice = [&](double beat, float length, SfxType type) {
+        if (!voiceFree(beat)) return;
+        add(beat, length, type);
+        vocalAt.push_back(beat);
+    };
+    Rng v;
+    v.seed(mixSeed(seed ^ kSaltVoice, 0));
+    for (int i = 0; i < f.count; ++i) {
+        const Section& s = f.section[i];
+        const double start = static_cast<double>(s.startBar) * bar;
+        const float u0 = v.uniform(), u1 = v.uniform(), u2 = v.uniform();
+        switch (s.type) {
+        case SectionType::Intro:
+            if (u0 < 0.9f * pMark) addVoice(start + (s.bars >= 16 ? 4.0 : 2.0) * bar, 8.0f, SfxType::SpokenWord);
+            if (s.bars >= 16 && u1 < 0.7f * amount)
+                addVoice(start + 10.0 * bar, 8.0f, u2 < 0.5f ? SfxType::FormantVoice : SfxType::SpokenWord);
+            break;
+        case SectionType::Break: {
+            if (u0 < pMark) addVoice(start + bar, 8.0f, u1 < 0.7f ? SfxType::SpokenWord : SfxType::FormantVoice);
+            for (int b = 9; b + 4 <= s.bars; b += 8) {
+                const float x = v.uniform(), y = v.uniform();
+                if (x >= 0.8f * amount) continue;
+                if (y < 0.45f) addVoice(start + b * bar, 8.0f, SfxType::FormantVoice);
+                else if (y < 0.8f) addVoice(start + b * bar, 8.0f, SfxType::SpokenWord);
+                else addVoice(start + b * bar + 0.5, 4.0f, SfxType::AlienChatter);
+            }
+            break;
+        }
+        case SectionType::Build:
+            if (u0 < 0.8f * amount && s.bars >= 8) addVoice(start, 8.0f, SfxType::SpokenWord);
+            break;
+        case SectionType::Drop:
+            if (u0 < 0.35f * pMark && s.bars >= 16) {
+                const int groups = s.bars / 8 - 1;   // interior eight-bar ends
+                const int g = 1 + static_cast<int>(u1 * static_cast<float>(std::max(1, groups))) % std::max(1, groups);
+                addVoice(start + 8.0 * g * bar - 2.0, 2.0f, SfxType::VoiceChop);
+            }
+            break;
+        default: break;
+        }
+    }
+
+    // Ear candy on free sixteenths.
+    Rng c;
+    c.seed(mixSeed(seed ^ kSaltPsy, 1));
+    const float trackDensity = 0.7f + 0.6f * c.uniform();
+    double wShort[4], wLong[4];   // squelch, bubble, chatter, zap / stutter, bubble burst, squelch pair, chatter
+    for (double& x : wShort) x = c.uniform() < 0.8f ? 1.0 : 0.0;
+    wShort[c.below(4)] = 2.5;
+    for (double& x : wLong) x = c.uniform() < 0.8f ? 1.0 : 0.0;
+    wLong[c.below(4)] = 2.5;
+    static const double kFree[4] = { 2.75, 3.25, 3.5, 3.75 };
+    for (int i = 0; i < f.count; ++i) {
+        const Section& s = f.section[i];
+        if (s.type == SectionType::Build) continue;
+        const double start = static_cast<double>(s.startBar) * bar;
+        const bool groove = s.type == SectionType::Groove || s.type == SectionType::Drop;
+        const float density = s.type == SectionType::Drop ? 0.8f : s.type == SectionType::Groove ? 0.6f
+                            : s.type == SectionType::Intro ? 0.25f : 0.3f;
+        for (int b = 2; b < s.bars; b += 2) {
+            if (b % 8 == 0) continue;   // the eight-bar ends keep their own candy (makeFormSfx)
+            const bool four = b % 4 == 0;
+            const float p = amount * density * trackDensity * (four ? 1.2f : 1.0f);
+            const float roll = c.uniform();
+            const int kind = drawIndex(c, four ? wLong : wShort, 4);
+            const int where = c.below(4);
+            if (roll >= p) continue;
+            const double last = start + (b - 1) * bar;   // the group's last bar
+            if (!four) {
+                switch (kind) {
+                case 0: add(last + kFree[where], 0.5f, SfxType::Squelch); break;
+                case 1: add(last + kFree[where], 1.0f, SfxType::Bubble); break;
+                case 2: if (voiceFree(last + 3.25)) { add(last + 3.25, 0.75f, SfxType::AlienChatter); vocalAt.push_back(last + 3.25); } break;
+                default: add(last + kFree[where], 0.5f, SfxType::Zap); break;
+                }
+            } else {
+                switch (kind) {
+                case 0:
+                    if (groove) add(last + 3.5, 0.5f, SfxType::Stutter);
+                    else add(last + 2.75, 1.0f, SfxType::Bubble);
+                    break;
+                case 1: add(last + 2.75, 1.0f, SfxType::Bubble); add(last + 3.5, 0.5f, SfxType::Bubble); break;
+                case 2: add(last + 3.25, 0.25f, SfxType::Squelch); add(last + 3.75, 0.25f, SfxType::Squelch); break;
+                default: if (voiceFree(last + 2.75)) { add(last + 2.75, 1.25f, SfxType::AlienChatter); vocalAt.push_back(last + 2.75); } break;
+                }
+            }
+        }
+    }
+
+    // The shamanic bed.
+    Rng t;
+    t.seed(mixSeed(seed ^ kSaltBed, 0));
+    bool bowl = t.uniform() < 0.65f, didge = t.uniform() < 0.55f, jaw = t.uniform() < 0.5f;
+    if (!bowl && !didge && !jaw) {
+        const int k = t.below(3);
+        bowl = k == 0; didge = k == 1; jaw = k == 2;
+    }
+    for (int i = 0; i < f.count; ++i) {
+        const Section& s = f.section[i];
+        const double start = static_cast<double>(s.startBar) * bar;
+        switch (s.type) {
+        case SectionType::Intro: {
+            const SfxType drone = didge ? SfxType::Didgeridoo : SfxType::JawHarp;
+            if ((didge || jaw) && t.uniform() < pMark) add(start, static_cast<float>((s.bars - 1) * bar), drone);
+            if (bowl) for (int b = 0; b < s.bars; b += 4) if (b == 0 || t.uniform() < 0.7f * pMark) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
+            break;
+        }
+        case SectionType::Break: {
+            // A bowl after the cut, then now and then on a four-bar line: a strike every four bars for
+            // sixty-four bars was one sound too regular to stay in the background.
+            if (bowl) for (int b = 1; b < s.bars - 1; b += 4) if (t.uniform() < (b == 1 ? pMark : 0.55f * pMark)) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
+            // Drones of up to twelve bars from the bar after the cut, one per sixteen bars, alternating
+            // between the track's two drones when it has both: a bed that comes and goes rather than
+            // one sound held for a minute and a half.
+            if (didge || jaw) {
+                bool useDidge = didge;
+                for (int b = 1; b + 5 <= s.bars - 1; b += 16) {
+                    const int len = std::min(12, s.bars - 1 - b);
+                    if (t.uniform() < pMark) add(start + b * bar, static_cast<float>(len * bar), useDidge ? SfxType::Didgeridoo : SfxType::JawHarp);
+                    if (didge && jaw) useDidge = !useDidge;
+                }
+            }
+            break;
+        }
+        case SectionType::Outro:
+            if (bowl) for (int b = 0; b < s.bars; b += 8) if (t.uniform() < pMark) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
+            if (didge && t.uniform() < pMark) add(start, static_cast<float>(s.bars * bar), SfxType::Didgeridoo);
+            break;
+        case SectionType::Groove:
+            if (jaw && s.bars >= 24 && t.uniform() < 0.3f * amount) add(start + 8.0 * bar, static_cast<float>(8.0 * bar), SfxType::JawHarp);
+            break;
+        default: break;
+        }
+    }
+}
+
 void makeFormSfx(FormPlan& f, uint64_t seed, float amount)
 {
     Rng r;
@@ -684,6 +892,8 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount)
             }
         }
     }
+    // The psychedelic layer of 19.09.2026, from streams of its own (placePsychedelia above).
+    placePsychedelia(f, seed, amount);
     std::stable_sort(f.sfx.begin(), f.sfx.end(), [](const SfxEvent& a, const SfxEvent& b) { return a.beat < b.beat; });
 }
 
@@ -760,6 +970,33 @@ void sectionAutomation(const ParamStore& p, const Section& s, uint64_t seed, dou
              static_cast<float>(rollBars * kBeatsPerBar));
     }
     if (knobs) return;
+
+    // The modulation effects' ride (19.09.2026, round "fx-psychedelia"; PsyFx.h): the section half of
+    // their automation, the event half being the engine's (Engine.h). Per section type, the depth drawn
+    // from the section's own seed: a drop opens the flanger on the SFX bus, a breakdown the phaser and
+    // a slow drift of the shifter, a buildup drags the shifter up over its whole length (with its riser
+    // on top, the event motion), and the drop snaps it back to zero on its downbeat.
+    {
+        const int xb = p.base(Module::PsyFx);
+        Rng fx;
+        fx.seed(mixSeed(seed ^ kSaltFxRide, 0));
+        const float a = fx.uniform(), b = fx.uniform(), sign = fx.below(2) == 0 ? 1.0f : -1.0f;
+        const float perHz = 1.0f / (p.desc(xb + psyfx::ShiftHz).maxValue - p.desc(xb + psyfx::ShiftHz).minValue);
+        const float twoBars = static_cast<float>(2.0 * kBeatsPerBar);
+        float flange = 0.0f, phase = 0.0f, shiftHz = 0.0f, shiftLen = twoBars;
+        switch (s.type) {
+        case SectionType::Drop:   flange = 0.15f + 0.20f * a; shiftLen = 0.0f; break;
+        case SectionType::Groove: flange = 0.10f * a; phase = 0.10f * b; break;
+        case SectionType::Break:  phase = 0.25f + 0.20f * a; shiftHz = sign * (10.0f + 30.0f * b); shiftLen = static_cast<float>(bars * kBeatsPerBar); break;
+        case SectionType::Build:  flange = 0.15f * a; shiftHz = 60.0f + 60.0f * b; shiftLen = static_cast<float>(bars * kBeatsPerBar); break;
+        default:                  phase = 0.15f * a; shiftHz = sign * 8.0f * b; break;
+        }
+        push(xb + psyfx::FlangerMix, flange, beat, twoBars);
+        push(xb + psyfx::PhaserMix, phase, beat, twoBars);
+        if (shiftLen > 0.0f && (s.type == SectionType::Build || s.type == SectionType::Break))
+            push(xb + psyfx::ShiftHz, 0.0f, beat, 0.0f);   // from zero, so the ramp is the section's own
+        push(xb + psyfx::ShiftHz, shiftHz * perHz, beat, shiftLen);
+    }
 
     // The acid's ride. Sections shorter than four bars have nothing to ride on.
     if (bars < 4.0) return;

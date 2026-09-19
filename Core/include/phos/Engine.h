@@ -35,6 +35,20 @@
  * was -0.075, and the same render cut at the estimator's 0.45 fs read -0.182 exact against -0.218
  * estimated -- the whole error lived above the band.
  *
+ * **The psychedelic layer (19.09.2026, round "fx-psychedelia").** Two more strips after the SFX strip:
+ * the shamanic bed (Texture.h) and the voices (Vocal.h). Effect notes are routed by their type
+ * (Sfx.h, sfxTypePart), so the composer still writes every effect as a Part::Sfx note. Three more
+ * things happen around the strips:
+ *  - the SFX strip passes its insert chain (PsyFx.h: flanger, phaser, frequency shifter) before its
+ *    gain, and the texture and vocal strips *send* into a second chain whose return joins the mix --
+ *    both move per section (control events on psyfx.*, Form.cpp) and per event (a riser drags the
+ *    shifter up, a downlifter down, a sweep opens the flanger, a phrase detunes the send);
+ *  - the vocal strip throws its last word into a tempo delay (Vocal.h, the throw weight);
+ *  - a Stutter event repeats a slice of the melodic bus (acid, lead, arp) in place of the live signal;
+ *    the sends keep the live signal, so the reverb tails run on underneath the glitch;
+ *  - the sub drop leaves the SFX generator on its own mono output and joins kick and bass in the
+ *    centre, under a ducker the kick triggers (sfx.sub_duck), so it never sits on a kick transient.
+ *
  * **Threads.** process() runs on the audio thread and never allocates. The push functions may be
  * called from one other thread. Parameters may be written from any thread.
  */
@@ -51,8 +65,12 @@
 #include "phos/Params.h"
 #include "phos/Perc.h"
 #include "phos/Poly.h"
+#include "phos/PsyFx.h"
 #include "phos/Quality.h"
 #include "phos/Score.h"
+#include "phos/TempoDelay.h"
+#include "phos/Texture.h"
+#include "phos/Vocal.h"
 #include <atomic>
 #include <memory>
 #include <vector>
@@ -112,6 +130,14 @@ public:
     const Poly& poly(PolyInstance i) const { return poly_[static_cast<int>(i)]; }
     /** @brief The effect generator, for tests and displays. */
     const Sfx& sfx() const { return sfx_; }
+    /** @brief The shamanic bed, for tests and displays. */
+    const Texture& texture() const { return texture_; }
+    /** @brief The voices, for tests and displays. */
+    const Vocal& vocal() const { return vocal_; }
+    /** @brief True while a stutter replaces the melodic bus (tests). */
+    bool stuttering() const { return stutter_.active(); }
+    /** @brief The SFX strip's modulation chain (tests: the event motion in force). */
+    const PsyFxChain& sfxChain() const { return sfxFx_; }
     /** @brief Samples by which the output lags the events (the limiter's lookahead; 0 when it is off). */
     int latencySamples() const { return limiterOn_ ? limiter_.latency() : 0; }
     /** @brief The meter on the master output (audio thread; read it when not processing). */
@@ -191,10 +217,32 @@ private:
     Sfx sfx_;
     std::vector<float> acidL_, acidR_, polyL_[kPolyInstances], polyR_[kPolyInstances], sfxL_, sfxR_;
 
-    /** @brief Channel strips of the parts after kick and bass, in this order. */
-    enum Strip : int { StripPerc = 0, StripAcid, StripLead, StripArp, StripPad, StripSfx, StripCount };
+    Texture texture_;
+    Vocal vocal_;
+    std::vector<float> texL_, texR_, vocL_, vocR_, vocThrow_, subBuf_, throwIn_, sendL_, sendR_;
+
+    /** @brief Channel strips of the parts after kick and bass, in this order (Texture, Vocal appended). */
+    enum Strip : int { StripPerc = 0, StripAcid, StripLead, StripArp, StripPad, StripSfx, StripTexture, StripVocal, StripCount };
     float stripGain_[StripCount] = {};
     float stripRoom_[StripCount] = {}, stripHall_[StripCount] = {};
+    float stripFx_[StripCount] = {};       ///< send into the modulation chain (texture and vocal only)
+
+    PsyFxChain sfxFx_, sendFx_;            ///< the SFX strip's insert, and the send chain
+    float sendReturn_ = 0.7f;              ///< psyfx.return
+    float motion_ = 0.7f;                  ///< psyfx.motion: how far events move the chains
+    /**
+     * @brief The event motion of one chain: which event last moved it, from when and for how long
+     *        (in beats), and how far. Evaluated at every chunk start from the chunk's beat, so the motion
+     *        is a function of the score alone.
+     */
+    struct Motion { double start = 0.0, length = 0.0; float shiftHz = 0.0f, flange = 0.0f; };
+    Motion sfxShift_, sfxFlange_, sendMotion_;   ///< the SFX chain's shift and flanger strands, the send's
+    void applyMotion();
+
+    TempoDelay throw_;                     ///< the vocal's delay throw
+    float throwSend_ = 0.6f;
+    Stutter stutter_;                      ///< buffer repeat of the melodic bus
+    Ducker subDuck_;                       ///< the kick's hold on the sub drop
     Ducker duck_[StripCount];
     Ducker returnDuck_;
     TranceGate gate_[kPolyInstances];
