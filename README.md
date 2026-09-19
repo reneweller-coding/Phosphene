@@ -145,7 +145,7 @@ build/Tools/render/Release/phos_render.exe --minutes 60 --seed 2026 --tracks --s
 corrections and, after the render, the loudness it really played; `--sections` lists every section of
 the set. `--set-file night.phosset` plays a saved set again, `--lock track:3` and `--reroll track:5`
 curate it (the units are set, track, section and lane). `--solo acid` (or kick, bass, perc, lead, arp,
-pad, sfx) mutes everything else. `PHOS_ONLY=testDynamics` runs only the named self-test sections.
+pad, sfx) mutes everything else. `phos_selftest --only testDynamics` runs only the named self-test sections.
 `--list` prints every parameter. `python Tools/inspect_wav.py out/loop.wav --bpm 145` draws the
 render (waveform, one beat, spectrogram) and prints where in the beat the sub band is occupied.
 
@@ -172,8 +172,19 @@ the Quest level costs 16.9 % less for an eight-minute set with every part (7.2 %
 ## Tests
 
 ```bash
-ctest --test-dir build -C Release
+ctest --test-dir build -C Release -j 6 --output-on-failure   # the whole suite, six at a time
+ctest --test-dir build -C Release -L quick -j 6              # smoke run: the sections of a few seconds
+ctest --test-dir build -C Release -R selftest.testBassRhythm # one self-test section
 ```
+
+Every self-test section is a ctest test of its own, `selftest.<name>`, taken from the `run("name", fn)`
+table in `Tests/selftest.cpp` each time ctest starts (`phos_selftest --list`), so a new section needs no
+CMake edit. Labels: `quick` (a few seconds), `slow`, `audio` (host and VST3 test: never muted, and each
+runs alone because they check real-time behaviour), `full` (the old all-in-one `selftest`, disabled
+unless `PHOS_SELFTEST_FULL=1` is set). `-j 6` leaves most of the machine to whoever works on it; a
+dedicated machine can take more. By hand: `phos_selftest --list`, `phos_selftest --only testA,testB`
+(exact names; `PHOS_ONLY` runs every section whose name occurs in the string, so
+`PHOS_ONLY=testAcidColour` also runs `testAcid`).
 
 `questguard` is the cheapest test in the suite and the only one that looks outside the desktop build:
 it configures the root project for Android with its **default** options, asserts that the JUCE plugin

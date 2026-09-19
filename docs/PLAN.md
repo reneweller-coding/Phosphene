@@ -4670,6 +4670,137 @@ Regler), `E4` 32 Takte Drop von Track 4 mit Counter-Lead.
 `PluginProcessor.h/.cpp`, `PluginEditor.h/.cpp`, `EditorSetTab.cpp`, `PhospheneLookAndFeel.cpp`; `Quest/src/main.cpp`;
 `Tools/render/main.cpp`; `Tests/selftest.cpp`, `Tests/hosttest.cpp`.
 
+**19.09.2026, Parallele Tests**
+
+*Warum.* `phos_selftest` lief jeden Abschnitt nacheinander auf einem Kern: gemessen **1859 s (31 min)** für 404
+Prüfungen (Basis 8e1276d, `PHOS_MUTE=1`, Rechner im Mittel 23 % ausgelastet, darin der Selbsttest der
+Arrangement-Runde). Mit Hosttest (565–628 s allein), VST3-Test, Cue-Prüfung und Vektortests kommt ein ganzes
+`ctest` seriell auf rund 2 550 s (Summe der Einzelzeiten, nicht als ein Lauf gemessen).
+
+*Gebaut.* Jeder Abschnitt der `run("name", fn)`-Tabelle in `main()` ist ein eigener ctest-Test
+`selftest.<name>`, der `phos_selftest --only <name>` startet. Die Liste steht **nirgends in CMake**: ctest liest
+bei jedem Start `Tests/selftest_tests.cmake` (über `TEST_INCLUDE_FILES`, wie `gtest_discover_tests` im
+PRE_TEST-Modus), und das fragt das gebaute Programm (`phos_selftest --list`). Ein neuer Abschnitt der
+Arrangement-Runde ist damit ohne CMake-Änderung ein Test. Zusätzlich vergleicht das Skript die Liste des
+Programms mit den `run(`-Zeilen des Quelltexts; weichen sie ab (Programm älter als Quelle, oder `--list`
+kaputt), erscheint ein roter Test `selftest.TABLE_MISMATCH`. `--only` nimmt ganze Namen: `PHOS_ONLY` bleibt
+wie es war, führt aber jeden Abschnitt aus, dessen Name im String *vorkommt* — `PHOS_ONLY=testAcidColour`
+lief `testAcid` mit, `testMidiKeys` auch `testMidi`, `testWaveTableLibrary` auch `testWaveTable`. Ein Name,
+den die Tabelle nicht hat, zählt als rote Prüfung (sonst „bestanden, nichts geprüft“); zwei kleine Tests
+(`selftest.dispatch.unknown`, `.exact`) halten beides fest. Jeder Abschnitt meldet am Ende `== name: s`.
+
+| Label | Inhalt | Anzahl |
+|---|---|---|
+| `quick` | Abschnitte ≤ 10 s, die zwei Dispatch-Tests, drei Vektorpfade, Quest-Wächter | 50 |
+| `slow` | 19 Abschnitte, Cue-Prüfung, Host- und VST3-Test | 22 |
+| `audio` | Host- und VST3-Test: **nie** unter `PHOS_MUTE` (`ENVIRONMENT_MODIFICATION PHOS_MUTE=unset:`, egal was die Shell gesetzt hat) | 2 |
+| `full` | der alte Gesamtlauf `selftest`, nur mit `PHOS_SELFTEST_FULL=1`, sonst „Disabled“ | 1 |
+
+Jeder Selbsttest-Prozess bekommt `PHOS_MUTE=1`, ein eigenes `TMP`/`TEMP` unter `build/Tests/tmp/<Test>`
+(`testModelFile` und `testWaveTableLibrary` schreiben feste Namen ins Temp-Verzeichnis — auch gegen die Läufe
+anderer Arbeitsbäume) und `PHOS_ONLY` entfernt. `testWav` und der Gesamtlauf teilen sich
+`phos_selftest_tmp.wav` im Arbeitsverzeichnis und sperren einander (`RESOURCE_LOCK`). Host- und VST3-Test
+belegen fünf der sechs Plätze (`PROCESSORS 5`), so läuft höchstens ein einkerniger Test neben ihnen; mit `-j 4`
+oder weniger laufen sie allein. `RUN_SERIAL` war die erste Wahl und kostete 565 s Wandzeit, in denen sonst
+nichts lief. Die Echtzeit-Prüfungen hielten neben `testModalInterchange` und dem Selbsttest eines anderen
+Arbeitsbaums mit weitem Abstand (erster Track nach 8,4 s gegen 30, Zeitleisten-Tick 0,56 ms gegen 4, 7,3×
+Echtzeit), die Cue-Prüfung unter `-j 6` ebenso (p95 0,76 ms gegen 16,7) — sie braucht keine Ruhe.
+Die gemessenen Sekunden je Abschnitt stehen als `COST` in `selftest_tests.cmake` (Reihenfolge im frischen
+Baum, und das Label); fehlt ein Abschnitt dort, gilt er als `slow`.
+
+*Aufruf (so läuft die Suite jetzt).*
+`ctest --test-dir build -C Release -j 6 --output-on-failure` — die ganze Suite; `-L quick` als Rauchtest;
+`-R selftest.testBassRhythm` für einen Abschnitt; von Hand `phos_selftest --list` und
+`phos_selftest --only a,b`. `-j 6` lässt den Rechner benutzbar; `Deploy/build_release.ps1` ruft genau das.
+Der Gesamtlauf von früher: `$env:PHOS_SELFTEST_FULL=1; ctest -C Release -L full`.
+
+*Gemessen* (i9-12900K, 24 Threads, geteilt mit der Arrangement-Runde und dem Nutzer; Last aus
+`Win32_Processor.LoadPercentage` alle 20 s, einschließlich der eigenen Tests):
+
+| Lauf | Wandzeit | Last Mittel / Max |
+|---|---|---|
+| alter Selbsttest seriell, ein Prozess (nur Selbsttest) | 1859 s | 23 % / 44 % |
+| `ctest -j 6` Plugin-Build, Host- und VST3-Test `RUN_SERIAL` | 1242 s | 27 % / 65 % |
+| `ctest -j 6` Plugin-Build, `PROCESSORS 5` (Hosttest wartete 340 s auf fünf freie Plätze) | 1021 s | 30 % / 58 % |
+| `ctest -j 6` Plugin-Build, endgültig (Hosttest ab Sekunde 0 neben `testModalInterchange`, 72 bestanden, `questguard` übersprungen) | **921 s** | 27 % / 52 % |
+| `ctest -j 6` ohne Plugin (kein Host-/VST3-Test) | 779 s | — |
+| `ctest -L quick -j 6` (50 Tests) | 13,7 s | — |
+
+Gegen den seriellen Selbsttest allein (1859 s) ist das ganze `ctest` mit Host- und VST3-Test in der Hälfte fertig,
+gegen ein serielles ganzes `ctest` (~2 550 s) in gut einem Drittel. Die Untergrenze setzt `testModalInterchange` allein: 620–803 s je nach Last. Solange es nicht geteilt ist,
+wird die Suite nicht schneller als dieser eine Abschnitt.
+
+*Prüfungen.* 63 `run(`-Zeilen, 63 Tests `selftest.test*`; die Summe ihrer „passed“ ist **404**, genau die
+404 des seriellen Laufs, 0 rot. Geändert wurde am Inhalt nichts: kein Abschnittskörper, keine Schwelle.
+Kosten der Trennung in Prozesse: der kleinste Abschnitt braucht als eigener Prozess 0,01–0,09 s Wandzeit
+einschließlich Start; Modelle, Wavetable-Paket und Stimmpaket lädt jeder Prozess erst, wenn sein Abschnitt sie
+braucht (`sharedMelodyModel` & Co.), und das liegt im Bereich von Zehntelsekunden. Gemeinsame teure Vorarbeit
+*zwischen* Abschnitten gab es im seriellen Lauf nicht — kein Abschnitt las eine Render eines anderen —, also
+vervielfacht die Trennung nichts. Wiederholt wird aber schon heute (Befund, nicht angefasst):
+`testMixBalance` (b) und `testStereoWidth` (c) rendern dieselben drei 96-Takt-Mischungen (Seeds 8, 11, 12);
+`testFoundation` und `testGenreRules` komponieren dieselben 768 Takte von 864566672 mit Standardreglern
+(`testVoices` (h) und `testAcidVoicing` (a) bauen dieselben Pläne mit Pegel-Proben); `testModalInterchange`
+Block 5 ist byte-gleich mit `testModeColour` Block 3 (31337, Goa, Markov und Neural, 1536 Takte).
+
+*Die 15 langsamsten Abschnitte* (Sekunden je eigener Prozess unter `-j 6`; Ursache aus dem Code gelesen, nicht
+profiliert) und wie man sie teilen könnte, **ohne** eine Prüfung zu schwächen — geteilt wurde in dieser Runde
+nichts, weil die Arrangement-Runde gleichzeitig an `Tests/selftest.cpp` arbeitet:
+
+| Abschnitt | s | was kostet | Teilung |
+|---|---|---|---|
+| testModalInterchange | 621 | Block 4: bis zu 24 ganze 128-Takt-Tracks gerendert (Präsenzband über den Break, an/aus) | Block 1, 2+3, 5 abtrennen; Block 4 je Modus (die Prüfung ist ein UND zweier Modus-Bedingungen) und je Modus in Seed-Scheiben, **wenn** jede Scheibe die Liste der qualifizierenden Seeds selbst bestimmt (die Schleife bricht bei 12 ab; eine naive Seed-Spanne änderte, welche Seeds zählen). `count ≥ 8` in einer Scheibe, `worst` ist ein Minimum und bleibt es |
+| testVoices | 203 | (h): 21 Trackpläne mit Pegel-Proben (Standardregler), (i): 16 Tracks à 256 Takte komponiert | (g), (h), (i) unabhängig; (a)–(f) teilen eine Partitur und bleiben zusammen |
+| testVariety | 202 | zwei zusammenhängende Renders à 512 Takte (Pegelabgleich an/aus) | A und C abtrennbar; B **nicht** — die Prüfung vergleicht beide Renders, und jeder ist ein Strom über vier Tracks |
+| testMixBalance | 111 | (b) drei 96-Takt-Renders, gepoolt | (a), (a2), (b) getrennt; (b) nicht nach Seed (das Poolen ist Absicht) |
+| testStereoWidth | 100 | (c) dieselben drei Renders | (a) je Raum, (b), (c) getrennt; (c) nicht nach Seed |
+| testPhaseLock | 90 | 32 Solo-Renders à ~16 Takte | nach Kopplungsmodus (vier Abschnitte über alle vier Tempi); **nicht** nach Tempo, „Off“ braucht alle vier |
+| testMaster | 88 | ein 288-Takt-Render | nicht teilbar (eine integrierte Lautheit) |
+| testMelody | 81 | 2048 Takte komponiert, 4 × 20 Takte bei Blockgröße 1–4096 | fünf unabhängige Blöcke |
+| testAcidVoicing | 66 | (a) 4 Trackpläne mit Proben | (a), (b), (c) unabhängig |
+| testFoundation | 66 | 768 Takte mit Standardreglern (mit Proben) | Partitur-Prüfungen und Render-Block trennbar |
+| testGenreRules | 58 | 768 + 256 Takte mit Standardreglern | drei unabhängige Blöcke; der Versuchsblock bleibt ganz (gepoolte Anteile) |
+| testSfxLevel | 36 | zwei 78-Takt-Renders | nicht teilbar (beide Prüfungen brauchen beide Renders) |
+| testKickBody | 33 | zwei 70-Takt-Solo-Renders | (a) abtrennbar, der Render-Teil nicht |
+| testModeColour | 31 | 8 × 1024 Takte, halb Neural | Blöcke 1–2, 3, 4; nicht nach Modell (Neural wird gegen Markov gemessen) |
+| testEngine | 30 | sieben kurze Blöcke um einen gemeinsamen Composer | teilbar, lohnt aber erst mit einem Plan-Cache |
+
+Der größere Hebel als Teilen: `compose.level_match` und `master.auto_gain` stehen per Voreinstellung an, und
+dann rendert jeder `Composer::track()` rund 48 Takte Pegel-Proben — auch für Tests, die nur einen Plan wollen.
+
+*Befund: `testVoices` stürzt sporadisch ab — ein Fehler im Test, nicht in der Parallelisierung.* In einem der
+Mutationsläufe endete `selftest.testVoices` nach 249 s mit SEGFAULT und ohne jede Ausgabe (die Pipe war
+gepuffert). Windows-Fehlerbericht: `c0000005` bei `phos_selftest.exe+0xab702`; mit der Linker-Map desselben
+Codes liegt das in `testVoices` +0x3b42, beim Lesen von `t.form.section[s]` in der Acid-Ride-Prüfung am Ende
+(`const TrackPlan& t = ac.track(ap, ti);` dann `ac.composeBars(...)`, dann `t.form...`). `Composer::track` gibt
+eine Referenz in `std::vector<TrackPlan> plans_` zurück, und `composeBars` legt am Trackende den nächsten Plan
+an (`plans_.push_back`) — der Vektor wächst um, `t` zeigt in freigegebenen Speicher. Meist liest das noch den
+alten Inhalt; wenn der Block zurück ans System ging, stürzt es ab. Sechs Wiederholungen unter `cdb` (drei
+gleichzeitig, mit und ohne die Mutation) liefen durch. Behebung für die Runde, der `testVoices` gehört: `t` als
+Kopie (`const TrackPlan t = ...`). `selftest.cpp` hält 24 solche `const TrackPlan&`-Referenzen; drei davon
+angesehen (`testAcidVoicing` bei 1989/1994, `testVoices` (h)) werden vor dem nächsten `track()` verbraucht und
+sind sicher, die übrigen sind nicht geprüft.
+Ob der einmalige Selbsttest-Fehler vom 16.09. (oben, „ohne Spur“) dieselbe Ursache hatte, ist nicht
+belegt. `main()` schaltet stdout jetzt ungepuffert, damit ein Absturz seine letzten Zeilen behält.
+
+*Mutationen* (eingebaut, gebaut, gelaufen, aus der Kopie zurück, Zeitstempel gesetzt, `git diff` danach leer):
+
+| Mutation | Wer merkt es, im parallelen Lauf, mit Namen |
+|---|---|
+| Tempokarte: Segmentdauer × 1,001 (`Clock.cpp`) | `-L quick -j 6`: `selftest.testTempo`, `selftest.testMidi` (und `dispatch.exact`, das `testMidiKeys` fährt) |
+| True-Peak-Limiter-Decke +0,5 dB (`Dynamics.cpp`) | ganzes `ctest -j 6`: `selftest.testDynamics`, `selftest.testMaster`, `selftest.testBandLimit` |
+| Sicherheits-Clip der Engine +0,5 dB (`Engine.cpp`) | **niemand** — äquivalent: der Limiter davor hält die Decke, der Clip wird nie erreicht |
+| `--only` wählt nach Teilstring | `selftest.dispatch.exact` |
+| unbekannter Name nicht als rot gezählt | `selftest.dispatch.unknown` (und jeder Abschnitt, weil die Zählung negativ wird) |
+| `--list` lässt den letzten Abschnitt aus | `selftest.TABLE_MISMATCH` |
+| `PHOS_MUTE=unset:` fehlt bei Host- und VST3-Test, Shell mit `PHOS_MUTE=1` | `hosttest` (8 rote Prüfungen, „0 of 562 blocks sounding“), `vst3test` (3 rote, „peak 0.000“) |
+
+*Nicht geprüft:* `questguard` wurde in allen Läufen übersprungen (in diesem Arbeitsbaum fehlt `ThirdParty`,
+Rückgabe 77 wie vorgesehen). Die Zeiten sind mit fremder Last gemessen und schwanken um ±20 %
+(`testModalInterchange` 620 gegen 803 s in zwei Läufen).
+
+*Dateien.* `Tests/selftest.cpp` (nur `main()`), `Tests/selftest_tests.cmake` (neu), `Tests/CMakeLists.txt`,
+`Deploy/build_release.ps1`, `README.md`, `Quest/README.md`, dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
