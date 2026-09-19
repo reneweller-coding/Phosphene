@@ -4971,6 +4971,132 @@ Ausgang; Lead 1 in Drop 1 nur, wo der Track eine Lead hat (`lead_amount` 0,5 unv
 sie überall, das wäre ein Eingriff in die kalibrierte Balance); nur 8 gerenderte Tracks je Stil für die
 Energie (Formmessungen über 22).
 
+**19.09.2026, Feinschliff: Drop 2, Helligkeit je Track, Plugin-Ansicht, Quest, UB-Suche**
+
+Anlass: die offenen Punkte der Arrangement-Runde (beae4b1). Alle Messungen: `phos_render` mit Standardreglern,
+je Stil 2 Seeds (1 und 2) und je Set die ersten drei vollstaendigen Tracks -- 30 Tracks -- sofern nicht anders
+gesagt; Skripte in `PhospheneWork\scratch\polish` (nicht im Repo), das Auswertewerkzeug ist `climax.py` dort.
+Die Hoerschnipsel: `out\listen\polish`.
+
+*Drop 2 als hoerbarer Hoehepunkt.* Vorher (Arrangement-Stand, 30 Tracks, K-Bewertung nach ITU-R BS.1770 ueber
+die eigenen Takte): Drop 2 stand **+0,62 LU** (Minimum +0,36) ueber Drop 1 und +0,45/+0,24 ueber dem lautesten
+anderen Achttaktfenster; ueber 1,5 kHz +1,71 dB gegen Drop 1, aber **2,2 dB unter** dem hellsten anderen Fenster
+-- den letzten acht Takten des grossen Builds mit Riser und Zweiunddreissigstel-Rolle. Der Master (Kompressor
+1,5:1, True-Peak-Limiter auf -1 dBTP bei -9 LUFS) macht aus 1 dB Pegelunterschied etwa 0,5 dB, und Drop 2 liegt
+schon an der Decke: Drop 2 laesst sich nicht hochdruecken, also kommt der Rest herunter, und Drop 2 bekommt,
+was nicht Lautheit ist. Vier Eingriffe (`Form.h`, kDrop1HoldDb …):
+
+| Eingriff | Was |
+|---|---|
+| Drop 1 zurueck | `sectionTrimDb` -1,5 dB auf den Track-Gain, eine Perkussionslage weniger (Form.cpp) |
+| Grosser Build | Rampe auf -2,0 dB bis zum letzten Takt; Zweiunddreissigstel der Rolle mit 0,75 Velocity (-2,5 dB je Schlag, Rhythm.cpp) |
+| Intro | -1,5 dB: die Kick-Bass-Takte 17--32 waren in den meisten Tracks das lauteste Fenster ausser Drop 2 (0,25--0,65 LU darunter) und 1,7 LU ueber dem kahlen Outro, ueber das sie im DJ-Ueberlapp laufen |
+| Drop 2 | Lead- und Acid-Filter +0,05 (normiert) beim ersten Takt, Breite von Lead, Counter, Arp und Pad +0,15 |
+
+Nachher, dieselben 30 Tracks (Median/Minimum): Drop 2 **+1,32/+1,05 LU** ueber Drop 1, **+0,69/+0,32 LU** ueber
+jedem anderen Achttaktfenster, und jede eigene Achtergruppe von Drop 2 liegt **+0,50/+0,21 LU** ueber dem besten
+anderen Fenster; ueber 1,5 kHz +3,21/+1,50 dB gegen Drop 1 (Baender: Praesenz +3,31, Air +2,68, Mitten +1,46,
+Tiefe +0,84), Breite +1,24 dB, Anschlagdichte ueber 1,5 kHz +0,35/s. Kein Stil faellt heraus (Mediane
++1,29 … +1,35 LU). **Was nicht gelungen ist:** ueber 1,5 kHz bleibt das letzte Achttaktfenster des grossen
+Builds im Median 1,28 dB heller als Drop 2 (vorher 2,22) -- Riser und Rolle sind Rauschen und laufen genau auf
+den Drop zu; nur in Progressive (kurzer Build) steht Drop 2 auch dort oben (+0,15 dB). In der Gesamtleistung
+und in der Lautheit steht Drop 2 ueberall oben.
+
+*Helligkeit je Track.* Vorher (dieselben 30 Tracks, Praesenz 1,5--6 kHz gegen 40--140 Hz, Abstand zum
+Referenzmedian von `Tools/ref_profile.json`): der Leistungsmittelwert der beiden Drops streute von -4,6 bis
++7,1 dB, nur 12 von 30 Tracks lagen innerhalb von 2,5 dB um den Median. Der Pegelabgleich sieht das nicht: er
+gleicht die *Lautheit* jeder Stimme an die des ersten Tracks an, und eine hellere Stimme bringt bei gleicher
+Lautheit mehr Praesenz. Neu `Composer::matchPresence` (Regler `compose.presence_match`, Standard an): zwei
+Probe-Renders der Drops (je vier Takte, einer je Achtergruppe, mit der Instrumentierung und den
+Abschnitts-Steuerungen der Form, ohne Master-Dynamik) -- die Linien (Lead, Counter, Arp, Stab) allein und
+alles andere. Beide sind linear im Linienpegel g, also loest `(g Pl + Pr) / (g Ll + Lr)` geschlossen nach g auf;
+kein dritter Render. Kalibriert an denselben 30 Tracks (`kPresenceRefDb`): Medianfehler -0,04 dB,
+Interquartil -0,33 … +0,33, Streuung 0,81, Korrelation 0,97. Innerhalb von 1,5 dB um den Median bewegt sich
+nichts, ausserhalb gehen die Linien auf den Bandrand, hoechstens -6/+3 dB.
+
+| | vorher | nachher |
+|---|---|---|
+| Praesenz der Drops (Leistungsmittel), Median | -2,09 dB | -1,69 dB |
+| Spanne (5.--95. Perzentil) | 9,71 dB | 8,40 dB |
+| innerhalb 2,5 dB um den Median | 12 von 30 | 17 von 30 |
+| hellster Track | +7,06 | +4,59 |
+| Hoer-Seed Track 2, Drop 1 / Drop 2 | +2,57 / +4,33 | +0,73 / +2,90 |
+| Hoer-Seed Track 1, Drop 1 / Drop 2 | -3,76 / -0,63 | -3,51 / -0,45 |
+
+**Die Grenze des Verfahrens, gemessen:** fuenf der 30 Tracks haben in ihren Drops gar keine Linie (keine Lead,
+kein Arp, kein Stab, kein Counter) -- sie sind dunkel, weil die Komposition dort keine Linie hat, und der
+Abgleich laesst sie in Ruhe; bei sehr hellen Tracks reicht der Deckel von -6 dB nicht (der hellste steht noch
++4,6 dB ueber dem Median). Die Klangvielfalt der Stimmen-Runde bleibt unberuehrt: korrigiert wird ein Pegel,
+kein Rezept.
+
+*Plugin-Arrangement-Ansicht (DJ-Ueberlapp).* Die Set-Leiste zeichnete die Trackbloecke uebereinander -- der
+spaetere verdeckte das Ende des frueheren, und die Leiste las sich wie lueckenlos aneinandergesetzte Tracks
+mit falscher Laenge. Jetzt **zwei Spuren** (gerade Tracks oben, ungerade unten), jeder Block in voller Laenge,
+darunter im geteilten Bereich ein Kreuz als Ueberblendzeichen; die Energielinie ist eine Kurve je Track (eine
+durchgehende sprang am Uebergang 16 Takte zurueck). In den Trackzeilen sind die geteilten Takte schraffiert
+und beschriftet ("mix 2"). Die anderen Stellen, die Tracks hintereinander annahmen: die Trackliste des
+Set-Reiters markiert jetzt den ausgehenden Track als spielend und den eingehenden schwaecher mit "mixing in,
+n bars to the hand-over"; die Zeile unter der Zeitleiste sagt "mixing into track n"; „Reroll/Lock this track"
+haben einen Tooltip, dass im Ueberlapp der ausgehende gemeint ist; die Quest-Anzeige bekommt eine Zeile
+`MIX IN nn  nn BARS` (und holt den eingehenden Track, bevor sie die Referenz auf den eigenen Plan nimmt --
+`incomingOfBar` kann den naechsten Track planen und den Plan-Vektor umlegen). Eine Cue-Liste hat der Editor
+nicht; die Cues beider Tracks verschickt der Prozessor seit der Arrangement-Runde.
+
+*Quest.* APK mit dem aktuellen Kern gebaut (`build-quest\PhospheneQuest.apk`), wie in der Stimmen-Runde ueber
+eine Verzeichnis-Verknuepfung auf das `ThirdParty` des Hauptcheckouts, die danach wieder entfernt wurde;
+`build_apk.ps1` nimmt jetzt `-Jobs` (Standard 8), damit ein geteilter Rechner nicht mit acht Prozessen
+belegt wird.
+
+*Die MSVC-Sache ist ein Compilerfehler.* Die Arrangement-Runde hatte `fitTemplate` mit einer Lambda-Summe ueber
+die Vorlagentabelle geschrieben; im Release kam jede Tracklaenge ueber 256 Takte als 256 heraus. Rekonstruiert
+(die Datei lag noch als Kopie im Kratzverzeichnis jener Runde), reproduziert und assembliert: bei
+`/O2 /arch:AVX2` (auch AVX512) vektorisiert MSVC 19.51.36257 die Summe zu einer horizontalen Reduktion und
+verwendet beim zweiten Aufruf **das reduzierte Register als waere es das geladene** -- zwei weitere `vphaddd`,
+also das Vierfache der Summe; die Wachstumsschleife bricht sofort ab. Kein undefiniertes Verhalten: dieselbe
+Quelle ist bei `/Od`, bei `/O2` ohne AVX2 und bei `/O2 /arch:AVX2 /Ob0` richtig. Minimalbeispiel und die
+Assembler-Zeilen in `Tools/msvc_avx2_reduction_repro.cpp` (druckt 4096 statt 272). Im heutigen Code kommt das
+Muster nicht vor: die Assembler-Listings des ganzen Kerns, von `phos_render` und des Selbsttests (`/FAs`) auf
+Ketten von drei oder mehr horizontalen Additionen abgesucht -- null Treffer. `testArrangement` (a) baut jede
+Laenge 128--320 jedes Stils und faellt sofort, wenn eine Form wieder zu kurz herauskommt.
+
+*AddressSanitizer.* Kern und Selbsttest mit `/fsanitize=address` gebaut (`build-asan`, wie Noctuary) und das
+ganze `ctest` darunter gefahren. Ein echter Fund, nicht der gesuchte: `testKickBody` las in seinem letzten
+Beat-Fenster `latency` Samples **hinter dem Render-Puffer** (`at(bt + 1.0)` bei Takt 70 von 70 plus die
+Latenz des Limiters) -- heap-buffer-overflow, seit dem Aufbau des Abschnitts vorhanden und in keinem normalen
+Lauf sichtbar. Behoben (geklemmt, das unvollstaendige Fenster uebersprungen), unter ASan nachgeprueft.
+clang-cl mit UBSan steht auf dem Rechner nicht zur Verfuegung.
+
+*Pruefungen, neu.* `testClimax` (drei Checks: Gain-Staffelung ueber 20 Trackplaene aller Stile, und je ein
+gerenderter erster Track von Full-On und Progressive -- Drop 2 mindestens 1,4 LU ueber Drop 1, jede
+Achtergruppe 0,3 LU ueber jedem anderen Fenster, 3 dB mehr ueber 1,5 kHz) und `testPresence` (zwei Checks: der
+Abgleich bewegt die Linien nur ausserhalb des Bandes, auf den Bandrand und nie ueber den Median; gerendert
+liegen die Drops der Tracks 1 und 2 des Hoer-Seeds im Mittel innerhalb von 2,5 dB um den Referenzmedian).
+Im Hosttest prueft der Arrangement-Block jetzt, dass sich die Bloecke zweier Nachbartracks in der Leiste nicht
+verdecken, nebeneinander laufen und jede Laenge stimmt; `bigSet` setzt die Tracks mit Ueberlapp.
+
+*Mutationen* (eingebaut, gebaut, gelaufen, aus der Kopie zurueck, Zeitstempel gesetzt, `git diff` danach leer):
+
+| Mutation | Wer merkt es |
+|---|---|
+| alle Climax-Eingriffe aus (der Stand der Arrangement-Runde) | `testClimax` alle drei (Rot zuerst gesehen) |
+| `compose.presence_match` Standard aus | `testPresence` beide (Rot zuerst gesehen) |
+| Build-Rampe ohne Headroom | `testClimax` (a): 20 von 20 Tracks |
+| Drop 1 ohne Gain-Trim | `testClimax` (a) und beide Renders |
+| Drop 1 ohne die zurueckgehaltene Lage | `testClimax` (a) und der Progressive-Render |
+| Bandrand des Abgleichs auf der falschen Seite | `testPresence` (a) -- erst, seit der Plan traegt, wo die Korrektur landet |
+| Linien- und Rest-Probe vertauscht | `testPresence` (a) |
+| Set-Leiste mit einer Spur | Hosttest: die Bloecke verdecken einander |
+
+*Hoeren* (`out\listen\polish`, 145 BPM = 1,655 s/Takt): A, B, C wie immer -- in A ist das Intro-Ende (0--13 s)
+1,5 dB leiser, in B ist Drop 1 (0--40 s) zurueckgenommen, in C faellt die Rolle ab 13 s weniger hell aus und
+Drop 2 setzt bei 39,7 s deutlich hoeher ein. Neu `D1_drop1/D1_drop2` … `D3_…`: die ersten 16 Takte von Drop 1
+und Drop 2 der Tracks 1--3, und `E1`--`E3` dieselben zwei Ausschnitte hintereinander in einer Datei (der
+A/B-Vergleich, den der Auftrag verlangt: Drop 1 gegen Drop 2).
+
+*Dateien.* Core: `Form.h/.cpp`, `Composer.h/.cpp`, `Rhythm.cpp`, `Params.h/.cpp`; `Plugin/EditorArrange.h/.cpp`,
+`Plugin/PluginEditor.cpp`; `Quest/src/main.cpp`, `Quest/build_apk.ps1`; `Tools/render/main.cpp`,
+`Tools/msvc_avx2_reduction_repro.cpp` (neu); `Tests/selftest.cpp`, `Tests/hosttest.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
