@@ -4,9 +4,10 @@
  *
  * Signal path per note:
  * @code
- *   PolyBLEP saw/pulse (2 fs) -> drive -> nonlinear ZDF ladder + filter envelope -> half-band -> [high pass] --+
- *                                                                                                          +-> amp ADSR -> duck -> level
- *   sine at the fundamental (fs, same phase as the saw's fundamental) -> sub level ------------------------------+
+ *   PolyBLEP saw/pulse (2 fs) -> drive -> nonlinear ZDF ladder + filter envelope --+
+ *                             -> bite: tanh -> 2-pole HP -> 4-pole LP + envelope --+-> half-band -> [LR8 high pass] --+
+ *                                                                                                                  +-> amp ADSR -> duck -> level
+ *   sines at f0 and 2 f0 (fs, same phase course as the saw's fundamental) -> sub and sub octave levels -----------------+
  * @endcode
  *
  * **Why the sub is separate.** A resonant low pass whose cutoff is swept by a fast envelope shifts
@@ -14,10 +15,20 @@
  * it: measured on the default sound, the fundamental's phase moved by -34 degrees during the first
  * 22 ms of every note. That is exactly the window in which the kick's tail and the bass overlap.
  * The fundamental is therefore generated as a pure sine that no filter touches, and in Split mode
- * the filtered voice is high-passed so that it carries the overtones only: two cascaded Butterworth
- * sections at Split x f0 form a fourth-order Linkwitz-Riley high pass (-6 dB at the corner,
- * 24 dB/octave), which at the default ratio of 2 leaves the filtered path's fundamental 24.6 dB
- * down. Mixed mode adds the sub without splitting.
+ * the filtered voice is high-passed so that it carries the overtones only. Since 19.09.2026 that high
+ * pass is a fourth-order Butterworth squared at Split x f0 -- an 8th-order Linkwitz-Riley, -6 dB at
+ * the corner, 48 dB/octave -- which at the default ratio of 2 leaves the filtered path's fundamental
+ * 48.2 dB down; the fourth-order pair before it left 24.6 dB. The difference became necessary when
+ * the sub came down to make room for the octave and the bite: with the old pair the saw's leaked
+ * fundamental would have stood about 11 dB under the new, quieter sub. Mixed mode adds the sub
+ * without splitting.
+ *
+ * **Sub octave (19.09.2026).** A second sine at twice the fundamental, on the sub's own phase
+ * course, so it is phase-locked by construction and carries no filter's phase. The reference
+ * basses have more power in 60 .. 120 Hz than under 60 Hz between their kicks (Tools/ref_bass.py:
+ * -0.9 against -7.4 dB, each against 20 .. 120 Hz); the saw path's second harmonic sits at the
+ * Split corner and loses 6 dB there, so the weight comes from this sine instead of from moving the
+ * corner towards the fundamental.
  *
  * **One phase for the note.** The saw and the sub start with the same fundamental phase, and the
  * engine chooses it: the Start Phase knob (0.5 is the saw's zero crossing, fundamental phase 0), or
@@ -28,6 +39,30 @@
  * **Release floor.** The release is never shorter than half a period of the note's fundamental. A
  * release that closes within a fraction of a period is a window shorter than the waveform it cuts,
  * and its spectrum spreads the note's end into a broadband thump.
+ *
+ * **Bite (19.09.2026).** A psytrance bass is two layers: the clean sub and a mid-bass "bite" -- the
+ * same line as a saturated saw, low-passed a few hundred hertz up -- that makes it audible on small
+ * speakers and gives the roll its attack. Before this round the voice was almost pure sub: in the first
+ * drop of the listening seed its power in 300 Hz .. 2 kHz lay 21 dB under its power below 60 Hz, and
+ * `Tools/ref_bass.py`, which measures the reference recordings between their kicks where kick and bass
+ * play alone, reads the bite band there roughly 10 dB under the fundamental region (docs/PLAN.md,
+ * 19.09.2026). The bite takes the oscillator's own samples, so it is phase-coherent with the saw path
+ * and the sub by construction:
+ * @code
+ *   oscillator (2 fs) -> tanh drive -> 2-pole high pass at 0.4 x Bite Cutoff
+ *                     -> 4-pole low pass (two SVFs, Butterworth, resonance on the second),
+ *                        cutoff = Bite Cutoff x 2^(Bite Env x its own exponential envelope + key track)
+ *   ... summed with the ladder's output *before* the half-band decimator and the Split high pass
+ * @endcode
+ * Summing it before the Split high pass is what keeps the low end clean: in Split mode the bite loses
+ * its fundamental exactly as the saw path does (48 dB down at the default ratio, on top of its own
+ * floor, a 2-pole high pass at 0.4 x Bite Cutoff), so everything at the fundamental is still the one
+ * sine no filter touches, and the kick lock, which is solved on that sine, is untouched. The bite's
+ * own envelope lets it be plucky (a bright onset that falls 13 dB above 700 Hz from a note's first
+ * period to its third at the defaults) while the saw path stays round, or long and "rubbery" with
+ * resonance. The pulse part of the wave has its edge at the fundamental's zero crossing; the bite's
+ * saturator lifts that edge into a band-limited attack under the bite's cutoff, which is part of the
+ * point, not a step.
  */
 #pragma once
 #include "phos/Ducker.h"
@@ -88,7 +123,9 @@ private:
     VaOscillator        osc_;
     LadderT<float>      ladder_;
     HalfbandDown<float> down_;
-    Svf                 hp1_, hp2_;
+    Svf                 hp1_, hp2_, hp3_, hp4_;   ///< the Split high pass, Linkwitz-Riley 8th order
+    Svf                 bite1_, bite2_;     ///< the bite's 4-pole low pass (two Butterworth sections)
+    Svf                 biteHp_;            ///< the bite's floor, a 2-pole high pass under the band
     Envelope            amp_;
     Ducker              ducker_;
 
@@ -100,6 +137,7 @@ private:
 
     // Settings from update().
     float  wave_ = 0.0f, pw_ = 0.5f, subLevel_ = 0.42f, splitRatio_ = 2.0f;
+    float  octLevel_ = 0.0f;        ///< amplitude of the sub's octave (sin at 2 f0, same phase course)
     int    subMode_ = 1;
     bool   retrigger_ = true;
     float  startPhase_ = 0.5f;
@@ -108,6 +146,17 @@ private:
     float  driveIn_ = 1.0f, driveOut_ = 1.0f;
     float  attack_ = 0.0008f, decay_ = 0.18f, sustain_ = 0.55f, release_ = 0.01f, releaseUsed_ = 0.01f;
     float  level_ = 0.5f;
+    /** @name The bite layer (see the file comment)
+     *  @{ */
+    float  biteLevel_ = 0.0f;       ///< output gain of the layer (knob x kBiteScale)
+    float  biteCut_ = 600.0f;       ///< resting cutoff, Hz
+    float  biteEnvOct_ = 1.5f;      ///< envelope depth, octaves
+    float  biteDecay_ = 0.999f;     ///< per-sample factor of the bite envelope (-60 dB over Bite Decay)
+    float  biteEnv_ = 0.0f;         ///< the bite envelope's current value, 1 at the onset
+    float  biteGain_ = 1.0f;        ///< saturator input gain
+    float  biteNorm_ = 1.0f;        ///< 1 / tanh(biteGain_): a full-scale saw stays full scale
+    float  biteK2_ = 0.765f;        ///< damping of the second section (resonance)
+    /** @} */
 };
 
 } // namespace phos

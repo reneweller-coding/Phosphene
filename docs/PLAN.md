@@ -4164,6 +4164,205 @@ Oktavsprüngen innerhalb der Sektion, und die gibt es nicht mehr). Ergebnis: Arp
 gleichzeitig (Maskierungstest jetzt taktweise, 0 gemeinsame Takte). Eine Folgerunde in Form.cpp könnte
 das direkt dort ausdrücken.
 
+**19.09.2026, Tiefe und Acid: Bass mit Biss, Kick-Körper, Klangvielfalt je Track**
+
+Anlass: nach `mix-foundation` und `melody-rules` sagte der Nutzer „der Bass klingt mir noch nicht so
+richtig“ und wünschte sich Varianz zwischen den Tracks („es sollen ja nicht alle Stücke gleich klingen“).
+Alle Messungen: Seed 864566672, Standardparameter, erster Drop von Track 1 (Takt 40–72), Master-Dynamik
+aus, sofern nicht anders gesagt. Skripte in `PhospheneWork\scratch\lowend-acid`; neu im Repo
+`Tools/ref_bass.py`.
+
+*Der Referenz-Bass* (`Tools/ref_bass.py`, baut auf `ref_kick.py` auf). Dieselben 24 von 40 Aufnahmen,
+die in den ersten 90 s acht und mehr Schläge Kick + Bass fast allein spielen (über 300 Hz mindestens 8 dB
+unter 30–150 Hz — die Schwelle des `ref_kick`-Laufs vom 18.09.). Gemessen in den drei Sechzehnteln nach
+jeder Kick, jedes Band gegen die eigenen 20–120 Hz; die Spalten mit ′ nur über das zweite und dritte
+Sechzehntel, weil die Referenz-Kicks bis zum ersten Slot noch über −20 dB stehen und ihr Schwanz dort als
+60–120 Hz „Bass“ zählen würde. Median (Quartile) gegen unseren Bass vorher:
+
+| | unter 60′ | 60–120′ | 120–300 | 300 Hz–2 kHz′ („Biss“) | 2–6 kHz | Bass/Kick (K-gew.) |
+|---|---|---|---|---|---|---|
+| Referenzen (24) | −7,4 (−10,7…−3,9) | −0,9 (−2,3…−0,4) | −6,8 (−7,8…−4,4) | −9,8 (−11,7…−8,2) | −18,2 | −4,7 (−5,8…−2,3) dB |
+| Phosphene vorher | −0,4 | −10,6 | −11,4 | −21,6 | −53,2 | −12,8 dB |
+| Phosphene nachher | −5,7 | −1,3 | −7,9 | −10,4 | −35,1 | −4,4 dB |
+
+(„nachher“ mit dem Werkzeug auf dem Kick+Bass-Render des Endstands; der Selbsttest `testBassBite` misst am
+Bass allein −5,7 / −1,4 / −10,3. Das 2–6-kHz-Band der Referenzen ist in diesen Intros vermutlich schon Hats
+und bleibt unser einziges Band weit unter dem Median — ein Bass bei −18 dB dort wäre ein Sägezahn ohne
+Filter. Biss minus Sub über das ganze Fenster, die Zahl des Auftrags: Referenzen −5,5, vorher −21,3,
+nachher −5,6.) „Bass/Kick“ ist die mittlere K-gewichtete Leistung der drei Bass-Sechzehntel gegen
+das erste Viertel der Kick — die Lautheitsrelation auf gleicher Zeitbasis; im Referenzbereich −8,5…+2,8
+lag unser Bass mit −12,8 unter allen 24. Die Hüllkurvenwerte des Werkzeugs (Einsatz, Länge je Sechzehntel)
+sind bei den Referenzen nicht belastbar: „Länge“ ist bei fast allen das ganze Sechzehntel (104 ms) und der
+Biss-Einsatz liegt im Median bei 42 ms — in 300 Hz–2 kHz spielt dort offenbar noch anderes mit. Sie stehen
+im Werkzeug, bestimmen aber nichts. **Auswahlverzerrung**, geprüft statt verschwiegen: bei 12 dB
+Schwelle (9 Aufnahmen) liest der Biss −9,6, die Oktave −0,5 — die Schwelle misst nicht sich selbst.
+**Wo die Referenzen etwas anderes sagen als der Auftragstext:** in 60–120 Hz liegt bei den Referenzen
+mehr Leistung als unter 60 Hz (in 18 von 30 Aufnahmen mit acht und mehr solchen Schlägen liegt die stärkste
+Spitze unter 150 Hz oberhalb von 60 Hz, oft genau auf der Oktave: Hallucinogen „Alpha Centauri“ 73 Hz gegen
+38 Hz bei −12 dB, Electric Universe „The Point“ 92 gegen 46 Hz bei −2 dB). Ein Psy-Bass ist also
+nicht nur „trockener Sub + Biss“, sondern hat Gewicht eine Oktave darüber.
+
+*Gebaut, im Bass* (`Bass.h`):
+1. **Biss-Schicht.** Die Samples des Oszillators (2 fs, also phasengleich mit Sägezahn und Sub) → tanh
+   (Bite Drive) → Butterworth-Hochpass bei 0,4 × Bite Cutoff (sonst trugen die 3.–6. Harmonischen,
+   140–280 Hz, so viel wie das ganze Biss-Band und machten die Tiefmitten dicker) → 4-Pol-Tiefpass (zwei
+   SVFs, Butterworth, Resonanz auf dem zweiten) mit eigener Hüllkurve (Bite Env 3 Okt., Bite Decay 90 ms,
+   Standard-Cutoff 500 Hz). Summiert **vor** Halbband und Split-Hochpass, verliert also ihren
+   Grundton wie der Sägezahnpfad. Oberhalb 700 Hz fällt der Biss vom ersten zur dritten Periode einer Note
+   um 15 dB: das ist der Anschlag der Rolle.
+2. **Split-Hochpass 8. Ordnung** (Butterworth 4. Ordnung, zweimal: Linkwitz-Riley 48 dB/Okt.) statt 4.
+   Ordnung. Bei 2 × f0 lässt er den Grundton des gefilterten Pfads 48,2 statt 24,6 dB durch. Nötig, weil
+   der Sub leiser wurde: mit dem alten Paar hätte der durchgesickerte Sägezahn-Grundton nur 13 dB unter
+   dem neuen Sub gestanden (gemessen, Mutation M1) — 13° Phasenfehler an der Kick-Kopplung.
+3. **Sub-Oktave**: ein zweiter Sinus bei 2 f0 auf dem Phasenverlauf des Subs (neuer Parameter
+   `bass.sub_octave`), also ohne Filterphase. Er liefert das Gewicht in 60–120 Hz, das die Referenzen
+   haben; den Split-Punkt Richtung Grundton zu schieben hätte dasselbe mit Phasenfehler erkauft (bei 1,5 ×
+   f0 gemessen: 9–27° „Drift“).
+4. Standardwerte: Sub 0,6 → 0,3, Oktave 0,5, Cutoff 140 → 240 Hz, Biss 0,5 (`kBiteScale` 1,344), Pegel
+   −5 → −3 dB. Angehängte Parameter (keine Umsortierung): `bass.bite`, `bite_cutoff`, `bite_env`,
+   `bite_decay`, `bite_drive`, `bite_resonance`, `sub_octave`.
+
+*Kick-Körper (die offene Frage von `mix-foundation`).* **Befund zuerst:** die Grenze −24 dB hat die Kick
+gar nicht gekürzt — beim Standard-Decay von 150 ms griff sie nicht (sie erlaubt bis 170 ms bei 145 BPM);
+76 ms Körper kamen vom Decay-Regler selbst. Sie hätte aber jeden Decay gekappt, der für 104 ms Körper
+nötig ist. Versuchsreihe (Kick+Bass-Render, Werkzeug `ref_kick.py`, Maskierung = Kick-Schwanz gegen
+Bass im ersten Sechzehntel, 30–150 Hz):
+
+| Grenze / Decay | Körper | Kick am Slot unter Spitze | Kick gegen Bass im 1. Sechzehntel |
+|---|---|---|---|
+| −24 dB / 150 ms (vorher) | 76 ms | −33,4 dB | −19,6 dB |
+| −24 dB / 200 und 240 ms | 89 ms (auf 170 ms gekappt) | −28,7 dB | −17,1 dB |
+| −15 dB / 200 ms | 95 ms | −23,5 dB | −12,8 dB |
+| −15 dB / 240 ms | 104 ms | −19,2 dB | −8,3 dB |
+
+(Die Zeilen mit dem alten Basspegel; mit dem neuen, lauteren Bass liegt der Schwanz im ersten Sechzehntel
+15,8 dB unter dem Bass, `testKickBody`.) **Entscheidung: −15 dB, Decay 240 ms** — der Körper erreicht den
+Referenz-Median, und der erste Basston bleibt klar vorn; durch die Kopplung treffen sich beide dort
+phasengleich. `Engine.cpp` blieb unberührt: die Grenze ist ein Regler (`kick.tail_limit`), keine Logik
+musste sich ändern. Der Selbsttest misst den Körper jetzt mit der Definition des Werkzeugs (analytische
+Hüllkurve 20–250 Hz): 113 ms. Kick-Pegel −2 → −6 dB: siehe „Mix“.
+
+*Varianz je Track* (`Composer.cpp`, `Composer.h`):
+- **Acid**: jeder Track ist ein Punkt im Dreieck der drei Stimmungen vom 18.09. (clean, driven, liquid),
+  baryzentrisch, gleichverteilt auf dem Dreieck gezogen und per Best-Candidate gegen die zwei Vortracks
+  gestreut; angewandt als Offset von den Reglern (Reichweite min(1, 2 × Sound Variation): beim Standard 0,5
+  spielt ein Eckpunkt die Stimmung genau, 0 spielt die Regler). Track 1 ist driven (die Regler). Was eine
+  Stimmung nicht besitzen kann, steht in `Composer.cpp` begründet: Resonanz und Decay reitet die Sektion
+  (`sectionAutomation`, ein Strang hält einen Offset, keine Summe), den Pegel gleicht der Level-Match der
+  Stimme ab, den Hall öffnet der Break. Cutoff und Env Amount gehen in die Basis des Sektionsbogens ein,
+  der Disperser als Override. Über 39 Tracks führt jede Stimmung 12–14, 14 sind Mischungen (kein Gewicht
+  über 0,7), Nachbarn mindestens 0,56 auseinander.
+- **Bass**: die fünf Richtungen tragen jetzt die vier Charaktere des Auftrags (sauber Sub + Biss in der
+  Mitte, gritty = grit, gummiartig/resonant = squelch, plucky = pluck, dazu Gewicht) mit den Biss-Parametern
+  und drei- bis vierfachen Gewichten: vorher bewegte ein typischer Track beim Standard keinen Regler um
+  mehr als 0,06 seines Bereichs.
+- **Kick**: Klick und Endtonhöhe reichen so weit, wie die Referenz-Kicks streuen (Klick-Quartile
+  −31…−23 dB; die Endtonhöhe bleibt mit Tune = Key auf Grundton oder Quinte); die Länge **weniger** weit als
+  vorher (Körper der Referenzen 101–108 ms zwischen den Quartilen; siehe „Mix“, Track 2).
+- Gemessen über 20 Tracks (`testRecipeSpread`, Interquartilsabstand über die Tracks): Klick der Kick 4,8 dB
+  (alte Tabelle 3,1; Referenzen 8,0), Biss-Band des Basses 6,7 dB (5,3), Pluck 9,9 dB (6,0). Die Kick-Kopplung
+  findet für jedes Rezept einen ganzen Zyklus (Fehler 2e−15 Zyklen).
+- **Level-Match**: die Fundament-Sonde spielt jetzt so viele Percussion-Ebenen wie der erste Core des Tracks,
+  statt aller. Sie las Tracks um bis zu 0,9 LU zu laut, je nach Percussion-Plan verschieden; die Streuung in
+  `testVariety` fiel von 0,79 (vor der Runde) bzw. 0,81 (mit den breiteren Rezepten) auf 0,40 LU.
+
+Gerendert gemessen (Solo-Renders, 19 Tracks, `compose.track_bars=64`, je Track Takt 2–10 des ersten Drops;
+Standardabweichung über die Tracks, vorher → nachher; Skript `scratch\lowend-acid\spread.py`):
+
+| | vorher | nachher |
+|---|---|---|
+| Bass: Leistungsschwerpunkt | 20 Hz (60–134 Hz) | 86 Hz (97–391 Hz) |
+| Bass: Biss-Band gegen 20–120 Hz | 4,4 dB | 6,7 dB |
+| Acid: Schwerpunkt / 2–6 kHz gegen 300 Hz–2 kHz / Crest | 46 Hz / 0,9 dB / 1,1 dB | 62 Hz / 1,9 dB / 1,8 dB |
+| Kick: Klick / Körper / Sub gegen 60–120 | 2,3 dB / 16 ms / 4,2 dB | 3,0 dB / 15 ms / 5,1 dB |
+
+Die Acid trennt sich messbar weniger als Bass und Kick — die drei Stimmungen unterscheiden sich in Textur
+(Verzerrung, Puls, Dispersion), nicht im Spektrum, wie schon `mix-foundation` fand (525/606/500 Hz). Der
+Körper der Kick streut absichtlich nicht mehr als vorher (s. u. „Mix“). Was hörbar ist, entscheidet das Ohr;
+die Auszüge je Stimmung und je Bass-Charakter liegen bei.
+
+*Mix.* Der lautere, schwerere Bass teilt sich 40–140 Hz mit der Kick, und gegen dieses Band ist der Mix
+kalibriert. Bass −5 → −3 dB, Kick −2 → −6 dB hält `testMixBalance` auf dem Median: Top −9,13 (vorher −8,40),
+Air −12,49 (−11,68), Presence −8,94 (−8,32). Mit dem `mix.perc_level` 2,0 des Masters (Koordinator)
+nachgerechnet: Air −13,02, Top −9,57, Presence −9,21 — beide Stände grün. Tiefmitten (140–500 Hz gegen
+40–140 Hz, Drop allein, trocken): vorher −3,4, nachher −4,3 dB — um 0,9 dB näher an den Referenzen, nicht
+schlechter. `Tools/metrics.py` gegen den Referenz-Median (Low-Mid / Mid / Presence / Air), Standard-Master,
+nach `mix-foundation` → nach dieser Runde:
+
+| | nach mix-foundation | nachher |
+|---|---|---|
+| Auszug A | +2,79 / −1,06 / −2,31 / −0,12 | +1,80 / −1,21 / −3,53 / −1,75 |
+| Auszug B | +5,71 / +8,31 / +6,10 / +3,84 | +6,65 / +10,50 / +8,21 / +2,18 |
+| Auszug C | +8,27 / +12,41 / +8,53 / +5,19 | +9,48 / +12,83 / +9,79 / +2,15 |
+| ganzer Render (424 Takte) | +3,96 / +5,05 / +1,99 / +1,02 | +3,64 / +5,10 / +1,87 / −0,69 |
+
+Über den ganzen Render sind Tiefmitten und Presence etwas näher am Median, Air 1,7 dB tiefer (durch das
+schwerere Tiefband; mit dem −1 dB Percussion des Masters kommt noch etwa 1 dB dazu — `testMixBalance`
+bleibt auch dann auf −13,0 innerhalb ±1). **Track 2 (B, C) ist heller geworden:** sein Rezept ist eine kurze,
+resonante Kick und ein dunkler, schwerer Bass; der Level-Match hebt den Track um 2,7 dB (vorher 0,3; ob
+das an der neuen Sonde oder am neuen Klang liegt, ist nicht getrennt gemessen). Die Spurverstärkung trifft
+Kick, Bass und Percussion, die melodischen Stimmen werden gegen Track 1 zurückgerechnet; trocken gemessen
+stieg im Drop von Track 2 das Tiefband um 1,8 dB, Presence um 2,5 und Air um 2,4 dB. Die Länge der Kick-Rezepte ist deshalb **enger** geworden als zuerst gebaut
+(die Referenz-Kicks streuen dort kaum: Körper 101–108 ms zwischen den Quartilen); mit der ersten, weiten
+Fassung lag B noch 1 dB weiter oben. Mid/Presence in B und C waren schon vorher Lead und Arp von Track 2.
+
+*Prüfungen, alle zuerst rot gesehen:* `testBassBite` (Quartile Sub/Oktave/Biss, der Biss trägt das Band,
+Grundton-Leck unter −30 dB ≙ höchstens 1,8°, Pluck), `testKickBody` (Körper, Maskierung, Bass/Kick),
+`testAcidVoicing` (Ecken, Streuung, Engine), `testRecipeSpread` (Streuung, Kopplung je Rezept). Mit den
+alten Bass-/Kick-Standardwerten: Biss −21,9 dB, Bass/Kick −11,3 dB → rot; mit der alten Rezepttabelle
+Klick 3,1 dB, Pluck 6,0 dB → rot. **Messmethode geändert, begründet:** die Phase des Bass-Grundtons wird in
+`testBass`, `testPhaseLock` und `testBassRhythm` jetzt mit den Harmonischen 2 und 3 im Fit gelesen
+(`phaseAgainstH`): eine Oberwelle, deren Amplitude sich im Zweiperiodenfenster ändert, projiziert sonst auf
+den Kosinus des Grundtons; mit der Oktave und dem Biss las ein Ton, dessen Grundton 48 dB frei von jedem
+Leck ist, 10° „Drift“. Die Einsatzstreuung von Schlag zu Schlag misst `testPhaseLock` am Sub allein
+(0,002°; mit allen Pfaden 0,10°, weil die Velocity von Schlag zu Schlag die Obertöne ändert). `testKick`
+liest die Ausklanggrenze aus dem Standard statt −24 fest. Der Einsatz-Test in `testBass` läuft ohne Biss:
+die Pulsflanke liegt am Nulldurchgang des Grundtons, der Biss macht daraus den Anschlag.
+
+*Mutationen* (je eine eingebaut, gemessen, aus der Kopie zurück, Zeitstempel gesetzt):
+
+| Mutation | Wer merkt es |
+|---|---|
+| M1 Split wieder 4. Ordnung | `testBassBite`: Leck −13,0 dB; `testBass`: Start 17°, Drift 11,7° |
+| M2 Biss-Hüllkurve je Note nicht neu gestartet | zuerst **niemand** (die Ladder-Hüllkurve lieferte den Pluck); Messung auf Biss allein umgestellt → 2,1 dB statt ≥ 6 |
+| M3 Sub-Oktave bei 3 f0 | `testBassBite`: 60–120 Hz −5,5 dB; `testBass`: Einsatz |
+| M4 Sonde spielt wieder alle Ebenen | `testVariety`: 0,81 LU (knapp über 0,8) |
+| M5 Ausklanggrenze wieder −24 dB | `testKickBody`: Körper 84 ms |
+| M6 Disperser-Override nicht geschrieben | `testAcidVoicing`: Disperser 0 statt 3 |
+
+Nach dem Rückbau jeder Mutation ist der `git diff` der Kerndateien leer (Kopie zurück, Zeitstempel gesetzt,
+neu gebaut). **Endstand:** Selbsttest 375 bestanden, 1 rot — „the auto-pan lowers the kit's 85 ms level
+difference in the air band“, mit denselben Zahlen (4,88 → 4,71 dB) schon am Ausgangscommit 886d18d rot
+(363/1), gehört nicht zu dieser Runde. `phos_vectest`, `_neon`, `_scalar` je 17/17; `ctest -C Release`
+ohne Selbsttest 5/5 (questguard übersprungen; Hosttest gibt es ohne Plugin-Build nicht). Kick + rollender
+Bass kosten jetzt 0,74 % eines Kerns (`phos_vectest`, AVX2).
+
+*Hören* (`out\listen\lowend-acid`, Seed 864566672, Standardparameter):
+- **A** (Track 1, Build 0–26,5 s, Drop ab 26,5 s): im Drop hat der Bass einen hörbaren Mittenanschlag auf
+  jedem Sechzehntel (Biss) und mehr Gewicht eine Oktave über dem Sub; die Kick ist gut 2 dB leiser, aber
+  länger (Körper bis zum ersten Basston); das Tiefband als Ganzes steht knapp 1 dB stärker gegen die Hats. Track 1 spielt die Regler: die Acid
+  ist unverändert „driven“.
+- **B** (Track 2, Build 0–13,3 s, Drop ab 13,3 s): Track 2 hat eine kurze, resonante Kick und einen dunklen,
+  schweren, wenig beißenden Bass (Rezept brightness −0,62, grit −0,75, weight +0,57) — deutlich anders als
+  Track 1; der Track steht insgesamt heller (siehe „Mix“). Keine Acid in Track 2.
+- **C** (Track 2, Drop bis 13,3 s, dann Breakdown): im Drop wie B; im Breakdown spielen weder Kick noch
+  Bass, dort hat sich nichts geändert.
+- `A_kick_tail_before/after`: nur Kick + Bass, erster Drop — vorher Grenze −24 dB/Decay 150 ms, nachher
+  −15 dB/240 ms, alles andere gleich. `A_kickbass_0_before/1_after`: Kick + Bass des Ausgangsstands gegen den
+  Endstand (der Vergleich „Bass mit Biss“).
+- `A_acid_clean/driven/liquid/blend_clean_liquid`: Auszug A mit den Acid-Reglern auf der jeweiligen Stimmung
+  (die Pegel-Trims von `mix-foundation`), dazu eine Mischung halb clean, halb liquid — so klingt ein Punkt im
+  Inneren des Dreiecks.
+- `A_bass_1_clean_sub_bite` (Standard), `2_gritty`, `3_rubbery`, `4_plucky`: Auszug A mit den Bass-Reglern
+  am Ende der jeweiligen Richtung. Track 1 hat keinen Level-Match, die Charaktere sind also nicht
+  lautheitsgleich.
+
+*Dateien.* `Core/include/phos/Bass.h`, `Core/src/Bass.cpp`, `Core/include/phos/Kick.h` (nur Doku),
+`Core/include/phos/Composer.h`, `Core/src/Composer.cpp`, `Core/src/Params.cpp` (Standardwerte `bass.*`,
+`kick.*`; sieben angehängte `bass.*`), `Core/include/phos/Params.h` (die sieben angehängten Enum-Einträge —
+für das Anhängen nötig, sonst unberührt), `Tests/selftest.cpp`, neu `Tools/ref_bass.py`. Nicht angefasst:
+`Engine.cpp`, `Acid.*`, `Kick.cpp`, `DiodeLadder.h`, `Ladder.h`, `Halfband.h`.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
