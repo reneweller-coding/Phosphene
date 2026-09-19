@@ -1942,6 +1942,14 @@ void testAcidVoicing()
         const TrackPlan& t0 = c.track(p, 0);
         check(cleanOk && liquidOk && drivenOk && anyZero == 0.0f && disp == -1 && t0.acidVoicing[1] == 1.0f,
               "a track at a corner plays that voicing exactly, the driven corner and Sound Variation 0 play the knobs, track 1 is driven");
+        // Not a check: what the listening seed's first tracks draw, for the listening notes.
+        for (int i = 0; i < 4; ++i) {
+            const TrackPlan& t = c.track(p, i);
+            std::printf("         listening seed, track %d: acid clean/driven/liquid %.2f/%.2f/%.2f; bass", i + 1,
+                        static_cast<double>(t.acidVoicing[0]), static_cast<double>(t.acidVoicing[1]), static_cast<double>(t.acidVoicing[2]));
+            for (int m = 0; m < kNumBassMacros; ++m) std::printf(" %s %+.2f", kBassMacroNames[m], static_cast<double>(t.bassMacro[m]));
+            std::printf("\n");
+        }
     }
     // (b) Over a night the tracks spread over the triangle, and consecutive tracks differ.
     {

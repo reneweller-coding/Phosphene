@@ -29,12 +29,23 @@
  * constraints are applied afterwards in the engine: the kick's tail limit at the first bass slot and
  * the kick lock.
  *
+ * **Per-track character (19.09.2026).** The user's wish: the tracks must not all sound alike. The bass
+ * directions now carry the four characters of that round's brief -- clean sub plus bite at the
+ * centre, gritty (grit), rubbery and resonant (squelch), plucky and short (pluck) -- including the new
+ * bite layer's parameters, with three to four times the old weights; the kick's click, length and end
+ * pitch reach as far as the reference kicks spread. The acid gets a third recipe: a point in the
+ * triangle of its three voicings (kNumAcidVoicings), drawn per track by the same best-candidate rule
+ * and applied as offsets from the knobs (acidVoicingOffsets). Measured over twenty tracks of the
+ * listening seed (testRecipeSpread): the kick's click band spreads 4.3 dB between its quartiles (3.1
+ * with the old table), the bass's pluck 9.9 dB (6.0).
+ *
  * **Level match.** A short recipe, a thin pattern or a clean bass is quieter, and a set must not jump
  * several decibels at every track change (measured before this existed: 3.5 dB between neighbouring
  * tracks). When a track is planned, the composer renders two bars of its sound -- kick, primary bass
  * pattern, recipe and constraints -- in a private engine, measures the integrated loudness to
  * ITU-R BS.1770, and gives the track the gain that brings it to the first track's loudness, at most
- * +-9 dB. The melodic parts come and go inside a track, so they are not part of that measurement; each
+ * +-9 dB. The probe's percussion plays as many layers as the track's first core does (since
+ * 19.09.2026; before, all the track has, which over-read the tracks by different amounts). The melodic parts come and go inside a track, so they are not part of that measurement; each
  * of them is probed alone instead (two bars of its own line and sound) and brought to the loudness the
  * same part had in the first track, so an FM lead after a supersaw or a squelched acid after a dry one
  * does not jump either.

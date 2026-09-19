@@ -216,6 +216,10 @@ const char* const kDefaultKit =
     "perc12.role=Blip;perc12.engine=Tone;perc12.pitch=1100;perc12.pitch_amount=1.3;perc12.pitch_decay=4;perc12.decay=45;"
     "perc12.filter=Band Pass;perc12.cutoff=1800;perc12.resonance=0.2;perc12.level=-8;perc12.pan=-0.6;perc12.pan_depth=1;perc12.tune=1\n";
 
+// 19.09.2026 (round "lowend-acid"): Decay 150 -> 240 ms and Tail Limit -24 -> -15 dB give the kick the
+// reference kicks' body (Kick.h, "Kick body and the limit"); Level -2 -> -6 dB, because the louder,
+// heavier bass now shares the 40 .. 140 Hz band the mix is calibrated against (testMixBalance), and the
+// bass-to-kick ratio lands on the references' (Tools/ref_bass.py, "b/k": -4.2 against a median -4.7).
 const ParamDesc kKickParams[kick::Count] = {
     { "engine",      "Engine",       "",     0.0f,     1.0f,    0.0f, Curve::Choice, kKickEngineNames },
     { "tune",        "Tune",         "",     0.0f,     1.0f,    1.0f, Curve::Choice, kKickTuneNames },
@@ -237,6 +241,12 @@ const ParamDesc kKickParams[kick::Count] = {
     { "tail_limit",  "Tail Limit",   "dB", -60.0f,     0.0f,  -15.0f, Curve::Linear },
 };
 
+// 19.09.2026 (round "lowend-acid"): calibrated against Tools/ref_bass.py (24 reference recordings, the
+// sixteenths between the kicks, each band against 20 .. 120 Hz; self test testBassBite). Sub 0.6 -> 0.3
+// and the new Sub Octave 0.5: under 60 Hz -5.7 dB, 60 .. 120 Hz -1.4 dB (references -7.4 and -0.9).
+// Cutoff 140 -> 240 Hz for 120 .. 300 Hz. The new bite layer: 300 Hz .. 2 kHz -10.3 dB (references
+// -9.8; the bass before read -21.6). Level -5 -> -3 dB: bass against kick, see the kick table. Split
+// stays 2 x f0 with a steeper filter (Bass.h).
 const ParamDesc kBassParams[bass::Count] = {
     { "wave",          "Wave",          "",      0.0f,     1.0f,  0.15f, Curve::Linear },
     { "pulse_width",   "Pulse Width",   "",     0.05f,    0.95f,   0.5f, Curve::Linear },
@@ -262,7 +272,8 @@ const ParamDesc kBassParams[bass::Count] = {
     { "duck_release",  "Duck Release",  "ms",    5.0f,   500.0f,  60.0f, Curve::Log },
     { "level",         "Level",         "dB",  -36.0f,     6.0f,  -3.0f, Curve::Linear },
     // Appended 19.09.2026 (round "lowend-acid"): the bite layer, a saturated copy of the oscillator
-    // low-passed around 400 .. 800 Hz with its own envelope (Bass.h, "Bite").
+    // low-passed around 400 .. 800 Hz with its own envelope (Bass.h, "Bite"). The envelope opens the
+    // cutoff three octaves at the onset and closes it within 90 ms: the pluck of the roll.
     { "bite",           "Bite",          "",      0.0f,     1.0f,   0.5f, Curve::Linear },
     { "bite_cutoff",    "Bite Cutoff",   "Hz",  100.0f,  4000.0f, 500.0f, Curve::Log },
     { "bite_env",       "Bite Env",      "oct",   0.0f,     5.0f,   3.0f, Curve::Linear },

@@ -59,6 +59,16 @@
  * gain relative to full scale -- g / tanh(g) for tanh, max(g, 1) for the hard clip -- and the
  * constraint accounts for that lift (without it the default kick measured 9.4 dB louder in its tail
  * than its envelope said).
+ *
+ * **Kick body and the limit (19.09.2026).** The reference kicks stay within 20 dB of their peak up to
+ * the first bass slot (Tools/ref_kick.py, median 104 ms, the end of its window); ours fell 20 dB by
+ * 76 ms. The limit of -24 dB was not what cut it -- at the default decay of 150 ms it did not bind --
+ * but it would have cut any decay long enough (at most 170 ms at 145 BPM). The default limit is now
+ * -15 dB and the decay 240 ms, which the limit trims to about 235 ms: the body reads 113 ms by the
+ * tool's definition. What the limit exists for still holds: in the first bass sixteenth the kick's tail
+ * stays 15.8 dB under the bass in 30 .. 150 Hz (median over the first drop of the listening seed), and
+ * with the lock the two meet in phase there. Neither the lock nor the trim range is touched: tau_2 is
+ * the same, so one cycle still costs 7.1 ms of it.
  */
 #pragma once
 #include "phos/Adaa.h"

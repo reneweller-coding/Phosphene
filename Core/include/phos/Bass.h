@@ -5,9 +5,9 @@
  * Signal path per note:
  * @code
  *   PolyBLEP saw/pulse (2 fs) -> drive -> nonlinear ZDF ladder + filter envelope --+
- *                             -> bite: tanh -> 4-pole low pass + its envelope -----+-> half-band -> [high pass] --+
- *                                                                                                              +-> amp ADSR -> duck -> level
- *   sine at the fundamental (fs, same phase as the saw's fundamental) -> sub level ----------------------------------+
+ *                             -> bite: tanh -> 2-pole HP -> 4-pole LP + envelope --+-> half-band -> [LR8 high pass] --+
+ *                                                                                                                  +-> amp ADSR -> duck -> level
+ *   sines at f0 and 2 f0 (fs, same phase course as the saw's fundamental) -> sub and sub octave levels -----------------+
  * @endcode
  *
  * **Why the sub is separate.** A resonant low pass whose cutoff is swept by a fast envelope shifts
@@ -15,10 +15,20 @@
  * it: measured on the default sound, the fundamental's phase moved by -34 degrees during the first
  * 22 ms of every note. That is exactly the window in which the kick's tail and the bass overlap.
  * The fundamental is therefore generated as a pure sine that no filter touches, and in Split mode
- * the filtered voice is high-passed so that it carries the overtones only: two cascaded Butterworth
- * sections at Split x f0 form a fourth-order Linkwitz-Riley high pass (-6 dB at the corner,
- * 24 dB/octave), which at the default ratio of 2 leaves the filtered path's fundamental 24.6 dB
- * down. Mixed mode adds the sub without splitting.
+ * the filtered voice is high-passed so that it carries the overtones only. Since 19.09.2026 that high
+ * pass is a fourth-order Butterworth squared at Split x f0 -- an 8th-order Linkwitz-Riley, -6 dB at
+ * the corner, 48 dB/octave -- which at the default ratio of 2 leaves the filtered path's fundamental
+ * 48.2 dB down; the fourth-order pair before it left 24.6 dB. The difference became necessary when
+ * the sub came down to make room for the octave and the bite: with the old pair the saw's leaked
+ * fundamental would have stood about 11 dB under the new, quieter sub. Mixed mode adds the sub
+ * without splitting.
+ *
+ * **Sub octave (19.09.2026).** A second sine at twice the fundamental, on the sub's own phase
+ * course, so it is phase-locked by construction and carries no filter's phase. The reference
+ * basses have more power in 60 .. 120 Hz than under 60 Hz between their kicks (Tools/ref_bass.py:
+ * -0.9 against -7.4 dB, each against 20 .. 120 Hz); the saw path's second harmonic sits at the
+ * Split corner and loses 6 dB there, so the weight comes from this sine instead of from moving the
+ * corner towards the fundamental.
  *
  * **One phase for the note.** The saw and the sub start with the same fundamental phase, and the
  * engine chooses it: the Start Phase knob (0.5 is the saw's zero crossing, fundamental phase 0), or
@@ -39,15 +49,20 @@
  * 19.09.2026). The bite takes the oscillator's own samples, so it is phase-coherent with the saw path
  * and the sub by construction:
  * @code
- *   oscillator (2 fs) -> tanh drive -> 4-pole low pass (two SVFs, Butterworth, resonance on the second),
+ *   oscillator (2 fs) -> tanh drive -> 2-pole high pass at 0.4 x Bite Cutoff
+ *                     -> 4-pole low pass (two SVFs, Butterworth, resonance on the second),
  *                        cutoff = Bite Cutoff x 2^(Bite Env x its own exponential envelope + key track)
  *   ... summed with the ladder's output *before* the half-band decimator and the Split high pass
  * @endcode
  * Summing it before the Split high pass is what keeps the low end clean: in Split mode the bite loses
- * its fundamental exactly as the saw path does (24.6 dB down at the default ratio), so everything at
- * the fundamental is still the one sine no filter touches, and the kick lock, which is solved on that
- * sine, is untouched. The bite's own envelope lets it be plucky (short, bright onset) while the saw
- * path stays dark and round, or long and "rubbery" with resonance.
+ * its fundamental exactly as the saw path does (48 dB down at the default ratio, on top of its own
+ * floor, a 2-pole high pass at 0.4 x Bite Cutoff), so everything at the fundamental is still the one
+ * sine no filter touches, and the kick lock, which is solved on that sine, is untouched. The bite's
+ * own envelope lets it be plucky (a bright onset that falls 13 dB above 700 Hz from a note's first
+ * period to its third at the defaults) while the saw path stays round, or long and "rubbery" with
+ * resonance. The pulse part of the wave has its edge at the fundamental's zero crossing; the bite's
+ * saturator lifts that edge into a band-limited attack under the bite's cutoff, which is part of the
+ * point, not a step.
  */
 #pragma once
 #include "phos/Ducker.h"

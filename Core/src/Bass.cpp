@@ -16,13 +16,14 @@ const HalfbandDesign& bassHalfband()
     return d;
 }
 constexpr float kResonanceMax = 3.9f;   ///< feedback at Resonance 1: just short of self-oscillation
-constexpr float kSubScale = 0.7f;       ///< sub knob to amplitude: at 0.6 the sine matches the filtered voice's old fundamental
+constexpr float kSubScale = 0.7f;       ///< sub (and sub octave) knob to amplitude: at 0.6 the sine matches the filtered voice's old fundamental
 /**
  * @brief Bite knob to amplitude.
  *
  * The layer is a band of a full-scale saw, so its raw level is already comparable to the saw path's;
  * the scale only sets where the knob's middle lands. Calibrated on 19.09.2026 so that the default
- * sound meets the references' bite band (docs/PLAN.md, 19.09.2026).
+ * sound meets the references' bite band: 300 Hz .. 2 kHz at -9.8 dB against 20 .. 120 Hz between the
+ * kicks, the median of Tools/ref_bass.py over 24 recordings (docs/PLAN.md, 19.09.2026).
  */
 constexpr float kBiteScale = 1.344f;
 /** @brief Butterworth dampings of the two sections: 2 cos(pi/8) and 2 cos(3 pi/8). */
@@ -137,7 +138,7 @@ void Bass::noteOn(int pitch, float velocity, int gateSamples, double late, doubl
     if (retrigger_) {
         // When the previous note has died away (-60 dB), the filters start from rest as well: the
         // oscillator keeps running between notes, and its ringing in the ladder, the decimator and
-        // the 24 dB high pass would otherwise make every note begin a little differently. Under
+        // the 48 dB high pass would otherwise make every note begin a little differently. Under
         // -60 dB the reset cannot be heard; a note that is still sounding keeps its filter states.
         if (amp_.level() < 1.0e-3f) {
             ladder_.reset();
