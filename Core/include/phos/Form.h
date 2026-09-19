@@ -11,7 +11,15 @@
  * Cut and Outro. Butler ("Unlocking the Groove", 2006) supplies the hypermetre: everything in powers
  * of two, every section starting on a multiple of eight bars.
  *
- * **The grammar** is context-free with weights per style profile (PLAN 6.2):
+ * **Since 19.09.2026 (round "arrangement") the user's two-drop form replaces the grammar below**: every
+ * track is intro (32: 16 without kick, then kick and bass), groove (32, a percussion layer every eight
+ * bars), buildup 1 (16, the last four a pre-drop break), drop 1 (32), breakdown (32), the big buildup (32,
+ * a sixteen-bar roll), drop 2 (48, the climax) and outro (32, the last sixteen kick, bass and a hat), with
+ * a template per subgenre family (Form.cpp, kTemplates) and the DJ overlap between tracks (kDjOverlap).
+ * The rules stand above the measured values the older text below describes; what is left of those is
+ * kept where the rules do not speak (the PDB variants, the cut, the energy arc, modal interchange).
+ *
+ * **The grammar (until 19.09.2026)** was context-free with weights per style profile (PLAN 6.2):
  * @code
  *   Track -> Intro Body Outro
  *   Body  -> Groove Build Drop Break Build Drop                (Full-On standard)
@@ -118,20 +126,46 @@ enum class ArcId : int { WarmUp = 0, PeakTime, Morning, Closing, Flat, Count };
 constexpr int kNumArcs = static_cast<int>(ArcId::Count);   ///< number of arcs
 extern const char* const kArcNames[kNumArcs];              ///< display names
 
-constexpr int kNumBodies = 3;        ///< grammar bodies of PLAN 6.2
-constexpr int kNumPdbVariants = 4;   ///< whole bar, half bar, beat 4 only, kick alone on beat 4
+/**
+ * @brief The form templates of the two-drop architecture (19.09.2026, round "arrangement"), one per
+ *        subgenre family: Full-On (also Hi-Tech), Progressive, Goa and Dark Forest.
+ *
+ * Until this round these were the three grammar bodies of PLAN 6.2; the user's arrangement rules replaced
+ * them (Form.cpp, kTemplates). The name stays because FormPlan::body and the style profiles' bodyWeight
+ * keep their meaning: which template a track was built from.
+ */
+constexpr int kNumBodies = 4;
+constexpr int kNumPdbVariants = 4;   ///< whole bar, half bar, beat 4 only, kick alone on beat 4 (the last is never drawn since 19.09.2026: beat 4 stays empty)
+
+/**
+ * @name The DJ intro and outro inside a continuous set (19.09.2026, round "arrangement")
+ *
+ * A track's intro runs 32 bars: 16 without a kick (atmosphere, a quiet sixteenth hat, the shaker), then
+ * kick and bass. Its outro runs 32 bars and ends on 16 bars of kick, bass and one hat. Inside a set the
+ * two ends overlap the way a DJ mixes them: the first kDjOverlap bars of track N+1's intro sound over the
+ * last kDjOverlap bars of track N's outro. That puts N's kick-bass-hat bars under N+1's kick-free
+ * atmosphere, so **exactly one kick and one bass sound at every moment** -- N's until the hand-over bar,
+ * N+1's from it, which is also N+1's kick entry at its own bar 17. Sixteen is the one overlap for which
+ * both halves of the user's rule hold literally; with 32 either N's last 16 bars or N+1's kick entry would
+ * have to give way (Composer.cpp, transitionBar).
+ * @{ */
+constexpr int kDjOverlap = 16;       ///< bars in which two tracks sound together
+constexpr int kIntroKickBar = 16;    ///< bar of the intro (0-based) on which kick and bass enter
+constexpr int kOutroBareBars = 16;   ///< the outro's last bars: kick, bass and one hat only
+/** @} */
 extern const char* const kPdbVariantNames[kNumPdbVariants];   ///< display names
 constexpr int kBassSlots = 3;        ///< bass notes per beat at most; the slot envelope of PLAN 6.6
-constexpr int kMaxSections = 16;     ///< sections a track can have (the grammar needs at most 10)
+constexpr int kMaxSections = 16;     ///< sections a track can have (the templates need eight)
 /**
- * @name The track lengths the grammar can build exactly
- * Every body must be able to hit every requested length, because the body is a track's own decision
- * while the length belongs to the set walk: a rerolled track must not move the tracks after it. The
- * window is what all three bodies have in common. 128 bars are 3:32 at 145 BPM, 320 bars are 8:50 --
- * the reference recordings run 7.7 min (Full-On median) to 8.6 min (Goa).
+ * @name The track lengths the templates can build exactly
+ * Every template must be able to hit every requested length, because the template is a track's own
+ * decision while the length belongs to the set walk: a rerolled track must not move the tracks after it.
+ * Lengths are multiples of 16 bars. 128 bars are 3:32 at 145 BPM, 320 bars are 8:50; the default is 256,
+ * and the set walk moves a track by at most one 16-bar block (240 .. 272 bars, the user's 220 .. 280).
  * @{ */
-constexpr int kMinTrackBars = 128;   ///< shortest track the grammar builds
+constexpr int kMinTrackBars = 128;   ///< shortest track the templates build
 constexpr int kMaxTrackBars = 320;   ///< longest
+constexpr int kTrackBarStep = 16;    ///< track lengths are multiples of this
 /** @} */
 
 /**
@@ -186,6 +220,19 @@ double arcEnergy(ArcId arc, double t);
 /** @brief Nominal energy of a section type, before the arc scales it. */
 float typeEnergy(SectionType type);
 
+/**
+ * @name Drop 2 as the climax (19.09.2026, round "arrangement")
+ * The user: drop 2 is "the most energetic part of the whole track -- its spectral energy must exceed every
+ * other point". Drop 1 takes kDrop1Share of a drop's nominal energy, and after the arc has scaled every
+ * section, drop 2 is lifted (or, where it would pass 1, the others lowered) until it stands kClimaxMargin
+ * above every other section. The energy drives the track gain by 5 dB per unit (Composer.cpp,
+ * energyGainDb), so the margin alone is 0.4 dB on kick, bass and percussion; the audible rest of the
+ * climax is density -- open hats, ride, the second lead, the arp an octave up, squelches in the gaps.
+ * @{ */
+constexpr float kDrop1Share = 0.88f;
+constexpr float kClimaxMargin = 0.08f;
+/** @} */
+
 /** @brief One section of a track's form. */
 struct Section {
     SectionType type = SectionType::Groove;   ///< what kind of section it is
@@ -196,6 +243,15 @@ struct Section {
     int   pdbVariant = 0;    ///< buildups: which pre-drop break the last bar plays
     float cutBeats = 0.0f;   ///< breakdowns: beats of silence at the start (the cut of Grosz et al.)
     int   scale = 0;         ///< the mode the *melodic* layer takes here; the bass ignores it entirely
+    /** @name The two-drop form (19.09.2026, round "arrangement")
+     *  @{ */
+    bool  climax = false;    ///< drops: this is drop 2, the most energetic part of the track
+    int   rollBars = 0;      ///< buildups: bars of the snare roll at its end (quarters -> ... -> thirty-seconds)
+    int   pdbBars = 0;       ///< buildups: bars of the pre-drop break at its end (kick and bass out; 0 = none)
+    int   breakPerc = 0;     ///< breakdowns: percussion layers that keep playing (Dark Forest's modular percussion)
+    bool  spiral = false;    ///< breakdowns: the arp spirals through the whole of it (Goa: no total silence)
+    bool  dry = false;       ///< drops: no impact and no sweep into it, the stab carries it (Progressive)
+    /** @} */
 };
 
 /** @brief An effect placed in a track: start and length in beats from the track's first bar. */
@@ -216,10 +272,18 @@ struct FormPlan {
     Section section[kMaxSections];    ///< the sections, in order
     int     count = 0;                ///< how many
     int     bars = 0;                 ///< total length (a multiple of 32)
-    int     body = 0;                 ///< which grammar body was drawn
+    int     body = 0;                 ///< which template the form was built from (Form.cpp, kTemplates)
     std::vector<SfxEvent> sfx;        ///< effects at the section boundaries, sorted by start
     /** @brief Bit per mode: which modes the melodic layer needs material for (bit @c trackScale always set). */
     uint32_t scaleMask = 0;
+    /**
+     * @brief Bars at the start of the track over which the previous track's kick and bass still sound
+     *        (0 for the first track of a set, kDjOverlap for every later one; set by the composer).
+     *
+     * The floor is not silent there, so neither the pad's sub foundation nor the drone's low octave may
+     * take it (planBar reads it into BarPlan::floorSilent).
+     */
+    int handover = 0;
 };
 
 /**
@@ -241,9 +305,11 @@ FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double a
 int sectionOfBar(const FormPlan& f, int barInTrack);
 
 /**
- * @brief Whether every hard constraint of PLAN 6.2 holds: lengths in {8, 16, 32, 64}, no core and no
- *        breakdown under 16 bars, buildups of 8 or 16, every section start on a multiple of eight, and
- *        the breakdowns between 15 and 30 % of the track.
+ * @brief Whether every hard constraint holds (19.09.2026): every length and every start a multiple of
+ *        eight, no core and no breakdown under 16 bars, buildups of 8 to 32 bars, an intro and an outro
+ *        of at least kDjOverlap bars (the DJ overlap needs them), exactly one climax and it is the last
+ *        drop. The breakdown share of PLAN 6.2 (15 .. 30 %) is gone: the user's form gives the breakdown
+ *        32 of 256 bars, 12.5 %.
  */
 bool formConstraintsHold(const FormPlan& f);
 
@@ -253,6 +319,7 @@ struct PartAvailability {
     int  leadLo = 59, leadHi = 79;   ///< the lead's pitch range (the masking rule)
     int  arpLo = 55, arpHi = 74;     ///< the arp's pitch range
     int  percLayers = 4;     ///< percussion layers the track's kit offers
+    int  hatLayers = 1;      ///< how many of them are the hats at the head of the layer order (PercPlan::hatLayers)
 };
 
 /** @brief What plays in one bar: the instrumentation matrix evaluated. */
@@ -281,6 +348,19 @@ struct BarPlan {
     /** @brief Kick and bass rest for the whole bar (and it is no pre-drop break): the floor under 140 Hz
      *         belongs to the pad's sub foundation or the drone's low octave (19.09.2026). */
     bool        floorSilent = false;
+    /** @name The two-drop form's percussion and markers (19.09.2026, round "arrangement")
+     *  @{ */
+    bool        climax = false;         ///< drop 2
+    int         rollBars = 4;           ///< length of the snare roll rollBar counts in
+    bool        quietHats = false;      ///< the intro's first half: a quiet closed hat on every sixteenth but the downbeat
+    bool        shaker = false;         ///< the shaker plays whether or not it is one of the layers
+    bool        offbeatHat = false;     ///< the closed hat plays its eighth offbeat whether or not it is a layer
+    float       hatLevel = 1.0f;        ///< velocity factor of the hats that offbeatHat and quietHats add
+    bool        openHats = false;       ///< drop 2: the open hat on every offbeat
+    bool        ride = false;           ///< drop 2: the ride plays whether or not it is one of the layers
+    bool        crash = false;          ///< a crash on the one (a drop's downbeat, every sixteenth bar of a drop)
+    int         cycleBar = 0;           ///< bar within the section's 32-bar cycle (the micro rules: 8, 16, 24, 32)
+    /** @} */
 };
 
 /**
@@ -335,7 +415,8 @@ constexpr float kRideDecayShort  = 1.0f / 3.0f;   ///< stage 1 filter decay as a
 constexpr float kRideDecayLong   = 1.7f;    ///< stages 3 and 4 filter decay as a ratio of the knob
 constexpr float kRideDive   = 0.22f;    ///< how far a breakdown dives, normalised
 constexpr float kRollSend   = 0.30f;    ///< hall send the buildup's snare roll rises to
-constexpr int   kRollBars   = 4;        ///< bars of a buildup the roll and its send ramp run over
+constexpr int   kRollBars   = 4;        ///< bars of a buildup the roll and its send ramp run over (where the section names none)
+constexpr float kRideSweep  = 0.8f;     ///< the bar-24 sweep of the acid (19.09.2026), in half-excursions above the ride
 
 /**
  * @brief The four-stage acid ride of the user's rule text of 18.09.2026, as key points in time.

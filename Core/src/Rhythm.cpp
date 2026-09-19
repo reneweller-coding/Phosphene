@@ -133,15 +133,25 @@ PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack, const
     double w[3] = { 0.45, openHat >= 0 ? 0.30 : 0.0, shaker >= 0 ? 0.25 : 0.0 };
     double x = r.uniform() * (w[0] + w[1] + w[2]);
     plan.hatMode = x < w[0] ? 0 : (x < w[0] + w[1] ? 1 : 2);
-    plan.clapBackbeat = clap >= 0 && r.uniform() < 0.55f;
+    // 19.09.2026, round "arrangement": the clap on 2 and 4 is the first layer the groove adds (the
+    // user's rule), so every kit that has a clap plays it on the backbeat. The draw stays in the stream.
+    const bool clapDraw = r.uniform() < 0.55f;
+    plan.clapBackbeat = clap >= 0;
+    (void)clapDraw;
 
-    // Layer order: the hats first, then the lane the hat mode leans on, the clap, then the rest by weight.
+    // Layer order: the hats first, then the lane the hat mode leans on; behind them the rule's order --
+    // clap, congas, ride, one per eight bars of the groove -- and then the rest by weight.
     std::vector<int> order;
     auto add = [&](int lane) { if (lane >= 0 && std::find(order.begin(), order.end(), lane) == order.end()) order.push_back(lane); };
     add(closedHat);
     if (plan.hatMode == 1) add(openHat);
-    if (plan.hatMode == 2) add(shaker);
+    // The shaker belongs to the hats since 19.09.2026: the intro brings it in before the kick and it stays,
+    // so the groove's first new layer is the clap and not a shaker that has been playing for sixteen bars.
+    add(shaker);
+    plan.hatLayers = std::max(1, static_cast<int>(order.size()));
     if (plan.clapBackbeat) add(clap);
+    add(laneOfRole(p, PercRole::Conga));
+    add(laneOfRole(p, PercRole::Ride));
     std::vector<int> rest;
     std::vector<double> weights;
     for (int l = 0; l < kPercLanes; ++l) {
@@ -213,9 +223,10 @@ PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack, const
     return plan;
 }
 
-FillType chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack)
+FillType chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack, int cycleBar)
 {
-    if (barInTrack % 8 != 7) return FillType::None;
+    const int phraseBar = cycleBar >= 0 ? cycleBar : barInTrack;
+    if (phraseBar % 8 != 7) return FillType::None;
     const float pv = p.get(p.base(Module::Compose) + compose::PercVariation);
     Rng r;
     r.seed(mixSeed(trackSeed ^ kSaltFill, static_cast<uint64_t>(barInTrack)));
@@ -228,7 +239,11 @@ FillType chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack)
         0.5,
     };
     // At the end of sixteen bars the fill is always a roll when a snare exists.
-    if (barInTrack % 16 == 15 && w[1] > 0.0) return FillType::SnareRoll;
+    if (phraseBar % 16 == 15 && w[1] > 0.0) return FillType::SnareRoll;
+    // The eighth bar of a cycle (19.09.2026): a snare fill or a tom run, nothing else, where the kit has
+    // either.
+    if (cycleBar >= 0 && cycleBar % 32 == 7 && w[1] + w[2] > 0.0)
+        return r.uniform() * (w[1] + w[2]) < w[1] ? FillType::SnareRoll : FillType::TomRun;
     double total = 0.0;
     for (double v : w) total += v;
     double x = r.uniform() * total;
@@ -250,7 +265,7 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
     bool inGroove[kPercLanes] = {};
     for (int i = 0; i < layers; ++i) inGroove[plan.layerOrder[i]] = true;
     // A buildup's roll replaces the phrase fill; everything else keeps the fill bank.
-    const FillType fill = (spec.fills && spec.rollBar < 0) ? chooseFill(p, trackSeed, barInTrack) : FillType::None;
+    const FillType fill = (spec.fills && spec.rollBar < 0) ? chooseFill(p, trackSeed, barInTrack, spec.cycleBar) : FillType::None;
 
     auto emit = [&](int lane, double beatInBar, float velocity, int shift) {
         if (beatInBar < static_cast<double>(spec.cutBeats)) return;
@@ -282,7 +297,25 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
         for (bool& k : keep) k = phrase.uniform() < prob;
         const bool hatsDropped = fill == FillType::HatDrop;
 
-        if (inGroove[l]) {
+        // 19.09.2026, round "arrangement": lanes the form asks for by name, whether or not they are among
+        // the layers -- the intro's quiet sixteenth hat and its shaker, the off-beat hat that the intro,
+        // the breakdown and the outro's bare bars keep, drop 2's open hats and ride. They play the lane's
+        // own pattern (below) at hatLevel, or the named figure where the lane is not a layer.
+        const bool named = (role == PercRole::Shaker && spec.shaker) || (role == PercRole::Ride && spec.ride)
+                        || (role == PercRole::OpenHat && spec.openHats);
+        if (!inGroove[l] && role == PercRole::ClosedHat && (spec.quietHats || spec.offbeatHat)) {
+            for (int s = 0; s < 16; ++s) {
+                const int pos = s % 4;
+                if (hatsDropped && s >= 12) continue;
+                // The quiet figure: every sixteenth but the downbeat, the off-beat a little stronger.
+                const float vel = spec.quietHats ? (pos == 2 ? 0.5f : (pos != 0 ? 0.32f : 0.0f)) : (pos == 2 ? 1.0f : 0.0f);
+                if (vel > 0.0f) emit(l, s * 0.25, vel * spec.hatLevel, 0);
+            }
+        }
+        if (role == PercRole::OpenHat && spec.openHats) {
+            for (int s = 2; s < 16; s += 4) if (!(hatsDropped && s >= 12)) emit(l, s * 0.25, 0.9f, 0);
+        } else if (inGroove[l] || named) {
+            const float level = inGroove[l] ? 1.0f : spec.hatLevel;
             for (int s = 0; s < 16; ++s) {
                 const int pos = s % 4;
                 if (hatsDropped && s >= 12 && (role == PercRole::ClosedHat || role == PercRole::OpenHat || role == PercRole::Shaker)) continue;
@@ -314,12 +347,14 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
                 }
                 default: break;
                 }
-                if (vel > 0.0f) emit(l, s * 0.25, vel, 0);
+                if (vel > 0.0f) emit(l, s * 0.25, vel * level, 0);
             }
         }
         // Phrase marks outside the layers: the crash on a drop, the snare's ghost note.
         if (role == PercRole::Crash && spec.crash) emit(l, 0.0, 0.9f, 0);
-        if (role == PercRole::Snare && fill == FillType::None && spec.rollBar < 0 && barInTrack % 4 == 3 && keep[15] && phrase.uniform() < 0.5f)
+        // The ghost note belongs to bars that may carry fills (19.09.2026): not to the bare ends of a track.
+        if (role == PercRole::Snare && fill == FillType::None && spec.rollBar < 0 && barInTrack % 4 == 3 && keep[15] && phrase.uniform() < 0.5f
+            && spec.fills)
             emit(l, 3.75, 0.35f, 0);
     }
 
@@ -374,17 +409,28 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
     // and Juslin and Laukka ("Communication of emotions in vocal expression", Psych. Bull. 2003)
     // collect the evidence that rising pitch together with rising loudness and rate is the
     // cross-cultural signal of increasing arousal, which is exactly what a buildup is for.
+    //
+    // **The roll's subdivision (19.09.2026, round "arrangement").** The user's rule for the big buildup:
+    // "a 16-bar snare roll: quarters -> eighths -> sixteenths -> thirty-seconds". The roll is cut into
+    // four equal quarters, each with its note value, whatever its length: four bars each over sixteen,
+    // one bar each over the four-bar roll of buildup 1. (Until then a four-bar roll played eighths,
+    // sixteenths and two bars of thirty-seconds.)
     if (spec.rollBar >= 0 && snare >= 0) {
-        const int r = std::clamp(spec.rollBar, 0, 3);
-        const double step = r == 0 ? 0.5 : (r == 1 ? 0.25 : 0.125);
-        // The pre-drop break's roll ends exactly on beat 3; every other roll bar fills its four beats.
-        const double last = spec.pdb ? 3.0 : 4.0 - step;
+        const int n = std::max(1, spec.rollBars);
+        const int r = std::clamp(spec.rollBar, 0, n - 1);
+        static const double kStep[4] = { 1.0, 0.5, 0.25, 0.125 };
+        const double step = kStep[std::min(3, (4 * r) / n)];
+        const float stage = 4.0f * static_cast<float>(r) / static_cast<float>(n);   // 0..4 over the roll
+        // The pre-drop break's roll ends inside beat 3 -- its last hit one step before beat 4, which holds
+        // nothing (19.09.2026: until then the last hit fell on beat 4's own downbeat); every other roll bar
+        // fills its four beats.
+        const double last = spec.pdb ? 3.0 - step : 4.0 - step;
         int k = 0;
         for (double b = 0.0; b <= last + 1e-9; b += step, ++k) {
-            const float vel = std::clamp(0.35f + 0.3f * static_cast<float>(r) + 0.02f * static_cast<float>(k), 0.2f, 1.0f);
-            // Position within the whole four-bar roll, 0 at its first hit and 1 at the drop. The ramp
-            // is over the roll, not over the bar, so the four bars form one gesture.
-            const double u = (static_cast<double>(r) + b / kBeatsPerBar) / 4.0;
+            const float vel = std::clamp(0.35f + 0.3f * stage + 0.02f * static_cast<float>(k), 0.2f, 1.0f);
+            // Position within the whole roll, 0 at its first hit and 1 at the drop. The ramp is over the
+            // roll, not over the bar, so its bars form one gesture.
+            const double u = (static_cast<double>(r) + b / kBeatsPerBar) / static_cast<double>(n);
             emit(snare, b, vel, static_cast<int>(std::lround(kRollSemitones * u)));
         }
     }

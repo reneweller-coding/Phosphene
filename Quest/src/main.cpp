@@ -480,6 +480,12 @@ public:
             } else {
                 const TrackPlan& plan = composer_.track(p, composer_.trackOfBar(p, nextBar_));
                 cueMarksForBar(plan.form, plan.firstBar, plan.key, plan.scale, nextBar_, cueKey_, cueMarks_);
+                // The next track's intro over this one's outro (the DJ overlap, Form.h): its marks too.
+                const int incoming = composer_.incomingOfBar(p, nextBar_);
+                if (incoming >= 0) {
+                    const TrackPlan& next = composer_.track(p, incoming);
+                    cueMarksForBar(next.form, next.firstBar, next.key, next.scale, nextBar_, cueKey_, cueMarks_);
+                }
             }
             ++nextBar_;
         }
@@ -597,8 +603,12 @@ private:
         const ParamStore& p = engine_.params();
         const int here = currentBar();
         const int ti = composer_.trackOfBar(p, here);
-        const TrackPlan& plan = composer_.track(p, ti);
-        const int nextFirst = plan.firstBar + plan.bars;
+        // The next track's first bar, where its intro starts over this one's outro (the DJ overlap); from
+        // inside that overlap, its hand-over, so that the jump never goes backwards.
+        const int nextFirst = [&] {
+            const TrackPlan next = composer_.track(p, ti + 1);
+            return next.firstBar > here ? next.firstBar : handoverBar(next);
+        }();
         // A fade first, so the jump is not a cut in the middle of a note; the fade is 15 ms and the
         // planning of the next stretch takes far longer than that anyway.
         const bool wasPlaying = playing();
@@ -630,6 +640,7 @@ private:
         avail.arpLo = plan.melody.arpLo;
         avail.arpHi = plan.melody.arpHi;
         avail.percLayers = plan.perc.layers;
+        avail.hatLayers = plan.perc.hatLayers;
         const BarPlan bp = planBar(plan.form, avail, plan.sectionSeed, inTrack);
         DisplayState d;
         d.planning = false;

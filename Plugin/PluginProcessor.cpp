@@ -264,7 +264,9 @@ void PlugConductor::tempoControls(const ParamStore& params, int bar, std::vector
     const int index = composer_.trackOfBar(params, bar);
     // By value: planning the next track may move the cached ones (see Composer::tempoMap).
     const TrackPlan plan = composer_.track(params, index);
-    if (bar == plan.firstBar) {
+    // The track's own tempo from its hand-over (19.09.2026: the DJ overlap, Form.h), where
+    // Composer::tempoMap puts it too.
+    if (bar == handoverBar(plan)) {
         ControlEvent e;
         e.beat = static_cast<double>(bar) * kBeatsPerBar;
         e.length = 0.0f;
@@ -273,12 +275,13 @@ void PlugConductor::tempoControls(const ParamStore& params, int bar, std::vector
         e.kind = ControlEvent::Kind::Offset;
         out.push_back(e);
     }
-    // Sixteen bars before the next track, ramp into its tempo, as Composer::tempoMap does. Only
-    // asked for near the end of this track: planning the next one costs a probe render, and at bar
-    // zero of a set that would double the wait before the first sound.
+    // Over the DJ overlap -- from the next track's first bar, sixteen bars before this one ends -- ramp
+    // into its tempo, as Composer::tempoMap does. Only asked for near the end of this track: planning
+    // the next one costs a probe render, and at bar zero of a set that would double the wait before the
+    // first sound.
     if (bar < plan.firstBar + plan.bars - 24) return;
     const TrackPlan next = composer_.track(params, index + 1);
-    if (next.bpm != plan.bpm && bar == juce::jmax(plan.firstBar, next.firstBar - 16)) {
+    if (next.bpm != plan.bpm && bar == juce::jmax(handoverBar(plan), next.firstBar)) {
         ControlEvent e;
         e.beat = static_cast<double>(bar) * kBeatsPerBar;
         e.length = static_cast<float>(16 * kBeatsPerBar);
@@ -299,6 +302,13 @@ void PlugConductor::cueMarks(const ParamStore& params, int bar, bool first)
     // By value: planning the next track may move the cached ones (see Composer::tempoMap).
     const TrackPlan plan = composer_.track(params, composer_.trackOfBar(params, bar));
     cueMarksForBar(plan.form, plan.firstBar, plan.key, plan.scale, bar, cueKey_, *marks_);
+    // The next track's intro starts over this one's outro (the DJ overlap): its marks as well, after
+    // this track's, in the order Composer::sections() lists them.
+    const int incoming = composer_.incomingOfBar(params, bar);
+    if (incoming >= 0) {
+        const TrackPlan next = composer_.track(params, incoming);
+        cueMarksForBar(next.form, next.firstBar, next.key, next.scale, bar, cueKey_, *marks_);
+    }
 }
 
 void PlugConductor::seek(const ParamStore& params, int startBar, double beatOffset, bool writeTempo,
@@ -1218,7 +1228,9 @@ bool PhospheneProcessor::exportMidi(const juce::File& file, int bars)
     for (int t = 0; composer_->track(params(), t).firstBar < total; ++t) {
         const TrackPlan p = composer_->track(params(), t);
         const double beat = static_cast<double>(p.firstBar) * kBeatsPerBar;
-        if (t > 0 && p.key != composer_->track(params(), t - 1).key) score.keyChanges.push_back(KeyChange{ beat, p.key });
+        // The key signature changes where the bass does: at the hand-over of the DJ overlap (19.09.2026).
+        const double keyBeat = static_cast<double>(handoverBar(p)) * kBeatsPerBar;
+        if (t > 0 && p.key != composer_->track(params(), t - 1).key) score.keyChanges.push_back(KeyChange{ keyBeat, p.key });
         score.sections.push_back(SectionMark{ beat, SectionType::Groove, 0.5f, t });
     }
     std::vector<NoteEvent> notes;

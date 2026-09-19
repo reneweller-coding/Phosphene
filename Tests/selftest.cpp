@@ -97,7 +97,7 @@ std::vector<float> renderEngine(Engine& engine, const Composer& composer, double
 /** @brief Bar on which the first core of track 0 begins (since Phase 5 bar 0 is the intro). */
 int firstCoreBar(const ParamStore& p, const Composer& c)
 {
-    const TrackPlan& t = c.track(p, 0);
+    const TrackPlan t = c.track(p, 0);
     for (int i = 0; i < t.form.count; ++i)
         if (t.form.section[i].type == SectionType::Groove || t.form.section[i].type == SectionType::Drop) return t.form.section[i].startBar;
     return 0;
@@ -1991,7 +1991,7 @@ void testAcidVoicing()
               "a track at a corner plays that voicing exactly, the driven corner and Sound Variation 0 play the knobs, track 1 is driven");
         // Not a check: what the listening seed's first tracks draw, for the listening notes.
         for (int i = 0; i < 4; ++i) {
-            const TrackPlan& t = c.track(p, i);
+            const TrackPlan t = c.track(p, i);
             std::printf("         listening seed, track %d: acid clean/driven/liquid %.2f/%.2f/%.2f; bass", i + 1,
                         static_cast<double>(t.acidVoicing[0]), static_cast<double>(t.acidVoicing[1]), static_cast<double>(t.acidVoicing[2]));
             for (int m = 0; m < kNumBassMacros; ++m) std::printf(" %s %+.2f", kBassMacroNames[m], static_cast<double>(t.bassMacro[m]));
@@ -4997,7 +4997,7 @@ void testMelody()
         if (e.part != Part::Acid && e.part != Part::Lead && e.part != Part::Arp) continue;
         const int bar = static_cast<int>(e.beat / kBeatsPerBar);
         const int ti = c.trackOfBar(p, bar);
-        const TrackPlan& t = c.track(p, ti);
+        const TrackPlan t = c.track(p, ti);
         const int inTrack = bar - t.firstBar;
         ++notes;
         // The mode of the *section*, not of the track: since 16.09.2026 a section may borrow another
@@ -5987,7 +5987,7 @@ void testPads()
         if (e.part != Part::Pad) continue;
         const int bar = static_cast<int>(e.beat / kBeatsPerBar);
         const int ti = c.trackOfBar(p, bar);
-        const TrackPlan& t = c.track(p, ti);
+        const TrackPlan t = c.track(p, ti);
         if (ti > 0 && bar - t.firstBar < 16) continue;
         int pcs[3];
         // The section's mode, not the track's: since 16.09.2026 a section may borrow another mode
@@ -9995,74 +9995,415 @@ void testCues()
 
 void testTransitions()
 {
-    section("transitions between tracks (PLAN 6.7)");
+    section("transitions between tracks: the DJ overlap (19.09.2026; PLAN 6.7 before it)");
+    // Since the arrangement round the transition is the DJ overlap (Form.h, kDjOverlap; testArrangement has
+    // its form): here the harmonic side. The incoming pads sound over the outgoing bass only where the keys
+    // are the same, a fourth or a fifth apart; elsewhere the incoming track's first sixteen bars carry no
+    // pitched line at all.
     ParamStore p;
-    p.parseText("compose.track_bars=128 compose.pad_amount=1 compose.sfx_amount=1 compose.track_variation=1 "
+    p.parseText("compose.pad_amount=1 compose.sfx_amount=1 compose.track_variation=1 "
                 "compose.level_match=Off master.auto_gain=Off");
     Composer c(31337);
-    int swapsOnGrid = 0, swaps = 0, keyChanges = 0, maskedChanges = 0, hatOverlaps = 0, padOverlaps = 0, padPossible = 0;
-    for (int ti = 0; ti + 1 < 6; ++ti) {
+    int consonant = 0, consonantWithPads = 0, dissonant = 0, dissonantPads = 0;
+    for (int ti = 0; ti + 1 < 10; ++ti) {
         const TrackPlan a = c.track(p, ti);
         const TrackPlan b = c.track(p, ti + 1);
-        ++swaps;
-        if (b.firstBar % 32 == 0) ++swapsOnGrid;
-
-        // The last sixteen bars of A: B's hats are already there. A's own hat lane is a different lane
-        // only by luck, so the overlap is counted by the notes B's percussion plan would place.
-        std::vector<NoteEvent> tail;
-        c.composeBars(p, a.firstBar + a.bars - 16, 16, tail);
-        std::vector<NoteEvent> own;
-        {
-            // What A alone would play there: everything of A's percussion, without B's hat lane.
-            int aHits = 0, allHits = 0;
-            const int bHat = b.perc.layerOrder[0];
-            for (const NoteEvent& e : tail) {
-                if (e.part != Part::Perc) continue;
-                ++allHits;
-                if (e.lane == static_cast<uint8_t>(bHat)) ++aHits;
-            }
-            if (allHits > 0 && aHits > 0) ++hatOverlaps;
-        }
-
-        // The first sixteen bars of B: A's pads hold on where the keys are close enough.
         const int move = ((b.key - a.key) % 12 + 12) % 12;
-        if (a.melody.present[mpIndex(MelodyPart::Pad)] && (move == 0 || move == 5 || move == 7)) {
-            ++padPossible;
-            std::vector<NoteEvent> head;
-            c.composeBars(p, b.firstBar, 16, head);
-            int foreign = 0;
-            int pcs[3];
-            for (const NoteEvent& e : head) {
-                if (e.part != Part::Pad) continue;
-                const int bar = static_cast<int>(e.beat / kBeatsPerBar) - b.firstBar;
-                chordTones(b.scale, b.melody.chordDegree[chordIndexAt(b.melody, bar)], pcs);
-                const int pc = ((e.pitch - b.key) % 12 + 12) % 12;
-                if (!(pc == pcs[0] || pc == pcs[1] || pc == pcs[2])) ++foreign;
+        const bool close = move == 0 || move == 5 || move == 7;
+        std::vector<NoteEvent> head;
+        c.composeBars(p, b.firstBar, kDjOverlap, head);
+        int pads = 0;
+        for (const NoteEvent& e : head) if (e.part == Part::Pad || e.part == Part::Drone) ++pads;
+        if (close) { ++consonant; if (pads > 0 || !b.melody.present[mpIndex(MelodyPart::Pad)]) ++consonantWithPads; }
+        else { ++dissonant; dissonantPads += pads; }
+    }
+    check(consonant > 0 && dissonant > 0 && consonantWithPads == consonant && dissonantPads == 0,
+          "the incoming pads sound over the outgoing bass only where the keys are the same, a fourth or a fifth apart",
+          fmt("%d close key moves, %d with the incoming pads there; %d far ones, %d pad or drone notes over them",
+              consonant, consonantWithPads, dissonant, dissonantPads));
+}
+
+// ------------------------------------------------------------------ arrangement, 19.09.2026
+
+/** @brief The lane that plays @p role in the knobs' kit, or -1 (test side: read from the knobs, not from Rhythm.cpp). */
+static int testLaneOfRole(const ParamStore& p, PercRole role)
+{
+    for (int l = 0; l < kPercLanes; ++l) {
+        const int b = p.base(Module::Perc, l);
+        if (p.getBool(b + perc::Active) && p.getInt(b + perc::Role) == static_cast<int>(role)) return l;
+    }
+    return -1;
+}
+
+/**
+ * @brief The user's arrangement rules of 19.09.2026 (round "arrangement"): the two-drop form, the DJ intro
+ *        and outro, the big buildup's roll, the pre-drop break, drop 2 as the climax, the micro rules.
+ *
+ * The expected values come from the rule text, written out here as numbers (the 1-based bars of the rule
+ * minus one), never from Form.cpp's tables. The score checks run over six tracks of every style, composed
+ * in sequence, so that the DJ overlap between them is in the score they measure.
+ */
+void testArrangement()
+{
+    section("arrangement: the two-drop form, the DJ intro and outro, the big buildup, drop 2 as the climax");
+
+    // (a) Where the sections sit at 256 bars, per style, and that every length the walk can ask for keeps
+    // the constraints and comes out exact.
+    {
+        struct Want { int start[8]; int bars[8]; SectionType type[8]; };
+        const SectionType kTypes[8] = { SectionType::Intro, SectionType::Groove, SectionType::Build, SectionType::Drop,
+                                        SectionType::Break, SectionType::Build, SectionType::Drop, SectionType::Outro };
+        // Full-On as the rule states it: intro 1-32, groove 33-64, buildup 65-80, drop 81-112, breakdown
+        // 113-144, big buildup 145-176, drop 2 177-224, outro 225-256.
+        const int fullOnStart[8] = { 0, 32, 64, 80, 112, 144, 176, 224 }, fullOnBars[8] = { 32, 32, 16, 32, 32, 32, 48, 32 };
+        // Progressive: the 64-bar groove and a 16-bar big buildup. Dark Forest: drop 1 of 48, breakdown of 16.
+        const int progStart[8] = { 0, 32, 96, 112, 144, 176, 192, 224 }, progBars[8] = { 32, 64, 16, 32, 32, 16, 32, 32 };
+        const int darkStart[8] = { 0, 32, 64, 80, 128, 144, 176, 224 }, darkBars[8] = { 32, 32, 16, 48, 16, 32, 48, 32 };
+        const int* wantStart[kNumStyles] = { fullOnStart, fullOnStart, progStart, darkStart, fullOnStart };
+        const int* wantBars[kNumStyles] = { fullOnBars, fullOnBars, progBars, darkBars, fullOnBars };
+        int forms = 0, misplaced = 0;
+        for (int st = 0; st < kNumStyles; ++st)
+            for (uint64_t seed = 1; seed <= 20; ++seed) {
+                const FormPlan f = makeFormPlan(styleProfile(static_cast<StyleId>(st)), seed, 256, 0.4, 0.9);
+                ++forms;
+                bool ok = f.count == 8 && f.bars == 256;
+                for (int i = 0; ok && i < 8; ++i)
+                    ok = f.section[i].startBar == wantStart[st][i] && f.section[i].bars == wantBars[st][i] && f.section[i].type == kTypes[i];
+                ok = ok && f.section[6].climax;
+                if (!ok) ++misplaced;
             }
-            if (foreign > 0) ++padOverlaps;   // notes that are not B's chords are A's pads still sounding
+        int lengths = 0, broken = 0, offLength = 0;
+        for (int st = 0; st < kNumStyles; ++st)
+            for (int target = kMinTrackBars; target <= kMaxTrackBars; target += 16)
+                for (uint64_t seed = 1; seed <= 6; ++seed) {
+                    const FormPlan f = makeFormPlan(styleProfile(static_cast<StyleId>(st)), seed, target, 0.3, 0.9);
+                    ++lengths;
+                    if (!formConstraintsHold(f)) ++broken;
+                    if (f.bars != target) ++offLength;
+                }
+        check(misplaced == 0 && broken == 0 && offLength == 0,
+              "every section where the rule puts it (per style at 256 bars), every length 128..320 exact and inside the constraints",
+              fmt("%d forms at 256 bars, %d misplaced; %d forms over all lengths, %d broken, %d off length", forms, misplaced, lengths, broken, offLength));
+    }
+
+    // (b) Drop 2's energy stands at least kClimaxMargin above every other section's, under every arc and
+    // wherever in the set the track sits (the arc falls across a Closing set's tracks).
+    {
+        int tracks = 0, notOnTop = 0;
+        double worst = 1.0;
+        for (int st = 0; st < kNumStyles; ++st)
+            for (double a0 = 0.0; a0 <= 1.0; a0 += 0.25)
+                for (double a1 = 0.0; a1 <= 1.0; a1 += 0.25) {
+                    const FormPlan f = makeFormPlan(styleProfile(static_cast<StyleId>(st)), 7, 256, a0, a1);
+                    ++tracks;
+                    float peak = 0.0f, others = 0.0f;
+                    for (int i = 0; i < f.count; ++i) {
+                        if (f.section[i].climax) peak = f.section[i].energy;
+                        else others = std::max({ others, f.section[i].energy, f.section[i].energyTo });
+                    }
+                    worst = std::min(worst, static_cast<double>(peak - others));
+                    if (peak - others < 0.05f - 1e-4f) ++notOnTop;
+                }
+        check(notOnTop == 0, "drop 2 carries the highest energy of its track, at least 0.05 above every other section, under every arc",
+              fmt("%d forms, %d where it is not; smallest margin %.3f", tracks, notOnTop, worst));
+    }
+
+    // The score of six tracks per style, composed in sequence (the DJ overlap between them included).
+    int kickDoubles = 0, bassOverlaps = 0, beats = 0, track0KickBefore = 0, track0KickAt = 0;
+    int rollBars = 0, rollWrong = 0, pdbs = 0, pdbBad = 0, pdbHeld = 0, pdbKick = 0;
+    int overlapBars = 0, overlapForeign = 0, overlapLanes = 0, overlapNoKick = 0;
+    int grooves = 0, grooveBad = 0, grooveOrderBad = 0;
+    int climaxBars = 0, climaxOpen = 0, climaxRide = 0, squelches = 0, climaxCounter = 0, counterPossible = 0;
+    int arpPairs = 0, arpUp = 0;
+    double arpLift = 99.0;
+    int fillBars = 0, fillBad = 0, crashBars = 0, crashMissing = 0, markers = 0, markersMissing = 0;
+    int introBlocksBad = 0, outroBlocksBad = 0, starts = 0, startsBad = 0;
+    std::string rollDetail;
+    for (int st = 0; st < kNumStyles; ++st) {
+        ParamStore q;
+        q.parseText("compose.level_match=Off master.auto_gain=Off");
+        q.parseText(fmt("compose.style=%s", kStyleNames[st]).c_str());
+        Composer c(4242 + static_cast<uint64_t>(st));
+        constexpr int kTracks = 6;
+        std::vector<TrackPlan> plan;
+        for (int t = 0; t <= kTracks; ++t) plan.push_back(c.track(q, t));
+        for (int t = 0; t < kTracks; ++t) {
+            ++starts;
+            if (t > 0 && plan[static_cast<size_t>(t)].firstBar != plan[static_cast<size_t>(t - 1)].firstBar + plan[static_cast<size_t>(t - 1)].bars - 16) ++startsBad;
+        }
+        const int totalBars = plan[kTracks - 1].firstBar + plan[kTracks - 1].bars;
+        std::vector<NoteEvent> ev;
+        c.composeBars(q, 0, totalBars, ev);
+        std::vector<std::vector<const NoteEvent*>> byBar(static_cast<size_t>(totalBars) + 1);
+        for (const NoteEvent& e : ev) byBar[static_cast<size_t>(std::clamp(static_cast<int>(e.beat / kBeatsPerBar), 0, totalBars))].push_back(&e);
+        const int snare = testLaneOfRole(q, PercRole::Snare), tom = testLaneOfRole(q, PercRole::Tom), crash = testLaneOfRole(q, PercRole::Crash);
+        const int closedHat = testLaneOfRole(q, PercRole::ClosedHat), shaker = testLaneOfRole(q, PercRole::Shaker);
+        const int openHat = testLaneOfRole(q, PercRole::OpenHat), ride = testLaneOfRole(q, PercRole::Ride);
+        const int clap = testLaneOfRole(q, PercRole::Clap), conga = testLaneOfRole(q, PercRole::Conga);
+
+        // One kick per beat, and no two bass notes sounding at once, over the whole set.
+        {
+            std::vector<int> kicks(static_cast<size_t>(totalBars) * 4 + 4, 0);
+            std::vector<const NoteEvent*> bass;
+            for (const NoteEvent& e : ev) {
+                if (e.part == Part::Kick) ++kicks[static_cast<size_t>(std::clamp(static_cast<int>(std::floor(e.beat + 1e-9)), 0, totalBars * 4))];
+                if (e.part == Part::Bass) bass.push_back(&e);
+            }
+            for (int k : kicks) { ++beats; if (k > 1) ++kickDoubles; }
+            std::sort(bass.begin(), bass.end(), [](const NoteEvent* a, const NoteEvent* b) { return a->beat < b->beat; });
+            for (size_t i = 1; i < bass.size(); ++i) if (bass[i]->beat < bass[i - 1]->beat + bass[i - 1]->length - 1e-6) ++bassOverlaps;
+            // The set's first track: no kick in its first sixteen bars, the kick on bar 17.
+            for (int b = 0; b < 16; ++b) for (const NoteEvent* e : byBar[static_cast<size_t>(b)]) if (e->part == Part::Kick) ++track0KickBefore;
+            for (const NoteEvent* e : byBar[16]) if (e->part == Part::Kick) ++track0KickAt;
         }
 
-        // The key change at the swap is masked: A's sweep ends exactly there and an impact sits on it.
-        if (a.key != b.key) {
-            ++keyChanges;
-            bool sweepEnds = false;
-            for (const SfxEvent& s : a.form.sfx)
-                if (s.type == static_cast<int>(SfxType::Sweep) && std::fabs(s.beat + s.length - static_cast<double>(a.bars) * kBeatsPerBar) < 1e-6) sweepEnds = true;
-            std::vector<NoteEvent> first;
-            c.composeBars(p, b.firstBar, 1, first);
-            bool impact = false;
-            for (const NoteEvent& e : first)
-                if (e.part == Part::Sfx && e.pitch == kSfxBaseNote + static_cast<int>(SfxType::Impact)
-                    && std::fabs(e.beat - static_cast<double>(b.firstBar) * kBeatsPerBar) < 1e-9) impact = true;
-            if (sweepEnds && impact) ++maskedChanges;
+        for (int t = 0; t < kTracks; ++t) {
+            const TrackPlan& tp = plan[static_cast<size_t>(t)];
+            PartAvailability av;
+            for (int k = 0; k < kMelodyParts; ++k) av.part[k] = tp.melody.present[k];
+            av.percLayers = tp.perc.layers;
+            av.hatLayers = tp.perc.hatLayers;
+            auto lanesIn = [&](int b0, int n, int minBars) {
+                // Lanes that play in at least minBars of the n bars from b0: the layers (the open hat of hat mode 0 plays
+                // every other bar), not a one-bar fill.
+                int count[kPercLanes] = {};
+                for (int b = b0; b < b0 + n; ++b) {
+                    bool seen[kPercLanes] = {};
+                    for (const NoteEvent* e : byBar[static_cast<size_t>(b)]) if (e->part == Part::Perc) seen[e->lane] = true;
+                    for (int l = 0; l < kPercLanes; ++l) count[l] += seen[l] ? 1 : 0;
+                }
+                unsigned mask = 0;
+                for (int l = 0; l < kPercLanes; ++l) if (count[l] >= minBars) mask |= 1u << l;
+                return mask;
+            };
+            for (int si = 0; si < tp.form.count; ++si) {
+                const Section& s = tp.form.section[si];
+                const int s0 = tp.firstBar + s.startBar;
+                // The big buildup's roll: the rule's quarters, eighths, sixteenths, thirty-seconds, each for a
+                // quarter of the roll -- read as the spacing of the snare lane's hits in every roll bar.
+                if (s.type == SectionType::Build && s.rollBars > 0 && snare >= 0) {
+                    for (int r = 0; r < s.rollBars; ++r) {
+                        const int b = s0 + s.bars - s.rollBars + r;
+                        std::vector<double> hits;
+                        for (const NoteEvent* e : byBar[static_cast<size_t>(b)]) if (e->part == Part::Perc && e->lane == snare) hits.push_back(e->beat);
+                        std::sort(hits.begin(), hits.end());
+                        static const double kWant[4] = { 1.0, 0.5, 0.25, 0.125 };
+                        const double want = kWant[(4 * r) / s.rollBars];
+                        const bool last = r == s.rollBars - 1 && s.pdbBars > 0;
+                        const size_t wantHits = static_cast<size_t>(std::lround((last ? 3.0 : 4.0) / want));
+                        bool ok = hits.size() == wantHits;
+                        for (size_t i = 1; ok && i < hits.size(); ++i) ok = std::fabs(hits[i] - hits[i - 1] - want) < 1e-6;
+                        ++rollBars;
+                        if (!ok) {
+                            ++rollWrong;
+                            if (rollDetail.empty()) rollDetail = fmt(" (first: bar %d of a %d-bar roll, %zu hits, want %zu every %.3f)", r, s.rollBars, hits.size(), wantHits, want);
+                        }
+                    }
+                }
+                // The pre-drop break: kick and bass out for its bars; beat 4 of its last bar holds one thing
+                // only, a vocal or a zap, and nothing sounds into it from before.
+                if (s.type == SectionType::Build && s.pdbBars > 0) {
+                    ++pdbs;
+                    const int last = s0 + s.bars - 1;
+                    const double beat4 = static_cast<double>(last) * kBeatsPerBar + 3.0;
+                    int on4 = 0, voice = 0;
+                    for (const NoteEvent* e : byBar[static_cast<size_t>(last)]) {
+                        if (e->beat >= beat4 - 1e-6) {
+                            ++on4;
+                            const int type = static_cast<int>(e->pitch) - kSfxBaseNote;
+                            if ((e->part == Part::Sfx || e->part == Part::Vocal) && (type == static_cast<int>(SfxType::VoiceChop) || type == static_cast<int>(SfxType::Zap))) ++voice;
+                        }
+                    }
+                    if (!(on4 == 1 && voice == 1)) ++pdbBad;
+                    for (int b = std::max(0, last - 20); b <= last; ++b)
+                        for (const NoteEvent* e : byBar[static_cast<size_t>(b)])
+                            if (e->beat < beat4 - 1e-6 && e->beat + e->length > beat4 + 1e-6) ++pdbHeld;
+                    for (int b = s0 + s.bars - s.pdbBars; b <= last; ++b)
+                        for (const NoteEvent* e : byBar[static_cast<size_t>(b)])
+                            if ((e->part == Part::Kick || e->part == Part::Bass) && (s.pdbBars > 1 || e->beat >= beat4 - 1e-6)) ++pdbKick;
+                }
+                // The groove: one layer more every eight bars, the clap first, then the congas, then the ride.
+                if (s.type == SectionType::Groove) {
+                    ++grooves;
+                    std::vector<int> seq;
+                    for (int l : { clap, conga, ride }) if (l >= 0) seq.push_back(l);
+                    unsigned prev = lanesIn(s0 - 8, 8, 4);
+                    int prevLayers = planBar(tp.form, av, tp.sectionSeed, s.startBar - 1).percLayers;
+                    size_t nextInSeq = 0;
+                    for (int g = 0; g * 8 < s.bars; ++g) {
+                        const unsigned now = lanesIn(s0 + 8 * g, 8, 4);
+                        const int layersNow = planBar(tp.form, av, tp.sectionSeed, s.startBar + 8 * g).percLayers;
+                        const unsigned added = now & ~prev;
+                        int n = 0;
+                        for (int l = 0; l < kPercLanes; ++l) n += (added >> l) & 1u;
+                        // A layer never leaves; exactly as many join as the plan adds; the plan adds one per
+                        // group until the kit has no more.
+                        if ((now & prev) != prev || n != layersNow - prevLayers || (layersNow - prevLayers != 1 && layersNow < tp.perc.layers)) ++grooveBad;
+                        else if (n == 1 && nextInSeq < seq.size()) {
+                            while (nextInSeq < seq.size() && ((prev >> seq[nextInSeq]) & 1u) != 0) ++nextInSeq;
+                            if (nextInSeq < seq.size() && added != (1u << seq[nextInSeq])) ++grooveOrderBad;
+                            ++nextInSeq;
+                        }
+                        prev = now;
+                        prevLayers = layersNow;
+                    }
+                }
+                // Drop 2: open hats and ride in every bar, squelches in the gaps, the counter answering the
+                // lead after the first group, the arp above drop 1's.
+                if (s.climax) {
+                    for (int b = s0; b < s0 + s.bars; ++b) {
+                        ++climaxBars;
+                        int open = 0, rideHits = 0;
+                        for (const NoteEvent* e : byBar[static_cast<size_t>(b)]) {
+                            if (e->part == Part::Perc && e->lane == openHat) ++open;
+                            if (e->part == Part::Perc && e->lane == ride) ++rideHits;
+                            if (e->part == Part::Sfx && static_cast<int>(e->pitch) - kSfxBaseNote == static_cast<int>(SfxType::Squelch)) ++squelches;
+                        }
+                        if (openHat < 0 || open >= 3) ++climaxOpen;
+                        if (ride < 0 || rideHits >= 4) ++climaxRide;
+                    }
+                    if (tp.melody.present[mpIndex(MelodyPart::Lead)] && tp.melody.present[mpIndex(MelodyPart::Counter)]) {
+                        ++counterPossible;
+                        int counter = 0;
+                        for (int b = s0 + 8; b < s0 + s.bars; ++b)
+                            for (const NoteEvent* e : byBar[static_cast<size_t>(b)]) counter += e->part == Part::Counter ? 1 : 0;
+                        if (counter > 0) ++climaxCounter;
+                    }
+                    const Section& d1 = tp.form.section[3];
+                    double sum1 = 0.0, sum2 = 0.0;
+                    int n1 = 0, n2 = 0;
+                    for (int b = tp.firstBar + d1.startBar; b < tp.firstBar + d1.startBar + d1.bars; ++b)
+                        for (const NoteEvent* e : byBar[static_cast<size_t>(b)]) if (e->part == Part::Arp) { sum1 += e->pitch; ++n1; }
+                    for (int b = s0; b < s0 + s.bars; ++b)
+                        for (const NoteEvent* e : byBar[static_cast<size_t>(b)]) if (e->part == Part::Arp) { sum2 += e->pitch; ++n2; }
+                    if (n1 > 0 && n2 > 0) { ++arpPairs; if (sum2 / n2 > sum1 / n1 + 5.0) ++arpUp; arpLift = std::min(arpLift, sum2 / n2 - sum1 / n1); }
+                }
+                // The micro rules inside the cores: bar 8 of every cycle a snare fill or a tom run, bar 17 of
+                // every drop cycle (and its downbeat) a crash on the one, bar 32 a downlifter or a glitch.
+                if (s.type == SectionType::Groove || s.type == SectionType::Drop) {
+                    for (int c0 = 0; c0 + 8 <= s.bars; c0 += 32) {
+                        const int b = s0 + c0 + 7;
+                        ++fillBars;
+                        bool fill = false;
+                        for (const NoteEvent* e : byBar[static_cast<size_t>(b)])
+                            if (e->part == Part::Perc && (e->lane == snare || e->lane == tom) && e->beat - static_cast<double>(b) * kBeatsPerBar >= 2.0) fill = true;
+                        if (!fill) ++fillBad;
+                    }
+                    if (s.type == SectionType::Drop && crash >= 0)
+                        for (int c0 = 0; c0 < s.bars; c0 += 16) {
+                            ++crashBars;
+                            bool hit = false;
+                            for (const NoteEvent* e : byBar[static_cast<size_t>(s0 + c0)])
+                                if (e->part == Part::Perc && e->lane == crash && std::fabs(e->beat - static_cast<double>(s0 + c0) * kBeatsPerBar) < 0.01) hit = true;
+                            if (!hit) ++crashMissing;
+                        }
+                    for (int c0 = 32; c0 < s.bars; c0 += 32) {
+                        ++markers;
+                        bool found = false;
+                        for (const SfxEvent& x : tp.form.sfx) {
+                            const double at = static_cast<double>(s.startBar + c0) * kBeatsPerBar;
+                            if ((x.type == static_cast<int>(SfxType::Downlifter) && std::fabs(x.beat - (at - kBeatsPerBar)) < 1e-6)
+                                || (x.type == static_cast<int>(SfxType::Stutter) && std::fabs(x.beat - (at - 0.5)) < 1e-6)) found = true;
+                        }
+                        if (!found) ++markersMissing;
+                    }
+                }
+                // The intro's blocks (planned): no kick and no layers for sixteen bars, the quiet hat, the
+                // shaker from bar 9; then kick, bass and the off-beat hat. The outro's: a layer less every eight
+                // bars, the last sixteen kick, bass and one hat, no melodic part.
+                if (s.type == SectionType::Intro) {
+                    for (int g = 0; g * 8 < s.bars; ++g) {
+                        const BarPlan bp = planBar(tp.form, av, tp.sectionSeed, s.startBar + 8 * g);
+                        const bool kick = 8 * g >= 16;
+                        const bool ok = (bp.kickBeats != 0) == kick && (bp.bassBeats != 0) == kick && bp.quietHats == !kick
+                                     && bp.offbeatHat == kick && bp.shaker == (g >= 1) && (kick || bp.percLayers == 0)
+                                     && (bp.parts & (partBit(MelodyPart::Acid) | partBit(MelodyPart::Lead) | partBit(MelodyPart::Arp))) == 0;
+                        if (!ok) ++introBlocksBad;
+                    }
+                }
+                if (s.type == SectionType::Outro) {
+                    int prevLayers = 99;
+                    uint8_t prevParts = 0xFF;
+                    for (int g = 0; g * 8 < s.bars; ++g) {
+                        const BarPlan bp = planBar(tp.form, av, tp.sectionSeed, s.startBar + 8 * g);
+                        const bool bare = s.bars - 8 * g <= 16;
+                        bool ok = bp.kickBeats == 0xF && bp.bassBeats == 0xF && bp.percLayers <= prevLayers && (bp.parts & ~prevParts) == 0;
+                        // Something leaves every eight bars until the bare end: a layer or a part.
+                        if (bare) ok = ok && bp.percLayers == 0 && bp.offbeatHat && bp.parts == 0;
+                        else ok = ok && (bp.percLayers < prevLayers || (bp.parts & prevParts) != prevParts);
+                        if (!ok) ++outroBlocksBad;
+                        prevLayers = bp.percLayers;
+                        prevParts = bp.parts;
+                    }
+                }
+            }
+            // The DJ overlap into the next track: in those sixteen bars the outgoing kick and bass play, the
+            // incoming track adds only its intro's hat, shaker, pads, drone and effects -- no line and no lane
+            // but the hats.
+            if (t + 1 <= kTracks) {
+                const TrackPlan& nx = plan[static_cast<size_t>(t + 1)];
+                for (int b = nx.firstBar; b < nx.firstBar + 16 && b < totalBars; ++b) {
+                    ++overlapBars;
+                    bool kick = false;
+                    for (const NoteEvent* e : byBar[static_cast<size_t>(b)]) {
+                        kick = kick || e->part == Part::Kick;
+                        const Part rp = routedPart(*e);
+                        if (rp == Part::Acid || rp == Part::Lead || rp == Part::Counter || rp == Part::Arp || rp == Part::Stab) ++overlapForeign;
+                        if (e->part == Part::Perc && e->lane != closedHat && e->lane != shaker) ++overlapLanes;
+                    }
+                    if (!kick) ++overlapNoKick;
+                }
+            }
         }
     }
-    check(swapsOnGrid == swaps, "every track boundary falls on a 32-bar grid (the bass swap)", fmt("%d of %d", swapsOnGrid, swaps));
-    check(hatOverlaps == swaps, "the next track's hats are already playing over the last sixteen bars", fmt("%d of %d transitions", hatOverlaps, swaps));
-    check(padPossible > 0 && padOverlaps == padPossible, "the previous track's pads hold on into the new track's intro where the keys are close",
-          fmt("%d of %d transitions with a compatible key", padOverlaps, padPossible));
-    check(keyChanges > 0 && maskedChanges == keyChanges, "every key change is masked by a sweep ending on it and an impact",
-          fmt("%d of %d key changes masked", maskedChanges, keyChanges));
+    check(starts > 0 && startsBad == 0 && kickDoubles == 0 && bassOverlaps == 0 && track0KickBefore == 0 && track0KickAt > 0,
+          "DJ overlap: every track starts 16 bars before the previous one ends, one kick per beat and one bass at a time across the set, the kick on bar 17",
+          fmt("%d track starts, %d off; %d beats with two kicks of %d, %d overlapping bass notes; set's first track: %d kicks before bar 17, %d on it",
+              starts, startsBad, kickDoubles, beats, bassOverlaps, track0KickBefore, track0KickAt));
+    check(overlapBars > 0 && overlapForeign == 0 && overlapLanes == 0 && overlapNoKick == 0,
+          "over the overlap the outgoing outro is kick, bass and a hat, the incoming intro adds no line and no lane but the hats",
+          fmt("%d overlap bars: %d notes of a line, %d hits outside the hat lanes, %d bars without the outgoing kick", overlapBars, overlapForeign, overlapLanes, overlapNoKick));
+    check(introBlocksBad == 0 && outroBlocksBad == 0, "intro and outro blocks: sixteen bars without kick, then kick, bass and the off-beat hat; a layer less every eight bars, the last sixteen bare",
+          fmt("%d intro blocks and %d outro blocks off the rule", introBlocksBad, outroBlocksBad));
+    check(grooves > 0 && grooveBad == 0 && grooveOrderBad == 0, "the groove adds one percussion layer every eight bars: clap, then congas, then ride",
+          fmt("%d grooves, %d with a group that did not add exactly one layer, %d out of order", grooves, grooveBad, grooveOrderBad));
+    check(rollBars > 0 && rollWrong == 0, "the buildups' rolls: quarters, eighths, sixteenths, thirty-seconds, a quarter of the roll each",
+          fmt("%d roll bars, %d with the wrong spacing%s", rollBars, rollWrong, rollDetail.c_str()));
+    check(pdbs > 0 && pdbBad == 0 && pdbHeld == 0 && pdbKick == 0,
+          "pre-drop break: no kick or bass in it, beat 4 of its last bar holds exactly one vocal or zap and nothing sounds into it",
+          fmt("%d pre-drop breaks, %d with anything else on beat 4, %d notes held into it, %d kick or bass notes in them", pdbs, pdbBad, pdbHeld, pdbKick));
+    check(climaxBars > 0 && climaxOpen == climaxBars && climaxRide == climaxBars && squelches >= climaxBars / 2
+              // The arp: an octave up in drop 2 always (Melody.cpp); where the register guard had already lifted
+              // drop 1's arp over the lead, the two stand level -- never lower (measured once in 16, 19.09.2026).
+              && climaxCounter == counterPossible && arpPairs > 0 && arpUp * 10 >= arpPairs * 9 && arpLift > -1.0,
+          "drop 2: open hats and ride in every bar, squelches in the gaps, the counter answers the lead, the arp above drop 1's",
+          fmt("%d bars: open hats in %d, ride in %d, %d squelches; counter in %d of %d; arp higher in %d of %d tracks (smallest lift of the mean pitch %.1f semitones)",
+              climaxBars, climaxOpen, climaxRide, squelches, climaxCounter, counterPossible, arpUp, arpPairs, arpLift));
+    check(fillBars > 0 && fillBad == 0 && crashMissing == 0 && markersMissing == 0,
+          "micro rules: bar 8 of every cycle a snare fill or a tom run, a crash on the one every sixteen bars of a drop, bar 32 a downlifter or a glitch",
+          fmt("%d eighth bars, %d without the fill; %d crash points, %d missing; %d cycle ends, %d without a marker",
+              fillBars, fillBad, crashBars, crashMissing, markers, markersMissing));
+
+    // (c) The tempo ramps over the overlap: the outgoing tempo at the incoming track's first bar, the
+    // incoming one from the hand-over.
+    {
+        ParamStore q;
+        q.parseText("compose.level_match=Off master.auto_gain=Off compose.track_variation=1 compose.tempo_range=6");
+        Composer c(99);
+        const TempoMap m = c.tempoMap(q, 2000);
+        int ramps = 0, bad = 0;
+        for (int t = 0; t < 6; ++t) {
+            const TrackPlan a = c.track(q, t), b = c.track(q, t + 1);
+            if (a.bpm == b.bpm) continue;
+            ++ramps;
+            const double from = static_cast<double>(b.firstBar) * kBeatsPerBar, to = static_cast<double>(handoverBar(b)) * kBeatsPerBar;
+            const double mid = m.bpmAt(0.5 * (from + to));
+            if (std::fabs(m.bpmAt(from - 1e-3) - a.bpm) > 1e-6 || std::fabs(m.bpmAt(to + 1e-3) - b.bpm) > 1e-6
+                || !(mid > std::min(a.bpm, b.bpm) && mid < std::max(a.bpm, b.bpm)) || to != static_cast<double>(a.firstBar + a.bars) * kBeatsPerBar) ++bad;
+        }
+        check(ramps > 0 && bad == 0, "the tempo ramps over the sixteen overlap bars and the incoming tempo holds from the hand-over (the outgoing track's end)",
+              fmt("%d tempo changes, %d off", ramps, bad));
+    }
 }
 
 // ------------------------------------------------------------------------ genre rules, 18.09.2026
@@ -10339,7 +10680,7 @@ void testGenreRules()
         std::printf("         seed 864566672, per track (first/second half of the bar, holes = bars with >= 6 silent sixteenths):\n");
         int acidRatioBad = 0, arpRatioBad = 0, leadMedianBad = 0, leadTopBad = 0, acidRun3 = 0, arpRegBad = 0, acidTopBad = 0;
         for (int ti = 0; ti < 3; ++ti) {
-            const TrackPlan& t = c.track(q, ti);
+            const TrackPlan t = c.track(q, ti);
             PartStats st[3];
             const Part parts[3] = { Part::Acid, Part::Lead, Part::Arp };
             for (int k = 0; k < 3; ++k) {
@@ -10495,7 +10836,7 @@ void testFoundation()
     for (const auto& kv : chords) {
         const int bar = static_cast<int>(std::floor(kv.first / kBeatsPerBar));
         const int ti = c.trackOfBar(q, bar);
-        const TrackPlan& t = c.track(q, ti);
+        const TrackPlan t = c.track(q, ti);
         if (ti > 0 && bar - t.firstBar < 16) continue;   // the previous track's pads still sound there
         std::vector<int> v = kv.second;
         std::sort(v.begin(), v.end());
@@ -10719,6 +11060,7 @@ void testVoices()
     //     no colour tone, the tonic its centre, every answer ending on the tonic or the fifth.
     {
         int notes = 0, alone = 0, onAttack = 0, answerNotes = 0, colour = 0, tonic = 0, answers = 0, answersResting = 0;
+        int pcCount[12] = {};
         std::vector<const NoteEvent*> counter;
         std::set<long long> leadOnsets;
         std::string offRest;
@@ -10743,6 +11085,7 @@ void testVoices()
             }
             if (RuleRef::colour(sc, pc)) ++colour;
             if (pc == 0) ++tonic;
+            ++pcCount[pc];
             // An answer ends where the next counter note is more than a beat away.
             const bool last = i + 1 == counter.size() || counter[i + 1]->beat - e.beat > 1.0 + 1e-9;
             if (last) {
@@ -10759,10 +11102,15 @@ void testVoices()
         // Every answer is written to end on the tonic or the fifth (makeCounter); the register guard may
         // still give up that last note where a lead note sits on it in every octave the counter has, and
         // the note before it then ends the answer -- measured: 2 of 46 on this set, hence nine in ten.
-        check(colour == 0 && tonic * 4 >= notes && answers > 10 && answersResting * 10 >= answers * 9,
+        // "The tonic as its centre" is read as: the commonest pitch class, and at least a fifth of the notes
+        // (19.09.2026, round "arrangement": until then a quarter; since the counter plays in drop 2 alone the
+        // set holds other phrases -- 24 % tonic, still the commonest class by far).
+        const bool tonicCommonest = *std::max_element(pcCount, pcCount + 12) == pcCount[0];
+        check(colour == 0 && tonicCommonest && tonic * 5 >= notes && answers > 10 && answersResting * 10 >= answers * 9,
               "counter-lead: the lead's genre rules -- no colour tone, the tonic as its centre, nine in ten answers ending on the tonic or the fifth",
-              fmt("%d colour tones, tonic %.0f %% of %d notes, %d of %d answers end on 1 or 5%s", colour, notes > 0 ? 100.0 * tonic / notes : 0.0, notes,
-                  answersResting, answers, offRest.c_str()));
+              fmt("%d colour tones, tonic %.0f %% of %d notes (commonest class %d with %d), %d of %d answers end on 1 or 5%s", colour,
+                  notes > 0 ? 100.0 * tonic / notes : 0.0, notes, static_cast<int>(std::max_element(pcCount, pcCount + 12) - pcCount),
+                  *std::max_element(pcCount, pcCount + 12), answersResting, answers, offRest.c_str()));
     }
 
     // (e) The stab: short chords in root position, never on a beat, only in grooves and drops, sparse.
@@ -10877,7 +11225,8 @@ void testVoices()
             if (!t.melody.present[mpIndex(MelodyPart::Drone)]) continue;
             for (int i = 0; i + 1 < t.form.count; ++i) {
                 const Section& sec = t.form.section[i];
-                if (sec.type == SectionType::Break && sec.startBar <= 80 && sec.bars >= 16) {
+                // 19.09.2026: the two-drop form puts the breakdown at bar 113 (until then within the first 80).
+                if (sec.type == SectionType::Break && sec.startBar <= 160 && sec.bars >= 16) {
                     breakStart = sec.startBar; breakEnd = sec.startBar + sec.bars; seed = s;
                     break;
                 }
@@ -11024,6 +11373,72 @@ void testVoices()
               "every voice sounds different from track to track: spread in centroid or brightness, several oscillators and tables, no two neighbours alike",
               fmt("%d voices without spread, %d with too few oscillators or tables, %d neighbouring pairs alike", badSpread, fewTables, alikeTotal));
     }
+    // (h2) The counter-lead against the lead of the same track (19.09.2026, round "arrangement"; the user:
+    //      "Die Counter-Lead sollte natuerlich einen anderen Sound haben als die Haupt-Lead"). Over 24 tracks
+    //      of the listening seed and of two others: the oscillator and table each voice really plays (the
+    //      recipe's, or the instance's knob where the recipe says -1), and both rendered on the same note --
+    //      the power centroid and the share above 2 kHz. No track may give both the same oscillator and
+    //      table, and none may share either.
+    {
+        ParamStore p;
+        const float sv = p.get(p.base(Module::Compose) + compose::SoundVariation);
+        int tracks = 0, samePair = 0, shareOne = 0;
+        std::vector<double> dCents, dBright;
+        const int lb = p.base(PolyInstance::Lead), cbI = p.base(PolyInstance::Counter);
+        for (uint64_t seed : { 864566672ull, 77ull, 2026ull }) {
+            Composer lc(seed);
+            for (int ti = 0; ti < 24; ++ti) {
+                const TrackPlan& plan = lc.track(p, ti);
+                ++tracks;
+                double cents[2] = {}, bright[2] = {};
+                int osc[2] = {}, table[2] = {};
+                for (int k = 0; k < 2; ++k) {
+                    const PolyInstance inst = k == 0 ? PolyInstance::Lead : PolyInstance::Counter;
+                    const int v = polyIndex(inst);
+                    const VoiceRecipe& rc = plan.voice[v];
+                    ParamStore s;
+                    const int b = s.base(inst);
+                    float off[poly::Count] = {};
+                    Composer::voiceRecipeOffsets(inst, rc, sv, off);
+                    if (rc.osc >= 0) s.set(b + poly::Osc, static_cast<float>(rc.osc));
+                    if (rc.table >= 0) s.set(b + poly::Table, static_cast<float>(rc.table));
+                    if (rc.filter >= 0) s.set(b + poly::FilterType, static_cast<float>(rc.filter));
+                    for (int q = 0; q < poly::Count; ++q)
+                        if (off[q] != 0.0f) s.set(b + q, s.fromNormalised(b + q, s.toNormalised(b + q, s.get(b + q)) + off[q]));
+                    s.set(b + poly::DelaySend, 0.0f);
+                    s.set(b + poly::Drift, 0.0f);
+                    osc[k] = s.getInt(b + poly::Osc);
+                    table[k] = s.getInt(b + poly::Table);
+                    auto e = std::make_unique<Poly>();
+                    e->prepare(48000.0);
+                    std::vector<float> vals = moduleValues(s, Module::Poly, v);
+                    e->update(vals.data(), 145.0);
+                    e->noteOn(69, 1.0f, 4.0, 1 << 24, 0.0);
+                    const size_t n = 16384;
+                    const std::vector<float> y = renderMono([&](float* L, float* R, int m) { e->process(L, R, m); }, n + 4800);
+                    cents[k] = 1200.0 * std::log2(std::max(1.0, centroid(y.data() + 4800, 48000.0, n)));
+                    const std::vector<double> pw = powerSpectrum(y.data() + 4800, n);
+                    double hi = 0.0, all = 0.0;
+                    for (size_t q = 1; q < pw.size(); ++q) { all += pw[q]; if (q * 48000.0 / n > 2000.0) hi += pw[q]; }
+                    bright[k] = powDb(hi / std::max(all, 1e-30));
+                }
+                (void)lb; (void)cbI;
+                // A table only colours the wavetable oscillator; the others read none.
+                const bool sameTable = osc[0] == static_cast<int>(PolyOsc::Wavetable) && osc[1] == osc[0] && table[0] == table[1];
+                if (osc[0] == osc[1] && (sameTable || osc[0] != static_cast<int>(PolyOsc::Wavetable))) ++samePair;
+                if (osc[0] == osc[1] || (table[0] == table[1] && osc[0] == static_cast<int>(PolyOsc::Wavetable) && osc[1] == osc[0])) ++shareOne;
+                dCents.push_back(std::fabs(cents[1] - cents[0]));
+                dBright.push_back(std::fabs(bright[1] - bright[0]));
+            }
+        }
+        std::sort(dCents.begin(), dCents.end());
+        std::sort(dBright.begin(), dBright.end());
+        check(samePair == 0 && shareOne == 0,
+              "the counter-lead never plays the lead's sound: another oscillator (and so another table) in every track",
+              fmt("%d tracks, %d with the same oscillator and table, %d sharing the oscillator; on one note the centroid differs by "
+                  "%.0f ct (median, lowest %.0f), the share above 2 kHz by %.1f dB (median, lowest %.1f)",
+                  tracks, samePair, shareOne, dCents[dCents.size() / 2], dCents[0], dBright[dBright.size() / 2], dBright[0]));
+    }
     // (i) The acid's voicing owns resonance and decay (a loose end of round "lowend-acid"): the section
     //     ride swings around the voiced values. Read off the control stream: in stage 2 of a drop's ride
     //     the decay returns to the track's own value -- for a mostly liquid track (500 ms against the
@@ -11037,7 +11452,7 @@ void testVoices()
         int tracksSeen = 0, tracksOk = 0, longDecay = 0;
         std::string seen;
         for (int ti = 1; ti <= 16; ++ti) {
-            const TrackPlan& t = ac.track(ap, ti);
+            const TrackPlan t = ac.track(ap, ti);
             std::vector<NoteEvent> nev;
             std::vector<ControlEvent> cev;
             ac.composeBars(ap, t.firstBar, t.bars, nev, &cev);
@@ -11113,6 +11528,7 @@ int main()
     run("testSectionRules", testSectionRules);
     run("testCuration", testCuration);
     run("testTransitions", testTransitions);
+    run("testArrangement", testArrangement);
     run("testCues", testCues);
     run("testParams", testParams);
     run("testTempo", testTempo);

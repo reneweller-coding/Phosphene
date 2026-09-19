@@ -67,7 +67,9 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "track_bars",      "Track Length",    "bars", 32.0f, 512.0f, 256.0f, Curve::Int },
     { "track_variation", "Track Variation", "",      0.0f,   1.0f,   0.5f, Curve::Linear },
     { "sound_variation", "Sound Variation", "",      0.0f,   1.0f,   0.5f, Curve::Linear },
-    { "tempo_range",     "Tempo Range",     "BPM",   0.0f,  10.0f,   3.0f, Curve::Linear },
+    // 19.09.2026, round "arrangement": 1 instead of 3, so that the default set (Full-On, 145 BPM) wanders
+    // inside the user's Full-On window of 142 .. 146 BPM (144 .. 146) rather than up to 148.
+    { "tempo_range",     "Tempo Range",     "BPM",   0.0f,  10.0f,   1.0f, Curve::Linear },
     { "level_match",     "Level Match",     "",      0.0f,   1.0f,   1.0f, Curve::Toggle },
     { "perc_density",    "Perc Density",    "",      0.0f,   1.0f,   0.6f, Curve::Linear },
     { "perc_variation",  "Perc Variation",  "",      0.0f,   1.0f,   0.5f, Curve::Linear },
@@ -546,15 +548,18 @@ const ParamDesc kMixParams[mix::Count] = {
     // -3 dB (19.09.2026, round "voices"): excerpt B of the listening seed (track 2's drop) sat +9.8 dB over
     // the reference median in presence once its foundation was no longer over-matched (Composer.cpp,
     // probeLoudness); with the lead muted it read +1.8, so the lead carried most of it. -3 dB: +7.6.
-    { "lead_level", "Lead Level", "dB", -24.0f, 12.0f, -3.0f, Curve::Linear },
+    // -7 dB (19.09.2026, round "arrangement"): the user after listening to the voices round, "insgesamt ist
+    // der Lead und auch der Arp zu laut"; the arp -2 -> -6 with it, the counter and the stab 4 dB down as
+    // well so that they stay under the lead. docs/PLAN.md has the band balance before and after.
+    { "lead_level", "Lead Level", "dB", -24.0f, 12.0f, -7.0f, Curve::Linear },
     { "counter_mute",  "Counter Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
-    { "counter_level", "Counter Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    { "counter_level", "Counter Level", "dB", -24.0f, 12.0f, -4.0f, Curve::Linear },
     { "arp_mute",   "Arp Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     // -2 dB (18.09.2026): the arp was the loudest melodic part and owned 300 Hz .. 2 kHz, where the
     // congas, toms and the clap have to be heard (kDefaultKit).
-    { "arp_level",  "Arp Level",  "dB", -24.0f, 12.0f, -2.0f, Curve::Linear },
+    { "arp_level",  "Arp Level",  "dB", -24.0f, 12.0f, -6.0f, Curve::Linear },
     { "stab_mute",  "Stab Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
-    { "stab_level", "Stab Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    { "stab_level", "Stab Level", "dB", -24.0f, 12.0f, -4.0f, Curve::Linear },
     { "pad_mute",   "Pad Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "pad_level",  "Pad Level",  "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     { "drone_mute", "Drone Mute", "",     0.0f,  1.0f, 0.0f, Curve::Toggle },

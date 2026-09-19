@@ -27,6 +27,10 @@
  *     --pcm24             write 24-bit PCM
  *     --midi FILE.mid     write the score as a Standard MIDI File
  *     --report            print loudness, peak and timing
+ *     --bar-log FILE.tsv  write one line per bar: owner track, section, output power and what the score
+ *                         plays there (kicks, bass, percussion lanes, parts, the snare roll's spacing, what
+ *                         sounds on beat 4) -- the arrangement round's measurements (19.09.2026)
+ *     --score-only        with --bar-log: compose the score without rendering audio (the power column is -200)
  *     --bench             render without writing and report the realtime factor
  *     --list              print every parameter with range and default
  *     --version           print the version, the vector path and the wavetable pack, then exit
@@ -39,6 +43,7 @@
 #include "phos/Model.h"
 #include "phos/Quality.h"
 #include "phos/SetFile.h"
+#include "phos/Sfx.h"
 #include "phos/Vec.h"
 #include "phos/WaveTableFile.h"
 #include "phos/WavWriter.h"
@@ -170,8 +175,8 @@ int main(int argc, char** argv)
     double seconds = -1.0;
     int sr = 48000, block = 256;
     uint64_t seed = 1;
-    std::string out, midi, solo, setFile, saveSet;
-    bool report = false, bench = false, pcm24 = false, listTracks = false, listSections = false;
+    std::string out, midi, solo, setFile, saveSet, barLog;
+    bool report = false, bench = false, pcm24 = false, listTracks = false, listSections = false, scoreOnly = false;
     Quality quality = Quality::desktop();
     double rampBeat = -1.0, rampBpm = 0.0;
     std::vector<std::string> sets;
@@ -225,6 +230,8 @@ int main(int argc, char** argv)
         else if (a == "--pcm24") pcm24 = true;
         else if (a == "--midi") midi = next();
         else if (a == "--report") report = true;
+        else if (a == "--bar-log") barLog = next();
+        else if (a == "--score-only") scoreOnly = true;
         else if (a == "--bench") bench = true;
         else if (a == "--list") { printList(params); return 0; }
         else if (a == "--version") { printVersion(); return 0; }
@@ -339,8 +346,10 @@ int main(int argc, char** argv)
                 for (int k = 0; k < kNumVoiceMacros; ++k) std::printf(" %s %+.2f", kVoiceMacroNames[k], static_cast<double>(rc.macro[k]));
                 std::printf("\n");
             }
-            std::printf("          form (%s body, arc %.2f..%.2f):", p.form.body == 0 ? "Full-On" : (p.form.body == 1 ? "Progressive" : "Goa"),
-                        static_cast<double>(p.arcIn), static_cast<double>(p.arcOut));
+            static const char* const kTemplateNames[] = { "Full-On", "Progressive", "Goa", "Dark Forest" };
+            static_assert(sizeof(kTemplateNames) / sizeof(kTemplateNames[0]) == kNumBodies, "one name per form template");
+            std::printf("          form (%s template, hand-over at bar %d, arc %.2f..%.2f):", kTemplateNames[std::clamp(p.form.body, 0, kNumBodies - 1)],
+                        handoverBar(p), static_cast<double>(p.arcIn), static_cast<double>(p.arcOut));
             for (int s = 0; s < p.form.count; ++s)
                 std::printf(" %s%d@%d(E%.2f)", kSectionNames[static_cast<int>(p.form.section[s].type)], p.form.section[s].bars,
                             p.form.section[s].startBar, static_cast<double>(p.form.section[s].energy));
@@ -370,6 +379,10 @@ int main(int argc, char** argv)
 
     std::vector<float> L(static_cast<size_t>(block)), R(static_cast<size_t>(block));
     std::vector<NoteEvent> recorded;
+    // Output power per bar for --bar-log: the sum of squares over every sample whose block starts in it.
+    std::vector<double> barPower(static_cast<size_t>(totalBars) + 1, 0.0);
+    std::vector<uint64_t> barSamples(static_cast<size_t>(totalBars) + 1, 0);
+    const bool record = !midi.empty() || !barLog.empty();
     const auto t0 = std::chrono::steady_clock::now();
     uint64_t renderedSamples = 0;
     double peak = 0.0;
@@ -377,10 +390,21 @@ int main(int argc, char** argv)
     LoudnessMeter trackMeter;
     trackMeter.prepare(sr);
     int meteredTrack = 0;
+    if (scoreOnly) {
+        composer.composeBars(params, 0, totalBars, recorded);
+        renderedSamples = totalSamples;
+    }
     while (renderedSamples < totalSamples) {
         const int n = static_cast<int>(std::min<uint64_t>(static_cast<uint64_t>(block), totalSamples - renderedSamples));
-        conductor.pump(params, 8.0 * kBeatsPerBar, midi.empty() ? nullptr : &recorded);
+        conductor.pump(params, 8.0 * kBeatsPerBar, record ? &recorded : nullptr);
+        const int blockBar = std::clamp(static_cast<int>(engine->beatPosition() / kBeatsPerBar), 0, totalBars);
         engine->process(L.data(), R.data(), n);
+        if (!barLog.empty()) {
+            double sq = 0.0;
+            for (int i = 0; i < n; ++i) sq += 0.5 * (static_cast<double>(L[static_cast<size_t>(i)]) * L[static_cast<size_t>(i)] + static_cast<double>(R[static_cast<size_t>(i)]) * R[static_cast<size_t>(i)]);
+            barPower[static_cast<size_t>(blockBar)] += sq;
+            barSamples[static_cast<size_t>(blockBar)] += static_cast<uint64_t>(n);
+        }
         if (!bench) {
             meter.process(L.data(), R.data(), n);
             const int at = composer.trackOfBar(params, static_cast<int>(engine->beatPosition() / kBeatsPerBar));
@@ -404,15 +428,74 @@ int main(int argc, char** argv)
         score.tempo = tempo;
         score.keyRoot = composer.track(params, 0).key;
         score.scale = composer.track(params, 0).scale;
+        // The key signature changes where the bass does: at the hand-over of the DJ overlap (19.09.2026).
         for (int t = 0; composer.track(params, t).firstBar < totalBars; ++t) {
             const TrackPlan p = composer.track(params, t);
-            const double beat = static_cast<double>(p.firstBar) * kBeatsPerBar;
-            if (t > 0 && p.key != composer.track(params, t - 1).key) score.keyChanges.push_back(KeyChange{ beat, p.key });
+            const double beat = static_cast<double>(handoverBar(p)) * kBeatsPerBar;
+            if (t > 0 && p.key != composer.track(params, t - 1).key && beat < totalBeats) score.keyChanges.push_back(KeyChange{ beat, p.key });
         }
         score.sections = composer.sections(params, totalBars);
         for (const NoteEvent& e : recorded) if (e.beat < totalBeats) score.notes.push_back(e);
         score.sort();
         if (!writeMidiFile(score, midi.c_str())) { std::fprintf(stderr, "cannot write %s\n", midi.c_str()); return 1; }
+    }
+
+    if (!barLog.empty()) {
+        FILE* f = std::fopen(barLog.c_str(), "w");
+        if (f == nullptr) { std::fprintf(stderr, "cannot write %s\n", barLog.c_str()); return 1; }
+        int snareLane = -1;
+        for (int l = 0; l < kPercLanes; ++l)
+            if (params.getBool(params.base(Module::Perc, l) + perc::Active) && params.getInt(params.base(Module::Perc, l) + perc::Role) == static_cast<int>(PercRole::Snare)) snareLane = l;
+        struct BarNotes { int kicks = 0, bass = 0; unsigned lanes = 0, parts = 0, beat4Parts = 0, beat4Sfx = 0; int snare = 0; double snareGap = 0.0, lastSnare = -1.0; };
+        std::vector<BarNotes> bn(static_cast<size_t>(totalBars) + 1);
+        std::vector<NoteEvent> sorted = recorded;
+        std::stable_sort(sorted.begin(), sorted.end(), [](const NoteEvent& a, const NoteEvent& b) { return a.beat < b.beat; });
+        for (const NoteEvent& e : sorted) {
+            const int b = static_cast<int>(e.beat / kBeatsPerBar);
+            if (b < 0 || b >= totalBars) continue;
+            BarNotes& x = bn[static_cast<size_t>(b)];
+            const double inBar = e.beat - static_cast<double>(b) * kBeatsPerBar;
+            const Part part = routedPart(e);
+            x.parts |= 1u << static_cast<int>(part);
+            if (part == Part::Kick) ++x.kicks;
+            if (part == Part::Bass) ++x.bass;
+            if (part == Part::Perc) x.lanes |= 1u << e.lane;
+            if (part == Part::Perc && static_cast<int>(e.lane) == snareLane) {
+                ++x.snare;
+                if (x.lastSnare >= 0.0) x.snareGap = x.snareGap > 0.0 ? std::min(x.snareGap, e.beat - x.lastSnare) : e.beat - x.lastSnare;
+                x.lastSnare = e.beat;
+            }
+            if (inBar >= 3.0 - 1e-6) {
+                x.beat4Parts |= 1u << static_cast<int>(part);
+                if (e.part == Part::Sfx || e.part == Part::Vocal || e.part == Part::Texture) x.beat4Sfx |= 1u << std::clamp(static_cast<int>(e.pitch) - kSfxBaseNote, 0, 31);
+            }
+        }
+        // One line per bar and sounding track: over the DJ overlap a bar has two lines, the outgoing track's
+        // (owner 1) and the incoming one's (owner 0). The score columns are the bar's, whoever wrote them.
+        std::fprintf(f, "bar\ttrack\tintrack\towner\tsection\tsecindex\tbarinsec\tclimax\tbody\tpower_db\tkicks\tbass\tlanes\tparts\tsnare\tsnaregap\tbeat4parts\tbeat4sfx\tlayers\tplanparts\tflags\n");
+        for (int ti = 0; composer.track(params, ti).firstBar < totalBars; ++ti)
+        for (int b = composer.track(params, ti).firstBar; b < std::min(totalBars, composer.track(params, ti).firstBar + composer.track(params, ti).bars); ++b) {
+            const TrackPlan t = composer.track(params, ti);
+            const int inTrack = b - t.firstBar;
+            const int si = sectionOfBar(t.form, inTrack);
+            const Section& sec = t.form.section[si];
+            const int owner = composer.trackOfBar(params, b) == ti ? 1 : 0;
+            const double ms = barSamples[static_cast<size_t>(b)] > 0 ? barPower[static_cast<size_t>(b)] / static_cast<double>(barSamples[static_cast<size_t>(b)]) : 0.0;
+            const BarNotes& x = bn[static_cast<size_t>(b)];
+            PartAvailability av;
+            for (int k = 0; k < kMelodyParts; ++k) av.part[k] = t.melody.present[k];
+            av.percLayers = t.perc.layers;
+            av.hatLayers = t.perc.hatLayers;
+            const BarPlan bp = planBar(t.form, av, t.sectionSeed, inTrack);
+            // Planned flags: 1 quiet hats, 2 shaker, 4 off-beat hat, 8 open hats, 16 ride, 32 crash, 64 floor silent.
+            const unsigned flags = (bp.quietHats ? 1u : 0u) | (bp.shaker ? 2u : 0u) | (bp.offbeatHat ? 4u : 0u) | (bp.openHats ? 8u : 0u)
+                                 | (bp.ride ? 16u : 0u) | (bp.crash ? 32u : 0u) | (bp.floorSilent ? 64u : 0u);
+            std::fprintf(f, "%d\t%d\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%.3f\t%d\t%d\t%u\t%u\t%d\t%.4f\t%u\t%u\t%d\t%u\t%u\n", b, ti, inTrack, owner,
+                         kSectionNames[static_cast<int>(sec.type)], si, inTrack - sec.startBar, sec.climax ? 1 : 0, t.form.body,
+                         ms > 0.0 ? 10.0 * std::log10(ms) : -200.0, x.kicks, x.bass, x.lanes, x.parts, x.snare, x.snareGap,
+                         x.beat4Parts, x.beat4Sfx, bp.percLayers, static_cast<unsigned>(bp.parts), flags);
+        }
+        std::fclose(f);
     }
 
     const double audioSeconds = static_cast<double>(totalSamples) / sr;

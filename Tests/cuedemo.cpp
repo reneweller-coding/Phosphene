@@ -228,6 +228,12 @@ int main(int argc, char** argv)
         while (nextBar < conductor.nextBar() && nextBar < bars) {
             const TrackPlan plan = composer.track(params, composer.trackOfBar(params, nextBar));
             cueMarksForBar(plan.form, plan.firstBar, plan.key, plan.scale, nextBar, lastKey, marks);
+            // The next track's intro over this one's outro (the DJ overlap, Form.h): its marks too.
+            const int incoming = composer.incomingOfBar(params, nextBar);
+            if (incoming >= 0) {
+                const TrackPlan next = composer.track(params, incoming);
+                cueMarksForBar(next.form, next.firstBar, next.key, next.scale, nextBar, lastKey, marks);
+            }
             ++nextBar;
         }
         const double from = engine.beatPosition();

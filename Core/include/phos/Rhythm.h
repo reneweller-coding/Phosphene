@@ -70,6 +70,15 @@ struct PercPlan {
     float macro[3] = {};                ///< sound recipe: brightness, tightness, grit (-1..1)
     int  engineOverride[kPercLanes] = {};   ///< -1 = the knob
     int  modeSetOverride[kPercLanes] = {};  ///< -1 = the knob
+    /**
+     * @brief How many lanes at the head of layerOrder are hats (the closed hat, and the open hat or the
+     *        shaker its hat mode leans on) -- 19.09.2026, round "arrangement".
+     *
+     * Behind them the order is fixed by the user's rule: "every 8 bars one percussion layer joins (clap
+     * on 2 and 4, then congas, then ride)", then the rest by weight. The groove adds one layer per group
+     * on top of the hats (Form.cpp).
+     */
+    int  hatLayers = 1;
 };
 
 /**
@@ -93,10 +102,21 @@ struct PercBarSpec {
     int   layers = 4;        ///< how many layers of the plan play
     bool  fills = true;      ///< fills allowed in this bar
     bool  hatsDense = false; ///< the closed hat plays every sixteenth (buildup)
-    int   rollBar = -1;      ///< 0..3: one of the last four bars of a buildup (the snare roll)
+    int   rollBar = -1;      ///< 0..rollBars-1: which bar of the buildup's snare roll this is
     bool  pdb = false;       ///< the pre-drop break: the roll ends on beat 3, beat 4 stays empty
     bool  crash = false;     ///< open the bar with a crash (a drop's downbeat)
     float cutBeats = 0.0f;   ///< beats of silence at the start of the bar (the cut)
+    /** @name 19.09.2026, round "arrangement" (Form.h, BarPlan has the same fields)
+     *  @{ */
+    int   rollBars = 4;      ///< length of the roll: its quarters play 1/4, 1/8, 1/16 and 1/32 notes
+    bool  quietHats = false; ///< a quiet closed hat on every sixteenth but the downbeat (the intro's first half)
+    bool  shaker = false;    ///< the shaker plays whether or not it is a layer
+    bool  offbeatHat = false;///< the closed hat plays its eighth offbeat whether or not it is a layer
+    float hatLevel = 1.0f;   ///< velocity factor of what quietHats, shaker and offbeatHat add
+    bool  openHats = false;  ///< the open hat on every offbeat (drop 2)
+    bool  ride = false;      ///< the ride plays whether or not it is a layer (drop 2)
+    int   cycleBar = -1;     ///< bar within the section's 32-bar cycle, -1 = unknown (the fill falls back on barInTrack)
+    /** @} */
 };
 
 /**
@@ -114,8 +134,15 @@ struct PercBarSpec {
 void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSeed, int bar, int barInTrack,
                     double bpm, int keyRoot, int scale, const PercBarSpec& spec, std::vector<NoteEvent>& out);
 
-/** @brief The fill a phrase ends with (exposed for tests). */
-FillType chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack);
+/**
+ * @brief The fill a phrase ends with (exposed for tests).
+ *
+ * The phrase is the section's 32-bar cycle when @p cycleBar is known (19.09.2026): a fill closes every
+ * eighth bar of it, the eighth bar itself always with a snare fill or a tom run (the user's micro rule,
+ * "bar 8 a snare fill or tom run"), the sixteenth and the thirty-second with the snare roll. With
+ * @p cycleBar -1 the bar of the track decides, as before.
+ */
+FillType chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack, int cycleBar = -1);
 
 /**
  * @brief Normalised offsets of the percussion recipe for one lane, indexed by perc::.

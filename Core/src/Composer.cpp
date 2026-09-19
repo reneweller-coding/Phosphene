@@ -144,7 +144,7 @@ struct VoicePalette {
 //                                     Supersaw VA   FM   WT      tables                                    LP    BP    HP   Notch   bright soft thick space motion
 const VoicePalette kVoicePalette[kPolyInstances] = {
     /* lead    */ { { 0.45, 0.15, 0.15, 0.25 }, { 11, 12, 13, 14, 4, 5, -1, -1 },  { 0.80, 0.10, 0.0, 0.10 }, { 1.0f, 0.6f, 1.0f, 1.0f, 0.8f } },
-    /* counter */ { { 0.00, 0.20, 0.20, 0.60 }, { 5, 1, 2, 11, 13, 15, -1, -1 },   { 0.50, 0.35, 0.0, 0.15 }, { 1.0f, 0.8f, 0.8f, 1.0f, 1.0f } },
+    /* counter */ { { 0.00, 0.20, 0.20, 0.60 }, { 5, 1, 2, -1, -1, -1, -1, -1 },   { 0.40, 0.40, 0.0, 0.20 }, { 1.0f, 0.8f, 0.8f, 1.0f, 1.0f } },
     /* arp     */ { { 0.35, 0.30, 0.10, 0.25 }, { 15, 16, 17, 2, 3, -1, -1, -1 },  { 0.75, 0.25, 0.0, 0.00 }, { 1.0f, 0.0f, 0.8f, 1.0f, 0.6f } },
     /* stab    */ { { 0.45, 0.25, 0.00, 0.30 }, { 3, 4, 6, 8, 15, 16, -1, -1 },    { 0.70, 0.30, 0.0, 0.00 }, { 1.0f, 0.0f, 1.0f, 1.0f, 0.5f } },
     /* pad     */ { { 0.25, 0.00, 0.00, 0.75 }, { 1, 6, 7, 8, 9, 10, 2, -1 },      { 0.85, 0.00, 0.0, 0.15 }, { 0.8f, 1.0f, 1.0f, 1.0f, 1.0f } },
@@ -456,8 +456,14 @@ void Composer::makeBassRhythm(const ParamStore& p, TrackPlan& t) const
     t.bassRhythm = true;
 }
 
-/** @brief Whether the form silences kick and bass for the whole of a bar (Melody.h, the sub foundation). */
-static bool foundationBar(const BarPlan& bp) { return bp.kickBeats == 0 && bp.bassBeats == 0; }
+/**
+ * @brief Whether the floor under 140 Hz is free for the whole of a bar (Melody.h, the sub foundation).
+ *
+ * Since 19.09.2026 this is BarPlan::floorSilent rather than "this track's kick and bass rest": over the DJ
+ * overlap the previous track's kick and bass still hold the floor, and a buildup's pre-drop break is a held
+ * breath rather than a floor (Form.cpp).
+ */
+static bool foundationBar(const BarPlan& bp) { return bp.floorSilent; }
 
 /** @name The pad's high pass while it lays the sub foundation (rule 20 of 18.09.2026). @{ */
 constexpr float kFoundationHpFloor = 40.0f;   ///< Hz: under the lowest sub root (D2, 73 Hz) by nearly an octave
@@ -498,9 +504,6 @@ static DroneBar droneBarAt(const TrackPlan& plan, const PartAvailability& a, int
     // the acid's octave. Where either of them plays it leaves instead (Form.cpp gives the upper octave only
     // to bars without them), and its low note's release is the fade.
     if (!d.low && (bp.parts & (partBit(MelodyPart::Pad) | partBit(MelodyPart::Acid))) != 0) d.on = false;
-    // The same for the first sixteen bars of a track after the first: the previous track's pads may still
-    // hold there (transitionBar), in the octave the upper drone would take.
-    if (!d.low && plan.index > 0 && inTrack < 16) d.on = false;
     return d;
 }
 
@@ -571,6 +574,7 @@ static PartAvailability availabilityOf(const TrackPlan& plan)
     a.arpLo = plan.melody.arpLo;
     a.arpHi = plan.melody.arpHi;
     a.percLayers = plan.perc.layers;
+    a.hatLayers = plan.perc.hatLayers;
     return a;
 }
 
@@ -737,9 +741,10 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
     const bool styleTempo = p.getBool(cb + compose::StyleTempo);
     const double baseBpm = styleTempo ? style.bpmCentre : p.get(cb + compose::Bpm);
     const double range = styleTempo ? style.bpmRange : p.get(cb + compose::TempoRange);
-    // Track lengths are multiples of 32 bars, so that every track boundary -- the bass swap of a
-    // transition -- falls on a 32-bar grid (PLAN 6.7).
-    const int baseBars = std::clamp((p.getInt(cb + compose::TrackBars) / 32) * 32, kMinTrackBars, kMaxTrackBars);
+    // Track lengths are multiples of 16 bars (19.09.2026; until then 32, so that every track boundary fell
+    // on a 32-bar grid of the set -- the DJ overlap of the arrangement round moves every later track by
+    // sixteen bars against that grid anyway, and a track's own form is what its phrases count from).
+    const int baseBars = std::clamp((p.getInt(cb + compose::TrackBars) / kTrackBarStep) * kTrackBarStep, kMinTrackBars, kMaxTrackBars);
 
     while (static_cast<int>(walk_.size()) <= index) {
         const int i = static_cast<int>(walk_.size());
@@ -756,9 +761,10 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
         Rng r;
         r.seed(mixSeed(setSeed() ^ kSaltWalk, static_cast<uint64_t>(i)));
 
-        // Length: the knob, give or take up to two 32-bar blocks.
+        // Length: the knob, give or take one 16-bar block -- at the default 256 bars that is 240 .. 272, inside
+        // the user's 220 .. 280 (19.09.2026; until then two 32-bar blocks either way).
         w.bars = baseBars;
-        if (r.uniform() < tv) w.bars = std::clamp(baseBars + 32 * (r.below(3) - 1), kMinTrackBars, kMaxTrackBars);
+        if (r.uniform() < tv) w.bars = std::clamp(baseBars + kTrackBarStep * (r.below(3) - 1), kMinTrackBars, kMaxTrackBars);
 
         // Key: by fifths and whole tones, now and then a semitone.
         w.key = prev.key;
@@ -829,6 +835,15 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
         // nothing drawn above moves.
         Rng rv;
         rv.seed(mixSeed(setSeed() ^ kSaltVoice, static_cast<uint64_t>(i)));
+        // The counter-lead against this track's lead (19.09.2026, the user: "Die Counter-Lead sollte
+        // natuerlich einen anderen Sound haben als die Haupt-Lead"). Until then a voice's candidates were
+        // scored only against the same voice in the two tracks before, and the counter's palette shared two
+        // of the lead lane's tables and three of its oscillators, so a track could give both the same
+        // oscillator and table an octave apart. Now the counter's palette is the vocal family alone (Formant
+        // Saw, Vocal, Glass), a candidate with the lead's oscillator or table is never taken, a different
+        // filter response counts, and the distance to the lead is part of the score.
+        const int leadV = polyIndex(PolyInstance::Lead), counterV = polyIndex(PolyInstance::Counter);
+        static_assert(polyIndex(PolyInstance::Lead) < polyIndex(PolyInstance::Counter), "the lead is drawn before the counter");
         for (int v = 0; v < kPolyInstances; ++v) {
             const VoicePalette& pal = kVoicePalette[v];
             int nTables = 0;
@@ -851,7 +866,29 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
                     d = std::sqrt(d) + (cand.osc != o.osc ? 1.0 : 0.0) + (cand.table != o.table ? 1.0 : 0.0) + (cand.filter != o.filter ? 0.5 : 0.0);
                     score = std::min(score, d);
                 }
+                if (v == counterV) {
+                    const VoiceRecipe& lead = w.voice[leadV];
+                    if (cand.osc == lead.osc || cand.table == lead.table) continue;   // never the lead's sound
+                    double d = 0.0;
+                    for (int k = 0; k < kNumVoiceMacros; ++k) d += (cand.macro[k] - lead.macro[k]) * (cand.macro[k] - lead.macro[k]);
+                    score = std::min(score, 1e8) + 0.5 * std::sqrt(d) + (cand.filter != lead.filter ? 0.5 : 0.0);
+                }
                 if (score > bestScore) { bestScore = score; w.voice[v] = cand; }
+            }
+            if (v == counterV) {
+                // No candidate differed from the lead in both (possible only when all twelve drew its
+                // oscillator or its table): take the counter's likeliest other oscillator and the first
+                // palette table that is not the lead's.
+                VoiceRecipe& c = w.voice[v];
+                const VoiceRecipe& lead = w.voice[leadV];
+                if (c.osc == lead.osc) {
+                    int best = -1;
+                    for (int o = 0; o < static_cast<int>(PolyOsc::Count); ++o)
+                        if (o != lead.osc && pal.osc[o] > 0.0 && (best < 0 || pal.osc[o] > pal.osc[best])) best = o;
+                    c.osc = best;
+                }
+                if (c.table == lead.table)
+                    for (int k = 0; k < nTables; ++k) if (pal.tables[k] != lead.table) { c.table = pal.tables[k]; break; }
             }
         }
         walk_.push_back(w);
@@ -871,7 +908,9 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
 
     TrackPlan t;
     t.index = index;
-    t.firstBar = index == 0 ? 0 : plans_[static_cast<size_t>(index - 1)].firstBar + plans_[static_cast<size_t>(index - 1)].bars;
+    // The DJ overlap (Form.h, kDjOverlap): every track after the first starts kDjOverlap bars before the one
+    // before it ends, its kick-free intro over the other's bare outro.
+    t.firstBar = index == 0 ? 0 : plans_[static_cast<size_t>(index - 1)].firstBar + plans_[static_cast<size_t>(index - 1)].bars - kDjOverlap;
     t.key = w.key;
     t.scale = w.scale;
     t.bpm = w.bpm;
@@ -897,6 +936,7 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     StyleProfile interchange = style;
     if (!p.getBool(cb + compose::ModalInterchange)) interchange.interchangeChance = 0.0f;
     t.form = makeFormPlan(interchange, t.formSeed, w.bars, t.arcIn, t.arcOut, t.scale, t.sectionSeed);
+    t.form.handover = index == 0 ? 0 : kDjOverlap;
     makeFormSfx(t.form, t.formSeed, p.get(cb + compose::SfxAmount), p.get(cb + compose::VoiceDensity), p.get(cb + compose::BedDensity));
     t.bars = t.form.bars;
 
@@ -990,10 +1030,12 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     return t;
 }
 
-void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out) const
+void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out,
+                                  ControlScope scope) const
 {
     const int cb = p.base(Module::Compose), kb = p.base(Module::Kick), bb = p.base(Module::Bass), mb = p.base(Module::Mix);
     const float sv = p.get(cb + compose::SoundVariation);
+    const bool floor = scope != ControlScope::Voices, voices = scope != ControlScope::Floor;
     auto push = [&](int id, ControlEvent::Kind kind, float value) {
         ControlEvent c;
         c.beat = beat;
@@ -1002,6 +1044,10 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
         c.value = value;
         out.push_back(c);
     };
+    // The DJ overlap (19.09.2026): a track's voices sound from its first bar, over the previous track's
+    // bare outro, but its key, kick, bass, kit, acid and gains take over only at the hand-over, with its
+    // kick and bass (ControlScope). A track that starts a set writes both at once.
+    if (floor) {
     push(cb + compose::Key, ControlEvent::Kind::Override, static_cast<float>(plan.key));
     push(cb + compose::Scale, ControlEvent::Kind::Override, static_cast<float>(plan.scale));
     push(cb + compose::BassPattern, ControlEvent::Kind::Override, static_cast<float>(plan.primaryPattern));
@@ -1026,16 +1072,20 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
         push(pb + perc::Engine, ControlEvent::Kind::Override, static_cast<float>(plan.perc.engineOverride[l]));
         push(pb + perc::ModeSet, ControlEvent::Kind::Override, static_cast<float>(plan.perc.modeSetOverride[l]));
     }
+    }   // floor
     (void)bb;
 
     // Melodic parts: switches of the track, delay times, level corrections and sound directions.
     const MelodyPlan& m = plan.melody;
     const int ab = p.base(Module::Acid);
+    if (floor) {
     push(ab + acid::Squelch, ControlEvent::Kind::Override, static_cast<float>(m.acidSquelch));
     push(ab + acid::DelayLeft, ControlEvent::Kind::Override, static_cast<float>(m.delay[mpIndex(MelodyPart::Acid)][0]));
     push(ab + acid::DelayRight, ControlEvent::Kind::Override, static_cast<float>(m.delay[mpIndex(MelodyPart::Acid)][1]));
+    }
     for (int k = 0; k < kMelodyParts; ++k) {
         const MelodyPart part = static_cast<MelodyPart>(k);
+        if (part == MelodyPart::Acid ? !floor : !voices) continue;
         const int level = mb + (part == MelodyPart::Acid ? static_cast<int>(mix::AcidLevel) : mix::polyLevel(melodyPoly(part)));
         const ParamDesc& d = p.desc(level);
         push(level, ControlEvent::Kind::Offset, plan.partGainDb[k] / (d.maxValue - d.minValue));
@@ -1044,7 +1094,7 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
     // by every section with the voicing folded into the section's base (sectionControls); they are
     // written here as well so that the level match's part probe, which plays the track start alone,
     // hears the voicing it has to match.
-    {
+    if (floor) {
         float acidOff[acid::Count] = {};
         int disperse = -1;
         acidVoicingOffsets(p, plan.acidVoicing, sv, acidOff, disperse);
@@ -1053,7 +1103,7 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
     }
     // Decay and resonance: the voicing's offset (pushed above) plus the old per-track direction, as one
     // value -- a strand holds an offset, it does not add one; the section ride swings around this sum.
-    {
+    if (floor) {
         float acidOff[acid::Count] = {};
         int unused = -1;
         acidVoicingOffsets(p, plan.acidVoicing, sv, acidOff, unused);
@@ -1065,7 +1115,7 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
     // ridden again later with this offset as their base -- the lead's cutoff and the pad's table
     // position by every section (sectionControls), the drone's cutoff, position and detune by its slow
     // evolution (droneControls) -- because a ride replaces an offset rather than adding to it.
-    for (int v = 0; v < kPolyInstances; ++v) {
+    for (int v = 0; v < kPolyInstances && voices; ++v) {
         const PolyInstance inst = static_cast<PolyInstance>(v);
         const VoiceRecipe& rc = plan.voice[v];
         const int vb = p.base(inst);
@@ -1079,9 +1129,10 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
         voiceRecipeOffsets(inst, rc, sv, off);
         for (const Loading& l : kVoiceLoadings) push(vb + l.param, ControlEvent::Kind::Offset, off[l.param]);
     }
-    push(p.base(PolyInstance::Pad) + poly::GatePattern, ControlEvent::Kind::Override, static_cast<float>(m.padGatePattern));    // The loudness offset of Auto Gain, in the normalised domain of master.gain's 36 dB range.
+    if (voices) push(p.base(PolyInstance::Pad) + poly::GatePattern, ControlEvent::Kind::Override, static_cast<float>(m.padGatePattern));
+    // The loudness offset of Auto Gain, in the normalised domain of master.gain's 36 dB range.
     const ParamDesc& mg = p.desc(p.base(Module::Master) + master::Gain);
-    push(p.base(Module::Master) + master::Gain, ControlEvent::Kind::Offset, plan.masterGainDb / (mg.maxValue - mg.minValue));
+    if (floor) push(p.base(Module::Master) + master::Gain, ControlEvent::Kind::Offset, plan.masterGainDb / (mg.maxValue - mg.minValue));
 }
 
 /**
@@ -1097,13 +1148,22 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
  * opening" the plan asks for; a breakdown opens the hall and closes the filters.
  */
 void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const BarPlan& bar, double beat,
-                               std::vector<ControlEvent>& out) const
+                               std::vector<ControlEvent>& out, ControlScope scope) const
 {
     const int cb = p.base(Module::Compose), ab = p.base(Module::Acid), mb = p.base(Module::Mix);
     const int lb = p.base(PolyInstance::Lead), pb = p.base(PolyInstance::Pad);
     const float sv = p.get(cb + compose::SoundVariation), mv = p.get(cb + compose::MelodyVariation);
     const MelodyPlan& m = plan.melody;
-    const Section& s = plan.form.section[bar.index];
+    // The DJ overlap (19.09.2026): the incoming track's first section (its intro) writes its voices from
+    // its first bar and its floor -- acid, gain, rides -- at the hand-over, as a section that starts there
+    // and runs to the intro's end, so that no event is ever dated behind the bar it is written in.
+    Section s = plan.form.section[bar.index];
+    if (scope == ControlScope::Floor && bar.barInSection > 0) {
+        s.startBar += bar.barInSection;
+        s.bars = std::max(1, s.bars - bar.barInSection);
+        s.energy = bar.energy;
+    }
+    const bool floor = scope != ControlScope::Voices, voices = scope != ControlScope::Floor;
     const float length = static_cast<float>(s.bars) * kBeatsPerBar;
     auto push = [&](int id, float value, float len) {
         ControlEvent c;
@@ -1147,22 +1207,22 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
         return knobs ? 0.0f : base + scale * (0.35f * (energy - 0.7f) + 0.12f * mv * wobble);
     };
     if (bar.index == 0) {
-        push(ab + acid::Cutoff, cutoffAt(acidBase, 1.0f, e0), 0.0f);
-        push(lb + poly::Cutoff, cutoffAt(leadBase, 0.8f, e0), 0.0f);
-        push(pb + poly::Position, cutoffAt(padBase, 0.6f, e0), 0.0f);
+        if (floor) push(ab + acid::Cutoff, cutoffAt(acidBase, 1.0f, e0), 0.0f);
+        if (voices) push(lb + poly::Cutoff, cutoffAt(leadBase, 0.8f, e0), 0.0f);
+        if (voices) push(pb + poly::Position, cutoffAt(padBase, 0.6f, e0), 0.0f);
     }
-    push(ab + acid::Cutoff, cutoffAt(acidBase, 1.0f, e1), length);
-    push(ab + acid::EnvAmount, 0.5f * (cutoffAt(acidBase, 1.0f, e1) - acidBase) + voicing[acid::EnvAmount], length);
-    push(lb + poly::Cutoff, cutoffAt(leadBase, 0.8f, e1), length);
-    push(pb + poly::Position, cutoffAt(padBase, 0.6f, e1), length);
+    if (floor) push(ab + acid::Cutoff, cutoffAt(acidBase, 1.0f, e1), length);
+    if (floor) push(ab + acid::EnvAmount, 0.5f * (cutoffAt(acidBase, 1.0f, e1) - acidBase) + voicing[acid::EnvAmount], length);
+    if (voices) push(lb + poly::Cutoff, cutoffAt(leadBase, 0.8f, e1), length);
+    if (voices) push(pb + poly::Position, cutoffAt(padBase, 0.6f, e1), length);
 
     // The hall opens where the floor empties: a breakdown is the wettest part of a track.
     const float wet = s.type == SectionType::Break ? 0.22f : (s.type == SectionType::Intro || s.type == SectionType::Outro ? 0.10f : 0.0f);
     const ParamDesc& hs = p.desc(pb + poly::HallSend);
     const float wetNorm = wet / (hs.maxValue - hs.minValue);
-    push(ab + acid::HallSend, knobs ? 0.0f : wetNorm, length);
+    if (floor) push(ab + acid::HallSend, knobs ? 0.0f : wetNorm, length);
     // Every polyphonic voice, with the hall share of its recipe's space direction folded in (19.09.2026).
-    for (int v = 0; v < kPolyInstances; ++v) {
+    for (int v = 0; v < kPolyInstances && voices; ++v) {
         const float space = kVoiceHallWeight * sv * kVoicePalette[v].scale[3] * plan.voice[v].macro[3];
         push(p.base(static_cast<PolyInstance>(v)) + poly::HallSend, knobs ? 0.0f : wetNorm + space, length);
     }
@@ -1170,10 +1230,10 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
     // Loudness (Farbood): at most +-2 dB around the section's energy, on top of the track's level match.
     const ParamDesc& g = p.desc(mb + mix::TrackGain);
     const float span = g.maxValue - g.minValue;
-    push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e0))) / span, 0.0f);
+    if (floor) push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e0))) / span, 0.0f);
     // A buildup's energy runs from the section before it to the drop, so the gain ramps with it; every
     // other section holds one value (e0 == e1 there).
-    if (e1 != e0) push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e1))) / span, length);
+    if (floor && e1 != e0) push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e1))) / span, length);
 
     // The macro ride of this section and the buildup's hall send (Form.h, 16.09.2026). The only line
     // of this file the arrangement-dynamics round of 16.09.2026 added: everything it writes is made
@@ -1181,12 +1241,13 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
     // Since 19.09.2026 the ride of resonance and decay swings around the track's voiced values (Form.cpp):
     // the voicing's offset and the old per-track direction, the same sum trackStartControls writes.
     const float acidRecipe = m.recipe[mpIndex(MelodyPart::Acid)];
-    sectionAutomation(p, s, plan.sectionSeed[std::clamp(bar.index, 0, kMaxSections - 1)], beat,
-                      cutoffAt(acidBase, 1.0f, e0), cutoffAt(acidBase, 1.0f, e1), knobs, out,
-                      voicing[acid::Resonance] + 0.08f * sv * acidRecipe, voicing[acid::Decay] + 0.12f * sv * acidRecipe);
+    if (floor)
+        sectionAutomation(p, s, plan.sectionSeed[std::clamp(bar.index, 0, kMaxSections - 1)], beat,
+                          cutoffAt(acidBase, 1.0f, e0), cutoffAt(acidBase, 1.0f, e1), knobs, out,
+                          voicing[acid::Resonance] + 0.08f * sv * acidRecipe, voicing[acid::Decay] + 0.12f * sv * acidRecipe);
 
     // The pad's trance gate is a property of the section, not of a 16-bar block.
-    pushNow(pb + poly::Gate, ControlEvent::Kind::Override, bar.padGate ? 1.0f : 0.0f);
+    if (voices) pushNow(pb + poly::Gate, ControlEvent::Kind::Override, bar.padGate ? 1.0f : 0.0f);
 }
 
 void Composer::droneControls(const ParamStore& p, const TrackPlan& plan, int inTrack, double beat, std::vector<ControlEvent>& out) const
@@ -1394,8 +1455,15 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
         spec.fills = false;
         spec.hatsDense = bp.hatsDense;
         spec.rollBar = bp.rollBar;
+        spec.rollBars = bp.rollBars;
         spec.pdb = bp.pdb;
         spec.cutBeats = bp.cutBeats;
+        spec.quietHats = bp.quietHats;
+        spec.shaker = bp.shaker;
+        spec.offbeatHat = bp.offbeatHat;
+        spec.hatLevel = bp.hatLevel;
+        spec.openHats = bp.openHats;
+        spec.ride = bp.ride;
         composePercBar(p, plan.perc, plan.percSeed, b, sourceBar(b), plan.bpm, plan.key, plan.scale, spec, notes);
     }
     // The melodic parts: everything the track has for their own measurement, as the form plays them
@@ -1455,20 +1523,32 @@ int Composer::trackOfBar(const ParamStore& p, int bar) const
     }
 }
 
+int Composer::incomingOfBar(const ParamStore& p, int bar) const
+{
+    const int ti = trackOfBar(p, bar);
+    const TrackPlan& t = track(p, ti);
+    if (bar < t.firstBar + t.bars - kDjOverlap) return -1;
+    const TrackPlan& next = track(p, ti + 1);
+    return bar >= next.firstBar ? ti + 1 : -1;
+}
+
 TempoMap Composer::tempoMap(const ParamStore& p, int bars) const
 {
+    // Held per track from its hand-over, ramped over the DJ overlap into the next -- the same sixteen bars
+    // at the end of every track as before 19.09.2026, now the bars in which the next track's intro already
+    // sounds over this one's bare outro (Form.h, kDjOverlap).
     TempoMap m;
     const TrackPlan& first = track(p, 0);
     m.setConstant(first.bpm);
     for (int i = 0;; ++i) {
         // By value: computing the next plan may move the cached ones.
         const TrackPlan t = track(p, i);
-        const double start = static_cast<double>(t.firstBar) * kBeatsPerBar;
+        const double start = static_cast<double>(handoverBar(t)) * kBeatsPerBar;
         if (i > 0) m.add(start, t.bpm, false);
         if (t.firstBar + t.bars >= bars) break;
         const TrackPlan next = track(p, i + 1);
         if (next.bpm != t.bpm) {
-            const double rampStart = static_cast<double>(next.firstBar - 16) * kBeatsPerBar;
+            const double rampStart = static_cast<double>(next.firstBar) * kBeatsPerBar;
             m.add(std::max(start, rampStart), t.bpm, true);
         }
     }
@@ -1512,74 +1592,74 @@ std::vector<SectionMark> Composer::sections(const ParamStore& p, int bars) const
 }
 
 /**
- * @brief The compositional transition between two tracks (PLAN 6.7).
+ * @brief The incoming track's share of a bar of the DJ overlap (19.09.2026, round "arrangement").
  *
- * All the tracks come from one hand, so a transition is written rather than mixed: the hats of the
- * next track come in sixteen bars early, over the outro of this one; the pads of the previous track
- * hold on sixteen bars into this one's intro; and the key change at the swap -- always a 32-bar
- * boundary, because every track is a multiple of 32 bars long -- is masked by the outro's sweep, which
- * ends exactly on it, and by an impact on the downbeat.
+ * All the tracks come from one hand, so the transition is written rather than mixed, but it is written
+ * the way a DJ mixes two records (Form.h, kDjOverlap): the incoming track's intro starts sixteen bars
+ * before the outgoing track ends, over its bare outro -- kick, bass and one hat -- with what the intro's
+ * kick-free half plays: the quiet sixteenth hat, the shaker, the pads, textures and voices. Its kick and
+ * bass wait for its own bar 17, which is the outgoing track's end, so exactly one kick and one bass sound
+ * at every moment and the kick-bass lock never has two partners.
+ *
+ * **Keys.** The incoming pads sound over the outgoing bass. They come in only where the two keys are close
+ * enough for that to be consonant -- the same key, a fourth or a fifth apart -- the harmonic-mixing rule of
+ * the DJ literature (Ishizaki, Hoashi and Takishima 2009, which this generator already followed for the
+ * pads that used to hold over from the previous track). Where they are not, the incoming track's first
+ * sixteen bars are its percussion and its effects alone; its pads enter with its kick and bass. The
+ * effects are tuned to the key the engine plays in, which is the outgoing track's until the hand-over.
+ *
+ * **Controls.** The incoming track's voice recipes and levels at its first bar, its voices' section
+ * controls, and per bar the pad's and the drone's high pass and the drone's evolution -- for this track,
+ * whose voices are the only ones sounding there (the outgoing outro's bare bars have none). Its floor
+ * follows at the hand-over (composeBars).
+ *
+ * The percussion shares the kit's lanes: where both tracks put a hit on the same lane at the same moment,
+ * the outgoing track's stands and the incoming one is dropped.
  */
-void Composer::transitionBar(const ParamStore& p, int ti, int inTrack, int bar, std::vector<NoteEvent>& out) const
+void Composer::transitionBar(const ParamStore& p, int gi, int bar, std::vector<NoteEvent>& out,
+                             std::vector<ControlEvent>* controls) const
 {
-    const TrackPlan& plan = plans_[static_cast<size_t>(ti)];
+    const TrackPlan& guest = plans_[static_cast<size_t>(gi)];
+    const TrackPlan& owner = plans_[static_cast<size_t>(gi - 1)];
+    const int inTrack = bar - guest.firstBar;
     const double barBeat = static_cast<double>(bar) * kBeatsPerBar;
-    constexpr int kOverlap = 16;
+    const BarPlan bp = planBar(guest.form, availabilityOf(guest), guest.sectionSeed, inTrack);
+    const int move = ((guest.key - owner.key) % 12 + 12) % 12;
+    const bool consonant = move == 0 || move == 5 || move == 7;
 
-    if (inTrack >= plan.bars - kOverlap && ti + 1 < static_cast<int>(plans_.size())) {
-        const TrackPlan& next = plans_[static_cast<size_t>(ti + 1)];
-        const int bIn = inTrack - (plan.bars - kOverlap);
-        std::vector<NoteEvent> tmp;
-        PercBarSpec spec;
-        spec.layers = 1;
-        spec.fills = false;
-        composePercBar(p, next.perc, next.percSeed, bar, bIn, plan.bpm, next.key, next.scale, spec, tmp);
-        const int hatLane = next.perc.layerOrder[0];
-        const float fade = static_cast<float>(bIn + 1) / (kOverlap + 1);   // the hats grow into the swap
-        for (NoteEvent& n : tmp) {
-            if (n.lane != static_cast<uint8_t>(hatLane)) continue;
-            n.velocity = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(n.velocity * fade)), 1, 127));
-            out.push_back(n);
+    if (controls != nullptr) {
+        if (inTrack == 0) trackStartControls(p, guest, barBeat, *controls, ControlScope::Voices);
+        if (bp.barInSection == 0) sectionControls(p, guest, bp, barBeat, *controls, ControlScope::Voices);
+        const int pb = p.base(PolyInstance::Pad), db = p.base(PolyInstance::Drone);
+        auto closeHighPass = [&](int base) {
+            // The floor is the outgoing track's here: the incoming pad and drone keep their knobs' high pass.
+            ControlEvent h;
+            h.beat = barBeat;
+            h.kind = ControlEvent::Kind::Offset;
+            h.value = 0.0f;
+            h.param = static_cast<int16_t>(base + poly::HpFloor);
+            controls->push_back(h);
+            h.param = static_cast<int16_t>(base + poly::HpTrack);
+            controls->push_back(h);
+        };
+        if (guest.melody.present[mpIndex(MelodyPart::Pad)]) closeHighPass(pb);
+        if (guest.melody.present[mpIndex(MelodyPart::Drone)]) {
+            closeHighPass(db);
+            droneControls(p, guest, inTrack, barBeat, *controls);
         }
     }
-    if (inTrack < kOverlap && ti > 0) {
-        const TrackPlan& prev = plans_[static_cast<size_t>(ti - 1)];
-        // The pads keep their own pitches -- that is what "the pads of A stay" means -- so they only
-        // carry over when the two keys are close enough for that to be consonant: the same key, a
-        // fourth or a fifth. That is the harmonic-mixing rule of the DJ literature (Ishizaki, Hoashi
-        // and Takishima 2009), applied to a transition we write rather than mix.
-        const int move = ((plan.key - prev.key) % 12 + 12) % 12;
-        if (prev.melody.present[mpIndex(MelodyPart::Pad)] && (move == 0 || move == 5 || move == 7)) {
-            std::vector<NoteEvent> tmp;
-            BarPlan pad;
-            pad.parts = partBit(MelodyPart::Pad);
-            pad.type = SectionType::Outro;
-            composeMelodyBar(p, prev.melody, bar, prev.bars + inTrack, prev.scale, pad, tmp);
-            const float fade = static_cast<float>(kOverlap - inTrack) / (kOverlap + 1);   // and the pads fade out
-            for (NoteEvent& n : tmp) {
-                if (n.part != Part::Pad) continue;
-                n.velocity = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(n.velocity * fade)), 1, 127));
-                out.push_back(n);
-            }
-        }
-    }
-    if (inTrack == 0 && ti > 0) {
-        // The impact on the key change, together with the sweep that ends on this beat.
-        NoteEvent e;
-        e.beat = barBeat;
-        e.length = 4.0f;
-        e.part = Part::Sfx;
-        e.pitch = static_cast<uint8_t>(kSfxBaseNote + static_cast<int>(SfxType::Impact));
-        e.velocity = 110;
-        out.push_back(e);
-        // And the sub drop under it, as under every impact the form places (Form.cpp, placePsychedelia;
-        // 19.09.2026). The next track's intro has no kick in its first bars, and the kick's own ducker
-        // would hold the drop under it anyway (Engine.h). Only where the effects are on at all.
-        if (p.get(p.base(Module::Compose) + compose::SfxAmount) > 0.0f) {
-            e.pitch = static_cast<uint8_t>(kSfxBaseNote + static_cast<int>(SfxType::SubDrop));
-            out.push_back(e);
-        }
-    }
+
+    PercBarSpec spec;
+    spec.layers = bp.percLayers;
+    spec.fills = false;
+    spec.quietHats = bp.quietHats;
+    spec.shaker = bp.shaker;
+    spec.offbeatHat = bp.offbeatHat;
+    spec.hatLevel = bp.hatLevel;
+    spec.cycleBar = bp.cycleBar;
+    composePercBar(p, guest.perc, guest.percSeed, bar, inTrack, owner.bpm, guest.key, guest.scale, spec, out);
+    if (consonant) composeMelodyBar(p, guest.melody, bar, inTrack, guest.scale, bp, out, melodyContext(guest, bp, inTrack));
+    composeSfxBar(guest.form, static_cast<double>(guest.firstBar) * kBeatsPerBar, inTrack, out);
 }
 
 void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::vector<NoteEvent>& out,
@@ -1596,8 +1676,11 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         const int ti = trackOfBar(p, bar);
         // The overlap window needs the next track's plan; making it may move the cache, so it is made
         // before any reference into the cache is taken.
-        { const TrackPlan& t0 = track(p, ti); if (bar - t0.firstBar >= t0.bars - 16) track(p, ti + 1); }
+        { const TrackPlan& t0 = track(p, ti); if (bar - t0.firstBar >= t0.bars - kDjOverlap) track(p, ti + 1); }
         const TrackPlan& plan = track(p, ti);
+        // The incoming track of the DJ overlap, if one sounds in this bar (Form.h, kDjOverlap).
+        const int incoming = ti + 1 < static_cast<int>(plans_.size()) && bar >= plans_[static_cast<size_t>(ti + 1)].firstBar ? ti + 1 : -1;
+        const size_t barNotes = out.size();
         const int inTrack = bar - plan.firstBar;
         const float progress = static_cast<float>(inTrack) / static_cast<float>(plan.bars);
         const double barBeat = static_cast<double>(bar) * kBeatsPerBar;
@@ -1622,13 +1705,18 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         BarPlan bp = planBar(plan.form, availabilityOf(plan), plan.sectionSeed, inTrack);
 
         if (controls != nullptr) {
-            if (inTrack == 0) {
-                trackStartControls(p, plan, barBeat, *controls);
+            // A track's floor takes over at its hand-over: its first bar in the set's first track, its own
+            // bar 17 -- the outgoing track's end -- in every later one, whose voices started at its first bar
+            // (transitionBar). Sections that start later write everything at their first bar as before.
+            const int handover = plan.form.handover;
+            if (inTrack == handover) {
+                trackStartControls(p, plan, barBeat, *controls, handover == 0 ? ControlScope::All : ControlScope::Floor);
                 arcControls(p, plan, inTrack, barBeat, false, *controls);
-            } else if (inTrack % 32 == 0) {
+                if (handover > 0 && bp.barInSection > 0) sectionControls(p, plan, bp, barBeat, *controls, ControlScope::Floor);
+            } else if (inTrack % 32 == 0 && inTrack > handover) {
                 arcControls(p, plan, inTrack, barBeat, true, *controls);
             }
-            if (bp.barInSection == 0) sectionControls(p, plan, bp, barBeat, *controls);
+            if (bp.barInSection == 0 && inTrack >= handover) sectionControls(p, plan, bp, barBeat, *controls);
             // The pad's high pass for the sub foundation (rule 20): opened to kFoundationHpFloor and
             // an octave under each voice wherever the form silences kick and bass, the knobs
             // everywhere else. Every bar carries its state, so a bar composed alone carries it too;
@@ -1648,8 +1736,10 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
                 h.value = open ? p.toNormalised(pb + poly::HpTrack, kFoundationHpTrack) - p.toNormalised(pb + poly::HpTrack, p.get(pb + poly::HpTrack)) : 0.0f;
                 controls->push_back(h);
             };
-            if (plan.melody.present[mpIndex(MelodyPart::Pad)]) highPass(PolyInstance::Pad, foundationBar(bp));
-            if (plan.melody.present[mpIndex(MelodyPart::Drone)]) {
+            // Over the DJ overlap the incoming track's pad and drone are the ones sounding, and it writes
+            // their controls (transitionBar); the outgoing outro's bare bars have neither.
+            if (incoming < 0 && plan.melody.present[mpIndex(MelodyPart::Pad)]) highPass(PolyInstance::Pad, foundationBar(bp));
+            if (incoming < 0 && plan.melody.present[mpIndex(MelodyPart::Drone)]) {
                 highPass(PolyInstance::Drone, droneLowAt(plan, inTrack));
                 droneControls(p, plan, inTrack, barBeat, *controls);
             }
@@ -1784,13 +1874,32 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         spec.fills = bp.fills;
         spec.hatsDense = bp.hatsDense;
         spec.rollBar = bp.rollBar;
+        spec.rollBars = bp.rollBars;
         spec.pdb = bp.pdb;
         spec.cutBeats = bp.cutBeats;
-        spec.crash = bp.barInSection == 0 && bp.type == SectionType::Drop;
+        spec.crash = bp.crash || (bp.barInSection == 0 && bp.type == SectionType::Drop);
+        spec.quietHats = bp.quietHats;
+        spec.shaker = bp.shaker;
+        spec.offbeatHat = bp.offbeatHat;
+        spec.hatLevel = bp.hatLevel;
+        spec.openHats = bp.openHats;
+        spec.ride = bp.ride;
+        spec.cycleBar = bp.cycleBar;
         composePercBar(p, plan.perc, plan.percSeed, bar, inTrack, plan.bpm, plan.key, plan.scale, spec, out);
         composeMelodyBar(p, plan.melody, bar, inTrack, plan.scale, bp, out, melodyContext(plan, bp, inTrack));
         composeSfxBar(plan.form, static_cast<double>(plan.firstBar) * kBeatsPerBar, inTrack, out);
-        transitionBar(p, ti, inTrack, bar, out);
+        if (incoming >= 0) {
+            // The percussion shares the kit's lanes: where both tracks hit one lane at the same moment the
+            // outgoing track's hit stands (transitionBar).
+            std::vector<NoteEvent> guest;
+            transitionBar(p, incoming, bar, guest, controls);
+            for (const NoteEvent& n : guest) {
+                bool taken = false;
+                for (size_t k = barNotes; k < out.size() && !taken; ++k)
+                    taken = out[k].part == Part::Perc && n.part == Part::Perc && out[k].lane == n.lane && std::fabs(out[k].beat - n.beat) < 1e-6;
+                if (!taken) out.push_back(n);
+            }
+        }
     }
     std::stable_sort(out.begin() + static_cast<long>(noteStart), out.end(), noteLess);
     std::inplace_merge(out.begin(), out.begin() + static_cast<long>(noteStart), out.end(), noteLess);

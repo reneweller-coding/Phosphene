@@ -231,6 +231,19 @@ struct TrackPlan {
     /** @} */
 };
 
+/**
+ * @brief Which half of a track's sound a batch of control events writes (19.09.2026, round "arrangement").
+ *
+ * Over the DJ overlap two tracks sound at once (Form.h, kDjOverlap): the incoming track's voices -- pads,
+ * drone, the polyphonic recipes and levels -- from its first bar, its floor -- key, kick, bass, kit, acid,
+ * track and master gain, the section rides -- only from the hand-over, where its kick and bass take over
+ * from the outgoing track's. A track that starts the set writes both at once (All).
+ */
+enum class ControlScope : int { All = 0, Voices, Floor };
+
+/** @brief The bar on which a track's own kick and bass take over the floor (its first bar in a set's first track). */
+inline int handoverBar(const TrackPlan& t) { return t.firstBar + t.form.handover; }
+
 /** @brief Composes the set from a seed and the knobs. */
 class Composer {
 public:
@@ -243,9 +256,18 @@ public:
 
     /** @brief The plan of track @p index (computed in order and cached). */
     const TrackPlan& track(const ParamStore& params, int index) const;
-    /** @brief Index of the track that contains @p bar. */
+    /**
+     * @brief Index of the track that owns @p bar: the one whose kick and bass sound there. Over the DJ
+     *        overlap that is the outgoing track, until its last bar.
+     */
     int trackOfBar(const ParamStore& params, int bar) const;
-    /** @brief The tempo map of the first @p bars bars: held per track, ramped over the last 16 bars into the next. */
+    /**
+     * @brief Index of the track whose intro sounds over the outgoing track's outro in @p bar (the DJ
+     *        overlap, Form.h), or -1 where only one track sounds. Plans the next track when asked about
+     *        the last kDjOverlap bars of one.
+     */
+    int incomingOfBar(const ParamStore& params, int bar) const;
+    /** @brief The tempo map of the first @p bars bars: held per track, ramped over the DJ overlap (the last 16 bars of a track) into the next. */
     TempoMap tempoMap(const ParamStore& params, int bars) const;
     /** @brief Every section mark of the first @p bars bars, for the MIDI export and the arrange view. */
     std::vector<SectionMark> sections(const ParamStore& params, int bars) const;
@@ -326,13 +348,19 @@ private:
     /** @brief Draws the track's two bass *rhythm* phrases, or leaves the plan on the pattern families. */
     void makeBassRhythm(const ParamStore& params, TrackPlan& plan) const;
     const TrackWalk& walkAt(const ParamStore& params, int index) const;
-    void trackStartControls(const ParamStore& params, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out) const;
+    void trackStartControls(const ParamStore& params, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out,
+                            ControlScope scope = ControlScope::All) const;
     void arcControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, bool ramp, std::vector<ControlEvent>& out) const;
     double probeLoudness(const ParamStore& params, const TrackPlan& plan, int part = -1, float masterGainDb = 0.0f) const;
     void matchMaster(const ParamStore& params, TrackPlan& plan) const;
     void sectionControls(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar, double beat,
-                         std::vector<ControlEvent>& out) const;
-    void transitionBar(const ParamStore& params, int track, int inTrack, int bar, std::vector<NoteEvent>& out) const;
+                         std::vector<ControlEvent>& out, ControlScope scope = ControlScope::All) const;
+    /**
+     * @brief The incoming track's share of an overlap bar (19.09.2026): its intro's percussion, voices and
+     *        effects, and the controls of its voices. Nothing of its kick or bass: there is none yet.
+     */
+    void transitionBar(const ParamStore& params, int track, int bar, std::vector<NoteEvent>& out,
+                       std::vector<ControlEvent>* controls) const;
     /**
      * @brief The tonic drone's slow evolution (19.09.2026): every MelodyPlan::droneEvolveBars bars a new
      *        target for its cutoff, table position and detune, ramped over the whole period, around the

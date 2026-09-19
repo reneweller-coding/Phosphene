@@ -2076,11 +2076,22 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         const std::vector<MelodyNote>& cell = arp[arpCell(set, variantOfBar(barInTrack % 4, 1), c)];
         // G3..G5 whatever the form's octave and the octave jump ask for (rule 14): a shift is played
         // only where the whole cell stays inside, and the cells already span most of the register.
+        // Drop 2 (19.09.2026, round "arrangement"): the user's rule "the arp an octave higher" stands above
+        // rule 14 there -- the form's octave (BarPlan::arpOctave, set only in drop 2) may take the cell up to
+        // G6, the ceiling the register guard already allows beside the lead; the octave jump comes on top
+        // only where it still fits.
+        const int ceiling = bp.arpOctave > 0 ? kArpOverHighest : kArpHighest;
+        auto fits = [&](int sh) {
+            for (const MelodyNote& n : cell) {
+                const int pitch = m.root[kArpI] + n.rel + sh;
+                if (pitch < kArpLowest || pitch > ceiling) return false;
+            }
+            return true;
+        };
         int shift = ((m.arpOctaveJump && (barInTrack / 2) % 2 == 1) ? 12 : 0) + 12 * bp.arpOctave;
-        for (const MelodyNote& n : cell) {
-            const int pitch = m.root[kArpI] + n.rel + shift;
-            if (pitch < kArpLowest || pitch > kArpHighest) { shift = 0; break; }
-        }
+        // In drop 2 the octave is the rule's and is kept: a cell too wide for G6 folds its top notes down an
+        // octave instead of giving the octave up (below, where the events are built).
+        if (!fits(shift)) shift = (bp.arpOctave > 0 || fits(12 * bp.arpOctave)) ? 12 * bp.arpOctave : 0;
         // Which note sounds on which sixteenth: the cell as written, or the polymeter's three-sixteenth
         // cell read at the *absolute* sixteenth of the track (it starts one step later in every bar and
         // comes home every three bars; its high note precesses with it).
@@ -2099,9 +2110,15 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         // accents into the lead's gaps (the interlock). Where nothing else sounds this is the arp as
         // it always was.
         std::vector<std::array<int, 3>> ev;
-        for (const auto& st : steps) ev.push_back({ st.first, m.root[kArpI] + st.second->rel + shift, m.root[kArpI] + st.second->rel + shift });
+        for (const auto& st : steps) {
+            int pitch = m.root[kArpI] + st.second->rel + shift;
+            while (bp.arpOctave > 0 && pitch > ceiling) pitch -= 12;
+            ev.push_back({ st.first, pitch, pitch });
+        }
         const bool shared = has(MelodyPart::Lead) || has(MelodyPart::Counter) || has(MelodyPart::Stab);
-        const int move = shared ? bestShift(ev, taken, { 0, -12, 12, 24 }, kArpLowest, kArpOverHighest) : 0;
+        // In drop 2 the guard may lift the arp further but never take it back under its climax octave.
+        const int move = !shared ? 0 : bp.arpOctave > 0 ? bestShift(ev, taken, { 0, 12 }, kArpLowest, kArpOverHighest)
+                                                        : bestShift(ev, taken, { 0, -12, 12, 24 }, kArpLowest, kArpOverHighest);
         // The gate (rule 15): kArpGate of a sixteenth; the arp's own release (Params.cpp) finishes it.
         const double gate = 0.25 * kArpGate;
         for (const auto& st : steps) {

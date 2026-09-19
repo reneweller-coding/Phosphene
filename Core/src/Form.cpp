@@ -33,6 +33,7 @@ constexpr uint64_t kSaltVoice   = 0x564F494300000008ull;   ///< the voices' plac
 constexpr uint64_t kSaltBed     = 0x4245440000000009ull;   ///< the shamanic bed's placement (19.09.2026)
 constexpr uint64_t kSaltFxRide  = 0x46585244000000Aull;    ///< the modulation effects' section ride (19.09.2026)
 constexpr uint64_t kSaltVariant = 0x564152490000000Bull;   ///< the voices' and the bed's variants (19.09.2026, round "voices")
+constexpr uint64_t kSaltClimax  = 0x434C494D0000000Cull;   ///< drop 2's squelches (19.09.2026, round "arrangement")
 
 /** @brief Index drawn from non-negative weights. */
 int drawIndex(Rng& r, const double* w, int n)
@@ -66,50 +67,58 @@ int drawIndex(Rng& r, const double* w, int n)
  * darker minors. Progressive's chance is small on purpose -- its literature is a genre of one mode
  * held for eight minutes -- rather than zero, so the path is exercised in every style.
  */
+//
+// 19.09.2026, round "arrangement": the user's subgenre rules stand above the measured values. The tempo
+// windows are now the rule's -- Full-On 142 .. 146, Progressive 135 .. 138, Goa 142 .. 148, Dark/Forest
+// 148 .. 155 (Hi-Tech has no rule and keeps 154 .. 162) -- the measured Goa median of 142.8 lies inside its
+// window, the measured Full-On median of 144.6 inside its. The body weights pick each style's own template
+// (Form.cpp, kTemplates) with certainty: the rule text gives every subgenre one form. The fourth PDB variant
+// (the kick alone on beat 4) is never drawn any more: "on beat 4 of the last bar before the drop everything
+// stops". breakShare and introBars are no longer read (the templates fix both).
 const StyleProfile kProfiles[kNumStyles] = {
     // Goa
-    { "Goa", 143.0, 4.0,
+    { "Goa", 145.0, 3.0,
       { 0.15, 0.20, 0.15, 0.30, 0.15, 0.05 },          // scales: Phrygian dominant and double harmonic lead
-      { 0.20, 0.10, 0.70 },                            // bodies: the long second drop
+      { 0.0, 0.0, 1.0, 0.0 },                          // template: Goa
       { 0.0, 0.5, 0.0, 0.0, 0.0, 0.2, 0.0, 0.1, 0.0, 0.0, 0.4, 0.0 },   // i-bII and i-bVII
       { 1.15f, 1.10f, 1.10f, 1.25f, 0.80f, 1.20f, 1.20f }, 0.9f, 0.95f,
-      { 0.35, 0.20, 0.25, 0.20 },
+      { 0.20, 0.25, 0.55, 0.00 },                      // mostly beat 4 alone: rarely total silence
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.26f, 1.0f, 16.0f,
       { 0.15, 0.25, 0.10, 0.30, 0.15, 0.05 }, 0.45f },   // interchange: the Hijaz modes at the peak
     // Full-On: the default, every multiplier 1, so the knobs play as they are set.
-    { "Full-On", 145.0, 4.0,
+    { "Full-On", 144.0, 2.0,
       { 0.30, 0.25, 0.15, 0.15, 0.05, 0.10 },
-      { 0.65, 0.15, 0.20 },
+      { 1.0, 0.0, 0.0, 0.0 },                          // template: the strict two-drop form
       { 0.0, 0.1, 0.0, 0.0, 0.0, 0.1, 0.0, 0.1, 0.0, 0.0, 0.1, 0.0 },
       { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f }, 1.0f, 1.0f,
-      { 0.30, 0.25, 0.25, 0.20 },
+      { 0.40, 0.30, 0.30, 0.00 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.22f, 1.0f, 16.0f,
       { 0.30, 0.30, 0.15, 0.15, 0.05, 0.05 }, 0.30f },
     // Progressive: flatter form, fewer leads, more pad, Dorian and Aeolian.
-    { "Progressive", 137.0, 3.0,
+    { "Progressive", 136.5, 1.5,
       { 0.35, 0.10, 0.05, 0.05, 0.00, 0.45 },
-      { 0.20, 0.70, 0.10 },
+      { 0.0, 1.0, 0.0, 0.0 },                          // template: long cycles, dry drops
       { 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.2, 0.0, 0.0, 0.2, 0.0 },
       { 0.9f, 0.55f, 0.50f, 0.8f, 1.20f, 1.3f, 1.30f }, 0.6f, 0.9f,
-      { 0.45, 0.25, 0.20, 0.10 },
+      { 0.50, 0.30, 0.20, 0.00 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.28f, 0.6f, 16.0f,
       { 0.45, 0.05, 0.00, 0.00, 0.00, 0.50 }, 0.12f },   // Dorian and Aeolian only
-    // Dark / Forest: darker modes, less lead, denser percussion, short intros.
-    { "Dark Forest", 149.0, 3.0,
+    // Dark / Forest: darker modes, less lead, denser percussion.
+    { "Dark Forest", 151.5, 3.5,
       { 0.20, 0.40, 0.25, 0.10, 0.05, 0.00 },
-      { 0.50, 0.30, 0.20 },
+      { 0.0, 0.0, 0.0, 1.0 },                          // template: fewer conventional drops
       { 0.0, 0.4, 0.0, 0.0, 0.0, 0.1, 0.0, 0.1, 0.0, 0.0, 0.3, 0.0 },
       { 1.2f, 0.4f, 0.50f, 0.9f, 1.00f, 0.8f, 1.30f }, 1.2f, 1.1f,
-      { 0.25, 0.25, 0.35, 0.15 },
+      { 0.30, 0.30, 0.40, 0.00 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.18f, 1.3f, 8.0f,
       { 0.20, 0.40, 0.30, 0.10, 0.00, 0.00 }, 0.35f },
-    // Hi-Tech: fastest, busiest, shortest sections.
+    // Hi-Tech: fastest, busiest; no rule of its own, so the strict two-drop form.
     { "Hi-Tech", 158.0, 4.0,
       { 0.20, 0.35, 0.25, 0.15, 0.05, 0.00 },
-      { 0.55, 0.15, 0.30 },
+      { 1.0, 0.0, 0.0, 0.0 },
       { 0.0, 0.3, 0.0, 0.0, 0.0, 0.1, 0.0, 0.1, 0.0, 0.0, 0.3, 0.0 },
       { 1.3f, 0.6f, 0.80f, 1.1f, 1.20f, 0.6f, 0.50f }, 1.4f, 1.2f,
-      { 0.20, 0.30, 0.35, 0.15 },
+      { 0.25, 0.35, 0.40, 0.00 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.16f, 1.4f, 8.0f,
       { 0.20, 0.35, 0.30, 0.15, 0.00, 0.00 }, 0.40f },
 };
@@ -124,41 +133,74 @@ const ArcPoint kFlat[]     = { { 0.0, 0.70 }, { 1.0, 0.70 } };
 
 bool isCore(SectionType t) { return t == SectionType::Groove || t == SectionType::Drop; }
 
-/** @brief The three grammar bodies, as sequences of section types. */
-struct Body { int count; SectionType type[8]; };
-const Body kBodies[kNumBodies] = {
-    // Full-On standard: Groove Build Drop Break Build Drop
-    { 6, { SectionType::Groove, SectionType::Build, SectionType::Drop, SectionType::Break, SectionType::Build, SectionType::Drop } },
-    // Progressive, flatter: Groove Drop Break Drop Break Drop
-    { 6, { SectionType::Groove, SectionType::Drop, SectionType::Break, SectionType::Drop, SectionType::Break, SectionType::Drop } },
-    // Goa, long second drop: Intro2 Build Drop Break Build Drop Drop2
-    { 7, { SectionType::Intro, SectionType::Build, SectionType::Drop, SectionType::Break, SectionType::Build, SectionType::Drop, SectionType::Drop } },
+/**
+ * @brief The two-drop templates (19.09.2026, round "arrangement"): the user's macro form, one per
+ *        subgenre family.
+ *
+ * Every template has the same eight slots -- intro, groove, buildup 1, drop 1, breakdown, the big
+ * buildup, drop 2, outro -- so that everything downstream can name them (kSlot*). The lengths are the
+ * rule text's at 256 bars:
+ *
+ * | slot        | Full-On / Hi-Tech | Progressive | Goa     | Dark Forest |
+ * |-------------|-------------------|-------------|---------|-------------|
+ * | intro       | 1-32              | 1-32        | 1-32    | 1-32        |
+ * | groove      | 33-64             | 33-96 (64)  | 33-64   | 33-64       |
+ * | buildup 1   | 65-80, PDB 77-80  | 97-112      | 65-80   | 65-80, no PDB |
+ * | drop 1      | 81-112            | 113-144     | 81-112  | 81-128 (48) |
+ * | breakdown   | 113-144           | 145-176     | 113-144, no cut, arp spiral | 129-144 (16), percussion stays |
+ * | big buildup | 145-176, roll 161-176 | 177-192 (16), roll 8 | 145-176 | 145-176 |
+ * | drop 2      | 177-224 (48)      | 193-224 (32), dry | 177-224 | 177-224 |
+ * | outro       | 225-256           | 225-256     | 225-256 | 225-256     |
+ *
+ * Progressive's longer cycles are its 64-bar groove and its short big buildup; its drops are dry (no
+ * impact, the stab carries them). Goa's breakdown is never silent -- the arp spirals through it, and with
+ * the big buildup behind it that is the rule's 64 bars of building spirals. Dark Forest has "fewer
+ * conventional drops": its first buildup runs into drop 1 without a pre-drop break, and its short
+ * breakdown keeps two layers of percussion; drop 2 keeps the full gesture, because drop 2 is the climax
+ * in every style.
+ */
+enum : int { kSlotIntro = 0, kSlotGroove, kSlotBuild1, kSlotDrop1, kSlotBreak, kSlotBuild2, kSlotDrop2, kSlotOutro, kSlots };
+struct Template {
+    int bars[kSlots];      ///< length of each slot at 256 bars
+    int grow[8];           ///< the slots that take 16 more bars when the track is longer, in order (-1 ends)
+    int growCap[8];        ///< the length each of those grows to at most
 };
+const SectionType kSlotType[kSlots] = { SectionType::Intro, SectionType::Groove, SectionType::Build, SectionType::Drop,
+                                        SectionType::Break, SectionType::Build, SectionType::Drop, SectionType::Outro };
+const Template kTemplates[kNumBodies] = {
+    // Full-On (and Hi-Tech): the strict two-drop form.
+    { { 32, 32, 16, 32, 32, 32, 48, 32 }, { kSlotDrop2, kSlotDrop1, kSlotBreak, kSlotGroove, kSlotDrop1, kSlotBreak, kSlotGroove, -1 },
+      { 64, 48, 48, 48, 64, 64, 64, 0 } },
+    // Progressive: the 64-bar groove, a short big buildup, a 32-bar drop 2.
+    { { 32, 64, 16, 32, 32, 16, 32, 32 }, { kSlotDrop2, kSlotDrop1, kSlotBreak, kSlotDrop2, kSlotDrop1, kSlotBreak, -1, -1 },
+      { 48, 48, 48, 64, 64, 64, 0, 0 } },
+    // Goa: the Full-On lengths, with the spiral in the breakdown.
+    { { 32, 32, 16, 32, 32, 32, 48, 32 }, { kSlotDrop2, kSlotBreak, kSlotDrop1, kSlotGroove, kSlotBreak, kSlotDrop1, kSlotGroove, -1 },
+      { 64, 48, 48, 48, 64, 64, 64, 0 } },
+    // Dark Forest: the long drop 1, the short breakdown.
+    { { 32, 32, 16, 48, 16, 32, 48, 32 }, { kSlotDrop2, kSlotDrop1, kSlotGroove, kSlotBreak, kSlotGroove, kSlotBreak, -1, -1 },
+      { 64, 64, 48, 32, 64, 48, 0, 0 } },
+};
+/** @brief The order in which slots give up 16 bars when the track is shorter, and how far (all templates). */
+const int kShrink[9][2] = { { kSlotDrop2, 32 }, { kSlotGroove, 16 }, { kSlotBreak, 16 }, { kSlotDrop1, 16 },
+                            { kSlotBuild2, 16 }, { kSlotIntro, 16 }, { kSlotOutro, 16 }, { kSlotDrop2, 16 }, { kSlotGroove, 16 } };
 
-/** @brief Share of the whole track taken by breakdowns. */
-double breakShare(const FormPlan& f)
-{
-    int total = 0, brk = 0;
-    for (int i = 0; i < f.count; ++i) {
-        total += f.section[i].bars;
-        if (f.section[i].type == SectionType::Break) brk += f.section[i].bars;
-    }
-    return total > 0 ? static_cast<double>(brk) / total : 0.0;
-}
-
-/** @brief True while every hard constraint of PLAN 6.2 holds (exposed as formConstraintsHold). */
+/** @brief True while every hard constraint holds (exposed as formConstraintsHold; Form.h says which). */
 bool constraintsHoldImpl(const FormPlan& f)
 {
+    int climaxes = 0, lastDrop = -1;
     for (int i = 0; i < f.count; ++i) {
         const Section& s = f.section[i];
-        if (s.bars != 8 && s.bars != 16 && s.bars != 32 && s.bars != 64) return false;
+        if (s.bars < 8 || s.bars % 8 != 0 || s.startBar % 8 != 0) return false;
         if (isCore(s.type) && s.bars < 16) return false;
-        if (s.type == SectionType::Build && s.bars != 8 && s.bars != 16) return false;
+        if (s.type == SectionType::Build && (s.bars < 8 || s.bars > 32)) return false;
         if (s.type == SectionType::Break && s.bars < 16) return false;
-        if (s.startBar % 8 != 0) return false;
+        if (s.type == SectionType::Drop) lastDrop = i;
+        if (s.climax) ++climaxes;
     }
-    const double share = breakShare(f);
-    return share >= 0.15 && share <= 0.30;
+    if (f.count < 2 || f.section[0].type != SectionType::Intro || f.section[0].bars < kDjOverlap) return false;
+    if (f.section[f.count - 1].type != SectionType::Outro || f.section[f.count - 1].bars < kDjOverlap) return false;
+    return climaxes == 1 && lastDrop >= 0 && f.section[lastDrop].climax;
 }
 
 /** @brief Recomputes the start bars and the total after a length changed. */
@@ -170,27 +212,26 @@ void relayout(FormPlan& f)
 }
 
 /**
- * @brief Splits @p bars over @p nc cores as a sum of 16, 32 and 64.
+ * @brief The slot lengths of template @p t for a track of @p target bars (a multiple of 16).
  *
- * With a of them 16, b of them 32 and c of them 64: 16a + 32b + 64c = bars and a + b + c = nc, so
- * b + 3c = bars/16 - nc. Taking c as large as the equation allows gives the fewest, longest cores,
- * which is what a Goa body wants; @p out receives the lengths with the long ones first.
- * @return false when no split exists (the length does not fit this many cores)
+ * From the rule's 256 bars, 16 bars at a time: a longer track lengthens the drops first, then the
+ * breakdown and the groove (each up to its cap); a shorter one gives up drop 2's extra half, then the
+ * groove, the breakdown, drop 1, the big buildup, and last the intro and the outro (never under the DJ
+ * overlap). The walk is deterministic, so a length always maps to the same form.
  */
-bool splitCores(int bars, int nc, int* out)
+void fitTemplate(const Template& t, int target, int* bars)
 {
-    if (nc <= 0 || bars % 16 != 0) return false;
-    const int m = bars / 16 - nc;          // extra sixteens to hand out
-    if (m < 0 || m > 3 * nc) return false;
-    const int c = std::min(nc, m / 3);
-    const int b = m - 3 * c;
-    const int a = nc - b - c;
-    if (a < 0 || b < 0 || b + c > nc) return false;
-    int k = 0;
-    for (int i = 0; i < c; ++i) out[k++] = 64;
-    for (int i = 0; i < b; ++i) out[k++] = 32;
-    for (int i = 0; i < a; ++i) out[k++] = 16;
-    return k == nc;
+    int total = 0;
+    for (int k = 0; k < kSlots; ++k) { bars[k] = t.bars[k]; total += bars[k]; }
+    for (bool moved = true; total < target && moved;) {
+        moved = false;
+        for (int g = 0; g < 8 && t.grow[g] >= 0 && total < target; ++g)
+            if (bars[t.grow[g]] + 16 <= t.growCap[g]) { bars[t.grow[g]] += 16; total += 16; moved = true; }
+    }
+    for (int k = 0; k < 9; ++k) {
+        const int slot = kShrink[k][0], floor = kShrink[k][1];
+        while (total > target && bars[slot] - 16 >= floor) { bars[slot] -= 16; total -= 16; }
+    }
 }
 
 } // namespace
@@ -285,106 +326,89 @@ FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double a
     Rng r;
     r.seed(mixSeed(seed, kSaltForm));
     FormPlan f;
-    target = std::clamp((target / 32) * 32, kMinTrackBars, kMaxTrackBars);
+    target = std::clamp((target / kTrackBarStep) * kTrackBarStep, kMinTrackBars, kMaxTrackBars);
 
-    // What the grammar would like: the style's intro length, a mostly long buildup, and breakdowns
-    // that together come to the style's share of the track.
-    const int wantIntro = r.uniform() < (s.introBars >= 12.0f ? 0.67f : 0.33f) ? 16 : 8;
-    const int wantOutro = r.uniform() < 0.6f ? 16 : 8;
-    const int wantBuild = r.uniform() < 0.6f ? 16 : 8;
+    // The template is the style's (19.09.2026: the rule text gives every subgenre one form; the draw
+    // stays a draw so that a profile may one day mix them).
     f.body = drawIndex(r, s.bodyWeight, kNumBodies);
-    const Body& body = kBodies[f.body];
-
-    f.count = 0;
-    f.section[f.count++].type = SectionType::Intro;
-    for (int i = 0; i < body.count; ++i) f.section[f.count++].type = body.type[i];
-    f.section[f.count++].type = SectionType::Outro;
-
-    int builds[kMaxSections], nb = 0, breaks[kMaxSections], nbr = 0, cores[kMaxSections], nc = 0;
-    int intro2 = -1;
-    for (int i = 0; i < f.count; ++i) {
-        const SectionType t = f.section[i].type;
-        if (t == SectionType::Build) builds[nb++] = i;
-        else if (t == SectionType::Break) breaks[nbr++] = i;
-        else if (isCore(t)) cores[nc++] = i;
-        else if (t == SectionType::Intro && i > 0) intro2 = i;
+    const Template& tp = kTemplates[f.body];
+    int lens[kSlots];
+    fitTemplate(tp, target, lens);
+    f.count = kSlots;
+    for (int k = 0; k < kSlots; ++k) {
+        f.section[k].type = kSlotType[k];
+        f.section[k].bars = lens[k];
     }
-    const int wantBreak = nbr > 0 ? static_cast<int>(std::lround(s.breakShare * target / nbr)) : 0;
-
-    // The lengths are a small constraint problem: the intro, the outro, the buildups and the
-    // breakdowns come from their allowed sets, the cores take what is left, and the total must be the
-    // requested length exactly (so that a track boundary always lands on the 32-bar grid, PLAN 6.7,
-    // and a rerolled track does not move the tracks after it). The candidate space is at most a few
-    // hundred combinations, so it is enumerated and the combination closest to what the grammar wanted
-    // wins -- constraint satisfaction rather than a repair loop that might not converge.
-    static const int kIntroLens[2] = { 8, 16 }, kBuildLens[2] = { 8, 16 }, kBreakLens[3] = { 16, 32, 64 };
-    int bestIntro = 16, bestOutro = 16, bestBuild = 16, bestBreak = 32, bestCores[kMaxSections] = {};
-    double bestScore = 1e30;
-    bool found = false;
-    for (int ii = 0; ii < 2; ++ii)
-        for (int oi = 0; oi < 2; ++oi)
-            for (int bi = 0; bi < 2; ++bi)
-                for (int ki = 0; ki < 3; ++ki) {
-                    const int in = kIntroLens[ii], ou = kIntroLens[oi], bu = kBuildLens[bi], br = kBreakLens[ki];
-                    const int fixed = in + ou + nb * bu + nbr * br + (intro2 >= 0 ? 8 : 0);
-                    int lens[kMaxSections];
-                    if (!splitCores(target - fixed, nc, lens)) continue;
-                    const double share = nbr * br / static_cast<double>(target);
-                    if (share < 0.15 || share > 0.30) continue;
-                    const double score = std::abs(in - wantIntro) + std::abs(ou - wantOutro)
-                                       + nb * std::abs(bu - wantBuild) + 0.5 * nbr * std::abs(br - wantBreak);
-                    if (score >= bestScore) continue;
-                    bestScore = score;
-                    bestIntro = in;
-                    bestOutro = ou;
-                    bestBuild = bu;
-                    bestBreak = br;
-                    for (int k = 0; k < nc; ++k) bestCores[k] = lens[k];
-                    found = true;
-                }
-    f.section[0].bars = bestIntro;
-    f.section[f.count - 1].bars = bestOutro;
-    if (intro2 >= 0) f.section[intro2].bars = 8;
-    for (int k = 0; k < nb; ++k) f.section[builds[k]].bars = bestBuild;
-    for (int k = 0; k < nbr; ++k) f.section[breaks[k]].bars = bestBreak;
-    // The long cores go where the body wants them: the Goa body ends on its long second drop, the
-    // others put their weight on the first.
-    for (int k = 0; k < nc; ++k) f.section[cores[f.body == 2 ? nc - 1 - k : k]].bars = found ? bestCores[k] : 16;
     relayout(f);
-    if (!found) {
-        // No combination fits: keep the cores at their floor and give the difference to the outro. The
-        // enumeration covers every target between kMinTrackBars and kMaxTrackBars for all three bodies
-        // (there is a self-test check for that), so this is a guard, not a path.
-        f.section[f.count - 1].bars += target - f.bars;
-        relayout(f);
-    }
+
+    // The form's own decisions per slot (Form.h, Section): the rolls, the pre-drop breaks, what the
+    // styles do differently.
+    Section& build1 = f.section[kSlotBuild1];
+    Section& build2 = f.section[kSlotBuild2];
+    Section& brk = f.section[kSlotBreak];
+    f.section[kSlotDrop2].climax = true;
+    // Buildup 1: a four-bar roll inside the four-bar pre-drop break (bars 77-80 of the rule), except in
+    // Dark Forest, whose first drop comes without the conventional stop.
+    build1.rollBars = std::min(4, build1.bars);
+    build1.pdbBars = f.body == 3 ? 0 : std::min(4, build1.bars);
+    // The big buildup: the sixteen-bar roll (quarters, eighths, sixteenths, thirty-seconds, four bars
+    // each) over its second half, and the stop on beat 4 of its last bar. A short big buildup (16 bars,
+    // Progressive) rolls over its last eight.
+    build2.rollBars = std::min(16, build2.bars / 2);
+    build2.pdbBars = 1;
+    if (f.body == 1) { f.section[kSlotDrop1].dry = true; f.section[kSlotDrop2].dry = true; }
+    if (f.body == 2) brk.spiral = true;
+    if (f.body == 3) brk.breakPerc = 2;
 
     // Energies from the arc, and the per-section decisions that belong to the form.
     Rng d;
     d.seed(mixSeed(seed ^ kSaltSection, 0));
+    auto scaled = [](float nominal, double arc) { return static_cast<float>(nominal * (0.55 + 0.45 * arc)); };
     for (int i = 0; i < f.count; ++i) {
         Section& sec = f.section[i];
         const double t0 = f.bars > 0 ? static_cast<double>(sec.startBar) / f.bars : 0.0;
         const double t1 = f.bars > 0 ? static_cast<double>(sec.startBar + sec.bars) / f.bars : 1.0;
         const double a0 = arcIn + (arcOut - arcIn) * t0, a1 = arcIn + (arcOut - arcIn) * t1;
         // The arc scales the type's nominal energy; at arc 0 a section keeps 55 % of it, so the order
-        // drop > buildup > groove > breakdown survives every arc.
-        auto scaled = [](float nominal, double arc) { return static_cast<float>(nominal * (0.55 + 0.45 * arc)); };
-        sec.energy = scaled(typeEnergy(sec.type), a0);
-        sec.energyTo = scaled(typeEnergy(sec.type), a1);
-        if (sec.type == SectionType::Build) {
-            // A buildup rises from the section before it to the drop that follows.
-            // A buildup starts where the section before it ended and arrives at the drop's energy, so
-            // that everything the energy drives -- the gain, the filter arcs -- really rises through it
-            // (Solberg and Dibben 2019: the rising middle of the U).
-            const float from = i > 0 ? f.section[i - 1].energyTo : 0.5f;
-            const float to = i + 1 < f.count ? scaled(typeEnergy(f.section[i + 1].type), a1) : 1.0f;
-            sec.energy = from;
-            sec.energyTo = to;
-            sec.pdbVariant = drawIndex(d, s.pdbWeight, kNumPdbVariants);
+        // drop > buildup > groove > breakdown survives every arc. Drop 1 stands at kDrop1Share of a drop:
+        // the rule makes drop 2 the climax, not a repeat.
+        const float nominal = typeEnergy(sec.type) * (sec.type == SectionType::Drop && !sec.climax ? kDrop1Share : 1.0f);
+        sec.energy = scaled(nominal, a0);
+        sec.energyTo = scaled(nominal, a1);
+        if (sec.type == SectionType::Drop) sec.energyTo = sec.energy;   // a drop holds its level
+        if (sec.type == SectionType::Build) sec.pdbVariant = drawIndex(d, s.pdbWeight, kNumPdbVariants);
+        // The cut of Grosz et al. (1 to 3 s): the bass vacuum of the rule, "kick and bass cut at once".
+        // Goa's breakdown is never silent, Dark Forest's keeps its percussion; neither takes a cut.
+        if (sec.type == SectionType::Break && i > 0 && isCore(f.section[i - 1].type)) {
+            const float cut = d.uniform() < 0.5f ? 1.0f : 2.0f;
+            sec.cutBeats = (sec.spiral || sec.breakPerc > 0) ? 0.0f : cut;
         }
-        if (sec.type == SectionType::Break && i > 0 && isCore(f.section[i - 1].type))
-            sec.cutBeats = d.uniform() < 0.5f ? 1.0f : 2.0f;   // Grosz et al.: 1 to 3 s
+    }
+    // Drop 2 is the climax: its energy stands kClimaxMargin above every other section's, whatever the
+    // arc does across the track (a Closing arc falls towards the end and would otherwise put drop 1 on
+    // top). Where the margin would take it past 1, the others come down instead.
+    {
+        Section& peak = f.section[kSlotDrop2];
+        float others = 0.0f;
+        for (int i = 0; i < f.count; ++i) if (i != kSlotDrop2) others = std::max({ others, f.section[i].energy, f.section[i].energyTo });
+        peak.energy = peak.energyTo = std::min(1.0f, std::max(peak.energy, others + kClimaxMargin));
+        for (int i = 0; i < f.count; ++i) {
+            if (i == kSlotDrop2) continue;
+            f.section[i].energy = std::min(f.section[i].energy, peak.energy - kClimaxMargin);
+            f.section[i].energyTo = std::min(f.section[i].energyTo, peak.energy - kClimaxMargin);
+        }
+    }
+    // A buildup starts where the section before it ended and arrives at the drop's energy (just under it:
+    // the drop itself is the arrival), so that everything the energy drives -- the gain, the filter arcs --
+    // really rises through it (Solberg and Dibben 2019: the rising middle of the U). Goa's breakdown rises
+    // into the big buildup as well: the rule's 64 bars of building spirals.
+    for (int i = 0; i < f.count; ++i) {
+        Section& sec = f.section[i];
+        if (sec.type == SectionType::Break && sec.spiral && i + 1 < f.count) sec.energyTo = std::max(sec.energy, 0.5f * (sec.energy + f.section[i + 1].energy + 0.2f));
+        if (sec.type != SectionType::Build) continue;
+        sec.energy = i > 0 ? f.section[i - 1].energyTo : 0.5f;
+        sec.energyTo = i + 1 < f.count ? f.section[i + 1].energy - (f.section[i + 1].climax ? kClimaxMargin : 0.0f) : 1.0f;
+        sec.energyTo = std::max(sec.energy, sec.energyTo);
     }
     // The mode of each section, over the tonic pedal (Form.h). It is drawn after the energies,
     // because the energy is what decides how far a section may reach for the Hijaz colour, and from
@@ -431,9 +455,9 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     const uint64_t ss = sectionSeed[std::clamp(si, 0, kMaxSections - 1)];
     Rng rs;
     rs.seed(mixSeed(ss ^ kSaltSection, 0));
-    // The kick joins between bar 5 and bar 9, and never after the intro is over (an eight-bar intro
-    // cannot wait until bar 9).
-    const int introKickBar = std::min(4 + rs.below(5), std::max(1, s.bars - 1));
+    // Drawn and no longer read (19.09.2026: the kick enters on bar 17 of every intro, kIntroKickBar), but
+    // still drawn, so that every later draw of the section keeps its place in the stream.
+    (void)rs.below(5);
     // A drop brings everything back at once (the instrumentation matrix of PLAN 6.1), which is also
     // what makes Solberg and Dibben's Track 2 rule hold: after the drop the spectrum must be at least
     // as full as it was before the break. Every other section may leave a voice out.
@@ -445,15 +469,17 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     const bool breakLead = rs.uniform() < 0.5f;     // a breakdown keeps the lead or the arp, not both
     const bool padExtra = rs.uniform() < 0.45f;     // pads join a section that already has lead or acid
     const bool gate = rs.uniform() < 0.35f;
-    const int layerStep = 4 + 4 * rs.below(2);      // outro: one layer leaves every 4 or 8 bars
+    (void)rs.below(2);                              // the outro's old layer step (19.09.2026: always eight bars)
     // 19.09.2026, round "voices": the draws of the three new voices come after every older draw of the
     // section, so no section decides anything else differently because of them.
-    //  - the counter-lead answers the lead: it joins most sections the lead plays in;
-    //  - the stab is a surprise, so a section carries it less often, and only every other group of it;
+    //  - the counter-lead answers the lead; since the arrangement round it is the rule's "lead 2" and
+    //    plays in drop 2 only, in call and response with the lead;
+    //  - the stab is a surprise, so a section carries it less often, and only every other group of it --
+    //    except Progressive's dry drops, which it carries (the rule's "bass stabs");
     //  - the drone holds the floor where kick and bass rest, and in a core only where neither the acid
     //    (its octave, 140 .. 350 Hz) nor the pad (the same root and fifth) plays.
-    const bool useCounter = a.part[mpIndex(MelodyPart::Counter)] && rs.uniform() < 0.75f;
-    const bool useStab = a.part[mpIndex(MelodyPart::Stab)] && rs.uniform() < (drop ? 0.75f : 0.55f);
+    const bool useCounter = a.part[mpIndex(MelodyPart::Counter)] && (s.climax || rs.uniform() < 0.75f);
+    const bool useStab = a.part[mpIndex(MelodyPart::Stab)] && (rs.uniform() < (drop ? 0.75f : 0.55f) || s.dry);
     const int voiceParity = rs.below(2);            // which eight-bar groups the counter takes; the stab takes the others
     const bool droneCore = a.part[mpIndex(MelodyPart::Drone)] && rs.uniform() < 0.5f;
     const uint8_t bAcid = partBit(MelodyPart::Acid), bLead = partBit(MelodyPart::Lead), bCounter = partBit(MelodyPart::Counter),
@@ -464,8 +490,6 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     // Group-level change: inside a section no eight-bar group repeats its predecessor's change
     // (Easwaran 2004: something new every four or eight bars; Butler's hypermetre).
     const int groupInSection = b / 8;
-    Rng rg;
-    rg.seed(mixSeed(ss ^ kSaltGroup, static_cast<uint64_t>(groupInSection)));
     // The figure is walked from the section's first group, because "differs from the group before"
     // has to compare against what that group really played: a group whose draw was already pushed
     // aside would otherwise be compared against its raw draw, and one pair in sixteen would repeat
@@ -478,116 +502,176 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
         if (g > 0 && draw == figure) draw = (draw + 1) % 4;
         figure = draw;
     }
-    rg.below(4);                                    // the same draw the walk above made for this group
-    const int layerNudge = rg.below(3) - 1;         // -1, 0 or +1 layer for this group
 
     const int maxLayers = std::max(1, a.percLayers);
+    const int hatLayers = std::clamp(a.hatLayers, 1, maxLayers);
     uint8_t parts = 0;
     int layers = maxLayers;
+    // A bar that plays nothing but what the rule names: the outro's kick, bass and hat, the last bar of a
+    // pre-drop break. No pad, no drone, no voice is added to it below.
+    bool bare = false;
+    bp.cycleBar = b % 32;
 
+    // 19.09.2026, round "arrangement": the instrumentation of the user's two-drop form. Bars are 0-based
+    // here; the comments give the rule's 1-based bars of a 256-bar Full-On track.
     switch (s.type) {
-    case SectionType::Intro:
-        // Percussion layered up from nothing; the kick joins between bar 5 and 9; pad or atmosphere.
-        layers = std::min(maxLayers, b / 4);
-        bp.kickBeats = b >= introKickBar ? 0xF : 0;
-        bp.bassBeats = b >= introKickBar ? 0xF : 0;
+    case SectionType::Intro: {
+        // Bars 1-16 without a kick: pads and textures, a quiet closed hat on the sixteenths, the shaker
+        // from bar 9 (one change inside the first sixteen). Bars 17-32: kick and bass, the off-beat hat.
+        const bool kick = b >= kIntroKickBar;
+        bp.kickBeats = kick ? 0xF : 0;
+        bp.bassBeats = kick ? 0xF : 0;
+        layers = kick ? hatLayers : 0;
+        bp.quietHats = !kick;
+        bp.hatLevel = kick ? 1.0f : 0.45f;
+        bp.offbeatHat = kick;
+        bp.shaker = b >= 8;
         if (hasPad) parts |= bPad;
-        bp.fills = false;
+        // Fills only once the kick is in: bar 24 and bar 32 of the intro close their groups.
+        bp.fills = kick;
         break;
+    }
     case SectionType::Groove:
-        // The first core: the groove in its essential form, the lead still held back.
-        layers = std::min(maxLayers, 2 + groupInSection);
-        if (useAcid) parts |= bAcid;
-        if (useArp && b >= 8) parts |= bArp;
-        if (useLead && b >= s.bars / 2 && s.bars >= 32) parts |= bLead;
+        // The first core: kick and bass at full pressure, the acid as the first rhythmic lead, and one
+        // percussion layer more every eight bars -- the clap on 2 and 4, then the congas, then the ride
+        // (Rhythm.cpp puts them in that order behind the hats). The lead waits for drop 1.
+        layers = std::min(maxLayers, hatLayers + 1 + groupInSection);
+        bp.shaker = true;                     // the intro's shaker stays: layers join here, none leaves
+        if (a.part[mpIndex(MelodyPart::Acid)]) parts |= bAcid;
+        else if (useArp) parts |= bArp;       // no acid in this track: the arp is the rhythmic lead
         break;
     case SectionType::Build: {
-        // Layers return one per four bars; the snare roll fills the last four bars; hats denser.
+        // Layers return one per four bars, the hats close up to sixteenths for the second half, the roll
+        // runs over the last rollBars bars. Buildup 1 thins the bass (beats 1 and 3) for the four bars
+        // before its pre-drop break; the break itself has neither kick nor bass, and its last bar stops
+        // on beat 4 -- that one beat is left to a vocal or a single zap (makeFormSfx).
+        const int rollStart = s.bars - std::max(0, s.rollBars);
+        const int pdbStart = s.bars - std::max(0, s.pdbBars);
         layers = std::min(maxLayers, 1 + b / 4);
         if (useAcid) parts |= bAcid;
         if (useArp && b >= s.bars / 2) parts |= bArp;
         bp.hatsDense = b >= s.bars / 2;
-        if (b >= s.bars - 4) bp.rollBar = 4 - (s.bars - b);
-        if (b == s.bars - 1) {
-            // The pre-drop break. Variants: whole bar, half bar, beat 4 only, kick alone on beat 4.
+        if (s.rollBars > 0 && b >= rollStart) { bp.rollBar = b - rollStart; bp.rollBars = s.rollBars; }
+        if (s.pdbBars >= 4 && b >= pdbStart - 4 && b < pdbStart) bp.bassBeats = 0x5;
+        if (s.pdbBars > 1 && b >= pdbStart && b < s.bars - 1) {
+            // The pre-drop break before its last bar: kick and bass out, the roll and the hats go on.
+            // BarPlan::pdb stays for the last bar alone, whose roll stops on beat 3.
+            bp.kickBeats = 0;
+            bp.bassBeats = 0;
+            layers = std::min(layers, hatLayers);
+        }
+        if (s.pdbBars > 0 && b == s.bars - 1) {
+            // The last bar before the drop. Variants: whole bar, half bar, beat 4 only; the fourth (the
+            // kick alone on beat 4) is never drawn since 19.09.2026, and a longer pre-drop break has had
+            // no kick for bars already, so there the whole bar is empty but for the roll.
             bp.pdb = true;
-            static const uint8_t kKickMask[kNumPdbVariants] = { 0x0, 0x3, 0x7, 0x8 };
-            static const uint8_t kBassMask[kNumPdbVariants] = { 0x0, 0x3, 0x7, 0x0 };
-            bp.kickBeats = kKickMask[std::clamp(s.pdbVariant, 0, kNumPdbVariants - 1)];
-            bp.bassBeats = kBassMask[std::clamp(s.pdbVariant, 0, kNumPdbVariants - 1)];
+            static const uint8_t kKickMask[kNumPdbVariants] = { 0x0, 0x3, 0x7, 0x7 };
+            static const uint8_t kBassMask[kNumPdbVariants] = { 0x0, 0x3, 0x7, 0x7 };
+            const int v = s.pdbBars > 1 ? 0 : std::clamp(s.pdbVariant, 0, kNumPdbVariants - 1);
+            bp.kickBeats = kKickMask[v];
+            bp.bassBeats = kBassMask[v];
             parts = 0;
             layers = 0;
+            bare = true;
         }
         break;
     }
-    case SectionType::Drop:
-        // Everything back at once.
-        layers = maxLayers;
+    case SectionType::Drop: {
+        // Everything back at once. Inside every 32-bar cycle the first sixteen bars keep one layer back
+        // and bar 17 brings it in with a crash on the one -- the micro rule's "bar 16: a crash on the one
+        // and a new percussion element"; the drop's own downbeat has its crash too.
+        const int cycleGroup = (b % 32) / 8;
+        layers = maxLayers - (cycleGroup < 2 && maxLayers > 2 ? 1 : 0);
+        bp.crash = b % 16 == 0;
+        bp.shaker = true;
         if (useAcid) parts |= bAcid;
         if (useLead) parts |= bLead;
         if (useArp) parts |= bArp;
+        if (s.climax) { bp.openHats = true; bp.ride = true; layers = maxLayers; }
         break;
-    case SectionType::Break:
-        // Solberg and Dibben 2019: the sudden removal of bass and bass drum. Pads carry it, with one
-        // thinned melodic voice; a hat returns in the second half.
+    }
+    case SectionType::Break: {
+        // Solberg and Dibben 2019: the sudden removal of bass and bass drum -- the rule's bass vacuum. Pads
+        // carry it, with one thinned melodic voice; after sixteen bars a quiet off-beat hat returns to keep
+        // the tempo in the dancer's head. Goa: the arp spirals through the whole breakdown. Dark Forest:
+        // two layers of percussion keep going.
         bp.kickBeats = 0;
         bp.bassBeats = 0;
-        layers = b >= s.bars / 2 ? 1 : 0;
+        const int hatBack = std::min(16, s.bars / 2);
+        layers = std::min(maxLayers, s.breakPerc);
+        bp.offbeatHat = b >= hatBack;
+        bp.hatLevel = 0.5f;
         if (hasPad) parts |= bPad;
-        if (b >= s.bars / 4) parts |= breakLead ? (useLead ? bLead : 0) : (useArp ? bArp : 0);
+        if (s.spiral && a.part[mpIndex(MelodyPart::Arp)]) parts |= bArp;
+        else if (b >= s.bars / 4) parts |= breakLead ? (useLead ? bLead : 0) : (useArp ? bArp : 0);
         bp.fills = false;
         if (b == 0) bp.cutBeats = s.cutBeats;
         break;
-    case SectionType::Outro:
-        // Layers leave one per four or eight bars; kick and bass hold on for the DJ.
-        layers = std::max(0, maxLayers - 1 - b / layerStep);
-        if (useAcid && b < s.bars / 2) parts |= bAcid;
-        if (hasPad) parts |= bPad;
+    }
+    case SectionType::Outro: {
+        // The inverse of the intro: a layer leaves every eight bars -- the leads at once, then the acid and
+        // two percussion layers, then the pads and the rest -- and the last sixteen bars are kick, bass and
+        // one simple hat, over which the next track's intro sets in (Composer.cpp, the DJ overlap).
+        const int bareFrom = s.bars - std::min(kOutroBareBars, s.bars);
+        if (b >= bareFrom) {
+            layers = 0;
+            bp.offbeatHat = true;
+            bare = true;
+        } else {
+            // Something leaves at every step: two layers, or -- where the kit has too few for that -- all
+            // but the one hat of the bare end.
+            const int first = std::max(hatLayers, maxLayers - 1);
+            const int step = b / 8;
+            layers = step == 0 ? first : (first > hatLayers ? std::max(hatLayers, first - 2) : 0);
+            bp.offbeatHat = layers == 0;
+            if (useAcid && step == 0) parts |= bAcid;
+            if (hasPad) parts |= bPad;
+        }
         bp.fills = false;
         break;
-    default: break;
     }
-
-    // Density (Farbood): the energy nudges the layer count, and the group's own change moves it again.
-    if (s.type == SectionType::Groove || s.type == SectionType::Drop) {
-        layers = std::clamp(layers + layerNudge, std::min(2, maxLayers), maxLayers);
-        if (s.energy < 0.6f) layers = std::max(std::min(2, maxLayers), layers - 1);
+    default: break;
     }
     bp.percLayers = std::clamp(layers, 0, maxLayers);
 
     // Pads carry what has neither lead nor acid, and join some of the rest.
-    if (hasPad && s.type != SectionType::Build && s.type != SectionType::Intro) {
+    if (hasPad && !bare && s.type != SectionType::Build && s.type != SectionType::Intro) {
         if ((parts & (bAcid | bLead)) == 0 || padExtra) parts |= bPad;
     }
     bp.padGate = (parts & bPad) != 0 && (parts & (bAcid | bLead)) != 0 && gate;
 
     // The new voices (19.09.2026, round "voices"), after everything above has been decided, because
     // each of them is placed *against* the others:
-    //  - Counter-lead and stab share the core's eight-bar groups: the counter takes one parity, the
-    //    stab the other, so they never play at once and every group change brings one of them in or
-    //    out. The counter only where the lead plays (it answers the lead) and never in the lead's first
-    //    group of a section (a response needs a call before it); the stab from the groove's second
-    //    group on. Buildups, breakdowns, intros and outros keep neither -- the pre-drop vacuum stays
-    //    empty and the breakdown stays thin.
+    //  - Counter-lead and stab share the core's eight-bar groups. Since the arrangement round the counter
+    //    is the rule's "lead 2": it plays in drop 2 only, in every group but the first (a response needs
+    //    a call before it), where the lead plays; the stab takes the groups it leaves -- elsewhere the
+    //    parity of old -- so the two never sound at once. The stab joins the groove from its second group.
+    //    Buildups, breakdowns, intros and outros keep neither -- the pre-drop vacuum stays empty and the
+    //    breakdown stays thin.
     //  - The drone lies under every bar in which kick and bass rest for the whole bar (the intro before
     //    the kick, the breakdown), in its low octave; in a bar where they play it may only go an octave
     //    up (the depth rule), and there it would double the pad's root and fifth or sit on the acid's
     //    octave -- so it plays there only where neither of them does.
     const bool core = isCore(s.type);
-    const bool counterGroup = groupInSection >= 1 && (groupInSection + voiceParity) % 2 == 1;
-    if (core && useCounter && (parts & bLead) != 0 && counterGroup) parts |= bCounter;
-    if (core && useStab && !counterGroup && (s.type == SectionType::Drop || b >= 8)) parts |= bStab;
-    bp.floorSilent = bp.kickBeats == 0 && bp.bassBeats == 0 && !bp.pdb;
-    if (hasDrone && s.type != SectionType::Build) {
+    const bool counterGroup = s.climax ? groupInSection >= 1 : (groupInSection >= 1 && (groupInSection + voiceParity) % 2 == 1);
+    if (s.climax && useCounter && (parts & bLead) != 0 && counterGroup) parts |= bCounter;
+    const bool stabHere = s.dry ? !(s.climax && counterGroup && (parts & bCounter) != 0) : !counterGroup;
+    if (core && useStab && stabHere && (s.type == SectionType::Drop || b >= 8)) parts |= bStab;
+    // The previous track's kick and bass still sound over the first bars of this one (the DJ overlap):
+    // there the floor is theirs.
+    // A buildup's pre-drop break is a held breath, not a floor to lay a sub under.
+    bp.floorSilent = bp.kickBeats == 0 && bp.bassBeats == 0 && !bp.pdb && s.type != SectionType::Build
+                  && barInTrack >= f.handover;
+    // Not in the outro either: it sheds voices, it does not take one on (19.09.2026).
+    if (hasDrone && s.type != SectionType::Build && s.type != SectionType::Outro && !bare) {
         const bool clear = (parts & (bPad | bAcid)) == 0;
         if (bp.floorSilent) parts |= bDrone;
         else if (clear && (droneCore || !core)) parts |= bDrone;
     }
 
-    // Register (Farbood): a high-energy section lifts the arp an octave, a low-energy one drops the
-    // lead, always within the depth rule (arp from G3, lead from B3). Both registers are a decision of
-    // the section, not of the bar: inside a buildup the energy rises, and a voice that changed octave
-    // halfway through would jump.
+    // Register (Farbood): a low-energy section drops the lead, always within the depth rule (arp from G3,
+    // lead from B3). Both registers are a decision of the section, not of the bar: inside a buildup the
+    // energy rises, and a voice that changed octave halfway through would jump.
     //
     // Since 19.09.2026 there is no masking rule here any more. Until then the form moved the arp up in
     // octaves until its range cleared the lead's and dropped it from any section where that passed
@@ -595,16 +679,22 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     // section the two shared, and a drop could never carry both. The arp is now kept beside the lead
     // bar by bar, where the lead's real notes are known (Melody.cpp, "arp beside the lead"): split
     // under the lead's lowest note, else interlocked into the lead's rests.
+    //
+    // The arp's octave (arrangement round): up in drop 2 and only there -- the rule's "the arp an octave
+    // higher" at the climax. It used to follow the energy (0.92 and up), which put it up in drop 1 as
+    // well under a high arc and left drop 2 nothing of its own.
     const int leadOct = (s.energy < 0.45f && a.leadLo >= 71) ? -1 : 0;
-    int arpShift = 0;
-    if (s.energy >= 0.92f) arpShift = 1;
-    bp.arpOctave = static_cast<int8_t>(arpShift);
+    bp.arpOctave = static_cast<int8_t>(s.climax ? 1 : 0);
     bp.leadOctave = static_cast<int8_t>(leadOct);
+    bp.climax = s.climax;
     bp.parts = parts;
 
-    // The group's figure: at beat 1 of the last bar of every eight-bar group of a core. The figures
-    // differ in their last note for every bass pattern, so no two consecutive groups are identical.
-    if (isCore(s.type) && b % 8 == 7 && (bp.bassBeats & 0x2) != 0) bp.groupFigure = kGroupFigures[figure];
+    // The group's figure: at beat 1 of the last bar of every eight-bar group in which the bass plays --
+    // the cores as before, and since 19.09.2026 the intro after the kick and the outro, whose last
+    // sixteen bars would otherwise be two identical groups of kick, bass and hat. The figures differ in
+    // their last note for every bass pattern, so no two consecutive groups are identical.
+    const bool figureSection = core || s.type == SectionType::Intro || s.type == SectionType::Outro;
+    if (figureSection && b % 8 == 7 && (bp.bassBeats & 0x2) != 0) bp.groupFigure = kGroupFigures[figure];
     // What the next bar plays, so that an acid slide at the end of a bar knows whether there is still
     // a note to slide into (the last bar of an acid section must not slide into silence).
     if (lookAhead && barInTrack + 1 < f.bars) bp.partsNext = planBarImpl(f, a, sectionSeed, barInTrack + 1, false).parts;
@@ -711,8 +801,11 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
                 if (m.uniform() < 0.5f * amount) add(start + b * bar - 2.0, 2.0f, SfxType::ReverseCrash);
     }
 
-    // Voices first, so that the chatter of the ear candy can keep its distance from them.
+    // Voices first, so that the chatter of the ear candy can keep its distance from them -- and from the
+    // vocal makeFormSfx put on beat 4 of a pre-drop break (19.09.2026).
     std::vector<double> vocalAt;
+    for (size_t k = 0; k < placed; ++k)
+        if (sfxTypePart(static_cast<SfxType>(f.sfx[k].type)) == Part::Vocal) vocalAt.push_back(f.sfx[k].beat);
     auto voiceFree = [&](double beat) {
         for (double b : vocalAt) if (std::fabs(b - beat) < 4.0 * bar - 1e-9) return false;
         return true;
@@ -748,7 +841,8 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
             break;
         }
         case SectionType::Build:
-            if (u0 < voiceOdds(0.8f * amount) && s.bars >= 8) addVoice(start, 8.0f, SfxType::SpokenWord);
+            // Until 19.09.2026 a spoken phrase opened every buildup. The user's rule puts the vocal into the
+            // pre-drop break instead (makeFormSfx, beat 4 of its last bar); the draws above stay.
             break;
         case SectionType::Drop:
             if (u0 < voiceOdds(0.35f * pMark) && s.bars >= 16) {
@@ -778,6 +872,8 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
         const bool groove = s.type == SectionType::Groove || s.type == SectionType::Drop;
         const float density = s.type == SectionType::Drop ? 0.8f : s.type == SectionType::Groove ? 0.6f
                             : s.type == SectionType::Intro ? 0.25f : 0.3f;
+        // The outro's last sixteen bars are kick, bass and a hat, nothing else (19.09.2026).
+        const int bareFrom = s.type == SectionType::Outro ? s.bars - std::min(kOutroBareBars, s.bars) : s.bars;
         for (int b = 2; b < s.bars; b += 2) {
             if (b % 8 == 0) continue;   // the eight-bar ends keep their own candy (makeFormSfx)
             const bool four = b % 4 == 0;
@@ -785,7 +881,7 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
             const float roll = c.uniform();
             const int kind = drawIndex(c, four ? wLong : wShort, 4);
             const int where = c.below(4);
-            if (roll >= p) continue;
+            if (roll >= p || b - 1 >= bareFrom) continue;
             const double last = start + (b - 1) * bar;   // the group's last bar
             if (!four) {
                 switch (kind) {
@@ -822,8 +918,12 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
         const double start = static_cast<double>(s.startBar) * bar;
         switch (s.type) {
         case SectionType::Intro: {
+            // The drone of the bed is tuned to the key the engine plays in, and over the DJ overlap that is
+            // still the previous track's (its kick and bass hold the floor until the hand-over): it starts
+            // at the hand-over, so that it never holds one key into the other (19.09.2026).
             const SfxType drone = didge ? SfxType::Didgeridoo : SfxType::JawHarp;
-            if ((didge || jaw) && t.uniform() < bedOdds(pMark)) add(start, static_cast<float>((s.bars - 1) * bar), drone);
+            const int from = std::clamp(f.handover, 0, s.bars - 2);
+            if ((didge || jaw) && t.uniform() < bedOdds(pMark)) add(start + from * bar, static_cast<float>((s.bars - 1 - from) * bar), drone);
             if (bowl) for (int b = 0; b < s.bars; b += 4) if (b == 0 ? db > 0.0f : t.uniform() < bedOdds(0.7f * pMark)) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
             break;
         }
@@ -844,14 +944,37 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
             }
             break;
         }
-        case SectionType::Outro:
-            if (bowl) for (int b = 0; b < s.bars; b += 8) if (t.uniform() < bedOdds(pMark)) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
-            if (didge && t.uniform() < bedOdds(pMark)) add(start, static_cast<float>(s.bars * bar), SfxType::Didgeridoo);
+        case SectionType::Outro: {
+            // Only before the bare bars (kick, bass, a hat; 19.09.2026).
+            const int live = s.bars - std::min(kOutroBareBars, s.bars);
+            if (bowl) for (int b = 0; b < s.bars; b += 8) if (t.uniform() < bedOdds(pMark) && b < live) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
+            if (didge && t.uniform() < bedOdds(pMark) && live > 0) add(start, static_cast<float>(live * bar), SfxType::Didgeridoo);
             break;
+        }
         case SectionType::Groove:
             if (jaw && s.bars >= 24 && t.uniform() < bedOdds(0.3f * amount)) add(start + 8.0 * bar, static_cast<float>(8.0 * bar), SfxType::JawHarp);
             break;
         default: break;
+        }
+    }
+
+    // Drop 2's squelches (19.09.2026, round "arrangement"): the rule's "extra FM squelches filling
+    // sixteenth gaps". In every bar of the climax, with the probability sfx_amount, one squelch on an
+    // off-beat sixteenth (never on a beat, where the kick is; never on the eighth off-beat, where the hat
+    // is), and in every other bar a second one. From a stream of its own: nothing above moves.
+    Rng q;
+    q.seed(mixSeed(seed ^ kSaltClimax, 0));
+    static const double kGaps[6] = { 0.25, 0.75, 1.25, 1.75, 2.25, 3.25 };
+    for (int i = 0; i < f.count; ++i) {
+        const Section& s = f.section[i];
+        if (!s.climax) continue;
+        const double start = static_cast<double>(s.startBar) * bar;
+        for (int b = 0; b < s.bars; ++b) {
+            const float roll = q.uniform();
+            const int k0 = q.below(6), k1 = q.below(6);
+            if (roll >= amount) continue;
+            add(start + b * bar + kGaps[k0], 0.25f, SfxType::Squelch);
+            if (b % 2 == 1 && k1 != k0) add(start + b * bar + kGaps[k1], 0.25f, SfxType::Squelch);
         }
     }
 }
@@ -877,26 +1000,39 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity, f
         const double end = static_cast<double>(s.startBar + s.bars) * bar;
         const SectionType prev = i > 0 ? f.section[i - 1].type : SectionType::Intro;
         if (s.type == SectionType::Build) {
-            // The riser climbs over the last eight bars and arrives on the drop; the formant shot is
-            // the pre-drop "Abriss" on beat 4 of the PDB bar; the sweep falls into the drop, which
-            // Solberg and Dibben found to be the marker listeners react to.
-            const double rise = std::min(8.0, static_cast<double>(s.bars)) * bar;
+            // The riser climbs over the last eight bars; the sweep falls into the drop, which Solberg and
+            // Dibben found to be the marker listeners react to. Since 19.09.2026 (the user's rule: "on
+            // beat 4 of the last bar before the drop everything stops") both end on beat 4 of that bar,
+            // and beat 4 holds exactly one thing: a vocal (a voice chop) or a single laser zap, drawn per
+            // buildup. The big buildup's riser climbs over sixteen bars and a second one over the last
+            // four stacks on it -- "risers pitch up to the extreme". A buildup without a pre-drop break
+            // (Dark Forest's first) runs its riser into the drop and leaves beat 4 alone.
+            const bool stop = s.pdbBars > 0;
+            const double arrive = stop ? end - 1.0 : end;
+            const double rise = std::min(s.bars >= 32 ? 16.0 : 8.0, static_cast<double>(s.bars)) * bar;
+            const bool dry = i + 1 < f.count && f.section[i + 1].dry;
             if (i > 0 && mark()) add(start - bar, static_cast<float>(bar), SfxType::ReverseSwell);
-            if (mark()) add(end - rise, static_cast<float>(rise), SfxType::Riser);
-            if (mark()) add(end - 1.0, 0.5f, SfxType::FormantShot);
-            if (mark()) add(end - 2.0 * bar, static_cast<float>(2.0 * bar), SfxType::Sweep);
-            if (mark()) add(end, 4.0f, SfxType::Impact);
+            if (mark()) add(arrive - rise, static_cast<float>(rise), SfxType::Riser);
+            const bool voice = r.uniform() < 0.5f;
+            if (mark() && stop) add(end - 1.0, 1.0f, voice ? SfxType::VoiceChop : SfxType::Zap);
+            if (mark() && !dry) add(arrive - 2.0 * bar, static_cast<float>(2.0 * bar), SfxType::Sweep);
+            if (mark() && !dry) add(end, 4.0f, SfxType::Impact);
+            if (s.bars >= 32 && mark()) add(arrive - 4.0 * bar, static_cast<float>(4.0 * bar), SfxType::Riser);
         } else if (s.type == SectionType::Break) {
             if (i > 0 && mark()) add(start - bar, static_cast<float>(bar), SfxType::ReverseSwell);
             if (mark()) add(start, static_cast<float>(4.0 * bar), SfxType::Downlifter);
         } else if (s.type == SectionType::Drop && i > 0 && prev != SectionType::Build) {
-            // A drop that no buildup announced (the flat Progressive body, a groove straight into it).
+            // A drop that no buildup announced (a groove straight into it).
             if (mark()) add(start - 2.0 * bar, static_cast<float>(2.0 * bar), SfxType::Sweep);
-            if (mark()) add(start, 4.0f, SfxType::Impact);
+            if (mark() && !s.dry) add(start, 4.0f, SfxType::Impact);
         } else if (s.type == SectionType::Outro) {
+            // Into the outro a downlifter. Until 19.09.2026 an eight-bar sweep closed the track to mask the
+            // key change; the outro's last sixteen bars are now kick, bass and a hat only, the key changes
+            // with the next track's kick and bass at the hand-over, and nothing is left there to mask.
             if (i > 0 && mark()) add(start, static_cast<float>(4.0 * bar), SfxType::Downlifter);
-            // The sweep over the last eight bars masks the key change into the next track (PLAN 6.7).
-            add(end - 8.0 * bar, static_cast<float>(8.0 * bar), SfxType::Sweep);
+        } else if (s.type == SectionType::Intro && s.bars > kIntroKickBar && mark()) {
+            // The inhale before the kick enters on bar 17 of the intro.
+            add(start + (kIntroKickBar - 1) * bar, static_cast<float>(bar), SfxType::ReverseSwell);
         }
         // Out of the intro into whatever comes next, unless that is a buildup or drop, which mark
         // their own entry above.
@@ -919,10 +1055,21 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity, f
         const Section& s = f.section[i];
         if (s.type == SectionType::Build) continue;
         const double start = static_cast<double>(s.startBar) * bar;
-        const double end = static_cast<double>(s.startBar + s.bars) * bar;
+        // The outro's bare bars (kick, bass, a hat) carry nothing else.
+        const double end = static_cast<double>(s.startBar + s.bars - (s.type == SectionType::Outro ? std::min(kOutroBareBars, s.bars) : 0)) * bar;
         // Interior group boundaries only: the section's own ends belong to the transition markers.
         for (double g = start + period; g < end - 1e-9; g += period) {
-            if (c.uniform() >= amount) continue;
+            const bool cycleEnd = std::fmod(g - start, 32.0 * bar) < 1e-9;
+            const float roll = c.uniform();
+            // The micro rule's bar 32 (19.09.2026): the end of every 32-bar cycle inside a section carries
+            // a marker for certain (as the transitions do, from sfx_amount 0.5 up): a one-bar downlifter
+            // or, in a core, a glitch -- the stutter of the melodic bus on the last half beat.
+            if (cycleEnd && roll < pMark) {
+                if (isCore(s.type) && roll < 0.5f * pMark) add(g - 0.5, 0.5f, SfxType::Stutter);
+                else add(g - bar, static_cast<float>(bar), SfxType::Downlifter);
+                continue;
+            }
+            if (roll >= amount) continue;
             switch (drawIndex(c, w, 4)) {
             case 0: add(g - 1.0, 0.5f, SfxType::Zap); break;                                        // beat 4
             case 1: add(g - bar, static_cast<float>(bar), SfxType::Sweep); break;                   // filtered noise, up and down
@@ -1011,7 +1158,8 @@ void sectionAutomation(const ParamStore& p, const Section& s, uint64_t seed, dou
     push(mb + mix::PercHall, 0.0f, beat, 0.0f);
     const double bars = static_cast<double>(s.bars);
     if (s.type == SectionType::Build && !knobs) {
-        const double rollBars = std::min(static_cast<double>(kRollBars), bars);
+        // Over the roll (19.09.2026: the section's own roll, sixteen bars in the big buildup).
+        const double rollBars = std::min(static_cast<double>(s.rollBars > 0 ? s.rollBars : kRollBars), bars);
         push(mb + mix::PercHall, kRollSend, beat + (bars - rollBars) * kBeatsPerBar,
              static_cast<float>(rollBars * kBeatsPerBar));
     }
@@ -1095,6 +1243,14 @@ void sectionAutomation(const ParamStore& p, const Section& s, uint64_t seed, dou
         for (int k = 1; k < RideShape::kPoints; ++k)
             push(ab + acid::Cutoff, cut(k), at(shape.bar[k - 1] + shape.hold[k - 1]),
                  len(shape.bar[k] - shape.bar[k - 1] - shape.hold[k - 1]));
+        // The micro rule's bar 24 (19.09.2026): a short sweep on the acid -- up by kRideSweep half-
+        // excursions over the first half of the cycle's 24th bar and back onto the ride's line over the
+        // second, arriving where the ride itself arrives at the end of stage 3. Only in full 32-bar cycles.
+        if (shape.length >= 32.0) {
+            const double b24 = shape.stage[3] - 1.0;
+            push(ab + acid::Cutoff, base(c0 + b24 + 0.5) + h * (shape.cutoff[3] + kRideSweep), at(b24), len(0.5));
+            push(ab + acid::Cutoff, cut(3), at(b24 + 0.5), len(0.5));
+        }
         // Resonance: medium through stages 1 and 2, up to the squelch over stage 3, held to the end.
         push(ab + acid::Resonance, resoMedium, at(0.0), len(1.0));
         push(ab + acid::Resonance, resoSquelch, at(shape.stage[2]), len(shape.stage[3] - shape.stage[2]));
