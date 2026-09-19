@@ -32,7 +32,7 @@ constexpr double kPiD = 3.141592653589793;
  * detail. The measurement and its targets are in docs/PLAN.md (round "mix-foundation").
  */
 constexpr float kTypeGainDb[] = {
-    -2.0f,    // Riser
+    +0.0f,    // Riser (19.09.2026: -2 -> 0 dB; it now arrives on beat 4 of the pre-drop break, over the loudest bar of the roll)
     -8.0f,    // Downlifter
     +3.0f,    // Impact
     -7.0f,    // Sweep

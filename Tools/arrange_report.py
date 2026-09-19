@@ -89,7 +89,7 @@ def report(path):
                     marginsWin.append(climax[0] - max(wins))
         # The big buildup's roll: the snare's spacing per bar.
         for s in secs:
-            if s[0] == "Build" and s[3] >= 16:
+            if s[0] == "Build" and s[2] == 5:          # the big buildup (slot 5 of every template)
                 for r in tr:
                     if int(r["secindex"]) == s[2] and r["snare"] > 0:
                         roll[int(r["barinsec"])].append(r["snaregap"])

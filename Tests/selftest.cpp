@@ -383,7 +383,8 @@ void testMidi()
     s.tempo.add(0.0, 140.0, true);
     s.tempo.add(32.0, 146.0, false);
     s.keyRoot = 6;
-    c.composeBars(p, 0, 12, s.notes);
+    // Bars 16 .. 28 (19.09.2026: the two-drop form's intro has no kick or bass before bar 17).
+    c.composeBars(p, 16, 12, s.notes);
     s.sections.push_back(SectionMark{ 16.0, SectionType::Drop, 1.0f, 0 });
     s.sort();
     const std::vector<uint8_t> bytes = encodeMidi(s);
@@ -1167,8 +1168,10 @@ void testBassModel()
                 if (!t.bassNeural) continue;
                 const int root = bassRootNote(t.key, q.getInt(cb + compose::BassRegister));
                 const int lowest = root + scaleDegree(t.scale, 6) - 12;
+                // From the track's hand-over: before it the previous track's bass still plays (the DJ overlap,
+                // 19.09.2026), in the previous track's key.
                 std::vector<NoteEvent> e;
-                c.composeBars(q, t.firstBar, std::min(48, t.bars), e);
+                c.composeBars(q, handoverBar(t), std::min(48, t.bars - t.form.handover), e);
                 for (const NoteEvent& n : e) {
                     if (n.part != Part::Bass) continue;
                     ++notes;
@@ -1208,7 +1211,7 @@ void testBassModel()
                     const TrackPlan t = c.track(q, ti);
                     const int root = bassRootNote(t.key, q.getInt(cb + compose::BassRegister));
                     std::vector<NoteEvent> e;
-                    c.composeBars(q, t.firstBar, std::min(48, t.bars), e);
+                    c.composeBars(q, handoverBar(t), std::min(48, t.bars - t.form.handover), e);   // this track's bass only (the DJ overlap)
                     for (const NoteEvent& n : e)
                         if (n.part == Part::Bass) { ++hist[static_cast<int>(n.pitch) - root]; ++total; }
                 }
@@ -1499,7 +1502,10 @@ void testEngine()
     eb->prepare(sr, 256);
     // Bass alone, inside the first core: in the intro it does not play yet, and a pad on the downbeat
     // would count as energy in the kick's window.
-    eb->params().parseText("mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1");
+    // The bed and the voices too (19.09.2026): the first core is now the groove, where a track may lay eight
+    // bars of jaw harp -- a sound this check has never been about.
+    eb->params().parseText("mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1 "
+                           "mix.texture_mute=1 mix.vocal_mute=1");
     const int coreBar = firstCoreBar(eb->params(), comp);
     const std::vector<float> bassOnly = renderEngine(*eb, comp, (coreBar + 16) * static_cast<double>(kBeatsPerBar), 256, sr);
     const double beatSamples = 60.0 / 145.0 * sr;
@@ -2037,16 +2043,18 @@ void testAcidVoicing()
         int disp = 0;
         Composer::acidVoicingOffsets(e->params(), t1.acidVoicing, e->params().get(cb + compose::SoundVariation), off, disp);
         const float wantDrive = valueAt(acid::Drive, off), wantWave = valueAt(acid::Wave, off);
-        const TempoMap tm = c.tempoMap(e->params(), t1.firstBar + 8);
+        // From track 2's hand-over (19.09.2026, the DJ overlap): its acid, like its kick and bass, takes over there.
+        const int from = handoverBar(t1);
+        const TempoMap tm = c.tempoMap(e->params(), from + 8);
         e->setTempoMap(tm);
         Conductor cond(*e, c);
         std::vector<float> L(1024), R(1024);
         float gotDrive = -1.0f, gotWave = -1.0f, gotDisp = -1.0f;
-        const uint64_t end = static_cast<uint64_t>(tm.secondsAt((t1.firstBar + 6.0) * kBeatsPerBar) * 48000.0);
+        const uint64_t end = static_cast<uint64_t>(tm.secondsAt((from + 6.0) * kBeatsPerBar) * 48000.0);
         while (e->samplePosition() < end) {
             cond.pump(e->params(), 32.0);
             e->process(L.data(), R.data(), 1024);
-            if (e->beatPosition() > (t1.firstBar + 4.0) * kBeatsPerBar && gotDrive < 0.0f) {
+            if (e->beatPosition() > (from + 4.0) * kBeatsPerBar && gotDrive < 0.0f) {
                 gotDrive = e->effective(ab + acid::Drive);
                 gotWave = e->effective(ab + acid::Wave);
                 gotDisp = e->effective(ab + acid::Disperse);
@@ -2242,9 +2250,19 @@ double measureFreeLock(double bpm, const char* rhythm, int& onsets, int& distinc
         auto e = std::make_unique<Engine>();
         e->prepare(sr, 256);
         e->params().parseText((base + " " + solo).c_str());
+        // A seed whose drawn rhythm moves its first onset between sixteenths within the eight bars of the
+        // window. Until 19.09.2026 this took the first seed whose core began by bar 8 and relied on its
+        // rhythm moving; the two-drop form starts every groove on bar 33, and the seed found that way played
+        // one slot only. The window covers one whole eight-bar phrase of the masks.
         for (uint64_t k = 1; k <= 40; ++k) {
             Composer probe(k);
-            if (firstCoreBar(e->params(), probe) <= 8) { seed = k; break; }
+            const TrackPlan t = probe.track(e->params(), 0);
+            std::set<int> firsts;
+            for (int b = 0; b < kBassPhraseBars; ++b)
+                for (int beat = 0; beat < kBeatsPerBar; ++beat)
+                    for (int s = 1; s < 4; ++s)
+                        if ((t.bassMask[0][b] >> (beat * 4 + s)) & 1u) { firsts.insert(s); break; }
+            if (!t.bassRhythm || firsts.size() >= 2) { seed = k; break; }
         }
         Composer c(seed);
         coreBeat = firstCoreBar(e->params(), c) * kBeatsPerBar;
@@ -2965,8 +2983,10 @@ void testRhythm()
             for (float m : tp.perc.macro) macroSpread = std::max(macroSpread, static_cast<double>(std::fabs(m)));
             for (int l = 0; l < kPercLanes; ++l) overrides += (tp.perc.engineOverride[l] >= 0 || tp.perc.modeSetOverride[l] >= 0) ? 1 : 0;
         }
-        check(modes[0] > 0 && modes[1] > 0 && modes[2] > 0 && backbeat > 5 && backbeat < 35 && maxLayers - minLayers >= 2 && macroSpread > 0.5 && overrides > 0,
-              "percussion varies over the night: hat modes, backbeat, layers, kit recipe",
+        // The clap on 2 and 4 in every track since 19.09.2026: it is the groove's first new layer by the
+        // user's rule, no longer a draw.
+        check(modes[0] > 0 && modes[1] > 0 && modes[2] > 0 && backbeat == 40 && maxLayers - minLayers >= 2 && macroSpread > 0.5 && overrides > 0,
+              "percussion varies over the night: hat modes, layers, kit recipe; the clap on the backbeat in every track",
               fmt("hat modes %d/%d/%d, clap backbeat in %d of 40, layers %d..%d, %d lane switches", modes[0], modes[1], modes[2], backbeat, minLayers, maxLayers, overrides));
     }
 }
@@ -5089,7 +5109,11 @@ void testMelody()
     {
         auto e = std::make_unique<Engine>();
         e->prepare(48000.0, 512);
-        e->params().parseText("compose.track_bars=64 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 mix.kick_mute=1 mix.bass_mute=1 mix.perc_mute=1");
+        // Acid, lead and arp alone (19.09.2026: the pad, drone, effects, bed and voices muted too -- the
+        // two-drop form puts a drop with its sub drop into this window, and the sub drop is the one effect
+        // that belongs under 140 Hz; the check has always been about the three lines).
+        e->params().parseText("compose.track_bars=64 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 mix.kick_mute=1 mix.bass_mute=1 mix.perc_mute=1 "
+                              "mix.pad_mute=1 mix.drone_mute=1 mix.sfx_mute=1 mix.texture_mute=1 mix.vocal_mute=1");
         Composer cm(3);
         const std::vector<float> y = renderEngine(*e, cm, 64.0 * kBeatsPerBar, 512, 48000.0);
         const std::vector<float> tail(y.begin() + static_cast<long>(y.size() / 2), y.end());
@@ -5971,9 +5995,8 @@ void testPads()
     check(mismatches == 0 && badNotes == 0, "every pad voicing moves the voices as little as any valid voicing could",
           fmt("%d of %d differ from brute force, %d notes out of range", mismatches, cases, badNotes));
 
-    // In the score: pad notes are chord tones of their bar, held to the next chord. The first sixteen
-    // bars of a track are left out: there the previous track's pads still sound, on its own chords,
-    // which is exactly what the transition asks for (PLAN 6.7) and has its own check in testForm.
+    // In the score: pad notes are chord tones of their bar, held to the next chord. Over the DJ overlap
+    // (19.09.2026) the pads that sound are the incoming track's, on its own chords.
     ParamStore p;
     p.parseText("compose.track_bars=128 compose.pad_amount=1 compose.level_match=Off master.auto_gain=Off");
     Composer c(515);
@@ -5986,9 +6009,9 @@ void testPads()
     for (const NoteEvent& e : ev) {
         if (e.part != Part::Pad) continue;
         const int bar = static_cast<int>(e.beat / kBeatsPerBar);
-        const int ti = c.trackOfBar(p, bar);
+        const int incoming = c.incomingOfBar(p, bar);
+        const int ti = incoming >= 0 ? incoming : c.trackOfBar(p, bar);
         const TrackPlan t = c.track(p, ti);
-        if (ti > 0 && bar - t.firstBar < 16) continue;
         int pcs[3];
         // The section's mode, not the track's: since 16.09.2026 a section may borrow another mode
         // over the tonic pedal (Form.h), and the pad is voiced in the mode its section plays.
@@ -6355,7 +6378,7 @@ void testSfx()
             for (int i = 0; i < t.form.count; ++i) {
                 const Section& sec = t.form.section[i];
                 if (sec.type != SectionType::Build) continue;
-                pdbEnd.push_back(static_cast<double>(sec.startBar + sec.bars) * kBeatsPerBar);
+                if (sec.pdbBars > 0) pdbEnd.push_back(static_cast<double>(sec.startBar + sec.bars) * kBeatsPerBar);
                 dropBeats.push_back(static_cast<double>(sec.startBar + sec.bars) * kBeatsPerBar);
             }
             auto isAt = [](const std::vector<double>& v, double x) {
@@ -6374,19 +6397,24 @@ void testSfx()
                           && std::fabs(static_cast<double>(t.form.section[i].startBar) * kBeatsPerBar - s.beat) < 1e-6;
                     if (!ok) ++misplaced;
                 }
-                if (s.type == static_cast<int>(SfxType::FormantShot)) { ++shots; if (!isAt(pdbEnd, s.beat + 1.0)) ++misplaced; }
-                if (s.type == static_cast<int>(SfxType::Riser)) { ++risers; if (!isAt(dropBeats, end)) ++misplaced; }
+                if (s.type == static_cast<int>(SfxType::FormantShot)) ++misplaced;   // replaced by the vocal or zap (19.09.2026)
+                // A riser arrives on the drop, or -- where a pre-drop break stops everything on beat 4 -- on beat 4.
+                if (s.type == static_cast<int>(SfxType::Riser)) { ++risers; if (!isAt(dropBeats, end) && !isAt(pdbEnd, end + 1.0)) ++misplaced; }
                 if (s.type == static_cast<int>(SfxType::Sweep)) ++sweeps;
+                // Nothing of this track in its outro's bare bars (kick, bass and a hat).
+                if (s.beat >= static_cast<double>(t.bars - 16) * kBeatsPerBar - 1e-6) ++misplaced;
             }
-            // The outro's sweep ends exactly on the track boundary, where the key changes (PLAN 6.7).
-            bool endSweep = false;
-            for (const SfxEvent& s : t.form.sfx)
-                if (s.type == static_cast<int>(SfxType::Sweep) && std::fabs(s.beat + s.length - static_cast<double>(t.bars) * kBeatsPerBar) < 1e-6) endSweep = true;
-            if (!endSweep) ++misplaced;
+            // Beat 4 of every pre-drop break: the vocal (a voice chop) or a single laser zap.
+            for (double z : pdbEnd) {
+                bool one = false;
+                for (const SfxEvent& s : t.form.sfx)
+                    if ((s.type == static_cast<int>(SfxType::VoiceChop) || s.type == static_cast<int>(SfxType::Zap)) && std::fabs(s.beat - (z - 1.0)) < 1e-6) one = true;
+                if (one) ++shots; else ++misplaced;
+            }
         }
         check(impacts > 0 && shots > 0 && risers > 0 && sweeps > 0 && misplaced == 0,
-              "effects on the boundaries of the form: riser into the drop, formant shot on the last beat of the PDB, impact on the drop, sweep into the key change",
-              fmt("%d impacts, %d formant shots, %d risers, %d sweeps, %d misplaced", impacts, shots, risers, sweeps, misplaced));
+              "effects on the boundaries of the form: riser into the drop (or onto beat 4 of the pre-drop break), a vocal or a zap on that beat 4, impact on the drop, nothing in the outro's bare bars",
+              fmt("%d impacts, %d vocals or zaps on beat 4, %d risers, %d sweeps, %d misplaced", impacts, shots, risers, sweeps, misplaced));
     }
     // 18.09.2026 (round "mix-foundation"): a marker at *every* transition, ear candy inside the long
     // sections, and nothing inside a buildup but its own markers -- the pre-drop vacuum stays empty.
@@ -6427,12 +6455,15 @@ void testSfx()
                         // the formant shot on the last beat, and nothing else -- since 19.09.2026 but for a
                         // spoken phrase on its very first downbeat ("the start of builds", round
                         // "fx-psychedelia"), which is eight bars and more before the pre-drop vacuum.
-                        const bool own = (e.type == static_cast<int>(SfxType::Riser) && std::fabs(e.beat + e.length - z) < 1e-6)
-                                      || (e.type == static_cast<int>(SfxType::Sweep) && std::fabs(e.beat + e.length - z) < 1e-6
+                        // Since 19.09.2026 (round "arrangement"): risers and the sweep arrive on the drop, or on
+                        // beat 4 of the pre-drop break where one stops everything; beat 4 holds a vocal or a zap;
+                        // the spoken phrase on the first downbeat moved into the pre-drop break.
+                        const double arrive = s.pdbBars > 0 ? z - 1.0 : z;
+                        const bool own = (e.type == static_cast<int>(SfxType::Riser) && std::fabs(e.beat + e.length - arrive) < 1e-6)
+                                      || (e.type == static_cast<int>(SfxType::Sweep) && std::fabs(e.beat + e.length - arrive) < 1e-6
                                           && e.length <= 2.0f * kBeatsPerBar + 1e-6)
-                                      || (e.type == static_cast<int>(SfxType::FormantShot) && std::fabs(e.beat - (z - 1.0)) < 1e-6)
-                                      || (e.type == static_cast<int>(SfxType::SpokenWord) && std::fabs(e.beat - a) < 1e-6
-                                          && z - a >= 8.0 * kBeatsPerBar - 1e-6);
+                                      || ((e.type == static_cast<int>(SfxType::VoiceChop) || e.type == static_cast<int>(SfxType::Zap))
+                                          && s.pdbBars > 0 && std::fabs(e.beat - (z - 1.0)) < 1e-6);
                         if (!own) ++intrusions;
                     }
                 }
@@ -6836,7 +6867,9 @@ void testPsychedelia()
                         ++voices;
                         vocal.push_back(e.beat);
                         const bool ok = s.type == SectionType::Intro || s.type == SectionType::Break
-                                     || (s.type == SectionType::Build && std::fabs(e.beat - at) < 1e-9)
+                                     // 19.09.2026: a buildup's vocal is the chop on beat 4 of its pre-drop break.
+                                     || (s.type == SectionType::Build && type == SfxType::VoiceChop && s.pdbBars > 0
+                                         && std::fabs(e.beat - (at + s.bars * kBeatsPerBar - 1.0)) < 1e-9)
                                      || ((s.type == SectionType::Drop || s.type == SectionType::Groove) && (type == SfxType::VoiceChop || type == SfxType::AlienChatter))
                                      || (s.type == SectionType::Outro && type == SfxType::AlienChatter);
                         if (!ok) ++misplacedVoices;
@@ -7120,10 +7153,12 @@ void testSfxLevel()
         if (solo) e->params().parseText("mix.kick_mute=On mix.bass_mute=On mix.perc_mute=On mix.acid_mute=On mix.lead_mute=On "
                                         "mix.arp_mute=On mix.pad_mute=On mix.texture_mute=On mix.vocal_mute=On mix.counter_mute=On mix.stab_mute=On mix.drone_mute=On");
         Composer c(864566672ull);
-        const TempoMap tm = c.tempoMap(e->params(), 78);
+        // 19.09.2026: the two-drop form -- buildup 1 at bars 65-80 (its riser arrives on beat 4 of bar 80),
+        // drop 1 at 81, the breakdown at 113 -- so the render runs to bar 118.
+        const TempoMap tm = c.tempoMap(e->params(), 118);
         e->setTempoMap(tm);
         Conductor cond(*e, c);
-        const uint64_t total = static_cast<uint64_t>(tm.secondsAt(78.0 * kBeatsPerBar) * sr);
+        const uint64_t total = static_cast<uint64_t>(tm.secondsAt(118.0 * kBeatsPerBar) * sr);
         std::vector<float> L(512), R(512), p;
         p.reserve(static_cast<size_t>(total));
         // K-weighting with the coefficients ITU-R BS.1770-4 tabulates for 48 kHz (pre-filter shelf,
@@ -7164,7 +7199,7 @@ void testSfxLevel()
         for (size_t i = a; i + win <= z; i += hop) { const double v = windowDb(sfx.first, i); if (v > best) { best = v; at = i; } }
         return best - windowDb(mix.first, at);
     };
-    const double riser = marker(32.0, 40.0), impact = marker(40.0, 41.0);
+    const double riser = marker(72.0, 79.75), impact = marker(80.0, 81.0);
     check(riser > -8.0 && impact > -8.0,
           "the riser into the first drop and the impact on it stand within 8 dB of the mix at their loudest",
           fmt("riser %+.1f dB, impact %+.1f dB against the mix in the same 400 ms (before the round: -9.4 and -14.9)", riser, impact));
@@ -7173,13 +7208,13 @@ void testSfxLevel()
     // it is compared with the drop it follows instead: the loudest 400 ms of the downlifter against the
     // mean power of the eight bars before the break. With the types sharing one gain it would reach
     // 4 dB under the drop; the table puts it about 12 under -- a fall, not a second drop. Track 1 of
-    // this seed breaks at bar 72.
+    // this seed breaks at bar 112 (the two-drop form; until 19.09.2026 at 72).
     double downPeak = -1e9, dropMean = 0.0;
     {
-        const size_t a = static_cast<size_t>(mix.second.secondsAt(72.0 * kBeatsPerBar) * sr);
-        const size_t z = static_cast<size_t>(mix.second.secondsAt(76.0 * kBeatsPerBar) * sr);
+        const size_t a = static_cast<size_t>(mix.second.secondsAt(112.0 * kBeatsPerBar) * sr);
+        const size_t z = static_cast<size_t>(mix.second.secondsAt(116.0 * kBeatsPerBar) * sr);
         for (size_t i = a; i + win <= z; i += hop) downPeak = std::max(downPeak, windowDb(sfx.first, i));
-        const size_t d0 = static_cast<size_t>(mix.second.secondsAt(64.0 * kBeatsPerBar) * sr);
+        const size_t d0 = static_cast<size_t>(mix.second.secondsAt(104.0 * kBeatsPerBar) * sr);
         for (size_t i = d0; i < a; ++i) dropMean += mix.first[i];
         dropMean = 10.0 * std::log10(dropMean / static_cast<double>(a - d0) + 1e-30);
     }
@@ -8652,7 +8687,7 @@ void testForm()
         double shareLo = 1.0, shareHi = 0.0;
         for (int st = 0; st < kNumStyles; ++st) {
             const StyleProfile& s = styleProfile(static_cast<StyleId>(st));
-            for (int target = kMinTrackBars; target <= kMaxTrackBars; target += 32) {
+            for (int target = kMinTrackBars; target <= kMaxTrackBars; target += kTrackBarStep) {
                 for (uint64_t seed = 1; seed <= 40; ++seed) {
                     const FormPlan f = makeFormPlan(s, seed, target, 0.3, 0.9);
                     ++forms;
@@ -8662,8 +8697,9 @@ void testForm()
                     int brk = 0;
                     for (int i = 0; i < f.count; ++i) {
                         if (f.section[i].type == SectionType::Break) brk += f.section[i].bars;
+                        // 19.09.2026: every multiple of eight is a legal length (drop 2 runs 48 bars).
                         const int b = f.section[i].bars;
-                        lengths[b == 8 ? 0 : (b == 16 ? 1 : (b == 32 ? 2 : (b == 64 ? 3 : 4)))]++;
+                        lengths[b % 8 == 0 && b >= 8 ? (b <= 16 ? 1 : (b <= 32 ? 2 : 3)) : 4]++;
                     }
                     const double share = static_cast<double>(brk) / f.bars;
                     shareLo = std::min(shareLo, share);
@@ -8671,15 +8707,17 @@ void testForm()
                 }
             }
         }
-        check(broken == 0 && wrongLength == 0 && lengths[4] == 0 && bodies[0] > 0 && bodies[1] > 0 && bodies[2] > 0,
-              "every form keeps the constraints and hits the requested length exactly",
-              fmt("%d forms, %d broken, %d off length, bodies %d/%d/%d, break share %.2f..%.2f",
-                  forms, broken, wrongLength, bodies[0], bodies[1], bodies[2], shareLo, shareHi));
+        check(broken == 0 && wrongLength == 0 && lengths[4] == 0 && bodies[0] > 0 && bodies[1] > 0 && bodies[2] > 0 && bodies[3] > 0,
+              "every form keeps the constraints and hits the requested length exactly, every template in use",
+              fmt("%d forms, %d broken, %d off length, templates %d/%d/%d/%d, break share %.2f..%.2f",
+                  forms, broken, wrongLength, bodies[0], bodies[1], bodies[2], bodies[3], shareLo, shareHi));
     }
 
     // The two-drop standard of Grosz et al.: every track has at least two cores, and the necessity
     // order Core > Buildup/Outro > Breakdown/Intro > PDB holds by construction (a form without a core
-    // cannot be built). Intro and outro stay inside Easwaran's window of 8 to 16 bars.
+    // cannot be built). Since 19.09.2026 intro and outro are the user's 32-bar DJ ends (Easwaran's 8 to 16
+    // bars of atmosphere are the intro's kick-free half), and the fourth PDB variant -- the kick alone on
+    // beat 4 -- is never drawn: beat 4 stays empty.
     {
         int tracks = 0, twoDrops = 0, introOk = 0, outroOk = 0, pdbVariants[kNumPdbVariants] = {}, cuts = 0, builds = 0;
         for (uint64_t seed = 1; seed <= 200; ++seed) {
@@ -8693,12 +8731,12 @@ void testForm()
                 if (s.type == SectionType::Break && s.cutBeats > 0.0f) ++cuts;
             }
             if (cores >= 2) ++twoDrops;
-            if (f.section[0].bars == 8 || f.section[0].bars == 16) ++introOk;
-            if (f.section[f.count - 1].bars == 8 || f.section[f.count - 1].bars == 16) ++outroOk;
+            if (f.section[0].bars == 32) ++introOk;
+            if (f.section[f.count - 1].bars == 32) ++outroOk;
         }
-        const int variantsSeen = (pdbVariants[0] > 0) + (pdbVariants[1] > 0) + (pdbVariants[2] > 0) + (pdbVariants[3] > 0);
-        check(twoDrops == tracks && introOk == tracks && outroOk == tracks && variantsSeen == kNumPdbVariants && cuts > 0,
-              "two-peak form, intro and outro of 8 or 16 bars, all four pre-drop-break variants, cuts before the breakdowns",
+        const int variantsSeen = (pdbVariants[0] > 0) + (pdbVariants[1] > 0) + (pdbVariants[2] > 0);
+        check(twoDrops == tracks && introOk == tracks && outroOk == tracks && variantsSeen == 3 && pdbVariants[3] == 0 && cuts > 0,
+              "two-peak form, intro and outro of 32 bars, three pre-drop-break variants and never the kick on beat 4, cuts before the breakdowns",
               fmt("%d tracks, %d with two or more cores, PDB variants %d/%d/%d/%d of %d buildups, %d cuts",
                   tracks, twoDrops, pdbVariants[0], pdbVariants[1], pdbVariants[2], pdbVariants[3], builds, cuts));
     }
@@ -8820,12 +8858,14 @@ void testForm()
                         if (beatInBar >= 3.0 && (e.part == Part::Bass || (e.part == Part::Kick && s.pdbVariant != 3))) ++pdbBeat4;
                     }
                 }
-                if (s.type == SectionType::Intro && si == 0) {
+                // The set's first track: its intro has no kick before bar 17 (19.09.2026; later tracks' intros
+                // sound over the previous track's outro, whose kick plays there -- testArrangement).
+                if (s.type == SectionType::Intro && si == 0 && ti == 0) {
                     ++introBars;
                     int firstKick = 99;
                     for (const NoteEvent& e : ev)
                         if (e.part == Part::Kick) firstKick = std::min(firstKick, static_cast<int>((e.beat - static_cast<double>(t.firstBar) * kBeatsPerBar) / kBeatsPerBar));
-                    if (firstKick >= 4 && firstKick <= 8) ++introKickBars;
+                    if (firstKick == kIntroKickBar) ++introKickBars;
                 }
                 if (s.type == SectionType::Drop) {
                     ++dropBars;
@@ -8841,7 +8881,7 @@ void testForm()
             }
         }
         check(breakKicks == 0 && breakBass == 0 && introKickBars == introBars && dropAllParts == dropBars && pdbBeat4 == 0 && pdbBars > 0,
-              "instrumentation matrix: no kick or bass in a breakdown, the intro's kick between bar 5 and 9, everything in a drop, beat 4 of the PDB empty",
+              "instrumentation matrix: no kick or bass in a breakdown, the intro's kick on bar 17, everything in a drop, beat 4 of the PDB empty",
               fmt("%d kicks and %d bass notes in breakdowns, %d of %d intros, %d of %d drops complete, %d notes on beat 4 of %d PDBs",
                   breakKicks, breakBass, introKickBars, introBars, dropAllParts, dropBars, pdbBeat4, pdbBars));
     }
@@ -9468,8 +9508,13 @@ void testSectionRules()
     section("section rules on the render (Solberg and Dibben 2019)");
     const double sr = 48000.0;
     ParamStore p;
-    p.parseText("compose.track_bars=128 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
-                "compose.pad_amount=1 compose.sfx_amount=1 compose.level_match=Off master.auto_gain=Off");
+    // 19.09.2026: the default 256 bars -- the two-drop form's 32-bar breakdown and big buildup. At 128 bars
+    // the form shrinks both to 16, and the breakdown's window then reaches the bar where its hat returns.
+    // No drone: its low octave is the floor of every breakdown by the voices round's rule (testVoices (g)
+    // measures it), and on the seed this finds it stands 13.5 dB under the core's kick -- the removal this
+    // section measures is the kick's and the bass's.
+    p.parseText("compose.track_bars=256 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
+                "compose.pad_amount=1 compose.sfx_amount=1 compose.drone_amount=0 compose.level_match=Off master.auto_gain=Off");
     // A seed whose first track carries the whole break routine: core, breakdown, buildup, drop, and a
     // pre-drop break that does not keep the kick on beat 4 (the "Kick on 4" variant is allowed to).
     int coreA = -1, brk = -1, build = -1, drop = -1;
@@ -9484,7 +9529,7 @@ void testSectionRules()
                 // A sixteen-bar buildup, so that its rise can be read over four four-bar windows, and a
             // pre-drop break that does not keep the kick on beat 4 (the "Kick on 4" variant may).
             if (t.form.section[i].type != SectionType::Drop || t.form.section[i - 1].pdbVariant == 3
-                || t.form.section[i - 1].bars != 16) continue;
+                || t.form.section[i - 1].bars < 16) continue;
             coreA = i - 3;
             brk = i - 2;
             build = i - 1;
@@ -9878,6 +9923,13 @@ void testCues()
             while (static_cast<double>(nextBar) * kBeatsPerBar < beat + 4 * kBeatsPerBar && nextBar < bars) {
                 const TrackPlan plan = comp.track(p, comp.trackOfBar(p, nextBar));
                 cueMarksForBar(plan.form, plan.firstBar, plan.key, plan.scale, nextBar, lastKey, marks);
+                // The next track's intro over this one's outro (the DJ overlap, 19.09.2026): its marks too,
+                // as the plugin, the Quest build and the cue demo send them.
+                const int incoming = comp.incomingOfBar(p, nextBar);
+                if (incoming >= 0) {
+                    const TrackPlan next = comp.track(p, incoming);
+                    cueMarksForBar(next.form, next.firstBar, next.key, next.scale, nextBar, lastKey, marks);
+                }
                 ++nextBar;
             }
             const double to = beat + beatsPerSample * block;
@@ -10835,9 +10887,10 @@ void testFoundation()
     int onsets = 0, rootLow = 0, foundationOnsets = 0, withSub = 0, subUnderKick = 0, tooMany = 0, doubled = 0;
     for (const auto& kv : chords) {
         const int bar = static_cast<int>(std::floor(kv.first / kBeatsPerBar));
-        const int ti = c.trackOfBar(q, bar);
+        // Over the DJ overlap (19.09.2026) the pads that sound are the incoming track's.
+        const int incoming = c.incomingOfBar(q, bar);
+        const int ti = incoming >= 0 ? incoming : c.trackOfBar(q, bar);
         const TrackPlan t = c.track(q, ti);
-        if (ti > 0 && bar - t.firstBar < 16) continue;   // the previous track's pads still sound there
         std::vector<int> v = kv.second;
         std::sort(v.begin(), v.end());
         if (v.size() > 4) ++tooMany;
@@ -10874,7 +10927,8 @@ void testFoundation()
             if (!t.melody.present[mpIndex(MelodyPart::Pad)]) continue;
             for (int i = 0; i + 1 < t.form.count; ++i) {
                 const Section& sec = t.form.section[i];
-                if (sec.type == SectionType::Break && sec.startBar <= 80 && sec.bars >= 16
+                // 19.09.2026: the two-drop form's breakdown starts on bar 113.
+                if (sec.type == SectionType::Break && sec.startBar <= 160 && sec.bars >= 16
                     && t.form.section[i + 1].startBar == sec.startBar + sec.bars) {
                     breakStart = sec.startBar; breakEnd = sec.startBar + sec.bars; seed = s;
                     break;
@@ -10918,7 +10972,11 @@ void testFoundation()
                 const double f = engine->effective(hp);
                 const bool silent = loud.count(bar) == 0;
                 ++hpBars;
-                if (silent ? std::fabs(f - 40.0) > 0.5 : std::fabs(f - 140.0) > 0.5) ++hpBad;
+                // A buildup's pre-drop break silences kick and bass too, but it is a held breath, not a floor
+                // (19.09.2026, Form.cpp): the pad does not play there and its floor stays closed.
+                const TrackPlan own = cm.track(p, cm.trackOfBar(p, bar));
+                const bool build = own.form.section[sectionOfBar(own.form, bar - own.firstBar)].type == SectionType::Build;
+                if (build ? std::fabs(f - 140.0) > 0.5 : (silent ? std::fabs(f - 40.0) > 0.5 : std::fabs(f - 140.0) > 0.5)) ++hpBad;
                 if (bar >= breakStart && bar < breakEnd && !silent) ++hpBad;   // the breakdown itself is silent
             }
         }
@@ -10953,17 +11011,21 @@ void testFoundation()
         const double steady = rmsDb(low, t0 + 4.0 * barSec, t0 + 8.0 * barSec);
         const double all = rmsDb(mono, t0 + 4.0 * barSec, t0 + 8.0 * barSec);
         const double first = rmsDb(low, t0, t0 + 0.1);
-        const double afterDrop = rmsDb(low, t1 + 0.25 * barSec, t1 + 2.0 * barSec);
-        const double beforeBreak = rmsDb(low, t0 - 2.0 * barSec, t0);
+        // Before the breakdown and after the drop the band is read as a share of the pad's own level there
+        // (19.09.2026): the two-drop form puts the breakdown behind drop 1, in which the pad may play, and
+        // its leakage through the closed 140 Hz floor (about 28 dB under it) is no foundation but stands only
+        // 15 dB under the breakdown's. No foundation: the band at least 25 dB under the pad.
+        const double afterDrop = rmsDb(low, t1 + 0.25 * barSec, t1 + 2.0 * barSec) - rmsDb(mono, t1 + 0.25 * barSec, t1 + 2.0 * barSec);
+        const double beforeBreak = rmsDb(low, t0 - 2.0 * barSec, t0) - rmsDb(mono, t0 - 2.0 * barSec, t0);
         // The pad before this round, measured on the same seed and bars: -55.7 dB under 140 Hz against
         // -24.6 dB in all, a share of -31.1 dB -- nothing but leakage. The foundation has to lift that
         // share by more than 12 dB; the hall's return (low cut 300 Hz) is part of "all", so the sub's
         // own voice carries more than the share says.
         check(steady - all > -19.0, "in the breakdown the pad carries a real foundation: the band under 140 Hz 12 dB above the old pad's share (-31.1 dB)",
               fmt("%.1f dB under 140 Hz against %.1f dB in all (%.1f dB)", steady, all, steady - all));
-        check(first < steady - 6.0 && afterDrop < steady - 25.0 && beforeBreak < steady - 25.0,
+        check(first < steady - 6.0 && afterDrop < -25.0 && beforeBreak < -25.0,
               "the foundation fades in with the pad's attack and is gone a beat after kick and bass return (no step)",
-              fmt("under 140 Hz: first 100 ms %.1f dB, steady %.1f dB; two bars before the breakdown %.1f dB, from a beat after it %.1f dB",
+              fmt("under 140 Hz: first 100 ms %.1f dB, steady %.1f dB; two bars before the breakdown %.1f dB and from a beat after it %.1f dB of the pad's level there",
                   first, steady, beforeBreak, afterDrop));
     }
 }
@@ -11102,10 +11164,11 @@ void testVoices()
         // Every answer is written to end on the tonic or the fifth (makeCounter); the register guard may
         // still give up that last note where a lead note sits on it in every octave the counter has, and
         // the note before it then ends the answer -- measured: 2 of 46 on this set, hence nine in ten.
-        // "The tonic as its centre" is read as: the commonest pitch class, and at least a fifth of the notes
-        // (19.09.2026, round "arrangement": until then a quarter; since the counter plays in drop 2 alone the
-        // set holds other phrases -- 24 % tonic, still the commonest class by far).
-        const bool tonicCommonest = *std::max_element(pcCount, pcCount + 12) == pcCount[0];
+        // "The tonic as its centre": until 19.09.2026 a quarter of the notes on the tonic. Since the counter
+        // plays in drop 2 alone (round "arrangement") the set holds other phrases: 24 % tonic and 29 % fifth,
+        // the two the answers are written to end on. Read now as: tonic and fifth together the centre (at
+        // least 40 %), the tonic at least a fifth of the notes.
+        const bool tonicCommonest = (pcCount[0] + pcCount[7]) * 5 >= notes * 2;
         check(colour == 0 && tonicCommonest && tonic * 5 >= notes && answers > 10 && answersResting * 10 >= answers * 9,
               "counter-lead: the lead's genre rules -- no colour tone, the tonic as its centre, nine in ten answers ending on the tonic or the fifth",
               fmt("%d colour tones, tonic %.0f %% of %d notes (commonest class %d with %d), %d of %d answers end on 1 or 5%s", colour,

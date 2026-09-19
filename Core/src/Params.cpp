@@ -548,18 +548,19 @@ const ParamDesc kMixParams[mix::Count] = {
     // -3 dB (19.09.2026, round "voices"): excerpt B of the listening seed (track 2's drop) sat +9.8 dB over
     // the reference median in presence once its foundation was no longer over-matched (Composer.cpp,
     // probeLoudness); with the lead muted it read +1.8, so the lead carried most of it. -3 dB: +7.6.
-    // -7 dB (19.09.2026, round "arrangement"): the user after listening to the voices round, "insgesamt ist
-    // der Lead und auch der Arp zu laut"; the arp -2 -> -6 with it, the counter and the stab 4 dB down as
-    // well so that they stay under the lead. docs/PLAN.md has the band balance before and after.
-    { "lead_level", "Lead Level", "dB", -24.0f, 12.0f, -7.0f, Curve::Linear },
+    // -6 dB (19.09.2026, round "arrangement"): the user after listening to the voices round, "insgesamt ist
+    // der Lead und auch der Arp zu laut"; the arp -2 -> -5 with it, the counter and the stab 3 dB down as
+    // well so that they stay under the lead. 4 dB each took the presence band of testMixBalance 2.2 dB
+    // under the reference median; docs/PLAN.md has the band balance before and after.
+    { "lead_level", "Lead Level", "dB", -24.0f, 12.0f, -6.0f, Curve::Linear },
     { "counter_mute",  "Counter Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
-    { "counter_level", "Counter Level", "dB", -24.0f, 12.0f, -4.0f, Curve::Linear },
+    { "counter_level", "Counter Level", "dB", -24.0f, 12.0f, -3.0f, Curve::Linear },
     { "arp_mute",   "Arp Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     // -2 dB (18.09.2026): the arp was the loudest melodic part and owned 300 Hz .. 2 kHz, where the
     // congas, toms and the clap have to be heard (kDefaultKit).
-    { "arp_level",  "Arp Level",  "dB", -24.0f, 12.0f, -6.0f, Curve::Linear },
+    { "arp_level",  "Arp Level",  "dB", -24.0f, 12.0f, -5.0f, Curve::Linear },
     { "stab_mute",  "Stab Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
-    { "stab_level", "Stab Level", "dB", -24.0f, 12.0f, -4.0f, Curve::Linear },
+    { "stab_level", "Stab Level", "dB", -24.0f, 12.0f, -3.0f, Curve::Linear },
     { "pad_mute",   "Pad Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "pad_level",  "Pad Level",  "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     { "drone_mute", "Drone Mute", "",     0.0f,  1.0f, 0.0f, Curve::Toggle },

@@ -226,11 +226,12 @@ float typeEnergy(SectionType type);
  * other point". Drop 1 takes kDrop1Share of a drop's nominal energy, and after the arc has scaled every
  * section, drop 2 is lifted (or, where it would pass 1, the others lowered) until it stands kClimaxMargin
  * above every other section. The energy drives the track gain by 5 dB per unit (Composer.cpp,
- * energyGainDb), so the margin alone is 0.4 dB on kick, bass and percussion; the audible rest of the
- * climax is density -- open hats, ride, the second lead, the arp an octave up, squelches in the gaps.
+ * energyGainDb), so the margin alone is 1 dB on kick, bass and percussion (0.08 = 0.4 dB measured only
+ * +0.17 dB at the master's output over drop 1 on the listening seed); the audible rest of the climax is
+ * density -- open hats, ride, the second lead, the arp an octave up, squelches in the gaps.
  * @{ */
 constexpr float kDrop1Share = 0.88f;
-constexpr float kClimaxMargin = 0.08f;
+constexpr float kClimaxMargin = 0.20f;
 /** @} */
 
 /** @brief One section of a track's form. */
