@@ -10618,9 +10618,9 @@ void testClimax()
             const double w = powDb(mean(kBar, b, 8));
             if (w > rival) { rival = w; rivalBar = b; }
         }
-        check(loud2 - loud1 >= 1.0 && weakest - rival >= 0.3 && hi2 - hi1 >= 2.5,
-              fmt("style %s, first track rendered: drop 2 at least 1 LU over drop 1, every eight bars of it 0.3 LU over any other "
-                  "window, and 2.5 dB more above 1.5 kHz than drop 1", style).c_str(),
+        check(loud2 - loud1 >= 1.4 && weakest - rival >= 0.3 && hi2 - hi1 >= 3.0,
+              fmt("style %s, first track rendered: drop 2 at least 1.4 LU over drop 1, every eight bars of it 0.3 LU over any other "
+                  "window, and 3 dB more above 1.5 kHz than drop 1", style).c_str(),
               fmt("drop 2 - drop 1 %+.2f LU; weakest group of drop 2 - loudest other window (bars %d-%d) %+.2f LU; above 1.5 kHz %+.2f dB",
                   loud2 - loud1, rivalBar + 1, rivalBar + 8, weakest - rival, hi2 - hi1));
     }
