@@ -1928,7 +1928,10 @@ void testKickBody()
     const std::vector<float> ky = render("mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1");
     const std::vector<float> by = render("mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1");
     const double beat = 60.0 / 145.0 * sr, q = beat / 4.0;
-    auto at = [&](double beats) { return static_cast<size_t>(beats * beat + latency); };
+    // Clamped to the render (19.09.2026, round "polish"): the window of the last beat measured ends at
+    // beat 280 of a 70-bar render, and the engine's latency pushed that `latency` samples past the buffer --
+    // a heap read past the end that the AddressSanitizer build caught (docs/PLAN.md, "UB-Suche").
+    auto at = [&](double beats) { return std::min(ky.size(), static_cast<size_t>(beats * beat + latency)); };
     // K-weighting, ITU-R BS.1770-4's tabulated 48 kHz coefficients (as in testSfxLevel).
     struct Biquad { double b0, b1, b2, a1, a2, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
         double tick(double x) { const double y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; } };
@@ -1947,6 +1950,7 @@ void testKickBody()
         if (bt % 32 >= 28) continue;   // the last bar of an eight-bar group carries its figure and a missing kick
         const size_t k0 = at(bt), s0 = at(bt + 0.25), s1 = at(bt + 0.5), e0 = at(bt + 1.0);
         (void)q;
+        if (e0 <= s1 || s0 <= k0) continue;   // the last beat's window runs past the render (see at())
         mask.push_back(powDb(lowendBandPower(ky, s0, s1, 30.0, 150.0, sr) / lowendBandPower(by, s0, s1, 30.0, 150.0, sr)));
         double pk = 0.0, pb = 0.0;
         for (size_t i = k0; i < s0; ++i) pk += static_cast<double>(km[i]) * km[i];
