@@ -15,7 +15,8 @@
 # `phos_selftest --list` prints it; every name becomes `selftest.<name>`, running
 # `phos_selftest --only <name>`. A section added there is a test here the next time ctest starts,
 # with nobody editing CMake -- which was the requirement, because another round adds sections while
-# this one is being written.
+# this one is being written. A section split into parts (19.09.2026) has one run line per part,
+# named `group.part` -- hence the dot in the name patterns below -- and so one test per part.
 #
 # What stays here is only *metadata*: the measured seconds of each section (below). A section the
 # table has and this list does not is labelled `slow` until somebody measures it, so `ctest -L quick`
@@ -29,17 +30,44 @@
 # breaks if a number is stale except the label and the order.
 set(PHOS_QUICK_SECONDS 10)
 set(PHOS_SELFTEST_SECONDS
-    testModalInterchange     620.7
-    testVoices               202.9
-    testVariety              202.3
+    # Split sections (19.09.2026, round "test-split"), named group.part: from `ctest -C Release -j 6` in
+    # the plugin build, the machine ~36 % busy on average (another round building and testing beside it).
+    testVoices.counterSoundListening   220.5
+    testVoices.counterSound77          232.7
+    testVoices.counterSound2026        218.8
+    testVoices.sound                   214.6
+    testPhaseLock.lock                 213.8
+    testModalInterchange.presenceOn2   209.1
+    testVariety.levelMatch             209.9
+    testModalInterchange.presenceOff2  208.7
+    testModalInterchange.presenceOn1   199.4
+    testModalInterchange.presenceOff1  198.0
+    testMelody.blockSize               73.5
+    testPhaseLock.onsets               69.6
+    testAcidVoicing.corners            43.1
+    testFoundation.score               42.9
+    testGenreRules.listeningSeed       43.1
+    testFoundation.render              41.5
+    testAcidVoicing.engine             34.5
+    testVoices.droneRender             33.0
+    testMelody.depthRender             26.9
+    testGenreRules.arpGate             22.9
+    testVariety.recipes                16.4
+    testModalInterchange.newTone       11.3
+    testGenreRules.rules               1.4
+    testVariety.plans                  1.1
+    testMelody.score                   0.7
+    testAcidVoicing.night              0.7
+    testVoices.acidRide                0.4
+    testMelody.variety                 0.4
+    testModalInterchange.bass          0.2
+    testVoices.score                   0.2
+    testModalInterchange.modes         0.0
+    testMelody.midi                    0.0
+    # Whole sections.
     testMixBalance           111.4
     testStereoWidth          100.2
-    testPhaseLock            90.0
     testMaster               88.4
-    testMelody               81.1
-    testAcidVoicing          65.9
-    testFoundation           65.8
-    testGenreRules           57.9
     testSfxLevel             35.7
     testKickBody             32.7
     testModeColour           30.7
@@ -116,7 +144,7 @@ string(REPLACE "\n" ";" _phos_lines "${_phos_out}")
 set(_phos_names)
 foreach(_l IN LISTS _phos_lines)
     # Names only: finish()'s "0 passed, 0 failed" and blank lines have spaces or nothing.
-    if(_l MATCHES "^[A-Za-z_][A-Za-z0-9_]*$")
+    if(_l MATCHES "^[A-Za-z_][A-Za-z0-9_.]*$")
         list(APPEND _phos_names "${_l}")
     endif()
 endforeach()
@@ -130,10 +158,10 @@ endif()
 # when the binary is older than the source -- in both cases ctest would not be testing what the
 # source says, and that has to be a red test, not a quiet one.
 if(EXISTS "${PHOS_SELFTEST_SOURCE}")
-    file(STRINGS "${PHOS_SELFTEST_SOURCE}" _phos_src_lines REGEX "^[ \t]+run\\(\"[A-Za-z0-9_]+\",")
+    file(STRINGS "${PHOS_SELFTEST_SOURCE}" _phos_src_lines REGEX "^[ \t]+run\\(\"[A-Za-z0-9_.]+\",")
     set(_phos_src_names)
     foreach(_l IN LISTS _phos_src_lines)
-        string(REGEX REPLACE "^[ \t]+run\\(\"([A-Za-z0-9_]+)\",.*$" "\\1" _l "${_l}")
+        string(REGEX REPLACE "^[ \t]+run\\(\"([A-Za-z0-9_.]+)\",.*$" "\\1" _l "${_l}")
         list(APPEND _phos_src_names "${_l}")
     endforeach()
     if(NOT "${_phos_src_names}" STREQUAL "${_phos_names}")

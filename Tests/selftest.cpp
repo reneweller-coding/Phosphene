@@ -1271,9 +1271,15 @@ void testBassModel()
     }
 }
 
-void testVariety()
+/**
+ * @brief Variety over a night, part `.plans`: sixty track plans and the zero-variation plans.
+ *
+ * testVariety was split on 19.09.2026 (round "test-split") into `.plans` (this), `.levelMatch`
+ * (the two 512-bar renders, which one check compares and so stay together) and `.recipes`.
+ */
+void testVarietyPlans()
 {
-    section("variety over a night");
+    section("variety over a night: the plans");
     // The probes of the level match are not what this looks at (they have their own check below).
     ParamStore p;
     p.parseText("compose.level_match=Off master.auto_gain=Off");
@@ -1336,7 +1342,17 @@ void testVariety()
         }
         check(allKnobs, "with Track and Sound Variation at 0 every track plays the knobs");
     }
+}
 
+/**
+ * @brief Variety over a night, part `.levelMatch`: the level match on the real render.
+ *
+ * Not split further: the check holds the spread with the match against the spread without it, so it
+ * needs both renders, and each is one stream over four tracks (the tracks hand over to each other).
+ */
+void testVarietyLevelMatch()
+{
+    section("variety over a night: the level match");
     // Level match: tracks with very different sounds reach the same loudness. Measured on the real
     // render, bars 4..28 of each 32-bar track, with every variation at full strength.
     //
@@ -1416,7 +1432,12 @@ void testVariety()
         check(withMatch < 0.8 && without > withMatch + 1.0, "level match keeps the tracks within 0.8 LU of each other once the form's own energy gain is taken out (without it they spread wider)",
               fmt("spread %.2f LU with, %.2f LU without", withMatch, without));
     }
+}
 
+/** @brief Variety over a night, part `.recipes`: the engine plays the knobs in track 1 and the recipe in track 2. */
+void testVarietyRecipes()
+{
+    section("variety over a night: the engine plays the recipes");
     // The engine plays the recipes: in track 1 the knobs, in track 2 something else, within the constraints.
     {
         auto e = std::make_unique<Engine>();
@@ -1968,12 +1989,51 @@ void testKickBody()
  * Checked against the voicing values written out here, independently of the table in Composer.cpp:
  * clean = drive 0.1, accent 0.8, low cut 150 Hz; liquid = wave 0.5, cutoff 450 Hz, 4 disperser stages.
  */
-void testAcidVoicing()
+/**
+ * @brief A composer of the listening seed 864566672 at the default knobs, for its track *plans*.
+ *
+ * With the default knobs the level match is on, and every plan renders about 48 bars of level probes
+ * (about 10 s a plan on 19.09.2026). testVoices parts `.sound` (tracks 1-20) and `.counterSoundListening`
+ * (0-23) and testAcidVoicing part `.corners` (0-3) all plan these same tracks with the same knobs; in
+ * one process (the full serial run) they are planned once. As separate ctest tests each process
+ * plans what it needs, as before. Only plans are asked of it -- nothing is composed with it -- so
+ * the plans are the ones a fresh composer gives (plans are made in track order either way).
+ */
+struct ListeningPlanner {
+    ParamStore p;                    ///< default knobs
+    std::unique_ptr<Composer> c;     ///< the composer, asked only for track()
+};
+
+/** @brief The shared ListeningPlanner, made on first use. */
+ListeningPlanner& listeningPlanner()
 {
-    section("acid voicings per track");
+    static std::unique_ptr<ListeningPlanner> s;
+    if (!s) {
+        s = std::make_unique<ListeningPlanner>();
+        s->c = std::make_unique<Composer>(864566672ull);
+    }
+    return *s;
+}
+
+/**
+ * @brief The value an acid parameter takes at the default knobs plus a voicing offset (normalised domain,
+ *        as the engine applies it). Shared by testAcidVoicing's parts `.corners` and `.engine`.
+ */
+float acidValueAt(const ParamStore& p, int param, const float* off)
+{
+    const int id = p.base(Module::Acid) + param;
+    return p.fromNormalised(id, p.toNormalised(id, p.get(id)) + off[param]);
+}
+
+/**
+ * @brief testAcidVoicing part `.corners` (a). The section was split on 19.09.2026 (round "test-split")
+ *        into its three independent blocks: `.corners` (a), `.night` (b), `.engine` (c).
+ */
+void testAcidVoicingCorners()
+{
+    section("acid voicings per track: the corners, and track 1 is the knobs");
     ParamStore p;
-    const int ab = p.base(Module::Acid), cb = p.base(Module::Compose);
-    auto valueAt = [&](int param, const float* off) { const int id = ab + param; return p.fromNormalised(id, p.toNormalised(id, p.get(id)) + off[param]); };
+    auto valueAt = [&](int param, const float* off) { return acidValueAt(p, param, off); };
     // (a) Corners reach the voicings exactly at the default Sound Variation; the first track is the knobs.
     {
         float off[acid::Count];
@@ -1991,19 +2051,27 @@ void testAcidVoicing()
         Composer::acidVoicingOffsets(p, liquid, 0.0f, off, disp);
         float anyZero = 0.0f;
         for (float o : off) anyZero += std::fabs(o);
-        Composer c(864566672ull);
-        const TrackPlan& t0 = c.track(p, 0);
+        // The listening seed's plans at the default knobs (`p` is default too): planned once in one process.
+        ListeningPlanner& lp = listeningPlanner();
+        Composer& c = *lp.c;
+        const TrackPlan& t0 = c.track(lp.p, 0);
         check(cleanOk && liquidOk && drivenOk && anyZero == 0.0f && disp == -1 && t0.acidVoicing[1] == 1.0f,
               "a track at a corner plays that voicing exactly, the driven corner and Sound Variation 0 play the knobs, track 1 is driven");
         // Not a check: what the listening seed's first tracks draw, for the listening notes.
         for (int i = 0; i < 4; ++i) {
-            const TrackPlan t = c.track(p, i);
+            const TrackPlan t = c.track(lp.p, i);
             std::printf("         listening seed, track %d: acid clean/driven/liquid %.2f/%.2f/%.2f; bass", i + 1,
                         static_cast<double>(t.acidVoicing[0]), static_cast<double>(t.acidVoicing[1]), static_cast<double>(t.acidVoicing[2]));
             for (int m = 0; m < kNumBassMacros; ++m) std::printf(" %s %+.2f", kBassMacroNames[m], static_cast<double>(t.bassMacro[m]));
             std::printf("\n");
         }
     }
+}
+
+/** @brief testAcidVoicing part `.night` (b): over 39 tracks the voicings spread over the triangle. */
+void testAcidVoicingNight()
+{
+    section("acid voicings per track: spread over a night");
     // (b) Over a night the tracks spread over the triangle, and consecutive tracks differ.
     {
         ParamStore q;
@@ -2030,8 +2098,16 @@ void testAcidVoicing()
               "over 39 tracks every voicing leads several of them, some are blends, and no two neighbours share a sound",
               fmt("clean %d, driven %d, liquid %d leading; %d blends (no weight over 0.7); closest neighbours %.2f apart",
                   dominant[0], dominant[1], dominant[2], blends, closest));
-        (void)cb;
     }
+}
+
+/** @brief testAcidVoicing part `.engine` (c): the engine plays track 2's voicing. */
+void testAcidVoicingEngine()
+{
+    section("acid voicings per track: the engine plays them");
+    ParamStore p;
+    const int ab = p.base(Module::Acid), cb = p.base(Module::Compose);
+    auto valueAt = [&](int param, const float* off) { return acidValueAt(p, param, off); };
     // (c) The engine plays it: in track 2 of a short-track set the acid's drive and wave are the voicing's.
     {
         auto e = std::make_unique<Engine>();
@@ -2179,21 +2255,25 @@ void testPercTempo()
               e->percKit().tempo(), period, static_cast<int>(ups.size()) - 1, expect, 0.1875 * 4.0 * 60.0 / 145.0));
 }
 
-void testPhaseLock()
+/**
+ * @brief Kick and bass phase at the first sixteenth, part `.lock`: the three coupling modes at four tempi.
+ *
+ * Split on 19.09.2026 (round "test-split") along its two checks, not by mode: the first check is one
+ * conjunction over "Kick follows bass", "Bass follows kick" and "Off", and "Off" is only meaningful
+ * over all four tempi (it asserts that the phases *wander* with the tempo), so this part keeps all
+ * three modes and the other part (`.onsets`) takes the sub-only measurement of the second check.
+ * Every measureLock call is independent (its own engine and composer), so the two parts measure
+ * exactly what the one section measured.
+ */
+void testPhaseLockLock()
 {
-    section("kick and bass phase at the first sixteenth");
+    section("kick and bass phase at the first sixteenth: the lock at every tempo");
     std::string detail;
-    double worstKick = 0.0, worstBass = 0.0, worstSpread = 0.0, offLo = 1e9, offHi = -1e9;
+    double worstKick = 0.0, worstBass = 0.0, offLo = 1e9, offHi = -1e9;
     for (double bpm : { 138.0, 142.0, 145.0, 148.0 }) {
         double spread = 0.0, coh = 0.0;
         const double dk = measureLock("bass.kick_lock=Kick follows bass", bpm, spread, coh);
         worstKick = std::max(worstKick, std::fabs(dk));
-        // The onset spread on the sub alone (19.09.2026): what it checks is that onsets are sub-sample
-        // exact, and since the bite and the sub octave the harmonics of a note depend on its velocity,
-        // which the pattern varies from beat to beat -- a two-period fit then reads 0.1 degree of
-        // "spread" that is timbre, not timing (with every harmonic path closed it reads what it did).
-        measureLock("bass.kick_lock=Kick follows bass bass.bite=0 bass.sub_octave=0 bass.cutoff=20 bass.env_amount=0 bass.key_track=0", bpm, spread, coh);
-        worstSpread = std::max(worstSpread, spread);
         const double db = measureLock("bass.kick_lock=Bass follows kick", bpm, spread, coh);
         worstBass = std::max(worstBass, std::fabs(db));
         const double off = measureLock("bass.kick_lock=Off", bpm, spread, coh);
@@ -2203,6 +2283,22 @@ void testPhaseLock()
     }
     check(worstKick < 6.0 && worstBass < 6.0 && offHi - offLo > 60.0,
           "kick lock aligns the phases at every tempo (without it they wander with the tempo)", detail);
+}
+
+/** @brief Kick and bass phase at the first sixteenth, part `.onsets`: the bass onset spread on the sub alone. */
+void testPhaseLockOnsets()
+{
+    section("kick and bass phase at the first sixteenth: sub-sample bass onsets");
+    double worstSpread = 0.0;
+    for (double bpm : { 138.0, 142.0, 145.0, 148.0 }) {
+        double spread = 0.0, coh = 0.0;
+        // The onset spread on the sub alone (19.09.2026): what it checks is that onsets are sub-sample
+        // exact, and since the bite and the sub octave the harmonics of a note depend on its velocity,
+        // which the pattern varies from beat to beat -- a two-period fit then reads 0.1 degree of
+        // "spread" that is timbre, not timing (with every harmonic path closed it reads what it did).
+        measureLock("bass.kick_lock=Kick follows bass bass.bite=0 bass.sub_octave=0 bass.cutoff=20 bass.env_amount=0 bass.key_track=0", bpm, spread, coh);
+        worstSpread = std::max(worstSpread, spread);
+    }
     check(worstSpread < 0.05, "bass onset phase constant from beat to beat (sub-sample onsets)", fmt("spread %.3f degrees", worstSpread));
 }
 
@@ -4996,9 +5092,16 @@ void testAcidColour()
     }
 }
 
-void testMelody()
+/**
+ * @brief Melody, part `.score`: 16 tracks of 128 bars read against the scale, the chords, the depth
+ *        rule, the slides and the register rule.
+ *
+ * testMelody was split on 19.09.2026 (round "test-split") into its five independent blocks: `.score`
+ * (this), `.variety`, `.depthRender`, `.blockSize` and `.midi`.
+ */
+void testMelodyScore()
 {
-    section("melody: chords, acid, lead, arp");
+    section("melody: chords, acid, lead, arp -- the score");
     ParamStore p;
     p.parseText("compose.track_bars=128 compose.acid_amount=0.8 compose.lead_amount=0.8 compose.arp_amount=0.8 compose.level_match=Off master.auto_gain=Off");
     Composer c(606);
@@ -5075,7 +5178,12 @@ void testMelody()
     check(clashes == 0 && sharedBlocks > 50, "where lead and arp play together they never sound in one register at the same instant",
           fmt("%d shared bars (%d with overlapping bar ranges), %d sixteenths with two line voices closer than %d semitones",
               sharedBlocks, masked, clashes, kRegisterGap));
+}
 
+/** @brief Melody, part `.variety`: the melodic identity changes from track to track (24 plans). */
+void testMelodyVariety()
+{
+    section("melody: variety over a night");
     // Variety over a night.
     {
         ParamStore q;
@@ -5104,7 +5212,12 @@ void testMelody()
               fmt("%d distinct acid riffs of 24, %d moving progressions, %d arp styles, lead osc %d/%d/%d/%d, %d squelched, %d without melody",
                   distinct, progressions, styleCount, oscs[0], oscs[1], oscs[2], oscs[3], squelch, silent));
     }
+}
 
+/** @brief Melody, part `.depthRender`: the depth rule in a rendered mix of acid, lead and arp. */
+void testMelodyDepthRender()
+{
+    section("melody: the depth rule rendered");
     // Depth rule in the rendered mix: acid, lead and arp together put nothing under 140 Hz.
     {
         auto e = std::make_unique<Engine>();
@@ -5122,7 +5235,12 @@ void testMelody()
         const double low = lowShareDb(tail, 140.0, true);
         check(pk > 0.01 && low < -30.0, "rendered melodic parts: under -30 dB of their power below 140 Hz", fmt("%.1f dB (peak %.2f)", low, pk));
     }
+}
 
+/** @brief Melody, part `.blockSize`: block-size independence with every melodic part sounding. */
+void testMelodyBlockSize()
+{
+    section("melody: block-size independence");
     // Block-size independence with every melodic part sounding (32-bar tracks: acid from bar 0, lead
     // and arp from bar 16), not only kick and bass as in the engine test.
     {
@@ -5140,7 +5258,12 @@ void testMelody()
         for (size_t k = 1; k < renders.size(); ++k) identical = identical && renders[k] == renders[0];
         check(identical, "with acid, lead and arp playing: output identical for blocks of 1, 77, 1000 and 4096 samples");
     }
+}
 
+/** @brief Melody, part `.midi`: slides carry portamento, accents are loud. */
+void testMelodyMidi()
+{
+    section("melody: acid slides and accents in MIDI");
     // MIDI: slides carry portamento, accents are loud.
     {
         Score s;
@@ -7823,10 +7946,14 @@ static int instabilityOf(int pitch, int key) { return lerdahlInstability(pitch -
  * expect it. Does the drawn line use the new tone or route around it? The share of the newly
  * admitted pitch classes is counted against the share a line that ignored the model would give,
  * which is the number of symbols in the constraint window that carry them -- the honest null.
+ *
+ * Split into parts on 19.09.2026 (round "test-split"; each is a ctest test of its own): `.bass` (1),
+ * `.modes` (2 and 3), `.presence*` (the rendered presence band, by mode and seed slice) and `.newTone`
+ * (the measurement). This part is (1).
  */
-void testModalInterchange()
+void testModalInterchangeBass()
 {
-    section("modal interchange over the tonic pedal");
+    section("modal interchange over the tonic pedal: the bass does not move");
 
     // The bass does not move. The knob is the only difference between the two runs.
     {
@@ -7886,6 +8013,12 @@ void testModalInterchange()
               fmt("%zu vs %zu foundation notes, %d moved, %d first-of-track moved, %d melodic pitches differ",
                   a.size(), b.size(), moved, firstMoved, melodicDiff));
     }
+}
+
+/** @brief testModalInterchange, parts (2) and (3): where a section's mode comes from (form plans only). */
+void testModalInterchangeModes()
+{
+    section("modal interchange over the tonic pedal: the style, the energy and the section's seed decide the mode");
 
     // The style profile decides which modes a section may take, and the energy decides how far it
     // reaches. Progressive may only borrow Dorian and Aeolian; Goa reaches the Hijaz modes, and it
@@ -7944,6 +8077,39 @@ void testModalInterchange()
               "a section's mode is a function of its own seed", fmt("%d of %d differ on a repeat, %d of %d match another seed, mask 0x%x",
                                                                     differ, a.count, same, a.count, a.scaleMask));
     }
+}
+
+/// Seed slices per mode of testModalInterchange's presence measurement (12 tracks at most per mode).
+constexpr int kPresenceSlices = 2;
+/// Tracks one slice renders: the qualifying seeds with index [slice * kPresencePerSlice, + kPresencePerSlice).
+constexpr int kPresencePerSlice = 6;
+static_assert(kPresenceSlices * kPresencePerSlice == 12, "the slices must cover exactly the 12 tracks the measurement takes per mode");
+
+/**
+ * @brief testModalInterchange, part (4): what the borrowed mode costs the presence band across the
+ *        break -- one mode, one slice of the seeds.
+ *
+ * Until 19.09.2026 one check covered both modes and all up to 24 rendered tracks (620-800 s, the
+ * floor of the whole ctest run). The check was `count[0] >= 8 && count[1] >= 8 && worst[0] > -1.5
+ * && worst[1] > -1.5`; it is now asserted per mode and per slice as `count >= 8 && worst over the
+ * slice > -1.5`, and the four parts together assert exactly the old conjunction: a minimum over a
+ * union is under -1.5 exactly when the minimum over one of its slices is.
+ *
+ * Which seeds count must not depend on the slicing. The loop takes seeds 1..40 in order, skips every
+ * seed whose first track lacks the full break routine, and stops at twelve that have it; a slice
+ * over a *seed range* would count other seeds. So every slice walks the same loop and plans every
+ * seed (plans only, cheap: level match is off), numbers the qualifying ones, and renders only those
+ * whose number falls in its own slice. `count` is the full number of qualifying seeds, the same in
+ * every slice of a mode -- the number the old check held against 8.
+ *
+ * @param mode  0 = compose.modal_interchange On, 1 = Off
+ * @param slice 0 .. kPresenceSlices - 1
+ */
+void modalPresence(int mode, int slice)
+{
+    section(fmt("modal interchange over the tonic pedal: presence band across the break, interchange %s, "
+                "qualifying tracks %d..%d of 12", mode == 0 ? "on" : "off",
+                slice * kPresencePerSlice + 1, (slice + 1) * kPresencePerSlice).c_str());
 
     // What the borrowed mode costs the presence band across the break. Solberg and Dibben's Track 2
     // rule (testSectionRules) asks that the drop after a breakdown be no duller between 1.5 and
@@ -7956,11 +8122,14 @@ void testModalInterchange()
         ParamStore p;
         p.parseText("compose.track_bars=128 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
                     "compose.pad_amount=1 compose.sfx_amount=1 compose.level_match=Off master.auto_gain=Off");
-        double worst[2] = { 1e9, 1e9 }, sum[2] = {}, changedSum = 0.0;
-        int count[2] = {}, changed = 0;
-        for (int mode = 0; mode < 2; ++mode) {
-            p.parseText(mode == 0 ? "compose.modal_interchange=On" : "compose.modal_interchange=Off");
-            for (uint64_t s = 1; s <= 40 && count[mode] < 12; ++s) {
+        // Before the split the Off pass parsed "On" first and then "Off" into the same store; the
+        // store's values are the same either way, since both lines set the one key.
+        p.parseText(mode == 0 ? "compose.modal_interchange=On" : "compose.modal_interchange=Off");
+        double worst = 1e9, sum = 0.0, changedSum = 0.0;
+        int count = 0, rendered = 0, changed = 0;
+        const int from = slice * kPresencePerSlice, to = from + kPresencePerSlice;
+        {
+            for (uint64_t s = 1; s <= 40 && count < 12; ++s) {
                 auto comp = std::make_unique<Composer>(s);
                 const TrackPlan plan = comp->track(p, 0);
                 int coreA = -1, drop = -1;
@@ -7973,6 +8142,8 @@ void testModalInterchange()
                     break;
                 }
                 if (coreA < 0) continue;
+                // The qualifying seed number `count`: another slice renders it.
+                if (count < from || count >= to) { ++count; continue; }
                 constexpr double sr = 48000.0;
                 auto e = std::make_unique<Engine>();
                 e->prepare(sr, 512);
@@ -8000,31 +8171,80 @@ void testModalInterchange()
                 const Section& sd = plan.form.section[drop];
                 const int w = std::min(16, sc.bars - 2);
                 const double d = band(sd.startBar, std::min(16, sd.bars)) - band(sc.startBar + sc.bars - w, w);
-                worst[mode] = std::min(worst[mode], d);
-                sum[mode] += d;
-                ++count[mode];
+                worst = std::min(worst, d);
+                sum += d;
+                ++count;
+                ++rendered;
                 if (mode == 0 && sc.scale != sd.scale) { changedSum += d; ++changed; }
             }
         }
-        check(count[0] >= 8 && count[1] >= 8 && worst[0] > -1.5 && worst[1] > -1.5,
-              "a borrowed mode costs the presence band across the break less than 1.5 dB",
-              fmt("interchange on: mean %+.2f dB, worst %+.2f dB over %d tracks (%d of them changed mode across the "
-                  "break, mean %+.2f dB); off: mean %+.2f dB, worst %+.2f dB over %d",
-                  sum[0] / std::max(1, count[0]), worst[0], count[0], changed,
-                  changed > 0 ? changedSum / changed : 0.0, sum[1] / std::max(1, count[1]), worst[1], count[1]));
+        // `count >= 8` is the old bound on the tracks one mode is measured over (the qualifying seeds,
+        // not this slice's share of them); `worst` is this slice's minimum.
+        check(count >= 8 && worst > -1.5,
+              mode == 0 ? (slice == 0 ? "a borrowed mode costs the presence band across the break less than 1.5 dB (interchange on, tracks 1-6)"
+                                      : "a borrowed mode costs the presence band across the break less than 1.5 dB (interchange on, tracks 7-12)")
+                        : (slice == 0 ? "a borrowed mode costs the presence band across the break less than 1.5 dB (interchange off, tracks 1-6)"
+                                      : "a borrowed mode costs the presence band across the break less than 1.5 dB (interchange off, tracks 7-12)"),
+              fmt("interchange %s: %d qualifying tracks, this slice %d of them: mean %+.2f dB, worst %+.2f dB (%d changed mode "
+                  "across the break, mean %+.2f dB)",
+                  mode == 0 ? "on" : "off", count, rendered, sum / std::max(1, rendered), worst, changed,
+                  changed > 0 ? changedSum / changed : 0.0));
     }
+}
+
+/// testModalInterchange part (4): interchange on, qualifying tracks 1-6.
+void testModalInterchangePresenceOn1() { modalPresence(0, 0); }
+/// testModalInterchange part (4): interchange on, qualifying tracks 7-12.
+void testModalInterchangePresenceOn2() { modalPresence(0, 1); }
+/// testModalInterchange part (4): interchange off, qualifying tracks 1-6.
+void testModalInterchangePresenceOff1() { modalPresence(1, 0); }
+/// testModalInterchange part (4): interchange off, qualifying tracks 7-12.
+void testModalInterchangePresenceOff2() { modalPresence(1, 1); }
+
+/**
+ * @brief The score testModalInterchange part (5) and testModeColour block 3 both measure: seed 31337,
+ *        Goa, interchange on, 12 tracks of 128 bars, composed with the Markov (0) or the neural (1) model.
+ *
+ * The two sections composed it byte for byte the same, each for itself. In one process (the full
+ * serial run, ctest's `selftest`) it is now composed once and read twice; as separate ctest tests
+ * each process composes it once, as before. The composer is kept with the notes because both readers
+ * ask it for track plans (`track`, `trackOfBar`) after the fact.
+ */
+struct BorrowedScore {
+    ParamStore p;                    ///< the knobs the score was composed with
+    std::unique_ptr<Composer> c;     ///< the composer that wrote it, asked for its plans afterwards
+    std::vector<NoteEvent> ev;       ///< the 1536 bars' notes
+};
+
+/** @brief BorrowedScore for @p which (0 Markov, 1 neural), composed on first use. */
+BorrowedScore& borrowedScore(int which)
+{
+    static std::unique_ptr<BorrowedScore> cache[2];
+    std::unique_ptr<BorrowedScore>& s = cache[which];
+    if (!s) {
+        s = std::make_unique<BorrowedScore>();
+        s->p.parseText("compose.track_bars=128 compose.lead_amount=1 compose.acid_amount=1 compose.arp_amount=1 "
+                       "compose.style=Goa compose.modal_interchange=On compose.level_match=Off master.auto_gain=Off");
+        s->p.parseText(which == 0 ? "compose.melody_model=Markov" : "compose.melody_model=Neural");
+        s->c = std::make_unique<Composer>(31337);
+        s->c->composeBars(s->p, 0, 12 * 128, s->ev);
+    }
+    return *s;
+}
+
+/** @brief testModalInterchange, part (5): does the model reach for a tone the borrowed mode newly admits? */
+void testModalInterchangeNewTone()
+{
+    section("modal interchange over the tonic pedal: the newly admitted tone");
 
     // Does the model use a tone the borrowed mode newly admits, or route around it? Measured with
     // both predictive models, because the neural one is the one that was never told the mode.
     {
         for (int which = 0; which < 2; ++which) {
-            ParamStore p;
-            p.parseText("compose.track_bars=128 compose.lead_amount=1 compose.acid_amount=1 compose.arp_amount=1 "
-                        "compose.style=Goa compose.modal_interchange=On compose.level_match=Off master.auto_gain=Off");
-            p.parseText(which == 0 ? "compose.melody_model=Markov" : "compose.melody_model=Neural");
-            Composer c(31337);
-            std::vector<NoteEvent> ev;
-            c.composeBars(p, 0, 12 * 128, ev);
+            BorrowedScore& bs = borrowedScore(which);
+            ParamStore& p = bs.p;
+            Composer& c = *bs.c;
+            const std::vector<NoteEvent>& ev = bs.ev;
             long long newNotes = 0, allNotes = 0;
             double expected = 0.0;
             for (const NoteEvent& e : ev) {
@@ -8189,16 +8409,14 @@ void testModeColour()
 
     double markovRatio = 0.0;
     // 3. The ratio against the mode-blind null, over the borrowed sections only. Same counting rule
-    // as testModalInterchange, so the two numbers are comparable with the ones recorded there.
+    // as testModalInterchange, so the two numbers are comparable with the ones recorded there. The very
+    // same score, too (31337, Goa, 1536 bars): in one process it is composed once for both sections.
     {
         for (int which = 0; which < 2; ++which) {
-            ParamStore p;
-            p.parseText("compose.track_bars=128 compose.lead_amount=1 compose.acid_amount=1 compose.arp_amount=1 "
-                        "compose.style=Goa compose.modal_interchange=On compose.level_match=Off master.auto_gain=Off");
-            p.parseText(which == 0 ? "compose.melody_model=Markov" : "compose.melody_model=Neural");
-            Composer c(31337);
-            std::vector<NoteEvent> ev;
-            c.composeBars(p, 0, 12 * 128, ev);
+            BorrowedScore& bs = borrowedScore(which);
+            ParamStore& p = bs.p;
+            Composer& c = *bs.c;
+            const std::vector<NoteEvent>& ev = bs.ev;
             long long newNotes[2] = {}, allNotes[2] = {};
             double expected[2] = {};
             long long roleNew[3] = {}, roleAll[3] = {};
@@ -10468,7 +10686,41 @@ void testArrangement()
  * listening seed 864566672 (three tracks, default settings) the score is measured with the same
  * statistics the brief's table used, so the before and after of the report come from here.
  */
-void testGenreRules()
+/**
+ * @brief The listening seed's score as testGenreRules part `.listeningSeed` and testFoundation part
+ *        `.score` both read it: 864566672, default knobs, bars 0..767.
+ *
+ * Default knobs mean the level match is on, so composing it renders the level probes of every track --
+ * the expensive half of both sections. In one process (the full serial run) it is composed once for
+ * both; as separate ctest tests each composes it once, as before. The composer is kept with the notes
+ * because both readers ask it for track plans after the fact.
+ */
+struct ListeningScore {
+    ParamStore q;                    ///< default knobs
+    std::unique_ptr<Composer> c;     ///< the composer that wrote the score
+    std::vector<NoteEvent> ev;       ///< 768 bars of notes
+};
+
+/** @brief The ListeningScore, composed on first use. */
+ListeningScore& listeningScore()
+{
+    static std::unique_ptr<ListeningScore> s;
+    if (!s) {
+        s = std::make_unique<ListeningScore>();
+        s->c = std::make_unique<Composer>(864566672ull);
+        s->c->composeBars(s->q, 0, 768, s->ev);
+    }
+    return *s;
+}
+
+/**
+ * @brief Genre rules, part `.rules`: 240 melody plans over every mode against the rules.
+ *
+ * testGenreRules was split on 19.09.2026 (round "test-split") into its three independent blocks:
+ * `.rules` (this; one block, because its checks pool counts over all 240 plans), `.listeningSeed`
+ * and `.arpGate`.
+ */
+void testGenreRulesRules()
 {
     section("genre rules: acid, arp and lead inside the rules, colour tones as neighbours");
     ParamStore p;
@@ -10717,13 +10969,18 @@ void testGenreRules()
     }
     check(padBad == 0, "pad: root position -- the chord root lowest, the fifth above it, D3 and up (rule 19)",
           fmt("%d of %d voicings break it", padBad, padVoicings));
+}
 
+/** @brief Genre rules, part `.listeningSeed`: the user's listening seed in the score, with the brief's statistics. */
+void testGenreRulesListeningSeed()
+{
+    section("genre rules: the listening seed 864566672 in the score");
     // ---- the user's listening seed, in the score, with the brief's statistics
     {
-        ParamStore q;
-        Composer c(864566672ull);
-        std::vector<NoteEvent> ev;
-        c.composeBars(q, 0, 768, ev);
+        ListeningScore& ls = listeningScore();
+        ParamStore& q = ls.q;
+        Composer& c = *ls.c;
+        const std::vector<NoteEvent>& ev = ls.ev;
         struct PartStats {
             int first = 0, second = 0, notes = 0, repeats = 0, runs3 = 0, holes = 0, bars = 0, octave = 0;
             std::vector<int> pitches, pcsPerBar;
@@ -10822,7 +11079,17 @@ void testGenreRules()
               fmt("%zu arp bars, %zu lead bars, %d together, %d sixteenths with two line voices closer than %d semitones",
                   arpBars2.size(), leadBars2.size(), together, clashes, kRegisterGap));
     }
+}
 
+/**
+ * @brief Genre rules, part `.arpGate`: the arp's gate as it is really played (rule 15).
+ *
+ * Composes its own 256 bars rather than reading ListeningScore: the first arp note of 256 bars
+ * composed alone is what this has always measured.
+ */
+void testGenreRulesArpGate()
+{
+    section("genre rules: the arp's gate");
     // ---- the arp's gate: 15 to 35 % of a sixteenth, as the arp is really played (rule 15)
     {
         ParamStore q;
@@ -10859,16 +11126,20 @@ void testGenreRules()
  * @brief The pad's foundation (rules 19 and 20): root position everywhere, and where the form
  *        silences kick and bass a real root an octave lower, faded in and out by the pad's own
  *        envelope, with the pad's high pass opened for it by control events.
+ *
+ * Split on 19.09.2026 (round "test-split") into `.score` (this: the listening seed's score) and
+ * `.render` (the pad alone through a breakdown).
  */
-void testFoundation()
+void testFoundationScore()
 {
-    section("pad foundation: root position, a sub root where kick and bass rest");
+    section("pad foundation: root position, a sub root where kick and bass rest -- the score");
     // The score of the listening seed: every pad chord in root position, a sub note wherever the
-    // form removes kick and bass, and never a pad note under D3 while either of them plays.
-    ParamStore q;
-    Composer c(864566672ull);
-    std::vector<NoteEvent> ev;
-    c.composeBars(q, 0, 768, ev);
+    // form removes kick and bass, and never a pad note under D3 while either of them plays. The same
+    // score testGenreRules reads (ListeningScore): composed once where both run in one process.
+    ListeningScore& ls = listeningScore();
+    ParamStore& q = ls.q;
+    Composer& c = *ls.c;
+    const std::vector<NoteEvent>& ev = ls.ev;
     std::set<int> kickBars, bassBars;
     for (const NoteEvent& e : ev) {
         const int bar = static_cast<int>(std::floor(e.beat / kBeatsPerBar));
@@ -10911,7 +11182,12 @@ void testFoundation()
           "a sub root under every pad chord in bars without kick and bass (unless the drone lays the floor there), never while they play (rule 20)",
           fmt("%d of %d chords in silent bars have one; %d sub notes while kick or bass play; %d doubling the drone's low root",
               withSub, foundationOnsets, subUnderKick, doubled));
+}
 
+/** @brief The pad's foundation, part `.render`: the pad alone through a breakdown, rendered. */
+void testFoundationRender()
+{
+    section("pad foundation: rendered through a breakdown");
     // Rendered: the pad alone through a track with a breakdown. Its high pass opens for the
     // breakdown and closes again, and the band under 140 Hz fades in and out with the pad's own
     // envelope instead of stepping.
@@ -11037,10 +11313,14 @@ void testFoundation()
  * Every check reads the score or renders audio and compares against a value derived here, never
  * against a number the code under test reports about itself: the register rule is RuleRef's reading
  * of the score, the scale material comes from the scale table, the depth rule is a filtered render.
+ *
+ * Split on 19.09.2026 (round "test-split") into `.score` ((a)-(f): (c)-(f) read one shared score, (a)
+ * and (b) are cheap and stay with it), `.droneRender` (g), `.sound` (h), `.counterSound` (h2) and
+ * `.acidRide` (i) -- blocks that share nothing.
  */
-void testVoices()
+void testVoicesScore()
 {
-    section("voices: order, counter-lead, stabs, tonic drone, arp beside the lead, a sound per track");
+    section("voices: order, counter-lead, stabs, tonic drone, arp beside the lead -- the score");
 
     // (a) The order the user asked for: related voices side by side, in every table that lists them.
     {
@@ -11274,7 +11554,12 @@ void testVoices()
               fmt("%d of %d breakdown bars, %zu ramp periods (%s)", breakWithDrone, breakBars, periods.size(),
                   periods.empty() ? "none" : fmt("%.0f..%.0f bars", static_cast<double>(*periods.begin()), static_cast<double>(*periods.rbegin())).c_str()));
     }
+}
 
+/** @brief Voices, part `.droneRender` (g): the drone alone through a breakdown, rendered. */
+void testVoicesDroneRender()
+{
+    section("voices: the tonic drone rendered through a breakdown");
     // (g) Rendered depth rule for the drone: the drone alone through a breakdown into the section after it.
     {
         ParamStore p;
@@ -11329,7 +11614,12 @@ void testVoices()
               fmt("seed %llu: under 140 Hz %.1f dB against %.1f dB in all in the breakdown, %.1f dB in the two bars after it",
                   static_cast<unsigned long long>(seed), lowBreak, allBreak, lowAfter));
     }
+}
 
+/** @brief Voices, part `.sound` (h): every voice's recipe rendered on one note for twenty tracks. */
+void testVoicesSound()
+{
+    section("voices: a sound of its own per track");
     // (h) A sound of its own per track: each voice's recipe rendered on one note for twenty tracks of
     //     the listening seed -- the spread of the power centroid, the attack and the brightness, the
     //     tables used, and whether two neighbouring tracks ever share a voice's sound. The same bench
@@ -11337,8 +11627,10 @@ void testVoices()
     //     the arp's filter decay and detune, the pad's table position; nothing of the new voices), and
     //     printed as the "before" line: the measurement the round started from.
     {
-        ParamStore p;
-        Composer lc(864566672ull);
+        // The listening seed's plans at the default knobs, shared with part `.counterSound` in one process.
+        ListeningPlanner& lp = listeningPlanner();
+        ParamStore& p = lp.p;
+        Composer& lc = *lp.c;
         const float sv = p.get(p.base(Module::Compose) + compose::SoundVariation);
         static const int kPitch[kPolyInstances] = { 69, 81, 64, 60, 57, 50 };
         const size_t n = 32768;
@@ -11436,6 +11728,16 @@ void testVoices()
               "every voice sounds different from track to track: spread in centroid or brightness, several oscillators and tables, no two neighbours alike",
               fmt("%d voices without spread, %d with too few oscillators or tables, %d neighbouring pairs alike", badSpread, fewTables, alikeTotal));
     }
+}
+
+/**
+ * @brief Voices, parts `.counterSound*` (h2): the counter-lead never plays the lead's sound, over the 24
+ *        tracks of one of the three seeds.
+ * @param seed 864566672 (the listening seed), 77 or 2026
+ */
+void voicesCounterSound(uint64_t seed)
+{
+    section(fmt("voices: the counter-lead's sound against the lead's, seed %llu", static_cast<unsigned long long>(seed)).c_str());
     // (h2) The counter-lead against the lead of the same track (19.09.2026, round "arrangement"; the user:
     //      "Die Counter-Lead sollte natuerlich einen anderen Sound haben als die Haupt-Lead"). Over 24 tracks
     //      of the listening seed and of two others: the oscillator and table each voice really plays (the
@@ -11443,13 +11745,23 @@ void testVoices()
     //      the power centroid and the share above 2 kHz. No track may give both the same oscillator and
     //      table, and none may share either.
     {
-        ParamStore p;
+        // Split by seed on 19.09.2026 (round "test-split"): 687 s in one process, almost all of it the 72
+        // track plans with their level probes. The check is a count of offending tracks held at zero, so
+        // "zero over three seeds" is exactly "zero in each"; the listening seed's plans are the ones part
+        // `.sound` plans too, and in one process they are planned once (listeningPlanner()).
+        std::unique_ptr<ListeningPlanner> own;
+        if (seed != 864566672ull) {
+            own = std::make_unique<ListeningPlanner>();
+            own->c = std::make_unique<Composer>(seed);
+        }
+        ListeningPlanner& lp = own ? *own : listeningPlanner();
+        ParamStore& p = lp.p;
         const float sv = p.get(p.base(Module::Compose) + compose::SoundVariation);
         int tracks = 0, samePair = 0, shareOne = 0;
         std::vector<double> dCents, dBright;
         const int lb = p.base(PolyInstance::Lead), cbI = p.base(PolyInstance::Counter);
-        for (uint64_t seed : { 864566672ull, 77ull, 2026ull }) {
-            Composer lc(seed);
+        {
+            Composer& lc = *lp.c;
             for (int ti = 0; ti < 24; ++ti) {
                 const TrackPlan& plan = lc.track(p, ti);
                 ++tracks;
@@ -11496,12 +11808,26 @@ void testVoices()
         }
         std::sort(dCents.begin(), dCents.end());
         std::sort(dBright.begin(), dBright.end());
-        check(samePair == 0 && shareOne == 0,
-              "the counter-lead never plays the lead's sound: another oscillator (and so another table) in every track",
+        const std::string what = fmt("the counter-lead never plays the lead's sound: another oscillator (and so another table) in every track (seed %llu)",
+                                     static_cast<unsigned long long>(seed));
+        check(samePair == 0 && shareOne == 0, what.c_str(),
               fmt("%d tracks, %d with the same oscillator and table, %d sharing the oscillator; on one note the centroid differs by "
                   "%.0f ct (median, lowest %.0f), the share above 2 kHz by %.1f dB (median, lowest %.1f)",
                   tracks, samePair, shareOne, dCents[dCents.size() / 2], dCents[0], dBright[dBright.size() / 2], dBright[0]));
     }
+}
+
+/// Voices part (h2) over the listening seed's 24 tracks.
+void testVoicesCounterSoundListening() { voicesCounterSound(864566672ull); }
+/// Voices part (h2) over seed 77's 24 tracks.
+void testVoicesCounterSound77() { voicesCounterSound(77ull); }
+/// Voices part (h2) over seed 2026's 24 tracks.
+void testVoicesCounterSound2026() { voicesCounterSound(2026ull); }
+
+/** @brief Voices, part `.acidRide` (i): the acid's section ride swings around the track's voiced decay. */
+void testVoicesAcidRide()
+{
+    section("voices: the acid's ride around its voicing");
     // (i) The acid's voicing owns resonance and decay (a loose end of round "lowend-acid"): the section
     //     ride swings around the voiced values. Read off the control stream: in stage 2 of a drop's ride
     //     the decay returns to the track's own value -- for a mostly liquid track (500 ms against the
@@ -11559,9 +11885,10 @@ void testVoices()
  *   `testAcidColour` also runs testAcid, `testMidiKeys` also testMidi, `testWaveTableLibrary` also
  *   testWaveTable. A ctest test must measure one section, not two. A name that is not in the table counts
  *   as a failed check, so a typo or a renamed section fails loudly instead of passing with nothing
- *   checked. `PHOS_ONLY` is ignored then.
- * - `PHOS_ONLY=a[,b...]` keeps its old meaning for work by hand: every section whose name occurs
- *   in the string.
+ *   checked. `PHOS_ONLY` is ignored then. A section split into parts is named `group.part`; the
+ *   group's name alone selects all its parts (`--only testVoices`), a whole part name one of them.
+ * - `PHOS_ONLY=a[,b...]` keeps its old meaning for work by hand: every section whose name -- or,
+ *   for a part, whose group's name -- occurs in the string.
  * - nothing: every section in table order, in this one process (ctest's `selftest`, label `full`).
  *
  * Each section that runs ends with a line `== <name>: <seconds> s`, the wall time of that section
@@ -11608,9 +11935,13 @@ int main(int argc, char** argv)
     if (listOnly) { wanted.clear(); haveOnly = false; }
     tally().failed += static_cast<int>(wanted.size());
     if (haveOnly) std::printf("only %zu section(s); a name not in the run table stays counted as a failed check\n", wanted.size());
+    // A section split into parts (19.09.2026, round "test-split") is a group `name.part`: `--only name`
+    // runs all its parts, `--only name.part` one of them. Still whole names -- testMidi is not a group
+    // of testMidiKeys, because only the text before the dot is the group.
+    auto groupOf = [](const std::string& n) { return n.substr(0, n.find('.')); };
     auto pick = [&](const char* name) {
         for (size_t k = 0; k < wanted.size(); ++k)
-            if (wanted[k] == name) {
+            if (wanted[k] == name || wanted[k] == groupOf(name)) {
                 if (!reached[k]) { reached[k] = true; --tally().failed; }
                 return true;
             }
@@ -11618,7 +11949,16 @@ int main(int argc, char** argv)
     };
     auto run = [&](const char* name, void (*fn)()) {
         if (listOnly) { std::printf("%s\n", name); return; }
-        if (haveOnly ? !pick(name) : (only != nullptr && std::strstr(only, name) == nullptr)) return;
+        // PHOS_ONLY keeps its substring rule, applied to the group as well: PHOS_ONLY=testVoices still runs
+        // every part of testVoices, as it ran the whole section before the split -- but where the group's
+        // name is followed by a dot it names one part (PHOS_ONLY=testVoices.sound), not the group.
+        auto groupNamed = [&](const std::string& g) {
+            for (const char* at = std::strstr(only, g.c_str()); at != nullptr; at = std::strstr(at + 1, g.c_str()))
+                if (at[g.size()] != '.') return true;
+            return false;
+        };
+        if (haveOnly ? !pick(name)
+                     : (only != nullptr && std::strstr(only, name) == nullptr && !groupNamed(groupOf(name)))) return;
         const auto t0 = std::chrono::steady_clock::now();
         fn();
         std::printf("== %s: %.1f s\n", name, std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
@@ -11639,7 +11979,11 @@ int main(int argc, char** argv)
     run("testAcid", testAcid);
     run("testPoly", testPoly);
     run("testAcidColour", testAcidColour);
-    run("testMelody", testMelody);
+    run("testMelody.score", testMelodyScore);
+    run("testMelody.variety", testMelodyVariety);
+    run("testMelody.depthRender", testMelodyDepthRender);
+    run("testMelody.blockSize", testMelodyBlockSize);
+    run("testMelody.midi", testMelodyMidi);
     run("testWaveTable", testWaveTable);
     run("testWaveTableLibrary", testWaveTableLibrary);
     run("testWaveTableQuality", testWaveTableQuality);
@@ -11654,14 +11998,29 @@ int main(int argc, char** argv)
     run("testMixBalance", testMixBalance);
     run("testBandLimit", testBandLimit);
     run("testStereoWidth", testStereoWidth);
-    run("testModalInterchange", testModalInterchange);
+    run("testModalInterchange.bass", testModalInterchangeBass);
+    run("testModalInterchange.modes", testModalInterchangeModes);
+    run("testModalInterchange.presenceOn1", testModalInterchangePresenceOn1);
+    run("testModalInterchange.presenceOn2", testModalInterchangePresenceOn2);
+    run("testModalInterchange.presenceOff1", testModalInterchangePresenceOff1);
+    run("testModalInterchange.presenceOff2", testModalInterchangePresenceOff2);
+    run("testModalInterchange.newTone", testModalInterchangeNewTone);
     run("testModeColour", testModeColour);
     run("testTensionCurve", testTensionCurve);
     run("testMotifOperators", testMotifOperators);
     run("testArpPatterns", testArpPatterns);
-    run("testGenreRules", testGenreRules);
-    run("testFoundation", testFoundation);
-    run("testVoices", testVoices);
+    run("testGenreRules.rules", testGenreRulesRules);
+    run("testGenreRules.listeningSeed", testGenreRulesListeningSeed);
+    run("testGenreRules.arpGate", testGenreRulesArpGate);
+    run("testFoundation.score", testFoundationScore);
+    run("testFoundation.render", testFoundationRender);
+    run("testVoices.score", testVoicesScore);
+    run("testVoices.droneRender", testVoicesDroneRender);
+    run("testVoices.sound", testVoicesSound);
+    run("testVoices.counterSoundListening", testVoicesCounterSoundListening);
+    run("testVoices.counterSound77", testVoicesCounterSound77);
+    run("testVoices.counterSound2026", testVoicesCounterSound2026);
+    run("testVoices.acidRide", testVoicesAcidRide);
     run("testForm", testForm);
     run("testArrangeDynamics", testArrangeDynamics);
     run("testSectionRules", testSectionRules);
@@ -11678,15 +12037,20 @@ int main(int argc, char** argv)
     run("testBass", testBass);
     run("testComposer", testComposer);
     run("testBassModel", testBassModel);
-    run("testVariety", testVariety);
+    run("testVariety.plans", testVarietyPlans);
+    run("testVariety.levelMatch", testVarietyLevelMatch);
+    run("testVariety.recipes", testVarietyRecipes);
     run("testEngine", testEngine);
     run("testKickReference", testKickReference);
     run("testBassBite", testBassBite);
     run("testKickBody", testKickBody);
-    run("testAcidVoicing", testAcidVoicing);
+    run("testAcidVoicing.corners", testAcidVoicingCorners);
+    run("testAcidVoicing.night", testAcidVoicingNight);
+    run("testAcidVoicing.engine", testAcidVoicingEngine);
     run("testRecipeSpread", testRecipeSpread);
     run("testPercTempo", testPercTempo);
-    run("testPhaseLock", testPhaseLock);
+    run("testPhaseLock.lock", testPhaseLockLock);
+    run("testPhaseLock.onsets", testPhaseLockOnsets);
     run("testBassRhythm", testBassRhythm);
     run("testPercKit", testPercKit);
     run("testRhythm", testRhythm);

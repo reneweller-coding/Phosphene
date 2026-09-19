@@ -4971,6 +4971,116 @@ Ausgang; Lead 1 in Drop 1 nur, wo der Track eine Lead hat (`lead_amount` 0,5 unv
 sie überall, das wäre ein Eingriff in die kalibrierte Balance); nur 8 gerenderte Tracks je Stil für die
 Energie (Formmessungen über 22).
 
+**19.09.2026, Testaufteilung**
+
+*Warum.* Seit „Parallele Tests“ ist jeder Abschnitt ein ctest-Test, und die Suite wird nicht schneller als ihr
+längster Abschnitt. Gemessen auf der Basis beae4b1 (Plugin-Build, `ctest -C Release -j 6`, Rechner im Mittel 40 %,
+max. 79 % ausgelastet, darin die Runde „polish“): **1613 s**, 73 Tests grün. Die Untergrenze war nicht mehr
+`testModalInterchange` (775 s), sondern **`testVoices` mit 960 s** — seit dem PLAN-Eintrag (203 s) hat die
+Arrangement-Runde Block (h2) angefügt: 72 Trackpläne mit Standardreglern, also je ~48 Takte Pegel-Proben
+(~9,5 s pro Plan). `testPhaseLock` stand bei 301 s statt 90 (der erste Kern liegt seit der Zwei-Drop-Form in Takt 33,
+jede der 32 Solo-Renders ist länger).
+
+*Gebaut.* Acht Abschnitte sind in Teile zerlegt, jeder Teil eine eigene `run("gruppe.teil", fn)`-Zeile und damit
+ein eigener Test `selftest.gruppe.teil`. `--only gruppe` wählt alle Teile einer Gruppe, `--only gruppe.teil`
+einen; `PHOS_ONLY` behält seine Teilstring-Regel und wendet sie auch auf den Gruppennamen an (`PHOS_ONLY=testVoices`
+läuft wie früher den ganzen Abschnitt, `PHOS_ONLY=testVoices.sound` nur den Teil). `selftest_tests.cmake` lässt den
+Punkt in Namen zu (beide Muster) und trägt die gemessenen Sekunden je Teil.
+
+| Abschnitt | Teile | Prüfungen vorher → nachher | langsamster Teil |
+|---|---|---|---|
+| testModalInterchange | `.bass` (1), `.modes` (2+3), `.presenceOn1/On2/Off1/Off2` (4), `.newTone` (5) | 6 → **9** | 209 s |
+| testVoices | `.score` (a–f), `.droneRender` (g), `.sound` (h), `.counterSoundListening/77/2026` (h2), `.acidRide` (i) | 14 → **16** | 233 s |
+| testVariety | `.plans` (A + Variation 0), `.levelMatch` (B, ganz), `.recipes` (C) | 8 → 8 | 210 s |
+| testPhaseLock | `.lock` (Prüfung 1), `.onsets` (Prüfung 2) | 2 → 2 | 214 s |
+| testMelody | `.score`, `.variety`, `.depthRender`, `.blockSize`, `.midi` | 9 → 9 | 74 s |
+| testAcidVoicing | `.corners` (a), `.night` (b), `.engine` (c) | 3 → 3 | 43 s |
+| testFoundation | `.score`, `.render` | 5 → 5 | 43 s |
+| testGenreRules | `.rules` (240 Pläne, ganz: gepoolte Zählungen), `.listeningSeed`, `.arpGate` | 20 → 20 | 43 s |
+| testModeColour | ganz (nur geteilte Partitur, s. u.) | 4 → 4 | 44 s |
+
+*Die Prüfungszahl.* Summe aller Abschnitte 413 → **418**. Sechs Abschnitte haben genau ihre alten Zahlen. Die +5
+kommen aus zwei Prüfungen, die eine UND-Verknüpfung über das waren, was jetzt in verschiedenen Prozessen läuft; sie
+sind je Teil gestellt, und die Teile zusammen verlangen genau die alte Konjunktion, keine Bedingung weniger:
+- `testModalInterchange` Block 4 (1 → 4): `count[0] ≥ 8 && count[1] ≥ 8 && worst[0] > −1,5 && worst[1] > −1,5` wird
+  je Modus und Seed-Scheibe zu `count ≥ 8 && worst(Scheibe) > −1,5`. Jede Scheibe durchläuft dieselbe Schleife über
+  die Seeds 1..40, plant jeden Seed (nur Pläne, billig, Pegelabgleich aus), nummeriert die qualifizierenden und
+  rendert nur die mit ihrer Nummer (1–6 bzw. 7–12); `count` ist also die volle Zahl qualifizierender Seeds wie
+  vorher, und das Minimum über die Vereinigung liegt genau dann unter −1,5, wenn es das in einer Scheibe tut.
+  Nachgerechnet: an 0,60/0,99 → worst 0,60 (vorher 0,60), Mittel (1,69+1,23)/2 = 1,46 (vorher 1,46), 3+2 = 5
+  Modus-Wechsel (vorher 5); aus 1,22/0,59 → 0,59 (vorher 0,59).
+- `testVoices` (h2) (1 → 3): „0 Tracks mit gleichem Oszillator“ über drei Seeds ist „0“ in jedem Seed.
+Alle anderen 69 Prüfzeilen dieser Abschnitte (mit ihren Messwerten) stehen nach der Teilung **zeichengleich** im
+Log wie vorher; die zwei zusammengesetzten Zeilen sind aus den Teilzeilen nachgerechnet (Minima, Mittel, Summen
+stimmen). Keine Schwelle, kein Seed, kein Takt, kein Render weniger.
+
+*Nicht geteilt, mit Grund.* `testVariety` B (beide 512-Takt-Renders vergleicht eine Prüfung), `testVoices` (h)
+(Interquartilsabstände über alle 20 Tracks), `testPhaseLock` nicht nach Modus (Prüfung 1 ist eine Konjunktion über
+drei Modi, „Off“ braucht alle vier Tempi — geteilt entlang der zwei Prüfungen, die Zahl bleibt 2),
+`testGenreRules.rules` (gepoolte Anteile). Das Aufteilen von Block 4 in mehr als zwei Scheiben je Modus brächte
+nichts: die unteilbaren Blöcke (`.levelMatch` 210 s, `.sound` 215 s) liegen auf derselben Höhe.
+
+*Geteilte Vorarbeit in einem Prozess.* Drei Stellen komponierten oder planten dasselbe zweimal; sie lesen jetzt
+aus je einem Zwischenspeicher, der beim ersten Gebrauch gefüllt wird (`borrowedScore`, `listeningScore`,
+`listeningPlanner` in `selftest.cpp`). Das wirkt nur im Gesamtlauf (`-L full`) und wenn Teile gemeinsam in einem
+Prozess laufen; als getrennte ctest-Tests rechnet jeder Prozess wie vorher selbst.
+- `testModalInterchange.newTone` und `testModeColour` Block 3: dieselbe Partitur (31337, Goa, 1536 Takte, Markov und
+  Neural). Zusammen in einem Prozess 11,5 + 30,6 s statt 11,3 + 44,2 s.
+- `testGenreRules.listeningSeed` und `testFoundation.score`: 864566672 mit Standardreglern, 768 Takte (mit Proben).
+  Zusammen 42,4 + 0,0 s statt 43,1 + 42,9 s.
+- `testVoices.sound`, `.counterSoundListening` und `testAcidVoicing.corners`: dieselben Pläne von 864566672 mit
+  Standardreglern (Tracks 0–23). Zusammen 197,9 + 23,4 + 0,0 s statt 214,6 + 220,5 + 43,1 s.
+  Pläne entstehen in `Composer::track` in Track-Reihenfolge und hängen nur an den Reglern (`validate`), die geteilten
+  Pläne sind also dieselben; geprüft: alle 36 Prüf- und Tabellenzeilen der drei Paare im gemeinsamen Prozess
+  zeichengleich mit den getrennten Läufen.
+`testVoices` (h) und `testAcidVoicing` (a) planen dieselben Tracks wie die Partitur von `listeningScore`; diese
+beiden Speicher sind **nicht** zusammengelegt, weil der eine komponiert und der andere nur plant.
+
+*Gemessen* (i9-12900K, geteilt mit „polish“ und dem Nutzer; Last aus `Win32_Processor.LoadPercentage` alle 20 s):
+
+| Lauf | Wandzeit | Last Mittel / Max | Tests |
+|---|---|---|---|
+| `ctest -j 6` Plugin-Build, vorher (beae4b1) | 1613 s | 40 % / 79 % | 73 grün |
+| `ctest -j 6` Plugin-Build, nachher | **1181 s** | 36 % / 71 % | 97 grün |
+| `ctest -L quick -j 6`, vorher (dieselben 51 Tests) | 13,9 s | — | 51 |
+| `ctest -L quick -j 6`, nachher (+10 neue schnelle Teile) | 14,6 s | — | 61 |
+| Gesamtlauf in **einem** Prozess, vorher (beae4b1) | 3210 s | — | 413 Prüfungen |
+| Gesamtlauf in **einem** Prozess, nachher (geteilte Vorarbeit) | 2959 s | — | 418 Prüfungen |
+
+Die beiden Gesamtläufe liefen gleichzeitig nebeneinander (je ein Kern), damit sie dieselbe Fremdlast sehen; die
+251 s Unterschied sind die geteilte Vorarbeit. Von den 413 Prüfzeilen des alten Gesamtlaufs stehen 410
+zeichengleich im neuen (die zwei aufgeteilten Konjunktionen und eine Zeile mit Ladezeiten in ms sind die
+Ausnahmen).
+
+Summe der Selbsttest-Zeiten 3476 → 3372 s·proc (die Teilung vervielfacht nichts). Längster Selbsttest-Test
+nachher 233 s statt 960 s. **Die Wandzeit bestimmt jetzt der Hosttest:** er belegt fünf der sechs Plätze
+(`PROCESSORS 5`, `Tests/CMakeLists.txt`) für 658 s, daneben läuft ein einziger Test; danach teilen sich die übrigen
+rund 3100 s·proc sechs Plätze (≈ 520 s). 658 + 520 ≈ 1180 s — die Suite ist nicht mehr durch einen Abschnitt,
+sondern durch den Durchsatz begrenzt. Der nächste Hebel liegt außerhalb dieser Runde: dem Hosttest weniger Plätze
+reservieren (seine Echtzeit-Prüfungen hielten laut „Parallele Tests“ mit weitem Abstand) oder die Pegel-Proben in
+Tests abschalten, die nur Pläne brauchen (die ~10 s je Plan sind der Großteil von `.sound` und `.counterSound*`).
+
+*Mutationen* (eingebaut, gebaut, `ctest -j 4` über alle Teile der acht Gruppen und `testModeColour`, aus der Kopie
+zurück, Zeitstempel gesetzt, `git diff` auf `Core/` danach leer):
+
+| Mutation | gefangen von (parallel, mit Namen) |
+|---|---|
+| M1 Counter nimmt in jedem fünften Track den Oszillator der Lead (`Composer.cpp`, Set-Walk) | `testVoices.counterSoundListening`, `.counterSound77`, `.counterSound2026`, `testVoices.sound` |
+| M2 Kick-Phasenziel +0,05 Zyklen (18°) (`Kick::setPhaseTarget`) | `testPhaseLock.lock` |
+| M3 Arp-Gate verdoppelt (`Melody.cpp`, `kArpGate`) | `testGenreRules.arpGate` |
+| M4 Energiebogen umgekehrt, Drops leiser als Grooves (`energyGainDb`) | **keiner der geteilten Teile** (nicht Ziel dieser Runde, s. u.) |
+| M5 die Bassfiguren lesen den geliehenen Modus des Abschnitts statt des Track-Modus (`Composer.cpp`) | `testModalInterchange.bass` (10 Bassnoten bewegt) |
+
+M4 war als Fang für `testModalInterchange.presence*` gedacht und ist durchgegangen — ein Befund über die Prüfung,
+nicht über die Teilung: sie misst Track 1 jedes Seeds, und Track 1 spielt die Regler (`knobs`), also ohne den
+Energiebogen; `testVariety.levelMatch` zieht den Bogen absichtlich heraus. M5 ersetzt ihn als vierten gefangenen
+Fehler in einem geteilten Teil. Ob andere Abschnitte M4 fangen, ist nicht gemessen (gelaufen sind nur die
+33 Tests der geteilten Gruppen).
+
+*Dateien.* `Tests/selftest.cpp` (Körper und `run`-Zeilen der acht Abschnitte, Block 3 von `testModeColour`,
+`main()`: Gruppenauswahl für `--only` und `PHOS_ONLY`), `Tests/selftest_tests.cmake` (Punkt in Namen, Zeiten),
+`docs/PLAN.md`. Keine Zeile in `Core/`, `Plugin/`, `Quest/`: am Klang ändert diese Runde nichts.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
