@@ -47,12 +47,14 @@ struct Loading { int param; int macro; float weight; };
 //
 // Widened 19.09.2026 where the reference kicks spread (Tools/ref_kick.py, 24 recordings): the click
 // band against the body has quartiles -31 .. -23 dB, eight decibels, where the old click weights moved
-// it by about two; the length direction reaches further (the tail limit at the first bass slot caps
-// it in the engine, so a long recipe cannot mask the bass); and the body direction now moves the end
+// it by about two; the length direction is *narrower* than before, because the reference kicks hardly
+// spread there (body 101 .. 108 ms between the quartiles) and a short recipe took the track's low end
+// with it (track 2 of the listening seed: 55 ms of body, the drop 3 dB lighter under its lead and arp);
+// and the body direction now moves the end
 // pitch, whose reference quartiles are 54 .. 71 Hz -- with Tune = Key the end pitch still lands on the
 // key's root or fifth, so a recipe changes *which* of the two, never the tuning.
 const Loading kKickLoadings[] = {
-    { kick::AmpHold,    0,  0.25f }, { kick::AmpDecay,   0,  0.45f }, { kick::PitchDecay, 0,  0.10f },
+    { kick::AmpHold,    0,  0.10f }, { kick::AmpDecay,   0,  0.15f }, { kick::PitchDecay, 0,  0.10f },
     { kick::Punch,      1,  0.40f }, { kick::PunchDecay, 1, -0.25f }, { kick::PitchStart, 1,  0.25f },
     { kick::PitchDecay, 2,  0.30f }, { kick::Tone,       2,  0.15f }, { kick::PitchStart, 2, -0.10f }, { kick::PitchEnd, 2, 0.25f },
     { kick::Drive,      3,  0.45f }, { kick::ClickLevel, 3,  0.10f }, { kick::Level,      3, -0.05f },
