@@ -7,7 +7,9 @@ param(
     [string]$BuildTools = "34.0.0",
     [string]$Platform = "android-34",
     [string]$Jdk = "C:\Android-Buildtools\jdk17",
-    [string]$Config = "Release"
+    [string]$Config = "Release",
+    # Parallel compile jobs. The machine is shared with other builds and the user (house rules: at most 8).
+    [int]$Jobs = 8
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
@@ -28,7 +30,7 @@ $env:Path = (Join-Path $Jdk "bin") + ";" + $env:Path
     -DCMAKE_TOOLCHAIN_FILE="$ndk\build\cmake\android.toolchain.cmake" `
     -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DCMAKE_BUILD_TYPE=$Config
 if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
-& cmake --build $build -j 8
+& cmake --build $build -j $Jobs
 if ($LASTEXITCODE -ne 0) { throw "native build failed" }
 
 # 2. staging: the native libraries

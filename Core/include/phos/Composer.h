@@ -210,6 +210,7 @@ struct TrackPlan {
     /** @name The presence match (19.09.2026, round "polish"; Composer.cpp, matchPresence)
      *  @{ */
     double presenceDb = 0.0;        ///< the drops' presence estimate before the match, dB against the reference median
+    double presenceAfterDb = 0.0;   ///< the same estimate with presenceGainDb on the lines (the match's own prediction)
     float  presenceGainDb = 0.0f;   ///< the gain the match puts on the lines (lead, counter, arp, stab), dB
     /** @} */
     /** @name The learned bass phrase (compose.bass_model = Neural; PLAN 6.9, stage B, role 3)

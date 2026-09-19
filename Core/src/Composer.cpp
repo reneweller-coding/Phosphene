@@ -741,6 +741,7 @@ constexpr double kPresenceLiftDb = 3.0;    ///< the most they are brought up
 void Composer::matchPresence(const ParamStore& p, TrackPlan& t) const
 {
     t.presenceDb = 0.0;
+    t.presenceAfterDb = 0.0;
     t.presenceGainDb = 0.0f;
     // Measured whenever the level match runs, so that a render with the match off still reports where each
     // track stands (phos_render --tracks); corrected only with compose.presence_match on.
@@ -749,7 +750,7 @@ void Composer::matchPresence(const ParamStore& p, TrackPlan& t) const
     probeLoudness(p, t, kProbeRest, 0.0f, rest);
     const double pl = lines[0], ll = lines[1], pr = rest[0], lr = rest[1];
     if (pl + pr <= 0.0 || ll + lr <= 0.0) return;
-    t.presenceDb = 10.0 * std::log10((pl + pr) / (ll + lr)) - kPresenceRefDb;
+    t.presenceDb = t.presenceAfterDb = 10.0 * std::log10((pl + pr) / (ll + lr)) - kPresenceRefDb;
     if (!p.getBool(p.base(Module::Compose) + compose::PresenceMatch)) return;
     if (std::fabs(t.presenceDb) <= kPresenceBandDb || pl <= 0.0) return;
     // The band's edge on the side the track is on, as a ratio of the two bands' powers.
@@ -758,6 +759,10 @@ void Composer::matchPresence(const ParamStore& p, TrackPlan& t) const
     double g = (num > 0.0 && den > 0.0) ? num / den : (t.presenceDb > 0.0 ? 0.0 : 1e9);
     const double db = g > 0.0 ? 10.0 * std::log10(g) : -kPresenceCutDb;
     t.presenceGainDb = static_cast<float>(std::clamp(db, -kPresenceCutDb, kPresenceLiftDb));
+    // Where the correction lands, by the same linear model: the band's edge unless a cap stopped it. The
+    // plans carry it so that a check (testPresence) can see the match's own prediction, not only its gain.
+    const double gain = std::pow(10.0, static_cast<double>(t.presenceGainDb) / 10.0);
+    t.presenceAfterDb = 10.0 * std::log10((gain * pl + pr) / (gain * ll + lr)) - kPresenceRefDb;
 }
 
 void Composer::validate(const ParamStore& p) const

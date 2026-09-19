@@ -10631,7 +10631,7 @@ void testClimax()
  *        brought into a band around the reference recordings' median by the level of its lines.
  *
  * (a) Over twenty tracks of the listening seed: where the probe reads a track more than 1.5 dB off the median, the
- *     lines move towards it, and only there; never further than the caps.
+ *     lines move towards it, and only there, to the band's edge and never past the median; never past the caps.
  * (b) Rendered, the listening seed's tracks 1 and 2 (the brief: track 2's drops stood +2.8 / +3.7 dB over the
  *     median, track 1's under it), each drop measured on the output: 1.5..6 kHz against 40..140 Hz, both channels'
  *     power, minus the reference median of Tools/ref_profile.json (-8.58 dB, the 40 recordings of Phase 11). The
@@ -10658,9 +10658,15 @@ void testPresence()
             bool lines = false;
             for (MelodyPart mp : { MelodyPart::Lead, MelodyPart::Counter, MelodyPart::Arp, MelodyPart::Stab }) lines = lines || tp.melody.present[mpIndex(mp)];
             if (!lines) { if (g != 0.0) ++wrong; continue; }
-            if (!(g * tp.presenceDb < 0.0 && g >= -6.0 - 1e-6 && g <= 3.0 + 1e-6)) {
+            // Towards the median and no further: the match's own prediction lands on the band's edge it came
+            // from, or short of it where a cap stopped the gain.
+            const bool capped = g <= -6.0 + 1e-6 || g >= 3.0 - 1e-6;
+            const bool landed = capped ? std::fabs(tp.presenceAfterDb) < std::fabs(tp.presenceDb)
+                                       : std::fabs(std::fabs(tp.presenceAfterDb) - 1.5) < 0.05;
+            if (!(g * tp.presenceDb < 0.0 && g >= -6.0 - 1e-6 && g <= 3.0 + 1e-6
+                  && landed && tp.presenceAfterDb * tp.presenceDb > 0.0)) {
                 ++wrong;
-                std::printf("    track %d: probe %+.2f dB, lines %+.2f dB\n", t + 1, tp.presenceDb, g);
+                std::printf("    track %d: probe %+.2f dB, lines %+.2f dB, after %+.2f dB\n", t + 1, tp.presenceDb, g, tp.presenceAfterDb);
             }
         }
         check(outside > 0 && inside > 0 && wrong == 0,
