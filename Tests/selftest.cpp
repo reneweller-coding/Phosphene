@@ -11066,16 +11066,92 @@ void testVoices()
 
 } // namespace
 
-int main()
+/**
+ * @brief Runs the self-test sections: all of them, the named ones, or none but their names.
+ *
+ * The `run("name", fn)` lines below are the one table of sections. Nothing else lists them:
+ * Tests/selftest_tests.cmake asks this binary for the table (`--list`) every time ctest starts and
+ * registers each section as a test of its own (`selftest.<name>`), so a section added here is in
+ * ctest the moment it is built, and one that is removed cannot linger as a stale name.
+ *
+ * Selection, in order of precedence:
+ * - `--list` prints the table's names, one per line, and runs nothing.
+ * - `--only a[,b...]` (also `--only=a,b`) runs exactly the named sections -- whole names, because
+ *   the substring rule below runs every section whose name occurs *inside* the string: asking for
+ *   `testAcidColour` also runs testAcid, `testMidiKeys` also testMidi, `testWaveTableLibrary` also
+ *   testWaveTable. A ctest test must measure one section, not two. A name that is not in the table counts
+ *   as a failed check, so a typo or a renamed section fails loudly instead of passing with nothing
+ *   checked. `PHOS_ONLY` is ignored then.
+ * - `PHOS_ONLY=a[,b...]` keeps its old meaning for work by hand: every section whose name occurs
+ *   in the string.
+ * - nothing: every section in table order, in this one process (ctest's `selftest`, label `full`).
+ *
+ * Each section that runs ends with a line `== <name>: <seconds> s`, the wall time of that section
+ * alone, which is what the ctest costs and the quick/slow labels are measured from.
+ *
+ * @param argc argument count
+ * @param argv `--list`, `--only <names>`
+ * @return 0 when every check passed, 1 when one failed, 2 on a bad command line
+ */
+int main(int argc, char** argv)
 {
-    std::printf("phos_selftest (vector path %s)\n", kVecPathName);
+    // Unbuffered: under ctest stdout is a pipe and fully buffered, so a crash took every line the
+    // section had printed with it. On 19.09.2026 selftest.testVoices died with an access violation
+    // after 249 s and ctest recorded no output at all; the check that ran last is the first clue.
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
+    bool listOnly = false;          // --list: print the table, run nothing
+    bool haveOnly = false;          // --only was given
+    std::vector<std::string> wanted;  // --only's names, each once
+    for (int i = 1; i < argc; ++i) {
+        const std::string a = argv[i];
+        std::string names;
+        if (a == "--list") { listOnly = true; continue; }
+        if (a == "--only" && i + 1 < argc) names = argv[++i];
+        else if (a.rfind("--only=", 0) == 0) names = a.substr(7);
+        else {
+            std::fprintf(stderr, "phos_selftest: unknown argument '%s'\nusage: phos_selftest [--list] [--only name[,name...]]\n", argv[i]);
+            return 2;
+        }
+        haveOnly = true;
+        for (size_t p = 0; p <= names.size();) {
+            const size_t q = std::min(names.find(',', p), names.size());
+            const std::string n = names.substr(p, q - p);
+            if (!n.empty() && std::find(wanted.begin(), wanted.end(), n) == wanted.end()) wanted.push_back(n);
+            p = q + 1;
+        }
+    }
+    if (haveOnly && wanted.empty()) { std::fprintf(stderr, "phos_selftest: --only names no section\n"); return 2; }
+    if (!listOnly) std::printf("phos_selftest (vector path %s)\n", kVecPathName);
     // PHOS_ONLY=testName[,testName...] runs only those tests (for work on one building block).
-    const char* only = std::getenv("PHOS_ONLY");
-    auto run = [&](const char* name, void (*fn)()) { if (only == nullptr || std::strstr(only, name) != nullptr) fn(); };
+    const char* only = (listOnly || haveOnly) ? nullptr : std::getenv("PHOS_ONLY");
+    // Every --only name is charged as a failed check up front and discharged when its section is
+    // reached; what is left at finish() is a name the table does not have.
+    std::vector<bool> reached(wanted.size(), false);
+    if (listOnly) { wanted.clear(); haveOnly = false; }
+    tally().failed += static_cast<int>(wanted.size());
+    if (haveOnly) std::printf("only %zu section(s); a name not in the run table stays counted as a failed check\n", wanted.size());
+    auto pick = [&](const char* name) {
+        for (size_t k = 0; k < wanted.size(); ++k)
+            if (wanted[k] == name) {
+                if (!reached[k]) { reached[k] = true; --tally().failed; }
+                return true;
+            }
+        return false;
+    };
+    auto run = [&](const char* name, void (*fn)()) {
+        if (listOnly) { std::printf("%s\n", name); return; }
+        if (haveOnly ? !pick(name) : (only != nullptr && std::strstr(only, name) == nullptr)) return;
+        const auto t0 = std::chrono::steady_clock::now();
+        fn();
+        std::printf("== %s: %.1f s\n", name, std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+        std::fflush(stdout);
+    };
     // The measurement bench prints tables and checks nothing; it reproduces the numbers of the
     // DSP quality round of 16.09.2026 (docs/PLAN.md) and runs only when it is named by itself.
-    if (only != nullptr && std::strstr(only, "testMeasure") != nullptr) testMeasure();
-    if (only != nullptr && std::strstr(only, "testProbeAudit") != nullptr) testProbeAudit();
+    // Neither it nor the probe audit is in the table, so neither is a ctest test of its own.
+    auto optIn = [&](const char* name) { return listOnly ? false : haveOnly ? pick(name) : (only != nullptr && std::strstr(only, name) != nullptr); };
+    if (optIn("testMeasure")) testMeasure();
+    if (optIn("testProbeAudit")) testProbeAudit();
     run("testSampler", testSampler);
     run("testModelKernel", testModelKernel);
     run("testModelFile", testModelFile);

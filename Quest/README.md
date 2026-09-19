@@ -134,9 +134,10 @@ adb shell /data/local/tmp/phos_vectest
 adb shell /data/local/tmp/phos_selftest
 ```
 
-The self test takes 155 s on the desktop and will take longer here; `PHOS_ONLY=testAcid` (or any
-other section name) runs one section at a time:
-`adb shell "PHOS_ONLY=testPoly /data/local/tmp/phos_selftest"`.
+The self test takes about half an hour on the desktop in one process (19.09.2026) and will take
+longer here; `--only testAcid` (or any other section name, exact; `--list` prints them all) runs one
+section at a time: `adb shell /data/local/tmp/phos_selftest --only testPoly`. There is no ctest on
+the device, so the per-section tests of the desktop suite do not exist here.
 
 `phos_vectest` must print `path neon` and every lane identical to the scalar path, bit for bit —
 that is the point of running it here at all.

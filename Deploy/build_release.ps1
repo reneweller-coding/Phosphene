@@ -156,8 +156,16 @@ if (-not $SkipTests) {
         # it makes the plugin deliberately silent for ever -- the host test then measures -inf dBFS
         # everywhere and fails for a reason that has nothing to do with the build. Noctuary lost a
         # release build to exactly this.
+        # (Tests/CMakeLists.txt now also unsets it for the host and VST3 test themselves; this
+        # stays as the second belt.)
         Remove-Item env:PHOS_MUTE -ErrorAction SilentlyContinue
-        & ctest --test-dir $buildDir -C Release --output-on-failure
+        # Every self-test section is its own test (selftest.<name>, Tests/selftest_tests.cmake), so
+        # the suite runs six at a time; the host and VST3 tests still run alone (RUN_SERIAL). The old
+        # all-in-one `selftest` is disabled unless PHOS_SELFTEST_FULL is set -- it would only run
+        # every section a second time. -j 6 matches the recommendation in the README: a release
+        # build is often made while somebody works on this machine.
+        Remove-Item env:PHOS_SELFTEST_FULL -ErrorAction SilentlyContinue
+        & ctest --test-dir $buildDir -C Release -j 6 --output-on-failure
         $code = $LASTEXITCODE
         # Keep the evidence. ctest writes Testing\Temporary\LastTest.log and overwrites it on the
         # next run, so the log of a failure is gone the moment anyone re-runs the suite to see

@@ -58,14 +58,49 @@ add_executable(phos_selftest selftest.cpp)
 target_link_libraries(phos_selftest PRIVATE PhospheneCore)
 phos_test_data_dir(phos_selftest)
 phos_copy_data(phos_selftest ${PHOS_DATA_FILES})
-phos_add_test(selftest phos_selftest)
-# Run it from beside its own binary: that is where the copies above are, and the bare-name loads
-# (sharedMelodyModel, sharedBassModel, loadWaveTableLibrary) then find them through the working
+# One ctest test per section (selftest.<name>, labels quick/slow) plus the old all-in-one `selftest`
+# (label full, disabled unless PHOS_SELFTEST_FULL is set). The list is not written here: ctest reads
+# Tests/selftest_tests.cmake each time it starts, and that asks the built binary for its run table
+# (`phos_selftest --list`), so a section added to main() is a test without anyone touching this file.
+# The generated file below only tells it where this configuration's binary is.
+#
+# Every test runs from beside its own binary: that is where the copies above are, and the bare-name
+# loads (sharedMelodyModel, sharedBassModel, loadWaveTableLibrary) then find them through the working
 # directory -- the same step of the lookup a portable installation uses. It also keeps the one
 # relative file the suite writes, phos_selftest_tmp.wav, out of whatever directory ctest was started
 # in.
+#
+# Recommended call, capped so the machine stays usable (24 threads here; six busy cores leave the
+# rest to the user and to a build):
+#     ctest --test-dir build -C Release -j 6 --output-on-failure
+#     ctest --test-dir build -C Release -L quick -j 6      (smoke run, about 15 s)
 if(NOT ANDROID)
-    set_tests_properties(selftest PROPERTIES WORKING_DIRECTORY "$<TARGET_FILE_DIR:phos_selftest>")
+    get_property(phos_multi GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+    if(phos_multi)
+        set(phos_st_file "${CMAKE_CURRENT_BINARY_DIR}/selftest_tests-$<CONFIG>.cmake")
+    else()
+        set(phos_st_file "${CMAKE_CURRENT_BINARY_DIR}/selftest_tests-single.cmake")
+    endif()
+    file(GENERATE OUTPUT "${phos_st_file}" CONTENT
+"set(PHOS_SELFTEST_EXE [==[$<TARGET_FILE:phos_selftest>]==])
+set(PHOS_SELFTEST_DIR [==[$<TARGET_FILE_DIR:phos_selftest>]==])
+set(PHOS_TEST_TMP [==[${CMAKE_CURRENT_BINARY_DIR}/tmp/$<CONFIG>]==])
+set(PHOS_CMAKE [==[${CMAKE_COMMAND}]==])
+set(PHOS_SELFTEST_SOURCE [==[${CMAKE_CURRENT_SOURCE_DIR}/selftest.cpp]==])
+include([==[${CMAKE_CURRENT_SOURCE_DIR}/selftest_tests.cmake]==])
+")
+    # ctest knows the configuration only when it runs (-C), so the include picks the file then.
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/selftest_include.cmake"
+"if(EXISTS [==[${CMAKE_CURRENT_BINARY_DIR}/selftest_tests-single.cmake]==])
+    include([==[${CMAKE_CURRENT_BINARY_DIR}/selftest_tests-single.cmake]==])
+elseif(EXISTS \"${CMAKE_CURRENT_BINARY_DIR}/selftest_tests-\${CTEST_CONFIGURATION_TYPE}.cmake\")
+    include(\"${CMAKE_CURRENT_BINARY_DIR}/selftest_tests-\${CTEST_CONFIGURATION_TYPE}.cmake\")
+else()
+    add_test(selftest.NO_CONFIG [==[${CMAKE_COMMAND}]==] -E echo \"no configuration: run ctest with -C Release\")
+    set_tests_properties(selftest.NO_CONFIG PROPERTIES WILL_FAIL TRUE)
+endif()
+")
+    set_property(DIRECTORY APPEND PROPERTY TEST_INCLUDE_FILES "${CMAKE_CURRENT_BINARY_DIR}/selftest_include.cmake")
 endif()
 
 # The lane paths against the scalar reference, bit for bit, once per vector path. The main variant
@@ -164,6 +199,19 @@ if(TARGET Phosphene)
     # define would answer that question wrongly. It names no path of its own, so it needs none.
     phos_copy_data(phos_hosttest ${PHOS_DATA_FILES})
     add_test(NAME hosttest COMMAND phos_hosttest)
+    # Never under PHOS_MUTE (it measures what the plugin sounds like; muted, it would test silence),
+    # whatever the shell that starts ctest has set.
+    #
+    # And nearly alone: it checks real-time behaviour -- a set starts within 30 s, no gap over 150 ms
+    # while it plays, a timeline tick under 4 ms, faster than real time. PROCESSORS 5 takes five of
+    # the six slots of `ctest -j 6`, so at most one single-threaded test runs beside it (with -j 4 or
+    # less it is clamped to all slots and runs alone). One neighbour on this 24-thread machine is less
+    # than the user's own work at the desk; measured beside testModalInterchange and another checkout's
+    # self test, the margins were wide: first track after 8.4 s (limit 30), a tick 0.56 ms (limit 4),
+    # 7.3x real time. RUN_SERIAL was the first choice and cost 565 s of wall time on its own: nothing
+    # else could run while it did. The lock keeps it apart from the VST3 test on wider -j.
+    set_tests_properties(hosttest PROPERTIES LABELS "audio;slow" PROCESSORS 5 RESOURCE_LOCK phos_realtime
+                         COST 600 ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:")
 endif()
 
 # The built VST3 loaded the way a DAW loads it (Tests/vst3test.cpp): the module off the disk, the
@@ -186,4 +234,23 @@ if(TARGET Phosphene_VST3)
     # The module inside the .vst3 bundle: on Windows that file is what the host loads, and it is
     # the one CMake can name (the bundle itself is a directory made by a post-build step).
     add_test(NAME vst3test COMMAND phos_vst3test "$<TARGET_FILE:Phosphene_VST3>")
+    # Like the host test: it checks that the plugin sounds (peak > 0.05), offline and at the rate a
+    # device asks for blocks, so it must not be muted, and it gets the host test's near-solitude.
+    set_tests_properties(vst3test PROPERTIES LABELS "audio;slow" PROCESSORS 5 RESOURCE_LOCK phos_realtime
+                         COST 60 ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:")
+endif()
+
+# Labels for everything that is not a self-test section (those are labelled in selftest_tests.cmake):
+# `quick` for what takes seconds -- the vector paths (4 to 8 s under `-j 6`) and the Quest guard (5 s
+# alone) -- `slow` for the cue check (32 s: two renders and a real-time pass over a socket; its
+# latency limits held under `-j 6` with p95 0.76 ms against 16.7, so it needs no solitude).
+if(NOT ANDROID)
+    foreach(t vectest vectest_neon vectest_scalar questguard)
+        if(TEST ${t})
+            set_tests_properties(${t} PROPERTIES LABELS quick)
+        endif()
+    endforeach()
+    if(TEST cuecheck)
+        set_tests_properties(cuecheck PROPERTIES LABELS slow)
+    endif()
 endif()
