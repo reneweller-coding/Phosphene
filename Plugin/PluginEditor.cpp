@@ -133,10 +133,25 @@ void TrackDisplay::paint(juce::Graphics& g)
         return;
     }
     const int rowH = juce::jlimit(13, 20, area.getHeight() / juce::jmax(1, static_cast<int>(rows_.size())));
+    // Over the DJ overlap (Form.h, kDjOverlap) two rows contain the play head: the outgoing track, which
+    // owns the bar (kick, bass, key), and the incoming one, whose intro is mixing in. The first is marked
+    // as playing; the second more faintly, and it says so.
+    bool ownerSeen = false;
     for (const Row& row : rows_) {
         if (area.getHeight() < rowH) break;
         juce::Rectangle<int> line = area.removeFromTop(rowH);
-        const bool here = bar_ >= row.bar && bar_ < row.bar + row.bars;
+        const bool inside = bar_ >= row.bar && bar_ < row.bar + row.bars;
+        const bool here = inside && !ownerSeen;
+        const bool mixingIn = inside && ownerSeen;
+        ownerSeen = ownerSeen || inside;
+        if (mixingIn) {
+            g.setColour(accent.withAlpha(0.07f));
+            g.fillRoundedRectangle(line.toFloat(), 3.0f);
+            g.setColour(accent.withAlpha(0.7f));
+            g.setFont(phosui::body(9.5f));
+            g.drawText("mixing in, " + juce::String(juce::jmax(0, row.bar + kDjOverlap - bar_)) + " bars to the hand-over",
+                       line.reduced(6, 0), juce::Justification::centredRight, false);
+        }
         if (here) {
             g.setColour(accent.withAlpha(0.18f));
             g.fillRoundedRectangle(line.toFloat(), 3.0f);

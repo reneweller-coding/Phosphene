@@ -15,6 +15,14 @@
  *    track of eight sections therefore gets about 140 pixels per section whatever the set's length,
  *    which is enough for the section's name, its lock and its reroll.
  *
+ * **The DJ overlap** (Form.h, kDjOverlap; 19.09.2026): track N+1 starts sixteen bars before track N
+ * ends, so two tracks sound at once and their blocks share bars. Drawn in one lane the later block
+ * covered the end of the earlier one and the strip read as back-to-back tracks with a wrong length. The
+ * strip therefore has **two lanes**, odd tracks above and even ones below, so every block keeps its full
+ * length and the overlap is where the two lanes run side by side (marked with a crossfade). In the
+ * track rows, where each track fills the width on its own, the bars it shares with its neighbours are
+ * hatched and say which track they mix with.
+ *
  * Nothing here talks to phos::Composer. The editor copies the published plans (which the composer
  * thread publishes as it goes) into a Snapshot on the message thread, and the component draws that.
  * The static picture is drawn once into an image and kept; a repaint moves the play head over it. A
@@ -26,6 +34,7 @@
 #include "phos/Form.h"
 #include "phos/Score.h"
 #include <functional>
+#include <utility>
 #include <vector>
 
 /** @brief The planned set, drawn. */
@@ -70,6 +79,10 @@ public:
     bool setPosition(double musicalBeat);
     /** @brief The snapshot that is on screen, so the editor can compare before replacing it. */
     const Snapshot& snapshot() const { return snap_; }
+    /** @brief Where track @p i sits in the set strip (empty before the first measure); for the host test. */
+    juce::Rectangle<int> trackBlock(size_t i) const { return i < blocks_.size() ? blocks_[i] : juce::Rectangle<int>(); }
+    /** @brief Bars track @p i shares with the one before (first) and the one after it (second); 0 = none. */
+    std::pair<int, int> overlapOf(size_t i) const;
 
     void paint(juce::Graphics&) override;
     void resized() override;
@@ -100,6 +113,7 @@ private:
     Snapshot snap_;                  ///< what is drawn
     std::vector<Hit> hits_;          ///< filled by measure(), scanned by mouseDown()
     juce::Rectangle<int> strip_;     ///< the set-wide bar at the top
+    std::vector<juce::Rectangle<int>> blocks_;    ///< each track's block in the strip, in its lane
     std::vector<juce::Rectangle<int>> rowArea_;   ///< the part of each row the sections live in
     juce::Image cache_;              ///< the static picture at the current size
     double beat_ = 0.0;              ///< the play head, in beats from the start of the set

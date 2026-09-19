@@ -250,7 +250,13 @@ void clickAt(juce::Component& c, int x, int y)
     c.mouseDown(e);
 }
 
-/** @brief A sixty-minute set as the editor copies it out of the published plans. */
+/**
+ * @brief A sixty-minute set as the editor copies it out of the published plans.
+ *
+ * Every track starts kDjOverlap bars before the previous one ends, as the composer plans them since the
+ * arrangement round (19.09.2026); until then this set was back to back and the view was never shown two
+ * tracks sharing bars.
+ */
 ArrangeDisplay::Snapshot bigSet()
 {
     static const SectionType kinds[] = { SectionType::Intro, SectionType::Groove, SectionType::Build,
@@ -280,10 +286,10 @@ ArrangeDisplay::Snapshot bigSet()
             in += sec.bars;
             if (in >= 256) break;
         }
-        bar += trk.bars;
+        s.bars = bar + trk.bars;
+        bar += trk.bars - kDjOverlap;
         s.tracks.push_back(std::move(trk));
     }
-    s.bars = bar;
     s.minutes = 60;
     return s;
 }
@@ -857,11 +863,50 @@ int main(int argc, char** argv)
         check(tick < redraw, "and less than drawing the set again (" + juce::String(redraw * 1000.0, 2) + " ms)");
         check(moved > frames / 2, "the play head reports when it has moved far enough to repaint");
 
+        // The DJ overlap drawn legibly (19.09.2026, round "polish"): in the set strip neighbouring tracks
+        // share kDjOverlap bars, so their blocks must run side by side in x -- each over its whole length --
+        // without one covering the other; and the view knows which bars each track shares.
+        {
+            int pairs = 0, covered = 0, notSideBySide = 0, wrongLength = 0, wrongShare = 0;
+            const int w = view.trackBlock(0).getWidth() > 0 ? view.getWidth() : 0;
+            for (size_t i = 0; i < snap.tracks.size(); ++i) {
+                const juce::Rectangle<int> b = view.trackBlock(i);
+                // The block's width against the strip's scale: its bars over the set's, within two pixels.
+                const juce::Rectangle<int> first = view.trackBlock(0), last = view.trackBlock(snap.tracks.size() - 1);
+                const double stripW = last.getRight() - first.getX();
+                const double want = stripW * snap.tracks[i].bars / snap.bars;
+                if (std::abs(b.getWidth() - want) > 2.0) ++wrongLength;
+                const auto share = view.overlapOf(i);
+                if (share.first != (i > 0 ? kDjOverlap : 0) || share.second != (i + 1 < snap.tracks.size() ? kDjOverlap : 0)) ++wrongShare;
+                if (i + 1 < snap.tracks.size()) {
+                    const juce::Rectangle<int> n = view.trackBlock(i + 1);
+                    ++pairs;
+                    if (b.intersects(n)) ++covered;
+                    const bool sharedX = n.getX() < b.getRight() && b.getX() < n.getRight();
+                    const bool apartY = b.getBottom() <= n.getY() || n.getBottom() <= b.getY();
+                    if (!(sharedX && apartY)) ++notSideBySide;
+                }
+            }
+            check(w > 0 && pairs == 8 && covered == 0 && notSideBySide == 0 && wrongLength == 0 && wrongShare == 0,
+                  "the strip draws the DJ overlap: neighbouring tracks in two lanes, side by side over the bars they share, "
+                  "each block its full length (" + juce::String(pairs) + " pairs, " + juce::String(covered) + " covered, "
+                  + juce::String(notSideBySide) + " not side by side, " + juce::String(wrongLength) + " off length, "
+                  + juce::String(wrongShare) + " with the wrong shared bars)");
+        }
+
         // What a click means, at every height of the view: the rows are reachable, and so are the
         // two small buttons on each of them.
         int seeks = 0, lastBar = -1;
         juce::SortedSet<int> tracksReached, locksReached, sectionLocks, sectionRolls;
-        view.onSeek = [&](int bar) { ++seeks; lastBar = bar; tracksReached.add(bar / 256); };
+        // A jump lands in the latest track that contains its bar: a track's first bar lies inside the previous
+        // track's outro (the DJ overlap), and a jump there means "this track from its start".
+        view.onSeek = [&](int bar) {
+            ++seeks;
+            lastBar = bar;
+            int reached = -1;
+            for (const auto& t : snap.tracks) if (bar >= t.firstBar && bar < t.firstBar + t.bars) reached = t.index;
+            if (reached >= 0) tracksReached.add(reached);
+        };
         view.onLock = [&](LockUnit unit, int index, bool) {
             if (unit == LockUnit::Track) locksReached.add(index);
             else sectionLocks.add(index);

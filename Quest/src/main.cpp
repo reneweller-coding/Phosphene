@@ -367,6 +367,8 @@ struct DisplayState {
     int  blockParts = 0;        ///< one bit per melodic part in the bar now playing (Form.h, partBit)
     bool padGate = false;       ///< trance gate on the pad in that bar
     int  bar = 0;               ///< absolute bar now playing
+    int  incoming = -1;         ///< the track whose intro mixes in over this one's outro (DJ overlap), -1 = none
+    int  handover = -1;         ///< the bar where that track's kick and bass take over, -1 = none
 };
 
 /**
@@ -625,6 +627,10 @@ private:
         const ParamStore& p = engine_.params();
         const int bar = currentBar();
         const int ti = composer_.trackOfBar(p, bar);
+        // The incoming track of the DJ overlap, asked for *before* the reference below is taken:
+        // incomingOfBar may plan the next track, and that may move the cached plans.
+        const int incoming = composer_.incomingOfBar(p, bar);
+        const int incomingHandover = incoming >= 0 ? handoverBar(composer_.track(p, incoming)) : -1;
         const TrackPlan& plan = composer_.track(p, ti);
         const int inTrack = std::clamp(bar - plan.firstBar, 0, std::max(0, plan.bars - 1));
         // What plays now comes from the instrumentation matrix (Form.h), evaluated for this bar.
@@ -655,6 +661,8 @@ private:
         d.blockParts = bp.parts;
         d.padGate = bp.padGate;
         d.bar = bar;
+        d.incoming = incoming;
+        d.handover = incomingHandover;
         std::lock_guard<std::mutex> lock(displayMutex_);
         display_ = d;
     }
@@ -1352,6 +1360,12 @@ private:
         text(line, 0.95f, 0.80f, 0.50f, 1.0f);
         std::snprintf(line, sizeof(line), "BAR %04d/%04d", inTrack + 1, d.trackBars);
         text(line, 0.95f, 0.80f, 0.50f, 0.9f);
+        // Over the DJ overlap the next track's intro already sounds: which one, and how many bars until its
+        // kick and bass take over. The panel's other lines stay with the outgoing track, which owns the bar.
+        if (d.incoming >= 0) {
+            std::snprintf(line, sizeof(line), "MIX IN %02d  %02d BARS", d.incoming + 1, std::max(0, d.handover - bar));
+            text(line, 0.55f, 0.95f, 0.75f, 0.9f);
+        }
         std::snprintf(line, sizeof(line), "%s %s", kKeyNames[d.key], kScaleNames[d.scale]);
         text(line, 0.70f, 0.85f, 1.00f, 0.9f);
         // The 16-bar block stands in for the section until the form grammar of Phase 5 is there:
