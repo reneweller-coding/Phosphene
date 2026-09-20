@@ -11348,6 +11348,12 @@ void testArrangement()
               // the guard already lifts the arp clear of it in more tracks than before and drop 2's octave
               // then finds it high already. Measured: the mean pitch still never falls (the smallest lift is
               // +0.5 semitones), but it rises by more than five semitones in 13 of 16 instead of 15 of 16.
+              // Round "climax-polish" (20.09.2026) looked at this again on the brief's word (a possible
+              // regression from the arrangement round's arp lift, gap (c)) and left it: it is the dialogue
+              // round's register change, decided deliberately and already documented above, not a fresh
+              // bug to chase. The count moved again regardless, to 14 of 17 -- a side effect of this
+              // round's own Melody.cpp fix (gap (b): a track with none of lead/arp/stab now falls back to
+              // one of them), which gave one more track an arp where it had none, adding it to the pool.
               && climaxCounter == counterPossible && arpPairs > 0 && arpUp * 4 >= arpPairs * 3 && arpLift > -1.0,
           "drop 2: open hats and ride in every bar, squelches in the gaps, the counter answers the lead, the arp above drop 1's",
           fmt("%d bars: open hats in %d, ride in %d, %d squelches; counter in %d of %d; arp higher in %d of %d tracks (smallest lift of the mean pitch %.1f semitones)",
