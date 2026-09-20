@@ -11550,6 +11550,37 @@ void testClimax()
                   "window, and 3 dB more above 1.5 kHz than drop 1", style).c_str(),
               fmt("drop 2 - drop 1 %+.2f LU; weakest group of drop 2 - loudest other window (bars %d-%d) %+.2f LU; above 1.5 kHz %+.2f dB",
                   loud2 - loud1, rivalBar + 1, rivalBar + 8, weakest - rival, hi2 - hi1));
+        // 20.09.2026, round "climax-polish", gap (a): the polish round's own residual, measured again on 30
+        // tracks (5 styles, 2 seeds, 3 tracks; PhospheneWork/scratch/climax-polish/brightness_gap.py) with
+        // this round's form -- the big buildup's last eight bars against drop 2's own brightest eight-bar
+        // group, both above 1.5 kHz: median +0.61 dB (was +0.90 dB before this round on the same 30 tracks,
+        // and +2.2 dB before the polish round), worst case +2.20 dB (was +2.52 dB), 20 of 30 tracks still
+        // with the buildup brighter (unchanged count -- the fix narrows the margin, it does not close every
+        // one; Progressive's short buildup was never the problem and stays negative throughout). The two
+        // changes: the roll's sixteenths now also take a trim of their own (Rhythm.cpp, rollScale), and the
+        // big buildup's second, stacked riser is two bars instead of four (Form.cpp) -- it still reaches the
+        // same peak at the same instant ("arrive"), only over half the time. Opening drop 2's filter further
+        // (kClimaxOpen) was tried first and measured to do nothing at all: Composer.cpp's cutoffAt already
+        // pushes the climax's acid and lead cutoff to the knob's own ceiling, so there was no headroom left
+        // to open into -- see the name block above kClimaxOpen (Form.h). On this render (the listening seed,
+        // style 1's first track) the gap is a smaller +0.31 dB (was +0.51 before this round's two changes,
+        // seen failing a 0.45 dB threshold first); style 2 (Progressive) was already negative both times.
+        // 0.45 sits between the two so an unrelated future change cannot pass it by accident, but it is
+        // tight to this one seed and not the 30-track median above -- do not read a pass here as "the gap
+        // is gone everywhere".
+        {
+            int b2i = d2 - 1;
+            check(b2i >= 0 && tp.form.section[b2i].type == SectionType::Build, "the climax drop's preceding section is the big buildup");
+            const Section& sb = tp.form.section[b2i];
+            const double buildHi = powDb(mean(hiBar, sb.startBar + std::max(0, sb.bars - 8), 8));
+            double dropBestHi = -1e9;
+            for (int b = s2.startBar; b + 8 <= s2.startBar + s2.bars; b += 8) dropBestHi = std::max(dropBestHi, powDb(mean(hiBar, b, 8)));
+            const double buildGap = buildHi - dropBestHi;
+            check(buildGap <= 0.45,
+                  fmt("style %s: the big buildup's last eight bars no more than 0.45 dB brighter than drop 2's own brightest eight bars above 1.5 kHz",
+                      style).c_str(),
+                  fmt("buildup last 8 bars - drop 2's brightest group: %+.2f dB", buildGap));
+        }
     }
 }
 

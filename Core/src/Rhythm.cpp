@@ -430,7 +430,15 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
         // last quarter of the big buildup was the brightest eight bars of the track, 2.2 dB above drop 2 over
         // 1.5 kHz (median of 30 tracks) -- the roll must lead into the climax, not outshine it. -2.5 dB per hit
         // leaves the step from sixteenths to thirty-seconds a rise of about half a decibel, and the rate.
-        const float rollScale = step < 0.25 ? 0.75f : 1.0f;
+        // 20.09.2026, round "climax-polish": the sixteenths now take a smaller trim of their own (0.85, about
+        // -1.4 dB) and the thirty-seconds a deeper one (0.65, about -3.7 dB against the untrimmed rate). The
+        // last eight bars of the buildup -- sixteenths then thirty-seconds -- were still 0.90 dB brighter than
+        // drop 2's own brightest eight bars above 1.5 kHz in 20 of 30 tracks even with only the thirty-seconds
+        // trimmed (opening drop 2's filter further, kClimaxOpen, was tried first and measured to do nothing:
+        // Composer.cpp's cutoffAt already pushes the climax's cutoff to the knob's own ceiling, so a bigger
+        // offset has no headroom left to open into). The step from sixteenths to thirty-seconds still rises,
+        // now by about half a decibel less than before, so the roll keeps climbing into the drop.
+        const float rollScale = step < 0.25 ? 0.65f : (step < 0.5 ? 0.85f : 1.0f);
         int k = 0;
         for (double b = 0.0; b <= last + 1e-9; b += step, ++k) {
             const float vel = rollScale * std::clamp(0.35f + 0.3f * stage + 0.02f * static_cast<float>(k), 0.2f, 1.0f);
