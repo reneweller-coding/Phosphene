@@ -67,9 +67,10 @@ struct VoicePhrase {
 void setVoicePackSearchPath(const std::string& directory);
 
 /**
- * @brief Loads the voice pack once (idempotent). Looks for the bare name in the working directory,
- *        then in setVoicePackSearchPath()'s directory, then in waveTableSearchPath() (a host that set
- *        that one ships the voice pack beside the wavetables), then in PHOS_SOURCE_DATA_DIR.
+ * @brief Loads the voice pack once (idempotent, genuinely thread-safe -- see loadWaveTableLibrary()'s
+ *        note, same call-once gate). Looks for the bare name in the working directory, then in
+ *        setVoicePackSearchPath()'s directory, then in waveTableSearchPath() (a host that set that
+ *        one ships the voice pack beside the wavetables), then in PHOS_SOURCE_DATA_DIR.
  * @param path  the file; nullptr means "voices.phosvx"
  * @param error receives why nothing was loaded, may be null
  * @return phrases loaded (0 when the pack is missing: the spoken types then fall silent, the synthetic
