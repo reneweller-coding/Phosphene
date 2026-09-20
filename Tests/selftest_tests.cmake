@@ -66,6 +66,9 @@ set(PHOS_SELFTEST_SECONDS
     testModalInterchange.modes         0.0
     testMelody.midi                    0.0
     # Whole sections.
+    # Round "speed" (20.09.2026): both switch the probe cache off for their references, so they cost the same warm.
+    testProbeSchedule        114.7
+    testProbeCache           71.3
     testMixBalance           111.4
     testStereoWidth          100.2
     testMaster               88.4
