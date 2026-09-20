@@ -1713,6 +1713,10 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     const bool cached = probe::cacheEnabled();
     probe::Key key;
     if (cached) {
+        // The shared data is hashed as it is loaded *now*, so it has to be loaded before the key is made and
+        // not by the engine after it: "not loaded yet" and "the file is missing" would otherwise be one key
+        // for two different renders. A flag test when it has happened (and it has, before any worker runs).
+        probe::warmSharedData();
         probe::Hasher h;
         h.text("phos probe 1");   // the layout of this key
         h.text(probe::buildId());

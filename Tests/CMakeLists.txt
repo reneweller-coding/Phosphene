@@ -209,20 +209,35 @@ if(TARGET Phosphene)
     # finds this checkout, or a shipping one, where it falls back and has to say so. Handing it the
     # define would answer that question wrongly. It names no path of its own, so it needs none.
     phos_copy_data(phos_hosttest ${PHOS_DATA_FILES})
-    add_test(NAME hosttest COMMAND phos_hosttest)
+    # Two tests since 20.09.2026 (round "speed"; the comment in hosttest.cpp's main()): `--part rest` and
+    # `--part realhost`. Every check is in exactly one of them (115 + 4 = the 119 of a run without --part).
+    add_test(NAME hosttest COMMAND phos_hosttest --part rest)
+    add_test(NAME hosttest.realhost COMMAND phos_hosttest --part realhost)
     # Never under PHOS_MUTE (it measures what the plugin sounds like; muted, it would test silence),
     # whatever the shell that starts ctest has set.
     #
-    # And nearly alone: it checks real-time behaviour -- a set starts within 30 s, no gap over 150 ms
-    # while it plays, a timeline tick under 4 ms, faster than real time. PROCESSORS 5 takes five of
-    # the six slots of `ctest -j 6`, so at most one single-threaded test runs beside it (with -j 4 or
-    # less it is clamped to all slots and runs alone). One neighbour on this 24-thread machine is less
-    # than the user's own work at the desk; measured beside testModalInterchange and another checkout's
-    # self test, the margins were wide: first track after 8.4 s (limit 30), a tick 0.56 ms (limit 4),
-    # 7.3x real time. RUN_SERIAL was the first choice and cost 565 s of wall time on its own: nothing
-    # else could run while it did. The lock keeps it apart from the VST3 test on wider -j.
+    # `hosttest` nearly alone: it checks real-time behaviour -- a set starts within 30 s, no gap over 150 ms
+    # while it plays, a timeline tick under 4 ms, faster than real time. PROCESSORS 5 takes five slots, so
+    # with `-j 6` at most one single-threaded test runs beside it (with -j 4 or less it is clamped to all
+    # slots and runs alone). Measured beside testModalInterchange and another checkout's self test, the
+    # margins were wide: first track after 8.4 s (limit 30), a tick 0.56 ms (limit 4), 7.3x real time.
+    # RUN_SERIAL was the first choice and cost 565 s of wall time on its own: nothing else could run while
+    # it did. The lock keeps it apart from the VST3 test on wider -j.
+    #
+    # Still five slots on a machine of 24 threads, deliberately: with the probe cache this part takes about
+    # a minute (it was 9 to 15), so its solitude now costs five slot-minutes instead of fifty, and the
+    # real-time margins stay what they were measured as. The section that times a plan plans it without the
+    # cache and on one thread, as the shipped plugin does (hosttest.cpp).
     set_tests_properties(hosttest PROPERTIES LABELS "audio;slow" PROCESSORS 5 RESOURCE_LOCK phos_realtime
-                         COST 600 ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:")
+                         COST 120 ENVIRONMENT "PHOS_PROBE_CACHE=${PHOS_PROBE_CACHE_DIR}"
+                         ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:")
+    # `hosttest.realhost` is offline and times nothing: no lock. Three slots: its render thread, the thread
+    # that writes parameters without pause, and the probe workers of the plans those writes keep forcing
+    # (eight for half a second per plan, then two, then one -- Composer::measureTrack). No probe cache: its
+    # parameters are random, so no entry would ever be read again, and every run would leave some hundred
+    # files behind.
+    set_tests_properties(hosttest.realhost PROPERTIES LABELS "audio;slow" PROCESSORS 3
+                         COST 400 ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:;PHOS_PROBE_CACHE=unset:")
 endif()
 
 # The built VST3 loaded the way a DAW loads it (Tests/vst3test.cpp): the module off the disk, the

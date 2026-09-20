@@ -301,13 +301,29 @@ int main(int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI juceInit;
     // The child half of the learned-model section below; it prints one line and checks nothing.
     if (argc > 1 && juce::String(argv[1]) == "--probe-models") return probeModels();
-    std::printf("Phosphene host test\n");
+    // Round "speed" (20.09.2026): the test in two independently schedulable parts. "ten seconds of a real
+    // host" took 236 s of a 293 s run with every plan already in the probe cache: a second thread writes
+    // random parameters while it renders, every written compose knob throws the plans away, and each new
+    // plan is twelve probe renders no cache can know. It is offline (setNonRealtime) and measures no time, so
+    // it needs none of the solitude the real-time sections need -- as a ctest test of its own
+    // (`hosttest.realhost`) it runs beside the rest instead of in front of it. `--part rest` is everything
+    // else; no argument runs both, as before. Every check is in exactly one part.
+    const juce::String part = argc > 2 && juce::String(argv[1]) == "--part" ? juce::String(argv[2]) : juce::String();
+    if (argc > 1 && part != "rest" && part != "realhost") {
+        std::fprintf(stderr, "usage: phos_hosttest [--part rest|realhost]\n");
+        return 2;
+    }
+    const bool partRest = part != "realhost", partRealHost = part != "rest";
+    std::printf("Phosphene host test%s%s\n", part.isEmpty() ? "" : ", part ", part.toRawUTF8());
     // Round "speed" (20.09.2026). This test builds some forty processors and nearly every one plans a
     // track, 12 to 15 s of probe renders each -- that, not real-time playback, is what made it 9 to 11
     // minutes. As a development program it opts in to parallel probes and, under ctest, to the suite's probe
     // cache (phos/Probe.h); the plans are bit for bit the shipped plugin's, which the oracle section below
     // keeps proving against phos_render. The one section that *times* a plan switches both off again.
     phos::probe::configureFromEnvironment();
+    // Unbuffered, as the self test is: under ctest stdout is a pipe, and a crash or a timeout took all of
+    // this test's output with it. It is also what lets the sections be timed from outside.
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
 
     // ---------------------------------------------------------------- the shipped wavetable pack
     //
@@ -317,7 +333,7 @@ int main(int argc, char** argv)
     // it is copied next to the plugin's artefacts, so what is measured here is the plugin's own
     // path resolution and nothing else. Both sections run before any other processor is built --
     // the library is loaded once per process, by the first Engine::prepare() that happens.
-    {
+    if (partRest) {
         const juce::File beside = juce::File::getSpecialLocation(juce::File::currentExecutableFile)
                                       .getParentDirectory().getChildFile("library.phoswt");
         check(beside.existsAsFile(), "the pack is installed beside the binary (" + beside.getFullPathName() + ")");
@@ -337,7 +353,7 @@ int main(int argc, char** argv)
     // absence is staged by asking for a name that cannot be found -- after that every load in this
     // process reports nothing, which is precisely the state of a plugin whose resources were not
     // installed. It must still make sound, and it must not pretend in the editor.
-    {
+    if (partRest) {
         phos::resetWaveTableLibrary();
         std::string why;
         const int loaded = phos::loadWaveTableLibrary("phosphene-no-such-pack.phoswt", &why);
@@ -393,7 +409,7 @@ int main(int argc, char** argv)
     // Both files are copied next to this executable by Tests/CMakeLists.txt, exactly as
     // Plugin/CMakeLists.txt copies them next to the artefacts, so what is measured is the plugin's
     // own path resolution.
-    {
+    if (partRest) {
         const juce::File beside = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
         check(beside.getChildFile("melody.phosmdl").existsAsFile() && beside.getChildFile("bass.phosmdl").existsAsFile(),
               "both weight files are installed beside the binary (" + beside.getFullPathName() + ")");
@@ -435,7 +451,7 @@ int main(int argc, char** argv)
     // The other half: a plugin with no resource directory of its own. Staged as a copy of this
     // executable in an empty temporary directory, run as a child process -- see probeModels() for
     // why it cannot be done inside this process.
-    {
+    if (partRest) {
         const juce::File exe = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
         const juce::File dir = juce::File::getSpecialLocation(juce::File::tempDirectory)
                                    .getChildFile("phos-nodata-" + juce::String(juce::Random::getSystemRandom().nextInt(1 << 30)));
@@ -477,7 +493,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- rates and block sizes
-    for (double sr : { 44100.0, 48000.0, 96000.0 }) {
+    if (partRest) for (double sr : { 44100.0, 48000.0, 96000.0 }) {
         for (int block : { 16, 64, 512, 2048 }) {
             auto p = std::make_unique<PhospheneProcessor>();
             p->setFollowHost(false);
@@ -502,7 +518,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- latency
-    {
+    if (partRest) {
         auto p = std::make_unique<PhospheneProcessor>();
         p->setPlayConfigDetails(0, 2, 48000.0, 256);
         p->prepareToPlay(48000.0, 256);
@@ -511,7 +527,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- the oracle
-    {
+    if (partRest) {
         const double sr = 48000.0;
         const int block = 256;
         // Eight bars at the default tempo: since Phase 5 a track opens with an intro whose first bars
@@ -539,7 +555,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- ten seconds of a real host
-    {
+    if (partRealHost) {
         const double sr = 48000.0;
         auto p = std::make_unique<PhospheneProcessor>();
         p->setNonRealtime(true);
@@ -601,7 +617,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- host sync
-    {
+    if (partRest) {
         const double sr = 48000.0;
         auto p = std::make_unique<PhospheneProcessor>();
         p->setNonRealtime(true);
@@ -635,7 +651,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- the composer thread, live
-    {
+    if (partRest) {
         // Everything above runs offline, where the audio thread composes for itself. This is the
         // arrangement the plugin actually ships with: blocks arriving at the rate a sound card asks
         // for them, and a thread of its own filling the rings a few bars ahead. If that thread ever
@@ -712,7 +728,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- state round trip
-    {
+    if (partRest) {
         auto p = std::make_unique<PhospheneProcessor>();
         p->setPlayConfigDetails(0, 2, 48000.0, 256);
         p->prepareToPlay(48000.0, 256);
@@ -775,7 +791,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- the parameters themselves
-    {
+    if (partRest) {
         auto p = std::make_unique<PhospheneProcessor>();
         const ParamStore& store = p->params();
         check(p->getParameters().size() == store.count(),
@@ -809,7 +825,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- bus layouts and the editor
-    {
+    if (partRest) {
         auto p = std::make_unique<PhospheneProcessor>();
         check(p->producesMidi() && !p->acceptsMidi(), "the plugin writes MIDI and reads none");
         juce::AudioProcessor::BusesLayout stereo;
@@ -846,7 +862,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- the arrange timeline
-    {
+    if (partRest) {
         // Nine tracks, 2304 bars, ninety-nine sections: the sixty-minute set of PLAN 8.1. The point
         // of the measurement is the difference between the two numbers below. Drawing the set costs
         // what it costs; a tick must not cost that, because the editor ticks twelve times a second
@@ -941,7 +957,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- locks and rerolls
-    {
+    if (partRest) {
         // The curation loop of PLAN 6.8 as the editor drives it: the editor pushes a command, the
         // composer thread carries it out, and the published plans come back changed -- the rerolled
         // track and nothing else.
@@ -982,7 +998,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- the perform macros
-    {
+    if (partRest) {
         const double sr = 48000.0;
         const int block = 256;
         const int bar = static_cast<int>(kBeatsPerBar * 60.0 / 145.0 * sr / block) * block;
@@ -1038,7 +1054,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- a set through the editor
-    {
+    if (partRest) {
         // Export and import go through the core's own `.phosset` (SetFile.h), so what the plugin
         // writes phos_render plays -- locks and rerolls included.
         auto p = std::make_unique<PhospheneProcessor>();
@@ -1073,7 +1089,7 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- what it costs
-    {
+    if (partRest) {
         const double sr = 48000.0;
         const int block = 256;
         const double seconds = 20.0;
