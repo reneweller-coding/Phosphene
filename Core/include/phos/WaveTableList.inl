@@ -8,7 +8,7 @@
  * stores the index.
  */
 #ifndef PHOS_WT_LIBRARY_COUNT
-#define PHOS_WT_LIBRARY_COUNT 12
+#define PHOS_WT_LIBRARY_COUNT 35
 #endif
 
 #ifdef PHOS_WT
@@ -17,11 +17,34 @@ PHOS_WT(1, "Sampled 210", "Ambient/ambient_sampled_210", WaveTableLane::Pad, 2)
 PHOS_WT(2, "WaveEdit Sohler52", "Classic/wavedit_sohler52", WaveTableLane::Pad, 5)
 PHOS_WT(3, "Organ 034", "Harmonic/harmonic_organ_034", WaveTableLane::Pad, 1)
 PHOS_WT(4, "Otmorph 069", "Ambient/ambient_otmorph_069", WaveTableLane::Pad, 2)
-PHOS_WT(5, "WaveEdit Hienharm", "Classic/wavedit_hienharm", WaveTableLane::Lead, 4)
-PHOS_WT(6, "WaveEdit Junox_ho", "Classic/wavedit_junox_ho", WaveTableLane::Lead, 3)
-PHOS_WT(7, "WaveEdit Euclidea", "Classic/wavedit_euclidea", WaveTableLane::Lead, 4)
-PHOS_WT(8, "WaveEdit Sohler49", "Classic/wavedit_sohler49", WaveTableLane::Lead, 3)
-PHOS_WT(9, "Consonant 129", "Ambient/ambient_consonant_129", WaveTableLane::Arp, 3)
-PHOS_WT(10, "AKWF 0004-hollow-01", "Classic/akwf_0004_hollow_01", WaveTableLane::Arp, 4)
-PHOS_WT(11, "WaveEdit Pd104", "Classic/wavedit_pd104", WaveTableLane::Arp, 3)
+PHOS_WT(5, "WaveEdit Vocal_fo", "Classic/wavedit_vocal_fo", WaveTableLane::Pad, 5)
+PHOS_WT(6, "WaveEdit Ppg_wa04", "Classic/wavedit_ppg_wa04", WaveTableLane::Pad, 1)
+PHOS_WT(7, "Sampled 214", "Ambient/ambient_sampled_214", WaveTableLane::Pad, 2)
+PHOS_WT(8, "Glass 003", "Harmonic/harmonic_glass_003", WaveTableLane::Pad, 5)
+PHOS_WT(9, "WaveEdit Organ_di", "Classic/wavedit_organ_di", WaveTableLane::Pad, 1)
+PHOS_WT(10, "AKWF hdrawn-01", "Classic/akwf_hdrawn_01", WaveTableLane::Pad, 2)
+PHOS_WT(11, "WaveEdit Qux_fmy", "Classic/wavedit_qux_fmy", WaveTableLane::Pad, 5)
+PHOS_WT(12, "WaveEdit Hienharm", "Classic/wavedit_hienharm", WaveTableLane::Lead, 4)
+PHOS_WT(13, "WaveEdit Junox_ho", "Classic/wavedit_junox_ho", WaveTableLane::Lead, 3)
+PHOS_WT(14, "WaveEdit Euclidea", "Classic/wavedit_euclidea", WaveTableLane::Lead, 4)
+PHOS_WT(15, "WaveEdit Sohler49", "Classic/wavedit_sohler49", WaveTableLane::Lead, 3)
+PHOS_WT(16, "WaveEdit Pwn_saw", "Classic/wavedit_pwn_saw", WaveTableLane::Lead, 4)
+PHOS_WT(17, "WaveEdit Tidyb030", "Classic/wavedit_tidyb030", WaveTableLane::Lead, 3)
+PHOS_WT(18, "WaveEdit Tezzalog", "Classic/wavedit_tezzalog", WaveTableLane::Lead, 4)
+PHOS_WT(19, "WaveEdit Sine_n", "Classic/wavedit_sine_n", WaveTableLane::Lead, 3)
+PHOS_WT(20, "Consonant 129", "Ambient/ambient_consonant_129", WaveTableLane::Arp, 3)
+PHOS_WT(21, "AKWF 0004-hollow-01", "Classic/akwf_0004_hollow_01", WaveTableLane::Arp, 4)
+PHOS_WT(22, "WaveEdit Pd104", "Classic/wavedit_pd104", WaveTableLane::Arp, 3)
+PHOS_WT(23, "WaveEdit Crush_ad", "Classic/wavedit_crush_ad", WaveTableLane::Arp, 4)
+PHOS_WT(24, "WaveEdit Micro_q", "Classic/wavedit_micro_q", WaveTableLane::Arp, 3)
+PHOS_WT(25, "AKWF oscchip-04", "Classic/akwf_oscchip_04", WaveTableLane::Arp, 4)
+PHOS_WT(26, "AKWF 0014-hollow-01", "Classic/akwf_0014_hollow_01", WaveTableLane::Arp, 3)
+PHOS_WT(27, "Vowel Bass 026", "Ambient/ambient_vowel_bass_026", WaveTableLane::Arp, 4)
+PHOS_WT(28, "Sub 003", "Harmonic/harmonic_sub_003", WaveTableLane::Drone, 1)
+PHOS_WT(29, "WaveEdit Sohler79", "Classic/wavedit_sohler79", WaveTableLane::Drone, 2)
+PHOS_WT(30, "Tube 002", "Ambient/ambient_tube_002", WaveTableLane::Drone, 1)
+PHOS_WT(31, "Consonant 008", "Ambient/ambient_consonant_008", WaveTableLane::Drone, 2)
+PHOS_WT(32, "WaveEdit Ppg_wa03", "Classic/wavedit_ppg_wa03", WaveTableLane::Drone, 1)
+PHOS_WT(33, "Pluck 028", "Harmonic/harmonic_pluck_028", WaveTableLane::Drone, 2)
+PHOS_WT(34, "Vowel Alto 012", "Ambient/ambient_vowel_alto_012", WaveTableLane::Drone, 1)
 #endif

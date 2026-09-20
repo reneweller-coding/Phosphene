@@ -14,9 +14,11 @@
 #include "phos/Params.h"
 #include "phos/Patterns.h"
 #include "phos/Sfx.h"
+#include "phos/WaveTableFile.h"   // kNumWaveTables, for kVoicePalette's static_assert
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <iterator>
 #include <string>
 
 namespace phos {
@@ -124,33 +126,48 @@ constexpr uint64_t kSaltDroneRide = 0x44524944450015ull;
 
 /**
  * @brief What a polyphonic voice may become in a track: its oscillators, wavetables and filter responses,
- *        each with a weight (19.09.2026, round "voices").
+ *        each with a weight (19.09.2026, round "voices"; widened 20.09.2026, round "wavetable-selection").
  *
  * The tables are indices of the `table` choice (Params.cpp): 0 Classic, 1 Vocal, 2 Glass, 3 PWM, 4 Sync,
  * 5 Formant Saw -- the built-ins -- and from 6 the library tables of `Core/data/library.phoswt`, chosen by
  * `Tools/wt_select.py` per lane from the 2191 licence-clean tables of the Noctuary library
- * (`Core/data/CREDITS-wavetables.md`): 6 .. 10 the pad lane (Hyperbol, Sampled 210, Sohler52, Organ 034,
- * Otmorph 069), 11 .. 14 the lead lane (Hienharm, Junox_ho, Euclidea, Sohler49), 15 .. 17 the arp lane
- * (Consonant 129, AKWF hollow, Pd104). Each voice draws from the lane that was measured for its role
- * plus the built-ins whose character fits it: the counter-lead the vocal and formant tables the user's
- * inventory names, the drone the organ and the measured, slow tables. The high pass is never a
- * response a recipe picks: every voice has its tracking high pass already.
+ * (`Core/data/CREDITS-wavetables.md`): 6 .. 17 the pad lane (12 tables, e.g. Hyperbol, Sampled 210,
+ * Sohler52), 18 .. 25 the lead lane (8 tables, e.g. Hienharm, Junox_ho, Euclidea), 26 .. 33 the arp lane
+ * (8 tables, e.g. Consonant 129, AKWF hollow, Pd104), 34 .. 40 the drone lane, new this round (7 tables,
+ * e.g. Sub 003, Tube 002, Consonant 008 -- organ-like, a clear fundamental, dark; see `Tools/wt_select.py`,
+ * `LANES["drone"]`). Each voice draws from the lane that was measured for its role plus the built-ins
+ * whose character fits it, widened from the "voices" round's 18-table library (12 tables total, mostly
+ * 5/4/3 candidates a voice) towards the 35-table one above: the pad the whole pad lane plus its three
+ * built-ins, the lead the whole lead lane plus Sync/Formant Saw, the arp the whole arp lane plus
+ * Glass/PWM, the drone -- which drew pad-lane tables by index until this round, for lack of a lane of its
+ * own -- the whole new drone lane plus Vocal, the stab (between the lead and the arp in both oscillator
+ * and filter weight, see the columns below) the whole arp lane plus two of the brighter lead tables and
+ * PWM/Sync. **The counter-lead is deliberately not widened**: the "voices" round gave it the vocal/formant
+ * built-ins alone on purpose ("der Counter-Lead ... die Vokal-/Formant-Tabellen") to keep it out of the
+ * lead's and the arp's library families entirely, not for lack of measurement -- widening it would put
+ * library tables back in reach of `cand.table == lead.table` collisions the round's own guard (below,
+ * `v == counterV`) exists to avoid, and the corpus has no opinion on a role it never had a name for. The
+ * high pass is never a response a recipe picks: every voice has its tracking high pass already.
  */
 struct VoicePalette {
     double osc[static_cast<int>(PolyOsc::Count)];      ///< weight per PolyOsc
-    int    tables[8];                                  ///< candidate tables (-1 ends the list)
+    int    tables[15];                                 ///< candidate tables (-1 ends the list)
     double filter[static_cast<int>(PolyFilter::Count)];///< weight per PolyFilter
     float  scale[kNumVoiceMacros];                     ///< how far each direction reaches for this voice
 };
-//                                     Supersaw VA   FM   WT      tables                                    LP    BP    HP   Notch   bright soft thick space motion
+//                                     Supersaw VA   FM   WT      tables (candidate table indices, -1 = unused slot)                                                                  LP    BP    HP   Notch   bright soft thick space motion
 const VoicePalette kVoicePalette[kPolyInstances] = {
-    /* lead    */ { { 0.45, 0.15, 0.15, 0.25 }, { 11, 12, 13, 14, 4, 5, -1, -1 },  { 0.80, 0.10, 0.0, 0.10 }, { 1.0f, 0.6f, 1.0f, 1.0f, 0.8f } },
-    /* counter */ { { 0.00, 0.20, 0.20, 0.60 }, { 5, 1, 2, -1, -1, -1, -1, -1 },   { 0.40, 0.40, 0.0, 0.20 }, { 1.0f, 0.8f, 0.8f, 1.0f, 1.0f } },
-    /* arp     */ { { 0.35, 0.30, 0.10, 0.25 }, { 15, 16, 17, 2, 3, -1, -1, -1 },  { 0.75, 0.25, 0.0, 0.00 }, { 1.0f, 0.0f, 0.8f, 1.0f, 0.6f } },
-    /* stab    */ { { 0.45, 0.25, 0.00, 0.30 }, { 3, 4, 6, 8, 15, 16, -1, -1 },    { 0.70, 0.30, 0.0, 0.00 }, { 1.0f, 0.0f, 1.0f, 1.0f, 0.5f } },
-    /* pad     */ { { 0.25, 0.00, 0.00, 0.75 }, { 1, 6, 7, 8, 9, 10, 2, -1 },      { 0.85, 0.00, 0.0, 0.15 }, { 0.8f, 1.0f, 1.0f, 1.0f, 1.0f } },
-    /* drone   */ { { 0.00, 0.30, 0.00, 0.70 }, { 9, 7, 10, 6, 1, -1, -1, -1 },    { 0.90, 0.10, 0.0, 0.00 }, { 0.7f, 0.6f, 1.0f, 0.8f, 1.0f } },
+    /* lead    */ { { 0.45, 0.15, 0.15, 0.25 }, { 18, 19, 20, 21, 22, 23, 24, 25, 4, 5, -1, -1, -1, -1, -1 },       { 0.80, 0.10, 0.0, 0.10 }, { 1.0f, 0.6f, 1.0f, 1.0f, 0.8f } },
+    /* counter */ { { 0.00, 0.20, 0.20, 0.60 }, { 5, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },        { 0.40, 0.40, 0.0, 0.20 }, { 1.0f, 0.8f, 0.8f, 1.0f, 1.0f } },
+    /* arp     */ { { 0.35, 0.30, 0.10, 0.25 }, { 26, 27, 28, 29, 30, 31, 32, 33, 2, 3, -1, -1, -1, -1, -1 },       { 0.75, 0.25, 0.0, 0.00 }, { 1.0f, 0.0f, 0.8f, 1.0f, 0.6f } },
+    /* stab    */ { { 0.45, 0.25, 0.00, 0.30 }, { 26, 27, 28, 29, 30, 31, 32, 33, 18, 19, 3, 4, -1, -1, -1 },       { 0.70, 0.30, 0.0, 0.00 }, { 1.0f, 0.0f, 1.0f, 1.0f, 0.5f } },
+    /* pad     */ { { 0.25, 0.00, 0.00, 0.75 }, { 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 1, 2, 5 },            { 0.85, 0.00, 0.0, 0.15 }, { 0.8f, 1.0f, 1.0f, 1.0f, 1.0f } },
+    /* drone   */ { { 0.00, 0.30, 0.00, 0.70 }, { 34, 35, 36, 37, 38, 39, 40, 1, -1, -1, -1, -1, -1, -1, -1 },      { 0.90, 0.10, 0.0, 0.00 }, { 0.7f, 0.6f, 1.0f, 0.8f, 1.0f } },
 };
+static_assert(sizeof(kVoicePalette[static_cast<int>(PolyInstance::Pad)].tables) / sizeof(int) == 15
+              && kNumWaveTables == 41,
+              "kVoicePalette's tables[] size and the pad row's 15 real candidates are meant to match exactly "
+              "(no padding) -- if the library selection changes, re-check both");
 
 /**
  * @brief The delay times a voice's role may draw (20.09.2026, round "dialogue").
@@ -970,7 +987,7 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
         for (int v = 0; v < kPolyInstances; ++v) {
             const VoicePalette& pal = kVoicePalette[v];
             int nTables = 0;
-            while (nTables < 8 && pal.tables[nTables] >= 0) ++nTables;
+            while (nTables < static_cast<int>(std::size(pal.tables)) && pal.tables[nTables] >= 0) ++nTables;
             double bestScore = -1.0;
             for (int c = 0; c < 12; ++c) {
                 VoiceRecipe cand;

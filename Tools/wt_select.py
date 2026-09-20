@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """Measure every wavetable of Noctuary's library and choose the set Phosphene ships.
 
-Phosphene is not Noctuary. Noctuary wants drones; a psytrance set wants three different things at
-once, and the three are measurable:
+Phosphene is not Noctuary, but it still has one part that wants what Noctuary was built for: a
+psytrance set needs four different things at once, and the four are measurable:
 
 * the **pad** needs tables whose spectrum *moves* across the frames -- a table whose 64 frames are
   nearly the same wave is 2 MB of mip levels that sound like one frame -- and that keep a
   fundamental, because a pad that is all formant disappears under the kick;
 * the **lead** needs hard, bright tables -- the sync- and PWM-like shapes whose upper harmonics
   carry the sound -- and it needs them to survive the mipmap at C5 and C6, where the lead plays;
-* the **arp** sits between the two: bright but thinner than the lead, so it does not mask it.
+* the **arp** sits between the two: bright but thinner than the lead, so it does not mask it;
+* the **drone** (added 20.09.2026, round "wavetable-selection") wants what Noctuary's own tables
+  were built for after all: an organ-like, clearly pitched fundamental that stays put rather than
+  sweeping, an octave or more under the pad, moving only as far as its own slow cutoff/position
+  ramp (Composer.cpp, kSaltDroneRide) needs.
 
 So this tool measures, per candidate table:
 
@@ -398,7 +402,7 @@ def feature_vector(m):
     return np.array(v, dtype=np.float64)
 
 
-# The three lanes, each with the gate a candidate must pass and the score that ranks the pool.
+# The four lanes, each with the gate a candidate must pass and the score that ranks the pool.
 #
 # The gates are the measurement's own thresholds, not preferences:
 #   * ``alias_c6`` under -60 dB: the DSP round put the supersaw's table saw at -61.6 dB at A6 and
@@ -407,9 +411,24 @@ def feature_vector(m):
 #   * ``move`` over 0.02: below it the frames of the table differ by two per cent of their power
 #     distribution, and 64 frames of mip levels carry one frame's worth of sound.
 #   * ``frames`` at least 16: fewer frames make the position knob a switch.
+#
+# 20.09.2026 (round "wavetable-selection"): every ``take`` widened from the "voices" round's 5/4/3
+# (12 tables total, chosen to prove the four new voices had a sound of their own at all, against a
+# library that was not yet measured for the purpose) towards how many candidates actually clear
+# each lane's gate out of the full 2191 -- 496 pad, 124 lead, 175 arp -- while keeping the pack a
+# fraction of what the Quest APK can absorb (see docs/PLAN.md, this round's block, for the bytes).
+# A fourth lane, ``drone``, is new: the tonic drone (Melody.cpp, ``makeDrone``) used to draw pad
+# lane tables (indices 6/7/9/10, "the organ and the measured, slow tables" of kVoicePalette's own
+# comment) because there was no lane measured for its own character -- a held low fundamental under
+# a slow cutoff/position ramp (docs/PLAN.md, "Stimmen" round). That is not what a pad wants: a pad
+# glides *through* timbres (high ``travel``/``directness``), a drone wants to *stay* one, clearly
+# pitched, organ-like timbre while it slowly moves -- high ``f1`` (a real fundamental, not a cloud
+# of partials), a dark-to-mid centroid (it sits at 70..280 Hz, an octave or more under the pad), and
+# a **bounded** ``move`` -- gliding is still wanted for the slow ramp, but not a sweep, which is what
+# unbounded ``move`` together with the pad's own high ``directness`` gate would let through.
 LANES = {
     "pad": dict(
-        take=5,
+        take=12,
         # A pad plays held chords under a slow position LFO, so the table must *glide*: a long
         # journey (travel) walked in small steps (directness). It must keep a fundamental, or it
         # disappears under the kick, and it must not alias, because a pad is the one part that
@@ -419,7 +438,7 @@ LANES = {
         score=lambda m: 2.0 * m["travel"] + 4.0 * m["directness"] + 0.4 * math.log2(max(m["centroid"], 1.0)),
     ),
     "lead": dict(
-        take=4,
+        take=8,
         # A lead plays short notes: it wants hard and bright, and somewhere to go under the
         # position envelope. Gliding does not matter -- the note is over before a sweep arrives --
         # so directness is not gated here; brightness at C5/C6 without aliasing is.
@@ -428,13 +447,24 @@ LANES = {
         score=lambda m: math.log2(max(m["centroid"], 1.0)) + 1.5 * m["centroid_span"] + 2.0 * m["move"],
     ),
     "arp": dict(
-        take=3,
+        take=8,
         # An arp is a lead that must not mask the lead: mid brightness, the hollow end of the
         # odd/even axis (where a pulse and a hard sync sit), and enough directedness that a
         # sixteenth line does not jump timbre from note to note.
         gate=lambda m: (m["frames"] >= 16 and 4.0 <= m["centroid"] <= 24.0
                         and m["alias_c6"] <= -62.0 and m["travel"] >= 0.15 and m["directness"] >= 0.05),
         score=lambda m: -2.0 * abs(m["odd"] - 0.80) + 1.5 * m["directness"] + 0.3 * m["centroid_span"],
+    ),
+    "drone": dict(
+        take=7,
+        # Organ-like and dark: a strong, clear fundamental (f1 well above the library's own median
+        # of 0.47), a centroid under the pad lane's own floor, and a move that is bounded rather than
+        # merely gated from below -- steady enough that the slow cutoff/position ramp of
+        # Composer.cpp's drone ride (kSaltDroneRide) does not turn into an audible sweep, which is
+        # exactly the pad's job, not the drone's.
+        gate=lambda m: (m["frames"] >= 16 and m["f1"] >= 0.55 and m["centroid"] <= 5.0
+                        and m["move"] <= 0.12 and m["alias_c6"] <= -58.0),
+        score=lambda m: 2.0 * m["f1"] - 0.4 * math.log2(max(m["centroid"], 1.0)) + 1.0 * m["directness"],
     ),
 }
 
@@ -506,10 +536,10 @@ def select(measures, allow_measured=True):
              "left out by --no-measured" if not allow_measured else "included"))
 
     chosen, used = {}, set()
-    for lane in ("pad", "lead", "arp"):
+    for lane in ("pad", "lead", "arp", "drone"):
         cfg = LANES[lane]
         pool = [c for c in pool_all if c["id"] not in used and cfg["gate"](c["m"])]
-        print("  lane %-4s: %d of %d pass the gate" % (lane, len(pool), len(pool_all)))
+        print("  lane %-5s: %d of %d pass the gate" % (lane, len(pool), len(pool_all)))
         picked = farthest_point(pool, cfg["take"], cfg["score"])
         for c in picked:
             used.add(c["id"])
@@ -517,14 +547,14 @@ def select(measures, allow_measured=True):
 
     rows = []
     print()
-    print("%-4s %-22s %-20s %6s %5s %6s %6s %6s %5s %6s %6s %4s" %
+    print("%-5s %-22s %-20s %6s %5s %6s %6s %6s %5s %6s %6s %4s" %
           ("lane", "table", "source", "centr", "span", "move", "trav", "direct", "f1", "C5 dB", "C6 dB", "frm"))
-    for lane in ("pad", "lead", "arp"):
+    for lane in ("pad", "lead", "arp", "drone"):
         for c in chosen[lane]:
             m = c["m"]
             rows.append({"lane": lane, "id": c["id"], "name": display_name(c),
                          "kind": m.get("kind"), "metrics": m})
-            print("%-4s %-22s %-20s %6.2f %5.2f %6.3f %6.3f %6.3f %5.3f %6.1f %6.1f %4d" %
+            print("%-5s %-22s %-20s %6.2f %5.2f %6.3f %6.3f %6.3f %5.3f %6.1f %6.1f %4d" %
                   (lane, display_name(c), c["id"].split("/")[0] + "/" + m.get("kind", "?"),
                    m["centroid"], m["centroid_span"], m["move"], m["travel"], m["directness"], m["f1"],
                    m["alias_c5"], m["alias_c6"], m["frames"]))

@@ -100,8 +100,13 @@ constexpr int kNumLibraryWaveTables = PHOS_WT_LIBRARY_COUNT;
 /** @brief Values the `table` parameter takes: the six built-in tables, then the library. */
 constexpr int kNumWaveTables = kNumBuiltinWaveTables + kNumLibraryWaveTables;
 
-/** @brief The lane a library table was chosen for (`Tools/wt_select.py`), for displays. */
-enum class WaveTableLane : int { Pad = 0, Lead, Arp };
+/**
+ * @brief The lane a library table was chosen for (`Tools/wt_select.py`), for displays.
+ * @note `Drone` appended 20.09.2026 (round "wavetable-selection"): the tonic drone used to draw pad
+ *       lane tables by index; it now has a lane measured for its own character (organ-like, a clear
+ *       fundamental, dark). Display-only, never stored (no Params/.phosset concern).
+ */
+enum class WaveTableLane : int { Pad = 0, Lead, Arp, Drone };
 
 /** @brief Static description of one shipped library table. */
 struct LibraryTableDesc {

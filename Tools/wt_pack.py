@@ -51,8 +51,11 @@ ALIGN = 32
 # Which built-in table stands in for a library table when the pack is missing. A lane's tables get
 # the built-ins of that lane's character in turn, so a set saved with a library table still plays
 # something of the right kind on a machine that has no pack: Vocal/Glass/Formant Saw are the three
-# pad tables written in code, Sync and PWM the two hard ones.
-FALLBACKS = {"pad": (1, 2, 5), "lead": (4, 3), "arp": (3, 4)}
+# pad tables written in code, Sync and PWM the two hard ones. The drone lane (20.09.2026) falls back
+# to Vocal and Glass, the same steady, formant-bearing pair the pad itself falls back to first --
+# there is no organ built-in, and a drone silently sounding like a hushed pad on a machine with no
+# library is closer to its own character than Sync or PWM would be.
+FALLBACKS = {"pad": (1, 2, 5), "lead": (4, 3), "arp": (3, 4), "drone": (1, 2)}
 
 
 def band_of(h):
@@ -117,7 +120,7 @@ def load_selection():
     """The chosen tables with their coefficients, in the order the parameter indices follow."""
     sel = json.load(open(SELECTION_JSON, encoding="utf-8"))["tables"]
     out = []
-    for lane in ("pad", "lead", "arp"):
+    for lane in ("pad", "lead", "arp", "drone"):
         n = 0
         for row in sel:
             if row["lane"] != lane:

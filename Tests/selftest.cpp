@@ -5707,13 +5707,36 @@ void testWaveTableLibrary()
         { "WaveEdit Sohler52", 64, 0.278029, -88.01, -77.25 },
         { "Organ 034", 64, 0.353553, -80.44, -66.62 },
         { "Otmorph 069", 64, 0.353553, -80.64, -76.14 },
+        { "WaveEdit Vocal_fo", 64, 0.310259, -68.11, -79.07 },
+        { "WaveEdit Ppg_wa04", 64, 0.117173, -83.84, -71.55 },
+        { "Sampled 214", 64, 0.353553, -106.07, -88.87 },
+        { "Glass 003", 64, 0.353553, -73.37, -68.43 },
+        { "WaveEdit Organ_di", 64, 0.174622, -84.35, -69.64 },
+        { "AKWF hdrawn-01", 46, 0.353553, -95.48, -88.10 },
+        { "WaveEdit Qux_fmy", 64, 0.216686, -76.37, -70.32 },
         { "WaveEdit Hienharm", 64, 0.321237, -115.80, -111.50 },
         { "WaveEdit Junox_ho", 64, 0.104091, -69.24, -69.09 },
         { "WaveEdit Euclidea", 64, 0.171836, -71.87, -69.44 },
         { "WaveEdit Sohler49", 64, 0.248337, -80.43, -74.28 },
+        { "WaveEdit Pwn_saw", 64, 0.298696, -72.03, -70.44 },
+        { "WaveEdit Tidyb030", 64, 0.163789, -70.04, -69.95 },
+        { "WaveEdit Tezzalog", 64, 0.035683, -68.44, -63.54 },
+        { "WaveEdit Sine_n", 64, 0.353511, -134.48, -117.38 },
         { "Consonant 129", 64, 0.353553, -92.65, -80.59 },
         { "AKWF 0004-hollow-01", 37, 0.353543, -101.98, -88.19 },
         { "WaveEdit Pd104", 64, 0.353553, -64.89, -72.18 },
+        { "WaveEdit Crush_ad", 64, 0.259528, -77.45, -75.33 },
+        { "WaveEdit Micro_q", 64, 0.254158, -69.08, -62.23 },
+        { "AKWF oscchip-04", 24, 0.353553, -76.36, -72.79 },
+        { "AKWF 0014-hollow-01", 17, 0.353552, -100.04, -88.44 },
+        { "Vowel Bass 026", 64, 0.353553, -90.54, -85.73 },
+        { "Sub 003", 64, 0.353553, -130.15, -112.68 },
+        { "WaveEdit Sohler79", 64, 0.215004, -83.00, -78.99 },
+        { "Tube 002", 64, 0.353553, -94.67, -82.74 },
+        { "Consonant 008", 64, 0.353553, -61.49, -65.55 },
+        { "WaveEdit Ppg_wa03", 64, 0.229824, -108.77, -103.83 },
+        { "Pluck 028", 64, 0.353553, -86.35, -79.13 },
+        { "Vowel Alto 012", 64, 0.353553, -107.74, -93.20 },
     };
     static_assert(sizeof(kLibraryRef) / sizeof(kLibraryRef[0]) == kNumLibraryWaveTables,
                   "the reference block and the shipped selection have come apart");
@@ -5931,7 +5954,15 @@ void testWaveTableLibrary()
             std::printf("  the same %d tables from the source .wav files: %.2f MB on disk, %.1f ms\n",
                         read, wavBytes / (1024.0 * 1024.0), wavMs);
         }
-        check(n == kNumLibraryWaveTables && bytes > 0 && bytes < 64u * 1024u * 1024u,
+        // The ceiling was 64 MB against the "wavetable library" round's twelve tables (28.6 MB actual,
+        // desktop, unthinned) -- a sanity bound with about 2.2x headroom, to catch a broken load
+        // growing without bound, not a platform limit (none is documented for either desktop or Quest).
+        // Widened 20.09.2026 (round "wavetable-selection") to 35 tables, 66.37 MB actual desktop: the
+        // number the check must move past, kept at the same roughly 2.2x headroom (rounded) rather than
+        // loosened further, so a future library that quietly doubles again still trips this. The number
+        // that actually matters for the headset is the Quest-thinned one just above (34.54 MB against a
+        // desktop 66.37 MB) -- comfortably inside what the frame-limit lever already proved it saves.
+        check(n == kNumLibraryWaveTables && bytes > 0 && bytes < 144u * 1024u * 1024u,
               "the library's memory is what the plan says it is", fmt("%zu bytes", bytes));
     }
 }
@@ -6107,7 +6138,8 @@ void testWaveTableQuality()
     std::printf("\n");
     for (int i = 0; i < kNumLibraryWaveTables; ++i) {
         const char* lane = kLibraryTables[i].lane == WaveTableLane::Pad ? "pad"
-                         : (kLibraryTables[i].lane == WaveTableLane::Lead ? "lead" : "arp");
+                         : (kLibraryTables[i].lane == WaveTableLane::Lead ? "lead"
+                         : (kLibraryTables[i].lane == WaveTableLane::Arp ? "arp" : "drone"));
         std::printf("  %-22s %-5s", kLibraryTables[i].name, lane);
         for (int limit : kLimits) {
             const MorphMeasure& m = byLimit[limit][static_cast<size_t>(i)];
@@ -12790,6 +12822,8 @@ void testVoicesSound()
         };
         std::printf("         voice             centroid IQR   attack IQR   >2 kHz IQR   tables  osc  neighbours alike\n");
         int badSpread = 0, alikeTotal = 0, fewTables = 0;
+        double ciSum = 0.0;
+        size_t tablesSum = 0;
         for (int v = 0; v < kPolyInstances; ++v) {
             const Row old = bench(v, true), now = bench(v, false);
             std::printf("         %-8s before %7.0f ct   %8.3f s   %7.1f dB   %4zu    %3zu   %d of 19\n", kPolyInstanceNames[v], old.ci, old.ai, old.bi,
@@ -12799,10 +12833,28 @@ void testVoicesSound()
             if (now.ci < 200.0 && now.bi < 2.0) ++badSpread;
             if (now.oscs < 2 || now.tables < 3) ++fewTables;
             alikeTotal += now.alike;
+            ciSum += now.ci;
+            tablesSum += now.tables;
         }
         check(badSpread == 0 && fewTables == 0 && alikeTotal == 0,
               "every voice sounds different from track to track: spread in centroid or brightness, several oscillators and tables, no two neighbours alike",
               fmt("%d voices without spread, %d with too few oscillators or tables, %d neighbouring pairs alike", badSpread, fewTables, alikeTotal));
+        // 20.09.2026 (round "wavetable-selection"): the library each voice's palette draws from went
+        // from 12 tables (mostly 5/4/3 candidates a voice) to 35 (12/8/8/7 across four measured lanes,
+        // the pad/lead/arp ones widened and a new drone lane), everywhere except the counter, which is
+        // deliberately unchanged (kVoicePalette's own comment). The per-voice "tables" column above is
+        // noisy over only 20 tracks -- a lane can hand out the same handful of winners in this one
+        // sample and still be a much wider pool underneath (the arp row below stayed at 4 distinct
+        // tables both times, yet its centroid IQR nearly tripled, because the wider arp lane spans a
+        // much bigger part of the measurement space even when only a few of its members get drawn) --
+        // so the number that actually moves in lockstep with the widening is the sum across all six
+        // voices. Measured against the unwidened kVoicePalette (git stash, this test, same seed): 26
+        // tables used in all, summed centroid IQR 5434 ct. This checks both against thresholds between
+        // that measurement and this round's own 31 / 7554: proof the wider selection changed what a
+        // track actually sounds like, not just what Tools/wt_select.py printed.
+        check(tablesSum >= 29 && ciSum >= 6500.0,
+              "the six voices' tables and centroid spread, summed, are well past what the 12-table library gave them",
+              fmt("%zu tables used in all (12-table library: 26), summed centroid IQR %.0f ct (12-table library: 5434)", tablesSum, ciSum));
     }
 }
 
