@@ -779,11 +779,24 @@ void Composer::matchMaster(const ParamStore& p, TrackPlan& t, const double* firs
  *    had read the bright tracks up to 2.4 dB low, and a constant 7.7 dB apart from the render;
  *  - inside kPresenceBandDb of the median nothing moves (the variety of the voices round stays); outside, the
  *    lines are brought to the band's edge, at most kPresenceCutDb down or kPresenceLiftDb up.
+ *
+ * **The cap, measured rather than widened (20.09.2026, round "climax-polish").** The brightest of 30 tracks
+ * (5 styles, 2 seeds, 3 tracks; the same sample as above) still sat +4.6 dB over the median after the cap --
+ * is the cap too narrow, or is the brightness not in the lines to begin with? Tried both -6 and -9 dB on the
+ * same 30 tracks: the three tracks the cap actually binds on moved 0.47, 1.28 and 1.30 dB at -6, and 0.55,
+ * 1.53 and 1.56 dB at -9 -- 50 % more cut bought at most 0.3 dB more correction. `presenceDb` only ever reads
+ * the lines against the rest (probeLoudness's kProbeLines/kProbeRest split); a track whose brightness sits in
+ * its acid, its percussion or its pad instead has little for a deeper cut on the lines to remove, however
+ * deep it goes -- diminishing returns, not a narrow cap. Left at -6/+3: widening it would have cost more
+ * headroom on tracks it does help (the two with all four lines present moved the most) for a track like
+ * this one that would stay bright regardless. A cut across the *rest* would reach it, but that is a
+ * different, larger change -- it touches the acid and the kit's own recipes, not a level on top of them --
+ * and the voices round's own diversity is deliberately outside matchPresence's reach (see above).
  */
 namespace {
 constexpr double kPresenceRefDb = -7.43;   ///< the probe's reading at the reference median (calibrated, see above)
 constexpr double kPresenceBandDb = 1.5;    ///< no correction within this distance of the median
-constexpr double kPresenceCutDb = 6.0;     ///< the most the lines are taken down
+constexpr double kPresenceCutDb = 6.0;     ///< the most the lines are taken down (kept at 6, not widened -- see above)
 constexpr double kPresenceLiftDb = 3.0;    ///< the most they are brought up
 } // namespace
 
