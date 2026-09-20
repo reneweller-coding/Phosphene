@@ -5764,9 +5764,14 @@ sind je Ereignis vom Seed gezogen (siehe oben) und nicht für jedes Ereignis gle
 in der Lage sein", nicht "tut immer".
 
 *Endstand.* `ctest -C Release -j 8` im Plugin-Build (Zweig `wandering-fx`, ab master b04a9d5; `-j 8` statt
-12, weil `presence-test` zur selben Zeit auf derselben Maschine lief, per Prozessliste geprüft):
-**ERGEBNIS_EINSETZEN**. `ctest -L quick -j 12` vorab (vor dem parallelen Lauf, als die Maschine noch frei
-war): 61/61 grün in 11,8 s.
+12, weil `presence-test` zur selben Zeit auf derselben Maschine lief, per Prozessliste geprüft --
+`phos_selftest.exe --only testModalInterchange.presenceArcOn2` aus dessen eigenem Arbeitsbaum): **108 von
+108 grün** (`selftest` als Gesamtlauf deaktiviert, `questguard` übersprungen -- dieser Arbeitsbaum hat kein
+`ThirdParty`), Wandzeit 709 s bei parallelem Betrieb mit `presence-test`. Darin `vectest`, `_neon` und
+`_scalar` je grün (die drei Vektorpfade bleiben bitgleich), Hosttest (`hosttest` 131,7 s,
+`hosttest.realhost` 216,8 s) und `vst3test` grün, `testSfx`/`testMixBalance`/`testGatedReverb`/
+`testPsychedelia`/`testReverb` unverändert grün (Default aus rührt an keinem bestehenden Render). `ctest -L
+quick -j 12` vorab (vor dem parallelen Lauf, als die Maschine noch frei war): 61/61 grün in 11,8 s.
 
 *Dateien.* Core: `Sfx.h/.cpp`, `Engine.h/.cpp`, `Params.h/.cpp`; `Tests/selftest.cpp`; dieser Block.
 
