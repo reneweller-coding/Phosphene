@@ -46,6 +46,11 @@ const Slice kPolySlices[] = {
     { "Trance Gate", poly::Gate, 7, 4 }, { "Level", poly::Level, 1, 2 },
     // Appended parameters: the disperser, the drift and (19.09.2026) the filter response.
     { "Colour", poly::Disperse, 4, 4 },
+    // 20.09.2026, round "dialogue": the portamento and the place in the image, and the voice's own
+    // comb / flanger / phaser. Every parameter has to stand on a tab or the manual generator refuses
+    // to print (Tools/manual), which is exactly how a forgotten append is caught.
+    { "Glide & Image", poly::Glide, 2, 2 },
+    { "Modulation", poly::Mod, 5, 5 },
 };
 /** @brief The send effects. */
 const Slice kFxSlices[] = {
