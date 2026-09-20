@@ -1800,6 +1800,23 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     }
     for (int k : { kCounterI, kStabI, kDroneI }) m.present[k] = r.uniform() < amounts[k];
     m.present[kCounterI] = m.present[kCounterI] && m.present[kLeadI];
+    // 20.09.2026, round "climax-polish": the guarantee above can be satisfied by the acid alone, and acid
+    // is not a "line" for the presence match or for a drop's brightness (Composer.cpp, matchPresence and
+    // probeLoudness's isLine: lead, counter, arp, stab). Measured over 30 tracks: 5 of them had none of
+    // those four in their drops -- matchPresence corrects a level, it cannot lift a part that never plays,
+    // so those tracks stayed dark no matter the cap. Counter is not a candidate here: it never plays alone
+    // (it answers the lead, the line above), so forcing it on would not open a lead-less drop. Lead and
+    // arp play in every drop that has them (the instrumentation matrix's `drop || draw`, Form.cpp); the
+    // stab only in three quarters of sections there (its own per-section draw) -- so lead and arp are
+    // tried first, the same weighted draw as the guarantee above, and the stab only if both their amounts
+    // are zero. Scoped to the tracks that actually have nothing: a track that already carries a line does
+    // not have its melody touched.
+    if (!m.present[kLeadI] && !m.present[kArpI] && !m.present[kStabI]) {
+        static const int kVoice[3] = { kLeadI, kArpI, kStabI };
+        int best = 0;
+        for (int k = 1; k < 3; ++k) if (amounts[kVoice[k]] * r.uniform() > amounts[kVoice[best]] * r.uniform()) best = k;
+        m.present[kVoice[best]] = amounts[kVoice[best]] > 0.0f;
+    }
     m.key = ((key % 12) + 12) % 12;
     m.root[kAcidI] = kAcidLowest + ((key - 2) % 12 + 12) % 12;   // D3 .. C#4
     // 20.09.2026, round "dialogue": the lead's tonic moved down into the rule's window. With the root at

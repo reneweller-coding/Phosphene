@@ -11658,6 +11658,34 @@ void testPresence()
         check(drops.size() == 4 && bad == 0, "rendered: the listening seed's tracks 1 and 2, the power mean of each track's drops within 2.5 dB of the reference median's presence",
               fmt("presence against the median:%s %d tracks outside", line.c_str(), bad));
     }
+    // (c) The match's blind spot, closed (20.09.2026, round "climax-polish"): a track with none of lead,
+    // counter, arp or stab in its drops has no line for matchPresence to move -- section (a) already
+    // tolerates that (gain stays 0), but it should now be rare. Measured over 150 plans (5 styles, 6 seeds
+    // each, the first 5 tracks of every plan; compose.level_match=Off so this is the score alone, no probes
+    // -- the house rules' speed section) against the guarantee of Melody.cpp: before the fix, 14 of 150 tracks
+    // (seen failing here first) had acid as their only melodic part, so their drops carried nothing
+    // matchPresence counts as a line; after it, the fallback also tries lead, then arp, then stab.
+    {
+        int total = 0, lineless = 0;
+        for (int st = 0; st < kNumStyles; ++st) {
+            for (uint64_t seed = 1; seed <= 6; ++seed) {
+                ParamStore q;
+                q.parseText("compose.level_match=Off master.auto_gain=Off");
+                q.parseText(fmt("compose.style=%d", st).c_str());
+                Composer c(seed);
+                for (int t = 0; t < 5; ++t) {
+                    const TrackPlan tp = c.track(q, t);
+                    ++total;
+                    bool lines = false;
+                    for (MelodyPart mp : { MelodyPart::Lead, MelodyPart::Counter, MelodyPart::Arp, MelodyPart::Stab })
+                        lines = lines || tp.melody.present[mpIndex(mp)];
+                    if (!lines) ++lineless;
+                }
+            }
+        }
+        check(total == 150 && lineless == 0, "every track has at least one line (lead, counter, arp or stab) for its drops, not only the acid",
+              fmt("%d of %d tracks with no line in their drops", lineless, total));
+    }
 }
 
 // ------------------------------------------------------------------------ genre rules, 18.09.2026
