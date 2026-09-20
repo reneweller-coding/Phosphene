@@ -5665,8 +5665,12 @@ wieder in der Freigabe steht. Ein Effekt auf die einzelne Stimme im Raum, keine 
 Mischung — im Vollmix (Kick, Bass, Kit) ist die 63-ms-Lücke nicht als RMS-Einbruch der Summe zu messen
 (andere Instrumente laufen weiter), hörbar ist sie an der Pad-eigenen Raumfahne.
 
-*Endstand.* `ctest -C Release -j 8` im Plugin-Build (Zweig `reverb`, ab master 2ae34ba):
-ENDSTAND_PLACEHOLDER.
+*Endstand.* `ctest -C Release -j 8` im Plugin-Build (Zweig `reverb`, ab master 2ae34ba): **107 von 107
+grün** (`selftest` als Gesamtlauf deaktiviert, `questguard` übersprungen -- dieser Arbeitsbaum hat kein
+`ThirdParty`), Wandzeit 810 s bei parallelem Betrieb mit der Runde `presence-test` auf derselben Maschine.
+Darin `phos_vectest`, `_neon` und `_scalar` je grün (die drei Vektorpfade bleiben bitgleich), Hosttest
+(118 + `realhost` 36 Prüfungen) und VST3-Test grün, `testMixBalance` unverändert grün (Default aus rührt
+an keinem bestehenden Render). `ctest -L quick -j 8` vorab: 61/61 grün in 12,7 s.
 
 *Dateien.* Core: `Reverb.h/.cpp`, `Engine.h/.cpp`, `Params.h/.cpp`; `Tests/selftest.cpp`; dieser Block.
 
