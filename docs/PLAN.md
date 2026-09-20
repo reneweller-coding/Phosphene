@@ -5215,6 +5215,151 @@ Selbsttests: **418 bestanden, 0 rot** (davon fuenf neu). Hosttest: 119 Pruefunge
 `Plugin/PluginEditor.cpp`; `Quest/src/main.cpp`, `Quest/build_apk.ps1`; `Tools/render/main.cpp`,
 `Tools/msvc_avx2_reduction_repro.cpp` (neu); `Tests/selftest.cpp`, `Tests/hosttest.cpp`; dieser Block.
 
+**20.09.2026, Tempo: parallele Proben, Proben-Cache, schnellere Suite**
+
+*Warum.* Die Zeitanalyse der elf Runden: 80 % der Wandzeit sind Warten auf Tests, Builds und Renders, und die
+Wurzel ist der Plan eines Tracks -- zwölf Proberenders nacheinander auf einem Kern (`Composer::probeLoudness`).
+Nachgemessen (Spur in `probeLoudness`, Hörseed, Track 1, seriell): Fundament und sieben Stimmen je 0,33--0,45 s
+(2 Takte), die zwei Präsenzproben je 1,9 s (8 Takte), die zwei Mix-Proben je 4,0--4,1 s (16 Takte) -- zusammen
+15,2 s bei belegtem Rechner, 12,2 s bei ruhigerem. **Der Aufbau einer Probe ist es nicht:** `Engine` anlegen und
+`prepare` kosten 8 ms je Probe (die erste 240 ms, darin das Laden der Wavetable-Bibliothek), also 0,1 s von 15;
+Punkt 2 des Auftrags („billigere Proben") hat deshalb nichts zu entfernen gefunden und nichts geändert.
+
+*Gebaut.*
+
+1. **Parallele Proben in einem Plan, bitgleich** (`Composer::measureTrack`, `phos/Probe.h`, `Core/src/Probe.cpp`).
+   Was eine Probe *liest*, entscheidet, was gleichzeitig laufen darf: Stufe 1 Fundament + Stimmen (alle
+   Korrekturen herausgenommen, voneinander unabhängig, bis zu acht zugleich); Stufe 2 die zwei Präsenzproben
+   (brauchen die Pegelkorrekturen aus Stufe 1); Stufe 3 die erste Mix-Probe; Stufe 4 die zweite (braucht die
+   Lesung der ersten). **Der Auftrag nahm an, die erste Mix-Probe sei von den Präsenzproben unabhängig -- das
+   stimmt nicht:** sie spielt den Track mit `presenceGainDb` auf den Linien (`trackStartControls`), und beide
+   Tracks des Hörseeds tragen einen (+0,88 und −2,18 dB). Genau dieser Fehler ist Mutation 1 unten und fällt
+   sofort (`mixLoudness` weicht ab). Nur mit `compose.presence_match=Off` ist der Gain per Konstruktion null,
+   dann läuft die Mix-Probe neben den Präsenzproben. Ein spekulativer Frühstart („der Gain wird schon null
+   sein") wurde gemessen und verworfen: trifft bei 17 von 44 Plänen, spart dann 2,1 s, verbrennt sonst einen
+   16-Takte-Render -- CPU, die ein paralleler Testlauf nicht übrig hat. Die längste Kette ist damit
+   2 + 8 + 16 + 16 Takte statt 64--72; mehr gibt die Abhängigkeit nicht her (die zwei Mix-Proben sind 8,2 s davon
+   und können nicht überlappen; eine Mix-Probe lässt sich nicht teilen, Hall, Kompressor und Messgerät laufen
+   über ihre vier Fenster durch).
+   Die Aufgaben fassen den Plan nie an: jede liest eine Kopie von vor ihrer Stufe und schreibt in ein eigenes
+   Feld. Arbeiter-Threads mit 16 MB Stack (`_beginthreadex` / pthread), der aufrufende Thread arbeitet mit.
+   *Geteilter Zustand:* jede Probe hat ihre eigene `Engine`; geteilt sind Wavetable-Bibliothek, Voice-Pack,
+   eingebaute Tabellen, Sinustabelle -- nach dem Laden unveränderlich, aber **das Laden selbst ist nicht
+   threadsicher** (ein `attempted`-Flag ohne Sperre in `WaveTableFile.cpp` und `Vocal.cpp`, beides nicht meine
+   Dateien). `probe::warmSharedData()` lädt deshalb alles auf dem aufrufenden Thread, bevor der erste Arbeiter
+   startet (Mutation 4). Die gelernten Modelle (`sharedMelodyModel`, ein Cache je Zeile) werden nur beim
+   Planen benutzt, nie in einer Probe. Denormal-Modus: je `Engine::process` gesetzt und zurückgenommen, also
+   auf jedem Thread gleich.
+   **Entscheidung seriell/parallel:** die Bibliothek bleibt bei *einem* Thread und *ohne* Cache, solange ein
+   Programm nichts anderes verlangt. Plugin und Quest-App rufen nichts davon auf und planen exakt wie vorher
+   (auf Android sind beide Schalter zusätzlich wirkungslos einkompiliert). Begründung: neben einem laufenden
+   Audiothread kann ich nicht zeigen, dass acht rechnende Arbeiter für mehrere Sekunden harmlos sind.
+   Entwicklungsprogramme melden sich mit `probe::configureFromEnvironment()` an: `phos_render`,
+   `phos_plandump`, `phos_selftest`, `phos_hosttest`, `phos_cuedemo`. `PHOS_PROBE_THREADS=1` ist die alte
+   Reihenfolge (höchstens 8, Standard nach Anmeldung: Hardware-Threads, höchstens 8).
+2. **Proben-Cache über Prozessgrenzen** (nur mit `PHOS_PROBE_CACHE=<Verzeichnis>`). Die Eingaben einer Probe
+   werden erst gesammelt, die `Engine` erst gebaut, wenn wirklich gerendert wird. Schlüssel (128 Bit, Feld für
+   Feld, keine Füllbytes): Build-ID des Kerns (SHA-256 über `Core/src`, `Core/include` und Compiler + Flags,
+   bei **jedem Build** neu von `Core/cmake/build_id.cmake`, 0,1 s, Header nur bei Änderung neu), Hash des
+   *Inhalts* der geladenen Wavetables und des Voice-Packs (7 ms je Probe; pro Probe, weil Tests die Bibliothek
+   zurücksetzen), jeder Parameterwert der Proben-Engine nach dem Setup, Tempo, Rate, Blockgröße, Länge, alle
+   Control- und Noten-Events in Reihenfolge. Wert: die drei Zahlen der Probe, 56 Bytes je Datei mit Prüfwort;
+   geschrieben in eine Temp-Datei (Prozess-ID + Zähler) und umbenannt. Eine beschädigte, abgeschnittene oder
+   fremde Datei ist ein Fehlgriff, nie ein falscher Wert. Ohne Build-ID (Fremd-Build) bleibt der Cache aus.
+   ctest gibt jedem Test `<build>/probe_cache` mit; `cmake -E rm -rf <build>/probe_cache` macht den nächsten Lauf
+   kalt (kostet nur Zeit; alte Build-IDs bleiben als 56-Byte-Dateien liegen).
+3. **Suite.** `hosttest` hat 872 s gebraucht -- nicht wegen Echtzeit, sondern weil rund vierzig Prozessoren je
+   einen Track planen. Mit gefülltem Cache blieben 293 s, davon **236 s ein einziger Abschnitt**: „ten seconds of
+   a real host" -- ein zweiter Thread schreibt pausenlos Zufallsparameter, jeder geschriebene Compose-Regler wirft
+   die Pläne weg, jeder neue Plan sind zwölf Proben, die kein Cache kennen kann. Der Abschnitt ist offline und
+   misst keine Zeit; er ist jetzt ein eigener ctest-Test `hosttest.realhost` (`phos_hosttest --part realhost`,
+   4 Prüfungen, `PROCESSORS 3`, ohne Sperre, ohne Cache -- seine Einträge würde nie jemand lesen), der Rest ist
+   `hosttest` (`--part rest`, 115 Prüfungen; 115 + 4 = die 119 von vorher, ohne Argument läuft beides wie
+   bisher). **Keine Prüfung abgeschwächt:** der Abschnitt, der die Planzeit *misst* („a set starts within 30 s"),
+   plant ohne Cache und mit einem Thread, also wie das ausgelieferte Plugin (gemessen 12,5 s); das Orakel
+   (Plugin = `phos_render`, bitgleich) läuft unverändert. `PROCESSORS 5` für `hosttest` bleibt: der Teil dauert
+   jetzt rund eine Minute, seine Ruhe kostet fünf Platz-Minuten statt fünfzig, und die Echtzeit-Abstände bleiben
+   wie vermessen. `hosttest` schreibt jetzt ungepuffert (ein Absturz nahm bisher die ganze Ausgabe mit).
+   `PHOS_SELFTEST_SECONDS` neu aus dem kalten Lauf.
+4. **`Tools/batch_render.py`**: Liste von (Seed, Takte, `--set`, Ausgabe) durch einen Pool von
+   `phos_render`-Prozessen (Standard 8), Konsolenausgabe je Job neben der WAV, JSON-Zusammenfassung, setzt
+   `PHOS_MUTE=1`, teilt die Proben-Threads auf (`cpu_count // workers`), optional gemeinsamer Proben-Cache.
+   Gemessen: 8 Renders zu 64 Takten 20,1 s statt 115,2 s nacheinander, WAV bitgleich.
+   **`Tools/plandump`** (`phos_plandump`): alle von Proben geschriebenen Planfelder als Bitmuster + Planzeit.
+
+*Bitgleichheit -- wie bewiesen.* (a) 53 Pläne (Hörseed 20 Tracks, Seeds 1--6 je 4, Seed 77 mit
+`presence_match=Off`, Seed 2026 mit `level_match=Off` und mit `auto_gain=Off`), alle Felder als Bitmuster:
+MD5 des Dumps `d6d684d8…966a0e` dreimal gleich -- Master 6bf0f8a (vor jeder Änderung gebaut), neu mit 8 Threads
+und kaltem Cache, neu mit warmem Cache. (b) `phos_render --bars 1 --tracks`: WAV-MD5 `8a897040…` vorher, parallel,
+Cache kalt, Cache warm gleich. (c) Hörausschnitte A/B/C, `full.wav` und `full.mid`: MD5 gleich
+`out\listen\4_master_after_polish\`. (d) `testProbeSchedule` im Selbsttest, (e) das Hosttest-Orakel.
+
+*Zahlen* (i9-12900K, 24 Threads; **die Dialog-Runde baute und testete die ganze Zeit daneben**, Rechner zu
+Beginn der Läufe 27--57 % belegt; „seriell" = `PHOS_PROBE_THREADS=1` ohne Cache = der alte Ablauf, jeweils
+gleichzeitig mit dem neuen gestartet, damit die Last dieselbe ist):
+
+| Messung | vorher / seriell | parallel, Cache kalt | Cache warm |
+|---|---|---|---|
+| `phos_render --bars 1 --tracks` (2 Pläne) | 24,4 s (ruhiger Rechner), 34,8 s (57 % Last) | 24,2 s (57 % Last) | **0,88 s** |
+| 20 Tracks planen (Hörseed, neben 9 weiteren Planprozessen) | 249,1 s (12,5 s/Track) | 208,0 s (10,4 s/Track) | **1,09 s** |
+| `phos_selftest --only testPresence` | 418,4 s | 324,4 s | **124,7 s** |
+| `phos_selftest --only testVoices` (7 Teile, ein Prozess) | 828,3 s | 640,2 s | **30,1 s** |
+| `hosttest` | 872 s (ein Prozess) | 394 s (ein Prozess) | `hosttest` 49,5 s + `hosttest.realhost` 222,8 s nebeneinander |
+| Selbsttest, Summe der Testzeiten im `ctest` | rund 3600 s (Auftrag) | 3628 s | **2688 s** |
+| ganzes `ctest -C Release -j 8` (102 grün, `questguard` übersprungen) | 1181 s bei `-j 6` (Runde Testaufteilung), 1958 s bei `-j 4` (Feinschliff) | **760 s** | **597 s** |
+| `ctest -L quick -j 8` (61 Tests) | 14,6 s (`-j 6`) | -- | 11,1 s |
+
+Gerechnet wurde mit `-j 8`, nicht `-j 12`, weil die zweite Runde lief (Hausregel). Ehrlich dazu: **parallel allein
+bringt nur rund 25--30 %** -- die Kette der zwei Mix-Proben begrenzt es --, der große Hebel ist der Cache. Und der
+warme `ctest` ist nicht zehnmal schneller, weil die jetzt längsten Abschnitte (`testPhaseLock.lock` 241 s,
+viermal `testModalInterchange.presence*` um 200 s, `testVariety.levelMatch` 231 s) ganze Tracks *rendern* und
+nicht Proben; das liegt in den Testkörpern, die diese Runde nicht anfassen durfte. Der Schwanz des Laufs sind
+`hosttest` und `vst3test`, die sich eine Sperre teilen und (nach ctests eigener Kostenliste) zuletzt starten.
+
+*Prüfungen* (beide zuerst ROT gesehen -- über die Mutanten unten; 26 neue Prüfungen in `Tests/selftest_probe.cpp`,
+eigene Datei, weil `selftest.cpp` der anderen Runde gehörte; angemeldet in `main()` wie jeder Abschnitt):
+`testProbeSchedule` (109 s): ein paralleler Plan als *erste* Benutzung der geteilten Daten im Prozess, zwei Tracks
+mit 8 Threads, noch einmal nach `resetWaveTableLibrary()` + `resetVoicePack()`, drei Threads, Präsenz-Match aus --
+jeweils bitgleich zur seriellen Reihenfolge; dazu, dass die Referenztracks wirklich einen Präsenz-Gain tragen.
+`testProbeCache` (63 s): Cache aus schreibt nichts; kalt 12 Fehlgriffe + 12 Einträge zu 56 Bytes (12 = 1 + 7 + 2 + 2
+aus der Planstruktur hergeleitet), warm 12 Treffer in 0,06 s, Plan jeweils bitgleich zum ungecachten; andere
+Build-ID: 0 Treffer; leere Build-ID: Cache aus; geänderter Parameter (Perkussionspegel −1,5 dB): 0 Treffer und der
+Plan des geänderten Reglers; in jeder Datei ein Bit gekippt: 0 Treffer, neu geschrieben, Plan unverändert;
+abgeschnittene Datei: Fehlgriff; acht Threads schreiben und lesen dieselben 64 Schlüssel: kein zerrissener
+Eintrag, keine Temp-Datei übrig.
+
+*Mutationsrunde* (5 Fehler, jeder gebaut, gefangen, zurückgenommen; `git diff` danach leer):
+
+| Fehler | gefangen von |
+|---|---|
+| erste Mix-Probe neben den Präsenzproben trotz Präsenz-Match (Probe vor dem Gain, von dem sie abhängt) | `testProbeSchedule`: 4 rot, „track 1, mixLoudness" |
+| Cache-Schlüssel lässt einen Parameter aus (`mix.perc_level`) | `testProbeCache`: „12 hits, 0 misses", Plan weicht in `loudness` ab |
+| Schlüssel ohne Build-ID (veralteter Wert nach Kernänderung) | `testProbeCache`: „a changed build id misses every entry -- 12 hits" |
+| `warmSharedData()` vor den Arbeitern entfernt (Laderennen) | `testProbeSchedule`: 2 rot, „track 1, partLoudness" -- Arbeiter renderten mit den eingebauten Ersatztabellen |
+| Prüfwort beim Lesen ignoriert | `testProbeCache`: beschädigte Einträge liefern 11 Treffer, Plan weicht ab |
+
+*ASan* (`build-asan`, `/fsanitize=address`, wie die Feinschliff-Runde; der eine zusätzliche Baum, den der Auftrag
+verlangt): `testProbeSchedule` (1634 s) und `testProbeCache` (975 s) mit 8 Proben-Threads: 26 Prüfungen grün, keine
+Meldung; dazu der planungsschwere Bestandsabschnitt `testVariety.levelMatch` (3136 s): grün, keine Meldung. TSan gibt es unter MSVC nicht; gegen Rennen stehen die Bitgleichheit über 53 Pläne, die Schnappschuss-
+Regel (keine Aufgabe schreibt, was eine andere liest) und Mutation 4.
+
+*Hören.* Nichts zu hören, und das ist das Ergebnis: A (Takte 24--72, 79,4 s), B (328--368, 66,2 s), C (392--424,
+53,0 s) in `out\listen\speed\` sind Byte für Byte die von `4_master_after_polish`.
+
+*Nicht fertig / offen.* Parallelität *über* Tracks hinweg (die Proben von Track n+1 neben der Mix-Kette von
+Track n) wäre der nächste Faktor für Werkzeuge, die viele Tracks planen, verlangt aber eine andere Schnittstelle
+als das faule `Composer::track()` und wurde nicht angefasst. Die Laderoutinen selbst threadsicher zu machen
+(`WaveTableFile.cpp`, `Vocal.cpp`) lag außerhalb meiner Dateien. Wer Testkörper anfassen darf, holt bei den
+oben genannten Render-Abschnitten am meisten. Beobachtung am Rand: während der Messungen wurden meine
+`phos_selftest.exe`/`phos_hosttest.exe`-Prozesse einmal von außen beendet (vermutlich `taskkill` nach Name aus
+der anderen Runde); Messläufe liefen danach aus umbenannten Kopien.
+
+*Dateien.* Neu: `Core/include/phos/Probe.h`, `Core/src/Probe.cpp`, `Core/cmake/build_id.cmake`,
+`Tests/selftest_probe.cpp`, `Tools/plandump/`, `Tools/batch_render.py`. Geändert: `Core/src/Composer.cpp`,
+`Core/include/phos/Composer.h` (nur Probenmaschinerie), `Core/CMakeLists.txt`, `CMakeLists.txt`,
+`Tests/CMakeLists.txt`, `Tests/selftest_tests.cmake`, `main()` von `Tests/selftest.cpp`, `Tests/hosttest.cpp`,
+`Tests/cuedemo.cpp`, `Tools/render/main.cpp` (ein Aufruf in `main()`); dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

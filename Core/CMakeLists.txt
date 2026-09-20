@@ -26,6 +26,7 @@ add_library(PhospheneCore STATIC
     src/CorpusTables.cpp
     src/Model.cpp
     src/Composer.cpp
+    src/Probe.cpp
     src/SetFile.cpp
     src/Engine.cpp
 )
@@ -51,6 +52,27 @@ if(NOT PHOS_SHIP)
     target_compile_definitions(PhospheneCore PUBLIC PHOS_SOURCE_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 endif()
 target_compile_features(PhospheneCore PUBLIC cxx_std_20)
+
+# The core's build id for the probe cache (include/phos/Probe.h, cmake/build_id.cmake): a hash of Core/src,
+# Core/include and the compile flags, made again by every build (the target is always out of date; the
+# script takes 0.1 s and rewrites the header only when the id changed). Per configuration, because Debug
+# and Release are two cores. The flags file is written at generate time; what it cannot see -- options
+# added to the target after this point -- is named by hand (PHOS_AVX2, PHOS_SHIP). An ASan tree differs in
+# CMAKE_CXX_FLAGS (/fsanitize=address), which is in the file.
+set(PHOS_BUILD_ID_DIR "${CMAKE_CURRENT_BINARY_DIR}/build_id/$<CONFIG>")
+file(GENERATE OUTPUT "${PHOS_BUILD_ID_DIR}/flags.txt" CONTENT
+"${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION} ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}
+config=$<CONFIG> flags=${CMAKE_CXX_FLAGS} $<$<CONFIG:Debug>:${CMAKE_CXX_FLAGS_DEBUG}>$<$<CONFIG:Release>:${CMAKE_CXX_FLAGS_RELEASE}>$<$<CONFIG:RelWithDebInfo>:${CMAKE_CXX_FLAGS_RELWITHDEBINFO}>$<$<CONFIG:MinSizeRel>:${CMAKE_CXX_FLAGS_MINSIZEREL}>
+avx2=${PHOS_AVX2} ship=${PHOS_SHIP} options=$<TARGET_PROPERTY:PhospheneCore,COMPILE_OPTIONS> definitions=$<TARGET_PROPERTY:PhospheneCore,COMPILE_DEFINITIONS>
+")
+add_custom_target(phos_build_id
+    COMMAND ${CMAKE_COMMAND} "-DPHOS_CORE_DIR=${CMAKE_CURRENT_SOURCE_DIR}" "-DPHOS_FLAGS_FILE=${PHOS_BUILD_ID_DIR}/flags.txt"
+            "-DPHOS_OUT=${PHOS_BUILD_ID_DIR}/phos_build_id.h" -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/build_id.cmake"
+    BYPRODUCTS "${PHOS_BUILD_ID_DIR}/phos_build_id.h"
+    COMMENT "Core build id (probe cache key)"
+    VERBATIM)
+add_dependencies(PhospheneCore phos_build_id)
+target_include_directories(PhospheneCore PRIVATE "${PHOS_BUILD_ID_DIR}")
 set_target_properties(PhospheneCore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 find_package(Threads)
 if(Threads_FOUND)

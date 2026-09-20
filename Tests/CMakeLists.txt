@@ -53,8 +53,16 @@ function(phos_copy_data target)
     endforeach()
 endfunction()
 
+# The probe cache of the whole suite (round "speed", 20.09.2026; Core/include/phos/Probe.h): one directory
+# in the build tree, shared by every test process, so that a plan one section has measured -- the listening
+# seed's first tracks are planned by a dozen sections -- is not rendered again by the next, in this run or a
+# later one. Entries are keyed by the core's build id, so a changed core never reads an old core's numbers;
+# `cmake -E rm -rf <build>/probe_cache` makes the next run a cold one (it only costs time).
+set(PHOS_PROBE_CACHE_DIR "${CMAKE_BINARY_DIR}/probe_cache")
+
 # The self test: every building block measured, and the engine as a whole.
-add_executable(phos_selftest selftest.cpp)
+# selftest_probe.cpp: the sections of round "speed" (20.09.2026), registered in selftest.cpp's main() like the rest.
+add_executable(phos_selftest selftest.cpp selftest_probe.cpp)
 target_link_libraries(phos_selftest PRIVATE PhospheneCore)
 phos_test_data_dir(phos_selftest)
 phos_copy_data(phos_selftest ${PHOS_DATA_FILES})
@@ -85,6 +93,7 @@ if(NOT ANDROID)
 "set(PHOS_SELFTEST_EXE [==[$<TARGET_FILE:phos_selftest>]==])
 set(PHOS_SELFTEST_DIR [==[$<TARGET_FILE_DIR:phos_selftest>]==])
 set(PHOS_TEST_TMP [==[${CMAKE_CURRENT_BINARY_DIR}/tmp/$<CONFIG>]==])
+set(PHOS_PROBE_CACHE_DIR [==[${PHOS_PROBE_CACHE_DIR}]==])
 set(PHOS_CMAKE [==[${CMAKE_COMMAND}]==])
 set(PHOS_SELFTEST_SOURCE [==[${CMAKE_CURRENT_SOURCE_DIR}/selftest.cpp]==])
 include([==[${CMAKE_CURRENT_SOURCE_DIR}/selftest_tests.cmake]==])
@@ -119,6 +128,8 @@ if(NOT ANDROID)
     if(Python3_FOUND)
         add_test(NAME cuecheck COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/cue_check.py
                  --demo $<TARGET_FILE:phos_cuedemo>)
+        # phos_cuedemo inherits it from the script.
+        set_tests_properties(cuecheck PROPERTIES ENVIRONMENT "PHOS_PROBE_CACHE=${PHOS_PROBE_CACHE_DIR}")
     endif()
 endif()
 
@@ -198,20 +209,35 @@ if(TARGET Phosphene)
     # finds this checkout, or a shipping one, where it falls back and has to say so. Handing it the
     # define would answer that question wrongly. It names no path of its own, so it needs none.
     phos_copy_data(phos_hosttest ${PHOS_DATA_FILES})
-    add_test(NAME hosttest COMMAND phos_hosttest)
+    # Two tests since 20.09.2026 (round "speed"; the comment in hosttest.cpp's main()): `--part rest` and
+    # `--part realhost`. Every check is in exactly one of them (115 + 4 = the 119 of a run without --part).
+    add_test(NAME hosttest COMMAND phos_hosttest --part rest)
+    add_test(NAME hosttest.realhost COMMAND phos_hosttest --part realhost)
     # Never under PHOS_MUTE (it measures what the plugin sounds like; muted, it would test silence),
     # whatever the shell that starts ctest has set.
     #
-    # And nearly alone: it checks real-time behaviour -- a set starts within 30 s, no gap over 150 ms
-    # while it plays, a timeline tick under 4 ms, faster than real time. PROCESSORS 5 takes five of
-    # the six slots of `ctest -j 6`, so at most one single-threaded test runs beside it (with -j 4 or
-    # less it is clamped to all slots and runs alone). One neighbour on this 24-thread machine is less
-    # than the user's own work at the desk; measured beside testModalInterchange and another checkout's
-    # self test, the margins were wide: first track after 8.4 s (limit 30), a tick 0.56 ms (limit 4),
-    # 7.3x real time. RUN_SERIAL was the first choice and cost 565 s of wall time on its own: nothing
-    # else could run while it did. The lock keeps it apart from the VST3 test on wider -j.
+    # `hosttest` nearly alone: it checks real-time behaviour -- a set starts within 30 s, no gap over 150 ms
+    # while it plays, a timeline tick under 4 ms, faster than real time. PROCESSORS 5 takes five slots, so
+    # with `-j 6` at most one single-threaded test runs beside it (with -j 4 or less it is clamped to all
+    # slots and runs alone). Measured beside testModalInterchange and another checkout's self test, the
+    # margins were wide: first track after 8.4 s (limit 30), a tick 0.56 ms (limit 4), 7.3x real time.
+    # RUN_SERIAL was the first choice and cost 565 s of wall time on its own: nothing else could run while
+    # it did. The lock keeps it apart from the VST3 test on wider -j.
+    #
+    # Still five slots on a machine of 24 threads, deliberately: with the probe cache this part takes about
+    # a minute (it was 9 to 15), so its solitude now costs five slot-minutes instead of fifty, and the
+    # real-time margins stay what they were measured as. The section that times a plan plans it without the
+    # cache and on one thread, as the shipped plugin does (hosttest.cpp).
     set_tests_properties(hosttest PROPERTIES LABELS "audio;slow" PROCESSORS 5 RESOURCE_LOCK phos_realtime
-                         COST 600 ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:")
+                         COST 120 ENVIRONMENT "PHOS_PROBE_CACHE=${PHOS_PROBE_CACHE_DIR}"
+                         ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:")
+    # `hosttest.realhost` is offline and times nothing: no lock. Three slots: its render thread, the thread
+    # that writes parameters without pause, and the probe workers of the plans those writes keep forcing
+    # (eight for half a second per plan, then two, then one -- Composer::measureTrack). No probe cache: its
+    # parameters are random, so no entry would ever be read again, and every run would leave some hundred
+    # files behind.
+    set_tests_properties(hosttest.realhost PROPERTIES LABELS "audio;slow" PROCESSORS 3
+                         COST 400 ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:;PHOS_PROBE_CACHE=unset:")
 endif()
 
 # The built VST3 loaded the way a DAW loads it (Tests/vst3test.cpp): the module off the disk, the

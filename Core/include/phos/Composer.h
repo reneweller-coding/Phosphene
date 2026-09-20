@@ -85,6 +85,7 @@
 #include "phos/Clock.h"
 #include "phos/Form.h"
 #include "phos/Melody.h"
+#include "phos/Probe.h"   // how the probe renders are scheduled; a program that plans tracks may opt in there
 #include "phos/Rhythm.h"
 #include "phos/Score.h"
 #include <cstdint>
@@ -368,9 +369,23 @@ private:
      */
     double probeLoudness(const ParamStore& params, const TrackPlan& plan, int part = -1, float masterGainDb = 0.0f,
                          double* bands = nullptr) const;
-    void matchMaster(const ParamStore& params, TrackPlan& plan) const;
-    /** @brief Measures the drops' presence and sets presenceDb and presenceGainDb (compose.presence_match). */
-    void matchPresence(const ParamStore& params, TrackPlan& plan) const;
+    /**
+     * @brief Auto Gain: two readings of the whole mix and a secant step to master.target_lufs.
+     * @param firstReading the first reading, when measureTrack has rendered it already; null renders it here
+     */
+    void matchMaster(const ParamStore& params, TrackPlan& plan, const double* firstReading = nullptr) const;
+    /**
+     * @brief Measures the drops' presence and sets presenceDb and presenceGainDb (compose.presence_match).
+     * @param linesReading,restReading the band powers of the two presence probes, when measureTrack has
+     *        rendered them already (both or neither); null renders them here, one after the other
+     */
+    void matchPresence(const ParamStore& params, TrackPlan& plan, const double* linesReading = nullptr,
+                       const double* restReading = nullptr) const;
+    /**
+     * @brief Runs every probe of a plan and the three matches that read them, serially or in dependency
+     *        stages (round "speed", 20.09.2026; Probe.h). The plan comes out the same either way.
+     */
+    void measureTrack(const ParamStore& params, TrackPlan& plan) const;
     void sectionControls(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar, double beat,
                          std::vector<ControlEvent>& out, ControlScope scope = ControlScope::All) const;
     /**
