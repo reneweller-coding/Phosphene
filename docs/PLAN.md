@@ -6237,6 +6237,79 @@ bewusst nicht begonnene Aenderung.
 `presenceAfterDb`); `Tests/selftest.cpp` (`testPresence` Teil (c) neu, `testClimax` neue Pruefung,
 `testArrangement`-Kommentar aktualisiert); dieser Block. Keine Zeile in `Plugin/`, `Quest/`.
 
+**20.09.2026, Wavetable-Auswahl erweitert**
+
+Auftrag (A9): `kVoicePalette`s Kandidatenliste je Stimme von den heutigen 18 Tabellen (6 eingebaut, 12
+aus Noctuarys 2191) auf einen groesseren Ausschnitt weiten, `tables[8]` bei Bedarf vergroessern, Quest-
+APK-Budget im Blick behalten, Klangvielfalt vorher/nachher belegen.
+
+*Messung.* `Tools/wt_select.py --measure` lief ueber alle 2191 Tabellen (71 s). Von den drei Lanes pad/
+lead/arp passen 496/123/170 durchs Tor; `take` wuchs von 5/4/3 auf 12/8/8. Neue vierte Lane `drone`
+(f1 >= 0,55, Schwerpunkt <= 5,0, move <= 0,12 -- Orgel-artig, klarer Grundton, dunkel, gebremste
+Bewegung statt der Fläche ihres Gleitens): 804 von 2191 passen, `take` 7. Die Tonic Drone zog bis heute
+Pad-Lane-Tabellen per Index, mangels eigener Lane. 35 Bibliothekstabellen insgesamt.
+
+*Palette.* `VoicePalette::tables[8]` -> `tables[15]` (Pad-Zeile: 12 eigene Lane-Tabellen + Vocal/Glass/
+Formant Saw = 15, keine Polsterung). lead/arp je die volle eigene Lane + zwei passende Eingebaute; stab
+die volle Arp-Lane + zwei helle Lead-Tabellen + PWM/Sync; drone die volle neue Lane + Vocal. **Der
+Counter bleibt bewusst bei 3** (Vokal/Formant-Eingebaute) -- die "Stimmen"-Runde wollte das so, nicht aus
+Messmangel. Zwei Stellen lasen `tables[8]` hart codiert; beide auf einen gemeinsamen Helfer
+(`paletteTableCount`) umgestellt, der jetzt auch testbar ist (`Composer::voicePaletteTableCount`).
+
+*Quest-Budget.* `library.phoswt` liegt nur die referenzierten Tabellen bei, keine Kopie der 2191 --
+mehr Referenzen heisst also mehr Nutzlast. Pack 750.264 -> 2.126.740 Byte (2,83x). Quest-APK (ThirdParty-
+Junction geliehen, danach entfernt, Hauptcheckout unveraendert) 8.803.479 -> 10.052.759 Byte (+14,2 %),
+der ganze Zuwachs in `assets/library.phoswt` (komprimiert 1.907.615 B), die drei anderen Assets
+bytegleich. Speicher nach Mip-Aufbau (Desktop, ungeduennt) 28,6 -> 66,37 MB; die Quest-relevante,
+gedünnte Zahl 34,54 MB. Die alte Selbsttest-Schranke (64 MB, Sicherheitsabstand ~2,2x gegen die alten
+28,6 MB) auf 144 MB angehoben, derselbe Abstand gegen die neuen 66,37 MB -- keine Plattformgrenze ist
+dokumentiert, die Zahl ist eine Anlaufstelle gegen einen kaputten Ladevorgang, keine.
+
+*Klangvielfalt* (`testVoicesSound`, 20 Tracks des Hoer-Seeds, vorher = heutige 12-Tabellen-Bibliothek):
+
+| Stimme | Tabellen vorher | Tabellen nachher | Schwerpunkt-IQR vorher | nachher |
+|---|---|---|---|---|
+| Lead | 3 | 4 | 1129 ct | 1427 ct |
+| Counter | 3 | 3 | 1302 ct | 1040 ct |
+| Arp | 4 | 4 | 505 ct | 1598 ct |
+| Stab | 4 | 5 | 1244 ct | 1570 ct |
+| Pad | 7 | 9 | 348 ct | 1013 ct |
+| Drone | 5 | 6 | 906 ct | 906 ct |
+
+Summe Tabellen 26 -> 31, Summe Schwerpunkt-IQR 5434 -> 7554 ct. Neuer Check dazu, deterministisch gegen
+`Composer::voicePaletteTableCount()` (nicht die verrauschte Rendermessung allein -- eine Mutation zeigte,
+dass die allein einen hartkodierten Scan nicht zuverlaessig fing): Mindestkandidaten je Stimme, Counter
+exakt 3. Beide Checks zuerst gegen die alte, schmale Palette FAIL gesehen.
+
+*Mutationen* (5, jede gefangen, zurueckgesetzt, `git diff` danach leer): `tables[]`-Groesse ohne den
+`static_assert` verstellt (Kompilierfehler); der Scan-Bound zweimal hart auf 8 zurueckgesetzt (einmal vor
+dem Helfer-Refactor -- die Aggregat-Messung allein liess es knapp durchrutschen, 29/6500 statt der
+erwarteten Schwaeche, genau der Fund, der den deterministischen Check ausloeste; einmal danach im Helfer
+selbst -- gefangen); der Counter um eine Bibliothekstabelle erweitert (gefangen, exaktes Soll verletzt);
+die Drone-Zeile auf 3 Kandidaten zurueckgestutzt (gefangen).
+
+*Pruefungen.* `phos_vectest`/`_neon`/`_scalar` je 17/17 (0 abweichende Samples, auch die 56 Oszillator-
+Slots/16 Stimmkanaele mit Wavetable). `testWaveTableLibrary` 9/9, `testWaveTableQuality` 3/3,
+`testVoices.score/droneRender/counterSoundListening/sound` gruen, `testMixBalance` 6/6,
+`testFoundation.render` 3/3, `testGenreRules.listeningSeed` 4/4.
+
+*Hoeren* (`out\listen\wavetable-selection`): A/B/C wie immer (`listen.py`, unveraendert). Dazu 18
+Ausschnitte `<stimme>_<t1|t2|t3>_drop.wav`, je 16 Takte ab dem ersten Drop der Tracks 1/2/3 (Takt 81/321/
+561, solo je Stimme, `--solo <stimme>`), zum Vergleich der Klangfarbe derselben Stimme über drei Tracks:
+Lead t1/t2/t3 sollte drei erkennbar verschiedene Tabellen zeigen (vorher oft dieselbe Sync/PWM-Ecke);
+Pad t1 gegen t3 den groessten Sprung (Hyperbol-artig hell gegen ein dunkleres Lane-Mitglied); Drone
+t1..t3 die neue Orgel-Lane statt der alten Pad-Tabellen-Umwidmung.
+
+*Nicht geschafft.* Keine Hoerprobe der stab-Kreuzbestäubung (Arp-Lane + zwei helle Lead-Tabellen) gegen
+die alte, rein eingebaute Stab-Farbe einzeln verglichen -- die sechs `_t1/t2/t3`-Saetze oben zeigen sie
+nur im Kontext der uebrigen Stimmen. Quest-APK nicht auf dem Geraet gehoert (kein Headset am Rechner).
+
+*Dateien.* `Tools/wt_select.py`, `Tools/wt_pack.py`, `Tools/wt_selection.json`; `Core/data/library.phoswt`,
+`Core/data/CREDITS-wavetables.md`, `Core/include/phos/WaveTableList.inl` (generiert); `Core/include/phos/
+WaveTableFile.h` (`WaveTableLane::Drone`); `Core/include/phos/Composer.h`, `Core/src/Composer.cpp`
+(`tables[15]`, `paletteTableCount`, `voicePaletteTableCount`); `Tests/selftest.cpp` (`kLibraryRef`
+neu erzeugt, Speicherschranke, zwei neue `testVoicesSound`-Checks); dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
