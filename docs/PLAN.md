@@ -5063,7 +5063,8 @@ Laenge 128--320 jedes Stils und faellt sofort, wenn eine Form wieder zu kurz her
 ganze `ctest` darunter gefahren. Ein echter Fund, nicht der gesuchte: `testKickBody` las in seinem letzten
 Beat-Fenster `latency` Samples **hinter dem Render-Puffer** (`at(bt + 1.0)` bei Takt 70 von 70 plus die
 Latenz des Limiters) -- heap-buffer-overflow, seit dem Aufbau des Abschnitts vorhanden und in keinem normalen
-Lauf sichtbar. Behoben (geklemmt, das unvollstaendige Fenster uebersprungen), unter ASan nachgeprueft.
+Lauf sichtbar. Behoben (geklemmt, das unvollstaendige Fenster uebersprungen); mit dem reparierten Stand liefen `testKickBody`,
+`testClimax` und `testPresence` noch einmal unter ASan: 8 Pruefungen, 0 rot, keine Meldung.
 clang-cl mit UBSan steht auf dem Rechner nicht zur Verfuegung.
 
 *Pruefungen, neu.* `testClimax` (drei Checks: Gain-Staffelung ueber 20 Trackplaene aller Stile, und je ein
