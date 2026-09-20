@@ -194,6 +194,10 @@ private:
     LoudnessDisplay*  loudness_ = nullptr;
     TrackDisplay*     tracks_ = nullptr;
     juce::Slider*     exportBars_ = nullptr;
+    /** @name The factory-defaults group of the Set tab (20.09.2026, round "dialogue") @{ */
+    juce::TextButton* legacyButton_ = nullptr;   ///< "Load the saved knobs anyway", shown only while one is held
+    juce::Label*      legacyNote_ = nullptr;     ///< why the session came up on the defaults
+    /** @} */
     std::unique_ptr<juce::FileChooser> chooser_;
     /** @brief The track list as the composer has published it so far. */
     std::vector<TrackDisplay::Row> trackRows_;

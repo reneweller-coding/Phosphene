@@ -79,6 +79,19 @@ constexpr Part sfxTypePart(SfxType t)
          : (t >= SfxType::Bowl && t <= SfxType::JawHarp) ? Part::Texture
          : Part::Sfx;
 }
+/**
+ * @brief Whether an effect type counts towards the user's density rule (20.09.2026, round "dialogue").
+ *
+ * The rule: "im Groove gibt es nie zwei Takte hintereinander ohne mindestens einen Zap, Glitch oder
+ * Swell". The three words name the three families the effect strip has -- the short bright one-shots
+ * (zap, squelch, bubble), the glitch (the stutter of the melodic bus) and everything that swells in or
+ * out (riser, sweep, reverse swell, reverse crash, downlifter, impact, sub drop) -- so the rule reads
+ * exactly as "an event of the effects strip". The voices and the shamanic bed do not count: they are
+ * another layer with another job, and a groove carried by chant alone would otherwise satisfy a rule
+ * that is about the candy. Form.cpp's density floor keeps it.
+ */
+constexpr bool isDensityEvent(SfxType t) { return sfxTypePart(t) == Part::Sfx; }
+
 /** @brief The part a note is played by: its own, or for an effect note the part of its type. */
 inline Part routedPart(const NoteEvent& e)
 {

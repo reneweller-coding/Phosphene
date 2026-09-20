@@ -227,6 +227,40 @@ void PhospheneEditor::buildSetPage()
         };
         page->addControl(ge, std::move(load), "", 2, true);
     }
+
+    // 20.09.2026, round "dialogue". Two things the rule asks for, in one place where they can be seen:
+    // a visible way back to the shipped calibration, and -- when a state older than version 3 was
+    // loaded -- the offer that replaces silently applying it (PluginProcessor.h, kStateVersion).
+    const int gd = page->addGroup("Factory defaults", tint, 4);
+    {
+        auto reset = std::make_unique<juce::TextButton>("Reset to factory defaults");
+        reset->setTooltip("Puts every knob back to the value this build ships with. The set itself -- seed, "
+                          "locks and rerolls -- is left alone.");
+        reset->onClick = [this] {
+            proc_.resetToFactoryDefaults();
+            if (legacyNote_ != nullptr) legacyNote_->setText(juce::String(), juce::dontSendNotification);
+            if (legacyButton_ != nullptr) legacyButton_->setVisible(false);
+        };
+        page->addControl(gd, std::move(reset), "", 2, true);
+
+        auto adopt = std::make_unique<juce::TextButton>("Load the saved knobs anyway");
+        adopt->setTooltip("Applies the knob values of the older session that was loaded. They were saved "
+                          "before this build's calibration and will replace it.");
+        adopt->onClick = [this] {
+            proc_.adoptLegacyState();
+            if (legacyNote_ != nullptr) legacyNote_->setText("The older session's knobs are in.", juce::dontSendNotification);
+            if (legacyButton_ != nullptr) legacyButton_->setVisible(false);
+        };
+        legacyButton_ = adopt.get();
+        legacyButton_->setVisible(false);
+        page->addControl(gd, std::move(adopt), "", 2, true);
+
+        auto note = std::make_unique<juce::Label>();
+        note->setJustificationType(juce::Justification::centredLeft);
+        note->setMinimumHorizontalScale(1.0f);
+        legacyNote_ = note.get();
+        page->addControl(gd, std::move(note), "", 4, true);
+    }
     pages_[0] = std::move(page);
 }
 
@@ -250,6 +284,21 @@ void PhospheneEditor::refreshSetPage()
         statusLabel_->setText(s, juce::dontSendNotification);
     }
     if (recordButton_ != nullptr) recordButton_->setButtonText(proc_.isRecording() ? "Stop recording" : "Record...");
+    // The older-state offer (20.09.2026). It appears only while a state of version 1 or 2 is held back,
+    // and it names the version, so the user can see why their session came up on the defaults.
+    if (legacyButton_ != nullptr && legacyNote_ != nullptr) {
+        const bool held = proc_.pendingLegacyState().isNotEmpty();
+        if (held != legacyButton_->isVisible()) {
+            legacyButton_->setVisible(held);
+            legacyNote_->setText(held ? "This session was saved by an older build (state version "
+                                            + juce::String(proc_.lastStateVersion())
+                                            + "). Such a state stores every knob of its own session, including the ones "
+                                              "later calibration changed, so it was not applied: you are hearing this "
+                                              "build's defaults."
+                                      : juce::String(),
+                                 juce::dontSendNotification);
+        }
+    }
 
     // The plan as the composer has published it. Reading it is a copy under a short lock and never
     // waits for a probe render; the list grows as the composer's spare time plans the next track.

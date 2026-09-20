@@ -69,6 +69,36 @@
  *  - the **bass does not drift**, and cannot: it is not a Poly instance. The phase lock of kick and
  *    bass sits on the bass's first note, and a drifting bass would break it.
  *
+ * **Glide (portamento), 20.09.2026, round "dialogue".** The user's articulation rule separates the two
+ * leads: "die Lead fliesst mit Portamento ueber die Halbtonschritte, die Counter-Lead peitscht trocken".
+ * Until this round no polyphonic voice could bend at all -- only the acid slid -- so the rule had no
+ * mechanism. `poly.glide` is the time constant of a one-pole slew on the voice's pitch, in
+ * milliseconds:
+ *
+ *  - the slew runs **on the same absolute kPolyBlock grid the drift walks on**, so where the host cuts
+ *    its blocks never decides when a pitch changes, and the scalar side alone computes it: the kernels
+ *    see the same slot phase steps they always saw and the AVX2, NEON and scalar paths stay
+ *    bit-identical;
+ *  - a note starts from the voice's **last sounding pitch**, held per instance rather than per voice,
+ *    so two overlapping notes chain into one continuous bend instead of each restarting from its own
+ *    predecessor -- the "retrigger-free where two notes overlap" of the rule. The amplitude and filter
+ *    envelopes are untouched: a new note is still a new note, it simply arrives from where the voice
+ *    already was;
+ *  - the first note after a silence does not glide (there is nothing to glide from), and neither does
+ *    a note whose pitch equals the one before it;
+ *  - at glide 0 -- every voice's default except the lead's -- nothing is computed and the slot
+ *    coefficients are exactly the ones noteOn() wrote, so a render is bit for bit the render of before.
+ *
+ * The slew is on the *pitch*, not on the frequency: a semitone takes the same time wherever it lies,
+ * which is what a portamento is. A pitch that moves inside a note necessarily smears the harmonics --
+ * that is the effect -- so the glide is the one thing that is deliberately *not* held for the note the
+ * way the drift is (Poly.h above).
+ *
+ * **Pan (same round).** `poly.pan` places the voice's dry signal, constant power. The rule makes it a
+ * property of the role -- the lead slightly left, the counter slightly right -- so that the two leads
+ * are separated in the image as well as in register and articulation. The delay send is taken from the
+ * unpanned sum, so the voice's own left/right delay times keep their image whatever the pan does.
+ *
  * Three quantities drift per note: the pitch of each unison slot (its own walk, so the seven saws of
  * a supersaw move against each other, which is what a unison of real oscillators does), the voice's
  * filter cutoff (a quarter of the pitch deviation in cents, a design ratio), and the amplitude
@@ -183,6 +213,14 @@ public:
     /** @brief The drift walk of one voice, in cents (tests). */
     float voiceDrift(int voice) const { return driftVoice_[voice] * driftNorm_; }
     /**
+     * @brief The pitch a voice's oscillators are sounding at right now, in MIDI notes (tests).
+     *
+     * Equal to the note's own pitch except while a glide is running (Poly.h), which is what makes the
+     * portamento measurable without a spectrum: the self test reads this on the kPolyBlock grid and
+     * checks the trajectory against the time constant the parameter asks for.
+     */
+    double soundingPitch(int voice) const { return glidePitch_[voice]; }
+    /**
      * @brief Wavetable reads the scalar pre-pass has done since prepare(), for the tests.
      *
      * The pre-pass reads one table sample per sounding wavetable slot per sample, and each read is a
@@ -223,6 +261,16 @@ private:
 
     void voiceCoefs(int voice);
     void lowPassCoefs(int voice, double damping);
+    /**
+     * @brief Writes a voice's slot frequencies for the pitch it is sounding at (Poly.h, glide).
+     *
+     * Exactly the arithmetic noteOn() does for dt, inv, mdt and the wavetable read, with the note's own
+     * detune curve, detune scale and FM ratio held from note on, so that a voice that never glides gets
+     * the same numbers twice and one that does moves continuously between them.
+     */
+    void writeSlotPitch(int voice);
+    /** @brief Advances every gliding voice by one kPolyBlock grid step (Poly.h). */
+    void advanceGlide();
     /**
      * @brief Advances every drift walk by one kPolyBlock grid step.
      *
@@ -268,6 +316,27 @@ private:
     float driftAlpha_ = 0.0f;                 ///< one-pole coefficient of a walk, per grid step
     float driftNorm_ = 0.0f;                  ///< walk -> cents, so the standing deviation is drift_
     float drift_ = 0.0f;                      ///< poly.drift in cents (standing deviation)
+    /** @name Portamento (20.09.2026, round "dialogue"; Poly.h)
+     *  @{ */
+    double glidePitch_[kPolyVoices] = {};     ///< the pitch each voice sounds at now, in MIDI notes
+    double glideTarget_[kPolyVoices] = {};    ///< the note's own pitch: where the slew is going
+    double glideY_[kPolyVoices] = {};         ///< the note's detune curve value, held for the note
+    double glideScale_[kPolyVoices] = {};     ///< the note's detune scale (FM halves it), held
+    double glideFmRatio_[kPolyVoices] = {};   ///< the note's FM ratio, held
+    /**
+     * @brief Each slot's thermal drift factor, read at note on and held for the note.
+     *
+     * The drift walks keep moving while a note sounds (Poly.h), and a glide has to keep reading the
+     * value the note started with -- otherwise the portamento would drag the drift into the note and
+     * break the statement that a sounding oscillator's pitch is constant apart from the bend.
+     */
+    double driftFactorHeld_[kPolySlots] = {};
+    double lastPitch_ = -1.0;                 ///< the instance's last sounding pitch, < 0 before the first note
+    int    newest_ = 0;                       ///< the voice that started last: the one lastPitch_ follows
+    float  glideAlpha_ = 0.0f;                ///< one-pole coefficient of the slew, per kPolyBlock step
+    float  glideMs_ = 0.0f;                   ///< poly.glide: 0 switches the whole mechanism off
+    float  panL_ = 1.0f, panR_ = 1.0f;        ///< constant-power gains of poly.pan (both exactly 1 at centre)
+    /** @} */
     Disperser disperse_;                      ///< all-pass chain coefficients (Disperser.h)
     DisperserChannel dispL_, dispR_;          ///< its state, one per output channel
     TempoDelay delay_;

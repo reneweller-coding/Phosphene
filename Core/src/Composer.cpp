@@ -152,6 +152,28 @@ const VoicePalette kVoicePalette[kPolyInstances] = {
 };
 
 /**
+ * @brief The delay times a voice's role may draw (20.09.2026, round "dialogue").
+ *
+ * Indices into kDelayBeats (Params.h): 0 = 1/16 (0.25 beats), 1 = 1/8, 2 = a dotted eighth (0.75, "3/16"),
+ * 3 = a quarter, 4 = a dotted quarter, 5 = a half. The user's rule gives each of the two leads an echo of
+ * its own -- the lead a dotted eighth, the counter a fast sixteenth ping-pong -- and a per-track recipe
+ * may vary only inside that family, so the two never swap characters. A ping-pong is two *different*
+ * times on the two sides (TempoDelay); the counter's pair is therefore 1/16 against 1/8 or 1/16 against
+ * a dotted eighth, both of which put its repeats between the lead's. Pad and drone send nothing into
+ * their delay (delay_send 0), so their family exists only to keep the table complete.
+ */
+struct VoiceDelayFamily { int left[3]; int leftCount; int right[3]; int rightCount; };
+const VoiceDelayFamily kVoiceDelay[kPolyInstances] = {
+    /* lead    */ { { 2, 2, 2 }, 1, { 2, 4, 4 }, 2 },   // dotted eighth against itself or a dotted quarter
+    /* counter */ { { 0, 0, 0 }, 1, { 1, 2, 2 }, 2 },   // 1/16 against 1/8 or a dotted eighth: the ping-pong
+    /* arp     */ { { 2, 1, 1 }, 2, { 1, 3, 3 }, 2 },   // as before: the arp's own short echo
+    /* stab    */ { { 2, 3, 3 }, 2, { 3, 1, 1 }, 2 },
+    /* pad     */ { { 3, 4, 4 }, 2, { 4, 5, 5 }, 2 },
+    /* drone   */ { { 4, 5, 5 }, 2, { 5, 4, 4 }, 2 },
+};
+static_assert(sizeof(kVoiceDelay) / sizeof(kVoiceDelay[0]) == kPolyInstances, "one delay family per polyphonic instance");
+
+/**
  * @brief How the five directions of a voice recipe move the knobs: parameter, direction, weight in
  *        normalised knob units at full variation (Composer.h, VoiceRecipe).
  *
@@ -482,8 +504,12 @@ constexpr int kDroneLowTail = 2;
 
 static PartAvailability availabilityOf(const TrackPlan& plan);
 
-/** @brief One bar as the drone sees it: whether it plays and whether in its low octave. */
-struct DroneBar { bool on = false, low = false; int section = -1; };
+/**
+ * @brief One bar as the drone sees it: whether it plays, in which octave, and whether pad or acid
+ *        share its band there (20.09.2026 -- a run breaks where that changes, because the chord the
+ *        drone holds changes with it).
+ */
+struct DroneBar { bool on = false, low = false, shaded = false; int section = -1; };
 
 /**
  * @brief The drone's state in bar @p inTrack: on where the form sets its bit, low where the floor is
@@ -500,10 +526,11 @@ static DroneBar droneBarAt(const TrackPlan& plan, const PartAvailability& a, int
     d.low = bp.floorSilent;
     for (int k = 1; k <= kDroneLowTail && d.low; ++k)
         d.low = inTrack + k < plan.bars && planBar(plan.form, a, plan.sectionSeed, inTrack + k).floorSilent;
-    // In the tail of a silent floor the drone would move to its upper octave -- the pad's root and fifth,
-    // the acid's octave. Where either of them plays it leaves instead (Form.cpp gives the upper octave only
-    // to bars without them), and its low note's release is the fade.
-    if (!d.low && (bp.parts & (partBit(MelodyPart::Pad) | partBit(MelodyPart::Acid))) != 0) d.on = false;
+    // Until 20.09.2026 the drone left a bar in which pad or acid sounded, which is why it was measured
+    // absent (Form.cpp): nearly every bar of a track has one of the two. It stays now, in its raised
+    // octave and reduced to its root where those two already own the fifth (composeMelodyBar), and the
+    // masking it leaves is a measurement rather than a prohibition.
+    d.shaded = !d.low && (bp.parts & (partBit(MelodyPart::Pad) | partBit(MelodyPart::Acid))) != 0;
     return d;
 }
 
@@ -544,15 +571,26 @@ static MelodyContext melodyContext(const TrackPlan& plan, const BarPlan& bp, int
         const DroneBar before = droneBarAt(plan, a, inTrack - 1);
         const bool start = !before.on || before.section != here.section || before.low != here.low;
         if (start) {
+            // The run is walked to its end rather than to a fixed 64 bars (20.09.2026): with the drone
+            // under every bar a run is a whole section, and a cap inside a section would have ended the
+            // held chord in the middle of one with nothing to follow it. A section can never be longer
+            // than the track, so plan.bars is the bound.
             int k = 1;
-            while (k < 64) {
+            bool shaded = here.shaded;
+            while (k < plan.bars) {
                 const DroneBar next = droneBarAt(plan, a, inTrack + k);
                 if (!next.on || next.section != here.section || next.low != here.low) break;
+                shaded = shaded || next.shaded;
                 ++k;
             }
             c.droneBars = k;
             c.droneLow = here.low;
             c.droneTail = 0;
+            // What the run holds is decided once, here, and not bar by bar: the drone's attack is 1.5 s,
+            // so a chord that changed whenever the pad came and went would pump instead of carrying. A
+            // run in which pad or acid sound *anywhere* keeps the root alone; only a run with the band
+            // to itself adds the fifth (composeMelodyBar).
+            c.droneShaded = shaded;
         }
     }
     return c;
@@ -910,9 +948,17 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
                 cand.osc = pick(rv, pal.osc, static_cast<int>(PolyOsc::Count));
                 cand.table = nTables > 0 ? pal.tables[rv.below(nTables)] : -1;
                 cand.filter = pick(rv, pal.filter, static_cast<int>(PolyFilter::Count));
-                static const int kLeft[4] = { 1, 2, 3, 4 }, kRight[4] = { 3, 2, 1, 4 };
-                cand.delayL = kLeft[rv.below(4)];
-                cand.delayR = kRight[rv.below(4)];
+                // The echo is a property of the *role* since 20.09.2026 (round "dialogue"). The user's
+                // rule: "Lead auf ein punktiertes Achtel (3/16), Counter auf ein schnelles 1/16
+                // Ping-Pong". Until then every voice drew its two times from the same four, so a track
+                // could give the lead a sixteenth and the counter a dotted eighth -- exactly the wrong
+                // way round -- and the contrast the rule is about was a matter of luck. Now each voice
+                // draws inside its own family (kVoiceDelayL / kVoiceDelayR), so a track still varies
+                // its echoes but never trades the two leads' characters. Two draws either way, so no
+                // other decision of this candidate moves.
+                const VoiceDelayFamily& fam = kVoiceDelay[v];
+                cand.delayL = fam.left[rv.below(fam.leftCount)];
+                cand.delayR = fam.right[rv.below(fam.rightCount)];
                 drawRecipe(rv, cand.macro, kNumVoiceMacros);
                 double score = 1e9;
                 for (int back = 1; back <= 2 && i - back >= 0; ++back) {

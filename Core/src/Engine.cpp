@@ -67,6 +67,7 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
     vocal_.prepare(sr_);   // loads the voice pack on the first call (Vocal.h); never on the audio thread
     sfxFx_.prepare(sr_);
     sendFx_.prepare(sr_);
+    for (int i = 0; i < kPolyInstances; ++i) { polyFlanger_[i].prepare(sr_); polyPhaser_[i].prepare(sr_); }
     throw_.prepare(sr_);
     stutter_.prepare(sr_);
     subDuck_.prepare(sr_);
@@ -118,6 +119,7 @@ void Engine::reset()
     vocal_.reset();
     sfxFx_.reset();
     sendFx_.reset();
+    for (int i = 0; i < kPolyInstances; ++i) { polyFlanger_[i].reset(); polyPhaser_[i].reset(); }
     throw_.reset();
     stutter_.reset();
     subDuck_.reset();
@@ -317,6 +319,17 @@ void Engine::applyParams()
         gateTone_[k] = e(pb + poly::GateTone);
         gateAttack_[k] = e(pb + poly::GateAttack) * 0.001 / beatSeconds;
         gateRelease_[k] = e(pb + poly::GateRelease) * 0.001 / beatSeconds;
+        // 20.09.2026, round "dialogue": the voice's own modulation insert (PsyFx.h). A comb is the
+        // flanger with its sweep stopped, so both share one object; the type decides which of the two
+        // runs and whether either runs at all. Both are tempo-synchronised by construction (their LFO
+        // reads the absolute beat), so the period stays a period in bars however the tempo ramps.
+        polyMod_[k] = static_cast<int>(std::lround(e(pb + poly::Mod)));
+        const float mix = e(pb + poly::ModMix);
+        const bool comb = polyMod_[k] == static_cast<int>(PolyMod::Comb);
+        polyFlanger_[k].set(e(pb + poly::ModBeats), comb ? 0.0f : e(pb + poly::ModDepth), e(pb + poly::ModFeedback),
+                            polyMod_[k] == static_cast<int>(PolyMod::Flanger) || comb ? mix : 0.0f);
+        polyPhaser_[k].set(e(pb + poly::ModBeats), e(pb + poly::ModDepth), e(pb + poly::ModFeedback),
+                           polyMod_[k] == static_cast<int>(PolyMod::Phaser) ? mix : 0.0f);
     }
     // Send effects: the hall's pre-delay follows the tempo.
     room_.set(e(fb + fx::RoomSize), e(fb + fx::RoomDecay), e(fb + fx::RoomDamping), 0.0f, e(fb + fx::LowCut), e(fb + fx::HighCut));
@@ -479,6 +492,21 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
     perc_.process(percL_.data(), percR_.data(), count);
     acid_.process(acidL_.data(), acidR_.data(), count);
     for (int k = 0; k < kPolyInstances; ++k) poly_[k].process(polyL_[k].data(), polyR_[k].data(), count);
+    // The voice's modulation insert, between the voice and its strip (Engine.h, polyFlanger_). Its LFO
+    // reads the absolute beat of each sample, so a bar rendered alone moves exactly as the same bar
+    // inside a whole render and the host's block boundaries decide nothing.
+    {
+        const double beatAt0 = chunkBeat_ + static_cast<double>(chunkPos_) * beatsPerSample_;
+        for (int k = 0; k < kPolyInstances; ++k) {
+            if (polyMod_[k] == static_cast<int>(PolyMod::Off)) continue;
+            const bool ph = polyMod_[k] == static_cast<int>(PolyMod::Phaser);
+            for (int i = 0; i < count; ++i) {
+                const double beat = beatAt0 + static_cast<double>(i) * beatsPerSample_;
+                if (ph) polyPhaser_[k].tick(polyL_[k][static_cast<size_t>(i)], polyR_[k][static_cast<size_t>(i)], beat);
+                else polyFlanger_[k].tick(polyL_[k][static_cast<size_t>(i)], polyR_[k][static_cast<size_t>(i)], beat);
+            }
+        }
+    }
     sfx_.processSplit(sfxL_.data(), sfxR_.data(), subBuf_.data(), count);
     texture_.process(texL_.data(), texR_.data(), count);
     vocal_.process(vocL_.data(), vocR_.data(), vocThrow_.data(), count);

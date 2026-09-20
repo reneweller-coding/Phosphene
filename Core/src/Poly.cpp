@@ -105,8 +105,12 @@ void Poly::reset()
         posEnv_[v] = 0.0f;
         lfoPh_[v] = 0.0;
         sawVoice_[v] = false;
+        glidePitch_[v] = glideTarget_[v] = 60.0;
+        glideY_[v] = glideScale_[v] = glideFmRatio_[v] = 0.0;
         voiceCoefs(v);
     }
+    lastPitch_ = -1.0;
+    newest_ = 0;
     counter_ = 0;
     pos_ = 0;
     tableReads_ = 0;
@@ -122,6 +126,41 @@ void Poly::advanceDrift()
 {
     for (int s = 0; s < kPolySlots; ++s) driftSlot_[s] += (driftRng_.bipolar() - driftSlot_[s]) * driftAlpha_;
     for (int v = 0; v < kPolyVoices; ++v) driftVoice_[v] += (driftRng_.bipolar() - driftVoice_[v]) * driftAlpha_;
+}
+
+void Poly::writeSlotPitch(int voice)
+{
+    const int uFirst = (kPolyUnison - unisonLimit_) / 2, uLast = uFirst + unisonLimit_;
+    const double f0 = midiToHz(glidePitch_[voice]);
+    const double y = glideY_[voice], scale = glideScale_[voice], fmRatio = glideFmRatio_[voice];
+    for (int u = uFirst; u < uLast; ++u) {
+        const int s = voice * kPolyUnison + u;
+        const double hz = f0 * (1.0 + kSupersawOffsets[u] * y * scale) * driftFactorHeld_[s];
+        const double dt = std::min(hz / sr_, 0.45);
+        slots_.dt[s] = static_cast<float>(dt);
+        slots_.inv[s] = static_cast<float>(1.0 / dt);
+        slots_.mdt[s] = static_cast<float>(std::min(hz * fmRatio / sr_, 0.45));
+        wtDt_[s] = hz / sr_;
+        wtLevel_[s] = waveLevelFor(hz, sr_, -1);
+    }
+}
+
+void Poly::advanceGlide()
+{
+    for (int v = 0; v < kPolyVoices; ++v) {
+        if (!amp_[v].isActive()) continue;
+        const double d = glideTarget_[v] - glidePitch_[v];
+        if (d != 0.0) {
+            // Within a thousandth of a semitone the bend has arrived: snapping there keeps the pitch of
+            // a long held note exactly the note's, so nothing wobbles under a sustained pad or drone.
+            glidePitch_[v] = std::abs(d) < 1.0e-3 ? glideTarget_[v] : glidePitch_[v] + d * glideAlpha_;
+            writeSlotPitch(v);
+        }
+    }
+    // The instance's last sounding pitch, for the next note to start from -- and nothing to start from
+    // once every voice has fallen silent, so the first note after a rest arrives without a bend.
+    lastPitch_ = -1.0;
+    for (int v = 0; v < kPolyVoices; ++v) if (amp_[v].isActive()) { lastPitch_ = glidePitch_[newest_]; break; }
 }
 
 void Poly::update(const float* v, double bpm)
@@ -148,6 +187,18 @@ void Poly::update(const float* v, double bpm)
     disperse_.set(static_cast<int>(std::lround(v[poly::Disperse])), v[poly::DisperseFreq], sr_);
     send_ = v[poly::DelaySend];
     level_ = dbToGain(v[poly::Level]);
+    // Portamento (Poly.h): a one-pole slew on the pitch, stepped once per kPolyBlock samples like the
+    // drift walks. The parameter is the time constant, so after glide ms a step has covered 1 - 1/e of
+    // its interval and after 0.693 glide exactly half of it -- which is what the self test measures.
+    glideMs_ = std::max(0.0f, v[poly::Glide]);
+    const double gridPeriod = static_cast<double>(kPolyBlock) / sr_;
+    glideAlpha_ = glideMs_ > 0.0f ? static_cast<float>(1.0 - std::exp(-gridPeriod / (glideMs_ * 0.001))) : 0.0f;
+    // Pan, constant power. At the centre cos(pi/4) * sqrt(2) is 1 to the last bit of a double, so a
+    // voice that does not pan multiplies by exactly 1.0f and renders as it did before this round.
+    const double pan = std::clamp(static_cast<double>(v[poly::Pan]), -1.0, 1.0);
+    const double theta = (pan + 1.0) * kPiD / 4.0;
+    panL_ = static_cast<float>(std::cos(theta) * std::sqrt(2.0));
+    panR_ = static_cast<float>(std::sin(theta) * std::sqrt(2.0));
     const int dl = std::clamp(static_cast<int>(std::lround(v[poly::DelayLeft])), 0, kNumDelayTimes - 1);
     const int dr = std::clamp(static_cast<int>(std::lround(v[poly::DelayRight])), 0, kNumDelayTimes - 1);
     delay_.set(kDelayBeats[dl], kDelayBeats[dr], bpm, v[poly::DelayFeedback], v[poly::DelayHighPass], v[poly::DelayLowPass]);
@@ -188,7 +239,20 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     const double y = detuneCurve(x);
     double center = 1.0, side = 0.0;
     mixGains(v[poly::Mix], center, side);
-    const double f0 = midiToHz(pitch);
+    // Portamento (Poly.h): the note's oscillators start at the pitch this instance was last sounding
+    // at and slew to the note's own. Without a glide time, without a note before, or on a repeated
+    // pitch there is nothing to slew and the oscillators start where they always did -- glidePitch_ is
+    // then bit for bit the note's pitch and every number below is the number of before this round.
+    glideTarget_[voice] = static_cast<double>(pitch);
+    const bool bend = glideMs_ > 0.0f && lastPitch_ >= 0.0 && lastPitch_ != static_cast<double>(pitch);
+    glidePitch_[voice] = bend ? lastPitch_ : static_cast<double>(pitch);
+    glideY_[voice] = y;
+    newest_ = voice;
+    const double f0 = midiToHz(glidePitch_[voice]);
+    // Everything that is a property of the *note* rather than of the moment reads the note's own pitch:
+    // the FM index headroom, the tracking high pass and the filter's key tracking. A glide bends the
+    // oscillators, not the patch.
+    const double f0Note = midiToHz(pitch);
     const double velGain = 1.0 - v[poly::VelSens] + v[poly::VelSens] * vel_[voice];
     const double width = v[poly::Width];
     const double wave = v[poly::Wave];
@@ -202,7 +266,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     // (Chowning, "The synthesis of complex audio spectra by means of frequency modulation", JAES 21(7),
     // 1973, section 3, on the bandwidth of the modulated spectrum).
     const double fmRatio = std::max(0.0625, static_cast<double>(v[poly::FmRatio]));
-    const double fmRoom = std::max(0.0, (0.45 * sr_ - f0) / (f0 * fmRatio) - 1.0);
+    const double fmRoom = std::max(0.0, (0.45 * sr_ - f0Note) / (f0Note * fmRatio) - 1.0);
     const double fmI = std::min(static_cast<double>(v[poly::FmIndex]), fmRoom);
     const float idxDecay = static_cast<float>(std::exp(-3.0 / (std::max(1.0, v[poly::FmDecay] * 0.001 * sr_))));
 
@@ -239,6 +303,8 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     const bool sup = osc == static_cast<int>(PolyOsc::Supersaw);
     sawVoice_[voice] = sup;
     const double tableGain = sup ? static_cast<double>(kSawTableGain) : 1.0;
+    glideScale_[voice] = detuneScale;
+    glideFmRatio_[voice] = v[poly::FmRatio];
 
     for (int u = 0; u < kPolyUnison; ++u) {
         const int s = voice * kPolyUnison + u;
@@ -259,8 +325,11 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
             continue;
         }
         // Thermal drift: each unison slot has its own walk, so the seven saws of a supersaw age
-        // against each other. The walk is read once here and held for the note (Poly.h).
-        const double hz = f0 * (1.0 + kSupersawOffsets[u] * y * detuneScale) * driftFactor(slotDrift(s));
+        // against each other. The walk is read once here and held for the note (Poly.h) -- held in
+        // driftFactorHeld_ since 20.09.2026, because a gliding note rewrites its frequencies later and
+        // must keep reading the walk it started with.
+        driftFactorHeld_[s] = driftFactor(slotDrift(s));
+        const double hz = f0 * (1.0 + kSupersawOffsets[u] * y * detuneScale) * driftFactorHeld_[s];
         const double dt = std::min(hz / sr_, 0.45);
         const double mdt = std::min(hz * v[poly::FmRatio] / sr_, 0.45);
         slots_.dt[s] = static_cast<float>(dt);
@@ -292,7 +361,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         slots_.mph[s] = static_cast<float>(mp - std::floor(mp));
         slots_.idx[s] = static_cast<float>(0.7 * fmI * std::pow(static_cast<double>(idxDecay), late));
     }
-    hpHz_[voice] = std::max(v[poly::HpFloor], static_cast<float>(v[poly::HpTrack] * f0));
+    hpHz_[voice] = std::max(v[poly::HpFloor], static_cast<float>(v[poly::HpTrack] * f0Note));
     if (wasIdle) {
         for (int c = 0; c < 2; ++c) {
             const int l = voice * 2 + c;
@@ -330,6 +399,10 @@ void Poly::renderSegment(float* L, float* R, int n)
     // longer be a function of the sample index. processWith() cuts every segment at the grid, so this
     // runs exactly once per kPolyBlock samples however the host splits its blocks.
     if (drift_ > 0.0f && pos_ % kPolyBlock == 0) advanceDrift();
+    // The portamento steps on the same grid and for the same reason (Poly.h): a bend that advanced with
+    // the host's block boundaries would not be a function of the sample index. At glide 0 nothing here
+    // runs and no slot coefficient is touched.
+    if (glideMs_ > 0.0f && pos_ % kPolyBlock == 0) advanceGlide();
     bool voiceOn[kPolyVoices] = {};
     for (int voice = 0; voice < kPolyVoices; ++voice) {
         voiceOn[voice] = amp_[voice].isActive();
@@ -453,9 +526,12 @@ void Poly::renderSegment(float* L, float* R, int n)
             l = dispL_.tick(l, disperse_.c, disperse_.d, disperse_.stages);
             r = dispR_.tick(r, disperse_.c, disperse_.d, disperse_.stages);
         }
-        L[i] = l * level_;
-        R[i] = r * level_;
-        sendBuf_[static_cast<size_t>(i)] = 0.5f * (L[i] + R[i]) * send_;
+        // The delay send is taken from the *unpanned* sum, so a voice's place in the image and its
+        // delay's own left/right times stay independent (Poly.h). At the centre panL_ and panR_ are
+        // exactly 1 and both lines are the lines of before this round.
+        sendBuf_[static_cast<size_t>(i)] = 0.5f * (l * level_ + r * level_) * send_;
+        L[i] = l * level_ * panL_;
+        R[i] = r * level_ * panR_;
     }
     delay_.process(sendBuf_.data(), L, R, n);
     pos_ += static_cast<uint64_t>(n);

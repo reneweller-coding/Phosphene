@@ -236,6 +236,16 @@ private:
     float stripFx_[StripCount] = {};       ///< send into the modulation chain (texture and vocal only)
 
     PsyFxChain sfxFx_, sendFx_;            ///< the SFX strip's insert, and the send chain
+    /** @name The per-voice modulation insert (20.09.2026, round "dialogue"; Params.h, PolyMod)
+     *  One flanger and one phaser per polyphonic instance, behind the voice and before its strip gain,
+     *  so that the comb / flanger / phaser colour the user's effect list asks for is a property of the
+     *  *voice* and not of the effects bus alone. At poly.mod = Off neither is ticked and the strip is
+     *  sample for sample the strip of before this round.
+     *  @{ */
+    Flanger polyFlanger_[kPolyInstances];
+    Phaser  polyPhaser_[kPolyInstances];
+    int     polyMod_[kPolyInstances] = {};
+    /** @} */
     float sendReturn_ = 0.7f;              ///< psyfx.return
     float motion_ = 0.7f;                  ///< psyfx.motion: how far events move the chains
     /**

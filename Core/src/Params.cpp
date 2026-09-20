@@ -318,6 +318,9 @@ const char* const kWaveTableNames[] = { "Classic", "Vocal", "Glass", "PWM", "Syn
 static_assert(sizeof(kWaveTableNames) / sizeof(kWaveTableNames[0]) == kNumWaveTables,
               "the table choice list and kNumWaveTables have come apart");
 const char* const kGatePatternNames[] = { "Sixteenths", "Eighths", "Rolling", "Gallop", "3-3-2", "Triplets" };
+const char* const kPolyModNames[] = { "Off", "Flanger", "Phaser", "Comb" };
+static_assert(sizeof(kPolyModNames) / sizeof(kPolyModNames[0]) == static_cast<int>(PolyMod::Count),
+              "one name per PolyMod");
 const char* const kPolyFilterNames[] = { "Low Pass", "Band Pass", "High Pass", "Notch" };
 static_assert(sizeof(kPolyFilterNames) / sizeof(kPolyFilterNames[0]) == static_cast<int>(PolyFilter::Count),
               "one name per PolyFilter");
@@ -420,6 +423,20 @@ const ParamDesc kPolyParams[poly::Count] = {
     // 19.09.2026 (round "voices"): which output of the voice's state-variable filter is heard (PolyKernel.h).
     // Low pass is what every voice played before; the per-track recipes (Composer.cpp) may pick the others.
     { "filter_type",    "Filter Type",    "",      0.0f,     3.0f,   0.0f, Curve::Choice, kPolyFilterNames },
+    // 20.09.2026 (round "dialogue"). Glide: the time constant of the pitch slew between two notes of
+    // the voice (Poly.h); 0 is the instantaneous jump every voice played before this round, so a voice
+    // that does not set it renders bit for bit as it did. Pan: the dry signal's place in the image, the
+    // role property the user's rule asks for ("Lead leicht links, Counter leicht rechts"); the delay
+    // behind the voice keeps its own left/right times and is not panned with it.
+    { "glide",          "Glide",          "ms",    0.0f,   400.0f,   0.0f, Curve::Linear },
+    { "pan",            "Pan",            "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
+    // The voice's own modulation insert (Engine.cpp; PsyFx.h). Off is the voice of before this round,
+    // sample for sample -- the insert is not even ticked.
+    { "mod",            "Modulation",     "",      0.0f,     3.0f,   0.0f, Curve::Choice, kPolyModNames },
+    { "mod_beats",      "Mod Period",     "beats", 0.5f,    64.0f,  16.0f, Curve::Log },
+    { "mod_depth",      "Mod Depth",      "",      0.0f,     1.0f,   0.7f, Curve::Linear },
+    { "mod_feedback",   "Mod Feedback",   "",     -0.9f,     0.9f,   0.5f, Curve::Linear },
+    { "mod_mix",        "Mod Mix",        "",      0.0f,     1.0f,   0.0f, Curve::Linear },
 };
 
 /**
@@ -434,9 +451,26 @@ const ParamDesc kPolyParams[poly::Count] = {
  * under it the tracking high pass at f0 treats the root like every other voice.
  */
 const char* const kDefaultPoly =
+    // 20.09.2026, round "dialogue". The user's four separations between the two leads, as far as they
+    // are knob values: the lead flows (a 45 ms portamento -- 0.44 of a sixteenth at 145 BPM, so a step
+    // has arrived within one note and a listener hears the bend, not a slur), stands slightly left and
+    // echoes on a dotted eighth (0.75 beats) against a dotted quarter (1.5); the counter whips (no
+    // glide, no sustain, a filter that shuts in 60 ms), stands slightly right and pings 1/16 against
+    // 1/8. The pan of +-0.20 is the middle of the rule's "15 to 25 %".
+    // The modulation insert of 20.09.2026 (poly.mod): the rule asks for the comb/flanger/phaser colour
+    // on the three line voices, tempo-synced. The lead takes the slow phaser (16 beats -- four bars, so
+    // the sweep is a phrase long and never a wobble), the counter the faster flanger (4 beats, one bar,
+    // which suits a voice that answers in single whips), the arp a *static* comb: its notes are a fifth
+    // of a sixteenth long, far too short for any sweep to be heard inside one, so what a moving filter
+    // would give it is a colour that changes between notes -- a fixed comb gives it the hollow metallic
+    // timbre instead. The mixes are small on purpose: this is a colour, not an effect the voice
+    // disappears into, and the listening excerpts are where it gets judged.
+    "lead.glide=45;lead.pan=-0.20;lead.delay_left=2;lead.delay_right=4;"
+    "lead.mod=Phaser;lead.mod_beats=16;lead.mod_depth=0.8;lead.mod_feedback=0.45;lead.mod_mix=0.22\n"
     "arp.detune=0.3;arp.mix=0.6;arp.cutoff=3500;arp.env_amount=2.8;arp.filter_decay=140;arp.resonance=0.3;"
     "arp.amp_attack=0.8;arp.amp_decay=220;arp.amp_sustain=0;arp.amp_release=12;arp.delay_send=0.35;"
-    "arp.delay_left=2;arp.delay_right=1;arp.level=-5;arp.width=0.6;arp.hall_send=0.15;arp.duck=0.25\n"
+    "arp.delay_left=2;arp.delay_right=1;arp.level=-5;arp.width=0.6;arp.hall_send=0.15;arp.duck=0.25;"
+    "arp.mod=Comb;arp.mod_depth=0;arp.mod_feedback=0.6;arp.mod_mix=0.20\n"
     "pad.osc=Wavetable;pad.table=Vocal;pad.detune=0.35;pad.mix=0.7;pad.dynamic_detune=0;pad.cutoff=5000;pad.env_amount=0;pad.resonance=0.1;"
     "pad.amp_attack=700;pad.amp_decay=2000;pad.amp_sustain=1;pad.amp_release=1800;pad.hp_floor=140;pad.hp_track=1;pad.width=1;"
     "pad.delay_send=0;pad.hall_send=0.45;pad.duck=0.5;pad.pos_env=0.3;pad.pos_decay=3000;pad.gate_pattern=Sixteenths;pad.level=-16\n"
@@ -444,10 +478,14 @@ const char* const kDefaultPoly =
     // inventory names "wavetable / vocal character" -- so it is a formant saw read by the wavetable
     // oscillator with a slow vowel movement of the position and a quarter-note echo, and no supersaw.
     "counter.osc=Wavetable;counter.table=Formant Saw;counter.detune=0.25;counter.mix=0.55;counter.dynamic_detune=0.3;"
-    "counter.cutoff=5000;counter.env_amount=1.5;counter.filter_decay=300;counter.resonance=0.2;counter.position=0.4;"
-    "counter.pos_lfo_depth=0.25;counter.pos_lfo_beats=4;counter.amp_attack=3;counter.amp_decay=400;counter.amp_sustain=0.6;"
-    "counter.amp_release=110;counter.delay_send=0.4;counter.delay_left=3;counter.delay_right=2;counter.hall_send=0.3;"
-    "counter.width=0.7;counter.duck=0.25;counter.level=-7\n"
+    "counter.cutoff=5000;counter.env_amount=3.2;counter.filter_decay=60;counter.resonance=0.2;counter.position=0.4;"
+    // 20.09.2026: its envelope is the staccato of the rule, not the sustained answer of the voices round
+    // (amp_decay 400 -> 70 ms, sustain 0.6 -> 0, release 110 -> 35 ms, filter_decay 300 -> 60 ms with a
+    // deeper envelope so the whip still opens). Pan and delay are its role's (see the lead above).
+    "counter.pos_lfo_depth=0.25;counter.pos_lfo_beats=4;counter.amp_attack=1;counter.amp_decay=70;counter.amp_sustain=0;"
+    "counter.amp_release=35;counter.delay_send=0.4;counter.delay_left=0;counter.delay_right=1;counter.hall_send=0.3;"
+    "counter.width=0.7;counter.duck=0.25;counter.level=-7;counter.pan=0.20;counter.glide=0;"
+    "counter.mod=Flanger;counter.mod_beats=4;counter.mod_depth=0.75;counter.mod_feedback=0.55;counter.mod_mix=0.28\n"
     // The stab: a short, bright chord -- a narrow supersaw through a filter envelope that closes within
     // 90 ms, no sustain, and throws into the delay and the hall so the hit leaves an echo behind it.
     "stab.detune=0.35;stab.mix=0.6;stab.dynamic_detune=0;stab.cutoff=1800;stab.env_amount=3.5;stab.filter_decay=90;"
@@ -572,7 +610,19 @@ const ParamDesc kMixParams[mix::Count] = {
     { "drone_mute", "Drone Mute", "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "drone_level","Drone Level","dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     { "sfx_mute",   "SFX Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
-    { "sfx_level",  "SFX Level",  "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    // 20.09.2026, round "dialogue". The user hears the effects and the voices as too quiet, and their
+    // rule is that in psytrance the effects *are* the composition. Measured on the listening seed's first
+    // drop (32 bars), solo renders against the full mix, counting only the 40 ms frames in which the part
+    // actually sounds (scratch/dialogue/events.py -- averaging over the silence, as the brief's -15.8 and
+    // -21.1 dB do, measures sparsity as much as level): the effects sounded in 12.8 % of the frames and
+    // stood 11.5 dB under the mix in them, the voices in 4.8 % and 13.0 dB under, while the percussion
+    // stood 9.3 dB under and the acid 7.4 dB. So an effect event was *quieter than a hi-hat* and a spoken
+    // phrase quieter than either. The targets: an effect event level with the percussion, a voice between
+    // the percussion and the acid -- which is where a phrase has to sit to be a voice and not a texture.
+    // Measured after: effects -8.5 dB (level with the percussion's -9.3), voices -8.4 dB. The master's
+    // compressor and limiter give back about two thirds of a dB per dB on the strip, which is why the
+    // strips move by 3 and 7 dB for 3.0 and 3.9 dB in the mix. docs/PLAN.md has the rest.
+    { "sfx_level",  "SFX Level",  "dB", -24.0f, 12.0f, 3.0f, Curve::Linear },
     { "perc_room",  "Perc Room",  "",     0.0f,  1.0f, 0.12f, Curve::Linear },
     { "perc_hall",  "Perc Hall",  "",     0.0f,  1.0f, 0.0f, Curve::Linear },
     { "duck_attack","Duck Attack","ms",   0.5f, 30.0f, 2.0f, Curve::Log },
@@ -582,7 +632,7 @@ const ParamDesc kMixParams[mix::Count] = {
     { "texture_mute",  "Texture Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "texture_level", "Texture Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     { "vocal_mute",    "Vocal Mute",    "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
-    { "vocal_level",   "Vocal Level",   "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
+    { "vocal_level",   "Vocal Level",   "dB", -24.0f, 12.0f, 7.0f, Curve::Linear },   // 20.09.2026, see sfx_level
 };
 
 const ParamDesc kMasterParams[master::Count] = {

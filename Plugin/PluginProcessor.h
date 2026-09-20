@@ -272,12 +272,49 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
     /**
-     * @brief The version of the state this build writes: 2 since 19.09.2026 (the reordered voices,
-     *        the counter-lead, the stab and the drone; docs/PLAN.md, "Stimmen").
+     * @brief The version of the state this build writes.
+     *
+     * 2 since 19.09.2026 (the reordered voices, the counter-lead, the stab and the drone; docs/PLAN.md,
+     * "Stimmen"). **3 since 20.09.2026** (round "dialogue"), and it is a change of meaning, not only of
+     * content: a version-3 state stores **only the knobs that differ from the defaults of the build that
+     * saved it**. Every knob a state does not name follows the current defaults when it is loaded.
+     *
+     * Why. The user's standalone state carried every parameter of an older session, including all the
+     * values later rounds recalibrated -- sfx.level -12 against today's -3, bass.cutoff 140 against 240,
+     * mix.lead_level 0 against -6, kick.level -2 against -6 -- and loading it silently undid every one of
+     * them. It cost an evening of listening to an old mix. A state that names only what the user touched
+     * cannot do that: a recalibrated default reaches every session that never touched that knob.
+     *
+     * The price, written down rather than hidden: a knob the user deliberately set *to* the value that
+     * was the default at the time is not stored, so if that default later moves, the deliberate choice
+     * moves with it. There is no way to tell the two apart from a value alone -- that is exactly the
+     * information a full state does not carry either, only with the opposite failure.
+     *
+     * What happens to older states is in setStateInformation().
      */
-    static constexpr int kStateVersion = 2;
+    static constexpr int kStateVersion = 3;
     /** @brief The version of the last state read by setStateInformation (1 for a state older than the voices round). */
     int lastStateVersion() const { return lastStateVersion_; }
+    /**
+     * @brief The knob text of a state older than kStateVersion that was **not** applied, or empty.
+     *
+     * A state of version 1 or 2 holds every value of its session and cannot say which of them the user
+     * chose, so loading it would do exactly the damage this round is about. Such a state therefore does
+     * not set a single knob: the engine starts at today's factory defaults and the text is kept here so
+     * that the editor can offer it (PhospheneEditor's banner, adoptLegacyState()).
+     */
+    const juce::String& pendingLegacyState() const { return legacyKnobs_; }
+    /** @brief Applies the knobs of the held older state after all, at the user's word. */
+    void adoptLegacyState();
+    /** @brief Forgets the held older state (the user kept the new defaults). */
+    void dismissLegacyState() { legacyKnobs_.clear(); }
+    /**
+     * @brief Every knob back to its factory default -- the "reset to factory defaults" of the rule.
+     *
+     * The set itself (seed, locks, rerolls) is not a knob and is left alone: the user asked for the
+     * *sound* to come back to the shipped calibration, not for their set to be thrown away.
+     */
+    void resetToFactoryDefaults();
 
     // ------------------------------------------------------------------ the set
     /** @brief The engine's parameters -- the single copy of every value. */
@@ -617,6 +654,7 @@ private:
     juce::String cuePortHost_;                  ///< message thread: the host the socket was opened with
     std::atomic<float> cueLeadMs_{ 0.0f };      ///< `cue.lead_ms`, as the audio thread reads it
     int lastStateVersion_ = kStateVersion;      ///< the version attribute of the last state that was read
+    juce::String legacyKnobs_;                  ///< an older state's knob text, held and not applied (20.09.2026)
     std::atomic<bool> cueBeats_{ true };        ///< `cue.beats`, as the audio thread reads it
     std::atomic<bool> cueAnnounce_{ false };    ///< the bridge just opened: say which section is playing
 

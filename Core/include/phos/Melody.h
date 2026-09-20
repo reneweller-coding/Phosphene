@@ -83,7 +83,7 @@
  * operators are the ones PLAN 6.5 names. Every one of them stays inside the scale, the ambitus and
  * the register the masking rule works with.
  *
- * **Depth rule.** Acid lines stay at or above D3 (147 Hz), leads above B3, arps above G3, pads at or
+ * **Depth rule.** Acid lines stay at or above D3 (147 Hz), leads at or above C4, arps above G3, pads at or
  * above D3 -- except the pad's sub foundation, which exists only where kick and bass are silent.
  *
  * **Genre rules above the corpus (18.09.2026).** The user decided that genre rules stand *above* the
@@ -107,7 +107,8 @@
  *    is heard as two streams); the Euclidean and polymetric styles decide which steps jump up; sus2,
  *    sus4 and add9 material; G3 to G5; a short gate.
  *  - *Lead:* a dense one- or two-bar riff (sixteenths, eighths with pickups, or a gallop) in A A' B
- *    A''; the fifth as a resting tone; median around A4 to C5 and never above A5.
+ *    A''; the fifth as a resting tone; C4 to G4 and never above G4 (20.09.2026, kLeadHighest -- the
+ *    rule replaces the earlier "median around A4 to C5, never above A5").
  *  - *Pad:* root position with the fifth above the root at the bottom, from D3; where the form
  *    silences kick and bass the root an octave lower as well (the sub foundation).
  */
@@ -128,8 +129,32 @@ enum class CorpusRoleId : int;
 constexpr int kAcidLowest = 50;                                     ///< D3: lowest acid note
 constexpr int kAcidHighest = 62;                                    ///< D4: top of the acid's own register
 constexpr int kAcidJumpHighest = 74;                                ///< D5: highest octave jump of the acid
-constexpr int kLeadLowest = 59;                                     ///< B3: lowest lead note
-constexpr int kLeadHighest = 81;                                    ///< A5: highest lead note
+/** @name The two leads' registers (20.09.2026, round "dialogue")
+ *  The user's rule, after listening to the standalone on 19.09.2026: "beide Leads klingen zu hoch".
+ *  The lead speaks from **C4** and the counter-lead answers exactly one octave above it, from **C5**.
+ *  Until this round the two spanned B3 .. A5 and C5 .. A6, nearly two octaves each, and both reached
+ *  well over the arp's own G3 .. G5; what the user heard as "too high" was the upper half of those
+ *  windows, which the register weight only discouraged and never forbade.
+ *
+ *  **Why an octave and not a fifth.** The rule's note names are "C4-G4" and "C5-G5", and its
+ *  parentheses are "about 260-400 Hz" and "500-1000 Hz" -- but 500 to 1000 Hz is C5 to B5, not C5 to
+ *  G5, so the rule's own two halves do not agree. A window of a fifth decides the question by itself
+ *  and decides it wrongly: eight semitones carry eight of the twelve pitch classes, so in four keys of
+ *  twelve the **tonic is not in the window at all** and rules 1 and 18 -- the tonic as the centre, the
+ *  fifth as the resting tone -- cannot be met by any line. Measured before the window was widened: 69
+ *  of 110 counter answers ended on the tonic or the fifth instead of the 9 in 10 the rule asks for.
+ *  So the floor of each window is the rule's note (C4, C5), the top is an octave above it (B4, B5),
+ *  and the counter's window is then exactly the 500 .. 1000 Hz the rule's own parenthesis names. The
+ *  lead's 262 .. 494 Hz reaches a major third over the "400 Hz" of its parenthesis; the register
+ *  weight (kLeadCentre, kLeadSigma in Melody.cpp) puts the mass of the line in its lower half.
+ *
+ *  **What it costs, measured rather than hidden:** an octave-wide window has no room for an upward
+ *  octave jump, so MotifOperator::OctaveJump -- the Goa lead idiom of PLAN 6.5 -- can no longer place
+ *  a note and is no longer drawn for the lead (Melody.cpp, makeLead). docs/PLAN.md carries the number.
+ *  @{ */
+constexpr int kLeadLowest = 60;                                     ///< C4 (262 Hz): lowest lead note
+constexpr int kLeadHighest = 71;                                    ///< B4 (494 Hz): highest lead note
+/** @} */
 constexpr int kArpLowest = 55;                                      ///< G3: lowest arp note
 constexpr int kArpHighest = 79;                                     ///< G5: highest arp note
 constexpr int kPadLowest = 50;                                      ///< D3: lowest pad note while kick and bass play
@@ -141,13 +166,13 @@ constexpr int kAcidCells = kMaterialSets * kAcidVariants;           ///< entries
 constexpr int kArpCells = kMaterialSets * kAcidVariants * 4;        ///< entries of MelodyPlan::arp (set, variant, chord)
 constexpr double kArpGate = 0.2;                                    ///< arp note length, in sixteenths (rule: 15-35 %)
 /** @name The new voices' registers (19.09.2026, round "voices")
- *  The counter-lead answers above the lead, inside the 400 Hz .. 2 kHz pocket of the user's rule; the arp
+ *  The counter-lead answers exactly an octave above the lead (kCounterLowest above); the arp
  *  may leave G3..G5 upwards only to clear a lead it shares a bar with (composeMelodyBar); the stab's chord
  *  is rooted where the arp's anchor is and moves by octaves between D3 and C7 to clear the lead; the drone's root lies an octave under the pad's where kick and
  *  bass rest, and on the pad's own octave where they play.
  *  @{ */
-constexpr int kCounterLowest = 72;                                  ///< C5: lowest counter-lead note
-constexpr int kCounterHighest = 93;                                 ///< A6: highest counter-lead note (1760 Hz)
+constexpr int kCounterLowest = 72;                                  ///< C5 (523 Hz): lowest counter-lead note
+constexpr int kCounterHighest = 83;                                 ///< B5 (988 Hz): highest counter-lead note
 constexpr int kArpOverHighest = 91;                                 ///< G6: the arp's ceiling when it clears a lead from above
 constexpr int kStabLowest = 50;                                     ///< D3: lowest stab note (the depth rule's floor, like the acid's)
 constexpr int kStabHighest = 96;                                    ///< C7: highest stab note (2.1 kHz, the top of the leads' pocket)
@@ -200,6 +225,15 @@ struct MelodyContext {
     int droneBars = 0;
     bool droneLow = false;    ///< the drone run lies on a silent floor: its low octave (D2..C#3)
     int droneTail = 0;        ///< bars before the run's end in which the low root stops (the kick returns after it)
+    /**
+     * @brief Pad or acid sound somewhere in this drone run (20.09.2026, round "dialogue").
+     *
+     * The drone is a continuous carpet since that round, so it meets the pad's root and fifth and the
+     * acid's octave nearly everywhere. Where it does, it holds its **root alone** and leaves the fifth
+     * to whoever already has it; a run with the band to itself holds root and fifth (and the octave
+     * where the track takes it). Decided once per run -- the drone's attack is 1.5 s.
+     */
+    bool droneShaded = false;
 };
 
 /**

@@ -729,35 +729,92 @@ int main(int argc, char** argv)
         q->setStateInformation(junk, static_cast<int>(sizeof(junk)));
         check(true, "a malformed state is ignored");
 
-        // A state from before 19.09.2026 (version 1): the voices were reordered and three were added
-        // (Params.h, PolyInstance). Built here as such a state was -- version 1, no key of the three new
-        // voices or their strips -- and read into an instance whose counter-lead has been moved: the
-        // old voices come back as saved, the new ones at their defaults (docs/PLAN.md, "Stimmen").
+        // ------------------------------------------------ 20.09.2026, round "dialogue": state version 3
+        // A version-3 state names only the knobs that differ from the defaults of the build that wrote
+        // it (PluginProcessor.h, kStateVersion). Three things follow, and each is checked here.
+
+        // (1) A fresh instance's state names no knob at all, and one moved knob is the only one in it.
+        {
+            auto f = std::make_unique<PhospheneProcessor>();
+            juce::MemoryBlock clean;
+            f->getStateInformation(clean);
+            std::unique_ptr<juce::XmlElement> cx(juce::AudioProcessor::getXmlFromBinary(clean.getData(), static_cast<int>(clean.getSize())));
+            const juce::String empty = cx != nullptr ? cx->getChildByName("params")->getAllSubText().trim() : "?";
+            f->params().set(f->params().find("acid.cutoff"), 777.0f);
+            juce::MemoryBlock one;
+            f->getStateInformation(one);
+            std::unique_ptr<juce::XmlElement> ox(juce::AudioProcessor::getXmlFromBinary(one.getData(), static_cast<int>(one.getSize())));
+            const juce::String text = ox != nullptr ? ox->getChildByName("params")->getAllSubText().trim() : "?";
+            check(cx != nullptr && ox != nullptr && empty.isEmpty() && text.contains("acid.cutoff")
+                      && !text.contains("sfx.level") && !text.contains("kick.level")
+                      && juce::StringArray::fromLines(text).size() == 1
+                      && cx->getIntAttribute("version", 0) == PhospheneProcessor::kStateVersion,
+                  "a state of version " + juce::String(PhospheneProcessor::kStateVersion)
+                      + " holds only what the user changed (untouched: \"" + empty + "\", one knob moved: \"" + text + "\")");
+        }
+
+        // (2) Because of that, a knob the state does not name follows the *current* default when it is
+        //     loaded -- which is the whole point: the user's old session carried sfx.level -12 and
+        //     bass.cutoff 140 and silently undid four rounds of recalibration.
+        {
+            auto f = std::make_unique<PhospheneProcessor>();
+            f->params().set(f->params().find("acid.cutoff"), 777.0f);
+            juce::MemoryBlock one;
+            f->getStateInformation(one);
+            auto g = std::make_unique<PhospheneProcessor>();
+            const int sfxLevel = g->params().find("mix.sfx_level"), bassCutoff = g->params().find("bass.cutoff");
+            g->params().set(sfxLevel, -12.0f);      // the value the user's own state carried
+            g->params().set(bassCutoff, 140.0f);
+            g->setStateInformation(one.getData(), static_cast<int>(one.getSize()));
+            const ParamStore fresh;
+            check(g->params().get(sfxLevel) == fresh.get(sfxLevel) && g->params().get(bassCutoff) == fresh.get(bassCutoff)
+                      && g->params().get(g->params().find("acid.cutoff")) == 777.0f,
+                  "a knob the state does not name comes up on today's default (mix.sfx_level "
+                      + juce::String(g->params().get(sfxLevel)) + " dB, bass.cutoff " + juce::String(g->params().get(bassCutoff))
+                      + " Hz) while the one it names is restored");
+        }
+
+        // (3) A state older than version 3 holds every value of its own session and cannot say which of
+        //     them the user chose, so it sets **no** knob: the engine comes up on today's defaults and
+        //     the text is held for the editor's offer. The seed is restored either way -- it is the
+        //     user's set, not our calibration. Built here from the round-trip state above, marked as the
+        //     version-2 state the voices round wrote.
         std::unique_ptr<juce::XmlElement> xml(juce::AudioProcessor::getXmlFromBinary(state.getData(), static_cast<int>(state.getSize())));
         bool built = xml != nullptr;
         if (built) {
-            xml->setAttribute("version", 1);
-            juce::StringArray lines = juce::StringArray::fromLines(xml->getChildByName("params")->getAllSubText());
-            juce::StringArray kept;
-            for (const juce::String& l : lines)
-                if (!l.startsWith("counter.") && !l.startsWith("stab.") && !l.startsWith("drone.") && !l.startsWith("mix.counter_")
-                    && !l.startsWith("mix.stab_") && !l.startsWith("mix.drone_") && l.isNotEmpty())
-                    kept.add(l);
+            xml->setAttribute("version", 2);
+            // Version 2 wrote every value; this state was written by version 3, so put them all back in.
+            ParamStore all;
+            for (int i = 0; i < static_cast<int>(before.size()); ++i) all.set(i, before[static_cast<size_t>(i)]);
             xml->getChildByName("params")->deleteAllTextElements();
-            xml->getChildByName("params")->addTextElement(kept.joinIntoString("\n"));
+            xml->getChildByName("params")->addTextElement(juce::String(all.toText(false)));
         }
         juce::MemoryBlock old;
         if (built) juce::AudioProcessor::copyXmlToBinary(*xml, old);
         auto r = std::make_unique<PhospheneProcessor>();
-        const int counterCutoff = r->params().find("counter.cutoff"), leadCutoff = r->params().find("lead.cutoff");
-        r->params().set(counterCutoff, 300.0f);
+        const int leadCutoff = r->params().find("lead.cutoff"), counterCutoff = r->params().find("counter.cutoff");
         r->setStateInformation(old.getData(), static_cast<int>(old.getSize()));
         const ParamStore fresh;
-        check(built && r->lastStateVersion() == 1 && r->params().get(counterCutoff) == fresh.get(counterCutoff)
-                  && r->params().get(leadCutoff) == before[static_cast<size_t>(leadCutoff)],
-              "a state saved before the voices round loads its old voices as saved and the new ones at their defaults (version "
-                  + juce::String(r->lastStateVersion()) + ", counter.cutoff " + juce::String(r->params().get(counterCutoff))
-                  + " against the default " + juce::String(fresh.get(counterCutoff)) + ", lead.cutoff " + juce::String(r->params().get(leadCutoff)) + ")");
+        const bool untouched = r->params().get(leadCutoff) == fresh.get(leadCutoff)
+                               && r->params().get(counterCutoff) == fresh.get(counterCutoff);
+        check(built && r->lastStateVersion() == 2 && untouched && r->pendingLegacyState().isNotEmpty()
+                  && r->seed() == 987654321,
+              "a state from before this round sets no knob and is held for the offer instead (version "
+                  + juce::String(r->lastStateVersion()) + ", lead.cutoff " + juce::String(r->params().get(leadCutoff))
+                  + " = the default " + juce::String(fresh.get(leadCutoff)) + ", seed " + juce::String(static_cast<int>(r->seed())) + ")");
+
+        // (4) The offer itself, and the way back: adopting the held state puts its knobs in, and the
+        //     factory reset -- the visible button of the rule -- takes every knob back to the shipped
+        //     value and forgets the offer.
+        r->adoptLegacyState();
+        const bool adopted = r->params().get(leadCutoff) == before[static_cast<size_t>(leadCutoff)]
+                             && r->pendingLegacyState().isEmpty();
+        r->resetToFactoryDefaults();
+        bool allDefault = true;
+        for (int i = 0; i < r->params().count(); ++i) allDefault = allDefault && r->params().get(i) == fresh.get(i);
+        check(adopted && allDefault && r->pendingLegacyState().isEmpty(),
+              juce::String("the offer applies the held state (adopted ") + (adopted ? "yes" : "no")
+                  + ") and \"reset to factory defaults\" puts every knob back (" + (allDefault ? "yes" : "no") + ")");
     }
 
     // ---------------------------------------------------------------- the parameters themselves

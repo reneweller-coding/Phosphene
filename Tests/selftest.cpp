@@ -1597,8 +1597,14 @@ double measureLock(const char* settings, double bpm, double& spread, double& coh
     auto render = [&](const char* solo, bool keepKick) {
         auto e = std::make_unique<Engine>();
         e->prepare(sr, 256);
-        e->params().parseText(fmt("compose.bpm=%g compose.bass_variation=0 compose.kick_pattern=Four master.clip=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.auto_gain=Off compose.level_match=Off "
-                                  "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 %s %s", bpm, settings, solo).c_str());
+        // Concatenated, not formatted: this string is over 600 characters and fmt() used to cut it off
+        // silently (TestSupport.h, buf). The presence probe is off -- nothing here is about levels.
+        const std::string cfg = fmt("compose.bpm=%g ", bpm)
+            + "compose.bass_variation=0 compose.kick_pattern=Four master.clip=Off master.limiter=Off master.clipper=Off "
+              "master.comp_ratio=1 master.auto_gain=Off compose.level_match=Off compose.presence_match=Off "
+              "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 "
+            + std::string(settings) + " " + solo;
+        e->params().parseText(cfg.c_str());
         for (uint64_t k = 1; k <= 40; ++k) {
             Composer probe(k);
             if (firstCoreBar(e->params(), probe) <= 8) { seed = k; break; }
@@ -8745,9 +8751,20 @@ void testMotifOperators()
         }
         int seen = 0;
         for (int u : used) seen += u > 0 ? 1 : 0;
-        check(seen == kNumMotifOperators && shiftSeen > 5 && shiftWrong == 0 && jumpSeen > 5 && jumpMissing == 0
+        // 20.09.2026, round "dialogue": the octave jump is no longer among the operators a phrase can
+        // take. The user's register rule holds the lead to one octave (C4..B4), and an upward octave
+        // jump necessarily leaves it -- the maker already refused such a jump and fell back to None, so
+        // its weight is 0 now (Melody.cpp). The check therefore asks for the *three* operators that can
+        // still act and for the jump to have disappeared entirely, which is what makes the loss visible
+        // in a test instead of only in a comment.
+        int actionable = 0;
+        for (int k = 0; k < kNumMotifOperators; ++k)
+            if (k != static_cast<int>(MotifOperator::OctaveJump) && used[k] > 0) ++actionable;
+        (void)seen;
+        check(actionable == kNumMotifOperators - 1 && shiftSeen > 5 && shiftWrong == 0 && jumpSeen == 0
+                  && used[static_cast<int>(MotifOperator::OctaveJump)] == 0
                   && expandSeen > 5 && widerPhrases * 2 > expandSeen && outside == 0 && tooLow == 0 && notes > 500,
-              "phase shift, expansion and octave jump do what they say and stay in the mode",
+              "phase shift and expansion do what they say and stay in the mode; the octave jump is gone with the one-octave window",
               fmt("operators %d/%d/%d/%d, %d shifts (%d wrong), %d jumps (%d without a jumped note), "
                   "%d expansions (%d wider than their A), %d notes out of the mode, %d under B3",
                   used[0], used[1], used[2], used[3], shiftSeen, shiftWrong, jumpSeen, jumpMissing,
@@ -10649,7 +10666,11 @@ void testArrangement()
     check(climaxBars > 0 && climaxOpen == climaxBars && climaxRide == climaxBars && squelches >= climaxBars / 2
               // The arp: an octave up in drop 2 always (Melody.cpp); where the register guard had already lifted
               // drop 1's arp over the lead, the two stand level -- never lower (measured once in 16, 19.09.2026).
-              && climaxCounter == counterPossible && arpPairs > 0 && arpUp * 10 >= arpPairs * 9 && arpLift > -1.0,
+              // 20.09.2026, round "dialogue": the user's register rule put the lead in C4..B4, so in drop 1
+              // the guard already lifts the arp clear of it in more tracks than before and drop 2's octave
+              // then finds it high already. Measured: the mean pitch still never falls (the smallest lift is
+              // +0.5 semitones), but it rises by more than five semitones in 13 of 16 instead of 15 of 16.
+              && climaxCounter == counterPossible && arpPairs > 0 && arpUp * 4 >= arpPairs * 3 && arpLift > -1.0,
           "drop 2: open hats and ride in every bar, squelches in the gaps, the counter answers the lead, the arp above drop 1's",
           fmt("%d bars: open hats in %d, ride in %d, %d squelches; counter in %d of %d; arp higher in %d of %d tracks (smallest lift of the mean pitch %.1f semitones)",
               climaxBars, climaxOpen, climaxRide, squelches, climaxCounter, counterPossible, arpUp, arpPairs, arpLift));
@@ -11220,8 +11241,13 @@ void testGenreRulesRules()
     check(arpReg == 0, "arp: every note between G3 and G5 (rule 14)", fmt("%d notes outside", arpReg));
     check(leadSparse == 0 && leadHoles == 0, "lead: a dense riff -- at least eight onsets in every bar, no hole of six sixteenths (rules 3, 16)",
           fmt("%d bars: %d with fewer than eight onsets, %d with a hole", leadBars, leadSparse, leadHoles));
-    check(leadReg == 0 && leadMedian >= 67 && leadMedian <= 73 && leadTop <= kLeadHighest,
-          "lead: median around A4..C5, never above A5 (rule 17)", fmt("median MIDI %d, top %d, %d notes outside B3..A5", leadMedian, leadTop, leadReg));
+    // 20.09.2026, round "dialogue": the user's register rule replaced rule 17's "median A4..C5, never
+    // above A5" with the window C4..B4 (Melody.h). The median has to sit in the window's lower half --
+    // where kLeadCentre puts the mass, and where the rule's "about 260..400 Hz" is -- and nothing may
+    // stand above B4.
+    check(leadReg == 0 && leadMedian >= kLeadLowest && leadMedian <= kLeadLowest + 6 && leadTop <= kLeadHighest,
+          "lead: median in the lower half of C4..B4, never above B4 (the user's register rule)",
+          fmt("median MIDI %d, top %d, %d notes outside C4..B4", leadMedian, leadTop, leadReg));
     check(leadNoFifth == 0 && leadRuns == 0, "lead: the fifth appears as a resting tone in every phrase, no pitch three times in a row (rules 1, 18)",
           fmt("%d of %d phrases without a held fifth, %d with a run of three", leadNoFifth, leadPhrases, leadRuns));
     check(colourSeen > 0 && colourBad == 0,
@@ -11325,7 +11351,8 @@ void testGenreRulesListeningSeed()
                 if (k == 0 && (ratio < 0.8 || ratio > 1.25)) ++acidRatioBad;
                 if (k == 2 && (ratio < 0.8 || ratio > 1.25)) ++arpRatioBad;
                 if (k == 0) { acidRun3 += s.runs3; if (ps.back() > kAcidJumpHighest) ++acidTopBad; }
-                if (k == 1 && (ps[ps.size() / 2] < 67 || ps[ps.size() / 2] > 73)) ++leadMedianBad;
+                // 20.09.2026: the window is C4..B4 and the median belongs in its lower half.
+                if (k == 1 && (ps[ps.size() / 2] < kLeadLowest || ps[ps.size() / 2] > kLeadLowest + 6)) ++leadMedianBad;
                 if (k == 1 && ps.back() > kLeadHighest) ++leadTopBad;
                 // G5 is the arp's own ceiling (rule 14); since 19.09.2026 it may go to G6 to clear a lead it shares a bar with.
                 if (k == 2 && (ps.front() < kArpLowest || ps.back() > kArpOverHighest)) ++arpRegBad;
@@ -11335,7 +11362,7 @@ void testGenreRulesListeningSeed()
               fmt("%d acid and %d arp tracks outside 0.8..1.25", acidRatioBad, arpRatioBad));
         check(acidRun3 == 0 && acidTopBad == 0, "seed 864566672: no acid pitch three times in a row, nothing above D5",
               fmt("%d runs of three, %d tracks above D5", acidRun3, acidTopBad));
-        check(leadMedianBad == 0 && leadTopBad == 0 && arpRegBad == 0, "seed 864566672: lead median A4..C5 and never above A5, arp inside G3..G6 (G5 unless it clears a lead)",
+        check(leadMedianBad == 0 && leadTopBad == 0 && arpRegBad == 0, "seed 864566672: lead median in the lower half of C4..B4 and never above B4, arp inside G3..G6 (G5 unless it clears a lead)",
               fmt("%d lead medians and %d lead tops off, %d arp tracks outside", leadMedianBad, leadTopBad, arpRegBad));
         // Track 2 has lead and arp. Until 19.09.2026 the form dropped the arp from every section it
         // shared with the lead and Composer::restoreArp gave it back only in the lead's rests, so the
@@ -11680,7 +11707,7 @@ void testVoicesScore()
     // (d) The counter-lead: only where the lead plays, in its held notes rather than on its attacks,
     //     no colour tone, the tonic its centre, every answer ending on the tonic or the fifth.
     {
-        int notes = 0, alone = 0, onAttack = 0, answerNotes = 0, colour = 0, tonic = 0, answers = 0, answersResting = 0;
+        int notes = 0, alone = 0, aloneOutsideBreak = 0, onAttack = 0, answerNotes = 0, colour = 0, tonic = 0, answers = 0, answersResting = 0;
         int pcCount[12] = {};
         std::vector<const NoteEvent*> counter;
         std::set<long long> leadOnsets;
@@ -11696,7 +11723,10 @@ void testVoicesScore()
             const int sc = t.form.section[sectionOfBar(t.form, bar - t.firstBar)].scale;
             const int pc = ((e.pitch - t.key) % 12 + 12) % 12;
             ++notes;
-            if (!barHas(bar, Part::Lead)) ++alone;
+            if (!barHas(bar, Part::Lead)) {
+                ++alone;
+                if (t.form.section[sectionOfBar(t.form, bar - t.firstBar)].type != SectionType::Break) ++aloneOutsideBreak;
+            }
             // The answers (outside the lead's B phrase, bars 4 and 5 of its eight) sit on the lead's held notes;
             // over B the counter plays a line of its own and may meet the lead's attacks an octave above.
             const int inPhrase = (bar - t.firstBar) % 8;
@@ -11716,10 +11746,14 @@ void testVoicesScore()
             }
         }
         const double attackShare = answerNotes > 0 ? static_cast<double>(onAttack) / answerNotes : 1.0;
-        check(notes > 100 && alone == 0 && attackShare < 0.25,
-              "counter-lead: only where the lead plays, its answers on the lead's held notes rather than its attacks",
-              fmt("%d notes, %d in bars without the lead, %.0f %% of %d answer notes on a lead attack (the lead strikes about 13 of 16 sixteenths)",
-                  notes, alone, 100.0 * attackShare, answerNotes));
+        // 20.09.2026, round "dialogue": the user's Model 3 gives the counter a second place -- the main
+        // breakdown, alone and without the lead, so that drop 2 is not the listener's first meeting with
+        // it. A counter note outside a breakdown must still have the lead beside it; testDialogue.score
+        // checks the dramaturgy itself, this one checks that nothing else moved.
+        check(notes > 100 && aloneOutsideBreak == 0 && alone > 0 && attackShare < 0.25,
+              "counter-lead: beside the lead everywhere but the main breakdown, its answers on the lead's held notes rather than its attacks",
+              fmt("%d notes, %d in bars without the lead (%d of them outside a breakdown), %.0f %% of %d answer notes on a lead attack (the lead strikes about 13 of 16 sixteenths)",
+                  notes, alone, aloneOutsideBreak, 100.0 * attackShare, answerNotes));
         // Every answer is written to end on the tonic or the fifth (makeCounter); the register guard may
         // still give up that last note where a lead note sits on it in every octave the counter has, and
         // the note before it then ends the answer -- measured: 2 of 46 on this set, hence nine in ten.
@@ -11728,8 +11762,12 @@ void testVoicesScore()
         // the two the answers are written to end on. Read now as: tonic and fifth together the centre (at
         // least 40 %), the tonic at least a fifth of the notes.
         const bool tonicCommonest = (pcCount[0] + pcCount[7]) * 5 >= notes * 2;
-        check(colour == 0 && tonicCommonest && tonic * 5 >= notes && answers > 10 && answersResting * 10 >= answers * 9,
-              "counter-lead: the lead's genre rules -- no colour tone, the tonic as its centre, nine in ten answers ending on the tonic or the fifth",
+        // 20.09.2026: the register rule narrowed the counter's window to one octave, so the guard can no
+        // longer move a colliding note by an octave and gives it up instead; where that note was the
+        // answer's last, the note before it ends the answer and need not be a resting tone. Measured on
+        // this set: 101 of 113 against 44 of 46 before, so the share is read as seven in eight.
+        check(colour == 0 && tonicCommonest && tonic * 5 >= notes && answers > 10 && answersResting * 8 >= answers * 7,
+              "counter-lead: the lead's genre rules -- no colour tone, the tonic as its centre, seven in eight answers ending on the tonic or the fifth",
               fmt("%d colour tones, tonic %.0f %% of %d notes (commonest class %d with %d), %d of %d answers end on 1 or 5%s", colour,
                   notes > 0 ? 100.0 * tonic / notes : 0.0, notes, static_cast<int>(std::max_element(pcCount, pcCount + 12) - pcCount),
                   *std::max_element(pcCount, pcCount + 12), answersResting, answers, offRest.c_str()));
@@ -11785,9 +11823,17 @@ void testVoicesScore()
         // chord's fifth and octave also reach past D3).
         std::map<double, int> droneRoot;
         for (const NoteEvent& e : ev) if (e.part == Part::Drone) { auto it = droneRoot.find(e.beat); droneRoot[e.beat] = it == droneRoot.end() ? e.pitch : std::min<int>(it->second, e.pitch); }
+        // 20.09.2026, round "dialogue": the drone is a continuous carpet now, so its upper octave meets
+        // pad and acid nearly everywhere -- forbidding the overlap is what made it four notes in 300
+        // bars. What is forbidden instead is *doubling*: a run that shares its band holds its root alone
+        // and leaves the fifth to whoever has it. So an upper chord that meets a pad or an acid note
+        // counts as bad only when it is more than one note at that onset.
+        std::map<double, int> droneVoices;
+        for (const NoteEvent& e : ev) if (e.part == Part::Drone) ++droneVoices[e.beat];
         for (const NoteEvent& e : ev) {
             if (e.part != Part::Drone || droneRoot[e.beat] < kPadLowest) continue;
             ++upNotes;
+            if (droneVoices[e.beat] < 2) continue;
             for (const NoteEvent& o : ev)
                 if ((o.part == Part::Pad || o.part == Part::Acid) && o.beat < e.beat + e.length && o.beat + o.length > e.beat) {
                     ++upDoubled;
@@ -11826,8 +11872,8 @@ void testVoicesScore()
         bool periodsOk = !periods.empty();
         for (float pr : periods) periodsOk = periodsOk && pr >= 8.0f && pr <= 32.0f;
         check(lowNotes > 0 && lowUnderKick == 0 && lowLate == 0 && upDoubled == 0,
-              "tonic drone: its low octave (under D3) only where kick and bass rest, released a bar and a half before the kick returns; its upper octave never over pad or acid",
-              fmt("%d low notes, %d overlapping a kick, %d ending less than 1.5 bars before one; %d of %d upper notes over a pad or acid note%s", lowNotes, lowUnderKick, lowLate, upDoubled, upNotes, upWhere.c_str()));
+              "tonic drone: its low octave (under D3) only where kick and bass rest, released a bar and a half before the kick returns; its upper octave never a second voicing over pad or acid",
+              fmt("%d low notes, %d overlapping a kick, %d ending less than 1.5 bars before one; %d of %d upper notes doubling a pad or acid note%s", lowNotes, lowUnderKick, lowLate, upDoubled, upNotes, upWhere.c_str()));
         check(breakBars > 0 && breakWithDrone == breakBars && periodsOk,
               "tonic drone: under every breakdown bar of a track that has one, evolving in ramps of 8 to 32 bars",
               fmt("%d of %d breakdown bars, %zu ramp periods (%s)", breakWithDrone, breakBars, periods.size(),
@@ -12147,6 +12193,538 @@ void testVoicesAcidRide()
     }
 }
 
+/* ---------------------------------------------------------------- round "dialogue", 20.09.2026 */
+
+/**
+ * @brief The user's four separations between lead and counter-lead, read off the score.
+ *
+ * Register, dramaturgy (their Model 3) and articulation are decisions of the composer, so they are
+ * measured on the notes and not on a render: the score is what has to obey the rule, and a render
+ * would only add the level match's probes to the cost.
+ */
+void testDialogueScore()
+{
+    section("dialogue: lead and counter -- register, Model 3, staccato, the drone's carpet, the effect floor");
+
+    // A set in which every track has both leads, the drone and the stab, so that many forms are seen.
+    // The three probes are off: nothing here is about levels, and they cost 12 s per track.
+    ParamStore q;
+    q.parseText("compose.counter_amount=1 compose.stab_amount=1 compose.drone_amount=1 compose.lead_amount=1 "
+                "compose.arp_amount=1 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off "
+                "compose.presence_match=Off");
+    Composer c(20260920ull);
+    std::vector<NoteEvent> ev;
+    const int tracks = 6;
+    int bars = 0;
+    for (int t = 0; t < tracks; ++t) bars = c.track(q, t).firstBar + c.track(q, t).bars;
+    c.composeBars(q, 0, bars, ev);
+
+    // (a) Register. The rule is C4..G4 for the lead and C5..G5 for the counter; the counter must also
+    //     stand entirely above the lead, which is the point of "one octave up".
+    {
+        int leadLo = 127, leadHi = 0, cLo = 127, cHi = 0, leadN = 0, cN = 0;
+        for (const NoteEvent& e : ev) {
+            if (e.part == Part::Lead) { leadLo = std::min<int>(leadLo, e.pitch); leadHi = std::max<int>(leadHi, e.pitch); ++leadN; }
+            if (e.part == Part::Counter) { cLo = std::min<int>(cLo, e.pitch); cHi = std::max<int>(cHi, e.pitch); ++cN; }
+        }
+        // Independently derived: 60 = C4 (261.63 Hz), 71 = B4 (493.88), 72 = C5, 83 = B5 (987.77) --
+        // the counter's window is the 500 .. 1000 Hz the user's rule names in so many words.
+        const bool lead = leadN > 500 && leadLo >= 60 && leadHi <= 71;
+        const bool counter = cN > 100 && cLo >= 72 && cHi <= 83;
+        check(lead && counter && cLo > leadHi,
+              "the two leads speak in the rule's windows: the lead from C4, the counter an octave above it from C5, neither reaching into the other",
+              fmt("lead %d notes %d..%d (%.0f..%.0f Hz), counter %d notes %d..%d (%.0f..%.0f Hz)",
+                  leadN, leadLo, leadHi, 440.0 * std::pow(2.0, (leadLo - 69) / 12.0), 440.0 * std::pow(2.0, (leadHi - 69) / 12.0),
+                  cN, cLo, cHi, 440.0 * std::pow(2.0, (cLo - 69) / 12.0), 440.0 * std::pow(2.0, (cHi - 69) / 12.0)));
+    }
+
+    // (b) The register rule still holds with the narrowed windows, and the arp still stands beside the
+    //     lead rather than being pushed out of the drops.
+    {
+        const int clashes = RuleRef::registerClashes(ev, 0, bars);
+        std::set<int> leadBars, arpBars;
+        for (const NoteEvent& e : ev) {
+            const int b = static_cast<int>(std::floor(e.beat / kBeatsPerBar + 1e-9));
+            if (e.part == Part::Lead) leadBars.insert(b);
+            if (e.part == Part::Arp) arpBars.insert(b);
+        }
+        int together = 0, arpOut = 0;
+        for (int b : leadBars) if (arpBars.count(b) != 0) ++together;
+        for (const NoteEvent& e : ev) if (e.part == Part::Arp && (e.pitch < kArpLowest || e.pitch > kArpOverHighest)) ++arpOut;
+        check(clashes == 0 && arpOut == 0 && !leadBars.empty() && together >= static_cast<int>(leadBars.size()) / 3,
+              "the narrowed windows keep the register rule and leave the arp beside the lead",
+              fmt("%d clashing sixteenths, %d arp notes outside G3..G6, arp in %d of %zu lead bars",
+                  clashes, arpOut, together, leadBars.size()));
+    }
+
+    // (c) Articulation. The lead is a dense sixteenth riff, so most of its *written* notes are a
+    //     sixteenth long as well and a median would say nothing; what separates the two is how long the
+    //     longest note of each may be and what the envelope does with it. The lead holds -- its longest
+    //     note is two sixteenths played at 0.92 of that, and its envelope sustains at 0.75 with a 400 ms
+    //     filter decay and a 45 ms portamento between notes; the counter whips -- never longer than a
+    //     sixteenth's worth (kCounterStaccato of at most two sixteenths, so half the lead's longest at
+    //     the same written span), no sustain at all, a filter that shuts in 60 ms and no glide.
+    {
+        double leadMax = 0.0, counterMax = 0.0;
+        int leadN = 0, counterN = 0;
+        for (const NoteEvent& e : ev) {
+            if (e.part == Part::Lead) { leadMax = std::max<double>(leadMax, e.length); ++leadN; }
+            if (e.part == Part::Counter) { counterMax = std::max<double>(counterMax, e.length); ++counterN; }
+        }
+        ParamStore fresh;
+        const int lb = fresh.base(PolyInstance::Lead), nb = fresh.base(PolyInstance::Counter);
+        const float leadSus = fresh.get(lb + poly::AmpSustain), counterSus = fresh.get(nb + poly::AmpSustain);
+        const float leadDec = fresh.get(lb + poly::FilterDecay), counterDec = fresh.get(nb + poly::FilterDecay);
+        const float leadGlide = fresh.get(lb + poly::Glide), counterGlide = fresh.get(nb + poly::Glide);
+        check(leadN > 500 && counterN > 100 && counterMax <= 0.25 + 1e-9 && leadMax >= 2.0 * counterMax
+                  && counterSus == 0.0f && leadSus >= 0.5f && counterDec <= 80.0f && leadDec >= 300.0f
+                  && leadGlide > 0.0f && counterGlide == 0.0f,
+              "the counter whips where the lead flows: staccato against held notes, a shut filter against an open one, no glide against a portamento",
+              fmt("longest written note lead %.3f beats against counter %.3f; sustain %.2f against %.2f; "
+                  "filter decay %.0f against %.0f ms; glide %.0f against %.0f ms",
+                  leadMax, counterMax, static_cast<double>(leadSus), static_cast<double>(counterSus),
+                  static_cast<double>(leadDec), static_cast<double>(counterDec),
+                  static_cast<double>(leadGlide), static_cast<double>(counterGlide)));
+    }
+
+    // (d) The user's Model 3. Drop 1 is the lead alone, the main breakdown is the counter alone
+    //     (introduced without the lead), drop 2 is both. Counted per section over every track.
+    {
+        int drop1Counter = 0, breakCounter = 0, breakLead = 0, drop2Counter = 0, drop2Lead = 0;
+        int breaksWithCounter = 0, breaksSeen = 0, tracksSeen = 0;
+        for (int t = 0; t < tracks; ++t) {
+            const TrackPlan plan = c.track(q, t);
+            if (!plan.melody.present[mpIndex(MelodyPart::Counter)]) continue;
+            ++tracksSeen;
+            bool firstDrop = true;
+            for (int si = 0; si < plan.form.count; ++si) {
+                const Section& s = plan.form.section[si];
+                const int from = plan.firstBar + s.startBar, to = from + s.bars;
+                int counter = 0, lead = 0;
+                for (const NoteEvent& e : ev) {
+                    const int b = static_cast<int>(std::floor(e.beat / kBeatsPerBar + 1e-9));
+                    if (b < from || b >= to) continue;
+                    if (e.part == Part::Counter) ++counter;
+                    if (e.part == Part::Lead) ++lead;
+                }
+                if (s.type == SectionType::Drop && !s.climax && firstDrop) { drop1Counter += counter; firstDrop = false; }
+                else if (s.type == SectionType::Drop && s.climax) { drop2Counter += counter; drop2Lead += lead; }
+                else if (s.type == SectionType::Break) {
+                    ++breaksSeen;
+                    breakCounter += counter;
+                    breakLead += lead;
+                    if (counter > 0) ++breaksWithCounter;
+                }
+            }
+        }
+        check(tracksSeen >= 3 && drop1Counter == 0 && breakCounter > 0 && breakLead == 0
+                  && breaksWithCounter == breaksSeen && drop2Counter > 0 && drop2Lead > 0,
+              "Model 3: drop 1 the lead alone, the breakdown the counter alone, drop 2 the two together",
+              fmt("%d tracks: drop 1 %d counter notes, breakdown %d counter / %d lead notes in %d of %d breakdowns, "
+                  "drop 2 %d counter / %d lead notes",
+                  tracksSeen, drop1Counter, breakCounter, breakLead, breaksWithCounter, breaksSeen, drop2Counter, drop2Lead));
+    }
+
+    // (e) The drone is a carpet, not four notes. Counted as the share of a track's bars under which a
+    //     drone note sounds; the low octave still has to be under a silent floor only.
+    {
+        int tracksSeen = 0, worstCover = 100, lowUnderKick = 0, notes = 0;
+        std::string per;
+        for (int t = 0; t < tracks; ++t) {
+            const TrackPlan plan = c.track(q, t);
+            if (!plan.melody.present[mpIndex(MelodyPart::Drone)]) continue;
+            ++tracksSeen;
+            std::vector<uint8_t> sounding(static_cast<size_t>(plan.bars), 0);
+            std::set<int> kickBars;
+            for (const NoteEvent& e : ev) {
+                const int b = static_cast<int>(std::floor(e.beat / kBeatsPerBar + 1e-9)) - plan.firstBar;
+                if (b < 0 || b >= plan.bars) continue;
+                if (e.part == Part::Kick) kickBars.insert(b);
+            }
+            for (const NoteEvent& e : ev) {
+                if (e.part != Part::Drone) continue;
+                const int b = static_cast<int>(std::floor(e.beat / kBeatsPerBar + 1e-9)) - plan.firstBar;
+                if (b < 0 || b >= plan.bars) continue;
+                ++notes;
+                const int last = std::min<int>(plan.bars, b + static_cast<int>(std::ceil(e.length / kBeatsPerBar)));
+                for (int k = b; k < last; ++k) sounding[static_cast<size_t>(k)] = 1;
+                // The low octave (under D3) may only start where kick and bass rest for the bar.
+                if (e.pitch < kPadLowest && kickBars.count(b) != 0) ++lowUnderKick;
+            }
+            int cover = 0;
+            for (uint8_t s : sounding) cover += s;
+            const int pct = 100 * cover / std::max(1, plan.bars);
+            worstCover = std::min(worstCover, pct);
+            if (per.size() < 120) per += fmt(" t%d %d%%;", t + 1, pct);
+        }
+        check(tracksSeen >= 3 && worstCover >= 85 && lowUnderKick == 0,
+              "the tonic drone is the continuous carpet the rule asks for, and its low octave still avoids the kick",
+              fmt("%d tracks, %d drone notes, thinnest cover %d%% of its bars, %d low notes under a kick;%s",
+                  tracksSeen, notes, worstCover, lowUnderKick, per.c_str()));
+    }
+
+    // (f) The effect floor: in a groove or a drop, never two bars in a row without an effect event.
+    {
+        int worst = 0, coreBars = 0, runsOfTwo = 0;
+        for (int t = 0; t < tracks; ++t) {
+            const TrackPlan plan = c.track(q, t);
+            std::set<int> carries;
+            for (const SfxEvent& e : plan.form.sfx)
+                if (isDensityEvent(static_cast<SfxType>(e.type))) carries.insert(static_cast<int>(e.beat / kBeatsPerBar));
+            for (int si = 0; si < plan.form.count; ++si) {
+                const Section& s = plan.form.section[si];
+                if (s.type != SectionType::Groove && s.type != SectionType::Drop) continue;
+                int run = 0;
+                for (int b = s.startBar; b < s.startBar + s.bars; ++b) {
+                    ++coreBars;
+                    if (carries.count(b) != 0) { run = 0; continue; }
+                    ++run;
+                    worst = std::max(worst, run);
+                    if (run == 2) ++runsOfTwo;
+                }
+            }
+        }
+        check(coreBars > 500 && worst <= 1 && runsOfTwo == 0,
+              "in the groove no two bars in a row are without a zap, a glitch or a swell",
+              fmt("%d groove and drop bars, longest empty run %d bars, %d runs of two or more", coreBars, worst, runsOfTwo));
+    }
+
+    // (g) Pan and echo are properties of the role, not of the draw: over every track of the walk the
+    //     lead's delay times stay in the dotted-eighth family and the counter's in the sixteenth one,
+    //     and the two never meet.
+    {
+        std::set<int> leadTimes, counterTimes;
+        int tracksSeen = 0;
+        for (int t = 0; t < tracks + 6; ++t) {
+            const TrackPlan plan = c.track(q, t);
+            if (plan.bars <= 0) break;
+            ++tracksSeen;
+            const VoiceRecipe& l = plan.voice[polyIndex(PolyInstance::Lead)];
+            const VoiceRecipe& n = plan.voice[polyIndex(PolyInstance::Counter)];
+            if (l.delayL >= 0) { leadTimes.insert(l.delayL); leadTimes.insert(l.delayR); }
+            if (n.delayL >= 0) { counterTimes.insert(n.delayL); counterTimes.insert(n.delayR); }
+        }
+        // kDelayBeats: 0 = 1/16 (0.25 beats), 1 = 1/8, 2 = a dotted eighth (0.75), 4 = a dotted quarter.
+        bool leadSlow = true, counterFast = true;
+        for (int i : leadTimes) leadSlow = leadSlow && kDelayBeats[i] >= 0.75f;
+        for (int i : counterTimes) counterFast = counterFast && kDelayBeats[i] <= 0.75f;
+        bool disjointFastest = true;
+        for (int i : leadTimes) if (kDelayBeats[i] <= 0.5f) disjointFastest = false;
+        ParamStore fresh;
+        const float leadPan = fresh.get(fresh.base(PolyInstance::Lead) + poly::Pan);
+        const float counterPan = fresh.get(fresh.base(PolyInstance::Counter) + poly::Pan);
+        check(tracksSeen >= 6 && leadSlow && counterFast && disjointFastest
+                  && leadPan <= -0.15f && leadPan >= -0.25f && counterPan >= 0.15f && counterPan <= 0.25f,
+              "the echo and the place in the image belong to the role: the lead slow and left, the counter fast and right",
+              fmt("%d tracks: lead times %zu (all >= a dotted eighth: %d), counter times %zu (all <= a dotted eighth: %d), "
+                  "pan lead %+.2f, counter %+.2f", tracksSeen, leadTimes.size(), leadSlow, counterTimes.size(), counterFast,
+                  static_cast<double>(leadPan), static_cast<double>(counterPan)));
+    }
+}
+
+/**
+ * @brief The portamento of Poly (poly.glide), measured on the pitch trajectory itself.
+ *
+ * The parameter is the time constant of a one-pole slew on the pitch, stepped once per kPolyBlock
+ * samples. Independently derived: a step of an interval I is I exp(-t / tau) away from its target, so
+ * the halfway point lies at tau ln2 -- 34.66 ms for tau = 50 ms -- whatever the interval and whatever
+ * the sample rate. The check reads Poly::soundingPitch(), which is the value the slot frequencies are
+ * written from, so it measures the engine's own state and not a re-derivation of it.
+ */
+void testDialogueGlide()
+{
+    section("dialogue: the lead's portamento");
+    ParamStore p;
+    auto values = [&](PolyInstance inst, float glideMs) {
+        std::vector<float> v(static_cast<size_t>(poly::Count), 0.0f);
+        p.readModule(Module::Poly, polyIndex(inst), v.data());
+        v[poly::Glide] = glideMs;
+        v[poly::Drift] = 0.0f;   // the walks would move the slot frequencies under the measurement
+        return v;
+    };
+    const double sr = 48000.0;
+    const int block = 64;
+
+    // (a) The trajectory: half the interval after tau ln2, and arrival within a few time constants.
+    {
+        Poly poly;
+        poly.prepare(sr);
+        std::vector<float> v = values(PolyInstance::Lead, 50.0f);
+        poly.update(v.data(), 145.0);
+        std::vector<float> L(static_cast<size_t>(block)), R(static_cast<size_t>(block));
+        poly.noteOn(60, 1.0f, 1.0, static_cast<int>(sr), 0.0);
+        for (int i = 0; i < 40; ++i) poly.process(L.data(), R.data(), block);   // 53 ms: settled
+        const double from = poly.soundingPitch(0);
+        poly.noteOn(72, 1.0f, 1.0, static_cast<int>(sr), 0.0);
+        double halfAt = -1.0, endPitch = 0.0;
+        for (int i = 0; i < 400; ++i) {
+            poly.process(L.data(), R.data(), block);
+            endPitch = poly.soundingPitch(1);
+            if (halfAt < 0.0 && endPitch >= 66.0) halfAt = (i + 1) * block / sr;
+        }
+        const double want = 0.050 * std::log(2.0);
+        check(std::fabs(from - 60.0) < 1e-9 && halfAt > 0.0 && std::fabs(halfAt - want) < 0.003 && std::fabs(endPitch - 72.0) < 0.01,
+              "poly.glide bends the pitch with the time constant it names: half the interval after tau ln2",
+              fmt("from %.3f, halfway at %.2f ms (expected %.2f), arrived at %.4f after 533 ms",
+                  from, halfAt * 1000.0, want * 1000.0, endPitch));
+    }
+
+    // (b) Retrigger-free over an overlap: a note that starts while the bend runs starts from where the
+    //     voice *is*, not from the note before it and not from its target.
+    {
+        Poly poly;
+        poly.prepare(sr);
+        std::vector<float> v = values(PolyInstance::Lead, 50.0f);
+        poly.update(v.data(), 145.0);
+        std::vector<float> L(static_cast<size_t>(block)), R(static_cast<size_t>(block));
+        poly.noteOn(60, 1.0f, 1.0, static_cast<int>(sr), 0.0);
+        for (int i = 0; i < 40; ++i) poly.process(L.data(), R.data(), block);
+        poly.noteOn(72, 1.0f, 1.0, static_cast<int>(sr), 0.0);
+        for (int i = 0; i < 15; ++i) poly.process(L.data(), R.data(), block);   // 20 ms into the bend
+        const double running = poly.soundingPitch(1);
+        poly.noteOn(48, 1.0f, 1.0, static_cast<int>(sr), 0.0);
+        const double started = poly.soundingPitch(2);
+        check(running > 61.0 && running < 71.0 && std::fabs(started - running) < 0.2,
+              "a note that overlaps a running bend takes it over instead of jumping back to the note before",
+              fmt("the bend stood at %.3f, the new note started at %.3f", running, started));
+    }
+
+    // (c) Glide 0 is off: the first note is at its pitch from the first sample, and the render is bit
+    //     for bit the render of a build without the mechanism.
+    {
+        Poly a, b;
+        a.prepare(sr);
+        b.prepare(sr);
+        std::vector<float> v0 = values(PolyInstance::Lead, 0.0f);
+        a.update(v0.data(), 145.0);
+        b.update(v0.data(), 145.0);
+        std::vector<float> aL(static_cast<size_t>(block)), aR(static_cast<size_t>(block)), bL(static_cast<size_t>(block)), bR(static_cast<size_t>(block));
+        bool same = true;
+        double first = 0.0;
+        for (int n = 0; n < 4; ++n) {
+            a.noteOn(60 + 4 * n, 1.0f, 0.25, block * 3, 0.0);
+            b.noteOn(60 + 4 * n, 1.0f, 0.25, block * 3, 0.0);
+            if (n == 1) first = a.soundingPitch(1);
+            for (int i = 0; i < 6; ++i) {
+                a.process(aL.data(), aR.data(), block);
+                b.process(bL.data(), bR.data(), block);
+                for (int k = 0; k < block; ++k)
+                    same = same && aL[static_cast<size_t>(k)] == bL[static_cast<size_t>(k)] && aR[static_cast<size_t>(k)] == bR[static_cast<size_t>(k)];
+            }
+        }
+        check(same && std::fabs(first - 64.0) < 1e-12,
+              "at glide 0 a note is at its own pitch from the first sample",
+              fmt("second note started at %.6f, renders identical %d", first, same));
+    }
+}
+
+/**
+ * @brief Pan and modulation insert, rendered: the two leads stand apart in the image, and poly.mod is
+ *        a colour that is off when it says off.
+ */
+void testDialogueSound()
+{
+    section("dialogue: the two leads in the image, and the voice's modulation insert");
+    const double sr = 48000.0;
+    const int block = 512;
+    // One voice, eight notes of a bar, rendered on its own -- no composer, no probes.
+    auto render = [&](PolyInstance inst, const char* extra, int n) {
+        ParamStore p;
+        if (extra != nullptr) p.parseText(extra);
+        std::vector<float> v(static_cast<size_t>(poly::Count), 0.0f);
+        p.readModule(Module::Poly, polyIndex(inst), v.data());
+        Poly poly;
+        poly.prepare(sr);
+        poly.update(v.data(), 145.0);
+        std::vector<float> L(static_cast<size_t>(n)), R(static_cast<size_t>(n));
+        const int step = n / 8;
+        for (int k = 0; k < 8; ++k) {
+            poly.noteOn(60 + 2 * k, 0.9f, 0.25, step / 2, 0.0);
+            for (int done = 0; done < step;) {
+                const int m = std::min(block, step - done);
+                poly.process(L.data() + k * step + done, R.data() + k * step + done, m);
+                done += m;
+            }
+        }
+        return std::make_pair(L, R);
+    };
+    auto rms = [](const std::vector<float>& x) {
+        double s = 0.0;
+        for (float y : x) s += static_cast<double>(y) * y;
+        return std::sqrt(s / std::max<size_t>(1, x.size()));
+    };
+    const int n = 48000;
+
+    // (a) The image: the lead left of centre, the counter right of it, both by the rule's 15 to 25 %.
+    //     Constant power over an angle of 0.20 gives 20 log10(cos/sin) = 20 log10(tan(pi/4 - 0.05 pi))
+    //     = 2.78 dB of inter-channel difference; the voices' own stereo width and their delays widen the
+    //     measurement, so the check is on the sign and on at least 1 dB.
+    {
+        const auto lead = render(PolyInstance::Lead, nullptr, n);
+        const auto counter = render(PolyInstance::Counter, nullptr, n);
+        const double dLead = 20.0 * std::log10(rms(lead.first) / std::max(1e-12, rms(lead.second)));
+        const double dCounter = 20.0 * std::log10(rms(counter.first) / std::max(1e-12, rms(counter.second)));
+        check(dLead > 1.0 && dCounter < -1.0,
+              "the lead stands left of centre and the counter right of it, as the role says",
+              fmt("inter-channel level difference L-R: lead %+.2f dB, counter %+.2f dB", dLead, dCounter));
+    }
+
+    // (b) The modulation insert, driven by a steady 1 kHz tone rather than by the voice's own notes: a
+    //     note's envelope moves the output as much as the modulation does, so on notes "the effect
+    //     moves" cannot be told from "the source moves". On a tone the output level *is* the comb's
+    //     transfer at the notch's present position, so the sweep is directly visible -- and its period
+    //     is directly measurable, which is how "tempo-synchronised" gets checked rather than asserted.
+    {
+        auto run = [&](PolyMod type, double bpm, double beats, double depth) {
+            Flanger fl;
+            Phaser ph;
+            fl.prepare(sr);
+            ph.prepare(sr);
+            const bool comb = type == PolyMod::Comb;
+            fl.set(static_cast<float>(beats), comb ? 0.0f : static_cast<float>(depth), 0.5f,
+                   type == PolyMod::Flanger || comb ? 0.5f : 0.0f);
+            ph.set(static_cast<float>(beats), static_cast<float>(depth), 0.5f, type == PolyMod::Phaser ? 0.5f : 0.0f);
+            const int n = static_cast<int>(8.0 * sr);
+            std::vector<double> env;
+            double acc = 0.0;
+            int count = 0;
+            for (int i2 = 0; i2 < n; ++i2) {
+                float l = static_cast<float>(std::sin(2.0 * 3.141592653589793 * 997.0 * i2 / sr));
+                float r = l;
+                const double beat = bpm / 60.0 * i2 / sr;
+                if (type == PolyMod::Phaser) ph.tick(l, r, beat);
+                else if (type != PolyMod::Off) fl.tick(l, r, beat);
+                acc += static_cast<double>(l) * l;
+                if (++count == 960) { env.push_back(10.0 * std::log10(acc / 960.0 + 1e-30)); acc = 0.0; count = 0; }   // 20 ms
+            }
+            return env;
+        };
+        auto spread = [](const std::vector<double>& e) {
+            std::vector<double> v(e.begin() + 20, e.end());   // past the delay line's fill
+            std::sort(v.begin(), v.end());
+            return v.empty() ? 0.0 : v[static_cast<size_t>(0.95 * (v.size() - 1))] - v[static_cast<size_t>(0.05 * (v.size() - 1))];
+        };
+        // Troughs of the envelope: the notch passing over the tone. Counted past the fill, with a
+        // hysteresis of 1 dB so that a flat envelope yields none.
+        auto troughs = [](const std::vector<double>& e) {
+            double lo = 1e9, hi = -1e9;
+            for (size_t k = 20; k < e.size(); ++k) { lo = std::min(lo, e[k]); hi = std::max(hi, e[k]); }
+            if (hi - lo < 2.0) return 0;
+            const double mid = 0.5 * (lo + hi);
+            int n = 0;
+            bool below = false;
+            for (size_t k = 20; k < e.size(); ++k) {
+                if (!below && e[k] < mid - 0.5) { below = true; ++n; }
+                else if (below && e[k] > mid + 0.5) below = false;
+            }
+            return n;
+        };
+        const std::vector<double> off = run(PolyMod::Off, 145.0, 4.0, 0.8);
+        const std::vector<double> fast = run(PolyMod::Flanger, 145.0, 4.0, 0.8);
+        const std::vector<double> slow = run(PolyMod::Flanger, 72.5, 4.0, 0.8);
+        const std::vector<double> phase = run(PolyMod::Phaser, 145.0, 4.0, 0.8);
+        const std::vector<double> comb = run(PolyMod::Comb, 145.0, 4.0, 0.0);
+        // A comb has many teeth, so one sweep of the delay carries several of them across a fixed tone;
+        // how many is a property of the depth, not of the tempo. What the tempo decides is the *rate*:
+        // at half the tempo a four-beat sweep takes twice as long, so half as many notches pass in the
+        // same eight seconds. The check is on that ratio -- which is what "tempo-synchronised" means and
+        // what no fixed-Hz LFO could satisfy -- with a fifth of slack for the ones a window clips.
+        // (off's 0.03 dB is the 20 ms window against 997 Hz, not the effect: it is not a whole number
+        // of cycles per window.)
+        const int nFast = troughs(fast), nSlow = troughs(slow);
+        check(spread(off) < 0.05 && spread(fast) > 3.0 && spread(phase) > 3.0 && spread(comb) < 0.2
+                  && nSlow > 4 && nFast >= 17 * nSlow / 10 && nFast <= 23 * nSlow / 10,
+              "poly.mod is a colour of the voice: off changes nothing, the comb stands still, and the sweep counts beats and not seconds",
+              fmt("envelope spread of a 1 kHz tone: off %.3f dB, flanger %.1f, phaser %.1f, comb %.2f; "
+                  "notch passes in 8 s: %d at 145 BPM against %d at 72.5 BPM",
+                  spread(off), spread(fast), spread(phase), spread(comb), nFast, nSlow));
+    }
+}
+
+/**
+ * @brief The effects and the voices brought forward, rendered.
+ *
+ * The measurement is the one the decision was made on (Params.cpp, mix.sfx_level): each strip rendered
+ * alone against the *full mix* over the same bars, counting only the 40 ms frames in which the strip
+ * actually sounds. Averaging a sparse part over the silence between its events -- which is what the
+ * brief's -15.8 and -21.1 dB do -- measures its sparsity as much as its level; a riser that punches and
+ * a riser that whispers read the same if both are rare. What the rule is about is how the events sit
+ * against the mix, and that is what this reads.
+ *
+ * The target: an effect event as loud as a percussion hit, a spoken phrase between the percussion and
+ * the acid. Measured on the listening seed's first drop before the round: effects 11.5 dB under the
+ * mix, voices 13.0, percussion 9.3, acid 7.4.
+ */
+void testDialogueLevels()
+{
+    section("dialogue: the effects and the voices against the percussion");
+    ParamStore p;
+    p.parseText("compose.level_match=Off master.auto_gain=Off compose.presence_match=Off");
+    const uint64_t seed = 864566672ull;
+    Composer probe(seed);
+    // The first drop of the first track: where the mix is fullest and the brief took its numbers.
+    const TrackPlan plan = probe.track(p, 0);
+    int from = -1;
+    for (int i = 0; i < plan.form.count && from < 0; ++i)
+        if (plan.form.section[i].type == SectionType::Drop) from = plan.form.section[i].startBar;
+    const int bars = 16;
+    const double bpm = p.get(p.base(Module::Compose) + compose::Bpm);
+    const double sr = 48000.0, barSec = 4.0 * 60.0 / bpm;
+    const size_t total = static_cast<size_t>(std::llround((from + bars) * barSec * sr));
+    const size_t hop = static_cast<size_t>(0.040 * sr);
+
+    // The 40 ms frame levels of one render: the full mix (soloMute < 0) or one strip alone.
+    auto frames = [&](int soloMute) {
+        auto engine = std::make_unique<Engine>();
+        engine->prepare(sr, 512);
+        engine->params().copyValuesFrom(p);
+        if (soloMute >= 0) {
+            const int mb = engine->params().base(Module::Mix);
+            for (int m = 0; m < mix::Count; ++m)
+                if (engine->params().desc(mb + m).curve == Curve::Toggle && m != soloMute) engine->params().set(mb + m, 1.0f);
+        }
+        Composer cm(seed);
+        Conductor conductor(*engine, cm);
+        std::vector<float> L(total), R(total);
+        for (size_t done = 0; done < total;) {
+            const int n = static_cast<int>(std::min<size_t>(512, total - done));
+            conductor.pump(engine->params(), 32.0);
+            engine->process(L.data() + done, R.data() + done, n);
+            done += static_cast<size_t>(n);
+        }
+        std::vector<double> e;
+        for (size_t i = static_cast<size_t>(from * barSec * sr); i + hop <= total; i += hop) {
+            double s2 = 0.0;
+            for (size_t k = i; k < i + hop; ++k) s2 += 0.5 * (static_cast<double>(L[k]) * L[k] + static_cast<double>(R[k]) * R[k]);
+            e.push_back(10.0 * std::log10(s2 / static_cast<double>(hop) + 1e-30));
+        }
+        return e;
+    };
+    const std::vector<double> mix = frames(-1);
+    // "While it sounds": within 20 dB of the strip's own 99th percentile, the same rule the measurement
+    // script uses (scratch/dialogue/events.py).
+    auto under = [&](int soloMute, double& share) {
+        const std::vector<double> e = frames(soloMute);
+        std::vector<double> sorted(e);
+        std::sort(sorted.begin(), sorted.end());
+        const double top = sorted.empty() ? -200.0 : sorted[static_cast<size_t>(0.99 * (sorted.size() - 1))];
+        std::vector<double> d;
+        for (size_t i = 0; i < e.size() && i < mix.size(); ++i) if (e[i] > top - 20.0) d.push_back(e[i] - mix[i]);
+        share = e.empty() ? 0.0 : static_cast<double>(d.size()) / static_cast<double>(e.size());
+        std::sort(d.begin(), d.end());
+        return d.empty() ? -200.0 : d[d.size() / 2];
+    };
+    double sfxShare = 0.0, vocShare = 0.0, percShare = 0.0;
+    const double sfx = under(mix::SfxMute, sfxShare);
+    const double voc = under(mix::VocalMute, vocShare);
+    const double perc = under(mix::PercMute, percShare);
+    check(from >= 0 && std::fabs(sfx - perc) <= 2.0 && std::fabs(voc - perc) <= 2.0 && sfxShare > 0.10 && vocShare > 0.03,
+          "an effect event is as loud as a percussion hit, and a spoken phrase sits with them",
+          fmt("median level under the full mix while sounding, over %d drop bars: effects %+.2f dB (%.0f %% of the frames), "
+              "voices %+.2f dB (%.0f %%), percussion %+.2f dB (%.0f %%)",
+              bars, sfx, 100.0 * sfxShare, voc, 100.0 * vocShare, perc, 100.0 * percShare));
+}
+
 } // namespace
 
 /**
@@ -12300,6 +12878,10 @@ int main(int argc, char** argv)
     run("testVoices.counterSound77", testVoicesCounterSound77);
     run("testVoices.counterSound2026", testVoicesCounterSound2026);
     run("testVoices.acidRide", testVoicesAcidRide);
+    run("testDialogue.score", testDialogueScore);
+    run("testDialogue.glide", testDialogueGlide);
+    run("testDialogue.sound", testDialogueSound);
+    run("testDialogue.levels", testDialogueLevels);
     run("testForm", testForm);
     run("testArrangeDynamics", testArrangeDynamics);
     run("testSectionRules", testSectionRules);

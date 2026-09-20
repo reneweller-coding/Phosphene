@@ -160,8 +160,31 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
              Disperse, DisperseFreq, Drift,
              // Appended 19.09.2026 (round "voices"): the voice filter's response (PolyFilter) -- the
              // per-track recipes of every voice may choose a band pass or a notch instead of the low pass.
-             FilterType, Count };
+             FilterType,
+             // Appended 20.09.2026 (round "dialogue"), for the user's articulation and stereo rules:
+             Glide,   ///< ms: the time constant of the portamento between two notes of this voice (Poly.h)
+             Pan,     ///< -1 .. 1: where the voice's dry signal stands (its delay keeps its own image)
+             /** @name The voice's own modulation insert (Engine.h; PsyFx.h supplies the two effects)
+              *  The user's effect list asks for "Kammfilter / Flanger / Phaser als Klangfarbe auf Lead,
+              *  Counter und Arp -- nicht nur auf dem FX-Bus": the alien, hollow character, tempo-synced.
+              *  Until this round the two lived on the effects strip alone.
+              *  @{ */
+             Mod,          ///< PolyMod: off, flanger, phaser or a static comb
+             ModBeats,     ///< the sweep's period in beats (tempo-synchronised, so it never drifts)
+             ModDepth,     ///< 0 .. 1: how far the comb's teeth or the phaser's notches travel
+             ModFeedback,  ///< -0.9 .. 0.9: how sharp they are
+             ModMix,       ///< 0 .. 1: how much of the voice goes through it
+             /** @} */
+             Count };
 }
+/** @brief Values of poly.mod: the voice's modulation insert (20.09.2026, round "dialogue"). */
+enum class PolyMod : int {
+    Off = 0,   ///< the voice as it was before this round, sample for sample
+    Flanger,   ///< a comb filter whose teeth slide (PsyFx.h, Flanger)
+    Phaser,    ///< notches that slide (PsyFx.h, Phaser)
+    Comb,      ///< the flanger with its sweep stopped: a *static* comb, the hollow metallic colour
+    Count
+};
 /** @brief Values of poly.filter_type: the outputs of the voice's state-variable filter (PolyKernel.h). */
 enum class PolyFilter : int { LowPass = 0, BandPass, HighPass, Notch, Count };
 /** @brief Parameters of the effect generator (module Sfx, prefix "sfx"). */

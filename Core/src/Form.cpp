@@ -487,9 +487,12 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     //    plays in drop 2 only, in call and response with the lead;
     //  - the stab is a surprise, so a section carries it less often, and only every other group of it --
     //    except Progressive's dry drops, which it carries (the rule's "bass stabs");
-    //  - the drone holds the floor where kick and bass rest, and in a core only where neither the acid
-    //    (its octave, 140 .. 350 Hz) nor the pad (the same root and fifth) plays.
-    const bool useCounter = a.part[mpIndex(MelodyPart::Counter)] && (s.climax || rs.uniform() < 0.75f);
+    //  - the drone lies under every bar of a track that has one (20.09.2026); the coin flip below is the
+    //    one the voices round used to place it, kept only so that the draws after it do not move.
+    // 20.09.2026, round "dialogue": the user's Model 3 gives the counter-lead the main breakdown as well
+    // as drop 2, so the drop-2 exception now covers the breakdown too. The draw stays where it was and
+    // is still made, so nothing else this section decides moves.
+    const bool useCounter = a.part[mpIndex(MelodyPart::Counter)] && (s.climax || s.type == SectionType::Break || rs.uniform() < 0.75f);
     const bool useStab = a.part[mpIndex(MelodyPart::Stab)] && (rs.uniform() < (drop ? 0.75f : 0.55f) || s.dry);
     const int voiceParity = rs.below(2);            // which eight-bar groups the counter takes; the stab takes the others
     const bool droneCore = a.part[mpIndex(MelodyPart::Drone)] && rs.uniform() < 0.5f;
@@ -616,8 +619,22 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
         bp.offbeatHat = b >= hatBack;
         bp.hatLevel = 0.5f;
         if (hasPad) parts |= bPad;
+        // The user's Model 3 (20.09.2026, round "dialogue"): drop 1 is the lead alone, the **main
+        // breakdown is the counter-lead alone, introduced without the lead**, and drop 2 is the two of
+        // them interlocking. The middle step is what makes drop 2 land, and until this round it did not
+        // exist: the counter played in drop 2 only, so a listener met it for the first time already
+        // interlocked with the lead. A breakdown that carries the counter therefore never carries the
+        // lead -- it is an introduction, and an introduction has nothing beside it.
+        //
+        // Per style, through the section's own fields rather than a style index: Goa spirals its arp
+        // through the whole breakdown (s.spiral), so there the counter enters at the half, over the
+        // spiral; every other style has the bare pad carpet and the counter enters at the quarter --
+        // in Dark Forest's sixteen-bar breakdown that is bar 5, in a 64-bar one bar 17.
+        const bool counterBreak = useCounter && a.part[mpIndex(MelodyPart::Counter)];
+        const int counterFrom = s.spiral ? s.bars / 2 : s.bars / 4;
         if (s.spiral && a.part[mpIndex(MelodyPart::Arp)]) parts |= bArp;
-        else if (b >= s.bars / 4) parts |= breakLead ? (useLead ? bLead : 0) : (useArp ? bArp : 0);
+        else if (!counterBreak && b >= s.bars / 4) parts |= breakLead ? (useLead ? bLead : 0) : (useArp ? bArp : 0);
+        if (counterBreak && b >= counterFrom) parts |= bCounter;
         bp.fills = false;
         if (b == 0) bp.cutBeats = s.cutBeats;
         break;
@@ -656,12 +673,12 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
 
     // The new voices (19.09.2026, round "voices"), after everything above has been decided, because
     // each of them is placed *against* the others:
-    //  - Counter-lead and stab share the core's eight-bar groups. Since the arrangement round the counter
-    //    is the rule's "lead 2": it plays in drop 2 only, in every group but the first (a response needs
-    //    a call before it), where the lead plays; the stab takes the groups it leaves -- elsewhere the
-    //    parity of old -- so the two never sound at once. The stab joins the groove from its second group.
-    //    Buildups, breakdowns, intros and outros keep neither -- the pre-drop vacuum stays empty and the
-    //    breakdown stays thin.
+    //  - Counter-lead and stab share the core's eight-bar groups. The counter is the rule's "lead 2": in
+    //    drop 2 it plays in every group but the first (a response needs a call before it), where the lead
+    //    plays; the stab takes the groups it leaves -- elsewhere the parity of old -- so the two never
+    //    sound at once. The stab joins the groove from its second group. The counter's *other* place is
+    //    the main breakdown, alone and without the lead (the Break case above, 20.09.2026); buildups,
+    //    intros and outros keep neither -- the pre-drop vacuum stays empty.
     //  - The drone lies under every bar in which kick and bass rest for the whole bar (the intro before
     //    the kick, the breakdown), in its low octave; in a bar where they play it may only go an octave
     //    up (the depth rule), and there it would double the pad's root and fifth or sit on the acid's
@@ -676,12 +693,19 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     // A buildup's pre-drop break is a held breath, not a floor to lay a sub under.
     bp.floorSilent = bp.kickBeats == 0 && bp.bassBeats == 0 && !bp.pdb && s.type != SectionType::Build
                   && barInTrack >= f.handover;
-    // Not in the outro either: it sheds voices, it does not take one on (19.09.2026).
-    if (hasDrone && s.type != SectionType::Build && s.type != SectionType::Outro && !bare) {
-        const bool clear = (parts & (bPad | bAcid)) == 0;
-        if (bp.floorSilent) parts |= bDrone;
-        else if (clear && (droneCore || !core)) parts |= bDrone;
-    }
+    // 20.09.2026, round "dialogue". The drone was measured absent: over 300 bars of the listening seed it
+    // played **four notes** -- two held chords -- because it needed a bar in which neither pad nor acid
+    // sounded, outside a track's first sixteen bars, outside buildups and outside outros, and a track
+    // hardly ever has such a bar. The user asked for "ein tiefer, warmer Grundton-Teppich, der das
+    // Frequenzvakuum fuellt", and a carpet is not a carpet where it lies in four places. So the drone now
+    // lies under **every** bar of a track that has one, except the bars the rule empties on purpose (the
+    // pre-drop break's last bar and the outro's bare end, both `bare`). What keeps it from muddying pad
+    // and acid is no longer where it plays but *what* it plays: on a silent floor the full low chord, and
+    // where kick and bass play the raised octave, quieter, and reduced to its root wherever pad or acid
+    // already own the fifth (composeMelodyBar). The masking that leaves is measured, not forbidden --
+    // docs/PLAN.md has the third-octave numbers.
+    if (hasDrone && !bare) parts |= bDrone;
+    (void)droneCore;   // the section's old coin flip; still drawn so no later draw of the section moves
 
     // Register (Farbood): a low-energy section drops the lead, always within the depth rule (arp from G3,
     // lead from B3). Both registers are a decision of the section, not of the bar: inside a buildup the
@@ -989,6 +1013,45 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
             if (roll >= amount) continue;
             add(start + b * bar + kGaps[k0], 0.25f, SfxType::Squelch);
             if (b % 2 == 1 && k1 != k0) add(start + b * bar + kGaps[k1], 0.25f, SfxType::Squelch);
+        }
+    }
+
+    // 20.09.2026, round "dialogue": the user's density floor. Their rule is "im Groove gibt es nie zwei
+    // Takte hintereinander ohne mindestens einen Zap, Glitch oder Swell", and the layer above does not
+    // keep it: measured over the listening seed's six tracks, **90 % of the groove and drop bars lay in
+    // a run of two or more bars with none of the three** (the longest run was 31 bars), and even
+    // counting every short effect the generator has, 41 % did and the longest run was 15 bars. The
+    // candy above is a probability per two-bar group, so a section can simply lose its coin flips.
+    //
+    // This pass is the floor, not another draw: it walks the grooves and the drops and, wherever a bar
+    // and the bar before it both carry nothing, puts one event on a free sixteenth of it. A run of empty
+    // bars can therefore never be longer than one, which is exactly the rule. Its stream is its own and
+    // it only appends, so nothing placed above moves -- and where the draws above already filled the
+    // bars it adds nothing at all.
+    Rng gapRng;
+    gapRng.seed(mixSeed(seed ^ kSaltPsy, 7));
+    const int lastBar = f.count > 0 ? f.section[f.count - 1].startBar + f.section[f.count - 1].bars : 0;
+    std::vector<uint8_t> carries(static_cast<size_t>(std::max(0, lastBar)), 0);
+    for (const SfxEvent& e : f.sfx) {
+        if (!isDensityEvent(static_cast<SfxType>(e.type))) continue;
+        const int at = static_cast<int>(e.beat / bar);
+        if (at >= 0 && at < lastBar) carries[static_cast<size_t>(at)] = 1;
+    }
+    static const double kFill[4] = { 2.75, 3.25, 3.5, 3.75 };   // the free sixteenths: never on a beat
+    static const double kFillWeights[4] = { 0.35, 0.30, 0.25, 0.10 };   // zap, squelch, bubble, stutter
+    static const SfxType kFillTypes[4] = { SfxType::Zap, SfxType::Squelch, SfxType::Bubble, SfxType::Stutter };
+    for (int i = 0; i < f.count; ++i) {
+        const Section& s = f.section[i];
+        if (s.type != SectionType::Groove && s.type != SectionType::Drop) continue;
+        for (int b = 0; b < s.bars; ++b) {
+            const int at = s.startBar + b;
+            if (at <= 0 || at >= lastBar) continue;
+            if (carries[static_cast<size_t>(at)] != 0 || carries[static_cast<size_t>(at - 1)] != 0) continue;
+            const int kind = drawIndex(gapRng, kFillWeights, 4);
+            const int where = gapRng.below(4);
+            const SfxType type = kFillTypes[kind];
+            add(static_cast<double>(at) * bar + kFill[where], type == SfxType::Stutter ? 0.5f : 0.25f, type);
+            carries[static_cast<size_t>(at)] = 1;
         }
     }
 }

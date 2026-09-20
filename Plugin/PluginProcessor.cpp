@@ -1178,17 +1178,18 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 void PhospheneProcessor::writeStateTo(juce::MemoryBlock& dest) const
 {
     juce::XmlElement xml("PHOSPHENE");
-    // Version 2 since 19.09.2026 (round "voices"): the polyphonic instances were reordered and three
-    // were added (Params.h, PolyInstance). The values travel as "key=value" text, so the order never
-    // reached a state; the number says which voices a state knows about (setStateInformation).
+    // The values travel as "key=value" text, so the order of the parameters never reaches a state; the
+    // version says what the *content* means (PluginProcessor.h, kStateVersion).
     xml.setAttribute("version", kStateVersion);
     xml.setAttribute("seed", juce::String(seed_.load()));
     xml.setAttribute("followHost", followHost_);
     // The cue destination is not a parameter (a parameter is a float); the port and the switch are.
     xml.setAttribute("cueHost", cueHost());
-    // Every value, not only the changed ones: "%.9g" round-trips a float exactly, and a state that
-    // leaves defaults out would silently change meaning if a default ever moved.
-    xml.createNewChildElement("params")->addTextElement(juce::String(params().toText(false)));
+    // 20.09.2026, round "dialogue": only the knobs that differ from *this* build's defaults. A state
+    // that held every value silently undid every default a later round recalibrated -- see kStateVersion
+    // for the whole reasoning and for what it costs. "%.9g" still round-trips a float exactly, so a
+    // knob that is in the file comes back bit for bit.
+    xml.createNewChildElement("params")->addTextElement(juce::String(params().toText(true)));
     juce::AudioProcessor::copyXmlToBinary(xml, dest);
 }
 
@@ -1198,20 +1199,53 @@ void PhospheneProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
     std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
     if (xml == nullptr || !xml->hasTagName("PHOSPHENE")) return;
-    // Every knob back to its default first, then the state's values on top (19.09.2026). A state
-    // holds every value it knew, by key, so for a state of this version this changes nothing; for a
-    // version-1 state (before the counter-lead, the stab and the drone) it is what makes the load safe
-    // rather than silently wrong: the three new voices and their strips start from their defaults
-    // instead of keeping whatever the previous session had left in them, and every older key --
-    // "lead.cutoff", "mix.pad_level" -- still names the knob it named when it was saved.
+    // Every knob back to its default first, then the state's own values on top. With version 3 the
+    // state names only the knobs the user moved, so this is what makes a recalibrated default reach an
+    // old session at all (PluginProcessor.h, kStateVersion).
     params().resetDefaults();
+    legacyKnobs_.clear();
     lastStateVersion_ = xml->getIntAttribute("version", 1);
-    if (auto* p = xml->getChildByName("params")) params().parseText(p->getAllSubText().toStdString());
+    const juce::String knobs = xml->getChildByName("params") != nullptr
+                             ? xml->getChildByName("params")->getAllSubText() : juce::String();
+    if (lastStateVersion_ >= 3) {
+        params().parseText(knobs.toStdString());
+    } else {
+        // A version-1 or version-2 state holds *every* value of its session and cannot say which of them
+        // the user chose. Applying it is exactly the failure this round exists to stop: the user's own
+        // standalone state carried sfx.level -12, bass.cutoff 140, mix.lead_level 0 and kick.level -2
+        // from an older calibration and silently undid four rounds of work.
+        //
+        // The decision, and it is a decision: such a state sets **no knob at all**. The engine comes up
+        // on today's factory defaults, which is the safe half of the choice and the one a listener
+        // wants by default, and the old text is kept so the editor can offer it ("Load the saved knobs
+        // anyway", adoptLegacyState). What is *not* a calibrated value is restored as always -- the
+        // seed, the host-sync switch and the cue destination are the user's set, not our tuning.
+        //
+        // The cost is real and is stated rather than hidden: a DAW project saved with an older build
+        // opens with its sound on the defaults until the user takes the offer.
+        legacyKnobs_ = knobs;
+    }
     followHost_ = xml->getBoolAttribute("followHost", followHost_);
     setCueHost(xml->getStringAttribute("cueHost", cueHost()));
     followHostAtomic_.store(followHost_, std::memory_order_release);
     const uint64_t s = static_cast<uint64_t>(xml->getStringAttribute("seed", "1").getLargeIntValue());
     setSeed(juce::jmax<uint64_t>(1, s));
+}
+
+void PhospheneProcessor::adoptLegacyState()
+{
+    if (legacyKnobs_.isEmpty()) return;
+    params().parseText(legacyKnobs_.toStdString());
+    legacyKnobs_.clear();
+}
+
+void PhospheneProcessor::resetToFactoryDefaults()
+{
+    // The host's own parameter objects read the store, so putting the store back is enough for the
+    // sound; the editor refreshes from the same place on its timer.
+    params().resetDefaults();
+    legacyKnobs_.clear();
+    lastStateVersion_ = kStateVersion;
 }
 
 // ------------------------------------------------------------------ export

@@ -38,7 +38,13 @@ inline void check(bool ok, const char* what, const std::string& detail = std::st
 template <class... A>
 inline std::string fmt(const char* f, A... args)
 {
-    char buf[512];
+    // 1024 since 20.09.2026 (round "dialogue"). At 512 this silently truncated, and measureLock built
+    // its parameter string with it: everything past the first of ten mute assignments was cut off, so
+    // "render the bass alone" rendered the bass *and* the pad, the drone and the arp. It stayed
+    // invisible while those voices happened to be quiet in the measured bars and became a failing
+    // sub-sample phase check the moment the drone became a continuous carpet. measureLock now
+    // concatenates instead; the wider buffer is the second half of the fix, for every other caller.
+    char buf[1024];
     std::snprintf(buf, sizeof(buf), f, args...);
     return buf;
 }

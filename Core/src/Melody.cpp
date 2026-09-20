@@ -872,8 +872,24 @@ int chordAtStep(const MelodyPlan& m, int window, int step)
 }
 
 /** @name The lead's register (rule 17): a soft centre between A4 and C5, a hard ceiling at A5. @{ */
-constexpr double kLeadCentre = 70.5;   ///< MIDI: between A#4 and B4
-constexpr double kLeadSigma = 5.0;     ///< semitones: the register weight falls to 0.6 at +-5, 0.14 at +-10
+// 20.09.2026, round "dialogue": the centre and the width follow the rule's window C4 .. G4 (Melody.h).
+// A sigma of 5 semitones was flat across a window of seven and would have left the register weight with
+// nothing to say; at 2.5 the weight falls to 0.6 at the window's edges, which is the same shape the
+// wider window had.
+/**
+ * @brief The counter-lead's gate, as a fraction of its written span (20.09.2026, round "dialogue").
+ *
+ * The rule asks for "trockenes Staccato" against the lead's legato. At 145 BPM a sixteenth is 103 ms,
+ * so 0.45 of at most two sixteenths is a note of at most 93 ms -- shorter than the counter's own filter
+ * decay (60 ms) plus its release (35 ms) takes to die, which is what makes it read as a whip rather
+ * than as a short held note. The lead's gate is 0.92 of its written length (composeMelodyBar) and its
+ * longest written note is two sixteenths, so the measured contrast is a factor of two in note length
+ * at the same written span -- and far more where the counter's block gave it four or six sixteenths
+ * to hold, which is where it used to sustain over the lead's riff.
+ */
+constexpr double kCounterStaccato = 0.45;
+constexpr double kLeadCentre = 63.5;   ///< MIDI: the middle of C4 .. G4, between D#4 and E4
+constexpr double kLeadSigma = 2.5;     ///< semitones: the register weight falls to 0.6 at the window's edges
 /** @} */
 
 /**
@@ -1057,7 +1073,13 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
         // operator is drawn per phrase from the phrase's own point in the lead's random stream, so it
         // is as deterministic as everything else here.
         {
-            static const double kOperatorWeights[kNumMotifOperators] = { 0.40, 0.20, 0.20, 0.20 };
+            // 20.09.2026, round "dialogue": OctaveJump's weight is 0. The user's register rule holds the
+            // lead to one octave (C4 .. B4, Melody.h), and an upward octave jump necessarily leaves it --
+            // the code below already refuses such a jump and falls back to None, so drawing the operator
+            // only cost A'' a fifth of its variations. The Goa idiom is a casualty of the rule; it is
+            // named in docs/PLAN.md rather than quietly kept as a dead branch. The draw itself stays, so
+            // every later draw of the phrase keeps its place in the stream.
+            static const double kOperatorWeights[kNumMotifOperators] = { 0.40, 0.30, 0.30, 0.00 };
             const int op = drawIndex(r, kOperatorWeights, kNumMotifOperators);
             m.leadOperator[w] = op;
             // The phase shift is a rotation of the two-bar cell by one sixteenth: the motif loops
@@ -1095,7 +1117,7 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
             if (op == static_cast<int>(MotifOperator::OctaveJump)) {
                 // Single offbeat sixteenths thrown an octave up: the Goa lead idiom. An octave keeps
                 // the pitch class, so a jumped note is still in the mode and still a chord tone where
-                // it was one; the ceiling is the lead's register (A5, rule 17).
+                // it was one; the ceiling is the lead's register (B4 since 20.09.2026, so no jump fits).
                 int jumps = 0;
                 for (size_t i = 0; i < a.size(); ++i) {
                     if (rh[i] % 2 == 0 || a[i] + 12 > hi) continue;
@@ -1444,9 +1466,15 @@ void makeRangesAndPad(MelodyPlan& m, uint64_t seed)
  *    one or two long notes held above it);
  *  - over the lead's B phrase (bars 4-5) it plays a line of its own -- eighths with a few sixteenth
  *    pickups, the density of the lead's riff families -- which is the "B phrase" of the brief.
- * The register is the lead's an octave up (root E5 .. D#6, window C5 .. A6, inside the 400 Hz .. 2 kHz
- * pocket of the user's rule), and composeMelodyBar's register guard holds it clear of every lead note
+ * The register is the lead's an octave up (root C5 .. B5, window C5 .. G5 -- 523 .. 784 Hz, the user's
+ * rule of 19.09.2026), and composeMelodyBar's register guard holds it clear of every lead note
  * sounding at the same instant.
+ *
+ * **Articulation** (20.09.2026, round "dialogue"). The rule contrasts the two leads: the lead flows with
+ * a portamento over its semitone steps, the counter *whips* -- dry staccato and a filter that shuts
+ * within a few tens of milliseconds. The pitch side of that lives in the engine (poly.glide, Poly.h);
+ * here the counter's written note is cut to a staccato of at most an eighth whatever the block it was
+ * placed in gave it, so that a note held over four sixteenths of a lead riff still ends as a stab.
  *
  * **Pitches** follow the lead's genre rules (Melody.h): the tonic is the centre (weight 2, the fifth 1.4), the fifth
  * the resting tone -- the last note of every answer is the fifth where the chord takes it, else the
@@ -1462,7 +1490,9 @@ void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
 {
     const int root = m.root[kCounterI];
     const int lo = kCounterLowest - root, hi = kCounterHighest - root;
-    const double centre = 5.0;   // just over the root: E5 .. D#6 plus a third
+    // The lead's register centre an octave up, as an interval to this key's counter root (20.09.2026):
+    // the counter answers in the lead's register, so it has to be weighted like the lead's.
+    const double centre = kLeadCentre + 12.0 - root;
     auto pcOf = [&](int rel) { return (((root - key) + rel) % 12 + 12) % 12; };
     for (int w = 0; w < 2; ++w) {
         Rng r;
@@ -1539,7 +1569,7 @@ void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
                 if (rel == prev && prev == prev2) continue;   // never one pitch three times in a row
                 double v = pc == 0 ? 2.0 : (pc == 7 ? 1.4 : 1.0);
                 v *= std::exp(-std::abs(rel - prev) / 2.5);
-                const double z = (rel - centre) / 5.0;
+                const double z = (rel - centre) / 4.0;   // the lead's sigma, on the lead's window an octave up
                 v *= std::exp(-0.5 * z * z);
                 cand.push_back(rel);
                 wgt.push_back(v);
@@ -1772,8 +1802,12 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     m.present[kCounterI] = m.present[kCounterI] && m.present[kLeadI];
     m.key = ((key % 12) + 12) % 12;
     m.root[kAcidI] = kAcidLowest + ((key - 2) % 12 + 12) % 12;   // D3 .. C#4
-    m.root[kLeadI] = 64 + ((key - 4) % 12 + 12) % 12;            // E4 .. D#5
-    m.root[kCounterI] = m.root[kLeadI] + 12;                      // E5 .. D#6: the lead's register an octave up
+    // 20.09.2026, round "dialogue": the lead's tonic moved down into the rule's window. With the root at
+    // E4 .. D#5 and the window narrowed to C4 .. G4, the highest keys would have had a window of four
+    // semitones and the lowest one of eight; from C4 .. B4 every key keeps the full fifth, and every
+    // interval to the root still fits the corpus alphabet (kCorpusRelMin .. kCorpusRelMax).
+    m.root[kLeadI] = kLeadLowest + ((key - kLeadLowest) % 12 + 12) % 12;   // C4 .. B4
+    m.root[kCounterI] = m.root[kLeadI] + 12;                      // C5 .. B5: the lead's register an octave up
     m.root[kArpI] = 57 + ((key - 9) % 12 + 12) % 12;            // A3 .. G#4
     m.root[kStabI] = m.root[kArpI];                               // unused: the stab's chord carries its own root
     m.root[kPadI] = kPadLowest;                                   // unused: the voicings carry their own
@@ -2031,7 +2065,10 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
             }
             if (pitch < 0) continue;
             taken.add(first, span, pitch);
-            emit(Part::Counter, *n, first, pitch, span * 0.25 * 0.85);
+            // Staccato (20.09.2026): the written note keeps its place in the register guard for its whole
+            // span -- the guard is about what *may* sound there -- but it is played as a whip of at most
+            // half an eighth. kCounterStaccato of a sixteenth, never more than two sixteenths' worth.
+            emit(Part::Counter, *n, first, pitch, std::min(span, 2) * 0.25 * kCounterStaccato);
         }
     }
     if (has(MelodyPart::Stab) && ((m.stabBars >> (barInTrack % 4)) & 1u) != 0) {
@@ -2163,11 +2200,17 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         // away before the kick returns; where kick and bass play it moves up an octave and back in level
         // (velocity 64 against 110 at a velocity sensitivity of 1: -4.7 dB). The next run's note starts
         // on the run's first beat with the drone's slow attack over this one's release: the cross-fade.
+        // 20.09.2026, round "dialogue": the carpet. Where pad or acid share the band (ctx.droneShaded) the
+        // drone holds its **root alone** -- the "tiefer, warmer Grundton" of the user's words -- and drops
+        // another 2.5 dB (velocity 64 -> 48 at a velocity sensitivity of 1), so that what fills the vacuum
+        // is a fundamental and not a second voicing of the chord. With the band to itself it holds root
+        // and fifth as before.
         MelodyNote held;
-        held.velocity = ctx.droneLow ? 110 : 64;
+        held.velocity = ctx.droneLow ? 110 : (ctx.droneShaded ? 48 : 64);
         const int root = m.root[kDroneI] + (ctx.droneLow ? 0 : 12);
-        std::vector<int> pitches = { root, root + 7 };
-        if (m.droneOctave && !has(MelodyPart::Pad)) pitches.push_back(root + 12);
+        std::vector<int> pitches = { root };
+        if (!ctx.droneShaded) pitches.push_back(root + 7);
+        if (m.droneOctave && !ctx.droneShaded && !has(MelodyPart::Pad)) pitches.push_back(root + 12);
         const double run = ctx.droneBars * static_cast<double>(kBeatsPerBar);
         const double tail = ctx.droneLow ? std::min(run - 0.5 * kBeatsPerBar, ctx.droneTail * static_cast<double>(kBeatsPerBar)) : 0.0;
         const double length = std::max(0.5 * kBeatsPerBar, run - tail) - 1.0 / 16.0 - cut;
