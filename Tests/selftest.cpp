@@ -25,6 +25,7 @@
 #include "phos/Melody.h"
 #include "phos/Perc.h"
 #include "phos/Poly.h"
+#include "phos/Probe.h"
 #include "phos/Reverb.h"
 #include "phos/Rhythm.h"
 #include "phos/Form.h"
@@ -1350,7 +1351,12 @@ void testVarietyPlans()
  * @brief Variety over a night, part `.levelMatch`: the level match on the real render.
  *
  * Not split further: the check holds the spread with the match against the spread without it, so it
- * needs both renders, and each is one stream over four tracks (the tracks hand over to each other).
+ * needs both renders, and each is one stream over four tracks (the tracks hand over to each other,
+ * so a single call's stream cannot be cut into pieces without breaking that hand-over). The two calls
+ * themselves are independent, though (round "test-speed-rest", 20.09.2026): trackLoudness(true, ...)
+ * and trackLoudness(false, ...) each open their own Engine, Composer and Conductor and touch nothing
+ * outside them, so they render side by side instead of one after the other (see testPhaseLockLock's
+ * comment for why this reuses phos::probe::runAll rather than a new pool for two tasks).
  */
 void testVarietyLevelMatch()
 {
@@ -1429,8 +1435,11 @@ void testVarietyLevelMatch()
             spread = hi - lo;
         };
         double withMatch = 0.0, without = 0.0;
-        trackLoudness(true, withMatch);
-        trackLoudness(false, without);
+        phos::probe::warmSharedData();
+        phos::probe::runAll({
+            std::function<void()>([&] { trackLoudness(true, withMatch); }),
+            std::function<void()>([&] { trackLoudness(false, without); }),
+        });
         check(withMatch < 0.8 && without > withMatch + 1.0, "level match keeps the tracks within 0.8 LU of each other once the form's own energy gain is taken out (without it they spread wider)",
               fmt("spread %.2f LU with, %.2f LU without", withMatch, without));
     }
@@ -2277,21 +2286,48 @@ void testPercTempo()
  * Every measureLock call is independent (its own engine and composer), so the two parts measure
  * exactly what the one section measured.
  */
+/**
+ * @brief testPhaseLock, part `.lock`: renders the twelve measureLock() calls (four tempi x three
+ *        coupling modes) in parallel (round "test-speed-rest", 20.09.2026).
+ *
+ * Each call was already independent of every other (measureLock's own comment: "its own engine and
+ * composer"), so the loop below just hands the twelve closures to phos::probe::runAll instead of
+ * calling them one after another. That reuses the "speed" round's pool rather than a new one: runAll
+ * is already a generic "run these closures on up to threads() workers, 16 MB stack, the caller works
+ * too" pool with nothing probe-specific in its contract, and Composer::measureTrack (Composer.cpp)
+ * already dispatches whole audio renders through it the same way (its probeLoudness tasks render full
+ * Engine instances, exactly what measureLock does here) -- this is that facility's existing, tested
+ * contract, not new machinery bolted on. warmSharedData() is a scheduling choice only since round
+ * "threadsafe-loaders" (both loaders now gate their own first load with a mutex), kept so the first
+ * stage's workers do not queue behind it instead of rendering.
+ *
+ * Bit for bit against the serial version: what each task computes does not depend on which thread runs
+ * it (own Engine, own Composer, nothing shared but the now-thread-safe immutable library/voice pack/
+ * sine table), and the fold below (worstKick/worstBass/offLo/offHi, the detail string) runs on the
+ * calling thread, after every task has finished, in the same bpm order the serial loop used -- so the
+ * accumulation is not just numerically equivalent, it is the same sequence of floating-point operations.
+ */
 void testPhaseLockLock()
 {
     section("kick and bass phase at the first sixteenth: the lock at every tempo");
+    static const double kBpms[4] = { 138.0, 142.0, 145.0, 148.0 };
+    double dk[4] = {}, db[4] = {}, off[4] = {};
+    phos::probe::warmSharedData();
+    std::vector<std::function<void()>> tasks;
+    for (int i = 0; i < 4; ++i) {
+        tasks.push_back([&, i] { double spread = 0.0, coh = 0.0; dk[i] = measureLock("bass.kick_lock=Kick follows bass", kBpms[i], spread, coh); });
+        tasks.push_back([&, i] { double spread = 0.0, coh = 0.0; db[i] = measureLock("bass.kick_lock=Bass follows kick", kBpms[i], spread, coh); });
+        tasks.push_back([&, i] { double spread = 0.0, coh = 0.0; off[i] = measureLock("bass.kick_lock=Off", kBpms[i], spread, coh); });
+    }
+    phos::probe::runAll(tasks);
     std::string detail;
     double worstKick = 0.0, worstBass = 0.0, offLo = 1e9, offHi = -1e9;
-    for (double bpm : { 138.0, 142.0, 145.0, 148.0 }) {
-        double spread = 0.0, coh = 0.0;
-        const double dk = measureLock("bass.kick_lock=Kick follows bass", bpm, spread, coh);
-        worstKick = std::max(worstKick, std::fabs(dk));
-        const double db = measureLock("bass.kick_lock=Bass follows kick", bpm, spread, coh);
-        worstBass = std::max(worstBass, std::fabs(db));
-        const double off = measureLock("bass.kick_lock=Off", bpm, spread, coh);
-        offLo = std::min(offLo, off);
-        offHi = std::max(offHi, off);
-        detail += fmt("%.0f BPM: %+.1f / %+.1f / off %+.1f   ", bpm, dk, db, off);
+    for (int i = 0; i < 4; ++i) {
+        worstKick = std::max(worstKick, std::fabs(dk[i]));
+        worstBass = std::max(worstBass, std::fabs(db[i]));
+        offLo = std::min(offLo, off[i]);
+        offHi = std::max(offHi, off[i]);
+        detail += fmt("%.0f BPM: %+.1f / %+.1f / off %+.1f   ", kBpms[i], dk[i], db[i], off[i]);
     }
     check(worstKick < 6.0 && worstBass < 6.0 && offHi - offLo > 60.0,
           "kick lock aligns the phases at every tempo (without it they wander with the tempo)", detail);
@@ -8566,55 +8602,88 @@ void modalPresence(int mode, int slice)
         double worst = 1e9, sum = 0.0, changedSum = 0.0;
         int count = 0, rendered = 0, changed = 0;
         const int from = slice * kPresencePerSlice, to = from + kPresencePerSlice;
-        {
-            for (uint64_t s = 1; s <= 40 && count < 12; ++s) {
-                auto comp = std::make_unique<Composer>(s);
-                const TrackPlan plan = comp->track(p, 0);
-                int coreA = -1, drop = -1;
-                for (int i = 3; i < plan.form.count; ++i) {
-                    if (plan.form.section[i - 3].type != SectionType::Groove && plan.form.section[i - 3].type != SectionType::Drop) continue;
-                    if (plan.form.section[i - 2].type != SectionType::Break || plan.form.section[i - 1].type != SectionType::Build) continue;
-                    if (plan.form.section[i].type != SectionType::Drop) continue;
-                    coreA = i - 3;
-                    drop = i;
-                    break;
-                }
-                if (coreA < 0) continue;
-                // The qualifying seed number `count`: another slice renders it.
-                if (count < from || count >= to) { ++count; continue; }
+        // Parallelised 20.09.2026 (round "test-speed-rest"): which of the seeds 1..40 qualify (carry the
+        // break routine) stays exactly this serial loop -- it is cheap (a plan only, no audio) and its
+        // *order* is what the function comment's slicing contract depends on (`count` must be the same
+        // number every slice would compute). Only the up to kPresencePerSlice full track renders this
+        // slice owns are deferred into a second, parallel phase below: a candidate keeps the Composer
+        // its qualifying plan came from (the render walks it further through a Conductor, so it must be
+        // the same instance, not a new one), and phos::probe::runAll hands the candidates to its worker
+        // pool exactly as Composer::measureTrack already does for probe renders -- see
+        // testPhaseLockLock's comment for why this reuses runAll instead of a new pool. The fold after
+        // (worst/sum/count/rendered/changed) runs on the calling thread once every render has returned,
+        // walking the candidates in the same ascending-seed order the serial loop rendered them in, so
+        // it is bit for bit the same sequence of additions and comparisons as before.
+        struct Candidate {
+            std::unique_ptr<Composer> comp;
+            TrackPlan plan;
+            int coreA = -1, drop = -1;
+        };
+        std::vector<Candidate> slice_;
+        for (uint64_t s = 1; s <= 40 && count < 12; ++s) {
+            auto comp = std::make_unique<Composer>(s);
+            const TrackPlan plan = comp->track(p, 0);
+            int coreA = -1, drop = -1;
+            for (int i = 3; i < plan.form.count; ++i) {
+                if (plan.form.section[i - 3].type != SectionType::Groove && plan.form.section[i - 3].type != SectionType::Drop) continue;
+                if (plan.form.section[i - 2].type != SectionType::Break || plan.form.section[i - 1].type != SectionType::Build) continue;
+                if (plan.form.section[i].type != SectionType::Drop) continue;
+                coreA = i - 3;
+                drop = i;
+                break;
+            }
+            if (coreA < 0) continue;
+            // The qualifying seed number `count`: another slice renders it.
+            if (count < from || count >= to) { ++count; continue; }
+            slice_.push_back({ std::move(comp), plan, coreA, drop });
+            ++count;
+        }
+        struct Result {
+            double d = 0.0;
+            bool changed = false;
+        };
+        std::vector<Result> results(slice_.size());
+        std::vector<std::function<void()>> tasks;
+        for (size_t i = 0; i < slice_.size(); ++i) {
+            tasks.push_back([&, i] {
+                Candidate& c = slice_[i];
                 constexpr double sr = 48000.0;
                 auto e = std::make_unique<Engine>();
                 e->prepare(sr, 512);
                 e->params().copyValuesFrom(p);
-                TempoMap tm = comp->tempoMap(e->params(), plan.bars);
+                TempoMap tm = c.comp->tempoMap(e->params(), c.plan.bars);
                 e->setTempoMap(tm);
-                Conductor cond(*e, *comp);
-                const double barSec = kBeatsPerBar * 60.0 / plan.bpm;
-                const size_t total = static_cast<size_t>(tm.secondsAt(plan.bars * static_cast<double>(kBeatsPerBar)) * sr);
+                Conductor cond(*e, *c.comp);
+                const double barSec = kBeatsPerBar * 60.0 / c.plan.bpm;
+                const size_t total = static_cast<size_t>(tm.secondsAt(c.plan.bars * static_cast<double>(kBeatsPerBar)) * sr);
                 std::vector<float> mono(total), L(512), R(512);
                 size_t done = 0;
                 while (done < total) {
                     cond.pump(e->params(), 32.0);
                     const int n = static_cast<int>(std::min<size_t>(512, total - done));
                     e->process(L.data(), R.data(), n);
-                    for (int i = 0; i < n; ++i) mono[done + static_cast<size_t>(i)] = 0.5f * (L[static_cast<size_t>(i)] + R[static_cast<size_t>(i)]);
+                    for (int k = 0; k < n; ++k) mono[done + static_cast<size_t>(k)] = 0.5f * (L[static_cast<size_t>(k)] + R[static_cast<size_t>(k)]);
                     done += static_cast<size_t>(n);
                 }
                 const size_t lat = static_cast<size_t>(e->latencySamples());
-                auto band = [&](int from, int bars) {
-                    return bandPowerDb(mono, static_cast<size_t>(from * barSec * sr) + lat,
+                auto band = [&](int fromBar, int bars) {
+                    return bandPowerDb(mono, static_cast<size_t>(fromBar * barSec * sr) + lat,
                                        static_cast<size_t>(bars * barSec * sr), 1500.0, 6000.0);
                 };
-                const Section& sc = plan.form.section[coreA];
-                const Section& sd = plan.form.section[drop];
+                const Section& sc = c.plan.form.section[c.coreA];
+                const Section& sd = c.plan.form.section[c.drop];
                 const int w = std::min(16, sc.bars - 2);
-                const double d = band(sd.startBar, std::min(16, sd.bars)) - band(sc.startBar + sc.bars - w, w);
-                worst = std::min(worst, d);
-                sum += d;
-                ++count;
-                ++rendered;
-                if (mode == 0 && sc.scale != sd.scale) { changedSum += d; ++changed; }
-            }
+                results[i].d = band(sd.startBar, std::min(16, sd.bars)) - band(sc.startBar + sc.bars - w, w);
+                results[i].changed = mode == 0 && sc.scale != sd.scale;
+            });
+        }
+        phos::probe::warmSharedData();
+        phos::probe::runAll(tasks);
+        for (const Result& r : results) {
+            worst = std::min(worst, r.d);
+            sum += r.d;
+            ++rendered;
+            if (r.changed) { changedSum += r.d; ++changed; }
         }
         // `count >= 8` is the old bound on the tracks one mode is measured over (the qualifying seeds,
         // not this slice's share of them); `worst` is this slice's minimum.
@@ -8704,41 +8773,64 @@ void modalPresenceArc(int mode, int slice)
         double worst = 1e9, sum = 0.0, changedSum = 0.0;
         int count = 0, rendered = 0, changed = 0;
         const int from = slice * kPresencePerSlice, to = from + kPresencePerSlice;
-        {
-            for (uint64_t s = 1; s <= 40 && count < 12; ++s) {
-                auto comp = std::make_unique<Composer>(s);
-                // Track 1 (index 1): the set's second track, which unlike track 0 is never the level
-                // match's own uncorrected reference.
-                const TrackPlan plan = comp->track(p, 1);
-                int coreA = -1, drop = -1;
-                for (int i = 3; i < plan.form.count; ++i) {
-                    if (plan.form.section[i - 3].type != SectionType::Groove && plan.form.section[i - 3].type != SectionType::Drop) continue;
-                    if (plan.form.section[i - 2].type != SectionType::Break || plan.form.section[i - 1].type != SectionType::Build) continue;
-                    if (plan.form.section[i].type != SectionType::Drop) continue;
-                    coreA = i - 3;
-                    drop = i;
-                    break;
-                }
-                if (coreA < 0) continue;
-                // The qualifying seed number `count`: another slice renders it.
-                if (count < from || count >= to) { ++count; continue; }
+        // Parallelised 20.09.2026 (round "test-speed-rest"), the same way as modalPresence above (see
+        // its comment): the cheap, order-defining qualification loop over seeds 1..40 stays serial, and
+        // only the up to kPresencePerSlice full track renders this slice owns move to a second, parallel
+        // phase over phos::probe::runAll. The fold afterwards walks the candidates in the same
+        // ascending-seed order the serial loop rendered them in, so it is bit for bit the same
+        // sequence of additions and comparisons as before.
+        struct Candidate {
+            std::unique_ptr<Composer> comp;
+            TrackPlan plan;
+            int coreA = -1, drop = -1;
+        };
+        std::vector<Candidate> slice_;
+        for (uint64_t s = 1; s <= 40 && count < 12; ++s) {
+            auto comp = std::make_unique<Composer>(s);
+            // Track 1 (index 1): the set's second track, which unlike track 0 is never the level
+            // match's own uncorrected reference.
+            const TrackPlan plan = comp->track(p, 1);
+            int coreA = -1, drop = -1;
+            for (int i = 3; i < plan.form.count; ++i) {
+                if (plan.form.section[i - 3].type != SectionType::Groove && plan.form.section[i - 3].type != SectionType::Drop) continue;
+                if (plan.form.section[i - 2].type != SectionType::Break || plan.form.section[i - 1].type != SectionType::Build) continue;
+                if (plan.form.section[i].type != SectionType::Drop) continue;
+                coreA = i - 3;
+                drop = i;
+                break;
+            }
+            if (coreA < 0) continue;
+            // The qualifying seed number `count`: another slice renders it.
+            if (count < from || count >= to) { ++count; continue; }
+            slice_.push_back({ std::move(comp), plan, coreA, drop });
+            ++count;
+        }
+        struct Result {
+            double d = 0.0;
+            bool changed = false;
+        };
+        std::vector<Result> results(slice_.size());
+        std::vector<std::function<void()>> tasks;
+        for (size_t idx = 0; idx < slice_.size(); ++idx) {
+            tasks.push_back([&, idx] {
+                Candidate& c = slice_[idx];
                 constexpr double sr = 48000.0;
                 auto e = std::make_unique<Engine>();
                 e->prepare(sr, 512);
                 e->params().copyValuesFrom(p);
-                const Section& sc = plan.form.section[coreA];
-                const Section& sd = plan.form.section[drop];
+                const Section& sc = c.plan.form.section[c.coreA];
+                const Section& sd = c.plan.form.section[c.drop];
                 const int w = std::min(16, sc.bars - 2);
                 const int dropLen = std::min(16, sd.bars);
                 // Global bar numbers on the set's timeline (see the function comment): local
                 // Section::startBar plus the track's own hand-over bar.
-                const int coreEnd = plan.firstBar + sc.startBar + sc.bars;
-                const int dropStart = plan.firstBar + sd.startBar;
+                const int coreEnd = c.plan.firstBar + sc.startBar + sc.bars;
+                const int dropStart = c.plan.firstBar + sd.startBar;
                 // The whole track, on the set's timeline (plan.firstBar is 0 only for track 0).
-                const int renderBars = plan.firstBar + plan.bars;
-                TempoMap tm = comp->tempoMap(e->params(), renderBars);
+                const int renderBars = c.plan.firstBar + c.plan.bars;
+                TempoMap tm = c.comp->tempoMap(e->params(), renderBars);
                 e->setTempoMap(tm);
-                Conductor cond(*e, *comp);
+                Conductor cond(*e, *c.comp);
                 const size_t total = static_cast<size_t>(tm.secondsAt(renderBars * static_cast<double>(kBeatsPerBar)) * sr);
                 std::vector<float> mono(total), L(512), R(512);
                 size_t done = 0;
@@ -8746,7 +8838,7 @@ void modalPresenceArc(int mode, int slice)
                     cond.pump(e->params(), 32.0);
                     const int n = static_cast<int>(std::min<size_t>(512, total - done));
                     e->process(L.data(), R.data(), n);
-                    for (int i = 0; i < n; ++i) mono[done + static_cast<size_t>(i)] = 0.5f * (L[static_cast<size_t>(i)] + R[static_cast<size_t>(i)]);
+                    for (int k = 0; k < n; ++k) mono[done + static_cast<size_t>(k)] = 0.5f * (L[static_cast<size_t>(k)] + R[static_cast<size_t>(k)]);
                     done += static_cast<size_t>(n);
                 }
                 const size_t lat = static_cast<size_t>(e->latencySamples());
@@ -8756,13 +8848,17 @@ void modalPresenceArc(int mode, int slice)
                     const double t1 = tm.secondsAt((fromBar + bars) * static_cast<double>(kBeatsPerBar));
                     return bandPowerDb(mono, static_cast<size_t>(t0 * sr) + lat, static_cast<size_t>((t1 - t0) * sr), 1500.0, 6000.0);
                 };
-                const double d = band(dropStart, dropLen) - band(coreEnd - w, w);
-                worst = std::min(worst, d);
-                sum += d;
-                ++count;
-                ++rendered;
-                if (mode == 0 && sc.scale != sd.scale) { changedSum += d; ++changed; }
-            }
+                results[idx].d = band(dropStart, dropLen) - band(coreEnd - w, w);
+                results[idx].changed = mode == 0 && sc.scale != sd.scale;
+            });
+        }
+        phos::probe::warmSharedData();
+        phos::probe::runAll(tasks);
+        for (const Result& r : results) {
+            worst = std::min(worst, r.d);
+            sum += r.d;
+            ++rendered;
+            if (r.changed) { changedSum += r.d; ++changed; }
         }
         const double mean = sum / std::max(1, rendered);
         // Gated on the mean, not the worst case (unlike modalPresence above): measured on this track,
@@ -13344,8 +13440,9 @@ void testDialogueLevels()
  * @return 0 when every check passed, 1 when one failed, 2 on a bad command line
  */
 // Round "speed" (20.09.2026): the probe scheduler's opt-in, and the two sections of Tests/selftest_probe.cpp
-// (a file of their own so that they do not collide with the rounds that work in this one).
-#include "phos/Probe.h"
+// (a file of their own so that they do not collide with the rounds that work in this one). phos/Probe.h is
+// included at the top of this file (round "test-speed-rest", 20.09.2026): several sections now use
+// phos::probe::runAll themselves, so the include had to be visible before their definitions, not just here.
 void testProbeSchedule();
 void testProbeCache();
 

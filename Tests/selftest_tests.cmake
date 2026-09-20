@@ -230,6 +230,44 @@ function(phos_selftest_env test)
         ENVIRONMENT_MODIFICATION "PHOS_ONLY=unset:")
 endfunction()
 
+# Sections that render several whole tracks at once on phos::probe::runAll's pool (round
+# "test-speed-rest", 20.09.2026; Tests/selftest.cpp has the detail on each). ctest's PROCESSORS is how
+# a test tells the scheduler how many of the machine's slots it is really using; left at the default 1,
+# ctest would happily start several of these -- each thinking it is cheap -- beside each other and
+# beside hosttest/vst3test, oversubscribing the 24 hardware threads well past what any of them was
+# measured under. Found the hard way: with hosttest's own PROCESSORS lowered (see Tests/CMakeLists.txt's
+# comment on it) and these five left at the ctest default, a `-j 12` run that happened to start four
+# presenceArc parts, hosttest, hosttest.realhost and testVariety.levelMatch together pushed hosttest's
+# plan time to 31.4 s, over its 30 s bound -- the first FAIL this round saw from contention, not from a
+# check. The number here is min(the section's own task count, phos::probe::kMaxThreads=8), i.e. the most
+# threads phos::probe::runAll will actually start for it: 8 for testPhaseLock.lock (four tempi x three
+# modes, twelve tasks, clamped to 8), 6 for the eight testModalInterchange.presence*/presenceArc* parts
+# (kPresencePerSlice), 2 for testVariety.levelMatch (its two independent renders).
+set(PHOS_SELFTEST_PROCESSORS
+    testPhaseLock.lock                       8
+    testModalInterchange.presenceOn1         6
+    testModalInterchange.presenceOn2         6
+    testModalInterchange.presenceOff1        6
+    testModalInterchange.presenceOff2        6
+    testModalInterchange.presenceArcOn1      6
+    testModalInterchange.presenceArcOn2      6
+    testModalInterchange.presenceArcOff1     6
+    testModalInterchange.presenceArcOff2     6
+    testVariety.levelMatch                   2
+)
+set(_phos_proc_known)
+list(LENGTH PHOS_SELFTEST_PROCESSORS _pn)
+if(_pn GREATER 1)
+    math(EXPR _plast "${_pn} - 2")
+    foreach(_i RANGE 0 ${_plast} 2)
+        math(EXPR _j "${_i} + 1")
+        list(GET PHOS_SELFTEST_PROCESSORS ${_i} _name)
+        list(GET PHOS_SELFTEST_PROCESSORS ${_j} _procs)
+        set(_phos_procs_${_name} ${_procs})
+        list(APPEND _phos_proc_known ${_name})
+    endforeach()
+endif()
+
 set(_phos_quick 0)
 set(_phos_slow 0)
 foreach(_name IN LISTS _phos_names)
@@ -249,6 +287,9 @@ foreach(_name IN LISTS _phos_names)
         math(EXPR _phos_slow "${_phos_slow} + 1")
     endif()
     set_tests_properties("${_t}" PROPERTIES LABELS "selftest;${_label}" COST ${_secs})
+    if(DEFINED _phos_procs_${_name})
+        set_tests_properties("${_t}" PROPERTIES PROCESSORS ${_phos_procs_${_name}})
+    endif()
 endforeach()
 # testWav writes phos_selftest_tmp.wav into the working directory, which every self-test process
 # shares (the data files are there); only the full run does the same.

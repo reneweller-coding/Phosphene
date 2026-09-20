@@ -216,19 +216,30 @@ if(TARGET Phosphene)
     # Never under PHOS_MUTE (it measures what the plugin sounds like; muted, it would test silence),
     # whatever the shell that starts ctest has set.
     #
-    # `hosttest` nearly alone: it checks real-time behaviour -- a set starts within 30 s, no gap over 150 ms
-    # while it plays, a timeline tick under 4 ms, faster than real time. PROCESSORS 5 takes five slots, so
-    # with `-j 6` at most one single-threaded test runs beside it (with -j 4 or less it is clamped to all
-    # slots and runs alone). Measured beside testModalInterchange and another checkout's self test, the
-    # margins were wide: first track after 8.4 s (limit 30), a tick 0.56 ms (limit 4), 7.3x real time.
-    # RUN_SERIAL was the first choice and cost 565 s of wall time on its own: nothing else could run while
-    # it did. The lock keeps it apart from the VST3 test on wider -j.
+    # `hosttest` checks real-time behaviour -- a set starts within 30 s, no gap over 150 ms while it
+    # plays, a timeline tick under 4 ms, faster than real time. It used to run nearly alone: PROCESSORS 5
+    # and a RESOURCE_LOCK it shared with vst3test, reserved when this part still ran 9 to 15 minutes and
+    # RUN_SERIAL (the first choice) cost 565 s of wall time with nothing else running at all.
     #
-    # Still five slots on a machine of 24 threads, deliberately: with the probe cache this part takes about
-    # a minute (it was 9 to 15), so its solitude now costs five slot-minutes instead of fifty, and the
-    # real-time margins stay what they were measured as. The section that times a plan plans it without the
-    # cache and on one thread, as the shipped plugin does (hosttest.cpp).
-    set_tests_properties(hosttest PROPERTIES LABELS "audio;slow" PROCESSORS 5 RESOURCE_LOCK phos_realtime
+    # Re-examined 20.09.2026 (round "test-speed-rest", A6), now that the "speed"/"test-split" rounds'
+    # cache and section split already bring this part down to about 85 s alone. Run beside phos_vst3test
+    # alone (both started at once, own processes, no other load): plan 15.0 s (limit 30), tick
+    # 0.39-0.45 ms (limit 4), 6.7-6.8x real time, 118/118 checks green, twice -- the two do not compete
+    # for anything that matters, so the RESOURCE_LOCK that kept them serial on wider -j is gone.
+    # PROCESSORS itself is NOT lowered, though, on evidence from trying it: at PROCESSORS 2 (and with
+    # this round's five parallelised selftest sections properly declaring the threads they use --
+    # Tests/selftest_tests.cmake's PHOS_SELFTEST_PROCESSORS table, added for exactly this reason) a
+    # `ctest -j 12` still managed to start hosttest beside hosttest.realhost, testVariety.levelMatch and
+    # all four testModalInterchange.presenceArc* parts at once (their own PROCESSORS, 3 + 2 + 4x6, only
+    # totals 29 of the machine's 24 hardware threads once hosttest's own 2 are added -- still an
+    # oversubscription ctest's slot model does not see, because none of those figures know about each
+    # other's real CPU cost, only their own). Result: plan time 31.4 s, over the 30 s bound -- the one
+    # contention failure this round saw, first FAIL then fixed by reverting to PROCESSORS 5 here (proof,
+    # not assumption: the number that was measured safe originally is kept). Five slots is conservative
+    # on this 24-thread machine but it is what is proven, and the RESOURCE_LOCK removal alone already
+    # lets hosttest and vst3test overlap instead of forming a serial tail. docs/PLAN.md (this round's
+    # block) has the full readings, including the failing run.
+    set_tests_properties(hosttest PROPERTIES LABELS "audio;slow" PROCESSORS 5
                          COST 120 ENVIRONMENT "PHOS_PROBE_CACHE=${PHOS_PROBE_CACHE_DIR}"
                          ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:")
     # `hosttest.realhost` is offline and times nothing: no lock. Three slots: its render thread, the thread
@@ -261,8 +272,16 @@ if(TARGET Phosphene_VST3)
     # the one CMake can name (the bundle itself is a directory made by a post-build step).
     add_test(NAME vst3test COMMAND phos_vst3test "$<TARGET_FILE:Phosphene_VST3>")
     # Like the host test: it checks that the plugin sounds (peak > 0.05), offline and at the rate a
-    # device asks for blocks, so it must not be muted, and it gets the host test's near-solitude.
-    set_tests_properties(vst3test PROPERTIES LABELS "audio;slow" PROCESSORS 5 RESOURCE_LOCK phos_realtime
+    # device asks for blocks, so it must not be muted. Its own real-time pass (vst3test.cpp) only paces
+    # a loop with sleep_until and reads the peak afterwards -- unlike hosttest it asserts no wall-clock
+    # deadline of its own, so it is the less fragile of the two. It shared hosttest's PROCESSORS 5 and
+    # RESOURCE_LOCK for the same reason (kept apart from hosttest on wider -j); round "test-speed-rest"
+    # (20.09.2026, docs/PLAN.md) measured both running at once, twice, with hosttest's own margins
+    # unmoved (see hosttest's comment above) and vst3test itself 36/36 green both times, so the
+    # RESOURCE_LOCK is gone -- they no longer form a serial tail. PROCESSORS stays 5: lowering it (tried
+    # on hosttest, see its comment) let ctest pack this and several other tests' own worker threads past
+    # what the machine has, and vst3test's own scan/load path was never measured under that.
+    set_tests_properties(vst3test PROPERTIES LABELS "audio;slow" PROCESSORS 5
                          COST 60 ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:")
 endif()
 
