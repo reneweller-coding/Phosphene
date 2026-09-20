@@ -5917,6 +5917,73 @@ Kommentar: Vorwärmen ist jetzt Optimierung, nicht Korrektheit), `Tests/selftest
 plus die zwei `#include`s, die sie braucht); dieser Block. `Core/src/Probe.cpp` unverändert (nur neu
 gebaut, weil es dieselbe Übersetzungseinheit wie die geänderten Header teilt).
 
+**20.09.2026, Quest-Build verifiziert**
+
+Anlass: das Quest-APK ist seit der "Dialog"-Runde (19.09.2026) nicht mehr gebaut worden, und der NDK-Compile
+von `Core/src/Probe.cpp` (neu in der "Tempo"-Runde: `pthread`, `<filesystem>`) wurde noch nie tatsächlich für
+Android versucht -- nur als sicher angenommen. `questguard` wurde in jedem `ctest`-Lauf seit dem 18.09.2026
+übersprungen, weil kein Arbeitsbaum `ThirdParty` hatte (jede Runde entfernte die geliehene Junction wieder).
+Reine Prüfrunde ohne Regelkonflikt: nichts an dieser Runde ändert Klangverhalten, also gilt die
+Regel-über-Korpus-Anmerkung hier nicht.
+
+*Aufbau.* `ThirdParty` per `mklink /J` aus dem Hauptcheckout (`G:\Tools\VRAudio\PsytranceGenerator\ThirdParty`)
+in den eigenen Arbeitsbaum geholt, ausschließlich für diese Runde, am Ende wieder entfernt (`rmdir` auf die
+Junction) -- `git status` im Hauptcheckout danach weiterhin sauber, `ThirdParty` dort unverändert (JUCE,
+debug.keystore, oboe, openxr-loader, wie vorher).
+
+*Quest-APK.* `powershell -File Quest\build_apk.ps1 -Jobs 8` (8 statt 12, weil die Runde `test-speed-rest`
+gleichzeitig in `slotA` baute -- vor dem Start per Prozessliste bestätigt). Sauber durchgelaufen, ~26 s
+Wandzeit (Konfigurieren 14:59:24, `PhospheneQuest.apk` fertig 14:59:49): keine Ninja verfügbar, `make` des
+NDK, arm64-v8a, android-29, Release. Ergebnis: `G:\Tools\VRAudio\PhospheneWork\quest-verify\build-quest\
+PhospheneQuest.apk`, **8.803.479 Bytes** (gegen 8.570.007 Bytes der "Dialog"-Runde, +233.472 Bytes). Die
+vier Asset-Dateien (`library.phoswt`, `melody.phosmdl`, `bass.phosmdl`, `voices.phosvx`) sind byteidentisch
+zur Quelle in `Core\data`, also liegt der ganze Zuwachs in `libphosquest.so`: seit der "Dialog"-Runde kamen
+`Core/src/Probe.cpp` (komplett neu, Proben-Threadpool + Cross-Prozess-Cache), der gedämpfte zweite Hall in
+`Reverb.cpp`/`Engine.cpp` (Gated-Reverb-Runde) und die Pan-Trajektorie/wachsende Hall-Sends in `Sfx.cpp`/
+`PsyFx.cpp` (Wandernde-Effekte-Runde) sowie die Thread-Sicherheits-Gatter in `WaveTableFile.cpp`/`Vocal.cpp`
+dazu -- alles Code, kein Datenwachstum, was zur Größenordnung passt.
+
+*`Core/src/Probe.cpp` für Android, wirklich geprüft.* Nicht nur der grüne Exit-Code des Gesamtbuilds: im
+Build-Log erscheint `[ 60%] Building CXX object Core/CMakeFiles/PhospheneCore.dir/src/Probe.cpp.o`, die
+Objektdatei liegt tatsächlich im Ausgabeverzeichnis, und `llvm-nm` (aus dem NDK) zeigt ihre `phos::probe`-
+Symbole sowohl in der Objektdatei als auch -- nach dem Verlinken -- in `libphosquest.so` selbst
+(`nm -D libphosquest.so | grep probe`: `cacheStats`, `cacheStore`, `setThreads`, `cacheLookup`,
+`cacheEnabled`, `sharedDataId`, `warmSharedData`, `resetCacheStats`, `CacheStats::CacheStats` je vorhanden).
+`setThreads()`/`cacheEnabled()` sind für `__ANDROID__` bewusst No-ops (`Probe.cpp`: der Quest-Komponist hat
+einen kleinen A55-Kern, Quality.h), und `cacheLookup()`/`cacheStore()` verlassen sich früh auf
+`cacheEnabled()==false`, bevor sie `<filesystem>` anfassen -- die Datei kompiliert und linkt für
+`aarch64-linux-android29`, aber ihr Cache-Pfad läuft auf dem Gerät nie. Einzige Auffälligkeit: eine harmlose
+`-Wunused-function`-Warnung auf `hardwareThreads()` (nur im nicht-Android-Zweig von `setThreads()` benutzt) --
+kein Fehler, nicht behoben, weil "kaputt" hier nicht zutrifft und die Warnung aus der "Tempo"-Runde stammt,
+nicht aus dieser.
+
+*`questguard`, wirklich gelaufen.* Erst von Hand (`cmake -DPHOS_ROOT=... -DPHOS_SCRATCH=... -P
+Tools/release/quest_guard.cmake`): `NDK gefunden`, `Android-Konfigurieren ok, PHOS_BUILD_PLUGIN:BOOL=OFF`,
+`main.cpp compiles for aarch64-linux-android29`, `questguard: passed`. Dann noch einmal als Teil der vollen
+Suite (unten): `Test #107: questguard ... Passed 5.16 sec` -- zum ersten Mal seit dem 18.09.2026 nicht
+"Skipped", weil `ThirdParty` diesmal da war.
+
+*Nichts zu reparieren.* Weder die Proben-/Thread-Maschinerie noch die neuen `Part`-Einträge (Texture/Vocal,
+`Sfx.h`) noch die Voice-Rezept-/Wavetable-Änderungen haben den Quest-Build gebrochen -- Konfigurieren, Bauen
+und Linken liefen beim ersten Versuch durch, `questguard` bestand ohne Änderung. Kein Fix nötig, also keine
+`#ifdef`-Frage und kein Params-Eingriff.
+
+*Desktop-Gegenprobe.* Der Arbeitsbaum hatte noch keinen Build (frischer Worktree). `build-plugin` neu
+konfiguriert (`cmake -S . -B build-plugin -G "Visual Studio 18 2026" -A x64 -DPHOS_BUILD_PLUGIN=ON`, JUCE aus
+der geliehenen `ThirdParty`-Junction, kein GitHub-Fetch nötig) und gebaut (`--parallel 8`, dieselbe Prozessrücksicht
+wie oben). Danach **ein** voller Lauf `ctest -C Release -j 8 --output-on-failure` mit `PHOS_MUTE=1`
+(`hosttest` regelt sein Mute-Verhalten laut Regelwerk selbst): **113 von 113 grün (100 %)**, Wandzeit
+1055,6 s; darin `hosttest` (173,8 s), `hosttest.realhost` (250,2 s), `vst3test` (70,1 s), die drei Vektorpfade
+(`vectest`/`_neon`/`_scalar`, alle grün) und `questguard` (5,16 s, s.o.). `selftest` als Gesamtlauf weiterhin
+deaktiviert (Regelwerk: nie der serielle Gesamtlauf). Keine Basislinie vorher nötig (Regelwerk: master war beim
+Start grün) -- dieser Lauf ist der Beleg, dass die Quest-Verifikation selbst nichts am Desktop-Pfad verändert
+hat, denn diese Runde hat keine Zeile Kerncode angefasst.
+
+*Hören.* Keine Hörausschnitte -- diese Runde ändert kein Audioverhalten, nur Build- und Prüfinfrastruktur.
+
+*Dateien.* Keine (reine Verifikationsrunde, nichts zu committen außer diesem Block). `ThirdParty` war nur
+eine temporäre Junction, vor dem Bericht wieder entfernt.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
