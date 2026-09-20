@@ -5984,6 +5984,156 @@ hat, denn diese Runde hat keine Zeile Kerncode angefasst.
 *Dateien.* Keine (reine Verifikationsrunde, nichts zu committen außer diesem Block). `ThirdParty` war nur
 eine temporäre Junction, vor dem Bericht wieder entfernt.
 
+**20.09.2026, Testlaufzeit: die letzten fünf langsamen Abschnitte**
+
+*Auftrag* (A6 des Plans). Fünf `Tests/selftest.cpp`-Abschnitte rendern noch ganze Tracks seriell und
+bestimmten die Wandzeit der Suite: `testPhaseLock.lock` (241 s laut Auftrag, `-j 8`),
+`testModalInterchange.presenceOn1/On2/Off1/Off2` (rund 200 s je Teil, dazu die vier von der
+"presence-test"-Runde neu angefügten `presenceArc{On,Off}{1,2}`-Teile, deren Kosten der Auftrag
+eigens zu prüfen verlangte) und `testVariety.levelMatch` (231 s). Ziel: parallelisieren, ohne eine
+Prüfung schwächer zu machen -- dieselben Seeds, dieselben Tracks, dieselben Schwellen, die Prosa
+unverändert -- und dazu die `hosttest`/`vst3test`-Sperre auf die richtige Größe prüfen.
+
+*Gebaut -- die Render-Parallelisierung.* Alle fünf Abschnitte rendern in ihrem eigenen Prozess
+unabhängige ganze Tracks nacheinander; jede Rendering-Aufgabe legt ihre eigene `Engine` und ihren
+eigenen `Composer` an und liest/schreibt nichts, was eine andere Aufgabe berührt (wie schon
+`measureLock`s eigener Kommentar für `testPhaseLock.lock` festhält). Statt einer neuen
+Aufgaben-Warteschlange läuft das auf `phos::probe::runAll` (`Core/include/phos/Probe.h`, Runde
+"speed"): das ist bereits ein generischer Pool ("bis zu `threads()` Arbeiter, 16-MB-Stack, der
+aufrufende Thread arbeitet mit") ohne irgendetwas Proben-Spezifisches im Vertrag, und
+`Composer::measureTrack` (`Core/src/Composer.cpp`) verschickt seine `probeLoudness`-Aufgaben --
+vollständige Engine-Renders, kein Deut anders als hier -- genau so. Wiederverwendet statt neu gebaut,
+mit Zitat der Fundstelle in den Doxygen-Kommentaren der geänderten Funktionen.
+
+- `testPhaseLockLock` (vormals `testPhaseLockLock`s Schleife über vier Tempi x drei Kopplungsmodi):
+  die zwölf `measureLock`-Aufrufe sind voneinander unabhängig und laufen jetzt als zwölf Aufgaben auf
+  `runAll`; die Faltung (`worstKick`/`worstBass`/`offLo`/`offHi`, der Detail-Text) läuft danach auf dem
+  aufrufenden Thread, in derselben Tempo-Reihenfolge wie vorher -- bitgleich, nicht nur zahlengleich.
+- `modalPresence`/`modalPresenceArc` (die acht `presence*`/`presenceArc*`-Teile): die Sitzsamen-Suche
+  (welche der 40 Seeds die Bruchroutine tragen, was `count` bestimmt) bleibt exakt die serielle,
+  billige Nur-Plan-Schleife -- ihre Reihenfolge ist der Vertrag, den der Funktionskommentar schon vor
+  dieser Runde beschrieb. Nur die bis zu sechs vollen Track-Renders, die eine Zeitscheibe trägt
+  (`kPresencePerSlice`), wandern in eine zweite, parallele Phase: ein `Candidate` behält den
+  `Composer`, aus dem sein Plan kam (der Render führt ihn über einen `Conductor` weiter, muss also
+  dieselbe Instanz sein), `runAll` verteilt die Kandidaten, und die Faltung danach läuft über die
+  Kandidaten in derselben aufsteigenden Sitzsamen-Reihenfolge wie die alte serielle Schleife.
+- `testVarietyLevelMatch`: die zwei `trackLoudness`-Aufrufe (mit/ohne Pegelabgleich) sind je ein
+  eigener Strom über vier Tracks (der Docstring: "each is one stream ... the tracks hand over to each
+  other", also **nicht** innerhalb eines Aufrufs teilbar) -- aber die zwei Aufrufe selbst sind
+  unabhängig und laufen nebeneinander, zwei Aufgaben auf `runAll`.
+
+*Bitgleichheit -- Beweis, nicht Annahme.* Jede Aufgabe berechnet, was sie vorher seriell berechnet
+hätte; welcher Thread rechnet, ändert am Ergebnis nichts (eigene `Engine`, eigener `Composer`, geteilt
+nur die seit der "threadsafe-loaders"-Runde echt thread-sichere Bibliothek/Voice-Pack/Sinustabelle).
+Verglichen `PHOS_PROBE_THREADS=1` (seriell) gegen den Standard (parallel, mehrere Threads): der
+Detail-Text jeder Prüfung ist zeichengleich -- `testVariety.levelMatch` "spread 0.55 LU with, 5.26 LU
+without" in beiden Läufen; `testPhaseLock.lock`s vier Tempi-Tripel zeichengleich; `presenceOn1` "mean
++3.38 dB, worst +2.25 dB" -- **exakt** die Zahlen, die die "presence-test"/"test-split"-Runden schon
+vor dieser Runde für den sauberen Stand dokumentiert hatten; `presenceArcOn1` "mean +1.89 dB, worst
+-2.03 dB" -- ebenso exakt die von der "presence-test"-Runde dokumentierten Zahlen. Die Faltung
+(Summen, Minima) läuft in derselben Reihenfolge wie vorher, ist also nicht nur numerisch gleich,
+sondern dieselbe Folge von Gleitkomma-Operationen.
+
+*Mutationen (Nachprüfung, kein neuer Fehlereinbau nötig -- diese Runde ändert keine Prüfungslogik, nur
+ihre Terminierung).* Zwei schon dokumentierte Mutationen gegen den parallelisierten Stand
+wiederholt, je gebaut, geprüft, aus der Kopie zurückgenommen, Zeitstempel gesetzt:
+
+| Mutation | gefangen von | Zahlen |
+|---|---|---|
+| `Composer.cpp`, `energyGainDb`: `(energy - 0.7f)` negiert ("test-split"-Runde M4, von der "presence-test"-Runde geschlossen) | `testModalInterchange.presenceArcOn1` | sauber mean +1.89/worst -2.03 dB → mit Mutation mean **+0.61**/worst **-3.35 dB** -- zeichengleich mit der "presence-test"-Runde. `testVariety.levelMatch` bleibt grün (spread 0.55/5.26 LU unverändert) -- erwartet, sie zieht den Energiebogen absichtlich aus ihrer eigenen Messung heraus (siehe ihr Docstring), fängt diese Mutation also so wenig wie vor dieser Runde. |
+| `Engine.cpp`, `kick_.setPhaseTarget(slot, bass_.knobPhase())` um +0,05 Zyklen (18°) verschoben ("test-split"-Runde M2) | `testPhaseLock.lock` | worstKick springt von 1,8-1,9° auf **~20°**, weit über der 6°-Schwelle, bei allen vier Tempi |
+
+*Messung vorher/nachher* (i9-12900K, 24 Threads; "vorher" aus dem Auftrag/der bisherigen
+`selftest_tests.cmake`-Tabelle, oder, wo unbekannt, eigens seriell nachgemessen mit
+`PHOS_PROBE_THREADS=1`, warmer Proben-Cache, Rechner ruhig; "nachher" aus dem abschließenden
+`ctest -C Release -j 12`-Gesamtlauf unten, also unter voller Suiten-Konkurrenz):
+
+| Abschnitt | vorher | nachher (im Gesamtlauf) |
+|---|---|---|
+| `testPhaseLock.lock` | 241 s (Auftrag, `-j 8`) / 194,6 s (eigen, seriell) | **38,65 s** |
+| `testModalInterchange.presenceOn1` | 194,6 s (Tabelle) / 175,6 s (eigen, seriell) | **38,71 s** |
+| `testModalInterchange.presenceOn2` | 204,8 s (Tabelle) | **39,53 s** |
+| `testModalInterchange.presenceOff1` | 194,8 s (Tabelle) | **41,44 s** |
+| `testModalInterchange.presenceOff2` | 204,5 s (Tabelle) | **40,61 s** |
+| `testModalInterchange.presenceArcOn1` | nie gemessen (Tabelle kannte den Abschnitt nicht, lief mit dem 600-s-Platzhalter); eigens seriell gemessen: **339,3 s** -- teurer als `testPhaseLock.lock` und `testVariety.levelMatch`, der langsamste Abschnitt der Suite vor dieser Runde | **86,03 s** |
+| `testModalInterchange.presenceArcOn2` | dieselbe Implementierung, nicht eigens vorher gemessen | **85,14 s** |
+| `testModalInterchange.presenceArcOff1` | dieselbe Implementierung, nicht eigens vorher gemessen | **82,60 s** |
+| `testModalInterchange.presenceArcOff2` | dieselbe Implementierung, nicht eigens vorher gemessen | **79,09 s** |
+| `testVariety.levelMatch` | 231 s (Auftrag) / 209,6 s (Tabelle) / 231,1 s (eigen, seriell) | **121,09 s** |
+| Summe der zehn ctest-Tests oben | ≈2563 s (teils gemessen, teils aus derselben Implementierung wie das eine gemessene Geschwister geschätzt für die drei `presenceArc*`-Teile ohne eigene Vorher-Messung) | **652,9 s** |
+
+Der Rechner unter dem Gesamtlauf ist voll ausgelastet (zehn weitere Prozesse parallel, `-j 12`), das
+"nachher" also kein Solo-Lauf -- gemessen isoliert (kein anderer Prozess) lagen dieselben Abschnitte
+enger beieinander (`testPhaseLock.lock` 38-45 s, `presenceOn/Off*` 38-45 s, `presenceArc*` 70-86 s,
+`levelMatch` 108-128 s); die Zahlen oben sind absichtlich die unter voller Konkurrenz, weil das ist,
+was ein `ctest`-Lauf wirklich zahlt.
+
+*Die `hosttest`/`vst3test`-Sperre.* Beide teilten sich `RESOURCE_LOCK phos_realtime` (bleiben also
+seriell hintereinander, ein Schwanz von ~110 s laut Auftrag) und `PROCESSORS 5`, aus der Zeit, als
+`hosttest` noch 9-15 Minuten lief. Nach der "speed"-Runde (Proben-Cache) und der Aufteilung in
+`hosttest`/`hosttest.realhost` läuft `hosttest` jetzt um die 60-85 s. Gemessen (eigene Prozesse,
+außerhalb von ctest, warmer Proben-Cache): `hosttest` allein 84,7 s (Plan 14,5 s, Grenze 30 s; Tick
+0,44 ms, Grenze 4 ms; 6,7x Echtzeit); `hosttest` und `vst3test` gleichzeitig gestartet, zweimal
+wiederholt: Plan 15,0 s / 15,0 s (praktisch unverändert), Tick 0,39/0,45 ms, 6,7x/6,8x Echtzeit,
+118/118 bzw. 36/36 Prüfungen grün beide Male -- die beiden stören sich nicht, also ist die Sperre weg.
+
+`PROCESSORS` versucht, dieselbe Rechnung zu senken (von 5 auf 2 je Test), scheiterte aber an der
+Realität statt an der Theorie: mit `PROCESSORS 2` und den fünf parallelisierten Abschnitten oben noch
+auf ctests Standard `PROCESSORS 1` (obwohl sie jetzt bis zu acht Threads nutzen) startete ein
+`ctest -j 12`-Lauf `hosttest` neben `hosttest.realhost`, `testVariety.levelMatch` und allen vier
+`presenceArc*`-Teilen gleichzeitig -- deren eigene `PROCESSORS`-Zahlen (3 + 2 + 4x6) plus `hosttest`s
+eigene 2 ergeben 29, mehr als die 24 Hardware-Threads der Maschine, ein Zuviel, das ctests
+Sperren-Modell nicht sehen konnte, weil keine der Zahlen von den anderen wusste. Ergebnis: Plantzeit
+31,4 s, über der 30-s-Grenze -- der einzige durch Konkurrenz verursachte FAIL dieser Runde, zuerst rot
+gesehen, dann repariert: eine neue `PHOS_SELFTEST_PROCESSORS`-Tabelle in `Tests/selftest_tests.cmake`
+gibt jedem der fünf parallelisierten Abschnitte seine echte Thread-Zahl (8 für `testPhaseLock.lock`,
+je 6 für die acht `presence*`/`presenceArc*`-Teile, 2 für `testVariety.levelMatch` -- das Minimum aus
+der Aufgabenzahl und `phos::probe::kMaxThreads` = 8), und `hosttest`/`vst3test` bekommen ihre
+ursprünglichen `PROCESSORS 5` zurück (der Wert, der schon einmal als sicher vermessen war). Mit beiden
+Reparaturen zweimal denselben feindlichen `ctest -j 12`-Ausschnitt wiederholt (`hosttest`,
+`hosttest.realhost`, `testVariety.levelMatch`, alle vier `presenceArc*`, `vst3test`,
+`testPhaseLock.lock` zusammen): 9/9 grün beide Male, `hosttest` 58,9/64,2 s Wandzeit, Plan-, Tick- und
+Echtzeit-Werte innerhalb der ursprünglichen Grenzen. Ergebnis: die Sperre ist weg (die
+`hosttest`/`vst3test`-Serialisierung entfällt, wo ctest die beiden nebeneinander plant), `PROCESSORS`
+bleibt bei 5 -- konservativer, als die Maschine bräuchte, aber das ist bewiesen, nicht geraten.
+
+*Gesamtlauf* (Commit 8e3cc79, `ctest -C Release -j 12`; Prozessliste vor dem Lauf geprüft, keine
+zweite Runde aktiv, daher `-j 12`): **100 % grün, 113 von 113 gelaufenen Tests** (`selftest` als
+Gesamtlauf deaktiviert, `questguard` übersprungen -- kein `ThirdParty` in diesem Arbeitsbaum),
+Wandzeit **720,81 s**. Kein Vorher-Gesamtlauf dieser Runde (Hausregel: kein Grundlauf) -- die
+vorherige Runde ("Thread-sichere Lader") maß auf ihrer eigenen Basis 643,4 s bei 109 Tests, aber das
+ist kein sauberer Vergleich (anderer Commit, vier Tests weniger, andere Rechnerlast); die
+belastbaren Vorher/Nachher-Zahlen sind die Abschnittstabelle oben.
+
+*Prüfungszahl* (Auftrag: "Report check counts before/after per section (must be identical)"): jede der
+zehn ctest-Prüfungen hat genau eine `check()`-Zeile, vor und nach dieser Runde identisch (nachgezählt
+in `Tests/selftest.cpp`: `testPhaseLockLock`, `testVarietyLevelMatch`, `modalPresence` und
+`modalPresenceArc` je genau ein `check(...)`-Aufruf in ihrem Rumpf). Keine Prüfung entfernt, keine
+Schwelle, kein Seed, kein Takt, kein Render weniger -- nur wie viele Threads sie rechnen.
+
+*Was der Corpus nicht widerspricht.* Diese Runde ändert keine Regel und keinen Klang -- reine
+Terminierung. Nichts zu berichten, wo Regel und Corpus auseinanderliefen.
+
+*Hören.* Keine Hörausschnitte -- der Auftrag sagt das ausdrücklich, und es stimmt: `git diff` auf
+`Core/`, `Plugin/`, `Quest/` ist leer, nur `Tests/CMakeLists.txt`, `Tests/selftest.cpp` und
+`Tests/selftest_tests.cmake` sind geändert. Diese Runde ändert, wie viele Threads eine Prüfung
+rechnet, nie was sie rechnet oder was der Motor klingt.
+
+*Nicht geschafft / offen.* Die drei `presenceArc*`-Teile außer `On1` wurden nicht einzeln seriell
+vermessen (dieselbe Implementierung, dieselbe Schwelle wie `On1` -- die Schätzung in der
+Vorher-Spalte ist eine Schätzung, kein Messwert). `hosttest`/`vst3test` könnten mit weiterer,
+gezielterer Vermessung vermutlich noch unter `PROCESSORS 5` sinken (die Marge bei `PROCESSORS 2`
+allein war nur 1,4 s über der Grenze), aber das hätte weitere Iterationen "ausprobieren, gegen den
+vollen `ctest -j 12` prüfen, wiederholen" gebraucht, die dieser Runde ihren Zeitrahmen gesprengt
+hätten; der bewiesene, sichere Wert stand höher als der spekulative.
+
+*Dateien.* `Tests/selftest.cpp` (`#include "phos/Probe.h"` an den Dateikopf verschoben;
+`testPhaseLockLock`, `modalPresence`, `modalPresenceArc`, `testVarietyLevelMatch` auf
+`phos::probe::runAll` umgestellt, Doxygen-Kommentare ergänzt), `Tests/selftest_tests.cmake` (neue
+`PHOS_SELFTEST_PROCESSORS`-Tabelle), `Tests/CMakeLists.txt` (`hosttest`/`vst3test`: `RESOURCE_LOCK`
+entfernt, Kommentare auf den neuen Messstand gebracht, `PROCESSORS` unverändert bei 5 nach dem
+gescheiterten Versuch mit 2); dieser Block. Keine Zeile in `Core/`, `Plugin/`, `Quest/`.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
