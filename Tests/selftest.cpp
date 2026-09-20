@@ -8569,6 +8569,160 @@ void testModalInterchangePresenceOff1() { modalPresence(1, 0); }
 void testModalInterchangePresenceOff2() { modalPresence(1, 1); }
 
 /**
+ * @brief testModalInterchange, part (4)'s blind spot on the energy arc, closed on the set's *second*
+ *        track (20.09.2026, round "presence-test"; PLAN_FOR_SONNET.md A5).
+ *
+ * Found by the test-split round's mutation check (19.09.2026, M4: `energyGainDb` inverted so a drop
+ * stands under its groove instead of over it) and confirmed here: `modalPresence` above always renders
+ * `Composer::track(p, 0)`, the set's *first* track, and `trackStartControls`'s `knobs` flag
+ * (`plan.index == 0 && bar.index == 0`) plays it from the raw knobs for its own first section only, so
+ * that alone does not explain the miss (the break routine this measurement looks for falls well past
+ * the intro). Reproducing M4 (`Composer.cpp`, `energyGainDb`, `(energy - 0.7f)` negated) against
+ * `modalPresence(0, 0)` (interchange on, tracks 1-6) measured worst +0.95 dB against a clean +2.25 dB --
+ * degraded by exactly the mutation's own swing, but nowhere near the -1.5 dB floor: this specific
+ * measurement (a spectral band, not a level) is dominated by the arc's *cutoff* component
+ * (`trackStartControls`'s `cutoffAt`, untouched by `energyGainDb`), so a mutation that only inverts the
+ * arc's loudness side moves it by a fraction of a dB regardless of which track is rendered -- track 1
+ * is not structurally blind here, this one check's tolerance is just too wide for a loudness-only fault
+ * to cross it. Measuring a second track closes the gap anyway, honouring the brief's instruction and
+ * exercising material that (unlike track 1's) is never the level match's own reference (`gainDb`,
+ * `partGainDb` fixed at the composer's raw values only for `t.index == 0`, `Composer::measureTrack`) --
+ * though with `compose.level_match=Off` here that difference does not apply to this particular render.
+ *
+ * A second track needed two fixes a first track's own math hides for free, both because
+ * `Section::startBar` is local to its own track (Form.h) while the Conductor always composes and
+ * renders the set's timeline from bar 0: (1) a section's position on what is actually rendered is
+ * `plan.firstBar + section.startBar` -- the arithmetic `testPresence` uses for a second track's drops --
+ * not the local number alone, which for track 0 is a no-op (`firstBar` 0) and for any other track reads
+ * the wrong, never-rendered bars of track 0 with no warning; (2) bar-to-sample has to go through the
+ * real tempo map (`tm.secondsAt`), not a constant BPM from the track's own settled tempo
+ * (`testVarietyPlans`, "tempo wanders": a later track can hand over at a different one). A first
+ * implementation that skipped both produced numbers that never moved between the clean tree and the M4
+ * mutation -- not "improved on track 1", silently wrong, because it measured track 0's own audio at
+ * bar offsets that belonged to track 1's form.
+ *
+ * With both fixed (interchange on, tracks 1-6): clean, mean +1.89 dB, worst -2.03 dB; with M4, mean
+ * +0.61 dB, worst -3.35 dB. The worst single seed is not the right gate here -- it is legitimately
+ * noisy on a second track (clean -2.03 dB already sits under `modalPresence`'s own -1.5 dB floor: this
+ * track's "core" reference window can still carry the tail of the previous track's hand-over, which
+ * track 0 never has to). The mean is not noisy: it drops by 1.28 dB under M4, and that is the same
+ * 1.28 dB `modalPresence(0, 0)` itself drops by (+3.38 to +2.10 dB) -- the arc's own swing, not sampling
+ * error -- so this check gates on the mean instead, `> 1.0 dB`, measured with margin on both sides of
+ * the clean/M4 gap. `docs/PLAN.md` (this round's block) has the numbers; only interchange-on, tracks
+ * 1-6 was measured before and after M4 -- the other three parts share the same implementation and bound
+ * without their own before/after run.
+ *
+ * Not a replacement: `modalPresence` above is kept exactly as it was (same code, same numbers) -- it
+ * may still be the one to catch some other, unrelated fault local to track 0 -- and this function adds
+ * coverage beside it rather than subsuming it (different track, different bound, different rationale).
+ *
+ * @param mode  0 = compose.modal_interchange On, 1 = Off
+ * @param slice 0 .. kPresenceSlices - 1
+ */
+void modalPresenceArc(int mode, int slice)
+{
+    section(fmt("modal interchange over the tonic pedal: presence band across the break on the set's "
+                "second track, interchange %s, qualifying tracks %d..%d of 12", mode == 0 ? "on" : "off",
+                slice * kPresencePerSlice + 1, (slice + 1) * kPresencePerSlice).c_str());
+
+    {
+        ParamStore p;
+        p.parseText("compose.track_bars=128 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
+                    "compose.pad_amount=1 compose.sfx_amount=1 compose.level_match=Off master.auto_gain=Off");
+        p.parseText(mode == 0 ? "compose.modal_interchange=On" : "compose.modal_interchange=Off");
+        double worst = 1e9, sum = 0.0, changedSum = 0.0;
+        int count = 0, rendered = 0, changed = 0;
+        const int from = slice * kPresencePerSlice, to = from + kPresencePerSlice;
+        {
+            for (uint64_t s = 1; s <= 40 && count < 12; ++s) {
+                auto comp = std::make_unique<Composer>(s);
+                // Track 1 (index 1): the set's second track, which unlike track 0 is never the level
+                // match's own uncorrected reference.
+                const TrackPlan plan = comp->track(p, 1);
+                int coreA = -1, drop = -1;
+                for (int i = 3; i < plan.form.count; ++i) {
+                    if (plan.form.section[i - 3].type != SectionType::Groove && plan.form.section[i - 3].type != SectionType::Drop) continue;
+                    if (plan.form.section[i - 2].type != SectionType::Break || plan.form.section[i - 1].type != SectionType::Build) continue;
+                    if (plan.form.section[i].type != SectionType::Drop) continue;
+                    coreA = i - 3;
+                    drop = i;
+                    break;
+                }
+                if (coreA < 0) continue;
+                // The qualifying seed number `count`: another slice renders it.
+                if (count < from || count >= to) { ++count; continue; }
+                constexpr double sr = 48000.0;
+                auto e = std::make_unique<Engine>();
+                e->prepare(sr, 512);
+                e->params().copyValuesFrom(p);
+                const Section& sc = plan.form.section[coreA];
+                const Section& sd = plan.form.section[drop];
+                const int w = std::min(16, sc.bars - 2);
+                const int dropLen = std::min(16, sd.bars);
+                // Global bar numbers on the set's timeline (see the function comment): local
+                // Section::startBar plus the track's own hand-over bar.
+                const int coreEnd = plan.firstBar + sc.startBar + sc.bars;
+                const int dropStart = plan.firstBar + sd.startBar;
+                // The whole track, on the set's timeline (plan.firstBar is 0 only for track 0).
+                const int renderBars = plan.firstBar + plan.bars;
+                TempoMap tm = comp->tempoMap(e->params(), renderBars);
+                e->setTempoMap(tm);
+                Conductor cond(*e, *comp);
+                const size_t total = static_cast<size_t>(tm.secondsAt(renderBars * static_cast<double>(kBeatsPerBar)) * sr);
+                std::vector<float> mono(total), L(512), R(512);
+                size_t done = 0;
+                while (done < total) {
+                    cond.pump(e->params(), 32.0);
+                    const int n = static_cast<int>(std::min<size_t>(512, total - done));
+                    e->process(L.data(), R.data(), n);
+                    for (int i = 0; i < n; ++i) mono[done + static_cast<size_t>(i)] = 0.5f * (L[static_cast<size_t>(i)] + R[static_cast<size_t>(i)]);
+                    done += static_cast<size_t>(n);
+                }
+                const size_t lat = static_cast<size_t>(e->latencySamples());
+                // Bar-to-sample through the real tempo map, not a constant BPM (see the function comment).
+                auto band = [&](int fromBar, int bars) {
+                    const double t0 = tm.secondsAt(fromBar * static_cast<double>(kBeatsPerBar));
+                    const double t1 = tm.secondsAt((fromBar + bars) * static_cast<double>(kBeatsPerBar));
+                    return bandPowerDb(mono, static_cast<size_t>(t0 * sr) + lat, static_cast<size_t>((t1 - t0) * sr), 1500.0, 6000.0);
+                };
+                const double d = band(dropStart, dropLen) - band(coreEnd - w, w);
+                worst = std::min(worst, d);
+                sum += d;
+                ++count;
+                ++rendered;
+                if (mode == 0 && sc.scale != sd.scale) { changedSum += d; ++changed; }
+            }
+        }
+        const double mean = sum / std::max(1, rendered);
+        // Gated on the mean, not the worst case (unlike modalPresence above): measured on this track,
+        // the worst single seed is legitimately noisy (clean: -2.03 dB, below modalPresence's own
+        // -1.5 dB floor, on tracks 1-6 alone -- a second track's "core" reference window can still
+        // carry the tail of the previous track's hand-over, which the first track never has to). The
+        // mean is not: clean +1.89 dB against M4-mutated (energyGainDb inverted) +0.61 dB on the same
+        // tracks, a drop of 1.28 dB that lines up with modalPresence's own (+3.38 to +2.10, 1.28 dB) --
+        // the arc's own swing, not sampling noise. +1.0 dB sits between the two with margin either way;
+        // docs/PLAN.md (this round's block) has the measurement.
+        check(count >= 8 && mean > 1.0,
+              fmt("on the set's second track, a borrowed mode costs the presence band across the break less than 1.0 dB "
+                  "on average (interchange %s, tracks %d-%d)", mode == 0 ? "on" : "off",
+                  slice * kPresencePerSlice + 1, (slice + 1) * kPresencePerSlice).c_str(),
+              fmt("interchange %s: %d qualifying tracks, this slice %d of them: mean %+.2f dB, worst %+.2f dB (%d changed mode "
+                  "across the break, mean %+.2f dB)",
+                  mode == 0 ? "on" : "off", count, rendered, sum / std::max(1, rendered), worst, changed,
+                  changed > 0 ? changedSum / changed : 0.0));
+    }
+}
+
+/// testModalInterchange part (4)', track 1: interchange on, qualifying tracks 1-6.
+void testModalInterchangePresenceArcOn1() { modalPresenceArc(0, 0); }
+/// testModalInterchange part (4)', track 1: interchange on, qualifying tracks 7-12.
+void testModalInterchangePresenceArcOn2() { modalPresenceArc(0, 1); }
+/// testModalInterchange part (4)', track 1: interchange off, qualifying tracks 1-6.
+void testModalInterchangePresenceArcOff1() { modalPresenceArc(1, 0); }
+/// testModalInterchange part (4)', track 1: interchange off, qualifying tracks 7-12.
+void testModalInterchangePresenceArcOff2() { modalPresenceArc(1, 1); }
+
+/**
  * @brief The score testModalInterchange part (5) and testModeColour block 3 both measure: seed 31337,
  *        Goa, interchange on, 12 tracks of 128 bars, composed with the Markov (0) or the neural (1) model.
  *
@@ -13235,6 +13389,10 @@ int main(int argc, char** argv)
     run("testModalInterchange.presenceOn2", testModalInterchangePresenceOn2);
     run("testModalInterchange.presenceOff1", testModalInterchangePresenceOff1);
     run("testModalInterchange.presenceOff2", testModalInterchangePresenceOff2);
+    run("testModalInterchange.presenceArcOn1", testModalInterchangePresenceArcOn1);
+    run("testModalInterchange.presenceArcOn2", testModalInterchangePresenceArcOn2);
+    run("testModalInterchange.presenceArcOff1", testModalInterchangePresenceArcOff1);
+    run("testModalInterchange.presenceArcOff2", testModalInterchangePresenceArcOff2);
     run("testModalInterchange.newTone", testModalInterchangeNewTone);
     run("testModeColour", testModeColour);
     run("testTensionCurve", testTensionCurve);
