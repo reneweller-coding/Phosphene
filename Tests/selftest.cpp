@@ -12728,6 +12728,30 @@ void testVoicesDroneRender()
 void testVoicesSound()
 {
     section("voices: a sound of its own per track");
+    // 20.09.2026 (round "wavetable-selection"): the widened candidate palette, checked directly against
+    // Composer::voicePaletteTableCount() -- the exact bound the per-track recipe draw itself uses, not a
+    // rendered, 20-track re-implementation of it (the block below is that; it is the audible proof, but
+    // an unrelated upstream RNG draw can occasionally keep a narrowed palette's rendered numbers over a
+    // threshold by chance, which this cannot). Minimums: the round's own chosen candidate counts per
+    // voice (lead 8 library + Sync/Formant Saw, arp 8 + Glass/PWM, stab the arp lane + two lead tables +
+    // PWM/Sync, pad its whole 12-table lane + Vocal/Glass/Formant Saw, drone its new 7-table lane +
+    // Vocal). The counter is checked for an **exact** count, not a floor: it is deliberately not widened
+    // (kVoicePalette's own comment), so a change either way is worth seeing.
+    {
+        static const int kMinCandidates[kPolyInstances] = { 10, 3, 10, 12, 15, 8 }; // lead,counter,arp,stab,pad,drone
+        int counts[kPolyInstances], wrong = 0;
+        for (int v = 0; v < kPolyInstances; ++v) {
+            counts[v] = Composer::voicePaletteTableCount(static_cast<PolyInstance>(v));
+            const bool ok = v == polyIndex(PolyInstance::Counter) ? counts[v] == kMinCandidates[v]
+                                                                    : counts[v] >= kMinCandidates[v];
+            if (!ok) ++wrong;
+        }
+        check(wrong == 0,
+              "every voice's candidate palette is as wide as this round chose (the counter deliberately excepted)",
+              fmt("lead %d/%d, counter %d/%d (exact), arp %d/%d, stab %d/%d, pad %d/%d, drone %d/%d; %d short or drifted",
+                  counts[0], kMinCandidates[0], counts[1], kMinCandidates[1], counts[2], kMinCandidates[2],
+                  counts[3], kMinCandidates[3], counts[4], kMinCandidates[4], counts[5], kMinCandidates[5], wrong));
+    }
     // (h) A sound of its own per track: each voice's recipe rendered on one note for twenty tracks of
     //     the listening seed -- the spread of the power centroid, the attack and the brightness, the
     //     tables used, and whether two neighbouring tracks ever share a voice's sound. The same bench

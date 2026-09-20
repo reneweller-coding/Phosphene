@@ -347,6 +347,20 @@ public:
      */
     static void voiceRecipeOffsets(PolyInstance voice, const VoiceRecipe& r, float amount, float* out);
 
+    /**
+     * @brief How many real wavetable candidates a voice's palette offers (Composer.cpp, kVoicePalette).
+     *
+     * Added 20.09.2026 (round "wavetable-selection") so the self test can check the widened candidate
+     * counts directly, against the exact bound the recipe draw itself uses (a shared helper, not a
+     * re-implementation) -- a rendered, 20-track measurement of the tables a track actually ends up
+     * using is what proves the wider selection is audible (testVoicesSound), but it is a noisy way to
+     * catch a narrower regression (an unrelated upstream RNG draw can shift which of a wide pool gets
+     * hit this run); this is the direct one.
+     * @param voice which polyphonic instance
+     * @return the count of `tables[]` entries before the first -1 (or the array's end)
+     */
+    static int voicePaletteTableCount(PolyInstance voice);
+
 private:
     void validate(const ParamStore& params) const;
     TrackPlan makeTrack(const ParamStore& params, int index) const;

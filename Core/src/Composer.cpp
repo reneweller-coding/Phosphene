@@ -170,6 +170,20 @@ static_assert(sizeof(kVoicePalette[static_cast<int>(PolyInstance::Pad)].tables) 
               "(no padding) -- if the library selection changes, re-check both");
 
 /**
+ * @brief Real candidates in a palette's `tables[]`: entries before the first -1 (or the array's end).
+ *
+ * The one place this is counted -- the per-track recipe draw below calls it too, so
+ * `Composer::voicePaletteTableCount()` (the test-facing wrapper, Composer.h) can never drift from what
+ * a track actually draws from.
+ */
+int paletteTableCount(const VoicePalette& pal)
+{
+    int n = 0;
+    while (n < static_cast<int>(std::size(pal.tables)) && pal.tables[n] >= 0) ++n;
+    return n;
+}
+
+/**
  * @brief The delay times a voice's role may draw (20.09.2026, round "dialogue").
  *
  * Indices into kDelayBeats (Params.h): 0 = 1/16 (0.25 beats), 1 = 1/8, 2 = a dotted eighth (0.75, "3/16"),
@@ -757,6 +771,11 @@ void Composer::voiceRecipeOffsets(PolyInstance voice, const VoiceRecipe& r, floa
     for (const Loading& l : kVoiceLoadings) out[l.param] += amount * l.weight * pal.scale[l.macro] * r.macro[l.macro];
 }
 
+int Composer::voicePaletteTableCount(PolyInstance voice)
+{
+    return paletteTableCount(kVoicePalette[polyIndex(voice)]);
+}
+
 void Composer::matchMaster(const ParamStore& p, TrackPlan& t, const double* firstReading) const
 {
     const int ms = p.base(Module::Master);
@@ -986,8 +1005,7 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
         static_assert(polyIndex(PolyInstance::Lead) < polyIndex(PolyInstance::Counter), "the lead is drawn before the counter");
         for (int v = 0; v < kPolyInstances; ++v) {
             const VoicePalette& pal = kVoicePalette[v];
-            int nTables = 0;
-            while (nTables < static_cast<int>(std::size(pal.tables)) && pal.tables[nTables] >= 0) ++nTables;
+            const int nTables = paletteTableCount(pal);
             double bestScore = -1.0;
             for (int c = 0; c < 12; ++c) {
                 VoiceRecipe cand;
