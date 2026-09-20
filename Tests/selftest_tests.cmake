@@ -23,8 +23,12 @@
 # table has and this list does not is labelled `slow` until somebody measures it, so `ctest -L quick`
 # never turns into a long run by accident; a name here that the table no longer has is reported.
 
-# Seconds of each section (`== name: s`, each in its own process, from `ctest -C Release -j 6` on
-# 19.09.2026, i9-12900K, Release, the machine otherwise ~25 % busy). They become each test's COST, so
+# Seconds of each section (each in its own process; since 20.09.2026, round "speed", from a `ctest -C Release
+# -j 8` with an *empty* probe cache and eight probe threads, i9-12900K, Release, another round's builds and
+# tests beside it -- with the cache filled the planning sections take a fraction, see docs/PLAN.md; the
+# table keeps the cold numbers because they decide what `quick` may contain; four sections that found their
+# plans already cached by an earlier test of that run and took 0.4 s keep their uncached 23 to 43 s). They
+# become each test's COST, so
 # a fresh tree starts the long ones first and the short ones fill the gaps (after one run ctest keeps
 # its own costs in Testing/Temporary/CTestCostData.txt); and they decide the label: up to
 # PHOS_QUICK_SECONDS is `quick`, above is `slow`. Re-measure when a section moves a lot; nothing
@@ -33,88 +37,88 @@ set(PHOS_QUICK_SECONDS 10)
 set(PHOS_SELFTEST_SECONDS
     # Split sections (19.09.2026, round "test-split"), named group.part: from `ctest -C Release -j 6` in
     # the plugin build, the machine ~36 % busy on average (another round building and testing beside it).
-    testVoices.counterSoundListening   220.5
-    testVoices.counterSound77          232.7
-    testVoices.counterSound2026        218.8
-    testVoices.sound                   214.6
-    testPhaseLock.lock                 213.8
-    testModalInterchange.presenceOn2   209.1
-    testVariety.levelMatch             209.9
-    testModalInterchange.presenceOff2  208.7
-    testModalInterchange.presenceOn1   199.4
-    testModalInterchange.presenceOff1  198.0
-    testMelody.blockSize               73.5
-    testPhaseLock.onsets               69.6
-    testAcidVoicing.corners            43.1
-    testFoundation.score               42.9
-    testGenreRules.listeningSeed       43.1
-    testFoundation.render              41.5
-    testAcidVoicing.engine             34.5
-    testVoices.droneRender             33.0
-    testMelody.depthRender             26.9
-    testGenreRules.arpGate             22.9
-    testVariety.recipes                16.4
-    testModalInterchange.newTone       11.3
-    testGenreRules.rules               1.4
-    testVariety.plans                  1.1
-    testMelody.score                   0.7
-    testAcidVoicing.night              0.7
-    testVoices.acidRide                0.4
-    testMelody.variety                 0.4
-    testModalInterchange.bass          0.2
-    testVoices.score                   0.2
+    testVoices.counterSoundListening   236.6
+    testVoices.counterSound77          242.4
+    testVoices.counterSound2026        234.5
+    testVoices.sound                    61.4
+    testPhaseLock.lock                 205.2
+    testModalInterchange.presenceOn2   204.8
+    testVariety.levelMatch             209.6
+    testModalInterchange.presenceOff2  204.5
+    testModalInterchange.presenceOn1   194.6
+    testModalInterchange.presenceOff1  194.8
+    testMelody.blockSize               35.7
+    testPhaseLock.onsets               66.4
+    testAcidVoicing.corners             43.1
+    testFoundation.score                42.9
+    testGenreRules.listeningSeed        43.1
+    testFoundation.render              40.5
+    testAcidVoicing.engine             33.6
+    testVoices.droneRender             31.0
+    testMelody.depthRender             24.3
+    testGenreRules.arpGate              22.9
+    testVariety.recipes                14.3
+    testModalInterchange.newTone       11.6
+    testGenreRules.rules               1.5
+    testVariety.plans                  1.4
+    testMelody.score                   1.1
+    testAcidVoicing.night              1.0
+    testVoices.acidRide                0.7
+    testMelody.variety                 0.7
+    testModalInterchange.bass          0.5
+    testVoices.score                   0.4
     testModalInterchange.modes         0.0
     testMelody.midi                    0.0
     # Whole sections.
     # Round "speed" (20.09.2026): both switch the probe cache off for their references, so they cost the same warm.
-    testProbeSchedule        114.7
-    testProbeCache           71.3
-    testMixBalance           111.4
-    testStereoWidth          100.2
-    testMaster               88.4
-    testSfxLevel             35.7
-    testKickBody             32.7
-    testModeColour           30.7
-    testEngine               29.9
-    testBassRhythm           29.5
-    testSectionRules         25.9
-    testBandLimit            20.1
-    testCues                 13.6
-    testAcidColour           7.1
-    testMelodyModelWiring    6.3
-    testRecipeSpread         5.8
-    testPsychedelia          5.5
-    testTensionCurve         3.3
-    testGateAndDuck          3.0
-    testModelDecode          2.4
-    testBassBite             1.8
-    testArpPatterns          1.7
-    testBassModel            1.3
-    testForm                 1.2
-    testSampler              1.2
-    testWaveTableQuality     1.0
-    testArrangeDynamics      0.9
-    testMotifOperators       0.8
-    testSfx                  0.7
-    testModelFile            0.7
-    testWaveTableLibrary     0.6
-    testRhythm               0.5
-    testPoly                 0.4
-    testCuration             0.4
-    testPercTempo            0.4
-    testDiodeLadder          0.2
-    testWaveTable            0.2
-    testPads                 0.1
+    testProbeSchedule        108.8
+    testProbeCache           62.6
+    testMixBalance           124.2
+    testStereoWidth           83.0
+    testMaster              103.7
+    testSfxLevel             59.5
+    testKickBody             35.3
+    testModeColour           41.9
+    testEngine               39.7
+    testBassRhythm           69.4
+    testSectionRules         65.8
+    testBandLimit            20.5
+    testCues                 14.0
+    testAcidColour           8.0
+    testMelodyModelWiring    7.6
+    testRecipeSpread         6.6
+    testPsychedelia          6.4
+    testTensionCurve         4.0
+    testGateAndDuck          3.2
+    testModelDecode          3.2
+    testBassBite             2.1
+    testArpPatterns          2.3
+    testBassModel            2.1
+    testForm                 1.8
+    testSampler              1.5
+    testWaveTableQuality     1.3
+    testArrangeDynamics      1.0
+    testMotifOperators       1.3
+    testSfx                  1.0
+    testModelFile            1.3
+    testWaveTableLibrary     0.8
+    testRhythm               0.9
+    testPoly                 0.6
+    testCuration             0.6
+    testPercTempo            0.5
+    testDiodeLadder          0.3
+    testWaveTable            0.3
+    testPads                 0.3
     testKickReference        0.1
     testDynamics             0.1
     testLoudness             0.1
-    testTransitions          0.1
-    testArrangement          0.4
+    testTransitions          0.4
+    testArrangement          0.9
     testReverb               0.1
-    testComposer             0.1
+    testComposer             0.4
     testPercKit              0.1
     testWav                  0.0
-    testMidi                 0.0
+    testMidi                 0.3
     testModelKernel          0.0
     testOscillator           0.0
     testAcid                 0.0
