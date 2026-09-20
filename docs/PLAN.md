@@ -5598,6 +5598,49 @@ Tracks messbar höher als im Drop 1 (vorher 15 von 16), weil die tiefere Lead si
 freistellt. Der enge Satz der Dichteregel (nur Zap/Stutter/Swell) bleibt bei 77 % der Takte in einem
 Lauf von zwei.
 
+**20.09.2026, Energiebogen-Testlücke geschlossen**
+
+Anlass: die Mutations-Runde "test-split" (19.09.2026) fand M4 (`Composer.cpp`, `energyGainDb` umgekehrt,
+Drops leiser als Grooves statt lauter) ungefangen durch `testModalInterchange.presence*` und schrieb das
+der Prüfung zu: sie rendert immer Track 1 jedes Seeds. Nachvollzogen (`Tests/selftest.cpp`,
+`modalPresence`): M4 wieder eingebaut, `testModalInterchange.presenceOn1` blieb grün (Worst-Wert +2,25 →
+**+0,95 dB**, Mittel +3,38 → **+2,10 dB** — beide klar über der −1,5-dB-Schwelle). Die Ursache ist nicht
+der `knobs`-Zweig in `trackStartControls` (`plan.index == 0 && bar.index == 0` betrifft nur den allerersten
+Takt von Track 1, die geprüfte Break-Routine liegt fast immer dahinter); diese Prüfung misst eine
+Spektralbande, keinen Pegel, und der Bogen bewegt die Bande vor allem über den Cutoff (`cutoffAt`), den M4
+nicht anfasst — die Lautheitsseite (`energyGainDb`) trägt nur einen Bruchteil bei, gleich auf welchem Track.
+
+Eine neue Prüfung rendert stattdessen Track 2 (Index 1) desselben Seeds, mit derselben Vor-/Nach-dem-Bruch-
+Messung (`modalPresenceArc`, vier Teile `testModalInterchange.presenceArc{On,Off}{1,2}`, dieselbe
+12-Track-Zweiteilung wie oben). Zwei stille Fehler mussten dafür repariert werden, die ein Test auf Track 1
+kostenlos verdeckt: `Section::startBar` ist lokal zum eigenen Track (`Form.h`), aber der Conductor rendert
+die Zeitachse des ganzen Sets immer ab Takt 0 — die Position einer Sektion im gerenderten Material ist
+`plan.firstBar + section.startBar`, nicht die lokale Zahl allein (dieselbe Rechnung wie `testPresence` für
+Track 2's Drops); und Takt-zu-Sample braucht die echte Tempokarte (`tm.secondsAt`), nicht ein konstantes BPM
+aus der eigenen Solltempo des Tracks (`testVarietyPlans`, "das Tempo wandert" — ein späterer Track kann bei
+einem anderen Tempo übernehmen). Eine erste Fassung ohne beide Korrekturen maß auf Track 1 unverändert
+dieselben Zahlen mit und ohne M4 — nicht "unempfindlich", sondern falsch: sie las die Takte von Track 1 aus
+dem nie dafür gerenderten Material von Track 0.
+
+Mit beiden Korrekturen (Seed 1–6, Interchange an): sauber Mittel **+1,89 dB**, Schlechtester **−2,03 dB**;
+mit M4 Mittel **+0,61 dB**, Schlechtester **−3,35 dB**. Der Schlechtester-Wert ist auf Track 2 legitim
+lauter (das eigene "Kern"-Fenster kann noch den Übergang vom Vortrack tragen, was Track 1 nie hat) — schon
+sauber liegt er unter der −1,5-dB-Schwelle von `modalPresence`. Das Mittel dagegen ist stabil und bewegt
+sich um genau den Betrag, den auch Track 1 zeigt (+3,38 → +2,10 dB, −1,28 dB dort; +1,89 → +0,61 dB hier,
+−1,28 dB) — der Bogen selbst, kein Stichprobenrauschen. Die neue Prüfung hängt daher am Mittel, nicht am
+Schlechtesten: `count >= 8 && mean > 1,0 dB`, gemessen zwischen sauber (1,89) und M4 (0,61) mit Abstand nach
+beiden Seiten. Vollständig nachgemessen (sauber und mit M4) nur für Interchange an, Seeds 1–6; die drei
+übrigen Teile (`.presenceArcOn2`, `.presenceArcOff1/2`) laufen mit derselben Implementierung und Schwelle,
+ohne eigene Vor-/Nachher-Messung — offen für eine spätere Runde, falls sie dort einmal fehlschlagen.
+
+`modalPresence` und ihre vier Teile bleiben unverändert (kein Zeichen geändert, nachgeprüft: identische
+Zahlen vor und nach dieser Runde) — sie fangen möglicherweise andere, Track-1-eigene Fehler, die neue
+Prüfung ersetzt sie nicht, sondern ergänzt.
+
+*Nicht Ziel dieser Runde:* Hörschnipsel (reine Testrunde, keine Klangänderung; `git diff` auf `Core/`,
+`Plugin/`, `Quest/` bleibt leer). *Dateien:* `Tests/selftest.cpp` (`modalPresenceArc` und ihre vier Teile,
+`main()`-Registrierung), dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
