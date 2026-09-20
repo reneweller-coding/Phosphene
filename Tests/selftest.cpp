@@ -6792,6 +6792,201 @@ void testSfx()
     }
 }
 
+void testWanderingFx()
+{
+    section("wandering effects (round wandering-fx)");
+    const double sr = 48000.0;
+    // (a) The reverb-send trajectory's two endpoints, in closed form: wetFrac(x) = smoothstep(x^wetExpo)
+    // * wander_send. At x = 0 that is exactly 0 and at x = 1 exactly wander_send, for *any* wetExpo > 0
+    // (0^k = 0, 1^k = 1) -- so the check needs no knowledge of the per-event curve the seed actually
+    // drew. Measured as a ratio of the already-panned, already-filtered sample split between the dry and
+    // wet outputs (Sfx.cpp: wetL = l * wetFrac, L = l - wetL, so wetL / (wetL + L) = wetFrac exactly
+    // whenever the underlying sample l is not itself zero) -- independent of sfx.level, the pan, and the
+    // filter, which cancel out of the ratio.
+    {
+        ParamStore p;
+        p.set(p.base(Module::Sfx) + sfx::Wander, 1.0f);
+        p.set(p.base(Module::Sfx) + sfx::WanderSend, 0.8f);
+        Sfx s;
+        s.prepare(sr);
+        const std::vector<float> v = moduleValues(p, Module::Sfx);
+        s.update(v.data(), 6);
+        // ReverseSwell: loud (amp = 1) exactly at x = 1, unlike types whose own envelope also happens to
+        // vanish at their own ends (Sweep, Zap) -- needed so the ratio at the tail is not 0 / 0.
+        const int length = static_cast<int>(sr);   // 1 s, exactly: seconds*sr round-trips to samples
+        s.trigger(SfxType::ReverseSwell, length, 1.0f, 0.0);
+        const int n = length + 1;   // one sample past the length: x = min(1, length/length) = 1 exactly
+        std::vector<float> L(static_cast<size_t>(n)), R(static_cast<size_t>(n)), sub(static_cast<size_t>(n)),
+                            wetL(static_cast<size_t>(n)), wetR(static_cast<size_t>(n));
+        s.processSplit(L.data(), R.data(), sub.data(), wetL.data(), wetR.data(), n);
+        check(wetL[0] == 0.0f && wetR[0] == 0.0f, "wander: the reverb send is exactly dry (0) on the event's very first sample (x = 0)",
+              fmt("%.6f %.6f", static_cast<double>(wetL[0]), static_cast<double>(wetR[0])));
+        const size_t last = static_cast<size_t>(n - 1);
+        const double totalL = static_cast<double>(L[last]) + static_cast<double>(wetL[last]);
+        const double totalR = static_cast<double>(R[last]) + static_cast<double>(wetR[last]);
+        const double ratioL = wetL[last] / totalL, ratioR = wetR[last] / totalR;
+        check(std::fabs(totalL) > 1e-6 && std::fabs(totalR) > 1e-6 && std::fabs(ratioL - 0.8) < 1e-4 && std::fabs(ratioR - 0.8) < 1e-4,
+              "wander: the reverb send reaches exactly wander_send at the event's own target beat (x = 1), whatever curve exponent the seed drew",
+              fmt("ratio L %.5f, R %.5f (signal %.4f/%.4f)", ratioL, ratioR, totalL, totalR));
+    }
+    // (b) The pan trajectory: a directed sweep, not the oscillation -- opposite sides near the start and
+    // near the end of a two-second event, regardless of which side the seed chose to start on (panFrom
+    // and panTo are always drawn with opposite signs and magnitude >= 0.75, Sfx.cpp).
+    {
+        ParamStore p;
+        p.set(p.base(Module::Sfx) + sfx::Wander, 1.0f);
+        p.set(p.base(Module::Sfx) + sfx::WanderSend, 0.0f);   // isolate pan: nothing splits off into wetL/R
+        Sfx s;
+        s.prepare(sr);
+        const std::vector<float> v = moduleValues(p, Module::Sfx);
+        s.update(v.data(), 6);
+        const int length = static_cast<int>(2.0 * sr);
+        s.trigger(SfxType::Sweep, length, 1.0f, 0.0);
+        std::vector<float> L(static_cast<size_t>(length)), R(static_cast<size_t>(length)), sub(static_cast<size_t>(length)),
+                            wetL(static_cast<size_t>(length)), wetR(static_cast<size_t>(length));
+        s.processSplit(L.data(), R.data(), sub.data(), wetL.data(), wetR.data(), length);
+        auto sideBias = [&](int from, int to) {
+            double el = 0.0, er = 0.0;
+            for (int i = from; i < to; ++i) { el += static_cast<double>(L[static_cast<size_t>(i)]) * L[static_cast<size_t>(i)]; er += static_cast<double>(R[static_cast<size_t>(i)]) * R[static_cast<size_t>(i)]; }
+            return std::sqrt(er) - std::sqrt(el);   // > 0: right-dominant, < 0: left-dominant
+        };
+        const double early = sideBias(2400, 7200), late = sideBias(length - 7200, length - 2400);
+        check(early * late < 0.0, "wander: the event's pan sits on opposite sides near its start and its end (a directed sweep, not the oscillation)",
+              fmt("early L/R bias %+.4f, late %+.4f", early, late));
+    }
+    // (c) Off by default: sfx.wander's own descriptor default is 0, so a Sfx that never had update()
+    // called with it on (every render before this round) draws nothing from this feature at all.
+    {
+        ParamStore p;
+        Sfx s;
+        s.prepare(sr);
+        const std::vector<float> v = moduleValues(p, Module::Sfx);
+        check(v[sfx::Wander] == 0.0f, "sfx.wander defaults to off", fmt("%.3f", static_cast<double>(v[sfx::Wander])));
+    }
+    // (d) Engine wiring: the growing wet trajectory reaches the master output through the plain hall, and
+    // only through it -- with sfx.hall_send and sfx.room_send at 0, nothing else can. Two configurations
+    // with fx.hall_return differing 96 dB (effectively off vs. on) isolate exactly the hall-return term of
+    // renderSegment()'s final sum (everything else -- the dry mix, masterGain_ -- is identical between
+    // them, so it cancels in the difference; the same technique testGatedReverb uses above).
+    {
+        auto render = [](bool wander, float hallReturnDb) {
+            auto e = std::make_unique<Engine>();
+            e->prepare(48000.0, 256);
+            e->params().parseText(fmt(
+                "master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 "
+                "mix.kick_mute=1 mix.bass_mute=1 mix.perc_mute=1 "
+                "fx.room_return=-96 fx.hall_return=%.2f fx.hall_decay=3 "
+                "sfx.room_send=0 sfx.hall_send=0 sfx.duck=0 sfx.level=0 sfx.wander=%d sfx.wander_send=0.9",
+                static_cast<double>(hallReturnDb), wander ? 1 : 0).c_str());
+            NoteEvent n;
+            n.part = Part::Sfx;
+            n.pitch = static_cast<uint8_t>(kSfxBaseNote + static_cast<int>(SfxType::ReverseSwell));
+            n.beat = 0.0;
+            n.length = 2.0f;
+            n.velocity = 127;
+            e->pushEvent(n);
+            std::vector<float> L(static_cast<size_t>(48000 * 5)), R(L.size());
+            e->process(L.data(), R.data(), static_cast<int>(L.size()));
+            return L;
+        };
+        const std::vector<float> onLoud = render(true, 0.0f), onSilent = render(true, -96.0f);
+        const std::vector<float> offLoud = render(false, 0.0f), offSilent = render(false, -96.0f);
+        auto diffDb = [&](const std::vector<float>& a, const std::vector<float>& b, size_t from, size_t to) {
+            double s = 0.0;
+            size_t n = 0;
+            for (size_t i = from; i < to; ++i) { const double d = static_cast<double>(a[i]) - static_cast<double>(b[i]); s += d * d; ++n; }
+            return 10.0 * std::log10(std::max(s / static_cast<double>(n), 1e-24));
+        };
+        const size_t s48 = 48000;
+        const double early = diffDb(onLoud, onSilent, 0, s48 / 4);                         // 0 .. 250 ms: onset
+        const double late = diffDb(onLoud, onSilent, 3 * s48 / 2, static_cast<size_t>(2.3 * static_cast<double>(s48)));   // 1.5 .. 2.3 s: the tail
+        const double offDiff = diffDb(offLoud, offSilent, 0, 3 * s48);
+        check(late > early + 10.0, "wander on: the hall's own return grows well past the event's onset towards its tail (Engine.cpp, hallInL_/hallInR_)",
+              fmt("%.1f dB in the first 250 ms, %.1f dB in the tail (1.5..2.3 s, +%.1f dB)", early, late, late - early));
+        check(offDiff < -80.0, "wander off: fx.hall_return changes nothing -- with sfx.hall_send and sfx.room_send at 0, no path reaches the hall at all",
+              fmt("%.1f dB", offDiff));
+    }
+    // (e) Kick and bass, proven untouched: a correlation/mono-sum check under 140 Hz. sfx.wander only
+    // touches Sfx's own voices and Engine's SFX/hall routing (Sfx.cpp, Engine.cpp) -- nothing on the
+    // kick's or the bass's own path reads sfx.wander, so a render with it on differs from one with it off
+    // by exactly the SFX/hall content, and a 140 Hz low-pass of kick+bass together should show none of it.
+    {
+        auto render = [](bool wander) {
+            auto e = std::make_unique<Engine>();
+            e->prepare(48000.0, 256);
+            e->params().parseText(fmt(
+                "master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 compose.bpm=145 "
+                "mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.counter_mute=1 mix.arp_mute=1 mix.stab_mute=1 "
+                "mix.pad_mute=1 mix.drone_mute=1 mix.texture_mute=1 mix.vocal_mute=1 "
+                "sfx.level=0 sfx.hall_send=0.5 sfx.room_send=0.3 sfx.wander=%d sfx.wander_send=0.9",
+                wander ? 1 : 0).c_str());
+            for (int b = 0; b < 8; ++b) {
+                NoteEvent k;
+                k.part = Part::Kick;
+                k.beat = static_cast<double>(b);
+                k.velocity = 120;
+                e->pushEvent(k);
+                NoteEvent bs;
+                bs.part = Part::Bass;
+                bs.beat = static_cast<double>(b) + 0.5;
+                bs.pitch = 36;
+                bs.length = 0.4f;
+                bs.velocity = 110;
+                e->pushEvent(bs);
+            }
+            // Two long, overlapping wandering-shaped effect events, so the reverb tail they leave behind
+            // is well established by the end of the eight bars this renders.
+            NoteEvent s1;
+            s1.part = Part::Sfx;
+            s1.pitch = static_cast<uint8_t>(kSfxBaseNote + static_cast<int>(SfxType::ReverseSwell));
+            s1.beat = 0.0;
+            s1.length = 3.5f;
+            s1.velocity = 120;
+            e->pushEvent(s1);
+            NoteEvent s2;
+            s2.part = Part::Sfx;
+            s2.pitch = static_cast<uint8_t>(kSfxBaseNote + static_cast<int>(SfxType::Sweep));
+            s2.beat = 4.0;
+            s2.length = 3.0f;
+            s2.velocity = 120;
+            e->pushEvent(s2);
+            std::vector<float> L(static_cast<size_t>(48000 * 4)), R(L.size());
+            e->process(L.data(), R.data(), static_cast<int>(L.size()));
+            std::vector<float> mono(L.size());
+            for (size_t i = 0; i < L.size(); ++i) mono[i] = 0.5f * (L[i] + R[i]);
+            return mono;
+        };
+        const std::vector<float> off = render(false), on = render(true);
+        // A steep low-pass at 140 Hz (cascaded one-poles), zero-phase (forward then backward) so it
+        // cannot itself smear a difference into the passband -- kick and bass are mono and centred
+        // (Engine.h), so the mid signal already carries their full content undiminished.
+        auto lowpass140 = [&](std::vector<float> x) {
+            const float c = 1.0f - std::exp(static_cast<float>(-2.0 * kPiD * 140.0 / 48000.0));
+            auto onePole = [&](std::vector<float>& y) { float s0 = 0.0f; for (float& v : y) { s0 += c * (v - s0); v = s0; } };
+            for (int k = 0; k < 4; ++k) onePole(x);
+            std::reverse(x.begin(), x.end());
+            for (int k = 0; k < 4; ++k) onePole(x);
+            std::reverse(x.begin(), x.end());
+            return x;
+        };
+        const std::vector<float> loOff = lowpass140(off), loOn = lowpass140(on);
+        double num = 0.0, e1 = 0.0, e2 = 0.0, diff = 0.0, total = 0.0;
+        for (size_t i = 0; i < loOff.size(); ++i) {
+            num += static_cast<double>(loOff[i]) * loOn[i];
+            e1 += static_cast<double>(loOff[i]) * loOff[i];
+            e2 += static_cast<double>(loOn[i]) * loOn[i];
+            const double d = static_cast<double>(loOn[i]) - loOff[i];
+            diff += d * d;
+            total += static_cast<double>(loOff[i]) * loOff[i];
+        }
+        const double corr = num / std::sqrt(std::max(e1 * e2, 1e-30));
+        const double diffDb2 = 10.0 * std::log10(std::max(diff / std::max(total, 1e-30), 1e-30));
+        check(corr > 0.999999 && diffDb2 < -80.0,
+              "kick and bass under 140 Hz: unchanged whether sfx.wander is on or off (a correlation/mono-sum check, not just a claim)",
+              fmt("correlation %.8f, mono-sum difference %.1f dB against the unchanged signal's own energy", corr, diffDb2));
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // 19.09.2026, round "fx-psychedelia": the psychedelic layer (Sfx.h, PsyFx.h, Texture.h, Vocal.h,
 // Form.cpp placePsychedelia, Engine.h).
@@ -13027,6 +13222,7 @@ int main(int argc, char** argv)
     run("testGatedReverb", testGatedReverb);
     run("testDynamics", testDynamics);
     run("testSfx", testSfx);
+    run("testWanderingFx", testWanderingFx);
     run("testMaster", testMaster);
     run("testSfxLevel", testSfxLevel);
     run("testPsychedelia", testPsychedelia);

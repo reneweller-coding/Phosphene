@@ -523,6 +523,10 @@ const ParamDesc kSfxParams[sfx::Count] = {
     // 19.09.2026, round "fx-psychedelia" (Sfx.h): the sub drop, mono and under the kick's sidechain.
     { "sub_level",    "Sub Drop",      "dB", -36.0f,   6.0f, -14.0f, Curve::Linear },
     { "sub_duck",     "Sub Duck",      "",     0.0f,   1.0f,   1.0f, Curve::Linear },
+    // 20.09.2026, round "wandering-fx" (Sfx.h): a directed pan trajectory and a growing reverb-send
+    // trajectory over an event's own length. Off by default: every render before this round is untouched.
+    { "wander",       "Wander",        "",     0.0f,   1.0f,   0.0f, Curve::Toggle },
+    { "wander_send",  "Wander Send",   "",     0.0f,   1.0f,   0.85f, Curve::Linear },
 };
 
 // The shamanic bed (Texture.h), the voices (Vocal.h) and the modulation effects (PsyFx.h), 19.09.2026.

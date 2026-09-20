@@ -203,6 +203,13 @@ enum : int { Level, Noise, Resonance, Brightness, ImpactDecay, Vowel, SwellDecay
              // 19.09.2026, round "fx-psychedelia". Appended.
              SubLevel,     ///< dB: the sub drop against sfx.level (Sfx.h; it plays mono and ducks under the kick)
              SubDuck,      ///< 0..1: how deep the kick ducks the sub drop
+             // 20.09.2026, round "wandering-fx" (Sfx.h): a directed pan trajectory plus a reverb-send
+             // trajectory over an event's own length, drawn from its own seed. Off by default, so every
+             // render before this round is untouched.
+             Wander,       ///< toggle: an event's pan sweeps from one side to the other and its content
+                           ///< crosses from dry to the hall's send over its length, instead of the
+                           ///< oscillating auto-pan and the constant hall_send fraction
+             WanderSend,   ///< 0..1: how far the crossfade reaches by the event's own tail (x = 1)
              Count };
 }
 /** @brief Parameters of the shamanic bed (module Texture, prefix "texture"; Texture.h). */

@@ -5680,6 +5680,102 @@ an keinem bestehenden Render). `ctest -L quick -j 8` vorab: 61/61 grün in 12,7 
 angefasst. Der zweite vom Nutzer genannte Effekttyp — Pan-Bahn plus Hall-Send über die Länge eines
 Ereignisses — bleibt offen wie zuvor.
 
+**20.09.2026, Wandernde Effekte**
+
+Anlass: die Nutzerregel vom 19.09.2026, oben als letzter offener Punkt vermerkt — ein psychedelisches
+Effektereignis soll weit hinten links beginnen können, über die Stereobreite nach rechts wandern und in
+einem langen Hallschwanz aufgehen, während Kick und Bass trocken und mono bleiben. Regel steht über den
+Midi-Daten (HOUSE_RULES): Größen (Winkelbereich, Kurvenform, Ziel-Sendeanteil) sind ein fester, gemessener
+Entwurf, keine aus dem Korpus abgeleiteten Werte — der Korpus widerspricht nirgends, weil ihm dieses
+Effekt-Konzept fremd ist.
+
+*Was gebaut wurde.* `Sfx` (Sfx.h/.cpp) bekommt einen neuen, an- und abschaltbaren Modus `sfx.wander`
+(Toggle, Default aus — jeder Render vor dieser Runde bleibt unverändert) und einen Mischanteil
+`sfx.wander_send` (0..1, Default 0,85). Bei `sfx.wander=1` ersetzt jede Stimme außer dem Sub Drop (der
+bleibt mittig und mono unter dem Kick, wie schon entworfen) zwei Dinge zugleich, beide reine Funktionen
+von `x`, dem Ereignis-Fortschritt (0 beim Einsatz, 1 auf dem Zielschlag), den jeder Typ schon für seine
+eigene Hüllkurve führt — also block-größen-unabhängig aus demselben Grund wie der Rest der Stimme:
+- die oszillierende Auto-Pan (`panPh`/`panRate`) durch eine gerichtete Bahn: `pan(x) = panFrom + (panTo -
+  panFrom) · x^panCurve`. Richtung, wie weit "hinten" die Startseite liegt und die Kurvenform werden einmal
+  bei `trigger()` aus dem Seed-Strom der Stimme gezogen (`Voice::rng`) — die Seite ist die Entscheidung des
+  Seeds, nicht immer links-nach-rechts.
+- den konstanten `sfx.hall_send`-Anteil des ganzen Trockensignals durch eine Überblendung:
+  `wetFrac(x) = smoothstep(x^wetExpo) · sfx.wander_send`, exakt 0 beim Einsatz und exakt `sfx.wander_send`
+  auf dem Zielschlag, gleich welchen `wetExpo` der Seed gezogen hat (0^k = 0 und 1^k = 1 für jedes k > 0).
+  `Sfx::processSplit()` teilt jede schon gepannte, schon gefilterte Probe in `(1 - wetFrac)` fürs normale
+  Trockensignal und `wetFrac` in einen zweiten, neuen `wet`-Ausgang; die beiden Anteile ergeben addiert
+  wieder exakt die ungeteilte Probe, also wird keine Energie erzeugt oder verloren, nur umgeleitet.
+
+Verdrahtung in `Engine.cpp` (renderSegment()): der wachsende `wet`-Anteil (`sfxWetL_`/`sfxWetR_`) wird
+direkt zum bestehenden, gewöhnlichen Hall-Send addiert (`hallInL_`/`hallInR_`) — nicht zum gerade gelandeten
+`Engine::hallGate_`. Abwägung, wie vom Auftrag verlangt: `hallGate_`s Eigen-Sidechain-Duck zieht den
+Rückweg herunter, solange der Send laut ist, und sein Taktschnitt würde einen Hallschwanz kappen, der
+absichtlich über die Taktgrenze hinaus klingen soll — beides widerspricht einer Bahn, die genau darauf
+gebaut ist, zum Ende hin laut in einen langen Schwanz zu wachsen. Der gewöhnliche Hall (`Engine::hall_`)
+passt dagegen ohne Anpassung: dieselbe Instanz, die `sfx.hall_send` schon bedient (kein dritter Hall), mit
+konfigurierbarem, tempo-unabhängigem Zerfall. Der trockene Anteil verliert dieselbe Energie, die der
+wachsende Send gewinnt, sodass die beiden Pfade sich ergänzen statt sich zu verdoppeln.
+
+*Gemessen* (`Tests/selftest.cpp`, `testWanderingFx`, unabhängig von der Sfx-eigenen Zufallsziehung
+hergeleitet: bei x=0 ist 0^k = 0 und bei x=1 ist 1^k = 1 für jedes vom Seed gezogene k, also sind beide
+Endpunkte exakt vorhersagbar ohne die konkrete Ziehung zu kennen):
+- Reverb-Send-Bahn direkt an `Sfx::processSplit()`: beim ersten Sample exakt 0,000000/0,000000 (trocken),
+  auf dem Zielschlag (x=1, `sfx.wander_send=0,8`) exakt Verhältnis 0,80000/0,80000 zwischen wet- und
+  Gesamtsignal — unabhängig davon, welchen Kurvenexponenten der Seed für dieses Ereignis gezogen hat.
+- Pan-Bahn: Stereo-Schwerpunkt in den ersten 50-150 ms eines zwei Sekunden langen Sweep-Ereignisses
+  -0,4756 (linkslastig), in den letzten 150-50 ms +0,5354 (rechtslastig) — entgegengesetzte Seiten, keine
+  Oszillation.
+- Verdrahtung über den vollen Engine-Prozesspfad (Chunk/Takt-Threading, `fx.hall_return` 96 dB
+  Unterschied isoliert wie bei `testGatedReverb` genau den Hall-Rückweg-Term): bei `sfx.wander=1` wächst
+  der Hall-Rückweg von -100,1 dB in den ersten 250 ms auf -44,1 dB im Schwanz (1,5..2,3 s) — +56,0 dB;
+  bei `sfx.wander=0` ändert `fx.hall_return` nichts (-240,0 dB, kein Pfad erreicht den Hall).
+- Kick/Bass-Nachweis (Korrelations-/Mono-Summen-Prüfung unter 140 Hz, acht Takte mit Kick, Bass und zwei
+  Effektereignissen, `sfx.wander` an gegen aus, zeitgespiegelte 140-Hz-Kaskade gegen Phasenverzerrung):
+  Korrelation 1,00000000, Mono-Summen-Differenz -83,3 dB gegen die eigene Energie des unveränderten
+  Signals — Kick und Bass laufen durch keine der beiden neuen Codestellen.
+
+*Prüfungen, neu.* `testWanderingFx` (7 Prüfungen, alle zuerst rot gesehen: siehe Mutationstabelle — jede
+der fünf Mutationen ist eine der fünf Wege, wie diese Prüfungen vor der richtigen Formel/Verdrahtung
+tatsächlich rot waren): die beiden Endpunkte der Send-Bahn in geschlossener Form, die Pan-Bahn als
+Seitenwechsel, `sfx.wander` per Default aus, die Engine-Verdrahtung über `fx.hall_return`-Differenz, der
+Kick/Bass-Nachweis.
+
+*Mutationen* (eingebaut, mit `--only testWanderingFx` geprüft, aus der Kopie zurück, Zeitstempel gesetzt,
+`git diff` danach leer):
+
+| Mutation | Wer merkt es |
+|---|---|
+| Pan bei `x^panCurve · 0` eingefroren (Bahn ignoriert `x`) | „pan sits on opposite sides…" (früh/spät dieselbe Seite) |
+| Send-Bahn bei `x + 0,05` statt `x` (Einsatz nicht mehr exakt trocken) | beide Send-Endpunkt-Prüfungen (0,000006 statt 0, 0,79569 statt 0,8) |
+| Smoothstep-Koeffizient `3 - 2,5x` statt `3 - 2x` (Zielschlag nicht mehr exakt `wander_send`) | Send-Endpunkt auf dem Zielschlag (0,4 statt 0,8) |
+| `hallInL_`/`hallInR_` bekommen `sfxWetL_`/`sfxWetR_` nicht addiert | Engine-Verdrahtung („grows well past the event's onset…", 0,0 dB Wachstum statt +56 dB) |
+| Trockenanteil nicht um `wl` reduziert (`L[i] += l` statt `l - wl`, Energie verdoppelt statt umgeleitet) | Send-Endpunkt auf dem Zielschlag (0,44444 statt 0,8) |
+
+*Gehört* (`out\listen\wandering-fx`; `listen.py`-Standardschnipsel A/B/C unverändert bei Default-Parametern
+— das Feature ist aus, also wie zuvor unverändert bis auf das, was frühere Runden zwischen 0_before und
+heute geändert haben; zusätzlich, mit `sfx.wander=1 sfx.wander_send=0,85 fx.hall_return=-3` (statt -6, für
+den schnellen A/B hörbar) über `scratch/wandering-fx/listen_wander.py`:
+`A_track1_build_drop_WANDER.wav` und `C_track2_into_break_WANDER.wav`, dieselben Takte wie A und C):
+in **A** (Takt 24-72) das Sweep-Ereignis bei 36,41-39,72 s (Takt 46, 3,31 s lang) und das Reverse-Swell bei
+51,31-52,97 s (Takt 55, 1,66 s): beide wandern hörbar über das Stereofeld, während ihr Direktsignal zum
+Ende hin zurückgeht und der Hallschwanz an derselben Stelle lauter wird. In **C** (Takt 392-424) dieselbe
+Reverse-Swell-Figur bei 51,31-52,97 s (Takt 423, am Ende des Ausschnitts). Die genauen Start-/Zielseiten
+sind je Ereignis vom Seed gezogen (siehe oben) und nicht für jedes Ereignis gleich — das ist Absicht, "soll
+in der Lage sein", nicht "tut immer".
+
+*Endstand.* `ctest -C Release -j 8` im Plugin-Build (Zweig `wandering-fx`, ab master b04a9d5; `-j 8` statt
+12, weil `presence-test` zur selben Zeit auf derselben Maschine lief, per Prozessliste geprüft):
+**ERGEBNIS_EINSETZEN**. `ctest -L quick -j 12` vorab (vor dem parallelen Lauf, als die Maschine noch frei
+war): 61/61 grün in 11,8 s.
+
+*Dateien.* Core: `Sfx.h/.cpp`, `Engine.h/.cpp`, `Params.h/.cpp`; `Tests/selftest.cpp`; dieser Block.
+
+*Offen:* `sfx.wander` ist ein globaler Schalter für die ganze SFX-Stimme (wie `poly.hall_gate`), keine
+Entscheidung des Komponisten je Ereignis (Form.cpp bleibt unangetastet) — welche Ereignisse wandern und
+welche nicht, ist für eine spätere Runde. Nur der gewöhnliche Hall trägt die Bahn; `Engine::hallGate_`
+bleibt aus den oben genannten Gründen außen vor, könnte aber über einen eigenen, ungegateten Zugang
+denselben Raum teilen, falls der Nutzer das will.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

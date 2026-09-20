@@ -46,6 +46,27 @@
  *    square waves -- under a rising exponential envelope that ends on the target beat.
  *  - Formant voice, alien chatter, spoken word, voice chop: the Vocal part (Vocal.h).
  *  - Singing bowl, didgeridoo, jaw harp: the Texture part (Texture.h).
+ *
+ * **20.09.2026, round "wandering-fx": effects that move through the room.** The user's rule of
+ * 19.09.2026: a psychedelic effect event should be able to start far to one side, morph across the
+ * stereo field, and dissolve into a long reverb tail while kick and bass stay dry and mono. `sfx.wander`
+ * (off by default, so no render before this round changes) replaces, for every voice but the sub drop
+ * (which stays centred under the kick by design), two things at once:
+ *  - the oscillating auto-pan (`panPh`/`panRate`) with a directed trajectory: `pan(x) = panFrom +
+ *    (panTo - panFrom) * x^panCurve`, `x` the event's own elapsed fraction (0 at onset, 1 at its target
+ *    beat) already used by every type's synthesis above, so the sweep is exactly as block-size
+ *    independent as the rest of the voice. Direction, "how far back" and the ease of the curve are drawn
+ *    once at trigger() from the event's own seed (`Voice::rng`), not fixed to always run left to right.
+ *  - the constant `sfx.hall_send` fraction of the (whole) dry signal with a trajectory that crosses from
+ *    dry to wet over the same `x`: `wetFrac(x) = smoothstep(x^wetExpo) * sfx.wander_send`, 0 at onset and
+ *    exactly `sfx.wander_send` at the target beat, whatever `wetExpo` the seed drew (0^k = 0 and 1^k = 1
+ *    for any k > 0). `Sfx::processSplit()` splits each voice's already-panned, already-filtered sample
+ *    into `(1 - wetFrac)` for the ordinary dry buffer and `wetFrac` for a second, `wet` buffer Engine.cpp
+ *    adds directly into the plain hall's send (not `Engine::hallGate_`: that hall's self-duck pulls its
+ *    return down while a send is loud and its bar-line cut would truncate a tail that is meant to run on
+ *    -- both fight a trajectory built to grow loud towards a long tail; docs/PLAN.md has the reasoning).
+ *    The dry buffer's own share of `sfx.hall_send`/`sfx.room_send` shrinks together with it, so the two
+ *    paths are complementary rather than double-counted.
  */
 #pragma once
 #include "phos/Dsp.h"
@@ -119,13 +140,20 @@ public:
      * @param late     how many samples ago it ideally started (0 <= late < 1)
      */
     void trigger(SfxType type, int samples, float velocity, double late);
-    /** @brief Renders @p n stereo samples, replacing @p L and @p R; a sub drop is added to both, centred. */
+    /**
+     * @brief Renders @p n stereo samples, replacing @p L and @p R; a sub drop is added to both, centred.
+     *        A wandering event's growing reverb-send trajectory (sfx.wander) is folded back in here too
+     *        -- this call has no reverb to hand it to -- so it stays audible for direct callers/tests.
+     */
     void process(float* L, float* R, int n);
     /**
      * @brief Renders @p n samples: everything but the sub drop into @p L and @p R, the sub drop alone
-     *        (mono, unfiltered) into @p sub. All three are replaced.
+     *        (mono, unfiltered) into @p sub, and a wandering event's reverb-send trajectory (Sfx.h,
+     *        sfx.wander) -- energy the dry @p L/@p R lose as it grows towards the event's tail -- into
+     *        @p wetL/@p wetR. All five are replaced. @p wetL/@p wetR are silent whenever sfx.wander is
+     *        off (every existing caller is unaffected).
      */
-    void processSplit(float* L, float* R, float* sub, int n);
+    void processSplit(float* L, float* R, float* sub, float* wetL, float* wetR, int n);
     /** @brief Voices sounding. */
     int active() const;
 
@@ -146,8 +174,17 @@ private:
         double bubT[kBubbles] = {}, bubF[kBubbles] = {}, bubTau[kBubbles] = {}, bubRise[kBubbles] = {}, bubPh[kBubbles] = {};
         int bubbles = 0;
         uint64_t age = 0;
+        /// @name The wandering trajectory (20.09.2026, round "wandering-fx"), drawn once at trigger()
+        /// from this voice's own seed stream; unused while `wander` is false (the SubDrop type and every
+        /// voice while sfx.wander is off).
+        /// @{
+        bool wander = false;
+        float panFrom = -1.0f, panTo = 1.0f;   ///< pan at x = 0 and x = 1 (before the sfx.width scale)
+        float panCurve = 1.0f;                 ///< pan(x) eases with x^panCurve
+        float wetExpo = 1.0f;                  ///< the dry/wet crossfade eases with x^wetExpo
+        /// @}
     };
-    float voiceSample(Voice& v, float& pan);
+    float voiceSample(Voice& v, float& pan, float& wetFrac);
 
     double sr_ = 48000.0;
     Voice voice_[kVoices];
@@ -155,6 +192,8 @@ private:
     int keyRoot_ = 6;
     float level_ = 0.5f, noise_ = 0.6f, resonance_ = 0.5f, brightness_ = 0.5f, impactDecay_ = 1.2f, vowel_ = 0.0f, swellDecay_ = 1.5f, width_ = 0.7f;
     float subLevel_ = 0.5f;
+    bool wander_ = false;          ///< sfx.wander
+    float wanderSend_ = 0.85f;     ///< sfx.wander_send
 };
 
 } // namespace phos

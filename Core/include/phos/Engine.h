@@ -53,6 +53,14 @@
  *  - the sub drop leaves the SFX generator on its own mono output and joins kick and bass in the
  *    centre, under a ducker the kick triggers (sfx.sub_duck), so it never sits on a kick transient.
  *
+ * **Wandering effects (20.09.2026, round "wandering-fx").** With `sfx.wander` on, an effect voice's pan
+ * sweeps across the field instead of oscillating and its content crosses from dry to the hall's send over
+ * its own length (Sfx.h); the growing wet share (`sfxWetL_`/`sfxWetR_`) is added straight into the plain
+ * hall's send in renderSegment(), alongside the (correspondingly shrinking) dry mix's own constant
+ * sfx.hall_send fraction -- not into Engine::hallGate_, whose self-duck and bar-line cut are built for a
+ * continuous voice, not a one-shot event's own growing trajectory into a tail that is meant to run past
+ * the bar. Off by default, so no existing render changes.
+ *
  * **Threads.** process() runs on the audio thread and never allocates. The push functions may be
  * called from one other thread. Parameters may be written from any thread.
  */
@@ -220,6 +228,10 @@ private:
     Poly poly_[kPolyInstances];
     Sfx sfx_;
     std::vector<float> acidL_, acidR_, polyL_[kPolyInstances], polyR_[kPolyInstances], sfxL_, sfxR_;
+    /// The wandering trajectory's reverb-send share (20.09.2026, round "wandering-fx"; Sfx.h,
+    /// sfx.wander): energy the dry sfxL_/sfxR_ above lose as an event nears its tail, added straight into
+    /// the plain hall's send in renderSegment() -- silent whenever sfx.wander is off.
+    std::vector<float> sfxWetL_, sfxWetR_;
 
     Texture texture_;
     Vocal vocal_;

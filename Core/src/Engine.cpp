@@ -64,7 +64,7 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
         poly_[i].prepare(sr_);
         poly_[i].setQuality(quality_.polyUnison[i], quality_.polyVoices[i]);
     }
-    for (auto* b : { &sfxL_, &sfxR_, &roomInL_, &roomInR_, &hallInL_, &hallInR_, &roomOutL_, &roomOutR_, &hallOutL_, &hallOutR_,
+    for (auto* b : { &sfxL_, &sfxR_, &sfxWetL_, &sfxWetR_, &roomInL_, &roomInR_, &hallInL_, &hallInR_, &roomOutL_, &roomOutR_, &hallOutL_, &hallOutR_,
                      &texL_, &texR_, &vocL_, &vocR_, &vocThrow_, &subBuf_, &throwIn_, &sendL_, &sendR_,
                      &hallGateInL_, &hallGateInR_, &hallGateOutL_, &hallGateOutR_ })
         b->assign(static_cast<size_t>(kChunk), 0.0f);
@@ -532,7 +532,7 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
             }
         }
     }
-    sfx_.processSplit(sfxL_.data(), sfxR_.data(), subBuf_.data(), count);
+    sfx_.processSplit(sfxL_.data(), sfxR_.data(), subBuf_.data(), sfxWetL_.data(), sfxWetR_.data(), count);
     texture_.process(texL_.data(), texR_.data(), count);
     vocal_.process(vocL_.data(), vocR_.data(), vocThrow_.data(), count);
     const double beat0 = chunkBeat_ + static_cast<double>(chunkPos_) * beatsPerSample_;
@@ -589,7 +589,10 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
         outL[i] = l + ml;
         outR[i] = r + mr;
         roomInL_[si] = rl; roomInR_[si] = rr;
-        hallInL_[si] = hl; hallInR_[si] = hr;
+        // The wandering SFX voices' growing reverb-send trajectory (Sfx.h, sfx.wander) joins the plain
+        // hall directly here -- it already left the dry mix in Sfx::processSplit(), so it is not counted
+        // again through stripHall_[StripSfx] above, and it bypasses the gated hall (Engine.h has why).
+        hallInL_[si] = hl + sfxWetL_[si]; hallInR_[si] = hr + sfxWetR_[si];
         hallGateInL_[si] = hgl; hallGateInR_[si] = hgr;
         sendL_[si] = fl; sendR_[si] = fr;
     }

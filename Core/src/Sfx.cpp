@@ -86,6 +86,8 @@ void Sfx::update(const float* v, int keyRoot)
     swellDecay_ = v[sfx::SwellDecay] * 0.001f;
     width_ = v[sfx::Width];
     subLevel_ = dbToGain(v[sfx::SubLevel]);
+    wander_ = v[sfx::Wander] >= 0.5f;
+    wanderSend_ = v[sfx::WanderSend];
 }
 
 int Sfx::active() const
@@ -145,9 +147,24 @@ void Sfx::trigger(SfxType type, int samples, float velocity, double late)
     }
     v.panPh = 0.25;
     v.typeGain = dbToGain(kTypeGainDb[static_cast<int>(type)]);
+    // 20.09.2026, round "wandering-fx": the directed trajectory (Sfx.h), drawn once here from the
+    // voice's own seed stream so a fresh Sfx (Sfx::reset() reseeds every voice the same way) draws the
+    // same shape every time it plays this slot in this position in the stream. Not the sub drop: it
+    // stays centred and mono under the kick by its own design (Sfx.h), and a growing send into the hall
+    // would fight the depth rule (the return's low cut never goes below 150 Hz).
+    v.wander = wander_ && type != SfxType::SubDrop;
+    if (v.wander) {
+        const bool leftToRight = v.rng.below(2) == 0;   // the seed's choice, not always left to right
+        const float a = 0.75f + 0.20f * v.rng.uniform();   // 0.75 .. 0.95: "far back" on its start side
+        const float b = 0.75f + 0.20f * v.rng.uniform();   // its own draw for the far side it ends on
+        v.panFrom = leftToRight ? -a : b;
+        v.panTo = leftToRight ? b : -a;
+        v.panCurve = 0.6f + 1.2f * v.rng.uniform();   // 0.6 .. 1.8: eases in or out, never a straight ramp
+        v.wetExpo = 0.6f + 1.4f * v.rng.uniform();    // 0.6 .. 2.0: some events turn wet early, some late
+    }
 }
 
-float Sfx::voiceSample(Voice& v, float& pan)
+float Sfx::voiceSample(Voice& v, float& pan, float& wetFrac)
 {
     const float sr = static_cast<float>(sr_);
     const double posD = static_cast<double>(v.pos) + v.late;
@@ -292,47 +309,76 @@ float Sfx::voiceSample(Voice& v, float& pan)
         amp *= static_cast<float>(std::max(0.0, 1.0 - over / fade));
         if (over >= fade) v.on = false;
     }
-    v.panPh += panRate / sr_;
-    if (v.panPh >= 1.0) v.panPh -= 1.0;
-    pan = width_ * static_cast<float>(std::sin(2.0 * kPiD * v.panPh));
+    if (v.wander) {
+        // A directed sweep instead of the oscillation: pan(x) eases from panFrom to panTo with the
+        // event's own curve exponent. x is the same absolute-position fraction every type's synthesis
+        // above already uses (posD / length, capped at 1), so the sweep needs no state of its own beyond
+        // it -- block-size independent for the same reason the rest of the voice is (Engine.h).
+        const double xp = std::pow(x, static_cast<double>(v.panCurve));
+        pan = width_ * static_cast<float>(v.panFrom + (v.panTo - v.panFrom) * xp);
+    } else {
+        v.panPh += panRate / sr_;
+        if (v.panPh >= 1.0) v.panPh -= 1.0;
+        pan = width_ * static_cast<float>(std::sin(2.0 * kPiD * v.panPh));
+    }
     ++v.pos;
-    return s * amp * v.velocity * v.typeGain;
+    const float total = s * amp * v.velocity * v.typeGain;
+    if (v.wander) {
+        // Dry at onset, wet by the tail: a smoothstep of x^wetExpo, so wetFrac(0) = 0 and wetFrac(1) =
+        // wander_send exactly, whatever wetExpo this event's seed drew (0^k = 0, 1^k = 1 for any k > 0)
+        // -- the closed form Tests/selftest.cpp checks against (testWanderingFx).
+        const double xe = std::pow(x, static_cast<double>(v.wetExpo));
+        const double sm = xe * xe * (3.0 - 2.0 * xe);
+        wetFrac = static_cast<float>(clampv(sm, 0.0, 1.0)) * wanderSend_;
+    } else {
+        wetFrac = 0.0f;
+    }
+    return total;
 }
 
 void Sfx::process(float* L, float* R, int n)
 {
-    float sub[64];
+    float sub[64], wetL[64], wetR[64];
     for (int done = 0; done < n; done += 64) {
         const int m = std::min(64, n - done);
-        processSplit(L + done, R + done, sub, m);
-        for (int i = 0; i < m; ++i) { L[done + i] += sub[i]; R[done + i] += sub[i]; }
+        processSplit(L + done, R + done, sub, wetL, wetR, m);
+        // This call has no reverb to hand the wandering trajectory's wet share to (that is Engine.cpp's
+        // job, Engine.h), so it folds it straight back into the dry output alongside the sub drop --
+        // energy-preserving and silent when sfx.wander is off, since wetL/wetR are then exactly zero.
+        for (int i = 0; i < m; ++i) { L[done + i] += sub[i] + wetL[i]; R[done + i] += sub[i] + wetR[i]; }
     }
 }
 
-void Sfx::processSplit(float* L, float* R, float* sub, int n)
+void Sfx::processSplit(float* L, float* R, float* sub, float* wetL, float* wetR, int n)
 {
-    for (int i = 0; i < n; ++i) { L[i] = 0.0f; R[i] = 0.0f; sub[i] = 0.0f; }
+    for (int i = 0; i < n; ++i) { L[i] = 0.0f; R[i] = 0.0f; sub[i] = 0.0f; wetL[i] = 0.0f; wetR[i] = 0.0f; }
     for (Voice& v : voice_) {
         if (!v.on) continue;
         if (v.type == SfxType::SubDrop) {
             // Mono and unfiltered: the engine puts it in the centre with kick and bass.
             for (int i = 0; i < n && v.on; ++i) {
-                float pan = 0.0f;
-                sub[i] += voiceSample(v, pan) * level_ * subLevel_;
+                float pan = 0.0f, wetFrac = 0.0f;
+                sub[i] += voiceSample(v, pan, wetFrac) * level_ * subLevel_;
             }
             continue;
         }
         for (int i = 0; i < n && v.on; ++i) {
-            float pan = 0.0f;
-            const float s = voiceSample(v, pan) * level_;
+            float pan = 0.0f, wetFrac = 0.0f;
+            const float s = voiceSample(v, pan, wetFrac) * level_;
             const double theta = (static_cast<double>(clampv(pan, -1.0f, 1.0f)) + 1.0) * kPiD / 4.0;
             float l = s * static_cast<float>(std::cos(theta) * 1.41421356);
             float r = s * static_cast<float>(std::sin(theta) * 1.41421356);
             float lp, bp, hp;
             v.hpL1.tick(l, lp, bp, hp); v.hpL2.tick(hp, lp, bp, l);
             v.hpR1.tick(r, lp, bp, hp); v.hpR2.tick(hp, lp, bp, r);
-            L[i] += l;
-            R[i] += r;
+            // The crossfade: the same panned, filtered sample split into a shrinking dry share and a
+            // growing wet share, so L + wetL (and R + wetR) always equals the sample before this split --
+            // no energy is created or lost, only rerouted towards the hall as the event nears its tail.
+            const float wl = l * wetFrac, wr = r * wetFrac;
+            L[i] += l - wl;
+            R[i] += r - wr;
+            wetL[i] += wl;
+            wetR[i] += wr;
         }
     }
 }
