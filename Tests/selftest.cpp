@@ -11559,21 +11559,23 @@ void testClimax()
         // 20.09.2026, round "climax-polish", gap (a): the polish round's own residual, measured again on 30
         // tracks (5 styles, 2 seeds, 3 tracks; PhospheneWork/scratch/climax-polish/brightness_gap.py) with
         // this round's form -- the big buildup's last eight bars against drop 2's own brightest eight-bar
-        // group, both above 1.5 kHz: median +0.61 dB (was +0.90 dB before this round on the same 30 tracks,
-        // and +2.2 dB before the polish round), worst case +2.20 dB (was +2.52 dB), 20 of 30 tracks still
+        // group, both above 1.5 kHz: median +0.62 dB (was +0.90 dB before this round on the same 30 tracks,
+        // and +2.2 dB before the polish round), worst case +2.39 dB (was +2.52 dB), 20 of 30 tracks still
         // with the buildup brighter (unchanged count -- the fix narrows the margin, it does not close every
-        // one; Progressive's short buildup was never the problem and stays negative throughout). The two
-        // changes: the roll's sixteenths now also take a trim of their own (Rhythm.cpp, rollScale), and the
-        // big buildup's second, stacked riser is two bars instead of four (Form.cpp) -- it still reaches the
-        // same peak at the same instant ("arrive"), only over half the time. Opening drop 2's filter further
-        // (kClimaxOpen) was tried first and measured to do nothing at all: Composer.cpp's cutoffAt already
-        // pushes the climax's acid and lead cutoff to the knob's own ceiling, so there was no headroom left
-        // to open into -- see the name block above kClimaxOpen (Form.h). On this render (the listening seed,
-        // style 1's first track) the gap is a smaller +0.31 dB (was +0.51 before this round's two changes,
-        // seen failing a 0.45 dB threshold first); style 2 (Progressive) was already negative both times.
-        // 0.45 sits between the two so an unrelated future change cannot pass it by accident, but it is
-        // tight to this one seed and not the 30-track median above -- do not read a pass here as "the gap
-        // is gone everywhere".
+        // one; Progressive's short buildup was never the problem and stays negative throughout). The one
+        // change that earns this: the roll's sixteenths now also take a trim of their own (Rhythm.cpp,
+        // rollScale), not only the thirty-seconds. Two others were tried and measured to do nothing, and are
+        // not in the code: opening drop 2's filter further (kClimaxOpen 0.05 -> 0.09) -- Composer.cpp's
+        // cutoffAt already pushes the climax's acid and lead cutoff to the knob's own ceiling, so the render
+        // came out bit-identical; and shortening the buildup's second, stacked riser from four bars to two
+        // (its amplitude is u^2 of its own position, so it still peaks at the same instant either way) --
+        // a mutation of this exact change (Form.cpp reverted to four bars, rollScale left trimmed) passed
+        // this very check unchanged, +0.31 dB both ways, so it was reverted rather than kept for nothing.
+        // On this render (the listening seed, style 1's first track) the gap is a smaller +0.31 dB (was
+        // +0.51 before the roll trim, seen failing a 0.45 dB threshold first); style 2 (Progressive) was
+        // already negative both times. 0.45 sits between the two so an unrelated future change cannot pass
+        // it by accident, but it is tight to this one seed and not the 30-track median above -- do not read
+        // a pass here as "the gap is gone everywhere".
         {
             int b2i = d2 - 1;
             check(b2i >= 0 && tp.form.section[b2i].type == SectionType::Build, "the climax drop's preceding section is the big buildup");

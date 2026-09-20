@@ -1081,9 +1081,9 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity, f
             // Dibben found to be the marker listeners react to. Since 19.09.2026 (the user's rule: "on
             // beat 4 of the last bar before the drop everything stops") both end on beat 4 of that bar,
             // and beat 4 holds exactly one thing: a vocal (a voice chop) or a single laser zap, drawn per
-            // buildup. The big buildup's riser climbs over sixteen bars and a second one stacks on it near
-            // the end -- "risers pitch up to the extreme". A buildup without a pre-drop break (Dark
-            // Forest's first) runs its riser into the drop and leaves beat 4 alone.
+            // buildup. The big buildup's riser climbs over sixteen bars and a second one over the last
+            // four stacks on it -- "risers pitch up to the extreme". A buildup without a pre-drop break
+            // (Dark Forest's first) runs its riser into the drop and leaves beat 4 alone.
             const bool stop = s.pdbBars > 0;
             const double arrive = stop ? end - 1.0 : end;
             const double rise = std::min(s.bars >= 32 ? 16.0 : 8.0, static_cast<double>(s.bars)) * bar;
@@ -1094,14 +1094,7 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity, f
             if (mark() && stop) add(end - 1.0, 1.0f, voice ? SfxType::VoiceChop : SfxType::Zap);
             if (mark() && !dry) add(arrive - 2.0 * bar, static_cast<float>(2.0 * bar), SfxType::Sweep);
             if (mark() && !dry) add(end, 4.0f, SfxType::Impact);
-            // 20.09.2026, round "climax-polish": the second riser's own four bars, stacked on the first's
-            // last four, doubled the buildup's power above 1.5 kHz over exactly the eight bars the drop is
-            // measured against (testClimax, and the polish round's own 30-track scan) -- two full-length
-            // risers ending together, not one climbing further. Two bars keeps the same peak at the same
-            // instant (the riser's amplitude is u^2 of its own position, so it still reaches full cry at
-            // "arrive") but for half the time, which is what a listener hears as "extreme": the stack
-            // itself, arriving late and fast, not a longer second climb underneath the first.
-            if (s.bars >= 32 && mark()) add(arrive - 2.0 * bar, static_cast<float>(2.0 * bar), SfxType::Riser);
+            if (s.bars >= 32 && mark()) add(arrive - 4.0 * bar, static_cast<float>(4.0 * bar), SfxType::Riser);
         } else if (s.type == SectionType::Break) {
             if (i > 0 && mark()) add(start - bar, static_cast<float>(bar), SfxType::ReverseSwell);
             if (mark()) add(start, static_cast<float>(4.0 * bar), SfxType::Downlifter);
