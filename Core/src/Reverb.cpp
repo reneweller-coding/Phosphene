@@ -3,6 +3,7 @@
  * @brief FDN reverb implementation.
  */
 #include "phos/Reverb.h"
+#include "phos/Clock.h"
 #include <algorithm>
 #include <cmath>
 
@@ -10,6 +11,7 @@ namespace phos {
 
 namespace {
 int pow2At(int n) { int p = 1; while (p < n) p <<= 1; return p; }
+constexpr double kPiD = 3.14159265358979323846;
 
 /**
  * @brief Which output channel each delay line feeds, and which input it is driven by (1 = left).
@@ -74,6 +76,7 @@ void Reverb::reset()
     preCur_ = -1.0f;
     dcX_[0] = dcX_[1] = dcY_[0] = dcY_[1] = 0.0f;
     hcL_ = hcR_ = lcL1_ = lcR1_ = lcL2_ = lcR2_ = 0.0f;
+    duckEnv_ = 0.0f;
 }
 
 void Reverb::set(float size, float decaySeconds, float damping, float preDelaySamples, float lowCutHz, float highCutHz)
@@ -159,6 +162,47 @@ void Reverb::process(const float* inL, const float* inR, float* outL, float* out
         outR[i] = aR - lcR2_;
         w_ = (w_ + 1) & mask_;
     }
+}
+
+void Reverb::setDuck(float depth, float thresholdDb, float attackS, float releaseS)
+{
+    duckDepth_ = clampv(depth, 0.0f, 1.0f);
+    duckThreshold_ = dbToGain(thresholdDb);
+    duckAttackC_ = 1.0f - std::exp(-1.0f / (std::max(attackS, 0.0005f) * static_cast<float>(sr_)));
+    duckReleaseC_ = 1.0f - std::exp(-1.0f / (std::max(releaseS, 0.0005f) * static_cast<float>(sr_)));
+}
+
+void Reverb::processDucked(const float* inL, const float* inR, float* outL, float* outR, int n)
+{
+    process(inL, inR, outL, outR, n);
+    for (int i = 0; i < n; ++i) {
+        // The send's own peak, above or below the threshold: no note events needed, the duck follows
+        // whatever actually reached this bus (stutters, level automation, the works).
+        const float lvl = std::max(std::fabs(inL[i]), std::fabs(inR[i]));
+        const float target = lvl > duckThreshold_ ? 1.0f : 0.0f;
+        duckEnv_ += (target - duckEnv_) * (target > duckEnv_ ? duckAttackC_ : duckReleaseC_);
+        const float g = 1.0f - duckDepth_ * duckEnv_;
+        outL[i] *= g;
+        outR[i] *= g;
+    }
+}
+
+float Reverb::barGate(double beat, double closeBeats, double holdBeats, double openBeats, float floorGain)
+{
+    const double bars = beat / static_cast<double>(kBeatsPerBar);
+    double sinceBar = (bars - std::floor(bars)) * static_cast<double>(kBeatsPerBar);
+    if (sinceBar < 0.0) sinceBar += static_cast<double>(kBeatsPerBar);   // guard: beat < 0 in a test
+    const double c = std::max(closeBeats, 1e-6), h = std::max(holdBeats, 0.0), o = std::max(openBeats, 1e-6);
+    if (sinceBar < c) {
+        const double x = sinceBar / c;
+        return floorGain + (1.0f - floorGain) * static_cast<float>(0.5 + 0.5 * std::cos(kPiD * x));
+    }
+    if (sinceBar < c + h) return floorGain;
+    if (sinceBar < c + h + o) {
+        const double x = (sinceBar - c - h) / o;
+        return floorGain + (1.0f - floorGain) * static_cast<float>(0.5 - 0.5 * std::cos(kPiD * x));
+    }
+    return 1.0f;
 }
 
 } // namespace phos

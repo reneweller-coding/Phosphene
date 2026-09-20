@@ -20,8 +20,12 @@
  *
  * **Signal flow.** Every generator renders into its own buffer. Its channel strip applies the level, the
  * kick's sidechain duck (event-driven, Ducker.h), the trance gate for lead, arp and pad (TranceGate.h),
- * and sends to a short room and a long hall (Reverb.h), whose returns are ducked as well. The master
- * sums everything, applies the gain (knob, the track's level match and the composer's loudness offset),
+ * and sends to a short room and a long hall (Reverb.h), whose returns are ducked as well. A voice whose
+ * own `hall_gate` is on (poly.hall_gate, acid.hall_gate; 20.09.2026, round "reverb") sends into a second,
+ * dedicated hall instead: a big space that ducks by its own send's envelope and is cut hard on the
+ * absolute bar line (Reverb::processDucked, Reverb::barGate) -- off by default, so it changes nothing
+ * for a voice that never turns it on. The master sums everything, applies the gain (knob, the track's
+ * level match and the composer's loudness offset),
  * the bus compressor, mono bass (the side signal high-passed), the soft clipper, the band limit that
  * gives the programme an upper end (Dsp.h, BandLimit), the lookahead true-peak limiter and a final
  * safety clip at the ceiling, and meters the result to BS.1770 (Dynamics.h, Loudness.h). With the
@@ -272,6 +276,24 @@ private:
     Reverb room_, hall_;
     float roomReturn_ = 0.5f, hallReturn_ = 0.5f;
     std::vector<float> roomInL_, roomInR_, hallInL_, hallInR_, roomOutL_, roomOutR_, hallOutL_, hallOutR_;
+    /**
+     * @name The gated hall (20.09.2026, round "reverb"; A2-gated-reverb.md)
+     * A second, dedicated hall a voice's hall_send is routed into instead of the plain one when its own
+     * `hall_gate` is on (poly.hall_gate, acid.hall_gate) -- so gating is an independent per-voice choice
+     * and never touches the plain hall's tail for the voices that leave it alone. Recipe is fixed
+     * (Engine.cpp, applyParams()): the brief names a result ("a big hall ... ducked ... cut hard"), not
+     * a set of knobs. hallGateOn_ is indexed like Strip (Reverb.h `Strip` below), so an off entry for a
+     * strip that never sets it (perc, sfx, texture, vocal) reads false, its default.
+     * @{
+     */
+    Reverb hallGate_;
+    std::vector<float> hallGateInL_, hallGateInR_, hallGateOutL_, hallGateOutR_;
+    bool hallGateOn_[StripCount] = {};
+    /// closeBeats_/holdBeats_/openBeats_ converted each chunk from fixed ms constants at the current
+    /// tempo (Reverb::barGate() takes beats, like TranceGate::open() -- the same reason: tempo ramps
+    /// between chunks, beats do not drift with it).
+    double hallGateCloseBeats_ = 0.001, hallGateHoldBeats_ = 0.0, hallGateOpenBeats_ = 0.001;
+    /** @} */
 
     BusCompressor comp_;
     Svf sideHp1_, sideHp2_;

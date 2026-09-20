@@ -6261,6 +6261,168 @@ void testReverb()
     check(low < -29.5, "reverb return with white noise in: under -29.5 dB of its power below 140 Hz", fmt("%.1f dB", low));
 }
 
+/**
+ * @brief The gated hall (20.09.2026, round "reverb"; briefs/A2-gated-reverb.md): a big hall ducked while
+ *        the synths play, cut hard on the absolute bar line, as an option per voice/bus.
+ *
+ * Three parts, each against a value derived independently of Reverb.cpp's own arithmetic: barGate()'s
+ * shape from its stated raised-cosine/hold/raised-cosine definition, the duck's depth and time constants
+ * from the exponential step response of a one-pole follower, and the engine wiring from the difference a
+ * routing bug would leave (no cut with the toggle off, no drop in level with it on).
+ */
+void testGatedReverb()
+{
+    section("gated hall");
+    // barGate(): stateless, a function of the absolute beat alone (Reverb.h/.cpp; Clock.h, kBeatsPerBar
+    // = 4). Chosen beats, not the round's own ms constants, so this exercises the formula and not a
+    // second copy of Engine.cpp's numbers.
+    {
+        const double close = 0.02, hold = 0.05, open = 0.03;   // beats
+        const float atLine   = Reverb::barGate(4.0, close, hold, open, 0.0f);
+        const float atFloor  = Reverb::barGate(4.0 + close, close, hold, open, 0.0f);
+        const float midHold  = Reverb::barGate(4.0 + close + 0.5 * hold, close, hold, open, 0.0f);
+        const float midOpen  = Reverb::barGate(4.0 + close + hold + 0.5 * open, close, hold, open, 0.0f);
+        const float reopened = Reverb::barGate(4.0 + close + hold + open, close, hold, open, 0.0f);
+        check(atLine == 1.0f && atFloor == 0.0f && midHold == 0.0f && std::fabs(midOpen - 0.5f) < 1e-6f && reopened == 1.0f,
+              "bar gate: open at the line, at the floor through the hold, half open halfway up the reopen, open again after",
+              fmt("%.4f %.4f %.4f %.4f %.4f", static_cast<double>(atLine), static_cast<double>(atFloor), static_cast<double>(midHold),
+                  static_cast<double>(midOpen), static_cast<double>(reopened)));
+        // A pure function of the beat, nothing carried between calls: the same phase inside a bar closes
+        // the same way whether that bar is bar 1 or bar 137 -- the "bar rendered alone" guarantee applied
+        // to the gate itself.
+        const float nearBar = Reverb::barGate(4.0 + close + hold + 0.5 * open, close, hold, open, 0.0f);
+        const float farBar = Reverb::barGate(137.0 * 4.0 + close + hold + 0.5 * open, close, hold, open, 0.0f);
+        check(std::fabs(nearBar - farBar) < 1e-5f, "bar gate: the same instant closes identically in a far-away bar",
+              fmt("%.6f vs %.6f", static_cast<double>(nearBar), static_cast<double>(farBar)));
+    }
+    // setDuck()/processDucked(): an envelope follower on the send itself, measured against the plain,
+    // unducked wet return of an identically configured, identically fed reverb -- since processDucked()
+    // only multiplies process()'s own output, the two are bit-identical before the duck, so the ratio
+    // measured below is exactly the duck's gain, not a side effect of the FDN's own level.
+    {
+        const double sr = 48000.0;
+        const float depth = 0.7f, thresholdDb = -50.0f, attackS = 0.015f, releaseS = 0.30f;
+        Reverb plain, ducked;
+        plain.prepare(sr);
+        ducked.prepare(sr);
+        plain.set(1.8f, 4.0f, 0.35f, 0.0f, 200.0f, 9000.0f);
+        ducked.set(1.8f, 4.0f, 0.35f, 0.0f, 200.0f, 9000.0f);
+        ducked.setDuck(depth, thresholdDb, attackS, releaseS);
+        // A quiet pre-roll first (well under the threshold, so the duck stays fully open through it) to
+        // warm the FDN's own delay lines: without it the wet return is exactly zero for the network's own
+        // diffusion latency (tens of ms, the shortest of the eight lines at this size), and the ratio
+        // below divides zero by zero right where the attack is measured. -60 dBFS peak keeps it under the
+        // -50 dBFS threshold with margin and still gives every line real, non-zero content to carry.
+        const size_t nPre = static_cast<size_t>(sr), nLoud = static_cast<size_t>(sr), nQuiet = static_cast<size_t>(sr);
+        const size_t n = nPre + nLoud + nQuiet;
+        std::vector<float> inL(n), inR(n), poL(n), poR(n), duL(n), duR(n);
+        Rng r;
+        for (size_t i = 0; i < nPre; ++i) {
+            inL[i] = 0.001f * static_cast<float>(std::sin(2.0 * kPiD * 233.0 * static_cast<double>(i) / sr));
+            inR[i] = inL[i];
+        }
+        for (size_t i = nPre; i < nPre + nLoud; ++i) {
+            const double t = static_cast<double>(i - nPre);
+            inL[i] = 0.4f * static_cast<float>(std::sin(2.0 * kPiD * 311.0 * t / sr)) + 0.05f * r.bipolar();
+            inR[i] = inL[i];
+        }
+        // inL/inR stay at the pre-roll's own last value's silence-adjacent level for the third: silence
+        // from nPre + nLoud on, well under the -50 dBFS threshold.
+        plain.process(inL.data(), inR.data(), poL.data(), poR.data(), static_cast<int>(n));
+        ducked.processDucked(inL.data(), inR.data(), duL.data(), duR.data(), static_cast<int>(n));
+        auto ratioDb = [&](size_t from, size_t to) {
+            double sp = 0.0, sd = 0.0;
+            for (size_t i = from; i < to; ++i) {
+                sp += static_cast<double>(poL[i]) * poL[i] + static_cast<double>(poR[i]) * poR[i];
+                sd += static_cast<double>(duL[i]) * duL[i] + static_cast<double>(duR[i]) * duR[i];
+            }
+            return 10.0 * std::log10(std::max(sd / sp, 1e-24));
+        };
+        // Steady state, long after the 15 ms attack has settled: the ratio is the depth alone.
+        const double settled = ratioDb(nPre + static_cast<size_t>(0.3 * sr), nPre + static_cast<size_t>(0.9 * sr));
+        const double wantDepthDb = 20.0 * std::log10(1.0 - static_cast<double>(depth));
+        check(std::fabs(settled - wantDepthDb) < 0.3, "duck settled: the send stays above threshold, so the ratio is 20 log10(1 - depth)",
+              fmt("%.2f dB (expected %.2f)", settled, wantDepthDb));
+        // One attack time constant after the send crosses the threshold at nPre: a one-pole step response
+        // is at 1 - 1/e there, so the envelope is 0.6321 and the gain 1 - depth * 0.6321. The window's own
+        // wet energy is dominated by the pre-roll's already-established tail, not by the still-arriving
+        // loud tone's own (still-diffusing) reflections, so it is never anywhere near zero here.
+        const size_t atSample = nPre + static_cast<size_t>(attackS * sr);
+        const double attackMeasured = ratioDb(atSample - 15, atSample + 15);
+        const double envAtTau = 1.0 - std::exp(-1.0);
+        const double wantAttackDb = 20.0 * std::log10(1.0 - static_cast<double>(depth) * envAtTau);
+        check(std::fabs(attackMeasured - wantAttackDb) < 0.5, "duck attack: one time constant in, the envelope is at 1 - 1/e (a one-pole step response)",
+              fmt("%.2f dB (expected %.2f)", attackMeasured, wantAttackDb));
+        // One release time constant after the send falls silent (nPre + nLoud), the envelope -- settled at
+        // 1 through the loud second -- has fallen to 1/e of it.
+        const size_t relSample = nPre + nLoud + static_cast<size_t>(releaseS * sr);
+        const double releaseMeasured = ratioDb(relSample - 15, relSample + 15);
+        const double wantReleaseDb = 20.0 * std::log10(1.0 - static_cast<double>(depth) * std::exp(-1.0));
+        check(std::fabs(releaseMeasured - wantReleaseDb) < 0.5, "duck release: one time constant after the send falls silent, the envelope is at 1/e",
+              fmt("%.2f dB (expected %.2f)", releaseMeasured, wantReleaseDb));
+    }
+    // Engine wiring (Engine.cpp send routing): a voice's hall_gate reroutes its hall send from the plain
+    // hall to the gated one -- never both, never neither -- and the gated hall's bar-line cut reaches the
+    // master output through the full chunked process() path (chunkBeat_, beatsPerSample_), not just the
+    // bare Reverb class tested above.
+    {
+        auto render = [](bool gate, float hallSend) {
+            auto e = std::make_unique<Engine>();
+            e->prepare(48000.0, 256);
+            e->params().parseText(fmt(
+                "master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 "
+                "mix.kick_mute=1 mix.bass_mute=1 mix.perc_mute=1 "
+                "fx.room_return=-36 fx.hall_return=6 pad.room_send=0 pad.hall_send=%.2f pad.duck=0 pad.level=-36 "
+                "pad.amp_attack=1 pad.amp_decay=1 pad.amp_sustain=1 pad.amp_release=2000 pad.hall_gate=%d",
+                static_cast<double>(hallSend), gate ? 1 : 0).c_str());
+            NoteEvent n;
+            n.part = Part::Pad; n.pitch = 60; n.length = 64.0f; n.velocity = 110;
+            e->pushEvent(n);
+            std::vector<float> L(48000 * 12), R(48000 * 12);
+            e->process(L.data(), R.data(), static_cast<int>(L.size()));
+            return L;
+        };
+        const std::vector<float> off = render(false, 1.0f), on = render(true, 1.0f);
+        // The dry pad's own settings (level -36 dB, a fast attack) push it well under the reverb return's
+        // reach, but at these settings the dry sum still outweighs the return by 10+ dB and its own slow
+        // table-position drift (kDefaultPoly, pad.pos_lfo_beats = 16, four bars) is on the same order as
+        // the return itself -- so a plain before/after window inside "on" cannot see the cut past the
+        // dry's own wander. The dry sum never reads stripHall_ (Engine.cpp: sl feeds l/r before the send
+        // terms are added, not after it), so it is bit-identical whichever hall a voice's send reaches, or
+        // none at all: a third render with hall_send=0 gives that dry sum exactly, and subtracting it out
+        // extracts the wet return with no approximation, not just an improved signal-to-dry ratio.
+        const std::vector<float> dry = render(false, 0.0f);
+        std::vector<float> wetOn(off.size()), wetOff(off.size());
+        for (size_t i = 0; i < wetOn.size(); ++i) { wetOn[i] = on[i] - dry[i]; wetOff[i] = off[i] - dry[i]; }
+        const double beat = 60.0 / 145.0 * 48000.0, bar = 4.0 * beat;
+        auto rmsDb = [&](const std::vector<float>& y, double fromSample, double toSample) {
+            double s = 0.0;
+            size_t n = 0;
+            for (size_t i = static_cast<size_t>(fromSample); i < static_cast<size_t>(toSample); ++i) { s += static_cast<double>(y[i]) * y[i]; ++n; }
+            return 10.0 * std::log10(std::max(s / n, 1e-24));
+        };
+        // Bar 6, long past the pad's 1 ms attack: "before" is the last 20 ms of the bar, "after" is
+        // 15 .. 35 ms into the next one -- inside the fixed close/hold window (Engine.cpp,
+        // kHallGateCloseMs = 8, kHallGateHoldMs = 40) -- "mid" is deep in the open part of the bar.
+        const double barStart = 6.0 * bar;
+        const double beforeOn = rmsDb(wetOn, barStart - 0.020 * 48000.0, barStart);
+        const double afterOn = rmsDb(wetOn, barStart + 0.015 * 48000.0, barStart + 0.035 * 48000.0);
+        const double midOn = rmsDb(wetOn, barStart + 0.55 * bar, barStart + 0.85 * bar);
+        // Measured (seed-independent, this render is deterministic): before -58 dB, after between -100
+        // and -186 dB depending how far the 480-sample window sits inside the hold, mid -52 dB -- the
+        // floor is silence to float precision (barGate's floorGain is exactly 0), so 40 dB is not a close
+        // call; the bound keeps a wide margin instead of chasing the exact residual.
+        check(beforeOn - afterOn > 40.0, "hall_gate on: the bar line takes the gated hall's return at least 40 dB down from just before it",
+              fmt("%.1f dB before, %.1f dB after (%.1f dB down)", beforeOn, afterOn, beforeOn - afterOn));
+        check(midOn - afterOn > 40.0, "hall_gate on: the same is true against the open part of the bar, not just the instant before the line",
+              fmt("%.1f dB mid-bar, %.1f dB after the line (%.1f dB down)", midOn, afterOn, midOn - afterOn));
+        const double beforeOff = rmsDb(wetOff, barStart - 0.020 * 48000.0, barStart);
+        const double afterOff = rmsDb(wetOff, barStart + 0.015 * 48000.0, barStart + 0.035 * 48000.0);
+        check(std::fabs(beforeOff - afterOff) < 3.0, "hall_gate off: hall_send still reaches the plain hall, no bar-line cut of its own",
+              fmt("%.1f dB before, %.1f dB after", beforeOff, afterOff));
+    }
+}
+
 void testDynamics()
 {
     section("master dynamics");
@@ -12862,6 +13024,7 @@ int main(int argc, char** argv)
     run("testPads", testPads);
     run("testGateAndDuck", testGateAndDuck);
     run("testReverb", testReverb);
+    run("testGatedReverb", testGatedReverb);
     run("testDynamics", testDynamics);
     run("testSfx", testSfx);
     run("testMaster", testMaster);

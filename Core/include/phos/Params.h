@@ -145,7 +145,12 @@ enum : int { Wave, Cutoff, Resonance, EnvAmount, Decay, Accent, SlideTime, AmpDe
              // Appended 16.09.2026 (acid colour round). New entries go at the end: the index of a
              // parameter is its position in this list and every stored set, preset and automation
              // slot refers to it by that index.
-             Disperse, DisperseFreq, Count };
+             Disperse, DisperseFreq,
+             // Appended 20.09.2026 (round "reverb"): routes hall_send into the gated hall (Reverb.h,
+             // Engine.cpp) instead of the plain one -- a big hall that ducks while this voice plays and
+             // is cut hard on the absolute bar line. Off by default: every render before this round is
+             // untouched.
+             HallGate, Count };
 }
 /** @brief Parameters of a polyphonic engine (module Poly, the six instances of PolyInstance). */
 namespace poly {
@@ -175,6 +180,11 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
              ModFeedback,  ///< -0.9 .. 0.9: how sharp they are
              ModMix,       ///< 0 .. 1: how much of the voice goes through it
              /** @} */
+             // Appended 20.09.2026 (round "reverb"): routes hall_send into the gated hall (Reverb.h,
+             // Engine.cpp) instead of the plain one -- a big hall that ducks while this voice plays and
+             // is cut hard on the absolute bar line. Off by default: every render before this round is
+             // untouched.
+             HallGate,
              Count };
 }
 /** @brief Values of poly.mod: the voice's modulation insert (20.09.2026, round "dialogue"). */

@@ -5598,6 +5598,84 @@ Tracks messbar höher als im Drop 1 (vorher 15 von 16), weil die tiefere Lead si
 freistellt. Der enge Satz der Dichteregel (nur Zap/Stutter/Swell) bleibt bei 77 % der Takte in einem
 Lauf von zwei.
 
+**20.09.2026, Gated Reverb**
+
+Anlass: die Nutzerregel vom 19.09.2026, oben als offener Punkt vermerkt — ein großer Hall (3–5 s Zerfall),
+der geduckt wird, solange die Synths spielen, und am Taktwechsel hart geschnitten wird, als Option je
+Stimme/Bus. Regel steht über den Midi-Daten (HOUSE_RULES): die Größen (Duck-Tiefe, Zeitkonstanten,
+Schließfenster) sind hier ein fester, gemessener Entwurf, keine aus dem Korpus abgeleiteten Werte — der
+Korpus widerspricht nirgends, weil ihm dieses Effekt-Konzept fremd ist.
+
+*Was gebaut wurde.* `Reverb` (Reverb.h/.cpp) bekommt zwei neue, unabhängig testbare Bausteine, ohne den
+bestehenden FDN-Kern anzufassen:
+- `setDuck()`/`processDucked()`: ein Hüllkurvenfolger auf dem Send selbst (Eigen-Sidechain, der
+  klassische Gated-Reverb-Trick) — über der Schwelle zieht er den nassen Rückweg auf `1 - depth` herunter,
+  unter der Schwelle lässt er ihn zurück auf eins los. Keine Notenereignisse nötig: die Hüllkurve folgt,
+  was am Bus wirklich ankam (auch Stutter, auch Automation).
+- `barGate()`: zustandslos, eine reine Funktion des absoluten Beats (wie `TranceGate::open`) — offen im
+  Takt, ein schneller Raised-Cosine-Schluss ab der Taktgrenze, eine Haltezeit am Boden, ein schneller
+  Wiederaufgang. Weil sie nichts zwischen Aufrufen trägt, schließt ein allein gerenderter Takt exakt im
+  selben Moment wie derselbe Takt mitten im Set.
+`Engine` bekommt einen zweiten, eigenen Hall (`hallGate_`, Engine.h/.cpp), fest eingestellt (Größe 1,8,
+Zerfall 4,0 s, Dämpfung 0,35 — die "3–5 s" der Regel; Duck-Tiefe 0,7 bei −50 dBFS Schwelle, 15 ms an,
+300 ms aus; Schluss 8 ms, Halten 40 ms, Wiederauf 15 ms). Zwei angehängte Parameter, `poly.hall_gate` und
+`acid.hall_gate` (Toggle, Default aus), entscheiden je Stimme, ob ihr `hall_send` den gewohnten,
+gemeinsamen Hall speist oder stattdessen ausschließlich den gegateten — nie beides, nie keins. Der
+gegatete Hall teilt sich `fx.hall_return` mit dem gewöhnlichen (dieselbe Rückweg-Lautstärke, nur für die
+angemeldeten Stimmen gegatet) und hängt hinter der bestehenden `returnDuck_` (duckt also zusätzlich unter
+dem Kick, wie jeder andere Rückweg). Bei Default aus ändert sich an keinem bestehenden Render ein Sample.
+
+*Gemessen.* Mit `setDuck(0.7, -50 dBFS, 15 ms, 300 ms)` an einem direkt angesteuerten `Reverb`
+(unabhängig von der Engine, wie `testReverb`): im eingeschwungenen Zustand −10,45 dB (erwartet
+20·log10(0,3) = −10,46), eine Zeitkonstante nach der Schwellenüberschreitung −5,05 dB (erwartet
+20·log10(1 − 0,7·(1−1/e)) = −5,07), eine Zeitkonstante nach dem Verstummen −2,58 dB (erwartet −2,59) —
+alle drei unabhängig aus der Sprungantwort eines Eintakt-Filters hergeleitet, nicht aus dem eigenen Code
+abgelesen. Der Taktschnitt (`Reverb::barGate`, dieselben festen Engine-Werte, über den vollen
+Engine-Prozesspfad mit Takt/Tempo-Threading): das trockene Pad-Signal ist bit-identisch, ob sein Send den
+gegateten Hall erreicht oder gar keinen (`sl` speist Trocken- und Sendsumme unabhängig, Engine.cpp) —
+Subtraktion eines trocken-only Renders legt den nassen Rückweg daher exakt frei, ohne Näherung. So
+gemessen: −58 dB unmittelbar vor der Taktgrenze, zwischen −100 und −186 dB (je nach Fensterlage im
+40-ms-Halten) danach — **über 86 dB Abstand**, wo die Regel 40 dB verlangt.
+
+*Prüfungen, neu.* `testGatedReverb` (8 Prüfungen, alle zuerst rot gesehen — vor der Verdrahtung in
+Engine.cpp fiel bei deaktiviertem Routing sowohl die 40-dB- als auch die Mitte-Takt-Prüfung, danach beide
+grün): `barGate()` gegen die eigene Definition (offen an der Linie, Boden durchs Halten, halb offen auf
+halbem Weg des Wiederaufgangs, offen danach; derselbe Beat-Phasenpunkt schließt in Takt 137 identisch wie
+in Takt 1); Duck-Tiefe/-Anstieg/-Abfall gegen die Sprungantwort-Formel; Engine-Verdrahtung (Toggle an vs.
+aus, mit vs. ohne Taktschnitt, gegen den trocken-subtrahierten Rückweg).
+
+*Mutationen* (eingebaut, mit `--only testGatedReverb` geprüft, aus der Kopie zurück, Zeitstempel gesetzt,
+`git diff` danach leer):
+
+| Mutation | Wer merkt es |
+|---|---|
+| `barGate`-Boden im Halten um 0,1 verschoben | `testGatedReverb`: „open at the line …" (Boden ≠ 0) und beide 40-dB-Prüfungen (nur noch 21–23 dB) |
+| Vorzeichen der Wiederauf-Rampe gedreht | `testGatedReverb`: „open at the line …" (Wiederauf landet bei 0 statt 1) |
+| Duck-Schwellenvergleich gedreht (`<` statt `>`) | alle drei Duck-Prüfungen (Tiefe/Anstieg/Abfall) |
+| `hallGateOn_`-Bedingung in Engine.cpp gedreht | alle drei Engine-Prüfungen (aus zeigt den Schnitt, an nicht) |
+| gegateter Hall nicht in die Mastersumme addiert | beide 40-dB-Prüfungen (0,0 dB Differenz, −240 dB überall) |
+
+*Gehört* (`out\listen\reverb`; `listen.py`-Standardschnipsel A/B/C unverändert bei Default-Parametern —
+das Feature ist aus, also klingen sie wie zuvor; zusätzlich `C_track2_into_break_GATED.wav`, derselbe
+Breakdown-Ausschnitt Takt 392–424 mit `pad.hall_gate=1` und `fx.hall_return=-3` (statt −6, damit der Raum
+im schnellen A/B hörbar bleibt) gegen `C_track2_into_break.wav` als Referenz): die Taktgrenzen fallen auf
+0,000/1,655/3,310 … s (145 BPM); an jeder Stelle, wo ein Pad-Akkord über eine Taktgrenze hinaus klingt,
+bricht sein Hallraum dort hörbar ab, statt weiter auszuklingen, und blüht danach neu auf, sobald der Akkord
+wieder in der Freigabe steht. Ein Effekt auf die einzelne Stimme im Raum, keine Pegeländerung der ganzen
+Mischung — im Vollmix (Kick, Bass, Kit) ist die 63-ms-Lücke nicht als RMS-Einbruch der Summe zu messen
+(andere Instrumente laufen weiter), hörbar ist sie an der Pad-eigenen Raumfahne.
+
+*Endstand.* `ctest -C Release -j 8` im Plugin-Build (Zweig `reverb`, ab master 2ae34ba):
+ENDSTAND_PLACEHOLDER.
+
+*Dateien.* Core: `Reverb.h/.cpp`, `Engine.h/.cpp`, `Params.h/.cpp`; `Tests/selftest.cpp`; dieser Block.
+
+*Offen:* nur `poly.hall_gate` (alle sechs Stimmen) und `acid.hall_gate` sind verdrahtet — die Regel nennt
+"Synths", was auf die Melodiestimmen und die Acid zielt; SFX/Textur/Vocal-Sends könnten dieselbe
+`hallGate_`-Infrastruktur später über denselben Mechanismus bekommen, wurden diese Runde aber nicht
+angefasst. Der zweite vom Nutzer genannte Effekttyp — Pan-Bahn plus Hall-Send über die Länge eines
+Ereignisses — bleibt offen wie zuvor.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

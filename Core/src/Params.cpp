@@ -362,6 +362,9 @@ const ParamDesc kAcidParams[acid::Count] = {
     // power, but it does smear the attack, and no measurement asks for that to be the default sound.
     { "disperse",       "Disperse",       "x",     0.0f, static_cast<float>(kDisperseStages), 0.0f, Curve::Int },
     { "disperse_freq",  "Disperse Freq",  "Hz",  200.0f,  8000.0f, 1250.0f, Curve::Log },
+    // Appended 20.09.2026 (round "reverb"). Off by default: hall_send keeps feeding the plain hall
+    // exactly as before.
+    { "hall_gate",      "Hall Gate",      "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
 };
 
 const ParamDesc kPolyParams[poly::Count] = {
@@ -437,6 +440,9 @@ const ParamDesc kPolyParams[poly::Count] = {
     { "mod_depth",      "Mod Depth",      "",      0.0f,     1.0f,   0.7f, Curve::Linear },
     { "mod_feedback",   "Mod Feedback",   "",     -0.9f,     0.9f,   0.5f, Curve::Linear },
     { "mod_mix",        "Mod Mix",        "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    // Appended 20.09.2026 (round "reverb"). Off by default: hall_send keeps feeding the plain hall
+    // exactly as before.
+    { "hall_gate",      "Hall Gate",      "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
 };
 
 /**

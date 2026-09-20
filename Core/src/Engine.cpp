@@ -14,6 +14,13 @@ namespace {
 constexpr double kPiD = 3.141592653589793;
 bool isDiscreteCurve(Curve c) { return c == Curve::Int || c == Curve::Choice || c == Curve::Toggle; }
 
+// The gated hall's bar-line window (20.09.2026, round "reverb"; Reverb::barGate()). Fixed, not exposed
+// as knobs: the brief names a result, not a set of controls. 8 ms is fast enough to read as a hard cut
+// (a raised-cosine taper, so it never clicks) yet the measured floor is already 40+ dB down well inside
+// it (Tests/selftest.cpp, testGatedReverb); 40 ms hold, 15 ms reopen -- 63 ms of the bar silenced out of
+// 1.655 s at 145 BPM, so most of the bar still rings.
+constexpr float kHallGateCloseMs = 8.0f, kHallGateHoldMs = 40.0f, kHallGateOpenMs = 15.0f;
+
 /**
  * @brief Clip with a quadratic knee: unity below 0.7 T, flat at T beyond 1.3 T, and a parabola in
  *        between that meets both with matching slope. Unlike tanh it leaves everything under the knee
@@ -58,7 +65,8 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
         poly_[i].setQuality(quality_.polyUnison[i], quality_.polyVoices[i]);
     }
     for (auto* b : { &sfxL_, &sfxR_, &roomInL_, &roomInR_, &hallInL_, &hallInR_, &roomOutL_, &roomOutR_, &hallOutL_, &hallOutR_,
-                     &texL_, &texR_, &vocL_, &vocR_, &vocThrow_, &subBuf_, &throwIn_, &sendL_, &sendR_ })
+                     &texL_, &texR_, &vocL_, &vocR_, &vocThrow_, &subBuf_, &throwIn_, &sendL_, &sendR_,
+                     &hallGateInL_, &hallGateInR_, &hallGateOutL_, &hallGateOutR_ })
         b->assign(static_cast<size_t>(kChunk), 0.0f);
     acid_.prepare(sr_);
     acid_.setOversampling(quality_.acidOversampling);
@@ -76,6 +84,15 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
     for (TranceGate& g : gate_) g.prepare(sr_);
     room_.prepare(sr_);
     hall_.prepare(sr_);
+    hallGate_.prepare(sr_);
+    // The gated hall's fixed recipe (20.09.2026, round "reverb"; docs/PLAN.md has the measurements).
+    // Big hall, 4 s decay (the brief's "3-5 s"), no pre-delay so the gate's timing is exact from the
+    // very first sample; the same return band as the plain hall's own default. Duck: -50 dBFS is a
+    // floor well under any real send, so any voice that is actually sounding trips it -- 15 ms in
+    // (fast enough to catch the attack), 300 ms out, the "opens as the voice's envelope releases" time
+    // constant the brief asks to report; 0.7 depth pulls the send about 10.5 dB down while it holds.
+    hallGate_.set(1.8f, 4.0f, 0.35f, 0.0f, 200.0f, 9000.0f);
+    hallGate_.setDuck(0.7f, -50.0f, 0.015f, 0.30f);
     comp_.prepare(sr_);
     bandLimitL_.prepare(sr_);
     bandLimitR_.prepare(sr_);
@@ -131,6 +148,7 @@ void Engine::reset()
     for (TranceGate& g : gate_) g.reset();
     room_.reset();
     hall_.reset();
+    hallGate_.reset();
     comp_.reset();
     sideHp1_.reset();
     sideHp2_.reset();
@@ -271,6 +289,7 @@ void Engine::applyParams()
     stripRoom_[StripAcid] = e(ab + acid::RoomSend);
     stripHall_[StripAcid] = e(ab + acid::HallSend);
     duck_[StripAcid].set(e(ab + acid::Duck), duckA, duckH, duckR);
+    hallGateOn_[StripAcid] = e(ab + acid::HallGate) >= 0.5f;
     stripRoom_[StripSfx] = e(sb + sfx::RoomSend);
     stripHall_[StripSfx] = e(sb + sfx::HallSend);
     duck_[StripSfx].set(e(sb + sfx::Duck), duckA, duckH, duckR);
@@ -306,12 +325,18 @@ void Engine::applyParams()
         subDuck_.set(e(sb + sfx::SubDuck), duckA, duckH + 40.0f, duckR);
     }
     const double beatSeconds = beatsPerSample_ > 0.0 ? 1.0 / (beatsPerSample_ * sr_) : 60.0 / 145.0;
+    // The gated hall's bar-line window (Reverb::barGate() takes beats, not seconds, for the same reason
+    // poly.gate_attack/_release do above: it stays the same fraction of a bar under a tempo ramp).
+    hallGateCloseBeats_ = static_cast<double>(kHallGateCloseMs) * 0.001 / beatSeconds;
+    hallGateHoldBeats_ = static_cast<double>(kHallGateHoldMs) * 0.001 / beatSeconds;
+    hallGateOpenBeats_ = static_cast<double>(kHallGateOpenMs) * 0.001 / beatSeconds;
     for (int k = 0; k < kPolyInstances; ++k) {
         const int pb = p.base(Module::Poly, k);
         const int strip = StripLead + k;
         stripRoom_[strip] = e(pb + poly::RoomSend);
         stripHall_[strip] = e(pb + poly::HallSend);
         duck_[strip].set(e(pb + poly::Duck), duckA, duckH, duckR);
+        hallGateOn_[strip] = e(pb + poly::HallGate) >= 0.5f;
         gateOn_[k] = e(pb + poly::Gate) >= 0.5f;
         gatePattern_[k] = static_cast<int>(std::lround(e(pb + poly::GatePattern)));
         gateDepth_[k] = e(pb + poly::GateDepth);
@@ -531,6 +556,7 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
         const float sub = stripGain_[StripSfx] * subDuck_.next() * subBuf_[si];
         const float mono = kg * kickBuf_[si] + bg * bassBuf_[si] + sub;
         float l = mono, r = mono, rl = 0.0f, rr = 0.0f, hl = 0.0f, hr = 0.0f, fl = 0.0f, fr = 0.0f;
+        float hgl = 0.0f, hgr = 0.0f;   // the gated hall's input: the strips whose hall_gate is on
         float ml = 0.0f, mr = 0.0f;   // the melodic bus a stutter may replace (acid, lead, counter, arp, stab)
         const double beat = chunkBeat_ + static_cast<double>(chunkPos_ + i) * beatsPerSample_;
         for (int s = 0; s < StripCount; ++s) {
@@ -549,8 +575,10 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
             else { l += sl; r += sr; }
             rl += stripRoom_[s] * sl;
             rr += stripRoom_[s] * sr;
-            hl += stripHall_[s] * sl;
-            hr += stripHall_[s] * sr;
+            // hall_gate on: this strip's hall send feeds the gated bus instead of the plain hall (never
+            // both -- a voice picks one hall or the other).
+            if (hallGateOn_[s]) { hgl += stripHall_[s] * sl; hgr += stripHall_[s] * sr; }
+            else { hl += stripHall_[s] * sl; hr += stripHall_[s] * sr; }
             fl += stripFx_[s] * sl;
             fr += stripFx_[s] * sr;
             if (s == StripVocal) throwIn_[si] = 0.5f * (sl + sr) * vocThrow_[si] * throwSend_;
@@ -562,10 +590,22 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
         outR[i] = r + mr;
         roomInL_[si] = rl; roomInR_[si] = rr;
         hallInL_[si] = hl; hallInR_[si] = hr;
+        hallGateInL_[si] = hgl; hallGateInR_[si] = hgr;
         sendL_[si] = fl; sendR_[si] = fr;
     }
     room_.process(roomInL_.data(), roomInR_.data(), roomOutL_.data(), roomOutR_.data(), count);
     hall_.process(hallInL_.data(), hallInR_.data(), hallOutL_.data(), hallOutR_.data(), count);
+    // The gated hall: ducked by its own send (Reverb.h, processDucked), then cut hard on the absolute
+    // bar line (Reverb::barGate, a function of the beat alone -- the same reason TranceGate::open above
+    // is called per sample instead of once per block: a bar rendered alone must close at the same
+    // instant as the same bar inside a whole set).
+    hallGate_.processDucked(hallGateInL_.data(), hallGateInR_.data(), hallGateOutL_.data(), hallGateOutR_.data(), count);
+    for (int i = 0; i < count; ++i) {
+        const double beat = chunkBeat_ + static_cast<double>(chunkPos_ + i) * beatsPerSample_;
+        const float barCut = Reverb::barGate(beat, hallGateCloseBeats_, hallGateHoldBeats_, hallGateOpenBeats_, 0.0f);
+        hallGateOutL_[static_cast<size_t>(i)] *= barCut;
+        hallGateOutR_[static_cast<size_t>(i)] *= barCut;
+    }
     // The modulation send of the bed and the voices, and the voices' delay throw.
     sendFx_.process(sendL_.data(), sendR_.data(), count, beat0, beatsPerSample_);
     for (int i = 0; i < count; ++i) {
@@ -576,8 +616,11 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
     for (int i = 0; i < count; ++i) {
         const size_t si = static_cast<size_t>(i);
         const float d = returnDuck_.next();
-        outL[i] = (outL[i] + d * (roomReturn_ * roomOutL_[si] + hallReturn_ * hallOutL_[si])) * masterGain_;
-        outR[i] = (outR[i] + d * (roomReturn_ * roomOutR_[si] + hallReturn_ * hallOutR_[si])) * masterGain_;
+        // The gated hall shares the plain hall's return trim (fx.hall_return): it is the same hall
+        // knob-wise, only gated for the voices routed into it. It ducks under the kick with everyone
+        // else's returns too (returnDuck_), on top of its own gate.
+        outL[i] = (outL[i] + d * (roomReturn_ * roomOutL_[si] + hallReturn_ * (hallOutL_[si] + hallGateOutL_[si]))) * masterGain_;
+        outR[i] = (outR[i] + d * (roomReturn_ * roomOutR_[si] + hallReturn_ * (hallOutR_[si] + hallGateOutR_[si]))) * masterGain_;
     }
     // Master: bus compressor, mono bass, limiter, safety clip, meter.
     comp_.process(outL, outR, count);
