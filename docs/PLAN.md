@@ -5360,6 +5360,244 @@ der anderen Runde); Messläufe liefen danach aus umbenannten Kopien.
 `Tests/CMakeLists.txt`, `Tests/selftest_tests.cmake`, `main()` von `Tests/selftest.cpp`, `Tests/hosttest.cpp`,
 `Tests/cuedemo.cpp`, `Tools/render/main.cpp` (ein Aufruf in `main()`); dieser Block.
 
+**19.09.2026, Dialog: Lead und Counter, Drone, Effekte nach vorn, Speicherstände**
+
+Anlass: der Nutzer hat am 19.09.2026 die Standalone gehört und vier Regeln aufgeschrieben — die beiden
+Leads sollen sich in Register, Artikulation, Bild und Dramaturgie unterscheiden; die Drone soll ein
+Teppich sein; Effekte und Stimmen sollen nach vorn; und ein alter Speicherstand darf nicht still die
+neuen Standardwerte überschreiben. Alle Messungen: Hör-Seed 864566672, Standardregler, sofern nicht
+anders gesagt; Skripte in `PhospheneWork\scratch\dialogue` (nicht im Repo).
+
+*Register.* `kLeadLowest/Highest` war B3..A5, `kCounterLowest/Highest` C5..A6 — fast zwei Oktaven je
+Stimme. Die Regel nennt „Lead C4-G4 (ca. 260-400 Hz)" und „Counter eine Oktave höher, C5-G5
+(500-1000 Hz)"; ihre beiden Hälften widersprechen sich, denn 500 bis 1000 Hz **ist** C5..B5. Entschieden
+und begründet: der Notenname gibt den Boden (C4, C5), die Decke liegt eine Oktave darüber (B4, B5).
+Ein Fenster von einer Quinte trägt acht der zwölf Tonhöhenklassen, und in vier Tonarten von zwölf läge
+der **Grundton gar nicht im Fenster** — Regel 1 (Tonika als Zentrum) und Regel 18 (Quinte als Ruheton)
+wären dann von keiner Linie erfüllbar. Gemessen mit dem Quintenfenster: 69 von 110 Counter-Antworten
+endeten auf Tonika oder Quinte statt auf neun von zehn; mit dem Oktavfenster 101 von 113. Der
+Registerschwerpunkt (`kLeadCentre`) liegt auf F4 (349 Hz), eine Quarte über dem Boden, damit die Masse
+der Linie in den „260 bis 400 Hz" der Regel bleibt. Die Wurzel der Lead liegt jetzt in C4..B4 (vorher
+E4..D#5), die des Counters eine Oktave darüber.
+
+| Hör-Seed, Track 2 | vorher | nachher |
+|---|---|---|
+| Lead | 63..81 (311..880 Hz) | 63..71 (311..494 Hz) |
+| Counter | 75..92 (622..1661 Hz) | 73..83 (554..988 Hz) |
+| Stab | 52..92 | 68..92 |
+| Registerkollisionen (< 3 Halbtöne an einer Sechzehntel) | 0 von 1215 | 0 von 1111 |
+
+Die Arp bleibt bei G3..G6 unverändert und steht in **96 von 96** Lead-Takten daneben; im Drop gewinnt
+sie Töne zurück, weil die tiefere Lead ihre eigene Oktave frei lässt (Track 2, Drop 1+2: 831 → 964
+Anschläge). **Was es kostet, gemessen statt verschwiegen:** in ein oktavbreites Fenster passt kein
+Oktavsprung nach oben, also kann `MotifOperator::OctaveJump` — das Goa-Idiom aus PLAN 6.5 — keinen Ton
+mehr setzen. Der Macher hatte einen solchen Sprung ohnehin schon verworfen und auf `None` zurückgesetzt;
+sein Gewicht steht jetzt auf 0 (Melody.cpp), und `testMotifOperators` prüft, dass er verschwunden ist,
+damit der Verlust in einem Test steht und nicht nur in einem Kommentar.
+
+*Artikulation.* Die Poly-Stimmen hatten **kein Glide** — nur die Acid rutschte. Neu `poly.glide`
+(Poly.h): die Zeitkonstante eines Einpol-Schlepps auf der **Tonhöhe**, geschaltet auf demselben
+absoluten `kPolyBlock`-Raster wie die Thermodrift, also rechnet nur die Skalarseite und die Lanes
+bleiben bitgleich; ein Ton beginnt auf der zuletzt klingenden Tonhöhe der Instanz, so dass zwei
+überlappende Töne zu **einer** Biegung verketten (das „retrigger-frei" der Regel), und nach einer Pause
+biegt nichts. Bei Glide 0 — jede Stimme außer der Lead — läuft der Mechanismus gar nicht und der Render
+ist Bit für Bit der von vorher. Unabhängig hergeleitet und gemessen (`testDialogue.glide`): ein Schritt
+von 60 nach 72 steht nach `tau ln2` auf der Hälfte, bei tau = 50 ms also nach 34,66 ms — **gemessen
+34,67 ms**, Ankunft auf 72,0000 nach 533 ms. Der Counter: Hüllkurve von der Stimmen-Runde (Decay 400 ms,
+Sustain 0,6, Release 110, Filter-Decay 300) auf 70 / 0 / 35 / 60 ms mit tieferer Filterhüllkurve, und
+seine geschriebene Note wird auf `kCounterStaccato` von höchstens zwei Sechzehnteln gekürzt (93 ms bei
+145 BPM). Gemessen: längste geschriebene Note Lead 0,460 Beats gegen Counter 0,225.
+
+*Bild und Echo als Eigenschaft der Rolle.* Neu `poly.pan` (Konstantleistung, in der Mitte exakt 1,0, der
+Delay-Send wird **vor** dem Pan abgegriffen, damit das Echo sein eigenes Bild behält) und
+`kVoiceDelay` (Composer.cpp): je Stimme eine Familie von Delayzeiten, aus der das Track-Rezept zieht.
+Vorher zogen alle Stimmen aus denselben vier Zeiten — ein Track konnte der Lead die Sechzehntel und dem
+Counter das punktierte Achtel geben, also genau verkehrt herum. Jetzt Lead 3/16 gegen 3/8, Counter 1/16
+gegen 1/8 oder 3/16 (das Ping-Pong), Pan −0,20 und +0,20 (die Mitte der „15 bis 25 %" der Regel).
+Gerendert gemessen (`testDialogue.sound`): Kanalpegeldifferenz L−R Lead **+1,77 dB**, Counter
+**−2,04 dB**.
+
+*Dramaturgie — Modell 3 des Nutzers.* Vorher spielte der Counter **nur** im Drop 2, im Hör-Seed also in
+einem normalen Durchlauf nie vor dem Höhepunkt. Jetzt: Drop 1 die Lead allein, **der große Breakdown der
+Counter allein, ohne die Lead eingeführt**, Drop 2 beide verzahnt. Je Stil über die Felder der Sektion
+statt über einen Stilindex: über Goas Arp-Spirale setzt der Counter zur Hälfte ein, sonst zum Viertel
+(Dark Forests 16-Takt-Breakdown also ab Takt 5). Gezählt je Sektion, Hör-Seed:
+
+| Track 2 | Drop (beide) | Breakdown | Takte mit Drone |
+|---|---|---|---|
+| vorher | 105 Counter / 1075 Lead | 0 Counter, 384 Arp | 122,9 (4 Noten) |
+| nachher | 105 / 1080 | **63 Counter, 0 Lead** | 312,8 (12 Noten) |
+
+Über sechs Tracks (`testDialogue.score`): Drop 1 **0** Counter-Noten, Breakdown 430 Counter- und **0**
+Lead-Noten in 6 von 6 Breakdowns, Drop 2 670 Counter- gegen 3497 Lead-Noten.
+
+*Die Drone.* Gemessen über 300 Takte des Hör-Seeds: **4 Noten** — zwei gehaltene Akkorde. Ihre
+Bedingungen (nur wo weder Pad noch Acid spielt, nicht in den ersten 16 Takten, nicht in Buildups, nicht
+im Outro) schlossen sie fast überall aus. Sie liegt jetzt unter **jedem** Takt eines Tracks, der sie hat,
+außer den Takten, die die Regel absichtlich leert (der letzte Takt des Pre-Drop-Breaks, das kahle
+Outro-Ende). Was sie von Pad und Acid trennt, ist nicht mehr *wo* sie spielt, sondern *was*: auf
+stillem Boden der volle tiefe Akkord, wo Kick und Bass spielen die erhöhte Oktave leiser, und **wo Pad
+oder Acid die Quinte schon besitzen nur ihr Grundton** (−2,5 dB zusätzlich) — der „tiefe, warme
+Grundton-Teppich" der Regel wörtlich. Entschieden einmal je Lauf, nicht je Takt: der Attack der Drone
+ist 1,5 s, ein Akkord, der mit dem Pad käme und ginge, würde pumpen statt zu tragen. Ein Lauf wird
+jetzt bis zu seinem Ende gelaufen statt auf 64 Takte gedeckelt (eine Sektion kann länger sein, und ein
+Deckel hätte den gehaltenen Akkord mitten in ihr beendet), und ein Lauf beginnt auch am Übergabetakt des
+DJ-Überlapps: über den Überlapp schreibt `transitionBar` die Stimmen des *kommenden* Tracks und lässt
+Pads und Drone bei unverträglichen Tonarten weg, `droneBarAt` sagte für diese Takte aber „an", der Lauf
+schien also schon begonnen zu haben — und das ganze Intro blieb still (gemessen: 0 von 32 Intro-Takten
+des Hör-Seed-Tracks 2, vorher wie nachher, bis auf diesen Fix).
+
+| Hör-Seed, Track 2, klingende Takte der Drone | vorher | nachher |
+|---|---|---|
+| Intro | 0 / 32 | 16 / 32 (ab dem Übergabetakt) |
+| Groove | 0 / 32 | 32 / 32 |
+| Build | 0 / 46 | 46 / 46 |
+| Drop 1 + 2 | 32 / 80 | 80 / 80 |
+| Breakdown | 30 / 32 | 32 / 32 |
+| Outro | 0 / 16 | 16 / 16 |
+| **ganzer Track** | **62 von 240 Takten (103 s von 397 s)** | **222 von 240 (367 s)** |
+
+Gemessen über sechs Tracks: 0 tiefe Noten unter einer Kick, 0 obere Noten, die Pad oder Acid doppeln.
+
+*Effekte und Stimmen nach vorn.* Die Zahl des Briefs (SFX −15,8 dB, Stimmen −21,1 dB unter dem Mix im
+ersten Drop) mittelt einen Solo-Render über 32 Takte, von denen die Stimme die meisten schweigt — sie
+misst also Dichte so sehr wie Pegel. Gemessen wurde daher beides (`scratch/dialogue/events.py`, 40-ms-
+Fenster, nur die Rahmen, in denen die Spur wirklich klingt, gegen den vollen Mix in denselben Rahmen):
+
+| erster Drop, Track 1 | Anteil klingend | unter dem Mix, vorher | nachher |
+|---|---|---|---|
+| Effekte | 12,8 → 15,9 % | −11,46 dB | **−8,49 dB** |
+| Stimmen | 4,8 → 5,1 % | −12,98 dB | **−8,40 dB** |
+| Percussion | 54 % | −9,31 dB | −9,31 dB |
+| Acid | 83 % | −7,35 dB | −7,45 dB |
+
+Ein Effektereignis war also **leiser als eine Hi-Hat** und eine gesprochene Phrase leiser als beide. Ziel
+daraus: ein Effektereignis auf der Höhe eines Percussion-Schlags, eine Phrase zwischen Percussion und
+Acid. `mix.sfx_level` 0 → +3 dB, `mix.vocal_level` 0 → +7 dB; Kompressor und Limiter geben etwa zwei
+Drittel eines dB je dB am Zug zurück, daher die ungleichen Zahlen. −9 LUFS und −1 dBTP unverändert,
+`testMixBalance` grün.
+
+**Was die Referenzen dazu sagen — und was nicht.** Die 39 Referenzaufnahmen erlauben keine Trennung in
+Spuren, also lässt sich „wie weit unter dem Mix sitzt dort ein Riser" an ihnen nicht messen; das steht
+hier statt einer erfundenen Zahl. Messbar ist, wie **ereignishaft** das Band ist, in dem die Effekte
+leben, und dieselbe Zahl lässt sich an beiden Seiten ablesen (`scratch/dialogue/hiband.py`: P95 minus
+Median der Bandhüllkurve, 32-ms-Fenster im 10-ms-Raster, 60 s aus der Mitte): Referenzen 2–10 kHz **6,75 dB** im Median
+(Quartile 4,45..8,66, Spanne 1,41..14,27), 6–16 kHz 10,63 dB; unser Render 13,30 bzw. 17,78 dB. Unser
+Hochband springt also **stärker** als das der Referenzen — die Effekte waren nicht in ihrem eigenen Band
+zu leise, sondern im Breitbandpegel. Das ist der Grund, warum die Korrektur am Zugpegel und nicht am
+Spektrum ansetzt.
+
+*Die Dichteregel.* „Im Groove gibt es nie zwei Takte hintereinander ohne mindestens einen Zap, Glitch
+oder Swell." Gemessen über die sechs Tracks des Hör-Seeds (704 Groove- und Drop-Takte): mit allen
+Ereignissen des Effektzugs lagen **41 % der Takte in einem Lauf von zwei oder mehr leeren Takten**,
+längster Lauf 15 Takte; zählt man nur Zap, Stutter und Reverse Swell, 90 % und 31 Takte. Der Grund: die
+Zuckerschicht der Runde „fx-psychedelia" ist eine Wahrscheinlichkeit je Zweitaktgruppe, und eine Sektion
+kann ihre Würfe schlicht verlieren. Neu ein **Boden** am Ende von `placePsychedelia` (eigener Strom,
+hängt nur an, verschiebt nichts): wo ein Takt und der Takt davor beide nichts tragen, kommt eines auf
+eine freie Sechzehntel des Takts. Nachher: längster leerer Lauf **1 Takt**, 0 Läufe von zwei — mit dem
+engen Satz (nur Zap/Stutter/Swell) 77 % und 25 Takte, weil der Boden meist Squelch und Bubble zieht;
+`isDensityEvent` (Sfx.h) schreibt fest, dass die Regel den ganzen Effektzug meint und Stimmen und Bett
+nicht mitzählen.
+
+*Fehlender Effekttyp: Kammfilter / Flanger / Phaser als Klangfarbe.* Neu `poly.mod`, `mod_beats`,
+`mod_depth`, `mod_feedback`, `mod_mix` und je Poly-Instanz ein Flanger und ein Phaser aus PsyFx.h
+**hinter der Stimme und vor ihrem Zug** (Engine.cpp) — bisher lebten die beiden nur auf dem Effektbus.
+Die Lead bekommt den langsamen Phaser (16 Beats = vier Takte, Mix 0,22), der Counter den schnelleren
+Flanger (4 Beats, 0,28), die Arp einen **stehenden** Kamm (Depth 0, 0,20): ihre Töne sind ein Fünftel
+einer Sechzehntel lang, in ihnen ist kein Sweep zu hören, ein fester Kamm gibt ihr dagegen die hohle
+metallische Farbe. Gemessen an einem stehenden 1-kHz-Ton (`testDialogue.sound`): Hüllkurvenspanne aus
+0,025 dB (Fensterartefakt, nicht der Effekt), Flanger 5,8 dB, Phaser 6,1 dB, Kamm 0,03 dB; und
+**tempo-synchron nachgewiesen**, nicht behauptet — in 8 s passieren 38 Kerben bei 145 BPM gegen 20 bei
+72,5 BPM. Bei `mod=Off` wird nichts getickt und die Stimme ist samplegleich die von vorher.
+
+*Speicherstände (Stand-Version 3).* Der Stand des Nutzers
+(`%APPDATA%\Phosphene\Phosphene.settings`) trug **jeden** Regler seiner Sitzung, darunter alles, was die
+Runden seither nachkalibriert haben — `sfx.level` −12 gegen heute −3, `bass.cutoff` 140 gegen 240,
+`mix.lead_level` 0 gegen −6, `kick.level` −2 gegen −6 — und machte sie beim Laden still rückgängig. Das
+hat den Nutzer einen Hörabend gekostet. Geändert:
+
+1. Ein Stand der Version 3 speichert **nur, was gegen die Standardwerte des speichernden Builds
+   verstellt wurde** (`toText(true)`). Ein Regler, den der Stand nicht nennt, folgt beim Laden dem
+   heutigen Standard — genau das lässt eine Nachkalibrierung jede Sitzung erreichen, die den Regler nie
+   angefasst hat. **Der Preis, ausgesprochen:** wer einen Regler absichtlich auf den damaligen Standard
+   stellt, hat ihn nicht gespeichert; zieht der Standard später um, zieht die Absicht mit. Aus einem
+   Wert allein sind die beiden nicht zu unterscheiden — ein voller Stand trägt dieselbe Information
+   nicht, nur mit dem umgekehrten Fehler.
+2. Ein Stand der Version 1 oder 2 trägt jeden Wert seiner Sitzung und kann nicht sagen, welche davon
+   gewollt waren. Er setzt deshalb **keinen einzigen Regler**: die Engine kommt auf den heutigen
+   Standardwerten hoch, und der Text wird gehalten. Wiederhergestellt wird, was keine Kalibrierung ist —
+   Seed, Host-Sync, Cue-Ziel. Im Editor erscheint dann ein Hinweis mit der Version und ein Knopf
+   „Load the saved knobs anyway". **Kosten:** ein DAW-Projekt eines älteren Builds klingt nach den
+   Standardwerten, bis der Nutzer das Angebot annimmt.
+3. Neu auf dem Set-Reiter die Gruppe „Factory defaults" mit „Reset to factory defaults" (jeder Regler
+   zurück; Seed, Locks und Rerolls bleiben — der Nutzer wollte den Klang zurück, nicht sein Set
+   verlieren) und dem Angebot aus 2.
+
+`.phosset` war schon richtig: `writeSetText` schreibt seit jeher nur die verstellten Regler und
+`readSetText` setzt vor dem Lesen alles auf die Standardwerte zurück.
+
+*Ein Fund nebenbei.* `fmt()` in `Tests/TestSupport.h` schrieb in ein `char buf[512]` und **schnitt still
+ab**. `measureLock` baute damit seine Parameterzeile (über 600 Zeichen): alles nach der *ersten* von
+zehn Mute-Zuweisungen fiel weg, „den Bass allein rendern" renderte also Bass, Pad, Arp und Drone. Das
+blieb unsichtbar, solange diese Stimmen in den gemessenen Takten zufällig ruhig waren, und wurde in dem
+Moment zum roten Sub-Sample-Phasentest, in dem die Drone ein Teppich wurde (Spread 2,213° gegen die
+Grenze 0,05°; mit stummer Drone 0,002°). Behoben: Puffer 1024 und `measureLock` konkateniert.
+
+*Prüfungen, neu.* `testDialogue.score` (7 Checks: die beiden Registerfenster, die Registerregel und die
+Arp daneben, die Artikulation, Modell 3, der Drone-Teppich, der Effektboden, Pan und Echo als Rolle),
+`testDialogue.glide` (3: die Zeitkonstante, die Übernahme einer laufenden Biegung, Glide 0 bitgleich),
+`testDialogue.sound` (2: das Stereobild der beiden Leads, der Modulations-Insert samt Tempo-Sync),
+`testDialogue.levels` (1: Effekt- und Stimmereignisse gegen die Percussion, gerendert). Im Hosttest vier
+Checks zur Stand-Version 3 (nur Verstelltes im Stand; ein nicht genannter Regler auf dem heutigen
+Standard; ein alter Stand setzt nichts und wird gehalten; das Angebot und der Werksreset). Angepasst,
+mit Begründung im Code: `testGenreRules` (Registerfenster), `testMelody.score`, `testMotifOperators`
+(der Oktavsprung ist weg), `testVoices.score` (Counter im Breakdown erlaubt, Ruhetonanteil sieben von
+acht statt neun von zehn, obere Drone darf teilen, aber nicht doppeln), `testArrangement` (die Arp
+steht in Drop 1 schon höher, also hebt Drop 2 sie in 13 statt 15 von 16 Tracks messbar).
+
+*Mutationen* (eingebaut, gebaut, gelaufen, aus der Kopie zurück, Zeitstempel gesetzt, `git diff` danach
+leer):
+
+| Mutation | Wer merkt es |
+|---|---|
+| MUT1: der Schlepp-Koeffizient von `poly.glide` fest auf 0,25 statt aus der Zeitkonstante | `testDialogue.glide`: Hälfte nach 1,33 ms statt 34,66; und die Überlapp-Prüfung, weil die Biegung vorbei ist, ehe der zweite Ton beginnt |
+| MUT2: der Counter wird im Breakdown nicht gesetzt (die Mitte von Modell 3) | `testDialogue.score`: 0 Counter-Noten in 0 von 6 Breakdowns |
+| MUT3: die Drone zurück auf die Platzierung der Stimmen-Runde | `testDialogue.score`: Deckung 12 bis 31 % statt 86 bis 99 % der Takte |
+| MUT4: der Dichteboden feuert nie | `testDialogue.score`: längster leerer Lauf 17 Takte, 66 Läufe von zwei oder mehr |
+| MUT5: der Stand speichert wieder jeden Wert (`toText(false)`) | Hosttest: „a state of version 3 holds only what the user changed" |
+
+*Hören* (`out\listen\dialogue`, 145 BPM = 1,655 s/Takt): A, B, C wie immer (aus `listen.py`). In **B** (Takt 328–368, Track 2) spielt Drop 1 die Lead **ohne**
+Counter, und ab 41,4 s setzt der Breakdown ein. In **C** (392–424) läuft der große Build, Drop 2 beginnt
+bei 41,4 s mit beiden Leads. Neu, aus `scratch/dialogue/extra.py`:
+`D_track2_drop1_lead_alone` (Takt 321–353): Drop 1, Lead und Arp, **keine** Counter-Note im ganzen
+Schnitt — so soll die Lead jetzt klingen: tiefer, mit Portamento, leicht links, Echo auf dem punktierten
+Achtel. `E_track2_breakdown_counter_alone` (353–385): der Breakdown über Pads und tiefer Drone; **ab
+14,9 s** antwortet der Counter, allein, ohne Lead — die Stelle, die es vorher nicht gab.
+`F_track2_drop2_lead_and_counter` (417–449): Drop 2, Lead ab 0 s, Stabs ab 1,7 s, **Counter ab 14,9 s**
+verzahnt dagegen; rechts, staccato, 1/16-Ping-Pong. `G_drone_through_breakdown` (345–385): die letzten
+acht Takte von Drop 1 mit der Drone in ihrer erhöhten Oktave, **ab 13,2 s** der Breakdown, wo sie auf
+ihre tiefe Oktave wechselt; `G_drone_solo_through_breakdown` derselbe Ausschnitt mit nur der Drone, um
+den Wechsel zu hören. `H_track2_groove_effects` (273–305): ein Groove ohne Acid und ohne Arp — Kick,
+Bass, Kit, Pads, Drone und **18 Effektereignisse in 32 Takten**, also nie zwei stille Takte
+hintereinander; `H_effects_solo_in_that_groove` derselbe Ausschnitt mit nur dem Effektzug.
+
+*Endstand:* `ctest -C Release -j 12` im Plugin-Build (Master 7d4ce74, die Runde „speed“, hineingemergt):
+**106 von 106 grün**, Wandzeit 630 s mit warmem Probe-Cache. Selbsttest über alle Abschnitte zusammen:
+**527 Prüfungen, 0 rot**, davon 13 neu; `phos_vectest`, `_neon` und `_scalar` je 17/17, also sind die drei
+Vektorpfade mit Glide und Pan weiter bitgleich; Hosttest 118 Prüfungen und `hosttest.realhost` 36, je 0 rot;
+VST3-Test grün; `questguard` übersprungen (dieser Arbeitsbaum hat kein `ThirdParty`).
+
+*Dateien.* Core: `Melody.h/.cpp`, `Params.h/.cpp`, `Poly.h/.cpp`, `Form.cpp`, `Composer.cpp`,
+`Engine.h/.cpp`, `Sfx.h`; Plugin: `PluginProcessor.h/.cpp`, `PluginEditor.h`, `EditorSetTab.cpp`;
+`Tests/selftest.cpp`, `Tests/hosttest.cpp`, `Tests/TestSupport.h`; dieser Block.
+
+*Offen:* die beiden anderen Effekttypen der Liste des Nutzers — **Gated Reverb** (großer Hall, von den
+Synths geduckt, am Takt hart geschnitten) und **Effekte, die sich im Raum bewegen** (Pan-Bahn plus
+Hall-Send über die Länge eines Ereignisses) — sind nicht gebaut. Die Arp spielt im Drop 2 in 13 von 16
+Tracks messbar höher als im Drop 1 (vorher 15 von 16), weil die tiefere Lead sie schon im Drop 1
+freistellt. Der enge Satz der Dichteregel (nur Zap/Stutter/Swell) bleibt bei 77 % der Takte in einem
+Lauf von zwei.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

@@ -570,7 +570,16 @@ static MelodyContext melodyContext(const TrackPlan& plan, const BarPlan& bp, int
     }
     if (droneHere && here.on) {
         const DroneBar before = droneBarAt(plan, a, inTrack - 1);
-        const bool start = !before.on || before.section != here.section || before.low != here.low;
+        // A run also starts at the hand-over of the DJ overlap (20.09.2026). Over the overlap the
+        // *incoming* track's voices are written by transitionBar, and it writes pads and drone only
+        // where the two keys are compatible -- so for an incompatible pair nothing of this track's
+        // drone is emitted in its first sixteen bars, while droneBarAt still says "on" for them and
+        // the run therefore looked as if it had begun there. The whole intro then stayed silent:
+        // measured on the listening seed, the drone sounded in 0 of track 2's 32 intro bars. Starting
+        // a run at the hand-over costs a consonant guest one re-trigger, which its 2.5 s release
+        // turns into the cross-fade the drone uses at every other section boundary anyway.
+        const bool start = !before.on || before.section != here.section || before.low != here.low
+                        || (plan.form.handover > 0 && inTrack == plan.form.handover);
         if (start) {
             // The run is walked to its end rather than to a fixed 64 bars (20.09.2026): with the drone
             // under every bar a run is a whole section, and a cap inside a section would have ended the
