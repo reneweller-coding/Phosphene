@@ -5088,10 +5088,17 @@ verdecken, nebeneinander laufen und jede Laenge stimmt; `bigSet` setzt die Track
 | Set-Leiste mit einer Spur | Hosttest: die Bloecke verdecken einander |
 
 *Hoeren* (`out\listen\polish`, 145 BPM = 1,655 s/Takt): A, B, C wie immer -- in A ist das Intro-Ende (0--13 s)
-1,5 dB leiser, in B ist Drop 1 (0--40 s) zurueckgenommen, in C faellt die Rolle ab 13 s weniger hell aus und
-Drop 2 setzt bei 39,7 s deutlich hoeher ein. Neu `D1_drop1/D1_drop2` … `D3_…`: die ersten 16 Takte von Drop 1
-und Drop 2 der Tracks 1--3, und `E1`--`E3` dieselben zwei Ausschnitte hintereinander in einer Datei (der
-A/B-Vergleich, den der Auftrag verlangt: Drop 1 gegen Drop 2).
+zurueckgenommen, in B Drop 1 (0--39 s, -8,05 LUFS), in C laeuft der grosse Build (13--38 s) bei -10,23 LUFS und
+Drop 2 setzt bei 39,7 s mit -6,47 LUFS ein: ein Sprung von 3,8 LU an der Marke. Neu `D1_drop1/D1_drop2` …
+`D3_…`: die ersten 16 Takte von Drop 1 und Drop 2 der Tracks 1--3 (gemessen +2,12 / +1,52 / +1,08 LU), und
+`E1`--`E3` dieselben zwei Ausschnitte hintereinander in einer Datei (der A/B-Vergleich, den der Auftrag
+verlangt: Drop 1 gegen Drop 2).
+
+*Endstand.* `ctest -C Release -j 4` im Plugin-Build: **75 von 75 gruen** (ein Test je Selbsttest-Abschnitt,
+Host- und VST3-Test, Cue-Pruefung, die drei Vektorpfade; `selftest` als Gesamtlauf deaktiviert, `questguard`
+uebersprungen -- in diesem Arbeitsbaum ohne `ThirdParty`), Wandzeit 1958 s. Serieller Gesamtlauf des
+Selbsttests: **418 bestanden, 0 rot** (davon fuenf neu). Hosttest: 119 Pruefungen, 0 rot. ASan-Lauf des ganzen
+`ctest`: 5 h Wandzeit, ein Fehlschlag -- der Fund oben -- und sonst nichts. Quest-APK 8.570.007 Bytes.
 
 *Dateien.* Core: `Form.h/.cpp`, `Composer.h/.cpp`, `Rhythm.cpp`, `Params.h/.cpp`; `Plugin/EditorArrange.h/.cpp`,
 `Plugin/PluginEditor.cpp`; `Quest/src/main.cpp`, `Quest/build_apk.ps1`; `Tools/render/main.cpp`,
