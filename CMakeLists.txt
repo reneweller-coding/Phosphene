@@ -93,6 +93,8 @@ add_subdirectory(Core)
 if(PHOS_BUILD_TOOLS)
     enable_testing()
     add_subdirectory(Tools/render)
+    # The probe-written plan fields as bit patterns, and the planning benchmark (round "speed", 20.09.2026).
+    add_subdirectory(Tools/plandump)
 endif()
 
 # The plugin (Phase 6). JUCE is taken from ThirdParty/JUCE when it is there -- that directory is

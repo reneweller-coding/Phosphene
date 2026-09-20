@@ -138,6 +138,8 @@ int usage()
 
 int main(int argc, char** argv)
 {
+    // Parallel probes, and the probe cache when ctest names one (phos/Probe.h; round "speed", 20.09.2026).
+    phos::probe::configureFromEnvironment();
     int bars = 96, port = kCueDefaultPort;
     uint64_t seed = 1;
     std::string host = kCueDefaultHost;

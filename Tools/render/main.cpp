@@ -182,6 +182,11 @@ int main(int argc, char** argv)
     std::vector<std::string> sets;
     std::vector<std::pair<bool, std::string>> unitOps;   // (lock?, "unit:index")
 
+    // A development tool (round "speed", 20.09.2026): the composer's probes run in parallel, and from the
+    // probe cache when PHOS_PROBE_CACHE names a directory (phos/Probe.h). The plans, and with them the
+    // render, are bit for bit what the serial order makes -- PHOS_PROBE_THREADS=1 is that order.
+    probe::configureFromEnvironment();
+
     // Before the engine: the first Engine::prepare() anywhere in the process is the one that loads
     // the wavetable library, so the search path has to be in place before there is an engine at all.
     installDataSearchPath();

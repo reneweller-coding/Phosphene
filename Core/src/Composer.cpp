@@ -3,6 +3,7 @@
  * @brief Track plans, sound recipes, bars of kick and bass, and the conductor.
  */
 #include "phos/Composer.h"
+#include "phos/Probe.h"
 #include "phos/Corpus.h"
 #include "phos/Disperser.h"
 #include "phos/Dsp.h"
@@ -692,14 +693,15 @@ void Composer::voiceRecipeOffsets(PolyInstance voice, const VoiceRecipe& r, floa
     for (const Loading& l : kVoiceLoadings) out[l.param] += amount * l.weight * pal.scale[l.macro] * r.macro[l.macro];
 }
 
-void Composer::matchMaster(const ParamStore& p, TrackPlan& t) const
+void Composer::matchMaster(const ParamStore& p, TrackPlan& t, const double* firstReading) const
 {
     const int ms = p.base(Module::Master);
     t.masterGainDb = 0.0f;
     if (!p.getBool(ms + master::AutoGain)) return;
     const double target = p.get(ms + master::TargetLufs);
     // Measure, correct, measure again, and take a secant step between the two readings.
-    const double l0 = probeLoudness(p, t, -2, 0.0f);
+    // The first reading may have been rendered already, beside the presence probes (measureTrack).
+    const double l0 = firstReading != nullptr ? *firstReading : probeLoudness(p, t, -2, 0.0f);
     t.mixLoudness = l0;
     if (l0 < -60.0) return;
     const double g1 = std::clamp(target - l0, -18.0, 18.0);
@@ -738,16 +740,21 @@ constexpr double kPresenceCutDb = 6.0;     ///< the most the lines are taken dow
 constexpr double kPresenceLiftDb = 3.0;    ///< the most they are brought up
 } // namespace
 
-void Composer::matchPresence(const ParamStore& p, TrackPlan& t) const
+void Composer::matchPresence(const ParamStore& p, TrackPlan& t, const double* linesReading, const double* restReading) const
 {
     t.presenceDb = 0.0;
     t.presenceAfterDb = 0.0;
     t.presenceGainDb = 0.0f;
     // Measured whenever the level match runs, so that a render with the match off still reports where each
     // track stands (phos_render --tracks); corrected only with compose.presence_match on.
+    // The two readings may have been rendered already, side by side (measureTrack).
     double lines[2] = {}, rest[2] = {};
-    probeLoudness(p, t, kProbeLines, 0.0f, lines);
-    probeLoudness(p, t, kProbeRest, 0.0f, rest);
+    if (linesReading != nullptr && restReading != nullptr) {
+        for (int i = 0; i < 2; ++i) { lines[i] = linesReading[i]; rest[i] = restReading[i]; }
+    } else {
+        probeLoudness(p, t, kProbeLines, 0.0f, lines);
+        probeLoudness(p, t, kProbeRest, 0.0f, rest);
+    }
     const double pl = lines[0], ll = lines[1], pr = rest[0], lr = rest[1];
     if (pl + pr <= 0.0 || ll + lr <= 0.0) return;
     t.presenceDb = t.presenceAfterDb = 10.0 * std::log10((pl + pr) / (ll + lr)) - kPresenceRefDb;
@@ -1020,12 +1027,7 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
         // default Rolling family already asks of the knob.
         makeBassRhythm(p, t);
         makeBassPhrases(p, t);
-        if (p.getBool(cb + compose::LevelMatch)) {
-            t.loudness = probeLoudness(p, t);
-            for (int k = 0; k < kMelodyParts; ++k) t.partLoudness[k] = probeLoudness(p, t, k);
-            matchPresence(p, t);
-        }
-        matchMaster(p, t);
+        measureTrack(p, t);
         return t;   // the first track is the knobs, exactly
     }
 
@@ -1068,24 +1070,110 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     if (r.uniform() < 0.15f * sv) t.kickEngine = 1 - p.getInt(p.base(Module::Kick) + kick::Engine);
     t.kickClip = r.uniform() < 0.3f * sv ? 1 : -1;
 
-    if (p.getBool(cb + compose::LevelMatch)) {
-        t.loudness = probeLoudness(p, t);
-        const double reference = plans_[0].loudness;
-        t.gainDb = static_cast<float>(std::clamp(reference - t.loudness, -9.0, 9.0));
-        // Each melodic part against the same part in the first track; the track gain applies to it as
-        // well, so it is taken back out.
-        for (int k = 0; k < kMelodyParts; ++k) {
-            // A part the track does not use needs no correction (the first track measures all of them:
-            // it is the reference for every later one).
-            if (!t.melody.present[k]) { t.partLoudness[k] = -120.0; t.partGainDb[k] = 0.0f; continue; }
-            t.partLoudness[k] = probeLoudness(p, t, k);
-            const bool measurable = plans_[0].partLoudness[k] > -60.0 && t.partLoudness[k] > -60.0;
-            t.partGainDb[k] = measurable ? static_cast<float>(std::clamp(plans_[0].partLoudness[k] - t.partLoudness[k] - t.gainDb, -12.0, 12.0)) : 0.0f;
-        }
-        matchPresence(p, t);
-    }
-    matchMaster(p, t);
+    measureTrack(p, t);
     return t;
+}
+
+/**
+ * @brief Everything a plan learns from probe renders: the level match, the presence match and Auto Gain.
+ *
+ * Until 20.09.2026 these were twelve renders one after the other, 12 s per track. What each probe *reads*
+ * decides what may run at the same time (round "speed"; the maths of every step is where it was):
+ *
+ *  1. the foundation and the melodic parts play the track with every correction taken out (probeLoudness
+ *     zeroes gainDb, partGainDb and presenceGainDb for them), so they depend on nothing measured and on
+ *     each other not at all -- one stage, up to eight at once;
+ *  2. the two presence probes keep the level corrections (the balance they measure is the one those make),
+ *     so they wait for stage 1 and then run side by side;
+ *  3. the first mix probe plays the track with *all* corrections, the presence gain on the lines included
+ *     (trackStartControls), so it waits for stage 2 -- unless compose.presence_match is off, when that gain
+ *     is zero by construction and the mix probe runs beside the presence probes;
+ *  4. the second mix probe needs the first one's reading for its gain, so it is last and alone.
+ *
+ * The longest chain is then 2 + 8 + 16 + 16 bars instead of 64 to 72: measured 10.9 s against 15.3 s for the
+ * listening seed's first track beside another round's load (the two mix probes are 8.2 s of it and cannot
+ * overlap). Starting the first mix probe early on the guess that the presence gain will be zero was
+ * measured and dropped: the guess holds for 17 of 44 plans (seeds 1..6 and the listening seed), saves 2.1 s
+ * when it does, and burns a 16-bar render when it does not -- CPU a parallel test run has no spare of.
+ *
+ * With probe::threads() == 1 -- the library's default, the plugin and the Quest -- the old serial order
+ * runs unchanged, and testProbeSchedule compares the two bit for bit. The tasks never touch the plan: each
+ * reads a snapshot taken before its stage and writes a slot of its own, because a probe copies the whole
+ * plan and another task writing one of its fields meanwhile would be a data race even where the value is
+ * not used.
+ */
+void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
+{
+    const int cb = p.base(Module::Compose);
+    const bool level = p.getBool(cb + compose::LevelMatch);
+    const bool first = t.index == 0;
+    // The level match's arithmetic, once for both orders. The first track is the reference: it measures
+    // every part and corrects nothing.
+    auto trackGain = [&] {
+        if (!first) t.gainDb = static_cast<float>(std::clamp(plans_[0].loudness - t.loudness, -9.0, 9.0));
+    };
+    // A part the track does not use needs no correction (the first track measures all of them: it is the
+    // reference for every later one).
+    auto partProbed = [&](int k) { return first || t.melody.present[k]; };
+    // Each melodic part against the same part in the first track; the track gain applies to it as well,
+    // so it is taken back out.
+    auto partGain = [&](int k) {
+        if (first) return;
+        if (!t.melody.present[k]) { t.partLoudness[k] = -120.0; t.partGainDb[k] = 0.0f; return; }
+        const bool measurable = plans_[0].partLoudness[k] > -60.0 && t.partLoudness[k] > -60.0;
+        t.partGainDb[k] = measurable ? static_cast<float>(std::clamp(plans_[0].partLoudness[k] - t.partLoudness[k] - t.gainDb, -12.0, 12.0)) : 0.0f;
+    };
+
+    if (probe::threads() <= 1) {
+        // The serial order of before 20.09.2026.
+        if (level) {
+            t.loudness = probeLoudness(p, t);
+            trackGain();
+            for (int k = 0; k < kMelodyParts; ++k) {
+                if (partProbed(k)) t.partLoudness[k] = probeLoudness(p, t, k);
+                partGain(k);
+            }
+            matchPresence(p, t);
+        }
+        matchMaster(p, t);
+        return;
+    }
+
+    // The shared loads are not thread-safe (Probe.h): on this thread, before any worker exists.
+    probe::warmSharedData();
+    const bool autoGain = p.getBool(p.base(Module::Master) + master::AutoGain);
+    std::vector<std::function<void()>> tasks;
+    if (level) {
+        // Stage 1: the foundation and the parts.
+        const TrackPlan snap = t;
+        double loudness = 0.0, partLoudness[kMelodyParts] = {};
+        tasks.push_back([&] { loudness = probeLoudness(p, snap); });
+        for (int k = 0; k < kMelodyParts; ++k)
+            if (partProbed(k)) tasks.push_back([&, k] { partLoudness[k] = probeLoudness(p, snap, k); });
+        probe::runAll(tasks);
+        t.loudness = loudness;
+        trackGain();
+        for (int k = 0; k < kMelodyParts; ++k) {
+            if (partProbed(k)) t.partLoudness[k] = partLoudness[k];
+            partGain(k);
+        }
+    }
+    // Stage 2: the presence probes -- and the first mix probe beside them only where the presence match
+    // cannot move the lines, because it is off (the mix probe first in the list: it is the longest).
+    const bool mixEarly = autoGain && level && !p.getBool(cb + compose::PresenceMatch);
+    double lines[2] = {}, rest[2] = {}, mix0 = 0.0;
+    if (level) {
+        t.presenceGainDb = 0.0f;   // what matchPresence starts from
+        const TrackPlan snap = t;
+        tasks.clear();
+        if (mixEarly) tasks.push_back([&] { mix0 = probeLoudness(p, snap, -2, 0.0f); });
+        tasks.push_back([&] { probeLoudness(p, snap, kProbeLines, 0.0f, lines); });
+        tasks.push_back([&] { probeLoudness(p, snap, kProbeRest, 0.0f, rest); });
+        probe::runAll(tasks);
+        matchPresence(p, t, lines, rest);
+    }
+    // Stages 3 and 4: Auto Gain's two readings, the second after the first.
+    matchMaster(p, t, mixEarly ? &mix0 : nullptr);
 }
 
 void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out,
@@ -1401,14 +1489,18 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     // as its blocks really play -- intro and outro included, since the gated integrated loudness counts
     // them: the densest block alone over-read a track by 0.8 LU, four bars from its middle by 0.6 LU.
     const int bars = part == -2 ? 16 : (presence ? 8 : 2);
-    auto engine = std::make_unique<Engine>();
-    engine->prepare(sr, 512);
-    engine->params().copyValuesFrom(p);
+    // The probe's inputs are collected first -- the parameter values, the controls, the notes -- and the
+    // engine is built only when they have to be rendered (20.09.2026, round "speed"): with the probe cache
+    // on (Probe.h) the same inputs may already have been rendered, by this process or another. The engine
+    // receives exactly what it used to receive, in the same order: its two rings are independent, and
+    // nothing is rendered before the last push.
+    ParamStore ps;
+    ps.copyValuesFrom(p);
     const int mb = p.base(Module::Mix);
-    engine->params().set(mb + mix::KickMute, 0.0f);
-    engine->params().set(mb + mix::BassMute, 0.0f);
-    engine->params().set(mb + mix::TrackGain, 0.0f);
-    engine->params().set(mb + mix::PercMute, 0.0f);
+    ps.set(mb + mix::KickMute, 0.0f);
+    ps.set(mb + mix::BassMute, 0.0f);
+    ps.set(mb + mix::TrackGain, 0.0f);
+    ps.set(mb + mix::PercMute, 0.0f);
     // The foundation (part -1): kick, bass and percussion. A melodic part: that part alone. The whole mix
     // (part -2): everything with its corrections, through the master. The first two are measured before
     // the master's dynamics, which would bend the relation between gain and loudness.
@@ -1416,24 +1508,23 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
         const MelodyPart mp = static_cast<MelodyPart>(k);
         const int mute = mp == MelodyPart::Acid ? static_cast<int>(mix::AcidMute) : mix::polyMute(melodyPoly(mp));
         const bool on = k == part || part == -2 || (part == kProbeLines && isLine(mp)) || (part == kProbeRest && !isLine(mp));
-        engine->params().set(mb + mute, on ? 0.0f : 1.0f);
+        ps.set(mb + mute, on ? 0.0f : 1.0f);
     }
-    engine->params().set(mb + mix::SfxMute, 1.0f);
+    ps.set(mb + mix::SfxMute, 1.0f);
     const int ms = p.base(Module::Master);
     if (part != -2) {
-        engine->params().set(ms + master::CompRatio, 1.0f);
-        engine->params().set(ms + master::Limiter, 0.0f);
-        engine->params().set(ms + master::Clip, 0.0f);
-        engine->params().set(ms + master::Clipper, 0.0f);
+        ps.set(ms + master::CompRatio, 1.0f);
+        ps.set(ms + master::Limiter, 0.0f);
+        ps.set(ms + master::Clip, 0.0f);
+        ps.set(ms + master::Clipper, 0.0f);
     }
     if (part >= 0 || part == kProbeLines) {
-        engine->params().set(mb + mix::KickMute, 1.0f);
-        engine->params().set(mb + mix::BassMute, 1.0f);
-        engine->params().set(mb + mix::PercMute, 1.0f);
+        ps.set(mb + mix::KickMute, 1.0f);
+        ps.set(mb + mix::BassMute, 1.0f);
+        ps.set(mb + mix::PercMute, 1.0f);
     }
     TempoMap tm;
     tm.setConstant(plan.bpm);
-    engine->setTempoMap(tm);
 
     std::vector<ControlEvent> controls;
     TrackPlan neutral = plan;
@@ -1446,7 +1537,6 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     }
     trackStartControls(p, neutral, 0.0, controls);
     arcControls(p, neutral, 0, 0.0, false, controls);
-    for (const ControlEvent& c : controls) engine->pushControl(c);
 
     const int root = bassRootNote(plan.key, p.getInt(p.base(Module::Compose) + compose::BassRegister));
     const BassPatternDef& pat = kBassPatterns[plan.primaryPattern];
@@ -1556,7 +1646,7 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
             const double u = sec.bars > 1 ? static_cast<double>(sourceBar(b) - sec.startBar) / sec.bars : 0.0;
             c.value = (plan.gainDb + energyGainDb(0.5f * (sec.energy + sec.energyTo)) + sectionTrimDb(plan.form, bp.index, u))
                     / (g.maxValue - g.minValue);
-            engine->pushControl(c);
+            controls.push_back(c);
         }
         PercBarSpec spec;
         spec.layers = bp.percLayers;
@@ -1612,12 +1702,46 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
             keep.push_back(c);
         }
         std::stable_sort(keep.begin(), keep.end(), [](const ControlEvent& a, const ControlEvent& b) { return a.beat < b.beat; });
-        for (const ControlEvent& c : keep) engine->pushControl(c);
+        for (const ControlEvent& c : keep) controls.push_back(c);
     }
     // One ring, so one order: the engine plays from the head of the ring.
     std::stable_sort(notes.begin(), notes.end(), noteLess);
-    for (const NoteEvent& n : notes) engine->pushEvent(n);
     const int total = static_cast<int>(tm.secondsAt(bars * kBeatsPerBar) * sr);
+
+    // The cache key: everything the render below depends on (Probe.h). Field by field, so that padding
+    // bytes never enter it; with the counts, so that a note cannot pass for a control.
+    const bool cached = probe::cacheEnabled();
+    probe::Key key;
+    if (cached) {
+        probe::Hasher h;
+        h.text("phos probe 1");   // the layout of this key
+        h.text(probe::buildId());
+        h.add(probe::sharedDataId());
+        h.add(sr);
+        h.add(static_cast<int32_t>(512));
+        h.add(static_cast<int32_t>(total));
+        h.add(static_cast<uint8_t>(bands != nullptr ? 1 : 0));
+        h.add(plan.bpm);
+        h.add(static_cast<int32_t>(ps.count()));
+        for (int i = 0; i < ps.count(); ++i) h.add(ps.get(i));
+        h.add(static_cast<uint64_t>(controls.size()));
+        for (const ControlEvent& c : controls) { h.add(c.beat); h.add(c.length); h.add(c.value); h.add(c.param); h.add(c.kind); }
+        h.add(static_cast<uint64_t>(notes.size()));
+        for (const NoteEvent& n : notes) { h.add(n.beat); h.add(n.length); h.add(n.part); h.add(n.lane); h.add(n.pitch); h.add(n.velocity); h.add(n.flags); }
+        key = h.finish();
+        double v[3];
+        if (probe::cacheLookup(key, v)) {
+            if (bands != nullptr) { bands[0] = v[1]; bands[1] = v[2]; }
+            return v[0];
+        }
+    }
+
+    auto engine = std::make_unique<Engine>();
+    engine->prepare(sr, 512);
+    engine->params().copyValuesFrom(ps);
+    engine->setTempoMap(tm);
+    for (const ControlEvent& c : controls) engine->pushControl(c);
+    for (const NoteEvent& n : notes) engine->pushEvent(n);
     LoudnessMeter meter;
     meter.prepare(sr);
     std::vector<float> L(512), R(512);
@@ -1649,7 +1773,12 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
         }
     }
     if (bands != nullptr) { bands[0] = bandSum[0]; bands[1] = bandSum[1]; }
-    return meter.read().integrated;
+    const double integrated = meter.read().integrated;
+    if (cached) {
+        const double v[3] = { integrated, bandSum[0], bandSum[1] };
+        probe::cacheStore(key, v);
+    }
+    return integrated;
 }
 
 const TrackPlan& Composer::track(const ParamStore& p, int index) const

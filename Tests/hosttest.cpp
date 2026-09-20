@@ -302,6 +302,12 @@ int main(int argc, char** argv)
     // The child half of the learned-model section below; it prints one line and checks nothing.
     if (argc > 1 && juce::String(argv[1]) == "--probe-models") return probeModels();
     std::printf("Phosphene host test\n");
+    // Round "speed" (20.09.2026). This test builds some forty processors and nearly every one plans a
+    // track, 12 to 15 s of probe renders each -- that, not real-time playback, is what made it 9 to 11
+    // minutes. As a development program it opts in to parallel probes and, under ctest, to the suite's probe
+    // cache (phos/Probe.h); the plans are bit for bit the shipped plugin's, which the oracle section below
+    // keeps proving against phos_render. The one section that *times* a plan switches both off again.
+    phos::probe::configureFromEnvironment();
 
     // ---------------------------------------------------------------- the shipped wavetable pack
     //
@@ -637,6 +643,11 @@ int main(int argc, char** argv)
         // that it does not, over three seconds, at a block size that leaves 5.3 ms per block.
         const double sr = 48000.0;
         const int block = 256;
+        // What is timed here is the shipped plugin's plan: one probe thread, no cache (round "speed").
+        const int probeThreads = phos::probe::threads();
+        const std::string probeCache = phos::probe::cacheDir();
+        phos::probe::setThreads(1);
+        phos::probe::setCacheDir("");
         auto p = std::make_unique<PhospheneProcessor>();
         p->setFollowHost(false);
         p->setPlayConfigDetails(0, 2, sr, block);
@@ -695,6 +706,9 @@ int main(int argc, char** argv)
                                            + juce::String(static_cast<int>(pattern.size())) + " notes)");
         check(kicks >= 12, "and the kick is in it (" + juce::String(kicks) + " notes in four bars)");
         check(percs > 0, "and the percussion kit too (" + juce::String(percs) + " notes)");
+        p.reset();   // its composer thread ends here, before the settings it planned under change
+        phos::probe::setThreads(probeThreads);
+        phos::probe::setCacheDir(probeCache);
     }
 
     // ---------------------------------------------------------------- state round trip

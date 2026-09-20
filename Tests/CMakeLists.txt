@@ -53,8 +53,16 @@ function(phos_copy_data target)
     endforeach()
 endfunction()
 
+# The probe cache of the whole suite (round "speed", 20.09.2026; Core/include/phos/Probe.h): one directory
+# in the build tree, shared by every test process, so that a plan one section has measured -- the listening
+# seed's first tracks are planned by a dozen sections -- is not rendered again by the next, in this run or a
+# later one. Entries are keyed by the core's build id, so a changed core never reads an old core's numbers;
+# `cmake -E rm -rf <build>/probe_cache` makes the next run a cold one (it only costs time).
+set(PHOS_PROBE_CACHE_DIR "${CMAKE_BINARY_DIR}/probe_cache")
+
 # The self test: every building block measured, and the engine as a whole.
-add_executable(phos_selftest selftest.cpp)
+# selftest_probe.cpp: the sections of round "speed" (20.09.2026), registered in selftest.cpp's main() like the rest.
+add_executable(phos_selftest selftest.cpp selftest_probe.cpp)
 target_link_libraries(phos_selftest PRIVATE PhospheneCore)
 phos_test_data_dir(phos_selftest)
 phos_copy_data(phos_selftest ${PHOS_DATA_FILES})
@@ -85,6 +93,7 @@ if(NOT ANDROID)
 "set(PHOS_SELFTEST_EXE [==[$<TARGET_FILE:phos_selftest>]==])
 set(PHOS_SELFTEST_DIR [==[$<TARGET_FILE_DIR:phos_selftest>]==])
 set(PHOS_TEST_TMP [==[${CMAKE_CURRENT_BINARY_DIR}/tmp/$<CONFIG>]==])
+set(PHOS_PROBE_CACHE_DIR [==[${PHOS_PROBE_CACHE_DIR}]==])
 set(PHOS_CMAKE [==[${CMAKE_COMMAND}]==])
 set(PHOS_SELFTEST_SOURCE [==[${CMAKE_CURRENT_SOURCE_DIR}/selftest.cpp]==])
 include([==[${CMAKE_CURRENT_SOURCE_DIR}/selftest_tests.cmake]==])
@@ -119,6 +128,8 @@ if(NOT ANDROID)
     if(Python3_FOUND)
         add_test(NAME cuecheck COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/cue_check.py
                  --demo $<TARGET_FILE:phos_cuedemo>)
+        # phos_cuedemo inherits it from the script.
+        set_tests_properties(cuecheck PROPERTIES ENVIRONMENT "PHOS_PROBE_CACHE=${PHOS_PROBE_CACHE_DIR}")
     endif()
 endif()
 

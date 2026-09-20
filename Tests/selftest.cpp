@@ -12177,8 +12177,17 @@ void testVoicesAcidRide()
  * @param argv `--list`, `--only <names>`
  * @return 0 when every check passed, 1 when one failed, 2 on a bad command line
  */
+// Round "speed" (20.09.2026): the probe scheduler's opt-in, and the two sections of Tests/selftest_probe.cpp
+// (a file of their own so that they do not collide with the rounds that work in this one).
+#include "phos/Probe.h"
+void testProbeSchedule();
+void testProbeCache();
+
 int main(int argc, char** argv)
 {
+    // A development program: the composer's probes run in parallel, and from the probe cache when
+    // PHOS_PROBE_CACHE names a directory (ctest does; phos/Probe.h). Neither changes a number.
+    phos::probe::configureFromEnvironment();
     // Unbuffered: under ctest stdout is a pipe and fully buffered, so a crash took every line the
     // section had printed with it. On 19.09.2026 selftest.testVoices died with an access violation
     // after 249 s and ctest recorded no output at all; the check that ran last is the first clue.
@@ -12339,5 +12348,7 @@ int main(int argc, char** argv)
     run("testMidiKeys", testMidiKeys);
     run("testWav", testWav);
     run("testLoudness", testLoudness);
+    run("testProbeSchedule", testProbeSchedule);
+    run("testProbeCache", testProbeCache);
     return finish();
 }

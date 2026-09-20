@@ -8,6 +8,7 @@
 #   PHOS_SELFTEST_EXE   the built phos_selftest
 #   PHOS_SELFTEST_DIR   its directory: the working directory of every test, where the data files are
 #   PHOS_TEST_TMP       a directory each test gets a TMP/TEMP of its own under
+#   PHOS_PROBE_CACHE_DIR  the suite's probe cache (Tests/CMakeLists.txt; round "speed", 20.09.2026)
 #   PHOS_CMAKE          the cmake that configured the tree (for the placeholder tests)
 #   PHOS_SELFTEST_SOURCE  Tests/selftest.cpp, whose run(...) lines the list is compared with
 #
@@ -212,10 +213,12 @@ function(phos_selftest_env test)
     set(tmp "${PHOS_TEST_TMP}/${test}")
     file(MAKE_DIRECTORY "${tmp}")
     # PHOS_MUTE=1 as for every audible binary started by hand (the self test itself opens no device);
-    # TMP/TEMP for the temporary files above; TMPDIR for the same on Linux and macOS.
+    # TMP/TEMP for the temporary files above; TMPDIR for the same on Linux and macOS; PHOS_PROBE_CACHE so
+    # that a probe render any test process has done is not done again (phos/Probe.h -- the sections that
+    # test the scheduler and the cache themselves switch it off for their references).
     set_tests_properties("${test}" PROPERTIES
         WORKING_DIRECTORY "${PHOS_SELFTEST_DIR}"
-        ENVIRONMENT "PHOS_MUTE=1;TMP=${tmp};TEMP=${tmp};TMPDIR=${tmp}"
+        ENVIRONMENT "PHOS_MUTE=1;TMP=${tmp};TEMP=${tmp};TMPDIR=${tmp};PHOS_PROBE_CACHE=${PHOS_PROBE_CACHE_DIR}"
         # A PHOS_ONLY left in the shell must not shrink the full run (--only ignores it anyway).
         ENVIRONMENT_MODIFICATION "PHOS_ONLY=unset:")
 endfunction()
