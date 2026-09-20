@@ -5340,7 +5340,7 @@ Eintrag, keine Temp-Datei übrig.
 
 *ASan* (`build-asan`, `/fsanitize=address`, wie die Feinschliff-Runde; der eine zusätzliche Baum, den der Auftrag
 verlangt): `testProbeSchedule` (1634 s) und `testProbeCache` (975 s) mit 8 Proben-Threads: 26 Prüfungen grün, keine
-Meldung. TSan gibt es unter MSVC nicht; gegen Rennen stehen die Bitgleichheit über 53 Pläne, die Schnappschuss-
+Meldung; dazu der planungsschwere Bestandsabschnitt `testVariety.levelMatch` (3136 s): grün, keine Meldung. TSan gibt es unter MSVC nicht; gegen Rennen stehen die Bitgleichheit über 53 Pläne, die Schnappschuss-
 Regel (keine Aufgabe schreibt, was eine andere liest) und Mutation 4.
 
 *Hören.* Nichts zu hören, und das ist das Ergebnis: A (Takte 24--72, 79,4 s), B (328--368, 66,2 s), C (392--424,
