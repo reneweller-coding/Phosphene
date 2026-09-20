@@ -6134,6 +6134,109 @@ hätten; der bewiesene, sichere Wert stand höher als der spekulative.
 entfernt, Kommentare auf den neuen Messstand gebracht, `PROCESSORS` unverändert bei 5 nach dem
 gescheiterten Versuch mit 2); dieser Block. Keine Zeile in `Core/`, `Plugin/`, `Quest/`.
 
+**20.09.2026, Feinschliff II: Höhepunkt und Helligkeit, die letzten drei Lücken**
+
+Anlass: die drei verbliebenen Messungen der "polish"-Runde (19.09.2026), A4 des Auftrags. Alle Messungen: 30
+Tracks (5 Stile, 2 Seeds, je 3 Tracks) mit `phos_render`, Standardregler; Skripte in
+`PhospheneWork\scratch\climax-polish\presence_scan.py` (Planzahlen, ohne Render) und `brightness_gap.py`
+(gerendert, mit `Tools/metrics.py`s Leistungsmaß). Die Hoerschnipsel: `out\listen\climax-polish`.
+
+*(a) Grosser Build noch heller als Drop 2.* Vorher (30 Tracks, letzte acht Takte des grossen Builds gegen
+die hellste Achtergruppe von Drop 2, ueber 1,5 kHz): Median **+0,90 dB**, schlechtester Fall +2,52 dB, in 20
+von 30 Tracks der Build noch heller -- nur Progressive (kurzer Build) stand schon vorher im Minus. Zuerst
+versucht: Drop 2s Filter weiter oeffnen (`kClimaxOpen` 0,05 -> 0,09, Form.h). **Gemessen: wirkungslos**, der
+Render kam Bit-fuer-Bit gleich heraus -- `Composer.cpp`s `cutoffAt` haengt beim Klimax schon am Deckel des
+normierten Reglerbereichs (eigener energieabhaengiger Offset plus das bestehende `kClimaxOpen` ueberschreiten
+ihn schon), kein Spielraum mehr zum Oeffnen; zurueckgenommen. Zwei Aenderungen auf der Build-Seite versucht:
+die Rolle nimmt jetzt auch auf den Sechzehnteln einen eigenen Abzug (`rollScale` 0,85, Rhythm.cpp, nicht nur
+auf den Zweiunddreissigsteln, dort von 0,75 auf 0,65 verschaerft), und der zweite, gestapelte Riser des
+grossen Builds wurde probeweise von vier auf zwei Takte verkuerzt (Form.cpp) -- seine Amplitude ist das
+Quadrat seiner eigenen Position, er erreicht denselben Hoehepunkt zum selben Zeitpunkt, nur halb so lange.
+**Die Mutationsrunde entlarvte den zweiten Versuch als wirkungslos**: die Rolle allein zurueckgenommen liess
+die neue Pruefung sofort rot werden (+0,53 statt hoechstens 0,45 dB), der Riser allein zurueckgenommen liess
+sie unveraendert gruen (+0,31 dB, exakt wie mit der Kuerzung) -- auf dem Hoer-Seed bewirkte die
+Riser-Kuerzung nichts Messbares, auf den 30 Tracks nur 0,01 dB Median-Unterschied. Zurueckgenommen: kein
+Nutzen rechtfertigt das Risiko an einer vorher bewusst gesetzten Genre-Eigenschaft ("Riser bis zum
+Aeussersten"). Geblieben ist nur die Rollen-Aenderung. Nachher (30 Tracks): Median **+0,62 dB**, schlechtester
+Fall +2,39 dB, weiterhin 20 von 30 (die Aenderung verkleinert die Marge ueberall, sie schliesst sie nicht bei
+jedem Track). Auf dem Hoer-Seed (Track 1, Stil 1): +0,51 -> +0,31 dB.
+
+*(b) `matchPresence`s blinde Flecken.* Zwei Teilprobleme.
+
+Erstens: fuenf von 30 Tracks hatten in ihren Drops gar keine Linie (weder Lead noch Counter, Arp oder Stab)
+-- die Garantie "mindestens eine Melodiestimme" (Melody.cpp) liess sich schon von der Acid allein erfuellen,
+und Acid zaehlt fuer `matchPresence` (und fuer die Helligkeit) nicht als Linie. Neu: wenn Lead, Arp und Stab
+alle fehlen, faengt eine zweite, gleich gewichtete Wahl unter genau diesen dreien (nicht Acid, nicht Counter
+-- Counter spielt nie ohne Lead und wuerde einen leadlosen Drop nicht oeffnen) eine davon auf, in der
+Reihenfolge, in der sie im Drop wirklich erklingen (Lead und Arp immer, wenn vorhanden; Stab zu drei Vierteln
+je Sektion). Gemessen ueber 150 Plaene (5 Stile, 6 Seeds, je 5 Tracks, `compose.level_match=Off`): **14 von
+150 linienlose Tracks vorher, 0 von 150 nachher.**
+
+Zweitens: der Deckel des Abgleichs (±6 dB) liess den hellsten der 30 Tracks bei +4,6 dB stehen -- ist der
+Deckel zu eng, oder sitzt die Helligkeit gar nicht in den Linien? Gemessen statt geraten: dieselben 30 Tracks
+mit dem Deckel bei -6 und bei -9 dB gerechnet. Die drei Tracks, an denen der Deckel wirklich zieht, bewegten
+sich 0,47/1,28/1,30 dB bei -6 und 0,55/1,53/1,56 dB bei -9 -- 50 % mehr Abschneiden kaufte hoechstens 0,3 dB
+mehr Korrektur. `matchPresence` korrigiert ausschliesslich die Linien (Lead, Counter, Arp, Stab,
+`probeLoudness`s `kProbeLines`/`kProbeRest`); ein Track, dessen Helligkeit in der Acid, dem Schlagzeug oder
+dem Pad sitzt, hat auf den Linien kaum etwas, das ein tieferer Schnitt noch wegnehmen koennte, egal wie tief.
+Abnehmender Grenznutzen, kein zu enger Deckel. Bei ±6/+3 dB belassen; ein Schnitt ueber den "Rest" wuerde die
+Klangvielfalt der Stimmen-Runde treffen, ein groesserer, hier bewusst nicht gemachter Eingriff. In
+`Composer.cpp` neben `kPresenceCutDb` dokumentiert, damit eine spaetere Runde das Experiment nicht
+wiederholt.
+
+*(c) Die Arp-Oktavanhebung.* Vom Auftrag als moegliche Regression genannt (13 statt 15 von 16 Tracken seit
+der "dialogue"-Runde). Nachgelesen: `testArrangement`s eigener Kommentar und der "dialogue"-Block dieses
+Dokuments belegen, dass das die **beabsichtigte** Folge der Register-Aenderung jener Runde ist -- die Lead
+liegt jetzt in C4..B4, die Register-Wache hebt die Arp in Drop 1 schon oefter ueber sie, und Drop 2s eigene
+Oktave findet sie dort schon hoch vor; die mittlere Tonhoehe faellt nie. Kein Fix, per Auftrag ("nicht gegen
+die Genre-Entscheidung einer anderen Runde ankaempfen"). Die Zahl verschob sich durch (b) trotzdem noch
+einmal, auf 14 von 17 -- ein Nebeneffekt der Linien-Garantie oben, die einem Track eine Arp gab, wo vorher
+keine war, und ihn so in den Zaehlpool aufnahm. Kommentar und Zahl in `testArrangement` aktualisiert.
+
+*Pruefungen.* `testPresence` neuer Teil (c): 150 Plaene, 0 linienlose Tracks (vorher 14, rot zuerst gesehen).
+`testClimax`s gerenderter Teil: neue Pruefung, Build-Ende gegen Drop 2s hellste Gruppe, Schwelle 0,45 dB auf
+dem Hoer-Seed (vorher +0,51 dB rot, nachher +0,31 dB gruen; Stil 2/Progressive beide Male im Minus).
+`testArrangement` unveraendert in der Logik, Kommentar und Zahl aktualisiert (13/16 -> 14/17).
+
+*Mutationen* (eingebaut, mit `--only` geprueft, aus der Kopie zurueck, Zeitstempel gesetzt):
+
+| Mutation | Wer merkt es |
+|---|---|
+| Melody.cpp: die neue Linien-Garantie abgeschaltet | `testPresence` (c): 14 von 150 statt 0 (rot zuerst gesehen) |
+| Rhythm.cpp: `rollScale` auf den alten Stand (nur Zweiunddreissigstel gedaempft) | `testClimax`s neue Pruefung: +0,53 statt hoechstens 0,45 dB |
+| Form.cpp: der zweite Riser zurueck auf vier Takte (bei getrimmter Rolle) | **nichts** -- `testClimax` blieb bei +0,31 dB gruen; deshalb aus dem Code genommen statt behalten |
+
+Die dritte Mutation ist kein Fehlschlag der Pruefung, sondern das Ergebnis, das sie liefern soll: sie zeigte,
+dass die Riser-Kuerzung nichts beitrug, bevor sie unnoetig im Code geblieben waere.
+
+*Hoeren* (`out\listen\climax-polish`, Hoer-Seed 864566672, 145 BPM): A (Takt 24-72, Track 1) und B (328-368,
+Track 2) zeigen Build 1 in Drop 1 -- die getrimmte Rolle spielt dort mit (derselbe Code, jeder Build mit
+Rolle), aber Build 1 ist kurz und ohne PDB-Rolle bis in die Zweiunddreissigstel, die eigentliche Aenderung
+ist am grossen Build vor Drop 2 am deutlichsten zu hoeren. Dafuer neu, aus `scratch/climax-polish/extra.py`:
+`D_track2_bigbuild_drop2` (Takt 400-448, 79,4 s) -- der grosse Build von Track 2 in seinen letzten sechzehn
+Takten (die Rolle: Sechzehntel, dann Zweiunddreissigstel, beide jetzt leiser) bis **26,5 s**, wo Drop 2
+einsetzt; der Sprung dort ist die Marge, die `testClimax`s neue Pruefung misst (+0,31 dB Restlucke auf
+diesem Track, gemessen ueber 1,5 kHz). C (392-424, in den Break) unveraendert, zeigt Drop 1 in den
+Breakdown -- diese Runde aendert daran nichts.
+
+*Endstand.* `ctest -C Release -j 12` im Plugin-Build (Commit 1aec104): **113 von 113 gruen** (`selftest` als
+Gesamtlauf deaktiviert, `questguard` uebersprungen -- kein `ThirdParty` in diesem Arbeitsbaum), Wandzeit
+815,3 s. Darunter `testClimax` (194,7 s, alle sieben Pruefungen inklusive der neuen) und `testPresence`
+(419,1 s, alle drei inklusive der neuen (c)) einzeln gruen; `hosttest` 173,9 s, `vst3test` 70,9 s.
+
+*Nicht geschafft / offen.* Die Build-vs-Drop-2-Helligkeit ist verkleinert, nicht geschlossen (Median 0,62 dB
+Restlucke, 20 von 30 Tracks noch positiv); weitere Haerte haette entweder tiefer in den Riser/Hut-Klang
+eingegriffen (mehr Risiko fuer wenig gemessenen Gewinn, siehe die verworfene Mutation) oder Drop 2 selbst
+lauter/heller gemacht, was `testClimax`s bestehende Lautheits- und Breite-Pruefungen wieder anders austariert
+haette -- ausserhalb des Zeitrahmens dieser Runde. Der hellste Track bleibt trotz Deckel-Experiment ueber dem
+Referenzmedian; ein Fix dafuer beruehrt die Klangvielfalt der Stimmen-Runde und ist eine groessere, hier
+bewusst nicht begonnene Aenderung.
+
+*Dateien.* Core: `Melody.cpp` (die Linien-Garantie), `Rhythm.cpp` (`rollScale`), `Composer.cpp`
+(nur Dokumentation, `kPresenceCutDb` unveraendert); `Tools/render/main.cpp` (`--tracks` druckt jetzt auch
+`presenceAfterDb`); `Tests/selftest.cpp` (`testPresence` Teil (c) neu, `testClimax` neue Pruefung,
+`testArrangement`-Kommentar aktualisiert); dieser Block. Keine Zeile in `Plugin/`, `Quest/`.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
