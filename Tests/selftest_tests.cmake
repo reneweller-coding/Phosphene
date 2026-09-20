@@ -41,12 +41,22 @@ set(PHOS_SELFTEST_SECONDS
     testVoices.counterSound77          242.4
     testVoices.counterSound2026        234.5
     testVoices.sound                    61.4
-    testPhaseLock.lock                 205.2
-    testModalInterchange.presenceOn2   204.8
-    testVariety.levelMatch             209.6
-    testModalInterchange.presenceOff2  204.5
-    testModalInterchange.presenceOn1   194.6
-    testModalInterchange.presenceOff1  194.8
+    # The ten entries below (round "test-speed-rest", 20.09.2026, A6): re-measured after the five
+    # sections' whole-track renders moved onto phos::probe::runAll's pool (Tests/selftest.cpp),
+    # from the round's own final `ctest -C Release -j 12` (commit 8e3cc79, 113 tests, full suite
+    # beside them, not isolated) -- docs/PLAN.md has the before numbers and the isolated-run figures.
+    # presenceArc{On,Off}{1,2} had never been costed before (they ran with the 600 s "unmeasured"
+    # placeholder): this is their first entry.
+    testPhaseLock.lock                  38.65
+    testModalInterchange.presenceOn1    38.71
+    testModalInterchange.presenceOn2    39.53
+    testModalInterchange.presenceOff1   41.44
+    testModalInterchange.presenceOff2   40.61
+    testModalInterchange.presenceArcOn1   86.03
+    testModalInterchange.presenceArcOn2   85.14
+    testModalInterchange.presenceArcOff1  82.60
+    testModalInterchange.presenceArcOff2  79.09
+    testVariety.levelMatch             121.09
     testMelody.blockSize               35.7
     testPhaseLock.onsets               66.4
     testAcidVoicing.corners             43.1
