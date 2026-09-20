@@ -15,10 +15,12 @@
 #include "phos/WaveTableFile.h"
 #include "phos/Fft.h"
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <mutex>
 
 namespace phos {
 
@@ -97,10 +99,20 @@ struct LibraryEntry {
     bool loaded = false;
 };
 
-/** @brief The loaded library: built once, read from the audio thread only through waveTable(). */
+/**
+ * @brief The loaded library: built once, read from the audio thread only through waveTable().
+ *
+ * `attempted` is the call-once gate for loadWaveTableLibrary() below: a thread that finds it already
+ * true (acquire) knows every write the loading thread made -- entry[], count, bytes -- is visible to
+ * it too (release), without taking `mutex`. `mutex` serialises the small number of threads that *do*
+ * find it false, so only one of them runs parsePack() while the rest block instead of racing it (the
+ * bug this struct replaces: a plain `bool attempted` let a second thread see "already attempted" and
+ * return `count` -- still 0 -- while the first thread's parse was still in flight).
+ */
 struct Library {
     LibraryEntry entry[kNumLibraryWaveTables > 0 ? kNumLibraryWaveTables : 1];
-    bool attempted = false;
+    std::atomic<bool> attempted{ false };
+    std::mutex mutex;
     int count = 0;
     size_t bytes = 0;
 };
@@ -213,14 +225,19 @@ const std::string& waveTableSearchPath() { return searchPath(); }
 
 void setWaveTableFrameLimit(int frames)
 {
-    if (!library().attempted) frameLimit() = frames;
+    if (!library().attempted.load(std::memory_order_acquire)) frameLimit() = frames;
 }
 
 int loadWaveTableLibrary(const char* path, std::string* error)
 {
     Library& lib = library();
-    if (lib.attempted) return lib.count;
-    lib.attempted = true;
+    // Hot path: once loaded (by this call or another thread), no lock -- an acquire load that pairs
+    // with the release store at the bottom of the slow path below.
+    if (lib.attempted.load(std::memory_order_acquire)) return lib.count;
+    std::lock_guard<std::mutex> guard(lib.mutex);
+    // Lost the race for the lock: whoever got there first already finished (attempted is set only
+    // after the load is complete), so there is nothing left to do.
+    if (lib.attempted.load(std::memory_order_relaxed)) return lib.count;
     if (error != nullptr) error->clear();
     const char* name = (path != nullptr && path[0] != 0) ? path : "library.phoswt";
     std::vector<uint8_t> file;
@@ -242,6 +259,9 @@ int loadWaveTableLibrary(const char* path, std::string* error)
 #endif
         if (!got) {
             if (error != nullptr) *error = "cannot open the wavetable library (" + tried + ")";
+            // The one attempt is made either way -- a missing file does not retry on the next call --
+            // so the gate opens here too, after the release store every other thread's acquire load pairs with.
+            lib.attempted.store(true, std::memory_order_release);
             return 0;
         }
     }
@@ -252,16 +272,22 @@ int loadWaveTableLibrary(const char* path, std::string* error)
         lib.count = 0;
         lib.bytes = 0;
         if (error != nullptr) *error = why;
+        lib.attempted.store(true, std::memory_order_release);
         return 0;
     }
+    lib.attempted.store(true, std::memory_order_release);
     return lib.count;
 }
 
 void resetWaveTableLibrary()
 {
     Library& lib = library();
+    // Guarded by the same mutex as the load: cheap (a test-only call, never during a load), and it
+    // rules out a reset landing between a concurrent loader's release store and a reader still using
+    // the entries it is about to clear.
+    std::lock_guard<std::mutex> guard(lib.mutex);
     for (int i = 0; i < kNumLibraryWaveTables; ++i) lib.entry[i] = LibraryEntry{};
-    lib.attempted = false;
+    lib.attempted.store(false, std::memory_order_release);
     lib.count = 0;
     lib.bytes = 0;
 }

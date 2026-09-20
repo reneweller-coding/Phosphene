@@ -5781,6 +5781,99 @@ welche nicht, ist für eine spätere Runde. Nur der gewöhnliche Hall trägt die
 bleibt aus den oben genannten Gründen außen vor, könnte aber über einen eigenen, ungegateten Zugang
 denselben Raum teilen, falls der Nutzer das will.
 
+**20.09.2026, Thread-sichere Lader**
+
+*Anlass* (A7 des Auftrags). Die "speed"-Runde (Block oben) fand die Lücke, durfte die beiden Dateien aber
+nicht anfassen: `Core/src/WaveTableFile.cpp`s `loadWaveTableLibrary()` und `Core/src/Vocal.cpp`s
+`loadVoicePack()` schützten ihren einmaligen Ladevorgang nur mit einem bloßen `bool attempted` -- ohne
+Sperre. Zwei Threads, die den Lader zum ersten Mal gleichzeitig aufrufen, können sich überholen: der zweite
+sieht `attempted == true`, den das erste noch mitten im Parsen gesetzt hatte, und liefert `count`/die
+Phrasenliste zurück, bevor sie gefüllt sind -- eine Bibliothek, die für den Rest des Prozesses leer bleibt,
+oder (unten gemessen) einen Absturz. `probe::warmSharedData()` umging das bislang, indem es beide Lader auf
+dem aufrufenden Thread lädt, bevor ein Arbeiter-Thread überhaupt startet -- eine Umgehung, keine Reparatur.
+
+*Vorher gemessen* (unreparierter Stand, gegen die neue Prüfung unten, dreimal wiederholt): 16 Threads x 30
+Runden, je Runde `resetWaveTableLibrary()`/`resetVoicePack()` und dann alle 16 Threads gleichzeitig
+`loadWaveTableLibrary()`/`loadVoicePack()` (ein Startgatter lässt sie so dicht wie der Scheduler erlaubt
+gleichzeitig loslaufen) -- gegen die Referenz eines sauberen Einzelthread-Ladens davor. Ergebnis: in allen
+drei Läufen etwa 93-94 % der 480 Aufrufe je Lader kamen falsch zurück (meist leer: 0 Tabellen bzw. 0
+Phrasen statt der Referenz); ein Lauf riss den Prozess mit einem Speicherfehler ab (mehrere Threads
+schreiben gleichzeitig in `Library::entry[]`, `parsePack()` läuft doppelt). Das bestätigt Probe.h's
+Warnung ("a bare flag, no lock") als echten, nicht nur theoretischen Fehler.
+
+*Gebaut.* In beiden Dateien dasselbe Call-once-Muster wie `Model.cpp`s `sharedMelodyModel()`/
+`sharedBassModel()` und `PluginProcessor.cpp`s `installSearchPaths()` (Fundstelle vor dem Bauen geprüft),
+aber angepasst: `std::once_flag` selbst lässt sich nicht zurücksetzen, `resetWaveTableLibrary()`/
+`resetVoicePack()` müssen das Gatter aber für die nächste Testrunde wieder öffnen können. Also ein
+`std::atomic<bool> attempted` + `std::mutex`: schneller Pfad ein `acquire`-Lesen ohne Sperre, sobald
+`attempted` steht (das Gatter für die nicht ladenden Aufrufe -- kein Sperrenstreit auf dem heißen Pfad, wie
+der Auftrag verlangt); langsamer Pfad die Sperre, ein zweites `relaxed`-Lesen (falls ein anderer Thread
+während des Wartens fertig wurde), dann der unveränderte Lade-/Parse-Code. Entscheidend, von Mutation 3/4
+unten bewiesen: `attempted.store(true, release)` steht **nach** jedem Rückgabepunkt, nie davor -- sonst sieht
+der schnelle Pfad "fertig", während `parsePack()`/`parse()` noch läuft, derselbe Fehler nur mit Sperre
+drumherum. `resetWaveTableLibrary()`/`resetVoicePack()` nehmen dieselbe Sperre (billig, nie während eines
+Ladevorgangs aufgerufen). Kein Byte der Lade-/Parse-Logik selbst geändert -- nur was sie umschließt.
+
+*Entscheidung `probe::warmSharedData()`.* Jetzt eine reine Terminplanungs-Optimierung, keine
+Korrektheitsvoraussetzung mehr: ohne den Vorwärmer würden bis zu `threads()-1` Arbeiter eines Stufenanfangs
+sofort auf der Lader-Sperre blockieren und untätig die Ladezeit (`testWaveTableLibrary` misst ~110-140 ms
+für die Wavetable-Bibliothek) abwarten, statt sofort zu rendern -- dieselbe Arbeit, nur weniger parallel.
+Behalten (nicht vereinfacht): kostet nichts, was eine Stufe nicht sowieso gezahlt hätte, und
+`testProbeSchedule`s Mutation 4 (Block der "speed"-Runde) deckt seine Existenz weiterhin ab. Doxygen-Kommentare
+in `Probe.h` (Datei-Kopf und `warmSharedData()` selbst) auf den neuen Stand gebracht: die Lader sind jetzt
+selbst thread-sicher, der Vorwärmer ist eine Wahl, keine Notwendigkeit mehr.
+
+*Prüfung, neu* (`Tests/selftest.cpp`, `testLoaderThreadSafety`, zuerst rot gesehen -- siehe "vorher
+gemessen" oben, das ist genau dieselbe Prüfung gegen den unreparierten Code): 16 Threads x 30 Runden je
+Lader, Startgatter, gegen die Referenz eines Einzelthread-Ladens vor der Schleife; prüft sowohl dass kein
+Aufruf falsch zurückkommt als auch (separat gezählt) wie viele leer zurückkamen. Mit der Reparatur: 0 von
+480 Aufrufen falsch, je Lader, in jedem Lauf. Kosten: 4,5 s im Release-Baum, 72,6 s unter ASan.
+
+*Mutationsrunde* (5 Fehler, je mit `--only testLoaderThreadSafety` bzw. `--only testWaveTableLibrary`
+geprüft, per Edit eingebaut und zurückgenommen -- keine Kopien nötig, `git diff` danach leer):
+
+| Mutation | Wer merkt es |
+|---|---|
+| Sperre in `loadWaveTableLibrary()` entfernt (schneller Pfad bleibt, langsamer Pfad ungeschützt) | `testLoaderThreadSafety`: Prozessabsturz (Speicherfehler in `parsePack()`, zwei Threads gleichzeitig) |
+| dieselbe Sperre in `loadVoicePack()` entfernt | derselbe Absturz verhindert die Voice-Pack-Hälfte des Laufs |
+| `attempted.store(true)` vor `parsePack()` statt danach (Gatter öffnet sich zu früh) | `testLoaderThreadSafety`: 444 von 480 falsch, alle leer |
+| dieselbe Verschiebung in `loadVoicePack()` | 443 von 480 falsch, alle leer |
+| `lib.count = 0;` aus `resetWaveTableLibrary()` entfernt (Zähler nicht zurückgesetzt) | `testWaveTableLibrary`: 24 statt 12 Tabellen nach Reset+Neuladen |
+
+*ASan* (`build-asan`, `/fsanitize=address`, wie die "speed"- und "polish"-Runde; `clang_rt.asan_dynamic-
+x86_64.dll` fehlte auf dem `PATH` -- unter `VC\Tools\MSVC\<Version>\bin\Hostx64\x64` gefunden und
+vorangestellt) mit `PHOS_PROBE_THREADS=8`, ohne Cache: `testLoaderThreadSafety` (72,6 s, 2/2 grün) und
+`testProbeSchedule` (1692,9 s, 8/8 grün -- die Prüfung, die den ursprünglichen Fehler laut dem Block der
+"speed"-Runde bereits einmal gefangen hatte, jetzt über den echten Komponisten-Pfad statt der synthetischen
+Hammer-Schleife). Keine ASan-Meldung in beiden Läufen (auf "AddressSanitizer", "ERROR", "leak" durchsucht,
+kein Treffer). `testProbeCache` nicht erneut unter ASan gelaufen -- es prüft den Proben-Cache-Mechanismus,
+der von dieser Runde nicht angefasst wurde, und war bereits in der "speed"-Runde grün.
+
+*Bitgleichheit* (`phos_plandump`, Sitzsamen 864566672 und 1, je 3 Titel; `phos_render --bars 8 --seed
+864566672`): MD5 des Plan-Dumps `f6b0035f...` gleich für seriell (Cache kalt), 8 Proben-Threads (Cache
+kalt), 8 Proben-Threads (Cache warm) und den unreparierten Stand vor dieser Runde (per `git stash` gebaut) --
+vier Läufe, eine Prüfsumme. `phos_render`-WAV (8 Takte, 8 Proben-Threads) MD5 `1d03ddfb...` gleich vor und
+nach der Reparatur. Die Ladelogik selbst ist unverändert, nur ihre Absicherung, also war das erwartet, nicht
+überraschend -- die Zahlen stehen trotzdem, wie der Auftrag verlangt.
+
+*Hören.* Keine Hörausschnitte -- diese Runde ändert kein Audioverhalten, nur die Nebenläufigkeitssicherheit
+beim Laden. Die Bitgleichheit oben (identische Plan-Dumps und eine identische WAV-Datei vor/nach der
+Reparatur) ist der Nachweis, dass tatsächlich nichts am Klang hängt.
+
+*Endstand.* `ctest -C Release -j 12` im Plugin-Build (Zweig `threadsafe-loaders`, ab master 5237124;
+Prozessliste vor dem Lauf geprüft, keine andere Runde aktiv, daher `-j 12` statt 8): **109 von 109 grün**
+(100 %; `selftest` als Gesamtlauf deaktiviert, `questguard` übersprungen -- dieser Arbeitsbaum hat kein
+`ThirdParty`, wie in früheren Runden), Wandzeit 643,4 s. Darin `hosttest` (139,3 s) und
+`hosttest.realhost` (297,8 s), `vst3test` (56,0 s) und `testModalInterchange.presenceOn1` (220,6 s, die
+langsamste Einzelprüfung) grün; `testLoaderThreadSafety` lief innerhalb der vollen Suite in 5,9 s.
+
+*Dateien.* `Core/src/WaveTableFile.cpp`, `Core/src/Vocal.cpp` (die Lader selbst), `Core/include/phos/
+WaveTableFile.h`, `Core/include/phos/Vocal.h` (Doxygen der öffentlichen Funktionen auf den neuen
+Thread-Sicherheitsstand gebracht), `Core/include/phos/Probe.h` (Datei-Kopf und `warmSharedData()`s
+Kommentar: Vorwärmen ist jetzt Optimierung, nicht Korrektheit), `Tests/selftest.cpp` (`testLoaderThreadSafety`
+plus die zwei `#include`s, die sie braucht); dieser Block. `Core/src/Probe.cpp` unverändert (nur neu
+gebaut, weil es dieselbe Übersetzungseinheit wie die geänderten Header teilt).
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

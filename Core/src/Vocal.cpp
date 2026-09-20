@@ -6,9 +6,11 @@
 #include "phos/Params.h"
 #include "phos/WaveTableFile.h"
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
 
 namespace phos {
 
@@ -54,8 +56,16 @@ float vocalTypeGain(SfxType t)
     }
 }
 
+/**
+ * @brief The loaded voice pack: built once, read only through voicePhrase()/voicePhraseCount().
+ *
+ * Same call-once gate as WaveTableFile.cpp's Library, and for the same reason: a plain `bool
+ * attempted` let a second thread see "already attempted" and return an empty `phrases` while the
+ * first thread's parse() was still filling it in.
+ */
 struct Pack {
-    bool attempted = false;
+    std::atomic<bool> attempted{ false };
+    std::mutex mutex;
     std::vector<VoicePhrase> phrases;
 };
 Pack& pack() { static Pack p; return p; }
@@ -143,8 +153,10 @@ void setVoicePackSearchPath(const std::string& directory) { voiceSearchPath() = 
 int loadVoicePack(const char* path, std::string* error)
 {
     Pack& p = pack();
-    if (p.attempted) return static_cast<int>(p.phrases.size());
-    p.attempted = true;
+    // Hot path: no lock once loaded, matching WaveTableFile.cpp's loadWaveTableLibrary().
+    if (p.attempted.load(std::memory_order_acquire)) return static_cast<int>(p.phrases.size());
+    std::lock_guard<std::mutex> guard(p.mutex);
+    if (p.attempted.load(std::memory_order_relaxed)) return static_cast<int>(p.phrases.size());
     if (error != nullptr) error->clear();
     const std::string name = (path != nullptr && path[0] != 0) ? path : "voices.phosvx";
     std::vector<uint8_t> file;
@@ -170,18 +182,26 @@ int loadVoicePack(const char* path, std::string* error)
 #endif
     if (!got) {
         if (error != nullptr) *error = "cannot open the voice pack (" + tried + ")";
+        // The one attempt is made either way; see the matching comment in loadWaveTableLibrary().
+        p.attempted.store(true, std::memory_order_release);
         return 0;
     }
     std::vector<VoicePhrase> phrases;
-    if (!parse(file, phrases, error)) return 0;   // a broken pack leaves nothing half-loaded
+    if (!parse(file, phrases, error)) {
+        p.attempted.store(true, std::memory_order_release);
+        return 0;   // a broken pack leaves nothing half-loaded
+    }
     p.phrases = std::move(phrases);
+    p.attempted.store(true, std::memory_order_release);
     return static_cast<int>(p.phrases.size());
 }
 
 void resetVoicePack()
 {
-    pack().attempted = false;
-    pack().phrases.clear();
+    Pack& p = pack();
+    std::lock_guard<std::mutex> guard(p.mutex);   // see resetWaveTableLibrary()'s comment
+    p.attempted.store(false, std::memory_order_release);
+    p.phrases.clear();
 }
 
 int voicePhraseCount() { return static_cast<int>(pack().phrases.size()); }

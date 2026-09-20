@@ -37,6 +37,7 @@
 #include "TestSupport.h"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -48,6 +49,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <thread>
 #include <tuple>
 
 using namespace phos;
@@ -5896,6 +5898,75 @@ void testWaveTableLibrary()
         check(n == kNumLibraryWaveTables && bytes > 0 && bytes < 64u * 1024u * 1024u,
               "the library's memory is what the plan says it is", fmt("%zu bytes", bytes));
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// 20.09.2026, round "threadsafe-loaders": loadWaveTableLibrary() and loadVoicePack() used to guard
+// their one real load with a bare bool, not a lock (Probe.h's warmSharedData() comment names the
+// consequence: the first worker set the flag and kept parsing while the others, told "already
+// attempted," rendered with the built-in fallback tables / no phrases at all). Both now gate on a
+// call-once pattern instead (an atomic flag checked without a lock once it is set, a mutex around the
+// load for whichever threads arrive first) -- the same shape sharedMelodyModel()/sharedBassModel()
+// (Model.cpp) and installSearchPaths() (PluginProcessor.cpp) already use, adapted because, unlike
+// those, resetWaveTableLibrary()/resetVoicePack() have to open the gate again for the next test.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * @brief Many threads call a shared-data loader for the very first time at once, repeatedly, and every
+ *        one of them must see the finished load -- never the "already attempted, but the real load is
+ *        still in flight" window a bare flag left open.
+ *
+ * One thread loads first, outside any race, to learn what a clean load returns; every threaded call in
+ * every round must then return exactly that, and it must do so without `probe::warmSharedData()`
+ * having run first (that pre-warm is a scheduling optimisation now, not what makes this correct -- see
+ * docs/PLAN.md). Seen to FAIL before the fix, reliably, not just occasionally: with the bare
+ * `bool attempted`, three runs against the pre-fix source each found ~450 of the 480 raced calls
+ * (16 threads x 30 rounds) coming back empty against a positive reference, for both loaders. Two
+ * threads racing past a bare flag and both calling parsePack()/parse() -- writing `Library::entry[]`
+ * or `Pack::phrases` at once -- is also what the ASan pass this round asked for is there to catch.
+ */
+void testLoaderThreadSafety()
+{
+    section("shared-data loaders are thread-safe at the source (WaveTableFile.cpp, Vocal.cpp)");
+    const unsigned hw = std::thread::hardware_concurrency();
+    const int threadsPerRound = static_cast<int>(std::clamp(hw == 0 ? 8u : hw, 4u, 16u));
+    constexpr int kRounds = 30;
+
+    auto hammer = [&](const char* what, const std::function<void()>& reset, const std::function<int()>& load) {
+        reset();
+        const int reference = load();
+        int mismatches = 0, cameBackEmpty = 0;
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int round = 0; round < kRounds; ++round) {
+            reset();
+            // A start gate: every thread spins on it so its first loadXxx() call lands as close to the
+            // others as the scheduler allows. Threads started one after another would mostly just queue
+            // up on the loader's mutex and never exercise the race the fix removed.
+            std::atomic<bool> go{ false };
+            std::vector<int> results(static_cast<size_t>(threadsPerRound), -1);
+            std::vector<std::thread> threads;
+            threads.reserve(static_cast<size_t>(threadsPerRound));
+            for (int t = 0; t < threadsPerRound; ++t)
+                threads.emplace_back([&, t] {
+                    while (!go.load(std::memory_order_acquire)) std::this_thread::yield();
+                    results[static_cast<size_t>(t)] = load();
+                });
+            go.store(true, std::memory_order_release);
+            for (std::thread& th : threads) th.join();
+            for (int r : results) {
+                if (r != reference) ++mismatches;
+                if (r == 0 && reference != 0) ++cameBackEmpty;
+            }
+        }
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        check(reference > 0 && mismatches == 0,
+              fmt("%s: %d threads x %d rounds of a fresh first load, every call agrees", what, threadsPerRound, kRounds).c_str(),
+              fmt("reference %d; %d of %d raced calls disagreed (%d came back empty); %.0f ms", reference, mismatches,
+                  threadsPerRound * kRounds, cameBackEmpty, ms));
+    };
+
+    hammer("wavetable library", [] { resetWaveTableLibrary(); }, [] { return loadWaveTableLibrary(); });
+    hammer("voice pack", [] { resetVoicePack(); }, [] { return loadVoicePack(); });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -13215,6 +13286,7 @@ int main(int argc, char** argv)
     run("testMelody.midi", testMelodyMidi);
     run("testWaveTable", testWaveTable);
     run("testWaveTableLibrary", testWaveTableLibrary);
+    run("testLoaderThreadSafety", testLoaderThreadSafety);
     run("testWaveTableQuality", testWaveTableQuality);
     run("testPads", testPads);
     run("testGateAndDuck", testGateAndDuck);

@@ -27,10 +27,16 @@
  *
  * **Bit identity.** A probe is a pure function of its inputs: every probe owns its Engine, and what the
  * engines share (the wavetable library, the voice pack, the built-in tables, the sine table) is immutable
- * once loaded. The loads themselves are *not* thread-safe (a flag, no lock: WaveTableFile.cpp, Vocal.cpp),
- * so warmSharedData() runs them on the calling thread before the first worker starts. The order in which
- * results are *used* is unchanged: the stages of Composer::measureTrack wait for everything a later probe
- * reads. `testProbeSchedule` holds the parallel schedule against the serial order of before, bit for bit.
+ * once loaded. Until 20.09.2026 (round "threadsafe-loaders") the loads themselves were *not* thread-safe
+ * (a flag, no lock: WaveTableFile.cpp, Vocal.cpp) -- warmSharedData() below existed to run them on the
+ * calling thread before any worker could reach them concurrently, which was a correctness requirement,
+ * not a choice. Both loaders now gate their one real load with an atomic flag and a mutex (a call-once
+ * pattern; see the Doxygen comments on `loadWaveTableLibrary()` and `loadVoicePack()`), so two workers
+ * racing for the first load can no longer corrupt it or see it half-done -- warmSharedData() stays only
+ * as the scheduling choice explained on it below. The order in which results are *used* is unchanged: the
+ * stages of Composer::measureTrack wait for everything a later probe reads. `testProbeSchedule` holds the
+ * parallel schedule against the serial order of before, bit for bit; `testLoaderThreadSafety`
+ * (Tests/selftest.cpp) hammers the loaders directly, without this file's help.
  *
  * **The cache key** covers everything a probe's render depends on: the core's build id (a hash of
  * `Core/src`, `Core/include` and the compile flags, generated at build time -- Core/cmake/build_id.cmake),
@@ -142,6 +148,19 @@ private:
  * Called before every parallel stage. Each load is idempotent and costs a flag test once it has happened;
  * deliberately not a std::call_once, because the tests reset the library (resetWaveTableLibrary()) and the
  * next stage then has to load it again before its workers start.
+ *
+ * @note 20.09.2026 (round "threadsafe-loaders"): loadWaveTableLibrary() and loadVoicePack() are now
+ *       genuinely thread-safe on their own (a mutex around the one real load, an atomic flag for the
+ *       already-loaded case), so this call is no longer needed *for correctness* -- a stage could skip
+ *       it and let its first workers race the loaders themselves. It is kept anyway, purely as a
+ *       scheduling choice: without it, up to `threads() - 1` workers of a stage's first use would start,
+ *       immediately block on the loader's mutex behind whichever one got there first, and sit idle for
+ *       the load's ~0.1-0.2 s (testLoaderThreadSafety measures ~140 ms for the wavetable library) before
+ *       any of them can render -- the same total work, done less concurrently. One call on the thread
+ *       that is about to hand out the work anyway costs nothing a stage was not going to pay, and keeps
+ *       every worker free to render the moment it starts. `testProbeSchedule`'s mutation 4
+ *       (docs/PLAN.md, round "speed") still covers this call existing; nothing here re-tests the
+ *       loaders' own thread safety, which is `testLoaderThreadSafety`'s job (Tests/selftest.cpp).
  */
 void warmSharedData();
 

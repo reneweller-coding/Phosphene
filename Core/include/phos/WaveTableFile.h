@@ -145,9 +145,14 @@ const std::string& waveTableSearchPath();
 void setWaveTableFrameLimit(int frames);
 
 /**
- * @brief Loads the library once. Idempotent, and safe to call from several prepare()s.
+ * @brief Loads the library once. Idempotent, and genuinely safe to call from several threads at once
+ *        (20.09.2026 round "threadsafe-loaders": a call-once gate -- an atomic flag checked without a
+ *        lock once it is set, a mutex around the one real load for whichever calls arrive first --
+ *        replaces a bare flag that let a second thread see "already attempted" while the first thread's
+ *        parse was still in flight and come away thinking the library was empty).
  * @param path  the `.phoswt` file; nullptr means the shipped name "library.phoswt"
- * @param error receives why nothing was loaded, may be null
+ * @param error receives why nothing was loaded, may be null (only the thread that ends up doing the
+ *               load writes into it; a thread that finds the load already done does not touch it)
  * @return how many tables are loaded (0 when the file is missing -- not an error for the caller,
  *         the built-in tables are the fallback)
  * @warning Never on the audio thread: it builds ten mip levels per frame per table.
