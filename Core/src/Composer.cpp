@@ -1042,18 +1042,31 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
                 if (score > bestScore) { bestScore = score; w.voice[v] = cand; }
             }
             if (v == counterV) {
-                // No candidate differed from the lead in both (possible only when all twelve drew its
-                // oscillator or its table): take the counter's likeliest other oscillator and the first
-                // palette table that is not the lead's.
+                // No candidate differed from the lead in both (possible when all twelve drew its
+                // oscillator or its table -- more so now that the lead's own pool is much wider, round
+                // "wavetable-selection": seed 77 hit this on a real track and exposed the bug below):
+                // take the counter's likeliest other oscillator and the first palette table that is not
+                // the lead's.
+                //
+                // `bestScore` staying at its initial -1.0 is the sign that every candidate was rejected,
+                // so `w.voice[v]` was never written this loop and still holds VoiceRecipe's own defaults
+                // (osc -1, table -1, "the knob"). Until 20.09.2026 the two fixes below fired only on
+                // `c.osc == lead.osc` / `c.table == lead.table`, which is never true for -1 against a
+                // real (>= 0) lead value -- so this exact case slipped through as "no collision, nothing
+                // to fix" and left the counter to whatever the knob's own default oscillator and table
+                // are, which can coincide with the lead's drawn ones by simple bad luck (seed 77,
+                // testVoices.counterSound77: 1 of 24 tracks). `bestScore <= -1.0` is the direct test for
+                // that case and triggers the same remediation the collision case already used.
                 VoiceRecipe& c = w.voice[v];
                 const VoiceRecipe& lead = w.voice[leadV];
-                if (c.osc == lead.osc) {
+                const bool noCandidateSurvived = bestScore <= -1.0;
+                if (noCandidateSurvived || c.osc == lead.osc) {
                     int best = -1;
                     for (int o = 0; o < static_cast<int>(PolyOsc::Count); ++o)
                         if (o != lead.osc && pal.osc[o] > 0.0 && (best < 0 || pal.osc[o] > pal.osc[best])) best = o;
                     c.osc = best;
                 }
-                if (c.table == lead.table)
+                if (noCandidateSurvived || c.table == lead.table)
                     for (int k = 0; k < nTables; ++k) if (pal.tables[k] != lead.table) { c.table = pal.tables[k]; break; }
             }
         }
