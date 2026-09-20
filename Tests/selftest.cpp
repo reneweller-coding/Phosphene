@@ -1949,7 +1949,10 @@ void testKickBody()
     const std::vector<float> ky = render("mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1");
     const std::vector<float> by = render("mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1");
     const double beat = 60.0 / 145.0 * sr, q = beat / 4.0;
-    auto at = [&](double beats) { return static_cast<size_t>(beats * beat + latency); };
+    // Clamped to the render (19.09.2026, round "polish"): the window of the last beat measured ends at
+    // beat 280 of a 70-bar render, and the engine's latency pushed that `latency` samples past the buffer --
+    // a heap read past the end that the AddressSanitizer build caught (docs/PLAN.md, "UB-Suche").
+    auto at = [&](double beats) { return std::min(ky.size(), static_cast<size_t>(beats * beat + latency)); };
     // K-weighting, ITU-R BS.1770-4's tabulated 48 kHz coefficients (as in testSfxLevel).
     struct Biquad { double b0, b1, b2, a1, a2, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
         double tick(double x) { const double y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; } };
@@ -1968,6 +1971,7 @@ void testKickBody()
         if (bt % 32 >= 28) continue;   // the last bar of an eight-bar group carries its figure and a missing kick
         const size_t k0 = at(bt), s0 = at(bt + 0.25), s1 = at(bt + 0.5), e0 = at(bt + 1.0);
         (void)q;
+        if (e0 <= s1 || s0 <= k0) continue;   // the last beat's window runs past the render (see at())
         mask.push_back(powDb(lowendBandPower(ky, s0, s1, 30.0, 150.0, sr) / lowendBandPower(by, s0, s1, 30.0, 150.0, sr)));
         double pk = 0.0, pb = 0.0;
         for (size_t i = k0; i < s0; ++i) pk += static_cast<double>(km[i]) * km[i];
@@ -10676,6 +10680,281 @@ void testArrangement()
     }
 }
 
+// ------------------------------------------------------------------------ drop 2 audible, 19.09.2026
+
+/**
+ * @brief The value of an Offset parameter at @p beat, replayed from control events (test side).
+ *
+ * Every event ramps from wherever the parameter stands at its own beat to its value over its length, by a
+ * raised cosine (Score.h, ControlEvent::Kind::Offset); a later event replaces a ramp in flight. Replayed in
+ * order, independently of the engine's dispatcher.
+ */
+static double offsetAt(const std::vector<ControlEvent>& controls, int param, double beat)
+{
+    double value = 0.0, from = 0.0, target = 0.0, start = 0.0, length = 0.0;
+    auto at = [&](double t) {
+        if (length <= 0.0 || t >= start + length) return target;
+        const double u = (t - start) / length;
+        return from + (target - from) * 0.5 * (1.0 - std::cos(kPiD * u));
+    };
+    for (const ControlEvent& c : controls) {
+        if (c.param != param || c.kind != ControlEvent::Kind::Offset) continue;
+        if (c.beat > beat) break;
+        value = at(c.beat);
+        from = value;
+        target = c.value;
+        start = c.beat;
+        length = c.length;
+    }
+    return at(beat);
+}
+
+/**
+ * @brief Drop 2 as an audible climax (19.09.2026, round "polish"): the user's rule "after the drop-2 marker the
+ *        spectral energy must be higher than at any other point of the track".
+ *
+ * (a) In the controls of four tracks of every style: the track gain of drop 1 stands at least 2 dB under drop 2's,
+ *     and the big buildup ends at least 2 dB under drop 2; drop 1 plays fewer percussion layers than drop 2.
+ * (b) Rendered, the first track of Full-On and of Progressive through its drop 2, measured on the output with a
+ *     K-weighting of the test's own (ITU-R BS.1770-4's tabulated 48 kHz coefficients) and a power spectrum: drop 2
+ *     louder than drop 1 and than every other eight-bar window of the track, and fuller above 1.5 kHz than drop 1.
+ *     The thresholds are the ones the report defends (docs/PLAN.md, 19.09.2026, "Feinschliff").
+ */
+void testClimax()
+{
+    section("drop 2 audible: gain staging, drop 1 held back, the climax louder than every other window");
+    // (a) The controls.
+    {
+        int tracks = 0, gainBad = 0, buildBad = 0, layerBad = 0, layerPairs = 0;
+        double worstGain = 99.0, worstBuild = 99.0;
+        for (int st = 0; st < kNumStyles; ++st) {
+            ParamStore q;
+            q.parseText("compose.level_match=Off master.auto_gain=Off");
+            q.parseText(fmt("compose.style=%d", st).c_str());
+            Composer c(5150 + static_cast<uint64_t>(st));
+            const int gain = q.base(Module::Mix) + mix::TrackGain;
+            const ParamDesc& gd = q.desc(gain);
+            const double span = gd.maxValue - gd.minValue;
+            std::vector<NoteEvent> notes;
+            std::vector<ControlEvent> ctl;
+            const TrackPlan last = c.track(q, 3);
+            c.composeBars(q, 0, last.firstBar + last.bars, notes, &ctl);
+            for (int t = 0; t < 4; ++t) {
+                const TrackPlan tp = c.track(q, t);
+                int d1 = -1, d2 = -1, b2 = -1;
+                for (int i = 0; i < tp.form.count; ++i) {
+                    if (tp.form.section[i].type == SectionType::Drop && !tp.form.section[i].climax && d1 < 0) d1 = i;
+                    if (tp.form.section[i].climax) { d2 = i; b2 = i - 1; }
+                }
+                if (d1 < 0 || d2 < 0) continue;
+                ++tracks;
+                // The gain in the middle of a section (a drop holds one value), and at the big buildup's last bar.
+                auto mid = [&](int si) {
+                    const Section& s = tp.form.section[si];
+                    return span * offsetAt(ctl, gain, (tp.firstBar + s.startBar + s.bars / 2 + 0.5) * kBeatsPerBar);
+                };
+                const Section& b = tp.form.section[b2];
+                const double buildEnd = span * offsetAt(ctl, gain, (tp.firstBar + b.startBar + b.bars - 0.01) * kBeatsPerBar);
+                const double g1 = mid(d1), g2 = mid(d2);
+                worstGain = std::min(worstGain, g2 - g1);
+                worstBuild = std::min(worstBuild, g2 - buildEnd);
+                if (g2 - g1 < 2.0) ++gainBad;
+                if (g2 - buildEnd < 2.0) ++buildBad;
+                PartAvailability av;
+                for (int k = 0; k < kMelodyParts; ++k) av.part[k] = tp.melody.present[k];
+                av.percLayers = tp.perc.layers;
+                av.hatLayers = tp.perc.hatLayers;
+                if (tp.perc.layers > 3) {
+                    ++layerPairs;
+                    // Bar 17 of each drop: both have brought in their cycle's layer there.
+                    const int l1 = planBar(tp.form, av, tp.sectionSeed, tp.form.section[d1].startBar + 16).percLayers;
+                    const int l2 = planBar(tp.form, av, tp.sectionSeed, tp.form.section[d2].startBar + 16).percLayers;
+                    if (!(l1 < l2)) ++layerBad;
+                }
+            }
+        }
+        check(tracks >= 15 && gainBad == 0 && buildBad == 0 && layerPairs > 0 && layerBad == 0,
+              "gain staging: drop 1 at least 2 dB under drop 2, the big buildup ending 2 dB under it, drop 1 with fewer layers",
+              fmt("%d tracks: %d with drop 1 too close (smallest gap %.2f dB), %d with the buildup too close (smallest %.2f dB); "
+                  "%d of %d with drop 1 not thinner", tracks, gainBad, worstGain, buildBad, worstBuild, layerBad, layerPairs));
+    }
+
+    // (b) Rendered.
+    constexpr double sr = 48000.0;
+    struct Biquad { double b0, b1, b2, a1, a2, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+        double tick(double x) { const double y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; } };
+    const char* const kStyles[2] = { "1", "2" };   // Full-On, Progressive (the style that had the smallest margin)
+    for (const char* style : kStyles) {
+        auto e = std::make_unique<Engine>();
+        e->prepare(sr, 512);
+        e->params().parseText(fmt("compose.style=%s", style).c_str());
+        Composer c(864566672ull);
+        const TrackPlan tp = c.track(e->params(), 0);
+        int d1 = -1, d2 = -1;
+        for (int i = 0; i < tp.form.count; ++i) {
+            if (tp.form.section[i].type == SectionType::Drop && !tp.form.section[i].climax && d1 < 0) d1 = i;
+            if (tp.form.section[i].climax) d2 = i;
+        }
+        const int bars = tp.form.section[d2].startBar + tp.form.section[d2].bars;
+        e->setTempoMap(c.tempoMap(e->params(), bars + 1));
+        const double latency = e->latencySamples();
+        std::vector<float> R;
+        const std::vector<float> L = renderEngine(*e, c, static_cast<double>(bars) * kBeatsPerBar, 512, sr, &R);
+        const double barSamples = kBeatsPerBar * 60.0 / tp.bpm * sr;
+        // Per bar: K-weighted mean square (L plus R) and the power above 1.5 kHz.
+        Biquad sL{ 1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241, 0.73248077421585 };
+        Biquad hL{ 1.0, -2.0, 1.0, -1.99004745483398, 0.99007225036621 };
+        Biquad sR = sL, hR = hL;
+        std::vector<double> kL(L.size()), kR(R.size());
+        for (size_t i = 0; i < L.size(); ++i) { kL[i] = hL.tick(sL.tick(L[i])); kR[i] = hR.tick(sR.tick(R[i])); }
+        std::vector<double> kBar(static_cast<size_t>(bars)), hiBar(static_cast<size_t>(bars));
+        for (int b = 0; b < bars; ++b) {
+            const size_t s0 = static_cast<size_t>(b * barSamples + latency), s1 = std::min(L.size(), static_cast<size_t>((b + 1) * barSamples + latency));
+            double k = 0.0;
+            for (size_t i = s0; i < s1; ++i) k += kL[i] * kL[i] + kR[i] * kR[i];
+            kBar[static_cast<size_t>(b)] = k / static_cast<double>(std::max<size_t>(1, s1 - s0));
+            // Power above 1.5 kHz from 4096-point spectra of the bar, both channels.
+            double hi = 0.0;
+            int frames = 0;
+            for (size_t f0 = s0; f0 + 4096 <= s1; f0 += 4096, ++frames)
+                for (const std::vector<float>* ch : { &L, static_cast<const std::vector<float>*>(&R) }) {
+                    const std::vector<double> ps = powerSpectrum(ch->data() + f0, 4096);
+                    for (size_t j = static_cast<size_t>(1500.0 * 4096 / sr); j < ps.size(); ++j) hi += ps[j];
+                }
+            hiBar[static_cast<size_t>(b)] = frames > 0 ? hi / frames : 0.0;
+        }
+        auto mean = [&](const std::vector<double>& v, int b0, int n) {
+            double s = 0.0;
+            for (int b = b0; b < b0 + n; ++b) s += v[static_cast<size_t>(b)];
+            return s / n;
+        };
+        const Section& s1 = tp.form.section[d1];
+        const Section& s2 = tp.form.section[d2];
+        const double loud1 = powDb(mean(kBar, s1.startBar, s1.bars)), loud2 = powDb(mean(kBar, s2.startBar, s2.bars));
+        const double hi1 = powDb(mean(hiBar, s1.startBar, s1.bars)), hi2 = powDb(mean(hiBar, s2.startBar, s2.bars));
+        // Drop 2's weakest eight-bar group against the loudest eight-bar window anywhere else (from bar 0).
+        double weakest = 1e9, rival = -1e9;
+        int rivalBar = -1;
+        for (int b = s2.startBar; b + 8 <= s2.startBar + s2.bars; b += 8) weakest = std::min(weakest, powDb(mean(kBar, b, 8)));
+        for (int b = 0; b + 8 <= s2.startBar; ++b) {
+            const double w = powDb(mean(kBar, b, 8));
+            if (w > rival) { rival = w; rivalBar = b; }
+        }
+        check(loud2 - loud1 >= 1.4 && weakest - rival >= 0.3 && hi2 - hi1 >= 3.0,
+              fmt("style %s, first track rendered: drop 2 at least 1.4 LU over drop 1, every eight bars of it 0.3 LU over any other "
+                  "window, and 3 dB more above 1.5 kHz than drop 1", style).c_str(),
+              fmt("drop 2 - drop 1 %+.2f LU; weakest group of drop 2 - loudest other window (bars %d-%d) %+.2f LU; above 1.5 kHz %+.2f dB",
+                  loud2 - loud1, rivalBar + 1, rivalBar + 8, weakest - rival, hi2 - hi1));
+    }
+}
+
+/**
+ * @brief The presence match (19.09.2026, round "polish"; Composer.cpp, matchPresence): each track's presence band
+ *        brought into a band around the reference recordings' median by the level of its lines.
+ *
+ * (a) Over twenty tracks of the listening seed: where the probe reads a track more than 1.5 dB off the median, the
+ *     lines move towards it, and only there, to the band's edge and never past the median; never past the caps.
+ * (b) Rendered, the listening seed's tracks 1 and 2 (the brief: track 2's drops stood +2.8 / +3.7 dB over the
+ *     median, track 1's under it), each drop measured on the output: 1.5..6 kHz against 40..140 Hz, both channels'
+ *     power, minus the reference median of Tools/ref_profile.json (-8.58 dB, the 40 recordings of Phase 11). The
+ *     match aims at the power mean of a track's two drops -- drop 2 is meant to be brighter than drop 1 (testClimax)
+ *     -- so that mean must lie within 2.5 dB of the median: the band of the match (1.5) plus the probe's error.
+ */
+void testPresence()
+{
+    section("presence match: every track's presence band near the reference median, by the level of its lines");
+    // (a) The plans.
+    {
+        ParamStore q;
+        Composer c(864566672ull);
+        int outside = 0, inside = 0, wrong = 0;
+        double lo = 99.0, hi = -99.0;
+        for (int t = 0; t < 20; ++t) {
+            const TrackPlan tp = c.track(q, t);
+            lo = std::min(lo, tp.presenceDb);
+            hi = std::max(hi, tp.presenceDb);
+            const double g = tp.presenceGainDb;
+            if (std::fabs(tp.presenceDb) <= 1.5) { ++inside; if (g != 0.0) ++wrong; continue; }
+            ++outside;
+            // Towards the median, and within the caps (-6 .. +3 dB) -- unless the track has none of the lines.
+            bool lines = false;
+            for (MelodyPart mp : { MelodyPart::Lead, MelodyPart::Counter, MelodyPart::Arp, MelodyPart::Stab }) lines = lines || tp.melody.present[mpIndex(mp)];
+            if (!lines) { if (g != 0.0) ++wrong; continue; }
+            // Towards the median and no further: the match's own prediction lands on the band's edge it came
+            // from, or short of it where a cap stopped the gain.
+            const bool capped = g <= -6.0 + 1e-6 || g >= 3.0 - 1e-6;
+            const bool landed = capped ? std::fabs(tp.presenceAfterDb) < std::fabs(tp.presenceDb)
+                                       : std::fabs(std::fabs(tp.presenceAfterDb) - 1.5) < 0.05;
+            if (!(g * tp.presenceDb < 0.0 && g >= -6.0 - 1e-6 && g <= 3.0 + 1e-6
+                  && landed && tp.presenceAfterDb * tp.presenceDb > 0.0)) {
+                ++wrong;
+                std::printf("    track %d: probe %+.2f dB, lines %+.2f dB, after %+.2f dB\n", t + 1, tp.presenceDb, g, tp.presenceAfterDb);
+            }
+        }
+        check(outside > 0 && inside > 0 && wrong == 0,
+              "the probe reads every track's presence; the lines move towards the median only where it is more than 1.5 dB off",
+              fmt("20 tracks, probe from %+.1f to %+.1f dB: %d outside the band, %d inside, %d handled wrongly", lo, hi, outside, inside, wrong));
+    }
+    // (b) Rendered: tracks 1 and 2 of the listening seed, through track 2's drop 2.
+    {
+        constexpr double sr = 48000.0;
+        constexpr double kRefPresence = -8.58;   // Tools/ref_profile.json, band_median.presence
+        auto e = std::make_unique<Engine>();
+        e->prepare(sr, 512);
+        Composer c(864566672ull);
+        const TrackPlan t1 = c.track(e->params(), 0), t2 = c.track(e->params(), 1);
+        std::vector<std::pair<int, int>> drops;   // first bar, bars
+        for (const TrackPlan* tp : { &t1, &t2 })
+            for (int i = 0; i < tp->form.count; ++i)
+                if (tp->form.section[i].type == SectionType::Drop)
+                    drops.emplace_back(tp->firstBar + tp->form.section[i].startBar, tp->form.section[i].bars);
+        const int bars = drops.back().first + drops.back().second;
+        const TempoMap tm = c.tempoMap(e->params(), bars + 1);
+        e->setTempoMap(tm);
+        const double latency = e->latencySamples();
+        const size_t total = static_cast<size_t>(tm.secondsAt(static_cast<double>(bars) * kBeatsPerBar) * sr + latency);
+        std::vector<float> L(total), R(total);
+        {
+            Conductor conductor(*e, c);
+            for (size_t done = 0; done < total;) {
+                const int n = static_cast<int>(std::min<size_t>(512, total - done));
+                conductor.pump(e->params(), 32.0);
+                e->process(L.data() + done, R.data() + done, n);
+                done += static_cast<size_t>(n);
+            }
+        }
+        int bad = 0;
+        std::string line;
+        double pair[2] = {};
+        int di = 0;
+        for (const auto& d : drops) {
+            const size_t s0 = static_cast<size_t>(tm.secondsAt(static_cast<double>(d.first) * kBeatsPerBar) * sr + latency);
+            const size_t s1 = std::min(total, static_cast<size_t>(tm.secondsAt(static_cast<double>(d.first + d.second) * kBeatsPerBar) * sr + latency));
+            double pres = 0.0, low = 0.0;
+            for (size_t f0 = s0; f0 + 4096 <= s1; f0 += 2048)
+                for (const std::vector<float>* ch : { static_cast<const std::vector<float>*>(&L), static_cast<const std::vector<float>*>(&R) }) {
+                    const std::vector<double> ps = powerSpectrum(ch->data() + f0, 4096);
+                    for (size_t j = 0; j < ps.size(); ++j) {
+                        const double f = static_cast<double>(j) * sr / 4096.0;
+                        if (f >= 1500.0 && f < 6000.0) pres += ps[j];
+                        if (f >= 40.0 && f < 140.0) low += ps[j];
+                    }
+                }
+            const double off = powDb(pres / low) - kRefPresence;
+            line += fmt(" bars %d-%d %+.2f;", d.first + 1, d.first + d.second, off);
+            pair[di % 2] = off;
+            if (di % 2 == 1) {
+                const double mean = powDb(0.5 * (std::pow(10.0, pair[0] / 10.0) + std::pow(10.0, pair[1] / 10.0)));
+                line += fmt(" track %d mean %+.2f;", di / 2 + 1, mean);
+                if (std::fabs(mean) > 2.5) ++bad;
+            }
+            ++di;
+        }
+        check(drops.size() == 4 && bad == 0, "rendered: the listening seed's tracks 1 and 2, the power mean of each track's drops within 2.5 dB of the reference median's presence",
+              fmt("presence against the median:%s %d tracks outside", line.c_str(), bad));
+    }
+}
+
 // ------------------------------------------------------------------------ genre rules, 18.09.2026
 
 /**
@@ -12027,6 +12306,8 @@ int main(int argc, char** argv)
     run("testCuration", testCuration);
     run("testTransitions", testTransitions);
     run("testArrangement", testArrangement);
+    run("testClimax", testClimax);
+    run("testPresence", testPresence);
     run("testCues", testCues);
     run("testParams", testParams);
     run("testTempo", testTempo);

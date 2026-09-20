@@ -207,6 +207,12 @@ struct TrackPlan {
     float  partGainDb[kMelodyParts] = {};     ///< level correction of each melodic part against the first track's
     double mixLoudness = 0.0;       ///< probe loudness of the whole mix after the master, before the loudness offset
     float  masterGainDb = 0.0f;     ///< the offset that brings the mix to master.target_lufs (Auto Gain)
+    /** @name The presence match (19.09.2026, round "polish"; Composer.cpp, matchPresence)
+     *  @{ */
+    double presenceDb = 0.0;        ///< the drops' presence estimate before the match, dB against the reference median
+    double presenceAfterDb = 0.0;   ///< the same estimate with presenceGainDb on the lines (the match's own prediction)
+    float  presenceGainDb = 0.0f;   ///< the gain the match puts on the lines (lead, counter, arp, stab), dB
+    /** @} */
     /** @name The learned bass phrase (compose.bass_model = Neural; PLAN 6.9, stage B, role 3)
      *  Two phrases of kBassPhraseBars bars, one for the track's primary and one for its secondary
      *  bass pattern, drawn once per track on the composer's thread. Each entry is the interval in semitones from
@@ -351,8 +357,20 @@ private:
     void trackStartControls(const ParamStore& params, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out,
                             ControlScope scope = ControlScope::All) const;
     void arcControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, bool ramp, std::vector<ControlEvent>& out) const;
-    double probeLoudness(const ParamStore& params, const TrackPlan& plan, int part = -1, float masterGainDb = 0.0f) const;
+    static constexpr int kProbeLines = -3;   ///< probeLoudness: lead, counter, arp and stab in the drops
+    static constexpr int kProbeRest = -4;    ///< probeLoudness: everything but the lines in the drops
+    /**
+     * @brief A probe render of the track: its loudness (LUFS), and with @p bands its band powers.
+     * @param part  a melodic part alone (0..), the foundation (-1), the whole mix through the master (-2), or
+     *              one of the two halves of the presence probe: the lines alone (kProbeLines) or everything
+     *              else (kProbeRest), in four bars of each drop, before the master's dynamics
+     * @param bands if not null, receives the power in 1.5..6 kHz and in 40..140 Hz (linear, L plus R)
+     */
+    double probeLoudness(const ParamStore& params, const TrackPlan& plan, int part = -1, float masterGainDb = 0.0f,
+                         double* bands = nullptr) const;
     void matchMaster(const ParamStore& params, TrackPlan& plan) const;
+    /** @brief Measures the drops' presence and sets presenceDb and presenceGainDb (compose.presence_match). */
+    void matchPresence(const ParamStore& params, TrackPlan& plan) const;
     void sectionControls(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar, double beat,
                          std::vector<ControlEvent>& out, ControlScope scope = ControlScope::All) const;
     /**

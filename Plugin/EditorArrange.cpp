@@ -16,6 +16,7 @@ constexpr int kStripH = 58;      ///< the set-wide bar at the top
 constexpr int kHeaderW = 176;    ///< the part of a track row that names the track
 constexpr int kLegendH = 15;     ///< the line at the bottom that says what a click does
 constexpr int kGlyph = 13;       ///< side of the lock and reroll buttons
+constexpr int kLaneGap = 3;      ///< between the strip's two lanes (odd and even tracks)
 
 /** @brief The colour of a section type: warm where the energy is, cold where it is taken away. */
 juce::Colour sectionColour(SectionType t)
@@ -93,6 +94,18 @@ void ArrangeDisplay::resized()
     render();
 }
 
+std::pair<int, int> ArrangeDisplay::overlapOf(size_t i) const
+{
+    // From the plans themselves rather than from kDjOverlap: the first track of a set has no overlap
+    // in front of it, and the last planned one none behind it until its successor is planned.
+    const auto& ts = snap_.tracks;
+    if (i >= ts.size()) return { 0, 0 };
+    auto shared = [&](size_t a, size_t b) {
+        return juce::jmax(0, ts[a].firstBar + ts[a].bars - ts[b].firstBar);
+    };
+    return { i > 0 ? shared(i - 1, i) : 0, i + 1 < ts.size() ? shared(i, i + 1) : 0 };
+}
+
 float ArrangeDisplay::stripX(double bar) const
 {
     const double t = juce::jlimit(0.0, 1.0, bar / juce::jmax(1, totalBars_));
@@ -103,6 +116,7 @@ void ArrangeDisplay::measure()
 {
     hits_.clear();
     rowArea_.clear();
+    blocks_.clear();
     juce::Rectangle<int> r = getLocalBounds().reduced(6, 4);
     if (r.getWidth() < 40 || r.getHeight() < 40) { strip_ = {}; return; }
     r.removeFromBottom(kLegendH);
@@ -113,11 +127,17 @@ void ArrangeDisplay::measure()
     const int n = static_cast<int>(snap_.tracks.size());
     if (n == 0) return;
 
-    // The set strip: every track a block, clickable at its first bar.
-    for (const Trk& t : snap_.tracks) {
+    // The set strip: every track a block in its lane, clickable at its first bar. Two lanes, because
+    // neighbouring tracks share kDjOverlap bars: in one lane the later block hid the end of the earlier.
+    blocks_.clear();
+    const int laneH = (strip_.getHeight() - kLaneGap) / 2;
+    for (size_t i = 0; i < snap_.tracks.size(); ++i) {
+        const Trk& t = snap_.tracks[i];
         const int x0 = juce::roundToInt(stripX(t.firstBar)), x1 = juce::roundToInt(stripX(t.firstBar + t.bars));
+        const int y = strip_.getY() + (i % 2 == 0 ? 0 : laneH + kLaneGap);
+        blocks_.emplace_back(x0, y, juce::jmax(2, x1 - x0), laneH);
         Hit h;
-        h.area = juce::Rectangle<int>(x0, strip_.getY(), juce::jmax(2, x1 - x0), strip_.getHeight());
+        h.area = blocks_.back();
         h.bar = t.firstBar;
         h.action = 0;
         hits_.push_back(h);
@@ -201,11 +221,26 @@ void ArrangeDisplay::render()
     // ---------------------------------------------------------------- the set strip
     g.setColour(edge.withAlpha(0.5f));
     g.fillRoundedRectangle(strip_.toFloat(), 3.0f);
-    for (size_t i = 0; i < snap_.tracks.size(); ++i) {
+    // The overlaps first, under the blocks: a band over both lanes with a crossfade (the outgoing track
+    // falling, the incoming one rising), so the eye reads the two lanes as one mix there.
+    for (size_t i = 0; i + 1 < snap_.tracks.size() && i + 1 < blocks_.size(); ++i) {
+        const int shared = overlapOf(i).second;
+        if (shared <= 0) continue;
+        const Trk& nx = snap_.tracks[i + 1];
+        const float x0 = stripX(nx.firstBar), x1 = stripX(nx.firstBar + shared);
+        const juce::Rectangle<float> band(x0, static_cast<float>(strip_.getY()), juce::jmax(1.0f, x1 - x0),
+                                          static_cast<float>(strip_.getHeight()));
+        g.setColour(text.withAlpha(0.07f));
+        g.fillRect(band);
+        const juce::Rectangle<float> out = blocks_[i].toFloat(), in = blocks_[i + 1].toFloat();
+        g.setColour(text.withAlpha(0.35f));
+        g.drawLine(band.getX(), out.getCentreY(), band.getRight(), in.getCentreY(), 1.0f);
+        g.drawLine(band.getX(), in.getCentreY(), band.getRight(), out.getCentreY(), 1.0f);
+    }
+    for (size_t i = 0; i < snap_.tracks.size() && i < blocks_.size(); ++i) {
         const Trk& t = snap_.tracks[i];
-        const float x0 = stripX(t.firstBar), x1 = stripX(t.firstBar + t.bars);
-        const juce::Rectangle<float> box(x0, static_cast<float>(strip_.getY()), juce::jmax(2.0f, x1 - x0 - 1.0f),
-                                         static_cast<float>(strip_.getHeight()));
+        const juce::Rectangle<float> lane = blocks_[i].toFloat();
+        const juce::Rectangle<float> box = lane.withWidth(juce::jmax(2.0f, lane.getWidth() - 1.0f));
         g.setColour(partColour(static_cast<int>(i) + 1).withAlpha(t.locked ? 0.42f : 0.26f));
         g.fillRoundedRectangle(box, 2.5f);
         // Every section of that track as a hairline of its own colour along the bottom: at this
@@ -213,21 +248,24 @@ void ArrangeDisplay::render()
         for (const Sec& s : t.sections) {
             const float sx0 = stripX(s.bar), sx1 = stripX(s.bar + s.bars);
             g.setColour(sectionColour(s.type).withAlpha(0.85f));
-            g.fillRect(sx0, box.getBottom() - 5.0f, juce::jmax(1.0f, sx1 - sx0 - 0.5f), 4.0f);
+            g.fillRect(sx0, box.getBottom() - 4.0f, juce::jmax(1.0f, sx1 - sx0 - 0.5f), 3.0f);
         }
         if (box.getWidth() > 46.0f) {
             g.setColour(text);
             g.setFont(body(9.5f));
-            g.drawText(juce::String(t.index + 1) + " " + kKeyNames[t.key], box.reduced(3.0f, 2.0f).removeFromTop(11.0f),
+            g.drawText(juce::String(t.index + 1) + " " + kKeyNames[t.key], box.reduced(3.0f, 1.0f).removeFromTop(11.0f),
                        juce::Justification::topLeft, false);
         }
         if (t.locked) drawLock(g, juce::Rectangle<int>(juce::roundToInt(box.getRight()) - kGlyph - 1,
-                                                       strip_.getY() + 1, kGlyph, kGlyph), true);
+                                                       juce::roundToInt(box.getY()), kGlyph,
+                                                       juce::jmin(kGlyph, juce::roundToInt(box.getHeight()))), true);
     }
-    // The energy arc of the night over it (Form.h): the line the sections were drawn against.
+    // The energy arc of the night over it (Form.h): the line the sections were drawn against. One line
+    // per track: over the overlap the outgoing outro and the incoming intro both run, and a single path
+    // through the tracks in order would jump back sixteen bars at every hand-over.
     juce::Path arc;
-    bool started = false;
-    for (const Trk& t : snap_.tracks)
+    for (const Trk& t : snap_.tracks) {
+        bool started = false;
         for (const Sec& s : t.sections) {
             const float y0 = strip_.getBottom() - 6.0f - s.energy * (strip_.getHeight() - 12.0f);
             const float y1 = strip_.getBottom() - 6.0f - s.energyTo * (strip_.getHeight() - 12.0f);
@@ -235,7 +273,8 @@ void ArrangeDisplay::render()
             else arc.lineTo(stripX(s.bar), y0);
             arc.lineTo(stripX(s.bar + s.bars), y1);
         }
-    if (started) {
+    }
+    if (!arc.isEmpty()) {
         g.setColour(green.withAlpha(0.8f));
         g.strokePath(arc, juce::PathStrokeType(1.4f));
     }
@@ -282,14 +321,39 @@ void ArrangeDisplay::render()
                            box.toNearestInt().reduced(kGlyph + 3, 0), juce::Justification::centred, false);
             }
         }
+        // The bars this track shares with its neighbours (the DJ overlap): hatched, with the track they
+        // mix with, drawn at the bottom edge so the section's lock, name and die stay readable.
+        const auto [in, out] = overlapOf(i);
+        auto hatch = [&](int fromBar, int bars, const juce::String& label, bool leftAligned) {
+            if (bars <= 0) return;
+            const float x0 = row.getX() + static_cast<float>(fromBar * barW);
+            const float x1 = row.getX() + static_cast<float>((fromBar + bars) * barW);
+            const juce::Rectangle<float> zone(x0, static_cast<float>(row.getY() + 1), juce::jmax(1.0f, x1 - x0),
+                                              static_cast<float>(row.getHeight() - 2));
+            g.saveState();
+            g.reduceClipRegion(zone.toNearestInt());
+            g.setColour(text.withAlpha(0.22f));
+            for (float x = zone.getX() - zone.getHeight(); x < zone.getRight(); x += 5.0f)
+                g.drawLine(x, zone.getBottom(), x + zone.getHeight(), zone.getY(), 0.8f);
+            g.restoreState();
+            g.setColour(text.withAlpha(0.55f));
+            g.drawRect(zone, 0.8f);
+            if (zone.getWidth() > 30.0f && row.getHeight() >= 24) {
+                g.setFont(body(8.0f));
+                g.drawText(label, zone.toNearestInt().reduced(2, 1).removeFromBottom(10),
+                           leftAligned ? juce::Justification::bottomLeft : juce::Justification::bottomRight, false);
+            }
+        };
+        hatch(0, in, "mix " + juce::String(t.index), true);
+        hatch(t.bars - out, out, "mix " + juce::String(t.index + 2), false);
     }
 
     // ---------------------------------------------------------------- the legend
     g.setColour(faint);
     g.setFont(body(9.5f));
     g.drawText("the strip is the night to scale, every row is one track filling the width   -   "
-               "click a block to jump   -   padlock freezes a track or a section on its seed   -   "
-               "die draws it again (a locked one does not move)",
+               "hatched: bars two tracks share (DJ mix)   -   click a block to jump   -   "
+               "padlock freezes a track or a section on its seed   -   die draws it again",
                getLocalBounds().reduced(6, 3).removeFromBottom(kLegendH), juce::Justification::centredLeft, false);
 }
 
@@ -363,6 +427,10 @@ void PhospheneEditor::buildArrangePage()
         page->addControl(gc, std::move(reroll), "", 4, true);
 
         auto here = std::make_unique<juce::TextButton>("Reroll this track");
+        // "This track" is the one that owns the bar: over the DJ overlap the outgoing one, whose kick and
+        // bass still play; the incoming one is rerolled from its own row on the timeline.
+        here->setTooltip("Draws the playing track again. Over the sixteen bars two tracks share, that is the "
+                         "outgoing one; the incoming track has its own die on its row.");
         here->onClick = [this] {
             proc_.reroll(LockUnit::Track, proc_.transport().track);
             arrangeDirty_ = true;
@@ -370,6 +438,7 @@ void PhospheneEditor::buildArrangePage()
         page->addControl(gc, std::move(here), "", 4, true);
 
         auto lockHere = std::make_unique<juce::TextButton>("Lock this track");
+        lockHere->setTooltip("Locks the playing track (over the DJ overlap the outgoing one).");
         lockHere->onClick = [this] {
             const int t = proc_.transport().track;
             proc_.setLock(LockUnit::Track, t, !proc_.isLocked(LockUnit::Track, t));
@@ -460,6 +529,10 @@ void PhospheneEditor::refreshArrangePage()
         s << "bar " << juce::String(t.bar + 1) << " of the set";
         const int track = t.track;
         s << "   -   track " << juce::String(track + 1) << (proc_.isLocked(LockUnit::Track, track) ? " (locked)" : "");
+        // The DJ overlap: the next track's intro already sounds under this one's outro.
+        for (const ArrangeDisplay::Trk& trk : arrange_->snapshot().tracks)
+            if (trk.index > track && t.bar >= trk.firstBar && t.bar < trk.firstBar + trk.bars)
+                s << ", mixing into track " << juce::String(trk.index + 1);
         if (t.restarting) s << "   -   planning...";
         arrangeNote_->setText(s, juce::dontSendNotification);
     }

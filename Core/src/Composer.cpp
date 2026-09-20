@@ -709,6 +709,62 @@ void Composer::matchMaster(const ParamStore& p, TrackPlan& t) const
     t.masterGainDb = static_cast<float>(std::clamp(g2, -18.0, 18.0));
 }
 
+/**
+ * The presence match (19.09.2026, round "polish"). Measured over 30 tracks of the arrangement round (5 styles,
+ * 2 seeds, 3 tracks each; Tools/metrics.py on the rendered drops): the presence band (1.5..6 kHz against the
+ * kick-and-bass band 40..140 Hz) of drop 1 ran from -6.2 to +7.1 dB around the reference recordings' median,
+ * interquartile -4.4 .. -0.7 -- the listening seed's track 2 at +2.8 / +3.7 over it, its track 1 at -3.1. The
+ * level match cannot see it: it matches each part's *loudness* to the first track's, and a line that is
+ * brighter at the same loudness puts more into the presence band. A cut on every track would push the dark
+ * ones further down, so the match is per track and only outside a band around the median:
+ *
+ *  - two probe renders of the drops (four bars of each, one per eight-bar group, the form's own instrumentation
+ *    and section controls, the master's dynamics off): the lines alone -- lead, counter, arp, stab, the voices
+ *    whose recipes carry the brightness -- and everything else. Both are linear in the lines' gain g, so
+ *    presence(g) = (g Pl + Pr) / (g Ll + Lr) is solved for g in closed form, no third render;
+ *  - the estimate is read against the reference median through kPresenceRefDb: the probe's raw ratio minus it is
+ *    the rendered drops' presence (the power mean of the two drops, Tools/metrics.py bands) over 30 calibration
+ *    tracks (5 styles, 2 seeds, 3 tracks each; the match off) with a median error of -0.04 dB, interquartile
+ *    -0.33 .. +0.33 dB, standard deviation 0.81, correlation 0.97; the three worst read the render 1.8 .. 2.5 dB
+ *    low (bright tracks whose drop 2 carries more than the probe's four bars show). Two bars from the middle of each drop without the section controls
+ *    had read the bright tracks up to 2.4 dB low, and a constant 7.7 dB apart from the render;
+ *  - inside kPresenceBandDb of the median nothing moves (the variety of the voices round stays); outside, the
+ *    lines are brought to the band's edge, at most kPresenceCutDb down or kPresenceLiftDb up.
+ */
+namespace {
+constexpr double kPresenceRefDb = -7.43;   ///< the probe's reading at the reference median (calibrated, see above)
+constexpr double kPresenceBandDb = 1.5;    ///< no correction within this distance of the median
+constexpr double kPresenceCutDb = 6.0;     ///< the most the lines are taken down
+constexpr double kPresenceLiftDb = 3.0;    ///< the most they are brought up
+} // namespace
+
+void Composer::matchPresence(const ParamStore& p, TrackPlan& t) const
+{
+    t.presenceDb = 0.0;
+    t.presenceAfterDb = 0.0;
+    t.presenceGainDb = 0.0f;
+    // Measured whenever the level match runs, so that a render with the match off still reports where each
+    // track stands (phos_render --tracks); corrected only with compose.presence_match on.
+    double lines[2] = {}, rest[2] = {};
+    probeLoudness(p, t, kProbeLines, 0.0f, lines);
+    probeLoudness(p, t, kProbeRest, 0.0f, rest);
+    const double pl = lines[0], ll = lines[1], pr = rest[0], lr = rest[1];
+    if (pl + pr <= 0.0 || ll + lr <= 0.0) return;
+    t.presenceDb = t.presenceAfterDb = 10.0 * std::log10((pl + pr) / (ll + lr)) - kPresenceRefDb;
+    if (!p.getBool(p.base(Module::Compose) + compose::PresenceMatch)) return;
+    if (std::fabs(t.presenceDb) <= kPresenceBandDb || pl <= 0.0) return;
+    // The band's edge on the side the track is on, as a ratio of the two bands' powers.
+    const double want = std::pow(10.0, (kPresenceRefDb + (t.presenceDb > 0.0 ? kPresenceBandDb : -kPresenceBandDb)) / 10.0);
+    const double num = want * lr - pr, den = pl - want * ll;
+    double g = (num > 0.0 && den > 0.0) ? num / den : (t.presenceDb > 0.0 ? 0.0 : 1e9);
+    const double db = g > 0.0 ? 10.0 * std::log10(g) : -kPresenceCutDb;
+    t.presenceGainDb = static_cast<float>(std::clamp(db, -kPresenceCutDb, kPresenceLiftDb));
+    // Where the correction lands, by the same linear model: the band's edge unless a cap stopped it. The
+    // plans carry it so that a check (testPresence) can see the match's own prediction, not only its gain.
+    const double gain = std::pow(10.0, static_cast<double>(t.presenceGainDb) / 10.0);
+    t.presenceAfterDb = 10.0 * std::log10((gain * pl + pr) / (gain * ll + lr)) - kPresenceRefDb;
+}
+
 void Composer::validate(const ParamStore& p) const
 {
     // The plans depend on these knobs; when any of them moves, the plans are made again.
@@ -967,6 +1023,7 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
         if (p.getBool(cb + compose::LevelMatch)) {
             t.loudness = probeLoudness(p, t);
             for (int k = 0; k < kMelodyParts; ++k) t.partLoudness[k] = probeLoudness(p, t, k);
+            matchPresence(p, t);
         }
         matchMaster(p, t);
         return t;   // the first track is the knobs, exactly
@@ -1025,6 +1082,7 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
             const bool measurable = plans_[0].partLoudness[k] > -60.0 && t.partLoudness[k] > -60.0;
             t.partGainDb[k] = measurable ? static_cast<float>(std::clamp(plans_[0].partLoudness[k] - t.partLoudness[k] - t.gainDb, -12.0, 12.0)) : 0.0f;
         }
+        matchPresence(p, t);
     }
     matchMaster(p, t);
     return t;
@@ -1088,7 +1146,9 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
         if (part == MelodyPart::Acid ? !floor : !voices) continue;
         const int level = mb + (part == MelodyPart::Acid ? static_cast<int>(mix::AcidLevel) : mix::polyLevel(melodyPoly(part)));
         const ParamDesc& d = p.desc(level);
-        push(level, ControlEvent::Kind::Offset, plan.partGainDb[k] / (d.maxValue - d.minValue));
+        // The lines carry the presence match on top of their level match (matchPresence).
+        const bool line = part == MelodyPart::Lead || part == MelodyPart::Counter || part == MelodyPart::Arp || part == MelodyPart::Stab;
+        push(level, ControlEvent::Kind::Offset, (plan.partGainDb[k] + (line ? plan.presenceGainDb : 0.0f)) / (d.maxValue - d.minValue));
     }
     // The track's acid voicing (Composer.h, kNumAcidVoicings). Cutoff and Env Amount are written again
     // by every section with the voicing folded into the section's base (sectionControls); they are
@@ -1211,10 +1271,26 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
         if (voices) push(lb + poly::Cutoff, cutoffAt(leadBase, 0.8f, e0), 0.0f);
         if (voices) push(pb + poly::Position, cutoffAt(padBase, 0.6f, e0), 0.0f);
     }
-    if (floor) push(ab + acid::Cutoff, cutoffAt(acidBase, 1.0f, e1), length);
+    // Drop 2 opens the acid's and the lead's filters by kClimaxOpen (Form.h), at its first bar rather than
+    // over its length: the lift is the arrival, not another ramp (19.09.2026, round "polish").
+    const float open = s.climax && !knobs ? kClimaxOpen : 0.0f;
+    if (open > 0.0f) {
+        if (floor) push(ab + acid::Cutoff, cutoffAt(acidBase, 1.0f, e0) + open, 0.0f);
+        if (voices) push(lb + poly::Cutoff, cutoffAt(leadBase, 0.8f, e0) + open, 0.0f);
+    }
+    if (floor) push(ab + acid::Cutoff, cutoffAt(acidBase, 1.0f, e1) + open, length);
     if (floor) push(ab + acid::EnvAmount, 0.5f * (cutoffAt(acidBase, 1.0f, e1) - acidBase) + voicing[acid::EnvAmount], length);
-    if (voices) push(lb + poly::Cutoff, cutoffAt(leadBase, 0.8f, e1), length);
+    if (voices) push(lb + poly::Cutoff, cutoffAt(leadBase, 0.8f, e1) + open, length);
     if (voices) push(pb + poly::Position, cutoffAt(padBase, 0.6f, e1), length);
+    // Drop 2 is wider: the lead, the counter, the arp and the pad by kClimaxWidth over their recipe's width,
+    // which every other section writes back (the offset replaces the one before it).
+    if (voices && !knobs) {
+        for (PolyInstance v : { PolyInstance::Lead, PolyInstance::Counter, PolyInstance::Arp, PolyInstance::Pad }) {
+            float off[poly::Count] = {};
+            voiceRecipeOffsets(v, plan.voice[polyIndex(v)], sv, off);
+            push(p.base(v) + poly::Width, off[poly::Width] + (s.climax ? kClimaxWidth : 0.0f), 0.0f);
+        }
+    }
 
     // The hall opens where the floor empties: a breakdown is the wettest part of a track.
     const float wet = s.type == SectionType::Break ? 0.22f : (s.type == SectionType::Intro || s.type == SectionType::Outro ? 0.10f : 0.0f);
@@ -1230,10 +1306,18 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
     // Loudness (Farbood): at most +-2 dB around the section's energy, on top of the track's level match.
     const ParamDesc& g = p.desc(mb + mix::TrackGain);
     const float span = g.maxValue - g.minValue;
-    if (floor) push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e0))) / span, 0.0f);
+    // The climax trims (Form.h, kDrop1HoldDb): drop 1 held under drop 2, the buildup into drop 2 ramping
+    // down to leave it headroom. Read at the bar this call writes from (the incoming track's floor starts at
+    // its hand-over, inside its intro) and at the section's end.
+    const Section& whole = plan.form.section[bar.index];
+    const double u0 = whole.bars > 1 ? static_cast<double>(s.startBar - whole.startBar) / whole.bars : 0.0;
+    const float t0 = knobs ? 0.0f : sectionTrimDb(plan.form, bar.index, u0);
+    const float t1 = knobs ? 0.0f : sectionTrimDb(plan.form, bar.index, 1.0);
+    if (floor) push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e0)) + t0) / span, 0.0f);
     // A buildup's energy runs from the section before it to the drop, so the gain ramps with it; every
     // other section holds one value (e0 == e1 there).
-    if (floor && e1 != e0) push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e1))) / span, length);
+    if (floor && (e1 != e0 || t1 != t0))
+        push(mb + mix::TrackGain, (plan.gainDb + (knobs ? 0.0f : energyGainDb(e1)) + t1) / span, length);
 
     // The macro ride of this section and the buildup's hall send (Form.h, 16.09.2026). The only line
     // of this file the arrangement-dynamics round of 16.09.2026 added: everything it writes is made
@@ -1303,13 +1387,20 @@ void Composer::arcControls(const ParamStore& p, const TrackPlan& plan, int inTra
     }
 }
 
-double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int part, float masterGainDb) const
+double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int part, float masterGainDb, double* bands) const
 {
+    // The presence probe (19.09.2026, round "polish"; matchPresence): the drops as the form plays them, split
+    // into the lines and the rest, so that the balance can be solved for the lines' gain without another render.
+    const bool presence = part == kProbeLines || part == kProbeRest;
+    const bool mixLike = part == -2 || presence;
+    auto isLine = [](MelodyPart mp) {
+        return mp == MelodyPart::Lead || mp == MelodyPart::Counter || mp == MelodyPart::Arp || mp == MelodyPart::Stab;
+    };
     constexpr double sr = 48000.0;
     // Two bars for the foundation and the parts. For the whole mix eight bars spread evenly over the track,
     // as its blocks really play -- intro and outro included, since the gated integrated loudness counts
     // them: the densest block alone over-read a track by 0.8 LU, four bars from its middle by 0.6 LU.
-    const int bars = part == -2 ? 16 : 2;
+    const int bars = part == -2 ? 16 : (presence ? 8 : 2);
     auto engine = std::make_unique<Engine>();
     engine->prepare(sr, 512);
     engine->params().copyValuesFrom(p);
@@ -1324,7 +1415,8 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     for (int k = 0; k < kMelodyParts; ++k) {
         const MelodyPart mp = static_cast<MelodyPart>(k);
         const int mute = mp == MelodyPart::Acid ? static_cast<int>(mix::AcidMute) : mix::polyMute(melodyPoly(mp));
-        engine->params().set(mb + mute, (k == part || part == -2) ? 0.0f : 1.0f);
+        const bool on = k == part || part == -2 || (part == kProbeLines && isLine(mp)) || (part == kProbeRest && !isLine(mp));
+        engine->params().set(mb + mute, on ? 0.0f : 1.0f);
     }
     engine->params().set(mb + mix::SfxMute, 1.0f);
     const int ms = p.base(Module::Master);
@@ -1334,7 +1426,7 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
         engine->params().set(ms + master::Clip, 0.0f);
         engine->params().set(ms + master::Clipper, 0.0f);
     }
-    if (part >= 0) {
+    if (part >= 0 || part == kProbeLines) {
         engine->params().set(mb + mix::KickMute, 1.0f);
         engine->params().set(mb + mix::BassMute, 1.0f);
         engine->params().set(mb + mix::PercMute, 1.0f);
@@ -1346,8 +1438,10 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     std::vector<ControlEvent> controls;
     TrackPlan neutral = plan;
     neutral.masterGainDb = masterGainDb;
-    if (part != -2) {
+    // The presence probe keeps the parts' level corrections: the balance it measures is the one they make.
+    if (!mixLike) {
         neutral.gainDb = 0.0f;
+        neutral.presenceGainDb = 0.0f;
         for (float& g : neutral.partGainDb) g = 0.0f;
     }
     trackStartControls(p, neutral, 0.0, controls);
@@ -1388,6 +1482,17 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     // holds its chord over several bars and a reverb tail runs on: single bars cut from the middle of a
     // breakdown read far quieter than the same bar does in the track.
     auto sourceBar = [&](int b) {
+        if (presence) {
+            // Four bars of drop 1 and four of drop 2 (the last drop, where a form has only one): the fifth bar
+            // of each of their first four eight-bar groups. One per group, because the stab and the counter
+            // take whole groups by turns (Form.cpp), and two bars from the middle heard one of them or neither
+            // -- on the calibration tracks the probe then read the brightest tracks 2 dB low.
+            int d1 = -1, d2 = -1;
+            for (int i = 0; i < plan.form.count; ++i)
+                if (plan.form.section[i].type == SectionType::Drop) { if (d1 < 0) d1 = i; d2 = i; }
+            const Section& s = plan.form.section[std::max(0, b < 4 ? d1 : d2)];
+            return s.startBar + std::min(s.bars - 1, 8 * (b % 4) + 4);
+        }
         if (part != -2) return 49 + b;
         // The first window starts on bar 0 and the last ends on the last bar, so that the intro and
         // the outro count: they are a tenth of the track and quieter than everything else, and a probe
@@ -1398,7 +1503,7 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     // The bar plan of a probe bar: the real instrumentation matrix for the whole mix, everything the
     // track has for a single part or the foundation (those measure a sound, not an arrangement).
     auto probeBar = [&](int source) {
-        if (part != -2) {
+        if (!mixLike) {
             BarPlan bp = allPartsBar(plan.melody);
             bp.percLayers = plan.perc.layers;
             // A part's own probe plays that part whether or not the track uses it (19.09.2026): every
@@ -1447,7 +1552,10 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
             c.beat = static_cast<double>(b) * kBeatsPerBar;
             c.param = static_cast<int16_t>(mb + mix::TrackGain);
             c.kind = ControlEvent::Kind::Offset;
-            c.value = (plan.gainDb + energyGainDb(0.5f * (sec.energy + sec.energyTo))) / (g.maxValue - g.minValue);
+            // With the climax trim at the probe bar's place in its section (Form.h, kDrop1HoldDb).
+            const double u = sec.bars > 1 ? static_cast<double>(sourceBar(b) - sec.startBar) / sec.bars : 0.0;
+            c.value = (plan.gainDb + energyGainDb(0.5f * (sec.energy + sec.energyTo)) + sectionTrimDb(plan.form, bp.index, u))
+                    / (g.maxValue - g.minValue);
             engine->pushControl(c);
         }
         PercBarSpec spec;
@@ -1468,7 +1576,7 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     }
     // The melodic parts: everything the track has for their own measurement, as the form plays them
     // for the whole mix.
-    if (part >= 0 || part == -2) {
+    if (part >= 0 || mixLike) {
         std::vector<NoteEvent> mel;
         for (int b = 0; b < bars; ++b) {
             const BarPlan bp = probeBar(sourceBar(b));
@@ -1477,7 +1585,7 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
             // bars in the upper octave, the mix probe over each four-bar window in the octave the form has
             // there (19.09.2026).
             MelodyContext ctx;
-            if (part == -2) {
+            if (mixLike) {
                 ctx = melodyContext(plan, bp, sourceBar(b));
                 if (b % 4 == 0 && ctx.droneBars == 0 && (bp.parts & partBit(MelodyPart::Drone)) != 0) {
                     ctx.droneBars = 4;
@@ -1486,9 +1594,25 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
             } else if (b == 0) {
                 ctx.droneBars = bars;
             }
-            composeMelodyBar(p, plan.melody, b, part == -2 ? sourceBar(b) : 48 + b, plan.scale, bp, mel, ctx);
+            composeMelodyBar(p, plan.melody, b, mixLike ? sourceBar(b) : 48 + b, plan.scale, bp, mel, ctx);
         }
-        for (const NoteEvent& n : mel) if (part == -2 || n.part == melodyScorePart(static_cast<MelodyPart>(part))) notes.push_back(n);
+        for (const NoteEvent& n : mel) if (mixLike || n.part == melodyScorePart(static_cast<MelodyPart>(part))) notes.push_back(n);
+    }
+    // The presence probe hears each drop's own section controls -- the energy's filter arc, the section's drawn
+    // wobble, drop 2's lift (Form.h, kClimaxOpen) -- at once rather than as the ramps a whole section plays them
+    // over; without them the probe read the brighter tracks up to 2 dB low against the render (calibration, above
+    // matchPresence). Only events inside the probe, in time order behind the track-start controls at beat 0.
+    if (presence) {
+        std::vector<ControlEvent> sc;
+        for (int b = 0; b < bars; b += 4) sectionControls(p, neutral, probeBar(sourceBar(b)), static_cast<double>(b) * kBeatsPerBar, sc);
+        std::vector<ControlEvent> keep;
+        for (ControlEvent c : sc) {
+            if (c.beat >= static_cast<double>(bars) * kBeatsPerBar) continue;
+            c.length = 0.0f;
+            keep.push_back(c);
+        }
+        std::stable_sort(keep.begin(), keep.end(), [](const ControlEvent& a, const ControlEvent& b) { return a.beat < b.beat; });
+        for (const ControlEvent& c : keep) engine->pushControl(c);
     }
     // One ring, so one order: the engine plays from the head of the ring.
     std::stable_sort(notes.begin(), notes.end(), noteLess);
@@ -1497,11 +1621,34 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     LoudnessMeter meter;
     meter.prepare(sr);
     std::vector<float> L(512), R(512);
+    // Band powers for the presence match: 1.5..6 kHz and 40..140 Hz, each a fourth-order band (two
+    // second-order high passes and two low passes, Butterworth Q), the bands of Tools/metrics.py.
+    Svf bandFilter[2][2][4];
+    for (int c = 0; c < 2; ++c)
+        for (int k = 0; k < 2; ++k) {
+            bandFilter[0][c][k].setQ(1500.0f, 0.7071f, static_cast<float>(sr));
+            bandFilter[0][c][2 + k].setQ(6000.0f, 0.7071f, static_cast<float>(sr));
+            bandFilter[1][c][k].setQ(40.0f, 0.7071f, static_cast<float>(sr));
+            bandFilter[1][c][2 + k].setQ(140.0f, 0.7071f, static_cast<float>(sr));
+        }
+    double bandSum[2] = {};
     for (int done = 0; done < total; done += 512) {
         const int n = std::min(512, total - done);
         engine->process(L.data(), R.data(), n);
         meter.process(L.data(), R.data(), n);
+        if (bands == nullptr) continue;
+        for (int c = 0; c < 2; ++c) {
+            const float* x = c == 0 ? L.data() : R.data();
+            for (int i = 0; i < n; ++i)
+                for (int band = 0; band < 2; ++band) {
+                    float y = x[i], lp, bp, hp;
+                    for (int k = 0; k < 2; ++k) { bandFilter[band][c][k].tick(y, lp, bp, hp); y = hp; }
+                    for (int k = 2; k < 4; ++k) y = bandFilter[band][c][k].lp(y);
+                    bandSum[band] += static_cast<double>(y) * y;
+                }
+        }
     }
+    if (bands != nullptr) { bands[0] = bandSum[0]; bands[1] = bandSum[1]; }
     return meter.read().integrated;
 }
 

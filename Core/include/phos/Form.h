@@ -234,6 +234,33 @@ constexpr float kDrop1Share = 0.88f;
 constexpr float kClimaxMargin = 0.20f;
 /** @} */
 
+/**
+ * @name Drop 2 audible (19.09.2026, round "polish")
+ * Measured over 30 tracks (5 styles, 2 seeds, 3 tracks each) with the arrangement round's form: drop 2 stood
+ * only +0.62 LU (K-weighted, median; minimum +0.36) over drop 1 at the output, and the loudest other eight-bar
+ * window of the track was the end of the big buildup -- as loud as drop 2 and, above 1.5 kHz, 2.2 dB *brighter*
+ * (its thirty-second snare roll over the riser). The master's compressor and true-peak limiter take about half
+ * of any gain difference, and drop 2 already sits at the ceiling, so drop 2 cannot be pushed up; what is left
+ * is to take the rest down and to make drop 2 fuller where loudness is not the currency:
+ *  - drop 1 stands kDrop1HoldDb under its energy's gain and holds one more percussion layer back (Form.cpp);
+ *  - the buildup into drop 2 ramps down to kBuildHeadroomDb under its energy's gain by its last bar, and its
+ *    thirty-second roll plays softer (Rhythm.cpp), so the drop is the arrival and not the build's peak;
+ *  - drop 2 opens the lead's and the acid's filters by kClimaxOpen and widens the lead, counter, arp and pad
+ *    by kClimaxWidth (Composer.cpp, sectionControls);
+ *  - the intro stands kIntroTrimDb under its energy's gain: with those changes alone, the intro's kick-and-bass
+ *    bars (17..32) were the loudest eight bars outside drop 2 in most tracks, 0.25 .. 0.65 LU under it -- sparse
+ *    material passes the compressor and the limiter that press the drops -- and 1.7 LU over the outgoing
+ *    track's bare outro at the DJ hand-over.
+ * sectionTrimDb() is the gain side of this, used by the section controls and by the level probe alike, so
+ * Auto Gain aims at the track the form really plays.
+ * @{ */
+constexpr float kDrop1HoldDb = 1.5f;       ///< drop 1's gain under its energy's (dB, before the master)
+constexpr float kBuildHeadroomDb = 2.0f;   ///< the big buildup's gain at its last bar under its energy's (dB)
+constexpr float kIntroTrimDb = 1.5f;       ///< the intro's gain under its energy's (dB)
+constexpr float kClimaxOpen = 0.05f;       ///< drop 2's filter lift, normalised cutoff
+constexpr float kClimaxWidth = 0.15f;      ///< drop 2's stereo width lift, normalised
+/** @} */
+
 /** @brief One section of a track's form. */
 struct Section {
     SectionType type = SectionType::Groove;   ///< what kind of section it is
@@ -304,6 +331,14 @@ FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double a
 
 /** @brief Index of the section that contains @p barInTrack (the last one if the bar is past the end). */
 int sectionOfBar(const FormPlan& f, int barInTrack);
+
+/**
+ * @brief The climax trim of section @p index at the fraction @p u (0 = its first bar, 1 = its end), in dB on
+ *        top of the energy's gain: -kDrop1HoldDb over every drop that is not the climax, a ramp from 0 to
+ *        -kBuildHeadroomDb over the buildup that leads into the climax, -kIntroTrimDb over the intro, 0 elsewhere
+ *        (see kDrop1HoldDb).
+ */
+float sectionTrimDb(const FormPlan& f, int index, double u);
 
 /**
  * @brief Whether every hard constraint holds (19.09.2026): every length and every start a multiple of
