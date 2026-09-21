@@ -608,7 +608,12 @@ const ParamDesc kMixParams[mix::Count] = {
     // under the reference median; docs/PLAN.md has the band balance before and after.
     { "lead_level", "Lead Level", "dB", -24.0f, 12.0f, -6.0f, Curve::Linear },
     { "counter_mute",  "Counter Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
-    { "counter_level", "Counter Level", "dB", -24.0f, 12.0f, -3.0f, Curve::Linear },
+    // 21.09.2026: measured at -3 dB the counter-lead sounded 11.6 dB under the lead it answers
+    // (seed 1, 173 notes against 1080, median MIDI 78 against 66, same velocity, same note length,
+    // identical synth parameters) -- a dialogue partner nobody can hear. Why an octave up costs
+    // that much through the same voice is not explained and wants its own round; this is the
+    // mixer doing what a mixer is for, set to the number the measurement asks for.
+    { "counter_level", "Counter Level", "dB", -24.0f, 12.0f, 5.0f, Curve::Linear },
     { "arp_mute",   "Arp Mute",   "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     // -2 dB (18.09.2026): the arp was the loudest melodic part and owned 300 Hz .. 2 kHz, where the
     // congas, toms and the clap have to be heard (kDefaultKit).
