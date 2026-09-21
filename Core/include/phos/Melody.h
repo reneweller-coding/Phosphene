@@ -281,6 +281,9 @@ struct ModeMaterial {
 /** @brief Everything melodic that is decided once per track. */
 struct MelodyPlan {
     bool present[kMelodyParts] = {};         ///< which parts the track uses at all (MelodyPart order)
+    /// The knobs behind `present`, kept so that a section can ask how *much* a part should play
+    /// rather than only whether it exists at all (21.09.2026; makeMelodyPlan, Form.cpp drawLead).
+    float amount[kMelodyParts] = {};
     int  chordBars = 2;                       ///< bars per chord (2 or 4)
     int  chordDegree[4] = {};                 ///< scale degree of each chord
     int  root[kMelodyParts] = { 50, 64, 76, 57, 57, 55, 38 }; ///< MIDI root of each part (the pad's, the stab's and the drone's are unused)

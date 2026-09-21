@@ -473,7 +473,11 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     // what makes Solberg and Dibben's Track 2 rule hold: after the drop the spectrum must be at least
     // as full as it was before the break. Every other section may leave a voice out.
     const bool drop = s.type == SectionType::Drop;
-    const bool drawAcid = rs.uniform() < 0.9f, drawLead = rs.uniform() < 0.85f, drawArp = rs.uniform() < 0.8f;
+    // The lead's share of the sections is the knob (21.09.2026); acid and arp keep their fixed draw,
+    // because those two are still drawn per track and a second thinning would empty them twice.
+    const bool drawAcid = rs.uniform() < 0.9f,
+               drawLead = rs.uniform() < a.amount[mpIndex(MelodyPart::Lead)],
+               drawArp = rs.uniform() < 0.8f;
     const bool useAcid = a.part[mpIndex(MelodyPart::Acid)] && (drop || drawAcid);
     const bool useLead = a.part[mpIndex(MelodyPart::Lead)] && (drop || drawLead);
     const bool useArp = a.part[mpIndex(MelodyPart::Arp)] && (drop || drawArp);
@@ -669,6 +673,40 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     if (hasPad && !bare && s.type != SectionType::Build && s.type != SectionType::Intro) {
         if ((parts & (bAcid | bLead)) == 0 || padExtra) parts |= bPad;
     }
+
+    // A floor under the arrangement (21.09.2026). Every rule above decides what a voice *may* do;
+    // none of them guarantees that anything melodic is left. Each voice is drawn per track
+    // (`present[k] = uniform() < amount`, Melody.cpp) and then thinned again per section, and the
+    // draws are independent, so the combination collapses far more often than any single amount
+    // suggests. Measured over four seeds, 256 bars each, as the share of bars in which a voice
+    // sounds at all: acid 59/0/65/65 %, lead 0/31/31/0 %, arp 34/0/0/40 %, pad 0/31/0/8 %. Two of
+    // the four tracks had no lead whatever, and in a ten-minute set the lead fell silent after bar
+    // 225 and never returned -- minutes of kick, bass and percussion, which is why the tracks all
+    // sounded the same. The knobs were not at fault: "Lead Amount 0.5" means half the *tracks* get a
+    // lead, not that the lead plays half the time.
+    //
+    // So: a bar that is meant to carry music carries at least one melodic voice. Only the three
+    // deliberate vacuums stay empty -- the pre-drop break, the cut after a core, and a bare bar --
+    // because each of them is one or two bars long and works by being silent (Grosz et al. 2025 put
+    // the pre-drop break at 1.5 to 2.5 s and the cut at 1 to 3 s).
+    //
+    // The breakdown and the buildup are NOT vacuums and must not be treated as such: what Solberg and
+    // Dibben (2019) measured leaving a breakdown is the kick and the bass, while the pads and a
+    // thinned lead carry it -- that is what the plan's own instrumentation matrix asks for. A first
+    // version of this rule excluded them and left gaps of 29 to 32 bars, 53 seconds without a
+    // melodic voice at 145 BPM, which is precisely the complaint it was written to answer.
+    //
+    // The pad is asked first because it is the carpet and disturbs the least, then the arp, then the
+    // lead, then the acid. The track always has one of them: makeMelodyPlan guarantees at least one
+    // of acid, lead and arp.
+    const bool carriesMusic = !bare && !bp.pdb && s.type != SectionType::Cut;
+    if (carriesMusic && (parts & (bAcid | bLead | bArp | bPad | bStab)) == 0) {
+        const MelodyPart kFloor[4] = { MelodyPart::Pad, MelodyPart::Arp, MelodyPart::Lead, MelodyPart::Acid };
+        for (MelodyPart part : kFloor) {
+            if (a.part[mpIndex(part)]) { parts |= partBit(part); break; }
+        }
+    }
+
     bp.padGate = (parts & bPad) != 0 && (parts & (bAcid | bLead)) != 0 && gate;
 
     // The new voices (19.09.2026, round "voices"), after everything above has been decided, because

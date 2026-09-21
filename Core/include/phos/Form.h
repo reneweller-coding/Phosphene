@@ -352,6 +352,7 @@ bool formConstraintsHold(const FormPlan& f);
 /** @brief What a track can play at all, and where its parts sit, for the instrumentation matrix. */
 struct PartAvailability {
     bool part[kMelodyParts] = {};   ///< which melodic parts exist in this track (MelodyPart order)
+    float amount[kMelodyParts] = {};  ///< how much each part should play, 0..1 (MelodyPlan::amount)
     int  leadLo = 59, leadHi = 79;   ///< the lead's pitch range (the masking rule)
     int  arpLo = 55, arpHi = 74;     ///< the arp's pitch range
     int  percLayers = 4;     ///< percussion layers the track's kit offers

@@ -648,6 +648,7 @@ static PartAvailability availabilityOf(const TrackPlan& plan)
 {
     PartAvailability a;
     for (int k = 0; k < kMelodyParts; ++k) a.part[k] = plan.melody.present[k];
+    for (int k = 0; k < kMelodyParts; ++k) a.amount[k] = plan.melody.amount[k];
     a.leadLo = plan.melody.leadLo;
     a.leadHi = plan.melody.leadHi;
     a.arpLo = plan.melody.arpLo;

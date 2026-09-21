@@ -1790,7 +1790,16 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     // The four older parts draw first and in their old order (acid, lead, arp, pad), so that which of
     // them a track has did not move when the three new voices joined (19.09.2026); then the new ones.
     // The counter-lead answers the lead, so a track without a lead has none.
+    for (int k = 0; k < kMelodyParts; ++k) m.amount[k] = amounts[k];
     for (int k : { kAcidI, kLeadI, kArpI, kPadI }) m.present[k] = r.uniform() < amounts[k];
+    // 21.09.2026: the lead is not a coin flip any more. Drawing it per track meant that "Lead
+    // Amount 0.5" gave half the tracks a lead and the other half none at all -- measured over four
+    // seeds, two of them had no lead in 256 bars, and with it went the counter-lead, which only
+    // answers where the lead plays. A track without its lead is the complaint this fixes. The knob
+    // now says how much the lead plays, not whether it exists: the draw above is left standing so
+    // that the other parts' draws keep their place in the random stream, and Form.cpp's per-section
+    // draw uses `amount` where it used a fixed 0.85.
+    m.present[kLeadI] = amounts[kLeadI] > 0.0f;
     // Every track has at least one melodic part unless all three amounts are zero: the likeliest one.
     if (!m.present[kAcidI] && !m.present[kLeadI] && !m.present[kArpI]) {
         static const int kLine[3] = { kAcidI, kLeadI, kArpI };
