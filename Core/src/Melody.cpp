@@ -605,6 +605,24 @@ void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, con
         }
         m.chordDegree[i] = drawIndex(r, w, 7);
     }
+    // 22.09.2026: never four times the same degree. The "keep the previous one" branch above fires
+    // with 0.35, so about one track in twenty-three drew i-i-i-i -- and with a two-bar chord block
+    // that is one chord held for 256 bars, which is "hat immer dasselbe gespielt" in the most
+    // literal sense a generator can manage. The repair is the smallest one that still lets a vamp
+    // stay a vamp: the *last* chord moves, drawn from the same successions as every other chord, so
+    // i-i-i-iv and i-i-i-bVII stay reachable and only the motionless case is gone.
+    if (m.chordDegree[1] == m.chordDegree[0] && m.chordDegree[2] == m.chordDegree[0]
+        && m.chordDegree[3] == m.chordDegree[0]) {
+        const int prev = m.chordDegree[0];
+        double w[7] = {};
+        for (int d = 0; d < 7; ++d) {
+            if (d == prev) continue;
+            const double q = chordTransition(scaleDegree(scale, prev), scaleDegree(scale, d));
+            const int move = ((scaleDegree(scale, d) - scaleDegree(scale, prev)) % 12 + 12) % 12;
+            w[d] = (q > 0.0 ? std::pow(q, 1.0 / temperature) : 0.0) + 0.15 * style.chordExtra[move];
+        }
+        m.chordDegree[3] = drawIndex(r, w, 7);
+    }
 }
 
 /**
@@ -1448,6 +1466,69 @@ void makeRangesAndPad(MelodyPlan& m, uint64_t seed)
     pr.seed(seed ^ kSaltPad);
     static const double kPatternWeights[6] = { 0.35, 0.2, 0.15, 0.1, 0.15, 0.05 };
     m.padGatePattern = drawIndex(pr, kPatternWeights, 6);
+    // 22.09.2026, round "Figuren". A second gate pattern, drawn from the same weights but never the
+    // same one, so that the sections which do not use the track's own pattern still move differently
+    // rather than falling back to no gate at all; and the track's figure.
+    do { m.padGateAlt = drawIndex(pr, kPatternWeights, 6); } while (m.padGateAlt == m.padGatePattern);
+    // Held keeps the largest share: it is the pad of the genre, and the three articulated figures are
+    // a colour a track may take rather than the rule. Weighted, in order:
+    // Held, Pulse, Offbeat, Swell, Syncope.
+    static const double kFigureWeights[static_cast<int>(PadFigure::Count)] = { 0.34, 0.22, 0.18, 0.13, 0.13 };
+    m.padFigure = drawIndex(pr, kFigureWeights, static_cast<int>(PadFigure::Count));
+    // A second figure for the grooves, never the drop's: a drop and the groove before it are the two
+    // places the pad is articulated at all, and hearing the same figure in both is most of what is
+    // left of "immer dasselbe" once the carpet sections are held.
+    do {
+        m.padFigureGroove = drawIndex(pr, kFigureWeights, static_cast<int>(PadFigure::Count));
+    } while (m.padFigureGroove == m.padFigure);
+}
+
+const char* const kPadFigureNames[static_cast<int>(PadFigure::Count)] = { "held", "pulse", "offbeat", "swell", "syncope" };
+
+/**
+ * @brief The onsets of one chord block for a figure, as (sixteenth from the block's start, beats held).
+ *
+ * The block is `chordBars` bars long. A figure that names more onsets than fit is cut by the caller;
+ * every length is shortened by a sixty-fourth there as well, so a repeated pitch always takes a fresh
+ * voice rather than retriggering one that is still sounding.
+ * @param figure   PadFigure
+ * @param chordBars bars in the block (2 or 4)
+ * @param out      receives the onsets
+ */
+void padOnsets(int figure, int chordBars, std::vector<std::pair<int, double>>& out)
+{
+    out.clear();
+    const int steps = chordBars * kStepsPerBar;
+    const double block = chordBars * static_cast<double>(kBeatsPerBar);
+    switch (static_cast<PadFigure>(std::clamp(figure, 0, static_cast<int>(PadFigure::Count) - 1))) {
+    case PadFigure::Pulse:
+        for (int b = 0; b < chordBars; ++b) out.emplace_back(b * kStepsPerBar, static_cast<double>(kBeatsPerBar));
+        break;
+    case PadFigure::Offbeat:
+        // The "and" of two and of four: the two sixteenths the kick and the bass leave free in a
+        // four-to-the-floor bar, which is where a stabbed pad sits without fighting either.
+        for (int b = 0; b < chordBars; ++b) {
+            out.emplace_back(b * kStepsPerBar + 6, 1.5);
+            out.emplace_back(b * kStepsPerBar + 14, 1.5);
+        }
+        break;
+    case PadFigure::Swell:
+        // Half the block short and quiet, then the whole chord for the rest: the pad arrives at the
+        // middle of its own block instead of at its start, which is what makes the next one land.
+        out.emplace_back(0, 0.5 * block);
+        out.emplace_back(steps / 2, 0.5 * block);
+        break;
+    case PadFigure::Syncope:
+        for (int b = 0; b < chordBars; ++b) {
+            out.emplace_back(b * kStepsPerBar, 2.5);
+            out.emplace_back(b * kStepsPerBar + 10, 1.5);
+        }
+        break;
+    case PadFigure::Held:
+    default:
+        out.emplace_back(0, block);
+        break;
+    }
 }
 
 /**
@@ -1799,7 +1880,15 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     // now says how much the lead plays, not whether it exists: the draw above is left standing so
     // that the other parts' draws keep their place in the random stream, and Form.cpp's per-section
     // draw uses `amount` where it used a fixed 0.85.
-    m.present[kLeadI] = amounts[kLeadI] > 0.0f;
+    // 22.09.2026: acid, arp, pad and drone follow the lead (21.09.2026). The draws above still
+    // happen, so nothing else this plan decides moves -- but their answer is no longer used. A coin
+    // flip per *track* meant a track simply had no acid line at all (0.6 at the knob's default), no
+    // arp (0.5), no drone (0.6), and it is what the user reported on 21.09: "Leads gibt es jetzt gar
+    // nicht mehr, ebensowenig wie eine Drone oder Acid-Lines". Measured on seed 7, the first track
+    // had none of the three. The knob still says how much each plays; it says it per *section* now
+    // (Form.cpp, the section draws), so a line comes and goes inside a track instead of being absent
+    // from the whole of it -- which is how a psytrance arrangement works anyway.
+    for (int k : { kAcidI, kLeadI, kArpI, kPadI }) m.present[k] = amounts[k] > 0.0f;
     // Every track has at least one melodic part unless all three amounts are zero: the likeliest one.
     if (!m.present[kAcidI] && !m.present[kLeadI] && !m.present[kArpI]) {
         static const int kLine[3] = { kAcidI, kLeadI, kArpI };
@@ -1808,6 +1897,7 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
         m.present[kLine[best]] = amounts[kLine[best]] > 0.0f;
     }
     for (int k : { kCounterI, kStabI, kDroneI }) m.present[k] = r.uniform() < amounts[k];
+    m.present[kDroneI] = amounts[kDroneI] > 0.0f;   // see above: its share is the sections', not the tracks'
     m.present[kCounterI] = m.present[kCounterI] && m.present[kLeadI];
     // 20.09.2026, round "climax-polish": the guarantee above can be satisfied by the acid alone, and acid
     // is not a "line" for the presence match or for a drop's brightness (Composer.cpp, matchPresence and
@@ -2180,8 +2270,17 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         }
         const bool shared = has(MelodyPart::Lead) || has(MelodyPart::Counter) || has(MelodyPart::Stab);
         // In drop 2 the guard may lift the arp further but never take it back under its climax octave.
+        // 22.09.2026: **the octave over G5 belongs to the climax.** Outside drop 2 the guard clears the
+        // lead within rule 14's own ceiling -- under the lead's lowest note, or interlocked into its
+        // rests, both of which it already prefers -- and only drop 2 may go up to G6. Until now both
+        // used kArpOverHighest, so in a track whose lead sat in the guard's way the arp was already at
+        // the top in drop 1 and drop 2's octave had nowhere to go: the cell was pulled back under the
+        // ceiling note by note and the two drops stood level. That is the brief's climax rule not
+        // happening at all, and it got much more common once the lead played in every track
+        // (21.09.2026) -- measured, the arp rose in drop 2 in 14 of 17 tracks before that and in 9 of
+        // 30 after it.
         const int move = !shared ? 0 : bp.arpOctave > 0 ? bestShift(ev, taken, { 0, 12 }, kArpLowest, kArpOverHighest)
-                                                        : bestShift(ev, taken, { 0, -12, 12, 24 }, kArpLowest, kArpOverHighest);
+                                                        : bestShift(ev, taken, { 0, -12, 12, 24 }, kArpLowest, kArpHighest);
         // The gate (rule 15): kArpGate of a sixteenth; the arp's own release (Params.cpp) finishes it.
         const double gate = 0.25 * kArpGate;
         for (const auto& st : steps) {
@@ -2190,32 +2289,72 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
             emit(Part::Arp, *st.second, st.first, pitch, gate);
         }
     }
-    if (has(MelodyPart::Pad) && barInTrack % m.chordBars == 0) {
+    if (has(MelodyPart::Pad)) {
+        // 22.09.2026, round "Figuren". Until now this ran only on the first bar of a chord block and
+        // emitted one held chord for the whole of it. A figure has onsets in the block's later bars
+        // too, and those cannot be written here: the conductor composes one bar at a time and pushes
+        // what it gets into the engine's ring, so a note whose onset lies in a later bar would arrive
+        // before that bar's own notes and the ring would no longer be in beat order. So the block's
+        // onsets are worked out every bar and only the ones belonging to *this* bar are written.
+        const int barInBlock = barInTrack % m.chordBars;
         MelodyNote held;
         held.velocity = 90;
-        // Held to the next chord, a 64th short of it so a repeated pitch takes a fresh voice cleanly.
-        // After a cut the chord starts where the cut ends, shortened by as much.
-        const double length = m.chordBars * static_cast<double>(kBeatsPerBar) - 1.0 / 16.0 - cut;
-        const int step = static_cast<int>(std::lround(cut * 4.0));
+        const double barBeats = static_cast<double>(kBeatsPerBar);
         const std::vector<int>& v = voicing[chordIndexAt(m, barInTrack)];
-        if (ctx.foundationBars > 0 && v.size() == 4) {
+        // Intro, breakdown and outro hold whatever the track drew: there the pad is the music, and an
+        // articulated pad under nothing sounds like a mistake rather than a figure.
+        // A buildup holds too: its whole job is to rise without a step, and an articulated pad puts a
+        // ripple into that ramp -- with Swell and a four-bar chord block a four-bar window can land
+        // on the quiet half of a block and read as a fall (testSectionRules, "the buildup rises over
+        // every four-bar window": one of eight windows fell).
+        const bool carpet = bp.type == SectionType::Intro || bp.type == SectionType::Break
+                         || bp.type == SectionType::Outro || bp.type == SectionType::Build;
+        std::vector<std::pair<int, double>> onsets;
+        const int figure = carpet ? static_cast<int>(PadFigure::Held)
+                         : bp.type == SectionType::Groove ? m.padFigureGroove : m.padFigure;
+        padOnsets(figure, m.chordBars, onsets);
+        // The onsets of this bar, in this bar's own steps, each held to the end of the block at the
+        // longest and a sixty-fourth short of it, so a repeated pitch always takes a fresh voice.
+        // A cut eats the start of the bar: an onset inside it moves to where the cut ends.
+        const double blockEnd = (m.chordBars - barInBlock) * barBeats;
+        std::vector<std::pair<int, double>> here;
+        for (const auto& on : onsets) {
+            if (on.first / kStepsPerBar != barInBlock) continue;
+            double at = (on.first % kStepsPerBar) * 0.25;
+            double len = on.second;
+            if (at < cut - 1e-9) { len -= cut - at; at = cut; }
+            len = std::min(len, blockEnd - at) - 1.0 / 16.0;
+            if (len > 1.0 / 16.0) here.emplace_back(static_cast<int>(std::lround(at * 4.0)), len);
+        }
+        const int step = static_cast<int>(std::lround(cut * 4.0));
+        if (barInBlock == 0 && ctx.foundationBars > 0 && v.size() == 4) {
             // The sub foundation (rule 20): the root an octave under the voicing, only where the form
             // silences kick and bass. It fades in with the pad's attack. Where the silence ends inside
             // this chord it stops a bar early, so the pad's release (1.8 s to -43 dB, a bar at 145 BPM)
             // has taken it away by the time the kick returns -- the band under 140 Hz is the kick's and
             // the bass's again from their first beat.
+            //
+            // It keeps the held shape whatever the figure is, and it is written on the block's first
+            // bar alone: rule 20 is about *filling* that band while the two rest, and a stabbed
+            // foundation leaves it empty between its hits, which is the hole the rule exists to close.
             const std::vector<int> f = foundationVoicing(v);
-            const double silentBeats = ctx.foundationBars * static_cast<double>(kBeatsPerBar);
+            const double length = m.chordBars * barBeats - 1.0 / 16.0 - cut;
+            const double silentBeats = ctx.foundationBars * barBeats;
             const double subLength = ctx.foundationBars > m.chordBars
                 ? length
-                : std::max(0.5 * kBeatsPerBar, silentBeats - kBeatsPerBar) - 1.0 / 16.0 - cut;
+                : std::max(0.5 * barBeats, silentBeats - barBeats) - 1.0 / 16.0 - cut;
             // The sub a little louder than the chord (velocity 118 against 90: +1 dB at the pad's
             // velocity sensitivity of 0.4): it is one voice carrying the whole register under the chord.
             MelodyNote sub = held;
             sub.velocity = 118;
-            for (size_t i = 0; i < f.size(); ++i) emit(Part::Pad, i == 0 ? sub : held, step, f[i], i == 0 ? subLength : length);
+            emit(Part::Pad, sub, step, f[0], subLength);
+            for (size_t i = 1; i < f.size(); ++i)
+                for (const auto& on : here) emit(Part::Pad, held, on.first, f[i], on.second);
         } else {
-            for (int pitch : v) emit(Part::Pad, held, step, pitch, length);
+            const bool foundation = ctx.foundationBars > 0 && v.size() == 4;
+            const std::vector<int> pitches = foundation ? foundationVoicing(v) : v;
+            for (size_t i = foundation ? 1 : 0; i < pitches.size(); ++i)
+                for (const auto& on : here) emit(Part::Pad, held, on.first, pitches[i], on.second);
         }
     }
     if (has(MelodyPart::Drone) && ctx.droneBars > 0) {

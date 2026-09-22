@@ -278,12 +278,49 @@ struct ModeMaterial {
     bool built = false;                 ///< false: this mode is not used by the track's form
 };
 
+/**
+ * @brief How the pad states its chord inside a chord block (22.09.2026, round "Figuren").
+ *
+ * `Held` is what every track did before this round and is still what an intro, a breakdown and an
+ * outro play, whatever the track drew: there the pad *is* the music, and an articulated pad under
+ * nothing sounds like a mistake. The other three are for the sections that have a kick under them.
+ */
+enum class PadFigure : int {
+    Held = 0,   ///< one chord for the whole block, struck on its first bar
+    Pulse,      ///< struck again every bar, each note a bar long
+    Offbeat,    ///< two hits a bar, on the "and" of two and of four, an eighth and a half long
+    Swell,      ///< the block in two halves: the first quiet and short, the second the full chord
+    Syncope,    ///< the downbeat and the "and" of three, the way a stab sits against the kick
+    Count
+};
+/** @brief Display names of PadFigure, in its order. */
+extern const char* const kPadFigureNames[static_cast<int>(PadFigure::Count)];
+
 /** @brief Everything melodic that is decided once per track. */
 struct MelodyPlan {
     bool present[kMelodyParts] = {};         ///< which parts the track uses at all (MelodyPart order)
     /// The knobs behind `present`, kept so that a section can ask how *much* a part should play
     /// rather than only whether it exists at all (21.09.2026; makeMelodyPlan, Form.cpp drawLead).
     float amount[kMelodyParts] = {};
+    /**
+     * @name How the pad states its chord (22.09.2026, round "Figuren")
+     *
+     * The user, on the pad: "sie war nicht sehr abwechslungsreich sondern klang immer gleich und hat
+     * immer dasselbe gespielt". Until this round that was literally true of its rhythm: one held
+     * chord per chord block, struck on the bar line, for the whole track -- every track. The only
+     * movement it ever had was the trance gate, and that was one pattern for 256 bars.
+     *
+     * A figure is a way of *stating* the chord, not a different chord: the onsets inside a chord
+     * block and how long each one holds. They are the four ways a psytrance pad is actually played --
+     * held under everything, re-struck each bar so the attack is heard, stabbed on the offbeats
+     * between the kick and the bass, or swelling into the next block. The track draws one; the
+     * sections that exist to be a carpet (intro, breakdown, outro) hold whatever it drew, because
+     * that is what those sections are for.
+     * @{ */
+    int  padFigure = 0;                       ///< PadFigure: how the pad states the chord in a drop
+    int  padFigureGroove = 0;                 ///< PadFigure: and in a groove, never the same one
+    int  padGateAlt = 0;                      ///< a second gate pattern, for the sections that do not use padGatePattern
+    /** @} */
     int  chordBars = 2;                       ///< bars per chord (2 or 4)
     int  chordDegree[4] = {};                 ///< scale degree of each chord
     int  root[kMelodyParts] = { 50, 64, 76, 57, 57, 55, 38 }; ///< MIDI root of each part (the pad's, the stab's and the drone's are unused)

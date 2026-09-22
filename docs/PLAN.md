@@ -6489,6 +6489,113 @@ Stimmen-LFO); `Core/include/phos/Engine.h` + `Core/src/Engine.cpp` (`ensureVoice
 (Lane-Palette, osc2 im Rezept, neue Loadings); `Tests/selftest.cpp` + `Tests/WaveTableRef.inl`
 (`testBed.audible`, Bibliothekstests in Blöcken, Formvergleich, neue Breiten); dieser Block.
 
+**22.09.2026, Figuren: der Rhythmus des Pads, Stimmen pro Sektion statt pro Nacht — und drei Regressionen, die dabei auffielen**
+
+Auftrag: „die Akkord und Rhythmen in denen das Pad gespielt wird sollten natürlich auch variieren.
+Dasselbe gilt aber auch für alle anderen Stimmen!"
+
+*Was der Rhythmus des Pads war.* Ein gehaltener Akkord pro Akkordblock, auf der Taktlinie
+angeschlagen, den ganzen Track, in jedem Track. Die einzige Bewegung war die Trance-Gate, und die
+lief mit **einem** Muster 256 Takte lang. Gemessen über den MIDI-Export: 1,0 bis 4,2 % der Pad-Noten
+lagen nicht auf der Eins, und die paar, die es taten, verdankten das einem Sektions-Cut, nicht einer
+Figur.
+
+*Figuren.* Fünf Arten, den Akkord zu *sagen* — `Held`, `Pulse` (jeder Takt neu angeschlagen),
+`Offbeat` (auf dem „und" von zwei und von vier, wo Kick und Bass den Sechzehntel frei lassen),
+`Swell` (der Block in zwei Hälften, die zweite trägt den vollen Akkord), `Syncope` (Eins und das
+„und" von drei). Ein Track zieht **zwei**: eine für die Drops, eine andere für die Grooves. Intro,
+Breakdown, Buildup und Outro halten immer, was der Track auch gezogen hat — dort *ist* das Pad die
+Musik, und eine artikulierte Fläche unter nichts klingt nach Versehen; beim Buildup kommt dazu, dass
+seine Rampe monoton steigen muss und eine Figur eine Welle hineinlegt (`testSectionRules` fand genau
+das: eines von acht Vier-Takt-Fenstern fiel um 0,2 dB). Die Sub-Foundation (Regel 20) bleibt
+gehalten: sie soll das Band unter 140 Hz *füllen*, und ein gestabbter Grundton lässt es zwischen
+seinen Schlägen leer.
+
+Das Gate-Muster gehört jetzt der **Sektion**. Jeder Track zieht zwei (nie dasselbe zweimal), die
+Sektion wählt aus ihrem eigenen Seed.
+
+*Gemessen, Pad-Noten nicht auf der Eins:*
+
+| Seed | vorher | jetzt | Positionen jetzt |
+|---|---|---|---|
+| 7 | 1,0 % | **22,9 %** | 0, 8, 10 (Syncope) |
+| 77 | 1,1 % | **40,6 %** | 0, 4, 6, 14 (zwei Figuren) |
+| 42 | 1,0 % | 0,6 % | zog zweimal eine Figur auf der Eins |
+| 99 | 4,2 % | 4,2 % | kurzer Track, nur Teppich-Sektionen |
+
+Etwa die Hälfte der Tracks bekommt so ein Pad, das nicht einfach auf der Eins liegt — vorher praktisch
+keiner. Takt-Gestalten (Einsatz + Länge) je Track: 3–4 vorher, 4–6 jetzt.
+
+*Ein Bug, den das Messen fand.* `makeChords` behält mit 0,35 den vorherigen Grad, dreimal
+hintereinander also mit 4 %: etwa jeder 23. Track zog **i-i-i-i**. Bei zweitaktigen Blöcken ist das
+ein Akkord über 256 Takte. Der letzte Grad muss sich jetzt bewegen, gezogen aus denselben
+Übergängen — i-i-i-iv bleibt erreichbar, nur der stehende Fall ist weg.
+
+*Die Stimmen gehören der Sektion, nicht der Nacht.* Acid, Arp, Pad und Drone waren ein Münzwurf pro
+**Track** (0,6 / 0,5 / 0,7 / 0,6). Die Chance, dass ein Track Acid *und* Arp *und* Pad hatte, war
+21 %, und Seed 7s erster Track hatte weder Acid noch Arp noch Drone, Seed 1s erster kein Pad. Genau
+das hat der Nutzer am 21.09. gemeldet („ebensowenig wie eine Drone oder Acid-Lines"), und am 21.09.
+war nur das Lead repariert worden. Jetzt gilt für alle vier, was für das Lead gilt: der Regler sagt,
+ob es die Stimme gibt, und die **Sektion** zieht, wie viel sie spielt. Die Dichte bleibt fast gleich
+(Acid 0,9 × 0,6 = 0,54 der Sektionen vorher, 0,6 jetzt; Arp 0,40 gegen 0,50), aber eine Linie kommt
+und geht *innerhalb* eines Tracks, statt im ganzen zu fehlen.
+
+Die Drone ist die Ausnahme, und zwar zurückgenommen: ein erster Versuch dünnte auch sie pro Sektion,
+und das ist der Teppich-an-vier-Stellen, den die Runde vom 20.09. mit dem Argument des Nutzers
+(„füllt das Frequenzvakuum") verworfen hat. Sie liegt unter jedem Takt wie seit jener Runde; was sich
+ändert, ist nur, *welche Tracks* eine haben — alle. `drone_amount` ist damit ein Schalter.
+
+*Drei Regressionen, gefunden und behoben.*
+
+**(a) Die Arrangement-Untergrenze vom 21.09. überfuhr vier Regeln.** Sie galt für jede Sektion, die
+nicht leer, kein Pre-Drop-Break und kein Cut war — und füllte damit die Takte, die mit Absicht leer
+sind. Gemessen: 1601 Linien-Noten in den Takten der DJ-Überblendung, in denen das eingehende Intro
+keine setzen darf; 28 Intro- und 5 Outro-Blöcke gegen ihre eigene Regel; 40 Noten, die in ein
+Pre-Drop-Break hineinklingen (dessen eigene Takte ausgenommen waren — eine Note aus dem Takt davor
+reicht hinein); und **132 Noten außerhalb der Tonart des Tracks plus 196 Arp-Noten außerhalb des
+Materials ihres Akkords**, weil eine Stimme, die in eine ungeplante Sektion gezwungen wird, das
+Material eines anderen Modus spielt als den, den diese Sektion geliehen hat. Nachgewiesen gegen den
+unreparierten Code (mit abgeschalteter Untergrenze verschwinden alle vier) und gegen 86356e3, wo
+beide Abschnitte grün waren. Die Untergrenze gilt jetzt für **Grooves und Drops** — die Sektionen,
+deren Aufgabe es ist, Musik zu tragen, und in denen die 29 bis 32 Takte lange Lücke lag, um die es
+ging.
+
+**(b) Zwei Form-Abschnitte maßen in Wahrheit den Klang.** Bisektiert über `PhospheneWork/slotA`
+(86356e3 → 5385685 → 6855fa0 → 732a35b): beide brachen erst mit dem Klangfarben-Commit, und zwar
+dadurch, dass der erste Track seit dem 21.09. ein eigenes Rezept zieht. Mit den Knöpfen liegt das
+Band 40…140 Hz im Breakdown 22,8 dB unter dem Core und jedes Buildup-Fenster steigt; mit gezogenem
+Klang 18,1 dB und ein Fenster fällt um 0,20 dB. Keines von beidem ist ein Fehler des Arrangements,
+und um das Arrangement geht es in diesen Abschnitten. Sie halten den Klang jetzt fest
+(`sound_variation=0`), genau wie die Oszillator-Abschnitte Detune und LFOs abschalten, um eine
+Wellenform zu messen; der Klang pro Track hat seine eigenen Abschnitte (`testVoices.sound`,
+`testRecipeSpread`, `testVariety`).
+
+**(c) Die Klimax-Regel für den Arp fand seit Monaten nicht statt.** „Der Arp eine Oktave höher in
+Drop 2" — gemessen stieg er in 9 von 30 Tracks, kleinste Anhebung −0,1 Halbtöne. Der Grund steht seit
+drei Runden im Testkommentar selbst und wurde jedes Mal stehengelassen: die Register-Regel hob den
+Arp schon in Drop 1 über das Lead, bis hinauf zu G6 (`kArpOverHighest`) — und dann hatte Drop 2s
+Oktave keinen Platz mehr, die Zelle wurde Note für Note unter die Decke zurückgezogen. Seit das Lead
+in jedem Track spielt (21.09.), passierte das fast immer. **Die Oktave über G5 gehört jetzt der
+Klimax:** außerhalb von Drop 2 räumt der Arp das Lead innerhalb von Regel 14 — unter dessen tiefster
+Note durch oder in seine Lücken verzahnt, beides bevorzugt der Wähler ohnehin. Ergebnis: 30 von 30
+Tracks, kleinste Anhebung +7,7 Halbtöne, gegen 14 von 17 und +0,5 vor dem 21.09.
+
+*Was die anderen Stimmen schon haben.* Nachgemessen über den MIDI-Export, verschiedene Takt-Rhythmen
+je Track: Arp 16–38, Lead 4–7, Counter 5, Bass 4–6, Acid 1–2 (eine 16- oder 32-Schritt-Figur ist das
+Rückgrat des Genres und soll sich wiederholen), Stab 1 bei 10–16 Takten Einsatz. Der einzige, der
+wirklich nur eine Gestalt hatte, war das Pad.
+
+*Nicht geschafft.* Der Pegelabgleich (`testVariety.levelMatch`, Spreizung 1,27 LU) — der letzte
+offene Punkt.
+
+*Dateien.* `Core/include/phos/Melody.h` + `Core/src/Melody.cpp` (`PadFigure`, `padOnsets`,
+`padFigure`/`padFigureGroove`/`padGateAlt`, die Pad-Emission pro Takt statt pro Block, der
+Akkord-Stillstand, die Präsenz der vier Stimmen, die Arp-Decke außerhalb der Klimax);
+`Core/src/Form.cpp` (Untergrenze nur in Grooves und Drops, Sektions-Ziehungen für Acid und Arp, die
+Drone-Rücknahme); `Core/src/Composer.cpp` (Gate-Muster pro Sektion, `kSaltPadGate`, die
+Pad-Intervalle nie unter die Note); `Tests/selftest.cpp` (`sound_variation=0` in den beiden
+Form-Abschnitten); dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

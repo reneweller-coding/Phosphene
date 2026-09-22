@@ -121,6 +121,8 @@ constexpr float kLiquidDisperse = 4.0f;
 
 /** @brief Salt of the voice recipes (19.09.2026): their own generator, so no other draw of the walk moves. */
 constexpr uint64_t kSaltVoice = 0x564F494345520014ull;
+/** @brief Salt of the section's choice between the track's two pad gate patterns (22.09.2026). */
+constexpr uint64_t kSaltPadGate = 0x504144474154ull;
 /** @brief Salt of the drone's slow evolution (19.09.2026). */
 constexpr uint64_t kSaltDroneRide = 0x44524944450015ull;
 
@@ -189,12 +191,15 @@ constexpr int8_t kLaneCounter = static_cast<int8_t>(WaveTableLane::Counter);
 // -5.9 dB in the two bars after the breakdown where it wants -18 dB or less. Unison, a fifth up or
 // an octave up give it an organ-like body instead, in its own register.
 //
-// The pad's intervals lean to the unison rather than the octave down (22.09.2026, measured): its
-// tracking high pass sits at the note already, so an octave under it is half filtered away, and what
-// survives lands in the range the kick and the bass own. A unison with a few cents of detune is the
-// one that changes the *colour* rather than the weight -- and with an octave-down partner on every
-// pad the rendered spread of the pad's centroid across twenty tracks fell from 915 to 321 cents,
-// because a low partner pulls every track's centroid to the same place.
+// The pad never answers below its own note either, and the reason is sharper than the drone's. Its
+// high pass tracks the note, so an octave-down partner is filtered away -- *except* in a breakdown,
+// where rule 20 opens that high pass to 40 Hz on purpose so the pad can carry the floor kick and
+// bass have left. So the one place the low partner is audible at all is the one place it does harm:
+// bisected to this row, the breakdown's 40..140 Hz band went from 23.7 dB under the core to 18.1,
+// against the 20 dB the section rule asks for (testSectionRules). Unison with a few cents of detune
+// is what changes the pad's *colour* rather than its weight anyway -- with an octave-down partner on
+// every pad the rendered spread of the pad's centroid across twenty tracks fell from 915 to 321
+// cents, because a low partner pulls every track's centroid to the same place.
 //
 // Per row: the first oscillator's weights; the built-in candidate tables; the library lanes; the
 // filter responses; the second oscillator's weights (index 0 = none, and it is the largest
@@ -207,7 +212,7 @@ const VoicePalette kVoicePalette[kPolyInstances] = {
     /* counter */ { { 0.08, 0.17, 0.20, 0.55 }, { 5, 1, 2, -1, -1, -1 },   { kLaneCounter, -1, -1 },     { 0.40, 0.40, 0.0, 0.20 }, { 0.45, 0.05, 0.20, 0.20, 0.10 }, { 0.05, 0.30, 0.10, 0.30, 0.05, 0.20 }, { 1.0f, 0.8f, 0.8f, 1.0f, 1.0f } },
     /* arp     */ { { 0.22, 0.20, 0.13, 0.45 }, { 2, 3, -1, -1, -1, -1 },  { kLaneArp, -1, -1 },         { 0.75, 0.25, 0.0, 0.00 }, { 0.50, 0.10, 0.15, 0.10, 0.15 }, { 0.02, 0.28, 0.05, 0.25, 0.05, 0.35 }, { 1.0f, 0.0f, 0.8f, 1.0f, 0.6f } },
     /* stab    */ { { 0.28, 0.18, 0.09, 0.45 }, { 3, 4, -1, -1, -1, -1 },  { kLaneArp, kLaneLead, -1 },  { 0.70, 0.30, 0.0, 0.00 }, { 0.45, 0.15, 0.15, 0.10, 0.15 }, { 0.05, 0.35, 0.10, 0.20, 0.05, 0.25 }, { 1.0f, 0.0f, 1.0f, 1.0f, 0.5f } },
-    /* pad     */ { { 0.15, 0.08, 0.12, 0.65 }, { 1, 2, 5, -1, -1, -1 },   { kLanePad, -1, -1 },         { 0.85, 0.00, 0.0, 0.15 }, { 0.30, 0.10, 0.25, 0.15, 0.20 }, { 0.04, 0.22, 0.10, 0.37, 0.09, 0.18 }, { 0.8f, 1.0f, 1.0f, 1.0f, 1.0f } },
+    /* pad     */ { { 0.15, 0.08, 0.12, 0.65 }, { 1, 2, 5, -1, -1, -1 },   { kLanePad, -1, -1 },         { 0.85, 0.00, 0.0, 0.15 }, { 0.30, 0.10, 0.25, 0.15, 0.20 }, { 0.00, 0.00, 0.12, 0.45, 0.15, 0.28 }, { 0.8f, 1.0f, 1.0f, 1.0f, 1.0f } },
     /* drone   */ { { 0.06, 0.20, 0.09, 0.65 }, { 1, -1, -1, -1, -1, -1 }, { kLaneDrone, kLanePad, -1 }, { 0.90, 0.10, 0.0, 0.00 }, { 0.30, 0.05, 0.30, 0.10, 0.25 }, { 0.00, 0.00, 0.05, 0.45, 0.20, 0.30 }, { 0.7f, 0.6f, 1.0f, 0.8f, 1.0f } },
 };
 
@@ -1651,6 +1656,19 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
 
     // The pad's trance gate is a property of the section, not of a 16-bar block.
     if (voices) pushNow(pb + poly::Gate, ControlEvent::Kind::Override, bar.padGate ? 1.0f : 0.0f);
+    // The gate *pattern* is the section's since 22.09.2026, not the track's. One pattern for 256 bars
+    // was the other half of "das Pad hat immer dasselbe gespielt": the pad's only movement under a
+    // drop is the gate, and it ran the same sixteen steps for seven minutes. The track still draws
+    // the two patterns (Melody.cpp, makePad: padGatePattern and a padGateAlt that is never the same
+    // one); which of them a section takes is the section's own seed, so a set is still a function of
+    // its seed and a locked section keeps its pattern.
+    if (voices) {
+        Rng gr;
+        gr.seed(mixSeed(plan.sectionSeed[std::clamp(bar.index, 0, kMaxSections - 1)] ^ kSaltPadGate, 0));
+        const bool alt = gr.uniform() < 0.4f;
+        pushNow(pb + poly::GatePattern, ControlEvent::Kind::Override,
+                static_cast<float>(alt ? m.padGateAlt : m.padGatePattern));
+    }
 }
 
 void Composer::droneControls(const ParamStore& p, const TrackPlan& plan, int inTrack, double beat, std::vector<ControlEvent>& out) const

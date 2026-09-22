@@ -473,11 +473,16 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     // what makes Solberg and Dibben's Track 2 rule hold: after the drop the spectrum must be at least
     // as full as it was before the break. Every other section may leave a voice out.
     const bool drop = s.type == SectionType::Drop;
-    // The lead's share of the sections is the knob (21.09.2026); acid and arp keep their fixed draw,
-    // because those two are still drawn per track and a second thinning would empty them twice.
-    const bool drawAcid = rs.uniform() < 0.9f,
+    // Every line's share of the sections is its knob (the lead since 21.09.2026, acid and arp since
+    // 22.09.2026). Acid and arp kept a fixed draw here only because they were still thinned once per
+    // *track*, and a second thinning would have emptied them twice; that track-level draw is gone
+    // (Melody.cpp, makeMelodyPlan), so the thinning happens here alone. The share is about what it
+    // was -- acid 0.9 x 0.6 = 0.54 of the sections before, 0.6 now; arp 0.8 x 0.5 = 0.40 against
+    // 0.5 -- but it is a share of the sections instead of of the whole night, so a track no longer
+    // simply lacks its acid line.
+    const bool drawAcid = rs.uniform() < a.amount[mpIndex(MelodyPart::Acid)],
                drawLead = rs.uniform() < a.amount[mpIndex(MelodyPart::Lead)],
-               drawArp = rs.uniform() < 0.8f;
+               drawArp = rs.uniform() < a.amount[mpIndex(MelodyPart::Arp)];
     const bool useAcid = a.part[mpIndex(MelodyPart::Acid)] && (drop || drawAcid);
     const bool useLead = a.part[mpIndex(MelodyPart::Lead)] && (drop || drawLead);
     const bool useArp = a.part[mpIndex(MelodyPart::Arp)] && (drop || drawArp);
@@ -699,7 +704,22 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     // The pad is asked first because it is the carpet and disturbs the least, then the arp, then the
     // lead, then the acid. The track always has one of them: makeMelodyPlan guarantees at least one
     // of acid, lead and arp.
-    const bool carriesMusic = !bare && !bp.pdb && s.type != SectionType::Cut;
+    //
+    // 22.09.2026: **grooves and drops only.** The first version of this floor (21.09.2026) covered
+    // every section that was not bare, not a pre-drop break and not a cut -- and thereby overrode
+    // four rules that empty a bar *on purpose*, which the tests found and named exactly: a line in
+    // the bars of the DJ overlap, where the incoming intro must add none (1601 notes); the sixteen
+    // bars an intro opens with and the bare end of an outro (28 intro and 5 outro blocks off the
+    // rule); notes held into a pre-drop break (40 of them, although the break's own bars were
+    // excluded -- a note started in the bar before reaches into it); and, worst, 132 notes outside
+    // the track's scale plus 196 arp notes off their chord's material, because a part forced into a
+    // section it was not planned for plays the material of another mode than the one that section
+    // borrowed.
+    //
+    // Those sections are not silent by accident, they are shaped. The gap the floor exists to close
+    // -- 29 to 32 bars of a groove with no melodic voice at all -- is in the sections whose job is
+    // to carry music, and there it still closes it. An intro that opens without a line is an intro.
+    const bool carriesMusic = !bare && !bp.pdb && (s.type == SectionType::Groove || s.type == SectionType::Drop);
     if (carriesMusic && (parts & (bAcid | bLead | bArp | bPad | bStab)) == 0) {
         const MelodyPart kFloor[4] = { MelodyPart::Pad, MelodyPart::Arp, MelodyPart::Lead, MelodyPart::Acid };
         for (MelodyPart part : kFloor) {
@@ -742,6 +762,13 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     // where kick and bass play the raised octave, quieter, and reduced to its root wherever pad or acid
     // already own the fifth (composeMelodyBar). The masking that leaves is measured, not forbidden --
     // docs/PLAN.md has the third-octave numbers.
+    // 22.09.2026: what changed is only *which tracks have one*. The drone used to be drawn once per
+    // track (0.6 at the knob's default), so 40 % of the night had none at all -- the user's
+    // "ebensowenig wie eine Drone". Every track has one now (Melody.cpp, makeMelodyPlan). Where it
+    // plays is untouched: under every bar, as the carpet argument above decided on 20.09.2026. A
+    // first attempt at this round thinned it per section with the knob as the probability, and that
+    // is the same carpet-in-four-places the argument rejects; `drone_amount` is therefore a switch
+    // now -- above zero the track has a drone throughout.
     if (hasDrone && !bare) parts |= bDrone;
     (void)droneCore;   // the section's old coin flip; still drawn so no later draw of the section moves
 

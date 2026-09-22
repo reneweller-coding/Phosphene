@@ -10558,8 +10558,18 @@ void testSectionRules()
     // No drone: its low octave is the floor of every breakdown by the voices round's rule (testVoices (g)
     // measures it), and on the seed this finds it stands 13.5 dB under the core's kick -- the removal this
     // section measures is the kick's and the bass's.
+    // `sound_variation=0` since 22.09.2026: this section measures the **form** -- the U, the buildup's
+    // ramp, what a pre-drop break holds -- and since 21.09.2026 the first track draws its own sound
+    // like every other one, so every number here would otherwise depend on which pad, kick and bass
+    // that one draw produced. Bisected: with the first track back on the knobs the breakdown's
+    // 40..140 Hz band reads 22.8 dB under the core and every buildup window rises; with a drawn sound
+    // 18.1 dB and one window dips by 0.2 dB. Neither is a fault of the arrangement, which is what
+    // this section is about -- the sound is held fixed here exactly as the oscillator sections switch
+    // off detune and the LFOs to measure a waveform. The per-track sound has its own sections
+    // (testVoices.sound, testRecipeSpread, testVariety).
     p.parseText("compose.track_bars=256 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
-                "compose.pad_amount=1 compose.sfx_amount=1 compose.drone_amount=0 compose.level_match=Off master.auto_gain=Off");
+                "compose.pad_amount=1 compose.sfx_amount=1 compose.drone_amount=0 compose.sound_variation=0 "
+                "compose.level_match=Off master.auto_gain=Off");
     // A seed whose first track carries the whole break routine: core, breakdown, buildup, drop, and a
     // pre-drop break that does not keep the kick on beat 4 (the "Kick on 4" variant is allowed to).
     int coreA = -1, brk = -1, build = -1, drop = -1;
@@ -12379,7 +12389,12 @@ void testFoundationRender()
     {
         ParamStore p;
         // No drone: this measures the pad's own foundation, which the drone replaces where it plays (19.09.2026).
-        p.parseText("compose.pad_amount=1 compose.drone_amount=0 compose.level_match=Off master.auto_gain=Off");
+        // No sound variation either (22.09.2026): rule 20 is about *when* the foundation is there and
+        // when it is gone, not about the timbre the track drew for its pad -- and since the first
+        // track has a drawn sound too, the level under 140 Hz a beat after the drop moved from within
+        // the bound to 0.7 dB outside it purely because of which pad came up.
+        p.parseText("compose.pad_amount=1 compose.drone_amount=0 compose.sound_variation=0 "
+                    "compose.level_match=Off master.auto_gain=Off");
         uint64_t seed = 0;
         int breakStart = -1, breakEnd = -1;
         for (uint64_t s = 1; s < 400 && breakStart < 0; ++s) {
