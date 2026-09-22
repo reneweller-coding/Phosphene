@@ -130,8 +130,14 @@ void testProbeSchedule()
     const auto t1 = std::chrono::steady_clock::now();
     const std::vector<TrackPlan> serial = planTracks(params, kListeningSeed, 2);
     const double serialSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
-    check(serial[0].presenceGainDb != 0.0f && serial[1].presenceGainDb != 0.0f,
-          "the reference tracks carry a presence gain (or the first mix probe's dependency would go untested)",
+    // 22.09.2026: **at least one**, not both. A presence gain of exactly zero is the correct answer
+    // for a track whose lines already sit inside the band (Composer.cpp, matchPresence returns early
+    // there), so demanding it of both reference tracks is a statement about which seed was picked and
+    // not about the code -- and the sound changes of this round put the second one inside the band.
+    // What this precondition is for is the dependency: the first mix probe reads a number the presence
+    // probes write, and one track with a live correction exercises that ordering exactly as two do.
+    check(serial[0].presenceGainDb != 0.0f || serial[1].presenceGainDb != 0.0f,
+          "at least one reference track carries a presence gain (or the first mix probe's dependency would go untested)",
           fmt("%+.2f and %+.2f dB", static_cast<double>(serial[0].presenceGainDb), static_cast<double>(serial[1].presenceGainDb)));
     check(serial[0].loudness < -5.0 && serial[0].loudness > -40.0 && serial[0].mixLoudness < -5.0 && serial[0].mixLoudness > -40.0,
           "and the probes measured something", fmt("foundation %.2f LUFS, mix %.2f LUFS", serial[0].loudness, serial[0].mixLoudness));

@@ -1049,6 +1049,26 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
                     for (int k = 0; k < n; ++k) d += (cand[k] - om[k]) * (cand[k] - om[k]);
                     score = std::min(score, std::sqrt(d));
                 }
+                // The first track has nothing behind it, so every candidate scored 1e9 and the *first*
+                // draw won -- an unspread random point (22.09.2026). That was harmless while the first
+                // track played the knobs, and became the level of the whole night when it started
+                // drawing a recipe like every other track (21.09.2026): the first track is the level
+                // match's reference, so a foundation that happened to come out quiet pulls every later
+                // track down with it. Measured on seed 31: its probe read -17.0 LUFS against -10.4,
+                // -11.1 and -12.8 for the three after it, which corrected them by -6.6, -5.9 and
+                // -4.3 dB; the set sat 3.5 dB under where the knobs put it, and the probe's own error
+                // was 1.1 dB for that recipe against 0.2 for the others -- the synthetic two-bar loop
+                // represents an ordinary foundation well and an extreme one less well.
+                //
+                // So the first track takes the *mildest* of its twelve candidates instead of the
+                // first: the opening track of a set is a variation of the settings somebody typed in,
+                // which is what it should be anyway, and the reference is then stable by construction
+                // rather than by luck. All twelve are still drawn, so no later track moves.
+                if (i == 0) {
+                    double norm = 0.0;
+                    for (int k = 0; k < n; ++k) norm += static_cast<double>(cand[k]) * cand[k];
+                    score = -std::sqrt(norm);
+                }
                 if (score > bestScore) { bestScore = score; std::copy(cand, cand + n, best); }
             }
             std::copy(best, best + n, out);
@@ -1075,6 +1095,14 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
                 for (int k = 0; k < kNumAcidVoicings; ++k) d += (cand[k] - o[k]) * (cand[k] - o[k]);
                 score = std::min(score, std::sqrt(d));
             }
+            // The first track keeps the knobs' voicing exactly (TrackWalk's own default, the driven
+            // corner): unlike the kick, the bass and the six voices, this is a three-way character
+            // switch -- clean, driven, liquid -- and the opening track of a set playing the acid
+            // character somebody set is right, while the difference between it and a point 0.95 of
+            // the way there is inaudible. All twelve candidates are still drawn, so no later track
+            // moves. testAcidVoicing.corners states this as a property; it went red when the first
+            // track began drawing a recipe (21.09.2026) and took candidate 0 here too.
+            if (i == 0) continue;
             if (score > bestAcid) { bestAcid = score; std::copy(cand, cand + kNumAcidVoicings, w.acidVoicing); }
         }
 
@@ -1142,6 +1170,17 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
                     double d = 0.0;
                     for (int k = 0; k < kNumVoiceMacros; ++k) d += (cand.macro[k] - lead.macro[k]) * (cand.macro[k] - lead.macro[k]);
                     score = std::min(score, 1e8) + 0.5 * std::sqrt(d) + (cand.filter != lead.filter ? 0.5 : 0.0);
+                }
+                // The first track: the mildest macro vector, not the first draw (22.09.2026). Its
+                // parts are the reference the level match brings every later track's to
+                // (Composer.h, "Level match"), so an extreme first draw moves the whole night. The
+                // discrete choices -- oscillator, table, filter, the two delays -- are left exactly
+                // as drawn: those are what gives the first track a sound of its own, which is the
+                // point of it having a recipe at all.
+                if (i == 0) {
+                    double norm = 0.0;
+                    for (int k = 0; k < kNumVoiceMacros; ++k) norm += static_cast<double>(cand.macro[k]) * cand.macro[k];
+                    score = -std::sqrt(norm);
                 }
                 if (score > bestScore) { bestScore = score; w.voice[v] = cand; }
             }

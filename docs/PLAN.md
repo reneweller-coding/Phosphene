@@ -6596,6 +6596,75 @@ Drone-Rücknahme); `Core/src/Composer.cpp` (Gate-Muster pro Sektion, `kSaltPadGa
 Pad-Intervalle nie unter die Note); `Tests/selftest.cpp` (`sound_variation=0` in den beiden
 Form-Abschnitten); dieser Block.
 
+**22.09.2026, Pegelabgleich: der erste Track nahm jedes Mal Kandidat 0**
+
+Der letzte offene Punkt der Beschwerde vom 21.09. `testVariety.levelMatch` las eine Spreizung von
+1,27 LU gegen eine Schranke von 0,8 — und der Abgleich war nicht schuld.
+
+*Was gemessen wurde.* Der Abschnitt schaltet alles Melodische stumm; er misst Kick, Bass und
+Percussion über vier Tracks. Deshalb bewegte ihn keine der Klangänderungen dieser Runde um ein
+Hundertstel: 1,27 / 5,66 LU, Lauf für Lauf identisch. Mit den Zahlen je Track wurde es sofort klar
+(Seed 31):
+
+| Track | gemessen | Probe | Korrektur | Fehler der Probe |
+|---|---|---|---|---|
+| 0 | −15,91 LUFS | −17,02 | 0,00 dB | **+1,11** |
+| 1 | −16,89 | −10,38 | −6,64 dB | +0,13 |
+| 2 | −16,80 | −11,08 | −5,94 dB | +0,22 |
+| 3 | −17,18 | −12,75 | −4,27 dB | +0,21 |
+
+Die Tracks 1 bis 3 stimmen untereinander auf 0,38 LU. Der Ausreißer ist die **Referenz**.
+
+*Die Ursache.* `chooseRecipe` zieht zwölf Kandidaten und nimmt den, der von den letzten vier Tracks
+am weitesten entfernt ist (Mitchells Beste-Kandidaten-Verfahren). Der erste Track hat nichts hinter
+sich, also bleibt `score` für alle zwölf auf `1e9` und die Bedingung `score > bestScore` trifft nur
+auf den **ersten** zu: Track 1 nahm jedes Mal Kandidat 0, einen ungespreizten Zufallspunkt. Dasselbe
+galt für das Acid-Voicing und für alle sechs Stimmen-Rezepte.
+
+Solange der erste Track die Knöpfe spielte, war das folgenlos — es gab kein Rezept. Seit dem
+21.09. zieht er eines, und er ist zugleich die Referenz, an die der Abgleich jeden späteren Track
+bringt. Sein Fundament kam 4 bis 6,6 dB leiser heraus als das der anderen, also wurden alle anderen
+um ebenso viel **heruntergezogen**: das Set lag 3,5 dB unter dem, wohin die Knöpfe es stellen. Und
+die synthetische Zwei-Takt-Schleife der Probe, die ein gewöhnliches Fundament auf 0,2 dB trifft,
+verfehlte dieses extreme um 1,1 dB.
+
+*Die Reparatur.* Der erste Track nimmt den **mildesten** seiner zwölf Kandidaten statt des ersten --
+den mit der kleinsten Norm, also den, der den Knöpfen am nächsten liegt. Für Kick, Bass, Acid-Voicing
+und die sechs Stimmen. Der Eröffnungstrack eines Sets ist damit eine Variation der Einstellungen, die
+jemand eingetippt hat, was er ohnehin sein sollte, und die Referenz steht per Konstruktion fest statt
+per Zufall. Alle zwölf werden weiter gezogen, also bewegt sich kein späterer Track. Die **diskreten**
+Wahlen -- Oszillator, Tabelle, Filterantwort, die zwei Delayzeiten -- bleiben genau wie gezogen: die
+sind es, die dem ersten Track einen eigenen Klang geben, und darum ging es beim 21.09.
+
+| | vorher | jetzt |
+|---|---|---|
+| Spreizung über vier Tracks | 1,27 LU | **0,24 LU** |
+| Fehler der Probe, Track 1 | +1,11 dB | +0,45 dB |
+| Pegel des Sets | −15,9 … −17,2 LUFS | −12,7 … −13,0 LUFS |
+
+0,24 LU ist enger als jede Messung, die in den Kommentaren dieses Abschnitts steht (0,26 LU beim
+Standard-Kit, 0,62 LU im schlechtesten der drei Seeds). `testVariety.recipes` bleibt grün: der erste
+Track spielt weiterhin nicht die Knöpfe.
+
+*Und die beiden Abschnitte, die schon vor dieser Runde rot waren.* `testClimax` ist mit der
+Arp-Oktave von heute grün geworden. `testProbeSchedule` scheiterte an einer Vorbedingung seiner
+selbst: er verlangte, dass **beide** Referenztracks einen Präsenz-Gain tragen. Ein Gain von genau
+null ist aber die richtige Antwort für einen Track, dessen Linien ohnehin im Band liegen
+(`matchPresence` kehrt dort früh zurück) -- die Forderung war eine Aussage über den gewählten Seed,
+nicht über den Code. Wofür die Vorbedingung da ist, ist die Abhängigkeit: die erste Mix-Probe liest
+eine Zahl, die die Präsenz-Proben schreiben, und **ein** Track mit einer lebenden Korrektur prüft
+diese Reihenfolge genauso wie zwei.
+
+*Eine Ausnahme.* Das Acid-Voicing des ersten Tracks bleibt exakt der Knopf. Anders als Kick, Bass und
+die sechs Stimmen ist es ein Dreiweg-Schalter des Charakters -- clean, driven, liquid --, und dass der
+Eröffnungstrack den Acid-Charakter spielt, den jemand eingestellt hat, ist richtig; der Unterschied zu
+einem Punkt, der zu 95 % dort liegt, ist ohnehin nicht zu hören. `testAcidVoicing.corners` hält das
+als Eigenschaft fest und war seit dem Klangfarben-Commit rot, weil der erste Track auch hier
+Kandidat 0 nahm. Gezogen werden alle zwölf weiterhin.
+
+*Dateien.* `Core/src/Composer.cpp` (der mildeste Kandidat für den ersten Track, dreimal);
+`Tests/selftest_probe.cpp` (die Vorbedingung); dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
