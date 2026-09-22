@@ -504,8 +504,8 @@ PhospheneProcessor::WaveTableLibrary PhospheneProcessor::waveTableLibrary() cons
     WaveTableLibrary s;
     s.directory = gWaveTablePackDirectory;
     s.shipped = kNumLibraryWaveTables;
-    for (int i = 0; i < kNumLibraryWaveTables; ++i)
-        if (waveTableLoaded(kNumBuiltinWaveTables + i)) ++s.loaded;
+    s.loaded = waveTablesIndexed();
+    s.built = waveTablesBuilt();
     return s;
 }
 
@@ -550,6 +550,12 @@ void PhospheneProcessor::timerCallback()
     serviceMacros();
     if (++macroTicks_ % 8 != 0) return;
     serviceCueBridge();
+    // A table the *user* picked (the Table box, a loaded set) has to be expanded by somebody, and
+    // the audio thread must not do it (22.09.2026, the on-demand library). Six atomic loads when
+    // nothing changed, on the message thread, a quarter of a second after the click at worst --
+    // until then the voice sounds the built-in fallback, which is what a machine without the pack
+    // hears anyway.
+    engine_->ensureVoiceTables();
     const int latency = engine_->latencySamples();
     if (latency != getLatencySamples()) setLatencySamples(latency);
     // The composer's own knobs decide how the set is planned, and the composer throws its cached
@@ -1056,9 +1062,28 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     // for every block of that wait would cancel the answer just before it arrived, over and over.
     // That livelock is what the VST3 test caught: the plugin planned forever and never played.
     const bool restarting = genPrimed_.load(std::memory_order_acquire) != genWanted_.load(std::memory_order_acquire);
+    const bool readyNow = genPrimed_.load(std::memory_order_acquire) == genWanted_.load(std::memory_order_acquire)
+                       && genReset_.load(std::memory_order_relaxed) == genWanted_.load(std::memory_order_acquire);
     if (restartRequest_.exchange(false, std::memory_order_acq_rel)) {
-        requestSeek(pendingBar_.load(std::memory_order_relaxed), pendingOffset_.load(std::memory_order_relaxed));
-        wasPlaying_ = false;
+        // 22.09.2026, the user: "Klicken direkt im Arrangement-View fuehrt zu schlimmsten
+        // Stoergeraeuschen". A click there is a seek, and a seek used to take effect inside this very
+        // block: genWanted_ moved, the `ready` test below failed, and the block came out silent --
+        // from whatever level the waveform happened to be at. The host test measured a step of
+        // 0.0235 on a quiet passage, and the size of that step is simply the instantaneous signal, so
+        // on a kick it is most of full scale. A step is broadband; once per mouse click it is exactly
+        // what the user described.
+        //
+        // So the seek waits for the end of this block: the block renders as it would have, a fade to
+        // zero is laid over it, and only then is the request made. The composer thread cannot be
+        // repositioning while we render, because it waits for genWanted_ -- which is the reason the
+        // request has to go *after* the render and not before it. When nothing is sounding (stopped,
+        // or a restart already in flight) there is nothing to fade and the seek goes at once.
+        if (playing && readyNow) {
+            fadeOutThenSeek_ = true;
+        } else {
+            requestSeek(pendingBar_.load(std::memory_order_relaxed), pendingOffset_.load(std::memory_order_relaxed));
+            wasPlaying_ = false;
+        }
     } else if (hostSync && !restarting) {
         const double expected = engine_->beatPosition() + conductor_->beatOffset();
         const double drift = hostBeat - expected;
@@ -1127,6 +1152,18 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         for (int i = 0; i < m; ++i) L[i] = 0.5f * (scratch_.getReadPointer(0)[i] + scratch_.getReadPointer(1)[i]);
     } else {
         engine_->process(L, R, n);
+    }
+    if (fadeOutThenSeek_) {
+        // A raised cosine rather than a straight line: its first derivative is zero at both ends, so
+        // neither the start of the fade nor the arrival at zero is itself a corner.
+        for (int c = 0; c < buffer.getNumChannels(); ++c) {
+            float* d = buffer.getWritePointer(c);
+            for (int i = 0; i < n; ++i)
+                d[i] *= static_cast<float>(0.5 * (1.0 + std::cos(juce::MathConstants<double>::pi * (i + 1) / n)));
+        }
+        fadeOutThenSeek_ = false;
+        requestSeek(pendingBar_.load(std::memory_order_relaxed), pendingOffset_.load(std::memory_order_relaxed));
+        wasPlaying_ = false;
     }
     const double beatAfter = engine_->beatPosition();
     const double beatsPerSample = n > 0 ? (beatAfter - beatAtStart) / n : 0.0;

@@ -94,7 +94,7 @@ void Poly::reset()
 {
     slots_ = PolySlots{};
     ch_ = PolyChannels{};
-    for (int s = 0; s < kPolySlots; ++s) { slots_.dt[s] = 0.001f; slots_.inv[s] = 1000.0f; slots_.idxDecay[s] = 1.0f; slots_.pw[s] = 0.5f; wtPh_[s] = 0.0; wtDt_[s] = 0.0; wtLevel_[s] = 0; }
+    for (int s = 0; s < kPolySlots; ++s) { slots_.dt[s] = 0.001f; slots_.inv[s] = 1000.0f; slots_.idxDecay[s] = 1.0f; slots_.pw[s] = 0.5f; wtPh_[s] = 0.0; wtDt_[s] = 0.0; wtLevel_[s] = 0; slotSaw_[s] = false; slotHzMul_[s] = 1.0; }
     for (int v = 0; v < kPolyVoices; ++v) {
         amp_[v].kill();
         fenv_[v] = 0.0f;
@@ -110,6 +110,8 @@ void Poly::reset()
         voiceCoefs(v);
     }
     lastPitch_ = -1.0;
+    lfo2Ph_ = 0.0;
+    lfo2Value_ = 0.0f;
     newest_ = 0;
     counter_ = 0;
     pos_ = 0;
@@ -131,11 +133,15 @@ void Poly::advanceDrift()
 void Poly::writeSlotPitch(int voice)
 {
     const int uFirst = (kPolyUnison - unisonLimit_) / 2, uLast = uFirst + unisonLimit_;
-    const double f0 = midiToHz(glidePitch_[voice]);
+    // The LFO's pitch destination rides here, on the same 16-sample grid the portamento steps on:
+    // a factor on the note's frequency, so it reaches the second oscillator's interval as well.
+    const double vib = lfo2Pitch_ > 0.0f
+        ? std::pow(2.0, static_cast<double>(lfo2Pitch_) * static_cast<double>(lfo2Value_) / 1200.0) : 1.0;
+    const double f0 = midiToHz(glidePitch_[voice]) * vib;
     const double y = glideY_[voice], scale = glideScale_[voice], fmRatio = glideFmRatio_[voice];
     for (int u = uFirst; u < uLast; ++u) {
         const int s = voice * kPolyUnison + u;
-        const double hz = f0 * (1.0 + kSupersawOffsets[u] * y * scale) * driftFactorHeld_[s];
+        const double hz = f0 * slotHzMul_[s] * (1.0 + kSupersawOffsets[u] * y * scale) * driftFactorHeld_[s];
         const double dt = std::min(hz / sr_, 0.45);
         slots_.dt[s] = static_cast<float>(dt);
         slots_.inv[s] = static_cast<float>(1.0 / dt);
@@ -176,6 +182,12 @@ void Poly::update(const float* v, double bpm)
     posDecay_ = static_cast<float>(std::exp(std::log(1.0e-3) / (std::max(1.0f, v[poly::PosDecay]) * 0.001 * sr_)));
     bpm_ = bpm;
     lfoInc_ = static_cast<float>(bpm / 60.0 / (std::max(0.05f, v[poly::PosLfoBeats]) * sr_));
+    // The voice LFO (22.09.2026). Free-running for the instance and tempo-synced, so a held chord
+    // breathes as one body and the breathing stays on the bar however long the note is.
+    lfo2Inc_ = static_cast<float>(bpm / 60.0 / (std::max(0.05f, v[poly::LfoBeats]) * sr_));
+    lfo2Cut_ = v[poly::LfoCutoff];
+    lfo2Pitch_ = v[poly::LfoPitch];
+    lfo2Amp_ = std::clamp(v[poly::LfoAmp], 0.0f, 1.0f);
     // Thermal drift (Poly.h). The walks step once per kPolyBlock samples, so their corner frequency
     // is kDriftHz against that grid rate; driftNorm_ turns the process's standing deviation,
     // sqrt(alpha / ((2 - alpha) * 3)) for a uniform excitation, into the drift depth in cents.
@@ -294,6 +306,40 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     // level needs: the voice stays as loud as the full unison. At the default limit uFirst is 0 and
     // uLast is kPolyUnison, and every loop below is the loop over all seven it always was.
     const int uFirst = (kPolyUnison - unisonLimit_) / 2, uLast = uFirst + unisonLimit_;
+
+    // The second oscillator (22.09.2026, round "Klangfarben"). A voice is already seven unison slots,
+    // each with its own frequency and its own four source weights, so a second oscillator needs no
+    // second render pass: it is the outermost pair of those slots given another source, another
+    // interval and a share of the power. For the VA and the FM those two slots carry nothing anyway
+    // (the switch above leaves gains[0] and gains[6] at zero), so there it is free in the literal
+    // sense; for the supersaw and the wavetable it trades the two furthest-detuned copies of the
+    // first oscillator for a second one, which is the trade a two-oscillator synth is.
+    //
+    // The interval is the point rather than the mix: an octave under the note turns a pad into a
+    // body, a fifth into an organ, a unison with a few cents of detune into a slow beat -- three
+    // sounds a single oscillator cannot make whatever its table is.
+    //
+    // The pair is the outermost *kept* slots, not slots 0 and 6: under the Quest's unison limit only
+    // the middle three are set up at all, and a second oscillator parked on a slot the limit throws
+    // away would be inaudible there while still taking its share of the first one's power. It needs
+    // three kept slots to exist, so that at least one is left for the first oscillator.
+    const int osc2 = std::clamp(static_cast<int>(std::lround(v[poly::Osc2])), 0, static_cast<int>(PolyOsc2::Count) - 1);
+    const double mix2 = osc2 == 0 ? 0.0 : std::clamp(static_cast<double>(v[poly::Osc2Mix]), 0.0, 1.0);
+    const bool two = mix2 > 0.0 && unisonLimit_ >= 3;
+    bool bSlot[kPolyUnison] = {};
+    if (two) {
+        // Equal-power between the two: the first oscillator keeps 1 - mix2 of the power, the pair
+        // splits mix2. The `norm` below then brings the whole voice back to the level it had.
+        const double keep = std::sqrt(1.0 - mix2), give = std::sqrt(0.5 * mix2);
+        for (int u = 0; u < kPolyUnison; ++u) gains[u] *= keep;
+        for (const int u : { uFirst, uLast - 1 }) { bSlot[u] = true; gains[u] = give; }
+    }
+    const int oscB = two ? osc2 - 1 : 0;   // PolyOsc2 counts Off first; PolyOsc does not
+    const int interval = std::clamp(static_cast<int>(std::lround(v[poly::Osc2Interval])),
+                                    0, static_cast<int>(PolyOsc2Interval::Count) - 1);
+    const double hzMul2 = two ? std::pow(2.0, (static_cast<double>(kOsc2IntervalSemis[interval])
+                                               + static_cast<double>(v[poly::Osc2Detune]) / 100.0) / 12.0) : 1.0;
+
     double power = 0.0;
     for (int u = uFirst; u < uLast; ++u) power += gains[u] * gains[u];
     const double norm = power > 0.0 ? 1.0 / std::sqrt(power) : 0.0;
@@ -301,8 +347,14 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     // The supersaw reads the mipmapped saw of the Classic table; only the VA blends a PolyBLEP ramp
     // into a pulse. A table frame is normalised to another RMS than the ramp, hence kSawTableGain.
     const bool sup = osc == static_cast<int>(PolyOsc::Supersaw);
-    sawVoice_[voice] = sup;
-    const double tableGain = sup ? static_cast<double>(kSawTableGain) : 1.0;
+    const bool supB = oscB == static_cast<int>(PolyOsc::Supersaw);
+    // The fast path (renderSegment: one Classic saw frame, no position, no LFO) needs *every* slot of
+    // the voice to be the supersaw. With a second oscillator of another kind the voice takes the
+    // general path, where each slot says for itself which table it reads (slotSaw_).
+    sawVoice_[voice] = sup && (!two || supB);
+    // kSawTableGain is per slot since 22.09.2026: with two oscillators one slot may read the Classic
+    // saw frame while its neighbour reads the voice's table, and the two are normalised to different
+    // RMS values.
     glideScale_[voice] = detuneScale;
     glideFmRatio_[voice] = v[poly::FmRatio];
 
@@ -322,6 +374,8 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
             slots_.gL[s] = slots_.gR[s] = 0.0f;
             wtPh_[s] = wtDt_[s] = 0.0;
             wtLevel_[s] = 0;
+            slotSaw_[s] = false;
+            slotHzMul_[s] = 1.0;
             continue;
         }
         // Thermal drift: each unison slot has its own walk, so the seven saws of a supersaw age
@@ -329,15 +383,20 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         // driftFactorHeld_ since 20.09.2026, because a gliding note rewrites its frequencies later and
         // must keep reading the walk it started with.
         driftFactorHeld_[s] = driftFactor(slotDrift(s));
-        const double hz = f0 * (1.0 + kSupersawOffsets[u] * y * detuneScale) * driftFactorHeld_[s];
+        // Which of the two oscillators this slot is, and at which pitch (22.09.2026).
+        const int slotOsc = bSlot[u] ? oscB : osc;
+        slotHzMul_[s] = bSlot[u] ? hzMul2 : 1.0;
+        const double hz = f0 * slotHzMul_[s] * (1.0 + kSupersawOffsets[u] * y * detuneScale) * driftFactorHeld_[s];
         const double dt = std::min(hz / sr_, 0.45);
         const double mdt = std::min(hz * v[poly::FmRatio] / sr_, 0.45);
         slots_.dt[s] = static_cast<float>(dt);
         slots_.inv[s] = static_cast<float>(1.0 / dt);
         slots_.mdt[s] = static_cast<float>(mdt);
         slots_.pw[s] = v[poly::PulseWidth];
-        const bool fm = osc == static_cast<int>(PolyOsc::Fm);
-        const bool wt = osc == static_cast<int>(PolyOsc::Wavetable) || sup;
+        const bool slotSup = slotOsc == static_cast<int>(PolyOsc::Supersaw);
+        const bool fm = slotOsc == static_cast<int>(PolyOsc::Fm);
+        const bool wt = slotOsc == static_cast<int>(PolyOsc::Wavetable) || slotSup;
+        slotSaw_[s] = slotSup;
         slots_.wWt[s] = wt ? 1.0f : 0.0f;
         wtDt_[s] = hz / sr_;
         wtLevel_[s] = waveLevelFor(hz, sr_, -1);
@@ -345,13 +404,13 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
             const double wp = static_cast<double>(wtRand) + wtDt_[s] * late;
             wtPh_[s] = wp - std::floor(wp);
         }
-        slots_.wSaw[s] = (fm || wt) ? 0.0f : static_cast<float>(osc == static_cast<int>(PolyOsc::Va) ? 1.0 - wave : 1.0);
-        slots_.wPulse[s] = osc == static_cast<int>(PolyOsc::Va) ? static_cast<float>(wave) : 0.0f;
+        slots_.wSaw[s] = (fm || wt) ? 0.0f : static_cast<float>(slotOsc == static_cast<int>(PolyOsc::Va) ? 1.0 - wave : 1.0);
+        slots_.wPulse[s] = slotOsc == static_cast<int>(PolyOsc::Va) ? static_cast<float>(wave) : 0.0f;
         slots_.wFm[s] = fm ? 1.0f : 0.0f;
         slots_.idxFloor[s] = static_cast<float>(0.3 * fmI);
         slots_.idxDecay[s] = idxDecay;
         const double theta = (std::clamp(width * kUnisonPan[u], -1.0, 1.0) + 1.0) * kPiD / 4.0;
-        const double g = gains[u] * norm * velGain * tableGain;
+        const double g = gains[u] * norm * velGain * (slotSup ? static_cast<double>(kSawTableGain) : 1.0);
         slots_.gL[s] = static_cast<float>(g * std::cos(theta) * std::sqrt(2.0));
         slots_.gR[s] = static_cast<float>(g * std::sin(theta) * std::sqrt(2.0));
         // `late` samples have already passed since the note ideally started.
@@ -403,6 +462,24 @@ void Poly::renderSegment(float* L, float* R, int n)
     // the host's block boundaries would not be a function of the sample index. At glide 0 nothing here
     // runs and no slot coefficient is touched.
     if (glideMs_ > 0.0f && pos_ % kPolyBlock == 0) advanceGlide();
+    // The voice LFO (22.09.2026). It steps on the same absolute grid and for the same reason: a
+    // modulation that advanced with the host's block boundaries would not be a function of the sample
+    // index, and the offline render is the determinism oracle. One sine per 16 samples for the whole
+    // instance, whose value the cutoff (lowPassCoefs), the pitch (writeSlotPitch) and the level (the
+    // amplitude loop below) all read -- which is why "kostet praktisch nichts" is literally true here.
+    const bool lfoOn = lfo2Cut_ > 0.0f || lfo2Pitch_ > 0.0f || lfo2Amp_ > 0.0f;
+    if (lfoOn && pos_ % kPolyBlock == 0) {
+        lfo2Value_ = static_cast<float>(std::sin(2.0 * kPiD * lfo2Ph_));
+        lfo2Ph_ += static_cast<double>(lfo2Inc_) * kPolyBlock;
+        lfo2Ph_ -= std::floor(lfo2Ph_);
+        // The pitch destination has to reach the slots, which only writeSlotPitch touches.
+        if (lfo2Pitch_ > 0.0f)
+            for (int voice = 0; voice < kPolyVoices; ++voice) if (amp_[voice].isActive()) writeSlotPitch(voice);
+    }
+    // Tremolo: a gain between 1 - depth and 1, so the LFO can only take level away and a voice never
+    // gets louder than the level match measured it at.
+    const float lfoGain = lfo2Amp_ > 0.0f
+        ? 1.0f - lfo2Amp_ * 0.5f * (1.0f - lfo2Value_) : 1.0f;
     bool voiceOn[kPolyVoices] = {};
     for (int voice = 0; voice < kPolyVoices; ++voice) {
         voiceOn[voice] = amp_[voice].isActive();
@@ -415,7 +492,7 @@ void Poly::renderSegment(float* L, float* R, int n)
         if (pos_ % kPolyBlock == 0) lowPassCoefs(voice, damping);
         for (int i = 0; i < n; ++i) {
             if (gate_[voice] > 0 && --gate_[voice] == 0) amp_[voice].noteOff();
-            const float a = amp_[voice].process();
+            const float a = amp_[voice].process() * lfoGain;
             chanAmp_[static_cast<size_t>(i * kPolyLanes + voice * 2)] = a;
             chanAmp_[static_cast<size_t>(i * kPolyLanes + voice * 2 + 1)] = a;
             fenv_[voice] *= fDecay_;
@@ -428,9 +505,13 @@ void Poly::renderSegment(float* L, float* R, int n)
     const int uFirst = (kPolyUnison - unisonLimit_) / 2, uLast = uFirst + unisonLimit_;
     for (int voice = 0; voice < kPolyVoices; ++voice) {
         const int s0 = voice * kPolyUnison;
-        // The source weight is read from a slot inside the limit: noteOn() clears the weights of the
-        // slots outside it, so slot 0 of a limited voice says nothing about its oscillator type.
-        const bool wt = voiceOn[voice] && slots_.wWt[s0 + uFirst] != 0.0f;
+        // The source weights are read from the slots inside the limit: noteOn() clears the weights of
+        // the slots outside it, so slot 0 of a limited voice says nothing about its oscillator type.
+        // Any of them, not just the first: with a second oscillator (22.09.2026) the outer pair can
+        // read tables while the middle does not, or the other way round.
+        bool wt = false;
+        for (int u = uFirst; u < uLast && !wt; ++u) wt = slots_.wWt[s0 + u] != 0.0f;
+        wt = wt && voiceOn[voice];
         if (!wt) {
             for (int i = 0; i < n; ++i)
                 for (int u = 0; u < kPolyUnison; ++u) wtRow_[static_cast<size_t>(i * kPolySlots + s0 + u)] = 0.0f;
@@ -466,7 +547,12 @@ void Poly::renderSegment(float* L, float* R, int n)
             if (lfoPh_[voice] >= 1.0) lfoPh_[voice] -= 1.0;
             for (int u = uFirst; u < uLast; ++u) {
                 const int s = s0 + u;
-                wtRow_[static_cast<size_t>(i * kPolySlots + s)] = table_->sampleAt(wtLevel_[s], pos, wtPh_[s]);
+                // Per slot since 22.09.2026: a second oscillator may be the supersaw while the first
+                // is a wavetable, and the supersaw reads one frame of the Classic table whatever the
+                // Table parameter says (the DSP round's aliasing figures depend on that frame).
+                wtRow_[static_cast<size_t>(i * kPolySlots + s)] =
+                    slotSaw_[s] ? sawTable_->sample(wtLevel_[s], kClassicSawFrame, wtPh_[s])
+                                : table_->sampleAt(wtLevel_[s], pos, wtPh_[s]);
                 wtPh_[s] += wtDt_[s];
                 if (wtPh_[s] >= 1.0) wtPh_[s] -= 1.0;
             }
@@ -541,7 +627,8 @@ void Poly::lowPassCoefs(int voice, double damping)
 {
     const float* v = values_;
     const double oct = v[poly::EnvAmount] * fenv_[voice] + v[poly::KeyTrack] * (pitch_[voice] - 60) / 12.0
-                     + static_cast<double>(driftOct_[voice]);
+                     + static_cast<double>(driftOct_[voice])
+                     + static_cast<double>(lfo2Cut_) * static_cast<double>(lfo2Value_);
     const double fc = std::min(static_cast<double>(v[poly::Cutoff]) * std::pow(2.0, oct), 0.45 * sr_);
     svfCoefs(fc, damping, sr_, ch_.a1[voice * 2], ch_.a2[voice * 2], ch_.a3[voice * 2]);
     ch_.a1[voice * 2 + 1] = ch_.a1[voice * 2];

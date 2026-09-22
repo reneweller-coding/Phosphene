@@ -300,7 +300,13 @@ private:
     double wtPh_[kPolySlots] = {};            ///< wavetable phase per slot (double: long pads)
     double wtDt_[kPolySlots] = {};            ///< wavetable phase step per slot
     int wtLevel_[kPolySlots] = {};            ///< table level per slot
-    bool  sawVoice_[kPolyVoices] = {};        ///< voice plays the supersaw: the Classic saw frame, no position
+    bool  sawVoice_[kPolyVoices] = {};        ///< every slot of the voice is the supersaw: the fast path
+    bool  slotSaw_[kPolySlots] = {};          ///< this slot reads the Classic saw frame rather than the table
+    double slotHzMul_[kPolySlots] = {};       ///< the slot's pitch against the note (the second oscillator's interval)
+    double lfo2Ph_ = 0.0;                     ///< the voice LFO's phase: one per instance, free-running
+    float lfo2Inc_ = 0.0f;                    ///< its step per sample, from poly::LfoBeats and the tempo
+    float lfo2Cut_ = 0.0f, lfo2Pitch_ = 0.0f, lfo2Amp_ = 0.0f;   ///< its three depths, from update()
+    float lfo2Value_ = 0.0f;                  ///< its last value, read by lowPassCoefs on the 16-sample grid
     const WaveTable* table_ = nullptr;
     const WaveTable* sawTable_ = nullptr;     ///< the Classic table, whose frame kClassicSawFrame is the saw
     float posDecay_ = 0.999f, lfoInc_ = 0.0f;

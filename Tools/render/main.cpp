@@ -351,8 +351,14 @@ int main(int argc, char** argv)
             for (int v = 0; v < kPolyInstances; ++v) {
                 const VoiceRecipe& rc = p.voice[v];
                 const int tableId = params.base(static_cast<PolyInstance>(v)) + poly::Table;
-                std::printf("          %-8s osc %-9s table %-20s filter %d  ", kPolyInstanceNames[v], rc.osc < 0 ? "knob" : kOscNames[rc.osc],
-                            rc.table < 0 ? "knob" : params.desc(tableId).choices[rc.table], rc.filter);
+                // 22.09.2026: the second oscillator and its interval (Composer.h, VoiceRecipe).
+                static const char* const kOsc2Names[] = { "off", "supersaw", "va", "fm", "wavetable" };
+                static const char* const kIntervalNames[] = { "-2oct", "-1oct", "-5th", "unison", "+5th", "+1oct" };
+                std::printf("          %-8s osc %-9s table %-20s filter %d  osc2 %-9s %-6s", kPolyInstanceNames[v],
+                            rc.osc < 0 ? "knob" : kOscNames[rc.osc],
+                            rc.table < 0 ? "knob" : params.desc(tableId).choices[rc.table], rc.filter,
+                            !rc.hasOsc2 || rc.osc2 < 0 ? "knob" : kOsc2Names[rc.osc2],
+                            !rc.hasOsc2 || rc.osc2 == 0 ? "" : kIntervalNames[rc.osc2Semis]);
                 for (int k = 0; k < kNumVoiceMacros; ++k) std::printf(" %s %+.2f", kVoiceMacroNames[k], static_cast<double>(rc.macro[k]));
                 std::printf("\n");
             }

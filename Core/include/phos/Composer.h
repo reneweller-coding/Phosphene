@@ -162,6 +162,15 @@ struct VoiceRecipe {
     int   table = -1;                  ///< override of poly.table, -1 = the knob
     int   filter = -1;                 ///< override of poly.filter_type, -1 = the knob
     int   delayL = -1, delayR = -1;    ///< overrides of the delay times, -1 = the knob
+    /** @name The second oscillator (22.09.2026, round "Klangfarben"; Params.h, poly::Osc2)
+     *  Two discrete choices, because that is what they are: *which* oscillator answers the first one
+     *  and *at which interval*. The mix between them is continuous and rides on the thickness
+     *  direction like everything else that is a matter of degree (kVoiceLoadings).
+     *  @{ */
+    int   osc2 = -1;                   ///< override of poly.osc2 (PolyOsc2, 0 = off), -1 = the knob
+    int   osc2Semis = 0;               ///< override of poly.osc2_interval (PolyOsc2Interval)
+    bool  hasOsc2 = false;             ///< whether the two above were drawn at all
+    /** @} */
     float macro[kNumVoiceMacros] = {}; ///< the five directions, each -1..1
 };
 

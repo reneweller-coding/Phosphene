@@ -336,7 +336,16 @@ public:
     struct WaveTableLibrary {
         juce::String directory;   ///< where the plugin pointed the core; empty when it found no pack
         int shipped = 0;          ///< library tables this build knows about
-        int loaded = 0;           ///< of those, the ones whose data is really there
+        int loaded = 0;           ///< of those, the ones the pack really holds (indexed at load)
+        /**
+         * @brief Of those, the ones expanded into mip levels right now.
+         *
+         * Since 22.09.2026 a table is expanded when a track that uses it is planned, not at load
+         * (WaveTableFile.h): 464 tables would be 935 MB. So this is a number about what has been
+         * *played*, and it is small and rises; `loaded` is the one that says the installation is
+         * complete.
+         */
+        int built = 0;
     };
     /** @brief The state of the library now; counted freshly, so it is valid after prepareToPlay(). */
     WaveTableLibrary waveTableLibrary() const;
@@ -563,6 +572,15 @@ private:
     /** @brief The track plans the composer has published, for the editor. */
     mutable std::mutex plansLock_;
     std::vector<phos::TrackPlan> plans_;   ///< the published copy; the editor reads only this
+    /**
+     * @brief A seek was asked for while the music was sounding: fade this block out, then seek.
+     *
+     * Audio thread only (22.09.2026). See the comment at the restart branch in processBlock: the
+     * request has to be made after the block is rendered, or the block the click lands in comes out
+     * silent from whatever level the waveform was at.
+     */
+    bool fadeOutThenSeek_ = false;
+
     static constexpr int kPublishedTracks = 24;   ///< how many tracks the warm-up plans ahead
     int publishedTracks_ = 0;                  ///< composer thread: how far the warm-up has got
     std::atomic<bool> plansStale_{ true };     ///< the seed or the knobs changed; plan again

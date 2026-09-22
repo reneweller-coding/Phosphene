@@ -104,6 +104,22 @@ public:
      *                     level, which is what the engine did before quality levels existed
      */
     void prepare(double sampleRate, int maxBlockSize, const Quality& quality = Quality::desktop());
+
+    /**
+     * @brief Expands the wavetables the parameters currently name, so the voices really sound them.
+     *
+     * Since 22.09.2026 the library is only indexed at load and a table is expanded when somebody
+     * asks for it (WaveTableFile.h, ensureWaveTables) -- 464 tables cannot all live in memory. The
+     * composer asks for a track's tables while it plans it, which covers everything the generator
+     * itself decides. This covers the other way a table gets chosen: a human turning the Table knob,
+     * a `--set pad.table=...`, a loaded `.phosset`. Without it those play the built-in fallback and
+     * nothing says why.
+     *
+     * Cheap when nothing changed (six atomic loads, no lock), so the plugin can call it off its
+     * 30 Hz timer. **Never from the audio thread:** it decodes and allocates. `prepare()` calls it
+     * once for whatever the parameters hold at that point.
+     */
+    void ensureVoiceTables();
     /** @brief The level prepare() was called with. */
     const Quality& quality() const { return quality_; }
     /** @brief Back to beat 0; clears events, offsets, overrides and all sound. */

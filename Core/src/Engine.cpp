@@ -64,6 +64,9 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
         poly_[i].prepare(sr_);
         poly_[i].setQuality(quality_.polyUnison[i], quality_.polyVoices[i]);
     }
+    // Whatever the parameters name right now -- a preset, a `--set`, a restored plugin state -- is
+    // expanded here, on this thread. Anything the composer decides later it asks for itself.
+    ensureVoiceTables();
     for (auto* b : { &sfxL_, &sfxR_, &sfxWetL_, &sfxWetR_, &roomInL_, &roomInR_, &hallInL_, &hallInR_, &roomOutL_, &roomOutR_, &hallOutL_, &hallOutR_,
                      &texL_, &texR_, &vocL_, &vocR_, &vocThrow_, &subBuf_, &throwIn_, &sendL_, &sendR_,
                      &hallGateInL_, &hallGateInR_, &hallGateOutL_, &hallGateOutR_ })
@@ -107,6 +110,17 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
     bass_.setOversampling(quality_.bassOversampling);
     perc_.prepare(sr_);
     reset();
+}
+
+void Engine::ensureVoiceTables()
+{
+    int want[kPolyInstances];
+    int n = 0;
+    for (int i = 0; i < kPolyInstances; ++i) {
+        const int t = static_cast<int>(std::lround(params_.get(params_.base(Module::Poly, i) + poly::Table)));
+        if (t >= kNumBuiltinWaveTables && t < kNumWaveTables) want[n++] = t;
+    }
+    if (n > 0) ensureWaveTables(want, n);
 }
 
 void Engine::reset()

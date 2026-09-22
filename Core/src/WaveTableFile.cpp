@@ -93,10 +93,24 @@ std::vector<int> frameIndices(int total, int limit)
     return idx;
 }
 
-/** @brief One entry of the loaded library. */
+/**
+ * @brief One entry of the library: where its frames sit in the pack, and the table once it is built.
+ *
+ * 21.09.2026: the pack used to be expanded in full at load. The ten mip levels make that expansion
+ * 32 times the packed size -- 61 KB on disk becomes 1.94 MB in memory -- so 35 tables cost 68 MB and
+ * a few hundred would cost gigabytes. Now the load only *indexes* the pack (`at`, `frameCount`,
+ * `dtype`) and keeps its bytes; a table is expanded when a track that uses it is planned
+ * (ensureWaveTables, on the composer thread) and published with a release store. The audio thread
+ * reads `ready` with an acquire load and never builds anything itself: a table that is not ready
+ * yet falls back to its built-in, exactly as a missing library file already did.
+ */
 struct LibraryEntry {
     WaveTable table;
-    bool loaded = false;
+    size_t at = 0;            ///< byte offset of this table's first frame record in the pack
+    int frameCount = 0;       ///< frames the pack holds for it
+    int dtype = 0;            ///< 0 = float32 coefficients, 1 = int16 with per-band scales
+    bool indexed = false;     ///< the pack has this table and the three fields above are valid
+    std::atomic<bool> ready{ false };   ///< the mip levels are built; only ever false -> true
 };
 
 /**
@@ -111,10 +125,11 @@ struct LibraryEntry {
  */
 struct Library {
     LibraryEntry entry[kNumLibraryWaveTables > 0 ? kNumLibraryWaveTables : 1];
+    std::vector<uint8_t> file;   ///< the pack itself, kept so a table can be expanded later
     std::atomic<bool> attempted{ false };
     std::mutex mutex;
-    int count = 0;
-    size_t bytes = 0;
+    int count = 0;               ///< tables the pack offers (indexed), not tables built
+    size_t bytes = 0;            ///< memory the built tables occupy; written under `mutex`
 };
 
 Library& library()
@@ -135,6 +150,89 @@ bool fail(std::string* error, const char* what, size_t at)
 }
 
 /**
+ * @brief Walks one table's frame records; decodes the kept frames when @p out is given.
+ *
+ * One function for both passes, so that indexing and expanding can never disagree about where a
+ * record ends: the load walks with @p out null to find the next table, ensureWaveTables() walks the
+ * same bytes again with a buffer to fill.
+ */
+bool walkTableFrames(const std::vector<uint8_t>& file, size_t& at, int frameCount, int dtype,
+                     const std::vector<int>& keep, std::vector<Coeffs>* out, std::string* error)
+{
+    const size_t n = file.size();
+    size_t next = 0;
+    for (int k = 0; k < frameCount; ++k) {
+        if (at + 4 > n) return fail(error, "a frame record runs past the end", at);
+        const int harmonics = readU16(file.data() + at);
+        const int bands = readU16(file.data() + at + 2);
+        at += 4;
+        if (harmonics < 0 || harmonics > kTopHarmonics) return fail(error, "harmonics out of range", at - 4);
+        const size_t scaleBytes = static_cast<size_t>(bands) * 4;
+        const size_t dataBytes = static_cast<size_t>(harmonics) * (dtype == 0 ? 8u : 4u);
+        if (at + scaleBytes + dataBytes > n) return fail(error, "frame data runs past the end", at);
+        const uint8_t* scales = file.data() + at;
+        const uint8_t* data = scales + scaleBytes;
+        if (out != nullptr && next < keep.size() && keep[next] == k) {
+            Coeffs c(static_cast<size_t>(harmonics));
+            for (int h = 1; h <= harmonics; ++h) {
+                const size_t i = static_cast<size_t>(h - 1);
+                if (dtype == 0) {
+                    c[i] = std::complex<double>(readF32(data + i * 8), readF32(data + i * 8 + 4));
+                } else {
+                    const int b = bandOf(h);
+                    const double s = b < bands ? static_cast<double>(readF32(scales + static_cast<size_t>(b) * 4)) : 0.0;
+                    c[i] = std::complex<double>(readI16(data + i * 4) * s, readI16(data + i * 4 + 2) * s);
+                }
+            }
+            (*out)[next++] = std::move(c);
+        }
+        at += scaleBytes + dataBytes;
+    }
+    return out == nullptr || next == keep.size();
+}
+
+/** @brief The memory ceiling on expanded tables (setWaveTableBudgetBytes); 0 = none. */
+std::atomic<size_t>& budgetBytes()
+{
+    static std::atomic<size_t> b{ 192u * 1024u * 1024u };
+    return b;
+}
+
+/** @brief Empties an entry. Not an assignment: LibraryEntry holds an atomic and is not copyable. */
+void clearEntry(LibraryEntry& e)
+{
+    e.table = WaveTable{};
+    e.at = 0;
+    e.frameCount = 0;
+    e.dtype = 0;
+    e.indexed = false;
+    e.ready.store(false, std::memory_order_release);
+}
+
+/** @brief Expands one indexed table into its mip levels and publishes it. Caller holds the mutex. */
+bool buildSlot(Library& lib, int slot)
+{
+    LibraryEntry& e = lib.entry[slot];
+    if (e.ready.load(std::memory_order_relaxed)) return true;
+    if (!e.indexed) return false;
+    // The ceiling (WaveTableFile.h, setWaveTableBudgetBytes). Checked before the work, not after:
+    // the point is not to allocate the table at all once the library is full, and a voice whose
+    // table is refused here sounds its built-in fallback, which is audible but never a fault.
+    const size_t budget = budgetBytes().load(std::memory_order_relaxed);
+    if (budget != 0 && lib.bytes >= budget) return false;
+    const std::vector<int> keep = frameIndices(e.frameCount, frameLimit());
+    std::vector<Coeffs> frames(keep.size());
+    size_t at = e.at;
+    if (!walkTableFrames(lib.file, at, e.frameCount, e.dtype, keep, &frames, nullptr)) return false;
+    if (frames.empty() || !e.table.buildFromHarmonics(frames)) return false;
+    lib.bytes += e.table.data.size() * sizeof(float);
+    // Release: everything buildFromHarmonics() wrote is visible to any thread that sees `ready`.
+    e.ready.store(true, std::memory_order_release);
+    return true;
+}
+
+
+/**
  * @brief Parses the pack into @p out, indexed by the position of an id in kLibraryTables.
  *
  * A table the file holds but this build does not ship is skipped, and a table this build ships but
@@ -152,7 +250,6 @@ bool parsePack(const std::vector<uint8_t>& file, Library& out, std::string* erro
     if (at > n) return fail(error, "headerLen runs past the end of the file", 16);
     at = (at + kAlign - 1) / kAlign * kAlign;
 
-    std::vector<Coeffs> frames;
     for (uint32_t t = 0; t < tables; ++t) {
         if (at + kNameBytes + kIdBytes + 8 > n) return fail(error, "a table record runs past the end", at);
         const char* id = reinterpret_cast<const char*>(file.data() + at + kNameBytes);
@@ -165,45 +262,17 @@ bool parsePack(const std::vector<uint8_t>& file, Library& out, std::string* erro
         for (int i = 0; i < kNumLibraryWaveTables; ++i)
             if (std::strncmp(id, kLibraryTables[i].id, kIdBytes) == 0) slot = i;
 
-        const std::vector<int> keep = frameIndices(frameCount, frameLimit());
-        frames.assign(keep.size(), Coeffs());
-        size_t next = 0;
-        for (int k = 0; k < frameCount; ++k) {
-            if (at + 4 > n) return fail(error, "a frame record runs past the end", at);
-            const int harmonics = readU16(file.data() + at);
-            const int bands = readU16(file.data() + at + 2);
-            at += 4;
-            if (harmonics < 0 || harmonics > kTopHarmonics) return fail(error, "harmonics out of range", at - 4);
-            const size_t scaleBytes = static_cast<size_t>(bands) * 4;
-            const size_t dataBytes = static_cast<size_t>(harmonics) * (dtype == 0 ? 8u : 4u);
-            if (at + scaleBytes + dataBytes > n) return fail(error, "frame data runs past the end", at);
-            const uint8_t* scales = file.data() + at;
-            const uint8_t* data = scales + scaleBytes;
-            // Only the frames this table keeps are decoded; the rest are walked past.
-            const bool wanted = slot >= 0 && next < keep.size() && keep[next] == k;
-            if (wanted) {
-                Coeffs c(static_cast<size_t>(harmonics));
-                for (int h = 1; h <= harmonics; ++h) {
-                    const size_t i = static_cast<size_t>(h - 1);
-                    if (dtype == 0) {
-                        c[i] = std::complex<double>(readF32(data + i * 8), readF32(data + i * 8 + 4));
-                    } else {
-                        const int b = bandOf(h);
-                        const double s = b < bands ? static_cast<double>(readF32(scales + static_cast<size_t>(b) * 4)) : 0.0;
-                        c[i] = std::complex<double>(readI16(data + i * 4) * s, readI16(data + i * 4 + 2) * s);
-                    }
-                }
-                frames[next++] = std::move(c);
-            }
-            at += scaleBytes + dataBytes;
-        }
-        if (slot >= 0 && next == keep.size() && !frames.empty()) {
+        // Indexing only: the frames are walked to find the end of the record, not decoded. What the
+        // entry keeps is where they begin, so ensureWaveTables() can come back for them.
+        const size_t framesAt = at;
+        if (!walkTableFrames(file, at, frameCount, dtype, {}, nullptr, error)) return false;
+        if (slot >= 0) {
             LibraryEntry& e = out.entry[slot];
-            e.loaded = e.table.buildFromHarmonics(frames);
-            if (e.loaded) {
-                ++out.count;
-                out.bytes += e.table.data.size() * sizeof(float);
-            }
+            e.at = framesAt;
+            e.frameCount = frameCount;
+            e.dtype = dtype;
+            e.indexed = true;
+            ++out.count;
         }
     }
     if (at + 8 > n || std::memcmp(file.data() + at, "PHOSWTE1", 8) != 0)
@@ -265,10 +334,11 @@ int loadWaveTableLibrary(const char* path, std::string* error)
             return 0;
         }
     }
+    lib.file = std::move(file);
     std::string why;
-    if (!parsePack(file, lib, &why)) {
+    if (!parsePack(lib.file, lib, &why)) {
         // A broken file must leave nothing half-built: every table falls back to its built-in.
-        for (int i = 0; i < kNumLibraryWaveTables; ++i) { lib.entry[i] = LibraryEntry{}; }
+        for (int i = 0; i < kNumLibraryWaveTables; ++i) clearEntry(lib.entry[i]);
         lib.count = 0;
         lib.bytes = 0;
         if (error != nullptr) *error = why;
@@ -286,7 +356,9 @@ void resetWaveTableLibrary()
     // rules out a reset landing between a concurrent loader's release store and a reader still using
     // the entries it is about to clear.
     std::lock_guard<std::mutex> guard(lib.mutex);
-    for (int i = 0; i < kNumLibraryWaveTables; ++i) lib.entry[i] = LibraryEntry{};
+    for (int i = 0; i < kNumLibraryWaveTables; ++i) clearEntry(lib.entry[i]);
+    lib.file.clear();
+    lib.file.shrink_to_fit();
     lib.attempted.store(false, std::memory_order_release);
     lib.count = 0;
     lib.bytes = 0;
@@ -299,7 +371,61 @@ bool waveTableIsLibrary(int index)
 
 bool waveTableLoaded(int index)
 {
-    return waveTableIsLibrary(index) && library().entry[index - kNumBuiltinWaveTables].loaded;
+    return waveTableIsLibrary(index) && library().entry[index - kNumBuiltinWaveTables].ready.load(std::memory_order_acquire);
+}
+
+void ensureWaveTables(const int* indices, int count)
+{
+    if (count <= 0 || indices == nullptr) return;
+    // The composer plans the first track before Engine::prepare() has loaded the pack, so asking for
+    // tables has to be able to open it. This runs on the planning thread, never on the audio thread,
+    // where loadWaveTableLibrary()'s own gate makes the call free once it has been done.
+    loadWaveTableLibrary();
+    Library& lib = library();
+    if (!lib.attempted.load(std::memory_order_acquire)) return;
+    // Cheap pass first: the common case is a track whose tables are all built already, and that must
+    // not take the lock -- the composer calls this for every track it plans.
+    bool missing = false;
+    for (int i = 0; i < count && !missing; ++i) {
+        const int idx = indices[i];
+        if (idx >= kNumBuiltinWaveTables && idx < kNumWaveTables)
+            missing = !lib.entry[idx - kNumBuiltinWaveTables].ready.load(std::memory_order_acquire);
+    }
+    if (!missing) return;
+    std::lock_guard<std::mutex> guard(lib.mutex);
+    for (int i = 0; i < count; ++i) {
+        const int idx = indices[i];
+        if (idx >= kNumBuiltinWaveTables && idx < kNumWaveTables) buildSlot(lib, idx - kNumBuiltinWaveTables);
+    }
+}
+
+void setWaveTableBudgetBytes(size_t bytes) { budgetBytes().store(bytes, std::memory_order_relaxed); }
+
+const std::vector<int>& waveTableLaneTables(WaveTableLane lane)
+{
+    // Built once on first use; the function-local static makes that thread safe without a lock of
+    // our own, and nothing here can change afterwards -- kLibraryTables is compiled in.
+    static const std::vector<std::vector<int>> byLane = [] {
+        std::vector<std::vector<int>> v(static_cast<size_t>(kNumWaveTableLanes));
+        for (int i = 0; i < kNumLibraryWaveTables; ++i) {
+            const int l = static_cast<int>(kLibraryTables[i].lane);
+            if (l >= 0 && l < kNumWaveTableLanes) v[static_cast<size_t>(l)].push_back(kNumBuiltinWaveTables + i);
+        }
+        return v;
+    }();
+    const int l = static_cast<int>(lane);
+    static const std::vector<int> none;
+    return l >= 0 && l < kNumWaveTableLanes ? byLane[static_cast<size_t>(l)] : none;
+}
+
+int waveTablesIndexed() { return library().count; }
+
+int waveTablesBuilt()
+{
+    const Library& lib = library();
+    int n = 0;
+    for (int i = 0; i < kNumLibraryWaveTables; ++i) n += lib.entry[i].ready.load(std::memory_order_acquire) ? 1 : 0;
+    return n;
 }
 
 size_t waveTableLibraryBytes() { return library().bytes; }
@@ -310,7 +436,10 @@ const WaveTable& waveTable(int index)
     const int i = index < kNumWaveTables ? index - kNumBuiltinWaveTables : kNumLibraryWaveTables - 1;
     if (kNumLibraryWaveTables <= 0) return builtinWaveTable(0);
     const LibraryEntry& e = library().entry[i];
-    if (e.loaded) return e.table;
+    // Acquire pairs with buildSlot()'s release store. Never builds here: this runs on the audio
+    // thread, where an allocation or a file read would be a fault, so a table that has not been
+    // asked for yet sounds as its built-in fallback rather than stalling the mix.
+    if (e.ready.load(std::memory_order_acquire)) return e.table;
     return builtinWaveTable(kLibraryTables[i].fallback);
 }
 

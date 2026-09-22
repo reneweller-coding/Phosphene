@@ -426,9 +426,11 @@ def feature_vector(m):
 # of partials), a dark-to-mid centroid (it sits at 70..280 Hz, an octave or more under the pad), and
 # a **bounded** ``move`` -- gliding is still wanted for the slow ramp, but not a sweep, which is what
 # unbounded ``move`` together with the pad's own high ``directness`` gate would let through.
+LANE_ORDER = ("lead", "arp", "pad", "counter", "drone")
+
 LANES = {
     "pad": dict(
-        take=12,
+        take=128,
         # A pad plays held chords under a slow position LFO, so the table must *glide*: a long
         # journey (travel) walked in small steps (directness). It must keep a fundamental, or it
         # disappears under the kick, and it must not alias, because a pad is the one part that
@@ -438,7 +440,7 @@ LANES = {
         score=lambda m: 2.0 * m["travel"] + 4.0 * m["directness"] + 0.4 * math.log2(max(m["centroid"], 1.0)),
     ),
     "lead": dict(
-        take=8,
+        take=80,
         # A lead plays short notes: it wants hard and bright, and somewhere to go under the
         # position envelope. Gliding does not matter -- the note is over before a sweep arrives --
         # so directness is not gated here; brightness at C5/C6 without aliasing is.
@@ -447,7 +449,7 @@ LANES = {
         score=lambda m: math.log2(max(m["centroid"], 1.0)) + 1.5 * m["centroid_span"] + 2.0 * m["move"],
     ),
     "arp": dict(
-        take=8,
+        take=96,
         # An arp is a lead that must not mask the lead: mid brightness, the hollow end of the
         # odd/even axis (where a pulse and a hard sync sit), and enough directedness that a
         # sixteenth line does not jump timbre from note to note.
@@ -455,8 +457,22 @@ LANES = {
                         and m["alias_c6"] <= -62.0 and m["travel"] >= 0.15 and m["directness"] >= 0.05),
         score=lambda m: -2.0 * abs(m["odd"] - 0.80) + 1.5 * m["directness"] + 0.3 * m["centroid_span"],
     ),
+    "counter": dict(
+        take=96,
+        # The counter-lead answers the lead, so it must not *be* the lead (Composer.cpp keeps a hard
+        # guard against sharing its oscillator or its table). Until 22.09.2026 it had no lane at all:
+        # it drew from three built-ins, the vocal/formant family, which was a deliberate choice while
+        # the library held 35 tables and became the reason the counter was the one voice that sounded
+        # the same in every track. Its character is the vowel: a mid centroid -- under the lead's
+        # floor of 8, over the drone's ceiling -- that *moves* across the frames (centroid_span), with
+        # a fundamental still present, which is what a formant sweep is and what makes an answering
+        # line read as a second voice rather than a thinner copy of the first.
+        gate=lambda m: (m["frames"] >= 16 and 3.0 <= m["centroid"] <= 12.0 and m["f1"] >= 0.08
+                        and m["centroid_span"] >= 0.5 and m["alias_c6"] <= -60.0),
+        score=lambda m: 1.5 * m["centroid_span"] + 1.0 * m["travel"] + 0.5 * m["f1"],
+    ),
     "drone": dict(
-        take=7,
+        take=64,
         # Organ-like and dark: a strong, clear fundamental (f1 well above the library's own median
         # of 0.47), a centroid under the pad lane's own floor, and a move that is bounded rather than
         # merely gated from below -- steady enough that the slow cutoff/position ramp of
@@ -479,19 +495,23 @@ def farthest_point(pool, take, score):
     if not pool:
         return []
     order = sorted(pool, key=lambda c: -score(c["m"]))
+    vecs = np.asarray([c["v"] for c in order], dtype=np.float64)
+    # 22.09.2026: the same rule, but the distance to the chosen set is carried along instead of
+    # recomputed. The old loop was O(take^2 * pool) single distances in Python, which cost seconds
+    # at take=8 and would have cost an hour at the takes this round needs (a lane now takes up to
+    # 128 of a pool of ~500). `near[i]` is always the distance from candidate i to its nearest
+    # chosen table, so each further pick is one argmax and one vectorised update; the tables it
+    # returns are the same ones, in the same order.
+    near = np.linalg.norm(vecs - vecs[0], axis=1)
+    near[0] = -1.0                      # chosen: never picked again
     chosen = [order[0]]
-    vecs = [c["v"] for c in order]
     while len(chosen) < take and len(chosen) < len(order):
-        best, bestd = None, -1.0
-        for c, v in zip(order, vecs):
-            if c in chosen:
-                continue
-            d = min(float(np.linalg.norm(v - k["v"])) for k in chosen)
-            if d > bestd:
-                best, bestd = c, d
-        if best is None:
+        j = int(np.argmax(near))
+        if near[j] < 0.0:
             break
-        chosen.append(best)
+        chosen.append(order[j])
+        near = np.minimum(near, np.linalg.norm(vecs - vecs[j], axis=1))
+        near[j] = -1.0
     return chosen
 
 
@@ -536,7 +556,7 @@ def select(measures, allow_measured=True):
              "left out by --no-measured" if not allow_measured else "included"))
 
     chosen, used = {}, set()
-    for lane in ("pad", "lead", "arp", "drone"):
+    for lane in LANE_ORDER:
         cfg = LANES[lane]
         pool = [c for c in pool_all if c["id"] not in used and cfg["gate"](c["m"])]
         print("  lane %-5s: %d of %d pass the gate" % (lane, len(pool), len(pool_all)))
@@ -549,7 +569,7 @@ def select(measures, allow_measured=True):
     print()
     print("%-5s %-22s %-20s %6s %5s %6s %6s %6s %5s %6s %6s %4s" %
           ("lane", "table", "source", "centr", "span", "move", "trav", "direct", "f1", "C5 dB", "C6 dB", "frm"))
-    for lane in ("pad", "lead", "arp", "drone"):
+    for lane in LANE_ORDER:
         for c in chosen[lane]:
             m = c["m"]
             rows.append({"lane": lane, "id": c["id"], "name": display_name(c),

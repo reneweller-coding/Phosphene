@@ -104,9 +104,15 @@ constexpr int kNumWaveTables = kNumBuiltinWaveTables + kNumLibraryWaveTables;
  * @brief The lane a library table was chosen for (`Tools/wt_select.py`), for displays.
  * @note `Drone` appended 20.09.2026 (round "wavetable-selection"): the tonic drone used to draw pad
  *       lane tables by index; it now has a lane measured for its own character (organ-like, a clear
- *       fundamental, dark). Display-only, never stored (no Params/.phosset concern).
+ *       fundamental, dark). `Counter` appended 22.09.2026: the counter-lead had no lane and drew
+ *       from three built-ins, which is why it was the one voice that sounded the same in every
+ *       track. Never stored (no Params/.phosset concern), but no longer display-only: the recipe
+ *       draw asks for a voice's candidates *by lane* now (Composer.cpp, kVoicePalette), so the
+ *       palettes grow with the pack instead of naming table indices by hand.
  */
-enum class WaveTableLane : int { Pad = 0, Lead, Arp, Drone };
+enum class WaveTableLane : int { Pad = 0, Lead, Arp, Drone, Counter, Count };
+/** @brief How many lanes the selection knows (for per-lane indexes). */
+constexpr int kNumWaveTableLanes = static_cast<int>(WaveTableLane::Count);
 
 /** @brief Static description of one shipped library table. */
 struct LibraryTableDesc {
@@ -188,8 +194,57 @@ bool waveTableIsLibrary(int index);
 /** @brief True when @p index addresses a library table whose data is actually loaded. */
 bool waveTableLoaded(int index);
 
-/** @brief Bytes the loaded library occupies after the mip levels are expanded. */
+/**
+ * @brief Expands the given tables so that waveTable() returns them, and publishes them.
+ *
+ * Call it from the thread that plans a track, never from the audio thread: it decodes and allocates.
+ * Tables already built are skipped without taking a lock. A table that is never asked for costs
+ * nothing but its packed bytes -- the pack itself is 32 times smaller than the expansion.
+ */
+void ensureWaveTables(const int* indices, int count);
+
+/** @brief How many library tables are expanded in memory right now. */
+int waveTablesBuilt();
+
+/**
+ * @brief How many library tables the pack offers: found in the file and indexed.
+ *
+ * Since the library is only indexed at load (22.09.2026) this is the number that answers
+ * "is the pack there and complete"; waveTablesBuilt() answers "how much of it is in memory",
+ * which is a property of what has been played, not of the installation.
+ */
+int waveTablesIndexed();
+
+/** @brief Bytes the expanded tables occupy (the packed file itself is not counted). */
 size_t waveTableLibraryBytes();
+
+/**
+ * @brief Ceiling on the memory the expanded tables may take; the on-demand library's safety belt.
+ *
+ * On-demand expansion (21.09.2026) turned the library's cost from a constant into a growing one: a
+ * track asks for six tables, and a set of twenty tracks can therefore ask for a hundred and twenty
+ * of the 464 the pack offers -- at 1.94 MB of mip levels each, far past what the old "expand all 35
+ * at load" ever took. Nothing is ever freed, because a prepared `Poly` holds a raw pointer into a
+ * table between `update()` calls and the audio thread must never find that pointer dangling. So the
+ * bound is at the other end: once the built tables reach the budget, a further one is not built and
+ * the voice that asked sounds its built-in fallback instead -- the same graceful path a machine
+ * without the pack at all takes.
+ *
+ * The default (192 MB) is about a hundred tables, which is a set of sixteen or so tracks with every
+ * voice drawing a different table every time. The Quest sets its own, smaller one, and pairs it with
+ * setWaveTableFrameLimit(), which makes each table cheaper rather than rarer.
+ * @param bytes the ceiling; 0 means no ceiling
+ */
+void setWaveTableBudgetBytes(size_t bytes);
+
+/**
+ * @brief The parameter indices (6 ..) of every library table the selection chose for @p lane.
+ *
+ * The voice palettes (Composer.cpp, kVoicePalette) name lanes, not tables, so that widening the
+ * pack widens what a voice can sound like without a line of C++ changing. Built once, from
+ * kLibraryTables, and safe to call from several threads.
+ */
+const std::vector<int>& waveTableLaneTables(WaveTableLane lane);
 
 /**
  * @brief Reads a wavetable `.wav` into one frame's-worth-per-row coefficients (tests, user files).

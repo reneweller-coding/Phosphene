@@ -345,7 +345,8 @@ int main(int argc, char** argv)
               "the plugin looks for the pack beside its own binary, not in a source tree (found \""
                   + lib.directory + "\")");
         check(lib.shipped > 0 && lib.loaded == lib.shipped,
-              "and it has every table this build ships (" + juce::String(lib.loaded) + " of "
+              "and it holds every table this build ships (" + juce::String(lib.built) + " expanded so far, "
+                  + juce::String(lib.loaded) + " of "
                   + juce::String(lib.shipped) + ")");
     }
 
@@ -722,6 +723,95 @@ int main(int argc, char** argv)
                                            + juce::String(static_cast<int>(pattern.size())) + " notes)");
         check(kicks >= 12, "and the kick is in it (" + juce::String(kicks) + " notes in four bars)");
         check(percs > 0, "and the percussion kit too (" + juce::String(percs) + " notes)");
+
+        // 22.09.2026, the user: "die Noten werden nicht mehr angezeigt (zumindest nach dem ersten
+        // Song)". The check above has always read bar 16, which is inside the *first* track; what the
+        // editor does from the second track on has never been measured. So: seek into track 2, wait
+        // the way the editor's timer waits, and ask for the same thing the pattern roll asks for --
+        // the bar the transport is in, rounded down to a group of four (PluginEditor.cpp,
+        // refreshPattern). The number of tracks the warm-up has published is read as well, because
+        // that is what the arrangement view draws from (tryReadTrack).
+        {
+            const int trackBars = static_cast<int>(std::lround(p->params().get(
+                p->params().base(Module::Compose) + compose::TrackBars)));
+            const int bar2 = trackBars + 24;            // well inside the second track
+            p->seekToBar(bar2);
+            const auto t0 = std::chrono::steady_clock::now();
+            bool arrived = false;
+            std::vector<NoteEvent> late;
+            int atBar = -1;
+            while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 120.0) {
+                buf.clear(); midi.clear();
+                p->processBlock(buf, midi);
+                const TransportView t = p->transport();
+                atBar = t.bar;
+                if (!t.restarting && t.bar >= bar2) {
+                    if (p->readPattern((t.bar / 4) * 4, 4, late) && !late.empty()) { arrived = true; break; }
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+            TrackPlan plan;
+            int published = 0;
+            while (published < 24 && p->tryReadTrack(published, plan)) ++published;
+            check(arrived, "the pattern preview still has notes in the second track (bar "
+                               + juce::String(bar2) + ", transport reached " + juce::String(atBar)
+                               + ", " + juce::String(static_cast<int>(late.size())) + " notes)");
+            check(published >= 2, "and the arrangement view has more than the first track to draw ("
+                                      + juce::String(published) + " published)");
+        }
+
+        // 22.09.2026, the user: "Klicken direkt im Arrangement-View fuehrt zu schlimmsten
+        // Stoergeraeuschen". A click in that view is a seek, and a seek is a hard cut: the block in
+        // which it is asked for returns silence from whatever level the music was at, and the block
+        // in which the music comes back starts at whatever level it starts at. Two step
+        // discontinuities per click, and a step is broadband -- which is what "Stoergeraeusche"
+        // sounds like when it happens once per click of the mouse.
+        //
+        // Comparing slew rates does not catch this: a kick transient slews harder in one sample than
+        // a cut from a quiet passage does, so a bound relative to the music's own steepest step
+        // passes a hard cut every time (measured -- it did). The two numbers that say it exactly are
+        // the level the signal was at when it went silent, and the level it starts at when it comes
+        // back. Both are a step from or to zero, whatever the music around them does.
+        {
+            float lastBefore = 0.0f, firstAfter = 0.0f;
+            // Settle at a bar that is playing, keeping the last sample of every block: the very
+            // first block after the seek is already the silent one (the request is consumed inside
+            // processBlock), so the level it was cut from has to come from the block before.
+            float tail = 0.0f;
+            bool sounding = false;
+            for (int i = 0; i < 400; ++i) {
+                buf.clear(); midi.clear();
+                p->processBlock(buf, midi);
+                if (buf.getMagnitude(0, block) > 1.0e-6f) { tail = buf.getReadPointer(0)[block - 1]; sounding = true; }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            const int here = p->transport().bar;
+            p->seekToBar(here + 8);
+            const auto t0 = std::chrono::steady_clock::now();
+            bool wentQuiet = false;
+            while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 60.0) {
+                buf.clear(); midi.clear();
+                p->processBlock(buf, midi);
+                const float* L = buf.getReadPointer(0);
+                const float mag = buf.getMagnitude(0, block);
+                if (!wentQuiet) {
+                    if (mag < 1.0e-6f) { wentQuiet = true; lastBefore = std::fabs(tail); }
+                    else tail = L[block - 1];
+                } else if (mag > 1.0e-6f) {
+                    firstAfter = std::fabs(L[0]);
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            check(sounding, "the transport was playing before the seek was measured");
+            // -34 dBFS: a step that small is under the music it lands in and under the noise of any
+            // converter. Anything above it is the click.
+            std::printf("seek seam: leaves at %.4f, returns at %.4f (block %d)\n",
+                        static_cast<double>(lastBefore), static_cast<double>(firstAfter), block);
+            check(lastBefore < 0.02f && firstAfter < 0.02f,
+                  "a seek fades instead of cutting: the level it leaves and the level it returns at are both near zero"
+                  " (leaves " + juce::String(lastBefore, 4) + ", returns " + juce::String(firstAfter, 4) + ")");
+        }
         p.reset();   // its composer thread ends here, before the settings it planned under change
         phos::probe::setThreads(probeThreads);
         phos::probe::setCacheDir(probeCache);

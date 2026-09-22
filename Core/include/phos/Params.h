@@ -185,6 +185,30 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
              // is cut hard on the absolute bar line. Off by default: every render before this round is
              // untouched.
              HallGate,
+             /** @name The second oscillator (22.09.2026, round "Klangfarben")
+              *  The user: "Eventuell sollte man bei Pads auch mindestens zwei Oszillatoren nehmen, um
+              *  mehr Varianz zuzulassen." It costs no render pass: a voice already spreads over seven
+              *  unison slots, each with its own frequency and its own source weights (Poly.h), so the
+              *  second oscillator is the outermost pair of those slots given another source and another
+              *  pitch. Off by default, so every render before this round is untouched.
+              *  @{ */
+             Osc2,        ///< PolyOsc2: off, or one of the four oscillators, on the outer unison pair
+             Osc2Mix,     ///< 0 .. 1: the share of the voice's power the second oscillator carries
+             Osc2Interval,///< PolyOsc2Interval: its interval against the note, a *choice* so a recipe can override it
+             Osc2Detune,  ///< -50 .. +50 cents on top, for the slow beating of two nearly equal pitches
+             /** @} */
+             /** @name The voice LFO (22.09.2026, round "Klangfarben")
+              *  A second, tempo-synced LFO beside the position one, free-running for the whole instance
+              *  rather than retriggered per note, so a held chord moves as one. The user: "Baue auch
+              *  LFOs ein, das erhoeht die Variabilitaet zusaetzlich und kostet praktisch nichts" -- and
+              *  it does not: the cutoff destination rides in lowPassCoefs(), which already runs once per
+              *  16-sample grid, and the amplitude one is a multiply in a loop that exists.
+              *  @{ */
+             LfoBeats,    ///< its period in beats (tempo-synchronised, so it never drifts against the bar)
+             LfoCutoff,   ///< +- octaves on the filter cutoff
+             LfoPitch,    ///< +- cents on every oscillator of the voice (vibrato, or a slow warp)
+             LfoAmp,      ///< 0 .. 1: tremolo depth
+             /** @} */
              Count };
 }
 /** @brief Values of poly.mod: the voice's modulation insert (20.09.2026, round "dialogue"). */
@@ -232,6 +256,20 @@ enum : int { RoomSize, RoomDecay, RoomDamping, HallSize, HallDecay, HallDamping,
 }
 /** @brief Values of poly.osc. */
 enum class PolyOsc : int { Supersaw = 0, Va, Fm, Wavetable, Count };
+/** @brief Values of poly.osc2: the second oscillator, or none (22.09.2026, round "Klangfarben"). */
+enum class PolyOsc2 : int { Off = 0, Supersaw, Va, Fm, Wavetable, Count };
+/**
+ * @brief Values of poly.osc2_interval: where the second oscillator sits against the note.
+ *
+ * A list and not a number of semitones, because only a discrete parameter can carry a
+ * per-track override (Engine.cpp, applyParams: an Override is read for discrete curves only)
+ * -- and because these six are the intervals that make a second oscillator worth having. A
+ * unison is not a waste of one: with poly.osc2_detune it is the slow beat of two analogue
+ * oscillators that never quite agree.
+ */
+enum class PolyOsc2Interval : int { TwoOctavesDown = 0, OctaveDown, FifthDown, Unison, FifthUp, OctaveUp, Count };
+/** @brief The semitones each PolyOsc2Interval stands for. */
+constexpr int kOsc2IntervalSemis[] = { -24, -12, -7, 0, 7, 12 };
 /** @brief Delay times offered by the delay-time choices, in beats. */
 inline constexpr float kDelayBeats[] = { 0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f };
 constexpr int kNumDelayTimes = 6;   ///< entries of kDelayBeats

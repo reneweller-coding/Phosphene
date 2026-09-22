@@ -6310,6 +6310,185 @@ WaveTableFile.h` (`WaveTableLane::Drone`); `Core/include/phos/Composer.h`, `Core
 (`tables[15]`, `paletteTableCount`, `voicePaletteTableCount`); `Tests/selftest.cpp` (`kLibraryRef`
 neu erzeugt, Speicherschranke, zwei neue `testVoicesSound`-Checks); dieser Block.
 
+**22.09.2026, Klangfarben: 464 Tabellen, zweiter Oszillator, Stimmen-LFO -- und das Bett, das keiner hörte**
+
+Auftrag des Nutzers (21.09., nach der Beschwerde über zwei verlorene Tage): "Wir brauchen deutlich
+mehr Pad-Klangfarben, mindestens 256, besser 1024" -- und dasselbe für Drone, Lead, Counter-Lead und
+Arp; zweiter Oszillator zumindest für Pads und Drones; Hüllkurven (auch die des Filters) und LFOs
+ins Rezept; wechselnde Oszillator-Gewichte; Tabellen von der Platte, damit sie kein RAM kosten. Der
+Pegelabgleich zuletzt, weil ihn alles davor wieder verschiebt.
+
+*Laden pro Track.* Das Pack wurde bisher beim Laden vollständig entfaltet. Die zehn Mip-Stufen machen
+das 32-mal so groß wie die gepackten Bytes -- 61 KB auf der Platte werden 2,02 MB im Speicher --, also
+kosteten 35 Tabellen 66 MB und ein paar hundert wären Gigabytes. Jetzt *indiziert* der Ladevorgang nur
+(Offset, Frames, dtype) und behält die Bytes; entfaltet wird, wenn ein Track, der die Tabelle braucht,
+geplant wird (`ensureWaveTables`, Komponisten-Thread), veröffentlicht mit einem Release-Store. Der
+Audio-Thread baut nie: was nicht fertig ist, klingt als sein eingebauter Ersatz, derselbe Weg wie auf
+einer Maschine ohne Pack. Gemessen: 0 Byte nach dem Laden, 12,1 MB und 60 ms für die sechs Stimmen
+eines Tracks, 2,02 MB je Tabelle, 935 MB wäre die ganze Bibliothek. Dazu eine Schranke
+(`setWaveTableBudgetBytes`, 192 MB): freigegeben wird nichts, weil eine vorbereitete `Poly` einen rohen
+Zeiger in eine Tabelle hält, also liegt die Grenze am anderen Ende -- über dem Budget wird nicht mehr
+gebaut und die Stimme fällt zurück.
+
+*Der Fehler, den das erst sichtbar gemacht hat.* Außer dem Komponisten forderte **niemand** eine
+Tabelle an. Wer die Table-Box selbst umstellt, ein `.phosset` lädt oder `--set pad.table=...` gibt,
+hätte still den Ersatz gehört. Der Test, der genau das prüfen sollte ("the pad plays the library table
+it is pointed at"), war aus dem falschen Grund grün: Tabelle 6 und 7 fallen auf *verschiedene*
+Eingebaute zurück, also war die Differenz da. Jetzt fordert `Engine::prepare` an, was die Parameter
+nennen, und der 30-Hz-Timer des Plugins holt nach, was ein Mensch anklickt
+(`Engine::ensureVoiceTables`).
+
+*Auswahl.* `Tools/wt_select.py --measure` über alle 2191 (71 s). Neue fünfte Lane `counter` (Vokal:
+Schwerpunkt 3..12, `centroid_span >= 0,5`, Grundton vorhanden; 382 von 2191 durchs Tor). `take` je Lane
+lead 80 / arp 96 / pad 128 / counter 96 / drone 64 = **464 Bibliothekstabellen** gegen 35. Die
+Reihenfolge läuft jetzt vom engsten Tor zum weitesten (lead 124 Kandidaten, arp 159, pad 431, counter
+382, drone 762), damit die Spreizung dort wählt, wo noch nichts weggenommen ist. `farthest_point` ist
+vektorisiert (die laufende Mindestdistanz wird mitgeführt statt neu berechnet) -- dieselbe Auswahl, aber
+bei `take=128` Sekunden statt Stunden. Pack 2,13 -> 22,4 MB, Rundlauf 94,4 dB.
+
+*Die Palette nennt Lanes, keine Nummern.* `VoicePalette::tables[15]` und sein `static_assert` gegen
+`kNumWaveTables` waren der Grund, warum das Pack bei 35 stehenblieb: jede Verbreiterung hieß, sechs
+Zeilen Indizes von Hand zu tippen. Eine Zeile nennt jetzt Lanes plus die passenden Eingebauten;
+`waveTableLaneTables()` macht daraus zur Laufzeit die Kandidatenliste. Neu packen genügt.
+**Der Counter ist nicht mehr die Ausnahme:** er hatte genau drei Kandidaten, bewusst, und war genau
+deshalb die eine Stimme, die in jedem Track gleich klang (gemessen, "before": 1 Tabelle, 1 Oszillator,
+19 von 19 Nachbarpaaren gleich). Der Schutz gegen "klingt wie das Lead" sitzt im Ziehen, nicht in der
+Enge der Palette, und arbeitet gegen 96 Tabellen bequemer als gegen drei.
+
+*Oszillator-Gewichte.* Jede Zeile hatte Nullen -- das Pad konnte nie VA oder FM sein, die Drone nie
+Supersaw oder FM, der Stab nie FM. Ein Drittel der Rezept-Reichweite lag tot, und die FM-Parameter,
+die das Rezept am 21.09. dazubekam, waren fürs Pad wirkungslos. Jetzt erreicht jede Lane jeden
+Oszillator; die Gewichte sind eine Neigung zur Rolle, kein Tor.
+
+*Zweiter Oszillator.* Kostet keinen zweiten Renderdurchgang: eine Stimme ist schon sieben
+Unison-Plätze mit je eigener Frequenz und eigenen vier Quellgewichten. Der zweite Oszillator ist das
+äußerste *behaltene* Paar dieser Plätze -- behalten, nicht 0 und 6, weil unter der Quest-Grenze nur die
+mittleren drei eingerichtet werden. Bei VA und FM tragen diese beiden ohnehin nichts, dort ist er
+buchstäblich gratis; bei Supersaw und Wavetable tauscht er die zwei am weitesten verstimmten Kopien
+gegen einen zweiten Oszillator. `poly.osc2` (Off/Supersaw/VA/FM/Wavetable), `osc2_mix`, `osc2_interval`
+(-2 Okt .. +1 Okt, eine *Auswahl*, weil nur diskrete Parameter einen Track-Override tragen) und
+`osc2_detune`. `slotSaw_` pro Platz: ein Platz kann den Classic-Sägezahn lesen, während sein Nachbar
+die Tabelle der Stimme liest.
+
+*Stimmen-LFO.* `poly.lfo_beats` und drei Ziele: `lfo_cutoff` (Oktaven), `lfo_pitch` (Cent),
+`lfo_amp` (Tremolo). Frei laufend je Instanz statt pro Note neu gestartet, damit ein gehaltener Akkord
+als ein Körper atmet. Ein Sinus je 16 Samples für die ganze Instanz, gelesen vom Cutoff
+(`lowPassCoefs`, läuft dort ohnehin), von der Tonhöhe (`writeSlotPitch`) und vom Pegel -- "kostet
+praktisch nichts" ist hier wörtlich wahr. Auf demselben absoluten Raster wie Drift und Portamento,
+damit die Modulation eine Funktion des Sample-Index bleibt und der Offline-Render das Orakel bleibt.
+
+*Gemessen, 20 Tracks, je Stimme eine Note gerendert* (`testVoices.sound`; "before" ist derselbe Lauf
+ohne Rezepte -- das, was der Nutzer gehört hat):
+
+| Stimme | Tabellen | Oszillatoren | Nachbarn gleich |
+|---|---|---|---|
+| counter | 1 -> 8 | 1 -> 4 | 19/19 -> 0/19 |
+| arp | 0 -> 7 | 1 -> 4 | 19/19 -> 0/19 |
+| stab | 0 -> 7 | 1 -> 4 | 19/19 -> 0/19 |
+| drone | 1 -> 9 | 1 -> 4 | 19/19 -> 0/19 |
+| pad | 1 -> 9 | 1 -> 4 | 3/19 -> 0/19 |
+| lead | 0 -> 7 | 3 -> 4 | 1/19 -> 0/19 |
+
+47 verschiedene Tabellen über alle sechs Stimmen (12-Tabellen-Bibliothek: 26), Summe der
+Schwerpunkt-Spannweiten 7239 ct (damals 5434).
+
+*Das Bett, das keiner hörte.* Der Nutzer am 21.09.: "das Didgeridoo und die Klangschalen hab ich
+überhaupt noch nie gehört." Sie waren da. `testPsychedelia` prüft seit Langem, dass das Bett in
+Intros, Breakdowns und Outros landet und nie in einem Drop oder Buildup -- und das tat es: in 72 von
+211 Sekunden eines 128-Takte-Renders von Seed 7 klang eines. Geprüft wurde die *Platzierung*. Was
+niemand prüfte, ist die einzige Frage, die ein Hörer stellt: **bei welchem Pegel.** Differenzrender
+gegen `mix.texture_mute`: Median **25,5 dB unter dem Mix**, 39 dB unter Vollaussteuerung. Neben einer
+Psytrance-Kick ist das keine leise Schicht, das ist keine. `mix.texture_level` 0 -> +9 dB, Median jetzt
+16,9 dB unter dem Mix, lautestes 11,8 dB. Neuer Abschnitt `testBed.audible`, der genau so misst
+(Differenzrender, Pegel nur über die Sekunden, in denen das Bett wirklich klingt) -- gegen den
+unreparierten Pegel fällt er mit 25,4 dB, mit dem reparierten besteht er.
+
+*Messfallen dieser Runde.*
+- Eine RMS über den ganzen Render teilt die Energie einer dünnen Schicht durch die Stille dazwischen
+  und meldet -33 dB für etwas, das man hätte hören müssen. Der Pegel gehört über die Fenster gemessen,
+  in denen die Schicht klingt, gegen den Mix in denselben Fenstern.
+- `--solo` beantwortet eine andere Frage: eigene Aussteuerung, eigenes Ducking. Differenzrender.
+- Der Frame-Limit-Check verglich rohe Samples gegen eine Schranke von einem Tausendstel. Das hielt nur,
+  weil Tabelle 6 zufällig eine Pad-Lane-Tabelle war, deren lauteste Frame das Ausdünnen überlebt. Auf
+  einer Lead-Lane-Tabelle wird die ganze Tabelle danach um gut ein dB anders skaliert. Verglichen wird
+  jetzt die *Form* (jedes Ende durch seine eigene RMS geteilt): 1,3e-07 statt 4,6e-02.
+- Ein Oktav-Partner unter jedem Pad zieht jeden Track-Schwerpunkt an dieselbe Stelle: die gemessene
+  Spannweite über 20 Tracks fiel von 915 auf 321 Cent. Die Intervall-Gewichte des Pads lehnen jetzt
+  zum Unisono -- sein mitlaufender Hochpass sitzt ohnehin an der Note, und was von einer Oktave darunter
+  übrig bleibt, liegt im Bereich von Kick und Bass.
+
+*Was die Tests danach gefunden haben.* Vier Abschnitte wurden rot, und drei davon zu Recht.
+- `testVoices.droneRender`: der zweite Oszillator der Drone lag eine Oktave *unter* ihr. Sie ist die
+  tiefste Stimme, und Regel 20 ist eindeutig -- das Band unter 140 Hz gehoert ab dem ersten Beat
+  wieder Kick und Bass, weshalb die Drone eine Oktave hochgeht, wenn die beiden zurueckkommen. Ein
+  Oktav-Partner setzte sie direkt wieder dorthin: gemessen -5,9 dB in den zwei Takten nach dem
+  Breakdown, wo -18 dB oder weniger verlangt sind. Ihre Intervall-Gewichte gehen jetzt nie nach
+  unten (Unisono, Quinte, Oktave darueber): -25,5 dB.
+- `testPoly` und `testOscillator`: FM-Seitenbaender und Supersaw-Aliasing weit daneben. Ursache waren
+  die Startwerte -- `lead.lfo_pitch=5` und `counter.lfo_pitch=8` standen im mitgelieferten Preset,
+  also mass jeder Abschnitt, der eine gehaltene Note spektral zerlegt, eine vibrierende Note. Die
+  Tonhoehe ist das eine LFO-Ziel, das den Vertrag "eine gehaltene Note ist ein Linienspektrum"
+  bricht; sie startet jetzt ueberall bei 0 und kommt nur noch ueber die Bewegungs-Richtung des
+  Rezepts dazu. Zusaetzlich schalten die 13 Messaufbauten, die einen Oszillator isolieren, `osc2` und
+  die LFOs ausdruecklich ab -- so wie sie Detune, Huellkurve und Filter schon immer abgeschaltet haben.
+- `testVariety.recipes` prueft seit gestern den falschen Vertrag: "die Knoepfe in Track 1, das Rezept
+  in Track 2". Genau das war der Fehler. Der Abschnitt verlangt jetzt ein Rezept ab dem ersten Track,
+  ein anderes im zweiten, und dass Tonart und Modus die Knoepfe bleiben.
+- `testRecipeSpread` misst die Tracks 1..20, also gar nicht den ersten -- und verschob sich trotzdem
+  (4,8/6,7/9,9 -> 8,2/5,8/7,1 dB). Weil Track 1 jetzt einen Klang *hat*, wird Track 2s "am weitesten
+  weg von den zwei davor" gegen etwas Echtes gemessen statt gegen eine Reihe Nullen, und der ganze
+  Walk landet woanders. Die Schranke fuer den Pluck lag bei 8,0, ein dB unter der einen gemessenen
+  Ziehung; ein Interquartilsabstand ueber zwanzig Werte traegt kein dB. Sie richtet sich jetzt nach
+  dem, worum es geht -- mehr Streuung als die festen Tabellen gaben (3,1/5,3/6,0 dB) -- und nicht nach
+  der letzten Zahl, die herauskam.
+
+*Das Klicken im Arrangement-View.* Der Nutzer: "Klicken direkt im Arrangement-View fuehrt zu
+schlimmsten Stoergeraeuschen". Ein Klick dort ist ein Seek, und ein Seek wirkte innerhalb genau des
+Blocks, in dem er angefordert wurde: `genWanted_` sprang, die `ready`-Pruefung schlug fehl, und der
+Block kam stumm heraus -- aus dem Pegel, auf dem die Wellenform gerade stand. Die Groesse dieses
+Sprungs *ist* der Momentanpegel, auf einer Kick also der halbe Vollausschlag, und ein Sprung ist
+breitbandig: einmal pro Mausklick genau das, was beschrieben wurde.
+
+Der Seek wartet jetzt aufs Blockende: der Block wird gerendert, eine Raised-Cosine-Blende auf Null
+darueber gelegt, und *erst dann* die Anfrage gestellt. Der Komponisten-Thread kann waehrenddessen
+nicht umpositionieren, weil er auf `genWanted_` wartet -- das ist der Grund, warum die Anfrage hinter
+den Render muss und nicht davor. Steht nichts an, gibt es nichts zu blenden und der Seek geht sofort.
+
+*Messfalle auch hier, und eine lehrreiche.* Der erste Versuch verglich die groesste
+Sample-zu-Sample-Steigung ueber den Seek mit der groessten, die die Musik selbst macht -- und bestand,
+weil eine Kick-Transiente in einem Sample steiler ist als ein Schnitt aus einer leisen Passage. Eine
+relative Schranke laesst einen harten Schnitt jedes Mal durch. Die zwei Zahlen, die es exakt sagen,
+sind der Pegel, auf dem das Signal stumm wurde, und der, mit dem es zurueckkommt: 0,0235 und 0,0000
+vorher, 0,0000 und 0,0000 nachher (`hosttest`). Der zweite Versuch mass ausserdem Null, weil der
+allererste Block nach dem Seek schon der stille ist -- der Pegel davor muss aus dem Block davor
+kommen. Beides stand im Test, bevor die Reparatur drin war.
+
+*Notenanzeige.* Nicht reproduzierbar: der Host-Test hat bisher immer nur Takt 16 gelesen, also
+mitten im *ersten* Track. Die Pruefung springt jetzt in den zweiten (Takt `track_bars + 24`) und
+fragt genau das, was die Notenrolle fragt -- sie besteht, und die Arrangement-Ansicht hat neun Tracks
+zu zeichnen. Der Fehler von gestern ist damit nicht erklaert, nur eingegrenzt.
+
+*Nicht geschafft.* Der Pegelabgleich (`testVariety.levelMatch`, Spreizung 1,27 LU) steht noch aus --
+so vereinbart, weil diese Runde ihn ohnehin verschiebt. Akkorde und Rhythmen variieren weiterhin nur
+beim Pad, nicht bei allen Stimmen. Klicken im Arrangement-View und die fehlende Notenanzeige ab dem
+zweiten Song sind unangetastet. `testClimax` und `testProbeSchedule` waren schon auf unverändertem
+master rot.
+
+*Dateien.* `Plugin/PluginProcessor.h` + `.cpp` (`fadeOutThenSeek_`, `ensureVoiceTables` im
+Timer, `WaveTableLibrary::built`); `Tests/hosttest.cpp` (Notenanzeige im zweiten Track,
+Seek-Naht); `Tools/wt_select.py` (counter-Lane, LANE_ORDER, vektorisiertes `farthest_point`, `take`),
+`Tools/wt_pack.py` (counter-Fallbacks, `--reference` schreibt `Tests/WaveTableRef.inl`);
+`Core/data/library.phoswt`, `Core/data/CREDITS-wavetables.md`, `Core/include/phos/WaveTableList.inl`
+(generiert); `Core/include/phos/WaveTableFile.h` + `Core/src/WaveTableFile.cpp` (Indizieren statt
+Entfalten, `ensureWaveTables`, `waveTablesBuilt`, `setWaveTableBudgetBytes`, `waveTableLaneTables`,
+`WaveTableLane::Counter`); `Core/include/phos/Params.h` + `Core/src/Params.cpp` (osc2-Gruppe,
+LFO-Gruppe, `PolyOsc2`, `PolyOsc2Interval`, Startwerte je Stimme, `mix.texture_level`);
+`Core/include/phos/Poly.h` + `Core/src/Poly.cpp` (zweiter Oszillator, `slotSaw_`, `slotHzMul_`,
+Stimmen-LFO); `Core/include/phos/Engine.h` + `Core/src/Engine.cpp` (`ensureVoiceTables`);
+`Plugin/PluginProcessor.cpp` (Timer); `Core/include/phos/Composer.h` + `Core/src/Composer.cpp`
+(Lane-Palette, osc2 im Rezept, neue Loadings); `Tests/selftest.cpp` + `Tests/WaveTableRef.inl`
+(`testBed.audible`, Bibliothekstests in Blöcken, Formvergleich, neue Breiten); dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

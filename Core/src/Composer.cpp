@@ -14,7 +14,7 @@
 #include "phos/Params.h"
 #include "phos/Patterns.h"
 #include "phos/Sfx.h"
-#include "phos/WaveTableFile.h"   // kNumWaveTables, for kVoicePalette's static_assert
+#include "phos/WaveTableFile.h"   // waveTableLaneTables(), for kVoicePalette
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -126,48 +126,90 @@ constexpr uint64_t kSaltDroneRide = 0x44524944450015ull;
 
 /**
  * @brief What a polyphonic voice may become in a track: its oscillators, wavetables and filter responses,
- *        each with a weight (19.09.2026, round "voices"; widened 20.09.2026, round "wavetable-selection").
+ *        each with a weight (19.09.2026, round "voices"; rebuilt 22.09.2026, round "Klangfarben").
  *
- * The tables are indices of the `table` choice (Params.cpp): 0 Classic, 1 Vocal, 2 Glass, 3 PWM, 4 Sync,
- * 5 Formant Saw -- the built-ins -- and from 6 the library tables of `Core/data/library.phoswt`, chosen by
- * `Tools/wt_select.py` per lane from the 2191 licence-clean tables of the Noctuary library
- * (`Core/data/CREDITS-wavetables.md`): 6 .. 17 the pad lane (12 tables, e.g. Hyperbol, Sampled 210,
- * Sohler52), 18 .. 25 the lead lane (8 tables, e.g. Hienharm, Junox_ho, Euclidea), 26 .. 33 the arp lane
- * (8 tables, e.g. Consonant 129, AKWF hollow, Pd104), 34 .. 40 the drone lane, new this round (7 tables,
- * e.g. Sub 003, Tube 002, Consonant 008 -- organ-like, a clear fundamental, dark; see `Tools/wt_select.py`,
- * `LANES["drone"]`). Each voice draws from the lane that was measured for its role plus the built-ins
- * whose character fits it, widened from the "voices" round's 18-table library (12 tables total, mostly
- * 5/4/3 candidates a voice) towards the 35-table one above: the pad the whole pad lane plus its three
- * built-ins, the lead the whole lead lane plus Sync/Formant Saw, the arp the whole arp lane plus
- * Glass/PWM, the drone -- which drew pad-lane tables by index until this round, for lack of a lane of its
- * own -- the whole new drone lane plus Vocal, the stab (between the lead and the arp in both oscillator
- * and filter weight, see the columns below) the whole arp lane plus two of the brighter lead tables and
- * PWM/Sync. **The counter-lead is deliberately not widened**: the "voices" round gave it the vocal/formant
- * built-ins alone on purpose ("der Counter-Lead ... die Vokal-/Formant-Tabellen") to keep it out of the
- * lead's and the arp's library families entirely, not for lack of measurement -- widening it would put
- * library tables back in reach of `cand.table == lead.table` collisions the round's own guard (below,
- * `v == counterV`) exists to avoid, and the corpus has no opinion on a role it never had a name for. The
- * high pass is never a response a recipe picks: every voice has its tracking high pass already.
+ * ## Lanes, not table numbers
+ *
+ * Until this round a row named its tables by hand -- fifteen indices into the `table` parameter, with
+ * a `static_assert` tying the array's size to the pack's 35 entries so that neither could move without
+ * the other. That was workable while the pack held 35 tables and is the reason the pack *stayed* at 35:
+ * every widening meant re-writing six rows of indices by hand. A row now names the **lanes**
+ * `Tools/wt_select.py` measured the library into (WaveTableFile.h, WaveTableLane), plus whichever
+ * built-ins fit the role, and `waveTableLaneTables()` turns that into the candidate list at run time.
+ * Repack with a wider selection and the palettes widen with it.
+ *
+ * The pack this round ships holds 464 library tables against the last round's 35: 80 lead, 96 arp,
+ * 128 pad, 96 counter and 64 drone, each chosen from the 2191 licence-clean tables of the Noctuary
+ * library by the same farthest-point spreading rule as before (`Core/data/CREDITS-wavetables.md`).
+ * They cost nothing until a track asks for one: the pack is only indexed at load and a table is
+ * expanded into its mip levels when a voice's recipe actually draws it (WaveTableFile.h,
+ * ensureWaveTables), which is what makes a library of this size possible at all -- expanded in full
+ * it would be 900 MB.
+ *
+ * **The counter-lead has its own lane now.** The "voices" round gave it three built-ins, the
+ * vocal/formant family, deliberately: it had to stay out of the lead's and the arp's table families so
+ * that the two leads could never share a sound. That was the right call against a 35-table pack and it
+ * is exactly why the counter was the one voice the user could not tell apart from track to track --
+ * three tables is three colours. The lane (`counter` in wt_select.py) keeps the character the choice
+ * was about, the vowel: a mid centroid that *moves* across the frames, with a fundamental still there.
+ * The hard guard in the recipe draw below (`v == counterV`: never the lead's oscillator, never the
+ * lead's table) is what keeps the two apart, and it does that far more comfortably against 96 tables
+ * than against three.
+ *
+ * ## Oscillators
+ *
+ * Every lane can now draw every oscillator. The old rows had zeros in them -- the pad could never be
+ * VA or FM, the drone never supersaw or FM, the stab never FM -- so a third of the recipe's reach was
+ * dead for most voices, and the FM parameters the recipe learned to shape on 21.09.2026 were dead for
+ * the pad entirely. The user's point ("die Mischung 0,25 und 0,75 zwischen FM und Wavetable ist ja
+ * nicht gottgegeben"): the weights are a tilt towards the role, not a gate. The wavetable weight is
+ * the largest everywhere, because that is the axis the 464 tables sit on; the rest say what the voice
+ * leans towards when it is not a table -- the lead towards the supersaw, the drone and the counter
+ * towards VA and FM, the pad towards a low-index FM (a classic pad, not a bell).
  */
 struct VoicePalette {
-    double osc[static_cast<int>(PolyOsc::Count)];      ///< weight per PolyOsc
-    int    tables[15];                                 ///< candidate tables (-1 ends the list)
-    double filter[static_cast<int>(PolyFilter::Count)];///< weight per PolyFilter
-    float  scale[kNumVoiceMacros];                     ///< how far each direction reaches for this voice
+    double osc[static_cast<int>(PolyOsc::Count)];       ///< weight per PolyOsc
+    int    builtin[6];                                  ///< built-in candidates (-1 ends the list)
+    int8_t lane[3];                                     ///< lanes drawn from (-1 ends the list)
+    double filter[static_cast<int>(PolyFilter::Count)]; ///< weight per PolyFilter
+    double osc2[static_cast<int>(PolyOsc2::Count)];     ///< weight per PolyOsc2, index 0 = no second oscillator
+    double interval[static_cast<int>(PolyOsc2Interval::Count)];   ///< weight per PolyOsc2Interval
+    float  scale[kNumVoiceMacros];                      ///< how far each direction reaches for this voice
 };
-//                                     Supersaw VA   FM   WT      tables (candidate table indices, -1 = unused slot)                                                                  LP    BP    HP   Notch   bright soft thick space motion
+constexpr int8_t kLanePad = static_cast<int8_t>(WaveTableLane::Pad);
+constexpr int8_t kLaneLead = static_cast<int8_t>(WaveTableLane::Lead);
+constexpr int8_t kLaneArp = static_cast<int8_t>(WaveTableLane::Arp);
+constexpr int8_t kLaneDrone = static_cast<int8_t>(WaveTableLane::Drone);
+constexpr int8_t kLaneCounter = static_cast<int8_t>(WaveTableLane::Counter);
+// The drone's second oscillator never goes *below* it, which is the one row where that matters and
+// where the first attempt at these weights was wrong. The drone is already the lowest voice, and
+// rule 20 is explicit about the band under 140 Hz: it belongs to the kick and the bass from their
+// first beat back, which is why the drone moves up an octave when they return (Melody.cpp,
+// makeDrone). An octave-down partner put it straight back there -- testVoices.droneRender measured
+// -5.9 dB in the two bars after the breakdown where it wants -18 dB or less. Unison, a fifth up or
+// an octave up give it an organ-like body instead, in its own register.
+//
+// The pad's intervals lean to the unison rather than the octave down (22.09.2026, measured): its
+// tracking high pass sits at the note already, so an octave under it is half filtered away, and what
+// survives lands in the range the kick and the bass own. A unison with a few cents of detune is the
+// one that changes the *colour* rather than the weight -- and with an octave-down partner on every
+// pad the rendered spread of the pad's centroid across twenty tracks fell from 915 to 321 cents,
+// because a low partner pulls every track's centroid to the same place.
+//
+// Per row: the first oscillator's weights; the built-in candidate tables; the library lanes; the
+// filter responses; the second oscillator's weights (index 0 = none, and it is the largest
+// everywhere -- a second oscillator is a colour a track may draw, not a thing every track has); the
+// interval it answers at (-2 Oct, -1 Oct, -5th, Unison, +5th, +1 Oct); and the reach of the five
+// directions.
+//                                     Supersaw VA   FM   WT      built-ins                  lanes                             LP    BP    HP   Notch     off   sup   va    fm    wt          -2oct -1oct -5th  uni   +5th  +1oct     bright soft thick space motion
 const VoicePalette kVoicePalette[kPolyInstances] = {
-    /* lead    */ { { 0.45, 0.15, 0.15, 0.25 }, { 18, 19, 20, 21, 22, 23, 24, 25, 4, 5, -1, -1, -1, -1, -1 },       { 0.80, 0.10, 0.0, 0.10 }, { 1.0f, 0.6f, 1.0f, 1.0f, 0.8f } },
-    /* counter */ { { 0.00, 0.20, 0.20, 0.60 }, { 5, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },        { 0.40, 0.40, 0.0, 0.20 }, { 1.0f, 0.8f, 0.8f, 1.0f, 1.0f } },
-    /* arp     */ { { 0.35, 0.30, 0.10, 0.25 }, { 26, 27, 28, 29, 30, 31, 32, 33, 2, 3, -1, -1, -1, -1, -1 },       { 0.75, 0.25, 0.0, 0.00 }, { 1.0f, 0.0f, 0.8f, 1.0f, 0.6f } },
-    /* stab    */ { { 0.45, 0.25, 0.00, 0.30 }, { 26, 27, 28, 29, 30, 31, 32, 33, 18, 19, 3, 4, -1, -1, -1 },       { 0.70, 0.30, 0.0, 0.00 }, { 1.0f, 0.0f, 1.0f, 1.0f, 0.5f } },
-    /* pad     */ { { 0.25, 0.00, 0.00, 0.75 }, { 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 1, 2, 5 },            { 0.85, 0.00, 0.0, 0.15 }, { 0.8f, 1.0f, 1.0f, 1.0f, 1.0f } },
-    /* drone   */ { { 0.00, 0.30, 0.00, 0.70 }, { 34, 35, 36, 37, 38, 39, 40, 1, -1, -1, -1, -1, -1, -1, -1 },      { 0.90, 0.10, 0.0, 0.00 }, { 0.7f, 0.6f, 1.0f, 0.8f, 1.0f } },
+    /* lead    */ { { 0.30, 0.12, 0.13, 0.45 }, { 4, 5, -1, -1, -1, -1 },  { kLaneLead, -1, -1 },        { 0.80, 0.10, 0.0, 0.10 }, { 0.45, 0.15, 0.15, 0.10, 0.15 }, { 0.05, 0.35, 0.10, 0.20, 0.05, 0.25 }, { 1.0f, 0.6f, 1.0f, 1.0f, 0.8f } },
+    /* counter */ { { 0.08, 0.17, 0.20, 0.55 }, { 5, 1, 2, -1, -1, -1 },   { kLaneCounter, -1, -1 },     { 0.40, 0.40, 0.0, 0.20 }, { 0.45, 0.05, 0.20, 0.20, 0.10 }, { 0.05, 0.30, 0.10, 0.30, 0.05, 0.20 }, { 1.0f, 0.8f, 0.8f, 1.0f, 1.0f } },
+    /* arp     */ { { 0.22, 0.20, 0.13, 0.45 }, { 2, 3, -1, -1, -1, -1 },  { kLaneArp, -1, -1 },         { 0.75, 0.25, 0.0, 0.00 }, { 0.50, 0.10, 0.15, 0.10, 0.15 }, { 0.02, 0.28, 0.05, 0.25, 0.05, 0.35 }, { 1.0f, 0.0f, 0.8f, 1.0f, 0.6f } },
+    /* stab    */ { { 0.28, 0.18, 0.09, 0.45 }, { 3, 4, -1, -1, -1, -1 },  { kLaneArp, kLaneLead, -1 },  { 0.70, 0.30, 0.0, 0.00 }, { 0.45, 0.15, 0.15, 0.10, 0.15 }, { 0.05, 0.35, 0.10, 0.20, 0.05, 0.25 }, { 1.0f, 0.0f, 1.0f, 1.0f, 0.5f } },
+    /* pad     */ { { 0.15, 0.08, 0.12, 0.65 }, { 1, 2, 5, -1, -1, -1 },   { kLanePad, -1, -1 },         { 0.85, 0.00, 0.0, 0.15 }, { 0.30, 0.10, 0.25, 0.15, 0.20 }, { 0.04, 0.22, 0.10, 0.37, 0.09, 0.18 }, { 0.8f, 1.0f, 1.0f, 1.0f, 1.0f } },
+    /* drone   */ { { 0.06, 0.20, 0.09, 0.65 }, { 1, -1, -1, -1, -1, -1 }, { kLaneDrone, kLanePad, -1 }, { 0.90, 0.10, 0.0, 0.00 }, { 0.30, 0.05, 0.30, 0.10, 0.25 }, { 0.00, 0.00, 0.05, 0.45, 0.20, 0.30 }, { 0.7f, 0.6f, 1.0f, 0.8f, 1.0f } },
 };
-static_assert(sizeof(kVoicePalette[static_cast<int>(PolyInstance::Pad)].tables) / sizeof(int) == 15
-              && kNumWaveTables == 41,
-              "kVoicePalette's tables[] size and the pad row's 15 real candidates are meant to match exactly "
-              "(no padding) -- if the library selection changes, re-check both");
 
 /**
  * @brief Real candidates in a palette's `tables[]`: entries before the first -1 (or the array's end).
@@ -179,8 +221,25 @@ static_assert(sizeof(kVoicePalette[static_cast<int>(PolyInstance::Pad)].tables) 
 int paletteTableCount(const VoicePalette& pal)
 {
     int n = 0;
-    while (n < static_cast<int>(std::size(pal.tables)) && pal.tables[n] >= 0) ++n;
+    for (int b : pal.builtin) if (b >= 0) ++n;
+    for (int8_t l : pal.lane) if (l >= 0) n += static_cast<int>(waveTableLaneTables(static_cast<WaveTableLane>(l)).size());
     return n;
+}
+
+/** @brief Candidate @p k of a palette: the built-ins first, then each lane in turn. */
+int paletteTableAt(const VoicePalette& pal, int k)
+{
+    for (int b : pal.builtin) {
+        if (b < 0) break;
+        if (k-- == 0) return b;
+    }
+    for (int8_t l : pal.lane) {
+        if (l < 0) break;
+        const std::vector<int>& lane = waveTableLaneTables(static_cast<WaveTableLane>(l));
+        if (k < static_cast<int>(lane.size())) return lane[static_cast<size_t>(k)];
+        k -= static_cast<int>(lane.size());
+    }
+    return -1;
 }
 
 /**
@@ -217,12 +276,32 @@ static_assert(sizeof(kVoiceDelay) / sizeof(kVoiceDelay[0]) == kPolyInstances, "o
  * spread over twenty tracks is measurable (self test, testVoiceSpread), small enough that a voice at
  * the end of a direction is still the voice it was; the listening excerpts are where they get judged.
  */
+// 21.09.2026, at the user's request ("Vergiss nicht die Huellkurven, auch fuer den Filter"): the
+// recipe reached only four of a voice's envelope parameters -- attack, release, filter decay and the
+// filter envelope's amount. What shapes a sustained voice most was missing: the amp envelope's decay
+// and sustain (the difference between a pad that swells and one that is plucked), the *speed* of the
+// position movement (only its depth was drawn, so every voice moved at the same 16 beats), the
+// filter's key tracking, and every FM parameter -- so a voice that drew the FM oscillator sounded
+// the same in every track whatever else it drew. They cost no table, no memory and no load time.
 const Loading kVoiceLoadings[] = {
     { poly::Cutoff,      0, 0.18f }, { poly::EnvAmount,   0, 0.10f }, { poly::Resonance, 0, 0.08f }, { poly::Position, 0, 0.20f },
+    { poly::KeyTrack,    0, 0.12f },
     { poly::AmpAttack,   1, 0.15f }, { poly::FilterDecay, 1, 0.15f }, { poly::AmpRelease, 1, 0.10f },
+    { poly::AmpDecay,    1, 0.18f }, { poly::AmpSustain,  1, 0.14f },
     { poly::Detune,      2, 0.25f }, { poly::Mix,         2, 0.15f }, { poly::Width,    2, 0.20f },
+    { poly::DynamicDetune, 2, 0.15f }, { poly::FmRatio,   2, 0.12f },
     { poly::DelaySend,   3, 0.20f }, { poly::DelayFeedback, 3, 0.10f },
     { poly::PosLfoDepth, 4, 0.30f }, { poly::PosEnv,      4, 0.20f }, { poly::Drift,    4, 0.15f },
+    { poly::PosLfoBeats, 4, 0.25f }, { poly::PosDecay,    4, 0.20f }, { poly::FmIndex,  4, 0.18f },
+    { poly::FmDecay,     1, 0.15f },
+    // 22.09.2026, round "Klangfarben". The second oscillator's balance is thickness by definition,
+    // and its detune belongs there too -- a few cents between two oscillators is the width of an
+    // analogue pad. The LFO's three depths and its period are the motion direction: that is what the
+    // direction is for, and they are the cheapest movement in the engine (one sine per 16 samples for
+    // a whole instance, read by the cutoff, the pitch and the level alike).
+    { poly::Osc2Mix,     2, 0.30f }, { poly::Osc2Detune,  2, 0.25f },
+    { poly::LfoCutoff,   4, 0.35f }, { poly::LfoAmp,      4, 0.25f },
+    { poly::LfoPitch,    4, 0.20f }, { poly::LfoBeats,    4, 0.30f },
 };
 /** @brief The hall-send share of the space direction, folded into the section's hall ride (sectionControls). */
 constexpr float kVoiceHallWeight = 0.12f;
@@ -914,31 +993,39 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
             w.key = p.getInt(cb + compose::Key);
             w.scale = p.getInt(cb + compose::Scale);
             w.bpm = styleTempo ? std::round(style.bpmCentre * 2.0) * 0.5 : baseBpm;
-            walk_.push_back(w);
-            continue;   // the first track is the knobs, exactly
-        }
-        const TrackWalk& prev = walk_[static_cast<size_t>(i - 1)];
-        Rng r;
-        r.seed(mixSeed(setSeed() ^ kSaltWalk, static_cast<uint64_t>(i)));
+            // 21.09.2026, at the user's decision: the knobs still decide the first track's key,
+            // mode, tempo and length -- those are musical settings somebody typed in -- but its
+            // *sound* is now drawn like every other track's. Until today the branch ended in a
+            // `continue`, so track 1 had no kick recipe, no bass recipe, no acid voicing and no
+            // voice recipes at all: it was the knobs exactly. A track is 256 bars, so every render
+            // shorter than about seven minutes is track 1 alone -- which meant the whole palette of
+            // 15 pad tables, four oscillators and four filter responses never sounded once in a
+            // short render, whatever the seed. The knobs are the centre now, not the whole story.
+        } else {
+            const TrackWalk& prev = walk_[static_cast<size_t>(i - 1)];
+            Rng r;
+            r.seed(mixSeed(setSeed() ^ kSaltWalk, static_cast<uint64_t>(i)));
 
-        // Length: the knob, give or take one 16-bar block -- at the default 256 bars that is 240 .. 272, inside
-        // the user's 220 .. 280 (19.09.2026; until then two 32-bar blocks either way).
-        w.bars = baseBars;
-        if (r.uniform() < tv) w.bars = std::clamp(baseBars + kTrackBarStep * (r.below(3) - 1), kMinTrackBars, kMaxTrackBars);
+            // Length: the knob, give or take one 16-bar block -- at the default 256 bars that is 240 .. 272, inside
+            // the user's 220 .. 280 (19.09.2026; until then two 32-bar blocks either way).
+            w.bars = baseBars;
+            if (r.uniform() < tv) w.bars = std::clamp(baseBars + kTrackBarStep * (r.below(3) - 1), kMinTrackBars, kMaxTrackBars);
 
-        // Key: by fifths and whole tones, now and then a semitone.
-        w.key = prev.key;
-        if (r.uniform() < tv) {
-            static const int kMoves[6] = { 7, 5, 2, -2, 1, -1 };
-            static const double kWeights[6] = { 0.3, 0.3, 0.15, 0.15, 0.05, 0.05 };
-            w.key = ((prev.key + kMoves[pick(r, kWeights, 6)]) % 12 + 12) % 12;
+            // Key: by fifths and whole tones, now and then a semitone.
+            w.key = prev.key;
+            if (r.uniform() < tv) {
+                static const int kMoves[6] = { 7, 5, 2, -2, 1, -1 };
+                static const double kWeights[6] = { 0.3, 0.3, 0.15, 0.15, 0.05, 0.05 };
+                w.key = ((prev.key + kMoves[pick(r, kWeights, 6)]) % 12 + 12) % 12;
+            }
+            // Mode: mostly kept; when it changes, the style profile's weights decide.
+            w.scale = prev.scale;
+            if (r.uniform() < 0.25f * tv) w.scale = pick(r, style.scaleWeight, kNumScales);
+            // Tempo: mean-reverting walk around the centre, inside the range, on half-BPM steps.
+            const double walk = baseBpm + 0.6 * (prev.bpm - baseBpm) + (2.0 * r.uniform() - 1.0) * range * tv;
+            w.bpm = std::round(std::clamp(walk, baseBpm - range, baseBpm + range) * 2.0) * 0.5;
+
         }
-        // Mode: mostly kept; when it changes, the style profile's weights decide.
-        w.scale = prev.scale;
-        if (r.uniform() < 0.25f * tv) w.scale = pick(r, style.scaleWeight, kNumScales);
-        // Tempo: mean-reverting walk around the centre, inside the range, on half-BPM steps.
-        const double walk = baseBpm + 0.6 * (prev.bpm - baseBpm) + (2.0 * r.uniform() - 1.0) * range * tv;
-        w.bpm = std::round(std::clamp(walk, baseBpm - range, baseBpm + range) * 2.0) * 0.5;
 
         // Recipes by best candidate against the last four tracks.
         Rng rr;
@@ -1011,7 +1098,7 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
             for (int c = 0; c < 12; ++c) {
                 VoiceRecipe cand;
                 cand.osc = pick(rv, pal.osc, static_cast<int>(PolyOsc::Count));
-                cand.table = nTables > 0 ? pal.tables[rv.below(nTables)] : -1;
+                cand.table = nTables > 0 ? paletteTableAt(pal, rv.below(nTables)) : -1;
                 cand.filter = pick(rv, pal.filter, static_cast<int>(PolyFilter::Count));
                 // The echo is a property of the *role* since 20.09.2026 (round "dialogue"). The user's
                 // rule: "Lead auf ein punktiertes Achtel (3/16), Counter auf ein schnelles 1/16
@@ -1024,13 +1111,24 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
                 const VoiceDelayFamily& fam = kVoiceDelay[v];
                 cand.delayL = fam.left[rv.below(fam.leftCount)];
                 cand.delayR = fam.right[rv.below(fam.rightCount)];
+                // The second oscillator (22.09.2026): which one answers, and at which interval. Two
+                // draws whatever the outcome, so "no second oscillator this track" costs the same
+                // random numbers as any other result and no other decision of this candidate moves.
+                cand.osc2 = pick(rv, pal.osc2, static_cast<int>(PolyOsc2::Count));
+                cand.osc2Semis = pick(rv, pal.interval, static_cast<int>(PolyOsc2Interval::Count));
+                cand.hasOsc2 = true;
                 drawRecipe(rv, cand.macro, kNumVoiceMacros);
                 double score = 1e9;
                 for (int back = 1; back <= 2 && i - back >= 0; ++back) {
                     const VoiceRecipe& o = walk_[static_cast<size_t>(i - back)].voice[v];
                     double d = 0.0;
                     for (int k = 0; k < kNumVoiceMacros; ++k) d += (cand.macro[k] - o.macro[k]) * (cand.macro[k] - o.macro[k]);
-                    d = std::sqrt(d) + (cand.osc != o.osc ? 1.0 : 0.0) + (cand.table != o.table ? 1.0 : 0.0) + (cand.filter != o.filter ? 0.5 : 0.0);
+                    d = std::sqrt(d) + (cand.osc != o.osc ? 1.0 : 0.0) + (cand.table != o.table ? 1.0 : 0.0)
+                      + (cand.filter != o.filter ? 0.5 : 0.0)
+                      // The second oscillator counts like the filter: half a unit for the kind and
+                      // half for the interval. A track whose pad answers an octave lower where the
+                      // last one answered at a fifth is a different pad, whatever else it drew.
+                      + (cand.osc2 != o.osc2 ? 0.5 : 0.0) + (cand.osc2Semis != o.osc2Semis ? 0.5 : 0.0);
                     score = std::min(score, d);
                 }
                 if (v == counterV) {
@@ -1068,7 +1166,7 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
                     c.osc = best;
                 }
                 if (noCandidateSurvived || c.table == lead.table)
-                    for (int k = 0; k < nTables; ++k) if (pal.tables[k] != lead.table) { c.table = pal.tables[k]; break; }
+                    for (int k = 0; k < nTables; ++k) { const int t = paletteTableAt(pal, k); if (t != lead.table) { c.table = t; break; } }
             }
         }
         walk_.push_back(w);
@@ -1098,6 +1196,17 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     std::copy(w.bassMacro, w.bassMacro + kNumBassMacros, t.bassMacro);
     std::copy(w.acidVoicing, w.acidVoicing + kNumAcidVoicings, t.acidVoicing);
     for (int v = 0; v < kPolyInstances; ++v) t.voice[v] = w.voice[v];
+    // The tables this track's voices will read, expanded now, on whichever thread planned the track
+    // (21.09.2026). The pack is only indexed at load; a table costs its 1.9 MB of mip levels when a
+    // track first asks for it and not before, which is what lets the library grow past a handful.
+    // The audio thread never builds: it reads what is published or falls back (WaveTableFile.h).
+    {
+        int want[kPolyInstances];
+        int n = 0;
+        for (int v = 0; v < kPolyInstances; ++v)
+            if (t.voice[v].table >= 0) want[n++] = t.voice[v].table;
+        if (n > 0) ensureWaveTables(want, n);
+    }
 
     // Where the track sits on the set's energy arc (Form.h).
     const double setBars = setLengthBars(p);
@@ -1390,6 +1499,11 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
         push(vb + poly::FilterType, ControlEvent::Kind::Override, static_cast<float>(vary ? rc.filter : -1));
         push(vb + poly::DelayLeft, ControlEvent::Kind::Override, static_cast<float>(vary ? rc.delayL : -1));
         push(vb + poly::DelayRight, ControlEvent::Kind::Override, static_cast<float>(vary ? rc.delayR : -1));
+        // The second oscillator (22.09.2026). Like every other discrete choice it is an override, so
+        // Sound Variation at 0 leaves the knobs exactly as they stand.
+        push(vb + poly::Osc2, ControlEvent::Kind::Override, static_cast<float>(vary && rc.hasOsc2 ? rc.osc2 : -1));
+        push(vb + poly::Osc2Interval, ControlEvent::Kind::Override,
+             static_cast<float>(vary && rc.hasOsc2 ? rc.osc2Semis : -1));
         float off[poly::Count] = {};
         voiceRecipeOffsets(inst, rc, sv, off);
         for (const Loading& l : kVoiceLoadings) push(vb + l.param, ControlEvent::Kind::Offset, off[l.param]);
