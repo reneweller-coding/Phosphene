@@ -102,6 +102,9 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              CounterAmount, StabAmount, DroneAmount, VoiceDensity, BedDensity,
              // 19.09.2026, round "polish": the presence match -- each track's lines (lead, counter, arp, stab)
              // brought to a band around the reference median's presence (Composer.cpp, matchPresence).
+             // 22.09.2026: the styles walk through the night instead of one style for all of it
+             // (Composer.cpp, walkAt). On by default; off, every track is compose.style as before.
+             StyleMix,
              PresenceMatch, Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */

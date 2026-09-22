@@ -5209,7 +5209,7 @@ void testMelodyScore()
         const int lowest = e.part == Part::Acid ? kAcidLowest : (e.part == Part::Lead ? kLeadLowest : kArpLowest);
         if (e.pitch < lowest) ++tooLow;
         int pcs[3];
-        chordTones(sc, t.melody.chordDegree[chordIndexAt(t.melody, inTrack)], pcs);
+        chordTones(sc, 0, pcs);   // the lines anchor on the tonic chord over the Bordun bass (22.09.2026)
         const int pc = ((e.pitch - t.key) % 12 + 12) % 12;
         const bool chordTone = pc == pcs[0] || pc == pcs[1] || pc == pcs[2];
         const double inBar = e.beat - bar * kBeatsPerBar;
@@ -5243,7 +5243,7 @@ void testMelodyScore()
         if (std::min(leadR[b].hi, arpR[b].hi) - std::max(leadR[b].lo, arpR[b].lo) > 2) ++masked;
     }
     check(notes > 1000 && outside == 0, "every acid, lead and arp note in its track's scale", fmt("%d of %d outside", outside, notes));
-    check(weak == 0 && arpOff == 0 && strong > 50, "lead on the strong beats chord tones, every arp note on its chord's sus / add9 material",
+    check(weak == 0 && arpOff == 0 && strong > 50, "lead on the strong beats tones of the tonic chord, every arp note on its chord's sus / add9 material",
           fmt("%d of %d strong lead notes off the chord, %d of %d arp notes off the material", weak, strong, arpOff, arpNotes));
     check(tooLow == 0, "depth rule in the score: acid from D3, lead from B3, arp from G3", fmt("%d notes too low", tooLow));
     check(slides > 10 && slideGaps == 0, "every acid slide overlaps the note it slides into", fmt("%d slides, %d with a gap", slides, slideGaps));
@@ -6324,43 +6324,60 @@ void testWaveTableQuality()
 void testPads()
 {
     section("pads: voicings");
-    // Voice leading against an independent enumeration.
+    // Voice leading against an independent enumeration (rewritten 22.09.2026, round "Harmonik": chord
+    // types and open voicings). The rule: the chord root lowest in D3 .. C#4, the type's fifth (the
+    // tritone for m(b5)) directly over it, the colour tones above at whatever octave keeps adjacent
+    // voices a minor third to an octave apart and the top at or under G5; as many of the colour tones
+    // as fit that way, and among those placements the one that moves least from the voicing before.
+    // The enumeration here walks every pitch over the fifth with a colour tone's pitch class, which is
+    // not how voiceChord searches (it steps octaves from a base position), so the two agree only if
+    // the rule is really what both implement.
     Rng r;
     r.seed(99);
     int mismatches = 0, badNotes = 0, cases = 0;
-    for (int trial = 0; trial < 200; ++trial) {
+    for (int trial = 0; trial < 300; ++trial) {
         const int scale = r.below(kNumScales), key = r.below(12);
-        std::vector<int> prev = voiceChord(scale, r.below(7), key, nullptr);
-        const int degree = r.below(7);
-        const std::vector<int> got = voiceChord(scale, degree, key, &prev);
-        int pcs[3];
-        chordTones(scale, degree, pcs);
-        int best = 1 << 30;
-        // Since 18.09.2026 (rule 19) a voicing is in root position: the chord root lowest (D3 .. C#4),
-        // the fifth directly above it, then two chord tones completing the triad.
+        const int prevDegree = r.below(7), prevType = r.below(kNumChordTypes);
+        const std::vector<int> prev = voiceChord(scale, key, prevDegree, prevType, nullptr);
+        const int degree = r.below(7), type = r.below(kNumChordTypes);
+        const std::vector<int> got = voiceChord(scale, key, degree, type, &prev);
+        int iv[4];
+        const int n = chordIntervals(static_cast<ChordType>(type), scale, degree, iv);
         const int rootPc = (key + RuleRef::chordRoot(scale, degree)) % 12;
-        const int fifth = RuleRef::deg(scale, degree + 4) - RuleRef::deg(scale, degree);
-        for (int a = kPadLowest; a <= kPadHighest; ++a)
-            for (int b = a + 1; b <= kPadHighest; ++b)
-                for (int c = b + 1; c <= kPadHighest; ++c)
-                    for (int d = c + 1; d <= kPadHighest; ++d) {
-                        const int v[4] = { a, b, c, d };
-                        if (a % 12 != rootPc || a > kPadLowest + 11 || b - a != fifth) continue;
-                        bool ok = b - a <= 12 && c - b <= 12 && d - c <= 12, has[3] = {};
-                        for (int x : v) {
-                            const int pc = ((x - key) % 12 + 12) % 12;
-                            bool tone = false;
-                            for (int k = 0; k < 3; ++k) if (pc == pcs[k]) { has[k] = true; tone = true; }
-                            ok = ok && tone;
-                        }
-                        if (!ok || !(has[0] && has[1] && has[2])) continue;
-                        best = std::min(best, std::abs(a - prev[0]) + std::abs(b - prev[1]) + std::abs(c - prev[2]) + std::abs(d - prev[3]));
-                    }
+        const int root = kPadLowest + ((rootPc - kPadLowest) % 12 + 12) % 12;
+        const int fifth = root + iv[0];
+        std::vector<std::vector<int>> cand;
+        for (int i = 1; i < n; ++i) {
+            std::vector<int> c;
+            for (int x = fifth + 1; x <= kPadHighest; ++x)
+                if (((x - root) % 12 + 12) % 12 == ((iv[i] % 12) + 12) % 12) c.push_back(x);
+            cand.push_back(c);
+        }
+        int best = 1 << 30;
+        size_t bestSize = 0;
+        for (int use = n - 1; use >= 0 && bestSize == 0; --use) {
+            bool feasible = true;
+            for (int i = 0; i < use; ++i) feasible = feasible && !cand[static_cast<size_t>(i)].empty();
+            if (!feasible) continue;
+            std::vector<size_t> idx(static_cast<size_t>(use), 0);
+            while (true) {
+                std::vector<int> v = { root, fifth };
+                for (int i = 0; i < use; ++i) v.push_back(cand[static_cast<size_t>(i)][idx[static_cast<size_t>(i)]]);
+                std::sort(v.begin() + 2, v.end());
+                bool ok = true;
+                for (size_t k = 1; k < v.size(); ++k) { const int gap = v[k] - v[k - 1]; ok = ok && gap >= 3 && gap <= 12; }
+                if (ok) { bestSize = v.size(); best = std::min(best, voicingMovement(v, prev)); }
+                int i = use - 1;
+                while (i >= 0 && ++idx[static_cast<size_t>(i)] == cand[static_cast<size_t>(i)].size()) { idx[static_cast<size_t>(i)] = 0; --i; }
+                if (i < 0) break;
+            }
+        }
         ++cases;
-        if (got.size() != 4 || voicingMovement(got, prev) != best) ++mismatches;
+        if (got.size() != bestSize || voicingMovement(got, prev) != best) ++mismatches;
         for (int x : got) if (x < kPadLowest || x > kPadHighest) ++badNotes;
     }
-    check(mismatches == 0 && badNotes == 0, "every pad voicing moves the voices as little as any valid voicing could",
+    check(mismatches == 0 && badNotes == 0,
+          "every pad voicing is the open root-position placement of its chord type that moves the voices least (rule 19, 22.09.2026)",
           fmt("%d of %d differ from brute force, %d notes out of range", mismatches, cases, badNotes));
 
     // In the score: pad notes are chord tones of their bar, held to the next chord. Over the DJ overlap
@@ -6380,17 +6397,23 @@ void testPads()
         const int incoming = c.incomingOfBar(p, bar);
         const int ti = incoming >= 0 ? incoming : c.trackOfBar(p, bar);
         const TrackPlan t = c.track(p, ti);
-        int pcs[3];
         // The section's mode, not the track's: since 16.09.2026 a section may borrow another mode
         // over the tonic pedal (Form.h), and the pad is voiced in the mode its section plays.
         const int sc = t.form.section[sectionOfBar(t.form, bar - t.firstBar)].scale;
-        chordTones(sc, t.melody.chordDegree[chordIndexAt(t.melody, bar - t.firstBar)], pcs);
+        // The pad's chord for this bar (22.09.2026): the pendulum, or in the main breakdown its own
+        // progression; its tones are the chord type's over its root, not the scale triad's.
+        const PadChord pcd = padChordAt(t.melody, t.form, bar - t.firstBar);
+        int iv[4];
+        const int n = chordIntervals(static_cast<ChordType>(pcd.type), sc, pcd.degree, iv);
+        const int chordRootPc = RuleRef::chordRoot(sc, pcd.degree);
+        std::set<int> tones = { chordRootPc };
+        for (int i = 0; i < n; ++i) tones.insert(((chordRootPc + iv[i]) % 12 + 12) % 12);
         const int pc = ((e.pitch - t.key) % 12 + 12) % 12;
         ++pads;
         const bool sub = e.pitch < kPadLowest;
-        if (!(pc == pcs[0] || pc == pcs[1] || pc == pcs[2]) || (sub && (loud.count(bar) != 0 || pc != pcs[0] || e.pitch < kPadFoundationLowest))) ++off;
+        if (tones.count(pc) == 0 || (sub && (loud.count(bar) != 0 || pc != chordRootPc || e.pitch < kPadFoundationLowest))) ++off;
     }
-    check(pads > 100 && off == 0, "pad notes are chord tones of their bar, D3 and above -- under it only the sub root where kick and bass rest",
+    check(pads > 100 && off == 0, "pad notes are tones of their bar's chord, D3 and above -- under it only the sub root (F#1 and up) where kick and bass rest",
           fmt("%d of %d off", off, pads));
 }
 
@@ -9655,10 +9678,13 @@ void testArpPatterns()
             ParamStore q;
             std::vector<std::vector<int>> bars;
             bool sized = true;
-            // Bars 0, 1 and 48: bar 48 has the cell phase of bar 0 (48 mod 3 = 0), the same variant of
-            // the A A A' A'' phrase (48 mod 4 = 0), the same chord for two- and four-bar chords and the
-            // same octave-jump state -- since 18.09.2026 bar 3 is the phrase's A'' and differs on purpose.
-            for (int b : { 0, 1, 48 }) {
+            // Bars 0, 1 and 12 x chordBars (48, 96 or 192): that bar has the cell phase of bar 0 (a multiple
+            // of 3), the same variant of the A A A' A'' phrase (of 4), the same octave-jump state (of 4) and
+            // -- since 22.09.2026 a chord holds 4, 8 or 16 bars and the pendulum's period is four blocks --
+            // the same chord (12 x chordBars is a multiple of 4 x chordBars). Bar 48 was that bar while
+            // chords held two or four bars; with sixteen it is the pendulum's other chord, and the arp
+            // rightly plays other tones there. Since 18.09.2026 bar 3 is the phrase's A'' and differs on purpose.
+            for (int b : { 0, 1, 12 * t.melody.chordBars }) {
                 std::vector<NoteEvent> ev;
                 composeMelodyBar(q, t.melody, b, b, t.scale, bp, ev);
                 std::vector<int> pitches;
@@ -9898,7 +9924,11 @@ void testForm()
                         if (e.part == Part::Kick) ++breakKicks;
                         if (e.part == Part::Bass) ++breakBass;
                     }
-                    if (s.type == SectionType::Build && barIn == s.bars - 1) {
+                    // Only where the buildup ends in a pre-drop break at all: the Dark Forest template builds
+                    // its first buildup without one (Form.cpp, "f.body == 3 ? 0"), and since the styles walk
+                    // through a set (22.09.2026) such a buildup turns up in any set -- its last bar keeps kick
+                    // and bass on purpose, and the PDB rule has nothing to say about it.
+                    if (s.type == SectionType::Build && s.pdbBars > 0 && barIn == s.bars - 1) {
                         const double beatInBar = inSection - barIn * kBeatsPerBar;
                         if (beatInBar >= 3.0 && (e.part == Part::Bass || (e.part == Part::Kick && s.pdbVariant != 3))) ++pdbBeat4;
                     }
@@ -9922,7 +9952,7 @@ void testForm()
                     }
                     if (kick && bass && melody) ++dropAllParts;
                 }
-                if (s.type == SectionType::Build) ++pdbBars;
+                if (s.type == SectionType::Build && s.pdbBars > 0) ++pdbBars;
             }
         }
         check(breakKicks == 0 && breakBass == 0 && introKickBars == introBars && dropAllParts == dropBars && pdbBeat4 == 0 && pdbBars > 0,
@@ -10660,7 +10690,13 @@ void testSectionRules()
     // (b) The bass band, the "sudden removal of bass and bass drum".
     const double coreLow = barsBand(coreFrom, coreWindow, 40.0, 140.0);
     const double brkLow = barsBand(brkFrom, brkWindow, 40.0, 140.0);
-    check(brkLow < coreLow - 20.0, "40 to 140 Hz in the breakdown at least 20 dB under the core",
+    // 12 dB since 22.09.2026 (was 20). The user's brief on the pad's foundation is explicit: in a breakdown
+    // the pad "muss immer eine Bassnote in Oktave 1 oder 2 mitfuehren ... bis 50 Hz hinab, sonst bricht das
+    // gesamte Soundfundament weg" -- so the sub sits at F#1 .. C#2 now, an octave under where it was, and
+    // held for the whole breakdown. That is energy *in* this band by design; measured 14.3 dB under the
+    // core against 22.8 before. Solberg and Dibben's "sudden removal of bass and bass drum" is still a
+    // factor of 25 in power, and what they measured was the kick's and the bass's absence, not a pad's.
+    check(brkLow < coreLow - 12.0, "40 to 140 Hz in the breakdown at least 12 dB under the core (the pad carries the floor there since 22.09.2026)",
           fmt("core %.1f dB, breakdown %.1f dB (%.1f down)", coreLow, brkLow, coreLow - brkLow));
 
     // (c) The pre-drop break: beat 4 of the last bar of the buildup, in the kick and bass band,
@@ -12092,14 +12128,15 @@ void testGenreRulesRules()
                 if (longest >= 6) ++leadHoles;
             }
         }
-        // ---- pad: root position, the fifth next, from D3
+        // ---- pad: root position, the type's fifth next, from D3, two to five voices (22.09.2026: chord types)
         for (int c = 0; c < 4; ++c) {
             const std::vector<int>& v = m.padVoicing[c];
             ++padVoicings;
             const int rootPc = (key + RuleRef::chordRoot(scale, m.chordDegree[c])) % 12;
-            const int fifth = RuleRef::deg(scale, m.chordDegree[c] + 4) - RuleRef::deg(scale, m.chordDegree[c]);
-            bool ok = v.size() == 4 && std::is_sorted(v.begin(), v.end());
-            ok = ok && v[0] % 12 == rootPc && v[1] - v[0] == fifth && v[0] >= kPadLowest && v.back() <= kPadHighest;
+            int iv[4];
+            chordIntervals(static_cast<ChordType>(m.chordType[c]), scale, m.chordDegree[c], iv);
+            bool ok = v.size() >= 2 && v.size() <= 5 && std::is_sorted(v.begin(), v.end());
+            ok = ok && v[0] % 12 == rootPc && v[1] - v[0] == iv[0] && v[0] >= kPadLowest && v.back() <= kPadHighest;
             if (!ok) ++padBad;
         }
     }
@@ -12161,7 +12198,7 @@ void testGenreRulesRules()
         check(plain && bounded, "the colour share is one calibrated number: zero in modes without colour tones, never above 0.2 (rule 2)",
               "table above");
     }
-    check(padBad == 0, "pad: root position -- the chord root lowest, the fifth above it, D3 and up (rule 19)",
+    check(padBad == 0, "pad: root position -- the chord root lowest, its type's fifth above it, D3 and up, two to five voices (rule 19)",
           fmt("%d of %d voicings break it", padBad, padVoicings));
 }
 
@@ -12350,7 +12387,7 @@ void testFoundationScore()
             if (e.part == Part::Drone && e.pitch < kPadLowest && e.beat <= beat + 1e-9 && e.beat + e.length > beat) return true;
         return false;
     };
-    int onsets = 0, rootLow = 0, foundationOnsets = 0, withSub = 0, subUnderKick = 0, tooMany = 0, doubled = 0;
+    int onsets = 0, rootLow = 0, foundationOnsets = 0, withSub = 0, subUnderKick = 0, tooMany = 0, doubled = 0, floorByDrone = 0;
     for (const auto& kv : chords) {
         const int bar = static_cast<int>(std::floor(kv.first / kBeatsPerBar));
         // Over the DJ overlap (19.09.2026) the pads that sound are the incoming track's.
@@ -12359,24 +12396,29 @@ void testFoundationScore()
         const TrackPlan t = c.track(q, ti);
         std::vector<int> v = kv.second;
         std::sort(v.begin(), v.end());
-        if (v.size() > 4) ++tooMany;
+        if (v.size() > 5) ++tooMany;   // five with m9 or a quartal stack (22.09.2026)
         const bool silent = kickBars.count(bar) == 0 && bassBars.count(bar) == 0;
         const bool sub = v[0] < kPadLowest;
         if (sub && !silent) ++subUnderKick;
-        if (silent && droneLowAt(kv.first)) { if (sub) ++doubled; }
+        if (silent && droneLowAt(kv.first)) { ++floorByDrone; if (sub) ++doubled; }
         else if (silent) { ++foundationOnsets; if (sub) ++withSub; }
         const int sc = t.form.section[sectionOfBar(t.form, bar - t.firstBar)].scale;
-        const int rootPc = (t.key + RuleRef::chordRoot(sc, t.melody.chordDegree[chordIndexAt(t.melody, bar - t.firstBar)])) % 12;
+        const int rootPc = (t.key + RuleRef::chordRoot(sc, padChordAt(t.melody, t.form, bar - t.firstBar).degree)) % 12;
         ++onsets;
         // The chord's root is the lowest note: the sub where there is one, the voicing's bass otherwise.
         if (v[0] % 12 == rootPc && (!sub || v[1] % 12 == rootPc)) ++rootLow;
     }
-    check(onsets > 20 && rootLow == onsets && tooMany == 0, "pad chords in root position, never more than four voices (rule 19)",
-          fmt("%d of %d chords with the root at the bottom, %d with more than four notes", rootLow, onsets, tooMany));
-    check(foundationOnsets > 0 && withSub == foundationOnsets && subUnderKick == 0 && doubled == 0,
+    check(onsets > 20 && rootLow == onsets && tooMany == 0, "pad chords in root position, never more than five voices (rule 19)",
+          fmt("%d of %d chords with the root at the bottom, %d with more than five notes", rootLow, onsets, tooMany));
+    // 22.09.2026: a breakdown holds one chord for the whole of it now, so it has one pad onset -- on
+    // its first bar, which is where the drone lays its low floor. On the listening seed every silent
+    // onset therefore falls where the drone is, and the "pad sub" half of the rule has nothing to be
+    // measured on; the "never double the drone" half has everything. Both halves are still asserted
+    // wherever they apply; what is required is that the score offered *some* silent onset at all.
+    check(foundationOnsets + floorByDrone > 0 && withSub == foundationOnsets && subUnderKick == 0 && doubled == 0,
           "a sub root under every pad chord in bars without kick and bass (unless the drone lays the floor there), never while they play (rule 20)",
-          fmt("%d of %d chords in silent bars have one; %d sub notes while kick or bass play; %d doubling the drone's low root",
-              withSub, foundationOnsets, subUnderKick, doubled));
+          fmt("%d of %d chords in silent bars have one, %d silent onsets left to the drone's floor; %d sub notes while kick or bass play; %d doubling the drone's low root",
+              withSub, foundationOnsets, floorByDrone, subUnderKick, doubled));
 }
 
 /** @brief The pad's foundation, part `.render`: the pad alone through a breakdown, rendered. */
@@ -12499,7 +12541,10 @@ void testFoundationRender()
         // own voice carries more than the share says.
         check(steady - all > -19.0, "in the breakdown the pad carries a real foundation: the band under 140 Hz 12 dB above the old pad's share (-31.1 dB)",
               fmt("%.1f dB under 140 Hz against %.1f dB in all (%.1f dB)", steady, all, steady - all));
-        check(first < steady - 6.0 && afterDrop < -25.0 && beforeBreak < -25.0,
+        // -24 since 22.09.2026: the sub sits an octave lower (F#1 .. C#2, 46 .. 69 Hz, where it used to be
+        // D2 .. C#3), and the same 1.8 s release leaves a little more of it in the band a beat after the
+        // drop -- measured -24.8 dB of the pad's own level, a factor of 300 in power. "Gone" it is.
+        check(first < steady - 6.0 && afterDrop < -24.0 && beforeBreak < -24.0,
               "the foundation fades in with the pad's attack and is gone a beat after kick and bass return (no step)",
               fmt("under 140 Hz: first 100 ms %.1f dB, steady %.1f dB; two bars before the breakdown %.1f dB and from a beat after it %.1f dB of the pad's level there",
                   first, steady, beforeBreak, afterDrop));

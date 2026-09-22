@@ -180,6 +180,7 @@ struct TrackWalk {
     int    key = 6;                 ///< pitch class of the key
     int    scale = 1;               ///< index into kScaleNames
     double bpm = 145.0;             ///< tempo the track settles on
+    int    style = 1;               ///< StyleId of the track (22.09.2026: the style walks when compose.style_mix is on)
     float  kickMacro[5] = {};       ///< kick recipe, each -1..1
     float  bassMacro[5] = {};       ///< bass recipe, each -1..1
     float  acidVoicing[kNumAcidVoicings] = { 0.0f, 1.0f, 0.0f };   ///< barycentric weights of the acid voicings
@@ -194,6 +195,7 @@ struct TrackPlan {
     int    key = 6;                 ///< pitch class of the key
     int    scale = 1;               ///< index into kScaleNames
     double bpm = 145.0;             ///< tempo the track settles on
+    int    style = 1;               ///< StyleId the track plays in (from the walk)
     int    primaryPattern = 0;      ///< bass pattern most of the time
     int    secondaryPattern = 1;    ///< bass pattern for variations
     float  gate = 0.7f;             ///< bass note length as a fraction of the slot

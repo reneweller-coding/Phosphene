@@ -114,6 +114,9 @@ const ParamDesc kComposeParams[compose::Count] = {
     // 19.09.2026, round "polish" (Composer.cpp, matchPresence): On brings each track's presence band into
     // a band around the reference recordings' median by the level of its lines; Off plays them as matched.
     { "presence_match",  "Presence Match",  "",      0.0f,   1.0f,   1.0f, Curve::Toggle },
+    // 22.09.2026: one style for a whole night was the user's first complaint about the sets ("langweilig,
+    // wenn immer alles im selben Stil ist"). On, the style walks from track to track (Composer.cpp).
+    { "style_mix",       "Style Mix",       "",      0.0f,   1.0f,   1.0f, Curve::Toggle },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };

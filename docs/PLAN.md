@@ -6735,6 +6735,100 @@ anderen defekten Knopf konnte der Rundgang nicht finden.
 ausgegraut ohne Transport); `Tests/hosttest.cpp` (der Knopf-Rundgang, das Eintreffen des Offsets,
 die Threads nicht mehr auf 1 gepinnt); dieser Block.
 
+**22.09.2026, Harmonik: Pendel über dem Bordun, elf Akkordtypen, offene Voicings — und Stil wie Tonart wandern durch die Nacht**
+
+Der Nutzer, zwei Anliegen: „Die Akkorde sind langweilig" — es klang, als gäbe es nur zwei —, mit
+einem Brief zur Psytrance-Harmonik (Bordun-Prinzip, m(b9)/sus(b2)/sus2/sus4/m7/m9/Hijaz/m(b5),
+Pendel-Progressionen, Voicing-Gesetz mit Sub bis F#1, Quartharmonik); und „es ist langweilig, wenn
+immer alles im selben Stil ist in einem Set" — dazu „auch immer dieselbe Tonart". Beides optional,
+beides als Voreinstellung an.
+
+*Was vorher war.* `makeChords` zog vier Stufen zu je **zwei Takten**, jede als Skalendreiklang,
+vierstimmig eng gesetzt (Grundton unten, Quinte, Terz und Oktave dicht darüber). Der Hörer hatte
+recht: bei Pendeln wie i–bII–i–bII sind das zwei Akkorde, und die Dreiklänge verwischen den
+Unterschied zwischen einem Aeolisch und einem Phrygisch — eine Terz ist eine Terz. Lead, Counter,
+Arp und Acid verfolgten den Akkord ihres Taktes auf die schweren Schläge.
+
+*Harmonik.* Fünf Pendel (`kPendulums`), je Stil gewichtet:
+
+| Pendel | Goa | Full-On | Prog | Dark | Hi-Tech |
+|---|---|---|---|---|---|
+| i ↔ bII | 0,50 | 0,20 | — | 0,50 | 0,50 |
+| i ↔ bVII | 0,30 | 0,40 | 0,35 | 0,15 | 0,30 |
+| i ↔ iv | 0,20 | 0,25 | 0,35 | 0,30 | 0,20 |
+| i ↔ bVI | — | 0,10 | 0,30 | 0,20 | — |
+| i ↔ v | — | 0,15 | — | — | — |
+
+Ein Pendel ist nur wählbar, wenn der Modus die Stufe *hat* (Aeolisch kein bII, Phrygisch kein ii)
+**und** über ihr eine reine Quinte steht — die fünfte Stufe im Phrygischen trägt einen Tritonus, und
+kein Akkordtyp passt darauf; der erste Lauf setzte dort einen Ton außerhalb des Modus ins Pad.
+Darüber elf Akkordtypen (`Harmony.h`, `ChordType`): Dreiklang, sus2, sus4, m7, m9, maj7, m(b9),
+sus(b2), phrygisch-dominant (Hijaz), m(b5), Quartstapel. `chordTypeFits` prüft jeden Ton gegen den
+Modus, `kTypeWeight` sagt, wonach ein Stil unter den passenden greift: Goa m(b9)/Hijaz/sus(b2),
+Full-On sus2/m7/Dreiklang, Progressive m7/m9/Quartstapel, Dark Forest m(b9)/sus(b2)/m(b5),
+Hi-Tech sus(b2)/m(b5)/Quartstapel. m(b5) passt in keinen Modus und bleibt den zwei dunklen Stilen als
+Cluster vorbehalten. Der Akkord hält **4, 8 oder 16 Takte** (`kBarsWeight`: Progressive und Dark nie
+4, Hi-Tech nie 16). Der Haupt-Breakdown bekommt seine eigene Folge (`breakDegree`/`breakType`,
+`breakChordBars`): die äolische Drei i–bVI–bVII, wo der Modus beide hat, sonst ein gehaltener Akkord
+mit Typwechsel. `padChordAt` liefert für jeden Takt Stufe, Typ und Blocktakt; die Form markiert den
+Haupt-Breakdown (`BarPlan::mainBreak`: der Break, dessen nächster Drop der Höhepunkt ist).
+
+*Voicing-Gesetz* (`voiceChord`, neu): Grundton unten in D3..C#4, die Quinte des Typs direkt darüber
+(bei m(b5) der Tritonus), die Farbtöne bei oder über der Oktave, Nachbarstimmen kleine Terz bis
+Oktave auseinander, Spitze höchstens G5; so viele Farbtöne wie so passen, darunter die Lage mit der
+kleinsten Bewegung zum Voicing davor. Zwei bis fünf Stimmen. Das Sub-Fundament geht zwei Oktaven
+unter den Grundton, wenn das F#1 nicht unterschreitet (`kPadFoundationLowest` 38 → 30), sonst eine.
+Der Selbsttest zählt eine unabhängige Aufzählung dagegen: 300 Fälle, 0 Abweichungen.
+
+*Die Linien bleiben zu Hause.* Lead, Counter, Arp und Acid verankern jetzt den **Tonika-Akkord**, was
+das Pad auch spielt — das Bordun-Prinzip wie beim Bass. Das Pendel *soll* gegen eine Melodieschicht
+reiben, die stehen bleibt; ein Lead, das dem Pad auf die schweren Schläge nachliefe, löste genau die
+Spannung auf, für die das Pendel da ist. Und gemessen: eine Phrase, die gegen den Akkord ihres
+Fensters komponiert und acht Takte später über einem anderen gespielt wurde, hatte 64 von 1156 schweren
+Noten daneben. Der Counter ruhte danach auf jeder Antwort auf der Quinte („die Quinte, wo der Akkord
+sie hat" — der Tonika-Akkord hat sie immer): 208 von 499 Noten, Tonika 15 %. Jetzt wechseln die
+Antworten offen und geschlossen ab (Quinte, Tonika, Quinte, Phrasenende Tonika), Tonika-Gewicht
+2,0 → 2,5: Tonika 21 %, gemessen.
+
+*Stil-Reise* (`compose.style_mix`, an). Die fünf Profile stehen in Tempo-Reihenfolge — Progressive
+136,5, Full-On 144, Goa 145, Dark Forest 151,5, Hi-Tech 158 — und ein Schritt geht zum **Nachbarn**:
+aufwärts, solange der Energiebogen steigt, abwärts, wo er fällt, in einem Viertel der Fälle dagegen;
+ein Stil hält ein bis drei Tracks. Eigener Salt (`kSaltStyle`), damit keine ältere Ziehung der
+Wanderung verrutscht. Der Track führt seinen Stil (`TrackWalk::style`, `TrackPlan::style`), und
+daraus lesen Tempo-Zentrum (bei Style Tempo), Modusgewichte, Bass-Rhythmus und Bass-Linie sein
+Profil — nicht mehr den Knopf. Aus ist der Knopf, was er war: ein Stil für die Nacht.
+
+*Tonart.* Die Chance eines Wechsels ist der Track-Variation-Knopf plus ein Viertel, und nach zwei
+Tracks in einer Tonart *muss* der dritte wechseln — drei Tracks sind über zwanzig Minuten eine
+Tonika. Schritte: Quinte/Quarte (je 0,28), Ganzton (je 0,12), kleine Terz (je 0,06), Halbton (je
+0,04). Die Münze wird weiter genau einmal geworfen, damit die Ziehungen danach ihren Platz behalten.
+Bei Track Variation 0 stehen Stil-Reise und Tonartzwang still: „every track plays the knobs" gilt
+weiter.
+
+*Seed 42, 90 Minuten, Style Tempo aus:* Full-On F# → Progressive B → Progressive E → Full-On E →
+Progressive A → Progressive G → A# → A# → G# → D# → F# → B → C# → E (Phrygisch, ab Track 7 Harmonisch
+Moll). Keine Tonart länger als zwei Tracks, kein Stilsprung über einen Nachbarn hinweg. Track 1 spielt
+im(b9) ↔ viisus4 zu 16 Takten, im Haupt-Breakdown im7 – visus2 – viisus2 – im(b9).
+
+*Tests.* Sechs Prüfungen brachen, jede aus einem nachvollziehbaren Grund: die Voicing-Aufzählung
+kannte die Typen nicht (neu geschrieben, siehe oben); „pad notes are chord tones" prüfte den
+Skalendreiklang statt des Typs (jetzt `padChordAt` + `chordIntervals`); Regel 19 verlangte genau vier
+Stimmen (zwei bis fünf); die Fundament-Prüfung erlaubte höchstens vier (fünf bei m9 und Quartstapel);
+die Breakdown-Boden-Schranke 20 dB (12 — das Sub reicht jetzt bis F#1); die Polymeter-Rückkehr rechnete
+mit `chordBars` = 2 (jetzt `12 · chordBars`); die PDB-Regel lief auch ohne PDB-Takte. `--tracks` zeigt
+den Stil und beide Akkordfolgen mit Typen.
+
+*Testlauf.* Die sechs betroffenen Prüfungen grün; der volle `ctest` folgt nach der Entscheidung des
+Nutzers zusammen mit der Melodie-Runde (ein abgebrochener Vollauf stand bei 31 von 114 ohne Fehler).
+
+*Dateien.* `Core/include/phos/Harmony.h` (ChordType, chordIntervals, chordTypeFits),
+`Core/include/phos/Melody.h` (chordType, breakDegree/-Type/-Bars, PadChord, padChordAt, voiceChord
+neu), `Core/include/phos/Form.h` + `Core/src/Form.cpp` (mainBreak, sectionBars, StyleId im Profil),
+`Core/include/phos/Composer.h` + `Core/src/Composer.cpp` (Stil-Reise, Tonartwanderung, Profil pro
+Track), `Core/include/phos/Params.h` + `Core/src/Params.cpp` (style_mix), `Core/src/Melody.cpp`
+(makeChords, voiceChord, foundationVoicing, Pad-Emission, Tonika-Anker, Counter-Ruhetöne),
+`Tools/render/main.cpp`, `Tests/selftest.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

@@ -317,8 +317,8 @@ int main(int argc, char** argv)
     if (listTracks) {
         for (int t = 0; composer.track(params, t).firstBar < totalBars; ++t) {
             const TrackPlan p = composer.track(params, t);
-            std::printf("track %2d  bar %5d  %3d bars  %5.1f BPM  %-2s %-17s  bass %-7s/%-7s gate %.2f  kick %s%s  gain %+.1f dB\n",
-                        t + 1, p.firstBar, p.bars, p.bpm, kKeyNames[p.key], kScaleNames[p.scale],
+            std::printf("track %2d  bar %5d  %3d bars  %5.1f BPM  %-2s %-17s %-11s  bass %-7s/%-7s gate %.2f  kick %s%s  gain %+.1f dB\n",
+                        t + 1, p.firstBar, p.bars, p.bpm, kKeyNames[p.key], kScaleNames[p.scale], kStyleNames[std::clamp(p.style, 0, kNumStyles - 1)],
                         kBassPatternNames[p.primaryPattern], kBassPatternNames[p.secondaryPattern], static_cast<double>(p.gate),
                         (p.kickEngine < 0 ? params.getInt(params.base(Module::Kick) + kick::Engine) : p.kickEngine) == 1 ? "resonant" : "sweep",
                         p.kickClip == 1 ? " hard" : "", static_cast<double>(p.gainDb));
@@ -340,9 +340,12 @@ int main(int argc, char** argv)
             static const char* const kArpStyles[] = { "corpus", "up", "down", "up-down", "Euclid", "polymeter" };
             static_assert(sizeof(kArpStyles) / sizeof(kArpStyles[0]) == kNumArpStyles, "one name per ArpStyle");
             std::printf("\n          melody: chords");
-            for (int c = 0; c < 4; ++c) std::printf(" %s", kRoman[m.chordDegree[c]]);
+            for (int c = 0; c < 4; ++c) std::printf(" %s%s", kRoman[m.chordDegree[c]], kChordTypeNames[std::clamp(m.chordType[c], 0, kNumChordTypes - 1)]);
+            std::printf(" (%d bars each); main breakdown", m.chordBars);
+            if (m.breakHolds) std::printf(" holds %s%s", kRoman[m.breakDegree[0]], kChordTypeNames[std::clamp(m.breakType[0], 0, kNumChordTypes - 1)]);
+            else for (int c = 0; c < 4; ++c) std::printf(" %s%s", kRoman[m.breakDegree[c]], kChordTypeNames[std::clamp(m.breakType[c], 0, kNumChordTypes - 1)]);
             auto on = [&](MelodyPart part) { return m.present[mpIndex(part)] ? "yes" : "no"; };
-            std::printf(" (%d bars each); acid %s (%d steps%s), lead %s, counter %s, arp %s (%s), stab %s, pad %s, drone %s\n", m.chordBars,
+            std::printf(" (%d bars each); acid %s (%d steps%s), lead %s, counter %s, arp %s (%s), stab %s, pad %s, drone %s\n", m.breakChordBars,
                         on(MelodyPart::Acid), m.acidSteps, m.acidSquelch == 1 ? ", squelch" : "", on(MelodyPart::Lead), on(MelodyPart::Counter),
                         on(MelodyPart::Arp), kArpStyles[m.arpStyle], on(MelodyPart::Stab), on(MelodyPart::Pad), on(MelodyPart::Drone));
             // 19.09.2026: each polyphonic voice's sound in this track (Composer.h, VoiceRecipe); -1 is the knob.

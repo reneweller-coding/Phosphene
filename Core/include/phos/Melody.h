@@ -159,7 +159,7 @@ constexpr int kArpLowest = 55;                                      ///< G3: low
 constexpr int kArpHighest = 79;                                     ///< G5: highest arp note
 constexpr int kPadLowest = 50;                                      ///< D3: lowest pad note while kick and bass play
 constexpr int kPadHighest = 79;                                     ///< G5: highest pad note
-constexpr int kPadFoundationLowest = 38;                            ///< D2: lowest note of the sub foundation
+constexpr int kPadFoundationLowest = 30;                            ///< F#1: lowest note of the sub foundation (22.09.2026; was D2 -- the brief wants octave 1 or 2)
 constexpr int kAcidVariants = 3;                                    ///< A, A', A'' of one acid cell
 constexpr int kMaterialSets = 2;                                    ///< cell sets: before and after the first breakdown
 constexpr int kAcidCells = kMaterialSets * kAcidVariants;           ///< entries of MelodyPlan::acid
@@ -274,7 +274,8 @@ struct ModeMaterial {
     std::vector<MelodyNote> lead[2];    ///< the two eight-bar lead phrases
     std::vector<MelodyNote> counter[2]; ///< the counter-lead's answers to them (19.09.2026)
     std::vector<MelodyNote> arp[kArpCells];     ///< arp cells (arpCell)
-    std::vector<int> padVoicing[4];     ///< the pad voicings
+    std::vector<int> padVoicing[4];     ///< the pad voicings of the core chords
+    std::vector<int> breakVoicing[4];   ///< and of the main breakdown's (22.09.2026)
     bool built = false;                 ///< false: this mode is not used by the track's form
 };
 
@@ -321,8 +322,26 @@ struct MelodyPlan {
     int  padFigureGroove = 0;                 ///< PadFigure: and in a groove, never the same one
     int  padGateAlt = 0;                      ///< a second gate pattern, for the sections that do not use padGatePattern
     /** @} */
-    int  chordBars = 2;                       ///< bars per chord (2 or 4)
-    int  chordDegree[4] = {};                 ///< scale degree of each chord
+    /**
+     * @name Harmony (rebuilt 22.09.2026, round "Harmonik")
+     *
+     * The user's brief: psytrance pads do not play cadences over a moving bass, they set *modal
+     * tension over a bass that stays on the tonic* (the Bordun principle; compose.bass_follows_chords
+     * is off by default for exactly that). So the core of a track is a **pendulum** of two chords --
+     * i <-> bII (Phrygian family), i <-> bVII, i <-> iv, i <-> bVI, i <-> v -- expressed over the
+     * four slots the lines' material is built on, changing every 4, 8 or 16 bars; and each chord has a
+     * **type** from Harmony.h that the style likes and the mode allows. The main breakdown, the one
+     * before the last drop, has harmony of its own: the aeolian three (i - bVI - bVII) where the mode
+     * has both, else the tonic held for the whole of it. Any other breakdown holds the tonic.
+     * @{ */
+    int  chordBars = 8;                       ///< bars per chord in the cores (4, 8 or 16)
+    int  chordDegree[4] = {};                 ///< scale degree of each core chord (the pendulum over four slots)
+    int  chordType[4] = {};                   ///< ChordType of each core chord (the pad's; the lines take the triad's tones)
+    int  breakDegree[4] = {};                 ///< the main breakdown's chords
+    int  breakType[4] = {};                   ///< and their types
+    int  breakChordBars = 8;                  ///< bars per chord in the main breakdown
+    bool breakHolds = true;                   ///< the main breakdown holds one chord (the mode has no aeolian three)
+    /** @} */
     int  root[kMelodyParts] = { 50, 64, 76, 57, 57, 55, 38 }; ///< MIDI root of each part (the pad's, the stab's and the drone's are unused)
     int  acidSteps = 16;                      ///< acid pattern length (16 or 32)
     std::vector<MelodyNote> acid[kAcidCells]; ///< acid cells: set 0/1 x A, A', A'' (acidCell); [0] is A
@@ -337,7 +356,8 @@ struct MelodyPlan {
     int  acidSquelch = -1;                    ///< override of acid.squelch, -1 = the knob
     int  leadOsc = -1;                        ///< override of lead.osc, -1 = the knob (superseded by the voice recipes, kept for the report)
     int  delay[kMelodyParts][2] = { { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 } };   ///< overrides of the delay times
-    std::vector<int> padVoicing[4];           ///< MIDI notes of each chord's pad voicing
+    std::vector<int> padVoicing[4];           ///< MIDI notes of each core chord's pad voicing
+    std::vector<int> breakVoicing[4];         ///< and of the main breakdown's chords (22.09.2026)
     int  padGatePattern = 0;                  ///< the track's gate pattern
     float recipe[kMelodyParts] = {};          ///< one sound direction per part, -1..1 (brightness)
     /** @name The new voices (19.09.2026, round "voices"; Melody.cpp, makeCounter, makeStab, makeDrone)
@@ -472,7 +492,35 @@ BarPlan allPartsBar(const MelodyPlan& m);
  * @param key          the key's pitch class
  * @param previous     the voicing before, or null
  */
-std::vector<int> voiceChord(int scale, int degree, int key, const std::vector<int>* previous);
+/**
+ * @brief Voices a chord of @p type on scale degree @p degree for the pad (rewritten 22.09.2026).
+ *
+ * Root position, open: the chord root lowest in D3 .. C#4, its fifth (the tritone for m(b5)) directly
+ * above, and the type's colour tones above that at or over the octave -- root, fifth, and the colour
+ * up high, which is the "Weite Lagen" of the brief and not the close triad in the low mids. Adjacent
+ * upper voices stand at least a minor third and at most an octave apart, nothing above G5, at most
+ * five voices. Among the placements that satisfy that, the one that moves least from @p previous
+ * (or from a centred reference without one): the same voice leading rule as before.
+ */
+std::vector<int> voiceChord(int scale, int key, int degree, int type, const std::vector<int>* previous);
+
+/** @brief The pad's chord in one bar: which, of which type, and where in its block the bar lies. */
+struct PadChord {
+    int  degree = 0;       ///< scale degree
+    int  type = 0;         ///< ChordType
+    int  slot = 0;         ///< 0 .. 3: index into padVoicing / breakVoicing
+    int  blockBars = 8;    ///< bars the chord holds
+    int  barInBlock = 0;   ///< 0 = the bar the chord starts on
+    bool inBreak = false;  ///< from the main breakdown's own harmony
+};
+/**
+ * @brief The pad's chord for a bar (22.09.2026). The cores follow the pendulum on track-absolute
+ *        blocks; a main breakdown its own progression from its first bar; any other breakdown holds
+ *        the tonic.
+ */
+PadChord padChordAt(const MelodyPlan& m, const BarPlan& bp, int barInTrack);
+/** @brief The same, from the form alone (for tests and tools without a BarPlan). */
+PadChord padChordAt(const MelodyPlan& m, const FormPlan& f, int barInTrack);
 
 /** @brief Total movement of the voices between two sorted voicings of equal size, in semitones. */
 int voicingMovement(const std::vector<int>& a, const std::vector<int>& b);

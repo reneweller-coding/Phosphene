@@ -84,7 +84,7 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 1.15f, 1.10f, 1.10f, 1.25f, 0.80f, 1.20f, 1.20f }, 0.9f, 0.95f,
       { 0.20, 0.25, 0.55, 0.00 },                      // mostly beat 4 alone: rarely total silence
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.26f, 1.0f, 16.0f,
-      { 0.15, 0.25, 0.10, 0.30, 0.15, 0.05 }, 0.45f },   // interchange: the Hijaz modes at the peak
+      { 0.15, 0.25, 0.10, 0.30, 0.15, 0.05 }, 0.45f, StyleId::Goa },   // interchange: the Hijaz modes at the peak
     // Full-On: the default, every multiplier 1, so the knobs play as they are set.
     { "Full-On", 144.0, 2.0,
       { 0.30, 0.25, 0.15, 0.15, 0.05, 0.10 },
@@ -93,7 +93,7 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f }, 1.0f, 1.0f,
       { 0.40, 0.30, 0.30, 0.00 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.22f, 1.0f, 16.0f,
-      { 0.30, 0.30, 0.15, 0.15, 0.05, 0.05 }, 0.30f },
+      { 0.30, 0.30, 0.15, 0.15, 0.05, 0.05 }, 0.30f, StyleId::FullOn },
     // Progressive: flatter form, fewer leads, more pad, Dorian and Aeolian.
     { "Progressive", 136.5, 1.5,
       { 0.35, 0.10, 0.05, 0.05, 0.00, 0.45 },
@@ -102,7 +102,7 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 0.9f, 0.55f, 0.50f, 0.8f, 1.20f, 1.3f, 1.30f }, 0.6f, 0.9f,
       { 0.50, 0.30, 0.20, 0.00 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.28f, 0.6f, 16.0f,
-      { 0.45, 0.05, 0.00, 0.00, 0.00, 0.50 }, 0.12f },   // Dorian and Aeolian only
+      { 0.45, 0.05, 0.00, 0.00, 0.00, 0.50 }, 0.12f, StyleId::Progressive },   // Dorian and Aeolian only
     // Dark / Forest: darker modes, less lead, denser percussion.
     { "Dark Forest", 151.5, 3.5,
       { 0.20, 0.40, 0.25, 0.10, 0.05, 0.00 },
@@ -111,7 +111,7 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 1.2f, 0.4f, 0.50f, 0.9f, 1.00f, 0.8f, 1.30f }, 1.2f, 1.1f,
       { 0.30, 0.30, 0.40, 0.00 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.18f, 1.3f, 8.0f,
-      { 0.20, 0.40, 0.30, 0.10, 0.00, 0.00 }, 0.35f },
+      { 0.20, 0.40, 0.30, 0.10, 0.00, 0.00 }, 0.35f, StyleId::DarkForest },
     // Hi-Tech: fastest, busiest; no rule of its own, so the strict two-drop form.
     { "Hi-Tech", 158.0, 4.0,
       { 0.20, 0.35, 0.25, 0.15, 0.05, 0.00 },
@@ -120,7 +120,7 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 1.3f, 0.6f, 0.80f, 1.1f, 1.20f, 0.6f, 0.50f }, 1.4f, 1.2f,
       { 0.25, 0.35, 0.40, 0.00 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.16f, 1.4f, 8.0f,
-      { 0.20, 0.35, 0.30, 0.15, 0.00, 0.00 }, 0.40f },
+      { 0.20, 0.35, 0.30, 0.15, 0.00, 0.00 }, 0.40f, StyleId::HiTech },
 };
 
 /** @brief Control points of the arcs: (t, E) pairs, interpolated with raised cosines. */
@@ -790,6 +790,16 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     bp.arpOctave = static_cast<int8_t>(s.climax ? 1 : 0);
     bp.leadOctave = static_cast<int8_t>(leadOct);
     bp.climax = s.climax;
+    bp.sectionBars = s.bars;
+    // The main breakdown (22.09.2026): the breakdown whose next drop is the climax. It is the one
+    // place the pad's harmony leaves the pendulum -- the aeolian three, or one chord held throughout.
+    if (s.type == SectionType::Break) {
+        for (int j = si + 1; j < f.count; ++j) {
+            if (f.section[j].type != SectionType::Drop) continue;
+            bp.mainBreak = f.section[j].climax;
+            break;
+        }
+    }
     bp.parts = parts;
 
     // The group's figure: at beat 1 of the last bar of every eight-bar group in which the bass plays --

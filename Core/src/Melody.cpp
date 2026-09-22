@@ -583,47 +583,179 @@ int median(const uint32_t* counts, int n)
 
 // ---------------------------------------------------------------------------------------------
 
+namespace {
+
+/**
+ * @brief A pendulum: the two degrees a track's core alternates between, and each style's taste for it.
+ *
+ * The user's brief (22.09.2026): "Wenn Akkorde wechseln, nutzen Produzenten fast immer sogenannte
+ * Pendel-Harmonien" -- i <-> bII (the Phrygian pendulum, "die Koenigsklasse"), i <-> bVII (subtonic,
+ * driving), i <-> iv (the shamanic fourth), and for the more melodic styles i <-> bVI and i <-> v.
+ * A pendulum exists only where the mode has its second degree at the interval the name says:
+ * bII wants a semitone, bVII a whole tone under the octave, bVI a minor sixth.
+ */
+struct Pendulum { int b; int semis; double weight[kNumStyles]; };
+const Pendulum kPendulums[] = {
+    //  b  semis   Goa   FullOn  Prog   Dark   HiTech
+    { 1,  1,  { 0.50, 0.20, 0.00, 0.50, 0.50 } },   // i <-> bII
+    { 6, 10,  { 0.30, 0.40, 0.35, 0.15, 0.30 } },   // i <-> bVII
+    { 3,  5,  { 0.20, 0.25, 0.35, 0.30, 0.20 } },   // i <-> iv
+    { 5,  8,  { 0.00, 0.10, 0.30, 0.20, 0.00 } },   // i <-> bVI
+    { 4,  7,  { 0.00, 0.15, 0.00, 0.00, 0.00 } },   // i <-> v
+};
+constexpr int kNumPendulums = static_cast<int>(sizeof(kPendulums) / sizeof(kPendulums[0]));
+
+/**
+ * @brief Each style's taste for the chord types of Harmony.h, in ChordType order:
+ *        triad, sus2, sus4, m7, m9, maj7, m(b9), sus(b2), phryg.dom, m(b5), quartal.
+ *
+ * The mode decides which of them exist (chordTypeFits); this only says what the style reaches for
+ * among those that do. m(b5) fits no root in any mode and is a chromatic cluster the two dark styles
+ * alone may take (the brief: "Darkpsy, Forest, Twilight").
+ */
+const double kTypeWeight[kNumStyles][kNumChordTypes] = {
+    //  triad sus2  sus4  m7    m9    maj7  m(b9) susb2 hijaz m(b5) quartal
+    { 0.15, 0.05, 0.15, 0.05, 0.00, 0.10, 0.30, 0.20, 0.25, 0.00, 0.00 },   // Goa
+    { 0.20, 0.25, 0.20, 0.20, 0.05, 0.10, 0.15, 0.05, 0.00, 0.00, 0.05 },   // Full-On
+    { 0.05, 0.15, 0.10, 0.30, 0.25, 0.10, 0.00, 0.00, 0.00, 0.00, 0.20 },   // Progressive
+    { 0.10, 0.05, 0.05, 0.05, 0.00, 0.05, 0.30, 0.25, 0.05, 0.20, 0.15 },   // Dark Forest
+    { 0.05, 0.20, 0.05, 0.00, 0.00, 0.05, 0.15, 0.30, 0.00, 0.25, 0.25 },   // Hi-Tech
+};
+
+/** @brief How long a chord holds in the cores: 4, 8 or 16 bars, by style ("oft nur alle 4, 8 oder 16 Takte"). */
+const double kBarsWeight[kNumStyles][3] = {
+    { 0.20, 0.50, 0.30 },   // Goa
+    { 0.40, 0.50, 0.10 },   // Full-On
+    { 0.00, 0.40, 0.60 },   // Progressive
+    { 0.00, 0.50, 0.50 },   // Dark Forest
+    { 0.50, 0.50, 0.00 },   // Hi-Tech
+};
+
+/** @brief Draws a chord type for @p degree in @p scale from the style's taste, among the types that fit. */
+int drawChordType(Rng& r, int scale, int degree, int styleIdx)
+{
+    const bool dark = styleIdx == static_cast<int>(StyleId::DarkForest) || styleIdx == static_cast<int>(StyleId::HiTech);
+    double w[kNumChordTypes] = {};
+    double sum = 0.0;
+    for (int t = 0; t < kNumChordTypes; ++t) {
+        const ChordType ct = static_cast<ChordType>(t);
+        const bool fits = ct == ChordType::MinFlat5 ? dark : chordTypeFits(scale, degree, ct);
+        w[t] = fits ? kTypeWeight[styleIdx][t] : 0.0;
+        sum += w[t];
+    }
+    if (sum <= 0.0) {
+        // Nothing the style likes fits: the first type that fits at all, and the triad only when
+        // even that is wanting -- a chord must never hand the pad a note outside its mode.
+        for (int t = 0; t < kNumChordTypes; ++t) if (chordTypeFits(scale, degree, static_cast<ChordType>(t))) return t;
+        return static_cast<int>(ChordType::Triad);
+    }
+    return drawIndex(r, w, kNumChordTypes);
+}
+
+} // namespace
+
 void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, const StyleProfile& style)
 {
+    (void)temperature;   // the corpus successions this used to temper are no longer the rule (22.09.2026)
     Rng r;
     r.seed(seed ^ kSaltChords);
-    m.chordBars = r.uniform() < 0.6f ? 2 : 4;
-    m.chordDegree[0] = 0;
-    for (int i = 1; i < 4; ++i) {
-        const int prev = m.chordDegree[i - 1];
-        if (r.uniform() < 0.35f) { m.chordDegree[i] = prev; continue; }
-        double w[7] = {};
-        for (int d = 0; d < 7; ++d) {
-            if (d == prev) continue;
-            const double p = chordTransition(scaleDegree(scale, prev), scaleDegree(scale, d));
-            // The corpus successions are the base (0 to 5, 0 to 7 and 0 to 8 are its commonest moves);
-            // the style profile adds the pendulum moves of the literature -- Goa's i to bII and i to
-            // bVII -- on top of them rather than replacing them. The extras are scaled to a sixth of a
-            // probability, which is the size of a common corpus move.
-            const int move = ((scaleDegree(scale, d) - scaleDegree(scale, prev)) % 12 + 12) % 12;
-            w[d] = (p > 0.0 ? std::pow(p, 1.0 / temperature) : 0.0) + 0.15 * style.chordExtra[move];
-        }
-        m.chordDegree[i] = drawIndex(r, w, 7);
+    const int si = std::clamp(static_cast<int>(style.id), 0, kNumStyles - 1);
+
+    // The pendulum: among those the mode has, by the style's taste. The corpus successions
+    // (chordTransition) decided this until 22.09.2026 and gave four degrees every 2 or 4 bars --
+    // cadences, in effect, which is what the brief says a psytrance pad does not play. Rules over
+    // corpus (the user's standing rule of 18.09.2026): the corpus fills in what the rules leave open,
+    // and here they leave nothing open.
+    double pw[kNumPendulums] = {};
+    double psum = 0.0;
+    for (int i = 0; i < kNumPendulums; ++i) {
+        const Pendulum& pd = kPendulums[i];
+        if (scaleDegree(scale, pd.b) % 12 != pd.semis) continue;
+        // And the chord on it has to stand on a perfect fifth: v in Phrygian is C# over F#, and its
+        // scale fifth is G, a tritone -- no type of Harmony.h fits such a root and the pad would be
+        // handed a note outside the mode (measured on seed 7, track 3, before this line existed).
+        if (scaleDegree(scale, pd.b + 4) - scaleDegree(scale, pd.b) != 7) continue;
+        pw[i] = pd.weight[si];
+        psum += pw[i];
     }
-    // 22.09.2026: never four times the same degree. The "keep the previous one" branch above fires
-    // with 0.35, so about one track in twenty-three drew i-i-i-i -- and with a two-bar chord block
-    // that is one chord held for 256 bars, which is "hat immer dasselbe gespielt" in the most
-    // literal sense a generator can manage. The repair is the smallest one that still lets a vamp
-    // stay a vamp: the *last* chord moves, drawn from the same successions as every other chord, so
-    // i-i-i-iv and i-i-i-bVII stay reachable and only the motionless case is gone.
-    if (m.chordDegree[1] == m.chordDegree[0] && m.chordDegree[2] == m.chordDegree[0]
-        && m.chordDegree[3] == m.chordDegree[0]) {
-        const int prev = m.chordDegree[0];
-        double w[7] = {};
-        for (int d = 0; d < 7; ++d) {
-            if (d == prev) continue;
-            const double q = chordTransition(scaleDegree(scale, prev), scaleDegree(scale, d));
-            const int move = ((scaleDegree(scale, d) - scaleDegree(scale, prev)) % 12 + 12) % 12;
-            w[d] = (q > 0.0 ? std::pow(q, 1.0 / temperature) : 0.0) + 0.15 * style.chordExtra[move];
-        }
-        m.chordDegree[3] = drawIndex(r, w, 7);
+    const int other = psum > 0.0 ? kPendulums[drawIndex(r, pw, kNumPendulums)].b : 3;   // iv exists in every mode
+    m.chordDegree[0] = 0; m.chordDegree[1] = other; m.chordDegree[2] = 0; m.chordDegree[3] = other;
+    // One type per chord of the pendulum, the same in both of its slots: the two chords are the two
+    // colours of the track, and a third type would make the pendulum a progression again.
+    const int typeI = drawChordType(r, scale, 0, si), typeOther = drawChordType(r, scale, other, si);
+    m.chordType[0] = typeI; m.chordType[1] = typeOther; m.chordType[2] = typeI; m.chordType[3] = typeOther;
+    static const int kBars[3] = { 4, 8, 16 };
+    m.chordBars = kBars[drawIndex(r, kBarsWeight[si], 3)];
+
+    // The main breakdown: the aeolian three (i - bVI - bVII) where the mode has both -- "die dramatischste
+    // und melodischste Progression im Psytrance, fast ausschliesslich im Main Breakdown" -- else one
+    // chord held through it, the most emotional type the mode allows (m9, m7, else the tonic's own).
+    const bool hasVI = scaleDegree(scale, 5) % 12 == 8, hasVII = scaleDegree(scale, 6) % 12 == 10;
+    if (hasVI && hasVII) {
+        m.breakHolds = false;
+        m.breakChordBars = 8;
+        const int deg[4] = { 0, 5, 6, 0 };
+        for (int c = 0; c < 4; ++c) { m.breakDegree[c] = deg[c]; m.breakType[c] = drawChordType(r, scale, deg[c], si); }
+    } else {
+        m.breakHolds = true;
+        m.breakChordBars = 16;
+        int t = typeI;
+        if (chordTypeFits(scale, 0, ChordType::Min9)) t = static_cast<int>(ChordType::Min9);
+        else if (chordTypeFits(scale, 0, ChordType::Min7)) t = static_cast<int>(ChordType::Min7);
+        for (int c = 0; c < 4; ++c) { m.breakDegree[c] = 0; m.breakType[c] = t; }
     }
 }
+
+} // namespace (padChordAt has external linkage: the header declares it)
+
+PadChord padChordAt(const MelodyPlan& m, const BarPlan& bp, int barInTrack)
+{
+    PadChord c;
+    if (bp.type == SectionType::Break) {
+        c.inBreak = true;
+        if (bp.mainBreak && !m.breakHolds) {
+            c.blockBars = m.breakChordBars;
+            c.slot = (bp.barInSection / c.blockBars) % 4;
+            c.barInBlock = bp.barInSection % c.blockBars;
+        } else {
+            // Held for the whole section: one chord from its first bar to its last.
+            c.blockBars = std::max(1, bp.sectionBars);
+            c.slot = 0;
+            c.barInBlock = bp.barInSection;
+        }
+        c.degree = m.breakDegree[c.slot];
+        c.type = m.breakType[c.slot];
+        return c;
+    }
+    c.blockBars = m.chordBars;
+    c.slot = chordIndexAt(m, barInTrack);
+    c.barInBlock = barInTrack % m.chordBars;
+    c.degree = m.chordDegree[c.slot];
+    c.type = m.chordType[c.slot];
+    return c;
+}
+
+PadChord padChordAt(const MelodyPlan& m, const FormPlan& f, int barInTrack)
+{
+    // The same answer from the form alone, for tests and tools that have no BarPlan in hand: the four
+    // fields padChordAt reads are the section's type, where in it the bar lies, how long it is, and
+    // whether it is the breakdown before the climax drop.
+    BarPlan bp;
+    const int si = sectionOfBar(f, barInTrack);
+    const Section& s = f.section[std::clamp(si, 0, std::max(0, f.count - 1))];
+    bp.type = s.type;
+    bp.barInSection = barInTrack - s.startBar;
+    bp.sectionBars = s.bars;
+    if (s.type == SectionType::Break)
+        for (int j = si + 1; j < f.count; ++j) {
+            if (f.section[j].type != SectionType::Drop) continue;
+            bp.mainBreak = f.section[j].climax;
+            break;
+        }
+    return padChordAt(m, bp, barInTrack);
+}
+
+namespace {
 
 /**
  * @brief The acid line: a one- or two-bar cell inside the TB-303 rules of 18.09.2026 (Melody.h).
@@ -1025,11 +1157,18 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     // Constraints of one note: chord tones on strong steps, scale tones elsewhere, colour tones never.
     // Both carry the measured tension curve of the lead; the motif is two bars long, so the bar-parity
     // term applies.
-    auto constraintAt = [&](int window, int step) {
+    auto constraintAt = [&]([[maybe_unused]] int window, int step) {   // the window chose the chord until 22.09.2026
         const double t = tensionAt(CorpusRoleId::Lead, step, 2);
         if (step % 8 == 0) {
             int pcs[3];
-            chordTones(scale, chordAtStep(m, window, step), pcs);
+            // The tonic chord, whatever the pad plays (22.09.2026, round "Harmonik"): the lines follow
+            // the Bordun principle like the bass. The pad's pendulum -- bII, bVII, iv over a bass that
+            // stays on the tonic -- is *meant* to rub against a melodic layer that stays home; a lead
+            // that chased the pad's chord to its strong beats would resolve the very tension the
+            // pendulum exists for. (And with chords of 8 or 16 bars a phrase composed against the
+            // chord of its own window met another chord when it was played eight bars later: 64 of
+            // 1156 strong notes off, measured.)
+            chordTones(scale, 0, pcs);
             const std::vector<uint8_t> s = weightedSet(rootOffset, lo, hi, [&](int rel) {
                 const int pc = pcOf(rel);
                 return (pc == pcs[0] || pc == pcs[1] || pc == pcs[2]) ? scaleW[pc] * registerW(rel) : 0.0;
@@ -1558,8 +1697,8 @@ void padOnsets(int figure, int chordBars, std::vector<std::pair<int, double>>& o
  * placed in gave it, so that a note held over four sixteenths of a lead riff still ends as a stab.
  *
  * **Pitches** follow the lead's genre rules (Melody.h): the tonic is the centre (weight 2, the fifth 1.4), the fifth
- * the resting tone -- the last note of every answer is the fifth where the chord takes it, else the
- * tonic --, chord tones on strong sixteenths, scale tones elsewhere, no colour tone at all (rule 1 allows
+ * the resting tone -- the answers end open and closed by turns, the first on the fifth, the next on the
+ * tonic (22.09.2026: over the Bordun there is no chord to take it elsewhere) --, chord tones on strong sixteenths, scale tones elsewhere, no colour tone at all (rule 1 allows
  * the flat second only as a neighbour; the counter takes none rather than a second mechanism), mostly
  * stepwise (weight e^(-|interval| / 2.5)), never one pitch three times in a row, and the phrase ends
  * on the tonic. No corpus model: the corpus has no counter-lead role, and the rules decide.
@@ -1634,12 +1773,14 @@ void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
         // Pitches: one weighted draw per note.
         std::vector<int> rels(n, 0);
         int prev = 0, prev2 = 1000;
+        int block = 0;   // which answer this note belongs to (the resting tones alternate by it)
         for (size_t i = 0; i < n; ++i) {
             const int s = st[i];
             const bool strong = s % 8 == 0;
             const bool last = i + 1 == n || be[i + 1] != be[i];   // the answer's last note
+            if (i > 0 && be[i] != be[i - 1]) ++block;              // a new answer begins
             int pcs[3];
-            chordTones(scale, m.chordDegree[chordIndexAt(m, w * 8 + s / 16)], pcs);
+            chordTones(scale, 0, pcs);   // the tonic chord: the counter stays home like the lead (22.09.2026)
             std::vector<double> wgt;
             std::vector<int> cand;
             for (int rel = lo; rel <= hi; ++rel) {
@@ -1648,7 +1789,10 @@ void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
                 const bool chord = pc == pcs[0] || pc == pcs[1] || pc == pcs[2];
                 if (strong && !chord) continue;
                 if (rel == prev && prev == prev2) continue;   // never one pitch three times in a row
-                double v = pc == 0 ? 2.0 : (pc == 7 ? 1.4 : 1.0);
+                // The tonic as the line's centre: 2.5 against 1.4 for the fifth and 1 for the rest (2.0 until
+                // 22.09.2026; with the resting tones no longer leaning on the bar's chord the tonic fell to
+                // 19 % of the notes, measured, and the fifth sat where the register prior favoured it).
+                double v = pc == 0 ? 2.5 : (pc == 7 ? 1.4 : 1.0);
                 v *= std::exp(-std::abs(rel - prev) / 2.5);
                 const double z = (rel - centre) / 4.0;   // the lead's sigma, on the lead's window an octave up
                 v *= std::exp(-0.5 * z * z);
@@ -1665,10 +1809,14 @@ void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
                 for (size_t k = 0; k < cand.size(); ++k) { if (x < wgt[k]) { rel = cand[k]; break; } x -= wgt[k]; }
             }
             if (last) {
-                // The resting tone: the fifth where the chord takes it, else the tonic; the phrase's very
-                // last note is the tonic. The octave nearest the drawn note.
+                // The resting tone. Until 22.09.2026 "the fifth where the bar's chord takes it, else the
+                // tonic" -- but the lines anchor the tonic now (round "Harmonik"; the pendulum is the pad's,
+                // the Bordun holds), and against the tonic chord alone every answer rested on the fifth.
+                // Instead the answers rest open and closed by turns: the first on the fifth (a question),
+                // the second on the tonic (its answer), the line over B open again, and the phrase's very
+                // last note the tonic. The octave nearest the drawn note.
                 const bool phraseEnd = i + 1 == n;
-                const bool fifthFits = !phraseEnd && (pcs[0] == 7 || pcs[1] == 7 || pcs[2] == 7);
+                const bool fifthFits = !phraseEnd && block % 2 == 0;
                 const int want = fifthFits ? 7 : 0;
                 int best = rel, bestD = 1 << 20;
                 for (int c = lo; c <= hi; ++c)
@@ -1949,7 +2097,8 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     makeAcid(m, key, scale, seed, temperature, colour, src);
     makeLead(m, key, scale, seed, temperature, colour, src);
     makeArp(m, key, scale, seed, temperature, colour, src);
-    for (int c = 0; c < 4; ++c) m.padVoicing[c] = voiceChord(scale, m.chordDegree[c], key, c > 0 ? &m.padVoicing[c - 1] : nullptr);
+    for (int c = 0; c < 4; ++c) m.padVoicing[c] = voiceChord(scale, key, m.chordDegree[c], m.chordType[c], c > 0 ? &m.padVoicing[c - 1] : nullptr);
+    for (int c = 0; c < 4; ++c) m.breakVoicing[c] = voiceChord(scale, key, m.breakDegree[c], m.breakType[c], c > 0 ? &m.breakVoicing[c - 1] : nullptr);
     // The three new voices (19.09.2026), each from a salt of its own, after everything older: nothing
     // any older maker drew moves because of them.
     makeCounter(m, key, scale, seed);
@@ -1969,13 +2118,16 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
         makeArp(tmp, key, sc, seed, temperature, colour, src);
         makeCounter(tmp, key, sc, seed);
         for (int c = 0; c < 4; ++c)
-            tmp.padVoicing[c] = voiceChord(sc, tmp.chordDegree[c], key, c > 0 ? &tmp.padVoicing[c - 1] : nullptr);
+            tmp.padVoicing[c] = voiceChord(sc, key, tmp.chordDegree[c], tmp.chordType[c], c > 0 ? &tmp.padVoicing[c - 1] : nullptr);
+        for (int c = 0; c < 4; ++c)
+            tmp.breakVoicing[c] = voiceChord(sc, key, tmp.breakDegree[c], tmp.breakType[c], c > 0 ? &tmp.breakVoicing[c - 1] : nullptr);
         ModeMaterial& mm = m.mode[sc];
         for (int i = 0; i < kAcidCells; ++i) mm.acid[i] = tmp.acid[i];
         for (int i = 0; i < 2; ++i) mm.lead[i] = tmp.lead[i];
         for (int i = 0; i < 2; ++i) mm.counter[i] = tmp.counter[i];
         for (int i = 0; i < kArpCells; ++i) mm.arp[i] = tmp.arp[i];
         for (int c = 0; c < 4; ++c) mm.padVoicing[c] = tmp.padVoicing[c];
+        for (int c = 0; c < 4; ++c) mm.breakVoicing[c] = tmp.breakVoicing[c];
         mm.built = true;
     }
     makeRangesAndPad(m, seed);
@@ -2086,6 +2238,7 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
     const std::vector<MelodyNote>* counter = mat != nullptr ? mat->counter : m.counter;
     const std::vector<MelodyNote>* arp = mat != nullptr ? mat->arp : m.arp;
     const std::vector<int>* voicing = mat != nullptr ? mat->padVoicing : m.padVoicing;
+    const std::vector<int>* breakVoicing = mat != nullptr ? mat->breakVoicing : m.breakVoicing;
     const int set = std::clamp(ctx.material, 0, kMaterialSets - 1);
     const int cb = p.base(Module::Compose);
     const float swing = p.get(cb + compose::Swing);
@@ -2290,36 +2443,31 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         }
     }
     if (has(MelodyPart::Pad)) {
-        // 22.09.2026, round "Figuren". Until now this ran only on the first bar of a chord block and
-        // emitted one held chord for the whole of it. A figure has onsets in the block's later bars
-        // too, and those cannot be written here: the conductor composes one bar at a time and pushes
-        // what it gets into the engine's ring, so a note whose onset lies in a later bar would arrive
-        // before that bar's own notes and the ring would no longer be in beat order. So the block's
-        // onsets are worked out every bar and only the ones belonging to *this* bar are written.
-        const int barInBlock = barInTrack % m.chordBars;
+        // The block's onsets are worked out every bar and only this bar's are written: the conductor
+        // composes one bar at a time into the engine's ring, in beat order (22.09.2026, round "Figuren").
+        //
+        // Which chord, and how long it holds, is padChordAt's (round "Harmonik", the same day): the
+        // cores on the pendulum's track-absolute blocks of 4, 8 or 16 bars, a main breakdown on its
+        // own progression from its first bar, any other breakdown on one chord for the whole of it. A
+        // chord never rings past its section either: a block that straddles a section boundary is
+        // cut there, so the breakdown's first chord is not heard under the tail of the groove's last.
+        const PadChord chord = padChordAt(m, bp, barInTrack);
+        const int barsLeft = std::max(1, std::min(chord.blockBars - chord.barInBlock, bp.sectionBars - bp.barInSection));
         MelodyNote held;
         held.velocity = 90;
         const double barBeats = static_cast<double>(kBeatsPerBar);
-        const std::vector<int>& v = voicing[chordIndexAt(m, barInTrack)];
-        // Intro, breakdown and outro hold whatever the track drew: there the pad is the music, and an
-        // articulated pad under nothing sounds like a mistake rather than a figure.
-        // A buildup holds too: its whole job is to rise without a step, and an articulated pad puts a
-        // ripple into that ramp -- with Swell and a four-bar chord block a four-bar window can land
-        // on the quiet half of a block and read as a fall (testSectionRules, "the buildup rises over
-        // every four-bar window": one of eight windows fell).
+        const std::vector<int>& v = (chord.inBreak ? breakVoicing : voicing)[chord.slot];
+        // Intro, breakdown, buildup and outro hold whatever figure the track drew (round "Figuren").
         const bool carpet = bp.type == SectionType::Intro || bp.type == SectionType::Break
                          || bp.type == SectionType::Outro || bp.type == SectionType::Build;
         std::vector<std::pair<int, double>> onsets;
         const int figure = carpet ? static_cast<int>(PadFigure::Held)
                          : bp.type == SectionType::Groove ? m.padFigureGroove : m.padFigure;
-        padOnsets(figure, m.chordBars, onsets);
-        // The onsets of this bar, in this bar's own steps, each held to the end of the block at the
-        // longest and a sixty-fourth short of it, so a repeated pitch always takes a fresh voice.
-        // A cut eats the start of the bar: an onset inside it moves to where the cut ends.
-        const double blockEnd = (m.chordBars - barInBlock) * barBeats;
+        padOnsets(figure, chord.blockBars, onsets);
+        const double blockEnd = barsLeft * barBeats;
         std::vector<std::pair<int, double>> here;
         for (const auto& on : onsets) {
-            if (on.first / kStepsPerBar != barInBlock) continue;
+            if (on.first / kStepsPerBar != chord.barInBlock) continue;
             double at = (on.first % kStepsPerBar) * 0.25;
             double len = on.second;
             if (at < cut - 1e-9) { len -= cut - at; at = cut; }
@@ -2327,34 +2475,29 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
             if (len > 1.0 / 16.0) here.emplace_back(static_cast<int>(std::lround(at * 4.0)), len);
         }
         const int step = static_cast<int>(std::lround(cut * 4.0));
-        if (barInBlock == 0 && ctx.foundationBars > 0 && v.size() == 4) {
-            // The sub foundation (rule 20): the root an octave under the voicing, only where the form
-            // silences kick and bass. It fades in with the pad's attack. Where the silence ends inside
-            // this chord it stops a bar early, so the pad's release (1.8 s to -43 dB, a bar at 145 BPM)
-            // has taken it away by the time the kick returns -- the band under 140 Hz is the kick's and
-            // the bass's again from their first beat.
-            //
-            // It keeps the held shape whatever the figure is, and it is written on the block's first
-            // bar alone: rule 20 is about *filling* that band while the two rest, and a stabbed
-            // foundation leaves it empty between its hits, which is the hole the rule exists to close.
+        const bool foundation = ctx.foundationBars > 0 && v.size() >= 2;
+        // Composer sets foundationBars on the bar a foundation starts -- a block start, or the first
+        // bar the floor falls silent inside a held chord -- and nowhere else, so this is that bar.
+        if (foundation) {
+            // The sub foundation (rule 20): the root under the voicing, only where the form silences
+            // kick and bass, fading in with the pad's attack; where the silence ends inside this chord
+            // it stops a bar early so the pad's release has taken it away by the time the kick returns.
+            // Held whatever the figure, and written on the block's first bar alone: the rule is about
+            // *filling* the band under 140 Hz, and a stabbed foundation leaves it empty between hits.
             const std::vector<int> f = foundationVoicing(v);
-            const double length = m.chordBars * barBeats - 1.0 / 16.0 - cut;
+            const double length = barsLeft * barBeats - 1.0 / 16.0 - cut;
             const double silentBeats = ctx.foundationBars * barBeats;
-            const double subLength = ctx.foundationBars > m.chordBars
+            const double subLength = ctx.foundationBars > barsLeft
                 ? length
                 : std::max(0.5 * barBeats, silentBeats - barBeats) - 1.0 / 16.0 - cut;
-            // The sub a little louder than the chord (velocity 118 against 90: +1 dB at the pad's
-            // velocity sensitivity of 0.4): it is one voice carrying the whole register under the chord.
             MelodyNote sub = held;
-            sub.velocity = 118;
+            sub.velocity = 118;   // +1 dB at the pad's velocity sensitivity: one voice carrying the register
             emit(Part::Pad, sub, step, f[0], subLength);
             for (size_t i = 1; i < f.size(); ++i)
                 for (const auto& on : here) emit(Part::Pad, held, on.first, f[i], on.second);
         } else {
-            const bool foundation = ctx.foundationBars > 0 && v.size() == 4;
-            const std::vector<int> pitches = foundation ? foundationVoicing(v) : v;
-            for (size_t i = foundation ? 1 : 0; i < pitches.size(); ++i)
-                for (const auto& on : here) emit(Part::Pad, held, on.first, pitches[i], on.second);
+            for (int pitch : v)
+                for (const auto& on : here) emit(Part::Pad, held, on.first, pitch, on.second);
         }
     }
     if (has(MelodyPart::Drone) && ctx.droneBars > 0) {
@@ -2397,43 +2540,57 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
  * Before this round the pad started at G3 and took any inversion, and the seed the user heard had
  * the root at the bottom of 24 of 96 chords in its first track.
  */
-std::vector<int> voiceChord(int scale, int degree, int key, const std::vector<int>* previous)
+std::vector<int> voiceChord(int scale, int key, int degree, int type, const std::vector<int>* previous)
 {
-    int pcs[3];
-    chordTones(scale, degree, pcs);
-    const int rootPc = ((key + pcs[0]) % 12 + 12) % 12;
+    int iv[4];
+    const int n = chordIntervals(static_cast<ChordType>(std::clamp(type, 0, kNumChordTypes - 1)), scale, degree, iv);
+    const int rootPc = ((key + scaleDegree(scale, degree)) % 12 + 12) % 12;
     const int root = kPadLowest + ((rootPc - kPadLowest) % 12 + 12) % 12;   // D3 .. C#4
-    const int fifth = root + (scaleDegree(scale, degree + 4) - scaleDegree(scale, degree));
-    const int thirdPc = ((key + pcs[1]) % 12 + 12) % 12;
-    std::vector<int> cand;
-    for (int n = fifth + 1; n <= kPadHighest; ++n) {
-        const int pc = ((n - key) % 12 + 12) % 12;
-        if (pc == pcs[0] || pc == pcs[1] || pc == pcs[2]) cand.push_back(n);
-    }
-    // Without a voicing before: the one nearest to a centred reference in the same shape.
-    const std::vector<int> reference = { root, fifth, fifth + 5, fifth + 9 };
-    std::vector<int> best;
-    int bestCost = 1 << 30;
-    const int c = static_cast<int>(cand.size());
-    for (int a = 0; a < c; ++a)
-        for (int b = a + 1; b < c; ++b) {
-            const std::vector<int> v = { root, fifth, cand[static_cast<size_t>(a)], cand[static_cast<size_t>(b)] };
-            if (v[2] % 12 != thirdPc && v[3] % 12 != thirdPc) continue;
-            if (v[2] - v[1] > 12 || v[3] - v[2] > 12) continue;   // no holes wider than an octave
-            const int cost = voicingMovement(v, previous != nullptr && previous->size() == 4 ? *previous : reference);
+    const int fifth = root + iv[0];
+    // The reference without a voicing before: every colour tone at its base position.
+    std::vector<int> reference = { root, fifth };
+    for (int i = 1; i < n; ++i) reference.push_back(root + iv[i]);
+    const std::vector<int>& target = (previous != nullptr && previous->size() >= 2) ? *previous : reference;
+    // Every upper voice at its base position or one or two octaves up; the placement that moves least
+    // from the target among those with adjacent voices a minor third to an octave apart and nothing
+    // over G5. If no placement of all the colour tones fits (a high root under a wide chord), the top
+    // one is dropped and the search runs again -- the chord keeps its character before its size.
+    for (int use = n; use >= 1; --use) {
+        std::vector<int> best;
+        int bestCost = 1 << 30;
+        const int upper = use - 1;
+        int combos = 1;
+        for (int i = 0; i < upper; ++i) combos *= 3;
+        for (int code = 0; code < combos; ++code) {
+            std::vector<int> v = { root, fifth };
+            int c = code;
+            for (int i = 1; i < use; ++i) { v.push_back(root + iv[i] + 12 * (c % 3)); c /= 3; }
+            std::sort(v.begin() + 2, v.end());
+            bool ok = v.back() <= kPadHighest;
+            for (size_t k = 1; k < v.size() && ok; ++k) { const int gap = v[k] - v[k - 1]; ok = gap >= 3 && gap <= 12; }
+            if (!ok) continue;
+            int cost = 0;
+            const size_t mn = std::min(v.size(), target.size());
+            for (size_t k = 0; k < mn; ++k) cost += std::abs(v[k] - target[k]);
             if (cost < bestCost) { bestCost = cost; best = v; }
         }
-    return best;
+        if (!best.empty()) return best;
+    }
+    return { root, fifth };
 }
 
 std::vector<int> foundationVoicing(const std::vector<int>& voicing)
 {
-    if (voicing.size() != 4) return voicing;
-    // Keep the upper voice that is the third (the pitch class that is neither root nor fifth); the
-    // other upper voice makes room for the sub, so a chord is never more than four voices.
-    const int r = voicing[0] % 12, f = voicing[1] % 12;
-    const int keep = (voicing[2] % 12 != r && voicing[2] % 12 != f) ? voicing[2] : voicing[3];
-    return { voicing[0] - 12, voicing[0], voicing[1], keep };
+    if (voicing.size() < 2) return voicing;
+    // The sub two octaves under the chord root where that stays at F#1 (46 Hz) or above, else one
+    // (22.09.2026, the brief: "immer eine Bassnote in Oktave 1 oder 2 mitfuehren ... bis 50 Hz hinab").
+    // Until then it was one octave down from a D3 .. C#4 root, i.e. D2 .. C#3, 73 .. 139 Hz -- an
+    // octave short of what the brief calls the fundament. The pad's high pass opens to 40 Hz for it.
+    const int sub = voicing[0] - 24 >= kPadFoundationLowest ? voicing[0] - 24 : voicing[0] - 12;
+    // Root, fifth and the first colour tone over the sub: at most four voices, as before.
+    std::vector<int> out = { sub, voicing[0], voicing[1] };
+    if (voicing.size() > 2) out.push_back(voicing[2]);
+    return out;
 }
 
 std::vector<int> arpHighTones(int scale, int degree, int key, int tones, int& anchor)

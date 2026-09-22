@@ -39,6 +39,7 @@ constexpr uint64_t kSaltArc    = 0x4152430000000005ull;
 constexpr uint64_t kSaltPerc   = 0x5045524300000006ull;
 constexpr uint64_t kSaltMelody = 0x4D454C4F44590007ull;
 constexpr uint64_t kSaltWalk   = 0x57414C4B00000008ull;
+constexpr uint64_t kSaltStyle  = 0x5354594C45000016ull;   ///< the style journey (22.09.2026): its own stream, so no older draw of the walk moves
 constexpr uint64_t kSaltFormU  = 0x464F524D55000009ull;
 constexpr uint64_t kSaltSectU  = 0x5345435455000010ull;
 constexpr uint64_t kSaltLaneU  = 0x4C414E4555000011ull;
@@ -570,7 +571,7 @@ void Composer::makeBassRhythm(const ParamStore& p, TrackPlan& t) const
     t.bassShortestSlot = 0.25f;
     const int cb = p.base(Module::Compose);
     if (p.getInt(cb + compose::BassRhythm) != 1) return;
-    const StyleProfile& style = styleProfile(styleOf(p));
+    const StyleProfile& style = styleProfile(static_cast<StyleId>(t.style));
     const float amount = std::clamp(p.get(cb + compose::BassVariation) * style.hatDensity, 0.0f, 1.0f);
     const double stray = amount;
     const double depart = (1.0 - BassRhythm::homeShare()) * amount;
@@ -678,7 +679,14 @@ static MelodyContext melodyContext(const TrackPlan& plan, const BarPlan& bp, int
     DroneBar here;
     if (droneHere) here = droneBarAt(plan, a, inTrack);
     if ((bp.parts & partBit(MelodyPart::Pad)) != 0 && plan.melody.present[mpIndex(MelodyPart::Pad)] && foundationBar(bp)
-        && inTrack % plan.melody.chordBars == 0 && !(droneHere && here.low)) {
+        // A foundation starts where a chord block starts -- or where the floor falls silent inside one
+        // (22.09.2026). Until this round a block was two or four bars, so a breakdown's second block
+        // always began on silent ground; a breakdown holds one chord for the whole of it now, its block
+        // starts on the breakdown's first bar with the kick still on the downbeat, and without this
+        // clause the sub never arrived at all (testFoundation.score: "0 of 0 chords in silent bars").
+        && (padChordAt(plan.melody, bp, inTrack).barInBlock == 0 || inTrack == 0
+            || !foundationBar(planBar(plan.form, a, plan.sectionSeed, inTrack - 1)))
+        && !(droneHere && here.low)) {
         int k = 1;
         while (inTrack + k < plan.bars && k < 64 && foundationBar(planBar(plan.form, a, plan.sectionSeed, inTrack + k))) ++k;
         c.foundationBars = k;
@@ -998,6 +1006,7 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
             w.key = p.getInt(cb + compose::Key);
             w.scale = p.getInt(cb + compose::Scale);
             w.bpm = styleTempo ? std::round(style.bpmCentre * 2.0) * 0.5 : baseBpm;
+            w.style = static_cast<int>(styleOf(p));
             // 21.09.2026, at the user's decision: the knobs still decide the first track's key,
             // mode, tempo and length -- those are musical settings somebody typed in -- but its
             // *sound* is now drawn like every other track's. Until today the branch ended in a
@@ -1011,24 +1020,66 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
             Rng r;
             r.seed(mixSeed(setSeed() ^ kSaltWalk, static_cast<uint64_t>(i)));
 
+            // The style journey (22.09.2026). The user: "es ist langweilig, wenn immer alles im selben
+            // Stil ist in einem Set". One style for the night was the knob; with compose.style_mix on
+            // the style walks -- but as a journey, not a lottery: the five profiles stand in tempo order
+            // (Progressive 136.5, Full-On 144, Goa 145, Dark Forest 151.5, Hi-Tech 158) and a step goes
+            // to a *neighbour*, upward while the set's energy arc rises and downward while it falls,
+            // now and then against it; so a DJ's tempo never jumps more than one profile at a time and
+            // the night has a shape. A style holds for one to three tracks. Its own generator, so
+            // nothing the older draws below decide moves because of it.
+            w.style = prev.style;
+            // Track Variation at 0 means every track plays the knobs, the style among them (testVariety.plans).
+            if (p.getBool(cb + compose::StyleMix) && tv > 0.0f) {
+                static const StyleId kByTempo[kNumStyles] = { StyleId::Progressive, StyleId::FullOn, StyleId::Goa, StyleId::DarkForest, StyleId::HiTech };
+                Rng rs;
+                rs.seed(mixSeed(setSeed() ^ kSaltStyle, static_cast<uint64_t>(i)));
+                int pos = 1;
+                for (int k = 0; k < kNumStyles; ++k) if (static_cast<int>(kByTempo[k]) == prev.style) pos = k;
+                int run = 1;
+                for (int k = i - 2; k >= 0 && walk_[static_cast<size_t>(k)].style == prev.style; --k) ++run;
+                double startBar = 0.0, prevStart = 0.0;
+                for (int k = 0; k < i; ++k) { if (k == i - 1) prevStart = startBar; startBar += walk_[static_cast<size_t>(k)].bars; }
+                const double setBars = setLengthBars(p);
+                const bool rising = arcEnergy(arcOf(p), startBar / setBars) >= arcEnergy(arcOf(p), prevStart / setBars);
+                const bool move = rs.uniform() < 0.4f || run >= 3;
+                const bool against = rs.uniform() < 0.25f;
+                if (move) {
+                    int dir = (rising != against) ? 1 : -1;
+                    if (pos + dir < 0 || pos + dir >= kNumStyles) dir = -dir;
+                    pos = std::clamp(pos + dir, 0, kNumStyles - 1);
+                    w.style = static_cast<int>(kByTempo[pos]);
+                }
+            }
+            // From here on the track's own profile: its modes, and its tempo centre when Style Tempo is on.
+            const StyleProfile& ts = styleProfile(static_cast<StyleId>(w.style));
+            const double trackBpm = styleTempo ? ts.bpmCentre : baseBpm;
+            const double trackRange = styleTempo ? ts.bpmRange : range;
+
             // Length: the knob, give or take one 16-bar block -- at the default 256 bars that is 240 .. 272, inside
             // the user's 220 .. 280 (19.09.2026; until then two 32-bar blocks either way).
             w.bars = baseBars;
             if (r.uniform() < tv) w.bars = std::clamp(baseBars + kTrackBarStep * (r.below(3) - 1), kMinTrackBars, kMaxTrackBars);
 
-            // Key: by fifths and whole tones, now and then a semitone.
+            // Key: by fifths and whole tones, a minor third now and then, rarely a semitone. 22.09.2026,
+            // the user ("auch immer dieselbe Tonart"): the knob's chance is raised by a quarter, and after
+            // two tracks in one key the third *must* move -- a key held for three tracks is over twenty
+            // minutes of one tonic. The coin is still tossed once, so the draws after it keep their place.
             w.key = prev.key;
-            if (r.uniform() < tv) {
-                static const int kMoves[6] = { 7, 5, 2, -2, 1, -1 };
-                static const double kWeights[6] = { 0.3, 0.3, 0.15, 0.15, 0.05, 0.05 };
-                w.key = ((prev.key + kMoves[pick(r, kWeights, 6)]) % 12 + 12) % 12;
+            const bool heldTwice = tv > 0.0f && i >= 2 && walk_[static_cast<size_t>(i - 2)].key == prev.key;
+            const float keyCoin = r.uniform();   // drawn whatever tv is, so the draws after it keep their place
+            const bool moveKey = tv > 0.0f && keyCoin < std::min(1.0f, tv + 0.25f);
+            if (moveKey || heldTwice) {
+                static const int kMoves[8] = { 7, 5, 2, -2, 3, -3, 1, -1 };
+                static const double kWeights[8] = { 0.28, 0.28, 0.12, 0.12, 0.06, 0.06, 0.04, 0.04 };
+                w.key = ((prev.key + kMoves[pick(r, kWeights, 8)]) % 12 + 12) % 12;
             }
-            // Mode: mostly kept; when it changes, the style profile's weights decide.
+            // Mode: mostly kept; when it changes, the track's style profile's weights decide.
             w.scale = prev.scale;
-            if (r.uniform() < 0.25f * tv) w.scale = pick(r, style.scaleWeight, kNumScales);
-            // Tempo: mean-reverting walk around the centre, inside the range, on half-BPM steps.
-            const double walk = baseBpm + 0.6 * (prev.bpm - baseBpm) + (2.0 * r.uniform() - 1.0) * range * tv;
-            w.bpm = std::round(std::clamp(walk, baseBpm - range, baseBpm + range) * 2.0) * 0.5;
+            if (r.uniform() < 0.25f * tv) w.scale = pick(r, ts.scaleWeight, kNumScales);
+            // Tempo: mean-reverting walk around the track's centre, inside its range, on half-BPM steps.
+            const double walk = trackBpm + 0.6 * (prev.bpm - trackBpm) + (2.0 * r.uniform() - 1.0) * trackRange * tv;
+            w.bpm = std::round(std::clamp(walk, trackBpm - trackRange, trackBpm + trackRange) * 2.0) * 0.5;
 
         }
 
@@ -1225,10 +1276,11 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     const float sv = p.get(cb + compose::SoundVariation);
     const int reg = p.getInt(cb + compose::BassRegister);
     const float releaseKnob = p.get(p.base(Module::Bass) + bass::AmpRelease);
-    const StyleProfile& style = styleProfile(styleOf(p));
     const TrackWalk& w = walkAt(p, index);
+    const StyleProfile& style = styleProfile(static_cast<StyleId>(w.style));   // the track's own (22.09.2026)
 
     TrackPlan t;
+    t.style = w.style;
     t.index = index;
     // The DJ overlap (Form.h, kDjOverlap): every track after the first starts kDjOverlap bars before the one
     // before it ends, its kick-free intro over the other's bare outro.
@@ -2365,7 +2417,7 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         // knob cannot move a single note the pattern generator places.
         const int barInBassPhrase = inTrack % kBassPhraseBars;
 
-        const StyleProfile& style = styleProfile(styleOf(p));
+        const StyleProfile& style = styleProfile(static_cast<StyleId>(plan.style));
         for (int beat = 0; beat < kBeatsPerBar; ++beat) {
             const double b = barBeat + beat;
             const bool fillGap = kickPattern == 1 && inTrack % 8 == 7 && beat == 3;

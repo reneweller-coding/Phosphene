@@ -197,6 +197,7 @@ struct StyleProfile {
     double interchangeWeight[kNumScales] = {};   ///< weight of each mode as a section's borrowed mode
     float  interchangeChance = 0.0f;             ///< 0..1: how often a section borrows a mode at all
     /** @} */
+    StyleId id = StyleId::FullOn;                ///< which style this is (22.09.2026: the harmony tables are indexed by it)
 };
 
 /** @brief How much a section's energy lifts the colourful modes when a mode is borrowed. */
@@ -364,6 +365,7 @@ struct BarPlan {
     int         index = 0;              ///< index of the section in the form
     SectionType type = SectionType::Groove;   ///< its type
     int         barInSection = 0;       ///< bar within the section
+    int         sectionBars = 16;       ///< length of the section (22.09.2026: a pad chord never rings past its section)
     float       energy = 0.5f;          ///< the section's energy at this bar (buildups rise)
     uint8_t     kickBeats = 0xF;        ///< bit per beat: does the kick play
     uint8_t     bassBeats = 0xF;        ///< bit per beat: does the bass play
@@ -388,6 +390,7 @@ struct BarPlan {
     /** @name The two-drop form's percussion and markers (19.09.2026, round "arrangement")
      *  @{ */
     bool        climax = false;         ///< drop 2
+    bool        mainBreak = false;      ///< the breakdown before drop 2: the pad's own harmony (22.09.2026, Melody.h)
     int         rollBars = 4;           ///< length of the snare roll rollBar counts in
     bool        quietHats = false;      ///< the intro's first half: a quiet closed hat on every sixteenth but the downbeat
     bool        shaker = false;         ///< the shaker plays whether or not it is one of the layers
