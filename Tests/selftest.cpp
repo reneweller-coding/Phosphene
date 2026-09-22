@@ -212,6 +212,7 @@ void testParams()
             { compose::Bpm, "bpm" }, { compose::Style, "style" }, { compose::MelodyModel, "melody_model" },
             { compose::BassRhythm, "bass_rhythm" }, { compose::BedDensity, "bed_density" }, { compose::StyleMix, "style_mix" },
             { compose::PresenceMatch, "presence_match" }, { compose::LeadDensity, "lead_density" }, { compose::PitchEntropy, "pitch_entropy" },
+            { compose::CounterMode, "counter_mode" },
         };
         std::string off;
         for (const KeyOf& k : kKeys)
@@ -6986,6 +6987,53 @@ void testSfx()
         check(impacts > 0 && shots > 0 && risers > 0 && sweeps > 0 && misplaced == 0,
               "effects on the boundaries of the form: riser into the drop (or onto beat 4 of the pre-drop break), a vocal or a zap on that beat 4, impact on the drop, nothing in the outro's bare bars",
               fmt("%d impacts, %d vocals or zaps on beat 4, %d risers, %d sweeps, %d misplaced", impacts, shots, risers, sweeps, misplaced));
+
+        // The preset bank (23.09.2026, round "SFX"; Sfx.h, SfxPreset; Tools/sfx_bank.py): 2048 presets in the
+        // families of the effects strip, every field finite and inside its family's range; and in the score of
+        // eight tracks no preset plays twice in one track, every effects-strip event carries one, atmospheres
+        // exist, and the events two bars or longer carry most of the effects' duration -- the user's
+        // "flaechigere und laengere Effekte".
+        {
+            int families = 0, total = 0, badField = 0;
+            for (int t = 0; t < kNumSfxTypes; ++t) {
+                if (kSfxBankCount[t] <= 0) continue;
+                ++families;
+                total += kSfxBankCount[t];
+                for (int k = 1; k <= kSfxBankCount[t]; ++k) {
+                    const SfxPreset* pr = sfxPreset(static_cast<SfxType>(t), k);
+                    if (pr == nullptr) { ++badField; continue; }
+                    const float* f = &pr->lengthScale;
+                    for (int x = 0; x < 12; ++x) if (!std::isfinite(f[x]) || f[x] < -12.0f || f[x] > 24.0f) ++badField;
+                }
+            }
+            int events = 0, withPreset = 0, repeats = 0, atmospheres = 0;
+            double longBeats = 0.0, allBeats = 0.0;
+            std::string repeatDetail;
+            for (int ti = 0; ti < 8; ++ti) {
+                const TrackPlan t = c.track(q, ti);
+                std::set<std::pair<int, int>> seen;
+                std::vector<int> perType(static_cast<size_t>(kNumSfxTypes), 0);
+                for (const SfxEvent& e : t.form.sfx) {
+                    if (sfxTypePart(static_cast<SfxType>(e.type)) != Part::Sfx || e.type == static_cast<int>(SfxType::Stutter)
+                        || e.type == static_cast<int>(SfxType::SubDrop)) continue;
+                    ++events;
+                    if (e.variant > 0) ++withPreset;
+                    if (!seen.insert({ e.type, static_cast<int>(e.variant) }).second) { ++repeats; repeatDetail += fmt(" track %d %s #%d;", ti + 1, kSfxTypeNames[e.type], static_cast<int>(e.variant)); }
+                    ++perType[static_cast<size_t>(e.type)];
+                    if (e.type == static_cast<int>(SfxType::Atmosphere)) ++atmospheres;
+                    allBeats += e.length;
+                    if (e.length >= 2.0 * kBeatsPerBar) longBeats += e.length;
+                }
+            }
+            check(kSfxBankSize == total && total == 2048 && families == 11 && badField == 0 && sfxPreset(SfxType::Riser, 0) == nullptr
+                      && sfxPreset(SfxType::Stutter, 1) == nullptr,
+                  "the effect bank: 2048 presets in eleven families, every field a finite number, lane 0 and a family-less type give no preset",
+                  fmt("%d presets in %d families, %d bad fields", total, families, badField));
+            check(events > 100 && withPreset == events && repeats == 0 && atmospheres > 8 && longBeats >= 0.6 * allBeats,
+                  "every effect event carries a preset, none twice in a track; atmospheres are placed, and events of two bars or more carry at least 60 % of the effects' duration",
+                  fmt("%d events, %d with a preset, %d repeats%s; %d atmospheres; %.0f %% of %.0f beats in events of two bars or more",
+                      events, withPreset, repeats, repeatDetail.c_str(), atmospheres, 100.0 * longBeats / std::max(1.0, allBeats), allBeats));
+        }
     }
     // 18.09.2026 (round "mix-foundation"): a marker at *every* transition, ear candy inside the long
     // sections, and nothing inside a buildup but its own markers -- the pre-drop vacuum stays empty.
@@ -9860,12 +9908,13 @@ void testForm()
                 if (s.type == SectionType::Break && s.cutBeats > 0.0f) ++cuts;
             }
             if (cores >= 2) ++twoDrops;
-            if (f.section[0].bars == 32) ++introOk;
-            if (f.section[f.count - 1].bars == 32) ++outroOk;
+            // 23.09.2026, round "Form": the fuzziness moves eight bars between neighbours, so 16 .. 48 (Form.cpp, jitterForm).
+            if (f.section[0].bars >= 16 && f.section[0].bars <= 48 && f.section[0].bars % 8 == 0) ++introOk;
+            if (f.section[f.count - 1].bars >= 16 && f.section[f.count - 1].bars <= 48 && f.section[f.count - 1].bars % 8 == 0) ++outroOk;
         }
         const int variantsSeen = (pdbVariants[0] > 0) + (pdbVariants[1] > 0) + (pdbVariants[2] > 0);
         check(twoDrops == tracks && introOk == tracks && outroOk == tracks && variantsSeen == 3 && pdbVariants[3] == 0 && cuts > 0,
-              "two-peak form, intro and outro of 32 bars, three pre-drop-break variants and never the kick on beat 4, cuts before the breakdowns",
+              "two-peak form, intro and outro of 16 to 48 bars (32 the rule, the fuzziness around it), three pre-drop-break variants and never the kick on beat 4, cuts before the breakdowns",
               fmt("%d tracks, %d with two or more cores, PDB variants %d/%d/%d/%d of %d buildups, %d cuts",
                   tracks, twoDrops, pdbVariants[0], pdbVariants[1], pdbVariants[2], pdbVariants[3], builds, cuts));
     }
@@ -10733,16 +10782,18 @@ void testSectionRules()
         // design and would read as a fall.
         int windows = 0, falls = 0;
         double prev = -1e9, first = 0.0, last = 0.0;
+        std::string detail;
         for (int b = 0; b + 4 <= sBuild.bars; b += 4) {
             const double v = barsRms(sBuild.startBar + b, b + 4 >= sBuild.bars ? 3 : 4);
             if (windows == 0) first = v;
             last = v;
             if (windows > 0 && v < prev - 0.2) ++falls;
+            detail += fmt(" %.1f", v);
             prev = v;
             ++windows;
         }
         check(windows >= 2 && falls == 0 && last > first,
-              "the buildup rises over every four-bar window", fmt("%d windows, %d falling, %.1f -> %.1f dB", windows, falls, first, last));
+              "the buildup rises over every four-bar window", fmt("%d windows, %d falling, %.1f -> %.1f dB (build of %d bars from bar %d, windows:%s)", windows, falls, first, last, sBuild.bars, sBuild.startBar, detail.c_str()));
     }
 
     // (b) The bass band, the "sudden removal of bass and bass drum".
@@ -11262,17 +11313,26 @@ void testArrangement()
         const int darkStart[8] = { 0, 32, 64, 80, 128, 144, 176, 224 }, darkBars[8] = { 32, 32, 16, 48, 16, 32, 48, 32 };
         const int* wantStart[kNumStyles] = { fullOnStart, fullOnStart, progStart, darkStart, fullOnStart };
         const int* wantBars[kNumStyles] = { fullOnBars, fullOnBars, progBars, darkBars, fullOnBars };
-        int forms = 0, misplaced = 0;
+        // 23.09.2026, round "Form": the template is the rule and the total is exact, but a track moves eight
+        // bars between neighbouring sections once or twice (Form.cpp, jitterForm) -- so every section stands
+        // within sixteen bars of the rule's, the order and the climax hold, and over twenty seeds not every
+        // form is the template.
+        int forms = 0, misplaced = 0, exact = 0;
         for (int st = 0; st < kNumStyles; ++st)
             for (uint64_t seed = 1; seed <= 20; ++seed) {
                 const FormPlan f = makeFormPlan(styleProfile(static_cast<StyleId>(st)), seed, 256, 0.4, 0.9);
                 ++forms;
-                bool ok = f.count == 8 && f.bars == 256;
-                for (int i = 0; ok && i < 8; ++i)
-                    ok = f.section[i].startBar == wantStart[st][i] && f.section[i].bars == wantBars[st][i] && f.section[i].type == kTypes[i];
-                ok = ok && f.section[6].climax;
+                bool ok = f.count == 8 && f.bars == 256, same = true;
+                for (int i = 0; ok && i < 8; ++i) {
+                    ok = std::abs(f.section[i].startBar - wantStart[st][i]) <= 16 && std::abs(f.section[i].bars - wantBars[st][i]) <= 16
+                      && f.section[i].bars % 8 == 0 && f.section[i].type == kTypes[i];
+                    same = same && f.section[i].bars == wantBars[st][i];
+                }
+                ok = ok && f.section[6].climax && f.section[3].bars >= 24 && f.section[6].bars >= 24;
                 if (!ok) ++misplaced;
+                if (same) ++exact;
             }
+        (void)wantStart;
         int lengths = 0, broken = 0, offLength = 0;
         for (int st = 0; st < kNumStyles; ++st)
             for (int target = kMinTrackBars; target <= kMaxTrackBars; target += 16)
@@ -11282,9 +11342,9 @@ void testArrangement()
                     if (!formConstraintsHold(f)) ++broken;
                     if (f.bars != target) ++offLength;
                 }
-        check(misplaced == 0 && broken == 0 && offLength == 0,
-              "every section where the rule puts it (per style at 256 bars), every length 128..320 exact and inside the constraints",
-              fmt("%d forms at 256 bars, %d misplaced; %d forms over all lengths, %d broken, %d off length", forms, misplaced, lengths, broken, offLength));
+        check(misplaced == 0 && exact < forms && broken == 0 && offLength == 0,
+              "every section within sixteen bars of the rule's place (per style at 256 bars), not every form the template, every length 128..320 exact and inside the constraints",
+              fmt("%d forms at 256 bars, %d misplaced, %d exactly the template; %d forms over all lengths, %d broken, %d off length", forms, misplaced, exact, lengths, broken, offLength));
     }
 
     // (b) Drop 2's energy stands at least kClimaxMargin above every other section's, under every arc and
@@ -11336,7 +11396,11 @@ void testArrangement()
             // Every track starts its blend's length before the one before it ends: the incoming style's
             // (djOverlapBars), 32 bars, Hi-Tech 16 (23.09.2026, round "DJ").
             const int blend = plan[static_cast<size_t>(t)].form.handover;
-            if (t > 0 && (blend != djOverlapBars(static_cast<StyleId>(plan[static_cast<size_t>(t)].style))
+            // ... capped by this intro and the previous outro (the form's fuzziness may shorten either to 24).
+            const int want = t > 0 ? std::max(kDjOverlap, std::min({ djOverlapBars(static_cast<StyleId>(plan[static_cast<size_t>(t)].style)),
+                                                                     plan[static_cast<size_t>(t)].form.section[0].bars,
+                                                                     plan[static_cast<size_t>(t - 1)].form.section[plan[static_cast<size_t>(t - 1)].form.count - 1].bars })) : 0;
+            if (t > 0 && (blend != want
                           || plan[static_cast<size_t>(t)].firstBar != plan[static_cast<size_t>(t - 1)].firstBar + plan[static_cast<size_t>(t - 1)].bars - blend
                           || plan[static_cast<size_t>(t - 1)].form.overlapTail != blend)) ++startsBad;
         }
@@ -11595,7 +11659,7 @@ void testArrangement()
     check(pdbs > 0 && pdbBad == 0 && pdbHeld == 0 && pdbKick == 0,
           "pre-drop break: no kick or bass in it, beat 4 of its last bar holds exactly one vocal or zap and nothing sounds into it",
           fmt("%d pre-drop breaks, %d with anything else on beat 4, %d notes held into it, %d kick or bass notes in them", pdbs, pdbBad, pdbHeld, pdbKick));
-    check(climaxBars > 0 && climaxOpen == climaxBars && climaxRide == climaxBars && squelches >= climaxBars / 2
+    check(climaxBars > 0 && climaxOpen == climaxBars && climaxRide == climaxBars && squelches >= climaxBars / 3   // 23.09.2026: 0.6 a bar, from a half
               // The arp: an octave up in drop 2 always (Melody.cpp); where the register guard had already lifted
               // drop 1's arp over the lead, the two stand level -- never lower (measured once in 16, 19.09.2026).
               // 20.09.2026, round "dialogue": the user's register rule put the lead in C4..B4, so in drop 1
@@ -12189,7 +12253,7 @@ void testGenreRulesRules()
                 const int pitch = m.root[1] + n.rel;
                 pitches.push_back(pitch);
                 leadPitches.push_back(pitch);
-                if (pitch < kLeadLowest || pitch > kLeadHighest) ++leadReg;
+                if (pitch < m.leadWindowLo || pitch > leadWindowHi(m)) ++leadReg;
                 if (((pitch - key) % 12 + 12) % 12 == 7 && n.len >= 2) fifthRests = true;
                 ++colourN[1][scale];
                 colourC[1][scale] += RuleRef::colour(scale, pitch - key) ? 1 : 0;
@@ -12251,8 +12315,11 @@ void testGenreRulesRules()
     // above A5" with the window C4..B4 (Melody.h). The median has to sit in the window's lower half --
     // where kLeadCentre puts the mass, and where the rule's "about 260..400 Hz" is -- and nothing may
     // stand above B4.
-    check(leadReg == 0 && leadMedian >= kLeadLowest && leadMedian <= kLeadLowest + 6 && leadTop <= kLeadHighest,
-          "lead: median in the lower half of C4..B4, never above B4 (the user's register rule)",
+    // 23.09.2026: the window stands the style's registerShift above C4 (Form.h, LeadStyle), so the median is
+    // read against the lowest and the highest window the styles set (E4 .. G4 bottoms), the top against the
+    // highest window's top.
+    check(leadReg == 0 && leadMedian >= kLeadLowest + 3 && leadMedian <= kLeadLowest + 8 + 6 && leadTop <= kLeadLowest + 8 + kLeadWindow - 1,
+          "lead: median in the lower half of its one-octave window (E4..G4 up), never above the window (the user's register rule, moved up 23.09.2026)",
           fmt("median MIDI %d, top %d, %d notes outside C4..B4", leadMedian, leadTop, leadReg));
     check(leadNoFifth == 0 && leadRuns == 0, "lead: the fifth appears as a resting tone in every phrase, no pitch three times in a row (rules 1, 18)",
           fmt("%d of %d phrases without a held fifth, %d with a run of three", leadNoFifth, leadPhrases, leadRuns));
@@ -12358,8 +12425,8 @@ void testGenreRulesListeningSeed()
                 if (k == 2 && (ratio < 0.8 || ratio > 1.25)) ++arpRatioBad;
                 if (k == 0) { acidRun3 += s.runs3; if (ps.back() > kAcidJumpHighest) ++acidTopBad; }
                 // 20.09.2026: the window is C4..B4 and the median belongs in its lower half.
-                if (k == 1 && (ps[ps.size() / 2] < kLeadLowest || ps[ps.size() / 2] > kLeadLowest + 6)) ++leadMedianBad;
-                if (k == 1 && ps.back() > kLeadHighest) ++leadTopBad;
+                if (k == 1 && (ps[ps.size() / 2] < t.melody.leadWindowLo || ps[ps.size() / 2] > t.melody.leadWindowLo + 6)) ++leadMedianBad;
+                if (k == 1 && ps.back() > leadWindowHi(t.melody)) ++leadTopBad;
                 // G5 is the arp's own ceiling (rule 14); since 19.09.2026 it may go to G6 to clear a lead it shares a bar with.
                 if (k == 2 && (ps.front() < kArpLowest || ps.back() > kArpOverHighest)) ++arpRegBad;
             }
@@ -12735,12 +12802,18 @@ void testVoicesScore()
             if (e.part == Part::Lead) leadOnsets.insert(std::llround(e.beat * 4.0));
             if (e.part == Part::Counter) counter.push_back(&e);
         }
+        // 23.09.2026, round "Counter": the answer rules -- held notes, the tonic as centre, the resting tones
+        // -- are the Answer mode's (Form.h, CounterMode); every mode keeps "no colour tone" and "beside the
+        // lead", and every mode but the timbral texture stays off the lead's attacks.
+        int answerModeNotes = 0;
         for (size_t i = 0; i < counter.size(); ++i) {
             const NoteEvent& e = *counter[i];
             const int bar = static_cast<int>(std::floor(e.beat / kBeatsPerBar));
             const TrackPlan& t = c.track(q, c.trackOfBar(q, bar));
             const int sc = t.form.section[sectionOfBar(t.form, bar - t.firstBar)].scale;
             const int pc = ((e.pitch - t.key) % 12 + 12) % 12;
+            const int mode = std::clamp(t.melody.counterMode, 0, kNumCounterModes - 1);
+            const bool answerMode = mode == static_cast<int>(CounterMode::Answer);
             ++notes;
             if (!barHas(bar, Part::Lead)) {
                 ++alone;
@@ -12749,11 +12822,16 @@ void testVoicesScore()
             // The answers (outside the lead's B phrase, bars 4 and 5 of its eight) sit on the lead's held notes;
             // over B the counter plays a line of its own and may meet the lead's attacks an octave above.
             const int inPhrase = (bar - t.firstBar) % 8;
-            if (inPhrase != 4 && inPhrase != 5) {
+            // Off the lead's attacks: the answer and the hocket. The echo may double them where a dense lead
+            // leaves it no other step (Melody.cpp, makeCounter), the timbral texture holds through them.
+            const bool offAttacks = answerMode ? (inPhrase != 4 && inPhrase != 5) : mode == static_cast<int>(CounterMode::Hocket);
+            if (offAttacks) {
                 ++answerNotes;
                 if (leadOnsets.count(std::llround(e.beat * 4.0)) != 0) ++onAttack;
             }
             if (RuleRef::colour(sc, pc)) ++colour;
+            if (!answerMode) continue;
+            ++answerModeNotes;
             if (pc == 0) ++tonic;
             ++pcCount[pc];
             // An answer ends where the next counter note is more than a beat away.
@@ -12770,7 +12848,7 @@ void testVoicesScore()
         // it. A counter note outside a breakdown must still have the lead beside it; testDialogue.score
         // checks the dramaturgy itself, this one checks that nothing else moved.
         check(notes > 100 && aloneOutsideBreak == 0 && alone > 0 && attackShare < 0.25,
-              "counter-lead: beside the lead everywhere but the main breakdown, its answers on the lead's held notes rather than its attacks",
+              "counter-lead: beside the lead everywhere but the main breakdown; answers and hockets on the lead's held notes rather than its attacks",
               fmt("%d notes, %d in bars without the lead (%d of them outside a breakdown), %.0f %% of %d answer notes on a lead attack (the lead strikes about 13 of 16 sixteenths)",
                   notes, alone, aloneOutsideBreak, 100.0 * attackShare, answerNotes));
         // Every answer is written to end on the tonic or the fifth (makeCounter); the register guard may
@@ -12780,15 +12858,16 @@ void testVoicesScore()
         // plays in drop 2 alone (round "arrangement") the set holds other phrases: 24 % tonic and 29 % fifth,
         // the two the answers are written to end on. Read now as: tonic and fifth together the centre (at
         // least 40 %), the tonic at least a fifth of the notes.
-        const bool tonicCommonest = (pcCount[0] + pcCount[7]) * 5 >= notes * 2;
+        const bool tonicCommonest = (pcCount[0] + pcCount[7]) * 5 >= answerModeNotes * 2;
         // 20.09.2026: the register rule narrowed the counter's window to one octave, so the guard can no
         // longer move a colliding note by an octave and gives it up instead; where that note was the
         // answer's last, the note before it ends the answer and need not be a resting tone. Measured on
         // this set: 101 of 113 against 44 of 46 before, so the share is read as seven in eight.
-        check(colour == 0 && tonicCommonest && tonic * 5 >= notes && answers > 10 && answersResting * 8 >= answers * 7,
-              "counter-lead: the lead's genre rules -- no colour tone, the tonic as its centre, seven in eight answers ending on the tonic or the fifth",
-              fmt("%d colour tones, tonic %.0f %% of %d notes (commonest class %d with %d), %d of %d answers end on 1 or 5%s", colour,
-                  notes > 0 ? 100.0 * tonic / notes : 0.0, notes, static_cast<int>(std::max_element(pcCount, pcCount + 12) - pcCount),
+        const bool answerRules = answerModeNotes == 0 || (tonicCommonest && tonic * 5 >= answerModeNotes && answers > 5 && answersResting * 8 >= answers * 7);
+        check(colour == 0 && answerRules,
+              "counter-lead: no colour tone in any mode; in the answer mode the tonic as its centre and seven in eight answers ending on the tonic or the fifth",
+              fmt("%d colour tones, tonic %.0f %% of %d answer-mode notes (commonest class %d with %d), %d of %d answers end on 1 or 5%s", colour,
+                  answerModeNotes > 0 ? 100.0 * tonic / answerModeNotes : 0.0, answerModeNotes, static_cast<int>(std::max_element(pcCount, pcCount + 12) - pcCount),
                   *std::max_element(pcCount, pcCount + 12), answersResting, answers, offRest.c_str()));
     }
 
@@ -13352,23 +13431,34 @@ void testDialogueScore()
     for (int t = 0; t < tracks; ++t) bars = c.track(q, t).firstBar + c.track(q, t).bars;
     c.composeBars(q, 0, bars, ev);
 
-    // (a) Register. The rule is C4..G4 for the lead and C5..G5 for the counter; the counter must also
-    //     stand entirely above the lead, which is the point of "one octave up".
+    // (a) Register. Since 23.09.2026 (round "Counter") each track's lead window is one octave standing the
+    //     style's registerShift above C4 (Form.h, LeadStyle: E4 .. G4 bottoms, the literature's 250 Hz .. 2 kHz
+    //     with the weight at 500 Hz .. 1 kHz), the counter's an octave above it -- and the counter must stand
+    //     entirely above the lead, which is the point of "one octave up". Read per track over the bars that
+    //     are its alone (from its hand-over to the start of the next track's blend).
     {
-        int leadLo = 127, leadHi = 0, cLo = 127, cHi = 0, leadN = 0, cN = 0;
-        for (const NoteEvent& e : ev) {
-            if (e.part == Part::Lead) { leadLo = std::min<int>(leadLo, e.pitch); leadHi = std::max<int>(leadHi, e.pitch); ++leadN; }
-            if (e.part == Part::Counter) { cLo = std::min<int>(cLo, e.pitch); cHi = std::max<int>(cHi, e.pitch); ++cN; }
+        int leadN = 0, cN = 0, leadOut = 0, cOut = 0, tracksSeen = 0, overlapping = 0, lowest = 127, highest = 0;
+        for (int t = 0; t < tracks; ++t) {
+            const TrackPlan plan = c.track(q, t);
+            const int from = handoverBar(plan), to = plan.firstBar + plan.bars - plan.form.overlapTail;
+            const int lo = plan.melody.leadWindowLo, hi = leadWindowHi(plan.melody);
+            int leadHi = 0, cLo = 127;
+            for (const NoteEvent& e : ev) {
+                const int b = static_cast<int>(std::floor(e.beat / kBeatsPerBar + 1e-9));
+                if (b < from || b >= to) continue;
+                if (e.part == Part::Lead) { ++leadN; if (e.pitch < lo || e.pitch > hi) ++leadOut; leadHi = std::max<int>(leadHi, e.pitch); }
+                if (e.part == Part::Counter) { ++cN; if (e.pitch < lo + 12 || e.pitch > hi + 12) ++cOut; cLo = std::min<int>(cLo, e.pitch); }
+            }
+            ++tracksSeen;
+            lowest = std::min(lowest, lo);
+            highest = std::max(highest, hi);
+            if (leadHi > 0 && cLo < 127 && cLo <= leadHi) ++overlapping;
         }
-        // Independently derived: 60 = C4 (261.63 Hz), 71 = B4 (493.88), 72 = C5, 83 = B5 (987.77) --
-        // the counter's window is the 500 .. 1000 Hz the user's rule names in so many words.
-        const bool lead = leadN > 500 && leadLo >= 60 && leadHi <= 71;
-        const bool counter = cN > 100 && cLo >= 72 && cHi <= 83;
-        check(lead && counter && cLo > leadHi,
-              "the two leads speak in the rule's windows: the lead from C4, the counter an octave above it from C5, neither reaching into the other",
-              fmt("lead %d notes %d..%d (%.0f..%.0f Hz), counter %d notes %d..%d (%.0f..%.0f Hz)",
-                  leadN, leadLo, leadHi, 440.0 * std::pow(2.0, (leadLo - 69) / 12.0), 440.0 * std::pow(2.0, (leadHi - 69) / 12.0),
-                  cN, cLo, cHi, 440.0 * std::pow(2.0, (cLo - 69) / 12.0), 440.0 * std::pow(2.0, (cHi - 69) / 12.0)));
+        // The lowest window the styles set is E4 (64), the highest G4 .. F#5 (67 .. 78), each with a semitone of jitter.
+        check(leadN > 500 && cN > 100 && leadOut == 0 && cOut == 0 && overlapping == 0 && lowest >= 63 && highest <= 79,
+              "the two leads speak in their windows: the lead an octave from E4 .. G4 (the style's register), the counter an octave above it, neither reaching into the other",
+              fmt("%d tracks; lead %d notes (%d outside), counter %d notes (%d outside), %d tracks with the counter reaching into the lead; windows %d..%d (%.0f..%.0f Hz)",
+                  tracksSeen, leadN, leadOut, cN, cOut, overlapping, lowest, highest, 440.0 * std::pow(2.0, (lowest - 69) / 12.0), 440.0 * std::pow(2.0, (highest - 69) / 12.0)));
     }
 
     // (b) The register rule still holds with the narrowed windows, and the arp still stands beside the
@@ -13397,27 +13487,54 @@ void testDialogueScore()
     //     filter decay and a 45 ms portamento between notes; the counter whips -- never longer than a
     //     sixteenth's worth (kCounterStaccato of at most two sixteenths, so half the lead's longest at
     //     the same written span), no sustain at all, a filter that shuts in 60 ms and no glide.
+    //     23.09.2026, round "Counter": the gate is the mode's (Form.h, CounterMode). A hocket whips as before,
+    //     an answer sounds an eighth at most, an echo what the lead's note was, a timbral counter holds a bar
+    //     -- and its voice gets the sustain and the portamento by offsets (Composer.cpp), so the recipe's
+    //     defaults stay the whip's. The level moved from -7 to -3 dB: "kaum hoerbar".
     {
-        double leadMax = 0.0, counterMax = 0.0;
-        int leadN = 0, counterN = 0;
-        for (const NoteEvent& e : ev) {
-            if (e.part == Part::Lead) { leadMax = std::max<double>(leadMax, e.length); ++leadN; }
-            if (e.part == Part::Counter) { counterMax = std::max<double>(counterMax, e.length); ++counterN; }
+        double leadMax = 0.0;
+        int leadN = 0, counterN = 0, modeSeen[kNumCounterModes] = {}, modeBad = 0;
+        for (const NoteEvent& e : ev) if (e.part == Part::Lead) { leadMax = std::max<double>(leadMax, e.length); ++leadN; }
+        std::string detail;
+        for (int t = 0; t < tracks; ++t) {
+            const TrackPlan plan = c.track(q, t);
+            if (!plan.melody.present[mpIndex(MelodyPart::Counter)]) continue;
+            const int from = handoverBar(plan), to = plan.firstBar + plan.bars - plan.form.overlapTail;
+            double longest = 0.0;
+            int n = 0;
+            for (const NoteEvent& e : ev) {
+                const int b = static_cast<int>(std::floor(e.beat / kBeatsPerBar + 1e-9));
+                if (e.part != Part::Counter || b < from || b >= to) continue;
+                longest = std::max<double>(longest, e.length);
+                ++n;
+            }
+            if (n == 0) continue;
+            counterN += n;
+            const int mode = std::clamp(plan.melody.counterMode, 0, kNumCounterModes - 1);
+            ++modeSeen[mode];
+            const bool ok = mode == static_cast<int>(CounterMode::Hocket) ? longest <= 0.25 + 1e-3   // the lengths are floats in the score
+                          : mode == static_cast<int>(CounterMode::Answer) ? longest <= 0.3 + 1e-3
+                          : mode == static_cast<int>(CounterMode::Echo) ? longest <= 0.8 + 1e-3
+                          : longest >= 3.0;
+            if (!ok) { ++modeBad; detail += fmt(" track %d mode %d longest %.3f;", t + 1, mode, longest); }
         }
         ParamStore fresh;
         const int lb = fresh.base(PolyInstance::Lead), nb = fresh.base(PolyInstance::Counter);
         const float leadSus = fresh.get(lb + poly::AmpSustain), counterSus = fresh.get(nb + poly::AmpSustain);
         const float leadDec = fresh.get(lb + poly::FilterDecay), counterDec = fresh.get(nb + poly::FilterDecay);
         const float leadGlide = fresh.get(lb + poly::Glide), counterGlide = fresh.get(nb + poly::Glide);
-        check(leadN > 500 && counterN > 100 && counterMax <= 0.25 + 1e-9 && leadMax >= 2.0 * counterMax
+        const float counterLevel = fresh.get(nb + poly::Level);
+        int modes = 0;
+        for (int k : modeSeen) modes += k > 0 ? 1 : 0;
+        check(leadN > 500 && counterN > 100 && modeBad == 0 && modes >= 2 && leadMax >= 0.4
                   && counterSus == 0.0f && leadSus >= 0.5f && counterDec <= 80.0f && leadDec >= 300.0f
-                  && leadGlide > 0.0f && counterGlide == 0.0f,
-              "the counter whips where the lead flows: staccato against held notes, a shut filter against an open one, no glide against a portamento",
-              fmt("longest written note lead %.3f beats against counter %.3f; sustain %.2f against %.2f; "
-                  "filter decay %.0f against %.0f ms; glide %.0f against %.0f ms",
-                  leadMax, counterMax, static_cast<double>(leadSus), static_cast<double>(counterSus),
-                  static_cast<double>(leadDec), static_cast<double>(counterDec),
-                  static_cast<double>(leadGlide), static_cast<double>(counterGlide)));
+                  && leadGlide > 0.0f && counterGlide == 0.0f && counterLevel >= -3.0f - 1e-6f,
+              "the counter's gate is its mode's -- hocket whips, answers an eighth at most, echoes the lead's length, timbral notes a bar -- on a whip recipe at -3 dB",
+              fmt("%d counter notes in modes echo/answer/timbral/hocket %d/%d/%d/%d, %d tracks off their mode's gate%s; lead longest %.3f beats; "
+                  "sustain %.2f against %.2f; filter decay %.0f against %.0f ms; glide %.0f against %.0f ms; counter level %.1f dB",
+                  counterN, modeSeen[0], modeSeen[1], modeSeen[2], modeSeen[3], modeBad, detail.c_str(), leadMax,
+                  static_cast<double>(leadSus), static_cast<double>(counterSus), static_cast<double>(leadDec), static_cast<double>(counterDec),
+                  static_cast<double>(leadGlide), static_cast<double>(counterGlide), static_cast<double>(counterLevel)));
     }
 
     // (d) The user's Model 3. Drop 1 is the lead alone, the main breakdown is the counter alone
@@ -13484,9 +13601,14 @@ void testDialogueScore()
                 // The low octave (under D3) may only start where kick and bass rest for the bar.
                 if (e.pitch < kPadLowest && kickBars.count(b) != 0) ++lowUnderKick;
             }
+            // 23.09.2026 (round "DJ"): over the last overlapTail bars the next track's intro owns the drone, and
+            // over this track's own blend (before its hand-over) its drone sounds only where the keys are close
+            // to the outgoing track's (transitionBar) -- so the carpet is read over the bars with this track's
+            // own floor, from the hand-over to the start of the next blend.
+            const int from = plan.form.handover, to = std::max(from + 1, plan.bars - plan.form.overlapTail);
             int cover = 0;
-            for (uint8_t s : sounding) cover += s;
-            const int pct = 100 * cover / std::max(1, plan.bars);
+            for (int k = from; k < to; ++k) cover += sounding[static_cast<size_t>(k)];
+            const int pct = 100 * cover / (to - from);
             worstCover = std::min(worstCover, pct);
             if (per.size() < 120) per += fmt(" t%d %d%%;", t + 1, pct);
         }
@@ -13496,7 +13618,9 @@ void testDialogueScore()
                   tracksSeen, notes, worstCover, lowUnderKick, per.c_str()));
     }
 
-    // (f) The effect floor: in a groove or a drop, never two bars in a row without an effect event.
+    // (f) The effect floor: in a groove or a drop, never four bars in a row without an effect event
+    //     (23.09.2026, round "SFX": two until then; the user asked for fewer short zips, the literature
+    //     describes the effects as a layering with rising density rather than steady fire).
     {
         int worst = 0, coreBars = 0, runsOfTwo = 0;
         for (int t = 0; t < tracks; ++t) {
@@ -13513,13 +13637,13 @@ void testDialogueScore()
                     if (carries.count(b) != 0) { run = 0; continue; }
                     ++run;
                     worst = std::max(worst, run);
-                    if (run == 2) ++runsOfTwo;
+                    if (run == 4) ++runsOfTwo;
                 }
             }
         }
-        check(coreBars > 500 && worst <= 1 && runsOfTwo == 0,
-              "in the groove no two bars in a row are without a zap, a glitch or a swell",
-              fmt("%d groove and drop bars, longest empty run %d bars, %d runs of two or more", coreBars, worst, runsOfTwo));
+        check(coreBars > 500 && worst <= 3 && runsOfTwo == 0,
+              "in the groove no four bars in a row are without an effect event (a sweep, a swell, a zap, a glitch)",
+              fmt("%d groove and drop bars, longest empty run %d bars, %d runs of four or more", coreBars, worst, runsOfTwo));
     }
 
     // (g) Pan and echo are properties of the role, not of the draw: over every track of the walk the

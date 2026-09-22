@@ -348,6 +348,12 @@ int main(int argc, char** argv)
             std::printf(" (%d bars each); acid %s (%d steps%s), lead %s, counter %s, arp %s (%s), stab %s, pad %s, drone %s\n", m.breakChordBars,
                         on(MelodyPart::Acid), m.acidSteps, m.acidSquelch == 1 ? ", squelch" : "", on(MelodyPart::Lead), on(MelodyPart::Counter),
                         on(MelodyPart::Arp), kArpStyles[m.arpStyle], on(MelodyPart::Stab), on(MelodyPart::Pad), on(MelodyPart::Drone));
+            // 23.09.2026, round "Counter": the register the lead window stands in and how the counter answers.
+            static const char* const kCounterModes[] = { "echo", "answer", "timbral", "hocket" };
+            static_assert(sizeof(kCounterModes) / sizeof(kCounterModes[0]) == kNumCounterModes, "one name per CounterMode");
+            std::printf("          register: lead %s..%s, counter %s..%s; counter mode %s\n",
+                        kKeyNames[m.leadWindowLo % 12], kKeyNames[leadWindowHi(m) % 12], kKeyNames[counterWindowLo(m) % 12], kKeyNames[counterWindowHi(m) % 12],
+                        kCounterModes[std::clamp(m.counterMode, 0, kNumCounterModes - 1)]);
             // 22.09.2026, round "Lead": the two phrases' design -- archetype, cell, operator and shift per bar.
             for (int w = 0; w < 2 && m.present[mpIndex(MelodyPart::Lead)]; ++w) {
                 std::printf("          lead %d: %s, cell ", w + 1, kLeadArchetypeNames[std::clamp(m.leadArchetype[w], 0, kNumLeadArchetypes - 1)]);

@@ -1643,6 +1643,22 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
         for (const Loading& l : kVoiceLoadings) push(vb + l.param, ControlEvent::Kind::Offset, off[l.param]);
     }
     if (voices) push(p.base(PolyInstance::Pad) + poly::GatePattern, ControlEvent::Kind::Override, static_cast<float>(m.padGatePattern));
+    // The timbral counter (23.09.2026, round "Counter"; Form.h, CounterMode): a texture needs a sustained
+    // envelope and a portamento, which the counter's recipe -- the whip of the dialogue round -- does not
+    // have. Written as offsets from the knobs' values, so a track in another mode plays the knobs exactly.
+    if (voices) {
+        const int nb = p.base(PolyInstance::Counter);
+        const bool timbral = m.counterMode == static_cast<int>(CounterMode::Timbral);
+        auto towards = [&](int local, float target) {
+            const int id = nb + local;
+            push(id, ControlEvent::Kind::Offset, timbral ? p.toNormalised(id, target) - p.toNormalised(id, p.get(id)) : 0.0f);
+        };
+        towards(poly::AmpSustain, 0.75f);
+        towards(poly::AmpDecay, 400.0f);
+        towards(poly::AmpRelease, 220.0f);
+        towards(poly::FilterDecay, 400.0f);
+        towards(poly::Glide, 60.0f);
+    }
     // The loudness offset of Auto Gain, in the normalised domain of master.gain's 36 dB range.
     const ParamDesc& mg = p.desc(p.base(Module::Master) + master::Gain);
     if (floor) push(p.base(Module::Master) + master::Gain, ControlEvent::Kind::Offset, plan.masterGainDb / (mg.maxValue - mg.minValue));

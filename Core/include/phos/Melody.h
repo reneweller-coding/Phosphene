@@ -152,7 +152,7 @@ constexpr int kAcidJumpHighest = 74;                                ///< D5: hig
  *  octave jump, so MotifOperator::OctaveJump -- the Goa lead idiom of PLAN 6.5 -- can no longer place
  *  a note and is no longer drawn for the lead (Melody.cpp, makeLead). docs/PLAN.md carries the number.
  *  @{ */
-constexpr int kLeadLowest = 60;                                     ///< C4 (262 Hz): lowest lead note
+constexpr int kLeadLowest = 60;                                     ///< C4 (262 Hz): the lead window's lowest bottom (MelodyPlan::leadWindowLo moves it up by the style's registerShift)
 constexpr int kLeadHighest = 71;                                    ///< B4 (494 Hz): highest lead note
 /** @} */
 constexpr int kArpLowest = 55;                                      ///< G3: lowest arp note
@@ -172,7 +172,8 @@ constexpr double kArpGate = 0.2;                                    ///< arp not
  *  bass rest, and on the pad's own octave where they play.
  *  @{ */
 constexpr int kCounterLowest = 72;                                  ///< C5 (523 Hz): lowest counter-lead note
-constexpr int kCounterHighest = 83;                                 ///< B5 (988 Hz): highest counter-lead note
+constexpr int kCounterHighest = 83;                                 ///< B5 (988 Hz): highest counter-lead note at the lowest window
+constexpr int kLeadWindow = 12;                                     ///< the lead's window is one octave (23.09.2026)
 constexpr int kArpOverHighest = 91;                                 ///< G6: the arp's ceiling when it clears a lead from above
 constexpr int kStabLowest = 50;                                     ///< D3: lowest stab note (the depth rule's floor, like the acid's)
 constexpr int kStabHighest = 96;                                    ///< C7: highest stab note (2.1 kHz, the top of the leads' pocket)
@@ -384,6 +385,11 @@ struct MelodyPlan {
     int      leadDensityBand = 1;             ///< 0 sparse (8..10 onsets), 1 medium (10..12), 2 dense (12..16)
     bool     leadCellFromCorpus[2] = { false, false };   ///< the cell's rhythm came from the corpus templates
     /** @} */
+    /** @name Register and counter mode (23.09.2026, round "Counter")
+     *  @{ */
+    int      leadWindowLo = kLeadLowest;      ///< MIDI note of the lead window's bottom (one octave wide; the counter's an octave above)
+    int      counterMode = 1;                 ///< CounterMode of the track (Form.h)
+    /** @} */
     bool arpPolymeter = false;                ///< the arp runs a 3/16 cell against the 4/4 bar
     int  arpPulses = 0;                       ///< Euclidean arps: onsets per bar (E(pulses, 16))
     int  arpRotation = 0;                     ///< and the rotation Bjorklund's pattern is turned by
@@ -452,6 +458,10 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
 
 extern const char* const kLeadArchetypeNames[kNumLeadArchetypes];   ///< names of LeadArchetype (Form.h)
 extern const char* const kCellOpNames[kNumCellOps];                 ///< names of CellOp (Form.h)
+/** @brief The lead's and the counter's windows of a track (23.09.2026): one octave each, the counter an octave up. */
+inline int leadWindowHi(const MelodyPlan& m) { return m.leadWindowLo + kLeadWindow - 1; }
+inline int counterWindowLo(const MelodyPlan& m) { return m.leadWindowLo + 12; }
+inline int counterWindowHi(const MelodyPlan& m) { return m.leadWindowLo + 12 + kLeadWindow - 1; }
 /** @brief The cutoff arc of an archetype at a bar of the phrase, mean-free (Composer.cpp writes depth x this). */
 double leadArc(int archetype, int barInPhrase);
 

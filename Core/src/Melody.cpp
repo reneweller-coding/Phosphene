@@ -1490,8 +1490,8 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     const PitchModel& model = corpusPitchModel(CorpusRoleId::Lead);
     const int root = m.root[kLeadI];
     const int rootOffset = ((root - key) % 12 + 12) % 12;
-    const int lo = std::max(kLeadLowest - root, kCorpusRelMin), hi = std::min(kLeadHighest - root, kCorpusRelMax);
-    const double baseCentre = kLeadCentre - root;
+    const int lo = std::max(m.leadWindowLo - root, kCorpusRelMin), hi = std::min(leadWindowHi(m) - root, kCorpusRelMax);
+    const double baseCentre = (m.leadWindowLo + 3.5) - root;   // the window's lower half, as kLeadCentre was for C4 .. B4
     m.colour = colour;
     // The knobs over the style: density band and entropy.
     {
@@ -2064,77 +2064,173 @@ void padOnsets(int figure, int chordBars, std::vector<std::pair<int, double>>& o
 }
 
 /**
- * @brief The counter-lead: a second lead that answers the first (19.09.2026, round "voices").
+ * @brief The counter-lead: a second lead that answers the first (19.09.2026, round "voices"; the four
+ *        modes of 23.09.2026, round "Counter").
  *
- * The user's inventory of a real psytrance track describes it as "a second lead with another timbre
- * (e.g. wavetable / vocal character) that answers the main lead's phrases (call and response)". The
- * rules of the brief: it plays in the lead's rests and in its B phrases, never on top of a lead note in
- * the same register, in a complementary register, under the lead's own genre rules.
+ * The user's brief (22.09.2026) and its supplement: a designed dialogue engine instead of a gap filler,
+ * with "MOTIF_ECHO" as the cheapest authentic counter, fixed rhythmic answer templates, a complementary
+ * contour, and the genre matrix -- Full-On call-and-response, Progressive and Darkpsy timbral, Hi-Tech
+ * micro-hocketing. The user's finding of 23.09.2026: "Die Counter-Leads sind bislang kaum hoerbar" --
+ * whips of 45 ms at -7 dB, only in drop 2's later groups. Four modes (Form.h, CounterMode), drawn per
+ * track from the style's vector or set by compose.counter_mode:
  *
- * **Where it plays.** The lead is a dense, nearly legato riff (rule 16) -- its only rests are its held
- * notes -- so the answer is placed where the lead *holds* rather than where it attacks:
- *  - after each two-bar statement of the motif (A in bars 0-1, A' in bars 2-3, A'' in bars 6-7) the
- *    counter answers in the statement's second bar, three to five notes from beat 2 on, drawn onto the
- *    sixteenths where the lead does not strike (over a riff that strikes nearly every sixteenth that is
- *    one or two long notes held above it);
- *  - over the lead's B phrase (bars 4-5) it plays a line of its own -- eighths with a few sixteenth
- *    pickups, the density of the lead's riff families -- which is the "B phrase" of the brief.
- * The register is the lead's an octave up (root C5 .. B5, window C5 .. G5 -- 523 .. 784 Hz, the user's
- * rule of 19.09.2026), and composeMelodyBar's register guard holds it clear of every lead note
- * sounding at the same instant.
+ *  - **Echo**: the lead's own material as its answer -- its beat notes and accents, delayed by a dotted
+ *    eighth or a beat, a fifth, an octave or a fourth up, in the contrasting timbre, on steps where the
+ *    lead does not strike. Thematically coherent by construction: the brief's MOTIF_ECHO.
+ *  - **Answer** (the mode of the rounds before, with templates): after each of the lead's statements A,
+ *    A' and A'' the second bar carries an answer in one of four fixed rhythms -- Offbeat Triple Stab
+ *    (x.x.x), Fast Cascade (xxxx), Syncopated Hook (x..x..x), Gallop Echo (x..xx..x) -- onto steps where
+ *    the lead holds; over B a line of its own. Pitches by the lead's genre rules: the tonic the centre,
+ *    chord tones on strong steps, no colour tone, mostly stepwise, the answers resting open and closed
+ *    by turns; and a *complementary contour* -- where the lead's bar rose, the answer leans down.
+ *  - **Timbral**: not a line but a texture, the Progressive and Forest way: one long note per two-bar
+ *    unit (tonic, fifth, third, fifth), a second now and then, a whole bar long, with a sustained
+ *    envelope and a portamento the composer writes as offsets on the counter's voice (Composer.cpp,
+ *    trackStartControls).
+ *  - **Hocket**: the Hi-Tech interlock -- short notes on the off sixteenths where the lead neither
+ *    strikes nor holds, stepping up and down from the lead's last pitch, never more than six a bar.
  *
- * **Articulation** (20.09.2026, round "dialogue"). The rule contrasts the two leads: the lead flows with
- * a portamento over its semitone steps, the counter *whips* -- dry staccato and a filter that shuts
- * within a few tens of milliseconds. The pitch side of that lives in the engine (poly.glide, Poly.h);
- * here the counter's written note is cut to a staccato of at most an eighth whatever the block it was
- * placed in gave it, so that a note held over four sixteenths of a lead riff still ends as a stab.
+ * The register is the lead's an octave up (MelodyPlan::leadWindowLo + 12), and composeMelodyBar's
+ * register guard holds it clear of every lead note sounding at the same instant. Every mode keeps the
+ * two rules the score tests read for all of them: no colour tone, and nothing outside the window.
  *
- * **Pitches** follow the lead's genre rules (Melody.h): the tonic is the centre (weight 2, the fifth 1.4), the fifth
- * the resting tone -- the answers end open and closed by turns, the first on the fifth, the next on the
- * tonic (22.09.2026: over the Bordun there is no chord to take it elsewhere) --, chord tones on strong sixteenths, scale tones elsewhere, no colour tone at all (rule 1 allows
- * the flat second only as a neighbour; the counter takes none rather than a second mechanism), mostly
- * stepwise (weight e^(-|interval| / 2.5)), never one pitch three times in a row, and the phrase ends
- * on the tonic. No corpus model: the corpus has no counter-lead role, and the rules decide.
- *
- * **Modal interchange.** Exactly one draw per note for its pitch, whatever the mode, so the same seed
- * gives the same rhythm in every borrowed mode (Melody.h, ModeMaterial).
+ * **Modal interchange.** The rhythm and every coin are drawn before any pitch, so a borrowed mode gets
+ * the same design with other pitches (Melody.h, ModeMaterial).
  */
 void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
 {
     const int root = m.root[kCounterI];
-    const int lo = kCounterLowest - root, hi = kCounterHighest - root;
+    const int lo = counterWindowLo(m) - root, hi = counterWindowHi(m) - root;
     // The lead's register centre an octave up, as an interval to this key's counter root (20.09.2026):
     // the counter answers in the lead's register, so it has to be weighted like the lead's.
-    const double centre = kLeadCentre + 12.0 - root;
+    const double centre = (m.leadWindowLo + 3.5) + 12.0 - root;
     auto pcOf = [&](int rel) { return (((root - key) + rel) % 12 + 12) % 12; };
+    int tonicPcs[3];
+    chordTones(scale, 0, tonicPcs);   // the tonic chord: the counter stays home like the lead (22.09.2026)
+    auto isChord = [&](int pc) { return pc == tonicPcs[0] || pc == tonicPcs[1] || pc == tonicPcs[2]; };
+    // The nearest legal pitch: inside the window, a scale tone, no colour tone, a chord tone where `strong`.
+    auto legal = [&](int rel, bool strong) {
+        while (rel < lo) rel += 12;
+        while (rel > hi) rel -= 12;
+        auto ok = [&](int c) { return c >= lo && c <= hi && inScale(scale, pcOf(c)) && !isColourTone(scale, pcOf(c)) && (!strong || isChord(pcOf(c))); };
+        if (ok(rel)) return rel;
+        for (int d = 1; d <= 12; ++d) { if (ok(rel - d)) return rel - d; if (ok(rel + d)) return rel + d; }
+        return std::clamp(rel, lo, hi);
+    };
+    // The pitch of `pc` nearest to `near` inside the window.
+    auto nearestPc = [&](int pc, double near) {
+        int best = lo;
+        double bestD = 1e9;
+        for (int c = lo; c <= hi; ++c)
+            if (pcOf(c) == pc && std::fabs(c - near) < bestD) { bestD = std::fabs(c - near); best = c; }
+        return best;
+    };
+    const CounterMode mode = static_cast<CounterMode>(std::clamp(m.counterMode, 0, kNumCounterModes - 1));
+
     for (int w = 0; w < 2; ++w) {
         Rng r;
         r.seed(mixSeed(seed ^ kSaltCounter, static_cast<uint64_t>(w)));
         const std::vector<MelodyNote>& lead = m.lead[w];
-        bool attack[128] = {};
-        for (const MelodyNote& n : lead) if (n.step >= 0 && n.step < 128) attack[n.step] = true;
+        bool attack[128] = {}, sounding[128] = {};
+        int leadRel[128];
+        for (int& x : leadRel) x = 1 << 20;
+        for (const MelodyNote& n : lead) {
+            if (n.step < 0 || n.step >= 128) continue;
+            attack[n.step] = true;
+            for (int s = n.step; s < std::min(128, n.step + n.len); ++s) { sounding[s] = true; leadRel[s] = n.rel; }
+        }
+        std::vector<MelodyNote>& out = m.counter[w];
+        out.clear();
+        auto emitNote = [&](int step, int len, int rel, int velocity) {
+            MelodyNote note;
+            note.step = static_cast<int16_t>(step);
+            note.len = static_cast<int16_t>(std::max(1, len));
+            note.rel = static_cast<int8_t>(rel);
+            note.velocity = static_cast<uint8_t>(velocity);
+            out.push_back(note);
+        };
+
+        if (mode == CounterMode::Echo) {
+            // The lead's beat notes and accents, delayed and transposed, where the lead does not strike.
+            const int delay = r.uniform() < 0.5f ? 3 : 4;
+            static const int kIntervals[3] = { 7, 12, 5 };
+            const int interval = kIntervals[r.below(3)];
+            std::vector<int> st, rl, ln;
+            // First on the steps the lead does not strike; where a dense lead leaves fewer than six of them
+            // in the phrase, the echo may double the lead's attacks (an octave or a fifth above, in its own
+            // timbre -- the doubled echo of the brief's "exakte Kopie, transponiert").
+            for (int pass = 0; pass < 2 && st.size() < 6; ++pass) {
+                st.clear(); rl.clear(); ln.clear();
+                int lastEnd = -1;
+                for (const MelodyNote& n : lead) {
+                    const bool strong = n.step % 4 == 0 || (n.flags & kNoteAccent) != 0;
+                    if (!strong) continue;
+                    const int s = n.step + delay;
+                    if (s >= 128 || (pass == 0 && attack[s]) || s < lastEnd) continue;
+                    // The lead's pitch in the counter's frame: the counter root is the lead root an octave up.
+                    const int rel = legal(n.rel + interval - 12, s % 8 == 0);
+                    st.push_back(s);
+                    rl.push_back(rel);
+                    ln.push_back(std::max(1, std::min<int>(n.len, 4)));
+                    lastEnd = s + ln.back();
+                }
+            }
+            for (size_t i = 0; i < st.size(); ++i) {
+                if (i + 1 < st.size()) ln[i] = std::min(ln[i], st[i + 1] - st[i]);
+                emitNote(st[i], ln[i], rl[i], 90);
+            }
+            continue;
+        }
+        if (mode == CounterMode::Timbral) {
+            // One long note per two-bar unit -- tonic, fifth, third, fifth -- and now and then a second.
+            const int cycle[4] = { 0, 7, tonicPcs[1], 7 };
+            for (int u = 0; u < 4; ++u) {
+                const int rel = nearestPc(cycle[u], centre);
+                emitNote(32 * u, 16, rel, 84);
+                if (r.uniform() < 0.5f) emitNote(32 * u + 16, 12, nearestPc(u % 2 == 0 ? 7 : 0, rel), 80);
+            }
+            continue;
+        }
+        if (mode == CounterMode::Hocket) {
+            // The off sixteenths the lead does not strike (it may hold: the hocket sits an octave above),
+            // stepping up and down from its last pitch. Measured with "neither strikes nor holds": a dense
+            // cell with a held note left no free sixteenth and the hocket fell silent in 5 of 26 drops.
+            int last = nearestPc(0, centre), dir = 1, perBar = 0;
+            for (int s = 0; s < 128; ++s) {
+                if (s % 16 == 0) perBar = 0;
+                const float coin = r.uniform();   // drawn for every step: the modes stay in step
+                if (attack[s] || s % 2 == 0 || perBar >= 6 || coin >= 0.7f) continue;
+                int base = last;
+                for (int k = s - 1; k >= 0 && k >= s - 4; --k) if (leadRel[k] != (1 << 20)) { base = leadRel[k]; break; }   // the lead's rel, an octave up in this frame
+                const int rel = legal(transposeRel(scale, ((root - key) % 12 + 12) % 12, legal(base, false), dir * (1 + (s / 16) % 2)), false);
+                emitNote(s, 1, rel, 96);
+                last = rel;
+                dir = -dir;
+                ++perBar;
+            }
+            continue;
+        }
+
+        // ---- Answer: the mode of the rounds before, with the brief's four rhythmic templates.
         std::vector<int> steps;
         std::vector<int> blockEnd;   // the step each note's answer block ends at
-        // The answers after A, A' and A'': the second bar of each two-bar statement.
+        static const int kTemplates[4][4] = { { 1, 3, 5, -1 }, { 0, 1, 2, 3 }, { 0, 3, 6, -1 }, { 0, 3, 4, 7 } };
+        const int tpl = r.below(4);
+        // The answers after A, A' and A'': the second bar of each two-bar statement, in the template's
+        // rhythm from the bar's second beat, onto steps where the lead holds -- a step the lead strikes is
+        // moved on by one, or dropped; a window the lead fills entirely takes one note above its attack.
         for (int bar : { 1, 3, 7 }) {
             const int first = bar * 16 + 4;
-            const int count = 3 + r.below(3);
-            // Onto the steps where the lead holds, as many as there are up to the drawn count -- over a
-            // lead that strikes nearly every sixteenth the answer is one or two long notes, held above
-            // the riff. Only a window without a single held step takes one lead attack (an octave above it).
-            int held = 0;
-            for (int k = 0; k < 12; ++k) held += attack[first + k] ? 0 : 1;
-            double wgt[12];
-            for (int k = 0; k < 12; ++k) wgt[k] = attack[first + k] ? (held >= 1 ? 0.0 : 1.0) : 1.0;
-            const int want = held >= 1 ? std::min(count, held) : 1;
             std::vector<int> picked;
-            for (int c = 0; c < want; ++c) {
-                const int k = drawIndex(r, wgt, 12);
-                picked.push_back(first + k);
-                wgt[k] = 0.0;
+            for (int k : kTemplates[tpl]) {
+                if (k < 0) continue;
+                int s = first + k;
+                if (attack[s] && s + 1 < first + 12 && !attack[s + 1]) ++s;
+                if (attack[s]) continue;
+                if (!picked.empty() && picked.back() == s) continue;
+                picked.push_back(s);
             }
-            for (int c = want; c < count; ++c) r.below(12);   // the same number of draws whatever the lead: the modes stay in step
-            std::sort(picked.begin(), picked.end());
+            if (picked.empty()) picked.push_back(first);
             for (int s : picked) { steps.push_back(s); blockEnd.push_back(bar * 16 + 16); }
         }
         // The line over B: eighths with two or three sixteenth pickups onto the lead's held steps.
@@ -2163,6 +2259,19 @@ void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
             const int next = i + 1 < n ? std::min(st[i + 1], be[i]) : be[i];
             lens[i] = std::max(1, next - st[i]);
         }
+        // The lead's contour in the bar before each answer: where it rose, the answer leans down (the
+        // brief's complementary contour), and the other way round.
+        auto leadDirection = [&](int bar) {
+            double first = 0.0, second = 0.0;
+            int n1 = 0, n2 = 0;
+            for (const MelodyNote& x : lead) {
+                if (x.step / 16 != bar) continue;
+                if (x.step % 16 < 8) { first += x.rel; ++n1; } else { second += x.rel; ++n2; }
+            }
+            if (n1 == 0 || n2 == 0) return 0;
+            const double d = second / n2 - first / n1;
+            return d > 0.5 ? 1 : (d < -0.5 ? -1 : 0);
+        };
         // Pitches: one weighted draw per note.
         std::vector<int> rels(n, 0);
         int prev = 0, prev2 = 1000;
@@ -2172,15 +2281,13 @@ void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
             const bool strong = s % 8 == 0;
             const bool last = i + 1 == n || be[i + 1] != be[i];   // the answer's last note
             if (i > 0 && be[i] != be[i - 1]) ++block;              // a new answer begins
-            int pcs[3];
-            chordTones(scale, 0, pcs);   // the tonic chord: the counter stays home like the lead (22.09.2026)
+            const int lean = -leadDirection(s / 16 - 1);          // against the lead's bar before
             std::vector<double> wgt;
             std::vector<int> cand;
             for (int rel = lo; rel <= hi; ++rel) {
                 const int pc = pcOf(rel);
                 if (!inScale(scale, pc) || isColourTone(scale, pc)) continue;
-                const bool chord = pc == pcs[0] || pc == pcs[1] || pc == pcs[2];
-                if (strong && !chord) continue;
+                if (strong && !isChord(pc)) continue;
                 if (rel == prev && prev == prev2) continue;   // never one pitch three times in a row
                 // The tonic as the line's centre: 3.0 against 1.4 for the fifth and 1 for the rest (2.0 until
                 // 22.09.2026; with the resting tones no longer leaning on the bar's chord the tonic fell to
@@ -2188,6 +2295,7 @@ void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
                 // lead's new cells (round "Lead") hold other steps, and 2.5 left the tonic at the bound).
                 double v = pc == 0 ? 3.0 : (pc == 7 ? 1.4 : 1.0);
                 v *= std::exp(-std::abs(rel - prev) / 2.5);
+                if (i > 0 && be[i] == be[i - 1] && lean != 0) v *= std::exp(0.35 * lean * (rel - prev));   // the complementary contour
                 const double z = (rel - centre) / 4.0;   // the lead's sigma, on the lead's window an octave up
                 v *= std::exp(-0.5 * z * z);
                 cand.push_back(rel);
@@ -2221,16 +2329,7 @@ void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
             prev2 = prev;
             prev = rel;
         }
-        std::vector<MelodyNote>& out = m.counter[w];
-        out.clear();
-        for (size_t i = 0; i < n; ++i) {
-            MelodyNote note;
-            note.step = static_cast<int16_t>(st[i]);
-            note.len = static_cast<int16_t>(lens[i]);
-            note.rel = static_cast<int8_t>(rels[i]);
-            note.velocity = st[i] % 4 == 0 ? 100 : 88;
-            out.push_back(note);
-        }
+        for (size_t i = 0; i < n; ++i) emitNote(st[i], lens[i], rels[i], st[i] % 4 == 0 ? 100 : 88);
     }
 }
 
@@ -2416,6 +2515,7 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     // 22.09.2026, round "Lead": the two knobs over the style's lead vector (Form.h, LeadStyle); 0 = Auto.
     const int leadDensity = p.getInt(cb + compose::LeadDensity);
     const int pitchEntropy = p.getInt(cb + compose::PitchEntropy);
+    const int counterKnob = p.getInt(cb + compose::CounterMode);   // 23.09.2026: 0 = Auto (the style's weights)
     const float mv = p.get(cb + compose::MelodyVariation);
     MelodyPlan m;
     Rng r;
@@ -2479,7 +2579,10 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     // E4 .. D#5 and the window narrowed to C4 .. G4, the highest keys would have had a window of four
     // semitones and the lowest one of eight; from C4 .. B4 every key keeps the full fifth, and every
     // interval to the root still fits the corpus alphabet (kCorpusRelMin .. kCorpusRelMax).
-    m.root[kLeadI] = kLeadLowest + ((key - kLeadLowest) % 12 + 12) % 12;   // C4 .. B4
+    // 23.09.2026, round "Counter": the window stands the style's registerShift above C4, with a semitone of
+    // jitter per track (the literature's 250 Hz .. 2 kHz, weight at 500 Hz .. 1 kHz; the user: "teils zu tief").
+    m.leadWindowLo = kLeadLowest + std::clamp(style.lead.registerShift + (r.below(3) - 1), 0, 12);
+    m.root[kLeadI] = m.leadWindowLo + ((key - m.leadWindowLo) % 12 + 12) % 12;   // the window's octave
     m.root[kCounterI] = m.root[kLeadI] + 12;                      // C5 .. B5: the lead's register an octave up
     m.root[kArpI] = 57 + ((key - 9) % 12 + 12) % 12;            // A3 .. G#4
     m.root[kStabI] = m.root[kArpI];                               // unused: the stab's chord carries its own root
@@ -2510,6 +2613,12 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     for (int c = 0; c < 4; ++c) m.breakVoicing[c] = voiceChord(scale, key, m.breakDegree[c], m.breakType[c], c > 0 ? &m.breakVoicing[c - 1] : nullptr);
     // The three new voices (19.09.2026), each from a salt of its own, after everything older: nothing
     // any older maker drew moves because of them.
+    // The counter's mode (23.09.2026): the knob, else the style's weights, from the counter's own stream.
+    {
+        Rng cm;
+        cm.seed(mixSeed(seed ^ kSaltCounter, 77u));
+        m.counterMode = counterKnob > 0 ? counterKnob - 1 : drawIndex(cm, style.lead.counterMode, kNumCounterModes);
+    }
     makeCounter(m, key, scale, seed);
     makeStab(m, seed);
     makeDrone(m, seed);
@@ -2706,7 +2815,7 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         int shift = 12 * bp.leadOctave;
         for (const MelodyNote& n : lead[window]) {
             const int pitch = m.root[kLeadI] + n.rel + shift;
-            if (pitch < kLeadLowest || pitch > kLeadHighest) { shift = 0; break; }
+            if (pitch < m.leadWindowLo || pitch > leadWindowHi(m)) { shift = 0; break; }
         }
         for (const MelodyNote& n : lead[window]) {
             // A note that started in the bar before and still holds here keeps its place in the guard.
@@ -2729,7 +2838,7 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
             for (int s = n.step - stepBase; s < std::min(16, n.step - stepBase + n.len); ++s) ev.push_back({ s, pitch, pitch });
             notes.push_back(&n);
         }
-        const int shift = bestShift(ev, taken, { 0, 12, -12 }, kCounterLowest, kCounterHighest);
+        const int shift = bestShift(ev, taken, { 0, 12, -12 }, counterWindowLo(m), counterWindowHi(m));
         for (const MelodyNote* n : notes) {
             const int first = n->step - stepBase, span = std::min(n->len, static_cast<int16_t>(16 - first));
             // The bar's octave first; a single note that still collides tries the octave above and the
@@ -2737,17 +2846,23 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
             int pitch = -1;
             for (int extra : { 0, 12, -12 }) {
                 const int cand = m.root[kCounterI] + n->rel + shift + extra;
-                if (cand < kCounterLowest || cand > kCounterHighest) continue;
+                if (cand < counterWindowLo(m) || cand > counterWindowHi(m)) continue;
                 bool ok = true;
                 for (int s = first; s < first + span; ++s) ok = ok && taken.clear(s, cand, cand);
                 if (ok) { pitch = cand; break; }
             }
             if (pitch < 0) continue;
             taken.add(first, span, pitch);
-            // Staccato (20.09.2026): the written note keeps its place in the register guard for its whole
-            // span -- the guard is about what *may* sound there -- but it is played as a whip of at most
-            // half an eighth. kCounterStaccato of a sixteenth, never more than two sixteenths' worth.
-            emit(Part::Counter, *n, first, pitch, std::min(span, 2) * 0.25 * kCounterStaccato);
+            // The gate by mode (23.09.2026; Form.h, CounterMode). The written note keeps its place in the
+            // register guard for its whole span -- the guard is about what *may* sound there. Hocket whips
+            // (kCounterStaccato of a sixteenth, at most two sixteenths' worth: the staccato of 20.09.2026);
+            // an answer sounds for an eighth at most, at 0.6 of its span; an echo and a timbral note for
+            // what they were written.
+            const CounterMode cmode = static_cast<CounterMode>(std::clamp(m.counterMode, 0, kNumCounterModes - 1));
+            const double gate = cmode == CounterMode::Hocket ? std::min(span, 2) * 0.25 * kCounterStaccato
+                              : cmode == CounterMode::Answer ? std::min(span, 2) * 0.25 * 0.6
+                              : cmode == CounterMode::Echo ? span * 0.25 * 0.8 : span * 0.25 * 0.95;
+            emit(Part::Counter, *n, first, pitch, gate);
         }
     }
     if (has(MelodyPart::Stab) && ((m.stabBars >> (barInTrack % 4)) & 1u) != 0) {
@@ -2846,9 +2961,23 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
                                                         : bestShift(ev, taken, { 0, -12, 12, 24 }, kArpLowest, kArpHighest);
         // The gate (rule 15): kArpGate of a sixteenth; the arp's own release (Params.cpp) finishes it.
         const double gate = 0.25 * kArpGate;
+        // 23.09.2026, round "Counter": the lead window moved up into the arp's octaves (Form.h, registerShift),
+        // and the sixteenths the bar's best shift still left colliding were *dropped* -- 4 and 13 % holes in
+        // the listening seed's arps, measured, in a line whose rule is "continuous sixteenths" (rule 11). A
+        // colliding note now moves by an octave on its own -- up, down, two up -- inside the guard's ceiling,
+        // and gives way only where no octave is clear. Same pitch class, so the material stands.
+        const int guardCeiling = bp.arpOctave > 0 ? kArpOverHighest : kArpHighest;
         for (const auto& st : steps) {
-            const int pitch = m.root[kArpI] + st.second->rel + shift + move;
-            if (!taken.clear(st.first, pitch, pitch)) continue;
+            int pitch = m.root[kArpI] + st.second->rel + shift + move;
+            if (!taken.clear(st.first, pitch, pitch)) {
+                int alt = -1;
+                for (int d : { 12, -12, 24 }) {
+                    const int c = pitch + d;
+                    if (c >= kArpLowest && c <= guardCeiling && taken.clear(st.first, c, c)) { alt = c; break; }
+                }
+                if (alt < 0) continue;
+                pitch = alt;
+            }
             emit(Part::Arp, *st.second, st.first, pitch, gate);
         }
     }

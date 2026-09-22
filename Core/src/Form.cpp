@@ -26,6 +26,7 @@ constexpr uint64_t kSaltForm    = 0x464F524D00000001ull;
 constexpr uint64_t kSaltSection = 0x5345435449000002ull;
 constexpr uint64_t kSaltGroup   = 0x47524F5550000003ull;
 constexpr uint64_t kSaltSfx     = 0x5346580000000004ull;
+constexpr uint64_t kSaltFuzz    = 0x46555A5A0000000Dull;   ///< the form's fuzziness (23.09.2026, round "Form")
 constexpr uint64_t kSaltMode    = 0x4D4F44450000005ull;   ///< the section's borrowed mode (16.09.2026)
 constexpr uint64_t kSaltRide    = 0x5249444500000006ull;   ///< the section's macro ride (16.09.2026)
 constexpr uint64_t kSaltPsy     = 0x5053594300000007ull;   ///< the psychedelic ear candy (19.09.2026)
@@ -88,7 +89,8 @@ const StyleProfile kProfiles[kNumStyles] = {
       // lead vector (22.09.2026): dense sixteenths, wide, more leaps, little portamento; surge and arch
       { 0.80f, 0.80f, 0.80f, 0.60f, 1.10f, 0.15f, 0.35f, 0.30f, 0.05f,
         { 0.35, 0.25, 0.10, 0.20, 0.10 },   // archetypes: surge, arch, pedal, cascade, tension call
-        { 0.0, 0.25, 0.25, 0.15, 0.15, 0.10, 0.10 } } },   // cell operators: keep, cadence, up, down, invert end, shift, thin   // interchange: the Hijaz modes at the peak
+        { 0.0, 0.25, 0.25, 0.15, 0.15, 0.10, 0.10 },   // cell operators: keep, cadence, up, down, invert end, shift, thin
+        7, { 0.5, 0.3, 0.0, 0.2 } } },   // register shift, counter modes (echo, answer, timbral, hocket) -- Goa: G4 .. F#5, echo and polyphony   // interchange: the Hijaz modes at the peak
     // Full-On: the default, every multiplier 1, so the knobs play as they are set.
     { "Full-On", 144.0, 2.0,
       { 0.30, 0.25, 0.15, 0.15, 0.05, 0.10 },
@@ -101,7 +103,8 @@ const StyleProfile kProfiles[kNumStyles] = {
       // lead vector (22.09.2026): call-and-response: medium density, smooth, sliding, tied to the bass
       { 0.60f, 1.00f, 1.00f, 1.00f, 1.00f, 0.35f, 0.40f, 0.60f, 0.06f,
         { 0.30, 0.30, 0.15, 0.10, 0.15 },   // archetypes: surge, arch, pedal, cascade, tension call
-        { 0.0, 0.30, 0.20, 0.10, 0.15, 0.15, 0.10 } } },   // cell operators: keep, cadence, up, down, invert end, shift, thin
+        { 0.0, 0.30, 0.20, 0.10, 0.15, 0.15, 0.10 },   // cell operators: keep, cadence, up, down, invert end, shift, thin
+        5, { 0.4, 0.5, 0.1, 0.0 } } },   // register shift, counter modes (echo, answer, timbral, hocket) -- Full-On: F4 .. E5, call and response
     // Progressive: flatter form, fewer leads, more pad, Dorian and Aeolian.
     { "Progressive", 136.5, 1.5,
       { 0.35, 0.10, 0.05, 0.05, 0.00, 0.45 },
@@ -114,7 +117,8 @@ const StyleProfile kProfiles[kNumStyles] = {
       // lead vector (22.09.2026): sparse, homing, stable, low entropy: the pedal and thinning
       { 0.30f, 1.30f, 1.30f, 1.30f, 0.70f, 0.45f, 0.20f, 0.70f, 0.04f,
         { 0.10, 0.25, 0.45, 0.15, 0.05 },   // archetypes: surge, arch, pedal, cascade, tension call
-        { 0.0, 0.25, 0.10, 0.10, 0.05, 0.20, 0.30 } } },   // cell operators: keep, cadence, up, down, invert end, shift, thin   // Dorian and Aeolian only
+        { 0.0, 0.25, 0.10, 0.10, 0.05, 0.20, 0.30 },   // cell operators: keep, cadence, up, down, invert end, shift, thin
+        4, { 0.3, 0.1, 0.6, 0.0 } } },   // register shift, counter modes (echo, answer, timbral, hocket) -- Progressive: E4 .. D#5, timbral   // Dorian and Aeolian only
     // Dark / Forest: darker modes, less lead, denser percussion.
     { "Dark Forest", 151.5, 3.5,
       { 0.20, 0.40, 0.25, 0.10, 0.05, 0.00 },
@@ -127,7 +131,8 @@ const StyleProfile kProfiles[kNumStyles] = {
       // lead vector (22.09.2026): tension tones allowed, syncopation, the unresolved call
       { 0.50f, 1.10f, 0.70f, 0.90f, 1.10f, 0.40f, 0.35f, 0.50f, 0.05f,
         { 0.15, 0.10, 0.25, 0.15, 0.35 },   // archetypes: surge, arch, pedal, cascade, tension call
-        { 0.0, 0.20, 0.10, 0.10, 0.15, 0.25, 0.20 } } },   // cell operators: keep, cadence, up, down, invert end, shift, thin
+        { 0.0, 0.20, 0.10, 0.10, 0.15, 0.25, 0.20 },   // cell operators: keep, cadence, up, down, invert end, shift, thin
+        4, { 0.2, 0.0, 0.5, 0.3 } } },   // register shift, counter modes (echo, answer, timbral, hocket) -- Dark Forest: E4 .. D#5, timbral and hocket
     // Hi-Tech: fastest, busiest; no rule of its own, so the strict two-drop form.
     { "Hi-Tech", 158.0, 4.0,
       { 0.20, 0.35, 0.25, 0.15, 0.05, 0.00 },
@@ -140,7 +145,8 @@ const StyleProfile kProfiles[kNumStyles] = {
       // lead vector (22.09.2026): densest, freest, hocketing against the bass, hardly a slide
       { 0.90f, 0.70f, 0.60f, 0.40f, 1.30f, 0.10f, 0.50f, 0.80f, 0.07f,
         { 0.25, 0.10, 0.15, 0.20, 0.30 },   // archetypes: surge, arch, pedal, cascade, tension call
-        { 0.0, 0.05, 0.20, 0.20, 0.15, 0.30, 0.10 } } },   // cell operators: keep, cadence, up, down, invert end, shift, thin
+        { 0.0, 0.05, 0.20, 0.20, 0.15, 0.30, 0.10 },   // cell operators: keep, cadence, up, down, invert end, shift, thin
+        7, { 0.3, 0.1, 0.0, 0.6 } } },   // register shift, counter modes (echo, answer, timbral, hocket) -- Hi-Tech: G4 .. F#5, hocket
 };
 
 /** @brief Control points of the arcs: (t, E) pairs, interpolated with raised cosines. */
@@ -254,6 +260,36 @@ void fitTemplate(const Template& t, int target, int* bars)
     }
 }
 
+/**
+ * @brief The form's fuzziness (23.09.2026, round "Form"): one or two eight-bar moves between neighbouring
+ *        sections, drawn from the form's seed.
+ *
+ * The user: "Die Vorgabe der Takte scheinst du SEHR ernst genommen zu haben, dadurch haben alle Stuecke eines
+ * Genres immer genau dieselbe Einteilung. Da sollten wir durchaus eine (minimale) Fuzziness erlauben." The
+ * template stays the rule and the total stays exact; a track moves eight bars from one section to its
+ * neighbour once (seven in ten tracks) or twice, wherever both stay inside their bounds -- an intro of 16
+ * to 48, a groove of 16 to 96, a buildup of 8 to 32, a drop of 24 to 64, a breakdown of 16 to 64, an outro
+ * of 16 to 48 (the literature's frames: intro one to two minutes, breakdown 64 to 96 bars with an arc, drop
+ * 32 to 64; Psytrance Blueprint, "7 rules of structure"; Psychedelic Island, "Track structure"). Everything
+ * downstream reads the sections it gets: the roll and the pre-drop break of a buildup are cut from its
+ * length, the energies from the arc at the bars the sections really have.
+ */
+void jitterForm(int* bars, uint64_t seed)
+{
+    static const int kMin[kSlots] = { kDjOverlap, 16, 8, 24, 16, 8, 24, kDjOverlap };
+    static const int kMax[kSlots] = { 48, 96, 32, 64, 64, 32, 64, 48 };
+    static const int kPairs[7][2] = { { kSlotIntro, kSlotGroove }, { kSlotGroove, kSlotBuild1 }, { kSlotBuild1, kSlotDrop1 }, { kSlotDrop1, kSlotBreak },
+                                      { kSlotBreak, kSlotBuild2 }, { kSlotBuild2, kSlotDrop2 }, { kSlotDrop2, kSlotOutro } };
+    Rng j;
+    j.seed(mixSeed(seed ^ kSaltFuzz, 0));
+    const int moves = j.uniform() < 0.3f ? 2 : 1;
+    for (int m = 0; m < moves; ++m) {
+        const int pair = j.below(7), dir = j.below(2);
+        const int from = kPairs[pair][dir], to = kPairs[pair][1 - dir];
+        if (bars[from] - 8 >= kMin[from] && bars[to] + 8 <= kMax[to]) { bars[from] -= 8; bars[to] += 8; }
+    }
+}
+
 } // namespace
 
 bool formConstraintsHold(const FormPlan& f) { return constraintsHoldImpl(f); }
@@ -354,6 +390,7 @@ FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double a
     const Template& tp = kTemplates[f.body];
     int lens[kSlots];
     fitTemplate(tp, target, lens);
+    jitterForm(lens, seed);   // the form's fuzziness (23.09.2026)
     f.count = kSlots;
     for (int k = 0; k < kSlots; ++k) {
         f.section[k].type = kSlotType[k];
@@ -1036,7 +1073,9 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
         for (int b = 2; b < s.bars; b += 2) {
             if (b % 8 == 0) continue;   // the eight-bar ends keep their own candy (makeFormSfx)
             const bool four = b % 4 == 0;
-            const float p = amount * density * trackDensity * (four ? 1.2f : 1.0f);
+            // 23.09.2026, round "SFX": the short candy at half its old chance -- the user: "die kurzen Zips und
+            // Zaps [...] wiederholen sich viel zu oft und nerven" -- the four-bar gestures as they were.
+            const float p = amount * density * trackDensity * (four ? 1.2f : 0.5f);
             const float roll = c.uniform();
             const int kind = drawIndex(c, four ? wLong : wShort, 4);
             const int where = c.below(4);
@@ -1131,9 +1170,12 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
         for (int b = 0; b < s.bars; ++b) {
             const float roll = q.uniform();
             const int k0 = q.below(6), k1 = q.below(6);
-            if (roll >= amount) continue;
+            // 23.09.2026, round "SFX": 0.6 of sfx_amount per bar, the pair in one odd bar of three -- one and a
+            // half squelches a bar (72 in a drop of 48) were the "Zips und Zaps [...] viiiel zu oft" the user
+            // heard, and the same synthesis every time; now about 0.7 a bar, each from its own bank preset.
+            if (roll >= 0.6f * amount) continue;
             add(start + b * bar + kGaps[k0], 0.25f, SfxType::Squelch);
-            if (b % 2 == 1 && k1 != k0) add(start + b * bar + kGaps[k1], 0.25f, SfxType::Squelch);
+            if (b % 2 == 1 && k1 != k0 && k1 % 3 == 0) add(start + b * bar + kGaps[k1], 0.25f, SfxType::Squelch);
         }
     }
 
@@ -1159,19 +1201,28 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
         if (at >= 0 && at < lastBar) carries[static_cast<size_t>(at)] = 1;
     }
     static const double kFill[4] = { 2.75, 3.25, 3.5, 3.75 };   // the free sixteenths: never on a beat
-    static const double kFillWeights[4] = { 0.35, 0.30, 0.25, 0.10 };   // zap, squelch, bubble, stutter
-    static const SfxType kFillTypes[4] = { SfxType::Zap, SfxType::Squelch, SfxType::Bubble, SfxType::Stutter };
+    // 23.09.2026, round "SFX": the literature describes the effects as a layering at section boundaries and
+    // in build-ups with *rising* density, not as steady fire (Psychedelic Island, "Deconstructing classic
+    // psytrance tracks"; Myloops), and the user asked for fewer short zips. The floor now lets three bars
+    // pass without an event and fills the fourth -- leaning long: a sweep or a swell before a zap.
+    static const double kFillWeights[4] = { 0.40, 0.30, 0.15, 0.15 };   // sweep, reverse swell, zap, squelch
+    static const SfxType kFillTypes[4] = { SfxType::Sweep, SfxType::ReverseSwell, SfxType::Zap, SfxType::Squelch };
     for (int i = 0; i < f.count; ++i) {
         const Section& s = f.section[i];
         if (s.type != SectionType::Groove && s.type != SectionType::Drop) continue;
         for (int b = 0; b < s.bars; ++b) {
             const int at = s.startBar + b;
-            if (at <= 0 || at >= lastBar) continue;
-            if (carries[static_cast<size_t>(at)] != 0 || carries[static_cast<size_t>(at - 1)] != 0) continue;
+            if (at <= 2 || at >= lastBar) continue;
+            bool any = false;
+            for (int k = 0; k <= 3; ++k) any = any || carries[static_cast<size_t>(at - k)] != 0;
+            if (any) continue;
             const int kind = drawIndex(gapRng, kFillWeights, 4);
             const int where = gapRng.below(4);
             const SfxType type = kFillTypes[kind];
-            add(static_cast<double>(at) * bar + kFill[where], type == SfxType::Stutter ? 0.5f : 0.25f, type);
+            const double when = static_cast<double>(at) * bar + kFill[where];
+            if (type == SfxType::Sweep) add(when, 2.0f, type);
+            else if (type == SfxType::ReverseSwell) add(when, static_cast<float>(bar + 4.0 - kFill[where]), type);   // ends on the next bar's downbeat
+            else add(when, 0.25f, type);
             carries[static_cast<size_t>(at)] = 1;
         }
     }
@@ -1278,6 +1329,59 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity, f
     }
     // The psychedelic layer of 19.09.2026, from streams of its own (placePsychedelia above).
     placePsychedelia(f, seed, amount, voiceDensity, bedDensity);
+
+    // Atmospheres (23.09.2026, round "SFX"; Sfx.h, SfxType::Atmosphere): the background layer the literature
+    // names beside risers and impacts -- pads and atmospheres that take over in breakdowns and sit under an
+    // intro (Psychedelic Island; Myloops). Long events, two to eight bars, ending on a phrase boundary: in the
+    // intro and the outro on every eight-bar line, in the breakdown too, in a groove or a drop once per
+    // sixteen bars from its ninth bar. Never in a build-up (the riser owns it), never over the outro's blend
+    // (composeSfxBar cuts this track's events there; the incoming track's atmospheres take the room).
+    {
+        Rng at;
+        at.seed(mixSeed(seed ^ kSaltSfx, 0x41544Dull));
+        const float pAtmo = std::min(1.0f, 1.5f * amount);
+        for (int i = 0; i < f.count; ++i) {
+            const Section& s = f.section[i];
+            const double start = static_cast<double>(s.startBar) * bar;
+            if (s.type == SectionType::Intro || s.type == SectionType::Outro || s.type == SectionType::Break) {
+                // The outro's last kDjOverlapMax bars are the next track's (the blend, whatever length it turns
+                // out to have): no atmosphere of this track starts there.
+                const int until = s.type == SectionType::Outro ? s.bars - kDjOverlapMax : s.bars;
+                for (int b = 0; b < until; b += 8) {
+                    const int len = std::min(8, until - b);
+                    if (at.uniform() < (s.type == SectionType::Break ? 0.9f : 0.75f) * pAtmo) add(start + b * bar, static_cast<float>(len * bar), SfxType::Atmosphere);
+                }
+            } else if (s.type == SectionType::Groove || s.type == SectionType::Drop) {
+                for (int b = 8; b + 4 <= s.bars; b += 16) {
+                    const int len = 4 + 4 * at.below(2);
+                    if (at.uniform() < 0.5f * pAtmo) add(start + b * bar, static_cast<float>(std::min(len, s.bars - b) * bar), SfxType::Atmosphere);
+                }
+            }
+        }
+    }
+
+    // The bank presets (23.09.2026, round "SFX"; Sfx.h, SfxPreset). Every event of the effects strip gets one
+    // of its type's family, drawn from the form's own stream, and no preset plays twice in one track -- the
+    // user's "wiederholen sich viel zu oft" was exactly that. A track with more events of a type than the
+    // family has presets starts a second round. The pick rides in the event's variant, which the score's
+    // lane carries to the engine (Engine.cpp, Sfx::trigger).
+    {
+        Rng pr;
+        pr.seed(mixSeed(seed ^ kSaltSfx, 0x505245ull));
+        std::vector<std::vector<int>> used(static_cast<size_t>(kNumSfxTypes));
+        for (SfxEvent& e : f.sfx) {
+            const int t = std::clamp(e.type, 0, kNumSfxTypes - 1);
+            if (sfxTypePart(static_cast<SfxType>(t)) != Part::Sfx) continue;
+            const int n = kSfxBankCount[t];
+            if (n <= 0) continue;
+            std::vector<int>& u = used[static_cast<size_t>(t)];
+            if (static_cast<int>(u.size()) >= n) u.clear();
+            int pick = pr.below(n);
+            while (std::find(u.begin(), u.end(), pick) != u.end()) pick = (pick + 1) % n;
+            u.push_back(pick);
+            e.variant = static_cast<uint16_t>(pick + 1);
+        }
+    }
     std::stable_sort(f.sfx.begin(), f.sfx.end(), [](const SfxEvent& a, const SfxEvent& b) { return a.beat < b.beat; });
     // Which phrase or bed variant each voice and bed event plays (19.09.2026): from the form seed, in the
     // order of the events, from a generator of its own -- nothing placed above moves. Until then the

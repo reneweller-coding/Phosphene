@@ -81,10 +81,48 @@ enum class SfxType : int { Riser = 0, Downlifter, Impact, Sweep, FormantShot, Re
                            Squelch, Bubble, Stutter, SubDrop, ReverseCrash,
                            FormantVoice, AlienChatter, SpokenWord, VoiceChop,
                            Bowl, Didgeridoo, JawHarp,
+                           // 23.09.2026, round "SFX": the long, pad-like layer the user asked for ("flaechigere und
+                           // laengere Effekte"): layered noise and detuned saws under a slow swell, two to eight bars.
+                           Atmosphere,
                            Count };
 constexpr int kNumSfxTypes = static_cast<int>(SfxType::Count);   ///< number of types
 constexpr int kSfxBaseNote = 48;                                   ///< MIDI note of the riser
 extern const char* const kSfxTypeNames[kNumSfxTypes];             ///< display names
+
+/**
+ * @brief One preset of the effect bank (23.09.2026, round "SFX"; Tools/sfx_bank.py).
+ *
+ * Twelve numbers that steer a type's synthesis (Sfx.cpp, voiceSample): the user heard the effects repeat
+ * -- "die kurzen Zips und Zaps wiederholen sich viel zu oft" -- because every type was one fixed sound.
+ * The bank holds 2048 presets in eleven families; the composer picks one per event and never the same
+ * twice in a track (Form.cpp, makeFormSfx), and the pick rides in the event's lane (SfxEvent::variant).
+ * A lane of 0 plays the type as it always did.
+ */
+struct SfxPreset {
+    float lengthScale;    ///< multiplier on the written length (one-shots only; risers and swells end on their beat)
+    float toneMix;        ///< 0..1: tonal layer against noise
+    float filterLo;       ///< octaves above 200 Hz where the filter starts (or sits low)
+    float filterHi;       ///< octaves above 200 Hz where it ends (or sits high)
+    float resonance;      ///< 0..1
+    float envShape;       ///< exponent or attack share of the envelope, by type
+    float pitchInterval;  ///< semitones of the tonal layer over the key's root
+    float detune;         ///< 0..1: spread of the detuned saws
+    float motionRate;     ///< Hz (or a type's own unit) of the slow modulation
+    float panSpeed;       ///< 0..1: how fast the event travels
+    float wet;            ///< 0..1: extra share into the hall (with sfx.wander)
+    float metal;          ///< 0..1: ring-modulated, metallic partials
+};
+extern const SfxPreset kSfxBank[];                 ///< every preset, family by family (SfxBankTables.cpp)
+extern const int kSfxBankSize;                     ///< 2048
+extern const int kSfxBankOffset[kNumSfxTypes];     ///< first preset of each type's family in kSfxBank
+extern const int kSfxBankCount[kNumSfxTypes];      ///< presets per type (0 for the types without a family)
+/** @brief The preset @p index (1-based, as the event's lane carries it) of @p type, or null for 0 / out of range. */
+inline const SfxPreset* sfxPreset(SfxType type, int index)
+{
+    const int t = static_cast<int>(type);
+    if (t < 0 || t >= kNumSfxTypes || index <= 0 || index > kSfxBankCount[t]) return nullptr;
+    return &kSfxBank[kSfxBankOffset[t] + index - 1];
+}
 static_assert(kSfxBaseNote + kNumSfxTypes <= 128, "every effect type needs a MIDI note");
 
 /**
@@ -138,8 +176,9 @@ public:
      * @param samples  its length
      * @param velocity 0..1
      * @param late     how many samples ago it ideally started (0 <= late < 1)
+     * @param preset   1-based index into the type's family of the bank (SfxPreset), 0 = the type as before
      */
-    void trigger(SfxType type, int samples, float velocity, double late);
+    void trigger(SfxType type, int samples, float velocity, double late, int preset = 0);
     /**
      * @brief Renders @p n stereo samples, replacing @p L and @p R; a sub drop is added to both, centred.
      *        A wandering event's growing reverb-send trajectory (sfx.wander) is folded back in here too
@@ -183,6 +222,8 @@ private:
         float panCurve = 1.0f;                 ///< pan(x) eases with x^panCurve
         float wetExpo = 1.0f;                  ///< the dry/wet crossfade eases with x^wetExpo
         /// @}
+        const SfxPreset* preset = nullptr;    ///< the bank preset this event plays, or null (23.09.2026)
+        double lfoPh = 0.0;                    ///< the atmosphere's slow motion
     };
     float voiceSample(Voice& v, float& pan, float& wetFrac);
 

@@ -133,7 +133,7 @@ void PhospheneEditor::buildSetPage()
     // The form (Phase 5): style profile, energy arc, whether tracks run at the profile's tempo, set length.
     page->addModuleGroup(proc_, Module::Compose, 0, "Form", tint, 2, compose::Style, compose::PresenceMatch - compose::Style + 1);   // two columns, so the row below still holds four groups
     // 22.09.2026, round "Lead": the two melodic knobs appended behind the form block (Params.h).
-    page->addModuleGroup(proc_, Module::Compose, 0, "Lead", tint, 2, compose::LeadDensity, 2);
+    page->addModuleGroup(proc_, Module::Compose, 0, "Lead", tint, 3, compose::LeadDensity, 3);   // + counter_mode (23.09.2026)
 
     // ---------------------------------------------------------------- what Phase 8 really is here
     // The two knobs above say what is *asked for*; these two lines say what the process *has*. They

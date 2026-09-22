@@ -476,7 +476,7 @@ void Engine::dispatch(const NoteEvent& e, double late)
                 stutter_.trigger(n, slice);
                 break;
             }
-            sfx_.trigger(t, n, vel, late);
+            sfx_.trigger(t, n, vel, late, e.lane);   // the lane carries the bank preset (23.09.2026, SfxEvent::variant)
             // The event half of the SFX chain's automation: a riser drags the shifter up with it, a
             // downlifter down, the reverse effects lift it a little, and a sweep opens the flanger.
             // The shift and the flanger are separate strands, so that the sweep that falls into a drop

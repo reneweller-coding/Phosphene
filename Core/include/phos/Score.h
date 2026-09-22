@@ -56,7 +56,7 @@ struct NoteEvent {
     double  beat = 0.0;       ///< start in beats from the start of the set
     float   length = 0.25f;   ///< duration in beats
     Part    part = Part::Kick; ///< generator
-    uint8_t lane = 0;         ///< lane within the part (percussion lane, layer)
+    uint16_t lane = 0;        ///< lane within the part (percussion lane, layer; an effect's bank preset since 23.09.2026, up to 512)
     uint8_t pitch = 36;       ///< MIDI note number
     uint8_t velocity = 100;   ///< 1..127
     uint8_t flags = 0;        ///< NoteFlag bits

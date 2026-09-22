@@ -224,6 +224,22 @@ enum class CellOp : int {
 constexpr int kNumCellOps = static_cast<int>(CellOp::Count);   ///< number of cell operators
 
 /**
+ * @brief How the counter-lead answers the lead (23.09.2026, round "Counter"; Melody.cpp, makeCounter).
+ *
+ * The user's genre matrix: Full-On call-and-response, Progressive and Darkpsy timbral, Hi-Tech
+ * micro-hocketing, Goa polyphonic; and his supplement's "MOTIF_ECHO" as the cheapest authentic counter.
+ * Drawn per track from the style's weights (LeadStyle::counterMode), or set by compose.counter_mode.
+ */
+enum class CounterMode : int {
+    Echo = 0,    ///< the lead's own beat notes and accents, delayed a dotted eighth or a beat, a fifth/octave/fourth up
+    Answer,      ///< answers in fixed rhythmic templates after each statement, a line of its own over B
+    Timbral,     ///< a texture: one long note per two-bar unit, sustained envelope and portamento
+    Hocket,      ///< short notes on the off sixteenths the lead leaves open
+    Count
+};
+constexpr int kNumCounterModes = static_cast<int>(CounterMode::Count);   ///< number of counter modes
+
+/**
  * @brief A style's lead vector (22.09.2026, round "Lead").
  *
  * The user's genre matrix -- Full-On call-and-response, Progressive timbral and sparse, Goa
@@ -244,6 +260,16 @@ struct LeadStyle {
     float  arcDepth = 0.05f;     ///< depth of the phrase's cutoff arc, normalised
     double archetype[kNumLeadArchetypes] = { 0.2, 0.2, 0.2, 0.2, 0.2 };   ///< weight of each LeadArchetype
     double cellOp[kNumCellOps] = { 0.0, 0.2, 0.2, 0.1, 0.15, 0.15, 0.2 };  ///< weight of each CellOp for a variation bar (Keep is never drawn)
+    /** @name 23.09.2026, round "Counter": the register and the counter's mode
+     *  The literature puts psytrance leads at 250 Hz .. 2 kHz with the weight around 500 Hz .. 1 kHz
+     *  (Psychedelic Island, "The science of frequency in psytrance"; Dance Midi Samples, "Making a
+     *  psytrance lead"); the lead's one-octave window sat at its lower end (C4 .. B4, 262 .. 494 Hz) and
+     *  the user heard it as "teils zu tief". The window moves up by `registerShift` semitones (plus a
+     *  semitone of per-track jitter), the counter an octave above it.
+     *  @{ */
+    int    registerShift = 5;                    ///< semitones the lead window (and with it the counter's) stands above C4
+    double counterMode[kNumCounterModes] = { 0.4, 0.5, 0.1, 0.0 };   ///< weight of each CounterMode (echo, answer, timbral, hocket)
+    /** @} */
 };
 
 /**
@@ -368,11 +394,13 @@ struct SfxEvent {
     float  length = 4.0f;  ///< beats
     int    type = 0;       ///< SfxType
     /**
-     * @brief Which variant a voice or a bed event plays (1..255; 0 = let the engine derive it from the
-     *        event's beat, as it did before 19.09.2026). Drawn from the track's form seed, so which phrase
-     *        speaks is a decision of the seed and not of where the event happens to fall (Engine.cpp).
+     * @brief Which variant a voice or a bed event plays (0 = let the engine derive it from the event's beat,
+     *        as it did before 19.09.2026), and since 23.09.2026 the bank preset of an effects-strip event
+     *        (Sfx.h, SfxPreset; 1-based, families of up to 512). Drawn from the track's form seed, so which
+     *        phrase speaks or which preset sounds is a decision of the seed and not of where the event
+     *        happens to fall (Engine.cpp).
      */
-    uint8_t variant = 0;
+    uint16_t variant = 0;
 };
 
 /** @brief The form of one track. */

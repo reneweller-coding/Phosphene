@@ -45,6 +45,7 @@ const char* const kBassRhythmNames[] = { "Pattern", "Corpus" };
 // 22.09.2026, round "Lead": "Auto (Style)" hands the choice to the style profile's lead vector (Form.h).
 const char* const kLeadDensityNames[] = { "Auto (Style)", "Sparse", "Medium", "Dense" };
 const char* const kPitchEntropyNames[] = { "Auto (Style)", "Low", "Medium", "High" };
+const char* const kCounterModeNames[] = { "Auto (Style)", "Echo", "Answer", "Timbral", "Hocket" };
 const char* const kPercRoleNames[kNumPercRoles] = { "Closed Hat", "Open Hat", "Ride", "Crash", "Clap", "Snare", "Rim",
                                                     "Shaker", "Tom", "Conga", "Zap", "Blip" };
 // The prefixes of the polyphonic instances, in the order of PolyInstance (Params.h): the voices' groups.
@@ -130,6 +131,9 @@ const ParamDesc kComposeParams[compose::Count] = {
     // and the rules' favourites (Melody.cpp, makeLead).
     { "lead_density",    "Lead Density",    "",      0.0f,   3.0f,   0.0f, Curve::Choice, kLeadDensityNames },
     { "pitch_entropy",   "Pitch Entropy",   "",      0.0f,   3.0f,   0.0f, Curve::Choice, kPitchEntropyNames },
+    // 23.09.2026, round "Counter": the counter-lead's mode (Form.h, CounterMode; Melody.cpp, makeCounter). At the end,
+    // in the enum's order (see the note above the style_mix row).
+    { "counter_mode",    "Counter Mode",    "",      0.0f,   4.0f,   0.0f, Curve::Choice, kCounterModeNames },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };
@@ -521,7 +525,7 @@ const char* const kDefaultPoly =
     // deeper envelope so the whip still opens). Pan and delay are its role's (see the lead above).
     "counter.pos_lfo_depth=0.25;counter.pos_lfo_beats=4;counter.amp_attack=1;counter.amp_decay=70;counter.amp_sustain=0;"
     "counter.amp_release=35;counter.delay_send=0.4;counter.delay_left=0;counter.delay_right=1;counter.hall_send=0.3;"
-    "counter.width=0.7;counter.duck=0.25;counter.level=-7;counter.pan=0.20;counter.glide=0;"
+    "counter.width=0.7;counter.duck=0.25;counter.level=-3;counter.pan=0.20;counter.glide=0;"   // level -7 -> -3 dB (23.09.2026: "kaum hoerbar")
     "counter.mod=Flanger;counter.mod_beats=4;counter.mod_depth=0.75;counter.mod_feedback=0.55;counter.mod_mix=0.28;"
     "counter.osc2_mix=0.30;counter.osc2_detune=6;counter.lfo_beats=4;counter.lfo_cutoff=0.35\n"
     // The stab: a short, bright chord -- a narrow supersaw through a filter envelope that closes within

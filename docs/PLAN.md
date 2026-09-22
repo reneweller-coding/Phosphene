@@ -7009,6 +7009,167 @@ listeningSeed, Voices.score, Variety.plans, SectionRules): grün. Voller ctest a
 handover/overlapTail, incomingOfBar, Rampen in transitionBar), `Core/src/Melody.cpp`
 (composeSfxBar-Schnitt), `Tests/selftest.cpp`; dieser Block.
 
+**23.09.2026, Counter: vier Modi, hörbar — und das Lead-Register nach der Literatur**
+
+Der Nutzer: „Die Counter-Leads sind bislang kaum hörbar." Und: „schau dir in der Literatur die
+empfohlenen Oktavlagen für Lead/Counter-Lead und Acid-Lines an. Teils kommen die mir zu tief vor."
+Zweite Runde der Nacht; zugleich Runde 2 der Melodie-Briefe (Counter-Modi, Stilvektor, `counter_mode`).
+
+*Befund Counter.* Drei Ursachen im Code: `counter.level = −7 dB`; die Peitsche der Dialog-Runde
+(45 % eines Sechzehntels, ~45 ms, bei jeder Note); und der Dialog-Test *verlangte* den Counter leiser
+und kürzer als den Lead. Dazu die Dramaturgie (Modell 3 des Nutzers: Drop 1 der Lead allein, der
+Haupt-Breakdown der Counter allein, Drop 2 beide) — sie bleibt.
+
+*Vier Modi* (`Form.h`, `CounterMode`; `Melody.cpp`, `makeCounter`), je Track aus dem Stilvektor
+gezogen oder mit `compose.counter_mode` gesetzt („Auto (Style)" voreingestellt, Gruppe „Lead"):
+- **Echo** — der Brief: „MOTIF_ECHO … trivial zu implementieren und thematisch automatisch kohärent".
+  Die Beat-Noten und Akzente des Leads, um ein punktiertes Achtel oder einen Beat verzögert, eine
+  Quinte, Oktave oder Quarte höher, im kontrastierenden Timbre, auf Schritten, die der Lead nicht
+  anschlägt; wo ein dichter Lead weniger als sechs davon lässt, darf das Echo seine Anschläge
+  doppeln.
+- **Answer** — der Modus der Runden zuvor, mit den vier Antwort-Templates des Briefs (Offbeat
+  Triple Stab x.x.x, Fast Cascade xxxx, Syncopated Hook x..x..x, Gallop Echo x..xx..x) im zweiten
+  Takt jeder Aussage, über B eine eigene Linie; Tonika als Zentrum, Akkordtöne auf schweren
+  Schritten, Ruhetöne offen/geschlossen im Wechsel — und die **komplementäre Kontur**: wo der Takt
+  des Leads stieg, neigt die Antwort nach unten (Gewicht e^(0,35·lean·Δ)).
+- **Timbral** — Progressive und Forest: eine ganze Note je Zweitakt-Einheit (Tonika, Quinte, Terz,
+  Quinte), hin und wieder eine zweite; die Stimme bekommt Sustain 0,75, Decay 400 ms, Release
+  220 ms, Filter-Decay 400 ms und 60 ms Portamento als **Offsets** auf ihre Parameter
+  (`trackStartControls`), so dass ein Track im anderen Modus die Knöpfe exakt spielt.
+- **Hocket** — Hi-Tech: kurze Noten auf den ungeraden Sechzehnteln, die der Lead nicht anschlägt
+  (halten darf er: der Hocket sitzt eine Oktave darüber), von der letzten Lead-Tonhöhe aus
+  auf- und abwärts, höchstens sechs je Takt. Erst mit „weder Anschlag noch Halten" gemessen: ein
+  dichter Zelltakt mit gehaltener Note ließ keinen freien Schritt, der Hocket schwieg in 5 von 26
+  Drops.
+Gate nach Modus (`composeMelodyBar`): Hocket peitscht wie zuvor, Answer klingt höchstens ein Achtel
+(0,6 der Spanne), Echo 0,8 der geschriebenen Länge, Timbral 0,95. Level −7 → **−3 dB**. Gewichte:
+Goa Echo/Answer/Hocket 0,5/0,3/0,2; Full-On 0,4/0,5/0,1 Timbral; Progressive Timbral 0,6, Echo 0,3;
+Dark Timbral 0,5, Hocket 0,3; Hi-Tech Hocket 0,6, Echo 0,3.
+
+*Register nach der Literatur.* Produktionsliteratur legt Psytrance-Leads in 250 Hz – 2 kHz mit dem
+Gewicht um 500 Hz – 1 kHz (Psychedelic Island, „The science of frequency in psytrance"; Dance Midi
+Samples, „Making a psytrance lead"; Foren nennen C4–C6). Unser Fenster C4..B4 (262–494 Hz) war das
+untere Ende — der Nutzer hörte richtig. Jetzt `LeadStyle::registerShift` in Halbtönen über C4, plus
+ein Halbton Jitter je Track: **Progressive/Dark 4 (E4..D#5), Full-On 5 (F4..E5), Goa/Hi-Tech 7
+(G4..F#5)**; die Counter eine Oktave darüber (E5.. bis F#6). `MelodyPlan::leadWindowLo` trägt das
+Fenster; Lead-Prior, Wurzel, Oktavprüfung, Counter-Fenster und Register-Guard lesen es. **Acid
+bleibt** in D3..D4: die 303 sitzt laut Literatur „in bass territory" oder bewusst höher als Textur;
+tiefer verbietet die Tiefenregel (unter 140 Hz nur Kick und Bass), höher läge sie im neuen
+Lead-Fenster — eine hohe Textur-Variante braucht die Acid im Register-Guard (sie ist heute keine
+„Linie" dort) und bleibt offen.
+
+*Folgefund: der Arp.* Mit dem Lead im E4..F#5 lag er in den Oktaven des Arps (Anker G3..F#4, hohe
+Ebene G4..F#5); der Guard fand keine Oktavverschiebung des ganzen Takts, die den Takt frei machte,
+und **ließ kollidierende Sechzehntel fallen**: 4 und 13 % Löcher in den Arps des Hör-Seeds, gemessen,
+in einer Linie mit der Regel „durchgehende Sechzehntel" (Regel 11), und die Takthälften-Regel 3
+brach (634/500). Jetzt weicht eine kollidierende Note **einzeln um eine Oktave** (auf, ab, zwei auf,
+in der Decke des Guards) und gibt nur nach, wo keine Oktave frei ist: Löcher 0 %, Hälften
+633/616, 692/714, 730/710.
+
+*Tests.* Dialog (a) liest die Fenster je Track (E4..G4-Böden, Counter darüber, nie ineinander); (c)
+das Gate je Modus (Hocket ≤ 0,25 Beat, Answer ≤ 0,3, Echo ≤ 0,8, Timbral ≥ 3) auf der
+Peitschen-Rezeptur bei −3 dB; (e) der Drone-Teppich über die Takte mit eigenem Boden (von der
+Übergabe bis zum nächsten Blend — über dem eigenen Blend klingt der Drone nur bei nahen Tonarten,
+transitionBar). `voices.score` (d): „keine Farbtöne" für alle Modi, die Antwortregeln nur für Answer,
+„nicht auf den Anschlägen" für Answer und Hocket. `testParams` prüft `counter_mode`. Genre-Regeln
+und Hör-Seed lesen das Fenster des Plans. Betroffene Abschnitte grün, Host-Test bitgleich mit dem
+neuen Knopf; voller ctest am Ende der Nacht.
+
+*Dateien.* `Core/include/phos/Form.h` (CounterMode, registerShift, counterMode-Gewichte),
+`Core/src/Form.cpp` (fünf Vektoren), `Core/include/phos/Params.h` + `Core/src/Params.cpp`
+(counter_mode, counter.level −3), `Core/include/phos/Melody.h` (leadWindowLo, counterMode,
+Fensterhelfer), `Core/src/Melody.cpp` (makeCounter neu, Fenster, Gate, Arp-Oktavausweichen),
+`Core/src/Composer.cpp` (Timbral-Offsets), `Plugin/EditorSetTab.cpp`, `Tools/render/main.cpp`
+(Register-Zeile), `Tests/selftest.cpp`; dieser Block.
+
+**23.09.2026, SFX-Bank: 2048 Presets in elf Familien, Atmosphären, weniger Zips und Zaps**
+
+Der Nutzer: „Die kurzen Zips und Zaps bei den SFX wiederholen sich viiiiiiiiiiiel zu oft und nerven
+dadurch mit der Zeit. Da brauchen wir DEUTLICH mehr verschiedene Effekte […] Ich bevorzuge dabei auch
+etwas flächigere und längere Effekte […] eine Library mit Presets […] mindestens 1024 besser 2048."
+
+*Befund.* Jeder der 19 Effekttypen war *eine* feste Synthese mit etwas Seed-Streuung — jeder Zap
+klang wie der letzte. Und der Haupt-Drop legte „Squelches in die Lücken": 1,5 je Takt, 72 in einem
+Drop von 48 Takten; Seed 42, Track 1 zählte **69 Squelches** unter 130 Effektereignissen. Die
+Dichteregel „nie zwei Groove-Takte ohne Zap/Glitch/Swell" (20.09.) füllte jede zweite Lücke mit
+einem Zap.
+
+*Literatur.* Produktionsliteratur beschreibt Riser als dreischichtig (tonaler Sweep, gefiltertes
+Rauschen, rhythmisches Element, mit versetzten Gipfeln), dazu Downlifter, Impacts, Whooshes/Sweeps
+— und **Atmosphären als Hintergrundschicht**, die in Breakdowns den Raum übernimmt (Myloops,
+„Designing trance risers, impacts and transition effects"; Psychedelic Island, „Deconstructing
+classic psytrance tracks"). Zur Häufigkeit nennt sie keine Taktzahlen, sondern Schichtung an
+Sektionsgrenzen und in Build-ups mit *steigender* Dichte — kein Dauerfeuer.
+
+*Die Bank* (`Tools/sfx_bank.py` → `Core/src/SfxBankTables.cpp`, lesbar `docs/sfx_bank.tsv`):
+**2048 Presets** in elf Familien aus einem Seed, einkompiliert (keine Datei kann fehlen). Ein Preset
+sind zwölf Zahlen (`Sfx.h`, `SfxPreset`): Längenfaktor, Ton/Rausch-Mischung, Filter-Start und -Ende
+in Oktaven über 200 Hz, Resonanz, Hüllkurvenform, Tonhöhenintervall über der Tonart, Verstimmung,
+Modulationsrate, Pan-Tempo, Hallanteil, Metall. Jede Synthese in `voiceSample` liest ihre Konstanten
+aus dem Preset; ohne Preset (Lane 0) gelten die alten Werte. Familien nach Länge gewichtet: Atmosphere
+512, Reverse Swell/Riser/Sweep je 256, Downlifter/Reverse Crash/Impact/Squelch je 128, Formant
+Shot/Zap je 96, Bubble 64 — Squelch als die dichteste kurze Familie am größten, Bubble am kleinsten.
+
+*Atmosphere* (neuer Typ, Note 67): zwei verstimmte Sägen auf Grundton und Preset-Intervall durch
+einen Tiefpass, der zwischen zwei Oktaven „atmet", ein Rauschband am selben Ort, wo das Preset es
+will ein metallischer Ring, unter einer Raised-Cosine-Hüllkurve (Anstieg über den Attack-Anteil des
+Presets, Halt, Abgang über das letzte Viertel, endet auf dem Zielbeat). Platzierung: Intro, Outro und
+Breakdown auf jeder Acht-Takt-Linie (8 Takte lang), Groove und Drop einmal je 16 Takte ab Takt 9 (4
+oder 8 Takte), nie im Build-up (der Riser gehört ihm), nie über dem Blend des Outros (die letzten
+`kDjOverlapMax` Takte gehören dem nächsten Track).
+
+*Weniger Zips.* Die kurze Candy mit halber Chance; die Drop-2-Squelches auf 0,6 je Takt und das Paar
+nur in jedem dritten ungeraden Takt (~0,7 statt 1,5 je Takt); die Dichteregel lässt **drei** leere
+Takte durch und füllt den vierten — mit Sweep (2 Beats) oder Reverse Swell (bis zum nächsten
+Downbeat) vor Zap und Squelch.
+
+*Kein Preset zweimal pro Track* (`makeFormSfx`): jedes Ereignis des Effekt-Streifens zieht aus der
+Familie seines Typs aus dem Form-Strom; ein benutztes Preset ist für den Track gesperrt, eine
+erschöpfte Familie beginnt eine zweite Runde. Der Griff reist im `SfxEvent::variant`, den die Lane
+der Partitur zur Engine trägt (`Sfx::trigger(…, preset)`). **Falle:** Lane und Variante waren
+8 Bit — 512 Atmosphere-Presets liefen modulo 256 um, ein Preset kam doppelt und der Index las das
+falsche Preset; beide sind jetzt 16 Bit (`NoteEvent::lane`, `SfxEvent::variant`).
+
+*Gemessen* (Selbsttest, Seed 303, acht Tracks à 256): 796 Effektereignisse, jedes mit Preset, **kein
+Preset zweimal in einem Track**, 77 Atmosphären; **83 %** der Effektdauer in Ereignissen von zwei
+Takten oder länger (Ziel 60 %). Jeder Typ weiter unter −30 dB seines Anteils unter 140 Hz.
+
+*Tests.* `testSfx`: Bank-Prüfung (2048, elf Familien, jedes Feld endlich, Lane 0 und familienlose
+Typen geben nichts) und die Score-Prüfung oben; Dialog (f) auf „nie vier Takte ohne Ereignis";
+Arrangement „Squelches in den Lücken" auf ein Drittel der Takte. Voller ctest am Ende der Nacht.
+
+*Dateien.* `Tools/sfx_bank.py`, `Core/src/SfxBankTables.cpp`, `docs/sfx_bank.tsv`,
+`Core/include/phos/Sfx.h` (Atmosphere, SfxPreset, Bank-Externs, trigger), `Core/src/Sfx.cpp`
+(Preset-Hand auf jeder Synthese, Atmosphere), `Core/src/Form.cpp` (Atmosphären, Candy-Chance,
+Drop-2-Squelches, Dichteboden, Preset-Vergabe), `Core/src/Engine.cpp`, `Core/include/phos/Score.h` +
+`Core/include/phos/Form.h` (16-Bit-Lane/-Variante), `Core/CMakeLists.txt`, `Tests/selftest.cpp`;
+dieser Block.
+
+**23.09.2026, Form: minimale Fuzziness — acht Takte wandern zwischen Nachbarsektionen**
+
+Der Nutzer: „Die Vorgabe der Takte scheinst du SEHR ernst genommen zu haben, dadurch haben alle
+Stücke eines Genres immer genau dieselbe Einteilung. Da sollten wir durchaus eine (minimale) Fuzziness
+(schau dir mal typische Psytrance-Songs an) erlauben." Seine Wahl: minimal, ±8, ein Zug pro Track.
+
+*Literatur.* Intro ein bis zwei Minuten, Haupt-Breakdown 64–96 Takte mit Bogen, Drop 32–64,
+Änderungen alle 8 Takte, größere alle 16, Sektionswechsel alle 32 (Psytrance Blueprint, „7 rules of
+structure"; Psychedelic Island, „Track structure"). Unsere Templates liegen in diesem Rahmen — nur ohne
+jede Streuung.
+
+*Umsetzung* (`Form.cpp`, `jitterForm`, nach `fitTemplate`): aus dem Form-Seed ein Zug (sieben von
+zehn Tracks) oder zwei: acht Takte von einer Sektion zur Nachbarsektion, wo beide in ihren Grenzen
+bleiben — Intro 16–48, Groove 16–96, Build-up 8–32, Drop 24–64, Breakdown 16–64, Outro 16–48. Die
+Summe bleibt exakt, alles Vielfache von acht, die Reihenfolge und der Höhepunkt stehen. Alles
+Nachgelagerte liest die Sektionen, die es bekommt: Roll und Pre-Drop-Break aus der Länge des
+Build-ups, Energien aus dem Bogen an den wirklichen Takten, der Blend nie länger als Intro oder Outro
+(ein Intro von 24 gibt einen Blend von 24; der Kick setzt an der Übergabe ein).
+
+*Tests.* Arrangement (a): jede Sektion innerhalb von 16 Takten der Regel, nicht jede Form das Template,
+Drops ≥ 24, jede Länge 128–320 exakt und in den Grenzen; `testForm`: Intro/Outro 16–48 statt genau
+32; DJ-Starts: Blend = min(Stil-Blend, Intro, Outro des Vorgängers). Voller ctest am Ende der Nacht.
+
+*Dateien.* `Core/src/Form.cpp` (kSaltFuzz, jitterForm), `Tests/selftest.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
