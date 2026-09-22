@@ -6665,6 +6665,76 @@ Kandidat 0 nahm. Gezogen werden alle zwölf weiterhin.
 *Dateien.* `Core/src/Composer.cpp` (der mildeste Kandidat für den ersten Track, dreimal);
 `Tests/selftest_probe.cpp` (die Vorbedingung); dieser Block.
 
+**22.09.2026, Start in 2,8 s statt 12,8 — und jeder Knopf der GUI einmal gedrückt**
+
+Der Nutzer: „Der Start des Programms dauert relativ lange, was ist dafür der Grund? Zudem
+funktionieren einige Knöpfe in der GUI nicht, z.B. in Perform-Tab."
+
+*Wo die Startzeit hinging.* Der Host-Test misst sie seit der Speed-Runde: „plan: the first track was
+ready after 12.78 s" — von Play bis zum ersten Sample. `phos_plandump --time` mit je einem
+abgeschalteten Abgleich zerlegt einen Track-Plan (Seed 31, 8,33 s):
+
+| | |
+|---|---|
+| alles aus | 0,15 s |
+| nur Auto Gain aus | 2,17 s → **Auto Gain kostet ~6,2 s** |
+| nur Level Match aus | 6,22 s → ~2,1 s |
+| nur Presence Match aus | 6,74 s → ~1,6 s |
+
+Zwei Ursachen. **Erstens plante das Plugin seriell:** der Kern hat einen Proben-Thread als
+Voreinstellung, und kein Host hat das je angehoben — auf einer Maschine mit 24. `Probe.h` begründet,
+warum das damals so blieb: der Einfluss von acht Arbeitsthreads auf den Audio-Thread eines Hosts war
+nicht messbar. Der Host-Test misst genau das — Kosten des Audio-Threads und längste Lücke, während der
+Composer-Thread plant. Mit der Hälfte der Kerne (`hardware_concurrency()/2`, von `Probe.cpp` auf
+`kMaxThreads` gekappt): 12,8 % statt 13,5 %, keine Lücke über 150 ms. → 8,8 s.
+
+**Zweitens wartete alles auf Auto Gain**, zwei volle 16-Takt-Mixrenders mit Sekantenschritt. Dem
+Nutzer zur Wahl gestellt — später einblenden, so lassen, oder Auto Gain aus —, er wählte
+**einblenden.** `Composer::setDeferMasterGain()`: der Track wird ohne Master-Offset geplant
+(`TrackPlan::masterDeferred`), spielt nach ~2,8 s; `serviceComposer` misst den Offset mit
+`completeMasterGain()`, schreibt ihn in den gecachten Plan (ein späterer Seek in diesen Track schiebt
+ihn dann wie jeder andere am Start) und schickt ihn als `ControlEvent::Kind::Offset` über eine
+**Vier-Takt-Rampe** — eine Phrase, keine Korrektur. Sie landet im Intro, das 16 Takte ohne Kick hat
+(~26 s), die Messung braucht ~6 s: der Pegel steht lange vor dem ersten Drop. Gemessen: +8,81 dB
+nachträglich ermittelt, im Engine-Wert angekommen.
+
+*Die Grenze, die der Test gezogen hat.* Der erste Lauf mit der Verschiebung brach „the plugin equals
+phos_render bit for bit" — erste Abweichung bei Sample 83. Richtig so: ein **Offline-Bounce** muss
+dieselben Samples schreiben wie `phos_render`, das ist der Determinismus-Vertrag des Projekts, und ein
+eingeblendeter Master ist ein anderes Signal. `setNonRealtime(true)` schaltet die Verschiebung ab und
+verwirft die darunter gemachten Pläne, damit der Bounce ganz plant. `phos_render` und die Quest-App
+rufen `setDeferMasterGain` nie; für sie ändert sich nichts.
+
+*Die Knöpfe.* Nichts im Host-Test hatte je einen gedrückt. Jetzt geht er jede Registerkarte durch,
+sammelt jeden `juce::Button`, drückt ihn mit einem echten Maus-Down/Up und vergleicht davor/danach
+einen Fingerabdruck aus allen Parametern, Seed, Transport, Locks, Reroll-Zählern, Registerkarte,
+Mute, Follow-host und den Schaltzuständen der Seite. **Alle 38 reagieren.** Vier Anläufe hat die
+Messung gebraucht, und jeder Fehlversuch war eine Lehre über das Messen selbst:
+
+- `triggerClick()` *postet* eine Nachricht; ohne Nachrichtenschleife passiert nichts — 249 „tot".
+- Der Rundgang drückte vorher jeden Mute-Schalter im Mixer-Tab, also war Drop-out wirkungslos, weil
+  Kick und Bass längst stumm waren. Jeder Druck startet jetzt vom Werkszustand.
+- Er drückte auch `Stop`, und Drop-out heißt „ein Takt ab hier" — ohne Transport keine Taktlinie.
+- Die zwölf Lane-Knöpfe der Percussion ändern nur die Ansicht; der Fingerabdruck sah sie nicht.
+- Drei Knöpfe machen einen Zustand *rückgängig* (Play, Reset, Clear all locks) und brauchen ihn erst.
+
+Die 249 vom ersten Anlauf waren übrigens 15 Registerkarten-Knöpfe × 16 Seiten; echte Knöpfe sind 38.
+
+*Der eine echte Fund:* **Drop-out schluckt den Druck kommentarlos, solange nichts läuft** —
+`serviceMacros` löscht das Macro im selben Aufruf, der es setzt, weil es keine Taktlinie zum
+Loslassen gibt. Ein Knopf, der aktiv aussieht und nichts tut. Er wird jetzt ausgegraut, wenn der
+Transport steht (`EditorPerform.cpp`). Das ist plausibel das, was der Nutzer gesehen hat; einen
+anderen defekten Knopf konnte der Rundgang nicht finden.
+
+*Testlauf.* Voller `ctest`: 114 von 114.
+
+*Dateien.* `Core/include/phos/Composer.h` + `Core/src/Composer.cpp` (`setDeferMasterGain`,
+`completeMasterGain`, `TrackPlan::masterDeferred`, `mixEarly` ohne Verschiebung);
+`Plugin/PluginProcessor.cpp` (Proben-Threads im Konstruktor, Auto Gain nach dem Start in
+`serviceComposer`, `setNonRealtime` ohne Verschiebung); `Plugin/EditorPerform.cpp` (Drop-out
+ausgegraut ohne Transport); `Tests/hosttest.cpp` (der Knopf-Rundgang, das Eintreffen des Offsets,
+die Threads nicht mehr auf 1 gepinnt); dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

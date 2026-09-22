@@ -660,10 +660,13 @@ int main(int argc, char** argv)
         // that it does not, over three seconds, at a block size that leaves 5.3 ms per block.
         const double sr = 48000.0;
         const int block = 256;
-        // What is timed here is the shipped plugin's plan: one probe thread, no cache (round "speed").
+        // What is timed here is the shipped plugin's plan, so the thread count is the plugin's own --
+        // which since 22.09.2026 it sets itself in its constructor (the machine's cores, clamped to
+        // Probe.h's kMaxThreads). Until then this pinned it to 1, which was the shipped behaviour and
+        // is what made "Play to the first sample" take 12.8 s. The cache stays off: a user starting
+        // the plugin for the first time has none either.
         const int probeThreads = phos::probe::threads();
         const std::string probeCache = phos::probe::cacheDir();
-        phos::probe::setThreads(1);
         phos::probe::setCacheDir("");
         auto p = std::make_unique<PhospheneProcessor>();
         p->setFollowHost(false);
@@ -709,6 +712,38 @@ int main(int argc, char** argv)
         check(allFinite, "the live path stays finite");
         check(loudBlocks > blocks * 3 / 4, "the composer thread keeps the engine fed ("
                                                + juce::String(loudBlocks) + " of " + juce::String(blocks) + " blocks sounding)");
+        // 22.09.2026: Auto Gain is measured after the start now, so the check is that it *arrives*.
+        // The plan starts deferred with no offset; within a few seconds of playing the composer
+        // thread has measured it, written it into the plan and pushed it as a two-bar ramp, and the
+        // engine's effective master gain has to end up at the knob plus that offset.
+        {
+            phos::TrackPlan first;
+            const auto t0 = std::chrono::steady_clock::now();
+            bool arrived = false;
+            while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 60.0) {
+                buf.clear(); midi.clear();
+                p->processBlock(buf, midi);
+                if (p->tryReadTrack(0, first) && !first.masterDeferred && first.masterGainDb != 0.0f) { arrived = true; break; }
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+            check(arrived, "the deferred Auto Gain offset is measured while the set plays ("
+                               + juce::String(first.masterGainDb, 2) + " dB)");
+            // And it reaches the engine: the ramp is two bars, so a few of them are rendered here.
+            const int gainId = p->params().find("master.gain");
+            const float knob = p->params().get(gainId);
+            float eff = knob;
+            for (int i = 0; i < 2000 && std::fabs(eff - (knob + first.masterGainDb)) > 0.25f; ++i) {
+                buf.clear(); midi.clear();
+                p->processBlock(buf, midi);
+                eff = p->engine().effective(gainId);
+            }
+            std::printf("Auto Gain: nachtraeglich gemessen %+.2f dB, im Engine-Wert %+.2f dB (Knopf %+.2f)\n",
+                        static_cast<double>(first.masterGainDb), static_cast<double>(eff), static_cast<double>(knob));
+            check(std::fabs(eff - (knob + first.masterGainDb)) <= 0.25f,
+                  "and rides into the engine over its ramp (knob " + juce::String(knob, 2)
+                      + " dB, effective " + juce::String(eff, 2) + " dB, wanted "
+                      + juce::String(knob + first.masterGainDb, 2) + ")");
+        }
         check(worstRun * block / sr < 0.15, "no gap longer than 150 ms while it plays (worst "
                                                 + juce::String(worstRun * block / sr * 1000.0, 1) + " ms)");
         // What the editor's pattern rolls draw: the bars the conductor has composed, by part.
@@ -1002,6 +1037,124 @@ int main(int argc, char** argv)
                     painted = painted && img.isValid();
                 }
                 check(painted, "every tab lays out and paints");
+
+                // 22.09.2026, the user: "zudem funktionieren einige Knoepfe in der GUI nicht, z.B. in
+                // Perform-Tab". Nothing here has ever pressed one. So: walk every tab, find every
+                // button, press it, and see whether anything in the processor moves -- its
+                // parameters, its seed, its transport, its curation. A button that changes nothing
+                // is either dead or needs a state this test has not set up, and either way it is
+                // worth naming.
+                //
+                // Buttons whose caption ends in "..." open a modal file chooser and would hang a
+                // test with no user; they are listed rather than pressed.
+                std::vector<juce::Button*> buttons;
+                auto snapshot = [&] {
+                    juce::String sig;
+                    const phos::ParamStore& ps = p->params();
+                    for (int i = 0; i < ps.count(); ++i) sig << juce::String(ps.get(i), 4) << ",";
+                    const TransportView tv = p->transport();
+                    sig << (tv.playing ? "P" : "-") << juce::String(p->seed()) << "," << juce::String(tv.bar)
+                        << "," << juce::String(phos->tab())
+                        << (p->muted() ? "M" : "-") << (p->followsHost() ? "F" : "-");
+                    for (int u = 0; u < 4; ++u)
+                        for (int k = 0; k < 4; ++k) sig << (p->isLocked(static_cast<phos::LockUnit>(u), k) ? "L" : ".");
+                    // And the page itself: the twelve percussion lane buttons choose which lane the
+                    // page shows and touch no parameter at all, which is working, not dead.
+                    for (const juce::Button* x : buttons) sig << (x->getToggleState() ? "1" : "0");
+                    for (int u = 0; u < 4; ++u)
+                        for (int k = 0; k < 4; ++k)
+                            sig << juce::String(p->variation(static_cast<phos::LockUnit>(u), k));
+                    return sig;
+                };
+                // The transport runs: a drop-out means "one bar, from here", so with nothing playing
+                // there is no bar line to release on and the macro is cleared the moment it is set
+                // (PluginProcessor.cpp, serviceMacros). Pressing it stopped is not a fair test of it.
+                p->play();
+                { juce::AudioBuffer<float> warm(2, 256); feed(*p, warm, 64); }
+                // Every press starts from the same state. Without this the walk masks itself: the
+                // Mixer tab's mute toggles come before the Perform tab, so by the time the drop-out
+                // is pressed the kick and the bass are already muted and the macro -- whose whole
+                // job is to mute them -- changes nothing and reads as dead.
+                phos::ParamStore pristine;
+                pristine.copyValuesFrom(p->params());
+                std::function<void(juce::Component&)> collect = [&](juce::Component& c) {
+                    for (int i = 0; i < c.getNumChildComponents(); ++i) {
+                        juce::Component* k = c.getChildComponent(i);
+                        if (k == nullptr) continue;
+                        if (auto* b = dynamic_cast<juce::Button*>(k)) buttons.push_back(b);
+                        collect(*k);
+                    }
+                };
+                juce::StringArray dead, dialogs;
+                int pressed = 0;
+                for (int t = 0; t < PhospheneEditor::tabNames().size(); ++t) {
+                    phos->setTab(t);
+                    phos->setBounds(0, 0, 1280, 800);
+                    phos->resized();
+                    buttons.clear();
+                    collect(*phos);
+                    for (juce::Button* b : buttons) {
+                        const juce::String name = b->getButtonText().isNotEmpty() ? b->getButtonText() : b->getName();
+                        if (name.isEmpty() || !b->isVisible()) continue;
+                        if (name.endsWithChar('.')) { dialogs.addIfNotAlreadyThere(name); continue; }
+                        p->params().copyValuesFrom(pristine);
+                        p->clearCuration();
+                        // And the transport runs again: "Stop" is one of the buttons this walk
+                        // presses, and everything after it would otherwise be judged with the set
+                        // standing still -- which is a fair verdict for none of them and a wrong one
+                        // for the drop-out, whose meaning is "one bar from here".
+                        p->play();
+                        // Three buttons undo a state rather than make one, and from a pristine start
+                        // they have nothing to undo. Each gets the state it is for.
+                        if (name == "Play") p->stop();
+                        if (name.startsWith("Reset")) p->params().set(p->params().find("compose.bpm"), 151.0f);
+                        if (name.startsWith("Clear all")) p->setLock(phos::LockUnit::Track, 0, true);
+                        // A lane button that is already the chosen lane has nothing to change, and
+                        // lane 1 is the default one. Stand somewhere else first.
+                        if (t == TabPerc && name.containsOnly("0123456789"))
+                            phos->setPercLane((name.getIntValue() - 1 + 1) % kPercLanes);   // any lane but its own
+                        // The header's own tab buttons are pressed on one page only: pressing them
+                        // is what changes the page, and every later button of this page would then
+                        // be hidden and skipped (measured: the walk fell from 237 presses to 24).
+                        if (PhospheneEditor::tabNames().contains(name) && t != 0) continue;
+                        if (name == PhospheneEditor::tabNames()[t]) continue;   // the page's own tab
+                        const juce::String before = snapshot();
+                        // A real press, not triggerClick(): that one *posts* a command message, and a
+                        // test with no message loop never dispatches it -- which is why the first run
+                        // of this block reported all 249 buttons dead, Play and Stop included. A
+                        // mouse down/up pair runs Button's own path synchronously, including the
+                        // onStateChange that a held button (the stutter) hangs off.
+                        const juce::MouseEvent me(juce::Desktop::getInstance().getMainMouseSource(),
+                                                  b->getLocalBounds().getCentre().toFloat(), juce::ModifierKeys::leftButtonModifier,
+                                                  1.0f, 0.0f, 0.0f, 0.0f, 0.0f, b, b,
+                                                  juce::Time::getCurrentTime(), b->getLocalBounds().getCentre().toFloat(),
+                                                  juce::Time::getCurrentTime(), 1, false);
+                        // Through Component*: Button re-declares the two handlers protected, and
+                        // access is checked on the static type while the call still dispatches to
+                        // Button's override.
+                        juce::Component* asComponent = b;
+                        asComponent->mouseDown(me);
+                        // A held button (the stutter) is only doing anything *while* it is held, so
+                        // it is read here rather than after the release, where it is back at zero by
+                        // design and would look dead.
+                        const bool heldDoesSomething = snapshot() != before
+                                                    || p->macroValue(Macro::Stutter) != 0.0f
+                                                    || p->macroValue(Macro::DropOut) != 0.0f;
+                        asComponent->mouseUp(me);
+                        p->serviceMacros();   // the processor's 30 Hz tick, turned by hand
+                        const juce::String after = snapshot();
+                        phos->setTab(t);      // back to the page this walk is on
+                        ++pressed;
+                        if (after == before && !heldDoesSomething) dead.addIfNotAlreadyThere(
+                            juce::String(PhospheneEditor::tabNames()[t]) + " / " + name);
+                    }
+                }
+                std::printf("  Knoepfe: %d gedrueckt, %d ohne Wirkung, %d Dialoge uebersprungen (%s)\n",
+                            pressed, dead.size(), dialogs.size(), dialogs.joinIntoString(", ").toRawUTF8());
+                if (!dead.isEmpty()) std::printf("  ohne Wirkung: %s\n", dead.joinIntoString(" | ").toRawUTF8());
+                check(pressed > 30 && dead.isEmpty(),
+                      "every button in the editor does something when it is pressed ("
+                          + juce::String(pressed) + " pressed, " + juce::String(dead.size()) + " without effect)");
             }
         }
         editor.reset();

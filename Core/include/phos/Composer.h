@@ -215,6 +215,16 @@ struct TrackPlan {
     float  arcIn = 0.7f, arcOut = 0.7f;        ///< the set's energy arc where the track starts and ends
     double partLoudness[kMelodyParts] = {};   ///< probe loudness of each melodic part alone, LUFS
     float  partGainDb[kMelodyParts] = {};     ///< level correction of each melodic part against the first track's
+    /**
+     * @brief The master offset has not been measured yet; it arrives later (22.09.2026).
+     *
+     * Only ever true when a host asked for it (Composer::setDeferMasterGain). Auto Gain is three
+     * quarters of the time it takes to plan a track -- two whole-mix renders with a secant step --
+     * and a plugin that waits for it shows nine seconds of silence after the button. With this the
+     * track can play as soon as the level match is done, about two, and the offset is measured
+     * behind it and rides in over a ramp while the intro plays.
+     */
+    bool   masterDeferred = false;
     double mixLoudness = 0.0;       ///< probe loudness of the whole mix after the master, before the loudness offset
     float  masterGainDb = 0.0f;     ///< the offset that brings the mix to master.target_lufs (Auto Gain)
     /** @name The presence match (19.09.2026, round "polish"; Composer.cpp, matchPresence)
@@ -267,6 +277,24 @@ public:
     explicit Composer(uint64_t seed = 1) : seed_(seed) {}
     /** @brief Changes the set seed (forgets cached plans). */
     void setSeed(uint64_t seed) { seed_ = seed; plans_.clear(); walk_.clear(); }
+    /**
+     * @brief Plan tracks without their Auto Gain offset; a host measures it afterwards.
+     *
+     * For the plugin and nothing else: `phos_render` is the determinism oracle and plans whole, and
+     * the Quest app has one small core and no one waiting at a button. Off by default, so every
+     * program that does not ask is exactly where it was.
+     */
+    void setDeferMasterGain(bool on) { deferMaster_ = on; }
+    /** @brief Whether the master offset is being deferred. */
+    bool defersMasterGain() const { return deferMaster_; }
+    /**
+     * @brief Measures the master offset of a deferred track and puts it into the cached plan.
+     *
+     * Runs the two whole-mix probes, so never on the audio thread and never while that track's plan
+     * is being read by another thread. Returns the gain in dB; 0 when the track was not deferred (it
+     * already has it) or Auto Gain is off.
+     */
+    float completeMasterGain(const ParamStore& p, int index) const;
     /** @brief The set seed. */
     uint64_t seed() const { return seed_; }
 
@@ -433,6 +461,7 @@ private:
     uint64_t laneSeedOf(int track, int lane) const;
 
     uint64_t seed_;
+    bool deferMaster_ = false;      ///< setDeferMasterGain: the plugin measures Auto Gain after the start
     mutable std::vector<TrackPlan> plans_;
     mutable std::vector<TrackWalk> walk_;
     mutable std::vector<float> planKnobs_;

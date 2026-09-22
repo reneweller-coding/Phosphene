@@ -4,6 +4,8 @@
  */
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "phos/Probe.h"
+#include <thread>
 #include "phos/Clock.h"
 #include "phos/Model.h"
 #include "phos/SetFile.h"
@@ -445,8 +447,32 @@ PhospheneProcessor::PhospheneProcessor()
     // renders -- the core has to know where the shipped tables and the two learned models are. The
     // table load itself happens in the first Engine::prepare() and only once for the process.
     installSearchPaths();
+    // 22.09.2026, the user: "der Start des Programms dauert relativ lange". Measured, from Play to
+    // the first sample: 12.8 s, and almost all of it is one thing -- the first track's level match,
+    // which renders the foundation, each melodic part, the two presence probes and the mix twice.
+    // The core's own default is a single probe thread (Probe.cpp), and no host ever raised it, so the
+    // plugin planned its first track serially on a machine with 24 of them.
+    //
+    // Parallel probes are not an approximation: testProbeSchedule renders the same plans with one,
+    // three and eight threads and compares them bit for bit, cold library included.
+    //
+    // Probe.h left this off for the plugin on purpose, and the reason it gives is the right one:
+    // "in the plugin the plan is made next to a running audio thread, where eight busy worker
+    // threads for several seconds are a risk this round could not show to be harmless". The host
+    // test can show it -- it renders live, at a device's rate, while the composer thread plans ahead,
+    // and it measures both the audio thread's own cost and the longest gap in the output. With this
+    // on: 14.0 % of a core against 13.5 % before, no gap over 150 ms. But that is one machine with
+    // twenty-four cores, and the concern is a small one, so half of them is what is taken and the
+    // other half stays for the host. Probe.cpp clamps to kMaxThreads.
+    //
+    // It happens here rather than in prepareToPlay because the composer thread starts with the
+    // processor, and a test that wants another number sets it after construction, as they all do.
+    const int cores = static_cast<int>(std::thread::hardware_concurrency());
+    phos::probe::setThreads(juce::jmax(1, cores / 2));
     engine_ = std::make_unique<Engine>();
     composer_ = std::make_unique<Composer>(seed_.load());
+    // The plugin plans without Auto Gain and measures it once the music is running (serviceComposer).
+    composer_->setDeferMasterGain(true);
     conductor_ = std::make_unique<PlugConductor>(*engine_, *composer_);
     conductor_->setCueMarks(&cueMarks_);
     buildParameters();
@@ -620,6 +646,18 @@ void PhospheneProcessor::setNonRealtime(bool offline) noexcept
 {
     juce::AudioProcessor::setNonRealtime(offline);
     offline_.store(offline, std::memory_order_release);
+    // Offline is a bounce, and a bounce has to be the same samples phos_render writes -- the whole
+    // determinism contract of this project rests on it (`the plugin equals phos_render bit for bit`,
+    // Tests/hosttest.cpp). Deferring Auto Gain is a *live* convenience: it lets the music start
+    // before the offset is measured and rides it in over a ramp, which is a different signal. So the
+    // deferral is switched off here, and the plans made under it are thrown away so the bounce plans
+    // whole. (22.09.2026.)
+    const std::lock_guard<std::mutex> lock(composeLock_);
+    if (composer_->defersMasterGain() == offline) {
+        composer_->setDeferMasterGain(!offline);
+        composer_->setSeed(seed_.load(std::memory_order_relaxed));   // clears the cached plans
+        plansStale_.store(true, std::memory_order_release);
+    }
 }
 
 void PhospheneProcessor::composerLoop()
@@ -685,6 +723,50 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
     if (genReset_.load(std::memory_order_acquire) != genLocal_) return;   // waiting for step 3
     conductor_->pump(params(), kHorizonBeats, &midiRing_, engineLock_);
     genPrimed_.store(genLocal_, std::memory_order_release);
+
+    // ---------------------------------------------------------------- Auto Gain, after the start
+    //
+    // 22.09.2026, at the user's decision. Auto Gain is three quarters of the time it takes to plan a
+    // track -- two whole-mix renders with a secant step between them -- and waiting for it put nine
+    // seconds of silence between the button and the first sound. The track is planned without it now
+    // (Composer::setDeferMasterGain, set in the constructor) and plays after about two; the offset is
+    // measured here, on this thread, while the music is already running, and rides in over a ramp.
+    //
+    // The ramp is four bars -- a phrase -- and it lands in the intro: a track opens with sixteen
+    // bars without a kick,
+    // some twenty-six seconds at 145 BPM, and the measurement takes about six. So the level settles
+    // long before the first drop, and what a listener hears is the intro coming up to level rather
+    // than a step. `ControlEvent::Kind::Offset` already ramps with a raised cosine over `length`
+    // beats, so this is one event, not a new mechanism.
+    //
+    // Only for the track that is playing, and only once: completeMasterGain writes the gain into the
+    // cached plan and clears the flag, so a later seek into the same track pushes it at the start
+    // like any other track's.
+    if (composer_->defersMasterGain()) {
+        const int playingTrack = composer_->trackOfBar(params(), juce::jmax(0, static_cast<int>(
+            musicalBeat_.load(std::memory_order_relaxed) / kBeatsPerBar)));
+        phos::TrackPlan plan;
+        if (tryReadTrack(playingTrack, plan) && plan.masterDeferred) {
+            const float gain = composer_->completeMasterGain(params(), playingTrack);
+            {
+                const std::lock_guard<std::mutex> pl(plansLock_);
+                if (playingTrack < static_cast<int>(plans_.size())) {
+                    plans_[static_cast<size_t>(playingTrack)].masterGainDb = gain;
+                    plans_[static_cast<size_t>(playingTrack)].masterDeferred = false;
+                }
+            }
+            const ParamStore& ps = params();
+            const ParamDesc& mg = ps.desc(ps.base(Module::Master) + master::Gain);
+            ControlEvent c;
+            c.beat = engine_->beatPosition() + 1.0;   // a beat ahead of the play head, never behind it
+            c.param = static_cast<int16_t>(ps.base(Module::Master) + master::Gain);
+            c.kind = ControlEvent::Kind::Offset;
+            c.value = gain / (mg.maxValue - mg.minValue);
+            c.length = 4.0f * static_cast<float>(kBeatsPerBar);   // a phrase, not a correction
+            const std::lock_guard<std::mutex> eng(engineLock_);
+            engine_->pushControl(c);
+        }
+    }
 
     // With the rings filled, the spare time goes into planning the tracks ahead: the editor's list
     // of tracks comes from here, and a seek into a track that is already planned is instant. One

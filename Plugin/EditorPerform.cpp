@@ -100,7 +100,16 @@ void PhospheneEditor::refreshPerformPage()
         const float v = proc_.macroValue(static_cast<Macro>(i));
         if (macroSlider_[i] != nullptr && std::fabs(static_cast<float>(macroSlider_[i]->getValue()) - v) > 1.0e-4f)
             macroSlider_[i]->setValue(v, juce::dontSendNotification);
-        if (macroButton_[i] != nullptr) macroButton_[i]->setToggleState(v > 0.0f, juce::dontSendNotification);
+        if (macroButton_[i] != nullptr) {
+            macroButton_[i]->setToggleState(v > 0.0f, juce::dontSendNotification);
+            // 22.09.2026: a drop-out means "one bar, from here", so with the transport standing
+            // still there is no bar line to let go on and the processor clears the macro in the same
+            // call that sets it (PluginProcessor.cpp, serviceMacros). Pressing it then did exactly
+            // nothing and said nothing -- a button that looks alive and is not. It now greys out
+            // while nothing is playing, so the page says why instead of swallowing the press.
+            if (static_cast<Macro>(i) == Macro::DropOut)
+                macroButton_[i]->setEnabled(proc_.transport().playing);
+        }
         if (v == 0.0f) continue;
         if (s.isNotEmpty()) s << "   -   ";
         s << kMacroNames[i] << " " << juce::String(v, 2);

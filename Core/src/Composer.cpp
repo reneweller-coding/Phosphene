@@ -1405,7 +1405,8 @@ void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
             }
             matchPresence(p, t);
         }
-        matchMaster(p, t);
+        if (deferMaster_) { t.masterGainDb = 0.0f; t.masterDeferred = true; }
+        else matchMaster(p, t);
         return;
     }
 
@@ -1430,7 +1431,7 @@ void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
     }
     // Stage 2: the presence probes -- and the first mix probe beside them only where the presence match
     // cannot move the lines, because it is off (the mix probe first in the list: it is the longest).
-    const bool mixEarly = autoGain && level && !p.getBool(cb + compose::PresenceMatch);
+    const bool mixEarly = autoGain && level && !deferMaster_ && !p.getBool(cb + compose::PresenceMatch);
     double lines[2] = {}, rest[2] = {}, mix0 = 0.0;
     if (level) {
         t.presenceGainDb = 0.0f;   // what matchPresence starts from
@@ -1442,8 +1443,25 @@ void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
         probe::runAll(tasks);
         matchPresence(p, t, lines, rest);
     }
-    // Stages 3 and 4: Auto Gain's two readings, the second after the first.
+    // Stages 3 and 4: Auto Gain's two readings, the second after the first -- unless a host asked to
+    // have them later (setDeferMasterGain). `mixEarly` puts the first of the two beside the presence
+    // probes where the presence match cannot move the lines; a deferred track does not want it there
+    // either, so it is not started.
+    if (deferMaster_) { t.masterGainDb = 0.0f; t.masterDeferred = true; return; }
     matchMaster(p, t, mixEarly ? &mix0 : nullptr);
+}
+
+float Composer::completeMasterGain(const ParamStore& p, int index) const
+{
+    if (index < 0 || index >= static_cast<int>(plans_.size())) return 0.0f;
+    TrackPlan& t = plans_[static_cast<size_t>(index)];
+    if (!t.masterDeferred) return t.masterGainDb;
+    // The two whole-mix probes this track did not run when it was planned. matchMaster writes
+    // masterGainDb and mixLoudness into the plan, which is what a later seek into this track will
+    // then push at its start like any other track's.
+    matchMaster(p, t);
+    t.masterDeferred = false;
+    return t.masterGainDb;
 }
 
 void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out,
