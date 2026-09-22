@@ -6964,6 +6964,8 @@ void testSfx()
                     for (int i = 1; i < t.form.count && !ok; ++i)
                         ok = t.form.section[i].type == SectionType::Drop
                           && std::fabs(static_cast<double>(t.form.section[i].startBar) * kBeatsPerBar - s.beat) < 1e-6;
+                    // 23.09.2026, round "DJ": the bass swap of the blend -- the incoming kick's first bar, the hand-over.
+                    ok = ok || (t.form.handover > 0 && std::fabs(static_cast<double>(t.form.handover) * kBeatsPerBar - s.beat) < 1e-6);
                     if (!ok) ++misplaced;
                 }
                 if (s.type == static_cast<int>(SfxType::FormantShot)) ++misplaced;   // replaced by the vocal or zap (19.09.2026)
@@ -11210,7 +11212,7 @@ void testTransitions()
         const int move = ((b.key - a.key) % 12 + 12) % 12;
         const bool close = move == 0 || move == 5 || move == 7;
         std::vector<NoteEvent> head;
-        c.composeBars(p, b.firstBar, kDjOverlap, head);
+        c.composeBars(p, b.firstBar, b.form.handover, head);   // the whole blend (Form.h, djOverlapBars; 23.09.2026)
         int pads = 0;
         for (const NoteEvent& e : head) if (e.part == Part::Pad || e.part == Part::Drone) ++pads;
         if (close) { ++consonant; if (pads > 0 || !b.melody.present[mpIndex(MelodyPart::Pad)]) ++consonantWithPads; }
@@ -11326,9 +11328,17 @@ void testArrangement()
         constexpr int kTracks = 6;
         std::vector<TrackPlan> plan;
         for (int t = 0; t <= kTracks; ++t) plan.push_back(c.track(q, t));
+        // 23.09.2026: a track's outro learns its blend (FormPlan::overlapTail) when the *next* track is made, so
+        // the copies are taken again once every track exists.
+        for (int t = 0; t <= kTracks; ++t) plan[static_cast<size_t>(t)] = c.track(q, t);
         for (int t = 0; t < kTracks; ++t) {
             ++starts;
-            if (t > 0 && plan[static_cast<size_t>(t)].firstBar != plan[static_cast<size_t>(t - 1)].firstBar + plan[static_cast<size_t>(t - 1)].bars - 16) ++startsBad;
+            // Every track starts its blend's length before the one before it ends: the incoming style's
+            // (djOverlapBars), 32 bars, Hi-Tech 16 (23.09.2026, round "DJ").
+            const int blend = plan[static_cast<size_t>(t)].form.handover;
+            if (t > 0 && (blend != djOverlapBars(static_cast<StyleId>(plan[static_cast<size_t>(t)].style))
+                          || plan[static_cast<size_t>(t)].firstBar != plan[static_cast<size_t>(t - 1)].firstBar + plan[static_cast<size_t>(t - 1)].bars - blend
+                          || plan[static_cast<size_t>(t - 1)].form.overlapTail != blend)) ++startsBad;
         }
         const int totalBars = plan[kTracks - 1].firstBar + plan[kTracks - 1].bars;
         std::vector<NoteEvent> ev;
@@ -11507,15 +11517,19 @@ void testArrangement()
                         if (!found) ++markersMissing;
                     }
                 }
-                // The intro's blocks (planned): no kick and no layers for sixteen bars, the quiet hat, the
-                // shaker from bar 9; then kick, bass and the off-beat hat. The outro's: a layer less every eight
-                // bars, the last sixteen kick, bass and one hat, no melodic part.
+                // The intro's blocks (planned): no kick before the kick bar -- bar 17 in the set's first track,
+                // the hand-over (the bass swap) in every later one, 23.09.2026 --, the quiet hat, the shaker from
+                // bar 9, no layer before the blend's second half; then kick, bass and the off-beat hat. The
+                // outro's: a layer less every eight bars; over the blend no polyphonic part, the acid only in
+                // its first half; the last eight bars kick, bass and one hat, no melodic part.
                 if (s.type == SectionType::Intro) {
+                    const int kickBar = tp.form.handover > 0 ? tp.form.handover : kIntroKickBar;
                     for (int g = 0; g * 8 < s.bars; ++g) {
                         const BarPlan bp = planBar(tp.form, av, tp.sectionSeed, s.startBar + 8 * g);
-                        const bool kick = 8 * g >= 16;
+                        const bool kick = 8 * g >= kickBar;
                         const bool ok = (bp.kickBeats != 0) == kick && (bp.bassBeats != 0) == kick && bp.quietHats == !kick
-                                     && bp.offbeatHat == kick && bp.shaker == (g >= 1) && (kick || bp.percLayers == 0)
+                                     && bp.offbeatHat == kick && bp.shaker == (g >= 1)
+                                     && (kick || (8 * g < kickBar / 2 ? bp.percLayers == 0 : bp.percLayers <= tp.perc.layers))
                                      && (bp.parts & (partBit(MelodyPart::Acid) | partBit(MelodyPart::Lead) | partBit(MelodyPart::Arp))) == 0;
                         if (!ok) ++introBlocksBad;
                     }
@@ -11523,12 +11537,17 @@ void testArrangement()
                 if (s.type == SectionType::Outro) {
                     int prevLayers = 99;
                     uint8_t prevParts = 0xFF;
+                    const int blendFrom = s.bars - std::clamp(tp.form.overlapTail, kOutroBareBars, s.bars);
+                    const uint8_t poly = static_cast<uint8_t>(partBit(MelodyPart::Lead) | partBit(MelodyPart::Counter) | partBit(MelodyPart::Arp)
+                                                              | partBit(MelodyPart::Stab) | partBit(MelodyPart::Pad) | partBit(MelodyPart::Drone));
                     for (int g = 0; g * 8 < s.bars; ++g) {
                         const BarPlan bp = planBar(tp.form, av, tp.sectionSeed, s.startBar + 8 * g);
-                        const bool bare = s.bars - 8 * g <= 16;
+                        const bool bare = s.bars - 8 * g <= kOutroBareBars;
+                        const bool blend = !bare && 8 * g >= blendFrom;
                         bool ok = bp.kickBeats == 0xF && bp.bassBeats == 0xF && bp.percLayers <= prevLayers && (bp.parts & ~prevParts) == 0;
-                        // Something leaves every eight bars until the bare end: a layer or a part.
                         if (bare) ok = ok && bp.percLayers == 0 && bp.offbeatHat && bp.parts == 0;
+                        else if (blend) ok = ok && (bp.parts & poly) == 0 && ((bp.parts & partBit(MelodyPart::Acid)) == 0 || 8 * g - blendFrom < (s.bars - kOutroBareBars - blendFrom) / 2);
+                        // Before the blend something leaves every eight bars: a layer or a part.
                         else ok = ok && (bp.percLayers < prevLayers || (bp.parts & prevParts) != prevParts);
                         if (!ok) ++outroBlocksBad;
                         prevLayers = bp.percLayers;
@@ -11536,19 +11555,24 @@ void testArrangement()
                     }
                 }
             }
-            // The DJ overlap into the next track: in those sixteen bars the outgoing kick and bass play, the
-            // incoming track adds only its intro's hat, shaker, pads, drone and effects -- no line and no lane
-            // but the hats.
+            // The blend into the next track (23.09.2026, round "DJ"): over its bars the outgoing kick and bass
+            // play to the swap; the incoming intro has no acid and no line, so an acid event there is the
+            // outgoing track's and may only stand in the blend's first half, and a lead, counter, arp or stab
+            // event is foreign anywhere. In the last eight bars (the bare end) the percussion is the outgoing
+            // off-beat hat and the incoming intro's layers: no lane but hats and the shaker.
             if (t + 1 <= kTracks) {
                 const TrackPlan& nx = plan[static_cast<size_t>(t + 1)];
-                for (int b = nx.firstBar; b < nx.firstBar + 16 && b < totalBars; ++b) {
+                const int blend = nx.form.handover;
+                for (int b = nx.firstBar; b < nx.firstBar + blend && b < totalBars; ++b) {
                     ++overlapBars;
+                    const int inBlend = b - nx.firstBar;
                     bool kick = false;
                     for (const NoteEvent* e : byBar[static_cast<size_t>(b)]) {
                         kick = kick || e->part == Part::Kick;
                         const Part rp = routedPart(*e);
-                        if (rp == Part::Acid || rp == Part::Lead || rp == Part::Counter || rp == Part::Arp || rp == Part::Stab) ++overlapForeign;
-                        if (e->part == Part::Perc && e->lane != closedHat && e->lane != shaker) ++overlapLanes;
+                        if (rp == Part::Lead || rp == Part::Counter || rp == Part::Arp || rp == Part::Stab) ++overlapForeign;
+                        if (rp == Part::Acid && inBlend >= (blend - kOutroBareBars) / 2) ++overlapForeign;
+                        if (inBlend >= blend - kOutroBareBars && e->part == Part::Perc && e->lane != closedHat && e->lane != shaker && e->lane != openHat) ++overlapLanes;
                     }
                     if (!kick) ++overlapNoKick;
                 }
@@ -11556,13 +11580,13 @@ void testArrangement()
         }
     }
     check(starts > 0 && startsBad == 0 && kickDoubles == 0 && bassOverlaps == 0 && track0KickBefore == 0 && track0KickAt > 0,
-          "DJ overlap: every track starts 16 bars before the previous one ends, one kick per beat and one bass at a time across the set, the kick on bar 17",
+          "DJ blend: every track starts its style's blend before the previous one ends (32 bars, Hi-Tech 16), one kick per beat and one bass at a time across the set, the set's first kick on bar 17",
           fmt("%d track starts, %d off; %d beats with two kicks of %d, %d overlapping bass notes; set's first track: %d kicks before bar 17, %d on it",
               starts, startsBad, kickDoubles, beats, bassOverlaps, track0KickBefore, track0KickAt));
     check(overlapBars > 0 && overlapForeign == 0 && overlapLanes == 0 && overlapNoKick == 0,
-          "over the overlap the outgoing outro is kick, bass and a hat, the incoming intro adds no line and no lane but the hats",
+          "over the blend the outgoing track keeps kick and bass (its acid only in the first half) and no line, the incoming intro adds no line; the bare end has no lane but hats and shaker",
           fmt("%d overlap bars: %d notes of a line, %d hits outside the hat lanes, %d bars without the outgoing kick", overlapBars, overlapForeign, overlapLanes, overlapNoKick));
-    check(introBlocksBad == 0 && outroBlocksBad == 0, "intro and outro blocks: sixteen bars without kick, then kick, bass and the off-beat hat; a layer less every eight bars, the last sixteen bare",
+    check(introBlocksBad == 0 && outroBlocksBad == 0, "intro and outro blocks: no kick before the kick bar (the hand-over inside a set), then kick, bass and the off-beat hat; a layer less every eight bars, no polyphonic part over the blend, the last eight bare",
           fmt("%d intro blocks and %d outro blocks off the rule", introBlocksBad, outroBlocksBad));
     check(grooves > 0 && grooveBad == 0 && grooveOrderBad == 0, "the groove adds one percussion layer every eight bars: clap, then congas, then ride",
           fmt("%d grooves, %d with a group that did not add exactly one layer, %d out of order", grooves, grooveBad, grooveOrderBad));

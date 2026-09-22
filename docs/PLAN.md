@@ -6951,6 +6951,64 @@ Slide je Note), `Core/src/Engine.cpp`, `Core/include/phos/Composer.h` + `Core/sr
 `Tools/render/main.cpp` (Design-Zeilen), `Tools/corpus/lead_templates.py` + `build_corpus.py`,
 `Tests/selftest.cpp`; dieser Block.
 
+**23.09.2026, DJ-Blend: 32 Takte, Bass-Swap an der Phrasengrenze, Fader-Rampen statt Sprung**
+
+Der Nutzer: „Die Übergänge zwischen zwei Stücken gefallen mir im Moment überhaupt nicht: Da wird
+ausgeblendet, dann wird es irgendwie leiser, dann ganz plötzlich wieder lauter. […] mehr, wie ein
+echter DJ das mixen würde." Erste Runde der Nacht; die Reihenfolge der fünf Punkte hat er abgenickt.
+
+*Befund.* Der Übergang war 16 Takte: der neue Track begann mit seinem kicklosen Intro über den letzten
+16 Takten des alten, die „nackt" waren (Kick, Bass, ein Hat), und an der Übergabe (Takt 17 des neuen
+Tracks) schrieb `trackStartControls` TrackGain und Master-Offset des neuen Tracks **ohne Rampe** —
+dazu der Energie-Trim des Outros (Energie 0,45 → −1,25 dB). Genau die drei Stufen, die der Nutzer
+hörte: Stimmen weg, Trim runter, Sprung hoch.
+
+*Literatur.* Psytrance-DJs blenden lang — 32, 64 Takte — und **tauschen den Bass** an einer
+Phrasengrenze, statt zwei Bässe zu mischen; die Mitten und Höhen des neuen Tracks kommen vorher
+hinein (Club Ready DJ School, „How to mix psy trance"; We Are Crossfader, „How to DJ trance music").
+In *einer* Engine mit je einer Instanz pro Stimme ist das genau die Struktur, die die Instanzen
+sowieso verlangen: der alte Track hält Kick und Bass bis zum Swap, der neue bringt Percussion,
+Pads/Drone, Voices, Effekte, und am Swap gehören ihm auch Kick, Bass und Acid.
+
+*Umsetzung.*
+- `djOverlapBars(StyleId)` (Form.h): **32 Takte**, Hi-Tech 16; nie länger als das Intro des neuen
+  oder das Outro des alten Tracks (Composer.cpp, `makeTrack`; ein kurzer Track kann sein Intro auf 16
+  kürzen). `FormPlan::handover` = Blend des neuen Tracks; `FormPlan::overlapTail` wird dem *alten*
+  Plan geschrieben, wenn der neue gemacht wird (16 für den letzten Track eines Sets).
+- Intro (Form.cpp): der Kick setzt an der **Übergabe** ein (im ersten Track eines Sets bei Takt 17 wie
+  zuvor); über die zweite Hälfte des Blends baut sich die Percussion des neuen Tracks Lage um Lage auf
+  und steht in den letzten acht Takten vor dem Swap auf den Hat-Lagen, denen der Groove dann eine
+  hinzufügt (die Groove-Regel „eine Lage mehr alle acht Takte" blieb so wahr).
+- Outro: über die letzten `overlapTail` Takte **keine polyphone Stimme** (Pad, Drone, Arp, Lead,
+  Counter, Stab gehören dem neuen Track), Kick und Bass bis zum Swap, die Acid über die erste Hälfte
+  des Blends, die Percussion dünnt eine Lage je acht Takte; die letzten **acht** (statt 16) Takte
+  nackt. Keine Effekte des alten Tracks über dem Blend (`composeSfxBar`; die Ereignisse entstehen,
+  bevor der nächste Track und damit die Blend-Länge existiert, deshalb der Schnitt beim Komponieren).
+- **Fader-Rampen** (`transitionBar`): acht Takte vor der Übergabe rampen TrackGain und Master-Offset
+  auf genau die Werte, die `trackStartControls`/`sectionControls` an der Übergabe schreiben — der Swap
+  selbst bewegt nichts mehr. Ziel: `gainDb + energyGainDb(Energie des Übergabetakts) + sectionTrimDb`.
+- Der Swap bekommt einen **Impact** und davor einen **Reverse Crash** (placePsychedelia; nur im Set,
+  nicht im ersten Track).
+- Tempo-Rampe über den Blend war schon da (tempoMap) und folgt der neuen Länge.
+
+*Gemessen* (Seed 42, 10 Minuten, `bar_rms.py` über den Blend, Takt-RMS): Track 1 in Drop 2 −9,1 dBFS;
+Takt 224 (Blend-Beginn, Track 2 setzt ein) −10,4; **Swap Takt 256: +0,58 dB**, danach −10,5; größter
+Takt-zu-Takt-Schritt über die Takte 200–291 **0,99 dB**. Der Sprung ist weg; die Stufe am
+Outro-Beginn (−1,3 dB) ist der Energie-Trim plus die abgegebenen Stimmen — der neue Track füllt sie
+mit seiner Atmosphäre.
+
+*Tests.* `testArrangement`: Starts je Stil (32/16), Intro-Kick an der Übergabe, Outro mit
+Blend/nackt-Struktur, über den Blend keine Linie des alten Tracks (Acid nur erste Hälfte), nacktes Ende
+nur Hat-Lagen; Plan-Kopien werden nach dem Planen aller Tracks neu genommen (`overlapTail` kommt vom
+Folgetrack). `testTransitions` komponiert den ganzen Blend. `testSfx` erlaubt den Impact am Swap.
+Betroffene Abschnitte (Sfx, Form, ArrangeDynamics, Transitions, Arrangement, Cues, Melody.score,
+listeningSeed, Voices.score, Variety.plans, SectionRules): grün. Voller ctest am Ende der Nacht.
+
+*Dateien.* `Core/include/phos/Form.h` (djOverlapBars, kDjOverlapMax, kOutroBareBars 8, overlapTail),
+`Core/src/Form.cpp` (Intro/Outro, Candy, Bett, Swap-Effekte), `Core/src/Composer.cpp` (firstBar,
+handover/overlapTail, incomingOfBar, Rampen in transitionBar), `Core/src/Melody.cpp`
+(composeSfxBar-Schnitt), `Tests/selftest.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

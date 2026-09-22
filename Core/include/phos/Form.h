@@ -149,10 +149,27 @@ constexpr int kNumPdbVariants = 4;   ///< whole bar, half bar, beat 4 only, kick
  * both halves of the user's rule hold literally; with 32 either N's last 16 bars or N+1's kick entry would
  * have to give way (Composer.cpp, transitionBar).
  * @{ */
-constexpr int kDjOverlap = 16;       ///< bars in which two tracks sound together
-constexpr int kIntroKickBar = 16;    ///< bar of the intro (0-based) on which kick and bass enter
-constexpr int kOutroBareBars = 16;   ///< the outro's last bars: kick, bass and one hat only
+constexpr int kDjOverlap = 16;       ///< the shortest blend: Hi-Tech's, and the last track's outro tail when no track follows
+constexpr int kDjOverlapMax = 32;    ///< the longest blend (23.09.2026, round "DJ")
+constexpr int kIntroKickBar = 16;    ///< bar of the intro (0-based) on which kick and bass enter in the set's first track
+constexpr int kOutroBareBars = 8;    ///< the outro's last bars: kick, bass and one hat only (16 until 23.09.2026)
 /** @} */
+
+/**
+ * @brief How many bars the incoming track of @p incoming's style blends over the outgoing one (23.09.2026,
+ *        round "DJ").
+ *
+ * The user: "Da wird ausgeblendet, dann wird es irgendwie leiser, dann ganz ploetzlich wieder lauter" -- the
+ * sixteen-bar overlap ended in a jump of track gain and master offset at the hand-over, over a bare outro.
+ * Psytrance DJs blend long -- 32 bars and more -- and *swap* the bass at a phrase boundary rather than
+ * mixing two basslines (Club Ready DJ School, "How to mix psy trance"; We Are Crossfader, "How to DJ trance
+ * music"). So the blend is 32 bars: the incoming track's whole intro over the outgoing outro, both keeping
+ * their own floor -- the outgoing kick and bass to the swap, the incoming kick and bass from it (its intro
+ * has no kick before the hand-over) -- and the gains ramp over the last eight bars into the swap
+ * (Composer.cpp, transitionBar). Hi-Tech, fast and hard, keeps the short sixteen. The blend can never be
+ * longer than the incoming intro or the outgoing outro (Composer.cpp, makeTrack).
+ */
+inline int djOverlapBars(StyleId incoming) { return incoming == StyleId::HiTech ? kDjOverlap : kDjOverlapMax; }
 extern const char* const kPdbVariantNames[kNumPdbVariants];   ///< display names
 constexpr int kBassSlots = 3;        ///< bass notes per beat at most; the slot envelope of PLAN 6.6
 constexpr int kMaxSections = 16;     ///< sections a track can have (the templates need eight)
@@ -375,6 +392,12 @@ struct FormPlan {
      * take it (planBar reads it into BarPlan::floorSilent).
      */
     int handover = 0;
+    /**
+     * @brief Bars at the end of the track over which the *next* track's intro sounds (23.09.2026, round
+     *        "DJ"): the next track's handover, written into this plan when that track is made (Composer.cpp);
+     *        kDjOverlap until then and for the set's last track. planBar builds the outro's blend from it.
+     */
+    int overlapTail = kDjOverlap;
 };
 
 /**

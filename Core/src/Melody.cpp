@@ -3042,6 +3042,12 @@ int voicingMovement(const std::vector<int>& a, const std::vector<int>& b)
 
 void composeSfxBar(const FormPlan& f, double trackBeat, int barInTrack, std::vector<NoteEvent>& out)
 {
+    // Over the blend (Form.h, FormPlan::overlapTail; 23.09.2026, round "DJ") the next track's intro owns the
+    // effects: nothing of this track's is played over its last overlapTail bars. The events were placed when
+    // the form was made, before the next track -- and so the blend's length -- existed, which is why the cut
+    // is made here and not in makeFormSfx.
+    const bool outroEnd = f.count > 0 && f.section[f.count - 1].type == SectionType::Outro;
+    if (outroEnd && barInTrack >= f.bars - std::clamp(f.overlapTail, 0, f.bars)) return;
     for (const SfxEvent& s : f.sfx) {
         if (static_cast<int>(std::floor(s.beat / kBeatsPerBar)) != barInTrack) continue;
         NoteEvent e;

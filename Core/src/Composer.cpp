@@ -1282,9 +1282,15 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     TrackPlan t;
     t.style = w.style;
     t.index = index;
-    // The DJ overlap (Form.h, kDjOverlap): every track after the first starts kDjOverlap bars before the one
-    // before it ends, its kick-free intro over the other's bare outro.
-    t.firstBar = index == 0 ? 0 : plans_[static_cast<size_t>(index - 1)].firstBar + plans_[static_cast<size_t>(index - 1)].bars - kDjOverlap;
+    // The DJ blend (Form.h, djOverlapBars; 23.09.2026): every track after the first starts its blend's length
+    // before the one before it ends, its kick-free intro over the other's outro. The length is the incoming
+    // style's, never longer than the outgoing outro; the incoming intro is checked once the form exists.
+    int overlap = 0;
+    if (index > 0) {
+        const TrackPlan& prev = plans_[static_cast<size_t>(index - 1)];
+        overlap = std::min(djOverlapBars(static_cast<StyleId>(w.style)), prev.form.count > 0 ? prev.form.section[prev.form.count - 1].bars : kDjOverlap);
+        t.firstBar = prev.firstBar + prev.bars - overlap;
+    }
     t.key = w.key;
     t.scale = w.scale;
     t.bpm = w.bpm;
@@ -1321,7 +1327,16 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     StyleProfile interchange = style;
     if (!p.getBool(cb + compose::ModalInterchange)) interchange.interchangeChance = 0.0f;
     t.form = makeFormPlan(interchange, t.formSeed, w.bars, t.arcIn, t.arcOut, t.scale, t.sectionSeed);
-    t.form.handover = index == 0 ? 0 : kDjOverlap;
+    if (index > 0) {
+        // The blend can be no longer than this track's intro (a short track shrinks its intro to sixteen,
+        // Form.cpp). A shorter blend moves firstBar by at most sixteen bars against the arc position the
+        // form was made with; the arc's energy hardly moves over sixteen bars of a set, so the form stands.
+        TrackPlan& prev = plans_[static_cast<size_t>(index - 1)];
+        overlap = std::max(kDjOverlap, std::min(overlap, t.form.section[0].bars));
+        t.firstBar = prev.firstBar + prev.bars - overlap;
+        prev.form.overlapTail = overlap;   // the outgoing outro builds its blend from it (Form.cpp, planBar)
+    }
+    t.form.handover = index == 0 ? 0 : overlap;
     makeFormSfx(t.form, t.formSeed, p.get(cb + compose::SfxAmount), p.get(cb + compose::VoiceDensity), p.get(cb + compose::BedDensity));
     t.bars = t.form.bars;
 
@@ -2211,7 +2226,7 @@ int Composer::incomingOfBar(const ParamStore& p, int bar) const
 {
     const int ti = trackOfBar(p, bar);
     const TrackPlan& t = track(p, ti);
-    if (bar < t.firstBar + t.bars - kDjOverlap) return -1;
+    if (bar < t.firstBar + t.bars - kDjOverlapMax) return -1;
     const TrackPlan& next = track(p, ti + 1);
     return bar >= next.firstBar ? ti + 1 : -1;
 }
@@ -2315,6 +2330,31 @@ void Composer::transitionBar(const ParamStore& p, int gi, int bar, std::vector<N
         if (inTrack == 0) trackStartControls(p, guest, barBeat, *controls, ControlScope::Voices);
         if (bp.barInSection == 0) sectionControls(p, guest, bp, barBeat, *controls, ControlScope::Voices);
         leadArcControls(p, guest, bp, inTrack, barBeat, *controls);
+        // The fader ride into the swap (23.09.2026, round "DJ"): eight bars before the hand-over the track
+        // gain and the master offset start ramping from the outgoing track's values to the ones the incoming
+        // floor will write at the hand-over -- the same numbers trackStartControls and sectionControls push
+        // there, so the swap itself moves nothing. Until this round both jumped at the hand-over: the
+        // "ploetzlich wieder lauter" the user heard.
+        if (guest.form.handover >= 8 && inTrack == guest.form.handover - 8) {
+            const int mb = p.base(Module::Mix);
+            const BarPlan at = planBar(guest.form, availabilityOf(guest), guest.sectionSeed, guest.form.handover);
+            const Section& sec = guest.form.section[std::clamp(at.index, 0, kMaxSections - 1)];
+            const double u = sec.bars > 1 ? static_cast<double>(at.barInSection) / sec.bars : 0.0;
+            const ParamDesc& g = p.desc(mb + mix::TrackGain);
+            ControlEvent c;
+            c.beat = barBeat;
+            c.kind = ControlEvent::Kind::Offset;
+            c.length = 8.0f * static_cast<float>(kBeatsPerBar);
+            c.param = static_cast<int16_t>(mb + mix::TrackGain);
+            c.value = (guest.gainDb + energyGainDb(at.energy) + sectionTrimDb(guest.form, at.index, u)) / (g.maxValue - g.minValue);
+            controls->push_back(c);
+            if (!guest.masterDeferred) {
+                const ParamDesc& mg = p.desc(p.base(Module::Master) + master::Gain);
+                c.param = static_cast<int16_t>(p.base(Module::Master) + master::Gain);
+                c.value = guest.masterGainDb / (mg.maxValue - mg.minValue);
+                controls->push_back(c);
+            }
+        }
         const int pb = p.base(PolyInstance::Pad), db = p.base(PolyInstance::Drone);
         auto closeHighPass = [&](int base) {
             // The floor is the outgoing track's here: the incoming pad and drone keep their knobs' high pass.
@@ -2361,7 +2401,7 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         const int ti = trackOfBar(p, bar);
         // The overlap window needs the next track's plan; making it may move the cache, so it is made
         // before any reference into the cache is taken.
-        { const TrackPlan& t0 = track(p, ti); if (bar - t0.firstBar >= t0.bars - kDjOverlap) track(p, ti + 1); }
+        { const TrackPlan& t0 = track(p, ti); if (bar - t0.firstBar >= t0.bars - kDjOverlapMax) track(p, ti + 1); }
         const TrackPlan& plan = track(p, ti);
         // The incoming track of the DJ overlap, if one sounds in this bar (Form.h, kDjOverlap).
         const int incoming = ti + 1 < static_cast<int>(plans_.size()) && bar >= plans_[static_cast<size_t>(ti + 1)].firstBar ? ti + 1 : -1;

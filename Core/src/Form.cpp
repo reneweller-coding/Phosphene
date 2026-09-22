@@ -561,10 +561,16 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     case SectionType::Intro: {
         // Bars 1-16 without a kick: pads and textures, a quiet closed hat on the sixteenths, the shaker
         // from bar 9 (one change inside the first sixteen). Bars 17-32: kick and bass, the off-beat hat.
-        const bool kick = b >= kIntroKickBar;
+        // Inside a set (23.09.2026, round "DJ") the kick enters at the hand-over instead -- the bass swap
+        // of the blend (Form.h, djOverlapBars): the outgoing kick and bass hold the floor until then, and
+        // over the blend's second half the incoming percussion builds up under them, one layer at a time.
+        const int kickBar = f.handover > 0 ? f.handover : kIntroKickBar;
+        const bool kick = b >= kickBar;
         bp.kickBeats = kick ? 0xF : 0;
         bp.bassBeats = kick ? 0xF : 0;
-        layers = kick ? hatLayers : 0;
+        // The build-up counts *down to* the kick bar, so the last eight bars before the swap carry the
+        // hat layers the groove then adds one to (the groove's rule: one layer more every eight bars).
+        layers = kick ? hatLayers : (f.handover > 0 && b >= kickBar / 2 ? std::max(1, hatLayers - (kickBar - 1 - b) / 8) : 0);
         bp.quietHats = !kick;
         bp.hatLevel = kick ? 1.0f : 0.45f;
         bp.offbeatHat = kick;
@@ -670,13 +676,24 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
     }
     case SectionType::Outro: {
         // The inverse of the intro: a layer leaves every eight bars -- the leads at once, then the acid and
-        // two percussion layers, then the pads and the rest -- and the last sixteen bars are kick, bass and
-        // one simple hat, over which the next track's intro sets in (Composer.cpp, the DJ overlap).
+        // two percussion layers, then the pads and the rest. Since 23.09.2026 (round "DJ") the outro's last
+        // `overlapTail` bars are the *blend*: the next track's intro sounds over them and owns the
+        // polyphonic voices, so this track keeps its floor -- kick, bass, the acid over the blend's first
+        // half, the percussion thinning by a layer every eight bars -- and nothing polyphonic; the last
+        // eight bars are kick, bass and one hat, the outgoing groove alone under the incoming atmosphere.
+        const int blendFrom = s.bars - std::clamp(f.overlapTail, kOutroBareBars, s.bars);
         const int bareFrom = s.bars - std::min(kOutroBareBars, s.bars);
         if (b >= bareFrom) {
             layers = 0;
             bp.offbeatHat = true;
             bare = true;
+        } else if (b >= blendFrom) {
+            const int blendBars = bareFrom - blendFrom, inBlend = b - blendFrom;
+            const int steps = std::max(1, blendBars / 8);
+            layers = std::max(1, hatLayers - (hatLayers - 1) * (inBlend / 8) / steps);
+            bp.offbeatHat = true;
+            if (useAcid && inBlend < blendBars / 2) parts |= bAcid;
+            bare = true;   // no pad, no drone, no voice: the incoming track's own sound there
         } else {
             // Something leaves at every step: two layers, or -- where the kit has too few for that -- all
             // but the one hat of the bare end.
@@ -927,6 +944,14 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
         const double start = static_cast<double>(s.startBar) * bar;
         const SectionType prev = i > 0 ? f.section[i - 1].type : SectionType::Intro;
         if (s.type == SectionType::Break && i > 0 && m.uniform() < pMark) add(start, static_cast<float>(2.0 * bar), SfxType::SubDrop);
+        // The bass swap of the blend (23.09.2026, round "DJ"): the incoming kick's first bar gets an impact,
+        // and a reverse crash runs into it -- the DJ's slam at the phrase boundary. Only inside a set
+        // (handover > 0); the set's first track keeps its quiet kick entry.
+        if (s.type == SectionType::Intro && f.handover > 0 && f.handover < s.bars) {
+            const double swap = start + f.handover * bar;
+            if (m.uniform() < pMark) add(swap, 4.0f, SfxType::Impact);
+            if (m.uniform() < 0.7f * pMark) add(swap - bar, static_cast<float>(bar), SfxType::ReverseCrash);
+        }
         if (s.type == SectionType::Drop && i > 0 && prev != SectionType::Build && m.uniform() < pMark)
             add(start - bar, static_cast<float>(bar), SfxType::ReverseCrash);
         if (s.type == SectionType::Drop)
@@ -1005,8 +1030,9 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
         const bool groove = s.type == SectionType::Groove || s.type == SectionType::Drop;
         const float density = s.type == SectionType::Drop ? 0.8f : s.type == SectionType::Groove ? 0.6f
                             : s.type == SectionType::Intro ? 0.25f : 0.3f;
-        // The outro's last sixteen bars are kick, bass and a hat, nothing else (19.09.2026).
-        const int bareFrom = s.type == SectionType::Outro ? s.bars - std::min(kOutroBareBars, s.bars) : s.bars;
+        // None of this track's candy over the blend (23.09.2026: the incoming track's candy plays there)
+        // nor over the bare end (19.09.2026).
+        const int bareFrom = s.type == SectionType::Outro ? s.bars - std::clamp(f.overlapTail, kOutroBareBars, s.bars) : s.bars;
         for (int b = 2; b < s.bars; b += 2) {
             if (b % 8 == 0) continue;   // the eight-bar ends keep their own candy (makeFormSfx)
             const bool four = b % 4 == 0;
@@ -1078,8 +1104,8 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
             break;
         }
         case SectionType::Outro: {
-            // Only before the bare bars (kick, bass, a hat; 19.09.2026).
-            const int live = s.bars - std::min(kOutroBareBars, s.bars);
+            // Only before the blend and the bare bars (19.09.2026; the blend since 23.09.2026).
+            const int live = s.bars - std::clamp(f.overlapTail, kOutroBareBars, s.bars);
             if (bowl) for (int b = 0; b < s.bars; b += 8) if (t.uniform() < bedOdds(pMark) && b < live) add(start + b * bar, static_cast<float>(4.0 * bar), SfxType::Bowl);
             if (didge && t.uniform() < bedOdds(pMark) && live > 0) add(start, static_cast<float>(live * bar), SfxType::Didgeridoo);
             break;
