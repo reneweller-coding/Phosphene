@@ -105,7 +105,11 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              // 22.09.2026: the styles walk through the night instead of one style for all of it
              // (Composer.cpp, walkAt). On by default; off, every track is compose.style as before.
              StyleMix,
-             PresenceMatch, Count };
+             PresenceMatch,
+             // 22.09.2026, round "Lead": the lead's density and the pitch entropy of the lines, each a
+             // choice whose first entry is "Auto (Style)" -- the style profile's vector decides (Form.h,
+             // LeadStyle) unless the user takes the knob. Appended, never reordered.
+             LeadDensity, PitchEntropy, Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
 namespace perc {
@@ -326,6 +330,8 @@ extern const char* const kBassPatternNames[];   ///< names of compose.bass_patte
 extern const char* const kMelodyModelNames[];   ///< names of compose.melody_model (Model.h)
 extern const char* const kBassModelNames[];     ///< names of compose.bass_model (Model.h)
 extern const char* const kBassRhythmNames[];    ///< names of compose.bass_rhythm (Corpus.h)
+extern const char* const kLeadDensityNames[];   ///< names of compose.lead_density (22.09.2026)
+extern const char* const kPitchEntropyNames[];  ///< names of compose.pitch_entropy (22.09.2026)
 
 /**
  * @brief All parameter values of one engine, lock-free readable from the audio thread.

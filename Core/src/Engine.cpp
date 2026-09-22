@@ -431,7 +431,10 @@ void Engine::dispatch(const NoteEvent& e, double late)
         const int inst = polyOfPart(e.part);
         // noteOnLimited applies the quality level's unison and voice limits (Quality.h, Poly.h); at
         // the desktop level it is noteOn() itself.
-        poly_[inst].noteOnLimited(e.pitch, vel, e.length, std::max(1, static_cast<int>(std::lround(samples))), late);
+        // 22.09.2026 (round "Lead"): the note's accent and slide flags. Every voice but the lead slides on
+        // every note where its glide time says so, as before; the lead only where the composer flagged it.
+        poly_[inst].noteOnLimited(e.pitch, vel, e.length, std::max(1, static_cast<int>(std::lround(samples))), late,
+                                  (e.flags & kNoteAccent) != 0, e.part != Part::Lead || (e.flags & kNoteSlide) != 0);
         break;
     }
     case Part::Sfx:

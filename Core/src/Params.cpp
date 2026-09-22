@@ -42,6 +42,9 @@ const char* const kBassModelNames[] = { "Pattern", "Neural" };
 // Pattern stays the default for the reason bass_model does: the held-out measurement says the
 // corpus model predicts real bass bars far better, which is not the same as saying it sounds better.
 const char* const kBassRhythmNames[] = { "Pattern", "Corpus" };
+// 22.09.2026, round "Lead": "Auto (Style)" hands the choice to the style profile's lead vector (Form.h).
+const char* const kLeadDensityNames[] = { "Auto (Style)", "Sparse", "Medium", "Dense" };
+const char* const kPitchEntropyNames[] = { "Auto (Style)", "Low", "Medium", "High" };
 const char* const kPercRoleNames[kNumPercRoles] = { "Closed Hat", "Open Hat", "Ride", "Crash", "Clap", "Snare", "Rim",
                                                     "Shaker", "Tom", "Conga", "Zap", "Blip" };
 // The prefixes of the polyphonic instances, in the order of PolyInstance (Params.h): the voices' groups.
@@ -111,12 +114,22 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "drone_amount",    "Drone Amount",    "",      0.0f,   1.0f,   0.6f, Curve::Linear },
     { "voice_density",   "Voice Density",   "x",     0.0f,   2.0f,   1.0f, Curve::Linear },
     { "bed_density",     "Bed Density",     "x",     0.0f,   2.0f,   1.0f, Curve::Linear },
-    // 19.09.2026, round "polish" (Composer.cpp, matchPresence): On brings each track's presence band into
-    // a band around the reference recordings' median by the level of its lines; Off plays them as matched.
-    { "presence_match",  "Presence Match",  "",      0.0f,   1.0f,   1.0f, Curve::Toggle },
+    // The rows below stand in the order of the compose enum (Params.h), which is what indexes them. On
+    // 22.09.2026 style_mix was appended *behind* presence_match while the enum put StyleMix before it, so
+    // compose::PresenceMatch read the style_mix row (two toggles at 1: unnoticed) and, when two choice rows
+    // followed on 23.09.2026, the lead_density row -- default 0, presence match off for every track
+    // (testPresence: 8 of 8 tracks outside the band left alone). testParams now checks key against index.
     // 22.09.2026: one style for a whole night was the user's first complaint about the sets ("langweilig,
     // wenn immer alles im selben Stil ist"). On, the style walks from track to track (Composer.cpp).
     { "style_mix",       "Style Mix",       "",      0.0f,   1.0f,   1.0f, Curve::Toggle },
+    // 19.09.2026, round "polish" (Composer.cpp, matchPresence): On brings each track's presence band into
+    // a band around the reference recordings' median by the level of its lines; Off plays them as matched.
+    { "presence_match",  "Presence Match",  "",      0.0f,   1.0f,   1.0f, Curve::Toggle },
+    // 22.09.2026, round "Lead" (the user: lead_density and pitch_entropy as knobs, "Auto" = the style):
+    // how many onsets a lead bar carries, and how far the pitch draws may stray from the model's
+    // and the rules' favourites (Melody.cpp, makeLead).
+    { "lead_density",    "Lead Density",    "",      0.0f,   3.0f,   0.0f, Curve::Choice, kLeadDensityNames },
+    { "pitch_entropy",   "Pitch Entropy",   "",      0.0f,   3.0f,   0.0f, Curve::Choice, kPitchEntropyNames },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };

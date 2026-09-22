@@ -373,8 +373,17 @@ struct MelodyPlan {
     int  scale = 0;                           ///< the track's own mode; the arrays above are its material
     int  key = 6;                             ///< the track's key (pitch class of the tonic)
     ModeMaterial mode[kNumScales];            ///< material of every *borrowed* mode the form uses
-    int  leadOperator[2] = { 0, 0 };          ///< the motivic operator of each lead phrase (MotifOperator)
-    int  leadJumps[2] = { 0, 0 };             ///< notes MotifOperator::OctaveJump lifted in each phrase
+    /** @name The lead's design (22.09.2026, round "Lead"; Melody.cpp, makeLead)
+     *  One cell, one archetype and one operator per bar, per phrase -- what the renderer's `--tracks`
+     *  prints and what the self test reads the phrase against.
+     *  @{ */
+    int      leadArchetype[2] = { 0, 0 };     ///< LeadArchetype of each phrase
+    int8_t   leadOps[2][8] = {};              ///< CellOp of each bar of each phrase
+    int8_t   leadShift[2][8] = {};            ///< the transposition each bar really got, in scale steps
+    uint16_t leadCell[2] = { 0, 0 };          ///< the cell's onset mask, a bit per sixteenth
+    int      leadDensityBand = 1;             ///< 0 sparse (8..10 onsets), 1 medium (10..12), 2 dense (12..16)
+    bool     leadCellFromCorpus[2] = { false, false };   ///< the cell's rhythm came from the corpus templates
+    /** @} */
     bool arpPolymeter = false;                ///< the arp runs a 3/16 cell against the 4/4 bar
     int  arpPulses = 0;                       ///< Euclidean arps: onsets per bar (E(pulses, 16))
     int  arpRotation = 0;                     ///< and the rotation Bjorklund's pattern is turned by
@@ -435,9 +444,16 @@ inline int chordIndexAt(const MelodyPlan& m, int barInTrack) { return (barInTrac
  * @param scaleMask  bit per mode: the modes the form's sections borrow (FormPlan::scaleMask). Every
  *                   bit other than @p scale gets its own recoloured material; 0 means the track
  *                   stays in one mode, which is exactly the behaviour before 16.09.2026.
+ * @param bassMask   the track's bass onsets over a bar, a bit per sixteenth (22.09.2026: the lead's
+ *                   rhythm interlocks with it; 0 = no bass to interlock with)
  */
 MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64_t seed, int key, int scale,
-                          bool firstTrack, float colour, uint32_t scaleMask = 0);
+                          bool firstTrack, float colour, uint32_t scaleMask = 0, unsigned bassMask = 0);
+
+extern const char* const kLeadArchetypeNames[kNumLeadArchetypes];   ///< names of LeadArchetype (Form.h)
+extern const char* const kCellOpNames[kNumCellOps];                 ///< names of CellOp (Form.h)
+/** @brief The cutoff arc of an archetype at a bar of the phrase, mean-free (Composer.cpp writes depth x this). */
+double leadArc(int archetype, int barInPhrase);
 
 /**
  * @brief Composes one bar of the melodic parts.

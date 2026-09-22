@@ -143,8 +143,12 @@ public:
      * @param lengthBeats written length of the note (for the dynamic detune)
      * @param gateSamples samples until release
      * @param late        how many samples ago the note ideally started (0 <= late < 1)
+     * @param accent      22.09.2026: the note is accented -- its filter envelope opens 1.5 times as far
+     *                    (the 303's accent logic on a poly voice; velocity carries the level as before)
+     * @param slide       22.09.2026: the note may glide in from the pitch before it. True is what every
+     *                    note did until this round; the lead passes its kNoteSlide flag (Score.h)
      */
-    void noteOn(int pitch, float velocity, double lengthBeats, int gateSamples, double late);
+    void noteOn(int pitch, float velocity, double lengthBeats, int gateSamples, double late, bool accent = false, bool slide = true);
 
     /**
      * @brief Sets the quality limits of this instance (Quality.h).
@@ -184,10 +188,10 @@ public:
      *    narrow beating the supersaw's body comes from, and the kept gains are normalised by their
      *    own incoherent power, so the level does not jump.
      */
-    void noteOnLimited(int pitch, float velocity, double lengthBeats, int gateSamples, double late)
+    void noteOnLimited(int pitch, float velocity, double lengthBeats, int gateSamples, double late, bool accent = false, bool slide = true)
     {
         if (voiceLimit_ < kPolyVoices) freeVoiceWithinLimit();
-        noteOn(pitch, velocity, lengthBeats, gateSamples, late);
+        noteOn(pitch, velocity, lengthBeats, gateSamples, late, accent, slide);
     }
 
     /** @brief Renders @p n stereo samples, replacing @p L and @p R. */
@@ -290,6 +294,7 @@ private:
     PolyChannels ch_;
     Envelope amp_[kPolyVoices];
     float fenv_[kPolyVoices] = {}, fDecay_ = 0.999f;
+    float accent_[kPolyVoices] = {};          ///< the note's factor on the filter envelope amount: 1, or 1.5 for an accent (22.09.2026)
     int   pitch_[kPolyVoices] = {};
     float vel_[kPolyVoices] = {};
     int   gate_[kPolyVoices] = {};

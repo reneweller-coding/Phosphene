@@ -98,6 +98,7 @@ void Poly::reset()
     for (int v = 0; v < kPolyVoices; ++v) {
         amp_[v].kill();
         fenv_[v] = 0.0f;
+        accent_[v] = 1.0f;
         gate_[v] = 0;
         age_[v] = 0;
         pitch_[v] = 60;
@@ -230,7 +231,7 @@ int Poly::activeVoices() const
     return n;
 }
 
-void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples, double late)
+void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples, double late, bool accent, bool slide)
 {
     const float* v = values_;
     // A free voice, else the one that started longest ago.
@@ -245,6 +246,9 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     pitch_[voice] = pitch;
     vel_[voice] = clampv(velocity, 0.0f, 1.0f);
     gate_[voice] = std::max(1, gateSamples);
+    // The accent (22.09.2026): the filter envelope reaches half again as far for this note, read by
+    // lowPassCoefs on every block of the note. 1 for every unaccented note, so nothing else moves.
+    accent_[voice] = accent ? 1.5f : 1.0f;
 
     const int osc = std::clamp(static_cast<int>(std::lround(v[poly::Osc])), 0, static_cast<int>(PolyOsc::Count) - 1);
     const double x = dynamicDetune(v[poly::Detune], v[poly::DynamicDetune], lengthBeats);
@@ -256,7 +260,9 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     // pitch there is nothing to slew and the oscillators start where they always did -- glidePitch_ is
     // then bit for bit the note's pitch and every number below is the number of before this round.
     glideTarget_[voice] = static_cast<double>(pitch);
-    const bool bend = glideMs_ > 0.0f && lastPitch_ >= 0.0 && lastPitch_ != static_cast<double>(pitch);
+    // `slide` (22.09.2026): a note the composer did not flag starts on its own pitch even with a glide
+    // time set -- the lead slides where a tension degree resolves, not on every step.
+    const bool bend = slide && glideMs_ > 0.0f && lastPitch_ >= 0.0 && lastPitch_ != static_cast<double>(pitch);
     glidePitch_[voice] = bend ? lastPitch_ : static_cast<double>(pitch);
     glideY_[voice] = y;
     newest_ = voice;
@@ -626,7 +632,7 @@ void Poly::renderSegment(float* L, float* R, int n)
 void Poly::lowPassCoefs(int voice, double damping)
 {
     const float* v = values_;
-    const double oct = v[poly::EnvAmount] * fenv_[voice] + v[poly::KeyTrack] * (pitch_[voice] - 60) / 12.0
+    const double oct = v[poly::EnvAmount] * fenv_[voice] * accent_[voice] + v[poly::KeyTrack] * (pitch_[voice] - 60) / 12.0
                      + static_cast<double>(driftOct_[voice])
                      + static_cast<double>(lfo2Cut_) * static_cast<double>(lfo2Value_);
     const double fc = std::min(static_cast<double>(v[poly::Cutoff]) * std::pow(2.0, oct), 0.45 * sr_);

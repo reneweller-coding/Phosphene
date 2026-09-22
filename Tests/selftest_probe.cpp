@@ -18,6 +18,7 @@
 #include "TestSupport.h"
 
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -128,24 +129,35 @@ void testProbeSchedule()
 
     probe::setThreads(1);
     const auto t1 = std::chrono::steady_clock::now();
-    const std::vector<TrackPlan> serial = planTracks(params, kListeningSeed, 2);
+    // 22.09.2026: **at least one** reference track has to carry a presence gain, not both. A gain of
+    // exactly zero is the correct answer for a track whose lines already sit inside the band
+    // (Composer.cpp, matchPresence returns early there), so demanding it of a fixed pair is a statement
+    // about which seed was picked and not about the code. 23.09.2026 (round "Lead"): the new lead cells
+    // put the listening seed's first *two* tracks inside the band, so the serial reference grows, track by
+    // track from the same composer, until one carries a gain -- six at most. What the precondition is
+    // for is the dependency: the first mix probe reads a number the presence probes write, and one track
+    // with a live correction exercises that ordering exactly as two do.
+    std::vector<TrackPlan> serial;
+    {
+        Composer serialComposer(kListeningSeed);
+        auto anyGain = [&]() { for (const TrackPlan& t : serial) if (t.presenceGainDb != 0.0f) return true; return false; };
+        for (int i = 0; i < 2; ++i) serial.push_back(serialComposer.track(params, i));
+        while (serial.size() < 6 && !anyGain()) serial.push_back(serialComposer.track(params, static_cast<int>(serial.size())));
+    }
+    const int refTracks = static_cast<int>(serial.size());
     const double serialSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
-    // 22.09.2026: **at least one**, not both. A presence gain of exactly zero is the correct answer
-    // for a track whose lines already sit inside the band (Composer.cpp, matchPresence returns early
-    // there), so demanding it of both reference tracks is a statement about which seed was picked and
-    // not about the code -- and the sound changes of this round put the second one inside the band.
-    // What this precondition is for is the dependency: the first mix probe reads a number the presence
-    // probes write, and one track with a live correction exercises that ordering exactly as two do.
-    check(serial[0].presenceGainDb != 0.0f || serial[1].presenceGainDb != 0.0f,
+    std::string gains;
+    for (const TrackPlan& t : serial) gains += fmt(" %+.2f", static_cast<double>(t.presenceGainDb));
+    check(std::any_of(serial.begin(), serial.end(), [](const TrackPlan& t) { return t.presenceGainDb != 0.0f; }),
           "at least one reference track carries a presence gain (or the first mix probe's dependency would go untested)",
-          fmt("%+.2f and %+.2f dB", static_cast<double>(serial[0].presenceGainDb), static_cast<double>(serial[1].presenceGainDb)));
+          fmt("%d reference tracks, gains%s dB", refTracks, gains.c_str()));
     check(serial[0].loudness < -5.0 && serial[0].loudness > -40.0 && serial[0].mixLoudness < -5.0 && serial[0].mixLoudness > -40.0,
           "and the probes measured something", fmt("foundation %.2f LUFS, mix %.2f LUFS", serial[0].loudness, serial[0].mixLoudness));
     checkSame(coldParallel, std::vector<TrackPlan>(serial.begin(), serial.begin() + 1),
               "a parallel plan as the process's first use of the shared data equals the serial plan");
 
     probe::setThreads(probe::kMaxThreads);
-    checkSame(planTracks(params, kListeningSeed, 2), serial, "two tracks planned with 8 probe threads equal the serial plans");
+    checkSame(planTracks(params, kListeningSeed, refTracks), serial, "the reference tracks planned with 8 probe threads equal the serial plans");
     resetWaveTableLibrary();
     resetVoicePack();
     checkSame(planTracks(params, kListeningSeed, 1), std::vector<TrackPlan>(serial.begin(), serial.begin() + 1),
@@ -163,8 +175,8 @@ void testProbeSchedule()
     probe::setThreads(probe::kMaxThreads);
     checkSame(planTracks(params, 3, 1), serialOff, "presence match off (the first mix probe runs early): equal to serial");
     check(serialOff[0].presenceGainDb == 0.0f && serialOff[0].presenceDb != 0.0, "with the match off the presence is still measured and nothing is moved");
-    std::printf("         first track: %.1f s with %d probe threads (shared data cold), two tracks serial %.1f s\n", parallelSeconds,
-                probe::kMaxThreads, serialSeconds);
+    std::printf("         first track: %.1f s with %d probe threads (shared data cold), %d tracks serial %.1f s\n", parallelSeconds,
+                probe::kMaxThreads, refTracks, serialSeconds);
 }
 
 /**

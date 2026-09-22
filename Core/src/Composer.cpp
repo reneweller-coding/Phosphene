@@ -1337,11 +1337,30 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     const float colour = std::clamp(style.colour * (0.4f + 0.6f * 0.5f * (t.arcIn + t.arcOut)), 0.0f, 1.0f);
     // The form's scale mask says which modes need recoloured material; with interchange off it holds
     // the track's mode alone and makeMelodyPlan does exactly what it did before.
-    t.melody = makeMelodyPlan(p, style, t.melodySeed, t.key, t.scale, index == 0, colour, t.form.scaleMask);
+    // The bass pattern before the melody (22.09.2026, round "Lead"): the lead's rhythm interlocks with
+    // the bass, so the pattern has to exist when the melody is drawn. Its draws are the first ones of
+    // the track's generator, as they were; only their place in this function moved, so every draw
+    // after them keeps its value.
+    Rng r;
+    r.seed(trackSeed(index));
+    t.primaryPattern = std::clamp(p.getInt(cb + compose::BassPattern), 0, kNumBassPatterns - 1);
+    t.secondaryPattern = t.primaryPattern == 0 ? 1 : 0;
+    if (index > 0) {
+        if (r.uniform() < tv) {
+            static const double kWeights[kNumBassPatterns] = { 0.45, 0.20, 0.12, 0.08, 0.15 };
+            t.primaryPattern = pick(r, kWeights, kNumBassPatterns);
+        }
+        double wp[kNumBassPatterns] = { 0.40, 0.30, 0.20, 0.05, 0.05 };
+        wp[t.primaryPattern] = 0.0;
+        t.secondaryPattern = pick(r, wp, kNumBassPatterns);
+    }
+    // The bass onsets the lead interlocks with: the primary pattern's family figure. A drawn bass
+    // rhythm (compose.bass_rhythm = Corpus) strays from it now and then; the family is what the
+    // track's groove is built on, and the mask is decided before the rhythm exists.
+    t.melody = makeMelodyPlan(p, style, t.melodySeed, t.key, t.scale, index == 0, colour, t.form.scaleMask,
+                              BassRhythm::familyMask(t.primaryPattern));
 
     if (index == 0) {
-        t.primaryPattern = std::clamp(p.getInt(cb + compose::BassPattern), 0, kNumBassPatterns - 1);
-        t.secondaryPattern = t.primaryPattern == 0 ? 1 : 0;
         t.gate = p.get(cb + compose::BassGate);
         // The rhythm before the pitches, because the learned phrase is drawn for the steps the rhythm
         // decides. The first track takes the gate knob as it is -- "the knobs, exactly" -- and a drawn
@@ -1353,22 +1372,8 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
         return t;   // the first track is the knobs, exactly
     }
 
-    Rng r;
-    r.seed(trackSeed(index));
-
-    // Patterns.
-    t.primaryPattern = std::clamp(p.getInt(cb + compose::BassPattern), 0, kNumBassPatterns - 1);
-    if (r.uniform() < tv) {
-        static const double kWeights[kNumBassPatterns] = { 0.45, 0.20, 0.12, 0.08, 0.15 };
-        t.primaryPattern = pick(r, kWeights, kNumBassPatterns);
-    }
-    {
-        double wp[kNumBassPatterns] = { 0.40, 0.30, 0.20, 0.05, 0.05 };
-        wp[t.primaryPattern] = 0.0;
-        t.secondaryPattern = pick(r, wp, kNumBassPatterns);
-    }
-
-    // The rhythm, after the patterns it strays from and before the gate limit it decides.
+    // The patterns were drawn above, before the melody. The rhythm, after the patterns it strays from
+    // and before the gate limit it decides.
     makeBassRhythm(p, t);
 
     // Gate, within what lets the lowest note (the seventh below the root) finish its release. With a
@@ -1640,6 +1645,47 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
  * The energy of a buildup runs from its own value to the drop's, which is exactly the "filter arcs
  * opening" the plan asks for; a breakdown opens the hall and closes the filters.
  */
+float Composer::leadCutoffValue(const ParamStore& p, const TrackPlan& plan, const BarPlan& bar) const
+{
+    // Mirrors the lead's cutoff in sectionControls below -- base, energy, wobble, drop 2's lift -- at the
+    // energy of *this bar* (BarPlan::energy is the section's ramp at the bar), so a per-bar event can
+    // stand in for the section's ramp without a step. The two must stay the same formula.
+    const int cb = p.base(Module::Compose);
+    const float sv = p.get(cb + compose::SoundVariation), mv = p.get(cb + compose::MelodyVariation);
+    if (plan.index == 0 && bar.index == 0) return 0.0f;   // the knobs, exactly
+    const Section& s = plan.form.section[std::clamp(bar.index, 0, kMaxSections - 1)];
+    Rng r;
+    r.seed(mixSeed(plan.sectionSeed[std::clamp(bar.index, 0, kMaxSections - 1)] ^ kSaltArc, 0));
+    const float wobble = (2.0f * r.uniform() - 1.0f);
+    float leadOff[poly::Count] = {};
+    voiceRecipeOffsets(PolyInstance::Lead, plan.voice[polyIndex(PolyInstance::Lead)], sv, leadOff);
+    const float leadBase = 0.10f * sv * plan.melody.recipe[mpIndex(MelodyPart::Lead)] + leadOff[poly::Cutoff];
+    const float open = s.climax ? kClimaxOpen : 0.0f;
+    return leadBase + 0.8f * (0.35f * (bar.energy - 0.7f) + 0.12f * mv * wobble) + open;
+}
+
+void Composer::leadArcControls(const ParamStore& p, const TrackPlan& plan, const BarPlan& bar, int inTrack, double beat,
+                               std::vector<ControlEvent>& out) const
+{
+    // The phrase's filter arc (22.09.2026, round "Lead"; Melody.cpp, kLeadArchetypes). The brief: "die
+    // halbe Melodie ist Modulation" -- the archetype's contour gets a timbral carrier, a cutoff curve
+    // over the eight bars of the phrase, written as one-bar ramps around the section's own value, so
+    // the arc rides on the energy arc instead of replacing it. Only where the lead plays; the first
+    // section of the first track keeps the knobs.
+    if (plan.index == 0 && bar.index == 0) return;
+    const MelodyPlan& m = plan.melody;
+    if (!m.present[mpIndex(MelodyPart::Lead)] || (bar.parts & partBit(MelodyPart::Lead)) == 0) return;
+    const int window = (inTrack / 8) % 2;
+    const float depth = styleProfile(static_cast<StyleId>(plan.style)).lead.arcDepth;
+    ControlEvent c;
+    c.beat = beat;
+    c.param = static_cast<int16_t>(p.base(PolyInstance::Lead) + poly::Cutoff);
+    c.kind = ControlEvent::Kind::Offset;
+    c.value = leadCutoffValue(p, plan, bar) + depth * static_cast<float>(leadArc(m.leadArchetype[window], inTrack % 8));
+    c.length = static_cast<float>(kBeatsPerBar);
+    out.push_back(c);
+}
+
 void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const BarPlan& bar, double beat,
                                std::vector<ControlEvent>& out, ControlScope scope) const
 {
@@ -2268,6 +2314,7 @@ void Composer::transitionBar(const ParamStore& p, int gi, int bar, std::vector<N
     if (controls != nullptr) {
         if (inTrack == 0) trackStartControls(p, guest, barBeat, *controls, ControlScope::Voices);
         if (bp.barInSection == 0) sectionControls(p, guest, bp, barBeat, *controls, ControlScope::Voices);
+        leadArcControls(p, guest, bp, inTrack, barBeat, *controls);
         const int pb = p.base(PolyInstance::Pad), db = p.base(PolyInstance::Drone);
         auto closeHighPass = [&](int base) {
             // The floor is the outgoing track's here: the incoming pad and drone keep their knobs' high pass.
@@ -2355,6 +2402,7 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
                 arcControls(p, plan, inTrack, barBeat, true, *controls);
             }
             if (bp.barInSection == 0 && inTrack >= handover) sectionControls(p, plan, bp, barBeat, *controls);
+            if (inTrack >= handover) leadArcControls(p, plan, bp, inTrack, barBeat, *controls);
             // The pad's high pass for the sub foundation (rule 20): opened to kFoundationHpFloor and
             // an octave under each voice wherever the form silences kick and bass, the knobs
             // everywhere else. Every bar carries its state, so a bar composed alone carries it too;

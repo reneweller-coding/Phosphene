@@ -6829,6 +6829,128 @@ Track), `Core/include/phos/Params.h` + `Core/src/Params.cpp` (style_mix), `Core/
 (makeChords, voiceChord, foundationVoicing, Pad-Emission, Tonika-Anker, Counter-Ruhetöne),
 `Tools/render/main.cpp`, `Tests/selftest.cpp`; dieser Block.
 
+**23.09.2026, Lead: eine Zelle, ein Archetyp, ein Operator pro Takt — und die halbe Melodie ist Modulation**
+
+Der Nutzer, zwei Briefe zum Lead: „hören sich im Moment leider auch noch nicht wirklich gut an,
+sondern eher zufällig" — Kontur-Archetypen, Hurons Post-Skip-Reversal, motivische Zellen, eine
+Dialog-Engine für den Counter, stilabhängiges Verhalten; dann die Ergänzung: Variation-Operatoren
+statt Neu-Sampling, Generate-and-Select mit Kritiker, eine Stabilitätshierarchie als *eine*
+Gewichtstabelle, Interlocking mit der Bassline, Akzent/Slide/Gate plus Filterbogen, der Counter als
+Echo, Korpus-Mining, Stile als Vektoren. Seine Entscheidungen: **zwei Runden** (erst der Lead, dann
+Counter-Modi + Stilvektor), **alle drei Knöpfe** (`lead_density`, `pitch_entropy` jetzt,
+`counter_mode` in Runde 2), **Korpus-Mining ja**, **Filterbogen ja**. Dies ist Runde 1.
+
+*Was vorher war.* `makeLead` zog acht Takte Note für Note unter unären Mengen: A aus einem
+Zweitakt-Motiv, A' dasselbe „wo es passt", B ein neuer Rhythmus, A'' ein Operator. Wiedererkennbar
+war, was der Zufall stehen ließ; Kontur gab es nirgends.
+
+*Die Zelle.* Eine Phrase ist jetzt **ein Takt** (`leadCell`, Onset-Maske) und ein Programm:
+
+- *Rhythmus:* eine Korpus-Vorlage, die die Regeln zulassen (`cellAdmits`: acht bis fünfzehn Onsets
+  im Dichteband des Stils, kein Loch von sechs Sechzehnteln — zyklisch, die Zelle wiederholt sich —,
+  der Downbeat klingt, eine gehaltene Note für die Quinte der Regel 18), gewichtet mit der **Wurzel**
+  ihrer Zählung und dem **Interlock mit dem Bass** (`interlockFactor`: Onsets in den Offbeat-Löchern
+  des Bass-Patterns zählen dafür, Onsets auf seinen Transienten dagegen — als *Anteile*, damit unter
+  einem Rolling-Bass, wo jedes Offbeat ein Transient ist, alle Masken gleich behandelt werden). Dazu
+  jede Vorlage als **Variante** mit einem getauschten Offbeat-Sechzehntel, zu einem Drittel des
+  Gewichts. Gezählt: die 64 Lead-Vorlagen lassen 12 Masken im dünnen Band zu, 5 im mittleren, 2 im
+  dichten — der dichte Korpus-Takt ist der Sechzehntel-Roll ohne gehaltene Note, die Figur des Arps.
+  Nach Zählung gewichtet teilten sich drei von vier Seeds eine Zelle; mit Wurzel und Varianten sind
+  es vier verschiedene.
+- *Akzente, Gates, Slide-Münzen* werden vor jeder Tonhöhe gezogen (Modal Interchange bekommt
+  dasselbe Design mit anderen Tönen): Akzent auf einem Offbeat nach einer Pause
+  (`kNoteAccent`, Velocity 112, Filterhüllkurve × 1,5 in `Poly::noteOn`), Staccato-Gate auf
+  Offbeat-Sechzehnteln (`kNoteShort`, halbe Länge), Slide *nur* wo eine Spannungsstufe auf eine
+  stabile tritt, benachbart, höchstens ein Ganzton (`kNoteSlide`; die Lead-Stimme gleitet seit dieser
+  Runde nur auf markierten Noten, jede andere Stimme wie zuvor auf jeder).
+- *Tonhöhen:* die beste von **24 Ziehungen** aus dem Korpus-Modell unter einer Gewichtstabelle
+  (`criticScore`): stabile Stufen auf schweren Positionen (Lerdahl-Instabilität × metrisches Gewicht:
+  1 auf der Eins, 0,8 auf der Drei, 0,5 auf den Beats, 0,2 auf den Achteln, **−0,15 auf den ungeraden
+  Sechzehnteln** — „Synkopen dürfen (sollen!) Spannungsstufen tragen"), Zickzack-Strafe,
+  Intervall-Histogramm gegen den Korpus (aus den Bigrammen; Gewicht = Proximity des Stils), die
+  Korpus-**Skelette** als Prior auf den vier Beat-Ankern, eine Tonika im Takt, drei bis fünf
+  Tonklassen, Riff-Ambitus, keine Dreierläufe. Hurons Umkehr nach Sprüngen ist, wie der Brief sagt,
+  Regression zur Tessitura: **ein Skalar**, das Register-Prior, dessen Breite der Stil (`homing`)
+  setzt. Starke Schläge bleiben Töne des Tonika-Akkords (Bordun), Farbtöne bleiben Nachbarnoten an
+  gezogenen Slots (Regel 1), die Quinte ruht auf der längsten Note (Regel 18).
+
+*Archetyp und Operatoren.* Fünf Archetypen (`kLeadArchetypes`) als Takt-Offsets in Skalenschritten,
+**zentriert auf die Zelle** (Zeilensumme 0): Phrygian Surge −1 −1 0 0 0 1 2 −1, Arch & Drop
+−1 0 0 1 1 0 0 −1, Pedal & Bounce 0…0, Descending Cascade 1 1 1 0 0 −1 −1 −1, Tension Call
+−1 0 −1 0 0 1 1 0. Als *Hebungen* geschrieben (0 0 0 0 1 1 2 0) trugen die gehobenen Takte mehr als
+die Hälfte der Noten, und der Median des Hör-Seeds verließ die untere Hälfte des Registers (G#4 gegen
+die F#4-Schranke) — die Kontur ist eine Form um das Register, kein Ausbruch daraus. Pro Takt ein
+Operator (`CellOp`): die ungeraden Takte behalten die Zelle, die geraden antworten — Kadenz auf die
+Tonika (Vorhalt eine Stufe daneben, nie ein Farbton: in Phrygisch ist die Stufe darüber die b2, die
+`legal()` sofort auf die Tonika zurückschnappte, drei Tonikas hintereinander, gemessen; in Doppelt
+Harmonisch sind b2, 3 *und* 7 Farbtöne, die Suche geht bis drei Stufen), Transposition ±1,
+Umkehrung des letzten Beats, Verschiebung um ein Sechzehntel, Ausdünnen (nie unter acht Onsets; ein
+Thin ohne Wirkung meldet sich als Keep). Takt 8 ist immer die Kadenz. Jeder Takt wird danach wieder
+legal gemacht — starke Schritte auf den nächsten Akkordton, zur *Seite der Transposition* hin, damit
+das Snappen die Verschiebung nicht aufhebt; kein Farbton außerhalb seines Slots; das Fenster. Die
+Transposition wird verkleinert, bis das Fenster C4..B4 sie hält (`leadShift` sagt, was wirklich
+kam). Über die Phrasengrenze: bis zu dieser Runde wanderte bei „dreimal derselbe Ton" die *letzte*
+Note — 93 von 128 Kadenzen landeten neben der Tonika, gemessen; jetzt weicht die zweite Note der
+*folgenden* Phrase, und nie auf den Ton danach.
+
+*Filterbogen.* `Composer::leadArcControls` schreibt in jedem Takt, in dem der Lead spielt, eine
+Eintakt-Rampe auf `lead.cutoff`: der Sektionswert des Taktes (`leadCutoffValue`, dieselbe Formel wie
+`sectionControls`, an der Energie *dieses* Taktes) plus `arcDepth` × dem mittelwertfreien Bogen des
+Archetyps (`leadArc`). Der Bogen reitet auf dem Energiebogen, statt ihn zu ersetzen; die erste
+Sektion des ersten Tracks bleibt die Knöpfe.
+
+*Stile als Vektor* (`Form.h`, `LeadStyle`, je Profil): Dichte, Homing, Stabilität, Proximity,
+Entropie, Slide-/Akzent-Chance, Interlock, Bogentiefe, Archetyp- und Operator-Gewichte. Goa dicht,
+weit, sprunghaft, wenig Portamento; Full-On Call-and-Response; Progressive dünn, stabil, ausdünnend;
+Dark Forest Spannungsstufen und Verschiebung; Hi-Tech am dichtesten, freiesten, gegen den Bass
+gehockt. Die Knöpfe `compose.lead_density` (Auto/Sparse/Medium/Dense) und `compose.pitch_entropy`
+(Auto/Low/Medium/High) übersteuern zwei Einträge; „Auto (Style)" ist die Voreinstellung; Gruppe
+„Lead" im Set-Tab.
+
+*Korpus.* `Tools/corpus/lead_templates.py` zählt auf dem deduplizierten Korpus (655 Zeilen, 175
+Lead) je Rolle die 64 häufigsten Takt-Masken (Lead: 846 Takte, 235 verschiedene, die 64 decken 63 %)
+und 48 Anker-Skelette (Tonhöhe auf Beat 2–4 relativ zu Beat 1; „0 0 0" ist mit 207 von 846 das
+häufigste — der Lead des Korpus pedalt). `build_corpus.py --lead-templates-only` spleißt den Block
+vor den Bass-Block, keine ältere Tabelle bewegt sich (17 Zeilen Unterschied).
+
+*Bass vor Melodie.* Das Bass-Pattern wird jetzt vor dem Melodieplan gezogen — dieselben ersten
+Ziehungen des Track-Generators, nur an anderer Stelle der Funktion, also verrutscht nichts.
+
+*Gemessen.* 128 Phrasen (64 Tracks): alle fünf Archetypen und alle sechs Operatoren in Gebrauch,
+Takt 1 immer die Zelle, Takt 8 immer die Kadenz, 79 Shift-Takte alle um genau ein Sechzehntel
+gedreht, kein Thin unter acht Onsets, 341 transponierte Takte, 21 % mit dem Mittel auf der falschen
+Seite (Snappen der starken Schritte in einem Oktavfenster); 1286 Akzente, 708 Staccati, 354 Slides,
+alle benachbart; 128 von 128 Zellen aus dem Korpus. Hör-Seed 864566672: Lead-Mediane 66/64/66 (F#4
+ist die Schranke), keine Läufe in Track 1 und 2. Planungszeit unverändert: Seed 31, 7,66 s je Track
+mit allen Abgleichen (8,33 s in der Start-Runde). Mix-Lautheit Seed 42 unverändert −14,2 LUFS vor
+dem Master-Offset. Host-Test: Plugin gleich `phos_render` bitgleich, alle 38 Knöpfe (die Gruppe
+„Lead" dazu). Eine Schranke bewegt: die Sprechstimme gegen die Percussion im Dialog-Level-Test von
+2,0 auf 2,5 dB — 2,09 gemessen; die Stimme klingt in 6 % der Frames, ihr Median steht auf ein paar
+Dutzend Frames des Mixes, und genau dort liegen die neuen Zellen; die Absicht (zwischen Percussion
+und Acid) hält.
+
+*Beispiele* (`--tracks`).* Seed 42, Track 1 — `lead 1: Arch & Drop, cell xxx.xx.xxxx.xx.. (corpus, band 1), bars keep+0 shift+0 keep+0
+cadence+1 keep+1 up+1 keep+0 cadence+0`; `lead 2: Phrygian Surge, cell xxx.xx..xxx.xxx., bars keep+0 invert+0
+keep+0 up+1 keep+0 invert+1 keep+1 cadence+0`. Seed 7 — `Tension Call, cell x.xxxx.xx.xxxxxx (band 2), bars
+keep+0 cadence+0 keep+0 cadence+0 keep+0 thin+1 keep+1 cadence+0`. Die Zahl hinter dem Operator ist die
+Transposition, die der Takt *wirklich* bekam: im Oktavfenster C4..B4 verschluckt der Boden die −1-Takte der
+Archetypen meist (die Zelle sitzt in der unteren Hälfte), so dass die Form als 0/+1/+2 ankommt — das steht
+so im Plan (`leadShift`) und im Ausdruck, nicht nur im Archetyp.
+
+*Zwei Funde des ersten Vollaufs.* (1) `testProbeSchedule`: der Plan mit parallelen Proben war nicht mehr gleich dem seriellen. Ursache: der Intervall-Histogramm-Cache des Kritikers wurde faul befüllt und war nicht threadsicher; ein Proben-Thread las eine halb gefüllte Tabelle, der Kritiker wählte eine andere Zelle. Jetzt eine Funktions-Statik, die alle Rollen auf einmal baut. Dazu verlangte der Test von genau zwei Referenz-Tracks einen Präsenzgewinn — die neuen Zellen legten beide in die ±1,5-dB-Zone; die Referenz wächst jetzt Track für Track, bis einer korrigiert wird. (2) `testPresence`: 8 von 8 Tracks außerhalb der Zone blieben unkorrigiert. Ursache **aus der Harmonik-Runde**: die Zeile `style_mix` war ans Ende der Parametertabelle gehängt, im Enum steht `StyleMix` vor `PresenceMatch` — seit 7dccf36 las `PresenceMatch` die `style_mix`-Zeile (zwei Toggles mit Default 1: unauffällig, aber `compose.presence_match=Off` in den Tests schaltete in Wahrheit die Stil-Reise ab), und mit den zwei neuen Choice-Zeilen dahinter die `lead_density`-Zeile mit Default 0: Präsenzabgleich aus. Die Tabelle steht jetzt in Enum-Reihenfolge, und `testParams` prüft für neun Einträge Name gegen Index — die Klasse Fehler, die Defaults verstecken.
+
+*Testlauf.* Die betroffenen Abschnitte grün (motivic operators, genre rules, listening seed, melody score/variety, voices, dialogue levels, params, hosttest bitgleich); der volle `ctest` folgt auf Wunsch des Nutzers am Ende der Nachtrunden (23.09.2026).
+
+*Dateien.* `Core/include/phos/Form.h` (LeadArchetype, CellOp, LeadStyle), `Core/src/Form.cpp` (fünf
+Vektoren), `Core/include/phos/Melody.h` + `Core/src/Melody.cpp` (makeLead neu, kLeadArchetypes,
+criticScore, drawCellMask, leadArc), `Core/include/phos/Corpus.h` + `Core/src/CorpusTables.cpp`
+(Vorlagen-Block), `Core/include/phos/Params.h` + `Core/src/Params.cpp` (lead_density, pitch_entropy),
+`Core/include/phos/Score.h` (kNoteShort), `Core/include/phos/Poly.h` + `Core/src/Poly.cpp` (Akzent,
+Slide je Note), `Core/src/Engine.cpp`, `Core/include/phos/Composer.h` + `Core/src/Composer.cpp`
+(Pattern vor Melodie, leadCutoffValue, leadArcControls), `Plugin/EditorSetTab.cpp` (Gruppe „Lead"),
+`Tools/render/main.cpp` (Design-Zeilen), `Tools/corpus/lead_templates.py` + `build_corpus.py`,
+`Tests/selftest.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

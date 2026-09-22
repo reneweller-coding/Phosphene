@@ -104,6 +104,26 @@ bool sampleConstrained(const Model& model, const std::vector<std::vector<uint8_t
 /** @brief Chord-root succession probabilities (with add-one smoothing over the roots seen at all). */
 double chordTransition(int fromRel, int toRel);
 
+// --------------------------------------------------------------------------------- lead templates
+
+/**
+ * @name The corpus's bar templates (22.09.2026, round "Lead"; Tools/corpus/lead_templates.py)
+ * The commonest one-bar onset masks and anchor skeletons of each role, counted on the deduplicated
+ * corpus. The lead's cell takes its rhythm from the masks the genre rules admit (at least eight
+ * onsets, no hole of six sixteenths) and its critic scores a cell's four beat anchors against the
+ * skeletons -- the corpus fills what the rules leave open, never the other way round.
+ * @{ */
+/** @brief One bar pattern: a 16-bit onset mask (bit s = sixteenth s) and how many bars played it. */
+struct CorpusBarMask { uint16_t mask; uint32_t count; };
+/** @brief One skeleton: the pitch at the start of beats 2, 3 and 4 relative to beat 1, semitones, and its count. */
+struct CorpusSkeleton { int8_t d[3]; uint32_t count; };
+extern const CorpusBarMask* const kCorpusRoleBars[kNumCorpusRoles];     ///< per role, sorted by count
+extern const int kNumCorpusRoleBars[kNumCorpusRoles];                   ///< entries per role
+extern const CorpusSkeleton* const kCorpusRoleSkeletons[kNumCorpusRoles];
+extern const int kNumCorpusRoleSkeletons[kNumCorpusRoles];
+extern const int kCorpusTemplateLines[kNumCorpusRoles];                 ///< deduplicated lines counted per role
+/** @} */
+
 // ------------------------------------------------------------------------------------ bass rhythm
 
 /** @brief One entry of the bass bar-pattern lookup: a 16-bit onset mask and its count. */

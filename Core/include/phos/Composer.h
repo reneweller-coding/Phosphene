@@ -441,6 +441,11 @@ private:
     void measureTrack(const ParamStore& params, TrackPlan& plan) const;
     void sectionControls(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar, double beat,
                          std::vector<ControlEvent>& out, ControlScope scope = ControlScope::All) const;
+    /** @brief The lead's cutoff offset at a bar, as sectionControls ramps it (22.09.2026). */
+    float leadCutoffValue(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar) const;
+    /** @brief The lead phrase's filter arc at a bar: a one-bar ramp on the lead's cutoff (22.09.2026, round "Lead"). */
+    void leadArcControls(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar, int inTrack, double beat,
+                         std::vector<ControlEvent>& out) const;
     /**
      * @brief The incoming track's share of an overlap bar (19.09.2026): its intro's percussion, voices and
      *        effects, and the controls of its voices. Nothing of its kick or bass: there is none yet.

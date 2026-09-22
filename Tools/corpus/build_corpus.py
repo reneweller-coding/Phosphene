@@ -410,6 +410,7 @@ def write_tables(stats, out):
         nbi, ntri = max(1, len(st["bi"])), max(1, len(st["tri"]))
         lines.append(f"    {{ \"{r}\", {st['files']}, k_{r}_uni, k_{r}_bi, {nbi}, k_{r}_tri, {ntri}, k_{r}_onset, k_{r}_accent, k_{r}_slide, k_{r}_length, k_{r}_ambitus }},")
     lines.append("};")
+    lines += lead_template_lines(stats.get("root", "M:/Midi"))
     lines += bass_rhythm_lines(stats.get("root", "M:/Midi"))
     lines.append("")
     lines.append("} // namespace phos")
@@ -420,6 +421,32 @@ def write_tables(stats, out):
 
 #: First line of the generated bass-rhythm block; :func:`splice_bass_rhythm` cuts the file here.
 BASS_MARKER = "// ---------------------------------------------------------------------------- bass rhythm"
+
+
+def lead_template_lines(root):
+    """The bar-template block (22.09.2026) from :mod:`lead_templates`; imported inside for the same reason."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import lead_templates                                      # noqa: E402
+    return lead_templates.emit_lines(root)
+
+
+def splice_lead_templates(out, root):
+    """Rewrites only the lead-template block of an existing ``CorpusTables.cpp`` (before the bass block)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import lead_templates                                      # noqa: E402
+    with open(out, "r", encoding="utf-8") as fh:
+        text = fh.read()
+    marker = lead_templates.MARKER
+    if marker in text:
+        head, rest = text.split(marker, 1)
+        tail = BASS_MARKER + rest.split(BASS_MARKER, 1)[1]
+    else:
+        head, rest = text.split(BASS_MARKER, 1)
+        tail = BASS_MARKER + rest
+    body = "\n".join(lead_template_lines(root))
+    with open(out, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(head.rstrip("\n") + "\n\n" + body + "\n" + tail)
+    print("lead template block written into", out)
 
 
 def bass_rhythm_lines(root):
@@ -528,7 +555,15 @@ def main():
     ap.add_argument("--memorisation")
     ap.add_argument("--bass-rhythm-only", action="store_true",
                     help="refit only the bass onset model and splice it into --out")
+    ap.add_argument("--lead-templates-only", action="store_true",
+                    help="recount only the bar templates (22.09.2026) and splice them into --out")
     a = ap.parse_args()
+    if a.lead_templates_only:
+        if not a.out:
+            print("--lead-templates-only needs --out", file=sys.stderr)
+            return 2
+        splice_lead_templates(a.out, a.root)
+        return 0
     if a.bass_rhythm_only:
         if not a.out:
             print("--bass-rhythm-only needs --out", file=sys.stderr)

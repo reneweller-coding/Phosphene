@@ -47,7 +47,8 @@ static_assert(polyPart(PolyInstance::Drone) == Part::Drone && polyPart(PolyInsta
 /** @brief Flags of a note event. */
 enum NoteFlag : uint8_t {
     kNoteAccent = 1,   ///< accented step (acid, percussion)
-    kNoteSlide  = 2,   ///< glide into the next note (acid)
+    kNoteSlide  = 2,   ///< glide into the next note (acid; the lead since 22.09.2026, on flagged notes only)
+    kNoteShort  = 4,   ///< played at half its written length: the lead's staccato gate (22.09.2026)
 };
 
 /** @brief One note of the score. */

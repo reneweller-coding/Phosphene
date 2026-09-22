@@ -169,6 +169,67 @@ constexpr int kTrackBarStep = 16;    ///< track lengths are multiples of this
 /** @} */
 
 /**
+ * @brief The macro contours a lead phrase may take (22.09.2026, round "Lead"; Melody.cpp, makeLead).
+ *
+ * The user's brief names five archetypes. Each is eight *bar offsets* in scale steps that the cell
+ * is transposed by, bar for bar -- centred on the cell, so the phrase keeps its register -- and a
+ * matching filter arc (kLeadArchetypes in Melody.cpp): contour lives on the two-to-eight-bar level,
+ * where Margulis (*On Repeat*, Oxford 2014) puts the hook of riff music, and the cell itself stays
+ * what it is -- the repetition is the point.
+ */
+enum class LeadArchetype : int {
+    PhrygianSurge = 0,   ///< flat, then rising to the seventh bar, back under it in the eighth
+    ArchAndDrop,         ///< up over the first half, down over the second
+    PedalAndBounce,      ///< the cell held home; the operators alone move it
+    DescendingCascade,   ///< starts high and steps down over the phrase
+    TensionCall,         ///< rises in calls that do not resolve until the last bar
+    Count
+};
+constexpr int kNumLeadArchetypes = static_cast<int>(LeadArchetype::Count);   ///< number of archetypes
+
+/**
+ * @brief The operators a lead bar may apply to the cell (22.09.2026; Melody.cpp, applyCellOp).
+ *
+ * The brief: "Würfle eine 1-Takt-Keimzelle und erzeuge alles Weitere durch deterministische
+ * Operatoren". Eight bars are one cell and one operator per bar; the operators are what makes A2
+ * recognisably A1's answer rather than another draw.
+ */
+enum class CellOp : int {
+    Keep = 0,        ///< the cell as it is
+    EndCadence,      ///< the last beat bent onto the tonic, the note before it a step off it
+    TransposeUp,     ///< the cell one scale step up (on top of the archetype's offset)
+    TransposeDown,   ///< one scale step down
+    InvertEnd,       ///< the last beat's contour mirrored round its first note
+    Shift16,         ///< the cell rotated by one sixteenth: every beat note lands just after its beat
+    Thin,            ///< two or three weak sixteenths dropped -- the question's open end
+    Count
+};
+constexpr int kNumCellOps = static_cast<int>(CellOp::Count);   ///< number of cell operators
+
+/**
+ * @brief A style's lead vector (22.09.2026, round "Lead").
+ *
+ * The user's genre matrix -- Full-On call-and-response, Progressive timbral and sparse, Goa
+ * polyphonic and dense, Darkpsy timbral with tension tones, Hi-Tech micro-hocketing -- as one set of
+ * weights over the same cost function rather than five code branches, so a hybrid is a point between
+ * two vectors and the engine stays one testable pipeline. The knobs compose.lead_density and
+ * compose.pitch_entropy override `density` and `entropy` when they are not "Auto".
+ */
+struct LeadStyle {
+    float  density = 0.5f;       ///< 0..1: onsets per bar, 8..10 at 0, 10..12 at 0.5, 12..16 at 1 (never under eight: rule 16)
+    float  homing = 1.0f;        ///< regression to the register centre (von Hippel and Huron 2000): tightens the register prior
+    float  stability = 1.0f;     ///< how hard metric weight pulls a note to the stable degrees (1 and 5, then b3)
+    float  proximity = 1.0f;     ///< the critic's weight on the corpus interval histogram: 1 smooth, 0 free leaps
+    float  entropy = 1.0f;       ///< multiplier on compose.melody_temperature
+    float  slideChance = 0.3f;   ///< chance that a tension-to-resolution step slides (portamento)
+    float  accentChance = 0.3f;  ///< chance that an onset after a rest is accented
+    float  interlock = 0.5f;     ///< how much the bass pattern's holes attract the lead's onsets
+    float  arcDepth = 0.05f;     ///< depth of the phrase's cutoff arc, normalised
+    double archetype[kNumLeadArchetypes] = { 0.2, 0.2, 0.2, 0.2, 0.2 };   ///< weight of each LeadArchetype
+    double cellOp[kNumCellOps] = { 0.0, 0.2, 0.2, 0.1, 0.15, 0.15, 0.2 };  ///< weight of each CellOp for a variation bar (Keep is never drawn)
+};
+
+/**
  * @brief A style profile: the weights that make Goa a Goa and Full-On a Full-On.
  *
  * Everything is either an absolute musical quantity (tempo) or a multiplier on a knob, so that the
@@ -198,6 +259,7 @@ struct StyleProfile {
     float  interchangeChance = 0.0f;             ///< 0..1: how often a section borrows a mode at all
     /** @} */
     StyleId id = StyleId::FullOn;                ///< which style this is (22.09.2026: the harmony tables are indexed by it)
+    LeadStyle lead;                              ///< the lead vector (22.09.2026, round "Lead")
 };
 
 /** @brief How much a section's energy lifts the colourful modes when a mode is borrowed. */

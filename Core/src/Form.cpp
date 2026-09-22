@@ -84,7 +84,11 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 1.15f, 1.10f, 1.10f, 1.25f, 0.80f, 1.20f, 1.20f }, 0.9f, 0.95f,
       { 0.20, 0.25, 0.55, 0.00 },                      // mostly beat 4 alone: rarely total silence
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.26f, 1.0f, 16.0f,
-      { 0.15, 0.25, 0.10, 0.30, 0.15, 0.05 }, 0.45f, StyleId::Goa },   // interchange: the Hijaz modes at the peak
+      { 0.15, 0.25, 0.10, 0.30, 0.15, 0.05 }, 0.45f, StyleId::Goa,
+      // lead vector (22.09.2026): dense sixteenths, wide, more leaps, little portamento; surge and arch
+      { 0.80f, 0.80f, 0.80f, 0.60f, 1.10f, 0.15f, 0.35f, 0.30f, 0.05f,
+        { 0.35, 0.25, 0.10, 0.20, 0.10 },   // archetypes: surge, arch, pedal, cascade, tension call
+        { 0.0, 0.25, 0.25, 0.15, 0.15, 0.10, 0.10 } } },   // cell operators: keep, cadence, up, down, invert end, shift, thin   // interchange: the Hijaz modes at the peak
     // Full-On: the default, every multiplier 1, so the knobs play as they are set.
     { "Full-On", 144.0, 2.0,
       { 0.30, 0.25, 0.15, 0.15, 0.05, 0.10 },
@@ -93,7 +97,11 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f }, 1.0f, 1.0f,
       { 0.40, 0.30, 0.30, 0.00 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.22f, 1.0f, 16.0f,
-      { 0.30, 0.30, 0.15, 0.15, 0.05, 0.05 }, 0.30f, StyleId::FullOn },
+      { 0.30, 0.30, 0.15, 0.15, 0.05, 0.05 }, 0.30f, StyleId::FullOn,
+      // lead vector (22.09.2026): call-and-response: medium density, smooth, sliding, tied to the bass
+      { 0.60f, 1.00f, 1.00f, 1.00f, 1.00f, 0.35f, 0.40f, 0.60f, 0.06f,
+        { 0.30, 0.30, 0.15, 0.10, 0.15 },   // archetypes: surge, arch, pedal, cascade, tension call
+        { 0.0, 0.30, 0.20, 0.10, 0.15, 0.15, 0.10 } } },   // cell operators: keep, cadence, up, down, invert end, shift, thin
     // Progressive: flatter form, fewer leads, more pad, Dorian and Aeolian.
     { "Progressive", 136.5, 1.5,
       { 0.35, 0.10, 0.05, 0.05, 0.00, 0.45 },
@@ -102,7 +110,11 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 0.9f, 0.55f, 0.50f, 0.8f, 1.20f, 1.3f, 1.30f }, 0.6f, 0.9f,
       { 0.50, 0.30, 0.20, 0.00 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.28f, 0.6f, 16.0f,
-      { 0.45, 0.05, 0.00, 0.00, 0.00, 0.50 }, 0.12f, StyleId::Progressive },   // Dorian and Aeolian only
+      { 0.45, 0.05, 0.00, 0.00, 0.00, 0.50 }, 0.12f, StyleId::Progressive,
+      // lead vector (22.09.2026): sparse, homing, stable, low entropy: the pedal and thinning
+      { 0.30f, 1.30f, 1.30f, 1.30f, 0.70f, 0.45f, 0.20f, 0.70f, 0.04f,
+        { 0.10, 0.25, 0.45, 0.15, 0.05 },   // archetypes: surge, arch, pedal, cascade, tension call
+        { 0.0, 0.25, 0.10, 0.10, 0.05, 0.20, 0.30 } } },   // cell operators: keep, cadence, up, down, invert end, shift, thin   // Dorian and Aeolian only
     // Dark / Forest: darker modes, less lead, denser percussion.
     { "Dark Forest", 151.5, 3.5,
       { 0.20, 0.40, 0.25, 0.10, 0.05, 0.00 },
@@ -111,7 +123,11 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 1.2f, 0.4f, 0.50f, 0.9f, 1.00f, 0.8f, 1.30f }, 1.2f, 1.1f,
       { 0.30, 0.30, 0.40, 0.00 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.18f, 1.3f, 8.0f,
-      { 0.20, 0.40, 0.30, 0.10, 0.00, 0.00 }, 0.35f, StyleId::DarkForest },
+      { 0.20, 0.40, 0.30, 0.10, 0.00, 0.00 }, 0.35f, StyleId::DarkForest,
+      // lead vector (22.09.2026): tension tones allowed, syncopation, the unresolved call
+      { 0.50f, 1.10f, 0.70f, 0.90f, 1.10f, 0.40f, 0.35f, 0.50f, 0.05f,
+        { 0.15, 0.10, 0.25, 0.15, 0.35 },   // archetypes: surge, arch, pedal, cascade, tension call
+        { 0.0, 0.20, 0.10, 0.10, 0.15, 0.25, 0.20 } } },   // cell operators: keep, cadence, up, down, invert end, shift, thin
     // Hi-Tech: fastest, busiest; no rule of its own, so the strict two-drop form.
     { "Hi-Tech", 158.0, 4.0,
       { 0.20, 0.35, 0.25, 0.15, 0.05, 0.00 },
@@ -120,7 +136,11 @@ const StyleProfile kProfiles[kNumStyles] = {
       { 1.3f, 0.6f, 0.80f, 1.1f, 1.20f, 0.6f, 0.50f }, 1.4f, 1.2f,
       { 0.25, 0.35, 0.40, 0.00 },
       { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, 0.16f, 1.4f, 8.0f,
-      { 0.20, 0.35, 0.30, 0.15, 0.00, 0.00 }, 0.40f, StyleId::HiTech },
+      { 0.20, 0.35, 0.30, 0.15, 0.00, 0.00 }, 0.40f, StyleId::HiTech,
+      // lead vector (22.09.2026): densest, freest, hocketing against the bass, hardly a slide
+      { 0.90f, 0.70f, 0.60f, 0.40f, 1.30f, 0.10f, 0.50f, 0.80f, 0.07f,
+        { 0.25, 0.10, 0.15, 0.20, 0.30 },   // archetypes: surge, arch, pedal, cascade, tension call
+        { 0.0, 0.05, 0.20, 0.20, 0.15, 0.30, 0.10 } } },   // cell operators: keep, cadence, up, down, invert end, shift, thin
 };
 
 /** @brief Control points of the arcs: (t, E) pairs, interpolated with raised cosines. */
