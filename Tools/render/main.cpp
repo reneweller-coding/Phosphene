@@ -31,6 +31,11 @@
  *                         plays there (kicks, bass, percussion lanes, parts, the snare roll's spacing, what
  *                         sounds on beat 4) -- the arrangement round's measurements (19.09.2026)
  *     --score-only        with --bar-log: compose the score without rendering audio (the power column is -200)
+ *     --excerpts DIR      the listening bench (23.09.2026): while the set renders, cut one WAV per section of
+ *                         every track into DIR -- the section's first --excerpt-bars bars, a buildup's last
+ *                         bars together with the drop it lands in -- named by seed, track, style, section and
+ *                         bar, with an index.tsv beside them (Tools/listen_bench.py drives it per style)
+ *     --excerpt-bars N    length of those excerpts in bars (default 16)
  *     --bench             render without writing and report the realtime factor
  *     --list              print every parameter with range and default
  *     --version           print the version, the vector path and the wavetable pack, then exit
@@ -60,6 +65,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <memory>
 #include <cstdlib>
 #include <cstring>
@@ -156,6 +162,32 @@ void printVersion()
     std::printf("vector path: %s\n", kVecPathName);
 }
 
+/**
+ * @brief One excerpt of the listening bench (--excerpts, 23.09.2026): a sample window of the render that is
+ *        copied into a file of its own while the set plays through.
+ *
+ * The bench exists so that a listener can hear "every drop in Full-On" or "every breakdown of seed 7" in a
+ * row instead of sitting through the sets around them, and so that a remark about one of them names a bar.
+ * Nothing is rendered twice: the excerpts are cut from the one render, sample-exact at the bar lines the
+ * tempo map gives, with a ten-millisecond fade at both ends so that a cut in the middle of a kick's tail
+ * does not click. Two excerpts may overlap (the outgoing track's outro and the incoming track's intro over
+ * the DJ blend), which is why each one carries its own writer.
+ */
+struct Excerpt {
+    std::string path;              ///< the file
+    uint64_t start = 0, end = 0;   ///< sample range in the render, end exclusive
+    WavWriter wav;                 ///< opened at the first sample, closed after the last
+    bool opened = false, closed = false;
+};
+
+/** @brief A style name as a file name part: "Dark Forest" -> "Dark-Forest". */
+std::string fileToken(const char* name)
+{
+    std::string s(name);
+    for (char& c : s) if (c == ' ' || c == '/' || c == '\\') c = '-';
+    return s;
+}
+
 bool readFile(const char* path, std::string& out)
 {
     FILE* f = std::fopen(path, "rb");
@@ -175,7 +207,8 @@ int main(int argc, char** argv)
     double seconds = -1.0;
     int sr = 48000, block = 256;
     uint64_t seed = 1;
-    std::string out, midi, solo, setFile, saveSet, barLog;
+    std::string out, midi, solo, setFile, saveSet, barLog, excerpts;
+    int excerptBars = 16;
     bool report = false, bench = false, pcm24 = false, listTracks = false, listSections = false, scoreOnly = false;
     Quality quality = Quality::desktop();
     double rampBeat = -1.0, rampBpm = 0.0;
@@ -237,6 +270,8 @@ int main(int argc, char** argv)
         else if (a == "--report") report = true;
         else if (a == "--bar-log") barLog = next();
         else if (a == "--score-only") scoreOnly = true;
+        else if (a == "--excerpts") excerpts = next();
+        else if (a == "--excerpt-bars") excerptBars = std::max(1, std::atoi(next()));
         else if (a == "--bench") bench = true;
         else if (a == "--list") { printList(params); return 0; }
         else if (a == "--version") { printVersion(); return 0; }
@@ -406,6 +441,52 @@ int main(int argc, char** argv)
     }
     const uint64_t totalSamples = static_cast<uint64_t>(std::llround(tempo.secondsAt(totalBeats) * sr));
 
+    // The listening bench (Excerpt above): one window per section of every track the render reaches. A
+    // section's excerpt is its first excerptBars bars -- the drop's hit, the breakdown's cut, the groove's
+    // entry are all at the start. A buildup is the exception: what a listener judges there is its *end*,
+    // the roll, the pre-drop break and the drop it lands in, so its excerpt is its last bars plus the first
+    // four of the section after it. The file name says everything the index says, so a folder listing is
+    // already the bench: s<seed>_t<track>_<style>_<section index>-<section>_b<first bar>.wav.
+    std::vector<std::unique_ptr<Excerpt>> excerptList;
+    if (!excerpts.empty() && !bench && !scoreOnly) {
+        std::error_code ec;
+        std::filesystem::create_directories(excerpts, ec);
+        const std::string indexPath = excerpts + "/index.tsv";
+        FILE* idx = std::fopen(indexPath.c_str(), "w");
+        if (idx == nullptr) { std::fprintf(stderr, "cannot write %s\n", indexPath.c_str()); return 1; }
+        std::fprintf(idx, "file\tseed\ttrack\tstyle\tkey\tscale\tbpm\tsection\tindex\tfirst_bar\tbars\tenergy\tclimax\n");
+        for (int t = 0; composer.track(params, t).firstBar < totalBars; ++t) {
+            const TrackPlan p = composer.track(params, t);
+            const std::string styleName = fileToken(kStyleNames[std::clamp(p.style, 0, kNumStyles - 1)]);
+            for (int s = 0; s < p.form.count; ++s) {
+                const Section& sec = p.form.section[s];
+                int from = p.firstBar + sec.startBar;
+                int len = std::min(excerptBars, sec.bars);
+                if (sec.type == SectionType::Build) {
+                    const int tail = std::min(sec.bars, std::max(4, excerptBars - 4));
+                    from = p.firstBar + sec.startBar + sec.bars - tail;
+                    len = tail + (s + 1 < p.form.count ? std::min(4, p.form.section[s + 1].bars) : 0);
+                }
+                const int to = std::min(from + len, totalBars);
+                if (to <= from) continue;
+                char name[256];
+                std::snprintf(name, sizeof(name), "s%llu_t%02d_%s_%d-%s_b%05d.wav", static_cast<unsigned long long>(seed), t + 1,
+                              styleName.c_str(), s + 1, kSectionNames[static_cast<int>(sec.type)], from + 1);
+                auto e = std::make_unique<Excerpt>();
+                e->path = excerpts + "/" + name;
+                e->start = static_cast<uint64_t>(std::llround(tempo.secondsAt(static_cast<double>(from) * kBeatsPerBar) * sr));
+                e->end = static_cast<uint64_t>(std::llround(tempo.secondsAt(static_cast<double>(to) * kBeatsPerBar) * sr));
+                std::fprintf(idx, "%s\t%llu\t%d\t%s\t%s\t%s\t%.1f\t%s\t%d\t%d\t%d\t%.2f\t%d\n", name, static_cast<unsigned long long>(seed), t + 1,
+                             kStyleNames[std::clamp(p.style, 0, kNumStyles - 1)], kKeyNames[p.key], kScaleNames[p.scale], p.bpm,
+                             kSectionNames[static_cast<int>(sec.type)], s + 1, from + 1, to - from, static_cast<double>(sec.energy), sec.climax ? 1 : 0);
+                excerptList.push_back(std::move(e));
+            }
+        }
+        std::fclose(idx);
+    }
+    const uint64_t excerptFade = static_cast<uint64_t>(sr / 100);   // 10 ms
+    std::vector<float> exL(static_cast<size_t>(block)), exR(static_cast<size_t>(block));
+
     WavWriter wav;
     if (!out.empty() && !bench) {
         if (!wav.open(out.c_str(), sr, 2, pcm24 ? WavFormat::Pcm24 : WavFormat::Float32)) {
@@ -455,9 +536,32 @@ int main(int argc, char** argv)
             trackMeter.process(L.data(), R.data(), n);
             for (int i = 0; i < n; ++i) peak = std::max(peak, static_cast<double>(std::max(std::fabs(L[static_cast<size_t>(i)]), std::fabs(R[static_cast<size_t>(i)]))));
             if (!out.empty()) wav.write(L.data(), R.data(), n);
+            // The bench's excerpts: whatever part of this block falls into an open window, faded at the ends.
+            const uint64_t blockEnd = renderedSamples + static_cast<uint64_t>(n);
+            for (auto& e : excerptList) {
+                if (e->closed || e->start >= blockEnd || e->end <= renderedSamples) continue;
+                if (!e->opened) {
+                    if (!e->wav.open(e->path.c_str(), sr, 2, pcm24 ? WavFormat::Pcm24 : WavFormat::Float32)) {
+                        std::fprintf(stderr, "cannot write %s\n", e->path.c_str());
+                        return 1;
+                    }
+                    e->opened = true;
+                }
+                const uint64_t a = std::max(e->start, renderedSamples), b = std::min(e->end, blockEnd);
+                for (uint64_t i = a; i < b; ++i) {
+                    const uint64_t in = i - e->start, left = e->end - i;
+                    const float g = static_cast<float>(std::min<double>({ 1.0, static_cast<double>(in) / static_cast<double>(excerptFade),
+                                                                           static_cast<double>(left) / static_cast<double>(excerptFade) }));
+                    exL[static_cast<size_t>(i - a)] = g * L[static_cast<size_t>(i - renderedSamples)];
+                    exR[static_cast<size_t>(i - a)] = g * R[static_cast<size_t>(i - renderedSamples)];
+                }
+                e->wav.write(exL.data(), exR.data(), static_cast<int>(b - a));
+                if (b == e->end) { e->wav.close(); e->closed = true; }
+            }
         }
         renderedSamples += static_cast<uint64_t>(n);
     }
+    for (auto& e : excerptList) if (e->opened && !e->closed) { e->wav.close(); e->closed = true; }
     if (listTracks && !bench) std::printf("track %2d played: %.1f LUFS integrated\n", meteredTrack + 1, static_cast<double>(trackMeter.read().integrated));
     const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     wav.close();

@@ -7239,6 +7239,31 @@ Folgen der Runden, keine neue Klasse Fehler.
 
 Danach ein zweiter Vollauf (sauberer Build, 1275 s): **114 von 114.**
 
+**23.09.2026, Hörprüfstand: jede Sektion jedes Stils als kurzer Ausschnitt**
+
+Der Nutzer hört ganze Sets und meldet dann „die Counter sind kaum hörbar" oder „die Zaps nerven" — beides
+richtig, beides ohne Takt. Ab dieser Runde schneidet `phos_render --excerpts DIR` beim Rendern eines Sets
+je Track und Sektion einen Ausschnitt heraus (`--excerpt-bars`, Standard 16): den Anfang der Sektion —
+dort liegen Drop-Einschlag, Breakdown-Schnitt, Groove-Einsatz —, beim Buildup dagegen sein *Ende* mit den
+ersten vier Takten des Drops, den es vorbereitet (Roll, Pre-Drop-Break, Einschlag). Nichts wird doppelt
+gerendert: die Fenster werden aus dem einen Render kopiert, sample-genau an den Taktgrenzen der Tempo-Map,
+mit 10 ms Fade an beiden Enden (gemessen: Pegel in den ersten und letzten 5 ms deutlich unter dem Spitzenwert,
+kein Klick). Zwei Fenster dürfen sich überlappen (Outro und Intro über die DJ-Blende), deshalb trägt jedes
+seinen eigenen Writer.
+
+Der Dateiname sagt alles: `s<Seed>_t<Track>_<Stil>_<Sektionsindex>-<Sektion>_b<erster Takt>.wav`; daneben
+`index.tsv` mit Seed, Track, Stil, Tonart, Skala, BPM, Sektion, Takt, Länge, Energie, Klimax.
+`Tools/listen_bench.py` treibt das je Stil (fünf Ordner, Stil festgepinnt über `compose.style_mix=0`) und
+Seed parallel; ein gemeinsamer `index.tsv` liegt oben. „Alle Drops in Full-On" ist damit eine Ordnersuche nach
+`-Drop_`, und eine Rückmeldung nennt einen Takt.
+
+*Geprüft.* Seed 1 über 288 Takte: zehn Ausschnitte (acht Sektionen von Track 1, zwei von Track 2), je
+26,48 s = 16 Takte bei 145 BPM; der Buildup-Ausschnitt liegt auf Takt 69–84 (Roll ab 69, Drop bei 81).
+Treiber mit Goa und Dark Forest, Seed 7, 3 Minuten: acht Dateien, Index gemischt. Kein Selbsttest betroffen
+(Werkzeug, kein Kern); voller ctest am Ende dieser Runden.
+
+*Dateien.* `Tools/render/main.cpp` (Excerpt, `--excerpts`, `--excerpt-bars`), `Tools/listen_bench.py`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
