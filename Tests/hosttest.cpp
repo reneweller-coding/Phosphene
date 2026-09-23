@@ -1058,6 +1058,46 @@ int main(int argc, char** argv)
               "learned controllers come back with the saved state");
     }
 
+    // ---------------------------------------------------------------- undo (23.09.2026)
+    if (partRest) {
+        auto p = std::make_unique<PhospheneProcessor>();
+        p->setPlayConfigDetails(0, 2, 48000.0, 256);
+        p->prepareToPlay(48000.0, 256);
+        auto* cutoff = p->hostParameter(p->params().find("lead.cutoff"));
+        const float v0 = cutoff->getValue();
+        // A knob gesture, the way an attachment makes one.
+        cutoff->beginChangeGesture();
+        cutoff->setValueNotifyingHost(0.2f);
+        cutoff->endChangeGesture();
+        const bool recorded = p->canUndo() && p->undoName().contains("Cutoff");
+        p->undo();
+        const float back = cutoff->getValue();
+        p->redo();
+        const float again = cutoff->getValue();
+        check(recorded && std::fabs(back - v0) < 1e-5f && std::fabs(again - 0.2f) < 1e-5f,
+              juce::String("undo: a knob gesture is one step, back and forth -- ") + juce::String::formatted("%.3f -> 0.200, undo %.3f, redo %.3f", v0, back, again)
+                  + " (" + p->undoName() + ")");
+        // A reroll and a seed, through undoable() as the editor calls them.
+        p->undoable("Reroll this track", [&] { p->reroll(phos::LockUnit::Track, 0); });
+        const uint32_t rolled = p->variation(phos::LockUnit::Track, 0);
+        p->undo();
+        const uint32_t unrolled = p->variation(phos::LockUnit::Track, 0);
+        const uint64_t seed0 = p->seed();
+        p->undoable("Seed", [&] { p->setSeed(seed0 + 1234); });
+        const uint64_t seed1 = p->seed();
+        p->undo();
+        const uint64_t seedBack = p->seed();
+        p->redo();
+        check(rolled == 1 && unrolled == 0 && seed1 == seed0 + 1234 && seedBack == seed0 && p->seed() == seed0 + 1234,
+              juce::String("undo: a reroll and a seed change come back, and go again -- ")
+                  + juce::String::formatted("reroll %u -> %u, seed %llu -> %llu -> %llu", rolled, unrolled, (unsigned long long)seed1, (unsigned long long)seedBack,
+                                            (unsigned long long)p->seed()));
+        // Host automation is not the editor's history: a value change without a gesture records nothing.
+        const juce::String before = p->undoName();
+        cutoff->setValueNotifyingHost(0.7f);
+        check(p->undoName() == before, "undo: automation without a gesture is not recorded");
+    }
+
     // ---------------------------------------------------------------- bus layouts and the editor
     if (partRest) {
         auto p = std::make_unique<PhospheneProcessor>();
@@ -1161,6 +1201,10 @@ int main(int argc, char** argv)
                         if (name == "Play") p->stop();
                         if (name.startsWith("Reset")) p->params().set(p->params().find("compose.bpm"), 151.0f);
                         if (name.startsWith("Clear all")) p->setLock(phos::LockUnit::Track, 0, true);
+                        // Undo and redo (23.09.2026) need a step to take back or to do again.
+                        if (name == "Undo" || name == "Redo")
+                            p->undoable("tempo", [&] { p->params().set(p->params().find("compose.bpm"), 151.0f); });
+                        if (name == "Redo") p->undo();
                         // A lane button that is already the chosen lane has nothing to change, and
                         // lane 1 is the default one. Stand somewhere else first.
                         if (t == TabPerc && name.containsOnly("0123456789"))

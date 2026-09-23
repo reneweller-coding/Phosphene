@@ -7536,7 +7536,7 @@ Logo oben, mit einer Fassung für den hellen und einer für den dunklen GitHub-M
 
 **23.09.2026, MIDI: jeder Parameter automatisierbar und per MIDI Learn auf einen Regler legbar**
 
-Der Nutzer: nicht nur die Makros, „alle Parameter automatisierbar machen". Bestandsaufnahme: alle 974
+Der Nutzer: nicht nur die Makros, „alle Parameter automatisierbar machen". Bestandsaufnahme: alle 978
 Store-Parameter waren schon Host-Parameter (`StoreParameter`), also in jeder DAW automatisierbar. Es fehlten
 drei Dinge: das Plugin nahm kein MIDI an (`NEEDS_MIDI_INPUT FALSE`, `acceptsMidi() false`), es gab keine
 Zuordnung Hardware-Regler → Parameter, und die vier Makros waren keine Host-Parameter.
@@ -7565,6 +7565,36 @@ Host-Parameter" kennt die vier Makros. Host-Test (Teil rest) 128 von 128. Screen
 `Plugin/PluginProcessor.h`, `Plugin/PluginProcessor.cpp`, `Plugin/EditorLayout.h`, `Plugin/EditorLayout.cpp`,
 `Plugin/EditorPerform.cpp`, `Plugin/PluginEditor.h`, `Tests/selftest.cpp`, `Tests/selftest_tests.cmake`,
 `Tests/hosttest.cpp`; dieser Block.
+
+**23.09.2026, Undo im Plugin**
+
+Knöpfe, Locks und Rerolls ließen sich nicht zurücknehmen. Jetzt hat der Prozessor einen `juce::UndoManager`
+(bis 100 Schritte, 32 MB). Ein Schritt ist ein **ganzer Zustand vorher und nachher** (`UndoState`: alle Knöpfe als
+Text, Seed, Lock- und Reroll-Spiegel), nicht ein Delta: Knopfgeste, Reroll und geladenes Set sind dann eine Art
+Schritt, und ein Schritt kann nie auf einen Zustand angewandt werden, in dem er nicht entstand. Die Makros sind
+nicht darin (Aufführung, nicht Bearbeitung).
+
+- **Knopfgesten** werden ohne Zutun aufgezeichnet: jeder `StoreParameter` meldet dem Prozessor Anfang und Ende
+  seiner Gesten (die JUCE-Attachments von Regler, Schalter und Auswahl erzeugen sie); der Anfang nimmt den
+  Vorher-Zustand, das Ende legt den Schritt ab, benannt nach dem Knopf. Nur Gesten auf dem Message-Thread:
+  Host-Automation ist die Geschichte des Hosts, nicht diese (geprüft: Wert ohne Geste → kein Schritt).
+- **Editor-Aktionen** laufen über `undoable(name, action)`: Seed (Eingabe und Würfel), Lock/Unlock, Reroll (Zeile,
+  Track, Set), „Clear all locks", Set laden, Werksreset, „Load the saved knobs anyway". Ein vom Host geladener
+  Zustand wird nicht aufgezeichnet.
+- **Zurückspielen** (`applyUndoState`): Knöpfe per Text, der Seed nur wenn er sich unterscheidet (dann Neustart
+  am Anfang, wie jede Seed-Änderung), die Kuration als Differenz zum Spiegel — dafür hat der Kurations-Kanal zum
+  Composer einen neuen Befehl „Reroll-Zähler setzen" (`op 4`, `Composer::setVariation`); ändert sich ein Zähler,
+  startet der Transport am laufenden Takt neu, wie bei einem Reroll.
+- **Bedienung:** „Undo" und „Redo" im Kopf (ausgegraut, wenn nichts da ist; der Tooltip nennt den Schritt),
+  Strg+Z, Strg+Y und Strg+Umschalt+Z.
+
+*Tests* (Host-Test): eine Geste auf `lead.cutoff` ist ein Schritt namens „… Cutoff", Undo stellt den Wert zurück,
+Redo wieder her; Reroll 1 → Undo 0; Seed +1234 → Undo zurück → Redo wieder; Wert ohne Geste zeichnet nichts
+auf. Der Knopf-Rundgang drückt Undo und Redo mit einem Schritt, den sie brauchen (wie „Reset" und „Clear all").
+Host-Test (Teil rest) 131 von 131.
+
+*Dateien.* `Plugin/PluginProcessor.h`, `Plugin/PluginProcessor.cpp`, `Plugin/PluginEditor.h`, `Plugin/PluginEditor.cpp`,
+`Plugin/EditorSetTab.cpp`, `Plugin/EditorArrange.cpp`, `Tests/hosttest.cpp`; dieser Block.
 
 ## 0. Kurzfassung
 

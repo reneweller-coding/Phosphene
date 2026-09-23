@@ -60,6 +60,7 @@
 #include "phos/Params.h"
 #include "phos/Score.h"
 #include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -243,8 +244,39 @@ struct TransportView {
 };
 
 /** @brief The Phosphene plugin processor. */
-class PhospheneProcessor final : public juce::AudioProcessor, private juce::Timer {
+class PhospheneProcessor final : public juce::AudioProcessor, private juce::Timer, private juce::AudioProcessorParameter::Listener {
 public:
+    // ------------------------------------------------------------------ undo (23.09.2026)
+    /**
+     * @brief What an undo step puts back: every knob, the seed, every lock and every reroll counter.
+     *
+     * A step is two of these, before and after. Whole states rather than deltas: a knob gesture, a reroll and
+     * a loaded set are then one kind of step, and a step can never be applied to a state it was not made in.
+     * The macros are not in it -- they are performance, not editing, and put their knobs back themselves.
+     */
+    struct UndoState {
+        std::string knobs;                                            ///< params().toText(false)
+        uint64_t seed = 1;                                            ///< the set seed
+        std::map<int, uint8_t> locks[phos::kNumLockUnits];            ///< the lock mirror
+        std::map<int, uint32_t> variations[phos::kNumLockUnits];      ///< the reroll counters
+        bool operator==(const UndoState& o) const;
+    };
+    /** @brief The state an undo step records (message thread). */
+    UndoState captureUndoState() const;
+    /** @brief Puts a recorded state back (message thread); records nothing itself. */
+    void applyUndoState(const UndoState& s);
+    /**
+     * @brief Runs an editing action from the editor as one undo step named @p name: seed, locks, rerolls, a
+     *        loaded set, the factory reset. Knob gestures are recorded without this (parameterGestureChanged).
+     */
+    void undoable(const juce::String& name, const std::function<void()>& action);
+    bool undo();                       ///< one step back; false when there is none
+    bool redo();                       ///< one step forward
+    bool canUndo() const { return undo_.canUndo(); }   ///< for the editor's buttons
+    bool canRedo() const { return undo_.canRedo(); }   ///< @copydoc canUndo
+    juce::String undoName() const { return undo_.getUndoDescription(); }   ///< what undo() would take back
+    juce::String redoName() const { return undo_.getRedoDescription(); }   ///< what redo() would do again
+
     PhospheneProcessor();
     ~PhospheneProcessor() override;
 
@@ -651,8 +683,9 @@ private:
     /** @brief One thing the editor wants done to a lockable unit. */
     struct CurationCommand {
         uint8_t unit = 0;    ///< phos::LockUnit
-        uint8_t op = 0;      ///< 0 unlock, 1 lock, 2 reroll, 3 clear everything
+        uint8_t op = 0;      ///< 0 unlock, 1 lock, 2 reroll, 3 clear everything, 4 set the reroll counter to value (undo)
         int32_t index = 0;   ///< unit index (Composer::sectionUnitIndex and friends)
+        uint32_t value = 0;  ///< op 4: the counter
     };
     phos::EventRing<CurationCommand> curation_{ 64 };   ///< message thread -> composer thread
     mutable std::mutex curationLock_;                   ///< guards the two mirrors below
@@ -682,6 +715,18 @@ private:
     float macroHostSeen_[kNumMacros] = {};
     /** @brief Controller -> target (MIDI learn). */
     phos::MidiMap midiMap_;
+
+    // ---- undo (message thread)
+    void parameterValueChanged(int, float) override {}
+    /** @brief A knob gesture from the editor: its start takes the before-state, its end records the step. */
+    void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override;
+    /** @brief Records the step from @p before to now, unless nothing changed. */
+    void recordUndo(const juce::String& name, const UndoState& before);
+    mutable juce::UndoManager undo_{ 32 * 1024 * 1024, 100 };
+    bool restoringUndo_ = false;   ///< applyUndoState is running: record nothing
+    int gestureDepth_ = 0;         ///< gestures open at once (a two-knob drag is one step)
+    UndoState gestureBefore_;      ///< the state when the first open gesture began
+    juce::String gestureName_;     ///< the knob it began on
 
     // ---- the cue bridge (PLAN 8.3, Cue.h)
     /**

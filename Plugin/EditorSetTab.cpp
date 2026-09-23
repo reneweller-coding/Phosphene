@@ -97,7 +97,7 @@ void PhospheneEditor::buildSetPage()
         seed->setJustification(juce::Justification::centred);
         seed->onReturnKey = [this] {
             const juce::int64 v = seedEditor_->getText().getLargeIntValue();
-            proc_.setSeed(static_cast<uint64_t>(juce::jmax<juce::int64>(1, v)));
+            proc_.undoable("Seed", [this, v] { proc_.setSeed(static_cast<uint64_t>(juce::jmax<juce::int64>(1, v))); });
         };
         seed->onFocusLost = [this] { seedEditor_->setText(juce::String(proc_.seed()), false); };
         seedEditor_ = seed.get();
@@ -105,7 +105,7 @@ void PhospheneEditor::buildSetPage()
 
         auto dice = std::make_unique<juce::TextButton>("Randomize seed");
         dice->onClick = [this] {
-            proc_.randomiseSeed();
+            proc_.undoable("Randomize seed", [this] { proc_.randomiseSeed(); });
             seedEditor_->setText(juce::String(proc_.seed()), false);
             trackRows_.clear();
             rowsSeed_ = 0;
@@ -221,7 +221,9 @@ void PhospheneEditor::buildSetPage()
             chooser_->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                                   [this](const juce::FileChooser& fc) {
                                       const juce::File f = fc.getResult();
-                                      if (f == juce::File() || !proc_.importSet(f)) return;
+                                      bool ok = false;
+                                      if (f != juce::File()) proc_.undoable("Load set", [this, f, &ok] { ok = proc_.importSet(f); });
+                                      if (!ok) return;
                                       seedEditor_->setText(juce::String(proc_.seed()), false);
                                       trackRows_.clear();
                                       rowsSeed_ = 0;
@@ -239,7 +241,7 @@ void PhospheneEditor::buildSetPage()
         reset->setTooltip("Puts every knob back to the value this build ships with. The set itself -- seed, "
                           "locks and rerolls -- is left alone.");
         reset->onClick = [this] {
-            proc_.resetToFactoryDefaults();
+            proc_.undoable("Reset to factory defaults", [this] { proc_.resetToFactoryDefaults(); });
             if (legacyNote_ != nullptr) legacyNote_->setText(juce::String(), juce::dontSendNotification);
             if (legacyButton_ != nullptr) legacyButton_->setVisible(false);
         };
@@ -249,7 +251,7 @@ void PhospheneEditor::buildSetPage()
         adopt->setTooltip("Applies the knob values of the older session that was loaded. They were saved "
                           "before this build's calibration and will replace it.");
         adopt->onClick = [this] {
-            proc_.adoptLegacyState();
+            proc_.undoable("Load the saved knobs", [this] { proc_.adoptLegacyState(); });
             if (legacyNote_ != nullptr) legacyNote_->setText("The older session's knobs are in.", juce::dontSendNotification);
             if (legacyButton_ != nullptr) legacyButton_->setVisible(false);
         };

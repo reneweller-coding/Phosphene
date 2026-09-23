@@ -520,6 +520,7 @@ void PhospheneProcessor::buildParameters()
     for (int i = 0; i < p.count(); ++i) {
         const juce::String name = prettyPrefix(p.key(i)) + " " + p.desc(i).name;
         auto* param = new StoreParameter(p, i, name);
+        param->addListener(this);   // undo: the editor's gestures (parameterGestureChanged)
         byId_[static_cast<size_t>(i)] = param;
         addParameter(param);
     }
@@ -726,6 +727,7 @@ bool PhospheneProcessor::drainCuration()
         case 0: composer_->setLock(unit, c.index, false); break;
         case 1: composer_->setLock(unit, c.index, true); break;
         case 2: composer_->reroll(unit, c.index); break;
+        case 4: composer_->setVariation(unit, c.index, c.value); break;
         default: composer_->clearLocks(); break;
         }
         any = true;
@@ -860,6 +862,118 @@ void PhospheneProcessor::setFollowHost(bool on)
     followHost_ = on;
     followHostAtomic_.store(on, std::memory_order_release);
     requestRestart();
+}
+
+// ------------------------------------------------------------------ undo (23.09.2026)
+
+namespace {
+
+/** @brief One undo step: the state before and after an edit. perform() is a no-op the first time -- the edit has
+ *         already happened when the step is recorded. */
+class UndoStep final : public juce::UndoableAction {
+public:
+    UndoStep(PhospheneProcessor& p, PhospheneProcessor::UndoState before, PhospheneProcessor::UndoState after)
+        : p_(p), before_(std::move(before)), after_(std::move(after)) {}
+    bool perform() override
+    {
+        if (first_) { first_ = false; return true; }
+        p_.applyUndoState(after_);
+        return true;
+    }
+    bool undo() override { p_.applyUndoState(before_); return true; }
+    int getSizeInUnits() override { return static_cast<int>(before_.knobs.size() + after_.knobs.size()) + 64; }
+
+private:
+    PhospheneProcessor& p_;
+    PhospheneProcessor::UndoState before_, after_;
+    bool first_ = true;
+};
+
+} // namespace
+
+bool PhospheneProcessor::UndoState::operator==(const UndoState& o) const
+{
+    if (knobs != o.knobs || seed != o.seed) return false;
+    for (int u = 0; u < kNumLockUnits; ++u) if (locks[u] != o.locks[u] || variations[u] != o.variations[u]) return false;
+    return true;
+}
+
+PhospheneProcessor::UndoState PhospheneProcessor::captureUndoState() const
+{
+    UndoState s;
+    s.knobs = params().toText(false);
+    s.seed = seed_.load(std::memory_order_relaxed);
+    const std::lock_guard<std::mutex> lock(curationLock_);
+    for (int u = 0; u < kNumLockUnits; ++u) { s.locks[u] = lockMirror_[u]; s.variations[u] = variationMirror_[u]; }
+    return s;
+}
+
+void PhospheneProcessor::applyUndoState(const UndoState& s)
+{
+    const bool was = restoringUndo_;
+    restoringUndo_ = true;
+    params().parseText(s.knobs);
+    if (s.seed != seed_.load(std::memory_order_relaxed)) setSeed(s.seed);
+    // The curation as a difference against the mirror, sent to the composer like any lock or reroll; a reroll
+    // counter that moves moves notes, so the transport restarts at the bar that is playing, as a reroll does.
+    std::vector<CurationCommand> cmds;
+    bool moved = false;
+    {
+        const std::lock_guard<std::mutex> lock(curationLock_);
+        for (int u = 0; u < kNumLockUnits; ++u) {
+            for (const auto& kv : lockMirror_[u]) if (s.locks[u].count(kv.first) == 0) cmds.push_back({ static_cast<uint8_t>(u), 0, kv.first, 0 });
+            for (const auto& kv : s.locks[u]) if (lockMirror_[u].count(kv.first) == 0) cmds.push_back({ static_cast<uint8_t>(u), 1, kv.first, 0 });
+            std::map<int, uint32_t> keys = variationMirror_[u];
+            for (const auto& kv : s.variations[u]) keys[kv.first] = 0;
+            for (const auto& kv : keys) {
+                const auto a = variationMirror_[u].find(kv.first);
+                const auto b = s.variations[u].find(kv.first);
+                const uint32_t now = a == variationMirror_[u].end() ? 0u : a->second, want = b == s.variations[u].end() ? 0u : b->second;
+                if (now != want) { cmds.push_back({ static_cast<uint8_t>(u), 4, kv.first, want }); moved = true; }
+            }
+            lockMirror_[u] = s.locks[u];
+            variationMirror_[u] = s.variations[u];
+        }
+    }
+    if (moved) markCurrentPosition();
+    for (const CurationCommand& c : cmds) curation_.push(c);
+    restoringUndo_ = was;
+}
+
+void PhospheneProcessor::recordUndo(const juce::String& name, const UndoState& before)
+{
+    if (restoringUndo_) return;
+    UndoState after = captureUndoState();
+    if (after == before) return;
+    undo_.beginNewTransaction(name);
+    undo_.perform(new UndoStep(*this, before, std::move(after)), name);
+}
+
+void PhospheneProcessor::undoable(const juce::String& name, const std::function<void()>& action)
+{
+    const UndoState before = captureUndoState();
+    action();
+    recordUndo(name, before);
+}
+
+bool PhospheneProcessor::undo() { return undo_.undo(); }
+
+bool PhospheneProcessor::redo() { return undo_.redo(); }
+
+void PhospheneProcessor::parameterGestureChanged(int parameterIndex, bool gestureIsStarting)
+{
+    // Only the editor's gestures, which come on the message thread; a host touching an automation lane may call
+    // this from its own threads, and automation is the host's history, not this one.
+    if (restoringUndo_ || !juce::MessageManager::existsAndIsCurrentThread()) return;
+    if (gestureIsStarting) {
+        if (gestureDepth_++ == 0) {
+            gestureBefore_ = captureUndoState();
+            const auto& all = getParameters();
+            gestureName_ = parameterIndex >= 0 && parameterIndex < all.size() ? all[parameterIndex]->getName(64) : juce::String("knob");
+        }
+    } else if (gestureDepth_ > 0 && --gestureDepth_ == 0) {
+        recordUndo(gestureName_, gestureBefore_);
+    }
 }
 
 void PhospheneProcessor::setSeed(uint64_t s)

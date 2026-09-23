@@ -403,11 +403,11 @@ void PhospheneEditor::buildArrangePage()
         auto view = std::make_unique<ArrangeDisplay>();
         view->onSeek = [this](int bar) { proc_.seekToBar(bar); };
         view->onLock = [this](LockUnit unit, int index, bool locked) {
-            proc_.setLock(unit, index, locked);
+            proc_.undoable(locked ? "Lock" : "Unlock", [this, unit, index, locked] { proc_.setLock(unit, index, locked); });
             arrangeDirty_ = true;
         };
         view->onReroll = [this](LockUnit unit, int index) {
-            proc_.reroll(unit, index);
+            proc_.undoable("Reroll", [this, unit, index] { proc_.reroll(unit, index); });
             arrangeDirty_ = true;
         };
         arrange_ = view.get();
@@ -423,7 +423,7 @@ void PhospheneEditor::buildArrangePage()
         auto reroll = std::make_unique<juce::TextButton>("Reroll the set");
         reroll->setTooltip("Draws the whole journey again: lengths, keys, tempi and sound recipes. "
                            "Locked tracks keep their seed and stay exactly as they are.");
-        reroll->onClick = [this] { proc_.reroll(LockUnit::Set, 0); arrangeDirty_ = true; };
+        reroll->onClick = [this] { proc_.undoable("Reroll the set", [this] { proc_.reroll(LockUnit::Set, 0); }); arrangeDirty_ = true; };
         page->addControl(gc, std::move(reroll), "", 4, true);
 
         auto here = std::make_unique<juce::TextButton>("Reroll this track");
@@ -432,7 +432,7 @@ void PhospheneEditor::buildArrangePage()
         here->setTooltip("Draws the playing track again. Over the sixteen bars two tracks share, that is the "
                          "outgoing one; the incoming track has its own die on its row.");
         here->onClick = [this] {
-            proc_.reroll(LockUnit::Track, proc_.transport().track);
+            proc_.undoable("Reroll this track", [this] { proc_.reroll(LockUnit::Track, proc_.transport().track); });
             arrangeDirty_ = true;
         };
         page->addControl(gc, std::move(here), "", 4, true);
@@ -441,13 +441,13 @@ void PhospheneEditor::buildArrangePage()
         lockHere->setTooltip("Locks the playing track (over the DJ overlap the outgoing one).");
         lockHere->onClick = [this] {
             const int t = proc_.transport().track;
-            proc_.setLock(LockUnit::Track, t, !proc_.isLocked(LockUnit::Track, t));
+            proc_.undoable("Lock this track", [this, t] { proc_.setLock(LockUnit::Track, t, !proc_.isLocked(LockUnit::Track, t)); });
             arrangeDirty_ = true;
         };
         page->addControl(gc, std::move(lockHere), "", 4, true);
 
         auto clear = std::make_unique<juce::TextButton>("Clear all locks");
-        clear->onClick = [this] { proc_.clearCuration(); arrangeDirty_ = true; };
+        clear->onClick = [this] { proc_.undoable("Clear all locks", [this] { proc_.clearCuration(); }); arrangeDirty_ = true; };
         page->addControl(gc, std::move(clear), "", 4, true);
 
         auto note = std::make_unique<juce::Label>(juce::String(), juce::String());

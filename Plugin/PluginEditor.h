@@ -161,6 +161,9 @@ private:
     void refreshPerformPage();    // EditorPerform.cpp: what the macros are doing
     void refreshPattern();        // the pattern roll of the tab that is open
     void timerCallback() override;
+    /** @brief Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo (23.09.2026). */
+    bool keyPressed(const juce::KeyPress& key) override;
+    juce::TextButton undoButton_{ "Undo" }, redoButton_{ "Redo" };   ///< in the header (23.09.2026)
     phosui::ControlPage* activePage() const;
     void layoutContent();
     void paintContent(juce::Graphics&);

@@ -312,6 +312,12 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
         b->onClick = [this, i] { setTab(i); };
         content_.addAndMakeVisible(b);
     }
+    // Undo and redo (23.09.2026): every knob gesture, seed, lock, reroll, loaded set and factory reset is a step.
+    undoButton_.onClick = [this] { proc_.undo(); };
+    redoButton_.onClick = [this] { proc_.redo(); };
+    content_.addAndMakeVisible(undoButton_);
+    content_.addAndMakeVisible(redoButton_);
+    setWantsKeyboardFocus(true);
     for (int i = 0; i < kPercLanes; ++i) {
         auto* b = laneButtons_.add(new juce::TextButton(juce::String(i + 1)));
         b->onClick = [this, i] { setPercLane(i); };
@@ -477,6 +483,9 @@ void PhospheneEditor::layoutContent()
 {
     juce::Rectangle<int> r = content_.getLocalBounds();
     r.removeFromTop(64);                                  // header, painted
+    // Undo and redo sit in the header, after the title and the mute note (paintContent keeps that space).
+    undoButton_.setBounds(516, 18, 72, 28);
+    redoButton_.setBounds(594, 18, 72, 28);
     juce::Rectangle<int> tabs = r.removeFromTop(34).reduced(10, 4);
     const int tw = tabs.getWidth() / juce::jmax(1, tabButtons_.size());
     for (auto* b : tabButtons_) b->setBounds(tabs.removeFromLeft(tw).reduced(2, 0));
@@ -546,8 +555,20 @@ void PhospheneEditor::refreshPattern()
     else roll->update({}, firstBar, bars, t.musicalBeat);
 }
 
+bool PhospheneEditor::keyPressed(const juce::KeyPress& key)
+{
+    const juce::ModifierKeys m = key.getModifiers();
+    if (m.isCommandDown() && key.getKeyCode() == 'Z') { if (m.isShiftDown()) proc_.redo(); else proc_.undo(); return true; }
+    if (m.isCommandDown() && key.getKeyCode() == 'Y') { proc_.redo(); return true; }
+    return false;
+}
+
 void PhospheneEditor::timerCallback()
 {
+    undoButton_.setEnabled(proc_.canUndo());
+    redoButton_.setEnabled(proc_.canRedo());
+    undoButton_.setTooltip(proc_.canUndo() ? "Undo " + proc_.undoName() + " (Ctrl+Z)" : juce::String("Nothing to undo"));
+    redoButton_.setTooltip(proc_.canRedo() ? "Redo " + proc_.redoName() + " (Ctrl+Y)" : juce::String("Nothing to redo"));
     // Only the page that is on screen is fed. The arrange timeline in particular draws a whole set,
     // and a set that is not being looked at costs nothing at all this way.
     if (tab_ == TabSet) refreshSetPage();
