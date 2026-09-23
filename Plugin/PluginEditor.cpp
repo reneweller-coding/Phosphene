@@ -291,7 +291,7 @@ void PatternDisplay::paint(juce::Graphics& g)
 const juce::StringArray& PhospheneEditor::tabNames()
 {
     static const juce::StringArray names{ "Set", "Arrange", "Kick", "Bass", "Percussion", "Acid",
-                                          "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "SFX / FX", "Mixer / Master", "Perform" };
+                                          "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "SFX / FX", "Mixer / Master", "Perform", "Gallery" };
     jassert(names.size() == TabCount);
     return names;
 }
@@ -390,6 +390,7 @@ void PhospheneEditor::buildPages()
         case TabSet: break;       // built in EditorSetTab.cpp, after this loop
         case TabArrange: break;   // built in EditorArrange.cpp
         case TabPerform: break;   // built in EditorPerform.cpp
+        case TabGallery: break;   // built in EditorGallery.cpp
         case TabKick: addSlices(*page, proc_, Module::Kick, 0, kKickSlices, tint); break;
         case TabBass: addSlices(*page, proc_, Module::Bass, 0, kBassSlices, tint); break;
         case TabAcid: addSlices(*page, proc_, Module::Acid, 0, kAcidSlices, tint); break;
@@ -435,6 +436,7 @@ void PhospheneEditor::buildPages()
     buildSetPage();
     buildArrangePage();
     buildPerformPage();
+    buildGalleryPage();
 }
 
 ControlPage* PhospheneEditor::activePage() const
@@ -456,6 +458,7 @@ void PhospheneEditor::setTab(int index)
     if (tab_ == TabSet) refreshSetPage();
     else if (tab_ == TabArrange) { arrangeDirty_ = true; refreshArrangePage(); }
     else if (tab_ == TabPerform) refreshPerformPage();
+    else if (tab_ == TabGallery && gallery_ != nullptr && gallery_->rowCount() == 0) refreshGalleryPage();
     refreshPattern();
     content_.repaint();
 }
@@ -574,6 +577,7 @@ void PhospheneEditor::timerCallback()
     if (tab_ == TabSet) refreshSetPage();
     else if (tab_ == TabArrange) refreshArrangePage();
     else if (tab_ == TabPerform) refreshPerformPage();
+    else if (tab_ == TabGallery && gallery_ != nullptr && gallery_->rowCount() == 0) refreshGalleryPage();
     refreshPattern();
     content_.repaint(0, 0, designW_, 64);
 }

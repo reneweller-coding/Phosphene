@@ -1058,6 +1058,38 @@ int main(int argc, char** argv)
               "learned controllers come back with the saved state");
     }
 
+    // ---------------------------------------------------------------- the gallery (23.09.2026)
+    if (partRest) {
+        // A folder of its own (PHOS_GALLERY_DIR), so the test never writes into the user's gallery.
+        const juce::File dir = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("phos_hosttest_gallery");
+        dir.deleteRecursively();
+        dir.createDirectory();
+#if defined(_WIN32)
+        _putenv_s("PHOS_GALLERY_DIR", dir.getFullPathName().toRawUTF8());
+#else
+        setenv("PHOS_GALLERY_DIR", dir.getFullPathName().toRawUTF8(), 1);
+#endif
+        auto p = std::make_unique<PhospheneProcessor>();
+        p->setPlayConfigDetails(0, 2, 48000.0, 256);
+        p->prepareToPlay(48000.0, 256);
+        p->setSeed(4711);
+        const juce::File f = p->saveToGallery("test | set");
+        phos::GalleryEntry e;
+        const bool read = f.existsAsFile() && f.getParentDirectory() == dir && phos::readGalleryEntry(f.loadFileAsString().toStdString(), e);
+        auto q = std::make_unique<PhospheneProcessor>();
+        q->setPlayConfigDetails(0, 2, 48000.0, 256);
+        q->prepareToPlay(48000.0, 256);
+        const bool loaded = q->importSet(f);
+        check(read && e.seed == 4711 && e.name == "test   set" && loaded && q->seed() == 4711,
+              "the gallery: a saved set lands in the gallery folder with its name and seed, and loads back as a set -- " + f.getFileName());
+#if defined(_WIN32)
+        _putenv_s("PHOS_GALLERY_DIR", "");
+#else
+        unsetenv("PHOS_GALLERY_DIR");
+#endif
+        dir.deleteRecursively();
+    }
+
     // ---------------------------------------------------------------- undo (23.09.2026)
     if (partRest) {
         auto p = std::make_unique<PhospheneProcessor>();

@@ -32,6 +32,7 @@ target_sources(Phosphene PRIVATE
     EditorSetTab.cpp
     EditorArrange.cpp
     EditorPerform.cpp
+    EditorGallery.cpp
     PhospheneLookAndFeel.cpp)
 
 target_compile_definitions(Phosphene PUBLIC

@@ -1597,6 +1597,44 @@ bool PhospheneProcessor::exportMidi(const juce::File& file, int bars)
     return writeMidiFile(score, file.getFullPathName().toRawUTF8());
 }
 
+juce::File PhospheneProcessor::galleryFolder() const
+{
+    const juce::String env = juce::SystemStats::getEnvironmentVariable("PHOS_GALLERY_DIR", "");
+    const juce::File dir = env.isNotEmpty() ? juce::File(env)
+                                            : juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Phosphene").getChildFile("Sets");
+    dir.createDirectory();
+    return dir;
+}
+
+juce::File PhospheneProcessor::ratingsFile() const
+{
+    const juce::File dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Phosphene");
+    dir.createDirectory();
+    return dir.getChildFile("ratings.tsv");
+}
+
+juce::File PhospheneProcessor::saveToGallery(const juce::String& name)
+{
+    GalleryEntry e;
+    e.name = name.trim().toStdString();
+    e.saved = juce::Time::getCurrentTime().formatted("%Y-%m-%dT%H:%M:%S").toStdString();
+    {
+        // The published plans: the tracks the editor has seen planned, which is what the thumbnail should show.
+        const std::lock_guard<std::mutex> lock(plansLock_);
+        for (const TrackPlan& p : plans_) e.tracks.push_back(galleryTrackOf(p));
+    }
+    std::string text;
+    {
+        const std::lock_guard<std::mutex> lock(composeLock_);
+        text = writeSetText(*composer_, params());
+    }
+    text = withGalleryComment(text, e);
+    juce::String base = juce::Time::getCurrentTime().formatted("%Y-%m-%d_%H%M") + "_";
+    base += name.trim().isNotEmpty() ? juce::File::createLegalFileName(name.trim()) : juce::String("seed") + juce::String(seed_.load());
+    const juce::File f = galleryFolder().getNonexistentChildFile(base, ".phosset", false);
+    return f.replaceWithText(juce::String(text)) ? f : juce::File();
+}
+
 bool PhospheneProcessor::exportSet(const juce::File& file)
 {
     // The core's own `.phosset` writer (SetFile.h), not a private format: seed, style, arc, the

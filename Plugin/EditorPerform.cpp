@@ -170,9 +170,7 @@ void PhospheneEditor::rateNow(int verdict)
         std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &local);
         e.time = buf;
     }
-    const juce::File dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Phosphene");
-    dir.createDirectory();
-    const juce::File file = dir.getChildFile("ratings.tsv");
+    const juce::File file = proc_.ratingsFile();
     const bool ok = appendRating(file.getFullPathName().toRawUTF8(), e);
     if (ratingNote_ != nullptr && ok) ratingNote_->clear();
     if (ratingLast_ != nullptr) {

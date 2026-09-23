@@ -7596,6 +7596,34 @@ Host-Test (Teil rest) 131 von 131.
 *Dateien.* `Plugin/PluginProcessor.h`, `Plugin/PluginProcessor.cpp`, `Plugin/PluginEditor.h`, `Plugin/PluginEditor.cpp`,
 `Plugin/EditorSetTab.cpp`, `Plugin/EditorArrange.cpp`, `Tests/hosttest.cpp`; dieser Block.
 
+**23.09.2026, Set-Galerie**
+
+Gespeicherte Sets durchblättern statt Dateien laden. Ein neuer Tab „Gallery" (der sechzehnte, hinter Perform)
+zeigt jedes Set im Galerieordner (`<Anwendungsdaten>/Phosphene/Sets`, oder `PHOS_GALLERY_DIR`) als Zeile: Name,
+Seed, Tracks, Minuten, Stile, Speicherzeit, die Urteile des Hörers zu diesem Seed (aus `ratings.tsv`, gut/schlecht/
+Notizen) und ein **Formbild**: jeder Track als Folge seiner Sektionen, so breit wie ihre Takte — Intro, Groove,
+Buildup, Drop, Breakdown, Klimax (orange), Outro. Ein Klick lädt das Set (als Undo-Schritt). „Save to gallery..."
+fragt nach einem Namen und schreibt das Set, wie es steht; „Open folder..." zeigt den Ordner.
+
+**Format** (`Core/include/phos/Gallery.h`): eine Galerie-Datei ist ein gewöhnliches `.phosset` mit Kommentarzeilen
+hinter dem Kopf — `# gallery.name=…`, `# gallery.saved=…`, je Track `# gallery.track=Stil|Tonart|Modus|BPM|Takte|
+Form` mit der Form als Buchstabenfolge („I32 G32 B16 D32 K32 B24 C56 O32"). Der Set-Leser überliest `#`-Zeilen, also
+lädt jede Galerie-Datei überall, wo ein Set lädt (`phos_render --set-file`), und ein von Hand hineinkopiertes Set
+erscheint einfach ohne Formbild. Der Selbsttest fand dabei einen echten Fehler meines ersten Entwurfs: die Zeilen
+standen *vor* dem Kopf, und der Set-Leser verlangt `phosset 2` als erste Zeile — `withGalleryComment` setzt sie
+jetzt dahinter.
+
+*Tests.* `testGallery` (Kern): Name, Datum und je Track Stil, Tempo, Länge und Form kommen zurück, die Form summiert
+sich zur Tracklänge, die Datei ist ein gültiges Set, Urteile werden je Seed gezählt. Host-Test: `saveToGallery`
+schreibt in einen eigenen Temp-Ordner (nie in die echte Galerie), Name und Seed lesen sich zurück, ein zweiter
+Prozessor lädt die Datei mit demselben Seed. Knopf-Rundgang: 74 gedrückt, 0 ohne Wirkung, die zwei neuen Knöpfe als
+Dialoge übersprungen. Host-Test 132 von 132. Screenshot mit drei Test-Sets geprüft.
+
+*Dateien.* `Core/include/phos/Gallery.h`, `Core/src/Gallery.cpp`, `Core/CMakeLists.txt`, `Plugin/EditorGallery.cpp`
+(neu), `Plugin/PluginEditor.h`, `Plugin/PluginEditor.cpp`, `Plugin/PluginProcessor.h`, `Plugin/PluginProcessor.cpp`,
+`Plugin/EditorPerform.cpp` (Bewertungsdatei über `ratingsFile()`), `Plugin/CMakeLists.txt`, `Tests/selftest.cpp`,
+`Tests/selftest_tests.cmake`, `Tests/hosttest.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

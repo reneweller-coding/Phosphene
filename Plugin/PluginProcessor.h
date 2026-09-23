@@ -56,6 +56,7 @@
 #include "phos/Cue.h"
 #include "phos/Engine.h"
 #include "phos/Midi.h"
+#include "phos/Gallery.h"
 #include "phos/MidiMap.h"
 #include "phos/Params.h"
 #include "phos/Score.h"
@@ -270,6 +271,18 @@ public:
      *        loaded set, the factory reset. Knob gestures are recorded without this (parameterGestureChanged).
      */
     void undoable(const juce::String& name, const std::function<void()>& action);
+    // ------------------------------------------------------------------ gallery and ratings (23.09.2026)
+    /** @brief Where saved sets live: `PHOS_GALLERY_DIR`, else `<application data>/Phosphene/Sets` (created). */
+    juce::File galleryFolder() const;
+    /** @brief The listener's verdicts (phos/Rating.h): `<application data>/Phosphene/ratings.tsv`. */
+    juce::File ratingsFile() const;
+    /**
+     * @brief Saves the set as it stands into the gallery: the `.phosset` with the gallery lines (phos/Gallery.h)
+     *        -- name, time, and every published track's style, tempo and form.
+     * @return the file written, or a non-existent File when it could not be written
+     */
+    juce::File saveToGallery(const juce::String& name);
+
     bool undo();                       ///< one step back; false when there is none
     bool redo();                       ///< one step forward
     bool canUndo() const { return undo_.canUndo(); }   ///< for the editor's buttons

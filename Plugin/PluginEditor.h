@@ -34,7 +34,9 @@ enum Tab : int {
     TabSet = 0, TabArrange, TabKick, TabBass, TabPerc, TabAcid,
     // 19.09.2026: the polyphonic voices in their groups (Params.h, PolyInstance), each beside its partner.
     TabLead, TabCounter, TabArp, TabStab, TabPad, TabDrone,
-    TabFx, TabMix, TabPerform, TabCount
+    TabFx, TabMix, TabPerform,
+    TabGallery,   ///< 23.09.2026: saved sets with their form, loaded with a click (EditorGallery.cpp)
+    TabCount
 };
 
 /**
@@ -117,6 +119,35 @@ private:
     double beat_ = 0.0;                     ///< where the engine stands, for the play head
 };
 
+/**
+ * @brief The gallery's list (23.09.2026): one row per saved set, its name, seed, tracks and verdicts, and a strip
+ *        that draws the whole set as its sections -- intro, groove, build, drop, breakdown, climax, outro -- in the
+ *        part colours. A click loads the set.
+ */
+class GalleryDisplay final : public juce::Component {
+public:
+    /** @brief One saved set. */
+    struct Row {
+        juce::File file;              ///< the .phosset
+        phos::GalleryEntry entry;     ///< what its gallery lines say
+        phos::RatingCount rating;     ///< the listener's verdicts for its seed
+    };
+    static constexpr int kRowH = 60;  ///< pixels per row
+    /** @brief Replaces the list and sizes the component to it. */
+    void setRows(std::vector<Row> rows);
+    void paint(juce::Graphics&) override;
+    void mouseDown(const juce::MouseEvent&) override;
+    void mouseMove(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
+    /** @brief Called with the file of the row that was clicked. */
+    std::function<void(const juce::File&)> onOpen;
+    int rowCount() const { return static_cast<int>(rows_.size()); }
+
+private:
+    std::vector<Row> rows_;   ///< newest first
+    int hover_ = -1;          ///< the row under the mouse
+};
+
 /** @brief The Phosphene editor. */
 class PhospheneEditor final : public juce::AudioProcessorEditor, private juce::Timer {
 public:
@@ -159,6 +190,8 @@ private:
     void refreshArrangePage();    // EditorArrange.cpp: the timeline and the play head
     void buildPerformPage();      // EditorPerform.cpp
     void refreshPerformPage();    // EditorPerform.cpp: what the macros are doing
+    void buildGalleryPage();      // EditorGallery.cpp
+    void refreshGalleryPage();    // EditorGallery.cpp: rescans the folder
     void refreshPattern();        // the pattern roll of the tab that is open
     void timerCallback() override;
     /** @brief Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo (23.09.2026). */
@@ -220,6 +253,11 @@ private:
     /** @name Rating what is playing (23.09.2026; phos/Rating.h)
      *  @{ */
     juce::Label*      midiNote_ = nullptr;             ///< MIDI learn: what is armed, what is bound (23.09.2026)
+    // ---- the Gallery tab (23.09.2026)
+    GalleryDisplay*   gallery_ = nullptr;              ///< the list
+    juce::Viewport*   galleryView_ = nullptr;          ///< scrolls it
+    juce::Label*      galleryNote_ = nullptr;          ///< where the sets are, what was saved
+    std::unique_ptr<juce::AlertWindow> galleryAsk_;    ///< the name dialog of "Save to gallery..."
     uint32_t          midiShown_ = 0xFFFFFFFFu;        ///< the map's revision the note shows
     int               midiArmedShown_ = -2;            ///< the armed target the note shows
     juce::TextEditor* ratingNote_ = nullptr;           ///< the note that goes with the next verdict

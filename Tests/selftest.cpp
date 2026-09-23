@@ -32,6 +32,7 @@
 #include "phos/Reverb.h"
 #include "phos/Rhythm.h"
 #include "phos/Form.h"
+#include "phos/Gallery.h"
 #include "phos/SetFile.h"
 #include "phos/Sfx.h"
 #include "phos/TranceGate.h"
@@ -10168,6 +10169,50 @@ void testKnobFuzz()
 }
 
 /**
+ * @brief The set gallery (23.09.2026, round "Galerie"; phos/Gallery.h): the comment lines survive the round trip,
+ *        a gallery file is still a set, and the verdicts are counted per seed.
+ */
+void testGallery()
+{
+    section("gallery: saved sets with their form");
+    ParamStore q;
+    q.parseText("compose.level_match=Off master.auto_gain=Off compose.presence_match=Off");
+    Composer c(7);
+    GalleryEntry e;
+    e.name = "night | one\ntest";
+    e.saved = "2026-09-23T20:00:00";
+    for (int t = 0; t < 2; ++t) e.tracks.push_back(galleryTrackOf(c.track(q, t)));
+    const std::string text = withGalleryComment(writeSetText(c, q), e);
+    GalleryEntry back;
+    const bool read = readGalleryEntry(text, back);
+    bool same = read && back.seed == 7 && back.tracks.size() == 2 && back.name == "night   one test" && back.saved == e.saved;
+    for (size_t t = 0; same && t < 2; ++t)
+        same = back.tracks[t].form == e.tracks[t].form && back.tracks[t].style == e.tracks[t].style && back.tracks[t].bars == e.tracks[t].bars
+            && std::fabs(back.tracks[t].bpm - e.tracks[t].bpm) < 0.05;
+    int formBars = 0;
+    for (size_t i = 0; i < e.tracks[0].form.size(); ++i)
+        if (std::isdigit(static_cast<unsigned char>(e.tracks[0].form[i])) && (i == 0 || !std::isdigit(static_cast<unsigned char>(e.tracks[0].form[i - 1]))))
+            formBars += std::atoi(e.tracks[0].form.c_str() + i);
+    check(same && formBars == e.tracks[0].bars, "a gallery entry reads back name, date, and every track's style, tempo, length and form",
+          fmt("track 1: %s %s %s %.1f BPM, form %s", e.tracks[0].style.c_str(), e.tracks[0].key.c_str(), e.tracks[0].scale.c_str(), e.tracks[0].bpm, e.tracks[0].form.c_str()));
+    Composer loaded(1);
+    ParamStore q2;
+    std::string err;
+    const bool isSet = readSetText(text, loaded, q2, &err);
+    check(isSet && loaded.seed() == 7, "a gallery file is an ordinary set: the comment lines are skipped", err);
+    const char* path = "phos_selftest_gallery_ratings.tsv";
+    std::remove(path);
+    RatingEntry r;
+    r.seed = 7; r.verdict = 1; appendRating(path, r); appendRating(path, r);
+    r.verdict = -1; appendRating(path, r);
+    r.seed = 9; r.verdict = 0; appendRating(path, r);
+    const std::map<uint64_t, RatingCount> counts = ratingsBySeed(path);
+    std::remove(path);
+    const bool ok = counts.count(7) == 1 && counts.at(7).good == 2 && counts.at(7).bad == 1 && counts.count(9) == 1 && counts.at(9).notes == 1;
+    check(ok, "the verdicts are counted per set seed");
+}
+
+/**
  * @brief MIDI learn's table (23.09.2026, round "MIDI"; phos/MidiMap.h): learning, one knob per parameter both
  *        ways, the text form by key.
  */
@@ -14695,6 +14740,7 @@ int main(int argc, char** argv)
     run("testSetArc", testSetArc);
     run("testRatings", testRatings);
     run("testMidiMap", testMidiMap);
+    run("testGallery", testGallery);
     run("testKnobFuzz", testKnobFuzz);
     run("testStems", testStems);
     run("testAudibility", testAudibility);
