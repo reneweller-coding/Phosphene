@@ -7237,7 +7237,7 @@ Folgen der Runden, keine neue Klasse Fehler.
   24-Takt-Breakdown der Formfuzziness. Schranke −20 dB mit Begründung; Bett und Stimmen sind in
   diesem Pad-Solo-Render jetzt ebenfalls stumm.
 
-Danach ein zweiter Vollauf.
+Danach ein zweiter Vollauf (sauberer Build, 1275 s): **114 von 114.**
 
 ## 0. Kurzfassung
 
