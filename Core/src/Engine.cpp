@@ -10,6 +10,9 @@
 
 namespace phos {
 
+const char* const kStemNames[kNumStems] = { "Kick", "Bass", "Perc", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone",
+                                            "Sfx", "Texture", "Vocal", "Returns" };
+
 namespace {
 constexpr double kPiD = 3.141592653589793;
 bool isDiscreteCurve(Curve c) { return c == Curve::Int || c == Curve::Choice || c == Curve::Toggle; }
@@ -572,6 +575,13 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
         // else brings the stereo.
         const float sub = stripGain_[StripSfx] * subDuck_.next() * subBuf_[si];
         const float mono = kg * kickBuf_[si] + bg * bassBuf_[si] + sub;
+        const size_t oi = static_cast<size_t>(offset + i);   // this sample's index in the caller's buffers (and the stem tap's)
+        if (tap_ != nullptr) {
+            // The stems (StemTap): the mono parts here, the strips in the loop below, the returns after it.
+            const float k = masterGain_ * kg * kickBuf_[si], bs = masterGain_ * bg * bassBuf_[si];
+            tap_->L[static_cast<int>(Part::Kick)][oi] = k;  tap_->R[static_cast<int>(Part::Kick)][oi] = k;
+            tap_->L[static_cast<int>(Part::Bass)][oi] = bs; tap_->R[static_cast<int>(Part::Bass)][oi] = bs;
+        }
         float l = mono, r = mono, rl = 0.0f, rr = 0.0f, hl = 0.0f, hr = 0.0f, fl = 0.0f, fr = 0.0f;
         float hgl = 0.0f, hgr = 0.0f;   // the gated hall's input: the strips whose hall_gate is on
         float ml = 0.0f, mr = 0.0f;   // the melodic bus a stutter may replace (acid, lead, counter, arp, stab)
@@ -588,6 +598,13 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
             const float g = stripGain_[s] * duck_[s].next();
             sl *= g;
             sr *= g;
+            if (tap_ != nullptr) {
+                // Strip s is part s + 2 (Perc .. Vocal follow Kick and Bass in both enums); the sub drop is the effects'.
+                const int part = s + static_cast<int>(Part::Perc);
+                const float extra = s == StripSfx ? sub : 0.0f;
+                tap_->L[part][oi] = masterGain_ * (sl + extra);
+                tap_->R[part][oi] = masterGain_ * (sr + extra);
+            }
             if (s >= StripAcid && s <= StripStab) { ml += sl; mr += sr; }
             else { l += sl; r += sr; }
             rl += stripRoom_[s] * sl;
@@ -605,6 +622,8 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
         stutter_.tick(ml, mr);
         outL[i] = l + ml;
         outR[i] = r + mr;
+        // The returns' stem holds the dry sum for now; after the returns are added it becomes their share.
+        if (tap_ != nullptr) { tap_->L[kNumParts][oi] = outL[i]; tap_->R[kNumParts][oi] = outR[i]; }
         roomInL_[si] = rl; roomInR_[si] = rr;
         // The wandering SFX voices' growing reverb-send trajectory (Sfx.h, sfx.wander) joins the plain
         // hall directly here -- it already left the dry mix in Sfx::processSplit(), so it is not counted
@@ -641,6 +660,11 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
         // else's returns too (returnDuck_), on top of its own gate.
         outL[i] = (outL[i] + d * (roomReturn_ * roomOutL_[si] + hallReturn_ * (hallOutL_[si] + hallGateOutL_[si]))) * masterGain_;
         outR[i] = (outR[i] + d * (roomReturn_ * roomOutR_[si] + hallReturn_ * (hallOutR_[si] + hallGateOutR_[si]))) * masterGain_;
+        if (tap_ != nullptr) {
+            const size_t oi = static_cast<size_t>(offset + i);
+            tap_->L[kNumParts][oi] = outL[i] - masterGain_ * tap_->L[kNumParts][oi];
+            tap_->R[kNumParts][oi] = outR[i] - masterGain_ * tap_->R[kNumParts][oi];
+        }
     }
     // Master: bus compressor, mono bass, limiter, safety clip, meter.
     comp_.process(outL, outR, count);

@@ -9905,6 +9905,63 @@ void testArpPatterns()
 }
 
 /**
+ * @brief The stems (23.09.2026, round "Stems"; Engine.h, StemTap): taking them changes nothing, each part's
+ *        stem is that part alone, and a part appears in its stem where the score has it.
+ */
+void testStems()
+{
+    section("stems: one per part, taken before the master");
+    const int bars = 24, block = 256;
+    const double sr = 48000.0;
+    struct Take { std::vector<float> mixL; std::vector<std::vector<float>> stemL; };
+    auto render = [&](bool withTap, bool mutePad) {
+        auto engine = std::make_unique<Engine>();
+        ParamStore& p = engine->params();
+        p.parseText("compose.level_match=Off master.auto_gain=Off compose.presence_match=Off");
+        if (mutePad) p.parseText("mix.pad_mute=1");
+        Composer composer(1);
+        engine->prepare(sr, block);
+        Conductor conductor(*engine, composer);
+        const size_t total = static_cast<size_t>(std::llround(bars * kBeatsPerBar * 60.0 / p.get(p.base(Module::Compose) + compose::Bpm) * sr));
+        Take t;
+        t.mixL.assign(total, 0.0f);
+        std::vector<float> R(total);
+        std::vector<std::vector<float>> bl(kNumStems, std::vector<float>(block)), br(kNumStems, std::vector<float>(block));
+        StemTap tap;
+        for (int s = 0; s < kNumStems; ++s) { tap.L[s] = bl[static_cast<size_t>(s)].data(); tap.R[s] = br[static_cast<size_t>(s)].data(); }
+        if (withTap) { engine->setStemTap(&tap); t.stemL.assign(kNumStems, std::vector<float>(total)); }
+        for (size_t done = 0; done < total;) {
+            const int n = static_cast<int>(std::min<size_t>(block, total - done));
+            conductor.pump(p, 32.0);
+            engine->process(t.mixL.data() + done, R.data() + done, n);
+            if (withTap)
+                for (int s = 0; s < kNumStems; ++s) std::copy(bl[static_cast<size_t>(s)].begin(), bl[static_cast<size_t>(s)].begin() + n, t.stemL[static_cast<size_t>(s)].begin() + static_cast<std::ptrdiff_t>(done));
+            done += static_cast<size_t>(n);
+        }
+        engine->setStemTap(nullptr);
+        return t;
+    };
+    const Take plain = render(false, false), tapped = render(true, false), muted = render(true, true);
+    check(plain.mixL == tapped.mixL, "taking the stems leaves the mix the same, bit for bit");
+    const int pad = static_cast<int>(Part::Pad), kick = static_cast<int>(Part::Kick);
+    auto energy = [](const std::vector<float>& x, size_t a, size_t b) { double e = 0.0; for (size_t i = a; i < b && i < x.size(); ++i) e += static_cast<double>(x[i]) * x[i]; return e; };
+    const size_t n = tapped.mixL.size();
+    bool othersSame = true;
+    for (int s = 0; s < kNumParts; ++s) if (s != pad) othersSame = othersSame && tapped.stemL[static_cast<size_t>(s)] == muted.stemL[static_cast<size_t>(s)];
+    const double padOn = energy(tapped.stemL[static_cast<size_t>(pad)], 0, n), padOff = energy(muted.stemL[static_cast<size_t>(pad)], 0, n);
+    check(padOn > 0.0 && padOff == 0.0 && othersSame, "a muted part leaves an empty stem and every other part's stem as it was",
+          fmt("pad stem energy %.3g unmuted, %.3g muted", padOn, padOff));
+    // The set's first kick is on bar 17 (kIntroKickBar): its stem is silent before and sounds after.
+    const size_t barLen = n / static_cast<size_t>(bars);
+    const double kickBefore = energy(tapped.stemL[static_cast<size_t>(kick)], 0, 16 * barLen - barLen / 8);
+    const double kickAfter = energy(tapped.stemL[static_cast<size_t>(kick)], 16 * barLen, n);
+    int silentParts = 0;
+    for (int s = 0; s < kNumStems; ++s) silentParts += energy(tapped.stemL[static_cast<size_t>(s)], 0, n) == 0.0 ? 1 : 0;
+    check(kickBefore == 0.0 && kickAfter > 0.0, "the kick's stem is silent before the set's first kick on bar 17 and sounds after it",
+          fmt("kick stem energy %.3g before, %.3g after; %d of %d stems silent over the %d bars", kickBefore, kickAfter, silentParts, kNumStems, bars));
+}
+
+/**
  * @brief Random knobs, fixed invariants (23.09.2026, round "Fuzz").
  *
  * Every other section sets the knobs it is about and leaves the rest at their defaults, so the corners of
@@ -14504,6 +14561,7 @@ int main(int argc, char** argv)
     run("testSetArc", testSetArc);
     run("testRatings", testRatings);
     run("testKnobFuzz", testKnobFuzz);
+    run("testStems", testStems);
     run("testArrangeDynamics", testArrangeDynamics);
     run("testSectionRules", testSectionRules);
     run("testCuration", testCuration);

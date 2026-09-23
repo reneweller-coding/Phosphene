@@ -108,6 +108,7 @@ set(PHOS_SELFTEST_SECONDS
     testSetArc               0.3
     testRatings              0.1
     testKnobFuzz            18.0
+    testStems               16.6
     testSampler              1.5
     testWaveTableQuality     1.3
     testArrangeDynamics      1.0

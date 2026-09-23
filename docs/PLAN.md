@@ -7432,6 +7432,29 @@ Schritte); ein Sinus von 0,4 Schritt bei 997 Hz kommt ohne Dither mit Faktor 0,0
 
 *Dateien.* `Core/include/phos/WavWriter.h`, `Core/src/WavWriter.cpp`, `Tests/selftest.cpp`; dieser Block.
 
+**23.09.2026, Stems: jede Stimme in einer Datei, aus einem Render**
+
+`--solo` rendert eine Stimme je Lauf und schickt sie durch den Master; zum Nachmischen in der DAW und für ein
+Hörbarkeitsmaß braucht es alle Stimmen aus *einem* Lauf, vor dem Master. Die Engine hat dafür einen Abgriff
+(`Engine::setStemTap`, `StemTap`, `kNumStems` = 13 Stimmen + Returns): jede Stimme nach Kanal-Gain,
+Trance-Gate und Duck, mal Master-Gain, **vor** Bus-Kompressor, Mono-Bass, Clipper, Bandbegrenzung und
+Limiter; der Sub-Drop gehört zum Effekt-Stem; der Returns-Stem ist Raum, Hall, Gated Hall, Modulations-Send
+und Delay-Wurf. Ein Stutter ist nicht in den Stems (sie tragen den lebenden Melodie-Bus, den er ersetzt). Ohne
+Abgriff kostet das einen Zeigertest je Sample.
+
+`phos_render --stems DIR` schreibt `01_Kick.wav` … `13_Vocal.wav`, `14_Returns.wav` im Format von `--out`
+(`--pcm24` gilt, mit Dither), um die Limiter-Vorausschau verzögert, damit sie unter dem Master liegen. Seed 1,
+40 Takte: 14 Dateien gleicher Länge wie der Mix; Summe der Stems gegen den Mix kreuzkorreliert: Versatz 3
+Samples (0,06 ms), Korrelation 0,979 (der Rest ist der Master). Die 3 Samples sind die IIR-Halbbandfilter um den
+Clipper — frequenzabhängige Laufzeit, keine Konstante, daher nicht ausgeglichen, im Code begründet.
+
+*Tests* (`testStems`, 16,6 s): der Abgriff lässt den Mix bitgleich; `mix.pad_mute` macht den Pad-Stem leer
+und lässt jeden anderen Stimmen-Stem bitgleich; der Kick-Stem ist vor dem ersten Kick des Sets (Takt 17) still
+und danach nicht.
+
+*Dateien.* `Core/include/phos/Engine.h`, `Core/src/Engine.cpp`, `Tools/render/main.cpp`, `Tests/selftest.cpp`,
+`Tests/selftest_tests.cmake`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

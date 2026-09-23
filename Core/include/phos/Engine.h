@@ -89,10 +89,43 @@
 
 namespace phos {
 
+/**
+ * @name Stems (23.09.2026, round "Stems")
+ * One stem per part (Part order: kick, bass, percussion, acid, the six polyphonic voices, effects, bed,
+ * voices) and one for the returns -- room, hall, gated hall, the modulation send and the voices' delay
+ * throw. Each part's stem is what that part puts into the mix: after its strip gain, its trance gate and
+ * its duck, times the master gain, *before* the master (bus compressor, mono bass, clipper, band limit,
+ * limiter). The sub drop belongs to the effects stem. A stutter is not in the stems: they carry the live
+ * melodic bus the stutter replaces. So the stems sum to the mix as it enters the master, and a stem is what
+ * a mixing engineer would get from a bounce of that channel.
+ * @{ */
+constexpr int kNumStems = kNumParts + 1;           ///< the parts and the returns
+extern const char* const kStemNames[kNumStems];    ///< "Kick" ... "Vocal", "Returns"
+/**
+ * @brief Where the engine writes the stems while it renders (Engine::setStemTap).
+ *
+ * Each pointer is a buffer of at least as many samples as the largest process() call; the engine writes
+ * sample i of a call at index i, exactly as it writes the mix.
+ */
+struct StemTap {
+    float* L[kNumStems] = {};   ///< left channel of each stem
+    float* R[kNumStems] = {};   ///< right channel of each stem
+};
+/** @} */
+
 /** @brief The Phosphene engine. */
 class Engine {
 public:
     static constexpr int kChunk = 32;   ///< samples per time/parameter chunk
+
+    /**
+     * @brief Writes the stems into @p tap on every following process() call; nullptr stops it (StemTap).
+     *
+     * Costs a store per part and sample while it is set and nothing when it is not; the mix is the same
+     * bit for bit either way (the self test measures that). Not for the audio thread of a host: set it
+     * before rendering, from the thread that renders.
+     */
+    void setStemTap(StemTap* tap) { tap_ = tap; }
 
     Engine();
 
@@ -235,6 +268,7 @@ private:
     double bassPhase_ = 0.0;               ///< fundamental phase for the next bass note
     bool kickMute_ = false, bassMute_ = false;
     float masterGain_ = 1.0f, ceiling_ = 1.0f;
+    StemTap* tap_ = nullptr;               ///< where the stems go (setStemTap), null = nowhere
     bool clip_ = true;
     TanhAdaa clipL_, clipR_;
 
