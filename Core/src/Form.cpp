@@ -8,6 +8,9 @@
 #include <algorithm>
 #include <cmath>
 
+#include "Salts.h"
+using namespace phos::salts::form;   // this file's seed salts (Salts.h)
+
 namespace phos {
 
 // kStyleNames and kArcNames are defined in Params.cpp with the other choice tables, so that the
@@ -21,22 +24,6 @@ const char* const kPdbVariantNames[kNumPdbVariants] = { "Full bar", "Half bar", 
 const int kGroupFigures[4] = { 0, 1, 3, -1 };
 
 namespace {
-
-constexpr uint64_t kSaltForm    = 0x464F524D00000001ull;
-constexpr uint64_t kSaltKickRoll = 0x4B49434B524F4C0Eull;   ///< the kick's roll before the pre-drop break (23.09.2026, round "Set-Kurve")
-constexpr uint64_t kSaltAbriss  = 0x41425249535300F0ull;   ///< the kick's Abriss before a sixteen-bar line of a drop (23.09.2026)
-constexpr uint64_t kSaltSection = 0x5345435449000002ull;
-constexpr uint64_t kSaltGroup   = 0x47524F5550000003ull;
-constexpr uint64_t kSaltSfx     = 0x5346580000000004ull;
-constexpr uint64_t kSaltFuzz    = 0x46555A5A0000000Dull;   ///< the form's fuzziness (23.09.2026, round "Form")
-constexpr uint64_t kSaltMode    = 0x4D4F44450000005ull;   ///< the section's borrowed mode (16.09.2026)
-constexpr uint64_t kSaltRide    = 0x5249444500000006ull;   ///< the section's macro ride (16.09.2026)
-constexpr uint64_t kSaltPsy     = 0x5053594300000007ull;   ///< the psychedelic ear candy (19.09.2026)
-constexpr uint64_t kSaltVoice   = 0x564F494300000008ull;   ///< the voices' placement (19.09.2026)
-constexpr uint64_t kSaltBed     = 0x4245440000000009ull;   ///< the shamanic bed's placement (19.09.2026)
-constexpr uint64_t kSaltFxRide  = 0x46585244000000Aull;    ///< the modulation effects' section ride (19.09.2026)
-constexpr uint64_t kSaltVariant = 0x564152490000000Bull;   ///< the voices' and the bed's variants (19.09.2026, round "voices")
-constexpr uint64_t kSaltClimax  = 0x434C494D0000000Cull;   ///< drop 2's squelches (19.09.2026, round "arrangement")
 
 /** @brief Index drawn from non-negative weights. */
 int drawIndex(Rng& r, const double* w, int n)

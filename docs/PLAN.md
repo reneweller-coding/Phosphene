@@ -7376,6 +7376,23 @@ den Anker nach jedem Treffer neu und löschte **jede** Zeile („golden 0 lines"
 *Dateien.* `Tools/plandump/main.cpp`, `Tests/plan_snapshot.cmake`, `Tests/golden/*.txt`, `Tests/CMakeLists.txt`,
 `Tests/selftest_tests.cmake`, `Tools/update_snapshots.py`; dieser Block.
 
+**23.09.2026, Salze: alle Seed-Salze an einer Stelle, Gleichheit verweigert der Compiler**
+
+Die 50 Salze des Kerns lagen in vier Dateien (Composer, Form, Melody, Rhythm), und drei Namen gab es zweimal mit
+verschiedenen Werten: `kSaltPhrase` (Bass-Figuren / Percussion-Phrase), `kSaltMode` (geliehener Modus der
+Sektion / Material dieses Modus) und `kSaltVoice` (Stimmrezepte / Platzierung der Stimmen). Wer einen davon in
+eine andere Datei kopiert hätte, hätte richtig ausgesehen und einen anderen Strom gezogen. Jetzt stehen sie in
+`Core/src/Salts.h`, je Datei ein Namensraum (`phos::salts::composer`, `form`, `melody`, `rhythm`), jede Datei
+sagt `using namespace phos::salts::<datei>`; die Werte sind die alten. Am Ende der Datei prüft ein
+`static_assert` über `kAll`, dass keine zwei gleich sind. Die Doku-Zeilen der Salze wanderten mit.
+
+*Geprüft.* Alle fünf Plan-Schnappschüsse unverändert (keine Note, kein Steuer-Event bewegt). Gegenprobe:
+`kSaltLane` testweise auf den Wert von `kSaltFill` gesetzt — der Build bricht mit „two seed salts are equal"
+ab; zurückgesetzt, baut. Verschoben per Skript (Definitionen samt einzeiliger Doku), keine Hand-Edits.
+
+*Dateien.* `Core/src/Salts.h` (neu), `Core/src/Composer.cpp`, `Core/src/Form.cpp`, `Core/src/Melody.cpp`,
+`Core/src/Rhythm.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

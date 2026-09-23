@@ -9,14 +9,12 @@
 #include <algorithm>
 #include <cmath>
 
+#include "Salts.h"
+using namespace phos::salts::rhythm;   // this file's seed salts (Salts.h)
+
 namespace phos {
 
 namespace {
-
-constexpr uint64_t kSaltPlan   = 0x5045524350000001ull;
-constexpr uint64_t kSaltPhrase = 0x5045524350000002ull;
-constexpr uint64_t kSaltFill   = 0x5045524350000004ull;
-constexpr uint64_t kSaltLane   = 0x5045524350000005ull;
 
 double normal(Rng& r)
 {

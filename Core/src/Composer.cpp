@@ -21,6 +21,9 @@
 #include <iterator>
 #include <string>
 
+#include "Salts.h"
+using namespace phos::salts::composer;   // this file's seed salts (Salts.h)
+
 namespace phos {
 
 const char* const kKickMacroNames[kNumKickMacros] = { "length", "punch", "body", "grit", "click" };
@@ -31,8 +34,6 @@ const char* const kVoiceMacroNames[kNumVoiceMacros] = { "brightness", "softness"
 
 namespace {
 
-constexpr uint64_t kSaltTrack  = 0x545241434B000001ull;
-constexpr uint64_t kSaltMotif  = 0x4D4F544946000017ull;   ///< the set's motif (23.09.2026, round "Set-Kurve"): its own stream, so no older draw of the walk moves
 /**
  * @brief How far the set's energy arc moves a track's tempo centre, in BPM per unit of arc energy
  *        (23.09.2026, round "Set-Kurve").
@@ -46,18 +47,6 @@ constexpr uint64_t kSaltMotif  = 0x4D4F544946000017ull;   ///< the set's motif (
  * what it was.
  */
 constexpr double kArcTempoPerUnit = 6.0;
-constexpr uint64_t kSaltRecipe = 0x5245434950450002ull;
-constexpr uint64_t kSaltBlock  = 0x424C4F434B000003ull;
-constexpr uint64_t kSaltPhrase = 0x5048524153450004ull;
-constexpr uint64_t kSaltArc    = 0x4152430000000005ull;
-constexpr uint64_t kSaltPerc   = 0x5045524300000006ull;
-constexpr uint64_t kSaltMelody = 0x4D454C4F44590007ull;
-constexpr uint64_t kSaltWalk   = 0x57414C4B00000008ull;
-constexpr uint64_t kSaltStyle  = 0x5354594C45000016ull;   ///< the style journey (22.09.2026): its own stream, so no older draw of the walk moves
-constexpr uint64_t kSaltFormU  = 0x464F524D55000009ull;
-constexpr uint64_t kSaltSectU  = 0x5345435455000010ull;
-constexpr uint64_t kSaltLaneU  = 0x4C414E4555000011ull;
-constexpr uint64_t kSaltReroll = 0x5245524F4C4C0012ull;
 
 /** @brief One move of a perceptual direction: parameter (module table index), direction, weight. */
 struct Loading { int param; int macro; float weight; };
@@ -96,9 +85,6 @@ const Loading kBassLoadings[] = {
     { bass::KeyTrack,    4, -0.10f },
 };
 
-/** @brief Salt of the acid voicing draw: its own, so no other draw of the walk moves. */
-constexpr uint64_t kSaltAcidVoice = 0x4143494456434500ull;
-
 /**
  * @brief One parameter of the acid voicings: its value in the clean and the liquid voicing.
  *
@@ -133,13 +119,6 @@ const AcidVoicingParam kAcidVoicingTable[] = {
 };
 /** @brief Disperser stages of the liquid voicing (a discrete parameter, written as an override). */
 constexpr float kLiquidDisperse = 4.0f;
-
-/** @brief Salt of the voice recipes (19.09.2026): their own generator, so no other draw of the walk moves. */
-constexpr uint64_t kSaltVoice = 0x564F494345520014ull;
-/** @brief Salt of the section's choice between the track's two pad gate patterns (22.09.2026). */
-constexpr uint64_t kSaltPadGate = 0x504144474154ull;
-/** @brief Salt of the drone's slow evolution (19.09.2026). */
-constexpr uint64_t kSaltDroneRide = 0x44524944450015ull;
 
 /**
  * @brief What a polyphonic voice may become in a track: its oscillators, wavetables and filter responses,
@@ -396,12 +375,6 @@ double setLengthBars(const ParamStore& p)
                                                            : std::max(20.0, static_cast<double>(p.get(cb + compose::Bpm)));
     return std::max(32.0, minutes * bpm / kBeatsPerBar);
 }
-
-/** @brief Salt of the learned bass phrase: its own, so it does not move any other draw. */
-constexpr uint64_t kSaltBassLine = 0x424153534C4E0013ull;
-
-/** @brief Salt of the drawn bass rhythm: its own, for the same reason. */
-constexpr uint64_t kSaltBassRhythm = 0x424153535248546Dull;
 
 /** @brief The uniform source sampleMasked() draws from. */
 struct BassUniform {

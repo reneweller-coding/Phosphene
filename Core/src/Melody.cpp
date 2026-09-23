@@ -15,20 +15,12 @@
 #include <cstdio>
 #include <string>
 
+#include "Salts.h"
+using namespace phos::salts::melody;   // this file's seed salts (Salts.h)
+
 namespace phos {
 
 namespace {
-
-constexpr uint64_t kSaltChords = 0x43484F5244000001ull;
-constexpr uint64_t kSaltAcid   = 0x4143494400000002ull;
-constexpr uint64_t kSaltLead   = 0x4C45414400000003ull;
-constexpr uint64_t kSaltArp    = 0x4152500000000004ull;
-constexpr uint64_t kSaltSound  = 0x534F554E44000006ull;
-constexpr uint64_t kSaltPad    = 0x5041440000000007ull;
-constexpr uint64_t kSaltMode   = 0x4D4F44450000008ull;   ///< the material of a borrowed mode (16.09.2026)
-constexpr uint64_t kSaltCounter = 0x434F554E5445000Aull; ///< the counter-lead's material (19.09.2026)
-constexpr uint64_t kSaltStab    = 0x535441420000000Bull; ///< the stab's rhythm and material (19.09.2026)
-constexpr uint64_t kSaltDrone   = 0x44524F4E4500000Cull; ///< the drone's octave and evolution (19.09.2026)
 
 /** @name Indices of the melodic parts in the arrays kept per part (Form.h, MelodyPart) @{ */
 constexpr int kAcidI = mpIndex(MelodyPart::Acid), kLeadI = mpIndex(MelodyPart::Lead), kCounterI = mpIndex(MelodyPart::Counter),
@@ -163,8 +155,6 @@ void quantise(const std::vector<double>& w, std::vector<uint8_t>& out)
     for (size_t i = 0; i < w.size(); ++i)
         if (w[i] > 0.0) out[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(200.0 * w[i] / mx)), 1, 255));
 }
-
-constexpr uint64_t kSaltColour = 0x434F4C4F55520009ull;   ///< the colour slots of a line (18.09.2026)
 
 /**
  * @brief The share of a role's notes that are colour tones, at the arc's full colour (rule 2).
