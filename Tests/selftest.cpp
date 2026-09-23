@@ -9863,6 +9863,115 @@ void testArpPatterns()
 }
 
 /**
+ * @brief Random knobs, fixed invariants (23.09.2026, round "Fuzz").
+ *
+ * Every other section sets the knobs it is about and leaves the rest at their defaults, so the corners of
+ * the knob space -- a 32-bar track in a 300-minute set, Hi-Tech with no hats in the kit, tempo range 10 at
+ * 100 BPM -- are planned by nobody but a user. This section draws whole configurations: every compose knob
+ * uniform over its range (choices and toggles included), the kick's engine and clip, the bass release, and
+ * the active flag, role, density and engine of every percussion lane; a random set seed. Only the three
+ * knobs that start probe renders stay off (level match, presence match, auto gain), because each probe costs
+ * seconds and they decide levels, not structure. For three tracks of each configuration it checks what must
+ * hold whatever the knobs say:
+ *  - the form keeps its constraints and adds up to the track, sections contiguous;
+ *  - key, mode, style and tempo are in range and finite;
+ *  - every note the composer sends is finite, inside the rendered span, with a pitch and velocity MIDI can
+ *    carry and a positive length; every control event names a real parameter with a finite value;
+ *  - at most one kick on any beat and no two bass notes sounding at once, across the DJ blends.
+ * A failure prints the configuration as `--seed ... --set ...`, so phos_render reproduces it. The draw is
+ * fixed (the section's own seed), so the same configurations run every time; PHOS_FUZZ_CASES=n runs n of
+ * them instead of the default 24 for a deeper search.
+ */
+void testKnobFuzz()
+{
+    section("fuzz: random knob configurations keep the invariants");
+    int cases = 24;
+    if (const char* env = std::getenv("PHOS_FUZZ_CASES")) cases = std::max(1, std::atoi(env));
+    Rng r;
+    r.seed(0x46555A5A4B4E4F42ull);
+    int broken = 0;
+    std::string firstBroken;
+    int planned = 0, notesSeen = 0;
+    for (int c = 0; c < cases; ++c) {
+        ParamStore q;
+        std::string text;
+        auto randomise = [&](int id) {
+            const ParamDesc& d = q.desc(id);
+            float v = d.minValue + (d.maxValue - d.minValue) * r.uniform();
+            if (d.curve == Curve::Int || d.curve == Curve::Choice || d.curve == Curve::Toggle) v = std::round(v);
+            q.set(id, v);
+            text += fmt(" --set %s=%g", q.key(id).c_str(), static_cast<double>(q.get(id)));
+        };
+        const int cb = q.base(Module::Compose);
+        for (int i = 0; i < compose::Count; ++i) {
+            if (i == compose::LevelMatch || i == compose::PresenceMatch) continue;
+            randomise(cb + i);
+        }
+        randomise(q.base(Module::Kick) + kick::Engine);
+        randomise(q.base(Module::Kick) + kick::Clip);
+        randomise(q.base(Module::Bass) + bass::AmpRelease);
+        for (int l = 0; l < kPercLanes; ++l) {
+            const int b = q.base(Module::Perc, l);
+            for (int k : { static_cast<int>(perc::Active), static_cast<int>(perc::Role), static_cast<int>(perc::Density), static_cast<int>(perc::Engine) })
+                randomise(b + k);
+        }
+        q.parseText("compose.level_match=Off compose.presence_match=Off master.auto_gain=Off");
+        const uint64_t seed = 1 + static_cast<uint64_t>(r.below(1 << 30));
+        Composer comp(seed);
+        std::vector<std::string> why;
+        int lastBar = 0;
+        for (int t = 0; t < 3; ++t) {
+            const TrackPlan p = comp.track(q, t);
+            ++planned;
+            lastBar = std::max(lastBar, p.firstBar + p.bars);
+            int sum = 0;
+            bool contiguous = true;
+            for (int s = 0; s < p.form.count; ++s) {
+                contiguous = contiguous && p.form.section[s].startBar == sum && p.form.section[s].bars > 0;
+                sum += p.form.section[s].bars;
+            }
+            if (!formConstraintsHold(p.form) || p.form.bars != p.bars || sum != p.bars || !contiguous) why.push_back(fmt("track %d form (%d bars, sections %d)", t + 1, p.bars, sum));
+            if (p.key < 0 || p.key > 11 || p.scale < 0 || p.scale >= kNumScales || p.style < 0 || p.style >= kNumStyles || !std::isfinite(p.bpm) || p.bpm < 20.0 || p.bpm > 400.0)
+                why.push_back(fmt("track %d key %d scale %d style %d bpm %.2f", t + 1, p.key, p.scale, p.style, p.bpm));
+        }
+        std::vector<NoteEvent> notes;
+        std::vector<ControlEvent> controls;
+        comp.composeBars(q, 0, lastBar, notes, &controls);
+        notesSeen += static_cast<int>(notes.size());
+        const double end = static_cast<double>(lastBar) * kBeatsPerBar;
+        int badNotes = 0, badControls = 0, kickDoubles = 0, bassOverlaps = 0;
+        std::vector<int> kicks(static_cast<size_t>(lastBar) * 4 + 4, 0);
+        const NoteEvent* lastBass = nullptr;
+        for (const NoteEvent& e : notes) {
+            if (!std::isfinite(e.beat) || e.beat < -1e-9 || e.beat > end + 1e-6 || !std::isfinite(e.length) || e.length <= 0.0f || e.pitch > 127 || e.velocity < 1
+                || e.velocity > 127 || static_cast<int>(e.part) < 0 || static_cast<int>(e.part) >= kNumParts) ++badNotes;
+            if (e.part == Part::Kick && std::fabs(e.beat - std::round(e.beat)) < 1e-6 && e.beat >= 0.0 && e.beat <= end)
+                if (++kicks[static_cast<size_t>(std::llround(e.beat))] == 2) ++kickDoubles;
+            if (e.part == Part::Bass) {
+                if (lastBass != nullptr && e.beat < lastBass->beat + lastBass->length - 1e-6) ++bassOverlaps;
+                lastBass = &e;
+            }
+        }
+        for (const ControlEvent& e : controls)
+            if (!std::isfinite(e.beat) || !std::isfinite(e.value) || !std::isfinite(e.length) || e.param < 0 || e.param >= q.count()) ++badControls;
+        if (badNotes) why.push_back(fmt("%d malformed notes", badNotes));
+        if (badControls) why.push_back(fmt("%d malformed controls", badControls));
+        if (kickDoubles) why.push_back(fmt("%d beats with two kicks", kickDoubles));
+        if (bassOverlaps) why.push_back(fmt("%d overlapping bass notes", bassOverlaps));
+        if (!why.empty()) {
+            ++broken;
+            if (firstBroken.empty()) {
+                std::string w;
+                for (const std::string& s : why) w += (w.empty() ? "" : "; ") + s;
+                firstBroken = fmt("case %d: %s -- reproduce: --seed %llu%s", c, w.c_str(), static_cast<unsigned long long>(seed), text.c_str());
+            }
+        }
+    }
+    check(broken == 0, "every random knob configuration plans valid forms and sends well-formed, collision-free notes",
+          broken == 0 ? fmt("%d configurations, %d tracks planned, %d notes checked", cases, planned, notesSeen) : firstBroken);
+}
+
+/**
  * @brief The ratings file (23.09.2026, round "Bewertung"; phos/Rating.h): a verdict survives the round trip,
  *        a tab in a note cannot break the columns, and the header is written once.
  */
@@ -14352,6 +14461,7 @@ int main(int argc, char** argv)
     run("testForm", testForm);
     run("testSetArc", testSetArc);
     run("testRatings", testRatings);
+    run("testKnobFuzz", testKnobFuzz);
     run("testArrangeDynamics", testArrangeDynamics);
     run("testSectionRules", testSectionRules);
     run("testCuration", testCuration);

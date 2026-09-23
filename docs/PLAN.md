@@ -7393,6 +7393,27 @@ ab; zurückgesetzt, baut. Verschoben per Skript (Definitionen samt einzeiliger D
 *Dateien.* `Core/src/Salts.h` (neu), `Core/src/Composer.cpp`, `Core/src/Form.cpp`, `Core/src/Melody.cpp`,
 `Core/src/Rhythm.cpp`; dieser Block.
 
+**23.09.2026, Fuzz: zufällige Knopf-Konfigurationen, feste Invarianten**
+
+Jeder andere Abschnitt stellt die Knöpfe, um die es ihm geht, und lässt den Rest auf dem Standard; die Ecken des
+Knopfraums (32-Takt-Tracks in einem 300-Minuten-Set, ein Kit ohne Hats, Tempo-Spanne 10 bei 100 BPM) plante
+bisher nur ein Nutzer. Der neue Abschnitt `testKnobFuzz` zieht ganze Konfigurationen: jeden Compose-Knopf
+gleichverteilt über seinen Bereich (Auswahl und Schalter eingeschlossen), Kick-Engine und -Clip, Bass-Release,
+Aktiv/Rolle/Dichte/Engine jeder Percussion-Spur, einen zufälligen Set-Seed; nur die drei Knöpfe, die
+Probe-Renders auslösen (Pegel-, Präsenzabgleich, Auto Gain), bleiben aus — sie entscheiden Pegel, keine
+Struktur, und kosten Sekunden je Track. Für drei Tracks je Konfiguration gilt, was immer gelten muss: Form
+hält ihre Regeln und summiert sich zur Tracklänge, Sektionen lückenlos; Tonart, Modus, Stil, Tempo im Bereich;
+jede Note endlich, im Render, MIDI-taugliche Tonhöhe und Velocity, positive Länge; jedes Steuer-Event nennt einen
+echten Parameter mit endlichem Wert; höchstens eine Kick je Schlag, nie zwei Bassnoten zugleich, über die
+DJ-Blenden hinweg. Ein Fehler druckt die Konfiguration als `--seed … --set …` zum Nachspielen mit `phos_render`.
+Der Zug ist fest (eigener Seed), `PHOS_FUZZ_CASES=n` sucht tiefer.
+
+*Geprüft.* 24 Konfigurationen (Standard): 72 Tracks, 668 165 Noten, 0 Verstöße, 18 s. Tiefe Suche mit 300:
+900 Tracks, 8 389 649 Noten, 0 Verstöße (2 min 47 s). Gegenprobe gegen einen eingebauten Kernfehler
+(Velocity 0 auf den Kick-Roll-Schlägen): FAIL mit „8 malformed notes" und der Reproduktionszeile; zurückgesetzt.
+
+*Dateien.* `Tests/selftest.cpp` (testKnobFuzz), `Tests/selftest_tests.cmake` (Laufzeit); dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
