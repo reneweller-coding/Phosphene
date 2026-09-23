@@ -41,6 +41,7 @@ void PhospheneEditor::buildPerformPage()
                 b->onClick = [this, m] { proc_.setMacro(m, 1.0f); };
             }
             macroButton_[i] = b.get();
+            page->enableMidiLearn(proc_, *b, proc_.params().count() + i);   // a macro is a MIDI target like any knob
             page->addControl(gm, std::move(b), "", 4, true);
         } else {
             auto s = std::make_unique<juce::Slider>(juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox);
@@ -54,6 +55,7 @@ void PhospheneEditor::buildPerformPage()
             juce::Slider* raw = s.get();
             s->onValueChange = [this, m, raw] { proc_.setMacro(m, static_cast<float>(raw->getValue())); };
             macroSlider_[i] = s.get();
+            page->enableMidiLearn(proc_, *s, proc_.params().count() + i);
             page->addControl(gm, std::move(s), kMacroNames[i], 4);
         }
     }
@@ -89,6 +91,23 @@ void PhospheneEditor::buildPerformPage()
         note->setColour(juce::Label::textColourId, dim);
         macroNote_ = note.get();
         page->addControl(gs, std::move(note), "", 16, true);
+    }
+
+    // MIDI (23.09.2026, phos/MidiMap.h): every knob, switch and chooser in the plugin -- and the four macros above --
+    // takes a controller. Right click, "MIDI Learn", turn the hardware knob. This group says what is being learned
+    // and what is bound, and forgets everything at once.
+    const int gx = page->addGroup("MIDI", tint, 16);
+    {
+        auto note = std::make_unique<juce::Label>(juce::String(), "no controller learned");
+        note->setJustificationType(juce::Justification::topLeft);
+        note->setColour(juce::Label::textColourId, dim);
+        note->setMinimumHorizontalScale(0.7f);
+        midiNote_ = note.get();
+        page->addControl(gx, std::move(note), "", 12, true);
+        auto clear = std::make_unique<juce::TextButton>("Forget all");
+        clear->setTooltip("Releases every controller from every parameter");
+        clear->onClick = [this] { proc_.midiMap().clear(); };
+        page->addControl(gx, std::move(clear), "", 4, true);
     }
 
     // Rating what is playing (23.09.2026, phos/Rating.h): "good here" and "bad here" write one line each --
@@ -191,4 +210,24 @@ void PhospheneEditor::refreshPerformPage()
     }
     macroNote_->setText(s.isEmpty() ? juce::String("neutral: every knob is where you left it") : s,
                         juce::dontSendNotification);
+
+    // MIDI learn: what is armed, and the bindings (redrawn only when the table changed).
+    if (midiNote_ != nullptr) {
+        const phos::MidiMap& map = proc_.midiMap();
+        const int armed = map.armed();
+        const uint32_t rev = map.revision() * 2u + (armed >= 0 ? 1u : 0u);
+        if (rev != midiShown_ || armed != midiArmedShown_) {
+            midiShown_ = rev;
+            midiArmedShown_ = armed;
+            juce::String t;
+            if (armed >= 0) t << "Learning " << proc_.midiTargetName(armed) << ": move a knob or fader on your controller.\n";
+            const std::vector<phos::MidiBinding> b = map.bindings();
+            if (b.empty() && armed < 0) t << "No controller learned. Right-click any knob, switch or chooser and choose MIDI Learn.";
+            for (size_t k = 0; k < b.size(); ++k) {
+                if (k > 0) t << ",  ";
+                t << "CC " << b[k].cc << "/" << (b[k].channel + 1) << " " << proc_.midiTargetName(b[k].target);
+            }
+            midiNote_->setText(t, juce::dontSendNotification);
+        }
+    }
 }

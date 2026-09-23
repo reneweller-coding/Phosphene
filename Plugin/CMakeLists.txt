@@ -1,13 +1,15 @@
 # The Phosphene plugin: VST3 and Standalone around the framework-free core.
 #
 # NEEDS_MIDI_OUTPUT is what makes the VST3 wrapper offer an event output bus; the processor writes
-# the score's notes into it (PluginProcessor.cpp, "MIDI out"). No MIDI input: the generator plays
-# itself, the host only supplies transport and tempo.
+# the score's notes into it (PluginProcessor.cpp, "MIDI out"). MIDI input since 23.09.2026, for
+# controllers only: MIDI learn puts a hardware knob on any parameter (phos/MidiMap.h). The generator
+# still plays itself; notes coming in are ignored.
 juce_add_plugin(Phosphene
     COMPANY_NAME                "Rene Weller"
     BUNDLE_ID                   "com.reneweller.phosphene"
     IS_SYNTH                    TRUE
-    NEEDS_MIDI_INPUT            FALSE
+    # TRUE since 23.09.2026: the plugin reads MIDI controllers for MIDI learn (phos/MidiMap.h); notes are ignored.
+    NEEDS_MIDI_INPUT            TRUE
     NEEDS_MIDI_OUTPUT           TRUE
     IS_MIDI_EFFECT              FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE

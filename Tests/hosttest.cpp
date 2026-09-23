@@ -976,10 +976,13 @@ int main(int argc, char** argv)
     if (partRest) {
         auto p = std::make_unique<PhospheneProcessor>();
         const ParamStore& store = p->params();
-        check(p->getParameters().size() == store.count(),
-              "every parameter of the store is a host parameter (" + juce::String(store.count()) + ")");
+        // Since 23.09.2026 the four macros follow the store's parameters as host parameters of their own.
+        check(p->getParameters().size() == store.count() + kNumMacros,
+              "every parameter of the store is a host parameter (" + juce::String(store.count()) + "), and the four macros after them");
         bool textRoundTrip = true, namesUnique = true, rangesSane = true;
         juce::StringArray ids;
+        for (int i = 0; i < kNumMacros; ++i)
+            if (auto* hp = p->hostParameter(store.count() + i)) ids.add(hp->getParameterID());
         for (int i = 0; i < store.count(); ++i) {
             auto* param = p->parameterFor(i);
             if (param == nullptr) { rangesSane = false; break; }
@@ -1006,10 +1009,59 @@ int main(int argc, char** argv)
         check(rangesSane, "every parameter has a default inside its range and at least two steps");
     }
 
+    // ---------------------------------------------------------------- MIDI learn and the macros as host parameters (23.09.2026)
+    if (partRest) {
+        auto p = std::make_unique<PhospheneProcessor>();
+        p->setPlayConfigDetails(0, 2, 48000.0, 256);
+        p->prepareToPlay(48000.0, 256);
+        const int cutoff = p->params().find("lead.cutoff");
+        const int sweepTarget = p->params().count() + static_cast<int>(Macro::FilterSweep);
+        // A controller arrives while lead.cutoff is armed: it binds, and it sets the knob in the same block.
+        p->midiMap().arm(cutoff);
+        juce::AudioBuffer<float> buf(2, 256);
+        juce::MidiBuffer in;
+        in.addEvent(juce::MidiMessage::controllerEvent(3, 74, 64), 10);
+        in.addEvent(juce::MidiMessage::noteOn(1, 60, (juce::uint8)100), 20);   // a note: ignored, and not echoed
+        p->processBlock(buf, in);
+        int ch = -1, cc = -1;
+        const bool bound = p->midiMap().controllerOf(cutoff, ch, cc) && ch == 2 && cc == 74;
+        const float atLearn = p->hostParameter(cutoff)->getValue();
+        bool echoed = false;
+        for (const auto meta : in) echoed = echoed || meta.getMessage().isNoteOn() && meta.getMessage().getNoteNumber() == 60 && meta.getMessage().getVelocity() == 100;
+        juce::MidiBuffer in2;
+        in2.addEvent(juce::MidiMessage::controllerEvent(3, 74, 127), 0);
+        p->processBlock(buf, in2);
+        const float atMax = p->hostParameter(cutoff)->getValue();
+        check(p->acceptsMidi() && p->producesMidi() && bound && std::fabs(atLearn - 64.0f / 127.0f) < 1e-4f && std::fabs(atMax - 1.0f) < 1e-6f && !echoed,
+              juce::String("MIDI learn: an armed knob takes the next controller, which then drives it; incoming notes are not echoed -- ")
+                  + juce::String::formatted("bound %d (ch %d cc %d), value %.4f then %.4f", (int)bound, ch + 1, cc, atLearn, atMax));
+        // A macro is a target too, and a host parameter: its value reaches the macro, and the macro reaches the host.
+        p->midiMap().bind(0, 1, sweepTarget);
+        juce::MidiBuffer in3;
+        in3.addEvent(juce::MidiMessage::controllerEvent(1, 1, 127), 0);
+        p->processBlock(buf, in3);
+        p->serviceMacros();
+        const float sweep = p->macroValue(Macro::FilterSweep);
+        p->setMacro(Macro::GateDepth, 0.5f);
+        auto* depth = p->hostParameter(p->params().count() + static_cast<int>(Macro::GateDepth));
+        const float depthHost = depth != nullptr ? depth->convertFrom0to1(depth->getValue()) : -1.0f;
+        check(std::fabs(sweep - 1.0f) < 1e-6f && std::fabs(depthHost - 0.5f) < 1e-4f,
+              juce::String("the macros are host parameters: a controller on one moves the macro, a macro moved in the editor moves its host value -- ")
+                  + juce::String::formatted("filter sweep %.3f, gate depth host %.3f", sweep, depthHost));
+        // The bindings travel with the state.
+        juce::MemoryBlock state;
+        p->getStateInformation(state);
+        auto q = std::make_unique<PhospheneProcessor>();
+        q->setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+        int ch2 = -1, cc2 = -1, ch3 = -1, cc3 = -1;
+        check(q->midiMap().controllerOf(cutoff, ch2, cc2) && ch2 == 2 && cc2 == 74 && q->midiMap().controllerOf(sweepTarget, ch3, cc3) && cc3 == 1,
+              "learned controllers come back with the saved state");
+    }
+
     // ---------------------------------------------------------------- bus layouts and the editor
     if (partRest) {
         auto p = std::make_unique<PhospheneProcessor>();
-        check(p->producesMidi() && !p->acceptsMidi(), "the plugin writes MIDI and reads none");
+        check(p->producesMidi() && p->acceptsMidi(), "the plugin writes MIDI and reads controllers (MIDI learn)");
         juce::AudioProcessor::BusesLayout stereo;
         stereo.outputBuses.add(juce::AudioChannelSet::stereo());
         juce::AudioProcessor::BusesLayout withInput = stereo;

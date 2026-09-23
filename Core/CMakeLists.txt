@@ -31,6 +31,7 @@ add_library(PhospheneCore STATIC
     src/SetFile.cpp
     src/Rating.cpp
     src/Audibility.cpp
+    src/MidiMap.cpp
     src/Engine.cpp
 )
 target_include_directories(PhospheneCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

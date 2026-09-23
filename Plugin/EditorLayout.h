@@ -112,9 +112,20 @@ public:
     void resized() override;
     void paint(juce::Graphics&) override;
 
+    /**
+     * @brief MIDI learn on a control (23.09.2026, phos/MidiMap.h): a right click on @p comp offers "MIDI Learn"
+     *        and "Forget MIDI" for @p target (PhospheneProcessor's target numbering). Every parameter cell gets
+     *        it by itself; the editor calls it for its own controls that drive a target (the macros).
+     */
+    void enableMidiLearn(PhospheneProcessor& proc, juce::Component& comp, int target);
+    /** @brief The right click of enableMidiLearn (the page listens to its controls' mouse). */
+    void mouseDown(const juce::MouseEvent& e) override;
+
 private:
     /** @brief Builds the control a descriptor asks for -- knob, switch or chooser -- and attaches it. */
     void addParamCell(PhospheneProcessor& proc, int groupIndex, int paramId);
+    PhospheneProcessor* learnProc_ = nullptr;                    ///< set by the first enableMidiLearn
+    std::vector<std::pair<juce::Component*, int>> learnTargets_; ///< control -> target
     std::vector<Cell> cells_;    ///< every control on the page, in the order it was added
     std::vector<Group> groups_;  ///< the boxes, each naming the cells that belong to it
     int contentHeight_ = 0;      ///< what the last layout() needed

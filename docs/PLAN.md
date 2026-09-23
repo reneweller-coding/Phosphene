@@ -7534,6 +7534,38 @@ Logo oben, mit einer Fassung für den hellen und einer für den dunklen GitHub-M
 *Dateien.* `Tools/logo/make_logo.py`, `docs/logo/**`, `Quest/res/mipmap-*/ic_launcher.png`, `Deploy/phosphene.ico`,
 `Deploy/make_icon.py`, `Plugin/Resources/*`, `Plugin/CMakeLists.txt`, `README.md`; dieser Block.
 
+**23.09.2026, MIDI: jeder Parameter automatisierbar und per MIDI Learn auf einen Regler legbar**
+
+Der Nutzer: nicht nur die Makros, „alle Parameter automatisierbar machen". Bestandsaufnahme: alle 974
+Store-Parameter waren schon Host-Parameter (`StoreParameter`), also in jeder DAW automatisierbar. Es fehlten
+drei Dinge: das Plugin nahm kein MIDI an (`NEEDS_MIDI_INPUT FALSE`, `acceptsMidi() false`), es gab keine
+Zuordnung Hardware-Regler → Parameter, und die vier Makros waren keine Host-Parameter.
+
+- **`phos::MidiMap`** (`Core/include/phos/MidiMap.h`): Tabelle (Kanal, Controller) → Ziel, atomar (Audio-Thread
+  liest ohne Sperre), Lernen (`arm` → der nächste Controller bindet sich und wirkt sofort), ein Regler je Ziel
+  und ein Ziel je Regler, Textform über Parameter-Schlüssel (`cc <Kanal> <Nummer> <Schlüssel>`), damit eine
+  Zuordnung neue Parameter überlebt.
+- **Plugin:** nimmt MIDI an; in `processBlock` treiben Controller ihr Ziel über `setValueNotifyingHost`, Noten
+  werden verworfen (und nicht zurückgegeben). Die vier Makros sind jetzt Host-Parameter hinter den Store-
+  Parametern (`macro_filter_sweep` … — keine bestehende ID verschiebt sich); `serviceMacros()` trägt einen
+  geänderten Host-Wert ins Makro und einen selbst losgelassenen Drop-out zurück in den Host-Wert, `setMacro()`
+  hält den Host-Wert im Schritt. Die Zuordnungen reisen im Plugin-Zustand (`<midimap>`).
+- **Editor:** Rechtsklick auf *jeden* Regler, Schalter und Auswahlknopf (und die Makros) → „MIDI Learn" /
+  „Forget MIDI", mit gebundenem CC in der Kopfzeile; die Perform-Seite hat eine Gruppe „MIDI" mit Lernstatus,
+  allen Zuordnungen und „Forget all".
+
+*Tests.* `testMidiMap` (Kern): Lernen, Kanal-Treue, Exklusivität in beide Richtungen, Textform mit
+unbekanntem Schlüssel. Host-Test: ein gelernter CC setzt `lead.cutoff` im selben Block (64/127, dann 1,0), eine
+eingehende Note wird nicht zurückgegeben, ein CC auf dem Filter-Sweep-Makro bewegt das Makro, ein im Editor
+bewegtes Makro seinen Host-Wert, Zuordnungen kommen mit dem Zustand zurück; die Zählung „jeder Store-Parameter ist
+Host-Parameter" kennt die vier Makros. Host-Test (Teil rest) 128 von 128. Screenshot der Perform-Seite geprüft.
+*Nicht* automatisch geprüft: das Rechtsklick-Menü selbst (JUCE-Popup, nur von Hand bedienbar).
+
+*Dateien.* `Core/include/phos/MidiMap.h`, `Core/src/MidiMap.cpp`, `Core/CMakeLists.txt`, `Plugin/CMakeLists.txt`,
+`Plugin/PluginProcessor.h`, `Plugin/PluginProcessor.cpp`, `Plugin/EditorLayout.h`, `Plugin/EditorLayout.cpp`,
+`Plugin/EditorPerform.cpp`, `Plugin/PluginEditor.h`, `Tests/selftest.cpp`, `Tests/selftest_tests.cmake`,
+`Tests/hosttest.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

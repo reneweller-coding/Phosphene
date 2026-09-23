@@ -107,6 +107,7 @@ set(PHOS_SELFTEST_SECONDS
     testForm                 1.8
     testSetArc               0.3
     testRatings              0.1
+    testMidiMap              0.1
     testKnobFuzz            18.0
     testStems               16.6
     testAudibility           8.0

@@ -216,6 +216,9 @@ private:
     juce::Label*      macroNote_ = nullptr;            ///< what they are doing now
     /** @name Rating what is playing (23.09.2026; phos/Rating.h)
      *  @{ */
+    juce::Label*      midiNote_ = nullptr;             ///< MIDI learn: what is armed, what is bound (23.09.2026)
+    uint32_t          midiShown_ = 0xFFFFFFFFu;        ///< the map's revision the note shows
+    int               midiArmedShown_ = -2;            ///< the armed target the note shows
     juce::TextEditor* ratingNote_ = nullptr;           ///< the note that goes with the next verdict
     juce::Label*      ratingLast_ = nullptr;           ///< what the last press wrote, and where
     juce::TextButton* ratingButton_[2] = {};           ///< good, bad

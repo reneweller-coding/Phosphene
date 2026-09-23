@@ -101,8 +101,39 @@ void ControlPage::addParamCell(PhospheneProcessor& proc, int groupIndex, int par
         break;
     }
     }
+    if (c.comp != nullptr) enableMidiLearn(proc, *c.comp, paramId);
     groups_[static_cast<size_t>(groupIndex)].cells.push_back(static_cast<int>(cells_.size()));
     cells_.push_back(std::move(c));
+}
+
+void ControlPage::enableMidiLearn(PhospheneProcessor& proc, juce::Component& comp, int target)
+{
+    learnProc_ = &proc;
+    learnTargets_.emplace_back(&comp, target);
+    comp.addMouseListener(this, true);
+}
+
+void ControlPage::mouseDown(const juce::MouseEvent& e)
+{
+    if (!e.mods.isPopupMenu() || learnProc_ == nullptr) return;
+    // The control that was clicked, or the learned control it lies inside (a combo box's label, say).
+    int target = -1;
+    for (juce::Component* c = e.originalComponent; c != nullptr && c != this && target < 0; c = c->getParentComponent())
+        for (const auto& t : learnTargets_) if (t.first == c) { target = t.second; break; }
+    if (target < 0) return;
+    PhospheneProcessor* proc = learnProc_;
+    phos::MidiMap& map = proc->midiMap();
+    int ch = 0, cc = 0;
+    const bool bound = map.controllerOf(target, ch, cc);
+    const bool armed = map.armed() == target;
+    juce::PopupMenu m;
+    m.addSectionHeader(proc->midiTargetName(target) + (bound ? juce::String("  (CC ") + juce::String(cc) + ", ch " + juce::String(ch + 1) + ")" : juce::String()));
+    m.addItem(1, armed ? "Cancel MIDI Learn" : "MIDI Learn: move a controller next");
+    m.addItem(2, "Forget MIDI", bound);
+    m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(e.originalComponent), [proc, target, armed](int r) {
+        if (r == 1) proc->midiMap().arm(armed ? -1 : target);
+        if (r == 2) proc->midiMap().unbind(target);
+    });
 }
 
 int ControlPage::addModuleGroup(PhospheneProcessor& proc, Module module, int instance, const juce::String& title,

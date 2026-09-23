@@ -56,6 +56,7 @@
 #include "phos/Cue.h"
 #include "phos/Engine.h"
 #include "phos/Midi.h"
+#include "phos/MidiMap.h"
 #include "phos/Params.h"
 #include "phos/Score.h"
 #include <atomic>
@@ -258,7 +259,8 @@ public:
     bool hasEditor() const override { return true; }
 
     const juce::String getName() const override { return JucePlugin_Name; }
-    bool acceptsMidi() const override { return false; }
+    /** @brief Since 23.09.2026 the plugin reads MIDI controllers (MIDI learn, phos/MidiMap.h); notes it ignores. */
+    bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return true; }
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 4.0; }
@@ -324,6 +326,28 @@ public:
     const phos::Engine& engine() const { return *engine_; }
     /** @brief The host parameter for a global id. */
     StoreParameter* parameterFor(int id) const { return id >= 0 && id < static_cast<int>(byId_.size()) ? byId_[static_cast<size_t>(id)] : nullptr; }
+
+    // ------------------------------------------------------------------ MIDI learn (23.09.2026, phos/MidiMap.h)
+    /**
+     * @name MIDI learn
+     * A *target* is a host parameter: the store's ids first (0 .. params().count() - 1), then the four macros
+     * (params().count() + Macro). Every one of them can take a controller, and every one of them is a host
+     * parameter a DAW can automate.
+     * @{ */
+    /** @brief The controller table (arm/bind/unbind on the message thread). */
+    phos::MidiMap& midiMap() { return midiMap_; }
+    const phos::MidiMap& midiMap() const { return midiMap_; }
+    /** @brief How many targets there are. */
+    int midiTargetCount() const { return params().count() + kNumMacros; }
+    /** @brief The host parameter behind a target, or null. */
+    juce::RangedAudioParameter* hostParameter(int target) const;
+    /** @brief A target's display name ("Lead Cutoff", "Macro Filter Sweep"). */
+    juce::String midiTargetName(int target) const;
+    /** @brief A target's stable key for the saved map ("lead.cutoff", "macro.filter_sweep"). */
+    std::string midiTargetKey(int target) const;
+    /** @brief The target with key @p key, or -1. */
+    int midiTargetFind(const std::string& key) const;
+    /** @} */
 
     /**
      * @brief What became of the shipped wavetable pack in this process.
@@ -652,6 +676,12 @@ private:
      */
     std::map<int, float> macroBase_;
     unsigned macroTicks_ = 0;   ///< message thread: how many ticks since the slow jobs last ran
+    /** @brief The macros as host parameters (23.09.2026): automatable and MIDI-learnable like every knob. */
+    juce::RangedAudioParameter* macroParam_[kNumMacros] = {};
+    /** @brief The value each macro's host parameter had when serviceMacros() last looked (message thread). */
+    float macroHostSeen_[kNumMacros] = {};
+    /** @brief Controller -> target (MIDI learn). */
+    phos::MidiMap midiMap_;
 
     // ---- the cue bridge (PLAN 8.3, Cue.h)
     /**

@@ -20,6 +20,7 @@
 #include "phos/Ladder.h"
 #include "phos/Loudness.h"
 #include "phos/Midi.h"
+#include "phos/MidiMap.h"
 #include "phos/Model.h"
 #include "phos/Oscillator.h"
 #include "phos/Patterns.h"
@@ -10167,6 +10168,43 @@ void testKnobFuzz()
 }
 
 /**
+ * @brief MIDI learn's table (23.09.2026, round "MIDI"; phos/MidiMap.h): learning, one knob per parameter both
+ *        ways, the text form by key.
+ */
+void testMidiMap()
+{
+    section("MIDI map: controllers on any parameter");
+    MidiMap m;
+    float v = -1.0f;
+    const bool unbound = m.handleCc(0, 74, 100, v) == -1;
+    m.arm(42);
+    const int learned = m.handleCc(2, 74, 64, v);
+    const bool learnedOk = learned == 42 && std::fabs(v - 64.0f / 127.0f) < 1e-6f && m.armed() == -1;
+    const int again = m.handleCc(2, 74, 127, v);
+    const bool otherChannel = m.handleCc(0, 74, 127, v) == -1;
+    check(unbound && learnedOk && again == 42 && v == 1.0f && otherChannel,
+          "an armed target takes the next controller, which then drives it on its own channel only",
+          fmt("learned %d, again %d", learned, again));
+    // One knob, one parameter: binding the same controller elsewhere moves it; binding the target to another knob too.
+    m.bind(2, 74, 7);
+    const bool moved = m.handleCc(2, 74, 10, v) == 7;
+    m.bind(0, 1, 7);
+    const bool released = m.handleCc(2, 74, 10, v) == -1 && m.handleCc(0, 1, 10, v) == 7 && m.bindings().size() == 1;
+    check(moved && released, "a controller drives one target and a target listens to one controller");
+    m.bind(15, 127, 3);
+    std::map<int, std::string> names = { { 3, "lead.cutoff" }, { 7, "macro.filter_sweep" } };
+    const std::string text = m.toText([&](int t) { return names[t]; });
+    MidiMap back;
+    const int read = back.fromText(text + "cc 1 5 no.such_param\n", [&](const std::string& k) {
+        for (const auto& kv : names) if (kv.second == k) return kv.first;
+        return -1;
+    });
+    int ch = -1, cc = -1;
+    check(read == 2 && back.controllerOf(3, ch, cc) && ch == 15 && cc == 127 && back.bindings().size() == 2,
+          "the map survives its text form by parameter key and skips keys it does not know", fmt("read %d bindings from:\n%s", read, text.c_str()));
+}
+
+/**
  * @brief The ratings file (23.09.2026, round "Bewertung"; phos/Rating.h): a verdict survives the round trip,
  *        a tab in a note cannot break the columns, and the header is written once.
  */
@@ -14656,6 +14694,7 @@ int main(int argc, char** argv)
     run("testForm", testForm);
     run("testSetArc", testSetArc);
     run("testRatings", testRatings);
+    run("testMidiMap", testMidiMap);
     run("testKnobFuzz", testKnobFuzz);
     run("testStems", testStems);
     run("testAudibility", testAudibility);

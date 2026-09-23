@@ -523,6 +523,50 @@ void PhospheneProcessor::buildParameters()
         byId_[static_cast<size_t>(i)] = param;
         addParameter(param);
     }
+    // The four macros as host parameters (23.09.2026), after every store parameter so that no id before them
+    // moves. A DAW automates them like any knob and a controller can be learned onto them; serviceMacros()
+    // carries a change of the host value into the macro and a macro that lets go by itself (a drop-out, one
+    // bar) back into the host value.
+    static const char* const kMacroIds[kNumMacros] = { "macro_filter_sweep", "macro_gate_depth", "macro_drop_out", "macro_stutter" };
+    for (int i = 0; i < kNumMacros; ++i) {
+        const Macro m = static_cast<Macro>(i);
+        const juce::ParameterID pid(kMacroIds[i], 1);
+        const juce::String name = juce::String("Macro ") + kMacroNames[i];
+        juce::RangedAudioParameter* hp = nullptr;
+        if (macroIsMomentary(m)) hp = new juce::AudioParameterBool(pid, name, false);
+        else hp = new juce::AudioParameterFloat(pid, name, juce::NormalisableRange<float>(m == Macro::FilterSweep ? -1.0f : 0.0f, 1.0f), 0.0f);
+        macroParam_[i] = hp;
+        addParameter(hp);
+    }
+}
+
+juce::RangedAudioParameter* PhospheneProcessor::hostParameter(int target) const
+{
+    const int n = static_cast<int>(byId_.size());
+    if (target >= 0 && target < n) return byId_[static_cast<size_t>(target)];
+    if (target >= n && target < n + kNumMacros) return macroParam_[target - n];
+    return nullptr;
+}
+
+juce::String PhospheneProcessor::midiTargetName(int target) const
+{
+    if (auto* hp = hostParameter(target)) return hp->getName(64);
+    return {};
+}
+
+std::string PhospheneProcessor::midiTargetKey(int target) const
+{
+    static const char* const kMacroKeys[kNumMacros] = { "macro.filter_sweep", "macro.gate_depth", "macro.drop_out", "macro.stutter" };
+    const int n = params().count();
+    if (target >= 0 && target < n) return params().key(target);
+    if (target >= n && target < n + kNumMacros) return kMacroKeys[target - n];
+    return {};
+}
+
+int PhospheneProcessor::midiTargetFind(const std::string& key) const
+{
+    for (int i = 0; i < kNumMacros; ++i) if (midiTargetKey(params().count() + i) == key) return params().count() + i;
+    return params().find(key.c_str());
 }
 
 PhospheneProcessor::WaveTableLibrary PhospheneProcessor::waveTableLibrary() const
@@ -984,17 +1028,50 @@ void PhospheneProcessor::setMacro(Macro m, float value)
     } else if (macro_[i].value == 0.0f) {
         macro_[i].releaseBeat = -1.0;
     }
+    // The host parameter follows (MIDI learn round): the editor's knob and the DAW's lane show the same thing.
+    if (auto* hp = macroParam_[i]) {
+        macroHostSeen_[i] = macro_[i].value;
+        const float norm = hp->convertTo0to1(macroIsMomentary(m) ? (macro_[i].value > 0.0f ? 1.0f : 0.0f) : macro_[i].value);
+        if (std::fabs(hp->getValue() - norm) > 1.0e-6f) hp->setValueNotifyingHost(norm);
+    }
     serviceMacros();
 }
 
 void PhospheneProcessor::serviceMacros()
 {
+    // A macro's host parameter moved (DAW automation, a learned controller): the macro follows. Compared with
+    // what was seen last, not with the macro's own value, so a drop-out that let go by itself is not pressed
+    // again by a host value that still says 1.
+    for (int i = 0; i < kNumMacros; ++i) {
+        auto* hp = macroParam_[i];
+        if (hp == nullptr) continue;
+        const Macro m = static_cast<Macro>(i);
+        float v = hp->convertFrom0to1(hp->getValue());
+        if (macroIsMomentary(m)) v = v > 0.5f ? 1.0f : 0.0f;
+        if (std::fabs(v - macroHostSeen_[i]) > 1.0e-6f) {
+            macroHostSeen_[i] = v;
+            macro_[static_cast<size_t>(i)].value = juce::jlimit(m == Macro::FilterSweep ? -1.0f : 0.0f, 1.0f, v);
+            if (m == Macro::DropOut && v > 0.0f) {
+                const double b = musicalBeat_.load(std::memory_order_relaxed);
+                macro_[static_cast<size_t>(i)].releaseBeat = (std::floor(b / kBeatsPerBar) + 1.0) * kBeatsPerBar;
+            } else if (v == 0.0f) {
+                macro_[static_cast<size_t>(i)].releaseBeat = -1.0;
+            }
+        }
+    }
     const double beat = musicalBeat_.load(std::memory_order_relaxed);
     const bool playing = playRequest_.load(std::memory_order_relaxed) || hostSyncNow_.load(std::memory_order_relaxed);
     for (MacroState& s : macro_) {
         if (s.releaseBeat < 0.0) continue;
         // A transport that is not running has no bar line to wait for.
         if (beat >= s.releaseBeat || !playing) { s.value = 0.0f; s.releaseBeat = -1.0; }
+    }
+    // A macro that let go by itself takes its host parameter with it.
+    for (int i = 0; i < kNumMacros; ++i) {
+        auto* hp = macroParam_[i];
+        if (hp == nullptr || macro_[static_cast<size_t>(i)].value != 0.0f || macroHostSeen_[i] == 0.0f) continue;
+        macroHostSeen_[i] = 0.0f;
+        hp->setValueNotifyingHost(hp->convertTo0to1(0.0f));
     }
 
     // What the macros want, summed: two macros may ask for the same knob (gate depth and stutter
@@ -1098,7 +1175,16 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     const juce::ScopedNoDenormals noDenormals;
     const int n = buffer.getNumSamples();
     buffer.clear();
-    midiMessages.clear();   // the generator produces MIDI; it consumes none
+    // MIDI in (23.09.2026): controllers drive whatever was learned onto them (phos/MidiMap.h); notes and the rest
+    // are dropped. The buffer is then cleared, because it is also the generator's MIDI out.
+    for (const juce::MidiMessageMetadata meta : midiMessages) {
+        const juce::MidiMessage msg = meta.getMessage();
+        if (!msg.isController()) continue;
+        float norm = 0.0f;
+        const int target = midiMap_.handleCc(msg.getChannel() - 1, msg.getControllerNumber(), msg.getControllerValue(), norm);
+        if (auto* hp = hostParameter(target)) hp->setValueNotifyingHost(norm);
+    }
+    midiMessages.clear();
     if (n <= 0) return;
 
     // ---------------------------------------------------------------- where the clock comes from
@@ -1309,6 +1395,8 @@ void PhospheneProcessor::writeStateTo(juce::MemoryBlock& dest) const
     // for the whole reasoning and for what it costs. "%.9g" still round-trips a float exactly, so a
     // knob that is in the file comes back bit for bit.
     xml.createNewChildElement("params")->addTextElement(juce::String(params().toText(true)));
+    // The learned controllers, by parameter key (23.09.2026): a map outlives parameters being added.
+    xml.createNewChildElement("midimap")->addTextElement(juce::String(midiMap_.toText([this](int t) { return midiTargetKey(t); })));
     juce::AudioProcessor::copyXmlToBinary(xml, dest);
 }
 
@@ -1344,6 +1432,8 @@ void PhospheneProcessor::setStateInformation(const void* data, int sizeInBytes)
         // opens with its sound on the defaults until the user takes the offer.
         legacyKnobs_ = knobs;
     }
+    if (auto* mm = xml->getChildByName("midimap"))
+        midiMap_.fromText(mm->getAllSubText().toStdString(), [this](const std::string& k) { return midiTargetFind(k); });
     followHost_ = xml->getBoolAttribute("followHost", followHost_);
     setCueHost(xml->getStringAttribute("cueHost", cueHost()));
     followHostAtomic_.store(followHost_, std::memory_order_release);
