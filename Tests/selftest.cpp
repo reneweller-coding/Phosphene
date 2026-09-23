@@ -7,6 +7,7 @@
  * rather than against a recording of what the code once produced.
  */
 #include "phos/Acid.h"
+#include "phos/Audibility.h"
 #include "phos/Composer.h"
 #include "phos/Corpus.h"
 #include "phos/Cue.h"
@@ -9905,6 +9906,101 @@ void testArpPatterns()
 }
 
 /**
+ * @brief The audibility meter (23.09.2026, round "Hörbarkeit"; phos/Audibility.h): the textbook facts of
+ *        masking on synthetic signals, then a real mix part that is turned down.
+ */
+void testAudibility()
+{
+    section("audibility: partial loudness of a part in the mix");
+    const double sr = 48000.0;
+    const int n = 48000;
+    auto tone = [&](double hz, double dbfs) {
+        std::vector<float> x(static_cast<size_t>(n));
+        const double a = std::pow(10.0, dbfs / 20.0);   // dBFS of a sine: its peak against full scale
+        for (int i = 0; i < n; ++i) x[static_cast<size_t>(i)] = static_cast<float>(a * std::sin(2.0 * 3.141592653589793 * hz * i / sr));
+        return x;
+    };
+    // Band noise: a sum of 40 sines with random phases spread over +-10 % of the centre, as much power as a sine at dbfs.
+    auto noise = [&](double hz, double dbfs, uint64_t seed) {
+        std::vector<float> x(static_cast<size_t>(n), 0.0f);
+        Rng r;
+        r.seed(seed);
+        const double a = std::pow(10.0, dbfs / 20.0) / std::sqrt(40.0);
+        for (int k = 0; k < 40; ++k) {
+            const double f = hz * (0.9 + 0.2 * k / 39.0), ph = 6.283185307179586 * r.uniform();
+            for (int i = 0; i < n; ++i) x[static_cast<size_t>(i)] += static_cast<float>(a * std::sin(6.283185307179586 * f * i / sr + ph));
+        }
+        return x;
+    };
+    auto measure = [&](const std::vector<float>& target, const std::vector<float>& masker) {
+        AudibilityMeter m(2, sr);
+        const float* L[2] = { target.data(), masker.empty() ? nullptr : masker.data() };
+        m.add(L, nullptr, n);
+        return m.read(0);
+    };
+    const std::vector<float> none;
+    const AudibilityReading t40 = measure(tone(1000.0, -60.0), none), t60 = measure(tone(1000.0, -40.0), none), t80 = measure(tone(1000.0, -20.0), none);
+    check(std::fabs(t40.alone - 1.0) < 0.15 && t60.alone > 1.5 * t40.alone && t80.alone > 1.5 * t60.alone && t80.ratio == 1.0,
+          "a 1 kHz tone at 40 dB SPL is about one unit, loudness grows with level, and a part alone is heard whole",
+          fmt("1 kHz at 40/60/80 dB SPL: %.2f, %.2f, %.2f units; ratio alone %.3f", t40.alone, t60.alone, t80.alone, t80.ratio));
+    const std::vector<float> target = tone(1000.0, -30.0);
+    const AudibilityReading equal = measure(target, noise(1000.0, -30.0, 1)), quiet = measure(target, noise(1000.0, -60.0, 2)),
+                            distant = measure(target, noise(6000.0, -30.0, 3));
+    check(equal.ratio < 0.6 && quiet.ratio > 0.9 && distant.ratio > equal.ratio + 0.2,
+          "a masker in the part's own band takes most of it, one 30 dB down or far away in frequency takes little",
+          fmt("1 kHz tone at 70 dB SPL under band noise at 1 kHz, same level: %.2f; 30 dB down: %.2f; at 6 kHz, same level: %.2f", equal.ratio, quiet.ratio, distant.ratio));
+    // The upward spread of masking: a low masker masks a higher part more than the other way round.
+    const AudibilityReading up = measure(tone(800.0, -40.0), noise(400.0, -20.0, 4)), down = measure(tone(400.0, -40.0), noise(800.0, -20.0, 5));
+    check(up.ratio < down.ratio, "masking spreads upward: a masker an octave below takes more than one an octave above",
+          fmt("800 Hz under 400 Hz noise %.2f, 400 Hz under 800 Hz noise %.2f", up.ratio, down.ratio));
+
+    // A real mix: the pad in the first 24 bars of seed 1 (intro and groove), measured twice from the same render --
+    // as it plays, and with its stem taken 20 dB down against the same other parts.
+    {
+        auto engine = std::make_unique<Engine>();
+        ParamStore& p = engine->params();
+        p.parseText("compose.level_match=Off master.auto_gain=Off compose.presence_match=Off");
+        Composer composer(1);
+        const int block = 256;
+        engine->prepare(sr, block);
+        Conductor conductor(*engine, composer);
+        std::vector<std::vector<float>> bl(kNumStems, std::vector<float>(block)), br(kNumStems, std::vector<float>(block));
+        std::vector<float> padL(block), padR(block);
+        StemTap tap;
+        for (int s = 0; s < kNumStems; ++s) { tap.L[s] = bl[static_cast<size_t>(s)].data(); tap.R[s] = br[static_cast<size_t>(s)].data(); }
+        engine->setStemTap(&tap);
+        AudibilityMeter asIs(kNumStems, sr), down(kNumStems, sr);
+        const int pad = static_cast<int>(Part::Pad);
+        const float* sl[kNumStems];
+        const float* srr[kNumStems];
+        const float* dl[kNumStems];
+        const float* dr[kNumStems];
+        for (int s = 0; s < kNumStems; ++s) { sl[s] = dl[s] = bl[static_cast<size_t>(s)].data(); srr[s] = dr[s] = br[static_cast<size_t>(s)].data(); }
+        dl[pad] = padL.data();
+        dr[pad] = padR.data();
+        const size_t total = static_cast<size_t>(std::llround(24.0 * kBeatsPerBar * 60.0 / p.get(p.base(Module::Compose) + compose::Bpm) * sr));
+        std::vector<float> L(block), R(block);
+        for (size_t done = 0; done < total;) {
+            const int k = static_cast<int>(std::min<size_t>(block, total - done));
+            conductor.pump(p, 32.0);
+            engine->process(L.data(), R.data(), k);
+            for (int i = 0; i < k; ++i) { padL[static_cast<size_t>(i)] = 0.1f * bl[static_cast<size_t>(pad)][static_cast<size_t>(i)]; padR[static_cast<size_t>(i)] = 0.1f * br[static_cast<size_t>(pad)][static_cast<size_t>(i)]; }
+            asIs.add(sl, srr, k);
+            down.add(dl, dr, k);
+            done += static_cast<size_t>(k);
+        }
+        engine->setStemTap(nullptr);
+        const AudibilityReading padAt = asIs.read(pad), padDown = down.read(pad);
+        // The partial loudness is what falls, not necessarily the ratio: where the pad has its bands to itself it is
+        // heard whole at any level, and the bands where the others cover it weigh less once it is quieter.
+        check(padAt.frames > 0 && padAt.inMix <= padAt.alone && padDown.inMix < 0.5 * padAt.inMix && padDown.alone < 0.5 * padAt.alone,
+              "in a real mix a part taken 20 dB down is heard with less than half its partial loudness, and never louder than alone",
+              fmt("pad in the first 24 bars of seed 1: %.2f units in the mix of %.2f alone (%.2f); 20 dB down: %.2f of %.2f (%.2f)", padAt.inMix, padAt.alone,
+                  padAt.ratio, padDown.inMix, padDown.alone, padDown.ratio));
+    }
+}
+
+/**
  * @brief The stems (23.09.2026, round "Stems"; Engine.h, StemTap): taking them changes nothing, each part's
  *        stem is that part alone, and a part appears in its stem where the score has it.
  */
@@ -14562,6 +14658,7 @@ int main(int argc, char** argv)
     run("testRatings", testRatings);
     run("testKnobFuzz", testKnobFuzz);
     run("testStems", testStems);
+    run("testAudibility", testAudibility);
     run("testArrangeDynamics", testArrangeDynamics);
     run("testSectionRules", testSectionRules);
     run("testCuration", testCuration);

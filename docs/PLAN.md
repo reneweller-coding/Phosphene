@@ -7455,6 +7455,43 @@ und danach nicht.
 *Dateien.* `Core/include/phos/Engine.h`, `Core/src/Engine.cpp`, `Tools/render/main.cpp`, `Tests/selftest.cpp`,
 `Tests/selftest_tests.cmake`; dieser Block.
 
+**23.09.2026, Hörbarkeit: Teillautheit je Stimme im Mix**
+
+Pegel- und Präsenzabgleich messen, wie *laut* eine Stimme ist. Die Beschwerden, die sie nicht fingen, waren
+Verdeckung: der Counter auf vernünftigem Pegel und trotzdem kaum hörbar, das Bett richtig platziert und 25 dB
+unter dem Mix. Was man von einer Stimme im Mix hört, ist ihre *Teillautheit*. `AudibilityMeter`
+(`Core/include/phos/Audibility.h`) schätzt sie je Stem gegen die Summe aller anderen, nach Moore, Glasberg &
+Baer (1997), stationär und frameweise: Hann 2048/1024, Ohr-Gewichtung nach ITU-R BS.1387, Halb-ERB-Bänder
+50 Hz–15 kHz, Anregung mit Terhardts pegelabhängigen Flanken (27 dB/Bark unten, 24 + 230/f − 0,2 L oben),
+Teillautheit mit MGBs Gleichungen (3)–(6) (α 0,2, A = 2 E_THRQ, K = 0,5; Vereinfachung: G = 1, Bark-Spreizung
+statt roex), Pegelbezug Vollaussteuerung = 100 dB SPL, Kalibrierung über denselben Pfad (1 kHz, 40 dB SPL = 1).
+`ratio` = Teillautheit / Lautheit allein; beides steht in der Ausgabe, weil nur beides zusammen etwas sagt.
+
+`phos_render --audibility F.tsv` misst je Track und Sektion jede klingende Stimme (über die Stems) und druckt
+`Stimme Anteil/Teillautheit`.
+
+*Zwei Umbauten unterwegs, beide durch den eigenen Test erzwungen.* (1) Die erste Fassung nahm als Teillautheit
+den reinen Lautheitszuwachs `(Es+Em+Et)^α − (Em+Et)^α`; ein Ton 30 dB über seinem Maskierer las dann 0,81
+statt nahe 1 — genau dafür hat MGB die zwei Fälle ober- und unterhalb der Mithörschwelle; umgesetzt, jetzt 0,98.
+(2) Feste Flanken (12 dB/Cam oben) ließen einen Maskierer eine Oktave tiefer kaum wirken (0,96 gegen 0,94);
+mit Terhardts pegelabhängiger oberer Flanke 0,77 gegen 0,88 — die Aufwärtsmaskierung, mit der Bass und Kick
+über sich verdecken. Außerdem kalibrierte die erste Fassung mit dem Ton in einem Band, der echte Pfad verteilt
+ihn über zwei (1,38 statt 1). Und eine falsch gedachte Aussage: das *Verhältnis* muss beim Leiserdrehen nicht
+fallen, wenn die Stimme ihre Bänder allein besetzt (Pad −20 dB: 0,66 → 0,74); fallen muss die Teillautheit
+(37,3 → 13,0) — so prüft es der Test jetzt.
+
+*Tests* (`testAudibility`, 8 s): 1 kHz bei 40/60/80 dB SPL = 1,00/4,49/17,38, allein Anteil 1; Ton unter
+Bandrauschen gleichen Pegels 0,49, 30 dB leiser 0,98, bei 6 kHz 1,00; Aufwärtsmaskierung 0,77 < 0,88; echter Mix
+(Seed 1, 24 Takte): Pad −20 dB aus demselben Render hat weniger als die halbe Teillautheit und nie mehr als allein.
+
+*Gemessen* (Seed 1, Track 1): fast alle Stimmen 0,6–0,8 gehört. Counter im Haupt-Breakdown 0,74/20, in Drop 2
+0,68/21 — gegen den Lead in Drop 2 0,73/60: der Counter ist **nicht verdeckt, sondern leiser** (Pegel/Helligkeit,
+nicht Maskierung). Arp in den Drops 0,56–0,61, aber nur 8–10 Einheiten. Das ist ein Befund für die Hörrunde,
+keine Änderung hier.
+
+*Dateien.* `Core/include/phos/Audibility.h`, `Core/src/Audibility.cpp`, `Core/CMakeLists.txt`,
+`Tools/render/main.cpp`, `Tests/selftest.cpp`, `Tests/selftest_tests.cmake`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

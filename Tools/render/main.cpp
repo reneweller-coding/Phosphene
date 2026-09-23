@@ -39,11 +39,15 @@
  *     --stems DIR         also write one WAV per part and one for the returns into DIR (23.09.2026): each part as it
  *                         enters the master (Engine.h, StemTap), delayed by the limiter's lookahead so that the
  *                         stems line up with --out sample for sample; same format as --out (--pcm24 applies)
+ *     --audibility F.tsv  how much of each part is heard in the mix (23.09.2026, phos/Audibility.h): per track and
+ *                         section, every sounding part's loudness alone, its partial loudness against all other
+ *                         parts, and the ratio of the two; printed as one line per section, written as a table
  *     --bench             render without writing and report the realtime factor
  *     --list              print every parameter with range and default
  *     --version           print the version, the vector path and the wavetable pack, then exit
  * @endcode
  */
+#include "phos/Audibility.h"
 #include "phos/Composer.h"
 #include "phos/Engine.h"
 #include "phos/Loudness.h"
@@ -210,7 +214,7 @@ int main(int argc, char** argv)
     double seconds = -1.0;
     int sr = 48000, block = 256;
     uint64_t seed = 1;
-    std::string out, midi, solo, setFile, saveSet, barLog, excerpts, stemsDir;
+    std::string out, midi, solo, setFile, saveSet, barLog, excerpts, stemsDir, audibilityPath;
     int excerptBars = 16;
     bool report = false, bench = false, pcm24 = false, listTracks = false, listSections = false, scoreOnly = false;
     Quality quality = Quality::desktop();
@@ -276,6 +280,7 @@ int main(int argc, char** argv)
         else if (a == "--excerpts") excerpts = next();
         else if (a == "--excerpt-bars") excerptBars = std::max(1, std::atoi(next()));
         else if (a == "--stems") stemsDir = next();
+        else if (a == "--audibility") audibilityPath = next();
         else if (a == "--bench") bench = true;
         else if (a == "--list") { printList(params); return 0; }
         else if (a == "--version") { printVersion(); return 0; }
@@ -504,16 +509,48 @@ int main(int argc, char** argv)
     std::vector<std::unique_ptr<WavWriter>> stemWav;
     StemTap tap;
     uint64_t stemLatency = 0, stemWritten = 0;
-    if (!stemsDir.empty() && !bench && !scoreOnly) {
-        std::error_code ec;
-        std::filesystem::create_directories(stemsDir, ec);
-        stemLatency = static_cast<uint64_t>(std::max(0, engine->latencySamples()));
-        std::vector<float> zeros(4096, 0.0f);
+    const bool wantTap = (!stemsDir.empty() || !audibilityPath.empty()) && !bench && !scoreOnly;
+    if (wantTap) {
         for (int s = 0; s < kNumStems; ++s) {
             stemBufL.emplace_back(static_cast<size_t>(block), 0.0f);
             stemBufR.emplace_back(static_cast<size_t>(block), 0.0f);
             tap.L[s] = stemBufL.back().data();
             tap.R[s] = stemBufR.back().data();
+        }
+        engine->setStemTap(&tap);
+    }
+    // The audibility report (Audibility.h, 23.09.2026): the stems of every block into a partial-loudness meter,
+    // one reading per track and section -- the owner track's section, since over a DJ blend two tracks sound.
+    std::unique_ptr<AudibilityMeter> audMeter;
+    FILE* audFile = nullptr;
+    int audTrack = -1, audSection = -1, audFirstBar = 0;
+    auto flushAudibility = [&](int lastBar) {
+        if (audMeter == nullptr || audTrack < 0) return;
+        const TrackPlan p = composer.track(params, audTrack);
+        const Section& sec = p.form.section[std::clamp(audSection, 0, p.form.count - 1)];
+        std::printf("audibility track %2d %-6s bars %5d..%5d:", audTrack + 1, kSectionNames[static_cast<int>(sec.type)], audFirstBar + 1, lastBar + 1);
+        for (int s = 0; s < kNumParts; ++s) {
+            const AudibilityReading a = audMeter->read(s);
+            if (a.frames == 0 || a.alone < 0.05) continue;
+            std::printf(" %s %.2f/%.1f", kStemNames[s], a.ratio, a.inMix);   // share heard / partial loudness in the mix
+            std::fprintf(audFile, "%d\t%s\t%d\t%s\t%d\t%d\t%s\t%.3f\t%.3f\t%.3f\t%d\n", audTrack + 1, kStyleNames[std::clamp(p.style, 0, kNumStyles - 1)], audSection + 1,
+                         kSectionNames[static_cast<int>(sec.type)], audFirstBar + 1, lastBar + 1, kStemNames[s], a.alone, a.inMix, a.ratio, a.frames);
+        }
+        std::printf("\n");
+        audMeter->reset();
+    };
+    if (!audibilityPath.empty() && wantTap) {
+        audFile = std::fopen(audibilityPath.c_str(), "w");
+        if (audFile == nullptr) { std::fprintf(stderr, "cannot write %s\n", audibilityPath.c_str()); return 1; }
+        std::fprintf(audFile, "track\tstyle\tsection_index\tsection\tfirst_bar\tlast_bar\tpart\talone\tin_mix\tratio\tframes\n");
+        audMeter = std::make_unique<AudibilityMeter>(kNumStems, static_cast<double>(sr));
+    }
+    if (!stemsDir.empty() && wantTap) {
+        std::error_code ec;
+        std::filesystem::create_directories(stemsDir, ec);
+        stemLatency = static_cast<uint64_t>(std::max(0, engine->latencySamples()));
+        std::vector<float> zeros(4096, 0.0f);
+        for (int s = 0; s < kNumStems; ++s) {
             char name[64];
             std::snprintf(name, sizeof(name), "%02d_%s.wav", s + 1, kStemNames[s]);
             auto w = std::make_unique<WavWriter>();
@@ -524,7 +561,6 @@ int main(int argc, char** argv)
             stemWav.push_back(std::move(w));
         }
         stemWritten = std::min(stemLatency, totalSamples);
-        engine->setStemTap(&tap);
     }
 
     WavWriter wav;
@@ -576,6 +612,16 @@ int main(int argc, char** argv)
             trackMeter.process(L.data(), R.data(), n);
             for (int i = 0; i < n; ++i) peak = std::max(peak, static_cast<double>(std::max(std::fabs(L[static_cast<size_t>(i)]), std::fabs(R[static_cast<size_t>(i)]))));
             if (!out.empty()) wav.write(L.data(), R.data(), n);
+            if (audMeter != nullptr) {
+                const int ti = composer.trackOfBar(params, std::max(0, blockBar));
+                const TrackPlan tp = composer.track(params, ti);
+                const int si = sectionOfBar(tp.form, std::max(0, blockBar - tp.firstBar));
+                if (ti != audTrack || si != audSection) { flushAudibility(blockBar - 1); audTrack = ti; audSection = si; audFirstBar = blockBar; }
+                const float* sl[kNumStems];
+                const float* srr[kNumStems];
+                for (int s = 0; s < kNumStems; ++s) { sl[s] = stemBufL[static_cast<size_t>(s)].data(); srr[s] = stemBufR[static_cast<size_t>(s)].data(); }
+                audMeter->add(sl, srr, n);
+            }
             if (!stemWav.empty() && stemWritten < totalSamples) {
                 const int m = static_cast<int>(std::min<uint64_t>(static_cast<uint64_t>(n), totalSamples - stemWritten));
                 for (int s = 0; s < kNumStems; ++s) stemWav[static_cast<size_t>(s)]->write(stemBufL[static_cast<size_t>(s)].data(), stemBufR[static_cast<size_t>(s)].data(), m);
@@ -609,6 +655,7 @@ int main(int argc, char** argv)
     for (auto& e : excerptList) if (e->opened && !e->closed) { e->wav.close(); e->closed = true; }
     engine->setStemTap(nullptr);
     for (auto& w : stemWav) w->close();
+    if (audMeter != nullptr) { flushAudibility(totalBars - 1); std::fclose(audFile); }
     if (listTracks && !bench) std::printf("track %2d played: %.1f LUFS integrated\n", meteredTrack + 1, static_cast<double>(trackMeter.read().integrated));
     const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     wav.close();
