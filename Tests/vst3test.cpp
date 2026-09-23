@@ -64,9 +64,11 @@ int main(int argc, char** argv)
 #if defined(_WIN32)
     _putenv_s("PHOS_USER_DIR", userDir.getFullPathName().toRawUTF8());
     _putenv_s("PHOS_GALLERY_DIR", userDir.getChildFile("Sets").getFullPathName().toRawUTF8());
+    _putenv_s("PHOS_NO_UPDATE_CHECK", "1");
 #else
     setenv("PHOS_USER_DIR", userDir.getFullPathName().toRawUTF8(), 1);
     setenv("PHOS_GALLERY_DIR", userDir.getChildFile("Sets").getFullPathName().toRawUTF8(), 1);
+    setenv("PHOS_NO_UPDATE_CHECK", "1", 1);
 #endif
     check(plugin.exists(), "the built VST3 is where the build says it is");
     if (!plugin.exists()) { std::printf("%d checks, %d failures\n", checks, failures); return 1; }

@@ -1,6 +1,6 @@
 # Phosphene -- from a checkout to the things other people get, in one run.
 #
-#   powershell -File Deploy\build_release.ps1 [-Version 1.0.0]
+#   powershell -File Deploy\build_release.ps1 [-Version 1.0.0] [-Toolchain intel|msvc]
 #                    [-SkipBuild] [-SkipTests] [-SkipManual] [-SkipQuest] [-NoSetup]
 #                    [-UpdateDocs] [-SignWith <thumbprint|file.pfx>] [-SignPassword <pw>]
 #
@@ -13,7 +13,7 @@
 # not shortcuts for a real release: each one prints a line saying what has not been verified, and
 # the manifest at the end says which of them was on.
 #
-# FOUR THINGS MAKE THIS BUILD DIFFERENT FROM AN EVERYDAY ONE
+# FIVE THINGS MAKE THIS BUILD DIFFERENT FROM AN EVERYDAY ONE
 #
 #   * PHOS_SHIP=ON takes this checkout's Core\data path out of the binaries (Core\CMakeLists.txt).
 #     Everyday builds keep it as the last step of the core's lookup, which is convenient here and a
@@ -28,21 +28,30 @@
 #   * PHOS_AVX2=ON. The setup asks the processor about AVX2 before installing, because a binary
 #     built for it does not degrade on a machine without it -- it takes an illegal instruction and
 #     dies with nothing on screen.
-#   * It builds in a tree of its own (build-release), so the everyday build directory keeps its
-#     timestamps and nobody has to rebuild it afterwards.
+#   * It builds in a tree of its own (build-release-intel, or build-release with -Toolchain msvc), so
+#     the everyday build directory keeps its timestamps and nobody has to rebuild it afterwards.
+#   * The data (the wavetable pack, the two models, the voices) is packed into an archive of its own
+#     that the setup downloads when it is not already installed (Deploy\Phosphene.iss). The portable
+#     archive still carries everything.
 #
-# WHY NOT THE INTEL COMPILER. docs/PLAN.md section 10 asks for "Intel-Baum wie Noctuary", and for
-# Noctuary that was right: icx renders a fifth faster and Noctuary's renders are allowed to differ
-# between compilers. Phosphene's are not. The offline render is this project's determinism oracle --
-# the host test asserts that the plugin produces exactly what phos_render produces, sample for
-# sample, and the three vector builds are compared bit for bit against the scalar path. A different
-# compiler puts the generator on a different floating-point trajectory (measured in Noctuary: every
-# render differs), which would not be a faster Phosphene but a different one, and would silence the
-# oracle. MSVC is what ships. If speed ever justifies revisiting this, the thing to change first is
-# the contract, not the compiler.
+# THE INTEL COMPILER (23.09.2026, at the user's request; until then this said "MSVC is what ships").
+# The old objection was the determinism contract: the offline render is the oracle, the plugin must
+# equal phos_render sample for sample, and the vector paths must equal the scalar path bit for bit.
+# None of that is broken by icx as such -- every artefact of a release is built by the same compiler,
+# so the plugin and phos_render still agree -- provided icx computes what the source says. Two things
+# had to be made true first, and both are measured, not assumed:
+#   - icx's default floating-point model is "fast", and even under /fp:precise it contracts a*b+c into
+#     an FMA. The root CMakeLists gives it /fp:precise /Qfma- (checked on the generated code).
+#   - Its /O2 vectoriser computed the singing bowl wrongly (1/260 of the energy, wrong frequencies; right
+#     at /O1 and under MSVC). The loop is written so that it cannot trip over it (Core/src/Texture.cpp).
+# The whole suite runs in the icx configuration below, and a release is only made when it passes there.
+# -Toolchain msvc builds the MSVC way, for comparing the two.
 
 param(
     [string]$Version = "",
+    # Which compiler builds what ships: Intel oneAPI's icx (the default since 23.09.2026) or MSVC.
+    [ValidateSet("intel", "msvc")]
+    [string]$Toolchain = "intel",
     [switch]$SkipBuild,      # reuse whatever is in build-release already
     [switch]$SkipTests,      # do not run ctest (NOT for a release; see the warning it prints)
     [switch]$SkipManual,     # reuse the manual already in docs\manual
@@ -75,7 +84,10 @@ if (-not $Version) {
     $Version = $m.Matches[0].Groups[1].Value
 }
 
-$buildDir  = Join-Path $root "build-release"
+$intel     = $Toolchain -eq "intel"
+# A tree of its own per compiler: the two make different objects from the same sources, and sharing a
+# build directory between them is a rebuild that looks incremental and is not.
+$buildDir  = Join-Path $root ($(if ($intel) { "build-release-intel" } else { "build-release" }))
 $stage     = Join-Path $root "Deploy\stage"
 $out       = Join-Path $root "Deploy\out"
 $manualDir = Join-Path $root "docs\manual"
@@ -83,12 +95,45 @@ $shots     = Join-Path $root "docs\screenshots"
 $art       = Join-Path $buildDir "Plugin\Phosphene_artefacts\Release"
 $exe       = Join-Path $art "Standalone\Phosphene.exe"
 $vst       = Join-Path $art "VST3\Phosphene.vst3"
-$render    = Join-Path $buildDir "Tools\render\Release\phos_render.exe"
+# Ninja (the Intel build) is single-configuration and puts no "Release" folder under the tools; JUCE's
+# artefacts are under Release either way.
+$render    = Join-Path $buildDir ($(if ($intel) { "Tools\render\phos_render.exe" } else { "Tools\render\Release\phos_render.exe" }))
 $apk       = Join-Path $root "build-quest\PhospheneQuest.apk"
 $refWav    = Join-Path $root "Deploy\reference.wav"
 
-Write-Host "Phosphene $Version -- release build" -ForegroundColor Cyan
+Write-Host "Phosphene $Version -- release build ($Toolchain)" -ForegroundColor Cyan
 Write-Host "  tree:  $buildDir"
+
+# Runs a batch file for its environment and keeps what it set (Visual Studio's vcvars64.bat): a batch file
+# cannot change the environment of the PowerShell that called it, so it runs in a cmd of its own and what
+# it left behind is read back. The same helper as Noctuary's release script.
+function Import-CmdEnvironment([string]$batch) {
+    if (-not (Test-Path $batch)) { throw "not found: $batch" }
+    $tmp = [System.IO.Path]::GetTempFileName()
+    cmd /c " `"$batch`" > nul 2>&1 && set > `"$tmp`" "
+    foreach ($line in Get-Content $tmp) {
+        if ($line -match '^([^=]+)=(.*)$') { Set-Item -Path "env:$($Matches[1])" -Value $Matches[2] }
+    }
+    Remove-Item $tmp -Force
+}
+# What oneAPI's setvars.bat would do, done by hand (on this machine setvars cannot find its per-component
+# scripts): the compiler, lld-link one level down (JUCE's link-time optimisation makes icx write LLVM bitcode
+# that link.exe cannot read), its libraries and its headers. Returns icx.exe.
+function Enable-IntelToolchain {
+    $vs = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\*\*\VC\Auxiliary\Build\vcvars64.bat" -ErrorAction SilentlyContinue |
+          Select-Object -First 1 -ExpandProperty FullName
+    if (-not $vs) { throw "vcvars64.bat not found -- the Intel build still needs the Windows SDK and the MSVC libraries" }
+    Import-CmdEnvironment $vs
+    $icx = Get-ChildItem "C:\Program Files (x86)\Intel\oneAPI\compiler\*\bin\icx.exe" -ErrorAction SilentlyContinue |
+           Sort-Object FullName -Descending | Select-Object -First 1
+    if (-not $icx) { throw "icx.exe not found -- is the oneAPI C++ compiler installed? (or run with -Toolchain msvc)" }
+    $iroot = Split-Path -Parent (Split-Path -Parent $icx.FullName)
+    $env:PATH = "$iroot\bin;$iroot\bin\compiler;$env:PATH"
+    $env:LIB = "$iroot\lib;$env:LIB"
+    $env:INCLUDE = "$iroot\include;$env:INCLUDE"
+    Write-Host "  Intel oneAPI: $iroot" -ForegroundColor DarkGray
+    return $icx.FullName
+}
 $skipped = @()
 foreach ($s in @(@{n="-SkipBuild";  v=$SkipBuild;  w="the binaries are whatever was in build-release"},
                  @{n="-SkipTests";  v=$SkipTests;  w="NOTHING proves this build passes its own tests"},
@@ -139,12 +184,29 @@ if (-not $SkipBuild) {
         $common = @("-DPHOS_SHIP=ON", "-DPHOS_STATIC_RUNTIME=ON", "-DPHOS_AVX2=ON", "-DPHOS_BUILD_TOOLS=ON", "-DPHOS_BUILD_PLUGIN=ON")
         if (Test-Path (Join-Path $juce "CMakeLists.txt")) { $common += "-DFETCHCONTENT_SOURCE_DIR_JUCE=$juce" }
 
-        & cmake -S $root -B $buildDir -G "Visual Studio 18 2026" -A x64 @common
-        if ($LASTEXITCODE -ne 0) { throw "configure failed" }
-        # A build for other people is not worth having in a hurry, and this machine has other work
-        # on it: --parallel 2 on top of MSVC's own /MP leaves it usable.
-        & cmake --build $buildDir --config Release --parallel 2
-        if ($LASTEXITCODE -ne 0) { throw "build failed" }
+        if ($intel) {
+            $icx = Enable-IntelToolchain
+            # Ninja, which comes with Visual Studio: there is no Visual Studio generator for icx without the
+            # IDE integration, and NMake (Noctuary's choice) builds one file at a time.
+            $ninja = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\*\*\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe" -ErrorAction SilentlyContinue |
+                     Select-Object -First 1 -ExpandProperty FullName
+            if (-not $ninja) { throw "ninja.exe not found (it ships with Visual Studio's CMake component)" }
+            $lld = "-fuse-ld=lld"
+            & cmake -S $root -B $buildDir -G Ninja "-DCMAKE_MAKE_PROGRAM=$ninja" -DCMAKE_BUILD_TYPE=Release `
+                "-DCMAKE_C_COMPILER=$icx" "-DCMAKE_CXX_COMPILER=$icx" `
+                "-DCMAKE_EXE_LINKER_FLAGS=$lld" "-DCMAKE_SHARED_LINKER_FLAGS=$lld" "-DCMAKE_MODULE_LINKER_FLAGS=$lld" @common
+            if ($LASTEXITCODE -ne 0) { throw "configure failed" }
+            # Four jobs: this machine usually has other work on it.
+            & cmake --build $buildDir -- -j 4
+            if ($LASTEXITCODE -ne 0) { throw "build failed" }
+        } else {
+            & cmake -S $root -B $buildDir -G "Visual Studio 18 2026" -A x64 @common
+            if ($LASTEXITCODE -ne 0) { throw "configure failed" }
+            # A build for other people is not worth having in a hurry, and this machine has other work
+            # on it: --parallel 2 on top of MSVC's own /MP leaves it usable.
+            & cmake --build $buildDir --config Release --parallel 2
+            if ($LASTEXITCODE -ne 0) { throw "build failed" }
+        }
     }
 }
 foreach ($p in @($exe, $vst, $render)) { if (-not (Test-Path $p)) { throw "missing build output: $p" } }
@@ -371,6 +433,36 @@ $(Get-Content (Join-Path $root "LICENSE") -TotalCount 1)
     Write-Host ("  staged {0} files" -f (Get-ChildItem $stage -Recurse -File).Count)
 }
 
+# ---------------------------------------------------------------- 6b. the data archive
+# The setup is slim and fetches the data (Deploy\Phosphene.iss) -- unless the same data is already installed,
+# which it finds out by the hashes written here. One archive, attached to the release it belongs to; its name
+# carries the version, so an old setup never unpacks a newer pack by accident. The two generated includes
+# name the file, its size and its SHA-256; Inno checks the download against that hash before unpacking.
+$dataFiles = @("library.phoswt", "melody.phosmdl", "bass.phosmdl", "voices.phosvx", "CREDITS-wavetables.md", "CREDITS-voices.md")
+$dataZipName = "Phosphene-data-$Version.zip"
+Step "data archive (downloaded by the setup)" {
+    New-Item -ItemType Directory -Force -Path $out | Out-Null
+    $dataZip = Join-Path $out $dataZipName
+    if (Test-Path $dataZip) { Remove-Item $dataZip -Force }
+    Compress-Archive -Path ($dataFiles | ForEach-Object { Join-Path $root "Core\data\$_" }) -DestinationPath $dataZip -CompressionLevel Optimal
+    $zipHash = (Get-FileHash $dataZip -Algorithm SHA256).Hash.ToLower()
+    $lines = @("// Generated by Deploy\build_release.ps1 -- do not edit.",
+               "#define DataZip `"$dataZipName`"",
+               "#define DataZipSha256 `"$zipHash`"")
+    # The installed files' own hashes: the setup compares them with what is already in the folder and does not
+    # download at all when every one of them matches (an update that changes no data, a reinstall).
+    $i = 0
+    foreach ($f in $dataFiles) {
+        $h = (Get-FileHash (Join-Path $root "Core\data\$f") -Algorithm SHA256).Hash.ToLower()
+        $lines += "#define DataFile$i `"$f`""
+        $lines += "#define DataHash$i `"$h`""
+        $i++
+    }
+    $lines += "#define DataFileCount $i"
+    [IO.File]::WriteAllLines((Join-Path $root "Deploy\data-files.iss"), $lines)
+    Write-Host ("  {0}: {1:N1} MB, sha256 {2}" -f $dataZipName, ((Get-Item $dataZip).Length / 1MB), $zipHash.Substring(0, 16))
+}
+
 # ---------------------------------------------------------------- 7. the package check
 # The gate. Everything above can succeed and still leave a payload that installs a product which
 # quietly plays the wrong sound; this is what refuses to let that become an installer.
@@ -419,7 +511,8 @@ if (-not $NoSetup) {
         $iscc = Get-ChildItem "C:\Program Files\Inno Setup *\ISCC.exe", "C:\Program Files (x86)\Inno Setup *\ISCC.exe" -ErrorAction SilentlyContinue |
                 Sort-Object FullName | Select-Object -Last 1 -ExpandProperty FullName
         if (-not $iscc) { throw "Inno Setup not found. winget install JRSoftware.InnoSetup, or run with -NoSetup." }
-        & $iscc "/DVersion=$Version" (Join-Path $root "Deploy\Phosphene.iss")
+        # The data comes from the release this setup belongs to (Deploy\Phosphene.iss, DataBaseUrl).
+        & $iscc "/DVersion=$Version" "/DDataBaseUrl=https://github.com/reneweller-coding/Phosphene/releases/download/v$Version" (Join-Path $root "Deploy\Phosphene.iss")
         if ($LASTEXITCODE -ne 0) { throw "the installer failed to build" }
         $setup = Join-Path $out "Phosphene-$Version-Setup.exe"
         if (-not (Test-Path $setup)) { throw "the compiler reported success but there is no $setup" }

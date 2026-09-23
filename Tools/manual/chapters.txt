@@ -32,15 +32,22 @@ The Set tab is where a night begins. The seed names the set; Randomize seed draw
 and Stop run Phosphene's own clock, and Follow host hands the transport to the DAW instead -- under a
 host the tempo knob follows the host's tempo and the play head follows its position.
 
-Starting a set is not instant. Planning a track measures its loudness by rendering two bars of it, so
-the first sound arrives about two seconds after the button; the header says "planning" rather than
+Starting a set is not instant. Planning a track measures it by rendering parts of it -- its loudness
+through the master, and how audible each line is against the lead -- so on an eight-core machine the
+first sound arrives some fifteen seconds after the button; the header says "planning" rather than
 going quiet without explanation. In the standalone this has usually happened before you press
 anything, because the composer thread starts working when the window opens.
 
-The composer's own knobs are here: how long a track is, how far the key and tempo may wander, how
-much of each voice there is, which style profile weights the grammar, which dramaturgy the energy arc
-follows and how long the whole set should be. The first track of a set plays exactly these knobs;
-variation starts with the second.
+The composer's own knobs are here, grouped by what they decide. Start & Style is where the night
+begins: the style profile, whether the style walks through the set (Style Mix) and whether each track
+takes its style's own tempo (Style Tempo, which then replaces Tempo and Tempo Range), and the start
+key and scale. They are called "start" because they are exactly that -- the first track plays them,
+and from the second on the key, the tempo and (with Style Mix) the style move from track to track as
+a DJ would move them. Set Journey is the shape of the night: the energy arc, the set length, the track
+length and how much tracks and sounds vary. Kick & Bass, Rhythm, Melody, Lead and Voices say how much
+of each part there is and how it is drawn; Levels holds the three automatic balances -- the loudness
+of whole tracks, the presence of the melodic lines, and the audibility of the quiet lines against the
+lead.
 
 Export MIDI writes the score of the first N bars as a Standard MIDI File with a named track per part,
 section markers and the tempo map. Export set writes a .phosset -- the seed, the style, the arc, the
@@ -117,6 +124,13 @@ oscillator types are a virtual-analogue saw and pulse, two-operator FM and a wav
 Everything but the kick and the bass is high-passed at its own fundamental, which is what keeps eight
 voices of supersaw out of the bass register.
 
+== Counter ==
+
+The counter-lead answers the lead. It plays in the gaps the lead leaves and in a register of its own,
+so the two never mask each other; Counter Mode on the Set tab (or the style, on Auto) decides whether
+it echoes, answers or holds against the lead. The engine is the same as the lead's, with its own
+knobs and its own presets.
+
 == Arp ==
 
 The same engine as the lead, with its own knobs. The arpeggio runs on chord tones, and when its pitch
@@ -128,6 +142,16 @@ the same two octaves mask each other, and the composer checks that before it wri
 Four-voice voicings with the smallest voice movement between chords, through the wavetable engine.
 The pads carry the blocks that have no lead and no acid, and the trance gate gives them their
 movement.
+
+== Stab ==
+
+Short chord hits on the off-beats and the phrase ends, the punctuation of a groove. They are voiced
+from the track's harmony and kept out of the lead's register.
+
+== Drone ==
+
+A long, slowly moving tone under the breakdowns and the intros: the sound that holds a track together
+when the kick is gone. It is high-passed above the bass so it never takes the floor.
 
 == SFX / FX ==
 
@@ -163,3 +187,58 @@ exactly where it was when you let go. The composer's own ramps keep riding on to
 Drop-out is a press, not a hold: it takes the kick and the bass out and lets them back in on the next
 bar line. Stutter is held. Filter Sweep and Gate Depth stay where you leave them, and a double click
 puts them back to neutral.
+
+Keyboard: notes from a MIDI keyboard can play one voice -- the acid or any of the six melodic voices,
+or "By channel" (channel 1 the acid, 2 the lead ... 7 the drone) -- with the sound that voice's tab
+has. Replace leaves the generator's notes of that voice out, Layer plays over them. The keyboard plays
+while the set runs.
+
+MIDI: every knob, switch and chooser, and the four macros, can be put on a hardware controller. Right
+click the control, choose MIDI Learn and turn the knob on your controller. The MIDI group lists every
+binding and forgets them all at once.
+
+Rate what you hear: Good here and Bad here write a verdict with a note into your ratings. Learn from
+my ratings fits your taste to them and, once you confirm, weights the choices the style leaves open
+towards what you liked. The genre's rules always stay above your taste.
+
+== Gallery ==
+
+Your saved sets, each with a picture of its form. Save to gallery keeps the set as it stands -- seed,
+style, arc, knobs, locks and rerolls -- and a click on an entry loads it back. The files are ordinary
+.phosset files in your Sets folder; Open folder shows it.
+
+== Sound presets ==
+
+Every synth tab starts with a Sound group: the synth's presets in a chooser, grouped by kind, a
+Save... button for presets of your own, and the Own Sound switch.
+
+Normally the generator designs a new sound for every synth in every track. Own Sound keeps it from
+doing that: the synth then sounds exactly as its tab says, in every track. Choosing a preset switches
+Own Sound on for you, because otherwise the next track would replace the preset with a sound of its
+own. A preset sets the synth's sound and leaves its level, its ducking and -- on the melodic voices --
+its high pass and trance gate alone, since those are where the mix and the form put the voice. Undo
+takes a preset back.
+
+The factory presets are the generator's own sound recipes, laid out on purpose: every oscillator of a
+voice's palette with a set of characters (Bright, Dark, Soft, Thick, Wide, Moving ...), every
+wavetable of its families, the kick by engine, the bass by character, the acid by voicing. Your own
+presets are listed under User and live in the Presets folder of your Phosphene user folder.
+
+== Shortcuts ==
+
+    F1               help (this page); Esc closes it
+    F11              full screen (standalone)
+    Ctrl+Z           undo
+    Ctrl+Y           redo (also Ctrl+Shift+Z)
+    right click      MIDI Learn / Forget MIDI on any control
+    double click     a knob back to its default
+
+The window can be dragged to any size; the whole panel zooms with it. The standalone's title bar has a
+maximise button, and Full screen in the header (or F11) fills the screen.
+
+== Updates ==
+
+Phosphene looks for a newer release at most once a day, when its window opens, by asking GitHub for
+the latest release of the project -- nothing else is sent, and nothing is installed by itself. When
+there is one, the header says so and a click opens the release page. The check can be switched off
+here on the help page, and Check now asks at once.

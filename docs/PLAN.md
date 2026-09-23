@@ -7836,6 +7836,133 @@ vollständig. `vst3test` bestand (Zustands-Fix).
 `Plugin/EditorLayout.cpp`, `Tests/selftest.cpp`,
 `Tests/selftest_tests.cmake`, `Tests/hosttest.cpp`, `Tests/vst3test.cpp`; dieser Block.
 
+**23.09.2026, Release: Intel-Compiler, schlankes Setup mit Daten-Download, Update-Check, Hilfe, Vollbild**
+
+Der Nutzer: mit dem Intel-Compiler bauen, Distributions-Exe und Setup, das die Daten „optional auch …
+runterladen, falls sie noch nicht vorhanden sind"; Update-Check und Hilfesystem „ähnlich zum Ambient-Generator";
+ein Vollbild-Knopf; wo lohnt sich Performance-Arbeit. Entscheidungen des Nutzers:
+- Update-Check und Download werden eingebaut, obwohl das Repo privat ist. Sie greifen, sobald es öffentlich ist.
+- Das Setup bleibt schlank und lädt die Daten nach (27 MB), wie bei Noctuary.
+
+**Intel-Compiler (icx 2026.1).** Bisher lieferte das Release-Skript absichtlich nur MSVC aus, wegen des
+Determinismus-Vertrags (Plugin gleich `phos_render`, Vektorpfade gleich dem Skalarpfad). Dieser Vertrag
+gilt je Compiler: Alle Artefakte eines Release kommen aus demselben Compiler. Vorausgesetzt, icx rechnet, was
+im Quelltext steht. Zwei Dinge stimmten nicht, beide gemessen:
+- icx rechnet standardmäßig mit „fast" und kontrahiert `a*b+c` auch unter `/fp:precise` zu `vfmadd213sd`
+  (an einer Einzeilerfunktion im Assembler gesehen). Dagegen hilft `/fp:precise /Qfma-` in der Root-CMakeLists,
+  nur für IntelLLVM. Vorsicht: `if(MSVC)` ist für icx wahr.
+- Der erste volle ctest im icx-Baum (eigener Worktree) ergab 126 von 129; drei Tests fielen durch.
+  - Die Klangschale (`testPsychedelia`, `testBed.audible`) klang unter icx `/O2` ganz anders: 1/260 der Energie
+    auf falschen Frequenzen. Unter `/O1`, `/Od`, `/Qvec-` und unter MSVC war sie richtig (Probe-Programm
+    gegen beide Core-Bibliotheken). Der Vektorisierer rechnete die Schleife falsch, die abwechselnd in
+    `sum[k & 1]` summiert. Undefiniertes Verhalten liegt dort nicht vor. Die Schleife ist jetzt zweigeteilt
+    (Drehung, dann zwei Summen in derselben Reihenfolge), damit bleibt MSVC bitgleich und icx ist richtig.
+  - `hosttest.realhost` stürzte unter icx ab (in cdb: der Schreib-Thread des Tests). Ursache war ein Testfehler:
+    `int i` zählte zig Millionen Mal hoch, und `i * 37` lief über. MSVC wickelte das zu einer negativen id,
+    die `parameterFor()` ablehnte. icx strich den Test `id >= 0` als unmöglich und las vor der Tabelle.
+    Jetzt `uint32_t`.
+  - Danach bestehen alle drei; die Plan-Schnappschüsse bestanden unter icx schon im ersten Lauf: Die
+    Kompositionsentscheidungen sind identisch.
+- icx gegen MSVC, gleiche Seed, 48 Takte, je Stem: Alle Stimmen-Stems liegen bei −115 dB relativ, also
+  Rundung im letzten Bit, weil icx eine andere Mathe-Bibliothek mitbringt.
+  - Der Returns-Stem weicht in einzelnen Sekunden deutlich ab (8, 16 und 72 s), sonst bei −114 dB. Level
+    und Oktavspektrum sind gleich (höchstens 0,2 dB).
+  - Ein icx-Build ohne Vektorisierer weicht genauso ab, also ist das kein weiterer Compilerfehler. Es ist
+    eine diskrete Entscheidung (eine Verzögerungslänge rundet an der Grenze anders), die ein Rückweg-Ereignis
+    um ein Sample versetzt.
+- Geschwindigkeit, 10 Minuten Set mit Seed 2026 (inklusive Planung): MSVC 7,7× und 7,9× Echtzeit, icx 8,8×
+  und 8,8×, also rund 12 % schneller.
+- `Deploy/build_release.ps1` hat jetzt `-Toolchain intel|msvc` mit Vorgabe intel.
+  - icx-Baum `build-release-intel` mit dem Ninja aus Visual Studio (parallel, anders als Noctuarys NMake)
+    und `lld` (JUCE-LTO).
+  - Die Umgebung wird von Hand gesetzt, wie in Noctuarys Skript.
+  - Die ganze Suite läuft in dieser Konfiguration. Paketprüfung E schließt die Intel-Laufzeit (libmmd,
+    svml …) schon aus.
+
+**Setup: Daten werden nachgeladen.**
+- Das Release-Skript packt `library.phoswt`, beide Modelle, `voices.phosvx` und die Credits in
+  `Phosphene-data-<Version>.zip` und schreibt `Deploy/data-files.iss` (generiert, ignoriert) mit dem Hash
+  des Archivs und dem Hash jeder Datei.
+- Das Setup entscheidet auf der Seite „Bereit":
+  - Liegen alle Dateien mit dem richtigen Hash schon in `{app}` (Update ohne neue Daten, Neuinstallation),
+    wird nichts geladen, und das VST3 bekommt Kopien daraus.
+  - Liegt das Archiv neben dem Setup, wird es genommen (Offline-Installation).
+  - Sonst wird es von der Release-Seite geladen und vor dem Entpacken gegen seinen SHA-256 geprüft.
+- Scheitert der Download, fragt das Setup „ohne Daten installieren?" (Muster Noctuary). Die Engine fällt
+  dann auf die eingebauten Tabellen und den Markov-Komponisten zurück und sagt das im Set-Tab.
+- `[InstallDelete]` löscht Daten nur, wenn neue kommen. Das VST3 wird ohne die Daten aus dem Stage-Ordner
+  kopiert, die Daten kommen aus dem Archiv.
+- Das portable ZIP enthält weiter alles.
+
+**Update-Check** (`Plugin/UpdateCheck.h`).
+- Fragt höchstens einmal am Tag, beim Öffnen des Editors, die GitHub-API nach dem neuesten Release und
+  vergleicht die Versionen Zahl für Zahl (1.10 nach 1.9; ein führendes v zählt nicht).
+- Ein neueres Release erscheint als Knopf in der Kopfzeile, der die Release-Seite öffnet. Es wird nichts
+  geladen und nichts installiert.
+- Zustand und Abschalter liegen in `update.txt` im Nutzerordner, gemeinsam für alle Instanzen.
+- `PHOS_NO_UPDATE_CHECK=1` schaltet ihn für den Prozess ab (Host- und VST3-Test). Der Screenshot- und
+  Handbuchmodus fragt nie.
+- Solange das Repo privat ist, meldet er „noch kein öffentliches Release" (API 404).
+
+**Hilfe** (`Plugin/EditorHelp.cpp`, Muster Noctuary).
+- „Help" in der Kopfzeile oder F1 öffnet eine Hilfeseite: links die Themen, rechts der Text. Sie öffnet beim
+  Kapitel des offenen Tabs.
+- Der Text ist `Tools/manual/chapters.txt`, als Binärdaten einkompiliert: Hilfe und PDF sind ein Text.
+- Neue Kapitel: Counter, Stab, Drone, Gallery, Sound presets, Shortcuts, Updates. Set und Perform sind auf
+  dem Stand von heute (Gruppierung, Keyboard, MIDI, Bewertungen). Der PDF-Generator druckt die Kapitel, die
+  kein Tab sind, nach den Tabs.
+- Dazu ein erzeugtes Thema „Parameters: <Tab>": Schlüssel, Name, Bereich, Vorgabe und der aktuelle Wert
+  jedes Parameters, den der Tab zeigt.
+- Das Thema „Updates" trägt die Steuerung des Update-Checks (Schalter, „Check now", Release-Seite).
+- Esc, F1 oder „Help" schließt die Seite, ein Tab-Knopf auch.
+
+**Vollbild.**
+- Wie bei Noctuary hat die Titelleiste des Standalone einen Maximieren-Knopf.
+- Dazu „Full screen" in der Kopfzeile und F11 (Kiosk-Modus des Fensters); Esc verlässt ihn. Nur im
+  Standalone, im Host besitzt der Host das Fenster.
+- Dafür fiel das feste Seitenverhältnis weg: JUCEs Standalone-Fenster setzt die Editorgröße über dessen
+  Constrainer, und das feste Verhältnis hätte ein maximiertes Fenster nie gefüllt. Der Inhalt wird jetzt
+  eingepasst und zentriert (Breite, oder Höhe mit mindestens 760 Designpixeln).
+- Eine Falle dabei: Die Titelleiste neu zu setzen, während JUCE das Fenster noch aufbaut, drückte den Editor
+  auf seine Mindestgröße (430 × 373, per Stacktrace gefunden). Das passiert jetzt einen Nachrichtenzyklus
+  später.
+
+**Performance: gemessen, nicht umgebaut** (VTune, 10 Minuten Set, MSVC):
+- Planung der Tracks (Probe-Renders): 26 % der Rechenzeit. `matchAudibility` von heute allein 11 %,
+  `matchMaster` 11,5 %. Der erste Ton kommt deshalb rund 15 s nach „Play". Das Handbuch sagte noch „zwei
+  Sekunden" und ist korrigiert.
+- Echtzeit-Engine: 66 %. Davon die sechs polyphonen Stimmen 23 % (schon AVX2 über `Vec.h`), `applyParams`
+  6 % (rechnet jeden Block alle rund 3000 Parameter neu, `powf` in `fromNormalised`), Psy-FX 5 %, Hall
+  4 %, Phaser 3 % (Koeffizienten mit `tan`/`cos` in jedem Sample).
+- Vorschläge an den Nutzer in der Antwort; nichts davon ist umgesetzt.
+
+*Tests.*
+- Host-Test: jeder Tab hat sein Kapitel; F1 auf dem Lead-Tab öffnet „Lead" und listet `lead.cutoff` und
+  `mix.lead_own`; Versionsvergleich des Update-Checks.
+- Klangschale unter icx gegen MSVC per Probe-Programm; die drei icx-Fehlschläge einzeln nachgeprüft.
+- Screenshot der Hilfeseite geprüft.
+- Release-Lauf `build_release.ps1` (icx, Ship-Konfiguration), voller ctest: 130 von 131 bestanden, auch der
+  VST3-Test.
+  - Durchgefallen war der Hosttest mit dem Fall „keine Daten": Das Kindprogramm fand die Modelle doch. Es
+    erbte das Arbeitsverzeichnis des Tests, und bei Ninja (Single-Config) liegen die Daten genau dort neben
+    den Testprogrammen; unter Visual Studio in `Tests/Release`, deshalb fiel es nie auf.
+  - Das Kind startet jetzt im leeren Ordner. Danach bestand der Hosttest im Release-Baum einzeln.
+- Paket mit `-SkipBuild -SkipTests` aus genau diesen getesteten Binaries. Die Paketprüfung bestand
+  vollständig (Laufzeit-DLLs, Versionsressource, Referenz-Render bitgleich, keine Quellpfade).
+- Ergebnis: `Phosphene-1.0.0-Setup.exe` 39,4 MB (davon 29,5 MB Quest-APK), portables ZIP 86,9 MB,
+  `Phosphene-data-1.0.0.zip` 23,1 MB, Manifest und SHA256SUMS.
+- Setup still (Einzelbenutzer, Temp-Ordner, ohne VST3) auf drei Wegen geprüft:
+  - Archiv neben dem Setup: entpackt, Hash stimmt.
+  - Zweiter Lauf mit vorhandenen Daten: kein Download, Dateien unberührt.
+  - Daten entfernt: Download gegen die Release-URL, 404 (Repo privat), stille Antwort „ohne Daten
+    installieren".
+  - Danach deinstalliert.
+
+*Dateien.* `CMakeLists.txt`, `Core/src/Texture.cpp`, `Plugin/UpdateCheck.h`, `Plugin/UpdateCheck.cpp`,
+`Plugin/EditorHelp.cpp` (neu), `Plugin/PluginEditor.h`, `Plugin/PluginEditor.cpp`, `Plugin/CMakeLists.txt`,
+`Deploy/build_release.ps1`, `Deploy/Phosphene.iss`, `Tools/manual/chapters.txt`, `Tools/manual/make_manual.py`,
+`Tests/hosttest.cpp`, `Tests/vst3test.cpp`, `.gitignore`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

@@ -168,13 +168,21 @@ void Texture::voiceSample(Voice& v, float& outL, float& outR)
     if (v.type == SfxType::Bowl) {
         // The two partials of each doublet lean to opposite sides, so the bowl's beating also moves
         // between the speakers -- the way a bowl turning in the hand sounds.
-        double sum[2] = { 0.0, 0.0 };
+        //
+        // The rotation and the two sums are two loops, not one (23.09.2026). As one loop, adding into sum[k & 1],
+        // Intel's icx vectorised it wrongly at /O2: the bowl came out at 1/260 of its energy on the wrong
+        // frequencies (it was right at /O1, at /Od and with /Qvec-, and under MSVC). The sums still add the
+        // partials in the same order -- 0, 2, 4, 6 and 1, 3, 5, 7 -- so MSVC's result is the same to the bit.
         for (int k = 0; k < 2 * kModes; ++k) {
             const double re = v.re[k] * v.c[k] - v.im[k] * v.s[k];
             const double im = v.re[k] * v.s[k] + v.im[k] * v.c[k];
             v.re[k] = re;
             v.im[k] = im;
-            sum[k & 1] += v.amp[k] * im;
+        }
+        double sum[2] = { 0.0, 0.0 };
+        for (int m = 0; m < kModes; ++m) {
+            sum[0] += v.amp[2 * m] * v.im[2 * m];
+            sum[1] += v.amp[2 * m + 1] * v.im[2 * m + 1];
         }
         s = static_cast<float>(sum[0] + sum[1]) * kBowlGain;
         side = static_cast<float>(sum[0] - sum[1]) * kBowlGain * 0.6f * width_;

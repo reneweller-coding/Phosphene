@@ -67,6 +67,14 @@ endif()
 if(NOT MSVC)
     add_compile_options(-ffp-contract=off)
 endif()
+# Intel's icx (oneAPI) passes for MSVC here -- it takes MSVC's flags, so if(MSVC) is true -- but it is
+# not MSVC underneath: its default floating-point model is "fast", and even under /fp:precise it
+# contracts a*b+c into vfmadd (measured 23.09.2026 on a one-line function; /fp:precise alone still
+# emitted vfmadd213sd). /Qfma- turns the contraction off, which icx reports as overriding the model's
+# default -- that override is the point, so the warning is silenced.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+    add_compile_options(/fp:precise /Qfma- /clang:-Wno-overriding-option)
+endif()
 
 # Android (the Quest): configured with the NDK toolchain, see Quest/README.md.
 #

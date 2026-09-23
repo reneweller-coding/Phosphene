@@ -325,9 +325,11 @@ int main(int argc, char** argv)
 #if defined(_WIN32)
     _putenv_s("PHOS_USER_DIR", userDir.getFullPathName().toRawUTF8());
     _putenv_s("PHOS_GALLERY_DIR", userDir.getChildFile("Sets").getFullPathName().toRawUTF8());
+    _putenv_s("PHOS_NO_UPDATE_CHECK", "1");   // a test never talks to the network (UpdateCheck.h)
 #else
     setenv("PHOS_USER_DIR", userDir.getFullPathName().toRawUTF8(), 1);
     setenv("PHOS_GALLERY_DIR", userDir.getChildFile("Sets").getFullPathName().toRawUTF8(), 1);
+    setenv("PHOS_NO_UPDATE_CHECK", "1", 1);
 #endif
     // Round "speed" (20.09.2026). This test builds some forty processors and nearly every one plans a
     // track, 12 to 15 s of probe renders each -- that, not real-time playback, is what made it 9 to 11
@@ -480,9 +482,16 @@ int main(int argc, char** argv)
             juce::StringArray args;
             args.add(copy.getFullPathName());
             args.add("--probe-models");
+            // Started in the empty directory, not in this test's: the core also tries a bare name against the
+            // working directory, and under a single-configuration generator (Ninja, the Intel release tree) the
+            // test's working directory is the very folder the data is copied into beside the test binaries --
+            // the child found the models there and the no-data case was no such thing (23.09.2026).
+            const juce::File previous = juce::File::getCurrentWorkingDirectory();
+            dir.setAsCurrentWorkingDirectory();
             if (!child.start(args, juce::ChildProcess::wantStdOut | juce::ChildProcess::wantStdErr))
                 check(false, "the no-data child would not start");
             else out = child.readAllProcessOutput();
+            previous.setAsCurrentWorkingDirectory();
         }
         const bool melody = out.contains("melody=1");
         const bool bass = out.contains("bass=1");
@@ -592,9 +601,13 @@ int main(int argc, char** argv)
         std::atomic<bool> stopThread{ false };
         std::thread writer([&] {
             const ParamStore& store = p->params();
-            int i = 0;
+            // Unsigned (23.09.2026): this loop runs tens of millions of times in ten seconds, and `int i * 37`
+            // overflowed -- undefined behaviour that MSVC happened to wrap into a negative id, which
+            // parameterFor() refused, and that Intel's icx used to drop the id >= 0 test as impossible and
+            // read in front of the table. The first icx run of the suite crashed here.
+            uint32_t i = 0;
             while (!stopThread.load(std::memory_order_relaxed)) {
-                const int id = (i * 37) % store.count();
+                const int id = static_cast<int>((i * 37u) % static_cast<uint32_t>(store.count()));
                 if (auto* param = p->parameterFor(id)) param->setValueNotifyingHost((i % 11) / 10.0f);
                 ++i;
                 std::this_thread::yield();
@@ -1171,6 +1184,15 @@ int main(int argc, char** argv)
         check(p->undoName() == before, "undo: automation without a gesture is not recorded");
     }
 
+    // ---------------------------------------------------------------- the update check's version order (23.09.2026)
+    if (partRest) {
+        using phosui::UpdateCheck;
+        const bool order = UpdateCheck::isNewer("v1.0.1", "1.0.0") && UpdateCheck::isNewer("1.10.0", "1.9.3")
+                        && !UpdateCheck::isNewer("v1.0.0", "1.0.0") && !UpdateCheck::isNewer("0.9", "1.0.0")
+                        && UpdateCheck::isNewer("2", "1.99.99") && !UpdateCheck::isNewer("v1.2.0-beta", "1.2.0");
+        check(order, "update check: versions compare number by number (1.10 after 1.9, a leading v ignored)");
+    }
+
     // ---------------------------------------------------------------- sound presets (23.09.2026)
     if (partRest) {
         auto p = std::make_unique<PhospheneProcessor>();
@@ -1294,6 +1316,23 @@ int main(int argc, char** argv)
                     if (!onPages.contains(juce::String(p->params().key(i)))) missing.add(juce::String(p->params().key(i)));
                 check(missing.isEmpty(), "every parameter stands on a page (" + juce::String(onPages.size()) + " placed"
                                              + (missing.isEmpty() ? juce::String() : ", missing: " + missing.joinIntoString(" ")) + ")");
+                // The help (23.09.2026): every tab has its chapter, F1 on a tab opens that chapter, and the
+                // parameter topic lists the tab's own parameters with their current values.
+                if (HelpView* hv = phos->helpView()) {
+                    juce::StringArray noChapter;
+                    for (const juce::String& t : PhospheneEditor::tabNames()) if (!hv->topicNames().contains(t)) noChapter.add(t);
+                    phos->setTab(TabLead);
+                    phos->setHelpVisible(true);
+                    const bool opened = hv->isVisible() && hv->selectedTopic() >= 0 && hv->topicNames()[hv->selectedTopic()] == "Lead";
+                    const int paramsTopic = hv->topicNames().indexOf("Parameters: Lead");
+                    const bool listed = paramsTopic >= 0 && hv->topicText(paramsTopic).contains("lead.cutoff")
+                                     && hv->topicText(paramsTopic).contains("mix.lead_own");
+                    phos->setHelpVisible(false);
+                    check(noChapter.isEmpty() && opened && listed && !hv->isVisible(),
+                          "help: every tab has its chapter, the help opens at the tab's chapter and lists its parameters"
+                              + (noChapter.isEmpty() ? juce::String() : " (no chapter: " + noChapter.joinIntoString(", ") + ")"));
+                }
+                phos->setTab(0);
 
                 // 22.09.2026, the user: "zudem funktionieren einige Knoepfe in der GUI nicht, z.B. in
                 // Perform-Tab". Nothing here has ever pressed one. So: walk every tab, find every

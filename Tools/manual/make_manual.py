@@ -203,6 +203,12 @@ def main():
         order.append(("About", None))
     for t in man["tabs"]:
         order.append((t["name"], t))
+    # Topics that are not a tab (sound presets, shortcuts, updates): after the tabs, in the file's order.
+    # The plugin's help page shows the same blocks (Plugin/EditorHelp.cpp reads this file, compiled in).
+    tab_names = set(t["name"] for t in man["tabs"])
+    for name in chapters:
+        if name != "About" and name not in tab_names:
+            order.append((name, None))
 
     body.append('<div class="toc"><h2>Contents</h2><ol>')
     for name, _ in order:

@@ -21,6 +21,7 @@
 #include "EditorLayout.h"
 #include "PhospheneLookAndFeel.h"
 #include "PluginProcessor.h"
+#include "UpdateCheck.h"
 #include <memory>
 #include <vector>
 
@@ -148,6 +149,50 @@ private:
     int hover_ = -1;          ///< the row under the mouse
 };
 
+/**
+ * @brief The help page (23.09.2026): the manual's prose by topic, the parameters of the tab it was opened from,
+ *        and the update check (EditorHelp.cpp).
+ *
+ * The prose is Tools/manual/chapters.txt compiled in, the same text the PDF prints -- one source, so the help
+ * and the manual cannot say different things. F1 opens it at the chapter of the tab that is open; Esc, F1 or
+ * Help closes it again.
+ */
+class HelpView final : public juce::Component, private juce::ListBoxModel {
+public:
+    explicit HelpView(PhospheneProcessor& proc);
+    /**
+     * @brief Shows the topic @p name (a tab's name or a chapter's), with the parameters of @p paramIds listed
+     *        under "Parameters on this tab" (the tab the help was opened from).
+     */
+    void open(const juce::String& name, const juce::String& tabName, std::vector<int> paramIds);
+    /** @brief The topics, in list order. */
+    const juce::StringArray& topicNames() const { return names_; }
+    /** @brief The text a topic shows (for the tests and the manual). */
+    juce::String topicText(int index) const;
+    /** @brief The topic on screen. */
+    int selectedTopic() const { return list_.getSelectedRow(); }
+    void paint(juce::Graphics&) override;
+    void resized() override;
+    /** @brief Refreshes the update line (the editor's timer). */
+    void refreshUpdate();
+
+private:
+    int getNumRows() override { return names_.size(); }
+    void paintListBoxItem(int row, juce::Graphics&, int w, int h, bool selected) override;
+    void selectedRowsChanged(int row) override;
+    PhospheneProcessor& proc_;
+    juce::StringArray names_;           ///< topic names
+    juce::StringArray texts_;           ///< their text (the parameter topic is filled by open())
+    int paramTopic_ = -1;               ///< index of "Parameters on this tab"
+    int updateTopic_ = -1;              ///< index of "Updates"
+    juce::ListBox list_;
+    juce::TextEditor text_;
+    juce::ToggleButton autoCheck_{ "Look for updates once a day" };
+    juce::TextButton checkNow_{ "Check now" }, openRelease_{ "Open the release page" };
+    juce::Label updateLine_;
+    juce::SharedResourcePointer<phosui::UpdateCheck> updates_;
+};
+
 /** @brief The Phosphene editor. */
 class PhospheneEditor final : public juce::AudioProcessorEditor, private juce::Timer {
 public:
@@ -183,6 +228,10 @@ public:
     bool writeManual(const juce::File& dir);
     /** @brief The keys of every parameter that stands in a group on some page, percussion lanes included. */
     juce::StringArray parametersOnPages() const;
+    /** @brief The help page (tests): null until the editor has built it. */
+    HelpView* helpView() const { return help_.get(); }
+    /** @brief Opens or closes the help page (the Help button, F1). */
+    void setHelpVisible(bool show) { showHelp(show); }
 
 private:
     void buildPages();
@@ -213,9 +262,22 @@ private:
     std::vector<std::unique_ptr<PresetBox>> presetBoxes_;   ///< one per synth page
     std::unique_ptr<juce::AlertWindow> presetNameDialog_;   ///< "Save preset" asks for a name
     void timerCallback() override;
-    /** @brief Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo (23.09.2026). */
+    /** @brief Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo (23.09.2026); F1 help, Esc closes it, F11 full screen. */
     bool keyPressed(const juce::KeyPress& key) override;
     juce::TextButton undoButton_{ "Undo" }, redoButton_{ "Redo" };   ///< in the header (23.09.2026)
+    /** @name Help, full screen and the update notice (23.09.2026)
+     *  @{ */
+    juce::TextButton helpButton_{ "Help" }, fullButton_{ "Full screen" }, updateButton_{ "" };
+    std::unique_ptr<HelpView> help_;
+    juce::SharedResourcePointer<phosui::UpdateCheck> updates_;
+    /** @brief Opens or closes the help page, at the chapter of the tab that is open. */
+    void showHelp(bool show);
+    bool helpShown() const { return help_ != nullptr && help_->isVisible(); }
+    /** @brief The standalone's window fills the screen, or stops filling it (a host owns its own window). */
+    void toggleFullScreen();
+    /** @brief The standalone's title bar gets a maximise button (as Noctuary's). */
+    void parentHierarchyChanged() override;
+    /** @} */
     phosui::ControlPage* activePage() const;
     void layoutContent();
     void paintContent(juce::Graphics&);

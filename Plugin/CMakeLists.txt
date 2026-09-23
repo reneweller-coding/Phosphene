@@ -33,7 +33,16 @@ target_sources(Phosphene PRIVATE
     EditorArrange.cpp
     EditorPerform.cpp
     EditorGallery.cpp
+    EditorHelp.cpp
+    UpdateCheck.cpp
     PhospheneLookAndFeel.cpp)
+
+# The help page's text (23.09.2026, EditorHelp.cpp): the manual's prose, compiled in, so the help and the PDF
+# are one text.
+juce_add_binary_data(PhospheneHelpData
+    HEADER_NAME PhospheneHelpData.h
+    NAMESPACE PhospheneHelpData
+    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../Tools/manual/chapters.txt)
 
 target_compile_definitions(Phosphene PUBLIC
     JUCE_WEB_BROWSER=0
@@ -45,6 +54,7 @@ target_compile_definitions(Phosphene PUBLIC
 target_link_libraries(Phosphene
     PRIVATE
         PhospheneCore
+        PhospheneHelpData
         juce::juce_audio_utils
     PUBLIC
         juce::juce_recommended_config_flags

@@ -324,6 +324,26 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
     redoButton_.onClick = [this] { proc_.redo(); };
     content_.addAndMakeVisible(undoButton_);
     content_.addAndMakeVisible(redoButton_);
+    // Help, full screen and the update notice (23.09.2026, EditorHelp.cpp).
+    helpButton_.setTooltip("The manual, by topic, opened at this tab (F1)");
+    helpButton_.onClick = [this] { showHelp(!helpShown()); };
+    content_.addAndMakeVisible(helpButton_);
+    fullButton_.setTooltip("Fill the screen, or stop filling it (F11)");
+    fullButton_.onClick = [this] { toggleFullScreen(); };
+    content_.addChildComponent(fullButton_);   // visible in the standalone only (parentHierarchyChanged)
+    updateButton_.setTooltip("Open the release page");
+    updateButton_.onClick = [this] {
+        const juce::String url = updates_->result().url;
+        if (url.isNotEmpty()) juce::URL(url).launchInDefaultBrowser();
+    };
+    content_.addChildComponent(updateButton_);
+    help_ = std::make_unique<HelpView>(proc_);
+    content_.addChildComponent(*help_);
+    // Not while the editor is photographing itself for the manual: that run asks nobody anything.
+    const bool shooting = juce::SystemStats::getEnvironmentVariable("PHOS_SHOT", "").isNotEmpty()
+                       || juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_ALL", "").isNotEmpty()
+                       || juce::SystemStats::getEnvironmentVariable("PHOS_MANUAL", "").isNotEmpty();
+    if (!shooting) updates_->startIfDue(proc_.userFolder().getChildFile("update.txt"));
     setWantsKeyboardFocus(true);
     for (int i = 0; i < kPercLanes; ++i) {
         auto* b = laneButtons_.add(new juce::TextButton(juce::String(i + 1)));
@@ -342,8 +362,10 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
 
     setResizable(true, true);
     if (auto* con = getConstrainer()) {
-        con->setFixedAspectRatio(static_cast<double>(designW_) / designH_);
-        con->setSizeLimits(designW_ / 2, designH_ / 2, designW_ * 2, designH_ * 2);
+        // 23.09.2026: no fixed aspect ratio any more. JUCE's standalone window sizes the editor through this
+        // constrainer, so a fixed ratio kept a maximised or full-screen window from filling the screen; the body
+        // is fitted and centred instead (resized()), which works for any shape.
+        con->setSizeLimits(designW_ / 3, designH_ / 3, designW_ * 4, designH_ * 4);
     }
     float fit = 1.0f;
     if (auto* screen = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()) {
@@ -354,6 +376,8 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
 
     const int startTab = juce::SystemStats::getEnvironmentVariable("PHOS_TAB", "0").getIntValue();
     setTab(juce::jlimit(0, tabNames().size() - 1, startTab));
+    // PHOS_HELP=1: open with the help page up (for its picture in the manual and for checking it by eye).
+    if (juce::SystemStats::getEnvironmentVariable("PHOS_HELP", "").isNotEmpty()) showHelp(true);
     runScreenshotMode();
     startTimerHz(12);
 }
@@ -536,6 +560,7 @@ ControlPage* PhospheneEditor::activePage() const
 
 void PhospheneEditor::setTab(int index)
 {
+    if (helpShown()) showHelp(false);
     tab_ = juce::jlimit(0, tabNames().size() - 1, index);
     for (int i = 0; i < tabButtons_.size(); ++i) tabButtons_[i]->setToggleState(i == tab_, juce::dontSendNotification);
     for (int i = 0; i < laneButtons_.size(); ++i) laneButtons_[i]->setVisible(tab_ == TabPerc);
@@ -566,8 +591,13 @@ void PhospheneEditor::resized()
     // The body is drawn in design coordinates and scaled to the window, so a page never reflows:
     // dragging the corner is a zoom. That is what makes a picture taken at design size the truth
     // about the layout.
-    const float scale = juce::jmax(0.25f, static_cast<float>(getWidth()) / designW_);
-    content_.setTransform(juce::AffineTransform::scale(scale));
+    // Fitted, not stretched: the width decides unless the window is wider than the design's shape, and then the
+    // height does and the body is centred (a maximised or full-screen window on a wide screen). A taller window
+    // shows more of the page.
+    const float scale = juce::jmax(0.25f, juce::jmin(static_cast<float>(getWidth()) / designW_,
+                                                     static_cast<float>(getHeight()) / juce::jmin(designH_, 760)));
+    const float left = juce::jmax(0.0f, (getWidth() - designW_ * scale) * 0.5f);
+    content_.setTransform(juce::AffineTransform::scale(scale).translated(left, 0.0f));
     content_.setBounds(0, 0, designW_, juce::roundToInt(getHeight() / scale));
 }
 
@@ -578,6 +608,9 @@ void PhospheneEditor::layoutContent()
     // Undo and redo sit in the header, after the title and the mute note (paintContent keeps that space).
     undoButton_.setBounds(516, 18, 72, 28);
     redoButton_.setBounds(594, 18, 72, 28);
+    helpButton_.setBounds(672, 18, 64, 28);
+    fullButton_.setBounds(742, 18, 96, 28);
+    updateButton_.setBounds(designW_ - 16 - 250, 38, 250, 20);
     juce::Rectangle<int> tabs = r.removeFromTop(34).reduced(10, 4);
     const int tw = tabs.getWidth() / juce::jmax(1, tabButtons_.size());
     for (auto* b : tabButtons_) b->setBounds(tabs.removeFromLeft(tw).reduced(2, 0));
@@ -587,6 +620,7 @@ void PhospheneEditor::layoutContent()
         for (auto* b : laneButtons_) b->setBounds(lanes.removeFromLeft(lw).reduced(2, 0));
     }
     viewport_.setBounds(r.reduced(8, 4));
+    if (help_ != nullptr) help_->setBounds(viewport_.getBounds());
     if (auto* page = activePage()) {
         const int first = page->layout(viewport_.getWidth());
         if (first > viewport_.getHeight()) page->layout(viewport_.getWidth() - 12);   // room for the scrollbar
@@ -625,7 +659,8 @@ void PhospheneEditor::paintContent(juce::Graphics& g)
          << "      " << state;
     g.setColour(text);
     g.setFont(body(12.5f));
-    g.drawText(info, h, juce::Justification::centredRight, false);
+    // With an update notice under it, the line moves up to make room.
+    g.drawText(info, updateButton_.isVisible() ? h.withHeight(26) : h, juce::Justification::centredRight, false);
     // The page's background, so a tab reads as a sheet lying on the window.
     g.setColour(card.darker(0.25f));
     g.fillRoundedRectangle(viewport_.getBounds().toFloat(), 8.0f);
@@ -652,6 +687,10 @@ bool PhospheneEditor::keyPressed(const juce::KeyPress& key)
     const juce::ModifierKeys m = key.getModifiers();
     if (m.isCommandDown() && key.getKeyCode() == 'Z') { if (m.isShiftDown()) proc_.redo(); else proc_.undo(); return true; }
     if (m.isCommandDown() && key.getKeyCode() == 'Y') { proc_.redo(); return true; }
+    if (key.getKeyCode() == juce::KeyPress::F1Key) { showHelp(!helpShown()); return true; }
+    if (key.getKeyCode() == juce::KeyPress::escapeKey && helpShown()) { showHelp(false); return true; }
+    if (key.getKeyCode() == juce::KeyPress::F11Key) { toggleFullScreen(); return true; }
+    if (key.getKeyCode() == juce::KeyPress::escapeKey && juce::Desktop::getInstance().getKioskModeComponent() != nullptr) { toggleFullScreen(); return true; }
     return false;
 }
 
@@ -659,6 +698,14 @@ void PhospheneEditor::timerCallback()
 {
     undoButton_.setEnabled(proc_.canUndo());
     redoButton_.setEnabled(proc_.canRedo());
+    {
+        const phosui::UpdateCheck::Result u = updates_->result();
+        if (u.newer != updateButton_.isVisible()) {
+            updateButton_.setButtonText("Update: Phosphene " + u.latest.trimCharactersAtStart("vV") + " is out");
+            updateButton_.setVisible(u.newer);
+        }
+        if (helpShown()) help_->refreshUpdate();
+    }
     undoButton_.setTooltip(proc_.canUndo() ? "Undo " + proc_.undoName() + " (Ctrl+Z)" : juce::String("Nothing to undo"));
     redoButton_.setTooltip(proc_.canRedo() ? "Redo " + proc_.redoName() + " (Ctrl+Y)" : juce::String("Nothing to redo"));
     // Only the page that is on screen is fed. The arrange timeline in particular draws a whole set,
