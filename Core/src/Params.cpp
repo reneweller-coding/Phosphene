@@ -134,6 +134,8 @@ const ParamDesc kComposeParams[compose::Count] = {
     // 23.09.2026, round "Counter": the counter-lead's mode (Form.h, CounterMode; Melody.cpp, makeCounter). At the end,
     // in the enum's order (see the note above the style_mix row).
     { "counter_mode",    "Counter Mode",    "",      0.0f,   4.0f,   0.0f, Curve::Choice, kCounterModeNames },
+    // 23.09.2026, round "Hoerbarkeit" (Composer.cpp, matchAudibility): at the end, in the enum's order.
+    { "audibility_match", "Audibility Match", "",    0.0f,   1.0f,   1.0f, Curve::Toggle },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };

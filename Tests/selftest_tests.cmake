@@ -113,6 +113,7 @@ set(PHOS_SELFTEST_SECONDS
     testKnobFuzz            18.0
     testStems               16.6
     testAudibility           8.0
+    testAudibilityMatch     70.0
     testSampler              1.5
     testWaveTableQuality     1.3
     testArrangeDynamics      1.0

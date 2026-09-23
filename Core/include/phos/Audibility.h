@@ -28,7 +28,8 @@
  *     above it; below the threshold its loudness falls steeply to zero. Summed over the bands and scaled so
  *     that a 1 kHz sine at 40 dB SPL, run through the same path, is 1: sone-like units.
  *
- * `ratio` is the partial loudness over the loudness alone, frames summed first: 1 means the part is heard in
+ * The readings average over the frames in which the part alone is at least a quarter unit loud -- the frames in which it
+ * plays, not its release tails. `ratio` is the partial loudness over the loudness alone, frames summed first: 1 means the part is heard in
  * the mix as loud as on its own, 0.3 that seven tenths of it disappear under the rest. It is a *relative*
  * measure and meant to be compared between parts, sections and versions of the program, not read as an
  * absolute sone value; the model's constants are the published ones where it has them and stated where it
@@ -49,7 +50,7 @@ struct AudibilityReading {
     double alone = 0.0;   ///< mean loudness of the stem on its own (sone-like)
     double inMix = 0.0;   ///< mean partial loudness in the mix of all stems
     double ratio = 0.0;   ///< inMix / alone, 0 when the stem was silent
-    int    frames = 0;    ///< frames in which the stem was not silent
+    int    frames = 0;    ///< frames in which the stem alone was heard (at least a quarter unit; release tails do not count)
 };
 
 /** @brief Partial loudness of each of a set of stems against the sum of the others. */

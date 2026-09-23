@@ -566,6 +566,18 @@ int main(int argc, char** argv)
             // since 20.09.2026, round "climax-polish", to see a capped correction without a full render).
             std::printf("          presence %+.2f dB against the reference median, lines %+.2f dB, predicted after %+.2f dB\n",
                         p.presenceDb, static_cast<double>(p.presenceGainDb), p.presenceAfterDb);
+            // 23.09.2026: the audibility match -- each line's partial loudness in the drops and what was lifted.
+            {
+                static const char* const kLine[] = { "acid", "lead", "counter", "arp", "stab", "pad", "drone" };
+                static_assert(sizeof(kLine) / sizeof(kLine[0]) == kMelodyParts, "one name per melodic part");
+                std::printf("          heard in the drops (partial loudness):");
+                for (int k = 0; k < kMelodyParts; ++k) {
+                    if (p.audibleInMix[k] <= 0.0) continue;
+                    std::printf(" %s %.1f", kLine[k], p.audibleInMix[k]);
+                    if (p.audibilityLiftDb[k] > 0.0f) std::printf(" (+%.1f dB)", static_cast<double>(p.audibilityLiftDb[k]));
+                }
+                std::printf("\n");
+            }
             std::printf("          kick recipe");
             for (int m = 0; m < kNumKickMacros; ++m) std::printf(" %s %+.2f", kKickMacroNames[m], static_cast<double>(p.kickMacro[m]));
             std::printf("\n          bass recipe");

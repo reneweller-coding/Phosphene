@@ -9951,6 +9951,41 @@ void testArpPatterns()
 }
 
 /**
+ * @brief The audibility match (23.09.2026; Composer.cpp, matchAudibility): it only lifts, never past its cap, only
+ *        lines under their share of the lead, and the lift is exactly what the plan's part gain gained.
+ */
+void testAudibilityMatch()
+{
+    section("audibility match: quiet lines lifted to a share of the lead");
+    ParamStore on, off;
+    off.parseText("compose.audibility_match=0");
+    Composer a(1), b(1);
+    int lifted = 0, tracks = 0, measured = 0;
+    bool capped = true, onlyUnder = true, exact = true, leadUntouched = true;
+    for (int t = 0; t < 3; ++t) {
+        const TrackPlan pa = a.track(on, t), pb = b.track(off, t);
+        ++tracks;
+        const double lead = pa.audibleInMix[mpIndex(MelodyPart::Lead)];
+        if (lead > 0.5) ++measured;
+        for (int k = 0; k < kMelodyParts; ++k) {
+            const float lift = pa.audibilityLiftDb[k];
+            capped = capped && lift >= 0.0f && lift <= 4.0f + 1e-4f;
+            // The part gains of the two plans differ by the lift alone (the rest of the level match is the same).
+            exact = exact && std::fabs((pa.partGainDb[k] - pb.partGainDb[k]) - lift) < 1e-4f;
+            if (lift > 0.0f) {
+                ++lifted;
+                const double share = k == mpIndex(MelodyPart::Counter) ? 0.6 : 0.35;
+                onlyUnder = onlyUnder && pa.audibleInMix[k] < share * lead;
+            }
+        }
+        leadUntouched = leadUntouched && pa.audibilityLiftDb[mpIndex(MelodyPart::Lead)] == 0.0f && pa.audibilityLiftDb[mpIndex(MelodyPart::Acid)] == 0.0f;
+    }
+    check(measured > 0 && lifted > 0 && capped && onlyUnder && exact && leadUntouched,
+          "only lines under their share of the lead are lifted, by at most 4 dB, and the lift is all that moves",
+          fmt("%d tracks, %d measured against a lead, %d lines lifted", tracks, measured, lifted));
+}
+
+/**
  * @brief The audibility meter (23.09.2026, round "Hörbarkeit"; phos/Audibility.h): the textbook facts of
  *        masking on synthetic signals, then a real mix part that is turned down.
  */
@@ -14833,6 +14868,7 @@ int main(int argc, char** argv)
     run("testKnobFuzz", testKnobFuzz);
     run("testStems", testStems);
     run("testAudibility", testAudibility);
+    run("testAudibilityMatch", testAudibilityMatch);
     run("testArrangeDynamics", testArrangeDynamics);
     run("testSectionRules", testSectionRules);
     run("testCuration", testCuration);

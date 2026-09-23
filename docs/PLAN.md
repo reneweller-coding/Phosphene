@@ -7654,6 +7654,39 @@ selbst (hier nicht installiert).
 `Core/src/WavWriter.cpp` (Cues, Tags), `Tools/render/main.cpp` (`--dj-export`), `Tests/selftest.cpp`,
 `Tests/selftest_tests.cmake`; dieser Block.
 
+**23.09.2026, Hörbarkeitsabgleich: leise Linien auf einen Anteil des Leads**
+
+Pegel- und Präsenzabgleich fragen nicht, was man von einer Linie *im Mix* hört. Neu: `compose.audibility_match`
+(Standard an, am Ende von Enum und Tabelle). Nach dem Präsenzabgleich und vor Auto Gain misst eine weitere Probe
+(`kProbeAudible`: 8 zusammenhängende Takte aus Drop 1, 16 aus Drop 2, jede Stimme, Master-Dynamik aus, Stems
+abgegriffen) die Teillautheit jeder Linie im Mix (`AudibilityMeter`). Bleibt der Counter unter 0,6 der Teillautheit
+des Leads, Arp oder Stab unter 0,35, wird die Stimme angehoben: Schritt aus Stevens' Lautheitsgesetz (Exponent
+0,3), höchstens 4 dB, nie abgesenkt; ohne Lead in den Drops keine Messung. Der Plan trägt die Messwerte und die
+Anhebung (`audibleInMix`, `audibilityLiftDb`), `--tracks` druckt sie. Die Probe liefert mehr als die drei Werte des
+Probe-Caches und wird deshalb nicht zwischengespeichert (rund 1 s je Track).
+
+*Zwei Messfehler unterwegs gefunden und behoben.* (1) Das Hörbarkeitsmaß zählte jeden Frame, in dem ein Stem nicht
+exakt null war — der Ausklang einer Stimme ist das nie, und eine Linie mit Pausen zwischen den Phrasen las viel
+leiser, als sie spielt. Es zählt jetzt nur Frames, in denen die Stimme allein wenigstens 0,25 Einheiten laut ist.
+(2) Die erste Fassung nahm die Takte der Präsenz-Probe (ein Takt je Achtergruppe); in Drop 2 wechseln Lead und
+Counter phrasenweise, und die Probe las das Verhältnis Counter/Lead 1,03, der volle Render 0,45. Mit zusammenhängenden
+Takten liest die Probe 0,54.
+
+*Gemessen* (Seed 1, Track 1, voller Render, ohne/mit Abgleich): Arp in Drop 1 13,9 → 18,3, in Drop 2 11,3 → 16,2;
+Counter in Drop 2 27,1 → 28,8 (+1,5 dB); Lead und Acid unverändert. Über die ersten Tracks dreier Seeds: der Counter
+meist +1,5 bis +4 dB, der Arp oft an der 4-dB-Grenze — die Linien sind im Mix häufig deutlich leiser, als ihre Rolle
+verlangt; ob die Anteile 0,6/0,35 nach Gehör stimmen, entscheidet die Hörrunde (die Knöpfe bleiben bei ihr).
+
+*Tests.* `testAudibilityMatch` (70 s, slow): nur Linien unter ihrem Anteil werden angehoben, höchstens 4 dB, Lead und
+Acid nie, und die Anhebung ist genau die Differenz der Part-Gains zwischen an und aus (3 Tracks, 5 Linien
+angehoben). Nachgeprüft, weil der Abgleich Pegel verschiebt: testPresence, testMixBalance, testClimax,
+testVariety.levelMatch, testProbeSchedule, testProbeCache (seriell = parallel), testDialogue.*, testVoices.sound und
+.counterSound77 — alle grün. `testAudibility` mit der neuen Frame-Regel grün.
+
+*Dateien.* `Core/include/phos/Params.h`, `Core/src/Params.cpp`, `Core/include/phos/Composer.h`, `Core/src/Composer.cpp`,
+`Core/include/phos/Audibility.h`, `Core/src/Audibility.cpp`, `Tools/render/main.cpp`, `Tests/selftest.cpp`,
+`Tests/selftest_tests.cmake`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

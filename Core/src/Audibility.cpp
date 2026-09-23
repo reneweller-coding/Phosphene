@@ -20,6 +20,7 @@ constexpr double kFullScaleSpl = 100.0; ///< dB SPL of a full-scale sine
 constexpr double kCamStep = 0.5;        ///< band width in Cam
 constexpr double kLowerSlope = 27.0;    ///< dB per Bark on the low side of a source (Terhardt 1979)
 constexpr double kMinUpperSlope = 5.0;  ///< the upper slope never flattens below this (dB per Bark)
+constexpr double kAudibleFrame = 0.25;  ///< a frame counts when the part alone is this loud (units; 1 = 1 kHz at 40 dB SPL)
 
 /** @brief Critical-band rate in Bark (Traunmueller 1990). */
 double bark(double hz) { return 26.81 * hz / (1960.0 + hz) - 0.53; }
@@ -237,7 +238,10 @@ void AudibilityMeter::frame()
         for (size_t r = 0; r < B; ++r) masker[r] = std::max(0.0, total[r] - exc[static_cast<size_t>(k)][r]);
         double alone = 0.0, inMix = 0.0;
         loudness(exc[static_cast<size_t>(k)], &masker, alone, inMix);
-        if (alone <= 0.0) continue;
+        // Only frames in which the part is heard at all on its own (kAudibleFrame): a voice's release tail is never
+        // exactly zero, and averaging it in read a line with pauses between its phrases as far quieter than it
+        // plays -- the counter of seed 1's drop 2 at a third of the lead where the probe of its phrases read it level.
+        if (alone * scale_ < kAudibleFrame) continue;
         sumAlone_[static_cast<size_t>(k)] += alone * scale_;
         sumMix_[static_cast<size_t>(k)] += inMix * scale_;
         ++frames_[static_cast<size_t>(k)];

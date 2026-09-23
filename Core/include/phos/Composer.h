@@ -238,6 +238,11 @@ struct TrackPlan {
     double presenceDb = 0.0;        ///< the drops' presence estimate before the match, dB against the reference median
     double presenceAfterDb = 0.0;   ///< the same estimate with presenceGainDb on the lines (the match's own prediction)
     float  presenceGainDb = 0.0f;   ///< the gain the match puts on the lines (lead, counter, arp, stab), dB
+    /** @name The audibility match (23.09.2026; Composer.cpp, matchAudibility)
+     *  @{ */
+    double audibleInMix[kMelodyParts] = {};    ///< each part's partial loudness in the drops' mix (Audibility.h), before the lift
+    float  audibilityLiftDb[kMelodyParts] = {}; ///< what the match added to partGainDb
+    /** @} */
     /** @} */
     /** @name The learned bass phrase (compose.bass_model = Neural; PLAN 6.9, stage B, role 3)
      *  Two phrases of kBassPhraseBars bars, one for the track's primary and one for its secondary
@@ -432,6 +437,7 @@ private:
     void arcControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, bool ramp, std::vector<ControlEvent>& out) const;
     static constexpr int kProbeLines = -3;   ///< probeLoudness: lead, counter, arp and stab in the drops
     static constexpr int kProbeRest = -4;    ///< probeLoudness: everything but the lines in the drops
+    static constexpr int kProbeAudible = -5; ///< probeLoudness: the drops with every part, for the audibility meter
     /**
      * @brief A probe render of the track: its loudness (LUFS), and with @p bands its band powers.
      * @param part  a melodic part alone (0..), the foundation (-1), the whole mix through the master (-2), or
@@ -440,7 +446,12 @@ private:
      * @param bands if not null, receives the power in 1.5..6 kHz and in 40..140 Hz (linear, L plus R)
      */
     double probeLoudness(const ParamStore& params, const TrackPlan& plan, int part = -1, float masterGainDb = 0.0f,
-                         double* bands = nullptr) const;
+                         double* bands = nullptr, double* audible = nullptr) const;
+    /**
+     * @brief The audibility match (23.09.2026, compose.audibility_match): the counter, the arp and the stab lifted
+     *        until each is heard with a share of the lead's partial loudness in the drops (Composer.cpp).
+     */
+    void matchAudibility(const ParamStore& params, TrackPlan& plan) const;
     /**
      * @brief Auto Gain: two readings of the whole mix and a secant step to master.target_lufs.
      * @param firstReading the first reading, when measureTrack has rendered it already; null renders it here

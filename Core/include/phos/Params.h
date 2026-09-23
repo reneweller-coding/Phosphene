@@ -111,7 +111,10 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              // LeadStyle) unless the user takes the knob. Appended, never reordered.
              LeadDensity, PitchEntropy,
              // 23.09.2026, round "Counter": how the counter-lead answers (Form.h, CounterMode); "Auto (Style)" first.
-             CounterMode, Count };
+             CounterMode,
+             // 23.09.2026, round "Hoerbarkeit": the quiet lines lifted to a share of the lead's partial loudness
+             // (Composer.cpp, matchAudibility). Appended, in the same place in the table.
+             AudibilityMatch, Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
 namespace perc {

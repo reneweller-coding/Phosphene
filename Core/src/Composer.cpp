@@ -3,6 +3,7 @@
  * @brief Track plans, sound recipes, bars of kick and bass, and the conductor.
  */
 #include "phos/Composer.h"
+#include "phos/Audibility.h"
 #include "phos/Probe.h"
 #include "phos/Corpus.h"
 #include "phos/Disperser.h"
@@ -948,6 +949,47 @@ void Composer::matchPresence(const ParamStore& p, TrackPlan& t, const double* li
     t.presenceAfterDb = 10.0 * std::log10((gain * pl + pr) / (gain * ll + lr)) - kPresenceRefDb;
 }
 
+/**
+ * The audibility match (23.09.2026, round "Hoerbarkeit"; compose.audibility_match). The level match brings each
+ * part to the loudness it had in the first track, the presence match the lines to the reference's brightness --
+ * neither asks what a listener hears of a line *inside* the mix. The audibility meter (Audibility.h) does: on seed
+ * 1 it read the counter in drop 2 as heard at 0.68 of its own loudness (not masked) but at 21 units against the
+ * lead's 60, and the arp at 8 -- the user's "counter barely audible" was a level, not a masking problem.
+ *
+ * So one more probe of the drops (the presence probe's bars, every part, the master's dynamics off, the stems
+ * tapped) measures each line's partial loudness in the mix, and a line that stays under its share of the lead's
+ * is lifted: the counter to 0.6 of the lead (it answers the lead and should read as its partner), the arp and the
+ * stab to 0.35 (they colour, they do not lead). The step assumes loudness grows with the 0.3rd power of intensity
+ * (Stevens' law for loudness), is capped at kAudibleLiftDb and only ever lifts; a track without a lead in its
+ * drops has nothing to measure against and is left alone. Before Auto Gain, whose probes then hear the lift.
+ */
+namespace {
+constexpr double kAudibleLiftDb = 4.0;   ///< the most one line is lifted
+struct AudibleWant { MelodyPart part; double share; };
+constexpr AudibleWant kAudibleWant[] = { { MelodyPart::Counter, 0.60 }, { MelodyPart::Arp, 0.35 }, { MelodyPart::Stab, 0.35 } };
+} // namespace
+
+void Composer::matchAudibility(const ParamStore& p, TrackPlan& t) const
+{
+    for (float& v : t.audibilityLiftDb) v = 0.0f;
+    for (double& v : t.audibleInMix) v = 0.0;
+    if (!p.getBool(p.base(Module::Compose) + compose::AudibilityMatch)) return;
+    double inMix[kMelodyParts] = {};
+    probeLoudness(p, t, kProbeAudible, 0.0f, nullptr, inMix);
+    for (int k = 0; k < kMelodyParts; ++k) t.audibleInMix[k] = inMix[k];
+    const double lead = inMix[mpIndex(MelodyPart::Lead)];
+    if (!(lead > 0.5)) return;
+    for (const AudibleWant& w : kAudibleWant) {
+        const int k = mpIndex(w.part);
+        if (!t.melody.present[k] || inMix[k] <= 0.05) continue;   // not in the probe's drop bars
+        const double f = w.share * lead / inMix[k];
+        if (f <= 1.0) continue;
+        const float lift = static_cast<float>(std::min(kAudibleLiftDb, 10.0 / 0.3 * std::log10(f)));
+        t.partGainDb[k] += lift;
+        t.audibilityLiftDb[k] = lift;
+    }
+}
+
 void Composer::validate(const ParamStore& p) const
 {
     // The plans depend on these knobs; when any of them moves, the plans are made again.
@@ -1499,6 +1541,7 @@ void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
                 partGain(k);
             }
             matchPresence(p, t);
+            matchAudibility(p, t);
         }
         if (deferMaster_) { t.masterGainDb = 0.0f; t.masterDeferred = true; }
         else matchMaster(p, t);
@@ -1526,7 +1569,8 @@ void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
     }
     // Stage 2: the presence probes -- and the first mix probe beside them only where the presence match
     // cannot move the lines, because it is off (the mix probe first in the list: it is the longest).
-    const bool mixEarly = autoGain && level && !deferMaster_ && !p.getBool(cb + compose::PresenceMatch);
+    const bool mixEarly = autoGain && level && !deferMaster_ && !p.getBool(cb + compose::PresenceMatch)
+                       && !p.getBool(cb + compose::AudibilityMatch);   // both move the lines Auto Gain has to hear
     double lines[2] = {}, rest[2] = {}, mix0 = 0.0;
     if (level) {
         t.presenceGainDb = 0.0f;   // what matchPresence starts from
@@ -1537,6 +1581,7 @@ void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
         tasks.push_back([&] { probeLoudness(p, snap, kProbeRest, 0.0f, rest); });
         probe::runAll(tasks);
         matchPresence(p, t, lines, rest);
+        matchAudibility(p, t);   // after the presence gain, before Auto Gain (23.09.2026)
     }
     // Stages 3 and 4: Auto Gain's two readings, the second after the first -- unless a host asked to
     // have them later (setDeferMasterGain). `mixEarly` puts the first of the two beside the presence
@@ -1933,11 +1978,12 @@ void Composer::arcControls(const ParamStore& p, const TrackPlan& plan, int inTra
     }
 }
 
-double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int part, float masterGainDb, double* bands) const
+double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int part, float masterGainDb, double* bands, double* audible) const
 {
     // The presence probe (19.09.2026, round "polish"; matchPresence): the drops as the form plays them, split
     // into the lines and the rest, so that the balance can be solved for the lines' gain without another render.
-    const bool presence = part == kProbeLines || part == kProbeRest;
+    // The audibility probe (23.09.2026, matchAudibility) plays the same bars with every part, and taps the stems.
+    const bool presence = part == kProbeLines || part == kProbeRest || part == kProbeAudible;
     const bool mixLike = part == -2 || presence;
     auto isLine = [](MelodyPart mp) {
         return mp == MelodyPart::Lead || mp == MelodyPart::Counter || mp == MelodyPart::Arp || mp == MelodyPart::Stab;
@@ -1946,7 +1992,9 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     // Two bars for the foundation and the parts. For the whole mix eight bars spread evenly over the track,
     // as its blocks really play -- intro and outro included, since the gated integrated loudness counts
     // them: the densest block alone over-read a track by 0.8 LU, four bars from its middle by 0.6 LU.
-    const int bars = part == -2 ? 16 : (presence ? 8 : 2);
+    // The audibility probe: 8 contiguous bars of drop 1 and 16 of drop 2 (sourceBar) -- lead and counter trade
+    // phrases there, and the presence probe's one bar per group heard whichever of them its bar fell on.
+    const int bars = part == -2 ? 16 : (part == kProbeAudible ? 24 : (presence ? 8 : 2));
     // The probe's inputs are collected first -- the parameter values, the controls, the notes -- and the
     // engine is built only when they have to be rendered (20.09.2026, round "speed"): with the probe cache
     // on (Probe.h) the same inputs may already have been rendered, by this process or another. The engine
@@ -1965,7 +2013,7 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     for (int k = 0; k < kMelodyParts; ++k) {
         const MelodyPart mp = static_cast<MelodyPart>(k);
         const int mute = mp == MelodyPart::Acid ? static_cast<int>(mix::AcidMute) : mix::polyMute(melodyPoly(mp));
-        const bool on = k == part || part == -2 || (part == kProbeLines && isLine(mp)) || (part == kProbeRest && !isLine(mp));
+        const bool on = k == part || part == -2 || part == kProbeAudible || (part == kProbeLines && isLine(mp)) || (part == kProbeRest && !isLine(mp));
         ps.set(mb + mute, on ? 0.0f : 1.0f);
     }
     ps.set(mb + mix::SfxMute, 1.0f);
@@ -2030,6 +2078,14 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
     // holds its chord over several bars and a reverb tail runs on: single bars cut from the middle of a
     // breakdown read far quieter than the same bar does in the track.
     auto sourceBar = [&](int b) {
+        if (part == kProbeAudible) {
+            int d1 = -1, d2 = -1;
+            for (int i = 0; i < plan.form.count; ++i)
+                if (plan.form.section[i].type == SectionType::Drop) { if (d1 < 0) d1 = i; d2 = i; }
+            const Section& s = plan.form.section[std::max(0, b < 8 ? d1 : d2)];
+            const int in = 8 + (b < 8 ? b : b - 8);   // from the second group on: the drop's first bars carry the impact
+            return s.startBar + std::min(s.bars - 1, in);
+        }
         if (presence) {
             // Four bars of drop 1 and four of drop 2 (the last drop, where a form has only one): the fifth bar
             // of each of their first four eight-bar groups. One per group, because the stab and the counter
@@ -2168,7 +2224,8 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
 
     // The cache key: everything the render below depends on (Probe.h). Field by field, so that padding
     // bytes never enter it; with the counts, so that a note cannot pass for a control.
-    const bool cached = probe::cacheEnabled();
+    // The audibility probe returns a reading per part, more than the cache's three values: never cached.
+    const bool cached = probe::cacheEnabled() && audible == nullptr;
     probe::Key key;
     if (cached) {
         // The shared data is hashed as it is loaded *now*, so it has to be loaded before the key is made and
@@ -2218,10 +2275,27 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
             bandFilter[1][c][2 + k].setQ(140.0f, 0.7071f, static_cast<float>(sr));
         }
     double bandSum[2] = {};
+    // The stems for the audibility meter (Engine.h, StemTap; Audibility.h), only when they are asked for.
+    std::vector<std::vector<float>> stemL, stemR;
+    StemTap tap;
+    std::unique_ptr<AudibilityMeter> aud;
+    if (audible != nullptr) {
+        stemL.assign(kNumStems, std::vector<float>(512));
+        stemR.assign(kNumStems, std::vector<float>(512));
+        for (int s = 0; s < kNumStems; ++s) { tap.L[s] = stemL[static_cast<size_t>(s)].data(); tap.R[s] = stemR[static_cast<size_t>(s)].data(); }
+        engine->setStemTap(&tap);
+        aud = std::make_unique<AudibilityMeter>(kNumStems, sr);
+    }
     for (int done = 0; done < total; done += 512) {
         const int n = std::min(512, total - done);
         engine->process(L.data(), R.data(), n);
         meter.process(L.data(), R.data(), n);
+        if (aud != nullptr) {
+            const float* sl[kNumStems];
+            const float* sr2[kNumStems];
+            for (int s = 0; s < kNumStems; ++s) { sl[s] = stemL[static_cast<size_t>(s)].data(); sr2[s] = stemR[static_cast<size_t>(s)].data(); }
+            aud->add(sl, sr2, n);
+        }
         if (bands == nullptr) continue;
         for (int c = 0; c < 2; ++c) {
             const float* x = c == 0 ? L.data() : R.data();
@@ -2235,6 +2309,10 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
         }
     }
     if (bands != nullptr) { bands[0] = bandSum[0]; bands[1] = bandSum[1]; }
+    if (aud != nullptr) {
+        engine->setStemTap(nullptr);
+        for (int k = 0; k < kMelodyParts; ++k) audible[k] = aud->read(static_cast<int>(melodyScorePart(static_cast<MelodyPart>(k)))).inMix;
+    }
     const double integrated = meter.read().integrated;
     if (cached) {
         const double v[3] = { integrated, bandSum[0], bandSum[1] };
