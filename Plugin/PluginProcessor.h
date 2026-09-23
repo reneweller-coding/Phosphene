@@ -202,6 +202,16 @@ public:
 
 private:
     bool flush(phos::EventRing<phos::NoteEvent>* midiOut);
+    /**
+     * @brief The sound state seek() replayed, waiting for the first pump() after the engine's reset.
+     *
+     * 23.09.2026: seek() used to push these straight into the engine -- and the seek is step 2 of the restart
+     * handshake, after which the audio thread resets the engine (step 3), which empties the control ring. So a
+     * set joined in the middle (Play from a position, a click in the Arrange tab) never got the replayed state:
+     * the track's recipe, its part levels and its track gain stayed at the knobs until the next track started.
+     * Found when the first track's measured line levels, sent while a seek was pending, did not arrive.
+     */
+    std::vector<phos::ControlEvent> landing_;
 
     /** @brief The tempo of the track that @p bar belongs to, as control events on compose.bpm. */
     void tempoControls(const phos::ParamStore& params, int bar, std::vector<phos::ControlEvent>& out) const;
@@ -710,6 +720,26 @@ private:
     std::atomic<double> hostBpm_{ 0.0 };         ///< tempo the host reported, 0 = none
 
     std::thread composerThread_;
+    /**
+     * @brief A measurement running behind the music (23.09.2026, round "Planung"): a copy of the composer measures
+     *        the playing track's deferred probes on a thread of its own, so the composer thread stays free for
+     *        seeks and pumps. Started and taken over by serviceComposer(); ended at once by stopMeasureJob().
+     */
+    struct MeasureJob {
+        std::unique_ptr<phos::Composer> composer;   ///< the copy, with the abort flag set
+        phos::ParamStore params;                    ///< the knobs as they stood when it started
+        int index = -1;                             ///< the track it measures
+        uint64_t generation = 0;                    ///< Composer::planGeneration() when it started
+        phos::TrackPlan result;                     ///< the measured plan, once done
+        std::atomic<bool> done{ false };            ///< result is complete
+        std::atomic<bool> abort{ false };           ///< stop the probes (Composer::setAbortFlag)
+    };
+    std::unique_ptr<MeasureJob> measureJob_;        ///< composer thread only
+    std::thread measureThread_;                     ///< the job's thread
+    /** @brief Starts the job for track @p index (composer thread, under composeLock_). */
+    void startMeasureJob(int index);
+    /** @brief Aborts a running job and waits for it (a few milliseconds: the probes stop at their next block). */
+    void stopMeasureJob();
     std::atomic<bool> composerRun_{ false };   ///< false asks the composer thread to end
     std::atomic<bool> offline_{ false };   ///< non-realtime: the composer thread idles
 

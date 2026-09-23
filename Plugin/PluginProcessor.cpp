@@ -360,15 +360,16 @@ void PlugConductor::seek(const ParamStore& params, int startBar, double beatOffs
         immediate.push_back(e);
     }
     // Last value wins, and it arrives at once: a ramp that was in flight lands where it was
-    // heading, which is the state the following bars are written against. Under the engine lock,
-    // because that lock is what makes the control ring a single-producer queue: everything that
-    // ever pushes into it -- this, the pump, nothing else -- holds the lock while it does.
-    const std::lock_guard<std::mutex> lock(engineLock);
+    // heading, which is the state the following bars are written against. Pushed under the engine lock
+    // (by pump()), because that lock is what makes the control ring a single-producer queue.
+    // Kept, not pushed: the engine is reset after this step of the handshake (landing_, PluginProcessor.h), and
+    // the first pump() after that reset sends them, before the first composed bar.
+    (void)engineLock;
     for (ControlEvent& e : immediate) {
         e.beat = 0.0;
         e.length = 0.0f;
-        engine_.pushControl(e);
     }
+    landing_ = std::move(immediate);
 }
 
 bool PlugConductor::flush(EventRing<NoteEvent>* midiOut)
@@ -395,6 +396,11 @@ void PlugConductor::pump(const ParamStore& params, double horizonBeats, EventRin
                          std::mutex& engineLock)
 {
     const double target = engine_.beatPosition() + beatOffset_ + horizonBeats;
+    if (!landing_.empty()) {
+        const std::lock_guard<std::mutex> lock(engineLock);
+        for (const ControlEvent& e : landing_) engine_.pushControl(e);
+        landing_.clear();
+    }
     for (;;) {
         {
             // The engine is only touched here, and only for as long as pushing takes. Composing the
@@ -519,6 +525,7 @@ PhospheneProcessor::~PhospheneProcessor()
     cues_.stop();
     composerRun_.store(false, std::memory_order_release);
     if (composerThread_.joinable()) composerThread_.join();
+    stopMeasureJob();
 }
 
 void PhospheneProcessor::buildParameters()
@@ -706,6 +713,7 @@ void PhospheneProcessor::setNonRealtime(bool offline) noexcept
     // deferral is switched off here, and the plans made under it are thrown away so the bounce plans
     // whole. (22.09.2026.)
     const std::lock_guard<std::mutex> lock(composeLock_);
+    if (offline) stopMeasureJob();   // a bounce measures whole, on its own; a live measurement would only compete
     if (composer_->defersMasterGain() == offline) {
         composer_->setDeferMasterGain(!offline);
         composer_->setSeed(seed_.load(std::memory_order_relaxed));   // clears the cached plans
@@ -778,47 +786,69 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
     conductor_->pump(params(), kHorizonBeats, &midiRing_, engineLock_);
     genPrimed_.store(genLocal_, std::memory_order_release);
 
-    // ---------------------------------------------------------------- Auto Gain, after the start
+    // ---------------------------------------------------------------- measuring behind the music
     //
-    // 22.09.2026, at the user's decision. Auto Gain is three quarters of the time it takes to plan a
-    // track -- two whole-mix renders with a secant step between them -- and waiting for it put nine
-    // seconds of silence between the button and the first sound. The track is planned without it now
-    // (Composer::setDeferMasterGain, set in the constructor) and plays after about two; the offset is
-    // measured here, on this thread, while the music is already running, and rides in over a ramp.
+    // 22.09.2026, at the user's decision: Auto Gain after the start -- two whole-mix renders that used to put nine
+    // seconds of silence between the button and the first sound, measured while the music runs and ridden in over
+    // a phrase (`ControlEvent::Kind::Offset` ramps with a raised cosine over `length` beats).
     //
-    // The ramp is four bars -- a phrase -- and it lands in the intro: a track opens with sixteen
-    // bars without a kick,
-    // some twenty-six seconds at 145 BPM, and the measurement takes about six. So the level settles
-    // long before the first drop, and what a listener hears is the intro coming up to level rather
-    // than a step. `ControlEvent::Kind::Offset` already ramps with a raised cosine over `length`
-    // beats, so this is one event, not a new mechanism.
+    // 23.09.2026, round "Planung": the first track's level, presence and audibility probes too (the composer plans
+    // it without any, Composer::completeMeasurement), and all of it on a thread of its own, on a copy of the
+    // composer. Done here, on this thread, the measurement held composeLock_ for 8 to 11 seconds, and a second
+    // restart right after Play -- a click into the Arrange tab, a host's locate -- waited for all of them; the host
+    // test measured 9.4 s. Now this thread is never busy for longer than a pump, and the job's result is taken over
+    // when it arrives (Composer::adoptMeasurement, refused if the plans were thrown away meanwhile).
     //
-    // Only for the track that is playing, and only once: completeMasterGain writes the gain into the
-    // cached plan and clears the flag, so a later seek into the same track pushes it at the start
-    // like any other track's.
+    // A track opens with sixteen bars without a kick and without the lines -- some twenty-six seconds at 145 BPM --
+    // and the job takes about fifteen, so the levels settle long before anyone hears a line or the first drop.
+    const bool running = playRequest_.load(std::memory_order_relaxed) || hostSyncNow_.load(std::memory_order_relaxed);
     if (composer_->defersMasterGain()) {
         const int playingTrack = composer_->trackOfBar(params(), juce::jmax(0, static_cast<int>(
             musicalBeat_.load(std::memory_order_relaxed) / kBeatsPerBar)));
-        phos::TrackPlan plan;
-        if (tryReadTrack(playingTrack, plan) && plan.masterDeferred) {
-            const float gain = composer_->completeMasterGain(params(), playingTrack);
-            {
-                const std::lock_guard<std::mutex> pl(plansLock_);
-                if (playingTrack < static_cast<int>(plans_.size())) {
-                    plans_[static_cast<size_t>(playingTrack)].masterGainDb = gain;
-                    plans_[static_cast<size_t>(playingTrack)].masterDeferred = false;
-                }
+        // The corrections of a plan as the engine should now have them: every melodic part's level, and the
+        // master offset, both over a phrase. Sent again when unchanged, which a ramp to the value it holds is.
+        auto sendCorrections = [&](int index) {
+            const phos::TrackPlan& now = composer_->track(params(), index);
+            std::vector<ControlEvent> events;
+            const double at = engine_->beatPosition() + 1.0;   // a beat ahead of the play head, never behind it
+            const float phrase = 4.0f * static_cast<float>(kBeatsPerBar);
+            composer_->levelControls(params(), now, at, phrase, events);
+            if (!now.masterDeferred) {
+                const ParamStore& ps = params();
+                const ParamDesc& mg = ps.desc(ps.base(Module::Master) + master::Gain);
+                ControlEvent c;
+                c.beat = at;
+                c.param = static_cast<int16_t>(ps.base(Module::Master) + master::Gain);
+                c.kind = ControlEvent::Kind::Offset;
+                c.value = now.masterGainDb / (mg.maxValue - mg.minValue);
+                c.length = phrase;
+                events.push_back(c);
             }
-            const ParamStore& ps = params();
-            const ParamDesc& mg = ps.desc(ps.base(Module::Master) + master::Gain);
-            ControlEvent c;
-            c.beat = engine_->beatPosition() + 1.0;   // a beat ahead of the play head, never behind it
-            c.param = static_cast<int16_t>(ps.base(Module::Master) + master::Gain);
-            c.kind = ControlEvent::Kind::Offset;
-            c.value = gain / (mg.maxValue - mg.minValue);
-            c.length = 4.0f * static_cast<float>(kBeatsPerBar);   // a phrase, not a correction
-            const std::lock_guard<std::mutex> eng(engineLock_);
-            engine_->pushControl(c);
+            {
+                const std::lock_guard<std::mutex> eng(engineLock_);
+                for (const ControlEvent& c : events) engine_->pushImmediate(c);   // not behind eight queued bars
+            }
+            composer_->clearCorrectionsPending(index);
+            const std::lock_guard<std::mutex> pl(plansLock_);
+            if (index < static_cast<int>(plans_.size())) plans_[static_cast<size_t>(index)] = now;
+        };
+        // A finished job: take it over and send what it measured.
+        if (measureJob_ != nullptr && measureJob_->done.load(std::memory_order_acquire)) {
+            if (measureThread_.joinable()) measureThread_.join();
+            const bool adopted = composer_->adoptMeasurement(measureJob_->index, measureJob_->result, measureJob_->generation);
+            if (trace_) std::fprintf(stderr, "[phos composer] background measurement of track %d %s\n", measureJob_->index + 1,
+                                     adopted ? "taken over" : "dropped (the plans changed meanwhile)");
+            const int index = measureJob_->index;
+            measureJob_.reset();
+            if (adopted && index == playingTrack) sendCorrections(index);
+        }
+        // Measured already, by the planning of a later track that needed the first one's numbers.
+        if (composer_->correctionsPending(playingTrack)) sendCorrections(playingTrack);
+        // Start one for the track that plays, while the set plays and no restart waits. Stopped, nothing is
+        // measured at all: a probe render's CPU is only worth spending on what is about to be heard.
+        if (measureJob_ == nullptr && running && genWanted_.load(std::memory_order_acquire) == genLocal_) {
+            const phos::TrackPlan& plan = composer_->track(params(), playingTrack);
+            if (plan.measureDeferred || plan.masterDeferred) startMeasureJob(playingTrack);
         }
     }
 
@@ -832,6 +862,9 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
     // stand silent for all of them. The warm-up is what there is spare time for, nothing more.
     if (genWanted_.load(std::memory_order_acquire) != genLocal_) return;
     if (plansStale_.exchange(false, std::memory_order_acq_rel)) publishedTracks_ = 0;
+    // Stopped, or while the job measures the playing track: the first track only. Every later plan renders its
+    // probes, and planning the second one before the first is measured would measure the first again, here.
+    if (composer_->defersMasterGain() && (!running || measureJob_ != nullptr) && publishedTracks_ >= 1) return;
     if (publishedTracks_ < kPublishedTracks) {
         const TrackPlan plan = composer_->track(params(), publishedTracks_);
         const std::lock_guard<std::mutex> pl(plansLock_);
@@ -839,6 +872,32 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
         plans_.push_back(plan);
         ++publishedTracks_;
     }
+}
+
+void PhospheneProcessor::startMeasureJob(int index)
+{
+    auto job = std::make_unique<MeasureJob>();
+    job->composer = std::make_unique<phos::Composer>(*composer_);
+    job->composer->setAbortFlag(&job->abort);
+    job->params.copyValuesFrom(params());
+    job->index = index;
+    job->generation = composer_->planGeneration();
+    MeasureJob* j = job.get();
+    measureJob_ = std::move(job);
+    measureThread_ = std::thread([j] {
+        j->composer->completeMeasurement(j->params, j->index);   // level, presence, audibility (the first track)
+        if (!j->abort.load(std::memory_order_relaxed)) j->composer->completeMasterGain(j->params, j->index);   // Auto Gain
+        j->result = j->composer->track(j->params, j->index);
+        j->done.store(true, std::memory_order_release);
+    });
+    if (trace_) std::fprintf(stderr, "[phos composer] measuring track %d behind the music\n", index + 1);
+}
+
+void PhospheneProcessor::stopMeasureJob()
+{
+    if (measureJob_ != nullptr) measureJob_->abort.store(true, std::memory_order_relaxed);
+    if (measureThread_.joinable()) measureThread_.join();
+    measureJob_.reset();
 }
 
 void PhospheneProcessor::requestSeek(int bar, double beatOffset)

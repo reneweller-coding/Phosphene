@@ -10140,6 +10140,100 @@ void testStems()
 }
 
 /**
+ * @brief The deferred first plan (23.09.2026, round "Planung", Composer::completeMeasurement).
+ *
+ * A live start plans the first track without a single probe render and measures it behind the music. The plan
+ * has to come out of that exactly as one planned whole -- the loudness readings, the part gains, the presence and
+ * the audibility match -- and a later track, planned while the first is still unmeasured, has to measure the first
+ * one itself and then be the same track as in a whole plan. The events the host sends afterwards carry the same
+ * values the track start would have written.
+ */
+void testDeferredPlan()
+{
+    section("deferred first plan: plays at once, measured behind the music, the same numbers");
+    ParamStore p;
+    auto sameLevels = [](const TrackPlan& a, const TrackPlan& b) {
+        bool ok = a.loudness == b.loudness && a.gainDb == b.gainDb && a.presenceDb == b.presenceDb && a.presenceGainDb == b.presenceGainDb;
+        for (int k = 0; k < kMelodyParts; ++k)
+            ok = ok && a.partLoudness[k] == b.partLoudness[k] && a.partGainDb[k] == b.partGainDb[k]
+                 && a.audibilityLiftDb[k] == b.audibilityLiftDb[k] && a.audibleInMix[k] == b.audibleInMix[k];
+        return ok;
+    };
+    Composer whole(11);
+    const auto w0 = std::chrono::steady_clock::now();
+    const TrackPlan ref0 = whole.track(p, 0);
+    const double wholeSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - w0).count();
+    const TrackPlan ref1 = whole.track(p, 1);
+
+    Composer live(11);
+    live.setDeferMasterGain(true);
+    const auto l0 = std::chrono::steady_clock::now();
+    const TrackPlan first = live.track(p, 0);
+    const double liveSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - l0).count();
+    bool zero = first.measureDeferred && first.masterDeferred && first.presenceGainDb == 0.0f && first.loudness == 0.0;
+    for (int k = 0; k < kMelodyParts; ++k) zero = zero && first.partGainDb[k] == 0.0f;
+    check(zero && liveSeconds < 0.5 * wholeSeconds,
+          "a live start plans the first track without its probes: every correction zero, and in a fraction of the time",
+          fmt("%.2f s instead of %.2f s", liveSeconds, wholeSeconds));
+
+    const bool measured = live.completeMeasurement(p, 0);
+    const TrackPlan& after = live.track(p, 0);
+    const bool again = live.completeMeasurement(p, 0);
+    check(measured && !again && !after.measureDeferred && after.correctionsPending && sameLevels(after, ref0),
+          "measured behind the music, the first plan's numbers are those of a plan made whole",
+          fmt("presence gain %.3f / %.3f dB, counter %.3f / %.3f dB", after.presenceGainDb, ref0.presenceGainDb,
+              after.partGainDb[mpIndex(MelodyPart::Counter)], ref0.partGainDb[mpIndex(MelodyPart::Counter)]));
+
+    // What the host sends afterwards: every melodic part's level, the lines with the presence gain on top.
+    std::vector<ControlEvent> ev;
+    live.levelControls(p, after, 12.0, 16.0f, ev);
+    const int mb = p.base(Module::Mix);
+    bool events = static_cast<int>(ev.size()) == kMelodyParts;
+    for (int k = 0; events && k < kMelodyParts; ++k) {
+        const MelodyPart part = static_cast<MelodyPart>(k);
+        const int level = mb + (part == MelodyPart::Acid ? static_cast<int>(mix::AcidLevel) : mix::polyLevel(melodyPoly(part)));
+        const bool line = part == MelodyPart::Lead || part == MelodyPart::Counter || part == MelodyPart::Arp || part == MelodyPart::Stab;
+        const ParamDesc& d = p.desc(level);
+        const float want = (after.partGainDb[k] + (line ? after.presenceGainDb : 0.0f)) / (d.maxValue - d.minValue);
+        events = ev[static_cast<size_t>(k)].param == level && ev[static_cast<size_t>(k)].value == want && ev[static_cast<size_t>(k)].length == 16.0f
+              && ev[static_cast<size_t>(k)].beat == 12.0 && ev[static_cast<size_t>(k)].kind == ControlEvent::Kind::Offset;
+    }
+    check(events, "the level events it sends are the track start's values, ramped");
+
+    // The plugin's way (PluginProcessor.cpp, MeasureJob): a copy measures behind the music and the original takes the
+    // numbers over -- and refuses them once its plans were thrown away (a knob, a seed, a reroll) since the copy.
+    {
+        Composer original(11);
+        original.setDeferMasterGain(true);
+        original.track(p, 0);
+        Composer copy = original;
+        const uint64_t generation = original.planGeneration();
+        copy.completeMeasurement(p, 0);
+        const bool taken = original.adoptMeasurement(0, copy.track(p, 0), generation);
+        const TrackPlan& adopted = original.track(p, 0);
+        Composer stale(11);
+        stale.setDeferMasterGain(true);
+        stale.track(p, 0);
+        const uint64_t before = stale.planGeneration();
+        stale.setSeed(12);
+        stale.track(p, 0);
+        const bool refused = !stale.adoptMeasurement(0, copy.track(p, 0), before);
+        check(taken && !adopted.measureDeferred && adopted.correctionsPending && sameLevels(adopted, ref0) && refused,
+              "a copy's measurement is taken over number for number, and refused once the plans changed");
+    }
+
+    // A later track planned while the first is still unmeasured measures the first one itself.
+    Composer seek(11);
+    seek.setDeferMasterGain(true);
+    const TrackPlan second = seek.track(p, 1);
+    const TrackPlan& firstAfter = seek.track(p, 0);
+    check(!firstAfter.measureDeferred && firstAfter.correctionsPending && sameLevels(firstAfter, ref0) && sameLevels(second, ref1)
+              && second.masterDeferred && !second.measureDeferred,
+          "a later track planned first measures the first one itself and is the track of a whole plan",
+          fmt("track 2 gain %.3f / %.3f dB", second.gainDb, ref1.gainDb));
+}
+
+/**
  * @brief The factory presets and the own-sound switches (23.09.2026, round "Presets", SoundPresets.h).
  *
  * Every synth has presets in groups, with names that tell them apart; every preset applies, leaves the knobs
@@ -15090,6 +15184,7 @@ int main(int argc, char** argv)
     run("testKnobFuzz", testKnobFuzz);
     run("testStems", testStems);
     run("testSoundPresets", testSoundPresets);
+    run("testDeferredPlan", testDeferredPlan);
     run("testKeyboard", testKeyboard);
     run("testAudibility", testAudibility);
     run("testAudibilityMatch", testAudibilityMatch);

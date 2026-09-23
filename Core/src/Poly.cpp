@@ -71,6 +71,7 @@ void Poly::prepare(double sampleRate)
 {
     sr_ = sampleRate;
     for (Envelope& e : amp_) e.setSampleRate(sr_);
+    ampTimes_.setSampleRate(sr_);
     delay_.prepare(sr_);
     slotL_.assign(static_cast<size_t>(kPolyBlock * kPolySlots), 0.0f);
     slotR_.assign(static_cast<size_t>(kPolyBlock * kPolySlots), 0.0f);
@@ -174,8 +175,9 @@ void Poly::update(const float* v, double bpm)
 {
     std::copy(v, v + poly::Count, values_);
     fDecay_ = static_cast<float>(std::exp(std::log(1.0e-3) / (v[poly::FilterDecay] * 0.001 * sr_)));
-    for (Envelope& e : amp_)
-        e.setTimes(v[poly::AmpAttack] * 0.001f, v[poly::AmpDecay] * 0.001f, v[poly::AmpSustain], std::max(0.005f, v[poly::AmpRelease] * 0.001f));
+    // Once, then copied: the same numbers setTimes would give each voice, without eight times three exp().
+    ampTimes_.setTimes(v[poly::AmpAttack] * 0.001f, v[poly::AmpDecay] * 0.001f, v[poly::AmpSustain], std::max(0.005f, v[poly::AmpRelease] * 0.001f));
+    refreshEnvelopeTimes();
     // waveTable() addresses the built-in tables and the library with one index, and hands back a
     // built-in when a library table's file is missing -- so this stays a pointer swap with no
     // branch on the audio thread and no chance of a null table.
@@ -215,6 +217,11 @@ void Poly::update(const float* v, double bpm)
     const int dl = std::clamp(static_cast<int>(std::lround(v[poly::DelayLeft])), 0, kNumDelayTimes - 1);
     const int dr = std::clamp(static_cast<int>(std::lround(v[poly::DelayRight])), 0, kNumDelayTimes - 1);
     delay_.set(kDelayBeats[dl], kDelayBeats[dr], bpm, v[poly::DelayFeedback], v[poly::DelayHighPass], v[poly::DelayLowPass]);
+}
+
+bool Poly::tableStale() const
+{
+    return table_ != &waveTable(static_cast<int>(std::lround(values_[poly::Table])));
 }
 
 void Poly::voiceCoefs(int voice)

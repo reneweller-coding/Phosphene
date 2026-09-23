@@ -88,6 +88,7 @@
 #include "phos/Probe.h"   // how the probe renders are scheduled; a program that plans tracks may opt in there
 #include "phos/Rhythm.h"
 #include "phos/Score.h"
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <vector>
@@ -231,6 +232,17 @@ struct TrackPlan {
      * behind it and rides in over a ramp while the intro plays.
      */
     bool   masterDeferred = false;
+    /**
+     * @brief The level, presence and audibility measurements of this plan are still to come (23.09.2026).
+     *
+     * Only ever true for the first track of a live start (Composer::setDeferMasterGain): the plugin plays at
+     * once and measures behind the music (Composer::completeMeasurement). Until then every correction of the plan
+     * is zero -- which for the first track is the right value everywhere but on the lines (presence, audibility)
+     * and the master, because the first track is the level match's reference and corrects nothing.
+     */
+    bool   measureDeferred = false;
+    /** @brief completeMeasurement() changed the lines' corrections, and the host has not sent them yet. */
+    bool   correctionsPending = false;
     double mixLoudness = 0.0;       ///< probe loudness of the whole mix after the master, before the loudness offset
     float  masterGainDb = 0.0f;     ///< the offset that brings the mix to master.target_lufs (Auto Gain)
     /** @name The presence match (19.09.2026, round "polish"; Composer.cpp, matchPresence)
@@ -287,7 +299,25 @@ public:
     /** @brief @p seed identifies the set. */
     explicit Composer(uint64_t seed = 1) : seed_(seed) {}
     /** @brief Changes the set seed (forgets cached plans). */
-    void setSeed(uint64_t seed) { seed_ = seed; plans_.clear(); walk_.clear(); }
+    void setSeed(uint64_t seed) { seed_ = seed; plans_.clear(); walk_.clear(); ++planGeneration_; }
+    /**
+     * @brief Counts the times the cached plans were thrown away (a seed, a lock, a reroll, a knob the plans depend
+     *        on). A measurement made on a copy of this composer belongs to the generation it was started in.
+     */
+    uint64_t planGeneration() const { return planGeneration_; }
+    /**
+     * @brief Takes over what a copy of this composer measured for track @p index behind the music (the host's
+     *        background job, 23.09.2026): the level, presence and audibility match and Auto Gain. Nothing else of the
+     *        plan is touched -- the planning of a later track writes into an earlier one (the DJ overlap's tail), and
+     *        that must survive. Refused when the plans were thrown away since the copy was made.
+     * @return true when taken over (then correctionsPending is set)
+     */
+    bool adoptMeasurement(int index, const TrackPlan& measured, uint64_t generation) const;
+    /**
+     * @brief A flag that stops probe renders early (their readings are then worthless and are not cached). For a
+     *        copy measuring in the background, so that a host can end it at once when it is torn down.
+     */
+    void setAbortFlag(const std::atomic<bool>* flag) { abort_ = flag; }
     /**
      * @brief Plan tracks without their Auto Gain offset; a host measures it afterwards.
      *
@@ -296,6 +326,37 @@ public:
      * program that does not ask is exactly where it was.
      */
     void setDeferMasterGain(bool on) { deferMaster_ = on; }
+    /**
+     * @brief Measures a plan planned without its probes: the level match, the presence and the audibility match
+     *        (TrackPlan::measureDeferred). Auto Gain stays deferred (completeMasterGain).
+     *
+     * With deferral on (setDeferMasterGain), the first track of a set is planned without any probe render at all
+     * (23.09.2026, round "Planung"): the button used to be followed by 8 to 11 seconds of silence while the
+     * level, presence and audibility probes ran, and a track's first sixteen bars do not need a single one of
+     * them. The plan has every correction at zero -- the first track corrects nothing in the level match, it is the
+     * reference; its lines' presence and audibility gains are what arrive later -- and the host calls this on
+     * its composer thread once the music runs, then sends the lines' new levels (levelControls, with a ramp).
+     * Planning any later track calls it first by itself, because every later track is matched against the first.
+     * The plan ends up the same, number for number, as one planned whole (testDeferredPlan).
+     * @return true when it measured something; false when the plan was not deferred
+     */
+    bool completeMeasurement(const ParamStore& p, int index) const;
+    /** @brief Whether completeMeasurement() changed corrections the host has not yet sent (TrackPlan::correctionsPending). */
+    bool correctionsPending(int index) const
+    {
+        return index >= 0 && index < static_cast<int>(plans_.size()) && plans_[static_cast<size_t>(index)].correctionsPending;
+    }
+    /** @brief The host sent them. */
+    void clearCorrectionsPending(int index) const
+    {
+        if (index >= 0 && index < static_cast<int>(plans_.size())) plans_[static_cast<size_t>(index)].correctionsPending = false;
+    }
+    /**
+     * @brief The melodic parts' level corrections of @p plan as control events at @p beat, ramped over @p rampBeats
+     *        -- exactly what trackStartControls writes for them (it calls the same code), for a host that sends
+     *        them later (completeMeasurement).
+     */
+    void levelControls(const ParamStore& p, const TrackPlan& plan, double beat, float rampBeats, std::vector<ControlEvent>& out) const;
     /** @brief Whether the master offset is being deferred. */
     bool defersMasterGain() const { return deferMaster_; }
     /**
@@ -479,6 +540,15 @@ private:
      *        stages (round "speed", 20.09.2026; Probe.h). The plan comes out the same either way.
      */
     void measureTrack(const ParamStore& params, TrackPlan& plan) const;
+    /**
+     * @brief measureTrack() without Auto Gain: the level match, the presence and the audibility match.
+     * @param mix0 receives Auto Gain's first reading where it could run beside the presence probes
+     * @return whether it did (then *mix0 holds it)
+     */
+    bool measureLevels(const ParamStore& params, TrackPlan& plan, double* mix0) const;
+    /** @brief The part-level events of trackStartControls and levelControls, one formula for both. */
+    void pushPartLevels(const ParamStore& params, const TrackPlan& plan, double beat, float length, bool floor, bool voices,
+                        std::vector<ControlEvent>& out) const;
     void sectionControls(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar, double beat,
                          std::vector<ControlEvent>& out, ControlScope scope = ControlScope::All) const;
     /** @brief The lead's cutoff offset at a bar, as sectionControls ramps it (22.09.2026). */
@@ -509,6 +579,8 @@ private:
 
     uint64_t seed_;
     bool deferMaster_ = false;      ///< setDeferMasterGain: the plugin measures Auto Gain after the start
+    mutable uint64_t planGeneration_ = 0;         ///< planGeneration()
+    const std::atomic<bool>* abort_ = nullptr;    ///< setAbortFlag()
     mutable std::vector<TrackPlan> plans_;
     int soloTrack_ = -1;   ///< setSoloTrack: the one track composeBars sends, -1 = the set
     mutable std::vector<TrackWalk> walk_;

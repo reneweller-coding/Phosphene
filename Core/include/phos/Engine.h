@@ -190,6 +190,17 @@ public:
     bool pushEvent(const NoteEvent& e) { return notes_.push(e); }
     /** @brief Queues a control event (producer thread); false if the ring is full. */
     bool pushControl(const ControlEvent& e) { return controls_.push(e); }
+    /**
+     * @brief Queues a control event that takes effect at the next chunk, ahead of everything queued (producer
+     *        thread, the same one that pushes the others); false if its ring is full.
+     *
+     * The control ring is first in, first out, and the composer keeps it filled eight bars ahead, so an event
+     * pushed "now" into it waits behind every event of those eight bars -- some thirteen seconds at 145 BPM
+     * (23.09.2026: the measured line levels and Auto Gain's offset arrived that late, and the host test's ramp
+     * was still short of its target when it looked). This ring is read at every chunk start before anything
+     * else; an event whose beat has passed starts there, so a ramp runs its full length from now.
+     */
+    bool pushImmediate(const ControlEvent& e) { return immediate_.push(e); }
     /** @brief Beat position of the next sample to be rendered (any thread). */
     double beatPosition() const { return beatNow_.load(std::memory_order_relaxed); }
     /** @brief Samples rendered since reset. */
@@ -247,6 +258,7 @@ private:
 
     EventRing<NoteEvent> notes_;
     EventRing<ControlEvent> controls_;
+    EventRing<ControlEvent> immediate_;    ///< pushImmediate()
     uint64_t samples_ = 0;
     double chunkBeat_ = 0.0;
     double beatsPerSample_ = 0.0;
@@ -262,6 +274,25 @@ private:
     };
     std::unique_ptr<Variation[]> var_;
     std::vector<float> eff_;               ///< effective values, indexed by global id
+    /**
+     * @name What applyParams() can skip (23.09.2026, round "Planung + applyParams")
+     * VTune put applyParams at 6 % of a render: every 32-sample chunk and every control event recomputed all ~3000
+     * effective values, each continuous one with an offset through fromNormalised(toNormalised()) -- powf and log
+     * for every logarithmic knob -- and a track start dispatches hundreds of events at one instant, each of them a
+     * full pass. Now a value is recomputed only when its knob, its offset or override, or its own-sound switch
+     * moved (raw_ keeps the result before Kick::constrain, which edits eff_ in place), and events at one sample
+     * are applied once, before anything reads them. The output is the same to the bit (checked on three sets).
+     * @{ */
+    std::vector<float> raw_;               ///< effective values before the kick's constraints, per id
+    std::vector<float> rawKnob_;           ///< the knob value raw_ was computed from
+    std::vector<uint8_t> rawDirty_;        ///< 1: the offset or override moved since raw_ was computed
+    bool ownSeen_[9] = {};                 ///< the own-sound switches as the last pass saw them
+    bool rawValid_ = false;                ///< false: recompute everything (construction, reset)
+    bool paramsPending_ = false;           ///< control events dispatched, applyParams() not yet run for them
+    double polyBpm_[kPolyInstances] = {};  ///< the tempo each voice's last Poly::update() was given
+    /** @brief Runs applyParams() if control events are waiting for it (before a note, a render or the next chunk). */
+    void flushParams() { if (paramsPending_) applyParams(); }
+    /** @} */
 
     Kick kick_;
     Bass bass_;

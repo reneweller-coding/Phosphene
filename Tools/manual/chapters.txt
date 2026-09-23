@@ -32,10 +32,12 @@ The Set tab is where a night begins. The seed names the set; Randomize seed draw
 and Stop run Phosphene's own clock, and Follow host hands the transport to the DAW instead -- under a
 host the tempo knob follows the host's tempo and the play head follows its position.
 
-Starting a set is not instant. Planning a track measures it by rendering parts of it -- its loudness
-through the master, and how audible each line is against the lead -- so on an eight-core machine the
-first sound arrives some fifteen seconds after the button; the header says "planning" rather than
-going quiet without explanation. In the standalone this has usually happened before you press
+Planning a track measures it by rendering parts of it -- its loudness through the master, the
+brightness of its lines, how audible each line is against the lead. For the first track of a set that
+happens behind the music: it starts playing at once, its intro runs, and the measured levels ride in
+over a phrase long before the kick and the lines arrive. A jump to a track that has not been planned
+yet still waits for its measurements; the header says "planning" rather than going quiet without
+explanation. In the standalone this has usually happened before you press
 anything, because the composer thread starts working when the window opens.
 
 The composer's own knobs are here, grouped by what they decide. Start & Style is where the night

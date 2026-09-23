@@ -745,6 +745,7 @@ void Composer::setLock(LockUnit unit, int index, bool locked)
     else locked_[static_cast<int>(unit)].erase(index);
     plans_.clear();
     walk_.clear();
+    ++planGeneration_;
 }
 
 bool Composer::isLocked(LockUnit unit, int index) const
@@ -759,6 +760,7 @@ void Composer::reroll(LockUnit unit, int index)
     ++variation_[static_cast<int>(unit)][index];
     plans_.clear();
     walk_.clear();
+    ++planGeneration_;
 }
 
 uint32_t Composer::variation(LockUnit unit, int index) const
@@ -774,6 +776,7 @@ void Composer::setVariation(LockUnit unit, int index, uint32_t value)
     else variation_[static_cast<int>(unit)][index] = value;
     plans_.clear();
     walk_.clear();
+    ++planGeneration_;
 }
 
 void Composer::clearLocks()
@@ -781,6 +784,7 @@ void Composer::clearLocks()
     for (int u = 0; u < kNumLockUnits; ++u) { locked_[u].clear(); variation_[u].clear(); }
     plans_.clear();
     walk_.clear();
+    ++planGeneration_;
 }
 
 uint64_t Composer::setSeed() const
@@ -1012,7 +1016,7 @@ void Composer::validate(const ParamStore& p) const
         for (int k : { static_cast<int>(perc::Active), static_cast<int>(perc::Role), static_cast<int>(perc::Density), static_cast<int>(perc::Engine) })
             knobs.push_back(p.get(b + k));
     }
-    if (knobs != planKnobs_) { plans_.clear(); walk_.clear(); planKnobs_ = std::move(knobs); }
+    if (knobs != planKnobs_) { plans_.clear(); walk_.clear(); ++planGeneration_; planKnobs_ = std::move(knobs); }
 }
 
 /**
@@ -1519,6 +1523,59 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
  */
 void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
 {
+    // A live start plays the first track before it is measured (completeMeasurement, Composer.h).
+    if (deferMaster_ && t.index == 0) {
+        t.measureDeferred = true;
+        t.masterDeferred = true;
+        t.masterGainDb = 0.0f;
+        return;
+    }
+    // Every later track is matched against the first one's measurements.
+    if (t.index > 0 && !plans_.empty() && plans_[0].measureDeferred) completeMeasurement(p, 0);
+    double mix0 = 0.0;
+    const bool mixEarly = measureLevels(p, t, &mix0);
+    // Auto Gain's two readings, the second after the first -- unless a host asked to have them later
+    // (setDeferMasterGain). `mixEarly` means the first of the two ran beside the presence probes.
+    if (deferMaster_) { t.masterGainDb = 0.0f; t.masterDeferred = true; return; }
+    matchMaster(p, t, mixEarly ? &mix0 : nullptr);
+}
+
+bool Composer::completeMeasurement(const ParamStore& p, int index) const
+{
+    if (index < 0 || index >= static_cast<int>(plans_.size())) return false;
+    TrackPlan& t = plans_[static_cast<size_t>(index)];
+    if (!t.measureDeferred) return false;
+    t.measureDeferred = false;
+    measureLevels(p, t, nullptr);
+    t.correctionsPending = true;
+    return true;
+}
+
+bool Composer::adoptMeasurement(int index, const TrackPlan& m, uint64_t generation) const
+{
+    if (generation != planGeneration_ || index < 0 || index >= static_cast<int>(plans_.size())) return false;
+    TrackPlan& t = plans_[static_cast<size_t>(index)];
+    t.loudness = m.loudness;
+    t.gainDb = m.gainDb;
+    for (int k = 0; k < kMelodyParts; ++k) {
+        t.partLoudness[k] = m.partLoudness[k];
+        t.partGainDb[k] = m.partGainDb[k];
+        t.audibleInMix[k] = m.audibleInMix[k];
+        t.audibilityLiftDb[k] = m.audibilityLiftDb[k];
+    }
+    t.presenceDb = m.presenceDb;
+    t.presenceAfterDb = m.presenceAfterDb;
+    t.presenceGainDb = m.presenceGainDb;
+    t.mixLoudness = m.mixLoudness;
+    t.masterGainDb = m.masterGainDb;
+    t.measureDeferred = m.measureDeferred;
+    t.masterDeferred = m.masterDeferred;
+    t.correctionsPending = true;
+    return true;
+}
+
+bool Composer::measureLevels(const ParamStore& p, TrackPlan& t, double* mix0Out) const
+{
     const int cb = p.base(Module::Compose);
     const bool level = p.getBool(cb + compose::LevelMatch);
     const bool first = t.index == 0;
@@ -1551,9 +1608,7 @@ void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
             matchPresence(p, t);
             matchAudibility(p, t);
         }
-        if (deferMaster_) { t.masterGainDb = 0.0f; t.masterDeferred = true; }
-        else matchMaster(p, t);
-        return;
+        return false;
     }
 
     // The shared loads are not thread-safe (Probe.h): on this thread, before any worker exists.
@@ -1577,7 +1632,7 @@ void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
     }
     // Stage 2: the presence probes -- and the first mix probe beside them only where the presence match
     // cannot move the lines, because it is off (the mix probe first in the list: it is the longest).
-    const bool mixEarly = autoGain && level && !deferMaster_ && !p.getBool(cb + compose::PresenceMatch)
+    const bool mixEarly = mix0Out != nullptr && autoGain && level && !deferMaster_ && !p.getBool(cb + compose::PresenceMatch)
                        && !p.getBool(cb + compose::AudibilityMatch);   // both move the lines Auto Gain has to hear
     double lines[2] = {}, rest[2] = {}, mix0 = 0.0;
     if (level) {
@@ -1591,12 +1646,11 @@ void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
         matchPresence(p, t, lines, rest);
         matchAudibility(p, t);   // after the presence gain, before Auto Gain (23.09.2026)
     }
-    // Stages 3 and 4: Auto Gain's two readings, the second after the first -- unless a host asked to
-    // have them later (setDeferMasterGain). `mixEarly` puts the first of the two beside the presence
-    // probes where the presence match cannot move the lines; a deferred track does not want it there
+    // Stages 3 and 4 (Auto Gain) are measureTrack's. `mixEarly` puts the first of its two readings beside the
+    // presence probes where the presence match cannot move the lines; a deferred track does not want it there
     // either, so it is not started.
-    if (deferMaster_) { t.masterGainDb = 0.0f; t.masterDeferred = true; return; }
-    matchMaster(p, t, mixEarly ? &mix0 : nullptr);
+    if (mixEarly) *mix0Out = mix0;
+    return mixEarly;
 }
 
 float Composer::completeMasterGain(const ParamStore& p, int index) const
@@ -1665,15 +1719,7 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
     push(ab + acid::DelayLeft, ControlEvent::Kind::Override, static_cast<float>(m.delay[mpIndex(MelodyPart::Acid)][0]));
     push(ab + acid::DelayRight, ControlEvent::Kind::Override, static_cast<float>(m.delay[mpIndex(MelodyPart::Acid)][1]));
     }
-    for (int k = 0; k < kMelodyParts; ++k) {
-        const MelodyPart part = static_cast<MelodyPart>(k);
-        if (part == MelodyPart::Acid ? !floor : !voices) continue;
-        const int level = mb + (part == MelodyPart::Acid ? static_cast<int>(mix::AcidLevel) : mix::polyLevel(melodyPoly(part)));
-        const ParamDesc& d = p.desc(level);
-        // The lines carry the presence match on top of their level match (matchPresence).
-        const bool line = part == MelodyPart::Lead || part == MelodyPart::Counter || part == MelodyPart::Arp || part == MelodyPart::Stab;
-        push(level, ControlEvent::Kind::Offset, (plan.partGainDb[k] + (line ? plan.presenceGainDb : 0.0f)) / (d.maxValue - d.minValue));
-    }
+    pushPartLevels(p, plan, beat, 0.0f, floor, voices, out);
     // The track's acid voicing (Composer.h, kNumAcidVoicings). Cutoff and Env Amount are written again
     // by every section with the voicing folded into the section's base (sectionControls); they are
     // written here as well so that the level match's part probe, which plays the track start alone,
@@ -1738,6 +1784,32 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
     // The loudness offset of Auto Gain, in the normalised domain of master.gain's 36 dB range.
     const ParamDesc& mg = p.desc(p.base(Module::Master) + master::Gain);
     if (floor) push(p.base(Module::Master) + master::Gain, ControlEvent::Kind::Offset, plan.masterGainDb / (mg.maxValue - mg.minValue));
+}
+
+void Composer::pushPartLevels(const ParamStore& p, const TrackPlan& plan, double beat, float length, bool floor, bool voices,
+                              std::vector<ControlEvent>& out) const
+{
+    const int mb = p.base(Module::Mix);
+    for (int k = 0; k < kMelodyParts; ++k) {
+        const MelodyPart part = static_cast<MelodyPart>(k);
+        if (part == MelodyPart::Acid ? !floor : !voices) continue;
+        const int level = mb + (part == MelodyPart::Acid ? static_cast<int>(mix::AcidLevel) : mix::polyLevel(melodyPoly(part)));
+        const ParamDesc& d = p.desc(level);
+        // The lines carry the presence match on top of their level match (matchPresence).
+        const bool line = part == MelodyPart::Lead || part == MelodyPart::Counter || part == MelodyPart::Arp || part == MelodyPart::Stab;
+        ControlEvent c;
+        c.beat = beat;
+        c.param = static_cast<int16_t>(level);
+        c.kind = ControlEvent::Kind::Offset;
+        c.value = (plan.partGainDb[k] + (line ? plan.presenceGainDb : 0.0f)) / (d.maxValue - d.minValue);
+        c.length = length;
+        out.push_back(c);
+    }
+}
+
+void Composer::levelControls(const ParamStore& p, const TrackPlan& plan, double beat, float rampBeats, std::vector<ControlEvent>& out) const
+{
+    pushPartLevels(p, plan, beat, rampBeats, true, true, out);
 }
 
 /**
@@ -2295,6 +2367,8 @@ double Composer::probeLoudness(const ParamStore& p, const TrackPlan& plan, int p
         aud = std::make_unique<AudibilityMeter>(kNumStems, sr);
     }
     for (int done = 0; done < total; done += 512) {
+        // A background copy that is being torn down (setAbortFlag): stop, and cache nothing.
+        if (abort_ != nullptr && abort_->load(std::memory_order_relaxed)) return 0.0;
         const int n = std::min(512, total - done);
         engine->process(L.data(), R.data(), n);
         meter.process(L.data(), R.data(), n);

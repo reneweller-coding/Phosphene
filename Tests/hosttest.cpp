@@ -716,7 +716,10 @@ int main(int argc, char** argv)
         }
         const double planSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - planStart).count();
         std::printf("plan: the first track was ready after %.2f s\n", planSeconds);
-        check(planSeconds < 30.0, "a set starts playing within half a minute of the button");
+        // 23.09.2026, round "Planung": the first track is planned without its probes and measured behind the music
+        // (Composer::completeMeasurement). It was 8 to 11 s under the suite's load; the plan itself is now a few
+        // milliseconds, and what is left is composing the first bars and the handshake.
+        check(planSeconds < 6.0, "a set starts playing within seconds of the button (" + juce::String(planSeconds, 2) + " s)");
         const int blocks = static_cast<int>(3.0 * sr / block);
         int silentRun = 0, worstRun = 0, loudBlocks = 0;
         bool allFinite = true;
@@ -770,6 +773,26 @@ int main(int argc, char** argv)
                   "and rides into the engine over its ramp (knob " + juce::String(knob, 2)
                       + " dB, effective " + juce::String(eff, 2) + " dB, wanted "
                       + juce::String(knob + first.masterGainDb, 2) + ")");
+            // The lines' levels were measured before Auto Gain and sent the same way (23.09.2026): the published
+            // plan is measured, and the counter's and the lead's levels in the engine carry their corrections.
+            phos::TrackPlan measured;
+            const bool published = p->tryReadTrack(0, measured) && !measured.measureDeferred;
+            juce::String lines;
+            bool linesIn = published;
+            for (PolyInstance v : { PolyInstance::Lead, PolyInstance::Counter }) {
+                const int id = p->params().base(Module::Mix) + mix::polyLevel(v);
+                const int k = mpIndex(v == PolyInstance::Lead ? MelodyPart::Lead : MelodyPart::Counter);
+                const float wantDb = p->params().get(id) + measured.partGainDb[k] + measured.presenceGainDb;
+                float got = p->engine().effective(id);
+                for (int i = 0; i < 2000 && std::fabs(got - wantDb) > 0.05f; ++i) {
+                    buf.clear(); midi.clear();
+                    p->processBlock(buf, midi);
+                    got = p->engine().effective(id);
+                }
+                linesIn = linesIn && std::fabs(got - wantDb) <= 0.05f;
+                lines << p->params().key(id).c_str() << " " << juce::String(got, 2) << " / " << juce::String(wantDb, 2) << " dB  ";
+            }
+            check(linesIn, "the first track's lines get their measured levels while it plays (" + lines + ")");
         }
         check(worstRun * block / sr < 0.15, "no gap longer than 150 ms while it plays (worst "
                                                 + juce::String(worstRun * block / sr * 1000.0, 1) + " ms)");

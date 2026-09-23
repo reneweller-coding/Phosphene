@@ -129,6 +129,8 @@ public:
         rCoef_ = coef(releaseS, 5.0f);
         sus_   = sustain;
     }
+    /** @brief Takes over another envelope's segment times (the same sample rate assumed): setTimes without the exp. */
+    void copyTimes(const Envelope& o) { aCoef_ = o.aCoef_; dCoef_ = o.dCoef_; rCoef_ = o.rCoef_; sus_ = o.sus_; }
     /** @brief Starts the attack from the current level (no reset to zero, so no click). */
     void noteOn()  { stage_ = Stage::Attack; }
     /**

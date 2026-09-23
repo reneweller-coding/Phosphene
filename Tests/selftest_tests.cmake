@@ -114,6 +114,7 @@ set(PHOS_SELFTEST_SECONDS
     testKnobFuzz            18.0
     testStems               16.6
     testSoundPresets        20.0
+    testDeferredPlan        45.0
     testKeyboard            40.0
     testAudibility           8.0
     testAudibilityMatch     70.0

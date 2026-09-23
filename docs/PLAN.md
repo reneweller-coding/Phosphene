@@ -7963,6 +7963,102 @@ im Quelltext steht. Zwei Dinge stimmten nicht, beide gemessen:
 `Deploy/build_release.ps1`, `Deploy/Phosphene.iss`, `Tools/manual/chapters.txt`, `Tools/manual/make_manual.py`,
 `Tests/hosttest.cpp`, `Tests/vst3test.cpp`, `.gitignore`; dieser Block.
 
+**23.09.2026, Planung hinter der Musik und `applyParams` nur für Geändertes**
+
+Der Nutzer, nach der Performance-Analyse: die Planung „auf jeden Fall optimieren", mit dem Intro vorab spielen,
+während die Probe-Renders laufen; `applyParams` ebenfalls.
+
+**Planung.**
+- Vorher: Live (Plugin, 12 Probe-Threads, Auto Gain schon aufgeschoben) kamen 8 bis 11 s nach „Play" der
+  erste Ton, gemessen im Host-Test unter Suite-Last. `phos_render` braucht für einen Takt 15 bis 16 s.
+- Jetzt plant ein Live-Start den ersten Track ganz ohne Probe-Render (`TrackPlan::measureDeferred`), in
+  0,00 s statt 16,4 s (`testDeferredPlan`).
+- Das ist genau: Der erste Track ist die Referenz des Level-Match und korrigiert dort nichts. Seine einzigen
+  gemessenen Korrekturen sind die Präsenz- und Hörbarkeitsgains der Linien (Lead, Counter, Arp, Stab) und
+  Auto Gain.
+- Gemessen wird hinter der Musik (`Composer::completeMeasurement`, siehe unten zum Thread): Level-Match-Referenz, Präsenz,
+  Hörbarkeit. Dann schickt er die Pegel aller melodischen Stimmen als Offset mit einer Rampe über eine Phrase
+  (`Composer::levelControls`, dieselbe Formel wie beim Track-Start, `pushPartLevels`).
+- Im selben Job misst er Auto Gain.
+- **Auf einem eigenen Thread, an einer Kopie des Composers** (`PhospheneProcessor::MeasureJob`). Der erste
+  Entwurf maß auf dem Composer-Thread. Der Host-Test zeigte, dass eine zweite Neustart-Anforderung direkt nach
+  Play (der Sprung des Tests auf Takt 16, im Leben ein Klick ins Arrangement) 9,4 s wartete, bis die Messung
+  durch war (Trace mit Zeitstempeln).
+  - Genauso blockierte vorher schon das aufgeschobene Auto Gain Sprünge für rund 6 s.
+  - Jetzt übernimmt der Composer-Thread das Ergebnis, wenn es kommt (`Composer::adoptMeasurement`). Er
+    übernimmt nur die Messfelder, weil das Planen eines späteren Tracks in den früheren schreibt (DJ-Overlap).
+  - Er lehnt es ab, wenn die Pläne inzwischen verworfen wurden (`planGeneration()`).
+  - Beim Beenden oder Umschalten auf Offline bricht ein Abbruch-Flag die Probe-Renders am nächsten Block ab;
+    abgebrochene Werte landen nicht im Cache.
+  - Solange gestoppt ist, wird nichts gemessen und kein späterer Track vorausgeplant: Ein Play mitten in einen
+    Messschritt würde warten.
+- Ein Track beginnt mit sechzehn Takten ohne Kick und ohne Linien, daher sitzen die Pegel, bevor eine Linie
+  zu hören ist.
+- Ein späterer Track, der vor der Messung des ersten geplant wird (Sprung in einen ungeplanten Track), misst
+  den ersten zuerst selbst. Er ist danach derselbe Track wie in einem ganzen Plan.
+- Offline (Bounce, `phos_render`, Plan-Schnappschüsse, Quest) ist nichts aufgeschoben; das Orakel ist
+  unberührt.
+- Nicht gemacht: Probe-Renders zwischen Präsenz- und Hörbarkeitsabgleich teilen. Die Präsenz-Kalibrierung
+  (`kPresenceRefDb`) hängt an getrennten Renders der Linien und des Rests samt ihrer Hallanteile; Stems eines
+  gemeinsamen Renders sind nicht dasselbe Signal.
+
+**`applyParams`** (VTune vorher 5,8 % eines Renders).
+- Jeder 32-Sample-Block und jedes Kontroll-Ereignis rechnete alle rund 3000 wirksamen Werte neu, die
+  logarithmischen über `powf`/`log`. Ein Track-Start sind Hunderte Ereignisse auf einem Schlag, jedes ein
+  voller Durchlauf.
+- Jetzt:
+  - Ein Wert wird nur neu gerechnet, wenn sich sein Regler, sein Offset/Override oder sein Own-Sound-Schalter
+    bewegt hat (`raw_`, vor `Kick::constrain`, das `eff_` an Ort und Stelle ändert).
+  - Ereignisse eines Augenblicks werden einmal angewandt, vor der nächsten Note oder dem nächsten Render.
+    Am Blockanfang weiter sofort, weil der Durchlauf dort das Tempo liest, das die Position aller weiteren
+    Ereignisse des Blocks bestimmt.
+  - Eine polyphone Stimme, deren Werte und Tempo gleich blieben, bekommt kein `Poly::update`.
+- Ergebnis: `applyParams` 3,4 %, `Poly::update` 1,34 → 0,36 %, `fromNormalised` 1,07 → 0,05 %. Drei Renders
+  (Seeds 1 und 2026, je 96 Takte; Seed 7 Hi-Tech mit Own Sound) sind **bitgleich** zu vorher.
+- Zwei Fallen auf dem Weg, beide per Bitvergleich gefunden:
+  - `==` hält −0,0 und +0,0 für gleich; wer den alten Wert behält, behält das alte Vorzeichen der Null.
+    Jetzt `memcmp`.
+  - `Poly::update` ist nicht wirkungslos: Es setzt jede Stimme auf die geschriebenen Hüllkurvenzeiten
+    zurück, auch die, der `noteOn()` bei Drift eine eigene Attack-Zeit gegeben hat.
+- **Befund:** Die Drift der Attack-Zeit, laut Kommentar „für die Note gehalten", hat also immer nur bis zum
+  nächsten 32-Sample-Block gehalten. Das Überspringen hätte sie erstmals für die ganze Note gehalten, und der
+  Render änderte sich.
+  - `Poly::refreshEnvelopeTimes()` hält das alte Verhalten (Zeiten einmal gerechnet, dann kopiert, ohne
+    `exp`).
+  - Ob die Drift wirklich gehalten werden soll, ist eine Hörentscheidung und dem Nutzer vorgelegt.
+
+**Zwei ältere Fehler, die der neue Host-Test fand.**
+- *Der Klangzustand nach einem Sprung ging verloren.* `PlugConductor::seek` spielt den Zustand des Tracks
+  nach, in den man springt (Rezepte, Stimmenpegel, Track-Gain), und schob ihn sofort in die Engine. Der Sprung
+  ist aber Schritt 2 des Neustart-Handshakes, und in Schritt 3 setzt der Audio-Thread die Engine zurück; das
+  leert den Kontroll-Ring.
+  - Folge: Wer mitten in einen Track sprang (Play ab einer Position, Klick im Arrangement), hörte bis zum
+    nächsten Track-Start die reinen Reglerwerte.
+  - Jetzt merkt sich `seek()` die Ereignisse (`landing_`), und das erste `pump()` nach dem Zurücksetzen
+    schickt sie.
+- *„Sofortige" Korrekturen warteten 13 s.* Der Kontroll-Ring ist eine FIFO, die der Conductor acht Takte
+  voraus füllt. Ein Ereignis „ab jetzt" stand also hinter acht Takten Ereignissen. Das betraf auch das
+  bisherige nachgereichte Auto Gain; der alte Test kam knapp an (6,75 statt 7,00 dB).
+  - Neu ist `Engine::pushImmediate`: ein zweiter kleiner Ring, am nächsten 32-Sample-Block vor allem anderen
+    gelesen.
+  - Der Offline-Render bleibt bitgleich.
+
+*Tests.*
+- `testDeferredPlan`:
+  - Der aufgeschobene erste Plan hat alle Korrekturen bei null.
+  - Nachgemessen ist er Zahl für Zahl der ganze Plan (Präsenz −2,187 dB, Counter +4,000 dB).
+  - Die gesendeten Ereignisse tragen die Werte des Track-Starts mit Rampe.
+  - Track 2 vor der Messung von Track 1 geplant: Track 1 wird mitgemessen, Track 2 ist der des ganzen Plans.
+- `testDeferredPlan` zusätzlich: Die Messung einer Kopie wird Zahl für Zahl übernommen und abgelehnt, sobald
+  sich die Pläne geändert haben.
+- Host-Test, Live-Pfad: **Der erste Track ist nach 0,02 s bereit** (vorher 8,5 bis 9 s in diesem Test).
+  Auto Gain kommt in der Engine an (+6,75 von +7,00 dB, innerhalb der Toleranz). Lead- und Counter-Pegel
+  tragen die gemessenen Korrekturen, die ohne den Sprung-Fix fehlten (Counter 5,00 statt 6,47 dB).
+- Standalone mit Trace: Der zweite Neustart wird sofort bedient. Die Hintergrundmessung wird übernommen,
+  während das Intro noch vor Takt 17 steht.
+- Voller ctest (MSVC): 132 von 132. Die Audio-Tests (Host, VST3, Realhost) brauchten zusammen 1753 statt rund
+  4000 Prozess-Sekunden, weil kein Start mehr auf die Planung wartet. Der Datenordner blieb unberührt.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

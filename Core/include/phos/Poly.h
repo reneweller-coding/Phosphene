@@ -137,6 +137,23 @@ public:
     /** @brief Reads the effective parameters (indexed by poly::) and the tempo (for the delay). */
     void update(const float* v, double bpm);
     /**
+     * @brief Whether the table update() chose is no longer the one its index resolves to -- a library table that
+     *        was still being expanded then (a built-in stood in) and is published now. Engine::applyParams skips an
+     *        update whose inputs did not move, and this is the one input that can move without a parameter.
+     */
+    bool tableStale() const;
+    /**
+     * @brief What update() does to the voices' envelopes and nothing else: every voice back to the written times.
+     *
+     * Engine::applyParams skips update() for a voice whose inputs did not move (23.09.2026), and has to call this
+     * instead, because update() is not free of effect even then: noteOn() gives a voice with drift its own attack
+     * time, "held for the note" by the comment there, and the next update() -- the next 32-sample chunk -- puts
+     * every voice back to the written times. So the drifted attack has only ever lasted up to 32 samples. Skipping
+     * update() made it last the whole note, which changed the render; this keeps the render as it was, and the
+     * question whether the drift should really be held is left to a listening decision.
+     */
+    void refreshEnvelopeTimes() { for (Envelope& e : amp_) e.copyTimes(ampTimes_); }
+    /**
      * @brief Starts a note.
      * @param pitch       MIDI note
      * @param velocity    0..1
@@ -301,6 +318,7 @@ private:
     PolySlots slots_;
     PolyChannels ch_;
     Envelope amp_[kPolyVoices];
+    Envelope ampTimes_;   ///< the written times, computed once per update() and copied into every voice
     float fenv_[kPolyVoices] = {}, fDecay_ = 0.999f;
     float accent_[kPolyVoices] = {};          ///< the note's factor on the filter envelope amount: 1, or 1.5 for an accent (22.09.2026)
     int   pitch_[kPolyVoices] = {};

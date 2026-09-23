@@ -7,6 +7,7 @@
 #include "phos/WaveTableFile.h"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace phos {
 
@@ -39,10 +40,13 @@ inline float kneeClip(float x, float T)
 }
 } // namespace
 
-Engine::Engine() : notes_(16384), controls_(16384)
+Engine::Engine() : notes_(16384), controls_(16384), immediate_(256)
 {
     var_ = std::make_unique<Variation[]>(static_cast<size_t>(params_.count()));
     eff_.assign(static_cast<size_t>(params_.count()), 0.0f);
+    raw_.assign(static_cast<size_t>(params_.count()), 0.0f);
+    rawKnob_.assign(static_cast<size_t>(params_.count()), 0.0f);
+    rawDirty_.assign(static_cast<size_t>(params_.count()), 1);
     // Which synth each parameter belongs to, for the own-sound switches (mix.*_own, 23.09.2026): -1 for none, and
     // for the parameters that are the arrangement's rather than the sound's -- the pad's and drone's high pass
     // (the sub foundation, rule 20) and the trance gate -- so an own sound still sits where the form puts it.
@@ -204,7 +208,10 @@ void Engine::reset()
     while (notes_.pop(e)) {}
     ControlEvent c;
     while (controls_.pop(c)) {}
+    while (immediate_.pop(c)) {}
     for (int i = 0; i < params_.count(); ++i) var_[static_cast<size_t>(i)] = Variation{};
+    rawValid_ = false;   // every offset and override is gone: recompute every value
+    paramsPending_ = false;
     for (int& t : liveTarget_) t = -1;   // the voices are cleared below; no played note is held any more
     livePlayed_ = 0;
     samples_ = 0;
@@ -261,6 +268,7 @@ void Engine::advanceRamps()
         Variation& v = var_[static_cast<size_t>(i)];
         if (v.length <= 0.0) continue;
         const double x = (chunkBeat_ - v.start) / v.length;
+        rawDirty_[static_cast<size_t>(i)] = 1;
         if (x >= 1.0) { v.offset = v.to; v.length = 0.0; continue; }
         const double s = x <= 0.0 ? 0.0 : 0.5 - 0.5 * std::cos(kPiD * x);   // raised cosine: C1 at both ends
         v.offset = v.from + static_cast<float>(s) * (v.to - v.from);
@@ -279,6 +287,7 @@ void Engine::dispatchControl(const ControlEvent& e)
         return;
     }
     if (e.param < 0 || e.param >= params_.count()) return;
+    rawDirty_[static_cast<size_t>(e.param)] = 1;
     Variation& v = var_[static_cast<size_t>(e.param)];
     if (e.kind == ControlEvent::Kind::Override) {
         v.override = e.value;
@@ -291,7 +300,11 @@ void Engine::dispatchControl(const ControlEvent& e)
         v.start = e.beat;
         v.length = e.length;
     }
-    applyParams();
+    // At a chunk's first sample the pass also reads the tempo, which times every later event of the chunk, so it
+    // runs now, as it always did. Anywhere else the events of one instant are applied together, once
+    // (flushParams(), before the next note, render or chunk): a track start is hundreds of events at one beat.
+    if (chunkPos_ == 0 || beatsPerSample_ <= 0.0) applyParams();
+    else paramsPending_ = true;
 }
 
 double Engine::firstSlotSeconds() const
@@ -305,24 +318,50 @@ double Engine::firstSlotSeconds() const
 void Engine::applyParams()
 {
     const ParamStore& p = params_;
-    // The own-sound switches, read once (23.09.2026): kick, bass, acid, then the six polyphonic voices.
+    paramsPending_ = false;
+    // The own-sound switches, read once (23.09.2026): kick, bass, acid, then the six polyphonic voices. A switch
+    // that moved changes every value it governs, so those are recomputed however their knobs stand.
     bool own[9];
-    for (int k = 0; k < 9; ++k) own[k] = p.get(p.base(Module::Mix) + mix::KickOwn + k) >= 0.5f;
-    // Effective values: knob + normalised offset for continuous parameters, override for discrete.
+    bool ownMoved[9];
+    for (int k = 0; k < 9; ++k) {
+        own[k] = p.get(p.base(Module::Mix) + mix::KickOwn + k) >= 0.5f;
+        ownMoved[k] = !rawValid_ || own[k] != ownSeen_[k];
+        ownSeen_[k] = own[k];
+    }
+    // Effective values: knob + normalised offset for continuous parameters, override for discrete. Only where
+    // something they are made of moved (Engine.h, raw_); the rest keep last pass's value, which is the same number.
+    // A polyphonic voice whose values all stayed is not updated either (below): Poly::update only derives
+    // coefficients from its inputs, so the same inputs are the same state.
+    const bool full = !rawValid_;
+    const int polyFirst = p.base(Module::Poly, 0), polyCount = ParamStore::moduleCount(Module::Poly);
+    bool polyMoved[kPolyInstances] = {};
+    auto store = [&](int i, float value) {
+        const size_t si = static_cast<size_t>(i);
+        // Bit for bit, not ==: -0.0f == 0.0f, and keeping the old zero's sign changed the render.
+        if (!full && std::memcmp(&value, &raw_[si], sizeof value) == 0) return;
+        raw_[si] = value;
+        if (i >= polyFirst && i < polyFirst + kPolyInstances * polyCount) polyMoved[(i - polyFirst) / polyCount] = true;
+    };
     for (int i = 0; i < p.count(); ++i) {
-        const Variation& v = var_[static_cast<size_t>(i)];
+        const size_t si = static_cast<size_t>(i);
         const float knob = p.get(i);
+        const int owner = ownOf_[si];
+        if (rawValid_ && !rawDirty_[si] && knob == rawKnob_[si] && (owner < 0 || !ownMoved[owner])) continue;
+        rawDirty_[si] = 0;
+        rawKnob_[si] = knob;
+        const Variation& v = var_[si];
         float value = knob;
         // An own sound (mix.*_own, 23.09.2026): the synth plays its knobs, whatever the composer's recipes say.
-        const int owner = ownOf_[static_cast<size_t>(i)];
-        if (owner >= 0 && own[owner]) { eff_[static_cast<size_t>(i)] = knob; continue; }
+        if (owner >= 0 && own[owner]) { store(i, knob); continue; }
         if (isDiscreteCurve(p.desc(i).curve)) {
             if (v.override >= 0.0f) value = v.override;
         } else if (v.offset != 0.0f) {
             value = p.fromNormalised(i, p.toNormalised(i, knob) + v.offset);
         }
-        eff_[static_cast<size_t>(i)] = value;
+        store(i, value);
     }
+    rawValid_ = true;
+    std::copy(raw_.begin(), raw_.end(), eff_.begin());   // Kick::constrain below edits the kick's copy in place
 
     const int cb = p.base(Module::Compose);
     keyRoot_ = static_cast<int>(std::lround(eff_[static_cast<size_t>(cb + compose::Key)]));
@@ -348,7 +387,14 @@ void Engine::applyParams()
     // period follows a tempo ramp between tracks without ever changing inside a chunk.
     perc_.setTempo(bpmNow);
     acid_.update(eff_.data() + p.base(Module::Acid), bpmNow);
-    for (int i = 0; i < kPolyInstances; ++i) poly_[i].update(eff_.data() + p.base(Module::Poly, i), bpmNow);
+    for (int i = 0; i < kPolyInstances; ++i) {
+        if (!full && !polyMoved[i] && polyBpm_[i] == bpmNow && !poly_[i].tableStale()) {
+            poly_[i].refreshEnvelopeTimes();   // the one thing update() does even with the same inputs (Poly.h)
+            continue;
+        }
+        poly_[i].update(eff_.data() + p.base(Module::Poly, i), bpmNow);
+        polyBpm_[i] = bpmNow;
+    }
 
     // The kick lock: either the kick's tail meets the bass's own start phase, or the bass starts
     // where the kick's phase is when the first bass note begins.
@@ -478,6 +524,7 @@ void Engine::applyParams()
 
 void Engine::dispatch(const NoteEvent& e, double late)
 {
+    flushParams();   // a note reads what the controls before it at this instant set
     // A voice the keyboard plays in Replace mode leaves the composer's notes out (23.09.2026, liveNoteOn).
     if (generatedSilenced(e.part)) return;
     const float vel = static_cast<float>(e.velocity) / 127.0f;
@@ -613,6 +660,7 @@ void Engine::applyMotion()
 
 void Engine::renderSegment(float* L, float* R, int offset, int count)
 {
+    flushParams();
     if (count <= 0) return;
     kick_.process(kickBuf_.data(), count);
     bass_.process(bassBuf_.data(), count);
@@ -804,10 +852,17 @@ void Engine::process(float* L, float* R, int n)
     int done = 0;
     while (done < n) {
         if (chunkPos_ == 0) {
+            // Out-of-band corrections first (pushImmediate): due now, whatever the queue holds ahead of them.
+            ControlEvent now;
+            while (immediate_.pop(now)) {
+                if (now.beat < chunkBeat_) now.beat = chunkBeat_;
+                dispatchControl(now);
+            }
             advanceRamps();
             applyParams();
             applyMotion();
         }
+        flushParams();
         int left = std::min(n - done, kChunk - chunkPos_);
 
         for (;;) {
