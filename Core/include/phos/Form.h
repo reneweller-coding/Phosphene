@@ -504,6 +504,7 @@ struct BarPlan {
      *  @{ */
     bool        climax = false;         ///< drop 2
     bool        mainBreak = false;      ///< the breakdown before drop 2: the pad's own harmony (22.09.2026, Melody.h)
+    bool        afterMainBreak = false; ///< a bar behind the main breakdown: the pad's second progression, where the track has one (23.09.2026)
     int         rollBars = 4;           ///< length of the snare roll rollBar counts in
     bool        quietHats = false;      ///< the intro's first half: a quiet closed hat on every sixteenth but the downbeat
     bool        shaker = false;         ///< the shaker plays whether or not it is one of the layers

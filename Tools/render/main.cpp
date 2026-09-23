@@ -341,7 +341,13 @@ int main(int argc, char** argv)
             static_assert(sizeof(kArpStyles) / sizeof(kArpStyles[0]) == kNumArpStyles, "one name per ArpStyle");
             std::printf("\n          melody: chords");
             for (int c = 0; c < 4; ++c) std::printf(" %s%s", kRoman[m.chordDegree[c]], kChordTypeNames[std::clamp(m.chordType[c], 0, kNumChordTypes - 1)]);
-            std::printf(" (%d bars each); main breakdown", m.chordBars);
+            std::printf(" (%d bars each, %s)", m.chordBars, m.progression == 1 ? "loop" : "pendulum");
+            if (m.secondHalf) {
+                std::printf("; after the main breakdown");
+                for (int c = 0; c < 4; ++c) std::printf(" %s%s", kRoman[m.chordDegree2[c]], kChordTypeNames[std::clamp(m.chordType2[c], 0, kNumChordTypes - 1)]);
+                std::printf(" (%s)", m.progression2 == 1 ? "loop" : "pendulum");
+            }
+            std::printf("; main breakdown");
             if (m.breakHolds) std::printf(" holds %s%s", kRoman[m.breakDegree[0]], kChordTypeNames[std::clamp(m.breakType[0], 0, kNumChordTypes - 1)]);
             else for (int c = 0; c < 4; ++c) std::printf(" %s%s", kRoman[m.breakDegree[c]], kChordTypeNames[std::clamp(m.breakType[c], 0, kNumChordTypes - 1)]);
             auto on = [&](MelodyPart part) { return m.present[mpIndex(part)] ? "yes" : "no"; };

@@ -277,6 +277,7 @@ struct ModeMaterial {
     std::vector<MelodyNote> arp[kArpCells];     ///< arp cells (arpCell)
     std::vector<int> padVoicing[4];     ///< the pad voicings of the core chords
     std::vector<int> breakVoicing[4];   ///< and of the main breakdown's (22.09.2026)
+    std::vector<int> padVoicing2[4];    ///< and of the second half's (23.09.2026)
     bool built = false;                 ///< false: this mode is not used by the track's form
 };
 
@@ -342,6 +343,22 @@ struct MelodyPlan {
     int  breakType[4] = {};                   ///< and their types
     int  breakChordBars = 8;                  ///< bars per chord in the main breakdown
     bool breakHolds = true;                   ///< the main breakdown holds one chord (the mode has no aeolian three)
+    /** @name Harmony's fuzziness (23.09.2026, round "Harmonie")
+     *  The user: "das absolute Verbot klassischer Harmonien scheint mir etwas zuuuu streng ausgelegt [...]
+     *  Auch Harmonie-Wechsel innerhalb eines Stueckes koennten wir erlauben". Beside the pendulum a track
+     *  may play a *loop* -- the minor loops the literature grants Progressive and Full-On (i - bVI - bVII,
+     *  i - bVII - bVI - bVII, i - iv - i - v, i - bIII - bVII - iv) in classical types (triads, sevenths) --
+     *  and behind the main breakdown a second progression. The Bordun stays: bass and lines anchor the
+     *  tonic (round "Harmonik"), so the change is the pad's and the stab's colour, not a modulation.
+     *  @{ */
+    int  progression = 0;                     ///< 0 pendulum, 1 loop (kLoops in Melody.cpp)
+    int  loop = -1;                           ///< which loop, or -1
+    bool secondHalf = false;                  ///< the bars behind the main breakdown take chordDegree2 / chordType2
+    int  progression2 = 0;                    ///< the second half's family
+    int  loop2 = -1;                          ///< and its loop
+    int  chordDegree2[4] = {};                ///< the second half's core chords
+    int  chordType2[4] = {};                  ///< and their types
+    /** @} */
     /** @} */
     int  root[kMelodyParts] = { 50, 64, 76, 57, 57, 55, 38 }; ///< MIDI root of each part (the pad's, the stab's and the drone's are unused)
     int  acidSteps = 16;                      ///< acid pattern length (16 or 32)
@@ -359,6 +376,7 @@ struct MelodyPlan {
     int  delay[kMelodyParts][2] = { { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 } };   ///< overrides of the delay times
     std::vector<int> padVoicing[4];           ///< MIDI notes of each core chord's pad voicing
     std::vector<int> breakVoicing[4];         ///< and of the main breakdown's chords (22.09.2026)
+    std::vector<int> padVoicing2[4];          ///< and of the second half's chords (23.09.2026; empty when secondHalf is false)
     int  padGatePattern = 0;                  ///< the track's gate pattern
     float recipe[kMelodyParts] = {};          ///< one sound direction per part, -1..1 (brightness)
     /** @name The new voices (19.09.2026, round "voices"; Melody.cpp, makeCounter, makeStab, makeDrone)
@@ -538,6 +556,7 @@ struct PadChord {
     int  blockBars = 8;    ///< bars the chord holds
     int  barInBlock = 0;   ///< 0 = the bar the chord starts on
     bool inBreak = false;  ///< from the main breakdown's own harmony
+    bool secondSet = false; ///< from the second half's progression (23.09.2026): padVoicing2
 };
 /**
  * @brief The pad's chord for a bar (22.09.2026). The cores follow the pendulum on track-absolute

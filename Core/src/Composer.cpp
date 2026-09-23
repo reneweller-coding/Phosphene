@@ -2428,7 +2428,7 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         const int baseRoot = bassRootNote(plan.key, reg);
         const bool follow = p.getBool(cb + compose::BassFollowsChords);
         const int root = follow ? baseRoot + bassChordShift(plan.melody, plan.scale, inTrack, baseRoot) : baseRoot;
-        const int chordDeg = follow ? plan.melody.chordDegree[chordIndexAt(plan.melody, inTrack)] : 0;
+        const int chordDeg = follow ? padChordAt(plan.melody, plan.form, inTrack).degree : 0;   // the pad's chord, set 2 behind the main breakdown (23.09.2026)
 
         // Pattern of this bar: the secondary one for the last four bars of some 16-bar blocks.
         Rng block;

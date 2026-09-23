@@ -874,6 +874,15 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
             break;
         }
     }
+    // Behind the main breakdown (23.09.2026, round "Harmonie"): the pad may change its progression there.
+    for (int k = 0; k < si; ++k) {
+        if (f.section[k].type != SectionType::Break) continue;
+        for (int j = k + 1; j < f.count; ++j) {
+            if (f.section[j].type != SectionType::Drop) continue;
+            if (f.section[j].climax) bp.afterMainBreak = true;
+            break;
+        }
+    }
     bp.parts = parts;
 
     // The group's figure: at beat 1 of the last bar of every eight-bar group in which the bass plays --

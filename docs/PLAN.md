@@ -7170,6 +7170,55 @@ Drops ≥ 24, jede Länge 128–320 exakt und in den Grenzen; `testForm`: Intro/
 
 *Dateien.* `Core/src/Form.cpp` (kSaltFuzz, jitterForm), `Tests/selftest.cpp`; dieser Block.
 
+**23.09.2026, Harmonie: Moll-Schleifen neben dem Pendel, klassische Typen, ein Wechsel hinter dem Haupt-Breakdown**
+
+Der Nutzer: „Auch das absolute Verbot klassischer Harmonien scheint mir etwas zuuuuuuu streng ausgelegt,
+auch hier sollten wir mehr Fuzziness erlauben, sonst klingt immer alles irgendwie schräg. Auch
+Harmonie-Wechsel innerhalb eines Stückes könnten wir erlauben, wenn die Literatur das hergibt in Bezug
+auf Psytrance. Betreibe da gerne nochmal Recherche."
+
+*Literatur.* Die Quellen halten Psytrance im Kern modal — ein Zentrum, Phrygisch/Moll, das Gegenteil
+funktionaler Progressionen (KVR, „Goa/Psytrance and music theory"; Outerverse, „Understanding scales &
+modes in psytrance") —, nennen aber ausdrücklich **Moduswechsel innerhalb eines Tracks** (C-Phrygisch
+→ F-Phrygisch) und geben den progressiven und Full-On-Zweigen kurze Moll-Schleifen. Also: das Pendel
+bleibt die Regel, die Schleife wird erlaubt, und ein Wechsel im Stück findet an der Stelle statt, an
+der Psytrance seine Dramaturgie hat — hinter dem Haupt-Breakdown.
+
+*Umsetzung* (`Melody.cpp`, `makeChords`/`drawProgression`):
+- **Vier Schleifen** (`kLoops`): i–bVI–bVII–i, i–bVII–bVI–bVII, i–iv–i–v, i–bIII–bVII–iv, jede nur
+  in Modi, die alle Stufen mit reiner Quinte haben. Chance je Stil (`kLoopChance`): Progressive 0,45,
+  Full-On 0,35, Goa 0,20, Dark 0,15, Hi-Tech 0,10.
+- **Klassische Typen** für die Schleifen (`kClassicalWeight`): Dreiklang 0,5, m7/maj7 je 0,2, sus2
+  0,12, sus4 0,08, die Farbtypen kaum — bVI und bVII tragen ihre Terz, die Schleife klingt als die
+  Progression, die sie ist, statt „schräg". Das Pendel behält die Stil-Tabelle der Harmonik-Runde.
+- **Zweite Hälfte** (`secondHalf`, `chordDegree2/chordType2/padVoicing2`): hinter dem Haupt-Breakdown
+  (`BarPlan::afterMainBreak`) eine eigene Progression — anderes Pendel oder Schleife, nie dieselbe —
+  in Progressive 0,40, Goa/Full-On 0,30, Dark 0,25, Hi-Tech 0,20 der Tracks. `padChordAt` liefert
+  dort den zweiten Satz; Pad und Stab folgen ihm, `bass_follows_chords` ebenso. **Bordun bleibt:**
+  Bass und Linien verankern die Tonika (Harmonik-Runde), der Arp behält sein Material des ersten
+  Satzes — der Wechsel ist die Farbe von Pad und Stab, keine Modulation (die sichere Variante, die
+  der Nutzer gewählt hat). Die Schleifen und die zweite Hälfte ziehen aus einem eigenen Strom
+  (`kSaltChords ^ 0x4C4F4F50`): ein Track, der das Pendel zieht, spielt genau das Pendel von zuvor.
+
+*Gehört* (`--tracks`, erste Tracks): Seed 42 `im(b9) viisus4` (Pendel, 16 Takte), hinter dem
+Breakdown `i bIII bVII iv` als Dreiklänge (Schleife); Seed 7 `i bIII bVII iv` zu 4 Takten mit sus2/sus4
+auf bIII/bVII und Dreiklängen auf i/iv; Seed 303 `i bVII bVI bVII` (Schleife), hinter dem Breakdown das
+Pendel `im(b9) viisus4`. Über 64 Tracks des Selbsttests: 6+ Schleifen, 6+ zweite Hälften, die
+Mehrheit weiter Pendel ohne Wechsel — Fuzziness, keine neue Regel.
+
+*Tests.* Regel 19 prüft die Voicings beider Sätze; die Stab-Wurzel und der Bass folgen `padChordAt`;
+`testMotifOperators` zählt Schleifen und zweite Hälften (beides > 0, beides Minderheit); Pad-Töne,
+Fundament, Genre-Regeln, Hör-Seed grün. Nebenbefund: die Fenster-Regel des Build-ups („steigt über
+jedes Vier-Takt-Fenster") las ab 0,2 dB einen Fall — der Build-up in den Höhepunkt rampt sein Gain
+*planmäßig* um die Headroom-Reserve nach unten, während die Energie steigt, seine Fenster liegen also
+fast eben und die Roll-Stufen bewegen sie um Zehntel (gemessen −16,7 −16,9 −16,6 −16,7 −16,7 −17,0
+−16,6 −16,2); Toleranz 0,35 dB. Voller ctest am Ende der Nacht.
+
+*Dateien.* `Core/include/phos/Form.h` + `Core/src/Form.cpp` (afterMainBreak), `Core/include/phos/Melody.h`
+(progression, loop, secondHalf, chordDegree2/Type2, padVoicing2, PadChord::secondSet),
+`Core/src/Melody.cpp` (kLoops, kClassicalWeight, drawProgression, padChordAt, Voicings, Stab),
+`Core/src/Composer.cpp`, `Tools/render/main.cpp`, `Tests/selftest.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

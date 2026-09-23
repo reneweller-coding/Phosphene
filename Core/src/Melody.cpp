@@ -632,15 +632,25 @@ const double kBarsWeight[kNumStyles][3] = {
 };
 
 /** @brief Draws a chord type for @p degree in @p scale from the style's taste, among the types that fit. */
-int drawChordType(Rng& r, int scale, int degree, int styleIdx)
+/**
+ * @brief The classical taste (23.09.2026, round "Harmonie"): triads and sevenths first, the suspensions
+ *        after them, the colour types hardly -- what a loop progression is voiced with, so that a bVI or
+ *        a bVII carries its third and the loop sounds like the progression it is rather than "schraeg".
+ */
+const double kClassicalWeight[kNumChordTypes] = {
+    //  triad sus2  sus4  m7    m9    maj7  m(b9) susb2 hijaz m(b5) quartal
+    0.50, 0.12, 0.08, 0.20, 0.05, 0.20, 0.02, 0.02, 0.02, 0.00, 0.03,
+};
+
+int drawChordType(Rng& r, int scale, int degree, int styleIdx, bool classical = false)
 {
     const bool dark = styleIdx == static_cast<int>(StyleId::DarkForest) || styleIdx == static_cast<int>(StyleId::HiTech);
     double w[kNumChordTypes] = {};
     double sum = 0.0;
     for (int t = 0; t < kNumChordTypes; ++t) {
         const ChordType ct = static_cast<ChordType>(t);
-        const bool fits = ct == ChordType::MinFlat5 ? dark : chordTypeFits(scale, degree, ct);
-        w[t] = fits ? kTypeWeight[styleIdx][t] : 0.0;
+        const bool fits = ct == ChordType::MinFlat5 ? (dark && !classical) : chordTypeFits(scale, degree, ct);
+        w[t] = fits ? (classical ? kClassicalWeight[t] : kTypeWeight[styleIdx][t]) : 0.0;
         sum += w[t];
     }
     if (sum <= 0.0) {
@@ -654,38 +664,109 @@ int drawChordType(Rng& r, int scale, int degree, int styleIdx)
 
 } // namespace
 
+/**
+ * @brief The minor loops a track may play instead of the pendulum (23.09.2026, round "Harmonie").
+ *
+ * The user found the ban on classical harmony too strict ("sonst klingt immer alles irgendwie schraeg").
+ * The literature keeps psytrance modal at heart but grants the progressive and full-on branches short
+ * minor loops (KVR, "Goa/Psytrance and music theory"; Outerverse, "Scales & modes in psytrance"): the
+ * aeolian three, its turn, the plagal-dominant swing, and the descending four. Each names its degrees
+ * over the four slots and what pitch class each degree has to be for the loop to exist in a mode.
+ */
+struct Loop { int deg[4]; int semis[4]; const char* name; };
+const Loop kLoops[4] = {
+    { { 0, 5, 6, 0 }, { 0, 8, 10, 0 },  "i-bVI-bVII-i" },
+    { { 0, 6, 5, 6 }, { 0, 10, 8, 10 }, "i-bVII-bVI-bVII" },
+    { { 0, 3, 0, 4 }, { 0, 5, 0, 7 },   "i-iv-i-v" },
+    { { 0, 2, 6, 3 }, { 0, 3, 10, 5 },  "i-bIII-bVII-iv" },
+};
+constexpr int kNumLoops = 4;
+/** @brief How often a style plays a loop instead of a pendulum, and how often the second half changes. */
+const float kLoopChance[kNumStyles] = { 0.20f, 0.35f, 0.45f, 0.15f, 0.10f };      // Goa, Full-On, Progressive, Dark, Hi-Tech
+const float kSecondHalfChance[kNumStyles] = { 0.30f, 0.30f, 0.40f, 0.25f, 0.20f };
+
+/** @brief Whether every degree of @p loop exists in @p scale with the loop's pitch class and a perfect fifth over it. */
+bool loopFits(int scale, const Loop& loop)
+{
+    for (int c = 0; c < 4; ++c) {
+        const int d = loop.deg[c];
+        if (scaleDegree(scale, d) % 12 != loop.semis[c]) return false;
+        if (scaleDegree(scale, d + 4) - scaleDegree(scale, d) != 7) return false;
+    }
+    return true;
+}
+
+/**
+ * @brief Draws one progression -- a pendulum or a loop -- into @p deg / @p type; returns 1 for a loop, 0 for
+ *        a pendulum. The loop's coin and its choice come from @p lr, the pendulum from @p r as before, so a
+ *        track that draws the pendulum plays exactly what it played before this round.
+ */
+int drawProgression(Rng& r, Rng& lr, int scale, int si, int* deg, int* type, int& which)
+{
+    which = -1;
+    double lw[kNumLoops] = {};
+    double lsum = 0.0;
+    for (int i = 0; i < kNumLoops; ++i) { lw[i] = loopFits(scale, kLoops[i]) ? 1.0 : 0.0; lsum += lw[i]; }
+    const bool loop = lr.uniform() < kLoopChance[si] && lsum > 0.0;
+    const int pick = drawIndex(lr, lw, kNumLoops);   // drawn whatever the coin: the pendulum path keeps its stream
+    if (loop) {
+        which = pick;
+        for (int c = 0; c < 4; ++c) { deg[c] = kLoops[pick].deg[c]; type[c] = drawChordType(lr, scale, deg[c], si, true); }
+        // The tonic's two slots take one type, as the pendulum's do.
+        type[3] = kLoops[pick].deg[3] == 0 ? type[0] : type[3];
+        type[2] = kLoops[pick].deg[2] == 0 ? type[0] : type[2];
+        return 1;
+    }
+    double pw[kNumPendulums] = {};
+    double psum = 0.0;
+    for (int i = 0; i < kNumPendulums; ++i) {
+        const Pendulum& pd = kPendulums[i];
+        if (scaleDegree(scale, pd.b) % 12 != pd.semis) continue;
+        if (scaleDegree(scale, pd.b + 4) - scaleDegree(scale, pd.b) != 7) continue;
+        pw[i] = pd.weight[si];
+        psum += pw[i];
+    }
+    const int other = psum > 0.0 ? kPendulums[drawIndex(r, pw, kNumPendulums)].b : 3;   // iv exists in every mode
+    deg[0] = 0; deg[1] = other; deg[2] = 0; deg[3] = other;
+    const int typeI = drawChordType(r, scale, 0, si), typeOther = drawChordType(r, scale, other, si);
+    type[0] = typeI; type[1] = typeOther; type[2] = typeI; type[3] = typeOther;
+    return 0;
+}
+
 void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, const StyleProfile& style)
 {
     (void)temperature;   // the corpus successions this used to temper are no longer the rule (22.09.2026)
     Rng r;
     r.seed(seed ^ kSaltChords);
     const int si = std::clamp(static_cast<int>(style.id), 0, kNumStyles - 1);
+    Rng lr;   // the loops' and the second half's own stream (23.09.2026): nothing older moves because of them
+    lr.seed(mixSeed(seed ^ kSaltChords, 0x4C4F4F50ull));
 
     // The pendulum: among those the mode has, by the style's taste. The corpus successions
     // (chordTransition) decided this until 22.09.2026 and gave four degrees every 2 or 4 bars --
     // cadences, in effect, which is what the brief says a psytrance pad does not play. Rules over
     // corpus (the user's standing rule of 18.09.2026): the corpus fills in what the rules leave open,
     // and here they leave nothing open.
-    double pw[kNumPendulums] = {};
-    double psum = 0.0;
-    for (int i = 0; i < kNumPendulums; ++i) {
-        const Pendulum& pd = kPendulums[i];
-        if (scaleDegree(scale, pd.b) % 12 != pd.semis) continue;
-        // And the chord on it has to stand on a perfect fifth: v in Phrygian is C# over F#, and its
-        // scale fifth is G, a tritone -- no type of Harmony.h fits such a root and the pad would be
-        // handed a note outside the mode (measured on seed 7, track 3, before this line existed).
-        if (scaleDegree(scale, pd.b + 4) - scaleDegree(scale, pd.b) != 7) continue;
-        pw[i] = pd.weight[si];
-        psum += pw[i];
-    }
-    const int other = psum > 0.0 ? kPendulums[drawIndex(r, pw, kNumPendulums)].b : 3;   // iv exists in every mode
-    m.chordDegree[0] = 0; m.chordDegree[1] = other; m.chordDegree[2] = 0; m.chordDegree[3] = other;
-    // One type per chord of the pendulum, the same in both of its slots: the two chords are the two
-    // colours of the track, and a third type would make the pendulum a progression again.
-    const int typeI = drawChordType(r, scale, 0, si), typeOther = drawChordType(r, scale, other, si);
-    m.chordType[0] = typeI; m.chordType[1] = typeOther; m.chordType[2] = typeI; m.chordType[3] = typeOther;
+    // (The pendulum's chord has to stand on a perfect fifth: v in Phrygian is C# over F#, and its scale
+    // fifth is G, a tritone -- no type of Harmony.h fits such a root and the pad would be handed a note
+    // outside the mode; measured on seed 7, track 3. drawProgression keeps that rule for loops as well.)
+    m.progression = drawProgression(r, lr, scale, si, m.chordDegree, m.chordType, m.loop);
+    const int typeI = m.chordType[0];
     static const int kBars[3] = { 4, 8, 16 };
     m.chordBars = kBars[drawIndex(r, kBarsWeight[si], 3)];
+    // The second half (23.09.2026): behind the main breakdown a progression of its own, in the style's
+    // share of tracks -- another pendulum or a loop, never the first one again. The lines and the bass
+    // stay on the tonic (the Bordun), so this is the pad's and the stab's colour changing, not a key.
+    m.secondHalf = lr.uniform() < kSecondHalfChance[si];
+    if (m.secondHalf) {
+        for (int attempt = 0; attempt < 4; ++attempt) {
+            m.progression2 = drawProgression(lr, lr, scale, si, m.chordDegree2, m.chordType2, m.loop2);
+            bool same = m.progression2 == m.progression;
+            for (int c = 0; c < 4 && same; ++c) same = m.chordDegree2[c] == m.chordDegree[c];
+            if (!same) break;
+            if (attempt == 3) m.secondHalf = false;
+        }
+    }
 
     // The main breakdown: the aeolian three (i - bVI - bVII) where the mode has both -- "die dramatischste
     // und melodischste Progression im Psytrance, fast ausschliesslich im Main Breakdown" -- else one
@@ -730,8 +811,9 @@ PadChord padChordAt(const MelodyPlan& m, const BarPlan& bp, int barInTrack)
     c.blockBars = m.chordBars;
     c.slot = chordIndexAt(m, barInTrack);
     c.barInBlock = barInTrack % m.chordBars;
-    c.degree = m.chordDegree[c.slot];
-    c.type = m.chordType[c.slot];
+    c.secondSet = m.secondHalf && bp.afterMainBreak;
+    c.degree = c.secondSet ? m.chordDegree2[c.slot] : m.chordDegree[c.slot];
+    c.type = c.secondSet ? m.chordType2[c.slot] : m.chordType[c.slot];
     return c;
 }
 
@@ -752,6 +834,14 @@ PadChord padChordAt(const MelodyPlan& m, const FormPlan& f, int barInTrack)
             bp.mainBreak = f.section[j].climax;
             break;
         }
+    for (int k = 0; k < si; ++k) {
+        if (f.section[k].type != SectionType::Break) continue;
+        for (int j = k + 1; j < f.count; ++j) {
+            if (f.section[j].type != SectionType::Drop) continue;
+            if (f.section[j].climax) bp.afterMainBreak = true;
+            break;
+        }
+    }
     return padChordAt(m, bp, barInTrack);
 }
 
@@ -2611,6 +2701,8 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     makeArp(m, key, scale, seed, temperature, colour, src);
     for (int c = 0; c < 4; ++c) m.padVoicing[c] = voiceChord(scale, key, m.chordDegree[c], m.chordType[c], c > 0 ? &m.padVoicing[c - 1] : nullptr);
     for (int c = 0; c < 4; ++c) m.breakVoicing[c] = voiceChord(scale, key, m.breakDegree[c], m.breakType[c], c > 0 ? &m.breakVoicing[c - 1] : nullptr);
+    if (m.secondHalf)
+        for (int c = 0; c < 4; ++c) m.padVoicing2[c] = voiceChord(scale, key, m.chordDegree2[c], m.chordType2[c], c > 0 ? &m.padVoicing2[c - 1] : nullptr);
     // The three new voices (19.09.2026), each from a salt of its own, after everything older: nothing
     // any older maker drew moves because of them.
     // The counter's mode (23.09.2026): the knob, else the style's weights, from the counter's own stream.
@@ -2639,6 +2731,9 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
             tmp.padVoicing[c] = voiceChord(sc, key, tmp.chordDegree[c], tmp.chordType[c], c > 0 ? &tmp.padVoicing[c - 1] : nullptr);
         for (int c = 0; c < 4; ++c)
             tmp.breakVoicing[c] = voiceChord(sc, key, tmp.breakDegree[c], tmp.breakType[c], c > 0 ? &tmp.breakVoicing[c - 1] : nullptr);
+        if (m.secondHalf)
+            for (int c = 0; c < 4; ++c)
+                tmp.padVoicing2[c] = voiceChord(sc, key, tmp.chordDegree2[c], tmp.chordType2[c], c > 0 ? &tmp.padVoicing2[c - 1] : nullptr);
         ModeMaterial& mm = m.mode[sc];
         for (int i = 0; i < kAcidCells; ++i) mm.acid[i] = tmp.acid[i];
         for (int i = 0; i < 2; ++i) mm.lead[i] = tmp.lead[i];
@@ -2646,6 +2741,7 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
         for (int i = 0; i < kArpCells; ++i) mm.arp[i] = tmp.arp[i];
         for (int c = 0; c < 4; ++c) mm.padVoicing[c] = tmp.padVoicing[c];
         for (int c = 0; c < 4; ++c) mm.breakVoicing[c] = tmp.breakVoicing[c];
+        for (int c = 0; c < 4; ++c) mm.padVoicing2[c] = tmp.padVoicing2[c];
         mm.built = true;
     }
     makeRangesAndPad(m, seed);
@@ -2757,6 +2853,7 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
     const std::vector<MelodyNote>* arp = mat != nullptr ? mat->arp : m.arp;
     const std::vector<int>* voicing = mat != nullptr ? mat->padVoicing : m.padVoicing;
     const std::vector<int>* breakVoicing = mat != nullptr ? mat->breakVoicing : m.breakVoicing;
+    const std::vector<int>* voicing2 = mat != nullptr ? mat->padVoicing2 : m.padVoicing2;   // the second half's (23.09.2026)
     const int set = std::clamp(ctx.material, 0, kMaterialSets - 1);
     const int cb = p.base(Module::Compose);
     const float swing = p.get(cb + compose::Swing);
@@ -2867,7 +2964,7 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
     }
     if (has(MelodyPart::Stab) && ((m.stabBars >> (barInTrack % 4)) & 1u) != 0) {
         // Short chord hits on the off-sixteenths of the track's figure (makeStab), over the bar's chord.
-        const std::vector<int> chord = stabChordImpl(bp.scale >= 0 ? bp.scale : m.scale, m.chordDegree[chordIndexAt(m, barInTrack)],
+        const std::vector<int> chord = stabChordImpl(bp.scale >= 0 ? bp.scale : m.scale, padChordAt(m, bp, barInTrack).degree,
                                                      m.key, m.stabTones);
         const uint16_t mask = m.stabMask[barInTrack % 2];
         std::vector<std::array<int, 3>> ev;
@@ -2995,7 +3092,7 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         MelodyNote held;
         held.velocity = 90;
         const double barBeats = static_cast<double>(kBeatsPerBar);
-        const std::vector<int>& v = (chord.inBreak ? breakVoicing : voicing)[chord.slot];
+        const std::vector<int>& v = (chord.inBreak ? breakVoicing : (chord.secondSet ? voicing2 : voicing))[chord.slot];
         // Intro, breakdown, buildup and outro hold whatever figure the track drew (round "Figuren").
         const bool carpet = bp.type == SectionType::Intro || bp.type == SectionType::Break
                          || bp.type == SectionType::Outro || bp.type == SectionType::Build;

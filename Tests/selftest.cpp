@@ -9606,9 +9606,13 @@ void testMotifOperators()
         int firstNotKeep = 0, lastNotCadence = 0, cadenceOff = 0, shiftBars = 0, shiftWrong = 0, thinBars = 0, thinWrong = 0;
         int shiftedBars = 0, shiftedWrongSide = 0, accents = 0, shorts = 0, slides = 0, slidesWrong = 0;
         int outside = 0, tooLow = 0, notes = 0, fromCorpus = 0, bands[3] = {};
+        int loops = 0, halves = 0, tracksSeen = 0;
         for (int i = 0; i < 64; ++i) {
             const TrackPlan t = c.track(p, i);
             const MelodyPlan& m = t.melody;
+            ++tracksSeen;
+            loops += m.progression == 1 ? 1 : 0;
+            halves += m.secondHalf ? 1 : 0;
             if (!m.present[1]) continue;
             ++bands[std::clamp(m.leadDensityBand, 0, 2)];
             for (int w = 0; w < 2; ++w) {
@@ -9676,6 +9680,11 @@ void testMotifOperators()
                   "%d shift bars (%d wrong), %d thin bars (%d wrong), %d transposed bars (%d on the wrong side); %d notes, %d out of the mode, %d under C4",
                   phrases, archetypesSeen, opsSeen, firstNotKeep, lastNotCadence, cadenceOff, shiftBars, shiftWrong, thinBars, thinWrong,
                   shiftedBars, shiftedWrongSide, notes, outside, tooLow));
+        // 23.09.2026, round "Harmonie": beside the pendulum some tracks play a minor loop, and some change their
+        // progression behind the main breakdown -- and most still play the pendulum: fuzziness, not a new rule.
+        check(tracksSeen >= 60 && loops >= 6 && loops * 2 < tracksSeen && halves >= 6 && halves * 2 < tracksSeen,
+              "harmony's fuzziness: some tracks play a minor loop instead of the pendulum, some change their progression behind the main breakdown, most keep both",
+              fmt("%d tracks: %d loops, %d with a second half", tracksSeen, loops, halves));
         check(accents > 20 && shorts > 20 && slides > 10 && slidesWrong == 0 && fromCorpus * 2 > phrases,
               "the lead carries accents, staccato gates and slides, a slide only into an adjacent note a whole tone away at most; most cells come from the corpus templates",
               fmt("%d accents, %d short notes, %d slides (%d not adjacent), %d of %d cells from the corpus, density bands %d/%d/%d",
@@ -10787,7 +10796,10 @@ void testSectionRules()
             const double v = barsRms(sBuild.startBar + b, b + 4 >= sBuild.bars ? 3 : 4);
             if (windows == 0) first = v;
             last = v;
-            if (windows > 0 && v < prev - 0.2) ++falls;
+            // 23.09.2026: 0.35 dB, not 0.2. The buildup's gain ramps *down* by the climax headroom while its energy
+            // rises (Form.h, kBuildHeadroomDb), so the windows are nearly level by design and the roll's stage
+            // changes move them by a few tenths either way (measured -16.7 -16.9 -16.6 -16.7 -16.7 -17.0 -16.6 -16.2).
+            if (windows > 0 && v < prev - 0.35) ++falls;
             detail += fmt(" %.1f", v);
             prev = v;
             ++windows;
@@ -12272,17 +12284,20 @@ void testGenreRulesRules()
                 if (longest >= 6) ++leadHoles;
             }
         }
-        // ---- pad: root position, the type's fifth next, from D3, two to five voices (22.09.2026: chord types)
-        for (int c = 0; c < 4; ++c) {
-            const std::vector<int>& v = m.padVoicing[c];
-            ++padVoicings;
-            const int rootPc = (key + RuleRef::chordRoot(scale, m.chordDegree[c])) % 12;
-            int iv[4];
-            chordIntervals(static_cast<ChordType>(m.chordType[c]), scale, m.chordDegree[c], iv);
-            bool ok = v.size() >= 2 && v.size() <= 5 && std::is_sorted(v.begin(), v.end());
-            ok = ok && v[0] % 12 == rootPc && v[1] - v[0] == iv[0] && v[0] >= kPadLowest && v.back() <= kPadHighest;
-            if (!ok) ++padBad;
-        }
+        // ---- pad: root position, the type's fifth next, from D3, two to five voices (22.09.2026: chord types);
+        //      the second half's set too, where the track has one (23.09.2026)
+        for (int set = 0; set < (m.secondHalf ? 2 : 1); ++set)
+            for (int c = 0; c < 4; ++c) {
+                const std::vector<int>& v = (set == 0 ? m.padVoicing : m.padVoicing2)[c];
+                const int deg = (set == 0 ? m.chordDegree : m.chordDegree2)[c], ty = (set == 0 ? m.chordType : m.chordType2)[c];
+                ++padVoicings;
+                const int rootPc = (key + RuleRef::chordRoot(scale, deg)) % 12;
+                int iv[4];
+                chordIntervals(static_cast<ChordType>(ty), scale, deg, iv);
+                bool ok = v.size() >= 2 && v.size() <= 5 && std::is_sorted(v.begin(), v.end());
+                ok = ok && v[0] % 12 == rootPc && v[1] - v[0] == iv[0] && v[0] >= kPadLowest && v.back() <= kPadHighest;
+                if (!ok) ++padBad;
+            }
     }
     std::sort(leadPitches.begin(), leadPitches.end());
     const int leadMedian = leadPitches.empty() ? 0 : leadPitches[leadPitches.size() / 2];
@@ -12890,7 +12905,7 @@ void testVoicesScore()
             std::sort(v.begin(), v.end());
             if (v.size() > 4) ++tooMany;
             // The chord's root from the scale table: the chord's own, or the tonic where it is a colour tone.
-            int rootPc = RuleRef::chordRoot(s.scale, t.melody.chordDegree[chordIndexAt(t.melody, bar - t.firstBar)]);
+            int rootPc = RuleRef::chordRoot(s.scale, padChordAt(t.melody, t.form, bar - t.firstBar).degree);   // the pad's chord, set 2 behind the main breakdown (23.09.2026)
             if (RuleRef::colour(s.scale, rootPc)) rootPc = 0;
             if (((v[0] - t.key - rootPc) % 12 + 12) % 12 != 0) ++notRoot;
             for (int x : v) if (RuleRef::colour(s.scale, x - t.key)) ++colourNotes;
