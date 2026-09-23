@@ -7492,6 +7492,25 @@ keine Änderung hier.
 *Dateien.* `Core/include/phos/Audibility.h`, `Core/src/Audibility.cpp`, `Core/CMakeLists.txt`,
 `Tools/render/main.cpp`, `Tests/selftest.cpp`, `Tests/selftest_tests.cmake`; dieser Block.
 
+**23.09.2026, CI: ein Lauf auf sauberer Maschine, nur per Knopf**
+
+Phosphene hatte keinen Workflow. `.github/workflows/phosphene-ci.yml` startet **ausschließlich** über
+`workflow_dispatch` (Actions-Tab, „Run workflow") — die Hausregel „CI bleibt manuell" gilt; kein Push, kein
+Pull Request löst ihn aus. Er baut Kern, Werkzeuge und Tests ohne Plugin (JUCE wird nur dafür gebraucht) auf
+`windows-latest` und lässt das gewählte ctest-Label laufen: `quick` (Standard: die kurzen Selbsttest-Abschnitte,
+die Vektorpfade, die Plan-Schnappschüsse — hier 69 Tests), `selftest`, `slow` oder `all`; bei Fehlern wird
+`LastTest.log` angehängt. Sein Zweck ist, was ein lokaler Lauf nicht zeigen kann: dass ein frischer Klon baut
+und besteht, ohne Build- und Probe-Cache und ohne Daten außerhalb des Repos (alle zwölf `Core/data`-Dateien
+sind eingecheckt, geprüft).
+
+*Geprüft:* YAML gültig, einziger Auslöser `workflow_dispatch`; ein frischer Build-Baum mit
+`-DPHOS_BUILD_PLUGIN=OFF` konfiguriert (7,5 s). **Nicht geprüft:** ein Lauf auf dem Runner — den startet der
+Nutzer. Offene Frage dort: der Runner baut mit Visual Studio 2022, dieser Rechner mit 2026; die
+Plan-Schnappschüsse drucken Entscheidungen in ihrer Auflösung, ein anderer Compiler kann trotzdem an einer
+Grenze anders runden — der Dump nennt dann die Zeile.
+
+*Dateien.* `.github/workflows/phosphene-ci.yml`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

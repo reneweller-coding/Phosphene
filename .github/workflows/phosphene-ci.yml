@@ -1,0 +1,58 @@
+# Phosphene CI -- manual only (23.09.2026, round "CI").
+#
+# The house rule is that CI stays manual: nothing here runs on a push or a pull request. It starts from the
+# Actions tab ("Run workflow") and builds the core, the tools and the tests on a clean Windows machine --
+# without the plugin, which needs JUCE -- then runs the ctest label chosen at the start:
+#   quick     the self-test sections under a few seconds, the vector paths, the plan snapshots (default)
+#   selftest  every self-test section
+#   slow      the long sections and the cue check
+#   all       everything that is built
+# The point is the one a local run cannot make: that a fresh clone builds and passes on a machine that has
+# never seen this source tree (no build cache, no probe cache, no data outside the repository).
+#
+# Not verified on a runner yet: the runner's compiler is Visual Studio 2022, this machine builds with 2026. The
+# plan snapshots (Tests/golden) print decisions at the resolution a decision has, but a different compiler can
+# still round a float the other way at a boundary; if a snapshot differs only there, the dump says which line.
+name: Phosphene CI (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: "ctest label: quick, selftest, slow or all"
+        required: true
+        default: quick
+        type: choice
+        options: [quick, selftest, slow, all]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (core, tools, tests; no plugin)
+        run: cmake -S . -B build -DPHOS_BUILD_PLUGIN=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        shell: bash
+        env:
+          PHOS_MUTE: "1"
+        run: |
+          cd build
+          if [ "${{ inputs.label }}" = "all" ]; then
+            ctest -C Release -j 4 --output-on-failure
+          else
+            ctest -C Release -j 4 -L "${{ inputs.label }}" --output-on-failure
+          fi
+
+      - name: Keep the test log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-log
+          path: build/Testing/Temporary/LastTest.log
