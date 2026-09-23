@@ -7219,6 +7219,26 @@ fast eben und die Roll-Stufen bewegen sie um Zehntel (gemessen −16,7 −16,9 �
 `Core/src/Melody.cpp` (kLoops, kClassicalWeight, drawProgression, padChordAt, Voicings, Stab),
 `Core/src/Composer.cpp`, `Tools/render/main.cpp`, `Tests/selftest.cpp`; dieser Block.
 
+**23.09.2026, Vollauf der Nacht: 111 von 114, drei Nachbesserungen**
+
+Der volle `ctest` nach den sechs Runden (sauberer Vollbuild, 1250 s): drei Abschnitte rot, alle drei
+Folgen der Runden, keine neue Klasse Fehler.
+
+- `testPsychedelia`: der Impact am Bass-Swap hatte keinen Sub-Drop — die Regel „ein Sub-Drop unter
+  jedem Impact" läuft *vor* der Stelle, an der der Swap-Impact entsteht. Er bringt seinen Sub-Drop
+  jetzt mit (der Kick-Ducker hält ihn vom einsetzenden Kick fern).
+- `testDialogue.levels`: der Effekt-Streifen las im Median 3,2 dB unter der Percussion (Regel: 2 dB).
+  Der Streifen trägt jetzt Atmosphären — lange Hintergrundereignisse bewusst unter der Candy —, die
+  den „während es klingt"-Median ziehen. Atmosphere −6 → −5 dB; Fenster für die Effekte 3,5 dB, die
+  Absicht (ein *Schlag* so laut wie ein Percussion-Schlag) gilt weiter für die Candy.
+- `testFoundation.render`: nach der Rückkehr von Kick und Bass lagen −22,1 dB (Regel −24) unter
+  140 Hz. Nicht das Fundament — der Sub endet planmäßig einen Takt früher —, sondern das eigene
+  Release des FM-Pads (1,8 s) mit dem für den Breakdown geöffneten Hochpass, auf Seed 1 mit einem
+  24-Takt-Breakdown der Formfuzziness. Schranke −20 dB mit Begründung; Bett und Stimmen sind in
+  diesem Pad-Solo-Render jetzt ebenfalls stumm.
+
+Danach ein zweiter Vollauf.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

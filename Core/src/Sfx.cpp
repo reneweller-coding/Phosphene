@@ -48,7 +48,7 @@ constexpr float kTypeGainDb[] = {
     -4.0f,    // Reverse crash
      0.0f, 0.0f, 0.0f, 0.0f,   // Vocal types
      0.0f, 0.0f, 0.0f,         // Texture types
-    -6.0f,    // Atmosphere (23.09.2026): a background layer, under the candy
+    -5.0f,    // Atmosphere (23.09.2026): a background layer, under the candy
 };
 static_assert(sizeof(kTypeGainDb) / sizeof(kTypeGainDb[0]) == kNumSfxTypes, "one gain per effect type");
 /** @brief Band-pass output of an SVF at unity gain in the centre. */

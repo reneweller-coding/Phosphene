@@ -995,7 +995,9 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
         // (handover > 0); the set's first track keeps its quiet kick entry.
         if (s.type == SectionType::Intro && f.handover > 0 && f.handover < s.bars) {
             const double swap = start + f.handover * bar;
-            if (m.uniform() < pMark) add(swap, 4.0f, SfxType::Impact);
+            // With its sub drop, as every impact has one (the pass above ran before this impact existed); the kick's
+            // ducker keeps it off the incoming kick's transient (Engine.h).
+            if (m.uniform() < pMark) { add(swap, 4.0f, SfxType::Impact); add(swap, 4.0f, SfxType::SubDrop); }
             if (m.uniform() < 0.7f * pMark) add(swap - bar, static_cast<float>(bar), SfxType::ReverseCrash);
         }
         if (s.type == SectionType::Drop && i > 0 && prev != SectionType::Build && m.uniform() < pMark)
