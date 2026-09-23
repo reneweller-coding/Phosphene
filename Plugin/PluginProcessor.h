@@ -58,6 +58,7 @@
 #include "phos/Midi.h"
 #include "phos/Gallery.h"
 #include "phos/MidiMap.h"
+#include "phos/Preferences.h"
 #include "phos/Params.h"
 #include "phos/Score.h"
 #include <atomic>
@@ -282,6 +283,18 @@ public:
      * @return the file written, or a non-existent File when it could not be written
      */
     juce::File saveToGallery(const juce::String& name);
+
+    // ------------------------------------------------------------------ learned preferences (23.09.2026)
+    /** @brief `<application data>/Phosphene/preferences.txt`, loaded at start when it exists (phos/Preferences.h). */
+    juce::File preferencesFile() const;
+    /** @brief The preferences fitted from ratingsFile(), and how many verdicts with features went in. */
+    phos::Preferences fitFromRatings(int* verdicts = nullptr) const;
+    /** @brief Writes @p prefs to preferencesFile(), makes them the process's, and plans the set again from here. */
+    bool applyPreferences(const phos::Preferences& prefs);
+    /** @brief Renames preferencesFile() to preferences.txt.old, drops the preferences, plans again from here. */
+    void forgetPreferences();
+    /** @brief One line on what is in force: "none", or the number of weights and the strongest of them. */
+    juce::String preferencesSummary() const;
 
     bool undo();                       ///< one step back; false when there is none
     bool redo();                       ///< one step forward

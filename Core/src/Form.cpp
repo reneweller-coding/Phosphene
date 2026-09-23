@@ -3,6 +3,7 @@
  * @brief Style profiles, the energy arc, the form grammar and the instrumentation matrix.
  */
 #include "phos/Form.h"
+#include "phos/Preferences.h"
 #include "phos/Dsp.h"
 #include "phos/Sfx.h"
 #include <algorithm>
@@ -388,7 +389,10 @@ FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double a
 
     // The template is the style's (19.09.2026: the rule text gives every subgenre one form; the draw
     // stays a draw so that a profile may one day mix them).
-    f.body = drawIndex(r, s.bodyWeight, kNumBodies);
+    // The listener's preferences reweight the choice (Preferences.h; factors of exactly 1 without them).
+    double bodyWeight[kNumBodies];
+    for (int i = 0; i < kNumBodies; ++i) bodyWeight[i] = s.bodyWeight[i] * preferenceFactor("form.template", kFormTemplateFeatureNames[i]);
+    f.body = drawIndex(r, bodyWeight, kNumBodies);
     const Template& tp = kTemplates[f.body];
     int lens[kSlots];
     fitTemplate(tp, target, lens);

@@ -29,6 +29,9 @@ struct RatingEntry {
     std::string note;              ///< free text; tabs and line breaks become spaces
     std::string source;            ///< "plugin", "bench", ...
     std::string time;              ///< when, ISO 8601 local time; empty when the writer has no clock
+    /** @brief The composer's decisions at that bar, `name=value;...` (Preferences.h, decisionFeatures; 23.09.2026).
+     *         An eleventh column; a file of ten columns reads with it empty. */
+    std::string features;
 };
 
 /** @brief The header line of a ratings file, without the line break. */

@@ -4,6 +4,7 @@
  */
 #include "phos/Composer.h"
 #include "phos/Audibility.h"
+#include "phos/Preferences.h"
 #include "phos/Probe.h"
 #include "phos/Corpus.h"
 #include "phos/Disperser.h"
@@ -999,6 +1000,7 @@ void Composer::validate(const ParamStore& p) const
     knobs.push_back(p.get(p.base(Module::Kick) + kick::Engine));
     knobs.push_back(p.get(p.base(Module::Kick) + kick::Clip));
     knobs.push_back(p.get(p.base(Module::Bass) + bass::AmpRelease));
+    knobs.push_back(static_cast<float>(preferencesRevision()));   // new preferences: new plans (Preferences.h)
     for (int l = 0; l < kPercLanes; ++l) {
         const int b = p.base(Module::Perc, l);
         for (int k : { static_cast<int>(perc::Active), static_cast<int>(perc::Role), static_cast<int>(perc::Density), static_cast<int>(perc::Engine) })

@@ -110,6 +110,7 @@ set(PHOS_SELFTEST_SECONDS
     testMidiMap              0.1
     testGallery              0.2
     testSoloTrack            0.5
+    testPreferences          1.0
     testKnobFuzz            18.0
     testStems               16.6
     testAudibility           8.0

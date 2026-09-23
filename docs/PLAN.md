@@ -7687,6 +7687,49 @@ testVariety.levelMatch, testProbeSchedule, testProbeCache (seriell = parallel), 
 `Core/include/phos/Audibility.h`, `Core/src/Audibility.cpp`, `Tools/render/main.cpp`, `Tests/selftest.cpp`,
 `Tests/selftest_tests.cmake`; dieser Block.
 
+**23.09.2026, Präferenzen: aus den Bewertungen lernen**
+
+Die Bewertungen der Runde „Bewertung" werden jetzt zu Daten, die der Komponist benutzt.
+
+- **Merkmale beim Bewerten.** Jede Bewertung trägt die Entscheidungen an der bewerteten Stelle als elfte Spalte
+  (`decisionFeatures`: Stil, Sektion, Klimax, Form-Vorlage, Lead-Archetypen, Dichteband, Counter-Modus, Arp-Stil,
+  Pendel/Schleife) — das Plugin schreibt sie beim „Good/Bad here", der Hörprüfstand in seinen `index.tsv`,
+  `ratings.py` reicht sie durch. So braucht das Lernen die Knöpfe von damals nicht. Dateien mit zehn Spalten
+  lesen sich weiter.
+- **Fit** (`fitPreferences`, `Core/include/phos/Preferences.h`): je Merkmalswert die geglättete Log-Chance
+  ln((gut+1)/(schlecht+1)), geschrumpft mit n/(n+4), Werte unter zwei Urteilen fallen weg. Zählen, keine Blackbox;
+  die Datei ist eine Zeile je Gewicht und von Hand lesbar.
+- **Wirkung**, nur auf Ziehungen, die ohnehin gewichtete Wahlen unter erlaubten Alternativen sind: Form-Vorlage,
+  Lead-Archetyp, Arp-Stil, Counter-Modus, Schleife gegen Pendel — Gewicht × exp(Präferenz). Eine Wahl mit Gewicht
+  0 im Stil bleibt unmöglich: die Regeln stehen über dem Geschmack wie über dem Korpus. Ohne Präferenzen ist jeder
+  Faktor exakt 1 (bei der Schleifen-Chance wird ohne Präferenzen der alte Wert direkt genommen), Plan-Schnappschüsse
+  unverändert. Neue Präferenzen bewegen eine Revisionsnummer, die `Composer::validate` beobachtet.
+- **Bedienung.** Plugin (Perform-Seite): „Learn from my ratings..." zeigt die gefitteten Gewichte und wendet sie
+  erst nach Bestätigung an (schreibt `preferences.txt`, plant ab dem laufenden Takt neu); „Forget learned
+  preferences..." legt die Datei als `.old` beiseite; eine Zeile nennt die stärksten Gewichte. Beim Start lädt
+  das Plugin `preferences.txt`. `phos_render --learn IN.tsv OUT.txt` fittet, `--preferences FILE` plant damit.
+
+**Ein Vorfall, und die Isolation dagegen.** Der Knopf-Rundgang des Host-Tests drückt jeden Knopf, auch „Good
+here" und „Bad here" — meine Host-Test-Läufe dieses Tages hatten 16 Test-Urteile in die *echte*
+`%APPDATA%\Phosphene\ratings.tsv` geschrieben und einen leeren `Sets`-Ordner angelegt. Beides entfernt (nur
+Test-Artefakte, geprüft: je gut/schlecht in derselben Sekunde auf Takt 1). Jetzt gilt: `PHOS_USER_DIR` lenkt
+Bewertungen und Präferenzen um, `PHOS_GALLERY_DIR` die Galerie; der Host-Test setzt beide zu Beginn auf einen
+eigenen Temp-Ordner, auch nach seinem Galerie-Abschnitt. Nachgeprüft: Datenordner vor und nach einem Lauf gleich.
+
+*Tests.* `testPreferences`: Fit-Richtung (Surge +0,80, Pedal −0,80, geteiltes Urteil 0), Textform; 24 Full-On-Tracks
+mit starker Vorliebe für „Pedal & Bounce": 8 → 31 von 48 Phrasen; Hocket (in Full-On ohne Gewicht) trotz +3 nie.
+Host-Test: Fit aus sechs Urteilen im Testordner, Anwenden schreibt die Datei, Vergessen legt sie beiseite und
+setzt zurück; Knopf-Rundgang überspringt die zwei neuen Dialog-Knöpfe. 133 von 133. `--learn` von Hand geprüft.
+Plan-Schnappschüsse: die Controls-Spalte hasht jetzt den Parameter-*Schlüssel* statt der globalen Nummer (ein neuer
+Parameter wie `audibility_match` verschob sonst alle Nummern dahinter); neu geschrieben, geprüft: nur diese Spalte
+änderte sich.
+
+*Dateien.* `Core/include/phos/Preferences.h`, `Core/src/Preferences.cpp` (neu), `Core/include/phos/Rating.h`,
+`Core/src/Rating.cpp`, `Core/src/Form.cpp`, `Core/src/Melody.cpp`, `Core/src/Composer.cpp`, `Core/CMakeLists.txt`,
+`Plugin/PluginProcessor.h`, `Plugin/PluginProcessor.cpp`, `Plugin/EditorPerform.cpp`, `Plugin/PluginEditor.h`,
+`Tools/render/main.cpp`, `Tools/plandump/main.cpp`, `Tools/ratings.py`, `Tests/selftest.cpp`, `Tests/selftest_tests.cmake`,
+`Tests/hosttest.cpp`, `Tests/golden/*.txt`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

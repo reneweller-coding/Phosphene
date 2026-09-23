@@ -137,6 +137,48 @@ void PhospheneEditor::buildPerformPage()
         last->setMinimumHorizontalScale(0.7f);
         ratingLast_ = last.get();
         page->addControl(gr, std::move(last), "", 16, true);
+
+        // Learning from the verdicts (23.09.2026, phos/Preferences.h): the fit is shown before it is applied.
+        auto learn = std::make_unique<juce::TextButton>("Learn from my ratings...");
+        learn->setTooltip("Counts your good and bad verdicts per decision (style, form, lead archetype, arp, counter, harmony) "
+                          "and lets the composer choose what you liked more often");
+        learn->onClick = [this] {
+            int verdicts = 0;
+            const Preferences prefs = proc_.fitFromRatings(&verdicts);
+            juce::String text;
+            if (prefs.empty()) text << "Nothing to learn yet: " << verdicts << " verdicts with their decisions. Rate a few bars first (Good here / Bad here).";
+            else text << verdicts << " verdicts give " << static_cast<int>(prefs.size()) << " weights (positive: chosen more often):\n\n" << juce::String(prefs.toText()).fromFirstOccurrenceOf("\n", false, false);
+            galleryAsk_ = std::make_unique<juce::AlertWindow>("Learn from my ratings", text, juce::MessageBoxIconType::NoIcon);
+            if (!prefs.empty()) galleryAsk_->addButton("Apply", 1, juce::KeyPress(juce::KeyPress::returnKey));
+            galleryAsk_->addButton(prefs.empty() ? "OK" : "Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+            galleryAsk_->enterModalState(true, juce::ModalCallbackFunction::create([this, prefs](int result) {
+                if (result == 1) proc_.applyPreferences(prefs);
+                if (prefsNote_ != nullptr) prefsNote_->setText(proc_.preferencesSummary(), juce::dontSendNotification);
+                juce::MessageManager::callAsync([safe = juce::Component::SafePointer<PhospheneEditor>(this)] { if (safe != nullptr) safe->galleryAsk_.reset(); });
+            }), false);
+        };
+        page->addControl(gr, std::move(learn), "", 4, true);
+        auto forget = std::make_unique<juce::TextButton>("Forget learned preferences...");
+        forget->setTooltip("Puts preferences.txt aside (as preferences.txt.old) and lets the styles choose on their own again");
+        forget->onClick = [this] {
+            galleryAsk_ = std::make_unique<juce::AlertWindow>("Forget learned preferences",
+                                                              "The composer goes back to the styles' own choices. The file is kept as preferences.txt.old.",
+                                                              juce::MessageBoxIconType::NoIcon);
+            galleryAsk_->addButton("Forget", 1, juce::KeyPress(juce::KeyPress::returnKey));
+            galleryAsk_->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+            galleryAsk_->enterModalState(true, juce::ModalCallbackFunction::create([this](int result) {
+                if (result == 1) proc_.forgetPreferences();
+                if (prefsNote_ != nullptr) prefsNote_->setText(proc_.preferencesSummary(), juce::dontSendNotification);
+                juce::MessageManager::callAsync([safe = juce::Component::SafePointer<PhospheneEditor>(this)] { if (safe != nullptr) safe->galleryAsk_.reset(); });
+            }), false);
+        };
+        page->addControl(gr, std::move(forget), "", 4, true);
+        auto pn = std::make_unique<juce::Label>(juce::String(), proc_.preferencesSummary());
+        pn->setJustificationType(juce::Justification::centredLeft);
+        pn->setColour(juce::Label::textColourId, dim);
+        pn->setMinimumHorizontalScale(0.6f);
+        prefsNote_ = pn.get();
+        page->addControl(gr, std::move(pn), "", 8, true);
     }
     pages_[static_cast<size_t>(TabPerform)] = std::move(page);
 }
@@ -158,6 +200,8 @@ void PhospheneEditor::rateNow(int verdict)
         e.style = kStyleNames[std::clamp(plan.style, 0, kNumStyles - 1)];
     }
     if (ratingNote_ != nullptr) e.note = ratingNote_->getText().toStdString();
+    // What this verdict teaches: the composer's decisions at the bar (phos/Preferences.h, decisionFeatures).
+    if (plan.form.count > 0) e.features = decisionFeatures(plan, tv.barInTrack);
     {
         const std::time_t now = std::time(nullptr);
         std::tm local{};

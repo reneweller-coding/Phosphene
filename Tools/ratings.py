@@ -11,8 +11,8 @@ Two sources write them:
 
 This script reads any number of either, and prints what a round of work needs: the verdicts per style and
 section, and every "bad" with its note and the exact place to hear it again. `--out FILE` writes all of them as
-one file in the plugin's format, which is what later rounds read (a critic fitted to the listener, thresholds set
-by ear).
+one file in the plugin's format -- with the composer's decisions at each rated bar (the features column) -- which
+`phos_render --learn all.tsv preferences.txt` turns into the listener's preferences (Core/include/phos/Preferences.h).
 
     python Tools/ratings.py                                  # the plugin's file
     python Tools/ratings.py out/bench/index.tsv              # a bench
@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List
 
-HEADER = ["time", "seed", "track", "bar", "bar_in_track", "section", "style", "verdict", "note", "source"]
+HEADER = ["time", "seed", "track", "bar", "bar_in_track", "section", "style", "verdict", "note", "source", "features"]
 
 
 def default_plugin_file() -> Path:
@@ -62,7 +62,7 @@ def read_file(path: Path) -> List[Dict[str, str]]:
             verdict = "note"
         rows.append({"time": "", "seed": r.get("seed", ""), "track": r.get("track", ""), "bar": r.get("first_bar", ""),
                      "bar_in_track": "", "section": r.get("section", ""), "style": r.get("style", ""), "verdict": verdict,
-                     "note": note, "source": f"bench:{r.get('file', '')}"})
+                     "note": note, "source": f"bench:{r.get('file', '')}", "features": r.get("features", "")})
     return rows
 
 

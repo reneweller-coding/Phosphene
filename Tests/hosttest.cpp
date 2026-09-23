@@ -27,6 +27,7 @@
 #include "PluginEditor.h"
 #include "phos/Composer.h"
 #include "phos/Engine.h"
+#include "phos/Rating.h"
 #include "phos/WaveTableFile.h"
 #include <atomic>
 #include <chrono>
@@ -315,6 +316,19 @@ int main(int argc, char** argv)
     }
     const bool partRest = part != "realhost", partRealHost = part != "rest";
     std::printf("Phosphene host test%s%s\n", part.isEmpty() ? "" : ", part ", part.toRawUTF8());
+    // The user's files stay the user's (23.09.2026): the ratings, the learned preferences and the gallery of every
+    // processor this test builds go to a folder of the test's own, emptied first. The editor sweep below presses
+    // "Good here", "Bad here" and the learning buttons like any other.
+    const juce::File userDir = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("phos_hosttest_user_" + part);
+    userDir.deleteRecursively();
+    userDir.createDirectory();
+#if defined(_WIN32)
+    _putenv_s("PHOS_USER_DIR", userDir.getFullPathName().toRawUTF8());
+    _putenv_s("PHOS_GALLERY_DIR", userDir.getChildFile("Sets").getFullPathName().toRawUTF8());
+#else
+    setenv("PHOS_USER_DIR", userDir.getFullPathName().toRawUTF8(), 1);
+    setenv("PHOS_GALLERY_DIR", userDir.getChildFile("Sets").getFullPathName().toRawUTF8(), 1);
+#endif
     // Round "speed" (20.09.2026). This test builds some forty processors and nearly every one plans a
     // track, 12 to 15 s of probe renders each -- that, not real-time playback, is what made it 9 to 11
     // minutes. As a development program it opts in to parallel probes and, under ctest, to the suite's probe
@@ -1082,12 +1096,39 @@ int main(int argc, char** argv)
         const bool loaded = q->importSet(f);
         check(read && e.seed == 4711 && e.name == "test   set" && loaded && q->seed() == 4711,
               "the gallery: a saved set lands in the gallery folder with its name and seed, and loads back as a set -- " + f.getFileName());
+        // Back to the test's own user folder, never to the user's real gallery.
 #if defined(_WIN32)
-        _putenv_s("PHOS_GALLERY_DIR", "");
+        _putenv_s("PHOS_GALLERY_DIR", userDir.getChildFile("Sets").getFullPathName().toRawUTF8());
 #else
-        unsetenv("PHOS_GALLERY_DIR");
+        setenv("PHOS_GALLERY_DIR", userDir.getChildFile("Sets").getFullPathName().toRawUTF8(), 1);
 #endif
         dir.deleteRecursively();
+    }
+
+    // ---------------------------------------------------------------- learned preferences (23.09.2026)
+    if (partRest) {
+        auto p = std::make_unique<PhospheneProcessor>();
+        const bool isolated = p->ratingsFile().getParentDirectory() == userDir && p->preferencesFile().getParentDirectory() == userDir;
+        // Six verdicts: the Surge archetype liked three times, the Pedal one disliked three times.
+        for (int i = 0; i < 6; ++i) {
+            phos::RatingEntry r;
+            r.seed = 1;
+            r.verdict = i < 3 ? 1 : -1;
+            r.features = i < 3 ? "style=Goa;lead.archetype=Surge" : "style=Goa;lead.archetype=Pedal";
+            phos::appendRating(p->ratingsFile().getFullPathName().toRawUTF8(), r);
+        }
+        int verdicts = 0;
+        const phos::Preferences prefs = p->fitFromRatings(&verdicts);
+        const bool fitted = verdicts == 6 && prefs.weight("lead.archetype=Surge") > 0.1 && prefs.weight("lead.archetype=Pedal") < -0.1;
+        const bool applied = p->applyPreferences(prefs) && p->preferencesFile().existsAsFile() && phos::preferences() != nullptr
+                          && p->preferencesSummary().contains("learned weights");
+        p->forgetPreferences();
+        const bool forgotten = !p->preferencesFile().existsAsFile() && p->preferencesFile().getSiblingFile("preferences.txt.old").existsAsFile()
+                            && phos::preferences() == nullptr;
+        check(isolated && fitted && applied && forgotten,
+              juce::String("learned preferences: fitted from the verdicts, applied and written, forgotten and set aside -- in the test's own folder (")
+                  + juce::String(verdicts) + " verdicts, Surge " + juce::String(prefs.weight("lead.archetype=Surge"), 2) + ", Pedal "
+                  + juce::String(prefs.weight("lead.archetype=Pedal"), 2) + ")");
     }
 
     // ---------------------------------------------------------------- undo (23.09.2026)

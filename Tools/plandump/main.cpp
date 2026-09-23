@@ -57,6 +57,7 @@ uint32_t bits(float v) { uint32_t u; std::memcpy(&u, &v, sizeof(u)); return u; }
 struct Fnv {
     uint64_t h = 1469598103934665603ull;
     void add(int64_t v) { for (int i = 0; i < 8; ++i) { h ^= static_cast<uint64_t>(v >> (8 * i)) & 0xFFu; h *= 1099511628211ull; } }
+    void add(const std::string& s) { for (unsigned char c : s) { h ^= c; h *= 1099511628211ull; } add(static_cast<int64_t>(s.size())); }
 };
 
 /** @brief A beat position or length on a grid far finer than any the composer uses (1/3840 beat). */
@@ -136,7 +137,11 @@ void dumpDecisions(Composer& composer, const ParamStore& params, uint64_t seed, 
         for (const ControlEvent& c : controls) {
             if (c.beat < from || c.beat >= to) continue;
             ++nc;
-            hc.add(tick(c.beat)); hc.add(tick(c.length)); hc.add(std::llround(static_cast<double>(c.value) * 1000.0)); hc.add(c.param); hc.add(static_cast<int>(c.kind));
+            // The parameter by its key, not its global id (23.09.2026): a parameter added to the store shifts every id
+            // after it, and a snapshot has to say what the composer does, not where the table's rows ended up.
+            hc.add(tick(c.beat)); hc.add(tick(c.length)); hc.add(std::llround(static_cast<double>(c.value) * 1000.0));
+            hc.add(c.param >= 0 && c.param < params.count() ? params.key(c.param) : std::to_string(c.param));
+            hc.add(static_cast<int>(c.kind));
         }
         std::printf("bars %4d..%4d: %5d notes %016llx, %5d controls %016llx\n", w * 16, w * 16 + 15, nn, static_cast<unsigned long long>(hn.h), nc,
                     static_cast<unsigned long long>(hc.h));

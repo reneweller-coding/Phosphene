@@ -27,6 +27,7 @@
 #include "phos/Melody.h"
 #include "phos/Perc.h"
 #include "phos/Poly.h"
+#include "phos/Preferences.h"
 #include "phos/Probe.h"
 #include "phos/Rating.h"
 #include "phos/Reverb.h"
@@ -10247,6 +10248,63 @@ void testKnobFuzz()
 }
 
 /**
+ * @brief Learned preferences (23.09.2026, round "Präferenzen"; phos/Preferences.h): the fit points the right way,
+ *        the text form survives, a strong preference moves the draws, and no preference allows what a rule forbids.
+ */
+void testPreferences()
+{
+    section("preferences: what the listener liked, learned and applied");
+    // The fit: Surge liked four times, Pedal disliked four times, Arch once each way.
+    std::vector<RatingEntry> ratings;
+    auto rate = [&](int verdict, const char* features) { RatingEntry r; r.verdict = verdict; r.features = features; ratings.push_back(r); };
+    for (int i = 0; i < 4; ++i) rate(1, "style=Goa;lead.archetype=Surge");
+    for (int i = 0; i < 4; ++i) rate(-1, "style=Goa;lead.archetype=Pedal");
+    rate(1, "lead.archetype=Arch");
+    rate(-1, "lead.archetype=Arch");
+    const Preferences fit = fitPreferences(ratings);
+    Preferences back;
+    const bool parsed = back.parse(fit.toText());
+    check(fit.weight("lead.archetype=Surge") > 0.5 && fit.weight("lead.archetype=Pedal") < -0.5 && std::fabs(fit.weight("lead.archetype=Arch")) < 0.05
+              && std::fabs(fit.weight("style=Goa")) < 0.05 && parsed && back.toText() == fit.toText(),
+          "the fit: liked values up, disliked down, a split verdict near zero; the text form reads back the same",
+          fmt("Surge %+.2f, Pedal %+.2f, Arch %+.2f, Goa %+.2f", fit.weight("lead.archetype=Surge"), fit.weight("lead.archetype=Pedal"),
+              fit.weight("lead.archetype=Arch"), fit.weight("style=Goa")));
+
+    // The draws: 24 tracks planned with and without a strong liking for the Pedal archetype and for hocket counters.
+    auto count = [&](bool withPrefs, int& pedal, int& hocket, int& total, std::string& features) {
+        if (withPrefs) {
+            auto p = std::make_shared<Preferences>();
+            p->set("lead.archetype=Pedal & Bounce", 2.5);
+            p->set("counter.mode=Hocket", 3.0);
+            setPreferences(p);
+        } else {
+            setPreferences(nullptr);
+        }
+        ParamStore q;
+        q.parseText("compose.level_match=Off master.auto_gain=Off compose.presence_match=Off compose.style=Full-On compose.style_mix=0");
+        Composer c(2026);
+        pedal = hocket = total = 0;
+        for (int t = 0; t < 24; ++t) {
+            const TrackPlan p = c.track(q, t);
+            for (int w = 0; w < 2; ++w) { ++total; if (p.melody.leadArchetype[w] == static_cast<int>(LeadArchetype::PedalAndBounce)) ++pedal; }
+            if (p.melody.counterMode == static_cast<int>(CounterMode::Hocket)) ++hocket;
+            if (t == 0) features = decisionFeatures(p, 90);
+        }
+    };
+    int pedal0 = 0, hocket0 = 0, n0 = 0, pedal1 = 0, hocket1 = 0, n1 = 0;
+    std::string f0, f1;
+    count(false, pedal0, hocket0, n0, f0);
+    count(true, pedal1, hocket1, n1, f1);
+    setPreferences(nullptr);
+    // Full-On gives the hocket no weight at all (Form.h, LeadStyle): the rule forbids it, and a liking cannot allow it.
+    const bool hocketForbidden = styleProfile(StyleId::FullOn).lead.counterMode[static_cast<int>(CounterMode::Hocket)] == 0.0;
+    check(pedal1 > pedal0 + 4 && (!hocketForbidden || hocket1 == 0) && f0.find("lead.archetype=") != std::string::npos && f0.find("section=") != std::string::npos,
+          "a strong liking moves the draw it names, and a choice the style's rules give no weight stays impossible",
+          fmt("Pedal phrases %d of %d without, %d of %d with the liking; hocket counters %d with (forbidden in Full-On: %s); features: %s",
+              pedal0, n0, pedal1, n1, hocket1, hocketForbidden ? "yes" : "no", f0.c_str()));
+}
+
+/**
  * @brief One track alone (23.09.2026, round "DJ-Export"; Composer::setSoloTrack): what the DJ export renders.
  *        Its intro has none of the outgoing track, its own bars are the set's, and nothing else sounds.
  */
@@ -14865,6 +14923,7 @@ int main(int argc, char** argv)
     run("testMidiMap", testMidiMap);
     run("testGallery", testGallery);
     run("testSoloTrack", testSoloTrack);
+    run("testPreferences", testPreferences);
     run("testKnobFuzz", testKnobFuzz);
     run("testStems", testStems);
     run("testAudibility", testAudibility);

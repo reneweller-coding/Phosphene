@@ -24,7 +24,7 @@ std::string clean(const std::string& s)
 
 const char* ratingHeader()
 {
-    return "time\tseed\ttrack\tbar\tbar_in_track\tsection\tstyle\tverdict\tnote\tsource";
+    return "time\tseed\ttrack\tbar\tbar_in_track\tsection\tstyle\tverdict\tnote\tsource\tfeatures";
 }
 
 std::string formatRating(const RatingEntry& e)
@@ -32,7 +32,7 @@ std::string formatRating(const RatingEntry& e)
     char nums[160];
     std::snprintf(nums, sizeof(nums), "%llu\t%d\t%d\t%d", static_cast<unsigned long long>(e.seed), e.track, e.bar, e.barInTrack);
     const char* verdict = e.verdict > 0 ? "good" : (e.verdict < 0 ? "bad" : "note");
-    return clean(e.time) + "\t" + nums + "\t" + clean(e.section) + "\t" + clean(e.style) + "\t" + verdict + "\t" + clean(e.note) + "\t" + clean(e.source);
+    return clean(e.time) + "\t" + nums + "\t" + clean(e.section) + "\t" + clean(e.style) + "\t" + verdict + "\t" + clean(e.note) + "\t" + clean(e.source) + "\t" + clean(e.features);
 }
 
 bool parseRating(const std::string& line, RatingEntry& out)
@@ -46,7 +46,7 @@ bool parseRating(const std::string& line, RatingEntry& out)
         start = tab + 1;
     }
     if (f.size() < 10 || f[1] == "seed") return false;
-    if (!f[9].empty() && f[9].back() == '\r') f[9].pop_back();
+    if (!f.back().empty() && f.back().back() == '\r') f.back().pop_back();
     RatingEntry e;
     e.time = f[0];
     e.seed = std::strtoull(f[1].c_str(), nullptr, 10);
@@ -58,6 +58,7 @@ bool parseRating(const std::string& line, RatingEntry& out)
     e.verdict = f[7] == "good" ? 1 : (f[7] == "bad" ? -1 : 0);
     e.note = f[8];
     e.source = f[9];
+    if (f.size() > 10) e.features = f[10];   // since 23.09.2026; older files have ten columns
     out = e;
     return true;
 }

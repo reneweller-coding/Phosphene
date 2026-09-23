@@ -9,6 +9,7 @@
 #include "phos/Clock.h"
 #include "phos/Model.h"
 #include "phos/SetFile.h"
+#include "phos/Rating.h"
 #include "phos/WaveTableFile.h"
 #include <chrono>
 #include <cmath>
@@ -476,6 +477,12 @@ PhospheneProcessor::PhospheneProcessor()
     conductor_ = std::make_unique<PlugConductor>(*engine_, *composer_);
     conductor_->setCueMarks(&cueMarks_);
     buildParameters();
+    // The listener's learned preferences (23.09.2026, phos/Preferences.h): process-wide, so every instance plans
+    // with the same taste; loaded before the composer thread plans its first track.
+    if (preferencesFile().existsAsFile()) {
+        auto prefs = std::make_shared<Preferences>();
+        if (prefs->parse(preferencesFile().loadFileAsString().toStdString())) setPreferences(prefs);
+    }
 
     // The cue bridge (PLAN 8.3) is off until `cue.send` is switched on. `PHOS_CUE_HOST` and
     // `PHOS_CUE_PORT` are for an automated run, which has no state file to carry a destination.
@@ -1608,7 +1615,12 @@ juce::File PhospheneProcessor::galleryFolder() const
 
 juce::File PhospheneProcessor::ratingsFile() const
 {
-    const juce::File dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Phosphene");
+    // PHOS_USER_DIR (tests): a folder of their own for the ratings and the preferences. The host test presses every
+    // button of the editor, "Good here" and "Learn from my ratings..." among them, and must never write into the
+    // user's real files -- its first runs of 23.09.2026 left sixteen verdicts in them before this existed.
+    const juce::String env = juce::SystemStats::getEnvironmentVariable("PHOS_USER_DIR", "");
+    const juce::File dir = env.isNotEmpty() ? juce::File(env)
+                                            : juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Phosphene");
     dir.createDirectory();
     return dir.getChildFile("ratings.tsv");
 }
@@ -1633,6 +1645,64 @@ juce::File PhospheneProcessor::saveToGallery(const juce::String& name)
     base += name.trim().isNotEmpty() ? juce::File::createLegalFileName(name.trim()) : juce::String("seed") + juce::String(seed_.load());
     const juce::File f = galleryFolder().getNonexistentChildFile(base, ".phosset", false);
     return f.replaceWithText(juce::String(text)) ? f : juce::File();
+}
+
+juce::File PhospheneProcessor::preferencesFile() const
+{
+    return ratingsFile().getSiblingFile("preferences.txt");
+}
+
+Preferences PhospheneProcessor::fitFromRatings(int* verdicts) const
+{
+    std::vector<RatingEntry> ratings;
+    juce::StringArray lines;
+    ratingsFile().readLines(lines);
+    for (const juce::String& l : lines) {
+        RatingEntry r;
+        if (parseRating(l.toStdString(), r) && r.verdict != 0 && !r.features.empty()) ratings.push_back(r);
+    }
+    if (verdicts != nullptr) *verdicts = static_cast<int>(ratings.size());
+    return fitPreferences(ratings);
+}
+
+bool PhospheneProcessor::applyPreferences(const Preferences& prefs)
+{
+    const bool written = preferencesFile().replaceWithText(juce::String(prefs.toText()));
+    setPreferences(std::make_shared<Preferences>(prefs));
+    // The plans are made again (Composer::validate watches the revision); the bars in the rings were composed under
+    // the old taste, so the transport restarts at the bar that is playing, as a reroll does.
+    markCurrentPosition();
+    plansStale_.store(true, std::memory_order_release);
+    restartRequest_.store(true, std::memory_order_release);
+    return written;
+}
+
+void PhospheneProcessor::forgetPreferences()
+{
+    const juce::File f = preferencesFile();
+    if (f.existsAsFile()) f.moveFileTo(f.getSiblingFile("preferences.txt.old"));
+    setPreferences(nullptr);
+    markCurrentPosition();
+    plansStale_.store(true, std::memory_order_release);
+    restartRequest_.store(true, std::memory_order_release);
+}
+
+juce::String PhospheneProcessor::preferencesSummary() const
+{
+    const std::shared_ptr<const Preferences> p = preferences();
+    if (p == nullptr || p->empty()) return "No learned preferences: every choice is the style's own.";
+    // The strongest three, read back from the text form (one line per weight).
+    juce::StringArray lines = juce::StringArray::fromLines(juce::String(p->toText()));
+    std::vector<std::pair<double, juce::String>> w;
+    for (const juce::String& l : lines) {
+        if (l.startsWithChar('#') || l.trim().isEmpty()) continue;
+        w.emplace_back(std::fabs(l.fromLastOccurrenceOf(" ", false, false).getDoubleValue()), l.trim());
+    }
+    std::sort(w.begin(), w.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    juce::String s;
+    s << static_cast<int>(p->size()) << " learned weights in force, strongest: ";
+    for (size_t i = 0; i < std::min<size_t>(3, w.size()); ++i) s << (i > 0 ? ",  " : "") << w[i].second;
+    return s;
 }
 
 bool PhospheneProcessor::exportSet(const juce::File& file)

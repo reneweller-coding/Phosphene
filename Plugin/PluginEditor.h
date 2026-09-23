@@ -262,6 +262,7 @@ private:
     int               midiArmedShown_ = -2;            ///< the armed target the note shows
     juce::TextEditor* ratingNote_ = nullptr;           ///< the note that goes with the next verdict
     juce::Label*      ratingLast_ = nullptr;           ///< what the last press wrote, and where
+    juce::Label*      prefsNote_ = nullptr;            ///< the learned preferences in force (23.09.2026)
     juce::TextButton* ratingButton_[2] = {};           ///< good, bad
     /** @brief Writes a verdict for the bar that is playing (+1 good, -1 bad) into the ratings file. */
     void rateNow(int verdict);

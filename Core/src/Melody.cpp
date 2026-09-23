@@ -3,6 +3,7 @@
  * @brief Chords, acid patterns, lead phrases, arps and their schedule.
  */
 #include "phos/Melody.h"
+#include "phos/Preferences.h"
 #include "phos/Corpus.h"
 #include "phos/Model.h"
 #include "phos/Dsp.h"
@@ -697,7 +698,14 @@ int drawProgression(Rng& r, Rng& lr, int scale, int si, int* deg, int* type, int
     double lw[kNumLoops] = {};
     double lsum = 0.0;
     for (int i = 0; i < kNumLoops; ++i) { lw[i] = loopFits(scale, kLoops[i]) ? 1.0 : 0.0; lsum += lw[i]; }
-    const bool loop = lr.uniform() < kLoopChance[si] && lsum > 0.0;
+    // The loop's chance against the pendulum's, reweighted by the listener's preferences (Preferences.h); without
+    // them the chance itself, so that not a bit of the draw moves.
+    float loopChance = kLoopChance[si];
+    {
+        const double fl = preferenceFactor("harmony", "loop"), fp = preferenceFactor("harmony", "pendulum");
+        if (fl != 1.0 || fp != 1.0) loopChance = static_cast<float>(loopChance * fl / (loopChance * fl + (1.0 - loopChance) * fp));
+    }
+    const bool loop = lr.uniform() < loopChance && lsum > 0.0;
     const int pick = drawIndex(lr, lw, kNumLoops);   // drawn whatever the coin: the pendulum path keeps its stream
     if (loop) {
         which = pick;
@@ -1647,7 +1655,9 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
         m.leadQuotesSet[w] = quote;
         m.leadCell[w] = mask;
         m.leadCellFromCorpus[w] = fromCorpus;
-        m.leadArchetype[w] = drawIndex(r, ls.archetype, kNumLeadArchetypes);
+        double archWeight[kNumLeadArchetypes];   // the style's weights times the listener's preferences (Preferences.h)
+        for (int a = 0; a < kNumLeadArchetypes; ++a) archWeight[a] = ls.archetype[a] * preferenceFactor("lead.archetype", kLeadArchetypeNames[a]);
+        m.leadArchetype[w] = drawIndex(r, archWeight, kNumLeadArchetypes);
         if (quote) m.leadArchetype[w] = std::clamp<int>(motif.archetype, 0, kNumLeadArchetypes - 1);
         const LeadArchetypeDef& arche = kLeadArchetypes[std::clamp(m.leadArchetype[w], 0, kNumLeadArchetypes - 1)];
         for (int b = 0; b < 8; ++b) {
@@ -1906,7 +1916,9 @@ void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatur
     // generates traditional musical rhythms", BRIDGES 2005) reuses the percussion's own generator,
     // and the polymeter is a three-sixteenth cell that precesses against the 4/4 bar.
     static const double kArpStyleWeights[kNumArpStyles] = { 0.30, 0.12, 0.10, 0.12, 0.24, 0.12 };
-    m.arpStyle = drawIndex(r, kArpStyleWeights, kNumArpStyles);
+    double arpWeight[kNumArpStyles];   // times the listener's preferences (Preferences.h)
+    for (int a = 0; a < kNumArpStyles; ++a) arpWeight[a] = kArpStyleWeights[a] * preferenceFactor("arp.style", kArpStyleFeatureNames[a]);
+    m.arpStyle = drawIndex(r, arpWeight, kNumArpStyles);
     m.arpPolymeter = m.arpStyle == static_cast<int>(ArpStyle::Polymeter);
     m.arpOctaveJump = r.uniform() < 0.3f;
     m.arpTones = r.below(3);
@@ -2719,7 +2731,9 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     {
         Rng cm;
         cm.seed(mixSeed(seed ^ kSaltCounter, 77u));
-        m.counterMode = counterKnob > 0 ? counterKnob - 1 : drawIndex(cm, style.lead.counterMode, kNumCounterModes);
+        double modeWeight[kNumCounterModes];   // times the listener's preferences (Preferences.h)
+        for (int a = 0; a < kNumCounterModes; ++a) modeWeight[a] = style.lead.counterMode[a] * preferenceFactor("counter.mode", kCounterModeFeatureNames[a]);
+        m.counterMode = counterKnob > 0 ? counterKnob - 1 : drawIndex(cm, modeWeight, kNumCounterModes);
     }
     makeCounter(m, key, scale, seed);
     makeStab(m, seed);

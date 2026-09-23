@@ -47,6 +47,10 @@
  *                         tempo with the first downbeat on sample 0, a cue marker per section and tags inside, plus
  *                         rekordbox.xml (beat grid, key, the eight sections as hot cues and memory cues), set.m3u8
  *                         and cues.tsv; the set itself is not rendered
+ *     --preferences FILE  plan with the listener's learned preferences (phos/Preferences.h): the form template, lead
+ *                         archetype, arp style, counter mode and loop-or-pendulum draws are reweighted by them
+ *     --learn IN.tsv OUT  fit preferences from a ratings file (the plugin's ratings.tsv, or Tools/ratings.py --out) and
+ *                         write them to OUT, then exit; the verdicts must carry their features (the eleventh column)
  *     --bench             render without writing and report the realtime factor
  *     --list              print every parameter with range and default
  *     --version           print the version, the vector path and the wavetable pack, then exit
@@ -58,6 +62,8 @@
 #include "phos/Loudness.h"
 #include "phos/Midi.h"
 #include "phos/Model.h"
+#include "phos/Preferences.h"
+#include "phos/Rating.h"
 #include "phos/Quality.h"
 #include "phos/SetFile.h"
 #include "phos/Sfx.h"
@@ -475,6 +481,37 @@ int main(int argc, char** argv)
         else if (a == "--stems") stemsDir = next();
         else if (a == "--audibility") audibilityPath = next();
         else if (a == "--dj-export") djDir = next();
+        else if (a == "--preferences") {
+            std::string text;
+            const char* path = next();
+            auto prefs = std::make_shared<Preferences>();
+            std::string err;
+            if (!readFile(path, text) || !prefs->parse(text, &err)) { std::fprintf(stderr, "cannot read preferences %s %s\n", path, err.c_str()); return 2; }
+            setPreferences(prefs);
+            std::fprintf(stderr, "preferences: %zu weights from %s\n", prefs->size(), path);
+        }
+        else if (a == "--learn") {
+            const char* in = next();
+            const char* outPath = next();
+            std::string text;
+            if (!readFile(in, text)) { std::fprintf(stderr, "cannot read %s\n", in); return 2; }
+            std::vector<RatingEntry> ratings;
+            size_t start = 0;
+            while (start < text.size()) {
+                size_t end = text.find('\n', start);
+                if (end == std::string::npos) end = text.size();
+                RatingEntry r;
+                if (parseRating(text.substr(start, end - start), r)) ratings.push_back(r);
+                start = end + 1;
+            }
+            const Preferences prefs = fitPreferences(ratings);
+            FILE* f = std::fopen(outPath, "w");
+            if (f == nullptr) { std::fprintf(stderr, "cannot write %s\n", outPath); return 1; }
+            std::fputs(prefs.toText().c_str(), f);
+            std::fclose(f);
+            std::printf("%zu verdicts, %zu weights written to %s\n%s", ratings.size(), prefs.size(), outPath, prefs.toText().c_str());
+            return 0;
+        }
         else if (a == "--bench") bench = true;
         else if (a == "--list") { printList(params); return 0; }
         else if (a == "--version") { printVersion(); return 0; }
@@ -673,7 +710,7 @@ int main(int argc, char** argv)
         if (idx == nullptr) { std::fprintf(stderr, "cannot write %s\n", indexPath.c_str()); return 1; }
         // The last two columns are the listener's (23.09.2026, phos/Rating.h): "good", "bad" or empty, and a
         // note. Tools/ratings.py reads them back together with the plugin's ratings.tsv.
-        std::fprintf(idx, "file\tseed\ttrack\tstyle\tkey\tscale\tbpm\tsection\tindex\tfirst_bar\tbars\tenergy\tclimax\trating\tnote\n");
+        std::fprintf(idx, "file\tseed\ttrack\tstyle\tkey\tscale\tbpm\tsection\tindex\tfirst_bar\tbars\tenergy\tclimax\tfeatures\trating\tnote\n");
         for (int t = 0; composer.track(params, t).firstBar < totalBars; ++t) {
             const TrackPlan p = composer.track(params, t);
             const std::string styleName = fileToken(kStyleNames[std::clamp(p.style, 0, kNumStyles - 1)]);
@@ -695,9 +732,10 @@ int main(int argc, char** argv)
                 e->path = excerpts + "/" + name;
                 e->start = static_cast<uint64_t>(std::llround(tempo.secondsAt(static_cast<double>(from) * kBeatsPerBar) * sr));
                 e->end = static_cast<uint64_t>(std::llround(tempo.secondsAt(static_cast<double>(to) * kBeatsPerBar) * sr));
-                std::fprintf(idx, "%s\t%llu\t%d\t%s\t%s\t%s\t%.1f\t%s\t%d\t%d\t%d\t%.2f\t%d\t\t\n", name, static_cast<unsigned long long>(seed), t + 1,
+                std::fprintf(idx, "%s\t%llu\t%d\t%s\t%s\t%s\t%.1f\t%s\t%d\t%d\t%d\t%.2f\t%d\t%s\t\t\n", name, static_cast<unsigned long long>(seed), t + 1,
                              kStyleNames[std::clamp(p.style, 0, kNumStyles - 1)], kKeyNames[p.key], kScaleNames[p.scale], p.bpm,
-                             kSectionNames[static_cast<int>(sec.type)], s + 1, from + 1, to - from, static_cast<double>(sec.energy), sec.climax ? 1 : 0);
+                             kSectionNames[static_cast<int>(sec.type)], s + 1, from + 1, to - from, static_cast<double>(sec.energy), sec.climax ? 1 : 0,
+                             decisionFeatures(p, from - p.firstBar).c_str());   // what a verdict on it teaches (Preferences.h)
                 excerptList.push_back(std::move(e));
             }
         }
