@@ -1,0 +1,470 @@
+# args: --seed 7 --tracks 3 --set compose.level_match=Off --set master.auto_gain=Off --set compose.presence_match=Off
+seed 7 track 1: bars 0..255, 145.0 BPM, F# Phrygian, Full-On, bass Rolling/Gallop gate 0.70, kick engine -1 clip -1
+  recipes: kick -0.167 -0.344 +0.034 +0.018 +0.235; bass -0.063 +0.172 +0.015 +0.380 +0.323; acid voicing 0.000 1.000 0.000
+  voice lead     osc 3 table 55 filter 0 osc2 0/5 (drawn) +0.444 -0.159 -0.133 +0.536 -0.031
+  voice counter  osc 2 table 356 filter 0 osc2 4/5 (drawn) +0.008 +0.271 -0.367 +0.327 -0.173
+  voice arp      osc 3 table 175 filter 1 osc2 4/5 (drawn) +0.007 +0.402 -0.269 -0.221 -0.076
+  voice stab     osc 1 table 178 filter 0 osc2 0/3 (drawn) +0.376 -0.205 +0.020 -0.042 +0.355
+  voice pad      osc 2 table 279 filter 0 osc2 0/3 (drawn) -0.216 +0.197 -0.154 -0.014 -0.178
+  voice drone    osc 3 table 458 filter 0 osc2 3/3 (drawn) -0.572 +0.060 +0.052 +0.156 +0.019
+  perc: layers 5 (hats 2), hat mode 0, clap 1, order 0 7 4 9 2
+  harmony: loop, 4 bars each: itriad iiisus2 viisus4 ivtriad; breakdown moves 8 bars each: isus(b2) vitriad viisus4 im(b9)
+  parts: 1 1 1 1 1 1 1; acid 16 steps squelch -1; arp style 0; lead window 66, counter mode 0, density band 1
+  lead 1: archetype 4 cell 5ddd set-motif ops 0+0 1+0 0+0 1+0 0+0 6+1 0+1 1+0
+  lead 2: archetype 1 cell 5d9d corpus ops 0+0 1+0 0+0 1+1 0+1 4+0 0+0 1+0
+  form: template 0, hand-over 0, overlap tail 16, arc 0.70..0.70
+    Intro  @  0 x32 energy 0.35..0.35 scale 1 roll 0 pdb 0/0 cut 0
+    Groove @ 32 x32 energy 0.61..0.61 scale 1 roll 0 pdb 0/0 cut 0
+    Build  @ 64 x16 energy 0.61..0.76 scale 1 roll 4 pdb 4/0 cut 0
+    Drop   @ 80 x32 energy 0.76..0.76 scale 1 roll 0 pdb 0/0 cut 0
+    Break  @112 x32 energy 0.26..0.26 scale 1 roll 0 pdb 0/0 cut 2
+    Build  @144 x24 energy 0.26..0.76 scale 1 roll 12 pdb 1/2 cut 0
+    Drop   @168 x56 energy 0.96..0.96 scale 1 climax roll 0 pdb 0/0 cut 0
+    Outro  @224 x32 energy 0.39..0.39 scale 1 roll 0 pdb 0/0 cut 0
+  effects (110):
+    Jaw Harp       beat       0 length   124 preset 225
+    Atmosphere     beat       0 length    32 preset 154
+    Spoken Word    beat      40 length     8 preset 187
+    Reverse Swell  beat      60 length     4 preset 185
+    Reverse Swell  beat      60 length     4 preset 28
+    Alien Chatter  beat   78.75 length  1.25 preset 148
+    Atmosphere     beat      96 length    32 preset 229
+    Sweep          beat     120 length     8 preset 52
+    Reverse Swell  beat  138.75 length  5.25 preset 153
+    Squelch        beat  143.25 length  0.25 preset 109
+    Squelch        beat  143.75 length  0.25 preset 60
+    Zap            beat  159.75 length  0.25 preset 30
+    Squelch        beat   175.5 length  0.25 preset 126
+    Sweep          beat  191.75 length     2 preset 187
+    Squelch        beat  207.25 length  0.25 preset 23
+    Squelch        beat  207.75 length  0.25 preset 37
+    Sweep          beat  223.25 length     2 preset 248
+    Alien Chatter  beat  238.75 length  1.25 preset 25
+    Squelch        beat  238.75 length  0.25 preset 61
+    Reverse Swell  beat     252 length     4 preset 164
+    Riser          beat     287 length    32 preset 219
+    Sweep          beat     311 length     8 preset 100
+    Zap            beat     319 length     1 preset 34
+    Impact         beat     320 length     4 preset 102
+    Sub Drop       beat     320 length     4 preset 0
+    Reverse Swell  beat  338.75 length  5.25 preset 57
+    Atmosphere     beat     352 length    32 preset 30
+    Reverse Swell  beat  355.25 length  4.75 preset 71
+    Sweep          beat   371.5 length     2 preset 137
+    Squelch        beat  375.75 length   0.5 preset 107
+    Voice Chop     beat     382 length     2 preset 199
+    Sweep          beat   391.5 length     2 preset 110
+    Alien Chatter  beat  398.75 length  1.25 preset 180
+    Zap            beat   407.5 length  0.25 preset 24
+    Reverse Swell  beat   423.5 length   4.5 preset 83
+    Alien Chatter  beat  430.75 length  1.25 preset 40
+    Sweep          beat  439.25 length     2 preset 103
+    Reverse Swell  beat     444 length     4 preset 180
+    Downlifter     beat     448 length    16 preset 103
+    Sub Drop       beat     448 length     8 preset 0
+    Spoken Word    beat     452 length     8 preset 177
+    Jaw Harp       beat     452 length    48 preset 144
+    Atmosphere     beat     480 length    32 preset 2
+    Formant Voice  beat     484 length     8 preset 254
+    Bubble         beat  494.75 length     1 preset 14
+    Squelch        beat  503.75 length   0.5 preset 97
+    Zap            beat     511 length   0.5 preset 55
+    Atmosphere     beat     512 length    32 preset 402
+    Jaw Harp       beat     516 length    48 preset 170
+    Alien Chatter  beat   516.5 length     4 preset 155
+    Atmosphere     beat     544 length    32 preset 291
+    Squelch        beat  559.25 length  0.25 preset 32
+    Squelch        beat  559.75 length  0.25 preset 39
+    Reverse Swell  beat     572 length     4 preset 181
+    Riser          beat     639 length    32 preset 120
+    Sweep          beat     663 length     8 preset 51
+    Zap            beat     671 length     1 preset 54
+    Impact         beat     672 length     4 preset 77
+    Sub Drop       beat     672 length     4 preset 0
+    Squelch        beat  682.25 length  0.25 preset 46
+    Squelch        beat  684.75 length  0.25 preset 72
+    Sweep          beat  703.25 length     2 preset 151
+    Squelch        beat  712.75 length  0.25 preset 88
+    Squelch        beat  717.75 length  0.25 preset 127
+    Squelch        beat  718.25 length  0.25 preset 64
+    Squelch        beat  719.25 length  0.25 preset 36
+    Squelch        beat  719.75 length  0.25 preset 96
+    Squelch        beat  725.75 length  0.25 preset 10
+    Sweep          beat     728 length     8 preset 195
+    Reverse Crash  beat     734 length     2 preset 49
+    Squelch        beat  745.75 length  0.25 preset 123
+    Squelch        beat  751.25 length  0.25 preset 24
+    Squelch        beat  751.75 length  0.25 preset 38
+    Squelch        beat  754.25 length  0.25 preset 85
+    Reverse Swell  beat   771.5 length   4.5 preset 26
+    Squelch        beat  772.75 length  0.25 preset 58
+    Squelch        beat  773.75 length  0.25 preset 116
+    Bubble         beat  775.25 length     1 preset 30
+    Squelch        beat  779.25 length  0.25 preset 5
+    Stutter        beat   783.5 length   0.5 preset 0
+    Squelch        beat  787.25 length  0.25 preset 95
+    Squelch        beat  789.75 length  0.25 preset 40
+    Squelch        beat   791.5 length   0.5 preset 6
+    Squelch        beat  795.25 length  0.25 preset 41
+    Squelch        beat  796.25 length  0.25 preset 13
+    Squelch        beat  797.75 length  0.25 preset 98
+    Reverse Crash  beat     798 length     2 preset 17
+    Stutter        beat   799.5 length   0.5 preset 0
+    Squelch        beat  806.25 length  0.25 preset 30
+    Alien Chatter  beat  807.25 length  0.75 preset 222
+    Squelch        beat  813.25 length  0.25 preset 104
+    Squelch        beat  821.75 length  0.25 preset 25
+    Squelch        beat  823.25 length  0.25 preset 48
+    Bubble         beat  823.75 length     1 preset 29
+    Squelch        beat  828.25 length  0.25 preset 115
+    Squelch        beat  831.25 length  0.25 preset 42
+    Squelch        beat  837.75 length  0.25 preset 111
+    Squelch        beat  842.25 length  0.25 preset 125
+    Alien Chatter  beat  846.75 length  1.25 preset 65
+    Squelch        beat  852.25 length  0.25 preset 43
+    Bubble         beat  855.75 length     1 preset 21
+    Reverse Swell  beat     860 length     4 preset 142
+    Squelch        beat  863.25 length  0.25 preset 106
+    Squelch        beat   871.5 length   0.5 preset 71
+    Stutter        beat   879.5 length   0.5 preset 0
+    Squelch        beat  881.25 length  0.25 preset 100
+    Squelch        beat  893.75 length  0.25 preset 31
+    Downlifter     beat     896 length    16 preset 28
+    Alien Chatter  beat  951.25 length  0.75 preset 98
+    Reverse Swell  beat     956 length     4 preset 9
+seed 7 track 2: bars 224..463, 145.5 BPM, B Phrygian, Full-On, bass Rolling/Skip gate 0.76, kick engine -1 clip -1
+  recipes: kick +0.315 +0.500 -0.029 -0.627 -0.686; bass +0.745 +0.154 -0.528 -0.218 -0.745; acid voicing 0.891 0.005 0.104
+  voice lead     osc 2 table 63 filter 1 osc2 0/1 (drawn) +0.072 -0.869 -0.170 -0.389 -0.330
+  voice counter  osc 3 table 379 filter 3 osc2 2/1 (drawn) -0.512 -0.552 +0.269 +0.101 +0.388
+  voice arp      osc 1 table 174 filter 0 osc2 2/1 (drawn) +0.257 -0.424 -0.020 -0.444 -0.300
+  voice stab     osc 3 table 143 filter 1 osc2 2/5 (drawn) -0.768 +0.095 +0.025 +0.768 +0.094
+  voice pad      osc 3 table 273 filter 0 osc2 4/5 (drawn) +0.914 +0.181 -0.370 -0.782 -0.914
+  voice drone    osc 2 table 253 filter 0 osc2 4/5 (drawn) -0.377 -0.792 +0.435 -0.273 -0.484
+  perc: layers 5 (hats 3), hat mode 1, clap 1, order 0 1 7 4 9
+  harmony: pendulum, 4 bars each: isus4 viitriad isus4 viitriad; breakdown moves 8 bars each: im(b9) vimaj7 viisus2 im7
+  parts: 1 1 1 1 0 1 1; acid 32 steps squelch 0; arp style 5; lead window 65, counter mode 1, density band 1
+  lead 1: archetype 0 cell ddbd corpus ops 0+0 1+0 0+0 1+0 0+0 4+1 0+2 1+0
+  lead 2: archetype 2 cell dd71 corpus ops 0+0 2+1 0+0 1+0 0+0 3+0 0+0 1+0
+  form: template 0, hand-over 32, overlap tail 16, arc 0.70..0.70
+    Intro  @  0 x32 energy 0.35..0.35 scale 1 roll 0 pdb 0/0 cut 0
+    Groove @ 32 x24 energy 0.61..0.61 scale 1 roll 0 pdb 0/0 cut 0
+    Build  @ 56 x24 energy 0.61..0.76 scale 1 roll 4 pdb 4/0 cut 0
+    Drop   @ 80 x32 energy 0.76..0.76 scale 4 roll 0 pdb 0/0 cut 0
+    Break  @112 x32 energy 0.26..0.26 scale 1 roll 0 pdb 0/0 cut 2
+    Build  @144 x32 energy 0.26..0.76 scale 1 roll 16 pdb 1/0 cut 0
+    Drop   @176 x32 energy 0.96..0.96 scale 0 climax roll 0 pdb 0/0 cut 0
+    Outro  @208 x32 energy 0.39..0.39 scale 1 roll 0 pdb 0/0 cut 0
+  effects (109):
+    Singing Bowl   beat       0 length    16 preset 73
+    Atmosphere     beat       0 length    32 preset 273
+    Spoken Word    beat      16 length     8 preset 151
+    Atmosphere     beat      32 length    32 preset 71
+    Singing Bowl   beat      48 length    16 preset 11
+    Reverse Swell  beat      60 length     4 preset 185
+    Sweep          beat      60 length     4 preset 93
+    Singing Bowl   beat      64 length    16 preset 123
+    Atmosphere     beat      64 length    32 preset 175
+    Squelch        beat   79.25 length  0.25 preset 96
+    Squelch        beat   79.75 length  0.25 preset 127
+    Singing Bowl   beat      80 length    16 preset 57
+    Zap            beat      95 length   0.5 preset 55
+    Atmosphere     beat      96 length    32 preset 468
+    Singing Bowl   beat     112 length    16 preset 105
+    Sweep          beat     120 length     8 preset 80
+    Reverse Swell  beat   139.5 length   4.5 preset 230
+    Alien Chatter  beat  142.75 length  1.25 preset 117
+    Sweep          beat     152 length     8 preset 206
+    Squelch        beat  170.75 length  0.25 preset 17
+    Squelch        beat  182.75 length   0.5 preset 6
+    Reverse Swell  beat   199.5 length   4.5 preset 15
+    Sweep          beat   215.5 length     2 preset 131
+    Reverse Swell  beat     220 length     4 preset 18
+    Riser          beat     287 length    32 preset 68
+    Sweep          beat     311 length     8 preset 114
+    Zap            beat     319 length     1 preset 4
+    Impact         beat     320 length     4 preset 116
+    Sub Drop       beat     320 length     4 preset 0
+    Stutter        beat   335.5 length   0.5 preset 0
+    Alien Chatter  beat  343.25 length  0.75 preset 122
+    Sweep          beat     348 length     4 preset 235
+    Atmosphere     beat     352 length    16 preset 433
+    Alien Chatter  beat  359.25 length  0.75 preset 236
+    Reverse Swell  beat  367.75 length  4.25 preset 222
+    Sweep          beat     380 length     4 preset 82
+    Reverse Crash  beat     382 length     2 preset 12
+    Sweep          beat  399.75 length     2 preset 165
+    Squelch        beat  406.75 length   0.5 preset 10
+    Zap            beat     415 length   0.5 preset 48
+    Atmosphere     beat     416 length    16 preset 76
+    Squelch        beat  423.25 length   0.5 preset 126
+    Bubble         beat  430.75 length     1 preset 19
+    Bubble         beat   431.5 length   0.5 preset 51
+    Reverse Swell  beat     444 length     4 preset 236
+    Downlifter     beat     448 length    16 preset 89
+    Sub Drop       beat     448 length     8 preset 0
+    Spoken Word    beat     452 length     8 preset 96
+    Singing Bowl   beat     452 length    16 preset 105
+    Bubble         beat  462.75 length     1 preset 57
+    Singing Bowl   beat     468 length    16 preset 11
+    Atmosphere     beat     480 length    32 preset 496
+    Formant Voice  beat     484 length     8 preset 65
+    Singing Bowl   beat     484 length    16 preset 109
+    Reverse Swell  beat     508 length     4 preset 223
+    Atmosphere     beat     512 length    32 preset 97
+    Spoken Word    beat     516 length     8 preset 6
+    Singing Bowl   beat     532 length    16 preset 87
+    Reverse Swell  beat     540 length     4 preset 254
+    Atmosphere     beat     544 length    32 preset 497
+    Singing Bowl   beat     548 length    16 preset 166
+    Singing Bowl   beat     564 length    16 preset 161
+    Reverse Swell  beat     572 length     4 preset 101
+    Riser          beat     639 length    64 preset 247
+    Riser          beat     687 length    16 preset 181
+    Sweep          beat     695 length     8 preset 158
+    Zap            beat     703 length     1 preset 60
+    Impact         beat     704 length     4 preset 85
+    Sub Drop       beat     704 length     4 preset 0
+    Squelch        beat  704.75 length  0.25 preset 18
+    Squelch        beat  716.75 length  0.25 preset 42
+    Squelch        beat  719.25 length  0.25 preset 99
+    Squelch        beat  719.75 length  0.25 preset 80
+    Squelch        beat  725.75 length  0.25 preset 46
+    Squelch        beat  730.25 length  0.25 preset 19
+    Sweep          beat     732 length     4 preset 197
+    Squelch        beat  733.75 length  0.25 preset 111
+    Voice Chop     beat     734 length     2 preset 156
+    Atmosphere     beat     736 length    16 preset 12
+    Squelch        beat  737.75 length  0.25 preset 125
+    Squelch        beat  743.25 length  0.25 preset 59
+    Squelch        beat   743.5 length   0.5 preset 87
+    Bubble         beat  750.75 length     1 preset 40
+    Bubble         beat   751.5 length   0.5 preset 33
+    Reverse Swell  beat   767.5 length   4.5 preset 148
+    Squelch        beat  772.75 length  0.25 preset 116
+    Squelch        beat  773.75 length  0.25 preset 34
+    Squelch        beat   775.5 length   0.5 preset 90
+    Bubble         beat  782.75 length     1 preset 32
+    Bubble         beat   783.5 length   0.5 preset 64
+    Squelch        beat  789.75 length  0.25 preset 2
+    Sweep          beat     796 length     4 preset 156
+    Squelch        beat  796.75 length  0.25 preset 57
+    Atmosphere     beat     800 length    32 preset 20
+    Squelch        beat  804.75 length  0.25 preset 117
+    Zap            beat   807.5 length   0.5 preset 40
+    Squelch        beat  808.75 length  0.25 preset 120
+    Squelch        beat  814.25 length  0.25 preset 71
+    Squelch        beat  815.25 length  0.25 preset 128
+    Squelch        beat  815.75 length  0.25 preset 41
+    Squelch        beat  817.25 length  0.25 preset 50
+    Downlifter     beat     832 length    16 preset 86
+    Singing Bowl   beat     832 length    16 preset 158
+    Zap            beat     863 length   0.5 preset 67
+    Singing Bowl   beat     864 length    16 preset 85
+    Alien Chatter  beat  871.25 length  0.75 preset 95
+    Bubble         beat  878.75 length     1 preset 1
+    Bubble         beat   879.5 length   0.5 preset 22
+    Sweep          beat     892 length     4 preset 251
+seed 7 track 3: bars 440..711, 145.5 BPM, B Phrygian, Goa, bass Rolling/Gallop gate 0.67, kick engine -1 clip -1
+  recipes: kick -0.814 +0.869 -0.390 -0.176 +0.868; bass +0.191 -0.732 -0.736 -0.013 -0.006; acid voicing 0.260 0.061 0.680
+  voice lead     osc 0 table 77 filter 0 osc2 4/5 (drawn) -0.212 +0.545 +0.901 -0.362 +0.882
+  voice counter  osc 1 table 346 filter 1 osc2 0/0 (drawn) +0.239 +0.329 -0.871 -0.239 -0.638
+  voice arp      osc 3 table 120 filter 0 osc2 0/1 (drawn) +0.540 +0.654 +0.961 +0.204 -0.646
+  voice stab     osc 3 table 64 filter 0 osc2 4/3 (drawn) -0.894 -0.260 -0.602 -0.577 -0.530
+  voice pad      osc 3 table 241 filter 0 osc2 3/2 (drawn) +0.274 -0.450 -0.255 -0.279 +0.593
+  voice drone    osc 1 table 466 filter 0 osc2 0/3 (drawn) +0.010 +0.849 +0.306 -0.337 +0.011
+  perc: layers 6 (hats 2), hat mode 0, clap 1, order 0 7 4 9 2 8
+  harmony: pendulum, 8 bars each: iphryg.dom ivsus2 iphryg.dom ivsus2; breakdown moves 8 bars each: iphryg.dom vimaj7 viisus4 isus4
+  parts: 1 1 1 1 0 1 1; acid 16 steps squelch 0; arp style 1; lead window 67, counter mode 0, density band 1
+  lead 1: archetype 3 cell fdf1 corpus ops 0+0 2+0 0+0 2+0 0+0 5-1 0-1 1-1
+  lead 2: archetype 1 cell fd73 corpus ops 0-1 4+0 0+0 5+0 0+0 4+0 0+0 1-1
+  form: template 2, hand-over 24, overlap tail 16, arc 0.70..0.70
+    Intro  @  0 x24 energy 0.35..0.35 scale 1 roll 0 pdb 0/0 cut 0
+    Groove @ 24 x40 energy 0.61..0.61 scale 1 roll 0 pdb 0/0 cut 0
+    Build  @ 64 x16 energy 0.61..0.76 scale 1 roll 4 pdb 4/2 cut 0
+    Drop   @ 80 x32 energy 0.76..0.76 scale 1 roll 0 pdb 0/0 cut 0
+    Break  @112 x32 energy 0.26..0.55 scale 3 roll 0 pdb 0/0 cut 0 spiral
+    Build  @144 x32 energy 0.55..0.76 scale 1 roll 16 pdb 1/2 cut 0
+    Drop   @176 x64 energy 0.96..0.96 scale 4 climax roll 0 pdb 0/0 cut 0
+    Outro  @240 x32 energy 0.39..0.39 scale 1 roll 0 pdb 0/0 cut 0
+  effects (136):
+    Singing Bowl   beat       0 length    16 preset 220
+    Atmosphere     beat       0 length    32 preset 418
+    Spoken Word    beat      16 length     8 preset 128
+    Singing Bowl   beat      16 length    16 preset 116
+    Atmosphere     beat      32 length    32 preset 327
+    Reverse Swell  beat      60 length     4 preset 161
+    Sweep          beat      60 length     4 preset 135
+    Singing Bowl   beat      64 length    16 preset 25
+    Atmosphere     beat      64 length    32 preset 377
+    Singing Bowl   beat      80 length    16 preset 203
+    Sweep          beat      88 length     8 preset 240
+    Didgeridoo     beat      88 length     4 preset 146
+    Bubble         beat  103.25 length     1 preset 29
+    Squelch        beat  111.25 length  0.25 preset 97
+    Squelch        beat  111.75 length  0.25 preset 77
+    Squelch        beat  126.75 length  0.25 preset 94
+    Squelch        beat  143.25 length  0.25 preset 27
+    Squelch        beat  143.75 length  0.25 preset 47
+    Reverse Swell  beat     156 length     4 preset 114
+    Stutter        beat   175.5 length   0.5 preset 0
+    Reverse Swell  beat  191.75 length  4.25 preset 230
+    Bubble         beat  199.25 length     1 preset 55
+    Squelch        beat  207.25 length  0.25 preset 104
+    Squelch        beat  207.75 length  0.25 preset 70
+    Downlifter     beat     220 length     4 preset 80
+    Squelch        beat  239.25 length  0.25 preset 89
+    Squelch        beat  239.75 length  0.25 preset 13
+    Reverse Swell  beat     252 length     4 preset 99
+    Riser          beat     287 length    32 preset 21
+    Sweep          beat     311 length     8 preset 250
+    Zap            beat     319 length     1 preset 13
+    Impact         beat     320 length     4 preset 47
+    Sub Drop       beat     320 length     4 preset 0
+    Bubble         beat  334.75 length     1 preset 43
+    Bubble         beat   335.5 length   0.5 preset 49
+    Zap            beat  343.25 length   0.5 preset 2
+    Reverse Swell  beat  359.25 length  4.75 preset 87
+    Stutter        beat   367.5 length   0.5 preset 0
+    Reverse Swell  beat  383.25 length  4.75 preset 191
+    Bubble         beat  398.75 length     1 preset 39
+    Bubble         beat   399.5 length   0.5 preset 19
+    Bubble         beat   407.5 length     1 preset 32
+    Atmosphere     beat     416 length    32 preset 483
+    Zap            beat  423.25 length   0.5 preset 53
+    Squelch        beat  431.25 length  0.25 preset 126
+    Squelch        beat  431.75 length  0.25 preset 3
+    Reverse Swell  beat     444 length     4 preset 121
+    Downlifter     beat     448 length    16 preset 81
+    Sub Drop       beat     448 length     8 preset 0
+    Atmosphere     beat     448 length    32 preset 134
+    Spoken Word    beat     452 length     8 preset 55
+    Singing Bowl   beat     452 length    16 preset 65
+    Didgeridoo     beat     452 length    48 preset 37
+    Singing Bowl   beat     468 length    16 preset 187
+    Atmosphere     beat     480 length    32 preset 489
+    Zap            beat  487.75 length   0.5 preset 90
+    Sweep          beat     504 length     8 preset 152
+    Spoken Word    beat     516 length     8 preset 157
+    Jaw Harp       beat     516 length    48 preset 114
+    Singing Bowl   beat     532 length    16 preset 90
+    Singing Bowl   beat     548 length    16 preset 18
+    Zap            beat  551.25 length   0.5 preset 88
+    Singing Bowl   beat     564 length    16 preset 39
+    Zap            beat  567.25 length   0.5 preset 48
+    Reverse Swell  beat     572 length     4 preset 152
+    Riser          beat     639 length    64 preset 127
+    Riser          beat     687 length    16 preset 73
+    Sweep          beat     695 length     8 preset 216
+    Zap            beat     703 length     1 preset 45
+    Impact         beat     704 length     4 preset 77
+    Sub Drop       beat     704 length     4 preset 0
+    Squelch        beat  705.25 length  0.25 preset 79
+    Squelch        beat  708.75 length  0.25 preset 30
+    Squelch        beat  709.75 length  0.25 preset 32
+    Squelch        beat  714.25 length  0.25 preset 6
+    Squelch        beat  717.75 length  0.25 preset 69
+    Squelch        beat  719.25 length  0.25 preset 78
+    Squelch        beat  719.75 length  0.25 preset 95
+    Squelch        beat  728.75 length  0.25 preset 65
+    Squelch        beat  735.25 length  0.25 preset 22
+    Sweep          beat  751.25 length     2 preset 144
+    Zap            beat   759.5 length   0.5 preset 56
+    Reverse Swell  beat     764 length     4 preset 195
+    Squelch        beat  764.25 length  0.25 preset 26
+    Squelch        beat  765.75 length  0.25 preset 71
+    Reverse Crash  beat     766 length     2 preset 13
+    Squelch        beat  768.25 length  0.25 preset 108
+    Squelch        beat  775.25 length  0.25 preset 107
+    Squelch        beat  781.25 length  0.25 preset 64
+    Stutter        beat   783.5 length   0.5 preset 0
+    Squelch        beat  784.25 length  0.25 preset 66
+    Squelch        beat  788.25 length  0.25 preset 109
+    Squelch        beat  788.75 length  0.25 preset 115
+    Squelch        beat  797.75 length  0.25 preset 25
+    Squelch        beat  798.25 length  0.25 preset 37
+    Atmosphere     beat     800 length    16 preset 504
+    Squelch        beat  810.25 length  0.25 preset 45
+    Squelch        beat  818.25 length  0.25 preset 99
+    Squelch        beat  822.25 length  0.25 preset 91
+    Squelch        beat  825.75 length  0.25 preset 87
+    Downlifter     beat     828 length     4 preset 16
+    Squelch        beat  831.25 length  0.25 preset 58
+    Squelch        beat  834.25 length  0.25 preset 33
+    Squelch        beat  838.25 length  0.25 preset 73
+    Squelch        beat  845.75 length  0.25 preset 84
+    Sweep          beat  863.75 length     2 preset 1
+    Squelch        beat  864.75 length  0.25 preset 48
+    Bubble         beat  870.75 length     1 preset 45
+    Squelch        beat  871.25 length  0.25 preset 62
+    Squelch        beat  873.75 length  0.25 preset 121
+    Stutter        beat   879.5 length   0.5 preset 0
+    Squelch        beat  884.25 length  0.25 preset 125
+    Squelch        beat  885.75 length  0.25 preset 51
+    Bubble         beat  887.25 length     1 preset 46
+    Squelch        beat  889.75 length  0.25 preset 49
+    Reverse Swell  beat     892 length     4 preset 41
+    Squelch        beat  893.75 length  0.25 preset 28
+    Reverse Crash  beat     894 length     2 preset 40
+    Voice Chop     beat     894 length     2 preset 135
+    Squelch        beat  895.25 length  0.25 preset 80
+    Squelch        beat  899.25 length  0.25 preset 59
+    Bubble         beat  903.75 length     1 preset 26
+    Squelch        beat  909.75 length  0.25 preset 92
+    Sweep          beat   927.5 length     2 preset 141
+    Atmosphere     beat     928 length    16 preset 165
+    Squelch        beat  929.75 length  0.25 preset 122
+    Squelch        beat  933.25 length  0.25 preset 81
+    Squelch        beat  933.75 length  0.25 preset 63
+    Squelch        beat  943.25 length  0.25 preset 86
+    Squelch        beat  943.75 length  0.25 preset 14
+    Squelch        beat  945.75 length  0.25 preset 74
+    Squelch        beat  955.25 length  0.25 preset 50
+    Downlifter     beat     960 length    16 preset 71
+    Singing Bowl   beat     960 length    16 preset 212
+    Didgeridoo     beat     960 length    64 preset 230
+    Singing Bowl   beat     992 length    16 preset 52
+bars    0..  15:   283 notes 26092d097b342d40,   522 controls f94c282aebc7a365
+bars   16..  31:   566 notes 753150b9ffde7aa2,    99 controls 0303d14af85dcef6
+bars   32..  47:   947 notes 6c6a41492bdd25bb,   130 controls b4192c65aa08a320
+bars   48..  63:  1100 notes 5e618669159e31f7,   107 controls e7bb5305c13cb875
+bars   64..  79:   626 notes 36f5a2e02467db08,   139 controls 6dfe71b7148b8180
+bars   80..  95:  1326 notes b8eb9452829a91f8,   143 controls 14d3c9990f6a52da
+bars   96.. 111:  1394 notes 1c2c73d92ab1d484,   126 controls 30704414fe68a52d
+bars  112.. 127:    25 notes be5ba1dd819c2400,   124 controls 0d67c56699f113a6
+bars  128.. 143:   125 notes c7f98e33c38a43fb,   104 controls 171d86a6b31367be
+bars  144.. 159:   789 notes c3df23544e491dd1,   133 controls 06c1e9f4d34ac9d8
+bars  160.. 175:  1421 notes 8b3dbe6cbb181c9e,   141 controls 2b75c5e654261b35
+bars  176.. 191:  1524 notes 64b7ca25d1a6e699,   122 controls 6630b693cfe88aa8
+bars  192.. 207:  1523 notes 569e76f486861ac0,   121 controls ea3d58ea7ffb77a4
+bars  208.. 223:  1538 notes 9168571226656ca9,   115 controls faf6b53fd2fc7567
+bars  224.. 239:   617 notes 776542f65f62f756,   383 controls 06a9d830d4c82156
+bars  240.. 255:   685 notes d5791657dc0ca4cc,   112 controls 20b235091ab0542f
+bars  256.. 271:   872 notes 8d3aff9426113ff2,   304 controls a3ae0995bce8cfc8
+bars  272.. 287:   768 notes a0b5e18f8dcb6f8c,   135 controls 9ab6a8660a33f31b
+bars  288.. 303:   831 notes d0e7ee67434d2411,   112 controls e4cdc2bd85394c41
+bars  304.. 319:  1254 notes 5e1d66a932ee28a9,   146 controls 048ac039329855a6
+bars  320.. 335:  1274 notes 3edc531ae0b45faf,   129 controls 69c110d08ee67e1a
+bars  336.. 351:    43 notes 577b92bd0ed38d72,   127 controls 41b05dbe2e684695
+bars  352.. 367:   126 notes 7136fc64966dfd71,   107 controls e0ef919031ecf7a6
+bars  368.. 383:   725 notes 1e3172df7840e511,   132 controls 0e37f229d68e49f1
+bars  384.. 399:  1182 notes 9f8ed0c6660ae5bc,   114 controls 156da058e078e71d
+bars  400.. 415:  1602 notes 57baecde834eb510,   148 controls 40014906250c997b
+bars  416.. 431:  1603 notes 57e771ec61e29501,   129 controls 9a3a850fd1d4689b
+bars  432.. 447:   843 notes 08d84113ded50951,   380 controls 3e5655b557a1b165
+bars  448.. 463:   626 notes 95a8d7ed4467fc61,   115 controls fbaeb00f94756650
+bars  464.. 479:   833 notes aac4e2598f53f941,   304 controls 790211f1e466181e
+bars  480.. 495:  1012 notes 5c05b5d9a847d92d,   110 controls 33d087501e9d82a4
+bars  496.. 511:   872 notes 884753d71642d09d,   135 controls 3fdcf0f71f7f70c9
+bars  512.. 527:  1016 notes 2acfe95dd37b6d18,   143 controls 64ae71030d8f775a
+bars  528.. 543:  1395 notes bcabe04d79f515bf,   128 controls 0d6ae0bd2927d2a8
+bars  544.. 559:   878 notes f5343dac3c60fbbf,   139 controls c6dd72c2e9094bed
+bars  560.. 575:   331 notes fb30a154e9280de0,   107 controls a13a73d6325f016c
+bars  576.. 591:   430 notes f41fcd9a8717c577,   130 controls 73cf88e57895cf0c
+bars  592.. 607:   946 notes 6ad98c36bf76e429,   113 controls 78471b508988cf9d
+bars  608.. 623:  1467 notes d06302b451405bbf,   141 controls e8f1de12c288f8ad
+bars  624.. 639:  1545 notes 6495348e585f8d7b,   128 controls b05f3f321dbdc822
+bars  640.. 655:  1554 notes 8128f9c29ac26987,   125 controls 968e8385560bf0ff
+bars  656.. 671:  1546 notes 07d94c8f73b5e90f,   128 controls 98e2c4bdec266084
+bars  672.. 687:  1064 notes a2f3dadf43a857c2,   389 controls 27236d03406298e4
+bars  688.. 703:   628 notes ddf61e68f37b5017,   109 controls 19d94678a121f5fb
+bars  704.. 719:   288 notes 9bd5e43994b750c0,    53 controls 77ab21433437184b

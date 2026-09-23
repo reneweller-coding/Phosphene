@@ -299,3 +299,18 @@ if(NOT ANDROID)
         set_tests_properties(cuecheck PROPERTIES LABELS slow)
     endif()
 endif()
+
+# The plan snapshots (23.09.2026, round "Schnappschuss"): one test per Tests/golden/*.txt, each running
+# `phos_plandump --decisions` with the arguments the file names and comparing with the rest of it
+# (Tests/plan_snapshot.cmake). A fraction of a second each: no probe renders (level match, auto gain and
+# presence match are off in every snapshot), only the plans and the composed score. A meant change is
+# written back with Tools/update_snapshots.py, and the golden diff goes into the commit.
+if(NOT ANDROID AND TARGET phos_plandump)
+    file(GLOB _phos_goldens CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/golden/*.txt")
+    foreach(_g ${_phos_goldens})
+        get_filename_component(_gn "${_g}" NAME_WE)
+        add_test(NAME plansnapshot.${_gn} COMMAND ${CMAKE_COMMAND} "-DPLANDUMP=$<TARGET_FILE:phos_plandump>" "-DGOLDEN=${_g}"
+                 -P "${CMAKE_CURRENT_SOURCE_DIR}/plan_snapshot.cmake")
+        set_tests_properties(plansnapshot.${_gn} PROPERTIES LABELS quick ENVIRONMENT "PHOS_MUTE=1")
+    endforeach()
+endif()

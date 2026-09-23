@@ -105,6 +105,8 @@ set(PHOS_SELFTEST_SECONDS
     testArpPatterns          2.3
     testBassModel            2.1
     testForm                 1.8
+    testSetArc               0.3
+    testRatings              0.1
     testSampler              1.5
     testWaveTableQuality     1.3
     testArrangeDynamics      1.0

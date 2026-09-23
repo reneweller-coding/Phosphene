@@ -7348,6 +7348,34 @@ Screenshot-Pfad zeigt).
 *Dateien.* `Core/include/phos/Rating.h`, `Core/src/Rating.cpp`, `Core/CMakeLists.txt`, `Plugin/PluginEditor.h`,
 `Plugin/EditorPerform.cpp`, `Tools/render/main.cpp`, `Tools/ratings.py`, `Tests/selftest.cpp`; dieser Block.
 
+**23.09.2026, Plan-Schnappschüsse: jede Kompositionsentscheidung als Textdiff**
+
+Viele Prüfungen der letzten Runden hingen an Schwellen, die bei einer Formänderung um Hundertstel kippten, und
+keine sagte, *was* sich musikalisch bewegt hatte. `phos_plandump --decisions` druckt jetzt jede Entscheidung
+des Komponisten als lesbare Zeilen — Walk (Takte, Tempo, Tonart, Stil, Bassmuster, Gate), Kick-/Bass-Rezept,
+Acid-Voicing, die sechs Stimmrezepte, Percussion-Plan, Harmonik mit zweiter Hälfte und Breakdown, Stimmen,
+Lead-Design mit Set-Motiv, Form mit allen Sektionsfeldern, jedes Effekt-Ereignis mit Preset — und danach je
+16 Takte eine FNV-Prüfsumme über alle Noten und alle Steuer-Events, die der Komponist dafür schickt.
+Kontinuierliche Werte in der Auflösung einer Entscheidung (Energien zwei, Rezepte drei Stellen), Positionen auf
+einem 1/3840-Schlag-Raster: der Dump sagt, was entschieden wurde, nicht wie gerundet.
+
+`Tests/golden/` hält fünf Dumps: Seed 1 (Standard), Seed 7 und 42 (gemischte Stile), Seed 303 (Goa fest),
+Seed 2026 (Peak-Time, 20-Minuten-Set: Tempo-Bogen und Motiv-Erinnerung). Die erste Zeile jeder Datei
+(`# args: ...`) sagt, wie sie entstand; Pegelabgleich, Auto Gain und Präsenzabgleich sind aus, also keine
+Probe-Renders. ctest `plansnapshot.<name>` (Label quick, zusammen 1,9 s) vergleicht über
+`Tests/plan_snapshot.cmake` und nennt bei Abweichung die ersten zwölf Zeilen mit Nummer, alt und neu. Eine
+gewollte Änderung schreibt `Tools/update_snapshots.py --plandump <exe>` zurück; der Golden-Diff gehört in
+denselben Commit und ist dessen musikalisches Protokoll.
+
+*Geprüft.* Zweimal erzeugt, identisch; ctest 5 von 5; Gegenprobe: eine verfälschte Prüfsummenzeile in
+`mixed_s7` schlägt fehl und zeigt Zeile 428 alt/neu. Falle beim Bauen: CMakes `REGEX REPLACE "^[^\n]*\n"` setzt
+den Anker nach jedem Treffer neu und löschte **jede** Zeile („golden 0 lines"); die Kopfzeile wird jetzt mit
+`string(FIND)` abgeschnitten. Nebenbei: `testSetArc` und `testRatings` stehen jetzt in der Zeitentabelle von
+`selftest_tests.cmake` (sonst liefen sie als „ungemessen" mit 600 s unter slow).
+
+*Dateien.* `Tools/plandump/main.cpp`, `Tests/plan_snapshot.cmake`, `Tests/golden/*.txt`, `Tests/CMakeLists.txt`,
+`Tests/selftest_tests.cmake`, `Tools/update_snapshots.py`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
