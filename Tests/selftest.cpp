@@ -26,6 +26,7 @@
 #include "phos/Perc.h"
 #include "phos/Poly.h"
 #include "phos/Probe.h"
+#include "phos/Rating.h"
 #include "phos/Reverb.h"
 #include "phos/Rhythm.h"
 #include "phos/Form.h"
@@ -9862,6 +9863,54 @@ void testArpPatterns()
 }
 
 /**
+ * @brief The ratings file (23.09.2026, round "Bewertung"; phos/Rating.h): a verdict survives the round trip,
+ *        a tab in a note cannot break the columns, and the header is written once.
+ */
+void testRatings()
+{
+    section("ratings: the listener's verdicts as lines");
+    RatingEntry e;
+    e.seed = 864566672ull;
+    e.track = 3;
+    e.bar = 517;
+    e.barInTrack = 69;
+    e.section = "Build";
+    e.style = "Dark Forest";
+    e.verdict = -1;
+    e.note = "counter\tinaudible\nhere";
+    e.source = "plugin";
+    e.time = "2026-09-24T08:15:00";
+    RatingEntry back;
+    const bool parsed = parseRating(formatRating(e), back);
+    check(parsed && back.seed == e.seed && back.track == 3 && back.bar == 517 && back.barInTrack == 69 && back.section == "Build"
+              && back.style == "Dark Forest" && back.verdict == -1 && back.note == "counter inaudible here" && back.source == "plugin"
+              && back.time == e.time,
+          "a verdict survives format and parse, a tab or line break in the note becomes a space", fmt("note read back as '%s'", back.note.c_str()));
+    const char* path = "phos_selftest_ratings.tsv";
+    std::remove(path);
+    e.verdict = 1;
+    const bool a = appendRating(path, e);
+    e.verdict = 0;
+    const bool b = appendRating(path, e);
+    int lines = 0, headers = 0, verdicts = 0;
+    if (FILE* f = std::fopen(path, "rb")) {
+        char buf[1024];
+        while (std::fgets(buf, sizeof(buf), f) != nullptr) {
+            std::string line(buf);
+            while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+            ++lines;
+            if (line == ratingHeader()) ++headers;
+            RatingEntry r;
+            if (parseRating(line, r)) verdicts += r.verdict == 1 ? 1 : (r.verdict == 0 ? 10 : 100);
+        }
+        std::fclose(f);
+    }
+    std::remove(path);
+    check(a && b && lines == 3 && headers == 1 && verdicts == 11, "appending writes the header once and one line per verdict",
+          fmt("%d lines, %d headers", lines, headers));
+}
+
+/**
  * @brief The set's dramaturgy (23.09.2026, round "Set-Kurve"): the tempo and the climax follow the arc, the
  *        set has a motif that returns, the kick rolls before the big drop and tears before a sixteen-bar line.
  *
@@ -14302,6 +14351,7 @@ int main(int argc, char** argv)
     run("testDialogue.levels", testDialogueLevels);
     run("testForm", testForm);
     run("testSetArc", testSetArc);
+    run("testRatings", testRatings);
     run("testArrangeDynamics", testArrangeDynamics);
     run("testSectionRules", testSectionRules);
     run("testCuration", testCuration);

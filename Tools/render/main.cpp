@@ -455,7 +455,9 @@ int main(int argc, char** argv)
         const std::string indexPath = excerpts + "/index.tsv";
         FILE* idx = std::fopen(indexPath.c_str(), "w");
         if (idx == nullptr) { std::fprintf(stderr, "cannot write %s\n", indexPath.c_str()); return 1; }
-        std::fprintf(idx, "file\tseed\ttrack\tstyle\tkey\tscale\tbpm\tsection\tindex\tfirst_bar\tbars\tenergy\tclimax\n");
+        // The last two columns are the listener's (23.09.2026, phos/Rating.h): "good", "bad" or empty, and a
+        // note. Tools/ratings.py reads them back together with the plugin's ratings.tsv.
+        std::fprintf(idx, "file\tseed\ttrack\tstyle\tkey\tscale\tbpm\tsection\tindex\tfirst_bar\tbars\tenergy\tclimax\trating\tnote\n");
         for (int t = 0; composer.track(params, t).firstBar < totalBars; ++t) {
             const TrackPlan p = composer.track(params, t);
             const std::string styleName = fileToken(kStyleNames[std::clamp(p.style, 0, kNumStyles - 1)]);
@@ -477,7 +479,7 @@ int main(int argc, char** argv)
                 e->path = excerpts + "/" + name;
                 e->start = static_cast<uint64_t>(std::llround(tempo.secondsAt(static_cast<double>(from) * kBeatsPerBar) * sr));
                 e->end = static_cast<uint64_t>(std::llround(tempo.secondsAt(static_cast<double>(to) * kBeatsPerBar) * sr));
-                std::fprintf(idx, "%s\t%llu\t%d\t%s\t%s\t%s\t%.1f\t%s\t%d\t%d\t%d\t%.2f\t%d\n", name, static_cast<unsigned long long>(seed), t + 1,
+                std::fprintf(idx, "%s\t%llu\t%d\t%s\t%s\t%s\t%.1f\t%s\t%d\t%d\t%d\t%.2f\t%d\t\t\n", name, static_cast<unsigned long long>(seed), t + 1,
                              kStyleNames[std::clamp(p.style, 0, kNumStyles - 1)], kKeyNames[p.key], kScaleNames[p.scale], p.bpm,
                              kSectionNames[static_cast<int>(sec.type)], s + 1, from + 1, to - from, static_cast<double>(sec.energy), sec.climax ? 1 : 0);
                 excerptList.push_back(std::move(e));

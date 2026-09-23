@@ -13,7 +13,10 @@
  * because it means "one bar, from here"; a stutter is held because it means "while I hold this".
  */
 #include "PluginEditor.h"
+#include "phos/Rating.h"
+#include <algorithm>
 #include <cmath>
+#include <ctime>
 
 using namespace phos;
 using namespace phosui;
@@ -87,7 +90,79 @@ void PhospheneEditor::buildPerformPage()
         macroNote_ = note.get();
         page->addControl(gs, std::move(note), "", 16, true);
     }
+
+    // Rating what is playing (23.09.2026, phos/Rating.h): "good here" and "bad here" write one line each --
+    // seed, track, bar, section, style, the note -- into ratings.tsv in the user's application data folder,
+    // so that a listening session ends in bars instead of in prose. Tools/ratings.py reads the file back.
+    const int gr = page->addGroup("Rate what you hear", tint, 16);
+    {
+        auto note = std::make_unique<juce::TextEditor>();
+        note->setTextToShowWhenEmpty("note (optional): what is good or wrong here", dim);
+        note->setTooltip("Written with the next verdict and then cleared.");
+        ratingNote_ = note.get();
+        page->addControl(gr, std::move(note), "", 8, true);
+        static const char* const kLabels[2] = { "Good here", "Bad here" };
+        static const char* const kHelp[2] = { "Writes 'good' for the bar that is playing now into ratings.tsv",
+                                              "Writes 'bad' for the bar that is playing now into ratings.tsv" };
+        for (int i = 0; i < 2; ++i) {
+            auto b = std::make_unique<juce::TextButton>(kLabels[i]);
+            b->setTooltip(kHelp[i]);
+            const int verdict = i == 0 ? 1 : -1;
+            b->onClick = [this, verdict] { rateNow(verdict); };
+            ratingButton_[i] = b.get();
+            page->addControl(gr, std::move(b), "", 4, true);
+        }
+        auto last = std::make_unique<juce::Label>(juce::String(), "nothing rated yet");
+        last->setJustificationType(juce::Justification::centredLeft);
+        last->setColour(juce::Label::textColourId, dim);
+        last->setMinimumHorizontalScale(0.7f);
+        ratingLast_ = last.get();
+        page->addControl(gr, std::move(last), "", 16, true);
+    }
     pages_[static_cast<size_t>(TabPerform)] = std::move(page);
+}
+
+void PhospheneEditor::rateNow(int verdict)
+{
+    const TransportView tv = proc_.transport();
+    RatingEntry e;
+    e.seed = proc_.seed();
+    e.track = tv.track + 1;
+    e.bar = tv.bar + 1;
+    e.barInTrack = tv.barInTrack + 1;
+    e.verdict = verdict;
+    e.source = "plugin";
+    TrackPlan plan;
+    if (proc_.tryReadTrack(tv.track, plan) && plan.form.count > 0) {
+        const int si = sectionOfBar(plan.form, tv.barInTrack);
+        e.section = kSectionNames[static_cast<int>(plan.form.section[si].type)];
+        e.style = kStyleNames[std::clamp(plan.style, 0, kNumStyles - 1)];
+    }
+    if (ratingNote_ != nullptr) e.note = ratingNote_->getText().toStdString();
+    {
+        const std::time_t now = std::time(nullptr);
+        std::tm local{};
+#if defined(_WIN32)
+        localtime_s(&local, &now);
+#else
+        localtime_r(&now, &local);
+#endif
+        char buf[32];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &local);
+        e.time = buf;
+    }
+    const juce::File dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Phosphene");
+    dir.createDirectory();
+    const juce::File file = dir.getChildFile("ratings.tsv");
+    const bool ok = appendRating(file.getFullPathName().toRawUTF8(), e);
+    if (ratingNote_ != nullptr && ok) ratingNote_->clear();
+    if (ratingLast_ != nullptr) {
+        juce::String s;
+        if (ok) s << (verdict > 0 ? "good" : "bad") << ": track " << e.track << ", bar " << e.barInTrack << " (" << e.section << ", " << e.style
+                  << ")  ->  " << file.getFullPathName();
+        else s << "could not write " << file.getFullPathName();
+        ratingLast_->setText(s, juce::dontSendNotification);
+    }
 }
 
 void PhospheneEditor::refreshPerformPage()

@@ -214,6 +214,14 @@ private:
     juce::Slider*     macroSlider_[kNumMacros] = {};   ///< the macros that are held at a value
     juce::TextButton* macroButton_[kNumMacros] = {};   ///< the macros that are pressed
     juce::Label*      macroNote_ = nullptr;            ///< what they are doing now
+    /** @name Rating what is playing (23.09.2026; phos/Rating.h)
+     *  @{ */
+    juce::TextEditor* ratingNote_ = nullptr;           ///< the note that goes with the next verdict
+    juce::Label*      ratingLast_ = nullptr;           ///< what the last press wrote, and where
+    juce::TextButton* ratingButton_[2] = {};           ///< good, bad
+    /** @brief Writes a verdict for the bar that is playing (+1 good, -1 bad) into the ratings file. */
+    void rateNow(int verdict);
+    /** @} */
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PhospheneEditor)
 };

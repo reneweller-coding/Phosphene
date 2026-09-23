@@ -7322,6 +7322,32 @@ dazwischen und sind die eines Tracks (vorher 64 „Doppel-Beats", alle aus der R
 `Core/src/Composer.cpp`, `Core/include/phos/Form.h`, `Core/src/Form.cpp`, `Tools/render/main.cpp`,
 `Tests/selftest.cpp`; dieser Block.
 
+**23.09.2026, Bewertung: das Urteil des Hörers als Daten**
+
+Bisher endete eine Hörsitzung in Sätzen („die Counter sind kaum hörbar") — richtig, aber ohne Takt. Ab
+dieser Runde ist ein Urteil eine Zeile: Zeit, Seed, Track, Takt im Set, Takt im Track, Sektion, Stil,
+Urteil (good/bad/note), Notiz, Quelle. Das Format steht an **einer** Stelle, `Core/include/phos/Rating.h`
+(`formatRating`, `parseRating`, `appendRating`), damit Plugin und Werkzeuge nicht auseinanderlaufen; Tabs und
+Zeilenumbrüche in der Notiz werden Leerzeichen.
+
+- **Plugin**, Perform-Seite, Gruppe „Rate what you hear": ein Notizfeld und die Knöpfe „Good here" / „Bad
+  here". Ein Druck schreibt den gerade spielenden Takt (Transport: Track, Takt, Takt im Track; Sektion und Stil
+  aus dem veröffentlichten Plan) nach `%APPDATA%\Phosphene\ratings.tsv` und leert die Notiz; darunter steht,
+  was geschrieben wurde und wohin. Screenshot geprüft (Standalone, stumm, Perform-Seite).
+- **Hörprüfstand**: `index.tsv` hat zwei neue, leere Spalten `rating` und `note` zum Ausfüllen in jedem
+  Editor oder jeder Tabelle („good"/„bad", auch „gut"/„schlecht", „+"/„−").
+- **`Tools/ratings.py`** liest beliebig viele Plugin-Dateien und Prüfstands-Indizes, druckt Urteile je Stil
+  und Sektion und jedes „bad" mit Notiz und Fundstelle, `--out` schreibt alles in einem Format — das ist, was
+  der Kritiker-Fit und Schwellen nach Gehör später lesen.
+
+*Geprüft.* Selbsttest `testRatings`: Hin- und Rückweg, Tab in der Notiz, Kopfzeile genau einmal (2 von 2).
+Prüfstand Seed 7 mit zwei von Hand eingetragenen Urteilen: `ratings.py` liest beide, nennt Datei und Takt.
+Der Klick im Plugin selbst ist nicht automatisiert geprüft (er ruft nur `appendRating` mit den Werten, die der
+Screenshot-Pfad zeigt).
+
+*Dateien.* `Core/include/phos/Rating.h`, `Core/src/Rating.cpp`, `Core/CMakeLists.txt`, `Plugin/PluginEditor.h`,
+`Plugin/EditorPerform.cpp`, `Tools/render/main.cpp`, `Tools/ratings.py`, `Tests/selftest.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
