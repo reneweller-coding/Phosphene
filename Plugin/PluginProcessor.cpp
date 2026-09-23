@@ -11,6 +11,7 @@
 #include "phos/SetFile.h"
 #include "phos/Rating.h"
 #include "phos/WaveTableFile.h"
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 
@@ -1160,6 +1161,7 @@ void PhospheneProcessor::setMacro(Macro m, float value)
 
 void PhospheneProcessor::serviceMacros()
 {
+    const std::lock_guard<std::mutex> lock(macroBaseLock_);
     // A macro's host parameter moved (DAW automation, a learned controller): the macro follows. Compared with
     // what was seen last, not with the macro's own value, so a drop-out that let go by itself is not pressed
     // again by a host value that still says 1.
@@ -1271,6 +1273,7 @@ void PhospheneProcessor::emitMidi(juce::MidiBuffer& midi, double beatAtStart, do
     while (midiRing_.peek(e)) {
         if (e.beat >= endBeat) break;
         midiRing_.pop(e);
+        if (engine_->generatedSilenced(e.part)) continue;   // the keyboard plays this voice (Replace)
         const int channel = midiChannelOf(e.part);
         const int at = sampleOf(e.beat);
         midi.addEvent(juce::MidiMessage::noteOn(channel + 1, e.pitch, static_cast<juce::uint8>(juce::jlimit(1, 127, static_cast<int>(e.velocity)))), at);
@@ -1296,10 +1299,18 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     const juce::ScopedNoDenormals noDenormals;
     const int n = buffer.getNumSamples();
     buffer.clear();
-    // MIDI in (23.09.2026): controllers drive whatever was learned onto them (phos/MidiMap.h); notes and the rest
-    // are dropped. The buffer is then cleared, because it is also the generator's MIDI out.
+    // MIDI in (23.09.2026): controllers drive whatever was learned onto them (phos/MidiMap.h); notes go to the
+    // voice mix.keyboard_part names (Engine::liveNoteOn) at their sample, below. The buffer is then cleared,
+    // because it is also the generator's MIDI out.
+    int liveCount = 0;
     for (const juce::MidiMessageMetadata meta : midiMessages) {
         const juce::MidiMessage msg = meta.getMessage();
+        if ((msg.isNoteOn() || msg.isNoteOff()) && liveCount < kMaxLive) {
+            live_[liveCount++] = { juce::jlimit(0, juce::jmax(0, n - 1), meta.samplePosition), msg.getNoteNumber(),
+                                   msg.getVelocity(), msg.getChannel() - 1, msg.isNoteOn() };
+            continue;
+        }
+        if (msg.isAllNotesOff() || msg.isAllSoundOff()) { engine_->liveAllOff(); continue; }
         if (!msg.isController()) continue;
         float norm = 0.0f;
         const int target = midiMap_.handleCc(msg.getChannel() - 1, msg.getControllerNumber(), msg.getControllerValue(), norm);
@@ -1392,6 +1403,11 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     }
     const bool justStopped = wasPlaying_ && !playing;
     wasPlaying_ = playing;
+    // A played note belongs to the voice it went to; a transport that stops, or a keyboard moved to another voice,
+    // must not leave it hanging there.
+    const int keyboardPart = static_cast<int>(std::lround(params().get(params().base(Module::Mix) + phos::mix::KeyboardPart)));
+    if (justStopped || keyboardPart != keyboardPartSeen_) engine_->liveAllOff();
+    keyboardPartSeen_ = keyboardPart;
     if (justStopped) {
         // A transport that stops in the middle of a note leaves it sounding in whatever the MIDI
         // output is wired to; the notes we started are the notes we end.
@@ -1434,14 +1450,29 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     const double beatAtStart = engine_->beatPosition();
     float* L = buffer.getWritePointer(0);
     float* R = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
-    if (R == nullptr) {
-        // Mono device: render the stereo pair into the scratch and fold it down.
-        const int m = juce::jmin(n, scratch_.getNumSamples());
-        engine_->process(scratch_.getWritePointer(0), scratch_.getWritePointer(1), m);
-        for (int i = 0; i < m; ++i) L[i] = 0.5f * (scratch_.getReadPointer(0)[i] + scratch_.getReadPointer(1)[i]);
-    } else {
-        engine_->process(L, R, n);
+    auto render = [&](int from, int count) {
+        if (count <= 0) return;
+        if (R == nullptr) {
+            // Mono device: render the stereo pair into the scratch and fold it down.
+            const int m = juce::jmin(count, scratch_.getNumSamples() - from);
+            if (m <= 0) return;
+            engine_->process(scratch_.getWritePointer(0, from), scratch_.getWritePointer(1, from), m);
+            for (int i = from; i < from + m; ++i) L[i] = 0.5f * (scratch_.getReadPointer(0)[i] + scratch_.getReadPointer(1)[i]);
+        } else {
+            engine_->process(L + from, R + from, count);
+        }
+    };
+    // Played notes split the block at their samples; a block without one is a single process() call, exactly as
+    // before, so a set nobody plays along to stays bit-identical to phos_render.
+    int done = 0;
+    for (int k = 0; k < liveCount; ++k) {
+        const LiveNote& ln = live_[k];
+        render(done, ln.at - done);
+        done = juce::jmax(done, ln.at);
+        if (ln.on) engine_->liveNoteOn(ln.pitch, ln.velocity, ln.channel);
+        else engine_->liveNoteOff(ln.pitch, ln.channel);
     }
+    render(done, n - done);
     if (fadeOutThenSeek_) {
         // A raised cosine rather than a straight line: its first derivative is zero at both ends, so
         // neither the start of the fade nor the arrival at zero is itself a corner.
@@ -1515,7 +1546,23 @@ void PhospheneProcessor::writeStateTo(juce::MemoryBlock& dest) const
     // that held every value silently undid every default a later round recalibrated -- see kStateVersion
     // for the whole reasoning and for what it costs. "%.9g" still round-trips a float exactly, so a
     // knob that is in the file comes back bit for bit.
-    xml.createNewChildElement("params")->addTextElement(juce::String(params().toText(true)));
+    //
+    // A knob a macro is holding is saved at the value it goes back to, not where the macro has it (23.09.2026: the
+    // VST3 test randomised the four macro host parameters, a filter sweep moved the cutoffs, and the state no longer
+    // came back byte for byte). The macros themselves are performance, not part of the set.
+    std::string knobs;
+    {
+        const std::lock_guard<std::mutex> lock(macroBaseLock_);
+        if (macroBase_.empty()) {
+            knobs = params().toText(true);
+        } else {
+            ParamStore base;
+            base.copyValuesFrom(params());
+            for (const auto& [id, value] : macroBase_) base.set(id, value);
+            knobs = base.toText(true);
+        }
+    }
+    xml.createNewChildElement("params")->addTextElement(juce::String(knobs));
     // The learned controllers, by parameter key (23.09.2026): a map outlives parameters being added.
     xml.createNewChildElement("midimap")->addTextElement(juce::String(midiMap_.toText([this](int t) { return midiTargetKey(t); })));
     juce::AudioProcessor::copyXmlToBinary(xml, dest);
@@ -1537,6 +1584,9 @@ void PhospheneProcessor::setStateInformation(const void* data, int sizeInBytes)
                              ? xml->getChildByName("params")->getAllSubText() : juce::String();
     if (lastStateVersion_ >= 3) {
         params().parseText(knobs.toStdString());
+        // A macro still holding a knob now holds it from the loaded value: that is where it goes back to.
+        const std::lock_guard<std::mutex> lock(macroBaseLock_);
+        for (auto& [id, value] : macroBase_) value = params().get(id);
     } else {
         // A version-1 or version-2 state holds *every* value of its session and cannot say which of them
         // the user chose. Applying it is exactly the failure this round exists to stop: the user's own
@@ -1609,20 +1659,66 @@ juce::File PhospheneProcessor::galleryFolder() const
     const juce::String env = juce::SystemStats::getEnvironmentVariable("PHOS_GALLERY_DIR", "");
     const juce::File dir = env.isNotEmpty() ? juce::File(env)
                                             : juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Phosphene").getChildFile("Sets");
+    // Not created here: the gallery page asks for the path just by opening (23.09.2026 -- the VST3 test, which opens
+    // the editor, left an empty Sets folder in the user's real data folder). Saving creates it.
+    return dir;
+}
+
+juce::File PhospheneProcessor::userFolder() const
+{
+    // PHOS_USER_DIR (tests): a folder of their own for the ratings, the preferences and the user presets. The host
+    // test presses every button of the editor, "Good here" and "Learn from my ratings..." among them, and must never
+    // write into the user's real files -- its first runs of 23.09.2026 left sixteen verdicts in them before this existed.
+    const juce::String env = juce::SystemStats::getEnvironmentVariable("PHOS_USER_DIR", "");
+    const juce::File dir = env.isNotEmpty() ? juce::File(env)
+                                            : juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Phosphene");
     dir.createDirectory();
     return dir;
 }
 
 juce::File PhospheneProcessor::ratingsFile() const
 {
-    // PHOS_USER_DIR (tests): a folder of their own for the ratings and the preferences. The host test presses every
-    // button of the editor, "Good here" and "Learn from my ratings..." among them, and must never write into the
-    // user's real files -- its first runs of 23.09.2026 left sixteen verdicts in them before this existed.
-    const juce::String env = juce::SystemStats::getEnvironmentVariable("PHOS_USER_DIR", "");
-    const juce::File dir = env.isNotEmpty() ? juce::File(env)
-                                            : juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Phosphene");
+    return userFolder().getChildFile("ratings.tsv");
+}
+
+// ------------------------------------------------------------------ sound presets
+
+juce::File PhospheneProcessor::userPresetFolder(Module module, int instance) const
+{
+    const std::string key = params().key(params().base(module, instance));
+    return userFolder().getChildFile("Presets").getChildFile(juce::String(key.substr(0, key.find('.'))));
+}
+
+std::vector<SoundPreset> PhospheneProcessor::userPresets(Module module, int instance) const
+{
+    std::vector<SoundPreset> out;
+    const juce::File dir = userPresetFolder(module, instance);
+    if (!dir.isDirectory()) return out;
+    for (const juce::File& f : dir.findChildFiles(juce::File::findFiles, false, "*.txt"))
+        out.push_back({ "User", f.getFileNameWithoutExtension().toStdString(), f.loadFileAsString().removeCharacters("\r").toStdString() });
+    std::sort(out.begin(), out.end(), [](const SoundPreset& a, const SoundPreset& b) { return a.name < b.name; });
+    return out;
+}
+
+void PhospheneProcessor::applyPreset(Module module, int instance, const SoundPreset& preset)
+{
+    // The synth's owner number is the order of the own-sound switches (Params.h, mix::KickOwn): kick, bass, acid, the voices.
+    const int owner = module == Module::Kick ? 0 : module == Module::Bass ? 1 : module == Module::Acid ? 2 : 3 + instance;
+    undoable("Preset " + juce::String(preset.name), [&] {
+        applySoundPreset(params(), module, instance, preset.text);
+        params().set(params().base(Module::Mix) + mix::KickOwn + owner, 1.0f);
+    });
+}
+
+juce::File PhospheneProcessor::saveUserPreset(Module module, int instance, const juce::String& name)
+{
+    const juce::String clean = juce::File::createLegalFileName(name.trim());
+    if (clean.isEmpty()) return {};
+    const juce::File dir = userPresetFolder(module, instance);
     dir.createDirectory();
-    return dir.getChildFile("ratings.tsv");
+    const juce::File f = dir.getChildFile(clean + ".txt");
+    // "\n" line ends: JUCE's default is "\r\n", and the preset must read back as the text it was.
+    return f.replaceWithText(juce::String(moduleText(params(), module, instance)), false, false, "\n") ? f : juce::File();
 }
 
 juce::File PhospheneProcessor::saveToGallery(const juce::String& name)
@@ -1643,6 +1739,7 @@ juce::File PhospheneProcessor::saveToGallery(const juce::String& name)
     text = withGalleryComment(text, e);
     juce::String base = juce::Time::getCurrentTime().formatted("%Y-%m-%d_%H%M") + "_";
     base += name.trim().isNotEmpty() ? juce::File::createLegalFileName(name.trim()) : juce::String("seed") + juce::String(seed_.load());
+    galleryFolder().createDirectory();
     const juce::File f = galleryFolder().getNonexistentChildFile(base, ".phosset", false);
     return f.replaceWithText(juce::String(text)) ? f : juce::File();
 }

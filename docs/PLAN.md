@@ -7730,6 +7730,112 @@ Parameter wie `audibility_match` verschob sonst alle Nummern dahinter); neu gesc
 `Tools/render/main.cpp`, `Tools/plandump/main.cpp`, `Tools/ratings.py`, `Tests/selftest.cpp`, `Tests/selftest_tests.cmake`,
 `Tests/hosttest.cpp`, `Tests/golden/*.txt`; dieser Block.
 
+**23.09.2026, ctest nach den sechs Runden (Galerie bis Präferenzen)**
+
+129 Tests, 128 bestanden. Durchgefallen: `vst3test`, „the state comes back through the wrapper, byte for byte". Ursache:
+Der Test setzt jeden Host-Parameter auf einen Zufallswert, seit der MIDI-Runde auch die vier Makros. Ein Makro
+schreibt Regler (der Filter-Sweep die Cutoffs), und der Zustand speicherte die Regler dort, wo das Makro sie
+hielt. Behoben: `writeStateTo` speichert einen vom Makro gehaltenen Regler mit dem Wert, zu dem er zurückkehrt
+(`macroBase_`), und `setStateInformation` setzt diese Rückkehrwerte auf die geladenen Werte. `macroBase_` ist
+jetzt durch eine Sperre geschützt, weil ein Host den Zustand aus einem anderen Thread abfragen darf. Zweiter
+Fund desselben Laufs: Der VST3-Test öffnet den Editor, die Galerie-Seite fragte nach ihrem Ordner, und
+`galleryFolder()` legte ihn an. So entstand ein leerer `Sets`-Ordner in `%APPDATA%\Phosphene`. Ich habe ihn
+gelöscht. Seitdem legt erst das Speichern den Ordner an, und der VST3-Test setzt wie der Host-Test
+`PHOS_USER_DIR` und `PHOS_GALLERY_DIR` auf einen eigenen Temp-Ordner.
+
+**23.09.2026, Presets in den Synth-Tabs, eigener Sound, MIDI-Keyboard auf einer Stimme**
+
+Der Nutzer: die vielen Synth-Presets „in den entsprechenden Tabs auswählbar (in entsprechende Gruppen
+eingeteilt)"; bestimmte Spuren (z. B. Lead) ohne generierte Noten, stattdessen „selbst mit dem Midi-Keyboard
+Noten einspielen … mit dem eingestellten Sound".
+
+- **Factory-Presets** (`Core/include/phos/SoundPresets.h`). Die Presets sind die Rezepte des Komponisten,
+  bewusst ausgelegt statt gezogen, durch dieselben Ladungen (`voiceRecipeOffsets`, `recipeOffsets`,
+  `acidVoicingOffsets`), und damit Klänge, die der Generator auf dieser Stimme spielen könnte:
+  - Stimmen: die Oszillatoren der eigenen Palette (Supersaw/VA/FM), je acht Charaktere (Plain, Bright, Dark, Soft,
+    Hard, Thick, Wide, Moving) und einmal geschichtet mit dem zweiten Oszillator. Dazu jede Wavetable der eigenen
+    Spuren, gruppiert nach der Familie der Bibliothek, mit reihum wechselndem Charakter.
+  - Kick: je Engine × acht Charaktere.
+  - Bass: drei Gruppen (Clean, Short, Dirty).
+  - Acid: Voicing-Punkte × drei Varianten.
+
+  Zahlen: Kick 16, Bass 9, Acid 21, Lead 109, Counter 126, Arp 122, Stab 202, Pad 158, Drone 220. Die Liste wächst
+  mit dem Wavetable-Paket, ohne dass sich eine Zeile ändert. Doppelte werden verworfen: Die Palette von Arp und
+  Stab hat keine Ladung auf der Achse „Soft", also war „Soft" dort gleich „Plain". Ebenso zählt eine Tabelle, die
+  in zwei Spuren liegt, nur einmal.
+- **Was ein Preset nicht anfasst** (`presetLeaves`): Pegel, Ducking und, bei den Stimmen, Hochpass und
+  Trance-Gate. Das ist die Stelle, an die Mix und Form die Stimme setzen, nicht ihr Klang.
+- **Eigener Sound** (`mix.kick_own` … `mix.drone_own`): Ist der Schalter an, lässt `Engine::applyParams` die
+  Rezepte des Komponisten für diesen Synth weg; der Wert ist dann genau der Regler. Hochpass, Gate und Pegel
+  der Stimmen bleiben ausgenommen. Ein Preset schaltet ihn ein, sonst würde der nächste Track den Klang
+  überschreiben.
+- **Plugin**: Jeder Synth-Tab beginnt mit der Gruppe „Sound": Schalter „Own Sound", „Save...", und ein
+  Preset-Wähler mit einem Untermenü je Gruppe (eigene Presets unter „User"). Ein Preset ist ein Undo-Schritt.
+  Eigene Presets liegen als `<Name>.txt` unter `<Nutzerordner>/Presets/<synth>/`, im selben Textformat wie die
+  Factory-Presets (`moduleText`).
+- **Keyboard** (`mix.keyboard_part`: Off, Acid, Lead … Drone, By channel; `mix.keyboard_mode`: Replace, Layer).
+  - `processBlock` behält die Noten des Eingangs, teilt den Block an ihren Samples und ruft
+    `Engine::liveNoteOn/Off`. Ein Block ohne Note bleibt ein einziger `process()`-Aufruf, also bitgleich.
+  - Eine gespielte Note hat ein Gate, das nicht abläuft; die losgelassene Taste gibt sie frei (`Poly::noteOff`,
+    `Acid::noteOff`).
+  - Replace lässt die generierten Noten der Stimme weg, im Klang wie im MIDI-Ausgang. Bei „By channel" gilt
+    das ab der ersten gespielten Note der Stimme; Kanal 1 ist die Acid, 2 der Lead … 7 die Drone.
+  - Transport-Stopp, eine andere Keyboard-Stimme und All-Notes-Off lassen alle gespielten Noten los.
+  - Grenzen: Das Keyboard spielt nur, während das Set läuft (gestoppt rendert die Engine nicht). Gespielte Noten
+    gehen nicht in den MIDI-Ausgang.
+- **Set-Tab neu gegliedert** (Nutzerfrage „ergibt die Anordnung von Tonart und Stil Sinn?" — nein, und er stimmte dem Vorschlag zu). Bisher waren die Gruppen Ausschnitte der Tabelle in Anhänge-Reihenfolge: Key/Scale zwischen Tempo und Bass-Mustern, Style vierzehn Regler tiefer unter „Form", „Style Tempo" getrennt von Tempo und Tempo Range, `compose.audibility_match` in gar keiner Gruppe. Jetzt Listen nach Bedeutung (`ControlPage::addParamsGroup`): **Start & Style** (Style, Style Mix, Style Tempo, Tempo, Tempo Range, Key, Scale), **Set Journey** (Arc, Länge, Track-Länge, Track-/Sound-Variation), **Kick & Bass**, **Rhythm**, **Melody**, **Lead**, **Voices**, **Levels** (Level/Presence/Audibility Match). Key, Scale und Style heißen jetzt „Start Key", „Start Scale", „Start Style": sie gelten für den ersten Track, danach wandern sie. Weil die Gruppen jetzt Listen sind, prüft der Host-Test, dass jeder Parameter auf einer Seite steht (`PhospheneEditor::parametersOnPages`).
+
+*Tests.*
+- `testSoundPresets`: Jeder Synth hat Presets in mindestens zwei Gruppen, alle in Name und Klang verschieden.
+  Jedes Preset lässt sich anwenden, liest sich als sein eigener Text zurück und lässt Pegel, Ducking, Hochpass
+  und Gate in Ruhe. Mit `lead_own` weicht in 0 von 3750 Blöcken ein Lead-Regler vom Wert der Seite ab, ohne in
+  3750 von 3750.
+- `testKeyboard`: Layer ohne Note ist bitgleich zum Set. Replace leert den Stem der Stimme. Ein gespielter
+  Akkord erklingt nur auf ihrem Stem, ab seinem Sample, und liegt 8 s nach dem Loslassen −134 dB unter dem
+  gehaltenen Akkord.
+- Host-Test: Ein Factory-Preset setzt den Arp, schaltet „Own Sound" ein und lässt den Pegel stehen; Undo nimmt
+  es zurück; ein eigenes Preset wird gespeichert, gelistet und bleibt im Testordner. Keyboard über
+  `processBlock`: kein Unterschied ohne Note (bitgleich), dann erklingt ein Akkord ab seinem Sample.
+- Screenshots aller Tabs geprüft.
+
+**Ein alter Fund der neuen Erreichbarkeits-Prüfung.** Ihr erster Lauf zeigte 130 Parameter, die auf keiner
+Seite standen. Alle stammen aus früheren Runden und wurden hinter die Tabellenausschnitte der Tabs angehängt:
+- Bass: Bite und Sub-Oktave.
+- Perc: Auto-Pan und Cut-Track.
+- Acid: Disperser und Gated Hall.
+- Stimmen: Gated Hall, zweiter Oszillator und LFO.
+- Ganze Module ohne Seite: `cue`, `texture`, `vocal`, `psyfx`.
+
+Sie waren automatisierbar, hatten aber weder Regler noch MIDI Learn. Die Anmerkung, der Handbuch-Generator
+fange so etwas ab, stimmte nur, solange jemand ihn laufen ließ. Jetzt stehen sie auf ihren Seiten:
+- Bass „Bite & Sub".
+- Perc „Motion".
+- Acid „Colour & Hall".
+- Stimmen „Gated Hall", „Second Oscillator" und „LFO".
+- SFX/FX „Psy FX", „Shamanic Bed" und „Voices".
+- Mixer/Master „Score Cues (OSC)".
+
+Der Host-Test prüft das bei jedem Lauf. Dasselbe Nachprüfen fand im Preset-Pfad `File::replaceWithText`, das
+unter Windows `
+` schreibt. Ein eigenes Preset las sich deshalb nicht als sein Text zurück. Es wird jetzt
+mit `
+` geschrieben und beim Lesen von `` befreit.
+
+*ctest* (vor dem Set-Tab-Umbau und dem Platzieren): 131 Tests, 130 bestanden. Durchgefallen war die neue
+Preset-Prüfung im Host-Test: Sie nahm „FM Bright" an, aber die Arp-Palette hat kein FM. Jetzt nimmt sie das
+erste „Bright" der Palette und meldet jede Teilbedingung einzeln. Danach lief der Host-Test erneut und bestand
+vollständig. `vst3test` bestand (Zustands-Fix).
+
+*Nicht* automatisch geprüft: das Aufklappen der Untermenüs und der Speichern-Dialog (JUCE-Popups).
+
+*Dateien.* `Core/include/phos/SoundPresets.h`, `Core/src/SoundPresets.cpp` (neu), `Core/include/phos/Composer.h`,
+`Core/src/Composer.cpp`, `Core/include/phos/Params.h`, `Core/src/Params.cpp`, `Core/include/phos/Engine.h`,
+`Core/src/Engine.cpp`, `Core/include/phos/Poly.h`, `Core/include/phos/Acid.h`, `Core/CMakeLists.txt`,
+`Plugin/PluginProcessor.h`, `Plugin/PluginProcessor.cpp`, `Plugin/PluginEditor.h`, `Plugin/PluginEditor.cpp`,
+`Plugin/EditorPerform.cpp`, `Plugin/EditorSetTab.cpp`, `Plugin/EditorGallery.cpp`, `Plugin/EditorLayout.h`,
+`Plugin/EditorLayout.cpp`, `Tests/selftest.cpp`,
+`Tests/selftest_tests.cmake`, `Tests/hosttest.cpp`, `Tests/vst3test.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

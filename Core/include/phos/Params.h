@@ -301,7 +301,16 @@ enum : int { KickMute, BassMute, TrackGain, PercMute, PercLevel, AcidMute, AcidL
              SfxMute, SfxLevel, PercRoom, PercHall,
              DuckAttack, DuckHold, DuckRelease,
              // 19.09.2026, round "fx-psychedelia": the strips of the two new parts.
-             TextureMute, TextureLevel, VocalMute, VocalLevel, Count };
+             TextureMute, TextureLevel, VocalMute, VocalLevel,
+             // 23.09.2026, round "Presets": a synth whose sound is the user's -- a preset picked on its page, or knobs
+             // set by hand -- and which the composer's per-track recipes leave alone (Engine.cpp, dispatchControl).
+             KickOwn, BassOwn, AcidOwn, LeadOwn, CounterOwn, ArpOwn, StabOwn, PadOwn, DroneOwn,
+             // 23.09.2026, round "Keyboard": which voice a MIDI keyboard plays, and whether it replaces that voice's
+             // generated notes or plays over them (Engine.h, liveNoteOn).
+             KeyboardPart, KeyboardMode, Count };
+/** @brief The "own sound" switch of a polyphonic instance. */
+constexpr int polyOwn(PolyInstance i) { return LeadOwn + static_cast<int>(i); }
+static_assert(polyOwn(PolyInstance::Drone) == DroneOwn, "the own-sound switches follow PolyInstance");
 /** @brief The mute of a polyphonic instance's strip. */
 constexpr int polyMute(PolyInstance i) { return LeadMute + 2 * static_cast<int>(i); }
 /** @brief The level of a polyphonic instance's strip. */

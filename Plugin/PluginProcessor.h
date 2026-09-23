@@ -61,6 +61,7 @@
 #include "phos/Preferences.h"
 #include "phos/Params.h"
 #include "phos/Score.h"
+#include "phos/SoundPresets.h"
 #include <atomic>
 #include <functional>
 #include <map>
@@ -277,6 +278,8 @@ public:
     juce::File galleryFolder() const;
     /** @brief The listener's verdicts (phos/Rating.h): `<application data>/Phosphene/ratings.tsv`. */
     juce::File ratingsFile() const;
+    /** @brief The user folder: %APPDATA%/Phosphene, or PHOS_USER_DIR when that is set (the tests). Created on demand. */
+    juce::File userFolder() const;
     /**
      * @brief Saves the set as it stands into the gallery: the `.phosset` with the gallery lines (phos/Gallery.h)
      *        -- name, time, and every published track's style, tempo and form.
@@ -375,6 +378,26 @@ public:
      * *sound* to come back to the shipped calibration, not for their set to be thrown away.
      */
     void resetToFactoryDefaults();
+
+    // ------------------------------------------------------------------ sound presets (23.09.2026, phos/SoundPresets.h)
+    /**
+     * @name Sound presets
+     * A synth is Module::Kick, Module::Bass, Module::Acid or Module::Poly with its instance. Its presets are the
+     * factory ones (phos::factoryPresets) and the user's, which live as `<name>.txt` in a folder per synth under the
+     * user folder (PHOS_USER_DIR in the tests, so a test never writes into the real one).
+     * @{ */
+    /** @brief The folder of the user's presets for one synth ("<user folder>/Presets/lead"). */
+    juce::File userPresetFolder(phos::Module module, int instance) const;
+    /** @brief The user's presets of one synth, in the group "User", sorted by name. */
+    std::vector<phos::SoundPreset> userPresets(phos::Module module, int instance) const;
+    /**
+     * @brief Applies a preset as one undo step and switches the synth's own sound on (mix.*_own), so the composer's
+     *        per-track recipes leave the sound as the preset has it.
+     */
+    void applyPreset(phos::Module module, int instance, const phos::SoundPreset& preset);
+    /** @brief Saves the synth's knobs as the user preset @p name; returns the file, or File() when it failed. */
+    juce::File saveUserPreset(phos::Module module, int instance, const juce::String& name);
+    /** @} */
 
     // ------------------------------------------------------------------ the set
     /** @brief The engine's parameters -- the single copy of every value. */
@@ -705,6 +728,13 @@ private:
     static constexpr int kMaxHeld = 128;   ///< notes that may sound at once on the MIDI output
     HeldNote held_[kMaxHeld];              ///< audio thread only
 
+    // ---- MIDI in: a keyboard on one voice (23.09.2026, phos::Engine::liveNoteOn)
+    /** @brief A note message of the incoming block, kept past the buffer's clear(). */
+    struct LiveNote { int at = 0; int pitch = 0; int velocity = 0; int channel = 0; bool on = false; };
+    static constexpr int kMaxLive = 256;   ///< note messages per block; more are dropped (a controller flood, not a player)
+    LiveNote live_[kMaxLive];              ///< audio thread only
+    int keyboardPartSeen_ = 0;             ///< audio thread: mix.keyboard_part as the last block had it
+
     // ---- curation: the editor asks, the composer thread does it
     /** @brief One thing the editor wants done to a lockable unit. */
     struct CurationCommand {
@@ -734,6 +764,11 @@ private:
      * than a normalised position, because a round trip through a logarithmic mapping is not exact.
      */
     std::map<int, float> macroBase_;
+    /**
+     * @brief Guards #macroBase_: serviceMacros() runs on the message thread, a host may ask for the state from
+     *        another (23.09.2026: the state stores a macro-held knob at its base, writeStateTo).
+     */
+    mutable std::mutex macroBaseLock_;
     unsigned macroTicks_ = 0;   ///< message thread: how many ticks since the slow jobs last ran
     /** @brief The macros as host parameters (23.09.2026): automatable and MIDI-learnable like every knob. */
     juce::RangedAudioParameter* macroParam_[kNumMacros] = {};

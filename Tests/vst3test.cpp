@@ -16,6 +16,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <thread>
 
@@ -55,6 +56,18 @@ int main(int argc, char** argv)
     if (argc < 2) { std::printf("usage: phos_vst3test <path to Phosphene.vst3>\n"); return 2; }
     const juce::File plugin(juce::String::fromUTF8(argv[1]));
     std::printf("Phosphene VST3 test: %s\n", plugin.getFullPathName().toRawUTF8());
+    // The user's files stay the user's (23.09.2026), as in the host test: the plugin loads into this process, so
+    // these variables reach it -- ratings, preferences, user presets and the gallery go to a folder of the test's own.
+    const juce::File userDir = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("phos_vst3test_user");
+    userDir.deleteRecursively();
+    userDir.createDirectory();
+#if defined(_WIN32)
+    _putenv_s("PHOS_USER_DIR", userDir.getFullPathName().toRawUTF8());
+    _putenv_s("PHOS_GALLERY_DIR", userDir.getChildFile("Sets").getFullPathName().toRawUTF8());
+#else
+    setenv("PHOS_USER_DIR", userDir.getFullPathName().toRawUTF8(), 1);
+    setenv("PHOS_GALLERY_DIR", userDir.getChildFile("Sets").getFullPathName().toRawUTF8(), 1);
+#endif
     check(plugin.exists(), "the built VST3 is where the build says it is");
     if (!plugin.exists()) { std::printf("%d checks, %d failures\n", checks, failures); return 1; }
 

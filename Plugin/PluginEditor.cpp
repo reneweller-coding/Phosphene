@@ -5,6 +5,7 @@
 #include "PluginEditor.h"
 #include "phos/Composer.h"
 #include <cmath>
+#include <map>
 
 using namespace phos;
 using namespace phosui;
@@ -28,16 +29,20 @@ const Slice kKickSlices[] = {
 const Slice kBassSlices[] = {
     { "Oscillator", bass::Wave, 8, 5 }, { "Filter", bass::Cutoff, 7, 4 },
     { "Amplitude", bass::AmpAttack, 4, 4 }, { "Duck & Level", bass::DuckDepth, 4, 4 },
+    // 23.09.2026: appended in earlier rounds and on no page until the host test's reachability check found them.
+    { "Bite & Sub", bass::Bite, 7, 4 },
 };
 /** @brief One percussion lane's table. */
 const Slice kPercSlices[] = {
     { "Lane", perc::Active, 3, 5 }, { "Source", perc::Pitch, 8, 4 }, { "Noise", perc::Noise, 4, 4 },
     { "Shape", perc::Decay, 6, 4 }, { "Output", perc::Level, 6, 4 },
+    { "Motion", perc::PanDepth, 3, 3 },   // 23.09.2026, see the bass
 };
 /** @brief The acid voice's table. */
 const Slice kAcidSlices[] = {
     { "Voice", acid::Wave, 10, 5 }, { "Squelch", acid::Squelch, 6, 4 },
     { "Delay", acid::DelaySend, 6, 4 }, { "Sends & Level", acid::RoomSend, 4, 4 },
+    { "Colour & Hall", acid::Disperse, 3, 3 },   // 23.09.2026, see the bass
 };
 /** @brief A polyphonic engine's table (lead, counter-lead, arp, stab, pad, drone). */
 const Slice kPolySlices[] = {
@@ -51,6 +56,8 @@ const Slice kPolySlices[] = {
     // to print (Tools/manual), which is exactly how a forgotten append is caught.
     { "Glide & Image", poly::Glide, 2, 2 },
     { "Modulation", poly::Mod, 5, 5 },
+    // 23.09.2026, see the bass: the gated hall, the second oscillator and the voice LFO (the four after it).
+    { "Gated Hall", poly::HallGate, 1, 2 }, { "Second Oscillator", poly::Osc2, 4, 4 }, { "LFO", poly::Osc2Detune + 1, 4, 4 },
 };
 /** @brief The send effects. */
 const Slice kFxSlices[] = {
@@ -391,20 +398,26 @@ void PhospheneEditor::buildPages()
         case TabArrange: break;   // built in EditorArrange.cpp
         case TabPerform: break;   // built in EditorPerform.cpp
         case TabGallery: break;   // built in EditorGallery.cpp
-        case TabKick: addSlices(*page, proc_, Module::Kick, 0, kKickSlices, tint); break;
-        case TabBass: addSlices(*page, proc_, Module::Bass, 0, kBassSlices, tint); break;
-        case TabAcid: addSlices(*page, proc_, Module::Acid, 0, kAcidSlices, tint); break;
+        case TabKick: addSoundGroup(*page, Module::Kick, 0, 0, tint); addSlices(*page, proc_, Module::Kick, 0, kKickSlices, tint); break;
+        case TabBass: addSoundGroup(*page, Module::Bass, 0, 1, tint); addSlices(*page, proc_, Module::Bass, 0, kBassSlices, tint); break;
+        case TabAcid: addSoundGroup(*page, Module::Acid, 0, 2, tint); addSlices(*page, proc_, Module::Acid, 0, kAcidSlices, tint); break;
         case TabLead: case TabCounter: case TabArp: case TabStab: case TabPad: case TabDrone:
             // The six voice pages share one table; the tab order is the instance order (PluginEditor.h).
+            addSoundGroup(*page, Module::Poly, t - TabLead, 3 + t - TabLead, tint);
             addSlices(*page, proc_, Module::Poly, t - TabLead, kPolySlices, tint);
             break;
         case TabFx:
             page->addModuleGroup(proc_, Module::Sfx, 0, "Effect Generator", tint, 5);
             addSlices(*page, proc_, Module::Fx, 0, kFxSlices, tint);
+            // 23.09.2026: the modules of round "fx-psychedelia" had no page (see the bass slices).
+            page->addModuleGroup(proc_, Module::PsyFx, 0, "Psy FX", tint, 4);
+            page->addModuleGroup(proc_, Module::Texture, 0, "Shamanic Bed", tint, 5);
+            page->addModuleGroup(proc_, Module::Vocal, 0, "Voices", tint, 5);
             break;
         case TabMix:
             addSlices(*page, proc_, Module::Mix, 0, kMixSlices, tint);
             addSlices(*page, proc_, Module::Master, 0, kMasterSlices, tint);
+            page->addModuleGroup(proc_, Module::Cue, 0, "Score Cues (OSC)", tint, 4);   // 23.09.2026, see the bass slices
             break;
         default: break;
         }
@@ -437,6 +450,82 @@ void PhospheneEditor::buildPages()
     buildArrangePage();
     buildPerformPage();
     buildGalleryPage();
+}
+
+void PhospheneEditor::fillPresetBox(PresetBox& pb)
+{
+    pb.presets = factoryPresets(pb.module, pb.instance);
+    for (SoundPreset& u : proc_.userPresets(pb.module, pb.instance)) pb.presets.push_back(std::move(u));
+    pb.box->clear(juce::dontSendNotification);
+    // A submenu per group, in the order the groups first appear (the factory's order: oscillators, then the
+    // wavetable families; the user's last).
+    std::vector<std::string> order;
+    std::map<std::string, juce::PopupMenu> menus;
+    for (size_t i = 0; i < pb.presets.size(); ++i) {
+        const SoundPreset& p = pb.presets[i];
+        if (menus.find(p.group) == menus.end()) order.push_back(p.group);
+        menus[p.group].addItem(static_cast<int>(i) + 1, p.name);
+    }
+    for (const std::string& g : order) pb.box->getRootMenu()->addSubMenu(g, menus[g]);
+    pb.box->setTextWhenNothingSelected(juce::String(pb.presets.size()) + " presets");
+}
+
+void PhospheneEditor::addSoundGroup(ControlPage& page, Module module, int instance, int owner, juce::Colour tint)
+{
+    // The own-sound switch is a mixer parameter; its group is this one, so it stands next to what it protects.
+    // Three cells wide, so the page's first group still stands beside it: the switch and "Save..." on the first
+    // row, the chooser across the second.
+    const int g = page.addModuleGroup(proc_, Module::Mix, 0, "Sound", tint, 3, mix::KickOwn + owner, 1);
+    auto pb = std::make_unique<PresetBox>();
+    pb->module = module;
+    pb->instance = instance;
+    auto box = std::make_unique<juce::ComboBox>();
+    box->setTooltip("Presets in groups. Choosing one sets the synth's knobs and switches Own Sound on, so the "
+                    "generator's per-track sound design leaves it as it is. Level, ducking and (on a voice) the high "
+                    "pass and the trance gate stay where they are. Undo takes it back.");
+    pb->box = box.get();
+    PresetBox* raw = pb.get();
+    box->onChange = [this, raw] {
+        const int id = raw->box->getSelectedId();
+        if (id <= 0 || id > static_cast<int>(raw->presets.size())) return;
+        proc_.applyPreset(raw->module, raw->instance, raw->presets[static_cast<size_t>(id - 1)]);
+    };
+    fillPresetBox(*pb);
+
+    auto save = std::make_unique<juce::TextButton>("Save...");
+    save->setTooltip("Saves this synth's knobs as a preset of your own (group \"User\")");
+    save->onClick = [this, raw] {
+        presetNameDialog_ = std::make_unique<juce::AlertWindow>("Save preset", "A name for this sound:", juce::MessageBoxIconType::NoIcon, this);
+        presetNameDialog_->addTextEditor("name", raw->box->getSelectedId() > 0 ? raw->box->getText() : juce::String("My sound"));
+        presetNameDialog_->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
+        presetNameDialog_->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+        presetNameDialog_->enterModalState(true, juce::ModalCallbackFunction::create([this, raw](int result) {
+            const juce::String name = presetNameDialog_ != nullptr ? presetNameDialog_->getTextEditorContents("name") : juce::String();
+            if (result == 1 && proc_.saveUserPreset(raw->module, raw->instance, name) != juce::File()) {
+                fillPresetBox(*raw);
+                for (size_t i = 0; i < raw->presets.size(); ++i)
+                    if (raw->presets[i].group == "User" && juce::String(raw->presets[i].name) == juce::File::createLegalFileName(name.trim()))
+                        raw->box->setSelectedId(static_cast<int>(i) + 1, juce::dontSendNotification);
+            }
+        }), false);
+    };
+    page.addControl(g, std::move(save), "", 2, true);
+    page.addControl(g, std::move(box), "Preset", 3);
+    presetBoxes_.push_back(std::move(pb));
+}
+
+juce::StringArray PhospheneEditor::parametersOnPages() const
+{
+    const ParamStore& p = proc_.params();
+    juce::StringArray seen;
+    auto collect = [&](const phosui::ControlPage* page) {
+        if (page == nullptr) return;
+        for (int g = 0; g < page->groupCount(); ++g)
+            for (int id : page->groupParams(g)) seen.addIfNotAlreadyThere(juce::String(p.key(id)));
+    };
+    for (auto& page : pages_) collect(page.get());
+    for (auto& page : percPages_) collect(page.get());
+    return seen;
 }
 
 ControlPage* PhospheneEditor::activePage() const
@@ -679,15 +768,7 @@ bool PhospheneEditor::writeManual(const juce::File& dir)
     // Which parameters are on a page somewhere, all twelve percussion lanes included. The generator
     // compares this with the full list; what is in neither is a parameter the editor cannot reach.
     juce::Array<juce::var> shown;
-    juce::StringArray seen;
-    auto collect = [&](const phosui::ControlPage* page) {
-        if (page == nullptr) return;
-        for (int g = 0; g < page->groupCount(); ++g)
-            for (int id : page->groupParams(g)) seen.addIfNotAlreadyThere(juce::String(p.key(id)));
-    };
-    for (auto& page : pages_) collect(page.get());
-    for (auto& page : percPages_) collect(page.get());
-    for (const juce::String& s : seen) shown.add(s);
+    for (const juce::String& s : parametersOnPages()) shown.add(s);
 
     // ---------------------------------------------------------------- the macros
     juce::Array<juce::var> macros;

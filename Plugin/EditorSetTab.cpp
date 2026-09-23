@@ -127,13 +127,33 @@ void PhospheneEditor::buildSetPage()
     }
 
     // ---------------------------------------------------------------- the composer's knobs
-    page->addModuleGroup(proc_, Module::Compose, 0, "Set", tint, 5, compose::Bpm, 13);
-    page->addModuleGroup(proc_, Module::Compose, 0, "Rhythm", tint, 3, compose::PercDensity, 3);
-    page->addModuleGroup(proc_, Module::Compose, 0, "Melody", tint, 5, compose::AcidAmount, 10);
-    // The form (Phase 5): style profile, energy arc, whether tracks run at the profile's tempo, set length.
-    page->addModuleGroup(proc_, Module::Compose, 0, "Form", tint, 2, compose::Style, compose::PresenceMatch - compose::Style + 1);   // two columns, so the row below still holds four groups
-    // 22.09.2026, round "Lead": the two melodic knobs appended behind the form block (Params.h).
-    page->addModuleGroup(proc_, Module::Compose, 0, "Lead", tint, 3, compose::LeadDensity, 3);   // + counter_mode (23.09.2026)
+    // 23.09.2026, at the user's word: grouped by what the knobs decide. Until then the groups were slices of the table
+    // in the order the rounds had appended to it, so the key and the scale stood between the tempo and the bass
+    // pattern, the style fourteen knobs further down under "Form", and "Style Tempo" -- which replaces the tempo and
+    // its range -- in a different group from both. Style, key, scale and tempo are where the set *starts*: the style
+    // walks with Style Mix and the key and tempo walk from track to track, which the names now say.
+    const int cb = proc_.params().base(Module::Compose);
+    auto ids = [cb](std::initializer_list<int> ks) { std::vector<int> v; for (int k : ks) v.push_back(cb + k); return v; };
+    using namespace compose;
+    const std::vector<std::pair<const char*, std::vector<int>>> groups = {
+        { "Start & Style", ids({ Style, StyleMix, StyleTempo, Bpm, TempoRange, Key, Scale }) },
+        { "Set Journey",   ids({ compose::Arc, SetMinutes, TrackBars, TrackVariation, SoundVariation }) },
+        { "Kick & Bass",   ids({ KickPattern, BassPattern, BassGate, BassVariation, BassRegister, BassFollowsChords, BassModel, BassRhythm }) },
+        { "Rhythm",        ids({ PercDensity, PercVariation, Swing, GateChance }) },
+        { "Melody",        ids({ AcidAmount, ArpAmount, MelodyVariation, MelodyTemperature, SquelchChance, ModalInterchange, MelodyModel, PitchEntropy }) },
+        { "Lead",          ids({ LeadAmount, LeadDensity, compose::CounterMode }) },
+        { "Voices",        ids({ CounterAmount, StabAmount, PadAmount, DroneAmount, SfxAmount, VoiceDensity, BedDensity }) },
+        { "Levels",        ids({ LevelMatch, PresenceMatch, AudibilityMatch }) },
+    };
+    static const int kColumns[] = { 5, 3, 5, 4, 5, 5, 4, 3 };
+    size_t claimed = 0;
+    for (size_t i = 0; i < groups.size(); ++i) {
+        page->addParamsGroup(proc_, groups[i].first, tint, kColumns[i], groups[i].second);
+        claimed += groups[i].second.size();
+    }
+    // Every compose knob in exactly one group: a knob appended to the table must be placed here by hand now.
+    jassert(claimed == static_cast<size_t>(compose::Count));
+    juce::ignoreUnused(claimed);
 
     // ---------------------------------------------------------------- what Phase 8 really is here
     // The two knobs above say what is *asked for*; these two lines say what the process *has*. They

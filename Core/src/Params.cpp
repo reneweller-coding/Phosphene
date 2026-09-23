@@ -61,8 +61,8 @@ const char* const kKickLockNames[] = { "Off", "Bass follows kick", "Kick follows
 
 const ParamDesc kComposeParams[compose::Count] = {
     { "bpm",             "Tempo",           "BPM", 100.0f, 190.0f, 145.0f, Curve::Linear },
-    { "key",             "Key",             "",      0.0f,  11.0f,   6.0f, Curve::Choice, kKeyNames },
-    { "scale",           "Scale",           "",      0.0f,   5.0f,   1.0f, Curve::Choice, kScaleNames },
+    { "key",             "Start Key",       "",      0.0f,  11.0f,   6.0f, Curve::Choice, kKeyNames },
+    { "scale",           "Start Scale",     "",      0.0f,   5.0f,   1.0f, Curve::Choice, kScaleNames },
     { "kick_pattern",    "Kick Pattern",    "",      0.0f,   2.0f,   1.0f, Curve::Choice, kKickPatternNames },
     { "bass_pattern",    "Bass Pattern",    "",      0.0f,   4.0f,   0.0f, Curve::Choice, kBassPatternNames },
     { "bass_gate",       "Bass Gate",       "",      0.2f,   1.0f,   0.7f, Curve::Linear },
@@ -89,7 +89,7 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "sfx_amount",      "SFX Amount",      "",      0.0f,   1.0f,   0.7f, Curve::Linear },
     { "gate_chance",     "Gate Chance",     "",      0.0f,   1.0f,  0.35f, Curve::Linear },
     // Phase 5: the style profile, the dramaturgy of the set and the time base of its energy arc.
-    { "style",           "Style",           "",      0.0f,   4.0f,   1.0f, Curve::Choice, kStyleNames },
+    { "style",           "Start Style",     "",      0.0f,   4.0f,   1.0f, Curve::Choice, kStyleNames },
     { "arc",             "Energy Arc",      "",      0.0f,   4.0f,   4.0f, Curve::Choice, kArcNames },
     { "style_tempo",     "Style Tempo",     "",      0.0f,   1.0f,   0.0f, Curve::Toggle },
     { "set_minutes",     "Set Length",      "min",  10.0f, 300.0f,  60.0f, Curve::Int },
@@ -627,6 +627,9 @@ const ParamDesc kFxParams[fx::Count] = {
     { "return_duck",    "Return Duck",    "",      0.0f,    1.0f,   0.5f, Curve::Linear },
 };
 
+// 23.09.2026, round "Keyboard": "By channel" plays the acid on channel 1, the lead on 2 ... the drone on 7.
+const char* const kKeyboardPartNames[] = { "Off", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "By channel" };
+const char* const kKeyboardModeNames[] = { "Replace", "Layer" };
 const ParamDesc kMixParams[mix::Count] = {
     { "kick_mute", "Kick Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
     { "bass_mute", "Bass Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
@@ -696,6 +699,19 @@ const ParamDesc kMixParams[mix::Count] = {
     { "texture_level", "Texture Level", "dB", -24.0f, 12.0f, 9.0f, Curve::Linear },
     { "vocal_mute",    "Vocal Mute",    "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "vocal_level",   "Vocal Level",   "dB", -24.0f, 12.0f, 7.0f, Curve::Linear },   // 20.09.2026, see sfx_level
+    // 23.09.2026, round "Presets": the synth keeps the sound on its page; the composer's recipes leave it alone.
+    { "kick_own",      "Kick Own Sound",    "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
+    { "bass_own",      "Bass Own Sound",    "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
+    { "acid_own",      "Acid Own Sound",    "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
+    { "lead_own",      "Lead Own Sound",    "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
+    { "counter_own",   "Counter Own Sound", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
+    { "arp_own",       "Arp Own Sound",     "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
+    { "stab_own",      "Stab Own Sound",    "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
+    { "pad_own",       "Pad Own Sound",     "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
+    { "drone_own",     "Drone Own Sound",   "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
+    // 23.09.2026, round "Keyboard": what a MIDI keyboard plays (Engine.h, liveNoteOn).
+    { "keyboard_part", "Keyboard Plays",    "", 0.0f, 8.0f, 0.0f, Curve::Choice, kKeyboardPartNames },
+    { "keyboard_mode", "Keyboard Mode",     "", 0.0f, 1.0f, 0.0f, Curve::Choice, kKeyboardModeNames },
 };
 
 const ParamDesc kMasterParams[master::Count] = {

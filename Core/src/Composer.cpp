@@ -846,6 +846,12 @@ void Composer::acidVoicingOffsets(const ParamStore& p, const float* weights, flo
     disperse = stages == knob ? -1 : stages;   // no liquid share: the knob, as an override of -1 says
 }
 
+Composer::VoicePaletteView Composer::voicePalette(PolyInstance voice)
+{
+    const VoicePalette& p = kVoicePalette[std::clamp(polyIndex(voice), 0, kPolyInstances - 1)];
+    return { p.osc, p.builtin, p.lane, p.filter, p.osc2, p.interval };
+}
+
 void Composer::voiceRecipeOffsets(PolyInstance voice, const VoiceRecipe& r, float amount, float* out)
 {
     std::fill(out, out + poly::Count, 0.0f);

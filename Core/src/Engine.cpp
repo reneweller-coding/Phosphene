@@ -43,6 +43,78 @@ Engine::Engine() : notes_(16384), controls_(16384)
 {
     var_ = std::make_unique<Variation[]>(static_cast<size_t>(params_.count()));
     eff_.assign(static_cast<size_t>(params_.count()), 0.0f);
+    // Which synth each parameter belongs to, for the own-sound switches (mix.*_own, 23.09.2026): -1 for none, and
+    // for the parameters that are the arrangement's rather than the sound's -- the pad's and drone's high pass
+    // (the sub foundation, rule 20) and the trance gate -- so an own sound still sits where the form puts it.
+    ownOf_.assign(static_cast<size_t>(params_.count()), -1);
+    auto mark = [&](Module m, int instance, int owner) {
+        const int b = params_.base(m, instance);
+        for (int k = 0; k < ParamStore::moduleCount(m); ++k) ownOf_[static_cast<size_t>(b + k)] = static_cast<int8_t>(owner);
+    };
+    mark(Module::Kick, 0, 0);
+    mark(Module::Bass, 0, 1);
+    mark(Module::Acid, 0, 2);
+    for (int v = 0; v < kPolyInstances; ++v) {
+        mark(Module::Poly, v, 3 + v);
+        const int b = params_.base(Module::Poly, v);
+        for (int k : { static_cast<int>(poly::HpFloor), static_cast<int>(poly::HpTrack), static_cast<int>(poly::Gate), static_cast<int>(poly::GatePattern),
+                       static_cast<int>(poly::GateDepth), static_cast<int>(poly::GateDuty), static_cast<int>(poly::GateAttack), static_cast<int>(poly::GateRelease),
+                       static_cast<int>(poly::GateTone), static_cast<int>(poly::Level) })
+            ownOf_[static_cast<size_t>(b + k)] = -1;
+    }
+    for (int& t : liveTarget_) t = -1;
+}
+
+int Engine::keyboardTarget(int channel) const
+{
+    const int mb = params_.base(Module::Mix);
+    const int part = static_cast<int>(std::lround(params_.get(mb + mix::KeyboardPart)));
+    if (part <= 0) return -1;
+    if (part == 8) return channel >= 0 && channel < 7 ? channel : -1;   // by channel: 1 acid, 2 lead ... 7 drone
+    return std::min(part, 7) - 1;                                       // 0 acid, 1 .. 6 the polyphonic voices
+}
+
+void Engine::liveNoteOn(int pitch, int velocity, int channel)
+{
+    if (pitch < 0 || pitch > 127) return;
+    const int target = keyboardTarget(channel);
+    if (target < 0) return;
+    const float vel = static_cast<float>(std::clamp(velocity, 1, 127)) / 127.0f;
+    constexpr int kHeld = 1 << 30;   // a gate that does not run out: the key's release ends the note
+    if (liveTarget_[pitch] >= 0) liveNoteOff(pitch, channel);
+    if (target == 0) acid_.noteOn(pitch, vel, velocity > 110, true, kHeld, 0.0);   // held keys slide, as a 303's legato does
+    else poly_[target - 1].noteOnLimited(pitch, vel, 1.0, kHeld, 0.0, false, true);
+    liveTarget_[pitch] = target;
+    livePlayed_ |= 1u << target;
+}
+
+void Engine::liveNoteOff(int pitch, int /*channel*/)
+{
+    if (pitch < 0 || pitch > 127 || liveTarget_[pitch] < 0) return;
+    const int target = liveTarget_[pitch];
+    if (target == 0) acid_.noteOff(pitch);
+    else poly_[target - 1].noteOff(pitch);
+    liveTarget_[pitch] = -1;
+}
+
+void Engine::liveAllOff()
+{
+    for (int k = 0; k < 128; ++k) liveNoteOff(k, 0);
+    livePlayed_ = 0;
+}
+
+bool Engine::generatedSilenced(Part part) const
+{
+    const int mb = params_.base(Module::Mix);
+    const int kbPart = static_cast<int>(std::lround(params_.get(mb + mix::KeyboardPart)));
+    if (kbPart <= 0 || static_cast<int>(std::lround(params_.get(mb + mix::KeyboardMode))) != 0) return false;   // off, or Layer
+    int target = -1;
+    if (part == Part::Acid) target = 0;
+    else if (part == Part::Lead || part == Part::Counter || part == Part::Arp || part == Part::Stab || part == Part::Pad || part == Part::Drone)
+        target = 1 + polyOfPart(part);
+    if (target < 0) return false;
+    if (kbPart == 8) return (livePlayed_ >> target) & 1u;   // by channel: a voice is the player's from its first played note
+    return std::min(kbPart, 7) - 1 == target;
 }
 
 void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& quality)
@@ -133,6 +205,8 @@ void Engine::reset()
     ControlEvent c;
     while (controls_.pop(c)) {}
     for (int i = 0; i < params_.count(); ++i) var_[static_cast<size_t>(i)] = Variation{};
+    for (int& t : liveTarget_) t = -1;   // the voices are cleared below; no played note is held any more
+    livePlayed_ = 0;
     samples_ = 0;
     chunkBeat_ = 0.0;
     chunkPos_ = 0;
@@ -231,11 +305,17 @@ double Engine::firstSlotSeconds() const
 void Engine::applyParams()
 {
     const ParamStore& p = params_;
+    // The own-sound switches, read once (23.09.2026): kick, bass, acid, then the six polyphonic voices.
+    bool own[9];
+    for (int k = 0; k < 9; ++k) own[k] = p.get(p.base(Module::Mix) + mix::KickOwn + k) >= 0.5f;
     // Effective values: knob + normalised offset for continuous parameters, override for discrete.
     for (int i = 0; i < p.count(); ++i) {
         const Variation& v = var_[static_cast<size_t>(i)];
         const float knob = p.get(i);
         float value = knob;
+        // An own sound (mix.*_own, 23.09.2026): the synth plays its knobs, whatever the composer's recipes say.
+        const int owner = ownOf_[static_cast<size_t>(i)];
+        if (owner >= 0 && own[owner]) { eff_[static_cast<size_t>(i)] = knob; continue; }
         if (isDiscreteCurve(p.desc(i).curve)) {
             if (v.override >= 0.0f) value = v.override;
         } else if (v.offset != 0.0f) {
@@ -398,6 +478,8 @@ void Engine::applyParams()
 
 void Engine::dispatch(const NoteEvent& e, double late)
 {
+    // A voice the keyboard plays in Replace mode leaves the composer's notes out (23.09.2026, liveNoteOn).
+    if (generatedSilenced(e.part)) return;
     const float vel = static_cast<float>(e.velocity) / 127.0f;
     switch (e.part) {
     case Part::Kick:

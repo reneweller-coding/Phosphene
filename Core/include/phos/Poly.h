@@ -149,6 +149,14 @@ public:
      *                    note did until this round; the lead passes its kNoteSlide flag (Score.h)
      */
     void noteOn(int pitch, float velocity, double lengthBeats, int gateSamples, double late, bool accent = false, bool slide = true);
+    /**
+     * @brief Closes the gate of every voice holding @p pitch (23.09.2026, live keyboard): a played note starts with a
+     *        gate that never runs out on its own, and the key's release ends it -- the voice then releases as any.
+     */
+    void noteOff(int pitch)
+    {
+        for (int v = 0; v < kPolyVoices; ++v) if (gate_[v] > 0 && pitch_[v] == pitch) gate_[v] = 1;
+    }
 
     /**
      * @brief Sets the quality limits of this instance (Quality.h).

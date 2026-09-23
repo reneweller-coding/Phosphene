@@ -36,6 +36,7 @@
 #include "phos/Gallery.h"
 #include "phos/SetFile.h"
 #include "phos/Sfx.h"
+#include "phos/SoundPresets.h"
 #include "phos/TranceGate.h"
 #include "phos/WaveTable.h"
 #include "phos/WaveTableFile.h"
@@ -10139,6 +10140,168 @@ void testStems()
 }
 
 /**
+ * @brief The factory presets and the own-sound switches (23.09.2026, round "Presets", SoundPresets.h).
+ *
+ * Every synth has presets in groups, with names that tell them apart; every preset applies, leaves the knobs
+ * presetLeaves() names where they were, and reads back as its own text (moduleText of the applied knobs is the
+ * preset -- which is what makes a saved user preset the same kind of thing). Then the switch: with lead_own on,
+ * the lead's sound knobs are what the page shows at every block of a set, whatever recipes the composer sends;
+ * with it off, the composer does move them (otherwise the first half would prove nothing).
+ */
+void testSoundPresets()
+{
+    section("sound presets: every synth, in groups; own sound keeps the composer's recipes off");
+    struct Synth { const char* name; Module m; int instance; };
+    std::vector<Synth> synths = { { "kick", Module::Kick, 0 }, { "bass", Module::Bass, 0 }, { "acid", Module::Acid, 0 } };
+    static const char* const kVoice[kPolyInstances] = { "lead", "counter", "arp", "stab", "pad", "drone" };
+    for (int v = 0; v < kPolyInstances; ++v) synths.push_back({ kVoice[v], Module::Poly, v });
+    bool allOk = true;
+    std::string summary;
+    for (const Synth& s : synths) {
+        const std::vector<SoundPreset>& list = factoryPresets(s.m, s.instance);
+        std::set<std::string> groups, names, texts;
+        std::map<std::string, std::string> byText;   // for the report: which two presets sound the same
+        std::string twins;
+        int applied = 0, roundTrip = 0, kept = 0;
+        for (const SoundPreset& sp : list) {
+            groups.insert(sp.group);
+            names.insert(sp.name);
+            if (!texts.insert(sp.text).second && twins.size() < 200) twins += " '" + byText[sp.text] + "' = '" + sp.name + "'";
+            byText.emplace(sp.text, sp.name);
+            ParamStore p;
+            const int b = p.base(s.m, s.instance);
+            // Every knob a preset leaves alone gets a value of its own first, so "left alone" is visible.
+            std::vector<float> set(static_cast<size_t>(ParamStore::moduleCount(s.m)));
+            for (int k = 0; k < ParamStore::moduleCount(s.m); ++k) {
+                if (presetLeaves(s.m, k)) p.setNormalised(b + k, 0.37f);
+                set[static_cast<size_t>(k)] = p.get(b + k);   // as the knob keeps it (a switch or a choice snaps)
+            }
+            applied += applySoundPreset(p, s.m, s.instance, sp.text) ? 1 : 0;
+            roundTrip += moduleText(p, s.m, s.instance) == sp.text ? 1 : 0;
+            bool leftAlone = true;
+            for (int k = 0; k < ParamStore::moduleCount(s.m); ++k)
+                if (presetLeaves(s.m, k)) leftAlone = leftAlone && p.get(b + k) == set[static_cast<size_t>(k)];
+            kept += leftAlone ? 1 : 0;
+        }
+        const int n = static_cast<int>(list.size());
+        const bool ok = n >= 9 && groups.size() >= 2 && static_cast<int>(names.size()) == n && static_cast<int>(texts.size()) == n
+                     && applied == n && roundTrip == n && kept == n;
+        allOk = allOk && ok;
+        summary += fmt("%s %d in %d groups%s; ", s.name, n, static_cast<int>(groups.size()),
+                       ok ? "" : fmt(" (names %d, texts %d, applied %d, round trip %d, kept %d;%s)", static_cast<int>(names.size()),
+                                     static_cast<int>(texts.size()), applied, roundTrip, kept, twins.c_str()).c_str());
+    }
+    check(allOk, "every synth has presets in groups, distinct in name and sound; each applies, reads back as itself and leaves level, "
+                 "ducking, high pass and gate alone", summary);
+
+    // The switch.
+    auto walk = [](bool own) {
+        auto engine = std::make_unique<Engine>();
+        ParamStore& p = engine->params();
+        p.parseText("compose.level_match=Off master.auto_gain=Off compose.presence_match=Off compose.audibility_match=Off");
+        if (own) p.parseText("mix.lead_own=1");
+        Composer composer(7);
+        engine->prepare(48000.0, 512);
+        Conductor conductor(*engine, composer);
+        std::vector<float> L(512), R(512);
+        const int b = p.base(PolyInstance::Lead);
+        int differs = 0, blocks = 0;
+        for (int i = 0; i < 48000 * 40 / 512; ++i) {   // 40 s: past the first recipes of the first track
+            conductor.pump(p, 32.0);
+            engine->process(L.data(), R.data(), 512);
+            ++blocks;
+            for (int k = 0; k < poly::Count; ++k)
+                if (!presetLeaves(Module::Poly, k) && engine->effective(b + k) != p.get(b + k)) { ++differs; break; }
+        }
+        return std::make_pair(differs, blocks);
+    };
+    const auto withOwn = walk(true), without = walk(false);
+    check(withOwn.first == 0 && without.first > 0, "own sound: the lead's sound knobs are what the page shows at every block; without it the composer moves them",
+          fmt("blocks with a lead knob off the page: %d of %d with own sound, %d of %d without", withOwn.first, withOwn.second, without.first, without.second));
+}
+
+/**
+ * @brief A MIDI keyboard on one voice (23.09.2026, round "Keyboard", Engine::liveNoteOn).
+ *
+ * A set, the stems taken. Replace on a voice empties its stem of the composer's notes; a played note then sounds on
+ * that stem and nowhere else, and its key's release lets it die away. Layer without a played note is the set as
+ * it was, bit for bit.
+ */
+void testKeyboard()
+{
+    section("keyboard: played notes on the chosen voice, with its sound");
+    constexpr int kBlock = 256;
+    const double sr = 48000.0;
+    struct Take { std::vector<std::vector<float>> stem; std::vector<float> mix; };
+    // part: mix.keyboard_part; mode 0 Replace, 1 Layer; a note from onAt to offAt (samples, -1 none).
+    auto render = [&](int part, int mode, size_t onAt, size_t offAt, size_t total) {
+        auto engine = std::make_unique<Engine>();
+        ParamStore& p = engine->params();
+        p.parseText("compose.level_match=Off master.auto_gain=Off compose.presence_match=Off compose.audibility_match=Off");
+        p.set(p.base(Module::Mix) + mix::KeyboardPart, static_cast<float>(part));
+        p.set(p.base(Module::Mix) + mix::KeyboardMode, static_cast<float>(mode));
+        Composer composer(3);
+        engine->prepare(sr, kBlock);
+        Conductor conductor(*engine, composer);
+        Take t;
+        t.stem.assign(kNumStems, std::vector<float>(total));
+        t.mix.assign(total, 0.0f);
+        std::vector<float> R(total);
+        std::vector<std::vector<float>> bl(kNumStems, std::vector<float>(kBlock)), br(kNumStems, std::vector<float>(kBlock));
+        StemTap tap;
+        for (int s = 0; s < kNumStems; ++s) { tap.L[s] = bl[static_cast<size_t>(s)].data(); tap.R[s] = br[static_cast<size_t>(s)].data(); }
+        engine->setStemTap(&tap);
+        for (size_t done = 0; done < total;) {
+            size_t n = std::min<size_t>(kBlock, total - done);
+            // The plugin's split: a block ends where a note message falls.
+            for (size_t at : { onAt, offAt }) if (at != static_cast<size_t>(-1) && at > done && at < done + n) n = at - done;
+            if (done == onAt) for (int pitch : { 60, 63, 67 }) engine->liveNoteOn(pitch, 100, 0);
+            if (done == offAt) for (int pitch : { 60, 63, 67 }) engine->liveNoteOff(pitch, 0);
+            conductor.pump(p, 32.0);
+            engine->process(t.mix.data() + done, R.data() + done, static_cast<int>(n));
+            for (int s = 0; s < kNumStems; ++s)
+                std::copy(bl[static_cast<size_t>(s)].begin(), bl[static_cast<size_t>(s)].begin() + static_cast<std::ptrdiff_t>(n),
+                          t.stem[static_cast<size_t>(s)].begin() + static_cast<std::ptrdiff_t>(done));
+            done += n;
+        }
+        engine->setStemTap(nullptr);
+        return t;
+    };
+    auto energy = [](const std::vector<float>& x, size_t a, size_t b) { double e = 0.0; for (size_t i = a; i < b && i < x.size(); ++i) e += static_cast<double>(x[i]) * x[i]; return e; };
+    const size_t total = static_cast<size_t>(sr * 60.0);
+    const size_t none = static_cast<size_t>(-1);
+    // Which voice plays most in this minute: the one Replace has something to take away from.
+    const Take off = render(0, 0, none, none, total);
+    int voice = static_cast<int>(Part::Lead);
+    for (int k = 0; k < kPolyInstances; ++k) {
+        const int s = static_cast<int>(polyPart(static_cast<PolyInstance>(k)));
+        if (energy(off.stem[static_cast<size_t>(s)], 0, total) > energy(off.stem[static_cast<size_t>(voice)], 0, total)) voice = s;
+    }
+    const int part = 2 + (voice - static_cast<int>(Part::Lead));   // keyboard_part: 1 acid, 2 lead .. 7 drone
+    const Take layerQuiet = render(part, 1, none, none, total);
+    check(layerQuiet.mix == off.mix, "Layer without a played note is the set, bit for bit");
+    const Take replaced = render(part, 0, none, none, total);
+    const double generated = energy(off.stem[static_cast<size_t>(voice)], 0, total);
+    check(generated > 0.0 && energy(replaced.stem[static_cast<size_t>(voice)], 0, total) == 0.0,
+          "Replace leaves the voice's generated notes out", fmt("%s: stem energy %.3g in the set, %.3g replaced", kStemNames[voice], generated,
+                                                               energy(replaced.stem[static_cast<size_t>(voice)], 0, total)));
+    // A chord held for four seconds from 20 s, then released.
+    const size_t onAt = static_cast<size_t>(sr * 20.0) + 77, offAt = static_cast<size_t>(sr * 24.0) + 13;
+    const Take played = render(part, 0, onAt, offAt, total);
+    const std::vector<float>& st = played.stem[static_cast<size_t>(voice)];
+    const double before = energy(st, 0, onAt), held = energy(st, onAt + static_cast<size_t>(sr * 1.0), offAt);
+    const double after = energy(st, offAt + static_cast<size_t>(sr * 8.0), offAt + static_cast<size_t>(sr * 11.0));
+    bool othersSame = true;
+    for (int s = 0; s < kNumParts; ++s) if (s != voice) othersSame = othersSame && played.stem[static_cast<size_t>(s)] == replaced.stem[static_cast<size_t>(s)];
+    const double heldPerSample = held / static_cast<double>(offAt - onAt - static_cast<size_t>(sr)), afterPerSample = after / (sr * 3.0);
+    check(before == 0.0 && heldPerSample > 1e-6 && afterPerSample < 0.01 * heldPerSample && othersSame,
+          "a played chord sounds on the voice's stem only, from its sample, and dies away after the keys are released",
+          fmt("%s: mean square %.3g held, %.3g from 8 s after the release (%.1f dB); before the chord %.3g; other stems %s",
+              kStemNames[voice], heldPerSample, afterPerSample, 10.0 * std::log10((afterPerSample + 1e-30) / (heldPerSample + 1e-30)), before,
+              othersSame ? "unchanged" : "CHANGED"));
+}
+
+/**
  * @brief Random knobs, fixed invariants (23.09.2026, round "Fuzz").
  *
  * Every other section sets the knobs it is about and leaves the rest at their defaults, so the corners of
@@ -14926,6 +15089,8 @@ int main(int argc, char** argv)
     run("testPreferences", testPreferences);
     run("testKnobFuzz", testKnobFuzz);
     run("testStems", testStems);
+    run("testSoundPresets", testSoundPresets);
+    run("testKeyboard", testKeyboard);
     run("testAudibility", testAudibility);
     run("testAudibilityMatch", testAudibilityMatch);
     run("testArrangeDynamics", testArrangeDynamics);

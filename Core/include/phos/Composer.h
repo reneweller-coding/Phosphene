@@ -409,6 +409,16 @@ public:
      * @param out    receives poly::Count offsets, indexed like the poly table
      */
     static void voiceRecipeOffsets(PolyInstance voice, const VoiceRecipe& r, float amount, float* out);
+    /** @brief A voice's palette, read-only (23.09.2026: the factory presets lay it out, SoundPresets.h). */
+    struct VoicePaletteView {
+        const double* osc;        ///< weight per PolyOsc
+        const int* builtin;       ///< built-in wavetables, six slots, -1 ends
+        const int8_t* lane;       ///< wavetable lanes, three slots, -1 ends
+        const double* filter;     ///< weight per PolyFilter
+        const double* osc2;       ///< weight per PolyOsc2 (index 0 = none)
+        const double* interval;   ///< weight per PolyOsc2Interval
+    };
+    static VoicePaletteView voicePalette(PolyInstance voice);
 
     /**
      * @brief How many real wavetable candidates a voice's palette offers (Composer.cpp, kVoicePalette).

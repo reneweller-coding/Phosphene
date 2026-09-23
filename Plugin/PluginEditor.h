@@ -181,6 +181,8 @@ public:
      * @return false if the folder cannot be written
      */
     bool writeManual(const juce::File& dir);
+    /** @brief The keys of every parameter that stands in a group on some page, percussion lanes included. */
+    juce::StringArray parametersOnPages() const;
 
 private:
     void buildPages();
@@ -193,6 +195,23 @@ private:
     void buildGalleryPage();      // EditorGallery.cpp
     void refreshGalleryPage();    // EditorGallery.cpp: rescans the folder
     void refreshPattern();        // the pattern roll of the tab that is open
+    /**
+     * @brief The "Sound" group at the head of a synth's page (23.09.2026): the synth's presets in a chooser with a
+     *        submenu per group, "Save..." for a user preset, and the own-sound switch (mix.*_own).
+     * @param owner the synth's own-sound number: 0 kick, 1 bass, 2 acid, 3 + instance the voices
+     */
+    void addSoundGroup(phosui::ControlPage& page, phos::Module module, int instance, int owner, juce::Colour tint);
+    /** @brief One synth's preset chooser and the presets behind its item ids (id = index + 1). */
+    struct PresetBox {
+        juce::ComboBox* box = nullptr;
+        phos::Module module = phos::Module::Kick;
+        int instance = 0;
+        std::vector<phos::SoundPreset> presets;
+    };
+    /** @brief Fills a chooser from the factory presets and the user's, grouped (after a save, again). */
+    void fillPresetBox(PresetBox& pb);
+    std::vector<std::unique_ptr<PresetBox>> presetBoxes_;   ///< one per synth page
+    std::unique_ptr<juce::AlertWindow> presetNameDialog_;   ///< "Save preset" asks for a name
     void timerCallback() override;
     /** @brief Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo (23.09.2026). */
     bool keyPressed(const juce::KeyPress& key) override;

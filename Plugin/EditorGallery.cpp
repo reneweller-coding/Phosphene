@@ -156,7 +156,7 @@ void PhospheneEditor::buildGalleryPage()
 
         auto open = std::make_unique<juce::TextButton>("Open folder...");
         open->setTooltip("Shows the gallery folder: sets can be copied in and out as files");
-        open->onClick = [this] { proc_.galleryFolder().startAsProcess(); };
+        open->onClick = [this] { proc_.galleryFolder().createDirectory(); proc_.galleryFolder().startAsProcess(); };
         page->addControl(ga, std::move(open), "", 3, true);
 
         auto note = std::make_unique<juce::Label>(juce::String(), proc_.galleryFolder().getFullPathName());

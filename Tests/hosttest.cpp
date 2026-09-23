@@ -1171,6 +1171,90 @@ int main(int argc, char** argv)
         check(p->undoName() == before, "undo: automation without a gesture is not recorded");
     }
 
+    // ---------------------------------------------------------------- sound presets (23.09.2026)
+    if (partRest) {
+        auto p = std::make_unique<PhospheneProcessor>();
+        phos::ParamStore& ps = p->params();
+        const int arpLevel = ps.find("arp.level");
+        ps.set(arpLevel, 0.37f);
+        const std::vector<phos::SoundPreset>& arp = phos::factoryPresets(phos::Module::Poly, static_cast<int>(phos::PolyInstance::Arp));
+        // The palette decides which oscillators a voice has presets for; the arp's first "Bright" is taken, whatever it is.
+        const phos::SoundPreset* fm = nullptr;
+        for (const phos::SoundPreset& s : arp) if (fm == nullptr && juce::String(s.name).endsWith("Bright")) fm = &s;
+        const std::string before = ps.toText(false);
+        if (fm != nullptr) p->applyPreset(phos::Module::Poly, static_cast<int>(phos::PolyInstance::Arp), *fm);
+        phos::ParamStore expect;
+        expect.copyValuesFrom(ps);
+        if (fm != nullptr) phos::applySoundPreset(expect, phos::Module::Poly, static_cast<int>(phos::PolyInstance::Arp), fm->text);
+        const bool applied = fm != nullptr && ps.toText(false) != before && ps.get(ps.find("mix.arp_own")) == 1.0f
+                          && ps.get(ps.find("arp.osc")) == expect.get(expect.find("arp.osc")) && ps.get(arpLevel) == 0.37f;
+        p->undo();
+        const bool undone = ps.toText(false) == before;
+        // A user preset: saved from the knobs, listed under "User", and written into the test's folder only.
+        p->redo();
+        const juce::File saved = p->saveUserPreset(phos::Module::Poly, static_cast<int>(phos::PolyInstance::Arp), "Hosttest sound");
+        const std::vector<phos::SoundPreset> mine = p->userPresets(phos::Module::Poly, static_cast<int>(phos::PolyInstance::Arp));
+        const bool listed = mine.size() == 1 && mine[0].group == "User" && mine[0].name == "Hosttest sound" && fm != nullptr && mine[0].text == fm->text;
+        const bool isolated = saved.isAChildOf(p->userFolder()) && p->userFolder().getFileName().startsWith("phos_hosttest_user");
+        saved.deleteFile();
+        size_t total = 0;
+        for (int v = 0; v < phos::kPolyInstances; ++v) total += phos::factoryPresets(phos::Module::Poly, v).size();
+        total += phos::factoryPresets(phos::Module::Kick).size() + phos::factoryPresets(phos::Module::Bass).size() + phos::factoryPresets(phos::Module::Acid).size();
+        check(applied && undone && listed && isolated,
+              juce::String("presets: a factory preset sets the arp, switches its own sound on and leaves its level; undo takes it back; "
+                           "a user preset is saved, listed and kept in the test's folder (")
+                  + (fm != nullptr ? juce::String(fm->name) : juce::String("no preset")) + juce::String::formatted(
+                        "; applied %d, undone %d, listed %d, isolated %d; ", (int)applied, (int)undone, (int)listed, (int)isolated)
+                  + juce::String(static_cast<int>(total)) + " factory presets)");
+    }
+
+    // ---------------------------------------------------------------- a MIDI keyboard on the lead (23.09.2026)
+    if (partRest) {
+        // Three renders of one set: the keyboard off; on the lead in Layer mode without a note (must be the same
+        // samples -- a block without a played note is one process() call, as before); and with a chord played
+        // from block 30, sample 100, released at block 60 (must be the same up to the note, and differ after it).
+        constexpr int kBlock = 512, kBlocks = 90, kOnBlock = 30, kOnAt = 100, kOffBlock = 60;
+        auto render = [&](int part, bool notes) {
+            auto p = std::make_unique<PhospheneProcessor>();
+            p->setFollowHost(false);
+            p->setNonRealtime(true);
+            p->setSeed(20260923);
+            p->setPlayConfigDetails(0, 2, 48000.0, kBlock);
+            p->prepareToPlay(48000.0, kBlock);
+            p->params().set(p->params().find("mix.keyboard_part"), static_cast<float>(part));
+            p->params().set(p->params().find("mix.keyboard_mode"), 1.0f);   // Layer
+            p->play();
+            juce::AudioBuffer<float> buf(2, kBlock);
+            juce::MidiBuffer midi;
+            std::vector<float> out;
+            for (int b = 0; b < kBlocks; ++b) {
+                buf.clear();
+                midi.clear();
+                if (notes && b == kOnBlock)
+                    for (int pitch : { 62, 65, 69 }) midi.addEvent(juce::MidiMessage::noteOn(1, pitch, static_cast<juce::uint8>(112)), kOnAt);
+                if (notes && b == kOffBlock)
+                    for (int pitch : { 62, 65, 69 }) midi.addEvent(juce::MidiMessage::noteOff(1, pitch), 7);
+                p->processBlock(buf, midi);
+                for (int i = 0; i < kBlock; ++i) { out.push_back(buf.getReadPointer(0)[i]); out.push_back(buf.getReadPointer(1)[i]); }
+            }
+            return out;
+        };
+        const std::vector<float> off = render(0, false), layerQuiet = render(2, false), played = render(2, true);
+        const size_t noteAt = static_cast<size_t>(kOnBlock * kBlock + kOnAt) * 2;
+        const bool same = off == layerQuiet;
+        bool untilNote = played.size() == off.size();
+        for (size_t i = 0; untilNote && i < noteAt; ++i) untilNote = played[i] == off[i];
+        double diff = 0.0, ref = 0.0;
+        for (size_t i = noteAt; i < played.size() && i < off.size(); ++i) {
+            diff += static_cast<double>(played[i] - off[i]) * (played[i] - off[i]);
+            ref += static_cast<double>(off[i]) * off[i];
+        }
+        const double db = 10.0 * std::log10((diff + 1e-30) / (ref + 1e-30));
+        check(same && untilNote && db > -40.0,
+              juce::String("keyboard: the lead plays the keys -- no note, no change (bit-identical); the chord starts on its sample "
+                           "and is ") + juce::String(db, 1) + " dB against the set");
+    }
+
     // ---------------------------------------------------------------- bus layouts and the editor
     if (partRest) {
         auto p = std::make_unique<PhospheneProcessor>();
@@ -1202,6 +1286,14 @@ int main(int argc, char** argv)
                     painted = painted && img.isValid();
                 }
                 check(painted, "every tab lays out and paints");
+                // Every parameter can be reached (23.09.2026: the Set tab's groups are now lists, not table
+                // slices, so a knob appended to the compose table is on no page until somebody places it).
+                const juce::StringArray onPages = phos->parametersOnPages();
+                juce::StringArray missing;
+                for (int i = 0; i < p->params().count(); ++i)
+                    if (!onPages.contains(juce::String(p->params().key(i)))) missing.add(juce::String(p->params().key(i)));
+                check(missing.isEmpty(), "every parameter stands on a page (" + juce::String(onPages.size()) + " placed"
+                                             + (missing.isEmpty() ? juce::String() : ", missing: " + missing.joinIntoString(" ")) + ")");
 
                 // 22.09.2026, the user: "zudem funktionieren einige Knoepfe in der GUI nicht, z.B. in
                 // Perform-Tab". Nothing here has ever pressed one. So: walk every tab, find every

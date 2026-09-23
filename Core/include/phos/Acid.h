@@ -123,6 +123,11 @@ public:
      * @param late        how many samples ago the note ideally started (0 <= late < 1)
      */
     void noteOn(int pitch, float velocity, bool accent, bool slide, int gateSamples, double late);
+    /**
+     * @brief Closes the gate of the note at @p pitch, if it is the one sounding (23.09.2026, live keyboard): a
+     *        played note starts with a gate that never runs out on its own, and the key's release ends it.
+     */
+    void noteOff(int pitch) { if (gate_ > 0 && static_cast<int>(pitchTarget_ + 0.5) == pitch) gate_ = 1; }
     /** @brief Renders @p n stereo samples, replacing @p L and @p R. */
     void process(float* L, float* R, int n);
     /** @brief Whether the amplitude envelope is open. */

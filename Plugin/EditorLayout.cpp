@@ -149,6 +149,14 @@ int ControlPage::addModuleGroup(PhospheneProcessor& proc, Module module, int ins
     return g;
 }
 
+int ControlPage::addParamsGroup(PhospheneProcessor& proc, const juce::String& title, juce::Colour tint, int columns,
+                                const std::vector<int>& paramIds)
+{
+    const int g = addGroup(title, tint, columns);
+    for (int id : paramIds) if (id >= 0 && id < proc.params().count()) addParamCell(proc, g, id);
+    return g;
+}
+
 int ControlPage::addControl(int groupIndex, std::unique_ptr<juce::Component> comp, const juce::String& name, int units,
                             bool tall, int rows)
 {

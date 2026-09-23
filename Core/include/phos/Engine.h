@@ -127,6 +127,25 @@ public:
      */
     void setStemTap(StemTap* tap) { tap_ = tap; }
 
+    /**
+     * @name A MIDI keyboard on one voice (23.09.2026, round "Keyboard")
+     * mix.keyboard_part says which voice the keyboard plays -- the acid or one of the six polyphonic voices, or
+     * "By channel" (channel 1 the acid, 2 the lead ... 7 the drone) -- with that voice's sound as its page has it.
+     * mix.keyboard_mode Replace silences the voice's generated notes (in "By channel" from a voice's first played
+     * note on), Layer plays over them. A played note starts with a gate that never runs out; its key's release
+     * ends it. Called on the rendering thread between process() calls -- the plugin splits a block at every MIDI
+     * event, so a note starts on its sample.
+     * @{ */
+    /** @param channel 0..15; @param velocity 1..127 */
+    void liveNoteOn(int pitch, int velocity, int channel);
+    /** @brief Releases the note @p pitch on whichever voice its note-on went to. */
+    void liveNoteOff(int pitch, int channel);
+    /** @brief Releases every played note (transport stop, a changed keyboard part). */
+    void liveAllOff();
+    /** @brief Whether the composer's notes of @p part are replaced by the keyboard (the plugin's MIDI out skips them too). */
+    bool generatedSilenced(Part part) const;
+    /** @} */
+
     Engine();
 
     /**
@@ -269,6 +288,11 @@ private:
     bool kickMute_ = false, bassMute_ = false;
     float masterGain_ = 1.0f, ceiling_ = 1.0f;
     StemTap* tap_ = nullptr;               ///< where the stems go (setStemTap), null = nowhere
+    std::vector<int8_t> ownOf_;            ///< per parameter: which own-sound switch governs it (0 kick .. 8 drone), -1 none
+    int liveTarget_[128];                  ///< per pitch: the voice a played note went to (0 acid, 1.. poly), -1 none
+    unsigned livePlayed_ = 0;              ///< voices the keyboard has played ("By channel" replaces from the first note)
+    /** @brief The voice the keyboard plays on @p channel (0 acid, 1 .. 6 poly), -1 none. */
+    int keyboardTarget(int channel) const;
     bool clip_ = true;
     TanhAdaa clipL_, clipR_;
 

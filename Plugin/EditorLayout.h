@@ -76,6 +76,14 @@ public:
      */
     int addModuleGroup(PhospheneProcessor& proc, phos::Module module, int instance, const juce::String& title,
                        juce::Colour tint, int columns, int first = 0, int count = -1);
+    /**
+     * @brief Adds a group of parameters named one by one (23.09.2026: the Set tab groups the composer's knobs by
+     *        what they decide, not by where they were appended to the table).
+     * @param paramIds global parameter ids, in the order they are drawn
+     * @return the group's index
+     */
+    int addParamsGroup(PhospheneProcessor& proc, const juce::String& title, juce::Colour tint, int columns,
+                       const std::vector<int>& paramIds);
     /** @brief Adds an empty group for controls that are not parameters. */
     int addGroup(const juce::String& title, juce::Colour tint, int columns);
     /**

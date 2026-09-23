@@ -96,6 +96,18 @@ void PhospheneEditor::buildPerformPage()
     // MIDI (23.09.2026, phos/MidiMap.h): every knob, switch and chooser in the plugin -- and the four macros above --
     // takes a controller. Right click, "MIDI Learn", turn the hardware knob. This group says what is being learned
     // and what is bound, and forgets everything at once.
+    // The keyboard (23.09.2026, Engine::liveNoteOn): notes coming in play the chosen voice with its sound as its page
+    // has it. Replace leaves out the generator's notes of that voice, Layer plays over them.
+    const int gk = page->addModuleGroup(proc_, Module::Mix, 0, "Keyboard", tint, 16, mix::KeyboardPart, 2);
+    {
+        auto note = std::make_unique<juce::Label>(juce::String(),
+            "Notes from a MIDI keyboard play this voice, with the sound its page has. By channel: 1 acid, 2 lead, "
+            "3 counter, 4 arp, 5 stab, 6 pad, 7 drone. Plays while the set runs.");
+        note->setJustificationType(juce::Justification::topLeft);
+        note->setColour(juce::Label::textColourId, dim);
+        note->setMinimumHorizontalScale(0.7f);
+        page->addControl(gk, std::move(note), "", 12, true);
+    }
     const int gx = page->addGroup("MIDI", tint, 16);
     {
         auto note = std::make_unique<juce::Label>(juce::String(), "no controller learned");
