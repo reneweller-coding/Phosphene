@@ -7414,6 +7414,24 @@ Der Zug ist fest (eigener Seed), `PHOS_FUZZ_CASES=n` sucht tiefer.
 
 *Dateien.* `Tests/selftest.cpp` (testKnobFuzz), `Tests/selftest_tests.cmake` (Laufzeit); dieser Block.
 
+**23.09.2026, Dither: 24-Bit-Export mit TPDF**
+
+`WavWriter` rundete den Float-Mix für `--pcm24` ohne Dither. In einem lauten Drop hört das niemand; ein
+Hallschwanz, ein Breakdown-Ausklang oder die Blende in den nächsten Track endet dann aber in
+Quantisierungs-Kratzen statt in Rauschen. Jetzt geht vor dem Runden ein dreieckverteilter Dither von einem
+Schritt dazu (zwei gleichverteilte Züge, das Lehrbuchverfahren: die ersten zwei Momente des Fehlers hängen
+nicht mehr vom Signal ab), Rauschen bei etwa −141 dBFS. `setDither(false)` schaltet ab; Float-Dateien bleiben
+unberührt. Reproduzierbar: der Generator (xorshift64*) startet mit jeder Datei neu, derselbe Render schreibt
+dieselben Bytes. Ein Sample, das exakt 0 ist, bleibt 0 — digitale Stille bleibt still; gezogen wird trotzdem
+für jedes Sample, damit der Strom nicht vom Signal abhängt.
+
+*Geprüft* (`testWav`): Rücklesefehler höchstens 1,5 Schritte (Rundung plus Dither; gemessen 1,64e-7 ≈ 1,37
+Schritte); ein Sinus von 0,4 Schritt bei 997 Hz kommt ohne Dither mit Faktor 0,000 zurück, mit Dither mit
+1,001; zweimal geschrieben identisch; Stille 0 Samples ungleich null. Kein anderes Werkzeug vergleicht
+24-Bit-Renders bitgenau (gesucht).
+
+*Dateien.* `Core/include/phos/WavWriter.h`, `Core/src/WavWriter.cpp`, `Tests/selftest.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

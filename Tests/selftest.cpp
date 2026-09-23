@@ -490,7 +490,49 @@ void testWav()
                 worst = std::max(worst, std::fabs(v - (ch == 0 ? L[static_cast<size_t>(i)] : R[static_cast<size_t>(i)])));
             }
         }
-        check(ok && worst <= (bps == 4 ? 0.0 : 1.0 / 8388608.0), bps == 4 ? "float file reads back exactly" : "24-bit file reads back within one step", fmt("worst %.3g", worst));
+        // 24 bits carry a triangular dither of one step since 23.09.2026 (WavWriter::setDither): half a step of
+        // rounding plus at most one step of dither.
+        check(ok && worst <= (bps == 4 ? 0.0 : 1.5 / 8388608.0 + 1e-12), bps == 4 ? "float file reads back exactly" : "24-bit file reads back within one and a half steps (rounding and dither)",
+              fmt("worst %.3g", worst));
+    }
+    // What the dither is for: a signal below one step survives on average instead of rounding away, digital
+    // silence stays exactly zero, and the same input writes the same bytes.
+    {
+        const int n = 48000;
+        std::vector<float> quiet(static_cast<size_t>(n)), silent(static_cast<size_t>(n), 0.0f);
+        for (int i = 0; i < n; ++i) quiet[static_cast<size_t>(i)] = static_cast<float>(0.4 / 8388608.0 * std::sin(2.0 * 3.141592653589793 * 997.0 * i / 48000.0));
+        auto readBack = [&](bool dither, const std::vector<float>& x, std::vector<int32_t>& out) {
+            WavWriter w;
+            w.setDither(dither);
+            w.open(path, 48000, 1, WavFormat::Pcm24);
+            w.write(x.data(), nullptr, n);
+            w.close();
+            FILE* fp = std::fopen(path, "rb");
+            std::vector<uint8_t> b(80 + static_cast<size_t>(n) * 3);
+            const size_t got = fp ? std::fread(b.data(), 1, b.size(), fp) : 0;
+            if (fp) std::fclose(fp);
+            out.assign(static_cast<size_t>(n), 0);
+            for (int i = 0; i < n && got == b.size(); ++i) {
+                const uint8_t* q = b.data() + 80 + i * 3;
+                out[static_cast<size_t>(i)] = ((q[0] << 8) | (q[1] << 16) | (q[2] << 24)) >> 8;
+            }
+        };
+        std::vector<int32_t> plain, dithered, again, quietZero;
+        readBack(false, quiet, plain);
+        readBack(true, quiet, dithered);
+        readBack(true, quiet, again);
+        readBack(true, silent, quietZero);
+        auto correlation = [&](const std::vector<int32_t>& y) {
+            double s = 0.0, e = 0.0;
+            for (int i = 0; i < n; ++i) { s += y[static_cast<size_t>(i)] * static_cast<double>(quiet[static_cast<size_t>(i)]); e += static_cast<double>(quiet[static_cast<size_t>(i)]) * quiet[static_cast<size_t>(i)]; }
+            return s / std::max(e, 1e-300) / 8388608.0;   // 1 = the signal comes back at its own level
+        };
+        int nonZero = 0;
+        for (int32_t v : quietZero) nonZero += v != 0 ? 1 : 0;
+        const double cPlain = correlation(plain), cDither = correlation(dithered);
+        check(cPlain == 0.0 && cDither > 0.8 && cDither < 1.2 && dithered == again && nonZero == 0,
+              "the 24-bit dither keeps a signal below one step (0.4 of a step at 997 Hz), is reproducible and leaves silence silent",
+              fmt("gain of the sub-step sine read back: %.3f undithered, %.3f dithered; %d non-zero samples of silence", cPlain, cDither, nonZero));
     }
     std::remove(path);
 }

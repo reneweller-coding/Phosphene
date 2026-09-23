@@ -31,6 +31,7 @@ bool WavWriter::open(const char* path, int sampleRate, int channels, WavFormat f
     format_ = format;
     frames_ = 0;
     clipped_ = 0;
+    rng_ = 0x9E3779B97F4A7C15ull;   // the dither starts over with every file: the same render writes the same bytes
     return writeHeader(false);
 }
 
@@ -82,6 +83,12 @@ bool WavWriter::write(const float* L, const float* R, int n)
                 p += 4;
             } else {
                 double x = static_cast<double>(v) * 8388608.0;
+                // TPDF dither of one step (setDither): drawn for every sample, so the stream does not depend on
+                // the signal, and left off exactly-zero samples, so silence stays digital silence.
+                if (dither_) {
+                    const double d = uniform() - uniform();
+                    if (v != 0.0f) x += d;
+                }
                 if (x > 8388607.0) { x = 8388607.0; ++clipped_; }
                 if (x < -8388608.0) { x = -8388608.0; ++clipped_; }
                 const int32_t s = static_cast<int32_t>(std::lround(x));
