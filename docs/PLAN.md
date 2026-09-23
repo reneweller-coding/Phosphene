@@ -7316,7 +7316,7 @@ Takt (ein Längenzug ist kein Energiezug) und liest Warm-up (0,25 → 0,85, unge
 Closing (0,54 → 0,48). `testArrangement`: „eine Kick je Beat über das Set" zählt nur Kicks *auf* dem Beat —
 zwei Tracks, die zugleich kicken, liegen beide auf dem Raster; die Achtel und Sechzehntel der Kick-Roll liegen
 dazwischen und sind die eines Tracks (vorher 64 „Doppel-Beats", alle aus der Roll). `testSectionRules` grün. `testVariety`,
-`testMotifOperators` grün. Voller ctest am Ende.
+`testMotifOperators` grün. Voller ctest nach sauberem Vollbuild: **115 von 115** (1346 s; der neue Abschnitt ist der 115.).
 
 *Dateien.* `Core/include/phos/Melody.h`, `Core/src/Melody.cpp`, `Core/include/phos/Composer.h`,
 `Core/src/Composer.cpp`, `Core/include/phos/Form.h`, `Core/src/Form.cpp`, `Tools/render/main.cpp`,
