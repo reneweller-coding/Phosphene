@@ -7264,6 +7264,64 @@ Treiber mit Goa und Dark Forest, Seed 7, 3 Minuten: acht Dateien, Index gemischt
 
 *Dateien.* `Tools/render/main.cpp` (Excerpt, `--excerpts`, `--excerpt-bars`), `Tools/listen_bench.py`; dieser Block.
 
+**23.09.2026, Set-Kurve: Tempo und Klimax folgen dem Bogen, das Set hat ein Motiv, die Kick rollt und reißt ab**
+
+Der Nutzer hatte am Morgen nach der Nacht gefragt, was noch zu verbessern sei; vorgeschlagen und angenommen:
+eine Dramaturgie über dem Track, ein Motivgedächtnis über Tracks, die rhythmische Schicht des Risers und der
+Abriss vor der 16-Takt-Linie. Die Bestandsaufnahme vor dem Bauen: ein Set-Energiebogen **gibt es bereits**
+(`compose.arc`, fünf Bögen, Form.cpp `arcEnergy`) — er skaliert die Sektionsenergien, treibt die Stil-Reise
+und die Farbe; Snare-Roll (vier Stufen), Fills an den Achtergruppen und die Kick-Lücke auf Takt 8
+(`compose.kick_pattern`) existieren ebenso. Gebaut wurde also nur, was fehlte:
+
+*Tempo folgt dem Bogen* (`Composer.cpp`, `kArcTempoPerUnit` = 6 BPM je Einheit Bogenenergie). Die
+Mitte, um die der mean-reverting Tempo-Walk kreist, verschiebt sich mit dem Bogen relativ zu seinem Wert am
+Set-Anfang — der erste Track bleibt die Knöpfe. Warm-up 0,25 → 0,85 gibt am Ende +3,6 BPM, Peak-Time
++1,8 dann +0,9, Closing −4,2; Flat (der Standard) bewegt nichts, jeder Render von vorher bleibt, was er war.
+DJ-Sets steigen über die Nacht um wenige BPM und fallen zum Schluss — nie ein Sprung.
+
+*Klimax folgt dem Bogen* (`Form.cpp`, `jitterForm(bars, seed, arc)`). Liegt der Track bei Bogenenergie
+≥ 0,75, gibt jeder zweite acht Takte des Haupt-Breakdowns an Drop 2; bei ≤ 0,35 umgekehrt (längerer
+Breakdown, kürzerer Klimax). Gezogen nach den Fuzz-Zügen aus demselben Strom, die Grenzen der Sektionen
+gelten weiter. Gemessen (Seed 2026, acht Tracks je Bogen): mittlere Drop-2-Länge Peak-Time 47,0, Flat 46,0,
+Closing 43,0 Takte.
+
+*Das Motiv des Sets* (`Melody.h` `SetMotif`, `Composer.cpp` walkAt, `Melody.cpp` makeLead). Der Set-Walk
+zieht aus dem Set-Seed eine Lead-Zelle (Band aus dem Lead-Vektor des ersten Stils, Rhythmus über
+`drawMotifCell`, Archetyp aus den Stil-Gewichten). Track 1 spielt sie als seine erste Phrase; der Track, der das
+Set-Ende trägt (`compose.set_minutes`), erinnert sie in seiner zweiten Phrase — Rhythmus und Kontur gleich, die
+Tonhöhen neu in seiner Tonart und seinem Modus, wie ein Motiv in anderer Tonart wiederkehrt; etwa jeder siebte
+Track dazwischen ebenso, nie der zweite. Eigener Strom (`kSaltMotif`), also bewegt sich kein älterer Zug des
+Walks; die Zelle liegt im Walk und nicht im Plan von Track 1, damit ein Reroll von Track 1 den letzten Track
+nicht verändert (PLAN 6.8). `--tracks` druckt „the set's motif" bzw. „recalls the set's motif".
+
+*Kick-Roll* (`Form.h` `BarPlan::kickRoll`, `Form.cpp` Build, `Composer.cpp` Kick-Emission). Im Takt vor dem
+Pre-Drop-Break eines Buildups mit langem Roll (der große: Roll ≥ 8 Takte, Break 1 Takt) verdoppelt die Kick auf
+Achtel, in Full-On/Hi-Tech jedes zweite Mal über die zweite Takthälfte auf Sechzehntel; Wiederholungen leiser
+(112/104) als der Schlag. Je Form-Template: Full-On/Hi-Tech 0,55, Progressive 0,20, Goa 0,35, Dark Forest
+0,30 der Tracks. Im Bar-Log: Seed 1 Takt 166 acht Kicks, Seed 2 und 4 Takt 174.
+
+*Abriss vor der 16-Takt-Linie* (`Form.cpp` Drop). Im Takt vor einem Crash-Takt — nie dem letzten des Drops —
+verlassen Kick **und Bass** Schlag 4 (Full-On/Hi-Tech 0,45, Progressive 0,15, Goa 0,30, Dark Forest 0,25 der
+Takte). Die Kick-Lücke allein gab es über `kick_pattern` an jedem achten Takt schon; neu ist, dass der Bass
+mitgeht und das Loch vor dem Crash wirklich leer ist. Im Bar-Log: Bass 9 statt 12 Noten in diesen Takten.
+
+*Tests.* Neuer Abschnitt `testSetArc` (Pläne, kein Audio, 0,3 s): Tempo gegen Flat bei gleichem Seed
+(Warm-up +1,62, Closing −2,00 BPM in der zweiten Hälfte, Track 1 gleich), Drop-2-Längen je Bogen, Motiv
+(Track 1 stellt es, Track 9 trägt das Ende und erinnert es mit gleicher Zelle und gleichem Archetyp, 2
+Erinnerungen in zehn Tracks), Kick-Roll in 5 von 8 großen Buildups, Abriss in 7 von 27 Takten. `testForm`:
+die Dramaturgie-Prüfung las Peak-Time früh gegen spät — 0,59 gegen 0,58, weil der Bogen dort bei 0,95–1,0
+steht und die Klimax-Marge die Energien sättigt (Drop 2 auf 1, der Rest bei 0,8 gekappt); Hundertstel
+entschieden das Vorzeichen, und der Acht-Takt-Zug dieser Runde kippte es. Sie mittelt jetzt je Sektion statt je
+Takt (ein Längenzug ist kein Energiezug) und liest Warm-up (0,25 → 0,85, ungesättigt: 0,46 → 0,51) gegen
+Closing (0,54 → 0,48). `testArrangement`: „eine Kick je Beat über das Set" zählt nur Kicks *auf* dem Beat —
+zwei Tracks, die zugleich kicken, liegen beide auf dem Raster; die Achtel und Sechzehntel der Kick-Roll liegen
+dazwischen und sind die eines Tracks (vorher 64 „Doppel-Beats", alle aus der Roll). `testSectionRules` grün. `testVariety`,
+`testMotifOperators` grün. Voller ctest am Ende.
+
+*Dateien.* `Core/include/phos/Melody.h`, `Core/src/Melody.cpp`, `Core/include/phos/Composer.h`,
+`Core/src/Composer.cpp`, `Core/include/phos/Form.h`, `Core/src/Form.cpp`, `Tools/render/main.cpp`,
+`Tests/selftest.cpp`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

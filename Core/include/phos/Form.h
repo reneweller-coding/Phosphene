@@ -506,6 +506,7 @@ struct BarPlan {
     bool        mainBreak = false;      ///< the breakdown before drop 2: the pad's own harmony (22.09.2026, Melody.h)
     bool        afterMainBreak = false; ///< a bar behind the main breakdown: the pad's second progression, where the track has one (23.09.2026)
     int         rollBars = 4;           ///< length of the snare roll rollBar counts in
+    int8_t      kickRoll = 0;           ///< 0 none; 1 the kick rolls in eighths; 2 in eighths, then sixteenths over beats 3 and 4 (the bar before the big buildup's pre-drop break; 23.09.2026)
     bool        quietHats = false;      ///< the intro's first half: a quiet closed hat on every sixteenth but the downbeat
     bool        shaker = false;         ///< the shaker plays whether or not it is one of the layers
     bool        offbeatHat = false;     ///< the closed hat plays its eighth offbeat whether or not it is a layer

@@ -299,6 +299,29 @@ enum class PadFigure : int {
 /** @brief Display names of PadFigure, in its order. */
 extern const char* const kPadFigureNames[static_cast<int>(PadFigure::Count)];
 
+/**
+ * @brief The set's motif (23.09.2026, round "Set-Kurve"): one lead cell the first track states and a later
+ *        track recalls, so that a night has a thread and not only a sequence of tracks.
+ *
+ * The cell is a rhythm (a bit per sixteenth) with an archetype and a density band; its pitches are drawn
+ * afresh in the recalling track's key and mode, the way a motif returns in another key. It is decided by the
+ * set walk (Composer.cpp, walkAt) from the set seed alone, so rerolling a track moves no other track's recall
+ * (PLAN 6.8). `phrase` says which of the two lead phrases plays it in this track: 0 in the first track, 1 in
+ * the track that recalls it, -1 in every other.
+ */
+struct SetMotif {
+    uint16_t cell = 0;        ///< the cell's onset mask, 0 = no motif
+    int8_t   archetype = 0;   ///< LeadArchetype (Form.h)
+    int8_t   band = 1;        ///< the density band the cell was drawn in
+    int8_t   phrase = -1;     ///< which lead phrase plays it, -1 = none
+};
+
+/**
+ * @brief Draws the set's motif cell: a lead cell the rules admit in @p band, with no bass to interlock with
+ *        (the set has no one bass), from @p seed alone.
+ */
+uint16_t drawMotifCell(uint64_t seed, int band);
+
 /** @brief Everything melodic that is decided once per track. */
 struct MelodyPlan {
     bool present[kMelodyParts] = {};         ///< which parts the track uses at all (MelodyPart order)
@@ -402,6 +425,7 @@ struct MelodyPlan {
     uint16_t leadCell[2] = { 0, 0 };          ///< the cell's onset mask, a bit per sixteenth
     int      leadDensityBand = 1;             ///< 0 sparse (8..10 onsets), 1 medium (10..12), 2 dense (12..16)
     bool     leadCellFromCorpus[2] = { false, false };   ///< the cell's rhythm came from the corpus templates
+    bool     leadQuotesSet[2] = { false, false };        ///< the phrase plays the set's motif (SetMotif; 23.09.2026)
     /** @} */
     /** @name Register and counter mode (23.09.2026, round "Counter")
      *  @{ */
@@ -470,9 +494,12 @@ inline int chordIndexAt(const MelodyPlan& m, int barInTrack) { return (barInTrac
  *                   stays in one mode, which is exactly the behaviour before 16.09.2026.
  * @param bassMask   the track's bass onsets over a bar, a bit per sixteenth (22.09.2026: the lead's
  *                   rhythm interlocks with it; 0 = no bass to interlock with)
+ * @param motif      the set's motif and which lead phrase of this track plays it (SetMotif; 23.09.2026);
+ *                   the default plays none, which is every track's behaviour before that date
  */
 MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64_t seed, int key, int scale,
-                          bool firstTrack, float colour, uint32_t scaleMask = 0, unsigned bassMask = 0);
+                          bool firstTrack, float colour, uint32_t scaleMask = 0, unsigned bassMask = 0,
+                          const SetMotif& motif = SetMotif{});
 
 extern const char* const kLeadArchetypeNames[kNumLeadArchetypes];   ///< names of LeadArchetype (Form.h)
 extern const char* const kCellOpNames[kNumCellOps];                 ///< names of CellOp (Form.h)

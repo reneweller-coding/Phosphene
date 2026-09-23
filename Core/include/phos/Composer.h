@@ -177,6 +177,10 @@ struct VoiceRecipe {
 /** @brief What the set walk decides for a track: the journey through the night. */
 struct TrackWalk {
     int    bars = 256;              ///< length in bars (a multiple of 32)
+    /** @brief The set's motif and this track's part in it (Melody.h, SetMotif; 23.09.2026): the first track
+     *         states it in its first lead phrase, the track that carries the set's end recalls it in its
+     *         second, a few tracks in between recall it too. */
+    SetMotif motif;
     int    key = 6;                 ///< pitch class of the key
     int    scale = 1;               ///< index into kScaleNames
     double bpm = 145.0;             ///< tempo the track settles on

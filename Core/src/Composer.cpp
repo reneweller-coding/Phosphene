@@ -32,6 +32,20 @@ const char* const kVoiceMacroNames[kNumVoiceMacros] = { "brightness", "softness"
 namespace {
 
 constexpr uint64_t kSaltTrack  = 0x545241434B000001ull;
+constexpr uint64_t kSaltMotif  = 0x4D4F544946000017ull;   ///< the set's motif (23.09.2026, round "Set-Kurve"): its own stream, so no older draw of the walk moves
+/**
+ * @brief How far the set's energy arc moves a track's tempo centre, in BPM per unit of arc energy
+ *        (23.09.2026, round "Set-Kurve").
+ *
+ * The arc already shapes every section's energy and the style journey; the tempo followed only its
+ * style's centre. DJ sets rise in tempo towards their peak and fall towards the end -- a few BPM over a
+ * night, never a jump -- so the centre the mean-reverting walk homes on now moves with the arc, relative
+ * to where the arc stood when the set began (the first track keeps the knobs). Over the arcs of Form.cpp:
+ * Warm-up 0.25 -> 0.85 is +3.6 BPM by the end, Peak-Time 0.70 -> 1.00 -> 0.85 is +1.8 then back to +0.9,
+ * Closing 0.90 -> 0.20 is -4.2; Flat, the default, moves nothing, so every render before this round is
+ * what it was.
+ */
+constexpr double kArcTempoPerUnit = 6.0;
 constexpr uint64_t kSaltRecipe = 0x5245434950450002ull;
 constexpr uint64_t kSaltBlock  = 0x424C4F434B000003ull;
 constexpr uint64_t kSaltPhrase = 0x5048524153450004ull;
@@ -1078,9 +1092,45 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
             w.scale = prev.scale;
             if (r.uniform() < 0.25f * tv) w.scale = pick(r, ts.scaleWeight, kNumScales);
             // Tempo: mean-reverting walk around the track's centre, inside its range, on half-BPM steps.
-            const double walk = trackBpm + 0.6 * (prev.bpm - trackBpm) + (2.0 * r.uniform() - 1.0) * trackRange * tv;
-            w.bpm = std::round(std::clamp(walk, trackBpm - trackRange, trackBpm + trackRange) * 2.0) * 0.5;
+            // The centre itself follows the set's energy arc (kArcTempoPerUnit): where the night rises the
+            // tracks run a little faster, where it closes a little slower.
+            double arcCentre = trackBpm;
+            {
+                double startBar = 0.0;
+                for (int k = 0; k < i; ++k) startBar += walk_[static_cast<size_t>(k)].bars;
+                const ArcId arc = arcOf(p);
+                arcCentre += kArcTempoPerUnit * (arcEnergy(arc, startBar / setLengthBars(p)) - arcEnergy(arc, 0.0));
+            }
+            const double walk = arcCentre + 0.6 * (prev.bpm - arcCentre) + (2.0 * r.uniform() - 1.0) * trackRange * tv;
+            w.bpm = std::round(std::clamp(walk, arcCentre - trackRange, arcCentre + trackRange) * 2.0) * 0.5;
 
+        }
+
+        // The set's motif (Melody.h, SetMotif; 23.09.2026, round "Set-Kurve"). The first track draws it --
+        // a lead cell in the band its style's lead vector puts it in, and an archetype -- and states it in
+        // its first lead phrase. The track that carries the set's end (compose.set_minutes) recalls it in
+        // its second phrase, and so does about one track in seven in between, never the second track (a
+        // recall right after the statement is a repeat). Its own stream, after the walk's older draws and
+        // before the recipes, which have streams of their own: nothing else moves. A set rendered past its
+        // length has no further recall; the recall belongs to the end the arc knows.
+        {
+            Rng rm;
+            rm.seed(mixSeed(setSeed() ^ kSaltMotif, static_cast<uint64_t>(i)));
+            if (i == 0) {
+                const LeadStyle& ls = styleProfile(static_cast<StyleId>(w.style)).lead;
+                w.motif.band = static_cast<int8_t>(std::clamp(static_cast<int>(std::lround(ls.density * 2.0 + (static_cast<double>(rm.uniform()) - 0.5))), 0, 2));
+                w.motif.cell = drawMotifCell(mixSeed(setSeed() ^ kSaltMotif, 0xC0FFEEull), w.motif.band);
+                w.motif.archetype = static_cast<int8_t>(pick(rm, ls.archetype, kNumLeadArchetypes));
+                w.motif.phrase = 0;
+            } else {
+                w.motif = walk_[0].motif;
+                double startBar = 0.0;
+                for (int k = 0; k < i; ++k) startBar += walk_[static_cast<size_t>(k)].bars;
+                const double setBars = setLengthBars(p);
+                const bool carriesEnd = startBar < setBars && startBar + w.bars >= setBars;
+                const bool recall = rm.uniform() < 0.15f;   // drawn whatever i is, so the stream is one per track
+                w.motif.phrase = (carriesEnd || (i >= 2 && recall)) ? 1 : -1;
+            }
         }
 
         // Recipes by best candidate against the last four tracks.
@@ -1373,7 +1423,7 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     // rhythm (compose.bass_rhythm = Corpus) strays from it now and then; the family is what the
     // track's groove is built on, and the mask is decided before the rhythm exists.
     t.melody = makeMelodyPlan(p, style, t.melodySeed, t.key, t.scale, index == 0, colour, t.form.scaleMask,
-                              BassRhythm::familyMask(t.primaryPattern));
+                              BassRhythm::familyMask(t.primaryPattern), w.motif);
 
     if (index == 0) {
         t.gate = p.get(cb + compose::BassGate);
@@ -2528,13 +2578,19 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
             // The form decides per beat whether kick and bass play: a breakdown removes both (Solberg
             // and Dibben 2019), a pre-drop break removes them for part or all of its bar.
             if (kickPattern != 2 && !fillGap && ((bp.kickBeats >> beat) & 1) != 0 && static_cast<double>(beat) >= bp.cutBeats) {
-                NoteEvent k;
-                k.beat = b;
-                k.length = 0.25f;
-                k.part = Part::Kick;
-                k.pitch = 36;
-                k.velocity = 127;
-                out.push_back(k);
+                // The kick's roll (Form.h, BarPlan::kickRoll; 23.09.2026): in the bar the form marks, the kick
+                // doubles to eighths, and in the roll's second half to sixteenths where the form asks for it,
+                // the repeats a little softer than the beat so the pulse still reads.
+                const int sub = bp.kickRoll >= 2 && beat >= 2 ? 4 : (bp.kickRoll >= 1 ? 2 : 1);
+                for (int hit = 0; hit < sub; ++hit) {
+                    NoteEvent k;
+                    k.beat = b + static_cast<double>(hit) / sub;
+                    k.length = 0.25f;
+                    k.part = Part::Kick;
+                    k.pitch = 36;
+                    k.velocity = static_cast<uint8_t>(hit == 0 ? 127 : (sub == 4 ? 104 : 112));
+                    out.push_back(k);
+                }
             }
             const bool bassBeat = ((bp.bassBeats >> beat) & 1) != 0 && static_cast<double>(beat) >= bp.cutBeats
                                && !(bassBreak && inTrack % 16 == 15 && beat >= 2);

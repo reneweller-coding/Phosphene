@@ -1569,7 +1569,7 @@ struct LeadBar {
 constexpr int kLeadCandidates = 24;   ///< cells drawn per phrase for the critic to choose from
 
 void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour, DrawSource src,
-              const LeadStyle& ls, int densityKnob, int entropyKnob, unsigned bassMask)
+              const LeadStyle& ls, int densityKnob, int entropyKnob, unsigned bassMask, const SetMotif& motif)
 {
     src.mode = std::clamp(scale, 0, kNumScales - 1);
     Rng r;
@@ -1587,6 +1587,10 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     {
         const double x = densityKnob > 0 ? static_cast<double>(densityKnob - 1) : ls.density * 2.0 + (static_cast<double>(r.uniform()) - 0.5);
         m.leadDensityBand = std::clamp(static_cast<int>(std::lround(x)), 0, 2);
+        // A track that states or recalls the set's motif takes the motif's band (SetMotif), unless the
+        // user holds the density knob -- then the motif plays only where the knob's band admits it. The
+        // draw above is made whatever happens, so the draws after it keep their place.
+        if (motif.phrase >= 0 && motif.cell != 0 && densityKnob == 0) m.leadDensityBand = std::clamp<int>(motif.band, 0, 2);
     }
     static const double kEntropy[4] = { 1.0, 0.7, 1.0, 1.4 };
     const double temp = temperature * (entropyKnob > 0 ? kEntropy[std::clamp(entropyKnob, 1, 3)] : ls.entropy);
@@ -1643,10 +1647,18 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
         ph.clear();
         // ---- 1. the design, before any pitch: the cell's rhythm, the archetype, the operators, the coins
         bool fromCorpus = false;
-        const uint16_t mask = drawCellMask(r, role, m.leadDensityBand, bassMask, ls.interlock, fromCorpus);
+        uint16_t mask = drawCellMask(r, role, m.leadDensityBand, bassMask, ls.interlock, fromCorpus);
+        // The set's motif (SetMotif, 23.09.2026): this phrase plays the set's cell and archetype instead of its
+        // own draw -- the first track states it, the recalling track answers it in its own key and mode. The
+        // draws are still made, so the coins and pitches after them keep their place; the cell stands only
+        // where the band admits it (it always does when the band is the motif's own).
+        const bool quote = motif.phrase == w && motif.cell != 0 && cellAdmits(motif.cell, m.leadDensityBand);
+        if (quote) { mask = motif.cell; fromCorpus = false; }
+        m.leadQuotesSet[w] = quote;
         m.leadCell[w] = mask;
         m.leadCellFromCorpus[w] = fromCorpus;
         m.leadArchetype[w] = drawIndex(r, ls.archetype, kNumLeadArchetypes);
+        if (quote) m.leadArchetype[w] = std::clamp<int>(motif.archetype, 0, kNumLeadArchetypes - 1);
         const LeadArchetypeDef& arche = kLeadArchetypes[std::clamp(m.leadArchetype[w], 0, kNumLeadArchetypes - 1)];
         for (int b = 0; b < 8; ++b) {
             int op = static_cast<int>(CellOp::Keep);
@@ -2597,8 +2609,16 @@ std::vector<int> melodyContour(const std::vector<MelodyNote>& notes)
     return out;
 }
 
+uint16_t drawMotifCell(uint64_t seed, int band)
+{
+    Rng r;
+    r.seed(seed);
+    bool fromCorpus = false;
+    return drawCellMask(r, kCorpusRoles[static_cast<int>(CorpusRoleId::Lead)], std::clamp(band, 0, 2), 0u, 0.0f, fromCorpus);
+}
+
 MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64_t seed, int key, int scale,
-                          bool firstTrack, float colour, uint32_t scaleMask, unsigned bassMask)
+                          bool firstTrack, float colour, uint32_t scaleMask, unsigned bassMask, const SetMotif& motif)
 {
     const int cb = p.base(Module::Compose);
     const double temperature = p.get(cb + compose::MelodyTemperature);
@@ -2697,7 +2717,7 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     src.style = 0;
     m.scale = std::clamp(scale, 0, kNumScales - 1);
     makeAcid(m, key, scale, seed, temperature, colour, src);
-    makeLead(m, key, scale, seed, temperature, colour, src, style.lead, leadDensity, pitchEntropy, bassMask);
+    makeLead(m, key, scale, seed, temperature, colour, src, style.lead, leadDensity, pitchEntropy, bassMask, motif);
     makeArp(m, key, scale, seed, temperature, colour, src);
     for (int c = 0; c < 4; ++c) m.padVoicing[c] = voiceChord(scale, key, m.chordDegree[c], m.chordType[c], c > 0 ? &m.padVoicing[c - 1] : nullptr);
     for (int c = 0; c < 4; ++c) m.breakVoicing[c] = voiceChord(scale, key, m.breakDegree[c], m.breakType[c], c > 0 ? &m.breakVoicing[c - 1] : nullptr);
@@ -2724,7 +2744,7 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
         if (sc == m.scale || (scaleMask & (1u << sc)) == 0) continue;
         MelodyPlan tmp = m;
         makeAcid(tmp, key, sc, seed, temperature, colour, src);
-        makeLead(tmp, key, sc, seed, temperature, colour, src, style.lead, leadDensity, pitchEntropy, bassMask);
+        makeLead(tmp, key, sc, seed, temperature, colour, src, style.lead, leadDensity, pitchEntropy, bassMask, motif);
         makeArp(tmp, key, sc, seed, temperature, colour, src);
         makeCounter(tmp, key, sc, seed);
         for (int c = 0; c < 4; ++c)

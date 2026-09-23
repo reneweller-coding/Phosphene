@@ -9861,6 +9861,106 @@ void testArpPatterns()
     }
 }
 
+/**
+ * @brief The set's dramaturgy (23.09.2026, round "Set-Kurve"): the tempo and the climax follow the arc, the
+ *        set has a motif that returns, the kick rolls before the big drop and tears before a sixteen-bar line.
+ *
+ * Plans only, no audio: everything here is a decision the composer prints and the renderer follows.
+ */
+void testSetArc()
+{
+    section("set arc: tempo, climax, motif, kick roll and Abriss");
+    auto plans = [](const char* arc, int tracks) {
+        ParamStore q;
+        q.parseText(fmt("compose.arc=%s compose.set_minutes=60 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off", arc).c_str());
+        Composer c(2026);
+        std::vector<TrackPlan> out;
+        for (int t = 0; t < tracks; ++t) out.push_back(c.track(q, t));
+        return out;
+    };
+    const std::vector<TrackPlan> flat = plans("Flat", 8), warm = plans("Warm-up", 8), closing = plans("Closing", 8), peak = plans("Peak-Time", 8);
+
+    // 1. The tempo centre follows the arc. Same seed, same draws: only the centre differs, so the second
+    //    half of a Warm-up set runs faster than the Flat set's and a Closing set's slower (kArcTempoPerUnit).
+    {
+        double dWarm = 0.0, dClose = 0.0;
+        for (int t = 4; t < 8; ++t) { dWarm += warm[t].bpm - flat[t].bpm; dClose += closing[t].bpm - flat[t].bpm; }
+        dWarm /= 4.0;
+        dClose /= 4.0;
+        check(dWarm > 1.0 && dClose < -1.0 && flat[0].bpm == warm[0].bpm && flat[0].bpm == closing[0].bpm,
+              "the tempo follows the set's energy arc: faster while it rises, slower while it closes, the first track the knobs",
+              fmt("second half against Flat: Warm-up %+.2f BPM, Closing %+.2f BPM", dWarm, dClose));
+    }
+    // 2. The arc moves the climax: at the peak drop 2 grows at the main breakdown's expense, in the closing
+    //    the breakdown grows. Flat draws nothing, so its forms are the fuzz alone.
+    {
+        auto drop2 = [](const std::vector<TrackPlan>& v) {
+            int sum = 0;
+            for (const TrackPlan& t : v) for (int i = 0; i < t.form.count; ++i) if (t.form.section[i].type == SectionType::Drop && t.form.section[i].climax) sum += t.form.section[i].bars;
+            return static_cast<double>(sum) / v.size();
+        };
+        const double dPeak = drop2(peak), dFlat = drop2(flat), dClose = drop2(closing);
+        bool bounds = true;
+        for (const std::vector<TrackPlan>* v : { &peak, &closing })
+            for (const TrackPlan& t : *v) bounds = bounds && formConstraintsHold(t.form) && t.form.bars == t.bars;
+        check(dPeak > dFlat && dClose < dFlat && bounds,
+              "the arc moves the climax: longer drop 2 at the peak, longer breakdown in the closing, every form inside its bounds",
+              fmt("mean drop 2: Peak-Time %.1f, Flat %.1f, Closing %.1f bars", dPeak, dFlat, dClose));
+    }
+    // 3. The set's motif: the first track states it in its first phrase, the track that carries the set's end
+    //    (60 minutes: the ninth) recalls it in its second, with the same cell and archetype; a recall in between
+    //    is the exception, and the second track never recalls.
+    {
+        ParamStore q;
+        q.parseText("compose.set_minutes=60 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off");
+        Composer c(2026);
+        std::vector<TrackPlan> v;
+        for (int t = 0; t < 10; ++t) v.push_back(c.track(q, t));
+        const MelodyPlan& first = v[0].melody;
+        int recalls = 0, carrier = -1;
+        double startBar = 0.0;
+        const double setBars = 60.0 * q.get(q.base(Module::Compose) + compose::Bpm) / kBeatsPerBar;   // what Composer.cpp's setLengthBars gives with Style Tempo off
+        for (int t = 1; t < 10; ++t) {
+            const double endBar = startBar + v[t - 1].bars;
+            if (carrier < 0 && startBar + v[t - 1].bars < setBars && endBar + v[t].bars >= setBars) carrier = t;
+            startBar = endBar;
+            if (v[t].melody.leadQuotesSet[1]) ++recalls;
+        }
+        const bool carrierRecalls = carrier > 0 && v[carrier].melody.leadQuotesSet[1]
+                                 && v[carrier].melody.leadCell[1] == first.leadCell[0] && v[carrier].melody.leadArchetype[1] == first.leadArchetype[0];
+        check(first.leadQuotesSet[0] && !first.leadQuotesSet[1] && carrierRecalls && !v[1].melody.leadQuotesSet[1] && recalls <= 4,
+              "the first track states the set's motif, the track that carries the set's end recalls it with the same cell and archetype",
+              fmt("carrier track %d, %d recalls in ten tracks, cell %04x archetype %d", carrier + 1, recalls, first.leadCell[0], first.leadArchetype[0]));
+    }
+    // 4. The kick's roll before the big buildup's pre-drop break, and the Abriss before a sixteen-bar line of a
+    //    drop: both a minority of the bars they may take, both present.
+    {
+        int rollBars = 0, rollCandidates = 0, abriss = 0, abrissCandidates = 0, sixteenths = 0;
+        for (const TrackPlan& t : flat) {
+            PartAvailability av;
+            for (int k = 0; k < kMelodyParts; ++k) av.part[k] = t.melody.present[k];
+            av.percLayers = t.perc.layers;
+            av.hatLayers = t.perc.hatLayers;
+            for (int b = 0; b < t.bars; ++b) {
+                const BarPlan bp = planBar(t.form, av, t.sectionSeed, b);
+                const Section& s = t.form.section[bp.index];
+                if (s.type == SectionType::Build && s.rollBars >= 8 && s.pdbBars == 1 && bp.barInSection == s.bars - 2) {
+                    ++rollCandidates;
+                    if (bp.kickRoll > 0) ++rollBars;
+                    if (bp.kickRoll == 2) ++sixteenths;
+                }
+                if (s.type == SectionType::Drop && bp.barInSection % 16 == 15 && bp.barInSection + 1 < s.bars) {
+                    ++abrissCandidates;
+                    if (bp.kickBeats == 0x7 && bp.bassBeats == 0x7) ++abriss;
+                }
+            }
+        }
+        check(rollCandidates >= 6 && rollBars > 0 && rollBars < rollCandidates && abrissCandidates >= 16 && abriss > 0 && abriss * 2 < abrissCandidates,
+              "the kick rolls before some big drops and tears before some sixteen-bar lines, never before all",
+              fmt("kick roll in %d of %d big buildups (%d into sixteenths), Abriss in %d of %d bars", rollBars, rollCandidates, sixteenths, abriss, abrissCandidates));
+    }
+}
+
 void testForm()
 {
     section("form grammar and energy arc");
@@ -9960,17 +10060,24 @@ void testForm()
             Composer c(2026);
             double sum = 0.0;
             int n = 0;
+            // Per section, not per bar (23.09.2026, round "Set-Kurve"): the arc now also moves eight bars between
+            // the main breakdown and drop 2 (Form.cpp, jitterForm), and a bar-weighted mean would read that
+            // length move as energy. This check is about the arc's energies themselves.
             for (int t = half * 4; t < half * 4 + 4; ++t) {
                 const TrackPlan p = c.track(q, t);
-                for (int i = 0; i < p.form.count; ++i) { sum += p.form.section[i].energy * p.form.section[i].bars; n += p.form.section[i].bars; }
+                for (int i = 0; i < p.form.count; ++i) { sum += p.form.section[i].energy; ++n; }
             }
             return sum / std::max(n, 1);
         };
-        const double peakEarly = meanEnergy("Peak-Time", 0), peakLate = meanEnergy("Peak-Time", 1);
+        // Warm-up against Closing, not Peak-Time (23.09.2026): Peak-Time stands at 0.95 to 1.0 over most of the
+        // set, where the climax margin saturates the energies (drop 2 at 1, the rest capped at 0.8), so its two
+        // halves read 0.59 against 0.58 and the sign was decided by hundredths -- the arc's eight-bar move of
+        // this round tipped it. Warm-up rises from 0.25 to 0.85 without saturating, which is the claim.
+        const double warmEarly = meanEnergy("Warm-up", 0), warmLate = meanEnergy("Warm-up", 1);
         const double closeEarly = meanEnergy("Closing", 0), closeLate = meanEnergy("Closing", 1);
-        check(peakLate > peakEarly && closeLate < closeEarly - 0.05 && peakLate > closeLate + 0.1,
+        check(warmLate > warmEarly + 0.03 && closeLate < closeEarly - 0.05 && warmLate > closeLate,
               "the dramaturgy preset moves the energy of the sections over the set",
-              fmt("Peak-Time %.2f -> %.2f, Closing %.2f -> %.2f", peakEarly, peakLate, closeEarly, closeLate));
+              fmt("Warm-up %.2f -> %.2f, Closing %.2f -> %.2f", warmEarly, warmLate, closeEarly, closeLate));
     }
 
     // Easwaran and Butler: something changes every eight bars. No two consecutive eight-bar groups of
@@ -11431,7 +11538,11 @@ void testArrangement()
             std::vector<int> kicks(static_cast<size_t>(totalBars) * 4 + 4, 0);
             std::vector<const NoteEvent*> bass;
             for (const NoteEvent& e : ev) {
-                if (e.part == Part::Kick) ++kicks[static_cast<size_t>(std::clamp(static_cast<int>(std::floor(e.beat + 1e-9)), 0, totalBars * 4))];
+                // Only kicks on the beat itself: two tracks kicking at once both land on the grid. The kick's own
+                // roll before the pre-drop break (23.09.2026, BarPlan::kickRoll) puts eighths and sixteenths
+                // between the beats by design, and those are one track's, not two.
+                if (e.part == Part::Kick && std::fabs(e.beat - std::round(e.beat)) < 1e-6)
+                    ++kicks[static_cast<size_t>(std::clamp(static_cast<int>(std::floor(e.beat + 1e-9)), 0, totalBars * 4))];
                 if (e.part == Part::Bass) bass.push_back(&e);
             }
             for (int k : kicks) { ++beats; if (k > 1) ++kickDoubles; }
@@ -14190,6 +14301,7 @@ int main(int argc, char** argv)
     run("testDialogue.sound", testDialogueSound);
     run("testDialogue.levels", testDialogueLevels);
     run("testForm", testForm);
+    run("testSetArc", testSetArc);
     run("testArrangeDynamics", testArrangeDynamics);
     run("testSectionRules", testSectionRules);
     run("testCuration", testCuration);

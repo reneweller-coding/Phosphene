@@ -399,7 +399,8 @@ int main(int argc, char** argv)
             for (int w = 0; w < 2 && m.present[mpIndex(MelodyPart::Lead)]; ++w) {
                 std::printf("          lead %d: %s, cell ", w + 1, kLeadArchetypeNames[std::clamp(m.leadArchetype[w], 0, kNumLeadArchetypes - 1)]);
                 for (int s = 0; s < 16; ++s) std::printf("%c", ((m.leadCell[w] >> s) & 1u) ? 'x' : '.');
-                std::printf(" (%s, band %d), bars", m.leadCellFromCorpus[w] ? "corpus" : "family", m.leadDensityBand);
+                std::printf(" (%s, band %d), bars", m.leadQuotesSet[w] ? (t == 0 ? "the set's motif" : "recalls the set's motif") : (m.leadCellFromCorpus[w] ? "corpus" : "family"),
+                            m.leadDensityBand);
                 for (int b = 0; b < 8; ++b) std::printf(" %s%+d", kCellOpNames[std::clamp<int>(m.leadOps[w][b], 0, kNumCellOps - 1)], static_cast<int>(m.leadShift[w][b]));
                 std::printf("\n");
             }

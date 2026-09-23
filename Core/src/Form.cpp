@@ -23,6 +23,8 @@ const int kGroupFigures[4] = { 0, 1, 3, -1 };
 namespace {
 
 constexpr uint64_t kSaltForm    = 0x464F524D00000001ull;
+constexpr uint64_t kSaltKickRoll = 0x4B49434B524F4C0Eull;   ///< the kick's roll before the pre-drop break (23.09.2026, round "Set-Kurve")
+constexpr uint64_t kSaltAbriss  = 0x41425249535300F0ull;   ///< the kick's Abriss before a sixteen-bar line of a drop (23.09.2026)
 constexpr uint64_t kSaltSection = 0x5345435449000002ull;
 constexpr uint64_t kSaltGroup   = 0x47524F5550000003ull;
 constexpr uint64_t kSaltSfx     = 0x5346580000000004ull;
@@ -273,8 +275,14 @@ void fitTemplate(const Template& t, int target, int* bars)
  * 32 to 64; Psytrance Blueprint, "7 rules of structure"; Psychedelic Island, "Track structure"). Everything
  * downstream reads the sections it gets: the roll and the pre-drop break of a buildup are cut from its
  * length, the energies from the arc at the bars the sections really have.
+ *
+ * **The arc's move (23.09.2026, round "Set-Kurve").** @p arc is the set's energy where the track lies
+ * (the mean of arcIn and arcOut). At the night's peak (0.75 and above) half the tracks give eight bars of
+ * the main breakdown to drop 2 -- the climax grows where the floor wants it; in the warm-up or the closing
+ * (0.35 and below) half the tracks do the reverse, a longer breakdown and a shorter climax. Drawn after the
+ * fuzz moves from the same stream, so those stay what they were; the Flat arc (0.70) draws nothing.
  */
-void jitterForm(int* bars, uint64_t seed)
+void jitterForm(int* bars, uint64_t seed, double arc)
 {
     static const int kMin[kSlots] = { kDjOverlap, 16, 8, 24, 16, 8, 24, kDjOverlap };
     static const int kMax[kSlots] = { 48, 96, 32, 64, 64, 32, 64, 48 };
@@ -287,6 +295,13 @@ void jitterForm(int* bars, uint64_t seed)
         const int pair = j.below(7), dir = j.below(2);
         const int from = kPairs[pair][dir], to = kPairs[pair][1 - dir];
         if (bars[from] - 8 >= kMin[from] && bars[to] + 8 <= kMax[to]) { bars[from] -= 8; bars[to] += 8; }
+    }
+    if (arc >= 0.75 || arc <= 0.35) {
+        const bool peak = arc >= 0.75;
+        if (j.uniform() < 0.5f) {
+            const int from = peak ? kSlotBreak : kSlotDrop2, to = peak ? kSlotDrop2 : kSlotBreak;
+            if (bars[from] - 8 >= kMin[from] && bars[to] + 8 <= kMax[to]) { bars[from] -= 8; bars[to] += 8; }
+        }
     }
 }
 
@@ -390,7 +405,7 @@ FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double a
     const Template& tp = kTemplates[f.body];
     int lens[kSlots];
     fitTemplate(tp, target, lens);
-    jitterForm(lens, seed);   // the form's fuzziness (23.09.2026)
+    jitterForm(lens, seed, 0.5 * (arcIn + arcOut));   // the form's fuzziness, and the arc's move (23.09.2026)
     f.count = kSlots;
     for (int k = 0; k < kSlots; ++k) {
         f.section[k].type = kSlotType[k];
@@ -638,6 +653,22 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
         if (useArp && b >= s.bars / 2) parts |= bArp;
         bp.hatsDense = b >= s.bars / 2;
         if (s.rollBars > 0 && b >= rollStart) { bp.rollBar = b - rollStart; bp.rollBars = s.rollBars; }
+        // The kick's own roll (23.09.2026, round "Set-Kurve"; BarPlan::kickRoll). The literature's riser has
+        // three layers -- the tonal sweep, the noise and a *rhythmic* one -- and the snare carried the third
+        // alone. In the bar before the pre-drop break of a buildup with a long roll (the big buildup: its roll
+        // is eight bars or more and its break one bar) the kick doubles to eighths, and in Full-On and Hi-Tech
+        // half of those times to sixteenths over the second half of the bar, the last acceleration before the
+        // vacuum. Per form template, because that is what the section knows of its style: Full-On/Hi-Tech
+        // 0.55, Progressive 0.20, Goa 0.35, Dark Forest 0.30 of the tracks. Its own stream, after every older
+        // draw of the section.
+        if (s.rollBars >= 8 && s.pdbBars == 1 && b == s.bars - 2) {
+            static const float kKickRollChance[kNumBodies] = { 0.55f, 0.20f, 0.35f, 0.30f };
+            Rng kr;
+            kr.seed(mixSeed(ss ^ kSaltKickRoll, static_cast<uint64_t>(b)));
+            const bool roll = kr.uniform() < kKickRollChance[std::clamp(f.body, 0, kNumBodies - 1)];
+            const bool fast = kr.uniform() < 0.5f;
+            if (roll) bp.kickRoll = static_cast<int8_t>(f.body == 0 && fast ? 2 : 1);
+        }
         if (s.pdbBars >= 4 && b >= pdbStart - 4 && b < pdbStart) bp.bassBeats = 0x5;
         if (s.pdbBars > 1 && b >= pdbStart && b < s.bars - 1) {
             // The pre-drop break before its last bar: kick and bass out, the roll and the hats go on.
@@ -677,6 +708,17 @@ static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const u
         if (useLead) parts |= bLead;
         if (useArp) parts |= bArp;
         if (s.climax) { bp.openHats = true; bp.ride = true; layers = maxLayers; }
+        // The Abriss before a sixteen-bar line (23.09.2026, round "Set-Kurve"): in the bar before a crash bar
+        // -- never the drop's last, whose end the next section's cut owns -- kick and bass leave beat 4, so
+        // that the crash on the one lands into a hole, the DJ's tear before the phrase. The fill of that bar
+        // (Rhythm.cpp, chooseFill: the snare roll at bar 16) plays over the hole. Per form template: Full-On/
+        // Hi-Tech 0.45, Progressive 0.15, Goa 0.30, Dark Forest 0.25 of these bars; its own stream.
+        if (b % 16 == 15 && b + 1 < s.bars) {
+            static const float kAbrissChance[kNumBodies] = { 0.45f, 0.15f, 0.30f, 0.25f };
+            Rng ab;
+            ab.seed(mixSeed(ss ^ kSaltAbriss, static_cast<uint64_t>(b)));
+            if (ab.uniform() < kAbrissChance[std::clamp(f.body, 0, kNumBodies - 1)]) { bp.kickBeats = 0x7; bp.bassBeats = 0x7; }
+        }
         break;
     }
     case SectionType::Break: {
