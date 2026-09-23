@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The Phosphene logo (23.09.2026): three concepts as SVG, rendered to PNG, and a sheet to compare them.
 
-    python Tools/logo/make_logo.py            # writes docs/logo/
+    python Tools/logo/make_logo.py                    # writes docs/logo/
+    python Tools/logo/make_logo.py --install rings    # and puts the chosen one into the builds (install())
 
 A phosphene is the light one sees with the eyes closed -- rings, dots, a glow that pulses. The three concepts
 take that literally, each with the plugin's own colours (Plugin/PhospheneLookAndFeel.h: accent #5ad1ff, warm
@@ -144,6 +145,19 @@ def mark_pulse(ink: str = TEXT) -> str:
     return "\n  ".join(parts)
 
 
+def mark_rings_small(ink: str = TEXT) -> str:
+    """The rings for 16 to 48 pixels: the full mark's 80 points become a speckle there, so the small one keeps the
+    core, eight large points and twelve smaller ones -- the same idea, drawn for the size it is seen at."""
+    parts = [f'<circle cx="256" cy="256" r="92" fill="url(#core)" filter="url(#soft)"/>',
+             f'<circle cx="256" cy="256" r="46" fill="url(#core)"/>']
+    for k, (radius, count, size, t) in enumerate([(138, 8, 32.0, 0.45), (218, 12, 24.0, 1.0)]):
+        offset = (math.pi / count) * (k % 2)
+        for i in range(count):
+            a = 2 * math.pi * i / count + offset - math.pi / 2
+            parts.append(dot(256 + radius * math.cos(a), 256 + radius * math.sin(a), size, ramp(t)))
+    return "\n  ".join(parts)
+
+
 MARKS = {"rings": mark_rings, "lid": mark_lid, "pulse": mark_pulse}
 
 # ---------------------------------------------------------------------------------------------- the wordmark
@@ -178,10 +192,11 @@ def svg(w: int, h: int, body: str, background: str | None = None, view: str | No
             f"<defs>{defs_common()}\n</defs>\n{bg}\n  {body}\n</svg>\n")
 
 
-def app_icon(name: str) -> str:
+def app_icon(name: str, small: bool = False) -> str:
     """The mark on the plugin's dark rounded square, for launchers and the Windows icon."""
+    mark = mark_rings_small() if small else MARKS[name]()
     body = (f'<rect x="0" y="0" width="512" height="512" rx="112" fill="{BG}"/>'
-            f'<g transform="translate(40 40) scale(0.84375)">{MARKS[name]()}</g>')
+            f'<g transform="translate(40 40) scale(0.84375)">{mark}</g>')
     return svg(512, 512, body)
 
 
@@ -224,6 +239,10 @@ def main() -> int:
         files["logo-dark.svg"] = (lk_dark, w, h)
         files["logo-light.svg"] = (lk_light, w, h)
         files["logo.svg"] = (lk_clear, w, h)
+        lk_ink, _, _ = lockup(name, BG, None)
+        files["logo-ink.svg"] = (lk_ink, w, h)   # transparent, dark text: for light pages (the README in light mode)
+        if name == "rings":
+            files["icon-small.svg"] = (app_icon(name, small=True), 512, 512)
         for fn, (text, fw, fh) in files.items():
             p = d / fn
             p.write_text(text, encoding="utf-8")
@@ -251,5 +270,33 @@ def main() -> int:
     return 0
 
 
+def install(name: str) -> None:
+    """Puts concept @p name where the builds read their icons (23.09.2026: the user chose "rings").
+
+    - Quest/res/mipmap-*/ic_launcher.png -- the headset's launcher, five densities, from the full icon (it is seen
+      large in VR);
+    - Deploy/phosphene.ico -- installer and shortcut; 16 to 48 pixels from the small icon, 64 to 256 from the full;
+    - Plugin/Resources/icon.png and icon-small.png -- the standalone's window and taskbar icon (JUCE ICON_BIG and
+      ICON_SMALL, Plugin/CMakeLists.txt).
+    """
+    from PIL import Image
+    d = OUT / name
+    full = Image.open(d / "icon.png").convert("RGBA")
+    small_src = d / "icon-small.png"
+    small = Image.open(small_src).convert("RGBA") if small_src.exists() else full
+    for density, size in (("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)):
+        full.resize((size, size), Image.LANCZOS).save(ROOT / "Quest" / "res" / f"mipmap-{density}" / "ic_launcher.png")
+    sizes = [16, 24, 32, 48, 64, 128, 256]
+    images = [(small if s <= 48 else full).resize((s, s), Image.LANCZOS) for s in sizes]
+    images[-1].save(ROOT / "Deploy" / "phosphene.ico", format="ICO", sizes=[(s, s) for s in sizes], append_images=images[:-1])
+    res = ROOT / "Plugin" / "Resources"
+    res.mkdir(exist_ok=True)
+    full.save(res / "icon.png")
+    small.resize((64, 64), Image.LANCZOS).save(res / "icon-small.png")
+    print(f"installed {name}: Quest launcher (5 densities), Deploy/phosphene.ico ({len(sizes)} sizes), Plugin/Resources")
+
+
 if __name__ == "__main__":
+    if len(sys.argv) >= 3 and sys.argv[1] == "--install":
+        sys.exit(main() or install(sys.argv[2]) or 0)
     sys.exit(main())

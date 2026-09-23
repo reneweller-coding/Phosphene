@@ -7513,6 +7513,27 @@ Grenze anders runden — der Dump nennt dann die Zeile.
 
 *Voller ctest nach allen acht Werkzeugrunden* (Vollbuild aller Ziele, `-j 6`): **124 von 124**, 1287 s (neu: fünf `plansnapshot.*`, `testRatings`, `testKnobFuzz`, `testStems`, `testAudibility`).
 
+**23.09.2026, Logo: die Ringe**
+
+Drei Entwürfe (`Tools/logo/make_logo.py`, `docs/logo/`): *Ringe* (vier Punktringe mit 8, 16, 24, 32 Punkten —
+Viertel, Achtel, Triolen, Sechzehntel —, warm im Kern, Cyan außen; das bisherige Launcher-Icon sauber gezeichnet),
+*Lid* (geschlossenes Auge, darüber aufsteigendes Licht), *Pulse* (Ring, dessen Radius der Takt ist). Farben aus
+`PhospheneLookAndFeel.h`. Der Schriftzug ist aus eigenen Strichen gezeichnet (P, H, O, S, E, N), nicht aus einer
+Systemschrift nachgezogen — keine Lizenzfrage, falls das Repo öffentlich wird. SVG ist die Quelle, PNG rendert
+Edge headless mit transparentem Grund.
+
+Der Nutzer wählte **Ringe**. Weil deren 80 Punkte bei 16–48 Pixeln zu Gesprenkel werden, gibt es eine kleine
+Fassung (Kern, 8 große und 12 kleinere Punkte), nebeneinander bei 48/32/24/16 geprüft. `make_logo.py --install
+rings` schreibt: die fünf Quest-Launcher-Mipmaps (aus dem vollen Icon, im Headset groß gesehen),
+`Deploy/phosphene.ico` (16–48 aus der kleinen, 64–256 aus der vollen Fassung), `Plugin/Resources/icon.png` und
+`icon-small.png` (JUCE `ICON_BIG`/`ICON_SMALL` in `Plugin/CMakeLists.txt`). Das Standalone-Programm trägt das
+Icon (aus der gebauten exe extrahiert und angesehen). `Deploy/make_icon.py` leitet das .ico nicht mehr aus dem
+Launcher-Bild ab — das hätte die kleine Fassung verworfen —, sondern ruft das Logo-Skript. Die README zeigt das
+Logo oben, mit einer Fassung für den hellen und einer für den dunklen GitHub-Modus (`<picture>`).
+
+*Dateien.* `Tools/logo/make_logo.py`, `docs/logo/**`, `Quest/res/mipmap-*/ic_launcher.png`, `Deploy/phosphene.ico`,
+`Deploy/make_icon.py`, `Plugin/Resources/*`, `Plugin/CMakeLists.txt`, `README.md`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

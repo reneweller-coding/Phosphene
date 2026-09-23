@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo/rings/logo.png">
+    <img alt="Phosphene" src="docs/logo/rings/logo-ink.png" width="600">
+  </picture>
+</p>
+
 # Phosphene
 
 A generator for complete psytrance sets: it composes and synthesizes kick, bass, percussion, acid,

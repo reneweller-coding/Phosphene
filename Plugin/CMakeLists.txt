@@ -17,6 +17,10 @@ juce_add_plugin(Phosphene
     FORMATS                     VST3 Standalone
     VST3_CATEGORIES             Instrument Synth
     VERSION                     ${PROJECT_VERSION}
+    # The logo's rings (23.09.2026, Tools/logo/make_logo.py --install rings): the standalone's window, taskbar and
+    # file icon. The small one is the mark drawn for 16 to 48 pixels, where the full one's 80 points are a speckle.
+    ICON_BIG                    "${CMAKE_CURRENT_SOURCE_DIR}/Resources/icon.png"
+    ICON_SMALL                  "${CMAKE_CURRENT_SOURCE_DIR}/Resources/icon-small.png"
     PRODUCT_NAME                "Phosphene")
 
 target_sources(Phosphene PRIVATE
