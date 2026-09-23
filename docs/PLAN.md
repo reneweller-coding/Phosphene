@@ -7511,6 +7511,8 @@ Grenze anders runden — der Dump nennt dann die Zeile.
 
 *Dateien.* `.github/workflows/phosphene-ci.yml`; dieser Block.
 
+*Voller ctest nach allen acht Werkzeugrunden* (Vollbuild aller Ziele, `-j 6`): **124 von 124**, 1287 s (neu: fünf `plansnapshot.*`, `testRatings`, `testKnobFuzz`, `testStems`, `testAudibility`).
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes
