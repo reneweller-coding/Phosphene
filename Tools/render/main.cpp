@@ -42,6 +42,11 @@
  *     --audibility F.tsv  how much of each part is heard in the mix (23.09.2026, phos/Audibility.h): per track and
  *                         section, every sounding part's loudness alone, its partial loudness against all other
  *                         parts, and the ratio of the two; printed as one line per section, written as a table
+ *     --dj-export DIR     the set for DJ software (23.09.2026): every track the render covers as a WAV of its own,
+ *                         rendered alone (no blend into its neighbours: Composer::setSoloTrack) at its own constant
+ *                         tempo with the first downbeat on sample 0, a cue marker per section and tags inside, plus
+ *                         rekordbox.xml (beat grid, key, the eight sections as hot cues and memory cues), set.m3u8
+ *                         and cues.tsv; the set itself is not rendered
  *     --bench             render without writing and report the realtime factor
  *     --list              print every parameter with range and default
  *     --version           print the version, the vector path and the wavetable pack, then exit
@@ -69,6 +74,7 @@
 #  include <unistd.h>
 #endif
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -195,6 +201,193 @@ std::string fileToken(const char* name)
     return s;
 }
 
+/** @brief A path as a rekordbox Location: file://localhost/ and the path with forward slashes, percent-encoded. */
+std::string fileUrl(const std::filesystem::path& path)
+{
+    const std::u8string u8 = std::filesystem::absolute(path).generic_u8string();   // UTF-8 bytes, percent-encoded below
+    const std::string raw(u8.begin(), u8.end());
+    std::string out = "file://localhost/";
+    for (unsigned char c : raw) {
+        if (std::isalnum(c) || c == '/' || c == '-' || c == '_' || c == '.' || c == '~' || c == ':') out += static_cast<char>(c);
+        else { char h[4]; std::snprintf(h, sizeof(h), "%%%02X", c); out += h; }
+    }
+    return out;
+}
+
+/** @brief Text for an XML attribute. */
+std::string xmlEscape(const std::string& in)
+{
+    std::string out;
+    for (char c : in) {
+        if (c == '&') out += "&amp;";
+        else if (c == '<') out += "&lt;";
+        else if (c == '>') out += "&gt;";
+        else if (c == '"') out += "&quot;";
+        else out += c;
+    }
+    return out;
+}
+
+/**
+ * @brief The DJ export (--dj-export, 23.09.2026): every track of the set as a WAV of its own, rendered alone.
+ *
+ * A DJ wants tracks, not a mix: each file starts with its own intro and ends with its own outro, and the DJ does
+ * the blends. So each track is composed alone (Composer::setSoloTrack: no guest over its outro, no outgoing track
+ * under its intro) and rendered in an engine of its own at the track's constant tempo -- inside the set the tempo
+ * ramps between tracks, which a beat grid cannot show. The limiter's lookahead is cut from the front, so the first
+ * downbeat is sample 0 and the grid starts at 0.000 s; ten milliseconds of fade close the last bar.
+ *
+ * Every section start is a cue marker in the WAV (`cue ` + `labl`, WavWriter::addCue) and, in rekordbox.xml, both
+ * a memory cue and -- the form has eight sections -- a hot cue A to H. The key goes to rekordbox as its tonic with
+ * "m" for the modes with a minor third over it (all but Phrygian Dominant and Double Harmonic). set.m3u8 lists the
+ * files in set order, cues.tsv the markers as a table.
+ */
+int djExport(const std::string& dir, Composer& composer, const ParamStore& params, int totalBars, int sr, int block,
+             const Quality& quality, bool pcm24, uint64_t seed)
+{
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    struct Done { std::string file, name, style, tonality; double bpm = 0.0, seconds = 0.0; uint64_t bytes = 0; std::vector<std::pair<std::string, double>> cues; };
+    std::vector<Done> done;
+    FILE* tsv = std::fopen((fs::path(dir) / "cues.tsv").string().c_str(), "w");
+    if (tsv != nullptr) std::fprintf(tsv, "file\ttrack\tcue\tbar\tseconds\n");
+    for (int t = 0; composer.track(params, t).firstBar < totalBars; ++t) {
+        const TrackPlan plan = composer.track(params, t);
+        const std::string style = kStyleNames[std::clamp(plan.style, 0, kNumStyles - 1)];
+        const bool major = plan.scale == 3 || plan.scale == 4;   // Phrygian Dominant, Double Harmonic: a major third over the tonic
+        const std::string tonality = std::string(kKeyNames[plan.key]) + (major ? "" : "m");
+        char base[160];
+        std::snprintf(base, sizeof(base), "%02d - %s - %s %s - %.1f BPM", t + 1, style.c_str(), kKeyNames[plan.key], kScaleNames[plan.scale], plan.bpm);
+        Done d;
+        d.file = std::string(base) + ".wav";
+        d.name = "Phosphene " + std::to_string(seed) + " - " + std::to_string(t + 1);
+        d.style = style;
+        d.tonality = tonality;
+        d.bpm = plan.bpm;
+
+        auto eng = std::make_unique<Engine>();
+        eng->params().copyValuesFrom(params);
+        TempoMap tm;
+        tm.setConstant(plan.bpm);
+        eng->prepare(sr, block, quality);
+        eng->setTempoMap(tm);
+        composer.setSoloTrack(t);
+        const double offset = static_cast<double>(plan.firstBar) * kBeatsPerBar;
+        const int endBar = plan.firstBar + plan.bars;
+        const uint64_t latency = static_cast<uint64_t>(std::max(0, eng->latencySamples()));
+        const double seconds = static_cast<double>(plan.bars) * kBeatsPerBar * 60.0 / plan.bpm;
+        const uint64_t frames = static_cast<uint64_t>(std::llround(seconds * sr));
+        d.seconds = seconds;
+
+        WavWriter wav;
+        const std::string path = (fs::path(dir) / d.file).string();
+        // The markers: every section's first bar, named by its place in the form.
+        int drops = 0, builds = 0;
+        for (int si = 0; si < plan.form.count; ++si) {
+            const Section& sec = plan.form.section[si];
+            std::string label = kSectionNames[static_cast<int>(sec.type)];
+            if (sec.type == SectionType::Drop) label = sec.climax ? "Drop 2 (climax)" : "Drop " + std::to_string(++drops);
+            else if (sec.type == SectionType::Build) label = "Build " + std::to_string(++builds);
+            else if (sec.type == SectionType::Break) label = "Breakdown";
+            const double at = static_cast<double>(sec.startBar) * kBeatsPerBar * 60.0 / plan.bpm;
+            wav.addCue(static_cast<uint64_t>(std::llround(at * sr)), label);
+            d.cues.emplace_back(label, at);
+            if (tsv != nullptr) std::fprintf(tsv, "%s\t%d\t%s\t%d\t%.3f\n", d.file.c_str(), t + 1, label.c_str(), sec.startBar + 1, at);
+        }
+        wav.setInfo("INAM", d.name);
+        wav.setInfo("IART", "Phosphene");
+        wav.setInfo("IGNR", "Psytrance / " + style);
+        char comment[160];
+        std::snprintf(comment, sizeof(comment), "%s %s, %.1f BPM, seed %llu, track %d", kKeyNames[plan.key], kScaleNames[plan.scale], plan.bpm,
+                      static_cast<unsigned long long>(seed), t + 1);
+        wav.setInfo("ICMT", comment);
+#if defined(PHOS_VERSION)
+        wav.setInfo("ISFT", std::string("Phosphene phos_render ") + PHOS_VERSION);
+#endif
+        if (!wav.open(path.c_str(), sr, 2, pcm24 ? WavFormat::Pcm24 : WavFormat::Float32)) { std::fprintf(stderr, "cannot write %s\n", path.c_str()); return 1; }
+
+        std::vector<float> L(static_cast<size_t>(block)), R(static_cast<size_t>(block));
+        std::vector<NoteEvent> notes;
+        std::vector<ControlEvent> controls;
+        int nextBar = plan.firstBar;
+        uint64_t rendered = 0, written = 0;
+        const uint64_t fade = static_cast<uint64_t>(sr / 100);
+        while (written < frames) {
+            // Keep eight bars composed ahead of the engine, the conductor's horizon; beats moved to the file's own 0.
+            while (nextBar < endBar && static_cast<double>(nextBar) * kBeatsPerBar - offset < eng->beatPosition() + 8.0 * kBeatsPerBar) {
+                notes.clear();
+                controls.clear();
+                composer.composeBars(params, nextBar, 1, notes, &controls);
+                for (ControlEvent c : controls) { c.beat -= offset; eng->pushControl(c); }
+                for (NoteEvent n : notes) { n.beat -= offset; eng->pushEvent(n); }
+                ++nextBar;
+            }
+            const int n = block;
+            eng->process(L.data(), R.data(), n);
+            // Drop the limiter's lookahead at the front, so the first downbeat is the file's first sample.
+            int from = 0;
+            if (rendered < latency) from = static_cast<int>(std::min<uint64_t>(latency - rendered, static_cast<uint64_t>(n)));
+            rendered += static_cast<uint64_t>(n);
+            const int take = static_cast<int>(std::min<uint64_t>(static_cast<uint64_t>(n - from), frames - written));
+            for (int i = 0; i < take; ++i) {
+                const uint64_t k = written + static_cast<uint64_t>(i);
+                if (k + fade > frames) {
+                    const float g = static_cast<float>(frames - k) / static_cast<float>(fade);
+                    L[static_cast<size_t>(from + i)] *= g;
+                    R[static_cast<size_t>(from + i)] *= g;
+                }
+            }
+            if (take > 0) wav.write(L.data() + from, R.data() + from, take);
+            written += static_cast<uint64_t>(std::max(0, take));
+        }
+        wav.close();
+        composer.setSoloTrack(-1);
+        d.bytes = static_cast<uint64_t>(fs::file_size(path, ec));
+        std::printf("dj export: %s  (%.1f min, %zu cues)\n", d.file.c_str(), seconds / 60.0, d.cues.size());
+        std::fflush(stdout);
+        done.push_back(std::move(d));
+    }
+    if (tsv != nullptr) std::fclose(tsv);
+
+    // set.m3u8: the files in set order.
+    if (FILE* m3u = std::fopen((fs::path(dir) / "set.m3u8").string().c_str(), "w")) {
+        std::fprintf(m3u, "#EXTM3U\n");
+        for (const Done& d : done) std::fprintf(m3u, "#EXTINF:%d,Phosphene - %s\n%s\n", static_cast<int>(std::lround(d.seconds)), d.name.c_str(), d.file.c_str());
+        std::fclose(m3u);
+    }
+    // rekordbox.xml: File > Import > rekordbox xml. The beat grid starts at 0, the eight sections are hot cues A-H
+    // and memory cues.
+    if (FILE* x = std::fopen((fs::path(dir) / "rekordbox.xml").string().c_str(), "w")) {
+        std::fprintf(x, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<DJ_PLAYLISTS Version=\"1.0.0\">\n");
+#if defined(PHOS_VERSION)
+        std::fprintf(x, "  <PRODUCT Name=\"Phosphene\" Version=\"%s\" Company=\"Rene Weller\"/>\n", PHOS_VERSION);
+#endif
+        std::fprintf(x, "  <COLLECTION Entries=\"%zu\">\n", done.size());
+        for (size_t i = 0; i < done.size(); ++i) {
+            const Done& d = done[i];
+            std::fprintf(x, "    <TRACK TrackID=\"%zu\" Name=\"%s\" Artist=\"Phosphene\" Album=\"Set %llu\" Genre=\"%s\" Kind=\"WAV File\" Size=\"%llu\" TotalTime=\"%d\""
+                            " TrackNumber=\"%zu\" AverageBpm=\"%.2f\" SampleRate=\"%d\" Tonality=\"%s\" Location=\"%s\">\n",
+                         i + 1, xmlEscape(d.name).c_str(), static_cast<unsigned long long>(seed), xmlEscape("Psytrance / " + d.style).c_str(),
+                         static_cast<unsigned long long>(d.bytes), static_cast<int>(std::lround(d.seconds)), i + 1, d.bpm, sr, d.tonality.c_str(),
+                         xmlEscape(fileUrl(fs::path(dir) / d.file)).c_str());
+            std::fprintf(x, "      <TEMPO Inizio=\"0.000\" Bpm=\"%.2f\" Metro=\"4/4\" Battito=\"1\"/>\n", d.bpm);
+            for (size_t c = 0; c < d.cues.size(); ++c) {
+                std::fprintf(x, "      <POSITION_MARK Name=\"%s\" Type=\"0\" Start=\"%.3f\" Num=\"-1\"/>\n", xmlEscape(d.cues[c].first).c_str(), d.cues[c].second);
+                if (c < 8) std::fprintf(x, "      <POSITION_MARK Name=\"%s\" Type=\"0\" Start=\"%.3f\" Num=\"%zu\"/>\n", xmlEscape(d.cues[c].first).c_str(), d.cues[c].second, c);
+            }
+            std::fprintf(x, "    </TRACK>\n");
+        }
+        std::fprintf(x, "  </COLLECTION>\n  <PLAYLISTS>\n    <NODE Type=\"0\" Name=\"ROOT\" Count=\"1\">\n");
+        std::fprintf(x, "      <NODE Name=\"Phosphene set %llu\" Type=\"1\" KeyType=\"0\" Entries=\"%zu\">\n", static_cast<unsigned long long>(seed), done.size());
+        for (size_t i = 0; i < done.size(); ++i) std::fprintf(x, "        <TRACK Key=\"%zu\"/>\n", i + 1);
+        std::fprintf(x, "      </NODE>\n    </NODE>\n  </PLAYLISTS>\n</DJ_PLAYLISTS>\n");
+        std::fclose(x);
+    }
+    std::printf("dj export: %zu tracks, rekordbox.xml, set.m3u8 and cues.tsv in %s\n", done.size(), dir.c_str());
+    return 0;
+}
+
 bool readFile(const char* path, std::string& out)
 {
     FILE* f = std::fopen(path, "rb");
@@ -214,7 +407,7 @@ int main(int argc, char** argv)
     double seconds = -1.0;
     int sr = 48000, block = 256;
     uint64_t seed = 1;
-    std::string out, midi, solo, setFile, saveSet, barLog, excerpts, stemsDir, audibilityPath;
+    std::string out, midi, solo, setFile, saveSet, barLog, excerpts, stemsDir, audibilityPath, djDir;
     int excerptBars = 16;
     bool report = false, bench = false, pcm24 = false, listTracks = false, listSections = false, scoreOnly = false;
     Quality quality = Quality::desktop();
@@ -281,6 +474,7 @@ int main(int argc, char** argv)
         else if (a == "--excerpt-bars") excerptBars = std::max(1, std::atoi(next()));
         else if (a == "--stems") stemsDir = next();
         else if (a == "--audibility") audibilityPath = next();
+        else if (a == "--dj-export") djDir = next();
         else if (a == "--bench") bench = true;
         else if (a == "--list") { printList(params); return 0; }
         else if (a == "--version") { printVersion(); return 0; }
@@ -358,6 +552,7 @@ int main(int argc, char** argv)
 
     const double totalBeats = seconds > 0.0 ? tempo.beatAt(seconds) : static_cast<double>(bars) * kBeatsPerBar;
     const int totalBars = static_cast<int>(std::ceil(totalBeats / kBeatsPerBar));
+    if (!djDir.empty()) return djExport(djDir, composer, params, totalBars, sr, block, quality, pcm24, seed);
     if (listTracks) {
         for (int t = 0; composer.track(params, t).firstBar < totalBars; ++t) {
             const TrackPlan p = composer.track(params, t);

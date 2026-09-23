@@ -356,6 +356,21 @@ public:
                      std::vector<ControlEvent>* controls = nullptr) const;
 
     /**
+     * @brief One track alone (23.09.2026, round "DJ-Export"): composeBars then sends only what track @p index
+     *        plays, as if the set held nothing else; -1 (the default) is the set.
+     *
+     * A DJ wants each track as its own file, and a track cut out of the set carries the neighbours' blends. In
+     * solo mode a bar the track owns is composed without the incoming guest (so the outro ends on its bare kick,
+     * bass and hat, the classic DJ outro), a bar in which it is the guest is composed as the guest alone (the
+     * intro without the outgoing track under it), with the track's floor settings written at its first bar
+     * because no earlier track put them there, and every other bar is silent. Nothing else changes: the plans
+     * are the set's, so the file is the track the set plays.
+     */
+    void setSoloTrack(int index) { soloTrack_ = index; }
+    /** @brief The track composeBars is limited to, or -1. */
+    int soloTrack() const { return soloTrack_; }
+
+    /**
      * @brief Normalised parameter offsets of a recipe.
      * @param kickModule true for the kick table, false for the bass table
      * @param macros     kNumKickMacros or kNumBassMacros values
@@ -474,6 +489,7 @@ private:
     uint64_t seed_;
     bool deferMaster_ = false;      ///< setDeferMasterGain: the plugin measures Auto Gain after the start
     mutable std::vector<TrackPlan> plans_;
+    int soloTrack_ = -1;   ///< setSoloTrack: the one track composeBars sends, -1 = the set
     mutable std::vector<TrackWalk> walk_;
     mutable std::vector<float> planKnobs_;
     mutable bool bassModelReported_ = false;           ///< the missing-weight-file line is printed once

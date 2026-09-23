@@ -537,6 +537,49 @@ void testWav()
               "the 24-bit dither keeps a signal below one step (0.4 of a step at 997 Hz), is reproducible and leaves silence silent",
               fmt("gain of the sub-step sine read back: %.3f undithered, %.3f dithered; %d non-zero samples of silence", cPlain, cDither, nonZero));
     }
+    // Markers and tags (23.09.2026, DJ export): a `cue ` chunk with a label per marker and a LIST/INFO, after the
+    // audio, with every chunk size and the RIFF size consistent -- walked chunk by chunk as a reader would. Mono
+    // 24-bit with an odd frame count, so the data chunk needs its pad byte.
+    {
+        WavWriter w;
+        std::vector<float> x(1001, 0.25f);
+        w.addCue(0, "Intro");
+        w.addCue(480, "Drop 1");
+        w.setInfo("INAM", "Track 1");
+        w.setInfo("IGNR", "Psytrance");
+        const bool written = w.open(path, 48000, 1, WavFormat::Pcm24) && w.write(x.data(), nullptr, 1001) && w.close();
+        FILE* fp = std::fopen(path, "rb");
+        std::vector<uint8_t> b;
+        uint8_t buf[4096];
+        size_t n;
+        while (fp && (n = std::fread(buf, 1, sizeof(buf), fp)) > 0) b.insert(b.end(), buf, buf + n);
+        if (fp) std::fclose(fp);
+        auto u32 = [&](size_t at) { uint32_t v = 0; std::memcpy(&v, b.data() + at, 4); return v; };
+        bool sizes = b.size() >= 12 && u32(4) + 8 == b.size();
+        int cues = 0;
+        uint32_t cue2 = 0;
+        std::string labels, info;
+        for (size_t at = 12; sizes && at + 8 <= b.size();) {
+            const std::string id(reinterpret_cast<const char*>(b.data() + at), 4);
+            const uint32_t sz = u32(at + 4);
+            if (at + 8 + sz > b.size()) { sizes = false; break; }
+            if (id == "cue ") { cues = static_cast<int>(u32(at + 8)); if (cues >= 2) cue2 = u32(at + 12 + 24 + 20); }
+            if (id == "LIST") {
+                const std::string kind(reinterpret_cast<const char*>(b.data() + at + 8), 4);
+                for (size_t k = at + 12; k + 8 <= at + 8 + sz;) {
+                    const uint32_t ssz = u32(k + 4);
+                    const std::string sub(reinterpret_cast<const char*>(b.data() + k), 4);
+                    if (kind == "adtl" && sub == "labl") labels += std::string(reinterpret_cast<const char*>(b.data() + k + 12)) + ";";
+                    if (kind == "INFO") info += sub + "=" + std::string(reinterpret_cast<const char*>(b.data() + k + 8)) + ";";
+                    k += 8 + ssz + (ssz % 2);
+                }
+            }
+            at += 8 + sz + (sz % 2);
+        }
+        check(written && sizes && cues == 2 && cue2 == 480 && labels == "Intro;Drop 1;" && info == "INAM=Track 1;IGNR=Psytrance;",
+              "markers and tags: a cue chunk with its labels and a LIST/INFO after the audio, every size consistent",
+              fmt("%d cues (second at %u), labels '%s', info '%s', %zu bytes", cues, cue2, labels.c_str(), info.c_str(), b.size()));
+    }
     std::remove(path);
 }
 
@@ -10169,6 +10212,51 @@ void testKnobFuzz()
 }
 
 /**
+ * @brief One track alone (23.09.2026, round "DJ-Export"; Composer::setSoloTrack): what the DJ export renders.
+ *        Its intro has none of the outgoing track, its own bars are the set's, and nothing else sounds.
+ */
+void testSoloTrack()
+{
+    section("solo track: one track of the set, alone");
+    ParamStore q;
+    q.parseText("compose.level_match=Off master.auto_gain=Off compose.presence_match=Off");
+    Composer c(7);
+    const TrackPlan t1 = c.track(q, 1), t2 = c.track(q, 2);
+    const int from = t1.firstBar, to = t1.firstBar + t1.bars;
+    std::vector<NoteEvent> full, solo, outside;
+    c.composeBars(q, from, t1.bars, full);
+    c.setSoloTrack(1);
+    c.composeBars(q, from, t1.bars, solo);
+    c.composeBars(q, 0, from, outside);
+    c.setSoloTrack(-1);
+    std::vector<NoteEvent> again;
+    c.composeBars(q, from, t1.bars, again);
+    // The outgoing track's kicks under the intro: in the set, not alone.
+    const double handover = static_cast<double>(from + t1.form.handover) * kBeatsPerBar;
+    int kicksBeforeFull = 0, kicksBeforeSolo = 0;
+    for (const NoteEvent& e : full) if (e.part == Part::Kick && e.beat < handover) ++kicksBeforeFull;
+    for (const NoteEvent& e : solo) if (e.part == Part::Kick && e.beat < handover) ++kicksBeforeSolo;
+    // The bars the track owns with no guest (from its hand-over to the next track's start): the same notes.
+    const double ownFrom = handover, ownTo = static_cast<double>(t2.firstBar) * kBeatsPerBar;
+    auto slice = [&](const std::vector<NoteEvent>& v) {
+        std::vector<NoteEvent> out;
+        for (const NoteEvent& e : v) if (e.beat >= ownFrom && e.beat < ownTo) out.push_back(e);
+        return out;
+    };
+    const std::vector<NoteEvent> a = slice(full), b = slice(solo);
+    bool same = a.size() == b.size() && !a.empty();
+    for (size_t i = 0; same && i < a.size(); ++i)
+        same = a[i].beat == b[i].beat && a[i].pitch == b[i].pitch && a[i].part == b[i].part && a[i].velocity == b[i].velocity && a[i].lane == b[i].lane;
+    // Its outro alone: no note of the next track's intro (its pads, from the next track's first bar on).
+    int guestPads = 0;
+    for (const NoteEvent& e : solo) if (e.beat >= static_cast<double>(t2.firstBar) * kBeatsPerBar && e.part == Part::Pad) ++guestPads;
+    check(kicksBeforeFull > 0 && kicksBeforeSolo == 0 && same && outside.empty() && guestPads == 0 && again.size() == full.size() && to > from,
+          "a solo track has no outgoing kick under its intro, no incoming pad over its outro, its own bars note for note, and nothing outside it",
+          fmt("kicks before the hand-over: %d in the set, %d alone; %zu notes of its own bars compared; %zu notes outside; %d guest pads",
+              kicksBeforeFull, kicksBeforeSolo, a.size(), outside.size(), guestPads));
+}
+
+/**
  * @brief The set gallery (23.09.2026, round "Galerie"; phos/Gallery.h): the comment lines survive the round trip,
  *        a gallery file is still a set, and the verdicts are counted per seed.
  */
@@ -14741,6 +14829,7 @@ int main(int argc, char** argv)
     run("testRatings", testRatings);
     run("testMidiMap", testMidiMap);
     run("testGallery", testGallery);
+    run("testSoloTrack", testSoloTrack);
     run("testKnobFuzz", testKnobFuzz);
     run("testStems", testStems);
     run("testAudibility", testAudibility);

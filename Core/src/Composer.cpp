@@ -2443,8 +2443,27 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         { const TrackPlan& t0 = track(p, ti); if (bar - t0.firstBar >= t0.bars - kDjOverlapMax) track(p, ti + 1); }
         const TrackPlan& plan = track(p, ti);
         // The incoming track of the DJ overlap, if one sounds in this bar (Form.h, kDjOverlap).
-        const int incoming = ti + 1 < static_cast<int>(plans_.size()) && bar >= plans_[static_cast<size_t>(ti + 1)].firstBar ? ti + 1 : -1;
+        int incoming = ti + 1 < static_cast<int>(plans_.size()) && bar >= plans_[static_cast<size_t>(ti + 1)].firstBar ? ti + 1 : -1;
         const size_t barNotes = out.size();
+        // One track alone (setSoloTrack, 23.09.2026): its own bars without a guest, its intro as the guest alone,
+        // and nothing of any other track.
+        if (soloTrack_ >= 0) {
+            if (ti == soloTrack_) {
+                incoming = -1;
+            } else if (incoming == soloTrack_) {
+                const TrackPlan& solo = plans_[static_cast<size_t>(incoming)];
+                // Its floor settings at its first bar: in the set the outgoing track holds the floor until the
+                // hand-over, alone there is nobody, and the engine would play the intro on the previous state.
+                if (controls != nullptr && bar == solo.firstBar)
+                    trackStartControls(p, solo, static_cast<double>(bar) * kBeatsPerBar, *controls, ControlScope::Floor);
+                std::vector<NoteEvent> guest;
+                transitionBar(p, incoming, bar, guest, controls);
+                out.insert(out.end(), guest.begin(), guest.end());
+                continue;
+            } else {
+                continue;
+            }
+        }
         const int inTrack = bar - plan.firstBar;
         const float progress = static_cast<float>(inTrack) / static_cast<float>(plan.bars);
         const double barBeat = static_cast<double>(bar) * kBeatsPerBar;

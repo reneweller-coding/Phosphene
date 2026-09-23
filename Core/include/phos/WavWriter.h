@@ -5,10 +5,18 @@
  * Writes as it goes, so a two-hour set does not have to sit in memory. 32-bit float or 24-bit PCM.
  * A RIFF file cannot exceed 4 GiB; beyond that the writer switches the header to RF64 (EBU Tech
  * 3306) on close, which every current editor reads.
+ *
+ * **Markers and tags (23.09.2026, round "DJ-Export").** addCue() puts a named marker at a frame -- a `cue ` chunk
+ * with a `LIST/adtl` label per marker, which audio editors and most DJ software read as cue points -- and setInfo()
+ * a `LIST/INFO` tag (INAM title, IART artist, IGNR genre, ICMT comment, ISFT software). Both are written after the
+ * audio when the file is closed, so a file that never gets any stays exactly what it was.
  */
 #pragma once
 #include <cstdint>
 #include <cstdio>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace phos {
 
@@ -50,8 +58,17 @@ public:
      * Call before open().
      */
     void setDither(bool on) { dither_ = on; }
+    /** @brief A marker at @p frame named @p label, written at close() (a `cue ` point with its `labl`). */
+    void addCue(uint64_t frame, const std::string& label) { cues_.emplace_back(frame, label); }
+    /** @brief A `LIST/INFO` tag, e.g. setInfo("INAM", "title"); written at close(). */
+    void setInfo(const char* id, const std::string& text) { info_.emplace_back(std::string(id, 4), text); }
 
 private:
+    /** @brief The cue and tag chunks, as bytes, for close(). */
+    std::vector<uint8_t> trailingChunks() const;
+    std::vector<std::pair<uint64_t, std::string>> cues_;   ///< frame, label
+    std::vector<std::pair<std::string, std::string>> info_; ///< four-letter id, text
+    uint64_t trailing_ = 0;                                  ///< bytes after the data chunk (pad byte included)
     bool writeHeader(bool final);
     /** @brief The dither's uniform draw in [0, 1) (xorshift64*). */
     double uniform()

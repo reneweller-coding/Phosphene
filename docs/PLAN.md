@@ -7624,6 +7624,36 @@ Dialoge übersprungen. Host-Test 132 von 132. Screenshot mit drei Test-Sets gepr
 `Plugin/EditorPerform.cpp` (Bewertungsdatei über `ratingsFile()`), `Plugin/CMakeLists.txt`, `Tests/selftest.cpp`,
 `Tests/selftest_tests.cmake`, `Tests/hosttest.cpp`; dieser Block.
 
+**23.09.2026, DJ-Export: jeder Track als eigene Datei, mit Beatgrid, Cues und Tonart**
+
+`phos_render --dj-export DIR` gibt die Tracks, die der Render abdeckt (`--bars`/`--minutes`), einzeln aus — zum
+Auflegen in eigener DJ-Software. Ein aus dem Set geschnittener Track trüge die Blenden der Nachbarn; darum wird jeder
+**allein** komponiert (`Composer::setSoloTrack`): in den eigenen Takten ohne den einlaufenden Gast (das Outro endet
+auf dem nackten Kick-Bass-Hat, das klassische DJ-Outro), im Intro als Gast ohne den auslaufenden Track darunter
+(seine Boden-Einstellungen werden am ersten Takt geschrieben, weil kein Vortrack sie setzt), alles andere still.
+Außerhalb des Solo-Modus ändert sich nichts (Plan-Schnappschüsse unverändert).
+
+Gerendert wird jeder Track in einer eigenen Engine im **konstanten eigenen Tempo** (im Set rampen die Tempi zwischen
+den Tracks, das kann kein Beatgrid abbilden); die Limiter-Vorausschau wird vorne abgeschnitten, sodass der erste
+Downbeat auf Sample 0 liegt, 10 ms Fade am Ende. Im WAV: ein Cue-Marker je Sektion (`Intro`, `Groove`, `Build 1`,
+`Drop 1`, `Breakdown`, `Build 2`, `Drop 2 (climax)`, `Outro`; neuer `WavWriter::addCue` → `cue `- und `LIST/adtl`-
+Chunk) und Tags (`LIST/INFO`: Titel, Künstler, Genre mit Stil, Kommentar mit Tonart/Tempo/Seed, Software). Daneben
+`rekordbox.xml` (Datei > Import: Beatgrid ab 0,000 s mit dem Tempo, Tonart als Grundton plus „m" für die Modi mit
+kleiner Terz, die acht Sektionen als Hot-Cues A–H und als Memory-Cues, eine Playlist in Set-Reihenfolge), `set.m3u8`
+und `cues.tsv`. Dateiname: `NN - Stil - Tonart Modus - BPM.wav`.
+
+*Geprüft.* Seed 7, zwei Tracks (2 min 12 s für 13,7 min Audio, 24 Bit): Track 2 liegt im Tiefbass bis Takt 32 bei
+−28 dB und springt erst mit seinem eigenen Kick auf Takt 33 (seiner Übergabe) auf −14 dB — vom Vortrack ist nichts
+im Intro; breitbandige Kick-Einsätze 0,1–0,5 ms hinter dem Raster (die Halbband-Laufzeit des Masters); die XML parst,
+Tonart `F#m`, 145,00 BPM. `testSoloTrack`: vor der Übergabe 124 Kicks im Set, 0 allein; die eigenen Takte 10 689 Noten
+identisch; außerhalb des Tracks keine Note; keine Pad-Note des Folgetracks im Outro. `testWav`: Cue- und INFO-Chunks
+mit konsistenten Größen und Füllbyte (Mono, 24 Bit, ungerade Länge). *Nicht* geprüft: der Import in Rekordbox
+selbst (hier nicht installiert).
+
+*Dateien.* `Core/include/phos/Composer.h`, `Core/src/Composer.cpp` (Solo-Modus), `Core/include/phos/WavWriter.h`,
+`Core/src/WavWriter.cpp` (Cues, Tags), `Tools/render/main.cpp` (`--dj-export`), `Tests/selftest.cpp`,
+`Tests/selftest_tests.cmake`; dieser Block.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

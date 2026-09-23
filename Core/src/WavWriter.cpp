@@ -31,6 +31,7 @@ bool WavWriter::open(const char* path, int sampleRate, int channels, WavFormat f
     format_ = format;
     frames_ = 0;
     clipped_ = 0;
+    trailing_ = 0;
     rng_ = 0x9E3779B97F4A7C15ull;   // the dither starts over with every file: the same render writes the same bytes
     return writeHeader(false);
 }
@@ -39,7 +40,7 @@ bool WavWriter::writeHeader(bool final)
 {
     const int bytesPerSample = format_ == WavFormat::Float32 ? 4 : 3;
     const uint64_t dataBytes = frames_ * static_cast<uint64_t>(channels_ * bytesPerSample);
-    const uint64_t riffBytes = dataBytes + kHeaderBytes - 8;
+    const uint64_t riffBytes = dataBytes + kHeaderBytes - 8 + trailing_;   // the cue and tag chunks after the data (23.09.2026)
     const bool rf64 = final && riffBytes > 0xFFFFFFFFull;
 
     uint8_t h[kHeaderBytes] = {};
@@ -101,12 +102,77 @@ bool WavWriter::write(const float* L, const float* R, int n)
     return std::fwrite(buf.data(), 1, buf.size(), f_) == buf.size();
 }
 
+std::vector<uint8_t> WavWriter::trailingChunks() const
+{
+    std::vector<uint8_t> out;
+    auto put32 = [&](uint32_t v) { for (int i = 0; i < 4; ++i) out.push_back(uint8_t(v >> (8 * i))); };
+    auto putId = [&](const char* id) { for (int i = 0; i < 4; ++i) out.push_back(uint8_t(id[i])); };
+    // A text as a chunk body: zero-terminated, padded to an even length (RIFF's word alignment).
+    auto text = [](const std::string& s) { std::vector<uint8_t> b(s.begin(), s.end()); b.push_back(0); if (b.size() % 2) b.push_back(0); return b; };
+    if (!cues_.empty()) {
+        putId("cue ");
+        put32(static_cast<uint32_t>(4 + 24 * cues_.size()));
+        put32(static_cast<uint32_t>(cues_.size()));
+        for (size_t i = 0; i < cues_.size(); ++i) {
+            put32(static_cast<uint32_t>(i + 1));                   // dwName: the id the label refers to
+            put32(static_cast<uint32_t>(cues_[i].first));          // dwPosition
+            putId("data");                                         // fccChunk
+            put32(0);                                              // dwChunkStart
+            put32(0);                                              // dwBlockStart
+            put32(static_cast<uint32_t>(cues_[i].first));          // dwSampleOffset
+        }
+        std::vector<uint8_t> adtl;
+        for (size_t i = 0; i < cues_.size(); ++i) {
+            const std::vector<uint8_t> t = text(cues_[i].second);
+            const char* id = "labl";
+            for (int k = 0; k < 4; ++k) adtl.push_back(uint8_t(id[k]));
+            const uint32_t sz = static_cast<uint32_t>(4 + cues_[i].second.size() + 1);   // the size excludes the pad byte
+            for (int k = 0; k < 4; ++k) adtl.push_back(uint8_t(sz >> (8 * k)));
+            for (int k = 0; k < 4; ++k) adtl.push_back(uint8_t((i + 1) >> (8 * k)));
+            adtl.insert(adtl.end(), t.begin(), t.end());
+        }
+        putId("LIST");
+        put32(static_cast<uint32_t>(4 + adtl.size()));
+        putId("adtl");
+        out.insert(out.end(), adtl.begin(), adtl.end());
+    }
+    if (!info_.empty()) {
+        std::vector<uint8_t> body;
+        for (const auto& kv : info_) {
+            const std::vector<uint8_t> t = text(kv.second);
+            for (int k = 0; k < 4; ++k) body.push_back(uint8_t(kv.first[static_cast<size_t>(k)]));
+            const uint32_t sz = static_cast<uint32_t>(kv.second.size() + 1);
+            for (int k = 0; k < 4; ++k) body.push_back(uint8_t(sz >> (8 * k)));
+            body.insert(body.end(), t.begin(), t.end());
+        }
+        putId("LIST");
+        put32(static_cast<uint32_t>(4 + body.size()));
+        putId("INFO");
+        out.insert(out.end(), body.begin(), body.end());
+    }
+    return out;
+}
+
 bool WavWriter::close()
 {
     if (f_ == nullptr) return true;
+    // The markers and tags after the audio (23.09.2026). The data chunk is padded to an even length first, as
+    // RIFF wants every chunk to start on a word; the pad byte is not part of the data size, only of the RIFF size.
+    if (!cues_.empty() || !info_.empty()) {
+        const int bps = format_ == WavFormat::Float32 ? 4 : 3;
+        const uint64_t dataBytes = frames_ * static_cast<uint64_t>(channels_ * bps);
+        std::vector<uint8_t> tail;
+        if (dataBytes % 2) tail.push_back(0);
+        const std::vector<uint8_t> chunks = trailingChunks();
+        tail.insert(tail.end(), chunks.begin(), chunks.end());
+        if (std::fseek(f_, 0, SEEK_END) == 0 && std::fwrite(tail.data(), 1, tail.size(), f_) == tail.size()) trailing_ = tail.size();
+    }
     bool ok = writeHeader(true);
     ok = std::fclose(f_) == 0 && ok;
     f_ = nullptr;
+    // Markers and tags belong to the file just closed; the next open() starts without any.
+    cues_.clear();
+    info_.clear();
     return ok;
 }
 
