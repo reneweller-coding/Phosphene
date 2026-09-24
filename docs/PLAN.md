@@ -8235,6 +8235,45 @@ solchen Verstimmungen auch in den anderen Stimmen kommen kann und korrigiere die
 - Plan-Schnappschüsse neu (Stab-Partner, Detune-Rezept).
 - Voller ctest (MSVC, -j 12): 132 von 132, 1 deaktiviert. `%APPDATA%\Phosphene` unberührt.
 
+**24.09.2026, abends: der Bass in der falschen Tonart**
+
+Der Nutzer, mit einem Screenshot (Seed 368982198, Progressive, F# harmonisch Moll, Bass Register 4): „Das Pad an für
+sich geht ja jetzt, aber wenn der Bass einsetzt wird es absolut schief."
+- Ursache: `compose.bass_register` wurde zur Grundton-Note *addiert* (`bassRootNote`). Bei 4 spielte der Bass A#
+  statt F#: eine große Terz über der Tonart, in harmonisch Moll ein fremder Ton. Das Pad lag darüber mit h-Moll
+  (H–D–F#): A# einen Halbton unter H.
+  - Takte 16 bis 32: 189 Bass-Noten auf A#, jetzt auf F#.
+  - Die Tests maßen den Bass immer gegen den *verschobenen* Grundton und sahen nichts.
+- Jetzt verschiebt der Regler das Oktavfenster, nie den Ton. Bei 0 und ±12 bleibt alles wie bisher.
+- Selbsttest: für jede Tonart und jedes Register ist der Grundton der der Tonart, im Fenster, und bei Oktaven
+  derselbe wie vorher.
+
+**Dieselbe Suche in den übrigen Stimmen:**
+- *Formant Voice* (gesungener Vokal auf dem Grundton): `vocal.pitch` (3) verschob zwei von fünf Vokalen um ±1,5
+  Halbtöne, also zwischen zwei Tönen, und einen auf die große Sexte darunter. Jetzt landet der Gesang auf dem
+  nächsten Intervall, das jede Skala hat (Prime, Quarte, Quinte, Oktave). Sprache bleibt frei.
+- *SFX-Bank:* Atmosphere und Reverse Swell legen ihre tonale Schicht auch auf +3 und +10. Harmonisch Moll hat keine
+  kleine Septime, Phrygisch-Dur keine kleine Terz, und eine Atmosphere hält bis zu acht Takte. Mit
+  `Sfx::setScale` nimmt ein Intervall, das die Skala nicht hat, den Nachbarn, den sie hat (zuerst nach oben). Die
+  Standardintervalle ohne Preset (0, 7, 24) hat jede Skala.
+- *Akkorde der klassischen Schleifen:* m(b9), sus(b2) und Hijaz standen dort noch mit je 2 % Gewicht. Genau so
+  eine Ziehung traf den Track des Nutzers: v als sus(b2) (C#, D, G#) 16 Takte lang über dem F# des Basses. Jetzt 0;
+  die Pendel behalten ihre Farben. Die v des Tracks ist jetzt C#–E#–G#–H über dem Orgelpunkt.
+
+**Nachfrage des Nutzers:** „Warum gibt es überhaupt derart riesige Verschiebungen bei den einzelnen Presets?"
+- Gemessen über alle 2517 Werks-Presets mit dem neuen `phos_plandump --presets`:
+  - Osc 2 Detune 0 bis 14 Cent (Median 4 bis 8).
+  - Unison-Detune 0,07 bis 0,67 (äußere Säge höchstens ±35 Cent, die mittlere auf dem Ton).
+  - Drift 0 bis 3 Cent, LFO to Pitch 0 bis 8 Cent.
+- In Halbtönen verschob nur der Bass-Register-Fehler. Wie Verstimmungen klangen außerdem das stufenlose
+  FM-Verhältnis und das weit verstimmte Osc-2-Paar, beide am selben Tag behoben.
+- Die Presets tragen jetzt das FM-Verhältnis, das gespielt wird (auf die Hälfte gerundet), nicht den krummen
+  Reglerwert.
+
+*Tests.*
+- Voller ctest (MSVC, -j 12): 132 von 132, 1 deaktiviert.
+- Nach der Rundung der Preset-FM-Werte: `testSoundPresets` und Host-Test einzeln bestanden.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

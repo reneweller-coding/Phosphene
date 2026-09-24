@@ -3,6 +3,7 @@
  * @brief Effect voices.
  */
 #include "phos/Sfx.h"
+#include "phos/Harmony.h"
 #include "phos/Params.h"
 #include <algorithm>
 #include <cmath>
@@ -73,6 +74,19 @@ void Sfx::reset()
         voice_[i].rng.seed(0x5346580000ull + static_cast<uint64_t>(i));
     }
     counter_ = 0;
+}
+
+double Sfx::interval(const SfxPreset* P, double fallback) const
+{
+    const double iv = P != nullptr ? static_cast<double>(P->pitchInterval) : fallback;
+    if (scale_ < 0) return iv;
+    // An interval the mode does not have goes to its neighbour that it does: up first (the major seventh of harmonic
+    // minor for a minor seventh, the major third of Phrygian dominant for a minor one), then down.
+    const int semis = static_cast<int>(std::lround(iv));
+    if (inScale(scale_, semis)) return iv;
+    if (inScale(scale_, semis + 1)) return iv + 1.0;
+    if (inScale(scale_, semis - 1)) return iv - 1.0;
+    return iv;
 }
 
 void Sfx::update(const float* v, int keyRoot)
@@ -196,7 +210,7 @@ float Sfx::voiceSample(Voice& v, float& pan, float& wetFrac)
         const double res = P ? P->resonance : resonance_;
         v.bp.set(fc, static_cast<float>(0.2 + 0.7 * res * u), sr);
         const float n = bandPass(v.bp, v.rng.bipolar());
-        const double hz = rootHz * std::pow(2.0, (P ? P->pitchInterval : 0.0f) / 12.0) * std::pow(2.0, 2.0 * u);
+        const double hz = rootHz * std::pow(2.0, interval(P, 0.0) / 12.0) * std::pow(2.0, 2.0 * u);
         const double spread = P ? 0.002 + 0.012 * P->detune : 0.006;
         v.saw1.set(hz * (1.0 + spread), sr_, 0.0f, 0.5f);
         v.saw2.set(hz * (1.0 - spread), sr_, 0.0f, 0.5f);
@@ -223,10 +237,10 @@ float Sfx::voiceSample(Voice& v, float& pan, float& wetFrac)
         const double breathe = 0.5 - 0.5 * std::cos(2.0 * kPiD * v.lfoPh);
         const float fc = static_cast<float>(200.0 * std::pow(2.0, lo + (hi - lo) * breathe));
         const float q = static_cast<float>(0.15 + 0.6 * (P ? P->resonance : 0.3));
-        const double interval = P ? P->pitchInterval : 7.0;
+        const double iv = interval(P, 7.0);
         const double spread = 0.003 + 0.02 * (P ? P->detune : 0.4);
         v.saw1.set(rootHz * (1.0 + spread), sr_, 0.0f, 0.5f);
-        v.saw2.set(rootHz * std::pow(2.0, interval / 12.0) * (1.0 - spread), sr_, 0.0f, 0.5f);
+        v.saw2.set(rootHz * std::pow(2.0, iv / 12.0) * (1.0 - spread), sr_, 0.0f, 0.5f);
         v.lp.set(fc, q, sr);
         float tone = v.lp.lp(0.5f * (v.saw1.next() + v.saw2.next()));
         v.bp.set(fc * 1.5f, 0.6f, sr);
@@ -253,7 +267,7 @@ float Sfx::voiceSample(Voice& v, float& pan, float& wetFrac)
         const double top = P ? 200.0 * std::pow(2.0, P->filterLo) * 2.0 : 6500.0;
         v.lp.set(static_cast<float>(500.0 + (top - 500.0) * std::exp(-t / 0.35)), 0.1f, sr);
         const float n = v.lp.lp(v.rng.bipolar()) * static_cast<float>(std::exp(-6.9 * t / decay));
-        const double base = 160.0 * std::pow(2.0, (P ? P->pitchInterval : 0.0f) / 12.0);
+        const double base = 160.0 * std::pow(2.0, interval(P, 0.0) / 12.0);
         const double f = base + 260.0 * std::exp(-t / 0.04);
         v.sinePh += f / sr_;
         const float thump = static_cast<float>(std::sin(2.0 * kPiD * v.sinePh) * 0.9 * std::exp(-t / (0.25 * (P ? P->envShape : 1.0f))));
@@ -273,7 +287,7 @@ float Sfx::voiceSample(Voice& v, float& pan, float& wetFrac)
         break;
     }
     case SfxType::FormantShot: {
-        v.saw1.set(2.0 * rootHz * std::pow(2.0, (P ? P->pitchInterval : 0.0f) / 12.0) * std::pow(2.0, -5.0 * x / 12.0), sr_, 0.0f, 0.5f);
+        v.saw1.set(2.0 * rootHz * std::pow(2.0, interval(P, 0.0) / 12.0) * std::pow(2.0, -5.0 * x / 12.0), sr_, 0.0f, 0.5f);
         const float src = v.saw1.next();
         s = bandPass(v.formant[0], src) + 0.5f * bandPass(v.formant[1], src) + 0.25f * bandPass(v.formant[2], src);
         const double lenS = static_cast<double>(v.length) / sr_;
@@ -286,7 +300,7 @@ float Sfx::voiceSample(Voice& v, float& pan, float& wetFrac)
         v.lp.set(static_cast<float>(P ? 200.0 * std::pow(2.0, P->filterHi) : 2500.0 + 5000.0 * brightness_), 0.1f, sr);
         const float n = v.lp.lp(v.rng.bipolar());
         float chord = 0.0f;
-        const double kInterval[3] = { 0.0, P ? static_cast<double>(P->pitchInterval) : 7.0, 12.0 };
+        const double kInterval[3] = { 0.0, interval(P, 7.0), 12.0 };
         for (int i = 0; i < 3; ++i) {
             v.chordPh[i] += rootHz * std::pow(2.0, kInterval[i] / 12.0) / sr_;
             if (v.chordPh[i] >= 1.0) v.chordPh[i] -= 1.0;
@@ -313,7 +327,7 @@ float Sfx::voiceSample(Voice& v, float& pan, float& wetFrac)
         // the resonance, so the resonance is what has to sit in the 3 .. 8 kHz pocket (a sweep from
         // 1.4 kHz measured 29 % of the power there, the saw's fundamental taking the rest). A small
         // upward pitch blip in the first 30 ms makes it liquid rather than a filter sweep.
-        const double hz = rootHz * std::pow(2.0, (P ? P->pitchInterval : 24.0f) / 12.0) * (1.0 + 0.5 * std::exp(-t / 0.03));
+        const double hz = rootHz * std::pow(2.0, interval(P, 24.0) / 12.0) * (1.0 + 0.5 * std::exp(-t / 0.03));
         v.saw1.set(hz, sr_, 0.0f, 0.5f);
         const double sweep = std::sin(kPiD * x);
         const double centre = P ? 200.0 * std::pow(2.0, P->filterLo) : 3000.0;

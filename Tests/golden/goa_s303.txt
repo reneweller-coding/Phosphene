@@ -124,7 +124,7 @@ seed 303 track 2: bars 224..479, 145.5 BPM, D# Phrygian, Goa, bass Gallop/Rollin
   voice pad      osc 3 table 223 filter 3 osc2 4/3 (drawn) +0.713 -0.287 +0.154 -0.128 +0.054
   voice drone    osc 1 table 1 filter 0 osc2 2/5 (drawn) -0.426 +0.269 +0.311 -0.231 -0.338
   perc: layers 6 (hats 2), hat mode 0, clap 1, order 0 7 4 9 2 6
-  harmony: pendulum, 8 bars each: itriad viitriad itriad viitriad; second half loop: im(b9) viitriad vimaj7 viisus4; breakdown moves 8 bars each: itriad visus4 viitriad iphryg.dom
+  harmony: pendulum, 8 bars each: itriad viitriad itriad viitriad; second half loop: im7 viitriad vimaj7 viisus4; breakdown moves 8 bars each: itriad visus4 viitriad iphryg.dom
   parts: 1 1 1 1 0 1 1; acid 16 steps squelch 0; arp style 5; lead window 66, counter mode 0, density band 2
   lead 1: archetype 1 cell d6f7 corpus ops 0-1 5+0 0+0 1+1 0+1 1+0 0+0 1-1
   lead 2: archetype 0 cell ddfd corpus ops 0-1 2+0 0+0 1+0 0+0 1+1 0+1 1-1

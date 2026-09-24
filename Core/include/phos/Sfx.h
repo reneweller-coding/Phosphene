@@ -218,6 +218,15 @@ public:
     void processSplit(float* L, float* R, float* sub, float* wetL, float* wetR, int n);
     /** @brief Voices sounding. */
     int active() const;
+    /**
+     * @brief The scale the tonal layers keep to (index into kScaleSteps), -1 for none (24.09.2026).
+     *
+     * A bank preset gives its tonal layer an interval over the key's root -- a minor third or a minor seventh among
+     * them -- and a long atmosphere held the minor seventh over harmonic minor's leading tone for eight bars. With a
+     * scale, an interval the mode does not have takes its neighbour that it does (interval()). The engine sets it;
+     * a direct caller that does not keeps the intervals as the bank has them.
+     */
+    void setScale(int scale) { scale_ = scale; }
 
 private:
     static constexpr int kBubbles = 8;   ///< bubbles a Bubble event can hold
@@ -258,6 +267,9 @@ private:
     float subLevel_ = 0.5f;
     bool wander_ = false;          ///< sfx.wander
     float wanderSend_ = 0.85f;     ///< sfx.wander_send
+    int scale_ = -1;                           ///< setScale()
+    /** @brief The preset's tonal interval (or @p fallback without one), kept to the scale. */
+    double interval(const SfxPreset* P, double fallback) const;
     int fixed_[sfx::kNumPresetChoices] = {};   ///< sfx.preset_*: the bank preset a family always plays, 0 = the event's own
 };
 

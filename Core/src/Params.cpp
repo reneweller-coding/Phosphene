@@ -67,6 +67,7 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "bass_pattern",    "Bass Pattern",    "",      0.0f,   4.0f,   0.0f, Curve::Choice, kBassPatternNames },
     { "bass_gate",       "Bass Gate",       "",      0.2f,   1.0f,   0.7f, Curve::Linear },
     { "bass_variation",  "Bass Variation",  "",      0.0f,   1.0f,   0.4f, Curve::Linear },
+    // The bass's octave window in semitones (Harmony.h, bassRootNote): it moves where the root sits, never which note it is.
     { "bass_register",   "Bass Register",   "st",  -12.0f,  12.0f,   0.0f, Curve::Int },
     { "track_bars",      "Track Length",    "bars", 32.0f, 512.0f, 256.0f, Curve::Int },
     { "track_variation", "Track Variation", "",      0.0f,   1.0f,   0.5f, Curve::Linear },

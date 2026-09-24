@@ -317,6 +317,10 @@ std::vector<SoundPreset> buildVoice(int v)
             const float n = std::clamp(p.toNormalised(b + k, p.get(b + k)) + off[k], 0.0f, 1.0f);
             p.setNormalised(b + k, n);
         }
+        // The FM ratio as the voice plays it (Poly.cpp, harmonicFmRatio: to the nearest half), so the knob shows 2 and
+        // not the 1.94 the recipe's thickness left (24.09.2026; the user, reading the presets: "Sollte das nicht
+        // ueblicherweise auf 0 stehen [...] anstatt die Oszillatoren um komplette Halbtoene zu verschieben?").
+        p.set(b + poly::FmRatio, std::max(0.5f, std::round(p.get(b + poly::FmRatio) * 2.0f) * 0.5f));
         // A direction a voice's loadings leave flat (the arp's and the stab's softness) would give a twin of
         // another point; a list without twins is the honest one.
         std::string text = moduleText(p, Module::Poly, v);

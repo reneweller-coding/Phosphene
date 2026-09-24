@@ -327,5 +327,5 @@ bars  608.. 623:   342 notes f80092e1d40f480a,   132 controls 8200badd619392d4
 bars  624.. 639:  1262 notes d57ccdad5d8cca3e,   106 controls 76d2ba85cd8964d1
 bars  640.. 655:  1667 notes 0096dab10f232a22,   148 controls 801152cb53bfda77
 bars  656.. 671:  1632 notes c3db76666961a007,   123 controls b9780dd1ff10b93e
-bars  672.. 687:   652 notes 5c3b2506a2c39504,   380 controls 994cebc2b1f8d81b
+bars  672.. 687:   653 notes ddf63839963aca97,   380 controls 994cebc2b1f8d81b
 bars  688.. 703:   584 notes 35f223193623f350,   106 controls a8331d47c2a8e6b2

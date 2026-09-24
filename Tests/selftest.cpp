@@ -1191,6 +1191,20 @@ void testComposer()
 void testBassModel()
 {
     section("compose.bass_model: the learned bass as the fourth role");
+    // 24.09.2026, the user: "wenn der Bass einsetzt wird es absolut schief". compose.bass_register was added to the
+    // root, so at 4 an F# set's bass played A#; every check here measured the bass against that shifted root and saw
+    // nothing wrong. The register moves the octave window and never the pitch class (Harmony.h, bassRootNote).
+    {
+        bool keyed = true, inWindow = true, octavesAsBefore = true;
+        for (int key = 0; key < 12; ++key)
+            for (int reg = -12; reg <= 12; ++reg) {
+                const int n = bassRootNote(key, reg);
+                keyed = keyed && ((n - key) % 12 + 12) % 12 == 0;
+                inWindow = inWindow && n >= 28 + reg && n < 40 + reg;
+                if (reg % 12 == 0) octavesAsBefore = octavesAsBefore && n == 28 + ((key - 4) % 12 + 12) % 12 + reg;
+            }
+        check(keyed && inWindow && octavesAsBefore, "the bass register moves the bass's octave window, never its note: at every register the root is the key's");
+    }
     ParamStore def;
     const int cb = def.base(Module::Compose);
     check(def.getInt(cb + compose::BassModel) == 0,

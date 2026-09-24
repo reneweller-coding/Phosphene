@@ -278,7 +278,13 @@ void Vocal::trigger(SfxType type, int samples, float velocity, double late, doub
         if (type == SfxType::FormantVoice) {
             v.length = std::clamp<long long>(v.length, static_cast<long long>(0.5 * sr_), static_cast<long long>(8.0 * sr_));
             for (int& x : v.vowel) x = v.rng.below(kNumVowels);
-            v.pitchHz = midiToHz(48 + pc) * ratio;
+            // A sung vowel has a pitch, so its shift lands on an interval every mode has -- the unison, the fourth,
+            // the fifth or the octave -- the one nearest the spoken shift (24.09.2026). vocal.pitch at its 3 put two
+            // of five vowels 1.5 semitones off the root, between two notes, and one on the major sixth under it.
+            static const int kSafe[7] = { -12, -7, -5, 0, 5, 7, 12 };
+            int sung = 0;
+            for (int k : kSafe) if (std::fabs(static_cast<float>(k) - semis) < std::fabs(static_cast<float>(sung) - semis)) sung = k;
+            v.pitchHz = midiToHz(48 + pc + sung);
             v.glide = v.rng.below(2) == 0 ? 7.0 : -5.0;
         } else {
             v.length = std::clamp<long long>(v.length, static_cast<long long>(0.2 * sr_), static_cast<long long>(3.0 * sr_));

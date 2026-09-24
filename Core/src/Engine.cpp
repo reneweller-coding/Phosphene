@@ -460,6 +460,7 @@ void Engine::applyParams()
     stripHall_[StripSfx] = e(sb + sfx::HallSend);
     duck_[StripSfx].set(e(sb + sfx::Duck), duckA, duckH, duckR);
     sfx_.update(eff_.data() + sb, keyRoot_);
+    sfx_.setScale(scale_);
     // The psychedelic layer (Engine.h): the bed's and the voices' strips, their sends, the modulation
     // chains, the delay throw and the sub drop's own duck.
     {

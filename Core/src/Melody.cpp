@@ -630,8 +630,12 @@ const double kBarsWeight[kNumStyles][3] = {
  */
 const double kClassicalWeight[kNumChordTypes] = {
     //  triad sus2  sus4  m7    m9    maj7  m(b9) susb2 hijaz m(b5) quartal
-    0.50, 0.12, 0.08, 0.20, 0.05, 0.20, 0.02, 0.02, 0.02, 0.00, 0.03,
+    0.50, 0.12, 0.08, 0.20, 0.05, 0.20, 0.00, 0.00, 0.00, 0.00, 0.03,
 };
+// The three b2 colours at 0 in the loops since 24.09.2026 (0.02 each before). A loop is the answer to "sonst klingt
+// immer alles schraeg", and a 2 % draw still came: seed 368982198's first track (Progressive, F# harmonic minor) held
+// its v as sus(b2) -- C#, D, G# -- for sixteen bars over the bass's F#, C# against D and F# against G#. The user:
+// "wenn der Bass einsetzt wird es absolut schief". The pendulums keep their colours; they are the modal half.
 
 int drawChordType(Rng& r, int scale, int degree, int styleIdx, bool classical = false)
 {

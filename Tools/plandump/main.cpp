@@ -29,6 +29,7 @@
 #include "phos/Form.h"
 #include "phos/Melody.h"
 #include "phos/Sfx.h"
+#include "phos/SoundPresets.h"
 #include <algorithm>
 #include <cmath>
 #if __has_include("phos/Probe.h")
@@ -153,7 +154,7 @@ int main(int argc, char** argv)
 {
     uint64_t seed = 1;
     int tracks = 2;
-    bool timeIt = false, dataId = false, decisions = false;
+    bool timeIt = false, dataId = false, decisions = false, presets = false;
     std::vector<std::string> sets;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -167,6 +168,7 @@ int main(int argc, char** argv)
         else if (a == "--time") timeIt = true;
         else if (a == "--data-id") dataId = true;
         else if (a == "--decisions") decisions = true;
+        else if (a == "--presets") presets = true;
         else { std::fprintf(stderr, "usage: phos_plandump [--seed N] [--tracks N] [--set module.param=value]... [--time] [--decisions]\n"); return 2; }
     }
 #if defined(PHOS_PLANDUMP_HAS_PROBE)
@@ -187,6 +189,23 @@ int main(int argc, char** argv)
 #else
     (void)dataId;
 #endif
+    // --presets (24.09.2026): every factory preset as "module instance | group | name | key=value ...", so what a
+    // preset sets can be read and counted -- the user asked why presets shift oscillators so far.
+    if (presets) {
+        static const char* const kVoice[] = { "lead", "counter", "arp", "stab", "pad", "drone" };
+        auto dump = [](const char* who, Module m, int instance) {
+            for (const SoundPreset& sp : factoryPresets(m, instance)) {
+                std::string text = sp.text;
+                std::replace(text.begin(), text.end(), '\n', ' ');
+                std::printf("%s | %s | %s | %s\n", who, sp.group.c_str(), sp.name.c_str(), text.c_str());
+            }
+        };
+        dump("kick", Module::Kick, 0);
+        dump("bass", Module::Bass, 0);
+        dump("acid", Module::Acid, 0);
+        for (int v = 0; v < kPolyInstances; ++v) dump(kVoice[v], Module::Poly, v);
+        return 0;
+    }
     auto engine = std::make_unique<Engine>();   // only for its ParamStore, as phos_render has it
     ParamStore& params = engine->params();
     for (const std::string& s : sets) {

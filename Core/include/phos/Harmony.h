@@ -107,12 +107,19 @@ inline int lerdahlInstability(int pcFromRoot)
 }
 
 /**
- * @brief MIDI note of the bass root: the key's pitch class in the octave E1 (28) .. D#2 (39),
- *        shifted by a register offset.
+ * @brief MIDI note of the bass root: the key's pitch class in the octave E1 (28) .. D#2 (39), that
+ *        window moved by @p registerOffset semitones.
+ *
+ * The offset moves the *window*, never the pitch class. Until 24.09.2026 it was added to the note:
+ * compose.bass_register at 4 put an F# set's bass on A# -- a major third over the key, in harmonic minor
+ * a note the mode does not have, under a pad playing its A. The user: "Das Pad an fuer sich geht ja
+ * jetzt, aber wenn der Bass einsetzt wird es absolut schief." At 0 and at +-12 the note is the one it
+ * always was; in between the bass stays on the root and only changes octave where the window says so.
  */
 inline int bassRootNote(int keyRoot, int registerOffset)
 {
-    return 28 + (((keyRoot - 4) % 12) + 12) % 12 + registerOffset;
+    const int low = 28 + registerOffset;   // the window's bottom note
+    return low + ((((keyRoot - low) % 12) + 12) % 12);
 }
 
 /**
