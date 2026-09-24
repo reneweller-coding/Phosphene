@@ -85,6 +85,10 @@ time the first bass note starts, and the phase lock (on the Bass tab) can trim t
 that the kick and the bass fundamental meet in phase. Both are applied in the engine, after every
 knob and every variation.
 
+The Kick Scope renders one hit with the values that play right now (the knobs plus the track's recipe;
+stopped, the knobs): its waveform, its pitch sweep on a log axis, its spectrum, and in figures where the
+sweep starts, the note it lands on (with its cents off it), its length to -60 dB and its peak.
+
 == Bass ==
 
 The rolling bass and the kick are one instrument with two halves. The oscillator is a PolyBLEP saw
@@ -99,6 +103,10 @@ degrees.
 Pattern and Gate are the note side: which of the five bass patterns the track prefers, and how long a
 note is as a fraction of its slot. The gate is never allowed to run shorter than half a period of the
 fundamental.
+
+The Bass Scope renders one eighth note of the bass on the key's root with the values that play right now
+(the knobs plus the track's recipe; stopped, the knobs): its waveform, the filter's cutoff over the note
+as the synth computes it, its spectrum, and the note and the filter's travel in figures.
 
 == Percussion ==
 
@@ -244,10 +252,15 @@ own. A preset sets the synth's sound and leaves its level, its ducking and -- on
 its high pass and trance gate alone, since those are where the mix and the form put the voice. Undo
 takes a preset back.
 
-The factory presets are the generator's own sound recipes, laid out on purpose: every oscillator of a
-voice's palette with a set of characters (Bright, Dark, Soft, Thick, Wide, Moving ...), every
-wavetable of its families, the kick by engine, the bass by character, the acid by voicing. Your own
-presets are listed under User and live in the Presets folder of your Phosphene user folder.
+The factory presets are the generator's own sound recipes, laid out on purpose: points spread evenly
+over each synth's five character directions (brightness, softness, thickness, space and motion for a
+voice; length, punch, body, grit and click for the kick), every oscillator of a voice's palette with
+them, every wavetable of its families twice. A preset is named after its strongest direction and the
+synth's role -- "Razor Comet" is a hard lead, "Nebula Aurora" a wide pad, "Tectonic Anvil" a kick with
+body, and a kick of the resonant engine has a struck noun ("Gong", "Bell"). The kick, the bass and the
+acid are grouped by character, the voices by oscillator and wavetable family: some 90 to 110 presets
+for kick, bass and acid, several hundred for each voice. Your own presets are listed under User and
+live in the Presets folder of your Phosphene user folder.
 
 == Shortcuts ==
 

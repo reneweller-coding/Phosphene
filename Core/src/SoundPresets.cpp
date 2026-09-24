@@ -1,12 +1,30 @@
 /**
  * @file SoundPresets.cpp
  * @brief The factory presets (SoundPresets.h).
+ *
+ * 24.09.2026, the user: "Koennten wir den Presets etwas coolere Namen geben und noch deutlich mehr Presets
+ * erzeugen?" Until then a synth had eight hand-placed characters ("Plain", "Bright", "Dark", ...) and the names
+ * said what the knobs did ("Supersaw Bright", "Sweep Punchy"). Now:
+ *
+ * - **More points.** A synth's characters are points in its five directions, spread evenly by a Halton sequence
+ *   (bases 2, 3, 5, 7, 11: a low-discrepancy set, so fifty points cover the space without the clumps and holes of
+ *   fifty random draws), after the neutral point and the ten poles (each direction alone, either way). The same
+ *   recipe code the composer uses turns each point into knob values, so every preset is still a sound the
+ *   generator could have played on that voice.
+ * - **Names from the sound.** A preset is named by its strongest direction -- an adjective for its pole ("Razor"
+ *   for a hard attack, "Nebula" for a wide one, "Obsidian" for a dark one) -- and a noun of the synth's role ("Comet"
+ *   for a lead, "Aurora" for a pad, "Anvil" for a kick). The name is a function of the point and its place in the
+ *   list, so it is the same in every build, and no two presets of a synth share one.
+ * - **Groups by character.** The kick, the bass and the acid are listed by their strongest direction ("Deep &
+ *   Heavy", "Squelchy", "Molten"), the voices by oscillator and wavetable family as before.
  */
 #include "phos/SoundPresets.h"
 #include "phos/Composer.h"
 #include "phos/WaveTableFile.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <map>
 #include <mutex>
@@ -16,46 +34,212 @@ namespace phos {
 
 namespace {
 
-/** @brief A character: a name and a point in a synth's five directions. */
-struct Character { const char* name; float d[5]; };
+/** @brief A point in a synth's five directions. */
+struct Point { float d[5]; };
+
+/** @brief The radical inverse of @p i in base @p b: the Halton sequence's i-th coordinate, in [0, 1). */
+double halton(int i, int b)
+{
+    double f = 1.0, r = 0.0;
+    for (int n = i; n > 0; n /= b) {
+        f /= b;
+        r += f * (n % b);
+    }
+    return r;
+}
+
+/**
+ * @brief @p n character points: the neutral one, the ten poles at 0.8, then the Halton sequence over [-0.85, 0.85]^5.
+ */
+std::vector<Point> characterPoints(int n)
+{
+    std::vector<Point> out;
+    out.push_back(Point{ { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f } });
+    for (int k = 0; k < 5 && static_cast<int>(out.size()) < n; ++k)
+        for (float s : { 0.8f, -0.8f }) {
+            Point p{ { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f } };
+            p.d[k] = s;
+            out.push_back(p);
+        }
+    static const int kBases[5] = { 2, 3, 5, 7, 11 };
+    for (int i = 1; static_cast<int>(out.size()) < n; ++i) {
+        Point p{};
+        for (int k = 0; k < 5; ++k) p.d[k] = static_cast<float>(1.7 * (halton(i, kBases[k]) - 0.5));
+        out.push_back(p);
+    }
+    out.resize(static_cast<size_t>(n));
+    return out;
+}
+
+/** @brief The words a synth's names are made of: per direction and pole, adjectives; per role, nouns. */
+struct Vocabulary {
+    const char* const* adj[5][2];   ///< [direction][0 = positive pole, 1 = negative], each null-terminated
+    const char* family[5][2];       ///< the group a point whose strongest direction is that pole is listed in
+    const char* const* nouns;       ///< null-terminated
+};
+
+/** @brief The strongest direction of @p p and its pole (0 positive, 1 negative); -1 for a point near neutral. */
+int strongest(const Point& p, int& pole)
+{
+    int k = -1;
+    float best = 0.22f;
+    for (int i = 0; i < 5; ++i)
+        if (std::fabs(p.d[i]) > best) { best = std::fabs(p.d[i]); k = i; }
+    pole = k >= 0 && p.d[k] < 0.0f ? 1 : 0;
+    return k;
+}
+
+int count(const char* const* words) { int n = 0; while (words[n] != nullptr) ++n; return n; }
+
+/**
+ * @brief A name for point @p p, the @p index-th of its synth: the pole's adjective and a role noun, the first
+ *        combination not in @p taken (which it joins). The index turns the words, so neighbours in a list differ.
+ */
+std::string nameFor(const Point& p, int index, const Vocabulary& v, std::set<std::string>& taken, const char* const* nouns = nullptr)
+{
+    static const char* const kNeutral[] = { "Classic", "Pure", "Prime", "True", "Core", nullptr };
+    int pole = 0;
+    const int k = strongest(p, pole);
+    const char* const* adj = k < 0 ? kNeutral : v.adj[k][pole];
+    const char* const* nn = nouns != nullptr ? nouns : v.nouns;
+    const int na = count(adj), nn_ = count(nn);
+    // Walk the combinations from a start that depends on the index (a multiplicative hash: 2654435761 is Knuth's).
+    const uint32_t h = static_cast<uint32_t>(index + 1) * 2654435761u;
+    for (int t = 0; t < na * nn_; ++t) {
+        const int a = static_cast<int>((h >> 7) + static_cast<uint32_t>(t / nn_)) % na;
+        const int b = static_cast<int>((h >> 17) + static_cast<uint32_t>(t)) % nn_;
+        std::string name = std::string(adj[a]) + " " + nn[b];
+        if (taken.insert(name).second) return name;
+    }
+    // Every combination used: a numbered one.
+    for (int i = 2;; ++i) {
+        std::string name = std::string(adj[0]) + " " + nn[0] + " " + std::to_string(i);
+        if (taken.insert(name).second) return name;
+    }
+}
+
+/** @brief The group of point @p p: its strongest pole's family, or "Classic". */
+std::string familyOf(const Point& p, const Vocabulary& v)
+{
+    int pole = 0;
+    const int k = strongest(p, pole);
+    return k < 0 ? std::string("Classic") : std::string(v.family[k][pole]);
+}
+
+// ------------------------------------------------------------------ the words
 
 // The voices' directions: brightness, softness, thickness, space, motion (Composer.h, kVoiceMacroNames).
-constexpr Character kVoiceCharacters[] = {
-    { "Plain",  { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f } },   { "Bright", { 0.8f, 0.0f, 0.0f, 0.0f, 0.0f } },
-    { "Dark",   { -0.8f, 0.0f, 0.0f, 0.0f, 0.0f } },  { "Soft",   { 0.0f, 0.8f, 0.0f, 0.0f, 0.0f } },
-    { "Hard",   { 0.3f, -0.8f, 0.0f, 0.0f, 0.0f } },  { "Thick",  { 0.0f, 0.0f, 0.8f, 0.0f, 0.0f } },
-    { "Wide",   { 0.0f, 0.0f, 0.3f, 0.8f, 0.0f } },   { "Moving", { 0.0f, 0.0f, 0.0f, 0.2f, 0.8f } },
-};
+const char* const kBrightUp[] = { "Solar", "Neon", "Crystal", "Radiant", "Prism", "Laser", "Golden", "Starlit", nullptr };
+const char* const kBrightDown[] = { "Obsidian", "Shadow", "Midnight", "Umbra", "Smoky", "Ember", "Nocturnal", nullptr };
+const char* const kSoftUp[] = { "Velvet", "Silken", "Misty", "Dreamy", "Feather", "Hazy", "Tender", nullptr };
+const char* const kSoftDown[] = { "Razor", "Steel", "Serrated", "Blade", "Venom", "Jagged", "Iron", nullptr };
+const char* const kThickUp[] = { "Titan", "Colossal", "Monolith", "Massive", "Thunder", "Mammoth", nullptr };
+const char* const kThickDown[] = { "Glass", "Needle", "Silver", "Slender", "Wire", "Filament", nullptr };
+const char* const kSpaceUp[] = { "Cosmic", "Nebula", "Astral", "Cathedral", "Endless", "Orbital", "Galactic", nullptr };
+const char* const kSpaceDown[] = { "Dry", "Close", "Direct", "Naked", "Compact", "Focused", nullptr };
+const char* const kMotionUp[] = { "Serpent", "Vortex", "Spiral", "Morphing", "Liquid", "Fractal", "Shifting", nullptr };
+const char* const kMotionDown[] = { "Still", "Frozen", "Static", "Steady", "Stone", "Fixed", nullptr };
+
+const char* const kLeadNouns[] = { "Comet", "Dragon", "Phoenix", "Siren", "Beam", "Flare", "Scream", "Oracle", "Hawk", "Lightning", nullptr };
+const char* const kCounterNouns[] = { "Echo", "Mirror", "Reply", "Ghost", "Twin", "Whisper", "Shadow Call", "Answer", nullptr };
+const char* const kArpNouns[] = { "Cascade", "Sparks", "Runner", "Circuit", "Rain", "Ripples", "Firefly", "Clockwork", "Swarm", nullptr };
+const char* const kStabNouns[] = { "Strike", "Blast", "Punch", "Shard", "Impact", "Spear", "Hit", "Bolt", nullptr };
+const char* const kPadNouns[] = { "Aurora", "Veil", "Horizon", "Choir", "Ocean", "Dawn", "Cloud", "Halo", "Mirage", "Tide", nullptr };
+const char* const kDroneNouns[] = { "Mantra", "Om", "Temple", "Abyss", "Earth", "Monk", "Cavern", "Bourdon", nullptr };
+
+constexpr int kVoiceNouns = kPolyInstances;
+const char* const* const kNounsOf[kVoiceNouns] = { kLeadNouns, kCounterNouns, kArpNouns, kStabNouns, kPadNouns, kDroneNouns };
+
+Vocabulary voiceVocabulary(int v)
+{
+    Vocabulary w{};
+    w.adj[0][0] = kBrightUp;  w.adj[0][1] = kBrightDown;
+    w.adj[1][0] = kSoftUp;    w.adj[1][1] = kSoftDown;
+    w.adj[2][0] = kThickUp;   w.adj[2][1] = kThickDown;
+    w.adj[3][0] = kSpaceUp;   w.adj[3][1] = kSpaceDown;
+    w.adj[4][0] = kMotionUp;  w.adj[4][1] = kMotionDown;
+    w.nouns = kNounsOf[std::clamp(v, 0, kVoiceNouns - 1)];
+    return w;
+}
+
 // The kick's: length, punch, body, grit, click.
-constexpr Character kKickCharacters[] = {
-    { "Plain",  { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f } },   { "Tight",  { -0.7f, 0.5f, 0.0f, 0.0f, 0.2f } },
-    { "Punchy", { 0.0f, 0.8f, 0.2f, 0.0f, 0.0f } },   { "Deep",   { 0.6f, 0.0f, 0.7f, 0.0f, -0.3f } },
-    { "Boomy",  { 0.8f, -0.2f, 0.6f, 0.0f, -0.5f } }, { "Hard",   { 0.0f, 0.5f, 0.0f, 0.8f, 0.2f } },
-    { "Clicky", { -0.2f, 0.3f, 0.0f, 0.0f, 0.9f } },  { "Soft",   { 0.2f, -0.6f, 0.3f, -0.5f, -0.6f } },
-};
+const char* const kLongUp[] = { "Rolling", "Booming", "Endless", "Swelling", "Long", nullptr };
+const char* const kLongDown[] = { "Tight", "Snappy", "Short", "Clipped", "Staccato", nullptr };
+const char* const kPunchUp[] = { "Slamming", "Knockout", "Punchy", "Brutal", "Pounding", nullptr };
+const char* const kPunchDown[] = { "Gentle", "Round", "Soft", "Cushioned", "Rounded", nullptr };
+const char* const kBodyUp[] = { "Deep", "Fat", "Heavy", "Tectonic", "Subsonic", nullptr };
+const char* const kBodyDown[] = { "Lean", "Dry", "Wiry", "Hollow", "Slim", nullptr };
+const char* const kGritUp[] = { "Crushed", "Dirty", "Distorted", "Molten", "Scorched", "Rusty", nullptr };
+const char* const kGritDown[] = { "Clean", "Polished", "Pure", "Smooth", "Chrome", nullptr };
+const char* const kClickUp[] = { "Clicky", "Laser", "Piercing", "Needle", "Sharp", nullptr };
+const char* const kClickDown[] = { "Muffled", "Warm", "Woolly", "Mellow", "Buried", nullptr };
+const char* const kKickNouns[] = { "Thump", "Hammer", "Stomp", "Quake", "Piston", "Heart", "Anvil", "Engine", "Boot", "Drum", "Titan", "Pulse", nullptr };
+/** @brief The resonant engine's nouns: a struck, tuned body -- so its presets say which engine they are. */
+const char* const kResonantNouns[] = { "Gong", "Bell", "Membrane", "Resonator", "Chamber", "Tom", "Timpani", "Ring", "Cauldron", nullptr };
+
+Vocabulary kickVocabulary()
+{
+    Vocabulary w{};
+    w.adj[0][0] = kLongUp;  w.adj[0][1] = kLongDown;
+    w.adj[1][0] = kPunchUp; w.adj[1][1] = kPunchDown;
+    w.adj[2][0] = kBodyUp;  w.adj[2][1] = kBodyDown;
+    w.adj[3][0] = kGritUp;  w.adj[3][1] = kGritDown;
+    w.adj[4][0] = kClickUp; w.adj[4][1] = kClickDown;
+    w.family[0][0] = "Long & Rolling"; w.family[0][1] = "Tight & Short";
+    w.family[1][0] = "Punchy";         w.family[1][1] = "Soft & Round";
+    w.family[2][0] = "Deep & Heavy";   w.family[2][1] = "Lean";
+    w.family[3][0] = "Dirty & Hard";   w.family[3][1] = "Clean";
+    w.family[4][0] = "Clicky";         w.family[4][1] = "Warm & Muffled";
+    w.nouns = kKickNouns;
+    return w;
+}
+
 // The bass's: brightness, pluck, squelch, grit, weight.
-struct BassCharacter { const char* group; Character c; };
-constexpr BassCharacter kBassCharacters[] = {
-    { "Clean",  { "Clean sub",   { -0.3f, 0.0f, 0.0f, -0.5f, 0.3f } } },
-    { "Clean",  { "Round",       { -0.5f, -0.3f, 0.0f, -0.3f, 0.5f } } },
-    { "Clean",  { "Heavy",       { 0.0f, 0.0f, 0.0f, 0.0f, 0.9f } } },
-    { "Short",  { "Plucky",      { 0.3f, 0.9f, 0.0f, 0.0f, 0.0f } } },
-    { "Short",  { "Tight pluck", { 0.5f, 0.8f, 0.0f, 0.2f, -0.4f } } },
-    { "Short",  { "Bright",      { 0.9f, 0.3f, 0.0f, 0.0f, 0.0f } } },
-    { "Dirty",  { "Gritty",      { 0.3f, 0.0f, 0.0f, 0.9f, 0.0f } } },
-    { "Dirty",  { "Rubbery",     { 0.2f, 0.2f, 0.9f, 0.0f, 0.0f } } },
-    { "Dirty",  { "Squelch grit",{ 0.4f, 0.0f, 0.7f, 0.6f, 0.0f } } },
+const char* const kBassBrightUp[] = { "Buzzing", "Bright", "Electric", "Neon", "Sizzling", nullptr };
+const char* const kBassBrightDown[] = { "Dark", "Round", "Deep", "Murky", "Shadow", nullptr };
+const char* const kPluckUp[] = { "Plucky", "Snappy", "Bouncing", "Staccato", "Springy", nullptr };
+const char* const kPluckDown[] = { "Legato", "Sustained", "Gliding", "Flowing", "Long", nullptr };
+const char* const kSquelchUp[] = { "Rubbery", "Squelchy", "Wobbly", "Elastic", "Gooey", nullptr };
+const char* const kSquelchDown[] = { "Straight", "Firm", "Solid", "Rigid", "Plain", nullptr };
+const char* const kBassGritUp[] = { "Growling", "Gritty", "Snarling", "Filthy", "Rough", nullptr };
+const char* const kBassGritDown[] = { "Clean", "Smooth", "Glassy", "Silky", "Pure", nullptr };
+const char* const kWeightUp[] = { "Massive", "Subby", "Heavy", "Tectonic", "Earthquake", nullptr };
+const char* const kWeightDown[] = { "Light", "Lean", "Nimble", "Airy", "Agile", nullptr };
+const char* const kBassNouns[] = { "Roller", "Rumble", "Gallop", "Motor", "Groove", "Driver", "Serpent", "Machine", "Runner", "Pulse", nullptr };
+
+Vocabulary bassVocabulary()
+{
+    Vocabulary w{};
+    w.adj[0][0] = kBassBrightUp; w.adj[0][1] = kBassBrightDown;
+    w.adj[1][0] = kPluckUp;      w.adj[1][1] = kPluckDown;
+    w.adj[2][0] = kSquelchUp;    w.adj[2][1] = kSquelchDown;
+    w.adj[3][0] = kBassGritUp;   w.adj[3][1] = kBassGritDown;
+    w.adj[4][0] = kWeightUp;     w.adj[4][1] = kWeightDown;
+    w.family[0][0] = "Bright";   w.family[0][1] = "Dark & Round";
+    w.family[1][0] = "Plucky";   w.family[1][1] = "Long";
+    w.family[2][0] = "Squelchy"; w.family[2][1] = "Straight";
+    w.family[3][0] = "Dirty";    w.family[3][1] = "Clean";
+    w.family[4][0] = "Heavy";    w.family[4][1] = "Light";
+    w.nouns = kBassNouns;
+    return w;
+}
+
+// The acid's voicings (clean, driven, liquid) as barycentric points, each with a turn of its own knobs.
+const char* const kCleanAdj[] = { "Crystal", "Glassy", "Pure", "Clear", nullptr };
+const char* const kDrivenAdj[] = { "Burning", "Scorched", "Fuzzed", "Screaming", nullptr };
+const char* const kLiquidAdj[] = { "Molten", "Liquid", "Flowing", "Dripping", nullptr };
+const char* const kBlendAdj[] = { "Twisted", "Hybrid", "Mutant", "Shifting", "Chimera", nullptr };
+struct AcidTweak { const char* const* nouns; float cutoff, resonance, env; };   // normalised steps
+const char* const kPlainNouns[] = { "Line", "Worm", "Snake", "Acid", nullptr };
+const char* const kSquelchNouns[] = { "Squelch", "Gurgle", "Slime", "Goo", nullptr };
+const char* const kDarkNouns[] = { "Swamp", "Cave", "Tar", "Bog", nullptr };
+const char* const kBrightNouns[] = { "Laser", "Spark", "Needle", "Wire", nullptr };
+const char* const kScreamNouns[] = { "Siren", "Howl", "Banshee", "Shriek", nullptr };
+const char* const kMellowNouns[] = { "Bubble", "Drop", "Ripple", "Tide", nullptr };
+const AcidTweak kAcidTweaks[] = {
+    { kPlainNouns, 0.0f, 0.0f, 0.0f },     { kSquelchNouns, 0.0f, 0.15f, 0.2f }, { kDarkNouns, -0.2f, 0.0f, -0.1f },
+    { kBrightNouns, 0.15f, 0.0f, 0.05f },  { kScreamNouns, 0.1f, 0.25f, 0.1f },  { kMellowNouns, -0.1f, -0.1f, -0.15f },
 };
-// The acid's voicings (clean, driven, liquid) as barycentric points, with the acid's own knobs on top.
-struct AcidPoint { const char* group; const char* name; float w[3]; };
-constexpr AcidPoint kAcidPoints[] = {
-    { "Clean", "Clean", { 1.0f, 0.0f, 0.0f } },         { "Driven", "Driven", { 0.0f, 1.0f, 0.0f } },
-    { "Liquid", "Liquid", { 0.0f, 0.0f, 1.0f } },       { "Blends", "Clean-driven", { 0.5f, 0.5f, 0.0f } },
-    { "Blends", "Driven-liquid", { 0.0f, 0.5f, 0.5f } }, { "Blends", "Clean-liquid", { 0.5f, 0.0f, 0.5f } },
-    { "Blends", "Middle", { 0.34f, 0.33f, 0.33f } },
-};
-struct AcidTweak { const char* name; float cutoff, resonance, env; };   // normalised steps
-constexpr AcidTweak kAcidTweaks[] = { { "", 0.0f, 0.0f, 0.0f }, { " squelchy", 0.0f, 0.15f, 0.2f }, { " dark", -0.2f, 0.0f, -0.1f } };
 
 } // namespace
 
@@ -92,6 +276,11 @@ void applyOffsets(ParamStore& p, Module m, int instance, const float* off)
     }
 }
 
+constexpr int kVoicePoints = 28;       ///< characters per oscillator of a voice
+constexpr int kVoiceLayered = 10;      ///< of them again with the palette's second oscillator
+constexpr int kKickPoints = 56;        ///< characters per kick engine
+constexpr int kBassPoints = 90;        ///< bass characters
+
 std::vector<SoundPreset> buildVoice(int v)
 {
     std::vector<SoundPreset> out;
@@ -104,8 +293,10 @@ std::vector<SoundPreset> buildVoice(int v)
     const int osc2 = argmax(pal.osc2, static_cast<int>(PolyOsc2::Count), 1);   // the palette's favourite partner (not "off")
     const int interval = argmax(pal.interval, static_cast<int>(PolyOsc2Interval::Count), 0);
     static const char* const kOscGroup[] = { "Supersaw", "VA", "FM", "Wavetable" };
-    std::set<std::string> seen;
-    auto make = [&](const std::string& group, const std::string& name, int osc, int table, const Character& c, bool withOsc2) {
+    const Vocabulary vocab = voiceVocabulary(v);
+    std::set<std::string> seen, names;
+    int index = 0;
+    auto make = [&](const std::string& group, const std::string& name, int osc, int table, const Point& c, bool withOsc2) {
         moduleToDefaults(p, Module::Poly, v);
         VoiceRecipe r;
         r.osc = osc;
@@ -121,42 +312,50 @@ std::vector<SoundPreset> buildVoice(int v)
         if (withOsc2) { p.set(b + poly::Osc2, static_cast<float>(osc2)); p.set(b + poly::Osc2Interval, static_cast<float>(interval)); }
         float off[poly::Count] = {};
         Composer::voiceRecipeOffsets(inst, r, 1.0f, off);
-        const int b2 = p.base(inst);
         for (int k = 0; k < poly::Count; ++k) {
             if (off[k] == 0.0f) continue;
-            const float n = std::clamp(p.toNormalised(b2 + k, p.get(b2 + k)) + off[k], 0.0f, 1.0f);
-            p.setNormalised(b2 + k, n);
+            const float n = std::clamp(p.toNormalised(b + k, p.get(b + k)) + off[k], 0.0f, 1.0f);
+            p.setNormalised(b + k, n);
         }
         // A direction a voice's loadings leave flat (the arp's and the stab's softness) would give a twin of
-        // "Plain"; a list without twins is the honest one.
+        // another point; a list without twins is the honest one.
         std::string text = moduleText(p, Module::Poly, v);
         if (seen.insert(text).second) out.push_back({ group, name, std::move(text) });
     };
-    // The palette's analogue and FM oscillators: every character each, with and without the second oscillator.
+    // The palette's analogue and FM oscillators: every character each, and some of them with the second oscillator.
+    const std::vector<Point> points = characterPoints(kVoicePoints);
     for (int o = 0; o < 3; ++o) {
         if (pal.osc[o] <= 0.0) continue;
-        for (const Character& c : kVoiceCharacters) make(kOscGroup[o], std::string(kOscGroup[o]) + " " + c.name, o, -1, c, false);
-        make(kOscGroup[o], std::string(kOscGroup[o]) + " layered", o, -1, kVoiceCharacters[0], true);
+        for (const Point& c : points) make(kOscGroup[o], nameFor(c, index++, vocab, names), o, -1, c, false);
+        for (int i = 0; i < kVoiceLayered; ++i) {
+            const Point& c = points[static_cast<size_t>((3 * i + o) % kVoicePoints)];
+            make(std::string(kOscGroup[o]) + " layered", nameFor(c, index++, vocab, names), o, -1, c, true);
+        }
     }
     // The wavetables: the palette's built-in ones, then every library table of its lanes, grouped by the pack's
-    // families (the folder of the table's file), each with one character in turn.
-    int turn = 0;
+    // families (the folder of the table's file); each table with two characters in turn, named "<pole> <table>".
+    const std::vector<Point> turns = characterPoints(64);
+    int turn = 1;   // the neutral point is the table as it stands, which the palette's own draw plays anyway
     const ParamDesc& td = p.desc(b + poly::Table);
     std::set<int> done;   // a table in two lanes is one preset
+    auto twoOf = [&](const std::string& group, const std::string& table, int t) {
+        for (int k = 0; k < 2; ++k) {
+            const Point& c = turns[static_cast<size_t>(1 + (turn++ % 63))];
+            const char* const nouns[] = { table.c_str(), nullptr };
+            make(group, nameFor(c, index++, vocab, names, nouns), 3, t, c, false);
+        }
+    };
     for (int k = 0; k < 6 && pal.builtin[k] >= 0; ++k) {
         const int t = pal.builtin[k];
         if (!done.insert(t).second) continue;
-        const Character& c = kVoiceCharacters[static_cast<size_t>(turn++ % 8)];
-        make("Wavetables: built-in", std::string(td.choices[t]) + " " + c.name, 3, t, c, false);
+        twoOf("Wavetables: built-in", td.choices[t], t);
     }
     for (int l = 0; l < 3 && pal.lane[l] >= 0; ++l) {
         for (int t : waveTableLaneTables(static_cast<WaveTableLane>(pal.lane[l]))) {
             const int li = t - kNumBuiltinWaveTables;
             if (li < 0 || li >= kNumLibraryWaveTables || !done.insert(t).second) continue;
             const std::string id = kLibraryTables[li].id;
-            const std::string family = id.substr(0, id.find('/'));
-            const Character& c = kVoiceCharacters[static_cast<size_t>(turn++ % 8)];
-            make("Wavetables: " + family, std::string(kLibraryTables[li].name) + " " + c.name, 3, t, c, false);
+            twoOf("Wavetables: " + id.substr(0, id.find('/')), kLibraryTables[li].name, t);
         }
     }
     return out;
@@ -166,15 +365,21 @@ std::vector<SoundPreset> buildKick()
 {
     std::vector<SoundPreset> out;
     ParamStore p;
-    static const char* const kEngines[] = { "Sweep", "Resonant" };
+    const Vocabulary vocab = kickVocabulary();
+    std::set<std::string> names, texts;
+    int index = 0;
+    const std::vector<Point> points = characterPoints(kKickPoints);
     for (int e = 0; e < 2; ++e)
-        for (const Character& c : kKickCharacters) {
+        for (const Point& c : points) {
             moduleToDefaults(p, Module::Kick, 0);
             p.set(p.base(Module::Kick) + kick::Engine, static_cast<float>(e));
             float off[kick::Count] = {};
             Composer::recipeOffsets(true, c.d, 1.0f, off);
             applyOffsets(p, Module::Kick, 0, off);
-            out.push_back({ kEngines[e], std::string(kEngines[e]) + " " + c.name, moduleText(p, Module::Kick) });
+            std::string text = moduleText(p, Module::Kick);
+            // Both engines in the character's group; the resonant one's names are its own nouns.
+            if (!texts.insert(text).second) continue;
+            out.push_back({ familyOf(c, vocab), nameFor(c, index++, vocab, names, e == 1 ? kResonantNouns : nullptr), std::move(text) });
         }
     return out;
 }
@@ -183,12 +388,17 @@ std::vector<SoundPreset> buildBass()
 {
     std::vector<SoundPreset> out;
     ParamStore p;
-    for (const BassCharacter& bc : kBassCharacters) {
+    const Vocabulary vocab = bassVocabulary();
+    std::set<std::string> names, texts;
+    int index = 0;
+    for (const Point& c : characterPoints(kBassPoints)) {
         moduleToDefaults(p, Module::Bass, 0);
         float off[bass::Count] = {};
-        Composer::recipeOffsets(false, bc.c.d, 1.0f, off);
+        Composer::recipeOffsets(false, c.d, 1.0f, off);
         applyOffsets(p, Module::Bass, 0, off);
-        out.push_back({ bc.group, bc.c.name, moduleText(p, Module::Bass) });
+        std::string text = moduleText(p, Module::Bass);
+        if (!texts.insert(text).second) continue;
+        out.push_back({ familyOf(c, vocab), nameFor(c, index++, vocab, names), std::move(text) });
     }
     return out;
 }
@@ -198,18 +408,34 @@ std::vector<SoundPreset> buildAcid()
     std::vector<SoundPreset> out;
     ParamStore p;
     const int b = p.base(Module::Acid);
-    for (const AcidPoint& a : kAcidPoints)
-        for (const AcidTweak& t : kAcidTweaks) {
-            moduleToDefaults(p, Module::Acid, 0);
-            float off[acid::Count] = {};
-            int disperse = -1;
-            Composer::acidVoicingOffsets(p, a.w, 1.0f, off, disperse);
-            off[acid::Cutoff] += t.cutoff;
-            off[acid::Resonance] += t.resonance;
-            off[acid::EnvAmount] += t.env;
-            applyOffsets(p, Module::Acid, 0, off);
-            if (disperse >= 0) p.set(b + acid::Disperse, static_cast<float>(disperse));
-            out.push_back({ a.group, std::string(a.name) + t.name, moduleText(p, Module::Acid) });
+    std::set<std::string> names, texts;
+    int index = 0;
+    // The voicing triangle in quarters: its three corners, the points on its edges and inside, fifteen in all.
+    for (int i = 0; i <= 4; ++i)
+        for (int j = 0; i + j <= 4; ++j) {
+            const float w[3] = { static_cast<float>(i) / 4.0f, static_cast<float>(j) / 4.0f, static_cast<float>(4 - i - j) / 4.0f };
+            const int top = w[0] >= w[1] && w[0] >= w[2] ? 0 : (w[1] >= w[2] ? 1 : 2);
+            const bool corner = w[top] >= 0.75f;
+            static const char* const kGroups[] = { "Clean", "Driven", "Liquid" };
+            const std::string group = corner ? kGroups[top] : "Blends";
+            const char* const* adj = !corner ? kBlendAdj : (top == 0 ? kCleanAdj : (top == 1 ? kDrivenAdj : kLiquidAdj));
+            for (const AcidTweak& t : kAcidTweaks) {
+                moduleToDefaults(p, Module::Acid, 0);
+                float off[acid::Count] = {};
+                int disperse = -1;
+                Composer::acidVoicingOffsets(p, w, 1.0f, off, disperse);
+                off[acid::Cutoff] += t.cutoff;
+                off[acid::Resonance] += t.resonance;
+                off[acid::EnvAmount] += t.env;
+                applyOffsets(p, Module::Acid, 0, off);
+                if (disperse >= 0) p.set(b + acid::Disperse, static_cast<float>(disperse));
+                std::string text = moduleText(p, Module::Acid);
+                if (!texts.insert(text).second) continue;
+                Vocabulary v{};
+                for (int k = 0; k < 5; ++k) v.adj[k][0] = v.adj[k][1] = adj;
+                const Point strong{ { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f } };
+                out.push_back({ group, nameFor(strong, index++, v, names, t.nouns), std::move(text) });
+            }
         }
     return out;
 }

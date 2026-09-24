@@ -421,8 +421,19 @@ void PhospheneEditor::buildPages()
         case TabArrange: break;   // built in EditorArrange.cpp
         case TabPerform: break;   // built in EditorPerform.cpp
         case TabGallery: break;   // built in EditorGallery.cpp
-        case TabKick: addSoundGroup(*page, Module::Kick, 0, 0, tint); addSlices(*page, proc_, Module::Kick, 0, kKickSlices, tint); break;
-        case TabBass: addSoundGroup(*page, Module::Bass, 0, 1, tint); addSlices(*page, proc_, Module::Bass, 0, kBassSlices, tint); break;
+        case TabKick: case TabBass: {
+            // 24.09.2026, the user: "Koennten wir bei der Kick und beim Bass noch Anzeigen einbauen, wie in (Kick 3 von
+            // Sonic Academy)" -- the scope (EditorScope.h) beside the sound group, the knobs under them.
+            const bool kickTab = t == TabKick;
+            addSoundGroup(*page, kickTab ? Module::Kick : Module::Bass, 0, kickTab ? 0 : 1, tint);
+            auto scope = std::make_unique<phosui::SynthScope>(proc_, kickTab ? phosui::SynthScope::Kind::Kick : phosui::SynthScope::Kind::Bass);
+            (kickTab ? kickScope_ : bassScope_) = scope.get();
+            const int g = page->addGroup(kickTab ? "Kick Scope" : "Bass Scope", tint, 12);
+            page->addControl(g, std::move(scope), "", 12, true, 3);
+            if (kickTab) addSlices(*page, proc_, Module::Kick, 0, kKickSlices, tint);
+            else addSlices(*page, proc_, Module::Bass, 0, kBassSlices, tint);
+            break;
+        }
         case TabAcid: addSoundGroup(*page, Module::Acid, 0, 2, tint); addSlices(*page, proc_, Module::Acid, 0, kAcidSlices, tint); break;
         case TabLead: case TabCounter: case TabArp: case TabStab: case TabPad: case TabDrone:
             // The six voice pages share one table; the tab order is the instance order (PluginEditor.h).

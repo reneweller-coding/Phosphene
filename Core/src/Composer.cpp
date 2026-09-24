@@ -200,8 +200,8 @@ constexpr int8_t kLaneCounter = static_cast<int8_t>(WaveTableLane::Counter);
 // Nor does the pad answer at a fifth (24.09.2026). The partner doubles every tone of the chord, so a
 // fifth over a chord is a second chord a fifth higher: over F# Phrygian's C# it plays G#, which the
 // mode does not have, and over a sus2 or an m7 it stacks new seconds onto the ones the chord already
-// has. The drone plays one note, the stab a short hit -- a fifth there is an organ or a rave stab;
-// under a held chord it was part of what the user heard as "schraeg".
+// has. The drone plays one note -- a fifth there is an organ; under a held chord it was part of what the
+// user heard as "schraeg". The stab plays the same chords, short, and lost its fifths the same day.
 //
 // Per row: the first oscillator's weights; the built-in candidate tables; the library lanes; the
 // filter responses; the second oscillator's weights (index 0 = none, and it is the largest
@@ -213,7 +213,7 @@ const VoicePalette kVoicePalette[kPolyInstances] = {
     /* lead    */ { { 0.30, 0.12, 0.13, 0.45 }, { 4, 5, -1, -1, -1, -1 },  { kLaneLead, -1, -1 },        { 0.80, 0.10, 0.0, 0.10 }, { 0.45, 0.15, 0.15, 0.10, 0.15 }, { 0.05, 0.35, 0.10, 0.20, 0.05, 0.25 }, { 1.0f, 0.6f, 1.0f, 1.0f, 0.8f } },
     /* counter */ { { 0.08, 0.17, 0.20, 0.55 }, { 5, 1, 2, -1, -1, -1 },   { kLaneCounter, -1, -1 },     { 0.40, 0.40, 0.0, 0.20 }, { 0.45, 0.05, 0.20, 0.20, 0.10 }, { 0.05, 0.30, 0.10, 0.30, 0.05, 0.20 }, { 1.0f, 0.8f, 0.8f, 1.0f, 1.0f } },
     /* arp     */ { { 0.22, 0.20, 0.13, 0.45 }, { 2, 3, -1, -1, -1, -1 },  { kLaneArp, -1, -1 },         { 0.75, 0.25, 0.0, 0.00 }, { 0.50, 0.10, 0.15, 0.10, 0.15 }, { 0.02, 0.28, 0.05, 0.25, 0.05, 0.35 }, { 1.0f, 0.0f, 0.8f, 1.0f, 0.6f } },
-    /* stab    */ { { 0.28, 0.18, 0.09, 0.45 }, { 3, 4, -1, -1, -1, -1 },  { kLaneArp, kLaneLead, -1 },  { 0.70, 0.30, 0.0, 0.00 }, { 0.45, 0.15, 0.15, 0.10, 0.15 }, { 0.05, 0.35, 0.10, 0.20, 0.05, 0.25 }, { 1.0f, 0.0f, 1.0f, 1.0f, 0.5f } },
+    /* stab    */ { { 0.28, 0.18, 0.09, 0.45 }, { 3, 4, -1, -1, -1, -1 },  { kLaneArp, kLaneLead, -1 },  { 0.70, 0.30, 0.0, 0.00 }, { 0.45, 0.15, 0.15, 0.10, 0.15 }, { 0.05, 0.40, 0.00, 0.25, 0.00, 0.30 }, { 1.0f, 0.0f, 1.0f, 1.0f, 0.5f } },
     /* pad     */ { { 0.15, 0.08, 0.12, 0.65 }, { 1, 2, 5, -1, -1, -1 },   { kLanePad, -1, -1 },         { 0.85, 0.00, 0.0, 0.15 }, { 0.30, 0.10, 0.25, 0.15, 0.20 }, { 0.00, 0.00, 0.00, 0.60, 0.00, 0.40 }, { 0.8f, 1.0f, 1.0f, 1.0f, 1.0f } },
     /* drone   */ { { 0.06, 0.20, 0.09, 0.65 }, { 1, -1, -1, -1, -1, -1 }, { kLaneDrone, kLanePad, -1 }, { 0.90, 0.10, 0.0, 0.00 }, { 0.30, 0.05, 0.30, 0.10, 0.25 }, { 0.00, 0.00, 0.05, 0.45, 0.20, 0.30 }, { 0.7f, 0.6f, 1.0f, 0.8f, 1.0f } },
 };
@@ -295,7 +295,11 @@ const Loading kVoiceLoadings[] = {
     { poly::KeyTrack,    0, 0.12f },
     { poly::AmpAttack,   1, 0.15f }, { poly::FilterDecay, 1, 0.15f }, { poly::AmpRelease, 1, 0.10f },
     { poly::AmpDecay,    1, 0.18f }, { poly::AmpSustain,  1, 0.14f },
-    { poly::Detune,      2, 0.25f }, { poly::Mix,         2, 0.15f }, { poly::Width,    2, 0.20f },
+    // Detune 0.25 -> 0.15 (24.09.2026, the user: "untersuche, ob es zu solchen Verstimmungen auch in den anderen
+    // Stimmen kommen kann"). Szabo's curve is steep at the top: the lead's 0.55 put its outer saws 22 cents off, and a
+    // thick recipe at full sound variation pushed it to 0.80 -- 54 cents, past a quarter tone, the pad's fault again.
+    // At 0.15 the lead stays under 40 cents and every other voice under 25.
+    { poly::Detune,      2, 0.15f }, { poly::Mix,         2, 0.15f }, { poly::Width,    2, 0.20f },
     { poly::DynamicDetune, 2, 0.15f }, { poly::FmRatio,   2, 0.12f },
     { poly::DelaySend,   3, 0.20f }, { poly::DelayFeedback, 3, 0.10f },
     { poly::PosLfoDepth, 4, 0.30f }, { poly::PosEnv,      4, 0.20f }, { poly::Drift,    4, 0.15f },

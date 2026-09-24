@@ -168,7 +168,7 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
     // expanded here, on this thread. Anything the composer decides later it asks for itself.
     ensureVoiceTables();
     for (auto* b : { &sfxL_, &sfxR_, &sfxWetL_, &sfxWetR_, &roomInL_, &roomInR_, &hallInL_, &hallInR_, &roomOutL_, &roomOutR_, &hallOutL_, &hallOutR_,
-                     &texL_, &texR_, &vocL_, &vocR_, &vocThrow_, &subBuf_, &throwIn_, &sendL_, &sendR_,
+                     &texL_, &texR_, &vocL_, &vocR_, &vocThrow_, &subBuf_, &throwIn_, &sendL_, &sendR_, &bedSendL_, &bedSendR_,
                      &hallGateInL_, &hallGateInR_, &hallGateOutL_, &hallGateOutR_ })
         b->assign(static_cast<size_t>(kChunk), 0.0f);
     acid_.prepare(sr_);
@@ -178,6 +178,7 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
     vocal_.prepare(sr_);   // loads the voice pack on the first call (Vocal.h); never on the audio thread
     sfxFx_.prepare(sr_);
     sendFx_.prepare(sr_);
+    bedFx_.prepare(sr_);
     for (int i = 0; i < kPolyInstances; ++i) { polyFlanger_[i].prepare(sr_); polyPhaser_[i].prepare(sr_); }
     throw_.prepare(sr_);
     stutter_.prepare(sr_);
@@ -255,6 +256,7 @@ void Engine::reset()
     vocal_.reset();
     sfxFx_.reset();
     sendFx_.reset();
+    bedFx_.reset();
     for (int i = 0; i < kPolyInstances; ++i) { polyFlanger_[i].reset(); polyPhaser_[i].reset(); }
     throw_.reset();
     stutter_.reset();
@@ -476,6 +478,7 @@ void Engine::applyParams()
         vocal_.update(eff_.data() + vb, keyRoot_);
         sfxFx_.update(eff_.data() + xb);
         sendFx_.update(eff_.data() + xb);
+        bedFx_.update(eff_.data() + xb);
         sendReturn_ = dbToGain(e(xb + psyfx::Return));
         motion_ = e(xb + psyfx::Motion);
         throwSend_ = e(vb + vocal::ThrowSend);
@@ -677,6 +680,7 @@ void Engine::applyMotion()
         hz = (x >= 0.0 && x < 1.0) ? sendMotion_.shiftHz * motion_ * static_cast<float>(std::min(1.0, 4.0 * (1.0 - x))) : 0.0f;
     }
     sendFx_.setMotion(hz, fl);
+    bedFx_.setMotion(0.0f, fl);   // the flanger's opening, not the shift (Engine.h, bedFx_)
 }
 
 void Engine::renderSegment(float* L, float* R, int offset, int count)
@@ -739,7 +743,7 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
             meterAdd(static_cast<int>(Part::Bass), bs, bs);
             ++meterCount_;
         }
-        float l = mono, r = mono, rl = 0.0f, rr = 0.0f, hl = 0.0f, hr = 0.0f, fl = 0.0f, fr = 0.0f;
+        float l = mono, r = mono, rl = 0.0f, rr = 0.0f, hl = 0.0f, hr = 0.0f, fl = 0.0f, fr = 0.0f, bl = 0.0f, br = 0.0f;
         float hgl = 0.0f, hgr = 0.0f;   // the gated hall's input: the strips whose hall_gate is on
         float ml = 0.0f, mr = 0.0f;   // the melodic bus a stutter may replace (acid, lead, counter, arp, stab)
         const double beat = chunkBeat_ + static_cast<double>(chunkPos_ + i) * beatsPerSample_;
@@ -774,8 +778,8 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
             // both -- a voice picks one hall or the other).
             if (hallGateOn_[s]) { hgl += stripHall_[s] * sl; hgr += stripHall_[s] * sr; }
             else { hl += stripHall_[s] * sl; hr += stripHall_[s] * sr; }
-            fl += stripFx_[s] * sl;
-            fr += stripFx_[s] * sr;
+            if (s == StripTexture) { bl += stripFx_[s] * sl; br += stripFx_[s] * sr; }
+            else { fl += stripFx_[s] * sl; fr += stripFx_[s] * sr; }
             if (s == StripVocal) throwIn_[si] = 0.5f * (sl + sr) * vocThrow_[si] * throwSend_;
         }
         // The glitch: while a stutter runs, the melodic bus is its repeat (the sends above keep the
@@ -792,6 +796,7 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
         hallInL_[si] = hl + sfxWetL_[si]; hallInR_[si] = hr + sfxWetR_[si];
         hallGateInL_[si] = hgl; hallGateInR_[si] = hgr;
         sendL_[si] = fl; sendR_[si] = fr;
+        bedSendL_[si] = bl; bedSendR_[si] = br;
     }
     room_.process(roomInL_.data(), roomInR_.data(), roomOutL_.data(), roomOutR_.data(), count);
     hall_.process(hallInL_.data(), hallInR_.data(), hallOutL_.data(), hallOutR_.data(), count);
@@ -808,9 +813,10 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
     }
     // The modulation send of the bed and the voices, and the voices' delay throw.
     sendFx_.process(sendL_.data(), sendR_.data(), count, beat0, beatsPerSample_);
+    bedFx_.process(bedSendL_.data(), bedSendR_.data(), count, beat0, beatsPerSample_);
     for (int i = 0; i < count; ++i) {
-        outL[i] += sendReturn_ * sendL_[static_cast<size_t>(i)];
-        outR[i] += sendReturn_ * sendR_[static_cast<size_t>(i)];
+        outL[i] += sendReturn_ * (sendL_[static_cast<size_t>(i)] + bedSendL_[static_cast<size_t>(i)]);
+        outR[i] += sendReturn_ * (sendR_[static_cast<size_t>(i)] + bedSendR_[static_cast<size_t>(i)]);
     }
     throw_.process(throwIn_.data(), outL, outR, count);
     for (int i = 0; i < count; ++i) {

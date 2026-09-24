@@ -8176,6 +8176,65 @@ es wurde nichts angezeigt".
 - Die drei einzeln wiederholt: bestanden. `%APPDATA%\Phosphene` blieb unberührt (Zeitstempel und Hash der
   Einstellungsdatei vor und nach den Standalone-Screenshots gleich).
 
+**24.09.2026, Presets mit Namen, Kick- und Bass-Scope, Verstimmungen in allen Stimmen**
+
+Der Nutzer: „Könnten wir den Presets etwas coolere Namen geben und noch deutlich mehr Presets erzeugen? Könnten wir
+bei der Kick und beim Bass noch Anzeigen einbauen, wie in (Kick 3 von Sonic Academy). […] Bitte untersuche, ob es zu
+solchen Verstimmungen auch in den anderen Stimmen kommen kann und korrigiere diese gegebenenfalls."
+
+**Presets** (`SoundPresets.cpp`).
+- Statt acht gesetzter Charaktere verteilen sich die Punkte jetzt gleichmäßig über die fünf Richtungen eines Synths:
+  zuerst der neutrale Punkt, dann die zehn Pole, danach die Halton-Folge (Basen 2, 3, 5, 7, 11).
+- Name = Adjektiv des stärksten Pols + Nomen der Rolle, z. B. „Razor Comet", „Nebula Aurora", „Tectonic Anvil".
+  Die resonante Kick-Engine hat eigene Nomen („Gong", „Bell").
+- Kick, Bass und Acid sind nach Charakter gruppiert, die Stimmen nach Oszillator und Wavetable-Familie.
+- Anzahl vorher → nachher:
+  - Kick 16 → 112, Bass 9 → 90, Acid 21 → 90.
+  - Stimmen 278 bis 500, jede Wavetable zweimal.
+- Alle Namen und Klänge sind je Synth eindeutig (Selbsttest, jetzt mindestens 60 je Synth).
+
+**Scopes** (`Plugin/EditorScope.cpp`), nach Kick 3.
+- Kick: rendert einen Schlag mit den gerade spielenden Werten (`Engine::effective`, gestoppt: die Regler). Zeigt
+  Wellenform, Tonhöhenkurve (`Kick::frequencyAt`) auf log-Achse und Spektrum. Dazu Start- und Zielton mit Note und
+  Cent, Länge bis −60 dB und Peak.
+- Bass: rendert eine Achtel auf dem Grundton. Zeigt die Filterkurve nach der Formel aus `Bass.cpp`, das Spektrum,
+  die Note und den Filterweg.
+- Neu gerendert wird nur, wenn sich ein Wert, die Tonart oder das Tempo ändert.
+
+**Muster-Vorschau:** siehe den Nachtrag der Runde davor (gehaltene Noten).
+
+**Verstimmungen in allen Stimmen.**
+- Audio-Maß: Leistungsanteil, der mehr als 30 Cent neben jedem Oberton der gerade gespielten Noten liegt (Noten aus
+  dem MIDI-Export).
+  - Nur Fenster, die ganz in gehaltenen Noten liegen, mindestens 150 ms nach dem Anschlag.
+  - Lead, 24 Seeds: **0,3 %**.
+  - Das erste, naive Maß (Raster-Abstand) meldete 7 % und mehr. Das waren die Obertöne 7, 11 und 13 heller Klänge
+    und die Delay-Echos früherer Noten, keine Verstimmung.
+- Die restlichen Quellen im Code geprüft und nachgerechnet:
+  - FM und zweiter Oszillator: in der Runde davor für alle Stimmen korrigiert.
+  - **Unison-Detune** (Szabos Kurve ist oben steil). Die äußere Säge des Leads liegt bei 0,55 auf 22 Cent; ein
+    dickes Rezept schob sie bei voller Sound Variation auf 0,80, also 54 Cent. Jetzt lädt das Rezept 0,15 statt
+    0,25: Der Lead bleibt unter etwa 40 Cent, jede andere Stimme unter 25.
+  - **Stab:** spielt Akkorde wie das Pad; sein zweiter Oszillator verliert die Quinten.
+  - **Frequenzshifter im Modulations-Send:** Jede gesprochene Phrase verschiebt ihn um 8 bis 25 Hz, und der Bordun
+    des Shamanic Bed (Didgeridoo, Maultrommel, Klangschalen, auf den Grundton gestimmt) teilte diesen Send. Unter
+    den Phrasen des Intros bekam der Bordun eine um feste Hertz verschobene, also unharmonische Kopie. Jetzt hat
+    das Bett eine eigene Kette (`bedFx_`): Flanger und Phaser ja, Verschiebung nein.
+  - Unbedenklich:
+    - Pitch-LFO (höchstens 5 bis 10 Cent Vibrato der ganzen Stimme) und Drift (1 bis 2 Cent).
+    - Acid-Kamm (auf die Periode der Note gestimmt).
+    - Kamm- und Phaser-Inserts (Filter, sie erzeugen keine neuen Frequenzen).
+    - Flanger-Doppler (etwa 14 Cent auf dem Effektanteil).
+    - Bass-„Split" (Frequenzweiche, keine Tonhöhe).
+    - Die Obertöne der Klangschalen, die bei einer echten Schale unharmonisch sind.
+
+*Tests.*
+- Host-Test: Der Kick-Scope landet auf 30 bis 90 Hz, der Bass-Scope auf dem Grundton; beide rendern hörbaren
+  Klang. Das Preset für den Undo-Test ist das mittlere des Arp, statt eines Namens auf „Bright".
+- Selbsttest: mindestens 60 Presets je Synth, alle eindeutig in Name und Klang.
+- Plan-Schnappschüsse neu (Stab-Partner, Detune-Rezept).
+- Voller ctest (MSVC, -j 12): 132 von 132, 1 deaktiviert. `%APPDATA%\Phosphene` unberührt.
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

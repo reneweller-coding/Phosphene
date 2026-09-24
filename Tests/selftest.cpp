@@ -10294,7 +10294,7 @@ void testSoundPresets()
             kept += leftAlone ? 1 : 0;
         }
         const int n = static_cast<int>(list.size());
-        const bool ok = n >= 9 && groups.size() >= 2 && static_cast<int>(names.size()) == n && static_cast<int>(texts.size()) == n
+        const bool ok = n >= 60 && groups.size() >= 2   // 24.09.2026: "deutlich mehr Presets" -- 9 to 25 a synth before && static_cast<int>(names.size()) == n && static_cast<int>(texts.size()) == n
                      && applied == n && roundTrip == n && kept == n;
         allOk = allOk && ok;
         summary += fmt("%s %d in %d groups%s; ", s.name, n, static_cast<int>(groups.size()),

@@ -20,6 +20,7 @@
 #include "EditorArrange.h"
 #include "EditorLayout.h"
 #include "EditorMixer.h"
+#include "EditorScope.h"
 #include "PhospheneLookAndFeel.h"
 #include "PluginProcessor.h"
 #include "UpdateCheck.h"
@@ -235,6 +236,9 @@ public:
     void setHelpVisible(bool show) { showHelp(show); }
     /** @brief The mixer page's console (tests). */
     phosui::MixerConsole* mixerConsole() const { return mixer_; }
+    /** @brief The kick's and the bass's scopes (tests). */
+    phosui::SynthScope* kickScope() const { return kickScope_; }
+    phosui::SynthScope* bassScope() const { return bassScope_; }   ///< @copydoc kickScope
 
 private:
     void buildPages();
@@ -303,6 +307,8 @@ private:
     std::vector<PatternDisplay*> patterns_;
     std::vector<PatternDisplay*> percPatterns_;   ///< one per lane page, each lighting its own lane
     phosui::MixerConsole* mixer_ = nullptr;       ///< on the Mix page (24.09.2026)
+    phosui::SynthScope* kickScope_ = nullptr;     ///< on the Kick page (24.09.2026)
+    phosui::SynthScope* bassScope_ = nullptr;     ///< on the Bass page (24.09.2026)
     /** @brief The effect preset choosers' host links; declared after pages_, so they go before their boxes do. */
     std::vector<std::unique_ptr<juce::ComboBoxParameterAttachment>> sfxPresetLinks_;
     std::vector<phos::NoteEvent> patternNotes_;   ///< scratch for the timer's read

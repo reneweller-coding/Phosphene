@@ -1235,9 +1235,9 @@ int main(int argc, char** argv)
         const int arpLevel = ps.find("arp.level");
         ps.set(arpLevel, 0.37f);
         const std::vector<phos::SoundPreset>& arp = phos::factoryPresets(phos::Module::Poly, static_cast<int>(phos::PolyInstance::Arp));
-        // The palette decides which oscillators a voice has presets for; the arp's first "Bright" is taken, whatever it is.
-        const phos::SoundPreset* fm = nullptr;
-        for (const phos::SoundPreset& s : arp) if (fm == nullptr && juce::String(s.name).endsWith("Bright")) fm = &s;
+        // The palette decides which oscillators a voice has presets for; the arp's middle one is taken, whatever it is
+        // (24.09.2026: the names are made of the sound now, "Solar Cascade" and the like, and no longer end in "Bright").
+        const phos::SoundPreset* fm = arp.empty() ? nullptr : &arp[arp.size() / 2];
         const std::string before = ps.toText(false);
         if (fm != nullptr) p->applyPreset(phos::Module::Poly, static_cast<int>(phos::PolyInstance::Arp), *fm);
         phos::ParamStore expect;
@@ -1409,6 +1409,18 @@ int main(int argc, char** argv)
                           "mixer: a strip per part (" + juce::String(mc->stripCount()) + "); the loudest, "
                               + juce::String(phos::kPartNames[loudest]) + ", read " + juce::String(before, 1) + " dB RMS and nothing ("
                               + juce::String(mutedPeak) + ") once its mute was on, while " + juce::String(others) + " others played on");
+                }
+                // 24.09.2026, the user: "Koennten wir bei der Kick und beim Bass noch Anzeigen einbauen, wie in (Kick 3 von
+                // Sonic Academy)". Each scope renders what its synth plays: the kick lands on a note in the kick's range,
+                // the bass plays the key's root, and both have a sound to draw.
+                if (phosui::SynthScope* ks = phos->kickScope(); ks != nullptr && phos->bassScope() != nullptr) {
+                    phosui::SynthScope* bs = phos->bassScope();
+                    ks->refresh();
+                    bs->refresh();
+                    check(ks->renderedPeak() > 0.05f && ks->landingHz() > 30.0 && ks->landingHz() < 90.0 && bs->renderedPeak() > 0.02f
+                              && bs->landingHz() > 38.0 && bs->landingHz() < 80.0,
+                          "scopes: the kick's hit lands at " + juce::String(ks->landingHz(), 1) + " Hz (peak " + juce::String(ks->renderedPeak(), 2)
+                              + "), the bass note is " + juce::String(bs->landingHz(), 1) + " Hz (peak " + juce::String(bs->renderedPeak(), 2) + ")");
                 }
                 // 24.09.2026, the user: "Im SFX-Fenster ist nach wie vor keine Auswahl fuer das Preset". Every family's
                 // chooser holds Auto and every preset of the family, and choosing one sets its parameter.

@@ -267,6 +267,8 @@ public:
     float limiterReduction() const { return limiter_.reduction(); }   ///< @copydoc compReduction
     /** @brief Effective value of a parameter as last applied (audio thread view). */
     float effective(int id) const;
+    /** @brief The key's pitch class the engine plays in (0 = C), as last applied (audio thread view; the scopes). */
+    int keyRoot() const { return keyRoot_; }
 
 private:
     void advanceRamps();
@@ -379,6 +381,7 @@ private:
     Texture texture_;
     Vocal vocal_;
     std::vector<float> texL_, texR_, vocL_, vocR_, vocThrow_, subBuf_, throwIn_, sendL_, sendR_;
+    std::vector<float> bedSendL_, bedSendR_;   ///< the bed's share of the modulation send (bedFx_)
 
     /**
      * @brief Channel strips of the parts after kick and bass, in this order. The six polyphonic strips
@@ -394,7 +397,19 @@ private:
     float stripRoom_[StripCount] = {}, stripHall_[StripCount] = {};
     float stripFx_[StripCount] = {};       ///< send into the modulation chain (texture and vocal only)
 
-    PsyFxChain sfxFx_, sendFx_;            ///< the SFX strip's insert, and the send chain
+    PsyFxChain sfxFx_, sendFx_;            ///< the SFX strip's insert, and the send chain (the voices')
+    /**
+     * @brief The bed's modulation send (24.09.2026): the same chain and knobs as sendFx_, without the spoken
+     *        phrases' frequency shift.
+     *
+     * A frequency shifter moves every partial by the same number of hertz, so it turns any pitched sound
+     * inharmonic. Every spoken phrase shifts the send chain by 8 to 25 Hz (dispatch, sendMotion_) -- meant for
+     * the voice, which is speech and has no pitch to lose -- and the bed shared that chain: under the intro's
+     * phrases the didgeridoo's tonic drone got a copy of itself a few hertz off every harmonic. The user,
+     * asked to have every voice checked for such detunings after the pad's: "Bitte untersuche, ob es zu solchen
+     * Verstimmungen auch in den anderen Stimmen kommen kann". Flanger and phaser, which only colour, stay.
+     */
+    PsyFxChain bedFx_;
     /** @name The per-voice modulation insert (20.09.2026, round "dialogue"; Params.h, PolyMod)
      *  One flanger and one phaser per polyphonic instance, behind the voice and before its strip gain,
      *  so that the comb / flanger / phaser colour the user's effect list asks for is a property of the
