@@ -71,6 +71,7 @@
 #pragma once
 #include "phos/Dsp.h"
 #include "phos/Oscillator.h"
+#include "phos/Params.h"
 #include "phos/Score.h"
 
 namespace phos {
@@ -126,6 +127,27 @@ inline const SfxPreset* sfxPreset(SfxType type, int index)
 static_assert(kSfxBaseNote + kNumSfxTypes <= 128, "every effect type needs a MIDI note");
 
 /**
+ * @brief The effect family each preset choice of the effects page names (sfx::PresetRiser ..), in their order.
+ *
+ * The eleven types with a family in the bank (kSfxBankCount > 0). sfxPresetChoice() is the other direction.
+ */
+inline constexpr SfxType kPresetChoiceType[sfx::kNumPresetChoices] = {
+    SfxType::Riser, SfxType::Downlifter, SfxType::Impact, SfxType::Sweep, SfxType::FormantShot, SfxType::ReverseSwell,
+    SfxType::Zap, SfxType::Squelch, SfxType::Bubble, SfxType::ReverseCrash, SfxType::Atmosphere,
+};
+/** @brief The preset choice (0 .. sfx::kNumPresetChoices - 1) of a type, or -1 for a type without a family. */
+constexpr int sfxPresetChoice(SfxType t)
+{
+    for (int i = 0; i < sfx::kNumPresetChoices; ++i) if (kPresetChoiceType[i] == t) return i;
+    return -1;
+}
+/**
+ * @brief How long an audition of a family plays, in beats (Engine::previewSfx): about what the composer
+ *        writes for it -- a riser's four bars, a zap's eighth.
+ */
+inline constexpr float kPresetPreviewBeats[sfx::kNumPresetChoices] = { 16.0f, 8.0f, 4.0f, 4.0f, 1.0f, 4.0f, 0.5f, 0.5f, 1.0f, 2.0f, 16.0f };
+
+/**
  * @brief Which generator, and so which part and mix strip, plays an effect type.
  *
  * The composer writes every effect as a Part::Sfx note (Melody.cpp, composeSfxBar); the engine and the
@@ -176,7 +198,8 @@ public:
      * @param samples  its length
      * @param velocity 0..1
      * @param late     how many samples ago it ideally started (0 <= late < 1)
-     * @param preset   1-based index into the type's family of the bank (SfxPreset), 0 = the type as before
+     * @param preset   1-based index into the type's family of the bank (SfxPreset), 0 = the type as before;
+     *                 the family's sfx.preset_* choice replaces it when that is not Auto
      */
     void trigger(SfxType type, int samples, float velocity, double late, int preset = 0);
     /**
@@ -235,6 +258,7 @@ private:
     float subLevel_ = 0.5f;
     bool wander_ = false;          ///< sfx.wander
     float wanderSend_ = 0.85f;     ///< sfx.wander_send
+    int fixed_[sfx::kNumPresetChoices] = {};   ///< sfx.preset_*: the bank preset a family always plays, 0 = the event's own
 };
 
 } // namespace phos

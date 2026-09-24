@@ -158,10 +158,11 @@ int ControlPage::addParamsGroup(PhospheneProcessor& proc, const juce::String& ti
 }
 
 int ControlPage::addControl(int groupIndex, std::unique_ptr<juce::Component> comp, const juce::String& name, int units,
-                            bool tall, int rows)
+                            bool tall, int rows, const std::vector<int>& bound)
 {
     if (groupIndex < 0 || groupIndex >= static_cast<int>(groups_.size()) || comp == nullptr) return -1;
     Cell c;
+    c.bound = bound;
     c.units = juce::jmax(1, units);
     c.heightRows = juce::jmax(1, rows);
     c.tall = tall;
@@ -184,8 +185,11 @@ std::vector<int> ControlPage::groupParams(int index) const
 {
     std::vector<int> out;
     if (index < 0 || index >= static_cast<int>(groups_.size())) return out;
-    for (int ci : groups_[static_cast<size_t>(index)].cells)
-        if (cells_[static_cast<size_t>(ci)].param >= 0) out.push_back(cells_[static_cast<size_t>(ci)].param);
+    for (int ci : groups_[static_cast<size_t>(index)].cells) {
+        const Cell& c = cells_[static_cast<size_t>(ci)];
+        if (c.param >= 0) out.push_back(c.param);
+        out.insert(out.end(), c.bound.begin(), c.bound.end());
+    }
     return out;
 }
 

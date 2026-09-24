@@ -89,6 +89,7 @@ void Sfx::update(const float* v, int keyRoot)
     subLevel_ = dbToGain(v[sfx::SubLevel]);
     wander_ = v[sfx::Wander] >= 0.5f;
     wanderSend_ = v[sfx::WanderSend];
+    for (int i = 0; i < sfx::kNumPresetChoices; ++i) fixed_[i] = static_cast<int>(std::lround(v[sfx::kFirstPreset + i]));
 }
 
 int Sfx::active() const
@@ -102,6 +103,9 @@ void Sfx::trigger(SfxType type, int samples, float velocity, double late, int pr
 {
     // The stutter is the engine's, and the voices and the bed have generators of their own.
     if (type == SfxType::Stutter || sfxTypePart(type) != Part::Sfx || type >= SfxType::Count) return;
+    // The page's choice for the family, where it is not Auto (24.09.2026, sfx.preset_*).
+    const int choice = sfxPresetChoice(type);
+    if (choice >= 0 && fixed_[choice] > 0) preset = fixed_[choice];
     int slot = 0;
     for (int i = 0; i < kVoices; ++i) {
         if (!voice_[i].on) { slot = i; break; }

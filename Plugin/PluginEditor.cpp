@@ -65,8 +65,6 @@ const Slice kFxSlices[] = {
 };
 /** @brief The mixer and the master. */
 // The channels up to the SFX strip, then the sidechain, then the two strips of 19.09.2026 (texture, vocal).
-const Slice kMixSlices[] = { { "Channels", mix::KickMute, mix::PercRoom + 2, 6 }, { "Sidechain", mix::DuckAttack, 3, 3 },
-                             { "Bed & Voices", mix::TextureMute, 4, 4 } };
 const Slice kMasterSlices[] = {
     { "Gain", master::Gain, 3, 3 }, { "Compressor", master::CompThreshold, 5, 5 }, { "Output", master::MonoBass, 7, 4 },
 };
@@ -271,9 +269,10 @@ void PatternDisplay::paint(juce::Graphics& g)
         for (const NoteEvent& e : notes_) {
             if (e.part != part_) continue;
             const float y = plot.getBottom() - (e.pitch - lo + 1) * rowH;
-            const juce::Rectangle<float> box(xOf(e.beat), y + 0.5f,
-                                             juce::jmax(3.0f, xOf(e.beat + e.length) - xOf(e.beat) - 1.0f),
-                                             juce::jmax(2.0f, rowH - 1.0f));
+            // A note struck before the window (a held chord) starts at its left edge, one that outlasts it ends at
+            // the right one.
+            const float x0 = juce::jmax(plot.getX(), xOf(e.beat)), x1 = juce::jmin(plot.getRight(), xOf(e.beat + e.length));
+            const juce::Rectangle<float> box(x0, y + 0.5f, juce::jmax(3.0f, x1 - x0 - 1.0f), juce::jmax(2.0f, rowH - 1.0f));
             const juce::Colour c = partColour(static_cast<int>(part_) + 1);
             g.setColour((e.flags & kNoteAccent) ? c.brighter(0.5f) : c.withAlpha(0.45f + 0.55f * e.velocity / 127.0f));
             g.fillRoundedRectangle(box, 1.5f);
@@ -431,18 +430,32 @@ void PhospheneEditor::buildPages()
             addSlices(*page, proc_, Module::Poly, t - TabLead, kPolySlices, tint);
             break;
         case TabFx:
-            page->addModuleGroup(proc_, Module::Sfx, 0, "Effect Generator", tint, 5);
+            page->addModuleGroup(proc_, Module::Sfx, 0, "Effect Generator", tint, 5, 0, sfx::kFirstPreset);
+            addSfxPresetGroup(*page, tint);
             addSlices(*page, proc_, Module::Fx, 0, kFxSlices, tint);
             // 23.09.2026: the modules of round "fx-psychedelia" had no page (see the bass slices).
             page->addModuleGroup(proc_, Module::PsyFx, 0, "Psy FX", tint, 4);
             page->addModuleGroup(proc_, Module::Texture, 0, "Shamanic Bed", tint, 5);
             page->addModuleGroup(proc_, Module::Vocal, 0, "Voices", tint, 5);
             break;
-        case TabMix:
-            addSlices(*page, proc_, Module::Mix, 0, kMixSlices, tint);
+        case TabMix: {
+            // 24.09.2026, the user: "Koennen wir im Mixer-Tab Meter fuer das Level fuer die einzelnen Kanalzuege
+            // anzeigen anstatt einfacher Drehknoepfe? Vielleicht sogar ganze Channel-Strips?" -- the console
+            // (EditorMixer.h) in place of the table slices of mutes and level knobs; the track gain and the
+            // sidechain's times, which belong to no strip, beside it.
+            auto console = std::make_unique<phosui::MixerConsole>(proc_);
+            mixer_ = console.get();
+            for (int i = 0; i < mixer_->stripCount(); ++i)
+                for (const auto& [comp, id] : mixer_->strip(i).controls()) page->enableMidiLearn(proc_, *comp, id);
+            const int g = page->addGroup("Channels", tint, 16);
+            page->addControl(g, std::move(console), "", 16, true, 5, mixer_->params());
+            const int mb = proc_.params().base(Module::Mix);
+            page->addParamsGroup(proc_, "Track & Sidechain", tint, 4,
+                                 { mb + mix::TrackGain, mb + mix::DuckAttack, mb + mix::DuckHold, mb + mix::DuckRelease });
             addSlices(*page, proc_, Module::Master, 0, kMasterSlices, tint);
             page->addModuleGroup(proc_, Module::Cue, 0, "Score Cues (OSC)", tint, 4);   // 23.09.2026, see the bass slices
             break;
+        }
         default: break;
         }
         // Every generator page ends with the notes it is shaping, so the knobs and the pattern are
@@ -536,6 +549,48 @@ void PhospheneEditor::addSoundGroup(ControlPage& page, Module module, int instan
     page.addControl(g, std::move(save), "", 2, true);
     page.addControl(g, std::move(box), "Preset", 3);
     presetBoxes_.push_back(std::move(pb));
+}
+
+void PhospheneEditor::addSfxPresetGroup(ControlPage& page, juce::Colour tint)
+{
+    // 24.09.2026, the user: "Im SFX-Fenster ist nach wie vor keine Auswahl fuer das Preset". The effects' presets are
+    // the bank's (Sfx.h, SfxPreset): 2048 in eleven families, drawn per event and never twice in a track. A family
+    // can now be fixed to one of them, and each can be heard before it is chosen.
+    const int g = page.addGroup("Effect Presets", tint, 12);
+    const int base = proc_.params().base(Module::Sfx);
+    for (int i = 0; i < sfx::kNumPresetChoices; ++i) {
+        const int id = base + sfx::kFirstPreset + i;
+        StoreParameter* param = proc_.parameterFor(id);
+        if (param == nullptr) continue;
+        const SfxType type = kPresetChoiceType[i];
+        const juce::String family(kSfxTypeNames[static_cast<int>(type)]);
+        const int n = kSfxBankCount[static_cast<int>(type)];
+        auto box = std::make_unique<juce::ComboBox>();
+        // Item i + 1 is preset i (0 = Auto): the attachment maps the parameter onto the item's *position*, and the
+        // position counts through the submenus in order (juce_ComboBox.cpp, getItemForIndex).
+        box->getRootMenu()->addItem(1, "Auto (drawn per event)");
+        for (int from = 1; from <= n; from += 32) {
+            juce::PopupMenu sub;
+            const int to = juce::jmin(n, from + 31);
+            for (int k = from; k <= to; ++k) sub.addItem(k + 1, family + " " + juce::String(k));
+            box->getRootMenu()->addSubMenu(family + " " + juce::String(from) + " - " + juce::String(to), sub);
+        }
+        box->setTooltip(juce::String(proc_.params().key(id)) + ": Auto lets the generator draw a preset of the family for "
+                        "every event, never the same twice in a track; a number makes every " + family + " play that one");
+        sfxPresetLinks_.push_back(std::make_unique<juce::ComboBoxParameterAttachment>(*param, *box));
+        page.enableMidiLearn(proc_, *box, id);
+        page.addControl(g, std::move(box), family, 2, false, 1, { id });
+
+        auto play = std::make_unique<juce::TextButton>("Hear");
+        play->setTooltip("Plays the chosen " + family + " in the running set (Auto: one of the family at random). "
+                         "Nothing sounds while the transport stands.");
+        play->onClick = [this, i, id, n] {
+            int preset = static_cast<int>(std::lround(proc_.params().get(id)));
+            if (preset <= 0) preset = 1 + juce::Random::getSystemRandom().nextInt(juce::jmax(1, n));
+            proc_.previewSfx(i, preset);
+        };
+        page.addControl(g, std::move(play), " ", 1);   // a (blank) name line: the button gets a combo's height, not the cell's
+    }
 }
 
 juce::StringArray PhospheneEditor::parametersOnPages() const

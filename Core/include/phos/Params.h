@@ -246,7 +246,16 @@ enum : int { Level, Noise, Resonance, Brightness, ImpactDecay, Vowel, SwellDecay
                            ///< crosses from dry to the hall's send over its length, instead of the
                            ///< oscillating auto-pan and the constant hall_send fraction
              WanderSend,   ///< 0..1: how far the crossfade reaches by the event's own tail (x = 1)
+             // 24.09.2026, the user: "Im SFX-Fenster ist nach wie vor keine Auswahl fuer das Preset". One per
+             // family of the effect bank (Sfx.h, SfxPreset): 0 = Auto, the composer's draw per event as before;
+             // n = every event of that family plays bank preset n (Sfx::trigger). Appended; Auto everywhere is
+             // the effects strip of before, sample for sample.
+             PresetRiser, PresetDownlifter, PresetImpact, PresetSweep, PresetFormantShot, PresetReverseSwell,
+             PresetZap, PresetSquelch, PresetBubble, PresetReverseCrash, PresetAtmosphere,
              Count };
+/** @brief The first of the per-family preset choices, and how many there are. */
+constexpr int kFirstPreset = PresetRiser;
+constexpr int kNumPresetChoices = PresetAtmosphere - PresetRiser + 1;
 }
 /** @brief Parameters of the shamanic bed (module Texture, prefix "texture"; Texture.h). */
 namespace texture {

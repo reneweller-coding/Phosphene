@@ -30,6 +30,38 @@ constexpr double kUnisonPan[kPolyUnison] = { -1.0, 0.67, -0.33, 0.0, 0.33, -0.67
  */
 inline double driftFactor(double cents) { return 1.0 + cents * (0.6931471805599453 / 1200.0); }
 
+/**
+ * @brief The share of the unison detune the second oscillator's pair plays (24.09.2026).
+ *
+ * The pair sits on the outermost kept slots, which in a supersaw carry the widest detune (Szabo's outer
+ * offset, +-11 % of the curve) -- right for the two quietest of seven saws, wrong for a second oscillator
+ * that carries up to half the voice's power in two copies. Seed 5's first pad (a supersaw partner in
+ * unison) played every chord tone with a loud pair a third of a semitone either side: 15 %
+ * of its peak power more than a quarter tone off the grid, after every FM pad was already back on it.
+ * A quarter keeps the pair's stereo beat and puts it within the few cents osc2_detune means (seed 5: +7 .. +15
+ * cents, and no first pad of seeds 1..24 with more than a tenth of its power off the grid).
+ */
+constexpr double kOsc2Spread = 0.25;
+
+/**
+ * @brief The FM ratio a voice plays: poly.fm_ratio to the nearest half, never under 0.5.
+ *
+ * A two-operator pair puts its sidebands at f_c (1 +- k r). With r = p/q in lowest terms every one of
+ * them is a multiple of f_c / q, so the spectrum is harmonic; with any other r it is not, and that is
+ * the bell and the struck metal (Chowning, JAES 21(7), 1973 -- his bell is 1 : 1.4). A half keeps q at 1 or 2:
+ * the note's own harmonic series, or the one an octave under it.
+ *
+ * 24.09.2026, the user on the first track's pad: "klingen einfach nur schraeg und nicht, wie irgend
+ * etwas, was ich jemals in einem Psytrance-Song gehoert habe". Measured over the first track of seeds
+ * 1..24 (all Full-On, F# Phrygian): in 9 of 24 more than a tenth of the pad's peak power lay more
+ * than a quarter tone off the grid, and every one of the FM pads was among them. Seed 1's pad played
+ * at 1.91 -- the knob's 2.0 plus its recipe's thickness offset (Composer.cpp, kVoiceLoadings) -- so
+ * each chord tone carried partials at 0.91 and 2.91 times itself, a quarter tone off every note of
+ * the key, 7 dB under the chord. Every pitched voice plays chords or lines in a key; the metallic FM
+ * of the set lives in the percussion (the rim, the zap: perc.fm_ratio is not rounded).
+ */
+inline double harmonicFmRatio(double knob) { return std::max(0.5, std::round(knob * 2.0) * 0.5); }
+
 void svfCoefs(double fc, double damping, double sr, float& a1, float& a2, float& a3)
 {
     const double g = std::tan(kPiD * std::clamp(fc, 10.0, 0.45 * sr) / sr);
@@ -95,7 +127,7 @@ void Poly::reset()
 {
     slots_ = PolySlots{};
     ch_ = PolyChannels{};
-    for (int s = 0; s < kPolySlots; ++s) { slots_.dt[s] = 0.001f; slots_.inv[s] = 1000.0f; slots_.idxDecay[s] = 1.0f; slots_.pw[s] = 0.5f; wtPh_[s] = 0.0; wtDt_[s] = 0.0; wtLevel_[s] = 0; slotSaw_[s] = false; slotHzMul_[s] = 1.0; }
+    for (int s = 0; s < kPolySlots; ++s) { slots_.dt[s] = 0.001f; slots_.inv[s] = 1000.0f; slots_.idxDecay[s] = 1.0f; slots_.pw[s] = 0.5f; wtPh_[s] = 0.0; wtDt_[s] = 0.0; wtLevel_[s] = 0; slotSaw_[s] = false; slotHzMul_[s] = 1.0; slotSpread_[s] = 1.0; }
     for (int v = 0; v < kPolyVoices; ++v) {
         amp_[v].kill();
         fenv_[v] = 0.0f;
@@ -143,7 +175,7 @@ void Poly::writeSlotPitch(int voice)
     const double y = glideY_[voice], scale = glideScale_[voice], fmRatio = glideFmRatio_[voice];
     for (int u = uFirst; u < uLast; ++u) {
         const int s = voice * kPolyUnison + u;
-        const double hz = f0 * slotHzMul_[s] * (1.0 + kSupersawOffsets[u] * y * scale) * driftFactorHeld_[s];
+        const double hz = f0 * slotHzMul_[s] * (1.0 + kSupersawOffsets[u] * slotSpread_[s] * y * scale) * driftFactorHeld_[s];
         const double dt = std::min(hz / sr_, 0.45);
         slots_.dt[s] = static_cast<float>(dt);
         slots_.inv[s] = static_cast<float>(1.0 / dt);
@@ -290,7 +322,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     // while clamping the index costs nothing and is where the classic instruments draw the line as well
     // (Chowning, "The synthesis of complex audio spectra by means of frequency modulation", JAES 21(7),
     // 1973, section 3, on the bandwidth of the modulated spectrum).
-    const double fmRatio = std::max(0.0625, static_cast<double>(v[poly::FmRatio]));
+    const double fmRatio = harmonicFmRatio(v[poly::FmRatio]);
     const double fmRoom = std::max(0.0, (0.45 * sr_ - f0Note) / (f0Note * fmRatio) - 1.0);
     const double fmI = std::min(static_cast<double>(v[poly::FmIndex]), fmRoom);
     const float idxDecay = static_cast<float>(std::exp(-3.0 / (std::max(1.0, v[poly::FmDecay] * 0.001 * sr_))));
@@ -369,7 +401,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     // saw frame while its neighbour reads the voice's table, and the two are normalised to different
     // RMS values.
     glideScale_[voice] = detuneScale;
-    glideFmRatio_[voice] = v[poly::FmRatio];
+    glideFmRatio_[voice] = fmRatio;
 
     for (int u = 0; u < kPolyUnison; ++u) {
         const int s = voice * kPolyUnison + u;
@@ -389,6 +421,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
             wtLevel_[s] = 0;
             slotSaw_[s] = false;
             slotHzMul_[s] = 1.0;
+            slotSpread_[s] = 1.0;
             continue;
         }
         // Thermal drift: each unison slot has its own walk, so the seven saws of a supersaw age
@@ -399,9 +432,10 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         // Which of the two oscillators this slot is, and at which pitch (22.09.2026).
         const int slotOsc = bSlot[u] ? oscB : osc;
         slotHzMul_[s] = bSlot[u] ? hzMul2 : 1.0;
-        const double hz = f0 * slotHzMul_[s] * (1.0 + kSupersawOffsets[u] * y * detuneScale) * driftFactorHeld_[s];
+        slotSpread_[s] = bSlot[u] ? kOsc2Spread : 1.0;
+        const double hz = f0 * slotHzMul_[s] * (1.0 + kSupersawOffsets[u] * slotSpread_[s] * y * detuneScale) * driftFactorHeld_[s];
         const double dt = std::min(hz / sr_, 0.45);
-        const double mdt = std::min(hz * v[poly::FmRatio] / sr_, 0.45);
+        const double mdt = std::min(hz * fmRatio / sr_, 0.45);
         slots_.dt[s] = static_cast<float>(dt);
         slots_.inv[s] = static_cast<float>(1.0 / dt);
         slots_.mdt[s] = static_cast<float>(mdt);

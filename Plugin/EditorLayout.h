@@ -30,6 +30,7 @@ constexpr int kPagePad = 12;      ///< around the page
 /** @brief One control and the name under it. */
 struct Cell {
     int param = -1;                                   ///< global parameter id, -1 for an added control
+    std::vector<int> bound;                           ///< the parameters an added control drives (addControl)
     int units = 1;                                    ///< width in cell units
     int heightRows = 1;                               ///< height in cell rows; > 1 takes a band of its own
     bool tall = false;                                ///< occupies the whole cell height (no label line)
@@ -94,10 +95,13 @@ public:
      * @param units width in cell units
      * @param tall  use the whole cell height instead of leaving room for the name
      * @param rows  height in cell rows; more than one puts the control in a band of its own
+     * @param bound the global ids of the parameters the control drives (24.09.2026: the mixer's console, the
+     *              effect preset choosers), so groupParams() -- the manual, the help, the host test's "every
+     *              parameter stands on a page" -- sees them
      * @return the cell's index
      */
     int addControl(int groupIndex, std::unique_ptr<juce::Component> comp, const juce::String& name, int units = 1,
-                   bool tall = false, int rows = 1);
+                   bool tall = false, int rows = 1, const std::vector<int>& bound = {});
 
     /** @brief Measures and places everything for a page @p width; returns the height it needs. */
     int layout(int width);
@@ -113,7 +117,7 @@ public:
      *  @{ */
     int groupCount() const { return static_cast<int>(groups_.size()); }   ///< number of groups
     const juce::String& groupTitle(int index) const { return groups_[static_cast<size_t>(index)].title; }
-    /** @brief The global parameter ids of a group, in the order they are drawn (-1 cells left out). */
+    /** @brief The global parameter ids of a group, in the order they are drawn (an added control's bound ids with it). */
     std::vector<int> groupParams(int index) const;
     /** @} */
 

@@ -19,6 +19,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "EditorArrange.h"
 #include "EditorLayout.h"
+#include "EditorMixer.h"
 #include "PhospheneLookAndFeel.h"
 #include "PluginProcessor.h"
 #include "UpdateCheck.h"
@@ -232,6 +233,8 @@ public:
     HelpView* helpView() const { return help_.get(); }
     /** @brief Opens or closes the help page (the Help button, F1). */
     void setHelpVisible(bool show) { showHelp(show); }
+    /** @brief The mixer page's console (tests). */
+    phosui::MixerConsole* mixerConsole() const { return mixer_; }
 
 private:
     void buildPages();
@@ -259,6 +262,12 @@ private:
     };
     /** @brief Fills a chooser from the factory presets and the user's, grouped (after a save, again). */
     void fillPresetBox(PresetBox& pb);
+    /**
+     * @brief The effects page's "Effect Presets" group (24.09.2026): per family of the effect bank a chooser --
+     *        Auto, or one of the family's presets in submenus of 32 -- bound to sfx.preset_*, and a button that
+     *        auditions it in the running set.
+     */
+    void addSfxPresetGroup(phosui::ControlPage& page, juce::Colour tint);
     std::vector<std::unique_ptr<PresetBox>> presetBoxes_;   ///< one per synth page
     std::unique_ptr<juce::AlertWindow> presetNameDialog_;   ///< "Save preset" asks for a name
     void timerCallback() override;
@@ -293,6 +302,9 @@ private:
     /** @brief The pattern preview of each tab (null for the Set tab, which has the plan instead). */
     std::vector<PatternDisplay*> patterns_;
     std::vector<PatternDisplay*> percPatterns_;   ///< one per lane page, each lighting its own lane
+    phosui::MixerConsole* mixer_ = nullptr;       ///< on the Mix page (24.09.2026)
+    /** @brief The effect preset choosers' host links; declared after pages_, so they go before their boxes do. */
+    std::vector<std::unique_ptr<juce::ComboBoxParameterAttachment>> sfxPresetLinks_;
     std::vector<phos::NoteEvent> patternNotes_;   ///< scratch for the timer's read
     juce::OwnedArray<juce::TextButton> tabButtons_, laneButtons_;
     juce::Viewport viewport_;

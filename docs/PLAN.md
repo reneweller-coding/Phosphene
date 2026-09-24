@@ -8059,6 +8059,123 @@ während die Probe-Renders laufen; `applyParams` ebenfalls.
 - Voller ctest (MSVC): 132 von 132. Die Audio-Tests (Host, VST3, Realhost) brauchten zusammen 1753 statt rund
   4000 Prozess-Sekunden, weil kein Start mehr auf die Planung wartet. Der Datenordner blieb unberührt.
 
+**24.09.2026, Pads, Zips und Zaps, Effekt-Presets, Mixer mit Kanalzügen**
+
+Der Nutzer: „Gerade zu Beginn klingen die Pads einfach nur schräg und nicht, wie irgend etwas, was ich jemals
+in einem Psytrance-Song gehört habe. […] Die Zips und Zaps kommen nach wie vor viel zu oft. Im SFX-Fenster
+ist nach wie vor keine Auswahl für das Preset. Können wir im Mixer-Tab Meter für das Level für die einzelnen
+Kanalzüge anzeigen anstatt einfacher Drehknöpfe? Vielleicht sogar ganze Channel-Strips?"
+
+**Pads: gemessen, dann an der Ursache korrigiert.**
+- Messung: das Pad allein in den ersten 16 Takten des ersten Tracks, Seeds 1 bis 24 (alle Full-On, F#
+  Phrygisch, der Start des Plugins). Maß: Anteil der Spektralspitzen-Leistung, der mehr als einen Viertelton
+  neben dem 12-TET-Raster liegt.
+  - Vorher im Mittel 8,1 %, in 9 von 24 Tracks über 10 %. Das Pad ist im Intro die lauteste Spur (−8,4 dB
+    gegen −17 dB Drone).
+- **Ursache 1, FM mit nicht ganzzahligem Verhältnis.** `poly.fm_ratio` ist ein stetiger Regler (Vorgabe 2),
+  und das Rezept verschiebt ihn um bis zu ±0,9 (`kVoiceLoadings`, Dicke).
+  - Seed 1 spielte 1,91: Seitenbänder bei c·(1 ± 1,91 k), also 0,91 c und 2,91 c. Das ist ein Viertelton neben
+    jedem Ton der Tonart, 7 dB unter dem Akkord, Glocke statt Pad.
+  - Alle FM-Pads lagen über 10 %.
+  - Jetzt spielt jede Stimme das Verhältnis auf die nächste Hälfte gerundet (`harmonicFmRatio`, Poly.cpp).
+    Dann liegt jedes Seitenband auf der Obertonreihe des Tons oder der eine Oktave darunter (Chowning 1973).
+  - Metallisches FM bleibt der Percussion (`perc.fm_ratio` wird nicht gerundet).
+- **Ursache 2, der zweite Oszillator zu weit verstimmt.**
+  - Das Rezept durfte `osc2_detune` um ±25 Cent schieben. Seed 5 spielte jeden Akkordton doppelt, 31 Cent
+    auseinander und gleich laut, wie ein verstimmtes Klavier. Jetzt ±6 Cent: 9 ± 6 beim Pad, die Breite
+    eines Analog-Pads.
+  - Das Paar des zweiten Oszillators saß auf den äußeren Unison-Plätzen und erbte deren volle
+    Supersaw-Spreizung. Jetzt ein Viertel davon (`kOsc2Spread`).
+- **Ursache 3, die Quinte auf jedem Akkordton.** Ein Pad-Partner auf der Quinte ist ein zweiter Akkord eine
+  Quinte höher: Über C# spielt er G#, das F# Phrygisch nicht hat. Die Pad-Palette wählt jetzt Unisono (60 %)
+  oder die Oktave darüber (40 %). Drone und Stab behalten die Quinte (ein Ton, ein kurzer Schlag).
+- Nachher: im Mittel **0,9 %**, **kein** Track über 10 % (Seed 5: das Paar bei +7 bis +15 Cent).
+- Recherche zum Abgleich (KVR „Goa/Psytrance and music theory", Outerverse „Scales & modes in psytrance",
+  Chowning):
+  - Psytrance-Harmonik ist sparsam und modal.
+  - Die phrygische b2 lebt in Melodie und Arpeggio.
+  - Pads sind Supersaw- oder Wavetable-Flächen mit moderater Verstimmung.
+  - Ein nicht ganzzahliges FM-Verhältnis ist die Glocke.
+- Nicht angefasst: die Akkordtypen. m(b9), sus(b2) und Hijaz stammen aus der Vorgabe des Nutzers vom
+  22.09. Zusammen mit m(b5) haben sie vor dem Filter der Tonart in Goa 60 %, Dark 76 %, Hi-Tech 54 % und
+  Full-On (dem Start) 16 % des Gewichts (`kTypeWeight`). Die Reibung
+  (Leistung auf Halbton-Nachbarn) fiel mit den Klangkorrekturen von 8,9 auf 6,4 %. Ob Goa und Dark weniger b9
+  bekommen, ist dem Nutzer vorgelegt.
+
+**Zips und Zaps.** Gezählt über 12 Seeds × 3 Tracks (`phos_plandump --decisions`), kurze One-Shots (Zap,
+Squelch, Bubble, Alien Chatter, Stutter) je acht Takte:
+
+    Abschnitt     vorher  nachher
+    Groove         1,70    0,71
+    Drop           1,87    1,00
+    Drop 2         5,74    2,00
+    Break          0,66    0,47
+    Intro          0,53    0,40
+    gesamt         2049    884 Ereignisse
+
+- Die Squelch-Schicht des Klimax fiel von fast einem pro Takt auf einen im letzten Takt einer Vierergruppe
+  (0,7 × `sfx_amount`), ohne Paar.
+- Kleinkram auf Zwei-Takt-Enden: Chance 0,5 → 0,15. Gesten auf Vier-Takt-Enden: 1,2 → 0,8.
+- Die Dichte-Untergrenze (Regel vom 20.09., am 23.09. schon auf vier Takte gelockert) lässt jetzt sieben Takte
+  ohne Effekt zu und füllt den achten nur mit Sweep oder Swell, nie mit einem Zap.
+
+**Effekt-Presets.** Elf neue Parameter `sfx.preset_riser` … `sfx.preset_atmosphere`, je Familie der Bank,
+0 = Auto:
+- Auto ist der Zug des Composers je Ereignis wie bisher. Eine Zahl lässt jedes Ereignis der Familie dieses
+  Preset spielen (`Sfx::trigger`).
+- Im SFX-Tab die Gruppe „Effect Presets": je Familie eine Auswahl mit Untermenüs zu 32 und „Hear".
+- „Hear" spielt das Preset im laufenden Set (`Engine::previewSfx`), bei Auto eines der Familie zufällig. Bei
+  stehendem Transport ist nichts zu hören.
+
+**Mixer mit Kanalzügen** (`Plugin/EditorMixer.cpp`).
+- Dreizehn Züge in Part-Reihenfolge. Jeder hat Pan (die sechs Stimmen), Sends (Room, Hall, Delay bzw. FX und
+  Throw), Duck, Mute, einen senkrechten Fader und ein Meter.
+- Alle Regler sind dieselben Host-Parameter wie auf den Synth-Seiten.
+- Kick und Bass haben keinen eigenen Mix-Pegel; ihr Fader ist `kick.level` bzw. `bass.level`.
+- Das Meter liest, was der Part in den Mix gibt, am Stem-Abgriff (nach Fader, Gate und Duck, vor dem Master):
+  `Engine::setMetering` und `takeMeters`, im Plugin immer an. Der Mix bleibt bitgleich, weil nur gelesen
+  wird.
+  - RMS-Balken mit 300 ms Rückfall.
+  - Peak-Linie, 1,5 s gehalten, dann 20 dB/s.
+  - Den Peak in dBFS darunter.
+- Track-Gain und Sidechain-Zeiten stehen daneben in einer eigenen Gruppe.
+
+*Tests.*
+- Selbsttest:
+  - Eine FM-Stimme bei `fm_ratio` 1,91 hat keine Leistung neben den Obertönen (< −50 dB).
+  - Die Preset-Bereiche entsprechen den Familiengrößen. Ein festes Preset ersetzt das des Ereignisses sample-
+    gleich, Auto lässt es stehen.
+  - Die SFX-Untergrenze gilt jetzt für acht Takte.
+  - Die FM-Aliasing-Tests messen bei 7,5 statt 7,3.
+- Host-Test:
+  - Die Konsole hat einen Zug je Part. Der lauteste Zug zeigt Pegel und nach Mute exakt null, während die
+    anderen weiterspielen.
+  - Jede Familie hat ihre Auswahl mit Auto und allen Presets; „Zap 17" setzt `sfx.preset_zap`.
+  - Der Knopfdurchlauf sieht die Vorhör-Anforderung.
+- Plan-Schnappschüsse neu geschrieben (weniger Effekte, andere Pad-Partner).
+
+**Nachtrag, selbe Runde: fehlende Noten in der Muster-Vorschau.** Der Nutzer: „spielte das Pad (oder die Drone) und
+es wurde nichts angezeigt".
+- `PlugConductor::readPreview` gab nur Noten zurück, die im Vier-Takt-Fenster *beginnen*. Ein Pad-Akkord oder
+  Drone-Ton, der 8 oder 16 Takte hält, fehlte in allen Fenstern nach seinem ersten.
+- Jetzt gibt es jede Note, die im Fenster klingt. Die Vorschau hält eine Note, bis sie *geendet* hat (nicht 24
+  Takte ab dem Anschlag). Die Rolle schneidet an den Fensterrändern ab.
+- Host-Test: Ein Fenster ab Takt 17 zeigt die Noten, die vorher angeschlagen wurden und noch klingen.
+
+*ctest.*
+- Voller Lauf (MSVC, -j 12): 130 von 133, 1 deaktiviert.
+- Fehlschläge und ihre Behebung:
+  - `testArrangement`: Die Squelch-Untergrenze des Klimax war auf fast einen pro Takt ausgelegt; jetzt ein
+    Zehntel pro Takt.
+  - `testDialogue.levels`: Der Effekt-Median liegt 3,7 dB unter der Percussion, weil Atmosphären und Sweeps
+    einen größeren Anteil tragen. Die Grenze ist jetzt 4,0 dB statt 3,5.
+  - Host-Test, zwei Zeitfehler des Tests selbst:
+    - Die Muster-Vorschau las die Takte 16 bis 20 erst nach den bis zu 60 s Wartezeit auf Auto Gain. Jetzt
+      liest sie direkt nach den drei Sekunden Live-Pfad.
+    - Die Mixer-Prüfung maß vor dem Ende des Start-Handshakes. Jetzt wartet sie auf Klang.
+- Die drei einzeln wiederholt: bestanden. `%APPDATA%\Phosphene` blieb unberührt (Zeitstempel und Hash der
+  Einstellungsdatei vor und nach den Standalone-Screenshots gleich).
+
 ## 0. Kurzfassung
 
 Ein Instrument, das aus einem Seed, einem Stilprofil und einem Energiebogen ein komplettes

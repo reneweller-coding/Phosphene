@@ -101,6 +101,27 @@ void Engine::liveNoteOff(int pitch, int /*channel*/)
     liveTarget_[pitch] = -1;
 }
 
+void Engine::previewSfx(int choice, int preset)
+{
+    if (choice < 0 || choice >= sfx::kNumPresetChoices) return;
+    const double bps = beatsPerSample_ > 0.0 ? beatsPerSample_ : 145.0 / (60.0 * sr_);
+    const int n = static_cast<int>(std::lround(static_cast<double>(kPresetPreviewBeats[choice]) / bps));
+    sfx_.trigger(kPresetChoiceType[choice], std::max(1, n), 0.9f, 0.0, preset);
+}
+
+int Engine::takeMeters(float* peak, double* sumSq)
+{
+    for (int k = 0; k < kNumParts; ++k) {
+        peak[k] = meterPeak_[k];
+        sumSq[k] = meterSum_[k];
+        meterPeak_[k] = 0.0f;
+        meterSum_[k] = 0.0;
+    }
+    const int n = meterCount_;
+    meterCount_ = 0;
+    return n;
+}
+
 void Engine::liveAllOff()
 {
     for (int k = 0; k < 128; ++k) liveNoteOff(k, 0);
@@ -712,6 +733,12 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
             tap_->L[static_cast<int>(Part::Kick)][oi] = k;  tap_->R[static_cast<int>(Part::Kick)][oi] = k;
             tap_->L[static_cast<int>(Part::Bass)][oi] = bs; tap_->R[static_cast<int>(Part::Bass)][oi] = bs;
         }
+        if (metering_) {
+            const float k = masterGain_ * kg * kickBuf_[si], bs = masterGain_ * bg * bassBuf_[si];
+            meterAdd(static_cast<int>(Part::Kick), k, k);
+            meterAdd(static_cast<int>(Part::Bass), bs, bs);
+            ++meterCount_;
+        }
         float l = mono, r = mono, rl = 0.0f, rr = 0.0f, hl = 0.0f, hr = 0.0f, fl = 0.0f, fr = 0.0f;
         float hgl = 0.0f, hgr = 0.0f;   // the gated hall's input: the strips whose hall_gate is on
         float ml = 0.0f, mr = 0.0f;   // the melodic bus a stutter may replace (acid, lead, counter, arp, stab)
@@ -734,6 +761,10 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
                 const float extra = s == StripSfx ? sub : 0.0f;
                 tap_->L[part][oi] = masterGain_ * (sl + extra);
                 tap_->R[part][oi] = masterGain_ * (sr + extra);
+            }
+            if (metering_) {
+                const float extra = s == StripSfx ? sub : 0.0f;
+                meterAdd(s + static_cast<int>(Part::Perc), masterGain_ * (sl + extra), masterGain_ * (sr + extra));
             }
             if (s >= StripAcid && s <= StripStab) { ml += sl; mr += sr; }
             else { l += sl; r += sr; }

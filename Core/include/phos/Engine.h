@@ -83,7 +83,9 @@
 #include "phos/TempoDelay.h"
 #include "phos/Texture.h"
 #include "phos/Vocal.h"
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -144,6 +146,31 @@ public:
     void liveAllOff();
     /** @brief Whether the composer's notes of @p part are replaced by the keyboard (the plugin's MIDI out skips them too). */
     bool generatedSilenced(Part part) const;
+    /** @} */
+
+    /**
+     * @brief Plays bank preset @p preset of the family behind preset choice @p choice now, for the effects page's
+     *        audition (24.09.2026; Sfx.h, kPresetChoiceType). Rendering thread, between process() calls. The
+     *        family's sfx.preset_* choice still wins inside Sfx::trigger, so the page passes the preset it shows.
+     */
+    void previewSfx(int choice, int preset);
+
+    /**
+     * @name Channel meters (24.09.2026, the mixer's strips)
+     * What each part puts into the mix -- the stem tap's signal (StemTap): after its strip gain, trance gate and
+     * duck, times the master gain, before the master -- as a peak and a sum of squares (the mean of the two
+     * channels) per part since the last takeMeters(). Off unless switched on, and reading only: the mix is the
+     * same to the bit either way.
+     * @{ */
+    /** @brief Switches the gathering on or off (rendering thread). */
+    void setMetering(bool on) { metering_ = on; }
+    /**
+     * @brief Hands over what was gathered since the last call and starts again (rendering thread).
+     * @param peak  kNumParts peaks (absolute sample values)
+     * @param sumSq kNumParts sums of squares
+     * @return the number of samples they cover
+     */
+    int takeMeters(float* peak, double* sumSq);
     /** @} */
 
     Engine();
@@ -319,6 +346,17 @@ private:
     bool kickMute_ = false, bassMute_ = false;
     float masterGain_ = 1.0f, ceiling_ = 1.0f;
     StemTap* tap_ = nullptr;               ///< where the stems go (setStemTap), null = nowhere
+    bool metering_ = false;                ///< setMetering()
+    float meterPeak_[kNumParts] = {};      ///< takeMeters(): peak per part
+    double meterSum_[kNumParts] = {};      ///< takeMeters(): sum of squares per part
+    int meterCount_ = 0;                   ///< takeMeters(): samples gathered
+    /** @brief Adds one stereo sample of part @p part to the meters. */
+    void meterAdd(int part, float l, float r)
+    {
+        const float a = std::max(std::fabs(l), std::fabs(r));
+        if (a > meterPeak_[part]) meterPeak_[part] = a;
+        meterSum_[part] += 0.5 * (static_cast<double>(l) * l + static_cast<double>(r) * r);
+    }
     std::vector<int8_t> ownOf_;            ///< per parameter: which own-sound switch governs it (0 kick .. 8 drone), -1 none
     int liveTarget_[128];                  ///< per pitch: the voice a played note went to (0 acid, 1.. poly), -1 none
     unsigned livePlayed_ = 0;              ///< voices the keyboard has played ("By channel" replaces from the first note)

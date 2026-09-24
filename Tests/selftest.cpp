@@ -4526,7 +4526,7 @@ void testPoly()
         struct Case { double ratio; int pitch; const char* what; };
         double worst = -1e9;
         std::string detail;
-        for (const Case& c : { Case{ 7.3, 84, "C6 r=7.3" }, Case{ 7.3, 93, "A6 r=7.3" }, Case{ 3.5, 84, "C6 r=3.5" } }) {
+        for (const Case& c : { Case{ 7.5, 84, "C6 r=7.5" }, Case{ 7.5, 93, "A6 r=7.5" }, Case{ 3.5, 84, "C6 r=3.5" } }) {   // 7.3 until 24.09.2026: a voice plays the ratio to the nearest half (Poly.cpp, harmonicFmRatio)
             ParamStore p;
             auto e = makePoly(fmt("lead.osc=FM lead.fm_index=10 lead.fm_ratio=%g lead.fm_decay=2000 lead.detune=0 lead.mix=0 lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 "
                                   "lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 lead.width=0 "
@@ -4539,6 +4539,22 @@ void testPoly()
             detail += fmt("%s %.1f dB  ", c.what, a);
         }
         check(worst < -45.0, "FM: the index is limited to the bandwidth Carson's rule allows, so a high note does not alias over its own carrier", detail);
+    }
+    // 24.09.2026, the user on the first track's pad: "klingen einfach nur schraeg". Its FM ratio was 1.91 -- the knob's
+    // 2 plus the recipe's offset -- and every chord tone carried sidebands a quarter tone off the key. A voice plays
+    // the ratio to the nearest half (Poly.cpp, harmonicFmRatio), so at 1.91 everything it sounds is a harmonic of its
+    // note (the pad stem of seed 1 had carried those sidebands 7 dB under the chord).
+    {
+        ParamStore p;
+        auto e = makePoly("lead.osc=FM lead.fm_ratio=1.91 lead.fm_index=3 lead.fm_decay=2000 lead.detune=0 lead.mix=0 lead.osc2=Off lead.lfo_cutoff=0 "
+                          "lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 "
+                          "lead.hp_floor=40 lead.width=0 lead.delay_send=0 lead.dynamic_detune=0 lead.drift=0 lead.amp_attack=1 lead.amp_sustain=1 "
+                          "lead.amp_decay=4000 lead.vel_sens=0", p, PolyInstance::Lead);
+        e->noteOn(57, 1.0f, 8.0, 1 << 24, 0.0);
+        const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
+        const double off = lineAliasDb(y, 9600, harmonicLines(midiToHz(57), sr), midiToHz(57), sr, 20.0);
+        check(off < -50.0, "FM: a ratio between the halves plays the nearest half, so the voice stays harmonic (no bell in a chord)",
+              fmt("power off the harmonics of A3 at fm_ratio 1.91: %.1f dB", off));
     }
     // The supersaw reads the saw frame, not the instance's table and position: two engines whose
     // table, position, position envelope and LFO stand at opposite ends must give the same samples.
@@ -5754,7 +5770,7 @@ void testMeasure()
         { "FM I=10 r=2",   "lead.osc=FM lead.fm_index=10 lead.fm_ratio=2 lead.fm_decay=2000", 2.0 },
         { "FM I=2.5 r=3.5","lead.osc=FM lead.fm_index=2.5 lead.fm_ratio=3.5 lead.fm_decay=2000", 3.5 },
         { "FM I=10 r=3.5", "lead.osc=FM lead.fm_index=10 lead.fm_ratio=3.5 lead.fm_decay=2000", 3.5 },
-        { "FM I=10 r=7.3", "lead.osc=FM lead.fm_index=10 lead.fm_ratio=7.3 lead.fm_decay=2000", 7.3 },
+        { "FM I=10 r=7.5", "lead.osc=FM lead.fm_index=10 lead.fm_ratio=7.5 lead.fm_decay=2000", 7.5 },
     };
     for (const Case& c : kCases) {
         std::printf("  %-14s", c.name);
@@ -10312,6 +10328,31 @@ void testSoundPresets()
     const auto withOwn = walk(true), without = walk(false);
     check(withOwn.first == 0 && without.first > 0, "own sound: the lead's sound knobs are what the page shows at every block; without it the composer moves them",
           fmt("blocks with a lead knob off the page: %d of %d with own sound, %d of %d without", withOwn.first, withOwn.second, without.first, without.second));
+
+    // The effect presets (24.09.2026, the user: "Im SFX-Fenster ist nach wie vor keine Auswahl fuer das Preset").
+    // Each family's choice has the family's size for its range, and a fixed choice makes an event play that preset
+    // whatever preset the event carries -- the same samples as the event carrying it itself -- while Auto plays the
+    // event's own.
+    {
+        ParamStore q;
+        const int sb = q.base(Module::Sfx);
+        bool ranges = true;
+        for (int i = 0; i < sfx::kNumPresetChoices; ++i)
+            ranges = ranges && static_cast<int>(q.desc(sb + sfx::kFirstPreset + i).maxValue) == kSfxBankCount[static_cast<int>(kPresetChoiceType[i])]
+                     && sfxPresetChoice(kPresetChoiceType[i]) == i;
+        auto zap = [&](float fixed, int carried) {
+            q.set(sb + sfx::PresetZap, fixed);
+            Sfx x;
+            x.prepare(48000.0);
+            std::vector<float> v = moduleValues(q, Module::Sfx);
+            x.update(v.data(), 6);
+            x.trigger(SfxType::Zap, 12000, 1.0f, 0.0, carried);
+            return renderMono([&](float* L, float* R, int n) { x.process(L, R, n); }, 16000);
+        };
+        const std::vector<float> fixed = zap(17.0f, 5), carried = zap(0.0f, 17), own = zap(0.0f, 5);
+        check(ranges && fixed == carried && fixed != own,
+              "effect presets: a choice per family with the family's size, a fixed choice replaces the event's preset, Auto keeps it");
+    }
 }
 
 /**
@@ -12656,7 +12697,7 @@ void testArrangement()
     check(pdbs > 0 && pdbBad == 0 && pdbHeld == 0 && pdbKick == 0,
           "pre-drop break: no kick or bass in it, beat 4 of its last bar holds exactly one vocal or zap and nothing sounds into it",
           fmt("%d pre-drop breaks, %d with anything else on beat 4, %d notes held into it, %d kick or bass notes in them", pdbs, pdbBad, pdbHeld, pdbKick));
-    check(climaxBars > 0 && climaxOpen == climaxBars && climaxRide == climaxBars && squelches >= climaxBars / 3   // 23.09.2026: 0.6 a bar, from a half
+    check(climaxBars > 0 && climaxOpen == climaxBars && climaxRide == climaxBars && squelches >= climaxBars / 10   // 24.09.2026: one in a four-bar group's last bar at 0.7 x sfx_amount ("viel zu oft"); 23.09.2026: 0.6 a bar, from a half
               // The arp: an octave up in drop 2 always (Melody.cpp); where the register guard had already lifted
               // drop 1's arp over the lead, the two stand level -- never lower (measured once in 16, 19.09.2026).
               // 20.09.2026, round "dialogue": the user's register rule put the lead in C4..B4, so in drop 1
@@ -14626,9 +14667,10 @@ void testDialogueScore()
                   tracksSeen, notes, worstCover, lowUnderKick, per.c_str()));
     }
 
-    // (f) The effect floor: in a groove or a drop, never four bars in a row without an effect event
-    //     (23.09.2026, round "SFX": two until then; the user asked for fewer short zips, the literature
-    //     describes the effects as a layering with rising density rather than steady fire).
+    // (f) The effect floor: in a groove or a drop, never eight bars in a row without an effect event
+    //     (23.09.2026, round "SFX": two until then, then four; 24.09.2026 eight -- the user still heard the
+    //     zips "viel zu oft", and the literature describes the effects as a layering at the phrase ends
+    //     with rising density rather than steady fire).
     {
         int worst = 0, coreBars = 0, runsOfTwo = 0;
         for (int t = 0; t < tracks; ++t) {
@@ -14645,13 +14687,13 @@ void testDialogueScore()
                     if (carries.count(b) != 0) { run = 0; continue; }
                     ++run;
                     worst = std::max(worst, run);
-                    if (run == 4) ++runsOfTwo;
+                    if (run == 8) ++runsOfTwo;
                 }
             }
         }
-        check(coreBars > 500 && worst <= 3 && runsOfTwo == 0,
-              "in the groove no four bars in a row are without an effect event (a sweep, a swell, a zap, a glitch)",
-              fmt("%d groove and drop bars, longest empty run %d bars, %d runs of four or more", coreBars, worst, runsOfTwo));
+        check(coreBars > 500 && worst <= 7 && runsOfTwo == 0,
+              "in the groove no eight bars in a row are without an effect event (a sweep, a swell, a zap, a glitch)",
+              fmt("%d groove and drop bars, longest empty run %d bars, %d runs of eight or more", coreBars, worst, runsOfTwo));
     }
 
     // (g) Pan and echo are properties of the role, not of the draw: over every track of the walk the
@@ -14992,7 +15034,10 @@ void testDialogueLevels()
     // background events at -5 dB under the candy's level by design (the literature's background layer), and
     // they pull the strip's "while sounding" median down -- 3.2 dB under the percussion, measured, where the
     // short candy alone stood within 2. The intent, a *hit* as loud as a percussion hit, holds for the candy.
-    check(from >= 0 && std::fabs(sfx - perc) <= 3.5 && std::fabs(voc - perc) <= 2.5 && sfxShare > 0.10 && vocShare > 0.03,
+    // 4.0 dB since 24.09.2026: the short candy was thinned by more than half (the user: "Die Zips und Zaps kommen nach
+    // wie vor viel zu oft"), so the atmospheres and sweeps carry more of the strip's sounding frames and its median
+    // sank further -- 3.7 dB under the percussion, measured on the same seed, with every event's level unchanged.
+    check(from >= 0 && std::fabs(sfx - perc) <= 4.0 && std::fabs(voc - perc) <= 2.5 && sfxShare > 0.10 && vocShare > 0.03,
           "an effect event is as loud as a percussion hit, and a spoken phrase sits with them",
           fmt("median level under the full mix while sounding, over %d drop bars: effects %+.2f dB (%.0f %% of the frames), "
               "voices %+.2f dB (%.0f %%), percussion %+.2f dB (%.0f %%)",

@@ -145,6 +145,11 @@ Four-voice voicings with the smallest voice movement between chords, through the
 The pads carry the blocks that have no lead and no acid, and the trance gate gives them their
 movement.
 
+Every pitched voice plays its FM ratio to the nearest half (1, 1.5, 2, ...), so an FM pad or lead is
+always harmonic: a ratio in between makes the bell and struck-metal spectra that sounded out of tune
+under a chord. A second oscillator stays within a few cents of its interval, and the pad's partner
+plays in unison or an octave up, never a fifth, which would stack a second chord on the first.
+
 == Stab ==
 
 Short chord hits on the off-beats and the phrase ends, the punctuation of a groove. They are voiced
@@ -162,15 +167,33 @@ zaps; the composer places them at the form's boundaries -- a riser over the last
 buildup, ending exactly on the drop, the formant shot on the last beat of the pre-drop break, a
 descending sweep into the drop.
 
+Short one-shots -- zaps, squelches, bubbles, alien chatter -- fall at the ends of phrases, about one
+in eight bars of a groove and one in four of the climax; a groove is never left eight bars without an
+effect, and what fills such a gap is a sweep or a swell, never a zap.
+
+Effect Presets: every family of the effect bank (2048 presets in eleven families: riser, downlifter,
+impact, sweep, formant shot, reverse swell, zap, squelch, bubble, reverse crash, atmosphere) has a
+chooser. Auto lets the generator draw a preset of the family for every event, never the same twice in
+a track; a number makes every event of that family play that preset. "Hear" plays the chosen preset
+in the running set (with Auto, one of the family at random); while the transport stands nothing
+sounds.
+
 The two send effects are a short room and a long hall, both feedback delay networks. Their returns
 are ducked with the kick like everything else, and high-passed: a reverb tail in the bass register is
 mud.
 
 == Mixer / Master ==
 
-Level, mute and sends per part, the sidechain matrix, and the master chain: bus compressor, mono
-bass, a two-times oversampled knee clipper, a lookahead true-peak limiter and a safety clip, metered
-to ITU-R BS.1770.
+A channel strip per part: its pan (the six voices), its sends to the room, the hall and its delay or
+effects bus, its duck under the kick, the mute ("M") and the fader, beside a meter of what the part
+puts into the mix -- after fader, trance gate and duck, before the master. The green-to-red bar is the
+RMS level, the line above it the peak, held for a second and a half; the figure under the meter is
+that peak in dBFS. The knobs of a strip are the same parameters its synth page shows. Kick and bass
+have no strip level of their own: their fader is the synth's level.
+
+Beside the strips the track gain and the sidechain's times, and the master chain: bus compressor,
+mono bass, a two-times oversampled knee clipper, a lookahead true-peak limiter and a safety clip,
+metered to ITU-R BS.1770.
 
 Auto Gain renders four four-bar windows of the track through the whole master chain, measures them
 and offsets the master gain so that the output meets the loudness target. It runs when a track is

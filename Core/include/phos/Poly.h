@@ -334,6 +334,7 @@ private:
     bool  sawVoice_[kPolyVoices] = {};        ///< every slot of the voice is the supersaw: the fast path
     bool  slotSaw_[kPolySlots] = {};          ///< this slot reads the Classic saw frame rather than the table
     double slotHzMul_[kPolySlots] = {};       ///< the slot's pitch against the note (the second oscillator's interval)
+    double slotSpread_[kPolySlots] = {};      ///< the share of the unison detune the slot plays (Poly.cpp, kOsc2Spread)
     double lfo2Ph_ = 0.0;                     ///< the voice LFO's phase: one per instance, free-running
     float lfo2Inc_ = 0.0f;                    ///< its step per sample, from poly::LfoBeats and the tempo
     float lfo2Cut_ = 0.0f, lfo2Pitch_ = 0.0f, lfo2Amp_ = 0.0f;   ///< its three depths, from update()

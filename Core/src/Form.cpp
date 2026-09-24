@@ -1119,7 +1119,10 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
             const bool four = b % 4 == 0;
             // 23.09.2026, round "SFX": the short candy at half its old chance -- the user: "die kurzen Zips und
             // Zaps [...] wiederholen sich viel zu oft und nerven" -- the four-bar gestures as they were.
-            const float p = amount * density * trackDensity * (four ? 1.2f : 0.5f);
+            // 24.09.2026, the user again: "Die Zips und Zaps kommen nach wie vor viel zu oft". Counted over twelve
+            // seeds of three tracks: 1.7 short one-shots per eight bars of groove, 1.9 in a drop, 5.7 in drop 2.
+            // The two-bar candy 0.5 -> 0.15, the four-bar gesture 1.2 -> 0.8: the candy lives at the phrase ends.
+            const float p = amount * density * trackDensity * (four ? 0.8f : 0.15f);
             const float roll = c.uniform();
             const int kind = drawIndex(c, four ? wLong : wShort, 4);
             const int where = c.below(4);
@@ -1217,9 +1220,12 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
             // 23.09.2026, round "SFX": 0.6 of sfx_amount per bar, the pair in one odd bar of three -- one and a
             // half squelches a bar (72 in a drop of 48) were the "Zips und Zaps [...] viiiel zu oft" the user
             // heard, and the same synthesis every time; now about 0.7 a bar, each from its own bank preset.
-            if (roll >= 0.6f * amount) continue;
+            // 24.09.2026: still "viel zu oft" -- 0.7 a bar was 5.7 short one-shots per eight bars of drop 2. One
+            // squelch in the last bar of a four-bar group, at 0.7 of sfx_amount, and no pair: about one per eight
+            // bars at the default. The three draws stay per bar, so the stream below keeps its shape.
+            (void)k1;
+            if (b % 4 != 3 || roll >= 0.7f * amount) continue;
             add(start + b * bar + kGaps[k0], 0.25f, SfxType::Squelch);
-            if (b % 2 == 1 && k1 != k0 && k1 % 3 == 0) add(start + b * bar + kGaps[k1], 0.25f, SfxType::Squelch);
         }
     }
 
@@ -1249,7 +1255,9 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
     // in build-ups with *rising* density, not as steady fire (Psychedelic Island, "Deconstructing classic
     // psytrance tracks"; Myloops), and the user asked for fewer short zips. The floor now lets three bars
     // pass without an event and fills the fourth -- leaning long: a sweep or a swell before a zap.
-    static const double kFillWeights[4] = { 0.40, 0.30, 0.15, 0.15 };   // sweep, reverse swell, zap, squelch
+    // 24.09.2026 ("nach wie vor viel zu oft"): a phrase -- seven bars may pass, the eighth is filled -- and
+    // never with a short one-shot: the floor is there so a groove does not go dry, not to add zips.
+    static const double kFillWeights[4] = { 0.55, 0.45, 0.0, 0.0 };   // sweep, reverse swell, zap, squelch
     static const SfxType kFillTypes[4] = { SfxType::Sweep, SfxType::ReverseSwell, SfxType::Zap, SfxType::Squelch };
     for (int i = 0; i < f.count; ++i) {
         const Section& s = f.section[i];
@@ -1258,7 +1266,7 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
             const int at = s.startBar + b;
             if (at <= 2 || at >= lastBar) continue;
             bool any = false;
-            for (int k = 0; k <= 3; ++k) any = any || carries[static_cast<size_t>(at - k)] != 0;
+            for (int k = 0; k <= 7 && k <= at; ++k) any = any || carries[static_cast<size_t>(at - k)] != 0;
             if (any) continue;
             const int kind = drawIndex(gapRng, kFillWeights, 4);
             const int where = gapRng.below(4);

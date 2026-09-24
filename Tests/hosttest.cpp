@@ -742,6 +742,20 @@ int main(int argc, char** argv)
         check(allFinite, "the live path stays finite");
         check(loudBlocks > blocks * 3 / 4, "the composer thread keeps the engine fed ("
                                                + juce::String(loudBlocks) + " of " + juce::String(blocks) + " blocks sounding)");
+        // What the editor's pattern rolls draw: the bars the conductor has composed, by part. Read here, three seconds
+        // after the jump to bar 16 (24.09.2026): the waits below for Auto Gain and the line levels run as long as the
+        // measurement takes, and under a loaded suite the transport had left bars 16 to 20 behind by then.
+        std::vector<NoteEvent> pattern;
+        const bool gotPattern = p->readPattern(16, 4, pattern);
+        // 24.09.2026, the user: "spielte das Pad (oder die Drone) und es wurde nichts angezeigt". A window that
+        // starts inside a held note -- bar 17, one bar into whatever the pads and the drone struck on bar 16 --
+        // shows that note, struck before it.
+        std::vector<NoteEvent> heldWindow;
+        p->readPattern(17, 1, heldWindow);
+        int held = 0;
+        for (const NoteEvent& e : heldWindow) held += e.beat < 17.0 * kBeatsPerBar ? 1 : 0;
+        check(held > 0, "the pattern preview shows the notes still sounding from before its window (" + juce::String(held)
+                            + " held into bar 17)");
         // 22.09.2026: Auto Gain is measured after the start now, so the check is that it *arrives*.
         // The plan starts deferred with no offset; within a few seconds of playing the composer
         // thread has measured it, written it into the plan and pushed it as a two-bar ramp, and the
@@ -796,9 +810,7 @@ int main(int argc, char** argv)
         }
         check(worstRun * block / sr < 0.15, "no gap longer than 150 ms while it plays (worst "
                                                 + juce::String(worstRun * block / sr * 1000.0, 1) + " ms)");
-        // What the editor's pattern rolls draw: the bars the conductor has composed, by part.
-        std::vector<NoteEvent> pattern;
-        const bool got = p->readPattern(16, 4, pattern);
+        const bool got = gotPattern;
         int kicks = 0, percs = 0;
         for (const NoteEvent& e : pattern) {
             kicks += e.part == Part::Kick ? 1 : 0;
@@ -1355,6 +1367,75 @@ int main(int argc, char** argv)
                           "help: every tab has its chapter, the help opens at the tab's chapter and lists its parameters"
                               + (noChapter.isEmpty() ? juce::String() : " (no chapter: " + noChapter.joinIntoString(", ") + ")"));
                 }
+                // 24.09.2026, the user: "Koennen wir im Mixer-Tab Meter fuer das Level fuer die einzelnen Kanalzuege
+                // anzeigen [...] Vielleicht sogar ganze Channel-Strips?" A strip per part, its meter reading what the
+                // part puts into the mix: loud where it plays, nothing at all where its mute is on.
+                if (phosui::MixerConsole* mc = phos->mixerConsole()) {
+                    phos->setTab(TabMix);
+                    p->play();
+                    juce::AudioBuffer<float> run(2, 256);
+                    // The start is a handshake with the composer thread; until it is done the engine renders nothing,
+                    // and "restarting" is not even raised until the thread has seen the request. So: until sound comes.
+                    float pk[phos::kNumParts], rms[phos::kNumParts];
+                    bool sounding = false;
+                    for (int i = 0; i < 4000 && !sounding; ++i) {
+                        feed(*p, run, 1);
+                        sounding = run.getMagnitude(0, run.getNumSamples()) > 1.0e-5f;
+                        if (!sounding) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                    }
+                    p->takeChannelMeters(pk, rms);
+                    feed(*p, run, 400);   // two seconds
+                    mc->pollMeters();
+                    int loudest = 0;
+                    for (int k = 1; k < mc->stripCount(); ++k) if (mc->strip(k).rmsDb() > mc->strip(loudest).rmsDb()) loudest = k;
+                    const float before = mc->strip(loudest).rmsDb();
+                    // Its mute: the same parameter the strip's "M" drives.
+                    const std::vector<int>& ids = mc->strip(loudest).params();
+                    int muteId = -1;
+                    for (int id : ids) if (juce::String(p->params().key(id)).endsWith("_mute")) muteId = id;
+                    if (muteId >= 0) p->params().set(muteId, 1.0f);
+                    p->takeChannelMeters(pk, rms);
+                    feed(*p, run, 100);
+                    p->takeChannelMeters(pk, rms);
+                    int others = 0;
+                    for (int k = 0; k < phos::kNumParts; ++k) others += k != loudest && rms[k] > 1.0e-4f ? 1 : 0;
+                    const float mutedPeak = pk[loudest];
+                    if (muteId >= 0) p->params().set(muteId, 0.0f);
+                    juce::Image img(juce::Image::ARGB, 1280, 800, true);
+                    juce::Graphics g(img);
+                    phos->setBounds(0, 0, 1280, 800);
+                    phos->paintEntireComponent(g, true);
+                    check(mc->stripCount() == phos::kNumParts && before > -40.0f && muteId >= 0 && mutedPeak == 0.0f && others >= 1,
+                          "mixer: a strip per part (" + juce::String(mc->stripCount()) + "); the loudest, "
+                              + juce::String(phos::kPartNames[loudest]) + ", read " + juce::String(before, 1) + " dB RMS and nothing ("
+                              + juce::String(mutedPeak) + ") once its mute was on, while " + juce::String(others) + " others played on");
+                }
+                // 24.09.2026, the user: "Im SFX-Fenster ist nach wie vor keine Auswahl fuer das Preset". Every family's
+                // chooser holds Auto and every preset of the family, and choosing one sets its parameter.
+                {
+                    phos->setTab(TabFx);
+                    std::vector<juce::ComboBox*> boxes;
+                    std::function<void(juce::Component&)> find = [&](juce::Component& c) {
+                        for (int i = 0; i < c.getNumChildComponents(); ++i) {
+                            juce::Component* k = c.getChildComponent(i);
+                            if (auto* cb = dynamic_cast<juce::ComboBox*>(k)) if (cb->getTooltip().startsWith("sfx.preset_")) boxes.push_back(cb);
+                            if (k != nullptr) find(*k);
+                        }
+                    };
+                    find(*phos);
+                    bool sizes = boxes.size() == static_cast<size_t>(phos::sfx::kNumPresetChoices);
+                    for (size_t i = 0; sizes && i < boxes.size(); ++i)
+                        sizes = boxes[i]->getNumItems() == 1 + phos::kSfxBankCount[static_cast<int>(phos::kPresetChoiceType[i])];
+                    const int zapId = p->params().find("sfx.preset_zap");
+                    juce::ComboBox* zap = nullptr;
+                    for (juce::ComboBox* cb : boxes) if (cb->getTooltip().startsWith("sfx.preset_zap")) zap = cb;
+                    if (zap != nullptr) zap->setSelectedItemIndex(17, juce::sendNotificationSync);
+                    const float chosen = zapId >= 0 ? p->params().get(zapId) : -1.0f;
+                    if (zapId >= 0) p->params().set(zapId, 0.0f);
+                    check(sizes && zap != nullptr && chosen == 17.0f,
+                          "effect presets: a chooser per family (" + juce::String(static_cast<int>(boxes.size())) + ") with Auto and every "
+                              "preset of it; choosing \"Zap 17\" sets sfx.preset_zap to " + juce::String(chosen));
+                }
                 phos->setTab(0);
 
                 // 22.09.2026, the user: "zudem funktionieren einige Knoepfe in der GUI nicht, z.B. in
@@ -1372,6 +1453,7 @@ int main(int argc, char** argv)
                     const phos::ParamStore& ps = p->params();
                     for (int i = 0; i < ps.count(); ++i) sig << juce::String(ps.get(i), 4) << ",";
                     const TransportView tv = p->transport();
+                    sig << juce::String(p->pendingSfxPreview()) << ",";   // the effect presets' audition (24.09.2026)
                     sig << (tv.playing ? "P" : "-") << juce::String(p->seed()) << "," << juce::String(tv.bar)
                         << "," << juce::String(phos->tab())
                         << (p->muted() ? "M" : "-") << (p->followsHost() ? "F" : "-");

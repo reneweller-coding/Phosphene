@@ -197,6 +197,12 @@ constexpr int8_t kLaneCounter = static_cast<int8_t>(WaveTableLane::Counter);
 // every pad the rendered spread of the pad's centroid across twenty tracks fell from 915 to 321
 // cents, because a low partner pulls every track's centroid to the same place.
 //
+// Nor does the pad answer at a fifth (24.09.2026). The partner doubles every tone of the chord, so a
+// fifth over a chord is a second chord a fifth higher: over F# Phrygian's C# it plays G#, which the
+// mode does not have, and over a sus2 or an m7 it stacks new seconds onto the ones the chord already
+// has. The drone plays one note, the stab a short hit -- a fifth there is an organ or a rave stab;
+// under a held chord it was part of what the user heard as "schraeg".
+//
 // Per row: the first oscillator's weights; the built-in candidate tables; the library lanes; the
 // filter responses; the second oscillator's weights (index 0 = none, and it is the largest
 // everywhere -- a second oscillator is a colour a track may draw, not a thing every track has); the
@@ -208,7 +214,7 @@ const VoicePalette kVoicePalette[kPolyInstances] = {
     /* counter */ { { 0.08, 0.17, 0.20, 0.55 }, { 5, 1, 2, -1, -1, -1 },   { kLaneCounter, -1, -1 },     { 0.40, 0.40, 0.0, 0.20 }, { 0.45, 0.05, 0.20, 0.20, 0.10 }, { 0.05, 0.30, 0.10, 0.30, 0.05, 0.20 }, { 1.0f, 0.8f, 0.8f, 1.0f, 1.0f } },
     /* arp     */ { { 0.22, 0.20, 0.13, 0.45 }, { 2, 3, -1, -1, -1, -1 },  { kLaneArp, -1, -1 },         { 0.75, 0.25, 0.0, 0.00 }, { 0.50, 0.10, 0.15, 0.10, 0.15 }, { 0.02, 0.28, 0.05, 0.25, 0.05, 0.35 }, { 1.0f, 0.0f, 0.8f, 1.0f, 0.6f } },
     /* stab    */ { { 0.28, 0.18, 0.09, 0.45 }, { 3, 4, -1, -1, -1, -1 },  { kLaneArp, kLaneLead, -1 },  { 0.70, 0.30, 0.0, 0.00 }, { 0.45, 0.15, 0.15, 0.10, 0.15 }, { 0.05, 0.35, 0.10, 0.20, 0.05, 0.25 }, { 1.0f, 0.0f, 1.0f, 1.0f, 0.5f } },
-    /* pad     */ { { 0.15, 0.08, 0.12, 0.65 }, { 1, 2, 5, -1, -1, -1 },   { kLanePad, -1, -1 },         { 0.85, 0.00, 0.0, 0.15 }, { 0.30, 0.10, 0.25, 0.15, 0.20 }, { 0.00, 0.00, 0.12, 0.45, 0.15, 0.28 }, { 0.8f, 1.0f, 1.0f, 1.0f, 1.0f } },
+    /* pad     */ { { 0.15, 0.08, 0.12, 0.65 }, { 1, 2, 5, -1, -1, -1 },   { kLanePad, -1, -1 },         { 0.85, 0.00, 0.0, 0.15 }, { 0.30, 0.10, 0.25, 0.15, 0.20 }, { 0.00, 0.00, 0.00, 0.60, 0.00, 0.40 }, { 0.8f, 1.0f, 1.0f, 1.0f, 1.0f } },
     /* drone   */ { { 0.06, 0.20, 0.09, 0.65 }, { 1, -1, -1, -1, -1, -1 }, { kLaneDrone, kLanePad, -1 }, { 0.90, 0.10, 0.0, 0.00 }, { 0.30, 0.05, 0.30, 0.10, 0.25 }, { 0.00, 0.00, 0.05, 0.45, 0.20, 0.30 }, { 0.7f, 0.6f, 1.0f, 0.8f, 1.0f } },
 };
 
@@ -300,7 +306,10 @@ const Loading kVoiceLoadings[] = {
     // analogue pad. The LFO's three depths and its period are the motion direction: that is what the
     // direction is for, and they are the cheapest movement in the engine (one sine per 16 samples for
     // a whole instance, read by the cutoff, the pitch and the level alike).
-    { poly::Osc2Mix,     2, 0.30f }, { poly::Osc2Detune,  2, 0.25f },
+    // Osc2Detune 0.25 -> 0.06 (24.09.2026): a quarter of the knob's 100 cents put the partner up to 25 cents
+    // from the pad's own 9, and seed 5's first pad played every chord tone twice, 31 cents apart and equally
+    // loud -- the honky-tonk piano, not the width of an analogue pad (3 to 15 cents, where 9 +- 6 now lies).
+    { poly::Osc2Mix,     2, 0.30f }, { poly::Osc2Detune,  2, 0.06f },
     { poly::LfoCutoff,   4, 0.35f }, { poly::LfoAmp,      4, 0.25f },
     { poly::LfoPitch,    4, 0.20f }, { poly::LfoBeats,    4, 0.30f },
 };

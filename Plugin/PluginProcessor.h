@@ -62,6 +62,7 @@
 #include "phos/Params.h"
 #include "phos/Score.h"
 #include "phos/SoundPresets.h"
+#include <array>
 #include <atomic>
 #include <functional>
 #include <map>
@@ -187,12 +188,13 @@ public:
     /**
      * @brief The notes of the bars last composed, for the editor's pattern preview.
      *
-     * The conductor keeps the last #kPreviewBars bars it composed, in musical beats. Reading them
+     * The conductor keeps the notes of the last #kPreviewBars bars it composed, and every older one still sounding
+     * there, in musical beats. Reading them
      * is a copy under a short lock -- the editor never asks the composer itself, which would mean
      * waiting for a probe render.
      * @param firstBar first bar wanted
      * @param bars     how many
-     * @param out      receives the notes whose bar falls in that range
+     * @param out      receives the notes that sound in that range, held ones struck before it included
      * @return false if nothing of that range has been composed yet
      */
     bool readPreview(int firstBar, int bars, std::vector<phos::NoteEvent>& out) const;
@@ -405,6 +407,22 @@ public:
      *        per-track recipes leave the sound as the preset has it.
      */
     void applyPreset(phos::Module module, int instance, const phos::SoundPreset& preset);
+
+    /**
+     * @brief Auditions bank preset @p preset of effect family @p choice (sfx::PresetRiser order) in the running set:
+     *        the audio thread plays it at its next block (phos::Engine::previewSfx). Nothing sounds while the
+     *        transport stands -- the engine renders silence then. Message thread.
+     */
+    void previewSfx(int choice, int preset);
+    /** @brief The audition waiting for the audio thread (choice << 12 | preset), -1 none -- for the tests. */
+    int pendingSfxPreview() const { return sfxPreview_.load(std::memory_order_acquire); }
+
+    /**
+     * @brief The channel meters (24.09.2026): per part (phos::Part order), the peak and the RMS of what it put into
+     *        the mix since the last call, as linear amplitudes; both 0 where nothing was rendered. Message thread
+     *        (the mixer page's timer).
+     */
+    void takeChannelMeters(float* peak, float* rms);
     /** @brief Saves the synth's knobs as the user preset @p name; returns the file, or File() when it failed. */
     juce::File saveUserPreset(phos::Module module, int instance, const juce::String& name);
     /** @} */
@@ -764,6 +782,12 @@ private:
     static constexpr int kMaxLive = 256;   ///< note messages per block; more are dropped (a controller flood, not a player)
     LiveNote live_[kMaxLive];              ///< audio thread only
     int keyboardPartSeen_ = 0;             ///< audio thread: mix.keyboard_part as the last block had it
+
+    // ---- the effects page's audition and the mixer's meters (24.09.2026)
+    std::atomic<int> sfxPreview_{ -1 };                             ///< choice << 12 | preset, -1 none (previewSfx)
+    std::array<std::atomic<float>, phos::kNumParts> meterPeak_{};   ///< audio thread raises, the editor takes (exchange 0)
+    std::array<std::atomic<double>, phos::kNumParts> meterSum_{};   ///< sums of squares since the editor last took them
+    std::atomic<int> meterCount_{ 0 };                              ///< the samples meterSum_ covers
 
     // ---- curation: the editor asks, the composer thread does it
     /** @brief One thing the editor wants done to a lockable unit. */

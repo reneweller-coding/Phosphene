@@ -34,6 +34,7 @@ target_sources(Phosphene PRIVATE
     EditorPerform.cpp
     EditorGallery.cpp
     EditorHelp.cpp
+    EditorMixer.cpp
     UpdateCheck.cpp
     PhospheneLookAndFeel.cpp)
 

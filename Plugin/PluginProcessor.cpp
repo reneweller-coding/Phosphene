@@ -420,10 +420,12 @@ void PlugConductor::pump(const ParamStore& params, double horizonBeats, EventRin
             // taken off: what the display draws is what the composer wrote, not where it landed in
             // the engine's timeline. Old bars fall off the front.
             const std::lock_guard<std::mutex> lock(previewLock_);
+            // A note falls off once it has *ended* before the kept bars (24.09.2026): a pad chord or a drone
+            // tone struck sixteen bars ago still sounds, and it was cut with the bar it started in.
             const double oldest = static_cast<double>(nextBar_ - kPreviewBars) * kBeatsPerBar;
-            const auto cut = std::find_if(preview_.begin(), preview_.end(),
-                                          [oldest](const NoteEvent& e) { return e.beat >= oldest; });
-            preview_.erase(preview_.begin(), cut);
+            preview_.erase(std::remove_if(preview_.begin(), preview_.end(),
+                                          [oldest](const NoteEvent& e) { return e.beat + std::max(0.0, static_cast<double>(e.length)) < oldest; }),
+                           preview_.end());
             preview_.insert(preview_.end(), notes_.begin(), notes_.end());
         }
         if (writeTempo_) tempoControls(params, nextBar_, controls_);
@@ -442,7 +444,11 @@ bool PlugConductor::readPreview(int firstBar, int bars, std::vector<NoteEvent>& 
     const double from = static_cast<double>(firstBar) * kBeatsPerBar;
     const double to = static_cast<double>(firstBar + bars) * kBeatsPerBar;
     if (preview_.front().beat > from || preview_.back().beat < from) return false;
-    for (const NoteEvent& e : preview_) if (e.beat >= from && e.beat < to) out.push_back(e);
+    // Every note that *sounds* in the window, not only those struck in it (24.09.2026, the user: "spielte das Pad
+    // (oder die Drone) und es wurde nichts angezeigt"): a chord held over sixteen bars was struck before the
+    // four-bar window of twelve of them and was missing from all twelve.
+    for (const NoteEvent& e : preview_)
+        if (e.beat < to && e.beat + std::max(0.0, static_cast<double>(e.length)) > from) out.push_back(e);
     return true;
 }
 
@@ -618,6 +624,7 @@ void PhospheneProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
         sampleRate_ = sampleRate;
         scratch_.setSize(2, juce::jmax(64, samplesPerBlock), false, true, true);
         engine_->prepare(sampleRate, samplesPerBlock);
+        engine_->setMetering(true);   // reading only: the mix is the same to the bit (Engine.h)
         for (HeldNote& h : held_) h = HeldNote{};
         NoteEvent junk;
         while (midiRing_.pop(junk)) {}
@@ -1521,6 +1528,8 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             engine_->process(L + from, R + from, count);
         }
     };
+    // The effects page's audition (previewSfx): a live action like a played note, at the block's start.
+    if (const int pv = sfxPreview_.exchange(-1, std::memory_order_acq_rel); pv >= 0) engine_->previewSfx(pv >> 12, pv & 0xFFF);
     // Played notes split the block at their samples; a block without one is a single process() call, exactly as
     // before, so a set nobody plays along to stays bit-identical to phos_render.
     int done = 0;
@@ -1532,6 +1541,22 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         else engine_->liveNoteOff(ln.pitch, ln.channel);
     }
     render(done, n - done);
+    {
+        // The channel meters: raised here, taken by the mixer page (takeChannelMeters). One writer, so a load and a
+        // store will do; a block the editor takes in between is at worst counted in the next reading.
+        float pk[phos::kNumParts];
+        double ss[phos::kNumParts];
+        const int got = engine_->takeMeters(pk, ss);
+        if (got > 0) {
+            for (int k = 0; k < phos::kNumParts; ++k) {
+                if (pk[k] > meterPeak_[static_cast<size_t>(k)].load(std::memory_order_relaxed))
+                    meterPeak_[static_cast<size_t>(k)].store(pk[k], std::memory_order_relaxed);
+                meterSum_[static_cast<size_t>(k)].store(meterSum_[static_cast<size_t>(k)].load(std::memory_order_relaxed) + ss[k],
+                                                        std::memory_order_relaxed);
+            }
+            meterCount_.fetch_add(got, std::memory_order_release);
+        }
+    }
     if (fadeOutThenSeek_) {
         // A raised cosine rather than a straight line: its first derivative is zero at both ends, so
         // neither the start of the fade nor the arrival at zero is itself a corner.
@@ -1757,6 +1782,22 @@ std::vector<SoundPreset> PhospheneProcessor::userPresets(Module module, int inst
         out.push_back({ "User", f.getFileNameWithoutExtension().toStdString(), f.loadFileAsString().removeCharacters("\r").toStdString() });
     std::sort(out.begin(), out.end(), [](const SoundPreset& a, const SoundPreset& b) { return a.name < b.name; });
     return out;
+}
+
+void PhospheneProcessor::previewSfx(int choice, int preset)
+{
+    if (choice < 0 || choice >= phos::sfx::kNumPresetChoices) return;
+    sfxPreview_.store((choice << 12) | juce::jlimit(0, 0xFFF, preset), std::memory_order_release);
+}
+
+void PhospheneProcessor::takeChannelMeters(float* peak, float* rms)
+{
+    const int n = meterCount_.exchange(0, std::memory_order_acquire);
+    for (int k = 0; k < phos::kNumParts; ++k) {
+        peak[k] = meterPeak_[static_cast<size_t>(k)].exchange(0.0f, std::memory_order_relaxed);
+        const double s = meterSum_[static_cast<size_t>(k)].exchange(0.0, std::memory_order_relaxed);
+        rms[k] = n > 0 ? static_cast<float>(std::sqrt(s / n)) : 0.0f;
+    }
 }
 
 void PhospheneProcessor::applyPreset(Module module, int instance, const SoundPreset& preset)

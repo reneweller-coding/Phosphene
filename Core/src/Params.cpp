@@ -567,6 +567,19 @@ const ParamDesc kSfxParams[sfx::Count] = {
     // trajectory over an event's own length. Off by default: every render before this round is untouched.
     { "wander",       "Wander",        "",     0.0f,   1.0f,   0.0f, Curve::Toggle },
     { "wander_send",  "Wander Send",   "",     0.0f,   1.0f,   0.85f, Curve::Linear },
+    // 24.09.2026: the bank preset each family plays, 0 = Auto (Params.h, sfx::PresetRiser). The ranges are the
+    // families' sizes (SfxBankTables.cpp, kSfxBankCount); the self test holds the two together.
+    { "preset_riser",         "Riser",         "", 0.0f, 256.0f, 0.0f, Curve::Int },
+    { "preset_downlifter",    "Downlifter",    "", 0.0f, 128.0f, 0.0f, Curve::Int },
+    { "preset_impact",        "Impact",        "", 0.0f, 128.0f, 0.0f, Curve::Int },
+    { "preset_sweep",         "Sweep",         "", 0.0f, 256.0f, 0.0f, Curve::Int },
+    { "preset_formant_shot",  "Formant Shot",  "", 0.0f,  96.0f, 0.0f, Curve::Int },
+    { "preset_reverse_swell", "Reverse Swell", "", 0.0f, 256.0f, 0.0f, Curve::Int },
+    { "preset_zap",           "Zap",           "", 0.0f,  96.0f, 0.0f, Curve::Int },
+    { "preset_squelch",       "Squelch",       "", 0.0f, 128.0f, 0.0f, Curve::Int },
+    { "preset_bubble",        "Bubble",        "", 0.0f,  64.0f, 0.0f, Curve::Int },
+    { "preset_reverse_crash", "Reverse Crash", "", 0.0f, 128.0f, 0.0f, Curve::Int },
+    { "preset_atmosphere",    "Atmosphere",    "", 0.0f, 512.0f, 0.0f, Curve::Int },
 };
 
 // The shamanic bed (Texture.h), the voices (Vocal.h) and the modulation effects (PsyFx.h), 19.09.2026.
