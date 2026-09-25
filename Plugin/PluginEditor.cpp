@@ -43,6 +43,7 @@ const Slice kAcidSlices[] = {
     { "Voice", acid::Wave, 10, 5 }, { "Squelch", acid::Squelch, 6, 4 },
     { "Delay", acid::DelaySend, 6, 4 }, { "Sends & Level", acid::RoomSend, 4, 4 },
     { "Colour & Hall", acid::Disperse, 3, 3 },   // 23.09.2026, see the bass
+    { "Plate", acid::PlateSend, 1, 2 },          // 25.09.2026, the mix guide's middle plane
 };
 /** @brief A polyphonic engine's table (lead, counter-lead, arp, stab, pad, drone). */
 const Slice kPolySlices[] = {
@@ -58,15 +59,19 @@ const Slice kPolySlices[] = {
     { "Modulation", poly::Mod, 5, 5 },
     // 23.09.2026, see the bass: the gated hall, the second oscillator and the voice LFO (the four after it).
     { "Gated Hall", poly::HallGate, 1, 2 }, { "Second Oscillator", poly::Osc2, 4, 4 }, { "LFO", poly::Osc2Detune + 1, 4, 4 },
+    { "Plate & Distance", poly::PlateSend, 3, 3 },   // 25.09.2026: the mix guide's middle plane, the addon's distance and slow movement
 };
 /** @brief The send effects. */
 const Slice kFxSlices[] = {
     { "Room", fx::RoomSize, 3, 3 }, { "Hall", fx::HallSize, 4, 4 }, { "Returns", fx::LowCut, 5, 5 },
+    { "Plate", fx::PlateSize, 5, 5 }, { "Return Duck", fx::ReturnDuckRelease, 1, 2 },   // 25.09.2026, the mix guide
+    { "Rooms", fx::RoomPreDelay, 6, 6 },   // 25.09.2026, the Dark-Ambient addon: the room's pre-delay, the send filters, B -> C
 };
 /** @brief The mixer and the master. */
 // The channels up to the SFX strip, then the sidechain, then the two strips of 19.09.2026 (texture, vocal).
 const Slice kMasterSlices[] = {
     { "Gain", master::Gain, 3, 3 }, { "Compressor", master::CompThreshold, 5, 5 }, { "Output", master::MonoBass, 7, 4 },
+    { "Monitor", master::Monitor, 1, 2 },   // 25.09.2026, the addon's monitoring
 };
 
 template <size_t N>
@@ -444,6 +449,7 @@ void PhospheneEditor::buildPages()
         case TabFx:
             page->addModuleGroup(proc_, Module::Sfx, 0, "Effect Generator", tint, 5, 0, sfx::kFirstPreset);
             addSfxPresetGroup(*page, tint);
+            page->addModuleGroup(proc_, Module::Sfx, 0, "Effects Plate", tint, 2, sfx::PlateSend, 1);   // 25.09.2026
             addSlices(*page, proc_, Module::Fx, 0, kFxSlices, tint);
             // 23.09.2026: the modules of round "fx-psychedelia" had no page (see the bass slices).
             page->addModuleGroup(proc_, Module::PsyFx, 0, "Psy FX", tint, 4);
@@ -463,7 +469,8 @@ void PhospheneEditor::buildPages()
             page->addControl(g, std::move(console), "", 16, true, 5, mixer_->params());
             const int mb = proc_.params().base(Module::Mix);
             page->addParamsGroup(proc_, "Track & Sidechain", tint, 4,
-                                 { mb + mix::TrackGain, mb + mix::DuckAttack, mb + mix::DuckHold, mb + mix::DuckRelease });
+                                 { mb + mix::TrackGain, mb + mix::DuckAttack, mb + mix::DuckHold, mb + mix::DuckRelease,
+                                   mb + mix::DuckReleaseLines, mb + mix::CounterDuck, mb + mix::PadLeadDuck });
             addSlices(*page, proc_, Module::Master, 0, kMasterSlices, tint);
             page->addModuleGroup(proc_, Module::Cue, 0, "Score Cues (OSC)", tint, 4);   // 23.09.2026, see the bass slices
             break;

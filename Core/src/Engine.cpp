@@ -122,6 +122,32 @@ int Engine::takeMeters(float* peak, double* sumSq)
     return n;
 }
 
+namespace {
+
+/** @brief The five cues of distance, and a voice's plane (25.09.2026, the Dark-Ambient addon's table). */
+struct DistanceCue { float gainDb, lowPassHz, wet, width; };
+
+/** @brief The cues at distance @p d (0 near .. 1 far): dB linear, Hz logarithmic, the rest linear between 0, 0.5, 1. */
+DistanceCue distanceCue(float d)
+{
+    static const DistanceCue k[3] = { { 0.0f, 20000.0f, 0.05f, 0.15f }, { -6.0f, 12000.0f, 0.20f, 0.50f }, { -15.0f, 6000.0f, 0.60f, 1.0f } };
+    const float x = clampv(d, 0.0f, 1.0f) * 2.0f;
+    const int i = std::min(1, static_cast<int>(x));
+    const float u = x - static_cast<float>(i);
+    const DistanceCue& a = k[i];
+    const DistanceCue& b = k[i + 1];
+    return { a.gainDb + u * (b.gainDb - a.gainDb), a.lowPassHz * std::pow(b.lowPassHz / a.lowPassHz, u),
+             a.wet + u * (b.wet - a.wet), a.width + u * (b.width - a.width) };
+}
+
+/** @brief Each voice's own plane, which its poly.distance default is (kDefaultPoly): lead front, pad and drone back. */
+constexpr float kDistancePlane[kPolyInstances] = { 0.0f, 0.5f, 0.5f, 0.5f, 1.0f, 1.0f };
+
+/** @brief The free slow movement's periods, in beats: 13, 21 and 34 s at 145 BPM -- ratios of the golden mean. */
+constexpr double kSlowBeats[3] = { 31.4166, 50.8325, 82.2491 };
+
+} // namespace
+
 void Engine::liveAllOff()
 {
     for (int k = 0; k < 128; ++k) liveNoteOff(k, 0);
@@ -188,6 +214,14 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
     for (TranceGate& g : gate_) g.prepare(sr_);
     room_.prepare(sr_);
     hall_.prepare(sr_);
+    plate_.prepare(sr_);
+    monLp1_.setQ(80.0f, 0.5412f, static_cast<float>(sr_));   // Butterworth, fourth order: Q 0.5412 and 1.3066
+    monLp2_.setQ(80.0f, 1.3066f, static_cast<float>(sr_));
+    for (auto* v : { &plateInL_, &plateInR_, &plateOutL_, &plateOutR_ }) v->assign(static_cast<size_t>(kChunk), 0.0f);
+    leadDuck_.prepare(sr_);
+    padBandDuck_.prepare(sr_);
+    padBandL_.setQ(1200.0f, 0.7f, static_cast<float>(sr_));
+    padBandR_.setQ(1200.0f, 0.7f, static_cast<float>(sr_));
     hallGate_.prepare(sr_);
     // The gated hall's fixed recipe (20.09.2026, round "reverb"; docs/rounds/2026-09.md has the measurements).
     // Big hall, 4 s decay (the brief's "3-5 s"), no pre-delay so the gate's timing is exact from the
@@ -269,6 +303,13 @@ void Engine::reset()
     for (TranceGate& g : gate_) g.reset();
     room_.reset();
     hall_.reset();
+    plate_.reset();
+    leadDuck_.reset();
+    padBandDuck_.reset();
+    padBandL_.ic1 = padBandL_.ic2 = 0.0f;
+    padBandR_.ic1 = padBandR_.ic2 = 0.0f;
+    for (int k = 0; k < kPolyInstances; ++k) distLpL_[k].ic1 = distLpL_[k].ic2 = distLpR_[k].ic1 = distLpR_[k].ic2 = 0.0f;
+    monLp1_.ic1 = monLp1_.ic2 = monLp2_.ic1 = monLp2_.ic2 = 0.0f;
     hallGate_.reset();
     comp_.reset();
     sideHp1_.reset();
@@ -449,12 +490,15 @@ void Engine::applyParams()
         stripGain_[StripLead + k] = partGain(mix::polyMute(static_cast<PolyInstance>(k)), mix::polyLevel(static_cast<PolyInstance>(k)));
     stripGain_[StripSfx] = partGain(mix::SfxMute, mix::SfxLevel);
     const float duckA = e(mb + mix::DuckAttack), duckH = e(mb + mix::DuckHold), duckR = e(mb + mix::DuckRelease);
+    // 25.09.2026, the mix guide's matrix: the lines come back faster than the pads and the bed.
+    const float duckRLines = e(mb + mix::DuckReleaseLines);
     stripRoom_[StripPerc] = e(mb + mix::PercRoom);
     stripHall_[StripPerc] = e(mb + mix::PercHall);
     duck_[StripPerc].set(0.0f, duckA, duckH, duckR);
     stripRoom_[StripAcid] = e(ab + acid::RoomSend);
     stripHall_[StripAcid] = e(ab + acid::HallSend);
-    duck_[StripAcid].set(e(ab + acid::Duck), duckA, duckH, duckR);
+    duck_[StripAcid].set(e(ab + acid::Duck), duckA, duckH, duckRLines);
+    stripPlate_[StripAcid] = e(ab + acid::PlateSend);
     hallGateOn_[StripAcid] = e(ab + acid::HallGate) >= 0.5f;
     stripRoom_[StripSfx] = e(sb + sfx::RoomSend);
     stripHall_[StripSfx] = e(sb + sfx::HallSend);
@@ -503,7 +547,9 @@ void Engine::applyParams()
         const int strip = StripLead + k;
         stripRoom_[strip] = e(pb + poly::RoomSend);
         stripHall_[strip] = e(pb + poly::HallSend);
-        duck_[strip].set(e(pb + poly::Duck), duckA, duckH, duckR);
+        stripPlate_[strip] = e(pb + poly::PlateSend);   // the distance's wet share is added after the table below
+        const bool line = strip <= StripStab;   // lead, counter, arp, stab: the lines' release
+        duck_[strip].set(e(pb + poly::Duck), duckA, duckH, line ? duckRLines : duckR);
         hallGateOn_[strip] = e(pb + poly::HallGate) >= 0.5f;
         gateOn_[k] = e(pb + poly::Gate) >= 0.5f;
         gatePattern_[k] = static_cast<int>(std::lround(e(pb + poly::GatePattern)));
@@ -525,12 +571,39 @@ void Engine::applyParams()
                            polyMod_[k] == static_cast<int>(PolyMod::Phaser) ? mix : 0.0f);
     }
     // Send effects: the hall's pre-delay follows the tempo.
-    room_.set(e(fb + fx::RoomSize), e(fb + fx::RoomDecay), e(fb + fx::RoomDamping), 0.0f, e(fb + fx::LowCut), e(fb + fx::HighCut));
+    // 25.09.2026, the Dark-Ambient addon: every room with its own send filter; the pre-delays are distance cues in
+    // milliseconds (front long, back short), the hall's the one that stays in beats (its default is ~5 ms).
+    room_.set(e(fb + fx::RoomSize), e(fb + fx::RoomDecay), e(fb + fx::RoomDamping), static_cast<float>(e(fb + fx::RoomPreDelay) * 0.001 * sr_),
+              e(fb + fx::RoomLowCut), e(fb + fx::RoomHighCut));
     hall_.set(e(fb + fx::HallSize), e(fb + fx::HallDecay), e(fb + fx::HallDamping),
               static_cast<float>(e(fb + fx::HallPreDelay) * beatSeconds * sr_), e(fb + fx::LowCut), e(fb + fx::HighCut));
     roomReturn_ = dbToGain(e(fb + fx::RoomReturn));
     hallReturn_ = dbToGain(e(fb + fx::HallReturn));
-    returnDuck_.set(e(fb + fx::ReturnDuck), duckA, duckH, duckR);
+    returnDuck_.set(e(fb + fx::ReturnDuck), duckA, duckH, e(fb + fx::ReturnDuckRelease));
+    plate_.set(e(fb + fx::PlateSize), e(fb + fx::PlateDecay), e(fb + fx::PlateDamping),
+               static_cast<float>(e(fb + fx::PlatePreDelay) * 0.001 * sr_), e(fb + fx::PlateLowCut), e(fb + fx::PlateHighCut));
+    plateReturn_ = dbToGain(e(fb + fx::PlateReturn));
+    plateToHall_ = e(fb + fx::PlateToHall);
+    stripPlate_[StripSfx] = e(sb + sfx::PlateSend);
+    for (int k = 0; k < kPolyInstances; ++k) {
+        const int pb = p.base(Module::Poly, k);
+        const DistanceCue at = distanceCue(e(pb + poly::Distance)), plane = distanceCue(kDistancePlane[k]);
+        distGain_[k] = dbToGain(at.gainDb - plane.gainDb);
+        distWet_[k] = at.wet - plane.wet;
+        // The width cue as a side gain against the plane's, at most doubled or halved: a lead far back is wider, but
+        // six times its own side (0.15 against 1) would make it a different sound, not a farther one.
+        distWidth_[k] = clampv(at.width / plane.width, 0.5f, 2.0f);
+        distLpOn_[k] = at.lowPassHz < plane.lowPassHz * 0.999f;
+        if (distLpOn_[k]) {
+            distLpL_[k].setQ(at.lowPassHz, 0.7071f, static_cast<float>(sr_));
+            distLpR_[k].copyCoefficients(distLpL_[k]);
+        }
+        slowWidth_[k] = e(pb + poly::SlowMod);
+    }
+    monitor_ = static_cast<int>(std::lround(e(p.base(Module::Master) + master::Monitor)));
+    counterDuck_ = e(mb + mix::CounterDuck);
+    leadDuck_.set(counterDuck_, 2.0f, 20.0f, 50.0f);
+    padBandCut_ = dbToGain(-e(mb + mix::PadLeadDuck));
 
     const int ms = p.base(Module::Master);
     masterGain_ = dbToGain(e(ms + master::Gain) + e(mb + mix::TrackGain));
@@ -586,6 +659,12 @@ void Engine::dispatch(const NoteEvent& e, double late)
     case Part::Drone: {
         const double samples = static_cast<double>(e.length) / beatsPerSample_;
         const int inst = polyOfPart(e.part);
+        if (e.part == Part::Lead) {
+            // The two ducks the lead drives (Engine.h): the counter's, and the pad's band for as long as the note sounds.
+            leadDuck_.trigger(late);
+            padBandDuck_.set(1.0f, 5.0f, static_cast<float>(samples * 1000.0 / sr_), 80.0f);
+            padBandDuck_.trigger(late);
+        }
         // noteOnLimited applies the quality level's unison and voice limits (Quality.h, Poly.h); at
         // the desktop level it is noteOn() itself.
         // 22.09.2026 (round "Lead"): the note's accent and slide flags. Every voice but the lead slides on
@@ -745,6 +824,15 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
             ++meterCount_;
         }
         float l = mono, r = mono, rl = 0.0f, rr = 0.0f, hl = 0.0f, hr = 0.0f, fl = 0.0f, fr = 0.0f, bl = 0.0f, br = 0.0f;
+        float pl = 0.0f, pr = 0.0f;   // the plate's input
+        if (chunkPos_ + i == 0) {
+            // The free slow movement (poly.slow_mod): a sine on the absolute beat with a period of 82 beats (34 s at
+            // 145 BPM), renewed on the engine's absolute 32-sample grid -- never where the host happens to cut its
+            // blocks -- so a bar rendered alone, or at another block size, moves as the same bar in the set.
+            const double b = chunkBeat_;
+            slowSide_ = static_cast<float>(std::sin(2.0 * kPiD * b / kSlowBeats[2]));
+        }
+        const float underLead = leadDuck_.next(), band = 1.0f - padBandDuck_.next();   // once per sample; band: 0 .. 1 engaged
         float hgl = 0.0f, hgr = 0.0f;   // the gated hall's input: the strips whose hall_gate is on
         float ml = 0.0f, mr = 0.0f;   // the melodic bus a stutter may replace (acid, lead, counter, arp, stab)
         const double beat = chunkBeat_ + static_cast<double>(chunkPos_ + i) * beatsPerSample_;
@@ -757,9 +845,36 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
                     gate_[k].apply(sl, sr, o, gateDepth_[k], gateTone_[k]);
                 }
             }
-            const float g = stripGain_[s] * duck_[s].next();
+            float g = stripGain_[s] * duck_[s].next();
+            if (s == StripCounter) g *= underLead;
             sl *= g;
             sr *= g;
+            if (s >= StripLead && s <= StripDrone) {
+                // Distance (Engine.h): level, low pass and width against the voice's plane; the wet share is in
+                // the plate send below. The free slow movement of width (poly.slow_mod) rides the side gain.
+                const int k = s - StripLead;
+                sl *= distGain_[k];
+                sr *= distGain_[k];
+                if (distLpOn_[k]) { sl = distLpL_[k].lp(sl); sr = distLpR_[k].lp(sr); }
+                float w = distWidth_[k];
+                if (slowWidth_[k] > 0.0f) w *= 1.0f + 0.25f * slowWidth_[k] * slowSide_;
+                if (w != 1.0f) {
+                    const float m = 0.5f * (sl + sr), sd = 0.5f * (sl - sr) * w;
+                    sl = m + sd;
+                    sr = m - sd;
+                }
+            }
+            if (s == StripPad) {
+                // The pad's presence band under the lead: the bandpass share, scaled towards padBandCut_ as far as
+                // the lead's duck has opened, taken out of the signal (a bell cut of up to pad_lead_duck dB).
+                float lp, bp, hp;
+                padBandL_.tick(sl, lp, bp, hp);
+                const float cutL = (1.0f - padBandCut_) * band * (bp / 0.7f);
+                padBandR_.tick(sr, lp, bp, hp);
+                const float cutR = (1.0f - padBandCut_) * band * (bp / 0.7f);
+                sl -= cutL;
+                sr -= cutR;
+            }
             if (tap_ != nullptr) {
                 // Strip s is part s + 2 (Perc .. Vocal follow Kick and Bass in both enums); the sub drop is the effects'.
                 const int part = s + static_cast<int>(Part::Perc);
@@ -775,6 +890,9 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
             else { l += sl; r += sr; }
             rl += stripRoom_[s] * sl;
             rr += stripRoom_[s] * sr;
+            const float plateSend = s >= StripLead && s <= StripDrone ? std::max(0.0f, stripPlate_[s] + distWet_[s - StripLead]) : stripPlate_[s];
+            pl += plateSend * sl;
+            pr += plateSend * sr;
             // hall_gate on: this strip's hall send feeds the gated bus instead of the plain hall (never
             // both -- a voice picks one hall or the other).
             if (hallGateOn_[s]) { hgl += stripHall_[s] * sl; hgr += stripHall_[s] * sr; }
@@ -791,6 +909,7 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
         // The returns' stem holds the dry sum for now; after the returns are added it becomes their share.
         if (tap_ != nullptr) { tap_->L[kNumParts][oi] = outL[i]; tap_->R[kNumParts][oi] = outR[i]; }
         roomInL_[si] = rl; roomInR_[si] = rr;
+        plateInL_[si] = pl; plateInR_[si] = pr;
         // The wandering SFX voices' growing reverb-send trajectory (Sfx.h, sfx.wander) joins the plain
         // hall directly here -- it already left the dry mix in Sfx::processSplit(), so it is not counted
         // again through stripHall_[StripSfx] above, and it bypasses the gated hall (Engine.h has why).
@@ -800,6 +919,13 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
         bedSendL_[si] = bl; bedSendR_[si] = br;
     }
     room_.process(roomInL_.data(), roomInR_.data(), roomOutL_.data(), roomOutR_.data(), count);
+    // The plate first: its output feeds the far room (fx.plate_to_hall), the addon's serial B -> C.
+    plate_.process(plateInL_.data(), plateInR_.data(), plateOutL_.data(), plateOutR_.data(), count);
+    if (plateToHall_ > 0.0f)
+        for (int i = 0; i < count; ++i) {
+            hallInL_[static_cast<size_t>(i)] += plateToHall_ * plateOutL_[static_cast<size_t>(i)];
+            hallInR_[static_cast<size_t>(i)] += plateToHall_ * plateOutR_[static_cast<size_t>(i)];
+        }
     hall_.process(hallInL_.data(), hallInR_.data(), hallOutL_.data(), hallOutR_.data(), count);
     // The gated hall: ducked by its own send (Reverb.h, processDucked), then cut hard on the absolute
     // bar line (Reverb::barGate, a function of the beat alone -- the same reason TranceGate::open above
@@ -826,8 +952,8 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
         // The gated hall shares the plain hall's return trim (fx.hall_return): it is the same hall
         // knob-wise, only gated for the voices routed into it. It ducks under the kick with everyone
         // else's returns too (returnDuck_), on top of its own gate.
-        outL[i] = (outL[i] + d * (roomReturn_ * roomOutL_[si] + hallReturn_ * (hallOutL_[si] + hallGateOutL_[si]))) * masterGain_;
-        outR[i] = (outR[i] + d * (roomReturn_ * roomOutR_[si] + hallReturn_ * (hallOutR_[si] + hallGateOutR_[si]))) * masterGain_;
+        outL[i] = (outL[i] + d * (roomReturn_ * roomOutL_[si] + plateReturn_ * plateOutL_[si] + hallReturn_ * (hallOutL_[si] + hallGateOutL_[si]))) * masterGain_;
+        outR[i] = (outR[i] + d * (roomReturn_ * roomOutR_[si] + plateReturn_ * plateOutR_[si] + hallReturn_ * (hallOutR_[si] + hallGateOutR_[si]))) * masterGain_;
         if (tap_ != nullptr) {
             const size_t oi = static_cast<size_t>(offset + i);
             tap_->L[kNumParts][oi] = outL[i] - masterGain_ * tap_->L[kNumParts][oi];
@@ -881,6 +1007,13 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
         }
     }
     meter_.process(outL, outR, count);
+    // The monitor (master.monitor, the addon): what the listener hears, after the meter.
+    if (monitor_ != 0)
+        for (int i = 0; i < count; ++i) {
+            const float m = 0.5f * (outL[i] + outR[i]), sd = 0.5f * (outL[i] - outR[i]);
+            const float y = monitor_ == 1 ? m : (monitor_ == 2 ? monLp2_.lp(monLp1_.lp(m)) : sd);
+            outL[i] = outR[i] = y;
+        }
     chunkPos_ += count;
     samples_ += static_cast<uint64_t>(count);
 }
@@ -899,6 +1032,11 @@ void Engine::process(float* L, float* R, int n)
             advanceRamps();
             applyParams();
             applyMotion();
+            // The free slow movement of the voices' cutoff and colour (poly.slow_mod, the addon): two sines on the
+            // absolute beat, periods of 31 and 51 beats (13 and 21 s at 145 BPM).
+            for (int k = 0; k < kPolyInstances; ++k)
+                poly_[k].setSlow(static_cast<float>(std::sin(2.0 * kPiD * chunkBeat_ / kSlowBeats[0])),
+                                 static_cast<float>(std::sin(2.0 * kPiD * chunkBeat_ / kSlowBeats[1] + 2.1)));
         }
         flushParams();
         int left = std::min(n - done, kChunk - chunkPos_);

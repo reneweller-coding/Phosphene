@@ -1395,6 +1395,21 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
             }
             if (bp.barInSection == 0 && inTrack >= handover) sectionControls(p, plan, bp, barBeat, *controls);
             if (inTrack >= handover) leadArcControls(p, plan, bp, inTrack, barBeat, *controls);
+            // The throw (25.09.2026, the mix guide): on the last beat before every eight-bar change of a groove or a
+            // drop the effects go into the plate (sfx.plate_send +0.6; the hall, the far room, is muted there), back on
+            // the next downbeat -- the zap that "splashes" to the back. Both events lie in their own bar.
+            if (inTrack >= handover && (bp.type == SectionType::Groove || bp.type == SectionType::Drop) && !(plan.index == 0 && bp.index == 0)) {
+                const int sb = p.base(Module::Sfx);
+                if (inTrack % 8 == 7 || inTrack % 8 == 0) {
+                    ControlEvent t;
+                    t.beat = inTrack % 8 == 7 ? barBeat + 3.0 : barBeat;
+                    t.param = static_cast<int16_t>(sb + sfx::PlateSend);
+                    t.kind = ControlEvent::Kind::Offset;
+                    t.value = inTrack % 8 == 7 ? 0.6f : 0.0f;
+                    t.length = 0.0f;
+                    controls->push_back(t);
+                }
+            }
             // The pad's high pass for the sub foundation (rule 20): opened to kFoundationHpFloor and
             // an octave under each voice wherever the form silences kick and bass, the knobs
             // everywhere else. Every bar carries its state, so a bar composed alone carries it too;

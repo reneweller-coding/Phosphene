@@ -115,7 +115,8 @@ private:
     float damp_ = 0.4f;   ///< high-frequency loss per loop
     float dcX_[2] = {}, dcY_[2] = {}, dcR_ = 0.999f;   ///< the return's DC blocker
     float hcCoef_ = 1.0f, hcL_ = 0.0f, hcR_ = 0.0f;   ///< the return's high cut
-    float lcCoef_ = 0.0f, lcL1_ = 0.0f, lcR1_ = 0.0f, lcL2_ = 0.0f, lcR2_ = 0.0f;   ///< the return's low cut, two poles
+    float lcCoef_ = 0.0f, lcL1_ = 0.0f, lcR1_ = 0.0f, lcL2_ = 0.0f, lcR2_ = 0.0f;   ///< the return's low cut, four poles: the first two
+    float lcL3_ = 0.0f, lcR3_ = 0.0f, lcL4_ = 0.0f, lcR4_ = 0.0f;                   ///< and the last two (25.09.2026)
     // The gate's duck (20.09.2026, round "reverb"): a one-pole follower on the send's own peak, with a
     // threshold so a silent send stays fully open rather than sitting at some small fraction of depth.
     float duckDepth_ = 0.0f, duckThreshold_ = 0.01f, duckAttackC_ = 1.0f, duckReleaseC_ = 1.0f, duckEnv_ = 0.0f;   ///< setDuck(): depth, threshold, attack and release coefficients, the follower

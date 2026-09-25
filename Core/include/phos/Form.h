@@ -365,6 +365,18 @@ constexpr float kBuildHeadroomDb = 2.0f;   ///< the big buildup's gain at its la
 constexpr float kIntroTrimDb = 1.5f;       ///< the intro's gain under its energy's (dB)
 constexpr float kClimaxOpen = 0.05f;       ///< drop 2's filter lift, normalised cutoff
 constexpr float kClimaxWidth = 0.15f;      ///< drop 2's stereo width lift, normalised
+/**
+ * @brief The breakdown's gain under its energy's (dB; 25.09.2026, the mix guide's "Mix nach Phase").
+ *
+ * The drop hits because the break before it was quieter and emptier. Measured by Tools/mix_audit.py, the
+ * user's forty recordings swing 4.4 dB between the 90th and the 10th percentile of their short-term loudness
+ * (quartiles 2.8 .. 5.6); Phosphene swung 1.9 .. 3.3, its breaks within 1 dB of its drops -- the energy's
+ * gain alone gives a break at most 2 dB. This trim is the difference, and it has to be larger than the loudness
+ * it buys: the master's compressor and limiter hold the drops down, and a breakdown's content -- the pad forward,
+ * the hall open, lead and counter -- is louder on its own than a drop's. Measured on Progressive (seed 7): 7 dB of
+ * gain between drop and break at a trim of 5 dB came out as 2 dB of short-term loudness.
+ */
+constexpr float kBreakTrimDb = 7.0f;
 /** @} */
 
 /** @brief One section of a track's form. */

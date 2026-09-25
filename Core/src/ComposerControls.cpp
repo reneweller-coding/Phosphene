@@ -351,6 +351,43 @@ void Composer::levelControls(const ParamStore& p, const TrackPlan& plan, double 
 }
 
 /**
+ * @brief The mix by phase (25.09.2026, the mix guide's "Mix nach Phase"): the same four quantities -- depth,
+ *        width, ducking and level -- set differently in every section, because a track's effect is the
+ *        contrast between its phases.
+ *
+ * All values are offsets on the voice's own (recipe) value, in the knob's normalised units unless said
+ * otherwise:
+ *  - **padWidth**: the pad narrow in the DJ's intro and outro and at the end of a buildup, at its own width in a
+ *    drop and a breakdown. The guide narrows a drop's pad to 60 %; the user's recordings are wider than the guide
+ *    (channel correlation 0.88 against Phosphene's 0.91 .. 0.96, Tools/mix_audit.py), and with the far room muted
+ *    in a drop a narrowed pad took the mix's mid band under the recordings' lower quartile (testStereoWidth). A
+ *    buildup still narrows to 60 % over its length, and the drop opens from there -- "narrow before expanding".
+ *  - **leadDistance**: the lead goes back in the breakdown and comes to the front in the drop -- on poly.distance,
+ *    so level, low pass, wet and width move together (the Dark-Ambient addon: a voice far by one cue and near by
+ *    another sticks to the speakers). 0.6 is about -8 dB, a low pass near 10 kHz and a third of the send wet.
+ *  - **padLevelDb**: the pad forward in the breakdown, the one phase where the back plane leads (+3 dB there in
+ *    the guide; +1.5 here, because the whole break stands kBreakTrimDb lower as well).
+ *  - **padDuck**: the pad's and the drone's duck deeper in a drop (6 .. 8 dB) and shallower in the DJ parts.
+ *  - **rampBars**: how long the change takes -- one bar into a drop, four into a breakdown (the guide: 1 .. 2
+ *    and 4 .. 8), the buildup its whole length.
+ */
+struct PhaseMix { float padWidth, leadDistance, padLevelDb, padDuck, rampBars; };
+
+/** @brief The phase values of a section type (see PhaseMix). */
+PhaseMix phaseMix(SectionType t)
+{
+    switch (t) {
+    case SectionType::Intro:  return { -0.40f, 0.0f, 0.0f, -0.10f, 4.0f };
+    case SectionType::Groove: return { -0.30f, 0.0f, 0.0f,  0.00f, 2.0f };
+    case SectionType::Build:  return { -0.40f, 0.0f, 0.0f,  0.00f, 0.0f };   // ramp: the build's length
+    case SectionType::Drop:   return {  0.00f, 0.0f, 0.0f,  0.10f, 1.0f };
+    case SectionType::Break:  return {  0.00f, 0.6f, 1.5f,  0.00f, 4.0f };
+    case SectionType::Outro:  return { -0.50f, 0.0f, 0.0f, -0.10f, 8.0f };
+    default:                  return {  0.00f, 0.0f, 0.0f,  0.00f, 2.0f };
+    }
+}
+
+/**
  * @brief The control events of a section: timbre as narrative, and the energy's three audible sides.
  *
  * Farrell's thesis (Sussex 2019) reads psychedelic music as a narrative told with timbre; Farbood's
@@ -455,9 +492,11 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
     float leadOff[poly::Count] = {}, padOff[poly::Count] = {};
     voiceRecipeOffsets(PolyInstance::Lead, plan.voice[polyIndex(PolyInstance::Lead)], sv, leadOff);
     voiceRecipeOffsets(PolyInstance::Pad, plan.voice[polyIndex(PolyInstance::Pad)], sv, padOff);
+    const bool knobs = plan.index == 0 && bar.index == 0;
+    const PhaseMix phase = phaseMix(s.type);
+    const float phaseRamp = s.type == SectionType::Build ? length : phase.rampBars * static_cast<float>(kBeatsPerBar);
     const float leadBase = 0.10f * sv * m.recipe[mpIndex(MelodyPart::Lead)] + leadOff[poly::Cutoff];
     const float padBase = 0.25f * sv * m.recipe[mpIndex(MelodyPart::Pad)] + padOff[poly::Position];
-    const bool knobs = plan.index == 0 && bar.index == 0;
     const float e0 = s.energy, e1 = s.energyTo;
     auto cutoffAt = [&](float base, float scale, float energy) {
         return knobs ? 0.0f : base + scale * (0.35f * (energy - 0.7f) + 0.12f * mv * wobble);
@@ -479,24 +518,91 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
     if (voices) push(lb + poly::Cutoff, cutoffAt(leadBase, 0.8f, e1) + open, length);
     if (voices) push(pb + poly::Position, cutoffAt(padBase, 0.6f, e1), length);
     // Drop 2 is wider: the lead, the counter, the arp and the pad by kClimaxWidth over their recipe's width,
-    // which every other section writes back (the offset replaces the one before it).
+    // which every other section writes back (the offset replaces the one before it). The pad's width follows
+    // the phase besides (PhaseMix), over the phase's ramp.
     if (voices && !knobs) {
         for (PolyInstance v : { PolyInstance::Lead, PolyInstance::Counter, PolyInstance::Arp, PolyInstance::Pad }) {
             float off[poly::Count] = {};
             voiceRecipeOffsets(v, plan.voice[polyIndex(v)], sv, off);
-            push(p.base(v) + poly::Width, off[poly::Width] + (s.climax ? kClimaxWidth : 0.0f), 0.0f);
+            const bool pad = v == PolyInstance::Pad;
+            push(p.base(v) + poly::Width, off[poly::Width] + (s.climax ? kClimaxWidth : 0.0f) + (pad ? phase.padWidth : 0.0f),
+                 pad ? phaseRamp : 0.0f);
+        }
+        // The pad forward in a breakdown, on top of its level match; the pad's and the drone's duck by phase.
+        const int k = mpIndex(MelodyPart::Pad);
+        const ParamDesc& lv = p.desc(mb + mix::polyLevel(PolyInstance::Pad));
+        push(mb + mix::polyLevel(PolyInstance::Pad), (plan.partGainDb[k] + phase.padLevelDb) / (lv.maxValue - lv.minValue), phaseRamp);
+        push(pb + poly::Duck, phase.padDuck, phaseRamp);
+        push(p.base(PolyInstance::Drone) + poly::Duck, phase.padDuck, phaseRamp);
+        // The buildup pulls the lines up from the bottom (the guide: the melodic sum's high pass climbs to
+        // 150 .. 250 Hz, "Sub" gone before the drop): 180 Hz over their own floor by its last bar, back at once
+        // wherever else a section starts. The pad and the drone keep theirs -- the sub foundation rides it.
+        for (PolyInstance v : { PolyInstance::Lead, PolyInstance::Counter, PolyInstance::Arp, PolyInstance::Stab }) {
+            const int id = p.base(v) + poly::HpFloor;
+            const float cur = p.get(id);
+            const float target = s.type == SectionType::Build ? std::min(cur + 180.0f, p.desc(id).maxValue) : cur;
+            push(id, p.toNormalised(id, target) - p.toNormalised(id, cur), s.type == SectionType::Build ? length : 0.0f);
         }
     }
+    // The rooms by phase (25.09.2026, the Dark-Ambient addon's architecture). The plate (B) is the main room:
+    // 1.5 s in a drop, 4 s in a breakdown, pulled down to 1.2 s over a buildup so its last bars are nearly dry (the
+    // guide's "Fallhoehe"). The hall (C) is the far room, fed from the plate (fx.plate_to_hall) and the bed: open in a
+    // breakdown, a quarter of it (-12 dB) in the intro, faded out over a buildup and muted everywhere else -- "im
+    // Drop existieren nur A und B". Both over the phase's ramp, a buildup over its length.
+    if (floor && !knobs) {
+        const int fb = p.base(Module::Fx);
+        const int decay = fb + fx::PlateDecay, ret = fb + fx::HallReturn;
+        const float curD = p.get(decay), curR = p.get(ret), rMin = p.desc(ret).minValue;
+        const bool brk = s.type == SectionType::Break, build = s.type == SectionType::Build;
+        const float ramp = build ? length : phaseRamp;
+        const float dTarget = brk ? std::max(curD, 4.0f) : (build ? std::min(curD, 1.2f) : curD);
+        push(decay, p.toNormalised(decay, dTarget) - p.toNormalised(decay, curD), ramp);
+        const float rTarget = brk ? curR : (s.type == SectionType::Intro ? std::max(rMin, curR - 12.0f) : rMin);
+        push(ret, p.toNormalised(ret, rTarget) - p.toNormalised(ret, curR), ramp);
+    }
 
-    // The hall opens where the floor empties: a breakdown is the wettest part of a track.
-    const float wet = s.type == SectionType::Break ? 0.22f : (s.type == SectionType::Intro || s.type == SectionType::Outro ? 0.10f : 0.0f);
-    const ParamDesc& hs = p.desc(pb + poly::HallSend);
-    const float wetNorm = wet / (hs.maxValue - hs.minValue);
-    if (floor) push(ab + acid::HallSend, knobs ? 0.0f : wetNorm, length);
-    // Every polyphonic voice, with the hall share of its recipe's space direction folded in (19.09.2026).
+    // The plate opens where the floor empties: a breakdown is the wettest part of a track (pads 30 .. 50 %, the
+    // middle plane more than its drop's 15 .. 25 %). The lead is not in this list: its wet share is its distance's.
+    const float wet = s.type == SectionType::Break ? 0.15f : (s.type == SectionType::Intro || s.type == SectionType::Outro ? 0.05f : 0.0f);
+    if (floor) push(ab + acid::PlateSend, knobs ? 0.0f : wet, phaseRamp);
+    // Every other polyphonic voice, with the share of its recipe's space direction folded in (19.09.2026; into the
+    // plate since the addon, where the hall was the one room).
     for (int v = 0; v < kPolyInstances && voices; ++v) {
+        if (static_cast<PolyInstance>(v) == PolyInstance::Lead) continue;
         const float space = kVoiceHallWeight * sv * kVoicePalette[v].scale[3] * plan.voice[v].macro[3];
-        push(p.base(static_cast<PolyInstance>(v)) + poly::HallSend, knobs ? 0.0f : wetNorm + space, length);
+        push(p.base(static_cast<PolyInstance>(v)) + poly::PlateSend, knobs ? 0.0f : wet + space, phaseRamp);
+    }
+    if (voices && !knobs) {
+        // The lead's distance by phase (PhaseMix), and the counter's approach: in the main breakdown, where the
+        // user's Model 3 introduces it alone, it starts far and comes to its own plane over sixteen bars with every
+        // cue at once -- the addon's "Annaeherung ueber 8 .. 16 Takte im Break".
+        push(lb + poly::Distance, phase.leadDistance, phaseRamp);
+        const int cd = p.base(PolyInstance::Counter) + poly::Distance;
+        if (s.type == SectionType::Break && bar.mainBreak && m.present[mpIndex(MelodyPart::Counter)]) {
+            push(cd, 0.5f, 0.0f);
+            push(cd, 0.0f, std::min(length, 16.0f * static_cast<float>(kBeatsPerBar)));
+        } else {
+            push(cd, 0.0f, 0.0f);
+        }
+        // Held pads without a beating cloud (the addon): in the intro and the breakdown, where the pad and the drone
+        // are often the only tonal voices for 16 .. 32 bars, their unison stays within about 6 cents (Szabo's curve
+        // at 0.15) and the second oscillator within 3 -- two voices 15 cents apart beat at 4 Hz at 440 Hz, and a
+        // stack of them flickers in a way no EQ reaches. Everywhere else the recipe's own detune.
+        const bool held = s.type == SectionType::Intro || s.type == SectionType::Break;
+        for (PolyInstance v : { PolyInstance::Pad, PolyInstance::Drone }) {
+            float off[poly::Count] = {};
+            voiceRecipeOffsets(v, plan.voice[polyIndex(v)], sv, off);
+            const int det = p.base(v) + poly::Detune, o2 = p.base(v) + poly::Osc2Detune;
+            float dOff = off[poly::Detune], oOff = off[poly::Osc2Detune];
+            if (held) {
+                dOff = std::min(dOff, 0.15f - p.get(det));
+                const float span = p.desc(o2).maxValue - p.desc(o2).minValue;
+                const float cents = p.get(o2) + oOff * span;
+                oOff += (std::clamp(cents, -3.0f, 3.0f) - cents) / span;
+            }
+            push(det, dOff, phaseRamp);
+            push(o2, oOff, phaseRamp);
+        }
     }
 
     // Loudness (Farbood): at most +-2 dB around the section's energy, on top of the track's level match.

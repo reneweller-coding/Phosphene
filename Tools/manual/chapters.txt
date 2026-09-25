@@ -124,6 +124,10 @@ The patterns are euclidean, rotated to a middle amount of syncopation rather tha
 decisions are made per four-bar phrase. Every lane is high-passed at 150 Hz at the least: the bottom
 of the mix belongs to the kick and the bass, and a tom that reaches into it takes the floor away.
 
+On a metal lane, Noise trades against the square stack: at 1 the squares keep 20 % of their level.
+Six summed squares are six steady tones, and a cymbal made mostly of them rings like feedback. The
+default hats and ride therefore run almost all noise, with their low cuts at 3 .. 3.5 kHz.
+
 == Acid ==
 
 A diode ladder after Zavalishin, solved from the inside out, with an accent that charges a sweep
@@ -234,6 +238,41 @@ metered to ITU-R BS.1770.
 Auto Gain renders four four-bar windows of the track through the whole master chain, measures them
 and offsets the master gain so that the output meets the loudness target. It runs when a track is
 planned, so it uses the knobs as they stand at that moment.
+
+Depth comes in three planes, and three rooms. The front -- kick, bass and the lead -- is dry, the lead with a
+little of the near room (A: short, early reflections, a 50 ms pre-delay). The middle -- acid, counter, arp and
+stab -- sends to the plate (B, the main room: 1.5 s in a drop, 4 s in a breakdown, 25 ms pre-delay). The back
+-- pads and drone -- sends to the plate as well, more of it, and the plate in turn feeds the hall (C, the far
+room: ten seconds, 400 Hz .. 3 kHz), which the bed and the voices reach directly. The far room is heard only in
+intros and breakdowns: in a drop there are only A and B. Pre-delays are distance cues, not tempo values: near
+sources get the long one (their direct sound arrives well before the first reflection), far ones almost none.
+Each room has its own send filter (the Rooms group on the FX page).
+
+Every voice carries a Distance (0 near .. 1 far, its own plane by default: the lead 0, the middle 0.5, pad and
+drone 1). Moving it moves all the cues of distance at once -- level, a low pass, the plate send and the width --
+so a voice is never near by one cue and far by another. The composer uses it: the lead steps back in a
+breakdown and comes forward in the drop, and in the main breakdown the counter-lead arrives from far away over
+sixteen bars. Pads and drone also move slowly on their own (Slow Movement: cutoff, colour and width on periods
+of 13, 21 and 34 seconds, in golden-mean ratios, so no pattern is heard to come round).
+
+Every strip gives way to the kick by what its plane needs: the bass 4 dB, the lines about 2 dB and back
+within 65 ms (Duck Release (Lines)), the back plane 5 to 6 dB within 125 ms (Duck Release), the returns
+5 dB within 100 ms (Return Duck Release). The effects do not duck: an impact lands on the drop's kick.
+The lead drives two ducks of its own: the counter steps back while the lead plays (Counter under Lead),
+and so does the pad's presence band between 500 Hz and 3 kHz, for as long as a lead note sounds (Pad
+Band under Lead).
+
+The composer mixes each phase differently. A breakdown stands 7 dB under the drop before it (after the master's
+compressor and limiter that is about 5 dB of loudness), with the pad at full width and a little louder, the
+lead further back and the far room open; a buildup narrows the pad, pulls the plate down to 1.2 seconds, fades
+the far room out and lifts the lines' high pass, and the drop opens it all again within a bar -- the lead at
+the front, the pad at its full width again, the pad and drone ducking deeper. In the intro and the breakdown, where
+pad and drone are often the only tonal voices, their unison stays within about six cents: held, a wider stack
+beats. While the bass plays, the pad leaves the third to the lead. On the last beat before every eight-bar
+change of a groove or a drop the effects are thrown into the plate for that one beat.
+
+Monitor (Master page): Mono, Sub (a low pass at 80 Hz, where the kick-bass gap and the tuning are judged) or
+Side, after the meter -- a listening switch, it changes nothing the loudness readings see.
 
 == Perform ==
 

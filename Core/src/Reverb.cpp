@@ -75,7 +75,7 @@ void Reverb::reset()
     for (int l = 0; l < kLines; ++l) { lp_[l] = 0.0f; modPh_[l] = l / static_cast<double>(kLines); lenCur_[l] = 0.0f; }
     preCur_ = -1.0f;
     dcX_[0] = dcX_[1] = dcY_[0] = dcY_[1] = 0.0f;
-    hcL_ = hcR_ = lcL1_ = lcR1_ = lcL2_ = lcR2_ = 0.0f;
+    hcL_ = hcR_ = lcL1_ = lcR1_ = lcL2_ = lcR2_ = lcL3_ = lcR3_ = lcL4_ = lcR4_ = 0.0f;
     duckEnv_ = 0.0f;
 }
 
@@ -96,9 +96,11 @@ void Reverb::set(float size, float decaySeconds, float damping, float preDelaySa
     if (preCur_ < 0.0f) preCur_ = preTarget_;
     const float hc = clampv(highCutHz, 500.0f, 20000.0f);
     hcCoef_ = hc >= 19000.0f ? 1.0f : 1.0f - std::exp(-kTwoPi * hc / static_cast<float>(sr_));
-    // Two cascaded one-poles are 6 dB down at their corner and 3 dB down at 1.554 times it.
+    // Four cascaded one-poles (24 dB per octave since 25.09.2026) are 3 dB down at 2.299 times their corner
+    // (1 / sqrt(2^(1/4) - 1)). Two, 12 dB per octave, let a drone's low octave back out of a four-second plate only
+    // 11 dB down, and its tail still stood under the drop two bars later (testVoices.droneRender).
     const float lc = std::max(150.0f, lowCutHz);
-    lcCoef_ = 1.0f - std::exp(-kTwoPi * (lc / 1.5538f) / static_cast<float>(sr_));
+    lcCoef_ = 1.0f - std::exp(-kTwoPi * (lc / 2.2991f) / static_cast<float>(sr_));
 }
 
 void Reverb::process(const float* inL, const float* inR, float* outL, float* outR, int n)
@@ -156,10 +158,14 @@ void Reverb::process(const float* inL, const float* inR, float* outL, float* out
         hcR_ += hcCoef_ * (wetR - hcR_);
         lcL1_ += lcCoef_ * (hcL_ - lcL1_);   const float aL = hcL_ - lcL1_;
         lcR1_ += lcCoef_ * (hcR_ - lcR1_);   const float aR = hcR_ - lcR1_;
-        lcL2_ += lcCoef_ * (aL - lcL2_);
-        lcR2_ += lcCoef_ * (aR - lcR2_);
-        outL[i] = aL - lcL2_;
-        outR[i] = aR - lcR2_;
+        lcL2_ += lcCoef_ * (aL - lcL2_);   const float bL = aL - lcL2_;
+        lcR2_ += lcCoef_ * (aR - lcR2_);   const float bR = aR - lcR2_;
+        lcL3_ += lcCoef_ * (bL - lcL3_);   const float cL = bL - lcL3_;
+        lcR3_ += lcCoef_ * (bR - lcR3_);   const float cR = bR - lcR3_;
+        lcL4_ += lcCoef_ * (cL - lcL4_);
+        lcR4_ += lcCoef_ * (cR - lcR4_);
+        outL[i] = cL - lcL4_;
+        outR[i] = cR - lcR4_;
         w_ = (w_ + 1) & mask_;
     }
 }

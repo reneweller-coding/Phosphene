@@ -402,6 +402,7 @@ private:
                   "the polyphonic strips must follow PolyInstance");
     float stripGain_[StripCount] = {};   ///< each strip's gain (mute and level)
     float stripRoom_[StripCount] = {}, stripHall_[StripCount] = {};   ///< each strip's room and hall sends
+    float stripPlate_[StripCount] = {};   ///< each strip's plate send (the middle plane, 25.09.2026)
     float stripFx_[StripCount] = {};       ///< send into the modulation chain (texture and vocal only)
 
     PsyFxChain sfxFx_, sendFx_;            ///< the SFX strip's insert, and the send chain (the voices')
@@ -445,6 +446,19 @@ private:
     Ducker subDuck_;                       ///< the kick's hold on the sub drop
     Ducker duck_[StripCount];   ///< each strip's duck under the kick
     Ducker returnDuck_;   ///< the returns' duck under the kick
+    /** @name The mix guide's two ducks that are not the kick's (25.09.2026)
+     *  The counter gives way to the lead (mix.counter_duck, 1 .. 3 dB, back in 50 ms), and the pad's presence band
+     *  -- a bell at 1.2 kHz, an octave and a half wide, over 500 Hz .. 3 kHz -- drops by mix.pad_lead_duck while a
+     *  lead note sounds (its hold is the note's length, its release 80 ms): the guide's dynamic EQ, the pad
+     *  stepping back exactly where and while the lead speaks. Both are driven by the lead's notes, as the kick's
+     *  ducks are by the kick's: deterministic, no detector.
+     *  @{ */
+    Ducker leadDuck_;             ///< the counter's gain under the lead
+    Ducker padBandDuck_;          ///< the pad's presence band under the lead
+    Svf padBandL_, padBandR_;     ///< the band's filters (a bandpass whose share is subtracted)
+    float counterDuck_ = 0.0f;    ///< mix.counter_duck
+    float padBandCut_ = 1.0f;     ///< linear gain of the band at full depth (mix.pad_lead_duck)
+    /** @} */
     TranceGate gate_[kPolyInstances];   ///< each voice's trance gate
     bool  gateOn_[kPolyInstances] = {};   ///< poly.gate per voice
     int   gatePattern_[kPolyInstances] = {};   ///< poly.gate_pattern per voice
@@ -452,6 +466,28 @@ private:
     double gateAttack_[kPolyInstances] = {}, gateRelease_[kPolyInstances] = {};   ///< the gate's attack and release per voice, in beats
 
     Reverb room_, hall_;   ///< the two send reverbs
+    /** @brief The plate (25.09.2026): the middle plane of depth -- acid, counter, arp and stab -- between the dry front
+     *         and the hall; short, bright, its pre-delay on the tempo grid (fx.plate_*). */
+    Reverb plate_;
+    float plateReturn_ = 0.0f;   ///< fx.plate_return, linear
+    float plateToHall_ = 0.0f;   ///< fx.plate_to_hall: the plate's output share that feeds the far room (the addon)
+    /** @name Distance (25.09.2026, the Dark-Ambient addon)
+     *  One cue for the five of distance, per polyphonic voice: poly.distance against the voice's own plane
+     *  (kDistancePlane) moves its level, a low pass, its plate send and its width together (distanceCue), so a
+     *  voice is never near by one cue and far by another -- the addon's "half assignment" that sticks to the
+     *  speakers. At the default the deltas are nil and nothing is processed.
+     *  @{ */
+    float distGain_[kPolyInstances] = {};       ///< linear gain against the plane's
+    float distWet_[kPolyInstances] = {};        ///< plate send added (may take away)
+    float distWidth_[kPolyInstances] = {};      ///< side gain against the plane's
+    bool distLpOn_[kPolyInstances] = {};        ///< the low pass is engaged (the voice is further than its plane)
+    Svf distLpL_[kPolyInstances], distLpR_[kPolyInstances];   ///< the low passes
+    /** @} */
+    float slowWidth_[kPolyInstances] = {};      ///< poly.slow_mod, for the width's free movement (Engine.cpp)
+    int monitor_ = 0;                           ///< master.monitor
+    float slowSide_ = 0.0f;                     ///< the free width movement's sine, renewed every 32 samples
+    Svf monLp1_, monLp2_;                       ///< the sub monitor's fourth-order low pass at 80 Hz
+    std::vector<float> plateInL_, plateInR_, plateOutL_, plateOutR_;   ///< the plate's send and return buffers
     float roomReturn_ = 0.5f, hallReturn_ = 0.5f;   ///< their returns, linear
     std::vector<float> roomInL_, roomInR_, hallInL_, hallInR_, roomOutL_, roomOutR_, hallOutL_, hallOutR_;   ///< the reverbs' inputs and outputs of a segment
     /**

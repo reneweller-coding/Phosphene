@@ -29,7 +29,7 @@ void testGateAndDuck()
         auto e = std::make_unique<Engine>();
         e->prepare(48000.0, 256);
         e->params().parseText(fmt("mix.kick_mute=1 mix.bass_mute=1 mix.perc_mute=1 master.limiter=Off master.clipper=Off master.clip=Off "
-                                  "master.comp_ratio=1 fx.hall_return=-36 fx.room_return=-36 pad.hall_send=0 pad.amp_attack=1 %s", settings).c_str());
+                                  "master.comp_ratio=1 fx.hall_return=-36 fx.room_return=-36 fx.plate_return=-36 pad.hall_send=0 pad.amp_attack=1 %s", settings).c_str());
         for (int pitch : { 60, 64, 67, 71 }) {
             NoteEvent n;
             n.part = Part::Pad; n.pitch = static_cast<uint8_t>(pitch); n.length = 64.0f; n.velocity = 100;

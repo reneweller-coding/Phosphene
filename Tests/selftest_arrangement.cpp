@@ -1983,10 +1983,13 @@ void testVoicesDroneRender()
         const double lowBreak = bandDb(t0 + 4.0 * barSec, t0 + 8.0 * barSec, 20.0, 140.0);
         const double allBreak = bandDb(t0 + 4.0 * barSec, t0 + 8.0 * barSec, 20.0, 20000.0);
         const double lowAfter = bandDb(t1, t1 + 2.0 * barSec, 20.0, 140.0);
-        check(breakStart >= 0 && lowBreak - allBreak > -12.0 && lowAfter < lowBreak - 40.0,
+        // The breakdown stands kBreakTrimDb under the sections around it (25.09.2026, a gain on the whole mix, the drone
+        // with it), so the floor after it is read against the breakdown's floor at the same gain: what has to be gone
+        // is the drone's low octave, not the difference the trim itself makes.
+        check(breakStart >= 0 && lowBreak - allBreak > -12.0 && lowAfter < lowBreak + kBreakTrimDb - 40.0,
               "tonic drone rendered: a real floor under 140 Hz in the breakdown, gone when kick and bass return",
-              fmt("seed %llu: under 140 Hz %.1f dB against %.1f dB in all in the breakdown, %.1f dB in the two bars after it",
-                  static_cast<unsigned long long>(seed), lowBreak, allBreak, lowAfter));
+              fmt("seed %llu: under 140 Hz %.1f dB against %.1f dB in all in the breakdown, %.1f dB in the two bars after it (break trim %.1f dB)",
+                  static_cast<unsigned long long>(seed), lowBreak, allBreak, lowAfter, static_cast<double>(kBreakTrimDb)));
     }
 }
 

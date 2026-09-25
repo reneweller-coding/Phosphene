@@ -161,7 +161,9 @@ enum : int { Wave, Cutoff, Resonance, EnvAmount, Decay, Accent, SlideTime, AmpDe
              // Appended 20.09.2026 (round "reverb"): routes hall_send into the gated hall (Reverb.h,
              // Engine.cpp) instead of the plain one -- a big hall that ducks while this voice plays and
              // is cut hard on the absolute bar line. Off by default, so older sets render unchanged.
-             HallGate, Count };
+             HallGate,
+             PlateSend,   ///< 25.09.2026, the mix guide: the send into the plate, the middle plane of depth (Engine.h)
+             Count };
 }
 /** @brief Parameters of a polyphonic engine (module Poly, the six instances of PolyInstance). */
 namespace poly {
@@ -219,6 +221,9 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
              LfoPitch,    ///< +- cents on every oscillator of the voice (vibrato, or a slow warp)
              LfoAmp,      ///< 0 .. 1: tremolo depth
              /** @} */
+             PlateSend,   ///< 25.09.2026, the mix guide: the send into the plate, the middle plane of depth (Engine.h)
+             Distance,    ///< 25.09.2026, the addon: 0 near .. 1 far -- level, low pass, wet and width together (Engine.h)
+             SlowMod,     ///< 25.09.2026, the addon: depth of the free slow movement (13 .. 34 s) of cutoff, colour, width
              Count };
 }
 /** @brief Values of poly.mod: the voice's modulation insert (20.09.2026, round "dialogue"). */
@@ -250,6 +255,7 @@ enum : int { Level, Noise, Resonance, Brightness, ImpactDecay, Vowel, SwellDecay
              // the composer's own draw, sample for sample.
              PresetRiser, PresetDownlifter, PresetImpact, PresetSweep, PresetFormantShot, PresetReverseSwell,
              PresetZap, PresetSquelch, PresetBubble, PresetReverseCrash, PresetAtmosphere,
+             PlateSend,   ///< 25.09.2026: the effects' send into the plate (the throw rides it; the hall is the far room now)
              Count };
 /** @brief The first of the per-family preset choices, and how many there are. */
 constexpr int kFirstPreset = PresetRiser;
@@ -271,7 +277,18 @@ enum : int { FlangerBeats, FlangerDepth, FlangerFeedback, FlangerMix, PhaserBeat
 /** @brief Parameters of the send effects (module Fx, prefix "fx"): a short room and a long hall. */
 namespace fx {
 enum : int { RoomSize, RoomDecay, RoomDamping, HallSize, HallDecay, HallDamping, HallPreDelay, LowCut, HighCut,
-             RoomReturn, HallReturn, ReturnDuck, Count };
+             RoomReturn, HallReturn, ReturnDuck,
+             /** @name Appended 25.09.2026 (the mix guide): the returns' own duck release, and the plate -- the middle
+              *  plane between the dry front (kick, bass, lead) and the hall at the back (Engine.h)
+              *  @{ */
+             ReturnDuckRelease, PlateSize, PlateDecay, PlateDamping, PlatePreDelay, PlateReturn,
+             /** @} */
+             /** @name Appended 25.09.2026 (the Dark-Ambient addon): the near room's pre-delay, a send filter per room,
+              *  and the far room fed from the plate (Engine.h)
+              *  @{ */
+             RoomPreDelay, RoomLowCut, RoomHighCut, PlateLowCut, PlateHighCut, PlateToHall,
+             /** @} */
+             Count };
 }
 /** @brief Values of poly.osc. */
 enum class PolyOsc : int { Supersaw = 0, Va, Fm, Wavetable, Count };
@@ -314,7 +331,13 @@ enum : int { KickMute, BassMute, TrackGain, PercMute, PercLevel, AcidMute, AcidL
              KickOwn, BassOwn, AcidOwn, LeadOwn, CounterOwn, ArpOwn, StabOwn, PadOwn, DroneOwn,
              // 23.09.2026, round "Keyboard": which voice a MIDI keyboard plays, and whether it replaces that voice's
              // generated notes or plays over them (Engine.h, liveNoteOn).
-             KeyboardPart, KeyboardMode, Count };
+             KeyboardPart, KeyboardMode,
+             /** @name Appended 25.09.2026 (the mix guide): the lines' duck release (the pads and the bed keep
+              *  duck_release), the counter's duck under the lead, and the pad's presence band under the lead
+              *  @{ */
+             DuckReleaseLines, CounterDuck, PadLeadDuck,
+             /** @} */
+             Count };
 /** @brief The "own sound" switch of a polyphonic instance. */
 constexpr int polyOwn(PolyInstance i) { return LeadOwn + static_cast<int>(i); }
 static_assert(polyOwn(PolyInstance::Drone) == DroneOwn, "the own-sound switches follow PolyInstance");
@@ -339,7 +362,9 @@ enum : int { Send, Port, Beats, LeadMs, Count };
 /** @brief Parameters of the master section. */
 namespace master {
 enum : int { Gain, Ceiling, Clip, CompThreshold, CompRatio, CompKnee, CompAttack, CompRelease, MonoBass,
-             Limiter, LimiterRelease, TargetLufs, AutoGain, Clipper, ClipperThreshold, Count };
+             Limiter, LimiterRelease, TargetLufs, AutoGain, Clipper, ClipperThreshold,
+             Monitor,   ///< 25.09.2026, the addon's monitoring: Normal, Mono, Sub (80 Hz low pass) or Side, after the meter
+             Count };
 }
 
 extern const char* const kKeyNames[12];         ///< C, C#, ... B

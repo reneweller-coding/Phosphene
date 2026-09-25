@@ -29,6 +29,8 @@ constexpr double kModeAmps[3][kPercModes] = {
 };
 /** @brief TR-808 cymbal oscillator frequencies. */
 constexpr double kMetalHz[kPercMetalOsc] = { 205.3, 304.4, 369.6, 522.7, 540.0, 800.0 };
+/** @brief How far a metal lane's noise pulls its squares down: at noise 1 they keep 1 - 0.8 = 0.2 (-14 dB). */
+constexpr float kMetalNoiseTrade = 0.8f;
 
 double decayFactor(double seconds, double sr) { return std::exp(-kLn1000 / (std::max(seconds, 1.0e-4) * sr)); }
 
@@ -222,7 +224,10 @@ void PercKit::computeCoefs(int l)
     // Sources.
     c_.wTone[l] = (engine == PercEngine::Tone || engine == PercEngine::Fm) ? 1.0f : 0.0f;
     c_.wModal[l] = engine == PercEngine::Modal ? 1.0f : 0.0f;
-    c_.wMetal[l] = engine == PercEngine::Metal ? 1.0f : 0.0f;
+    // Since 25.09.2026 the noise of a metal lane trades against its squares instead of lying on top of them:
+    // six summed squares are six steady tones, and with a fixed weight no amount of noise buried them (the ride
+    // rang 19 dB over its neighbourhood at 2.9 kHz, which the user heard as feedback; at 0.6 still 8 dB).
+    c_.wMetal[l] = engine == PercEngine::Metal ? 1.0f - kMetalNoiseTrade * v[perc::Noise] : 0.0f;
     c_.wNoise[l] = engine == PercEngine::Noise ? 1.0f : v[perc::Noise];
 
     const double w0 = std::min(2.0 * kPiD * f / sr_, 1.2);

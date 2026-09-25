@@ -63,7 +63,7 @@ set(PHOS_PROBE_CACHE_DIR "${CMAKE_BINARY_DIR}/probe_cache")
 # The self test: every building block measured, and the engine as a whole.
 # selftest_probe.cpp: the sections of round "speed" (20.09.2026), registered in selftest.cpp's main() like the rest.
 add_executable(phos_selftest selftest.cpp selftest_probe.cpp
-    selftest_basics.cpp selftest_lowend.cpp selftest_synths.cpp selftest_mix.cpp selftest_composer.cpp selftest_arrangement.cpp)
+    selftest_basics.cpp selftest_lowend.cpp selftest_synths.cpp selftest_mix.cpp selftest_composer.cpp selftest_arrangement.cpp selftest_mixguide.cpp)
 target_link_libraries(phos_selftest PRIVATE PhospheneCore)
 phos_test_data_dir(phos_selftest)
 phos_copy_data(phos_selftest ${PHOS_DATA_FILES})
@@ -298,6 +298,13 @@ if(NOT ANDROID)
     endforeach()
     if(TEST cuecheck)
         set_tests_properties(cuecheck PROPERTIES LABELS slow)
+    endif()
+    # The mix guide's render checks (25.09.2026, Tools/mix_audit.py): two styles rendered with stems, measured, held to
+    # the bounds the tool writes down with their reasons, the renders deleted again (they are gigabytes).
+    if(Python3_FOUND AND TARGET phos_render)
+        add_test(NAME mixaudit COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/mix_audit.py
+                 --render $<TARGET_FILE:phos_render> --out ${CMAKE_BINARY_DIR}/mixaudit --fresh --check --clean --styles 1,3)
+        set_tests_properties(mixaudit PROPERTIES LABELS slow PROCESSORS 2)
     endif()
 endif()
 

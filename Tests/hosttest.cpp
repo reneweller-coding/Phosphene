@@ -608,10 +608,16 @@ int main(int argc, char** argv)
             // overflowed -- undefined behaviour that MSVC happened to wrap into a negative id, which
             // parameterFor() refused, and that Intel's icx used to drop the id >= 0 test as impossible and
             // read in front of the table. The first icx run of the suite crashed here.
+            // The value follows the id, not the loop count (25.09.2026): with `i % 11` a parameter got the same value
+            // on every pass only while store.count() was a multiple of 11 (1001 until the mix-guide round, 1037
+            // after it). Otherwise the compose and perc knobs changed on every pass, Composer::validate threw the
+            // plans away each time, and the seek below planned from the start for 1 h 46 min until it crashed.
+            // Writing each parameter one fixed value keeps the race this part is for -- every write still
+            // lands while the audio thread reads -- without a knob that never stops moving.
             uint32_t i = 0;
             while (!stopThread.load(std::memory_order_relaxed)) {
                 const int id = static_cast<int>((i * 37u) % static_cast<uint32_t>(store.count()));
-                if (auto* param = p->parameterFor(id)) param->setValueNotifyingHost((i % 11) / 10.0f);
+                if (auto* param = p->parameterFor(id)) param->setValueNotifyingHost((id % 11) / 10.0f);
                 ++i;
                 std::this_thread::yield();
             }

@@ -31,6 +31,11 @@
  *                         plays there (kicks, bass, percussion lanes, parts, the snare roll's spacing, what
  *                         sounds on beat 4) -- the arrangement round's measurements (19.09.2026)
  *     --score-only        with --bar-log: compose the score without rendering audio (the power column is -200)
+ *     --mix-log FILE.tsv  what Tools/mix_audit.py needs to read a render against the mix guide (25.09.2026):
+ *                         "bar <n> <first sample> <track> <section>" per bar, "kick <sample>" and "bass <sample>"
+ *                         per onset, "gr <sample> <limiter dB> <compressor dB>" per block (the reduction at the
+ *                         block's end, so --block 32 gives it every 0.7 ms). Samples are positions in the
+ *                         mix WAV, the master's lookahead included.
  *     --excerpts DIR      the listening bench (23.09.2026): while the set renders, cut one WAV per section of
  *                         every track into DIR -- the section's first --excerpt-bars bars, a buildup's last
  *                         bars together with the drop it lands in -- named by seed, track, style, section and
@@ -415,7 +420,7 @@ int main(int argc, char** argv)
     double seconds = -1.0;
     int sr = 48000, block = 256;
     uint64_t seed = 1;
-    std::string out, midi, solo, setFile, saveSet, barLog, excerpts, stemsDir, audibilityPath, djDir;
+    std::string out, midi, solo, setFile, saveSet, barLog, excerpts, stemsDir, audibilityPath, djDir, mixLog;
     int excerptBars = 16;
     bool report = false, bench = false, pcm24 = false, listTracks = false, listSections = false, scoreOnly = false;
     Quality quality = Quality::desktop();
@@ -477,6 +482,7 @@ int main(int argc, char** argv)
         else if (a == "--midi") midi = next();
         else if (a == "--report") report = true;
         else if (a == "--bar-log") barLog = next();
+        else if (a == "--mix-log") mixLog = next();
         else if (a == "--score-only") scoreOnly = true;
         else if (a == "--excerpts") excerpts = next();
         else if (a == "--excerpt-bars") excerptBars = std::max(1, std::atoi(next()));
@@ -825,7 +831,10 @@ int main(int argc, char** argv)
     // Output power per bar for --bar-log: the sum of squares over every sample whose block starts in it.
     std::vector<double> barPower(static_cast<size_t>(totalBars) + 1, 0.0);
     std::vector<uint64_t> barSamples(static_cast<size_t>(totalBars) + 1, 0);
-    const bool record = !midi.empty() || !barLog.empty();
+    const bool record = !midi.empty() || !barLog.empty() || !mixLog.empty();
+    // --mix-log: the master's gain reduction at the end of every block.
+    struct GrPoint { uint64_t at; float limiter, comp; };
+    std::vector<GrPoint> grLog;
     const auto t0 = std::chrono::steady_clock::now();
     uint64_t renderedSamples = 0;
     double peak = 0.0;
@@ -898,8 +907,34 @@ int main(int argc, char** argv)
             }
         }
         renderedSamples += static_cast<uint64_t>(n);
+        if (!mixLog.empty()) grLog.push_back({ renderedSamples, engine->limiterReduction(), engine->compReduction() });
     }
     for (auto& e : excerptList) if (e->opened && !e->closed) { e->wav.close(); e->closed = true; }
+    if (!mixLog.empty()) {
+        FILE* f = std::fopen(mixLog.c_str(), "w");
+        if (f == nullptr) { std::fprintf(stderr, "cannot write %s\n", mixLog.c_str()); return 1; }
+        const double lat = static_cast<double>(std::max(0, engine->latencySamples()));
+        const std::vector<SectionMark> marks = composer.sections(params, totalBars);
+        size_t mk = 0;
+        const char* sec = "Intro";
+        int trk = 0;
+        for (int b = 0; b < totalBars; ++b) {
+            while (mk < marks.size() && marks[mk].beat < (b + 1) * kBeatsPerBar - 1e-9 && static_cast<int>(marks[mk].beat / kBeatsPerBar) <= b) {
+                sec = kSectionNames[static_cast<int>(marks[mk].type)];
+                trk = marks[mk].track;
+                ++mk;
+            }
+            std::fprintf(f, "bar\t%d\t%.0f\t%d\t%s\n", b, tempo.secondsAt(b * kBeatsPerBar) * sr + lat, trk, sec);
+        }
+        for (const NoteEvent& e : recorded) {
+            if (e.beat >= totalBeats) continue;
+            const Part part = routedPart(e);
+            if (part != Part::Kick && part != Part::Bass) continue;
+            std::fprintf(f, "%s\t%.0f\n", part == Part::Kick ? "kick" : "bass", tempo.secondsAt(e.beat) * sr + lat);
+        }
+        for (const GrPoint& g : grLog) std::fprintf(f, "gr\t%llu\t%.3f\t%.3f\n", static_cast<unsigned long long>(g.at), static_cast<double>(g.limiter), static_cast<double>(g.comp));
+        std::fclose(f);
+    }
     engine->setStemTap(nullptr);
     for (auto& w : stemWav) w->close();
     if (audMeter != nullptr) { flushAudibility(totalBars - 1); std::fclose(audFile); }

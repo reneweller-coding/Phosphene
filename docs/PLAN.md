@@ -379,6 +379,31 @@ Ein Generator mit Ereignistypen, die der Komponist an Formpunkte setzt:
   einstellbar).
 - **Auto-Gain-Staging:** jedes Sound-Preset trägt eine offline gemessene Referenzlautheit, so dass
   ein neu gewürfeltes Set nicht erst ausgepegelt werden muss (Lehre aus Noctuary 2.0.3).
+- **Tiefe, Weite, Klarheit** (Mix-Leitfaden des Nutzers, 25.09.2026; Zahlen gegen seine 40 Referenzen
+  gemessen, `Tools/mix_audit.py`, wo der Leitfaden nur Erfahrungswerte nennt):
+  - *Drei Ebenen, drei Räume* (Nachtrag "Lehren aus dem Dark-Ambient-Guide", 25.09.2026): vorn trocken
+    (Kick, Bass; der Lead etwas im Nahraum A, 0,4–0,9 s), Mitte in der Plate B (Acid, Counter, Arp, Stab;
+    1,5 s im Drop, 4 s im Break), hinten ebenfalls in B mit mehr Anteil (Pads, Drone); B speist seriell den
+    Fernraum C (Hall, 10 s, 400 Hz–3 kHz), den Bett und Stimmen direkt erreichen. C klingt nur in Intro und
+    Break. Pre-Delays sind Entfernungshinweise, kein Tempowert: vorn 40–60 ms, Mitte 20–30, hinten 0–10.
+    Jeder Raum hat eigene Send-Filter.
+  - *Distance* je Stimme (0 nah … 1 fern, Vorgabe die eigene Ebene) koppelt Pegel, Tiefpass, Plate-Anteil
+    und Breite; der Lead geht im Break nach hinten, der Counter nähert sich im Haupt-Break über 16 Takte.
+    Pads und Drone bewegen sich zusätzlich frei (13/21/34 s, Verhältnisse des Goldenen Schnitts).
+  - *Gehaltene Pads:* in Intro und Break Unison ≤ 6 Cent; solange der Bass läuft, keine Terz im Pad.
+  - *Ducking-Matrix* von der Kick: Bass 2–4 dB (Release 40–70 ms), Linien 1–2 dB (50–80 ms), hintere
+    Ebene 4–8 dB (100–150 ms), Returns 3–6 dB (80–120 ms); Effekte nicht (ein Impact fällt auf die Kick).
+    Vom Lead: der Counter 1–3 dB, das Präsenzband des Pads (500 Hz–3 kHz) 2–4 dB, solange eine Lead-Note
+    klingt.
+  - *Mix nach Phase:* Break 7 dB Gain unter dem Drop (nach Kompressor und Limiter rund 5 dB Lautheit),
+    Pad dort etwas lauter, Lead nach hinten; Drop mit Lead vorn, Pad voll breit (die Referenzen sind
+    breiter als der Leitfaden), tieferem Ducking; Build-up zieht den Mix zusammen (Pad auf 60 %, Plate auf 1,2 s, Fernraum aus,
+    Hochpass der Linien +180 Hz) und öffnet sich im Drop; Übergänge ein Takt in den Drop, vier in den
+    Break. Vor jedem Achttaktwechsel werden die Effekte einen Schlag lang in die Plate geworfen.
+  - *Monitor-Schalter* (Master): Mono, Sub (Tiefpass 80 Hz), Side -- nach dem Meter.
+  - *Prüfungen nach dem Render* (ctest `mixaudit`): Korrelation, Mono-Verlust, Spektralneigung,
+    Energie unter 120 Hz je Stimme, Kick-Bass-Lücke, Kontrast Drop/Break, Stimmung Kick/Bass; dazu der
+    Ablations-Bericht (jede Stimme weggelassen, spektrale Distanz zum vollen Mix).
 
 ## 6. Der Komponist
 

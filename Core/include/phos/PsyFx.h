@@ -31,6 +31,7 @@
  */
 #pragma once
 #include "phos/Dsp.h"
+#include "phos/Params.h"
 #include <vector>
 
 namespace phos {
@@ -151,7 +152,7 @@ private:
     Flanger flanger_;   ///< first in the chain
     Phaser phaser_;   ///< second
     FreqShifter shifter_;   ///< third
-    float v_[16] = {};   ///< the psyfx parameters as update() read them
+    float v_[psyfx::Count] = {};   ///< the psyfx parameters as update() read them (sized by the table, as Poly's since 25.09.2026)
     float motionHz_ = 0.0f, motionFlange_ = 0.0f;   ///< setMotion()
 };
 

@@ -1015,8 +1015,15 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
             for (size_t i = 1; i < f.size(); ++i)
                 for (const auto& on : here) emit(Part::Pad, held, on.first, f[i], on.second);
         } else {
-            for (int pitch : v)
+            // The third belongs to the lead while the bass runs (25.09.2026, the Dark-Ambient addon: "Pad-Grundton zum
+            // Bass in reiner Oktave oder Quinte; die Terz liegt im Lead, nicht im Pad, sobald der Bass laeuft"): over a
+            // floor with bass the pad leaves out every tone a third over its root and keeps root, fifth and colour.
+            const bool bassRuns = bp.bassBeats != 0 && !bp.floorSilent;
+            for (int pitch : v) {
+                const int iv = ((pitch - v[0]) % 12 + 12) % 12;
+                if (bassRuns && v.size() > 2 && (iv == 3 || iv == 4)) continue;
                 for (const auto& on : here) emit(Part::Pad, held, on.first, pitch, on.second);
+            }
         }
     }
     if (has(MelodyPart::Drone) && ctx.droneBars > 0) {

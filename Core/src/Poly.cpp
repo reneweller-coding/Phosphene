@@ -580,7 +580,10 @@ void Poly::renderSegment(float* L, float* R, int n)
         }
         for (int i = 0; i < n; ++i) {
             const float lfo = static_cast<float>(std::sin(2.0 * kPiD * lfoPh_[voice]));
-            const float pos = v[poly::Position] + v[poly::PosEnv] * posEnv_[voice] + v[poly::PosLfoDepth] * lfo;
+            float pos = v[poly::Position] + v[poly::PosEnv] * posEnv_[voice] + v[poly::PosLfoDepth] * lfo;
+            // The free slow movement of colour (25.09.2026), kept inside the table: at a position near an end the sine
+            // would carry the read outside it. Only where it runs, so every render without it is the one before.
+            if (v[poly::SlowMod] > 0.0f) pos = std::clamp(pos + 0.15f * v[poly::SlowMod] * slowColour_, 0.0f, 1.0f);
             posEnv_[voice] *= posDecay_;
             lfoPh_[voice] += lfoInc_;
             if (lfoPh_[voice] >= 1.0) lfoPh_[voice] -= 1.0;
@@ -667,7 +670,8 @@ void Poly::lowPassCoefs(int voice, double damping)
     const float* v = values_;
     const double oct = v[poly::EnvAmount] * fenv_[voice] * accent_[voice] + v[poly::KeyTrack] * (pitch_[voice] - 60) / 12.0
                      + static_cast<double>(driftOct_[voice])
-                     + static_cast<double>(lfo2Cut_) * static_cast<double>(lfo2Value_);
+                     + static_cast<double>(lfo2Cut_) * static_cast<double>(lfo2Value_)
+                     + static_cast<double>(v[poly::SlowMod]) * static_cast<double>(slowCut_);
     const double fc = std::min(static_cast<double>(v[poly::Cutoff]) * std::pow(2.0, oct), 0.45 * sr_);
     svfCoefs(fc, damping, sr_, ch_.a1[voice * 2], ch_.a2[voice * 2], ch_.a3[voice * 2]);
     ch_.a1[voice * 2 + 1] = ch_.a1[voice * 2];

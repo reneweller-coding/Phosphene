@@ -494,6 +494,7 @@ float sectionTrimDb(const FormPlan& f, int index, double u)
     const Section& s = f.section[index];
     if (s.type == SectionType::Drop && !s.climax) return -kDrop1HoldDb;
     if (s.type == SectionType::Intro) return -kIntroTrimDb;
+    if (s.type == SectionType::Break) return -kBreakTrimDb;
     if (s.type == SectionType::Build && index + 1 < f.count && f.section[index + 1].climax)
         return -kBuildHeadroomDb * static_cast<float>(std::clamp(u, 0.0, 1.0));
     return 0.0f;

@@ -228,6 +228,11 @@ int main(int argc, char** argv)
     run("testGenreRules.bassAndDrone", testGenreRulesBassAndDrone);
     run("testGenreRules.counterAgainstLead", testGenreRulesCounterAgainstLead);
     run("testSfxToneIntervals", testSfxToneIntervals);
+    run("testMixGuide.matrix", testMixGuideMatrix);
+    run("testMixGuide.leadDucks", testMixGuideLeadDucks);
+    run("testMixGuide.planes", testMixGuidePlanes);
+    run("testMixGuide.distance", testMixGuideDistance);
+    run("testMixGuide.phase", testMixGuidePhase);
     run("testGenreRules.listeningSeed", testGenreRulesListeningSeed);
     run("testGenreRules.arpGate", testGenreRulesArpGate);
     run("testFoundation.score", testFoundationScore);

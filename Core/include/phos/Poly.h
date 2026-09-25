@@ -109,6 +109,7 @@
 #pragma once
 #include "phos/Disperser.h"
 #include "phos/Dsp.h"
+#include "phos/Params.h"
 #include "phos/PolyKernel.h"
 #include "phos/TempoDelay.h"
 #include "phos/WaveTable.h"
@@ -166,6 +167,11 @@ public:
      *                    note glide; the lead passes its kNoteSlide flag (Score.h)
      */
     void noteOn(int pitch, float velocity, double lengthBeats, int gateSamples, double late, bool accent = false, bool slide = true);
+    /**
+     * @brief The free slow movement's two sines at this moment (Engine.cpp, 25.09.2026): the first moves the cutoff by
+     *        up to an octave, the second the wavetable position by up to 0.15, both scaled by poly.slow_mod.
+     */
+    void setSlow(float cutoffSine, float colourSine) { slowCut_ = cutoffSine; slowColour_ = colourSine; }
     /**
      * @brief Closes the gate of every voice holding @p pitch (23.09.2026, live keyboard): a played note starts with a
      *        gate that never runs out on its own, and the key's release ends it -- the voice then releases as any.
@@ -269,6 +275,7 @@ public:
     static double dynamicDetune(double knob, double amount, double lengthBeats);
 
 private:
+    float slowCut_ = 0.0f, slowColour_ = 0.0f;   ///< setSlow()'s sines (the addon's free movement)
     /**
      * @brief Makes sure a voice below voiceLimit_ is free before noteOn() allocates.
      *
@@ -317,7 +324,9 @@ private:
     double sr_ = 48000.0;   ///< sample rate
     int unisonLimit_ = kPolyUnison;   ///< oscillators per voice (Quality.h)
     int voiceLimit_ = kPolyVoices;    ///< voices that may sound at once (Quality.h)
-    float values_[64] = {};   ///< the instance's parameters as update() read them
+    /** @brief The instance's parameters as update() read them. Sized by the table itself: a fixed 64 held until the
+     *         mix guide's appends of 25.09.2026 took poly::Count to 68, and update()'s copy ran past its end. */
+    float values_[poly::Count] = {};
     PolySlots slots_;   ///< every unison slot's oscillator state (PolyKernel.h)
     PolyChannels ch_;   ///< every voice's filter and output state (PolyKernel.h)
     Envelope amp_[kPolyVoices];   ///< amplitude envelope per voice

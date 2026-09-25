@@ -164,7 +164,8 @@ const ParamDesc kPercParams[perc::Count] = {
     { "filter",        "Filter",        "",      0.0f,     2.0f,    2.0f, Curve::Choice, kPercFilterNames },
     { "cutoff",        "Cutoff",        "Hz",  100.0f, 18000.0f, 8000.0f, Curve::Log },
     { "resonance",     "Resonance",     "",      0.0f,     1.0f,    0.2f, Curve::Linear },
-    { "low_cut",       "Low Cut",       "Hz",  150.0f,  4000.0f,  150.0f, Curve::Log },
+    // Up to 8 kHz since 25.09.2026: a closed hat's low cut belongs at 5 kHz (the kit above), and the range stopped at 4.
+    { "low_cut",       "Low Cut",       "Hz",  150.0f,  8000.0f,  150.0f, Curve::Log },
     { "drive",         "Drive",         "",      0.0f,     1.0f,    0.0f, Curve::Linear },
     { "level",         "Level",         "dB",  -36.0f,     6.0f,  -12.0f, Curve::Linear },
     { "pan",           "Pan",           "",     -1.0f,     1.0f,    0.0f, Curve::Linear },
@@ -231,15 +232,25 @@ const ParamDesc kPercParams[perc::Count] = {
  * loudness probe does not see how much of a track the toms and congas play. The measurements
  * before and after are in docs/rounds/2026-09.md.
  */
+// 25.09.2026, the user after listening: "die Percussions, insbesondere die Hi Hats, VIEL zu laut und sie erzeugen
+// auch noch Feedback". Measured lane by lane (seed 42, Full-On): the ride alone carried about 70 % of the kit's
+// energy, and the metal engine's square partials rang 12 .. 28 dB over their neighbourhood at 1.7 .. 2.4 kHz -- under
+// the cymbals' low cuts of 3 .. 3.5 kHz, which a gentle slope does not reach: a standing tone, heard as feedback.
+// Noise carries the cymbals now: a metal lane's noise trades against its squares (Perc.cpp, kMetalNoiseTrade), and
+// at noise 0.9 .. 1 the partials stand 1 .. 6 dB over their neighbourhood instead of 12 .. 28, the resonances are
+// low, and the levels came down with the brighter noise -- to where the air band sits near the recordings' median
+// (testMixBalance; lowering the hats without the noise had taken it under their lower quartile). The hats' low cuts
+// stay at 3 kHz: moved up to 4.5 .. 5 kHz they took the presence band with them, and the listening seed's darkest
+// track fell 2.7 dB under the recordings' median (testPresence) with its lines already at the match's +3 dB cap.
 const char* const kDefaultKit =
-    "perc1.role=Closed Hat;perc1.engine=Metal;perc1.decay=45;perc1.noise=0.35;perc1.noise_decay=35;perc1.filter=Low Pass;"
-    "perc1.cutoff=12000;perc1.low_cut=3500;perc1.resonance=0.25;perc1.level=5;perc1.pan=0.45;perc1.pan_depth=1;perc1.choke=1;perc1.density=0.6\n"
-    "perc2.role=Open Hat;perc2.engine=Metal;perc2.decay=260;perc2.noise=0.35;perc2.noise_decay=220;perc2.filter=Low Pass;"
-    "perc2.cutoff=12000;perc2.low_cut=3000;perc2.level=2;perc2.pan=-0.4;perc2.pan_depth=1;perc2.choke=1\n"
-    "perc3.role=Ride;perc3.engine=Metal;perc3.metal_scale=0.72;perc3.decay=700;perc3.noise=0.2;perc3.noise_decay=400;"
-    "perc3.filter=Band Pass;perc3.cutoff=5200;perc3.resonance=0.35;perc3.level=0;perc3.pan=0.6;perc3.pan_depth=1\n"
-    "perc4.role=Crash;perc4.engine=Metal;perc4.metal_scale=0.5;perc4.decay=1600;perc4.noise=0.6;perc4.noise_decay=1400;"
-    "perc4.filter=High Pass;perc4.cutoff=3000;perc4.level=-5;perc4.pan=-0.55;perc4.pan_depth=1\n"
+    "perc1.role=Closed Hat;perc1.engine=Metal;perc1.decay=45;perc1.noise=1;perc1.noise_decay=35;perc1.filter=Low Pass;"
+    "perc1.cutoff=12000;perc1.low_cut=3000;perc1.resonance=0.05;perc1.level=-0.5;perc1.pan=0.45;perc1.pan_depth=1;perc1.choke=1;perc1.density=0.6\n"
+    "perc2.role=Open Hat;perc2.engine=Metal;perc2.decay=260;perc2.noise=0.9;perc2.noise_decay=220;perc2.filter=Low Pass;"
+    "perc2.cutoff=12000;perc2.low_cut=3000;perc2.level=-3.5;perc2.pan=-0.4;perc2.pan_depth=1;perc2.choke=1\n"
+    "perc3.role=Ride;perc3.engine=Metal;perc3.metal_scale=0.72;perc3.decay=700;perc3.noise=1;perc3.noise_decay=400;"
+    "perc3.filter=Band Pass;perc3.cutoff=5200;perc3.resonance=0.1;perc3.low_cut=3500;perc3.level=-10.5;perc3.pan=0.6;perc3.pan_depth=1\n"
+    "perc4.role=Crash;perc4.engine=Metal;perc4.metal_scale=0.5;perc4.decay=1600;perc4.noise=0.9;perc4.noise_decay=1400;"
+    "perc4.filter=High Pass;perc4.cutoff=3000;perc4.low_cut=4000;perc4.level=-5;perc4.pan=-0.55;perc4.pan_depth=1\n"
     "perc5.role=Clap;perc5.engine=Noise;perc5.noise=1;perc5.bursts=4;perc5.burst_spacing=9;perc5.noise_decay=180;"
     "perc5.filter=Band Pass;perc5.cutoff=1400;perc5.resonance=0.35;perc5.level=-1;perc5.low_cut=300\n"
     "perc6.role=Snare;perc6.engine=Tone;perc6.pitch=190;perc6.pitch_amount=1.6;perc6.pitch_decay=25;perc6.decay=90;"
@@ -253,7 +264,7 @@ const char* const kDefaultKit =
     "perc10.role=Conga;perc10.engine=Modal;perc10.pitch=330;perc10.mode_set=Harmonic;perc10.mode_damp=0.4;perc10.decay=180;"
     "perc10.noise=0.05;perc10.noise_decay=8;perc10.filter=Low Pass;perc10.cutoff=8000;perc10.low_cut=220;perc10.level=-3;perc10.pan=0.5;perc10.pan_depth=1;perc10.tune=1\n"
     "perc11.role=Zap;perc11.engine=FM;perc11.pitch=420;perc11.pitch_amount=8;perc11.pitch_decay=35;perc11.fm_ratio=1.5;"
-    "perc11.fm_index=3;perc11.decay=110;perc11.filter=Low Pass;perc11.cutoff=9000;perc11.resonance=0.4;perc11.drive=0.3;"
+    "perc11.fm_index=3;perc11.decay=110;perc11.filter=Low Pass;perc11.cutoff=9000;perc11.resonance=0.2;perc11.drive=0.3;"
     "perc11.level=-8;perc11.pan=0.6;perc11.pan_depth=1\n"
     "perc12.role=Blip;perc12.engine=Tone;perc12.pitch=1100;perc12.pitch_amount=1.3;perc12.pitch_decay=4;perc12.decay=45;"
     "perc12.filter=Band Pass;perc12.cutoff=1800;perc12.resonance=0.2;perc12.level=-8;perc12.pan=-0.6;perc12.pan_depth=1;perc12.tune=1\n";
@@ -309,7 +320,8 @@ const ParamDesc kBassParams[bass::Count] = {
     { "amp_decay",     "Decay",         "ms",    5.0f,  2000.0f, 180.0f, Curve::Log },
     { "amp_sustain",   "Sustain",       "",      0.0f,     1.0f,  0.55f, Curve::Linear },
     { "amp_release",   "Release",       "ms",    1.0f,   500.0f,  10.0f, Curve::Log },
-    { "duck_depth",    "Duck Depth",    "",      0.0f,     1.0f,   0.5f, Curve::Linear },
+    // 25.09.2026, the mix guide: the bass gives way to the kick by 2 .. 4 dB (0.37 is -4 dB; it was -6).
+    { "duck_depth",    "Duck Depth",    "",      0.0f,     1.0f,   0.37f, Curve::Linear },
     { "duck_hold",     "Duck Hold",     "ms",    0.0f,   200.0f,  25.0f, Curve::Linear },
     { "duck_release",  "Duck Release",  "ms",    5.0f,   500.0f,  60.0f, Curve::Log },
     { "level",         "Level",         "dB",  -36.0f,     6.0f,  -3.0f, Curve::Linear },
@@ -381,7 +393,7 @@ const ParamDesc kAcidParams[acid::Count] = {
     { "delay_high_pass","Delay High Pass","Hz",  150.0f,  2000.0f, 400.0f, Curve::Log },
     { "delay_low_pass", "Delay Low Pass", "Hz",  800.0f, 16000.0f,4500.0f, Curve::Log },
     { "room_send",      "Room Send",      "",      0.0f,     1.0f,   0.1f, Curve::Linear },
-    { "hall_send",      "Hall Send",      "",      0.0f,     1.0f,  0.08f, Curve::Linear },
+    { "hall_send",      "Hall Send",      "",      0.0f,     1.0f,   0.0f, Curve::Linear },   // 25.09.2026: the plate, not the far room
     { "duck",           "Duck",           "",      0.0f,     1.0f,  0.15f, Curve::Linear },
     { "level",          "Level",          "dB",  -36.0f,     6.0f,  -2.3f, Curve::Linear },
     // Appended 16.09.2026 (acid colour round). Off by default: an all-pass chain changes no band's
@@ -391,6 +403,8 @@ const ParamDesc kAcidParams[acid::Count] = {
     // Appended 20.09.2026 (round "reverb"). Off by default: hall_send keeps feeding the plain hall
     // exactly as before.
     { "hall_gate",      "Hall Gate",      "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
+    // 25.09.2026, the mix guide: the acid is the middle plane -- 15 to 25 % into a short plate (Engine.h).
+    { "plate_send",     "Plate Send",     "",      0.0f,     1.0f,  0.15f, Curve::Linear },
 };
 
 const ParamDesc kPolyParams[poly::Count] = {
@@ -479,6 +493,15 @@ const ParamDesc kPolyParams[poly::Count] = {
     { "lfo_cutoff",     "LFO to Cutoff",  "oct",   0.0f,     4.0f,   0.0f, Curve::Linear },
     { "lfo_pitch",      "LFO to Pitch",   "ct",    0.0f,    50.0f,   0.0f, Curve::Linear },
     { "lfo_amp",        "LFO to Level",   "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    // 25.09.2026, the mix guide: the plate, the middle plane. Off by default; the counter, the arp and the stab
+    // take it per instance (kDefaultPoly).
+    { "plate_send",     "Plate Send",     "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    // 25.09.2026, the Dark-Ambient addon. Distance: one cue for all five of distance (Engine.h, distanceCue) --
+    // 0 the front plane, 0.5 the middle, 1 the back; each instance's default is its own plane (kDefaultPoly), so
+    // the knob at its default changes nothing and a ride moves the voice with every cue at once. Slow movement:
+    // free periods of 13, 21 and 34 s (ratios of the golden mean), so no pattern is heard to come round.
+    { "distance",       "Distance",       "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    { "slow_mod",       "Slow Movement",  "",      0.0f,     1.0f,   0.0f, Curve::Linear },
 };
 
 /**
@@ -507,17 +530,17 @@ const char* const kDefaultPoly =
     // would give it is a colour that changes between notes -- a fixed comb gives it the hollow metallic
     // timbre instead. The mixes are small on purpose: this is a colour, not an effect the voice
     // disappears into, and the listening excerpts are where it gets judged.
-    "lead.glide=45;lead.pan=-0.20;lead.delay_left=2;lead.delay_right=4;"
+    "lead.glide=45;lead.pan=-0.20;lead.room_send=0.1;lead.hall_send=0;lead.delay_left=2;lead.delay_right=4;"
     "lead.mod=Phaser;lead.mod_beats=16;lead.mod_depth=0.8;lead.mod_feedback=0.45;lead.mod_mix=0.22;"
     "lead.osc2_mix=0.28;lead.osc2_detune=7;lead.lfo_beats=8;lead.lfo_cutoff=0.30;lead.lfo_amp=0.06\n"
     "arp.detune=0.3;arp.mix=0.6;arp.cutoff=3500;arp.env_amount=2.8;arp.filter_decay=140;arp.resonance=0.3;"
     "arp.amp_attack=0.8;arp.amp_decay=220;arp.amp_sustain=0;arp.amp_release=12;arp.delay_send=0.35;"
-    "arp.delay_left=2;arp.delay_right=1;arp.level=-5;arp.width=0.6;arp.hall_send=0.15;arp.duck=0.25;"
+    "arp.delay_left=2;arp.delay_right=1;arp.level=-5;arp.width=0.6;arp.hall_send=0;arp.duck=0.2;arp.plate_send=0.2;arp.distance=0.5;"
     "arp.mod=Comb;arp.mod_depth=0;arp.mod_feedback=0.6;arp.mod_mix=0.20;"
     "arp.osc2_mix=0.26;arp.osc2_detune=4;arp.lfo_beats=8;arp.lfo_cutoff=0.28;arp.lfo_amp=0.08\n"
     "pad.osc=Wavetable;pad.table=Vocal;pad.detune=0.35;pad.mix=0.7;pad.dynamic_detune=0;pad.cutoff=5000;pad.env_amount=0;pad.resonance=0.1;"
     "pad.amp_attack=700;pad.amp_decay=2000;pad.amp_sustain=1;pad.amp_release=1800;pad.hp_floor=140;pad.hp_track=1;pad.width=1;"
-    "pad.delay_send=0;pad.hall_send=0.45;pad.duck=0.5;pad.pos_env=0.3;pad.pos_decay=3000;pad.gate_pattern=Sixteenths;pad.level=-16;"
+    "pad.delay_send=0;pad.hall_send=0;pad.plate_send=0.35;pad.distance=1;pad.slow_mod=0.5;pad.duck=0.5;pad.pos_env=0.3;pad.pos_decay=3000;pad.gate_pattern=Sixteenths;pad.level=-16;"
     "pad.osc2_mix=0.38;pad.osc2_detune=9;pad.lfo_beats=16;pad.lfo_cutoff=0.50;pad.lfo_amp=0.10\n"
     // 19.09.2026, round "voices". The counter-lead answers the lead in another timbre -- the user's
     // inventory names "wavetable / vocal character" -- so it is a formant saw read by the wavetable
@@ -528,15 +551,15 @@ const char* const kDefaultPoly =
     // (amp_decay 400 -> 70 ms, sustain 0.6 -> 0, release 110 -> 35 ms, filter_decay 300 -> 60 ms with a
     // deeper envelope so the whip still opens). Pan and delay are its role's (see the lead above).
     "counter.pos_lfo_depth=0.25;counter.pos_lfo_beats=4;counter.amp_attack=1;counter.amp_decay=70;counter.amp_sustain=0;"
-    "counter.amp_release=35;counter.delay_send=0.4;counter.delay_left=0;counter.delay_right=1;counter.hall_send=0.3;"
-    "counter.width=0.7;counter.duck=0.25;counter.level=-3;counter.pan=0.20;counter.glide=0;"   // level -7 -> -3 dB (23.09.2026: "kaum hoerbar")
+    "counter.amp_release=35;counter.delay_send=0.4;counter.delay_left=0;counter.delay_right=1;counter.hall_send=0;counter.distance=0.5;"
+    "counter.width=0.7;counter.duck=0.2;counter.plate_send=0.2;counter.level=-3;counter.pan=0.20;counter.glide=0;"   // level -7 -> -3 dB (23.09.2026: "kaum hoerbar")
     "counter.mod=Flanger;counter.mod_beats=4;counter.mod_depth=0.75;counter.mod_feedback=0.55;counter.mod_mix=0.28;"
     "counter.osc2_mix=0.30;counter.osc2_detune=6;counter.lfo_beats=4;counter.lfo_cutoff=0.35\n"
     // The stab: a short, bright chord -- a narrow supersaw through a filter envelope that closes within
     // 90 ms, no sustain, and throws into the delay and the hall so the hit leaves an echo behind it.
     "stab.detune=0.35;stab.mix=0.6;stab.dynamic_detune=0;stab.cutoff=1800;stab.env_amount=3.5;stab.filter_decay=90;"
     "stab.resonance=0.35;stab.amp_attack=0.5;stab.amp_decay=180;stab.amp_sustain=0;stab.amp_release=60;stab.delay_send=0.45;"
-    "stab.delay_left=2;stab.delay_right=3;stab.delay_feedback=0.45;stab.hall_send=0.35;stab.width=0.9;stab.duck=0.3;stab.level=-7;"
+    "stab.delay_left=2;stab.delay_right=3;stab.delay_feedback=0.45;stab.hall_send=0;stab.distance=0.5;stab.width=0.9;stab.duck=0.2;stab.plate_send=0.15;stab.level=-7;"
     "stab.osc2_mix=0.26;stab.osc2_detune=5;stab.lfo_beats=8;stab.lfo_cutoff=0.22\n"
     // The tonic drone: a warm organ table held across a section, dark, slow in and slow out (the
     // cross-fade at section boundaries), with more thermal drift than the other voices. Its high pass
@@ -544,8 +567,8 @@ const char* const kDefaultPoly =
     // opens the floor to 40 Hz for its low octave, as it does for the pad's sub foundation.
     "drone.osc=Wavetable;drone.table=Organ 034;drone.detune=0.2;drone.mix=0.5;drone.dynamic_detune=0;drone.cutoff=900;"
     "drone.env_amount=0;drone.resonance=0.1;drone.amp_attack=1500;drone.amp_decay=2000;drone.amp_sustain=1;"
-    "drone.amp_release=2500;drone.hp_floor=140;drone.hp_track=0.5;drone.width=1;drone.delay_send=0;drone.hall_send=0.35;"
-    "drone.duck=0.35;drone.position=0.3;drone.pos_lfo_depth=0.1;drone.pos_lfo_beats=32;drone.drift=2;drone.level=-14;"
+    "drone.amp_release=2500;drone.hp_floor=140;drone.hp_track=0.5;drone.width=1;drone.delay_send=0;drone.hall_send=0;drone.plate_send=0.5;drone.distance=1;drone.slow_mod=0.25;"
+    "drone.duck=0.45;drone.position=0.3;drone.pos_lfo_depth=0.1;drone.pos_lfo_beats=32;drone.drift=2;drone.level=-17;"
     "drone.osc2_mix=0.36;drone.osc2_detune=5;drone.lfo_beats=32;drone.lfo_cutoff=0.32;drone.lfo_amp=0.08\n";
 
 // sfx.level -12 -> -3 dB (18.09.2026): the SFX strip measured -27.6 LUFS over the first drop and its
@@ -582,6 +605,8 @@ const ParamDesc kSfxParams[sfx::Count] = {
     { "preset_bubble",        "Bubble",        "", 0.0f,  64.0f, 0.0f, Curve::Int },
     { "preset_reverse_crash", "Reverse Crash", "", 0.0f, 128.0f, 0.0f, Curve::Int },
     { "preset_atmosphere",    "Atmosphere",    "", 0.0f, 512.0f, 0.0f, Curve::Int },
+    // 25.09.2026: the effects in the plate (the main room); the throw before an eight-bar change rides it.
+    { "plate_send",           "Plate Send",    "", 0.0f, 1.0f, 0.1f, Curve::Linear },
 };
 
 // The shamanic bed (Texture.h), the voices (Vocal.h) and the modulation effects (PsyFx.h), 19.09.2026.
@@ -597,7 +622,7 @@ const ParamDesc kTextureParams[texture::Count] = {
     { "room_send",     "Room Send",      "",     0.0f,   1.0f,   0.1f, Curve::Linear },
     { "hall_send",     "Hall Send",      "",     0.0f,   1.0f,   0.35f, Curve::Linear },
     { "fx_send",       "FX Send",        "",     0.0f,   1.0f,   0.3f, Curve::Linear },
-    { "duck",          "Duck",           "",     0.0f,   1.0f,   0.3f, Curve::Linear },
+    { "duck",          "Duck",           "",     0.0f,   1.0f,   0.45f, Curve::Linear },   // 25.09.2026: the back plane, 4 .. 8 dB
 };
 
 const ParamDesc kVocalParams[vocal::Count] = {
@@ -608,7 +633,7 @@ const ParamDesc kVocalParams[vocal::Count] = {
     { "throw_feedback", "Throw Feedback", "",     0.0f,   0.9f,   0.55f, Curve::Linear },
     { "fx_send",        "FX Send",        "",     0.0f,   1.0f,   0.45f, Curve::Linear },
     { "hall_send",      "Hall Send",      "",     0.0f,   1.0f,   0.3f, Curve::Linear },
-    { "duck",           "Duck",           "",     0.0f,   1.0f,   0.3f, Curve::Linear },
+    { "duck",           "Duck",           "",     0.0f,   1.0f,   0.4f, Curve::Linear },   // 25.09.2026: the back plane
     { "width",          "Width",          "",     0.0f,   1.0f,   0.5f, Curve::Linear },
 };
 
@@ -632,19 +657,42 @@ const ParamDesc kFxParams[fx::Count] = {
     { "room_decay",     "Room Decay",     "s",     0.1f,    4.0f,   0.7f, Curve::Log },
     { "room_damping",   "Room Damping",   "",      0.0f,    1.0f,   0.5f, Curve::Linear },
     { "hall_size",      "Hall Size",      "",      0.3f,    3.0f,   1.6f, Curve::Linear },
-    { "hall_decay",     "Hall Decay",     "s",     0.3f,   20.0f,   4.5f, Curve::Log },
+    // 25.09.2026, the Dark-Ambient addon: the hall is the far room C, 8 .. 20 s, heard only in intros and breakdowns
+    // (ComposerControls.cpp rides its return), its pre-delay almost none (the back plane's 0 .. 10 ms, 5 ms at 145 BPM).
+    { "hall_decay",     "Hall Decay",     "s",     0.3f,   20.0f,  10.0f, Curve::Log },
     { "hall_damping",   "Hall Damping",   "",      0.0f,    1.0f,  0.45f, Curve::Linear },
-    { "hall_pre_delay", "Hall Pre-Delay", "beats", 0.0f,    0.5f,  0.25f, Curve::Linear },
-    { "low_cut",        "Return Low Cut", "Hz",  150.0f, 1000.0f, 300.0f, Curve::Log },
-    { "high_cut",       "Return High Cut","Hz",  1000.0f,20000.0f,9000.0f, Curve::Log },
+    { "hall_pre_delay", "Hall Pre-Delay", "beats", 0.0f,    0.5f, 0.0125f, Curve::Linear },
+    // The hall's send filter since 25.09.2026 (room and plate have their own): the far room's 400 Hz .. 3 kHz.
+    { "low_cut",        "Hall Low Cut",   "Hz",  150.0f, 1000.0f, 400.0f, Curve::Log },
+    { "high_cut",       "Hall High Cut",  "Hz",  1000.0f,20000.0f,3000.0f, Curve::Log },
     { "room_return",    "Room Return",    "dB",  -36.0f,    6.0f,  -6.0f, Curve::Linear },
     { "hall_return",    "Hall Return",    "dB",  -36.0f,    6.0f,  -6.0f, Curve::Linear },
-    { "return_duck",    "Return Duck",    "",      0.0f,    1.0f,   0.5f, Curve::Linear },
+    // 25.09.2026, the mix guide: returns 3 .. 6 dB under the kick (0.45 is -5.2 dB), back within 80 .. 120 ms.
+    { "return_duck",    "Return Duck",    "",      0.0f,    1.0f,  0.45f, Curve::Linear },
+    { "return_duck_release", "Return Duck Release", "ms", 10.0f, 800.0f, 100.0f, Curve::Log },
+    // The plate: the main room B (the addon) -- the middle plane in a drop (1 .. 2 s), pads and lead in a
+    // breakdown (3 .. 6 s, a ride). Its pre-delay is a distance cue, not a tempo value (the addon's correction:
+    // near sources long, far ones short -- front 40 .. 60, middle 20 .. 30, back 0 .. 10 ms).
+    { "plate_size",      "Plate Size",      "",      0.3f,    3.0f,   0.8f, Curve::Linear },
+    { "plate_decay",     "Plate Decay",     "s",     0.2f,    8.0f,   1.5f, Curve::Log },
+    { "plate_damping",   "Plate Damping",   "",      0.0f,    1.0f,   0.35f, Curve::Linear },
+    { "plate_pre_delay", "Plate Pre-Delay", "ms",    0.0f,  100.0f,  25.0f, Curve::Linear },
+    { "plate_return",    "Plate Return",    "dB",  -36.0f,    6.0f,  -6.0f, Curve::Linear },
+    // 25.09.2026, the Dark-Ambient addon: the near room A (lead, snare, zaps) with the front's long pre-delay and
+    // its own send filter; the plate's filter; and the plate's share that feeds the far room C (the hall) -- the
+    // serial feed that makes a breakdown's room endless without a second, foreign place.
+    { "room_pre_delay",  "Room Pre-Delay",  "ms",    0.0f,  100.0f,  50.0f, Curve::Linear },
+    { "room_low_cut",    "Room Low Cut",    "Hz",  100.0f, 1000.0f, 200.0f, Curve::Log },
+    { "room_high_cut",   "Room High Cut",   "Hz", 1000.0f,20000.0f,10000.0f, Curve::Log },
+    { "plate_low_cut",   "Plate Low Cut",   "Hz",  100.0f, 1000.0f, 300.0f, Curve::Log },
+    { "plate_high_cut",  "Plate High Cut",  "Hz", 1000.0f,20000.0f, 6000.0f, Curve::Log },
+    { "plate_to_hall",   "Plate to Hall",   "",      0.0f,    1.0f,  0.15f, Curve::Linear },
 };
 
 // 23.09.2026, round "Keyboard": "By channel" plays the acid on channel 1, the lead on 2 ... the drone on 7.
 const char* const kKeyboardPartNames[] = { "Off", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "By channel" };
 const char* const kKeyboardModeNames[] = { "Replace", "Layer" };
+const char* const kMonitorNames[] = { "Normal", "Mono", "Sub", "Side" };
 const ParamDesc kMixParams[mix::Count] = {
     { "kick_mute", "Kick Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
     { "bass_mute", "Bass Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
@@ -700,7 +748,9 @@ const ParamDesc kMixParams[mix::Count] = {
     { "perc_hall",  "Perc Hall",  "",     0.0f,  1.0f, 0.0f, Curve::Linear },
     { "duck_attack","Duck Attack","ms",   0.5f, 30.0f, 2.0f, Curve::Log },
     { "duck_hold",  "Duck Hold",  "ms",   0.0f, 200.0f, 20.0f, Curve::Linear },
-    { "duck_release","Duck Release","ms", 10.0f, 800.0f, 180.0f, Curve::Log },
+    // 25.09.2026, the mix guide: the pads and the bed come back within 100 .. 150 ms (it was 180); the lines have
+    // their own release (duck_release_lines), the returns theirs (fx.return_duck_release).
+    { "duck_release","Duck Release","ms", 10.0f, 800.0f, 125.0f, Curve::Log },
     // 19.09.2026, round "fx-psychedelia": the shamanic bed and the voices get their own strips.
     { "texture_mute",  "Texture Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     // 22.09.2026, the user: "das Didgeridoo und die Klangschalen hab ich ueberhaupt noch nie
@@ -727,6 +777,12 @@ const ParamDesc kMixParams[mix::Count] = {
     // 23.09.2026, round "Keyboard": what a MIDI keyboard plays (Engine.h, liveNoteOn).
     { "keyboard_part", "Keyboard Plays",    "", 0.0f, 8.0f, 0.0f, Curve::Choice, kKeyboardPartNames },
     { "keyboard_mode", "Keyboard Mode",     "", 0.0f, 1.0f, 0.0f, Curve::Choice, kKeyboardModeNames },
+    // 25.09.2026, the mix guide's ducking matrix. The lines (acid, lead, counter, arp, stab) come back within
+    // 50 .. 80 ms, the pads and the bed within 100 .. 150 (duck_release, 125 now); the counter gives way to the
+    // lead by 1 .. 3 dB, the pad's band of 500 Hz .. 3 kHz by 2 .. 4 dB while the lead plays (Engine.h).
+    { "duck_release_lines", "Duck Release (Lines)", "ms", 10.0f, 800.0f, 65.0f, Curve::Log },
+    { "counter_duck",  "Counter under Lead", "",   0.0f, 1.0f, 0.2f, Curve::Linear },
+    { "pad_lead_duck", "Pad Band under Lead", "dB", 0.0f, 12.0f, 3.0f, Curve::Linear },
 };
 
 const ParamDesc kMasterParams[master::Count] = {
@@ -745,6 +801,9 @@ const ParamDesc kMasterParams[master::Count] = {
     { "auto_gain",      "Auto Gain",      "",     0.0f,  1.0f,  1.0f, Curve::Toggle },
     { "clipper",        "Clipper",        "",     0.0f,  1.0f,  1.0f, Curve::Toggle },
     { "clipper_threshold","Clipper Threshold","dB", -6.0f, 6.0f, 0.0f, Curve::Linear },
+    // 25.09.2026, the addon's monitoring: listen in mono, to the sub alone (the kick-bass gap and the tuning are
+    // judged there), or to the side signal. After the meter, so Auto Gain and the loudness readings are the mix's.
+    { "monitor",        "Monitor",        "",     0.0f,  3.0f,  0.0f, Curve::Choice, kMonitorNames },
 };
 
 // The cue bridge of PLAN 8.3. Appended after the master block, so no parameter that existed before

@@ -234,7 +234,7 @@ void PsyFxChain::reset()
 
 void PsyFxChain::update(const float* v)
 {
-    for (int k = 0; k < psyfx::Count && k < 16; ++k) v_[k] = v[k];
+    for (int k = 0; k < psyfx::Count; ++k) v_[k] = v[k];
     apply();
 }
 
