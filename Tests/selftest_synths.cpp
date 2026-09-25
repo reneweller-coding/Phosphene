@@ -1983,9 +1983,10 @@ void testPads()
         const std::vector<int> prev = voiceChord(scale, key, prevDegree, prevType, nullptr);
         const int degree = r.below(7), type = r.below(kNumChordTypes);
         const std::vector<int> got = voiceChord(scale, key, degree, type, &prev);
-        int iv[4];
-        const int n = chordIntervals(static_cast<ChordType>(type), scale, degree, iv);
-        const int rootPc = (key + RuleRef::chordRoot(scale, degree)) % 12;
+        // The chord the pad may hold (Harmony.h, padChordIntervals): no b9, the bII as the tonic's minor sixth.
+        int iv[4], rootSemis = 0;
+        const int n = padChordIntervals(static_cast<ChordType>(type), scale, degree, rootSemis, iv);
+        const int rootPc = (key + rootSemis) % 12;
         const int root = kPadLowest + ((rootPc - kPadLowest) % 12 + 12) % 12;
         const int fifth = root + iv[0];
         std::vector<std::vector<int>> cand;
@@ -2015,7 +2016,16 @@ void testPads()
             }
         }
         ++cases;
-        if (got.size() != bestSize || voicingMovement(got, prev) != best) ++mismatches;
+        if (got.size() != bestSize || voicingMovement(got, prev) != best) {
+            ++mismatches;
+            if (std::getenv("PHOS_DEBUG_RULES")) {
+                std::printf("DBG voicing: scale %d key %d degree %d type %d, got", scale, key, degree, type);
+                for (int x : got) std::printf(" %d", x);
+                std::printf(" (move %d), best size %zu move %d, prev", voicingMovement(got, prev), bestSize, best);
+                for (int x : prev) std::printf(" %d", x);
+                std::printf("\n");
+            }
+        }
         for (int x : got) if (x < kPadLowest || x > kPadHighest) ++badNotes;
     }
     check(mismatches == 0 && badNotes == 0,
@@ -2045,9 +2055,8 @@ void testPads()
         // The pad's chord for this bar (22.09.2026): the pendulum, or in the main breakdown its own
         // progression; its tones are the chord type's over its root, not the scale triad's.
         const PadChord pcd = padChordAt(t.melody, t.form, bar - t.firstBar);
-        int iv[4];
-        const int n = chordIntervals(static_cast<ChordType>(pcd.type), sc, pcd.degree, iv);
-        const int chordRootPc = RuleRef::chordRoot(sc, pcd.degree);
+        int iv[4], chordRootPc = 0;
+        const int n = padChordIntervals(static_cast<ChordType>(pcd.type), sc, pcd.degree, chordRootPc, iv);
         std::set<int> tones = { chordRootPc };
         for (int i = 0; i < n; ++i) tones.insert(((chordRootPc + iv[i]) % 12 + 12) % 12);
         const int pc = ((e.pitch - t.key) % 12 + 12) % 12;

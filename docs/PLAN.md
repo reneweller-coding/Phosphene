@@ -100,6 +100,10 @@ Sektionslängen, Bass-Onsets, Kick-Spektrum), nicht nur behauptet. Werkzeug: `To
 - Fast immer Moll mit modalen Färbungen: äolisch, phrygisch, harmonisch Moll, doppelt-harmonisch
   (Hijaz, Goa). Selten mehr als zwei Akkorde pro Sektion (i–bII, i–bVI, i–v). Tonart pro Track
   fest; Wechsel zwischen Tracks meist über Quintverwandtschaft oder Halbtonrückung.
+- **Keine kleine None in der Fläche** (Regel des Nutzers, 25.09.2026): kein Pad- oder Drone-Ton einen Halbton
+  über dem Grundton, den Bass und Drone halten, und keiner über dem eigenen Akkordgrundton -- auch nicht im
+  DJ-Übergang über dem Bass des alten Tracks. Die phrygische b2 gehört
+  Lead und Arp als kurzer Akzent (Farbton-Slots); auf dem bII des Pendels hält das Pad die Tonika mit kleiner Sexte.
 - Acid-Linien: 16-Step-Sequenzen mit Akzent und Slide, Bereich ein bis zwei Oktaven, oft auf dem
   Grundton pendelnd, Filter-Cutoff als eigentliche "Melodie".
 - Leads: Motiv aus 2 bis 4 Takten, wiederholt mit Transposition, Verkürzung, Oktavierung,

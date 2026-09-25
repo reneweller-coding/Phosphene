@@ -158,6 +158,11 @@ always harmonic: a ratio in between makes the bell and struck-metal spectra that
 under a chord. A second oscillator stays within a few cents of its interval, and the pad's partner
 plays in unison or an octave up, never a fifth, which would stack a second chord on the first.
 
+A pad never holds a minor ninth -- no note a semitone above the tonic that bass and drone play, none a
+semitone above its own root. Held for bars, that interval sounds wrong rather than dark; the Phrygian
+b2 is left to the lead and the arp as a short accent. Where the progression swings to the bII,
+the pad stays on the tonic and adds the minor sixth instead (E - B - E - C over E).
+
 == Stab ==
 
 Short chord hits on the off-beats and the phrase ends, the punctuation of a groove. They are voiced
@@ -166,7 +171,9 @@ from the track's harmony and kept out of the lead's register.
 == Drone ==
 
 A long, slowly moving tone under the breakdowns and the intros: the sound that holds a track together
-when the kick is gone. It is high-passed above the bass so it never takes the floor.
+when the kick is gone. It is high-passed above the bass so it never takes the floor. It holds the tonic,
+its fifth and its octave, and like the pad never a minor ninth over the bass -- in a DJ blend a note of the
+incoming track that would stand a semitone over the outgoing tonic waits for the hand-over.
 
 == SFX / FX ==
 

@@ -107,6 +107,8 @@ void testArrangement();   ///< selftest_arrangement.cpp
 void testClimax();   ///< selftest_arrangement.cpp
 void testPresence();   ///< selftest_arrangement.cpp
 void testGenreRulesRules();   ///< selftest_arrangement.cpp
+void testGenreRulesPadNoFlat9();   ///< selftest_arrangement.cpp
+void testGenreRulesHeldNoFlat9();   ///< selftest_arrangement.cpp
 void testGenreRulesListeningSeed();   ///< selftest_arrangement.cpp
 void testGenreRulesArpGate();   ///< selftest_arrangement.cpp
 void testFoundationScore();   ///< selftest_arrangement.cpp

@@ -8,7 +8,7 @@ seed 303 track 1: bars 0..255, 145.0 BPM, F# Phrygian, Goa, bass Rolling/Gallop 
   voice pad      osc 0 table 190 filter 0 osc2 0/5 (drawn) -0.249 -0.140 -0.184 -0.106 -0.152
   voice drone    osc 3 table 292 filter 1 osc2 0/3 (drawn) +0.077 -0.376 +0.018 +0.206 +0.077
   perc: layers 5 (hats 2), hat mode 0, clap 1, order 0 7 4 9 2
-  harmony: pendulum, 8 bars each: im(b9) iimaj7 im(b9) iimaj7; second half loop: itriad iiim7 viim7 ivtriad; breakdown moves 8 bars each: iphryg.dom vimaj7 viisus4 iphryg.dom
+  harmony: pendulum, 16 bars each: isus4 iitriad isus4 iitriad; second half pendulum: itriad viiquartal itriad viiquartal; breakdown moves 8 bars each: isus4 vimaj7 viiquartal iquartal
   parts: 1 1 1 1 1 1 1; acid 16 steps squelch -1; arp style 0; lead window 68, counter mode 0, density band 2
   lead 1: archetype 1 cell d6fb set-motif ops 0-1 1+0 0+0 1+1 0+1 4+0 0+0 1-1
   lead 2: archetype 0 cell 56ff corpus ops 0-1 1-1 0+0 4+0 0+0 1+1 0+1 1-1
@@ -124,7 +124,7 @@ seed 303 track 2: bars 224..479, 145.5 BPM, D# Phrygian, Goa, bass Gallop/Rollin
   voice pad      osc 3 table 223 filter 3 osc2 4/3 (drawn) +0.713 -0.287 +0.154 -0.128 +0.054
   voice drone    osc 1 table 1 filter 0 osc2 2/5 (drawn) -0.426 +0.269 +0.311 -0.231 -0.338
   perc: layers 6 (hats 2), hat mode 0, clap 1, order 0 7 4 9 2 6
-  harmony: pendulum, 8 bars each: itriad viitriad itriad viitriad; second half loop: im7 viitriad vimaj7 viisus4; breakdown moves 8 bars each: itriad visus4 viitriad iphryg.dom
+  harmony: pendulum, 8 bars each: itriad viisus2 itriad viisus2; second half loop: im7 viisus2 vimaj7 viisus4; breakdown moves 8 bars each: itriad visus2 viisus2 iquartal
   parts: 1 1 1 1 0 1 1; acid 16 steps squelch 0; arp style 5; lead window 66, counter mode 0, density band 2
   lead 1: archetype 1 cell d6f7 corpus ops 0-1 5+0 0+0 1+1 0+1 1+0 0+0 1-1
   lead 2: archetype 0 cell ddfd corpus ops 0-1 2+0 0+0 1+0 0+0 1+1 0+1 1-1
@@ -209,29 +209,29 @@ seed 303 track 2: bars 224..479, 145.5 BPM, D# Phrygian, Goa, bass Gallop/Rollin
     Didgeridoo     beat     896 length    64 preset 165
     Sweep          beat     924 length     4 preset 50
     Reverse Swell  beat     956 length     4 preset 168
-bars    0..  15:   284 notes b5cbf456cf1fc5c7,   525 controls 5d40c60820baf056
-bars   16..  31:   577 notes f85dd3ee549a0b02,   102 controls a74e3524dcfd67a2
-bars   32..  47:   770 notes 7d82dac890da222f,   133 controls b704030a03883cd0
-bars   48..  63:  1100 notes 4422eea0626066d4,   108 controls 75ee772d3c9475e9
-bars   64..  79:   849 notes 5f7c68cc0a86906f,   142 controls 4d331b98e551f591
-bars   80..  95:  1401 notes 28a1c87da54de726,   146 controls 34e9f32169e4e038
-bars   96.. 111:  1394 notes 12ab102ea429e496,   129 controls 051fed8d89020d0d
-bars  112.. 127:   275 notes 2551bc20ab79a3c0,   128 controls 5f927541aa1cfcf4
-bars  128.. 143:   383 notes 85dc1b5d29132a0c,   107 controls fc970b312e669f50
+bars    0..  15:   279 notes a0ad5a8d418968f6,   525 controls 5d40c60820baf056
+bars   16..  31:   573 notes 708110851076af40,   102 controls a74e3524dcfd67a2
+bars   32..  47:   753 notes 0a250e6246acde2f,   133 controls b704030a03883cd0
+bars   48..  63:  1100 notes b4135690bb84fd90,   108 controls 75ee772d3c9475e9
+bars   64..  79:   849 notes 1fe9ce0f6867c1d1,   142 controls 4d331b98e551f591
+bars   80..  95:  1409 notes 4d455ac9f10ab70c,   146 controls 34e9f32169e4e038
+bars   96.. 111:  1387 notes d7efa851c8fa97b0,   129 controls 051fed8d89020d0d
+bars  112.. 127:   274 notes d2e0005b2a0a17fd,   128 controls 5f927541aa1cfcf4
+bars  128.. 143:   386 notes 6f21649ef9603f00,   107 controls fc970b312e669f50
 bars  144.. 159:   796 notes f8d86f428f452cdb,   132 controls 249163c90be55bd8
-bars  160.. 175:  1509 notes b10e66501ff35989,   114 controls 09db4fe6e377b6e5
-bars  176.. 191:  1600 notes a60f36b196aa41fd,   148 controls b7946c52fddad56c
-bars  192.. 207:  1561 notes 0b092513503539d2,   129 controls 481de716f8f53df7
-bars  208.. 223:  1585 notes db0bf366ac28859c,   118 controls 205010b2915c5bb6
+bars  160.. 175:  1509 notes 312d058e0f5034cd,   114 controls 09db4fe6e377b6e5
+bars  176.. 191:  1600 notes e1cf16316e6ba041,   148 controls b7946c52fddad56c
+bars  192.. 207:  1565 notes 02ab9b8e89c29f69,   129 controls 481de716f8f53df7
+bars  208.. 223:  1591 notes 6d5797c3e4126b4a,   118 controls 205010b2915c5bb6
 bars  224.. 239:   766 notes 3c1e3d1f153eb9b3,   380 controls e16bdea76bc915be
 bars  240.. 255:   578 notes b82225163e8904cb,   106 controls 1a72c00f2f939b27
 bars  256.. 271:   771 notes 640feab96b0482c8,   298 controls 541d4110cf506564
 bars  272.. 287:   939 notes 8202796696136f64,   104 controls 101deb16aa9d5680
 bars  288.. 303:   749 notes 4246e64c1d00d91b,   139 controls 55886f37a917f546
-bars  304.. 319:  1285 notes 88dff3e5572ba1fe,   140 controls 3ae2c4968abd118f
-bars  320.. 335:  1388 notes 7ffa676e7f86c4bc,   126 controls 20ffda98f9b0c0ab
+bars  304.. 319:  1277 notes 0858aa82864a2796,   140 controls 3ae2c4968abd118f
+bars  320.. 335:  1380 notes 144317f95bfe5e46,   126 controls 20ffda98f9b0c0ab
 bars  336.. 351:   771 notes e3e9688dad3e2fca,   130 controls bd9055dfe65f467a
-bars  352.. 367:   336 notes 2bb1df787c6bd8fe,   104 controls 77ef3863f70766be
+bars  352.. 367:   336 notes 42764b0b1dd5266d,   104 controls 77ef3863f70766be
 bars  368.. 383:   677 notes 75598c372eb2e06d,   126 controls 2a5e43ff1583f890
 bars  384.. 399:  1447 notes 735cdbac83973855,   111 controls 1a02e1ce003e09fa
 bars  400.. 415:  1495 notes 92e5c9c0d3168aea,   142 controls db95dc4f4f1147d2

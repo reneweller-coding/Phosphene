@@ -1161,6 +1161,9 @@ std::vector<SectionMark> Composer::sections(const ParamStore& p, int bars) const
  * pads that used to hold over from the previous track). Where they are not, the incoming track's first
  * sixteen bars are its percussion and its effects alone; its pads enter with its kick and bass. The
  * effects are tuned to the key the engine plays in, which is the outgoing track's until the hand-over.
+ * A fourth apart is consonant for the tonics but not for every colour: the incoming key's minor sixth is
+ * then a semitone over the outgoing tonic, a b9 held over the outgoing bass, and the user's rule
+ * (25.09.2026) allows none in a pad or a drone -- such a note is left out until the hand-over.
  *
  * **Controls.** The incoming track's voice recipes and levels at its first bar, its voices' section
  * controls, and per bar the pad's and the drone's high pass and the drone's evolution -- for this track,
@@ -1238,7 +1241,14 @@ void Composer::transitionBar(const ParamStore& p, int gi, int bar, std::vector<N
     spec.hatLevel = bp.hatLevel;
     spec.cycleBar = bp.cycleBar;
     composePercBar(p, guest.perc, guest.percSeed, bar, inTrack, owner.bpm, guest.key, guest.scale, spec, out);
-    if (consonant) composeMelodyBar(p, guest.melody, bar, inTrack, guest.scale, bp, out, melodyContext(guest, bp, inTrack));
+    if (consonant) {
+        const size_t from = out.size();
+        composeMelodyBar(p, guest.melody, bar, inTrack, guest.scale, bp, out, melodyContext(guest, bp, inTrack));
+        const int flat9 = (owner.key + 1) % 12;
+        out.erase(std::remove_if(out.begin() + static_cast<std::ptrdiff_t>(from), out.end(), [&](const NoteEvent& e) {
+                      return (e.part == Part::Pad || e.part == Part::Drone) && e.pitch % 12 == flat9;
+                  }), out.end());
+    }
     composeSfxBar(guest.form, static_cast<double>(guest.firstBar) * kBeatsPerBar, inTrack, out);
 }
 

@@ -49,19 +49,21 @@ constexpr int kNumPendulums = static_cast<int>(sizeof(kPendulums) / sizeof(kPend
 
 /**
  * @brief Each style's taste for the chord types of Harmony.h, in ChordType order:
- *        triad, sus2, sus4, m7, m9, maj7, m(b9), sus(b2), phryg.dom, m(b5), quartal.
+ *        triad, sus2, sus4, m7, m9, maj7, m(b5), quartal.
  *
- * The mode decides which of them exist (chordTypeFits); this only says what the style reaches for
- * among those that do. m(b5) fits no root in any mode and is a chromatic cluster the two dark styles
- * alone may take (the brief: "Darkpsy, Forest, Twilight").
+ * The mode decides which of them exist (chordTypeFits), the pad's b9 rule which of those it may hold
+ * (padAvoidsFlat9); this only says what the style reaches for among what is left. m(b5) fits no root in
+ * any mode and is a chromatic cluster the two dark styles alone may take (the brief: "Darkpsy, Forest,
+ * Twilight"). The b9 chords that Goa, Dark and Hi-Tech leaned on are gone (Harmony.h, 25.09.2026); their
+ * weight went to the suspensions and the fourths, which keep a pad open and unresolved without the rub.
  */
 const double kTypeWeight[kNumStyles][kNumChordTypes] = {
-    //  triad sus2  sus4  m7    m9    maj7  m(b9) susb2 hijaz m(b5) quartal
-    { 0.15, 0.05, 0.15, 0.05, 0.00, 0.10, 0.30, 0.20, 0.25, 0.00, 0.00 },   // Goa
-    { 0.20, 0.25, 0.20, 0.20, 0.05, 0.10, 0.15, 0.05, 0.00, 0.00, 0.05 },   // Full-On
-    { 0.05, 0.15, 0.10, 0.30, 0.25, 0.10, 0.00, 0.00, 0.00, 0.00, 0.20 },   // Progressive
-    { 0.10, 0.05, 0.05, 0.05, 0.00, 0.05, 0.30, 0.25, 0.05, 0.20, 0.15 },   // Dark Forest
-    { 0.05, 0.20, 0.05, 0.00, 0.00, 0.05, 0.15, 0.30, 0.00, 0.25, 0.25 },   // Hi-Tech
+    //  triad sus2  sus4  m7    m9    maj7  m(b5) quartal
+    { 0.15, 0.20, 0.30, 0.05, 0.00, 0.10, 0.00, 0.20 },   // Goa
+    { 0.20, 0.25, 0.25, 0.20, 0.05, 0.10, 0.00, 0.05 },   // Full-On
+    { 0.05, 0.15, 0.10, 0.30, 0.25, 0.10, 0.00, 0.20 },   // Progressive
+    { 0.10, 0.15, 0.15, 0.05, 0.00, 0.05, 0.25, 0.25 },   // Dark Forest
+    { 0.05, 0.25, 0.10, 0.00, 0.00, 0.05, 0.25, 0.30 },   // Hi-Tech
 };
 
 /** @brief How long a chord holds in the cores: 4, 8 or 16 bars, by style ("oft nur alle 4, 8 oder 16 Takte"). */
@@ -77,16 +79,18 @@ const double kBarsWeight[kNumStyles][3] = {
  * @brief The classical taste: triads and sevenths first, the suspensions after them -- what a loop progression
  *        is voiced with, so that a bVI or a bVII carries its third and the loop sounds like the progression it is.
  *
- * The b2 colours (m(b9), sus(b2), Hijaz) and the m(b5) cluster have no weight here: a loop is the answer to
- * "sonst klingt immer alles schraeg", and even at 2 % such a draw held a sus(b2) for sixteen bars over the bass's
- * tonic (docs/rounds/2026-09.md, 24.09.2026). The pendulums keep those colours; they are the modal half.
+ * The m(b5) cluster has no weight here: a loop is the answer to "sonst klingt immer alles schraeg".
  */
 const double kClassicalWeight[kNumChordTypes] = {
-    //  triad sus2  sus4  m7    m9    maj7  m(b9) susb2 hijaz m(b5) quartal
-    0.50, 0.12, 0.08, 0.20, 0.05, 0.20, 0.00, 0.00, 0.00, 0.00, 0.03,
+    //  triad sus2  sus4  m7    m9    maj7  m(b5) quartal
+    0.50, 0.12, 0.08, 0.20, 0.05, 0.20, 0.00, 0.03,
 };
 
-/** @brief Draws a chord type for @p degree in @p scale from the style's taste, among the types that fit. */
+/**
+ * @brief Draws a chord type for @p degree in @p scale from the style's taste, among the types that fit the mode
+ *        and hold no b9 (padAvoidsFlat9). On the bII nothing does, and the triad stands for the chord the pad
+ *        replaces (padChordIntervals).
+ */
 int drawChordType(Rng& r, int scale, int degree, int styleIdx, bool classical = false)
 {
     const bool dark = styleIdx == static_cast<int>(StyleId::DarkForest) || styleIdx == static_cast<int>(StyleId::HiTech);
@@ -94,14 +98,18 @@ int drawChordType(Rng& r, int scale, int degree, int styleIdx, bool classical = 
     double sum = 0.0;
     for (int t = 0; t < kNumChordTypes; ++t) {
         const ChordType ct = static_cast<ChordType>(t);
-        const bool fits = ct == ChordType::MinFlat5 ? (dark && !classical) : chordTypeFits(scale, degree, ct);
+        const bool fits = (ct == ChordType::MinFlat5 ? (dark && !classical) : chordTypeFits(scale, degree, ct))
+                          && padAvoidsFlat9(scale, degree, ct);
         w[t] = fits ? (classical ? kClassicalWeight[t] : kTypeWeight[styleIdx][t]) : 0.0;
         sum += w[t];
     }
     if (sum <= 0.0) {
         // Nothing the style likes fits: the first type that fits at all, and the triad only when
-        // even that is wanting -- a chord must never hand the pad a note outside its mode.
-        for (int t = 0; t < kNumChordTypes; ++t) if (chordTypeFits(scale, degree, static_cast<ChordType>(t))) return t;
+        // even that is wanting -- a chord must never hand the pad a note outside its mode, nor a b9.
+        for (int t = 0; t < kNumChordTypes; ++t) {
+            const ChordType ct = static_cast<ChordType>(t);
+            if (chordTypeFits(scale, degree, ct) && padAvoidsFlat9(scale, degree, ct)) return t;
+        }
         return static_cast<int>(ChordType::Triad);
     }
     return drawIndex(r, w, kNumChordTypes);
@@ -350,24 +358,30 @@ void chordTones(int scale, int degree, int out[3])
  * leading of PLAN 5.7, exact rather than greedy. The bass voice itself moves as the roots do: that is
  * what root position means, and it is what the user asked for ("Auf jeden Fall den Pad-Grundton!").
  * Before 22.09.2026 the pad started at G3 and took any inversion, and the seed the user heard had
- * the root at the bottom of 24 of 96 chords in its first track.
+ * the root at the bottom of 24 of 96 chords in its first track. The chord is the one the pad may hold
+ * (padChordIntervals): no b9, and on the bII the tonic with its minor sixth.
  * @param type the chord type (Harmony.h, kChordTypes)
  */
 std::vector<int> voiceChord(int scale, int key, int degree, int type, const std::vector<int>* previous)
 {
     int iv[4];
-    const int n = chordIntervals(static_cast<ChordType>(std::clamp(type, 0, kNumChordTypes - 1)), scale, degree, iv);
-    const int rootPc = ((key + scaleDegree(scale, degree)) % 12 + 12) % 12;
+    int rootSemis = 0;
+    const int n = padChordIntervals(static_cast<ChordType>(std::clamp(type, 0, kNumChordTypes - 1)), scale, degree, rootSemis, iv);
+    const int rootPc = ((key + rootSemis) % 12 + 12) % 12;
     const int root = kPadLowest + ((rootPc - kPadLowest) % 12 + 12) % 12;   // D3 .. C#4
     const int fifth = root + iv[0];
     // The reference without a voicing before: every colour tone at its base position.
     std::vector<int> reference = { root, fifth };
     for (int i = 1; i < n; ++i) reference.push_back(root + iv[i]);
     const std::vector<int>& target = (previous != nullptr && previous->size() >= 2) ? *previous : reference;
-    // Every upper voice at its base position or one or two octaves up; the placement that moves least
-    // from the target among those with adjacent voices a minor third to an octave apart and nothing
-    // over G5. If no placement of all the colour tones fits (a high root under a wide chord), the top
-    // one is dropped and the search runs again -- the chord keeps its character before its size.
+    // Every upper voice at its lowest octave over the fifth or one or two octaves up; the placement that
+    // moves least from the target among those with adjacent voices a minor third to an octave apart and
+    // nothing over G5. If no placement of all the colour tones fits (a high root under a wide chord), the
+    // top one is dropped and the search runs again -- the chord keeps its character before its size.
+    // (The lowest octave, not the table's: the quartal chord's seventh is listed at 22 and may stand at 10,
+    // right over the fifth, which the rule allows and the self test's brute force found.)
+    int low[4] = {};
+    for (int i = 1; i < n; ++i) { low[i] = iv[i]; while (low[i] - 12 > iv[0]) low[i] -= 12; }
     for (int use = n; use >= 1; --use) {
         std::vector<int> best;
         int bestCost = 1 << 30;
@@ -377,7 +391,7 @@ std::vector<int> voiceChord(int scale, int key, int degree, int type, const std:
         for (int code = 0; code < combos; ++code) {
             std::vector<int> v = { root, fifth };
             int c = code;
-            for (int i = 1; i < use; ++i) { v.push_back(root + iv[i] + 12 * (c % 3)); c /= 3; }
+            for (int i = 1; i < use; ++i) { v.push_back(root + low[i] + 12 * (c % 3)); c /= 3; }
             std::sort(v.begin() + 2, v.end());
             bool ok = v.back() <= kPadHighest;
             for (size_t k = 1; k < v.size() && ok; ++k) { const int gap = v[k] - v[k - 1]; ok = gap >= 3 && gap <= 12; }

@@ -125,13 +125,20 @@ inline int bassRootNote(int keyRoot, int registerOffset)
 /**
  * @name Chord types (22.09.2026, round "Harmonik")
  *
- * The user's brief on psytrance pads: they "meiden reine, einfache Dreiklaenge" and live in four
- * families instead -- the Phrygian chords with the flat second (m(b9), sus(b2)), the floating sus and
- * add chords that are neither major nor minor (sus2, sus4, m7, m9), the Phrygian-dominant "Hijaz"
- * chord with both a major third and a flat second, and the clusters of the dark styles (m(b5)). With
- * the scale's plain triads alone every pad chord sounds alike. A type is a set of intervals over the chord
- * root; whether it *fits* is whether every one of them is in the section's mode (chordTypeFits), so
- * the same table gives Phrygian its m(b9) and Aeolian its m9 without a per-mode list.
+ * The user's brief on psytrance pads: they "meiden reine, einfache Dreiklaenge" and live in the
+ * floating sus and add chords that are neither major nor minor (sus2, sus4, m7, m9), open sevenths and
+ * fourths, and the clusters of the dark styles (m(b5)). With the scale's plain triads alone every pad
+ * chord sounds alike. A type is a set of intervals over the chord root; whether it *fits* is whether
+ * every one of them is in the section's mode (chordTypeFits), so the same table gives Aeolian its m9
+ * and leaves it out of Phrygian without a per-mode list.
+ *
+ * **No b9 in a pad** (the user's rule, 25.09.2026: "Er sollte auf keinen Fall in den Pads verwendet
+ * werden"). Held for bars under a bass and a drone on the tonic, a semitone over the root is heard as
+ * wrong and tires the ear; the Phrygian colour belongs to the short accents of the lead and the arp
+ * (their colour slots, Melody.h rule 1). The three types that were built on it -- m(b9), sus(b2) and
+ * the Hijaz chord 1-b2-3-5 -- are therefore gone, no type is drawn where one of its tones is the key's
+ * b2 (padAvoidsFlat9), and the bII of the Phrygian pendulum, whose root *is* that b2, is held by the
+ * pad as the tonic with the minor sixth (padChordIntervals).
  * @{ */
 enum class ChordType : int {
     Triad = 0,   ///< root, third, fifth -- the scale's own
@@ -139,17 +146,14 @@ enum class ChordType : int {
     Sus4,        ///< 1 - 4 - 5
     Min7,        ///< 1 - b3 - 5 - b7: depth and room (progressive, morning)
     Min9,        ///< 1 - b3 - 5 - b7 - 9
-    Maj7,        ///< 1 - 3 - 5 - 7: the bII of the Phrygian pendulum as Gmaj7 over F#
-    MinFlat9,    ///< 1 - b3 - 5 - b9: the Phrygian signature, the semitone rub over the root
-    SusFlat2,    ///< 1 - b2 - 5: no third at all, cold and unresolved
-    PhrygDom,    ///< 1 - b2 - 3 - 5: Hijaz, the Goa temple sound
+    Maj7,        ///< 1 - 3 - 5 - 7: bVI or bIII as a floating major seventh
     MinFlat5,    ///< 1 - b3 - b5: the tritone cluster of darkpsy and forest
     Quartal,     ///< stacked fourths from the fifth: modern, cool, blurred
     Count
 };
 constexpr int kNumChordTypes = static_cast<int>(ChordType::Count);
 inline constexpr const char* kChordTypeNames[kNumChordTypes] = {
-    "triad", "sus2", "sus4", "m7", "m9", "maj7", "m(b9)", "sus(b2)", "phryg.dom", "m(b5)", "quartal"
+    "triad", "sus2", "sus4", "m7", "m9", "maj7", "m(b5)", "quartal"
 };
 
 /**
@@ -173,9 +177,6 @@ inline int chordIntervals(ChordType type, int scale, int degree, int out[4])
     case ChordType::Min7:     put(7);  put(third + 12); put(10); break;
     case ChordType::Min9:     put(7);  put(third + 12); put(10); put(14); break;
     case ChordType::Maj7:     put(7);  put(third + 12); put(11); break;
-    case ChordType::MinFlat9: put(7);  put(third + 12); put(13); break;
-    case ChordType::SusFlat2: put(7);  put(13); break;
-    case ChordType::PhrygDom: put(7);  put(third + 12); put(13); break;
     case ChordType::MinFlat5: put(6);  put(third + 12); break;
     case ChordType::Quartal:  put(7);  put(12); put(17); put(22); break;
     case ChordType::Triad:
@@ -188,11 +189,10 @@ inline int chordIntervals(ChordType type, int scale, int degree, int out[4])
  * @brief Whether every tone of the chord lies in the mode -- relative to the key, with the chord on
  *        scale degree @p degree.
  *
- * This is the whole harmony rule of the round: the style says which types it likes, the mode says
- * which of them exist. m(b9) needs the flat second, so it exists in the Phrygian family and not in
- * Aeolian; the Hijaz chord needs a major third and a flat second, so only Phrygian dominant and
- * double harmonic give it; m9 needs the major ninth, so it lives in Aeolian and Dorian. m(b5) fits
- * no root in any of the six modes and is admitted chromatically by the dark styles alone (Melody.cpp).
+ * The style says which types it likes, the mode says which of them exist: m9 needs the major ninth,
+ * so it lives in Aeolian and Dorian and not in Phrygian. m(b5) fits no root in any of the six modes and
+ * is admitted chromatically by the dark styles alone (MelodyHarmony.cpp, drawChordType), under
+ * padAvoidsFlat9 like every other type.
  */
 inline bool chordTypeFits(int scale, int degree, ChordType type)
 {
@@ -201,6 +201,57 @@ inline bool chordTypeFits(int scale, int degree, ChordType type)
     const int root = scaleDegree(scale, degree);
     for (int i = 0; i < n; ++i) if (!inScale(scale, root + iv[i])) return false;
     return true;
+}
+
+/**
+ * @brief Whether the chord holds no b9: neither its root nor any of its tones is the key's flat second
+ *        (a minor ninth over the tonic of bass and drone), and no tone is a minor ninth over its own root.
+ */
+inline bool padAvoidsFlat9(int scale, int degree, ChordType type)
+{
+    int iv[4];
+    const int n = chordIntervals(type, scale, degree, iv);
+    const int root = scaleDegree(scale, degree) % 12;
+    if (root == 1) return false;
+    for (int i = 0; i < n; ++i) if ((root + iv[i]) % 12 == 1 || iv[i] % 12 == 1) return false;
+    return true;
+}
+
+/**
+ * @brief What the pad plays for a chord of the progression: its root and its intervals, without a b9.
+ *
+ * Mostly the chord itself (chordIntervals). On the bII -- the Phrygian pendulum's other chord, whose root is
+ * the minor ninth over the tonic -- the pad stays on the tonic and turns its colour instead: root, fifth,
+ * octave and the minor sixth an octave up (E - B - E - C over E), the Phrygian pad the literature gives as the
+ * safe alternative to the b9; the b2 itself sounds only as the lines' colour tone. A tone that would still
+ * land on the key's b2 (only a type chosen when nothing else fitted can have one) is left out, and a fifth
+ * that would is replaced by the perfect fifth.
+ * @param type   the chord's type
+ * @param scale  index into kScaleSteps
+ * @param degree the chord's scale degree
+ * @param root   receives the pad's root in semitones over the key, 0..11
+ * @param out    receives the intervals over that root, the fifth first
+ * @return how many intervals were written (2 .. 4)
+ */
+inline int padChordIntervals(ChordType type, int scale, int degree, int& root, int out[4])
+{
+    root = scaleDegree(scale, degree) % 12;
+    if (root == 1) {
+        root = 0;
+        out[0] = 7;
+        out[1] = 12;
+        out[2] = inScale(scale, 8) ? 20 : scaleDegree(scale, 2) + 12;
+        return 3;
+    }
+    int iv[4];
+    const int m = chordIntervals(type, scale, degree, iv);
+    int n = 0;
+    for (int i = 0; i < m; ++i) {
+        const bool flat9 = (root + iv[i]) % 12 == 1 || iv[i] % 12 == 1;
+        if (!flat9) out[n++] = iv[i];
+        else if (i == 0) out[n++] = 7;
+    }
+    return n;
 }
 /** @} */
 

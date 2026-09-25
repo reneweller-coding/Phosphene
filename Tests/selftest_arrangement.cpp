@@ -942,9 +942,9 @@ void testGenreRulesRules()
                 const std::vector<int>& v = (set == 0 ? m.padVoicing : m.padVoicing2)[c];
                 const int deg = (set == 0 ? m.chordDegree : m.chordDegree2)[c], ty = (set == 0 ? m.chordType : m.chordType2)[c];
                 ++padVoicings;
-                const int rootPc = (key + RuleRef::chordRoot(scale, deg)) % 12;
-                int iv[4];
-                chordIntervals(static_cast<ChordType>(ty), scale, deg, iv);
+                int iv[4], rootSemis = 0;
+                padChordIntervals(static_cast<ChordType>(ty), scale, deg, rootSemis, iv);   // the bII held as the tonic
+                const int rootPc = (key + rootSemis) % 12;
                 bool ok = v.size() >= 2 && v.size() <= 5 && std::is_sorted(v.begin(), v.end());
                 ok = ok && v[0] % 12 == rootPc && v[1] - v[0] == iv[0] && v[0] >= kPadLowest && v.back() <= kPadHighest;
                 if (!ok) ++padBad;
@@ -1013,6 +1013,120 @@ void testGenreRulesRules()
     }
     check(padBad == 0, "pad: root position -- the chord root lowest, its type's fifth above it, D3 and up, two to five voices (rule 19)",
           fmt("%d of %d voicings break it", padBad, padVoicings));
+}
+
+/**
+ * @brief Genre rules, part `.padNoFlat9`: no pad note is a minor ninth over the tonic or over the pad's own root.
+ *
+ * The user's rule of 25.09.2026: the b9 "sollte auf keinen Fall in den Pads verwendet werden". Held under a
+ * tonic bass and drone, a semitone over the root reads as wrong and tires the ear; its place is the lead's,
+ * the arp's short accents. Checked over every style, every mode and twelve keys, on every
+ * voicing a plan carries: the core chords, the second half's, the main breakdown's, and the borrowed modes'.
+ */
+void testGenreRulesPadNoFlat9()
+{
+    section("genre rules: the pad never holds a b9, over the tonic or over its own root");
+    ParamStore p;
+    int voicings = 0, bad = 0, bII = 0;
+    auto look = [&](const std::vector<int>& v, int key) {
+        if (v.empty()) return;
+        ++voicings;
+        const int flatTwo = (key + 1) % 12, overRoot = (v[0] + 1) % 12;
+        for (int n : v) {
+            const int pc = n % 12;
+            if (pc == flatTwo || pc == overRoot) {
+                ++bad;
+                if (std::getenv("PHOS_DEBUG_RULES")) std::printf("DBG pad b9: key %d root %d note %d\n", key, v[0], n);
+                return;
+            }
+        }
+    };
+    for (int st = 0; st < kNumStyles; ++st) {
+        const StyleProfile& style = styleProfile(static_cast<StyleId>(st));
+        for (int trial = 0; trial < 48; ++trial) {
+            const int scale = trial % kNumScales, key = (trial * 5 + st) % 12;
+            const uint64_t seed = 0xB9000000ull + static_cast<uint64_t>(st) * 104729ull + static_cast<uint64_t>(trial) * 7919ull;
+            const MelodyPlan m = makeMelodyPlan(p, style, seed, key, scale, false, 0.82f, (1u << kNumScales) - 1u);
+            for (int c = 0; c < 4; ++c) {
+                if (scaleDegree(scale, m.chordDegree[c]) % 12 == 1) ++bII;
+                look(m.padVoicing[c], key);
+                look(m.breakVoicing[c], key);
+                if (m.secondHalf) look(m.padVoicing2[c], key);
+                for (int sc = 0; sc < kNumScales; ++sc) {
+                    if (sc == m.scale) continue;
+                    look(m.mode[sc].padVoicing[c], key);
+                    look(m.mode[sc].breakVoicing[c], key);
+                    if (m.secondHalf) look(m.mode[sc].padVoicing2[c], key);
+                }
+            }
+        }
+    }
+    check(voicings > 1000 && bII > 0 && bad == 0,
+          "pad: no note a b9 over the tonic (bass, drone) or over the pad's own root, in every style and mode (the user's rule, 25.09.2026)",
+          fmt("%d of %d voicings hold one; %d chords of the plans stand on the bII", bad, voicings, bII));
+}
+
+/**
+ * @brief Genre rules, part `.heldNoFlat9`: in the score, no pad or drone note a b9 over the bass's tonic under it.
+ *
+ * The user's rule of 25.09.2026 holds for the pad *and* the drone ("Das mit b9 gilt natürlich auch für die
+ * Drone!"). Inside a track both are built without one (padChordIntervals; the drone is root, fifth and octave).
+ * What this checks is the score as it plays, across the DJ overlaps as well, where the incoming track's pad
+ * and drone, in its own key, sound over the outgoing track's bass in the old one: a key moved by a semitone,
+ * or a colour of the new key that lands a semitone over the old tonic, is a b9 held for bars. The bass's tonic
+ * of a bar is the pitch class its notes hold most often there: the ostinato's root, not a passing fifth of a
+ * figure (the pad's minor sixth over the bass's fifth is the Phrygian pad the rule recommends, E - B - C).
+ */
+void testGenreRulesHeldNoFlat9()
+{
+    section("genre rules: pad and drone never a b9 over the bass's tonic, across the DJ overlaps too");
+    int held = 0, bad = 0, badOverlap = 0, badDrone = 0, sets = 0;
+    for (int run = 0; run < 10; ++run) {
+        ParamStore p;
+        p.parseText(fmt("compose.track_bars=128 compose.pad_amount=1 compose.track_variation=1 compose.level_match=Off "
+                        "master.auto_gain=Off compose.style=%d", run % 5).c_str());
+        Composer c(0xB9D0ull + static_cast<uint64_t>(run) * 7919ull);
+        std::vector<NoteEvent> ev;
+        const int bars = 6 * 128;
+        c.composeBars(p, 0, bars, ev);
+        ++sets;
+        // The bass's tonic per bar: the pitch class its notes hold longest there (-1 where it rests).
+        std::vector<std::array<double, 12>> hold(static_cast<size_t>(bars));
+        for (auto& h : hold) h.fill(0.0);
+        for (const NoteEvent& e : ev) {
+            if (e.part != Part::Bass) continue;
+            const int bar = static_cast<int>(e.beat / kBeatsPerBar);
+            if (bar >= 0 && bar < bars) hold[static_cast<size_t>(bar)][static_cast<size_t>(e.pitch % 12)] += e.length;
+        }
+        std::vector<int> tonic(static_cast<size_t>(bars), -1);
+        for (int b = 0; b < bars; ++b) {
+            const auto& h = hold[static_cast<size_t>(b)];
+            const auto top = std::max_element(h.begin(), h.end());
+            if (*top > 0.0) tonic[static_cast<size_t>(b)] = static_cast<int>(top - h.begin());
+        }
+        for (const NoteEvent& e : ev) {
+            if (e.part != Part::Pad && e.part != Part::Drone) continue;
+            ++held;
+            const int first = static_cast<int>(e.beat / kBeatsPerBar);
+            const int last = static_cast<int>((e.beat + e.length - 1e-6) / kBeatsPerBar);
+            const int under = (e.pitch % 12 + 11) % 12;   // the tonic this note would be a b9 over
+            int hitBar = -1;
+            for (int b = std::max(0, first); b <= std::min(last, bars - 1) && hitBar < 0; ++b)
+                if (tonic[static_cast<size_t>(b)] == under) hitBar = b;
+            if (hitBar < 0) continue;
+            ++bad;
+            if (e.part == Part::Drone) ++badDrone;
+            if (c.incomingOfBar(p, hitBar) >= 0) ++badOverlap;
+            if (std::getenv("PHOS_DEBUG_RULES"))
+                std::printf("DBG held b9: run %d bar %d %s pitch %d over tonic %d, track key %d, incoming %d\n", run, hitBar,
+                            e.part == Part::Pad ? "pad" : "drone", e.pitch, under, c.track(p, c.trackOfBar(p, hitBar)).key,
+                            c.incomingOfBar(p, hitBar));
+        }
+    }
+    check(held > 1000 && bad == 0,
+          "pad and drone: no held note a b9 over the bass's tonic, in the tracks and across the DJ overlaps (the user's rule, 25.09.2026)",
+          fmt("%d of %d pad and drone notes over %d sets hold one (%d of them the drone's), %d in an overlap",
+              bad, held, sets, badDrone, badOverlap));
 }
 
 /** @brief Genre rules, part `.listeningSeed`: the user's listening seed in the score, with the brief's statistics. */
