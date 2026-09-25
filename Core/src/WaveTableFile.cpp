@@ -13,6 +13,7 @@
  *       none of which any file of this library needs.
  */
 #include "phos/WaveTableFile.h"
+#include "phos/Util.h"
 #include "phos/Fft.h"
 #include <algorithm>
 #include <atomic>
@@ -45,21 +46,6 @@ int& frameLimit()
 {
     static int n = 0;
     return n;
-}
-
-/** @brief Reads the whole file; false when it cannot be opened or read. */
-bool readFile(const char* path, std::vector<uint8_t>& out)
-{
-    std::FILE* f = std::fopen(path, "rb");
-    if (f == nullptr) return false;
-    std::fseek(f, 0, SEEK_END);
-    const long n = std::ftell(f);
-    std::fseek(f, 0, SEEK_SET);
-    if (n <= 0) { std::fclose(f); return false; }
-    out.resize(static_cast<size_t>(n));
-    const size_t got = std::fread(out.data(), 1, out.size(), f);
-    std::fclose(f);
-    return got == out.size();
 }
 
 /** @brief Little-endian reads that do not care how the host aligns. */
@@ -132,21 +118,11 @@ struct Library {
     size_t bytes = 0;            ///< memory the built tables occupy; written under `mutex`
 };
 
+/** @brief The process's one wavetable library. */
 Library& library()
 {
     static Library lib;
     return lib;
-}
-
-/** @brief Records a message that names the field and where in the file it sits. */
-bool fail(std::string* error, const char* what, size_t at)
-{
-    if (error != nullptr) {
-        char buf[256];
-        std::snprintf(buf, sizeof(buf), "%s (at byte %llu)", what, static_cast<unsigned long long>(at));
-        *error = buf;
-    }
-    return false;
 }
 
 /**
@@ -162,14 +138,14 @@ bool walkTableFrames(const std::vector<uint8_t>& file, size_t& at, int frameCoun
     const size_t n = file.size();
     size_t next = 0;
     for (int k = 0; k < frameCount; ++k) {
-        if (at + 4 > n) return fail(error, "a frame record runs past the end", at);
+        if (at + 4 > n) return fileError(error, "a frame record runs past the end", at);
         const int harmonics = readU16(file.data() + at);
         const int bands = readU16(file.data() + at + 2);
         at += 4;
-        if (harmonics < 0 || harmonics > kTopHarmonics) return fail(error, "harmonics out of range", at - 4);
+        if (harmonics < 0 || harmonics > kTopHarmonics) return fileError(error, "harmonics out of range", at - 4);
         const size_t scaleBytes = static_cast<size_t>(bands) * 4;
         const size_t dataBytes = static_cast<size_t>(harmonics) * (dtype == 0 ? 8u : 4u);
-        if (at + scaleBytes + dataBytes > n) return fail(error, "frame data runs past the end", at);
+        if (at + scaleBytes + dataBytes > n) return fileError(error, "frame data runs past the end", at);
         const uint8_t* scales = file.data() + at;
         const uint8_t* data = scales + scaleBytes;
         if (out != nullptr && next < keep.size() && keep[next] == k) {
@@ -242,16 +218,16 @@ bool buildSlot(Library& lib, int slot)
 bool parsePack(const std::vector<uint8_t>& file, Library& out, std::string* error)
 {
     const size_t n = file.size();
-    if (n < 24 || std::memcmp(file.data(), "PHOSWT1\0", 8) != 0) return fail(error, "magic is not PHOSWT1", 0);
-    if (readU32(file.data() + 8) != 1u) return fail(error, "version is not 1", 8);
+    if (n < 24 || std::memcmp(file.data(), "PHOSWT1\0", 8) != 0) return fileError(error, "magic is not PHOSWT1", 0);
+    if (readU32(file.data() + 8) != 1u) return fileError(error, "version is not 1", 8);
     const uint32_t tables = readU32(file.data() + 12);
     const uint32_t headerLen = readU32(file.data() + 16);
     size_t at = 20 + headerLen;
-    if (at > n) return fail(error, "headerLen runs past the end of the file", 16);
+    if (at > n) return fileError(error, "headerLen runs past the end of the file", 16);
     at = (at + kAlign - 1) / kAlign * kAlign;
 
     for (uint32_t t = 0; t < tables; ++t) {
-        if (at + kNameBytes + kIdBytes + 8 > n) return fail(error, "a table record runs past the end", at);
+        if (at + kNameBytes + kIdBytes + 8 > n) return fileError(error, "a table record runs past the end", at);
         const char* id = reinterpret_cast<const char*>(file.data() + at + kNameBytes);
         at += kNameBytes + kIdBytes;
         const int frameCount = readU16(file.data() + at);
@@ -276,7 +252,7 @@ bool parsePack(const std::vector<uint8_t>& file, Library& out, std::string* erro
         }
     }
     if (at + 8 > n || std::memcmp(file.data() + at, "PHOSWTE1", 8) != 0)
-        return fail(error, "the end marker PHOSWTE1 is missing", at);
+        return fileError(error, "the end marker PHOSWTE1 is missing", at);
     return true;
 }
 

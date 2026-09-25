@@ -140,39 +140,39 @@ public:
     bool lastLegato() const { return legato_; }
 
 private:
-    double sr_ = 48000.0;
+    double sr_ = 48000.0;   ///< output sample rate
     int    os_ = 2;                  ///< oscillator/ladder rate as a multiple of sr_ (1 or 2)
     double osRate_ = 96000.0;        ///< sr_ * os_, the rate the voice runs at
     double nyqFactor_ = 0.2;         ///< cutoff ceiling as a fraction of osRate_: decimator passband at 2x, stability at 1x
-    VaOscillator osc_;
-    DiodeLadderT<float> ladder_;
-    HalfbandDown<float> down_;
-    Envelope amp_;
-    TanhAdaa shaper_;
-    Svf lc1_, lc2_;
+    VaOscillator osc_;   ///< saw-to-square oscillator
+    DiodeLadderT<float> ladder_;   ///< the 303's diode ladder
+    HalfbandDown<float> down_;   ///< back from the oversampled rate
+    Envelope amp_;   ///< amplitude envelope
+    TanhAdaa shaper_;   ///< the drive stage
+    Svf lc1_, lc2_;   ///< the low cut (acid.low_cut), two sections
     Disperser disperse_;             ///< all-pass chain coefficients (Disperser.h)
     DisperserChannel dispState_;     ///< its state; the acid is mono until the delay
-    TempoDelay delay_;
-    std::vector<float> comb_;
-    size_t combPos_ = 0;
-    std::vector<float> mono_, send_;
+    TempoDelay delay_;   ///< the acid's own tempo delay
+    std::vector<float> comb_;   ///< the squelch's feedback comb, tuned to the note
+    size_t combPos_ = 0;   ///< its write position
+    std::vector<float> mono_, send_;   ///< a block's dry signal and delay send
 
     // Note state.
-    double pitchNow_ = 57.0, pitchTarget_ = 57.0;
-    float  velocity_ = 1.0f;
-    bool   accent_ = false, slidePending_ = false, legato_ = false;
-    int    gate_ = 0;
-    float  fenv_ = 0.0f, fDecayNote_ = 0.999f, sq_ = 0.0f;
-    float  pulse_ = 0.0f, sweep_ = 0.0f;
-    float  accentGain_ = 1.0f, accentGainTarget_ = 1.0f;
+    double pitchNow_ = 57.0, pitchTarget_ = 57.0;   ///< MIDI pitch now and where a slide goes
+    float  velocity_ = 1.0f;   ///< the note's velocity, 0..1
+    bool   accent_ = false, slidePending_ = false, legato_ = false;   ///< the note's accent, a slide into the next note, and a slid (legato) note
+    int    gate_ = 0;   ///< samples until the note is released
+    float  fenv_ = 0.0f, fDecayNote_ = 0.999f, sq_ = 0.0f;   ///< filter envelope, its per-sample decay for this note, and the squelch envelope
+    float  pulse_ = 0.0f, sweep_ = 0.0f;   ///< the accent pulse and the accent sweep capacitor it charges
+    float  accentGain_ = 1.0f, accentGainTarget_ = 1.0f;   ///< the accent's level, smoothed towards its target
 
     // Settings from update().
-    float wave_ = 0.0f, cutoff_ = 420.0f, k_ = 10.0f, envOct_ = 2.6f, accentAmt_ = 0.6f, keyTrack_ = 0.5f;
-    float fDecay_ = 0.999f, fDecayAccent_ = 0.999f, glide_ = 0.001f, driveIn_ = 1.0f, driveOut_ = 1.0f;
-    bool  squelch_ = false;
-    float sqOct_ = 3.5f, sqDecay_ = 0.999f, combMix_ = 0.5f, combFb_ = 0.8f;
-    float pulseDecay_ = 0.999f, sweepCharge_ = 0.001f, level_ = 0.3f, sendAmt_ = 0.25f, resonance_ = 0.7f;
-    float ampDecay_ = 0.9f, hz_ = 220.0f, accentSmooth_ = 0.01f;
+    float wave_ = 0.0f, cutoff_ = 420.0f, k_ = 10.0f, envOct_ = 2.6f, accentAmt_ = 0.6f, keyTrack_ = 0.5f;   ///< waveform, cutoff, ladder feedback, envelope depth (octaves), accent amount, key tracking
+    float fDecay_ = 0.999f, fDecayAccent_ = 0.999f, glide_ = 0.001f, driveIn_ = 1.0f, driveOut_ = 1.0f;   ///< filter decay (plain and accented), slide coefficient, drive in and out
+    bool  squelch_ = false;   ///< acid.squelch
+    float sqOct_ = 3.5f, sqDecay_ = 0.999f, combMix_ = 0.5f, combFb_ = 0.8f;   ///< the squelch's start (octaves) and decay, the comb's mix and feedback
+    float pulseDecay_ = 0.999f, sweepCharge_ = 0.001f, level_ = 0.3f, sendAmt_ = 0.25f, resonance_ = 0.7f;   ///< accent pulse decay, sweep charge rate, level, delay send, resonance
+    float ampDecay_ = 0.9f, hz_ = 220.0f, accentSmooth_ = 0.01f;   ///< amplitude decay, the frequency sounding, the accent gain's smoothing
 };
 
 } // namespace phos

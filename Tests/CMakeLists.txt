@@ -62,7 +62,8 @@ set(PHOS_PROBE_CACHE_DIR "${CMAKE_BINARY_DIR}/probe_cache")
 
 # The self test: every building block measured, and the engine as a whole.
 # selftest_probe.cpp: the sections of round "speed" (20.09.2026), registered in selftest.cpp's main() like the rest.
-add_executable(phos_selftest selftest.cpp selftest_probe.cpp)
+add_executable(phos_selftest selftest.cpp selftest_probe.cpp
+    selftest_basics.cpp selftest_lowend.cpp selftest_synths.cpp selftest_mix.cpp selftest_composer.cpp selftest_arrangement.cpp)
 target_link_libraries(phos_selftest PRIVATE PhospheneCore)
 phos_test_data_dir(phos_selftest)
 phos_copy_data(phos_selftest ${PHOS_DATA_FILES})
@@ -237,7 +238,7 @@ if(TARGET Phosphene)
     # contention failure this round saw, first FAIL then fixed by reverting to PROCESSORS 5 here (proof,
     # not assumption: the number that was measured safe originally is kept). Five slots is conservative
     # on this 24-thread machine but it is what is proven, and the RESOURCE_LOCK removal alone already
-    # lets hosttest and vst3test overlap instead of forming a serial tail. docs/PLAN.md (this round's
+    # lets hosttest and vst3test overlap instead of forming a serial tail. docs/rounds/2026-09.md (this round's
     # block) has the full readings, including the failing run.
     set_tests_properties(hosttest PROPERTIES LABELS "audio;slow" PROCESSORS 5
                          COST 120 ENVIRONMENT "PHOS_PROBE_CACHE=${PHOS_PROBE_CACHE_DIR}"
@@ -253,7 +254,7 @@ endif()
 
 # The built VST3 loaded the way a DAW loads it (Tests/vst3test.cpp): the module off the disk, the
 # factory, an instance, a transport, the state and the editor. It is the part of pluginval that can
-# live in the repository -- pluginval itself is not on this machine (docs/PLAN.md, Phase 6).
+# live in the repository -- pluginval itself is not on this machine (docs/rounds/2026-09.md, Phase 6).
 if(TARGET Phosphene_VST3)
     add_executable(phos_vst3test vst3test.cpp)
     target_link_libraries(phos_vst3test PRIVATE juce::juce_audio_utils juce::juce_recommended_config_flags)
@@ -276,7 +277,7 @@ if(TARGET Phosphene_VST3)
     # a loop with sleep_until and reads the peak afterwards -- unlike hosttest it asserts no wall-clock
     # deadline of its own, so it is the less fragile of the two. It shared hosttest's PROCESSORS 5 and
     # RESOURCE_LOCK for the same reason (kept apart from hosttest on wider -j); round "test-speed-rest"
-    # (20.09.2026, docs/PLAN.md) measured both running at once, twice, with hosttest's own margins
+    # (20.09.2026, docs/rounds/2026-09.md) measured both running at once, twice, with hosttest's own margins
     # unmoved (see hosttest's comment above) and vst3test itself 36/36 green both times, so the
     # RESOURCE_LOCK is gone -- they no longer form a serial tail. PROCESSORS stays 5: lowering it (tried
     # on hosttest, see its comment) let ctest pack this and several other tests' own worker threads past

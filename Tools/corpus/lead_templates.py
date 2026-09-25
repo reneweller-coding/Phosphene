@@ -1,7 +1,7 @@
 """Mines one-bar rhythm templates and anchor skeletons from the melodic corpus (22.09.2026).
 
 **Why.** The lead round of 22.09.2026 builds a phrase from a one-bar *cell* and an operator program
-instead of sampling eight bars note by note (docs/PLAN.md, block "Lead: Zelle, Operatoren,
+instead of sampling eight bars note by note (docs/rounds/2026-09.md, block "Lead: Zelle, Operatoren,
 Kritiker"). The cell's rhythm and its contour skeleton come from two small pools that the genre
 rules filter and the corpus fills -- the user's rule since 18.09.2026: rules over corpus, the MIDI
 data only decides what the rules leave open.

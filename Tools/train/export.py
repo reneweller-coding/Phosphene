@@ -53,7 +53,7 @@ def tensor_list(state, header):
         add(name, key)
     # The mode table follows idx.emb (and kick.emb, which a melodic model does not have), exactly
     # where MODEL_FORMAT section 4 puts it. Absent from a model built without --mode-cond, and then
-    # the file is byte for byte the file that exporter wrote before this round.
+    # the file is byte for byte the file that exporter wrote before mode conditioning.
     if "emb.mode.weight" in state:
         add("mode.emb", "emb.mode.weight")
     for n in range(header["layers"]):

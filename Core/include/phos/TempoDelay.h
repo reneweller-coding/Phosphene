@@ -68,6 +68,7 @@ public:
      * @brief Adds the delayed signal of a mono send to a stereo output.
      * @param send mono input, @p n samples (already scaled by the send amount)
      * @param L,R  outputs the echoes are added to
+     * @param n    samples
      */
     void process(const float* send, float* L, float* R, int n)
     {
@@ -94,6 +95,7 @@ public:
     }
 
 private:
+    /** @brief Reads @p buf @p delay samples back, linearly interpolated. */
     float read(const std::vector<float>& buf, float delay) const
     {
         // In double: at a write index of 2^17 a float resolves only 1/64 of a sample.
@@ -105,13 +107,13 @@ private:
         return buf[i0] + frac * (buf[i1] - buf[i0]);
     }
 
-    double sr_ = 48000.0;
-    std::vector<float> bufL_, bufR_;
-    size_t mask_ = 0, write_ = 0;
-    float timeL_ = 1000.0f, timeR_ = 1000.0f, targetL_ = 1000.0f, targetR_ = 1000.0f, glide_ = 0.001f;
-    float feedback_ = 0.4f;
-    bool primed_ = false;
-    Svf hpL_, hpR_, lpL_, lpR_;
+    double sr_ = 48000.0;   ///< sample rate
+    std::vector<float> bufL_, bufR_;   ///< the delay lines, a power of two long
+    size_t mask_ = 0, write_ = 0;   ///< index mask and write position
+    float timeL_ = 1000.0f, timeR_ = 1000.0f, targetL_ = 1000.0f, targetR_ = 1000.0f, glide_ = 0.001f;   ///< delay times now and where they glide to (samples), and the glide coefficient
+    float feedback_ = 0.4f;   ///< feedback
+    bool primed_ = false;   ///< the times have been set once (the first set() jumps, later ones glide)
+    Svf hpL_, hpR_, lpL_, lpR_;   ///< the feedback path's high and low pass
 };
 
 } // namespace phos

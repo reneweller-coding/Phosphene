@@ -10,7 +10,7 @@
  * **What happened.** The arrangement round wrote Form.cpp's fitTemplate with a lambda that sums the eight slot
  * lengths, called in the conditions of two nested loops that grow the slots 16 bars at a time. In the Release
  * build every track longer than 256 bars came out at 256: no slot ever grew. Rewritten with a running total it
- * worked, and the cause was left open (docs/PLAN.md, round "polish").
+ * worked, and the cause was left open (docs/rounds/2026-09.md, round "polish").
  *
  * **What it is not.** Undefined behaviour was the first suspect. The code reads eight ints through a pointer it
  * was handed, writes one of them through the same pointer, and indexes the templates' tables inside their bounds;

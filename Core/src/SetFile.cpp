@@ -3,6 +3,7 @@
  * @brief Reading and writing `.phosset`.
  */
 #include "phos/SetFile.h"
+#include "phos/Util.h"
 #include "phos/Composer.h"
 #include "phos/Form.h"
 #include "phos/Params.h"
@@ -52,13 +53,6 @@ int choiceIndex(std::string_view name, const char* const* names, int count)
     return -1;
 }
 
-std::string_view trim(std::string_view s)
-{
-    while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\r')) s.remove_prefix(1);
-    while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r')) s.remove_suffix(1);
-    return s;
-}
-
 } // namespace
 
 std::string writeSetText(const Composer& composer, const ParamStore& p)
@@ -94,7 +88,7 @@ bool readSetText(std::string_view text, Composer& composer, ParamStore& p, std::
     // The header names the format; without it the file is not a set.
     std::string_view rest = text;
     const size_t nl = rest.find('\n');
-    const std::string_view header = trim(rest.substr(0, nl == std::string_view::npos ? rest.size() : nl));
+    const std::string_view header = trimView(rest.substr(0, nl == std::string_view::npos ? rest.size() : nl));
     if (header.rfind("phosset", 0) != 0) {
         if (error != nullptr) *error = "not a phosset file (the first line must be \"phosset 1\" or \"phosset 2\")";
         return false;
@@ -113,7 +107,7 @@ bool readSetText(std::string_view text, Composer& composer, ParamStore& p, std::
     size_t pos = 0;
     while (pos <= rest.size()) {
         const size_t end = rest.find('\n', pos);
-        const std::string_view line = trim(rest.substr(pos, (end == std::string_view::npos ? rest.size() : end) - pos));
+        const std::string_view line = trimView(rest.substr(pos, (end == std::string_view::npos ? rest.size() : end) - pos));
         pos = end == std::string_view::npos ? rest.size() + 1 : end + 1;
         if (line.empty() || line.front() == '#') continue;
         const size_t eq = line.find('=');
@@ -122,8 +116,8 @@ bool readSetText(std::string_view text, Composer& composer, ParamStore& p, std::
             ok = false;
             continue;
         }
-        const std::string_view key = trim(line.substr(0, eq));
-        const std::string_view value = trim(line.substr(eq + 1));
+        const std::string_view key = trimView(line.substr(0, eq));
+        const std::string_view value = trimView(line.substr(eq + 1));
         if (key == "seed") {
             composer.setSeed(std::strtoull(std::string(value).c_str(), nullptr, 10));
         } else if (key == "style" || key == "arc") {

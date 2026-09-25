@@ -44,12 +44,14 @@ namespace {
 int failures = 0;
 int checks = 0;
 
+/** @brief Records one check's result and prints it. */
 void check(bool ok, const juce::String& what)
 {
     ++checks;
     if (!ok) { std::printf("FAIL: %s\n", what.toRawUTF8()); ++failures; }
 }
 
+/** @brief Whether the first @p n samples of every channel of @p b are finite. */
 bool finite(const juce::AudioBuffer<float>& b, int n)
 {
     for (int c = 0; c < b.getNumChannels(); ++c)
@@ -297,6 +299,7 @@ ArrangeDisplay::Snapshot bigSet()
 
 } // namespace
 
+/** @brief Runs the host test's parts (all, or the one named on the command line). */
 int main(int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
@@ -420,7 +423,7 @@ int main(int argc, char** argv)
     // The same failure as the missing pack, one level up: without `melody.phosmdl` and
     // `bass.phosmdl` the composer draws from the Markov model and the pattern families, the whole of
     // Phase 8 is gone, and the only word about it is one line on stderr -- which in a DAW is
-    // nowhere. Until this round nothing in the plugin called setModelSearchPath() at all, so that was
+    // nowhere. Before the fix nothing in the plugin called setModelSearchPath() at all, so that was
     // the state of every installed copy.
     //
     // Both files are copied next to this executable by Tests/CMakeLists.txt, exactly as
@@ -1016,7 +1019,7 @@ int main(int argc, char** argv)
                                && r->params().get(counterCutoff) == fresh.get(counterCutoff);
         check(built && r->lastStateVersion() == 2 && untouched && r->pendingLegacyState().isNotEmpty()
                   && r->seed() == 987654321,
-              "a state from before this round sets no knob and is held for the offer instead (version "
+              "a state of version 1 or 2 sets no knob and is held for the offer instead (version "
                   + juce::String(r->lastStateVersion()) + ", lead.cutoff " + juce::String(r->params().get(leadCutoff))
                   + " = the default " + juce::String(fresh.get(leadCutoff)) + ", seed " + juce::String(static_cast<int>(r->seed())) + ")");
 

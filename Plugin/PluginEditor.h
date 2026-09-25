@@ -78,9 +78,9 @@ class TrackDisplay final : public juce::Component {
 public:
     /** @brief One line of the list. */
     struct Row {
-        int bar = 0, bars = 0, index = 0;
-        double bpm = 145.0;
-        juce::String text;
+        int bar = 0, bars = 0, index = 0;   ///< the track's first bar, its length, its index
+        double bpm = 145.0;   ///< its tempo
+        juce::String text;   ///< the line as drawn
     };
     void paint(juce::Graphics&) override;
     void resized() override {}
@@ -161,6 +161,7 @@ private:
  */
 class HelpView final : public juce::Component, private juce::ListBoxModel {
 public:
+    /** @brief Builds the topics from the manual's chapters. */
     explicit HelpView(PhospheneProcessor& proc);
     /**
      * @brief Shows the topic @p name (a tab's name or a chapter's), with the parameters of @p paramIds listed
@@ -182,22 +183,23 @@ private:
     int getNumRows() override { return names_.size(); }
     void paintListBoxItem(int row, juce::Graphics&, int w, int h, bool selected) override;
     void selectedRowsChanged(int row) override;
-    PhospheneProcessor& proc_;
+    PhospheneProcessor& proc_;   ///< the processor the help reads (parameters, update state)
     juce::StringArray names_;           ///< topic names
     juce::StringArray texts_;           ///< their text (the parameter topic is filled by open())
     int paramTopic_ = -1;               ///< index of "Parameters on this tab"
     int updateTopic_ = -1;              ///< index of "Updates"
-    juce::ListBox list_;
-    juce::TextEditor text_;
-    juce::ToggleButton autoCheck_{ "Look for updates once a day" };
-    juce::TextButton checkNow_{ "Check now" }, openRelease_{ "Open the release page" };
-    juce::Label updateLine_;
-    juce::SharedResourcePointer<phosui::UpdateCheck> updates_;
+    juce::ListBox list_;   ///< the topics
+    juce::TextEditor text_;   ///< the chosen topic's text
+    juce::ToggleButton autoCheck_{ "Look for updates once a day" };   ///< the daily update check on or off
+    juce::TextButton checkNow_{ "Check now" }, openRelease_{ "Open the release page" };   ///< check now, and open the release page when there is one
+    juce::Label updateLine_;   ///< what the last check found
+    juce::SharedResourcePointer<phosui::UpdateCheck> updates_;   ///< the process's one update check
 };
 
 /** @brief The Phosphene editor. */
 class PhospheneEditor final : public juce::AudioProcessorEditor, private juce::Timer {
 public:
+    /** @brief Builds every page from the parameter tables and sizes the window. */
     explicit PhospheneEditor(PhospheneProcessor&);
     ~PhospheneEditor() override;
 
@@ -223,8 +225,8 @@ public:
      * One picture per tab, and a `manual.json` holding the parameter tables and -- which is the
      * point -- the groups each tab really built, straight out of the pages. Tools/manual/make_manual.py
      * turns that into the manual and refuses to print one in which a parameter appears on no tab.
-     * That is the bug of the last round (four new parameters that no group claimed) made impossible
-     * to miss.
+     * That makes a parameter that no group claims (it happened on 23.09.2026 with four of them)
+     * impossible to miss.
      * @return false if the folder cannot be written
      */
     bool writeManual(const juce::File& dir);
@@ -241,6 +243,7 @@ public:
     phosui::SynthScope* bassScope() const { return bassScope_; }   ///< @copydoc kickScope
 
 private:
+    /** @brief Builds the synth, effect and mixer pages (the others have their own files). */
     void buildPages();
     void buildSetPage();          // EditorSetTab.cpp
     void refreshSetPage();        // EditorSetTab.cpp: meters, transport, track list
@@ -259,10 +262,10 @@ private:
     void addSoundGroup(phosui::ControlPage& page, phos::Module module, int instance, int owner, juce::Colour tint);
     /** @brief One synth's preset chooser and the presets behind its item ids (id = index + 1). */
     struct PresetBox {
-        juce::ComboBox* box = nullptr;
-        phos::Module module = phos::Module::Kick;
-        int instance = 0;
-        std::vector<phos::SoundPreset> presets;
+        juce::ComboBox* box = nullptr;   ///< the chooser (owned by the page)
+        phos::Module synth = phos::Module::Kick;    ///< the synth it sets (named so: doxygen reads a member `module` as a C++20 module)
+        int instance = 0;   ///< its instance
+        std::vector<phos::SoundPreset> presets;   ///< factory and user presets, item id = index + 1
     };
     /** @brief Fills a chooser from the factory presets and the user's, grouped (after a save, again). */
     void fillPresetBox(PresetBox& pb);
@@ -281,8 +284,8 @@ private:
     /** @name Help, full screen and the update notice (23.09.2026)
      *  @{ */
     juce::TextButton helpButton_{ "Help" }, fullButton_{ "Full screen" }, updateButton_{ "" };
-    std::unique_ptr<HelpView> help_;
-    juce::SharedResourcePointer<phosui::UpdateCheck> updates_;
+    std::unique_ptr<HelpView> help_;   ///< the help page, made on first use
+    juce::SharedResourcePointer<phosui::UpdateCheck> updates_;   ///< the process's one update check
     /** @brief Opens or closes the help page, at the chapter of the tab that is open. */
     void showHelp(bool show);
     bool helpShown() const { return help_ != nullptr && help_->isVisible(); }
@@ -292,17 +295,20 @@ private:
     void parentHierarchyChanged() override;
     /** @} */
     phosui::ControlPage* activePage() const;
+    /** @brief Places the header, the tab bar and the page for the current size. */
     void layoutContent();
+    /** @brief Paints the header and the page's background. */
     void paintContent(juce::Graphics&);
+    /** @brief PHOS_SHOT, PHOS_SHOT_ALL, PHOS_MANUAL: plays, waits, writes the pictures (and the manual) and quits. */
     void runScreenshotMode();
 
-    PhospheneProcessor& proc_;
-    PhospheneLookAndFeel lnf_;
-    EditorContent content_;
-    juce::TooltipWindow tooltips_{ this, 700 };
+    PhospheneProcessor& proc_;   ///< the processor this editor shows
+    PhospheneLookAndFeel lnf_;   ///< the editor's look
+    EditorContent content_;   ///< the scaled content: header, tabs and page
+    juce::TooltipWindow tooltips_{ this, 700 };   ///< tooltips after 700 ms
 
     std::vector<std::unique_ptr<phosui::ControlPage>> pages_;   ///< one per tab; the percussion tab's is a stand-in
-    std::vector<std::unique_ptr<phosui::ControlPage>> percPages_;
+    std::vector<std::unique_ptr<phosui::ControlPage>> percPages_;   ///< one page per percussion lane
     /** @brief The pattern preview of each tab (null for the Set tab, which has the plan instead). */
     std::vector<PatternDisplay*> patterns_;
     std::vector<PatternDisplay*> percPatterns_;   ///< one per lane page, each lighting its own lane
@@ -312,24 +318,25 @@ private:
     /** @brief The effect preset choosers' host links; declared after pages_, so they go before their boxes do. */
     std::vector<std::unique_ptr<juce::ComboBoxParameterAttachment>> sfxPresetLinks_;
     std::vector<phos::NoteEvent> patternNotes_;   ///< scratch for the timer's read
-    juce::OwnedArray<juce::TextButton> tabButtons_, laneButtons_;
-    juce::Viewport viewport_;
-    int tab_ = 0, percLane_ = 0;
-    int designW_ = 1290, designH_ = 860;
+    juce::OwnedArray<juce::TextButton> tabButtons_, laneButtons_;   ///< the tab bar and the percussion lane bar
+    juce::Viewport viewport_;   ///< scrolls a page taller than the window
+    int tab_ = 0, percLane_ = 0;   ///< the tab and the percussion lane on screen
+    int designW_ = 1290, designH_ = 860;   ///< the design size the content is laid out at before scaling
 
     // ---- the Set tab's own controls (owned by the Set page, referenced here)
-    juce::Label*      seedLabel_ = nullptr;
-    juce::TextEditor* seedEditor_ = nullptr;
-    juce::TextButton* playButton_ = nullptr;
-    juce::TextButton* stopButton_ = nullptr;
-    juce::TextButton* recordButton_ = nullptr;
-    juce::TextButton* followButton_ = nullptr;
-    juce::TextButton* muteButton_ = nullptr;
-    juce::Label*      statusLabel_ = nullptr;
-    LoudnessDisplay*  loudness_ = nullptr;
-    TrackDisplay*     tracks_ = nullptr;
-    juce::Slider*     exportBars_ = nullptr;
-    /** @name The factory-defaults group of the Set tab (20.09.2026, round "dialogue") @{ */
+    juce::Label*      seedLabel_ = nullptr;   ///< the seed's caption
+    juce::TextEditor* seedEditor_ = nullptr;   ///< the seed field
+    juce::TextButton* playButton_ = nullptr;   ///< Play
+    juce::TextButton* stopButton_ = nullptr;   ///< Stop
+    juce::TextButton* recordButton_ = nullptr;   ///< Record...
+    juce::TextButton* followButton_ = nullptr;   ///< Follow host
+    juce::TextButton* muteButton_ = nullptr;   ///< Mute
+    juce::Label*      statusLabel_ = nullptr;   ///< clock, bar, beat and tempo
+    LoudnessDisplay*  loudness_ = nullptr;   ///< the output meter
+    TrackDisplay*     tracks_ = nullptr;   ///< the track list
+    juce::Slider*     exportBars_ = nullptr;   ///< bars for the MIDI export
+    /** @name The factory-defaults group of the Set tab (20.09.2026, round "dialogue")
+     *  @{ */
     juce::TextButton* legacyButton_ = nullptr;   ///< "Load the saved knobs anyway", shown only while one is held
     juce::Label*      legacyNote_ = nullptr;     ///< why the session came up on the defaults
     /** @} */

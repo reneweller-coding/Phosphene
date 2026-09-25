@@ -95,6 +95,7 @@ using namespace phos;
 
 namespace {
 
+/** @brief --list: every parameter with its range and default. */
 void printList(const ParamStore& p)
 {
     for (int i = 0; i < p.count(); ++i) {
@@ -394,6 +395,7 @@ int djExport(const std::string& dir, Composer& composer, const ParamStore& param
     return 0;
 }
 
+/** @brief Reads a whole text file into @p out; false if it cannot be opened. */
 bool readFile(const char* path, std::string& out)
 {
     FILE* f = std::fopen(path, "rb");

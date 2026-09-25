@@ -34,6 +34,7 @@ juce::Font body(float height);   ///< @copydoc title
 /** @brief Look and feel of the Phosphene editor. */
 class PhospheneLookAndFeel final : public juce::LookAndFeel_V4 {
 public:
+    /** @brief Sets the editor's colours. */
     PhospheneLookAndFeel();
     void drawRotarySlider(juce::Graphics&, int x, int y, int width, int height, float pos,
                           float startAngle, float endAngle, juce::Slider&) override;

@@ -12,7 +12,8 @@ leads, arpeggios, pads and effects from a seed, a style profile and an energy ar
 note line as MIDI. Standalone and VST3 on Windows, native on Meta Quest 2. Everything is synthesized;
 there are no samples.
 
-The design and the literature behind each building block are in [docs/PLAN.md](docs/PLAN.md) (German).
+The design and the literature behind each building block are in [docs/PLAN.md](docs/PLAN.md) (German). What each development round built, measured and decided is in the journal,
+[docs/rounds/](docs/rounds/) (German, one file per month).
 
 **Status:** Phases 0 to 7 are done: framework, kick and rolling bass, a twelve-lane percussion kit,
 the melodic layer (an acid voice on a diode ladder with accent, slide and squelch; a polyphonic

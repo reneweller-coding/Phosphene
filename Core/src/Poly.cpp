@@ -4,6 +4,7 @@
  */
 #include "phos/Poly.h"
 #include "phos/Params.h"
+#include "phos/Util.h"
 #include "phos/WaveTableFile.h"
 #include <algorithm>
 #include <cmath>
@@ -55,21 +56,12 @@ constexpr double kOsc2Spread = 0.25;
  * etwas, was ich jemals in einem Psytrance-Song gehoert habe". Measured over the first track of seeds
  * 1..24 (all Full-On, F# Phrygian): in 9 of 24 more than a tenth of the pad's peak power lay more
  * than a quarter tone off the grid, and every one of the FM pads was among them. Seed 1's pad played
- * at 1.91 -- the knob's 2.0 plus its recipe's thickness offset (Composer.cpp, kVoiceLoadings) -- so
+ * at 1.91 -- the knob's 2.0 plus its recipe's thickness offset (ComposerControls.cpp, kVoiceLoadings) -- so
  * each chord tone carried partials at 0.91 and 2.91 times itself, a quarter tone off every note of
  * the key, 7 dB under the chord. Every pitched voice plays chords or lines in a key; the metallic FM
  * of the set lives in the percussion (the rim, the zap: perc.fm_ratio is not rounded).
  */
 inline double harmonicFmRatio(double knob) { return std::max(0.5, std::round(knob * 2.0) * 0.5); }
-
-void svfCoefs(double fc, double damping, double sr, float& a1, float& a2, float& a3)
-{
-    const double g = std::tan(kPiD * std::clamp(fc, 10.0, 0.45 * sr) / sr);
-    const double d1 = 1.0 / (1.0 + g * (g + damping));
-    a1 = static_cast<float>(d1);
-    a2 = static_cast<float>(g * d1);
-    a3 = static_cast<float>(g * g * d1);
-}
 
 } // namespace
 
@@ -241,7 +233,7 @@ void Poly::update(const float* v, double bpm)
     const double gridPeriod = static_cast<double>(kPolyBlock) / sr_;
     glideAlpha_ = glideMs_ > 0.0f ? static_cast<float>(1.0 - std::exp(-gridPeriod / (glideMs_ * 0.001))) : 0.0f;
     // Pan, constant power. At the centre cos(pi/4) * sqrt(2) is 1 to the last bit of a double, so a
-    // voice that does not pan multiplies by exactly 1.0f and renders as it did before this round.
+    // voice that does not pan multiplies by exactly 1.0f and renders as it would without a pan.
     const double pan = std::clamp(static_cast<double>(v[poly::Pan]), -1.0, 1.0);
     const double theta = (pan + 1.0) * kPiD / 4.0;
     panL_ = static_cast<float>(std::cos(theta) * std::sqrt(2.0));
@@ -297,7 +289,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     // Portamento (Poly.h): the note's oscillators start at the pitch this instance was last sounding
     // at and slew to the note's own. Without a glide time, without a note before, or on a repeated
     // pitch there is nothing to slew and the oscillators start where they always did -- glidePitch_ is
-    // then bit for bit the note's pitch and every number below is the number of before this round.
+    // then bit for bit the note's pitch and every number below is the number without a glide.
     glideTarget_[voice] = static_cast<double>(pitch);
     // `slide` (22.09.2026): a note the composer did not flag starts on its own pitch even with a glide
     // time set -- the lead slides where a tension degree resolves, not on every step.
@@ -611,7 +603,7 @@ void Poly::renderSegment(float* L, float* R, int n)
     // one of the seven groups still holds kept slots of one or two voices, so the limit frees a group
     // only when those voices are silent -- a denser layout (voice x unisonLimit_) would free four of
     // the seven outright, but it moves the lane assignment and with it the bit-identity of the vector
-    // tests (docs/PLAN.md).
+    // tests (docs/rounds/2026-09.md).
     for (int g = 0; g < kPolySlots / 8; ++g) {
         bool on = false, blep = false, fm = false, wt = false;
         for (int s = g * 8; s < g * 8 + 8; ++s) {
@@ -661,7 +653,7 @@ void Poly::renderSegment(float* L, float* R, int n)
         }
         // The delay send is taken from the *unpanned* sum, so a voice's place in the image and its
         // delay's own left/right times stay independent (Poly.h). At the centre panL_ and panR_ are
-        // exactly 1 and both lines are the lines of before this round.
+        // exactly 1 and both lines are the lines without a pan.
         sendBuf_[static_cast<size_t>(i)] = 0.5f * (l * level_ + r * level_) * send_;
         L[i] = l * level_ * panL_;
         R[i] = r * level_ * panR_;

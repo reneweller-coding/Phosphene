@@ -416,11 +416,11 @@ def feature_vector(m):
 # (12 tables total, chosen to prove the four new voices had a sound of their own at all, against a
 # library that was not yet measured for the purpose) towards how many candidates actually clear
 # each lane's gate out of the full 2191 -- 496 pad, 124 lead, 175 arp -- while keeping the pack a
-# fraction of what the Quest APK can absorb (see docs/PLAN.md, this round's block, for the bytes).
+# fraction of what the Quest APK can absorb (docs/rounds/2026-09.md, round block of 20.09.2026, has the bytes).
 # A fourth lane, ``drone``, is new: the tonic drone (Melody.cpp, ``makeDrone``) used to draw pad
 # lane tables (indices 6/7/9/10, "the organ and the measured, slow tables" of kVoicePalette's own
 # comment) because there was no lane measured for its own character -- a held low fundamental under
-# a slow cutoff/position ramp (docs/PLAN.md, "Stimmen" round). That is not what a pad wants: a pad
+# a slow cutoff/position ramp (docs/rounds/2026-09.md, "Stimmen" round). That is not what a pad wants: a pad
 # glides *through* timbres (high ``travel``/``directness``), a drone wants to *stay* one, clearly
 # pitched, organ-like timbre while it slowly moves -- high ``f1`` (a real fundamental, not a cloud
 # of partials), a dark-to-mid centroid (it sits at 70..280 Hz, an octave or more under the pad), and
@@ -498,7 +498,7 @@ def farthest_point(pool, take, score):
     vecs = np.asarray([c["v"] for c in order], dtype=np.float64)
     # 22.09.2026: the same rule, but the distance to the chosen set is carried along instead of
     # recomputed. The old loop was O(take^2 * pool) single distances in Python, which cost seconds
-    # at take=8 and would have cost an hour at the takes this round needs (a lane now takes up to
+    # at take=8 and would have cost an hour at the takes the lanes need (a lane now takes up to
     # 128 of a pool of ~500). `near[i]` is always the distance from candidate i to its nearest
     # chosen table, so each further pick is one argmax and one vectorised update; the tables it
     # returns are the same ones, in the same order.

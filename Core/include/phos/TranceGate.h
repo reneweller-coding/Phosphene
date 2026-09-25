@@ -77,6 +77,7 @@ public:
      * @param o     opening from open()
      * @param depth 0..1, how far a closed gate lowers the level
      * @param tone  0..1, how far a closed gate darkens
+     * @param l,r   the stereo sample, gated in place
      */
     inline void apply(float& l, float& r, float o, float depth, float tone)
     {
@@ -90,7 +91,7 @@ public:
     }
 
 private:
-    float lpCoef_ = 0.09f, lpL_ = 0.0f, lpR_ = 0.0f;
+    float lpCoef_ = 0.09f, lpL_ = 0.0f, lpR_ = 0.0f;   ///< the gate tone's low pass: coefficient and states
 };
 
 } // namespace phos

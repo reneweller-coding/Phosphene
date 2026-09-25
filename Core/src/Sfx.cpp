@@ -22,7 +22,7 @@ constexpr double kPiD = 3.141592653589793;
  * @brief Level of each type relative to sfx.level, in dB (18.09.2026, round "mix-foundation").
  *
  * The seven types come out of their synthesis at very different levels -- a narrow band pass over
- * noise has a fraction of the power of a broad one -- and until this round they all shared one gain.
+ * noise has a fraction of the power of a broad one -- so one gain for all of them cannot be right.
  * Measured on the listening seed with the master's dynamics off, as the momentary (400 ms) loudness
  * of the SFX strip at an event's loudest moment against the mix's in the same window: impacts peaked
  * 14.9 dB under the mix, the riser 9.4 and sweeps 8.9, while a downlifter reached -4.7 -- and with
@@ -30,7 +30,7 @@ constexpr double kPiD = 3.141592653589793;
  * The table evens that out towards two targets: the markers of a transition (riser, impact, formant
  * shot, downlifter) about 4 to 6 dB under the mix at their peak, which is prominent without covering
  * the drop, and the short ear candy (sweeps, swells, zaps) about 8 to 10 dB under it, heard as a
- * detail. The measurement and its targets are in docs/PLAN.md (round "mix-foundation").
+ * detail. The measurement and its targets are in docs/rounds/2026-09.md (round "mix-foundation").
  */
 constexpr float kTypeGainDb[] = {
     +0.0f,    // Riser (19.09.2026: -2 -> 0 dB; it now arrives on beat 4 of the pre-drop break, over the loudest bar of the roll)
@@ -40,7 +40,7 @@ constexpr float kTypeGainDb[] = {
     +1.0f,    // Formant shot
     -2.0f,    // Reverse swell
     +2.0f,    // Zap
-    // 19.09.2026, round "fx-psychedelia": short ear candy, heard as a detail like the zap (docs/PLAN.md
+    // 19.09.2026, round "fx-psychedelia": short ear candy, heard as a detail like the zap (docs/rounds/2026-09.md
     // has the measurement against the mix). The types of the other two generators carry 0 here.
     +0.0f,    // Squelch
     +0.0f,    // Bubble
@@ -199,7 +199,7 @@ float Sfx::voiceSample(Voice& v, float& pan, float& wetFrac)
     float s = 0.0f, amp = 0.0f;
     double panRate = 0.3;
     // The bank preset's hand on the type (23.09.2026, round "SFX"): every constant of the syntheses below
-    // has its preset field, and without a preset (lane 0) the field's default is the constant of before.
+    // has its preset field, and without a preset (lane 0) the field's default is the synthesis's own constant.
     const SfxPreset* P = v.preset;
     switch (v.type) {
     case SfxType::Riser:

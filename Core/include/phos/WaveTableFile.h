@@ -21,7 +21,7 @@
  * begin. A `.phoswt` carries instead exactly what `WaveTable::buildFromHarmonics()` consumes -- the
  * Fourier coefficients of each frame -- with the harmonics that are below the frame's own noise
  * floor left out, which is most of them for a table built from 32 or 128 partials. One file, one
- * open, no analysis, and the numbers in docs/PLAN.md (block of 16.09.2026) for what that saves.
+ * open, no analysis, and the numbers in docs/rounds/2026-09.md (block of 16.09.2026) for what that saves.
  *
  * ## Byte layout
  *
@@ -68,7 +68,7 @@
  * one's. Measured over the shipped selection, one scale a frame gives a round trip of 82.7 dB and
  * octave bands 92.2 dB -- within three dB of the 16-bit PCM the `Classic/` files are stored in to
  * begin with. The packer's `--check` prints both, and every alternative, before anything is written
- * (docs/PLAN.md, block of 16.09.2026).
+ * (docs/rounds/2026-09.md, block of 16.09.2026).
  *
  * ## What the reader guarantees
  *
@@ -107,7 +107,7 @@ constexpr int kNumWaveTables = kNumBuiltinWaveTables + kNumLibraryWaveTables;
  *       fundamental, dark). `Counter` appended 22.09.2026: the counter-lead had no lane and drew
  *       from three built-ins, which is why it was the one voice that sounded the same in every
  *       track. Never stored (no Params/.phosset concern), but no longer display-only: the recipe
- *       draw asks for a voice's candidates *by lane* now (Composer.cpp, kVoicePalette), so the
+ *       draw asks for a voice's candidates *by lane* now (ComposerInternal.h, kVoicePalette), so the
  *       palettes grow with the pack instead of naming table indices by hand.
  */
 enum class WaveTableLane : int { Pad = 0, Lead, Arp, Drone, Counter, Count };
@@ -240,7 +240,7 @@ void setWaveTableBudgetBytes(size_t bytes);
 /**
  * @brief The parameter indices (6 ..) of every library table the selection chose for @p lane.
  *
- * The voice palettes (Composer.cpp, kVoicePalette) name lanes, not tables, so that widening the
+ * The voice palettes (ComposerInternal.h, kVoicePalette) name lanes, not tables, so that widening the
  * pack widens what a voice can sound like without a line of C++ changing. Built once, from
  * kLibraryTables, and safe to call from several threads.
  */

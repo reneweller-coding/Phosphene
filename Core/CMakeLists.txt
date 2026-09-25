@@ -22,11 +22,17 @@ add_library(PhospheneCore STATIC
     src/Vocal.cpp
     src/Rhythm.cpp
     src/Form.cpp
+    src/FormSfx.cpp
     src/Melody.cpp
+    src/MelodyHarmony.cpp
+    src/MelodyLead.cpp
+    src/MelodyParts.cpp
     src/Corpus.cpp
     src/CorpusTables.cpp
     src/Model.cpp
     src/Composer.cpp
+    src/ComposerControls.cpp
+    src/ComposerLevels.cpp
     src/Probe.cpp
     src/SetFile.cpp
     src/Rating.cpp

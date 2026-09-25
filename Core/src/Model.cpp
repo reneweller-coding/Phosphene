@@ -26,6 +26,7 @@
  */
 #include "phos/Model.h"
 #include "phos/Harmony.h"   // kNumScales: the rows mode.emb is allowed to have
+#include "phos/Util.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -42,6 +43,7 @@ constexpr size_t kNameBytes = 48;
 constexpr size_t kTensorFixed = kNameBytes + 1 + 1 + 2 + 16;   ///< name, dtype, ndim, reserved, dim[4]
 constexpr size_t kAlign = 32;                                   ///< payloads start on this boundary
 
+/** @brief Where the model files are looked for (setModelSearchPath). */
 std::string& searchPath()
 {
     static std::string p;
@@ -57,15 +59,6 @@ struct Tensor {
     const void* data = nullptr;
     size_t count = 0;
 };
-
-/** @brief Records a message that names the field and where in the file it sits. */
-bool fail(std::string& error, const char* what, size_t offset)
-{
-    char buf[256];
-    std::snprintf(buf, sizeof(buf), "%s (at byte %llu)", what, static_cast<unsigned long long>(offset));
-    error = buf;
-    return false;
-}
 
 uint32_t readU32(const uint8_t* p) { uint32_t v; std::memcpy(&v, p, 4); return v; }
 uint16_t readU16(const uint8_t* p) { uint16_t v; std::memcpy(&v, p, 2); return v; }
@@ -85,25 +78,11 @@ std::string headerValue(const std::string& header, const char* key)
     return std::string();
 }
 
+/** @brief The integer value of @p key in a model file's header, or @p fallback. */
 int headerInt(const std::string& header, const char* key, int fallback)
 {
     const std::string v = headerValue(header, key);
     return v.empty() ? fallback : std::atoi(v.c_str());
-}
-
-/** @brief Reads the whole file; false when it cannot be opened or read. */
-bool readFile(const char* path, std::vector<uint8_t>& out)
-{
-    std::FILE* f = std::fopen(path, "rb");
-    if (f == nullptr) return false;
-    std::fseek(f, 0, SEEK_END);
-    const long n = std::ftell(f);
-    std::fseek(f, 0, SEEK_SET);
-    if (n <= 0) { std::fclose(f); return false; }
-    out.resize(static_cast<size_t>(n));
-    const size_t got = std::fread(out.data(), 1, out.size(), f);
-    std::fclose(f);
-    return got == out.size();
 }
 
 /** @brief One value of a tensor, dequantized when it is int8 (one scale per row of dim[0]). */
@@ -173,14 +152,14 @@ bool NeuralModel::load(const char* path, std::string& error)
 
     size_t at = 0;
     const size_t n = file.size();
-    if (n < 16 || std::memcmp(file.data(), "PHOSMDL1", 8) != 0) return fail(error, "magic is not PHOSMDL1", 0);
+    if (n < 16 || std::memcmp(file.data(), "PHOSMDL1", 8) != 0) return fileError(&error, "magic is not PHOSMDL1", 0);
     at = 8;
     const uint32_t version = readU32(file.data() + at);
-    if (version != 1) return fail(error, "version is not 1", at);
+    if (version != 1) return fileError(&error, "version is not 1", at);
     at += 4;
     const uint32_t headerLen = readU32(file.data() + at);
     at += 4;
-    if (at + headerLen > n) return fail(error, "headerLen runs past the end of the file", at - 4);
+    if (at + headerLen > n) return fileError(&error, "headerLen runs past the end of the file", at - 4);
     const std::string header(reinterpret_cast<const char*>(file.data() + at), headerLen);
     at += headerLen;
 
@@ -266,43 +245,43 @@ bool NeuralModel::load(const char* path, std::string& error)
     std::vector<Tensor> tensors;
     while (true) {
         if (at + 8 <= n && std::memcmp(file.data() + at, "PHOSEND1", 8) == 0) { at += 8; break; }
-        if (at + kTensorFixed > n) return fail(error, "a tensor header runs past the end of the file", at);
+        if (at + kTensorFixed > n) return fileError(&error, "a tensor header runs past the end of the file", at);
         const size_t head = at;
         Tensor t;
         const char* nameBytes = reinterpret_cast<const char*>(file.data() + at);
         size_t nameLen = 0;
         while (nameLen < kNameBytes && nameBytes[nameLen] != '\0') ++nameLen;
         t.name.assign(nameBytes, nameLen);
-        if (t.name.empty()) return fail(error, "tensor name is empty", head);
+        if (t.name.empty()) return fileError(&error, "tensor name is empty", head);
         at += kNameBytes;
         t.dtype = file[at];
         const int ndim = file[at + 1];
-        if (t.dtype > 1) return fail(error, "tensor dtype is neither 0 (float32) nor 1 (int8)", at);
-        if (ndim < 1 || ndim > 4) return fail(error, "tensor ndim is not in 1..4", at + 1);
-        if (readU16(file.data() + at + 2) != 0) return fail(error, "tensor reserved field is not zero", at + 2);
+        if (t.dtype > 1) return fileError(&error, "tensor dtype is neither 0 (float32) nor 1 (int8)", at);
+        if (ndim < 1 || ndim > 4) return fileError(&error, "tensor ndim is not in 1..4", at + 1);
+        if (readU16(file.data() + at + 2) != 0) return fileError(&error, "tensor reserved field is not zero", at + 2);
         at += 4;
         t.count = 1;
         for (int i = 0; i < 4; ++i) {
             t.dim[i] = static_cast<int>(readU32(file.data() + at + static_cast<size_t>(i) * 4));
-            if (t.dim[i] <= 0) return fail(error, ("tensor " + t.name + " has a dimension that is not positive").c_str(), at + static_cast<size_t>(i) * 4);
+            if (t.dim[i] <= 0) return fileError(&error, ("tensor " + t.name + " has a dimension that is not positive").c_str(), at + static_cast<size_t>(i) * 4);
             t.count *= static_cast<size_t>(t.dim[i]);
         }
         at += 16;
         if (t.dtype == 1) {
             const size_t bytes = static_cast<size_t>(t.dim[0]) * 4;
-            if (at + bytes > n) return fail(error, ("tensor " + t.name + ": the int8 scales run past the end").c_str(), at);
+            if (at + bytes > n) return fileError(&error, ("tensor " + t.name + ": the int8 scales run past the end").c_str(), at);
             t.scale = reinterpret_cast<const float*>(file.data() + at);
             at += bytes;
         }
         at += (kAlign - (at % kAlign)) % kAlign;
         const size_t bytes = t.count * (t.dtype == 1 ? 1u : 4u);
-        if (at + bytes > n) return fail(error, ("tensor " + t.name + ": the data runs past the end of the file").c_str(), at);
+        if (at + bytes > n) return fileError(&error, ("tensor " + t.name + ": the data runs past the end of the file").c_str(), at);
         t.data = file.data() + at;
         at += bytes;
         info.parameters += t.count;
         tensors.push_back(t);
     }
-    if (at != n) return fail(error, "trailing bytes after PHOSEND1", at);
+    if (at != n) return fileError(&error, "trailing bytes after PHOSEND1", at);
 
     auto find = [&](const std::string& name) -> const Tensor* {
         for (const Tensor& tt : tensors) if (tt.name == name) return &tt;

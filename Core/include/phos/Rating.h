@@ -3,7 +3,7 @@
  * @brief The listener's verdicts as data (23.09.2026, round "Bewertung"): one line per "good here" or
  *        "bad here", with everything needed to find the bar again.
  *
- * Until this round a listening session ended in prose ("the counters are hardly audible"), which is right
+ * Without ratings a listening session ends in prose ("the counters are hardly audible"), which is right
  * and names no bar. A rating is a line of tab-separated text -- seed, track, bar of the set, bar in the
  * track, section, style, verdict, note, where it came from -- that the plugin appends while it plays
  * (Perform tab), that the listening bench carries as two empty columns of its index (Tools/listen_bench.py),

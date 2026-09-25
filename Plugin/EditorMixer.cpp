@@ -140,7 +140,6 @@ void MixerStrip::meter(float peak, float rms, double seconds)
         holdAge_ += seconds;
         if (holdAge_ > kHoldSeconds) holdDb_ = juce::jmax(pDb, holdDb_ - static_cast<float>(kFallDbPerSecond * seconds));
     }
-    lastPeakDb_ = pDb;
     repaint(meterArea_.expanded(2).withBottom(getHeight()));
 }
 

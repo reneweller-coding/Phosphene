@@ -62,10 +62,10 @@ public:
     }
 private:
     enum class Stage { Idle, Attack, Hold, Release };
-    double sr_ = 48000.0;
-    float depth_ = 0.5f, amount_ = 0.0f, from_ = 0.0f, late_ = 0.0f;
-    int attack_ = 48, hold_ = 0, release_ = 2880, pos_ = 0;
-    Stage stage_ = Stage::Idle;
+    double sr_ = 48000.0;   ///< sample rate
+    float depth_ = 0.5f, amount_ = 0.0f, from_ = 0.0f, late_ = 0.0f;   ///< depth, the current amount (0..1, scaled by depth), where the attack started, the sub-sample offset
+    int attack_ = 48, hold_ = 0, release_ = 2880, pos_ = 0;   ///< stage lengths in samples, samples into the stage
+    Stage stage_ = Stage::Idle;   ///< where it is
 };
 
 } // namespace phos

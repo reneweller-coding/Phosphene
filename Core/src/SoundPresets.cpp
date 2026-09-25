@@ -150,6 +150,7 @@ const char* const kDroneNouns[] = { "Mantra", "Om", "Temple", "Abyss", "Earth", 
 constexpr int kVoiceNouns = kPolyInstances;
 const char* const* const kNounsOf[kVoiceNouns] = { kLeadNouns, kCounterNouns, kArpNouns, kStabNouns, kPadNouns, kDroneNouns };
 
+/** @brief The words of polyphonic instance @p v's preset names. */
 Vocabulary voiceVocabulary(int v)
 {
     Vocabulary w{};
@@ -177,6 +178,7 @@ const char* const kKickNouns[] = { "Thump", "Hammer", "Stomp", "Quake", "Piston"
 /** @brief The resonant engine's nouns: a struck, tuned body -- so its presets say which engine they are. */
 const char* const kResonantNouns[] = { "Gong", "Bell", "Membrane", "Resonator", "Chamber", "Tom", "Timpani", "Ring", "Cauldron", nullptr };
 
+/** @brief The words and families of the kick's preset names. */
 Vocabulary kickVocabulary()
 {
     Vocabulary w{};
@@ -207,6 +209,7 @@ const char* const kWeightUp[] = { "Massive", "Subby", "Heavy", "Tectonic", "Eart
 const char* const kWeightDown[] = { "Light", "Lean", "Nimble", "Airy", "Agile", nullptr };
 const char* const kBassNouns[] = { "Roller", "Rumble", "Gallop", "Motor", "Groove", "Driver", "Serpent", "Machine", "Runner", "Pulse", nullptr };
 
+/** @brief The words and families of the bass's preset names. */
 Vocabulary bassVocabulary()
 {
     Vocabulary w{};
@@ -259,6 +262,7 @@ bool presetLeaves(Module m, int k)
 
 namespace {
 
+/** @brief Puts every knob of a module instance to its default. */
 void moduleToDefaults(ParamStore& p, Module m, int instance)
 {
     const int b = p.base(m, instance);
@@ -281,6 +285,7 @@ constexpr int kVoiceLayered = 10;      ///< of them again with the palette's sec
 constexpr int kKickPoints = 56;        ///< characters per kick engine
 constexpr int kBassPoints = 90;        ///< bass characters
 
+/** @brief The factory presets of polyphonic instance @p v. */
 std::vector<SoundPreset> buildVoice(int v)
 {
     std::vector<SoundPreset> out;
@@ -365,6 +370,7 @@ std::vector<SoundPreset> buildVoice(int v)
     return out;
 }
 
+/** @brief The kick's factory presets. */
 std::vector<SoundPreset> buildKick()
 {
     std::vector<SoundPreset> out;
@@ -388,6 +394,7 @@ std::vector<SoundPreset> buildKick()
     return out;
 }
 
+/** @brief The bass's factory presets. */
 std::vector<SoundPreset> buildBass()
 {
     std::vector<SoundPreset> out;
@@ -407,6 +414,7 @@ std::vector<SoundPreset> buildBass()
     return out;
 }
 
+/** @brief The acid's factory presets. */
 std::vector<SoundPreset> buildAcid()
 {
     std::vector<SoundPreset> out;

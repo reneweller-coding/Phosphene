@@ -189,7 +189,7 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
     room_.prepare(sr_);
     hall_.prepare(sr_);
     hallGate_.prepare(sr_);
-    // The gated hall's fixed recipe (20.09.2026, round "reverb"; docs/PLAN.md has the measurements).
+    // The gated hall's fixed recipe (20.09.2026, round "reverb"; docs/rounds/2026-09.md has the measurements).
     // Big hall, 4 s decay (the brief's "3-5 s"), no pre-delay so the gate's timing is exact from the
     // very first sample; the same return band as the plain hall's own default. Duck: -50 dBFS is a
     // floor well under any real send, so any voice that is actually sounding trips it -- 15 ms in

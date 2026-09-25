@@ -27,8 +27,8 @@ struct GalleryTrack {
     std::string style;   ///< kStyleNames
     std::string key;     ///< kKeyNames
     std::string scale;   ///< kScaleNames
-    double bpm = 0.0;
-    int bars = 0;
+    double bpm = 0.0;   ///< tempo
+    int bars = 0;   ///< length
     std::string form;    ///< section letters with lengths, space-separated (see the file comment)
 };
 
@@ -53,7 +53,7 @@ bool readGalleryEntry(std::string_view text, GalleryEntry& out);
 
 /** @brief The listener's verdicts per set seed (Rating.h). */
 struct RatingCount {
-    int good = 0, bad = 0, notes = 0;
+    int good = 0, bad = 0, notes = 0;   ///< verdicts and written notes
 };
 /** @brief Counts the verdicts of a ratings file by seed; an unreadable file gives an empty map. */
 std::map<uint64_t, RatingCount> ratingsBySeed(const char* path);

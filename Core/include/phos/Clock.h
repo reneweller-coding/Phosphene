@@ -66,9 +66,11 @@ public:
     double beatAt(double seconds) const;
 
 private:
+    /** @brief Recomputes the seconds at every tempo point after the points changed. */
     void rebuild();
+    /** @brief The index of the tempo segment @p beat falls in (0 before the first point). */
     int segmentFor(double beat) const;
-    std::vector<TempoPoint> points_;
+    std::vector<TempoPoint> points_;   ///< the tempo points, by beat
     std::vector<double> seconds_;   ///< seconds at each point
 };
 

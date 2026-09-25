@@ -130,7 +130,7 @@ extern const char* const kArcNames[kNumArcs];              ///< display names
  * @brief The form templates of the two-drop architecture (19.09.2026, round "arrangement"), one per
  *        subgenre family: Full-On (also Hi-Tech), Progressive, Goa and Dark Forest.
  *
- * Until this round these were the three grammar bodies of PLAN 6.2; the user's arrangement rules replaced
+ * Until 19.09.2026 these were the three grammar bodies of PLAN 6.2; the user's arrangement rules replaced
  * them (Form.cpp, kTemplates). The name stays because FormPlan::body and the style profiles' bodyWeight
  * keep their meaning: which template a track was built from.
  */
@@ -186,7 +186,7 @@ constexpr int kTrackBarStep = 16;    ///< track lengths are multiples of this
 /** @} */
 
 /**
- * @brief The macro contours a lead phrase may take (22.09.2026, round "Lead"; Melody.cpp, makeLead).
+ * @brief The macro contours a lead phrase may take (22.09.2026, round "Lead"; MelodyLead.cpp, makeLead).
  *
  * The user's brief names five archetypes. Each is eight *bar offsets* in scale steps that the cell
  * is transposed by, bar for bar -- centred on the cell, so the phrase keeps its register -- and a
@@ -205,7 +205,7 @@ enum class LeadArchetype : int {
 constexpr int kNumLeadArchetypes = static_cast<int>(LeadArchetype::Count);   ///< number of archetypes
 
 /**
- * @brief The operators a lead bar may apply to the cell (22.09.2026; Melody.cpp, applyCellOp).
+ * @brief The operators a lead bar may apply to the cell (22.09.2026; applied in MelodyLead.cpp, makeLead).
  *
  * The brief: "Würfle eine 1-Takt-Keimzelle und erzeuge alles Weitere durch deterministische
  * Operatoren". Eight bars are one cell and one operator per bar; the operators are what makes A2
@@ -224,7 +224,7 @@ enum class CellOp : int {
 constexpr int kNumCellOps = static_cast<int>(CellOp::Count);   ///< number of cell operators
 
 /**
- * @brief How the counter-lead answers the lead (23.09.2026, round "Counter"; Melody.cpp, makeCounter).
+ * @brief How the counter-lead answers the lead (23.09.2026, round "Counter"; MelodyLead.cpp, makeCounter).
  *
  * The user's genre matrix: Full-On call-and-response, Progressive and Darkpsy timbral, Hi-Tech
  * micro-hocketing, Goa polyphonic; and his supplement's "MOTIF_ECHO" as the cheapest authentic counter.
@@ -352,7 +352,7 @@ constexpr float kClimaxMargin = 0.20f;
  *  - the buildup into drop 2 ramps down to kBuildHeadroomDb under its energy's gain by its last bar, and its
  *    thirty-second roll plays softer (Rhythm.cpp), so the drop is the arrival and not the build's peak;
  *  - drop 2 opens the lead's and the acid's filters by kClimaxOpen and widens the lead, counter, arp and pad
- *    by kClimaxWidth (Composer.cpp, sectionControls);
+ *    by kClimaxWidth (ComposerControls.cpp, sectionControls);
  *  - the intro stands kIntroTrimDb under its energy's gain: with those changes alone, the intro's kick-and-bass
  *    bars (17..32) were the loudest eight bars outside drop 2 in most tracks, 0.25 .. 0.65 LU under it -- sparse
  *    material passes the compressor and the limiter that press the drops -- and 1.7 LU over the outgoing
@@ -547,6 +547,9 @@ BarPlan planBar(const FormPlan& f, const PartAvailability& a, const uint64_t* se
  */
 void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity = 1.0f, float bedDensity = 1.0f);
 
+/** @brief Whether a section is part of a track's core, a groove or a drop (the form's rules and the effects' placement). */
+inline bool isCore(SectionType t) { return t == SectionType::Groove || t == SectionType::Drop; }
+
 /**
  * @name The macro automation of a section (16.09.2026)
  *
@@ -589,7 +592,7 @@ constexpr float kRideSweep  = 0.8f;     ///< the bar-24 sweep of the acid (19.09
  * is what keeps Composer's level match honest, which measures the knobs and not the automation.
  */
 struct RideShape {
-    static constexpr int kPoints = 7;
+    static constexpr int kPoints = 7;   ///< points of the shape
     double length = 32.0;       ///< bars of one cycle
     double stage[4] = {};       ///< first bar of each stage within the cycle
     double bar[kPoints] = {};   ///< when each cutoff key point is reached, bars into the cycle

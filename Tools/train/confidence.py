@@ -67,7 +67,7 @@ def per_line(model, records, ctx, device):
 def per_line_phosmdl(path, records, log=None):
     """(summed NLL, token count) of every line under an **exported** ``.phosmdl``.
 
-    Why read the shipped file rather than a checkpoint: the question this round has to answer is
+    Why read the shipped file rather than a checkpoint: the question this report answers is
     whether a new model beats *what is installed*, and what is installed is
     ``Core/data/melody.phosmdl`` -- int8, with whatever seed and whatever training set produced it.
     The checkpoint it came from is gitignored and is not on this machine, and reproducing it by

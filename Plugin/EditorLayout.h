@@ -61,6 +61,7 @@ struct Group {
  */
 class ControlPage : public juce::Component {
 public:
+    /** @brief An empty page; the add* calls fill it. */
     ControlPage() = default;
 
     /**
@@ -82,6 +83,10 @@ public:
      *        what they decide, not by where they were appended to the table).
      * @param paramIds global parameter ids, in the order they are drawn
      * @return the group's index
+     * @param proc    the processor whose parameters the controls edit
+     * @param title   the group's caption
+     * @param tint    the group's accent colour
+     * @param columns controls per row
      */
     int addParamsGroup(PhospheneProcessor& proc, const juce::String& title, juce::Colour tint, int columns,
                        const std::vector<int>& paramIds);

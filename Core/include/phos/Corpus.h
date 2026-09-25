@@ -44,9 +44,9 @@ struct CorpusRole {
     int files;                          ///< melodic loops that contributed
     const uint32_t* uni;                ///< order-0 counts, kCorpusAlphabet entries
     const CorpusGram* bi;               ///< order-1 counts, sorted by key
-    int numBi;
+    int numBi;   ///< entries of bi
     const CorpusGram* tri;              ///< order-2 counts, sorted by key
-    int numTri;
+    int numTri;   ///< entries of tri
     const uint32_t (*onset)[2][2];      ///< [step][previous step had onset][this step has onset]
     const uint32_t (*accent)[2];        ///< [step][accented]
     const uint32_t (*slide)[2];         ///< [step][slides into the next]
@@ -81,7 +81,7 @@ public:
     int alphabet() const { return kCorpusAlphabet; }
 
 private:
-    std::vector<double> p_;
+    std::vector<double> p_;   ///< the smoothed trigram probabilities, alphabet^3
 };
 
 /**
@@ -146,7 +146,7 @@ extern const int kCorpusBassTrainBars;               ///< bars the tables were c
  * @brief The learned bass onset model: a bar-pattern lookup mixed with a parametric chain.
  *
  * **Why a mixture, and why this one.** Two candidates were measured against the same held-out split
- * of the bass corpus (`Tools/corpus/bass_rhythm.py`, and the table in docs/PLAN.md, block
+ * of the bass corpus (`Tools/corpus/bass_rhythm.py`, and the table in docs/rounds/2026-09.md, block
  * "Bass-Rhythmus: die 61,5-Prozent-Lücke"): a lookup over 16-bit bar patterns, which is sharp on the
  * bars it has seen and blind to the rest, and a parametric chain
  * `P(onset_s | s, s-1, s-2, s-3, s-4, s-8)`, which can produce every bar and can memorise none. They

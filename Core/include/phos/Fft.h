@@ -56,8 +56,8 @@ public:
     }
 
 private:
-    int n_;
-    std::vector<double> cosT_, sinT_;
+    int n_;   ///< size
+    std::vector<double> cosT_, sinT_;   ///< the twiddle factors
 };
 
 } // namespace phos

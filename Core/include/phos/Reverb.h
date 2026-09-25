@@ -67,6 +67,7 @@ public:
      * @brief Processes a stereo send.
      * @param inL,inR   send input
      * @param outL,outR receives the wet return (replaced)
+     * @param n         samples
      */
     void process(const float* inL, const float* inR, float* outL, float* outR, int n);
 
@@ -85,6 +86,7 @@ public:
      *        envelope (setDuck()). Does not apply the bar-line cut; see barGate().
      * @param inL,inR   send input (also the duck's own sidechain)
      * @param outL,outR receives the ducked wet return (replaced)
+     * @param n         samples
      */
     void processDucked(const float* inL, const float* inR, float* outL, float* outR, int n);
 
@@ -100,23 +102,23 @@ public:
     static float barGate(double beat, double closeBeats, double holdBeats, double openBeats, float floorGain);
 
 private:
-    static constexpr int kLines = 8;
-    static constexpr int kAllpasses = 4;
-    double sr_ = 48000.0;
-    std::vector<float> line_[kLines], sc_[kLines], ap_[kAllpasses], apR_[kAllpasses], pre_, preR_;
-    int mask_ = 0, w_ = 0;
-    int apLen_[kAllpasses] = {}, scLen_[kLines] = {};
-    float lenTarget_[kLines] = {}, lenCur_[kLines] = {}, gain_[kLines] = {}, lp_[kLines] = {};
-    double modPh_[kLines] = {};
-    float modRate_[kLines] = {};
-    float preTarget_ = 0.0f, preCur_ = 0.0f;
-    float damp_ = 0.4f;
-    float dcX_[2] = {}, dcY_[2] = {}, dcR_ = 0.999f;
-    float hcCoef_ = 1.0f, hcL_ = 0.0f, hcR_ = 0.0f;
-    float lcCoef_ = 0.0f, lcL1_ = 0.0f, lcR1_ = 0.0f, lcL2_ = 0.0f, lcR2_ = 0.0f;
+    static constexpr int kLines = 8;   ///< delay lines of the feedback network
+    static constexpr int kAllpasses = 4;   ///< input diffusion stages per channel
+    double sr_ = 48000.0;   ///< sample rate
+    std::vector<float> line_[kLines], sc_[kLines], ap_[kAllpasses], apR_[kAllpasses], pre_, preR_;   ///< the lines, their scattering all-passes, the diffusers of both channels, the pre-delays
+    int mask_ = 0, w_ = 0;   ///< index mask and write position
+    int apLen_[kAllpasses] = {}, scLen_[kLines] = {};   ///< diffuser and scattering lengths, samples
+    float lenTarget_[kLines] = {}, lenCur_[kLines] = {}, gain_[kLines] = {}, lp_[kLines] = {};   ///< line lengths (target and gliding), loop gains, damping states
+    double modPh_[kLines] = {};   ///< each line's modulation phase
+    float modRate_[kLines] = {};   ///< and its rate, Hz
+    float preTarget_ = 0.0f, preCur_ = 0.0f;   ///< the pre-delay, target and gliding
+    float damp_ = 0.4f;   ///< high-frequency loss per loop
+    float dcX_[2] = {}, dcY_[2] = {}, dcR_ = 0.999f;   ///< the return's DC blocker
+    float hcCoef_ = 1.0f, hcL_ = 0.0f, hcR_ = 0.0f;   ///< the return's high cut
+    float lcCoef_ = 0.0f, lcL1_ = 0.0f, lcR1_ = 0.0f, lcL2_ = 0.0f, lcR2_ = 0.0f;   ///< the return's low cut, two poles
     // The gate's duck (20.09.2026, round "reverb"): a one-pole follower on the send's own peak, with a
     // threshold so a silent send stays fully open rather than sitting at some small fraction of depth.
-    float duckDepth_ = 0.0f, duckThreshold_ = 0.01f, duckAttackC_ = 1.0f, duckReleaseC_ = 1.0f, duckEnv_ = 0.0f;
+    float duckDepth_ = 0.0f, duckThreshold_ = 0.01f, duckAttackC_ = 1.0f, duckReleaseC_ = 1.0f, duckEnv_ = 0.0f;   ///< setDuck(): depth, threshold, attack and release coefficients, the follower
 };
 
 } // namespace phos

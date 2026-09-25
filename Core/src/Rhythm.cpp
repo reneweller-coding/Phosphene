@@ -6,6 +6,7 @@
 #include "phos/Dsp.h"
 #include "phos/Harmony.h"
 #include "phos/Perc.h"
+#include "phos/Util.h"
 #include <algorithm>
 #include <cmath>
 
@@ -15,13 +16,6 @@ using namespace phos::salts::rhythm;   // this file's seed salts (Salts.h)
 namespace phos {
 
 namespace {
-
-double normal(Rng& r)
-{
-    const double u1 = 1.0 - static_cast<double>(r.uniform());
-    const double u2 = static_cast<double>(r.uniform());
-    return std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * 3.141592653589793 * u2);
-}
 
 /** @brief First active lane with a role, or -1. */
 int laneOfRole(const ParamStore& p, PercRole role)
@@ -33,6 +27,7 @@ int laneOfRole(const ParamStore& p, PercRole role)
     return -1;
 }
 
+/** @brief Whether a role plays a Euclidean rhythm rather than a written pattern. */
 bool isEuclidRole(PercRole r)
 {
     return r == PercRole::Rim || r == PercRole::Tom || r == PercRole::Conga || r == PercRole::Zap || r == PercRole::Blip;
@@ -206,7 +201,7 @@ PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack, const
     if (!firstTrack) {
         for (float& m : plan.macro) {
             double v;
-            do { v = 0.5 * normal(r); } while (v < -1.0 || v > 1.0);
+            do { v = 0.5 * gaussian(r); } while (v < -1.0 || v > 1.0);
             m = static_cast<float>(v);
         }
         if (closedHat >= 0 && r.uniform() < 0.25f * sv) {

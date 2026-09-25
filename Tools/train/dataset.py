@@ -105,7 +105,7 @@ N_ROLE, N_STYLE, N_BARS, N_STEP, N_BAR, N_GAP, N_IDX = 3, 6, 8, 16, 8, 10, 8
 #: Rows of ``mode.emb``: the six modes of ``phos::kScaleSteps``. The mode of a corpus line is
 #: **estimated**, not read -- see ``Tools/train/mode.py`` for the estimator and for how much of the
 #: label is noise. Optional in the format exactly as ``condKick`` is, so a file without it still
-#: loads and is the model it was before this round.
+#: loads and is the model it was without the mode label.
 N_MODE = 6
 
 
@@ -463,7 +463,7 @@ def mode_of(rec):
     Imported lazily because ``mode`` imports this module: the estimator needs ``REL_MIN`` to read a
     symbol back as an interval, and this module needs the estimator only when a record is encoded.
     The label is **not** part of the cached line (``cache_path``): it is derived from ``syms`` alone,
-    so a cache written before this round produces the same labels as one written after it, and no
+    so a cache written before the label existed produces the same labels as a new one, and no
     measurement made on the old cache becomes incomparable.
     """
     if "mode" not in rec:
@@ -589,8 +589,8 @@ def collect_tracks(root, sources, how="name", threshold=0.70, refresh=False):
     carry both (``Tools/corpus/rolemodel.py --audit``). ``how="clf"`` takes what the content
     classifier admits above ``threshold`` from the tracks no name covers.
 
-    The two are kept apart because they are worth different amounts and the difference is the point
-    of this round: a track name is the vendor's own word, while the classifier is measured at 97.4 %
+    The two are kept apart because they are worth different amounts and the difference is the
+    point: a track name is the vendor's own word, while the classifier is measured at 97.4 %
     precision against vendor names but only 50 % against the hand-labelled unnamed sample, because
     the unnamed population is mostly rhythm patterns, pads and basslines
     (``Tools/corpus/labelsample.py``). Whether either is worth admitting is decided by the held-out

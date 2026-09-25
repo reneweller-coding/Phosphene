@@ -150,7 +150,7 @@ def estimate(syms):
     ``n_colour_tones`` is 0, 1, 1, 2, 3, 0 down the list. An undecided line is therefore labelled
     with the mode that claims the *fewest* colour tones among those that fit it. The label can
     under-call the colour of a line; it can never claim a colour the line does not play, which is the
-    direction an error has to point in for this round -- a mode row trained on lines that do not use
+    direction an error has to point in here -- a mode row trained on lines that do not use
     its colour would teach the model to avoid the colour all over again.
     """
     p = posterior(syms)

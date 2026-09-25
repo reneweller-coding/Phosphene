@@ -46,7 +46,7 @@
  * **The default sound against the references (18.09.2026).** `Tools/ref_kick.py` measured the kicks
  * of 24 of the 40 reference recordings where kick and bass play nearly alone, over the window from the
  * onset to the first bass slot: power under 60 Hz against 60 .. 120 Hz median -4.7 dB, the click band
- * 2 .. 5 kHz against 40 .. 120 Hz -27.7 dB, crest 7.1 dB. The kick before this round measured -7.0,
+ * 2 .. 5 kHz against 40 .. 120 Hz -27.7 dB, crest 7.1 dB. The kick before 19.09.2026 measured -7.0,
  * -38.7 and 6.0 there (little sub, no click). The defaults now sweep faster onto the fundamental
  * (Body Decay 22 -> 13 ms) from higher up (Pitch Start 220 -> 330 Hz), drive the body a little less
  * (0.35 -> 0.30) and carry the click at 0.5 after the saturator: -3.4, -27.9 and 8.2 dB in the self
@@ -145,52 +145,56 @@ public:
 private:
     /** @brief Everything a kick needs, frozen at its trigger. */
     struct Shape {
-        int    engine = 0;
-        double fe = 50.0, fs = 330.0, tau1 = 0.004, tau2 = 0.022, punch = 0.5;
+        int    engine = 0;   ///< kick.engine
+        double fe = 50.0, fs = 330.0, tau1 = 0.004, tau2 = 0.022, punch = 0.5;   ///< end and start pitch (Hz), the two sweep time constants (s), the punch share
         double attack = 10.0, hold = 576.0;     ///< samples
         double decayRate = -1e-4;               ///< ln(amplitude) per sample after the hold
         double damping = 0.9999;                ///< resonant engine radius per sample
     };
+    /** @brief One sounding kick: its shape, its envelopes and where it stands. */
     struct Voice {
-        bool   active = false;
-        Shape  s;
+        bool   active = false;   ///< sounding
+        Shape  s;   ///< the shape it was triggered with
         double late = 0.0;                      ///< sub-sample start offset
         int    n = 0;                           ///< samples since the trigger
         double e1 = 1.0, e2 = 1.0;              ///< e^(-t/tau_1), e^(-t/tau_2)
         double d1 = 1.0, d2 = 1.0;              ///< their per-sample factors
-        float  click = 0.0f;
-        float  velocity = 1.0f;
+        float  click = 0.0f;   ///< the click layer's envelope
+        float  velocity = 1.0f;   ///< 0..1
         double zRe = 0.0, zIm = 0.0;            ///< resonant phasor
     };
 
     /** @brief The body of one voice for one sample; the click layer's sample goes to @p click. */
     float voiceSample(Voice& v, float& click);
+    /** @brief The shape a kick triggered now would get, from the current parameters. */
     Shape currentShape() const;
+    /** @brief The sweep's phase at @p t seconds with body time constant @p tau2, in cycles. */
     double phaseWith(double t, double tau2) const;
+    /** @brief The phase the output chain (ADAA, tone filter) adds at @p hz, in cycles. */
     double chainPhase(double hz) const;
 
-    double sr_ = 48000.0;
-    Voice  voice_, fade_;
-    float  fadeGain_ = 0.0f, fadeStep_ = 0.0f;
+    double sr_ = 48000.0;   ///< sample rate
+    Voice  voice_, fade_;   ///< the sounding kick and the one fading out under it
+    float  fadeGain_ = 0.0f, fadeStep_ = 0.0f;   ///< the fading kick's gain and its per-sample step
 
     // Settings from update().
-    int    engine_ = 0;
-    float  endHz_ = 50.0f, startHz_ = 330.0f, punch_ = 0.5f;
-    double tau1_ = 0.004, tau2_ = 0.022, tau2Trimmed_ = 0.022;
-    double attackSamples_ = 10.0, holdSamples_ = 576.0, decaySeconds_ = 0.15;
-    float  drive_ = 2.0f, driveNorm_ = 1.0f;
-    int    clip_ = 0;
-    float  clickLevel_ = 0.2f, clickDecay_ = 0.99f;
-    float  toneHz_ = 9000.0f;
-    float  level_ = 1.0f;
-    double lockT_ = 0.0, lockTarget_ = 0.0;
+    int    engine_ = 0;   ///< kick.engine
+    float  endHz_ = 50.0f, startHz_ = 330.0f, punch_ = 0.5f;   ///< end pitch (tuned), start pitch, punch share
+    double tau1_ = 0.004, tau2_ = 0.022, tau2Trimmed_ = 0.022;   ///< punch and body time constants, the body's after the phase trim
+    double attackSamples_ = 10.0, holdSamples_ = 576.0, decaySeconds_ = 0.15;   ///< the amplitude envelope
+    float  drive_ = 2.0f, driveNorm_ = 1.0f;   ///< drive into the clip and the gain that keeps the level
+    int    clip_ = 0;   ///< kick.clip: soft (tanh) or hard
+    float  clickLevel_ = 0.2f, clickDecay_ = 0.99f;   ///< the click layer's level and per-sample decay
+    float  toneHz_ = 9000.0f;   ///< the tone low pass
+    float  level_ = 1.0f;   ///< kick.level, linear
+    double lockT_ = 0.0, lockTarget_ = 0.0;   ///< the phase lock: seconds to the bass's slot and the phase wanted there
     double trimKey_[10] = { -1.0 };           ///< inputs of the last trim solve
 
-    Rng          noise_;
-    Svf          clickFilter_, toneFilter_;
-    TanhAdaa     tanh_;
-    HardClipAdaa hard_;
-    DcBlocker    dc_;
+    Rng          noise_;   ///< the click's noise
+    Svf          clickFilter_, toneFilter_;   ///< the click's band and the tone low pass
+    TanhAdaa     tanh_;   ///< the soft clip
+    HardClipAdaa hard_;   ///< the hard clip
+    DcBlocker    dc_;   ///< after the clip
 };
 
 } // namespace phos

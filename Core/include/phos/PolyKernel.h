@@ -94,6 +94,9 @@ inline V laneSin01(V p)
  *                  folded Taylor sines of the frequency modulation are the most expensive part of a
  *                  slot, and a supersaw, a VA voice and a pad never use them.
  * @param outL,outR per sample and slot (index i * kPolySlots + slot)
+ * @param s    the slots' oscillator state
+ * @param slot the first slot of this call
+ * @param n    samples to render
  */
 template <class V>
 void polySlotKernel(PolySlots& s, int slot, int n, const float* wt, bool blep, bool fm, bool useWt, float* outL, float* outR)
@@ -145,6 +148,9 @@ void polySlotKernel(PolySlots& s, int slot, int n, const float* wt, bool blep, b
  * @param in   per sample and lane (index i * kPolyLanes + lane): summed oscillators
  * @param amp  per sample and lane: amplitude envelope
  * @param out  per sample and lane
+ * @param c    the channels' filter and gain state
+ * @param lane the first channel of this call
+ * @param n    samples to render
  */
 template <class V>
 void polyChannelKernel(PolyChannels& c, int lane, int n, const float* in, const float* amp, float* out)

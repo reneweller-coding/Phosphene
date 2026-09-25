@@ -44,9 +44,10 @@ public:
     /** @brief One sample. */
     float process(float x);
 private:
+    /** @brief One second-order section of the K-weighting filter. */
     struct Biquad {
-        float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
-        float z1 = 0, z2 = 0;
+        float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;   ///< coefficients
+        float z1 = 0, z2 = 0;   ///< state
         float process(float x)
         {
             const float y = b0 * x + z1;
@@ -56,7 +57,7 @@ private:
         }
         void reset() { z1 = z2 = 0.0f; }
     };
-    Biquad shelf_, hp_;
+    Biquad shelf_, hp_;   ///< the K-weighting's high shelf and high pass
 };
 
 /**
@@ -93,8 +94,8 @@ struct LoudnessLog {
         return out;
     }
 private:
-    std::vector<float> buf_;
-    std::atomic<size_t> pos_{ 0 }, count_{ 0 };
+    std::vector<float> buf_;   ///< the ring of values
+    std::atomic<size_t> pos_{ 0 }, count_{ 0 };   ///< write position and how many were written
 };
 
 /** @brief The BS.1770 meter with gating, range and true peak. */
@@ -109,29 +110,30 @@ public:
     /** @brief The current figures. */
     LoudnessReading read() const;
 private:
+    /** @brief Closes a 100 ms hop: stores its mean square and updates the gated readings. */
     void pushBlock();
 
-    double sr_ = 48000.0;
-    KFilter kL_, kR_;
-    int    blockLen_ = 19200, hopLen_ = 4800, hopPos_ = 0;
-    std::vector<double> sumL_, sumR_;
-    int    ringPos_ = 0, ringFilled_ = 0;
+    double sr_ = 48000.0;   ///< sample rate
+    KFilter kL_, kR_;   ///< K-weighting per channel
+    int    blockLen_ = 19200, hopLen_ = 4800, hopPos_ = 0;   ///< the 400 ms block, the 100 ms hop, samples into the hop
+    std::vector<double> sumL_, sumR_;   ///< the last kHopsPerShort hops' mean squares
+    int    ringPos_ = 0, ringFilled_ = 0;   ///< their ring's position and fill
     static constexpr int kHopsPerBlock = 4;       ///< 400 ms blocks with 75 % overlap
     static constexpr int kHopsPerShort = 30;      ///< 3 s
-    double hopL_ = 0.0, hopR_ = 0.0;
-    long   hopSamples_ = 0;
+    double hopL_ = 0.0, hopR_ = 0.0;   ///< the running hop's sums of squares
+    long   hopSamples_ = 0;   ///< its samples so far
     static constexpr size_t kBlockLog = 1u << 17; ///< about 3.6 hours of blocks at ten a second
-    LoudnessLog blocks_;
-    LoudnessLog shortBlocks_;
-    double truePeak_ = 0.0;
-    double seconds_ = 0.0;
-    float  lastShort_ = -120.0f;
+    LoudnessLog blocks_;   ///< every 400 ms block's loudness, for the gated integral
+    LoudnessLog shortBlocks_;   ///< every 3 s window's loudness, for the range
+    double truePeak_ = 0.0;   ///< the highest true peak seen, linear
+    double seconds_ = 0.0;   ///< seconds measured
+    float  lastShort_ = -120.0f;   ///< the last short-term loudness, LUFS
     /// The last TruePeakInterpolator::kHistory samples of each channel. Every sample is written into
     /// both halves of the buffer, so the window the interpolator reads is contiguous and the meter
     /// needs neither a shift nor a modulo per sample (the same arrangement as TruePeakLimiter).
     float  tpHistL_[2 * TruePeakInterpolator::kHistory] = {}, tpHistR_[2 * TruePeakInterpolator::kHistory] = {};
-    int    tpPos_ = 0;
-    TruePeakInterpolator tpInterp_;
+    int    tpPos_ = 0;   ///< position in the true-peak history
+    TruePeakInterpolator tpInterp_;   ///< reads the peaks between the samples
 };
 
 } // namespace phos

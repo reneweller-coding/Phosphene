@@ -46,6 +46,7 @@ namespace phos {
 constexpr double kDiodeLadderSelfOsc = 17.0;
 
 template <class V>
+/** @brief The four-pole diode ladder (the 303's filter), one instance per SIMD lane type @p V. */
 struct DiodeLadderT {
     V s[4];     ///< trapezoidal integrator states
     V d[4];     ///< saturated differences of the previous sample (gain estimates)

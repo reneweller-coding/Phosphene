@@ -70,6 +70,7 @@ const Slice kMasterSlices[] = {
 };
 
 template <size_t N>
+/** @brief Adds one group per slice of a module's parameter table to @p page. */
 void addSlices(ControlPage& page, PhospheneProcessor& proc, Module m, int instance, const Slice (&slices)[N], juce::Colour tint)
 {
     for (const Slice& s : slices) page.addModuleGroup(proc, m, instance, s.title, tint, s.columns, s.first, s.count);
@@ -502,8 +503,8 @@ void PhospheneEditor::buildPages()
 
 void PhospheneEditor::fillPresetBox(PresetBox& pb)
 {
-    pb.presets = factoryPresets(pb.module, pb.instance);
-    for (SoundPreset& u : proc_.userPresets(pb.module, pb.instance)) pb.presets.push_back(std::move(u));
+    pb.presets = factoryPresets(pb.synth, pb.instance);
+    for (SoundPreset& u : proc_.userPresets(pb.synth, pb.instance)) pb.presets.push_back(std::move(u));
     pb.box->clear(juce::dontSendNotification);
     // A submenu per group, in the order the groups first appear (the factory's order: oscillators, then the
     // wavetable families; the user's last).
@@ -525,7 +526,7 @@ void PhospheneEditor::addSoundGroup(ControlPage& page, Module module, int instan
     // row, the chooser across the second.
     const int g = page.addModuleGroup(proc_, Module::Mix, 0, "Sound", tint, 3, mix::KickOwn + owner, 1);
     auto pb = std::make_unique<PresetBox>();
-    pb->module = module;
+    pb->synth = module;
     pb->instance = instance;
     auto box = std::make_unique<juce::ComboBox>();
     box->setTooltip("Presets in groups. Choosing one sets the synth's knobs and switches Own Sound on, so the "
@@ -536,7 +537,7 @@ void PhospheneEditor::addSoundGroup(ControlPage& page, Module module, int instan
     box->onChange = [this, raw] {
         const int id = raw->box->getSelectedId();
         if (id <= 0 || id > static_cast<int>(raw->presets.size())) return;
-        proc_.applyPreset(raw->module, raw->instance, raw->presets[static_cast<size_t>(id - 1)]);
+        proc_.applyPreset(raw->synth, raw->instance, raw->presets[static_cast<size_t>(id - 1)]);
     };
     fillPresetBox(*pb);
 
@@ -549,7 +550,7 @@ void PhospheneEditor::addSoundGroup(ControlPage& page, Module module, int instan
         presetNameDialog_->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
         presetNameDialog_->enterModalState(true, juce::ModalCallbackFunction::create([this, raw](int result) {
             const juce::String name = presetNameDialog_ != nullptr ? presetNameDialog_->getTextEditorContents("name") : juce::String();
-            if (result == 1 && proc_.saveUserPreset(raw->module, raw->instance, name) != juce::File()) {
+            if (result == 1 && proc_.saveUserPreset(raw->synth, raw->instance, name) != juce::File()) {
                 fillPresetBox(*raw);
                 for (size_t i = 0; i < raw->presets.size(); ++i)
                     if (raw->presets[i].group == "User" && juce::String(raw->presets[i].name) == juce::File::createLegalFileName(name.trim()))

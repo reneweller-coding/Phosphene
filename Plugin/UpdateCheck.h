@@ -36,12 +36,14 @@ public:
         juce::Time when;           ///< when GitHub was last asked
     };
 
+    /** @brief Creates the (not yet running) check thread; nothing is fetched until startIfDue(). */
     UpdateCheck();
     ~UpdateCheck() override;
 
     /**
      * @brief Asks GitHub unless it was asked less than a day ago (@p force asks anyway) or the check is off.
      * @param stateFile `update.txt` in the user folder
+     * @param force check now, even if the last check was less than a day ago
      */
     void startIfDue(const juce::File& stateFile, bool force = false);
     /** @brief The last result (thread-safe). */
@@ -59,9 +61,9 @@ private:
     void run() override;
     /** @brief Reads the cached answer out of the state file. */
     void loadCache(const juce::File& stateFile);
-    mutable std::mutex lock_;
-    Result result_;
-    juce::File stateFile_;
+    mutable std::mutex lock_;   ///< guards result_
+    Result result_;   ///< what the last check found
+    juce::File stateFile_;   ///< update.txt in the user folder
 };
 
 } // namespace phosui

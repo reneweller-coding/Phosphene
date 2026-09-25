@@ -106,7 +106,7 @@ constexpr uint64_t kProbesFirstTrack = 1 + kMelodyParts + 2 + 2;
  * @brief The parallel schedule against the serial order of before 20.09.2026, bit for bit.
  *
  * The reference is the serial branch of Composer::measureTrack, which is the old code's order of calls. What
- * the comparison can see, each seen to fail first (docs/PLAN.md, the round's mutation table):
+ * the comparison can see, each seen to fail first (docs/rounds/2026-09.md, the round's mutation table):
  *  - a probe started before a number it reads exists (the first mix probe beside the presence probes while
  *    the presence match is on: the listening seed's tracks both carry a presence gain);
  *  - a shared load racing the workers: the section *starts* with a parallel plan in a process that has not
@@ -131,7 +131,7 @@ void testProbeSchedule()
     const auto t1 = std::chrono::steady_clock::now();
     // 22.09.2026: **at least one** reference track has to carry a presence gain, not both. A gain of
     // exactly zero is the correct answer for a track whose lines already sit inside the band
-    // (Composer.cpp, matchPresence returns early there), so demanding it of a fixed pair is a statement
+    // (ComposerLevels.cpp, matchPresence returns early there), so demanding it of a fixed pair is a statement
     // about which seed was picked and not about the code. 23.09.2026 (round "Lead"): the new lead cells
     // put the listening seed's first *two* tracks inside the band, so the serial reference grows, track by
     // track from the same composer, until one carries a gain -- six at most. What the precondition is

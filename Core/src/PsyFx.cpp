@@ -57,7 +57,6 @@ void Flanger::reset()
     std::fill(bufL_.begin(), bufL_.end(), 0.0f);
     std::fill(bufR_.begin(), bufR_.end(), 0.0f);
     write_ = 0;
-    lastL_ = lastR_ = 0.0f;
 }
 
 void Flanger::set(float periodBeats, float depth, float feedback, float mix)

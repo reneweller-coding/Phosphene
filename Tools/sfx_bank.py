@@ -2,10 +2,10 @@
 
 **Why.** The user: "Die kurzen Zips und Zaps bei den SFX wiederholen sich viiiiel zu oft [...] Da brauchen
 wir DEUTLICH mehr verschiedene Effekte [...] Ich bevorzuge dabei auch etwas flaechigere und laengere
-Effekte [...] mindestens 1024 besser 2048 Presets." Until this round every effect type was one fixed
+Effekte [...] mindestens 1024 besser 2048 Presets." Before the bank (23.09.2026) every effect type was one fixed
 synthesis with a little per-event jitter, so every zap was the last one. Now each type of the effects
 strip has a *family* of presets -- twelve parameters that steer its synthesis (Sfx.h, SfxPreset) -- and
-the composer picks one per event, never the same twice in a track (Form.cpp, makeFormSfx).
+the composer picks one per event, never the same twice in a track (FormSfx.cpp, makeFormSfx).
 
 **What the literature says.** Psytrance production writing names risers built from three layers (a
 tonal sweep, filtered noise, a rhythmic element) with staggered peaks, downlifters, impacts, whooshes

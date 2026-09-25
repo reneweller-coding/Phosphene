@@ -24,7 +24,7 @@
  *     p(t) = p0 * [ sqrt(1 - D*D) + sqrt(2) * D * cos(2 pi t / T + phi_l) ],   phi_l in {0, pi}
  *
  * with p0 the lane's own @c perc.pan, D its @c perc.pan_depth and T its @c perc.pan_bars in bars of
- * the current tempo. Three decisions, each of them measured rather than chosen (docs/PLAN.md,
+ * the current tempo. Three decisions, each of them measured rather than chosen (docs/rounds/2026-09.md,
  * 16.09.2026, and @c Tools/ref_arrange.py --pan-bound):
  *
  * **1. The law keeps the width the width round calibrated.** Both figures of a constant-power panner
@@ -136,35 +136,37 @@ public:
     double panSwing(int lane) const;
 
 private:
+    /** @brief Recomputes lane @p lane's synthesis coefficients from its parameters. */
     void computeCoefs(int lane);
     /** @brief The auto-pan phasor's step for @p lane from its period and the tempo (all setTempo() changes). */
     void updatePanRate(int lane);
+    /** @brief Gives each lane its auto-pan direction from its role's pan group. */
     void assignPanGroups();
 
-    double sr_ = 48000.0;
-    PercState s_;
-    PercCoefs c_;
-    float values_[kPercLanes][perc::Count] = {};
-    bool  valid_[kPercLanes] = {};
-    int   keyRoot_[kPercLanes] = {}, scale_[kPercLanes] = {};
-    int   role_[kPercLanes] = {};
-    int   engine_[kPercLanes] = {};
-    int   choke_[kPercLanes] = {};
-    double tunedHz_[kPercLanes] = {};
-    double shiftMul_[kPercLanes] = {};
+    double sr_ = 48000.0;   ///< sample rate
+    PercState s_;   ///< every lane's synthesis state (PercKernel.h)
+    PercCoefs c_;   ///< every lane's coefficients (PercKernel.h)
+    float values_[kPercLanes][perc::Count] = {};   ///< each lane's parameters as update() read them
+    bool  valid_[kPercLanes] = {};   ///< the lane has been updated at least once
+    int   keyRoot_[kPercLanes] = {}, scale_[kPercLanes] = {};   ///< the key and scale each lane was tuned to
+    int   role_[kPercLanes] = {};   ///< perc.role per lane (PercRole)
+    int   engine_[kPercLanes] = {};   ///< perc.engine per lane
+    int   choke_[kPercLanes] = {};   ///< perc.choke group per lane (0 = none)
+    double tunedHz_[kPercLanes] = {};   ///< each lane's pitch after tuning to the key
+    double shiftMul_[kPercLanes] = {};   ///< the pitch factor of the last hit's semitone shift
     double bpm_ = kDefaultBpm;   ///< time base of the auto-pan
     bool   panning_ = false;     ///< any lane moves: one decision for the whole kit (PercKernel.h)
-    float modeAmp_[kPercModes][kPercLanes] = {};
-    double modeW_[kPercModes][kPercLanes] = {};
-    double modeR_[kPercModes][kPercLanes] = {};
+    float modeAmp_[kPercModes][kPercLanes] = {};   ///< the modal engine's mode amplitudes
+    double modeW_[kPercModes][kPercLanes] = {};   ///< their angular frequencies per sample
+    double modeR_[kPercModes][kPercLanes] = {};   ///< their per-sample radii (the decays)
     // Noise and bursts.
-    Rng   noiseRng_[kPercLanes];
-    float noiseTail_[kPercLanes] = {}, noiseFast_[kPercLanes] = {};
-    int   burstsLeft_[kPercLanes] = {};
-    double burstTimer_[kPercLanes] = {}, burstSpacing_[kPercLanes] = {};
-    float burstVel_[kPercLanes] = {};
-    float chokeFactor_ = 0.999f;
-    std::vector<float> noise_, reset_, dNoise_, outL_, outR_;
+    Rng   noiseRng_[kPercLanes];   ///< each lane's noise source
+    float noiseTail_[kPercLanes] = {}, noiseFast_[kPercLanes] = {};   ///< the noise's per-sample decay after the hit and between the bursts of a clap
+    int   burstsLeft_[kPercLanes] = {};   ///< a clap's bursts still to come
+    double burstTimer_[kPercLanes] = {}, burstSpacing_[kPercLanes] = {};   ///< samples to the next burst, and between bursts
+    float burstVel_[kPercLanes] = {};   ///< the bursts' level
+    float chokeFactor_ = 0.999f;   ///< the per-sample decay of a choked lane (8 ms)
+    std::vector<float> noise_, reset_, dNoise_, outL_, outR_;   ///< a block's noise, burst restarts and noise decays per lane, and the kit's output
 };
 
 } // namespace phos

@@ -94,8 +94,8 @@
  *    appear only on weak sixteenths, one sixteenth long, and the next note is the tonic. They are
  *    kept out of every sampler set and placed at drawn "colour slots" instead, whose number is a
  *    target share per role (kColourShare in Melody.cpp) scaled by the arc's colour. That is the one
- *    mechanism for colour: before this round the arc's weight and the neural model's mode table both
- *    lifted the same tones, and the lead ended up parked on the flat second (0.41 of its notes).
+ *    mechanism for colour: when the arc's weight and the neural model's mode table both lifted the
+ *    same tones, the lead ended up parked on the flat second (0.41 of its notes).
  *  - *No mid-bar collapse, variation per phrase.* Every part fills both halves of the bar; a cell
  *    plays A A A' A'' over four (or eight) bars, and a second set of cells takes over after the
  *    track's first breakdown (MelodyContext::material), so new material arrives at section boundaries.
@@ -132,7 +132,7 @@ constexpr int kAcidJumpHighest = 74;                                ///< D5: hig
 /** @name The two leads' registers (20.09.2026, round "dialogue")
  *  The user's rule, after listening to the standalone on 19.09.2026: "beide Leads klingen zu hoch".
  *  The lead speaks from **C4** and the counter-lead answers exactly one octave above it, from **C5**.
- *  Until this round the two spanned B3 .. A5 and C5 .. A6, nearly two octaves each, and both reached
+ *  Before that the two spanned B3 .. A5 and C5 .. A6, nearly two octaves each, and both reached
  *  well over the arp's own G3 .. G5; what the user heard as "too high" was the upper half of those
  *  windows, which the register weight only discouraged and never forbade.
  *
@@ -150,7 +150,7 @@ constexpr int kAcidJumpHighest = 74;                                ///< D5: hig
  *
  *  **What it costs, measured rather than hidden:** an octave-wide window has no room for an upward
  *  octave jump, so MotifOperator::OctaveJump -- the Goa lead idiom of PLAN 6.5 -- can no longer place
- *  a note and is no longer drawn for the lead (Melody.cpp, makeLead). docs/PLAN.md carries the number.
+ *  a note and is no longer drawn for the lead (MelodyLead.cpp, makeLead). docs/rounds/2026-09.md carries the number.
  *  @{ */
 constexpr int kLeadLowest = 60;                                     ///< C4 (262 Hz): the lead window's lowest bottom (MelodyPlan::leadWindowLo moves it up by the style's registerShift)
 constexpr int kLeadHighest = 71;                                    ///< B4 (494 Hz): highest lead note
@@ -284,7 +284,7 @@ struct ModeMaterial {
 /**
  * @brief How the pad states its chord inside a chord block (22.09.2026, round "Figuren").
  *
- * `Held` is what every track did before this round and is still what an intro, a breakdown and an
+ * `Held` is the plain pad and is what an intro, a breakdown and an
  * outro play, whatever the track drew: there the pad *is* the music, and an articulated pad under
  * nothing sounds like a mistake. The other three are for the sections that have a kick under them.
  */
@@ -332,7 +332,7 @@ struct MelodyPlan {
      * @name How the pad states its chord (22.09.2026, round "Figuren")
      *
      * The user, on the pad: "sie war nicht sehr abwechslungsreich sondern klang immer gleich und hat
-     * immer dasselbe gespielt". Until this round that was literally true of its rhythm: one held
+     * immer dasselbe gespielt". Until 22.09.2026 that was literally true of its rhythm: one held
      * chord per chord block, struck on the bar line, for the whole track -- every track. The only
      * movement it ever had was the trance gate, and that was one pattern for 256 bars.
      *
@@ -402,7 +402,7 @@ struct MelodyPlan {
     std::vector<int> padVoicing2[4];          ///< and of the second half's chords (23.09.2026; empty when secondHalf is false)
     int  padGatePattern = 0;                  ///< the track's gate pattern
     float recipe[kMelodyParts] = {};          ///< one sound direction per part, -1..1 (brightness)
-    /** @name The new voices (19.09.2026, round "voices"; Melody.cpp, makeCounter, makeStab, makeDrone)
+    /** @name The new voices (19.09.2026, round "voices"; MelodyLead.cpp, makeCounter, makeStab, makeDrone)
      *  @{ */
     std::vector<MelodyNote> counter[2];       ///< the counter-lead's two eight-bar phrases, one per lead phrase
     uint16_t stabMask[2] = { 0, 0 };          ///< the stab's onsets over two bars, a bit per sixteenth (never a beat)
@@ -415,7 +415,7 @@ struct MelodyPlan {
     int  scale = 0;                           ///< the track's own mode; the arrays above are its material
     int  key = 6;                             ///< the track's key (pitch class of the tonic)
     ModeMaterial mode[kNumScales];            ///< material of every *borrowed* mode the form uses
-    /** @name The lead's design (22.09.2026, round "Lead"; Melody.cpp, makeLead)
+    /** @name The lead's design (22.09.2026, round "Lead"; MelodyLead.cpp, makeLead)
      *  One cell, one archetype and one operator per bar, per phrase -- what the renderer's `--tracks`
      *  prints and what the self test reads the phrase against.
      *  @{ */
@@ -507,7 +507,7 @@ extern const char* const kCellOpNames[kNumCellOps];                 ///< names o
 inline int leadWindowHi(const MelodyPlan& m) { return m.leadWindowLo + kLeadWindow - 1; }
 inline int counterWindowLo(const MelodyPlan& m) { return m.leadWindowLo + 12; }
 inline int counterWindowHi(const MelodyPlan& m) { return m.leadWindowLo + 12 + kLeadWindow - 1; }
-/** @brief The cutoff arc of an archetype at a bar of the phrase, mean-free (Composer.cpp writes depth x this). */
+/** @brief The cutoff arc of an archetype at a bar of the phrase, mean-free (ComposerControls.cpp, leadArcControls, writes depth x this). */
 double leadArc(int archetype, int barInPhrase);
 
 /**
@@ -540,6 +540,9 @@ std::vector<int> foundationVoicing(const std::vector<int>& voicing);
  * @param tones  0 sus2 (1 2 5), 1 sus4 (1 4 5), 2 add9 (1 3 5 9)
  * @param anchor receives the anchor as a MIDI note
  * @return the high stream's MIDI notes, ascending, all in [kArpLowest, kArpHighest]
+ * @param scale  index into kScaleSteps
+ * @param degree the chord's scale degree
+ * @param key    pitch class of the track's key
  */
 std::vector<int> arpHighTones(int scale, int degree, int key, int tones, int& anchor);
 
@@ -549,6 +552,9 @@ std::vector<int> arpHighTones(int scale, int degree, int key, int tones, int& an
  *        imperfect fifth.
  * @param tones 0 sus2, 1 sus4, 2 add9 (MelodyPlan::stabTones)
  * @return ascending MIDI notes, the root first
+ * @param scale  index into kScaleSteps
+ * @param degree the chord's scale degree
+ * @param key    pitch class of the track's key
  */
 std::vector<int> stabChord(int scale, int degree, int key, int tones);
 

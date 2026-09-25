@@ -51,6 +51,7 @@ float testValue(uint32_t i)
 
 bool sameBits(float a, float b) { return std::memcmp(&a, &b, sizeof(float)) == 0; }
 
+/** @brief Vector test: vector operations, lane by lane. */
 void testOps()
 {
     section("vector operations, lane by lane");
@@ -78,6 +79,7 @@ void testOps()
     check(bad == 0, "12 operations identical to scalar", fmt("%d of %d lanes differ", bad, total));
 }
 
+/** @brief Vector test: ladder lanes against the scalar ladder. */
 void testLadder()
 {
     section("ladder lanes against the scalar ladder");
@@ -108,6 +110,7 @@ void testLadder()
     check(std::isfinite(maxAbs) && maxAbs < 50.0f, "ladder bounded under drive and resonance", fmt("max |y| = %.3f", static_cast<double>(maxAbs)));
 }
 
+/** @brief Vector test: half-band lanes against scalar. */
 void testHalfband()
 {
     section("half-band lanes against scalar");
@@ -136,6 +139,7 @@ void testHalfband()
     check(bad == 0, "decimator and interpolator identical to scalar", fmt("%d differing samples", bad));
 }
 
+/** @brief Vector test: percussion kit lanes against the scalar kit. */
 void testPerc()
 {
     section("percussion kit lanes against the scalar kit");
@@ -199,6 +203,7 @@ void testPerc()
                 ts * 10.0, kVecPathName, tv * 10.0, ts / tv);
 }
 
+/** @brief Vector test: diode ladder lanes against the scalar diode ladder. */
 void testDiodeLadder()
 {
     section("diode ladder lanes against the scalar diode ladder");
@@ -228,6 +233,7 @@ void testDiodeLadder()
     check(std::isfinite(maxAbs) && maxAbs < 50.0f, "diode ladder bounded under drive and resonance", fmt("max |y| = %.3f", static_cast<double>(maxAbs)));
 }
 
+/** @brief Vector test: polyphonic engine lanes against the scalar engine. */
 void testPoly()
 {
     section("polyphonic engine lanes against the scalar engine");
@@ -550,6 +556,7 @@ void testModelForwardFile(const std::string& file, const char* label, bool bench
                 kVecPathName, model.info().parameters, us / (lines * notes), us / lines / 1000.0);
 }
 
+/** @brief Vector test: the model's forward pass, on this path, against the trainer's reference vectors. */
 void testModelForward()
 {
     section("the model's forward pass, on this path, against the trainer's reference vectors");
@@ -571,6 +578,7 @@ void testModelForward()
  * mixer, so every engine still renders and every part measures the whole engine.
  */
 #if !defined(PHOS_FORCE_SCALAR) && !defined(PHOS_NEON_SHIM)
+/** @brief Vector test: cost of kick, bass and acid (no check, a measurement). */
 void testParts()
 {
     section("cost of kick, bass and acid (no check, a measurement)");
@@ -619,6 +627,7 @@ void testParts()
 
 } // namespace
 
+/** @brief Runs every comparison of the vector path against the scalar one. */
 int main()
 {
     std::printf("phos_vectest: path %s, %d lanes\n", kVecPathName, W);

@@ -17,7 +17,7 @@ constexpr double kPiD = 3.141592653589793;
  * Measured on the listening seed with the master's dynamics off, as the loudest 400 ms of the texture
  * strip against the rest of the mix in the same window (K-weighted): before these constants the bowls
  * stood 11 dB and the drones 13 dB *over* the rest of an intro or breakdown; with these constants the
- * bed measures about 9 dB under it. The bed should be felt rather than heard (docs/PLAN.md, round
+ * bed measures about 9 dB under it. The bed should be felt rather than heard (docs/rounds/2026-09.md, round
  * "fx-psychedelia").
  * @{ */
 constexpr float kBowlGain  = 0.08f;   ///< -22 dB

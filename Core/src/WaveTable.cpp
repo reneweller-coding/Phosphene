@@ -49,6 +49,7 @@ const std::complex<double> kSine(0.0, -1.0);   ///< sin x = cos(x - pi/2)
 /** @brief Harmonic h of a rising saw, 2t - 1: -(2/pi) sum sin(2 pi h t)/h. */
 std::complex<double> sawHarmonic(int h) { return kSine * (-2.0 / (kPiD * h)); }
 
+/** @brief The built-in wavetables, built once on first use. */
 struct Builtins {
     WaveTable t[kNumBuiltinWaveTables];
     Builtins()

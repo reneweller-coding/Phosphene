@@ -743,7 +743,7 @@ def main(argv):
         print()
     if args.median and len(rows) > 1:
         # A single render is one throw of the arrangement lottery: over eight seeds the presence band
-        # of this engine swings from -7.5 to -14.3 dB (docs/PLAN.md, Phase 9). Only the median over
+        # of this engine swings from -7.5 to -14.3 dB (docs/rounds/2026-09.md, Phase 9). Only the median over
         # several seeds is a calibration quantity, so the tool prints it rather than leaving it to be
         # eyeballed from the rows above.
         def med(f):

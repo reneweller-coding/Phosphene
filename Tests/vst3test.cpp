@@ -7,7 +7,7 @@
  * created, and everything a host does to a freshly loaded plugin is done to it -- describe the
  * parameters, prepare, play with a transport, read the MIDI it produces, save and restore the state,
  * and take it away again. That is the part of pluginval that can live in the repository; pluginval
- * itself is not on this machine (see docs/PLAN.md, Phase 6).
+ * itself is not on this machine (see docs/rounds/2026-09.md, Phase 6).
  *
  * The path of the plugin comes from the command line, which CMake fills in with the built artefact.
  */
@@ -25,6 +25,7 @@ namespace {
 int failures = 0;
 int checks = 0;
 
+/** @brief Records one check's result and prints it. */
 void check(bool ok, const juce::String& what)
 {
     ++checks;
@@ -50,6 +51,7 @@ public:
 
 } // namespace
 
+/** @brief Loads the built VST3 as a host would and runs the checks. */
 int main(int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

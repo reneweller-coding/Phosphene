@@ -128,6 +128,7 @@ const char* addressOf(Cue::Kind k)
     }
 }
 
+/** @brief Prints the command line and returns the exit code for a wrong one. */
 int usage()
 {
     std::printf("phos_cuedemo [--bars N] [--seed S] [--host H] [--port P] [--sections] [--realtime] [--nobeats]\n");
@@ -136,6 +137,7 @@ int usage()
 
 } // namespace
 
+/** @brief Sends a demonstration set's cues to a listener (see the file comment). */
 int main(int argc, char** argv)
 {
     // Parallel probes, and the probe cache when ctest names one (phos/Probe.h; round "speed", 20.09.2026).

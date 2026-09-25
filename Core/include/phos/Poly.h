@@ -7,7 +7,7 @@
  * Roland JP-8000 ("How to emulate the super saw", thesis, Stockholm 2010), all four of its findings
  * adopted and each number taken from the thesis itself. Each of the seven reads the *mipmapped* saw
  * of the Classic table (WaveTable.h) rather than generating a PolyBLEP ramp: measured on 16.09.2026,
- * the table saw leaves 30 dB less aliasing at C5 and C6 and 20 dB less at A6 (docs/PLAN.md). PolyBLEP
+ * the table saw leaves 30 dB less aliasing at C5 and C6 and 20 dB less at A6 (docs/rounds/2026-09.md). PolyBLEP
  * remains the VA oscillator, where one saw per voice is blended into a pulse and a table cannot give
  * the pulse width. The table frame is normalised to a different RMS than the ramp, so the slot gains
  * carry kSawTableGain and the lead keeps its calibrated level.
@@ -63,7 +63,7 @@
  *    the physics but a statement of it -- and it keeps the pitch of a sounding oscillator constant,
  *    which matters: a pitch that wanders *within* a note smears every harmonic, and the supersaw's
  *    aliasing figures are measured in narrow bands around the lines the oscillators should produce
- *    (the measurement is in docs/PLAN.md, 16.09.2026);
+ *    (the measurement is in docs/rounds/2026-09.md, 16.09.2026);
  *  - they are computed **on the scalar side**, like the wavetable rows, and reach the kernels only as
  *    coefficients, so the AVX2, NEON and scalar lane paths stay bit-identical;
  *  - the **bass does not drift**, and cannot: it is not a Poly instance. The phase lock of kick and
@@ -71,7 +71,7 @@
  *
  * **Glide (portamento), 20.09.2026, round "dialogue".** The user's articulation rule separates the two
  * leads: "die Lead fliesst mit Portamento ueber die Halbtonschritte, die Counter-Lead peitscht trocken".
- * Until this round no polyphonic voice could bend at all -- only the acid slid -- so the rule had no
+ * Without it no polyphonic voice can bend at all -- only the acid slides -- and the rule has no
  * mechanism. `poly.glide` is the time constant of a one-pole slew on the voice's pitch, in
  * milliseconds:
  *
@@ -87,7 +87,7 @@
  *  - the first note after a silence does not glide (there is nothing to glide from), and neither does
  *    a note whose pitch equals the one before it;
  *  - at glide 0 -- every voice's default except the lead's -- nothing is computed and the slot
- *    coefficients are exactly the ones noteOn() wrote, so a render is bit for bit the render of before.
+ *    coefficients are exactly the ones noteOn() wrote, so a render is bit for bit the render without glide.
  *
  * The slew is on the *pitch*, not on the frequency: a semitone takes the same time wherever it lies,
  * which is what a portamento is. A pitch that moves inside a note necessarily smears the harmonics --
@@ -162,8 +162,8 @@ public:
      * @param late        how many samples ago the note ideally started (0 <= late < 1)
      * @param accent      22.09.2026: the note is accented -- its filter envelope opens 1.5 times as far
      *                    (the 303's accent logic on a poly voice; velocity carries the level as before)
-     * @param slide       22.09.2026: the note may glide in from the pitch before it. True is what every
-     *                    note did until this round; the lead passes its kNoteSlide flag (Score.h)
+     * @param slide       22.09.2026: the note may glide in from the pitch before it. True lets every
+     *                    note glide; the lead passes its kNoteSlide flag (Score.h)
      */
     void noteOn(int pitch, float velocity, double lengthBeats, int gateSamples, double late, bool accent = false, bool slide = true);
     /**
@@ -288,7 +288,9 @@ private:
         gate_[oldest] = 0;
     }
 
+    /** @brief Sets a voice's high-pass coefficients for its note. */
     void voiceCoefs(int voice);
+    /** @brief Sets a voice's low-pass coefficients from its envelope, key tracking, drift and LFO. */
     void lowPassCoefs(int voice, double damping);
     /**
      * @brief Writes a voice's slot frequencies for the pitch it is sounding at (Poly.h, glide).
@@ -309,23 +311,24 @@ private:
      * deviation is exactly the drift parameter in cents whatever the sample rate.
      */
     void advanceDrift();
+    /** @brief Renders @p n samples with the lane type @p V (scalar, AVX2 or NEON). */
     template <class V> void renderSegment(float* L, float* R, int n);
 
-    double sr_ = 48000.0;
+    double sr_ = 48000.0;   ///< sample rate
     int unisonLimit_ = kPolyUnison;   ///< oscillators per voice (Quality.h)
     int voiceLimit_ = kPolyVoices;    ///< voices that may sound at once (Quality.h)
-    float values_[64] = {};
-    PolySlots slots_;
-    PolyChannels ch_;
-    Envelope amp_[kPolyVoices];
+    float values_[64] = {};   ///< the instance's parameters as update() read them
+    PolySlots slots_;   ///< every unison slot's oscillator state (PolyKernel.h)
+    PolyChannels ch_;   ///< every voice's filter and output state (PolyKernel.h)
+    Envelope amp_[kPolyVoices];   ///< amplitude envelope per voice
     Envelope ampTimes_;   ///< the written times, computed once per update() and copied into every voice
-    float fenv_[kPolyVoices] = {}, fDecay_ = 0.999f;
+    float fenv_[kPolyVoices] = {}, fDecay_ = 0.999f;   ///< filter envelope per voice and its per-sample decay
     float accent_[kPolyVoices] = {};          ///< the note's factor on the filter envelope amount: 1, or 1.5 for an accent (22.09.2026)
-    int   pitch_[kPolyVoices] = {};
-    float vel_[kPolyVoices] = {};
-    int   gate_[kPolyVoices] = {};
-    uint64_t age_[kPolyVoices] = {};
-    float hpHz_[kPolyVoices] = {};
+    int   pitch_[kPolyVoices] = {};   ///< each voice's MIDI pitch
+    float vel_[kPolyVoices] = {};   ///< each voice's velocity, 0..1
+    int   gate_[kPolyVoices] = {};   ///< samples until each voice is released
+    uint64_t age_[kPolyVoices] = {};   ///< note-on order, for voice stealing
+    float hpHz_[kPolyVoices] = {};   ///< each voice's high-pass frequency (the depth rule)
     float posEnv_[kPolyVoices] = {};          ///< table-position envelope per voice
     double lfoPh_[kPolyVoices] = {};          ///< table-position LFO phase per voice
     double wtPh_[kPolySlots] = {};            ///< wavetable phase per slot (double: long pads)
@@ -339,14 +342,14 @@ private:
     float lfo2Inc_ = 0.0f;                    ///< its step per sample, from poly::LfoBeats and the tempo
     float lfo2Cut_ = 0.0f, lfo2Pitch_ = 0.0f, lfo2Amp_ = 0.0f;   ///< its three depths, from update()
     float lfo2Value_ = 0.0f;                  ///< its last value, read by lowPassCoefs on the 16-sample grid
-    const WaveTable* table_ = nullptr;
+    const WaveTable* table_ = nullptr;   ///< the table poly.table names
     const WaveTable* sawTable_ = nullptr;     ///< the Classic table, whose frame kClassicSawFrame is the saw
-    float posDecay_ = 0.999f, lfoInc_ = 0.0f;
-    double bpm_ = 145.0;
-    uint64_t counter_ = 0;
+    float posDecay_ = 0.999f, lfoInc_ = 0.0f;   ///< the position envelope's per-sample decay and the position LFO's step
+    double bpm_ = 145.0;   ///< the tempo the LFO periods were computed for
+    uint64_t counter_ = 0;   ///< notes so far (the voices' age)
     uint64_t pos_ = 0;          ///< samples rendered since reset (the coefficient grid)
     uint64_t tableReads_ = 0;   ///< wavetable reads of the scalar pre-pass (tests, see tableReads())
-    Rng phaseRng_;
+    Rng phaseRng_;   ///< the oscillators' random start phases
     Rng driftRng_;                            ///< the thermal drift walks, salted against phaseRng_
     float driftSlot_[kPolySlots] = {};        ///< drift walk per unison slot, before driftNorm_
     float driftVoice_[kPolyVoices] = {};      ///< drift walk per voice, before driftNorm_
@@ -377,9 +380,9 @@ private:
     /** @} */
     Disperser disperse_;                      ///< all-pass chain coefficients (Disperser.h)
     DisperserChannel dispL_, dispR_;          ///< its state, one per output channel
-    TempoDelay delay_;
-    float send_ = 0.0f, level_ = 1.0f;
-    std::vector<float> slotL_, slotR_, chanIn_, chanAmp_, chanOut_, sendBuf_, wtRow_;
+    TempoDelay delay_;   ///< the voice's tempo delay
+    float send_ = 0.0f, level_ = 1.0f;   ///< poly.delay_send and poly.level, linear
+    std::vector<float> slotL_, slotR_, chanIn_, chanAmp_, chanOut_, sendBuf_, wtRow_;   ///< a block's slot outputs, channel buffers, delay send and wavetable rows
 };
 
 } // namespace phos

@@ -417,7 +417,7 @@ void PhospheneEditor::buildArrangePage()
     // The set-wide half of the curation loop: the moves that have no block to sit on. Tracks and
     // sections are locked and rerolled on the timeline itself. (The fourth lockable unit, a
     // percussion lane, has no place here either -- it belongs on the Percussion tab and is not
-    // built yet; see docs/PLAN.md, Phase 6 second round.)
+    // built yet; see docs/rounds/2026-09.md, Phase 6 second round.)
     const int gc = page->addGroup("Curation", tint, 16);
     {
         auto reroll = std::make_unique<juce::TextButton>("Reroll the set");

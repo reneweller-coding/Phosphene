@@ -32,6 +32,7 @@
 namespace phos {
 
 template <class V>
+/** @brief The four-pole transistor ladder, one instance per SIMD lane type @p V. */
 struct LadderT {
     V s[4];     ///< trapezoidal integrator states
     V y[4];     ///< stage outputs of the previous sample (gain estimates)

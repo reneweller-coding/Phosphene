@@ -71,6 +71,7 @@ public:
         int minutes = 0;           ///< the set length the knobs ask for, for the caption
     };
 
+    /** @brief An empty timeline; update() fills it. */
     ArrangeDisplay();
 
     /** @brief Replaces what is drawn (message thread); the picture is redrawn, not the play head. */

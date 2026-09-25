@@ -25,7 +25,7 @@
 
 # Seconds of each section (each in its own process; since 20.09.2026, round "speed", from a `ctest -C Release
 # -j 8` with an *empty* probe cache and eight probe threads, i9-12900K, Release, another round's builds and
-# tests beside it -- with the cache filled the planning sections take a fraction, see docs/PLAN.md; the
+# tests beside it -- with the cache filled the planning sections take a fraction, see docs/rounds/2026-09.md; the
 # table keeps the cold numbers because they decide what `quick` may contain; four sections that found their
 # plans already cached by an earlier test of that run and took 0.4 s keep their uncached 23 to 43 s). They
 # become each test's COST, so
@@ -44,7 +44,7 @@ set(PHOS_SELFTEST_SECONDS
     # The ten entries below (round "test-speed-rest", 20.09.2026, A6): re-measured after the five
     # sections' whole-track renders moved onto phos::probe::runAll's pool (Tests/selftest.cpp),
     # from the round's own final `ctest -C Release -j 12` (commit 8e3cc79, 113 tests, full suite
-    # beside them, not isolated) -- docs/PLAN.md has the before numbers and the isolated-run figures.
+    # beside them, not isolated) -- docs/rounds/2026-09.md has the before numbers and the isolated-run figures.
     # presenceArc{On,Off}{1,2} had never been costed before (they ran with the 600 s "unmeasured"
     # placeholder): this is their first entry.
     testPhaseLock.lock                  38.65

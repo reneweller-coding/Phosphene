@@ -40,9 +40,10 @@ struct MidiBinding {
 /** @brief Controller-to-target table with learning (see the file comment). */
 class MidiMap {
 public:
-    static constexpr int kChannels = 16;
-    static constexpr int kControllers = 128;
+    static constexpr int kChannels = 16;   ///< MIDI channels
+    static constexpr int kControllers = 128;   ///< controllers per channel
 
+    /** @brief An empty map: no controller bound. */
     MidiMap();
 
     /** @brief The next controller message binds to @p target (message thread); -1 disarms. */
@@ -82,10 +83,11 @@ public:
     int fromText(const std::string& text, const std::function<int(const std::string&)>& find);
 
 private:
+    /** @brief Binds a controller to a target, releasing both from any other binding. */
     void bindLocked(int channel, int cc, int target);
     std::atomic<int32_t> table_[kChannels * kControllers];   ///< target + 1, 0 = unbound
-    std::atomic<int32_t> armed_{ -1 };
-    std::atomic<uint32_t> revision_{ 0 };
+    std::atomic<int32_t> armed_{ -1 };   ///< the target MIDI learn waits for, -1 none
+    std::atomic<uint32_t> revision_{ 0 };   ///< bumped on every change (the editor redraws)
 };
 
 } // namespace phos

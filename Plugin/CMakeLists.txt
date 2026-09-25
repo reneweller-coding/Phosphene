@@ -27,6 +27,8 @@ juce_add_plugin(Phosphene
 
 target_sources(Phosphene PRIVATE
     PluginProcessor.cpp
+    StoreParameter.cpp
+    PlugConductor.cpp
     PluginEditor.cpp
     EditorLayout.cpp
     EditorSetTab.cpp

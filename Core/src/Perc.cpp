@@ -4,6 +4,7 @@
  */
 #include "phos/Perc.h"
 #include "phos/Harmony.h"
+#include "phos/Util.h"
 #include <algorithm>
 #include <cmath>
 
@@ -47,16 +48,6 @@ constexpr double kPanRms = 1.4142135623730951;
  */
 constexpr double kPanMaxAngle = 1.6;
 /** @} */
-
-/** @brief Coefficients of a trapezoidal SVF (as Svf::setG). */
-void svfCoefs(double fc, double damping, double sr, float& a1, float& a2, float& a3)
-{
-    const double g = std::tan(kPiD * std::clamp(fc, 10.0, 0.45 * sr) / sr);
-    const double d1 = 1.0 / (1.0 + g * (g + damping));
-    a1 = static_cast<float>(d1);
-    a2 = static_cast<float>(g * d1);
-    a3 = static_cast<float>(g * g * d1);
-}
 
 } // namespace
 

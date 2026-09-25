@@ -2,7 +2,7 @@
  * @file ModelKernel.h
  * @brief The hot loops of the neural sequence model, written once over the lane types of Vec.h.
  *
- * Phase 8 puts a small transformer where the order-2 Markov model of Phase 5 stood (docs/PLAN.md,
+ * Phase 8 puts a small transformer where the order-2 Markov model of Phase 5 stood (docs/rounds/2026-09.md,
  * 6.9). Its forward pass is five matrix-vector products and an attention per layer; this header is
  * that arithmetic, and nothing else. It is header-only so that the three lane variants of
  * phos_vectest -- AVX2, the NEON shim and the forced scalar path -- can compile it without linking
@@ -193,6 +193,8 @@ inline void matvecPanel(const float* panels, const float* bias, const float* x, 
  * Called once per matrix when the model is loaded. The scale is folded into the weight rather than
  * applied to the finished sum, which is one multiply fewer per row and -- because the reference
  * vectors are computed from the dequantized weights as well -- the same arithmetic the oracle does.
+ * @param rows rows of the matrix
+ * @param cols columns of the matrix
  */
 template <class V, class Src>
 inline void packPanels(const Src* src, const float* scale, int rows, int cols, float* dst)
@@ -220,6 +222,11 @@ inline void packPanels(const Src* src, const float* scale, int rows, int cols, f
  * arXiv:1607.06450 (2016); the variance is the biased one (divided by n), as in PyTorch.
  *
  * @param n  the width; @p x, @p w, @p b and @p out are padded to a whole number of lanes
+ * @param x   the @p n inputs
+ * @param w   the @p n gains
+ * @param b   the @p n biases
+ * @param eps added to the variance
+ * @param out receives the @p n outputs (may be @p x)
  */
 template <class V>
 inline void laneLayerNorm(const float* x, const float* w, const float* b, float eps, int n, float* out)
@@ -309,6 +316,7 @@ inline void laneActivate(float* x, int n, ModelAct act)
  *
  * W scalar stores per dimension. The cache is laid out this way so that scoring a query against all
  * keys is exactly matvecPanel() with the time steps as output rows.
+ * @param headDim dimensions of one head's key
  */
 template <class V>
 inline void storeKey(float* cache, int t, const float* k, int headDim)

@@ -18,6 +18,7 @@ juce::StringPairArray readState(const juce::File& f)
     return kv;
 }
 
+/** @brief Writes the check's state as key=value lines. */
 void writeState(const juce::File& f, const juce::StringPairArray& kv)
 {
     juce::String s;
@@ -26,6 +27,7 @@ void writeState(const juce::File& f, const juce::StringPairArray& kv)
     f.replaceWithText(s, false, false, "\n");
 }
 
+/** @brief Whether PHOS_NO_UPDATE_CHECK switches the check off for this process (the tests). */
 bool switchedOffForProcess()
 {
     return juce::SystemStats::getEnvironmentVariable("PHOS_NO_UPDATE_CHECK", "").isNotEmpty();

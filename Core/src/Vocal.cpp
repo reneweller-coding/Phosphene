@@ -3,6 +3,7 @@
  * @brief The voice pack and the voice generator (Vocal.h).
  */
 #include "phos/Vocal.h"
+#include "phos/Util.h"
 #include "phos/Params.h"
 #include "phos/WaveTableFile.h"
 #include <algorithm>
@@ -71,20 +72,9 @@ struct Pack {
 Pack& pack() { static Pack p; return p; }
 std::string& voiceSearchPath() { static std::string s; return s; }
 
-bool readFile(const std::string& path, std::vector<uint8_t>& out)
-{
-    std::FILE* f = std::fopen(path.c_str(), "rb");
-    if (f == nullptr) return false;
-    out.clear();
-    uint8_t buf[65536];
-    size_t n;
-    while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0) out.insert(out.end(), buf, buf + n);
-    std::fclose(f);
-    return true;
-}
-
 uint32_t rd32(const uint8_t* p) { return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24); }
 
+/** @brief Parses a voice pack (PHOSVX01) into its phrases; false, with a reason in @p error, if it is not one. */
 bool parse(const std::vector<uint8_t>& f, std::vector<VoicePhrase>& out, std::string* error)
 {
     auto fail = [&](const char* why) { if (error) *error = why; return false; };

@@ -84,6 +84,8 @@ struct WaveTable {
     /**
      * @brief A position between frames: frame floor(p (frames-1)) blended into the next.
      * @param position 0..1 across the table
+     * @param level the mip level (bandLimitLevel())
+     * @param phase 0..1 within the cycle
      */
     float sampleAt(int level, float position, double phase) const
     {

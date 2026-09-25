@@ -3,6 +3,7 @@
  * @brief Module descriptor tables and the parameter store.
  */
 #include "phos/Params.h"
+#include "phos/Util.h"
 #include "phos/Disperser.h"        // kDisperseStages: the upper end of the disperse parameters
 #include "phos/WaveTableFile.h"   // kNumWaveTables and the names of the shipped library tables
 #include <cmath>
@@ -124,18 +125,18 @@ const ParamDesc kComposeParams[compose::Count] = {
     // 22.09.2026: one style for a whole night was the user's first complaint about the sets ("langweilig,
     // wenn immer alles im selben Stil ist"). On, the style walks from track to track (Composer.cpp).
     { "style_mix",       "Style Mix",       "",      0.0f,   1.0f,   1.0f, Curve::Toggle },
-    // 19.09.2026, round "polish" (Composer.cpp, matchPresence): On brings each track's presence band into
+    // 19.09.2026, round "polish" (ComposerLevels.cpp, matchPresence): On brings each track's presence band into
     // a band around the reference recordings' median by the level of its lines; Off plays them as matched.
     { "presence_match",  "Presence Match",  "",      0.0f,   1.0f,   1.0f, Curve::Toggle },
     // 22.09.2026, round "Lead" (the user: lead_density and pitch_entropy as knobs, "Auto" = the style):
     // how many onsets a lead bar carries, and how far the pitch draws may stray from the model's
-    // and the rules' favourites (Melody.cpp, makeLead).
+    // and the rules' favourites (MelodyLead.cpp, makeLead).
     { "lead_density",    "Lead Density",    "",      0.0f,   3.0f,   0.0f, Curve::Choice, kLeadDensityNames },
     { "pitch_entropy",   "Pitch Entropy",   "",      0.0f,   3.0f,   0.0f, Curve::Choice, kPitchEntropyNames },
-    // 23.09.2026, round "Counter": the counter-lead's mode (Form.h, CounterMode; Melody.cpp, makeCounter). At the end,
+    // 23.09.2026, round "Counter": the counter-lead's mode (Form.h, CounterMode; MelodyLead.cpp, makeCounter). At the end,
     // in the enum's order (see the note above the style_mix row).
     { "counter_mode",    "Counter Mode",    "",      0.0f,   4.0f,   0.0f, Curve::Choice, kCounterModeNames },
-    // 23.09.2026, round "Hoerbarkeit" (Composer.cpp, matchAudibility): at the end, in the enum's order.
+    // 23.09.2026, round "Hoerbarkeit" (ComposerLevels.cpp, matchAudibility): at the end, in the enum's order.
     { "audibility_match", "Audibility Match", "",    0.0f,   1.0f,   1.0f, Curve::Toggle },
 };
 
@@ -228,7 +229,7 @@ const ParamDesc kPercParams[perc::Count] = {
  * would have bought more, and were tried: they push the level match of testVariety (spread of four
  * tracks, perc, kick and bass only) from 0.75 to 0.85 LU, over its 0.8 bound -- the composer's
  * loudness probe does not see how much of a track the toms and congas play. The measurements
- * before and after are in docs/PLAN.md.
+ * before and after are in docs/rounds/2026-09.md.
  */
 const char* const kDefaultKit =
     "perc1.role=Closed Hat;perc1.engine=Metal;perc1.decay=45;perc1.noise=0.35;perc1.noise_decay=35;perc1.filter=Low Pass;"
@@ -452,13 +453,13 @@ const ParamDesc kPolyParams[poly::Count] = {
     // Low pass is what every voice played before; the per-track recipes (Composer.cpp) may pick the others.
     { "filter_type",    "Filter Type",    "",      0.0f,     3.0f,   0.0f, Curve::Choice, kPolyFilterNames },
     // 20.09.2026 (round "dialogue"). Glide: the time constant of the pitch slew between two notes of
-    // the voice (Poly.h); 0 is the instantaneous jump every voice played before this round, so a voice
+    // the voice (Poly.h); 0 is the instantaneous jump, so a voice
     // that does not set it renders bit for bit as it did. Pan: the dry signal's place in the image, the
     // role property the user's rule asks for ("Lead leicht links, Counter leicht rechts"); the delay
     // behind the voice keeps its own left/right times and is not panned with it.
     { "glide",          "Glide",          "ms",    0.0f,   400.0f,   0.0f, Curve::Linear },
     { "pan",            "Pan",            "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
-    // The voice's own modulation insert (Engine.cpp; PsyFx.h). Off is the voice of before this round,
+    // The voice's own modulation insert (Engine.cpp; PsyFx.h). Off is the plain voice,
     // sample for sample -- the insert is not even ticked.
     { "mod",            "Modulation",     "",      0.0f,     3.0f,   0.0f, Curve::Choice, kPolyModNames },
     { "mod_beats",      "Mod Period",     "beats", 0.5f,    64.0f,  16.0f, Curve::Log },
@@ -469,7 +470,7 @@ const ParamDesc kPolyParams[poly::Count] = {
     // exactly as before.
     { "hall_gate",      "Hall Gate",      "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
     // Appended 22.09.2026 (round "Klangfarben"). Both groups are off at their defaults -- osc2 "Off"
-    // and every LFO depth 0 -- so a set saved before this round renders the same samples it did.
+    // and every LFO depth 0 -- so an older set renders the same samples it did.
     { "osc2",           "Oscillator 2",   "",      0.0f,     4.0f,   0.0f, Curve::Choice, kPolyOsc2Names },
     { "osc2_mix",       "Osc 2 Mix",      "",      0.0f,     1.0f,   0.0f, Curve::Linear },
     { "osc2_interval",  "Osc 2 Interval", "",      0.0f,     5.0f,   1.0f, Curve::Choice, kPolyOsc2IntervalNames },
@@ -565,7 +566,7 @@ const ParamDesc kSfxParams[sfx::Count] = {
     { "sub_level",    "Sub Drop",      "dB", -36.0f,   6.0f, -14.0f, Curve::Linear },
     { "sub_duck",     "Sub Duck",      "",     0.0f,   1.0f,   1.0f, Curve::Linear },
     // 20.09.2026, round "wandering-fx" (Sfx.h): a directed pan trajectory and a growing reverb-send
-    // trajectory over an event's own length. Off by default: every render before this round is untouched.
+    // trajectory over an event's own length. Off by default, so older sets render unchanged.
     { "wander",       "Wander",        "",     0.0f,   1.0f,   0.0f, Curve::Toggle },
     { "wander_send",  "Wander Send",   "",     0.0f,   1.0f,   0.85f, Curve::Linear },
     // 24.09.2026: the bank preset each family plays, 0 = Auto (Params.h, sfx::PresetRiser). The ranges are the
@@ -584,7 +585,7 @@ const ParamDesc kSfxParams[sfx::Count] = {
 };
 
 // The shamanic bed (Texture.h), the voices (Vocal.h) and the modulation effects (PsyFx.h), 19.09.2026.
-// Their levels are the calibration of that round (docs/PLAN.md): a bed that is felt rather than heard,
+// Their levels are the calibration of that round (docs/rounds/2026-09.md): a bed that is felt rather than heard,
 // voices that stand in a breakdown without covering the pad.
 const ParamDesc kTextureParams[texture::Count] = {
     { "width",         "Width",          "",     0.0f,   1.0f,   0.8f, Curve::Linear },
@@ -662,7 +663,7 @@ const ParamDesc kMixParams[mix::Count] = {
     // -6 dB (19.09.2026, round "arrangement"): the user after listening to the voices round, "insgesamt ist
     // der Lead und auch der Arp zu laut"; the arp -2 -> -5 with it, the counter and the stab 3 dB down as
     // well so that they stay under the lead. 4 dB each took the presence band of testMixBalance 2.2 dB
-    // under the reference median; docs/PLAN.md has the band balance before and after.
+    // under the reference median; docs/rounds/2026-09.md has the band balance before and after.
     { "lead_level", "Lead Level", "dB", -24.0f, 12.0f, -6.0f, Curve::Linear },
     { "counter_mute",  "Counter Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     // 21.09.2026: measured at -3 dB the counter-lead sounded 11.6 dB under the lead it answers
@@ -693,7 +694,7 @@ const ParamDesc kMixParams[mix::Count] = {
     // the percussion and the acid -- which is where a phrase has to sit to be a voice and not a texture.
     // Measured after: effects -8.5 dB (level with the percussion's -9.3), voices -8.4 dB. The master's
     // compressor and limiter give back about two thirds of a dB per dB on the strip, which is why the
-    // strips move by 3 and 7 dB for 3.0 and 3.9 dB in the mix. docs/PLAN.md has the rest.
+    // strips move by 3 and 7 dB for 3.0 and 3.9 dB in the mix. docs/rounds/2026-09.md has the rest.
     { "sfx_level",  "SFX Level",  "dB", -24.0f, 12.0f, 3.0f, Curve::Linear },
     { "perc_room",  "Perc Room",  "",     0.0f,  1.0f, 0.12f, Curve::Linear },
     { "perc_hall",  "Perc Hall",  "",     0.0f,  1.0f, 0.0f, Curve::Linear },
@@ -706,7 +707,7 @@ const ParamDesc kMixParams[mix::Count] = {
     // gehoert". They were not missing -- measured over 128 bars of seed 7, the bed sounds in 72 of
     // 211 seconds (a difference render against mix.texture_mute) -- they were 25.5 dB under the mix
     // at the median and 39 dB under full scale, which in a psytrance mix is not a quiet layer but
-    // no layer at all. The placement was tested (Form.cpp, placePsychedelia; the self test checks
+    // no layer at all. The placement was tested (FormSfx.cpp, placePsychedelia; the self test checks
     // the bed never lands in a drop or a buildup); the *audibility* was not, which is the gap this
     // number and testBedAudible close together. +9 dB puts the median at about -16 dB under the
     // mix -- still a bed, under the voices, but there.
@@ -786,13 +787,6 @@ const ModuleSpec kModules[static_cast<int>(Module::Count)] = {
 };
 
 bool isDiscrete(Curve c) { return c == Curve::Int || c == Curve::Choice || c == Curve::Toggle; }
-
-std::string_view trim(std::string_view s)
-{
-    while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\r')) s.remove_prefix(1);
-    while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r')) s.remove_suffix(1);
-    return s;
-}
 
 } // namespace
 
@@ -938,14 +932,14 @@ bool ParamStore::parseText(std::string_view text, std::string* error)
 
     bool ok = true;
     for (const std::string& item : items) {
-        const std::string_view tok = trim(item);
+        const std::string_view tok = trimView(item);
         const size_t eq = tok.find('=');
         if (eq == std::string_view::npos) {
             if (error && ok) *error = "missing '=' in \"" + std::string(tok) + "\"";
             ok = false;
             continue;
         }
-        const std::string_view k = trim(tok.substr(0, eq)), v = trim(tok.substr(eq + 1));
+        const std::string_view k = trimView(tok.substr(0, eq)), v = trimView(tok.substr(eq + 1));
         const int id = find(k);
         if (id < 0) {
             if (error && ok) *error = "unknown parameter \"" + std::string(k) + "\"";

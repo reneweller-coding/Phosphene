@@ -4,7 +4,7 @@
  *
  * A salt is XOR-ed into a seed so that one decision draws from a stream of its own: then a new draw can be
  * added without moving any older one, which is how every round since Phase 5 has kept the music of the
- * rounds before it ("its own stream, so no older draw moves"). Until this round the salts lay in four files,
+ * rounds before it ("its own stream, so no older draw moves"). Until 22.09.2026 the salts lay in four files,
  * and three names existed twice with different values -- kSaltPhrase (the bass figures, the percussion
  * phrase), kSaltMode (a section's borrowed mode, the material of that mode) and kSaltVoice (the voice
  * recipes, the voices' placement). Copying one of them into another file would have looked right and drawn
@@ -46,7 +46,7 @@ constexpr uint64_t kSaltBassLine   = 0x424153534C4E0013ull;   ///< Salt of the l
 constexpr uint64_t kSaltBassRhythm = 0x424153535248546Dull;   ///< Salt of the drawn bass rhythm: its own, for the same reason.
 } // namespace composer
 
-/** @brief Salts of the form, its sections and its effects (Form.cpp). */
+/** @brief Salts of the form, its sections and its effects (Form.cpp, FormSfx.cpp). */
 namespace form {
 constexpr uint64_t kSaltForm     = 0x464F524D00000001ull;
 constexpr uint64_t kSaltKickRoll = 0x4B49434B524F4C0Eull;   ///< the kick's roll before the pre-drop break (23.09.2026, round "Set-Kurve")

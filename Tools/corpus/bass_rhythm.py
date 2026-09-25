@@ -1,6 +1,6 @@
 """The bass **rhythm** of Phosphene: measured first, then turned into a corpus table.
 
-The pitch round of 16.09.2026 (docs/PLAN.md, "Phase 8 (Bass)") made the bass a learned role and
+The pitch round of 16.09.2026 (docs/rounds/2026-09.md, "Phase 8 (Bass)") made the bass a learned role and
 learned only its *pitch*. Its onset pattern stayed the five hard-wired families of
 ``Core/include/phos/Patterns.h``, and the same round measured what that costs: of the held-out
 corpus bars, **61.5 % cannot be produced at all**, and a learned onset model is worth about
@@ -262,7 +262,7 @@ def emit_lines(root="M:/Midi", seed=12345, packs=None):
         "// ---------------------------------------------------------------------------- bass rhythm",
         "// The bass onset model of 16.09.2026 (Tools/corpus/bass_rhythm.py). Two count tables and one",
         "// mixture weight, fitted on the TRAINING split of the bass corpus alone -- so the held-out",
-        "// numbers in docs/PLAN.md describe the table that is in this binary, not a cousin of it -- and",
+        "// numbers in docs/rounds/2026-09.md describe the table that is in this binary, not a cousin of it -- and",
         "// only over bars with no onset on a kick step (Corpus.h, BassRhythm).",
         "namespace {",
         f"const CorpusBassBar k_bass_bars[] = {{ {pat or '{0,0}'} }};",

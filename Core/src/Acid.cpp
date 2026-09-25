@@ -20,7 +20,7 @@ constexpr float kSweepOctaves = 2.0f;        ///< sweep depth at full accent, re
 /**
  * @brief Input gain of the drive stage at Drive = 1, in dB (18.09.2026, round "mix-foundation").
  *
- * Until this round the drive ran 1 + 5 d into the tanh (at most 15.6 dB) and 1 / (1 + 1.5 d) out.
+ * Until 18.09.2026 the drive ran 1 + 5 d into the tanh (at most 15.6 dB) and 1 / (1 + 1.5 d) out.
  * Measured on the listening seed, four bars of the first drop, acid alone and dry: crest 25.6 dB at
  * drive 0, 22.2 at the default 0.45 and 19.4 at 1, and the band 3 .. 8 kHz moved by 0.7 dB between
  * 0.45 and 1. The body of a line with a resonant diode ladder sits 20 dB and more under the ladder's
@@ -33,6 +33,7 @@ constexpr float kSweepOctaves = 2.0f;        ///< sweep depth at full accent, re
  */
 constexpr float kDriveMaxDb = 30.0f;
 
+/** @brief The half-band decimator of the acid's 2x oversampling (96 dB stop band, 0.1 transition), designed once. */
 const HalfbandDesign& acidHalfband()
 {
     static const HalfbandDesign d = designHalfband(96.0, 0.1);

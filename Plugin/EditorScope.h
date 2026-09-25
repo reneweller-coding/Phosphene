@@ -28,6 +28,7 @@ namespace phosui {
 class SynthScope final : public juce::Component, private juce::Timer {
 public:
     enum class Kind { Kick, Bass };
+    /** @brief A scope of the kick or the bass of @p proc. */
     SynthScope(PhospheneProcessor& proc, Kind kind);
     ~SynthScope() override;
 
@@ -41,18 +42,19 @@ public:
 
 private:
     void timerCallback() override { if (isShowing()) refresh(); }
+    /** @brief Renders one hit or note with the synth values @p v, the key and the tempo, and derives the curves. */
     void render(const std::vector<float>& v, int key, double bpm);
 
-    PhospheneProcessor& proc_;
-    Kind kind_;
+    PhospheneProcessor& proc_;   ///< the processor whose values it reads
+    Kind kind_;   ///< kick or bass
     std::vector<float> seen_;          ///< the values (and key, tempo) the picture was made from
     std::vector<float> wave_;          ///< the rendered sound
     std::vector<float> curveHz_;       ///< pitch (kick) or cutoff (bass) per display column's time
     std::vector<float> spectrumDb_;    ///< per log-frequency column
-    double sr_ = 48000.0, seconds_ = 0.6;
-    float peak_ = 0.0f;
-    double startHz_ = 0.0, landHz_ = 0.0, lengthMs_ = 0.0;
-    int note_ = -1;
+    double seconds_ = 0.6;   ///< the length rendered
+    float peak_ = 0.0f;   ///< its peak, linear
+    double startHz_ = 0.0, landHz_ = 0.0, lengthMs_ = 0.0;   ///< where the curve starts and lands, the length to -60 dB
+    int note_ = -1;   ///< the bass note, MIDI (-1 for the kick)
 };
 
 } // namespace phosui

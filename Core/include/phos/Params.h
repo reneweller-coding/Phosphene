@@ -64,7 +64,7 @@ constexpr int kPercLanes = 12;   ///< instances of the percussion lane module
  * So the three new instances are *not* appended: the leads (lead, counter-lead), the rhythmic chord
  * voices (arp, stab) and the carpets (pad, drone) stand side by side, and every table that follows
  * this order -- the parts (Score.h), the mix strips, the MIDI tracks, the plugin's pages -- follows it
- * too. What this does to a state saved before that date is written down in docs/PLAN.md (19.09.2026,
+ * too. What this does to a state saved before that date is written down in docs/rounds/2026-09.md (19.09.2026,
  * "Stimmen"): every stored text key ("lead.cutoff", "mix.pad_level") still names the same knob, so
  * such a state loads the old voices unchanged and the new ones at their defaults.
  *
@@ -97,11 +97,11 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              // (Corpus.h, BassRhythm). Pattern is the default and reproduces every note bit for bit.
              BassRhythm,
              // 19.09.2026, round "voices": how often a track has each of the three new voices, and the
-             // density of the voices (speech, chants) and of the shamanic bed (Form.cpp, placePsychedelia).
+             // density of the voices (speech, chants) and of the shamanic bed (FormSfx.cpp, placePsychedelia).
              // Appended: the compose block is not part of the reordering, which concerns the voices only.
              CounterAmount, StabAmount, DroneAmount, VoiceDensity, BedDensity,
              // 19.09.2026, round "polish": the presence match -- each track's lines (lead, counter, arp, stab)
-             // brought to a band around the reference median's presence (Composer.cpp, matchPresence).
+             // brought to a band around the reference median's presence (ComposerLevels.cpp, matchPresence).
              // 22.09.2026: the styles walk through the night instead of one style for all of it
              // (Composer.cpp, walkAt). On by default; off, every track is compose.style as before.
              StyleMix,
@@ -113,7 +113,7 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              // 23.09.2026, round "Counter": how the counter-lead answers (Form.h, CounterMode); "Auto (Style)" first.
              CounterMode,
              // 23.09.2026, round "Hoerbarkeit": the quiet lines lifted to a share of the lead's partial loudness
-             // (Composer.cpp, matchAudibility). Appended, in the same place in the table.
+             // (ComposerLevels.cpp, matchAudibility). Appended, in the same place in the table.
              AudibilityMatch, Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
@@ -160,8 +160,7 @@ enum : int { Wave, Cutoff, Resonance, EnvAmount, Decay, Accent, SlideTime, AmpDe
              Disperse, DisperseFreq,
              // Appended 20.09.2026 (round "reverb"): routes hall_send into the gated hall (Reverb.h,
              // Engine.cpp) instead of the plain one -- a big hall that ducks while this voice plays and
-             // is cut hard on the absolute bar line. Off by default: every render before this round is
-             // untouched.
+             // is cut hard on the absolute bar line. Off by default, so older sets render unchanged.
              HallGate, Count };
 }
 /** @brief Parameters of a polyphonic engine (module Poly, the six instances of PolyInstance). */
@@ -184,7 +183,7 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
              /** @name The voice's own modulation insert (Engine.h; PsyFx.h supplies the two effects)
               *  The user's effect list asks for "Kammfilter / Flanger / Phaser als Klangfarbe auf Lead,
               *  Counter und Arp -- nicht nur auf dem FX-Bus": the alien, hollow character, tempo-synced.
-              *  Until this round the two lived on the effects strip alone.
+              *  On the effects strip alone they would colour every voice at once.
               *  @{ */
              Mod,          ///< PolyMod: off, flanger, phaser or a static comb
              ModBeats,     ///< the sweep's period in beats (tempo-synchronised, so it never drifts)
@@ -194,15 +193,14 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
              /** @} */
              // Appended 20.09.2026 (round "reverb"): routes hall_send into the gated hall (Reverb.h,
              // Engine.cpp) instead of the plain one -- a big hall that ducks while this voice plays and
-             // is cut hard on the absolute bar line. Off by default: every render before this round is
-             // untouched.
+             // is cut hard on the absolute bar line. Off by default, so older sets render unchanged.
              HallGate,
              /** @name The second oscillator (22.09.2026, round "Klangfarben")
               *  The user: "Eventuell sollte man bei Pads auch mindestens zwei Oszillatoren nehmen, um
               *  mehr Varianz zuzulassen." It costs no render pass: a voice already spreads over seven
               *  unison slots, each with its own frequency and its own source weights (Poly.h), so the
               *  second oscillator is the outermost pair of those slots given another source and another
-              *  pitch. Off by default, so every render before this round is untouched.
+              *  pitch. Off by default, so older sets render unchanged.
               *  @{ */
              Osc2,        ///< PolyOsc2: off, or one of the four oscillators, on the outer unison pair
              Osc2Mix,     ///< 0 .. 1: the share of the voice's power the second oscillator carries
@@ -225,7 +223,7 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
 }
 /** @brief Values of poly.mod: the voice's modulation insert (20.09.2026, round "dialogue"). */
 enum class PolyMod : int {
-    Off = 0,   ///< the voice as it was before this round, sample for sample
+    Off = 0,   ///< no insert: the plain voice, sample for sample
     Flanger,   ///< a comb filter whose teeth slide (PsyFx.h, Flanger)
     Phaser,    ///< notches that slide (PsyFx.h, Phaser)
     Comb,      ///< the flanger with its sweep stopped: a *static* comb, the hollow metallic colour
@@ -240,8 +238,8 @@ enum : int { Level, Noise, Resonance, Brightness, ImpactDecay, Vowel, SwellDecay
              SubLevel,     ///< dB: the sub drop against sfx.level (Sfx.h; it plays mono and ducks under the kick)
              SubDuck,      ///< 0..1: how deep the kick ducks the sub drop
              // 20.09.2026, round "wandering-fx" (Sfx.h): a directed pan trajectory plus a reverb-send
-             // trajectory over an event's own length, drawn from its own seed. Off by default, so every
-             // render before this round is untouched.
+             // trajectory over an event's own length, drawn from its own seed. Off by default, so older
+             // sets render unchanged.
              Wander,       ///< toggle: an event's pan sweeps from one side to the other and its content
                            ///< crosses from dry to the hall's send over its length, instead of the
                            ///< oscillating auto-pan and the constant hall_send fraction
@@ -249,7 +247,7 @@ enum : int { Level, Noise, Resonance, Brightness, ImpactDecay, Vowel, SwellDecay
              // 24.09.2026, the user: "Im SFX-Fenster ist nach wie vor keine Auswahl fuer das Preset". One per
              // family of the effect bank (Sfx.h, SfxPreset): 0 = Auto, the composer's draw per event as before;
              // n = every event of that family plays bank preset n (Sfx::trigger). Appended; Auto everywhere is
-             // the effects strip of before, sample for sample.
+             // the composer's own draw, sample for sample.
              PresetRiser, PresetDownlifter, PresetImpact, PresetSweep, PresetFormantShot, PresetReverseSwell,
              PresetZap, PresetSquelch, PresetBubble, PresetReverseCrash, PresetAtmosphere,
              Count };
@@ -365,6 +363,7 @@ extern const char* const kCounterModeNames[];   ///< names of compose.counter_mo
  */
 class ParamStore {
 public:
+    /** @brief Builds the registry from the module tables, every value at its default. */
     ParamStore();
     ParamStore(const ParamStore&) = delete;
     ParamStore& operator=(const ParamStore&) = delete;
@@ -436,17 +435,18 @@ public:
     std::string format(int id) const;
 
 private:
+    /** @brief One registered parameter: its descriptor, key, module and instance. */
     struct Entry {
-        const ParamDesc* desc;
-        std::string key;
-        Module module;
-        int instance;
+        const ParamDesc* desc;   ///< the descriptor in the module table
+        std::string key;   ///< "module.name"
+        Module module;   ///< which module
+        int instance;   ///< which instance of it
     };
-    std::vector<Entry> entries_;
-    std::unique_ptr<std::atomic<float>[]> values_;
-    std::vector<float> defaults_;
-    std::unordered_map<std::string, int> index_;
-    static constexpr int kMaxInstances = 16;
+    std::vector<Entry> entries_;   ///< every parameter, by global id
+    std::unique_ptr<std::atomic<float>[]> values_;   ///< the values, lock-free for the audio thread
+    std::vector<float> defaults_;   ///< the defaults, by global id
+    std::unordered_map<std::string, int> index_;   ///< key -> global id
+    static constexpr int kMaxInstances = 16;   ///< instances a module may have (base() table)
     int bases_[static_cast<int>(Module::Count)][kMaxInstances] = {};
 };
 

@@ -41,7 +41,7 @@
  *  - **Sub drop**: a sine falling from about 110 Hz to 32 Hz. It is the one effect allowed under
  *    140 Hz, so it skips the low cut, leaves on its own mono output (processSplit) and the engine ducks
  *    it under every kick with a depth of its own (sfx.sub_duck): it never sits on a kick transient.
- *    The form places it only where kick and bass are silent anyway (Form.cpp, makeFormSfx).
+ *    The form places it only where kick and bass are silent anyway (FormSfx.cpp, makeFormSfx).
  *  - **Reverse crash**: a metallic cymbal wash -- high-passed noise ring-modulated by two inharmonic
  *    square waves -- under a rising exponential envelope that ends on the target beat.
  *  - Formant voice, alien chatter, spoken word, voice chop: the Vocal part (Vocal.h).
@@ -50,7 +50,7 @@
  * **20.09.2026, round "wandering-fx": effects that move through the room.** The user's rule of
  * 19.09.2026: a psychedelic effect event should be able to start far to one side, morph across the
  * stereo field, and dissolve into a long reverb tail while kick and bass stay dry and mono. `sfx.wander`
- * (off by default, so no render before this round changes) replaces, for every voice but the sub drop
+ * (off by default, so older sets render unchanged) replaces, for every voice but the sub drop
  * (which stays centred under the kick by design), two things at once:
  *  - the oscillating auto-pan (`panPh`/`panRate`) with a directed trajectory: `pan(x) = panFrom +
  *    (panTo - panFrom) * x^panCurve`, `x` the event's own elapsed fraction (0 at onset, 1 at its target
@@ -64,7 +64,7 @@
  *    into `(1 - wetFrac)` for the ordinary dry buffer and `wetFrac` for a second, `wet` buffer Engine.cpp
  *    adds directly into the plain hall's send (not `Engine::hallGate_`: that hall's self-duck pulls its
  *    return down while a send is loud and its bar-line cut would truncate a tail that is meant to run on
- *    -- both fight a trajectory built to grow loud towards a long tail; docs/PLAN.md has the reasoning).
+ *    -- both fight a trajectory built to grow loud towards a long tail; docs/rounds/2026-09.md has the reasoning).
  *    The dry buffer's own share of `sfx.hall_send`/`sfx.room_send` shrinks together with it, so the two
  *    paths are complementary rather than double-counted.
  */
@@ -96,7 +96,7 @@ extern const char* const kSfxTypeNames[kNumSfxTypes];             ///< display n
  * Twelve numbers that steer a type's synthesis (Sfx.cpp, voiceSample): the user heard the effects repeat
  * -- "die kurzen Zips und Zaps wiederholen sich viel zu oft" -- because every type was one fixed sound.
  * The bank holds 2048 presets in eleven families; the composer picks one per event and never the same
- * twice in a track (Form.cpp, makeFormSfx), and the pick rides in the event's lane (SfxEvent::variant).
+ * twice in a track (FormSfx.cpp, makeFormSfx), and the pick rides in the event's lane (SfxEvent::variant).
  * A lane of 0 plays the type as it always did.
  */
 struct SfxPreset {
@@ -169,7 +169,7 @@ constexpr Part sfxTypePart(SfxType t)
  * out (riser, sweep, reverse swell, reverse crash, downlifter, impact, sub drop) -- so the rule reads
  * exactly as "an event of the effects strip". The voices and the shamanic bed do not count: they are
  * another layer with another job, and a groove carried by chant alone would otherwise satisfy a rule
- * that is about the candy. Form.cpp's density floor keeps it.
+ * that is about the candy. FormSfx.cpp's density floor keeps it.
  */
 constexpr bool isDensityEvent(SfxType t) { return sfxTypePart(t) == Part::Sfx; }
 
@@ -230,21 +230,22 @@ public:
 
 private:
     static constexpr int kBubbles = 8;   ///< bubbles a Bubble event can hold
+    /** @brief One sounding effect event. */
     struct Voice {
-        SfxType type = SfxType::Riser;
-        bool on = false;
-        long long pos = 0, length = 1;
-        double late = 0.0;
-        float velocity = 1.0f;
+        SfxType type = SfxType::Riser;   ///< which effect
+        bool on = false;   ///< sounding
+        long long pos = 0, length = 1;   ///< samples played and the event's length
+        double late = 0.0;   ///< sub-sample onset
+        float velocity = 1.0f;   ///< 0..1
         float typeGain = 1.0f;   ///< the type's level against sfx.level (Sfx.cpp, kTypeGainDb)
-        Rng rng;
-        VaOscillator saw1, saw2;
-        Svf bp, lp, formant[3], hpL1, hpL2, hpR1, hpR2;
-        double sinePh = 0.0, panPh = 0.0, chordPh[3] = {};
+        Rng rng;   ///< the event's own random stream
+        VaOscillator saw1, saw2;   ///< the tonal layer's oscillators
+        Svf bp, lp, formant[3], hpL1, hpL2, hpR1, hpR2;   ///< the effect's filters and the stereo high pass
+        double sinePh = 0.0, panPh = 0.0, chordPh[3] = {};   ///< sine, auto-pan and chord phases
         /// Bubble burst: onset (s), start frequency (Hz), decay time constant (s), rise per second, phase.
         double bubT[kBubbles] = {}, bubF[kBubbles] = {}, bubTau[kBubbles] = {}, bubRise[kBubbles] = {}, bubPh[kBubbles] = {};
-        int bubbles = 0;
-        uint64_t age = 0;
+        int bubbles = 0;   ///< bubbles in the burst
+        uint64_t age = 0;   ///< trigger order, for voice stealing
         /// @name The wandering trajectory (20.09.2026, round "wandering-fx"), drawn once at trigger()
         /// from this voice's own seed stream; unused while `wander` is false (the SubDrop type and every
         /// voice while sfx.wander is off).
@@ -257,14 +258,15 @@ private:
         const SfxPreset* preset = nullptr;    ///< the bank preset this event plays, or null (23.09.2026)
         double lfoPh = 0.0;                    ///< the atmosphere's slow motion
     };
+    /** @brief One sample of voice @p v; its pan and its share for the reverb go to @p pan and @p wetFrac. */
     float voiceSample(Voice& v, float& pan, float& wetFrac);
 
-    double sr_ = 48000.0;
-    Voice voice_[kVoices];
-    uint64_t counter_ = 0;
-    int keyRoot_ = 6;
-    float level_ = 0.5f, noise_ = 0.6f, resonance_ = 0.5f, brightness_ = 0.5f, impactDecay_ = 1.2f, vowel_ = 0.0f, swellDecay_ = 1.5f, width_ = 0.7f;
-    float subLevel_ = 0.5f;
+    double sr_ = 48000.0;   ///< sample rate
+    Voice voice_[kVoices];   ///< the sounding events
+    uint64_t counter_ = 0;   ///< triggers so far (the voices' age)
+    int keyRoot_ = 6;   ///< the key's pitch class, for the tonal layers
+    float level_ = 0.5f, noise_ = 0.6f, resonance_ = 0.5f, brightness_ = 0.5f, impactDecay_ = 1.2f, vowel_ = 0.0f, swellDecay_ = 1.5f, width_ = 0.7f;   ///< the sfx parameters as update() read them (levels linear, decays in seconds)
+    float subLevel_ = 0.5f;   ///< sfx.sub_level, linear
     bool wander_ = false;          ///< sfx.wander
     float wanderSend_ = 0.85f;     ///< sfx.wander_send
     int scale_ = -1;                           ///< setScale()

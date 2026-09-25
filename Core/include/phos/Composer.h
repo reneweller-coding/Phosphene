@@ -133,7 +133,7 @@ extern const char* const kBassMacroNames[kNumBassMacros];   ///< display names
 /**
  * @brief The acid voicings a track's acid sound is interpolated between (19.09.2026).
  *
- * The three candidates the user heard on 18.09.2026 (docs/PLAN.md, "Fundament und Mix"): a clean,
+ * The three candidates the user heard on 18.09.2026 (docs/rounds/2026-09.md, "Fundament und Mix"): a clean,
  * round 303 ("clean"), the 303 into a distortion pedal that became the default ("driven"), and the
  * half-pulse, dispersed Goa acid ("liquid"). A track's acid is a point in the triangle they span --
  * barycentric weights, one per voicing, summing to 1 -- so that tracks differ by more than three
@@ -146,11 +146,11 @@ extern const char* const kAcidVoicingNames[kNumAcidVoicings];   ///< "clean", "d
  * @brief The sound of one polyphonic voice in one track (19.09.2026, round "voices").
  *
  * The user: "Auch die anderen Synthesizer können gerne mehr verschiedene Klangfarben haben, es sollen
- * ja nicht alle Stücke gleich klingen." Before this round a track changed the pad's table position and
+ * ja nicht alle Stücke gleich klingen." Without recipes a track changed the pad's table position and
  * gate pattern and nothing else of it, the lead's detune and cutoff, the arp's filter decay and detune
  * -- measured on the listening seed, every pad of the set sounded the same. A recipe is drawn per voice
  * and per track from the set seed and the style: three discrete choices -- the oscillator, the wavetable
- * (from the voice's own palette of the built-in and the library tables, Composer.cpp, kVoicePalette)
+ * (from the voice's own palette of the built-in and the library tables, ComposerInternal.h, kVoicePalette)
  * and the filter's response -- and five perceptual directions in the knobs' normalised domain, the
  * attack, spectral-centroid and spectral-flux axes timbre research keeps finding (Grey 1977; McAdams et
  * al. 1995): brightness, softness, thickness, space and motion. Like the kick and bass recipes they are
@@ -158,6 +158,7 @@ extern const char* const kAcidVoicingNames[kNumAcidVoicings];   ///< "clean", "d
  */
 constexpr int kNumVoiceMacros = 5;   ///< brightness, softness, thickness, space, motion
 extern const char* const kVoiceMacroNames[kNumVoiceMacros];   ///< display names
+/** @brief One polyphonic voice's sound for one track: discrete choices and the five perceptual directions (see above). */
 struct VoiceRecipe {
     int   osc = -1;                    ///< override of poly.osc, -1 = the knob
     int   table = -1;                  ///< override of poly.table, -1 = the knob
@@ -245,12 +246,12 @@ struct TrackPlan {
     bool   correctionsPending = false;
     double mixLoudness = 0.0;       ///< probe loudness of the whole mix after the master, before the loudness offset
     float  masterGainDb = 0.0f;     ///< the offset that brings the mix to master.target_lufs (Auto Gain)
-    /** @name The presence match (19.09.2026, round "polish"; Composer.cpp, matchPresence)
+    /** @name The presence match (19.09.2026, round "polish"; ComposerLevels.cpp, matchPresence)
      *  @{ */
     double presenceDb = 0.0;        ///< the drops' presence estimate before the match, dB against the reference median
     double presenceAfterDb = 0.0;   ///< the same estimate with presenceGainDb on the lines (the match's own prediction)
     float  presenceGainDb = 0.0f;   ///< the gain the match puts on the lines (lead, counter, arp, stab), dB
-    /** @name The audibility match (23.09.2026; Composer.cpp, matchAudibility)
+    /** @name The audibility match (23.09.2026; ComposerLevels.cpp, matchAudibility)
      *  @{ */
     double audibleInMix[kMelodyParts] = {};    ///< each part's partial loudness in the drops' mix (Audibility.h), before the lift
     float  audibilityLiftDb[kMelodyParts] = {}; ///< what the match added to partGainDb
@@ -479,10 +480,11 @@ public:
         const double* osc2;       ///< weight per PolyOsc2 (index 0 = none)
         const double* interval;   ///< weight per PolyOsc2Interval
     };
+    /** @brief The palette a voice's recipes are drawn from (ComposerInternal.h, kVoicePalette), for the presets and the tests. */
     static VoicePaletteView voicePalette(PolyInstance voice);
 
     /**
-     * @brief How many real wavetable candidates a voice's palette offers (Composer.cpp, kVoicePalette).
+     * @brief How many real wavetable candidates a voice's palette offers (ComposerInternal.h, kVoicePalette).
      *
      * Added 20.09.2026 (round "wavetable-selection") so the self test can check the widened candidate
      * counts directly, against the exact bound the recipe draw itself uses (a shared helper, not a
@@ -496,15 +498,20 @@ public:
     static int voicePaletteTableCount(PolyInstance voice);
 
 private:
+    /** @brief Drops the cached plans when a parameter that shapes them has changed since they were made. */
     void validate(const ParamStore& params) const;
+    /** @brief Plans track @p index from its walk, its seeds and the knobs: key, tempo, form, melody, recipes and levels. */
     TrackPlan makeTrack(const ParamStore& params, int index) const;
     /** @brief Draws the track's two learned bass phrases, or leaves the plan on the pattern families. */
     void makeBassPhrases(const ParamStore& params, TrackPlan& plan) const;
     /** @brief Draws the track's two bass *rhythm* phrases, or leaves the plan on the pattern families. */
     void makeBassRhythm(const ParamStore& params, TrackPlan& plan) const;
+    /** @brief The style, key and tempo walk of the set up to track @p index (made and cached on demand). */
     const TrackWalk& walkAt(const ParamStore& params, int index) const;
+    /** @brief The control events that set a track's sound at its start: recipes, voice levels, track gain and part levels. */
     void trackStartControls(const ParamStore& params, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out,
                             ControlScope scope = ControlScope::All) const;
+    /** @brief The bass's slow filter arcs within a track, at @p beat (ramped, or set at once). */
     void arcControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, bool ramp, std::vector<ControlEvent>& out) const;
     static constexpr int kProbeLines = -3;   ///< probeLoudness: lead, counter, arp and stab in the drops
     static constexpr int kProbeRest = -4;    ///< probeLoudness: everything but the lines in the drops
@@ -577,14 +584,14 @@ private:
     /** @brief The seed of one percussion lane of a track. */
     uint64_t laneSeedOf(int track, int lane) const;
 
-    uint64_t seed_;
+    uint64_t seed_;   ///< the set seed
     bool deferMaster_ = false;      ///< setDeferMasterGain: the plugin measures Auto Gain after the start
     mutable uint64_t planGeneration_ = 0;         ///< planGeneration()
     const std::atomic<bool>* abort_ = nullptr;    ///< setAbortFlag()
-    mutable std::vector<TrackPlan> plans_;
+    mutable std::vector<TrackPlan> plans_;   ///< the tracks planned so far, made on demand
     int soloTrack_ = -1;   ///< setSoloTrack: the one track composeBars sends, -1 = the set
-    mutable std::vector<TrackWalk> walk_;
-    mutable std::vector<float> planKnobs_;
+    mutable std::vector<TrackWalk> walk_;   ///< the style, key and tempo walk, made on demand
+    mutable std::vector<float> planKnobs_;   ///< the knobs the plans were made with (validate)
     mutable bool bassModelReported_ = false;           ///< the missing-weight-file line is printed once
     std::map<int, uint8_t> locked_[kNumLockUnits];     ///< unit index -> locked
     std::map<int, uint32_t> variation_[kNumLockUnits]; ///< unit index -> reroll counter
@@ -613,12 +620,12 @@ public:
     int nextBar() const { return nextBar_; }
 
 private:
-    Engine& engine_;
-    const Composer& composer_;
-    int nextBar_ = 0;
-    std::vector<NoteEvent> notes_;
-    std::vector<ControlEvent> controls_;
-    size_t notePos_ = 0, controlPos_ = 0;
+    Engine& engine_;   ///< where the events go
+    const Composer& composer_;   ///< where they come from
+    int nextBar_ = 0;   ///< the next bar to compose
+    std::vector<NoteEvent> notes_;   ///< the last composed bar's notes
+    std::vector<ControlEvent> controls_;   ///< and its control events
+    size_t notePos_ = 0, controlPos_ = 0;   ///< how many of them are in the engine's rings
 };
 
 } // namespace phos

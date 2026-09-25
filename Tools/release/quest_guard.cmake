@@ -58,7 +58,7 @@ set(_skip 77)   # ctest's SKIP_RETURN_CODE, see Tests/CMakeLists.txt
 # ---------------------------------------------------------------- find the NDK
 # In order: what the caller passed, what the usual environment variables say, then the layout this
 # machine has (C:/Android-Buildtools/sdk/ndk/<version>, newest first -- the toolchain note in
-# docs/PLAN.md names r27 at 27.2.12479018).
+# docs/rounds/2026-09.md names r27 at 27.2.12479018).
 if(NOT DEFINED PHOS_ANDROID_NDK OR PHOS_ANDROID_NDK STREQUAL "")
     foreach(_var ANDROID_NDK_HOME ANDROID_NDK_ROOT ANDROID_NDK)
         if(DEFINED ENV{${_var}} AND EXISTS "$ENV{${_var}}/build/cmake/android.toolchain.cmake")

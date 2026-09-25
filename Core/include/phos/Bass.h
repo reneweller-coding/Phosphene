@@ -42,10 +42,10 @@
  *
  * **Bite (19.09.2026).** A psytrance bass is two layers: the clean sub and a mid-bass "bite" -- the
  * same line as a saturated saw, low-passed a few hundred hertz up -- that makes it audible on small
- * speakers and gives the roll its attack. Before this round the voice was almost pure sub: in the first
+ * speakers and gives the roll its attack. Without it the voice is almost pure sub: in the first
  * drop of the listening seed its power in 300 Hz .. 2 kHz lay 21 dB under its power below 60 Hz, and
  * `Tools/ref_bass.py`, which measures the reference recordings between their kicks where kick and bass
- * play alone, reads the bite band there roughly 10 dB under the fundamental region (docs/PLAN.md,
+ * play alone, reads the bite band there roughly 10 dB under the fundamental region (docs/rounds/2026-09.md,
  * 19.09.2026). The bite takes the oscillator's own samples, so it is phase-coherent with the saw path
  * and the sub by construction:
  * @code
@@ -115,37 +115,38 @@ public:
     double knobPhase() const { return static_cast<double>(startPhase_) - 0.5; }
 
 private:
+    /** @brief Sets what depends on the note's pitch: the release floor, the envelope times and the Split high pass. */
     void applyNoteSettings();
 
-    double sr_ = 48000.0;
+    double sr_ = 48000.0;   ///< output sample rate
     int    os_ = 2;                 ///< oscillator/ladder rate as a multiple of sr_ (1 or 2)
     double osRate_ = 96000.0;       ///< sr_ * os_, the rate the voice runs at
-    VaOscillator        osc_;
-    LadderT<float>      ladder_;
-    HalfbandDown<float> down_;
+    VaOscillator        osc_;   ///< saw-to-pulse oscillator
+    LadderT<float>      ladder_;   ///< the four-pole ladder
+    HalfbandDown<float> down_;   ///< back from the oversampled rate
     Svf                 hp1_, hp2_, hp3_, hp4_;   ///< the Split high pass, Linkwitz-Riley 8th order
     Svf                 bite1_, bite2_;     ///< the bite's 4-pole low pass (two Butterworth sections)
     Svf                 biteHp_;            ///< the bite's floor, a 2-pole high pass under the band
-    Envelope            amp_;
-    Ducker              ducker_;
+    Envelope            amp_;   ///< amplitude envelope
+    Ducker              ducker_;   ///< the sidechain duck under the kick
 
-    int    pitch_ = 30;
-    float  velocity_ = 1.0f;
-    int    gate_ = 0;
-    float  fenv_ = 0.0f;
-    double subPhase_ = 0.0;
+    int    pitch_ = 30;   ///< the note's MIDI pitch
+    float  velocity_ = 1.0f;   ///< 0..1
+    int    gate_ = 0;   ///< samples until the note is released
+    float  fenv_ = 0.0f;   ///< filter envelope
+    double subPhase_ = 0.0;   ///< the sub sine's phase, in cycles
 
     // Settings from update().
-    float  wave_ = 0.0f, pw_ = 0.5f, subLevel_ = 0.42f, splitRatio_ = 2.0f;
+    float  wave_ = 0.0f, pw_ = 0.5f, subLevel_ = 0.42f, splitRatio_ = 2.0f;   ///< waveform, pulse width, sub level, Split crossover as a multiple of f0
     float  octLevel_ = 0.0f;        ///< amplitude of the sub's octave (sin at 2 f0, same phase course)
-    int    subMode_ = 1;
-    bool   retrigger_ = true;
-    float  startPhase_ = 0.5f;
-    float  cutoff_ = 140.0f, k_ = 1.0f, envOct_ = 4.0f, keyTrack_ = 0.6f, velCut_ = 0.25f;
-    float  fDecay_ = 0.999f;
-    float  driveIn_ = 1.0f, driveOut_ = 1.0f;
-    float  attack_ = 0.0008f, decay_ = 0.18f, sustain_ = 0.55f, release_ = 0.01f, releaseUsed_ = 0.01f;
-    float  level_ = 0.5f;
+    int    subMode_ = 1;   ///< bass.sub_mode (SubMode)
+    bool   retrigger_ = true;   ///< bass.retrigger: every note restarts the envelopes
+    float  startPhase_ = 0.5f;   ///< bass.start_phase
+    float  cutoff_ = 140.0f, k_ = 1.0f, envOct_ = 4.0f, keyTrack_ = 0.6f, velCut_ = 0.25f;   ///< cutoff, ladder feedback, envelope depth (octaves), key tracking, velocity to cutoff
+    float  fDecay_ = 0.999f;   ///< the filter envelope's per-sample decay
+    float  driveIn_ = 1.0f, driveOut_ = 1.0f;   ///< drive into the ladder and the gain back out
+    float  attack_ = 0.0008f, decay_ = 0.18f, sustain_ = 0.55f, release_ = 0.01f, releaseUsed_ = 0.01f;   ///< the amplitude envelope (s), and the release used after its floor
+    float  level_ = 0.5f;   ///< bass.level, linear
     /** @name The bite layer (see the file comment)
      *  @{ */
     float  biteLevel_ = 0.0f;       ///< output gain of the layer (knob x kBiteScale)

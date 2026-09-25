@@ -76,6 +76,7 @@ public:
     void reset();
 
 private:
+    /** @brief Analyses the completed frame of every stem and adds it to the readings. */
     void frame();
     /** @brief Adds the band intensities of one channel's frame to @p out (half weight: two channels are averaged). */
     void bandIntensity(const std::vector<float>& buf, std::vector<double>& out, std::vector<std::complex<double>>& x) const;
@@ -83,21 +84,21 @@ private:
     bool excite(const std::vector<double>& in, std::vector<double>& out) const;
     /** @brief Loudness of excitation @p es alone and in the masker @p em (null: in quiet), unscaled. */
     void loudness(const std::vector<double>& es, const std::vector<double>* em, double& alone, double& inMix) const;
-    int stems_;
-    double sr_;
-    std::unique_ptr<Fft> fft_;
-    std::vector<double> window_;
+    int stems_;   ///< stems per add()
+    double sr_;   ///< their sample rate
+    std::unique_ptr<Fft> fft_;   ///< one frame's transform
+    std::vector<double> window_;   ///< the analysis window
     std::vector<int> bandOfBin_;                 ///< -1 for bins outside 50 Hz .. 15 kHz
     std::vector<double> binGain_;                ///< ear weighting and level reference per bin
     std::vector<double> spread_;                 ///< bands x bands, Bark distance of receiver above source
     std::vector<double> centre_;                 ///< centre frequency of each band, Hz
     std::vector<double> threshold_;              ///< threshold excitation per band
-    int bands_ = 0;
+    int bands_ = 0;   ///< critical bands in use
     double scale_ = 1.0;                         ///< makes a 1 kHz tone at 40 dB SPL one unit
     std::vector<std::vector<float>> bufL_, bufR_;   ///< the current frame of each stem
-    int fill_ = 0;
-    std::vector<double> sumAlone_, sumMix_;
-    std::vector<int> frames_;
+    int fill_ = 0;   ///< samples in the current frame
+    std::vector<double> sumAlone_, sumMix_;   ///< per stem: the loudness alone and the partial loudness in the mix, summed over frames
+    std::vector<int> frames_;   ///< per stem: the frames it sounded in
 };
 
 } // namespace phos

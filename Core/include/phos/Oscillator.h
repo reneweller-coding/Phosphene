@@ -85,15 +85,16 @@ public:
     }
 
 private:
+    /** @brief The naive waveform at phase @p t: the saw-to-pulse blend before the PolyBLEP correction. */
     float shapeAt(float t) const
     {
         const float saw = 2.0f * t - 1.0f;
         const float pulse = t < pw_ ? -1.0f : 1.0f;
         return saw + wave_ * (pulse - saw);
     }
-    float phase_ = 0.5f, dt_ = 0.001f, wave_ = 0.0f, pw_ = 0.5f;
-    float lastValue_ = 0.0f, pendingJump_ = 0.0f;
-    bool  hasJump_ = false;
+    float phase_ = 0.5f, dt_ = 0.001f, wave_ = 0.0f, pw_ = 0.5f;   ///< phase, step per sample, saw-to-pulse blend, pulse width
+    float lastValue_ = 0.0f, pendingJump_ = 0.0f;   ///< the last output and a discontinuity still to be corrected
+    bool  hasJump_ = false;   ///< pendingJump_ applies to the next sample
 };
 
 } // namespace phos

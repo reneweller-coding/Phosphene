@@ -25,7 +25,9 @@ namespace phosui {
 /** @brief One strip: name, knobs, mute, fader and meter of one part. */
 class MixerStrip final : public juce::Component {
 public:
-    /** @param levelKey the fader's parameter; @param muteKey the mute; @param knobKeys the knobs, top to bottom */
+    /** @param proc the processor whose parameters the strip edits; @param name the strip's caption;
+     *  @param colour its accent colour; @param levelKey the fader's parameter; @param muteKey the mute;
+     *  @param knobKeys the knobs, top to bottom */
     MixerStrip(PhospheneProcessor& proc, const juce::String& name, juce::Colour colour, const char* levelKey,
                const char* muteKey, const std::vector<std::pair<const char*, const char*>>& knobKeys);
 
@@ -43,25 +45,26 @@ public:
     void resized() override;
 
 private:
-    juce::String name_;
-    juce::Colour colour_;
-    std::unique_ptr<juce::Slider> fader_;
-    std::unique_ptr<juce::SliderParameterAttachment> faderLink_;
-    std::unique_ptr<juce::TextButton> mute_;
-    std::unique_ptr<juce::ButtonParameterAttachment> muteLink_;
-    std::vector<std::unique_ptr<juce::Slider>> knobs_;
-    std::vector<std::unique_ptr<juce::Label>> knobNames_;
-    std::vector<std::unique_ptr<juce::SliderParameterAttachment>> knobLinks_;
-    std::vector<int> params_;
-    std::vector<std::pair<juce::Component*, int>> controls_;
-    juce::Rectangle<int> meterArea_;
-    float rmsDb_ = -100.0f, holdDb_ = -100.0f, lastPeakDb_ = -100.0f;
-    double holdAge_ = 0.0;
+    juce::String name_;   ///< the part's name
+    juce::Colour colour_;   ///< its page's colour
+    std::unique_ptr<juce::Slider> fader_;   ///< the level fader
+    std::unique_ptr<juce::SliderParameterAttachment> faderLink_;   ///< its host link
+    std::unique_ptr<juce::TextButton> mute_;   ///< the mute
+    std::unique_ptr<juce::ButtonParameterAttachment> muteLink_;   ///< its host link
+    std::vector<std::unique_ptr<juce::Slider>> knobs_;   ///< pan, sends and duck
+    std::vector<std::unique_ptr<juce::Label>> knobNames_;   ///< their names
+    std::vector<std::unique_ptr<juce::SliderParameterAttachment>> knobLinks_;   ///< their host links
+    std::vector<int> params_;   ///< params()
+    std::vector<std::pair<juce::Component*, int>> controls_;   ///< controls()
+    juce::Rectangle<int> meterArea_;   ///< where the meter is drawn
+    float rmsDb_ = -100.0f, holdDb_ = -100.0f;   ///< the RMS bar and the held peak, dB
+    double holdAge_ = 0.0;   ///< seconds the peak has been held
 };
 
 /** @brief The console: one MixerStrip per part, in the parts' order, fed by a 30 Hz timer. */
 class MixerConsole final : public juce::Component, private juce::Timer {
 public:
+    /** @brief Builds a strip per part and starts the meter timer. */
     explicit MixerConsole(PhospheneProcessor& proc);
     ~MixerConsole() override;
 
@@ -79,9 +82,9 @@ public:
 private:
     /** @brief Takes the processor's readings and hands them to the strips. */
     void timerCallback() override;
-    PhospheneProcessor& proc_;
-    std::vector<std::unique_ptr<MixerStrip>> strips_;
-    double lastPoll_ = 0.0;
+    PhospheneProcessor& proc_;   ///< the processor whose meters it reads
+    std::vector<std::unique_ptr<MixerStrip>> strips_;   ///< one strip per part
+    double lastPoll_ = 0.0;   ///< when the meters were last read, seconds
 };
 
 } // namespace phosui

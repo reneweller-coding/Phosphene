@@ -19,7 +19,7 @@
  * bank of our own rather than the standard's table: seven points between every pair of samples (8x),
  * each from a Kaiser-windowed sinc of twenty-four taps.
  *
- * *Why these numbers, and why the previous ones were wrong* (measured 16.09.2026, docs/PLAN.md). This
+ * *Why these numbers, and why the previous ones were wrong* (measured 16.09.2026, docs/rounds/2026-09.md). This
  * is a fractional-delay filter bank, not an interpolating low-pass, and for a fractional-delay filter
  * evaluated at a single point only the **passband** deviation |H(f)| - 1 over 0 .. 0.5 fs is an error:
  * the input is already band-limited, so there is no image for a stopband to suppress (Laakso,
@@ -101,8 +101,8 @@ public:
     float reduction() const { return reduction_; }
 
 private:
-    double sr_ = 48000.0, aA_ = 0.99, aR_ = 0.999, y1_ = 0.0, yL_ = 0.0;
-    float T_ = -12.0f, R_ = 2.0f, W_ = 6.0f, reduction_ = 0.0f;
+    double sr_ = 48000.0, aA_ = 0.99, aR_ = 0.999, y1_ = 0.0, yL_ = 0.0;   ///< sample rate, attack and release coefficients, the detector's two states
+    float T_ = -12.0f, R_ = 2.0f, W_ = 6.0f, reduction_ = 0.0f;   ///< threshold (dB), ratio, knee width (dB), the last gain reduction (dB)
 };
 
 /** @brief 8x interpolation for true-peak estimates: seven phases of twenty-four taps each. */
@@ -156,8 +156,8 @@ public:
         return std::max(a, b);
     }
 private:
-    double h_[kPhases - 1][kTaps] = {};
-    double bound_ = 1.0;
+    double h_[kPhases - 1][kTaps] = {};   ///< the polyphase interpolation filters
+    double bound_ = 1.0;   ///< the largest absolute tap sum: how far an interpolated peak can exceed the samples
 };
 
 /** @brief Stereo lookahead true-peak limiter. */
@@ -177,29 +177,29 @@ public:
     float reduction() const { return reduction_; }
 
 private:
-    TruePeakInterpolator interp_;
-    double sr_ = 48000.0;
-    int window_ = 72;
-    float ceiling_ = 0.891f;
-    double release_ = 0.999;
+    TruePeakInterpolator interp_;   ///< reads the peaks between the samples
+    double sr_ = 48000.0;   ///< sample rate
+    int window_ = 72;   ///< the lookahead, samples
+    float ceiling_ = 0.891f;   ///< the ceiling, linear
+    double release_ = 0.999;   ///< the release coefficient
     // Input history for the interpolator (both channels): 2 * kTaps slots, every sample written into
     // both halves, so the kTaps the filter needs are always contiguous (see process()).
-    std::vector<float> histL_, histR_;
-    int histPos_ = 0;
-    double prevBetween_ = 0.0;
+    std::vector<float> histL_, histR_;   ///< input history, written twice (see above)
+    int histPos_ = 0;   ///< its position
+    double prevBetween_ = 0.0;   ///< the last inter-sample peak
     // Required gains, the sliding-minimum deque and the moving average.
-    std::vector<double> req_;
-    std::vector<int> dq_;
-    int dqHead_ = 0, dqTail_ = 0;
-    std::vector<double> minRing_;
-    double minSum_ = 0.0;
-    long long t_ = 0;
-    int sinceRecompute_ = 0;
-    double gain_ = 1.0;
+    std::vector<double> req_;   ///< the gain each sample requires
+    std::vector<int> dq_;   ///< the sliding-minimum deque over req_
+    int dqHead_ = 0, dqTail_ = 0;   ///< its ends
+    std::vector<double> minRing_;   ///< the window's minima, for the moving average
+    double minSum_ = 0.0;   ///< their sum
+    long long t_ = 0;   ///< samples processed
+    int sinceRecompute_ = 0;   ///< samples since minSum_ was summed afresh (against drift)
+    double gain_ = 1.0;   ///< the gain applied
     // The audio delay.
-    std::vector<float> delayL_, delayR_;
-    int delayPos_ = 0;
-    float reduction_ = 0.0f;
+    std::vector<float> delayL_, delayR_;   ///< the audio's lookahead delay
+    int delayPos_ = 0;   ///< its position
+    float reduction_ = 0.0f;   ///< the last gain reduction, dB
 };
 
 } // namespace phos

@@ -13,8 +13,8 @@
  * **Two switches, both off unless a program asks.** The library's defaults are what it did before this
  * round: one thread, no cache. The plugin and the Quest app never call anything in this file, so they stay
  * exactly there: on the Quest the composer has one small core, and in the plugin the plan is made next to a
- * running audio thread, where eight busy worker threads for several seconds are a risk this round could not
- * show to be harmless (it has no way to measure a host's audio thread under that load). Development
+ * running audio thread, where eight busy worker threads for several seconds were a risk nobody had shown to
+ * be harmless (it has no way to measure a host's audio thread under that load). Development
  * programs -- `phos_render`, `phos_plandump`, `phos_selftest`, `phos_hosttest` -- opt in with one call,
  * configureFromEnvironment(), at the top of their `main()`:
  *
@@ -35,7 +35,7 @@
  * racing for the first load can no longer corrupt it or see it half-done -- warmSharedData() stays only
  * as the scheduling choice explained on it below. The order in which results are *used* is unchanged: the
  * stages of Composer::measureTrack wait for everything a later probe reads. `testProbeSchedule` holds the
- * parallel schedule against the serial order of before, bit for bit; `testLoaderThreadSafety`
+ * parallel schedule against the serial order, bit for bit; `testLoaderThreadSafety`
  * (Tests/selftest.cpp) hammers the loaders directly, without this file's help.
  *
  * **The cache key** covers everything a probe's render depends on: the core's build id (a hash of
@@ -61,7 +61,7 @@ constexpr int kMaxThreads = 8;
 
 /**
  * @brief How many probes of one stage may render at once.
- * @param n 1 = serial, in the order of before this round (the library's default); 0 = the hardware's
+ * @param n 1 = serial, one probe after the other (the library's default); 0 = the hardware's
  *          threads, at most kMaxThreads; anything else is clamped to 1..kMaxThreads. Ignored on Android.
  */
 void setThreads(int n);
@@ -108,7 +108,7 @@ void setBuildIdForTest(const char* id);
 
 /** @brief A 128-bit cache key. */
 struct Key {
-    uint64_t a = 0, b = 0;
+    uint64_t a = 0, b = 0;   ///< the two halves
     bool operator==(const Key& o) const { return a == o.a && b == o.b; }
 };
 
@@ -159,7 +159,7 @@ private:
  *       any of them can render -- the same total work, done less concurrently. One call on the thread
  *       that is about to hand out the work anyway costs nothing a stage was not going to pay, and keeps
  *       every worker free to render the moment it starts. `testProbeSchedule`'s mutation 4
- *       (docs/PLAN.md, round "speed") still covers this call existing; nothing here re-tests the
+ *       (docs/rounds/2026-09.md, round "speed") still covers this call existing; nothing here re-tests the
  *       loaders' own thread safety, which is `testLoaderThreadSafety`'s job (Tests/selftest.cpp).
  */
 void warmSharedData();
@@ -179,6 +179,7 @@ bool cacheEnabled();
  * @param values receives the three numbers of a probe (loudness, presence-band power, low-band power)
  * @return false when there is no file or it is not a complete, intact entry for this key -- a truncated or
  *         foreign file is a miss, never an error
+ * @param key the probe's key (Hasher)
  */
 bool cacheLookup(const Key& key, double values[3]);
 

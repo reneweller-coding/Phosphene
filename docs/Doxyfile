@@ -2,7 +2,7 @@
 PROJECT_NAME           = Phosphene
 PROJECT_BRIEF          = "Generator for complete psytrance sets"
 OUTPUT_DIRECTORY       = build/doxygen
-INPUT                  = Core/include Core/src Tools/render Tests README.md
+INPUT                  = Core/include Core/src Plugin Tools/render Tools/plandump Tests README.md
 FILE_PATTERNS          = *.h *.cpp *.md
 RECURSIVE              = YES
 EXCLUDE                = Tests/neonshim

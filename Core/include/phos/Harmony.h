@@ -128,8 +128,8 @@ inline int bassRootNote(int keyRoot, int registerOffset)
  * The user's brief on psytrance pads: they "meiden reine, einfache Dreiklaenge" and live in four
  * families instead -- the Phrygian chords with the flat second (m(b9), sus(b2)), the floating sus and
  * add chords that are neither major nor minor (sus2, sus4, m7, m9), the Phrygian-dominant "Hijaz"
- * chord with both a major third and a flat second, and the clusters of the dark styles (m(b5)). Until
- * this round every pad chord was the scale's plain triad. A type is a set of intervals over the chord
+ * chord with both a major third and a flat second, and the clusters of the dark styles (m(b5)). With
+ * the scale's plain triads alone every pad chord sounds alike. A type is a set of intervals over the chord
  * root; whether it *fits* is whether every one of them is in the section's mode (chordTypeFits), so
  * the same table gives Phrygian its m(b9) and Aeolian its m9 without a per-mode list.
  * @{ */

@@ -15,7 +15,7 @@
  *    reach the visualiser a quarter of a minute before the drop.
  *  - *The score* has no clock at all. A SectionMark is a beat number, not an instant.
  *  - *The play position* is the one place where a beat is an instant: phos::Engine::beatPosition()
- *    says which beat the next sample to be rendered carries. #CueTap therefore takes the beat range a
+ *    says which beat the next sample to be rendered carries. phos::CueTap therefore takes the beat range a
  *    block covers -- the value before and after Engine::process() -- and emits the boundaries that
  *    fall inside it.
  *
@@ -26,19 +26,19 @@
  *     the default settings, 1.7 ms at 48 kHz).
  *  2. The block being rendered now is not the block being played now. It is handed to the device and
  *     played once the buffers in front of it have drained.
- * Both are a *lead*: the cue would be early, never late. #CueTap::scan therefore stamps every cue with
+ * Both are a *lead*: the cue would be early, never late. phos::CueTap::scan() therefore stamps every cue with
  * the instant the listener will hear it -- `now + (outputLatency + limiterLookahead + sampleOffset) /
  * sampleRate` -- and the sender thread holds it back until then. Being a little early is the safer
  * error of the two (a visual can be scheduled, it cannot be un-drawn), so the lead is only ever
  * corrected by a latency that is *reported*, plus a trim the user can dial in.
  *
- * **The audio thread sends nothing.** #CueTap::scan does arithmetic and one wait-free push per cue
- * into a phos::EventRing; #CueSender's own thread pops, waits for the due instant and calls sendto().
+ * **The audio thread sends nothing.** phos::CueTap::scan() does arithmetic and one wait-free push per cue
+ * into a phos::EventRing; phos::CueSender's own thread pops, waits for the due instant and calls sendto().
  * No socket, no allocation and no lock ever touches the audio thread.
  *
  * **Failure is silence.** UDP to a port nobody listens on is not an error anywhere in the stack: the
  * datagram is dropped and the generator plays on. A host that cannot be resolved, a socket that
- * cannot be opened and a full queue are all counted (#CueSender::dropped) and otherwise ignored.
+ * cannot be opened and a full queue are all counted (phos::CueSender::dropped()) and otherwise ignored.
  *
  * @note The OSC encoding is written out here rather than taken from a library: five message types,
  *       three argument types, forty lines. Tests/selftest.cpp checks it against the byte layout of
@@ -79,7 +79,7 @@ namespace phos {
 
 /** @brief Default destination of the cue bridge (PLAN 8.3). */
 constexpr const char* kCueDefaultHost = "127.0.0.1";
-constexpr int kCueDefaultPort = 9000;   ///< @copydoc kCueDefaultHost
+constexpr int kCueDefaultPort = 9000;   ///< default destination port of the cue bridge
 
 // ---------------------------------------------------------------------------- OSC encoding
 
@@ -143,6 +143,7 @@ public:
     int size() const { return ok_ ? pos_ : 0; }
 
 private:
+    /** @brief Appends @p u big-endian, as OSC wants every word. */
     void putWord(uint32_t u)
     {
         if (!ok_ || pos_ + 4 > kCapacity) { ok_ = false; return; }
@@ -151,9 +152,9 @@ private:
         buf_[pos_++] = static_cast<char>((u >> 8) & 0xFF);
         buf_[pos_++] = static_cast<char>(u & 0xFF);
     }
-    char buf_[kCapacity] = {};
-    int  pos_ = 0;
-    bool ok_ = true;
+    char buf_[kCapacity] = {};   ///< the message being built
+    int  pos_ = 0;   ///< bytes written
+    bool ok_ = true;   ///< false once the message would have overflowed
 };
 
 // ---------------------------------------------------------------------------- the cues
@@ -189,6 +190,7 @@ inline int64_t cueNowNanos()
  * @brief Writes the key of a cue as the string `/phos/key` carries, e.g. "F# Phrygian".
  * @param c   the cue
  * @param out receives the text, at least 32 bytes
+ * @param cap size of @p out in bytes, the terminating zero included
  */
 inline void cueKeyText(const Cue& c, char* out, size_t cap)
 {
@@ -268,7 +270,7 @@ struct CueMark {
     uint8_t keyChanged = 0;  ///< 1: the key changes here, so `/phos/key` is sent as well
 };
 
-/** @brief The ring the composing thread fills and #CueTap drains. */
+/** @brief The ring the composing thread fills and phos::CueTap drains. */
 using CueMarkRing = EventRing<CueMark>;
 
 /**
@@ -348,7 +350,7 @@ inline void cueLandingMark(const FormPlan& form, int firstBar, int key, int scal
     out.push(m);
     lastKey = key;
 }
-/** @brief The ring #CueTap fills and #CueSender drains. */
+/** @brief The ring phos::CueTap fills and phos::CueSender drains. */
 using CueRing = EventRing<Cue>;
 
 /**
@@ -491,7 +493,7 @@ private:
         }
     }
 
-    bool sendBeats_ = true;
+    bool sendBeats_ = true;   ///< cue.beats: a beat cue on every beat, not only the marks
     CueMark last_;              ///< the last section mark that went out, for #announce
     bool haveLast_ = false;     ///< @copydoc last_
 };
@@ -543,6 +545,7 @@ class CueSender {
 public:
     static constexpr int64_t kPollNanos = 1000000;   ///< 1 ms: the longest the thread sleeps when idle
 
+    /** @brief A sender with no destination; start() opens it. */
     CueSender() = default;
     CueSender(const CueSender&) = delete;
     CueSender& operator=(const CueSender&) = delete;
@@ -635,6 +638,7 @@ public:
     }
 
 private:
+    /** @brief The sender thread: sends what is due, sleeps at most kPollNanos when idle. */
     void loop()
     {
         while (run_.load(std::memory_order_acquire)) {
@@ -671,21 +675,21 @@ private:
         }();
         return up;
     }
-    SocketHandle sock_ = INVALID_SOCKET;
+    SocketHandle sock_ = INVALID_SOCKET;   ///< the UDP socket
 #else
     using SocketHandle = int;
     static bool validSocket(SocketHandle s) { return s >= 0; }
     void closeSocket() { if (validSocket(sock_)) { ::close(sock_); sock_ = -1; } }
-    SocketHandle sock_ = -1;
+    SocketHandle sock_ = -1;   ///< the UDP socket
 #endif
 
-    sockaddr_in to_{};
-    bool scheduled_ = true;
-    std::atomic<bool> run_{ false };
-    std::thread thread_;
-    CueRing queue_{ 1024 };
-    std::atomic<uint64_t> sent_{ 0 }, dropped_{ 0 };
-    std::atomic<int64_t> worstLate_{ 0 };
+    sockaddr_in to_{};   ///< the destination
+    bool scheduled_ = true;   ///< hold each cue until its due time (false: send at once, the tests)
+    std::atomic<bool> run_{ false };   ///< the thread runs
+    std::thread thread_;   ///< the sender thread
+    CueRing queue_{ 1024 };   ///< cues waiting to go out
+    std::atomic<uint64_t> sent_{ 0 }, dropped_{ 0 };   ///< datagrams sent and cues dropped
+    std::atomic<int64_t> worstLate_{ 0 };   ///< the latest a cue went out after its due time, ns
 };
 
 } // namespace phos

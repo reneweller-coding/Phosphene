@@ -181,15 +181,16 @@ public:
     }
 
 private:
+    /** @brief The one-pole coefficient that covers @p k time constants in @p seconds. */
     float coef(float seconds, float k) const
     {
         const float tau = std::max(seconds, 0.0005f) / k;
         return 1.0f - std::exp(-1.0f / (tau * static_cast<float>(sr_)));
     }
-    double sr_ = 48000.0;
-    float aCoef_ = 0.01f, dCoef_ = 0.001f, rCoef_ = 0.0005f, sus_ = 1.0f;
-    float level_ = 0.0f;
-    Stage stage_ = Stage::Idle;
+    double sr_ = 48000.0;   ///< sample rate
+    float aCoef_ = 0.01f, dCoef_ = 0.001f, rCoef_ = 0.0005f, sus_ = 1.0f;   ///< attack, decay and release coefficients, sustain level
+    float level_ = 0.0f;   ///< the envelope's value
+    Stage stage_ = Stage::Idle;   ///< where it is
 };
 
 /**
@@ -326,6 +327,7 @@ struct BandLimit {
  */
 class DenormalGuard {
 public:
+    /** @brief Saves the floating-point mode and switches flush-to-zero (and denormals-are-zero on x86) on. */
     DenormalGuard()
     {
 #if defined(_M_X64) || defined(__x86_64__)
@@ -351,7 +353,7 @@ public:
     DenormalGuard& operator=(const DenormalGuard&) = delete;
 private:
 #if defined(_M_X64) || defined(__x86_64__)
-    unsigned int saved_ = 0;
+    unsigned int saved_ = 0;   ///< the MXCSR before the guard
 #elif defined(__aarch64__)
     /** @brief The floating-point control register. */
     static unsigned long long readFpcr()
@@ -362,7 +364,7 @@ private:
     }
     /** @brief Writes the floating-point control register. */
     static void writeFpcr(unsigned long long v) { __asm__ __volatile__("msr fpcr, %0" : : "r"(v)); }
-    unsigned long long saved_ = 0;
+    unsigned long long saved_ = 0;   ///< the FPCR before the guard
 #endif
 };
 

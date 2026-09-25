@@ -164,7 +164,7 @@ Let the line have notes `s_0 .. s_{N-1}`. At input position `t` (`0 <= t < N`):
 > profiles of `Form.h`. Every training line was therefore labelled `style = 0` (unknown), and the
 > C++ side must pass `0`. The slot exists so that a later, labelled corpus can use it without a
 > format change. `Tools/train/` measured what a style-like label is worth by conditioning on the
-> pack instead (section 6 of the Phase 8 status block in `docs/PLAN.md`).
+> pack instead (section 6 of the Phase 8 status block in `docs/rounds/2026-09.md`).
 
 ## 4. Tensors
 

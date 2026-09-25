@@ -48,7 +48,7 @@ namespace {
 /** @brief Settings of the process. One mutex: they are written at start-up or by a test, read per plan. */
 struct Settings {
     std::mutex lock;
-    int threads = 1;               ///< the library's default: what it did before this round
+    int threads = 1;               ///< the library's default: serial
     std::string cacheDir;          ///< empty = no cache
     std::string buildIdOverride;   ///< setBuildIdForTest()
     bool buildIdOverridden = false;
@@ -62,6 +62,7 @@ constexpr size_t kWorkerStack = 16u * 1024u * 1024u;   ///< as the JUCE-linked p
 constexpr char kMagic[8] = { 'P', 'H', 'O', 'S', 'P', 'R', 'B', '1' };
 constexpr size_t kEntryBytes = 8 + 16 + 24 + 8;        ///< magic, key, three doubles, check
 
+/** @brief The machine's hardware threads, at least one. */
 int hardwareThreads()
 {
     const unsigned n = std::thread::hardware_concurrency();
@@ -85,6 +86,7 @@ uint64_t checkOf(const unsigned char* data, size_t n)
     return h.finish().b;
 }
 
+/** @brief This process's id: the probe cache's temporary files carry it, so two processes never write one name. */
 unsigned long long processId()
 {
 #if defined(_WIN32)

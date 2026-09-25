@@ -214,13 +214,14 @@ public:
     double prob(int c) const { return probs_[static_cast<size_t>(c)]; }
 
 private:
+    /** @brief Runs the transformer's forward pass for position @p t and fills the logits. */
     void forwardTransformer(int t);
 
-    ModelInfo info_;
-    bool loaded_ = false;
-    int role_ = 0, style_ = 0, bars_ = 0, mode_ = 0, pos_ = 0;
-    int headDim_ = 0;
-    int dimP_ = 0, ffnP_ = 0, vocabP_ = 0, headDimP_ = 0, ctxP_ = 0, qkvP_ = 0;
+    ModelInfo info_;   ///< the file's header: architecture and sizes
+    bool loaded_ = false;   ///< a model file was read
+    int role_ = 0, style_ = 0, bars_ = 0, mode_ = 0, pos_ = 0;   ///< the conditioning rows of the current sequence, and its position
+    int headDim_ = 0;   ///< dimensions per attention head
+    int dimP_ = 0, ffnP_ = 0, vocabP_ = 0, headDimP_ = 0, ctxP_ = 0, qkvP_ = 0;   ///< the sizes padded to the lane width, as the panels are stored
 
     /** @brief Weights of one block, already packed into panels (empty for the other architecture). */
     struct Block {
@@ -228,13 +229,13 @@ private:
         std::vector<float> qkv, qkvB, out, outB, up, upB, down, downB;   ///< the transformer
         std::vector<float> kCache, vCache;                          ///< keys in time panels, values row major
     };
-    std::vector<Block> blocks_;
+    std::vector<Block> blocks_;   ///< the layers
     /** @brief The nine embedding tables, in the order of MODEL_FORMAT.md section 4, plus the two
      *         optional ones (kick.emb, mode.emb) that are empty in a file that does not carry them. */
     std::vector<float> tok_, posE_, roleE_, styleE_, barsE_, stepE_, barE_, gapE_, idxE_, kickE_, modeE_;
-    std::vector<float> normW_, normB_, head_, headB_;
-    std::vector<float> x_, nx_, qkvBuf_, att_, ff_, accum_, scores_, logits_;
-    std::vector<double> probs_;
+    std::vector<float> normW_, normB_, head_, headB_;   ///< the final norm and the output head
+    std::vector<float> x_, nx_, qkvBuf_, att_, ff_, accum_, scores_, logits_;   ///< the forward pass's working buffers
+    std::vector<double> probs_;   ///< softmax of the logits
 };
 
 /**
@@ -323,7 +324,7 @@ constexpr int kMaskedRetries = 4;
  * a position where the model has little to say. With unary constraints it can never paint itself
  * into a corner -- every position's allowed set is fixed in advance and non-empty -- so it always
  * produces a sequence; what it loses is that the sequence is drawn from the right distribution. The
- * self test measures how far off that is (testModelDecode), and docs/PLAN.md says so in as many
+ * self test measures how far off that is (testModelDecode), and docs/rounds/2026-09.md says so in as many
  * words.
  *
  * The one failure it can have is numerical: a model confident enough that its whole allowed set

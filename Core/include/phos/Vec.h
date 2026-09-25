@@ -104,6 +104,7 @@ inline MaskF operator&(MaskF a, MaskF b) { return { _mm256_and_ps(a.v, b.v) }; }
 inline MaskF operator|(MaskF a, MaskF b) { return { _mm256_or_ps(a.v, b.v) }; }
 inline VecF vselect(MaskF m, VecF t, VecF f) { return { _mm256_blendv_ps(f.v, t.v, m.v) }; }
 inline float laneOf(VecF a, int i) { alignas(32) float t[8]; _mm256_store_ps(t, a.v); return t[i]; }
+/** @brief The lanes' sum, added in lane order so that every vector path gives the scalar path's result. */
 inline float sumOrdered(VecF a)
 {
     alignas(32) float t[8];
@@ -154,6 +155,7 @@ inline VecF vsqrt(VecF a) { return { vsqrtq_f32(a.v) }; }
 inline VecF vabs(VecF a) { return { vabsq_f32(a.v) }; }
 inline VecF vfloor(VecF a) { return { vrndmq_f32(a.v) }; }
 inline float laneOf(VecF a, int i) { float t[4]; vst1q_f32(t, a.v); return t[i]; }
+/** @brief The lanes' sum, added in lane order so that every vector path gives the scalar path's result. */
 inline float sumOrdered(VecF a)
 {
     float t[4];

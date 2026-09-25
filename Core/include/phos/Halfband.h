@@ -75,9 +75,9 @@ struct HalfbandDown {
  */
 template <class V>
 struct HalfbandUp {
-    HalfbandDesign d;
-    V x[kHalfbandMaxCoefs];
-    V y[kHalfbandMaxCoefs];
+    HalfbandDesign d;   ///< the coefficients
+    V x[kHalfbandMaxCoefs];   ///< the all-pass inputs, one sample back
+    V y[kHalfbandMaxCoefs];   ///< their outputs, one sample back
 
     void setup(const HalfbandDesign& design) { d = design; reset(); }
     void reset() { for (int i = 0; i < kHalfbandMaxCoefs; ++i) { x[i] = lanes<V>(0.0f); y[i] = lanes<V>(0.0f); } }

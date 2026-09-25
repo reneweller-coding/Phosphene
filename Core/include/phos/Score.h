@@ -76,6 +76,7 @@ bool noteLess(const NoteEvent& a, const NoteEvent& b);
  * override, the instrument sounds exactly as the knobs say.
  */
 struct ControlEvent {
+    /** @brief What a control event does to its parameter. */
     enum class Kind : uint8_t {
         Offset,        ///< ramp the normalised offset to `value` over `length` beats (raised cosine)
         Override,      ///< play `value` instead of the knob (discrete parameters); value < 0 clears it
@@ -189,9 +190,9 @@ public:
     /** @brief Consumer side: drops everything. */
     void clear() { read_.store(write_.load(std::memory_order_acquire), std::memory_order_release); }
 private:
-    int size_;
-    std::unique_ptr<T[]> buf_;
-    std::atomic<int> read_{ 0 }, write_{ 0 };
+    int size_;   ///< capacity
+    std::unique_ptr<T[]> buf_;   ///< the ring
+    std::atomic<int> read_{ 0 }, write_{ 0 };   ///< consumer and producer positions
 };
 
 } // namespace phos

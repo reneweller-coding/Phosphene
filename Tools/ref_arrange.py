@@ -225,7 +225,7 @@ def pan_bound(sm_db=-9.35, n=4001):
         level difference in a window: 10 log10( <1 - sin(p pi/2)> / <1 + sin(p pi/2)> )
 
     the first averaged over all time, the second over the 85 ms window only. Two consequences, and
-    they decide the third item of this round:
+    they decide the third item of the arrangement round:
 
     1. A *slow* pan cannot trade one against the other. Over a window short against the LFO the
        average inside the window is the instantaneous value, so both numbers read the same theta. The

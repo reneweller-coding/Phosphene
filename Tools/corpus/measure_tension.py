@@ -8,7 +8,7 @@ schedule is a design assertion about *psytrance*, and it is measurable: the corp
 melodic lines whose symbols are already intervals to the tonic (Tools/corpus/build_corpus.py,
 Tools/train/dataset.py), so the distribution of stability against position in the phrase can simply
 be counted. This script counts it. What Phosphene then implements is the measured curve, not the
-proposed one (docs/PLAN.md, the block of 16.09.2026).
+proposed one (docs/rounds/2026-09.md, the block of 16.09.2026).
 
 **The stability measure.** Lerdahl's basic space for a minor tonic is a set of nested levels: the
 octave level holds the tonic, the fifth level adds the fifth, the triadic level adds the third, the

@@ -97,8 +97,8 @@ struct DisperserChannel {
 
 /** @brief The coefficients of a disperser chain, computed once per update(). */
 struct Disperser {
-    float c[kDisperseStages] = {}, d[kDisperseStages] = {};
-    int stages = 0;
+    float c[kDisperseStages] = {}, d[kDisperseStages] = {};   ///< each all-pass section's two coefficients
+    int stages = 0;   ///< sections in use
 
     /**
      * @brief Places @p n sections logarithmically over a decade around @p centreHz.

@@ -4,7 +4,7 @@
  *
  * **Who owns time.** The engine's own clock always starts at beat 0 (phos::Engine has no way to be
  * placed anywhere else, and it should not have one: a deterministic render is a render from the
- * start). The plugin therefore keeps one number, #beatOffset(), the *musical* beat that the
+ * start). The plugin therefore keeps one number, PhospheneProcessor::beatOffset(), the *musical* beat that the
  * engine's beat 0 stands for. Host beat = engine beat + offset. In the standalone the offset is 0
  * unless the player jumps to a track; under a host it is the playhead's position at the moment
  * playback started or jumped, so a seek costs one engine reset and nothing else. Because
@@ -17,7 +17,7 @@
  * tracks ahead. It is the only thread that ever touches phos::Composer, whose plans are cached
  * lazily and whose first plan of a track *renders* that track to measure its level -- two seconds
  * of work, which is why nothing the user or the host waits on shares a lock with it: prepareToPlay
- * takes the short #engineLock_, and the editor reads a published copy of the plans.
+ * takes the short `engineLock_`, and the editor reads a published copy of the plans.
  *
  * **Tempo.** phos::Engine::setTempoMap is never used here. Building a map plans every track it
  * covers, so a half-hour set would begin with half a minute of silence; instead the conductor
@@ -27,7 +27,7 @@
  *
  * **Restarts are a handshake.** Everything that has to reposition the engine -- the transport
  * starting, a seek, a new seed -- goes through a three-step handshake between the audio thread and
- * the composer thread (see #genWanted_). The audio thread renders silence while it is in flight,
+ * the composer thread (see `genWanted_`). The audio thread renders silence while it is in flight,
  * which is the price for never allocating and never locking on the audio thread. In a non-realtime
  * run (offline bounce, the host test) the audio thread performs the composer's steps itself, so a
  * block is self-contained and the output is bit-identical to phos_render.
@@ -42,7 +42,7 @@
  * decision rather than a shortcut: phos::Engine's control ring is strictly first in, first out and
  * the conductor keeps it filled eight bars ahead, so an event pushed now would fire only after every
  * event already queued -- about thirteen seconds at 145 BPM. A macro instead writes the *knob*, in
- * the knob's normalised domain and as an offset from the value it had (#macroBase_), which is the
+ * the knob's normalised domain and as an offset from the value it had (`macroBase_`), which is the
  * language a phos::ControlEvent speaks; the composer's own offsets keep riding on top, and letting
  * go puts every knob back exactly where it was. See #Macro.
  *
@@ -76,7 +76,7 @@
  *
  * Four, because a macro that nobody can describe in one line is a knob with a nickname. Each one
  * names a handful of parameters and the size of its move; the manual generator prints that table
- * from #macroTargets, so what the manual says is what the plugin does.
+ * from `macroTargets`, so what the manual says is what the plugin does.
  */
 enum class Macro : int {
     FilterSweep = 0,   ///< -1..+1: opens or closes the acid, lead, counter, arp and stab filters together
@@ -126,11 +126,14 @@ public:
     int paramId() const { return id_; }
 
 private:
-    phos::ParamStore& store_;
-    int id_;
-    juce::String name_;
-    juce::NormalisableRange<float> range_;
+    phos::ParamStore& store_;   ///< the store the value lives in
+    int id_;   ///< its global id
+    juce::String name_;   ///< the name the host shows
+    juce::NormalisableRange<float> range_;   ///< the store's own mapping, for the host
 };
+
+/** @brief `PHOS_TRACE=1`: the conductor's bar-by-bar work on stderr (set by the processor, PlugConductor.cpp). */
+extern bool gPlugTrace;
 
 /**
  * @brief Keeps the engine's rings filled, at an offset, from any bar.
@@ -203,6 +206,7 @@ public:
     static constexpr int kPreviewBars = 24;    ///< bars kept for the editor's pattern preview
 
 private:
+    /** @brief Pushes what the last composed bar left over into the engine's rings; false while they are full. */
     bool flush(phos::EventRing<phos::NoteEvent>* midiOut);
     /**
      * @brief The sound state seek() replayed, waiting for the first pump() after the engine's reset.
@@ -231,14 +235,14 @@ private:
      */
     void cueMarks(const phos::ParamStore& params, int bar, bool first);
 
-    phos::Engine& engine_;
-    const phos::Composer& composer_;
-    int nextBar_ = 0;
-    double beatOffset_ = 0.0;
-    bool writeTempo_ = true;
-    std::vector<phos::NoteEvent> notes_;
-    std::vector<phos::ControlEvent> controls_;
-    size_t notePos_ = 0, controlPos_ = 0;
+    phos::Engine& engine_;   ///< where the events go
+    const phos::Composer& composer_;   ///< where they come from
+    int nextBar_ = 0;   ///< the next bar to compose
+    double beatOffset_ = 0.0;   ///< musical beat of engine beat 0
+    bool writeTempo_ = true;   ///< send the tempo walk's control events (not when the host sets the tempo)
+    std::vector<phos::NoteEvent> notes_;   ///< the last composed bar's notes
+    std::vector<phos::ControlEvent> controls_;   ///< and its control events
+    size_t notePos_ = 0, controlPos_ = 0;   ///< how many of them are in the engine's rings
     mutable std::mutex previewLock_;               ///< guards #preview_ (composer writes, editor reads)
     std::vector<phos::NoteEvent> preview_;         ///< the last kPreviewBars bars, in musical beats
     phos::CueMarkRing* marks_ = nullptr;           ///< where the cue marks go, null = the bridge is off
@@ -318,6 +322,7 @@ public:
     juce::String undoName() const { return undo_.getUndoDescription(); }   ///< what undo() would take back
     juce::String redoName() const { return undo_.getRedoDescription(); }   ///< what redo() would do again
 
+    /** @brief Creates the engine, the composer and its thread, and binds every parameter. */
     PhospheneProcessor();
     ~PhospheneProcessor() override;
 
@@ -349,7 +354,7 @@ public:
     /**
      * @brief The version of the state this build writes.
      *
-     * 2 since 19.09.2026 (the reordered voices, the counter-lead, the stab and the drone; docs/PLAN.md,
+     * 2 since 19.09.2026 (the reordered voices, the counter-lead, the stab and the drone; docs/rounds/2026-09.md,
      * "Stimmen"). **3 since 20.09.2026** (round "dialogue"), and it is a change of meaning, not only of
      * content: a version-3 state stores **only the knobs that differ from the defaults of the build that
      * saved it**. Every knob a state does not name follows the current defaults when it is loaded.
@@ -374,7 +379,7 @@ public:
      * @brief The knob text of a state older than kStateVersion that was **not** applied, or empty.
      *
      * A state of version 1 or 2 holds every value of its session and cannot say which of them the user
-     * chose, so loading it would do exactly the damage this round is about. Such a state therefore does
+     * chose, so loading it would silently undo the defaults of later calibrations. Such a state therefore does
      * not set a single knob: the engine starts at today's factory defaults and the text is kept here so
      * that the editor can offer it (PhospheneEditor's banner, adoptLegacyState()).
      */
@@ -541,7 +546,7 @@ public:
     /**
      * @brief Locks or unlocks a unit (message thread).
      *
-     * The command travels to the composer thread through #curation_; what the editor draws comes
+     * The command travels to the composer thread through `curation_`; what the editor draws comes
      * from the mirror this keeps, so a lock toggles under the mouse even while a track is being
      * planned. A locked unit is frozen on the seed it had, so rerolling anything around it leaves
      * it bit-identical.
@@ -568,7 +573,7 @@ public:
     /**
      * @brief The macro tick (message thread): applies what is held and releases what has run out.
      *
-     * Called by #timerCallback at about 30 Hz. It is public because a test has no message loop and
+     * Called by `timerCallback` at about 30 Hz. It is public because a test has no message loop and
      * has to turn the crank itself.
      */
     void serviceMacros();
@@ -687,15 +692,15 @@ private:
     /** @brief Message thread: the limiter's lookahead is a switchable latency; tell the host when it moves. */
     void timerCallback() override;
 
-    std::unique_ptr<phos::Engine> engine_;
-    std::unique_ptr<phos::Composer> composer_;
-    std::unique_ptr<PlugConductor> conductor_;
+    std::unique_ptr<phos::Engine> engine_;   ///< the engine the audio thread renders
+    std::unique_ptr<phos::Composer> composer_;   ///< the composer (its thread plans, the conductor reads)
+    std::unique_ptr<PlugConductor> conductor_;   ///< keeps the engine's rings filled from the composer
     /**
      * @brief Guards the composer and the conductor.
      *
      * The composer thread holds it while it plans and composes -- which takes seconds the first time
      * a track is planned, because a track's level match is measured by rendering it. Nothing the
-     * host or the user waits on ever takes this lock: prepareToPlay takes #engineLock_ instead, and
+     * host or the user waits on ever takes this lock: prepareToPlay takes `engineLock_` instead, and
      * the editor reads the published copy of the plans (#plans_). Only the exports, which are user
      * actions with a file dialog in front of them, block on it.
      */
@@ -720,8 +725,8 @@ private:
     float composeFingerprint_ = 0.0f;          ///< message thread: watches the composer's knobs for a change
     std::vector<StoreParameter*> byId_;   ///< host parameters by global id, for the editor
 
-    double sampleRate_ = 48000.0;
-    std::atomic<uint64_t> seed_{ 1 };
+    double sampleRate_ = 48000.0;   ///< the host's rate
+    std::atomic<uint64_t> seed_{ 1 };   ///< the set seed
     /** @brief Stereo scratch for hosts (or devices) that hand over fewer than two channels. */
     juce::AudioBuffer<float> scratch_;
 
@@ -737,7 +742,7 @@ private:
     std::atomic<bool> hostSyncNow_{ false };     ///< the last block followed a host playhead
     std::atomic<double> hostBpm_{ 0.0 };         ///< tempo the host reported, 0 = none
 
-    std::thread composerThread_;
+    std::thread composerThread_;   ///< plans, composes and measures behind the audio thread
     /**
      * @brief A measurement running behind the music (23.09.2026, round "Planung"): a copy of the composer measures
      *        the playing track's deferred probes on a thread of its own, so the composer thread stays free for
@@ -808,7 +813,7 @@ private:
         float  value = 0.0f;         ///< where it stands; 0 is neutral
         double releaseBeat = -1.0;   ///< musical beat at which it lets go, < 0 = not timed
     };
-    MacroState macro_[kNumMacros];
+    MacroState macro_[kNumMacros];   ///< the perform macros
     /**
      * @brief The knob values the macros found, by parameter id, in their real units.
      *
@@ -819,7 +824,7 @@ private:
      */
     std::map<int, float> macroBase_;
     /**
-     * @brief Guards #macroBase_: serviceMacros() runs on the message thread, a host may ask for the state from
+     * @brief Guards `macroBase_`: serviceMacros() runs on the message thread, a host may ask for the state from
      *        another (23.09.2026: the state stores a macro-held knob at its base, writeStateTo).
      */
     mutable std::mutex macroBaseLock_;
@@ -837,7 +842,7 @@ private:
     void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override;
     /** @brief Records the step from @p before to now, unless nothing changed. */
     void recordUndo(const juce::String& name, const UndoState& before);
-    mutable juce::UndoManager undo_{ 32 * 1024 * 1024, 100 };
+    mutable juce::UndoManager undo_{ 32 * 1024 * 1024, 100 };   ///< undo and redo of whole states (UndoState)
     bool restoringUndo_ = false;   ///< applyUndoState is running: record nothing
     int gestureDepth_ = 0;         ///< gestures open at once (a two-knob drag is one step)
     UndoState gestureBefore_;      ///< the state when the first open gesture began
@@ -872,11 +877,11 @@ private:
     /** @brief `PHOS_TRACE=1`: processBlock reports the transport and the handshake on stderr. */
     bool trace_ = false;
     unsigned traceCount_ = 0;   ///< @copydoc trace_
-    juce::TimeSliceThread recordThread_{ "Phosphene recorder" };
-    std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> recordWriter_;
-    juce::CriticalSection recordLock_;
-    std::atomic<bool> recording_{ false };
-    std::atomic<juce::int64> recordedSamples_{ 0 };
+    juce::TimeSliceThread recordThread_{ "Phosphene recorder" };   ///< writes the recording to disk
+    std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> recordWriter_;   ///< the recording's writer, null when none runs
+    juce::CriticalSection recordLock_;   ///< guards recordWriter_ between the audio and the message thread
+    std::atomic<bool> recording_{ false };   ///< a recording runs
+    std::atomic<juce::int64> recordedSamples_{ 0 };   ///< samples recorded so far
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PhospheneProcessor)
 };

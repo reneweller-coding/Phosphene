@@ -20,6 +20,7 @@ struct RawEvent {
     std::vector<uint8_t> bytes;   ///< status and data, or FF type len data for meta
 };
 
+/** @brief Appends @p v as a MIDI variable-length quantity. */
 void putVlq(std::vector<uint8_t>& out, uint32_t v)
 {
     uint8_t tmp[5];
@@ -29,17 +30,20 @@ void putVlq(std::vector<uint8_t>& out, uint32_t v)
     while (n > 0) out.push_back(tmp[--n]);
 }
 
+/** @brief Appends @p v big-endian, four bytes. */
 void put32(std::vector<uint8_t>& out, uint32_t v)
 {
     out.push_back(static_cast<uint8_t>(v >> 24)); out.push_back(static_cast<uint8_t>(v >> 16));
     out.push_back(static_cast<uint8_t>(v >> 8));  out.push_back(static_cast<uint8_t>(v));
 }
 
+/** @brief Appends @p v big-endian, two bytes. */
 void put16(std::vector<uint8_t>& out, uint16_t v)
 {
     out.push_back(static_cast<uint8_t>(v >> 8)); out.push_back(static_cast<uint8_t>(v));
 }
 
+/** @brief A meta event of @p type with @p payload at @p tick. */
 RawEvent meta(int64_t tick, uint8_t type, const std::vector<uint8_t>& payload)
 {
     RawEvent e{ tick, 0, {} };
@@ -50,11 +54,13 @@ RawEvent meta(int64_t tick, uint8_t type, const std::vector<uint8_t>& payload)
     return e;
 }
 
+/** @brief A text meta event (track name, marker, ...) at @p tick. */
 RawEvent textMeta(int64_t tick, uint8_t type, const std::string& s)
 {
     return meta(tick, type, std::vector<uint8_t>(s.begin(), s.end()));
 }
 
+/** @brief A set-tempo meta event for @p bpm at @p tick. */
 RawEvent tempoMeta(int64_t tick, double bpm)
 {
     const uint32_t mpq = static_cast<uint32_t>(std::lround(60000000.0 / bpm));

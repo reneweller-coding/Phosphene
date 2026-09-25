@@ -23,7 +23,7 @@ constexpr float kSubScale = 0.7f;       ///< sub (and sub octave) knob to amplit
  * The layer is a band of a full-scale saw, so its raw level is already comparable to the saw path's;
  * the scale only sets where the knob's middle lands. Calibrated on 19.09.2026 so that the default
  * sound meets the references' bite band: 300 Hz .. 2 kHz at -9.8 dB against 20 .. 120 Hz between the
- * kicks, the median of Tools/ref_bass.py over 24 recordings (docs/PLAN.md, 19.09.2026).
+ * kicks, the median of Tools/ref_bass.py over 24 recordings (docs/rounds/2026-09.md, 19.09.2026).
  */
 constexpr float kBiteScale = 1.344f;
 /** @brief Butterworth dampings of the two sections: 2 cos(pi/8) and 2 cos(3 pi/8). */
@@ -108,7 +108,7 @@ void Bass::update(const float* v)
     // The bite's floor: a Butterworth high pass at kBiteHpRatio of the resting cutoff. The bite is the
     // band above the low mids; without the floor its 3rd to 6th harmonics (140 .. 280 Hz on F#1) came
     // out as strong as its 300 Hz .. 2 kHz band and thickened the low mids, which the mix already
-    // carries 4 dB over the references (docs/PLAN.md, 18.09.2026).
+    // carries 4 dB over the references (docs/rounds/2026-09.md, 18.09.2026).
     biteHp_.setQ(std::max(40.0f, kBiteHpRatio * biteCut_), 0.70710678f, static_cast<float>(osRate_));
     applyNoteSettings();
 }

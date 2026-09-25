@@ -6,7 +6,7 @@
  * A55) with 128-bit NEON, so a lane register holds four floats instead of the eight of AVX2, and the
  * clock is roughly half a desktop core's. Audio gets one big core and the composer a small one, and
  * the budget for a full drop arrangement is 30 % of that big core at 48 kHz with 256-sample blocks
- * (docs/PLAN.md, section 9). The engine therefore has two levels, chosen once at Engine::prepare():
+ * (docs/rounds/2026-09.md, section 9). The engine therefore has two levels, chosen once at Engine::prepare():
  *
  * | Setting | Desktop | Quest | Why |
  * |---|---|---|---|
