@@ -671,6 +671,13 @@ private:
      *               (the audio thread calls this offline, where a probe render would stall the block)
      */
     void serviceComposer(bool warmUp);
+    /**
+     * @brief Takes the live knobs over into composeParams_, the plan knobs by their own rule (under
+     *        composeLock_: the composer thread and the MIDI export; 25.09.2026).
+     * @param restart a restart is being positioned, or a user action wants the knobs as they stand: every knob is
+     *                taken over at once
+     */
+    void refreshComposeParams(bool restart);
     /** @brief Asks for a restart at @p bar with engine beat 0 meaning bar @p bar (audio thread). */
     void requestSeek(int bar, double beatOffset);
     /**
@@ -723,6 +730,26 @@ private:
     int publishedTracks_ = 0;                  ///< composer thread: how far the warm-up has got
     std::atomic<bool> plansStale_{ true };     ///< the seed or the knobs changed; plan again
     float composeFingerprint_ = 0.0f;          ///< message thread: watches the composer's knobs for a change
+    /**
+     * @brief The knobs as the composer sees them (25.09.2026): a copy of the live store, taken at the start of each
+     *        composer turn under composeLock_, so that one turn plans and composes from one set of knobs while the
+     *        host's automation and the editor go on writing the live store.
+     *
+     * The knobs the plans depend on (phos::Composer::planKnobIds) follow a rule of their own, because a change of
+     * one throws every plan away and planning a track renders probes for seconds. They are taken over at a restart
+     * (a seek plans anyway), at once while the transport stands, and while it runs only once they have held still
+     * for kPlanKnobSettleBeats beats of the music; the bars already composed keep the plans they were written
+     * with, so a change is heard a few bars later, on a bar line. Until this date a knob automated on every block
+     * threw the plans away on every bar -- in the host test, a seek re-planned the set from its first track for
+     * 1 h 46 min and then crashed (docs/rounds/2026-09.md, 25.09.2026). Now the set plays on under the plans it
+     * has and takes the value over when the automation rests. The same rule offline, in musical time, so a
+     * bounce comes out the same every time.
+     */
+    phos::ParamStore composeParams_;
+    std::vector<int> planKnobIds_;              ///< phos::Composer::planKnobIds of the store
+    std::vector<float> planKnobsSeen_;          ///< composer thread: the plan knobs as the live store last held them
+    double planKnobsSeenBeat_ = 0.0;            ///< under composeLock_: the musical beat at which they last moved
+    static constexpr double kPlanKnobSettleBeats = 4.0;   ///< how long a plan knob holds still before it is taken over: a bar
     std::vector<StoreParameter*> byId_;   ///< host parameters by global id, for the editor
 
     double sampleRate_ = 48000.0;   ///< the host's rate

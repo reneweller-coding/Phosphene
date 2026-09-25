@@ -29,7 +29,7 @@ void PlugConductor::tempoControls(const ParamStore& params, int bar, std::vector
         return params.toNormalised(bpmId, static_cast<float>(bpm)) - params.toNormalised(bpmId, params.get(bpmId));
     };
     const int index = composer_.trackOfBar(params, bar);
-    // By value: planning the next track may move the cached ones (see Composer::tempoMap).
+    // By value: the next call may throw the plans away, when a knob they depend on moved (Composer::track).
     const TrackPlan plan = composer_.track(params, index);
     // The track's own tempo from its hand-over (19.09.2026: the DJ overlap, Form.h), where
     // Composer::tempoMap puts it too.
@@ -66,7 +66,7 @@ void PlugConductor::cueMarks(const ParamStore& params, int bar, bool first)
     // same section twice, which for a visualiser is two scene changes where the music has one.
     if (bar == cueLandingBar_) { cueLandingBar_ = -1; return; }
     if (first) cueKey_ = -1;
-    // By value: planning the next track may move the cached ones (see Composer::tempoMap).
+    // By value: the next call may throw the plans away, when a knob they depend on moved (Composer::track).
     const TrackPlan plan = composer_.track(params, composer_.trackOfBar(params, bar));
     cueMarksForBar(plan.form, plan.firstBar, plan.key, plan.scale, bar, cueKey_, *marks_);
     // The next track's intro starts over this one's outro (the DJ overlap): its marks as well, after

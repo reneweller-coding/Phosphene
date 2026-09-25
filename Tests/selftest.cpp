@@ -260,6 +260,7 @@ int main(int argc, char** argv)
     run("testStems", testStems);
     run("testSoundPresets", testSoundPresets);
     run("testDeferredPlan", testDeferredPlan);
+    run("testPlanCacheLive", testPlanCacheLive);
     run("testKeyboard", testKeyboard);
     run("testAudibility", testAudibility);
     run("testAudibilityMatch", testAudibilityMatch);

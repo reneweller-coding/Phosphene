@@ -613,11 +613,18 @@ int main(int argc, char** argv)
             // after it). Otherwise the compose and perc knobs changed on every pass, Composer::validate threw the
             // plans away each time, and the seek below planned from the start for 1 h 46 min until it crashed.
             // Writing each parameter one fixed value keeps the race this part is for -- every write still
-            // lands while the audio thread reads -- without a knob that never stops moving.
+            // lands while the audio thread reads.
+            // And one knob that never stops moving, on purpose (25.09.2026, same day): Track Variation, which every
+            // plan depends on, gets a new value on every pass, as a host automating it on every block would give it.
+            // The composer takes a plan knob over only once it has rested for a bar (PluginProcessor.h,
+            // composeParams_) and checks the knobs once per call (Composer.h), so the set plays on under the plans
+            // it has; before, this was the endless re-planning and the crash.
+            const int moving = store.base(Module::Compose) + compose::TrackVariation;
             uint32_t i = 0;
             while (!stopThread.load(std::memory_order_relaxed)) {
                 const int id = static_cast<int>((i * 37u) % static_cast<uint32_t>(store.count()));
                 if (auto* param = p->parameterFor(id)) param->setValueNotifyingHost((id % 11) / 10.0f);
+                if (auto* param = p->parameterFor(moving)) param->setValueNotifyingHost(static_cast<float>((i * 7919u) % 1000u) / 1000.0f);
                 ++i;
                 std::this_thread::yield();
             }

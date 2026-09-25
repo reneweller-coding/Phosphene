@@ -201,6 +201,8 @@ PhospheneProcessor::PhospheneProcessor()
     conductor_ = std::make_unique<PlugConductor>(*engine_, *composer_);
     conductor_->setCueMarks(&cueMarks_);
     buildParameters();
+    planKnobIds_ = Composer::planKnobIds(params());
+    composeParams_.copyValuesFrom(params());
     // The listener's learned preferences (23.09.2026, phos/Preferences.h): process-wide, so every instance plans
     // with the same taste; loaded before the composer thread plans its first track.
     if (preferencesFile().existsAsFile()) {
@@ -475,11 +477,38 @@ bool PhospheneProcessor::drainCuration()
     return true;
 }
 
+void PhospheneProcessor::refreshComposeParams(bool restart)
+{
+    // What the plans were made with, for the plan knobs whose change has to wait.
+    const size_t n = planKnobIds_.size();
+    std::vector<float> held(n), now(n);
+    for (size_t k = 0; k < n; ++k) held[k] = composeParams_.get(planKnobIds_[k]);
+    composeParams_.copyValuesFrom(params());
+    for (size_t k = 0; k < n; ++k) now[k] = composeParams_.get(planKnobIds_[k]);
+    // The clock of the rule is the music's, so that a bounce takes a change over on the same bar every time.
+    const double beat = musicalBeat_.load(std::memory_order_relaxed);
+    if (now != planKnobsSeen_ || beat < planKnobsSeenBeat_) {
+        planKnobsSeen_ = now;
+        planKnobsSeenBeat_ = beat;
+    }
+    if (now == held) return;
+    const bool running = playRequest_.load(std::memory_order_relaxed) || hostSyncNow_.load(std::memory_order_relaxed);
+    if (restart || !running || beat - planKnobsSeenBeat_ >= kPlanKnobSettleBeats) {
+        plansStale_.store(true, std::memory_order_release);   // taken over: the composer plans again, the editor's list follows
+        if (trace_) std::fprintf(stderr, "[phos composer] plan knobs taken over at beat %.1f\n", beat);
+        return;
+    }
+    for (size_t k = 0; k < n; ++k) composeParams_.set(planKnobIds_[k], held[k]);   // still moving: the plans stay
+}
+
 void PhospheneProcessor::serviceComposer(bool warmUp)
 {
     const std::lock_guard<std::mutex> lock(composeLock_);
     drainCuration();
     const int want = genWanted_.load(std::memory_order_acquire);
+    // One set of knobs for the whole turn (composeParams_, PluginProcessor.h); a restart takes every knob over.
+    refreshComposeParams(want != genLocal_);
+    const ParamStore& knobs = composeParams_;
     if (trace_ && want != genLocal_)
         std::fprintf(stderr, "[phos composer] generation %d wanted, was %d, engine reset for %d\n",
                      want, genLocal_, genReset_.load());
@@ -495,13 +524,13 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
             const std::lock_guard<std::mutex> eng(engineLock_);
             engine_->clearTempoMap();
         }
-        conductor_->seek(params(), bar, offset, ownClock, engineLock_);
+        conductor_->seek(knobs, bar, offset, ownClock, engineLock_);
         genLocal_ = want;
         genAck_.store(want, std::memory_order_release);
         return;
     }
     if (genReset_.load(std::memory_order_acquire) != genLocal_) return;   // waiting for step 3
-    conductor_->pump(params(), kHorizonBeats, &midiRing_, engineLock_);
+    conductor_->pump(knobs, kHorizonBeats, &midiRing_, engineLock_);
     genPrimed_.store(genLocal_, std::memory_order_release);
 
     // ---------------------------------------------------------------- measuring behind the music
@@ -521,18 +550,18 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
     // and the job takes about fifteen, so the levels settle long before anyone hears a line or the first drop.
     const bool running = playRequest_.load(std::memory_order_relaxed) || hostSyncNow_.load(std::memory_order_relaxed);
     if (composer_->defersMasterGain()) {
-        const int playingTrack = composer_->trackOfBar(params(), juce::jmax(0, static_cast<int>(
+        const int playingTrack = composer_->trackOfBar(knobs, juce::jmax(0, static_cast<int>(
             musicalBeat_.load(std::memory_order_relaxed) / kBeatsPerBar)));
         // The corrections of a plan as the engine should now have them: every melodic part's level, and the
         // master offset, both over a phrase. Sent again when unchanged, which a ramp to the value it holds is.
         auto sendCorrections = [&](int index) {
-            const phos::TrackPlan& now = composer_->track(params(), index);
+            const phos::TrackPlan& now = composer_->track(knobs, index);
             std::vector<ControlEvent> events;
             const double at = engine_->beatPosition() + 1.0;   // a beat ahead of the play head, never behind it
             const float phrase = 4.0f * static_cast<float>(kBeatsPerBar);
-            composer_->levelControls(params(), now, at, phrase, events);
+            composer_->levelControls(knobs, now, at, phrase, events);
             if (!now.masterDeferred) {
-                const ParamStore& ps = params();
+                const ParamStore& ps = knobs;
                 const ParamDesc& mg = ps.desc(ps.base(Module::Master) + master::Gain);
                 ControlEvent c;
                 c.beat = at;
@@ -565,7 +594,7 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
         // Start one for the track that plays, while the set plays and no restart waits. Stopped, nothing is
         // measured at all: a probe render's CPU is only worth spending on what is about to be heard.
         if (measureJob_ == nullptr && running && genWanted_.load(std::memory_order_acquire) == genLocal_) {
-            const phos::TrackPlan& plan = composer_->track(params(), playingTrack);
+            const phos::TrackPlan& plan = composer_->track(knobs, playingTrack);
             if (plan.measureDeferred || plan.masterDeferred) startMeasureJob(playingTrack);
         }
     }
@@ -584,7 +613,7 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
     // probes, and planning the second one before the first is measured would measure the first again, here.
     if (composer_->defersMasterGain() && (!running || measureJob_ != nullptr) && publishedTracks_ >= 1) return;
     if (publishedTracks_ < kPublishedTracks) {
-        const TrackPlan plan = composer_->track(params(), publishedTracks_);
+        const TrackPlan plan = composer_->track(knobs, publishedTracks_);
         const std::lock_guard<std::mutex> pl(plansLock_);
         if (publishedTracks_ == 0) plans_.clear();
         plans_.push_back(plan);
@@ -597,7 +626,7 @@ void PhospheneProcessor::startMeasureJob(int index)
     auto job = std::make_unique<MeasureJob>();
     job->composer = std::make_unique<phos::Composer>(*composer_);
     job->composer->setAbortFlag(&job->abort);
-    job->params.copyValuesFrom(params());
+    job->params.copyValuesFrom(composeParams_);   // the knobs the plan was made with
     job->index = index;
     job->generation = composer_->planGeneration();
     MeasureJob* j = job.get();
@@ -1429,21 +1458,24 @@ bool PhospheneProcessor::exportMidi(const juce::File& file, int bars)
 {
     // Blocks on the composer, which is what a user action with a file dialog in front of it may do.
     const std::lock_guard<std::mutex> lock(composeLock_);
+    // The knobs as they stand, every one of them: the file is the set the user sees (composeParams_, 25.09.2026).
+    refreshComposeParams(true);
+    const ParamStore& knobs = composeParams_;
     const int total = juce::jlimit(1, 4096, bars);
     Score score;
-    score.tempo = composer_->tempoMap(params(), total);
-    score.keyRoot = composer_->track(params(), 0).key;
-    score.scale = composer_->track(params(), 0).scale;
-    for (int t = 0; composer_->track(params(), t).firstBar < total; ++t) {
-        const TrackPlan p = composer_->track(params(), t);
+    score.tempo = composer_->tempoMap(knobs, total);
+    score.keyRoot = composer_->track(knobs, 0).key;
+    score.scale = composer_->track(knobs, 0).scale;
+    for (int t = 0; composer_->track(knobs, t).firstBar < total; ++t) {
+        const TrackPlan p = composer_->track(knobs, t);
         const double beat = static_cast<double>(p.firstBar) * kBeatsPerBar;
         // The key signature changes where the bass does: at the hand-over of the DJ overlap (19.09.2026).
         const double keyBeat = static_cast<double>(handoverBar(p)) * kBeatsPerBar;
-        if (t > 0 && p.key != composer_->track(params(), t - 1).key) score.keyChanges.push_back(KeyChange{ keyBeat, p.key });
+        if (t > 0 && p.key != composer_->track(knobs, t - 1).key) score.keyChanges.push_back(KeyChange{ keyBeat, p.key });
         score.sections.push_back(SectionMark{ beat, SectionType::Groove, 0.5f, t });
     }
     std::vector<NoteEvent> notes;
-    composer_->composeBars(params(), 0, total, notes, nullptr);
+    composer_->composeBars(knobs, 0, total, notes, nullptr);
     score.notes = std::move(notes);
     score.sort();
     return writeMidiFile(score, file.getFullPathName().toRawUTF8());

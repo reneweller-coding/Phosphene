@@ -80,6 +80,18 @@
  * sections into control events: the energy of a section moves the track gain by at most +-2 dB, the
  * acid and lead cutoffs, the pad's table position and the hall sends, each as a ramp over the section
  * (Farbood's four quantities; timbre as narrative after Farrell).
+ *
+ * **Knobs that move while the composer works (25.09.2026).** The plans depend on the knobs planKnobIds()
+ * lists, and are thrown away when one of them moves. A call checks them once, when it begins -- the outermost
+ * call, not the track() and trackOfBar() it makes itself -- so everything one call reads comes from one set of
+ * plans, and a change takes effect at the next call: for Conductor::pump, which composes a bar per call, at the
+ * next bar. Until this date every inner call checked again; a host's automation writing a knob while
+ * composeBars ran threw the plans away up to five times inside one bar, the track index it had found no longer
+ * belonged to the plan it read, and bars outside a plan's range read its arrays out of bounds (the host test's
+ * crash after 1 h 46 min, docs/rounds/2026-09.md). The plans also live in a std::deque now, so planning a later
+ * track never moves an earlier one. A knob that changes during the call is still read by the plans that call
+ * makes; a host that wants a plan made from one consistent set of knobs hands the composer a snapshot (the
+ * plugin does, PluginProcessor.h, refreshComposeParams).
  */
 #pragma once
 #include "phos/Clock.h"
@@ -90,6 +102,7 @@
 #include "phos/Score.h"
 #include <atomic>
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <vector>
 
@@ -371,8 +384,20 @@ public:
     /** @brief The set seed. */
     uint64_t seed() const { return seed_; }
 
-    /** @brief The plan of track @p index (computed in order and cached). */
+    /**
+     * @brief The plan of track @p index (computed in order and cached).
+     *
+     * The reference stays valid while later tracks are planned (the cache is a deque), and until the next call
+     * of a member that takes the knobs, which throws the plans away when a planKnobIds() knob has moved. A plan
+     * read across two such calls is copied.
+     */
     const TrackPlan& track(const ParamStore& params, int index) const;
+    /**
+     * @brief The parameter ids the plans depend on (25.09.2026): every compose knob, the kick's engine and clip,
+     *        the bass's release and each percussion lane's Active, Role, Density and Engine. The preferences'
+     *        revision counts as well (Preferences.h); it is not a parameter and is not in the list.
+     */
+    static std::vector<int> planKnobIds(const ParamStore& params);
     /**
      * @brief Index of the track that owns @p bar: the one whose kick and bass sound there. Over the DJ
      *        overlap that is the outgoing track, until its last bar.
@@ -500,6 +525,18 @@ public:
 private:
     /** @brief Drops the cached plans when a parameter that shapes them has changed since they were made. */
     void validate(const ParamStore& params) const;
+    /**
+     * @brief One call of a member that reads the plans: validates the knobs when it is the outermost one
+     *        (25.09.2026; see the file comment), and counts the depth so the calls it makes do not.
+     */
+    struct Entry {
+        /** @brief Enters: validates @p params when no other call is running on @p c. */
+        Entry(const Composer& c, const ParamStore& params) : composer(c) { if (composer.depth_++ == 0) composer.validate(params); }
+        ~Entry() { --composer.depth_; }   ///< leaves
+        Entry(const Entry&) = delete;              ///< one entry, one leave
+        Entry& operator=(const Entry&) = delete;   ///< one entry, one leave
+        const Composer& composer;   ///< the composer entered
+    };
     /** @brief Plans track @p index from its walk, its seeds and the knobs: key, tempo, form, melody, recipes and levels. */
     TrackPlan makeTrack(const ParamStore& params, int index) const;
     /** @brief Draws the track's two learned bass phrases, or leaves the plan on the pattern families. */
@@ -588,10 +625,11 @@ private:
     bool deferMaster_ = false;      ///< setDeferMasterGain: the plugin measures Auto Gain after the start
     mutable uint64_t planGeneration_ = 0;         ///< planGeneration()
     const std::atomic<bool>* abort_ = nullptr;    ///< setAbortFlag()
-    mutable std::vector<TrackPlan> plans_;   ///< the tracks planned so far, made on demand
+    mutable std::deque<TrackPlan> plans_;   ///< the tracks planned so far, made on demand (a deque: growing never moves one)
     int soloTrack_ = -1;   ///< setSoloTrack: the one track composeBars sends, -1 = the set
-    mutable std::vector<TrackWalk> walk_;   ///< the style, key and tempo walk, made on demand
+    mutable std::deque<TrackWalk> walk_;   ///< the style, key and tempo walk, made on demand
     mutable std::vector<float> planKnobs_;   ///< the knobs the plans were made with (validate)
+    mutable int depth_ = 0;   ///< Entry: how many calls that read the plans are running (only the outermost validates)
     mutable bool bassModelReported_ = false;           ///< the missing-weight-file line is printed once
     std::map<int, uint8_t> locked_[kNumLockUnits];     ///< unit index -> locked
     std::map<int, uint32_t> variation_[kNumLockUnits]; ///< unit index -> reroll counter

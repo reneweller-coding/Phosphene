@@ -959,6 +959,78 @@ void testStems()
 }
 
 /**
+ * @brief The plan cache under knobs that move while the composer works (25.09.2026; docs/rounds/2026-09.md).
+ *
+ * The plugin hands the composer a store that a host's automation and the editor write while it composes. Until
+ * this date every track() and trackOfBar() inside composeBars checked the knobs again and threw the cached plans
+ * away when one had moved -- while composeBars still held a reference into them (use after free), and a knob
+ * that never stopped moving had the seek plan from the start without end. Now a call checks the knobs once, when
+ * it begins; a change takes effect at the next call, and a plan never moves when a later one is added.
+ * Part (1) moves a compose knob from a second thread while bars over a DJ overlap are composed and counts how
+ * often the plans are thrown away inside one call; (2) holds a reference while tracks are added; (3) checks that
+ * a change is taken over by the very next call.
+ */
+void testPlanCacheLive()
+{
+    section("plan cache: a knob that moves during composeBars never frees a plan in use");
+    ParamStore p;
+    p.parseText("compose.level_match=Off compose.presence_match=Off compose.audibility_match=Off master.auto_gain=Off");
+    const int sv = p.base(Module::Compose) + compose::SoundVariation;
+    Composer c(7);
+    const TrackPlan second = c.track(p, 1);   // by value: the cache is about to be thrown away many times
+    const int from = second.firstBar;          // the incoming track's first bar: both plans are read there
+
+    // (1) A writer moves two knobs to new values all the time -- the sound and the track length, which moves every
+    // track boundary -- and each call may take the change over once, at its start. Until 25.09.2026 the track index
+    // composeBars had found and the plan it then read came from two different sets of plans, and a bar outside the
+    // plan's own range read its bass masks and phrases out of bounds.
+    const int tb = p.base(Module::Compose) + compose::TrackBars;
+    std::atomic<bool> stop{ false };
+    std::thread writer([&] {
+        for (uint32_t k = 1; !stop.load(std::memory_order_relaxed); ++k) {
+            const uint32_t h = k * 2654435761u;
+            p.set(sv, 0.3f + 0.4f * static_cast<float>(h % 1000u) / 1000.0f);
+            p.set(tb, static_cast<float>(192 + 64 * static_cast<int>((h >> 12) % 3u)));
+            std::this_thread::yield();
+        }
+    });
+    while (p.get(sv) == 0.5f) std::this_thread::yield();   // the cached calls take microseconds: wait for the first write
+    uint64_t worst = 0, total = 0;
+    size_t notes = 0;
+    for (int bar = from; bar < from + 12; ++bar) {
+        std::vector<NoteEvent> out;
+        std::vector<ControlEvent> ctl;
+        const uint64_t g0 = c.planGeneration();
+        c.composeBars(p, bar, 1, out, &ctl);
+        const uint64_t moved = c.planGeneration() - g0;
+        worst = std::max(worst, moved);
+        total += moved;
+        notes += out.size();
+    }
+    stop.store(true);
+    writer.join();
+    check(total > 0 && worst <= 1 && notes > 0,
+          "a knob moving during composeBars throws the plans away at most once per call, at its start",
+          fmt("at most %llu times in one call, %llu in 12 calls, %zu notes", static_cast<unsigned long long>(worst),
+              static_cast<unsigned long long>(total), notes));
+
+    // (2) Adding tracks never moves the ones before.
+    const TrackPlan* first = &c.track(p, 0);
+    c.track(p, 12);
+    check(&c.track(p, 0) == first, "a plan stays where it is while later tracks are planned");
+
+    // (3) A change is taken over by the next call, once.
+    p.set(sv, 0.9f);
+    const uint64_t g0 = c.planGeneration();
+    std::vector<NoteEvent> out;
+    c.composeBars(p, from, 1, out, nullptr);
+    const uint64_t g1 = c.planGeneration();
+    c.composeBars(p, from + 1, 1, out, nullptr);
+    check(g1 == g0 + 1 && c.planGeneration() == g1, "a knob change is taken over by the next call, and only once",
+          fmt("%llu, then %llu", static_cast<unsigned long long>(g1 - g0), static_cast<unsigned long long>(c.planGeneration() - g1)));
+}
+
+/**
  * @brief The deferred first plan (23.09.2026, round "Planung", Composer::completeMeasurement).
  *
  * A live start plans the first track without a single probe render and measures it behind the music. The plan

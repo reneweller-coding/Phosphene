@@ -567,21 +567,31 @@ uint64_t Composer::laneSeedOf(int track, int lane) const
     return v == 0 ? base : mixSeed(base ^ kSaltReroll, v);
 }
 
-void Composer::validate(const ParamStore& p) const
+std::vector<int> Composer::planKnobIds(const ParamStore& p)
 {
-    // The plans depend on these knobs; when any of them moves, the plans are made again.
-    std::vector<float> knobs;
+    std::vector<int> ids;
     const int cb = p.base(Module::Compose);
-    for (int i = 0; i < compose::Count; ++i) knobs.push_back(p.get(cb + i));
-    knobs.push_back(p.get(p.base(Module::Kick) + kick::Engine));
-    knobs.push_back(p.get(p.base(Module::Kick) + kick::Clip));
-    knobs.push_back(p.get(p.base(Module::Bass) + bass::AmpRelease));
-    knobs.push_back(static_cast<float>(preferencesRevision()));   // new preferences: new plans (Preferences.h)
+    for (int i = 0; i < compose::Count; ++i) ids.push_back(cb + i);
+    ids.push_back(p.base(Module::Kick) + kick::Engine);
+    ids.push_back(p.base(Module::Kick) + kick::Clip);
+    ids.push_back(p.base(Module::Bass) + bass::AmpRelease);
     for (int l = 0; l < kPercLanes; ++l) {
         const int b = p.base(Module::Perc, l);
         for (int k : { static_cast<int>(perc::Active), static_cast<int>(perc::Role), static_cast<int>(perc::Density), static_cast<int>(perc::Engine) })
-            knobs.push_back(p.get(b + k));
+            ids.push_back(b + k);
     }
+    return ids;
+}
+
+void Composer::validate(const ParamStore& p) const
+{
+    // The plans depend on these knobs; when any of them moves, the plans are made again. Called by Entry, once per
+    // outermost call (Composer.h, "Knobs that move while the composer works").
+    const std::vector<int> ids = planKnobIds(p);
+    std::vector<float> knobs;
+    knobs.reserve(ids.size() + 1);
+    for (int id : ids) knobs.push_back(p.get(id));
+    knobs.push_back(static_cast<float>(preferencesRevision()));   // new preferences: new plans (Preferences.h)
     if (knobs != planKnobs_) { plans_.clear(); walk_.clear(); ++planGeneration_; planKnobs_ = std::move(knobs); }
 }
 
@@ -1061,14 +1071,14 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
 
 const TrackPlan& Composer::track(const ParamStore& p, int index) const
 {
-    validate(p);
+    const Entry entry(*this, p);
     while (static_cast<int>(plans_.size()) <= index) plans_.push_back(makeTrack(p, static_cast<int>(plans_.size())));
     return plans_[static_cast<size_t>(index)];
 }
 
 int Composer::trackOfBar(const ParamStore& p, int bar) const
 {
-    validate(p);
+    const Entry entry(*this, p);
     int i = 0;
     for (;;) {
         const TrackPlan& t = track(p, i);
@@ -1079,6 +1089,7 @@ int Composer::trackOfBar(const ParamStore& p, int bar) const
 
 int Composer::incomingOfBar(const ParamStore& p, int bar) const
 {
+    const Entry entry(*this, p);
     const int ti = trackOfBar(p, bar);
     const TrackPlan& t = track(p, ti);
     if (bar < t.firstBar + t.bars - kDjOverlapMax) return -1;
@@ -1091,16 +1102,17 @@ TempoMap Composer::tempoMap(const ParamStore& p, int bars) const
     // Held per track from its hand-over, ramped over the DJ overlap into the next -- the same sixteen bars
     // at the end of every track as before 19.09.2026, now the bars in which the next track's intro already
     // sounds over this one's bare outro (Form.h, kDjOverlap).
+    const Entry entry(*this, p);   // one set of plans for the whole map
     TempoMap m;
     const TrackPlan& first = track(p, 0);
     m.setConstant(first.bpm);
     for (int i = 0;; ++i) {
-        // By value: computing the next plan may move the cached ones.
-        const TrackPlan t = track(p, i);
+        // References: inside one call planning the next track moves none of the cached ones (Composer.h).
+        const TrackPlan& t = track(p, i);
         const double start = static_cast<double>(handoverBar(t)) * kBeatsPerBar;
         if (i > 0) m.add(start, t.bpm, false);
         if (t.firstBar + t.bars >= bars) break;
-        const TrackPlan next = track(p, i + 1);
+        const TrackPlan& next = track(p, i + 1);
         if (next.bpm != t.bpm) {
             const double rampStart = static_cast<double>(next.firstBar) * kBeatsPerBar;
             m.add(std::max(start, rampStart), t.bpm, true);
@@ -1111,10 +1123,10 @@ TempoMap Composer::tempoMap(const ParamStore& p, int bars) const
 
 std::vector<SectionMark> Composer::sections(const ParamStore& p, int bars) const
 {
+    const Entry entry(*this, p);   // one set of plans for every mark
     std::vector<SectionMark> out;
     for (int i = 0;; ++i) {
-        // By value: computing the next plan may move the cached ones.
-        const TrackPlan t = track(p, i);
+        const TrackPlan& t = track(p, i);
         for (int s = 0; s < t.form.count; ++s) {
             const Section& sec = t.form.section[s];
             const int startBar = t.firstBar + sec.startBar;
@@ -1314,6 +1326,9 @@ static void followWithDrone(const TrackPlan& plan, int baseRoot, std::vector<Not
 void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::vector<NoteEvent>& out,
                            std::vector<ControlEvent>* controls) const
 {
+    // The knobs are checked here and nowhere else in this call (Composer.h, "Knobs that move while the composer
+    // works"): the track index, the incoming track and the plans below all come from one set of plans.
+    const Entry entry(*this, p);
     const int cb = p.base(Module::Compose);
     const int kickPattern = p.getInt(cb + compose::KickPattern);
     const float bassVar = p.get(cb + compose::BassVariation);
@@ -1323,10 +1338,9 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
     const size_t ctlStart = controls ? controls->size() : 0;
     for (int bar = firstBar; bar < firstBar + count; ++bar) {
         const int ti = trackOfBar(p, bar);
-        // The overlap window needs the next track's plan; making it may move the cache, so it is made
-        // before any reference into the cache is taken.
-        { const TrackPlan& t0 = track(p, ti); if (bar - t0.firstBar >= t0.bars - kDjOverlapMax) track(p, ti + 1); }
+        // The overlap window needs the next track's plan.
         const TrackPlan& plan = track(p, ti);
+        if (bar - plan.firstBar >= plan.bars - kDjOverlapMax) track(p, ti + 1);
         // The incoming track of the DJ overlap, if one sounds in this bar (Form.h, kDjOverlap).
         int incoming = ti + 1 < static_cast<int>(plans_.size()) && bar >= plans_[static_cast<size_t>(ti + 1)].firstBar ? ti + 1 : -1;
         const size_t barNotes = out.size();

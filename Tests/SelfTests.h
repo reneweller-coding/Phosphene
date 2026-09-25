@@ -88,6 +88,7 @@ void testAudibilityMatch();   ///< selftest_composer.cpp
 void testAudibility();   ///< selftest_composer.cpp
 void testStems();   ///< selftest_composer.cpp
 void testDeferredPlan();   ///< selftest_composer.cpp
+void testPlanCacheLive();   ///< selftest_composer.cpp
 void testSoundPresets();   ///< selftest_composer.cpp
 void testKeyboard();   ///< selftest_composer.cpp
 void testKnobFuzz();   ///< selftest_composer.cpp
