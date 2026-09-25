@@ -613,7 +613,18 @@ int voicingMovement(const std::vector<int>& a, const std::vector<int>& b);
  */
 void composeSfxBar(const FormPlan& f, double trackBeat, int barInTrack, std::vector<NoteEvent>& out);
 
-/** @brief Semitones the bass moves in @p barInTrack when it follows the chords (0 on the tonic). */
-int bassChordShift(const MelodyPlan& m, int scale, int barInTrack, int bassRoot);
+/**
+ * @brief Semitones the bass moves under @p chord when it follows the chords (0 on the tonic).
+ *
+ * The root the bass follows is the one the pad holds (padChordIntervals): on the bII, where the pad stays on
+ * the tonic, the bass stays there too (25.09.2026). Until then the bass read the first chord set and could stand
+ * under another chord than the pad behind the main breakdown. The mode is the track's own, not a borrowing
+ * section's: modal interchange recolours the melody over an unchanged floor (the self test holds kick and bass
+ * bit-identical with it on and off).
+ * @param chord    the bar's pad chord (padChordAt)
+ * @param scale    the track's mode
+ * @param bassRoot the bass's root note on the tonic, MIDI
+ */
+int bassChordShift(const PadChord& chord, int scale, int bassRoot);
 
 } // namespace phos

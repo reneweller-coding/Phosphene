@@ -104,6 +104,12 @@ Pattern and Gate are the note side: which of the five bass patterns the track pr
 note is as a fraction of its slot. The gate is never allowed to run shorter than half a period of the
 fundamental.
 
+The bass is a pedal on the root. Its figures at the phrase ends may touch the b2 or the leading tone only as a
+pickup -- at most two sixteenths, at the end of the bar, into the next downbeat; anywhere else the figure takes
+the fifth, because under the drone's tonic those notes are a minor ninth in the low register. Bass Follows
+Chords (Set tab) moves the bass to the root the pad holds, and only where the pad plays; the drone moves with
+it.
+
 The Bass Scope renders one eighth note of the bass on the key's root with the values that play right now
 (the knobs plus the track's recipe; stopped, the knobs): its waveform, the filter's cutoff over the note
 as the synth computes it, its spectrum, and the note and the filter's travel in figures.
@@ -125,6 +131,10 @@ capacitor the way the original did -- three accents in a row open further than o
 exponential glide into the next note, Squelch a cutoff start value plus a comb tuned to the note's
 period. The tempo delay is in beats, so it follows the set.
 
+In the Phrygian modes the b2 is a degree of the acid's own: the F of an E - F - E riff, on any step and held
+too. The other colour tones -- the upper note of an augmented second -- stay short neighbours that resolve to
+the tonic.
+
 == Lead ==
 
 A supersaw after Szabo's measurements of the JP-8000 -- the detune curve, the mix law and the random
@@ -133,6 +143,9 @@ oscillator types are a virtual-analogue saw and pulse, two-operator FM and a wav
 
 Everything but the kick and the bass is high-passed at its own fundamental, which is what keeps eight
 voices of supersaw out of the bass register.
+
+As in the acid, the Phrygian b2 is one of the lead's degrees, on beats 2 and 4 and off the beat; beats 1 and 3
+take a tone of the tonic chord.
 
 == Counter ==
 
@@ -147,6 +160,8 @@ The same engine as the lead, with its own knobs. The arpeggio runs on chord tone
 range would overlap the lead's by more than two semitones it is octaved away: two voices playing in
 the same two octaves mask each other, and the composer checks that before it writes the notes.
 
+The counter never strikes together with the lead a semitone or a minor ninth apart on beats 1 and 3.
+
 == Pad ==
 
 Four-voice voicings with the smallest voice movement between chords, through the wavetable engine.
@@ -159,9 +174,11 @@ under a chord. A second oscillator stays within a few cents of its interval, and
 plays in unison or an octave up, never a fifth, which would stack a second chord on the first.
 
 A pad never holds a minor ninth -- no note a semitone above the tonic that bass and drone play, none a
-semitone above its own root. Held for bars, that interval sounds wrong rather than dark; the Phrygian
-b2 is left to the lead and the arp as a short accent. Where the progression swings to the bII,
-the pad stays on the tonic and adds the minor sixth instead (E - B - E - C over E).
+semitone above its own root -- nor the leading tone under the tonic, nor a tritone over its root. Held for
+bars, those intervals sound wrong rather than dark; the genre makes its dissonance with the sound (clusters,
+noise, drones), and the Phrygian b2 belongs to the lead and the acid. Where the progression swings to the
+bII, the pad stays on the tonic and adds the minor sixth instead (E - B - E - C over E). The major seventh is a
+rare colour, on bVI and bIII only.
 
 == Stab ==
 
@@ -173,7 +190,8 @@ from the track's harmony and kept out of the lead's register.
 A long, slowly moving tone under the breakdowns and the intros: the sound that holds a track together
 when the kick is gone. It is high-passed above the bass so it never takes the floor. It holds the tonic,
 its fifth and its octave, and like the pad never a minor ninth over the bass -- in a DJ blend a note of the
-incoming track that would stand a semitone over the outgoing tonic waits for the hand-over.
+incoming track that would stand a semitone over the outgoing tonic waits for the hand-over. With Bass Follows
+Chords on it follows the bass to the pad's root.
 
 == SFX / FX ==
 
@@ -192,6 +210,9 @@ chooser. Auto lets the generator draw a preset of the family for every event, ne
 a track; a number makes every event of that family play that preset. "Hear" plays the chosen preset
 in the running set (with Auto, one of the family at random); while the transport stands nothing
 sounds.
+
+The tonal layer of an effect -- an atmosphere's held tone above all -- is mapped into the mode, and never
+onto the b2 or the leading tone: a minor seventh the mode lacks becomes the fifth, not the major seventh.
 
 The two send effects are a short room and a long hall, both feedback delay networks. Their returns
 are ducked with the kick like everything else, and high-passed: a reverb tail in the bass register is

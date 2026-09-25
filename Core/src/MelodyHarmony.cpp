@@ -49,21 +49,21 @@ constexpr int kNumPendulums = static_cast<int>(sizeof(kPendulums) / sizeof(kPend
 
 /**
  * @brief Each style's taste for the chord types of Harmony.h, in ChordType order:
- *        triad, sus2, sus4, m7, m9, maj7, m(b5), quartal.
+ *        triad, sus2, sus4, m7, m9, maj7, quartal.
  *
- * The mode decides which of them exist (chordTypeFits), the pad's b9 rule which of those it may hold
- * (padAvoidsFlat9); this only says what the style reaches for among what is left. m(b5) fits no root in
- * any mode and is a chromatic cluster the two dark styles alone may take (the brief: "Darkpsy, Forest,
- * Twilight"). The b9 chords that Goa, Dark and Hi-Tech leaned on are gone (Harmony.h, 25.09.2026); their
- * weight went to the suspensions and the fourths, which keep a pad open and unresolved without the rub.
+ * The mode decides which of them exist (chordTypeFits), the pad's rule against rubs which of those it may
+ * hold (padAvoidsRubs); this only says what the style reaches for among what is left. The b9 chords that
+ * Goa, Dark and Hi-Tech leaned on and the dark styles' m(b5) cluster are gone (Harmony.h, 25.09.2026);
+ * their weight went to the suspensions and the fourths, which keep a pad open and unresolved without the
+ * rub. The major seventh stays a rare colour, at most 8 %.
  */
 const double kTypeWeight[kNumStyles][kNumChordTypes] = {
-    //  triad sus2  sus4  m7    m9    maj7  m(b5) quartal
-    { 0.15, 0.20, 0.30, 0.05, 0.00, 0.10, 0.00, 0.20 },   // Goa
-    { 0.20, 0.25, 0.25, 0.20, 0.05, 0.10, 0.00, 0.05 },   // Full-On
-    { 0.05, 0.15, 0.10, 0.30, 0.25, 0.10, 0.00, 0.20 },   // Progressive
-    { 0.10, 0.15, 0.15, 0.05, 0.00, 0.05, 0.25, 0.25 },   // Dark Forest
-    { 0.05, 0.25, 0.10, 0.00, 0.00, 0.05, 0.25, 0.30 },   // Hi-Tech
+    //  triad sus2  sus4  m7    m9    maj7  quartal
+    { 0.15, 0.20, 0.32, 0.05, 0.00, 0.08, 0.20 },   // Goa
+    { 0.20, 0.25, 0.25, 0.20, 0.05, 0.08, 0.05 },   // Full-On
+    { 0.05, 0.15, 0.10, 0.30, 0.25, 0.08, 0.20 },   // Progressive
+    { 0.10, 0.25, 0.20, 0.05, 0.00, 0.05, 0.35 },   // Dark Forest
+    { 0.05, 0.30, 0.15, 0.00, 0.00, 0.05, 0.45 },   // Hi-Tech
 };
 
 /** @brief How long a chord holds in the cores: 4, 8 or 16 bars, by style ("oft nur alle 4, 8 oder 16 Takte"). */
@@ -79,27 +79,26 @@ const double kBarsWeight[kNumStyles][3] = {
  * @brief The classical taste: triads and sevenths first, the suspensions after them -- what a loop progression
  *        is voiced with, so that a bVI or a bVII carries its third and the loop sounds like the progression it is.
  *
- * The m(b5) cluster has no weight here: a loop is the answer to "sonst klingt immer alles schraeg".
+ * A loop is the answer to "sonst klingt immer alles schraeg": no suspension it could do without, and the major
+ * seventh as rare as in the styles' own taste.
  */
 const double kClassicalWeight[kNumChordTypes] = {
-    //  triad sus2  sus4  m7    m9    maj7  m(b5) quartal
-    0.50, 0.12, 0.08, 0.20, 0.05, 0.20, 0.00, 0.03,
+    //  triad sus2  sus4  m7    m9    maj7  quartal
+    0.50, 0.12, 0.08, 0.20, 0.05, 0.08, 0.03,
 };
 
 /**
  * @brief Draws a chord type for @p degree in @p scale from the style's taste, among the types that fit the mode
- *        and hold no b9 (padAvoidsFlat9). On the bII nothing does, and the triad stands for the chord the pad
- *        replaces (padChordIntervals).
+ *        and rub against nothing (padAvoidsRubs). On the bII nothing does, and the triad stands for the chord
+ *        the pad replaces (padChordIntervals).
  */
 int drawChordType(Rng& r, int scale, int degree, int styleIdx, bool classical = false)
 {
-    const bool dark = styleIdx == static_cast<int>(StyleId::DarkForest) || styleIdx == static_cast<int>(StyleId::HiTech);
     double w[kNumChordTypes] = {};
     double sum = 0.0;
     for (int t = 0; t < kNumChordTypes; ++t) {
         const ChordType ct = static_cast<ChordType>(t);
-        const bool fits = (ct == ChordType::MinFlat5 ? (dark && !classical) : chordTypeFits(scale, degree, ct))
-                          && padAvoidsFlat9(scale, degree, ct);
+        const bool fits = chordTypeFits(scale, degree, ct) && padAvoidsRubs(scale, degree, ct);
         w[t] = fits ? (classical ? kClassicalWeight[t] : kTypeWeight[styleIdx][t]) : 0.0;
         sum += w[t];
     }
@@ -108,7 +107,7 @@ int drawChordType(Rng& r, int scale, int degree, int styleIdx, bool classical = 
         // even that is wanting -- a chord must never hand the pad a note outside its mode, nor a b9.
         for (int t = 0; t < kNumChordTypes; ++t) {
             const ChordType ct = static_cast<ChordType>(t);
-            if (chordTypeFits(scale, degree, ct) && padAvoidsFlat9(scale, degree, ct)) return t;
+            if (chordTypeFits(scale, degree, ct) && padAvoidsRubs(scale, degree, ct)) return t;
         }
         return static_cast<int>(ChordType::Triad);
     }
@@ -427,9 +426,10 @@ int voicingMovement(const std::vector<int>& a, const std::vector<int>& b)
     return s;
 }
 
-int bassChordShift(const MelodyPlan& m, int scale, int barInTrack, int bassRoot)
+int bassChordShift(const PadChord& chord, int scale, int bassRoot)
 {
-    int shift = scaleDegree(scale, m.chordDegree[chordIndexAt(m, barInTrack)]) % 12;
+    int iv[4], shift = 0;
+    padChordIntervals(static_cast<ChordType>(std::clamp(chord.type, 0, kNumChordTypes - 1)), scale, chord.degree, shift, iv);
     if (shift > 6 && bassRoot + shift - 12 >= 28) shift -= 12;   // the nearer octave, never under E1
     return shift;
 }

@@ -172,7 +172,7 @@ bool emptySet(const std::vector<uint8_t>& a);
 /** @brief An allowed-symbol set that admits the one interval @p rel. Defined in Melody.cpp. */
 std::vector<uint8_t> single(int rel);
 /** @brief Where a colour tone and its resolution stand, inside the given windows; false where none fits. Defined in Melody.cpp. */
-bool placeColour(int scale, int rootOffset, int lo, int hi, int resHi, int near, Rng& cr, int& colourRel, int& tonicRel);
+bool placeColour(int scale, int rootOffset, int lo, int hi, int resHi, int near, Rng& cr, int& colourRel, int& tonicRel, bool line);
 /** @brief Draws pitches for a sequence of allowed sets; falls back to the lowest allowed symbol of each. Defined in Melody.cpp. */
 std::vector<int> drawPitches(const PitchModel& model, CorpusRoleId role, const DrawSource& src, const Allowed& allowed, const std::vector<int>& steps, int bars, int ctx2, int ctx1, double temperature, Rng& r);
 /** @brief Redraws single notes of a drawn line until it keeps @p rules. Defined in Melody.cpp. */

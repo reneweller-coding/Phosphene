@@ -182,6 +182,14 @@ inline Part routedPart(const NoteEvent& e)
 }
 
 /** @brief The effect generator. */
+/**
+ * @brief The tonal layer's interval over the key's root in mode @p scale, for a preset that asks for @p iv semitones.
+ * @param scale index into kScaleSteps, or -1 for no mapping
+ * @param iv    the preset's interval in semitones
+ * @return the interval the effect plays
+ */
+double sfxToneInterval(int scale, double iv);
+
 class Sfx {
 public:
     static constexpr int kVoices = 4;   ///< simultaneous effects

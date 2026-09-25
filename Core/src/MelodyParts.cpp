@@ -177,8 +177,13 @@ void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     rest[7] = 4.0;
     jump[0] = jump[7] = 1.0;
     jump[scaleDegree(scale, 6) % 12] = 0.6;
+    // The Phrygian family's b2 is a degree of the acid's own (Harmony.h, isLineColourTone): the F of the E - F - E
+    // riff, on any step and held too, a little less likely than the third. (The acid's colour slots no longer place
+    // the b2 on top of that -- placeColour's `line` -- which with the neural model, whose Phrygian row lifts the b2
+    // eightfold, put it on 29 % of the acid's notes.)
+    if (inScale(scale, 1)) { core[1] = 2.0; rest[1] = 1.0; }
     for (int pc = 0; pc < 12; ++pc)
-        if (isColourTone(scale, pc)) core[pc] = rest[pc] = jump[pc] = 0.0;
+        if (isLineColourTone(scale, pc)) core[pc] = rest[pc] = jump[pc] = 0.0;
     auto pcOf = [&](int rel) { return ((rel + rootOffset) % 12 + 12) % 12; };
     Allowed allowed;
     for (size_t i = 0; i < n; ++i) {
@@ -201,7 +206,7 @@ void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
         for (int i : slots) {
             const size_t nx = (static_cast<size_t>(i) + 1) % n;
             int c = 0, t = 0;
-            if (!placeColour(scale, rootOffset, lo, hi, nx == 0 ? 0 : jumpHi, 0, cr, c, t)) continue;
+            if (!placeColour(scale, rootOffset, lo, hi, nx == 0 ? 0 : jumpHi, 0, cr, c, t, true)) continue;
             if (nx == 0 && t != 0) continue;
             allowed[static_cast<size_t>(i)] = single(c);
             allowed[nx] = single(t);
@@ -277,8 +282,9 @@ void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
             // A slide lasts to the next note; everything else is the 303's own gate (a tie holds).
             const bool last = i + 1 == n;
             note.len = static_cast<int16_t>((note.flags & kNoteSlide) ? (last ? steps + on[0] : on[i + 1]) - on[i] : lens[i]);
-            // A colour tone is never held: one sixteenth, whatever it follows (rule 1).
-            if (isColourTone(scale, pcOf(note.rel))) { note.len = 1; note.flags = static_cast<uint8_t>(note.flags & ~kNoteSlide); }
+            // A colour tone is never held: one sixteenth, whatever it follows (rule 1). The structural b2 is none
+            // (isLineColourTone) and keeps its length and its slide.
+            if (isLineColourTone(scale, pcOf(note.rel))) { note.len = 1; note.flags = static_cast<uint8_t>(note.flags & ~kNoteSlide); }
             note.velocity = (note.flags & kNoteAccent) ? 120 : 88;
             a.push_back(note);
         }
@@ -389,7 +395,7 @@ void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatur
         int glintRel = 0;
         if (tonicChord && !m.arpPolymeter) {
             int res = 0;
-            if (placeColour(scale, rootOffset, lo, hi, hi, aRel, cr, glintRel, res) && res == aRel) {
+            if (placeColour(scale, rootOffset, lo, hi, hi, aRel, cr, glintRel, res, false) && res == aRel) {
                 const std::vector<int> ones(static_cast<size_t>(cellSteps), 1);
                 const std::vector<uint8_t> taken(static_cast<size_t>(cellSteps), 0);
                 glintAt = colourSlots(steps, ones, taken, true, cellSteps, target, cr, [&](int i) { return !isHigh(i); });

@@ -148,13 +148,16 @@ double colourTarget(CorpusRoleId role, float colour)
     return kColourShare[static_cast<int>(role)] * (0.6 + 0.4 * std::clamp(static_cast<double>(colour), 0.0, 1.0));
 }
 
-/** @brief The colour tones of a mode as pitch classes above the tonic (Harmony.h, isColourTone). */
-std::vector<int> colourPcs(int scale)
+/**
+ * @brief The colour tones of a mode as pitch classes above the tonic (Harmony.h, isColourTone) -- for the acid and
+ *        the lead (@p line) without the Phrygian family's b2, which is a degree of theirs (isLineColourTone).
+ */
+std::vector<int> colourPcs(int scale, bool line)
 {
     std::vector<int> out;
     for (int d = 0; d < 7; ++d) {
         const int pc = scaleDegree(scale, d) % 12;
-        if (isColourTone(scale, pc)) out.push_back(pc);
+        if (line ? isLineColourTone(scale, pc) : isColourTone(scale, pc)) out.push_back(pc);
     }
     return out;
 }
@@ -206,11 +209,14 @@ std::vector<uint8_t> single(int rel)
 /**
  * @brief Where a colour tone and its resolution stand: the colour pitch nearest to @p near inside
  *        [lo, hi], and the tonic nearest to it inside [lo, resHi].
+ *
+ * With @p line set (the acid's or the lead's slot) the Phrygian family's b2 is a degree there, not a colour
+ * (25.09.2026), so a slot of theirs in plain Phrygian has nothing to place.
  * @return false where the mode has no colour tone or neither fits the window
  */
-bool placeColour(int scale, int rootOffset, int lo, int hi, int resHi, int near, Rng& cr, int& colourRel, int& tonicRel)
+bool placeColour(int scale, int rootOffset, int lo, int hi, int resHi, int near, Rng& cr, int& colourRel, int& tonicRel, bool line)
 {
-    const std::vector<int> pcs = colourPcs(scale);
+    const std::vector<int> pcs = colourPcs(scale, line);
     if (pcs.empty()) return false;
     // The sampler's alphabet ends at kCorpusRelMin / kCorpusRelMax: a pitch outside it could not be
     // written into a set (sym() would clamp it onto another pitch -- the arp's glint under a G#3

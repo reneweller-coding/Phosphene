@@ -104,10 +104,11 @@ void testModalInterchangeNewTone()
  * lines give it. The mode-blind transformer gives it 0.039, which is how this check was seen to fail
  * before it passed.
  *
- * **2. The composer is mode-blind without the table.** The corpus gives the colour 0.0874 of *all* its
+ * **2. The colour is the rule's, not the model's.** The corpus gives the colour 0.0874 of *all* its
  * notes when the mode is not conditioned on at all (`mode.py`, 666 lines) against 0.1539 inside the
- * mode. The Markov model -- which cannot be told the mode -- reproduces the first number in sections
- * that play the second, which is the finding in one line.
+ * mode. Since 18.09.2026 the colour tones are placed at the rules' colour slots and the share no longer
+ * depends on the model; since 25.09.2026 the acid's and the lead's b2 in the Phrygian family is a degree
+ * the model draws, and is held to at most a quarter of their notes instead.
  *
  * **3. The ratio against the mode-blind null**, the measurement the modal-interchange round left open:
  * over the sections that borrow a mode, the share of notes on a pitch class the borrowed mode admits
@@ -141,6 +142,10 @@ void testModeColour()
         for (int which = 0; which < 2; ++which) {
             long long colourNotes = 0, allNotes = 0;
             long long perRole[3] = {}, perRoleAll[3] = {};
+            // Since 25.09.2026 the b2 of the Phrygian family is a degree of the acid's and the lead's own
+            // (Harmony.h, isLineColourTone), drawn by the model like any scale tone: [role] notes on it in the
+            // modes that have it, and the rule's colour -- every other colour tone -- apart from it.
+            long long flat2[2] = {}, flat2All[2] = {}, ruleColour[3] = {};
             long long own[2] = {}, ownAll[2] = {};   // [0] the track's own mode, [1] a borrowed one
             for (int s = 0; s < 4; ++s) {
                 ParamStore p;
@@ -166,7 +171,10 @@ void testModeColour()
                     ++allNotes;
                     ++perRoleAll[role];
                     ++ownAll[b];
-                    if (isColourTone(sc, ((e.pitch - t.key) % 12 + 12) % 12)) { ++colourNotes; ++perRole[role]; ++own[b]; }
+                    const int pc = ((e.pitch - t.key) % 12 + 12) % 12;
+                    if (isColourTone(sc, pc)) { ++colourNotes; ++perRole[role]; ++own[b]; }
+                    if (role < 2 ? isLineColourTone(sc, pc) : isColourTone(sc, pc)) ++ruleColour[role];
+                    if (role < 2 && inScale(sc, 1)) { ++flat2All[role]; flat2[role] += pc == 1 ? 1 : 0; }
                 }
             }
             const double share = allNotes > 0 ? static_cast<double>(colourNotes) / allNotes : 0.0;
@@ -182,22 +190,29 @@ void testModeColour()
                         kCorpus[0].share, kCorpus[1].share, kCorpus[2].share,
                         ownAll[0] > 0 ? static_cast<double>(own[0]) / ownAll[0] : 0.0, ownAll[0],
                         ownAll[1] > 0 ? static_cast<double>(own[1]) / ownAll[1] : 0.0, ownAll[1]);
-            if (which == 0)
-                check(allNotes > 5000 && std::fabs(share - 0.0874) < 0.02,
-                      "the Markov model, which cannot be told the mode, still sounds mode-blind",
-                      fmt("%.4f against the corpus's mode-blind 0.0874 and its in-mode 0.1539: the "
-                          "order-2 chain gives the colour the share a corpus line gives it *on "
-                          "average over all modes*, not the share it gives it *in this mode*", share));
-            else
-                // Since 18.09.2026 the colour share is the genre rules' one mechanism (Melody.cpp,
-                // kColourShare): colour tones are out of every sampler set and are placed at colour
-                // slots, so the neural model's mode table can no longer lift them. What is checked is
-                // that the share no longer depends on the model -- the rule decides it, not the corpus.
-                check(perRoleAll[0] > 2000 && std::fabs(roleShare[0] - markovAcidShare) < 0.03,
-                      "the acid's colour share is the rule's, whichever model draws the line",
+            // Since 18.09.2026 the colour share is the genre rules' one mechanism (Melody.cpp, kColourShare):
+            // colour tones are out of every sampler set and are placed at colour slots, so the neural model's
+            // mode table cannot lift them. Since 25.09.2026 that holds for every colour tone but the acid's and
+            // the lead's structural b2 (the user's decision): the rule's colour must not depend on the model,
+            // and the b2, which the model now draws, must not take a line over -- at most a quarter of its notes
+            // in the modes that have it (the lead once sat on it with 0.41). Until then the first check here
+            // read the Markov share against the corpus's mode-blind 0.0874; with the b2 a degree of the lines
+            // the chain is no longer blind to the mode, by design.
+            const double ruleAcid = perRoleAll[0] > 0 ? static_cast<double>(ruleColour[0]) / perRoleAll[0] : 0.0;
+            const double b2Acid = flat2All[0] > 0 ? static_cast<double>(flat2[0]) / flat2All[0] : 0.0;
+            const double b2Lead = flat2All[1] > 0 ? static_cast<double>(flat2[1]) / flat2All[1] : 0.0;
+            std::printf("         %s: the rule's colour in the acid %.4f; the structural b2 acid %.4f (%lld), lead %.4f (%lld)\n",
+                        which == 0 ? "Markov" : "neural", ruleAcid, b2Acid, flat2All[0], b2Lead, flat2All[1]);
+            check(flat2All[0] > 1000 && flat2All[1] > 1000 && b2Acid <= 0.25 && b2Lead <= 0.25,
+                  which == 0 ? "the structural b2 stays a degree among others with the Markov model: at most a quarter of acid and lead"
+                             : "the structural b2 stays a degree among others with the neural model: at most a quarter of acid and lead",
+                  fmt("acid %.4f of %lld, lead %.4f of %lld notes in the modes with a b2", b2Acid, flat2All[0], b2Lead, flat2All[1]));
+            if (which == 1)
+                check(perRoleAll[0] > 2000 && std::fabs(ruleAcid - markovAcidShare) < 0.03,
+                      "the acid's colour share is the rule's, whichever model draws the line (the structural b2 aside)",
                       fmt("neural %.4f against Markov %.4f (%lld notes; the corpus's acid interval [%.4f, %.4f] "
-                          "no longer decides it)", roleShare[0], markovAcidShare, perRoleAll[0], kCorpus[0].lo, kCorpus[0].hi));
-            if (which == 0) markovAcidShare = roleShare[0];
+                          "no longer decides it)", ruleAcid, markovAcidShare, perRoleAll[0], kCorpus[0].lo, kCorpus[0].hi));
+            if (which == 0) markovAcidShare = ruleAcid;
         }
     }
 
@@ -490,12 +505,16 @@ void testMotifOperators()
     {
         ParamStore p;
         p.parseText("compose.track_bars=128 compose.lead_amount=1 compose.level_match=Off master.auto_gain=Off");
-        Composer c(1979);
         int phrases = 0, archetypes[kNumLeadArchetypes] = {}, ops[kNumCellOps] = {};
         int firstNotKeep = 0, lastNotCadence = 0, cadenceOff = 0, shiftBars = 0, shiftWrong = 0, thinBars = 0, thinWrong = 0;
         int shiftedBars = 0, shiftedWrongSide = 0, accents = 0, shorts = 0, slides = 0, slidesWrong = 0;
         int outside = 0, tooLow = 0, notes = 0, fromCorpus = 0, bands[3] = {};
         int loops = 0, halves = 0, tracksSeen = 0;
+        // Three sets of 64 tracks (25.09.2026): the transposed bars' side is a share of about 300 bars per set,
+        // too few for a bound at 25 % -- the lead's structural b2 moved set 1979 from 23 % to 25.5 %, one standard
+        // deviation, while over the three sets it reads 21.6 % before and 20.9 % after.
+        for (const uint64_t setSeed : { 1979ull, 2026ull, 77ull }) {
+        Composer c(setSeed);
         for (int i = 0; i < 64; ++i) {
             const TrackPlan t = c.track(p, i);
             const MelodyPlan& m = t.melody;
@@ -556,6 +575,7 @@ void testMotifOperators()
                 if (((m.root[1] + ph.back().rel - t.key) % 12 + 12) % 12 != 0) ++cadenceOff;
             }
         }
+        }
         int archetypesSeen = 0, opsSeen = 0;
         for (int a : archetypes) archetypesSeen += a > 0 ? 1 : 0;
         for (int k = 1; k < kNumCellOps; ++k) opsSeen += ops[k] > 0 ? 1 : 0;
@@ -582,6 +602,7 @@ void testMotifOperators()
         // The filter arc: the composer writes one-bar cutoff ramps on the lead wherever it plays, and
         // the eight bars of a phrase are not one value.
         {
+            Composer c(1979);
             const TrackPlan t = c.track(p, 1);
             std::vector<NoteEvent> ev;
             std::vector<ControlEvent> ctl;

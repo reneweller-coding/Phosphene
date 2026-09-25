@@ -771,15 +771,21 @@ void testGenreRulesRules()
     // Colour: [role][mode] notes and colour notes; and the neighbour rule itself.
     long colourN[3][kNumScales] = {}, colourC[3][kNumScales] = {};
     int colourBad = 0, colourSeen = 0;
+    // The structural b2 of the Phrygian family in acid and lead (25.09.2026): [role acid/lead][mode] notes on the b2,
+    // and how many of them stand where no colour slot could (an even step, or longer than a sixteenth).
+    long flat2N[2][kNumScales] = {}, flat2Free[2][kNumScales] = {}, lineN[2][kNumScales] = {};
     // Pads.
     int padVoicings = 0, padBad = 0;
     // Variation.
     int variantPairs = 0, variantSame = 0, variantWide = 0, setsSame = 0;
 
-    auto colourRule = [&](const std::vector<MelodyNote>& cell, int root, int key, int scale, bool loop, int cellSteps) {
+    // `structuralFlat2`: the line is the acid's or the lead's, whose b2 is a degree of its own in the modes that have
+    // one (the user's decision of 25.09.2026, the E - F - E riff) -- only the other colour tones are neighbours there.
+    auto colourRule = [&](const std::vector<MelodyNote>& cell, int root, int key, int scale, bool loop, int cellSteps, bool structuralFlat2) {
         for (size_t i = 0; i < cell.size(); ++i) {
             const int pc = ((root + cell[i].rel - key) % 12 + 12) % 12;
             if (!RuleRef::colour(scale, pc)) continue;
+            if (structuralFlat2 && pc == 1) continue;
             ++colourSeen;
             const bool last = i + 1 == cell.size();
             if (last && !loop) { ++colourBad; continue; }
@@ -805,7 +811,14 @@ void testGenreRulesRules()
             std::vector<int> pitches;
             for (const MelodyNote& n : cell) pitches.push_back(aRoot + n.rel);
             if (longestRun(pitches, true) > 2) ++acidRuns;
-            colourRule(cell, aRoot, key, scale, true, m.acidSteps);
+            colourRule(cell, aRoot, key, scale, true, m.acidSteps, true);
+            for (size_t i = 0; i < cell.size(); ++i) {
+                const int pc = ((aRoot + cell[i].rel - key) % 12 + 12) % 12;
+                ++lineN[0][scale];
+                if (pc != 1) continue;
+                ++flat2N[0][scale];
+                if (cell[i].step % 2 == 0 || cell[i].len >= 2) ++flat2Free[0][scale];
+            }
             for (int w = 0; w < m.acidSteps / 16; ++w) {
                 ++acidWin;
                 bool covered[16] = {};
@@ -840,7 +853,7 @@ void testGenreRulesRules()
                 }
                 const int pc = ((pitch - key) % 12 + 12) % 12;
                 ++colourN[0][scale];
-                colourC[0][scale] += RuleRef::colour(scale, pc) ? 1 : 0;
+                colourC[0][scale] += RuleRef::colour(scale, pc) && pc != 1 ? 1 : 0;   // the b2 is the acid's own degree
             }
         }
         // Variation: A' and A'' vary A minimally, and the second set is new material.
@@ -883,7 +896,7 @@ void testGenreRulesRules()
             if (!continuous) ++arpNotContinuous;
             int lowest = 127;
             for (const MelodyNote& n : cell) lowest = std::min(lowest, m.root[mpIndex(MelodyPart::Arp)] + n.rel);
-            colourRule(cell, m.root[mpIndex(MelodyPart::Arp)], key, scale, true, m.arpPolymeter ? 3 : 16);
+            colourRule(cell, m.root[mpIndex(MelodyPart::Arp)], key, scale, true, m.arpPolymeter ? 3 : 16, false);
             for (size_t i = 0; i < cell.size(); ++i) {
                 const MelodyNote& n = cell[i];
                 const int pitch = m.root[mpIndex(MelodyPart::Arp)] + n.rel;
@@ -919,11 +932,18 @@ void testGenreRulesRules()
                 if (pitch < m.leadWindowLo || pitch > leadWindowHi(m)) ++leadReg;
                 if (((pitch - key) % 12 + 12) % 12 == 7 && n.len >= 2) fifthRests = true;
                 ++colourN[1][scale];
-                colourC[1][scale] += RuleRef::colour(scale, pitch - key) ? 1 : 0;
+                colourC[1][scale] += RuleRef::colour(scale, pitch - key) && ((pitch - key) % 12 + 12) % 12 != 1 ? 1 : 0;
             }
             if (!fifthRests) ++leadNoFifth;
             if (longestRun(pitches, false) > 2) ++leadRuns;
-            colourRule(ph, m.root[1], key, scale, false, 128);
+            colourRule(ph, m.root[1], key, scale, false, 128, true);
+            for (const MelodyNote& n : ph) {
+                const int pc = ((m.root[1] + n.rel - key) % 12 + 12) % 12;
+                ++lineN[1][scale];
+                if (pc != 1) continue;
+                ++flat2N[1][scale];
+                if (n.step % 2 == 0 || n.len >= 2) ++flat2Free[1][scale];
+            }
             for (int b = 0; b < 8; ++b) {
                 ++leadBars;
                 bool on[16] = {};
@@ -1011,6 +1031,24 @@ void testGenreRulesRules()
         check(plain && bounded, "the colour share is one calibrated number: zero in modes without colour tones, never above 0.2 (rule 2)",
               "table above");
     }
+    {
+        // The structural b2 (25.09.2026): in the modes that have it, acid and lead hold it as a degree of their
+        // own -- also on an even step or longer than a sixteenth, where no colour slot stands -- but it may not
+        // take the line over (the lead once sat on it with 0.41 of its notes).
+        std::string table;
+        long free = 0;
+        bool bounded = true;
+        for (int role = 0; role < 2; ++role)
+            for (int sc = 0; sc < kNumScales; ++sc) {
+                if (RuleRef::deg(sc, 1) != 1 || lineN[role][sc] == 0) continue;
+                const double share = static_cast<double>(flat2N[role][sc]) / static_cast<double>(lineN[role][sc]);
+                table += fmt("  %s %s %.3f (%ld free)", role == 0 ? "acid" : "lead", kScaleNames[sc], share, flat2Free[role][sc]);
+                free += flat2Free[role][sc];
+                if (share > 0.25) bounded = false;
+            }
+        check(free > 0 && bounded, "acid and lead: the b2 of the Phrygian family is a degree of its own, off the colour slots too, at most a quarter of the notes",
+              fmt("b2 share:%s", table.c_str()));
+    }
     check(padBad == 0, "pad: root position -- the chord root lowest, its type's fifth above it, D3 and up, two to five voices (rule 19)",
           fmt("%d of %d voicings break it", padBad, padVoicings));
 }
@@ -1025,16 +1063,19 @@ void testGenreRulesRules()
  */
 void testGenreRulesPadNoFlat9()
 {
-    section("genre rules: the pad never holds a b9, over the tonic or over its own root");
+    section("genre rules: the pad never holds a b9, a leading tone or a tritone against the tonic or its root");
     ParamStore p;
     int voicings = 0, bad = 0, bII = 0;
     auto look = [&](const std::vector<int>& v, int key) {
         if (v.empty()) return;
         ++voicings;
-        const int flatTwo = (key + 1) % 12, overRoot = (v[0] + 1) % 12;
+        // A b9 over the tonic, the leading tone under it (a semitone under the drone's octave), a b9 or a
+        // tritone over the pad's own root (25.09.2026: the research the user brought finds none of them
+        // held in a psytrance pad).
+        const int flatTwo = (key + 1) % 12, leading = (key + 11) % 12, overRoot = (v[0] + 1) % 12, tritone = (v[0] + 6) % 12;
         for (int n : v) {
             const int pc = n % 12;
-            if (pc == flatTwo || pc == overRoot) {
+            if (pc == flatTwo || pc == leading || pc == overRoot || pc == tritone) {
                 ++bad;
                 if (std::getenv("PHOS_DEBUG_RULES")) std::printf("DBG pad b9: key %d root %d note %d\n", key, v[0], n);
                 return;
@@ -1062,8 +1103,128 @@ void testGenreRulesPadNoFlat9()
         }
     }
     check(voicings > 1000 && bII > 0 && bad == 0,
-          "pad: no note a b9 over the tonic (bass, drone) or over the pad's own root, in every style and mode (the user's rule, 25.09.2026)",
+          "pad: no note a b9 over the tonic or the leading tone under it, none a b9 or a tritone over the pad's root, every style and mode (25.09.2026)",
           fmt("%d of %d voicings hold one; %d chords of the plans stand on the bII", bad, voicings, bII));
+}
+
+/**
+ * @brief Genre rules, part `.bassAndDrone`: the bass's b2 and leading tone only as a pickup, and a drone that
+ *        follows the bass where the bass follows the chords.
+ *
+ * 25.09.2026, from the literature the user brought: the bass is a pedal on the tonic; a b2 or a leading tone in it
+ * is a variation at a phrase end, one or two sixteenths before the next bar -- held under the drone's tonic it is a
+ * minor ninth in the low register. And with "Bass Follows Chords" on, a drone left on the tonic stands a step or a
+ * semitone against the bass: where the bass goes, the drone goes.
+ */
+void testGenreRulesBassAndDrone()
+{
+    section("genre rules: the bass's b2 and leading tone only as a pickup; the drone follows a following bass");
+    int bassNotes = 0, bassRub = 0, droneNotes = 0, droneOff = 0, sets = 0;
+    for (int run = 0; run < 10; ++run) {
+        const bool follow = run >= 5;
+        ParamStore p;
+        p.parseText(fmt("compose.track_bars=128 compose.pad_amount=1 compose.track_variation=1 compose.level_match=Off "
+                        "master.auto_gain=Off compose.style=%d compose.bass_follows_chords=%d", run % 5, follow ? 1 : 0).c_str());
+        Composer c(0xBA55ull + static_cast<uint64_t>(run) * 104729ull);
+        std::vector<NoteEvent> ev;
+        const int bars = 5 * 128;
+        c.composeBars(p, 0, bars, ev);
+        ++sets;
+        // The bass's tonic per bar: the pitch class its notes hold longest on the bar's first beat, which no
+        // figure touches.
+        std::vector<std::array<double, 12>> hold(static_cast<size_t>(bars));
+        for (auto& h : hold) h.fill(0.0);
+        for (const NoteEvent& e : ev) {
+            const int bar = static_cast<int>(e.beat / kBeatsPerBar);
+            if (e.part == Part::Bass && bar >= 0 && bar < bars && e.beat - bar * kBeatsPerBar < 1.0)
+                hold[static_cast<size_t>(bar)][static_cast<size_t>(e.pitch % 12)] += e.length;
+        }
+        std::vector<int> tonic(static_cast<size_t>(bars), -1);
+        for (int b = 0; b < bars; ++b) {
+            const auto& h = hold[static_cast<size_t>(b)];
+            const auto top = std::max_element(h.begin(), h.end());
+            if (*top > 0.0) tonic[static_cast<size_t>(b)] = static_cast<int>(top - h.begin());
+        }
+        for (const NoteEvent& e : ev) {
+            const int bar = static_cast<int>(e.beat / kBeatsPerBar);
+            if (bar < 0 || bar >= bars || tonic[static_cast<size_t>(bar)] < 0) continue;
+            const int t = tonic[static_cast<size_t>(bar)];
+            if (e.part == Part::Bass) {
+                ++bassNotes;
+                const int iv = ((e.pitch - t) % 12 + 12) % 12;
+                if (iv != 1 && iv != 11) continue;
+                const double inBar = e.beat - bar * kBeatsPerBar;
+                const bool pickup = inBar >= kBeatsPerBar - 0.5 - 1e-6 && e.length <= 0.5f + 1e-6f;
+                if (!pickup) {
+                    ++bassRub;
+                    if (std::getenv("PHOS_DEBUG_RULES"))
+                        std::printf("DBG bass rub: run %d bar %d at %.2f len %.2f interval %d\n", run, bar, inBar, static_cast<double>(e.length), iv);
+                }
+            } else if (e.part == Part::Drone && follow) {
+                // Every bar the note spans in which the bass plays: the drone stands on that bar's bass tonic or
+                // its fifth (the drone's own notes are root, fifth and octave).
+                ++droneNotes;
+                const int last = static_cast<int>((e.beat + e.length - 1e-6) / kBeatsPerBar);
+                for (int b = bar; b <= std::min(last, bars - 1); ++b) {
+                    const int tb = tonic[static_cast<size_t>(b)];
+                    if (tb < 0) continue;
+                    const int iv = ((e.pitch - tb) % 12 + 12) % 12;
+                    // In a DJ overlap the drone is the incoming track's, on its own tonic, over the outgoing
+                    // bass: a fourth is the harmonic-mixing move transitionBar allows there.
+                    const bool overlapFourth = iv == 5 && c.incomingOfBar(p, b) >= 0;
+                    if (iv != 0 && iv != 7 && !overlapFourth) {
+                        ++droneOff;
+                        if (std::getenv("PHOS_DEBUG_RULES")) std::printf("DBG drone: run %d bar %d pitch %d over bass tonic %d\n", run, b, e.pitch, tb);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    check(bassNotes > 10000 && bassRub == 0,
+          "bass: a b2 or a leading tone only as a pickup of at most two sixteenths at the bar's end (25.09.2026)",
+          fmt("%d of %d bass notes break it, over %d sets", bassRub, bassNotes, sets));
+    check(droneNotes > 20 && droneOff == 0, "drone: with Bass Follows Chords on it stands on the bass's tonic or its fifth (25.09.2026)",
+          fmt("%d of %d drone notes stay behind the bass", droneOff, droneNotes));
+}
+
+/**
+ * @brief Genre rules, part `.counterAgainstLead`: no common attack of lead and counter a semitone or a minor ninth
+ *        apart on beats 1 and 3.
+ *
+ * 25.09.2026: at 145 BPM a passing ninth between two sixteenth lines is hardly heard, but a common attack on a strong
+ * beat is -- the research the user brought proposes exactly this check.
+ */
+void testGenreRulesCounterAgainstLead()
+{
+    section("genre rules: lead and counter never strike a semitone or a minor ninth apart on beats 1 and 3");
+    int common = 0, bad = 0;
+    for (int st = 0; st < kNumStyles; ++st) {
+        const StyleProfile& style = styleProfile(static_cast<StyleId>(st));
+        for (int trial = 0; trial < 48; ++trial) {
+            const int scale = trial % kNumScales, key = (trial * 7 + st) % 12;
+            const uint64_t seed = 0xC0DEull + static_cast<uint64_t>(st) * 104729ull + static_cast<uint64_t>(trial) * 7919ull;
+            const MelodyPlan m = makeMelodyPlan(ParamStore(), style, seed, key, scale, false, 0.82f, (1u << kNumScales) - 1u);
+            auto look = [&](const std::vector<MelodyNote>& lead, const std::vector<MelodyNote>& counter) {
+                int at[128];
+                std::fill(at, at + 128, -1);
+                for (const MelodyNote& n : lead) if (n.step >= 0 && n.step < 128) at[n.step] = m.root[mpIndex(MelodyPart::Lead)] + n.rel;
+                for (const MelodyNote& n : counter) {
+                    if (n.step < 0 || n.step >= 128 || n.step % 8 != 0 || at[n.step] < 0) continue;
+                    ++common;
+                    const int iv = ((m.root[mpIndex(MelodyPart::Counter)] + n.rel - at[n.step]) % 12 + 12) % 12;
+                    if (iv == 1 || iv == 11) ++bad;
+                }
+            };
+            for (int w = 0; w < 2; ++w) {
+                look(m.lead[w], m.counter[w]);
+                for (int sc = 0; sc < kNumScales; ++sc)
+                    if (sc != m.scale) look(m.mode[sc].lead[w], m.mode[sc].counter[w]);
+            }
+        }
+    }
+    check(common > 0 && bad == 0, "counter: no common attack with the lead a semitone or a minor ninth apart on beats 1 and 3 (25.09.2026)",
+          fmt("%d of %d common attacks on beats 1 and 3", bad, common));
 }
 
 /**
@@ -1074,7 +1235,7 @@ void testGenreRulesPadNoFlat9()
  * What this checks is the score as it plays, across the DJ overlaps as well, where the incoming track's pad
  * and drone, in its own key, sound over the outgoing track's bass in the old one: a key moved by a semitone,
  * or a colour of the new key that lands a semitone over the old tonic, is a b9 held for bars. The bass's tonic
- * of a bar is the pitch class its notes hold most often there: the ostinato's root, not a passing fifth of a
+ * of a bar is the pitch class it holds on the bar's first beat: the ostinato's root, not a passing fifth of a
  * figure (the pad's minor sixth over the bass's fifth is the Phrygian pad the rule recommends, E - B - C).
  */
 void testGenreRulesHeldNoFlat9()
@@ -1090,13 +1251,15 @@ void testGenreRulesHeldNoFlat9()
         const int bars = 6 * 128;
         c.composeBars(p, 0, bars, ev);
         ++sets;
-        // The bass's tonic per bar: the pitch class its notes hold longest there (-1 where it rests).
+        // The bass's tonic per bar: the pitch class its notes hold longest on the bar's first beat, which no
+        // figure touches (-1 where it rests). The whole bar would count a figure's fifths as well.
         std::vector<std::array<double, 12>> hold(static_cast<size_t>(bars));
         for (auto& h : hold) h.fill(0.0);
         for (const NoteEvent& e : ev) {
             if (e.part != Part::Bass) continue;
             const int bar = static_cast<int>(e.beat / kBeatsPerBar);
-            if (bar >= 0 && bar < bars) hold[static_cast<size_t>(bar)][static_cast<size_t>(e.pitch % 12)] += e.length;
+            if (bar >= 0 && bar < bars && e.beat - bar * kBeatsPerBar < 1.0)
+                hold[static_cast<size_t>(bar)][static_cast<size_t>(e.pitch % 12)] += e.length;
         }
         std::vector<int> tonic(static_cast<size_t>(bars), -1);
         for (int b = 0; b < bars; ++b) {

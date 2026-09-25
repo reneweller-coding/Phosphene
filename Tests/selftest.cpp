@@ -225,6 +225,9 @@ int main(int argc, char** argv)
     run("testGenreRules.rules", testGenreRulesRules);
     run("testGenreRules.padNoFlat9", testGenreRulesPadNoFlat9);
     run("testGenreRules.heldNoFlat9", testGenreRulesHeldNoFlat9);
+    run("testGenreRules.bassAndDrone", testGenreRulesBassAndDrone);
+    run("testGenreRules.counterAgainstLead", testGenreRulesCounterAgainstLead);
+    run("testSfxToneIntervals", testSfxToneIntervals);
     run("testGenreRules.listeningSeed", testGenreRulesListeningSeed);
     run("testGenreRules.arpGate", testGenreRulesArpGate);
     run("testFoundation.score", testFoundationScore);

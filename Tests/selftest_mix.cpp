@@ -2155,4 +2155,28 @@ void testModalInterchangeModes()
     }
 }
 
+/**
+ * @brief The effects' tonal layer never holds a b9 over the tonic or the leading tone under it (25.09.2026).
+ *
+ * An atmosphere is a long, pad-like layer. Its preset interval is mapped into the mode (sfxToneInterval); a minor
+ * seventh the mode does not have went up to the major one -- the leading tone, held over the tonic, which the
+ * genre uses only melodically. Every interval a bank preset can ask for, in every mode.
+ */
+void testSfxToneIntervals()
+{
+    section("effects: the tonal layer's interval, mapped into the mode, is never a b9 or a leading tone");
+    int cases = 0, bad = 0;
+    for (int scale = 0; scale < kNumScales; ++scale)
+        for (int iv = -12; iv <= 24; ++iv) {
+            const int pc = ((static_cast<int>(std::lround(sfxToneInterval(scale, iv))) % 12) + 12) % 12;
+            ++cases;
+            if (pc == 1 || pc == 11) {
+                ++bad;
+                if (std::getenv("PHOS_DEBUG_RULES")) std::printf("DBG sfx: scale %d interval %d -> pc %d\n", scale, iv, pc);
+            }
+        }
+    check(bad == 0, "effects: no interval of the tonal layer lands a semitone over or under the tonic, in any mode",
+          fmt("%d of %d", bad, cases));
+}
+
 } // namespace phostest

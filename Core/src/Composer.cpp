@@ -1252,6 +1252,65 @@ void Composer::transitionBar(const ParamStore& p, int gi, int bar, std::vector<N
     composeSfxBar(guest.form, static_cast<double>(guest.firstBar) * kBeatsPerBar, inTrack, out);
 }
 
+/** @brief Whether the bass follows the chords in bar @p inTrack: where the track's own pad sounds (25.09.2026). */
+static bool followsHere(const TrackPlan& plan, int inTrack)
+{
+    if (inTrack < 0 || inTrack >= plan.bars) return false;
+    const BarPlan bp = planBar(plan.form, availabilityOf(plan), plan.sectionSeed, inTrack);
+    return (bp.parts & partBit(MelodyPart::Pad)) != 0 && plan.melody.present[mpIndex(MelodyPart::Pad)];
+}
+
+/**
+ * @brief With Bass Follows Chords on, the drone goes where the bass goes (25.09.2026).
+ *
+ * A drone left on the tonic while the bass moves to another root stands a step or a semitone against it -- the
+ * literature the user brought: where the bass follows, "geht typischerweise alles mit". Each drone note that
+ * composeMelodyBar placed from @p from on is cut at the chord blocks it spans (and where the bass stops or starts
+ * following, followsHere), and every piece moves by the bass's shift there (bassChordShift), to the nearer octave
+ * so the drone keeps its register. Pieces that would repeat the pitch before them are joined back.
+ * @param plan     the track
+ * @param baseRoot the bass's root note on the tonic, MIDI
+ * @param out      the bar's notes; the drone's are replaced by their pieces
+ * @param from     the first note composeMelodyBar added
+ */
+static void followWithDrone(const TrackPlan& plan, int baseRoot, std::vector<NoteEvent>& out, size_t from)
+{
+    std::vector<NoteEvent> pieces;
+    for (size_t k = from; k < out.size(); ++k) {
+        if (out[k].part != Part::Drone) continue;
+        const NoteEvent whole = out[k];
+        const double end = whole.beat + whole.length;
+        double at = whole.beat;
+        while (at < end - 1e-9) {
+            const int bar = static_cast<int>(std::floor(at / kBeatsPerBar + 1e-9));
+            const int inTrack = bar - plan.firstBar;
+            const PadChord pcd = padChordAt(plan.melody, plan.form, inTrack);
+            // A piece per bar where the following switches on or off with the pad, else per chord block.
+            const int blockEnd = bar - pcd.barInBlock + std::max(1, pcd.blockBars);
+            int pieceEnd = bar + 1;
+            const bool on = followsHere(plan, inTrack);
+            while (pieceEnd < blockEnd && followsHere(plan, pieceEnd - plan.firstBar) == on) ++pieceEnd;
+            const double cut = std::min(end, static_cast<double>(pieceEnd) * kBeatsPerBar);
+            int shift = on ? bassChordShift(pcd, plan.scale, baseRoot) : 0;
+            shift = ((shift % 12) + 12) % 12;
+            if (shift > 6) shift -= 12;
+            NoteEvent piece = whole;
+            piece.beat = at;
+            piece.length = static_cast<float>(cut - at);
+            piece.pitch = static_cast<uint8_t>(std::clamp(static_cast<int>(whole.pitch) + shift, 0, 127));
+            NoteEvent* before = pieces.empty() ? nullptr : &pieces.back();
+            if (before != nullptr && before->pitch == piece.pitch && std::fabs(before->beat + before->length - at) < 1e-9)
+                before->length += piece.length;
+            else
+                pieces.push_back(piece);
+            at = cut;
+        }
+        out.erase(out.begin() + static_cast<std::ptrdiff_t>(k));
+        --k;
+    }
+    out.insert(out.end(), pieces.begin(), pieces.end());
+}
+
 void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::vector<NoteEvent>& out,
                            std::vector<ControlEvent>* controls) const
 {
@@ -1295,8 +1354,17 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         const double barBeat = static_cast<double>(bar) * kBeatsPerBar;
         const int baseRoot = bassRootNote(plan.key, reg);
         const bool follow = p.getBool(cb + compose::BassFollowsChords);
-        const int root = follow ? baseRoot + bassChordShift(plan.melody, plan.scale, inTrack, baseRoot) : baseRoot;
-        const int chordDeg = follow ? padChordAt(plan.melody, plan.form, inTrack).degree : 0;   // the pad's chord, set 2 behind the main breakdown (23.09.2026)
+        // Following, the bass takes the root the pad holds (bassChordShift), and its figures count from that
+        // chord's degree -- the tonic's where the pad holds the tonic for a chord it may not (the bII). Only
+        // where the pad sounds: in a bar without it there is no chord to follow, and the bass is the pedal
+        // (so, too, under a DJ overlap, whose outgoing outro is bare).
+        int shift = 0, chordDeg = 0;
+        if (follow && followsHere(plan, inTrack)) {
+            const PadChord pcd = padChordAt(plan.melody, plan.form, inTrack);
+            shift = bassChordShift(pcd, plan.scale, baseRoot);
+            chordDeg = shift == 0 ? 0 : pcd.degree;
+        }
+        const int root = baseRoot + shift;
 
         // Pattern of this bar: the secondary one for the last four bars of some 16-bar blocks.
         Rng block;
@@ -1473,6 +1541,16 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
                     pitch = root + scaleDegree(plan.scale, chordDeg + kFigureDegrees[figure][idx]) - scaleDegree(plan.scale, chordDeg)
                           + 12 * kFigureOctaves[figure][idx];
                 }
+                // A b2 or a leading tone is a pickup (25.09.2026): at most two sixteenths, in the bar's last two,
+                // into the next downbeat -- the variation at a phrase end the literature knows. Anywhere else,
+                // under the drone's tonic, it is a minor ninth in the low register, and the figure takes the
+                // fifth instead (the fifth below for the leading tone under the root).
+                {
+                    const int iv = ((pitch - root) % 12 + 12) % 12;
+                    const bool pickup = beat == kBeatsPerBar - 1 && pos >= 0.5 - 1e-9
+                                        && (next - pos) * plan.gate * style.slotGate[std::min(s, kBassSlots - 1)] <= 0.5 + 1e-9;
+                    if (rubsTonic(iv) && !pickup) pitch += iv == 1 ? 6 : -4;
+                }
                 // The bass slot envelope of the style profile (PLAN 6.6): flat by default, because nine
                 // reference tracks play three equally loud notes within +-1.2 dB.
                 const int slot = std::min(s, kBassSlots - 1);
@@ -1502,7 +1580,9 @@ void Composer::composeBars(const ParamStore& p, int firstBar, int count, std::ve
         spec.ride = bp.ride;
         spec.cycleBar = bp.cycleBar;
         composePercBar(p, plan.perc, plan.percSeed, bar, inTrack, plan.bpm, plan.key, plan.scale, spec, out);
+        const size_t melodyFrom = out.size();
         composeMelodyBar(p, plan.melody, bar, inTrack, plan.scale, bp, out, melodyContext(plan, bp, inTrack));
+        if (follow) followWithDrone(plan, baseRoot, out, melodyFrom);
         composeSfxBar(plan.form, static_cast<double>(plan.firstBar) * kBeatsPerBar, inTrack, out);
         if (incoming >= 0) {
             // The percussion shares the kit's lanes: where both tracks hit one lane at the same moment the

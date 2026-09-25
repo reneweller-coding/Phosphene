@@ -76,17 +76,32 @@ void Sfx::reset()
     counter_ = 0;
 }
 
+double sfxToneInterval(int scale, double iv)
+{
+    if (scale < 0) return iv;
+    // An interval the mode does not have goes to its neighbour that it does: up first (the major third of Phrygian
+    // dominant for a minor one), then down. Never onto the b2 or the leading tone (25.09.2026): an atmosphere is a
+    // long, pad-like layer, and held over the tonic either is the semitone rub the pad and the drone may not hold
+    // either -- the minor seventh of harmonic minor went up to the leading tone until then. Such a tone takes the
+    // fifth of its octave, the literature's "+7 st above the root" for pads and atmospheres.
+    const int semis = static_cast<int>(std::lround(iv));
+    double out = iv;
+    if (!inScale(scale, semis)) {
+        if (inScale(scale, semis + 1) && !rubsTonic(semis + 1)) out = iv + 1.0;
+        else if (inScale(scale, semis - 1) && !rubsTonic(semis - 1)) out = iv - 1.0;
+        else out = iv + 1.0;   // only a rub is near: the fifth below takes it
+    }
+    const int got = static_cast<int>(std::lround(out));
+    if (rubsTonic(got)) {
+        const int octave = static_cast<int>(std::floor(static_cast<double>(got) / 12.0));
+        return 12.0 * octave + 7.0;
+    }
+    return out;
+}
+
 double Sfx::interval(const SfxPreset* P, double fallback) const
 {
-    const double iv = P != nullptr ? static_cast<double>(P->pitchInterval) : fallback;
-    if (scale_ < 0) return iv;
-    // An interval the mode does not have goes to its neighbour that it does: up first (the major seventh of harmonic
-    // minor for a minor seventh, the major third of Phrygian dominant for a minor one), then down.
-    const int semis = static_cast<int>(std::lround(iv));
-    if (inScale(scale_, semis)) return iv;
-    if (inScale(scale_, semis + 1)) return iv + 1.0;
-    if (inScale(scale_, semis - 1)) return iv - 1.0;
-    return iv;
+    return sfxToneInterval(scale_, P != nullptr ? static_cast<double>(P->pitchInterval) : fallback);
 }
 
 void Sfx::update(const float* v, int keyRoot)

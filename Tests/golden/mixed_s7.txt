@@ -103,7 +103,7 @@ seed 7 track 2: bars 224..463, 145.5 BPM, B Phrygian, Full-On, bass Rolling/Skip
   harmony: pendulum, 4 bars each: isus4 viisus2 isus4 viisus2; breakdown moves 8 bars each: im7 vimaj7 viisus2 im7
   parts: 1 1 1 1 0 1 1; acid 32 steps squelch 0; arp style 5; lead window 65, counter mode 1, density band 1
   lead 1: archetype 0 cell ddbd corpus ops 0+0 1+0 0+0 1+0 0+0 4+1 0+2 1+0
-  lead 2: archetype 2 cell dd71 corpus ops 0+0 2+1 0+0 1+0 0+0 3+0 0+0 1+0
+  lead 2: archetype 1 cell 3737 corpus ops 0+0 6+0 0+0 2+2 0+1 5+0 0+0 1+0
   form: template 0, hand-over 32, overlap tail 16, arc 0.70..0.70
     Intro  @  0 x32 energy 0.35..0.35 scale 1 roll 0 pdb 0/0 cut 0
     Groove @ 32 x24 energy 0.61..0.61 scale 1 roll 0 pdb 0/0 cut 0
@@ -308,47 +308,47 @@ seed 7 track 3: bars 440..711, 145.5 BPM, B Phrygian, Goa, bass Rolling/Gallop g
     Didgeridoo     beat     960 length    64 preset 230
     Singing Bowl   beat     992 length    16 preset 52
 bars    0..  15:   283 notes faf6bc1eec28af5c,   522 controls 57714465f6401f67
-bars   16..  31:   565 notes 87ed189433916b66,    99 controls 9b7a5958253cebb6
-bars   32..  47:   944 notes eb4bfcc294dc475a,   130 controls 2566659fc1a908ef
-bars   48..  63:  1099 notes df3eba170357d061,   107 controls a19c8ce84ca7be7f
+bars   16..  31:   565 notes 9dcf635ed2a9f70e,    99 controls 9b7a5958253cebb6
+bars   32..  47:   944 notes be1a9246d8cf4d42,   130 controls 2566659fc1a908ef
+bars   48..  63:  1099 notes f86d46437afaf8e1,   107 controls a19c8ce84ca7be7f
 bars   64..  79:   626 notes 36f5a2e02467db08,   139 controls 63c27a915a4e9b93
-bars   80..  95:  1323 notes e26dc99639ff9b6e,   143 controls 5cf7a880264aeb71
-bars   96.. 111:  1391 notes 7e7bacde33ed1870,   126 controls c77f5d7c4a6b0d8f
-bars  112.. 127:    26 notes d09dcc33c824b68f,   124 controls 043fe5aa0c1fbb05
-bars  128.. 143:   125 notes 8c54f3dc63bfd019,   104 controls 0bb12a1fd73bc265
-bars  144.. 159:   789 notes c3df23544e491dd1,   133 controls d82dca9489cbe36d
-bars  160.. 175:  1419 notes e750a12bb51dbeff,   141 controls 2e408b481d74a877
-bars  176.. 191:  1519 notes fe7469ccd4ce2559,   122 controls ce64a88eeba26753
-bars  192.. 207:  1507 notes bf42c68b5dc127c1,   121 controls 3f3e5da85bef8292
-bars  208.. 223:  1532 notes c36c45ef7f410317,   115 controls bc2431d94022ab26
-bars  224.. 239:   617 notes 13a0ffcbcdaa2acf,   383 controls 856f49e40d9119a2
-bars  240.. 255:   685 notes 1b6a43268106bb57,   112 controls b2e5feb43ba920e7
-bars  256.. 271:   870 notes 320416d70ea7173a,   304 controls 14384e672dd49097
-bars  272.. 287:   767 notes effea07b6c1e31f0,   135 controls a98754b4b0f18baa
-bars  288.. 303:   831 notes d0e7ee67434d2411,   112 controls 8b52f526788f7d1e
-bars  304.. 319:  1253 notes 7bb81b6a3b145f42,   146 controls 95428c5685432856
-bars  320.. 335:  1272 notes 80d39db7c0d81cd4,   129 controls 1c8864c8f8e0e2e5
-bars  336.. 351:    44 notes 735e46b3f3be0d68,   127 controls 76908c74c9fbbc44
-bars  352.. 367:   126 notes 68eecffc1e4000ea,   107 controls 1e72e4bee5144179
-bars  368.. 383:   725 notes 1e3172df7840e511,   132 controls 8025a78e22af1f1f
-bars  384.. 399:  1182 notes 9f8ed0c6660ae5bc,   114 controls e3b75366381d6fd2
-bars  400.. 415:  1592 notes 56b1d2d5b0dccbd1,   148 controls 02fc78a7d1a448e7
-bars  416.. 431:  1596 notes 89b9428f881787af,   129 controls 214e98132cb66aa4
-bars  432.. 447:   844 notes 25a9b8581872f99d,   380 controls 592cb63ccf86e9c6
-bars  448.. 463:   627 notes b4f55652246b79b5,   115 controls 0a01eee88a678e9d
-bars  464.. 479:   829 notes 3e7a736d67575122,   304 controls f0b303c2ad37820d
-bars  480.. 495:  1010 notes a4dc15529e3c7fa4,   110 controls c933ae320a189fa4
-bars  496.. 511:   872 notes 93ee88d3f06dea29,   135 controls 93f554a1de3fc7cb
-bars  512.. 527:  1016 notes 29a04d441b378659,   143 controls 3710aa7263145306
-bars  528.. 543:  1391 notes f2d7d754110398f2,   128 controls 49a4974460e6414e
-bars  544.. 559:   876 notes 63ba5b7e429dea71,   139 controls 8843927077920efb
+bars   80..  95:  1320 notes caf81666d6160b30,   143 controls 5cf7a880264aeb71
+bars   96.. 111:  1388 notes ec11cecf19450bee,   126 controls c77f5d7c4a6b0d8f
+bars  112.. 127:    26 notes 6d8fc242ae6e9f71,   124 controls 043fe5aa0c1fbb05
+bars  128.. 143:   125 notes b35202776efa008e,   104 controls 0bb12a1fd73bc265
+bars  144.. 159:   789 notes 80d8ddcd3158e5d9,   133 controls d82dca9489cbe36d
+bars  160.. 175:  1423 notes 244a339f12701fe9,   141 controls 2e408b481d74a877
+bars  176.. 191:  1520 notes ed1e9afee1b86efc,   122 controls ce64a88eeba26753
+bars  192.. 207:  1508 notes e310d185a648a774,   121 controls 3f3e5da85bef8292
+bars  208.. 223:  1533 notes b3708554650d65d7,   115 controls bc2431d94022ab26
+bars  224.. 239:   617 notes c4b71308b49a364f,   383 controls 856f49e40d9119a2
+bars  240.. 255:   685 notes bb84ce882e9ce0ab,   112 controls b2e5feb43ba920e7
+bars  256.. 271:   870 notes d11f25180f60983e,   304 controls 14384e672dd49097
+bars  272.. 287:   767 notes 71140c980dec3c20,   135 controls a98754b4b0f18baa
+bars  288.. 303:   831 notes 42df65ad950cd05c,   112 controls 8b52f526788f7d1e
+bars  304.. 319:  1253 notes d5b0b77551e1a364,   146 controls 012d7a01f7971f12
+bars  320.. 335:  1272 notes 4860d708fab97c87,   129 controls e4cd830b076f52f5
+bars  336.. 351:    45 notes b2d7669763bdfdd2,   127 controls 76908c74c9fbbc44
+bars  352.. 367:   127 notes d350292820d87179,   107 controls 1e72e4bee5144179
+bars  368.. 383:   725 notes 9a225ca4c9d4c8b5,   132 controls 8025a78e22af1f1f
+bars  384.. 399:  1182 notes 7d684610f65bbda2,   114 controls e3b75366381d6fd2
+bars  400.. 415:  1592 notes 3d3368b80d65b755,   148 controls b03224f1e98c86fb
+bars  416.. 431:  1596 notes 89b9428f881787af,   129 controls a709f3fd93e274a0
+bars  432.. 447:   844 notes 79aacf9a26283bd9,   380 controls 592cb63ccf86e9c6
+bars  448.. 463:   627 notes 3b41c8383ad938e1,   115 controls 0a01eee88a678e9d
+bars  464.. 479:   829 notes 343b75dddaa10622,   304 controls f0b303c2ad37820d
+bars  480.. 495:  1010 notes 6862738a8bc6ead8,   110 controls c933ae320a189fa4
+bars  496.. 511:   872 notes 9815cba1f3506a69,   135 controls 93f554a1de3fc7cb
+bars  512.. 527:  1016 notes 6c1ad479e9634911,   143 controls 3710aa7263145306
+bars  528.. 543:  1391 notes d5ed1321196df064,   128 controls 49a4974460e6414e
+bars  544.. 559:   876 notes ee066f1998fc9c67,   139 controls 8843927077920efb
 bars  560.. 575:   330 notes 98bb3f48f1525197,   107 controls 5c282d0a26de6a44
-bars  576.. 591:   430 notes 4d69f8565ed127be,   130 controls d0687237f85a37d1
+bars  576.. 591:   430 notes c1ba729314d2a1c2,   130 controls d0687237f85a37d1
 bars  592.. 607:   946 notes 6ad98c36bf76e429,   113 controls 1b10152de5c87bfd
-bars  608.. 623:  1462 notes 69f108f1eebaa79c,   141 controls 9a31272680dd3228
-bars  624.. 639:  1535 notes bfaf38c0756ee83f,   128 controls 1f2c22c8bdd99372
-bars  640.. 655:  1547 notes 88d60c10ad3d8f22,   125 controls 8081f120a016f8d2
-bars  656.. 671:  1534 notes 800e56e95780cd80,   128 controls eaf65927de0d7f6b
-bars  672.. 687:  1057 notes 34994b8f8decab2f,   389 controls 3713d76b35449b9e
+bars  608.. 623:  1462 notes 5ac0398a7e961a76,   141 controls 9a31272680dd3228
+bars  624.. 639:  1542 notes 57b89ebae361e606,   128 controls 1f2c22c8bdd99372
+bars  640.. 655:  1554 notes 2d8cf40554338e5e,   125 controls 8081f120a016f8d2
+bars  656.. 671:  1541 notes 8a4d0deea3c52a7e,   128 controls eaf65927de0d7f6b
+bars  672.. 687:  1064 notes 02f4ac5860479cd2,   389 controls 3713d76b35449b9e
 bars  688.. 703:   624 notes 06a290901a823f3c,   109 controls 1c7669c828b629af
-bars  704.. 719:   286 notes 160043d50005f1dd,    53 controls e9976446fe64919d
+bars  704.. 719:   286 notes 1b191eb380400b6d,    53 controls e9976446fe64919d

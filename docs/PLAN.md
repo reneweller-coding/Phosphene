@@ -102,7 +102,15 @@ Sektionslängen, Bass-Onsets, Kick-Spektrum), nicht nur behauptet. Werkzeug: `To
   fest; Wechsel zwischen Tracks meist über Quintverwandtschaft oder Halbtonrückung.
 - **Keine kleine None in der Fläche** (Regel des Nutzers, 25.09.2026): kein Pad- oder Drone-Ton einen Halbton
   über dem Grundton, den Bass und Drone halten, und keiner über dem eigenen Akkordgrundton -- auch nicht im
-  DJ-Übergang über dem Bass des alten Tracks. Die phrygische b2 gehört
+  DJ-Übergang über dem Bass des alten Tracks. Ebenso kein gehaltener Leitton unter der Tonika und kein
+  Tritonus über dem Pad-Grundton; Dissonanz in Flächen entsteht über den Klang (Cluster, Rauschen, Drones),
+  nicht über Voicings. maj7 nur selten und nur auf bVI/bIII.
+- **Bass ist Orgelpunkt:** b2 und Leitton im Bass nur als Auftakt (höchstens zwei Sechzehntel am Taktende).
+  "Bass Follows Chords" folgt dem Grundton, den das Pad hält, nur wo das Pad spielt, und die Drone geht mit.
+- **Die b2 ist in Phrygisch eine Stufe** für Acid und Lead (E–F–E), auch betont (Lead: Zählzeit 2 und 4) und
+  gehalten, höchstens ein Viertel der Noten; übrige Farbtöne bleiben Nachbartöne. Lead und Counter schlagen auf
+  1 und 3 nie im Halbton- oder Nonenabstand zusammen. Der Tonanteil eines Effekts landet nie auf b2 oder
+  Leitton. Die phrygische b2 gehört
   Lead und Arp als kurzer Akzent (Farbton-Slots); auf dem bII des Pendels hält das Pad die Tonika mit kleiner Sexte.
 - Acid-Linien: 16-Step-Sequenzen mit Akzent und Slide, Bereich ein bis zwei Oktaven, oft auf dem
   Grundton pendelnd, Filter-Cutoff als eigentliche "Melodie".

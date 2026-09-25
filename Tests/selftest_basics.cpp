@@ -1056,10 +1056,12 @@ void testBassModel()
     //    therefore does nothing to it. Measured here so the limit is a fact and not a sentence.
     {
         std::vector<NoteEvent> off, on, patOff, patOn;
-        composeWith("compose.bass_model=Neural", 31337, 48, off);
-        composeWith("compose.bass_model=Neural compose.bass_follows_chords=1", 31337, 48, on);
-        composeWith("", 31337, 48, patOff);
-        composeWith("compose.bass_follows_chords=1", 31337, 48, patOn);
+        // Pads on throughout (25.09.2026): the bass follows only where the track's pad sounds -- where there is
+        // no chord to follow it is the pedal (Composer.cpp, followsHere).
+        composeWith("compose.pad_amount=1 compose.bass_model=Neural", 31337, 128, off);
+        composeWith("compose.pad_amount=1 compose.bass_model=Neural compose.bass_follows_chords=1", 31337, 128, on);
+        composeWith("compose.pad_amount=1", 31337, 128, patOff);
+        composeWith("compose.pad_amount=1 compose.bass_follows_chords=1", 31337, 128, patOn);
         auto bassOnly = [](const std::vector<NoteEvent>& v) {
             std::vector<const NoteEvent*> out;
             for (const NoteEvent& e : v) if (e.part == Part::Bass) out.push_back(&e);

@@ -506,7 +506,9 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     double scaleW[12] = {};
     for (int d = 0; d < 7; ++d) {
         const int pc = scaleDegree(scale, d) % 12;
-        scaleW[pc] = isColourTone(scale, pc) ? 0.0 : (pc == 0 || pc == 7 ? 1.3 : 1.0);
+        // The Phrygian family's b2 is a degree of the lead's own (Harmony.h, isLineColourTone), a little rarer than
+        // the others; beats 1 and 3 still take a chord tone (constraintAt).
+        scaleW[pc] = isLineColourTone(scale, pc) ? 0.0 : (pc == 0 || pc == 7 ? 1.3 : (pc == 1 ? 0.8 : 1.0));
     }
     int tonicPcs[3];
     chordTones(scale, 0, tonicPcs);   // the tonic chord, whatever the pad plays (the Bordun; round "Harmonik")
@@ -527,14 +529,15 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     auto fits = [&](int step, int rel) {
         return rel >= lo && rel <= hi && constraintAt(step)[static_cast<size_t>(sym(rel))] != 0;
     };
-    // The nearest legal pitch to `rel` at `step`: a scale tone, no colour tone, a chord tone on a strong step.
+    // The nearest legal pitch to `rel` at `step`: a scale tone, no colour tone (the structural b2 is none,
+    // isLineColourTone), a chord tone on a strong step.
     // `dir` (the bar's shift) breaks ties towards the transposition, so a snapped strong step does not undo it.
     auto legal = [&](int step, int rel, int dir) {
-        if (fits(step, rel) && !isColourTone(scale, pcOf(rel))) return rel;
+        if (fits(step, rel) && !isLineColourTone(scale, pcOf(rel))) return rel;
         const int first = dir >= 0 ? 1 : -1;
         for (int d = 1; d <= 12; ++d) {
             for (int c : { rel + first * d, rel - first * d })
-                if (c >= lo && c <= hi && inScale(scale, pcOf(c)) && !isColourTone(scale, pcOf(c)) && (step % 8 != 0 || isChord(pcOf(c)))) return c;
+                if (c >= lo && c <= hi && inScale(scale, pcOf(c)) && !isLineColourTone(scale, pcOf(c)) && (step % 8 != 0 || isChord(pcOf(c)))) return c;
         }
         return std::clamp(rel, lo, hi);
     };
@@ -681,21 +684,22 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
                         bar.rels[bn - 1] = tonic;
                         if (bn >= 3 && first < bn - 1) {
                             // The approach note: a scale step off the tonic, on the side the note before it comes
-                            // from -- but never a colour tone (in Phrygian the step above is the b2, which legal()
-                            // would snap straight back onto the tonic: three tonics in a row, measured), so the
-                            // other side or a farther step where the nearer ones are colour; in Double Harmonic
-                            // b2, 3 and 7 all are, and a tonic at the window's floor left nothing, so the search
-                            // goes out to three steps and, failing that, takes the nearest legal tone above.
+                            // from -- but never a colour tone (legal() would snap it straight back onto the tonic:
+                            // three tonics in a row, measured), so the other side or a farther step where the nearer
+                            // ones are colour; in Double Harmonic 3 and 7 are, and a tonic at the window's floor left
+                            // nothing, so the search goes out to three steps and, failing that, takes the nearest
+                            // legal tone above. The Phrygian family's b2 is no colour tone for the lead
+                            // (isLineColourTone): F - E is the Phrygian cadence itself.
                             const int side = bar.rels[bn - 3] >= tonic ? 1 : -1;
                             int approach = tonic;
                             for (int cand : { side, -side, 2 * side, -2 * side, 3 * side, -3 * side }) {
                                 const int c = transposeRel(scale, rootOffset, tonic, cand);
-                                if (c >= lo && c <= hi && !isColourTone(scale, pcOf(c))) { approach = c; break; }
+                                if (c >= lo && c <= hi && !isLineColourTone(scale, pcOf(c))) { approach = c; break; }
                             }
                             if (approach == tonic) {
                                 for (int d = 1; d <= 12 && approach == tonic; ++d)
                                     for (int c : { tonic + d, tonic - d })
-                                        if (approach == tonic && c >= lo && c <= hi && inScale(scale, pcOf(c)) && !isColourTone(scale, pcOf(c))) approach = c;
+                                        if (approach == tonic && c >= lo && c <= hi && inScale(scale, pcOf(c)) && !isLineColourTone(scale, pcOf(c))) approach = c;
                             }
                             if (approach != tonic) bar.rels[bn - 2] = approach;
                         }
@@ -715,7 +719,7 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
                 for (size_t j = 0; j + 1 < bn; ++j) if (bar.src[j] == k && bar.src[j + 1] == k + 1 && bar.steps[j + 1] == bar.steps[j] + 1 && bar.steps[j] % 2 == 1) i = j;
                 if (i == bn || bFixed[i] || bFixed[i + 1]) continue;
                 int c = 0, t = 0;
-                if (!placeColour(scale, rootOffset, lo, hi, hi, bar.rels[i], cr, c, t)) continue;
+                if (!placeColour(scale, rootOffset, lo, hi, hi, bar.rels[i], cr, c, t, true)) continue;
                 if (!fits(bar.steps[i + 1], t)) continue;
                 bar.rels[i] = c;
                 bar.rels[i + 1] = t;
@@ -768,7 +772,7 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
         const int after = b.size() > (two ? 2u : 1u) ? b[two ? 2 : 1].rel : (1 << 20);   // never onto the note after it: no new run
         int best = from, bestD = 1 << 20;
         for (int rel = lo; rel <= hi; ++rel) {
-            if (!inScale(scale, pcOf(rel)) || isColourTone(scale, pcOf(rel)) || rel == from || rel == after) continue;
+            if (!inScale(scale, pcOf(rel)) || isLineColourTone(scale, pcOf(rel)) || rel == from || rel == after) continue;
             if (step % 8 == 0 && !isChord(pcOf(rel))) continue;
             if (std::abs(rel - from) < bestD) { bestD = std::abs(rel - from); best = rel; }
         }
