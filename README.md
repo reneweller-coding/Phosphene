@@ -1,38 +1,95 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/logo/rings/logo.png">
-    <img alt="Phosphene" src="docs/logo/rings/logo-ink.png" width="600">
-  </picture>
+  <img alt="Phosphene" src="docs/logo/rings/logo-dark.png" width="640">
 </p>
 
-# Phosphene
+# Phosphene — a generator for complete psytrance sets
 
-A generator for complete psytrance sets: it composes and synthesizes kick, bass, percussion, acid,
-leads, arpeggios, pads and effects from a seed, a style profile and an energy arc, and exports every
-note line as MIDI. Standalone and VST3 on Windows, native on Meta Quest 2. Everything is synthesized;
-there are no samples.
+Phosphene composes and synthesizes **whole psytrance sets** in real time: Goa, Full-On, Progressive,
+Dark Forest and Hi-Tech, from a single seed, a style and an energy arc. It writes every track — key,
+tempo, form, kick and rolling bass, percussion, 303 acid, leads, counter-leads, arpeggios, stabs,
+pads, drones and effects — and plays it through its own synthesizers, mixer and mastering chain.
+The same seed always gives the same night, so a set fits in seven lines of text.
 
-The design and the literature behind each building block are in [docs/PLAN.md](docs/PLAN.md) (German). What each development round built, measured and decided is in the journal,
+**Standalone and VST3 plugin** for Windows (x64), and a native build for **Meta Quest**.
+Generative music, algorithmic composition and sound design in one instrument; C++20, JUCE.
+Licence: AGPL-3.0.
+
+![The Set tab](docs/screenshots/tab-0-set.png)
+
+## Download
+
+**[Phosphene-1.1.0-Setup.exe](https://github.com/reneweller-coding/Phosphene/releases/download/v1.1.0/Phosphene-1.1.0-Setup.exe)**
+installs the standalone and the VST3 and fetches the data it needs (the wavetable pack, the two
+learned models, the spoken phrases). Nothing else has to be installed: the runtime is linked in.
+There is a
+**[portable zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.1.0/Phosphene-1.1.0-portable.zip)**
+with everything in it for anyone who would rather not run an installer, and the
+**[manual](https://github.com/reneweller-coding/Phosphene/releases/download/v1.1.0/Phosphene-Manual.pdf)** —
+every tab as a picture, every parameter, and the reasons behind the design.
+
+Requirements: Windows 10 or 11, a 64-bit processor with AVX2 (every x86-64 since 2013), and a VST3
+host if you want the plugin. In a host Phosphene follows the transport and sends the score out as
+MIDI, one channel per part.
+
+## How it is put together
+
+![The signal flow](docs/screenshots/flow.png)
+
+At the top the **composer**: a seed becomes a set arc, the arc becomes tracks, and each track becomes
+a score, a choice of sounds and a mix. The **conductor** hands notes and control events to the
+**engine** on an absolute grid of 32 samples, which is why a bar sounds the same whether the night
+was played from the start or joined in the middle, and whatever block size a host uses. On the left
+the generators, each in the colour of its tab; on the right the channel strips, three planes of space
+and the master. Along the bottom the modulation of every voice.
+
+## The instrument
+
+* **A composer that knows the genre.** Every track is drawn from a grammar of intro, grooves,
+  buildups, pre-drop breaks, drops, breakdowns and outro; an energy arc over the whole set moves
+  loudness, density, register and tension. Five style profiles weight everything from tempo and
+  kick pattern to chord moves. Melodies follow written genre rules first and a learned model
+  (trained on statistics of a MIDI corpus) second; tracks overlap and hand over like a DJ mix.
+* **Nine synthesizers, 9216 sound presets.** Kick (sweep or resonator, tuned to the key and
+  phase-locked to the bass), rolling bass (oscillator and sub), a 303 acid on a diode ladder with
+  accent, slide, squelch comb and disperser, and six polyphonic voices — lead, counter, arp, stab,
+  pad, drone — with supersaw, VA, FM or wavetable oscillators (464 tables), a second oscillator, a
+  state-variable filter or nine circuit-modelled filters (Moog ladder, Prophet, Juno, SEM, Xpander,
+  diode ladder, Korg35, Polivoks, Wasp), amp, filter and mod envelopes, four LFOs and an eight-slot
+  mod matrix. For every track the composer picks a preset per synth by style — 1024 per synth, in
+  sixteen named groups — and evens their loudness out.
+* **A twelve-lane percussion kit** with five synthesis engines, grooves and fills; **effects** —
+  risers, zips, impacts, a sub drop, a shamanic bed and spoken phrases — with flanger, phaser,
+  frequency shifter and stutter.
+* **Mixed and mastered as it plays.** A channel strip per part with the kick's sidechain duck, trance
+  gate and distance; a room, a plate and a hall for near, middle and far; a level, presence and
+  audibility match measured by rendering parts of each track ahead of time; bus compressor, mono
+  bass, soft clipper, a true-peak limiter on a loudness target, and BS.1770 metering.
+* **The panel is yours.** Sixteen tabs generated from the engine's own parameter tables. The tab of a
+  synth shows the preset the composer plays; a thin bright **live ring** on every knob and fader shows
+  where a value plays away from where it stands — a section opening a filter, the level match, an
+  LFO — and turning a knob takes the sound over. An arrange timeline locks or rerolls any track or
+  section; four perform macros; a recorder; MIDI and set export.
+* **Beyond the plugin.** An offline renderer (`phos_render`) that equals the plugin sample for sample,
+  score cues over OSC for visuals (bars, sections, drops — made for
+  [Kaleidoscope](https://github.com/reneweller-coding/KaleidoscopeEnhanced)), and the whole
+  generator natively on Meta Quest, played with the hands.
+
+| | |
+|---|---|
+| ![Arrange](docs/screenshots/tab-1-arrange.png) | ![Mixer](docs/screenshots/tab-13-mixer-master.png) |
+| The arrange timeline: every track and section of the set, lockable | The mixer: a strip per part; the bright tick is the level the composer plays |
+| ![Pad](docs/screenshots/tab-10-pad.png) | ![Acid](docs/screenshots/tab-5-acid.png) |
+| A voice: oscillators, filter model, envelopes, LFOs and matrix | The acid: a 303 with squelch, disperser and delay |
+
+## What it does not do
+
+It does not play samples of instruments or loops: every sound except the spoken phrases is
+synthesized. It does not use a neural network to generate audio. It does not write lyrics, and it
+does not imitate a named artist — the presets and styles are genres, not people.
+
+The design and the literature behind each building block are in [docs/PLAN.md](docs/PLAN.md)
+(German); what each development round built, measured and decided is in the journal,
 [docs/rounds/](docs/rounds/) (German, one file per month).
-
-**Status:** Phases 0 to 7 are done: framework, kick and rolling bass, a twelve-lane percussion kit,
-the melodic layer (an acid voice on a diode ladder with accent, slide and squelch; a polyphonic
-supersaw/VA/FM/wavetable engine for lead, arp and pads; chords, riffs, phrases and arps drawn from
-statistics of a local MIDI corpus under musical constraints), the space and the master (wavetable pads
-with voice-led chords and a trance gate, synthesised effects, kick sidechain on every channel, a room
-and a hall, bus compressor, mono bass, soft clipper and true-peak limiter on a loudness target), and
-the composer: every track is built from a weighted grammar over intro, groove, buildup, pre-drop break,
-drop, breakdown, cut and outro, an energy arc over the whole set moves loudness, density, register and
-dissonance, five style profiles weight everything from tempo to chord moves, transitions between tracks
-are written rather than mixed, and any unit of a set can be locked or rerolled and saved as a
-`.phosset`. A sixty-minute set comes out of one seed as audio and as a Standard MIDI File. Phase 6 adds the plugin: a
-VST3 and a standalone with twelve tabs of controls generated from the parameter tables, an arrange
-timeline of the whole set with a lock and a reroll on every track and every section, four perform
-macros, the composer on a thread of its own, host transport and tempo, MIDI output of the score, and a
-recorder; the standalone renders exactly what the offline renderer renders, sample for sample. The
-headset build is there (below). Phase 9 adds the release path: one script from a checkout to an
-installer, a package check that refuses an incomplete payload, and a build guard in `ctest` for the
-two artefacts nothing else builds (see [Install](#install) and [Tests](#tests)).
 
 ## Build
 

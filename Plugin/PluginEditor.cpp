@@ -456,6 +456,7 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
     const bool shooting = juce::SystemStats::getEnvironmentVariable("PHOS_SHOT", "").isNotEmpty()
                        || juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_ALL", "").isNotEmpty()
                        || juce::SystemStats::getEnvironmentVariable("PHOS_MANUAL", "").isNotEmpty();
+    shooting_ = shooting;
     if (!shooting) updates_->startIfDue(proc_.userFolder().getChildFile("update.txt"));
     setWantsKeyboardFocus(true);
     for (int i = 0; i < kPercLanes; ++i) {
@@ -828,7 +829,8 @@ void PhospheneEditor::paintContent(juce::Graphics& g)
     g.setColour(faint);
     g.setFont(body(11.0f));
     g.drawText("psytrance set generator", h.removeFromLeft(150), juce::Justification::centredLeft, false);
-    if (proc_.muted()) {
+    // Not in the pictures (26.09.2026): they are taken muted by design, and on the project's page a red "MUTED" read as a fault.
+    if (proc_.muted() && !shooting_) {
         g.setColour(red);
         g.setFont(title(11.0f));
         g.drawText(proc_.muteForced() ? "MUTED (PHOS_MUTE)" : "MUTED", h.removeFromLeft(160), juce::Justification::centredLeft, false);
