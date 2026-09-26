@@ -231,6 +231,10 @@ RMS level, the line above it the peak, held for a second and a half; the figure 
 that peak in dBFS. The knobs of a strip are the same parameters its synth page shows. Kick and bass
 have no strip level of their own: their fader is the synth's level.
 
+The fader stays where you put it. Where the composer plays a part at another level -- the level match
+that holds every track's parts to one loudness, a preset's level correction -- a bright tick beside the
+fader shows the level that plays, joined to the fader's cap by a line.
+
 Beside the strips the track gain and the sidechain's times, and the master chain: bus compressor,
 mono bass, a two-times oversampled knee clipper, a lookahead true-peak limiter and a safety clip,
 metered to ITU-R BS.1770.
@@ -354,6 +358,10 @@ the chooser switches Own Sound on as well. A preset sets the synth's sound and l
 ducking, its sends to the rooms, its place in the image and -- on the melodic voices -- its high pass
 and trance gate alone, since those are where the mix and the form put the voice. Undo takes a preset
 back.
+
+The live ring: where a knob plays away from where it stands -- a section riding the cutoff, drop 2's
+lift, a preset's level correction -- a thin bright arc on the knob's ring runs from the knob to the
+value that plays, with a dot where it plays. A knob without it plays exactly what it shows.
 
 The factory bank holds 1024 presets for each synth: sixteen groups -- Hoover, Acid Lead, Vocal
 Formant, Rolling, Squelchy, Classic 303, Full-On ... -- of sixty-four each. A group is a grid of eight

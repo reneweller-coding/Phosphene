@@ -430,6 +430,14 @@ public:
      *        (the mixer page's timer).
      */
     void takeChannelMeters(float* peak, float* rms);
+    /**
+     * @brief The value parameter @p id plays at (26.09.2026, the live ring): the knob with the composer's preset base,
+     *        its rides and the level match's corrections on it, as the engine applied them in the last block. Any thread.
+     */
+    float playedValue(int id) const
+    {
+        return id >= 0 && id < playedCount_ ? played_[static_cast<size_t>(id)].load(std::memory_order_relaxed) : 0.0f;
+    }
     /** @brief Saves the synth's knobs as the user preset @p name; returns the file, or File() when it failed. */
     juce::File saveUserPreset(phos::Module module, int instance, const juce::String& name);
     /** @} */
@@ -822,6 +830,8 @@ private:
     std::array<std::atomic<float>, phos::kNumParts> meterPeak_{};   ///< audio thread raises, the editor takes (exchange 0)
     std::array<std::atomic<double>, phos::kNumParts> meterSum_{};   ///< sums of squares since the editor last took them
     std::atomic<int> meterCount_{ 0 };                              ///< the samples meterSum_ covers
+    std::unique_ptr<std::atomic<float>[]> played_;                  ///< playedValue(): the audio thread stores after every block
+    int playedCount_ = 0;                                           ///< its length (the store's parameter count)
 
     // ---- curation: the editor asks, the composer thread does it
     /** @brief One thing the editor wants done to a lockable unit. */

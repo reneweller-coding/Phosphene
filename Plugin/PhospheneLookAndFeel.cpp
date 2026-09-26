@@ -129,6 +129,19 @@ void PhospheneLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int
     } else {
         arc(g, c, r, startAngle, angle, thickness, fill, true);
     }
+    // The live ring (26.09.2026; phosui::showLive): where the parameter plays away from the knob -- a ride, a lift, a
+    // correction -- a thin bright arc on the ring from the knob to the played value, and a dot where it plays.
+    const juce::var live = s.getProperties()["live"];
+    if (!live.isVoid()) {
+        const float lp = static_cast<float>(juce::jlimit(0.0, 1.0, s.valueToProportionOfLength(static_cast<double>(live))));
+        if (std::fabs(lp - pos) > 0.004f) {
+            const float la = startAngle + lp * (endAngle - startAngle);
+            arc(g, c, r, juce::jmin(angle, la), juce::jmax(angle, la), thickness * 0.42f, text.withAlpha(0.85f), false);
+            const float dr = juce::jmax(2.0f, thickness * 0.45f);
+            g.setColour(text);
+            g.fillEllipse(juce::Rectangle<float>(2.0f * dr, 2.0f * dr).withCentre(c.getPointOnCircumference(r, la)));
+        }
+    }
     // The pointer: short, bright, and inside the ring, so the value text stays readable.
     juce::Path pointer;
     pointer.addRectangle(-1.0f, -r + 1.0f, 2.0f, thickness * 1.5f);
@@ -141,6 +154,21 @@ void PhospheneLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int
     g.setColour(text.withAlpha(s.isEnabled() ? 0.92f : 0.4f));
     g.setFont(phosui::body(juce::jlimit(8.5f, 15.0f, side * 0.18f)));   // a large knob reads its value larger
     g.drawFittedText(v, area.reduced(side * 0.13f, side * 0.34f).toNearestInt(), juce::Justification::centred, 1, 0.45f);
+}
+
+void PhospheneLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width, int height, float pos, float minPos,
+                                            float maxPos, juce::Slider::SliderStyle style, juce::Slider& s)
+{
+    juce::LookAndFeel_V4::drawLinearSlider(g, x, y, width, height, pos, minPos, maxPos, style, s);
+    // The live ring's form on a fader (26.09.2026): a bright tick where the level plays, joined to the cap by a line.
+    const juce::var live = s.getProperties()["live"];
+    if (live.isVoid() || style != juce::Slider::LinearVertical) return;
+    const float lp = static_cast<float>(s.getPositionOfValue(juce::jlimit(s.getMinimum(), s.getMaximum(), static_cast<double>(live))));
+    if (std::fabs(lp - pos) < 1.5f) return;
+    const float cx = static_cast<float>(x) + 0.5f * static_cast<float>(width);
+    g.setColour(phosui::text.withAlpha(0.85f));
+    g.drawLine(cx, juce::jmin(pos, lp), cx, juce::jmax(pos, lp), 2.0f);
+    g.fillRoundedRectangle(juce::Rectangle<float>(14.0f, 3.0f).withCentre({ cx, lp }), 1.5f);
 }
 
 void PhospheneLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& b, bool highlighted, bool)

@@ -136,6 +136,13 @@ void ControlPage::showValues(const phos::ParamStore& store, int first, int count
     }
 }
 
+void ControlPage::showPlayed(const PhospheneProcessor& proc)
+{
+    for (Cell& c : cells_)
+        if (c.param >= 0 && c.comp != nullptr)
+            if (auto* s = dynamic_cast<juce::Slider*>(c.comp.get())) showLive(*s, proc.playedValue(c.param));
+}
+
 void ControlPage::enableMidiLearn(PhospheneProcessor& proc, juce::Component& comp, int target)
 {
     learnProc_ = &proc;

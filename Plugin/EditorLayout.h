@@ -19,6 +19,20 @@
 
 namespace phosui {
 
+/**
+ * @brief The live ring (26.09.2026, the user's choice "Preset absolut + Live-Ring"): hands a knob or a fader the value its
+ *        parameter plays at, in the control's own units. PhospheneLookAndFeel draws it where it differs from the control:
+ *        the composer's rides, a section's lift, the level match's correction of a fader. Repaints only on a change.
+ */
+inline void showLive(juce::Slider& s, double played)
+{
+    auto& props = s.getProperties();
+    const juce::var old = props["live"];
+    if (!old.isVoid() && std::abs(static_cast<double>(old) - played) <= 1.0e-4 * (1.0 + std::abs(played))) return;
+    props.set("live", played);
+    s.repaint();
+}
+
 constexpr int kCellW = 76;        ///< width of one cell unit
 constexpr int kCellH = 84;        ///< height of a cell: knob plus its name
 constexpr int kLabelH = 15;       ///< the name under the knob
@@ -181,6 +195,8 @@ public:
      * @param values (index from @p first, value) pairs, or null
      */
     void showValues(const phos::ParamStore& store, int first, int count, const std::vector<std::pair<int, float>>* values);
+    /** @brief Gives every knob of the page the value its parameter plays at (the live ring; showLive). */
+    void showPlayed(const PhospheneProcessor& proc);
     /** @brief The right click of enableMidiLearn (the page listens to its controls' mouse). */
     void mouseDown(const juce::MouseEvent& e) override;
 

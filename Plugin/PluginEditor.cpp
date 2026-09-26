@@ -879,6 +879,9 @@ bool PhospheneEditor::keyPressed(const juce::KeyPress& key)
 
 void PhospheneEditor::timerCallback()
 {
+    // The live ring of the page on screen (26.09.2026).
+    if (tab_ >= 0 && tab_ < static_cast<int>(pages_.size()) && pages_[static_cast<size_t>(tab_)] != nullptr)
+        pages_[static_cast<size_t>(tab_)]->showPlayed(proc_);
     // The composer's preset of each synth, in its chooser (26.09.2026): the name, and "(composer)" to say who chose it.
     for (auto& pb : presetBoxes_) {
         const int k = pb->synth == Module::Kick ? 0 : pb->synth == Module::Bass ? 1 : pb->synth == Module::Acid ? 2 : 3 + pb->instance;

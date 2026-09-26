@@ -249,6 +249,11 @@ void MixerConsole::timerCallback()
     // The strips follow the readings whether the page is on screen or not (a repaint of a hidden strip costs
     // nothing), so a page that comes into view -- or into a screenshot -- shows the level of now.
     for (size_t i = 0; i < strips_.size() && i < static_cast<size_t>(kNumParts); ++i) strips_[i]->meter(peak[i], rms[i], dt);
+    // The live ring on the faders and the strip knobs (26.09.2026, the user: "Stellt der Composer auch ... die Mixer-Werte
+    // ein?"): a fader stays where the user put it, and the level the level match plays it at shows beside it.
+    for (auto& s : strips_)
+        for (const auto& [comp, id] : s->controls())
+            if (auto* sl = dynamic_cast<juce::Slider*>(comp)) showLive(*sl, proc_.playedValue(id));
 }
 
 void MixerConsole::resized()
