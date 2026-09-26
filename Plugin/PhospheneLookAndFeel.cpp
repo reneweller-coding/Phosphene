@@ -9,14 +9,30 @@ namespace phosui {
 
 juce::Colour partColour(int index)
 {
-    // One hue per generator page, walked around the wheel so that neighbouring tabs differ; the
-    // saturation and brightness stay put, so no page shouts louder than another.
-    // 19.09.2026: five more for the counter-lead, stab and drone pages and the pages that moved behind
-    // them, so that no two of the fifteen tabs share a hue.
-    static const float hues[] = { 0.55f, 0.06f, 0.10f, 0.33f, 0.78f, 0.62f, 0.47f, 0.88f, 0.16f, 0.71f,
-                                  0.25f, 0.95f, 0.40f, 0.02f, 0.52f, 0.84f };
-    const int n = static_cast<int>(sizeof(hues) / sizeof(hues[0]));
-    return juce::Colour::fromHSV(hues[((index % n) + n) % n], 0.55f, 0.92f, 1.0f);
+    // In tab order (PluginEditor.h): Set, Arrange | Kick, Bass, Percussion | Acid | Lead, Counter, Arp, Stab |
+    // Pad, Drone, SFX / FX | Mixer, Perform, Gallery. See the palette's note in the header.
+    static const juce::uint32 tabs[] = {
+        0xffb9b3d6, 0xffc4bde4,                           // the set: lavender
+        0xffff2e97, 0xffff4fa8, 0xffff6fbd,               // the low end: hot magenta
+        0xffb8ff3c,                                       // the acid: acid green
+        0xff22e4ff, 0xff3cc8ff, 0xff22f0d0, 0xff62b4ff,   // the lines: UV cyan
+        0xff9b6bff, 0xff7d5cff, 0xffc46bff,               // the space: electric violet
+        0xffb9b3d6, 0xffc4bde4, 0xffaea8cc,               // mixer, perform, gallery: lavender
+    };
+    const int n = static_cast<int>(sizeof(tabs) / sizeof(tabs[0]));
+    return juce::Colour(tabs[((index % n) + n) % n]);
+}
+
+juce::Colour partColourOf(int part)
+{
+    // Score.h's parts run Kick .. Sfx in the tabs' order from TabKick (2); the bed and the voices live on the SFX tab.
+    return partColour(part <= 10 ? part + 2 : 12);
+}
+
+juce::Colour cycleColour(int i)
+{
+    static const juce::uint32 c[] = { 0xffff2e97, 0xff22e4ff, 0xff9b6bff, 0xffb8ff3c, 0xffff6fbd, 0xff62b4ff };
+    return juce::Colour(c[((i % 6) + 6) % 6]);
 }
 
 juce::Font title(float height)
@@ -123,7 +139,7 @@ void PhospheneLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int
     // It is fitted rather than clipped, so "10000 Hz" shrinks instead of turning into "10000 H".
     const juce::String v = s.getTextFromValue(s.getValue()).trim();
     g.setColour(text.withAlpha(s.isEnabled() ? 0.92f : 0.4f));
-    g.setFont(phosui::body(juce::jlimit(8.5f, 11.5f, side * 0.20f)));
+    g.setFont(phosui::body(juce::jlimit(8.5f, 15.0f, side * 0.18f)));   // a large knob reads its value larger
     g.drawFittedText(v, area.reduced(side * 0.13f, side * 0.34f).toNearestInt(), juce::Justification::centred, 1, 0.45f);
 }
 
@@ -132,9 +148,10 @@ void PhospheneLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButto
     using namespace phosui;
     const juce::Rectangle<float> r = b.getLocalBounds().toFloat().reduced(1.0f);
     const bool on = b.getToggleState();
-    g.setColour(on ? accent.withAlpha(0.30f) : group.brighter(highlighted ? 0.12f : 0.04f));
+    const juce::Colour lit = b.findColour(juce::ToggleButton::tickColourId);   // the page's colour (EditorLayout.cpp)
+    g.setColour(on ? lit.withAlpha(0.28f) : group.brighter(highlighted ? 0.12f : 0.04f));
     g.fillRoundedRectangle(r, 5.0f);
-    g.setColour(on ? accent : edge);
+    g.setColour(on ? lit : edge);
     g.drawRoundedRectangle(r.reduced(0.5f), 5.0f, 1.0f);
     g.setColour(on ? juce::Colours::white : dim);
     g.setFont(phosui::body(juce::jlimit(9.0f, 12.0f, r.getHeight() * 0.5f)));
@@ -162,10 +179,18 @@ void PhospheneLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button&
 {
     using namespace phosui;
     const juce::Rectangle<float> r = b.getLocalBounds().toFloat().reduced(1.0f);
-    g.setColour(background.brighter(down ? 0.22f : (highlighted ? 0.12f : 0.0f)));
+    // A tab carries its page's family colour (PluginEditor.cpp): a stripe along its foot, its frame when open.
+    const juce::var stripe = b.getProperties()["stripe"];
+    const juce::Colour own = stripe.isVoid() ? accent : juce::Colour(static_cast<juce::uint32>(static_cast<juce::int64>(stripe)));
+    const bool open = b.getToggleState();
+    g.setColour(open && !stripe.isVoid() ? own.withAlpha(0.22f) : background.brighter(down ? 0.22f : (highlighted ? 0.12f : 0.0f)));
     g.fillRoundedRectangle(r, 5.0f);
-    g.setColour(b.getToggleState() ? accent : edge);
+    g.setColour(open ? own : edge);
     g.drawRoundedRectangle(r.reduced(0.5f), 5.0f, 1.0f);
+    if (!stripe.isVoid()) {
+        g.setColour(own.withAlpha(open ? 1.0f : 0.55f));
+        g.fillRoundedRectangle(r.withTop(r.getBottom() - 2.5f).reduced(5.0f, 0.0f), 1.2f);
+    }
 }
 
 juce::Font PhospheneLookAndFeel::getLabelFont(juce::Label& l) { return phosui::body(juce::jlimit(9.0f, 13.0f, l.getHeight() * 0.72f)); }

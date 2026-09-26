@@ -26,13 +26,34 @@ constexpr int kGroupPad = 9;      ///< inside a group box
 constexpr int kGroupTitleH = 21;  ///< the group's title bar
 constexpr int kGroupGap = 9;      ///< between group boxes
 constexpr int kPagePad = 12;      ///< around the page
+/**
+ * @name The grid inside a group (26.09.2026)
+ * The user: "wichtigere Encoder größer machen (sowas wie Cutoff im Filter ...) und die Funktionsgruppen sinnvoll und
+ * platzsparend, ohne zu große Lücken, anordnen". A cell used to be one kCellW by kCellH box; the grid is now a half
+ * cell wide and a third of one tall, so that three sizes of control fit together: a normal knob is 2 x 3 of these,
+ * a large one 4 x 5 (its knob nearly twice as wide), a small one -- sends, fine settings -- and a switch or a
+ * chooser 2 (or 4) x 2. Widths and heights handed in as cell units (Group::columns, addControl) mean normal cells.
+ * @{ */
+constexpr int kColU = kCellW / 2;  ///< grid column, pixels
+constexpr int kRowU = kCellH / 3;  ///< grid row, pixels
+/** @} */
+
+/** @brief How large a parameter's control is drawn (26.09.2026). */
+enum class CellSize { Small, Normal, Large };
+/** @brief A parameter and the size of its control, for ControlPage::addSizedGroup. */
+struct SizedParam {
+    int id = -1;                        ///< global parameter id
+    CellSize size = CellSize::Normal;   ///< how large
+};
 
 /** @brief One control and the name under it. */
 struct Cell {
     int param = -1;                                   ///< global parameter id, -1 for an added control
     std::vector<int> bound;                           ///< the parameters an added control drives (addControl)
     int units = 1;                                    ///< width in cell units
-    int heightRows = 1;                               ///< height in cell rows; > 1 takes a band of its own
+    int heightRows = 1;                               ///< height in cell rows (added controls)
+    CellSize size = CellSize::Normal;                 ///< a parameter's control: small, normal or large
+    int gridW = 2, gridH = 3;                         ///< its footprint in grid units (kColU x kRowU), set when added
     bool tall = false;                                ///< occupies the whole cell height (no label line)
     std::unique_ptr<juce::Component> comp;            ///< the control
     std::unique_ptr<juce::Label> label;               ///< its name, under it
@@ -50,6 +71,8 @@ struct Group {
     std::vector<int> cells;         ///< indices into ControlPage::cells_
     juce::Rectangle<int> bounds;    ///< filled by the layout pass
     int rows = 1;                   ///< filled by the layout pass
+    int extraColumns = 0;           ///< columns the layout pass added where the page had room (26.09.2026)
+    bool fill = false;              ///< spans the page's width, its one control with it (setFillWidth)
 };
 
 /**
@@ -90,6 +113,14 @@ public:
      */
     int addParamsGroup(PhospheneProcessor& proc, const juce::String& title, juce::Colour tint, int columns,
                        const std::vector<int>& paramIds);
+    /**
+     * @brief Adds a group of parameters each with the size of its control (26.09.2026: the synth pages).
+     * @param proc the processor; @param title the caption; @param tint the page's colour
+     * @param columns the group's width in normal cells; @param params the parameters, in the order they are placed
+     * @return the group's index
+     */
+    int addSizedGroup(PhospheneProcessor& proc, const juce::String& title, juce::Colour tint, int columns,
+                      const std::vector<SizedParam>& params);
     /** @brief Adds an empty group for controls that are not parameters. */
     int addGroup(const juce::String& title, juce::Colour tint, int columns);
     /**
@@ -108,6 +139,11 @@ public:
     int addControl(int groupIndex, std::unique_ptr<juce::Component> comp, const juce::String& name, int units = 1,
                    bool tall = false, int rows = 1, const std::vector<int>& bound = {});
 
+    /** @brief The group @p groupIndex spans the page's whole width, and so does the control in it (the pattern rolls). */
+    void setFillWidth(int groupIndex)
+    {
+        if (groupIndex >= 0 && groupIndex < static_cast<int>(groups_.size())) groups_[static_cast<size_t>(groupIndex)].fill = true;
+    }
     /** @brief Measures and places everything for a page @p width; returns the height it needs. */
     int layout(int width);
     /** @brief The height the last layout() needed. */
@@ -139,8 +175,12 @@ public:
     void mouseDown(const juce::MouseEvent& e) override;
 
 private:
+    /** @brief Packs every group's cells and places the groups on the page (one pass of layout()); returns the bottom. */
+    int place(int usable);
+    /** @brief Packs @p g's cells into @p gridCols grid columns; returns the rows used; @p apply writes the cells' bounds. */
+    int pack(Group& g, int gridCols, bool apply);
     /** @brief Builds the control a descriptor asks for -- knob, switch or chooser -- and attaches it. */
-    void addParamCell(PhospheneProcessor& proc, int groupIndex, int paramId);
+    void addParamCell(PhospheneProcessor& proc, int groupIndex, int paramId, CellSize size = CellSize::Normal);
     PhospheneProcessor* learnProc_ = nullptr;                    ///< set by the first enableMidiLearn
     std::vector<std::pair<juce::Component*, int>> learnTargets_; ///< control -> target
     std::vector<Cell> cells_;    ///< every control on the page, in the order it was added

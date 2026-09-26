@@ -20,53 +20,6 @@ struct Slice {
     int columns;         ///< cell units per row
 };
 
-/** @brief The kick's table, grouped by what the parameters do. */
-const Slice kKickSlices[] = {
-    { "Pitch", kick::Engine, 7, 5 }, { "Amplitude", kick::AmpAttack, 3, 3 },
-    { "Drive", kick::Drive, 2, 3 }, { "Click", kick::ClickLevel, 3, 3 }, { "Output", kick::Tone, 3, 3 },
-};
-/** @brief The bass's table. */
-const Slice kBassSlices[] = {
-    { "Oscillator", bass::Wave, 8, 5 }, { "Filter", bass::Cutoff, 7, 4 },
-    { "Amplitude", bass::AmpAttack, 4, 4 }, { "Duck & Level", bass::DuckDepth, 4, 4 },
-    // 23.09.2026: appended in earlier rounds and on no page until the host test's reachability check found them.
-    { "Bite & Sub", bass::Bite, 7, 4 },
-};
-/** @brief One percussion lane's table. */
-const Slice kPercSlices[] = {
-    { "Lane", perc::Active, 3, 5 }, { "Source", perc::Pitch, 8, 4 }, { "Noise", perc::Noise, 4, 4 },
-    { "Shape", perc::Decay, 6, 4 }, { "Output", perc::Level, 6, 4 },
-    { "Motion", perc::PanDepth, 3, 3 },   // 23.09.2026, see the bass
-};
-/** @brief The acid voice's table. */
-const Slice kAcidSlices[] = {
-    { "Voice", acid::Wave, 10, 5 }, { "Squelch", acid::Squelch, 6, 4 },
-    { "Delay", acid::DelaySend, 6, 4 }, { "Sends & Level", acid::RoomSend, 4, 4 },
-    { "Colour & Hall", acid::Disperse, 3, 3 },   // 23.09.2026, see the bass
-    { "Plate", acid::PlateSend, 1, 2 },          // 25.09.2026, the mix guide's middle plane
-};
-/** @brief A polyphonic engine's table (lead, counter-lead, arp, stab, pad, drone). */
-const Slice kPolySlices[] = {
-    { "Oscillator", poly::Osc, 15, 5 }, { "Filter", poly::Cutoff, 7, 4 }, { "Amplitude", poly::AmpAttack, 6, 4 },
-    { "Delay", poly::DelaySend, 6, 4 }, { "Sends", poly::RoomSend, 3, 3 },
-    { "Trance Gate", poly::Gate, 7, 4 }, { "Level", poly::Level, 1, 2 },
-    // Appended parameters: the disperser, the drift and (19.09.2026) the filter response.
-    { "Colour", poly::Disperse, 4, 4 },
-    // 20.09.2026, round "dialogue": the portamento and the place in the image, and the voice's own
-    // comb / flanger / phaser. Every parameter has to stand on a tab or the manual generator refuses
-    // to print (Tools/manual), which is exactly how a forgotten append is caught.
-    { "Glide & Image", poly::Glide, 2, 2 },
-    { "Modulation", poly::Mod, 5, 5 },
-    // 23.09.2026, see the bass: the gated hall, the second oscillator and the voice LFO (the four after it).
-    { "Gated Hall", poly::HallGate, 1, 2 }, { "Second Oscillator", poly::Osc2, 4, 4 }, { "LFO", poly::Osc2Detune + 1, 4, 4 },
-    { "Plate & Distance", poly::PlateSend, 3, 3 },   // 25.09.2026: the mix guide's middle plane, the addon's distance and slow movement
-};
-/** @brief The send effects. */
-const Slice kFxSlices[] = {
-    { "Room", fx::RoomSize, 3, 3 }, { "Hall", fx::HallSize, 4, 4 }, { "Returns", fx::LowCut, 5, 5 },
-    { "Plate", fx::PlateSize, 5, 5 }, { "Return Duck", fx::ReturnDuckRelease, 1, 2 },   // 25.09.2026, the mix guide
-    { "Rooms", fx::RoomPreDelay, 6, 6 },   // 25.09.2026, the Dark-Ambient addon: the room's pre-delay, the send filters, B -> C
-};
 /** @brief The mixer and the master. */
 // The channels up to the SFX strip, then the sidechain, then the two strips of 19.09.2026 (texture, vocal).
 const Slice kMasterSlices[] = {
@@ -80,6 +33,134 @@ void addSlices(ControlPage& page, PhospheneProcessor& proc, Module m, int instan
 {
     for (const Slice& s : slices) page.addModuleGroup(proc, m, instance, s.title, tint, s.columns, s.first, s.count);
 }
+
+/**
+ * @name The synth pages by signal flow (26.09.2026)
+ *
+ * The user: "wichtigere Encoder größer machen (sowas wie Cutoff im Filter, und so weiter) und die Funktionsgruppen
+ * sinnvoll und platzsparend, ohne zu große Lücken, anordnen". Until then a page was cut into slices of its module's
+ * table, in the order the parameters had been appended over the rounds -- which put "Plate", "Colour & Hall" or
+ * "Glide & Image" into groups of one or two. A page is now written down the way a synthesizer's panel reads: source,
+ * filter, amplifier, movement, space, output, each knob with the size of its weight -- large for what shapes the
+ * sound most (cutoff and resonance, the wavetable position, the level), small for sends and fine settings. A
+ * parameter the table below forgets is not lost: addSections puts it into a group "More" of its own, where the next
+ * look at the page finds it.
+ * @{ */
+struct SizedKey {
+    const char* key;   ///< the parameter's key inside its module ("cutoff")
+    CellSize size;     ///< the size of its control
+};
+struct Section {
+    const char* title;              ///< the group's caption
+    int columns;                    ///< its width in normal cells
+    std::vector<SizedKey> keys;     ///< its parameters, in the order they are placed
+};
+constexpr CellSize S = CellSize::Small, N = CellSize::Normal, L = CellSize::Large;
+
+const std::vector<Section> kKickSections = {
+    { "Pitch", 6, { { "engine", N }, { "tune", L }, { "pitch_start", N }, { "pitch_end", N }, { "pitch_decay", N } } },
+    { "Punch & Body", 5, { { "punch", L }, { "punch_decay", N }, { "amp_decay", N }, { "amp_attack", S }, { "amp_hold", S } } },
+    { "Click", 3, { { "click_level", N }, { "click_tone", N }, { "click_decay", N } } },
+    { "Drive & Output", 5, { { "level", L }, { "drive", N }, { "clip", N }, { "tone", N }, { "tail_limit", S } } },
+};
+const std::vector<Section> kBassSections = {
+    { "Oscillator", 5, { { "wave", N }, { "sub_mode", N }, { "pulse_width", N }, { "sub", N }, { "sub_octave", S },
+                         { "split_ratio", S }, { "start_phase", S }, { "retrigger", S }, { "kick_lock", S } } },
+    { "Filter", 6, { { "cutoff", L }, { "resonance", L }, { "env_amount", N }, { "filter_decay", N }, { "key_track", S },
+                     { "vel_to_cutoff", S } } },
+    { "Bite", 5, { { "bite", N }, { "bite_cutoff", N }, { "bite_resonance", S }, { "bite_env", S }, { "bite_decay", S },
+                   { "bite_drive", S } } },
+    { "Amplifier", 4, { { "drive", N }, { "amp_attack", S }, { "amp_decay", S }, { "amp_sustain", S }, { "amp_release", S } } },
+    { "Duck & Level", 4, { { "level", L }, { "duck_depth", N }, { "duck_hold", S }, { "duck_release", S } } },
+};
+const std::vector<Section> kAcidSections = {
+    { "Voice", 4, { { "wave", N }, { "slide_time", N }, { "amp_decay", N } } },
+    { "Filter", 6, { { "cutoff", L }, { "resonance", L }, { "env_amount", N }, { "decay", N }, { "accent", N }, { "key_track", S } } },
+    { "Squelch & Drive", 5, { { "squelch", N }, { "drive", N }, { "squelch_start", S }, { "squelch_time", S }, { "low_cut", S },
+                              { "comb_mix", S }, { "comb_feedback", S }, { "disperse", S }, { "disperse_freq", S } } },
+    { "Delay", 4, { { "delay_send", N }, { "delay_feedback", N }, { "delay_left", S }, { "delay_right", S },
+                    { "delay_high_pass", S }, { "delay_low_pass", S } } },
+    { "Space & Output", 5, { { "level", L }, { "duck", N }, { "room_send", S }, { "plate_send", S }, { "hall_send", S },
+                             { "hall_gate", S } } },
+};
+const std::vector<Section> kPolySections = {
+    { "Oscillator", 6, { { "osc", N }, { "table", N }, { "position", L }, { "detune", N }, { "mix", N }, { "wave", N },
+                         { "dynamic_detune", S }, { "pulse_width", S }, { "drift", S } } },
+    { "Wavetable Motion", 4, { { "pos_env", N }, { "pos_lfo_depth", N }, { "pos_decay", S }, { "pos_lfo_beats", S } } },
+    { "FM", 3, { { "fm_ratio", N }, { "fm_index", N }, { "fm_decay", S } } },
+    { "Second Oscillator", 4, { { "osc2", N }, { "osc2_mix", N }, { "osc2_interval", N }, { "osc2_detune", S } } },
+    { "Filter", 6, { { "filter_type", N }, { "cutoff", L }, { "resonance", L }, { "env_amount", N }, { "filter_decay", N },
+                     { "key_track", S }, { "hp_floor", S }, { "hp_track", S }, { "disperse", S }, { "disperse_freq", S } } },
+    { "Amplifier", 4, { { "amp_attack", N }, { "amp_decay", N }, { "amp_sustain", N }, { "amp_release", N }, { "vel_sens", S },
+                        { "glide", S } } },
+    { "LFO", 4, { { "lfo_beats", N }, { "lfo_cutoff", S }, { "lfo_pitch", S }, { "lfo_amp", S } } },
+    { "Modulation", 5, { { "mod", N }, { "mod_mix", N }, { "mod_depth", N }, { "mod_beats", S }, { "mod_feedback", S } } },
+    { "Trance Gate", 5, { { "gate", N }, { "gate_pattern", N }, { "gate_depth", N }, { "gate_duty", S }, { "gate_attack", S },
+                          { "gate_release", S }, { "gate_tone", S } } },
+    { "Delay", 4, { { "delay_send", N }, { "delay_feedback", N }, { "delay_left", S }, { "delay_right", S },
+                    { "delay_high_pass", S }, { "delay_low_pass", S } } },
+    { "Space & Image", 5, { { "distance", N }, { "width", N }, { "room_send", S }, { "plate_send", S }, { "hall_send", S },
+                            { "hall_gate", S }, { "pan", S }, { "slow_mod", S } } },
+    { "Output", 3, { { "level", L }, { "duck", N } } },
+};
+// The effects page: the generator, then the three rooms of the mix guide -- A the room, B the plate, C the hall, each
+// with its own filters and pre-delay -- and the returns. The effect presets stand in a group of their own.
+const std::vector<Section> kSfxSections = {
+    { "Effect Generator", 6, { { "level", L }, { "noise", N }, { "resonance", N }, { "brightness", N }, { "impact_decay", N },
+                               { "swell_decay", N }, { "vowel", S }, { "width", S }, { "sub_level", S }, { "sub_duck", S },
+                               { "wander", S }, { "wander_send", S }, { "room_send", S }, { "plate_send", S }, { "hall_send", S },
+                               { "duck", S } } },
+};
+const std::vector<Section> kFxSections = {
+    { "Room (A)", 4, { { "room_size", N }, { "room_decay", N }, { "room_damping", S }, { "room_pre_delay", S }, { "room_low_cut", S },
+                       { "room_high_cut", S } } },
+    { "Plate (B)", 4, { { "plate_size", N }, { "plate_decay", N }, { "plate_damping", S }, { "plate_pre_delay", S },
+                        { "plate_low_cut", S }, { "plate_high_cut", S }, { "plate_to_hall", S } } },
+    { "Hall (C)", 4, { { "hall_size", N }, { "hall_decay", N }, { "hall_damping", S }, { "hall_pre_delay", S }, { "low_cut", S },
+                       { "high_cut", S } } },
+    { "Returns", 4, { { "room_return", N }, { "plate_return", N }, { "hall_return", N }, { "return_duck", S },
+                      { "return_duck_release", S } } },
+};
+const std::vector<Section> kPercSections = {
+    { "Lane", 5, { { "active", N }, { "role", N }, { "engine", N }, { "density", N }, { "choke", S }, { "cut_track", S } } },
+    { "Source", 6, { { "pitch", L }, { "pitch_amount", N }, { "pitch_decay", N }, { "tune", S }, { "shift", S }, { "fm_ratio", S },
+                     { "fm_index", S }, { "mode_set", N }, { "mode_damp", S }, { "metal_scale", S } } },
+    { "Noise", 4, { { "noise", N }, { "noise_decay", N }, { "bursts", S }, { "burst_spacing", S } } },
+    { "Filter & Shape", 5, { { "filter", N }, { "cutoff", L }, { "resonance", N }, { "low_cut", N }, { "decay", N }, { "drive", S } } },
+    { "Output & Motion", 4, { { "level", L }, { "pan", N }, { "pan_depth", S }, { "pan_bars", S } } },
+};
+
+/**
+ * @brief Adds @p sections of a module instance to @p page, and whatever they leave out as a group "More".
+ * @param restFrom first table index a leftover may come from; @param restTo one past the last, -1 = the table's end
+ *        (the effect presets of the SFX table have a group of their own, addSfxPresetGroup)
+ */
+void addSections(ControlPage& page, PhospheneProcessor& proc, Module m, int instance, const std::vector<Section>& sections,
+                 juce::Colour tint, int restFrom = 0, int restTo = -1)
+{
+    const ParamStore& ps = proc.params();
+    const int base = ps.base(m, instance), count = ParamStore::moduleCount(m);
+    if (base < 0 || count <= 0) return;
+    const juce::String prefix = juce::String(ps.key(base)).upToFirstOccurrenceOf(".", false, false);
+    std::vector<char> seen(static_cast<size_t>(count), 0);
+    for (const Section& sec : sections) {
+        std::vector<SizedParam> params;
+        for (const SizedKey& k : sec.keys) {
+            const int id = ps.find((prefix + "." + k.key).toStdString());
+            jassert(id >= base && id < base + count);   // a key the table misspells
+            if (id < base || id >= base + count || seen[static_cast<size_t>(id - base)] != 0) continue;
+            seen[static_cast<size_t>(id - base)] = 1;
+            params.push_back({ id, k.size });
+        }
+        if (!params.empty()) page.addSizedGroup(proc, sec.title, tint, sec.columns, params);
+    }
+    // The leftovers of [restFrom, restTo) -- the whole table unless a page shows a part of it elsewhere.
+    std::vector<SizedParam> rest;
+    const int to = restTo < 0 ? count : juce::jmin(count, restTo);
+    for (int i = juce::jmax(0, restFrom); i < to; ++i) if (seen[static_cast<size_t>(i)] == 0) rest.push_back({ base + i, S });
+    if (!rest.empty()) page.addSizedGroup(proc, "More", tint, 5, rest);
+}
+/** @} */
 
 } // namespace
 
@@ -249,7 +330,7 @@ void PatternDisplay::paint(juce::Graphics& g)
             if (e.part != Part::Perc || e.lane >= kPercLanes) continue;
             const juce::Rectangle<float> row(xOf(e.beat), plot.getY() + e.lane * rowH + 1.5f,
                                              juce::jmax(3.0f, xOf(e.beat + 0.22) - xOf(e.beat)), rowH - 3.0f);
-            g.setColour((e.lane == lane_ ? accent : partColour(3)).withAlpha(0.35f + 0.65f * e.velocity / 127.0f));
+            g.setColour((e.lane == lane_ ? accent : partColour(TabPerc)).withAlpha(0.35f + 0.65f * e.velocity / 127.0f));
             g.fillRoundedRectangle(row, 1.5f);
         }
     } else {
@@ -279,7 +360,7 @@ void PatternDisplay::paint(juce::Graphics& g)
             // the right one.
             const float x0 = juce::jmax(plot.getX(), xOf(e.beat)), x1 = juce::jmin(plot.getRight(), xOf(e.beat + e.length));
             const juce::Rectangle<float> box(x0, y + 0.5f, juce::jmax(3.0f, x1 - x0 - 1.0f), juce::jmax(2.0f, rowH - 1.0f));
-            const juce::Colour c = partColour(static_cast<int>(part_) + 1);
+            const juce::Colour c = partColourOf(static_cast<int>(part_));
             g.setColour((e.flags & kNoteAccent) ? c.brighter(0.5f) : c.withAlpha(0.45f + 0.55f * e.velocity / 127.0f));
             g.fillRoundedRectangle(box, 1.5f);
             // A slide is drawn as a line into the next note, which is what it does.
@@ -321,6 +402,8 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
     for (int i = 0; i < tabNames().size(); ++i) {
         auto* b = tabButtons_.add(new juce::TextButton(tabNames()[i]));
         b->setClickingTogglesState(false);
+        // The tab's family colour as a stripe under its name, and the frame of the open one (PhospheneLookAndFeel).
+        b->getProperties().set("stripe", static_cast<juce::int64>(partColour(i).getARGB()));
         b->onClick = [this, i] { setTab(i); };
         content_.addAndMakeVisible(b);
     }
@@ -436,21 +519,20 @@ void PhospheneEditor::buildPages()
             (kickTab ? kickScope_ : bassScope_) = scope.get();
             const int g = page->addGroup(kickTab ? "Kick Scope" : "Bass Scope", tint, 12);
             page->addControl(g, std::move(scope), "", 12, true, 3);
-            if (kickTab) addSlices(*page, proc_, Module::Kick, 0, kKickSlices, tint);
-            else addSlices(*page, proc_, Module::Bass, 0, kBassSlices, tint);
+            if (kickTab) addSections(*page, proc_, Module::Kick, 0, kKickSections, tint);
+            else addSections(*page, proc_, Module::Bass, 0, kBassSections, tint);
             break;
         }
-        case TabAcid: addSoundGroup(*page, Module::Acid, 0, 2, tint); addSlices(*page, proc_, Module::Acid, 0, kAcidSlices, tint); break;
+        case TabAcid: addSoundGroup(*page, Module::Acid, 0, 2, tint); addSections(*page, proc_, Module::Acid, 0, kAcidSections, tint); break;
         case TabLead: case TabCounter: case TabArp: case TabStab: case TabPad: case TabDrone:
             // The six voice pages share one table; the tab order is the instance order (PluginEditor.h).
             addSoundGroup(*page, Module::Poly, t - TabLead, 3 + t - TabLead, tint);
-            addSlices(*page, proc_, Module::Poly, t - TabLead, kPolySlices, tint);
+            addSections(*page, proc_, Module::Poly, t - TabLead, kPolySections, tint);
             break;
         case TabFx:
-            page->addModuleGroup(proc_, Module::Sfx, 0, "Effect Generator", tint, 5, 0, sfx::kFirstPreset);
+            addSections(*page, proc_, Module::Sfx, 0, kSfxSections, tint, 0, sfx::kFirstPreset);
             addSfxPresetGroup(*page, tint);
-            page->addModuleGroup(proc_, Module::Sfx, 0, "Effects Plate", tint, 2, sfx::PlateSend, 1);   // 25.09.2026
-            addSlices(*page, proc_, Module::Fx, 0, kFxSlices, tint);
+            addSections(*page, proc_, Module::Fx, 0, kFxSections, tint);
             // 23.09.2026: the modules of round "fx-psychedelia" had no page (see the bass slices).
             page->addModuleGroup(proc_, Module::PsyFx, 0, "Psy FX", tint, 4);
             page->addModuleGroup(proc_, Module::Texture, 0, "Shamanic Bed", tint, 5);
@@ -485,6 +567,7 @@ void PhospheneEditor::buildPages()
             patterns_[static_cast<size_t>(t)] = roll.get();
             const int g = page->addGroup("Pattern", tint, 12);
             page->addControl(g, std::move(roll), "", 12, true, 2);
+            page->setFillWidth(g);
         }
         pages_[static_cast<size_t>(t)] = std::move(page);
     }
@@ -492,14 +575,15 @@ void PhospheneEditor::buildPages()
     percPatterns_.assign(kPercLanes, nullptr);
     for (int lane = 0; lane < kPercLanes; ++lane) {
         auto page = std::make_unique<ControlPage>();
-        addSlices(*page, proc_, Module::Perc, lane, kPercSlices, partColour(3));
+        addSections(*page, proc_, Module::Perc, lane, kPercSections, partColour(TabPerc));
         // The whole kit on every lane's page: the twelve lanes are one pattern, and only the lit
         // row moves as the lane is changed.
         auto roll = std::make_unique<PatternDisplay>();
         roll->setPart(Part::Perc, lane);
         percPatterns_[static_cast<size_t>(lane)] = roll.get();
-        const int g = page->addGroup("Kit pattern", partColour(3), 12);
+        const int g = page->addGroup("Kit pattern", partColour(TabPerc), 12);
         page->addControl(g, std::move(roll), "", 12, true, 3);
+        page->setFillWidth(g);
         percPages_[static_cast<size_t>(lane)] = std::move(page);
     }
     buildSetPage();

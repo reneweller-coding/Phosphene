@@ -610,6 +610,26 @@ Globale Tabs (Vorschlag, erweitert gegenüber der Aufgabenstellung):
 Jeder Erzeuger-Tab ist zweigeteilt: links "Noten" (Pattern-Generator), rechts "Klang" (Synth),
 darunter eine Step-/Piano-Roll-Vorschau der aktuellen Sektion mit Würfel- und Sperr-Knopf.
 
+**Gestaltung (26.09.2026, Farbschema vom Nutzer gewählt):**
+
+- **Farben "UV Blacklight":** indigo-schwarzer Grund, eine Leuchtfarbe je *Familie* statt je Tab.
+  - Low End (Kick, Bass, Percussion): Magenta.
+  - Linien (Lead, Counter, Arp, Stab): UV-Cyan.
+  - Acid: Acid-Grün.
+  - Raum (Pad, Drone, SFX/FX): Violett.
+  - Set, Arrange, Mixer, Perform, Gallery: Lavendel.
+  - Innerhalb einer Familie unterscheiden sich die Tabs um eine kleine Stufe. Knopfbögen, Schalter, Gruppentitel und der Streifen unter dem Tab tragen die Familienfarbe.
+- **Drei Knopfgrößen:**
+  - groß: was den Klang am stärksten formt (Cutoff, Resonance, Wavetable-Position, Pegel, Punch, Pitch);
+  - normal;
+  - klein: Sends, Feineinstellungen.
+- **Gruppen nach Signalfluss:** Quelle, Filter, Verstärker, Bewegung, Raum, Ausgang. Die Synth-Seiten sind als Tabellen in `PluginEditor.cpp` beschrieben (`Section`); ein dort vergessener Parameter landet in einer Gruppe "More".
+- **Layout (`EditorLayout.cpp`):**
+  - Innerhalb einer Gruppe geht jede Zelle an die erste freie Stelle eines Rasters aus halben Zellbreiten und Zelldritteln.
+  - Auf der Seite liegen die Gruppen in einer Skyline, jede dort, wo die Seite über ihre Breite am niedrigsten ist.
+  - Eine Gruppe mit Platz rechts nimmt die schmalste Breite, bei der sie am niedrigsten wird.
+  - Die Pattern-Anzeige nimmt die ganze Breite.
+
 ### 8.2 Quest 2
 Entscheidung: **der komplette Generator läuft auf dem Gerät** (Komponist auf einem kleinen Kern,
 Synthese auf einem großen, Qualitätsstufe `Quest`). Die Quest-Oberfläche ist Spieler und

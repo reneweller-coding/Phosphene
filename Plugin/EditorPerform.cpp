@@ -24,7 +24,7 @@ using namespace phosui;
 void PhospheneEditor::buildPerformPage()
 {
     auto page = std::make_unique<phosui::ControlPage>();
-    const juce::Colour tint = partColour(6);
+    const juce::Colour tint = partColour(TabPerform);
 
     const int gm = page->addGroup("Macros", tint, 16);
     for (int i = 0; i < kNumMacros; ++i) {

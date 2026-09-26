@@ -111,6 +111,7 @@ MixerStrip::MixerStrip(PhospheneProcessor& proc, const juce::String& name, juce:
         auto k = std::make_unique<juce::Slider>(juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox);
         const ParamDesc& d = p.desc(id);
         if (d.minValue < -1.0e-6f && d.maxValue > 1.0e-6f) k->getProperties().set("bipolar", true);
+        k->setColour(juce::Slider::rotarySliderFillColourId, colour_);   // the channel's family colour (26.09.2026)
         k->setTooltip(juce::String(key));
         k->setPopupDisplayEnabled(true, true, nullptr);
         addAndMakeVisible(*k);

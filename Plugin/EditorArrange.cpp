@@ -241,7 +241,7 @@ void ArrangeDisplay::render()
         const Trk& t = snap_.tracks[i];
         const juce::Rectangle<float> lane = blocks_[i].toFloat();
         const juce::Rectangle<float> box = lane.withWidth(juce::jmax(2.0f, lane.getWidth() - 1.0f));
-        g.setColour(partColour(static_cast<int>(i) + 1).withAlpha(t.locked ? 0.42f : 0.26f));
+        g.setColour(cycleColour(static_cast<int>(i)).withAlpha(t.locked ? 0.42f : 0.26f));
         g.fillRoundedRectangle(box, 2.5f);
         // Every section of that track as a hairline of its own colour along the bottom: at this
         // scale a section is a few pixels, so it is a texture rather than a block.

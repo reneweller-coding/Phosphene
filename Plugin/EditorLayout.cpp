@@ -6,6 +6,7 @@
 #include "PhospheneLookAndFeel.h"
 #include "phos/WaveTableFile.h"
 #include <cmath>
+#include <limits>
 
 using namespace phos;
 
@@ -21,17 +22,20 @@ int ControlPage::addGroup(const juce::String& title, juce::Colour tint, int colu
     return static_cast<int>(groups_.size()) - 1;
 }
 
-void ControlPage::addParamCell(PhospheneProcessor& proc, int groupIndex, int paramId)
+void ControlPage::addParamCell(PhospheneProcessor& proc, int groupIndex, int paramId, CellSize size)
 {
     StoreParameter* param = proc.parameterFor(paramId);
     if (param == nullptr) return;
     const ParamDesc& d = proc.params().desc(paramId);
+    const juce::Colour tint = groups_[static_cast<size_t>(groupIndex)].tint;
 
     Cell c;
     c.param = paramId;
+    c.size = size;
     c.label = std::make_unique<juce::Label>(juce::String(), d.name);
     c.label->setJustificationType(juce::Justification::centredTop);
-    c.label->setColour(juce::Label::textColourId, dim);
+    // A large knob is what the page is about, and its name reads so.
+    c.label->setColour(juce::Label::textColourId, size == CellSize::Large ? text : dim);
     c.label->setInterceptsMouseClicks(false, false);
     // "Melody Temperature" under a 76-pixel cell: squeeze it rather than cut it off.
     c.label->setMinimumHorizontalScale(0.5f);
@@ -40,7 +44,10 @@ void ControlPage::addParamCell(PhospheneProcessor& proc, int groupIndex, int par
     switch (d.curve) {
     case Curve::Toggle: {
         auto b = std::make_unique<juce::ToggleButton>();
+        b->setColour(juce::ToggleButton::tickColourId, tint);
         b->setTooltip(juce::String(proc.params().key(paramId)));
+        c.gridW = 2;
+        c.gridH = 2;
         addAndMakeVisible(*b);
         c.button = std::make_unique<juce::ButtonParameterAttachment>(*param, *b);
         c.comp = std::move(b);
@@ -87,6 +94,8 @@ void ControlPage::addParamCell(PhospheneProcessor& proc, int groupIndex, int par
         c.combo = std::make_unique<juce::ComboBoxParameterAttachment>(*param, *cb);
         c.comp = std::move(cb);
         c.units = 2;
+        c.gridW = 4;
+        c.gridH = 2;   // a chooser is a line of text and its name: two thirds of a knob's height
         break;
     }
     default: {
@@ -94,6 +103,9 @@ void ControlPage::addParamCell(PhospheneProcessor& proc, int groupIndex, int par
         // A range that spans zero reads far better as an arc out of the centre than as a full ring.
         if (d.minValue < -1.0e-6f && d.maxValue > 1.0e-6f) s->getProperties().set("bipolar", true);
         if (d.unit != nullptr && d.unit[0] != 0) s->setTextValueSuffix(juce::String(" ") + d.unit);
+        s->setColour(juce::Slider::rotarySliderFillColourId, tint);   // the arc in the page's colour
+        c.gridW = size == CellSize::Large ? 4 : 2;
+        c.gridH = size == CellSize::Large ? 5 : (size == CellSize::Small ? 2 : 3);
         s->setTooltip(juce::String(proc.params().key(paramId)));
         addAndMakeVisible(*s);
         c.slider = std::make_unique<juce::SliderParameterAttachment>(*param, *s);
@@ -157,6 +169,15 @@ int ControlPage::addParamsGroup(PhospheneProcessor& proc, const juce::String& ti
     return g;
 }
 
+int ControlPage::addSizedGroup(PhospheneProcessor& proc, const juce::String& title, juce::Colour tint, int columns,
+                               const std::vector<SizedParam>& params)
+{
+    const int g = addGroup(title, tint, columns);
+    for (const SizedParam& sp : params)
+        if (sp.id >= 0 && sp.id < proc.params().count()) addParamCell(proc, g, sp.id, sp.size);
+    return g;
+}
+
 int ControlPage::addControl(int groupIndex, std::unique_ptr<juce::Component> comp, const juce::String& name, int units,
                             bool tall, int rows, const std::vector<int>& bound)
 {
@@ -165,6 +186,8 @@ int ControlPage::addControl(int groupIndex, std::unique_ptr<juce::Component> com
     c.bound = bound;
     c.units = juce::jmax(1, units);
     c.heightRows = juce::jmax(1, rows);
+    c.gridW = 2 * c.units;
+    c.gridH = 3 * c.heightRows;
     c.tall = tall;
     if (name.isNotEmpty()) {
         c.label = std::make_unique<juce::Label>(juce::String(), name);
@@ -202,43 +225,113 @@ int ControlPage::minimumWidth() const
 
 int ControlPage::layout(int width)
 {
-    // Two nested flows, both measured: cells into rows of their group, groups into rows of the page.
-    // Nothing here knows where anything is; it only knows how wide a thing is and how much is left.
+    // Two packings, both measured: the cells into the grid of their group, then the groups onto the page.
+    // Nothing here knows where anything is; it only knows how large a thing is and where there is room.
     const int usable = juce::jmax(kCellW, width - 2 * kPagePad);
-    int x = kPagePad, y = kPagePad, rowHeight = 0;
-
-    for (Group& g : groups_) {
-        // Flow the cells into rows of the group first, in the group's own coordinates; how tall the
-        // group is falls out of that, and only then is it placed on the page.
-        int cx = 0, cy = 0, used = 0;
-        for (int ci : g.cells) {
-            Cell& c = cells_[static_cast<size_t>(ci)];
-            const int u = juce::jmin(g.columns, c.units);
-            if (c.heightRows > 1) {
-                if (used > 0) { ++cy; used = 0; cx = 0; }
-                c.bounds = juce::Rectangle<int>(cx * kCellW, cy * kCellH, u * kCellW, c.heightRows * kCellH);
-                cy += c.heightRows;
-                continue;
+    for (Group& g : groups_) g.extraColumns = 0;
+    // Then a group that has room to its right takes it, in whole cells, as far as its cells would still fill a
+    // row -- never wider than all of them side by side, so no group grows empty space inside itself -- and the
+    // page is placed again, since a group that grew wider grew shorter (26.09.2026, "ohne zu große Lücken").
+    for (int pass = 0; pass < 3; ++pass) {
+        place(usable);
+        bool grew = false;
+        for (Group& g : groups_) {
+            if (g.fill) continue;
+            int limit = kPagePad + usable;
+            for (const Group& o : groups_)
+                if (&o != &g && o.bounds.getX() >= g.bounds.getRight() && o.bounds.getY() < g.bounds.getBottom()
+                    && g.bounds.getY() < o.bounds.getBottom())
+                    limit = juce::jmin(limit, o.bounds.getX() - kGroupGap);
+            const int room = (limit - g.bounds.getRight()) / kCellW;
+            // The narrowest of the widths the room allows that reaches the lowest of their heights, and only if
+            // that is lower than now: beside a large knob the small ones then stack instead of lining up in a row
+            // under which the group stands empty.
+            const int now = g.columns + g.extraColumns;
+            int bestCols = now, bestH = pack(g, 2 * now, false);
+            for (int add = 1; add <= room; ++add) {
+                const int h = pack(g, 2 * (now + add), false);
+                if (h < bestH) { bestH = h; bestCols = now + add; }
             }
-            if (used + u > g.columns) { used = 0; cx = 0; ++cy; }
-            c.bounds = juce::Rectangle<int>(cx * kCellW, cy * kCellH, u * kCellW, kCellH);
-            used += u;
-            cx += u;
+            if (bestCols > now) { g.extraColumns += bestCols - now; grew = true; }
         }
-        g.rows = juce::jmax(1, cy + (used > 0 ? 1 : 0));
-        const int gw = g.columns * kCellW + 2 * kGroupPad;
-        const int gh = kGroupTitleH + g.rows * kCellH + kGroupPad;
-        if (x > kPagePad && x + gw > kPagePad + usable) { x = kPagePad; y += rowHeight + kGroupGap; rowHeight = 0; }
-        g.bounds = juce::Rectangle<int>(x, y, gw, gh);
-        rowHeight = juce::jmax(rowHeight, gh);
-        x += gw + kGroupGap;
-        for (int ci : g.cells)
-            cells_[static_cast<size_t>(ci)].bounds.translate(g.bounds.getX() + kGroupPad, g.bounds.getY() + kGroupTitleH);
+        if (!grew) break;
     }
-    contentHeight_ = y + rowHeight + kPagePad;
+    contentHeight_ = place(usable) + kPagePad;
     setSize(width, contentHeight_);
     resized();
     return contentHeight_;
+}
+
+int ControlPage::pack(Group& g, int gridCols, bool apply)
+{
+    // Every cell goes to the first place it fits, row by row (26.09.2026): a large knob takes 4 x 5 grid units and
+    // the small and normal cells after it fill the rows beside it, where a flow of equal cells would have left a
+    // hole under every shorter one.
+    std::vector<std::vector<char>> used;
+    auto freeAt = [&](int r, int col, int w, int h) {
+        for (int y = r; y < r + h && y < static_cast<int>(used.size()); ++y)
+            for (int x = col; x < col + w; ++x)
+                if (used[static_cast<size_t>(y)][static_cast<size_t>(x)] != 0) return false;
+        return true;
+    };
+    int bottom = 0;
+    for (int ci : g.cells) {
+        Cell& c = cells_[static_cast<size_t>(ci)];
+        const int w = juce::jmin(gridCols, c.gridW), h = c.gridH;
+        int row = 0, col = 0;
+        for (bool placed = false; !placed; ++row) {
+            for (col = 0; col + w <= gridCols; ++col)
+                if (freeAt(row, col, w, h)) { placed = true; break; }
+            if (placed) break;
+        }
+        while (static_cast<int>(used.size()) < row + h) used.emplace_back(static_cast<size_t>(gridCols), static_cast<char>(0));
+        for (int y = row; y < row + h; ++y)
+            for (int x = col; x < col + w; ++x) used[static_cast<size_t>(y)][static_cast<size_t>(x)] = 1;
+        if (apply) c.bounds = juce::Rectangle<int>(col * kColU, row * kRowU, w * kColU, h * kRowU);
+        bottom = juce::jmax(bottom, row + h);
+    }
+    return bottom;
+}
+
+int ControlPage::place(int usable)
+{
+    for (Group& g : groups_) {
+        if (g.fill) {
+            // As wide as the page, in whole grid columns; its control (a pattern roll) takes all of them.
+            g.extraColumns = juce::jmax(0, (usable - 2 * kGroupPad) / kCellW - g.columns);
+            for (int ci : g.cells) cells_[static_cast<size_t>(ci)].gridW = 2 * (g.columns + g.extraColumns);
+        }
+        const int bottom = pack(g, 2 * (g.columns + g.extraColumns), true);
+        g.rows = juce::jmax(1, (bottom + 2) / 3);
+        const int gpw = (g.columns + g.extraColumns) * kCellW + 2 * kGroupPad;
+        const int gph = kGroupTitleH + juce::jmax(2, bottom) * kRowU + kGroupPad;
+        g.bounds = juce::Rectangle<int>(0, 0, gpw, gph);
+    }
+
+    // On the page, a skyline (26.09.2026): each group, in order, goes where the page is lowest across its width --
+    // the leftmost of the lowest -- instead of into rows as tall as their tallest group, so a short group no
+    // longer leaves a gap under itself as wide as it is.
+    std::vector<juce::Rectangle<int>> placed;
+    int contentBottom = kPagePad;
+    for (Group& g : groups_) {
+        const int gw = juce::jmin(g.bounds.getWidth(), usable);
+        std::vector<int> xs { kPagePad };
+        for (const auto& r : placed)
+            if (r.getRight() + kGroupGap + gw <= kPagePad + usable) xs.push_back(r.getRight() + kGroupGap);
+        int bestX = kPagePad, bestY = std::numeric_limits<int>::max();
+        for (int x : xs) {
+            int y = kPagePad;
+            for (const auto& r : placed)
+                if (r.getX() < x + gw && x < r.getRight()) y = juce::jmax(y, r.getBottom() + kGroupGap);
+            if (y < bestY || (y == bestY && x < bestX)) { bestY = y; bestX = x; }
+        }
+        g.bounds.setPosition(bestX, bestY);
+        placed.push_back(g.bounds);
+        contentBottom = juce::jmax(contentBottom, g.bounds.getBottom());
+        for (int ci : g.cells)
+            cells_[static_cast<size_t>(ci)].bounds.translate(g.bounds.getX() + kGroupPad, g.bounds.getY() + kGroupTitleH);
+    }
+    return contentBottom;
 }
 
 void ControlPage::resized()
@@ -251,7 +344,8 @@ void ControlPage::resized()
             if (c.label != nullptr) c.label->setBounds(juce::Rectangle<int>());
             continue;
         }
-        juce::Rectangle<int> labelArea = r.removeFromBottom(kLabelH);
+        const int labelH = c.size == CellSize::Large ? kLabelH + 3 : (c.size == CellSize::Small ? kLabelH - 2 : kLabelH);
+        juce::Rectangle<int> labelArea = r.removeFromBottom(labelH);
         if (dynamic_cast<juce::Slider*>(c.comp.get()) != nullptr) {
             // A knob is round: keep it square and centred in what is left.
             const int side = juce::jmin(r.getWidth(), r.getHeight());
