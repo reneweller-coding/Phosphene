@@ -18,13 +18,33 @@ is decided by the composer.
 Two ideas run through the whole instrument. The first is that the same seed always gives the same
 set: bar 3000 is bar 3000 whether the night was played from the start or joined in the middle, which
 is what makes a set something you can save in seven lines of text and hand to someone else. The
-second is that the composer never writes a knob. It writes offsets from the knobs, so with every
-offset at zero the instrument sounds exactly as the panel says, and a variation keeps its musical
-size whatever you have set the ranges to.
+second is that the composer never writes a knob. For every track it chooses a sound preset for each
+synth and plays it, and on top of that it rides offsets -- a section opening a filter, the level match
+evening out the parts. The knobs stay yours: the tab shows the preset the composer plays, a thin
+bright ring shows where a value plays away from its knob, and the moment you turn a knob the synth
+is yours again (Own Sound).
 
-The panel has a tab per generator, plus four that are about the set rather than the sound: Set,
-Arrange, Mixer / Master and Perform. Every control on every page is generated from the engine's own
-parameter tables, and so is this manual.
+The panel has a tab per generator, plus the pages that are about the set rather than the sound: Set,
+Arrange, Mixer / Master, Perform and Gallery. Every control on every page is generated from the
+engine's own parameter tables, and so is this manual.
+
+== Signal flow ==
+
+The picture is the whole instrument in the order it works. At the top the composer: a seed becomes a
+set arc, the arc becomes tracks with keys, tempi, styles and forms, and each track becomes a score, a
+choice of sounds and a mix -- the last measured by rendering parts of the track before it plays. The
+conductor hands notes and control events to the engine on an absolute grid of 32 samples, which is
+why a bar sounds the same however a host cuts its blocks.
+
+On the left the generators, each in the colour of its tab: kick, bass and percussion, the acid, the
+six melodic voices with their oscillators, filter models and envelopes, and the effects with the bed
+and the spoken voices. Every part has a channel strip -- level, the kick's sidechain duck, the trance
+gate and its distance -- and sends into three planes of space: a room near, a plate in the middle, a
+hall far behind, plus a gated hall a voice can choose. The master sums it all and brings it to
+loudness: gain, bus compressor, mono bass, soft clipper, band limit, a true-peak limiter and a
+safety clip, metered to BS.1770. Out go the audio, the stems, the score as MIDI and the cues over OSC.
+
+Along the bottom the modulation of every voice: its envelopes, four LFOs and an eight-slot matrix.
 
 == Set ==
 

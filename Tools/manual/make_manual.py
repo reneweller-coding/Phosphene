@@ -201,13 +201,16 @@ def main():
     order = []
     if "About" in chapters:
         order.append(("About", None))
+    # The signal flow second (26.09.2026): the picture the plugin draws of itself (EditorFlow.cpp, flow.png).
+    if "Signal flow" in chapters:
+        order.append(("Signal flow", None))
     for t in man["tabs"]:
         order.append((t["name"], t))
     # Topics that are not a tab (sound presets, shortcuts, updates): after the tabs, in the file's order.
     # The plugin's help page shows the same blocks (Plugin/EditorHelp.cpp reads this file, compiled in).
     tab_names = set(t["name"] for t in man["tabs"])
     for name in chapters:
-        if name != "About" and name not in tab_names:
+        if name not in ("About", "Signal flow") and name not in tab_names:
             order.append((name, None))
 
     body.append('<div class="toc"><h2>Contents</h2><ol>')
@@ -224,6 +227,9 @@ def main():
             body.append(prose(chapters[name]))
         elif tab is not None:
             body.append("<p>%s.</p>" % html.escape("The " + name + " tab"))
+        if name == "Signal flow" and os.path.isfile(os.path.join(a.dir, "flow.png")):
+            body.append('<figure><img src="%s" alt=""><figcaption>The signal flow, drawn by the plugin '
+                        '(the same picture as the help page\'s).</figcaption></figure>' % html.escape(image("flow.png")))
         if tab is None:
             body.append("</div>")
             continue

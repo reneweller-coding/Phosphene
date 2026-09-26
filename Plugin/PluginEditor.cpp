@@ -935,6 +935,29 @@ bool PhospheneEditor::writeScreenshot(const juce::File& file)
     return png.writeImageToStream(img, *out);
 }
 
+bool PhospheneEditor::writeFullPage(const juce::File& file)
+{
+    juce::Component* shown = viewport_.getViewedComponent();
+    const juce::Rectangle<int> vp = viewport_.getBounds();   // in content_'s coordinates, which are design units here
+    if (shown == nullptr || !viewport_.isVisible() || shown->getHeight() <= vp.getHeight()) return writeScreenshot(file);
+    // The header and the tab row as the window shows them, then the page in full below them.
+    const juce::Image head = content_.createComponentSnapshot({ 0, 0, designW_, vp.getY() }, true, 1.0f);
+    const juce::Image page = shown->createComponentSnapshot(shown->getLocalBounds(), true, 1.0f);
+    juce::Image img(juce::Image::ARGB, designW_, vp.getY() + page.getHeight() + 8, true);
+    {
+        juce::Graphics g(img);
+        g.fillAll(bg0);
+        g.drawImageAt(head, 0, 0);
+        g.drawImageAt(page, vp.getX(), vp.getY());
+    }
+    file.getParentDirectory().createDirectory();
+    file.deleteFile();
+    auto out = std::unique_ptr<juce::FileOutputStream>(file.createOutputStream());
+    if (out == nullptr) return false;
+    juce::PNGImageFormat png;
+    return png.writeImageToStream(img, *out);
+}
+
 namespace {
 /** @brief The file name a tab's picture gets, from the tab's own name. */
 juce::String shotName(int index)
@@ -964,7 +987,17 @@ bool PhospheneEditor::writeManual(const juce::File& dir)
     for (int i = 0; i < tabNames().size(); ++i) {
         setTab(i);
         setSize(designW_, designH_);
-        if (!writeScreenshot(dir.getChildFile(shotName(i)))) return false;
+        if (!writeFullPage(dir.getChildFile(shotName(i)))) return false;
+    }
+    // The signal flow (EditorFlow.cpp) at twice its canvas, for print.
+    {
+        SignalFlow flow;
+        flow.setSize(juce::roundToInt(SignalFlow::kCanvasW * 2.0f), juce::roundToInt(SignalFlow::kCanvasH * 2.0f));
+        const juce::Image img = flow.createComponentSnapshot(flow.getLocalBounds(), true, 1.0f);
+        const juce::File f = dir.getChildFile("flow.png");
+        f.deleteFile();
+        auto out = std::unique_ptr<juce::FileOutputStream>(f.createOutputStream());
+        if (out == nullptr || !juce::PNGImageFormat().writeImageToStream(img, *out)) return false;
     }
 
     // ---------------------------------------------------------------- every parameter
@@ -1093,7 +1126,7 @@ void PhospheneEditor::runScreenshotMode()
             for (int i = 0; i < tabNames().size(); ++i) {
                 safe->setTab(i);
                 safe->setSize(safe->designW_, safe->designH_);
-                safe->writeScreenshot(dir.getChildFile(shotName(i)));
+                safe->writeFullPage(dir.getChildFile(shotName(i)));
             }
         }
         if (man.isNotEmpty()) safe->writeManual(juce::File(man));

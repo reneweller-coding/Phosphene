@@ -61,6 +61,8 @@ HelpView::HelpView(PhospheneProcessor& proc) : proc_(proc)
     names_.add("Parameters on this tab");
     texts_.add({});
     updateTopic_ = names_.indexOf("Updates");
+    flowTopic_ = names_.indexOf("Signal flow");
+    addChildComponent(flow_);
 
     list_.setModel(this);
     list_.setRowHeight(26);
@@ -151,6 +153,7 @@ void HelpView::selectedRowsChanged(int row)
     for (juce::Component* c : { static_cast<juce::Component*>(&autoCheck_), static_cast<juce::Component*>(&checkNow_),
                                 static_cast<juce::Component*>(&openRelease_), static_cast<juce::Component*>(&updateLine_) })
         c->setVisible(upd);
+    flow_.setVisible(row == flowTopic_ && flowTopic_ >= 0);
     if (upd) refreshUpdate();
     resized();
 }
@@ -190,6 +193,13 @@ void HelpView::resized()
         openRelease_.setBounds(row.removeFromLeft(190).reduced(4, 2));
         updateLine_.setBounds(r.removeFromBottom(26));
         r.removeFromBottom(6);
+    }
+    if (flow_.isVisible()) {
+        // The picture on top at its own proportions, the chapter's text under it.
+        const int h = juce::jmin(juce::roundToInt(static_cast<float>(r.getHeight()) * 0.68f),
+                                 juce::roundToInt(static_cast<float>(r.getWidth()) * SignalFlow::kCanvasH / SignalFlow::kCanvasW));
+        flow_.setBounds(r.removeFromTop(h));
+        r.removeFromTop(8);
     }
     text_.setBounds(r.withWidth(juce::jmin(r.getWidth(), 900)));
 }

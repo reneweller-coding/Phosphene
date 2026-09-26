@@ -36,6 +36,7 @@ target_sources(Phosphene PRIVATE
     EditorPerform.cpp
     EditorGallery.cpp
     EditorHelp.cpp
+    EditorFlow.cpp
     EditorMixer.cpp
     EditorScope.cpp
     UpdateCheck.cpp

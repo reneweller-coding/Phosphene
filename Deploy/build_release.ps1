@@ -213,7 +213,7 @@ foreach ($p in @($exe, $vst, $render)) { if (-not (Test-Path $p)) { throw "missi
 
 # ---------------------------------------------------------------- 2. the tests, in this configuration
 if (-not $SkipTests) {
-    Step "ctest (the whole suite, in the configuration that ships)" {
+    Step "ctest (the quick suite and the VST3 test, in the configuration that ships)" {
         # PHOS_MUTE has to be OFF. It is set in the shell for every standalone started by hand, and
         # it makes the plugin deliberately silent for ever -- the host test then measures -inf dBFS
         # everywhere and fails for a reason that has nothing to do with the build. Noctuary lost a
@@ -227,7 +227,12 @@ if (-not $SkipTests) {
         # every section a second time. -j 6 matches the recommendation in the README: a release
         # build is often made while somebody works on this machine.
         Remove-Item env:PHOS_SELFTEST_FULL -ErrorAction SilentlyContinue
-        & ctest --test-dir $buildDir -C Release -j 6 --output-on-failure
+        # The quick suite (26.09.2026, the user: "Wobei wir auch vor Releases nicht immer diesen kompletten Wahnsinn
+        # ablaufen müssen"), plus the one long test that is about what ships: the built VST3 loaded as a DAW loads it.
+        # The long tests are registered only when PHOS_TESTS names them (Tests/selftest_tests.cmake).
+        $env:PHOS_TESTS = "vst3test"
+        & ctest --test-dir $buildDir -C Release -j 12 --output-on-failure
+        Remove-Item env:PHOS_TESTS -ErrorAction SilentlyContinue
         $code = $LASTEXITCODE
         # Keep the evidence. ctest writes Testing\Temporary\LastTest.log and overwrites it on the
         # next run, so the log of a failure is gone the moment anyone re-runs the suite to see

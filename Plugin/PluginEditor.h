@@ -159,6 +159,21 @@ private:
  * and the manual cannot say different things. F1 opens it at the chapter of the tab that is open; Esc, F1 or
  * Help closes it again.
  */
+/**
+ * @brief The signal flow as a picture (26.09.2026; EditorFlow.cpp): the help page's topic "Signal flow" and the
+ *        manual's figure (flow.png). A fixed canvas of kCanvasW x kCanvasH, scaled to fit.
+ */
+class SignalFlow final : public juce::Component {
+public:
+    SignalFlow() { setInterceptsMouseClicks(false, false); }
+    static constexpr float kCanvasW = 1000.0f;   ///< the canvas's width in drawing units
+    static constexpr float kCanvasH = 486.0f;    ///< its height
+    /** @brief Every unit a box in its family's colour, the buses as arrows. */
+    void paint(juce::Graphics&) override;
+    /** @brief The part of the component the drawing covers (the canvas keeps its proportions). */
+    juce::Rectangle<int> drawn() const;
+};
+
 class HelpView final : public juce::Component, private juce::ListBoxModel {
 public:
     /** @brief Builds the topics from the manual's chapters. */
@@ -188,6 +203,8 @@ private:
     juce::StringArray texts_;           ///< their text (the parameter topic is filled by open())
     int paramTopic_ = -1;               ///< index of "Parameters on this tab"
     int updateTopic_ = -1;              ///< index of "Updates"
+    int flowTopic_ = -1;                ///< index of "Signal flow"
+    SignalFlow flow_;                   ///< its picture, above the text
     juce::ListBox list_;   ///< the topics
     juce::TextEditor text_;   ///< the chosen topic's text
     juce::ToggleButton autoCheck_{ "Look for updates once a day" };   ///< the daily update check on or off
@@ -230,6 +247,11 @@ public:
      * @return false if the folder cannot be written
      */
     bool writeManual(const juce::File& dir);
+    /**
+     * @brief The open tab in full (26.09.2026, for the manual): the header and the whole page, however tall -- a page
+     *        taller than the window is cut by the viewport in writeScreenshot().
+     */
+    bool writeFullPage(const juce::File& file);
     /** @brief The keys of every parameter that stands in a group on some page, percussion lanes included. */
     juce::StringArray parametersOnPages() const;
     /** @brief The help page (tests): null until the editor has built it. */
