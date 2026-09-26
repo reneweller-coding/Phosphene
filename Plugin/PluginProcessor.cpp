@@ -205,6 +205,7 @@ PhospheneProcessor::PhospheneProcessor()
     // The live ring's values start at the knobs, so nothing shows a ring before the first block has played.
     playedCount_ = params().count();
     played_ = std::make_unique<std::atomic<float>[]>(static_cast<size_t>(playedCount_));
+    playedScratch_.assign(static_cast<size_t>(playedCount_), 0.0f);
     for (int id = 0; id < playedCount_; ++id) played_[static_cast<size_t>(id)].store(params().get(id), std::memory_order_relaxed);
     planKnobIds_ = Composer::planKnobIds(params());
     composeParams_.copyValuesFrom(params());
@@ -1365,7 +1366,9 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         const int got = engine_->takeMeters(pk, ss);
         // What every parameter played at, for the editor's live ring (26.09.2026): one relaxed store each, a few
         // microseconds a block.
-        for (int id = 0; id < playedCount_; ++id) played_[static_cast<size_t>(id)].store(engine_->effective(id), std::memory_order_relaxed);
+        engine_->playedValues(playedScratch_.data());   // with the modulation of the voice one hears (Engine.h)
+        for (int id = 0; id < playedCount_; ++id)
+            played_[static_cast<size_t>(id)].store(playedScratch_[static_cast<size_t>(id)], std::memory_order_relaxed);
         if (got > 0) {
             for (int k = 0; k < phos::kNumParts; ++k) {
                 if (pk[k] > meterPeak_[static_cast<size_t>(k)].load(std::memory_order_relaxed))

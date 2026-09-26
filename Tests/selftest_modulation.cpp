@@ -174,6 +174,35 @@ void testModulationFilterAdsr()
 }
 
 /**
+ * @brief Modulation, part `.display`: the live ring's values (Engine::playedValues, 26.09.2026) carry the modulation of the
+ *        voice one hears -- an LFO on the table position moves the position shown, and a knob nothing modulates stays as
+ *        it stands.
+ */
+void testModulationDisplay()
+{
+    section("modulation: the live ring shows what the LFO does");
+    auto e = std::make_unique<Engine>();
+    e->prepare(48000.0, 512);
+    e->params().parseText("mix.kick_mute=1 mix.bass_mute=1 lead.osc=Wavetable lead.position=0.5 lead.lfo1_rate=2 "
+                          "lead.mx1_src=LFO 1 lead.mx1_dst=Table Position lead.mx1_amount=0.3");
+    e->pushEvent(note(Part::Lead, 0.0, 8.0f, 60));
+    const ParamStore& p = e->params();
+    const int pos = p.base(Module::Poly, 0) + poly::Position, cut = p.base(Module::Poly, 0) + poly::Cutoff;
+    std::vector<float> L(512), R(512), shown(static_cast<size_t>(p.count()));
+    double lo = 1.0, hi = 0.0, cutOff = 0.0;
+    for (int b = 0; b < 200; ++b) {   // about two seconds: four LFO cycles
+        e->process(L.data(), R.data(), 512);
+        e->playedValues(shown.data());
+        lo = std::min(lo, static_cast<double>(shown[static_cast<size_t>(pos)]));
+        hi = std::max(hi, static_cast<double>(shown[static_cast<size_t>(pos)]));
+        cutOff = std::max(cutOff, std::fabs(static_cast<double>(shown[static_cast<size_t>(cut)] - e->effective(cut))));
+    }
+    check(hi - lo > 0.4 && lo < 0.5 && hi > 0.5 && cutOff == 0.0,
+          "an LFO of amount 0.3 on the table position swings the position shown around the knob; the cutoff stays put",
+          fmt("position shown %.3f .. %.3f around 0.5, cutoff off its knob by at most %.3g", lo, hi, cutOff));
+}
+
+/**
  * @brief The preset bank (26.09.2026; PresetBank.cpp): 1024 presets for each of nine synths, names unique within a synth,
  *        every key of the table a real knob, the counter never on the lead's oscillator; with PHOS_BANK_FULL every preset
  *        sounds: finite, audible, without a runaway peak (PHOS_BANK_TRIMS also writes PresetTrims.inl).

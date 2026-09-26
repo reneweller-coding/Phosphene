@@ -285,10 +285,19 @@ public:
     /** @brief The detune knob value a note of @p lengthBeats plays with. */
     static double dynamicDetune(double knob, double amount, double lengthBeats);
 
+    /**
+     * @brief The modulation to show on the knobs (26.09.2026, the live ring): the sums per destination (ModDest) of the
+     *        latest note's voice (after it ends, the last it played), or null where nothing moves. Rendering thread.
+     */
+    const float* displayModulation() const
+    {
+        return modOn_ && lastVoice_ >= 0 && mod_[lastVoice_].active() ? modSum_[lastVoice_] : nullptr;
+    }
 private:
     float slowCut_ = 0.0f, slowColour_ = 0.0f;   ///< setSlow()'s sines (the addon's free movement)
     /** @name The voice's own modulation (26.09.2026, Modulation.h)
      *  @{ */
+    int   lastVoice_ = -1;                        ///< the voice of the latest note (displayModulation)
     Modulator mod_[kPolyVoices];                  ///< envelope, LFOs and matrix, per voice
     float modSum_[kPolyVoices][kModDests] = {};   ///< the sums per destination, per voice, on the 16-sample grid
     bool  modOn_ = false;                         ///< some slot of the matrix reaches something

@@ -118,6 +118,11 @@ public:
     /** @brief Fundamental phase the Start Phase knob stands for. */
     double knobPhase() const { return static_cast<double>(startPhase_) - 0.5; }
 
+    /**
+     * @brief The modulation to show on the knobs (26.09.2026, the live ring): the sums per destination (ModDest) of the
+     *        modulator, or null where nothing moves. Rendering thread.
+     */
+    const float* displayModulation() const { return modOn_ && mod_.active() ? modSum_ : nullptr; }
 private:
     /** @brief Sets what depends on the note's pitch: the release floor, the envelope times and the Split high pass. */
     void applyNoteSettings();

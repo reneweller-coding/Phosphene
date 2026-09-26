@@ -514,6 +514,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
     for (float& m : modSum_[voice]) m = 0.0f;
     modGainL_[voice] = modGainR_[voice] = 1.0f;
     mod_[voice].noteOn(static_cast<int64_t>(pos_), beat_);
+    lastVoice_ = voice;
     if (fAdsrOn_) {
         fAdsr_[voice].noteOn();
         fAdsr_[voice].advanceAttack(late);

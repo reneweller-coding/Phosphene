@@ -832,6 +832,7 @@ private:
     std::atomic<int> meterCount_{ 0 };                              ///< the samples meterSum_ covers
     std::unique_ptr<std::atomic<float>[]> played_;                  ///< playedValue(): the audio thread stores after every block
     int playedCount_ = 0;                                           ///< its length (the store's parameter count)
+    std::vector<float> playedScratch_;                              ///< the audio thread's copy before the stores
 
     // ---- curation: the editor asks, the composer thread does it
     /** @brief One thing the editor wants done to a lockable unit. */

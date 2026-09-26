@@ -49,6 +49,7 @@ set(PHOS_SELFTEST_SECONDS
     testPlanCacheLive                     1.3
     testPresetBank                        1.7
     testModulation.filterAdsr             1.9
+    testModulation.display                1.0
     testGenreRules.bassAndDrone           2.0
     testGenreRules.heldNoFlat9            2.2
     testWanderingFx                       4.0

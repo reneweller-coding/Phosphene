@@ -326,6 +326,45 @@ float Engine::effective(int id) const
     return id >= 0 && id < static_cast<int>(eff_.size()) ? eff_[static_cast<size_t>(id)] : 0.0f;
 }
 
+void Engine::playedValues(float* out) const
+{
+    const ParamStore& p = params_;
+    for (int id = 0; id < p.count(); ++id) out[id] = eff_[static_cast<size_t>(id)];
+    auto add = [&](int id, float delta) {
+        if (id < 0) return;
+        const ParamDesc& d = p.desc(id);
+        out[id] = std::clamp(out[id] + delta, d.minValue, d.maxValue);
+    };
+    auto mul = [&](int id, float factor) {
+        if (id < 0) return;
+        const ParamDesc& d = p.desc(id);
+        out[id] = std::clamp(out[id] * factor, d.minValue, d.maxValue);
+    };
+    auto sum = [](const float* s, ModDest d) { return s[static_cast<int>(d)]; };
+    // The same arithmetic as the synths (Poly.cpp applyModulation and lowPassCoefs, Bass.cpp, Acid.cpp): the cutoff in
+    // octaves, level and FM index as factors, the rest added.
+    auto show = [&](const float* s, int cutoff, int res, int mode, int pw, int fm, int pos, int level, int pan) {
+        if (s == nullptr) return;
+        mul(cutoff, std::pow(2.0f, sum(s, ModDest::Cutoff)));
+        add(res, sum(s, ModDest::Resonance));
+        add(mode, sum(s, ModDest::FilterMode));
+        add(pw, sum(s, ModDest::PulseWidth));
+        mul(fm, std::clamp(1.0f + sum(s, ModDest::FmIndex), 0.0f, 2.0f));
+        add(pos, sum(s, ModDest::TablePos));
+        if (level >= 0) add(level, 20.0f * std::log10(std::max(1.0e-4f, std::clamp(1.0f + sum(s, ModDest::Level), 0.0f, 2.0f))));
+        add(pan, sum(s, ModDest::Pan));
+    };
+    for (int i = 0; i < kPolyInstances; ++i) {
+        const int b = p.base(Module::Poly, i);
+        show(poly_[i].displayModulation(), b + poly::Cutoff, b + poly::Resonance, b + poly::FilterMode, b + poly::PulseWidth,
+             b + poly::FmIndex, b + poly::Position, b + poly::Level, b + poly::Pan);
+    }
+    const int bb = p.base(Module::Bass), ab = p.base(Module::Acid);
+    show(bass_.displayModulation(), bb + bass::Cutoff, bb + bass::Resonance, bb + bass::FilterMode, bb + bass::PulseWidth,
+         -1, -1, bb + bass::Level, -1);
+    show(acid_.displayModulation(), ab + acid::Cutoff, ab + acid::Resonance, -1, -1, -1, -1, ab + acid::Level, -1);
+}
+
 void Engine::advanceRamps()
 {
     for (int i = 0; i < params_.count(); ++i) {

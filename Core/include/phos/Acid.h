@@ -142,6 +142,11 @@ public:
     /** @brief Whether the last note started legato (slid into). */
     bool lastLegato() const { return legato_; }
 
+    /**
+     * @brief The modulation to show on the knobs (26.09.2026, the live ring): the sums per destination (ModDest) of the
+     *        modulator, or null where nothing moves. Rendering thread.
+     */
+    const float* displayModulation() const { return modOn_ && mod_.active() ? modSum_ : nullptr; }
 private:
     double sr_ = 48000.0;   ///< output sample rate
     int    os_ = 2;                  ///< oscillator/ladder rate as a multiple of sr_ (1 or 2)

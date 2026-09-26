@@ -361,7 +361,10 @@ back.
 
 The live ring: where a knob plays away from where it stands -- a section riding the cutoff, drop 2's
 lift, a preset's level correction -- a thin bright arc on the knob's ring runs from the knob to the
-value that plays, with a dot where it plays. A knob without it plays exactly what it shows.
+value that plays, with a dot where it plays. The modulation shows there too: an LFO or the mod
+envelope on the cutoff, the table position, the resonance, the filter mode, the pulse width, the FM
+index, the level or the pan moves the dot as the latest note's voice moves. A knob without it plays
+exactly what it shows.
 
 The factory bank holds 1024 presets for each synth: sixteen groups -- Hoover, Acid Lead, Vocal
 Formant, Rolling, Squelchy, Classic 303, Full-On ... -- of sixty-four each. A group is a grid of eight

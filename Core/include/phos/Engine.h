@@ -269,6 +269,13 @@ public:
     float limiterReduction() const { return limiter_.reduction(); }   ///< @copydoc compReduction
     /** @brief Effective value of a parameter as last applied (audio thread view). */
     float effective(int id) const;
+    /**
+     * @brief Every parameter's effective value, with the modulation of the voice a player hears on the knobs it moves
+     *        (26.09.2026, the live ring): cutoff, resonance, filter mode, pulse width, FM index, table position, level
+     *        and pan of the six voices, the bass and the acid, the way each synth applies its sums. Rendering thread.
+     * @param out params().count() values
+     */
+    void playedValues(float* out) const;
     /** @brief The key's pitch class the engine plays in (0 = C), as last applied (audio thread view; the scopes). */
     int keyRoot() const { return keyRoot_; }
 
