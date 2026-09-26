@@ -83,6 +83,7 @@
 #include "phos/TempoDelay.h"
 #include "phos/Texture.h"
 #include "phos/Vocal.h"
+#include <limits>
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -307,6 +308,7 @@ private:
         float from = 0.0f, to = 0.0f;      ///< ramp endpoints
         double start = 0.0, length = 0.0;  ///< ramp in beats; length 0 = not ramping
         float override = -1.0f;            ///< discrete override, < 0 = none
+        float base = std::numeric_limits<float>::quiet_NaN();   ///< ControlEvent::Kind::Base: the value in place of the knob, NaN = none
     };
     std::unique_ptr<Variation[]> var_;   ///< every parameter's offset and override
     std::vector<float> eff_;               ///< effective values, indexed by global id

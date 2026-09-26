@@ -114,7 +114,10 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              CounterMode,
              // 23.09.2026, round "Hoerbarkeit": the quiet lines lifted to a share of the lead's partial loudness
              // (ComposerLevels.cpp, matchAudibility). Appended, in the same place in the table.
-             AudibilityMatch, Count };
+             AudibilityMatch,
+             // 26.09.2026: the track's sounds come from the preset bank (on) or from the older recipes (off; Composer::presetOf).
+             SoundPresets,
+             Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
 namespace perc {

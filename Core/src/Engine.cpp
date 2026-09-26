@@ -355,6 +355,10 @@ void Engine::dispatchControl(const ControlEvent& e)
     Variation& v = var_[static_cast<size_t>(e.param)];
     if (e.kind == ControlEvent::Kind::Override) {
         v.override = e.value;
+    } else if (e.kind == ControlEvent::Kind::Base) {
+        // A negative length clears it (Score.h); a value is held inside the knob's range, as the knob itself is.
+        const ParamDesc& d = params_.desc(e.param);
+        v.base = e.length < 0.0f ? std::numeric_limits<float>::quiet_NaN() : std::clamp(e.value, d.minValue, d.maxValue);
     } else if (e.length <= 0.0f) {
         v.offset = e.value;
         v.length = 0.0;
@@ -419,8 +423,10 @@ void Engine::applyParams()
         if (owner >= 0 && own[owner]) { store(i, knob); continue; }
         if (isDiscreteCurve(p.desc(i).curve)) {
             if (v.override >= 0.0f) value = v.override;
-        } else if (v.offset != 0.0f) {
-            value = p.fromNormalised(i, p.toNormalised(i, knob) + v.offset);
+        } else {
+            // A base value (a preset of the composer's, 26.09.2026) stands in for the knob; the offset rides on it.
+            const float basis = std::isnan(v.base) ? knob : v.base;
+            value = v.offset != 0.0f ? p.fromNormalised(i, p.toNormalised(i, basis) + v.offset) : basis;
         }
         store(i, value);
     }

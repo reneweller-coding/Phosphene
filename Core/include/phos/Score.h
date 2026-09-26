@@ -96,6 +96,17 @@ struct ControlEvent {
          * before notes at equal beats) and the earliest at which it is not still the previous beat's.
          */
         BassSlot,
+        /**
+         * @brief Play `value` -- absolute, in the parameter's own unit -- in place of the knob of a continuous
+         *        parameter; an offset still rides on top. A negative `length` clears it (26.09.2026; a NaN would be
+         *        the clearer word, but every control's value stays finite -- testKnobFuzz checks that).
+         *
+         * The composer's sound for a track is a preset (SoundPresets.h, bankPresets) since 26.09.2026, and the user
+         * wanted it absolute: "Stellt der Composer auch die Preset-Werte auf Absolutwerte ... ein?" A preset's
+         * continuous knobs arrive as this at the track's start, its discrete ones as Override; the section rides stay
+         * offsets. An own sound (mix.*_own) plays the knobs and none of it.
+         */
+        Base,
     };
     double  beat = 0.0;       ///< when the change starts
     float   length = 0.0f;    ///< ramp length in beats; 0 = immediately

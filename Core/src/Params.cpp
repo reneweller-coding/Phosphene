@@ -138,6 +138,7 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "counter_mode",    "Counter Mode",    "",      0.0f,   4.0f,   0.0f, Curve::Choice, kCounterModeNames },
     // 23.09.2026, round "Hoerbarkeit" (ComposerLevels.cpp, matchAudibility): at the end, in the enum's order.
     { "audibility_match", "Audibility Match", "",    0.0f,   1.0f,   1.0f, Curve::Toggle },
+    { "sound_presets", "Sound Presets", "",  0.0f,  1.0f,  1.0f, Curve::Toggle },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };

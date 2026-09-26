@@ -130,7 +130,10 @@ void PlugConductor::seek(const ParamStore& params, int startBar, double beatOffs
     (void)engineLock;
     for (ControlEvent& e : immediate) {
         e.beat = 0.0;
-        e.length = 0.0f;
+        // A base's negative length is not a ramp but its clear (Score.h, 26.09.2026): a zero here made the composer's
+        // clearing of a preset a base of 0 -- acid.disperse_freq at 0 Hz, the disperser's coefficients NaN, whenever a
+        // host started a set in the middle with the presets off (hosttest.realhost).
+        if (!(e.kind == ControlEvent::Kind::Base && e.length < 0.0f)) e.length = 0.0f;
     }
     landing_ = std::move(immediate);
 }

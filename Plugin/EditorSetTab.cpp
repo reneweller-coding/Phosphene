@@ -137,7 +137,7 @@ void PhospheneEditor::buildSetPage()
     using namespace compose;
     const std::vector<std::pair<const char*, std::vector<int>>> groups = {
         { "Start & Style", ids({ Style, StyleMix, StyleTempo, Bpm, TempoRange, Key, Scale }) },
-        { "Set Journey",   ids({ compose::Arc, SetMinutes, TrackBars, TrackVariation, SoundVariation }) },
+        { "Set Journey",   ids({ compose::Arc, SetMinutes, TrackBars, TrackVariation, SoundVariation, SoundPresets }) },
         { "Kick & Bass",   ids({ KickPattern, BassPattern, BassGate, BassVariation, BassRegister, BassFollowsChords, BassModel, BassRhythm }) },
         { "Rhythm",        ids({ PercDensity, PercVariation, Swing, GateChance }) },
         { "Melody",        ids({ AcidAmount, ArpAmount, MelodyVariation, MelodyTemperature, SquelchChance, ModalInterchange, MelodyModel, PitchEntropy }) },

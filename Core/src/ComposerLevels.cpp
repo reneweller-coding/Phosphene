@@ -228,9 +228,11 @@ bool Composer::adoptMeasurement(int index, const TrackPlan& m, uint64_t generati
     if (generation != planGeneration_ || index < 0 || index >= static_cast<int>(plans_.size())) return false;
     TrackPlan& t = plans_[static_cast<size_t>(index)];
     t.loudness = m.loudness;
+    t.refLoudness = m.refLoudness;
     t.gainDb = m.gainDb;
     for (int k = 0; k < kMelodyParts; ++k) {
         t.partLoudness[k] = m.partLoudness[k];
+        t.refPartLoudness[k] = m.refPartLoudness[k];
         t.partGainDb[k] = m.partGainDb[k];
         t.audibleInMix[k] = m.audibleInMix[k];
         t.audibilityLiftDb[k] = m.audibilityLiftDb[k];
@@ -251,10 +253,20 @@ bool Composer::measureLevels(const ParamStore& p, TrackPlan& t, double* mix0Out)
     const int cb = p.base(Module::Compose);
     const bool level = p.getBool(cb + compose::LevelMatch);
     const bool first = t.index == 0;
-    // The level match's arithmetic, once for both orders. The first track is the reference: it measures
-    // every part and corrects nothing.
+    // The reference (26.09.2026, Composer.h refLoudness): the first track with its presets off. Measured only where it
+    // plays one; otherwise it is the first track as it stands, which corrects nothing, as before.
+    bool presets = false;
+    for (int k = 0; k < kSoundSynths && first; ++k) presets = presets || presetOf(p, t, k) != nullptr;
+    ParamStore recipes;
+    if (presets) {
+        recipes.copyValuesFrom(p);
+        recipes.set(cb + compose::SoundPresets, 0.0f);
+    }
+    const TrackPlan& ref = first ? t : plans_[0];
+    // The level match's arithmetic, once for both orders. Every track against the reference -- the first one too,
+    // where it plays presets.
     auto trackGain = [&] {
-        if (!first) t.gainDb = static_cast<float>(std::clamp(plans_[0].loudness - t.loudness, -9.0, 9.0));
+        if (!first || presets) t.gainDb = static_cast<float>(std::clamp(ref.refLoudness - t.loudness, -9.0, 9.0));
     };
     // A part the track does not use needs no correction (the first track measures all of them: it is the
     // reference for every later one).
@@ -262,19 +274,21 @@ bool Composer::measureLevels(const ParamStore& p, TrackPlan& t, double* mix0Out)
     // Each melodic part against the same part in the first track; the track gain applies to it as well,
     // so it is taken back out.
     auto partGain = [&](int k) {
-        if (first) return;
-        if (!t.melody.present[k]) { t.partLoudness[k] = -120.0; t.partGainDb[k] = 0.0f; return; }
-        const bool measurable = plans_[0].partLoudness[k] > -60.0 && t.partLoudness[k] > -60.0;
-        t.partGainDb[k] = measurable ? static_cast<float>(std::clamp(plans_[0].partLoudness[k] - t.partLoudness[k] - t.gainDb, -12.0, 12.0)) : 0.0f;
+        if (first && !presets) return;
+        if (!first && !t.melody.present[k]) { t.partLoudness[k] = -120.0; t.partGainDb[k] = 0.0f; return; }
+        const bool measurable = ref.refPartLoudness[k] > -60.0 && t.partLoudness[k] > -60.0;
+        t.partGainDb[k] = measurable ? static_cast<float>(std::clamp(ref.refPartLoudness[k] - t.partLoudness[k] - t.gainDb, -12.0, 12.0)) : 0.0f;
     };
 
     if (probe::threads() <= 1) {
         // The serial order of before 20.09.2026.
         if (level) {
             t.loudness = probeLoudness(p, t);
+            t.refLoudness = presets ? probeLoudness(recipes, t) : t.loudness;
             trackGain();
             for (int k = 0; k < kMelodyParts; ++k) {
                 if (partProbed(k)) t.partLoudness[k] = probeLoudness(p, t, k);
+                t.refPartLoudness[k] = presets ? probeLoudness(recipes, t, k) : t.partLoudness[k];
                 partGain(k);
             }
             matchPresence(p, t);
@@ -290,15 +304,21 @@ bool Composer::measureLevels(const ParamStore& p, TrackPlan& t, double* mix0Out)
     if (level) {
         // Stage 1: the foundation and the parts.
         const TrackPlan snap = t;
-        double loudness = 0.0, partLoudness[kMelodyParts] = {};
+        double loudness = 0.0, partLoudness[kMelodyParts] = {}, refLoudness = 0.0, refPart[kMelodyParts] = {};
         tasks.push_back([&] { loudness = probeLoudness(p, snap); });
         for (int k = 0; k < kMelodyParts; ++k)
             if (partProbed(k)) tasks.push_back([&, k] { partLoudness[k] = probeLoudness(p, snap, k); });
+        if (presets) {
+            tasks.push_back([&] { refLoudness = probeLoudness(recipes, snap); });
+            for (int k = 0; k < kMelodyParts; ++k) tasks.push_back([&, k] { refPart[k] = probeLoudness(recipes, snap, k); });
+        }
         probe::runAll(tasks);
         t.loudness = loudness;
+        t.refLoudness = presets ? refLoudness : loudness;
         trackGain();
         for (int k = 0; k < kMelodyParts; ++k) {
             if (partProbed(k)) t.partLoudness[k] = partLoudness[k];
+            t.refPartLoudness[k] = presets ? refPart[k] : t.partLoudness[k];
             partGain(k);
         }
     }

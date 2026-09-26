@@ -168,6 +168,7 @@ bool macroIsMomentary(Macro m) { return m == Macro::DropOut || m == Macro::Stutt
 PhospheneProcessor::PhospheneProcessor()
     : juce::AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true))
 {
+    for (auto& a : shownIndex_) a.store(-1, std::memory_order_relaxed);   // no composer preset shown yet (26.09.2026)
     // Before anything prepares an engine -- this instance's, or one of the composer thread's probe
     // renders -- the core has to know where the shipped tables and the two learned models are. The
     // table load itself happens in the first Engine::prepare() and only once for the process.
@@ -374,6 +375,53 @@ void PhospheneProcessor::timerCallback()
     if (sum != composeFingerprint_) {
         composeFingerprint_ = sum;
         plansStale_.store(true, std::memory_order_release);
+    }
+    refreshPresetDisplay();
+}
+
+int PhospheneProcessor::soundSynthOfId(int id, int& local) const
+{
+    const ParamStore& p = params();
+    for (int k = 0; k < kSoundSynths; ++k) {
+        const Module m = k == 0 ? Module::Kick : k == 1 ? Module::Bass : k == 2 ? Module::Acid : Module::Poly;
+        const int b = p.base(m, k >= 3 ? k - 3 : 0);
+        if (id >= b && id < b + ParamStore::moduleCount(m)) { local = id - b; return k; }
+    }
+    local = -1;
+    return -1;
+}
+
+void PhospheneProcessor::refreshPresetDisplay()
+{
+    const TransportView t = transport();
+    TrackPlan plan;
+    if (!tryReadTrack(t.track, plan)) return;
+    ParamStore& p = params();
+    const int ownBase = p.base(Module::Mix) + mix::KickOwn;
+    for (int k = 0; k < kSoundSynths; ++k) {
+        if (p.getBool(ownBase + k)) { shownPreset_[k] = -2; shownIndex_[k].store(-1, std::memory_order_relaxed); continue; }
+        const SoundPreset* sp = Composer::presetOf(p, plan, k);
+        const int idx = sp != nullptr ? plan.soundPreset[k] : -1;
+        shownPreset_[k] = idx;
+        shownIndex_[k].store(idx, std::memory_order_relaxed);
+    }
+}
+
+void PhospheneProcessor::takeOverPreset(int k)
+{
+    // The knobs of the synth take the preset's values (26.09.2026): what the user starts turning from is what sounded.
+    // Inside the gesture, so the undo step that records the turn takes this back with it. Not the plan knobs.
+    const int idx = k >= 0 && k < kSoundSynths ? shownPreset_[k] : -1;
+    if (idx < 0) return;
+    const Module m = k == 0 ? Module::Kick : k == 1 ? Module::Bass : k == 2 ? Module::Acid : Module::Poly;
+    const std::vector<SoundPreset>& bank = factoryPresets(m, k >= 3 ? k - 3 : 0);
+    if (idx >= static_cast<int>(bank.size())) return;
+    ParamStore& p = params();
+    const int b = p.base(m, k >= 3 ? k - 3 : 0);
+    for (const auto& kv : bank[static_cast<size_t>(idx)].values) {
+        const int id = b + kv.first;
+        if (std::find(planKnobIds_.begin(), planKnobIds_.end(), id) != planKnobIds_.end() || p.get(id) == kv.second) continue;
+        if (StoreParameter* sp = parameterFor(id)) sp->setValueNotifyingHost(p.toNormalised(id, kv.second));
     }
 }
 
@@ -795,6 +843,19 @@ void PhospheneProcessor::parameterGestureChanged(int parameterIndex, bool gestur
             gestureBefore_ = captureUndoState();
             const auto& all = getParameters();
             gestureName_ = parameterIndex >= 0 && parameterIndex < all.size() ? all[parameterIndex]->getName(64) : juce::String("knob");
+            // A synth playing the composer's preset (26.09.2026): the knob the user takes becomes the sound's owner --
+            // Own Sound on, the knobs standing at the preset's values -- in the same undo step as the turn.
+            if (parameterIndex >= 0 && parameterIndex < all.size())
+                if (auto* spar = dynamic_cast<StoreParameter*>(all[parameterIndex])) {
+                    int local = -1;
+                    const int k = soundSynthOfId(spar->storeId(), local);
+                    const Module m = k == 0 ? Module::Kick : k == 1 ? Module::Bass : k == 2 ? Module::Acid : Module::Poly;
+                    const int own = params().base(Module::Mix) + mix::KickOwn + k;
+                    if (k >= 0 && !presetLeaves(m, local) && !params().getBool(own) && shownPreset_[k] >= 0) {
+                        takeOverPreset(k);
+                        if (StoreParameter* o = parameterFor(own)) o->setValueNotifyingHost(1.0f);
+                    }
+                }
         }
     } else if (gestureDepth_ > 0 && --gestureDepth_ == 0) {
         recordUndo(gestureName_, gestureBefore_);

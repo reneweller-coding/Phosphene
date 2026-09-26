@@ -238,6 +238,24 @@ Literatur pro Baustein steht dabei, wie in der Feedback-Regel "Literatur statt K
   - Ausgewertet wird im absoluten 16-Sample-Raster, also unabhängig von den Blöcken des Hosts (`testModulation.blockSize`).
   - Der Bass hat keine Tonhöhe und kein Pan als Ziel (Kick-Lock), die Acid keine Filter-ADSR.
 
+**Preset-Bank und Preset-Wahl des Komponisten (26.09.2026, vom Nutzer gewünscht):**
+
+- **Bank (`PresetBank.cpp`, erzeugt aus `Tools/presets/bank_spec.py` über `gen_bank.py`):** je Synth (Kick, Bass, Acid, Lead, Counter, Arp, Stab, Pad, Drone) 16 Gruppen × 64 = 1024 Presets.
+  - Namensschema wie im BerlinSchoolGenerator: Gruppe = Klangart ("Hoover", "Rolling", "Classic 303"), Name = Adjektiv (8, dunkel → hell) + Nomen der Gruppe (8).
+  - Die Adjektiv-Achse und die Nomen-Achse spannen die Knopfbereiche der Gruppe auf (Achsen A/B), der Rest streut (R) oder steht fest (C).
+  - Jede Gruppe wählt ihr Filtermodell und Modulationsrezepte (LFO auf Cutoff, Wavetable-Position über LFO/Mod-Hüllkurve, Pitch-Dive, einblendendes Vibrato).
+  - Jede Gruppe trägt Gewichte je Stil (Goa, Full-On, Progressive, Dark Forest, Hi-Tech).
+  - Was ein Preset nicht setzt (`presetLeaves`): Pegel, Ducking, Sends, Pan/Distanz, bei den Stimmen Hochpass und Gate; Kick-Tuning, End-Tonhöhe und Schwanz; Kick-Lock, Retrigger und Startphase des Basses.
+- **Pegelkorrektur (`PresetTrims.inl`):** jedes Preset gegen die Standardknöpfe seines Synths gemessen, so wie es spielt (`PHOS_BANK_TRIMS`, `testPresetBank`), höchstens ±20 dB, als Offset auf den Level des Synths.
+  - Kick und Bass über das Tiefband unter 140 Hz, das Pad unbewertet am gehaltenen Dreiklang, der Drone an Grundton und Quinte.
+  - Lead und Counter K-gewichtet an einer gemischten Phrase, Arp, Stab und Acid K-gewichtet an Sechzehnteln.
+- **Referenz des Pegelabgleichs:** Track 1 *ohne* Presets (`TrackPlan::refLoudness`, `refPartLoudness`); spielt Track 1 Presets, wird auch er daran angeglichen.
+- **Regeln der Ziehung:** Der Counter spielt nie den Oszillator des Lead-Presets. Der Kick-Sweep endet vor der ersten Bass-Sechzehntel (≤ 16 ms).
+- **Wahl im Komponisten:** je Track und Synth ein Preset (`TrackPlan::soundPreset`, Salz `kSaltSoundPreset`). Die Gruppe wird nach Stil gewichtet gezogen; Gruppen der zwei vorigen Tracks zählen ein Sechstel.
+  - Die Werte gehen absolut an die Engine (`ControlEvent::Kind::Base`, diskrete als Override); Fahrten der Sektionen reiten als Offset darauf. Die Rezepte des Synths ruhen dann.
+  - Own Sound hält den Komponisten heraus; `compose.sound_presets` = Aus (oder Sound Variation 0) schaltet die Wahl ab.
+  - Der Tab zeigt Namen und Werte, ohne sie in den Zustand zu schreiben; ein gedrehter Knopf übernimmt das Preset in die Knöpfe und schaltet Own Sound ein.
+
 ### 5.1 Kick
 Zwei Engines, umschaltbar, layerbar:
 

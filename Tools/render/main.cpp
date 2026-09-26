@@ -61,6 +61,7 @@
  *     --version           print the version, the vector path and the wavetable pack, then exit
  * @endcode
  */
+#include "phos/SoundPresets.h"
 #include "phos/Audibility.h"
 #include "phos/Composer.h"
 #include "phos/Engine.h"
@@ -620,6 +621,16 @@ int main(int argc, char** argv)
                     if (p.audibleInMix[k] <= 0.0) continue;
                     std::printf(" %s %.1f", kLine[k], p.audibleInMix[k]);
                     if (p.audibilityLiftDb[k] > 0.0f) std::printf(" (+%.1f dB)", static_cast<double>(p.audibilityLiftDb[k]));
+                }
+                std::printf("\n");
+            }
+            // 26.09.2026: the sound presets the composer chose, one per synth (SoundPresets.h, Composer::presetOf).
+            {
+                static const char* const kSynth[kSoundSynths] = { "kick", "bass", "acid", "lead", "counter", "arp", "stab", "pad", "drone" };
+                std::printf("          presets:");
+                for (int k = 0; k < kSoundSynths; ++k) {
+                    const SoundPreset* sp = Composer::presetOf(params, p, k);
+                    std::printf(" %s \"%s\"%s", kSynth[k], sp != nullptr ? (sp->group + ": " + sp->name).c_str() : "knobs", k + 1 < kSoundSynths ? ";" : "");
                 }
                 std::printf("\n");
             }

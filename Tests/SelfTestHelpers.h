@@ -363,6 +363,7 @@ inline double measureLock(const char* settings, double bpm, double& spread, doub
             + "compose.bass_variation=0 compose.kick_pattern=Four master.clip=Off master.limiter=Off master.clipper=Off "
               "master.comp_ratio=1 master.auto_gain=Off compose.level_match=Off compose.presence_match=Off "
               "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 "
+              "compose.sound_presets=0 "   // the settings' timbre (bite, sub octave, cutoff), not a preset's (26.09.2026)
             + std::string(settings) + " " + solo;
         e->params().parseText(cfg.c_str());
         for (uint64_t k = 1; k <= 40; ++k) {
@@ -542,7 +543,7 @@ inline double measureFreeLock(double bpm, const char* rhythm, int& onsets, int& 
         fmt("compose.bpm=%g compose.bass_rhythm=%s compose.bass_variation=1 bass.kick_lock=Bass follows kick "
             "compose.kick_pattern=Four master.clip=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 "
             "master.auto_gain=Off compose.level_match=Off compose.acid_amount=0 compose.lead_amount=0 "
-            "compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0", bpm, rhythm);
+            "compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 compose.sound_presets=0", bpm, rhythm);   // the knobs' timbre, not a preset's (26.09.2026)
     auto render = [&](const char* solo, bool keepKick) {
         auto e = std::make_unique<Engine>();
         e->prepare(sr, 256);

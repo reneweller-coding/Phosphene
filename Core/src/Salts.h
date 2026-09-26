@@ -39,6 +39,7 @@ constexpr uint64_t kSaltSectU      = 0x5345435455000010ull;
 constexpr uint64_t kSaltLaneU      = 0x4C414E4555000011ull;
 constexpr uint64_t kSaltReroll     = 0x5245524F4C4C0012ull;
 constexpr uint64_t kSaltAcidVoice  = 0x4143494456434500ull;   ///< Salt of the acid voicing draw: its own, so no other draw of the walk moves.
+constexpr uint64_t kSaltSoundPreset = 0x534E445052535401ull;   ///< Salt of the track's sound presets (26.09.2026): their own stream, so no other draw of the walk moves.
 constexpr uint64_t kSaltVoice      = 0x564F494345520014ull;   ///< Salt of the voice recipes (19.09.2026): their own generator, so no other draw of the walk moves.
 constexpr uint64_t kSaltPadGate    = 0x504144474154ull;   ///< Salt of the section's choice between the track's two pad gate patterns (22.09.2026).
 constexpr uint64_t kSaltDroneRide  = 0x44524944450015ull;   ///< Salt of the drone's slow evolution (19.09.2026).
@@ -105,6 +106,7 @@ inline constexpr uint64_t kAll[] = {
     composer::kSaltLaneU,
     composer::kSaltReroll,
     composer::kSaltAcidVoice,
+    composer::kSaltSoundPreset,
     composer::kSaltVoice,
     composer::kSaltPadGate,
     composer::kSaltDroneRide,

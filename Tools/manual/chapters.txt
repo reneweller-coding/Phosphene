@@ -335,22 +335,34 @@ the kick (no pitch, no pan), the acid what suits a 303 line.
 Every synth tab starts with a Sound group: the synth's presets in a chooser, grouped by kind, a
 Save... button for presets of your own, and the Own Sound switch.
 
-Normally the generator designs a new sound for every synth in every track. Own Sound keeps it from
-doing that: the synth then sounds exactly as its tab says, in every track. Choosing a preset switches
-Own Sound on for you, because otherwise the next track would replace the preset with a sound of its
-own. A preset sets the synth's sound and leaves its level, its ducking and -- on the melodic voices --
-its high pass and trance gate alone, since those are where the mix and the form put the voice. Undo
-takes a preset back.
+Every track of a set plays a preset on every synth that is not on Own Sound: the composer chooses one
+by the track's style -- a Hoover or a Supersaw Anthem for Full-On, a Growl or a Screaming Glide for
+Dark Forest, a Glass Lead or a Psy Pluck for Progressive -- and never the same group as the two tracks
+before. While it plays, the tab shows it: the chooser reads "Group: Name (composer)" and the knobs
+stand at the preset's values. The sections still move some of them on top, the way a player rides a
+filter; those moves are not written into the knobs. The composer also evens out the presets' loudness:
+each carries a correction, measured against the synth's own default sound, that rides on the synth's
+Level on top of your setting, and the level match then holds every part of every track -- the first
+one included -- to the loudness the default sound would have there. Sound Presets on the Set page
+(or Sound Variation at 0) turns the
+composer's presets off, and every synth plays its knobs again, with the composer's recipes.
 
-The factory presets are the generator's own sound recipes, laid out on purpose: points spread evenly
-over each synth's five character directions (brightness, softness, thickness, space and motion for a
-voice; length, punch, body, grit and click for the kick), every oscillator of a voice's palette with
-them, every wavetable of its families twice. A preset is named after its strongest direction and the
-synth's role -- "Razor Comet" is a hard lead, "Nebula Aurora" a wide pad, "Tectonic Anvil" a kick with
-body, and a kick of the resonant engine has a struck noun ("Gong", "Bell"). The kick, the bass and the
-acid are grouped by character, the voices by oscillator and wavetable family: some 90 to 110 presets
-for kick, bass and acid, several hundred for each voice. Your own presets are listed under User and
-live in the Presets folder of your Phosphene user folder.
+Own Sound keeps the composer out: the synth then sounds exactly as its tab says, in every track.
+Turning a knob of a synth that plays the composer's preset switches its Own Sound on, with the knobs
+where the preset put them, so the sound you start from is the one you heard. Choosing a preset from
+the chooser switches Own Sound on as well. A preset sets the synth's sound and leaves its level, its
+ducking, its sends to the rooms, its place in the image and -- on the melodic voices -- its high pass
+and trance gate alone, since those are where the mix and the form put the voice. Undo takes a preset
+back.
+
+The factory bank holds 1024 presets for each synth: sixteen groups -- Hoover, Acid Lead, Vocal
+Formant, Rolling, Squelchy, Classic 303, Full-On ... -- of sixty-four each. A group is a grid of eight
+adjectives from dark to bright (the lead's run from Umbral to Supernova) and eight nouns of its own
+(the Hoover's from Hoover to Titan), so "Umbral Mentasm" is the darkest of the Hoovers' second column
+and "Supernova Titan" the brightest of its last. Each preset brings the filter model its group suits
+and modulation from its group's recipes: a slow LFO on the cutoff, the wavetable scanned by an LFO or
+the mod envelope, a hoover's pitch dive, a vibrato that fades in. Your own presets are listed under
+User and live in the Presets folder of your Phosphene user folder.
 
 == Shortcuts ==
 

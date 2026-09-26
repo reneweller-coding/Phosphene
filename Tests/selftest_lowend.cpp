@@ -95,7 +95,7 @@ void testAcidVoicingEngine()
     {
         auto e = std::make_unique<Engine>();
         e->prepare(48000.0, 256);
-        e->params().parseText("compose.track_bars=32 compose.level_match=Off master.auto_gain=Off");
+        e->params().parseText("compose.track_bars=32 compose.level_match=Off master.auto_gain=Off compose.sound_presets=0");   // the recipe path
         Composer c(77);
         const TrackPlan t1 = c.track(e->params(), 1);
         float off[acid::Count];

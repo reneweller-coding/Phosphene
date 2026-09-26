@@ -237,6 +237,7 @@ int main(int argc, char** argv)
     run("testModulation.blockSize", testModulationBlockSize);
     run("testModulation.sync", testModulationSync);
     run("testModulation.filterAdsr", testModulationFilterAdsr);
+    run("testPresetBank", testPresetBank);
     run("testGenreRules.listeningSeed", testGenreRulesListeningSeed);
     run("testGenreRules.arpGate", testGenreRulesArpGate);
     run("testFoundation.score", testFoundationScore);

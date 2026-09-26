@@ -171,6 +171,16 @@ public:
      *        it by itself; the editor calls it for its own controls that drive a target (the macros).
      */
     void enableMidiLearn(PhospheneProcessor& proc, juce::Component& comp, int target);
+    /**
+     * @brief Shows @p values on the controls of the parameters [@p first, @p first + @p count) without writing them
+     *        (26.09.2026: the composer's preset of a synth; the attachment writes a value only when the user moves the
+     *        control). A parameter without a value -- or all of them, @p values null -- shows its own value again.
+     * @param store the parameters (the value of a control @p values does not name)
+     * @param first the first parameter of the synth
+     * @param count how many parameters the synth has
+     * @param values (index from @p first, value) pairs, or null
+     */
+    void showValues(const phos::ParamStore& store, int first, int count, const std::vector<std::pair<int, float>>* values);
     /** @brief The right click of enableMidiLearn (the page listens to its controls' mouse). */
     void mouseDown(const juce::MouseEvent& e) override;
 

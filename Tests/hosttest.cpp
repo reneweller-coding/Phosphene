@@ -736,6 +736,35 @@ int main(int argc, char** argv)
         check(ons > 20, "the MIDI output carries the score's notes (" + juce::String(ons) + " note-ons)");
         check(offs >= ons - 128, "every note that started is ended (" + juce::String(ons) + " on, " + juce::String(offs) + " off)");
     }
+    // Joining a set in the middle with the composer's presets off (26.09.2026). The landing (PlugConductor::seek) replays
+    // the controls of the bars before it at once; it set every length to zero, and so turned the composer's clearing of
+    // a preset base (a negative length, Score.h) into a base of 0 -- acid.disperse_freq at 0 Hz, the disperser NaN. The
+    // writer thread above found it only by the order it happened to write the knobs in.
+    if (partRealHost) {
+        const double sr = 48000.0;
+        auto p = std::make_unique<PhospheneProcessor>();
+        p->setNonRealtime(true);
+        p->setPlayConfigDetails(0, 2, sr, 512);
+        p->prepareToPlay(sr, 512);
+        p->params().parseText("compose.sound_presets=0 acid.disperse=4");
+        TestPlayHead head;
+        head.sampleRate = sr;
+        head.ppq = 64.0;
+        head.samples = 64.0 * 60.0 / 145.0 * sr;
+        p->setPlayHead(&head);
+        juce::AudioBuffer<float> buf(2, 512);
+        juce::MidiBuffer midi;
+        bool allFinite = true;
+        for (int rendered = 0; rendered < static_cast<int>(2.0 * sr); rendered += 512) {
+            buf.clear();
+            midi.clear();
+            p->processBlock(buf, midi);
+            allFinite = allFinite && finite(buf, 512);
+            head.advance(512);
+        }
+        p->setPlayHead(nullptr);
+        check(allFinite, "a set joined in the middle with the presets off stays finite (the landing keeps a base's clear)");
+    }
 
     // ---------------------------------------------------------------- host sync
     if (partRest) {

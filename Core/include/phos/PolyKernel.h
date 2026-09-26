@@ -49,6 +49,10 @@ struct PolySlots {
 };
 
 /** @brief Voice channel state and coefficients. */
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4324)   // padded to its 32-byte lanes on purpose
+#endif
 struct PolyChannels {
     alignas(32) float ic1[kPolyLanes] = {}, ic2[kPolyLanes] = {};   ///< low pass
     alignas(32) float ha1[kPolyLanes] = {}, ha2[kPolyLanes] = {};   ///< high pass, first section
@@ -78,6 +82,9 @@ struct PolyChannels {
     alignas(32) float fxp[kPolyLanes] = {};                                               ///< the last input sample (the half-way point of 2x)
     /** @} */
 };
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 /** @brief sin(2 pi p) for any p, from the Taylor series on the folded phase (see the file comment). */
 template <class V>

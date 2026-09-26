@@ -2240,7 +2240,7 @@ void testVoicesAcidRide()
     //     above the knob, for a mostly driven one about the knob -- and never above the voiced squelch.
     {
         ParamStore ap;
-        ap.parseText("compose.level_match=Off master.auto_gain=Off");
+        ap.parseText("compose.level_match=Off master.auto_gain=Off compose.sound_presets=0");   // the recipe path, not a preset
         Composer ac(864566672ull);
         const int decayId = ap.base(Module::Acid) + acid::Decay;
         int tracksSeen = 0, tracksOk = 0, longDecay = 0;

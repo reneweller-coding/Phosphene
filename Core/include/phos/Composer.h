@@ -189,6 +189,10 @@ struct VoiceRecipe {
     float macro[kNumVoiceMacros] = {}; ///< the five directions, each -1..1
 };
 
+struct SoundPreset;   // SoundPresets.h
+/** @brief The synths a track's sound presets are for, in the order of the own-sound switches: kick, bass, acid, the six voices. */
+constexpr int kSoundSynths = 9;
+
 /** @brief What the set walk decides for a track: the journey through the night. */
 struct TrackWalk {
     int    bars = 256;              ///< length in bars (a multiple of 32)
@@ -204,6 +208,7 @@ struct TrackWalk {
     float  bassMacro[5] = {};       ///< bass recipe, each -1..1
     float  acidVoicing[kNumAcidVoicings] = { 0.0f, 1.0f, 0.0f };   ///< barycentric weights of the acid voicings
     VoiceRecipe voice[kPolyInstances];   ///< the sound of each polyphonic voice (PolyInstance order)
+    int    soundPreset[kSoundSynths] = { -1, -1, -1, -1, -1, -1, -1, -1, -1 };   ///< the track's preset of each synth (kSoundSynths order)
 };
 
 /** @brief Everything that is decided once per track. */
@@ -224,6 +229,16 @@ struct TrackPlan {
     float  bassMacro[kNumBassMacros] = {};   ///< recipe, each -1..1
     float  acidVoicing[kNumAcidVoicings] = { 0.0f, 1.0f, 0.0f };   ///< barycentric weights of the acid voicings (clean, driven, liquid)
     VoiceRecipe voice[kPolyInstances];   ///< the sound of each polyphonic voice (PolyInstance order; 19.09.2026)
+    /**
+     * @brief The track's sound of each synth as a preset of the bank (26.09.2026; SoundPresets.h): an index into
+     *        factoryPresets() of kick, bass, acid and the six voices (kSoundSynths order), -1 for the knobs.
+     *
+     * The user: "Könnte der Composer dann beim Generieren der Stücke auch aus diesen Presets auswählen und die
+     * entsprechenden Presets im jeweiligen Synthesizer anzeigen?" -- and, having listened: "Stellt der Composer auch
+     * die Preset-Werte auf Absolutwerte ... ein?" A preset replaces the recipe of its synth (the recipe's offsets are
+     * zero where one plays) and arrives absolute (ControlEvent::Kind::Base); the section rides stay offsets on it.
+     */
+    int    soundPreset[kSoundSynths] = { -1, -1, -1, -1, -1, -1, -1, -1, -1 };
     double loudness = 0.0;         ///< probe loudness of the track's sound, LUFS (0 when Level Match is off)
     float  gainDb = 0.0f;           ///< level correction against the first track
     uint64_t percSeed = 0;          ///< seed of the track's percussion decisions
@@ -235,6 +250,16 @@ struct TrackPlan {
     uint64_t sectionSeed[kMaxSections] = {};   ///< seed of each section (lockable, rerollable)
     float  arcIn = 0.7f, arcOut = 0.7f;        ///< the set's energy arc where the track starts and ends
     double partLoudness[kMelodyParts] = {};   ///< probe loudness of each melodic part alone, LUFS
+    /**
+     * @name The level match's reference (26.09.2026)
+     * What every track is matched against: the first track's loudness and its parts' *with the composer's presets off*
+     * -- the recipes' sound the mix was calibrated on. Where the first track plays presets it is matched to these too
+     * (it used to be the reference as it stood, and with presets a reference drawn by chance: the Full-On breakdown's
+     * counter came out 7 dB under the calibrated one). Equal to loudness and partLoudness where it plays none.
+     * @{ */
+    double refLoudness = 0.0;
+    double refPartLoudness[kMelodyParts] = {};
+    /** @} */
     float  partGainDb[kMelodyParts] = {};     ///< level correction of each melodic part against the first track's
     /**
      * @brief The master offset has not been measured yet; it arrives later (22.09.2026).
@@ -374,6 +399,8 @@ public:
      *        them later (completeMeasurement).
      */
     void levelControls(const ParamStore& p, const TrackPlan& plan, double beat, float rampBeats, std::vector<ControlEvent>& out) const;
+    /** @brief The preset @p plan plays on synth @p synth (kSoundSynths order), or null: none drawn, or Sound Variation at 0. */
+    static const SoundPreset* presetOf(const ParamStore& p, const TrackPlan& plan, int synth);
     /** @brief Whether the master offset is being deferred. */
     bool defersMasterGain() const { return deferMaster_; }
     /**

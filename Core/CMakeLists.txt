@@ -41,6 +41,7 @@ add_library(PhospheneCore STATIC
     src/Gallery.cpp
     src/Preferences.cpp
     src/SoundPresets.cpp
+    src/PresetBank.cpp
     src/Engine.cpp
 )
 target_include_directories(PhospheneCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

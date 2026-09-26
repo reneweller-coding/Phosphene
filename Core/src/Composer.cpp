@@ -3,6 +3,7 @@
  * @brief Track plans and their walk, bass phrases, curation, the bars of a set, and the conductor
  *        (the control events are in ComposerControls.cpp, the measurements in ComposerLevels.cpp).
  */
+#include "phos/SoundPresets.h"
 #include "phos/Composer.h"
 #include "phos/Audibility.h"
 #include "phos/Preferences.h"
@@ -917,6 +918,41 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
                     for (int k = 0; k < nTables; ++k) { const int t = paletteTableAt(pal, k); if (t != lead.table) { c.table = t; break; } }
             }
         }
+        // The sound presets (26.09.2026; SoundPresets.h): for every synth a group of the bank weighted by the track's
+        // style -- a group of the two tracks before it at a sixth of its weight, so neighbours differ -- and a cell of
+        // its eight by eight grid. Their own stream, so no draw above moves.
+        {
+            Rng rp;
+            rp.seed(mixSeed(setSeed() ^ kSaltSoundPreset, static_cast<uint64_t>(i)));
+            for (int k = 0; k < kSoundSynths; ++k) {
+                const Module m = k == 0 ? Module::Kick : k == 1 ? Module::Bass : k == 2 ? Module::Acid : Module::Poly;
+                const std::vector<SoundPreset>& bank = factoryPresets(m, k >= 3 ? k - 3 : 0);
+                const int groups = static_cast<int>(bank.size() / 64);
+                if (groups <= 0) continue;
+                const int st = std::clamp(w.style, 0, 4);
+                // The counter never plays the lead's sound (23.09.2026, round "Counter": another oscillator, and so
+                // another table), with presets too: a group of the lead's oscillator is left out (26.09.2026 -- on the
+                // listening seed both played Vocal Formant, and drop 2 lost its lift, testClimax).
+                auto oscOf = [](const SoundPreset& sp) {
+                    for (const auto& kv : sp.values) if (kv.first == poly::Osc) return static_cast<int>(std::lround(kv.second));
+                    return -1;
+                };
+                const int leadOsc = k == 4 ? oscOf(factoryPresets(Module::Poly, 0)[static_cast<size_t>(w.soundPreset[3])]) : -1;
+                double weight[16] = {}, total = 0.0;
+                for (int g = 0; g < groups && g < 16; ++g) {
+                    double wg = static_cast<double>(bank[static_cast<size_t>(g * 64)].style[st]);
+                    for (int back = 1; back <= 2 && i - back >= 0; ++back)
+                        if (walk_[static_cast<size_t>(i - back)].soundPreset[k] / 64 == g) wg /= 6.0;
+                    if (leadOsc >= 0 && oscOf(bank[static_cast<size_t>(g * 64)]) == leadOsc) wg = 0.0;
+                    weight[g] = wg;
+                    total += wg;
+                }
+                double u = static_cast<double>(rp.uniform()) * total;
+                int g = 0;
+                while (g < groups - 1 && u >= weight[g]) { u -= weight[g]; ++g; }
+                w.soundPreset[k] = g * 64 + rp.below(64);
+            }
+        }
         walk_.push_back(w);
     }
     return walk_[static_cast<size_t>(index)];
@@ -951,6 +987,7 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     std::copy(w.bassMacro, w.bassMacro + kNumBassMacros, t.bassMacro);
     std::copy(w.acidVoicing, w.acidVoicing + kNumAcidVoicings, t.acidVoicing);
     for (int v = 0; v < kPolyInstances; ++v) t.voice[v] = w.voice[v];
+    std::copy(w.soundPreset, w.soundPreset + kSoundSynths, t.soundPreset);
     // The tables this track's voices will read, expanded now, on whichever thread planned the track
     // (21.09.2026). The pack is only indexed at load; a table costs its 1.9 MB of mip levels when a
     // track first asks for it and not before, which is what lets the library grow past a handful.

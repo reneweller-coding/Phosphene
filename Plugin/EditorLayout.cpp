@@ -118,6 +118,24 @@ void ControlPage::addParamCell(PhospheneProcessor& proc, int groupIndex, int par
     cells_.push_back(std::move(c));
 }
 
+void ControlPage::showValues(const phos::ParamStore& store, int first, int count, const std::vector<std::pair<int, float>>* values)
+{
+    for (Cell& c : cells_) {
+        if (c.param < first || c.param >= first + count || c.comp == nullptr) continue;
+        float v = store.get(c.param);
+        if (values != nullptr)
+            for (const auto& kv : *values) if (first + kv.first == c.param) { v = kv.second; break; }
+        if (auto* s = dynamic_cast<juce::Slider*>(c.comp.get())) {
+            if (s->getValue() != static_cast<double>(v) && !s->isMouseButtonDown()) s->setValue(v, juce::dontSendNotification);
+        } else if (auto* cb = dynamic_cast<juce::ComboBox*>(c.comp.get())) {
+            const int id = static_cast<int>(std::lround(v)) + 1;
+            if (cb->getSelectedId() != id) cb->setSelectedId(id, juce::dontSendNotification);
+        } else if (auto* t = dynamic_cast<juce::ToggleButton*>(c.comp.get())) {
+            if (t->getToggleState() != (v >= 0.5f)) t->setToggleState(v >= 0.5f, juce::dontSendNotification);
+        }
+    }
+}
+
 void ControlPage::enableMidiLearn(PhospheneProcessor& proc, juce::Component& comp, int target)
 {
     learnProc_ = &proc;

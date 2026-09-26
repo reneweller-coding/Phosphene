@@ -109,6 +109,8 @@ public:
      * @param name  display name shown by the host
      */
     StoreParameter(phos::ParamStore& store, int id, const juce::String& name);
+    /** @brief The global id of the store's parameter this one is. */
+    int storeId() const { return id_; }
 
     float getValue() const override;
     void  setValue(float newValue) override;
@@ -867,6 +869,27 @@ private:
     void parameterValueChanged(int, float) override {}
     /** @brief A knob gesture from the editor: its start takes the before-state, its end records the step. */
     void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override;
+    /**
+     * @name The composer's presets on the knobs (26.09.2026)
+     * The user: "Stellt der Composer auch die Preset-Werte auf Absolutwerte ... ein?" The engine plays a track's preset
+     * absolute (ControlEvent::Kind::Base); refreshPresetDisplay() tells the editor which preset each synth whose Own
+     * Sound is off plays, and the editor shows its values on the knobs without writing them (the state stays the
+     * user's: vst3test reads it back byte for byte). A gesture on such a synth's knob takes the sound over: the knobs
+     * get the preset's values (takeOverPreset; not the plan knobs, Composer::planKnobIds, whose change would throw the
+     * plans away) and Own Sound goes on, all in the gesture's undo step (parameterGestureChanged).
+     * @{ */
+    void refreshPresetDisplay();
+    /** @brief Writes the shown preset of synth @p k into its knobs (a take-over; message thread). */
+    void takeOverPreset(int k);
+    int shownPreset_[phos::kSoundSynths] = { -2, -2, -2, -2, -2, -2, -2, -2, -2 };   ///< the preset each synth's knobs show, -1 none, -2 not yet
+    std::atomic<int> shownIndex_[phos::kSoundSynths];   ///< the same, for the editor (any thread)
+    /** @brief The synth (kSoundSynths order) a global parameter id belongs to, and its index in the module; -1 for none. */
+    int soundSynthOfId(int id, int& local) const;
+    /** @} */
+public:
+    /** @brief The preset the composer plays on synth @p synth (kSoundSynths order) and its knobs show; -1 none (the editor). */
+    int composerPreset(int synth) const { return synth >= 0 && synth < phos::kSoundSynths ? shownIndex_[synth].load(std::memory_order_relaxed) : -1; }
+private:
     /** @brief Records the step from @p before to now, unless nothing changed. */
     void recordUndo(const juce::String& name, const UndoState& before);
     mutable juce::UndoManager undo_{ 32 * 1024 * 1024, 100 };   ///< undo and redo of whole states (UndoState)

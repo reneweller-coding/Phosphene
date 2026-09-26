@@ -879,6 +879,24 @@ bool PhospheneEditor::keyPressed(const juce::KeyPress& key)
 
 void PhospheneEditor::timerCallback()
 {
+    // The composer's preset of each synth, in its chooser (26.09.2026): the name, and "(composer)" to say who chose it.
+    for (auto& pb : presetBoxes_) {
+        const int k = pb->synth == Module::Kick ? 0 : pb->synth == Module::Bass ? 1 : pb->synth == Module::Acid ? 2 : 3 + pb->instance;
+        const int idx = proc_.composerPreset(k);
+        const juce::String want = idx >= 0 && idx < static_cast<int>(pb->presets.size())
+            ? juce::String(pb->presets[static_cast<size_t>(idx)].group) + ": " + juce::String(pb->presets[static_cast<size_t>(idx)].name) + " (composer)"
+            : juce::String();
+        if (want.isNotEmpty() && pb->box->getText() != want) pb->box->setText(want, juce::dontSendNotification);
+        const int tab = pb->synth == Module::Kick ? TabKick : pb->synth == Module::Bass ? TabBass : pb->synth == Module::Acid ? TabAcid : TabLead + pb->instance;
+        // Every synth page, not only the one on screen (26.09.2026): a tab switched to shows the composer's values at once,
+        // not a tick later -- the screenshots caught the pad's page with the knobs' values under the preset's name.
+        if (pages_[static_cast<size_t>(tab)] != nullptr) {
+            const ParamStore& store = proc_.params();
+            const std::vector<std::pair<int, float>>* vals =
+                idx >= 0 && idx < static_cast<int>(pb->presets.size()) ? &pb->presets[static_cast<size_t>(idx)].values : nullptr;
+            pages_[static_cast<size_t>(tab)]->showValues(store, store.base(pb->synth, pb->instance), ParamStore::moduleCount(pb->synth), vals);
+        }
+    }
     undoButton_.setEnabled(proc_.canUndo());
     redoButton_.setEnabled(proc_.canRedo());
     {
