@@ -22,6 +22,7 @@
  * key-tracked high-pass frequency, then the amplitude envelope.
  */
 #pragma once
+#include "phos/Filters.h"
 #include "phos/Vec.h"
 
 namespace phos {
@@ -62,6 +63,19 @@ struct PolyChannels {
      * with k the damping. Zero is the low pass the kernel always had: v2 + 0 is v2.
      * @{ */
     alignas(32) float m0[kPolyLanes] = {}, m1[kPolyLanes] = {}, m2[kPolyLanes] = {};
+    /** @} */
+    /**
+     * @name The filter models (poly.filter_model, 26.09.2026; Filters.h)
+     * `model` 0 is the state-variable filter above; 1 .. 9 are FilterModel Moog .. Wasp, run in place of it on the
+     * same lanes: four node voltages and four trapezoidal states per lane, the cutoff as g = tan(pi fc / fs), the
+     * resonance as the model's feedback k, and the pass band's makeup gain, all written per voice on the 16-sample grid.
+     * @{ */
+    int model = 0;                                                     ///< poly.filter_model
+    alignas(32) float fmd[kPolyLanes] = {};                            ///< poly.filter_mode per lane (SEM morph, Polivoks), modulated per voice
+    alignas(32) float xw[5][kPolyLanes] = {};                          ///< the Xpander's pole mix per lane (poleMix of the mode)
+    alignas(32) float fv[4][kPolyLanes] = {}, fs[4][kPolyLanes] = {};  ///< node voltages and trapezoidal states
+    alignas(32) float fg[kPolyLanes] = {}, fk[kPolyLanes] = {}, fmk[kPolyLanes] = {};   ///< g (at twice the rate), feedback, makeup
+    alignas(32) float fxp[kPolyLanes] = {};                                               ///< the last input sample (the half-way point of 2x)
     /** @} */
 };
 
@@ -153,8 +167,12 @@ void polySlotKernel(PolySlots& s, int slot, int n, const float* wt, bool blep, b
  * @param n    samples to render
  */
 template <class V>
+void polyModelKernel(PolyChannels& c, int lane, int n, const float* in, const float* amp, float* out);
+
+template <class V>
 void polyChannelKernel(PolyChannels& c, int lane, int n, const float* in, const float* amp, float* out)
 {
+    if (c.model != 0) { polyModelKernel<V>(c, lane, n, in, amp, out); return; }
     auto at = [lane](const float* a) { return loadLanes<V>(a + lane); };
     const V two = lanes<V>(2.0f), sqrt2 = lanes<V>(1.41421356f);
     V ic1 = at(c.ic1), ic2 = at(c.ic2), ha1 = at(c.ha1), ha2 = at(c.ha2), hb1 = at(c.hb1), hb2 = at(c.hb2);
@@ -185,6 +203,93 @@ void polyChannelKernel(PolyChannels& c, int lane, int n, const float* in, const 
     }
     auto put = [lane](float* a, V v) { vstore(a + lane, v); };
     put(c.ic1, ic1); put(c.ic2, ic2); put(c.ha1, ha1); put(c.ha2, ha2); put(c.hb1, hb1); put(c.hb2, hb2);
+}
+
+/**
+ * @brief polyChannelKernel with one of the filter models (PolyChannels::model > 0): the model, its makeup gain, then the
+ *        same two high-pass sections and the amplitude envelope. One sample loop per model, so the switch is decided
+ *        once per call and every lane of every vector path runs the same arithmetic.
+ */
+template <class V>
+void polyModelKernel(PolyChannels& c, int lane, int n, const float* in, const float* amp, float* out)
+{
+    auto at = [lane](const float* a) { return loadLanes<V>(a + lane); };
+    const V two = lanes<V>(2.0f), sqrt2 = lanes<V>(1.41421356f);
+    V v[4], s[4];
+    for (int j = 0; j < 4; ++j) { v[j] = at(c.fv[j]); s[j] = at(c.fs[j]); }
+    V ha1 = at(c.ha1), ha2 = at(c.ha2), hb1 = at(c.hb1), hb2 = at(c.hb2);
+    const V c1 = at(c.c1), c2 = at(c.c2), c3 = at(c.c3);
+    const V g = at(c.fg), k = at(c.fk), mk = at(c.fmk);
+    V xp = at(c.fxp);
+    const FilterModel m = static_cast<FilterModel>(c.model - 1);
+    const V morph = at(c.fmd);
+    // Twice the rate, as in the BerlinSchoolGenerator whose tuning the models carry (26.09.2026): at the plain rate
+    // the Polivoks' slew-limited integrators and the Wasp's inverters screamed (a centroid of 9 kHz on the lead) and
+    // the nonlinear stages folded their harmonics back. The input is interpolated half-way, the two outputs averaged.
+    const V half = lanes<V>(0.5f);
+    auto run = [&](auto&& filt) {
+        for (int i = 0; i < n; ++i) {
+            const int row = i * kPolyLanes + lane;
+            const V x = loadLanes<V>(in + row);
+            const V y1 = filt(half * (xp + x));
+            const V y2 = filt(x);
+            xp = x;
+            V y = half * (y1 + y2) * mk;
+            V v3 = y - ha2;
+            V v1 = c1 * ha1 + c2 * v3;
+            V v2 = ha2 + c2 * ha1 + c3 * v3;
+            ha1 = two * v1 - ha1;
+            ha2 = two * v2 - ha2;
+            y = y - sqrt2 * v1 - v2;
+            v3 = y - hb2;
+            v1 = c1 * hb1 + c2 * v3;
+            v2 = hb2 + c2 * hb1 + c3 * v3;
+            hb1 = two * v1 - hb1;
+            hb2 = two * v2 - hb2;
+            y = y - sqrt2 * v1 - v2;
+            vstore(out + row, y * loadLanes<V>(amp + row));
+        }
+    };
+    switch (m) {
+    case FilterModel::Moog: run([&](V x) { return ladderMoog<V>(v, s, x, g, k); }); break;
+    case FilterModel::Prophet: case FilterModel::Juno: {
+        const float d = FilterVoicing::otaDrive(m), r = FilterVoicing::otaRes(m);
+        run([&](V x) { return otaCascade<V>(v, s, x, g, k, d, r); });
+        break;
+    }
+    case FilterModel::Xpander: {
+        const float d = FilterVoicing::otaDrive(m), r = FilterVoicing::otaRes(m);
+        const V w0 = at(c.xw[0]), w1 = at(c.xw[1]), w2 = at(c.xw[2]), w3 = at(c.xw[3]), w4 = at(c.xw[4]);
+        const V rv = lanes<V>(r), invR = lanes<V>(1.0f / r);
+        run([&](V x) {
+            otaCascade<V>(v, s, x, g, k, d, r);
+            const V a0 = x - k * ftanh<V>(rv * v[3]) * invR;
+            return w0 * a0 + w1 * v[0] + w2 * v[1] + w3 * v[2] + w4 * v[3];
+        });
+        break;
+    }
+    case FilterModel::Sem: case FilterModel::Wasp: {
+        const float L = FilterVoicing::svfRange(m), a = FilterVoicing::svfAsym(m);
+        run([&](V x) { return svfNonlinear<V>(v, s, x, g, k, L, a, morph); });
+        break;
+    }
+    case FilterModel::Polivoks: {
+        const float L = FilterVoicing::svfRange(m);
+        run([&](V x) { return svfNonlinear<V>(v, s, x, g, k, L, 0.0f, morph, true); });
+        break;
+    }
+    case FilterModel::Diode: {
+        const V gd = g * lanes<V>(0.70710678f);
+        run([&](V x) { return diodeLadder<V>(v, s, x, gd, k); });
+        break;
+    }
+    case FilterModel::Korg35: run([&](V x) { return korg35<V>(v, s, x, g, k); }); break;
+    default: run([&](V x) { return x; }); break;
+    }
+    for (int j = 0; j < 4; ++j) { vstore(c.fv[j] + lane, v[j]); vstore(c.fs[j] + lane, s[j]); }
+    vstore(c.fxp + lane, xp);
+    auto put = [lane](float* a, V x) { vstore(a + lane, x); };
+    put(c.ha1, ha1); put(c.ha2, ha2); put(c.hb1, hb1); put(c.hb2, hb2);
 }
 
 } // namespace phos

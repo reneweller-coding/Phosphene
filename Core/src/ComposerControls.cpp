@@ -227,7 +227,7 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
     push(cb + compose::BassPattern, ControlEvent::Kind::Override, static_cast<float>(plan.primaryPattern));
     push(kb + kick::Engine, ControlEvent::Kind::Override, static_cast<float>(plan.kickEngine));
     push(kb + kick::Clip, ControlEvent::Kind::Override, static_cast<float>(plan.kickClip));
-    float kickOff[64] = {};
+    float kickOff[kick::Count] = {};   // sized by the table (26.09.2026: a fixed 64 is the Poly::values_ trap)
     recipeOffsets(true, plan.kickMacro, sv, kickOff);
     for (const Loading& l : kKickLoadings) push(kb + l.param, ControlEvent::Kind::Offset, kickOff[l.param]);
     // The track's level correction, in the normalised domain of a linear 24 dB range.
@@ -679,7 +679,7 @@ void Composer::arcControls(const ParamStore& p, const TrackPlan& plan, int inTra
 {
     const int cb = p.base(Module::Compose), bb = p.base(Module::Bass);
     const float sv = p.get(cb + compose::SoundVariation);
-    float bassOff[64] = {};
+    float bassOff[bass::Count] = {};   // sized by the table, see kickOff
     recipeOffsets(false, plan.bassMacro, sv, bassOff);
     Rng arc;
     arc.seed(mixSeed(seed_ ^ kSaltArc, (static_cast<uint64_t>(plan.index) << 32) | static_cast<uint64_t>(inTrack / 32)));

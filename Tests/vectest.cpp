@@ -628,6 +628,66 @@ void testParts()
 } // namespace
 
 /** @brief Runs every comparison of the vector path against the scalar one. */
+
+/**
+ * @brief Vector test (26.09.2026): the filter models (Filters.h) and the voice's own modulation (Modulation.h) on the
+ *        polyphonic engine's lanes -- every model, with a matrix that moves cutoff, resonance, mode, table, pitch,
+ *        pulse width, pan and level from all four LFOs, the modulation envelope and the note's random value.
+ */
+void testPolyModels()
+{
+    section("filter models and modulation on the polyphonic lanes against the scalar engine");
+    const DenormalGuard guard;
+    ParamStore p;
+    auto a = std::make_unique<Poly>(), b = std::make_unique<Poly>();
+    a->prepare(48000.0);
+    b->prepare(48000.0);
+    a->seedPhases(7);
+    b->seedPhases(7);
+    int bad = 0;
+    double energy = 0.0;
+    float maxAbs = 0.0f;
+    std::vector<float> aL(64), aR(64), bL(64), bR(64);
+    double beat = 0.0;
+    for (int block = 0; block < 4500; ++block) {
+        if (block % 500 == 0) {
+            const int m = 1 + (block / 500) % 9;
+            p.parseText(fmt("lead.filter_model=%d lead.filter_mode=%.2f lead.resonance=%.2f lead.osc=%d lead.table=3 lead.drift=3 "
+                            "lead.filt_attack=40 lead.filt_sustain=0.3 lead.lfo1_sync=6 lead.lfo2_rate=3.1 lead.lfo2_shape=6 "
+                            "lead.lfo3_shape=5 lead.lfo3_sync=7 lead.lfo4_retrig=1 lead.lfo4_fade=0.2 lead.menv_decay=300 "
+                            "lead.mx1_src=1 lead.mx1_dst=6 lead.mx1_amount=0.4 lead.mx2_src=2 lead.mx2_dst=7 lead.mx2_amount=0.3 "
+                            "lead.mx3_src=5 lead.mx3_dst=4 lead.mx3_amount=0.7 lead.mx4_src=3 lead.mx4_dst=8 lead.mx4_amount=0.8 "
+                            "lead.mx5_src=4 lead.mx5_dst=1 lead.mx5_amount=0.1 lead.mx6_src=9 lead.mx6_dst=10 lead.mx6_amount=0.6 "
+                            "lead.mx7_src=7 lead.mx7_dst=9 lead.mx7_amount=-0.4 lead.mx8_src=6 lead.mx8_dst=3 lead.mx8_amount=0.5",
+                            m, 0.11 * (block / 500 % 9), 0.2 + 0.09 * (block / 500 % 9), (block / 500) % 4).c_str());
+            std::vector<float> v(static_cast<size_t>(poly::Count));
+            p.readModule(Module::Poly, 0, v.data());
+            a->update(v.data(), 145.0);
+            b->update(v.data(), 145.0);
+        }
+        if (block % 9 == 0) {
+            const int pitch = 50 + (block * 7) % 34;
+            const double late = static_cast<double>(block % 10) / 10.0;
+            a->noteOn(pitch, 0.6f + 0.04f * (block % 10), 0.25 * (1 + block % 8), 1500 + block % 4000, late);
+            b->noteOn(pitch, 0.6f + 0.04f * (block % 10), 0.25 * (1 + block % 8), 1500 + block % 4000, late);
+        }
+        const int n = 5 + block % 60;
+        a->setClock(beat, 145.0 / 60.0 / 48000.0);
+        b->setClock(beat, 145.0 / 60.0 / 48000.0);
+        beat += n * 145.0 / 60.0 / 48000.0;
+        a->processWith<float>(aL.data(), aR.data(), n);
+        b->processWith<VecF>(bL.data(), bR.data(), n);
+        for (int i = 0; i < n; ++i) {
+            if (!sameBits(aL[static_cast<size_t>(i)], bL[static_cast<size_t>(i)]) || !sameBits(aR[static_cast<size_t>(i)], bR[static_cast<size_t>(i)])) ++bad;
+            energy += static_cast<double>(aL[static_cast<size_t>(i)]) * aL[static_cast<size_t>(i)];
+            maxAbs = std::max(maxAbs, std::fabs(aL[static_cast<size_t>(i)]));
+        }
+    }
+    check(bad == 0 && energy > 1.0, "nine filter models with a full modulation matrix identical to scalar",
+          fmt("%d differing samples, energy %.1f", bad, energy));
+    check(std::isfinite(maxAbs) && maxAbs < 20.0f, "the models stay bounded under modulated resonance and mode", fmt("max |y| = %.3f", static_cast<double>(maxAbs)));
+}
+
 int main()
 {
     std::printf("phos_vectest: path %s, %d lanes\n", kVecPathName, W);
@@ -640,6 +700,7 @@ int main()
     testPerc();
     testDiodeLadder();
     testPoly();
+    testPolyModels();
     testModelKernels();
     testModelForward();
 #if !defined(PHOS_FORCE_SCALAR) && !defined(PHOS_NEON_SHIM)

@@ -1037,6 +1037,10 @@ void Engine::process(float* L, float* R, int n)
             for (int k = 0; k < kPolyInstances; ++k)
                 poly_[k].setSlow(static_cast<float>(std::sin(2.0 * kPiD * chunkBeat_ / kSlowBeats[0])),
                                  static_cast<float>(std::sin(2.0 * kPiD * chunkBeat_ / kSlowBeats[1] + 2.1)));
+            // The voices' own modulation reads the set's beat (26.09.2026, Modulation.h: the synced LFOs).
+            for (int k = 0; k < kPolyInstances; ++k) poly_[k].setClock(chunkBeat_, beatsPerSample_);
+            bass_.setClock(chunkBeat_, beatsPerSample_);
+            acid_.setClock(chunkBeat_, beatsPerSample_);
         }
         flushParams();
         int left = std::min(n - done, kChunk - chunkPos_);

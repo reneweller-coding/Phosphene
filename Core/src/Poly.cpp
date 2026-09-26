@@ -95,6 +95,8 @@ void Poly::prepare(double sampleRate)
 {
     sr_ = sampleRate;
     for (Envelope& e : amp_) e.setSampleRate(sr_);
+    for (Envelope& e : fAdsr_) e.setSampleRate(sr_);
+    for (int v = 0; v < kPolyVoices; ++v) mod_[v].prepare(sr_, static_cast<uint64_t>(v) + 1u);
     ampTimes_.setSampleRate(sr_);
     delay_.prepare(sr_);
     slotL_.assign(static_cast<size_t>(kPolyBlock * kPolySlots), 0.0f);
@@ -122,6 +124,10 @@ void Poly::reset()
     for (int s = 0; s < kPolySlots; ++s) { slots_.dt[s] = 0.001f; slots_.inv[s] = 1000.0f; slots_.idxDecay[s] = 1.0f; slots_.pw[s] = 0.5f; wtPh_[s] = 0.0; wtDt_[s] = 0.0; wtLevel_[s] = 0; slotSaw_[s] = false; slotHzMul_[s] = 1.0; slotSpread_[s] = 1.0; }
     for (int v = 0; v < kPolyVoices; ++v) {
         amp_[v].kill();
+        fAdsr_[v].kill();
+        mod_[v].kill();
+        for (float& m : modSum_[v]) m = 0.0f;
+        modGainL_[v] = modGainR_[v] = 1.0f;
         fenv_[v] = 0.0f;
         accent_[v] = 1.0f;
         gate_[v] = 0;
@@ -163,11 +169,15 @@ void Poly::writeSlotPitch(int voice)
     // a factor on the note's frequency, so it reaches the second oscillator's interval as well.
     const double vib = lfo2Pitch_ > 0.0f
         ? std::pow(2.0, static_cast<double>(lfo2Pitch_) * static_cast<double>(lfo2Value_) / 1200.0) : 1.0;
-    const double f0 = midiToHz(glidePitch_[voice]) * vib;
+    // The matrix's pitch destinations (26.09.2026): semitones on the note, and on the second oscillator alone.
+    const double f0 = midiToHz(glidePitch_[voice] + static_cast<double>(modSum_[voice][static_cast<int>(ModDest::Pitch)])) * vib;
+    const double o2 = modSum_[voice][static_cast<int>(ModDest::Osc2Pitch)] != 0.0f
+        ? std::pow(2.0, static_cast<double>(modSum_[voice][static_cast<int>(ModDest::Osc2Pitch)]) / 12.0) : 1.0;
     const double y = glideY_[voice], scale = glideScale_[voice], fmRatio = glideFmRatio_[voice];
     for (int u = uFirst; u < uLast; ++u) {
         const int s = voice * kPolyUnison + u;
-        const double hz = f0 * slotHzMul_[s] * (1.0 + kSupersawOffsets[u] * slotSpread_[s] * y * scale) * driftFactorHeld_[s];
+        const double hz = f0 * slotHzMul_[s] * (slotOsc2_[s] ? o2 : 1.0) * (1.0 + kSupersawOffsets[u] * slotSpread_[s] * y * scale)
+                        * driftFactorHeld_[s];
         const double dt = std::min(hz / sr_, 0.45);
         slots_.dt[s] = static_cast<float>(dt);
         slots_.inv[s] = static_cast<float>(1.0 / dt);
@@ -199,6 +209,18 @@ void Poly::update(const float* v, double bpm)
 {
     std::copy(v, v + poly::Count, values_);
     fDecay_ = static_cast<float>(std::exp(std::log(1.0e-3) / (v[poly::FilterDecay] * 0.001 * sr_)));
+    // The modulation (26.09.2026, Modulation.h): the matrix, the LFOs and the envelope, the same for every voice.
+    {
+        static_assert(poly::Mx8Amount - poly::FiltAttack + 1 == kModBlockSize, "the block's layout (Modulation.h)");
+        const ModSettings ms = readModBlock(v + poly::FiltAttack);
+        for (Modulator& m : mod_) m.set(ms);
+        modOn_ = mod_[0].active();
+        // The filter envelope as an ADSR once it asks for more than a decay: attack at its minimum and sustain 0 is
+        // the exponential decay every voice had, which keeps every older set's sound.
+        fAdsrOn_ = v[poly::FiltAttack] > 0.1001f || v[poly::FiltSustain] > 0.0f;
+        for (Envelope& e : fAdsr_)
+            e.setTimes(v[poly::FiltAttack] * 0.001f, v[poly::FilterDecay] * 0.001f, v[poly::FiltSustain], std::max(0.005f, v[poly::FiltRelease] * 0.001f));
+    }
     // Once, then copied: the same numbers setTimes would give each voice, without eight times three exp().
     ampTimes_.setTimes(v[poly::AmpAttack] * 0.001f, v[poly::AmpDecay] * 0.001f, v[poly::AmpSustain], std::max(0.005f, v[poly::AmpRelease] * 0.001f));
     refreshEnvelopeTimes();
@@ -414,6 +436,8 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
             slotSaw_[s] = false;
             slotHzMul_[s] = 1.0;
             slotSpread_[s] = 1.0;
+            slotOsc2_[s] = false;
+            idxFloor0_[s] = 0.0f;
             continue;
         }
         // Thermal drift: each unison slot has its own walk, so the seven saws of a supersaw age
@@ -424,6 +448,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         // Which of the two oscillators this slot is, and at which pitch (22.09.2026).
         const int slotOsc = bSlot[u] ? oscB : osc;
         slotHzMul_[s] = bSlot[u] ? hzMul2 : 1.0;
+        slotOsc2_[s] = bSlot[u];
         slotSpread_[s] = bSlot[u] ? kOsc2Spread : 1.0;
         const double hz = f0 * slotHzMul_[s] * (1.0 + kSupersawOffsets[u] * slotSpread_[s] * y * detuneScale) * driftFactorHeld_[s];
         const double dt = std::min(hz / sr_, 0.45);
@@ -446,7 +471,7 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         slots_.wSaw[s] = (fm || wt) ? 0.0f : static_cast<float>(slotOsc == static_cast<int>(PolyOsc::Va) ? 1.0 - wave : 1.0);
         slots_.wPulse[s] = slotOsc == static_cast<int>(PolyOsc::Va) ? static_cast<float>(wave) : 0.0f;
         slots_.wFm[s] = fm ? 1.0f : 0.0f;
-        slots_.idxFloor[s] = static_cast<float>(0.3 * fmI);
+        slots_.idxFloor[s] = idxFloor0_[s] = static_cast<float>(0.3 * fmI);
         slots_.idxDecay[s] = idxDecay;
         const double theta = (std::clamp(width * kUnisonPan[u], -1.0, 1.0) + 1.0) * kPiD / 4.0;
         const double g = gains[u] * norm * velGain * (slotSup ? static_cast<double>(kSawTableGain) : 1.0);
@@ -464,6 +489,8 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         for (int c = 0; c < 2; ++c) {
             const int l = voice * 2 + c;
             ch_.ic1[l] = ch_.ic2[l] = ch_.ha1[l] = ch_.ha2[l] = ch_.hb1[l] = ch_.hb2[l] = 0.0f;
+            for (int j = 0; j < 4; ++j) ch_.fv[j][l] = ch_.fs[j][l] = 0.0f;   // the filter models' nodes (26.09.2026)
+            ch_.fxp[l] = 0.0f;
         }
     }
     voiceCoefs(voice);
@@ -481,9 +508,54 @@ void Poly::noteOn(int pitch, float velocity, double lengthBeats, int gateSamples
         amp_[voice].setTimes(std::max(1.0e-5f, attack), v[poly::AmpDecay] * 0.001f, v[poly::AmpSustain],
                              std::max(0.005f, v[poly::AmpRelease] * 0.001f));
     }
+    // The modulation (26.09.2026): the note's random value, the envelope and the retriggered LFOs, the sums of the
+    // last note gone -- they are evaluated again on the next grid step -- and the filter envelope as an ADSR.
+    noteRand_[voice] = modRng_.bipolar();
+    for (float& m : modSum_[voice]) m = 0.0f;
+    modGainL_[voice] = modGainR_[voice] = 1.0f;
+    mod_[voice].noteOn(static_cast<int64_t>(pos_), beat_);
+    if (fAdsrOn_) {
+        fAdsr_[voice].noteOn();
+        fAdsr_[voice].advanceAttack(late);
+        fenv_[voice] = fAdsr_[voice].level();
+    }
+    if (modOn_) applyModulation(voice, beat_);
     lowPassCoefs(voice, 2.0 - 1.9 * std::clamp(static_cast<double>(v[poly::Resonance]), 0.0, 1.0));
     amp_[voice].noteOn();
     amp_[voice].advanceAttack(late);
+}
+
+void Poly::applyModulation(int voice, double beat)
+{
+    const float* v = values_;
+    float ext[kModSources] = {};
+    ext[static_cast<int>(ModSource::FilterEnv)] = fenv_[voice];
+    ext[static_cast<int>(ModSource::Velocity)] = vel_[voice];
+    ext[static_cast<int>(ModSource::Key)] = std::clamp(static_cast<float>(pitch_[voice] - 60) / 24.0f, -1.0f, 1.0f);
+    ext[static_cast<int>(ModSource::Random)] = noteRand_[voice];
+    float* sum = modSum_[voice];
+    mod_[voice].evaluate(static_cast<int64_t>(pos_), beat, ext, sum);
+    const Modulator& m = mod_[voice];
+    // Pitch: the slots' frequencies (writeSlotPitch reads the sums).
+    if (m.targets(ModDest::Pitch) || m.targets(ModDest::Osc2Pitch)) writeSlotPitch(voice);
+    const int s0 = voice * kPolyUnison;
+    if (m.targets(ModDest::PulseWidth)) {
+        const float pw = std::clamp(v[poly::PulseWidth] + sum[static_cast<int>(ModDest::PulseWidth)], 0.05f, 0.95f);
+        for (int u = 0; u < kPolyUnison; ++u) if (slots_.wPulse[s0 + u] != 0.0f) slots_.pw[s0 + u] = pw;
+    }
+    if (m.targets(ModDest::FmIndex)) {
+        const float f = std::clamp(1.0f + sum[static_cast<int>(ModDest::FmIndex)], 0.0f, 2.0f);
+        for (int u = 0; u < kPolyUnison; ++u) slots_.idxFloor[s0 + u] = idxFloor0_[s0 + u] * f;
+    }
+    // Level doubled or shut, and the pan as constant power -- both exactly 1 where no slot reaches them.
+    const float gain = m.targets(ModDest::Level) ? std::clamp(1.0f + sum[static_cast<int>(ModDest::Level)], 0.0f, 2.0f) : 1.0f;
+    if (m.targets(ModDest::Pan)) {
+        const double theta = (std::clamp(static_cast<double>(sum[static_cast<int>(ModDest::Pan)]), -1.0, 1.0) + 1.0) * kPiD / 4.0;
+        modGainL_[voice] = gain * static_cast<float>(std::cos(theta) * std::sqrt(2.0));
+        modGainR_[voice] = gain * static_cast<float>(std::sin(theta) * std::sqrt(2.0));
+    } else {
+        modGainL_[voice] = modGainR_[voice] = gain;
+    }
 }
 
 template <class V>
@@ -527,14 +599,25 @@ void Poly::renderSegment(float* L, float* R, int n)
             continue;
         }
         // Low pass from the envelope, renewed on the absolute 16-sample grid only: where the host cuts
-        // its blocks must not decide when a coefficient changes.
-        if (pos_ % kPolyBlock == 0) lowPassCoefs(voice, damping);
+        // its blocks must not decide when a coefficient changes. The modulation is evaluated on the same
+        // grid, before the coefficients read it (26.09.2026).
+        if (pos_ % kPolyBlock == 0) {
+            if (modOn_) applyModulation(voice, beat_);
+            lowPassCoefs(voice, damping);
+        }
+        const float gl = modGainL_[voice], gr = modGainR_[voice];
         for (int i = 0; i < n; ++i) {
-            if (gate_[voice] > 0 && --gate_[voice] == 0) amp_[voice].noteOff();
+            if (gate_[voice] > 0 && --gate_[voice] == 0) {
+                amp_[voice].noteOff();
+                mod_[voice].noteOff();
+                fAdsr_[voice].noteOff();
+            }
             const float a = amp_[voice].process() * lfoGain;
-            chanAmp_[static_cast<size_t>(i * kPolyLanes + voice * 2)] = a;
-            chanAmp_[static_cast<size_t>(i * kPolyLanes + voice * 2 + 1)] = a;
-            fenv_[voice] *= fDecay_;
+            chanAmp_[static_cast<size_t>(i * kPolyLanes + voice * 2)] = a * gl;
+            chanAmp_[static_cast<size_t>(i * kPolyLanes + voice * 2 + 1)] = a * gr;
+            if (fAdsrOn_) fenv_[voice] = fAdsr_[voice].process();
+            else fenv_[voice] *= fDecay_;
+            mod_[voice].tick();
         }
     }
     // Wavetable rows, on the scalar side (a table read is a gather): position from the knob, the
@@ -584,6 +667,9 @@ void Poly::renderSegment(float* L, float* R, int n)
             // The free slow movement of colour (25.09.2026), kept inside the table: at a position near an end the sine
             // would carry the read outside it. Only where it runs, so every render without it is the one before.
             if (v[poly::SlowMod] > 0.0f) pos = std::clamp(pos + 0.15f * v[poly::SlowMod] * slowColour_, 0.0f, 1.0f);
+            // The matrix's table destination (26.09.2026: "z.B. um durch das Wavetable zu interpolieren").
+            if (modOn_ && mod_[voice].targets(ModDest::TablePos))
+                pos = std::clamp(pos + modSum_[voice][static_cast<int>(ModDest::TablePos)], 0.0f, 1.0f);
             posEnv_[voice] *= posDecay_;
             lfoPh_[voice] += lfoInc_;
             if (lfoPh_[voice] >= 1.0) lfoPh_[voice] -= 1.0;
@@ -663,6 +749,7 @@ void Poly::renderSegment(float* L, float* R, int n)
     }
     delay_.process(sendBuf_.data(), L, R, n);
     pos_ += static_cast<uint64_t>(n);
+    beat_ += beatsPerSample_ * static_cast<double>(n);
 }
 
 void Poly::lowPassCoefs(int voice, double damping)
@@ -672,7 +759,15 @@ void Poly::lowPassCoefs(int voice, double damping)
                      + static_cast<double>(driftOct_[voice])
                      + static_cast<double>(lfo2Cut_) * static_cast<double>(lfo2Value_)
                      + static_cast<double>(v[poly::SlowMod]) * static_cast<double>(slowCut_);
-    const double fc = std::min(static_cast<double>(v[poly::Cutoff]) * std::pow(2.0, oct), 0.45 * sr_);
+    const float* mods = modSum_[voice];
+    const bool modded = modOn_ && mod_[voice].active();
+    const double modOct = modded && mod_[voice].targets(ModDest::Cutoff) ? static_cast<double>(mods[static_cast<int>(ModDest::Cutoff)]) : 0.0;
+    const double fc = std::min(static_cast<double>(v[poly::Cutoff]) * std::pow(2.0, oct + modOct), 0.45 * sr_);
+    // The resonance per voice where a slot moves it (26.09.2026); the instance's damping otherwise.
+    const float res = modded && mod_[voice].targets(ModDest::Resonance)
+        ? std::clamp(v[poly::Resonance] + mods[static_cast<int>(ModDest::Resonance)], 0.0f, 1.0f)
+        : std::clamp(v[poly::Resonance], 0.0f, 1.0f);
+    if (modded && mod_[voice].targets(ModDest::Resonance)) damping = 2.0 - 1.9 * static_cast<double>(res);
     svfCoefs(fc, damping, sr_, ch_.a1[voice * 2], ch_.a2[voice * 2], ch_.a3[voice * 2]);
     ch_.a1[voice * 2 + 1] = ch_.a1[voice * 2];
     ch_.a2[voice * 2 + 1] = ch_.a2[voice * 2];
@@ -687,6 +782,27 @@ void Poly::lowPassCoefs(int voice, double damping)
     default: break;
     }
     for (int c = 0; c < 2; ++c) { ch_.m0[voice * 2 + c] = m0; ch_.m1[voice * 2 + c] = m1; ch_.m2[voice * 2 + c] = m2; }
+    // The filter models (26.09.2026, Filters.h): the same cutoff as g, the resonance as the model's own feedback.
+    ch_.model = std::clamp(static_cast<int>(std::lround(v[poly::FilterModel])), 0, kVoiceFilterModels - 1);
+    if (ch_.model != 0) {
+        const FilterModel fm = static_cast<FilterModel>(ch_.model - 1);
+        const float g = static_cast<float>(std::tan(kPiD * fc / (2.0 * sr_)));   // the models run at twice the rate
+        const float fk = FilterVoicing::feedback(fm, res);
+        // The level against the state-variable filter, made good (26.09.2026): measured on the lead of the listening
+        // seed at resonance 0.2, 0.45 and 0.7, the ladders and cascades lost 2 .. 3.7 dB, the Juno 3.3 .. 6.7, the diode
+        // ladder 6.6 .. 8.6 -- the passband a filter's feedback takes, which FilterVoicing::makeup gives back only in
+        // part. A line a + b res through those points; the SEM, the Korg35, the Polivoks and the Wasp were within 1 dB.
+        static const float kTrimA[kVoiceFilterModels] = { 0.0f, 1.32f, 1.28f, 1.94f, 0.0f, 1.28f, 5.8f, 0.4f, 0.0f, 0.0f };
+        static const float kTrimB[kVoiceFilterModels] = { 0.0f, 3.4f, 3.6f, 6.8f, 0.0f, 3.6f, 4.0f, 0.0f, 0.0f, 0.0f };
+        const float mk = FilterVoicing::makeup(fm, fk) * dbToGain(kTrimA[ch_.model] + kTrimB[ch_.model] * res);
+        const float mode = std::clamp(v[poly::FilterMode] + (modded ? mods[static_cast<int>(ModDest::FilterMode)] : 0.0f), 0.0f, 1.0f);
+        const float* w = poleMix(mode);
+        for (int c = 0; c < 2; ++c) {
+            const int l = voice * 2 + c;
+            ch_.fg[l] = g; ch_.fk[l] = fk; ch_.fmk[l] = mk; ch_.fmd[l] = mode;
+            for (int j = 0; j < 5; ++j) ch_.xw[j][l] = w[j];
+        }
+    }
 }
 
 template <class V>

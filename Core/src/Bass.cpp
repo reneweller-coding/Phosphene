@@ -37,6 +37,9 @@ void Bass::prepare(double sampleRate)
     sr_ = sampleRate;
     osRate_ = sr_ * os_;
     amp_.setSampleRate(sr_);
+    fAdsr_.setSampleRate(sr_);
+    mod_.prepare(sr_, 0x42415353'4D4F4430ull);   // "BASSMOD0": one voice, one fixed stream (26.09.2026)
+    modRng_.seed(0x42415353'524E4430ull);         // "BASSRND0"
     ducker_.prepare(sr_);
     down_.setup(bassHalfband());
     reset();
@@ -53,7 +56,11 @@ void Bass::setOversampling(int factor)
 
 void Bass::reset()
 {
+    mod_.kill();
+    fAdsr_.kill();
+    for (float& m : modSum_) m = 0.0f;
     ladder_.reset();
+    model_.clear();
     down_.reset();
     hp1_.reset();
     hp2_.reset();
@@ -83,6 +90,29 @@ void Bass::update(const float* v)
     startPhase_ = v[bass::StartPhase];
     cutoff_ = v[bass::Cutoff];
     k_ = kResonanceMax * v[bass::Resonance];
+    modelIndex_ = std::clamp(static_cast<int>(std::lround(v[bass::FilterModel])), 0, kVoiceFilterModels - 1);
+    modelMode_ = std::clamp(v[bass::FilterMode], 0.0f, 1.0f);
+    if (modelIndex_ != 0)
+        modelK_ = FilterVoicing::feedback(static_cast<FilterModel>(modelIndex_ - 1), std::clamp(v[bass::Resonance], 0.0f, 1.0f));
+    // The level against the bass ladder, made good (26.09.2026, testFilterModels.levels at resonance 0.45): the drive
+    // stage evens out most of it, but the SEM, the Korg35, the Polivoks and the Wasp stood 1.6 .. 3.6 dB over it.
+    // The trim reaches only the filtered voice, not the sub under it, so it moves the bass's level by about half its
+    // value (measured: -2.94 dB on the SEM took it from +2.94 to +1.46): the table is twice the differences.
+    static const float kModelTrimDb[kVoiceFilterModels] = { 0.0f, -0.5f, -2.9f, -1.2f, -5.9f, -2.9f, 1.0f, -3.3f, -4.7f, -7.1f };
+    modelTrim_ = dbToGain(kModelTrimDb[modelIndex_]);
+    // The modulation (26.09.2026): the block with the bass's own targets, and the filter envelope as an ADSR once it
+    // asks for more than a decay.
+    static_assert(bass::Mx8Amount - bass::FiltAttack + 1 == kModBlockSize, "the block's layout (Modulation.h)");
+    mod_.set(readModBlock(v + bass::FiltAttack, kBassModDestMap, kBassModDests));
+    modOn_ = mod_.active();
+    fAdsrOn_ = v[bass::FiltAttack] > 0.1001f || v[bass::FiltSustain] > 0.0f;
+    fAdsr_.setTimes(v[bass::FiltAttack] * 0.001f, v[bass::FilterDecay] * 0.001f, v[bass::FiltSustain], std::max(0.005f, v[bass::FiltRelease] * 0.001f));
+    resBase_ = std::clamp(v[bass::Resonance], 0.0f, 1.0f);
+    kMod_ = k_;
+    modelKMod_ = modelK_;
+    modeMod_ = modelMode_;
+    cutMod_ = 0.0f;
+    levelMod_ = 1.0f;
     envOct_ = v[bass::EnvAmount];
     keyTrack_ = v[bass::KeyTrack];
     velCut_ = v[bass::VelToCutoff];
@@ -142,6 +172,7 @@ void Bass::noteOn(int pitch, float velocity, int gateSamples, double late, doubl
         // -60 dB the reset cannot be heard; a note that is still sounding keeps its filter states.
         if (amp_.level() < 1.0e-3f) {
             ladder_.reset();
+            model_.clear();
             down_.reset();
             hp1_.reset();
             hp2_.reset();
@@ -159,6 +190,14 @@ void Bass::noteOn(int pitch, float velocity, int gateSamples, double late, doubl
     // Sub-sample onset for the envelopes too: the filter envelope and the attack start `late`
     // samples into their curves, like the oscillators.
     fenv_ = static_cast<float>(std::pow(static_cast<double>(fDecay_), late));
+    // The modulation (26.09.2026): the note's random value, the envelope and the retriggered LFOs, the ADSR.
+    noteRand_ = modRng_.bipolar();
+    mod_.noteOn(static_cast<int64_t>(modPos_), beat_);
+    if (fAdsrOn_) {
+        fAdsr_.noteOn();
+        fAdsr_.advanceAttack(late);
+        fenv_ = fAdsr_.level();
+    }
     // The bite envelope steps once per oscillator sample, so `late` counts at the voice's rate.
     biteEnv_ = static_cast<float>(std::pow(static_cast<double>(biteDecay_), static_cast<double>(os_) * late));
     amp_.noteOn();
@@ -175,10 +214,32 @@ void Bass::process(float* out, int n)
     const float track = keyTrack_ * static_cast<float>(pitch_ - 28) / 12.0f;
     const float velScale = 1.0f - velCut_ + velCut_ * velocity_;
     for (int i = 0; i < n; ++i) {
-        const float oct = envOct_ * fenv_ * velScale + track;
+        // The modulation, every 16 samples on the absolute count (26.09.2026): where the host cuts its blocks must
+        // not decide when a destination moves.
+        if (modOn_ && modPos_ % 16 == 0) {
+            float ext[kModSources] = {};
+            ext[static_cast<int>(ModSource::FilterEnv)] = fenv_;
+            ext[static_cast<int>(ModSource::Velocity)] = velocity_;
+            ext[static_cast<int>(ModSource::Key)] = std::clamp(static_cast<float>(pitch_ - 40) / 24.0f, -1.0f, 1.0f);
+            ext[static_cast<int>(ModSource::Random)] = noteRand_;
+            mod_.evaluate(static_cast<int64_t>(modPos_), beat_, ext, modSum_);
+            cutMod_ = mod_.offset(modSum_, ModDest::Cutoff);
+            levelMod_ = mod_.targets(ModDest::Level) ? std::clamp(1.0f + modSum_[static_cast<int>(ModDest::Level)], 0.0f, 2.0f) : 1.0f;
+            if (mod_.targets(ModDest::Resonance)) {
+                const float res = std::clamp(resBase_ + modSum_[static_cast<int>(ModDest::Resonance)], 0.0f, 1.0f);
+                kMod_ = kResonanceMax * res;
+                if (modelIndex_ != 0) modelKMod_ = FilterVoicing::feedback(static_cast<FilterModel>(modelIndex_ - 1), res);
+            }
+            modeMod_ = std::clamp(modelMode_ + mod_.offset(modSum_, ModDest::FilterMode), 0.0f, 1.0f);
+            if (mod_.targets(ModDest::PulseWidth))
+                osc_.set(f0, osRate_, wave_, std::clamp(pw_ + modSum_[static_cast<int>(ModDest::PulseWidth)], 0.05f, 0.95f));
+        }
+        const float oct = envOct_ * fenv_ * velScale + track + cutMod_;
         const float fc = clampv(cutoff_ * std::pow(2.0f, oct), 20.0f, nyq);
         const float g = std::tan(kPi * fc / static_cast<float>(osRate_));
-        fenv_ *= fDecay_;
+        if (fAdsrOn_) fenv_ = fAdsr_.process();
+        else fenv_ *= fDecay_;
+        mod_.tick();
 
         // 2x: two ladder steps, decimated back. 1x (Quality::Quest, not used for the bass today):
         // one step, no decimator -- the PolyBLEP oscillator still band-limits its own discontinuity,
@@ -198,12 +259,17 @@ void Bass::process(float* out, int n)
             biteHp_.tick(std::tanh(s * biteGain_) * biteNorm_, lp, bp, hp);
             return bite2_.lp(bite1_.lp(hp)) * biteLevel_;
         };
+        // The filter: the bass's own ladder, or since 26.09.2026 one of the models (Filters.h) at the same rate.
+        auto filt = [&](float x) {
+            return modelIndex_ == 0 ? ladder_.tick(x, g, kMod_, 0.5f)
+                                    : model_.tick(static_cast<FilterModel>(modelIndex_ - 1), x, g, modelKMod_, modeMod_) * modelTrim_;
+        };
         const float s0 = osc_.next();
-        const float o0 = ladder_.tick(s0 * driveIn_, g, k_, 0.5f) * driveOut_ + (bite ? biteStep(s0) : 0.0f);
+        const float o0 = filt(s0 * driveIn_) * driveOut_ + (bite ? biteStep(s0) : 0.0f);
         float y;
         if (os_ == 2) {
             const float s1 = osc_.next();
-            const float o1 = ladder_.tick(s1 * driveIn_, g, k_, 0.5f) * driveOut_ + (bite ? biteStep(s1) : 0.0f);
+            const float o1 = filt(s1 * driveIn_) * driveOut_ + (bite ? biteStep(s1) : 0.0f);
             y = down_.process(o0, o1);
         } else {
             y = o0;
@@ -220,9 +286,15 @@ void Bass::process(float* out, int n)
         subPhase_ += subInc;
         if (subPhase_ >= 1.0) subPhase_ -= 1.0;
 
-        if (gate_ > 0 && --gate_ == 0) amp_.noteOff();
+        if (gate_ > 0 && --gate_ == 0) {
+            amp_.noteOff();
+            mod_.noteOff();
+            fAdsr_.noteOff();
+        }
         const float a = amp_.process();
-        out[i] = (y + sub) * a * ducker_.next() * level_;
+        out[i] = (y + sub) * a * ducker_.next() * level_ * levelMod_;
+        ++modPos_;
+        beat_ += beatsPerSample_;
     }
 }
 

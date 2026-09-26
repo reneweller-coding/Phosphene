@@ -146,7 +146,18 @@ enum : int { Wave, PulseWidth, Sub, SubMode, SplitRatio, KickLock, Retrigger, St
              DuckDepth, DuckHold, DuckRelease, Level,
              // Appended 19.09.2026 (round "lowend-acid"): the bite layer (Bass.h). New entries go at
              // the end: stored sets, presets and plugin state refer to a parameter by its index.
-             Bite, BiteCutoff, BiteEnv, BiteDecay, BiteDrive, BiteResonance, SubOctave, Count };
+             Bite, BiteCutoff, BiteEnv, BiteDecay, BiteDrive, BiteResonance, SubOctave,
+             // 26.09.2026: the filter models (Filters.h); 0 is the bass's own ladder (Ladder.h), as before.
+             FilterModel, FilterMode,
+             // 26.09.2026: the modulation block (Modulation.h, kModBlockSize knobs), with the bass's own targets
+             // (kBassModDestNames: no pitch -- the kick lock sits on it -- and no pan).
+             FiltAttack, FiltSustain, FiltRelease, MenvAttack, MenvDecay, MenvSustain, MenvRelease, Lfo1Rate,
+             Lfo1Shape, Lfo1Sync, Lfo1Retrig, Lfo1Fade, Lfo2Rate, Lfo2Shape, Lfo2Sync, Lfo2Retrig, Lfo2Fade,
+             Lfo3Rate, Lfo3Shape, Lfo3Sync, Lfo3Retrig, Lfo3Fade, Lfo4Rate, Lfo4Shape, Lfo4Sync, Lfo4Retrig,
+             Lfo4Fade, Mx1Src, Mx1Dst, Mx1Amount, Mx2Src, Mx2Dst, Mx2Amount, Mx3Src, Mx3Dst, Mx3Amount, Mx4Src,
+             Mx4Dst, Mx4Amount, Mx5Src, Mx5Dst, Mx5Amount, Mx6Src, Mx6Dst, Mx6Amount, Mx7Src, Mx7Dst, Mx7Amount,
+             Mx8Src, Mx8Dst, Mx8Amount,
+             Count };
 }
 /** @brief Parameters of the acid voice (module Acid, prefix "acid"). */
 namespace acid {
@@ -163,6 +174,13 @@ enum : int { Wave, Cutoff, Resonance, EnvAmount, Decay, Accent, SlideTime, AmpDe
              // is cut hard on the absolute bar line. Off by default, so older sets render unchanged.
              HallGate,
              PlateSend,   ///< 25.09.2026, the mix guide: the send into the plate, the middle plane of depth (Engine.h)
+             // 26.09.2026: the modulation block (Modulation.h) without the filter envelope -- the acid keeps its 303
+             // envelope -- and with the acid's own targets (kAcidModDestNames).
+             MenvAttack, MenvDecay, MenvSustain, MenvRelease, Lfo1Rate, Lfo1Shape, Lfo1Sync, Lfo1Retrig, Lfo1Fade,
+             Lfo2Rate, Lfo2Shape, Lfo2Sync, Lfo2Retrig, Lfo2Fade, Lfo3Rate, Lfo3Shape, Lfo3Sync, Lfo3Retrig,
+             Lfo3Fade, Lfo4Rate, Lfo4Shape, Lfo4Sync, Lfo4Retrig, Lfo4Fade, Mx1Src, Mx1Dst, Mx1Amount, Mx2Src,
+             Mx2Dst, Mx2Amount, Mx3Src, Mx3Dst, Mx3Amount, Mx4Src, Mx4Dst, Mx4Amount, Mx5Src, Mx5Dst, Mx5Amount,
+             Mx6Src, Mx6Dst, Mx6Amount, Mx7Src, Mx7Dst, Mx7Amount, Mx8Src, Mx8Dst, Mx8Amount,
              Count };
 }
 /** @brief Parameters of a polyphonic engine (module Poly, the six instances of PolyInstance). */
@@ -224,6 +242,19 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
              PlateSend,   ///< 25.09.2026, the mix guide: the send into the plate, the middle plane of depth (Engine.h)
              Distance,    ///< 25.09.2026, the addon: 0 near .. 1 far -- level, low pass, wet and width together (Engine.h)
              SlowMod,     ///< 25.09.2026, the addon: depth of the free slow movement (13 .. 34 s) of cutoff, colour, width
+             // 26.09.2026, the filter models of the BerlinSchoolGenerator (Filters.h): which circuit the voice filter is
+             // (0 = the state-variable filter it always had, so older sets render unchanged) and its mode -- the SEM's
+             // morph from low pass through notch to high pass, the Xpander's eight pole mixes, the Polivoks' band pass.
+             FilterModel, FilterMode,
+             // 26.09.2026, the voice's own modulation (Modulation.h): the filter envelope's attack, sustain and release (its
+             // decay is FilterDecay; attack at its minimum and sustain 0 keep the exponential decay the voice always had),
+             // the modulation envelope, four LFOs and the eight slots of the matrix.
+             FiltAttack, FiltSustain, FiltRelease, MenvAttack, MenvDecay, MenvSustain, MenvRelease, Lfo1Rate,
+             Lfo1Shape, Lfo1Sync, Lfo1Retrig, Lfo1Fade, Lfo2Rate, Lfo2Shape, Lfo2Sync, Lfo2Retrig, Lfo2Fade,
+             Lfo3Rate, Lfo3Shape, Lfo3Sync, Lfo3Retrig, Lfo3Fade, Lfo4Rate, Lfo4Shape, Lfo4Sync, Lfo4Retrig,
+             Lfo4Fade, Mx1Src, Mx1Dst, Mx1Amount, Mx2Src, Mx2Dst, Mx2Amount, Mx3Src, Mx3Dst, Mx3Amount, Mx4Src,
+             Mx4Dst, Mx4Amount, Mx5Src, Mx5Dst, Mx5Amount, Mx6Src, Mx6Dst, Mx6Amount, Mx7Src, Mx7Dst, Mx7Amount,
+             Mx8Src, Mx8Dst, Mx8Amount,
              Count };
 }
 /** @brief Values of poly.mod: the voice's modulation insert (20.09.2026, round "dialogue"). */
@@ -236,6 +267,23 @@ enum class PolyMod : int {
 };
 /** @brief Values of poly.filter_type: the outputs of the voice's state-variable filter (PolyKernel.h). */
 enum class PolyFilter : int { LowPass = 0, BandPass, HighPass, Notch, Count };
+// Names of the modulation block's choices (Modulation.h; Params.cpp), 26.09.2026.
+extern const char* const kLfoShapeNames[];    ///< LfoShape
+extern const char* const kLfoSyncNames[];     ///< lfoCyclesPerBeat's divisions
+extern const char* const kModSourceNames[];   ///< ModSource
+extern const char* const kModDestNames[];     ///< ModDest
+extern const char* const kBassModDestNames[]; ///< the bass's targets (kBassModDests maps them to ModDest)
+constexpr int kBassModDests = 6;              ///< entries of kBassModDestNames
+extern const int kBassModDestMap[kBassModDests];   ///< kBassModDestNames -> ModDest
+extern const char* const kAcidModDestNames[]; ///< the acid's targets
+constexpr int kAcidModDests = 6;              ///< entries of kAcidModDestNames
+extern const int kAcidModDestMap[kAcidModDests];   ///< kAcidModDestNames -> ModDest
+/**
+ * @brief Values of poly.filter_model and bass.filter_model (26.09.2026): entry 0 is the synth's own filter (the
+ *        state-variable filter of a voice, the ladder of the bass), entries 1 .. 9 are Filters.h's FilterModel from
+ *        Moog to Wasp (the comb is left out: the voices have one in their modulation insert).
+ */
+constexpr int kVoiceFilterModels = 10;   ///< entries of the two lists (Params.cpp kPolyFilterModelNames, kBassFilterModelNames)
 /** @brief Parameters of the effect generator (module Sfx, prefix "sfx"). */
 namespace sfx {
 enum : int { Level, Noise, Resonance, Brightness, ImpactDecay, Vowel, SwellDecay, Width, RoomSend, HallSend, Duck,

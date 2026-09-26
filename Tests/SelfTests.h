@@ -118,6 +118,10 @@ void testMixGuideLeadDucks();   ///< selftest_mixguide.cpp
 void testMixGuidePlanes();   ///< selftest_mixguide.cpp
 void testMixGuideDistance();   ///< selftest_mixguide.cpp
 void testMixGuidePhase();   ///< selftest_mixguide.cpp
+void testFilterModelsLevels();   ///< selftest_modulation.cpp
+void testModulationBlockSize();   ///< selftest_modulation.cpp
+void testModulationSync();   ///< selftest_modulation.cpp
+void testModulationFilterAdsr();   ///< selftest_modulation.cpp
 void testGenreRulesListeningSeed();   ///< selftest_arrangement.cpp
 void testGenreRulesArpGate();   ///< selftest_arrangement.cpp
 void testFoundationScore();   ///< selftest_arrangement.cpp

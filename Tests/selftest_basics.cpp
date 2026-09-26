@@ -1149,7 +1149,7 @@ void testVarietyPlans()
         bool allKnobs = true;
         for (int i = 0; i < 20; ++i) {
             const TrackPlan t = cz.track(q, i);
-            float off[64] = {};
+            float off[std::max<int>(kick::Count, bass::Count)] = {};   // sized by the tables (26.09.2026)
             Composer::recipeOffsets(true, t.kickMacro, 0.0f, off);
             float any = 0.0f;
             for (float o : off) any += std::fabs(o);

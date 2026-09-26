@@ -57,23 +57,45 @@ struct Section {
 };
 constexpr CellSize S = CellSize::Small, N = CellSize::Normal, L = CellSize::Large;
 
+/** @brief The modulation block's groups (Modulation.h; 26.09.2026), the same on every synth that has it. */
+const std::vector<Section> kModSections = {
+    { "Mod Envelope", 4, { { "menv_attack", S }, { "menv_decay", S }, { "menv_sustain", S }, { "menv_release", S } } },
+    { "LFO 1", 5, { { "lfo1_shape", N }, { "lfo1_sync", N }, { "lfo1_rate", N }, { "lfo1_retrig", S }, { "lfo1_fade", S } } },
+    { "LFO 2", 5, { { "lfo2_shape", N }, { "lfo2_sync", N }, { "lfo2_rate", N }, { "lfo2_retrig", S }, { "lfo2_fade", S } } },
+    { "LFO 3", 5, { { "lfo3_shape", N }, { "lfo3_sync", N }, { "lfo3_rate", N }, { "lfo3_retrig", S }, { "lfo3_fade", S } } },
+    { "LFO 4", 5, { { "lfo4_shape", N }, { "lfo4_sync", N }, { "lfo4_rate", N }, { "lfo4_retrig", S }, { "lfo4_fade", S } } },
+    { "Mod Matrix", 10, { { "mx1_src", N }, { "mx1_dst", N }, { "mx1_amount", S }, { "mx2_src", N }, { "mx2_dst", N }, { "mx2_amount", S },
+                          { "mx3_src", N }, { "mx3_dst", N }, { "mx3_amount", S }, { "mx4_src", N }, { "mx4_dst", N }, { "mx4_amount", S },
+                          { "mx5_src", N }, { "mx5_dst", N }, { "mx5_amount", S }, { "mx6_src", N }, { "mx6_dst", N }, { "mx6_amount", S },
+                          { "mx7_src", N }, { "mx7_dst", N }, { "mx7_amount", S }, { "mx8_src", N }, { "mx8_dst", N }, { "mx8_amount", S } } },
+};
+/** @brief @p own with the modulation groups after its first @p at groups (the source and the filter come first). */
+std::vector<Section> withModulation(const std::vector<Section>& own, size_t at)
+{
+    std::vector<Section> out(own.begin(), own.begin() + static_cast<std::ptrdiff_t>(std::min(at, own.size())));
+    out.insert(out.end(), kModSections.begin(), kModSections.end());
+    out.insert(out.end(), own.begin() + static_cast<std::ptrdiff_t>(std::min(at, own.size())), own.end());
+    return out;
+}
 const std::vector<Section> kKickSections = {
     { "Pitch", 6, { { "engine", N }, { "tune", L }, { "pitch_start", N }, { "pitch_end", N }, { "pitch_decay", N } } },
     { "Punch & Body", 5, { { "punch", L }, { "punch_decay", N }, { "amp_decay", N }, { "amp_attack", S }, { "amp_hold", S } } },
     { "Click", 3, { { "click_level", N }, { "click_tone", N }, { "click_decay", N } } },
     { "Drive & Output", 5, { { "level", L }, { "drive", N }, { "clip", N }, { "tone", N }, { "tail_limit", S } } },
 };
-const std::vector<Section> kBassSections = {
+const std::vector<Section> kBassSectionsOwn = {
     { "Oscillator", 5, { { "wave", N }, { "sub_mode", N }, { "pulse_width", N }, { "sub", N }, { "sub_octave", S },
                          { "split_ratio", S }, { "start_phase", S }, { "retrigger", S }, { "kick_lock", S } } },
-    { "Filter", 6, { { "cutoff", L }, { "resonance", L }, { "env_amount", N }, { "filter_decay", N }, { "key_track", S },
-                     { "vel_to_cutoff", S } } },
+    { "Filter", 6, { { "filter_model", N }, { "cutoff", L }, { "resonance", L }, { "env_amount", N },
+                     { "filter_mode", S }, { "key_track", S }, { "vel_to_cutoff", S } } },
+    { "Filter Envelope", 4, { { "filt_attack", S }, { "filter_decay", S }, { "filt_sustain", S }, { "filt_release", S } } },
     { "Bite", 5, { { "bite", N }, { "bite_cutoff", N }, { "bite_resonance", S }, { "bite_env", S }, { "bite_decay", S },
                    { "bite_drive", S } } },
     { "Amplifier", 4, { { "drive", N }, { "amp_attack", S }, { "amp_decay", S }, { "amp_sustain", S }, { "amp_release", S } } },
     { "Duck & Level", 4, { { "level", L }, { "duck_depth", N }, { "duck_hold", S }, { "duck_release", S } } },
 };
-const std::vector<Section> kAcidSections = {
+const std::vector<Section> kBassSections = withModulation(kBassSectionsOwn, 5);   // after Amplifier
+const std::vector<Section> kAcidSectionsOwn = {
     { "Voice", 4, { { "wave", N }, { "slide_time", N }, { "amp_decay", N } } },
     { "Filter", 6, { { "cutoff", L }, { "resonance", L }, { "env_amount", N }, { "decay", N }, { "accent", N }, { "key_track", S } } },
     { "Squelch & Drive", 5, { { "squelch", N }, { "drive", N }, { "squelch_start", S }, { "squelch_time", S }, { "low_cut", S },
@@ -83,18 +105,20 @@ const std::vector<Section> kAcidSections = {
     { "Space & Output", 5, { { "level", L }, { "duck", N }, { "room_send", S }, { "plate_send", S }, { "hall_send", S },
                              { "hall_gate", S } } },
 };
-const std::vector<Section> kPolySections = {
+const std::vector<Section> kAcidSections = withModulation(kAcidSectionsOwn, 3);   // after Squelch & Drive
+const std::vector<Section> kPolySectionsOwn = {
     { "Oscillator", 6, { { "osc", N }, { "table", N }, { "position", L }, { "detune", N }, { "mix", N }, { "wave", N },
                          { "dynamic_detune", S }, { "pulse_width", S }, { "drift", S } } },
     { "Wavetable Motion", 4, { { "pos_env", N }, { "pos_lfo_depth", N }, { "pos_decay", S }, { "pos_lfo_beats", S } } },
     { "FM", 3, { { "fm_ratio", N }, { "fm_index", N }, { "fm_decay", S } } },
     { "Second Oscillator", 4, { { "osc2", N }, { "osc2_mix", N }, { "osc2_interval", N }, { "osc2_detune", S } } },
-    { "Filter", 6, { { "filter_type", N }, { "cutoff", L }, { "resonance", L }, { "env_amount", N }, { "filter_decay", N },
-                     { "key_track", S }, { "hp_floor", S }, { "hp_track", S }, { "disperse", S }, { "disperse_freq", S } } },
+    { "Filter", 6, { { "filter_model", N }, { "filter_type", N }, { "cutoff", L }, { "resonance", L }, { "env_amount", N },
+                     { "filter_mode", S }, { "key_track", S }, { "hp_floor", S }, { "hp_track", S }, { "disperse", S }, { "disperse_freq", S } } },
+    { "Filter Envelope", 4, { { "filt_attack", S }, { "filter_decay", S }, { "filt_sustain", S }, { "filt_release", S } } },
     { "Amplifier", 4, { { "amp_attack", N }, { "amp_decay", N }, { "amp_sustain", N }, { "amp_release", N }, { "vel_sens", S },
                         { "glide", S } } },
-    { "LFO", 4, { { "lfo_beats", N }, { "lfo_cutoff", S }, { "lfo_pitch", S }, { "lfo_amp", S } } },
-    { "Modulation", 5, { { "mod", N }, { "mod_mix", N }, { "mod_depth", N }, { "mod_beats", S }, { "mod_feedback", S } } },
+    { "Vibrato & Tremolo", 4, { { "lfo_beats", N }, { "lfo_cutoff", S }, { "lfo_pitch", S }, { "lfo_amp", S } } },
+    { "Voice FX", 5, { { "mod", N }, { "mod_mix", N }, { "mod_depth", N }, { "mod_beats", S }, { "mod_feedback", S } } },
     { "Trance Gate", 5, { { "gate", N }, { "gate_pattern", N }, { "gate_depth", N }, { "gate_duty", S }, { "gate_attack", S },
                           { "gate_release", S }, { "gate_tone", S } } },
     { "Delay", 4, { { "delay_send", N }, { "delay_feedback", N }, { "delay_left", S }, { "delay_right", S },
@@ -103,6 +127,7 @@ const std::vector<Section> kPolySections = {
                             { "hall_gate", S }, { "pan", S }, { "slow_mod", S } } },
     { "Output", 3, { { "level", L }, { "duck", N } } },
 };
+const std::vector<Section> kPolySections = withModulation(kPolySectionsOwn, 7);   // after Amplifier
 // The effects page: the generator, then the three rooms of the mix guide -- A the room, B the plate, C the hall, each
 // with its own filters and pre-delay -- and the returns. The effect presets stand in a group of their own.
 const std::vector<Section> kSfxSections = {

@@ -57,6 +57,8 @@ void Acid::prepare(double sampleRate)
     sr_ = sampleRate;
     osRate_ = sr_ * os_;
     amp_.setSampleRate(sr_);
+    mod_.prepare(sr_, 0x41434944'4D4F4430ull);   // "ACIDMOD0": one voice, one fixed stream (26.09.2026)
+    modRng_.seed(0x41434944'524E4430ull);         // "ACIDRND0"
     down_.setup(acidHalfband());
     delay_.prepare(sr_);
     size_t n = 1;
@@ -69,6 +71,8 @@ void Acid::prepare(double sampleRate)
 
 void Acid::reset()
 {
+    mod_.kill();
+    for (float& m : modSum_) m = 0.0f;
     osc_ = VaOscillator{};
     ladder_.reset();
     down_.reset();
@@ -121,6 +125,13 @@ void Acid::update(const float* v, double bpm)
     sweepCharge_ = static_cast<float>(1.0 - std::exp(-1.0 / (kSweepTau * sr2)));
     accentSmooth_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.004 * sr_)));
     level_ = dbToGain(v[acid::Level]);
+    // The modulation (26.09.2026): the block from its envelope on (the acid has no filter envelope of the block's).
+    static_assert(acid::Mx8Amount - acid::MenvAttack + 1 == kModBlockSize - kModBlockMenv, "the block's layout (Modulation.h)");
+    mod_.set(readModBlock(v + acid::MenvAttack - kModBlockMenv, kAcidModDestMap, kAcidModDests));
+    modOn_ = mod_.active();
+    kMod_ = k_;
+    cutMod_ = pitchMod_ = 0.0f;
+    gainL_ = gainR_ = 1.0f;
     sendAmt_ = v[acid::DelaySend];
     const int dl = std::clamp(static_cast<int>(std::lround(v[acid::DelayLeft])), 0, kNumDelayTimes - 1);
     const int dr = std::clamp(static_cast<int>(std::lround(v[acid::DelayRight])), 0, kNumDelayTimes - 1);
@@ -138,6 +149,8 @@ void Acid::noteOn(int pitch, float velocity, bool accent, bool slide, int gateSa
     gate_ = std::max(1, gateSamples);
     slidePending_ = slide;
     const double f0 = midiToHz(pitch);
+    noteRand_ = modRng_.bipolar();
+    if (!legato_) mod_.noteOn(static_cast<int64_t>(modPos_), beat_);   // a slide is one note to the modulation, as to the envelopes
     // Release floor: half a period (as the bass), and never under 8 ms.
     amp_.setTimes(0.0004f, ampDecay_, 0.0f, static_cast<float>(std::max(0.008, 0.5 / f0)));
     if (!legato_) {
@@ -166,16 +179,37 @@ void Acid::process(float* L, float* R, int total)
     while (done < total) {
         const int n = std::min(total - done, static_cast<int>(mono_.size()));
         for (int i = 0; i < n; ++i) {
+            // The modulation, every 16 samples on the absolute count (26.09.2026).
+            if (modOn_ && modPos_ % 16 == 0) {
+                float ext[kModSources] = {};
+                ext[static_cast<int>(ModSource::FilterEnv)] = fenv_;
+                ext[static_cast<int>(ModSource::Velocity)] = velocity_;
+                ext[static_cast<int>(ModSource::Key)] = std::clamp(static_cast<float>(pitchNow_ - 57.0) / 24.0f, -1.0f, 1.0f);
+                ext[static_cast<int>(ModSource::Random)] = noteRand_;
+                mod_.evaluate(static_cast<int64_t>(modPos_), beat_, ext, modSum_);
+                cutMod_ = mod_.offset(modSum_, ModDest::Cutoff);
+                pitchMod_ = mod_.offset(modSum_, ModDest::Pitch);
+                kMod_ = mod_.targets(ModDest::Resonance)
+                    ? kResonanceMax * std::clamp(resonance_ + modSum_[static_cast<int>(ModDest::Resonance)], 0.0f, 1.0f) : k_;
+                const float gain = mod_.targets(ModDest::Level) ? std::clamp(1.0f + modSum_[static_cast<int>(ModDest::Level)], 0.0f, 2.0f) : 1.0f;
+                if (mod_.targets(ModDest::Pan)) {
+                    const double theta = (std::clamp(static_cast<double>(modSum_[static_cast<int>(ModDest::Pan)]), -1.0, 1.0) + 1.0) * kPiD / 4.0;
+                    gainL_ = gain * static_cast<float>(std::cos(theta) * std::sqrt(2.0));
+                    gainR_ = gain * static_cast<float>(std::sin(theta) * std::sqrt(2.0));
+                } else {
+                    gainL_ = gainR_ = gain;
+                }
+            }
             if (std::fabs(pitchTarget_ - pitchNow_) > 1.0e-6) {
                 pitchNow_ += (pitchTarget_ - pitchNow_) * glide_;
                 hz_ = static_cast<float>(midiToHz(pitchNow_));
             }
-            osc_.set(hz_, sr2, wave_, 0.5f);
+            osc_.set(pitchMod_ != 0.0f ? hz_ * std::pow(2.0f, pitchMod_ / 12.0f) : hz_, sr2, wave_, 0.5f);
             accentGain_ += (accentGainTarget_ - accentGain_) * accentSmooth_;
             // 2x: two ladder steps, decimated back. 1x (Quality::Quest): one step, no decimator.
             float o[2] = { 0.0f, 0.0f };
             for (int j = 0; j < os_; ++j) {
-                float oct = envOct_ * fenv_ * accentOct + keyTrack_ * static_cast<float>(pitchNow_ - 57.0) / 12.0f + sweepDepth * sweep_;
+                float oct = envOct_ * fenv_ * accentOct + keyTrack_ * static_cast<float>(pitchNow_ - 57.0) / 12.0f + sweepDepth * sweep_ + cutMod_;
                 if (squelch_) oct += sqOct_ * sq_;
                 const float fc = clampv(cutoff_ * std::pow(2.0f, oct), 20.0f, nyq);
                 const float g = 1.41421356f * static_cast<float>(std::tan(kPiD * fc / sr2));
@@ -183,7 +217,7 @@ void Acid::process(float* L, float* R, int total)
                 sq_ *= sqDecay_;
                 pulse_ *= pulseDecay_;
                 sweep_ += (pulse_ - sweep_) * sweepCharge_;
-                o[j] = ladder_.tick(osc_.next(), g, k_, kLadderComp);
+                o[j] = ladder_.tick(osc_.next(), g, kMod_, kLadderComp);
             }
             float y = os_ == 2 ? down_.process(o[0], o[1]) : o[0];
             if (squelch_) {
@@ -206,8 +240,11 @@ void Acid::process(float* L, float* R, int total)
                 combPos_ = (combPos_ + 1) & mask;
                 y += combMix_ * ((1.0f - combFb_) * yc - y);
             }
-            if (gate_ > 0 && --gate_ == 0) amp_.noteOff();
+            if (gate_ > 0 && --gate_ == 0) { amp_.noteOff(); mod_.noteOff(); }
             const float a = amp_.process();
+            mod_.tick();
+            ++modPos_;
+            beat_ += beatsPerSample_;
             float v = shaper_(y * a * accentGain_ * velGain * driveIn_) * driveOut_;
             float lp, bp, hp;
             lc1_.tick(v, lp, bp, hp);
@@ -217,8 +254,8 @@ void Acid::process(float* L, float* R, int total)
             // spending sections on a band that is already gone.
             if (disperse_.stages > 0) v = dispState_.tick(v, disperse_.c, disperse_.d, disperse_.stages);
             v *= level_;
-            L[done + i] = v;
-            R[done + i] = v;
+            L[done + i] = v * gainL_;
+            R[done + i] = v * gainR_;
             send_[static_cast<size_t>(i)] = v * sendAmt_;
         }
         delay_.process(send_.data(), L + done, R + done, n);

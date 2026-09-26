@@ -171,7 +171,7 @@ void testRecipeSpread()
                 if (off[k] != 0.0f) v[k] = p.fromNormalised(base + static_cast<int>(k), p.toNormalised(base + static_cast<int>(k), v[k]) + off[k]);
             return v;
         };
-        float ko[64] = {}, bo[64] = {};
+        float ko[kick::Count] = {}, bo[bass::Count] = {};   // sized by the tables (26.09.2026: the bass outgrew 64)
         Composer::recipeOffsets(true, t.kickMacro, sv, ko);
         Composer::recipeOffsets(false, t.bassMacro, sv, bo);
         std::vector<float> kv = apply(Module::Kick, ko), bv = apply(Module::Bass, bo);

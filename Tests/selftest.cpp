@@ -233,6 +233,10 @@ int main(int argc, char** argv)
     run("testMixGuide.planes", testMixGuidePlanes);
     run("testMixGuide.distance", testMixGuideDistance);
     run("testMixGuide.phase", testMixGuidePhase);
+    run("testFilterModels.levels", testFilterModelsLevels);
+    run("testModulation.blockSize", testModulationBlockSize);
+    run("testModulation.sync", testModulationSync);
+    run("testModulation.filterAdsr", testModulationFilterAdsr);
     run("testGenreRules.listeningSeed", testGenreRulesListeningSeed);
     run("testGenreRules.arpGate", testGenreRulesArpGate);
     run("testFoundation.score", testFoundationScore);

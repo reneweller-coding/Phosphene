@@ -222,6 +222,22 @@ Jeder Erzeuger ist ein Modul mit: Pattern-Generator (Abschnitt 6), Synth-Engine 
 Kanalzug (5.9). Jede Engine hat einen skalaren Referenzpfad und einen SoA-Pfad über Lanes.
 Literatur pro Baustein steht dabei, wie in der Feedback-Regel "Literatur statt Klon" verlangt.
 
+**Filtermodelle und Modulation (26.09.2026, vom Nutzer gewünscht, übernommen aus dem BerlinSchoolGenerator):**
+
+- **Filtermodelle (`Filters.h`):** Moog-Leiter, Prophet- und Juno-OTA-Kaskade, Oberheim SEM, Xpander-Polmischung, Diodenleiter, Korg35, Polivoks und Wasp.
+  - Jedes Modell ist die Differentialgleichung der Schaltung, trapezförmig integriert und je Sample per Newton gelöst.
+  - In den sechs Stimmen laufen sie mit doppelter Rate (Eingang halb interpoliert, Ausgang gemittelt), im Bass mit seiner 2×-Rate.
+  - Wahl 0 ist das eigene Filter des Synths; ältere Sets klingen damit unverändert.
+  - Der Pegel ist je Modell gegen das eigene Filter kalibriert: in den Stimmen als Gerade über die Resonanz, im Bass konstant.
+  - Die Acid behält ihre Diodenleiter.
+- **Modulation (`Modulation.h`):** je Stimme (bzw. einmal in Bass und Acid).
+  - Filter-ADSR: Attack an seinem Minimum und Sustain 0 ergeben den alten exponentiellen Abfall.
+  - Eine dritte Hüllkurve.
+  - Vier LFOs: frei oder auf den Beat synchronisiert, sieben Formen, Retrigger, Einblendung.
+  - Eine Matrix mit acht Slots.
+  - Ausgewertet wird im absoluten 16-Sample-Raster, also unabhängig von den Blöcken des Hosts (`testModulation.blockSize`).
+  - Der Bass hat keine Tonhöhe und kein Pan als Ziel (Kick-Lock), die Acid keine Filter-ADSR.
+
 ### 5.1 Kick
 Zwei Engines, umschaltbar, layerbar:
 

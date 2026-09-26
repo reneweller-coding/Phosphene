@@ -307,6 +307,29 @@ Your saved sets, each with a picture of its form. Save to gallery keeps the set 
 style, arc, knobs, locks and rerolls -- and a click on an entry loads it back. The files are ordinary
 .phosset files in your Sets folder; Open folder shows it.
 
+== Filters and modulation ==
+
+The melodic voices and the bass choose their filter's circuit with Filter Model. The first entry is
+the synth's own filter -- the voices' state-variable filter, the bass's ladder -- and the others are
+circuit models solved sample by sample: the Moog transistor ladder, the OTA cascades of the Prophet
+and the Juno, the Oberheim SEM, the Xpander's pole mixes, the diode ladder of the TB-303, the Korg35
+of the MS-20, the Polivoks and the Wasp. Filter Mode morphs the SEM from low pass through notch to high
+pass, steps through the Xpander's eight responses and turns the Polivoks into a band pass. Switching
+models keeps the level: each is calibrated against the synth's own filter. The acid keeps its diode
+ladder -- that is the acid.
+
+The filter envelope is a full ADSR: Filter Attack, Decay, Sustain and Release. With the attack at its
+minimum and the sustain at 0 it is the plain decay every older set used.
+
+A third envelope (Mod Envelope), four LFOs and a modulation matrix of eight slots move the rest. An LFO
+runs free at its rate or synced to the beat (4 bars down to a sixteenth, and triplets), in seven shapes
+from sine to smooth random; Retrig restarts it with every note, Fade brings it in over a few seconds.
+A slot of the matrix reads a source -- an LFO, the mod or filter envelope, the velocity, the key or a
+random value drawn per note -- and moves a target by its amount: pitch, the second oscillator's pitch,
+pulse width, the wavetable position (the classic slow scan through a table), the FM index, cutoff,
+resonance, the filter mode, the level or the pan. The bass offers only what cannot break its lock to
+the kick (no pitch, no pan), the acid what suits a 303 line.
+
 == Sound presets ==
 
 Every synth tab starts with a Sound group: the synth's presets in a chooser, grouped by kind, a

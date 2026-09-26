@@ -39,6 +39,7 @@
  * D3 (147 Hz): under 140 Hz only kick and bass may play.
  */
 #pragma once
+#include "phos/Modulation.h"
 #include "phos/Adaa.h"
 #include "phos/DiodeLadder.h"
 #include "phos/Disperser.h"
@@ -113,6 +114,8 @@ public:
     void reset();
     /** @brief Reads the effective parameters (indexed by acid::) and the tempo (for the delay). */
     void update(const float* v, double bpm);
+    /** @brief The set's beat at the next sample and the beats per sample (Engine.cpp, per chunk): the synced LFOs' clock. */
+    void setClock(double beat, double beatsPerSample) { beat_ = beat; beatsPerSample_ = beatsPerSample; }
     /**
      * @brief Starts a note.
      * @param pitch       MIDI note
@@ -173,6 +176,18 @@ private:
     float sqOct_ = 3.5f, sqDecay_ = 0.999f, combMix_ = 0.5f, combFb_ = 0.8f;   ///< the squelch's start (octaves) and decay, the comb's mix and feedback
     float pulseDecay_ = 0.999f, sweepCharge_ = 0.001f, level_ = 0.3f, sendAmt_ = 0.25f, resonance_ = 0.7f;   ///< accent pulse decay, sweep charge rate, level, delay send, resonance
     float ampDecay_ = 0.9f, hz_ = 220.0f, accentSmooth_ = 0.01f;   ///< amplitude decay, the frequency sounding, the accent gain's smoothing
+    /** @name The acid's own modulation (26.09.2026, Modulation.h), every 16 samples on the absolute count
+     *  @{ */
+    Modulator mod_;                       ///< envelope, LFOs, matrix
+    float modSum_[kModDests] = {};        ///< the sums per destination
+    bool  modOn_ = false;                 ///< some slot reaches something
+    float noteRand_ = 0.0f;               ///< the Random source, per note
+    Rng   modRng_;                        ///< its stream
+    uint64_t modPos_ = 0;                 ///< samples since reset (the evaluation grid)
+    double beat_ = 0.0, beatsPerSample_ = 0.0;   ///< setClock()
+    float cutMod_ = 0.0f, pitchMod_ = 0.0f, kMod_ = 0.0f;   ///< cutoff octaves, pitch semitones, feedback as modulated
+    float gainL_ = 1.0f, gainR_ = 1.0f;   ///< the level and pan destinations
+    /** @} */
 };
 
 } // namespace phos

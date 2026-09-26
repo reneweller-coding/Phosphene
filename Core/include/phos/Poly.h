@@ -109,6 +109,7 @@
 #pragma once
 #include "phos/Disperser.h"
 #include "phos/Dsp.h"
+#include "phos/Modulation.h"
 #include "phos/Params.h"
 #include "phos/PolyKernel.h"
 #include "phos/TempoDelay.h"
@@ -172,6 +173,13 @@ public:
      *        up to an octave, the second the wavetable position by up to 0.15, both scaled by poly.slow_mod.
      */
     void setSlow(float cutoffSine, float colourSine) { slowCut_ = cutoffSine; slowColour_ = colourSine; }
+    /**
+     * @brief The set's beat at the next sample and the beats per sample (Engine.cpp, per chunk; 26.09.2026): the
+     *        clock the tempo-synced LFOs of the modulation (Modulation.h) read.
+     */
+    void setClock(double beat, double beatsPerSample) { beat_ = beat; beatsPerSample_ = beatsPerSample; }
+    /** @brief A voice's modulation sums per destination, as the last grid step evaluated them (tests, the live ring). */
+    const float* modulation(int voice) const { return modSum_[voice]; }
     /**
      * @brief Closes the gate of every voice holding @p pitch (23.09.2026, live keyboard): a played note starts with a
      *        gate that never runs out on its own, and the key's release ends it -- the voice then releases as any.
@@ -242,6 +250,9 @@ public:
     {
         phaseRng_.seed(seed);
         driftRng_.seed(seed ^ 0x44524946'54574C4Bull);   // "DRIFTWLK"
+        // The modulation's streams (26.09.2026), salted against both, so nothing above moves.
+        modRng_.seed(seed ^ 0x4D4F4452'414E4430ull);      // "MODRAND0"
+        for (int v = 0; v < kPolyVoices; ++v) mod_[v].prepare(sr_, mixSeed(seed, 0x4D4F4456'4F494345ull + static_cast<uint64_t>(v)));
     }
     /** @brief The drift walk of one unison slot, in cents (tests). */
     float slotDrift(int slot) const { return driftSlot_[slot] * driftNorm_; }
@@ -276,6 +287,22 @@ public:
 
 private:
     float slowCut_ = 0.0f, slowColour_ = 0.0f;   ///< setSlow()'s sines (the addon's free movement)
+    /** @name The voice's own modulation (26.09.2026, Modulation.h)
+     *  @{ */
+    Modulator mod_[kPolyVoices];                  ///< envelope, LFOs and matrix, per voice
+    float modSum_[kPolyVoices][kModDests] = {};   ///< the sums per destination, per voice, on the 16-sample grid
+    bool  modOn_ = false;                         ///< some slot of the matrix reaches something
+    Envelope fAdsr_[kPolyVoices];                 ///< the filter envelope as an ADSR (filt_attack, filt_sustain, filt_release)
+    bool  fAdsrOn_ = false;                       ///< the ADSR runs; off (attack at its minimum, sustain 0) the exponential decay does
+    float noteRand_[kPolyVoices] = {};            ///< the Random source, drawn per note
+    Rng   modRng_;                                ///< its stream, salted against the phases and the drift
+    bool  slotOsc2_[kPolySlots] = {};             ///< the slot is the second oscillator (its own pitch destination)
+    float idxFloor0_[kPolySlots] = {};            ///< the FM index floor the note set, before the modulation
+    float modGainL_[kPolyVoices] = {}, modGainR_[kPolyVoices] = {};   ///< the level and pan destinations as channel gains
+    double beat_ = 0.0, beatsPerSample_ = 0.0;    ///< setClock()
+    /** @brief Evaluates voice @p voice's modulation at this grid step and writes what it moves (renderSegment). */
+    void applyModulation(int voice, double beat);
+    /** @} */
     /**
      * @brief Makes sure a voice below voiceLimit_ is free before noteOn() allocates.
      *

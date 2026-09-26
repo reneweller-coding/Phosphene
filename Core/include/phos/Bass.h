@@ -68,6 +68,8 @@
 #include "phos/Ducker.h"
 #include "phos/Dsp.h"
 #include "phos/Halfband.h"
+#include "phos/Filters.h"
+#include "phos/Modulation.h"
 #include "phos/Ladder.h"
 #include "phos/Oscillator.h"
 
@@ -94,6 +96,8 @@ public:
     void reset();
     /** @brief Reads the effective parameter values, indexed by bass::. */
     void update(const float* v);
+    /** @brief The set's beat at the next sample and the beats per sample (Engine.cpp, per chunk): the synced LFOs' clock. */
+    void setClock(double beat, double beatsPerSample) { beat_ = beat; beatsPerSample_ = beatsPerSample; }
     /**
      * @brief Starts a note.
      * @param pitch            MIDI note number
@@ -123,6 +127,25 @@ private:
     double osRate_ = 96000.0;       ///< sr_ * os_, the rate the voice runs at
     VaOscillator        osc_;   ///< saw-to-pulse oscillator
     LadderT<float>      ladder_;   ///< the four-pole ladder
+    FilterLane          model_;    ///< bass.filter_model 1 .. 9 (26.09.2026, Filters.h), in the ladder's place
+    /** @name The bass's own modulation (26.09.2026, Modulation.h), evaluated every 16 samples on the absolute count
+     *  @{ */
+    Modulator mod_;                       ///< envelope, LFOs, matrix
+    float modSum_[kModDests] = {};        ///< the sums per destination
+    bool  modOn_ = false;                 ///< some slot reaches something
+    Envelope fAdsr_;                      ///< the filter envelope as an ADSR
+    bool  fAdsrOn_ = false;               ///< the ADSR runs (attack at its minimum and sustain 0: the exponential decay)
+    float noteRand_ = 0.0f;               ///< the Random source, per note
+    Rng   modRng_;                        ///< its stream
+    uint64_t modPos_ = 0;                 ///< samples since reset (the evaluation grid)
+    double beat_ = 0.0, beatsPerSample_ = 0.0;   ///< setClock()
+    float kMod_ = 0.0f, modelKMod_ = 0.0f, modeMod_ = 0.0f;   ///< the feedbacks and the mode as modulated
+    float cutMod_ = 0.0f, levelMod_ = 1.0f;                   ///< the cutoff's octaves and the level's factor
+    float resBase_ = 0.0f;                                     ///< bass.resonance, 0..1 (the resonance destination adds to it)
+    /** @} */
+    int   modelIndex_ = 0;         ///< bass.filter_model: 0 the ladder above
+    float modelK_ = 0.0f, modelMode_ = 0.0f;   ///< the model's feedback (FilterVoicing::feedback) and bass.filter_mode
+    float modelTrim_ = 1.0f;                   ///< the model's level against the bass ladder, made good (Bass.cpp)
     HalfbandDown<float> down_;   ///< back from the oversampled rate
     Svf                 hp1_, hp2_, hp3_, hp4_;   ///< the Split high pass, Linkwitz-Riley 8th order
     Svf                 bite1_, bite2_;     ///< the bite's 4-pole low pass (two Butterworth sections)
