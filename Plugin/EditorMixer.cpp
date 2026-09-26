@@ -149,7 +149,7 @@ void MixerStrip::resized()
     r.removeFromTop(18);   // the name
     // The knobs two to a row, so that a strip of five stays short enough for the fader to have room.
     const int cols = 2, kw = r.getWidth() / cols, kh = 30, lh = 11;
-    const int rows = (static_cast<int>(knobs_.size()) + cols - 1) / cols;
+    const int rows = juce::jmax(knobRows(), knobRowsShown_);
     auto knobArea = r.removeFromTop(rows * (kh + lh));
     for (size_t i = 0; i < knobs_.size(); ++i) {
         const int row = static_cast<int>(i) / cols, col = static_cast<int>(i) % cols;
@@ -255,7 +255,12 @@ void MixerConsole::resized()
     const int n = static_cast<int>(strips_.size());
     if (n == 0) return;
     const int gap = 4, w = (getWidth() - gap * (n - 1)) / n;
-    for (int i = 0; i < n; ++i) strips_[static_cast<size_t>(i)]->setBounds(i * (w + gap), 0, w, getHeight());
+    int rows = 0;
+    for (const auto& s : strips_) rows = juce::jmax(rows, s->knobRows());
+    for (int i = 0; i < n; ++i) {
+        strips_[static_cast<size_t>(i)]->setKnobRows(rows);
+        strips_[static_cast<size_t>(i)]->setBounds(i * (w + gap), 0, w, getHeight());
+    }
 }
 
 void MixerConsole::paint(juce::Graphics&) {}

@@ -40,6 +40,16 @@ public:
     const std::vector<int>& params() const { return params_; }
     /** @brief The strip's controls with the parameter each drives, for MIDI learn. */
     const std::vector<std::pair<juce::Component*, int>>& controls() const { return controls_; }
+    /** @brief Rows of knobs this strip's own knobs fill (two to a row). */
+    int knobRows() const { return (static_cast<int>(knobs_.size()) + 1) / 2; }
+    /**
+     * @brief Rows of knobs to make room for, at least knobRows() (26.09.2026, the user: "dass alle Meter die gleiche
+     *        Höhe haben"). The console gives every strip the rows of its fullest, so that mute, fader and meter
+     *        start at the same height in every strip; a strip with fewer knobs leaves the rest of its rows empty.
+     */
+    void setKnobRows(int rows) { knobRowsShown_ = rows; }
+    /** @brief Where the meter is drawn, in the strip's coordinates (the host test compares them). */
+    juce::Rectangle<int> meterArea() const { return meterArea_; }
 
     void paint(juce::Graphics&) override;
     void resized() override;
@@ -57,6 +67,7 @@ private:
     std::vector<int> params_;   ///< params()
     std::vector<std::pair<juce::Component*, int>> controls_;   ///< controls()
     juce::Rectangle<int> meterArea_;   ///< where the meter is drawn
+    int knobRowsShown_ = 0;   ///< setKnobRows()
     float rmsDb_ = -100.0f, holdDb_ = -100.0f;   ///< the RMS bar and the held peak, dB
     double holdAge_ = 0.0;   ///< seconds the peak has been held
 };

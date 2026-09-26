@@ -193,20 +193,20 @@ void Composer::matchAudibility(const ParamStore& p, TrackPlan& t) const
  */
 void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
 {
-    // A live start plays the first track before it is measured (completeMeasurement, Composer.h).
-    if (deferMaster_ && t.index == 0) {
+    // Live, every track is played before it is measured (completeMeasurement, Composer.h). Until 26.09.2026 only the
+    // first one was: a later track measured itself here, on the composer thread, after measuring the first one if
+    // that was still deferred -- 15 to 30 s during which nothing filled the engine's rings, eight bars (13 s) deep.
+    // The user heard it as the playback stalling ("die Engine scheint manchmal nicht mit dem Generieren der Noten
+    // hinterherzukommen"): after a jump close to a track's end the transport stood for 29.6 s (hosttest --part live).
+    if (deferMaster_) {
         t.measureDeferred = true;
         t.masterDeferred = true;
         t.masterGainDb = 0.0f;
         return;
     }
-    // Every later track is matched against the first one's measurements.
-    if (t.index > 0 && !plans_.empty() && plans_[0].measureDeferred) completeMeasurement(p, 0);
     double mix0 = 0.0;
     const bool mixEarly = measureLevels(p, t, &mix0);
-    // Auto Gain's two readings, the second after the first -- unless a host asked to have them later
-    // (setDeferMasterGain). `mixEarly` means the first of the two ran beside the presence probes.
-    if (deferMaster_) { t.masterGainDb = 0.0f; t.masterDeferred = true; return; }
+    // Auto Gain's two readings, the second after the first. `mixEarly` means the first ran beside the presence probes.
     matchMaster(p, t, mixEarly ? &mix0 : nullptr);
 }
 
@@ -215,6 +215,8 @@ bool Composer::completeMeasurement(const ParamStore& p, int index) const
     if (index < 0 || index >= static_cast<int>(plans_.size())) return false;
     TrackPlan& t = plans_[static_cast<size_t>(index)];
     if (!t.measureDeferred) return false;
+    // Every later track is matched against the first one's measurements (plans_ is a deque: t stays valid).
+    if (index > 0) completeMeasurement(p, 0);
     t.measureDeferred = false;
     measureLevels(p, t, nullptr);
     t.correctionsPending = true;

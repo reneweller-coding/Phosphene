@@ -1113,15 +1113,24 @@ void testDeferredPlan()
               "a copy's measurement is taken over number for number, and refused once the plans changed");
     }
 
-    // A later track planned while the first is still unmeasured measures the first one itself.
+    // A later track (26.09.2026): planned live, it is deferred like the first -- until then planning it measured the
+    // first track and itself on the composer thread, 15 to 30 s in which the engine's rings ran dry (the user: "die
+    // Engine scheint manchmal nicht mit dem Generieren der Noten hinterherzukommen"). Measured behind the music, it
+    // measures the first one before itself and ends as the track of a whole plan.
     Composer seek(11);
     seek.setDeferMasterGain(true);
-    const TrackPlan second = seek.track(p, 1);
+    const auto s0 = std::chrono::steady_clock::now();
+    const TrackPlan planned = seek.track(p, 1);
+    const double plannedSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - s0).count();
+    const bool deferred = planned.measureDeferred && planned.masterDeferred && planned.gainDb == 0.0f && seek.track(p, 0).measureDeferred;
+    seek.completeMeasurement(p, 1);
+    const TrackPlan& second = seek.track(p, 1);
     const TrackPlan& firstAfter = seek.track(p, 0);
-    check(!firstAfter.measureDeferred && firstAfter.correctionsPending && sameLevels(firstAfter, ref0) && sameLevels(second, ref1)
-              && second.masterDeferred && !second.measureDeferred,
-          "a later track planned first measures the first one itself and is the track of a whole plan",
-          fmt("track 2 gain %.3f / %.3f dB", second.gainDb, ref1.gainDb));
+    check(deferred && plannedSeconds < 1.0 && !firstAfter.measureDeferred && sameLevels(firstAfter, ref0) && sameLevels(second, ref1)
+              && second.masterDeferred && !second.measureDeferred && second.correctionsPending,
+          "a later track is planned without probes too, and measured behind the music it measures the first one itself "
+          "and is the track of a whole plan",
+          fmt("planned in %.2f s; track 2 gain %.3f / %.3f dB", plannedSeconds, second.gainDb, ref1.gainDb));
 }
 
 /**
@@ -2276,7 +2285,10 @@ void testArrangeDynamics()
         // the groups and the reduction fell to 0.17 dB; it has to stay above 1 dB for both.
         double worst = 1e9;
         std::string detail;
-        for (const char* change : { "perc1.level=4", "perc8.level=-5", "perc1.level=3 perc8.level=-3" }) {
+        // 26.09.2026: the corrections are relative to the kit's defaults, as they always meant to be -- the hat -1 dB, the
+        // shaker -4, both -2. Written as absolute levels against the closed hat's old 5 dB, they turned into a 1.5 dB
+        // *lift* once the hat stood at 1.5 and the shaker at +1 (the hat round of the mix guide), which is not the correction this checks.
+        for (const char* change : { "perc1.level=0.5", "perc8.level=-3", "perc1.level=-0.5 perc8.level=-1" }) {
             double ildA = 0.0, wA = 0.0, rA = 0.0, ildB = 0.0, wB = 0.0, rB = 0.0;
             play((std::string(off) + " " + change).c_str(), ildA, wA, rA);
             play(change, ildB, wB, rB);

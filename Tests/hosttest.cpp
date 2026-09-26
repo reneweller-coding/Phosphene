@@ -297,6 +297,82 @@ ArrangeDisplay::Snapshot bigSet()
     return s;
 }
 
+/**
+ * @brief `--part live` (26.09.2026): a diagnosis, not a check -- plays a set in real time over a track change.
+ *
+ * The user heard the playback stall "when the engine does not keep up with generating the notes". This plays
+ * the shipped arrangement (composer thread, probes at the plugin's own thread count, no probe cache) at a
+ * device's pace from a few bars before the end of track 1, and prints, per second of music, the slowest
+ * processBlock, the blocks that missed their deadline and the silent blocks, and at the end the longest silent
+ * run. Not registered with ctest: it takes as long as the music it plays.
+ *
+ * Environment: PHOS_LIVE_SEED (default 358425790), PHOS_LIVE_SET (knob text, default Progressive with the style
+ * mix on), PHOS_LIVE_SECONDS (default 90), PHOS_LIVE_BEFORE_END (bars before track 1 ends, default 12).
+ * @return 0
+ */
+int liveDiagnosis()
+{
+    auto env = [](const char* k, const char* d) { return juce::SystemStats::getEnvironmentVariable(k, d); };
+    const double sr = 48000.0;
+    const int block = 256;
+    phos::probe::setCacheDir("");
+    auto p = std::make_unique<PhospheneProcessor>();
+    p->setFollowHost(false);
+    p->params().parseText(env("PHOS_LIVE_SET", "compose.style=2;compose.style_mix=1").toStdString());
+    p->setSeed(static_cast<uint64_t>(env("PHOS_LIVE_SEED", "358425790").getLargeIntValue()));
+    p->setPlayConfigDetails(0, 2, sr, block);
+    p->prepareToPlay(sr, block);
+    juce::AudioBuffer<float> buf(2, block);
+    juce::MidiBuffer midi;
+    // Track 1's length, from the plan the composer thread publishes.
+    phos::TrackPlan first;
+    for (int i = 0; i < 6000 && !p->tryReadTrack(0, first); ++i) {
+        buf.clear(); midi.clear();
+        p->processBlock(buf, midi);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    const int startBar = juce::jmax(0, first.bars - env("PHOS_LIVE_BEFORE_END", "12").getIntValue());
+    std::printf("live: track 1 has %d bars, starting at bar %d\n", first.bars, startBar + 1);
+    p->play();
+    p->seekToBar(startBar);
+    while (p->transport().restarting) {
+        buf.clear(); midi.clear();
+        p->processBlock(buf, midi);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    const double seconds = env("PHOS_LIVE_SECONDS", "90").getDoubleValue();
+    const int blocks = static_cast<int>(seconds * sr / block), perSecond = static_cast<int>(sr / block);
+    const double blockSeconds = block / sr;
+    int silentRun = 0, worstRun = 0, worstAt = 0, late = 0, silent = 0;
+    double worstBlock = 0.0;
+    const auto started = std::chrono::steady_clock::now();
+    for (int i = 0; i < blocks; ++i) {
+        buf.clear(); midi.clear();
+        const auto b0 = std::chrono::steady_clock::now();
+        p->processBlock(buf, midi);
+        const double took = std::chrono::duration<double>(std::chrono::steady_clock::now() - b0).count();
+        worstBlock = std::max(worstBlock, took);
+        late += took > blockSeconds ? 1 : 0;
+        if (buf.getMagnitude(0, block) < 1.0e-4f) {
+            ++silent;
+            if (++silentRun > worstRun) { worstRun = silentRun; worstAt = p->transport().bar + 1; }
+        } else {
+            silentRun = 0;
+        }
+        if ((i + 1) % perSecond == 0) {
+            const TransportView t = p->transport();
+            std::printf("  %3d s  bar %4d (track %d, bar %3d)  slowest block %6.2f ms  late %3d  silent %3d of %d\n", (i + 1) / perSecond,
+                        t.bar + 1, t.track + 1, t.barInTrack + 1, 1000.0 * worstBlock, late, silent, perSecond);
+            worstBlock = 0.0; late = 0; silent = 0;
+        }
+        const auto due = started + std::chrono::microseconds(static_cast<long long>((i + 1) * block * 1.0e6 / sr));
+        std::this_thread::sleep_until(due);
+    }
+    std::printf("live: longest silent run %.2f s, ending near bar %d\n", worstRun * blockSeconds, worstAt);
+    p->releaseResources();
+    return 0;
+}
+
 } // namespace
 
 /** @brief Runs the host test's parts (all, or the one named on the command line). */
@@ -313,8 +389,8 @@ int main(int argc, char** argv)
     // (`hosttest.realhost`) it runs beside the rest instead of in front of it. `--part rest` is everything
     // else; no argument runs both, as before. Every check is in exactly one part.
     const juce::String part = argc > 2 && juce::String(argv[1]) == "--part" ? juce::String(argv[2]) : juce::String();
-    if (argc > 1 && part != "rest" && part != "realhost") {
-        std::fprintf(stderr, "usage: phos_hosttest [--part rest|realhost]\n");
+    if (argc > 1 && part != "rest" && part != "realhost" && part != "live") {
+        std::fprintf(stderr, "usage: phos_hosttest [--part rest|realhost|live]\n");
         return 2;
     }
     const bool partRest = part != "realhost", partRealHost = part != "rest";
@@ -340,6 +416,7 @@ int main(int argc, char** argv)
     // cache (phos/Probe.h); the plans are bit for bit the shipped plugin's, which the oracle section below
     // keeps proving against phos_render. The one section that *times* a plan switches both off again.
     phos::probe::configureFromEnvironment();
+    if (part == "live") return liveDiagnosis();   // after the user folder and the probe settings above
     // Unbuffered, as the self test is: under ctest stdout is a pipe, and a crash or a timeout took all of
     // this test's output with it. It is also what lets the sections be timed from outside.
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -1425,6 +1502,13 @@ int main(int argc, char** argv)
                           "mixer: a strip per part (" + juce::String(mc->stripCount()) + "); the loudest, "
                               + juce::String(phos::kPartNames[loudest]) + ", read " + juce::String(before, 1) + " dB RMS and nothing ("
                               + juce::String(mutedPeak) + ") once its mute was on, while " + juce::String(others) + " others played on");
+                    // 26.09.2026, the user: "dass alle Meter die gleiche Höhe haben". The strips hold two to five knobs;
+                    // each made room for its own rows, so fader and meter began lower in a strip with more knobs.
+                    int top = mc->strip(0).meterArea().getY(), height = mc->strip(0).meterArea().getHeight(), odd = 0;
+                    for (int k = 1; k < mc->stripCount(); ++k)
+                        odd += mc->strip(k).meterArea().getY() != top || mc->strip(k).meterArea().getHeight() != height ? 1 : 0;
+                    check(odd == 0 && height > 40, "mixer: every strip's meter starts at the same height and is as tall as the others ("
+                                                       + juce::String(height) + " px, " + juce::String(odd) + " different)");
                 }
                 // 24.09.2026, the user: "Koennten wir bei der Kick und beim Bass noch Anzeigen einbauen, wie in (Kick 3 von
                 // Sonic Academy)". Each scope renders what its synth plays: the kick lands on a note in the kick's range,

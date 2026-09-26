@@ -249,10 +249,11 @@ struct TrackPlan {
     /**
      * @brief The level, presence and audibility measurements of this plan are still to come (23.09.2026).
      *
-     * Only ever true for the first track of a live start (Composer::setDeferMasterGain): the plugin plays at
-     * once and measures behind the music (Composer::completeMeasurement). Until then every correction of the plan
-     * is zero -- which for the first track is the right value everywhere but on the lines (presence, audibility)
-     * and the master, because the first track is the level match's reference and corrects nothing.
+     * Only ever true in a live set (Composer::setDeferMasterGain; the first track since 23.09.2026, every track since
+     * 26.09.2026): the plugin plays at once and measures behind the music (Composer::completeMeasurement), for the
+     * track that plays and for the next one before it comes. Until then every correction of the plan is zero --
+     * for the first track the right value everywhere but on the lines (presence, audibility) and the master,
+     * because it is the level match's reference; a later track measured in time never plays without its own.
      */
     bool   measureDeferred = false;
     /** @brief completeMeasurement() changed the lines' corrections, and the host has not sent them yet. */
@@ -350,7 +351,9 @@ public:
      * them. The plan has every correction at zero -- the first track corrects nothing in the level match, it is the
      * reference; its lines' presence and audibility gains are what arrive later -- and the host calls this on
      * its composer thread once the music runs, then sends the lines' new levels (levelControls, with a ramp).
-     * Planning any later track calls it first by itself, because every later track is matched against the first.
+     * Since 26.09.2026 every track of a live set is planned so, not only the first: planning one took 15 to 30 s of
+     * probes on the composer thread, longer than the eight bars the engine's rings hold. Measuring a later track
+     * measures the first one before it, because every later track is matched against the first.
      * The plan ends up the same, number for number, as one planned whole (testDeferredPlan).
      * @return true when it measured something; false when the plan was not deferred
      */

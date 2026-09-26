@@ -242,23 +242,30 @@ const ParamDesc kPercParams[perc::Count] = {
 // (testMixBalance; lowering the hats without the noise had taken it under their lower quartile). The hats' low cuts
 // stay at 3 kHz: moved up to 4.5 .. 5 kHz they took the presence band with them, and the listening seed's darkest
 // track fell 2.7 dB under the recordings' median (testPresence) with its lines already at the match's +3 dB cap.
+// 26.09.2026, the user: "Jetzt höre ich praktisch gar keine Hi Hats mehr". The ride's noise, 700 ms long, had taken 41 %
+// of the kit's air band (26 % before) and hissed over the short hats: the ride is 4 dB lower with a 220 ms noise tail,
+// the closed hat +2 dB, the open hat +2 dB. Two consequences, each met where it arises: the clap, the kit's presence
+// voice, is 1.5 dB up (with the ride's presence gone the listening seed's darkest track sat 2.57 dB under the
+// recordings' median, testPresence, 2.5), and the shaker 2 dB -- the auto-pan swings the hats against shaker, ride
+// and rim (kRolePanGroup, Perc.cpp), and with the ride down that side had lost the weight to hold them once the
+// shaker was corrected down (testArrangeDynamics: 0.78 dB of reduction left, 1 wanted; 1.07 now).
 const char* const kDefaultKit =
     "perc1.role=Closed Hat;perc1.engine=Metal;perc1.decay=45;perc1.noise=1;perc1.noise_decay=35;perc1.filter=Low Pass;"
-    "perc1.cutoff=12000;perc1.low_cut=3000;perc1.resonance=0.05;perc1.level=-0.5;perc1.pan=0.45;perc1.pan_depth=1;perc1.choke=1;perc1.density=0.6\n"
+    "perc1.cutoff=12000;perc1.low_cut=3000;perc1.resonance=0.05;perc1.level=1.5;perc1.pan=0.45;perc1.pan_depth=1;perc1.choke=1;perc1.density=0.6\n"
     "perc2.role=Open Hat;perc2.engine=Metal;perc2.decay=260;perc2.noise=0.9;perc2.noise_decay=220;perc2.filter=Low Pass;"
-    "perc2.cutoff=12000;perc2.low_cut=3000;perc2.level=-3.5;perc2.pan=-0.4;perc2.pan_depth=1;perc2.choke=1\n"
-    "perc3.role=Ride;perc3.engine=Metal;perc3.metal_scale=0.72;perc3.decay=700;perc3.noise=1;perc3.noise_decay=400;"
-    "perc3.filter=Band Pass;perc3.cutoff=5200;perc3.resonance=0.1;perc3.low_cut=3500;perc3.level=-10.5;perc3.pan=0.6;perc3.pan_depth=1\n"
+    "perc2.cutoff=12000;perc2.low_cut=3000;perc2.level=-1.5;perc2.pan=-0.4;perc2.pan_depth=1;perc2.choke=1\n"
+    "perc3.role=Ride;perc3.engine=Metal;perc3.metal_scale=0.72;perc3.decay=700;perc3.noise=1;perc3.noise_decay=220;"
+    "perc3.filter=Band Pass;perc3.cutoff=5200;perc3.resonance=0.1;perc3.low_cut=3500;perc3.level=-14.5;perc3.pan=0.6;perc3.pan_depth=1\n"
     "perc4.role=Crash;perc4.engine=Metal;perc4.metal_scale=0.5;perc4.decay=1600;perc4.noise=0.9;perc4.noise_decay=1400;"
     "perc4.filter=High Pass;perc4.cutoff=3000;perc4.low_cut=4000;perc4.level=-5;perc4.pan=-0.55;perc4.pan_depth=1\n"
     "perc5.role=Clap;perc5.engine=Noise;perc5.noise=1;perc5.bursts=4;perc5.burst_spacing=9;perc5.noise_decay=180;"
-    "perc5.filter=Band Pass;perc5.cutoff=1400;perc5.resonance=0.35;perc5.level=-1;perc5.low_cut=300\n"
+    "perc5.filter=Band Pass;perc5.cutoff=1400;perc5.resonance=0.35;perc5.level=0.5;perc5.low_cut=300\n"
     "perc6.role=Snare;perc6.engine=Tone;perc6.pitch=190;perc6.pitch_amount=1.6;perc6.pitch_decay=25;perc6.decay=90;"
     "perc6.noise=0.8;perc6.noise_decay=140;perc6.filter=High Pass;perc6.cutoff=250;perc6.level=-4;perc6.low_cut=160;perc6.cut_track=2\n"
     "perc7.role=Rim;perc7.engine=FM;perc7.pitch=1700;perc7.fm_ratio=2.61;perc7.fm_index=2.2;perc7.decay=28;perc7.pitch_decay=6;"
     "perc7.filter=Band Pass;perc7.cutoff=2200;perc7.resonance=0.3;perc7.level=-6;perc7.pan=-0.45;perc7.pan_depth=1\n"
     "perc8.role=Shaker;perc8.engine=Noise;perc8.noise=1;perc8.noise_decay=45;perc8.filter=Low Pass;perc8.cutoff=11000;"
-    "perc8.low_cut=3000;perc8.resonance=0.1;perc8.level=-1;perc8.pan=0.55;perc8.pan_depth=1\n"
+    "perc8.low_cut=3000;perc8.resonance=0.1;perc8.level=1;perc8.pan=0.55;perc8.pan_depth=1\n"
     "perc9.role=Tom;perc9.engine=Modal;perc9.pitch=220;perc9.low_cut=190;perc9.mode_set=Membrane;perc9.mode_damp=0.6;perc9.decay=280;"
     "perc9.noise=0.08;perc9.noise_decay=15;perc9.filter=Low Pass;perc9.cutoff=6000;perc9.level=-2;perc9.pan=-0.35;perc9.pan_depth=1;perc9.tune=1\n"
     "perc10.role=Conga;perc10.engine=Modal;perc10.pitch=330;perc10.mode_set=Harmonic;perc10.mode_damp=0.4;perc10.decay=180;"
@@ -700,7 +707,11 @@ const ParamDesc kMixParams[mix::Count] = {
     { "perc_mute",  "Perc Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     // +3 dB instead of +1 (16.09.2026, Phase 9): with the band-limited hats the kit no longer spends
     // its level above 12 kHz, and the presence and air bands land on the reference median.
-    { "perc_level", "Perc Level", "dB", -24.0f, 12.0f, 2.0f, Curve::Linear },
+    // +1.2 since 26.09.2026: the hats came up by 2.5 .. 3 dB after the user heard them no more ("Jetzt höre ich
+    // praktisch gar keine Hi Hats mehr"), and a kit that is mostly its hats while it sounds then stood 4.4 dB over
+    // the effects (testDialogue.levels, 4 dB) and the air band at the top of its window; 0.8 dB off the whole kit
+    // puts both back, the air band on the reference median, and leaves the hats 1.2 .. 2.2 dB louder than before.
+    { "perc_level", "Perc Level", "dB", -24.0f, 12.0f, 1.2f, Curve::Linear },
     { "acid_mute",  "Acid Mute",  "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
     { "acid_level", "Acid Level", "dB", -24.0f, 12.0f, 0.0f, Curve::Linear },
     // 19.09.2026, round "voices": the strips in the order of the voices' groups (Params.h, mix::).
@@ -743,7 +754,10 @@ const ParamDesc kMixParams[mix::Count] = {
     // Measured after: effects -8.5 dB (level with the percussion's -9.3), voices -8.4 dB. The master's
     // compressor and limiter give back about two thirds of a dB per dB on the strip, which is why the
     // strips move by 3 and 7 dB for 3.0 and 3.9 dB in the mix. docs/rounds/2026-09.md has the rest.
-    { "sfx_level",  "SFX Level",  "dB", -24.0f, 12.0f, 3.0f, Curve::Linear },
+    // +4.5 since 26.09.2026: the kit came up for the hats the user no longer heard (clap +1.5, shaker +2 dB), and a
+    // percussion hit then stood 4.56 dB over an effect event (testDialogue.levels, 4). The rule is that the two are
+    // alike, so the effects follow; 1.5 dB on the strip is about 1 dB in the mix (the two thirds above).
+    { "sfx_level",  "SFX Level",  "dB", -24.0f, 12.0f, 4.5f, Curve::Linear },
     { "perc_room",  "Perc Room",  "",     0.0f,  1.0f, 0.12f, Curve::Linear },
     { "perc_hall",  "Perc Hall",  "",     0.0f,  1.0f, 0.0f, Curve::Linear },
     { "duck_attack","Duck Attack","ms",   0.5f, 30.0f, 2.0f, Curve::Log },

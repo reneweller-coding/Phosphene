@@ -587,15 +587,26 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
                                      adopted ? "taken over" : "dropped (the plans changed meanwhile)");
             const int index = measureJob_->index;
             measureJob_.reset();
-            if (adopted && index == playingTrack) sendCorrections(index);
+            if (adopted && index == playingTrack) {
+                sendCorrections(index);
+            } else if (adopted) {
+                // Measured ahead of its turn: its first bars will be composed with it, and the editor's list shows it.
+                const phos::TrackPlan& now = composer_->track(knobs, index);
+                const std::lock_guard<std::mutex> pl(plansLock_);
+                if (index < static_cast<int>(plans_.size())) plans_[static_cast<size_t>(index)] = now;
+            }
         }
         // Measured already, by the planning of a later track that needed the first one's numbers.
         if (composer_->correctionsPending(playingTrack)) sendCorrections(playingTrack);
-        // Start one for the track that plays, while the set plays and no restart waits. Stopped, nothing is
-        // measured at all: a probe render's CPU is only worth spending on what is about to be heard.
+        // Start one for the track that plays, while the set plays and no restart waits; that one measured, for the
+        // next track, so that it arrives with its levels (26.09.2026: every live plan is made without its probes,
+        // Composer::measureTrack). Stopped, nothing is measured at all: a probe render's CPU is only worth spending
+        // on what is about to be heard.
         if (measureJob_ == nullptr && running && genWanted_.load(std::memory_order_acquire) == genLocal_) {
-            const phos::TrackPlan& plan = composer_->track(knobs, playingTrack);
-            if (plan.measureDeferred || plan.masterDeferred) startMeasureJob(playingTrack);
+            for (const int index : { playingTrack, playingTrack + 1 }) {
+                const phos::TrackPlan& plan = composer_->track(knobs, index);
+                if (plan.measureDeferred || plan.masterDeferred) { startMeasureJob(index); break; }
+            }
         }
     }
 
@@ -609,9 +620,9 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
     // stand silent for all of them. The warm-up is what there is spare time for, nothing more.
     if (genWanted_.load(std::memory_order_acquire) != genLocal_) return;
     if (plansStale_.exchange(false, std::memory_order_acq_rel)) publishedTracks_ = 0;
-    // Stopped, or while the job measures the playing track: the first track only. Every later plan renders its
-    // probes, and planning the second one before the first is measured would measure the first again, here.
-    if (composer_->defersMasterGain() && (!running || measureJob_ != nullptr) && publishedTracks_ >= 1) return;
+    // Live, a plan renders no probes (Composer::measureTrack, 26.09.2026) and takes milliseconds, so the list is
+    // planned whether the set plays or not; until then this stopped at the first track while stopped or measuring,
+    // because every later plan measured the first one again, here, for seconds.
     if (publishedTracks_ < kPublishedTracks) {
         const TrackPlan plan = composer_->track(knobs, publishedTracks_);
         const std::lock_guard<std::mutex> pl(plansLock_);
