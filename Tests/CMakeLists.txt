@@ -67,8 +67,8 @@ add_executable(phos_selftest selftest.cpp selftest_probe.cpp
 target_link_libraries(phos_selftest PRIVATE PhospheneCore)
 phos_test_data_dir(phos_selftest)
 phos_copy_data(phos_selftest ${PHOS_DATA_FILES})
-# One ctest test per section (selftest.<name>, labels quick/slow) plus the old all-in-one `selftest`
-# (label full, disabled unless PHOS_SELFTEST_FULL is set). The list is not written here: ctest reads
+# One ctest test per section (selftest.<name>, labels quick/slow; a slow one only when PHOS_TESTS names it,
+# 26.09.2026) plus the old all-in-one `selftest` (label full, only with PHOS_SELFTEST_FULL). The list is not written here: ctest reads
 # Tests/selftest_tests.cmake each time it starts, and that asks the built binary for its run table
 # (`phos_selftest --list`), so a section added to main() is a test without anyone touching this file.
 # The generated file below only tells it where this configuration's binary is.
@@ -81,8 +81,8 @@ phos_copy_data(phos_selftest ${PHOS_DATA_FILES})
 #
 # Recommended call, capped so the machine stays usable (24 threads here; six busy cores leave the
 # rest to the user and to a build):
-#     ctest --test-dir build -C Release -j 6 --output-on-failure
-#     ctest --test-dir build -C Release -L quick -j 6      (smoke run, about 15 s)
+#     ctest --test-dir build -C Release -j 12 --output-on-failure        (the quick suite, about 30 s)
+#     PHOS_TESTS="testPresence|mixaudit" ctest --test-dir build -C Release  (plus the long tests named)
 if(NOT ANDROID)
     get_property(phos_multi GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
     if(phos_multi)
@@ -127,10 +127,9 @@ phos_test_data_dir(phos_cuedemo)
 if(NOT ANDROID)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_FOUND)
-        add_test(NAME cuecheck COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/cue_check.py
-                 --demo $<TARGET_FILE:phos_cuedemo>)
-        # phos_cuedemo inherits it from the script.
-        set_tests_properties(cuecheck PROPERTIES ENVIRONMENT "PHOS_PROBE_CACHE=${PHOS_PROBE_CACHE_DIR}")
+        # Registered by the long-test file at the end (26.09.2026), with the probe cache in its environment
+        # (phos_cuedemo inherits it from the script).
+        set(phos_long_cuecheck TRUE)
     endif()
 endif()
 
@@ -212,8 +211,8 @@ if(TARGET Phosphene)
     phos_copy_data(phos_hosttest ${PHOS_DATA_FILES})
     # Two tests since 20.09.2026 (round "speed"; the comment in hosttest.cpp's main()): `--part rest` and
     # `--part realhost`. Every check is in exactly one of them (115 + 4 = the 119 of a run without --part).
-    add_test(NAME hosttest COMMAND phos_hosttest --part rest)
-    add_test(NAME hosttest.realhost COMMAND phos_hosttest --part realhost)
+    # Registered by the long-test file at the end of this file (26.09.2026), with the properties below.
+    set(phos_long_hosttest TRUE)
     # Never under PHOS_MUTE (it measures what the plugin sounds like; muted, it would test silence),
     # whatever the shell that starts ctest has set.
     #
@@ -240,16 +239,13 @@ if(TARGET Phosphene)
     # on this 24-thread machine but it is what is proven, and the RESOURCE_LOCK removal alone already
     # lets hosttest and vst3test overlap instead of forming a serial tail. docs/rounds/2026-09.md (this round's
     # block) has the full readings, including the failing run.
-    set_tests_properties(hosttest PROPERTIES LABELS "audio;slow" PROCESSORS 5
-                         COST 120 ENVIRONMENT "PHOS_PROBE_CACHE=${PHOS_PROBE_CACHE_DIR}"
-                         ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:")
+    # hosttest: LABELS audio;slow, PROCESSORS 5, COST 120, the probe cache, PHOS_MUTE unset (the long-test file).
     # `hosttest.realhost` is offline and times nothing: no lock. Three slots: its render thread, the thread
     # that writes parameters without pause, and the probe workers of the plans those writes keep forcing
     # (eight for half a second per plan, then two, then one -- Composer::measureTrack). No probe cache: its
     # parameters are random, so no entry would ever be read again, and every run would leave some hundred
     # files behind.
-    set_tests_properties(hosttest.realhost PROPERTIES LABELS "audio;slow" PROCESSORS 3
-                         COST 400 ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:;PHOS_PROBE_CACHE=unset:")
+    # hosttest.realhost: LABELS audio;slow, PROCESSORS 3, COST 400, PHOS_MUTE and PHOS_PROBE_CACHE unset.
 endif()
 
 # The built VST3 loaded the way a DAW loads it (Tests/vst3test.cpp): the module off the disk, the
@@ -271,7 +267,7 @@ if(TARGET Phosphene_VST3)
     endif()
     # The module inside the .vst3 bundle: on Windows that file is what the host loads, and it is
     # the one CMake can name (the bundle itself is a directory made by a post-build step).
-    add_test(NAME vst3test COMMAND phos_vst3test "$<TARGET_FILE:Phosphene_VST3>")
+    set(phos_long_vst3test TRUE)   # registered by the long-test file at the end
     # Like the host test: it checks that the plugin sounds (peak > 0.05), offline and at the rate a
     # device asks for blocks, so it must not be muted. Its own real-time pass (vst3test.cpp) only paces
     # a loop with sleep_until and reads the peak afterwards -- unlike hosttest it asserts no wall-clock
@@ -282,8 +278,7 @@ if(TARGET Phosphene_VST3)
     # RESOURCE_LOCK is gone -- they no longer form a serial tail. PROCESSORS stays 5: lowering it (tried
     # on hosttest, see its comment) let ctest pack this and several other tests' own worker threads past
     # what the machine has, and vst3test's own scan/load path was never measured under that.
-    set_tests_properties(vst3test PROPERTIES LABELS "audio;slow" PROCESSORS 5
-                         COST 60 ENVIRONMENT_MODIFICATION "PHOS_MUTE=unset:")
+    # vst3test: LABELS audio;slow, PROCESSORS 5, COST 60, PHOS_MUTE unset (the long-test file).
 endif()
 
 # Labels for everything that is not a self-test section (those are labelled in selftest_tests.cmake):
@@ -296,16 +291,67 @@ if(NOT ANDROID)
             set_tests_properties(${t} PROPERTIES LABELS quick)
         endif()
     endforeach()
-    if(TEST cuecheck)
-        set_tests_properties(cuecheck PROPERTIES LABELS slow)
-    endif()
+
     # The mix guide's render checks (25.09.2026, Tools/mix_audit.py): two styles rendered with stems, measured, held to
     # the bounds the tool writes down with their reasons, the renders deleted again (they are gigabytes).
     if(Python3_FOUND AND TARGET phos_render)
-        add_test(NAME mixaudit COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/mix_audit.py
-                 --render $<TARGET_FILE:phos_render> --out ${CMAKE_BINARY_DIR}/mixaudit --fresh --check --clean --styles 1,3)
-        set_tests_properties(mixaudit PROPERTIES LABELS slow PROCESSORS 2)
+        set(phos_long_mixaudit TRUE)   # registered by the long-test file below
     endif()
+
+    # The long tests (26.09.2026): hosttest, hosttest.realhost, vst3test, cuecheck and mixaudit render or play for
+    # minutes each. Like the slow self-test sections (Tests/selftest_tests.cmake) they are registered only when
+    # PHOS_TESTS names them when ctest starts -- `all`, or a regular expression their name matches -- so a plain
+    # `ctest` is the quick suite. A generated file read by ctest (TEST_INCLUDE_FILES), because the choice is made
+    # when ctest runs, not when CMake configures.
+    set(L "")
+    string(APPEND L "function(phos_long_wanted name out)\n"
+                    "    set(_sel \"\$ENV{PHOS_TESTS}\")\n"
+                    "    if(_sel STREQUAL \"all\" OR (NOT _sel STREQUAL \"\" AND name MATCHES \"\${_sel}\"))\n"
+                    "        set(\${out} TRUE PARENT_SCOPE)\n"
+                    "    else()\n"
+                    "        set(\${out} FALSE PARENT_SCOPE)\n"
+                    "    endif()\n"
+                    "endfunction()\n")
+    if(phos_long_hosttest)
+        string(APPEND L "phos_long_wanted(hosttest _w)\nif(_w)\n"
+            "    add_test(hosttest [==[$<TARGET_FILE:phos_hosttest>]==] --part rest)\n"
+            "    set_tests_properties(hosttest PROPERTIES LABELS \"audio;slow\" PROCESSORS 5 COST 120\n"
+            "        ENVIRONMENT [==[PHOS_PROBE_CACHE=${PHOS_PROBE_CACHE_DIR}]==] ENVIRONMENT_MODIFICATION \"PHOS_MUTE=unset:\")\nendif()\n"
+            "phos_long_wanted(hosttest.realhost _w)\nif(_w)\n"
+            "    add_test(hosttest.realhost [==[$<TARGET_FILE:phos_hosttest>]==] --part realhost)\n"
+            "    set_tests_properties(hosttest.realhost PROPERTIES LABELS \"audio;slow\" PROCESSORS 3 COST 400\n"
+            "        ENVIRONMENT_MODIFICATION \"PHOS_MUTE=unset:;PHOS_PROBE_CACHE=unset:\")\nendif()\n")
+    endif()
+    if(phos_long_vst3test)
+        string(APPEND L "phos_long_wanted(vst3test _w)\nif(_w)\n"
+            "    add_test(vst3test [==[$<TARGET_FILE:phos_vst3test>]==] [==[$<TARGET_FILE:Phosphene_VST3>]==])\n"
+            "    set_tests_properties(vst3test PROPERTIES LABELS \"audio;slow\" PROCESSORS 5 COST 60\n"
+            "        ENVIRONMENT_MODIFICATION \"PHOS_MUTE=unset:\")\nendif()\n")
+    endif()
+    if(phos_long_cuecheck)
+        string(APPEND L "phos_long_wanted(cuecheck _w)\nif(_w)\n"
+            "    add_test(cuecheck [==[${Python3_EXECUTABLE}]==] [==[${CMAKE_SOURCE_DIR}/Tools/cue_check.py]==] --demo [==[$<TARGET_FILE:phos_cuedemo>]==])\n"
+            "    set_tests_properties(cuecheck PROPERTIES LABELS slow ENVIRONMENT [==[PHOS_PROBE_CACHE=${PHOS_PROBE_CACHE_DIR}]==])\nendif()\n")
+    endif()
+    if(phos_long_mixaudit)
+        string(APPEND L "phos_long_wanted(mixaudit _w)\nif(_w)\n"
+            "    add_test(mixaudit [==[${Python3_EXECUTABLE}]==] [==[${CMAKE_SOURCE_DIR}/Tools/mix_audit.py]==] --render [==[$<TARGET_FILE:phos_render>]==]\n"
+            "        --out [==[${CMAKE_BINARY_DIR}/mixaudit]==] --fresh --check --clean --styles 1,3)\n"
+            "    set_tests_properties(mixaudit PROPERTIES LABELS slow PROCESSORS 2)\nendif()\n")
+    endif()
+    if(phos_multi)
+        file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/long_tests-$<CONFIG>.cmake" CONTENT "${L}")
+    else()
+        file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/long_tests-single.cmake" CONTENT "${L}")
+    endif()
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/long_include.cmake"
+"if(EXISTS [==[${CMAKE_CURRENT_BINARY_DIR}/long_tests-single.cmake]==])
+    include([==[${CMAKE_CURRENT_BINARY_DIR}/long_tests-single.cmake]==])
+elseif(EXISTS \"${CMAKE_CURRENT_BINARY_DIR}/long_tests-\${CTEST_CONFIGURATION_TYPE}.cmake\")
+    include(\"${CMAKE_CURRENT_BINARY_DIR}/long_tests-\${CTEST_CONFIGURATION_TYPE}.cmake\")
+endif()
+")
+    set_property(DIRECTORY APPEND PROPERTY TEST_INCLUDE_FILES "${CMAKE_CURRENT_BINARY_DIR}/long_include.cmake")
 endif()
 
 # The plan snapshots (23.09.2026, round "Schnappschuss"): one test per Tests/golden/*.txt, each running

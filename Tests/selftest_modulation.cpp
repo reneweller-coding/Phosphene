@@ -175,8 +175,8 @@ void testModulationFilterAdsr()
 
 /**
  * @brief The preset bank (26.09.2026; PresetBank.cpp): 1024 presets for each of nine synths, names unique within a synth,
- *        every key of the table a real knob, and a sample of every group -- four presets of each, one per quarter of the
- *        grid -- sounds: finite, audible, without a runaway peak.
+ *        every key of the table a real knob, the counter never on the lead's oscillator; with PHOS_BANK_FULL every preset
+ *        sounds: finite, audible, without a runaway peak (PHOS_BANK_TRIMS also writes PresetTrims.inl).
  */
 void testPresetBank()
 {
@@ -262,10 +262,12 @@ void testPresetBank()
             return level(std::vector<float>(y.begin() + static_cast<std::ptrdiff_t>(2.5 * 48000.0), y.end()));
         };
         // Every sixteenth preset under ctest; every one with PHOS_BANK_FULL set (on eight threads).
+        // Rendered only on request (26.09.2026: the user, "Wir müssen doch nicht in jedem ctest die gesamte Preset-Bank
+        // testen?"): PHOS_BANK_FULL renders every preset, PHOS_BANK_TRIMS every one and writes the corrections; a plain
+        // run checks the table's structure only, in seconds -- every preset was rendered when the table was generated.
         const bool full = std::getenv("PHOS_BANK_FULL") != nullptr || trimsPath != nullptr;
-        const size_t step = full ? 1 : 16;
         std::vector<size_t> which;
-        for (size_t i = 0; i < ps.size(); i += step) which.push_back(i);
+        for (size_t i = 0; full && i < ps.size(); ++i) which.push_back(i);
         struct R { double rms = 0.0, peak = 0.0, k = 0.0; bool finite = true; };
         std::vector<R> res(which.size());
         std::atomic<size_t> nextJob{ 0 };
@@ -344,7 +346,8 @@ void testPresetBank()
     check(bad == 0, "every key of the preset table is a knob of its synth", bad == 0 ? std::string("all found") : fmt("%d unknown, first %s", bad, unknown.c_str()));
     check(wrongCount == 0 && dupNames == 0, "nine synths with 1024 presets each, no name twice within a synth",
           fmt("%d synths off the count, %d repeated names;%s", wrongCount, dupNames, detail.c_str()));
-    check(nonFinite == 0 && silent == 0 && loud == 0, "a sample of every group (4 per group) sounds: finite, over -60 dB, peaks under +12 dB",
+    if (rendered > 0)
+        check(nonFinite == 0 && silent == 0 && loud == 0, "every preset sounds: finite, over -60 dB, peaks under +12 dB",
           fmt("%d rendered: %d not finite, %d silent, %d too loud;%s", rendered, nonFinite, silent, loud, detail.c_str()));
 }
 

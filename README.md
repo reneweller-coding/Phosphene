@@ -108,7 +108,7 @@ powershell -File Deploy\build_release.ps1
 ```
 
 It runs the build guard, configures and builds Release with the static MSVC runtime and AVX2 in a
-tree of its own, runs the whole `ctest` suite in that configuration, renders a reference, prints the
+tree of its own, runs `ctest` (the quick suite) in that configuration, renders a reference, prints the
 manual out of the freshly built plugin, builds the Quest APK, stages everything into `Deploy\stage`,
 checks the staging directory, and only then compiles the installer and the portable archive into
 `Deploy\out`. Every step that fails stops the run; there is no switch that makes an installer out of
@@ -180,16 +180,21 @@ the Quest level costs 16.9 % less for an eight-minute set with every part (7.2 %
 ## Tests
 
 ```bash
-ctest --test-dir build -C Release -j 6 --output-on-failure   # the whole suite, six at a time
-ctest --test-dir build -C Release -L quick -j 6              # smoke run: the sections of a few seconds
-ctest --test-dir build -C Release -R selftest.testBassRhythm # one self-test section
+ctest --test-dir build -C Release -j 12 --output-on-failure  # the quick suite: about 90 tests, under half a minute
+PHOS_TESTS="testPresence|mixaudit" ctest --test-dir build -C Release -j 6   # plus the long tests a change touches
+PHOS_TESTS=all ctest --test-dir build -C Release -j 6         # everything (about half an hour; rarely needed)
 ```
+
+A plain `ctest` is the quick suite. The long tests -- self-test sections over 10 s, which render whole tracks, and
+`hosttest`, `hosttest.realhost`, `vst3test`, `cuecheck`, `mixaudit` -- are registered only when `PHOS_TESTS` names
+them when ctest starts (`all`, or a regular expression their names match), so they run where a change concerns them
+(the mix, the host, the cues), not on every commit.
 
 Every self-test section is a ctest test of its own, `selftest.<name>`, taken from the `run("name", fn)`
 table in `Tests/selftest.cpp` each time ctest starts (`phos_selftest --list`), so a new section needs no
 CMake edit. Labels: `quick` (a few seconds), `slow`, `audio` (host and VST3 test: never muted, and each
-runs alone because they check real-time behaviour), `full` (the old all-in-one `selftest`, disabled
-unless `PHOS_SELFTEST_FULL=1` is set). `-j 6` leaves most of the machine to whoever works on it; a
+runs alone because they check real-time behaviour), `full` (the old all-in-one `selftest`, registered only
+with `PHOS_SELFTEST_FULL=1`). The seconds that decide quick and slow are in `Tests/selftest_tests.cmake`. `-j 6` leaves most of the machine to whoever works on it; a
 dedicated machine can take more. By hand: `phos_selftest --list`, `phos_selftest --only testA,testB`
 (exact names; `PHOS_ONLY` runs every section whose name occurs in the string, so
 `PHOS_ONLY=testAcidColour` also runs `testAcid`).

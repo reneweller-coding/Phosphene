@@ -35,6 +35,34 @@
 # breaks if a number is stale except the label and the order.
 set(PHOS_QUICK_SECONDS 10)
 set(PHOS_SELFTEST_SECONDS
+    # 26.09.2026: the sections nobody had timed (they ran as 600 s "unmeasured"), each alone, six at a time, idle machine;
+    # the four at 60 were stopped at 40 s (their true time is longer), testClimax and testPresence from ctest -R runs today.
+    testMixGuide.matrix                   0.1
+    testSfxToneIntervals                  0.1
+    testMixGuide.planes                   0.1
+    testDialogue.glide                    0.2
+    testDialogue.sound                    0.3
+    testMixGuide.phase                    0.5
+    testLoaderThreadSafety                0.9
+    testDialogue.score                    1.2
+    testModulation.sync                   1.2
+    testPlanCacheLive                     1.3
+    testPresetBank                        1.7
+    testModulation.filterAdsr             1.9
+    testGenreRules.bassAndDrone           2.0
+    testGenreRules.heldNoFlat9            2.2
+    testWanderingFx                       4.0
+    testGenreRules.padNoFlat9             5.0
+    testGatedReverb                       5.1
+    testGenreRules.counterAgainstLead     5.3
+    testMixGuide.leadDucks                7.7
+    testMixGuide.distance                 11.4
+    testFilterModels.levels               20.4
+    testModulation.blockSize              60
+    testDialogue.levels                   60
+    testBed.audible                       60
+    testClimax                            190
+    testPresence                          650
     # Split sections (19.09.2026, round "test-split"), named group.part: from `ctest -C Release -j 6` in
     # the plugin build, the machine ~36 % busy on average (another round building and testing beside it).
     testVoices.counterSoundListening   236.6
@@ -291,17 +319,40 @@ if(_pn GREATER 1)
     endforeach()
 endif()
 
+# A plain `ctest` is the quick suite (26.09.2026, the user: "Ist eigentlich alles im ctest notwendig? ... Wobei wir auch
+# vor Releases nicht immer diesen kompletten Wahnsinn ablaufen müssen."). A slow section -- one that renders whole
+# tracks, minutes of CPU -- is registered only when PHOS_TESTS asks for it: `all`, or a regular expression its name
+# matches, e.g. PHOS_TESTS="testPresence|testClimax" for a change to the mix. The same variable admits the slow tests
+# of Tests/CMakeLists.txt (phos_long_wanted there, by their own names). What is not registered is not listed as
+# "did not run" either; the one line below says how many were left out.
+function(phos_long_wanted name out)
+    set(_sel "$ENV{PHOS_TESTS}")
+    if(_sel STREQUAL "all" OR (NOT _sel STREQUAL "" AND name MATCHES "${_sel}"))
+        set(${out} TRUE PARENT_SCOPE)
+    else()
+        set(${out} FALSE PARENT_SCOPE)
+    endif()
+endfunction()
+
 set(_phos_quick 0)
 set(_phos_slow 0)
+set(_phos_left 0)
 foreach(_name IN LISTS _phos_names)
     set(_t "selftest.${_name}")
-    add_test("${_t}" "${PHOS_SELFTEST_EXE}" --only "${_name}")
-    phos_selftest_env("${_t}")
     if(DEFINED _phos_secs_${_name})
         set(_secs ${_phos_secs_${_name}})
     else()
         set(_secs 600)   # unmeasured: start it early and keep it out of `quick`
     endif()
+    if(_secs GREATER PHOS_QUICK_SECONDS)
+        phos_long_wanted("${_name}" _want)
+        if(NOT _want)
+            math(EXPR _phos_left "${_phos_left} + 1")
+            continue()
+        endif()
+    endif()
+    add_test("${_t}" "${PHOS_SELFTEST_EXE}" --only "${_name}")
+    phos_selftest_env("${_t}")
     if(_secs LESS_EQUAL PHOS_QUICK_SECONDS)
         set(_label quick)
         math(EXPR _phos_quick "${_phos_quick} + 1")
@@ -320,17 +371,16 @@ if("testWav" IN_LIST _phos_names)
     set_tests_properties(selftest.testWav PROPERTIES RESOURCE_LOCK phos_selftest_cwd)
 endif()
 
+if(_phos_left GREATER 0)
+    message(STATUS "phos: ${_phos_left} slow self-test sections not registered (PHOS_TESTS=all or a name pattern admits them)")
+endif()
+
 # The old all-in-one run: every section in one process, as before. Kept for whoever wants exactly
 # that (and for comparing times), but not part of a plain `ctest`: it would run every section a second
-# time. It runs when PHOS_SELFTEST_FULL is set in the environment, e.g.
+# time. Registered only when PHOS_SELFTEST_FULL is set in the environment, e.g.
 #     $env:PHOS_SELFTEST_FULL=1; ctest -C Release -L full
-# otherwise it is listed as disabled.
-add_test(selftest "${PHOS_SELFTEST_EXE}")
-phos_selftest_env(selftest)
-# COST 0: a disabled test is still "started" in ctest's first pass and holds a slot for that moment;
-# with a high cost it did so first and kept the host test (five slots) from starting beside
-# testModalInterchange at time zero -- measured, it then waited 340 s.
-set_tests_properties(selftest PROPERTIES LABELS "selftest;full" RESOURCE_LOCK phos_selftest_cwd COST 0)
-if(NOT "$ENV{PHOS_SELFTEST_FULL}")
-    set_tests_properties(selftest PROPERTIES DISABLED TRUE)
+if("$ENV{PHOS_SELFTEST_FULL}")
+    add_test(selftest "${PHOS_SELFTEST_EXE}")
+    phos_selftest_env(selftest)
+    set_tests_properties(selftest PROPERTIES LABELS "selftest;full" RESOURCE_LOCK phos_selftest_cwd COST 0)
 endif()
