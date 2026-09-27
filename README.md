@@ -18,13 +18,15 @@ Licence: AGPL-3.0.
 
 ## Download
 
-**[Phosphene-1.1.0-Setup.exe](https://github.com/reneweller-coding/Phosphene/releases/download/v1.1.0/Phosphene-1.1.0-Setup.exe)**
+**[Phosphene-1.2.0-Setup.exe](https://github.com/reneweller-coding/Phosphene/releases/download/v1.2.0/Phosphene-1.2.0-Setup.exe)**
 installs the standalone and the VST3 and fetches the data it needs (the wavetable pack, the two
-learned models, the spoken phrases). Nothing else has to be installed: the runtime is linked in.
+learned models, the spoken phrases) and, if you leave the box ticked, the Field track's recordings
+(2 GB, from the [field-data-1](https://github.com/reneweller-coding/Phosphene/releases/tag/field-data-1)
+release). Nothing else has to be installed: the runtime is linked in.
 There is a
-**[portable zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.1.0/Phosphene-1.1.0-portable.zip)**
+**[portable zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.2.0/Phosphene-1.2.0-portable.zip)**
 with everything in it for anyone who would rather not run an installer, and the
-**[manual](https://github.com/reneweller-coding/Phosphene/releases/download/v1.1.0/Phosphene-Manual.pdf)** —
+**[manual](https://github.com/reneweller-coding/Phosphene/releases/download/v1.2.0/Phosphene-Manual.pdf)** —
 every tab as a picture, every parameter, and the reasons behind the design.
 
 Requirements: Windows 10 or 11, a 64-bit processor with AVX2 (every x86-64 since 2013), and a VST3
