@@ -1627,11 +1627,11 @@ void testKickBody()
         std::vector<std::complex<double>> s(n);
         for (size_t i = 0; i < y.size(); ++i) s[i] = y[i];
         fft(s);
-        for (size_t k = 0; k < n; ++k) {
-            const double f = static_cast<double>(k) * sr / static_cast<double>(n);
+        for (size_t bin = 0; bin < n; ++bin) {
+            const double f = static_cast<double>(bin) * sr / static_cast<double>(n);
             // analytic signal: positive frequencies doubled, negative ones and everything outside the band gone
-            if (k == 0 || k >= n / 2 || f < 20.0 || f > 250.0) s[k] = 0.0;
-            else s[k] *= 2.0;
+            if (bin == 0 || bin >= n / 2 || f < 20.0 || f > 250.0) s[bin] = 0.0;
+            else s[bin] *= 2.0;
         }
         for (auto& c : s) c = std::conj(c);   // inverse FFT via conjugation
         fft(s);

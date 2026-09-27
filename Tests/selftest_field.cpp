@@ -212,7 +212,10 @@ void testFieldNoLibrary()
     // wurden!" -- a Dark Forest track, whose intro has its place for certain, composed with the shipped folder (where
     // this machine has it) and without; then its intro rendered without.
     ParamStore q;
-    q.parseText("compose.style=3 compose.style_mix=Off");
+    // Without the level, presence and audibility matches: they plan by probe renders of the track (45 s here), and
+    // what this test compares -- the notes and the controls with and without the library -- does not need them.
+    q.parseText("compose.style=3 compose.style_mix=Off compose.level_match=Off compose.presence_match=Off "
+                "compose.audibility_match=Off master.auto_gain=Off");
     auto compose = [&](std::vector<NoteEvent>& notes, std::vector<ControlEvent>& ctl) {
         Composer c(4711);
         const TrackPlan t = c.track(q, 0);

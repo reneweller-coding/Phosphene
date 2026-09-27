@@ -43,7 +43,7 @@ set(PHOS_SELFTEST_SECONDS
     testField.engine                      0.5
     testField.form                        2.0
     testField.presets                     0.2
-    testField.noLibrary                   3.0
+    testField.noLibrary                   5.0
     testSfxToneIntervals                  0.1
     testMixGuide.planes                   0.1
     testDialogue.glide                    0.2

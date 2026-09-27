@@ -533,8 +533,8 @@ void testAcidColour()
         // first has discharged. What is measured is the charge *the accented notes themselves see*,
         // because that is what lifts their cutoff: kSweepOctaves x Accent x Resonance x charge.
         {
-            ParamStore q;
-            q.parseText("compose.level_match=Off master.auto_gain=Off");
+            ParamStore plain;
+            plain.parseText("compose.level_match=Off master.auto_gain=Off");
             const size_t sixteenth = static_cast<size_t>(0.25 * 60.0 / 145.0 * sr);
             std::vector<float> L(sixteenth), R(sixteenth);
             double peak = 0.0, sumAcc = 0.0;
@@ -544,7 +544,7 @@ void testAcidColour()
             for (uint64_t s = 0; s < 6; ++s) {
                 Composer c(2000 + s);
                 for (int i = 0; i < 20; ++i) {
-                    const MelodyPlan& m = c.track(q, i).melody;
+                    const MelodyPlan& m = c.track(plain, i).melody;
                     const std::vector<MelodyNote>& a = m.acid[0];
                     voice->reset();
                     size_t next = 0;

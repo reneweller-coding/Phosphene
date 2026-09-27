@@ -870,7 +870,7 @@ void testAudibility()
         StemTap tap;
         for (int s = 0; s < kNumStems; ++s) { tap.L[s] = bl[static_cast<size_t>(s)].data(); tap.R[s] = br[static_cast<size_t>(s)].data(); }
         engine->setStemTap(&tap);
-        AudibilityMeter asIs(kNumStems, sr), down(kNumStems, sr);
+        AudibilityMeter asIs(kNumStems, sr), lowered(kNumStems, sr);
         const int pad = static_cast<int>(Part::Pad);
         const float* sl[kNumStems];
         const float* srr[kNumStems];
@@ -887,11 +887,11 @@ void testAudibility()
             engine->process(L.data(), R.data(), k);
             for (int i = 0; i < k; ++i) { padL[static_cast<size_t>(i)] = 0.1f * bl[static_cast<size_t>(pad)][static_cast<size_t>(i)]; padR[static_cast<size_t>(i)] = 0.1f * br[static_cast<size_t>(pad)][static_cast<size_t>(i)]; }
             asIs.add(sl, srr, k);
-            down.add(dl, dr, k);
+            lowered.add(dl, dr, k);
             done += static_cast<size_t>(k);
         }
         engine->setStemTap(nullptr);
-        const AudibilityReading padAt = asIs.read(pad), padDown = down.read(pad);
+        const AudibilityReading padAt = asIs.read(pad), padDown = lowered.read(pad);
         // The partial loudness is what falls, not necessarily the ratio: where the pad has its bands to itself it is
         // heard whole at any level, and the bands where the others cover it weigh less once it is quieter.
         check(padAt.frames > 0 && padAt.inMix <= padAt.alone && padDown.inMix < 0.5 * padAt.inMix && padDown.alone < 0.5 * padAt.alone,
@@ -2048,7 +2048,7 @@ void testForm()
 void testArrangeDynamics()
 {
     section("arrangement dynamics: the roll that lifts, the acid's ride, movement in the panorama");
-    constexpr double kPi = 3.141592653589793;
+    constexpr double kPiLocal = 3.141592653589793;
 
     // ---------------------------------------------------------------------------------------------
     // The auto-pan.
@@ -2065,7 +2065,7 @@ void testArrangeDynamics()
                 double sum = 0.0, sum2 = 0.0;
                 constexpr int kSteps = 4096;
                 for (int i = 0; i < kSteps; ++i) {
-                    const double ph = 2.0 * kPi * i / kSteps;
+                    const double ph = 2.0 * kPiLocal * i / kSteps;
                     const double p = p0 * (std::sqrt(1.0 - d * d) + std::sqrt(2.0) * d * std::cos(ph));
                     sum += p;
                     sum2 += p * p;
@@ -2091,7 +2091,7 @@ void testArrangeDynamics()
         auto moments = [&](double periodSixteenths, int n, double& mean, double& ms) {
             mean = ms = 0.0;
             for (int i = 0; i < n; ++i) {
-                const double ph = 2.0 * kPi * i / periodSixteenths;
+                const double ph = 2.0 * kPiLocal * i / periodSixteenths;
                 const double p = p0 * (std::sqrt(1.0 - d * d) + std::sqrt(2.0) * d * std::cos(ph));
                 mean += p;
                 ms += p * p;
@@ -2167,7 +2167,6 @@ void testArrangeDynamics()
         // angle a default lane asks for (1.14 rad: the first dropped term is d^8/8!).
         double worst = 0.0, peak = 0.0, diff = 0.0;
         for (int i = 0; i < kN; ++i) {
-            const double pa = static_cast<double>(aL[i]) * aL[i] + static_cast<double>(aR[i]) * aR[i];
             const double pb = static_cast<double>(bL[i]) * bL[i] + static_cast<double>(bR[i]) * bR[i];
             peak = std::max(peak, pb);
             diff += std::fabs(static_cast<double>(aL[i]) - bL[i]);
@@ -2956,11 +2955,11 @@ void testCues()
         const double bpm = 145.0, sr = 48000.0;
         const double beatsPerSample = bpm / 60.0 / sr;
         const int block = 137;   // not a divisor of anything musical
-        double beat = 0.0;
-        while (beat < 64.0) {
-            const double to = std::min(64.0, beat + beatsPerSample * block);
-            tap.scan(beat, to, 0, 0, 1, marks, out);
-            beat = to;
+        double at = 0.0;
+        while (at < 64.0) {
+            const double to = std::min(64.0, at + beatsPerSample * block);
+            tap.scan(at, to, 0, 0, 1, marks, out);
+            at = to;
         }
         const std::vector<Cue> cues = drainCues(out);
         std::vector<int> beats, bars;
@@ -3028,12 +3027,12 @@ void testCues()
         const double sr = 48000.0;
         const double beatsPerSample = 145.0 / 60.0 / sr;
         const int block = 256;
-        double beat = 0.0;
+        double at = 0.0;
         int nextBar = 0;
-        while (beat < static_cast<double>(bars) * kBeatsPerBar) {
+        while (at < static_cast<double>(bars) * kBeatsPerBar) {
             // The composer runs ahead: four bars of marks are always in the ring before the play
             // position reaches them, exactly as the conductor keeps the engine's rings filled.
-            while (static_cast<double>(nextBar) * kBeatsPerBar < beat + 4 * kBeatsPerBar && nextBar < bars) {
+            while (static_cast<double>(nextBar) * kBeatsPerBar < at + 4 * kBeatsPerBar && nextBar < bars) {
                 const TrackPlan plan = comp.track(p, comp.trackOfBar(p, nextBar));
                 cueMarksForBar(plan.form, plan.firstBar, plan.key, plan.scale, nextBar, lastKey, marks);
                 // The next track's intro over this one's outro (the DJ overlap, 19.09.2026): its marks too,
@@ -3045,15 +3044,15 @@ void testCues()
                 }
                 ++nextBar;
             }
-            const double to = beat + beatsPerSample * block;
-            tap.scan(beat, to, 0, 0, 1, marks, out);
+            const double to = at + beatsPerSample * block;
+            tap.scan(at, to, 0, 0, 1, marks, out);
             Cue c;
             while (out.pop(c)) {
                 if (c.kind == Cue::Kind::Bar) barSeen = c.index;
                 if (c.kind == Cue::Kind::Section) got.emplace_back(barSeen, static_cast<int>(c.section));
                 received.push_back(c);
             }
-            beat = to;
+            at = to;
         }
         std::vector<std::pair<int, int>> want;
         for (const SectionMark& m : score) {

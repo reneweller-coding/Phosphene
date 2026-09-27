@@ -15,6 +15,7 @@
 #include "phos/Dynamics.h"
 #include "phos/Dsp.h"
 #include "phos/Engine.h"
+#include "phos/FieldLibrary.h"
 #include "phos/Halfband.h"
 #include "phos/Harmony.h"
 #include "phos/Ladder.h"
@@ -106,6 +107,10 @@ int main(int argc, char** argv)
     // A development program: the composer's probes run in parallel, and from the probe cache when
     // PHOS_PROBE_CACHE names a directory (ctest does; phos/Probe.h). Neither changes a number.
     phos::probe::configureFromEnvironment();
+    // The Field track's recordings are loaded when the composer plans a track (FieldLibrary.h). In a plugin that is
+    // asked of the loader thread, and a recording may arrive a moment into its first note; the tests compare renders
+    // bit for bit (with and without the cue tap, at any block size), so here, as in phos_render, the composer waits.
+    phos::setFieldPreloadBlocking(true);
     // Unbuffered: under ctest stdout is a pipe and fully buffered, so a crash took every line the
     // section had printed with it. On 19.09.2026 selftest.testVoices died with an access violation
     // after 249 s and ctest recorded no output at all; the check that ran last is the first clue.
