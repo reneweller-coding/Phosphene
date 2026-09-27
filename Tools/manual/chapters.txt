@@ -12,8 +12,9 @@
 
 Phosphene composes and plays complete psytrance sets. You give it a seed, a style and an energy arc;
 it writes the tracks -- their keys, tempi, forms, patterns and sounds -- and synthesises them in real
-time. There is no sample library and no loop pool: every sound is made by the engine, and every note
-is decided by the composer.
+time. There is no loop pool and no sampled instrument: every note is decided by the composer, and every
+sound is made by the engine -- except the spoken phrases and, on the Field track, field recordings of
+real places (and of NASA's missions), which a place cannot be synthesised without.
 
 Two ideas run through the whole instrument. The first is that the same seed always gives the same
 set: bar 3000 is bar 3000 whether the night was played from the start or joined in the middle, which
@@ -37,8 +38,8 @@ conductor hands notes and control events to the engine on an absolute grid of 32
 why a bar sounds the same however a host cuts its blocks.
 
 On the left the generators, each in the colour of its tab: kick, bass and percussion, the acid, the
-six melodic voices with their oscillators, filter models and envelopes, and the effects with the bed
-and the spoken voices. Every part has a channel strip -- level, the kick's sidechain duck, the trance
+six melodic voices with their oscillators, filter models and envelopes, the effects with the bed
+and the spoken voices, and the Field track's sampler. Every part has a channel strip -- level, the kick's sidechain duck, the trance
 gate and its distance -- and sends into three planes of space: a room near, a plate in the middle, a
 hall far behind, plus a gated hall a voice can choose. The master sums it all and brings it to
 loudness: gain, bus compressor, mono bass, soft clipper, band limit, a true-peak limiter and a
@@ -235,12 +236,62 @@ a track; a number makes every event of that family play that preset. "Hear" play
 in the running set (with Auto, one of the family at random); while the transport stands nothing
 sounds.
 
+Space Shot: a recording of NASA's, up to 25 seconds -- a rocket launch, Sputnik's beep, Saturn's radio
+emissions, a quake on Mars -- played whole, once, on this strip: after the cut of a breakdown, now and
+then in a long intro, most in Full-On and Hi-Tech, and never within two bars of a spoken phrase. It
+comes from the field recordings (Field tab); without them it stays silent.
+
 The tonal layer of an effect -- an atmosphere's held tone above all -- is mapped into the mode, and never
 onto the b2 or the leading tone: a minor seventh the mode lacks becomes the fifth, not the major seventh.
 
 The two send effects are a short room and a long hall, both feedback delay networks. Their returns
 are ducked with the kick like everything else, and high-passed: a reverb tail in the bass register is
 mud.
+
+== Field ==
+
+The Field track plays field recordings: a place under the music -- a rainforest, a night full of insects,
+rain on a roof, a river, a cave, a machine hall, the wind on Mars. It is a sampler, and its recordings
+are the original files, not converted: 120 recordings in 30 categories (four each, the steadiest and
+most different of their category; generated with Stable Audio 3 for Noctuary) and NASA's sounds from
+space. They are an optional part of the installation (2 GB). Without them everything plays; only this
+track and the NASA shots are silent, and the Library line says so.
+
+Where it plays: under the intro from its first bar (so the place changes with the track, over the DJ's
+blend), over a breakdown, in the outro up to the blend, and -- in Dark Forest, rarely in Progressive --
+sixteen quiet bars under a long groove. Never in a build-up or a drop. How often follows the style:
+Dark Forest always has its place, Hi-Tech least. compose.field_density scales it.
+
+What plays: with A Category on Auto the composer draws a preset for every track by its style -- forest,
+night, insects and swamps for Dark Forest, sea, fire and ritual for Goa, wind, rain and water for
+Progressive, machines and radio for Hi-Tech, space for Full-On -- and sends it as it does the synths'
+presets: the knobs stay as they are. Choose a category and the knobs play, in every track.
+
+Preset: loads one of the factory presets into the knobs -- one per recording (by category) and the
+scenes, two recordings as one place (Jungle Night: a night and its insects; Swamp: the wetland and its
+mud). The category is then no longer Auto; set it back to hand the choice to the composer again.
+Library: how many recordings were found, and where. Folder...: a folder of your own recordings beside
+the installed ones -- FLAC files named fr-<category>-<anything>.flac (Noctuary's whole library of 2938
+fits as it is); cancel the dialog to remove it.
+
+Layer A and B: each a recording, chosen by category and variation (the variations of a category are its
+files in name order), with its level, its pitch (semitones and cents, by resampling), where it starts
+and how far that start may wander per event, and its direction. B is off by default; Layer Mix weighs
+the two (the middle plays both whole).
+
+Loop: over any stretch of the recording (Loop Start to Loop End), joined by a crossfade of its own
+length -- over the last stretch before the loop's end a second read head runs from the loop's start, and
+the two are mixed with equal power, because two stretches of a field recording are uncorrelated and keep
+their loudness only so. What is heard at the seam is always a blend, never a cut, so a recording that
+was not made as a loop plays as one. Without the loop a layer ends with its recording.
+
+Filter, Filter Envelope, Amplifier and the modulation block are the synths' (Filters and modulation);
+the matrix reaches pitch, cutoff, resonance, the filter's mode, level and pan. The Low Cut (24 dB per
+octave) keeps the recordings out of the range that belongs to kick and bass -- wind and water have most
+of their power there. The long amp envelope (2 s in, 4 s out) is how a place enters and leaves.
+
+The recordings are loaded when a track is planned, a track ahead of their first note, and kept in
+memory; an offline render waits for them, so it is the same every time.
 
 == Mixer / Master ==
 

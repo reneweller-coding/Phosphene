@@ -415,6 +415,16 @@ public:
      */
     void applyPreset(phos::Module module, int instance, const phos::SoundPreset& preset);
 
+    /** @name The Field track's presets and library (27.09.2026; phos/FieldPresets.h, phos/FieldLibrary.h)
+     *  @{ */
+    /** @brief Puts the Field knobs where factory preset @p index has them, as one undo step (message thread). */
+    void applyFieldPreset(int index);
+    /** @brief The user's own folder of field recordings, scanned beside the shipped one ("" none). */
+    juce::String fieldFolder() const { return fieldFolder_; }
+    /** @brief Sets that folder and scans the library again; it is saved with the plugin's state (message thread). */
+    void setFieldFolder(const juce::String& folder);
+    /** @} */
+
     /**
      * @brief Auditions bank preset @p preset of effect family @p choice (sfx::PresetRiser order) in the running set:
      *        the audio thread plays it at its next block (phos::Engine::previewSfx). Nothing sounds while the
@@ -922,6 +932,7 @@ private:
     phos::CueTap cueTap_;                       ///< @copydoc cues_
     phos::CueMarkRing cueMarks_{ 256 };         ///< @copydoc cues_
     juce::String cueHost_{ phos::kCueDefaultHost };   ///< message thread's copy of the destination
+    juce::String fieldFolder_;   ///< setFieldFolder (message thread; saved in the state as "fieldFolder")
     mutable std::mutex cueHostLock_;            ///< guards #cueHost_ (the editor writes, the timer reads)
     bool cueWanted_ = false;                    ///< message thread: what `cue.send` said at the last tick
     int  cuePort_ = phos::kCueDefaultPort;      ///< message thread: what `cue.port` said at the last tick

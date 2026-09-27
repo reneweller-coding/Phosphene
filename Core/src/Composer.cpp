@@ -1028,6 +1028,7 @@ TrackPlan Composer::makeTrack(const ParamStore& p, int index) const
     }
     t.form.handover = index == 0 ? 0 : overlap;
     makeFormSfx(t.form, t.formSeed, p.get(cb + compose::SfxAmount), p.get(cb + compose::VoiceDensity), p.get(cb + compose::BedDensity));
+    placeField(t.form, t.formSeed, t.style, p.get(cb + compose::FieldDensity), p.get(cb + compose::SfxAmount));   // 27.09.2026
     t.bars = t.form.bars;
 
     uint64_t laneSeeds[kPercLanes];

@@ -544,6 +544,16 @@
       "curve": "toggle"
     },
     {
+      "key": "compose.field_density",
+      "module": "compose",
+      "name": "Field Density",
+      "unit": "x",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
       "key": "kick.engine",
       "module": "kick",
       "name": "Engine",
@@ -20018,6 +20028,26 @@
       "curve": "linear"
     },
     {
+      "key": "mix.field_mute",
+      "module": "mix",
+      "name": "Field Mute",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "mix.field_level",
+      "module": "mix",
+      "name": "Field Level",
+      "unit": "dB",
+      "min": -24.0,
+      "max": 12.0,
+      "default": -14.0,
+      "curve": "linear"
+    },
+    {
       "key": "master.gain",
       "module": "master",
       "name": "Gain",
@@ -20540,6 +20570,1246 @@
       "max": 1.0,
       "default": 0.699999988079071,
       "curve": "linear"
+    },
+    {
+      "key": "field.a_category",
+      "module": "field",
+      "name": "A Category",
+      "unit": "",
+      "min": 0.0,
+      "max": 31.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Auto",
+        "Rainforest",
+        "Night Country",
+        "Insects",
+        "Foliage",
+        "Wetland",
+        "Mud Bubbles",
+        "Cave",
+        "River",
+        "Sea",
+        "Rain on Land",
+        "Rain on Roof",
+        "Wind",
+        "Underwater",
+        "Ice and Snow",
+        "Desert",
+        "Fire",
+        "Geothermal",
+        "Seismic",
+        "Ritual Objects",
+        "Abandoned",
+        "Tunnel",
+        "Metal Creak",
+        "Dark Drone",
+        "Electric",
+        "Ventilation",
+        "Factory",
+        "Polar Station",
+        "Radio Space",
+        "Empty Space",
+        "Grain Texture",
+        "NASA"
+      ]
+    },
+    {
+      "key": "field.a_variation",
+      "module": "field",
+      "name": "A Variation",
+      "unit": "",
+      "min": 0.0,
+      "max": 63.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "field.a_level",
+      "module": "field",
+      "name": "A Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.a_pitch",
+      "module": "field",
+      "name": "A Pitch",
+      "unit": "st",
+      "min": -24.0,
+      "max": 24.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "field.a_fine",
+      "module": "field",
+      "name": "A Fine",
+      "unit": "ct",
+      "min": -100.0,
+      "max": 100.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.a_start",
+      "module": "field",
+      "name": "A Start",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.a_start_random",
+      "module": "field",
+      "name": "A Start Random",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.a_reverse",
+      "module": "field",
+      "name": "A Reverse",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "field.b_on",
+      "module": "field",
+      "name": "B On",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "field.b_category",
+      "module": "field",
+      "name": "B Category",
+      "unit": "",
+      "min": 0.0,
+      "max": 31.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Auto",
+        "Rainforest",
+        "Night Country",
+        "Insects",
+        "Foliage",
+        "Wetland",
+        "Mud Bubbles",
+        "Cave",
+        "River",
+        "Sea",
+        "Rain on Land",
+        "Rain on Roof",
+        "Wind",
+        "Underwater",
+        "Ice and Snow",
+        "Desert",
+        "Fire",
+        "Geothermal",
+        "Seismic",
+        "Ritual Objects",
+        "Abandoned",
+        "Tunnel",
+        "Metal Creak",
+        "Dark Drone",
+        "Electric",
+        "Ventilation",
+        "Factory",
+        "Polar Station",
+        "Radio Space",
+        "Empty Space",
+        "Grain Texture",
+        "NASA"
+      ]
+    },
+    {
+      "key": "field.b_variation",
+      "module": "field",
+      "name": "B Variation",
+      "unit": "",
+      "min": 0.0,
+      "max": 63.0,
+      "default": 1.0,
+      "curve": "int"
+    },
+    {
+      "key": "field.b_level",
+      "module": "field",
+      "name": "B Level",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 6.0,
+      "default": -6.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.b_pitch",
+      "module": "field",
+      "name": "B Pitch",
+      "unit": "st",
+      "min": -24.0,
+      "max": 24.0,
+      "default": 0.0,
+      "curve": "int"
+    },
+    {
+      "key": "field.b_fine",
+      "module": "field",
+      "name": "B Fine",
+      "unit": "ct",
+      "min": -100.0,
+      "max": 100.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.b_start",
+      "module": "field",
+      "name": "B Start",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.b_start_random",
+      "module": "field",
+      "name": "B Start Random",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.b_reverse",
+      "module": "field",
+      "name": "B Reverse",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "field.layer_mix",
+      "module": "field",
+      "name": "Layer Mix",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "curve": "linear"
+    },
+    {
+      "key": "field.loop",
+      "module": "field",
+      "name": "Loop",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "field.loop_start",
+      "module": "field",
+      "name": "Loop Start",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.loop_end",
+      "module": "field",
+      "name": "Loop End",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.loop_xfade",
+      "module": "field",
+      "name": "Loop Crossfade",
+      "unit": "ms",
+      "min": 10.0,
+      "max": 10000.0,
+      "default": 1500.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.amp_attack",
+      "module": "field",
+      "name": "Attack",
+      "unit": "ms",
+      "min": 1.0,
+      "max": 30000.0,
+      "default": 2000.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.amp_decay",
+      "module": "field",
+      "name": "Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 30000.0,
+      "default": 1000.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.amp_sustain",
+      "module": "field",
+      "name": "Sustain",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.amp_release",
+      "module": "field",
+      "name": "Release",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 30000.0,
+      "default": 4000.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.filter_model",
+      "module": "field",
+      "name": "Filter Model",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "State Variable",
+        "Moog Ladder",
+        "Prophet (SSM2040)",
+        "Juno (IR3109)",
+        "Oberheim SEM",
+        "Xpander",
+        "Diode Ladder",
+        "Korg35 (MS-20)",
+        "Polivoks",
+        "Wasp"
+      ]
+    },
+    {
+      "key": "field.filter_type",
+      "module": "field",
+      "name": "Filter Type",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Low Pass",
+        "Band Pass",
+        "High Pass",
+        "Notch"
+      ]
+    },
+    {
+      "key": "field.cutoff",
+      "module": "field",
+      "name": "Cutoff",
+      "unit": "Hz",
+      "min": 40.0,
+      "max": 20000.0,
+      "default": 20000.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.resonance",
+      "module": "field",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.filter_mode",
+      "module": "field",
+      "name": "Filter Mode",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.env_amount",
+      "module": "field",
+      "name": "Env Amount",
+      "unit": "oct",
+      "min": -8.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.filter_decay",
+      "module": "field",
+      "name": "Filter Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 30000.0,
+      "default": 2000.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.low_cut",
+      "module": "field",
+      "name": "Low Cut",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 1000.0,
+      "default": 150.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.filt_attack",
+      "module": "field",
+      "name": "Filter Attack",
+      "unit": "ms",
+      "min": 0.100000001490116,
+      "max": 4000.0,
+      "default": 0.100000001490116,
+      "curve": "log"
+    },
+    {
+      "key": "field.filt_sustain",
+      "module": "field",
+      "name": "Filter Sustain",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.filt_release",
+      "module": "field",
+      "name": "Filter Release",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 8000.0,
+      "default": 300.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.menv_attack",
+      "module": "field",
+      "name": "Mod Attack",
+      "unit": "ms",
+      "min": 0.100000001490116,
+      "max": 8000.0,
+      "default": 10.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.menv_decay",
+      "module": "field",
+      "name": "Mod Decay",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 12000.0,
+      "default": 800.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.menv_sustain",
+      "module": "field",
+      "name": "Mod Sustain",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.menv_release",
+      "module": "field",
+      "name": "Mod Release",
+      "unit": "ms",
+      "min": 5.0,
+      "max": 12000.0,
+      "default": 400.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.lfo1_rate",
+      "module": "field",
+      "name": "LFO 1 Rate",
+      "unit": "Hz",
+      "min": 0.009999999776483,
+      "max": 40.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.lfo1_shape",
+      "module": "field",
+      "name": "LFO 1 Shape",
+      "unit": "",
+      "min": 0.0,
+      "max": 6.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Sine",
+        "Triangle",
+        "Saw Up",
+        "Saw Down",
+        "Square",
+        "Sample & Hold",
+        "Smooth Random"
+      ]
+    },
+    {
+      "key": "field.lfo1_sync",
+      "module": "field",
+      "name": "LFO 1 Sync",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Free",
+        "4 Bars",
+        "2 Bars",
+        "1 Bar",
+        "1/2",
+        "1/4",
+        "1/8",
+        "1/16",
+        "1/4 T",
+        "1/8 T"
+      ]
+    },
+    {
+      "key": "field.lfo1_retrig",
+      "module": "field",
+      "name": "LFO 1 Retrig",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "field.lfo1_fade",
+      "module": "field",
+      "name": "LFO 1 Fade",
+      "unit": "s",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.lfo2_rate",
+      "module": "field",
+      "name": "LFO 2 Rate",
+      "unit": "Hz",
+      "min": 0.009999999776483,
+      "max": 40.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.lfo2_shape",
+      "module": "field",
+      "name": "LFO 2 Shape",
+      "unit": "",
+      "min": 0.0,
+      "max": 6.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Sine",
+        "Triangle",
+        "Saw Up",
+        "Saw Down",
+        "Square",
+        "Sample & Hold",
+        "Smooth Random"
+      ]
+    },
+    {
+      "key": "field.lfo2_sync",
+      "module": "field",
+      "name": "LFO 2 Sync",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Free",
+        "4 Bars",
+        "2 Bars",
+        "1 Bar",
+        "1/2",
+        "1/4",
+        "1/8",
+        "1/16",
+        "1/4 T",
+        "1/8 T"
+      ]
+    },
+    {
+      "key": "field.lfo2_retrig",
+      "module": "field",
+      "name": "LFO 2 Retrig",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "field.lfo2_fade",
+      "module": "field",
+      "name": "LFO 2 Fade",
+      "unit": "s",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.lfo3_rate",
+      "module": "field",
+      "name": "LFO 3 Rate",
+      "unit": "Hz",
+      "min": 0.009999999776483,
+      "max": 40.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.lfo3_shape",
+      "module": "field",
+      "name": "LFO 3 Shape",
+      "unit": "",
+      "min": 0.0,
+      "max": 6.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Sine",
+        "Triangle",
+        "Saw Up",
+        "Saw Down",
+        "Square",
+        "Sample & Hold",
+        "Smooth Random"
+      ]
+    },
+    {
+      "key": "field.lfo3_sync",
+      "module": "field",
+      "name": "LFO 3 Sync",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Free",
+        "4 Bars",
+        "2 Bars",
+        "1 Bar",
+        "1/2",
+        "1/4",
+        "1/8",
+        "1/16",
+        "1/4 T",
+        "1/8 T"
+      ]
+    },
+    {
+      "key": "field.lfo3_retrig",
+      "module": "field",
+      "name": "LFO 3 Retrig",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "field.lfo3_fade",
+      "module": "field",
+      "name": "LFO 3 Fade",
+      "unit": "s",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.lfo4_rate",
+      "module": "field",
+      "name": "LFO 4 Rate",
+      "unit": "Hz",
+      "min": 0.009999999776483,
+      "max": 40.0,
+      "default": 1.0,
+      "curve": "log"
+    },
+    {
+      "key": "field.lfo4_shape",
+      "module": "field",
+      "name": "LFO 4 Shape",
+      "unit": "",
+      "min": 0.0,
+      "max": 6.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Sine",
+        "Triangle",
+        "Saw Up",
+        "Saw Down",
+        "Square",
+        "Sample & Hold",
+        "Smooth Random"
+      ]
+    },
+    {
+      "key": "field.lfo4_sync",
+      "module": "field",
+      "name": "LFO 4 Sync",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Free",
+        "4 Bars",
+        "2 Bars",
+        "1 Bar",
+        "1/2",
+        "1/4",
+        "1/8",
+        "1/16",
+        "1/4 T",
+        "1/8 T"
+      ]
+    },
+    {
+      "key": "field.lfo4_retrig",
+      "module": "field",
+      "name": "LFO 4 Retrig",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "field.lfo4_fade",
+      "module": "field",
+      "name": "LFO 4 Fade",
+      "unit": "s",
+      "min": 0.0,
+      "max": 8.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.mx1_src",
+      "module": "field",
+      "name": "Mod 1 Source",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "LFO 1",
+        "LFO 2",
+        "LFO 3",
+        "LFO 4",
+        "Mod Env",
+        "Filter Env",
+        "Velocity",
+        "Key",
+        "Random"
+      ]
+    },
+    {
+      "key": "field.mx1_dst",
+      "module": "field",
+      "name": "Mod 1 Target",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "Pulse Width",
+        "Cutoff",
+        "Resonance",
+        "Filter Mode",
+        "Level"
+      ]
+    },
+    {
+      "key": "field.mx1_amount",
+      "module": "field",
+      "name": "Mod 1 Amount",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.mx2_src",
+      "module": "field",
+      "name": "Mod 2 Source",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "LFO 1",
+        "LFO 2",
+        "LFO 3",
+        "LFO 4",
+        "Mod Env",
+        "Filter Env",
+        "Velocity",
+        "Key",
+        "Random"
+      ]
+    },
+    {
+      "key": "field.mx2_dst",
+      "module": "field",
+      "name": "Mod 2 Target",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "Pulse Width",
+        "Cutoff",
+        "Resonance",
+        "Filter Mode",
+        "Level"
+      ]
+    },
+    {
+      "key": "field.mx2_amount",
+      "module": "field",
+      "name": "Mod 2 Amount",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.mx3_src",
+      "module": "field",
+      "name": "Mod 3 Source",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "LFO 1",
+        "LFO 2",
+        "LFO 3",
+        "LFO 4",
+        "Mod Env",
+        "Filter Env",
+        "Velocity",
+        "Key",
+        "Random"
+      ]
+    },
+    {
+      "key": "field.mx3_dst",
+      "module": "field",
+      "name": "Mod 3 Target",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "Pulse Width",
+        "Cutoff",
+        "Resonance",
+        "Filter Mode",
+        "Level"
+      ]
+    },
+    {
+      "key": "field.mx3_amount",
+      "module": "field",
+      "name": "Mod 3 Amount",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.mx4_src",
+      "module": "field",
+      "name": "Mod 4 Source",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "LFO 1",
+        "LFO 2",
+        "LFO 3",
+        "LFO 4",
+        "Mod Env",
+        "Filter Env",
+        "Velocity",
+        "Key",
+        "Random"
+      ]
+    },
+    {
+      "key": "field.mx4_dst",
+      "module": "field",
+      "name": "Mod 4 Target",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "Pulse Width",
+        "Cutoff",
+        "Resonance",
+        "Filter Mode",
+        "Level"
+      ]
+    },
+    {
+      "key": "field.mx4_amount",
+      "module": "field",
+      "name": "Mod 4 Amount",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.mx5_src",
+      "module": "field",
+      "name": "Mod 5 Source",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "LFO 1",
+        "LFO 2",
+        "LFO 3",
+        "LFO 4",
+        "Mod Env",
+        "Filter Env",
+        "Velocity",
+        "Key",
+        "Random"
+      ]
+    },
+    {
+      "key": "field.mx5_dst",
+      "module": "field",
+      "name": "Mod 5 Target",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "Pulse Width",
+        "Cutoff",
+        "Resonance",
+        "Filter Mode",
+        "Level"
+      ]
+    },
+    {
+      "key": "field.mx5_amount",
+      "module": "field",
+      "name": "Mod 5 Amount",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.mx6_src",
+      "module": "field",
+      "name": "Mod 6 Source",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "LFO 1",
+        "LFO 2",
+        "LFO 3",
+        "LFO 4",
+        "Mod Env",
+        "Filter Env",
+        "Velocity",
+        "Key",
+        "Random"
+      ]
+    },
+    {
+      "key": "field.mx6_dst",
+      "module": "field",
+      "name": "Mod 6 Target",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "Pulse Width",
+        "Cutoff",
+        "Resonance",
+        "Filter Mode",
+        "Level"
+      ]
+    },
+    {
+      "key": "field.mx6_amount",
+      "module": "field",
+      "name": "Mod 6 Amount",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.mx7_src",
+      "module": "field",
+      "name": "Mod 7 Source",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "LFO 1",
+        "LFO 2",
+        "LFO 3",
+        "LFO 4",
+        "Mod Env",
+        "Filter Env",
+        "Velocity",
+        "Key",
+        "Random"
+      ]
+    },
+    {
+      "key": "field.mx7_dst",
+      "module": "field",
+      "name": "Mod 7 Target",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "Pulse Width",
+        "Cutoff",
+        "Resonance",
+        "Filter Mode",
+        "Level"
+      ]
+    },
+    {
+      "key": "field.mx7_amount",
+      "module": "field",
+      "name": "Mod 7 Amount",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.mx8_src",
+      "module": "field",
+      "name": "Mod 8 Source",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "LFO 1",
+        "LFO 2",
+        "LFO 3",
+        "LFO 4",
+        "Mod Env",
+        "Filter Env",
+        "Velocity",
+        "Key",
+        "Random"
+      ]
+    },
+    {
+      "key": "field.mx8_dst",
+      "module": "field",
+      "name": "Mod 8 Target",
+      "unit": "",
+      "min": 0.0,
+      "max": 5.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "Pulse Width",
+        "Cutoff",
+        "Resonance",
+        "Filter Mode",
+        "Level"
+      ]
+    },
+    {
+      "key": "field.mx8_amount",
+      "module": "field",
+      "name": "Mod 8 Amount",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.width",
+      "module": "field",
+      "name": "Width",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.pan",
+      "module": "field",
+      "name": "Pan",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.room_send",
+      "module": "field",
+      "name": "Room Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.100000001490116,
+      "curve": "linear"
+    },
+    {
+      "key": "field.plate_send",
+      "module": "field",
+      "name": "Plate Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "field.hall_send",
+      "module": "field",
+      "name": "Hall Send",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.200000002980232,
+      "curve": "linear"
+    },
+    {
+      "key": "field.duck",
+      "module": "field",
+      "name": "Duck",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.400000005960464,
+      "curve": "linear"
     }
   ],
   "tabs": [
@@ -20627,7 +21897,8 @@
             "compose.drone_amount",
             "compose.sfx_amount",
             "compose.voice_density",
-            "compose.bed_density"
+            "compose.bed_density",
+            "compose.field_density"
           ]
         },
         {
@@ -22653,8 +23924,179 @@
     },
     {
       "index": 13,
+      "name": "Field",
+      "image": "tab-13-field.png",
+      "groups": [
+        {
+          "title": "Field Preset & Library",
+          "params": []
+        },
+        {
+          "title": "Layer A",
+          "params": [
+            "field.a_category",
+            "field.a_variation",
+            "field.a_level",
+            "field.a_pitch",
+            "field.a_fine",
+            "field.a_start",
+            "field.a_start_random",
+            "field.a_reverse"
+          ]
+        },
+        {
+          "title": "Layer B",
+          "params": [
+            "field.b_on",
+            "field.b_category",
+            "field.b_variation",
+            "field.b_level",
+            "field.b_pitch",
+            "field.b_fine",
+            "field.b_start",
+            "field.b_start_random",
+            "field.b_reverse",
+            "field.layer_mix"
+          ]
+        },
+        {
+          "title": "Loop",
+          "params": [
+            "field.loop",
+            "field.loop_start",
+            "field.loop_end",
+            "field.loop_xfade"
+          ]
+        },
+        {
+          "title": "Filter",
+          "params": [
+            "field.filter_model",
+            "field.filter_type",
+            "field.cutoff",
+            "field.resonance",
+            "field.env_amount",
+            "field.filter_mode",
+            "field.low_cut"
+          ]
+        },
+        {
+          "title": "Filter Envelope",
+          "params": [
+            "field.filt_attack",
+            "field.filter_decay",
+            "field.filt_sustain",
+            "field.filt_release"
+          ]
+        },
+        {
+          "title": "Amplifier",
+          "params": [
+            "field.amp_attack",
+            "field.amp_decay",
+            "field.amp_sustain",
+            "field.amp_release"
+          ]
+        },
+        {
+          "title": "Mod Envelope",
+          "params": [
+            "field.menv_attack",
+            "field.menv_decay",
+            "field.menv_sustain",
+            "field.menv_release"
+          ]
+        },
+        {
+          "title": "LFO 1",
+          "params": [
+            "field.lfo1_shape",
+            "field.lfo1_sync",
+            "field.lfo1_rate",
+            "field.lfo1_retrig",
+            "field.lfo1_fade"
+          ]
+        },
+        {
+          "title": "LFO 2",
+          "params": [
+            "field.lfo2_shape",
+            "field.lfo2_sync",
+            "field.lfo2_rate",
+            "field.lfo2_retrig",
+            "field.lfo2_fade"
+          ]
+        },
+        {
+          "title": "LFO 3",
+          "params": [
+            "field.lfo3_shape",
+            "field.lfo3_sync",
+            "field.lfo3_rate",
+            "field.lfo3_retrig",
+            "field.lfo3_fade"
+          ]
+        },
+        {
+          "title": "LFO 4",
+          "params": [
+            "field.lfo4_shape",
+            "field.lfo4_sync",
+            "field.lfo4_rate",
+            "field.lfo4_retrig",
+            "field.lfo4_fade"
+          ]
+        },
+        {
+          "title": "Mod Matrix",
+          "params": [
+            "field.mx1_src",
+            "field.mx1_dst",
+            "field.mx1_amount",
+            "field.mx2_src",
+            "field.mx2_dst",
+            "field.mx2_amount",
+            "field.mx3_src",
+            "field.mx3_dst",
+            "field.mx3_amount",
+            "field.mx4_src",
+            "field.mx4_dst",
+            "field.mx4_amount",
+            "field.mx5_src",
+            "field.mx5_dst",
+            "field.mx5_amount",
+            "field.mx6_src",
+            "field.mx6_dst",
+            "field.mx6_amount",
+            "field.mx7_src",
+            "field.mx7_dst",
+            "field.mx7_amount",
+            "field.mx8_src",
+            "field.mx8_dst",
+            "field.mx8_amount"
+          ]
+        },
+        {
+          "title": "Space & Output",
+          "params": [
+            "field.width",
+            "field.pan",
+            "field.duck",
+            "field.room_send",
+            "field.plate_send",
+            "field.hall_send"
+          ]
+        },
+        {
+          "title": "Pattern",
+          "params": []
+        }
+      ]
+    },
+    {
+      "index": 14,
       "name": "Mixer / Master",
-      "image": "tab-13-mixer-master.png",
+      "image": "tab-14-mixer-master.png",
       "groups": [
         {
           "title": "Channels",
@@ -22731,7 +24173,13 @@
             "vocal.hall_send",
             "vocal.fx_send",
             "vocal.throw_send",
-            "vocal.duck"
+            "vocal.duck",
+            "mix.field_level",
+            "mix.field_mute",
+            "field.pan",
+            "field.room_send",
+            "field.hall_send",
+            "field.duck"
           ]
         },
         {
@@ -22794,9 +24242,9 @@
       ]
     },
     {
-      "index": 14,
+      "index": 15,
       "name": "Perform",
-      "image": "tab-14-perform.png",
+      "image": "tab-15-perform.png",
       "groups": [
         {
           "title": "Macros",
@@ -22828,9 +24276,9 @@
       ]
     },
     {
-      "index": 15,
+      "index": 16,
       "name": "Gallery",
-      "image": "tab-15-gallery.png",
+      "image": "tab-16-gallery.png",
       "groups": [
         {
           "title": "Gallery",
@@ -22887,6 +24335,7 @@
     "compose.sfx_amount",
     "compose.voice_density",
     "compose.bed_density",
+    "compose.field_density",
     "compose.level_match",
     "compose.presence_match",
     "compose.audibility_match",
@@ -23886,6 +25335,97 @@
     "vocal.hall_send",
     "vocal.duck",
     "vocal.width",
+    "field.a_category",
+    "field.a_variation",
+    "field.a_level",
+    "field.a_pitch",
+    "field.a_fine",
+    "field.a_start",
+    "field.a_start_random",
+    "field.a_reverse",
+    "field.b_on",
+    "field.b_category",
+    "field.b_variation",
+    "field.b_level",
+    "field.b_pitch",
+    "field.b_fine",
+    "field.b_start",
+    "field.b_start_random",
+    "field.b_reverse",
+    "field.layer_mix",
+    "field.loop",
+    "field.loop_start",
+    "field.loop_end",
+    "field.loop_xfade",
+    "field.filter_model",
+    "field.filter_type",
+    "field.cutoff",
+    "field.resonance",
+    "field.env_amount",
+    "field.filter_mode",
+    "field.low_cut",
+    "field.filt_attack",
+    "field.filter_decay",
+    "field.filt_sustain",
+    "field.filt_release",
+    "field.amp_attack",
+    "field.amp_decay",
+    "field.amp_sustain",
+    "field.amp_release",
+    "field.menv_attack",
+    "field.menv_decay",
+    "field.menv_sustain",
+    "field.menv_release",
+    "field.lfo1_shape",
+    "field.lfo1_sync",
+    "field.lfo1_rate",
+    "field.lfo1_retrig",
+    "field.lfo1_fade",
+    "field.lfo2_shape",
+    "field.lfo2_sync",
+    "field.lfo2_rate",
+    "field.lfo2_retrig",
+    "field.lfo2_fade",
+    "field.lfo3_shape",
+    "field.lfo3_sync",
+    "field.lfo3_rate",
+    "field.lfo3_retrig",
+    "field.lfo3_fade",
+    "field.lfo4_shape",
+    "field.lfo4_sync",
+    "field.lfo4_rate",
+    "field.lfo4_retrig",
+    "field.lfo4_fade",
+    "field.mx1_src",
+    "field.mx1_dst",
+    "field.mx1_amount",
+    "field.mx2_src",
+    "field.mx2_dst",
+    "field.mx2_amount",
+    "field.mx3_src",
+    "field.mx3_dst",
+    "field.mx3_amount",
+    "field.mx4_src",
+    "field.mx4_dst",
+    "field.mx4_amount",
+    "field.mx5_src",
+    "field.mx5_dst",
+    "field.mx5_amount",
+    "field.mx6_src",
+    "field.mx6_dst",
+    "field.mx6_amount",
+    "field.mx7_src",
+    "field.mx7_dst",
+    "field.mx7_amount",
+    "field.mx8_src",
+    "field.mx8_dst",
+    "field.mx8_amount",
+    "field.width",
+    "field.pan",
+    "field.duck",
+    "field.room_send",
+    "field.plate_send",
+    "field.hall_send",
     "mix.kick_mute",
     "mix.bass_mute",
     "mix.perc_level",
@@ -23912,6 +25452,8 @@
     "mix.texture_mute",
     "mix.vocal_level",
     "mix.vocal_mute",
+    "mix.field_level",
+    "mix.field_mute",
     "mix.track_gain",
     "mix.duck_attack",
     "mix.duck_hold",

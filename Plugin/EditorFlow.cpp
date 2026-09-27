@@ -63,7 +63,7 @@ void SignalFlow::paint(juce::Graphics& g)
     };
 
     const juce::Colour setC = partColour(0), lowC = partColour(2), percC = partColour(4), acidC = partColour(5),
-                       lineC = partColour(6), spaceC = partColour(10), mixC = partColour(13);
+                       lineC = partColour(6), spaceC = partColour(10), mixC = partColour(TabMix);
 
     // ---- the composer: what a set is before it sounds
     node(20, 14, 960, 30, "COMPOSER   seed  ->  set arc (energy, style morph)  ->  tracks: key, tempo, style, form "
@@ -85,7 +85,9 @@ void SignalFlow::paint(juce::Graphics& g)
     node(30, 270, 432, 26, "Supersaw, VA, FM or wavetable  +  a second oscillator", lineC, 9.5f);
     node(30, 302, 432, 26, "State-variable filter or nine circuit models (Moog ... Wasp), at twice the rate", lineC, 9.5f);
     const auto voiceEnd = node(30, 334, 432, 26, "Amp, filter and mod envelopes  -  voice FX  -  delay", lineC, 9.5f);
-    const auto sfx = node(22, 376, 448, 40, "SFX, bed and voices\nrisers, zips, impacts, the sub drop  -  a shamanic texture  -  spoken phrases", spaceC, 9.5f);
+    const auto sfx = node(22, 376, 448, 19, "SFX, bed and voices: risers, zips, impacts, sub drop, shamanic texture, phrases, NASA shots", spaceC, 9.0f);
+    // 27.09.2026: the Field track, a sampler of field recordings (FieldPlayer.h).
+    const auto fieldNode = node(22, 400, 448, 19, "Field: recordings of places - two layers, crossfade loop, filter, envelopes", partColour(TabField), 9.0f);
     arrow({ 500.0f, 136.0f }, { 500.0f, 146.0f }, setC);
 
     // ---- the strips and the space
@@ -96,6 +98,7 @@ void SignalFlow::paint(juce::Graphics& g)
     arrow({ acid.getRight(), acid.getCentreY() }, { 500.0f, 198.0f }, acidC);
     arrow({ voiceEnd.getRight(), voiceEnd.getCentreY() }, { 500.0f, 200.0f }, lineC);
     arrow({ sfx.getRight(), sfx.getCentreY() }, { 500.0f, 202.0f }, spaceC);
+    arrow({ fieldNode.getRight(), fieldNode.getCentreY() }, { 500.0f, 203.0f }, partColour(TabField));
     // Sends and effects in one frame: every strip sends into it, and its returns join the master.
     frame(494, 212, 492, 98, "SPACE AND EFFECTS   sends and returns", spaceC);
     const auto room = node(500, 232, 110, 32, "Room\nthe near plane", spaceC, 9.0f);

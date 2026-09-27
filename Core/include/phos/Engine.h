@@ -68,6 +68,7 @@
 #include "phos/Acid.h"
 #include "phos/Bass.h"
 #include "phos/Dynamics.h"
+#include "phos/FieldPlayer.h"
 #include "phos/Loudness.h"
 #include "phos/Reverb.h"
 #include "phos/Sfx.h"
@@ -176,6 +177,10 @@ public:
     /** @} */
 
     Engine();
+    /** @brief Lets go of the field library's loader thread (FieldLibrary.h). */
+    ~Engine();
+    Engine(const Engine&) = delete;              ///< one engine holds one share of the loader thread
+    Engine& operator=(const Engine&) = delete;   ///< likewise
 
     /**
      * @brief Prepares for playback.
@@ -398,6 +403,12 @@ private:
     Vocal vocal_;   ///< the voices
     std::vector<float> texL_, texR_, vocL_, vocR_, vocThrow_, subBuf_, throwIn_, sendL_, sendR_;   ///< bed and voice outputs, the voices' throw weight, the sub drop, and the send buses of a segment
     std::vector<float> bedSendL_, bedSendR_;   ///< the bed's share of the modulation send (bedFx_)
+    /** @name The Field track (27.09.2026; FieldPlayer.h): the sampler on its own strip, and the NASA shots on the SFX strip's
+     *  @{ */
+    FieldPlayer field_;                        ///< the field recordings' sampler
+    FieldShot shot_;                           ///< the NASA shots (SfxType::SpaceShot)
+    std::vector<float> fieldL_, fieldR_;       ///< the sampler's output of a segment
+    /** @} */
 
     /**
      * @brief Channel strips of the parts after kick and bass, in this order. The six polyphonic strips
@@ -406,7 +417,7 @@ private:
      *        pad and drone keep holding underneath the glitch.
      */
     enum Strip : int { StripPerc = 0, StripAcid, StripLead, StripCounter, StripArp, StripStab, StripPad, StripDrone,
-                       StripSfx, StripTexture, StripVocal, StripCount };
+                       StripSfx, StripTexture, StripVocal, StripField, StripCount };
     static_assert(StripDrone - StripLead + 1 == kPolyInstances && StripStab - StripLead == static_cast<int>(PolyInstance::Stab),
                   "the polyphonic strips must follow PolyInstance");
     float stripGain_[StripCount] = {};   ///< each strip's gain (mute and level)

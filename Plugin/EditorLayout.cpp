@@ -82,12 +82,12 @@ void ControlPage::addParamCell(PhospheneProcessor& proc, int groupIndex, int par
             learnedMissing = isMelodyModel ? !models.melody : !models.bass;
         }
         for (int i = 0; d.choices != nullptr && i <= static_cast<int>(d.maxValue); ++i) {
-            juce::String text = d.choices[i];
-            if (isTable && waveTableIsLibrary(i) && !waveTableLoaded(i)) text += " (missing)";
+            juce::String item = d.choices[i];
+            if (isTable && waveTableIsLibrary(i) && !waveTableLoaded(i)) item += " (missing)";
             // Index 1 of both model lists is the learned draw; index 0 is the generator that is
             // always there (Params.cpp, kMelodyModelNames and kBassModelNames).
-            if (learnedMissing && i == 1) text += " (missing)";
-            cb->addItem(text, i + 1);
+            if (learnedMissing && i == 1) item += " (missing)";
+            cb->addItem(item, i + 1);
         }
         cb->setTooltip(juce::String(proc.params().key(paramId)));
         addAndMakeVisible(*cb);

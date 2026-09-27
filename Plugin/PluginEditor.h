@@ -37,7 +37,9 @@ enum Tab : int {
     TabSet = 0, TabArrange, TabKick, TabBass, TabPerc, TabAcid,
     // 19.09.2026: the polyphonic voices in their groups (Params.h, PolyInstance), each beside its partner.
     TabLead, TabCounter, TabArp, TabStab, TabPad, TabDrone,
-    TabFx, TabMix, TabPerform,
+    TabFx,
+    TabField,     ///< 27.09.2026: the field recordings' sampler (FieldPlayer.h)
+    TabMix, TabPerform,
     TabGallery,   ///< 23.09.2026: saved sets with their form, loaded with a click (EditorGallery.cpp)
     TabCount
 };
@@ -297,6 +299,12 @@ private:
      *        auditions it in the running set.
      */
     void addSfxPresetGroup(phosui::ControlPage& page, juce::Colour tint);
+    /** @brief The Field tab's preset menu and library line (27.09.2026; phos/FieldPresets.h). */
+    void addFieldPresetGroup(phosui::ControlPage& page, juce::Colour tint);
+    /** @brief Writes what the field library holds into fieldStatus_ (after a scan or a new folder). */
+    void refreshFieldStatus();
+    juce::Label* fieldStatus_ = nullptr;                 ///< the Field tab's library line (owned by its page)
+    std::unique_ptr<juce::FileChooser> fieldChooser_;   ///< the folder dialog while it is open
     std::vector<std::unique_ptr<PresetBox>> presetBoxes_;   ///< one per synth page
     std::unique_ptr<juce::AlertWindow> presetNameDialog_;   ///< "Save preset" asks for a name
     void timerCallback() override;

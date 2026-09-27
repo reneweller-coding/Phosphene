@@ -58,13 +58,20 @@ and the master. Along the bottom the modulation of every voice.
   mod matrix. For every track the composer picks a preset per synth by style — 1024 per synth, in
   sixteen named groups — and evens their loudness out.
 * **A twelve-lane percussion kit** with five synthesis engines, grooves and fills; **effects** —
-  risers, zips, impacts, a sub drop, a shamanic bed and spoken phrases — with flanger, phaser,
-  frequency shifter and stutter.
+  risers, zips, impacts, a sub drop, a shamanic bed, spoken phrases and NASA's sounds from space —
+  with flanger, phaser, frequency shifter and stutter.
+* **A Field track: a sampler for field recordings.** A place under the music — rainforest, a night
+  of insects, rain, a river, a cave, a machine hall, the wind on Mars — from 120 recordings in 30
+  categories and NASA's recordings, played as the original files: two layers, a loop joined by an
+  equal-power crossfade (so any stretch of any recording loops), amp and filter envelopes, the
+  synths' filter models and modulation, 160 presets. The composer draws a place per track by style
+  (Dark Forest always has one) under intros, breakdowns and outros. The recordings are an optional
+  2 GB download; without them everything else plays.
 * **Mixed and mastered as it plays.** A channel strip per part with the kick's sidechain duck, trance
   gate and distance; a room, a plate and a hall for near, middle and far; a level, presence and
   audibility match measured by rendering parts of each track ahead of time; bus compressor, mono
   bass, soft clipper, a true-peak limiter on a loudness target, and BS.1770 metering.
-* **The panel is yours.** Sixteen tabs generated from the engine's own parameter tables. The tab of a
+* **The panel is yours.** Seventeen tabs generated from the engine's own parameter tables. The tab of a
   synth shows the preset the composer plays; a thin bright **live ring** on every knob and fader shows
   where a value plays away from where it stands — a section opening a filter, the level match, an
   LFO — and turning a knob takes the sound over. An arrange timeline locks or rerolls any track or
@@ -76,18 +83,18 @@ and the master. Along the bottom the modulation of every voice.
 
 | | |
 |---|---|
-| ![Arrange](docs/screenshots/tab-1-arrange.png) | ![Mixer](docs/screenshots/tab-13-mixer-master.png) |
+| ![Arrange](docs/screenshots/tab-1-arrange.png) | ![Mixer](docs/screenshots/tab-14-mixer-master.png) |
 | The arrange timeline: every track and section of the set, lockable | The mixer: a strip per part; the bright tick is the level the composer plays |
 | ![Pad](docs/screenshots/tab-10-pad.png) | ![Acid](docs/screenshots/tab-5-acid.png) |
 | A voice: oscillators, filter model, envelopes, LFOs and matrix | The acid: a 303 with squelch, disperser and delay |
 
 ## What it does not do
 
-It does not play samples of instruments or loops: every sound except the spoken phrases is
-synthesized. It does not use a neural network to generate audio. It does not write lyrics, and it
+It does not play samples of instruments or loops: every sound except the spoken phrases and the
+Field track's recordings of places is synthesized. It does not use a neural network to generate audio. It does not write lyrics, and it
 does not imitate a named artist — the presets and styles are genres, not people.
 
-The design and the literature behind each building block are in [docs/PLAN.md](docs/PLAN.md)
+The design and the literature behind each building block are in [docs/PLAN.md](https://github.com/reneweller-coding/Phosphene/blob/master/docs/PLAN.md)
 (German); what each development round built, measured and decided is in the journal,
 [docs/rounds/](docs/rounds/) (German, one file per month).
 
@@ -219,7 +226,7 @@ render (waveform, one beat, spectrogram) and prints where in the beat the sub ba
 The whole generator runs on the headset: the composer plans the set on a small core, the engine
 synthesizes it on a big one, and the hands play it — pinch left for play/stop, pinch right for the
 next track, left hand height is the track gain and right hand height the acid cutoff. Native
-OpenXR, no game engine. Build and on-device checks: [Quest/README.md](Quest/README.md).
+OpenXR, no game engine. Build and on-device checks: [Quest/README.md](https://github.com/reneweller-coding/Phosphene/blob/master/Quest/README.md).
 
 ```powershell
 powershell -File Quest\fetch_thirdparty.ps1

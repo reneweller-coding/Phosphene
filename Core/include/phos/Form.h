@@ -422,6 +422,11 @@ struct FormPlan {
     int     bars = 0;                 ///< total length (a multiple of 32)
     int     body = 0;                 ///< which template the form was built from (Form.cpp, kTemplates)
     std::vector<SfxEvent> sfx;        ///< effects at the section boundaries, sorted by start
+    /**
+     * @brief The Field track's events (27.09.2026; placeField), sorted by start: a place under an intro, a breakdown,
+     *        an outro, in Dark Forest under a groove. `type` is unused; `variant` carries the velocity (1 .. 127).
+     */
+    std::vector<SfxEvent> field;
     /** @brief Bit per mode: which modes the melodic layer needs material for (bit @c trackScale always set). */
     uint32_t scaleMask = 0;
     /**
@@ -558,6 +563,23 @@ BarPlan planBar(const FormPlan& f, const PartAvailability& a, const uint64_t* se
  * @param bedDensity compose.bed_density: the same for the shamanic bed (bowls, didgeridoo, jaw harp)
  */
 void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity = 1.0f, float bedDensity = 1.0f);
+
+/**
+ * @brief The Field track's events and the NASA shots of a track (27.09.2026; FieldPlayer.h), after makeFormSfx.
+ *
+ * The field recordings are a place, so they sit where the floor leaves room for one: under the intro (from its first
+ * bar, over the DJ overlap -- the place changes with the track), over a breakdown to its last bar, in the outro up to
+ * the blend; in Dark Forest, and more rarely in Progressive, sixteen quiet bars under a long groove. Never in a
+ * build-up or a drop. How often follows the style (Dark Forest always, Hi-Tech least) times compose.field_density.
+ * The NASA shots are effects: one after the cut of a breakdown and one in a long intro, now and then -- most in
+ * Full-On and Hi-Tech -- and never within two bars of a voice. From streams of their own: nothing placed before moves.
+ * @param f       the track's form, after makeFormSfx (its field events and effects are appended)
+ * @param seed    the track's form seed
+ * @param style   the track's StyleId
+ * @param density compose.field_density
+ * @param amount  compose.sfx_amount (the shots)
+ */
+void placeField(FormPlan& f, uint64_t seed, int style, float density, float amount);
 
 /** @brief Whether a section is part of a track's core, a groove or a drop (the form's rules and the effects' placement). */
 inline bool isCore(SectionType t) { return t == SectionType::Groove || t == SectionType::Drop; }

@@ -4,6 +4,8 @@
  */
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "phos/FieldLibrary.h"
+#include "phos/FieldPresets.h"
 #include "phos/Probe.h"
 #include <thread>
 #include "phos/Clock.h"
@@ -1448,6 +1450,7 @@ void PhospheneProcessor::writeStateTo(juce::MemoryBlock& dest) const
     xml.setAttribute("followHost", followHost_);
     // The cue destination is not a parameter (a parameter is a float); the port and the switch are.
     xml.setAttribute("cueHost", cueHost());
+    xml.setAttribute("fieldFolder", fieldFolder_);   // 27.09.2026: the user's own field recordings
     // 20.09.2026, round "dialogue": only the knobs that differ from *this* build's defaults. A state
     // that held every value silently undid every default a later round recalibrated -- see kStateVersion
     // for the whole reasoning and for what it costs. "%.9g" still round-trips a float exactly, so a
@@ -1513,6 +1516,7 @@ void PhospheneProcessor::setStateInformation(const void* data, int sizeInBytes)
         midiMap_.fromText(mm->getAllSubText().toStdString(), [this](const std::string& k) { return midiTargetFind(k); });
     followHost_ = xml->getBoolAttribute("followHost", followHost_);
     setCueHost(xml->getStringAttribute("cueHost", cueHost()));
+    if (xml->getStringAttribute("fieldFolder") != fieldFolder_) setFieldFolder(xml->getStringAttribute("fieldFolder"));
     followHostAtomic_.store(followHost_, std::memory_order_release);
     const uint64_t s = static_cast<uint64_t>(xml->getStringAttribute("seed", "1").getLargeIntValue());
     setSeed(juce::jmax<uint64_t>(1, s));
@@ -1633,6 +1637,25 @@ void PhospheneProcessor::applyPreset(Module module, int instance, const SoundPre
         applySoundPreset(params(), module, instance, preset.text);
         params().set(params().base(Module::Mix) + mix::KickOwn + owner, 1.0f);
     });
+}
+
+void PhospheneProcessor::applyFieldPreset(int index)
+{
+    const std::vector<FieldPreset>& all = fieldPresets();
+    if (index < 0 || index >= static_cast<int>(all.size())) return;
+    const FieldPreset& fp = all[static_cast<size_t>(index)];
+    // A preset loaded by hand is the user's choice: its category is no longer Auto, so the composer leaves it alone.
+    undoable("Field preset " + juce::String(fp.name), [&] {
+        const int b = params().base(Module::Field);
+        for (const auto& kv : fieldPresetValues(params(), fp)) params().set(b + kv.first, kv.second);
+    });
+}
+
+void PhospheneProcessor::setFieldFolder(const juce::String& folder)
+{
+    fieldFolder_ = folder.trim();
+    setFieldUserFolder(fieldFolder_.toStdString());
+    scanFieldLibrary();
 }
 
 juce::File PhospheneProcessor::saveUserPreset(Module module, int instance, const juce::String& name)

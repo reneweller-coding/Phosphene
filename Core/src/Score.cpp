@@ -8,7 +8,7 @@
 namespace phos {
 
 const char* const kPartNames[kNumParts] = { "Kick", "Bass", "Perc", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone",
-                                            "Sfx", "Texture", "Vocal" };
+                                            "Sfx", "Texture", "Vocal", "Field" };
 const char* const kSectionNames[static_cast<int>(SectionType::Count)] = { "Intro", "Groove", "Build", "Drop", "Break", "Outro", "PDB", "Cut" };
 
 bool noteLess(const NoteEvent& a, const NoteEvent& b)

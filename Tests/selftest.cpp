@@ -239,6 +239,11 @@ int main(int argc, char** argv)
     run("testModulation.filterAdsr", testModulationFilterAdsr);
     run("testModulation.display", testModulationDisplay);
     run("testPresetBank", testPresetBank);
+    run("testField.loop", testFieldLoop);
+    run("testField.engine", testFieldEngine);
+    run("testField.form", testFieldForm);
+    run("testField.presets", testFieldPresets);
+    run("testField.noLibrary", testFieldNoLibrary);
     run("testGenreRules.listeningSeed", testGenreRulesListeningSeed);
     run("testGenreRules.arpGate", testGenreRulesArpGate);
     run("testFoundation.score", testFoundationScore);

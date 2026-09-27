@@ -38,6 +38,12 @@ set(PHOS_SELFTEST_SECONDS
     # 26.09.2026: the sections nobody had timed (they ran as 600 s "unmeasured"), each alone, six at a time, idle machine;
     # the four at 60 were stopped at 40 s (their true time is longer), testClimax and testPresence from ctest -R runs today.
     testMixGuide.matrix                   0.1
+    # 27.09.2026: the Field track (selftest_field.cpp), estimated until measured below.
+    testField.loop                        0.5
+    testField.engine                      0.5
+    testField.form                        2.0
+    testField.presets                     0.2
+    testField.noLibrary                   3.0
     testSfxToneIntervals                  0.1
     testMixGuide.planes                   0.1
     testDialogue.glide                    0.2

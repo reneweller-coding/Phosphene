@@ -85,6 +85,8 @@ enum class SfxType : int { Riser = 0, Downlifter, Impact, Sweep, FormantShot, Re
                            // 23.09.2026, round "SFX": the long, pad-like layer the user asked for ("flaechigere und
                            // laengere Effekte"): layered noise and detuned saws under a slow swell, two to eight bars.
                            Atmosphere,
+                           // 27.09.2026: a NASA recording up to 25 s, played whole (FieldPlayer.h, FieldShot).
+                           SpaceShot,
                            Count };
 constexpr int kNumSfxTypes = static_cast<int>(SfxType::Count);   ///< number of types
 constexpr int kSfxBaseNote = 48;                                   ///< MIDI note of the riser
@@ -171,7 +173,7 @@ constexpr Part sfxTypePart(SfxType t)
  * another layer with another job, and a groove carried by chant alone would otherwise satisfy a rule
  * that is about the candy. FormSfx.cpp's density floor keeps it.
  */
-constexpr bool isDensityEvent(SfxType t) { return sfxTypePart(t) == Part::Sfx; }
+constexpr bool isDensityEvent(SfxType t) { return sfxTypePart(t) == Part::Sfx && t != SfxType::SpaceShot; }
 
 /** @brief The part a note is played by: its own, or for an effect note the part of its type. */
 inline Part routedPart(const NoteEvent& e)

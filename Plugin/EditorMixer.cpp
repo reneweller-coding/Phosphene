@@ -68,6 +68,8 @@ std::vector<StripSpec> stripSpecs()
                     { { "texture.room_send", "Room" }, { "texture.hall_send", "Hall" }, { "texture.fx_send", "FX" }, { "texture.duck", "Duck" } } });
     out.push_back({ "Voices", TabFx, "mix.vocal_level", "mix.vocal_mute",
                     { { "vocal.hall_send", "Hall" }, { "vocal.fx_send", "FX" }, { "vocal.throw_send", "Throw" }, { "vocal.duck", "Duck" } } });
+    out.push_back({ "Field", TabField, "mix.field_level", "mix.field_mute",
+                    { { "field.pan", "Pan" }, { "field.room_send", "Room" }, { "field.hall_send", "Hall" }, { "field.duck", "Duck" } } });
     return out;
 }
 

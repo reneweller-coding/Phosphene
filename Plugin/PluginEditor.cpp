@@ -4,6 +4,9 @@
  */
 #include "PluginEditor.h"
 #include "phos/Composer.h"
+#include "phos/FieldLibrary.h"
+#include "phos/FieldPresets.h"
+#include <algorithm>
 #include <cmath>
 #include <map>
 
@@ -128,6 +131,22 @@ const std::vector<Section> kPolySectionsOwn = {
     { "Output", 3, { { "level", L }, { "duck", N } } },
 };
 const std::vector<Section> kPolySections = withModulation(kPolySectionsOwn, 7);   // after Amplifier
+// The Field track's sampler (27.09.2026, FieldPlayer.h): the two layers, the loop, the filter and the envelopes, the
+// synths' modulation block after the amplifier, and the strip's space.
+const std::vector<Section> kFieldSectionsOwn = {
+    { "Layer A", 6, { { "a_category", N }, { "a_variation", N }, { "a_level", L }, { "a_pitch", N }, { "a_fine", S },
+                      { "a_start", S }, { "a_start_random", S }, { "a_reverse", S } } },
+    { "Layer B", 6, { { "b_on", S }, { "b_category", N }, { "b_variation", N }, { "b_level", L }, { "b_pitch", N },
+                      { "b_fine", S }, { "b_start", S }, { "b_start_random", S }, { "b_reverse", S }, { "layer_mix", N } } },
+    { "Loop", 4, { { "loop", S }, { "loop_start", N }, { "loop_end", N }, { "loop_xfade", N } } },
+    { "Filter", 6, { { "filter_model", N }, { "filter_type", N }, { "cutoff", L }, { "resonance", L }, { "env_amount", N },
+                     { "filter_mode", S }, { "low_cut", S } } },
+    { "Filter Envelope", 4, { { "filt_attack", S }, { "filter_decay", S }, { "filt_sustain", S }, { "filt_release", S } } },
+    { "Amplifier", 4, { { "amp_attack", N }, { "amp_decay", N }, { "amp_sustain", N }, { "amp_release", N } } },
+    { "Space & Output", 5, { { "width", N }, { "pan", N }, { "duck", N }, { "room_send", S }, { "plate_send", S },
+                             { "hall_send", S } } },
+};
+const std::vector<Section> kFieldSections = withModulation(kFieldSectionsOwn, 6);   // after Amplifier
 // The effects page: the generator, then the three rooms of the mix guide -- A the room, B the plate, C the hall, each
 // with its own filters and pre-delay -- and the returns. The effect presets stand in a group of their own.
 const std::vector<Section> kSfxSections = {
@@ -409,7 +428,7 @@ void PatternDisplay::paint(juce::Graphics& g)
 const juce::StringArray& PhospheneEditor::tabNames()
 {
     static const juce::StringArray names{ "Set", "Arrange", "Kick", "Bass", "Percussion", "Acid",
-                                          "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "SFX / FX", "Mixer / Master", "Perform", "Gallery" };
+                                          "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "SFX / FX", "Field", "Mixer / Master", "Perform", "Gallery" };
     jassert(names.size() == TabCount);
     return names;
 }
@@ -518,6 +537,7 @@ Part partOfTab(int tab)
     case TabPad:     return Part::Pad;
     case TabDrone:   return Part::Drone;
     case TabFx:   return Part::Sfx;
+    case TabField: return Part::Field;
     default: return Part::Count;
     }
 }
@@ -563,6 +583,10 @@ void PhospheneEditor::buildPages()
             page->addModuleGroup(proc_, Module::PsyFx, 0, "Psy FX", tint, 4);
             page->addModuleGroup(proc_, Module::Texture, 0, "Shamanic Bed", tint, 5);
             page->addModuleGroup(proc_, Module::Vocal, 0, "Voices", tint, 5);
+            break;
+        case TabField:
+            addFieldPresetGroup(*page, tint);
+            addSections(*page, proc_, Module::Field, 0, kFieldSections, tint);
             break;
         case TabMix: {
             // 24.09.2026, the user: "Koennen wir im Mixer-Tab Meter fuer das Level fuer die einzelnen Kanalzuege
@@ -720,6 +744,70 @@ void PhospheneEditor::addSfxPresetGroup(ControlPage& page, juce::Colour tint)
         };
         page.addControl(g, std::move(play), " ", 1);   // a (blank) name line: the button gets a combo's height, not the cell's
     }
+}
+
+void PhospheneEditor::addFieldPresetGroup(ControlPage& page, juce::Colour tint)
+{
+    // 27.09.2026, the user: "Sollten wir für die vorhandenen Samples dann Presets schreiben, die einfach in den Sampler
+    // geladen werden können?" -- the factory presets by category and the scenes; choosing one sets the knobs (one undo
+    // step). Layer A's category back on Auto hands the choice to the composer again, a track at a time.
+    const int g = page.addGroup("Field Preset & Library", tint, 12);
+    auto box = std::make_unique<juce::ComboBox>();
+    box->setTextWhenNothingSelected("Load a preset...");
+    const std::vector<FieldPreset>& all = fieldPresets();
+    std::map<std::string, juce::PopupMenu> groups;
+    std::vector<std::string> order;
+    for (size_t i = 0; i < all.size(); ++i) {
+        const std::string grp = all[i].group;
+        if (groups.find(grp) == groups.end()) order.push_back(grp);
+        groups[grp].addItem(static_cast<int>(i) + 1, all[i].name);
+    }
+    // The scenes first: two recordings as one place is what most tracks want.
+    std::stable_partition(order.begin(), order.end(), [](const std::string& s) { return s == "Scenes"; });
+    for (const std::string& grp : order) box->getRootMenu()->addSubMenu(grp, groups[grp]);
+    box->setTooltip("Loads a factory preset into the Field knobs: its recordings, loop, envelopes, filter and space. "
+                    "Set A Category back to Auto to let the composer choose a place for every track again.");
+    juce::ComboBox* raw = box.get();
+    box->onChange = [this, raw] {
+        const int id = raw->getSelectedId();
+        if (id > 0) proc_.applyFieldPreset(id - 1);
+    };
+    page.addControl(g, std::move(box), "Preset", 4, false, 1);
+
+    auto status = std::make_unique<juce::Label>();
+    status->setJustificationType(juce::Justification::centredLeft);
+    status->setMinimumHorizontalScale(0.7f);
+    fieldStatus_ = status.get();
+    page.addControl(g, std::move(status), "Library", 6, false, 1);
+
+    auto folder = std::make_unique<juce::TextButton>("Folder...");
+    folder->setTooltip("Adds a folder of your own field recordings (FLAC, named fr-<category>-*.flac, e.g. Noctuary's "
+                       "FieldRecordings) beside the ones Phosphene installs. Cancel the dialog to remove it.");
+    folder->onClick = [this] {
+        fieldChooser_ = std::make_unique<juce::FileChooser>("Folder of field recordings", juce::File(proc_.fieldFolder()));
+        fieldChooser_->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                                   [this](const juce::FileChooser& fc) {
+                                       proc_.setFieldFolder(fc.getResult() == juce::File() ? juce::String() : fc.getResult().getFullPathName());
+                                       refreshFieldStatus();
+                                   });
+    };
+    page.addControl(g, std::move(folder), " ", 2);
+    refreshFieldStatus();
+}
+
+void PhospheneEditor::refreshFieldStatus()
+{
+    if (fieldStatus_ == nullptr) return;
+    const int n = scanFieldLibrary();
+    const std::vector<std::string> folders = fieldLibraryFolders();
+    juce::String where;
+    for (const std::string& f : folders) where << (where.isEmpty() ? "" : ", ") << juce::String(f);
+    // Without the recordings the program works as before: the Field track and the NASA shots are silent (the user:
+    // "achte darauf, dass das Programm auch dann funktioniert, wenn die Samples nicht heruntergeladen wurden").
+    fieldStatus_->setText(n > 0 ? juce::String(n) + " recordings (" + where + ")"
+                                : juce::String("No field recordings installed: the Field track stays silent. Install them with the setup, or add a folder."),
+                          juce::dontSendNotification);
+    fieldStatus_->setTooltip(fieldStatus_->getText());
 }
 
 juce::StringArray PhospheneEditor::parametersOnPages() const

@@ -527,4 +527,71 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity, f
         if (sfxTypePart(static_cast<SfxType>(e.type)) != Part::Sfx) e.variant = static_cast<uint8_t>(1 + vr.below(255));
 }
 
+void placeField(FormPlan& f, uint64_t seed, int style, float density, float amount)
+{
+    // How often a style has its place (StyleId order: Goa, Full-On, Progressive, Dark Forest, Hi-Tech): the forest
+    // styles live in one (the user: "insbesondere für Forest"), the machine styles only visit.
+    static const float kPlace[kNumStyles] = { 0.7f, 0.55f, 0.8f, 1.0f, 0.5f };
+    static const float kGroove[kNumStyles] = { 0.0f, 0.0f, 0.3f, 0.8f, 0.0f };
+    static const float kShot[kNumStyles] = { 0.4f, 0.6f, 0.25f, 0.15f, 0.5f };
+    const int st = std::clamp(style, 0, kNumStyles - 1);
+    const double bar = kBeatsPerBar;
+    const float d = std::max(0.0f, density);
+    Rng r;
+    r.seed(mixSeed(seed ^ kSaltBed, 0x4649454C44ull));
+    auto place = [&](double beat, int bars, int velocity) {
+        if (bars <= 0) return;
+        SfxEvent e;
+        e.beat = std::max(0.0, beat);
+        e.length = static_cast<float>(bars * bar);
+        e.variant = static_cast<uint16_t>(std::clamp(velocity, 1, 127));
+        f.field.push_back(e);
+    };
+    for (int i = 0; i < f.count; ++i) {
+        const Section& s = f.section[i];
+        const double start = static_cast<double>(s.startBar) * bar;
+        const float u = r.uniform();
+        switch (s.type) {
+        case SectionType::Intro: if (u < std::min(1.0f, 0.95f * kPlace[st] * d)) place(start, s.bars, 100); break;
+        case SectionType::Break: if (u < std::min(1.0f, 0.9f * kPlace[st] * d)) place(start, s.bars, 105); break;
+        case SectionType::Outro: {
+            const int live = s.bars - kDjOverlapMax;   // up to the blend: the next track's place takes over there
+            if (live >= 8 && u < std::min(1.0f, 0.75f * kPlace[st] * d)) place(start, live, 95);
+            break;
+        }
+        case SectionType::Groove:
+            for (int b = 8; b + 16 <= s.bars; b += 32)
+                if (r.uniform() < std::min(1.0f, kGroove[st] * d)) place(start + b * bar, 16, 50);   // under a groove: 6 dB under an intro's
+            break;
+        default: break;
+        }
+    }
+    // The NASA shots, away from the voices.
+    std::vector<double> voices;
+    for (const SfxEvent& e : f.sfx)
+        if (sfxTypePart(static_cast<SfxType>(std::clamp(e.type, 0, kNumSfxTypes - 1))) == Part::Vocal) voices.push_back(e.beat);
+    auto free = [&](double beat) {
+        for (double v : voices) if (std::fabs(v - beat) < 2.0 * bar) return false;
+        return true;
+    };
+    const float pShot = kShot[st] * std::min(1.0f, 2.0f * std::max(0.0f, amount));
+    for (int i = 0; i < f.count; ++i) {
+        const Section& s = f.section[i];
+        const double start = static_cast<double>(s.startBar) * bar;
+        const float u = r.uniform();
+        int at = -1;
+        if (s.type == SectionType::Break && s.bars >= 8 && u < pShot) at = 2;
+        if (s.type == SectionType::Intro && s.bars >= 16 && u < 0.5f * pShot) at = 8;
+        if (at < 0) continue;
+        for (int tries = 0; tries < 3 && !free(start + at * bar); ++tries) at += 4;
+        if (at + 2 > s.bars || !free(start + at * bar)) continue;
+        SfxEvent e;
+        e.beat = start + at * bar;
+        e.length = static_cast<float>(4.0 * bar);
+        e.type = static_cast<int>(SfxType::SpaceShot);
+        f.sfx.push_back(e);
+    }
+    std::stable_sort(f.sfx.begin(), f.sfx.end(), [](const SfxEvent& a, const SfxEvent& b) { return a.beat < b.beat; });
+}
+
 } // namespace phos

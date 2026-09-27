@@ -18,7 +18,9 @@ void testParams()
                        + static_cast<int>(acid::Count) + kPolyInstances * static_cast<int>(poly::Count)
                        + static_cast<int>(sfx::Count) + static_cast<int>(fx::Count) + static_cast<int>(cue::Count)
                        // 19.09.2026, round "fx-psychedelia": the bed, the voices, the modulation effects
-                       + static_cast<int>(texture::Count) + static_cast<int>(vocal::Count) + static_cast<int>(psyfx::Count);
+                       + static_cast<int>(texture::Count) + static_cast<int>(vocal::Count) + static_cast<int>(psyfx::Count)
+                       // 27.09.2026: the Field track's sampler
+                       + static_cast<int>(field::Count);
     check(p.count() == expected, "every module table registered", fmt("%d parameters", p.count()));
     check(p.find("lead.detune") == p.base(PolyInstance::Lead) + poly::Detune && p.find("arp.detune") == p.base(PolyInstance::Arp) + poly::Detune
           && p.find("acid.cutoff") == p.base(Module::Acid) + acid::Cutoff && p.get(p.find("arp.amp_sustain")) == 0.0f,

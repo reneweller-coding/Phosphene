@@ -12,7 +12,7 @@
 namespace phos {
 
 const char* const kStemNames[kNumStems] = { "Kick", "Bass", "Perc", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone",
-                                            "Sfx", "Texture", "Vocal", "Returns" };
+                                            "Sfx", "Texture", "Vocal", "Field", "Returns" };
 
 namespace {
 constexpr double kPiD = 3.141592653589793;
@@ -42,6 +42,7 @@ inline float kneeClip(float x, float T)
 
 Engine::Engine() : notes_(16384), controls_(16384), immediate_(256)
 {
+    retainFieldLoader();
     var_ = std::make_unique<Variation[]>(static_cast<size_t>(params_.count()));
     eff_.assign(static_cast<size_t>(params_.count()), 0.0f);
     raw_.assign(static_cast<size_t>(params_.count()), 0.0f);
@@ -107,6 +108,11 @@ void Engine::previewSfx(int choice, int preset)
     const double bps = beatsPerSample_ > 0.0 ? beatsPerSample_ : 145.0 / (60.0 * sr_);
     const int n = static_cast<int>(std::lround(static_cast<double>(kPresetPreviewBeats[choice]) / bps));
     sfx_.trigger(kPresetChoiceType[choice], std::max(1, n), 0.9f, 0.0, preset);
+}
+
+Engine::~Engine()
+{
+    releaseFieldLoader();
 }
 
 int Engine::takeMeters(float* peak, double* sumSq)
@@ -195,13 +201,19 @@ void Engine::prepare(double sampleRate, int /*maxBlockSize*/, const Quality& qua
     ensureVoiceTables();
     for (auto* b : { &sfxL_, &sfxR_, &sfxWetL_, &sfxWetR_, &roomInL_, &roomInR_, &hallInL_, &hallInR_, &roomOutL_, &roomOutR_, &hallOutL_, &hallOutR_,
                      &texL_, &texR_, &vocL_, &vocR_, &vocThrow_, &subBuf_, &throwIn_, &sendL_, &sendR_, &bedSendL_, &bedSendR_,
-                     &hallGateInL_, &hallGateInR_, &hallGateOutL_, &hallGateOutR_ })
+                     &hallGateInL_, &hallGateInR_, &hallGateOutL_, &hallGateOutR_, &fieldL_, &fieldR_ })
         b->assign(static_cast<size_t>(kChunk), 0.0f);
     acid_.prepare(sr_);
     acid_.setOversampling(quality_.acidOversampling);
     sfx_.prepare(sr_);
     texture_.prepare(sr_);
     vocal_.prepare(sr_);   // loads the voice pack on the first call (Vocal.h); never on the audio thread
+    // The field library (FieldLibrary.h): scanned here, never on the audio thread; the NASA shots asked for at once, so
+    // that the first one the score calls is in memory (a shot that is not is left out, FieldShot::trigger).
+    scanFieldLibrary();
+    for (int i = 0; i < fieldShotCount(); ++i) requestFieldClip(fieldShotIndex(i));
+    field_.prepare(sr_);
+    shot_.prepare(sr_);
     sfxFx_.prepare(sr_);
     sendFx_.prepare(sr_);
     bedFx_.prepare(sr_);
@@ -288,6 +300,8 @@ void Engine::reset()
     sfx_.reset();
     texture_.reset();
     vocal_.reset();
+    field_.reset();
+    shot_.reset();
     sfxFx_.reset();
     sendFx_.reset();
     bedFx_.reset();
@@ -566,6 +580,15 @@ void Engine::applyParams()
         duck_[StripVocal].set(e(vb + vocal::Duck), duckA, duckH, duckR);
         texture_.update(eff_.data() + tb, keyRoot_);
         vocal_.update(eff_.data() + vb, keyRoot_);
+        // The Field track's strip (27.09.2026): sends and duck on the sampler's own knobs, like the bed's.
+        const int flb = p.base(Module::Field);
+        stripGain_[StripField] = partGain(mix::FieldMute, mix::FieldLevel);
+        stripRoom_[StripField] = e(flb + field::RoomSend);
+        stripPlate_[StripField] = e(flb + field::PlateSend);
+        stripHall_[StripField] = e(flb + field::HallSend);
+        stripFx_[StripField] = 0.0f;
+        duck_[StripField].set(e(flb + field::Duck), duckA, duckH, duckR);
+        field_.update(eff_.data() + flb);
         sfxFx_.update(eff_.data() + xb);
         sendFx_.update(eff_.data() + xb);
         bedFx_.update(eff_.data() + xb);
@@ -751,6 +774,10 @@ void Engine::dispatch(const NoteEvent& e, double late)
             break;
         }
         default:
+            if (t == SfxType::SpaceShot) {
+                shot_.trigger(vel, late, pick);   // a NASA recording, whole (FieldPlayer.h)
+                break;
+            }
             if (t == SfxType::Stutter) {
                 // A sixteenth repeated, or a thirty-second for a stutter of half a beat or less.
                 const int slice = static_cast<int>(std::lround(spb * (e.length <= 0.5f ? 0.125 : 0.25)));
@@ -773,6 +800,14 @@ void Engine::dispatch(const NoteEvent& e, double late)
             applyMotion();
             break;
         }
+        break;
+    }
+    case Part::Field: {
+        // The field recordings (27.09.2026): the note's length is the event's, its pitch against middle C transposes it.
+        const double samples = static_cast<double>(e.length) / beatsPerSample_;
+        const uint64_t where = static_cast<uint64_t>(std::llround(e.beat * 16.0));
+        const uint64_t pick = mixSeed(where ^ (static_cast<uint64_t>(e.lane) << 40), 0x4649454C44ull);
+        field_.trigger(std::max(1, static_cast<int>(std::lround(samples))), vel, late, static_cast<int>(e.pitch) - 60, e.beat, pick);
         break;
     }
     default:
@@ -836,6 +871,8 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
     texture_.process(texL_.data(), texR_.data(), count);
     vocal_.process(vocL_.data(), vocR_.data(), vocThrow_.data(), count);
     const double beat0 = chunkBeat_ + static_cast<double>(chunkPos_) * beatsPerSample_;
+    field_.process(fieldL_.data(), fieldR_.data(), count, beat0, beatsPerSample_);
+    shot_.process(sfxL_.data(), sfxR_.data(), count);   // before the SFX strip's insert, like every effect
     // The SFX strip's insert: flanger, phaser, frequency shifter (PsyFx.h).
     sfxFx_.process(sfxL_.data(), sfxR_.data(), count, beat0, beatsPerSample_);
     const float kg = kickMute_ ? 0.0f : 1.0f, bg = bassMute_ ? 0.0f : 1.0f;
@@ -847,6 +884,7 @@ void Engine::renderSegment(float* L, float* R, int offset, int count)
     srcL[StripSfx] = sfxL_.data(); srcR[StripSfx] = sfxR_.data();
     srcL[StripTexture] = texL_.data(); srcR[StripTexture] = texR_.data();
     srcL[StripVocal] = vocL_.data(); srcR[StripVocal] = vocR_.data();
+    srcL[StripField] = fieldL_.data(); srcR[StripField] = fieldR_.data();
     float* outL = L + offset;
     float* outR = R + offset;
     for (int i = 0; i < count; ++i) {

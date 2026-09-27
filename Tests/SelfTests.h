@@ -124,6 +124,11 @@ void testModulationSync();   ///< selftest_modulation.cpp
 void testModulationFilterAdsr();   ///< selftest_modulation.cpp
 void testModulationDisplay();   ///< selftest_modulation.cpp
 void testPresetBank();   ///< selftest_modulation.cpp
+void testFieldLoop();   ///< selftest_field.cpp
+void testFieldEngine();   ///< selftest_field.cpp
+void testFieldForm();   ///< selftest_field.cpp
+void testFieldPresets();   ///< selftest_field.cpp
+void testFieldNoLibrary();   ///< selftest_field.cpp
 void testGenreRulesListeningSeed();   ///< selftest_arrangement.cpp
 void testGenreRulesArpGate();   ///< selftest_arrangement.cpp
 void testFoundationScore();   ///< selftest_arrangement.cpp

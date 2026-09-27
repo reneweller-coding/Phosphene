@@ -109,6 +109,7 @@ int midiChannelOf(Part part)
     case Part::Sfx:     return 8;
     case Part::Texture: return 10;   // the shamanic bed and the voices on their own channels
     case Part::Vocal:   return 11;
+    case Part::Field:   return 12;   // 27.09.2026: the field recordings
     default: return 15;
     }
 }

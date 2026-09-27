@@ -593,7 +593,7 @@ void testSfx()
                 std::vector<int> perType(static_cast<size_t>(kNumSfxTypes), 0);
                 for (const SfxEvent& e : t.form.sfx) {
                     if (sfxTypePart(static_cast<SfxType>(e.type)) != Part::Sfx || e.type == static_cast<int>(SfxType::Stutter)
-                        || e.type == static_cast<int>(SfxType::SubDrop)) continue;
+                        || e.type == static_cast<int>(SfxType::SubDrop) || e.type == static_cast<int>(SfxType::SpaceShot)) continue;   // no family: a NASA recording
                     ++events;
                     if (e.variant > 0) ++withPreset;
                     if (!seen.insert({ e.type, static_cast<int>(e.variant) }).second) { ++repeats; repeatDetail += fmt(" track %d %s #%d;", ti + 1, kSfxTypeNames[e.type], static_cast<int>(e.variant)); }
@@ -1170,9 +1170,9 @@ void testPsychedelia()
         for (float s : chant) eC += static_cast<double>(s) * s;
         resetVoicePack();
         const int again = loadVoicePack();
-        check(dec.size() == 3 && dec[0] == 11 && dec[1] == -19 && dec[2] == -15 && count == 31 && badMarks == 0 && shortest > 0.5 && longest < 4.0
+        check(dec.size() == 3 && dec[0] == 11 && dec[1] == -19 && dec[2] == -15 && count >= 150 && badMarks == 0 && shortest > 0.5 && longest < 20.0
                   && none == 0 && !why.empty() && eS == 0.0 && eC > 0.0 && again == count,
-              "the voice pack loads its 31 phrases, decodes as IMA ADPCM must, and without it only the spoken types fall silent",
+              "the voice pack loads its phrases (196 since 27.09.2026: NASA and radio whole), decodes as IMA ADPCM must, and without it only the spoken types fall silent",
               fmt("decoded %d %d %d; %d phrases of %.2f .. %.2f s, %d with bad marks; missing pack: %d loaded (\"%s\")",
                   dec.size() > 0 ? dec[0] : 0, dec.size() > 1 ? dec[1] : 0, dec.size() > 2 ? dec[2] : 0, count, shortest, longest, badMarks, none, why.c_str()));
     }
@@ -1185,7 +1185,7 @@ void testPsychedelia()
         std::vector<float> v = moduleValues(p, Module::Vocal);
         x.update(v.data(), 6);
         x.trigger(SfxType::SpokenWord, 1, 1.0f, 0.0, 20000.0, 3);
-        std::vector<float> L(48000 * 5), R(L.size()), T(L.size());
+        std::vector<float> L(48000 * 20), R(L.size()), T(L.size());   // 20 s: a radio phrase runs to 16 s (27.09.2026)
         x.process(L.data(), R.data(), T.data(), 24000);
         x.trigger(SfxType::SpokenWord, 1, 1.0f, 0.0, 20000.0, 4);
         const int during = x.active();

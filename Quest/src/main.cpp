@@ -40,6 +40,8 @@
  *               set=compose.bpm=146;compose.pad_amount=1     any knobs, repeatable
  *   library.phoswt   optional: a wavetable pack pushed to the device, used instead of the one in
  *                    the APK (see prepareWaveTables)
+ *   field/           optional: the Field track's recordings (27.09.2026), the desktop's `field` folder pushed as
+ *                    it is (`adb push field /sdcard/Android/data/com.reneweller.phosphene.quest/files/`)
  * @endcode
  *
  * **The shipped wavetable library** rides in the APK as an asset and is unpacked once into the
@@ -80,6 +82,7 @@
 #include "phos/Composer.h"
 #include "phos/Cue.h"
 #include "phos/Engine.h"
+#include "phos/FieldLibrary.h"
 #include "phos/Model.h"
 #include "phos/Quality.h"
 #include "phos/Vocal.h"
@@ -985,6 +988,11 @@ public:
         const std::string voices = prepareAsset(app_->activity->assetManager, app_->activity->internalDataPath,
                                                 dataDir_, kVoicePack, "voices");
         if (!voices.empty()) setVoicePackSearchPath(voices);
+        // The Field track's recordings (27.09.2026, FieldLibrary.h): a folder `field` pushed beside phos.cfg with adb --
+        // 2 GB of FLAC are not unpacked from an APK into a second copy. The cache stays under a third of the headset's
+        // memory. Without the folder the Field track and the NASA shots are silent and everything else plays.
+        setFieldSearchPath(dataDir_);
+        setFieldCacheBytes(size_t(512) * 1024 * 1024);
         prepareModels(app_->activity->assetManager, app_->activity->internalDataPath, dataDir_);
         // The cue bridge of PLAN 8.3, off unless phos.cfg names a host. A visualiser that is not
         // there changes nothing here: the datagrams go to a port nobody reads and the set plays on.

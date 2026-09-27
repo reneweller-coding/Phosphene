@@ -32,3 +32,7 @@ Deploy/manual-work/
 Deploy/data-files.iss
 # Logs of Deploy/build_release.ps1 runs (a failing run keeps build-release-failure-*.log).
 build-release*.log
+
+# The Field track's recordings (Tools/field_select.py): the original FLAC files, 1.8 GB, shipped by the release as a
+# component of its own; what is committed is the choice (Tools/field_selection.json) and the credits.
+Core/data/field/

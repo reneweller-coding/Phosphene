@@ -63,7 +63,7 @@ set(PHOS_PROBE_CACHE_DIR "${CMAKE_BINARY_DIR}/probe_cache")
 # The self test: every building block measured, and the engine as a whole.
 # selftest_probe.cpp: the sections of round "speed" (20.09.2026), registered in selftest.cpp's main() like the rest.
 add_executable(phos_selftest selftest.cpp selftest_probe.cpp
-    selftest_basics.cpp selftest_lowend.cpp selftest_synths.cpp selftest_mix.cpp selftest_composer.cpp selftest_arrangement.cpp selftest_mixguide.cpp selftest_modulation.cpp)
+    selftest_basics.cpp selftest_lowend.cpp selftest_synths.cpp selftest_mix.cpp selftest_composer.cpp selftest_arrangement.cpp selftest_mixguide.cpp selftest_modulation.cpp selftest_field.cpp)
 target_link_libraries(phos_selftest PRIVATE PhospheneCore)
 phos_test_data_dir(phos_selftest)
 phos_copy_data(phos_selftest ${PHOS_DATA_FILES})

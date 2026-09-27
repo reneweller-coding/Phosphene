@@ -63,6 +63,7 @@
  */
 #include "phos/SoundPresets.h"
 #include "phos/Audibility.h"
+#include "phos/FieldLibrary.h"
 #include "phos/Composer.h"
 #include "phos/Engine.h"
 #include "phos/Loudness.h"
@@ -417,6 +418,8 @@ bool readFile(const char* path, std::string& out)
 
 int main(int argc, char** argv)
 {
+    // An offline render waits for the Field track's recordings (FieldLibrary.h): the same seed, the same audio.
+    setFieldPreloadBlocking(true);
     int bars = 16;
     double seconds = -1.0;
     int sr = 48000, block = 256;
@@ -537,15 +540,15 @@ int main(int argc, char** argv)
     if (!solo.empty()) {
         // One entry per part, in the order of the Part enum (19.09.2026: the polyphonic voices in their groups).
         static const char* const kSoloNames[] = { "kick", "bass", "perc", "acid", "lead", "counter", "arp", "stab", "pad", "drone",
-                                                  "sfx", "texture", "vocal" };
+                                                  "sfx", "texture", "vocal", "field" };
         static const int kSoloMutes[] = { mix::KickMute, mix::BassMute, mix::PercMute, mix::AcidMute,
                                           mix::LeadMute, mix::CounterMute, mix::ArpMute, mix::StabMute, mix::PadMute, mix::DroneMute,
-                                          mix::SfxMute, mix::TextureMute, mix::VocalMute };
+                                          mix::SfxMute, mix::TextureMute, mix::VocalMute, mix::FieldMute };
         static_assert(sizeof(kSoloNames) / sizeof(kSoloNames[0]) == kNumParts, "one solo name per part");
         static_assert(sizeof(kSoloMutes) / sizeof(kSoloMutes[0]) == kNumParts, "one mute per part");
         int which = -1;
         for (int k = 0; k < kNumParts; ++k) if (solo == kSoloNames[k]) which = k;
-        if (which < 0) { std::fprintf(stderr, "--solo wants kick, bass, perc, acid, lead, counter, arp, stab, pad, drone, sfx, texture or vocal\n"); return 2; }
+        if (which < 0) { std::fprintf(stderr, "--solo wants kick, bass, perc, acid, lead, counter, arp, stab, pad, drone, sfx, texture, vocal or field\n"); return 2; }
         for (int k = 0; k < kNumParts; ++k) params.set(mb + kSoloMutes[k], k == which ? 0.0f : 1.0f);
         soloMutes.assign(std::begin(kSoloMutes), std::end(kSoloMutes));
         soloWhich = which;

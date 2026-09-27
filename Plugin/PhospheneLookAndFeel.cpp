@@ -10,13 +10,14 @@ namespace phosui {
 juce::Colour partColour(int index)
 {
     // In tab order (PluginEditor.h): Set, Arrange | Kick, Bass, Percussion | Acid | Lead, Counter, Arp, Stab |
-    // Pad, Drone, SFX / FX | Mixer, Perform, Gallery. See the palette's note in the header.
+    // Pad, Drone, SFX / FX | Field | Mixer, Perform, Gallery. See the palette's note in the header.
     static const juce::uint32 tabs[] = {
         0xffb9b3d6, 0xffc4bde4,                           // the set: lavender
         0xffff2e97, 0xffff4fa8, 0xffff6fbd,               // the low end: hot magenta
         0xffb8ff3c,                                       // the acid: acid green
         0xff22e4ff, 0xff3cc8ff, 0xff22f0d0, 0xff62b4ff,   // the lines: UV cyan
         0xff9b6bff, 0xff7d5cff, 0xffc46bff,               // the space: electric violet
+        0xffffb347,                                       // the field recordings: amber, the one warm colour (27.09.2026)
         0xffb9b3d6, 0xffc4bde4, 0xffaea8cc,               // mixer, perform, gallery: lavender
     };
     const int n = static_cast<int>(sizeof(tabs) / sizeof(tabs[0]));
@@ -25,8 +26,9 @@ juce::Colour partColour(int index)
 
 juce::Colour partColourOf(int part)
 {
-    // Score.h's parts run Kick .. Sfx in the tabs' order from TabKick (2); the bed and the voices live on the SFX tab.
-    return partColour(part <= 10 ? part + 2 : 12);
+    // Score.h's parts run Kick .. Sfx in the tabs' order from TabKick (2); the bed and the voices live on the SFX tab,
+    // the field recordings on a tab of their own after it (13).
+    return partColour(part <= 10 ? part + 2 : part == 13 ? 13 : 12);
 }
 
 juce::Colour cycleColour(int i)

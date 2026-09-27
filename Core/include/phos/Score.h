@@ -29,7 +29,9 @@ namespace phos {
  * so nothing saved depends on these values; the sort order of notes at equal beats does, and with it
  * every render, which the round accepted.
  */
-enum class Part : uint8_t { Kick = 0, Bass, Perc, Acid, Lead, Counter, Arp, Stab, Pad, Drone, Sfx, Texture, Vocal, Count };
+enum class Part : uint8_t { Kick = 0, Bass, Perc, Acid, Lead, Counter, Arp, Stab, Pad, Drone, Sfx, Texture, Vocal,
+                            Field,   ///< 27.09.2026: the field recordings' sampler (FieldPlayer.h). Appended.
+                            Count };
 constexpr int kNumParts = static_cast<int>(Part::Count);   ///< number of parts
 extern const char* const kPartNames[kNumParts];              ///< "Kick", "Bass", ...
 

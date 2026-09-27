@@ -20,6 +20,9 @@ add_library(PhospheneCore STATIC
     src/PsyFx.cpp
     src/Texture.cpp
     src/Vocal.cpp
+    src/FieldLibrary.cpp
+    src/FieldPlayer.cpp
+    src/FieldPresets.cpp
     src/Rhythm.cpp
     src/Form.cpp
     src/FormSfx.cpp
@@ -45,6 +48,8 @@ add_library(PhospheneCore STATIC
     src/Engine.cpp
 )
 target_include_directories(PhospheneCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# dr_flac (public domain / MIT-0), for the Field track's original recordings (FieldLibrary.cpp).
+target_include_directories(PhospheneCore PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 # Where the shipped data lies in the source tree: the wavetable pack and the two learned models of
 # Phase 8. It is the *last* place WaveTableFile.cpp and NeuralModel::load() look -- after the host's
 # own resource directory (setWaveTableSearchPath() / setModelSearchPath(), which the plugin and the

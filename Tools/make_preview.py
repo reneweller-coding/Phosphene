@@ -18,7 +18,7 @@ NAME = (164, 107, 255)       # the plugin's colour, UV violet (phosui::accent)
 TEXT = (236, 234, 246)
 SMALL = (163, 157, 194)
 FRAME = (43, 38, 65)
-SHOTS = ["tab-0-set.png", "tab-1-arrange.png", "tab-13-mixer-master.png", "tab-10-pad.png"]
+SHOTS = ["tab-0-set.png", "tab-1-arrange.png", "tab-14-mixer-master.png", "tab-10-pad.png"]
 
 
 def font(name, size):

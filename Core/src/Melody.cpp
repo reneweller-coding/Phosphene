@@ -952,8 +952,8 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
             if (!taken.clear(st.first, pitch, pitch)) {
                 int alt = -1;
                 for (int d : { 12, -12, 24 }) {
-                    const int c = pitch + d;
-                    if (c >= kArpLowest && c <= guardCeiling && taken.clear(st.first, c, c)) { alt = c; break; }
+                    const int cand = pitch + d;
+                    if (cand >= kArpLowest && cand <= guardCeiling && taken.clear(st.first, cand, cand)) { alt = cand; break; }
                 }
                 if (alt < 0) continue;
                 pitch = alt;
@@ -1073,6 +1073,19 @@ void composeSfxBar(const FormPlan& f, double trackBeat, int barInTrack, std::vec
         e.lane = s.variant;
         e.pitch = static_cast<uint8_t>(kSfxBaseNote + s.type);
         e.velocity = 110;
+        out.push_back(e);
+    }
+    // The Field track (27.09.2026, Form.h FormPlan::field): a place, at middle C (no transposition), its velocity in
+    // the variant.
+    for (const SfxEvent& s : f.field) {
+        if (static_cast<int>(std::floor(s.beat / kBeatsPerBar)) != barInTrack) continue;
+        NoteEvent e;
+        e.beat = trackBeat + s.beat;
+        e.length = s.length;
+        e.part = Part::Field;
+        e.lane = 0;
+        e.pitch = 60;
+        e.velocity = static_cast<uint8_t>(std::clamp(static_cast<int>(s.variant), 1, 127));
         out.push_back(e);
     }
 }

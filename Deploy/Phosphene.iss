@@ -37,6 +37,15 @@
 ; A download that fails does not cost the installation: the question is "install without the data?",
 ; and without it the engine falls back to its six built-in wavetables and the Markov composer and says
 ; so on the Set tab.
+;
+; THE FIELD RECORDINGS (27.09.2026) are a component of their own, on by default: 1.97 GB of original FLAC files
+; (Tools\field_select.py), in two archives of a release of their own (field-data-<set>, Tools\field_archives.py),
+; so a new version of the program does not upload them again. They are unpacked once, into
+; {autoappdata}\Phosphene\field -- ProgramData for a machine-wide install, AppData for "just for me" --, where
+; the standalone and the plug-in both look (FieldLibrary.cpp), instead of twice as the data above. Recognised by
+; the hash of field\CREDITS-field.md: an installed set is not downloaded again. Without them the program works
+; as before and the Field track and the NASA shots are silent (the user: "achte darauf, dass das Programm auch
+; dann funktioniert, wenn die Samples nicht heruntergeladen wurden").
 
 #ifndef Version
   #define Version "1.1.0"
@@ -50,6 +59,8 @@
   #define DataBaseUrl "https://github.com/reneweller-coding/Phosphene/releases/download/v" + Version
 #endif
 #include "data-files.iss"
+; The Field track's recordings (27.09.2026): a release of their own, written by Tools\field_archives.py.
+#include "field-files.iss"
 
 [Setup]
 AppId={{2F6A4D91-8C13-47B5-A0E2-5D7C9B814E33}
@@ -98,6 +109,8 @@ en.CompManual=Manual (PDF)
 en.CompQuest=Meta Quest app (APK, installed with adb)
 en.TaskDesktop=Create a desktop shortcut
 en.CompData=Wavetables, learned models and voices (downloaded if not installed yet)
+en.CompField=Field recordings for the Field track, {#FieldSizeMB} MB (downloaded if not installed yet)
+en.FieldDownloadFailed=The field recordings could not be downloaded:%n%n%1%n%nInstall Phosphene without them? Everything plays; only the Field track and the NASA shots stay silent. Running this setup again later fetches them.
 en.DownloadFailed=The data could not be downloaded:%n%n%1%n%nInstall Phosphene without it? It then plays with its six built-in wavetables and the Markov composer; running this setup again later fetches the data.
 en.NoAvx2=This processor reports no AVX2 support.%n%nPhosphene is built for AVX2, which every x86-64 processor since 2013 has. Without it, it will not start.%n%nInstall anyway?
 de.CompStandalone=Eigenstaendiges Programm
@@ -107,6 +120,8 @@ de.CompManual=Handbuch (PDF)
 de.CompQuest=Meta-Quest-App (APK, wird mit adb installiert)
 de.TaskDesktop=Verknuepfung auf dem Desktop anlegen
 de.CompData=Wavetables, gelernte Modelle und Stimmen (werden geladen, falls noch nicht installiert)
+de.CompField=Field Recordings fuer die Field-Spur, {#FieldSizeMB} MB (werden geladen, falls noch nicht installiert)
+de.FieldDownloadFailed=Die Field Recordings konnten nicht geladen werden:%n%n%1%n%nPhosphene ohne sie installieren? Alles spielt; nur die Field-Spur und die NASA-Shots bleiben still. Ein spaeterer Lauf dieses Setups holt sie nach.
 de.DownloadFailed=Die Daten konnten nicht geladen werden:%n%n%1%n%nPhosphene ohne sie installieren? Es spielt dann mit seinen sechs eingebauten Wavetables und dem Markov-Komponisten; ein spaeterer Lauf dieses Setups holt die Daten nach.
 de.NoAvx2=Dieser Prozessor meldet keine AVX2-Unterstuetzung.%n%nPhosphene ist fuer AVX2 gebaut, das jeder x86-64-Prozessor seit 2013 hat. Ohne AVX2 startet es nicht.%n%nTrotzdem installieren?
 
@@ -121,6 +136,7 @@ Name: "render";     Description: "{cm:CompRender}";     Types: full custom
 Name: "manual";     Description: "{cm:CompManual}";     Types: full custom
 Name: "quest";      Description: "{cm:CompQuest}";      Types: full custom
 Name: "data";       Description: "{cm:CompData}";       Types: full custom
+Name: "field";      Description: "{cm:CompField}";      Types: full custom; ExtraDiskSpaceRequired: 2000000000
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:TaskDesktop}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; Components: standalone
@@ -156,6 +172,11 @@ Source: "{tmp}\{#DataZip}"; DestDir: "{app}"; Components: data; Check: DataFetch
 Source: "{tmp}\{#DataZip}"; DestDir: "{autocf}\VST3\Phosphene.vst3\Contents\Resources"; Components: data and vst3; Check: DataFetched; \
     Flags: external extractarchive recursesubdirs ignoreversion
 Source: "{app}\library.phoswt"; DestDir: "{autocf}\VST3\Phosphene.vst3\Contents\Resources"; Components: data and vst3; Check: DataReused; Flags: external ignoreversion
+; The field recordings: both archives into one folder (their paths start with field\).
+Source: "{tmp}\{#FieldZipA}"; DestDir: "{autoappdata}\Phosphene"; Components: field; Check: FieldFetched; \
+    Flags: external extractarchive recursesubdirs ignoreversion
+Source: "{tmp}\{#FieldZipB}"; DestDir: "{autoappdata}\Phosphene"; Components: field; Check: FieldFetched; \
+    Flags: external extractarchive recursesubdirs ignoreversion
 Source: "{app}\melody.phosmdl"; DestDir: "{autocf}\VST3\Phosphene.vst3\Contents\Resources"; Components: data and vst3; Check: DataReused; Flags: external ignoreversion
 Source: "{app}\bass.phosmdl";   DestDir: "{autocf}\VST3\Phosphene.vst3\Contents\Resources"; Components: data and vst3; Check: DataReused; Flags: external ignoreversion
 Source: "{app}\voices.phosvx";  DestDir: "{autocf}\VST3\Phosphene.vst3\Contents\Resources"; Components: data and vst3; Check: DataReused; Flags: external ignoreversion
@@ -197,15 +218,74 @@ Type: files;          Name: "{app}\CREDITS-voices.md"
 Type: files;          Name: "{app}\Phosphene-Manual.pdf"
 Type: files;          Name: "{app}\PhospheneQuest.apk"
 Type: files;          Name: "{app}\phosphene.ico"
+Type: filesandordirs; Name: "{autoappdata}\Phosphene\field"
 
 [Code]
 var
   DownloadPage: TDownloadWizardPage;
   DataState: Integer;   // 0 not decided / no data, 1 fetched (downloaded or found beside the setup), 2 reused
+  FieldState: Integer;  // the same for the field recordings (27.09.2026)
 
 function DataFetched: Boolean; begin Result := DataState = 1; end;
 function DataReused: Boolean;  begin Result := DataState = 2; end;
 function DataReplaced: Boolean; begin Result := DataState = 1; end;
+function FieldFetched: Boolean; begin Result := FieldState = 1; end;
+
+// The field recordings of this set are installed: their credits file carries the set's hash.
+function FieldAlreadyInstalled: Boolean;
+var
+  F: String;
+begin
+  Result := False;
+  F := ExpandConstant('{autoappdata}\Phosphene\field\CREDITS-field.md');
+  if not FileExists(F) then Exit;
+  try
+    Result := CompareText(GetSHA256OfFile(F), '{#FieldMarkerSha256}') = 0;
+  except
+    Result := False;
+  end;
+end;
+
+// One archive of the set: from beside the setup when it is there with the right hash, else to be downloaded.
+function FieldLocal(const Name, Hash: String): Boolean;
+var
+  Local: String;
+begin
+  Result := False;
+  Local := ExpandConstant('{src}\') + Name;
+  if FileExists(Local) and (CompareText(GetSHA256OfFile(Local), Hash) = 0) then
+    Result := FileCopy(Local, ExpandConstant('{tmp}\') + Name, False);
+end;
+
+function FetchField: Boolean;
+var
+  NeedA, NeedB: Boolean;
+begin
+  Result := True;
+  FieldState := 0;
+  if FieldAlreadyInstalled then Exit;
+  NeedA := not FieldLocal('{#FieldZipA}', '{#FieldZipASha256}');
+  NeedB := not FieldLocal('{#FieldZipB}', '{#FieldZipBSha256}');
+  if not (NeedA or NeedB) then begin FieldState := 1; Exit; end;
+  DownloadPage.Clear;
+  if NeedA then DownloadPage.Add('{#FieldBaseUrl}/{#FieldZipA}', '{#FieldZipA}', '{#FieldZipASha256}');
+  if NeedB then DownloadPage.Add('{#FieldBaseUrl}/{#FieldZipB}', '{#FieldZipB}', '{#FieldZipBSha256}');
+  DownloadPage.Show;
+  try
+    try
+      DownloadPage.Download;
+      FieldState := 1;
+    except
+      if DownloadPage.AbortedByUser then
+        Result := False
+      else
+        Result := SuppressibleMsgBox(FmtMessage(CustomMessage('FieldDownloadFailed'), [GetExceptionMessage]),
+                                     mbError, MB_YESNO or MB_DEFBUTTON1, IDYES) = IDYES;
+    end;
+  finally
+    DownloadPage.Hide;
+  end;
+end;
 
 // Every data file in {app} with the hash this release expects.
 function DataAlreadyInstalled: Boolean;
@@ -239,6 +319,7 @@ begin
   DownloadPage := CreateDownloadPage(SetupMessage(msgWizardPreparing), SetupMessage(msgPreparingDesc), nil);
   DownloadPage.ShowBaseNameInsteadOfUrl := True;
   DataState := 0;
+  FieldState := 0;
 end;
 
 // At "Ready": reuse what is installed, else take the archive from beside the setup, else download it.
@@ -247,7 +328,13 @@ var
   Local: String;
 begin
   Result := True;
-  if (CurPageID <> wpReady) or not WizardIsComponentSelected('data') then Exit;
+  if CurPageID <> wpReady then Exit;
+  // The field recordings first: their own archives, their own question when the download fails.
+  if WizardIsComponentSelected('field') then begin
+    Result := FetchField;
+    if not Result then Exit;
+  end;
+  if not WizardIsComponentSelected('data') then Exit;
   DataState := 0;
   if DataAlreadyInstalled then begin
     DataState := 2;

@@ -13,7 +13,7 @@ namespace phos {
 const char* const kSfxTypeNames[kNumSfxTypes] = { "Riser", "Downlifter", "Impact", "Sweep", "Formant Shot", "Reverse Swell", "Zap",
                                                   "Squelch", "Bubble", "Stutter", "Sub Drop", "Reverse Crash",
                                                   "Formant Voice", "Alien Chatter", "Spoken Word", "Voice Chop",
-                                                  "Singing Bowl", "Didgeridoo", "Jaw Harp", "Atmosphere" };
+                                                  "Singing Bowl", "Didgeridoo", "Jaw Harp", "Atmosphere", "Space Shot" };
 
 namespace {
 constexpr double kPiD = 3.141592653589793;
@@ -50,6 +50,7 @@ constexpr float kTypeGainDb[] = {
      0.0f, 0.0f, 0.0f, 0.0f,   // Vocal types
      0.0f, 0.0f, 0.0f,         // Texture types
     -5.0f,    // Atmosphere (23.09.2026): a background layer, under the candy
+     0.0f,    // Space shot (27.09.2026): played by the Field track's FieldShot, not by this generator
 };
 static_assert(sizeof(kTypeGainDb) / sizeof(kTypeGainDb[0]) == kNumSfxTypes, "one gain per effect type");
 /** @brief Band-pass output of an SVF at unity gain in the centre. */
@@ -131,7 +132,7 @@ int Sfx::active() const
 void Sfx::trigger(SfxType type, int samples, float velocity, double late, int preset)
 {
     // The stutter is the engine's, and the voices and the bed have generators of their own.
-    if (type == SfxType::Stutter || sfxTypePart(type) != Part::Sfx || type >= SfxType::Count) return;
+    if (type == SfxType::Stutter || type == SfxType::SpaceShot || sfxTypePart(type) != Part::Sfx || type >= SfxType::Count) return;
     // The page's choice for the family, where it is not Auto (24.09.2026, sfx.preset_*).
     const int choice = sfxPresetChoice(type);
     if (choice >= 0 && fixed_[choice] > 0) preset = fixed_[choice];

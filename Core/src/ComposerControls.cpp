@@ -2,6 +2,8 @@
  * @file ComposerControls.cpp
  * @brief The control events of a plan: a track's sound at its start, the sections' rides, the arcs, the drone's evolution, and the recipe offsets behind them.
  */
+#include "phos/FieldLibrary.h"
+#include "phos/FieldPresets.h"
 #include <limits>
 #include "phos/SoundPresets.h"
 #include "phos/Composer.h"
@@ -395,6 +397,28 @@ void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, do
     // The loudness offset of Auto Gain, in the normalised domain of master.gain's 36 dB range.
     const ParamDesc& mg = p.desc(p.base(Module::Master) + master::Gain);
     if (floor) push(p.base(Module::Master) + master::Gain, ControlEvent::Kind::Offset, plan.masterGainDb / (mg.maxValue - mg.minValue));
+    // The Field track's place (27.09.2026; FieldPresets.h), with the voices: with layer A's category on Auto the
+    // composer plays a preset drawn by the track's style -- every knob of the module as a base or an override, so the
+    // knobs stay as the user left them -- and asks the library for its recordings now, a track ahead of their first
+    // note. A category the user chose is theirs: whatever a track before set is cleared, and the knobs play.
+    if (voices) {
+        const int fb = p.base(Module::Field);
+        for (int i = 0; i < field::Count; ++i) {
+            if (isDiscreteCurve(p.desc(fb + i).curve)) push(fb + i, ControlEvent::Kind::Override, -1.0f);
+            else { push(fb + i, ControlEvent::Kind::Base, 0.0f); out.back().length = -1.0f; }
+        }
+        const int fp = p.getInt(fb + field::ACategory) == 0 ? fieldPresetFor(plan.style, mixSeed(plan.formSeed, 0x4649454C44ull)) : -1;
+        if (fp >= 0) {
+            const FieldPreset& preset = fieldPresets()[static_cast<size_t>(fp)];
+            for (const auto& kv : fieldPresetValues(p, preset)) {
+                const int id = fb + kv.first;
+                push(id, isDiscreteCurve(p.desc(id).curve) ? ControlEvent::Kind::Override : ControlEvent::Kind::Base, kv.second);
+            }
+            preloadFieldClip(fieldClipIndex(preset.categoryA, fieldPresetVariation(preset.categoryA, preset.fileA, preset.variationA)));
+            if (preset.categoryB >= 0)
+                preloadFieldClip(fieldClipIndex(preset.categoryB, fieldPresetVariation(preset.categoryB, preset.fileB, preset.variationB)));
+        }
+    }
     // The track's presets (26.09.2026), last, so they win over what the clearing and the recipes wrote at this beat:
     // every value a preset sets, the continuous ones as bases, the discrete ones as overrides.
     presetSynths([&](int k) {

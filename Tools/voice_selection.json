@@ -6,7 +6,8 @@
   "start": 0.0,
   "end": 1.76,
   "last_word": 1.18,
-  "first_word_end": 0.58
+  "first_word_end": 0.58,
+  "hand": true
  },
  {
   "category": 0,
@@ -15,7 +16,8 @@
   "start": 12.5,
   "end": 13.62,
   "last_word": 13.22,
-  "first_word_end": 12.62
+  "first_word_end": 12.62,
+  "hand": true
  },
  {
   "category": 0,
@@ -24,7 +26,8 @@
   "start": 3.88,
   "end": 6.44,
   "last_word": 6.04,
-  "first_word_end": 4.5
+  "first_word_end": 4.5,
+  "hand": true
  },
  {
   "category": 0,
@@ -33,7 +36,8 @@
   "start": 1.04,
   "end": 2.22,
   "last_word": 1.96,
-  "first_word_end": 1.36
+  "first_word_end": 1.36,
+  "hand": true
  },
  {
   "category": 0,
@@ -42,7 +46,8 @@
   "start": 9.6,
   "end": 11.58,
   "last_word": 11.36,
-  "first_word_end": 10.18
+  "first_word_end": 10.18,
+  "hand": true
  },
  {
   "category": 0,
@@ -51,7 +56,8 @@
   "start": 7.14,
   "end": 8.48,
   "last_word": 8.2,
-  "first_word_end": 7.52
+  "first_word_end": 7.52,
+  "hand": true
  },
  {
   "category": 0,
@@ -60,7 +66,8 @@
   "start": 0.0,
   "end": 1.8,
   "last_word": 1.52,
-  "first_word_end": 0.28
+  "first_word_end": 0.28,
+  "hand": true
  },
  {
   "category": 0,
@@ -69,7 +76,8 @@
   "start": 12.64,
   "end": 15.28,
   "last_word": 14.8,
-  "first_word_end": 12.84
+  "first_word_end": 12.84,
+  "hand": true
  },
  {
   "category": 0,
@@ -78,7 +86,8 @@
   "start": 0.0,
   "end": 1.66,
   "last_word": 1.36,
-  "first_word_end": 0.28
+  "first_word_end": 0.28,
+  "hand": true
  },
  {
   "category": 0,
@@ -87,7 +96,8 @@
   "start": 2.24,
   "end": 3.1,
   "last_word": 2.66,
-  "first_word_end": 2.38
+  "first_word_end": 2.38,
+  "hand": true
  },
  {
   "category": 0,
@@ -96,7 +106,8 @@
   "start": 3.34,
   "end": 4.56,
   "last_word": 4.1,
-  "first_word_end": 3.62
+  "first_word_end": 3.62,
+  "hand": true
  },
  {
   "category": 0,
@@ -105,7 +116,8 @@
   "start": 0.0,
   "end": 1.78,
   "last_word": 1.16,
-  "first_word_end": 0.34
+  "first_word_end": 0.34,
+  "hand": true
  },
  {
   "category": 0,
@@ -114,7 +126,8 @@
   "start": 3.78,
   "end": 5.32,
   "last_word": 5.02,
-  "first_word_end": 4.1
+  "first_word_end": 4.1,
+  "hand": true
  },
  {
   "category": 0,
@@ -123,7 +136,8 @@
   "start": 4.34,
   "end": 5.34,
   "last_word": 5.08,
-  "first_word_end": 4.48
+  "first_word_end": 4.48,
+  "hand": true
  },
  {
   "category": 0,
@@ -132,7 +146,8 @@
   "start": 0.44,
   "end": 2.34,
   "last_word": 1.96,
-  "first_word_end": 0.56
+  "first_word_end": 0.56,
+  "hand": true
  },
  {
   "category": 0,
@@ -141,7 +156,8 @@
   "start": 1.66,
   "end": 2.94,
   "last_word": 2.76,
-  "first_word_end": 2.16
+  "first_word_end": 2.16,
+  "hand": true
  },
  {
   "category": 0,
@@ -150,7 +166,8 @@
   "start": 6.82,
   "end": 8.28,
   "last_word": 8.0,
-  "first_word_end": 7.24
+  "first_word_end": 7.24,
+  "hand": true
  },
  {
   "category": 0,
@@ -159,7 +176,8 @@
   "start": 6.92,
   "end": 8.94,
   "last_word": 8.64,
-  "first_word_end": 7.42
+  "first_word_end": 7.42,
+  "hand": true
  },
  {
   "category": 0,
@@ -168,7 +186,8 @@
   "start": 17.74,
   "end": 19.48,
   "last_word": 19.22,
-  "first_word_end": 18.06
+  "first_word_end": 18.06,
+  "hand": true
  },
  {
   "category": 0,
@@ -177,7 +196,8 @@
   "start": 5.44,
   "end": 8.2,
   "last_word": 7.62,
-  "first_word_end": 6.04
+  "first_word_end": 6.04,
+  "hand": true
  },
  {
   "category": 0,
@@ -186,7 +206,8 @@
   "start": 11.82,
   "end": 13.44,
   "last_word": 13.06,
-  "first_word_end": 11.9
+  "first_word_end": 11.9,
+  "hand": true
  },
  {
   "category": 1,
@@ -195,7 +216,8 @@
   "start": 0.0,
   "end": 0.8,
   "last_word": 0.44,
-  "first_word_end": 0.08
+  "first_word_end": 0.08,
+  "hand": true
  },
  {
   "category": 1,
@@ -204,7 +226,8 @@
   "start": 5.92,
   "end": 8.86,
   "last_word": 8.32,
-  "first_word_end": 6.16
+  "first_word_end": 6.16,
+  "hand": true
  },
  {
   "category": 1,
@@ -213,7 +236,8 @@
   "start": 0.0,
   "end": 0.76,
   "last_word": 0.56,
-  "first_word_end": 0.12
+  "first_word_end": 0.12,
+  "hand": true
  },
  {
   "category": 1,
@@ -222,7 +246,8 @@
   "start": 2.32,
   "end": 3.7,
   "last_word": 3.48,
-  "first_word_end": 2.48
+  "first_word_end": 2.48,
+  "hand": true
  },
  {
   "category": 1,
@@ -231,7 +256,8 @@
   "start": 1.26,
   "end": 4.48,
   "last_word": 4.16,
-  "first_word_end": 1.44
+  "first_word_end": 1.44,
+  "hand": true
  },
  {
   "category": 1,
@@ -240,7 +266,8 @@
   "start": 1.7,
   "end": 3.18,
   "last_word": 2.66,
-  "first_word_end": 1.82
+  "first_word_end": 1.82,
+  "hand": true
  },
  {
   "category": 1,
@@ -249,7 +276,8 @@
   "start": 7.76,
   "end": 10.36,
   "last_word": 10.04,
-  "first_word_end": 8.34
+  "first_word_end": 8.34,
+  "hand": true
  },
  {
   "category": 1,
@@ -258,7 +286,8 @@
   "start": 0.0,
   "end": 1.4,
   "last_word": 1.08,
-  "first_word_end": 0.1
+  "first_word_end": 0.1,
+  "hand": true
  },
  {
   "category": 1,
@@ -267,7 +296,8 @@
   "start": 14.3,
   "end": 16.7,
   "last_word": 16.34,
-  "first_word_end": 15.08
+  "first_word_end": 15.08,
+  "hand": true
  },
  {
   "category": 1,
@@ -276,6 +306,1657 @@
   "start": 18.82,
   "end": 19.74,
   "last_word": 19.22,
-  "first_word_end": 19.22
+  "first_word_end": 19.22,
+  "hand": true
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 11 - Eagle has landed extended.flac",
+  "text": "Houston, Tranquility Base here. The Eagle has landed.",
+  "start": 0.0,
+  "end": 5.78,
+  "last_word": 5.44,
+  "first_word_end": 0.78,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 11 - Eagle has landed extended.flac",
+  "text": "Roger, Tranquility. We copy you on the ground. You got a bunch of guys about to turn blue. We're breathing again. Thanks",
+  "start": 7.18,
+  "end": 13.12,
+  "last_word": 12.84,
+  "first_word_end": 7.62,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 11 - Eagle has landed.flac",
+  "text": "Houston, uh, Tranquility Base here. The Eagle has landed.",
+  "start": 0.7,
+  "end": 4.78,
+  "last_word": 4.44,
+  "first_word_end": 1.3,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 11 - One small step.flac",
+  "text": "I'm going to step off the land now.",
+  "start": 0.0,
+  "end": 1.62,
+  "last_word": 1.42,
+  "first_word_end": 0.48,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 11 - One small step.flac",
+  "text": "one giant leap for mankind.",
+  "start": 9.74,
+  "end": 11.72,
+  "last_word": 11.46,
+  "first_word_end": 10.26,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 11 - We have a lift-off.flac",
+  "text": "6, 5, 4, 3, 2, 1,",
+  "start": 2.04,
+  "end": 7.6,
+  "last_word": 6.9,
+  "first_word_end": 2.92,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 11 - We have a lift-off.flac",
+  "text": "0. All engine running.",
+  "start": 7.92,
+  "end": 10.38,
+  "last_word": 10.02,
+  "first_word_end": 8.84,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 11 - We have a lift-off.flac",
+  "text": "Tower cleared.",
+  "start": 20.64,
+  "end": 21.96,
+  "last_word": 21.08,
+  "first_word_end": 21.08,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 11 - We have a lift-off.flac",
+  "text": "We got a roll program.",
+  "start": 22.52,
+  "end": 23.68,
+  "last_word": 23.42,
+  "first_word_end": 22.86,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 12 - All weather testing.flac",
+  "text": "I think we need to do a little more all -weather testing.",
+  "start": 0.0,
+  "end": 2.54,
+  "last_word": 2.24,
+  "first_word_end": 0.2,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 12 - Cardiac sim.flac",
+  "text": "Hey, that's one of the better sims, believe me. We've had a couple of cardiac arrests down here, too, Pete. There wasn't",
+  "start": 0.0,
+  "end": 5.98,
+  "last_word": 5.7,
+  "first_word_end": 0.16,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 12 - Cardiac sim.flac",
+  "text": "any time for that up here.",
+  "start": 5.98,
+  "end": 7.3,
+  "last_word": 7.12,
+  "first_word_end": 6.12,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 13 - Houston weve had a problem.flac",
+  "text": "Okay, Houston, we've had a problem here.",
+  "start": 0.4,
+  "end": 2.14,
+  "last_word": 1.86,
+  "first_word_end": 0.76,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 13 - Houston weve had a problem.flac",
+  "text": "This is Houston, say again, please.",
+  "start": 3.06,
+  "end": 4.42,
+  "last_word": 4.24,
+  "first_word_end": 3.42,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 13 - Houston weve had a problem.flac",
+  "text": "We've had a main B bus undervolt.",
+  "start": 8.04,
+  "end": 9.62,
+  "last_word": 9.2,
+  "first_word_end": 8.4,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 13 - Houston weve had a problem.flac",
+  "text": "Roger, main B undervolt.",
+  "start": 11.06,
+  "end": 12.14,
+  "last_word": 11.76,
+  "first_word_end": 11.42,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 13 - Houston weve had a problem.flac",
+  "text": "standby at 13, we're looking at it.",
+  "start": 14.84,
+  "end": 16.3,
+  "last_word": 16.2,
+  "first_word_end": 15.14,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 8 - Merry Christmas.flac",
+  "text": "And from the crew of Apollo 8, we close with good night, good luck,",
+  "start": 0.0,
+  "end": 5.38,
+  "last_word": 4.88,
+  "first_word_end": 0.16,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Apollo 8 - Merry Christmas.flac",
+  "text": "a Merry Christmas,",
+  "start": 5.48,
+  "end": 7.06,
+  "last_word": 6.48,
+  "first_word_end": 6.26,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\JFK - Return him safely to Earth.flac",
+  "text": "I believe that this nation should commit itself to achieving the goal before this decade",
+  "start": 0.0,
+  "end": 5.8,
+  "last_word": 5.4,
+  "first_word_end": 0.12,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\JFK - We choose the moon with Apollo 11 launch.flac",
+  "text": "easy, but because they are hard. 3, 2, 1, 0,",
+  "start": 5.64,
+  "end": 11.22,
+  "last_word": 10.26,
+  "first_word_end": 6.08,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\JFK - We choose the moon.flac",
+  "text": "easy, but because they are hard. Because that goal will serve to",
+  "start": 5.62,
+  "end": 11.28,
+  "last_word": 10.96,
+  "first_word_end": 6.04,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\JFK - We choose the moon.flac",
+  "text": "Because that challenge is one that we're willing to accept,",
+  "start": 15.58,
+  "end": 19.08,
+  "last_word": 18.66,
+  "first_word_end": 16.18,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\JFK - We choose the moon.flac",
+  "text": "one we are unwilling to postpone, and one we intend to win, and the others too.",
+  "start": 19.76,
+  "end": 25.38,
+  "last_word": 25.16,
+  "first_word_end": 20.06,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Mercury 7 - Fireflies.flac",
+  "text": "I have the fireflies.",
+  "start": 0.0,
+  "end": 1.8,
+  "last_word": 0.9,
+  "first_word_end": 0.22,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Mercury 7 - Guaymas greeting.flac",
+  "text": "Hello friends, congratulations to Mexico and especially to",
+  "start": 0.0,
+  "end": 5.88,
+  "last_word": 4.66,
+  "first_word_end": 0.38,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Mercury 7 - Guaymas greeting.flac",
+  "text": "my friends from Guaymas.",
+  "start": 5.88,
+  "end": 7.2,
+  "last_word": 6.74,
+  "first_word_end": 6.08,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Apollo-Mercury\\Mercury 7 - Liftoff.flac",
+  "text": "I feel the liftoff. The clock has started.",
+  "start": 0.0,
+  "end": 3.6,
+  "last_word": 3.12,
+  "first_word_end": 0.94,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - APU shutdown.flac",
+  "text": "Discovery, you're go for APU shutdown on time.",
+  "start": 0.0,
+  "end": 2.66,
+  "last_word": 2.38,
+  "first_word_end": 0.48,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Go at throttle up 1.flac",
+  "text": "Discovery, Roger, go ahead and throttle up.",
+  "start": 0.0,
+  "end": 1.56,
+  "last_word": 1.4,
+  "first_word_end": 0.46,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Go at throttle up 2.flac",
+  "text": "Discovery, go at throttle up.",
+  "start": 0.0,
+  "end": 1.46,
+  "last_word": 1.28,
+  "first_word_end": 0.52,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Go for deploy.flac",
+  "text": "Discovery Roger, go for deploy.",
+  "start": 0.0,
+  "end": 1.52,
+  "last_word": 1.28,
+  "first_word_end": 0.58,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Good picture of Steve.flac",
+  "text": "In Discovery Houston, we've got a good picture of Steve.",
+  "start": 0.0,
+  "end": 2.72,
+  "last_word": 2.56,
+  "first_word_end": 0.28,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Houston Discovery 2.flac",
+  "text": "Houston Discovery, go ahead.",
+  "start": 0.0,
+  "end": 1.12,
+  "last_word": 0.96,
+  "first_word_end": 0.38,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Houston Discovery.flac",
+  "text": "And here's the discovery.",
+  "start": 0.0,
+  "end": 0.9,
+  "last_word": 0.6,
+  "first_word_end": 0.26,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - How do you read.flac",
+  "text": "Houston Discovery, how do you read?",
+  "start": 0.0,
+  "end": 1.14,
+  "last_word": 1.04,
+  "first_word_end": 0.28,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Lookin at it.flac",
+  "text": "Discovery, Houston, we're still looking at it.",
+  "start": 0.0,
+  "end": 2.12,
+  "last_word": 2.04,
+  "first_word_end": 0.52,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - MECO.flac",
+  "text": "Discovery, nominal MECO, OMS -1 not required.",
+  "start": 0.0,
+  "end": 2.62,
+  "last_word": 2.32,
+  "first_word_end": 0.42,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Nice to be in orbit.flac",
+  "text": "Discovery, Houston. 20 seconds to LOS, TDRS. Roger that. Nice to be in orbit.",
+  "start": 0.0,
+  "end": 4.7,
+  "last_word": 4.48,
+  "first_word_end": 0.4,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - On its way to orbit.flac",
+  "text": "through main engine cutoff.",
+  "start": 5.94,
+  "end": 7.12,
+  "last_word": 6.6,
+  "first_word_end": 6.1,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Press to ATO.flac",
+  "text": "Discovery, Houston. Press to ATO.",
+  "start": 0.0,
+  "end": 2.32,
+  "last_word": 1.64,
+  "first_word_end": 0.4,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Roger roll.flac",
+  "text": "Roger roll, Discovery.",
+  "start": 0.0,
+  "end": 0.88,
+  "last_word": 0.7,
+  "first_word_end": 0.38,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - STS-26 liftoff.flac",
+  "text": "3, 2, 1, 0, and liftoff,",
+  "start": 0.0,
+  "end": 5.7,
+  "last_word": 4.52,
+  "first_word_end": 0.68,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - STS-41D liftoff.flac",
+  "text": "Liftoff of Mission 41D, the first flight of the orbiter Discovery, and the shuttle has cleared the tower.",
+  "start": 0.0,
+  "end": 5.72,
+  "last_word": 5.36,
+  "first_word_end": 0.54,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Vector transfer.flac",
+  "text": "Discover Houston recommend vector transfer to the BFS.",
+  "start": 0.0,
+  "end": 3.12,
+  "last_word": 2.78,
+  "first_word_end": 0.5,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery - Wheelstop.flac",
+  "text": "We'll stop. Roger, we'll stop Discovery. Welcome back. A great ending to the new beginning.",
+  "start": 0.0,
+  "end": 5.3,
+  "last_word": 5.08,
+  "first_word_end": 0.56,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery STS-131 - sound of launch.flac",
+  "text": "Thanks for",
+  "start": 0.0,
+  "end": 0.64,
+  "last_word": 0.54,
+  "first_word_end": 0.54,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Discovery\\Discovery STS-131 - sound of launch.flac",
+  "text": "watching!",
+  "start": 0.64,
+  "end": 16.64,
+  "last_word": 0.64,
+  "first_word_end": 16.64,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-1 - Were going to dust it off first.flac",
+  "text": "Welcome home, Columbia. Beautiful, beautiful.",
+  "start": 0.0,
+  "end": 1.94,
+  "last_word": 1.76,
+  "first_word_end": 0.48,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-1 - Were going to dust it off first.flac",
+  "text": "Do you want us to take it up the hangar, Joe?",
+  "start": 3.04,
+  "end": 4.84,
+  "last_word": 4.7,
+  "first_word_end": 3.4,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-1 - Were going to dust it off first.flac",
+  "text": "We're going to dust it off first.",
+  "start": 5.72,
+  "end": 7.02,
+  "last_word": 6.72,
+  "first_word_end": 6.08,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Countdown to launch.flac",
+  "text": "T -minus 10, 9, 8, 7, 6, 5,",
+  "start": 0.0,
+  "end": 5.8,
+  "last_word": 4.9,
+  "first_word_end": 0.64,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Countdown to launch.flac",
+  "text": "and liftoff, the final liftoff of Atlantis on the shoulders of the space shuttle.",
+  "start": 11.82,
+  "end": 17.2,
+  "last_word": 16.78,
+  "first_word_end": 12.12,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Landing commander comments.flac",
+  "text": "Mission complete, Houston.",
+  "start": 0.0,
+  "end": 0.98,
+  "last_word": 0.7,
+  "first_word_end": 0.2,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Landing commander comments.flac",
+  "text": "After serving the world for over 30 years, the Space Shuttle has earned its place in history and has come to a final stop.",
+  "start": 1.64,
+  "end": 7.5,
+  "last_word": 7.3,
+  "first_word_end": 2.12,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Landing commander comments.flac",
+  "text": "We copy your will stop and we'll take this opportunity to congratulate you, Atlantis, as well as the thousands",
+  "start": 8.58,
+  "end": 14.56,
+  "last_word": 14.22,
+  "first_word_end": 9.06,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Landing commander comments.flac",
+  "text": "of passionate individuals across this great space -faring nation.",
+  "start": 14.56,
+  "end": 18.34,
+  "last_word": 17.96,
+  "first_word_end": 14.8,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Landing comments.flac",
+  "text": "Nose gear touchdown.",
+  "start": 3.38,
+  "end": 4.52,
+  "last_word": 4.18,
+  "first_word_end": 3.98,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Landing comments.flac",
+  "text": "the space shuttle pulls into port for the last time, its voyage at",
+  "start": 11.54,
+  "end": 17.42,
+  "last_word": 16.28,
+  "first_word_end": 12.24,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-135 - Launch commentary.flac",
+  "text": "Houston now controlling the flight of Atlantis, the space shuttle spreads its wings one final time",
+  "start": 5.12,
+  "end": 11.02,
+  "last_word": 10.66,
+  "first_word_end": 5.72,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-7 - That was definitely an E-ticket.flac",
+  "text": "Will I never be to Disneyland?",
+  "start": 0.98,
+  "end": 2.5,
+  "last_word": 2.06,
+  "first_word_end": 1.46,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-7 - That was definitely an E-ticket.flac",
+  "text": "That was definitely an E -ticket.",
+  "start": 9.18,
+  "end": 11.12,
+  "last_word": 10.82,
+  "first_word_end": 9.66,
+  "hand": false
+ },
+ {
+  "category": 0,
+  "file": "NASA\\Historical\\Shuttle\\STS-7 - That was definitely an E-ticket.flac",
+  "text": "Roger that Sally.",
+  "start": 12.5,
+  "end": 13.4,
+  "last_word": 13.14,
+  "first_word_end": 12.98,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470608_001_Nothing_Behind_the_Door_01.flac",
+  "text": "Mutual Broadcasting System presents the first of a series of new and unusual dramatic programs.",
+  "start": 0.0,
+  "end": 4.48,
+  "last_word": 3.94,
+  "first_word_end": 0.32,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470608_001_Nothing_Behind_the_Door_02.flac",
+  "text": "No, nobody knows anything about it. Astronomers look at it, they take pictures of it.",
+  "start": 0.74,
+  "end": 4.72,
+  "last_word": 4.58,
+  "first_word_end": 1.18,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470608_001_Nothing_Behind_the_Door_03.flac",
+  "text": "The tourists stand on kind of a catwalk around the edge while the astronomer explains the...",
+  "start": 0.0,
+  "end": 5.4,
+  "last_word": 4.98,
+  "first_word_end": 0.12,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470608_001_Nothing_Behind_the_Door_04.flac",
+  "text": "You always get the feeling they know a lot more.",
+  "start": 0.0,
+  "end": 2.08,
+  "last_word": 1.76,
+  "first_word_end": 0.12,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470608_001_Nothing_Behind_the_Door_05.flac",
+  "text": "It wasn't the first bank that Minucci and Hugh Grant and I had worked a deal on.",
+  "start": 0.0,
+  "end": 3.04,
+  "last_word": 2.86,
+  "first_word_end": 0.1,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470608_001_Nothing_Behind_the_Door_06.flac",
+  "text": "San Fernando, Culver City, Santa Monica.",
+  "start": 0.0,
+  "end": 2.38,
+  "last_word": 2.02,
+  "first_word_end": 0.34,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470608_001_Nothing_Behind_the_Door_07.flac",
+  "text": "It's tough going, especially when you're dragging a briefcase full of money, too.",
+  "start": 0.0,
+  "end": 2.74,
+  "last_word": 2.58,
+  "first_word_end": 0.02,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470608_001_Nothing_Behind_the_Door_08.flac",
+  "text": "You stay here and watch and listen. I wouldn't go in there if you... Nobody asked you to. I'm going.",
+  "start": 0.0,
+  "end": 4.82,
+  "last_word": 4.62,
+  "first_word_end": 0.1,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470608_001_Nothing_Behind_the_Door_09.flac",
+  "text": "Nothing. That's nothing, you see.",
+  "start": 0.5,
+  "end": 2.74,
+  "last_word": 2.48,
+  "first_word_end": 0.88,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470910_014_How_Are_You_Pal_02.flac",
+  "text": "Say, maybe less than a ten or so.",
+  "start": 0.0,
+  "end": 2.5,
+  "last_word": 2.26,
+  "first_word_end": 0.24,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470910_014_How_Are_You_Pal_03.flac",
+  "text": "I remember how many jams I got shot of in the old days.",
+  "start": 0.0,
+  "end": 2.6,
+  "last_word": 2.36,
+  "first_word_end": 0.08,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470910_014_How_Are_You_Pal_05.flac",
+  "text": "But it wasn't.",
+  "start": 0.0,
+  "end": 1.52,
+  "last_word": 1.14,
+  "first_word_end": 1.0,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470910_014_How_Are_You_Pal_06.flac",
+  "text": "I won't tell you his name because, as I said, I don't think it's a good idea to mention.",
+  "start": 0.0,
+  "end": 3.1,
+  "last_word": 2.86,
+  "first_word_end": 0.08,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470910_014_How_Are_You_Pal_07.flac",
+  "text": "And the fellow always gets what's coming to him, never fails.",
+  "start": 0.0,
+  "end": 2.56,
+  "last_word": 2.18,
+  "first_word_end": 0.08,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470910_014_How_Are_You_Pal_08.flac",
+  "text": "Kidded about it a lot with this tether, Murray.",
+  "start": 0.0,
+  "end": 2.14,
+  "last_word": 1.96,
+  "first_word_end": 0.28,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470910_014_How_Are_You_Pal_09.flac",
+  "text": "I was pretty griped when I yelled for the house ticket at the hotel.",
+  "start": 0.0,
+  "end": 2.22,
+  "last_word": 2.0,
+  "first_word_end": 0.1,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_470910_014_How_Are_You_Pal_10.flac",
+  "text": "And after a word about next week's Quiet Please, here is our...",
+  "start": 0.0,
+  "end": 2.66,
+  "last_word": 2.36,
+  "first_word_end": 0.08,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_471117_024_Kill_Me_Again_01.flac",
+  "text": "The Mutual Broadcasting System presents Quiet, Please.",
+  "start": 0.0,
+  "end": 3.02,
+  "last_word": 2.76,
+  "first_word_end": 0.42,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_471117_024_Kill_Me_Again_02.flac",
+  "text": "Dart all around the room, but, well, maybe that was from the flickering light.",
+  "start": 0.0,
+  "end": 3.06,
+  "last_word": 2.8,
+  "first_word_end": 0.18,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_471117_024_Kill_Me_Again_03.flac",
+  "text": "I don't get it. Why, you see, you're a regular inmate now, Mr. Davis, but...",
+  "start": 0.0,
+  "end": 4.42,
+  "last_word": 4.22,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_471117_024_Kill_Me_Again_04.flac",
+  "text": "Yes, remind me to show you someday.",
+  "start": 0.0,
+  "end": 2.42,
+  "last_word": 2.04,
+  "first_word_end": 0.26,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_471117_024_Kill_Me_Again_05.flac",
+  "text": "The guy that sold his soul and made a profit on it.",
+  "start": 0.0,
+  "end": 2.62,
+  "last_word": 2.5,
+  "first_word_end": 0.16,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_471117_024_Kill_Me_Again_06.flac",
+  "text": "And then, well, you see, they automatically qualify for a...",
+  "start": 0.0,
+  "end": 3.7,
+  "last_word": 3.4,
+  "first_word_end": 0.16,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_471117_024_Kill_Me_Again_07.flac",
+  "text": "Why? You signed an agreement, Mr. Davis.",
+  "start": 0.0,
+  "end": 2.7,
+  "last_word": 2.4,
+  "first_word_end": 0.2,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_471117_024_Kill_Me_Again_08.flac",
+  "text": "So I went to see my prospect. And it wasn't very hard feeling the way I did.",
+  "start": 0.0,
+  "end": 4.18,
+  "last_word": 3.98,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_471117_024_Kill_Me_Again_09.flac",
+  "text": "Yes? You'll have to buy the drapers in the apartment. Oh, that's all right.",
+  "start": 0.0,
+  "end": 3.54,
+  "last_word": 3.32,
+  "first_word_end": 0.3,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_471117_024_Kill_Me_Again_10.flac",
+  "text": "This is the Mutual Broadcasting System.",
+  "start": 0.0,
+  "end": 2.0,
+  "last_word": 1.56,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480126_034_Green_Light_02.flac",
+  "text": "40, 50 people, practically all of them in the mill.",
+  "start": 0.0,
+  "end": 2.28,
+  "last_word": 2.02,
+  "first_word_end": 0.22,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480126_034_Green_Light_03.flac",
+  "text": "Feels like a storm coming up.",
+  "start": 0.0,
+  "end": 2.2,
+  "last_word": 1.94,
+  "first_word_end": 0.54,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480126_034_Green_Light_04.flac",
+  "text": "Would you marry me if I was making money, Abby? Why, of course.",
+  "start": 0.0,
+  "end": 3.62,
+  "last_word": 3.36,
+  "first_word_end": 0.22,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480126_034_Green_Light_05.flac",
+  "text": "It's been raining for five minutes. Oh, you did that on purpose. Well, I didn't make it.",
+  "start": 0.0,
+  "end": 3.84,
+  "last_word": 3.72,
+  "first_word_end": 0.1,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480126_034_Green_Light_06.flac",
+  "text": "Well, I don't know, but I'm going to find out. Let's go outside. Well, hurry up!",
+  "start": 0.0,
+  "end": 3.12,
+  "last_word": 2.9,
+  "first_word_end": 0.48,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480126_034_Green_Light_07.flac",
+  "text": "Well, how would that look? You know...",
+  "start": 0.0,
+  "end": 2.26,
+  "last_word": 1.86,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480126_034_Green_Light_08.flac",
+  "text": "Sure. Well, then, won't you please? Honey.",
+  "start": 0.0,
+  "end": 1.96,
+  "last_word": 1.74,
+  "first_word_end": 0.3,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480126_034_Green_Light_09.flac",
+  "text": "I gotta get me a fireman. What are you talking about? Give me a green light, boy, and climb aboard.",
+  "start": 0.0,
+  "end": 4.42,
+  "last_word": 4.14,
+  "first_word_end": 0.1,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480329_043_Quiet_Please_01.flac",
+  "text": "which is written and directed by Willis Cooper and which features Ernest Chappell.",
+  "start": 0.0,
+  "end": 4.04,
+  "last_word": 3.62,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480329_043_Quiet_Please_02.flac",
+  "text": "And there were the waves fed upon the beach, the shattered walls.",
+  "start": 0.0,
+  "end": 2.7,
+  "last_word": 2.28,
+  "first_word_end": 0.08,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480329_043_Quiet_Please_03.flac",
+  "text": "I am old now and my speech is set in somber way.",
+  "start": 0.0,
+  "end": 2.44,
+  "last_word": 2.26,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480329_043_Quiet_Please_04.flac",
+  "text": "Have music and light.",
+  "start": 0.0,
+  "end": 1.58,
+  "last_word": 0.92,
+  "first_word_end": 0.12,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480329_043_Quiet_Please_05.flac",
+  "text": "Might be the one that stood in the city in another world.",
+  "start": 0.0,
+  "end": 1.92,
+  "last_word": 1.58,
+  "first_word_end": 0.12,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480329_043_Quiet_Please_06.flac",
+  "text": "The bells rang in my world once.",
+  "start": 0.0,
+  "end": 2.4,
+  "last_word": 2.1,
+  "first_word_end": 0.98,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480329_043_Quiet_Please_07.flac",
+  "text": "Well, sit down, sit down.",
+  "start": 0.0,
+  "end": 2.18,
+  "last_word": 1.78,
+  "first_word_end": 0.44,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480329_043_Quiet_Please_08.flac",
+  "text": "Secret seeking the power that was never intended for them.",
+  "start": 0.0,
+  "end": 2.56,
+  "last_word": 2.4,
+  "first_word_end": 0.2,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480329_043_Quiet_Please_09.flac",
+  "text": "Flowering in the spring with all the dazzling lavishness that can be packed into a brief span of life.",
+  "start": 0.0,
+  "end": 4.48,
+  "last_word": 4.32,
+  "first_word_end": 0.42,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480329_043_Quiet_Please_10.flac",
+  "text": "Thank you, Burt Berman. Thank you, Bob Doherty.",
+  "start": 0.0,
+  "end": 3.22,
+  "last_word": 2.6,
+  "first_word_end": 0.16,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480524_051_In_the_House_Where_I_Was_Born_02.flac",
+  "text": "Come on, let's have a baby.",
+  "start": 0.0,
+  "end": 1.06,
+  "last_word": 0.68,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480524_051_In_the_House_Where_I_Was_Born_03.flac",
+  "text": "And the wide streets are filled with crowds of people.",
+  "start": 0.0,
+  "end": 2.34,
+  "last_word": 2.08,
+  "first_word_end": 0.1,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480524_051_In_the_House_Where_I_Was_Born_05.flac",
+  "text": "7 % of lilacs.",
+  "start": 3.38,
+  "end": 5.02,
+  "last_word": 4.48,
+  "first_word_end": 3.94,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480524_051_In_the_House_Where_I_Was_Born_06.flac",
+  "text": "And I'm betting you there'll be war in Europe before the year is out, my lad.",
+  "start": 0.0,
+  "end": 3.76,
+  "last_word": 3.54,
+  "first_word_end": 0.16,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480524_051_In_the_House_Where_I_Was_Born_07.flac",
+  "text": "Shook hands with a half dozen cow hands and a Mexican foot.",
+  "start": 0.0,
+  "end": 2.78,
+  "last_word": 2.48,
+  "first_word_end": 0.38,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480524_051_In_the_House_Where_I_Was_Born_08.flac",
+  "text": "Two prints of a child's shoes in the concrete remain.",
+  "start": 0.0,
+  "end": 3.04,
+  "last_word": 2.56,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480524_051_In_the_House_Where_I_Was_Born_09.flac",
+  "text": "I felt a bitter fire in the cleaving steel.",
+  "start": 0.0,
+  "end": 2.9,
+  "last_word": 2.54,
+  "first_word_end": 0.2,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480524_051_In_the_House_Where_I_Was_Born_10.flac",
+  "text": "This is the slow broadcasting system.",
+  "start": 0.0,
+  "end": 3.02,
+  "last_word": 2.34,
+  "first_word_end": 1.08,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480816_061_PrestoChangeO_Im_Sure_02.flac",
+  "text": "Crystal Chainsaw disappeared.",
+  "start": 0.0,
+  "end": 1.04,
+  "last_word": 0.8,
+  "first_word_end": 0.22,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480816_061_PrestoChangeO_Im_Sure_03.flac",
+  "text": "Well, he stopped and looked at me and he said,",
+  "start": 0.0,
+  "end": 2.08,
+  "last_word": 1.84,
+  "first_word_end": 0.12,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480816_061_PrestoChangeO_Im_Sure_04.flac",
+  "text": "Whatever it was, I've forgotten. But I said to him, you...",
+  "start": 0.0,
+  "end": 2.68,
+  "last_word": 2.34,
+  "first_word_end": 0.2,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480816_061_PrestoChangeO_Im_Sure_05.flac",
+  "text": "What trick? I can't take it away from you.",
+  "start": 0.0,
+  "end": 2.76,
+  "last_word": 2.56,
+  "first_word_end": 0.16,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480816_061_PrestoChangeO_Im_Sure_06.flac",
+  "text": "I'm him. I thought I said disappear, but I...",
+  "start": 0.0,
+  "end": 2.82,
+  "last_word": 2.56,
+  "first_word_end": 0.38,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480816_061_PrestoChangeO_Im_Sure_07.flac",
+  "text": "Hey, you said you were gone! Oh, I am...",
+  "start": 0.0,
+  "end": 2.24,
+  "last_word": 1.96,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480816_061_PrestoChangeO_Im_Sure_08.flac",
+  "text": "I didn't say anything, honey. Well, what is it?",
+  "start": 0.0,
+  "end": 2.6,
+  "last_word": 2.46,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480816_061_PrestoChangeO_Im_Sure_09.flac",
+  "text": "It was written and directed by Willis Cooper, and the man who spoke to you was Ernest Chappell.",
+  "start": 0.0,
+  "end": 4.9,
+  "last_word": 4.56,
+  "first_word_end": 0.24,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_480816_061_PrestoChangeO_Im_Sure_10.flac",
+  "text": "The program is heard in calendar through the facilities of the Canadian Broadcasting Corporation.",
+  "start": 0.0,
+  "end": 3.22,
+  "last_word": 2.92,
+  "first_word_end": 0.0,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481017_070_And_Jeannie_Dreams_of_Me_03.flac",
+  "text": "But there was never any key to unlock the door either.",
+  "start": 1.76,
+  "end": 4.14,
+  "last_word": 3.92,
+  "first_word_end": 2.16,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481017_070_And_Jeannie_Dreams_of_Me_04.flac",
+  "text": "And I stood on the majestic porch of the White House before the great door.",
+  "start": 0.0,
+  "end": 3.48,
+  "last_word": 3.2,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481017_070_And_Jeannie_Dreams_of_Me_05.flac",
+  "text": "My other life, that's a dream to me.",
+  "start": 0.0,
+  "end": 2.14,
+  "last_word": 1.94,
+  "first_word_end": 0.22,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481017_070_And_Jeannie_Dreams_of_Me_06.flac",
+  "text": "He's gone! But what is this, P .V .I.? Don't go, I tell you! Oh, quick, quick! And she seized my arm and shook me.",
+  "start": 0.0,
+  "end": 4.78,
+  "last_word": 4.58,
+  "first_word_end": 0.1,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481017_070_And_Jeannie_Dreams_of_Me_07.flac",
+  "text": "Yes. And you tried to pull him out of the house, right? I'd give anything to be out of it.",
+  "start": 0.0,
+  "end": 3.6,
+  "last_word": 3.52,
+  "first_word_end": 0.22,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481017_070_And_Jeannie_Dreams_of_Me_08.flac",
+  "text": "And so the long days and the peaceful...",
+  "start": 0.0,
+  "end": 2.0,
+  "last_word": 1.5,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481017_070_And_Jeannie_Dreams_of_Me_09.flac",
+  "text": "And again my heart turned over within me, for now I was to live.",
+  "start": 0.0,
+  "end": 2.84,
+  "last_word": 2.56,
+  "first_word_end": 0.12,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481017_070_And_Jeannie_Dreams_of_Me_10.flac",
+  "text": "This is ABC, the American Broadcasting Company.",
+  "start": 0.0,
+  "end": 2.4,
+  "last_word": 2.12,
+  "first_word_end": 0.12,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481226_080_Berlin_1945_01.flac",
+  "text": "The American Broadcasting Company presents Quiet, Please.",
+  "start": 0.0,
+  "end": 2.92,
+  "last_word": 2.62,
+  "first_word_end": 0.06,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481226_080_Berlin_1945_02.flac",
+  "text": "Oh, I'd rather look at what's that under your arm, Lieutenant. That's...",
+  "start": 0.0,
+  "end": 4.04,
+  "last_word": 3.66,
+  "first_word_end": 0.22,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481226_080_Berlin_1945_03.flac",
+  "text": "What are you so glad about over there, Corporal Morgan?",
+  "start": 0.0,
+  "end": 1.5,
+  "last_word": 1.32,
+  "first_word_end": 0.0,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481226_080_Berlin_1945_04.flac",
+  "text": "Hollywood. What? Hollywood? Yeah, hey, uh...",
+  "start": 0.0,
+  "end": 2.14,
+  "last_word": 1.82,
+  "first_word_end": 0.3,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481226_080_Berlin_1945_05.flac",
+  "text": "And every single one of them lads.",
+  "start": 0.0,
+  "end": 3.14,
+  "last_word": 2.56,
+  "first_word_end": 0.6,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481226_080_Berlin_1945_06.flac",
+  "text": "I'm sorry. Yeah, played like he was him.",
+  "start": 0.0,
+  "end": 2.62,
+  "last_word": 2.44,
+  "first_word_end": 0.08,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481226_080_Berlin_1945_07.flac",
+  "text": "Well, you can get out your pocketknife now, Lieutenant.",
+  "start": 1.76,
+  "end": 5.1,
+  "last_word": 4.92,
+  "first_word_end": 2.16,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481226_080_Berlin_1945_08.flac",
+  "text": "He's got a fight. Yeah.",
+  "start": 0.0,
+  "end": 1.3,
+  "last_word": 1.06,
+  "first_word_end": 0.12,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481226_080_Berlin_1945_09.flac",
+  "text": "Amen.",
+  "start": 0.0,
+  "end": 0.96,
+  "last_word": 0.0,
+  "first_word_end": 0.96,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_481226_080_Berlin_1945_10.flac",
+  "text": "And so, until next week at the...",
+  "start": 0.46,
+  "end": 2.18,
+  "last_word": 2.06,
+  "first_word_end": 0.88,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490227_089_If_I_Should_Wake_Before_I_Die_02.flac",
+  "text": "that they may be facing a horrible death out there 700 miles away from this earth.",
+  "start": 0.0,
+  "end": 5.38,
+  "last_word": 5.14,
+  "first_word_end": 0.82,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490227_089_If_I_Should_Wake_Before_I_Die_03.flac",
+  "text": "Then in the meantime, there are problems to be solved, answers to be proved.",
+  "start": 0.0,
+  "end": 3.64,
+  "last_word": 3.34,
+  "first_word_end": 0.42,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490227_089_If_I_Should_Wake_Before_I_Die_04.flac",
+  "text": "If I should die before I wake... That isn't what your brother said.",
+  "start": 0.0,
+  "end": 4.74,
+  "last_word": 4.4,
+  "first_word_end": 0.74,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490227_089_If_I_Should_Wake_Before_I_Die_05.flac",
+  "text": "Gregor until the whole universe is blotted out!",
+  "start": 0.0,
+  "end": 2.04,
+  "last_word": 1.86,
+  "first_word_end": 0.34,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490227_089_If_I_Should_Wake_Before_I_Die_06.flac",
+  "text": "Now that's an interesting thought, I must make a note of it.",
+  "start": 0.52,
+  "end": 2.46,
+  "last_word": 2.4,
+  "first_word_end": 0.76,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490227_089_If_I_Should_Wake_Before_I_Die_07.flac",
+  "text": "Allowances for the gravitation of stars 40 light years away.",
+  "start": 0.0,
+  "end": 3.24,
+  "last_word": 2.92,
+  "first_word_end": 0.52,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490227_089_If_I_Should_Wake_Before_I_Die_08.flac",
+  "text": "We've started a chain reaction among people. You know what chain reactions are.",
+  "start": 0.0,
+  "end": 3.78,
+  "last_word": 3.38,
+  "first_word_end": 0.16,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490227_089_If_I_Should_Wake_Before_I_Die_09.flac",
+  "text": "Some of the most amazing things, why... I...",
+  "start": 0.0,
+  "end": 2.88,
+  "last_word": 2.52,
+  "first_word_end": 0.14,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490501_098_Dark_Grey_Magic_02.flac",
+  "text": "Wait a minute, I wonder if that could be him that was at the door. Do you suppose...",
+  "start": 0.4,
+  "end": 3.28,
+  "last_word": 3.04,
+  "first_word_end": 0.66,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490501_098_Dark_Grey_Magic_03.flac",
+  "text": "Women, what a word. Honorific ability.",
+  "start": 0.0,
+  "end": 2.02,
+  "last_word": 1.62,
+  "first_word_end": 0.44,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490501_098_Dark_Grey_Magic_04.flac",
+  "text": "You did everything the book said. You called me to teach you evil, boy.",
+  "start": 0.0,
+  "end": 4.12,
+  "last_word": 3.7,
+  "first_word_end": 0.18,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490501_098_Dark_Grey_Magic_05.flac",
+  "text": "I can't hear you. I can't hear you very well, Luman. What's all that noise?",
+  "start": 0.0,
+  "end": 2.84,
+  "last_word": 2.62,
+  "first_word_end": 0.1,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490501_098_Dark_Grey_Magic_06.flac",
+  "text": "60 ,000, 60 ,000. What are you talking about?",
+  "start": 0.0,
+  "end": 3.28,
+  "last_word": 3.0,
+  "first_word_end": 0.28,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490501_098_Dark_Grey_Magic_07.flac",
+  "text": "And you've got to get some new tires, darling.",
+  "start": 0.0,
+  "end": 2.04,
+  "last_word": 1.7,
+  "first_word_end": 0.2,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490501_098_Dark_Grey_Magic_08.flac",
+  "text": "Wouldn't that freeze you? Now, Dixie, I... If you give me back Luma's necktie...",
+  "start": 0.0,
+  "end": 4.72,
+  "last_word": 3.98,
+  "first_word_end": 0.26,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490501_098_Dark_Grey_Magic_09.flac",
+  "text": "Maybe she could change herself back. Nah, once they've changed.",
+  "start": 0.0,
+  "end": 4.14,
+  "last_word": 3.78,
+  "first_word_end": 0.34,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490625_106_Quiet_Please_02.flac",
+  "text": "Yet I remember the lights on the hillside.",
+  "start": 0.88,
+  "end": 2.96,
+  "last_word": 2.48,
+  "first_word_end": 1.36,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490625_106_Quiet_Please_03.flac",
+  "text": "But there was a time when I was young in this very world.",
+  "start": 0.0,
+  "end": 2.86,
+  "last_word": 2.48,
+  "first_word_end": 0.5,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490625_106_Quiet_Please_04.flac",
+  "text": "Let's look like us.",
+  "start": 0.0,
+  "end": 1.64,
+  "last_word": 1.32,
+  "first_word_end": 0.38,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490625_106_Quiet_Please_05.flac",
+  "text": "Oh, Krogh, the prophet of war, muttering away a disaster might be one of your own.",
+  "start": 1.3,
+  "end": 5.4,
+  "last_word": 5.14,
+  "first_word_end": 1.66,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490625_106_Quiet_Please_06.flac",
+  "text": "Will your heart leap at the first green shoots of the bounty that lies in that earth?",
+  "start": 0.0,
+  "end": 4.2,
+  "last_word": 3.98,
+  "first_word_end": 0.54,
+  "hand": false
+ },
+ {
+  "category": 1,
+  "file": "Radio\\Quiet-Please\\Quiet_Please_490625_106_Quiet_Please_07.flac",
+  "text": "Well, come in, come along. Oh, I'm so glad.",
+  "start": 1.12,
+  "end": 5.66,
+  "last_word": 5.36,
+  "first_word_end": 1.72,
+  "hand": false
  }
 ]

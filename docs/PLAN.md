@@ -397,6 +397,23 @@ Ein Generator mit Ereignistypen, die der Komponist an Formpunkte setzt:
 | Phaser / Flanger | ZDF-Phaser nach Zavalishin; Kiiski, Esqueda, Välimäki 2016 als Referenz für Zeitvarianz | Pads, Hats |
 | Bitcrush / Downsample | mit Anti-Aliasing (Tiefpass vor Dezimation), Trocken/Nass | Hi-Tech |
 
+### 5.8a Field-Spur: Sampler für Field Recordings (27.09.2026)
+
+Der Nutzer: "einen ordentlichen Sampler bauen, mit ADSR-Hüllkurven, eventuell Filtern, Möglichkeiten die Samples
+überblendbar zu loopen, wenn sie keine Loops sind ... Also ähnlich wie Kontakt", eine eigene Spur, "insbesondere für
+Forest", und die Aufnahmen im Original ("Nimm doch die originalen Aufnahmen?").
+
+| Baustein | Verfahren | Warum |
+|---|---|---|
+| Bibliothek (`FieldLibrary.h`) | Original-FLAC, mit dr_flac beim Bedarf dekodiert; Katalog-Schnappschüsse, Nachlade-Thread, LRU-Cache 1,5 GB (Quest 512 MB) mit Schonfrist | nie Plattenzugriff im Audio-Thread; eine Aufnahme, die eine Stimme hält, wird nie freigegeben |
+| Pegel | Faktor je Aufnahme: RMS −20 dBFS, Spitze ≤ −1 dBFS; Datei bleibt unverändert | leise Nacht und lauter Fluss unter demselben Regler an derselben Stelle |
+| Player (`FieldPlayer.h`) | zwei Ebenen A/B, Hermite-Interpolation, Tonhöhe durch Resampling, Start mit Zufallsstreuung, rückwärts | Kontakt-artige Grundfunktionen |
+| Loop | beliebiger Bereich, geschlossen mit Equal-Power-Überblendung (zweiter Lesekopf ab Loop-Start, cos/sin) | zwei Abschnitte einer Feldaufnahme sind unkorreliert; nur gleiche Leistung hält den Pegel (Test: ±0,5 dB, linear −3,6 dB) |
+| Klang | Amp- und Filter-ADSR, SVF oder neun Schaltungsmodelle mit den Pegel-Trims der Stimmen, Low Cut 24 dB/Okt, Modulationsblock | Tiefenregel: unter 100 Hz nur Kick und Bass |
+| Komponist | Orte unter Intro, Breakdown, Outro bis zum Blend, in Dark Forest leise unter langen Grooves; nie in Build/Drop; Preset je Track nach Stil, als Base/Override | die Regler bleiben beim Nutzer; die Partitur hängt nicht davon ab, ob Aufnahmen installiert sind |
+| NASA-Shots | `SfxType::SpaceShot`: NASA-Aufnahme ≤ 25 s ganz, auf dem SFX-Strip, zwei Takte Abstand zu Stimmen | Full-On/Hi-Tech-Farbe |
+| Auslieferung | eigene Setup-Komponente (Standard an), zwei Archive in eigenem Release `field-data-<n>`, installiert nach `%PROGRAMDATA%` bzw. `%APPDATA%\Phosphene\field`; Quest per `adb push` | ohne Aufnahmen läuft alles, nur Field-Spur und Shots schweigen |
+
 ### 5.9 Mixer und Master
 - Kanalzug je Erzeuger (Percussion: je Lane + Gruppe): Gain, Pan, 3-Band-EQ (SVF), Hochpass,
   Sends A (Reverb kurz), B (Reverb lang / Convolver), C (Delay), Sidechain-Eingang.

@@ -424,6 +424,15 @@ WHAT IS HERE
                          adb install -r PhospheneQuest.apk
   CREDITS-wavetables.md  where the wavetables come from.
 
+THE FIELD RECORDINGS (optional, 2 GB)
+
+  The Field track plays field recordings -- forest, night, water, weather, machines, NASA's sounds from
+  space -- and they are not in this archive. Download Phosphene-field-1a.zip and Phosphene-field-1b.zip
+  from https://github.com/reneweller-coding/Phosphene/releases/tag/field-data-1 and unpack both here,
+  so that a folder "field" lies beside Phosphene.exe. Without it everything plays; only the Field
+  track and the NASA shots stay silent. On the Quest:
+    adb push field /sdcard/Android/data/com.reneweller.phosphene.quest/files/
+
 The setup does all of that for you; this archive is for anyone who would rather it did not.
 
 FIRST RUN
@@ -444,6 +453,10 @@ $(Get-Content (Join-Path $root "LICENSE") -TotalCount 1)
 # carries the version, so an old setup never unpacks a newer pack by accident. The two generated includes
 # name the file, its size and its SHA-256; Inno checks the download against that hash before unpacking.
 $dataFiles = @("library.phoswt", "melody.phosmdl", "bass.phosmdl", "voices.phosvx", "CREDITS-wavetables.md", "CREDITS-voices.md")
+# The field recordings (27.09.2026) are not in it: two archives of a release of their own (Tools\field_archives.py),
+# whose names and hashes Deploy\field-files.iss carries into the setup, their credits inside them (field\CREDITS-field.md).
+# That file is committed; without it no setup.
+if (-not (Test-Path (Join-Path $root "Deploy\field-files.iss"))) { throw "Deploy\field-files.iss is missing -- run Tools\field_archives.py" }
 $dataZipName = "Phosphene-data-$Version.zip"
 Step "data archive (downloaded by the setup)" {
     New-Item -ItemType Directory -Force -Path $out | Out-Null

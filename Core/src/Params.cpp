@@ -139,6 +139,8 @@ const ParamDesc kComposeParams[compose::Count] = {
     // 23.09.2026, round "Hoerbarkeit" (ComposerLevels.cpp, matchAudibility): at the end, in the enum's order.
     { "audibility_match", "Audibility Match", "",    0.0f,   1.0f,   1.0f, Curve::Toggle },
     { "sound_presets", "Sound Presets", "",  0.0f,  1.0f,  1.0f, Curve::Toggle },
+    // 27.09.2026 (FormSfx.cpp, placeField): at the end, in the enum's order.
+    { "field_density", "Field Density", "x",  0.0f,  2.0f,  1.0f, Curve::Linear },
 };
 
 const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };
@@ -974,6 +976,12 @@ const ParamDesc kMixParams[mix::Count] = {
     { "duck_release_lines", "Duck Release (Lines)", "ms", 10.0f, 800.0f, 65.0f, Curve::Log },
     { "counter_duck",  "Counter under Lead", "",   0.0f, 1.0f, 0.2f, Curve::Linear },
     { "pad_lead_duck", "Pad Band under Lead", "dB", 0.0f, 12.0f, 3.0f, Curve::Linear },
+    // 27.09.2026: the Field track's strip (FieldPlayer.h).
+    { "field_mute",    "Field Mute",    "",     0.0f,  1.0f, 0.0f, Curve::Toggle },
+    // -14 dB (27.09.2026): measured on a Dark Forest intro (seed 7) at 0 dB the place had the highest partial loudness
+    // of all parts (69.7 against the voices' 57.7), at -10 still 48; at -14 it sits by the shamanic bed (33), a
+    // background, as a place should.
+    { "field_level",   "Field Level",   "dB", -24.0f, 12.0f, -14.0f, Curve::Linear },
 };
 
 const ParamDesc kMasterParams[master::Count] = {
@@ -1019,6 +1027,118 @@ struct ModuleSpec {
     const char* const* instanceNames = nullptr;   ///< prefixes of the instances instead of prefix + number
 };
 
+} // namespace
+
+// 27.09.2026: the Field track's sampler (Params.h, namespace field; FieldPlayer.h).
+const char* const kFieldCategoryNames[field::kCategories + 1] = { "Auto", "Rainforest", "Night Country", "Insects", "Foliage", "Wetland", "Mud Bubbles", "Cave", "River", "Sea", "Rain on Land", "Rain on Roof", "Wind", "Underwater", "Ice and Snow", "Desert", "Fire", "Geothermal", "Seismic", "Ritual Objects", "Abandoned", "Tunnel", "Metal Creak", "Dark Drone", "Electric", "Ventilation", "Factory", "Polar Station", "Radio Space", "Empty Space", "Grain Texture", "NASA" };
+const char* const kFieldCategorySlugs[field::kCategories] = { "rainforest", "night-country", "insects", "foliage", "wetland", "mud-bubbles", "cave", "river", "sea", "rain-land", "rain-roof", "wind", "underwater", "ice-snow", "desert", "fire", "geothermal", "seismic", "ritual-objects", "abandoned", "tunnel", "metal-creak", "dark-drone-noise", "electric", "ventilation", "factory", "polar-station", "radio-space", "empty-space", "grain-texture", "nasa" };
+const char* const kFieldModDestNames[7] = { "Off", "Pitch", "Cutoff", "Resonance", "Filter Mode", "Level", "Pan" };
+const int kFieldModDestMap[7] = { 0, 1, 6, 7, 8, 9, 10 };   // ModDest: Off, Pitch, Cutoff, Resonance, FilterMode, Level, Pan
+const char* const kFieldFilterTypeNames[4] = { "Low Pass", "Band Pass", "High Pass", "Notch" };
+namespace {
+const ParamDesc kFieldParams[field::Count] = {
+    // Layer A: a recording of the library -- the category, a variation within it (Auto: the composer's choice), its level,
+    // its pitch (resampled), where it starts (and how far that start may wander), and its direction.
+    { "a_category",     "A Category",     "",      0.0f,    31.0f,   0.0f, Curve::Choice, kFieldCategoryNames },
+    { "a_variation",    "A Variation",    "",      0.0f,    63.0f,   0.0f, Curve::Int },
+    { "a_level",        "A Level",        "dB",  -36.0f,     6.0f,   0.0f, Curve::Linear },
+    { "a_pitch",        "A Pitch",        "st",  -24.0f,    24.0f,   0.0f, Curve::Int },
+    { "a_fine",         "A Fine",         "ct", -100.0f,   100.0f,   0.0f, Curve::Linear },
+    { "a_start",        "A Start",        "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    { "a_start_random", "A Start Random", "",      0.0f,     1.0f,   1.0f, Curve::Linear },
+    { "a_reverse",      "A Reverse",      "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
+    // Layer B: the same, off by default.
+    { "b_on",           "B On",           "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
+    { "b_category",     "B Category",     "",      0.0f,    31.0f,   0.0f, Curve::Choice, kFieldCategoryNames },
+    { "b_variation",    "B Variation",    "",      0.0f,    63.0f,   1.0f, Curve::Int },
+    { "b_level",        "B Level",        "dB",  -36.0f,     6.0f,  -6.0f, Curve::Linear },
+    { "b_pitch",        "B Pitch",        "st",  -24.0f,    24.0f,   0.0f, Curve::Int },
+    { "b_fine",         "B Fine",         "ct", -100.0f,   100.0f,   0.0f, Curve::Linear },
+    { "b_start",        "B Start",        "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    { "b_start_random", "B Start Random", "",      0.0f,     1.0f,   1.0f, Curve::Linear },
+    { "b_reverse",      "B Reverse",      "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
+    { "layer_mix",      "Layer Mix",      "",      0.0f,     1.0f,   0.5f, Curve::Linear },
+    // The loop: over [loop_start, loop_end] of the recording, joined by an equal-power crossfade of loop_xfade.
+    { "loop",           "Loop",           "",      0.0f,     1.0f,   1.0f, Curve::Toggle },
+    { "loop_start",     "Loop Start",     "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    { "loop_end",       "Loop End",       "",      0.0f,     1.0f,   1.0f, Curve::Linear },
+    { "loop_xfade",     "Loop Crossfade", "ms",   10.0f, 10000.0f, 1500.0f, Curve::Log },
+    // The amp envelope: long by default, the way a recording enters under an intro and leaves a breakdown.
+    { "amp_attack",     "Attack",         "ms",    1.0f, 30000.0f, 2000.0f, Curve::Log },
+    { "amp_decay",      "Decay",          "ms",    5.0f, 30000.0f, 1000.0f, Curve::Log },
+    { "amp_sustain",    "Sustain",        "",      0.0f,     1.0f,   1.0f, Curve::Linear },
+    { "amp_release",    "Release",        "ms",    5.0f, 30000.0f, 4000.0f, Curve::Log },
+    // The filter: the state-variable filter (its type) or one of the nine circuit models (Filters.h), the filter
+    // envelope's depth in octaves and its decay (attack, sustain and release are in the block below), and the low cut
+    // the depth rule wants under everything but kick and bass.
+    { "filter_model",   "Filter Model",   "",      0.0f,     9.0f,   0.0f, Curve::Choice, kPolyFilterModelNames },
+    { "filter_type",    "Filter Type",    "",      0.0f,     3.0f,   0.0f, Curve::Choice, kFieldFilterTypeNames },
+    { "cutoff",         "Cutoff",         "Hz",   40.0f, 20000.0f, 20000.0f, Curve::Log },
+    { "resonance",      "Resonance",      "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    { "filter_mode",    "Filter Mode",    "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    { "env_amount",     "Env Amount",     "oct",  -8.0f,     8.0f,   0.0f, Curve::Linear },
+    { "filter_decay",   "Filter Decay",   "ms",    5.0f, 30000.0f, 2000.0f, Curve::Log },
+    { "low_cut",        "Low Cut",        "Hz",   20.0f,  1000.0f, 150.0f, Curve::Log },
+    { "filt_attack",    "Filter Attack",  "ms",    0.1f,  4000.0f,   0.1f, Curve::Log },
+    { "filt_sustain",   "Filter Sustain", "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    { "filt_release",   "Filter Release", "ms",    5.0f,  8000.0f, 300.0f, Curve::Log },
+    { "menv_attack",    "Mod Attack",     "ms",    0.1f,  8000.0f,  10.0f, Curve::Log },
+    { "menv_decay",     "Mod Decay",      "ms",    5.0f, 12000.0f, 800.0f, Curve::Log },
+    { "menv_sustain",   "Mod Sustain",    "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    { "menv_release",   "Mod Release",    "ms",    5.0f, 12000.0f, 400.0f, Curve::Log },
+    { "lfo1_rate",     "LFO 1 Rate",     "Hz",    0.01f,   40.0f,   1.0f, Curve::Log },
+    { "lfo1_shape",    "LFO 1 Shape",    "",      0.0f,     6.0f,   0.0f, Curve::Choice, kLfoShapeNames },
+    { "lfo1_sync",     "LFO 1 Sync",     "",      0.0f,     9.0f,   0.0f, Curve::Choice, kLfoSyncNames },
+    { "lfo1_retrig",   "LFO 1 Retrig",   "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
+    { "lfo1_fade",     "LFO 1 Fade",     "s",     0.0f,     8.0f,   0.0f, Curve::Linear },
+    { "lfo2_rate",     "LFO 2 Rate",     "Hz",    0.01f,   40.0f,   1.0f, Curve::Log },
+    { "lfo2_shape",    "LFO 2 Shape",    "",      0.0f,     6.0f,   0.0f, Curve::Choice, kLfoShapeNames },
+    { "lfo2_sync",     "LFO 2 Sync",     "",      0.0f,     9.0f,   0.0f, Curve::Choice, kLfoSyncNames },
+    { "lfo2_retrig",   "LFO 2 Retrig",   "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
+    { "lfo2_fade",     "LFO 2 Fade",     "s",     0.0f,     8.0f,   0.0f, Curve::Linear },
+    { "lfo3_rate",     "LFO 3 Rate",     "Hz",    0.01f,   40.0f,   1.0f, Curve::Log },
+    { "lfo3_shape",    "LFO 3 Shape",    "",      0.0f,     6.0f,   0.0f, Curve::Choice, kLfoShapeNames },
+    { "lfo3_sync",     "LFO 3 Sync",     "",      0.0f,     9.0f,   0.0f, Curve::Choice, kLfoSyncNames },
+    { "lfo3_retrig",   "LFO 3 Retrig",   "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
+    { "lfo3_fade",     "LFO 3 Fade",     "s",     0.0f,     8.0f,   0.0f, Curve::Linear },
+    { "lfo4_rate",     "LFO 4 Rate",     "Hz",    0.01f,   40.0f,   1.0f, Curve::Log },
+    { "lfo4_shape",    "LFO 4 Shape",    "",      0.0f,     6.0f,   0.0f, Curve::Choice, kLfoShapeNames },
+    { "lfo4_sync",     "LFO 4 Sync",     "",      0.0f,     9.0f,   0.0f, Curve::Choice, kLfoSyncNames },
+    { "lfo4_retrig",   "LFO 4 Retrig",   "",      0.0f,     1.0f,   0.0f, Curve::Toggle },
+    { "lfo4_fade",     "LFO 4 Fade",     "s",     0.0f,     8.0f,   0.0f, Curve::Linear },
+    { "mx1_src",       "Mod 1 Source",   "",      0.0f,     9.0f,   0.0f, Curve::Choice, kModSourceNames },
+    { "mx1_dst",       "Mod 1 Target",   "",      0.0f,    5.0f,   0.0f, Curve::Choice, kBassModDestNames },
+    { "mx1_amount",    "Mod 1 Amount",   "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
+    { "mx2_src",       "Mod 2 Source",   "",      0.0f,     9.0f,   0.0f, Curve::Choice, kModSourceNames },
+    { "mx2_dst",       "Mod 2 Target",   "",      0.0f,    5.0f,   0.0f, Curve::Choice, kBassModDestNames },
+    { "mx2_amount",    "Mod 2 Amount",   "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
+    { "mx3_src",       "Mod 3 Source",   "",      0.0f,     9.0f,   0.0f, Curve::Choice, kModSourceNames },
+    { "mx3_dst",       "Mod 3 Target",   "",      0.0f,    5.0f,   0.0f, Curve::Choice, kBassModDestNames },
+    { "mx3_amount",    "Mod 3 Amount",   "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
+    { "mx4_src",       "Mod 4 Source",   "",      0.0f,     9.0f,   0.0f, Curve::Choice, kModSourceNames },
+    { "mx4_dst",       "Mod 4 Target",   "",      0.0f,    5.0f,   0.0f, Curve::Choice, kBassModDestNames },
+    { "mx4_amount",    "Mod 4 Amount",   "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
+    { "mx5_src",       "Mod 5 Source",   "",      0.0f,     9.0f,   0.0f, Curve::Choice, kModSourceNames },
+    { "mx5_dst",       "Mod 5 Target",   "",      0.0f,    5.0f,   0.0f, Curve::Choice, kBassModDestNames },
+    { "mx5_amount",    "Mod 5 Amount",   "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
+    { "mx6_src",       "Mod 6 Source",   "",      0.0f,     9.0f,   0.0f, Curve::Choice, kModSourceNames },
+    { "mx6_dst",       "Mod 6 Target",   "",      0.0f,    5.0f,   0.0f, Curve::Choice, kBassModDestNames },
+    { "mx6_amount",    "Mod 6 Amount",   "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
+    { "mx7_src",       "Mod 7 Source",   "",      0.0f,     9.0f,   0.0f, Curve::Choice, kModSourceNames },
+    { "mx7_dst",       "Mod 7 Target",   "",      0.0f,    5.0f,   0.0f, Curve::Choice, kBassModDestNames },
+    { "mx7_amount",    "Mod 7 Amount",   "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
+    { "mx8_src",       "Mod 8 Source",   "",      0.0f,     9.0f,   0.0f, Curve::Choice, kModSourceNames },
+    { "mx8_dst",       "Mod 8 Target",   "",      0.0f,    5.0f,   0.0f, Curve::Choice, kBassModDestNames },
+    { "mx8_amount",    "Mod 8 Amount",   "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
+    // Output: width of the stereo image, pan, the sends and the duck under the kick.
+    { "width",          "Width",          "",      0.0f,     2.0f,   1.0f, Curve::Linear },
+    { "pan",            "Pan",            "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
+    { "room_send",      "Room Send",      "",      0.0f,     1.0f,   0.1f, Curve::Linear },
+    { "plate_send",     "Plate Send",     "",      0.0f,     1.0f,   0.0f, Curve::Linear },
+    { "hall_send",      "Hall Send",      "",      0.0f,     1.0f,   0.2f, Curve::Linear },
+    { "duck",           "Duck",           "",      0.0f,     1.0f,   0.4f, Curve::Linear },
+};
+
 const ModuleSpec kModules[static_cast<int>(Module::Count)] = {
     { "compose", kComposeParams, compose::Count, 1 },
     { "kick",    kKickParams,    kick::Count,    1 },
@@ -1034,6 +1154,7 @@ const ModuleSpec kModules[static_cast<int>(Module::Count)] = {
     { "texture", kTextureParams, texture::Count, 1 },
     { "vocal",   kVocalParams,   vocal::Count,   1 },
     { "psyfx",   kPsyFxParams,   psyfx::Count,   1 },
+    { "field",   kFieldParams,   field::Count,   1 },
 };
 
 bool isDiscrete(Curve c) { return c == Curve::Int || c == Curve::Choice || c == Curve::Toggle; }

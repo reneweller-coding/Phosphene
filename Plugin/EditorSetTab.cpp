@@ -142,7 +142,7 @@ void PhospheneEditor::buildSetPage()
         { "Rhythm",        ids({ PercDensity, PercVariation, Swing, GateChance }) },
         { "Melody",        ids({ AcidAmount, ArpAmount, MelodyVariation, MelodyTemperature, SquelchChance, ModalInterchange, MelodyModel, PitchEntropy }) },
         { "Lead",          ids({ LeadAmount, LeadDensity, compose::CounterMode }) },
-        { "Voices",        ids({ CounterAmount, StabAmount, PadAmount, DroneAmount, SfxAmount, VoiceDensity, BedDensity }) },
+        { "Voices",        ids({ CounterAmount, StabAmount, PadAmount, DroneAmount, SfxAmount, VoiceDensity, BedDensity, FieldDensity }) },
         { "Levels",        ids({ LevelMatch, PresenceMatch, AudibilityMatch }) },
     };
     static const int kColumns[] = { 5, 3, 5, 4, 5, 5, 4, 3 };

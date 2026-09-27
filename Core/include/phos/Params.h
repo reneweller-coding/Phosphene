@@ -53,6 +53,8 @@ enum class Module : int { Compose = 0, Kick, Bass, Perc, Acid, Poly, Sfx, Fx, Mi
                           /** 19.09.2026, round "fx-psychedelia": the shamanic bed (Texture.h), the voices
                            *  (Vocal.h) and the modulation effects of the SFX bus (PsyFx.h). Appended. */
                           Texture, Vocal, PsyFx,
+                          /** 27.09.2026: the Field track's sampler (FieldPlayer.h). Appended. */
+                          Field,
                           Count };
 
 constexpr int kPercLanes = 12;   ///< instances of the percussion lane module
@@ -117,6 +119,8 @@ enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation,
              AudibilityMatch,
              // 26.09.2026: the track's sounds come from the preset bank (on) or from the older recipes (off; Composer::presetOf).
              SoundPresets,
+             // 27.09.2026: how often the Field track plays (FormSfx.cpp, placeField); 1 the style's own density.
+             FieldDensity,
              Count };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
@@ -320,6 +324,37 @@ enum : int { Width, BowlDecay, BowlBright, DidgeFormant, DidgeBreath, JawSweep, 
 namespace vocal {
 enum : int { Pitch, Drive, ThrowSend, ThrowBeats, ThrowFeedback, FxSend, HallSend, Duck, Width, Count };
 }
+/**
+ * @brief Parameters of the Field track's sampler (module Field, prefix "field"; FieldPlayer.h, 27.09.2026).
+ *
+ * Two layers, A and B, each a recording of the field library (a category and a variation within it, "Auto" for the
+ * composer's choice), with its own level, pitch, start and direction; a loop over any stretch of the recording with a
+ * crossfade of its own length, so a recording that is not a loop plays as one; amp and filter envelopes, the voices'
+ * filters (the state-variable filter or the nine circuit models) and their modulation block -- the same controls as a
+ * synth's, from filt_attack to mx8_amount.
+ */
+namespace field {
+enum : int { ACategory, AVariation, ALevel, APitch, AFine, AStart, AStartRandom, AReverse,
+             BOn, BCategory, BVariation, BLevel, BPitch, BFine, BStart, BStartRandom, BReverse,
+             LayerMix, Loop, LoopStart, LoopEnd, LoopXfade,
+             AmpAttack, AmpDecay, AmpSustain, AmpRelease,
+             FilterModel, FilterType, Cutoff, Resonance, FilterMode, EnvAmount, FilterDecay, LowCut,
+             FiltAttack, FiltSustain, FiltRelease, MenvAttack, MenvDecay, MenvSustain, MenvRelease, Lfo1Rate,
+             Lfo1Shape, Lfo1Sync, Lfo1Retrig, Lfo1Fade, Lfo2Rate, Lfo2Shape, Lfo2Sync, Lfo2Retrig, Lfo2Fade,
+             Lfo3Rate, Lfo3Shape, Lfo3Sync, Lfo3Retrig, Lfo3Fade, Lfo4Rate, Lfo4Shape, Lfo4Sync, Lfo4Retrig,
+             Lfo4Fade, Mx1Src, Mx1Dst, Mx1Amount, Mx2Src, Mx2Dst, Mx2Amount, Mx3Src, Mx3Dst, Mx3Amount, Mx4Src,
+             Mx4Dst, Mx4Amount, Mx5Src, Mx5Dst, Mx5Amount, Mx6Src, Mx6Dst, Mx6Amount, Mx7Src, Mx7Dst, Mx7Amount,
+             Mx8Src, Mx8Dst, Mx8Amount,
+             Width, Pan, RoomSend, PlateSend, HallSend, Duck,
+             Count };
+/** @brief The categories of the field library, in the order of the category choice (index 0 is "Auto"). */
+constexpr int kCategories = 31;
+}
+extern const char* const kFieldCategoryNames[field::kCategories + 1];   ///< "Auto", then the categories' names
+extern const char* const kFieldCategorySlugs[field::kCategories];       ///< the file names' category tokens ("rainforest", ...)
+extern const char* const kFieldModDestNames[7];                          ///< the matrix's targets on the Field track
+extern const int kFieldModDestMap[7];                                    ///< and the ModDest each one is
+
 /** @brief Parameters of the modulation effects (module PsyFx, prefix "psyfx"; PsyFx.h). */
 namespace psyfx {
 enum : int { FlangerBeats, FlangerDepth, FlangerFeedback, FlangerMix, PhaserBeats, PhaserDepth, PhaserFeedback,
@@ -388,6 +423,8 @@ enum : int { KickMute, BassMute, TrackGain, PercMute, PercLevel, AcidMute, AcidL
               *  @{ */
              DuckReleaseLines, CounterDuck, PadLeadDuck,
              /** @} */
+             /** @brief Appended 27.09.2026: the Field track's strip (FieldPlayer.h). */
+             FieldMute, FieldLevel,
              Count };
 /** @brief The "own sound" switch of a polyphonic instance. */
 constexpr int polyOwn(PolyInstance i) { return LeadOwn + static_cast<int>(i); }

@@ -1,0 +1,1526 @@
+[
+ {
+  "file": "fr-rainforest-2342_loop.flac",
+  "category": "rainforest",
+  "seconds": 115.0,
+  "centroid": 538,
+  "loudness": -24.9,
+  "gap": 2.8,
+  "burst": 7.6
+ },
+ {
+  "file": "fr-rainforest-0732_loop.flac",
+  "category": "rainforest",
+  "seconds": 85.0,
+  "centroid": 704,
+  "loudness": -21.7,
+  "gap": 1.5,
+  "burst": 6.8
+ },
+ {
+  "file": "fr-rainforest-1542_loop.flac",
+  "category": "rainforest",
+  "seconds": 115.0,
+  "centroid": 986,
+  "loudness": -31.7,
+  "gap": 1.7,
+  "burst": 7.5
+ },
+ {
+  "file": "fr-rainforest-0423_loop.flac",
+  "category": "rainforest",
+  "seconds": 55.0,
+  "centroid": 1414,
+  "loudness": -21.0,
+  "gap": 10.5,
+  "burst": 6.6
+ },
+ {
+  "file": "fr-night-country-1584_loop.flac",
+  "category": "night-country",
+  "seconds": 85.0,
+  "centroid": 103,
+  "loudness": -24.5,
+  "gap": 3.2,
+  "burst": 8.6
+ },
+ {
+  "file": "fr-night-country-2014_loop.flac",
+  "category": "night-country",
+  "seconds": 85.0,
+  "centroid": 225,
+  "loudness": -20.3,
+  "gap": 2.2,
+  "burst": 5.1
+ },
+ {
+  "file": "fr-night-country-1673_loop.flac",
+  "category": "night-country",
+  "seconds": 55.0,
+  "centroid": 466,
+  "loudness": -16.2,
+  "gap": 1.3,
+  "burst": 3.3
+ },
+ {
+  "file": "fr-night-country-0557_loop.flac",
+  "category": "night-country",
+  "seconds": 55.0,
+  "centroid": 841,
+  "loudness": -20.7,
+  "gap": 4.0,
+  "burst": 5.3
+ },
+ {
+  "file": "fr-insects-0282_loop.flac",
+  "category": "insects",
+  "seconds": 55.0,
+  "centroid": 23,
+  "loudness": -19.0,
+  "gap": 3.9,
+  "burst": 4.3
+ },
+ {
+  "file": "fr-insects-0534_loop.flac",
+  "category": "insects",
+  "seconds": 115.0,
+  "centroid": 225,
+  "loudness": -18.5,
+  "gap": 14.0,
+  "burst": 5.3
+ },
+ {
+  "file": "fr-insects-0378_loop.flac",
+  "category": "insects",
+  "seconds": 85.0,
+  "centroid": 728,
+  "loudness": -12.8,
+  "gap": 1.0,
+  "burst": 1.8
+ },
+ {
+  "file": "fr-insects-0729_loop.flac",
+  "category": "insects",
+  "seconds": 115.0,
+  "centroid": 1325,
+  "loudness": -22.8,
+  "gap": 6.1,
+  "burst": 7.9
+ },
+ {
+  "file": "fr-foliage-1255_loop.flac",
+  "category": "foliage",
+  "seconds": 55.0,
+  "centroid": 366,
+  "loudness": -21.9,
+  "gap": 2.1,
+  "burst": 2.1
+ },
+ {
+  "file": "fr-foliage-0004_loop.flac",
+  "category": "foliage",
+  "seconds": 85.0,
+  "centroid": 597,
+  "loudness": -21.5,
+  "gap": 3.1,
+  "burst": 6.0
+ },
+ {
+  "file": "fr-foliage-1151_loop.flac",
+  "category": "foliage",
+  "seconds": 55.0,
+  "centroid": 1024,
+  "loudness": -26.2,
+  "gap": 2.0,
+  "burst": 5.1
+ },
+ {
+  "file": "fr-foliage-1839_loop.flac",
+  "category": "foliage",
+  "seconds": 55.0,
+  "centroid": 2258,
+  "loudness": -40.6,
+  "gap": 4.5,
+  "burst": 8.3
+ },
+ {
+  "file": "fr-wetland-0622_loop.flac",
+  "category": "wetland",
+  "seconds": 85.0,
+  "centroid": 228,
+  "loudness": -23.3,
+  "gap": 2.0,
+  "burst": 8.9
+ },
+ {
+  "file": "fr-wetland-0354_loop.flac",
+  "category": "wetland",
+  "seconds": 55.0,
+  "centroid": 429,
+  "loudness": -28.8,
+  "gap": 14.1,
+  "burst": 8.6
+ },
+ {
+  "file": "fr-wetland-0192_loop.flac",
+  "category": "wetland",
+  "seconds": 40.5,
+  "centroid": 843,
+  "loudness": -16.6,
+  "gap": 1.4,
+  "burst": 2.5
+ },
+ {
+  "file": "fr-wetland-1897_loop.flac",
+  "category": "wetland",
+  "seconds": 85.0,
+  "centroid": 1363,
+  "loudness": -24.1,
+  "gap": 4.6,
+  "burst": 6.0
+ },
+ {
+  "file": "fr-mud-bubbles-0643_loop.flac",
+  "category": "mud-bubbles",
+  "seconds": 85.0,
+  "centroid": 119,
+  "loudness": -16.8,
+  "gap": 13.6,
+  "burst": 3.4
+ },
+ {
+  "file": "fr-mud-bubbles-0710_loop.flac",
+  "category": "mud-bubbles",
+  "seconds": 40.5,
+  "centroid": 218,
+  "loudness": -19.4,
+  "gap": 4.8,
+  "burst": 3.6
+ },
+ {
+  "file": "fr-mud-bubbles-0439_loop.flac",
+  "category": "mud-bubbles",
+  "seconds": 40.5,
+  "centroid": 339,
+  "loudness": -18.7,
+  "gap": 0.7,
+  "burst": 1.0
+ },
+ {
+  "file": "fr-mud-bubbles-0769_loop.flac",
+  "category": "mud-bubbles",
+  "seconds": 85.0,
+  "centroid": 650,
+  "loudness": -20.2,
+  "gap": 3.0,
+  "burst": 3.8
+ },
+ {
+  "file": "fr-cave-2522_loop.flac",
+  "category": "cave",
+  "seconds": 55.0,
+  "centroid": 73,
+  "loudness": -18.3,
+  "gap": 1.2,
+  "burst": 1.2
+ },
+ {
+  "file": "fr-cave-2393_loop.flac",
+  "category": "cave",
+  "seconds": 115.0,
+  "centroid": 274,
+  "loudness": -20.9,
+  "gap": 2.5,
+  "burst": 4.1
+ },
+ {
+  "file": "fr-cave-0268_loop.flac",
+  "category": "cave",
+  "seconds": 115.0,
+  "centroid": 613,
+  "loudness": -15.9,
+  "gap": 0.9,
+  "burst": 2.1
+ },
+ {
+  "file": "fr-cave-2660_loop.flac",
+  "category": "cave",
+  "seconds": 85.0,
+  "centroid": 1298,
+  "loudness": -28.1,
+  "gap": 1.8,
+  "burst": 1.3
+ },
+ {
+  "file": "fr-river-1454_loop.flac",
+  "category": "river",
+  "seconds": 55.0,
+  "centroid": 291,
+  "loudness": -21.6,
+  "gap": 1.1,
+  "burst": 8.4
+ },
+ {
+  "file": "fr-river-2569_loop.flac",
+  "category": "river",
+  "seconds": 115.0,
+  "centroid": 620,
+  "loudness": -20.4,
+  "gap": 1.7,
+  "burst": 2.3
+ },
+ {
+  "file": "fr-river-2353_loop.flac",
+  "category": "river",
+  "seconds": 55.0,
+  "centroid": 973,
+  "loudness": -27.4,
+  "gap": 1.2,
+  "burst": 3.1
+ },
+ {
+  "file": "fr-river-1350_loop.flac",
+  "category": "river",
+  "seconds": 55.0,
+  "centroid": 1449,
+  "loudness": -21.8,
+  "gap": 0.4,
+  "burst": 0.9
+ },
+ {
+  "file": "fr-sea-2063_loop.flac",
+  "category": "sea",
+  "seconds": 115.0,
+  "centroid": 269,
+  "loudness": -24.8,
+  "gap": 10.9,
+  "burst": 7.3
+ },
+ {
+  "file": "fr-sea-0822_loop.flac",
+  "category": "sea",
+  "seconds": 55.0,
+  "centroid": 440,
+  "loudness": -21.8,
+  "gap": 15.0,
+  "burst": 7.7
+ },
+ {
+  "file": "fr-sea-2392_loop.flac",
+  "category": "sea",
+  "seconds": 85.0,
+  "centroid": 813,
+  "loudness": -30.0,
+  "gap": 2.7,
+  "burst": 5.3
+ },
+ {
+  "file": "fr-sea-2628_loop.flac",
+  "category": "sea",
+  "seconds": 115.0,
+  "centroid": 1273,
+  "loudness": -24.9,
+  "gap": 4.7,
+  "burst": 8.2
+ },
+ {
+  "file": "fr-rain-land-0384_loop.flac",
+  "category": "rain-land",
+  "seconds": 55.0,
+  "centroid": 637,
+  "loudness": -28.4,
+  "gap": 1.8,
+  "burst": 5.7
+ },
+ {
+  "file": "fr-rain-land-1916_loop.flac",
+  "category": "rain-land",
+  "seconds": 55.0,
+  "centroid": 976,
+  "loudness": -25.1,
+  "gap": 0.8,
+  "burst": 2.4
+ },
+ {
+  "file": "fr-rain-land-0477_loop.flac",
+  "category": "rain-land",
+  "seconds": 40.5,
+  "centroid": 1226,
+  "loudness": -28.3,
+  "gap": 0.8,
+  "burst": 1.3
+ },
+ {
+  "file": "fr-rain-land-0561_loop.flac",
+  "category": "rain-land",
+  "seconds": 40.5,
+  "centroid": 1507,
+  "loudness": -31.4,
+  "gap": 1.0,
+  "burst": 1.6
+ },
+ {
+  "file": "fr-rain-roof-2017_loop.flac",
+  "category": "rain-roof",
+  "seconds": 40.5,
+  "centroid": 390,
+  "loudness": -31.3,
+  "gap": 3.3,
+  "burst": 8.1
+ },
+ {
+  "file": "fr-rain-roof-0158_loop.flac",
+  "category": "rain-roof",
+  "seconds": 40.5,
+  "centroid": 604,
+  "loudness": -11.4,
+  "gap": 6.7,
+  "burst": 4.2
+ },
+ {
+  "file": "fr-rain-roof-1519_loop.flac",
+  "category": "rain-roof",
+  "seconds": 85.0,
+  "centroid": 915,
+  "loudness": -30.1,
+  "gap": 4.2,
+  "burst": 4.3
+ },
+ {
+  "file": "fr-rain-roof-0826_loop.flac",
+  "category": "rain-roof",
+  "seconds": 115.0,
+  "centroid": 1454,
+  "loudness": -33.9,
+  "gap": 1.7,
+  "burst": 7.7
+ },
+ {
+  "file": "fr-wind-0762_loop.flac",
+  "category": "wind",
+  "seconds": 85.0,
+  "centroid": 42,
+  "loudness": -23.5,
+  "gap": 8.0,
+  "burst": 8.7
+ },
+ {
+  "file": "fr-wind-1123_loop.flac",
+  "category": "wind",
+  "seconds": 55.0,
+  "centroid": 251,
+  "loudness": -14.4,
+  "gap": 4.8,
+  "burst": 2.4
+ },
+ {
+  "file": "fr-wind-1823_loop.flac",
+  "category": "wind",
+  "seconds": 115.0,
+  "centroid": 432,
+  "loudness": -16.5,
+  "gap": 2.0,
+  "burst": 1.7
+ },
+ {
+  "file": "fr-wind-2056_loop.flac",
+  "category": "wind",
+  "seconds": 115.0,
+  "centroid": 989,
+  "loudness": -16.2,
+  "gap": 3.1,
+  "burst": 4.0
+ },
+ {
+  "file": "fr-underwater-0748_loop.flac",
+  "category": "underwater",
+  "seconds": 85.0,
+  "centroid": 240,
+  "loudness": -26.7,
+  "gap": 1.1,
+  "burst": 5.2
+ },
+ {
+  "file": "fr-underwater-0626_loop.flac",
+  "category": "underwater",
+  "seconds": 85.0,
+  "centroid": 375,
+  "loudness": -25.3,
+  "gap": 1.0,
+  "burst": 5.8
+ },
+ {
+  "file": "fr-underwater-2902_loop.flac",
+  "category": "underwater",
+  "seconds": 85.0,
+  "centroid": 550,
+  "loudness": -22.9,
+  "gap": 3.4,
+  "burst": 2.6
+ },
+ {
+  "file": "fr-underwater-2289_loop.flac",
+  "category": "underwater",
+  "seconds": 115.0,
+  "centroid": 1061,
+  "loudness": -34.1,
+  "gap": 2.7,
+  "burst": 7.0
+ },
+ {
+  "file": "fr-ice-snow-2529_loop.flac",
+  "category": "ice-snow",
+  "seconds": 55.0,
+  "centroid": 254,
+  "loudness": -18.5,
+  "gap": 3.1,
+  "burst": 3.6
+ },
+ {
+  "file": "fr-ice-snow-1890_loop.flac",
+  "category": "ice-snow",
+  "seconds": 115.0,
+  "centroid": 540,
+  "loudness": -19.7,
+  "gap": 11.5,
+  "burst": 5.5
+ },
+ {
+  "file": "fr-ice-snow-1634_loop.flac",
+  "category": "ice-snow",
+  "seconds": 115.0,
+  "centroid": 752,
+  "loudness": -17.2,
+  "gap": 2.9,
+  "burst": 1.7
+ },
+ {
+  "file": "fr-ice-snow-2275_loop.flac",
+  "category": "ice-snow",
+  "seconds": 40.5,
+  "centroid": 1142,
+  "loudness": -14.6,
+  "gap": 0.3,
+  "burst": 0.2
+ },
+ {
+  "file": "fr-desert-0190_loop.flac",
+  "category": "desert",
+  "seconds": 85.0,
+  "centroid": 57,
+  "loudness": -20.8,
+  "gap": 6.2,
+  "burst": 7.5
+ },
+ {
+  "file": "fr-desert-0882_loop.flac",
+  "category": "desert",
+  "seconds": 115.0,
+  "centroid": 191,
+  "loudness": -20.7,
+  "gap": 3.1,
+  "burst": 8.6
+ },
+ {
+  "file": "fr-desert-1250_loop.flac",
+  "category": "desert",
+  "seconds": 115.0,
+  "centroid": 356,
+  "loudness": -16.8,
+  "gap": 3.9,
+  "burst": 2.9
+ },
+ {
+  "file": "fr-desert-1051_loop.flac",
+  "category": "desert",
+  "seconds": 55.0,
+  "centroid": 661,
+  "loudness": -21.4,
+  "gap": 4.8,
+  "burst": 4.8
+ },
+ {
+  "file": "fr-fire-0638_loop.flac",
+  "category": "fire",
+  "seconds": 55.0,
+  "centroid": 182,
+  "loudness": -33.7,
+  "gap": 1.6,
+  "burst": 4.5
+ },
+ {
+  "file": "fr-fire-1896_loop.flac",
+  "category": "fire",
+  "seconds": 55.0,
+  "centroid": 368,
+  "loudness": -18.1,
+  "gap": 4.4,
+  "burst": 5.1
+ },
+ {
+  "file": "fr-fire-2052_loop.flac",
+  "category": "fire",
+  "seconds": 85.0,
+  "centroid": 654,
+  "loudness": -14.5,
+  "gap": 0.4,
+  "burst": 0.6
+ },
+ {
+  "file": "fr-fire-1202_loop.flac",
+  "category": "fire",
+  "seconds": 55.0,
+  "centroid": 1148,
+  "loudness": -30.7,
+  "gap": 2.7,
+  "burst": 3.0
+ },
+ {
+  "file": "fr-geothermal-1497_loop.flac",
+  "category": "geothermal",
+  "seconds": 85.0,
+  "centroid": 40,
+  "loudness": -17.3,
+  "gap": 2.7,
+  "burst": 4.6
+ },
+ {
+  "file": "fr-geothermal-1685_loop.flac",
+  "category": "geothermal",
+  "seconds": 115.0,
+  "centroid": 107,
+  "loudness": -20.9,
+  "gap": 3.2,
+  "burst": 5.4
+ },
+ {
+  "file": "fr-geothermal-0369_loop.flac",
+  "category": "geothermal",
+  "seconds": 115.0,
+  "centroid": 253,
+  "loudness": -18.7,
+  "gap": 0.9,
+  "burst": 2.7
+ },
+ {
+  "file": "fr-geothermal-1415_loop.flac",
+  "category": "geothermal",
+  "seconds": 85.0,
+  "centroid": 633,
+  "loudness": -14.6,
+  "gap": 0.6,
+  "burst": 0.4
+ },
+ {
+  "file": "fr-seismic-0574_loop.flac",
+  "category": "seismic",
+  "seconds": 115.0,
+  "centroid": 17,
+  "loudness": -16.6,
+  "gap": 7.4,
+  "burst": 4.8
+ },
+ {
+  "file": "fr-seismic-2143_loop.flac",
+  "category": "seismic",
+  "seconds": 115.0,
+  "centroid": 119,
+  "loudness": -20.1,
+  "gap": 8.3,
+  "burst": 8.3
+ },
+ {
+  "file": "fr-seismic-1393_loop.flac",
+  "category": "seismic",
+  "seconds": 115.0,
+  "centroid": 340,
+  "loudness": -17.2,
+  "gap": 1.6,
+  "burst": 2.7
+ },
+ {
+  "file": "fr-seismic-0287_loop.flac",
+  "category": "seismic",
+  "seconds": 115.0,
+  "centroid": 897,
+  "loudness": -15.9,
+  "gap": 5.5,
+  "burst": 2.6
+ },
+ {
+  "file": "fr-ritual-objects-2119_loop.flac",
+  "category": "ritual-objects",
+  "seconds": 55.0,
+  "centroid": 15,
+  "loudness": -26.0,
+  "gap": 4.4,
+  "burst": 7.7
+ },
+ {
+  "file": "fr-ritual-objects-0033_loop.flac",
+  "category": "ritual-objects",
+  "seconds": 55.0,
+  "centroid": 60,
+  "loudness": -14.2,
+  "gap": 3.7,
+  "burst": 2.5
+ },
+ {
+  "file": "fr-ritual-objects-1855_loop.flac",
+  "category": "ritual-objects",
+  "seconds": 115.0,
+  "centroid": 253,
+  "loudness": -20.9,
+  "gap": 9.7,
+  "burst": 4.9
+ },
+ {
+  "file": "fr-ritual-objects-0981_loop.flac",
+  "category": "ritual-objects",
+  "seconds": 40.5,
+  "centroid": 2737,
+  "loudness": -37.2,
+  "gap": 1.8,
+  "burst": 3.4
+ },
+ {
+  "file": "fr-abandoned-1046_loop.flac",
+  "category": "abandoned",
+  "seconds": 115.0,
+  "centroid": 170,
+  "loudness": -18.4,
+  "gap": 1.2,
+  "burst": 3.7
+ },
+ {
+  "file": "fr-abandoned-2168_loop.flac",
+  "category": "abandoned",
+  "seconds": 115.0,
+  "centroid": 298,
+  "loudness": -19.4,
+  "gap": 1.3,
+  "burst": 2.9
+ },
+ {
+  "file": "fr-abandoned-1751_loop.flac",
+  "category": "abandoned",
+  "seconds": 55.0,
+  "centroid": 416,
+  "loudness": -18.7,
+  "gap": 4.2,
+  "burst": 4.3
+ },
+ {
+  "file": "fr-abandoned-1956_loop.flac",
+  "category": "abandoned",
+  "seconds": 55.0,
+  "centroid": 754,
+  "loudness": -18.4,
+  "gap": 2.0,
+  "burst": 3.7
+ },
+ {
+  "file": "fr-tunnel-1938_loop.flac",
+  "category": "tunnel",
+  "seconds": 55.0,
+  "centroid": 65,
+  "loudness": -20.8,
+  "gap": 2.8,
+  "burst": 6.4
+ },
+ {
+  "file": "fr-tunnel-0634_loop.flac",
+  "category": "tunnel",
+  "seconds": 55.0,
+  "centroid": 139,
+  "loudness": -15.7,
+  "gap": 10.8,
+  "burst": 2.0
+ },
+ {
+  "file": "fr-tunnel-0118_loop.flac",
+  "category": "tunnel",
+  "seconds": 115.0,
+  "centroid": 294,
+  "loudness": -15.0,
+  "gap": 1.4,
+  "burst": 1.7
+ },
+ {
+  "file": "fr-tunnel-1435_loop.flac",
+  "category": "tunnel",
+  "seconds": 85.0,
+  "centroid": 601,
+  "loudness": -17.6,
+  "gap": 1.2,
+  "burst": 2.3
+ },
+ {
+  "file": "fr-metal-creak-0330_loop.flac",
+  "category": "metal-creak",
+  "seconds": 55.0,
+  "centroid": 135,
+  "loudness": -29.7,
+  "gap": 4.8,
+  "burst": 7.7
+ },
+ {
+  "file": "fr-metal-creak-0835_loop.flac",
+  "category": "metal-creak",
+  "seconds": 55.0,
+  "centroid": 206,
+  "loudness": -16.3,
+  "gap": 0.7,
+  "burst": 0.9
+ },
+ {
+  "file": "fr-metal-creak-1459_loop.flac",
+  "category": "metal-creak",
+  "seconds": 85.0,
+  "centroid": 411,
+  "loudness": -26.3,
+  "gap": 1.7,
+  "burst": 1.8
+ },
+ {
+  "file": "fr-metal-creak-0017_loop.flac",
+  "category": "metal-creak",
+  "seconds": 85.0,
+  "centroid": 502,
+  "loudness": -22.4,
+  "gap": 4.7,
+  "burst": 6.6
+ },
+ {
+  "file": "fr-dark-drone-noise-1831_loop.flac",
+  "category": "dark-drone-noise",
+  "seconds": 55.0,
+  "centroid": 26,
+  "loudness": -11.0,
+  "gap": 1.5,
+  "burst": 1.8
+ },
+ {
+  "file": "fr-dark-drone-noise-0933_loop.flac",
+  "category": "dark-drone-noise",
+  "seconds": 85.0,
+  "centroid": 113,
+  "loudness": -13.9,
+  "gap": 3.8,
+  "burst": 2.6
+ },
+ {
+  "file": "fr-dark-drone-noise-0474_loop.flac",
+  "category": "dark-drone-noise",
+  "seconds": 115.0,
+  "centroid": 263,
+  "loudness": -17.8,
+  "gap": 1.4,
+  "burst": 4.8
+ },
+ {
+  "file": "fr-dark-drone-noise-1390_loop.flac",
+  "category": "dark-drone-noise",
+  "seconds": 115.0,
+  "centroid": 758,
+  "loudness": -15.1,
+  "gap": 0.3,
+  "burst": 0.3
+ },
+ {
+  "file": "fr-electric-2691_loop.flac",
+  "category": "electric",
+  "seconds": 40.5,
+  "centroid": 17,
+  "loudness": -9.7,
+  "gap": 4.7,
+  "burst": 3.1
+ },
+ {
+  "file": "fr-electric-2329_loop.flac",
+  "category": "electric",
+  "seconds": 85.0,
+  "centroid": 53,
+  "loudness": -21.6,
+  "gap": 3.8,
+  "burst": 7.7
+ },
+ {
+  "file": "fr-electric-2556_loop.flac",
+  "category": "electric",
+  "seconds": 115.0,
+  "centroid": 268,
+  "loudness": -25.6,
+  "gap": 0.9,
+  "burst": 3.8
+ },
+ {
+  "file": "fr-electric-0706_loop.flac",
+  "category": "electric",
+  "seconds": 85.0,
+  "centroid": 1024,
+  "loudness": -37.1,
+  "gap": 4.2,
+  "burst": 1.6
+ },
+ {
+  "file": "fr-ventilation-2668_loop.flac",
+  "category": "ventilation",
+  "seconds": 85.0,
+  "centroid": 18,
+  "loudness": -13.9,
+  "gap": 3.6,
+  "burst": 3.7
+ },
+ {
+  "file": "fr-ventilation-0469_loop.flac",
+  "category": "ventilation",
+  "seconds": 55.0,
+  "centroid": 71,
+  "loudness": -13.8,
+  "gap": 1.7,
+  "burst": 4.3
+ },
+ {
+  "file": "fr-ventilation-1164_loop.flac",
+  "category": "ventilation",
+  "seconds": 85.0,
+  "centroid": 208,
+  "loudness": -15.2,
+  "gap": 0.9,
+  "burst": 0.9
+ },
+ {
+  "file": "fr-ventilation-2520_loop.flac",
+  "category": "ventilation",
+  "seconds": 85.0,
+  "centroid": 519,
+  "loudness": -19.0,
+  "gap": 3.7,
+  "burst": 7.1
+ },
+ {
+  "file": "fr-factory-2340_loop.flac",
+  "category": "factory",
+  "seconds": 85.0,
+  "centroid": 35,
+  "loudness": -18.0,
+  "gap": 2.4,
+  "burst": 4.8
+ },
+ {
+  "file": "fr-factory-1556_loop.flac",
+  "category": "factory",
+  "seconds": 55.0,
+  "centroid": 113,
+  "loudness": -15.1,
+  "gap": 0.9,
+  "burst": 2.6
+ },
+ {
+  "file": "fr-factory-1826_loop.flac",
+  "category": "factory",
+  "seconds": 85.0,
+  "centroid": 370,
+  "loudness": -16.1,
+  "gap": 0.6,
+  "burst": 1.3
+ },
+ {
+  "file": "fr-factory-1053_loop.flac",
+  "category": "factory",
+  "seconds": 115.0,
+  "centroid": 712,
+  "loudness": -17.8,
+  "gap": 0.9,
+  "burst": 4.9
+ },
+ {
+  "file": "fr-polar-station-2474_loop.flac",
+  "category": "polar-station",
+  "seconds": 55.0,
+  "centroid": 60,
+  "loudness": -15.6,
+  "gap": 1.6,
+  "burst": 2.2
+ },
+ {
+  "file": "fr-polar-station-0186_loop.flac",
+  "category": "polar-station",
+  "seconds": 55.0,
+  "centroid": 108,
+  "loudness": -15.4,
+  "gap": 1.4,
+  "burst": 2.6
+ },
+ {
+  "file": "fr-polar-station-1231_loop.flac",
+  "category": "polar-station",
+  "seconds": 115.0,
+  "centroid": 292,
+  "loudness": -24.4,
+  "gap": 2.9,
+  "burst": 3.4
+ },
+ {
+  "file": "fr-polar-station-1153_loop.flac",
+  "category": "polar-station",
+  "seconds": 55.0,
+  "centroid": 795,
+  "loudness": -16.8,
+  "gap": 0.4,
+  "burst": 0.8
+ },
+ {
+  "file": "fr-radio-space-2364_loop.flac",
+  "category": "radio-space",
+  "seconds": 115.0,
+  "centroid": 102,
+  "loudness": -17.0,
+  "gap": 2.0,
+  "burst": 3.2
+ },
+ {
+  "file": "fr-radio-space-1400_loop.flac",
+  "category": "radio-space",
+  "seconds": 115.0,
+  "centroid": 193,
+  "loudness": -17.7,
+  "gap": 4.7,
+  "burst": 3.2
+ },
+ {
+  "file": "fr-radio-space-0870_loop.flac",
+  "category": "radio-space",
+  "seconds": 55.0,
+  "centroid": 304,
+  "loudness": -22.8,
+  "gap": 6.1,
+  "burst": 5.4
+ },
+ {
+  "file": "fr-radio-space-2013_loop.flac",
+  "category": "radio-space",
+  "seconds": 115.0,
+  "centroid": 778,
+  "loudness": -12.6,
+  "gap": 1.5,
+  "burst": 0.7
+ },
+ {
+  "file": "fr-empty-space-1117_loop.flac",
+  "category": "empty-space",
+  "seconds": 115.0,
+  "centroid": 142,
+  "loudness": -25.5,
+  "gap": 1.9,
+  "burst": 8.3
+ },
+ {
+  "file": "fr-empty-space-1001_loop.flac",
+  "category": "empty-space",
+  "seconds": 55.0,
+  "centroid": 234,
+  "loudness": -16.3,
+  "gap": 0.6,
+  "burst": 0.6
+ },
+ {
+  "file": "fr-empty-space-0011_loop.flac",
+  "category": "empty-space",
+  "seconds": 115.0,
+  "centroid": 365,
+  "loudness": -18.1,
+  "gap": 1.4,
+  "burst": 6.9
+ },
+ {
+  "file": "fr-empty-space-2256_loop.flac",
+  "category": "empty-space",
+  "seconds": 115.0,
+  "centroid": 756,
+  "loudness": -25.7,
+  "gap": 0.4,
+  "burst": 2.6
+ },
+ {
+  "file": "fr-grain-texture-0790_loop.flac",
+  "category": "grain-texture",
+  "seconds": 40.5,
+  "centroid": 88,
+  "loudness": -23.3,
+  "gap": 3.4,
+  "burst": 7.1
+ },
+ {
+  "file": "fr-grain-texture-0602_loop.flac",
+  "category": "grain-texture",
+  "seconds": 85.0,
+  "centroid": 180,
+  "loudness": -34.5,
+  "gap": 2.3,
+  "burst": 6.5
+ },
+ {
+  "file": "fr-grain-texture-2074_loop.flac",
+  "category": "grain-texture",
+  "seconds": 115.0,
+  "centroid": 558,
+  "loudness": -33.5,
+  "gap": 9.1,
+  "burst": 8.1
+ },
+ {
+  "file": "fr-grain-texture-0138_loop.flac",
+  "category": "grain-texture",
+  "seconds": 85.0,
+  "centroid": 2509,
+  "loudness": -33.4,
+  "gap": 0.9,
+  "burst": 2.9
+ },
+ {
+  "file": "nasa/shots/First acoustic recording of laser shots on Mars.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Beyond",
+  "seconds": 11.0,
+  "centroid": 3271,
+  "loudness": -58.4,
+  "gap": 33.3,
+  "burst": 0.9,
+  "url": "https://www.nasa.gov/wp-content/uploads/2024/05/scam-mic-sol012-run001.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/shots/First audio recording of sounds on Mars.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Beyond",
+  "seconds": 20.0,
+  "centroid": 270,
+  "loudness": -29.4,
+  "gap": 4.3,
+  "burst": 15.0,
+  "url": "https://www.nasa.gov/wp-content/uploads/2024/05/scam-mic-sol001-run001.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/InSight robotic arm.flac",
+  "category": "nasa",
+  "folder": "NASA/Beyond",
+  "seconds": 111.0,
+  "centroid": 530,
+  "loudness": -25.2,
+  "gap": 44.2,
+  "burst": 13.6,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/20190819-Sol-98-SEIS-Spatialized-reflective.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/InSight seismometer dinks and donks.flac",
+  "category": "nasa",
+  "folder": "NASA/Beyond",
+  "seconds": 120.1,
+  "centroid": 570,
+  "loudness": -29.3,
+  "gap": 18.6,
+  "burst": 14.1,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/Cropped-Dinks-and-Donks-sample.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/InSight seismometer raw full length.flac",
+  "category": "nasa",
+  "folder": "NASA/Beyond",
+  "seconds": 937.0,
+  "centroid": 6,
+  "loudness": -16.5,
+  "gap": 7.3,
+  "burst": 6.4,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/06-MASTERRESAMPLED-48Kraw_velocity_0.6_normalisedx1.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/shots/InSight seismometer two octaves up.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Beyond",
+  "seconds": 20.0,
+  "centroid": 28,
+  "loudness": -9.1,
+  "gap": 1.6,
+  "burst": 2.1,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/08-Brian-Cook_raw_velocity_0.6_normalisedx1_2octavesUp_03.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/Ingenuity Mars helicopter in flight.flac",
+  "category": "nasa",
+  "folder": "NASA/Beyond",
+  "seconds": 150.1,
+  "centroid": 85,
+  "loudness": -12.4,
+  "gap": 29.8,
+  "burst": 2.2,
+  "url": "https://www.nasa.gov/wp-content/uploads/2024/05/jpl-20210506-listen-to-nasas-ingenuity-helicopter-as-it-flies-on-mars.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/Juno Ganymede flyby.flac",
+  "category": "nasa",
+  "folder": "NASA/Beyond",
+  "seconds": 49.0,
+  "centroid": 1159,
+  "loudness": -17.3,
+  "gap": 2.8,
+  "burst": 4.8,
+  "url": "https://www.nasa.gov/wp-content/uploads/2024/05/e2-wave-ganymede-flyby-compressed.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/shots/Marsquake magnitude 3 3 25 July 2019.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Beyond",
+  "seconds": 15.7,
+  "centroid": 63,
+  "loudness": -23.9,
+  "gap": 31.9,
+  "burst": 6.7,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/Quake-Sol-235.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/Marsquake magnitude 3 7 22 May 2019.flac",
+  "category": "nasa",
+  "folder": "NASA/Beyond",
+  "seconds": 46.9,
+  "centroid": 56,
+  "loudness": -25.7,
+  "gap": 26.8,
+  "burst": 10.0,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/Quake-Sol-173.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/Perseverance SuperCam records wind on Mars.flac",
+  "category": "nasa",
+  "folder": "NASA/Beyond",
+  "seconds": 40.0,
+  "centroid": 45,
+  "loudness": -29.0,
+  "gap": 15.9,
+  "burst": 10.4,
+  "url": "https://www.nasa.gov/wp-content/uploads/2024/05/scam-mic-sol004-run001.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/Perseverance gaseous dust removal tool filtered.flac",
+  "category": "nasa",
+  "folder": "NASA/Beyond",
+  "seconds": 846.0,
+  "centroid": 9,
+  "loudness": -29.7,
+  "gap": 87.6,
+  "burst": 17.9,
+  "url": "https://www.nasa.gov/wp-content/uploads/2024/05/em-0346-edlc-mic-gdrt-session-34-filtered.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/Perseverance records a Martian dust devil.flac",
+  "category": "nasa",
+  "folder": "NASA/Beyond",
+  "seconds": 27.0,
+  "centroid": 67,
+  "loudness": -45.3,
+  "gap": 74.7,
+  "burst": 31.5,
+  "url": "https://www.nasa.gov/wp-content/uploads/2024/05/pia25657.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/Perseverance rover driving sol 16 highlights.flac",
+  "category": "nasa",
+  "folder": "NASA/Beyond",
+  "seconds": 85.0,
+  "centroid": 69,
+  "loudness": -27.6,
+  "gap": 25.4,
+  "burst": 20.1,
+  "url": "https://www.nasa.gov/wp-content/uploads/2024/05/filtered-highlights-sol16roverdrivehighlights.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/shots/Sounds from Mars rover self-noise filtered out.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Beyond",
+  "seconds": 18.0,
+  "centroid": 36,
+  "loudness": -33.0,
+  "gap": 45.0,
+  "burst": 16.6,
+  "url": "https://www.nasa.gov/wp-content/uploads/2024/05/sounds-from-mars-filters-out-rover-self-noise.wav",
+  "listed": "https://www.nasa.gov/sounds-from-beyond/"
+ },
+ {
+  "file": "nasa/shots/Atlas V - Launch.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Historical/Missions",
+  "seconds": 20.1,
+  "centroid": 99,
+  "loudness": -24.8,
+  "gap": 3.5,
+  "burst": 3.2,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/590329main_ringtone_SDO_launchNats.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/shots/Cassini - Enceladus sound.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Historical/Missions",
+  "seconds": 10.7,
+  "centroid": 703,
+  "loudness": -8.5,
+  "gap": 6.9,
+  "burst": 2.8,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/584796main_enceladus.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/shots/Cassini - Saturn radio emissions 1.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Historical/Missions",
+  "seconds": 19.2,
+  "centroid": 1152,
+  "loudness": -18.6,
+  "gap": 11.9,
+  "burst": 2.2,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/584791main_spookysaturn.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/shots/Cassini - Saturn radio emissions 2.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Historical/Missions",
+  "seconds": 13.0,
+  "centroid": 648,
+  "loudness": -22.7,
+  "gap": 4.8,
+  "burst": 1.9,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/584795main_saturn_radio_waves.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/shots/Kepler - Star KIC12268220C light curve.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Historical/Missions",
+  "seconds": 7.0,
+  "centroid": 65,
+  "loudness": -12.3,
+  "gap": 0.1,
+  "burst": 0.1,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/578358main_kepler_star_KIC12268220C.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/shots/Kepler - Star KIC7671081B light curve.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Historical/Missions",
+  "seconds": 20.6,
+  "centroid": 103,
+  "loudness": -9.6,
+  "gap": 2.7,
+  "burst": 1.3,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/578359main_kepler_star_KIC7671081B.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/SOFIA - Takeoff.flac",
+  "category": "nasa",
+  "folder": "NASA/Historical/Missions",
+  "seconds": 25.8,
+  "centroid": 408,
+  "loudness": -21.8,
+  "gap": 2.9,
+  "burst": 0.4,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/sofia_takeoff_audio.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/shots/Stardust - Passing comet Tempel 1.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Historical/Missions",
+  "seconds": 9.1,
+  "centroid": 771,
+  "loudness": -26.3,
+  "gap": 66.6,
+  "burst": 6.1,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/598980main_stardust_tempel1.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/shots/Voyager - Lightning on Jupiter.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Historical/Missions",
+  "seconds": 7.8,
+  "centroid": 653,
+  "loudness": -17.3,
+  "gap": 1.4,
+  "burst": 0.6,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/603921main_voyager_jupiter_lightning.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/Chorus radio waves in Earths atmosphere.flac",
+  "category": "nasa",
+  "folder": "NASA/Historical/Beeps",
+  "seconds": 29.9,
+  "centroid": 1602,
+  "loudness": -29.9,
+  "gap": 14.6,
+  "burst": 14.7,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/693857main_emfisis_chorus_1.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/shots/Quindar sound 1.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Historical/Beeps",
+  "seconds": 24.4,
+  "centroid": 892,
+  "loudness": -18.5,
+  "gap": 7.7,
+  "burst": 3.1,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/578628main_hskquindar.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/shots/Quindar sound 2.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Historical/Beeps",
+  "seconds": 24.2,
+  "centroid": 995,
+  "loudness": -19.1,
+  "gap": 8.8,
+  "burst": 4.2,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/578629main_hawquindar.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/shots/SLS test fire.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Historical/Beeps",
+  "seconds": 23.6,
+  "centroid": 348,
+  "loudness": -7.2,
+  "gap": 13.0,
+  "burst": 1.9,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/663784main_SLS_Audio_D.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/shots/Sputnik beep.flac",
+  "category": "nasa-shot",
+  "folder": "NASA/Historical/Beeps",
+  "seconds": 4.4,
+  "centroid": 1022,
+  "loudness": -11.0,
+  "gap": 3.5,
+  "burst": 1.7,
+  "url": "https://www.nasa.gov/wp-content/uploads/2015/01/578626main_sputnik-beep.mp3",
+  "listed": "https://www.nasa.gov/historical-sounds/"
+ },
+ {
+  "file": "nasa/Webb - Cosmic Cliffs mountains.flac",
+  "category": "nasa",
+  "folder": "NASA/Sonification/Webb",
+  "seconds": 36.0,
+  "centroid": 445,
+  "loudness": -17.2,
+  "gap": 43.2,
+  "burst": 2.2,
+  "url": "https://www3.nasa.gov/specials/sounds/carina-bot-Aug-3.wav",
+  "listed": "https://www.nasa.gov/data-sonifications/"
+ },
+ {
+  "file": "nasa/Webb - Cosmic Cliffs sky.flac",
+  "category": "nasa",
+  "folder": "NASA/Sonification/Webb",
+  "seconds": 36.0,
+  "centroid": 1203,
+  "loudness": -29.6,
+  "gap": 37.6,
+  "burst": 4.8,
+  "url": "https://www3.nasa.gov/specials/sounds/carina-top-Aug-3.wav",
+  "listed": "https://www.nasa.gov/data-sonifications/"
+ },
+ {
+  "file": "nasa/Webb - Cosmic Cliffs stars.flac",
+  "category": "nasa",
+  "folder": "NASA/Sonification/Webb",
+  "seconds": 36.0,
+  "centroid": 1201,
+  "loudness": -33.2,
+  "gap": 26.4,
+  "burst": 5.3,
+  "url": "https://www3.nasa.gov/specials/sounds/carina-stars-Aug-3.wav",
+  "listed": "https://www.nasa.gov/data-sonifications/"
+ },
+ {
+  "file": "nasa/Webb - Cosmic Cliffs.flac",
+  "category": "nasa",
+  "folder": "NASA/Sonification/Webb",
+  "seconds": 36.0,
+  "centroid": 507,
+  "loudness": -17.1,
+  "gap": 42.4,
+  "burst": 2.4,
+  "url": "https://www3.nasa.gov/specials/sounds/carina-Aug-3.wav",
+  "listed": "https://www.nasa.gov/data-sonifications/"
+ },
+ {
+  "file": "nasa/Webb - Southern Ring Nebula mid-infrared.flac",
+  "category": "nasa",
+  "folder": "NASA/Sonification/Webb",
+  "seconds": 32.0,
+  "centroid": 285,
+  "loudness": -24.4,
+  "gap": 85.3,
+  "burst": 14.9,
+  "url": "https://www3.nasa.gov/specials/sounds/ring-miri-Aug-%203.wav",
+  "listed": "https://www.nasa.gov/data-sonifications/"
+ },
+ {
+  "file": "nasa/Webb - Southern Ring Nebula near-infrared.flac",
+  "category": "nasa",
+  "folder": "NASA/Sonification/Webb",
+  "seconds": 33.0,
+  "centroid": 802,
+  "loudness": -30.0,
+  "gap": 89.1,
+  "burst": 17.1,
+  "url": "https://www3.nasa.gov/specials/sounds/ring-nircam-Aug-3.wav",
+  "listed": "https://www.nasa.gov/data-sonifications/"
+ },
+ {
+  "file": "nasa/Webb - Southern Ring Nebula side by side.flac",
+  "category": "nasa",
+  "folder": "NASA/Sonification/Webb",
+  "seconds": 60.0,
+  "centroid": 419,
+  "loudness": -26.5,
+  "gap": 19.3,
+  "burst": 16.3,
+  "url": "https://www3.nasa.gov/specials/sounds/ring-side-by-side-Aug-3.wav",
+  "listed": "https://www.nasa.gov/data-sonifications/"
+ },
+ {
+  "file": "nasa/Webb - WASP-96 b.flac",
+  "category": "nasa",
+  "folder": "NASA/Sonification/Webb",
+  "seconds": 26.0,
+  "centroid": 918,
+  "loudness": -32.0,
+  "gap": 88.0,
+  "burst": 17.9,
+  "url": "https://www3.nasa.gov/specials/sounds/wasp-notes-Aug-3.wav",
+  "listed": "https://www.nasa.gov/data-sonifications/"
+ }
+]

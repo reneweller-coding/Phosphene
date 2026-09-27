@@ -121,6 +121,10 @@ void dumpDecisions(Composer& composer, const ParamStore& params, uint64_t seed, 
         std::printf("  effects (%zu):\n", p.form.sfx.size());
         for (const SfxEvent& e : p.form.sfx)
             std::printf("    %-14s beat %7g length %5g preset %d\n", kSfxTypeNames[std::clamp(e.type, 0, kNumSfxTypes - 1)], e.beat, static_cast<double>(e.length), e.variant);
+        // The Field track's places (27.09.2026, placeField): start, length, velocity.
+        std::printf("  field (%zu):\n", p.form.field.size());
+        for (const SfxEvent& e : p.form.field)
+            std::printf("    beat %7g length %5g velocity %d\n", e.beat, static_cast<double>(e.length), e.variant);
     }
     // What the composer sends, sixteen bars at a time: a checksum over every note and every control event.
     std::vector<NoteEvent> notes;

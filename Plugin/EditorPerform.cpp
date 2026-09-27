@@ -157,10 +157,10 @@ void PhospheneEditor::buildPerformPage()
         learn->onClick = [this] {
             int verdicts = 0;
             const Preferences prefs = proc_.fitFromRatings(&verdicts);
-            juce::String text;
-            if (prefs.empty()) text << "Nothing to learn yet: " << verdicts << " verdicts with their decisions. Rate a few bars first (Good here / Bad here).";
-            else text << verdicts << " verdicts give " << static_cast<int>(prefs.size()) << " weights (positive: chosen more often):\n\n" << juce::String(prefs.toText()).fromFirstOccurrenceOf("\n", false, false);
-            galleryAsk_ = std::make_unique<juce::AlertWindow>("Learn from my ratings", text, juce::MessageBoxIconType::NoIcon);
+            juce::String summary;
+            if (prefs.empty()) summary << "Nothing to learn yet: " << verdicts << " verdicts with their decisions. Rate a few bars first (Good here / Bad here).";
+            else summary << verdicts << " verdicts give " << static_cast<int>(prefs.size()) << " weights (positive: chosen more often):\n\n" << juce::String(prefs.toText()).fromFirstOccurrenceOf("\n", false, false);
+            galleryAsk_ = std::make_unique<juce::AlertWindow>("Learn from my ratings", summary, juce::MessageBoxIconType::NoIcon);
             if (!prefs.empty()) galleryAsk_->addButton("Apply", 1, juce::KeyPress(juce::KeyPress::returnKey));
             galleryAsk_->addButton(prefs.empty() ? "OK" : "Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
             galleryAsk_->enterModalState(true, juce::ModalCallbackFunction::create([this, prefs](int result) {

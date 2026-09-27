@@ -2059,7 +2059,7 @@ const SfxPreset kSfxBank[2048] = {
     { 1.0000f, 0.7956f, 1.1985f, 2.3233f, 0.2861f, 0.2479f, 5.0000f, 0.8380f, 0.0715f, 0.0762f, 0.3516f, 0.1781f },   // Atmosphere 512
 };
 const int kSfxBankSize = 2048;
-const int kSfxBankOffset[kNumSfxTypes] = { 0, 256, 384, 512, 768, 864, 1120, 1216, 1344, 1408, 1408, 1408, 1536, 1536, 1536, 1536, 1536, 1536, 1536, 1536 };
-const int kSfxBankCount[kNumSfxTypes] = { 256, 128, 128, 256, 96, 256, 96, 128, 64, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 512 };
+const int kSfxBankOffset[kNumSfxTypes] = { 0, 256, 384, 512, 768, 864, 1120, 1216, 1344, 1408, 1408, 1408, 1536, 1536, 1536, 1536, 1536, 1536, 1536, 1536, 2048 };
+const int kSfxBankCount[kNumSfxTypes] = { 256, 128, 128, 256, 96, 256, 96, 128, 64, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 512, 0 };
 
 } // namespace phos

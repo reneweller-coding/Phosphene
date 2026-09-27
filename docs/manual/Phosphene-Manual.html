@@ -40,8 +40,8 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <div class="cover">
 <h1>Phosphene</h1>
 <p class="sub">Manual &middot; version 1.1.0</p>
-<img src="tab-0-set.png" alt="">
-<p class="facts">1457 parameters &middot; 16 tabs &middot; 4 perform macros &middot; every picture in this manual is the plugin drawing itself at design size</p>
+<img src="../screenshots/tab-0-set.png" alt="">
+<p class="facts">1551 parameters &middot; 17 tabs &middot; 4 perform macros &middot; every picture in this manual is the plugin drawing itself at design size</p>
 </div>
 <div class="toc"><h2>Contents</h2><ol>
 <li>About</li>
@@ -59,6 +59,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <li>Pad</li>
 <li>Drone</li>
 <li>SFX / FX</li>
+<li>Field</li>
 <li>Mixer / Master</li>
 <li>Perform</li>
 <li>Gallery</li>
@@ -69,16 +70,16 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 </ol></div>
 <div class="topic">
 <h2>1. About</h2>
-<p>Phosphene composes and plays complete psytrance sets. You give it a seed, a style and an energy arc; it writes the tracks -- their keys, tempi, forms, patterns and sounds -- and synthesises them in real time. There is no sample library and no loop pool: every sound is made by the engine, and every note is decided by the composer.</p>
+<p>Phosphene composes and plays complete psytrance sets. You give it a seed, a style and an energy arc; it writes the tracks -- their keys, tempi, forms, patterns and sounds -- and synthesises them in real time. There is no loop pool and no sampled instrument: every note is decided by the composer, and every sound is made by the engine -- except the spoken phrases and, on the Field track, field recordings of real places (and of NASA&#x27;s missions), which a place cannot be synthesised without.</p>
 <p>Two ideas run through the whole instrument. The first is that the same seed always gives the same set: bar 3000 is bar 3000 whether the night was played from the start or joined in the middle, which is what makes a set something you can save in seven lines of text and hand to someone else. The second is that the composer never writes a knob. For every track it chooses a sound preset for each synth and plays it, and on top of that it rides offsets -- a section opening a filter, the level match evening out the parts. The knobs stay yours: the tab shows the preset the composer plays, a thin bright ring shows where a value plays away from its knob, and the moment you turn a knob the synth is yours again (Own Sound).</p>
 <p>The panel has a tab per generator, plus the pages that are about the set rather than the sound: Set, Arrange, Mixer / Master, Perform and Gallery. Every control on every page is generated from the engine&#x27;s own parameter tables, and so is this manual.</p>
 </div>
 <div class="topic">
 <h2>2. Signal flow</h2>
 <p>The picture is the whole instrument in the order it works. At the top the composer: a seed becomes a set arc, the arc becomes tracks with keys, tempi, styles and forms, and each track becomes a score, a choice of sounds and a mix -- the last measured by rendering parts of the track before it plays. The conductor hands notes and control events to the engine on an absolute grid of 32 samples, which is why a bar sounds the same however a host cuts its blocks.</p>
-<p>On the left the generators, each in the colour of its tab: kick, bass and percussion, the acid, the six melodic voices with their oscillators, filter models and envelopes, and the effects with the bed and the spoken voices. Every part has a channel strip -- level, the kick&#x27;s sidechain duck, the trance gate and its distance -- and sends into three planes of space: a room near, a plate in the middle, a hall far behind, plus a gated hall a voice can choose. The master sums it all and brings it to loudness: gain, bus compressor, mono bass, soft clipper, band limit, a true-peak limiter and a safety clip, metered to BS.1770. Out go the audio, the stems, the score as MIDI and the cues over OSC.</p>
+<p>On the left the generators, each in the colour of its tab: kick, bass and percussion, the acid, the six melodic voices with their oscillators, filter models and envelopes, the effects with the bed and the spoken voices, and the Field track&#x27;s sampler. Every part has a channel strip -- level, the kick&#x27;s sidechain duck, the trance gate and its distance -- and sends into three planes of space: a room near, a plate in the middle, a hall far behind, plus a gated hall a voice can choose. The master sums it all and brings it to loudness: gain, bus compressor, mono bass, soft clipper, band limit, a true-peak limiter and a safety clip, metered to BS.1770. Out go the audio, the stems, the score as MIDI and the cues over OSC.</p>
 <p>Along the bottom the modulation of every voice: its envelopes, four LFOs and an eight-slot matrix.</p>
-<figure><img src="flow.png" alt=""><figcaption>The signal flow, drawn by the plugin (the same picture as the help page's).</figcaption></figure>
+<figure><img src="../screenshots/flow.png" alt=""><figcaption>The signal flow, drawn by the plugin (the same picture as the help page's).</figcaption></figure>
 </div>
 <div class="topic">
 <h2>3. Set</h2>
@@ -86,7 +87,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Planning a track measures it by rendering parts of it -- its loudness through the master, the brightness of its lines, how audible each line is against the lead. For the first track of a set that happens behind the music: it starts playing at once, its intro runs, and the measured levels ride in over a phrase long before the kick and the lines arrive. A jump to a track that has not been planned yet still waits for its measurements; the header says &quot;planning&quot; rather than going quiet without explanation. In the standalone this has usually happened before you press anything, because the composer thread starts working when the window opens.</p>
 <p>The composer&#x27;s own knobs are here, grouped by what they decide. Start &amp; Style is where the night begins: the style profile, whether the style walks through the set (Style Mix) and whether each track takes its style&#x27;s own tempo (Style Tempo, which then replaces Tempo and Tempo Range), and the start key and scale. They are called &quot;start&quot; because they are exactly that -- the first track plays them, and from the second on the key, the tempo and (with Style Mix) the style move from track to track as a DJ would move them. Set Journey is the shape of the night: the energy arc, the set length, the track length and how much tracks and sounds vary. Kick &amp; Bass, Rhythm, Melody, Lead and Voices say how much of each part there is and how it is drawn; Levels holds the three automatic balances -- the loudness of whole tracks, the presence of the melodic lines, and the audibility of the quiet lines against the lead.</p>
 <p>Export MIDI writes the score of the first N bars as a Standard MIDI File with a named track per part, section markers and the tempo map. Export set writes a .phosset -- the seed, the style, the arc, the knobs that differ from their defaults, and every lock and reroll -- which phos_render will play back byte for byte.</p>
-<figure><img src="tab-0-set.png" alt=""><figcaption>The Set tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-0-set.png" alt=""><figcaption>The Set tab.</figcaption></figure>
 <h3>Start &amp; Style</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Start Style</td><td class="key">compose.style</td><td class="rng">Goa | Full-On | Progressive | Dark Forest | Hi-Tech</td><td class="rng">Full-On</td></tr>
@@ -150,6 +151,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <tr><td>SFX Amount</td><td class="key">compose.sfx_amount</td><td class="rng">0 .. 1</td><td class="rng">0.7</td></tr>
 <tr><td>Voice Density</td><td class="key">compose.voice_density</td><td class="rng">0 .. 2 x</td><td class="rng">1</td></tr>
 <tr><td>Bed Density</td><td class="key">compose.bed_density</td><td class="rng">0 .. 2 x</td><td class="rng">1</td></tr>
+<tr><td>Field Density</td><td class="key">compose.field_density</td><td class="rng">0 .. 2 x</td><td class="rng">1</td></tr>
 </table>
 <h3>Levels</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
@@ -163,14 +165,14 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>The Arrange tab is the whole planned set on one page, and the curation loop that goes with it.</p>
 <p>The strip across the top is the night: every planned track a block in the order it plays, the energy arc drawn over it, the play head in it. Underneath, each track gets a row of its own in which its own form fills the full width, so a section stays readable no matter how long the set is. The colours are the section categories: intro and outro grey, groove green, buildup amber, the pre-drop break violet, the drop red, the breakdown blue. Clicking any block jumps there.</p>
 <p>The two small glyphs on every track and every section are the answer to the oldest complaint about generators, which is that they are boring. The padlock freezes that unit on the seed it has; the die draws it again. Because a locked unit keeps its old seed and nothing later reads anything an earlier one decided, rerolling one track leaves every other track bit-identical -- so you can keep what you like and reroll what you do not, one section at a time, until the set is yours. Reroll the set draws the whole journey again and leaves the locked tracks exactly where they were.</p>
-<figure><img src="tab-1-arrange.png" alt=""><figcaption>The Arrange tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-1-arrange.png" alt=""><figcaption>The Arrange tab.</figcaption></figure>
 </div>
 <div class="topic">
 <h2>5. Kick</h2>
 <p>The kick is the floor of the genre and the first thing to get right. Two engines: a swept sine whose pitch falls from Pitch Start to Pitch End with its own decay, and a damped phasor resonator with the retrigger behaviour of a TR-808. Punch is a second, much faster pitch envelope on top of the first; Click adds the attack transient; Drive and Clip decide how much of the body survives.</p>
 <p>Two of its numbers are not free. The tail is limited so that the kick has fallen far enough by the time the first bass note starts, and the phase lock (on the Bass tab) can trim the kick&#x27;s decay so that the kick and the bass fundamental meet in phase. Both are applied in the engine, after every knob and every variation.</p>
 <p>The Kick Scope renders one hit with the values that play right now (the knobs plus the track&#x27;s recipe; stopped, the knobs): its waveform, its pitch sweep on a log axis, its spectrum, and in figures where the sweep starts, the note it lands on (with its cents off it), its length to -60 dB and its peak.</p>
-<figure><img src="tab-2-kick.png" alt=""><figcaption>The Kick tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-2-kick.png" alt=""><figcaption>The Kick tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Kick Own Sound</td><td class="key">mix.kick_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -213,7 +215,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Pattern and Gate are the note side: which of the five bass patterns the track prefers, and how long a note is as a fraction of its slot. The gate is never allowed to run shorter than half a period of the fundamental.</p>
 <p>The bass is a pedal on the root. Its figures at the phrase ends may touch the b2 or the leading tone only as a pickup -- at most two sixteenths, at the end of the bar, into the next downbeat; anywhere else the figure takes the fifth, because under the drone&#x27;s tonic those notes are a minor ninth in the low register. Bass Follows Chords (Set tab) moves the bass to the root the pad holds, and only where the pad plays; the drone moves with it.</p>
 <p>The Bass Scope renders one eighth note of the bass on the key&#x27;s root with the values that play right now (the knobs plus the track&#x27;s recipe; stopped, the knobs): its waveform, the filter&#x27;s cutoff over the note as the synth computes it, its spectrum, and the note and the filter&#x27;s travel in figures.</p>
-<figure><img src="tab-3-bass.png" alt=""><figcaption>The Bass tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-3-bass.png" alt=""><figcaption>The Bass tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Bass Own Sound</td><td class="key">mix.bass_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -343,7 +345,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Twelve lanes, each a complete voice: a tone with its own pitch envelope and FM, four modal sets, the 808 square stack, noise with clap bursts, a filter, a low cut, drive, choke and panning. The role of a lane decides what it plays in the groove and which General MIDI note it exports as.</p>
 <p>The patterns are euclidean, rotated to a middle amount of syncopation rather than to none, and the decisions are made per four-bar phrase. Every lane is high-passed at 150 Hz at the least: the bottom of the mix belongs to the kick and the bass, and a tom that reaches into it takes the floor away.</p>
 <p>On a metal lane, Noise trades against the square stack: at 1 the squares keep 20 % of their level. Six summed squares are six steady tones, and a cymbal made mostly of them rings like feedback. The default hats and ride therefore run almost all noise, with their low cuts at 3 .. 3.5 kHz.</p>
-<figure><img src="tab-4-percussion.png" alt=""><figcaption>The Percussion tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-4-percussion.png" alt=""><figcaption>The Percussion tab.</figcaption></figure>
 <p>The 12 lanes of the kit share one table; lane 1 is printed here and the others are the same controls under the keys <code>perc2.*</code> to <code>perc12.*</code>.</p>
 <h3>Lane</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
@@ -395,7 +397,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <h2>8. Acid</h2>
 <p>A diode ladder after Zavalishin, solved from the inside out, with an accent that charges a sweep capacitor the way the original did -- three accents in a row open further than one. Slide is an exponential glide into the next note, Squelch a cutoff start value plus a comb tuned to the note&#x27;s period. The tempo delay is in beats, so it follows the set.</p>
 <p>In the Phrygian modes the b2 is a degree of the acid&#x27;s own: the F of an E - F - E riff, on any step and held too. The other colour tones -- the upper note of an augmented second -- stay short neighbours that resolve to the tonic.</p>
-<figure><img src="tab-5-acid.png" alt=""><figcaption>The Acid tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-5-acid.png" alt=""><figcaption>The Acid tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Acid Own Sound</td><td class="key">mix.acid_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -517,7 +519,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>A supersaw after Szabo&#x27;s measurements of the JP-8000 -- the detune curve, the mix law and the random phase per note -- with a dynamic detune that follows the length of the note. The other three oscillator types are a virtual-analogue saw and pulse, two-operator FM and a wavetable.</p>
 <p>Everything but the kick and the bass is high-passed at its own fundamental, which is what keeps eight voices of supersaw out of the bass register.</p>
 <p>As in the acid, the Phrygian b2 is one of the lead&#x27;s degrees, on beats 2 and 4 and off the beat; beats 1 and 3 take a tone of the tonic chord.</p>
-<figure><img src="tab-6-lead.png" alt=""><figcaption>The Lead tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-6-lead.png" alt=""><figcaption>The Lead tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Lead Own Sound</td><td class="key">mix.lead_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -704,7 +706,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <div class="topic">
 <h2>10. Counter</h2>
 <p>The counter-lead answers the lead. It plays in the gaps the lead leaves and in a register of its own, so the two never mask each other; Counter Mode on the Set tab (or the style, on Auto) decides whether it echoes, answers or holds against the lead. The engine is the same as the lead&#x27;s, with its own knobs and its own presets.</p>
-<figure><img src="tab-7-counter.png" alt=""><figcaption>The Counter tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-7-counter.png" alt=""><figcaption>The Counter tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Counter Own Sound</td><td class="key">mix.counter_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -892,7 +894,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <h2>11. Arp</h2>
 <p>The same engine as the lead, with its own knobs. The arpeggio runs on chord tones, and when its pitch range would overlap the lead&#x27;s by more than two semitones it is octaved away: two voices playing in the same two octaves mask each other, and the composer checks that before it writes the notes.</p>
 <p>The counter never strikes together with the lead a semitone or a minor ninth apart on beats 1 and 3.</p>
-<figure><img src="tab-8-arp.png" alt=""><figcaption>The Arp tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-8-arp.png" alt=""><figcaption>The Arp tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Arp Own Sound</td><td class="key">mix.arp_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -1079,7 +1081,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <div class="topic">
 <h2>12. Stab</h2>
 <p>Short chord hits on the off-beats and the phrase ends, the punctuation of a groove. They are voiced from the track&#x27;s harmony and kept out of the lead&#x27;s register.</p>
-<figure><img src="tab-9-stab.png" alt=""><figcaption>The Stab tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-9-stab.png" alt=""><figcaption>The Stab tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Stab Own Sound</td><td class="key">mix.stab_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -1268,7 +1270,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Four-voice voicings with the smallest voice movement between chords, through the wavetable engine. The pads carry the blocks that have no lead and no acid, and the trance gate gives them their movement.</p>
 <p>Every pitched voice plays its FM ratio to the nearest half (1, 1.5, 2, ...), so an FM pad or lead is always harmonic: a ratio in between makes the bell and struck-metal spectra that sounded out of tune under a chord. A second oscillator stays within a few cents of its interval, and the pad&#x27;s partner plays in unison or an octave up, never a fifth, which would stack a second chord on the first.</p>
 <p>A pad never holds a minor ninth -- no note a semitone above the tonic that bass and drone play, none a semitone above its own root -- nor the leading tone under the tonic, nor a tritone over its root. Held for bars, those intervals sound wrong rather than dark; the genre makes its dissonance with the sound (clusters, noise, drones), and the Phrygian b2 belongs to the lead and the acid. Where the progression swings to the bII, the pad stays on the tonic and adds the minor sixth instead (E - B - E - C over E). The major seventh is a rare colour, on bVI and bIII only.</p>
-<figure><img src="tab-10-pad.png" alt=""><figcaption>The Pad tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-10-pad.png" alt=""><figcaption>The Pad tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Pad Own Sound</td><td class="key">mix.pad_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -1455,7 +1457,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <div class="topic">
 <h2>14. Drone</h2>
 <p>A long, slowly moving tone under the breakdowns and the intros: the sound that holds a track together when the kick is gone. It is high-passed above the bass so it never takes the floor. It holds the tonic, its fifth and its octave, and like the pad never a minor ninth over the bass -- in a DJ blend a note of the incoming track that would stand a semitone over the outgoing tonic waits for the hand-over. With Bass Follows Chords on it follows the bass to the pad&#x27;s root.</p>
-<figure><img src="tab-11-drone.png" alt=""><figcaption>The Drone tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-11-drone.png" alt=""><figcaption>The Drone tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Drone Own Sound</td><td class="key">mix.drone_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -1644,9 +1646,10 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>The effect generator makes risers, downlifters, impacts, sweeps, formant shots, reverse swells and zaps; the composer places them at the form&#x27;s boundaries -- a riser over the last eight bars of a buildup, ending exactly on the drop, the formant shot on the last beat of the pre-drop break, a descending sweep into the drop.</p>
 <p>Short one-shots -- zaps, squelches, bubbles, alien chatter -- fall at the ends of phrases, about one in eight bars of a groove and one in four of the climax; a groove is never left eight bars without an effect, and what fills such a gap is a sweep or a swell, never a zap.</p>
 <p>Effect Presets: every family of the effect bank (2048 presets in eleven families: riser, downlifter, impact, sweep, formant shot, reverse swell, zap, squelch, bubble, reverse crash, atmosphere) has a chooser. Auto lets the generator draw a preset of the family for every event, never the same twice in a track; a number makes every event of that family play that preset. &quot;Hear&quot; plays the chosen preset in the running set (with Auto, one of the family at random); while the transport stands nothing sounds.</p>
+<p>Space Shot: a recording of NASA&#x27;s, up to 25 seconds -- a rocket launch, Sputnik&#x27;s beep, Saturn&#x27;s radio emissions, a quake on Mars -- played whole, once, on this strip: after the cut of a breakdown, now and then in a long intro, most in Full-On and Hi-Tech, and never within two bars of a spoken phrase. It comes from the field recordings (Field tab); without them it stays silent.</p>
 <p>The tonal layer of an effect -- an atmosphere&#x27;s held tone above all -- is mapped into the mode, and never onto the b2 or the leading tone: a minor seventh the mode lacks becomes the fifth, not the major seventh.</p>
 <p>The two send effects are a short room and a long hall, both feedback delay networks. Their returns are ducked with the kick like everything else, and high-passed: a reverb tail in the bass register is mud.</p>
-<figure><img src="tab-12-sfx-fx.png" alt=""><figcaption>The SFX / FX tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-12-sfx-fx.png" alt=""><figcaption>The SFX / FX tab.</figcaption></figure>
 <h3>Effect Generator</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Level</td><td class="key">sfx.level</td><td class="rng">-36 .. 6 dB</td><td class="rng">-3</td></tr>
@@ -1758,7 +1761,149 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 </table>
 </div>
 <div class="topic">
-<h2>16. Mixer / Master</h2>
+<h2>16. Field</h2>
+<p>The Field track plays field recordings: a place under the music -- a rainforest, a night full of insects, rain on a roof, a river, a cave, a machine hall, the wind on Mars. It is a sampler, and its recordings are the original files, not converted: 120 recordings in 30 categories (four each, the steadiest and most different of their category; generated with Stable Audio 3 for Noctuary) and NASA&#x27;s sounds from space. They are an optional part of the installation (2 GB). Without them everything plays; only this track and the NASA shots are silent, and the Library line says so.</p>
+<p>Where it plays: under the intro from its first bar (so the place changes with the track, over the DJ&#x27;s blend), over a breakdown, in the outro up to the blend, and -- in Dark Forest, rarely in Progressive -- sixteen quiet bars under a long groove. Never in a build-up or a drop. How often follows the style: Dark Forest always has its place, Hi-Tech least. compose.field_density scales it.</p>
+<p>What plays: with A Category on Auto the composer draws a preset for every track by its style -- forest, night, insects and swamps for Dark Forest, sea, fire and ritual for Goa, wind, rain and water for Progressive, machines and radio for Hi-Tech, space for Full-On -- and sends it as it does the synths&#x27; presets: the knobs stay as they are. Choose a category and the knobs play, in every track.</p>
+<p>Preset: loads one of the factory presets into the knobs -- one per recording (by category) and the scenes, two recordings as one place (Jungle Night: a night and its insects; Swamp: the wetland and its mud). The category is then no longer Auto; set it back to hand the choice to the composer again. Library: how many recordings were found, and where. Folder...: a folder of your own recordings beside the installed ones -- FLAC files named fr-&lt;category&gt;-&lt;anything&gt;.flac (Noctuary&#x27;s whole library of 2938 fits as it is); cancel the dialog to remove it.</p>
+<p>Layer A and B: each a recording, chosen by category and variation (the variations of a category are its files in name order), with its level, its pitch (semitones and cents, by resampling), where it starts and how far that start may wander per event, and its direction. B is off by default; Layer Mix weighs the two (the middle plays both whole).</p>
+<p>Loop: over any stretch of the recording (Loop Start to Loop End), joined by a crossfade of its own length -- over the last stretch before the loop&#x27;s end a second read head runs from the loop&#x27;s start, and the two are mixed with equal power, because two stretches of a field recording are uncorrelated and keep their loudness only so. What is heard at the seam is always a blend, never a cut, so a recording that was not made as a loop plays as one. Without the loop a layer ends with its recording.</p>
+<p>Filter, Filter Envelope, Amplifier and the modulation block are the synths&#x27; (Filters and modulation); the matrix reaches pitch, cutoff, resonance, the filter&#x27;s mode, level and pan. The Low Cut (24 dB per octave) keeps the recordings out of the range that belongs to kick and bass -- wind and water have most of their power there. The long amp envelope (2 s in, 4 s out) is how a place enters and leaves.</p>
+<p>The recordings are loaded when a track is planned, a track ahead of their first note, and kept in memory; an offline render waits for them, so it is the same every time.</p>
+<figure><img src="../screenshots/tab-13-field.png" alt=""><figcaption>The Field tab.</figcaption></figure>
+<h3>Layer A</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>A Category</td><td class="key">field.a_category</td><td class="rng">Auto | Rainforest | Night Country | Insects | Foliage | Wetland | Mud Bubbles | Cave | River | Sea | Rain on Land | Rain on Roof | Wind | Underwater | Ice and Snow | Desert | Fire | Geothermal | Seismic | Ritual Objects | Abandoned | Tunnel | Metal Creak | Dark Drone | Electric | Ventilation | Factory | Polar Station | Radio Space | Empty Space | Grain Texture | NASA</td><td class="rng">Auto</td></tr>
+<tr><td>A Variation</td><td class="key">field.a_variation</td><td class="rng">0 .. 63</td><td class="rng">0</td></tr>
+<tr><td>A Level</td><td class="key">field.a_level</td><td class="rng">-36 .. 6 dB</td><td class="rng">0</td></tr>
+<tr><td>A Pitch</td><td class="key">field.a_pitch</td><td class="rng">-24 .. 24 st</td><td class="rng">0</td></tr>
+<tr><td>A Fine</td><td class="key">field.a_fine</td><td class="rng">-100 .. 100 ct</td><td class="rng">0</td></tr>
+<tr><td>A Start</td><td class="key">field.a_start</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>A Start Random</td><td class="key">field.a_start_random</td><td class="rng">0 .. 1</td><td class="rng">1</td></tr>
+<tr><td>A Reverse</td><td class="key">field.a_reverse</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+</table>
+<h3>Layer B</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>B On</td><td class="key">field.b_on</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>B Category</td><td class="key">field.b_category</td><td class="rng">Auto | Rainforest | Night Country | Insects | Foliage | Wetland | Mud Bubbles | Cave | River | Sea | Rain on Land | Rain on Roof | Wind | Underwater | Ice and Snow | Desert | Fire | Geothermal | Seismic | Ritual Objects | Abandoned | Tunnel | Metal Creak | Dark Drone | Electric | Ventilation | Factory | Polar Station | Radio Space | Empty Space | Grain Texture | NASA</td><td class="rng">Auto</td></tr>
+<tr><td>B Variation</td><td class="key">field.b_variation</td><td class="rng">0 .. 63</td><td class="rng">1</td></tr>
+<tr><td>B Level</td><td class="key">field.b_level</td><td class="rng">-36 .. 6 dB</td><td class="rng">-6</td></tr>
+<tr><td>B Pitch</td><td class="key">field.b_pitch</td><td class="rng">-24 .. 24 st</td><td class="rng">0</td></tr>
+<tr><td>B Fine</td><td class="key">field.b_fine</td><td class="rng">-100 .. 100 ct</td><td class="rng">0</td></tr>
+<tr><td>B Start</td><td class="key">field.b_start</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>B Start Random</td><td class="key">field.b_start_random</td><td class="rng">0 .. 1</td><td class="rng">1</td></tr>
+<tr><td>B Reverse</td><td class="key">field.b_reverse</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Layer Mix</td><td class="key">field.layer_mix</td><td class="rng">0 .. 1</td><td class="rng">0.5</td></tr>
+</table>
+<h3>Loop</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Loop</td><td class="key">field.loop</td><td class="rng">off / on</td><td class="rng">on</td></tr>
+<tr><td>Loop Start</td><td class="key">field.loop_start</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Loop End</td><td class="key">field.loop_end</td><td class="rng">0 .. 1</td><td class="rng">1</td></tr>
+<tr><td>Loop Crossfade</td><td class="key">field.loop_xfade</td><td class="rng">10 .. 10000 ms</td><td class="rng">1500</td></tr>
+</table>
+<h3>Filter</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Filter Model</td><td class="key">field.filter_model</td><td class="rng">State Variable | Moog Ladder | Prophet (SSM2040) | Juno (IR3109) | Oberheim SEM | Xpander | Diode Ladder | Korg35 (MS-20) | Polivoks | Wasp</td><td class="rng">State Variable</td></tr>
+<tr><td>Filter Type</td><td class="key">field.filter_type</td><td class="rng">Low Pass | Band Pass | High Pass | Notch</td><td class="rng">Low Pass</td></tr>
+<tr><td>Cutoff</td><td class="key">field.cutoff</td><td class="rng">40 .. 20000 Hz</td><td class="rng">20000</td></tr>
+<tr><td>Resonance</td><td class="key">field.resonance</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Env Amount</td><td class="key">field.env_amount</td><td class="rng">-8 .. 8 oct</td><td class="rng">0</td></tr>
+<tr><td>Filter Mode</td><td class="key">field.filter_mode</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Low Cut</td><td class="key">field.low_cut</td><td class="rng">20 .. 1000 Hz</td><td class="rng">150</td></tr>
+</table>
+<h3>Filter Envelope</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Filter Attack</td><td class="key">field.filt_attack</td><td class="rng">0.1 .. 4000 ms</td><td class="rng">0.1</td></tr>
+<tr><td>Filter Decay</td><td class="key">field.filter_decay</td><td class="rng">5 .. 30000 ms</td><td class="rng">2000</td></tr>
+<tr><td>Filter Sustain</td><td class="key">field.filt_sustain</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Filter Release</td><td class="key">field.filt_release</td><td class="rng">5 .. 8000 ms</td><td class="rng">300</td></tr>
+</table>
+<h3>Amplifier</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Attack</td><td class="key">field.amp_attack</td><td class="rng">1 .. 30000 ms</td><td class="rng">2000</td></tr>
+<tr><td>Decay</td><td class="key">field.amp_decay</td><td class="rng">5 .. 30000 ms</td><td class="rng">1000</td></tr>
+<tr><td>Sustain</td><td class="key">field.amp_sustain</td><td class="rng">0 .. 1</td><td class="rng">1</td></tr>
+<tr><td>Release</td><td class="key">field.amp_release</td><td class="rng">5 .. 30000 ms</td><td class="rng">4000</td></tr>
+</table>
+<h3>Mod Envelope</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Mod Attack</td><td class="key">field.menv_attack</td><td class="rng">0.1 .. 8000 ms</td><td class="rng">10</td></tr>
+<tr><td>Mod Decay</td><td class="key">field.menv_decay</td><td class="rng">5 .. 12000 ms</td><td class="rng">800</td></tr>
+<tr><td>Mod Sustain</td><td class="key">field.menv_sustain</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Mod Release</td><td class="key">field.menv_release</td><td class="rng">5 .. 12000 ms</td><td class="rng">400</td></tr>
+</table>
+<h3>LFO 1</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>LFO 1 Shape</td><td class="key">field.lfo1_shape</td><td class="rng">Sine | Triangle | Saw Up | Saw Down | Square | Sample &amp; Hold | Smooth Random</td><td class="rng">Sine</td></tr>
+<tr><td>LFO 1 Sync</td><td class="key">field.lfo1_sync</td><td class="rng">Free | 4 Bars | 2 Bars | 1 Bar | 1/2 | 1/4 | 1/8 | 1/16 | 1/4 T | 1/8 T</td><td class="rng">Free</td></tr>
+<tr><td>LFO 1 Rate</td><td class="key">field.lfo1_rate</td><td class="rng">0.01 .. 40 Hz</td><td class="rng">1</td></tr>
+<tr><td>LFO 1 Retrig</td><td class="key">field.lfo1_retrig</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>LFO 1 Fade</td><td class="key">field.lfo1_fade</td><td class="rng">0 .. 8 s</td><td class="rng">0</td></tr>
+</table>
+<h3>LFO 2</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>LFO 2 Shape</td><td class="key">field.lfo2_shape</td><td class="rng">Sine | Triangle | Saw Up | Saw Down | Square | Sample &amp; Hold | Smooth Random</td><td class="rng">Sine</td></tr>
+<tr><td>LFO 2 Sync</td><td class="key">field.lfo2_sync</td><td class="rng">Free | 4 Bars | 2 Bars | 1 Bar | 1/2 | 1/4 | 1/8 | 1/16 | 1/4 T | 1/8 T</td><td class="rng">Free</td></tr>
+<tr><td>LFO 2 Rate</td><td class="key">field.lfo2_rate</td><td class="rng">0.01 .. 40 Hz</td><td class="rng">1</td></tr>
+<tr><td>LFO 2 Retrig</td><td class="key">field.lfo2_retrig</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>LFO 2 Fade</td><td class="key">field.lfo2_fade</td><td class="rng">0 .. 8 s</td><td class="rng">0</td></tr>
+</table>
+<h3>LFO 3</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>LFO 3 Shape</td><td class="key">field.lfo3_shape</td><td class="rng">Sine | Triangle | Saw Up | Saw Down | Square | Sample &amp; Hold | Smooth Random</td><td class="rng">Sine</td></tr>
+<tr><td>LFO 3 Sync</td><td class="key">field.lfo3_sync</td><td class="rng">Free | 4 Bars | 2 Bars | 1 Bar | 1/2 | 1/4 | 1/8 | 1/16 | 1/4 T | 1/8 T</td><td class="rng">Free</td></tr>
+<tr><td>LFO 3 Rate</td><td class="key">field.lfo3_rate</td><td class="rng">0.01 .. 40 Hz</td><td class="rng">1</td></tr>
+<tr><td>LFO 3 Retrig</td><td class="key">field.lfo3_retrig</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>LFO 3 Fade</td><td class="key">field.lfo3_fade</td><td class="rng">0 .. 8 s</td><td class="rng">0</td></tr>
+</table>
+<h3>LFO 4</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>LFO 4 Shape</td><td class="key">field.lfo4_shape</td><td class="rng">Sine | Triangle | Saw Up | Saw Down | Square | Sample &amp; Hold | Smooth Random</td><td class="rng">Sine</td></tr>
+<tr><td>LFO 4 Sync</td><td class="key">field.lfo4_sync</td><td class="rng">Free | 4 Bars | 2 Bars | 1 Bar | 1/2 | 1/4 | 1/8 | 1/16 | 1/4 T | 1/8 T</td><td class="rng">Free</td></tr>
+<tr><td>LFO 4 Rate</td><td class="key">field.lfo4_rate</td><td class="rng">0.01 .. 40 Hz</td><td class="rng">1</td></tr>
+<tr><td>LFO 4 Retrig</td><td class="key">field.lfo4_retrig</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>LFO 4 Fade</td><td class="key">field.lfo4_fade</td><td class="rng">0 .. 8 s</td><td class="rng">0</td></tr>
+</table>
+<h3>Mod Matrix</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Mod 1 Source</td><td class="key">field.mx1_src</td><td class="rng">Off | LFO 1 | LFO 2 | LFO 3 | LFO 4 | Mod Env | Filter Env | Velocity | Key | Random</td><td class="rng">Off</td></tr>
+<tr><td>Mod 1 Target</td><td class="key">field.mx1_dst</td><td class="rng">Off | Pulse Width | Cutoff | Resonance | Filter Mode | Level</td><td class="rng">Off</td></tr>
+<tr><td>Mod 1 Amount</td><td class="key">field.mx1_amount</td><td class="rng">-1 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Mod 2 Source</td><td class="key">field.mx2_src</td><td class="rng">Off | LFO 1 | LFO 2 | LFO 3 | LFO 4 | Mod Env | Filter Env | Velocity | Key | Random</td><td class="rng">Off</td></tr>
+<tr><td>Mod 2 Target</td><td class="key">field.mx2_dst</td><td class="rng">Off | Pulse Width | Cutoff | Resonance | Filter Mode | Level</td><td class="rng">Off</td></tr>
+<tr><td>Mod 2 Amount</td><td class="key">field.mx2_amount</td><td class="rng">-1 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Mod 3 Source</td><td class="key">field.mx3_src</td><td class="rng">Off | LFO 1 | LFO 2 | LFO 3 | LFO 4 | Mod Env | Filter Env | Velocity | Key | Random</td><td class="rng">Off</td></tr>
+<tr><td>Mod 3 Target</td><td class="key">field.mx3_dst</td><td class="rng">Off | Pulse Width | Cutoff | Resonance | Filter Mode | Level</td><td class="rng">Off</td></tr>
+<tr><td>Mod 3 Amount</td><td class="key">field.mx3_amount</td><td class="rng">-1 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Mod 4 Source</td><td class="key">field.mx4_src</td><td class="rng">Off | LFO 1 | LFO 2 | LFO 3 | LFO 4 | Mod Env | Filter Env | Velocity | Key | Random</td><td class="rng">Off</td></tr>
+<tr><td>Mod 4 Target</td><td class="key">field.mx4_dst</td><td class="rng">Off | Pulse Width | Cutoff | Resonance | Filter Mode | Level</td><td class="rng">Off</td></tr>
+<tr><td>Mod 4 Amount</td><td class="key">field.mx4_amount</td><td class="rng">-1 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Mod 5 Source</td><td class="key">field.mx5_src</td><td class="rng">Off | LFO 1 | LFO 2 | LFO 3 | LFO 4 | Mod Env | Filter Env | Velocity | Key | Random</td><td class="rng">Off</td></tr>
+<tr><td>Mod 5 Target</td><td class="key">field.mx5_dst</td><td class="rng">Off | Pulse Width | Cutoff | Resonance | Filter Mode | Level</td><td class="rng">Off</td></tr>
+<tr><td>Mod 5 Amount</td><td class="key">field.mx5_amount</td><td class="rng">-1 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Mod 6 Source</td><td class="key">field.mx6_src</td><td class="rng">Off | LFO 1 | LFO 2 | LFO 3 | LFO 4 | Mod Env | Filter Env | Velocity | Key | Random</td><td class="rng">Off</td></tr>
+<tr><td>Mod 6 Target</td><td class="key">field.mx6_dst</td><td class="rng">Off | Pulse Width | Cutoff | Resonance | Filter Mode | Level</td><td class="rng">Off</td></tr>
+<tr><td>Mod 6 Amount</td><td class="key">field.mx6_amount</td><td class="rng">-1 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Mod 7 Source</td><td class="key">field.mx7_src</td><td class="rng">Off | LFO 1 | LFO 2 | LFO 3 | LFO 4 | Mod Env | Filter Env | Velocity | Key | Random</td><td class="rng">Off</td></tr>
+<tr><td>Mod 7 Target</td><td class="key">field.mx7_dst</td><td class="rng">Off | Pulse Width | Cutoff | Resonance | Filter Mode | Level</td><td class="rng">Off</td></tr>
+<tr><td>Mod 7 Amount</td><td class="key">field.mx7_amount</td><td class="rng">-1 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Mod 8 Source</td><td class="key">field.mx8_src</td><td class="rng">Off | LFO 1 | LFO 2 | LFO 3 | LFO 4 | Mod Env | Filter Env | Velocity | Key | Random</td><td class="rng">Off</td></tr>
+<tr><td>Mod 8 Target</td><td class="key">field.mx8_dst</td><td class="rng">Off | Pulse Width | Cutoff | Resonance | Filter Mode | Level</td><td class="rng">Off</td></tr>
+<tr><td>Mod 8 Amount</td><td class="key">field.mx8_amount</td><td class="rng">-1 .. 1</td><td class="rng">0</td></tr>
+</table>
+<h3>Space &amp; Output</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Width</td><td class="key">field.width</td><td class="rng">0 .. 2</td><td class="rng">1</td></tr>
+<tr><td>Pan</td><td class="key">field.pan</td><td class="rng">-1 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Duck</td><td class="key">field.duck</td><td class="rng">0 .. 1</td><td class="rng">0.4</td></tr>
+<tr><td>Room Send</td><td class="key">field.room_send</td><td class="rng">0 .. 1</td><td class="rng">0.1</td></tr>
+<tr><td>Plate Send</td><td class="key">field.plate_send</td><td class="rng">0 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Hall Send</td><td class="key">field.hall_send</td><td class="rng">0 .. 1</td><td class="rng">0.2</td></tr>
+</table>
+</div>
+<div class="topic">
+<h2>17. Mixer / Master</h2>
 <p>A channel strip per part: its pan (the six voices), its sends to the room, the hall and its delay or effects bus, its duck under the kick, the mute (&quot;M&quot;) and the fader, beside a meter of what the part puts into the mix -- after fader, trance gate and duck, before the master. The green-to-red bar is the RMS level, the line above it the peak, held for a second and a half; the figure under the meter is that peak in dBFS. The knobs of a strip are the same parameters its synth page shows. Kick and bass have no strip level of their own: their fader is the synth&#x27;s level.</p>
 <p>The fader stays where you put it. Where the composer plays a part at another level -- the level match that holds every track&#x27;s parts to one loudness, a preset&#x27;s level correction -- a bright tick beside the fader shows the level that plays, joined to the fader&#x27;s cap by a line.</p>
 <p>Beside the strips the track gain and the sidechain&#x27;s times, and the master chain: bus compressor, mono bass, a two-times oversampled knee clipper, a lookahead true-peak limiter and a safety clip, metered to ITU-R BS.1770.</p>
@@ -1768,7 +1913,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Every strip gives way to the kick by what its plane needs: the bass 4 dB, the lines about 2 dB and back within 65 ms (Duck Release (Lines)), the back plane 5 to 6 dB within 125 ms (Duck Release), the returns 5 dB within 100 ms (Return Duck Release). The effects do not duck: an impact lands on the drop&#x27;s kick. The lead drives two ducks of its own: the counter steps back while the lead plays (Counter under Lead), and so does the pad&#x27;s presence band between 500 Hz and 3 kHz, for as long as a lead note sounds (Pad Band under Lead).</p>
 <p>The composer mixes each phase differently. A breakdown stands 7 dB under the drop before it (after the master&#x27;s compressor and limiter that is about 5 dB of loudness), with the pad at full width and a little louder, the lead further back and the far room open; a buildup narrows the pad, pulls the plate down to 1.2 seconds, fades the far room out and lifts the lines&#x27; high pass, and the drop opens it all again within a bar -- the lead at the front, the pad at its full width again, the pad and drone ducking deeper. In the intro and the breakdown, where pad and drone are often the only tonal voices, their unison stays within about six cents: held, a wider stack beats. While the bass plays, the pad leaves the third to the lead. On the last beat before every eight-bar change of a groove or a drop the effects are thrown into the plate for that one beat.</p>
 <p>Monitor (Master page): Mono, Sub (a low pass at 80 Hz, where the kick-bass gap and the tuning are judged) or Side, after the meter -- a listening switch, it changes nothing the loudness readings see.</p>
-<figure><img src="tab-13-mixer-master.png" alt=""><figcaption>The Mixer / Master tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-14-mixer-master.png" alt=""><figcaption>The Mixer / Master tab.</figcaption></figure>
 <h3>Channels</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Level</td><td class="key">kick.level</td><td class="rng">-36 .. 6 dB</td><td class="rng">-6</td></tr>
@@ -1844,6 +1989,12 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <tr><td>FX Send</td><td class="key">vocal.fx_send</td><td class="rng">0 .. 1</td><td class="rng">0.45</td></tr>
 <tr><td>Delay Throw</td><td class="key">vocal.throw_send</td><td class="rng">0 .. 1</td><td class="rng">0.6</td></tr>
 <tr><td>Duck</td><td class="key">vocal.duck</td><td class="rng">0 .. 1</td><td class="rng">0.4</td></tr>
+<tr><td>Field Level</td><td class="key">mix.field_level</td><td class="rng">-24 .. 12 dB</td><td class="rng">-14</td></tr>
+<tr><td>Field Mute</td><td class="key">mix.field_mute</td><td class="rng">off / on</td><td class="rng">off</td></tr>
+<tr><td>Pan</td><td class="key">field.pan</td><td class="rng">-1 .. 1</td><td class="rng">0</td></tr>
+<tr><td>Room Send</td><td class="key">field.room_send</td><td class="rng">0 .. 1</td><td class="rng">0.1</td></tr>
+<tr><td>Hall Send</td><td class="key">field.hall_send</td><td class="rng">0 .. 1</td><td class="rng">0.2</td></tr>
+<tr><td>Duck</td><td class="key">field.duck</td><td class="rng">0 .. 1</td><td class="rng">0.4</td></tr>
 </table>
 <h3>Track &amp; Sidechain</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
@@ -1892,14 +2043,14 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 </table>
 </div>
 <div class="topic">
-<h2>17. Perform</h2>
+<h2>18. Perform</h2>
 <p>Four macros, meant for a hand rather than a mouse.</p>
 <p>They are immediate parameter moves rather than score events, and that is measured rather than convenient: the engine&#x27;s control ring is first in, first out and the composer keeps it filled eight bars ahead, so an event pushed into it now would not be heard for about thirteen seconds. A macro therefore writes the knob itself, as an offset in the knob&#x27;s normalised domain, and puts it back exactly where it was when you let go. The composer&#x27;s own ramps keep riding on top.</p>
 <p>Drop-out is a press, not a hold: it takes the kick and the bass out and lets them back in on the next bar line. Stutter is held. Filter Sweep and Gate Depth stay where you leave them, and a double click puts them back to neutral.</p>
 <p>Keyboard: notes from a MIDI keyboard can play one voice -- the acid or any of the six melodic voices, or &quot;By channel&quot; (channel 1 the acid, 2 the lead ... 7 the drone) -- with the sound that voice&#x27;s tab has. Replace leaves the generator&#x27;s notes of that voice out, Layer plays over them. The keyboard plays while the set runs.</p>
 <p>MIDI: every knob, switch and chooser, and the four macros, can be put on a hardware controller. Right click the control, choose MIDI Learn and turn the knob on your controller. The MIDI group lists every binding and forgets them all at once.</p>
 <p>Rate what you hear: Good here and Bad here write a verdict with a note into your ratings. Learn from my ratings fits your taste to them and, once you confirm, weights the choices the style leaves open towards what you liked. The genre&#x27;s rules always stay above your taste.</p>
-<figure><img src="tab-14-perform.png" alt=""><figcaption>The Perform tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-15-perform.png" alt=""><figcaption>The Perform tab.</figcaption></figure>
 <h4>Filter Sweep</h4>
 <p>Opens or closes the filters of acid, lead, counter-lead, arp and stab together, by up to a third of their range in each direction. Centre is neutral.</p>
 <p><i>Moves:</i> <code>acid.cutoff +0.35, lead.cutoff +0.35, arp.cutoff +0.35, counter.cutoff +0.35, stab.cutoff +0.35</code></p>
@@ -1919,18 +2070,18 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 </table>
 </div>
 <div class="topic">
-<h2>18. Gallery</h2>
+<h2>19. Gallery</h2>
 <p>Your saved sets, each with a picture of its form. Save to gallery keeps the set as it stands -- seed, style, arc, knobs, locks and rerolls -- and a click on an entry loads it back. The files are ordinary .phosset files in your Sets folder; Open folder shows it.</p>
-<figure><img src="tab-15-gallery.png" alt=""><figcaption>The Gallery tab.</figcaption></figure>
+<figure><img src="../screenshots/tab-16-gallery.png" alt=""><figcaption>The Gallery tab.</figcaption></figure>
 </div>
 <div class="topic">
-<h2>19. Filters and modulation</h2>
+<h2>20. Filters and modulation</h2>
 <p>The melodic voices and the bass choose their filter&#x27;s circuit with Filter Model. The first entry is the synth&#x27;s own filter -- the voices&#x27; state-variable filter, the bass&#x27;s ladder -- and the others are circuit models solved sample by sample: the Moog transistor ladder, the OTA cascades of the Prophet and the Juno, the Oberheim SEM, the Xpander&#x27;s pole mixes, the diode ladder of the TB-303, the Korg35 of the MS-20, the Polivoks and the Wasp. Filter Mode morphs the SEM from low pass through notch to high pass, steps through the Xpander&#x27;s eight responses and turns the Polivoks into a band pass. Switching models keeps the level: each is calibrated against the synth&#x27;s own filter. The acid keeps its diode ladder -- that is the acid.</p>
 <p>The filter envelope is a full ADSR: Filter Attack, Decay, Sustain and Release. With the attack at its minimum and the sustain at 0 it is the plain decay every older set used.</p>
 <p>A third envelope (Mod Envelope), four LFOs and a modulation matrix of eight slots move the rest. An LFO runs free at its rate or synced to the beat (4 bars down to a sixteenth, and triplets), in seven shapes from sine to smooth random; Retrig restarts it with every note, Fade brings it in over a few seconds. A slot of the matrix reads a source -- an LFO, the mod or filter envelope, the velocity, the key or a random value drawn per note -- and moves a target by its amount: pitch, the second oscillator&#x27;s pitch, pulse width, the wavetable position (the classic slow scan through a table), the FM index, cutoff, resonance, the filter mode, the level or the pan. The bass offers only what cannot break its lock to the kick (no pitch, no pan), the acid what suits a 303 line.</p>
 </div>
 <div class="topic">
-<h2>20. Sound presets</h2>
+<h2>21. Sound presets</h2>
 <p>Every synth tab starts with a Sound group: the synth&#x27;s presets in a chooser, grouped by kind, a Save... button for presets of your own, and the Own Sound switch.</p>
 <p>Every track of a set plays a preset on every synth that is not on Own Sound: the composer chooses one by the track&#x27;s style -- a Hoover or a Supersaw Anthem for Full-On, a Growl or a Screaming Glide for Dark Forest, a Glass Lead or a Psy Pluck for Progressive -- and never the same group as the two tracks before. While it plays, the tab shows it: the chooser reads &quot;Group: Name (composer)&quot; and the knobs stand at the preset&#x27;s values. The sections still move some of them on top, the way a player rides a filter; those moves are not written into the knobs. The composer also evens out the presets&#x27; loudness: each carries a correction, measured against the synth&#x27;s own default sound, that rides on the synth&#x27;s Level on top of your setting, and the level match then holds every part of every track -- the first one included -- to the loudness the default sound would have there. Sound Presets on the Set page (or Sound Variation at 0) turns the composer&#x27;s presets off, and every synth plays its knobs again, with the composer&#x27;s recipes.</p>
 <p>Own Sound keeps the composer out: the synth then sounds exactly as its tab says, in every track. Turning a knob of a synth that plays the composer&#x27;s preset switches its Own Sound on, with the knobs where the preset put them, so the sound you start from is the one you heard. Choosing a preset from the chooser switches Own Sound on as well. A preset sets the synth&#x27;s sound and leaves its level, its ducking, its sends to the rooms, its place in the image and -- on the melodic voices -- its high pass and trance gate alone, since those are where the mix and the form put the voice. Undo takes a preset back.</p>
@@ -1938,7 +2089,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>The factory bank holds 1024 presets for each synth: sixteen groups -- Hoover, Acid Lead, Vocal Formant, Rolling, Squelchy, Classic 303, Full-On ... -- of sixty-four each. A group is a grid of eight adjectives from dark to bright (the lead&#x27;s run from Umbral to Supernova) and eight nouns of its own (the Hoover&#x27;s from Hoover to Titan), so &quot;Umbral Mentasm&quot; is the darkest of the Hoovers&#x27; second column and &quot;Supernova Titan&quot; the brightest of its last. Each preset brings the filter model its group suits and modulation from its group&#x27;s recipes: a slow LFO on the cutoff, the wavetable scanned by an LFO or the mod envelope, a hoover&#x27;s pitch dive, a vibrato that fades in. Your own presets are listed under User and live in the Presets folder of your Phosphene user folder.</p>
 </div>
 <div class="topic">
-<h2>21. Shortcuts</h2>
+<h2>22. Shortcuts</h2>
 <pre>F1               help (this page); Esc closes it
 F11              full screen (standalone)
 Ctrl+Z           undo
@@ -1948,7 +2099,7 @@ double click     a knob back to its default</pre>
 <p>The window can be dragged to any size; the whole panel zooms with it. The standalone&#x27;s title bar has a maximise button, and Full screen in the header (or F11) fills the screen.</p>
 </div>
 <div class="topic">
-<h2>22. Updates</h2>
+<h2>23. Updates</h2>
 <p>Phosphene looks for a newer release at most once a day, when its window opens, by asking GitHub for the latest release of the project -- nothing else is sent, and nothing is installed by itself. When there is one, the header says so and a click opens the release page. The check can be switched off here on the help page, and Check now asks at once.</p>
 </div>
 <footer>Phosphene 1.1.0 &middot; generated from the plugin: the parameter tables and the pictures come out of the running editor (Tools/manual/make_manual.py).</footer>

@@ -21,9 +21,10 @@ seed 7 track 1: bars 0..255, 145.0 BPM, F# Phrygian, Full-On, bass Rolling/Gallo
     Build  @144 x24 energy 0.26..0.76 scale 1 roll 12 pdb 1/2 cut 0
     Drop   @168 x56 energy 0.96..0.96 scale 1 climax roll 0 pdb 0/0 cut 0
     Outro  @224 x32 energy 0.39..0.39 scale 1 roll 0 pdb 0/0 cut 0
-  effects (69):
+  effects (71):
     Jaw Harp       beat       0 length   124 preset 225
     Atmosphere     beat       0 length    32 preset 379
+    Space Shot     beat      32 length    16 preset 0
     Spoken Word    beat      40 length     8 preset 187
     Reverse Swell  beat      60 length     4 preset 185
     Reverse Swell  beat      60 length     4 preset 28
@@ -53,6 +54,7 @@ seed 7 track 1: bars 0..255, 145.0 BPM, F# Phrygian, Full-On, bass Rolling/Gallo
     Sub Drop       beat     448 length     8 preset 0
     Spoken Word    beat     452 length     8 preset 180
     Jaw Harp       beat     452 length    48 preset 40
+    Space Shot     beat     472 length    16 preset 0
     Atmosphere     beat     480 length    32 preset 500
     Formant Voice  beat     484 length     8 preset 177
     Bubble         beat  494.75 length     1 preset 43
@@ -91,6 +93,8 @@ seed 7 track 1: bars 0..255, 145.0 BPM, F# Phrygian, Full-On, bass Rolling/Gallo
     Squelch        beat  893.75 length  0.25 preset 46
     Downlifter     beat     896 length    16 preset 28
     Reverse Swell  beat     956 length     4 preset 9
+  field (1):
+    beat       0 length   128 velocity 100
 seed 7 track 2: bars 224..463, 145.5 BPM, B Phrygian, Full-On, bass Rolling/Skip gate 0.76, kick engine -1 clip -1
   recipes: kick +0.315 +0.500 -0.029 -0.627 -0.686; bass +0.745 +0.154 -0.528 -0.218 -0.745; acid voicing 0.891 0.005 0.104
   voice lead     osc 2 table 63 filter 1 osc2 0/1 (drawn) +0.072 -0.869 -0.170 -0.389 -0.330
@@ -200,6 +204,8 @@ seed 7 track 2: bars 224..463, 145.5 BPM, B Phrygian, Full-On, bass Rolling/Skip
     Bubble         beat  878.75 length     1 preset 40
     Bubble         beat   879.5 length   0.5 preset 33
     Sweep          beat     892 length     4 preset 251
+  field (1):
+    beat     448 length   128 velocity 105
 seed 7 track 3: bars 440..711, 145.5 BPM, B Phrygian, Goa, bass Rolling/Gallop gate 0.67, kick engine -1 clip -1
   recipes: kick -0.814 +0.869 -0.390 -0.176 +0.868; bass +0.191 -0.732 -0.736 -0.013 -0.006; acid voicing 0.260 0.061 0.680
   voice lead     osc 0 table 77 filter 0 osc2 4/5 (drawn) -0.212 +0.545 +0.901 -0.362 +0.882
@@ -307,34 +313,36 @@ seed 7 track 3: bars 440..711, 145.5 BPM, B Phrygian, Goa, bass Rolling/Gallop g
     Singing Bowl   beat     960 length    16 preset 212
     Didgeridoo     beat     960 length    64 preset 230
     Singing Bowl   beat     992 length    16 preset 52
-bars    0..  15:   283 notes faf6bc1eec28af5c,  2086 controls 0e99af7657fc664c
+  field (1):
+    beat       0 length    96 velocity 100
+bars    0..  15:   285 notes 99e62b81b03de1e7,  2268 controls b75d28d850716383
 bars   16..  31:   562 notes 0f336c541f5da142,    99 controls cc48af0c967cd8e6
 bars   32..  47:   932 notes df5aaa6cb341c4b5,   148 controls 918e058397de7c5d
 bars   48..  63:  1087 notes dceb724d85918b55,   111 controls 6a1bc8a23ff35518
 bars   64..  79:   626 notes 36f5a2e02467db08,   153 controls 2a88397b1f6f5826
 bars   80..  95:  1296 notes f5593be4e3ebf5e6,   161 controls 2da1e5e78721a6fd
 bars   96.. 111:  1364 notes 76289af1c198274c,   130 controls 16b8ef21bdf53416
-bars  112.. 127:    26 notes 6d8fc242ae6e9f71,   139 controls 4098ae80e0de9dc1
+bars  112.. 127:    27 notes 28a51d8fb926b75a,   139 controls 4098ae80e0de9dc1
 bars  128.. 143:   125 notes b35202776efa008e,   104 controls d9232ffc2dc3c508
 bars  144.. 159:   789 notes 80d8ddcd3158e5d9,   147 controls 614921333bef2cf5
 bars  160.. 175:  1423 notes 244a339f12701fe9,   157 controls c1f922c0fbd39ca7
 bars  176.. 191:  1520 notes ed1e9afee1b86efc,   126 controls 36ddc0f661a23c84
 bars  192.. 207:  1508 notes e310d185a648a774,   125 controls 42afb65f90b395aa
 bars  208.. 223:  1533 notes b3708554650d65d7,   119 controls a43fda960223fbaa
-bars  224.. 239:   617 notes c4b71308b49a364f,  1651 controls af16d593f305eea7
+bars  224.. 239:   617 notes c4b71308b49a364f,  1833 controls 7d531d92133f2b22
 bars  240.. 255:   685 notes bb84ce882e9ce0ab,   112 controls 6cb47ad250ad33b6
 bars  256.. 271:   870 notes d11f25180f60983e,   645 controls 148de1b8ba9a4932
 bars  272.. 287:   767 notes 71140c980dec3c20,   151 controls 2b56499a6fc8389e
 bars  288.. 303:   831 notes 42df65ad950cd05c,   112 controls 1364eab9c5eb8fc6
 bars  304.. 319:  1253 notes d5b0b77551e1a364,   164 controls c2e8027a0431f826
 bars  320.. 335:  1272 notes 4860d708fab97c87,   133 controls fe28c69d4ee03d63
-bars  336.. 351:    45 notes b2d7669763bdfdd2,   142 controls d33a0c295bacb246
+bars  336.. 351:    46 notes 6a70b9ba988a585f,   142 controls d33a0c295bacb246
 bars  352.. 367:   127 notes d350292820d87179,   107 controls 2a85114b62587198
 bars  368.. 383:   725 notes 9a225ca4c9d4c8b5,   146 controls 327458b9a0bc7e38
 bars  384.. 399:  1182 notes 7d684610f65bbda2,   114 controls 5d2e3b0f36dcdb7e
 bars  400.. 415:  1592 notes 3d3368b80d65b755,   166 controls 80be6d993113634f
 bars  416.. 431:  1596 notes 89b9428f881787af,   133 controls b106eb9f203c3327
-bars  432.. 447:   844 notes 79aacf9a26283bd9,  1648 controls 44d5d70f05581649
+bars  432.. 447:   845 notes 06e8cf349420a03a,  1830 controls f5ee0a1efe5a75da
 bars  448.. 463:   627 notes 3b41c8383ad938e1,   115 controls 8936ba87e81a6e7f
 bars  464.. 479:   829 notes 343b75dddaa10622,   645 controls 8c7c90755d3eed14
 bars  480.. 495:  1010 notes 6862738a8bc6ead8,   114 controls b1427a59b574539f
@@ -349,6 +357,6 @@ bars  608.. 623:  1462 notes 5ac0398a7e961a76,   157 controls c29d1c6853ae0389
 bars  624.. 639:  1542 notes 57b89ebae361e606,   132 controls dfce9b479d055476
 bars  640.. 655:  1554 notes 2d8cf40554338e5e,   129 controls e57945dc2965fb22
 bars  656.. 671:  1541 notes 8a4d0deea3c52a7e,   132 controls e275fffb45fc0ad1
-bars  672.. 687:  1064 notes 02f4ac5860479cd2,  1659 controls 2db2ef13f4ab8717
+bars  672.. 687:  1065 notes 57aa36db23cc1b0b,  1841 controls be3e7be7077ac744
 bars  688.. 703:   624 notes 06a290901a823f3c,   109 controls a9a3e50344732708
 bars  704.. 719:   286 notes 1b191eb380400b6d,    53 controls 39623580d969bc1c
