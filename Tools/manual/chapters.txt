@@ -370,11 +370,26 @@ while the set runs.
 
 MIDI: every knob, switch and chooser, and the four macros, can be put on a hardware controller. Right
 click the control, choose MIDI Learn and turn the knob on your controller. The MIDI group lists every
-binding and forgets them all at once.
+binding and forgets them all at once. Without learning, controller 74 is the filter sweep, 11 the gate
+depth and 64 the stutter -- the controllers every generator of the family listens to.
+
+Headset: while a Meta Quest sends its hands (the Quest app's bridge mode), the Perform tab shows what
+they do -- the left pinch play and stop, the right pinch the drop-out, held the stutter, both hands the
+next track, the left hand the filter sweep, the right the gate depth (The panel).
 
 Rate what you hear: Good here and Bad here write a verdict with a note into your ratings. Learn from
 my ratings fits your taste to them and, once you confirm, weights the choices the style leaves open
 towards what you liked. The genre's rules always stay above your taste.
+
+== Export ==
+
+What leaves the instrument, in one place, as every generator of the family has it (01.10.2026): Record writes the output
+as it plays into a WAV file until it is pressed again; Export MIDI writes the score of so many bars from the start, a
+channel per part; Export set writes the set -- the seed, the locks, the rerolls and every knob that differs from the
+factory -- as a .phosset, and Load set reads one and plays it. The score cues (OSC) send the set's beats, bars, sections
+and keys to a light show or a VJ program at the moment they are heard.
+
+The keys: Ctrl+E exports the MIDI, Ctrl+S the set, Ctrl+O loads one.
 
 == Gallery ==
 
@@ -446,21 +461,71 @@ and modulation from its group's recipes: a slow LFO on the cutoff, the wavetable
 the mod envelope, a hoover's pitch dive, a vibrato that fades in. Your own presets are listed under
 User and live in the Presets folder of your Phosphene user folder.
 
+== The panel ==
+
+Phosphene shares its panel with the other generators of the family -- Ephemeris, Totality and Parhelion (and, in part, Noctuary) -- so that what is learned on one holds
+on the others: the same places, the same keys, the same controllers, the same hands. Each keeps its own colours, its
+own letters and the picture behind its panel (Settings > Picture behind the panel takes it away).
+
+The header's first row: the logo, the style, the key and the scale, what is composed and its length, Compose, New
+seed, Play and Mute. Its second row: Good here and Bad here -- a verdict on what plays, for your taste --, the status line, and at the right Undo, Redo, Help and the settings.
+Under the header the whole set at a glance; a click jumps there. The tabs come in one order everywhere: Set,
+Arrange, the instrument's own pages -- a page of several has small tabs of its own --, Mixer, Perform, Export, Gallery.
+
+A colour says what a control does, the same on every page and in every generator of the family: the sources, the
+filters, the envelopes, what moves by itself, the room and the mix. A knob the composer moves has a thin ring round
+it that shows where it stands at this moment. A double click sets a control to its default; a right click offers
+MIDI learn, forgetting the controller, and the default.
+
+Undo and Redo take back and bring back what was changed -- a knob, a new seed, a reroll, a preset, a loaded set --
+one step at a time; the button's tooltip names the step. Help opens this manual by topic, with the page in front, the
+keys and the headset as topics of their own. The settings hold the update check (it asks GitHub once a day whether a
+newer Phosphene is out; nothing else is sent), the picture behind the panel, the headset, the window's size, full
+screen, the keys and About.
+
+    Space                 play / stop
+    Ctrl+Z                undo
+    Ctrl+Y, Ctrl+Shift+Z  redo
+    F1                    help
+    F11                   full screen (the standalone); Esc leaves it and closes the help
+    Ctrl+S, Ctrl+O        save the set, open one
+    Ctrl+E                export
+
+The controllers every generator of the family listens to without learning: controller 74 (brightness) is the filter sweep, 11 (the expression pedal) the gate depth, 64 (the sustain pedal) the stutter while it is held; the mod wheel is left free. A set with bindings of its own keeps them.
+
+The headset. The controls of a Meta Quest's hands are shown only while a headset sends them -- or always, if the
+settings say so (Headset > Always show them); Off stops listening. The Quest app sends its hands to this computer in
+bridge mode: bridge_host = this computer's address in its phos.cfg (audio=0 leaves the headset silent), and Phosphene
+listens on port 9101. The hands mean the same in every generator of the family, on the headset alone and here:
+
+    left pinch            play / stop
+    both hands pinched    the next track
+    right pinch           drop-out: kick and bass gone until the next bar line
+    right pinch held      stutter, while it is held
+    left hand up, down    filter sweep: closed below the middle, open above
+    right hand up         gate depth
+
+A pinch acts when it opens again, so a pinch of both hands is never also one of each; a hand moves its control only
+while it does not pinch, and both glide and are centred: a hand at mid height plays what was composed.
+
 == Shortcuts ==
 
+    Space            play / stop
     F1               help (this page); Esc closes it
     F11              full screen (standalone)
     Ctrl+Z           undo
     Ctrl+Y           redo (also Ctrl+Shift+Z)
-    right click      MIDI Learn / Forget MIDI on any control
+    Ctrl+S, Ctrl+O   export the set, load one
+    Ctrl+E           export MIDI
+    right click      MIDI Learn / Forget MIDI / Default value on any control
     double click     a knob back to its default
 
 The window can be dragged to any size; the whole panel zooms with it. The standalone's title bar has a
-maximise button, and Full screen in the header (or F11) fills the screen.
+maximise button, and Full screen in the settings (or F11) fills the screen.
 
 == Updates ==
 
 Phosphene looks for a newer release at most once a day, when its window opens, by asking GitHub for
 the latest release of the project -- nothing else is sent, and nothing is installed by itself. When
 there is one, the header says so and a click opens the release page. The check can be switched off
-here on the help page, and Check now asks at once.
+here on the help page or in the settings, and Check now asks at once.

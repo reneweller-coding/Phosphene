@@ -26,10 +26,12 @@ namespace phosui {
  */
 inline void showLive(juce::Slider& s, double played)
 {
+    // Since 01.10.2026 normalised, as the frame's look and feel reads it (Frame.h, LiveRings).
     auto& props = s.getProperties();
+    const double norm = s.valueToProportionOfLength(juce::jlimit(s.getMinimum(), s.getMaximum(), played));
     const juce::var old = props["live"];
-    if (!old.isVoid() && std::abs(static_cast<double>(old) - played) <= 1.0e-4 * (1.0 + std::abs(played))) return;
-    props.set("live", played);
+    if (!old.isVoid() && std::abs(static_cast<double>(old) - norm) <= 1.0e-4) return;
+    props.set("live", norm);
     s.repaint();
 }
 
@@ -87,6 +89,7 @@ struct Group {
     int rows = 1;                   ///< filled by the layout pass
     int extraColumns = 0;           ///< columns the layout pass added where the page had room (26.09.2026)
     bool fill = false;              ///< spans the page's width, its one control with it (setFillWidth)
+    bool hidden = false;            ///< left out of the layout and not drawn (setGroupVisible)
 };
 
 /**
@@ -158,6 +161,8 @@ public:
     {
         if (groupIndex >= 0 && groupIndex < static_cast<int>(groups_.size())) groups_[static_cast<size_t>(groupIndex)].fill = true;
     }
+    /** @brief Shows or hides group @p groupIndex and its controls (01.10.2026: the headset's, while one sends). */
+    void setGroupVisible(int groupIndex, bool visible);
     /** @brief Measures and places everything for a page @p width; returns the height it needs. */
     int layout(int width);
     /** @brief The height the last layout() needed. */

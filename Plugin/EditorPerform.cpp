@@ -21,6 +21,23 @@
 using namespace phos;
 using namespace phosui;
 
+namespace {
+/** @brief The headset's box (01.10.2026, the frame's): the hands as they stand and what they do, live. */
+class HeadsetBox final : public juce::Component, private juce::Timer {
+public:
+    explicit HeadsetBox(PhospheneProcessor& p) : proc_(p) { startTimerHz(15); }
+    void paint(juce::Graphics& g) override
+    {
+        frame::drawHeadsetBox(g, getLocalBounds(), phosui::skin(), proc_.headset(), "drop-out", "stutter while held",
+                              "filter sweep", "gate depth", false);
+    }
+
+private:
+    void timerCallback() override { if (isShowing()) repaint(); }
+    PhospheneProcessor& proc_;
+};
+} // namespace
+
 void PhospheneEditor::buildPerformPage()
 {
     auto page = std::make_unique<phosui::ControlPage>();
@@ -121,6 +138,12 @@ void PhospheneEditor::buildPerformPage()
         clear->onClick = [this] { proc_.midiMap().clear(); };
         page->addControl(gx, std::move(clear), "", 4, true);
     }
+
+    // The headset (01.10.2026, the frame): shown while a Quest in bridge mode sends its hands, or always if the settings
+    // say so (refreshHeader).
+    headsetGroup_ = page->addGroup("Headset", tint, 8);
+    page->addControl(headsetGroup_, std::make_unique<HeadsetBox>(proc_), "", 8, true, 2);
+    page->setGroupVisible(headsetGroup_, proc_.headset().shown(frame::Settings::of("Phosphene").headset()));
 
     // Rating what is playing (23.09.2026, phos/Rating.h): "good here" and "bad here" write one line each --
     // seed, track, bar, section, style, the note -- into ratings.tsv in the user's application data folder,

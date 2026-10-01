@@ -51,6 +51,7 @@
  */
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "Frame.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "phos/Composer.h"
 #include "phos/Cue.h"
@@ -616,6 +617,21 @@ public:
     // ------------------------------------------------------------------ transport
     /** @brief Standalone: starts at the top (or resumes after a pause). */
     void play();
+    /**
+     * @brief Compose set (01.10.2026, the frame's header): the plans made again with every knob as it stands -- the seed,
+     *        the locks and the rerolls kept -- and the set started from its beginning.
+     */
+    void composeSet();
+    /** @brief How often the transport was asked to start again (the host test sees Compose set by it). */
+    int restartCount() const { return restarts_.load(std::memory_order_relaxed); }
+    /** @brief Parameter @p id back to its default, an undo step (the controls' right-click menu). */
+    void resetToDefault(int id);
+    /**
+     * @brief The headset (01.10.2026, the frame): the hands of the Quest app in bridge mode, as OSC, while the settings do
+     *        not say Off -- left pinch play and stop, both hands the next track, right pinch the drop-out, held the
+     *        stutter, the left hand's height the filter sweep, the right hand's the gate depth.
+     */
+    frame::Headset& headset() { return headset_; }
     /** @brief Standalone: stops and rewinds to bar 0. */
     void stop();
     /** @brief Standalone: jumps to a bar. */
@@ -718,6 +734,10 @@ private:
     void markCurrentPosition();
     /** @brief Message thread: the limiter's lookahead is a switchable latency; tell the host when it moves. */
     void timerCallback() override;
+    void pollHeadset();                     ///< the hands' events (message thread, the timer)
+    void bindDefaultControllers();          ///< CC 74, 11 and 64 on the macros, as every generator has them
+    frame::Headset headset_;                ///< the Quest's hands
+    std::atomic<int> restarts_{ 0 };        ///< restartCount
 
     std::unique_ptr<phos::Engine> engine_;   ///< the engine the audio thread renders
     std::unique_ptr<phos::Composer> composer_;   ///< the composer (its thread plans, the conductor reads)

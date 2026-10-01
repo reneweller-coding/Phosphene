@@ -1,9 +1,13 @@
 /**
  * @file PluginEditor.h
- * @brief The editor: a header, one tab per generator, and pages built from the parameter tables.
+ * @brief The editor: the shared frame's header (Frame.h, 01.10.2026), the set's overview strip, the tabs in groups, and
+ *        pages built from the parameter tables.
  *
- * The tabs follow PLAN 8.1: Set, Arrange, Kick, Bass, Percussion (twelve lanes behind a lane bar),
- * Acid, Lead, Counter, Arp, Stab, Pad, Drone, SFX + FX, Mixer + Master, Perform. None of the pages knows a coordinate; each is a
+ * The header and its keys are the ones every generator has (Frame.h): the start's style, key and scale, the set's length,
+ * Compose set, New seed, Play, Mute; the ratings, the status, undo, redo, help and the settings. Under it the set as a
+ * strip (the Arrange tab's top, to scale), a click jumps. The tabs follow PLAN 8.1, grouped as in every generator so the
+ * row stays short: Set, Arrange, Low End (Kick, Bass), Percussion (twelve lanes behind a lane bar), Acid, Synths (Lead,
+ * Counter, Arp, Stab, Pad, Drone), Effects (SFX + FX, Field), Mixer + Master, Perform, Export, Gallery. None of the pages knows a coordinate; each is a
  * phosui::ControlPage that is handed slices of a module's descriptor table and measures itself
  * (EditorLayout.h). The window has a design size -- the size at which every page fits without
  * scrolling -- and is scaled to whatever the screen or the host offers.
@@ -40,6 +44,7 @@ enum Tab : int {
     TabFx,
     TabField,     ///< 27.09.2026: the field recordings' sampler (FieldPlayer.h)
     TabMix, TabPerform,
+    TabExport,    ///< 01.10.2026: the files -- the recording, the MIDI, the set, the score cues -- as every generator has them
     TabGallery,   ///< 23.09.2026: saved sets with their form, loaded with a click (EditorGallery.cpp)
     TabCount
 };
@@ -216,7 +221,7 @@ private:
 };
 
 /** @brief The Phosphene editor. */
-class PhospheneEditor final : public juce::AudioProcessorEditor, private juce::Timer {
+class PhospheneEditor final : public juce::AudioProcessorEditor, private juce::Timer, private juce::ChangeListener {
 public:
     /** @brief Builds every page from the parameter tables and sizes the window. */
     explicit PhospheneEditor(PhospheneProcessor&);
@@ -227,6 +232,12 @@ public:
 
     /** @brief Names of the tabs, in order. */
     static const juce::StringArray& tabNames();
+    /** @brief Names of the groups of tabs, the row on top (01.10.2026), in order. */
+    static const juce::StringArray& groupNames();
+    /** @brief The group tab @p tab belongs to. */
+    static int groupOf(int tab);
+    /** @brief The tabs of group @p g, in order. */
+    static const std::vector<int>& tabsOf(int g);
     /** @brief Opens a tab. */
     void setTab(int index);
     /** @brief The tab that is open. */
@@ -277,6 +288,16 @@ private:
     void refreshPerformPage();    // EditorPerform.cpp: what the macros are doing
     void buildGalleryPage();      // EditorGallery.cpp
     void refreshGalleryPage();    // EditorGallery.cpp: rescans the folder
+    void buildExportPage();       // EditorSetTab.cpp (01.10.2026)
+    void refreshExportPage();     // EditorSetTab.cpp: the recording's state
+    /** @brief The set's plan as the arrange views draw it, copied out of the published plans (EditorArrange.cpp). */
+    ArrangeDisplay::Snapshot planSnapshot() const;
+    void refreshOverview();       // EditorArrange.cpp: the strip under the header
+    void refreshHeader();         // the header's transport, status and tools
+    void showSettings();          // the frame's settings menu
+    void changeListenerCallback(juce::ChangeBroadcaster*) override;   ///< the settings changed (the backdrop)
+    bool standalone() const;      ///< the editor sits in the standalone's window
+    bool fullScreen() const;      ///< and that window fills the screen
     void refreshPattern();        // the pattern roll of the tab that is open
     /**
      * @brief The "Sound" group at the head of a synth's page (23.09.2026): the synth's presets in a chooser with a
@@ -310,10 +331,38 @@ private:
     void timerCallback() override;
     /** @brief Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo (23.09.2026); F1 help, Esc closes it, F11 full screen. */
     bool keyPressed(const juce::KeyPress& key) override;
-    juce::TextButton undoButton_{ "Undo" }, redoButton_{ "Redo" };   ///< in the header (23.09.2026)
+    /** @name The frame's header (01.10.2026): undo, redo, help, the settings, the headset's sign, the ratings
+     *  @{ */
+    frame::IconButton undoIcon_{ frame::IconButton::Icon::Undo, "Undo (Ctrl+Z)" }, redoIcon_{ frame::IconButton::Icon::Redo, "Redo (Ctrl+Y)" };
+    frame::IconButton helpIcon_{ frame::IconButton::Icon::Help, "Help (F1)" }, settingsIcon_{ frame::IconButton::Icon::Settings, "Settings" };
+    frame::IconButton headsetIcon_{ frame::IconButton::Icon::Headset, "A headset sends its hands: the Perform tab shows them" };
+    frame::IconButton likeIcon_{ frame::IconButton::Icon::ThumbUp, "Good here: rates the bar that plays (ratings.tsv)" };
+    frame::IconButton dislikeIcon_{ frame::IconButton::Icon::ThumbDown, "Bad here: rates the bar that plays (ratings.tsv)" };
+    juce::Component titleSpot_;                       ///< where the name is drawn
+    juce::Rectangle<float> logo_;                     ///< where the logo is drawn
+    juce::ComboBox style_, key_, scale_;              ///< where the set starts
+    std::vector<std::unique_ptr<juce::ComboBoxParameterAttachment>> headerLinks_;
+    juce::Slider length_;                             ///< compose.set_minutes: the time the arc spans
+    std::unique_ptr<juce::SliderParameterAttachment> lengthLink_;
+    juce::Label lengthLabel_;
+    juce::TextButton compose_{ "Compose set" }, newSeed_{ "New seed" }, play_{ "Play" }, mute_{ "Mute" };
+    juce::Label status_, where_;                      ///< seed, clock and state; the track and the bar
+    ArrangeDisplay overview_;                         ///< the set strip under the header
+    uint64_t overviewHash_ = 0;                       ///< what it draws
+    unsigned overviewTicks_ = 0;
+    juce::OwnedArray<frame::FlatTab> groupTabs_;      ///< the row of tabs: one per group
+    juce::OwnedArray<juce::TextButton> subButtons_;   ///< the pages of every group of several, shown for the group that is open
+    std::vector<int> subTab_;                         ///< per sub button: its tab
+    std::vector<int> lastTabOfGroup_;                 ///< the page of each group last open
+    juce::Rectangle<int> tabRow_;                     ///< where the row of tabs is (its hairline)
+    frame::Backdrop backdrop_;                        ///< the phosphenes behind the panel
+    int headerBottom_ = 0;
+    int headsetGroup_ = -1;                           ///< the Perform page's headset group
+    bool shotHands_ = false;                          ///< PHOS_SHOT_HEADSET: the headset's hands kept alive
+    /** @} */
     /** @name Help, full screen and the update notice (23.09.2026)
      *  @{ */
-    juce::TextButton helpButton_{ "Help" }, fullButton_{ "Full screen" }, updateButton_{ "" };
+    juce::TextButton updateButton_{ "" };
     std::unique_ptr<HelpView> help_;   ///< the help page, made on first use
     juce::SharedResourcePointer<phosui::UpdateCheck> updates_;   ///< the process's one update check
     /** @brief Opens or closes the help page, at the chapter of the tab that is open. */
@@ -348,7 +397,7 @@ private:
     /** @brief The effect preset choosers' host links; declared after pages_, so they go before their boxes do. */
     std::vector<std::unique_ptr<juce::ComboBoxParameterAttachment>> sfxPresetLinks_;
     std::vector<phos::NoteEvent> patternNotes_;   ///< scratch for the timer's read
-    juce::OwnedArray<juce::TextButton> tabButtons_, laneButtons_;   ///< the tab bar and the percussion lane bar
+    juce::OwnedArray<juce::TextButton> laneButtons_;   ///< the percussion lane bar
     juce::Viewport viewport_;   ///< scrolls a page taller than the window
     int tab_ = 0, percLane_ = 0;   ///< the tab and the percussion lane on screen
     int designW_ = 1290, designH_ = 860;   ///< the design size the content is laid out at before scaling
@@ -366,6 +415,9 @@ private:
     LoudnessDisplay*  loudness_ = nullptr;   ///< the output meter
     TrackDisplay*     tracks_ = nullptr;   ///< the track list
     juce::Slider*     exportBars_ = nullptr;   ///< bars for the MIDI export
+    juce::TextButton* exportMidi_ = nullptr;   ///< the Export tab's buttons (Ctrl+E, Ctrl+S, Ctrl+O)
+    juce::TextButton* exportSet_ = nullptr;    ///< @copydoc exportMidi_
+    juce::TextButton* loadSet_ = nullptr;      ///< @copydoc exportMidi_
     /** @name The factory-defaults group of the Set tab (20.09.2026, round "dialogue")
      *  @{ */
     juce::TextButton* legacyButton_ = nullptr;   ///< "Load the saved knobs anyway", shown only while one is held

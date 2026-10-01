@@ -2,7 +2,7 @@
   "version": "1.2.0",
   "name": "Phosphene",
   "designWidth": 1290,
-  "designHeight": 1120,
+  "designHeight": 1200,
   "params": [
     {
       "key": "compose.bpm",
@@ -21819,7 +21819,7 @@
       "image": "tab-0-set.png",
       "groups": [
         {
-          "title": "Transport",
+          "title": "Seed and Clock",
           "params": []
         },
         {
@@ -21919,10 +21919,6 @@
         },
         {
           "title": "Plan",
-          "params": []
-        },
-        {
-          "title": "Export",
           "params": []
         },
         {
@@ -24229,15 +24225,6 @@
           "params": [
             "master.monitor"
           ]
-        },
-        {
-          "title": "Score Cues (OSC)",
-          "params": [
-            "cue.send",
-            "cue.port",
-            "cue.beats",
-            "cue.lead_ms"
-          ]
         }
       ]
     },
@@ -24270,6 +24257,10 @@
           "params": []
         },
         {
+          "title": "Headset",
+          "params": []
+        },
+        {
           "title": "Rate what you hear",
           "params": []
         }
@@ -24277,8 +24268,32 @@
     },
     {
       "index": 16,
+      "name": "Export",
+      "image": "tab-16-export.png",
+      "groups": [
+        {
+          "title": "Record",
+          "params": []
+        },
+        {
+          "title": "Score and Set",
+          "params": []
+        },
+        {
+          "title": "Score Cues (OSC)",
+          "params": [
+            "cue.send",
+            "cue.port",
+            "cue.beats",
+            "cue.lead_ms"
+          ]
+        }
+      ]
+    },
+    {
+      "index": 17,
       "name": "Gallery",
-      "image": "tab-16-gallery.png",
+      "image": "tab-17-gallery.png",
       "groups": [
         {
           "title": "Gallery",
@@ -25477,12 +25492,12 @@
     "master.clipper",
     "master.clipper_threshold",
     "master.monitor",
+    "mix.keyboard_part",
+    "mix.keyboard_mode",
     "cue.send",
     "cue.port",
     "cue.beats",
     "cue.lead_ms",
-    "mix.keyboard_part",
-    "mix.keyboard_mode",
     "perc1.active",
     "perc1.role",
     "perc1.engine",

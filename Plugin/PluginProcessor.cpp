@@ -238,6 +238,8 @@ PhospheneProcessor::PhospheneProcessor()
     followHost_ = wrapperType != wrapperType_Standalone;
     followHostAtomic_.store(followHost_);
 
+    bindDefaultControllers();
+
     composerRun_.store(true);
     composerThread_ = std::thread([this] { composerLoop(); });
     startTimer(33);
@@ -361,6 +363,7 @@ void PhospheneProcessor::timerCallback()
 {
     // The fast job is the macros: a drop-out has to let go on the bar line, and 33 ms is a
     // sixty-fourth note at 145 BPM. Everything else here is housekeeping and runs every eighth tick.
+    pollHeadset();   // the headset's hands move macros too (01.10.2026)
     serviceMacros();
     if (++macroTicks_ % 8 != 0) return;
     serviceCueBridge();
@@ -529,6 +532,7 @@ bool PhospheneProcessor::drainCuration()
     // the transport restarts at the bar the editor marked when the button was pressed.
     plansStale_.store(true, std::memory_order_release);
     restartRequest_.store(true, std::memory_order_release);
+    restarts_.fetch_add(1, std::memory_order_relaxed);
     return true;
 }
 
@@ -724,6 +728,54 @@ void PhospheneProcessor::requestSeek(int bar, double beatOffset)
 
 void PhospheneProcessor::play() { playRequest_.store(true, std::memory_order_release); }
 
+void PhospheneProcessor::bindDefaultControllers()
+{
+    // The controllers every generator of the family has by default (01.10.2026): controller 74 (brightness) the filter
+    // sweep, the expression pedal (11) the gate depth, the sustain pedal (64) the stutter while it is held. The mod
+    // wheel (1) is left free.
+    midiMap_.bind(0, 74, params().count() + static_cast<int>(Macro::FilterSweep));
+    midiMap_.bind(0, 11, params().count() + static_cast<int>(Macro::GateDepth));
+    midiMap_.bind(0, 64, params().count() + static_cast<int>(Macro::Stutter));
+}
+
+void PhospheneProcessor::composeSet()
+{
+    // Every knob taken over at once (refreshComposeParams: a restart takes them all), the plans made again, the set
+    // from bar 1.
+    plansStale_.store(true, std::memory_order_release);
+    seekToBar(0);
+}
+
+void PhospheneProcessor::resetToDefault(int id)
+{
+    if (id < 0 || id >= params().count()) return;
+    StoreParameter* p = parameterFor(id);
+    if (p == nullptr) return;
+    undoable(juce::String(params().desc(id).name) + " to its default", [p] {
+        p->beginChangeGesture();
+        p->setValueNotifyingHost(p->getDefaultValue());
+        p->endChangeGesture();
+    });
+}
+
+void PhospheneProcessor::pollHeadset()
+{
+    frame::Settings& st = frame::Settings::of("Phosphene");
+    headset_.listen(st.headset() == frame::Settings::HeadsetMode::Off ? 0 : st.headsetPort());
+    const frame::HeadsetEvents e = headset_.poll();
+    if (e.playStop) { if (isPlaying()) stop(); else play(); }
+    if (e.next) {
+        // The next track, as the Quest app has it: the conductor goes to its first bar.
+        phos::TrackPlan plan;
+        if (tryReadTrack(transport().track + 1, plan)) seekToBar(plan.firstBar);
+    }
+    if (e.action) setMacro(Macro::DropOut, 1.0f);
+    if (e.hold) setMacro(Macro::Stutter, 1.0f);
+    if (e.holdEnded) setMacro(Macro::Stutter, 0.0f);
+    if (e.filterMoved) setMacro(Macro::FilterSweep, e.filter);
+    if (e.throwMoved) setMacro(Macro::GateDepth, e.throwAmount);
+}
+
 void PhospheneProcessor::stop()
 {
     playRequest_.store(false, std::memory_order_release);
@@ -735,6 +787,7 @@ void PhospheneProcessor::seekToBar(int bar)
     pendingBar_.store(juce::jmax(0, bar), std::memory_order_relaxed);
     pendingOffset_.store(static_cast<double>(juce::jmax(0, bar)) * kBeatsPerBar, std::memory_order_relaxed);
     restartRequest_.store(true, std::memory_order_release);
+    restarts_.fetch_add(1, std::memory_order_relaxed);
 }
 
 void PhospheneProcessor::setFollowHost(bool on)
@@ -1514,6 +1567,7 @@ void PhospheneProcessor::setStateInformation(const void* data, int sizeInBytes)
     }
     if (auto* mm = xml->getChildByName("midimap"))
         midiMap_.fromText(mm->getAllSubText().toStdString(), [this](const std::string& k) { return midiTargetFind(k); });
+    if (midiMap_.bindings().empty()) bindDefaultControllers();   // a state from before 01.10.2026 had none at all
     followHost_ = xml->getBoolAttribute("followHost", followHost_);
     setCueHost(xml->getStringAttribute("cueHost", cueHost()));
     if (xml->getStringAttribute("fieldFolder") != fieldFolder_) setFieldFolder(xml->getStringAttribute("fieldFolder"));
@@ -1719,6 +1773,7 @@ bool PhospheneProcessor::applyPreferences(const Preferences& prefs)
     markCurrentPosition();
     plansStale_.store(true, std::memory_order_release);
     restartRequest_.store(true, std::memory_order_release);
+    restarts_.fetch_add(1, std::memory_order_relaxed);
     return written;
 }
 
@@ -1730,6 +1785,7 @@ void PhospheneProcessor::forgetPreferences()
     markCurrentPosition();
     plansStale_.store(true, std::memory_order_release);
     restartRequest_.store(true, std::memory_order_release);
+    restarts_.fetch_add(1, std::memory_order_relaxed);
 }
 
 juce::String PhospheneProcessor::preferencesSummary() const

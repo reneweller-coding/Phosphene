@@ -119,8 +119,8 @@ void ArrangeDisplay::measure()
     blocks_.clear();
     juce::Rectangle<int> r = getLocalBounds().reduced(6, 4);
     if (r.getWidth() < 40 || r.getHeight() < 40) { strip_ = {}; return; }
-    r.removeFromBottom(kLegendH);
-    strip_ = r.removeFromTop(kStripH).withTrimmedTop(13);
+    if (!stripOnly_) r.removeFromBottom(kLegendH);
+    strip_ = stripOnly_ ? r.withTrimmedTop(13) : r.removeFromTop(kStripH).withTrimmedTop(13);
     r.removeFromTop(6);
 
     totalBars_ = juce::jmax(1, snap_.bars);
@@ -143,6 +143,7 @@ void ArrangeDisplay::measure()
         hits_.push_back(h);
     }
 
+    if (stripOnly_) return;   // the overview: the strip is all
     // The rows. They share what is left; a row never grows past a comfortable height, so a short
     // set does not draw nine fat bars, and never shrinks below what a section label needs.
     const int rowH = juce::jlimit(20, 44, r.getHeight() / n);
@@ -348,13 +349,15 @@ void ArrangeDisplay::render()
         hatch(t.bars - out, out, "mix " + juce::String(t.index + 2), false);
     }
 
-    // ---------------------------------------------------------------- the legend
-    g.setColour(faint);
-    g.setFont(body(9.5f));
-    g.drawText("the strip is the night to scale, every row is one track filling the width   -   "
-               "hatched: bars two tracks share (DJ mix)   -   click a block to jump   -   "
-               "padlock freezes a track or a section on its seed   -   die draws it again",
-               getLocalBounds().reduced(6, 3).removeFromBottom(kLegendH), juce::Justification::centredLeft, false);
+    if (!stripOnly_) {
+        // ---------------------------------------------------------------- the legend
+        g.setColour(faint);
+        g.setFont(body(9.5f));
+        g.drawText("the strip is the night to scale, every row is one track filling the width   -   "
+                   "hatched: bars two tracks share (DJ mix)   -   click a block to jump   -   "
+                   "padlock freezes a track or a section on its seed   -   die draws it again",
+                   getLocalBounds().reduced(6, 3).removeFromBottom(kLegendH), juce::Justification::centredLeft, false);
+    }
 }
 
 void ArrangeDisplay::paint(juce::Graphics& g)
@@ -457,6 +460,80 @@ void PhospheneEditor::buildArrangePage()
         page->addControl(gc, std::move(note), "", 16, true);
     }
     pages_[static_cast<size_t>(TabArrange)] = std::move(page);
+}
+
+ArrangeDisplay::Snapshot PhospheneEditor::planSnapshot() const
+{
+    ArrangeDisplay::Snapshot s;
+    const ParamStore& p = proc_.params();
+    s.minutes = static_cast<int>(p.get(p.base(Module::Compose) + compose::SetMinutes));
+    for (int i = 0; i < 64; ++i) {
+        TrackPlan plan;
+        if (!proc_.tryReadTrack(i, plan)) break;
+        ArrangeDisplay::Trk trk;
+        trk.index = plan.index;
+        trk.firstBar = plan.firstBar;
+        trk.bars = plan.bars;
+        trk.key = plan.key;
+        trk.scale = plan.scale;
+        trk.bpm = plan.bpm;
+        trk.gainDb = plan.gainDb;
+        trk.locked = proc_.isLocked(LockUnit::Track, plan.index);
+        trk.variation = proc_.variation(LockUnit::Track, plan.index);
+        for (int si = 0; si < plan.form.count; ++si) {
+            const Section& sec = plan.form.section[si];
+            ArrangeDisplay::Sec out;
+            out.index = si;
+            out.bar = plan.firstBar + sec.startBar;
+            out.bars = sec.bars;
+            out.type = sec.type;
+            out.energy = sec.energy;
+            out.energyTo = sec.energyTo;
+            out.locked = proc_.isLocked(LockUnit::Section, sectionUnitIndex(plan.index, si));
+            out.variation = proc_.variation(LockUnit::Section, sectionUnitIndex(plan.index, si));
+            trk.sections.push_back(out);
+        }
+        s.bars = plan.firstBar + plan.bars;
+        s.tracks.push_back(std::move(trk));
+    }
+    return s;
+}
+
+namespace {
+/** @brief A hash over everything the timeline's picture shows. */
+uint64_t snapshotHash(const ArrangeDisplay::Snapshot& s)
+{
+    uint64_t hash = 1469598103934665603ull;
+    auto mix = [&hash](uint64_t v) { hash = (hash ^ v) * 1099511628211ull; };
+    mix(static_cast<uint64_t>(s.tracks.size()));
+    mix(static_cast<uint64_t>(s.bars));
+    for (const ArrangeDisplay::Trk& trk : s.tracks) {
+        mix(static_cast<uint64_t>(trk.firstBar) * 131 + static_cast<uint64_t>(trk.bars));
+        mix(static_cast<uint64_t>(trk.key) * 17 + static_cast<uint64_t>(trk.scale));
+        mix(static_cast<uint64_t>(trk.bpm * 100.0));
+        mix(static_cast<uint64_t>(trk.locked) * 7 + trk.variation * 1000003ull);
+        for (const ArrangeDisplay::Sec& sec : trk.sections) {
+            mix(static_cast<uint64_t>(sec.bar) * 131 + static_cast<uint64_t>(sec.bars) * 13 + static_cast<uint64_t>(sec.type));
+            mix(static_cast<uint64_t>(sec.energy * 1000.0f) * 3 + static_cast<uint64_t>(sec.locked) + sec.variation * 1000003ull);
+        }
+    }
+    return hash;
+}
+} // namespace
+
+void PhospheneEditor::refreshOverview()
+{
+    // The strip under the header (01.10.2026): the plans read once a second, or at once after a reroll or a lock; the
+    // play head every tick.
+    if (arrangeDirty_ || overview_.snapshot().tracks.empty() || ++overviewTicks_ % 12 == 0) {
+        ArrangeDisplay::Snapshot s = planSnapshot();
+        const uint64_t hash = snapshotHash(s);
+        if (hash != overviewHash_) {
+            overviewHash_ = hash;
+            overview_.setSnapshot(std::move(s));
+        }
+    }
+    overview_.setPosition(proc_.transport().musicalBeat);
 }
 
 void PhospheneEditor::refreshArrangePage()

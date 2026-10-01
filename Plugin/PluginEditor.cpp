@@ -428,10 +428,47 @@ void PatternDisplay::paint(juce::Graphics& g)
 const juce::StringArray& PhospheneEditor::tabNames()
 {
     static const juce::StringArray names{ "Set", "Arrange", "Kick", "Bass", "Percussion", "Acid",
-                                          "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "SFX / FX", "Field", "Mixer / Master", "Perform", "Gallery" };
+                                          "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "SFX / FX", "Field", "Mixer / Master", "Perform",
+                                          "Export", "Gallery" };
     jassert(names.size() == TabCount);
     return names;
 }
+
+namespace {
+/** @brief The groups of tabs (01.10.2026): the row on top, as short as every generator's. */
+const std::vector<std::pair<juce::String, std::vector<int>>>& tabGroups()
+{
+    static const std::vector<std::pair<juce::String, std::vector<int>>> groups = {
+        { "Set", { TabSet } }, { "Arrange", { TabArrange } }, { "Low End", { TabKick, TabBass } }, { "Percussion", { TabPerc } },
+        { "Acid", { TabAcid } }, { "Synths", { TabLead, TabCounter, TabArp, TabStab, TabPad, TabDrone } },
+        { "Effects", { TabFx, TabField } }, { "Mixer", { TabMix } }, { "Perform", { TabPerform } }, { "Export", { TabExport } },
+        { "Gallery", { TabGallery } },
+    };
+    return groups;
+}
+constexpr int kOverviewH = 74;   ///< the set strip under the header
+constexpr int kTabRowH = 32;     ///< the row of tabs
+constexpr int kSubRowH = 30;     ///< the row of a group's pages (or the percussion lanes)
+} // namespace
+
+const juce::StringArray& PhospheneEditor::groupNames()
+{
+    static const juce::StringArray names = [] {
+        juce::StringArray n;
+        for (const auto& g : tabGroups()) n.add(g.first);
+        return n;
+    }();
+    return names;
+}
+
+int PhospheneEditor::groupOf(int tab)
+{
+    for (size_t g = 0; g < tabGroups().size(); ++g)
+        for (int t : tabGroups()[g].second) if (t == tab) return static_cast<int>(g);
+    return 0;
+}
+
+const std::vector<int>& PhospheneEditor::tabsOf(int g) { return tabGroups()[static_cast<size_t>(juce::jlimit(0, static_cast<int>(tabGroups().size()) - 1, g))].second; }
 
 PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEditor(&p), proc_(p)
 {
@@ -443,26 +480,102 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
     viewport_.setViewedComponent(nullptr, false);
     content_.addAndMakeVisible(viewport_);
 
-    for (int i = 0; i < tabNames().size(); ++i) {
-        auto* b = tabButtons_.add(new juce::TextButton(tabNames()[i]));
-        b->setClickingTogglesState(false);
-        // The tab's family colour as a stripe under its name, and the frame of the open one (PhospheneLookAndFeel).
-        b->getProperties().set("stripe", static_cast<juce::int64>(partColour(i).getARGB()));
-        b->onClick = [this, i] { setTab(i); };
+    // The row of tabs (01.10.2026): one per group, drawn as every generator's; a group of several pages shows them in a
+    // row of its own under it, each in its family's colour (PhospheneLookAndFeel).
+    lastTabOfGroup_.assign(tabGroups().size(), 0);
+    for (int g = 0; g < static_cast<int>(tabGroups().size()); ++g) {
+        lastTabOfGroup_[static_cast<size_t>(g)] = tabsOf(g).front();
+        auto* b = groupTabs_.add(new frame::FlatTab(groupNames()[g]));
+        b->onClick = [this, g] { setTab(lastTabOfGroup_[static_cast<size_t>(g)]); };
         content_.addAndMakeVisible(b);
+        if (tabsOf(g).size() < 2) continue;
+        for (int t : tabsOf(g)) {
+            auto* s = subButtons_.add(new juce::TextButton(tabNames()[t]));
+            s->setClickingTogglesState(false);
+            s->getProperties().set("stripe", static_cast<juce::int64>(partColour(t).getARGB()));
+            s->onClick = [this, t] { setTab(t); };
+            subTab_.push_back(t);
+            content_.addChildComponent(s);
+        }
     }
-    // Undo and redo (23.09.2026): every knob gesture, seed, lock, reroll, loaded set and factory reset is a step.
-    undoButton_.onClick = [this] { proc_.undo(); };
-    redoButton_.onClick = [this] { proc_.redo(); };
-    content_.addAndMakeVisible(undoButton_);
-    content_.addAndMakeVisible(redoButton_);
-    // Help, full screen and the update notice (23.09.2026, EditorHelp.cpp).
-    helpButton_.setTooltip("The manual, by topic, opened at this tab (F1)");
-    helpButton_.onClick = [this] { showHelp(!helpShown()); };
-    content_.addAndMakeVisible(helpButton_);
-    fullButton_.setTooltip("Fill the screen, or stop filling it (F11)");
-    fullButton_.onClick = [this] { toggleFullScreen(); };
-    content_.addChildComponent(fullButton_);   // visible in the standalone only (parentHierarchyChanged)
+    // The frame's header (Frame.h): where the set starts and how long its arc is, Compose set, New seed, Play, Mute; the
+    // ratings, the status and where the set is; undo, redo, help and the settings.
+    {
+        const ParamStore& ps = proc_.params();
+        const int cb = ps.base(Module::Compose);
+        auto combo = [&](juce::ComboBox& box, int id, const char* tip) {
+            const ParamDesc& d = ps.desc(id);
+            for (int k = 0; d.choices != nullptr && k <= static_cast<int>(d.maxValue); ++k) box.addItem(d.choices[k], k + 1);
+            headerLinks_.push_back(std::make_unique<juce::ComboBoxParameterAttachment>(*proc_.parameterFor(id), box));
+            box.setTooltip(tip);
+            content_.addAndMakeVisible(box);
+        };
+        combo(style_, cb + compose::Style, "The style the set starts in (Style Mix on the Set tab lets it walk)");
+        combo(key_, cb + compose::Key, "The key the set starts in (it walks from track to track)");
+        combo(scale_, cb + compose::Scale, "The scale the set starts in");
+        length_.setSliderStyle(juce::Slider::LinearHorizontal);
+        length_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 62, 20);
+        lengthLink_ = std::make_unique<juce::SliderParameterAttachment>(*proc_.parameterFor(cb + compose::SetMinutes), length_);
+        length_.setTextValueSuffix(" min");
+        length_.setTooltip("The set's length: the time its energy arc spans (the set plays on after it)");
+        lengthLabel_.setText("Set", juce::dontSendNotification);
+        lengthLabel_.setColour(juce::Label::textColourId, dim);
+        lengthLabel_.setJustificationType(juce::Justification::centredRight);
+        content_.addAndMakeVisible(length_);
+        content_.addAndMakeVisible(lengthLabel_);
+    }
+    compose_.setTooltip("Plans the set again with the knobs as they stand -- its seed, locks and rerolls kept -- and starts it "
+                        "from the beginning");
+    compose_.onClick = [this] { proc_.composeSet(); arrangeDirty_ = true; };
+    newSeed_.setTooltip("A new seed: another night from the same knobs");
+    newSeed_.onClick = [this] {
+        proc_.undoable("New seed", [this] { proc_.randomiseSeed(); });
+        if (seedEditor_ != nullptr) seedEditor_->setText(juce::String(proc_.seed()), false);
+        trackRows_.clear();
+        rowsSeed_ = 0;
+        arrangeDirty_ = true;
+    };
+    play_.setTooltip("Play, and stop (Space)");
+    play_.onClick = [this] { if (proc_.isPlaying()) proc_.stop(); else proc_.play(); };
+    mute_.setClickingTogglesState(true);
+    mute_.setToggleState(proc_.muted(), juce::dontSendNotification);
+    mute_.setEnabled(!proc_.muteForced());
+    mute_.setColour(juce::TextButton::buttonOnColourId, red.withAlpha(0.55f));
+    mute_.setTooltip(proc_.muteForced() ? "Muted by PHOS_MUTE: an automated run makes no sound" : "Silence the output");
+    mute_.onClick = [this] { proc_.setMuted(mute_.getToggleState()); };
+    play_.setColour(juce::TextButton::buttonColourId, accent.withAlpha(0.22f));
+    compose_.setColour(juce::TextButton::buttonColourId, accent.withAlpha(0.12f));
+    for (juce::Component* comp : { static_cast<juce::Component*>(&compose_), static_cast<juce::Component*>(&newSeed_),
+                                   static_cast<juce::Component*>(&play_), static_cast<juce::Component*>(&mute_),
+                                   static_cast<juce::Component*>(&status_), static_cast<juce::Component*>(&where_),
+                                   static_cast<juce::Component*>(&titleSpot_) })
+        content_.addAndMakeVisible(comp);
+    titleSpot_.setInterceptsMouseClicks(false, false);
+    status_.setColour(juce::Label::textColourId, text);
+    status_.setMinimumHorizontalScale(0.8f);
+    where_.setColour(juce::Label::textColourId, dim);
+    where_.setJustificationType(juce::Justification::centredRight);
+    // The tools; their names are what the host test presses by (Tests/hosttest.cpp), their tooltips say the keys.
+    undoIcon_.setButtonText("Undo");
+    redoIcon_.setButtonText("Redo");
+    helpIcon_.setButtonText("Help");
+    settingsIcon_.setButtonText("Settings ...");
+    likeIcon_.setButtonText("Good here");
+    dislikeIcon_.setButtonText("Bad here");
+    undoIcon_.onClick = [this] { proc_.undo(); };
+    redoIcon_.onClick = [this] { proc_.redo(); };
+    helpIcon_.onClick = [this] { showHelp(!helpShown()); };
+    settingsIcon_.onClick = [this] { showSettings(); };
+    headsetIcon_.onClick = [this] { setTab(TabPerform); };
+    likeIcon_.onClick = [this] { rateNow(1); };
+    dislikeIcon_.onClick = [this] { rateNow(-1); };
+    for (auto* b : { &undoIcon_, &redoIcon_, &helpIcon_, &settingsIcon_, &likeIcon_, &dislikeIcon_ }) content_.addAndMakeVisible(b);
+    content_.addChildComponent(headsetIcon_);
+    // The set as a strip under the header (the Arrange tab's top, to scale): a click on a track jumps to it.
+    overview_.setStripOnly(true);
+    overview_.onSeek = [this](int bar) { proc_.seekToBar(bar); };
+    content_.addAndMakeVisible(overview_);
+    frame::Settings::of("Phosphene").addChangeListener(this);
     updateButton_.setTooltip("Open the release page");
     updateButton_.onClick = [this] {
         const juce::String url = updates_->result().url;
@@ -491,7 +604,7 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
     for (auto& page : pages_) if (page != nullptr) { tallest = juce::jmax(tallest, page->layout(designW_ - 30)); widest = juce::jmax(widest, page->minimumWidth()); }
     for (auto& page : percPages_) if (page != nullptr) { tallest = juce::jmax(tallest, page->layout(designW_ - 30)); widest = juce::jmax(widest, page->minimumWidth()); }
     designW_ = juce::jmax(designW_, widest + 30);
-    designH_ = juce::jlimit(680, 1120, tallest + 64 + 34 + 30 + 16);
+    designH_ = juce::jlimit(760, 1200, tallest + 64 + kOverviewH + kTabRowH + kSubRowH + 24);
 
     setResizable(true, true);
     if (auto* con = getConstrainer()) {
@@ -511,12 +624,23 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
     setTab(juce::jlimit(0, tabNames().size() - 1, startTab));
     // PHOS_HELP=1: open with the help page up (for its picture in the manual and for checking it by eye).
     if (juce::SystemStats::getEnvironmentVariable("PHOS_HELP", "").isNotEmpty()) showHelp(true);
+    // PHOS_SHOT_HEADSET=1: the headset's controls in the pictures, hands as if one sent them.
+    if (juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_HEADSET", "").isNotEmpty()) {
+        frame::Hands hands;
+        hands.height[0] = 0.62f;
+        hands.height[1] = 0.8f;
+        hands.tracked[0] = hands.tracked[1] = true;
+        proc_.headset().inject(hands);
+        shotHands_ = true;
+    }
+    frame::keepKeysForEditor(content_);
     runScreenshotMode();
     startTimerHz(12);
 }
 
 PhospheneEditor::~PhospheneEditor()
 {
+    frame::Settings::of("Phosphene").removeChangeListener(this);
     viewport_.setViewedComponent(nullptr, false);
     setLookAndFeel(nullptr);
 }
@@ -556,6 +680,7 @@ void PhospheneEditor::buildPages()
         case TabArrange: break;   // built in EditorArrange.cpp
         case TabPerform: break;   // built in EditorPerform.cpp
         case TabGallery: break;   // built in EditorGallery.cpp
+        case TabExport: break;    // built in EditorSetTab.cpp (01.10.2026)
         case TabKick: case TabBass: {
             // 24.09.2026, the user: "Koennten wir bei der Kick und beim Bass noch Anzeigen einbauen, wie in (Kick 3 von
             // Sonic Academy)" -- the scope (EditorScope.h) beside the sound group, the knobs under them.
@@ -604,7 +729,7 @@ void PhospheneEditor::buildPages()
                                  { mb + mix::TrackGain, mb + mix::DuckAttack, mb + mix::DuckHold, mb + mix::DuckRelease,
                                    mb + mix::DuckReleaseLines, mb + mix::CounterDuck, mb + mix::PadLeadDuck });
             addSlices(*page, proc_, Module::Master, 0, kMasterSlices, tint);
-            page->addModuleGroup(proc_, Module::Cue, 0, "Score Cues (OSC)", tint, 4);   // 23.09.2026, see the bass slices
+            // The score cues went to the Export tab (01.10.2026), as every generator has them.
             break;
         }
         default: break;
@@ -640,6 +765,7 @@ void PhospheneEditor::buildPages()
     buildArrangePage();
     buildPerformPage();
     buildGalleryPage();
+    buildExportPage();
 }
 
 void PhospheneEditor::fillPresetBox(PresetBox& pb)
@@ -834,7 +960,15 @@ void PhospheneEditor::setTab(int index)
 {
     if (helpShown()) showHelp(false);
     tab_ = juce::jlimit(0, tabNames().size() - 1, index);
-    for (int i = 0; i < tabButtons_.size(); ++i) tabButtons_[i]->setToggleState(i == tab_, juce::dontSendNotification);
+    // The group on top, and the row of its pages under it (01.10.2026).
+    const int grp = groupOf(tab_);
+    if (grp < static_cast<int>(lastTabOfGroup_.size())) lastTabOfGroup_[static_cast<size_t>(grp)] = tab_;
+    for (int i = 0; i < groupTabs_.size(); ++i) groupTabs_[i]->setToggleState(i == grp, juce::dontSendNotification);
+    for (int i = 0; i < subButtons_.size(); ++i) {
+        const int t = subTab_[static_cast<size_t>(i)];
+        subButtons_[i]->setVisible(groupOf(t) == grp);
+        subButtons_[i]->setToggleState(t == tab_, juce::dontSendNotification);
+    }
     for (int i = 0; i < laneButtons_.size(); ++i) laneButtons_[i]->setVisible(tab_ == TabPerc);
     for (int i = 0; i < laneButtons_.size(); ++i) laneButtons_[i]->setToggleState(i == percLane_, juce::dontSendNotification);
     viewport_.setViewedComponent(activePage(), false);
@@ -845,6 +979,7 @@ void PhospheneEditor::setTab(int index)
     else if (tab_ == TabArrange) { arrangeDirty_ = true; refreshArrangePage(); }
     else if (tab_ == TabPerform) refreshPerformPage();
     else if (tab_ == TabGallery && gallery_ != nullptr && gallery_->rowCount() == 0) refreshGalleryPage();
+    else if (tab_ == TabExport) refreshExportPage();
     refreshPattern();
     content_.repaint();
 }
@@ -875,19 +1010,41 @@ void PhospheneEditor::resized()
 
 void PhospheneEditor::layoutContent()
 {
-    juce::Rectangle<int> r = content_.getLocalBounds();
-    r.removeFromTop(64);                                  // header, painted
-    // Undo and redo sit in the header, after the title and the mute note (paintContent keeps that space).
-    undoButton_.setBounds(516, 18, 72, 28);
-    redoButton_.setBounds(594, 18, 72, 28);
-    helpButton_.setBounds(672, 18, 64, 28);
-    fullButton_.setBounds(742, 18, 96, 28);
-    updateButton_.setBounds(designW_ - 16 - 250, 38, 250, 20);
-    juce::Rectangle<int> tabs = r.removeFromTop(34).reduced(10, 4);
-    const int tw = tabs.getWidth() / juce::jmax(1, tabButtons_.size());
-    for (auto* b : tabButtons_) b->setBounds(tabs.removeFromLeft(tw).reduced(2, 0));
-    if (tab_ == TabPerc) {
-        juce::Rectangle<int> lanes = r.removeFromTop(30).reduced(12, 4);
+    // The frame's header (Frame.h), the set strip, the row of tabs and the row of a group's pages.
+    juce::Rectangle<int> r = content_.getLocalBounds().reduced(10, 0).withTrimmedTop(10);
+    frame::Header h;
+    h.logo = &logo_;
+    h.title = &titleSpot_;
+    h.titleWidth = static_cast<int>(frame::titleWidth(phosui::skin(), 21.0f)) + 12;
+    h.choices = { { &style_, 124 }, { &key_, 60 }, { &scale_, 150 } };
+    h.lengthLabel = &lengthLabel_;
+    h.length = &length_;
+    h.actions = { { &compose_, 112 }, { &newSeed_, 88 } };
+    h.play = &play_;
+    h.mute = &mute_;
+    h.like = &likeIcon_;
+    h.dislike = &dislikeIcon_;
+    h.status = &status_;
+    h.curation = &where_;
+    h.update = &updateButton_;
+    h.tools = { &headsetIcon_, nullptr, &undoIcon_, &redoIcon_, nullptr, &helpIcon_, &settingsIcon_ };
+    frame::layoutHeader(r, h);
+    headerBottom_ = r.getY();
+    overview_.setBounds(r.removeFromTop(kOverviewH));
+    r.removeFromTop(4);
+    tabRow_ = r.removeFromTop(kTabRowH);
+    {
+        juce::Rectangle<int> row = tabRow_;
+        for (auto* b : groupTabs_) b->setBounds(row.removeFromLeft(b->bestWidth()));
+    }
+    const int grp = groupOf(tab_);
+    if (tabsOf(grp).size() > 1) {
+        juce::Rectangle<int> sub = r.removeFromTop(kSubRowH).reduced(2, 3);
+        for (int i = 0; i < subButtons_.size(); ++i)
+            if (groupOf(subTab_[static_cast<size_t>(i)]) == grp)
+                subButtons_[i]->setBounds(sub.removeFromLeft(juce::jmax(84, juce::GlyphArrangement::getStringWidthInt(body(13.0f), subButtons_[i]->getButtonText()) + 30)).reduced(2, 0));
+    } else if (tab_ == TabPerc) {
+        juce::Rectangle<int> lanes = r.removeFromTop(kSubRowH).reduced(2, 3);
         const int lw = juce::jmin(52, lanes.getWidth() / juce::jmax(1, laneButtons_.size()));
         for (auto* b : laneButtons_) b->setBounds(lanes.removeFromLeft(lw).reduced(2, 0));
     }
@@ -903,40 +1060,76 @@ void PhospheneEditor::paint(juce::Graphics& g) { g.fillAll(bg0); }
 
 void PhospheneEditor::paintContent(juce::Graphics& g)
 {
-    g.fillAll(bg0);
-    juce::Rectangle<int> header(0, 0, designW_, 64);
-    g.setColour(card);
-    g.fillRect(header);
+    // The frame's backdrop (strong behind the header, faint behind the pages), the logo and the name.
+    const frame::Skin& skin = phosui::skin();
+    backdrop_.paint(g, content_.getLocalBounds(), headerBottom_, skin, frame::Settings::of("Phosphene").backdrop());
+    if (skin.logo) skin.logo(g, logo_);
+    frame::drawTitle(g, skin, titleSpot_.getBounds().toFloat(), 21.0f);
     g.setColour(edge);
-    g.drawHorizontalLine(63, 0.0f, static_cast<float>(designW_));
-
-    juce::Rectangle<int> h = header.reduced(16, 8);
-    g.setColour(accent);
-    g.setFont(title(21.0f));
-    g.drawText("PHOSPHENE", h.removeFromLeft(170), juce::Justification::centredLeft, false);
-    g.setColour(faint);
-    g.setFont(body(11.0f));
-    g.drawText("psytrance set generator", h.removeFromLeft(150), juce::Justification::centredLeft, false);
-    // Not in the pictures (26.09.2026): they are taken muted by design, and on the project's page a red "MUTED" read as a fault.
-    if (proc_.muted() && !shooting_) {
-        g.setColour(red);
-        g.setFont(title(11.0f));
-        g.drawText(proc_.muteForced() ? "MUTED (PHOS_MUTE)" : "MUTED", h.removeFromLeft(160), juce::Justification::centredLeft, false);
-    }
-
-    const TransportView t = proc_.transport();
-    juce::String state = t.restarting ? "planning" : (t.playing ? "playing" : "stopped");
-    juce::String info;
-    info << "seed " << juce::String(proc_.seed()) << "      bar " << juce::String(t.bar + 1)
-         << "      " << juce::String(t.bpm, 1) << " BPM      " << (t.hostSync ? "host clock" : "own clock")
-         << "      " << state;
-    g.setColour(text);
-    g.setFont(body(12.5f));
-    // With an update notice under it, the line moves up to make room.
-    g.drawText(info, updateButton_.isVisible() ? h.withHeight(26) : h, juce::Justification::centredRight, false);
-    // The page's background, so a tab reads as a sheet lying on the window.
-    g.setColour(card.darker(0.25f));
+    g.fillRect(tabRow_.getX(), tabRow_.getBottom() - 1, tabRow_.getWidth(), 1);
+    // The page's background, so a tab reads as a sheet lying on the window (the phosphenes faint through it).
+    g.setColour(skin.panel);
     g.fillRoundedRectangle(viewport_.getBounds().toFloat(), 8.0f);
+}
+
+bool PhospheneEditor::standalone() const { return findParentComponentOfClass<juce::DocumentWindow>() != nullptr; }
+
+bool PhospheneEditor::fullScreen() const
+{
+    auto* window = findParentComponentOfClass<juce::DocumentWindow>();
+    return window != nullptr && juce::Desktop::getInstance().getKioskModeComponent() == window;
+}
+
+void PhospheneEditor::changeListenerCallback(juce::ChangeBroadcaster*) { content_.repaint(); }
+
+void PhospheneEditor::showSettings()
+{
+    frame::SettingsMenu m;
+    m.app = "Phosphene";
+    m.version = JucePlugin_VersionString;
+    const juce::File state = proc_.userFolder().getChildFile("update.txt");
+    m.updatesOn = [state] { return phosui::UpdateCheck::enabled(state); };
+    m.setUpdates = [this, state](bool on) {
+        phosui::UpdateCheck::setEnabled(state, on);
+        if (on) updates_->startIfDue(state, true);
+    };
+    m.canFullScreen = [this] { return standalone(); };
+    m.isFullScreen = [this] { return fullScreen(); };
+    m.toggleFullScreen = [this] { toggleFullScreen(); };
+    m.setWindowScale = [this](float k) {
+        if (!fullScreen()) setSize(juce::roundToInt(static_cast<float>(designW_) * k), juce::roundToInt(static_cast<float>(juce::jmin(designH_, 860)) * k));
+    };
+    m.headsetStatus = [this] { return proc_.headset().statusText(); };
+    m.about = [] { return juce::String("Whole psytrance sets, composed and synthesised.\ngithub.com/reneweller-coding/Phosphene"); };
+    m.show(settingsIcon_);
+}
+
+void PhospheneEditor::refreshHeader()
+{
+    const TransportView t = proc_.transport();
+    play_.setButtonText(proc_.isPlaying() ? "Stop" : "Play");
+    const bool muted = proc_.muted() && !shooting_;   // the pictures are taken muted by design (26.09.2026)
+    mute_.setToggleState(muted, juce::dontSendNotification);
+    mute_.setButtonText(muted ? (proc_.muteForced() ? "Muted (env)" : "Muted") : "Mute");
+    juce::String info;
+    info << "seed " << juce::String(proc_.seed()) << "   " << juce::String(t.bpm, 1) << " BPM   " << (t.hostSync ? "host clock" : "own clock")
+         << "   " << (t.restarting ? "planning" : (t.playing ? "playing" : "stopped"));
+    if (proc_.isRecording()) info << "   recording " << juce::String(proc_.recordedSeconds(), 1) << " s";
+    status_.setText(info, juce::dontSendNotification);
+    where_.setText("track " + juce::String(t.track + 1) + ", bar " + juce::String(t.barInTrack + 1) + "   (bar " + juce::String(t.bar + 1) + " of the set)",
+                   juce::dontSendNotification);
+    undoIcon_.setEnabled(proc_.canUndo());
+    redoIcon_.setEnabled(proc_.canRedo());
+    undoIcon_.setTooltip(proc_.canUndo() ? "Undo: " + proc_.undoName() + " (Ctrl+Z)" : juce::String("Nothing to undo"));
+    redoIcon_.setTooltip(proc_.canRedo() ? "Redo: " + proc_.redoName() + " (Ctrl+Y)" : juce::String("Nothing to redo"));
+    // The headset (the frame): its sign while one sends (or always, if asked), its group on the Perform tab.
+    if (shotHands_) proc_.headset().inject(proc_.headset().hands());
+    const bool hs = proc_.headset().shown(frame::Settings::of("Phosphene").headset());
+    if (headsetIcon_.isVisible() != hs) {
+        headsetIcon_.setVisible(hs);
+        if (headsetGroup_ >= 0 && pages_[TabPerform] != nullptr) pages_[TabPerform]->setGroupVisible(headsetGroup_, hs);
+        layoutContent();
+    }
 }
 
 void PhospheneEditor::refreshPattern()
@@ -957,14 +1150,23 @@ void PhospheneEditor::refreshPattern()
 
 bool PhospheneEditor::keyPressed(const juce::KeyPress& key)
 {
-    const juce::ModifierKeys m = key.getModifiers();
-    if (m.isCommandDown() && key.getKeyCode() == 'Z') { if (m.isShiftDown()) proc_.redo(); else proc_.undo(); return true; }
-    if (m.isCommandDown() && key.getKeyCode() == 'Y') { proc_.redo(); return true; }
-    if (key.getKeyCode() == juce::KeyPress::F1Key) { showHelp(!helpShown()); return true; }
-    if (key.getKeyCode() == juce::KeyPress::escapeKey && helpShown()) { showHelp(false); return true; }
-    if (key.getKeyCode() == juce::KeyPress::F11Key) { toggleFullScreen(); return true; }
-    if (key.getKeyCode() == juce::KeyPress::escapeKey && juce::Desktop::getInstance().getKioskModeComponent() != nullptr) { toggleFullScreen(); return true; }
-    return false;
+    // The keys every generator has (Frame.h): Space, Ctrl+Z / Ctrl+Y, F1, F11, Esc, Ctrl+S / Ctrl+O / Ctrl+E.
+    frame::Keys k;
+    if (standalone()) {   // in a host, Space and F11 are the host's
+        k.playStop = [this] { if (proc_.isPlaying()) proc_.stop(); else proc_.play(); };
+        k.fullScreen = [this] { toggleFullScreen(); };
+    }
+    k.undo = [this] { proc_.undo(); };
+    k.redo = [this] { proc_.redo(); };
+    k.help = [this] { showHelp(!helpShown()); };
+    k.escape = [this] {
+        if (helpShown()) showHelp(false);
+        else if (fullScreen()) toggleFullScreen();
+    };
+    k.save = [this] { setTab(TabExport); if (exportSet_ != nullptr) exportSet_->triggerClick(); };
+    k.open = [this] { setTab(TabExport); if (loadSet_ != nullptr) loadSet_->triggerClick(); };
+    k.exportFile = [this] { setTab(TabExport); if (exportMidi_ != nullptr) exportMidi_->triggerClick(); };
+    return frame::handleKey(key, k);
 }
 
 void PhospheneEditor::timerCallback()
@@ -990,26 +1192,25 @@ void PhospheneEditor::timerCallback()
             pages_[static_cast<size_t>(tab)]->showValues(store, store.base(pb->synth, pb->instance), ParamStore::moduleCount(pb->synth), vals);
         }
     }
-    undoButton_.setEnabled(proc_.canUndo());
-    redoButton_.setEnabled(proc_.canRedo());
+    refreshHeader();
+    refreshOverview();
     {
         const phosui::UpdateCheck::Result u = updates_->result();
         if (u.newer != updateButton_.isVisible()) {
             updateButton_.setButtonText("Update: Phosphene " + u.latest.trimCharactersAtStart("vV") + " is out");
             updateButton_.setVisible(u.newer);
+            layoutContent();
         }
         if (helpShown()) help_->refreshUpdate();
     }
-    undoButton_.setTooltip(proc_.canUndo() ? "Undo " + proc_.undoName() + " (Ctrl+Z)" : juce::String("Nothing to undo"));
-    redoButton_.setTooltip(proc_.canRedo() ? "Redo " + proc_.redoName() + " (Ctrl+Y)" : juce::String("Nothing to redo"));
     // Only the page that is on screen is fed. The arrange timeline in particular draws a whole set,
     // and a set that is not being looked at costs nothing at all this way.
     if (tab_ == TabSet) refreshSetPage();
     else if (tab_ == TabArrange) refreshArrangePage();
     else if (tab_ == TabPerform) refreshPerformPage();
     else if (tab_ == TabGallery && gallery_ != nullptr && gallery_->rowCount() == 0) refreshGalleryPage();
+    else if (tab_ == TabExport) refreshExportPage();
     refreshPattern();
-    content_.repaint(0, 0, designW_, 64);
 }
 
 // ---------------------------------------------------------------- screenshots

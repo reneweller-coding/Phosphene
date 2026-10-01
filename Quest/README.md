@@ -48,15 +48,25 @@ so "next track" can start the engine at bar 700 of the set. Nothing in the core 
 | Gesture | Effect |
 |---|---|
 | left pinch | play / stop — a 15 ms fade, the music pauses where it is |
-| right pinch | next track: the conductor rewinds to that track's first bar |
-| left hand height | `mix.track_gain`, −12 to +12 dB, mid height = 0 dB |
-| right hand height | acid cutoff, two octaves either way around the composed value |
+| right pinch | drop-out: kick and bass gone until the next bar line |
+| right pinch held 0.6 s | stutter: lead, counter, arp, stab and pad chopped on sixteenths while it is held |
+| both hands pinched together | the next track: the conductor goes to that track's first bar |
+| left hand height | filter sweep: the acid, lead, counter, arp and stab filters together, closed low, open high (a dead zone round the middle) |
+| right hand height | gate depth: the trance gate of lead, counter, arp, stab and pad, from mid height up |
 
-A hand moves its macro only while it is **not** pinching, so the pinch that starts a track does not
-drag the gain with it. Height is measured against the head (`(palm.y − (head.y − 1 m)) / 0.8 m`), so
+These are the plugin's four perform macros (`macroTargets`, copied into the app) in the grammar every generator's
+headset shares (01.10.2026; until then the right pinch was the next track and the heights the track gain and the acid
+cutoff): a pinch acts when it opens again, so a pinch of both hands never also counts as two single ones. A hand moves
+its macro only while it is **not** pinching. Height is measured against the head (`(palm.y − (head.y − 1 m)) / 0.8 m`), so
 it works in a STAGE space and in a LOCAL one and for any player's size. Both macros are smoothed
 with a 0.15 s one-pole and both are centred: a hand at mid height plays exactly what the composer
 wrote, and nothing ever jumps.
+
+**The bridge.** With `bridge_host` set, the app sends its hands to Phosphene on that computer as well: OSC `/hands` with
+six floats (left and right height, left and right pinch, left and right tracked), 30 times a second, to `bridge_port`
+(9101 by default, the port in the plugin's settings under Headset). The plugin reads them with the same grammar and
+the same numbers -- every generator of the family has them (its `Plugin/Frame.h`) -- and shows its headset controls
+while they arrive. `audio=0` leaves the headset silent, so only the computer plays.
 
 The panel is head-locked (yaw only) and drawn as points: track and bar, key and scale, tempo, the
 16-bar block and what plays in it, loudness, both macro values, four beat lamps whose brightness is
@@ -77,6 +87,9 @@ seed=2026                  set seed
 quality=quest              quest (the default here) or desktop
 osc_host=192.168.1.20      Kaleidoscope cue bridge (PLAN 8.3), empty = off
 osc_port=9000
+bridge_host=192.168.1.20   the bridge: the hands to Phosphene on that computer; empty = off
+bridge_port=9101                its headset port (the plugin's settings, Headset)
+audio=0                    no sound on the headset, the computer plays (the same as mute=1)
 set=compose.pad_amount=1;compose.acid_amount=1     any knobs, repeatable
 ```
 

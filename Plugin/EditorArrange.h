@@ -73,6 +73,11 @@ public:
 
     /** @brief An empty timeline; update() fills it. */
     ArrangeDisplay();
+    /**
+     * @brief The set strip alone (01.10.2026, the frame's overview under the header, as every generator has one): no
+     *        track rows, no legend; a click jumps.
+     */
+    void setStripOnly(bool on) { stripOnly_ = on; }
 
     /** @brief Replaces what is drawn (message thread); the picture is redrawn, not the play head. */
     void setSnapshot(Snapshot s);
@@ -120,4 +125,5 @@ private:
     double beat_ = 0.0;              ///< the play head, in beats from the start of the set
     int headPixel_ = -1;             ///< where it was last drawn, so a repaint is worth it
     int totalBars_ = 1;              ///< bars the strip spans
+    bool stripOnly_ = false;         ///< setStripOnly
 };

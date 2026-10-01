@@ -226,8 +226,10 @@ render (waveform, one beat, spectrogram) and prints where in the beat the sub ba
 ## Meta Quest
 
 The whole generator runs on the headset: the composer plans the set on a small core, the engine
-synthesizes it on a big one, and the hands play it — pinch left for play/stop, pinch right for the
-next track, left hand height is the track gain and right hand height the acid cutoff. Native
+synthesizes it on a big one, and the hands play it — pinch left for play/stop, pinch right for a
+drop-out (held: the stutter), both hands for the next track, left hand height the filter sweep and
+right hand height the gate depth: the grammar every generator of the family shares. In bridge mode
+the app sends the hands to the desktop's Phosphene instead, which plays with them. Native
 OpenXR, no game engine. Build and on-device checks: [Quest/README.md](https://github.com/reneweller-coding/Phosphene/blob/master/Quest/README.md).
 
 ```powershell

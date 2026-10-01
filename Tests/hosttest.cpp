@@ -1596,7 +1596,7 @@ int main(int argc, char** argv)
                     const TransportView tv = p->transport();
                     sig << juce::String(p->pendingSfxPreview()) << ",";   // the effect presets' audition (24.09.2026)
                     sig << (tv.playing ? "P" : "-") << juce::String(p->seed()) << "," << juce::String(tv.bar)
-                        << "," << juce::String(phos->tab())
+                        << "," << juce::String(phos->tab()) << "," << juce::String(p->restartCount())
                         << (p->muted() ? "M" : "-") << (p->followsHost() ? "F" : "-");
                     for (int u = 0; u < 4; ++u)
                         for (int k = 0; k < 4; ++k) sig << (p->isLocked(static_cast<phos::LockUnit>(u), k) ? "L" : ".");

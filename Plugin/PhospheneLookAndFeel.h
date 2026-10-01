@@ -10,6 +10,7 @@
  */
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
+#include "Frame.h"
 
 /**
  * @brief Colours shared by the whole editor: "UV blacklight" (26.09.2026, the user's choice).
@@ -39,22 +40,28 @@ juce::Colour partColour(int index);
 juce::Colour partColourOf(int part);
 /** @brief A colour for the @p i-th of several equal things (the tracks of the Arrange tab): the families in turn. */
 juce::Colour cycleColour(int i);
+/**
+ * @brief The colour of a group by what its controls do (01.10.2026, the frame's families -- the same in every generator,
+ *        in Phosphene's fluorescent tones): sources gold, filters orange, envelopes acid green, what moves by itself cyan,
+ *        space and mix UV blue; a group that is none of these keeps the page's colour @p page.
+ */
+juce::Colour groupColour(const juce::String& title, juce::Colour page);
+/** @brief Phosphene's skin of the frame: the UV palette, the glow, the phosphenes behind the panel, the logo. */
+const frame::Skin& skin();
 /** @brief The editor's fonts. */
 juce::Font title(float height);
 juce::Font body(float height);   ///< @copydoc title
 } // namespace phosui
 
-/** @brief Look and feel of the Phosphene editor. */
-class PhospheneLookAndFeel final : public juce::LookAndFeel_V4 {
+/**
+ * @brief Look and feel of the Phosphene editor (01.10.2026): the shared frame's (Frame.h) -- the same knob, fader,
+ *        switch, menu and button as in every generator, drawn from Phosphene's skin (phosui::skin: the UV palette, the
+ *        glow, the value inside the knob) --, with Phosphene's fonts and its tabs' family stripes.
+ */
+class PhospheneLookAndFeel final : public frame::LookAndFeel {
 public:
-    /** @brief Sets the editor's colours. */
+    /** @brief The frame's look in Phosphene's skin. */
     PhospheneLookAndFeel();
-    void drawRotarySlider(juce::Graphics&, int x, int y, int width, int height, float pos,
-                          float startAngle, float endAngle, juce::Slider&) override;
-    void drawLinearSlider(juce::Graphics&, int x, int y, int width, int height, float pos, float minPos, float maxPos,
-                          juce::Slider::SliderStyle, juce::Slider&) override;
-    void drawToggleButton(juce::Graphics&, juce::ToggleButton&, bool highlighted, bool down) override;
-    void drawComboBox(juce::Graphics&, int width, int height, bool down, int bx, int by, int bw, int bh, juce::ComboBox&) override;
     void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour& background, bool highlighted, bool down) override;
     juce::Font getLabelFont(juce::Label&) override;
     juce::Font getComboBoxFont(juce::ComboBox&) override;

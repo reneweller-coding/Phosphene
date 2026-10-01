@@ -20,13 +20,18 @@
  * | Gesture | Effect |
  * |---|---|
  * | left pinch | play / stop (a 15 ms fade, the music pauses where it is) |
- * | right pinch | next track (the conductor rewinds to that track's first bar) |
- * | left hand height | `mix.track_gain`, -12 to +12 dB, mid height = 0 dB |
- * | right hand height | acid cutoff, two octaves either way around the composed value |
+ * | right pinch | drop-out: kick and bass gone until the next bar line |
+ * | right pinch held (0.6 s) | stutter: lead, counter, arp, stab and pad chopped on sixteenths while it is held |
+ * | both hands pinched together | the next track (the conductor goes to that track's first bar) |
+ * | left hand height | filter sweep: the acid, lead, counter, arp and stab filters together, closed low, open high |
+ * | right hand height | gate depth: the trance gate of lead, counter, arp, stab and pad, from mid height up |
  *
- * A hand only moves its macro while it is *not* pinching, so the gesture that starts a track does
- * not also yank the gain. Both macros are centred and smoothed with a 0.15 s one-pole: a hand at
- * mid height plays exactly what the composer wrote, and nothing ever jumps (the continuity rule).
+ * The desktop's four perform macros (Plugin/PluginProcessor.cpp, macroTargets, copied below) in the grammar every
+ * generator's headset shares (01.10.2026; until then the right pinch was the next track and the heights the track gain
+ * and the acid cutoff): a pinch acts when it opens again, so a pinch of both hands is never also one of each, and the
+ * desktop's frame (Plugin/Frame.h) reads the same hands from the bridge with the same rules and numbers. A hand only
+ * moves its macro while it is *not* pinching; both are centred and smoothed with a 0.15 s one-pole: a hand at mid
+ * height plays exactly what the composer wrote, and nothing ever jumps (the continuity rule).
  *
  * **Files in `<externalDataPath>`** (`/sdcard/Android/data/com.reneweller.phosphene.quest/files`):
  * @code
@@ -35,6 +40,9 @@
  *               quality=quest   quest (default here) or desktop
  *               osc_host=192.168.1.20   optional cue bridge to Kaleidoscope (PLAN 8.3)
  *               osc_port=9000
+ *               bridge_host=192.168.1.20   the hands to the desktop's Phosphene (01.10.2026): played from here
+ *               bridge_port=9101   its headset port (the desktop's settings, Headset)
+ *               audio=0         no sound here, the desktop plays (the same as mute=1)
  *               osc_beats=0     leave out /phos/beat, the busiest of the five messages
  *               osc_lead_ms=12  trim: how much deeper the device's own buffering is than one block
  *               set=compose.bpm=146;compose.pad_amount=1     any knobs, repeatable
@@ -320,6 +328,8 @@ struct Config {
     Quality quality = Quality::quest();   ///< quality level, `quest` unless the file says otherwise
     std::string oscHost;            ///< cue bridge target, empty = off
     int oscPort = kCueDefaultPort;  ///< cue bridge port
+    std::string bridgeHost;         ///< the bridge (01.10.2026): the hands to the desktop's Phosphene there; empty = off
+    int bridgePort = 9101;          ///< its headset port (the desktop's settings, Headset)
     bool oscBeats = true;           ///< send /phos/beat as well as /phos/bar
     float oscLeadMs = 0.0f;         ///< trim on the lead the tap computes from the block (Cue.h)
     std::string sets;               ///< knob assignments, "key=value" separated by ';' or newlines
@@ -346,6 +356,9 @@ Config readConfig(const char* dir)
         else if (k == "quality") { if (!Quality::fromName(v.c_str(), c.quality)) LOGE("quality: %s?", v.c_str()); }
         else if (k == "osc_host") c.oscHost = v;
         else if (k == "osc_port") c.oscPort = std::atoi(v.c_str());
+        else if (k == "bridge_host") c.bridgeHost = v;
+        else if (k == "bridge_port") c.bridgePort = std::atoi(v.c_str());
+        else if (k == "audio") { if (v == "0") c.mute = true; }   // no sound here: the desktop plays (the bridge)
         else if (k == "osc_beats") c.oscBeats = v != "0";
         else if (k == "osc_lead_ms") c.oscLeadMs = static_cast<float>(std::atof(v.c_str()));
         else if (k == "set") { c.sets += v; c.sets += ";"; }
@@ -958,6 +971,193 @@ private:
     bool wasClosed_[2] = { false, false };
 };
 
+// ---------------------------------------------------------------- the perform macros
+
+/** @brief The desktop's perform macros (Plugin/PluginProcessor.h, Macro): the hands' controls (01.10.2026). */
+enum class HandMacro : int { FilterSweep = 0, GateDepth, DropOut, Stutter, Count };
+constexpr int kHandMacros = static_cast<int>(HandMacro::Count);
+constexpr int kMaxMacroTargets = 24;   ///< most knobs one macro touches (Stutter: four each on five voices)
+
+/** @brief One knob a macro moves: by a normalised offset, or to a normalised value. */
+struct MacroTarget {
+    int   param = -1;         ///< global parameter id
+    float value = 0.0f;       ///< normalised delta, or the absolute normalised value
+    bool  absolute = false;   ///< true: set the knob to @ref value instead of adding it
+};
+
+/**
+ * @brief The knobs macro @p m moves at @p value (0: none -- its knobs go back). A copy of the desktop's
+ *        PhospheneProcessor::macroTargets (Plugin/PluginProcessor.cpp, 01.10.2026): a hand does here what it does there.
+ */
+int macroTargets(const ParamStore& p, HandMacro m, float value, MacroTarget* out)
+{
+    const int acidBase = p.base(Module::Acid);
+    const int lead = p.base(PolyInstance::Lead), counter = p.base(PolyInstance::Counter);
+    const int arp = p.base(PolyInstance::Arp), stab = p.base(PolyInstance::Stab);
+    const int pad = p.base(PolyInstance::Pad);
+    const int mixBase = p.base(Module::Mix);
+    int n = 0;
+    auto add = [&](int id, float v, bool absolute) {
+        if (id >= 0 && n < kMaxMacroTargets) out[n++] = MacroTarget{ id, v, absolute };
+    };
+    if (value == 0.0f) return 0;
+    switch (m) {
+    case HandMacro::FilterSweep: {
+        const float d = std::clamp(value, -1.0f, 1.0f) * 0.35f;   // a third of the normalised range each way
+        for (int id : { acidBase + acid::Cutoff, lead + poly::Cutoff, arp + poly::Cutoff, counter + poly::Cutoff, stab + poly::Cutoff })
+            add(id, d, false);
+        break;
+    }
+    case HandMacro::GateDepth: {
+        const float v = std::clamp(value, 0.0f, 1.0f);
+        for (int base : { lead, counter, arp, stab, pad }) {
+            add(base + poly::Gate, 1.0f, true);
+            add(base + poly::GateDepth, v, true);
+        }
+        break;
+    }
+    case HandMacro::DropOut:
+        add(mixBase + mix::KickMute, 1.0f, true);
+        add(mixBase + mix::BassMute, 1.0f, true);
+        break;
+    case HandMacro::Stutter:
+        for (int base : { lead, counter, arp, stab, pad }) {
+            add(base + poly::Gate, 1.0f, true);
+            add(base + poly::GatePattern, 0.0f, true);   // Sixteenths
+            add(base + poly::GateDepth, 1.0f, true);
+            add(base + poly::GateDuty, 0.0f, true);      // the shortest opening the knob allows
+        }
+        break;
+    default: break;
+    }
+    return n;
+}
+
+/**
+ * @brief The macros' values and the knobs they hold (the desktop's PhospheneProcessor::serviceMacros without the host's
+ *        parameters): what two macros ask of the same knob is summed, the stronger absolute wish winning, and a knob no
+ *        macro wants any more goes back to the value it had before. Render thread.
+ */
+class HandMacros {
+public:
+    void set(HandMacro m, float v)
+    {
+        value_[static_cast<int>(m)] = m == HandMacro::FilterSweep ? std::clamp(v, -1.0f, 1.0f) : std::clamp(v, 0.0f, 1.0f);
+    }
+    float get(HandMacro m) const { return value_[static_cast<int>(m)]; }
+    /** @brief Puts the macros onto their knobs (every frame). */
+    void apply(ParamStore& p)
+    {
+        MacroTarget want[kHandMacros * kMaxMacroTargets];
+        int n = 0;
+        for (int i = 0; i < kHandMacros; ++i) {
+            MacroTarget t[kMaxMacroTargets];
+            const int c = macroTargets(p, static_cast<HandMacro>(i), value_[i], t);
+            for (int k = 0; k < c; ++k) {
+                int found = -1;
+                for (int j = 0; j < n; ++j) if (want[j].param == t[k].param) { found = j; break; }
+                if (found < 0) { want[n++] = t[k]; continue; }
+                if (t[k].absolute && want[found].absolute) want[found].value = std::max(want[found].value, t[k].value);
+                else if (t[k].absolute) want[found] = t[k];
+                else want[found].value += t[k].value;
+            }
+        }
+        for (int i = 0; i < n; ++i) {
+            const int id = want[i].param;
+            // The value as the store keeps it, not as a normalised position: putting a knob back must be exact.
+            float base = 0.0f;
+            bool known = false;
+            for (const auto& b : base_) if (b.first == id) { base = b.second; known = true; break; }
+            if (!known) { base = p.get(id); base_.emplace_back(id, base); }
+            p.setNormalised(id, std::clamp(want[i].absolute ? want[i].value : p.toNormalised(id, base) + want[i].value, 0.0f, 1.0f));
+        }
+        for (size_t b = 0; b < base_.size();) {
+            bool wanted = false;
+            for (int i = 0; i < n; ++i) if (want[i].param == base_[b].first) { wanted = true; break; }
+            if (wanted) { ++b; continue; }
+            p.set(base_[b].first, base_[b].second);
+            base_.erase(base_.begin() + static_cast<std::ptrdiff_t>(b));
+        }
+    }
+
+private:
+    float value_[kHandMacros] = {};
+    std::vector<std::pair<int, float>> base_;   ///< the knobs held, with the values they had before
+};
+
+// ---------------------------------------------------------------- the bridge
+
+/**
+ * @brief The bridge mode (01.10.2026): the hands to the desktop's Phosphene over OSC (UDP), which then plays as if they were
+ *        its own -- the same gestures, read by its frame (Plugin/Frame.h, Headset) with the same rules as here.
+ *
+ * "/hands" with six floats: left height, right height, left pinch, right pinch, left tracked, right tracked (the heights
+ * 0..1 against the head and unsmoothed, the desktop smooths them; the others 0 or 1), about 30 times a second. Fire and
+ * forget: a desktop that is not there changes nothing. After Noctuary's bridge (AmbientSynth's Quest/src/main.cpp, OscOut).
+ */
+class HandBridge {
+public:
+    HandBridge() = default;
+    HandBridge(const HandBridge&) = delete;
+    HandBridge& operator=(const HandBridge&) = delete;
+    ~HandBridge() { close(); }
+    /** @brief Opens the UDP socket to @p host (a dotted IPv4 address, no names) and @p port; false if it cannot. */
+    bool open(const std::string& host, int port)
+    {
+        close();
+        sock_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (sock_ < 0) return false;
+        std::memset(&to_, 0, sizeof(to_));
+        to_.sin_family = AF_INET;
+        to_.sin_port = htons(static_cast<uint16_t>(port));
+        if (inet_pton(AF_INET, host.c_str(), &to_.sin_addr) != 1) { close(); return false; }
+        return true;
+    }
+    /** @brief Closes the socket; send() then does nothing. */
+    void close() { if (sock_ >= 0) ::close(sock_); sock_ = -1; }
+    /** @brief Whether the bridge is on. */
+    bool ok() const { return sock_ >= 0; }
+    /** @brief Sends the hands, at most 30 times a second; @p dt the seconds since the last frame (render thread). */
+    void send(const Hands& hands, double dt)
+    {
+        if (sock_ < 0) return;
+        since_ += dt;
+        if (since_ < 1.0 / 30.0) return;
+        since_ = 0.0;
+        float a[6];
+        for (int h = 0; h < 2; ++h) {
+            const Hands::Hand& s = hands.hand(h);
+            a[h] = s.height;
+            a[2 + h] = s.valid && s.closed ? 1.0f : 0.0f;
+            a[4 + h] = s.valid ? 1.0f : 0.0f;
+        }
+        char buf[64];
+        size_t pos = 0;
+        auto putStr = [&](const char* t) {
+            const size_t l = std::strlen(t) + 1;
+            std::memcpy(buf + pos, t, l);
+            pos += l;
+            while (pos & 3) buf[pos++] = 0;
+        };
+        putStr("/hands");
+        putStr(",ffffff");
+        for (const float f : a) {   // big-endian 32-bit words
+            uint32_t u;
+            std::memcpy(&u, &f, 4);
+            buf[pos++] = static_cast<char>(u >> 24);
+            buf[pos++] = static_cast<char>(u >> 16);
+            buf[pos++] = static_cast<char>(u >> 8);
+            buf[pos++] = static_cast<char>(u);
+        }
+        ::sendto(sock_, buf, pos, 0, reinterpret_cast<const sockaddr*>(&to_), sizeof(to_));
+    }
+
+private:
+    int sock_ = -1;        ///< the UDP socket, or -1 while closed
+    sockaddr_in to_{};     ///< the desktop's address and port
+    double since_ = 0.0;   ///< seconds since the last datagram
+};
+
 // ---------------------------------------------------------------- the app
 
 /** @brief One eye's swapchain and the framebuffer it is rendered through. */
@@ -1001,6 +1201,12 @@ public:
                 LOGI("cue bridge: OSC to %s:%d", config_.oscHost.c_str(), config_.oscPort);
             else LOGE("cue bridge: cannot reach %s:%d", config_.oscHost.c_str(), config_.oscPort);
             player_.setCueSender(&cues_);
+        }
+        // The bridge (01.10.2026): the hands to the desktop's Phosphene, off unless phos.cfg names a host.
+        if (!config_.bridgeHost.empty()) {
+            if (bridge_.open(config_.bridgeHost, config_.bridgePort))
+                LOGI("bridge: the hands to %s:%d", config_.bridgeHost.c_str(), config_.bridgePort);
+            else LOGE("bridge: bad host %s (a dotted IPv4 address)", config_.bridgeHost.c_str());
         }
         if (!initLoader()) return false;
         if (!initInstance()) return false;
@@ -1276,28 +1482,64 @@ private:
     }
 
     /**
-     * @brief Turns the gestures into knob values.
+     * @brief Turns the hands' heights into the two continuous macros, with the numbers of every generator's headset
+     *        (01.10.2026, Plugin/Frame.h), then puts the macros onto their knobs.
      *
-     * Left height writes `mix.track_gain` directly (-12 to +12 dB, mid = 0 dB). Right height moves
-     * the acid cutoff two octaves either way around the value the knob had at start, so mid height
-     * is the composed sound; the composer's own filter arcs are normalised *offsets* on top of the
-     * knob (Score.h), so they keep working while the hand moves the knob underneath them.
+     * Left height is the filter sweep: a dead zone round the middle, closed below it, open above. Right height is the
+     * gate depth, from mid height up. The composer's own filter arcs are normalised *offsets* on top of the knobs
+     * (Score.h), so they keep working while the hand moves the knobs underneath them.
      */
     void applyMacros()
     {
         if (!player_.ready()) return;
-        ParamStore& p = player_.params();
-        if (mixBase_ < 0) {
-            mixBase_ = p.base(Module::Mix);
-            acidBase_ = p.base(Module::Acid);
-            acidCutoffBase_ = p.get(acidBase_ + acid::Cutoff);
-        }
         // A hand that has never been tracked writes nothing: on a headset without hand tracking the
-        // knobs keep whatever phos.cfg set them to instead of being pinned to the centre.
+        // knobs keep whatever phos.cfg set them to.
         const Hands::Hand& left = hands_.hand(0);
         const Hands::Hand& right = hands_.hand(1);
-        if (left.everSeen) p.setNormalised(mixBase_ + mix::TrackGain, left.macro);
-        if (right.everSeen) p.set(acidBase_ + acid::Cutoff, acidCutoffBase_ * std::pow(2.0f, 4.0f * (right.macro - 0.5f)));
+        if (left.everSeen) {
+            const float x = 2.0f * (left.macro - 0.5f);
+            macros_.set(HandMacro::FilterSweep, std::fabs(x) < 0.1f ? 0.0f : (x - (x > 0.0f ? 0.1f : -0.1f)) / 0.9f);
+        }
+        if (right.everSeen) macros_.set(HandMacro::GateDepth, clamp01(2.0f * (right.macro - 0.5f)));
+        // The drop-out lets go on the next bar line, as the desktop's does; a stopped set has none to wait for.
+        if (macros_.get(HandMacro::DropOut) > 0.0f && (!player_.playing() || player_.currentBar() != dropBar_))
+            macros_.set(HandMacro::DropOut, 0.0f);
+        macros_.apply(player_.params());
+    }
+
+    /**
+     * @brief The pinches, in the grammar every generator's headset shares (01.10.2026, Plugin/Frame.h): a short one
+     *        acts when it opens again, so both hands closed together can mean something else -- the next track, once,
+     *        while neither then counts as a single pinch. Left alone: play / stop; right alone: the drop-out; right
+     *        held kLongPinch: the stutter, until it opens.
+     */
+    void gestures(double dt)
+    {
+        const bool closed[2] = { hands_.hand(0).closed, hands_.hand(1).closed };
+        if (closed[0] && closed[1]) {
+            spoiled_[0] = spoiled_[1] = true;
+            if (!bothFired_) { player_.requestNextTrack(); bothFired_ = true; }
+        }
+        for (int h = 0; h < 2; ++h) {
+            if (closed[h] && !handWas_[h] && !closed[1 - h]) { spoiled_[h] = false; held_[h] = 0.0; }
+            if (closed[h]) held_[h] += std::min(dt, 0.1);
+            else held_[h] = 0.0;
+            if (h == 1 && closed[1] && !spoiled_[1] && held_[1] >= kLongPinch) {
+                spoiled_[1] = true;
+                stuttering_ = true;
+                macros_.set(HandMacro::Stutter, 1.0f);
+            }
+            if (h == 1 && !closed[1] && stuttering_) {
+                stuttering_ = false;
+                macros_.set(HandMacro::Stutter, 0.0f);
+            }
+            if (!closed[h] && handWas_[h] && !spoiled_[h]) {
+                if (h == 0) player_.setPlaying(!player_.playing());
+                else { macros_.set(HandMacro::DropOut, 1.0f); dropBar_ = player_.currentBar(); }
+            }
+            handWas_[h] = closed[h];
+        }
+        if (!closed[0] && !closed[1]) bothFired_ = false;
     }
 
     /**
@@ -1389,9 +1631,11 @@ private:
         std::snprintf(line, sizeof(line), "%+.1f LUFS  %s", static_cast<double>(lufs),
                       config_.mute ? "MUTED" : (player_.playing() ? "PLAY" : "STOP"));
         text(line, 0.95f, 0.85f, 0.60f, 0.9f);
-        std::snprintf(line, sizeof(line), "GAIN %+.1f DB", static_cast<double>(player_.params().get(mixBase_ + mix::TrackGain)));
+        std::snprintf(line, sizeof(line), "SWEEP %+.2f%s", static_cast<double>(macros_.get(HandMacro::FilterSweep)),
+                      macros_.get(HandMacro::DropOut) > 0.0f ? "  DROP" : "");
         text(line, 0.60f, 0.75f, 0.95f, 0.75f);
-        std::snprintf(line, sizeof(line), "ACID %.0f HZ", static_cast<double>(player_.params().get(acidBase_ + acid::Cutoff)));
+        std::snprintf(line, sizeof(line), "GATE %.2f%s", static_cast<double>(macros_.get(HandMacro::GateDepth)),
+                      macros_.get(HandMacro::Stutter) > 0.0f ? "  STUTTER" : "");
         text(line, 0.60f, 0.75f, 0.95f, 0.75f);
 
         row -= kRow * 0.3f;
@@ -1429,9 +1673,9 @@ private:
         updateHands(fs.predictedDisplayTime);
         bool leftPinch = false, rightPinch = false;
         hands_.update(dt, leftPinch, rightPinch);
+        bridge_.send(hands_, dt);   // the bridge: the hands to the desktop (01.10.2026)
         if (player_.ready()) {
-            if (leftPinch) player_.setPlaying(!player_.playing());
-            if (rightPinch) player_.requestNextTrack();
+            gestures(dt);
             applyMacros();
         }
 
@@ -1501,6 +1745,7 @@ private:
     std::atomic<bool> stopComposer_{ false };
     Scene scene_;
     Hands hands_;
+    HandBridge bridge_;                  ///< the bridge mode: the hands to the desktop's Phosphene (01.10.2026)
     /**
      * @brief The cue bridge's socket and thread (PLAN 8.3, Cue.h).
      *
@@ -1510,8 +1755,12 @@ private:
      * listener hears them, which is the only stamp a visualiser can act on.
      */
     CueSender cues_;
-    int mixBase_ = -1, acidBase_ = -1;
-    float acidCutoffBase_ = 650.0f;
+    HandMacros macros_;                  ///< the desktop's perform macros, the hands' controls (01.10.2026)
+    int dropBar_ = -1;                   ///< the bar the drop-out was pressed in: it lets go when that bar is over
+    bool handWas_[2] = {}, spoiled_[2] = {}, bothFired_ = false;   ///< gestures(): the pinches as they were
+    double held_[2] = {};                ///< how long each pinch has been closed, seconds
+    bool stuttering_ = false;            ///< the right pinch was held into the stutter
+    static constexpr double kLongPinch = 0.6;   ///< seconds the right pinch is held for the stutter
 
     EGLDisplay display_ = EGL_NO_DISPLAY;
     EGLConfig eglConfig_ = nullptr;

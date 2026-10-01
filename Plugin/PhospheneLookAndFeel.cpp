@@ -3,6 +3,7 @@
  * @brief Implementation of the editor's palette, knob, toggle and combo box.
  */
 #include "PhospheneLookAndFeel.h"
+#include "PhospheneHelpData.h"
 #include <cmath>
 
 namespace phosui {
@@ -47,180 +48,113 @@ juce::Font body(float height)
     return juce::Font(juce::FontOptions(height));
 }
 
-} // namespace phosui
-
 namespace {
-
-/** @brief An arc with a soft wide copy underneath, so a lit value glows instead of being outlined. */
-void arc(juce::Graphics& g, juce::Point<float> c, float radius, float from, float to,
-         float thickness, juce::Colour colour, bool glow)
+/** @brief The frame's families in Phosphene's fluorescent tones (the same hues as in every generator). */
+juce::Colour familyTone(frame::Family f)
 {
-    if (std::fabs(to - from) < 1.0e-4f) return;
-    juce::Path p;
-    p.addCentredArc(c.x, c.y, radius, radius, 0.0f, from, to, true);
-    if (glow) {
-        g.setColour(colour.withMultipliedAlpha(0.18f));
-        g.strokePath(p, juce::PathStrokeType(thickness * 2.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    switch (f) {
+    case frame::Family::Source:   return juce::Colour(0xffffc247);   // gold
+    case frame::Family::Filter:   return juce::Colour(0xffff7a45);   // orange
+    case frame::Family::Envelope: return juce::Colour(0xff8dff5a);   // acid green
+    case frame::Family::Motion:   return juce::Colour(0xff22e4ff);   // UV cyan
+    default:                      return juce::Colour(0xff8c8dff);   // UV blue
     }
-    g.setColour(colour);
-    g.strokePath(p, juce::PathStrokeType(thickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
-
 } // namespace
 
-PhospheneLookAndFeel::PhospheneLookAndFeel()
+juce::Colour groupColour(const juce::String& title, juce::Colour page)
+{
+    const juce::String t = title.toLowerCase();
+    auto has = [&t](std::initializer_list<const char*> words) {
+        for (const char* w : words) if (t.contains(w)) return true;
+        return false;
+    };
+    using F = frame::Family;
+    // The order matters: "Filter Envelope" is an envelope, "Wavetable Motion" moves.
+    if (has({ "envelope", "amp", "punch" })) return familyTone(F::Envelope);
+    if (has({ "lfo", "mod", "matrix", "gate", "vibrato", "tremolo", "motion", "stutter", "glide", "psy fx", "voice fx" })) return familyTone(F::Motion);
+    if (has({ "filter", "tone", "eq" })) return familyTone(F::Filter);
+    if (has({ "delay", "space", "reverb", "room", "hall", "send", "output", "level", "sidechain", "image", "compressor", "gain", "monitor" }))
+        return familyTone(F::Space);
+    if (has({ "osc", "wave", "fm", "noise", "click", "body", "engine", "sample", "layer", "sub", "pitch", "fundamental", "harmonic" }))
+        return familyTone(F::Source);
+    return page;
+}
+
+const frame::Skin& skin()
+{
+    static const frame::Skin s = [] {
+        frame::Skin k;
+        k.name = "Phosphene";
+        k.bg = bg0;
+        k.panel = card.withAlpha(0.62f);   // the phosphenes show faintly through a page
+        k.group = group;
+        k.raised = card.brighter(0.12f);
+        k.edge = edge;
+        k.ink = text;
+        k.dim = dim;
+        k.faint = faint;
+        k.accent = accent;
+        k.onset = warm;
+        k.good = green;
+        k.bad = red;
+        for (int f = 0; f < 5; ++f) k.families[f] = familyTone(static_cast<frame::Family>(f));
+        k.decks[0] = juce::Colour(0xffff2e97);
+        k.decks[1] = juce::Colour(0xff22e4ff);
+        k.decks[2] = juce::Colour(0xff9b6bff);
+        k.radius = 5.0f;
+        k.tracking = 0.3f;
+        k.titleBold = true;
+        k.glow = true;
+        k.valueInKnob = true;            // six hundred knobs on ten pages: the value inside the ring
+        k.backdropData = PhospheneHelpData::backdrop_jpg;
+        k.backdropSize = PhospheneHelpData::backdrop_jpgSize;
+        k.backdropTop = 0.9f;
+        k.backdropPage = 0.6f;
+        k.logo = [](juce::Graphics& g, juce::Rectangle<float> r) {   // from the image cache: no image outlives JUCE
+            g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+            g.drawImage(juce::ImageCache::getFromMemory(PhospheneHelpData::iconsmall_png, PhospheneHelpData::iconsmall_pngSize), r,
+                        juce::RectanglePlacement::centred);
+        };
+        return k;
+    }();
+    return s;
+}
+
+} // namespace phosui
+
+PhospheneLookAndFeel::PhospheneLookAndFeel() : frame::LookAndFeel(phosui::skin())
 {
     using namespace phosui;
-    setColour(juce::ResizableWindow::backgroundColourId, bg0);
-    setColour(juce::Label::textColourId, text);
+    // What the frame does not set, as Phosphene had it.
     setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
-    setColour(juce::Slider::rotarySliderFillColourId, accent);
     setColour(juce::Slider::rotarySliderOutlineColourId, edge);
-    setColour(juce::Slider::thumbColourId, text);
     setColour(juce::Slider::textBoxTextColourId, text);
-    setColour(juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
-    setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-    setColour(juce::ComboBox::backgroundColourId, card.brighter(0.12f));
-    setColour(juce::ComboBox::textColourId, text);
-    setColour(juce::ComboBox::outlineColourId, edge);
-    setColour(juce::ComboBox::arrowColourId, dim);
-    setColour(juce::PopupMenu::backgroundColourId, card.brighter(0.05f));
-    setColour(juce::PopupMenu::textColourId, text);
-    setColour(juce::PopupMenu::highlightedBackgroundColourId, accent.withAlpha(0.22f));
-    setColour(juce::PopupMenu::highlightedTextColourId, juce::Colours::white);
-    setColour(juce::TextButton::buttonColourId, card.brighter(0.12f));
-    setColour(juce::TextButton::buttonOnColourId, accent.withAlpha(0.32f));
-    setColour(juce::TextButton::textColourOffId, text);
     setColour(juce::TextButton::textColourOnId, juce::Colours::white);
     setColour(juce::ToggleButton::textColourId, text);
-    setColour(juce::ToggleButton::tickColourId, accent);
     setColour(juce::TextEditor::backgroundColourId, bg0);
-    setColour(juce::TextEditor::textColourId, text);
-    setColour(juce::TextEditor::outlineColourId, edge);
-    setColour(juce::TextEditor::focusedOutlineColourId, accent.withAlpha(0.6f));
-    setColour(juce::TextEditor::highlightColourId, accent.withAlpha(0.3f));
-    setColour(juce::ListBox::backgroundColourId, juce::Colours::transparentBlack);
-    setColour(juce::ScrollBar::thumbColourId, faint);
-    setColour(juce::AlertWindow::backgroundColourId, card);
-    setColour(juce::AlertWindow::textColourId, text);
-    setColour(juce::AlertWindow::outlineColourId, edge);
-}
-
-void PhospheneLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
-                                            float pos, float startAngle, float endAngle, juce::Slider& s)
-{
-    using namespace phosui;
-    const juce::Rectangle<float> area(static_cast<float>(x), static_cast<float>(y),
-                                      static_cast<float>(width), static_cast<float>(height));
-    const float side = juce::jmin(area.getWidth(), area.getHeight());
-    const juce::Point<float> c = area.getCentre();
-    const float r = side * 0.5f - 2.5f;
-    if (r < 5.0f) return;
-    const float thickness = juce::jmax(2.5f, r * 0.20f);
-    const juce::Colour fill = s.findColour(juce::Slider::rotarySliderFillColourId);
-
-    g.setColour(group.brighter(0.05f));
-    g.fillEllipse(juce::Rectangle<float>(side - 2.0f * thickness, side - 2.0f * thickness).withCentre(c));
-    arc(g, c, r, startAngle, endAngle, thickness, edge, false);
-
-    const float angle = startAngle + pos * (endAngle - startAngle);
-    const bool bipolar = s.getProperties()["bipolar"];
-    if (bipolar) {
-        const float mid = 0.5f * (startAngle + endAngle);
-        arc(g, c, r, juce::jmin(mid, angle), juce::jmax(mid, angle), thickness, fill, true);
-    } else {
-        arc(g, c, r, startAngle, angle, thickness, fill, true);
-    }
-    // The live ring (26.09.2026; phosui::showLive): where the parameter plays away from the knob -- a ride, a lift, a
-    // correction -- a thin bright arc on the ring from the knob to the played value, and a dot where it plays.
-    const juce::var live = s.getProperties()["live"];
-    if (!live.isVoid()) {
-        const float lp = static_cast<float>(juce::jlimit(0.0, 1.0, s.valueToProportionOfLength(static_cast<double>(live))));
-        if (std::fabs(lp - pos) > 0.004f) {
-            const float la = startAngle + lp * (endAngle - startAngle);
-            arc(g, c, r, juce::jmin(angle, la), juce::jmax(angle, la), thickness * 0.42f, text.withAlpha(0.85f), false);
-            const float dr = juce::jmax(2.0f, thickness * 0.45f);
-            g.setColour(text);
-            g.fillEllipse(juce::Rectangle<float>(2.0f * dr, 2.0f * dr).withCentre(c.getPointOnCircumference(r, la)));
-        }
-    }
-    // The pointer: short, bright, and inside the ring, so the value text stays readable.
-    juce::Path pointer;
-    pointer.addRectangle(-1.0f, -r + 1.0f, 2.0f, thickness * 1.5f);
-    g.setColour(text);
-    g.fillPath(pointer, juce::AffineTransform::rotation(angle).translated(c.x, c.y));
-
-    // The value lives inside the ring, which is what buys a knob this size in a wall of six hundred.
-    // It is fitted rather than clipped, so "10000 Hz" shrinks instead of turning into "10000 H".
-    const juce::String v = s.getTextFromValue(s.getValue()).trim();
-    g.setColour(text.withAlpha(s.isEnabled() ? 0.92f : 0.4f));
-    g.setFont(phosui::body(juce::jlimit(8.5f, 15.0f, side * 0.18f)));   // a large knob reads its value larger
-    g.drawFittedText(v, area.reduced(side * 0.13f, side * 0.34f).toNearestInt(), juce::Justification::centred, 1, 0.45f);
-}
-
-void PhospheneLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width, int height, float pos, float minPos,
-                                            float maxPos, juce::Slider::SliderStyle style, juce::Slider& s)
-{
-    juce::LookAndFeel_V4::drawLinearSlider(g, x, y, width, height, pos, minPos, maxPos, style, s);
-    // The live ring's form on a fader (26.09.2026): a bright tick where the level plays, joined to the cap by a line.
-    const juce::var live = s.getProperties()["live"];
-    if (live.isVoid() || style != juce::Slider::LinearVertical) return;
-    const float lp = static_cast<float>(s.getPositionOfValue(juce::jlimit(s.getMinimum(), s.getMaximum(), static_cast<double>(live))));
-    if (std::fabs(lp - pos) < 1.5f) return;
-    const float cx = static_cast<float>(x) + 0.5f * static_cast<float>(width);
-    g.setColour(phosui::text.withAlpha(0.85f));
-    g.drawLine(cx, juce::jmin(pos, lp), cx, juce::jmax(pos, lp), 2.0f);
-    g.fillRoundedRectangle(juce::Rectangle<float>(14.0f, 3.0f).withCentre({ cx, lp }), 1.5f);
-}
-
-void PhospheneLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& b, bool highlighted, bool)
-{
-    using namespace phosui;
-    const juce::Rectangle<float> r = b.getLocalBounds().toFloat().reduced(1.0f);
-    const bool on = b.getToggleState();
-    const juce::Colour lit = b.findColour(juce::ToggleButton::tickColourId);   // the page's colour (EditorLayout.cpp)
-    g.setColour(on ? lit.withAlpha(0.28f) : group.brighter(highlighted ? 0.12f : 0.04f));
-    g.fillRoundedRectangle(r, 5.0f);
-    g.setColour(on ? lit : edge);
-    g.drawRoundedRectangle(r.reduced(0.5f), 5.0f, 1.0f);
-    g.setColour(on ? juce::Colours::white : dim);
-    g.setFont(phosui::body(juce::jlimit(9.0f, 12.0f, r.getHeight() * 0.5f)));
-    g.drawText(b.getButtonText().isEmpty() ? (on ? "On" : "Off") : b.getButtonText(), r, juce::Justification::centred, false);
-}
-
-void PhospheneLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bool,
-                                        int, int, int, int, juce::ComboBox& box)
-{
-    using namespace phosui;
-    const juce::Rectangle<float> r(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
-    g.setColour(box.findColour(juce::ComboBox::backgroundColourId));
-    g.fillRoundedRectangle(r.reduced(1.0f), 5.0f);
-    g.setColour(edge);
-    g.drawRoundedRectangle(r.reduced(1.5f), 5.0f, 1.0f);
-    juce::Path tri;
-    const float cx = r.getRight() - 11.0f, cy = r.getCentreY();
-    tri.addTriangle(cx - 4.0f, cy - 2.0f, cx + 4.0f, cy - 2.0f, cx, cy + 3.0f);
-    g.setColour(dim);
-    g.fillPath(tri);
 }
 
 void PhospheneLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b, const juce::Colour& background,
                                                 bool highlighted, bool down)
 {
     using namespace phosui;
-    const juce::Rectangle<float> r = b.getLocalBounds().toFloat().reduced(1.0f);
-    // A tab carries its page's family colour (PluginEditor.cpp): a stripe along its foot, its frame when open.
+    // A button with a family stripe (the percussion lanes, the sub-tabs) carries its colour along its foot; any other is the
+    // frame's.
     const juce::var stripe = b.getProperties()["stripe"];
-    const juce::Colour own = stripe.isVoid() ? accent : juce::Colour(static_cast<juce::uint32>(static_cast<juce::int64>(stripe)));
+    if (stripe.isVoid()) {
+        frame::LookAndFeel::drawButtonBackground(g, b, background, highlighted, down);
+        return;
+    }
+    const juce::Rectangle<float> r = b.getLocalBounds().toFloat().reduced(1.0f);
+    const juce::Colour own(static_cast<juce::uint32>(static_cast<juce::int64>(stripe)));
     const bool open = b.getToggleState();
-    g.setColour(open && !stripe.isVoid() ? own.withAlpha(0.22f) : background.brighter(down ? 0.22f : (highlighted ? 0.12f : 0.0f)));
+    g.setColour(open ? own.withAlpha(0.22f) : background.brighter(down ? 0.22f : (highlighted ? 0.12f : 0.0f)));
     g.fillRoundedRectangle(r, 5.0f);
     g.setColour(open ? own : edge);
     g.drawRoundedRectangle(r.reduced(0.5f), 5.0f, 1.0f);
-    if (!stripe.isVoid()) {
-        g.setColour(own.withAlpha(open ? 1.0f : 0.55f));
-        g.fillRoundedRectangle(r.withTop(r.getBottom() - 2.5f).reduced(5.0f, 0.0f), 1.2f);
-    }
+    g.setColour(own.withAlpha(open ? 1.0f : 0.55f));
+    g.fillRoundedRectangle(r.withTop(r.getBottom() - 2.5f).reduced(5.0f, 0.0f), 1.2f);
 }
 
 juce::Font PhospheneLookAndFeel::getLabelFont(juce::Label& l) { return phosui::body(juce::jlimit(9.0f, 13.0f, l.getHeight() * 0.72f)); }

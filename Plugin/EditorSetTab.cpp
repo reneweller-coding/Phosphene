@@ -1,6 +1,7 @@
 /**
  * @file EditorSetTab.cpp
- * @brief The Set tab: seed, transport, loudness, the track list and the exports.
+ * @brief The Set tab -- seed, clock, the composer's knobs, loudness, the track list -- and the Export tab (01.10.2026):
+ *        the recording, the MIDI, the set's file and the score cues.
  *
  * Everything here is what the composer's knobs alone cannot say: which set is playing (the seed),
  * whether it is playing at all, how loud it is, what the plan looks like, and how to get the plan
@@ -58,40 +59,12 @@ void PhospheneEditor::buildSetPage()
     auto page = std::make_unique<ControlPage>();
     const juce::Colour tint = partColour(0);
 
-    // ---------------------------------------------------------------- transport and seed
-    // Twelve cells wide: the transport is a strip across the top of the page, and the
-    // composer's knobs stand in three groups underneath it.
-    const int gt = page->addGroup("Transport", tint, 12);
+    // ---------------------------------------------------------------- seed and clock
+    // Play, stop and mute are in the header since 01.10.2026 (the frame's), the recording and the files on the Export
+    // tab, as every generator has them. Here what only this page says: the seed to type, the host's clock, and where the
+    // transport stands.
+    const int gt = page->addGroup("Seed and Clock", tint, 12);
     {
-        auto play = std::make_unique<juce::TextButton>("Play");
-        play->onClick = [this] { proc_.play(); };
-        playButton_ = play.get();
-        page->addControl(gt, std::move(play), "", 1, true);
-
-        auto stop = std::make_unique<juce::TextButton>("Stop");
-        stop->onClick = [this] { proc_.stop(); };
-        stopButton_ = stop.get();
-        page->addControl(gt, std::move(stop), "", 1, true);
-
-        auto rec = std::make_unique<juce::TextButton>("Record...");
-        rec->onClick = [this] {
-            if (proc_.isRecording()) { proc_.stopRecording(); return; }
-            chooser_ = std::make_unique<juce::FileChooser>("Record the output", juce::File(), "*.wav");
-            chooser_->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
-                                  [this](const juce::FileChooser& fc) {
-                                      const juce::File f = fc.getResult();
-                                      if (f != juce::File()) proc_.startRecording(f.withFileExtension("wav"));
-                                  });
-        };
-        recordButton_ = rec.get();
-        page->addControl(gt, std::move(rec), "", 2, true);
-
-        auto follow = makeToggle("Follow host");
-        follow->setToggleState(proc_.followsHost(), juce::dontSendNotification);
-        follow->onClick = [this] { proc_.setFollowHost(followButton_->getToggleState()); };
-        followButton_ = follow.get();
-        page->addControl(gt, std::move(follow), "", 2, true);
-
         auto seed = std::make_unique<juce::TextEditor>();
         seed->setText(juce::String(proc_.seed()), false);
         seed->setJustification(juce::Justification::centred);
@@ -112,18 +85,17 @@ void PhospheneEditor::buildSetPage()
         };
         page->addControl(gt, std::move(dice), "", 3, true);
 
-        auto mute = makeToggle("Mute");
-        mute->setToggleState(proc_.muted(), juce::dontSendNotification);
-        mute->setEnabled(!proc_.muteForced());
-        mute->onClick = [this] { proc_.setMuted(muteButton_->getToggleState()); };
-        muteButton_ = mute.get();
-        page->addControl(gt, std::move(mute), "", 1, true);
+        auto follow = makeToggle("Follow host");
+        follow->setToggleState(proc_.followsHost(), juce::dontSendNotification);
+        follow->onClick = [this] { proc_.setFollowHost(followButton_->getToggleState()); };
+        followButton_ = follow.get();
+        page->addControl(gt, std::move(follow), "", 2, true);
 
         auto status = std::make_unique<juce::Label>(juce::String(), "stopped");
         status->setJustificationType(juce::Justification::centredLeft);
         status->setColour(juce::Label::textColourId, dim);
         statusLabel_ = status.get();
-        page->addControl(gt, std::move(status), "", 12, true);
+        page->addControl(gt, std::move(status), "", 5, true);
     }
 
     // ---------------------------------------------------------------- the composer's knobs
@@ -205,53 +177,6 @@ void PhospheneEditor::buildSetPage()
         tracks_ = list.get();
         page->addControl(gp, std::move(list), "", 7, true, 3);
     }
-    const int ge = page->addGroup("Export", tint, 4);
-    {
-        auto bars = std::make_unique<juce::Slider>(juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox);
-        bars->setRange(4.0, 1024.0, 4.0);
-        bars->setValue(64.0, juce::dontSendNotification);
-        exportBars_ = bars.get();
-        page->addControl(ge, std::move(bars), "Bars", 1);
-
-        auto midi = std::make_unique<juce::TextButton>("Export MIDI...");
-        midi->onClick = [this] {
-            chooser_ = std::make_unique<juce::FileChooser>("Write the score", juce::File(), "*.mid");
-            chooser_->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
-                                  [this](const juce::FileChooser& fc) {
-                                      const juce::File f = fc.getResult();
-                                      if (f != juce::File()) proc_.exportMidi(f.withFileExtension("mid"), static_cast<int>(exportBars_->getValue()));
-                                  });
-        };
-        page->addControl(ge, std::move(midi), "", 3, true);
-
-        auto set = std::make_unique<juce::TextButton>("Export set...");
-        set->onClick = [this] {
-            chooser_ = std::make_unique<juce::FileChooser>("Write the set", juce::File(), "*.phosset");
-            chooser_->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
-                                  [this](const juce::FileChooser& fc) {
-                                      const juce::File f = fc.getResult();
-                                      if (f != juce::File()) proc_.exportSet(f.withFileExtension("phosset"));
-                                  });
-        };
-        page->addControl(ge, std::move(set), "", 2, true);
-
-        auto load = std::make_unique<juce::TextButton>("Load set...");
-        load->onClick = [this] {
-            chooser_ = std::make_unique<juce::FileChooser>("Read a set", juce::File(), "*.phosset");
-            chooser_->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                                  [this](const juce::FileChooser& fc) {
-                                      const juce::File f = fc.getResult();
-                                      bool ok = false;
-                                      if (f != juce::File()) proc_.undoable("Load set", [this, f, &ok] { ok = proc_.importSet(f); });
-                                      if (!ok) return;
-                                      seedEditor_->setText(juce::String(proc_.seed()), false);
-                                      trackRows_.clear();
-                                      rowsSeed_ = 0;
-                                  });
-        };
-        page->addControl(ge, std::move(load), "", 2, true);
-    }
-
     // 20.09.2026, round "dialogue". Two things the rule asks for, in one place where they can be seen:
     // a visible way back to the shipped calibration, and -- when a state older than version 3 was
     // loaded -- the offer that replaces silently applying it (PluginProcessor.h, kStateVersion).
@@ -296,8 +221,6 @@ void PhospheneEditor::refreshSetPage()
                       p.get(p.base(Module::Master) + master::TargetLufs));
 
     const TransportView t = proc_.transport();
-    if (playButton_ != nullptr) playButton_->setToggleState(t.playing && !t.hostSync, juce::dontSendNotification);
-    if (muteButton_ != nullptr) muteButton_->setToggleState(proc_.muted(), juce::dontSendNotification);
     if (followButton_ != nullptr) followButton_->setToggleState(proc_.followsHost(), juce::dontSendNotification);
     if (statusLabel_ != nullptr) {
         juce::String s;
@@ -307,7 +230,6 @@ void PhospheneEditor::refreshSetPage()
         if (proc_.isRecording()) s << "   recording " << juce::String(proc_.recordedSeconds(), 1) << " s";
         statusLabel_->setText(s, juce::dontSendNotification);
     }
-    if (recordButton_ != nullptr) recordButton_->setButtonText(proc_.isRecording() ? "Stop recording" : "Record...");
     // The older-state offer (20.09.2026). It appears only while a state of version 1 or 2 is held back,
     // and it names the version, so the user can see why their session came up on the defaults.
     if (legacyButton_ != nullptr && legacyNote_ != nullptr) {
@@ -347,4 +269,92 @@ void PhospheneEditor::refreshSetPage()
     }
     if (trackRows_.size() != rowsSeed_) { rowsSeed_ = trackRows_.size(); tracks_->setRows(trackRows_); }
     tracks_->setPosition(proc_.transport().bar);
+}
+
+// ==================================================================== the Export tab (01.10.2026)
+
+void PhospheneEditor::buildExportPage()
+{
+    // What leaves the instrument, in one place as every generator has it: the recording of the output, the score as
+    // MIDI, the set as a file (and back), the score cues over OSC.
+    auto page = std::make_unique<ControlPage>();
+    const juce::Colour tint = partColour(TabExport);
+    const int gr = page->addGroup("Record", tint, 6);
+    {
+        auto rec = std::make_unique<juce::TextButton>("Record...");
+        rec->setTooltip("Records the output into a WAV file until you press again");
+        rec->onClick = [this] {
+            if (proc_.isRecording()) { proc_.stopRecording(); return; }
+            chooser_ = std::make_unique<juce::FileChooser>("Record the output", juce::File(), "*.wav");
+            chooser_->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
+                                  [this](const juce::FileChooser& fc) {
+                                      const juce::File f = fc.getResult();
+                                      if (f != juce::File()) proc_.startRecording(f.withFileExtension("wav"));
+                                  });
+        };
+        recordButton_ = rec.get();
+        page->addControl(gr, std::move(rec), "", 3, true);
+        auto note = std::make_unique<juce::Label>(juce::String(), "the output as it plays, 32-bit float");
+        note->setColour(juce::Label::textColourId, dim);
+        page->addControl(gr, std::move(note), "", 3, true);
+    }
+    const int ge = page->addGroup("Score and Set", tint, 8);
+    {
+        auto bars = std::make_unique<juce::Slider>(juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox);
+        bars->setRange(4.0, 1024.0, 4.0);
+        bars->setValue(64.0, juce::dontSendNotification);
+        exportBars_ = bars.get();
+        page->addControl(ge, std::move(bars), "Bars", 1);
+
+        auto midi = std::make_unique<juce::TextButton>("Export MIDI...");
+        midi->setTooltip("Writes the score of that many bars from the start as a MIDI file, a channel per part (Ctrl+E)");
+        midi->onClick = [this] {
+            chooser_ = std::make_unique<juce::FileChooser>("Write the score", juce::File(), "*.mid");
+            chooser_->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
+                                  [this](const juce::FileChooser& fc) {
+                                      const juce::File f = fc.getResult();
+                                      if (f != juce::File()) proc_.exportMidi(f.withFileExtension("mid"), static_cast<int>(exportBars_->getValue()));
+                                  });
+        };
+        exportMidi_ = midi.get();
+        page->addControl(ge, std::move(midi), "", 3, true);
+
+        auto set = std::make_unique<juce::TextButton>("Export set...");
+        set->setTooltip("Writes the set -- seed, locks, rerolls and every changed knob -- as a .phosset (Ctrl+S)");
+        set->onClick = [this] {
+            chooser_ = std::make_unique<juce::FileChooser>("Write the set", juce::File(), "*.phosset");
+            chooser_->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
+                                  [this](const juce::FileChooser& fc) {
+                                      const juce::File f = fc.getResult();
+                                      if (f != juce::File()) proc_.exportSet(f.withFileExtension("phosset"));
+                                  });
+        };
+        exportSet_ = set.get();
+        page->addControl(ge, std::move(set), "", 2, true);
+
+        auto load = std::make_unique<juce::TextButton>("Load set...");
+        load->setTooltip("Reads a .phosset and plays it (Ctrl+O)");
+        load->onClick = [this] {
+            chooser_ = std::make_unique<juce::FileChooser>("Read a set", juce::File(), "*.phosset");
+            chooser_->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                  [this](const juce::FileChooser& fc) {
+                                      const juce::File f = fc.getResult();
+                                      bool ok = false;
+                                      if (f != juce::File()) proc_.undoable("Load set", [this, f, &ok] { ok = proc_.importSet(f); });
+                                      if (!ok) return;
+                                      if (seedEditor_ != nullptr) seedEditor_->setText(juce::String(proc_.seed()), false);
+                                      trackRows_.clear();
+                                      rowsSeed_ = 0;
+                                  });
+        };
+        loadSet_ = load.get();
+        page->addControl(ge, std::move(load), "", 2, true);
+    }
+    page->addModuleGroup(proc_, Module::Cue, 0, "Score Cues (OSC)", tint, 4);   // 23.09.2026, on the Mixer tab until 01.10.2026
+    pages_[static_cast<size_t>(TabExport)] = std::move(page);
+}
+
+void PhospheneEditor::refreshExportPage()
+{
+    if (recordButton_ != nullptr) recordButton_->setButtonText(proc_.isRecording() ? "Stop recording" : "Record...");
 }

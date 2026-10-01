@@ -221,7 +221,7 @@ void PhospheneEditor::showHelp(bool show)
     help_->setVisible(show);
     viewport_.setVisible(!show);
     for (auto* b : laneButtons_) b->setVisible(!show && tab_ == TabPerc);
-    helpButton_.setToggleState(show, juce::dontSendNotification);
+    helpIcon_.setToggleState(show, juce::dontSendNotification);
     layoutContent();
     content_.repaint();
     if (show) help_->grabKeyboardFocus();
@@ -235,7 +235,6 @@ void PhospheneEditor::toggleFullScreen()
     auto& desktop = juce::Desktop::getInstance();
     const bool on = desktop.getKioskModeComponent() != window;
     desktop.setKioskModeComponent(on ? window : nullptr, false);
-    fullButton_.setToggleState(on, juce::dontSendNotification);
     grabKeyboardFocus();   // so F11 and Esc keep working in the new window state
 }
 
@@ -254,6 +253,5 @@ void PhospheneEditor::parentHierarchyChanged()
         if (window != nullptr)
             window->setTitleBarButtonsRequired(juce::DocumentWindow::minimiseButton | juce::DocumentWindow::maximiseButton
                                                    | juce::DocumentWindow::closeButton, false);
-        safe->fullButton_.setVisible(window != nullptr);
     });
 }

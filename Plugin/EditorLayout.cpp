@@ -16,7 +16,7 @@ int ControlPage::addGroup(const juce::String& title, juce::Colour tint, int colu
 {
     Group g;
     g.title = title;
-    g.tint = tint;
+    g.tint = groupColour(title, tint);   // the frame's family by what the group does, else the page's colour
     g.columns = juce::jmax(1, columns);
     groups_.push_back(std::move(g));
     return static_cast<int>(groups_.size()) - 1;
@@ -167,9 +167,13 @@ void ControlPage::mouseDown(const juce::MouseEvent& e)
     m.addSectionHeader(proc->midiTargetName(target) + (bound ? juce::String("  (CC ") + juce::String(cc) + ", ch " + juce::String(ch + 1) + ")" : juce::String()));
     m.addItem(1, armed ? "Cancel MIDI Learn" : "MIDI Learn: move a controller next");
     m.addItem(2, "Forget MIDI", bound);
+    // The frame's third item (01.10.2026, as in every generator): back to the default, an undo step.
+    const bool param = target >= 0 && target < proc->params().count();
+    m.addItem(3, "Default value", param);
     m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(e.originalComponent), [proc, target, armed](int r) {
         if (r == 1) proc->midiMap().arm(armed ? -1 : target);
         if (r == 2) proc->midiMap().unbind(target);
+        if (r == 3) proc->resetToDefault(target);
     });
 }
 
@@ -318,9 +322,25 @@ int ControlPage::pack(Group& g, int gridCols, bool apply)
     return bottom;
 }
 
+void ControlPage::setGroupVisible(int groupIndex, bool visible)
+{
+    if (groupIndex < 0 || groupIndex >= static_cast<int>(groups_.size())) return;
+    Group& g = groups_[static_cast<size_t>(groupIndex)];
+    if (g.hidden == !visible) return;
+    g.hidden = !visible;
+    for (int ci : g.cells) {
+        Cell& c = cells_[static_cast<size_t>(ci)];
+        if (c.comp != nullptr) c.comp->setVisible(visible);
+        if (c.label != nullptr) c.label->setVisible(visible);
+    }
+    layout(getWidth());
+    repaint();
+}
+
 int ControlPage::place(int usable)
 {
     for (Group& g : groups_) {
+        if (g.hidden) { g.bounds = {}; continue; }
         if (g.fill) {
             // As wide as the page, in whole grid columns; its control (a pattern roll) takes all of them.
             g.extraColumns = juce::jmax(0, (usable - 2 * kGroupPad) / kCellW - g.columns);
@@ -339,6 +359,7 @@ int ControlPage::place(int usable)
     std::vector<juce::Rectangle<int>> placed;
     int contentBottom = kPagePad;
     for (Group& g : groups_) {
+        if (g.hidden) continue;
         const int gw = juce::jmin(g.bounds.getWidth(), usable);
         std::vector<int> xs { kPagePad };
         for (const auto& r : placed)
@@ -385,18 +406,21 @@ void ControlPage::resized()
 
 void ControlPage::paint(juce::Graphics& g)
 {
+    // The group boxes as every generator draws them (01.10.2026, the frame): the box, its title in its family's colour
+    // and a hairline under it.
     for (const Group& grp : groups_) {
+        if (grp.hidden) continue;
         const juce::Rectangle<float> r = grp.bounds.toFloat();
         g.setColour(phosui::group);
-        g.fillRoundedRectangle(r, 7.0f);
+        g.fillRoundedRectangle(r, 6.0f);
         g.setColour(edge);
-        g.drawRoundedRectangle(r.reduced(0.5f), 7.0f, 1.0f);
-        g.setColour(grp.tint.withAlpha(0.14f));
-        g.fillRoundedRectangle(r.withHeight(static_cast<float>(kGroupTitleH)), 7.0f);
+        g.drawRoundedRectangle(r.reduced(0.5f), 6.0f, 1.0f);
         g.setColour(grp.tint);
-        g.setFont(title(11.5f));
-        g.drawText(grp.title.toUpperCase(), grp.bounds.withHeight(kGroupTitleH).reduced(kGroupPad, 2),
+        g.setFont(title(11.0f));
+        g.drawText(grp.title.toUpperCase(), grp.bounds.withHeight(kGroupTitleH).reduced(kGroupPad + 1, 2),
                    juce::Justification::centredLeft, false);
+        g.setColour(grp.tint.withAlpha(0.45f));
+        g.fillRect(r.getX() + kGroupPad, r.getY() + static_cast<float>(kGroupTitleH) - 2.0f, r.getWidth() - 2.0f * kGroupPad, 1.0f);
     }
 }
 
