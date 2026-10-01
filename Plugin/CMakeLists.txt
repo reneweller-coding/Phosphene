@@ -106,3 +106,12 @@ if(MSVC)
         endif()
     endforeach()
 endif()
+
+# Into bin/<preset> after every build (cmake/Family.cmake, 01.10.2026): the standalone with the files it reads
+# beside it, as in its build tree, and the VST3 bundle (its Resources inside).
+set(PHOS_BIN_RESOURCES)
+foreach(f ${PHOS_RESOURCES})
+    list(APPEND PHOS_BIN_RESOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../Core/data/${f}")
+endforeach()
+family_bin(Phosphene_Standalone FILES ${PHOS_BIN_RESOURCES})
+family_bin(Phosphene_VST3 VST3)

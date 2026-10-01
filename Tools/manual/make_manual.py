@@ -4,7 +4,8 @@ Two steps, as Noctuary's manual is built:
 
     set PHOS_MANUAL=docs\\screenshots
     set PHOS_SHOT_WAIT=26
-    build\\...\\Phosphene.exe                 writes one PNG per tab and manual.json, then quits
+    set FAMILY_NO_SECTIONS=1                 every page whole in its picture, its sections at once
+    bin\\msvc\\Phosphene.exe                writes one PNG per tab and manual.json, then quits
     python Tools/manual/make_manual.py        manual.json + chapters.txt -> HTML -> PDF in docs/manual
 
 PHOS_MANUAL writes into docs/screenshots because those are the same pictures: one snapshot of each

@@ -29,7 +29,7 @@ kind enters them; the sidecar of such a table names a generator and a seed and n
 ## Measured families -- `ambient_sampled` and its relatives
 
 These are spectral analyses of the user's own material: single notes generated with Stable
-Audio 3 medium by the user's own pipeline (`G:\Tools\VRAudio\StableAudio3`) under the
+Audio 3 medium by the user's own pipeline (`G:\Tools\VRAudio\_Sources\StableAudio3`) under the
 Stability Community License, which assigns the outputs to the user. What ships here is not
 audio but the harmonic envelopes measured from it -- the same relation a wavetable has to
 the instrument it was drawn from. The Stability Community License is revenue-capped:

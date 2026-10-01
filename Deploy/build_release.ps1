@@ -28,7 +28,7 @@
 #   * PHOS_AVX2=ON. The setup asks the processor about AVX2 before installing, because a binary
 #     built for it does not degrade on a machine without it -- it takes an illegal instruction and
 #     dies with nothing on screen.
-#   * It builds in a tree of its own (build-release-intel, or build-release with -Toolchain msvc), so
+#   * It builds in a tree of its own (build\release, or build\release-msvc with -Toolchain msvc), so
 #     the everyday build directory keeps its timestamps and nobody has to rebuild it afterwards.
 #   * The data (the wavetable pack, the two models, the voices) is packed into an archive of its own
 #     that the setup downloads when it is not already installed (Deploy\Phosphene.iss). The portable
@@ -52,10 +52,10 @@ param(
     # Which compiler builds what ships: Intel oneAPI's icx (the default since 23.09.2026) or MSVC.
     [ValidateSet("intel", "msvc")]
     [string]$Toolchain = "intel",
-    [switch]$SkipBuild,      # reuse whatever is in build-release already
+    [switch]$SkipBuild,      # reuse whatever is in build\release already
     [switch]$SkipTests,      # do not run ctest (NOT for a release; see the warning it prints)
     [switch]$SkipManual,     # reuse the manual already in docs\manual
-    [switch]$SkipQuest,      # do not rebuild the APK (reuse build-quest\PhospheneQuest.apk)
+    [switch]$SkipQuest,      # do not rebuild the APK (reuse bin\quest\PhospheneQuest.apk)
     [switch]$NoSetup,        # stage, check and zip, but do not call the Inno compiler
     # Copy the freshly made manual and its screenshots back into docs\ as well. Off by default: a
     # release build should not quietly rewrite a hundred committed PNGs, and docs\manual\*.pdf may
@@ -87,9 +87,9 @@ if (-not $Version) {
 $intel     = $Toolchain -eq "intel"
 # A tree of its own per compiler: the two make different objects from the same sources, and sharing a
 # build directory between them is a rebuild that looks incremental and is not.
-$buildDir  = Join-Path $root ($(if ($intel) { "build-release-intel" } else { "build-release" }))
-$stage     = Join-Path $root "Deploy\stage"
-$out       = Join-Path $root "Deploy\out"
+$buildDir  = Join-Path $root ($(if ($intel) { "build\release" } else { "build\release-msvc" }))
+$stage     = Join-Path $root "dist\stage"
+$out       = Join-Path $root "dist"
 $manualDir = Join-Path $root "docs\manual"
 $shots     = Join-Path $root "docs\screenshots"
 $art       = Join-Path $buildDir "Plugin\Phosphene_artefacts\Release"
@@ -98,7 +98,7 @@ $vst       = Join-Path $art "VST3\Phosphene.vst3"
 # Ninja (the Intel build) is single-configuration and puts no "Release" folder under the tools; JUCE's
 # artefacts are under Release either way.
 $render    = Join-Path $buildDir ($(if ($intel) { "Tools\render\phos_render.exe" } else { "Tools\render\Release\phos_render.exe" }))
-$apk       = Join-Path $root "build-quest\PhospheneQuest.apk"
+$apk       = Join-Path $root "bin\quest\PhospheneQuest.apk"
 $refWav    = Join-Path $root "Deploy\reference.wav"
 
 Write-Host "Phosphene $Version -- release build ($Toolchain)" -ForegroundColor Cyan
@@ -135,7 +135,7 @@ function Enable-IntelToolchain {
     return $icx.FullName
 }
 $skipped = @()
-foreach ($s in @(@{n="-SkipBuild";  v=$SkipBuild;  w="the binaries are whatever was in build-release"},
+foreach ($s in @(@{n="-SkipBuild";  v=$SkipBuild;  w="the binaries are whatever was in build\release"},
                  @{n="-SkipTests";  v=$SkipTests;  w="NOTHING proves this build passes its own tests"},
                  @{n="-SkipManual"; v=$SkipManual; w="the manual may describe an older build"},
                  @{n="-SkipQuest";  v=$SkipQuest;  w="the APK may be from an older Core"},
@@ -161,7 +161,7 @@ function Step([string]$name, [scriptblock]$body) {
 # configure of the root project. Running it before a twenty-minute build rather than after is the
 # whole point of it being cheap.
 Step "guard (Quest sources + Android configure)" {
-    & cmake "-DPHOS_ROOT=$root" "-DPHOS_SCRATCH=$root\build-guard" -P (Join-Path $root "Tools\release\quest_guard.cmake")
+    & cmake "-DPHOS_ROOT=$root" "-DPHOS_SCRATCH=$root\build\guard" -P (Join-Path $root "Tools\release\quest_guard.cmake")
     if ($LASTEXITCODE -eq 77) { Write-Warning "the guard could not run (no NDK or no ThirdParty) -- the Quest side of this release is unverified" }
     elseif ($LASTEXITCODE -ne 0) { throw "the build guard failed" }
 }
@@ -242,7 +242,8 @@ if (-not $SkipTests) {
         # still unknown. A timestamped copy costs nothing and makes the next one answerable.
         $last = Join-Path $buildDir "Testing\Temporary\LastTest.log"
         if ($code -ne 0 -and (Test-Path $last)) {
-            $kept = Join-Path $root ("build-release-failure-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
+            $kept = Join-Path $root ("work\logs\build-release-failure-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
+            New-Item -ItemType Directory -Force (Split-Path -Parent $kept) | Out-Null
             Copy-Item $last $kept -Force
             Write-Warning "the failing run's log is kept at $kept"
         }
@@ -288,7 +289,7 @@ Step "reference render (64 bars, both neural models)" {
 # a written description would -- and why it has to run the binary that is being released rather than
 # any older one. PHOS_SHOT_WAIT is how long the composer gets to plan before the pictures are taken;
 # 26 s plans a whole sixty-minute set, which the arrange timeline needs in order to show anything.
-$manualWork = Join-Path $root "Deploy\manual-work"
+$manualWork = Join-Path $root "work\manual"
 $manualPdf = Join-Path $manualWork "Phosphene-Manual.pdf"
 if (-not $SkipManual) {
     Step "manual (screenshots from the plugin, then HTML and PDF)" {
@@ -301,12 +302,13 @@ if (-not $SkipManual) {
         New-Item -ItemType Directory -Force $manualWork | Out-Null
 
         $env:PHOS_MANUAL = $manualWork
+        $env:FAMILY_NO_SECTIONS = "1"   # every page whole in its picture (Frame.h, 01.10.2026)
         $env:PHOS_SHOT_WAIT = "26"    # how long the composer gets to plan; 26 s plans a whole set
         try {
             $mp = Start-Process $exe -PassThru
             if (-not $mp.WaitForExit(180000)) { $mp.Kill(); throw "the manual export did not finish in three minutes" }
         } finally {
-            Remove-Item env:PHOS_MANUAL, env:PHOS_SHOT_WAIT -ErrorAction SilentlyContinue
+            Remove-Item env:PHOS_MANUAL, env:PHOS_SHOT_WAIT, env:FAMILY_NO_SECTIONS -ErrorAction SilentlyContinue
         }
         $json = Join-Path $manualWork "manual.json"
         if (-not (Test-Path $json)) { throw "the plugin wrote no manual.json into $manualWork" }

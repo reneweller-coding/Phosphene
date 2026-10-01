@@ -104,10 +104,25 @@ The design and the literature behind each building block are in [docs/PLAN.md](h
 
 Visual Studio 2026 and CMake 3.22 or newer:
 
-```bash
-cmake -S . -B build -G "Visual Studio 18 2026" -A x64
-cmake --build build --config Release
+The same in every instrument of the family (`build.ps1`, `CMakePresets.json`, `cmake/Family.cmake`):
+
+```powershell
+.\build.ps1               # Visual Studio's compiler, Release: build\msvc (the solution), the programs in bin\msvc
+.\build.ps1 icx           # Intel's oneAPI compiler: build\icx, the programs in bin\icx
+.\build.ps1 msvc -Test    # and the tests (ctest)
+.\build.ps1 icx -Run      # and start the standalone
+.\build.ps1 quest         # the Meta Quest app: bin\quest\PhospheneQuest.apk
 ```
+
+| Folder | What is in it |
+|---|---|
+| `bin\msvc`, `bin\icx` | what can be started: the standalone, the VST3, the renderer (and the files they read) |
+| `build\<preset>` | the build trees -- `build\msvc\Phosphene.slnx` for Visual Studio |
+| `dist\` | the release: setup, portable zip, checksums (`Deploy\build_release.ps1`, from `build\release`) |
+| `work\` | local data, renders and logs, never in git |
+
+Without the script: `cmake --preset msvc`, `cmake --build --preset msvc`, `ctest --preset msvc`; the icx presets need
+Visual Studio's and oneAPI's environment, which `build.ps1` sets up.
 
 That builds one of six configurations this repository has. Before a release, or after anything in
 `Core/` changes shape, build them all:
@@ -129,12 +144,11 @@ The VST3 and the standalone are built with the rest and need JUCE 9.0.1, which C
 GitHub on the first configure. To use a checkout you already have, copy it to `ThirdParty/JUCE`
 (ignored by git) and it is taken from there. `-DPHOS_BUILD_PLUGIN=OFF` builds the tools alone.
 
-```bash
-cmake --build build --config Release --target Phosphene_Standalone Phosphene_VST3
-build/Plugin/Phosphene_artefacts/Release/Standalone/Phosphene.exe
+```powershell
+.\build.ps1 msvc -Run
 ```
 
-The VST3 is `build/Plugin/Phosphene_artefacts/Release/VST3/Phosphene.vst3`; copy it to
+The VST3 is `bin\msvc\Phosphene.vst3`; copy it to
 `C:\Program Files\Common Files\VST3`. In a host the playhead is the clock -- tempo and position
 come from the transport, a jump is followed to the bar -- and the score's notes leave the plugin as
 MIDI, one channel per part. The standalone has its own clock, a play and stop button, a loudness
@@ -157,7 +171,7 @@ built, read back out of the running editor, plus one picture per tab -- with the
 `Tools/manual/chapters.txt`:
 
 ```bash
-PHOS_MANUAL=docs/screenshots PHOS_SHOT_WAIT=26 build/.../Phosphene.exe
+PHOS_MANUAL=docs/screenshots PHOS_SHOT_WAIT=26 FAMILY_NO_SECTIONS=1 bin/msvc/Phosphene.exe
 python Tools/manual/make_manual.py
 ```
 
@@ -175,9 +189,9 @@ powershell -File Deploy\build_release.ps1
 
 It runs the build guard, configures and builds Release with the static MSVC runtime and AVX2 in a
 tree of its own, runs `ctest` (the quick suite) in that configuration, renders a reference, prints the
-manual out of the freshly built plugin, builds the Quest APK, stages everything into `Deploy\stage`,
+manual out of the freshly built plugin, builds the Quest APK, stages everything into `dist\stage`,
 checks the staging directory, and only then compiles the installer and the portable archive into
-`Deploy\out`. Every step that fails stops the run; there is no switch that makes an installer out of
+`dist\`. Every step that fails stops the run; there is no switch that makes an installer out of
 a build that did not pass its tests. It prints a manifest of every file with its size and SHA-256.
 
 The package check ([`Tools/release/check_package.ps1`](Tools/release/check_package.ps1)) is what
@@ -202,17 +216,17 @@ publisher unknown on first run. The manifest's hashes are what can be checked in
 ## Try it
 
 ```bash
-build/Tools/render/Release/phos_render.exe --bars 32 --out out/loop.wav --midi out/loop.mid --report
+bin/msvc/phos_render.exe --bars 32 --out work/renders/loop.wav --midi work/renders/loop.mid --report
 ```
 
 ```bash
-build/Tools/render/Release/phos_render.exe --bars 32 --set "compose.bass_pattern=Triplet compose.key=A compose.scale=Double Harmonic kick.engine=Resonant" --out out/goa.wav
+bin/msvc/phos_render.exe --bars 32 --set "compose.bass_pattern=Triplet compose.key=A compose.scale=Double Harmonic kick.engine=Resonant" --out work/renders/goa.wav
 ```
 
 ```bash
-build/Tools/render/Release/phos_render.exe --minutes 60 --seed 2026 --tracks --sections --report \
+bin/msvc/phos_render.exe --minutes 60 --seed 2026 --tracks --sections --report \
     --set "compose.style=Goa compose.style_tempo=On compose.arc=Peak-Time compose.set_minutes=60" \
-    --out out/night.wav --midi out/night.mid --save-set out/night.phosset
+    --out work/renders/night.wav --midi work/renders/night.mid --save-set work/renders/night.phosset
 ```
 
 `--tracks` prints each track's key, tempo, patterns, sound recipe, chords, form, effects, level
@@ -220,7 +234,7 @@ corrections and, after the render, the loudness it really played; `--sections` l
 the set. `--set-file night.phosset` plays a saved set again, `--lock track:3` and `--reroll track:5`
 curate it (the units are set, track, section and lane). `--solo acid` (or kick, bass, perc, lead, arp,
 pad, sfx) mutes everything else. `phos_selftest --only testDynamics` runs only the named self-test sections.
-`--list` prints every parameter. `python Tools/inspect_wav.py out/loop.wav --bpm 145` draws the
+`--list` prints every parameter. `python Tools/inspect_wav.py work/renders/loop.wav --bpm 145` draws the
 render (waveform, one beat, spectrogram) and prints where in the beat the sub band is occupied.
 
 ## Meta Quest
@@ -235,7 +249,7 @@ OpenXR, no game engine. Build and on-device checks: [Quest/README.md](https://gi
 ```powershell
 powershell -File Quest\fetch_thirdparty.ps1
 powershell -File Quest\build_apk.ps1
-adb install -r build-quest\PhospheneQuest.apk
+adb install -r bin\quest\PhospheneQuest.apk
 ```
 
 `Quality::Quest` (`Core/include/phos/Quality.h`) is what the engine may spend there: the acid's

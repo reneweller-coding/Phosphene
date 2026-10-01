@@ -1,8 +1,8 @@
 {
   "version": "1.2.0",
   "name": "Phosphene",
-  "designWidth": 1290,
-  "designHeight": 1200,
+  "designWidth": 1288,
+  "designHeight": 860,
   "params": [
     {
       "key": "compose.bpm",

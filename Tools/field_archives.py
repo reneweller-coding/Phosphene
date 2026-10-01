@@ -1,6 +1,6 @@
 """Packs the Field track's recordings for the setup's download (27.09.2026).
 
-    python Tools/field_archives.py [--out Deploy/out] [--set 1]
+    python Tools/field_archives.py [--out dist] [--set 1]
 
 `Core/data/field` (Tools/field_select.py: 157 original FLAC files, 1.97 GB) goes into two archives,
 `Phosphene-field-<set>a.zip` and `-<set>b.zip`, each about half: GitHub takes no release file over 2 GB, and a
@@ -15,7 +15,7 @@ gigabytes again. A new selection is a new set number.
 Writes `Deploy/field-files.iss` (the names, the archives' SHA-256, the release's address and the hash of
 `field/CREDITS-field.md`, by which the setup recognises an installed set and downloads nothing). Upload once:
 
-    gh release create field-data-1 Deploy/out/Phosphene-field-1a.zip Deploy/out/Phosphene-field-1b.zip \\
+    gh release create field-data-1 dist/Phosphene-field-1a.zip dist/Phosphene-field-1b.zip \\
         --repo reneweller-coding/Phosphene --title "Field recordings, set 1" --notes "..."
 """
 import argparse
@@ -41,7 +41,7 @@ def sha256(path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=os.path.join(ROOT, "Deploy", "out"))
+    ap.add_argument("--out", default=os.path.join(ROOT, "dist"))
     ap.add_argument("--set", default="1")
     a = ap.parse_args()
     if not os.path.isdir(FIELD):

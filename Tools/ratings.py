@@ -15,8 +15,8 @@ one file in the plugin's format -- with the composer's decisions at each rated b
 `phos_render --learn all.tsv preferences.txt` turns into the listener's preferences (Core/include/phos/Preferences.h).
 
     python Tools/ratings.py                                  # the plugin's file
-    python Tools/ratings.py out/bench/index.tsv              # a bench
-    python Tools/ratings.py out/bench/index.tsv %APPDATA%/Phosphene/ratings.tsv --out all_ratings.tsv
+    python Tools/ratings.py work/bench/index.tsv              # a bench
+    python Tools/ratings.py work/bench/index.tsv %APPDATA%/Phosphene/ratings.tsv --out all_ratings.tsv
 """
 from __future__ import annotations
 

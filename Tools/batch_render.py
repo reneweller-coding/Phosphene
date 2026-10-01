@@ -9,13 +9,13 @@ WAV, and reports what each cost.
 Jobs come from a JSON file or from a seed range on the command line:
 
     python Tools/batch_render.py --render build-plugin/Tools/render/Release/phos_render.exe \
-        --seeds 1-30 --bars 256 --set compose.style="Full-On" --out-dir out/batch
+        --seeds 1-30 --bars 256 --set compose.style="Full-On" --out-dir work/renders/batch
 
     python Tools/batch_render.py --render ...phos_render.exe --jobs jobs.json
 
 A jobs file is a list of objects; every key but `out` is optional:
 
-    [{"seed": 864566672, "bars": 96, "out": "out/a.wav",
+    [{"seed": 864566672, "bars": 96, "out": "work/renders/a.wav",
       "set": ["compose.level_match=Off"], "args": ["--tracks", "--report"]}]
 
 `set` entries become `--set` options, `args` is passed through as it is (`--tracks`, `--solo kick`,

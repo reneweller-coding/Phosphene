@@ -257,6 +257,15 @@ int ControlPage::layout(int width)
     // Two packings, both measured: the cells into the grid of their group, then the groups onto the page.
     // Nothing here knows where anything is; it only knows how large a thing is and where there is room.
     const int usable = juce::jmax(kCellW, width - 2 * kPagePad);
+    plan(usable);   // the sections for this width first (01.10.2026)
+    contentHeight_ = arrange(usable);
+    setSize(width, contentHeight_);
+    resized();
+    return contentHeight_;
+}
+
+int ControlPage::arrange(int usable)
+{
     for (Group& g : groups_) g.extraColumns = 0;
     // Then a group that has room to its right takes it, in whole cells, as far as its cells would still fill a
     // row -- never wider than all of them side by side, so no group grows empty space inside itself -- and the
@@ -285,10 +294,7 @@ int ControlPage::layout(int width)
         }
         if (!grew) break;
     }
-    contentHeight_ = place(usable) + kPagePad;
-    setSize(width, contentHeight_);
-    resized();
-    return contentHeight_;
+    return place(usable) + kPagePad;
 }
 
 int ControlPage::pack(Group& g, int gridCols, bool apply)
@@ -326,13 +332,9 @@ void ControlPage::setGroupVisible(int groupIndex, bool visible)
 {
     if (groupIndex < 0 || groupIndex >= static_cast<int>(groups_.size())) return;
     Group& g = groups_[static_cast<size_t>(groupIndex)];
-    if (g.hidden == !visible) return;
-    g.hidden = !visible;
-    for (int ci : g.cells) {
-        Cell& c = cells_[static_cast<size_t>(ci)];
-        if (c.comp != nullptr) c.comp->setVisible(visible);
-        if (c.label != nullptr) c.label->setVisible(visible);
-    }
+    if (g.off == !visible) return;
+    g.off = !visible;
+    applySections();
     layout(getWidth());
     repaint();
 }
@@ -357,7 +359,7 @@ int ControlPage::place(int usable)
     // the leftmost of the lowest -- instead of into rows as tall as their tallest group, so a short group no
     // longer leaves a gap under itself as wide as it is.
     std::vector<juce::Rectangle<int>> placed;
-    int contentBottom = kPagePad;
+    int contentBottom = kPagePad + topBar();
     for (Group& g : groups_) {
         if (g.hidden) continue;
         const int gw = juce::jmin(g.bounds.getWidth(), usable);
@@ -366,7 +368,7 @@ int ControlPage::place(int usable)
             if (r.getRight() + kGroupGap + gw <= kPagePad + usable) xs.push_back(r.getRight() + kGroupGap);
         int bestX = kPagePad, bestY = std::numeric_limits<int>::max();
         for (int x : xs) {
-            int y = kPagePad;
+            int y = kPagePad + topBar();
             for (const auto& r : placed)
                 if (r.getX() < x + gw && x < r.getRight()) y = juce::jmax(y, r.getBottom() + kGroupGap);
             if (y < bestY || (y == bestY && x < bestX)) { bestY = y; bestX = x; }
@@ -380,8 +382,73 @@ int ControlPage::place(int usable)
     return contentBottom;
 }
 
+void ControlPage::enableSections(const frame::Skin& skin, std::function<void()> changed)
+{
+    skin_ = &skin;
+    sectionChanged_ = std::move(changed);
+    plannedWidth_ = -1;
+}
+
+void ControlPage::plan(int usable)
+{
+    if (skin_ == nullptr || (usable == plannedWidth_ && available_ == plannedAvailable_)) return;
+    plannedWidth_ = usable;
+    plannedAvailable_ = available_;
+    juce::StringArray titles;
+    for (const Group& g : groups_) titles.add(g.title);
+    // A section's height as the page places it: its groups alone (those the editor hides stay hidden), the switch's
+    // row, the margin.
+    auto height = [this, usable](const std::vector<int>& set) {
+        planning_ = true;
+        for (size_t i = 0; i < groups_.size(); ++i)
+            groups_[i].hidden = groups_[i].off || std::find(set.begin(), set.end(), static_cast<int>(i)) == set.end();
+        const int h = arrange(usable);   // measured as the page lays it out, the groups that grow included
+        planning_ = false;
+        return h;
+    };
+    const frame::SectionPlan p = frame::planSections(titles, available_, height);
+    sectionOf_.assign(groups_.size(), 0);
+    for (size_t s = 0; s < p.groups.size(); ++s)
+        for (int gi : p.groups[s]) sectionOf_[static_cast<size_t>(gi)] = static_cast<int>(s);
+    if (p.groups.size() > 1) {
+        if (sections_ == nullptr) {
+            sections_ = std::make_unique<frame::SectionSwitch>(*skin_);
+            sections_->onChange = [this](int) {
+                applySections();
+                if (sectionChanged_) sectionChanged_();
+            };
+            addChildComponent(*sections_);
+        }
+        sections_->setNames(p.names);
+        sections_->setVisible(true);
+    } else if (sections_ != nullptr) {
+        sections_->setVisible(false);
+    }
+    applySections();
+}
+
+void ControlPage::applySections()
+{
+    const int shownSection = split() ? sections_->current() : -1;
+    for (size_t i = 0; i < groups_.size(); ++i) {
+        Group& g = groups_[i];
+        const bool inSection = shownSection < 0 || (i < sectionOf_.size() && sectionOf_[i] == shownSection);
+        g.hidden = g.off || !inSection;
+        for (int ci : g.cells) {
+            Cell& c = cells_[static_cast<size_t>(ci)];
+            if (c.comp != nullptr) c.comp->setVisible(!g.hidden);
+            if (c.label != nullptr) c.label->setVisible(!g.hidden);
+        }
+    }
+    repaint();
+}
+
 void ControlPage::resized()
 {
+    if (sections_ != nullptr) {
+        const int w = sections_->bestWidth();
+        sections_->setBounds(getWidth() - kPagePad - w, kPagePad - 4, w, 26);
+    }
     for (Cell& c : cells_) {
         if (c.comp == nullptr) continue;
         juce::Rectangle<int> r = c.bounds.reduced(3, 3);

@@ -6,9 +6,9 @@ transient density, stereo width and the spectral distance to the reference media
 the next round is cheap: one command, the same numbers every time, and a cached reference profile so
 the 40 recordings have to be decoded only once.
 
-    python Tools/metrics.py out/mix.wav
+    python Tools/metrics.py work/renders/mix.wav
     python Tools/metrics.py --ref-build --refs refs.json      # cache the reference profile
-    python Tools/metrics.py out/mix.wav --third               # the 1/3-octave curve as well
+    python Tools/metrics.py work/renders/mix.wav --third               # the 1/3-octave curve as well
     python Tools/metrics.py --selftest                        # every measure on a known signal
 
 **Why the measures are shaped the way they are.** Every one of them has a way of lying that this

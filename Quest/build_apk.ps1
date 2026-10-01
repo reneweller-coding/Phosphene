@@ -17,7 +17,7 @@ $quest = Join-Path $root "Quest"
 $ndk = Join-Path $Sdk "ndk\$NdkVersion"
 $bt = Join-Path $Sdk "build-tools\$BuildTools"
 $androidJar = Join-Path $Sdk "platforms\$Platform\android.jar"
-$build = Join-Path $root "build-quest"
+$build = Join-Path $root "build\quest"
 $out = Join-Path $build "apk"
 
 if (-not (Test-Path (Join-Path $root "ThirdParty\openxr-loader\prefab"))) { throw "ThirdParty missing: run Quest\fetch_thirdparty.ps1 first" }
@@ -105,6 +105,11 @@ foreach ($f in $assetFiles) {
     Write-Host ("assets:   {0} {1:N0} bytes, {2:N0} in the APK" -f $f, $packedBytes, $carried[$key][1])
 }
 Write-Host ("APK size: {0:N0} bytes" -f (Get-Item $final).Length)
+# Beside the other programs (cmake/Family.cmake's bin/<preset>, 01.10.2026).
+$binQuest = Join-Path $root "bin\quest"
+New-Item -ItemType Directory -Force $binQuest | Out-Null
+Copy-Item $final $binQuest -Force
+$final = Join-Path $binQuest (Split-Path -Leaf $final)
 Write-Host "APK: $final"
 Write-Host "install:  adb install -r `"$final`""
 Write-Host "config:   adb push phos.cfg /sdcard/Android/data/com.reneweller.phosphene.quest/files/phos.cfg"

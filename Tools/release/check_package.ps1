@@ -1,7 +1,7 @@
 # Phosphene -- the package check: does the thing we are about to ship actually contain a product?
 #
-#   powershell -File Tools\release\check_package.ps1 -Stage Deploy\stage -Version 1.0.0
-#                    [-Reference <wav>] [-Manifest Deploy\out\MANIFEST.txt]
+#   powershell -File Tools\release\check_package.ps1 -Stage dist\stage -Version 1.0.0
+#                    [-Reference <wav>] [-Manifest dist\MANIFEST.txt]
 #
 # WHY THIS EXISTS
 #

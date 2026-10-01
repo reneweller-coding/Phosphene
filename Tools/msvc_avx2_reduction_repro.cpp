@@ -38,7 +38,7 @@
  *
  * **How to find it again.** A correct 8 x int32 reduction chains exactly two horizontal adds. Scanning the /FAs
  * listings of the whole core, phos_render and the self test for a chain of three or more (a script of the
- * polish round, PhospheneWork\scratch\polish\repro\scan_hadd.py) finds this function and nothing else in the
+ * polish round, work\phosphene-work\scratch\polish\repro\scan_hadd.py) finds this function and nothing else in the
  * project today: the code as it stands does not contain the pattern.
  *
  * **What to do.** Nothing in the code: the running total the arrangement round wrote is correct and is what

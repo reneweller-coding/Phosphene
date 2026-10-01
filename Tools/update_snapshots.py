@@ -4,7 +4,7 @@
 Run it when a change to what the composer decides is *meant*; then `git diff Tests/golden` is the record of
 what the change did musically, and it goes into the same commit:
 
-    python Tools/update_snapshots.py --plandump build/Tools/plandump/Release/phos_plandump.exe
+    python Tools/update_snapshots.py --plandump build/msvc/Tools/plandump/Release/phos_plandump.exe
     python Tools/update_snapshots.py --plandump ... --check     # compare only, like ctest
 
 A snapshot is `Tests/golden/*.txt`; its first line `# args: ...` says how it was made.

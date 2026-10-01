@@ -1,7 +1,7 @@
 """Draws a render so it can be looked at, and prints the measurements that matter for kick and bass.
 
 Usage:
-    python Tools/inspect_wav.py out/loop.wav [--bpm 145] [--png out/loop.png]
+    python Tools/inspect_wav.py work/renders/loop.wav [--bpm 145] [--png work/renders/loop.png]
 
 Picture (top to bottom): two bars of waveform, one beat zoomed in, a log-frequency spectrogram of
 four bars. Numbers: per-beat low-band energy profile (where in the beat the sub band is occupied),

@@ -9,6 +9,10 @@
 cmake_minimum_required(VERSION 3.22)
 project(Phosphene VERSION 1.2.0 LANGUAGES C CXX)
 
+# The family's layout (01.10.2026): build/<preset>, bin/<preset>, dist/, work/ -- cmake/Family.cmake,
+# CMakePresets.json and build.ps1, the same in every repository of the family.
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Family.cmake)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -109,18 +113,7 @@ endif()
 # ignored by git and may be a copy of a JUCE checkout a sibling build already has -- and fetched
 # from GitHub otherwise. Nothing under Core/ ever includes JUCE; the dependency stops here.
 if(PHOS_BUILD_PLUGIN)
-    include(FetchContent)
-    set(JUCE_BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
-    set(JUCE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/JUCE/CMakeLists.txt)
-        set(FETCHCONTENT_SOURCE_DIR_JUCE ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/JUCE CACHE PATH "" FORCE)
-    endif()
-    FetchContent_Declare(JUCE
-        GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-        GIT_TAG        ${PHOS_JUCE_TAG}
-        GIT_SHALLOW    TRUE
-        GIT_PROGRESS   TRUE)
-    FetchContent_MakeAvailable(JUCE)
+    family_juce(${PHOS_JUCE_TAG})   # ThirdParty/JUCE, the sibling Phosphene's, or fetched (cmake/Family.cmake)
     add_subdirectory(Plugin)
 endif()
 

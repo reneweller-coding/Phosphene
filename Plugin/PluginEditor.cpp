@@ -587,7 +587,8 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
     // Not while the editor is photographing itself for the manual: that run asks nobody anything.
     const bool shooting = juce::SystemStats::getEnvironmentVariable("PHOS_SHOT", "").isNotEmpty()
                        || juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_ALL", "").isNotEmpty()
-                       || juce::SystemStats::getEnvironmentVariable("PHOS_MANUAL", "").isNotEmpty();
+                       || juce::SystemStats::getEnvironmentVariable("PHOS_MANUAL", "").isNotEmpty()
+                       || juce::SystemStats::getEnvironmentVariable("PHOS_PAGE_REPORT", "").isNotEmpty();
     shooting_ = shooting;
     if (!shooting) updates_->startIfDue(proc_.userFolder().getChildFile("update.txt"));
     setWantsKeyboardFocus(true);
@@ -603,8 +604,11 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
     int tallest = 0, widest = 0;
     for (auto& page : pages_) if (page != nullptr) { tallest = juce::jmax(tallest, page->layout(designW_ - 30)); widest = juce::jmax(widest, page->minimumWidth()); }
     for (auto& page : percPages_) if (page != nullptr) { tallest = juce::jmax(tallest, page->layout(designW_ - 30)); widest = juce::jmax(widest, page->minimumWidth()); }
+    // The family's window size (01.10.2026): 1280 x 860 -- a page taller than that is split into sections (Sound |
+    // Modulation) or scrolls; the content was laid out at the tallest page's height before, up to 1200.
+    (void) tallest;
     designW_ = juce::jmax(designW_, widest + 30);
-    designH_ = juce::jlimit(760, 1200, tallest + 64 + kOverviewH + kTabRowH + kSubRowH + 24);
+    designH_ = 860;
 
     setResizable(true, true);
     if (auto* con = getConstrainer()) {
@@ -766,6 +770,12 @@ void PhospheneEditor::buildPages()
     buildPerformPage();
     buildGalleryPage();
     buildExportPage();
+    // A page taller than the window: its groups in sections (01.10.2026, Frame.h planSections) -- the sound and the
+    // modulation apart, each cut where the window ends.
+    for (size_t t = 0; t < pages_.size(); ++t)   // the gallery's list scrolls, its buttons stay with it
+        if (pages_[t] != nullptr && static_cast<int>(t) != TabGallery) pages_[t]->enableSections(phosui::skin(), [this] { layoutContent(); });
+    for (auto& page : percPages_)
+        if (page != nullptr) page->enableSections(phosui::skin(), [this] { layoutContent(); });
 }
 
 void PhospheneEditor::fillPresetBox(PresetBox& pb)
@@ -1030,7 +1040,10 @@ void PhospheneEditor::layoutContent()
     h.tools = { &headsetIcon_, nullptr, &undoIcon_, &redoIcon_, nullptr, &helpIcon_, &settingsIcon_ };
     frame::layoutHeader(r, h);
     headerBottom_ = r.getY();
-    overview_.setBounds(r.removeFromTop(kOverviewH));
+    // The overview, unless the settings fold it away (01.10.2026): then the pages get its height.
+    const bool overview = frame::Settings::of("Phosphene").overview();
+    overview_.setVisible(overview);
+    overview_.setBounds(r.removeFromTop(overview ? kOverviewH : 0));
     r.removeFromTop(4);
     tabRow_ = r.removeFromTop(kTabRowH);
     {
@@ -1051,6 +1064,7 @@ void PhospheneEditor::layoutContent()
     viewport_.setBounds(r.reduced(8, 4));
     if (help_ != nullptr) help_->setBounds(viewport_.getBounds());
     if (auto* page = activePage()) {
+        page->setAvailableHeight(viewport_.getHeight());   // the sections are cut to it (01.10.2026)
         const int first = page->layout(viewport_.getWidth());
         if (first > viewport_.getHeight()) page->layout(viewport_.getWidth() - 12);   // room for the scrollbar
     }
@@ -1080,7 +1094,7 @@ bool PhospheneEditor::fullScreen() const
     return window != nullptr && juce::Desktop::getInstance().getKioskModeComponent() == window;
 }
 
-void PhospheneEditor::changeListenerCallback(juce::ChangeBroadcaster*) { content_.repaint(); }
+void PhospheneEditor::changeListenerCallback(juce::ChangeBroadcaster*) { layoutContent(); content_.repaint(); }   // the settings changed
 
 void PhospheneEditor::showSettings()
 {
@@ -1097,7 +1111,7 @@ void PhospheneEditor::showSettings()
     m.isFullScreen = [this] { return fullScreen(); };
     m.toggleFullScreen = [this] { toggleFullScreen(); };
     m.setWindowScale = [this](float k) {
-        if (!fullScreen()) setSize(juce::roundToInt(static_cast<float>(designW_) * k), juce::roundToInt(static_cast<float>(juce::jmin(designH_, 860)) * k));
+        if (!fullScreen()) setSize(juce::roundToInt(static_cast<float>(designW_) * k), juce::roundToInt(static_cast<float>(designH_) * k));
     };
     m.headsetStatus = [this] { return proc_.headset().statusText(); };
     m.about = [] { return juce::String("Whole psytrance sets, composed and synthesised.\ngithub.com/reneweller-coding/Phosphene"); };
@@ -1398,7 +1412,10 @@ void PhospheneEditor::runScreenshotMode()
     const juce::String one = juce::SystemStats::getEnvironmentVariable("PHOS_SHOT", "");
     const juce::String all = juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_ALL", "");
     const juce::String man = juce::SystemStats::getEnvironmentVariable("PHOS_MANUAL", "");
-    if (one.isEmpty() && all.isEmpty() && man.isEmpty()) return;
+    // PHOS_PAGE_REPORT=<file> (01.10.2026): how far every page reaches past the window at the design size, a line each
+    // and one per section (Frame.h, pageLines) -- which page still scrolls.
+    const juce::String rep = juce::SystemStats::getEnvironmentVariable("PHOS_PAGE_REPORT", "");
+    if (one.isEmpty() && all.isEmpty() && man.isEmpty() && rep.isEmpty()) return;
     // At design size: the pixels of the picture are then the layout's own measurements.
     setSize(designW_, designH_);
     // Playing, and silent: PHOS_SHOT implies PHOS_MUTE, and the pictures are meant to show the
@@ -1409,8 +1426,16 @@ void PhospheneEditor::runScreenshotMode()
     // two seconds, so a picture of a nine-track set needs `PHOS_SHOT_WAIT=25`.
     const double wait = juce::jlimit(1.0, 600.0, juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_WAIT", "6").getDoubleValue());
     juce::Timer::callAfterDelay(static_cast<int>(wait * 1000.0),
-                                [safe = juce::Component::SafePointer<PhospheneEditor>(this), one, all, man] {
+                                [safe = juce::Component::SafePointer<PhospheneEditor>(this), one, all, man, rep] {
         if (safe == nullptr) return;
+        if (rep.isNotEmpty()) {
+            juce::String out;
+            for (int i = 0; i < tabNames().size(); ++i) {
+                safe->setTab(i);
+                out << frame::pageLines(safe->content_, tabNames()[i]);
+            }
+            juce::File(rep).replaceWithText(out);
+        }
         if (all.isNotEmpty()) {
             const juce::File dir(all);
             dir.createDirectory();

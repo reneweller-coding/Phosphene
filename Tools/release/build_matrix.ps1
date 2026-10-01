@@ -60,7 +60,7 @@ param(
 )
 $ErrorActionPreference = "Continue"    # one entry failing must not stop the others: the table is the point
 $root = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
-$work = Join-Path $root "build-matrix"
+$work = Join-Path $root "build\matrix"
 
 # The NDK, the same way Tools\release\quest_guard.cmake finds it.
 if (-not $Ndk) {

@@ -400,7 +400,7 @@ private:
     juce::OwnedArray<juce::TextButton> laneButtons_;   ///< the percussion lane bar
     juce::Viewport viewport_;   ///< scrolls a page taller than the window
     int tab_ = 0, percLane_ = 0;   ///< the tab and the percussion lane on screen
-    int designW_ = 1290, designH_ = 860;   ///< the design size the content is laid out at before scaling
+    int designW_ = 1280, designH_ = 860;   ///< the design size the content is laid out at before scaling
     bool shooting_ = false;   ///< photographing itself (PHOS_SHOT, PHOS_SHOT_ALL, PHOS_MANUAL): the pictures leave out the mute note
 
     // ---- the Set tab's own controls (owned by the Set page, referenced here)

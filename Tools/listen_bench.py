@@ -5,9 +5,9 @@
 This script drives it once per style and seed, in parallel, so that a morning's listening can be "all drops
 in Full-On" or "every breakdown of seed 7" instead of whole sets:
 
-    python Tools/listen_bench.py --render build/Tools/render/Release/phos_render.exe --out out/bench
-    python Tools/listen_bench.py --render ... --out out/bench --styles Full-On Goa --seeds 1-3 --minutes 24
-    python Tools/listen_bench.py --render ... --out out/bench --set compose.style_tempo=1   # each style at its own tempo
+    python Tools/listen_bench.py --render bin/msvc/phos_render.exe --out work/bench
+    python Tools/listen_bench.py --render ... --out work/bench --styles Full-On Goa --seeds 1-3 --minutes 24
+    python Tools/listen_bench.py --render ... --out work/bench --set compose.style_tempo=1   # each style at its own tempo
 
 Each style gets a folder, each render its own `index.tsv` and `plan.log` (the `--tracks` print of the render);
 `index.tsv` at the top merges every render's index with the style folder in front. Files are named

@@ -50,7 +50,7 @@ if(NOT DEFINED PHOS_ROOT)
     message(FATAL_ERROR "quest_guard.cmake needs -DPHOS_ROOT=<repository root>")
 endif()
 if(NOT DEFINED PHOS_SCRATCH)
-    set(PHOS_SCRATCH "${PHOS_ROOT}/build-guard")
+    set(PHOS_SCRATCH "${PHOS_ROOT}/build/guard")
 endif()
 
 set(_skip 77)   # ctest's SKIP_RETURN_CODE, see Tests/CMakeLists.txt

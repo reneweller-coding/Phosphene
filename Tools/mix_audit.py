@@ -7,7 +7,7 @@ prints, for every check, the guide's value, the references' value and Phosphene'
 ``--check`` then holds a render to bounds that are written down in ``LIMITS`` below, each with the reason
 for the number.
 
-    python Tools/mix_audit.py --render build/Tools/render/Release/phos_render.exe --out out/audit
+    python Tools/mix_audit.py --render bin/msvc/phos_render.exe --out work/audit
     python Tools/mix_audit.py --refs "C:/Users/Rene/Desktop/Kandidaten/Pop - Kopie"   # cache the references
     python Tools/mix_audit.py --render ... --check                                   # ctest: bounds, exit code
 
@@ -442,7 +442,7 @@ def table(results, refs):
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--render", help="phos_render executable: render and audit the five style configurations")
-    ap.add_argument("--out", default="out/audit", help="where the renders go (reused when present)")
+    ap.add_argument("--out", default="work/audit", help="where the renders go (reused when present)")
     ap.add_argument("--fresh", action="store_true", help="render again even where a render exists")
     ap.add_argument("--refs", help="measure the reference recordings in this folder and cache the statistics")
     ap.add_argument("--album", default="Psytrance Collection")

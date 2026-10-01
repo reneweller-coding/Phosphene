@@ -12,6 +12,7 @@
  */
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "Frame.h"
 #include "PluginProcessor.h"
 #include "phos/Params.h"
 #include <memory>
@@ -89,7 +90,8 @@ struct Group {
     int rows = 1;                   ///< filled by the layout pass
     int extraColumns = 0;           ///< columns the layout pass added where the page had room (26.09.2026)
     bool fill = false;              ///< spans the page's width, its one control with it (setFillWidth)
-    bool hidden = false;            ///< left out of the layout and not drawn (setGroupVisible)
+    bool hidden = false;            ///< left out of the layout and not drawn (setGroupVisible, or another section)
+    bool off = false;               ///< hidden by setGroupVisible, in every section
 };
 
 /**
@@ -163,6 +165,14 @@ public:
     }
     /** @brief Shows or hides group @p groupIndex and its controls (01.10.2026: the headset's, while one sends). */
     void setGroupVisible(int groupIndex, bool visible);
+    /**
+     * @brief A page taller than its window in sections, one shown at a time (01.10.2026, the family's Frame.h,
+     *        planSections): the sound and the modulation apart, each cut where the window ends; a switch at the page's
+     *        top right. @p changed runs after a switch (the editor lays the page out again).
+     */
+    void enableSections(const frame::Skin& skin, std::function<void()> changed);
+    /** @brief The height the page has in its window (the editor says so before layout()). */
+    void setAvailableHeight(int h) { available_ = h; }
     /** @brief Measures and places everything for a page @p width; returns the height it needs. */
     int layout(int width);
     /** @brief The height the last layout() needed. */
@@ -208,6 +218,8 @@ public:
 private:
     /** @brief Packs every group's cells and places the groups on the page (one pass of layout()); returns the bottom. */
     int place(int usable);
+    /** @brief The whole arrangement for @p usable: the groups grown into the room beside them, then placed; returns the height. */
+    int arrange(int usable);
     /** @brief Packs @p g's cells into @p gridCols grid columns; returns the rows used; @p apply writes the cells' bounds. */
     int pack(Group& g, int gridCols, bool apply);
     /** @brief Builds the control a descriptor asks for -- knob, switch or chooser -- and attaches it. */
@@ -217,6 +229,16 @@ private:
     std::vector<Cell> cells_;    ///< every control on the page, in the order it was added
     std::vector<Group> groups_;  ///< the boxes, each naming the cells that belong to it
     int contentHeight_ = 0;      ///< what the last layout() needed
+    const frame::Skin* skin_ = nullptr;                ///< set by enableSections: the page may have sections
+    std::unique_ptr<frame::SectionSwitch> sections_;   ///< the switch, while the page has more than one section
+    std::vector<int> sectionOf_;                       ///< per group its section
+    std::function<void()> sectionChanged_;
+    int available_ = 0, plannedWidth_ = -1, plannedAvailable_ = -1;
+    bool planning_ = false;                            ///< measuring: the switch's row counted in
+    void plan(int usable);                             ///< the sections for this width and available_
+    void applySections();                              ///< the groups of the section shown, the others hidden
+    bool split() const { return sections_ != nullptr && sections_->isVisible(); }
+    int topBar() const { return planning_ || split() ? 32 : 0; }   ///< room for the switch above the groups
 };
 
 } // namespace phosui

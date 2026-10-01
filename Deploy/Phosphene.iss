@@ -1,6 +1,6 @@
 ; Phosphene -- the Windows installer.
 ;
-; Built by Deploy\build_release.ps1, which stages everything under Deploy\stage first and only then
+; Built by Deploy\build_release.ps1, which stages everything under dist\stage first and only then
 ; calls the compiler. Nothing in here reaches into a build tree: what is in the staging folder is
 ; exactly what gets installed, so the payload can be looked at (and checked, see
 ; Tools\release\check_package.ps1) before the setup is made.
@@ -53,7 +53,7 @@
 #define AppName "Phosphene"
 #define Publisher "Rene Weller"
 #define AppURL "https://github.com/reneweller-coding/Phosphene"
-#define Stage "stage"
+#define Stage "..\dist\stage"
 #ifndef DataBaseUrl
   ; Set by Deploy\build_release.ps1 (/DDataBaseUrl=...): the release this setup belongs to.
   #define DataBaseUrl "https://github.com/reneweller-coding/Phosphene/releases/download/v" + Version
@@ -74,7 +74,7 @@ DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 LicenseFile={#Stage}\LICENSE.txt
-OutputDir=out
+OutputDir=..\dist
 OutputBaseFilename={#AppName}-{#Version}-Setup
 SetupIconFile={#Stage}\phosphene.ico
 UninstallDisplayIcon={app}\Phosphene.exe

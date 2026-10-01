@@ -20,7 +20,7 @@ Quest/
 ```powershell
 powershell -File Quest\fetch_thirdparty.ps1
 powershell -File Quest\build_apk.ps1
-adb install -r build-quest\PhospheneQuest.apk
+adb install -r bin\quest\PhospheneQuest.apk
 ```
 
 Needs NDK r27 (`C:\Android-Buildtools\sdk\ndk\27.2.12479018`), build-tools 34, platform android-34
@@ -172,7 +172,7 @@ scheduler may leave it on an A55 and the number means nothing. If the device's t
 Then the app:
 
 ```
-adb install -r build-quest\PhospheneQuest.apk
+adb install -r bin\quest\PhospheneQuest.apk
 adb shell am start -n com.reneweller.phosphene.quest/android.app.NativeActivity
 adb logcat -s Phosphene
 ```

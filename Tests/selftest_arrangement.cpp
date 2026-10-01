@@ -573,7 +573,7 @@ void testClimax()
               fmt("drop 2 - drop 1 %+.2f LU; weakest group of drop 2 - loudest other window (bars %d-%d) %+.2f LU; above 1.5 kHz %+.2f dB",
                   loud2 - loud1, rivalBar + 1, rivalBar + 8, weakest - rival, hi2 - hi1));
         // 20.09.2026, round "climax-polish", gap (a): the polish round's own residual, measured again on 30
-        // tracks (5 styles, 2 seeds, 3 tracks; PhospheneWork/scratch/climax-polish/brightness_gap.py) with
+        // tracks (5 styles, 2 seeds, 3 tracks; work/phosphene-work/scratch/climax-polish/brightness_gap.py) with
         // the polished form -- the big buildup's last eight bars against drop 2's own brightest eight-bar
         // group, both above 1.5 kHz: median +0.62 dB (was +0.90 dB before that form on the same 30 tracks,
         // and +2.2 dB before the polish round), worst case +2.39 dB (was +2.52 dB), 20 of 30 tracks still

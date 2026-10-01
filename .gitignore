@@ -36,3 +36,8 @@ build-release*.log
 # The Field track's recordings (Tools/field_select.py): the original FLAC files, 1.8 GB, shipped by the release as a
 # component of its own; what is committed is the choice (Tools/field_selection.json) and the credits.
 Core/data/field/
+# The family's layout (01.10.2026): bin/<preset> what can be started, dist/ what is handed out,
+# work/ local data, renders and logs (cmake/Family.cmake).
+bin/
+dist/
+work/
