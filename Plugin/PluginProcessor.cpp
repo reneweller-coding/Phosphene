@@ -1571,6 +1571,12 @@ void PhospheneProcessor::setStateInformation(const void* data, int sizeInBytes)
         // opens with its sound on the defaults until the user takes the offer.
         legacyKnobs_ = knobs;
     }
+    // A loaded set lets go of every macro (01.10.2026). The macros are performance, not part of the set
+    // (writeStateTo), so a state cannot say where they stand -- and leaving them where they were did not bring them
+    // back either: pluginval's state test pressed the drop-out, the timer let it go by itself (no transport, no bar
+    // line to wait for), and the next state handed the host a value it had not had before. Neutral is the one value
+    // a state can promise; the knobs a macro held go back to what was just loaded.
+    for (int i = 0; i < kNumMacros; ++i) setMacro(static_cast<Macro>(i), 0.0f);
     if (auto* mm = xml->getChildByName("midimap"))
         midiMap_.fromText(mm->getAllSubText().toStdString(), [this](const std::string& k) { return midiTargetFind(k); });
     if (midiMap_.bindings().empty()) bindDefaultControllers();   // a state from before 01.10.2026 had none at all

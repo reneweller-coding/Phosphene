@@ -122,7 +122,8 @@ void PhospheneEditor::buildPerformPage()
     {
         auto note = std::make_unique<juce::Label>(juce::String(),
             "Notes from a MIDI keyboard play this voice, with the sound its page has. By channel: 1 acid, 2 lead, "
-            "3 counter, 4 arp, 5 stab, 6 pad, 7 drone. Plays while the set runs.");
+            "3 counter, 4 arp, 5 stab, 6 pad, 7 drone, 8 bass, 10 the kit (C1 the kick, C#1 .. C2 the twelve lanes). "
+            "Plays while the set runs.");
         note->setJustificationType(juce::Justification::topLeft);
         note->setColour(juce::Label::textColourId, dim);
         note->setMinimumHorizontalScale(0.7f);

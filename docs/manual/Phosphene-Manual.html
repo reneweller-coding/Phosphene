@@ -41,7 +41,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <h1>Phosphene</h1>
 <p class="sub">Manual &middot; version 1.2.0</p>
 <img src="../screenshots/tab-0-set.png" alt="">
-<p class="facts">1551 parameters &middot; 18 tabs &middot; 4 perform macros &middot; every picture in this manual is the plugin drawing itself at design size</p>
+<p class="facts">1552 parameters &middot; 18 tabs &middot; 4 perform macros &middot; every picture in this manual is the plugin drawing itself at design size</p>
 </div>
 <div class="toc"><h2>Contents</h2><ol>
 <li>About</li>
@@ -2042,7 +2042,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Four macros, meant for a hand rather than a mouse.</p>
 <p>They are immediate parameter moves rather than score events, and that is measured rather than convenient: the engine&#x27;s control ring is first in, first out and the composer keeps it filled eight bars ahead, so an event pushed into it now would not be heard for about thirteen seconds. A macro therefore writes the knob itself, as an offset in the knob&#x27;s normalised domain, and puts it back exactly where it was when you let go. The composer&#x27;s own ramps keep riding on top.</p>
 <p>Drop-out is a press, not a hold: it takes the kick and the bass out and lets them back in on the next bar line. Stutter is held. Filter Sweep and Gate Depth stay where you leave them, and a double click puts them back to neutral.</p>
-<p>Keyboard: notes from a MIDI keyboard can play one voice -- the acid or any of the six melodic voices, or &quot;By channel&quot; (channel 1 the acid, 2 the lead ... 7 the drone) -- with the sound that voice&#x27;s tab has. Replace leaves the generator&#x27;s notes of that voice out, Layer plays over them. The keyboard plays while the set runs.</p>
+<p>Keyboard: notes from a MIDI keyboard can play one voice -- the acid, any of the six melodic voices, the bass or the kit (C1 the kick, C#1 to C2 the twelve lanes), or &quot;By channel&quot; (channel 1 the acid, 2 the lead ... 7 the drone, 8 the bass, 10 the kit) -- with the sound that voice&#x27;s tab has. Replace leaves the generator&#x27;s notes of that voice out, Layer plays over them. Composer off leaves every generated note out: then only what you play sounds, through the mix and the effects as composed. The keyboard plays while the set runs; an export always plays what was composed.</p>
 <p>MIDI: every knob, switch and chooser, and the four macros, can be put on a hardware controller. Right click the control, choose MIDI Learn and turn the knob on your controller. The MIDI group lists every binding and forgets them all at once. Without learning, controller 74 is the filter sweep, 11 the gate depth and 64 the stutter -- the controllers every generator of the family listens to.</p>
 <p>Headset: while a Meta Quest sends its hands (the Quest app&#x27;s bridge mode), the Perform tab shows what they do -- the left pinch play and stop, the right pinch the drop-out, held the stutter, both hands the next track, the left hand the filter sweep, the right the gate depth (The panel).</p>
 <p>Rate what you hear: Good here and Bad here write a verdict with a note into your ratings. Learn from my ratings fits your taste to them and, once you confirm, weights the choices the style leaves open towards what you liked. The genre&#x27;s rules always stay above your taste.</p>
@@ -2061,8 +2061,9 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p><i>Moves:</i> <code>lead.gate = 1, lead.gate_pattern = 0, lead.gate_depth = 1, lead.gate_duty = 0, counter.gate = 1, counter.gate_pattern = 0, counter.gate_depth = 1, counter.gate_duty = 0, arp.gate = 1, arp.gate_pattern = 0, arp.gate_depth = 1, arp.gate_duty = 0, stab.gate = 1, stab.gate_pattern = 0, stab.gate_depth = 1, stab.gate_duty = 0, pad.gate = 1, pad.gate_pattern = 0, pad.gate_depth = 1, pad.gate_duty = 0</code></p>
 <h3>Keyboard</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
-<tr><td>Keyboard Plays</td><td class="key">mix.keyboard_part</td><td class="rng">Off | Acid | Lead | Counter | Arp | Stab | Pad | Drone | By channel</td><td class="rng">Off</td></tr>
+<tr><td>Keyboard Plays</td><td class="key">mix.keyboard_part</td><td class="rng">Off | Acid | Lead | Counter | Arp | Stab | Pad | Drone | By channel | Bass | Kit</td><td class="rng">Off</td></tr>
 <tr><td>Keyboard Mode</td><td class="key">mix.keyboard_mode</td><td class="rng">Replace | Layer</td><td class="rng">Replace</td></tr>
+<tr><td>Composer</td><td class="key">mix.composer</td><td class="rng">off / on</td><td class="rng">on</td></tr>
 </table>
 </div>
 <div class="topic">

@@ -358,7 +358,7 @@ public:
     void changeProgramName(int, const juce::String&) override {}   ///< not renameable
 
     void getStateInformation(juce::MemoryBlock& destData) override;   ///< seed, rerolls, parameters, controllers as XML
-    void setStateInformation(const void* data, int sizeInBytes) override;   ///< restores them and composes
+    void setStateInformation(const void* data, int sizeInBytes) override;   ///< restores them, lets go of the macros, composes
     /**
      * @brief The version of the state this build writes.
      *
