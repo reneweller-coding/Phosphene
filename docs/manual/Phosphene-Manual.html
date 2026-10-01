@@ -39,8 +39,8 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 </style></head><body>
 <div class="cover">
 <h1>Phosphene</h1>
-<p class="sub">Manual &middot; version 1.2.0</p>
-<img src="../screenshots/tab-0-set.png" alt="">
+<p class="sub">Manual &middot; version 1.3.0</p>
+<img src="tab-0-set.png" alt="">
 <p class="facts">1552 parameters &middot; 18 tabs &middot; 4 perform macros &middot; every picture in this manual is the plugin drawing itself at design size</p>
 </div>
 <div class="toc"><h2>Contents</h2><ol>
@@ -81,7 +81,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>The picture is the whole instrument in the order it works. At the top the composer: a seed becomes a set arc, the arc becomes tracks with keys, tempi, styles and forms, and each track becomes a score, a choice of sounds and a mix -- the last measured by rendering parts of the track before it plays. The conductor hands notes and control events to the engine on an absolute grid of 32 samples, which is why a bar sounds the same however a host cuts its blocks.</p>
 <p>On the left the generators, each in the colour of its tab: kick, bass and percussion, the acid, the six melodic voices with their oscillators, filter models and envelopes, the effects with the bed and the spoken voices, and the Field track&#x27;s sampler. Every part has a channel strip -- level, the kick&#x27;s sidechain duck, the trance gate and its distance -- and sends into three planes of space: a room near, a plate in the middle, a hall far behind, plus a gated hall a voice can choose. The master sums it all and brings it to loudness: gain, bus compressor, mono bass, soft clipper, band limit, a true-peak limiter and a safety clip, metered to BS.1770. Out go the audio, the stems, the score as MIDI and the cues over OSC.</p>
 <p>Along the bottom the modulation of every voice: its envelopes, four LFOs and an eight-slot matrix.</p>
-<figure><img src="../screenshots/flow.png" alt=""><figcaption>The signal flow, drawn by the plugin (the same picture as the help page's).</figcaption></figure>
+<figure><img src="flow.png" alt=""><figcaption>The signal flow, drawn by the plugin (the same picture as the help page's).</figcaption></figure>
 </div>
 <div class="topic">
 <h2>3. Set</h2>
@@ -89,7 +89,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Planning a track measures it by rendering parts of it -- its loudness through the master, the brightness of its lines, how audible each line is against the lead. For the first track of a set that happens behind the music: it starts playing at once, its intro runs, and the measured levels ride in over a phrase long before the kick and the lines arrive. A jump to a track that has not been planned yet still waits for its measurements; the header says &quot;planning&quot; rather than going quiet without explanation. In the standalone this has usually happened before you press anything, because the composer thread starts working when the window opens.</p>
 <p>The composer&#x27;s own knobs are here, grouped by what they decide. Start &amp; Style is where the night begins: the style profile, whether the style walks through the set (Style Mix) and whether each track takes its style&#x27;s own tempo (Style Tempo, which then replaces Tempo and Tempo Range), and the start key and scale. They are called &quot;start&quot; because they are exactly that -- the first track plays them, and from the second on the key, the tempo and (with Style Mix) the style move from track to track as a DJ would move them. Set Journey is the shape of the night: the energy arc, the set length, the track length and how much tracks and sounds vary. Kick &amp; Bass, Rhythm, Melody, Lead and Voices say how much of each part there is and how it is drawn; Levels holds the three automatic balances -- the loudness of whole tracks, the presence of the melodic lines, and the audibility of the quiet lines against the lead.</p>
 <p>Export MIDI writes the score of the first N bars as a Standard MIDI File with a named track per part, section markers and the tempo map. Export set writes a .phosset -- the seed, the style, the arc, the knobs that differ from their defaults, and every lock and reroll -- which phos_render will play back byte for byte.</p>
-<figure><img src="../screenshots/tab-0-set.png" alt=""><figcaption>The Set tab.</figcaption></figure>
+<figure><img src="tab-0-set.png" alt=""><figcaption>The Set tab.</figcaption></figure>
 <h3>Start &amp; Style</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Start Style</td><td class="key">compose.style</td><td class="rng">Goa | Full-On | Progressive | Dark Forest | Hi-Tech</td><td class="rng">Full-On</td></tr>
@@ -167,14 +167,14 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>The Arrange tab is the whole planned set on one page, and the curation loop that goes with it.</p>
 <p>The strip across the top is the night: every planned track a block in the order it plays, the energy arc drawn over it, the play head in it. Underneath, each track gets a row of its own in which its own form fills the full width, so a section stays readable no matter how long the set is. The colours are the section categories: intro and outro grey, groove green, buildup amber, the pre-drop break violet, the drop red, the breakdown blue. Clicking any block jumps there.</p>
 <p>The two small glyphs on every track and every section are the answer to the oldest complaint about generators, which is that they are boring. The padlock freezes that unit on the seed it has; the die draws it again. Because a locked unit keeps its old seed and nothing later reads anything an earlier one decided, rerolling one track leaves every other track bit-identical -- so you can keep what you like and reroll what you do not, one section at a time, until the set is yours. Reroll the set draws the whole journey again and leaves the locked tracks exactly where they were.</p>
-<figure><img src="../screenshots/tab-1-arrange.png" alt=""><figcaption>The Arrange tab.</figcaption></figure>
+<figure><img src="tab-1-arrange.png" alt=""><figcaption>The Arrange tab.</figcaption></figure>
 </div>
 <div class="topic">
 <h2>5. Kick</h2>
 <p>The kick is the floor of the genre and the first thing to get right. Two engines: a swept sine whose pitch falls from Pitch Start to Pitch End with its own decay, and a damped phasor resonator with the retrigger behaviour of a TR-808. Punch is a second, much faster pitch envelope on top of the first; Click adds the attack transient; Drive and Clip decide how much of the body survives.</p>
 <p>Two of its numbers are not free. The tail is limited so that the kick has fallen far enough by the time the first bass note starts, and the phase lock (on the Bass tab) can trim the kick&#x27;s decay so that the kick and the bass fundamental meet in phase. Both are applied in the engine, after every knob and every variation.</p>
 <p>The Kick Scope renders one hit with the values that play right now (the knobs plus the track&#x27;s recipe; stopped, the knobs): its waveform, its pitch sweep on a log axis, its spectrum, and in figures where the sweep starts, the note it lands on (with its cents off it), its length to -60 dB and its peak.</p>
-<figure><img src="../screenshots/tab-2-kick.png" alt=""><figcaption>The Kick tab.</figcaption></figure>
+<figure><img src="tab-2-kick.png" alt=""><figcaption>The Kick tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Kick Own Sound</td><td class="key">mix.kick_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -217,7 +217,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Pattern and Gate are the note side: which of the five bass patterns the track prefers, and how long a note is as a fraction of its slot. The gate is never allowed to run shorter than half a period of the fundamental.</p>
 <p>The bass is a pedal on the root. Its figures at the phrase ends may touch the b2 or the leading tone only as a pickup -- at most two sixteenths, at the end of the bar, into the next downbeat; anywhere else the figure takes the fifth, because under the drone&#x27;s tonic those notes are a minor ninth in the low register. Bass Follows Chords (Set tab) moves the bass to the root the pad holds, and only where the pad plays; the drone moves with it.</p>
 <p>The Bass Scope renders one eighth note of the bass on the key&#x27;s root with the values that play right now (the knobs plus the track&#x27;s recipe; stopped, the knobs): its waveform, the filter&#x27;s cutoff over the note as the synth computes it, its spectrum, and the note and the filter&#x27;s travel in figures.</p>
-<figure><img src="../screenshots/tab-3-bass.png" alt=""><figcaption>The Bass tab.</figcaption></figure>
+<figure><img src="tab-3-bass.png" alt=""><figcaption>The Bass tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Bass Own Sound</td><td class="key">mix.bass_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -347,7 +347,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Twelve lanes, each a complete voice: a tone with its own pitch envelope and FM, four modal sets, the 808 square stack, noise with clap bursts, a filter, a low cut, drive, choke and panning. The role of a lane decides what it plays in the groove and which General MIDI note it exports as.</p>
 <p>The patterns are euclidean, rotated to a middle amount of syncopation rather than to none, and the decisions are made per four-bar phrase. Every lane is high-passed at 150 Hz at the least: the bottom of the mix belongs to the kick and the bass, and a tom that reaches into it takes the floor away.</p>
 <p>On a metal lane, Noise trades against the square stack: at 1 the squares keep 20 % of their level. Six summed squares are six steady tones, and a cymbal made mostly of them rings like feedback. The default hats and ride therefore run almost all noise, with their low cuts at 3 .. 3.5 kHz.</p>
-<figure><img src="../screenshots/tab-4-percussion.png" alt=""><figcaption>The Percussion tab.</figcaption></figure>
+<figure><img src="tab-4-percussion.png" alt=""><figcaption>The Percussion tab.</figcaption></figure>
 <p>The 12 lanes of the kit share one table; lane 1 is printed here and the others are the same controls under the keys <code>perc2.*</code> to <code>perc12.*</code>.</p>
 <h3>Lane</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
@@ -399,7 +399,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <h2>8. Acid</h2>
 <p>A diode ladder after Zavalishin, solved from the inside out, with an accent that charges a sweep capacitor the way the original did -- three accents in a row open further than one. Slide is an exponential glide into the next note, Squelch a cutoff start value plus a comb tuned to the note&#x27;s period. The tempo delay is in beats, so it follows the set.</p>
 <p>In the Phrygian modes the b2 is a degree of the acid&#x27;s own: the F of an E - F - E riff, on any step and held too. The other colour tones -- the upper note of an augmented second -- stay short neighbours that resolve to the tonic.</p>
-<figure><img src="../screenshots/tab-5-acid.png" alt=""><figcaption>The Acid tab.</figcaption></figure>
+<figure><img src="tab-5-acid.png" alt=""><figcaption>The Acid tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Acid Own Sound</td><td class="key">mix.acid_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -521,7 +521,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>A supersaw after Szabo&#x27;s measurements of the JP-8000 -- the detune curve, the mix law and the random phase per note -- with a dynamic detune that follows the length of the note. The other three oscillator types are a virtual-analogue saw and pulse, two-operator FM and a wavetable.</p>
 <p>Everything but the kick and the bass is high-passed at its own fundamental, which is what keeps eight voices of supersaw out of the bass register.</p>
 <p>As in the acid, the Phrygian b2 is one of the lead&#x27;s degrees, on beats 2 and 4 and off the beat; beats 1 and 3 take a tone of the tonic chord.</p>
-<figure><img src="../screenshots/tab-6-lead.png" alt=""><figcaption>The Lead tab.</figcaption></figure>
+<figure><img src="tab-6-lead.png" alt=""><figcaption>The Lead tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Lead Own Sound</td><td class="key">mix.lead_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -708,7 +708,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <div class="topic">
 <h2>10. Counter</h2>
 <p>The counter-lead answers the lead. It plays in the gaps the lead leaves and in a register of its own, so the two never mask each other; Counter Mode on the Set tab (or the style, on Auto) decides whether it echoes, answers or holds against the lead. The engine is the same as the lead&#x27;s, with its own knobs and its own presets.</p>
-<figure><img src="../screenshots/tab-7-counter.png" alt=""><figcaption>The Counter tab.</figcaption></figure>
+<figure><img src="tab-7-counter.png" alt=""><figcaption>The Counter tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Counter Own Sound</td><td class="key">mix.counter_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -896,7 +896,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <h2>11. Arp</h2>
 <p>The same engine as the lead, with its own knobs. The arpeggio runs on chord tones, and when its pitch range would overlap the lead&#x27;s by more than two semitones it is octaved away: two voices playing in the same two octaves mask each other, and the composer checks that before it writes the notes.</p>
 <p>The counter never strikes together with the lead a semitone or a minor ninth apart on beats 1 and 3.</p>
-<figure><img src="../screenshots/tab-8-arp.png" alt=""><figcaption>The Arp tab.</figcaption></figure>
+<figure><img src="tab-8-arp.png" alt=""><figcaption>The Arp tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Arp Own Sound</td><td class="key">mix.arp_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -1083,7 +1083,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <div class="topic">
 <h2>12. Stab</h2>
 <p>Short chord hits on the off-beats and the phrase ends, the punctuation of a groove. They are voiced from the track&#x27;s harmony and kept out of the lead&#x27;s register.</p>
-<figure><img src="../screenshots/tab-9-stab.png" alt=""><figcaption>The Stab tab.</figcaption></figure>
+<figure><img src="tab-9-stab.png" alt=""><figcaption>The Stab tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Stab Own Sound</td><td class="key">mix.stab_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -1272,7 +1272,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Four-voice voicings with the smallest voice movement between chords, through the wavetable engine. The pads carry the blocks that have no lead and no acid, and the trance gate gives them their movement.</p>
 <p>Every pitched voice plays its FM ratio to the nearest half (1, 1.5, 2, ...), so an FM pad or lead is always harmonic: a ratio in between makes the bell and struck-metal spectra that sounded out of tune under a chord. A second oscillator stays within a few cents of its interval, and the pad&#x27;s partner plays in unison or an octave up, never a fifth, which would stack a second chord on the first.</p>
 <p>A pad never holds a minor ninth -- no note a semitone above the tonic that bass and drone play, none a semitone above its own root -- nor the leading tone under the tonic, nor a tritone over its root. Held for bars, those intervals sound wrong rather than dark; the genre makes its dissonance with the sound (clusters, noise, drones), and the Phrygian b2 belongs to the lead and the acid. Where the progression swings to the bII, the pad stays on the tonic and adds the minor sixth instead (E - B - E - C over E). The major seventh is a rare colour, on bVI and bIII only.</p>
-<figure><img src="../screenshots/tab-10-pad.png" alt=""><figcaption>The Pad tab.</figcaption></figure>
+<figure><img src="tab-10-pad.png" alt=""><figcaption>The Pad tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Pad Own Sound</td><td class="key">mix.pad_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -1459,7 +1459,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <div class="topic">
 <h2>14. Drone</h2>
 <p>A long, slowly moving tone under the breakdowns and the intros: the sound that holds a track together when the kick is gone. It is high-passed above the bass so it never takes the floor. It holds the tonic, its fifth and its octave, and like the pad never a minor ninth over the bass -- in a DJ blend a note of the incoming track that would stand a semitone over the outgoing tonic waits for the hand-over. With Bass Follows Chords on it follows the bass to the pad&#x27;s root.</p>
-<figure><img src="../screenshots/tab-11-drone.png" alt=""><figcaption>The Drone tab.</figcaption></figure>
+<figure><img src="tab-11-drone.png" alt=""><figcaption>The Drone tab.</figcaption></figure>
 <h3>Sound</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Drone Own Sound</td><td class="key">mix.drone_own</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -1651,7 +1651,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Space Shot: a recording of NASA&#x27;s, up to 25 seconds -- a rocket launch, Sputnik&#x27;s beep, Saturn&#x27;s radio emissions, a quake on Mars -- played whole, once, on this strip: after the cut of a breakdown, now and then in a long intro, most in Full-On and Hi-Tech, and never within two bars of a spoken phrase. It comes from the field recordings (Field tab); without them it stays silent.</p>
 <p>The tonal layer of an effect -- an atmosphere&#x27;s held tone above all -- is mapped into the mode, and never onto the b2 or the leading tone: a minor seventh the mode lacks becomes the fifth, not the major seventh.</p>
 <p>The two send effects are a short room and a long hall, both feedback delay networks. Their returns are ducked with the kick like everything else, and high-passed: a reverb tail in the bass register is mud.</p>
-<figure><img src="../screenshots/tab-12-sfx-fx.png" alt=""><figcaption>The SFX / FX tab.</figcaption></figure>
+<figure><img src="tab-12-sfx-fx.png" alt=""><figcaption>The SFX / FX tab.</figcaption></figure>
 <h3>Effect Generator</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Level</td><td class="key">sfx.level</td><td class="rng">-36 .. 6 dB</td><td class="rng">-3</td></tr>
@@ -1772,7 +1772,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Loop: over any stretch of the recording (Loop Start to Loop End), joined by a crossfade of its own length -- over the last stretch before the loop&#x27;s end a second read head runs from the loop&#x27;s start, and the two are mixed with equal power, because two stretches of a field recording are uncorrelated and keep their loudness only so. What is heard at the seam is always a blend, never a cut, so a recording that was not made as a loop plays as one. Without the loop a layer ends with its recording.</p>
 <p>Filter, Filter Envelope, Amplifier and the modulation block are the synths&#x27; (Filters and modulation); the matrix reaches pitch, cutoff, resonance, the filter&#x27;s mode, level and pan. The Low Cut (24 dB per octave) keeps the recordings out of the range that belongs to kick and bass -- wind and water have most of their power there. The long amp envelope (2 s in, 4 s out) is how a place enters and leaves.</p>
 <p>The recordings are loaded when a track is planned, a track ahead of their first note, and kept in memory; an offline render waits for them, so it is the same every time.</p>
-<figure><img src="../screenshots/tab-13-field.png" alt=""><figcaption>The Field tab.</figcaption></figure>
+<figure><img src="tab-13-field.png" alt=""><figcaption>The Field tab.</figcaption></figure>
 <h3>Layer A</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>A Category</td><td class="key">field.a_category</td><td class="rng">Auto | Rainforest | Night Country | Insects | Foliage | Wetland | Mud Bubbles | Cave | River | Sea | Rain on Land | Rain on Roof | Wind | Underwater | Ice and Snow | Desert | Fire | Geothermal | Seismic | Ritual Objects | Abandoned | Tunnel | Metal Creak | Dark Drone | Electric | Ventilation | Factory | Polar Station | Radio Space | Empty Space | Grain Texture | NASA</td><td class="rng">Auto</td></tr>
@@ -1915,7 +1915,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>Every strip gives way to the kick by what its plane needs: the bass 4 dB, the lines about 2 dB and back within 65 ms (Duck Release (Lines)), the back plane 5 to 6 dB within 125 ms (Duck Release), the returns 5 dB within 100 ms (Return Duck Release). The effects do not duck: an impact lands on the drop&#x27;s kick. The lead drives two ducks of its own: the counter steps back while the lead plays (Counter under Lead), and so does the pad&#x27;s presence band between 500 Hz and 3 kHz, for as long as a lead note sounds (Pad Band under Lead).</p>
 <p>The composer mixes each phase differently. A breakdown stands 7 dB under the drop before it (after the master&#x27;s compressor and limiter that is about 5 dB of loudness), with the pad at full width and a little louder, the lead further back and the far room open; a buildup narrows the pad, pulls the plate down to 1.2 seconds, fades the far room out and lifts the lines&#x27; high pass, and the drop opens it all again within a bar -- the lead at the front, the pad at its full width again, the pad and drone ducking deeper. In the intro and the breakdown, where pad and drone are often the only tonal voices, their unison stays within about six cents: held, a wider stack beats. While the bass plays, the pad leaves the third to the lead. On the last beat before every eight-bar change of a groove or a drop the effects are thrown into the plate for that one beat.</p>
 <p>Monitor (Master page): Mono, Sub (a low pass at 80 Hz, where the kick-bass gap and the tuning are judged) or Side, after the meter -- a listening switch, it changes nothing the loudness readings see.</p>
-<figure><img src="../screenshots/tab-14-mixer-master.png" alt=""><figcaption>The Mixer / Master tab.</figcaption></figure>
+<figure><img src="tab-14-mixer-master.png" alt=""><figcaption>The Mixer / Master tab.</figcaption></figure>
 <h3>Channels</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Level</td><td class="key">kick.level</td><td class="rng">-36 .. 6 dB</td><td class="rng">-6</td></tr>
@@ -2046,7 +2046,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <p>MIDI: every knob, switch and chooser, and the four macros, can be put on a hardware controller. Right click the control, choose MIDI Learn and turn the knob on your controller. The MIDI group lists every binding and forgets them all at once. Without learning, controller 74 is the filter sweep, 11 the gate depth and 64 the stutter -- the controllers every generator of the family listens to.</p>
 <p>Headset: while a Meta Quest sends its hands (the Quest app&#x27;s bridge mode), the Perform tab shows what they do -- the left pinch play and stop, the right pinch the drop-out, held the stutter, both hands the next track, the left hand the filter sweep, the right the gate depth (The panel).</p>
 <p>Rate what you hear: Good here and Bad here write a verdict with a note into your ratings. Learn from my ratings fits your taste to them and, once you confirm, weights the choices the style leaves open towards what you liked. The genre&#x27;s rules always stay above your taste.</p>
-<figure><img src="../screenshots/tab-15-perform.png" alt=""><figcaption>The Perform tab.</figcaption></figure>
+<figure><img src="tab-15-perform.png" alt=""><figcaption>The Perform tab.</figcaption></figure>
 <h4>Filter Sweep</h4>
 <p>Opens or closes the filters of acid, lead, counter-lead, arp and stab together, by up to a third of their range in each direction. Centre is neutral.</p>
 <p><i>Moves:</i> <code>acid.cutoff +0.35, lead.cutoff +0.35, arp.cutoff +0.35, counter.cutoff +0.35, stab.cutoff +0.35</code></p>
@@ -2070,7 +2070,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <h2>19. Export</h2>
 <p>What leaves the instrument, in one place, as every generator of the family has it (01.10.2026): Record writes the output as it plays into a WAV file until it is pressed again; Export MIDI writes the score of so many bars from the start, a channel per part; Export set writes the set -- the seed, the locks, the rerolls and every knob that differs from the factory -- as a .phosset, and Load set reads one and plays it. The score cues (OSC) send the set&#x27;s beats, bars, sections and keys to a light show or a VJ program at the moment they are heard.</p>
 <p>The keys: Ctrl+E exports the MIDI, Ctrl+S the set, Ctrl+O loads one.</p>
-<figure><img src="../screenshots/tab-16-export.png" alt=""><figcaption>The Export tab.</figcaption></figure>
+<figure><img src="tab-16-export.png" alt=""><figcaption>The Export tab.</figcaption></figure>
 <h3>Score Cues (OSC)</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Send Cues</td><td class="key">cue.send</td><td class="rng">off / on</td><td class="rng">off</td></tr>
@@ -2082,7 +2082,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <div class="topic">
 <h2>20. Gallery</h2>
 <p>Your saved sets, each with a picture of its form. Save to gallery keeps the set as it stands -- seed, style, arc, knobs, locks and rerolls -- and a click on an entry loads it back. The files are ordinary .phosset files in your Sets folder; Open folder shows it.</p>
-<figure><img src="../screenshots/tab-17-gallery.png" alt=""><figcaption>The Gallery tab.</figcaption></figure>
+<figure><img src="tab-17-gallery.png" alt=""><figcaption>The Gallery tab.</figcaption></figure>
 </div>
 <div class="topic">
 <h2>21. Filters and modulation</h2>
@@ -2139,5 +2139,5 @@ double click     a knob back to its default</pre>
 <h2>25. Updates</h2>
 <p>Phosphene looks for a newer release at most once a day, when its window opens, by asking GitHub for the latest release of the project -- nothing else is sent, and nothing is installed by itself. When there is one, the header says so and a click opens the release page. The check can be switched off here on the help page or in the settings, and Check now asks at once.</p>
 </div>
-<footer>Phosphene 1.2.0 &middot; generated from the plugin: the parameter tables and the pictures come out of the running editor (Tools/manual/make_manual.py).</footer>
+<footer>Phosphene 1.3.0 &middot; generated from the plugin: the parameter tables and the pictures come out of the running editor (Tools/manual/make_manual.py).</footer>
 </body></html>
