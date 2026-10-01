@@ -54,12 +54,13 @@ const char* const kPolyInstanceNames[kPolyInstances] = { "lead", "counter", "arp
 
 namespace {
 
-const char* const kKickEngineNames[] = { "Sweep", "Resonant" };
-const char* const kKickTuneNames[] = { "Free", "Key" };
-const char* const kKickClipNames[] = { "Tanh", "Hard" };
-const char* const kSubModeNames[] = { "Mixed", "Split" };
-const char* const kKickLockNames[] = { "Off", "Bass follows kick", "Kick follows bass" };
+const char* const kKickEngineNames[] = { "Sweep", "Resonant" };   ///< kick.engine
+const char* const kKickTuneNames[] = { "Free", "Key" };   ///< kick.tune
+const char* const kKickClipNames[] = { "Tanh", "Hard" };   ///< kick.clip
+const char* const kSubModeNames[] = { "Mixed", "Split" };   ///< bass.sub_mode: the sub mixed into the bass or split from it
+const char* const kKickLockNames[] = { "Off", "Bass follows kick", "Kick follows bass" };   ///< bass.kick_lock (KickLock)
 
+/** @brief The compose module: what the composer is asked for. */
 const ParamDesc kComposeParams[compose::Count] = {
     { "bpm",             "Tempo",           "BPM", 100.0f, 190.0f, 145.0f, Curve::Linear },
     { "key",             "Start Key",       "",      0.0f,  11.0f,   6.0f, Curve::Choice, kKeyNames },
@@ -143,10 +144,11 @@ const ParamDesc kComposeParams[compose::Count] = {
     { "field_density", "Field Density", "x",  0.0f,  2.0f,  1.0f, Curve::Linear },
 };
 
-const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };
-const char* const kModeSetNames[] = { "Membrane", "Bar", "Harmonic" };
-const char* const kPercFilterNames[] = { "Low Pass", "Band Pass", "High Pass" };
+const char* const kPercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };   ///< perc.engine (PercEngine)
+const char* const kModeSetNames[] = { "Membrane", "Bar", "Harmonic" };   ///< perc.modes: the modal engine's mode sets
+const char* const kPercFilterNames[] = { "Low Pass", "Band Pass", "High Pass" };   ///< perc.filter: the lane filter's output
 
+/** @brief A lane of the kit. */
 const ParamDesc kPercParams[perc::Count] = {
     { "active",        "Active",        "",      0.0f,     1.0f,    1.0f, Curve::Toggle },
     { "role",          "Role",          "",      0.0f,    11.0f,    0.0f, Curve::Choice, kPercRoleNames },
@@ -279,10 +281,10 @@ const char* const kDefaultKit =
     "perc12.role=Blip;perc12.engine=Tone;perc12.pitch=1100;perc12.pitch_amount=1.3;perc12.pitch_decay=4;perc12.decay=45;"
     "perc12.filter=Band Pass;perc12.cutoff=1800;perc12.resonance=0.2;perc12.level=-8;perc12.pan=-0.6;perc12.pan_depth=1;perc12.tune=1\n";
 
-// 19.09.2026 (round "lowend-acid"): Decay 150 -> 240 ms and Tail Limit -24 -> -15 dB give the kick the
-// reference kicks' body (Kick.h, "Kick body and the limit"); Level -2 -> -6 dB, because the louder,
-// heavier bass now shares the 40 .. 140 Hz band the mix is calibrated against (testMixBalance), and the
-// bass-to-kick ratio lands on the references' (Tools/ref_bass.py, "b/k": -4.2 against a median -4.7).
+/// 19.09.2026 (round "lowend-acid"): Decay 150 -> 240 ms and Tail Limit -24 -> -15 dB give the kick the
+/// reference kicks' body (Kick.h, "Kick body and the limit"); Level -2 -> -6 dB, because the louder,
+/// heavier bass now shares the 40 .. 140 Hz band the mix is calibrated against (testMixBalance), and the
+/// bass-to-kick ratio lands on the references' (Tools/ref_bass.py, "b/k": -4.2 against a median -4.7).
 const ParamDesc kKickParams[kick::Count] = {
     { "engine",      "Engine",       "",     0.0f,     1.0f,    0.0f, Curve::Choice, kKickEngineNames },
     { "tune",        "Tune",         "",     0.0f,     1.0f,    1.0f, Curve::Choice, kKickTuneNames },
@@ -304,16 +306,17 @@ const ParamDesc kKickParams[kick::Count] = {
     { "tail_limit",  "Tail Limit",   "dB", -60.0f,     0.0f,  -15.0f, Curve::Linear },
 };
 
-// 19.09.2026 (round "lowend-acid"): calibrated against Tools/ref_bass.py (24 reference recordings, the
-// sixteenths between the kicks, each band against 20 .. 120 Hz; self test testBassBite). Sub 0.6 -> 0.3
-// and the new Sub Octave 0.5: under 60 Hz -5.7 dB, 60 .. 120 Hz -1.4 dB (references -7.4 and -0.9).
-// Cutoff 140 -> 240 Hz for 120 .. 300 Hz. The new bite layer: 300 Hz .. 2 kHz -10.3 dB (references
-// -9.8; the bass before read -21.6). Level -5 -> -3 dB: bass against kick, see the kick table. Split
-// stays 2 x f0 with a steeper filter (Bass.h).
-// 26.09.2026: the filter models' names (Params.h, kVoiceFilterModels), before the first table that uses them.
+/// 19.09.2026 (round "lowend-acid"): calibrated against Tools/ref_bass.py (24 reference recordings, the
+/// sixteenths between the kicks, each band against 20 .. 120 Hz; self test testBassBite). Sub 0.6 -> 0.3
+/// and the new Sub Octave 0.5: under 60 Hz -5.7 dB, 60 .. 120 Hz -1.4 dB (references -7.4 and -0.9).
+/// Cutoff 140 -> 240 Hz for 120 .. 300 Hz. The new bite layer: 300 Hz .. 2 kHz -10.3 dB (references
+/// -9.8; the bass before read -21.6). Level -5 -> -3 dB: bass against kick, see the kick table. Split
+/// stays 2 x f0 with a steeper filter (Bass.h).
+/// 26.09.2026: the filter models' names (Params.h, kVoiceFilterModels), before the first table that uses them.
 const char* const kPolyFilterModelNames[kVoiceFilterModels] = { "State Variable", "Moog Ladder", "Prophet (SSM2040)", "Juno (IR3109)",
                                                                 "Oberheim SEM", "Xpander", "Diode Ladder", "Korg35 (MS-20)",
                                                                 "Polivoks", "Wasp" };
+/** @brief bass.filter_model: the bass ladder, then the filter models */
 const char* const kBassFilterModelNames[kVoiceFilterModels] = { "Bass Ladder", "Moog Ladder", "Prophet (SSM2040)", "Juno (IR3109)",
                                                                 "Oberheim SEM", "Xpander", "Diode Ladder", "Korg35 (MS-20)",
                                                                 "Polivoks", "Wasp" };
@@ -329,6 +332,7 @@ const int kBassModDestMap[kBassModDests] = { 0, 3, 6, 7, 8, 9 };   // ModDest: O
 const char* const kAcidModDestNames[] = { "Off", "Pitch", "Cutoff", "Resonance", "Level", "Pan" };
 const int kAcidModDestMap[kAcidModDests] = { 0, 1, 6, 7, 9, 10 };   // ModDest: Off, Pitch, Cutoff, Resonance, Level, Pan
 namespace {
+/** @brief The bass. */
 const ParamDesc kBassParams[bass::Count] = {
     { "wave",          "Wave",          "",      0.0f,     1.0f,  0.15f, Curve::Linear },
     { "pulse_width",   "Pulse Width",   "",     0.05f,    0.95f,   0.5f, Curve::Linear },
@@ -423,35 +427,38 @@ const ParamDesc kBassParams[bass::Count] = {
     { "mx8_amount",    "Mod 8 Amount",   "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
 };
 
-const char* const kDelayTimeNames[] = { "1/16", "1/8", "3/16", "1/4", "3/8", "1/2" };
-const char* const kPolyOscNames[] = { "Supersaw", "VA", "FM", "Wavetable" };
-const char* const kPolyOsc2Names[] = { "Off", "Supersaw", "VA", "FM", "Wavetable" };
+const char* const kDelayTimeNames[] = { "1/16", "1/8", "3/16", "1/4", "3/8", "1/2" };   ///< the tempo delay's times, in notes
+const char* const kPolyOscNames[] = { "Supersaw", "VA", "FM", "Wavetable" };   ///< poly.osc: the first oscillator's engine
+const char* const kPolyOsc2Names[] = { "Off", "Supersaw", "VA", "FM", "Wavetable" };   ///< poly.osc2: the second oscillator's engine, or none
+/** @brief poly.osc2_interval: the second oscillator's interval */
 const char* const kPolyOsc2IntervalNames[] = { "-2 Oct", "-1 Oct", "-5th", "Unison", "+5th", "+1 Oct" };
-// The `table` choice: the six tables written as spectra in code, then whatever library tables this
-// build ships (Core/include/phos/WaveTableList.inl, generated by Tools/wt_pack.py). The six come
-// first and in this order for good: a `.phosset` and a plugin state store the index as a number, so
-// "lead.table=1" must go on meaning Vocal whatever is added behind it.
+/// The `table` choice: the six tables written as spectra in code, then whatever library tables this
+/// build ships (Core/include/phos/WaveTableList.inl, generated by Tools/wt_pack.py). The six come
+/// first and in this order for good: a `.phosset` and a plugin state store the index as a number, so
+/// "lead.table=1" must go on meaning Vocal whatever is added behind it.
 #define PHOS_WT(index, name, id, lane, fallback) name,
+/** @brief poly.table: the wavetables. */
 const char* const kWaveTableNames[] = { "Classic", "Vocal", "Glass", "PWM", "Sync", "Formant Saw",
 #include "phos/WaveTableList.inl"
 };
 #undef PHOS_WT
 static_assert(sizeof(kWaveTableNames) / sizeof(kWaveTableNames[0]) == kNumWaveTables,
               "the table choice list and kNumWaveTables have come apart");
+/** @brief poly.gate_pattern: the trance gate's patterns */
 const char* const kGatePatternNames[] = { "Sixteenths", "Eighths", "Rolling", "Gallop", "3-3-2", "Triplets" };
-const char* const kPolyModNames[] = { "Off", "Flanger", "Phaser", "Comb" };
+const char* const kPolyModNames[] = { "Off", "Flanger", "Phaser", "Comb" };   ///< poly.mod: the voice's modulation insert
 static_assert(sizeof(kPolyModNames) / sizeof(kPolyModNames[0]) == static_cast<int>(PolyMod::Count),
               "one name per PolyMod");
-const char* const kPolyFilterNames[] = { "Low Pass", "Band Pass", "High Pass", "Notch" };
+const char* const kPolyFilterNames[] = { "Low Pass", "Band Pass", "High Pass", "Notch" };   ///< poly.filter_type: the filter's response
 static_assert(sizeof(kPolyFilterNames) / sizeof(kPolyFilterNames[0]) == static_cast<int>(PolyFilter::Count),
               "one name per PolyFilter");
 
-// 18.09.2026 (round "mix-foundation"): the default voicing is the "driven" one of three candidates
-// rendered for the user -- a 303 into a distortion pedal. Cutoff 650 -> 900 Hz, env 4 -> 3.5 oct,
-// decay 350 -> 220 ms, accent 0.6 -> 0.7, slide 55 -> 70 ms (the 60 .. 80 ms of the rule text), drive
-// 0.45 -> 0.85 on the new, stronger drive curve (Acid.cpp, kDriveMaxDb), low cut 150 -> 250 Hz so the
-// distortion does not thicken the low mids, delay feedback 0.45 -> 0.5, hall 0.05 -> 0.08, and the
-// level -9 -> -2.3 dB, which puts the acid alone at -20 LUFS in the first drop, level with the arp.
+/// 18.09.2026 (round "mix-foundation"): the default voicing is the "driven" one of three candidates
+/// rendered for the user -- a 303 into a distortion pedal. Cutoff 650 -> 900 Hz, env 4 -> 3.5 oct,
+/// decay 350 -> 220 ms, accent 0.6 -> 0.7, slide 55 -> 70 ms (the 60 .. 80 ms of the rule text), drive
+/// 0.45 -> 0.85 on the new, stronger drive curve (Acid.cpp, kDriveMaxDb), low cut 150 -> 250 Hz so the
+/// distortion does not thicken the low mids, delay feedback 0.45 -> 0.5, hall 0.05 -> 0.08, and the
+/// level -9 -> -2.3 dB, which puts the acid alone at -20 LUFS in the first drop, level with the arp.
 const ParamDesc kAcidParams[acid::Count] = {
     { "wave",           "Wave",           "",      0.0f,     1.0f,   0.0f, Curve::Linear },
     { "cutoff",         "Cutoff",         "Hz",   80.0f,  8000.0f, 900.0f, Curve::Log },
@@ -539,6 +546,7 @@ const ParamDesc kAcidParams[acid::Count] = {
     { "mx8_amount",    "Mod 8 Amount",   "",     -1.0f,     1.0f,   0.0f, Curve::Linear },
 };
 
+/** @brief A polyphonic voice (lead, counter, arp, stab, pad, drone). */
 const ParamDesc kPolyParams[poly::Count] = {
     { "osc",            "Oscillator",     "",      0.0f,     3.0f,   0.0f, Curve::Choice, kPolyOscNames },
     { "detune",         "Detune",         "",      0.0f,     1.0f,  0.55f, Curve::Linear },
@@ -757,8 +765,8 @@ const char* const kDefaultPoly =
     "drone.duck=0.45;drone.position=0.3;drone.pos_lfo_depth=0.1;drone.pos_lfo_beats=32;drone.drift=2;drone.level=-17;"
     "drone.osc2_mix=0.36;drone.osc2_detune=5;drone.lfo_beats=32;drone.lfo_cutoff=0.32;drone.lfo_amp=0.08\n";
 
-// sfx.level -12 -> -3 dB (18.09.2026): the SFX strip measured -27.6 LUFS over the first drop and its
-// events 5 to 15 dB under the mix at their loudest; the per-type balance is in Sfx.cpp (kTypeGainDb).
+/// sfx.level -12 -> -3 dB (18.09.2026): the SFX strip measured -27.6 LUFS over the first drop and its
+/// events 5 to 15 dB under the mix at their loudest; the per-type balance is in Sfx.cpp (kTypeGainDb).
 const ParamDesc kSfxParams[sfx::Count] = {
     { "level",        "Level",         "dB", -36.0f,   6.0f,  -3.0f, Curve::Linear },
     { "noise",        "Noise",         "",     0.0f,   1.0f,   0.6f, Curve::Linear },
@@ -795,9 +803,9 @@ const ParamDesc kSfxParams[sfx::Count] = {
     { "plate_send",           "Plate Send",    "", 0.0f, 1.0f, 0.1f, Curve::Linear },
 };
 
-// The shamanic bed (Texture.h), the voices (Vocal.h) and the modulation effects (PsyFx.h), 19.09.2026.
-// Their levels are the calibration of that round (docs/rounds/2026-09.md): a bed that is felt rather than heard,
-// voices that stand in a breakdown without covering the pad.
+/// The shamanic bed (Texture.h), the voices (Vocal.h) and the modulation effects (PsyFx.h), 19.09.2026.
+/// Their levels are the calibration of that round (docs/rounds/2026-09.md): a bed that is felt rather than heard,
+/// voices that stand in a breakdown without covering the pad.
 const ParamDesc kTextureParams[texture::Count] = {
     { "width",         "Width",          "",     0.0f,   1.0f,   0.8f, Curve::Linear },
     { "bowl_decay",    "Bowl Decay",     "s",    1.0f,  20.0f,   7.0f, Curve::Log },
@@ -811,6 +819,7 @@ const ParamDesc kTextureParams[texture::Count] = {
     { "duck",          "Duck",           "",     0.0f,   1.0f,   0.45f, Curve::Linear },   // 25.09.2026: the back plane, 4 .. 8 dB
 };
 
+/** @brief The voices. */
 const ParamDesc kVocalParams[vocal::Count] = {
     { "pitch",          "Pitch Spread",   "st",   0.0f,  12.0f,   3.0f, Curve::Linear },
     { "drive",          "Drive",          "",     0.0f,   1.0f,   0.35f, Curve::Linear },
@@ -823,6 +832,7 @@ const ParamDesc kVocalParams[vocal::Count] = {
     { "width",          "Width",          "",     0.0f,   1.0f,   0.5f, Curve::Linear },
 };
 
+/** @brief The modulation effects: the SFX insert and the send chain. */
 const ParamDesc kPsyFxParams[psyfx::Count] = {
     { "flanger_beats",    "Flanger Period",   "beats", 0.5f, 32.0f,  8.0f, Curve::Log },
     { "flanger_depth",    "Flanger Depth",    "",      0.0f,  1.0f,  0.7f, Curve::Linear },
@@ -838,6 +848,7 @@ const ParamDesc kPsyFxParams[psyfx::Count] = {
     { "motion",           "Motion",           "",      0.0f,  1.0f,  0.7f, Curve::Linear },
 };
 
+/** @brief The rooms: the room, the hall, the plate, the delay. */
 const ParamDesc kFxParams[fx::Count] = {
     { "room_size",      "Room Size",      "",      0.3f,    3.0f,   0.5f, Curve::Linear },
     { "room_decay",     "Room Decay",     "s",     0.1f,    4.0f,   0.7f, Curve::Log },
@@ -875,10 +886,12 @@ const ParamDesc kFxParams[fx::Count] = {
     { "plate_to_hall",   "Plate to Hall",   "",      0.0f,    1.0f,  0.15f, Curve::Linear },
 };
 
-// 23.09.2026, round "Keyboard": "By channel" plays the acid on channel 1, the lead on 2 ... the drone on 7.
-const char* const kKeyboardPartNames[] = { "Off", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "By channel" };
-const char* const kKeyboardModeNames[] = { "Replace", "Layer" };
-const char* const kMonitorNames[] = { "Normal", "Mono", "Sub", "Side" };
+/// 23.09.2026, round "Keyboard": "By channel" plays the acid on channel 1, the lead on 2 ... the drone on 7.
+/// 01.10.2026: the bass and the kit appended (the values before them stay what they were in a saved set).
+const char* const kKeyboardPartNames[] = { "Off", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "By channel", "Bass", "Kit" };
+const char* const kKeyboardModeNames[] = { "Replace", "Layer" };   ///< perform.keyboard_mode
+const char* const kMonitorNames[] = { "Normal", "Mono", "Sub", "Side" };   ///< master.monitor: what the output plays
+/** @brief The mix: the strips' levels, mutes and sends, the ducks. */
 const ParamDesc kMixParams[mix::Count] = {
     { "kick_mute", "Kick Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
     { "bass_mute", "Bass Mute", "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
@@ -968,8 +981,9 @@ const ParamDesc kMixParams[mix::Count] = {
     { "pad_own",       "Pad Own Sound",     "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
     { "drone_own",     "Drone Own Sound",   "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
     // 23.09.2026, round "Keyboard": what a MIDI keyboard plays (Engine.h, liveNoteOn).
-    { "keyboard_part", "Keyboard Plays",    "", 0.0f, 8.0f, 0.0f, Curve::Choice, kKeyboardPartNames },
+    { "keyboard_part", "Keyboard Plays",    "", 0.0f, 10.0f, 0.0f, Curve::Choice, kKeyboardPartNames },
     { "keyboard_mode", "Keyboard Mode",     "", 0.0f, 1.0f, 0.0f, Curve::Choice, kKeyboardModeNames },
+    { "composer",      "Composer",          "", 0.0f, 1.0f, 1.0f, Curve::Toggle },   // 01.10.2026, live play only
     // 25.09.2026, the mix guide's ducking matrix. The lines (acid, lead, counter, arp, stab) come back within
     // 50 .. 80 ms, the pads and the bed within 100 .. 150 (duck_release, 125 now); the counter gives way to the
     // lead by 1 .. 3 dB, the pad's band of 500 Hz .. 3 kHz by 2 .. 4 dB while the lead plays (Engine.h).
@@ -984,6 +998,7 @@ const ParamDesc kMixParams[mix::Count] = {
     { "field_level",   "Field Level",   "dB", -24.0f, 12.0f, -14.0f, Curve::Linear },
 };
 
+/** @brief The master: the bus compressor, the clipper, the limiter, the loudness. */
 const ParamDesc kMasterParams[master::Count] = {
     { "gain",    "Gain",    "dB", -24.0f, 24.0f,  0.0f, Curve::Linear },
     { "ceiling", "Ceiling", "dBTP", -12.0f,  0.0f, -1.0f, Curve::Linear },
@@ -1005,8 +1020,8 @@ const ParamDesc kMasterParams[master::Count] = {
     { "monitor",        "Monitor",        "",     0.0f,  3.0f,  0.0f, Curve::Choice, kMonitorNames },
 };
 
-// The cue bridge of PLAN 8.3. Appended after the master block, so no parameter that existed before
-// changed its id, its default or its place in the host's list.
+/// The cue bridge of PLAN 8.3. Appended after the master block, so no parameter that existed before
+/// changed its id, its default or its place in the host's list.
 const ParamDesc kCueParams[cue::Count] = {
     { "send",    "Send Cues", "",      0.0f,     1.0f,    0.0f, Curve::Toggle },
     { "port",    "Port",      "",   1024.0f, 65535.0f, 9000.0f, Curve::Int },
@@ -1020,10 +1035,10 @@ const ParamDesc kCueParams[cue::Count] = {
 
 /** @brief One module: its prefix, table, how many instances exist, and optionally their names. */
 struct ModuleSpec {
-    const char* prefix;
-    const ParamDesc* descs;
-    int count;
-    int instances;
+    const char* prefix;   ///< the key prefix ("kick", "perc" ...)
+    const ParamDesc* descs;   ///< its parameters
+    int count;   ///< how many
+    int instances;   ///< how many instances
     const char* const* instanceNames = nullptr;   ///< prefixes of the instances instead of prefix + number
 };
 
@@ -1034,8 +1049,10 @@ const char* const kFieldCategoryNames[field::kCategories + 1] = { "Auto", "Rainf
 const char* const kFieldCategorySlugs[field::kCategories] = { "rainforest", "night-country", "insects", "foliage", "wetland", "mud-bubbles", "cave", "river", "sea", "rain-land", "rain-roof", "wind", "underwater", "ice-snow", "desert", "fire", "geothermal", "seismic", "ritual-objects", "abandoned", "tunnel", "metal-creak", "dark-drone-noise", "electric", "ventilation", "factory", "polar-station", "radio-space", "empty-space", "grain-texture", "nasa" };
 const char* const kFieldModDestNames[7] = { "Off", "Pitch", "Cutoff", "Resonance", "Filter Mode", "Level", "Pan" };
 const int kFieldModDestMap[7] = { 0, 1, 6, 7, 8, 9, 10 };   // ModDest: Off, Pitch, Cutoff, Resonance, FilterMode, Level, Pan
+/** @brief field.filter_type: the state-variable filter's response */
 const char* const kFieldFilterTypeNames[4] = { "Low Pass", "Band Pass", "High Pass", "Notch" };
 namespace {
+/** @brief The Field track: the field recordings' sampler. */
 const ParamDesc kFieldParams[field::Count] = {
     // Layer A: a recording of the library -- the category, a variation within it (Auto: the composer's choice), its level,
     // its pitch (resampled), where it starts (and how far that start may wander), and its direction.
@@ -1139,6 +1156,7 @@ const ParamDesc kFieldParams[field::Count] = {
     { "duck",           "Duck",           "",      0.0f,     1.0f,   0.4f, Curve::Linear },
 };
 
+/** @brief The modules, in the order of Module. */
 const ModuleSpec kModules[static_cast<int>(Module::Count)] = {
     { "compose", kComposeParams, compose::Count, 1 },
     { "kick",    kKickParams,    kick::Count,    1 },
@@ -1157,6 +1175,7 @@ const ModuleSpec kModules[static_cast<int>(Module::Count)] = {
     { "field",   kFieldParams,   field::Count,   1 },
 };
 
+/** @brief Whether a curve takes whole steps (Int, Choice, Toggle). */
 bool isDiscrete(Curve c) { return c == Curve::Int || c == Curve::Choice || c == Curve::Toggle; }
 
 } // namespace

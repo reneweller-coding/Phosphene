@@ -120,7 +120,10 @@ std::vector<int> leadRhythm(Rng& r, const CorpusRole& role, int family)
  * @{ */
 
 /** @brief An archetype: the cell's transposition per bar in scale steps, and the phrase's filter arc. */
-struct LeadArchetypeDef { int8_t step[8]; float arc[8]; };
+struct LeadArchetypeDef {
+    int8_t step[8];   ///< the cell's transposition per bar, scale steps
+    float arc[8];     ///< the phrase's filter arc per bar
+};
 
 /**
  * @brief The five archetypes of the brief, as bar offsets and cutoff arcs.
@@ -435,7 +438,9 @@ double criticScore(const std::vector<int>& steps, const std::vector<int>& rels, 
 
 /** @brief One bar of the phrase as it is being built. */
 struct LeadBar {
-    std::vector<int> steps, rels, lens;
+    std::vector<int> steps;   ///< the notes' sixteenths
+    std::vector<int> rels;   ///< their intervals to the tonic
+    std::vector<int> lens;   ///< their lengths, sixteenths
     std::vector<int> src;     ///< the cell note each note derives from, -1 for none
 };
 

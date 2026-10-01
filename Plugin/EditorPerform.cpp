@@ -25,7 +25,9 @@ namespace {
 /** @brief The headset's box (01.10.2026, the frame's): the hands as they stand and what they do, live. */
 class HeadsetBox final : public juce::Component, private juce::Timer {
 public:
+    /** @brief The box for @p p. */
     explicit HeadsetBox(PhospheneProcessor& p) : proc_(p) { startTimerHz(15); }
+    /** @brief The frame's headset box with the hands and the macros they play. */
     void paint(juce::Graphics& g) override
     {
         frame::drawHeadsetBox(g, getLocalBounds(), phosui::skin(), proc_.headset(), "drop-out", "stutter while held",
@@ -33,8 +35,9 @@ public:
     }
 
 private:
+    /** @brief Repaints while it is shown (15 times a second). */
     void timerCallback() override { if (isShowing()) repaint(); }
-    PhospheneProcessor& proc_;
+    PhospheneProcessor& proc_;   ///< the processor: its headset
 };
 } // namespace
 
@@ -115,7 +118,7 @@ void PhospheneEditor::buildPerformPage()
     // and what is bound, and forgets everything at once.
     // The keyboard (23.09.2026, Engine::liveNoteOn): notes coming in play the chosen voice with its sound as its page
     // has it. Replace leaves out the generator's notes of that voice, Layer plays over them.
-    const int gk = page->addModuleGroup(proc_, Module::Mix, 0, "Keyboard", tint, 16, mix::KeyboardPart, 2);
+    const int gk = page->addModuleGroup(proc_, Module::Mix, 0, "Keyboard", tint, 16, mix::KeyboardPart, 3);   // with the composer switch
     {
         auto note = std::make_unique<juce::Label>(juce::String(),
             "Notes from a MIDI keyboard play this voice, with the sound its page has. By channel: 1 acid, 2 lead, "

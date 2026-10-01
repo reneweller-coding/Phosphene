@@ -392,8 +392,10 @@ struct MelodyPlan {
     uint16_t arpHigh = 0;                     ///< bit per sixteenth: the step belongs to the high stream
     int  arpStyle = 0;                        ///< ArpStyle: corpus, up, down, up-down, Euclid, polymeter
     bool arpOctaveJump = false;               ///< every other two bars an octave up
-    int  leadLo = 127, leadHi = 0;            ///< the lead's pitch range (for the masking rule)
-    int  arpLo = 127, arpHi = 0;              ///< the arp's pitch range
+    int  leadLo = 127;   ///< the lead's lowest pitch (the masking rule)
+    int  leadHi = 0;   ///< ... its highest
+    int  arpLo = 127;   ///< the arp's lowest pitch
+    int  arpHi = 0;   ///< ... its highest
     int  acidSquelch = -1;                    ///< override of acid.squelch, -1 = the knob
     int  leadOsc = -1;                        ///< override of lead.osc, -1 = the knob (superseded by the voice recipes, kept for the report)
     int  delay[kMelodyParts][2] = { { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 } };   ///< overrides of the delay times
@@ -505,7 +507,9 @@ extern const char* const kLeadArchetypeNames[kNumLeadArchetypes];   ///< names o
 extern const char* const kCellOpNames[kNumCellOps];                 ///< names of CellOp (Form.h)
 /** @brief The lead's and the counter's windows of a track (23.09.2026): one octave each, the counter an octave up. */
 inline int leadWindowHi(const MelodyPlan& m) { return m.leadWindowLo + kLeadWindow - 1; }
+/** @brief The counter's window: its lowest note, an octave over the lead's. */
 inline int counterWindowLo(const MelodyPlan& m) { return m.leadWindowLo + 12; }
+/** @brief ... its highest. */
 inline int counterWindowHi(const MelodyPlan& m) { return m.leadWindowLo + 12 + kLeadWindow - 1; }
 /** @brief The cutoff arc of an archetype at a bar of the phrase, mean-free (ComposerControls.cpp, leadArcControls, writes depth x this). */
 double leadArc(int archetype, int barInPhrase);

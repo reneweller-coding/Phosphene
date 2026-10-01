@@ -61,7 +61,9 @@ class EditorContent final : public juce::Component {
 public:
     std::function<void(juce::Graphics&)> onPaint;   ///< the editor draws the frame
     std::function<void()> onResized;                ///< the editor places its children
+    /** @brief Draws through onPaint. */
     void paint(juce::Graphics& g) override { if (onPaint) onPaint(g); }
+    /** @brief Lays out through onResized. */
     void resized() override { if (onResized) onResized(); }
 };
 
@@ -85,12 +87,17 @@ class TrackDisplay final : public juce::Component {
 public:
     /** @brief One line of the list. */
     struct Row {
-        int bar = 0, bars = 0, index = 0;   ///< the track's first bar, its length, its index
+        int bar = 0;   ///< the track's first bar
+        int bars = 0;   ///< its length, bars
+        int index = 0;   ///< its index
         double bpm = 145.0;   ///< its tempo
         juce::String text;   ///< the line as drawn
     };
+    /** @brief The lines, the play head marker on the track that plays. */
     void paint(juce::Graphics&) override;
+    /** @brief Nothing to lay out. */
     void resized() override {}
+    /** @brief A click jumps to the track clicked (onJump). */
     void mouseDown(const juce::MouseEvent&) override;
     /** @brief Replaces the list (message thread). */
     void setRows(std::vector<Row> rows) { rows_ = std::move(rows); repaint(); }
@@ -118,6 +125,7 @@ public:
     void setPart(phos::Part part, int highlightLane = -1) { part_ = part; lane_ = highlightLane; }
     /** @brief New notes and where the play head stands, in bars and beats (message thread). */
     void update(std::vector<phos::NoteEvent> notes, int firstBar, int bars, double beat);
+    /** @brief The notes of the window as a piano roll (the lanes for the percussion), the play head. */
     void paint(juce::Graphics&) override;
 
 private:
@@ -145,12 +153,17 @@ public:
     static constexpr int kRowH = 60;  ///< pixels per row
     /** @brief Replaces the list and sizes the component to it. */
     void setRows(std::vector<Row> rows);
+    /** @brief The rows: name, seed, tracks, verdicts and the strip of sections. */
     void paint(juce::Graphics&) override;
+    /** @brief A click opens the set clicked (onOpen). */
     void mouseDown(const juce::MouseEvent&) override;
+    /** @brief Follows the row under the mouse. */
     void mouseMove(const juce::MouseEvent&) override;
+    /** @brief No row under the mouse. */
     void mouseExit(const juce::MouseEvent&) override;
     /** @brief Called with the file of the row that was clicked. */
     std::function<void(const juce::File&)> onOpen;
+    /** @brief How many sets the list has. */
     int rowCount() const { return static_cast<int>(rows_.size()); }
 
 private:
@@ -158,14 +171,6 @@ private:
     int hover_ = -1;          ///< the row under the mouse
 };
 
-/**
- * @brief The help page (23.09.2026): the manual's prose by topic, the parameters of the tab it was opened from,
- *        and the update check (EditorHelp.cpp).
- *
- * The prose is Tools/manual/chapters.txt compiled in, the same text the PDF prints -- one source, so the help
- * and the manual cannot say different things. F1 opens it at the chapter of the tab that is open; Esc, F1 or
- * Help closes it again.
- */
 /**
  * @brief The signal flow as a picture (26.09.2026; EditorFlow.cpp): the help page's topic "Signal flow" and the
  *        manual's figure (flow.png). A fixed canvas of kCanvasW x kCanvasH, scaled to fit.
@@ -181,6 +186,14 @@ public:
     juce::Rectangle<int> drawn() const;
 };
 
+/**
+ * @brief The help page (23.09.2026): the manual's prose by topic, the parameters of the tab it was opened from,
+ *        and the update check (EditorHelp.cpp).
+ *
+ * The prose is Tools/manual/chapters.txt compiled in, the same text the PDF prints -- one source, so the help
+ * and the manual cannot say different things. F1 opens it at the chapter of the tab that is open; Esc, F1 or
+ * Help closes it again.
+ */
 class HelpView final : public juce::Component, private juce::ListBoxModel {
 public:
     /** @brief Builds the topics from the manual's chapters. */
@@ -196,14 +209,19 @@ public:
     juce::String topicText(int index) const;
     /** @brief The topic on screen. */
     int selectedTopic() const { return list_.getSelectedRow(); }
+    /** @brief The panel's background. */
     void paint(juce::Graphics&) override;
+    /** @brief The topics left, the text right, the update controls under them. */
     void resized() override;
     /** @brief Refreshes the update line (the editor's timer). */
     void refreshUpdate();
 
 private:
+    /** @brief How many topics there are. */
     int getNumRows() override { return names_.size(); }
+    /** @brief A topic's name in the list, the chosen one in the accent. */
     void paintListBoxItem(int row, juce::Graphics&, int w, int h, bool selected) override;
+    /** @brief Shows the topic chosen. */
     void selectedRowsChanged(int row) override;
     PhospheneProcessor& proc_;   ///< the processor the help reads (parameters, update state)
     juce::StringArray names_;           ///< topic names
@@ -215,7 +233,8 @@ private:
     juce::ListBox list_;   ///< the topics
     juce::TextEditor text_;   ///< the chosen topic's text
     juce::ToggleButton autoCheck_{ "Look for updates once a day" };   ///< the daily update check on or off
-    juce::TextButton checkNow_{ "Check now" }, openRelease_{ "Open the release page" };   ///< check now, and open the release page when there is one
+    juce::TextButton checkNow_{ "Check now" };   ///< asks for updates now
+    juce::TextButton openRelease_{ "Open the release page" };   ///< opens the release page when there is one
     juce::Label updateLine_;   ///< what the last check found
     juce::SharedResourcePointer<phosui::UpdateCheck> updates_;   ///< the process's one update check
 };
@@ -227,8 +246,9 @@ public:
     explicit PhospheneEditor(PhospheneProcessor&);
     ~PhospheneEditor() override;
 
+    /** @brief The background behind the scaled body. */
     void paint(juce::Graphics&) override;
-    void resized() override;
+    void resized() override;   ///< scales the body to the window
 
     /** @brief Names of the tabs, in order. */
     static const juce::StringArray& tabNames();
@@ -280,25 +300,25 @@ public:
 private:
     /** @brief Builds the synth, effect and mixer pages (the others have their own files). */
     void buildPages();
-    void buildSetPage();          // EditorSetTab.cpp
-    void refreshSetPage();        // EditorSetTab.cpp: meters, transport, track list
-    void buildArrangePage();      // EditorArrange.cpp
-    void refreshArrangePage();    // EditorArrange.cpp: the timeline and the play head
-    void buildPerformPage();      // EditorPerform.cpp
-    void refreshPerformPage();    // EditorPerform.cpp: what the macros are doing
-    void buildGalleryPage();      // EditorGallery.cpp
-    void refreshGalleryPage();    // EditorGallery.cpp: rescans the folder
-    void buildExportPage();       // EditorSetTab.cpp (01.10.2026)
-    void refreshExportPage();     // EditorSetTab.cpp: the recording's state
+    void buildSetPage();   ///< EditorSetTab.cpp
+    void refreshSetPage();   ///< EditorSetTab.cpp: meters, transport, track list
+    void buildArrangePage();   ///< EditorArrange.cpp
+    void refreshArrangePage();   ///< EditorArrange.cpp: the timeline and the play head
+    void buildPerformPage();   ///< EditorPerform.cpp
+    void refreshPerformPage();   ///< EditorPerform.cpp: what the macros are doing
+    void buildGalleryPage();   ///< EditorGallery.cpp
+    void refreshGalleryPage();   ///< EditorGallery.cpp: rescans the folder
+    void buildExportPage();   ///< EditorSetTab.cpp (01.10.2026)
+    void refreshExportPage();   ///< EditorSetTab.cpp: the recording's state
     /** @brief The set's plan as the arrange views draw it, copied out of the published plans (EditorArrange.cpp). */
     ArrangeDisplay::Snapshot planSnapshot() const;
-    void refreshOverview();       // EditorArrange.cpp: the strip under the header
-    void refreshHeader();         // the header's transport, status and tools
-    void showSettings();          // the frame's settings menu
+    void refreshOverview();   ///< EditorArrange.cpp: the strip under the header
+    void refreshHeader();   ///< the header's transport, status and tools
+    void showSettings();   ///< the frame's settings menu
     void changeListenerCallback(juce::ChangeBroadcaster*) override;   ///< the settings changed (the backdrop)
     bool standalone() const;      ///< the editor sits in the standalone's window
     bool fullScreen() const;      ///< and that window fills the screen
-    void refreshPattern();        // the pattern roll of the tab that is open
+    void refreshPattern();   ///< the pattern roll of the tab that is open
     /**
      * @brief The "Sound" group at the head of a synth's page (23.09.2026): the synth's presets in a chooser with a
      *        submenu per group, "Save..." for a user preset, and the own-sound switch (mix.*_own).
@@ -328,6 +348,7 @@ private:
     std::unique_ptr<juce::FileChooser> fieldChooser_;   ///< the folder dialog while it is open
     std::vector<std::unique_ptr<PresetBox>> presetBoxes_;   ///< one per synth page
     std::unique_ptr<juce::AlertWindow> presetNameDialog_;   ///< "Save preset" asks for a name
+    /** @brief Follows the processor: the status, the play button, the rerolls, the update link; the screenshots. */
     void timerCallback() override;
     /** @brief Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo (23.09.2026); F1 help, Esc closes it, F11 full screen. */
     bool keyPressed(const juce::KeyPress& key) override;
@@ -373,6 +394,7 @@ private:
     /** @brief The standalone's title bar gets a maximise button (as Noctuary's). */
     void parentHierarchyChanged() override;
     /** @} */
+    /** @brief The control page on screen, null for a page without knobs. */
     phosui::ControlPage* activePage() const;
     /** @brief Places the header, the tab bar and the page for the current size. */
     void layoutContent();
@@ -399,8 +421,10 @@ private:
     std::vector<phos::NoteEvent> patternNotes_;   ///< scratch for the timer's read
     juce::OwnedArray<juce::TextButton> laneButtons_;   ///< the percussion lane bar
     juce::Viewport viewport_;   ///< scrolls a page taller than the window
-    int tab_ = 0, percLane_ = 0;   ///< the tab and the percussion lane on screen
-    int designW_ = 1280, designH_ = 860;   ///< the design size the content is laid out at before scaling
+    int tab_ = 0;   ///< the tab on screen
+    int percLane_ = 0;   ///< the percussion lane on screen
+    int designW_ = 1280;   ///< the design width the content is laid out at before scaling
+    int designH_ = 860;   ///< ... and the design height
     bool shooting_ = false;   ///< photographing itself (PHOS_SHOT, PHOS_SHOT_ALL, PHOS_MANUAL): the pictures leave out the mute note
 
     // ---- the Set tab's own controls (owned by the Set page, referenced here)
@@ -423,7 +447,7 @@ private:
     juce::TextButton* legacyButton_ = nullptr;   ///< "Load the saved knobs anyway", shown only while one is held
     juce::Label*      legacyNote_ = nullptr;     ///< why the session came up on the defaults
     /** @} */
-    std::unique_ptr<juce::FileChooser> chooser_;
+    std::unique_ptr<juce::FileChooser> chooser_;   ///< the file dialog while it is open
     /** @brief The track list as the composer has published it so far. */
     std::vector<TrackDisplay::Row> trackRows_;
     size_t rowsSeed_ = 0;   ///< how many rows the display was last given, so it repaints only when it grows

@@ -146,8 +146,13 @@ private:
     /** @brief Everything a kick needs, frozen at its trigger. */
     struct Shape {
         int    engine = 0;   ///< kick.engine
-        double fe = 50.0, fs = 330.0, tau1 = 0.004, tau2 = 0.022, punch = 0.5;   ///< end and start pitch (Hz), the two sweep time constants (s), the punch share
-        double attack = 10.0, hold = 576.0;     ///< samples
+        double fe = 50.0;   ///< end pitch, Hz
+        double fs = 330.0;   ///< start pitch, Hz
+        double tau1 = 0.004;   ///< the punch's sweep time constant, s
+        double tau2 = 0.022;   ///< the body's sweep time constant, s
+        double punch = 0.5;   ///< the punch's share
+        double attack = 10.0;   ///< the attack, samples
+        double hold = 576.0;   ///< the hold, samples
         double decayRate = -1e-4;               ///< ln(amplitude) per sample after the hold
         double damping = 0.9999;                ///< resonant engine radius per sample
     };
@@ -157,11 +162,14 @@ private:
         Shape  s;   ///< the shape it was triggered with
         double late = 0.0;                      ///< sub-sample start offset
         int    n = 0;                           ///< samples since the trigger
-        double e1 = 1.0, e2 = 1.0;              ///< e^(-t/tau_1), e^(-t/tau_2)
-        double d1 = 1.0, d2 = 1.0;              ///< their per-sample factors
+        double e1 = 1.0;   ///< e^(-t/tau_1)
+        double e2 = 1.0;   ///< e^(-t/tau_2)
+        double d1 = 1.0;   ///< e1's per-sample factor
+        double d2 = 1.0;   ///< e2's per-sample factor
         float  click = 0.0f;   ///< the click layer's envelope
         float  velocity = 1.0f;   ///< 0..1
-        double zRe = 0.0, zIm = 0.0;            ///< resonant phasor
+        double zRe = 0.0;   ///< the resonant phasor's real part
+        double zIm = 0.0;   ///< the resonant phasor's imaginary part
     };
 
     /** @brief The body of one voice for one sample; the click layer's sample goes to @p click. */
@@ -174,24 +182,36 @@ private:
     double chainPhase(double hz) const;
 
     double sr_ = 48000.0;   ///< sample rate
-    Voice  voice_, fade_;   ///< the sounding kick and the one fading out under it
-    float  fadeGain_ = 0.0f, fadeStep_ = 0.0f;   ///< the fading kick's gain and its per-sample step
+    Voice  voice_;   ///< the sounding kick
+    Voice  fade_;   ///< the kick fading out under it
+    float  fadeGain_ = 0.0f;   ///< the fading kick's gain
+    float  fadeStep_ = 0.0f;   ///< its per-sample step
 
     // Settings from update().
     int    engine_ = 0;   ///< kick.engine
-    float  endHz_ = 50.0f, startHz_ = 330.0f, punch_ = 0.5f;   ///< end pitch (tuned), start pitch, punch share
-    double tau1_ = 0.004, tau2_ = 0.022, tau2Trimmed_ = 0.022;   ///< punch and body time constants, the body's after the phase trim
-    double attackSamples_ = 10.0, holdSamples_ = 576.0, decaySeconds_ = 0.15;   ///< the amplitude envelope
-    float  drive_ = 2.0f, driveNorm_ = 1.0f;   ///< drive into the clip and the gain that keeps the level
+    float  endHz_ = 50.0f;   ///< end pitch (tuned), Hz
+    float  startHz_ = 330.0f;   ///< start pitch, Hz
+    float  punch_ = 0.5f;   ///< the punch's share
+    double tau1_ = 0.004;   ///< the punch's time constant, s
+    double tau2_ = 0.022;   ///< the body's time constant, s
+    double tau2Trimmed_ = 0.022;   ///< the body's time constant after the phase trim, s
+    double attackSamples_ = 10.0;   ///< the amplitude envelope's attack, samples
+    double holdSamples_ = 576.0;   ///< its hold, samples
+    double decaySeconds_ = 0.15;   ///< its decay, seconds
+    float  drive_ = 2.0f;   ///< drive into the clip
+    float  driveNorm_ = 1.0f;   ///< the gain that keeps the level after the clip
     int    clip_ = 0;   ///< kick.clip: soft (tanh) or hard
-    float  clickLevel_ = 0.2f, clickDecay_ = 0.99f;   ///< the click layer's level and per-sample decay
+    float  clickLevel_ = 0.2f;   ///< the click layer's level
+    float  clickDecay_ = 0.99f;   ///< the click layer's per-sample decay
     float  toneHz_ = 9000.0f;   ///< the tone low pass
     float  level_ = 1.0f;   ///< kick.level, linear
-    double lockT_ = 0.0, lockTarget_ = 0.0;   ///< the phase lock: seconds to the bass's slot and the phase wanted there
+    double lockT_ = 0.0;   ///< the phase lock: seconds from the trigger to the slot
+    double lockTarget_ = 0.0;   ///< the phase lock: the phase wanted at the slot, cycles
     double trimKey_[10] = { -1.0 };           ///< inputs of the last trim solve
 
     Rng          noise_;   ///< the click's noise
-    Svf          clickFilter_, toneFilter_;   ///< the click's band and the tone low pass
+    Svf          clickFilter_;   ///< the click's band
+    Svf          toneFilter_;   ///< the tone low pass
     TanhAdaa     tanh_;   ///< the soft clip
     HardClipAdaa hard_;   ///< the hard clip
     DcBlocker    dc_;   ///< after the clip

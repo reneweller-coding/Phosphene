@@ -10,7 +10,7 @@
 namespace phos {
 
 namespace {
-constexpr double kPiD = 3.141592653589793;
+constexpr double kPiD = 3.141592653589793;   ///< pi
 
 /** @brief Raised-cosine ramp 0..1 for u in [0, 1], clamped outside. */
 inline float smoothRamp(double u)
@@ -35,7 +35,7 @@ inline double lfoPhase(double beat, double period)
  * 50 Hz to 20 kHz and reads the angle between the two outputs.
  */
 constexpr double kHilbertA[4] = { 0.6923878, 0.9360654322959, 0.9882295226860, 0.9987488452737 };
-constexpr double kHilbertB[4] = { 0.4021921162426, 0.8561710882420, 0.9722909545651, 0.9952884791278 };
+constexpr double kHilbertB[4] = { 0.4021921162426, 0.8561710882420, 0.9722909545651, 0.9952884791278 };   ///< the second chain's all-pass coefficients
 } // namespace
 
 // ---------------------------------------------------------------------------------------------

@@ -104,6 +104,7 @@ add_subdirectory(Core)
 
 if(PHOS_BUILD_TOOLS)
     enable_testing()
+    family_doccheck()   # every entity documented (cmake/Family.cmake, 01.10.2026)
     add_subdirectory(Tools/render)
     # The probe-written plan fields as bit patterns, and the planning benchmark (round "speed", 20.09.2026).
     add_subdirectory(Tools/plandump)

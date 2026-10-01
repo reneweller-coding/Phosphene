@@ -10,10 +10,19 @@ value). The controllers every generator listens to: 74 the filter sweep, 11 the 
 headset's controls only while a headset sends (port 9101); the Quest app plays the desktop's Phosphene in bridge mode,
 in the grammar every generator's headset shares, with the plugin's four macros.
 
+**Play it yourself.** The keyboard plays the bass and the kit too (C1 the kick, C#1 to C2 the twelve lanes; by channel
+8 the bass, 10 the kit), and Composer (beside Keyboard Plays) off leaves every generated note out, so only what is
+played sounds. Replace and the composer switch act in the plugin only: an export and phos_render play what was
+composed, whatever a set's keyboard knobs say.
+
 **One layout for the repositories.** Every instrument of the family builds the same way now: `build.ps1` (msvc, icx,
 release, quest) on the presets of `CMakePresets.json`, the build trees under `build\<preset>`, everything that can be
 started -- the standalone, the VST3, the renderer -- flat in `bin\msvc` and `bin\icx` (and the Quest APK in
 `bin\quest`), the release in `dist\`, local data, renders and logs in `work\` (`cmake/Family.cmake`).
+
+**Every line explained.** Every class, function, variable, macro and table of the sources -- the core, the plugin,
+the Quest app, the tools and the tests -- has its Doxygen comment now, and the test `doccheck` (`cmake/Family.cmake`)
+fails as soon as one is missing. The scripts that generate tables write the comments into what they generate.
 
 **No page scrolls.** The window opens at 1280 x 860, as every generator of the family's. A tab of several modules has a
 small tab for each, and a page that is still taller than the window shows its groups in sections, one at a time --

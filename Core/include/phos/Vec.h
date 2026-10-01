@@ -40,6 +40,7 @@
   #define PHOS_VEC_PATH 1
   #include <immintrin.h>
 #else
+  /** @brief The vector path compiled: 0 scalar, 1 AVX2, 2 NEON. */
   #define PHOS_VEC_PATH 0
 #endif
 
@@ -167,8 +168,8 @@ inline float sumOrdered(VecF a)
 // ------------------------------------------------------------------------------------------------
 // Scalar: the lane type is float itself.
 // ------------------------------------------------------------------------------------------------
-constexpr int kVecWidth = 1;
-constexpr const char* kVecPathName = "scalar";
+constexpr int kVecWidth = 1;   ///< lanes per vector
+constexpr const char* kVecPathName = "scalar";   ///< the path this translation unit was built for
 using VecF = float;   ///< one lane
 using MaskF = bool;   ///< one lane mask
 #endif

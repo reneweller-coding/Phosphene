@@ -13,8 +13,8 @@ namespace phos {
 
 namespace {
 
-constexpr int kFrame = 2048;
-constexpr int kHop = 1024;
+constexpr int kFrame = 2048;   ///< the analysis frame, samples
+constexpr int kHop = 1024;   ///< the hop between frames, samples
 constexpr double kAlpha = 0.2;          ///< the compressive exponent of specific loudness
 constexpr double kFullScaleSpl = 100.0; ///< dB SPL of a full-scale sine
 constexpr double kCamStep = 0.5;        ///< band width in Cam

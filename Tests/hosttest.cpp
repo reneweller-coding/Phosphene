@@ -41,8 +41,8 @@ using namespace phos;
 
 namespace {
 
-int failures = 0;
-int checks = 0;
+int failures = 0;   ///< checks that failed
+int checks = 0;   ///< checks made
 
 /** @brief Records one check's result and prints it. */
 void check(bool ok, const juce::String& what)
@@ -63,6 +63,7 @@ bool finite(const juce::AudioBuffer<float>& b, int n)
 /** @brief A play head a host would give: a transport at a tempo, running from a position. */
 class TestPlayHead final : public juce::AudioPlayHead {
 public:
+    /** @brief The transport as it stands: at bpm, at ppq and samples, playing or not. */
     juce::Optional<PositionInfo> getPosition() const override
     {
         PositionInfo info;
@@ -81,8 +82,11 @@ public:
         samples += n;
         ppq += n * bpm / (60.0 * sampleRate);
     }
-    double bpm = 145.0, ppq = 0.0, sampleRate = 48000.0, samples = 0.0;
-    bool playing = true;
+    double bpm = 145.0;   ///< the tempo
+    double ppq = 0.0;   ///< the position, quarter notes
+    double sampleRate = 48000.0;   ///< the sample rate, Hz
+    double samples = 0.0;   ///< the position, samples
+    bool playing = true;   ///< the transport runs
 };
 
 /** @brief Runs @p blocks blocks through the processor, collecting the MIDI it produces. */

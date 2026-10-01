@@ -381,20 +381,28 @@ def write_tables(stats, out):
     for r in ROLES:
         st = stats[r]
         uni = [st["uni"].get(REL_MIN + i, 0) for i in range(ALPHABET)]
+        lines.append(f"/// {r}: order-0 counts of the intervals to the tonic, kCorpusAlphabet entries")
         lines.append(f"const uint32_t k_{r}_uni[{ALPHABET}] = {{ {', '.join(map(str, uni))} }};")
         bi = sorted(((b - REL_MIN) * ALPHABET + (c - REL_MIN), n) for (b, c), n in st["bi"].items())
         tri = sorted(((a - REL_MIN) * ALPHABET * ALPHABET + (b - REL_MIN) * ALPHABET + (c - REL_MIN), n) for (a, b, c), n in st["tri"].items())
+        lines.append(f"/// {r}: order-1 counts (key: the interval before times the alphabet plus this one), sorted by key")
         lines.append(f"const CorpusGram k_{r}_bi[] = {{ {', '.join(f'{{{k},{n}}}' for k, n in bi) or '{0,0}'} }};")
+        lines.append(f"/// {r}: order-2 counts, sorted by key")
         lines.append(f"const CorpusGram k_{r}_tri[] = {{ {', '.join(f'{{{k},{n}}}' for k, n in tri) or '{0,0}'} }};")
         onset = ", ".join(f"{{{{{st['onset'][p][0][0]},{st['onset'][p][0][1]}}},{{{st['onset'][p][1][0]},{st['onset'][p][1][1]}}}}}" for p in range(16))
+        lines.append(f"/// {r}: onsets: [step][the step before had one][this step has one]")
         lines.append(f"const uint32_t k_{r}_onset[16][2][2] = {{ {onset} }};")
         acc = ", ".join(f"{{{st['accent'][p][0]},{st['accent'][p][1]}}}" for p in range(16))
         sl = ", ".join(f"{{{st['slide'][p][0]},{st['slide'][p][1]}}}" for p in range(16))
         ln = ", ".join("{" + ",".join(str(st["length"][p].get(k, 0)) for k in range(9)) + "}" for p in range(16))
+        lines.append(f"/// {r}: accents: [step][accented]")
         lines.append(f"const uint32_t k_{r}_accent[16][2] = {{ {acc} }};")
+        lines.append(f"/// {r}: slides: [step][slides into the next]")
         lines.append(f"const uint32_t k_{r}_slide[16][2] = {{ {sl} }};")
+        lines.append(f"/// {r}: note lengths: [step][length in steps, 8 = eight or more]")
         lines.append(f"const uint32_t k_{r}_length[16][9] = {{ {ln} }};")
         amb = [st["ambitus"].get(i, 0) for i in range(37)]
+        lines.append(f"/// {r}: the lines' ambitus: [semitones 0..36]")
         lines.append(f"const uint32_t k_{r}_ambitus[37] = {{ {', '.join(map(str, amb))} }};")
     ch = stats["chords"]
     trans = ", ".join("{" + ",".join(str(ch["trans"].get((a, b), 0)) for b in range(12)) + "}" for a in range(12))
@@ -404,6 +412,7 @@ def write_tables(stats, out):
     lines.append(f"const uint32_t kCorpusChordFirst[12] = {{ {', '.join(str(ch['first'].get(r, 0)) for r in range(12))} }};")
     lines.append(f"const int kCorpusChordFiles = {ch['files']};")
     lines.append("")
+    lines.append("/// The tables of every role, in the order of CorpusRoleId.")
     lines.append("const CorpusRole kCorpusRoles[kNumCorpusRoles] = {")
     for r in ROLES:
         st = stats[r]

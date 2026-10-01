@@ -65,7 +65,13 @@ constexpr double kArcTempoPerUnit = 6.0;
  * a dotted eighth, both of which put its repeats between the lead's. Pad and drone send nothing into
  * their delay (delay_send 0), so their family exists only to keep the table complete.
  */
-struct VoiceDelayFamily { int left[3]; int leftCount; int right[3]; int rightCount; };
+struct VoiceDelayFamily {
+    int left[3];      ///< the left side's times (kDelayBeats indices)
+    int leftCount;    ///< how many of them
+    int right[3];     ///< the right side's times
+    int rightCount;   ///< how many of them
+};
+/** @brief Each polyphonic voice's echo family, in PolyInstance order. */
 const VoiceDelayFamily kVoiceDelay[kPolyInstances] = {
     /* lead    */ { { 2, 2, 2 }, 1, { 2, 4, 4 }, 2 },   // dotted eighth against itself or a dotted quarter
     /* counter */ { { 0, 0, 0 }, 1, { 1, 2, 2 }, 2 },   // 1/16 against 1/8 or a dotted eighth: the ping-pong
@@ -126,7 +132,8 @@ double setLengthBars(const ParamStore& p)
 
 /** @brief The uniform source sampleMasked() draws from. */
 struct BassUniform {
-    Rng* r;
+    Rng* r;   ///< the stream
+    /** @brief A uniform draw in [0, 1). */
     double operator()() const { return static_cast<double>(r->uniform()); }
 };
 
@@ -360,7 +367,12 @@ constexpr int kDroneLowTail = 2;
  *        share its band there (20.09.2026 -- a run breaks where that changes, because the chord the
  *        drone holds changes with it).
  */
-struct DroneBar { bool on = false, low = false, shaded = false; int section = -1; };
+struct DroneBar {
+    bool on = false;       ///< the drone plays
+    bool low = false;      ///< in the low octave
+    bool shaded = false;   ///< pad or acid share its band
+    int section = -1;      ///< the section it belongs to
+};
 
 /**
  * @brief The drone's state in bar @p inTrack: on where the form sets its bit, low where the floor is

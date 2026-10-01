@@ -205,7 +205,8 @@ public:
 private:
     int size_;   ///< capacity
     std::unique_ptr<T[]> buf_;   ///< the ring
-    std::atomic<int> read_{ 0 }, write_{ 0 };   ///< consumer and producer positions
+    std::atomic<int> read_{ 0 };   ///< the consumer's position
+    std::atomic<int> write_{ 0 };   ///< the producer's position
 };
 
 } // namespace phos

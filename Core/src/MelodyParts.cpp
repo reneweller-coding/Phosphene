@@ -536,6 +536,7 @@ void makeRangesAndPad(MelodyPlan& m, uint64_t seed)
     } while (m.padFigureGroove == m.padFigure);
 }
 
+/** @brief the pad's figures, in the order of PadFigure */
 const char* const kPadFigureNames[static_cast<int>(PadFigure::Count)] = { "held", "pulse", "offbeat", "swell", "syncope" };
 
 /**

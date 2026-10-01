@@ -22,7 +22,7 @@ namespace phostest {
 
 namespace {
 
-constexpr double kSr = 48000.0;
+constexpr double kSr = 48000.0;   ///< the sample rate, Hz
 
 /** @brief A second of stereo white noise at 44.1 kHz whose end does NOT meet its start: only the crossfade joins it. */
 void addNoiseClip(int category, const char* name)

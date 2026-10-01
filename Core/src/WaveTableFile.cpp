@@ -27,11 +27,11 @@ namespace phos {
 
 namespace {
 
-using Coeffs = std::vector<std::complex<double>>;
+using Coeffs = std::vector<std::complex<double>>;   ///< A table frame's harmonics as complex coefficients.
 
-constexpr size_t kNameBytes = 32;
-constexpr size_t kIdBytes = 64;
-constexpr size_t kAlign = 32;
+constexpr size_t kNameBytes = 32;   ///< a table's name in the pack, bytes
+constexpr size_t kIdBytes = 64;   ///< a table's id in the pack, bytes
+constexpr size_t kAlign = 32;   ///< the alignment of the pack's records, bytes
 constexpr int kTopHarmonics = WaveTable::kStoreLen / 8;   ///< levelHarmonics(0)
 
 /** @brief Where a bare library file name is looked for, after the working directory. */
@@ -50,8 +50,11 @@ int& frameLimit()
 
 /** @brief Little-endian reads that do not care how the host aligns. */
 uint32_t readU32(const uint8_t* p) { uint32_t v = 0; std::memcpy(&v, p, 4); return v; }
+/** @brief A little-endian 16-bit word at @p p. */
 uint16_t readU16(const uint8_t* p) { uint16_t v = 0; std::memcpy(&v, p, 2); return v; }
+/** @brief A little-endian float at @p p. */
 float readF32(const uint8_t* p) { float v = 0.0f; std::memcpy(&v, p, 4); return v; }
+/** @brief A little-endian signed 16-bit word at @p p. */
 int16_t readI16(const uint8_t* p) { int16_t v = 0; std::memcpy(&v, p, 2); return v; }
 
 /** @brief The octave band a 1-based harmonic belongs to: 1 | 2,3 | 4..7 | 8..15 | ... */
@@ -91,7 +94,7 @@ std::vector<int> frameIndices(int total, int limit)
  * yet falls back to its built-in, exactly as a missing library file already did.
  */
 struct LibraryEntry {
-    WaveTable table;
+    WaveTable table;   ///< the table, its mip levels once built
     size_t at = 0;            ///< byte offset of this table's first frame record in the pack
     int frameCount = 0;       ///< frames the pack holds for it
     int dtype = 0;            ///< 0 = float32 coefficients, 1 = int16 with per-band scales
@@ -110,10 +113,10 @@ struct LibraryEntry {
  * return `count` -- still 0 -- while the first thread's parse was still in flight).
  */
 struct Library {
-    LibraryEntry entry[kNumLibraryWaveTables > 0 ? kNumLibraryWaveTables : 1];
+    LibraryEntry entry[kNumLibraryWaveTables > 0 ? kNumLibraryWaveTables : 1];   ///< the tables of the pack, by index
     std::vector<uint8_t> file;   ///< the pack itself, kept so a table can be expanded later
-    std::atomic<bool> attempted{ false };
-    std::mutex mutex;
+    std::atomic<bool> attempted{ false };   ///< loadWaveTableLibrary() ran (or runs): the call-once gate
+    std::mutex mutex;   ///< serialises the threads that find it false
     int count = 0;               ///< tables the pack offers (indexed), not tables built
     size_t bytes = 0;            ///< memory the built tables occupy; written under `mutex`
 };
@@ -258,7 +261,7 @@ bool parsePack(const std::vector<uint8_t>& file, Library& out, std::string* erro
 
 } // namespace
 
-// The generated list, once as data.
+/// The generated list, once as data.
 #define PHOS_WT(index, name, id, lane, fallback) { name, id, lane, fallback },
 const LibraryTableDesc kLibraryTables[kNumLibraryWaveTables] = {
 #include "phos/WaveTableList.inl"
@@ -419,6 +422,10 @@ const WaveTable& waveTable(int index)
     return builtinWaveTable(kLibraryTables[i].fallback);
 }
 
+/**
+ * @brief Reads a single-cycle wavetable WAV at @p path into @p out (a frame's harmonics each, at most @p maxFrames) and its
+ *        cycle length into @p cycleLen; false if it cannot.
+ */
 bool readWaveTableWav(const char* path, std::vector<Coeffs>& out, int& cycleLen, int maxFrames)
 {
     out.clear();

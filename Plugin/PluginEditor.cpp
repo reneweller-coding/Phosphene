@@ -49,10 +49,12 @@ void addSlices(ControlPage& page, PhospheneProcessor& proc, Module m, int instan
  * parameter the table below forgets is not lost: addSections puts it into a group "More" of its own, where the next
  * look at the page finds it.
  * @{ */
+/** @brief A parameter of a section and the size of its control. */
 struct SizedKey {
     const char* key;   ///< the parameter's key inside its module ("cutoff")
     CellSize size;     ///< the size of its control
 };
+/** @brief A group of a page: its caption, its width, its parameters. */
 struct Section {
     const char* title;              ///< the group's caption
     int columns;                    ///< its width in normal cells

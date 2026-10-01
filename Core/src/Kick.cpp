@@ -10,8 +10,8 @@
 namespace phos {
 
 namespace {
-constexpr double kPiD = 3.141592653589793;
-constexpr double kLn1000 = 6.907755278982137;
+constexpr double kPiD = 3.141592653589793;   ///< pi
+constexpr double kLn1000 = 6.907755278982137;   ///< ln 1000: a decay of 60 dB
 constexpr double kDcHz = 3.0;                 ///< DC blocker corner
 /**
  * @brief Gain of the click layer at Click = 1.

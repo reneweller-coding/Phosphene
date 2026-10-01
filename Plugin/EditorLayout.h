@@ -70,7 +70,8 @@ struct Cell {
     int units = 1;                                    ///< width in cell units
     int heightRows = 1;                               ///< height in cell rows (added controls)
     CellSize size = CellSize::Normal;                 ///< a parameter's control: small, normal or large
-    int gridW = 2, gridH = 3;                         ///< its footprint in grid units (kColU x kRowU), set when added
+    int gridW = 2;   ///< its footprint in grid units (kColU): width
+    int gridH = 3;   ///< ... height (kRowU)
     bool tall = false;                                ///< occupies the whole cell height (no label line)
     std::unique_ptr<juce::Component> comp;            ///< the control
     std::unique_ptr<juce::Label> label;               ///< its name, under it
@@ -191,7 +192,9 @@ public:
     std::vector<int> groupParams(int index) const;
     /** @} */
 
+    /** @brief Lays the groups out (in sections where the window is too low). */
     void resized() override;
+    /** @brief The groups' boxes and titles. */
     void paint(juce::Graphics&) override;
 
     /**
@@ -232,11 +235,14 @@ private:
     const frame::Skin* skin_ = nullptr;                ///< set by enableSections: the page may have sections
     std::unique_ptr<frame::SectionSwitch> sections_;   ///< the switch, while the page has more than one section
     std::vector<int> sectionOf_;                       ///< per group its section
-    std::function<void()> sectionChanged_;
-    int available_ = 0, plannedWidth_ = -1, plannedAvailable_ = -1;
+    std::function<void()> sectionChanged_;   ///< called when another section is chosen
+    int available_ = 0;   ///< the height of the window (setAvailableHeight)
+    int plannedWidth_ = -1;   ///< the width the sections were planned for, -1 never
+    int plannedAvailable_ = -1;   ///< the height the sections were planned for, -1 never
     bool planning_ = false;                            ///< measuring: the switch's row counted in
     void plan(int usable);                             ///< the sections for this width and available_
     void applySections();                              ///< the groups of the section shown, the others hidden
+    /** @brief Whether the page shows its groups in sections. */
     bool split() const { return sections_ != nullptr && sections_->isVisible(); }
     int topBar() const { return planning_ || split() ? 32 : 0; }   ///< room for the switch above the groups
 };

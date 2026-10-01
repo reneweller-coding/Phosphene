@@ -32,30 +32,38 @@ namespace bank {
 /** @brief One knob of a group: its key inside the module, its range, its axis; a table's spec in place of a range. */
 struct Knob {
     const char* key;     ///< e.g. "cutoff", "lfo@_rate", "mx#_amount"
-    float lo, hi;        ///< the range ('C': lo)
+    float lo;   ///< the low end of the range (the constant for an axis of C)
+    float hi;   ///< the high end of the range
     char axis;           ///< 'A' the row, 'B' the column, 'R' drawn, 'C' constant
     const char* table;   ///< for "table": "lane:<WaveTableLane>" or "list:<index>,<index>..."; else null
 };
 /** @brief A filter model a group allows, with the range of its mode. */
-struct Filter { int model; float modeLo, modeHi; };
+struct Filter {
+    int model;      ///< the filter model
+    float modeLo;   ///< the low end of its mode's range
+    float modeHi;   ///< ... the high end
+};
 /** @brief A modulation recipe: its chance and its knobs. */
-struct Mod { float chance; std::vector<Knob> knobs; };
+struct Mod {
+    float chance;              ///< how often a preset of the group gets it, 0..1
+    std::vector<Knob> knobs;   ///< the knobs it sets
+};
 /** @brief A group: its name, its eight nouns, its knobs, its filters and its modulation recipes. */
 struct Group {
-    const char* name;
-    const char* nouns[8];
+    const char* name;   ///< the group's name
+    const char* nouns[8];   ///< its eight nouns
     float style[5];   ///< the group's weight in each style (StyleId order), for the composer's choice
-    std::vector<Knob> knobs;
-    std::vector<Filter> filters;
-    std::vector<Mod> mods;
+    std::vector<Knob> knobs;   ///< its knobs
+    std::vector<Filter> filters;   ///< the filter models it allows
+    std::vector<Mod> mods;   ///< its modulation recipes
 };
 /** @brief A synth: its label, module and instance, its eight adjectives and its sixteen groups. */
 struct Synth {
-    const char* label;
-    Module module;
-    int instance;
-    const char* adj[8];
-    std::vector<Group> groups;
+    const char* label;   ///< the bank's label: the module's key prefix
+    Module module;   ///< the module
+    int instance;   ///< the instance
+    const char* adj[8];   ///< its eight adjectives
+    std::vector<Group> groups;   ///< its sixteen groups
 };
 
 #include "PresetBankData.inl"

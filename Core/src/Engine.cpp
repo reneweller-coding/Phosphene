@@ -15,7 +15,8 @@ const char* const kStemNames[kNumStems] = { "Kick", "Bass", "Perc", "Acid", "Lea
                                             "Sfx", "Texture", "Vocal", "Field", "Returns" };
 
 namespace {
-constexpr double kPiD = 3.141592653589793;
+constexpr double kPiD = 3.141592653589793;   ///< pi
+/** @brief Whether a curve takes whole steps (Int, Choice, Toggle). */
 bool isDiscreteCurve(Curve c) { return c == Curve::Int || c == Curve::Choice || c == Curve::Toggle; }
 
 // The gated hall's bar-line window (20.09.2026, round "reverb"; Reverb::barGate()). Fixed, not exposed
@@ -23,7 +24,9 @@ bool isDiscreteCurve(Curve c) { return c == Curve::Int || c == Curve::Choice || 
 // (a raised-cosine taper, so it never clicks) yet the measured floor is already 40+ dB down well inside
 // it (Tests/selftest.cpp, testGatedReverb); 40 ms hold, 15 ms reopen -- 63 ms of the bar silenced out of
 // 1.655 s at 145 BPM, so most of the bar still rings.
-constexpr float kHallGateCloseMs = 8.0f, kHallGateHoldMs = 40.0f, kHallGateOpenMs = 15.0f;
+constexpr float kHallGateCloseMs = 8.0f;   ///< the gated hall's close from the bar line, ms
+constexpr float kHallGateHoldMs = 40.0f;   ///< ... its hold at the floor, ms
+constexpr float kHallGateOpenMs = 15.0f;   ///< ... its reopening, ms
 
 /**
  * @brief Clip with a quadratic knee: unity below 0.7 T, flat at T beyond 1.3 T, and a parabola in
@@ -75,8 +78,13 @@ int Engine::keyboardTarget(int channel) const
     const int mb = params_.base(Module::Mix);
     const int part = static_cast<int>(std::lround(params_.get(mb + mix::KeyboardPart)));
     if (part <= 0) return -1;
-    if (part == 8) return channel >= 0 && channel < 7 ? channel : -1;   // by channel: 1 acid, 2 lead ... 7 drone
-    return std::min(part, 7) - 1;                                       // 0 acid, 1 .. 6 the polyphonic voices
+    if (part == 9) return 7;    // the bass (01.10.2026)
+    if (part == 10) return 8;   // the kit
+    if (part == 8) {            // by channel: 1 acid, 2 lead ... 7 drone, 8 bass, 10 the kit (General MIDI's drums)
+        if (channel == 9) return 8;
+        return channel >= 0 && channel < 8 ? channel : -1;
+    }
+    return std::min(part, 7) - 1;   // 0 acid, 1 .. 6 the polyphonic voices
 }
 
 void Engine::liveNoteOn(int pitch, int velocity, int channel)
@@ -86,8 +94,23 @@ void Engine::liveNoteOn(int pitch, int velocity, int channel)
     if (target < 0) return;
     const float vel = static_cast<float>(std::clamp(velocity, 1, 127)) / 127.0f;
     constexpr int kHeld = 1 << 30;   // a gate that does not run out: the key's release ends the note
+    if (target == 8) {
+        // The kit (01.10.2026): C1 the kick, with the ducks a kick starts; C#1 .. C2 the twelve lanes, at their own pitch.
+        if (pitch == 36) {
+            kick_.trigger(vel, 0.0);
+            bass_.duck(0.0);
+            for (Ducker& d : duck_) d.trigger(0.0);
+            returnDuck_.trigger(0.0);
+            subDuck_.trigger(0.0);
+        } else if (pitch > 36 && pitch <= 36 + kPercLanes) {
+            perc_.trigger(pitch - 37, vel, 0, 0.0);
+        }
+        livePlayed_ |= 1u << target;
+        return;   // one-shots: no release to wait for
+    }
     if (liveTarget_[pitch] >= 0) liveNoteOff(pitch, channel);
-    if (target == 0) acid_.noteOn(pitch, vel, velocity > 110, true, kHeld, 0.0);   // held keys slide, as a 303's legato does
+    if (target == 7) bass_.noteOn(pitch, vel, kHeld, 0.0, bassPhase_);   // the bass (01.10.2026)
+    else if (target == 0) acid_.noteOn(pitch, vel, velocity > 110, true, kHeld, 0.0);   // held keys slide, as a 303's legato does
     else poly_[target - 1].noteOnLimited(pitch, vel, 1.0, kHeld, 0.0, false, true);
     liveTarget_[pitch] = target;
     livePlayed_ |= 1u << target;
@@ -97,7 +120,8 @@ void Engine::liveNoteOff(int pitch, int /*channel*/)
 {
     if (pitch < 0 || pitch > 127 || liveTarget_[pitch] < 0) return;
     const int target = liveTarget_[pitch];
-    if (target == 0) acid_.noteOff(pitch);
+    if (target == 7) bass_.release();
+    else if (target == 0) acid_.noteOff(pitch);
     else poly_[target - 1].noteOff(pitch);
     liveTarget_[pitch] = -1;
 }
@@ -131,7 +155,12 @@ int Engine::takeMeters(float* peak, double* sumSq)
 namespace {
 
 /** @brief The five cues of distance, and a voice's plane (25.09.2026, the Dark-Ambient addon's table). */
-struct DistanceCue { float gainDb, lowPassHz, wet, width; };
+struct DistanceCue {
+    float gainDb;      ///< the level, dB
+    float lowPassHz;   ///< the low pass, Hz
+    float wet;         ///< the plate send
+    float width;       ///< the width
+};
 
 /** @brief The cues at distance @p d (0 near .. 1 far): dB linear, Hz logarithmic, the rest linear between 0, 0.5, 1. */
 DistanceCue distanceCue(float d)
@@ -162,15 +191,21 @@ void Engine::liveAllOff()
 
 bool Engine::generatedSilenced(Part part) const
 {
+    if (!live_) return false;   // a render or an export plays what was composed (01.10.2026)
     const int mb = params_.base(Module::Mix);
+    if (params_.get(mb + mix::Composer) < 0.5f) return true;   // the composer off: only what is played
     const int kbPart = static_cast<int>(std::lround(params_.get(mb + mix::KeyboardPart)));
     if (kbPart <= 0 || static_cast<int>(std::lround(params_.get(mb + mix::KeyboardMode))) != 0) return false;   // off, or Layer
     int target = -1;
     if (part == Part::Acid) target = 0;
+    else if (part == Part::Bass) target = 7;
+    else if (part == Part::Kick || part == Part::Perc) target = 8;
     else if (part == Part::Lead || part == Part::Counter || part == Part::Arp || part == Part::Stab || part == Part::Pad || part == Part::Drone)
         target = 1 + polyOfPart(part);
     if (target < 0) return false;
     if (kbPart == 8) return (livePlayed_ >> target) & 1u;   // by channel: a voice is the player's from its first played note
+    if (kbPart == 9) return target == 7;
+    if (kbPart == 10) return target == 8;
     return std::min(kbPart, 7) - 1 == target;
 }
 

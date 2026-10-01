@@ -90,8 +90,11 @@ public:
     /** @brief Bars track @p i shares with the one before (first) and the one after it (second); 0 = none. */
     std::pair<int, int> overlapOf(size_t i) const;
 
+    /** @brief The set strip, the tracks and their sections, the play head. */
     void paint(juce::Graphics&) override;
+    /** @brief Measures the blocks for the size. */
     void resized() override;
+    /** @brief A click jumps to the bar clicked. */
     void mouseDown(const juce::MouseEvent&) override;
 
     std::function<void(int)> onSeek;                                  ///< called with a bar to jump to

@@ -105,21 +105,47 @@ private:
     static constexpr int kLines = 8;   ///< delay lines of the feedback network
     static constexpr int kAllpasses = 4;   ///< input diffusion stages per channel
     double sr_ = 48000.0;   ///< sample rate
-    std::vector<float> line_[kLines], sc_[kLines], ap_[kAllpasses], apR_[kAllpasses], pre_, preR_;   ///< the lines, their scattering all-passes, the diffusers of both channels, the pre-delays
-    int mask_ = 0, w_ = 0;   ///< index mask and write position
-    int apLen_[kAllpasses] = {}, scLen_[kLines] = {};   ///< diffuser and scattering lengths, samples
-    float lenTarget_[kLines] = {}, lenCur_[kLines] = {}, gain_[kLines] = {}, lp_[kLines] = {};   ///< line lengths (target and gliding), loop gains, damping states
+    std::vector<float> line_[kLines];   ///< the eight delay lines, power-of-two rings
+    std::vector<float> sc_[kLines];   ///< the scattering all-passes, one per line
+    std::vector<float> ap_[kAllpasses];   ///< the left channel's input diffusion
+    std::vector<float> apR_[kAllpasses];   ///< the right channel's input diffusion
+    std::vector<float> pre_;   ///< the left pre-delay ring
+    std::vector<float> preR_;   ///< the right pre-delay ring
+    int mask_ = 0;   ///< ring size - 1 for the lines, diffusers and pre-delays
+    int w_ = 0;   ///< the write index, shared
+    int apLen_[kAllpasses] = {};   ///< the input diffusers' lengths in samples (5.1 .. 13.7 ms)
+    int scLen_[kLines] = {};   ///< the scattering all-passes' lengths in samples (1.9 .. 7.1 ms, mutually prime)
+    float lenTarget_[kLines] = {};   ///< each line's length asked for, in samples
+    float lenCur_[kLines] = {};   ///< each line's length as it glides
+    float gain_[kLines] = {};   ///< each line's loop gain, from its length and the decay
+    float lp_[kLines] = {};   ///< the damping one-pole's state per line
     double modPh_[kLines] = {};   ///< each line's modulation phase
     float modRate_[kLines] = {};   ///< and its rate, Hz
-    float preTarget_ = 0.0f, preCur_ = 0.0f;   ///< the pre-delay, target and gliding
+    float preTarget_ = 0.0f;   ///< the pre-delay asked for, in samples
+    float preCur_ = 0.0f;   ///< the pre-delay as it glides
     float damp_ = 0.4f;   ///< high-frequency loss per loop
-    float dcX_[2] = {}, dcY_[2] = {}, dcR_ = 0.999f;   ///< the return's DC blocker
-    float hcCoef_ = 1.0f, hcL_ = 0.0f, hcR_ = 0.0f;   ///< the return's high cut
-    float lcCoef_ = 0.0f, lcL1_ = 0.0f, lcR1_ = 0.0f, lcL2_ = 0.0f, lcR2_ = 0.0f;   ///< the return's low cut, four poles: the first two
-    float lcL3_ = 0.0f, lcR3_ = 0.0f, lcL4_ = 0.0f, lcR4_ = 0.0f;                   ///< and the last two (25.09.2026)
+    float dcX_[2] = {};   ///< the input DC blocker's last input per channel
+    float dcY_[2] = {};   ///< its last output per channel
+    float dcR_ = 0.999f;   ///< its pole, 5 Hz at the rate
+    float hcCoef_ = 1.0f;   ///< the tail high cut's one-pole coefficient; 1 is off
+    float hcL_ = 0.0f;   ///< the high cut's state, left
+    float hcR_ = 0.0f;   ///< ... and right
+    float lcCoef_ = 0.0f;   ///< the tail low cut's one-pole coefficient
+    float lcL1_ = 0.0f;   ///< the low cut's first one-pole, left
+    float lcR1_ = 0.0f;   ///< its first one-pole, right
+    float lcL2_ = 0.0f;   ///< its second one-pole, left
+    float lcR2_ = 0.0f;   ///< its second one-pole, right
+    float lcL3_ = 0.0f;   ///< the low cut's third one-pole, left
+    float lcR3_ = 0.0f;   ///< ... right
+    float lcL4_ = 0.0f;   ///< the fourth, left
+    float lcR4_ = 0.0f;   ///< ... right (25.09.2026)
     // The gate's duck (20.09.2026, round "reverb"): a one-pole follower on the send's own peak, with a
     // threshold so a silent send stays fully open rather than sitting at some small fraction of depth.
-    float duckDepth_ = 0.0f, duckThreshold_ = 0.01f, duckAttackC_ = 1.0f, duckReleaseC_ = 1.0f, duckEnv_ = 0.0f;   ///< setDuck(): depth, threshold, attack and release coefficients, the follower
+    float duckDepth_ = 0.0f;   ///< the duck's depth, 0..1
+    float duckThreshold_ = 0.01f;   ///< the send's level that counts as sounding, linear peak
+    float duckAttackC_ = 1.0f;   ///< the follower's attack coefficient
+    float duckReleaseC_ = 1.0f;   ///< the follower's release coefficient
+    float duckEnv_ = 0.0f;   ///< the follower's envelope
 };
 
 } // namespace phos

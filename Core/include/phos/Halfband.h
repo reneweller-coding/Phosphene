@@ -79,7 +79,9 @@ struct HalfbandUp {
     V x[kHalfbandMaxCoefs];   ///< the all-pass inputs, one sample back
     V y[kHalfbandMaxCoefs];   ///< their outputs, one sample back
 
+    /** @brief Takes a design and clears the states. */
     void setup(const HalfbandDesign& design) { d = design; reset(); }
+    /** @brief Clears the states. */
     void reset() { for (int i = 0; i < kHalfbandMaxCoefs; ++i) { x[i] = lanes<V>(0.0f); y[i] = lanes<V>(0.0f); } }
 
     /** @brief One interpolation step; @p o0 is the earlier output sample, @p o1 the later. */

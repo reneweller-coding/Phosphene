@@ -96,7 +96,9 @@
 #include "phos/Vocal.h"
 #include "phos/WaveTableFile.h"
 
+/** @brief An info line in the Android log, tag "Phosphene" (printf style). */
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "Phosphene", __VA_ARGS__)
+/** @brief An error line in the Android log, tag "Phosphene" (printf style). */
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "Phosphene", __VA_ARGS__)
 
 using namespace phos;
@@ -106,12 +108,20 @@ namespace {
 // ---------------------------------------------------------------- small math
 
 /** @brief Column-major 4x4 matrix, the layout GL wants. */
-struct Mat4 { float m[16]; };
+struct Mat4 {
+    float m[16];   ///< the sixteen values, column by column
+};
 /** @brief A point or direction. */
-struct Vec3 { float x, y, z; };
+struct Vec3 {
+    float x;   ///< right
+    float y;   ///< up
+    float z;   ///< back (towards the viewer)
+};
 
+/** @brief The identity matrix. */
 Mat4 identity() { Mat4 r{}; r.m[0] = r.m[5] = r.m[10] = r.m[15] = 1.0f; return r; }
 
+/** @brief The product @p a times @p b (b applied first). */
 Mat4 multiply(const Mat4& a, const Mat4& b)
 {
     Mat4 r{};
@@ -137,6 +147,7 @@ Mat4 projectionFromFov(const XrFovf& fov, float nearZ, float farZ)
     return p;
 }
 
+/** @brief The rotation of unit quaternion @p q as a matrix. */
 Mat4 rotationFromQuat(const XrQuaternionf& q)
 {
     const float x = q.x, y = q.y, z = q.z, w = q.w;
@@ -147,6 +158,7 @@ Mat4 rotationFromQuat(const XrQuaternionf& q)
     return r;
 }
 
+/** @brief Vector @p v rotated by @p q. */
 Vec3 rotate(const XrQuaternionf& q, Vec3 v)
 {
     const Mat4 r = rotationFromQuat(q);
@@ -166,6 +178,7 @@ Mat4 viewFromPose(const XrPosef& pose)
     return multiply(rt, t);
 }
 
+/** @brief @p x limited to 0 .. 1. */
 float clamp01(float x) { return x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x); }
 
 // ---------------------------------------------------------------- 5x7 point font
@@ -683,16 +696,19 @@ private:
         display_ = d;
     }
 
-    Engine engine_;
-    Composer composer_{ 1 };
-    std::vector<NoteEvent> notes_;
-    std::vector<ControlEvent> controls_;
-    size_t notePos_ = 0, ctlPos_ = 0;
-    int nextBar_ = 0;
-    std::atomic<int> barOffset_{ 0 };
-    std::atomic<int> state_{ kIdle };
-    std::atomic<bool> ready_{ false }, playing_{ false }, jumpRequest_{ false };
-    bool muted_ = false;
+    Engine engine_;   ///< the engine: the voices, the kit, the rooms, the perform controls
+    Composer composer_{ 1 };   ///< the composer: the set, bar by bar
+    std::vector<NoteEvent> notes_;   ///< the last composed bar's notes
+    std::vector<ControlEvent> controls_;   ///< ... and its control events
+    size_t notePos_ = 0;   ///< how many of the notes are in the engine
+    size_t ctlPos_ = 0;   ///< ... and of the control events
+    int nextBar_ = 0;   ///< the next bar to compose
+    std::atomic<int> barOffset_{ 0 };   ///< the bar the engine counts from (a jump rebases it)
+    std::atomic<int> state_{ kIdle };   ///< the handover between the audio thread and the composer thread (kIdle, kProcessing, kBlocked)
+    std::atomic<bool> ready_{ false };   ///< prepare() has finished
+    std::atomic<bool> playing_{ false };   ///< play is on (the fade follows it)
+    std::atomic<bool> jumpRequest_{ false };   ///< the next track is asked for
+    bool muted_ = false;   ///< the config mutes the output (the engine still runs)
     double sr_ = 48000.0;                 ///< the rate the stream really gave (for the cue lead)
     /** @name The cue bridge (PLAN 8.3, Cue.h): marks written by the composer, sent from the play position @{ */
     CueSender* cues_ = nullptr;           ///< the socket and its thread, owned by the app; null = off
@@ -702,9 +718,10 @@ private:
     int cueLandingBar_ = -1;              ///< rebase() already described this bar
     float cueLeadMs_ = 0.0f;              ///< `osc_lead_ms`
     /** @} */
-    float gain_ = 0.0f, gainCoef_ = 0.002f;
-    mutable std::mutex displayMutex_;
-    DisplayState display_;
+    float gain_ = 0.0f;   ///< the play/stop fade, 0 .. 1
+    float gainCoef_ = 0.002f;   ///< the fade's one-pole coefficient (15 ms)
+    mutable std::mutex displayMutex_;   ///< guards display_
+    DisplayState display_;   ///< what the panel shows
 };
 
 // ---------------------------------------------------------------- audio
@@ -712,8 +729,10 @@ private:
 /** @brief Oboe output stream: a low-latency float stream straight into SetPlayer::process. */
 class Audio : public oboe::AudioStreamDataCallback {
 public:
+    /** @brief A stream that will play @p p (open() and start() it). */
     explicit Audio(SetPlayer& p) : player_(p) {}
 
+    /** @brief Opens a low-latency stereo float stream at 48 kHz (or what the device gives); false if it cannot. */
     bool open()
     {
         oboe::AudioStreamBuilder b;
@@ -733,11 +752,19 @@ public:
         LOGI("Oboe: %d Hz, burst %d", sampleRate_, burst_);
         return true;
     }
+    /** @brief Starts the stream; false if it does not. */
     bool start() { return stream_ && stream_->requestStart() == oboe::Result::OK; }
+    /** @brief Stops and closes the stream. */
     void stop() { if (stream_) { stream_->requestStop(); stream_->close(); stream_.reset(); } }
+    /** @brief The rate the device gave, Hz. */
     int sampleRate() const { return sampleRate_; }
+    /** @brief The device's burst, frames. */
     int burst() const { return burst_; }
 
+    /**
+     * @brief Oboe's callback: renders @p frames through the player in pieces of at most 4096 and interleaves them into @p
+     *        data.
+     */
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream*, void* data, int32_t frames) override
     {
         float* out = static_cast<float*>(data);
@@ -755,14 +782,17 @@ public:
     }
 
 private:
-    SetPlayer& player_;
-    std::shared_ptr<oboe::AudioStream> stream_;
-    std::vector<float> bufL_, bufR_;
-    int sampleRate_ = 48000, burst_ = 256;
+    SetPlayer& player_;   ///< what renders the audio
+    std::shared_ptr<oboe::AudioStream> stream_;   ///< the open stream, or null
+    std::vector<float> bufL_;   ///< the left channel of one piece
+    std::vector<float> bufR_;   ///< the right channel of one piece
+    int sampleRate_ = 48000;   ///< the rate the device gave, Hz
+    int burst_ = 256;   ///< the device's burst, frames
 };
 
 // ---------------------------------------------------------------- GL scene
 
+/** @brief The vertex shader: a point at its position, sized by its distance. */
 const char* kVertexShader = R"(#version 300 es
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec4 aCol;
@@ -776,6 +806,7 @@ void main() {
     vCol = aCol;
 })";
 
+/** @brief The fragment shader: a soft round dot, added to what is there. */
 const char* kFragmentShader = R"(#version 300 es
 precision mediump float;
 in vec4 vCol;
@@ -788,11 +819,25 @@ void main() {
 })";
 
 /** @brief One soft round point: the only primitive the scene has. */
-struct Point { float x, y, z; float r, g, b, a; float size; };
+struct Point {
+    float x;      ///< position in the room, metres
+    float y;      ///< @copydoc x
+    float z;      ///< @copydoc x
+    float r;      ///< red 0..1
+    float g;      ///< green 0..1
+    float b;      ///< blue 0..1
+    float a;      ///< brightness 0..1
+    float size;   ///< diameter, pixels at one metre
+};
 
 /** @brief A head-locked plane to lay text out on: origin plus a right and an up axis. */
-struct Panel { Vec3 origin, right, up; };
+struct Panel {
+    Vec3 origin;   ///< the top left of the text, in the room
+    Vec3 right;    ///< one metre to the right along the panel
+    Vec3 up;       ///< one metre up along the panel
+};
 
+/** @brief A shader of @p type compiled from @p src; a failure is logged. */
 GLuint compile(GLenum type, const char* src)
 {
     const GLuint s = glCreateShader(type);
@@ -815,6 +860,7 @@ public:
     /** @brief Display pixels per radian on the Quest 2's render target (about 1830 px over 90 deg). */
     static constexpr float kPixelsPerRadian = 1150.0f;
 
+    /** @brief Links the shaders and sets up the point buffer; false if the program does not link. */
     bool init()
     {
         program_ = glCreateProgram();
@@ -836,6 +882,7 @@ public:
         return true;
     }
 
+    /** @brief Starts a new picture: forgets the points of the last frame. */
     void begin() { points_.clear(); }
 
     /** @brief One point in world space. */
@@ -873,12 +920,14 @@ public:
         }
     }
 
+    /** @brief Sends this frame's points to the GPU. */
     void upload()
     {
         glBindBuffer(GL_ARRAY_BUFFER, vbo_);
         glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(points_.size() * sizeof(Point)), points_.data(), GL_DYNAMIC_DRAW);
     }
 
+    /** @brief Draws the points for one eye with view-projection @p vp into a @p width by @p height target. */
     void draw(const Mat4& vp, int width, int height)
     {
         glViewport(0, 0, width, height);
@@ -895,9 +944,11 @@ public:
     }
 
 private:
-    GLuint program_ = 0, vbo_ = 0, vao_ = 0;
-    GLint uVP_ = -1;
-    std::vector<Point> points_;
+    GLuint program_ = 0;   ///< the shader program
+    GLuint vbo_ = 0;   ///< the points' buffer
+    GLuint vao_ = 0;   ///< the points' vertex layout
+    GLint uVP_ = -1;   ///< the location of the view-projection uniform
+    std::vector<Point> points_;   ///< this frame's points
 };
 
 // ---------------------------------------------------------------- hands
@@ -916,8 +967,8 @@ class Hands {
 public:
     /** @brief One hand's measurement of this frame. */
     struct Hand {
-        bool valid = false;
-        XrVector3f palm{};
+        bool valid = false;   ///< tracked this frame
+        XrVector3f palm{};   ///< the palm's position in the room
         float pinch = 0.0f;     ///< 0 open .. 1 closed
         bool closed = false;    ///< after the Schmitt trigger
         float height = 0.5f;    ///< 0..1 against the head
@@ -964,18 +1015,19 @@ public:
         wasClosed_[1] = hand_[1].closed;
     }
 
+    /** @brief Hand @p h: 0 left, 1 right. */
     const Hand& hand(int h) const { return hand_[h]; }
 
 private:
-    Hand hand_[2];
-    bool wasClosed_[2] = { false, false };
+    Hand hand_[2];   ///< left, right
+    bool wasClosed_[2] = { false, false };   ///< left, right: closed in the last update (the rising edges)
 };
 
 // ---------------------------------------------------------------- the perform macros
 
 /** @brief The desktop's perform macros (Plugin/PluginProcessor.h, Macro): the hands' controls (01.10.2026). */
 enum class HandMacro : int { FilterSweep = 0, GateDepth, DropOut, Stutter, Count };
-constexpr int kHandMacros = static_cast<int>(HandMacro::Count);
+constexpr int kHandMacros = static_cast<int>(HandMacro::Count);   ///< how many macros the hands play
 constexpr int kMaxMacroTargets = 24;   ///< most knobs one macro touches (Stutter: four each on five voices)
 
 /** @brief One knob a macro moves: by a normalised offset, or to a normalised value. */
@@ -1040,10 +1092,12 @@ int macroTargets(const ParamStore& p, HandMacro m, float value, MacroTarget* out
  */
 class HandMacros {
 public:
+    /** @brief Sets macro @p m to @p v (the filter sweep -1 .. 1, the others 0 .. 1). */
     void set(HandMacro m, float v)
     {
         value_[static_cast<int>(m)] = m == HandMacro::FilterSweep ? std::clamp(v, -1.0f, 1.0f) : std::clamp(v, 0.0f, 1.0f);
     }
+    /** @brief Macro @p m as it stands. */
     float get(HandMacro m) const { return value_[static_cast<int>(m)]; }
     /** @brief Puts the macros onto their knobs (every frame). */
     void apply(ParamStore& p)
@@ -1081,7 +1135,7 @@ public:
     }
 
 private:
-    float value_[kHandMacros] = {};
+    float value_[kHandMacros] = {};   ///< every macro's value
     std::vector<std::pair<int, float>> base_;   ///< the knobs held, with the values they had before
 };
 
@@ -1162,16 +1216,24 @@ private:
 
 /** @brief One eye's swapchain and the framebuffer it is rendered through. */
 struct SwapchainTarget {
-    XrSwapchain swapchain = XR_NULL_HANDLE;
-    int width = 0, height = 0;
-    std::vector<XrSwapchainImageOpenGLESKHR> images;
-    GLuint fbo = 0, depth = 0;
+    XrSwapchain swapchain = XR_NULL_HANDLE;   ///< the eye's swapchain
+    int width = 0;   ///< its width, pixels
+    int height = 0;   ///< its height, pixels
+    std::vector<XrSwapchainImageOpenGLESKHR> images;   ///< the swapchain's images
+    GLuint fbo = 0;   ///< the framebuffer drawn through
+    GLuint depth = 0;   ///< its depth buffer
 };
 
+/** @brief The Quest app: OpenXR session, hands, panel, and the track player with its composer thread and audio stream. */
 class App {
 public:
+    /** @brief The app on the native activity @p app. */
     explicit App(android_app* app) : app_(app) {}
 
+    /**
+     * @brief Reads phos.cfg, opens the cue sender and the bridge, sets up OpenXR, EGL, the hands, the scene and the audio
+     *        stream, and starts the composer thread; false where something essential failed.
+     */
     bool init()
     {
         dataDir_ = app_->activity->externalDataPath ? app_->activity->externalDataPath : "";
@@ -1220,6 +1282,7 @@ public:
         return true;
     }
 
+    /** @brief The main loop: Android's events, OpenXR's events, a frame while the session runs; until the app is closed. */
     void run()
     {
         while (!app_->destroyRequested) {
@@ -1236,6 +1299,7 @@ public:
         }
     }
 
+    /** @brief Stops the composer thread and the stream, then destroys what OpenXR made. */
     void shutdown()
     {
         stopComposer_.store(true);
@@ -1275,6 +1339,7 @@ private:
 
     // ------------------------------------------------ OpenXR setup
 
+    /** @brief Initialises Android's OpenXR loader. */
     bool initLoader()
     {
         PFN_xrInitializeLoaderKHR initLoader = nullptr;
@@ -1286,6 +1351,7 @@ private:
         return XR_SUCCEEDED(initLoader(reinterpret_cast<const XrLoaderInitInfoBaseHeaderKHR*>(&li)));
     }
 
+    /** @brief Creates the OpenXR instance with GLES and hand tracking and finds the headset; notes whether it tracks hands. */
     bool initInstance()
     {
         const char* exts[] = { XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
@@ -1314,6 +1380,7 @@ private:
         return true;
     }
 
+    /** @brief An EGL context for GLES 3 on a small pbuffer, as OpenXR's GLES binding needs. */
     bool initEgl()
     {
         PFN_xrGetOpenGLESGraphicsRequirementsKHR getReq = nullptr;
@@ -1338,6 +1405,7 @@ private:
         return true;
     }
 
+    /** @brief The session, the room (stage, else local) and head spaces, and a swapchain with framebuffer and depth per eye. */
     bool initSession()
     {
         XrGraphicsBindingOpenGLESAndroidKHR gb{ XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR };
@@ -1395,6 +1463,7 @@ private:
         return true;
     }
 
+    /** @brief A hand tracker per hand; false where the headset or runtime does not track hands. */
     bool initHands()
     {
         if (!handsSupported_) return false;
@@ -1411,6 +1480,7 @@ private:
         return true;
     }
 
+    /** @brief OpenXR's events: begins and ends the session as its state asks, and notes when the app is to quit. */
     void pollXrEvents()
     {
         XrEventDataBuffer ev{ XR_TYPE_EVENT_DATA_BUFFER };
@@ -1444,6 +1514,7 @@ private:
 
     // ------------------------------------------------ per frame
 
+    /** @brief The head pose at @p time (headPose_, headValid_). */
     void updateHead(XrTime time)
     {
         headValid_ = false;
@@ -1456,6 +1527,7 @@ private:
         headValid_ = true;
     }
 
+    /** @brief Locates both hands at @p time and feeds their palms and pinches to hands_. */
     void updateHands(XrTime time)
     {
         for (int h = 0; h < 2; ++h) {
@@ -1659,6 +1731,10 @@ private:
         }
     }
 
+    /**
+     * @brief One frame: head and hands, the gestures and controls, then the scene drawn for both eyes and handed to the
+     *        compositor.
+     */
     void frame()
     {
         XrFrameWaitInfo wi{ XR_TYPE_FRAME_WAIT_INFO };
@@ -1736,15 +1812,15 @@ private:
         xrEndFrame(session_, &ei);
     }
 
-    android_app* app_;
-    std::string dataDir_;
-    Config config_;
-    SetPlayer player_;
-    Audio audio_{ player_ };
-    std::thread composerThread_;
-    std::atomic<bool> stopComposer_{ false };
-    Scene scene_;
-    Hands hands_;
+    android_app* app_;   ///< the native activity
+    std::string dataDir_;   ///< the app's external data folder (phos.cfg)
+    Config config_;   ///< what phos.cfg says
+    SetPlayer player_;   ///< the engine and the composer
+    Audio audio_{ player_ };   ///< the audio stream
+    std::thread composerThread_;   ///< composes and loads tracks, measures their loudness
+    std::atomic<bool> stopComposer_{ false };   ///< ends the composer thread
+    Scene scene_;   ///< what is drawn
+    Hands hands_;   ///< the hands as tracked
     HandBridge bridge_;                  ///< the bridge mode: the hands to the desktop's Phosphene (01.10.2026)
     /**
      * @brief The cue bridge's socket and thread (PLAN 8.3, Cue.h).
@@ -1757,33 +1833,40 @@ private:
     CueSender cues_;
     HandMacros macros_;                  ///< the desktop's perform macros, the hands' controls (01.10.2026)
     int dropBar_ = -1;                   ///< the bar the drop-out was pressed in: it lets go when that bar is over
-    bool handWas_[2] = {}, spoiled_[2] = {}, bothFired_ = false;   ///< gestures(): the pinches as they were
+    bool handWas_[2] = {};   ///< gestures(): the pinches as they were
+    bool spoiled_[2] = {};   ///< gestures(): per hand, the pinch was part of a two-hand gesture and does not count alone
+    bool bothFired_ = false;   ///< gestures(): both hands closed and asked for the next track; once until both open
     double held_[2] = {};                ///< how long each pinch has been closed, seconds
     bool stuttering_ = false;            ///< the right pinch was held into the stutter
     static constexpr double kLongPinch = 0.6;   ///< seconds the right pinch is held for the stutter
 
-    EGLDisplay display_ = EGL_NO_DISPLAY;
-    EGLConfig eglConfig_ = nullptr;
-    EGLSurface surface_ = EGL_NO_SURFACE;
-    EGLContext context_ = EGL_NO_CONTEXT;
+    EGLDisplay display_ = EGL_NO_DISPLAY;   ///< the EGL display
+    EGLConfig eglConfig_ = nullptr;   ///< the EGL configuration
+    EGLSurface surface_ = EGL_NO_SURFACE;   ///< the small pbuffer surface the context is current on
+    EGLContext context_ = EGL_NO_CONTEXT;   ///< the GLES context
 
-    XrInstance instance_ = XR_NULL_HANDLE;
-    XrSystemId system_ = XR_NULL_SYSTEM_ID;
-    XrSession session_ = XR_NULL_HANDLE;
-    XrSpace stageSpace_ = XR_NULL_HANDLE, viewSpace_ = XR_NULL_HANDLE;
-    XrSessionState sessionState_ = XR_SESSION_STATE_UNKNOWN;
-    bool sessionRunning_ = false, quit_ = false, handsSupported_ = false, headValid_ = false;
-    std::vector<XrView> views_;
-    std::vector<SwapchainTarget> targets_;
-    XrPosef headPose_{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
-    XrTime lastTime_ = 0;
+    XrInstance instance_ = XR_NULL_HANDLE;   ///< the OpenXR instance
+    XrSystemId system_ = XR_NULL_SYSTEM_ID;   ///< the headset
+    XrSession session_ = XR_NULL_HANDLE;   ///< the OpenXR session
+    XrSpace stageSpace_ = XR_NULL_HANDLE;   ///< the room: stage, else local
+    XrSpace viewSpace_ = XR_NULL_HANDLE;   ///< the head
+    XrSessionState sessionState_ = XR_SESSION_STATE_UNKNOWN;   ///< the session's last state
+    bool sessionRunning_ = false;   ///< the session runs: frames are drawn
+    bool quit_ = false;   ///< the runtime asks the app to end
+    bool handsSupported_ = false;   ///< the headset tracks hands
+    bool headValid_ = false;   ///< headPose_ is valid this frame
+    std::vector<XrView> views_;   ///< the eyes' poses and fields of view this frame
+    std::vector<SwapchainTarget> targets_;   ///< per eye: its swapchain and framebuffer
+    XrPosef headPose_{ { 0, 0, 0, 1 }, { 0, 0, 0 } };   ///< the head in the room
+    XrTime lastTime_ = 0;   ///< the last frame's display time (0 before the first)
 
-    PFN_xrCreateHandTrackerEXT pfnCreateHandTracker_ = nullptr;
-    PFN_xrLocateHandJointsEXT pfnLocateHandJoints_ = nullptr;
-    PFN_xrDestroyHandTrackerEXT pfnDestroyHandTracker_ = nullptr;
-    XrHandTrackerEXT handTracker_[2] = { XR_NULL_HANDLE, XR_NULL_HANDLE };
+    PFN_xrCreateHandTrackerEXT pfnCreateHandTracker_ = nullptr;   ///< xrCreateHandTrackerEXT
+    PFN_xrLocateHandJointsEXT pfnLocateHandJoints_ = nullptr;   ///< xrLocateHandJointsEXT
+    PFN_xrDestroyHandTrackerEXT pfnDestroyHandTracker_ = nullptr;   ///< xrDestroyHandTrackerEXT
+    XrHandTrackerEXT handTracker_[2] = { XR_NULL_HANDLE, XR_NULL_HANDLE };   ///< left, right
 };
 
+/** @brief The native app glue's command callback: nothing to do, OpenXR's events drive the app. */
 void handleCmd(android_app*, int32_t) {}
 
 } // namespace

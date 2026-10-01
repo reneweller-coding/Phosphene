@@ -46,8 +46,14 @@ public:
 private:
     /** @brief One second-order section of the K-weighting filter. */
     struct Biquad {
-        float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;   ///< coefficients
-        float z1 = 0, z2 = 0;   ///< state
+        float b0 = 1;   ///< the coefficient of x[n]
+        float b1 = 0;   ///< ... of x[n-1]
+        float b2 = 0;   ///< ... of x[n-2]
+        float a1 = 0;   ///< ... of y[n-1]
+        float a2 = 0;   ///< ... of y[n-2]
+        float z1 = 0;   ///< the first state
+        float z2 = 0;   ///< the second state
+        /** @brief One sample @p x through the section. */
         float process(float x)
         {
             const float y = b0 * x + z1;
@@ -55,9 +61,11 @@ private:
             z2 = b2 * x - a2 * y;
             return y;
         }
+        /** @brief Clears the state. */
         void reset() { z1 = z2 = 0.0f; }
     };
-    Biquad shelf_, hp_;   ///< the K-weighting's high shelf and high pass
+    Biquad shelf_;   ///< the K-weighting's high shelf
+    Biquad hp_;   ///< the K-weighting's high pass
 };
 
 /**
@@ -95,7 +103,8 @@ struct LoudnessLog {
     }
 private:
     std::vector<float> buf_;   ///< the ring of values
-    std::atomic<size_t> pos_{ 0 }, count_{ 0 };   ///< write position and how many were written
+    std::atomic<size_t> pos_{ 0 };   ///< the write position
+    std::atomic<size_t> count_{ 0 };   ///< how many were written
 };
 
 /** @brief The BS.1770 meter with gating, range and true peak. */
@@ -114,13 +123,19 @@ private:
     void pushBlock();
 
     double sr_ = 48000.0;   ///< sample rate
-    KFilter kL_, kR_;   ///< K-weighting per channel
-    int    blockLen_ = 19200, hopLen_ = 4800, hopPos_ = 0;   ///< the 400 ms block, the 100 ms hop, samples into the hop
-    std::vector<double> sumL_, sumR_;   ///< the last kHopsPerShort hops' mean squares
-    int    ringPos_ = 0, ringFilled_ = 0;   ///< their ring's position and fill
+    KFilter kL_;   ///< the K-weighting, left
+    KFilter kR_;   ///< ... right
+    int    blockLen_ = 19200;   ///< the 400 ms block, samples
+    int    hopLen_ = 4800;   ///< the 100 ms hop, samples
+    int    hopPos_ = 0;   ///< samples into the hop
+    std::vector<double> sumL_;   ///< the last kHopsPerShort hops' mean squares, left
+    std::vector<double> sumR_;   ///< ... right
+    int    ringPos_ = 0;   ///< their ring's position
+    int    ringFilled_ = 0;   ///< ... and fill
     static constexpr int kHopsPerBlock = 4;       ///< 400 ms blocks with 75 % overlap
     static constexpr int kHopsPerShort = 30;      ///< 3 s
-    double hopL_ = 0.0, hopR_ = 0.0;   ///< the running hop's sums of squares
+    double hopL_ = 0.0;   ///< the running hop's sum of squares, left
+    double hopR_ = 0.0;   ///< ... right
     long   hopSamples_ = 0;   ///< its samples so far
     static constexpr size_t kBlockLog = 1u << 17; ///< about 3.6 hours of blocks at ten a second
     LoudnessLog blocks_;   ///< every 400 ms block's loudness, for the gated integral
@@ -131,7 +146,7 @@ private:
     /// The last TruePeakInterpolator::kHistory samples of each channel. Every sample is written into
     /// both halves of the buffer, so the window the interpolator reads is contiguous and the meter
     /// needs neither a shift nor a modulo per sample (the same arrangement as TruePeakLimiter).
-    float  tpHistL_[2 * TruePeakInterpolator::kHistory] = {}, tpHistR_[2 * TruePeakInterpolator::kHistory] = {};
+    float  tpHistL_[2 * TruePeakInterpolator::kHistory] = {}, tpHistR_[2 * TruePeakInterpolator::kHistory] = {};   ///< ... right
     int    tpPos_ = 0;   ///< position in the true-peak history
     TruePeakInterpolator tpInterp_;   ///< reads the peaks between the samples
 };

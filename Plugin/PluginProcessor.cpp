@@ -198,6 +198,7 @@ PhospheneProcessor::PhospheneProcessor()
     const int cores = static_cast<int>(std::thread::hardware_concurrency());
     phos::probe::setThreads(juce::jmax(1, cores / 2));
     engine_ = std::make_unique<Engine>();
+    engine_->setLive(true);   // the keyboard's Replace and the composer switch act here, never in an export (01.10.2026)
     composer_ = std::make_unique<Composer>(seed_.load());
     // The plugin plans without Auto Gain and measures it once the music is running (serviceComposer).
     composer_->setDeferMasterGain(true);
@@ -805,21 +806,26 @@ namespace {
  *         already happened when the step is recorded. */
 class UndoStep final : public juce::UndoableAction {
 public:
+    /** @brief A step of @p p from @p before to @p after. */
     UndoStep(PhospheneProcessor& p, PhospheneProcessor::UndoState before, PhospheneProcessor::UndoState after)
         : p_(p), before_(std::move(before)), after_(std::move(after)) {}
+    /** @brief Applies after (the first time: it is applied already, so nothing happens). */
     bool perform() override
     {
         if (first_) { first_ = false; return true; }
         p_.applyUndoState(after_);
         return true;
     }
+    /** @brief Puts before back. */
     bool undo() override { p_.applyUndoState(before_); return true; }
+    /** @brief The memory the step takes, roughly (the history's limit). */
     int getSizeInUnits() override { return static_cast<int>(before_.knobs.size() + after_.knobs.size()) + 64; }
 
 private:
-    PhospheneProcessor& p_;
-    PhospheneProcessor::UndoState before_, after_;
-    bool first_ = true;
+    PhospheneProcessor& p_;   ///< the processor
+    PhospheneProcessor::UndoState before_;   ///< the state before the step
+    PhospheneProcessor::UndoState after_;   ///< the state after it
+    bool first_ = true;   ///< perform() has not run yet (the change is made already)
 };
 
 } // namespace

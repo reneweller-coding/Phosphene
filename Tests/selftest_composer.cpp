@@ -1244,7 +1244,8 @@ void testSoundPresets()
  *
  * A set, the stems taken. Replace on a voice empties its stem of the composer's notes; a played note then sounds on
  * that stem and nowhere else, and its key's release lets it die away. Layer without a played note is the set as
- * it was, bit for bit.
+ * it was, bit for bit. 01.10.2026: the composer off leaves every generated note out; without live play (setLive) the
+ * keyboard's knobs change nothing.
  */
 void testKeyboard()
 {
@@ -1253,12 +1254,14 @@ void testKeyboard()
     const double sr = 48000.0;
     struct Take { std::vector<std::vector<float>> stem; std::vector<float> mix; };
     // part: mix.keyboard_part; mode 0 Replace, 1 Layer; a note from onAt to offAt (samples, -1 none).
-    auto render = [&](int part, int mode, size_t onAt, size_t offAt, size_t total) {
+    auto render = [&](int part, int mode, size_t onAt, size_t offAt, size_t total, bool live = true, bool composerOn = true) {
         auto engine = std::make_unique<Engine>();
+        engine->setLive(live);
         ParamStore& p = engine->params();
         p.parseText("compose.level_match=Off master.auto_gain=Off compose.presence_match=Off compose.audibility_match=Off");
         p.set(p.base(Module::Mix) + mix::KeyboardPart, static_cast<float>(part));
         p.set(p.base(Module::Mix) + mix::KeyboardMode, static_cast<float>(mode));
+        p.set(p.base(Module::Mix) + mix::Composer, composerOn ? 1.0f : 0.0f);
         Composer composer(3);
         engine->prepare(sr, kBlock);
         Conductor conductor(*engine, composer);
@@ -1300,6 +1303,11 @@ void testKeyboard()
     const Take layerQuiet = render(part, 1, none, none, total);
     check(layerQuiet.mix == off.mix, "Layer without a played note is the set, bit for bit");
     const Take replaced = render(part, 0, none, none, total);
+    const Take offline = render(part, 0, none, none, total, false);
+    check(offline.mix == off.mix, "without live play Replace changes nothing (a render, an export)");
+    const Take silent = render(0, 0, none, none, total, true, false);
+    check(energy(silent.mix, 0, total) < 1e-6 * energy(off.mix, 0, total), "the composer off: nothing generated sounds",
+          fmt("%.3g of %.3g", energy(silent.mix, 0, total), energy(off.mix, 0, total)));
     const double generated = energy(off.stem[static_cast<size_t>(voice)], 0, total);
     check(generated > 0.0 && energy(replaced.stem[static_cast<size_t>(voice)], 0, total) == 0.0,
           "Replace leaves the voice's generated notes out", fmt("%s: stem energy %.3g in the set, %.3g replaced", kStemNames[voice], generated,

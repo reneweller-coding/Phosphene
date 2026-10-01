@@ -294,7 +294,8 @@ public:
         return modOn_ && lastVoice_ >= 0 && mod_[lastVoice_].active() ? modSum_[lastVoice_] : nullptr;
     }
 private:
-    float slowCut_ = 0.0f, slowColour_ = 0.0f;   ///< setSlow()'s sines (the addon's free movement)
+    float slowCut_ = 0.0f;   ///< setSlow()'s sine on the cutoff
+    float slowColour_ = 0.0f;   ///< ... and on the colour
     /** @name The voice's own modulation (26.09.2026, Modulation.h)
      *  @{ */
     int   lastVoice_ = -1;                        ///< the voice of the latest note (displayModulation)
@@ -367,7 +368,8 @@ private:
     PolyChannels ch_;   ///< every voice's filter and output state (PolyKernel.h)
     Envelope amp_[kPolyVoices];   ///< amplitude envelope per voice
     Envelope ampTimes_;   ///< the written times, computed once per update() and copied into every voice
-    float fenv_[kPolyVoices] = {}, fDecay_ = 0.999f;   ///< filter envelope per voice and its per-sample decay
+    float fenv_[kPolyVoices] = {};   ///< per voice: its filter envelope
+    float fDecay_ = 0.999f;   ///< the filter envelope's per-sample decay
     float accent_[kPolyVoices] = {};          ///< the note's factor on the filter envelope amount: 1, or 1.5 for an accent (22.09.2026)
     int   pitch_[kPolyVoices] = {};   ///< each voice's MIDI pitch
     float vel_[kPolyVoices] = {};   ///< each voice's velocity, 0..1
@@ -385,11 +387,14 @@ private:
     double slotSpread_[kPolySlots] = {};      ///< the share of the unison detune the slot plays (Poly.cpp, kOsc2Spread)
     double lfo2Ph_ = 0.0;                     ///< the voice LFO's phase: one per instance, free-running
     float lfo2Inc_ = 0.0f;                    ///< its step per sample, from poly::LfoBeats and the tempo
-    float lfo2Cut_ = 0.0f, lfo2Pitch_ = 0.0f, lfo2Amp_ = 0.0f;   ///< its three depths, from update()
+    float lfo2Cut_ = 0.0f;   ///< the voice LFO's depth on the cutoff
+    float lfo2Pitch_ = 0.0f;   ///< ... on the pitch
+    float lfo2Amp_ = 0.0f;   ///< ... on the level
     float lfo2Value_ = 0.0f;                  ///< its last value, read by lowPassCoefs on the 16-sample grid
     const WaveTable* table_ = nullptr;   ///< the table poly.table names
     const WaveTable* sawTable_ = nullptr;     ///< the Classic table, whose frame kClassicSawFrame is the saw
-    float posDecay_ = 0.999f, lfoInc_ = 0.0f;   ///< the position envelope's per-sample decay and the position LFO's step
+    float posDecay_ = 0.999f;   ///< the position envelope's per-sample decay
+    float lfoInc_ = 0.0f;   ///< the position LFO's step
     double bpm_ = 145.0;   ///< the tempo the LFO periods were computed for
     uint64_t counter_ = 0;   ///< notes so far (the voices' age)
     uint64_t pos_ = 0;          ///< samples rendered since reset (the coefficient grid)
@@ -424,10 +429,18 @@ private:
     float  panL_ = 1.0f, panR_ = 1.0f;        ///< constant-power gains of poly.pan (both exactly 1 at centre)
     /** @} */
     Disperser disperse_;                      ///< all-pass chain coefficients (Disperser.h)
-    DisperserChannel dispL_, dispR_;          ///< its state, one per output channel
+    DisperserChannel dispL_;   ///< the disperser's state, left
+    DisperserChannel dispR_;   ///< ... right
     TempoDelay delay_;   ///< the voice's tempo delay
-    float send_ = 0.0f, level_ = 1.0f;   ///< poly.delay_send and poly.level, linear
-    std::vector<float> slotL_, slotR_, chanIn_, chanAmp_, chanOut_, sendBuf_, wtRow_;   ///< a block's slot outputs, channel buffers, delay send and wavetable rows
+    float send_ = 0.0f;   ///< poly.delay_send, linear
+    float level_ = 1.0f;   ///< poly.level, linear
+    std::vector<float> slotL_;   ///< a block's slot outputs, left
+    std::vector<float> slotR_;   ///< ... right
+    std::vector<float> chanIn_;   ///< the channels' input
+    std::vector<float> chanAmp_;   ///< the channels' amplitude
+    std::vector<float> chanOut_;   ///< the channels' output
+    std::vector<float> sendBuf_;   ///< the delay send
+    std::vector<float> wtRow_;   ///< the wavetable rows
 };
 
 } // namespace phos

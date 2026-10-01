@@ -95,9 +95,11 @@ private:
     std::vector<double> threshold_;              ///< threshold excitation per band
     int bands_ = 0;   ///< critical bands in use
     double scale_ = 1.0;                         ///< makes a 1 kHz tone at 40 dB SPL one unit
-    std::vector<std::vector<float>> bufL_, bufR_;   ///< the current frame of each stem
+    std::vector<std::vector<float>> bufL_;   ///< the current frame of each stem, left
+    std::vector<std::vector<float>> bufR_;   ///< ... right
     int fill_ = 0;   ///< samples in the current frame
-    std::vector<double> sumAlone_, sumMix_;   ///< per stem: the loudness alone and the partial loudness in the mix, summed over frames
+    std::vector<double> sumAlone_;   ///< per stem: the loudness alone, summed over frames
+    std::vector<double> sumMix_;   ///< ... and its partial loudness in the mix
     std::vector<int> frames_;   ///< per stem: the frames it sounded in
 };
 

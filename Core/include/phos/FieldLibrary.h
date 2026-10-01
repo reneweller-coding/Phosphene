@@ -38,7 +38,8 @@ struct FieldClip {
     std::string name;              ///< the file's stem
     int category = -1;             ///< index into kFieldCategorySlugs
     int sampleRate = 44100;        ///< the file's own rate
-    std::vector<float> left, right;   ///< decoded, -1..1; a mono file leaves right empty (right() reads left)
+    std::vector<float> left;   ///< the left channel, -1..1
+    std::vector<float> right;   ///< the right one; empty for a mono file (right() reads left)
     std::atomic<int> users{ 0 };   ///< voices playing it now (eviction skips it)
     /**
      * @brief The gain that brings it to the library's level: RMS -20 dBFS, the peak held at -1 dBFS.

@@ -91,7 +91,9 @@ public:
     }
 
 private:
-    float lpCoef_ = 0.09f, lpL_ = 0.0f, lpR_ = 0.0f;   ///< the gate tone's low pass: coefficient and states
+    float lpCoef_ = 0.09f;   ///< the gate tone's low pass: coefficient
+    float lpL_ = 0.0f;   ///< ... state, left
+    float lpR_ = 0.0f;   ///< ... state, right
 };
 
 } // namespace phos

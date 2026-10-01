@@ -86,7 +86,9 @@ private:
         bool done = false;           ///< a layer without a loop has run off its recording's end
         double p = 0.0;              ///< playhead, in the recording's frames (negative: not placed yet)
         double start = 0.0;          ///< where it starts once the recording is there (0..1 of the length)
-        double ls = 0.0, le = 0.0, x = 0.0;   ///< the loop's start, end and crossfade, in frames (control step)
+        double ls = 0.0;   ///< the loop's start, frames (control step)
+        double le = 0.0;   ///< the loop's end, frames
+        double x = 0.0;   ///< the loop's crossfade, frames
         double ratio = 1.0;          ///< frames per output sample (control step)
         bool loop = false;           ///< the loop is on (control step)
         float gain = 1.0f;           ///< its level and share
@@ -96,18 +98,34 @@ private:
     /** @brief One event. */
     struct Voice {
         bool on = false;                 ///< sounding
-        int64_t pos = 0, length = 1;     ///< samples since the onset, the event's length
+        int64_t pos = 0;   ///< samples since the onset
+        int64_t length = 1;   ///< the event's length, samples
         uint64_t age = 0;                ///< trigger order (stealing)
-        float velocity = 1.0f, random = 0.0f, keySemis = 0.0f;   ///< the event's velocity, random source and transposition
+        float velocity = 1.0f;   ///< the event's velocity
+        float random = 0.0f;   ///< the event's random source
+        float keySemis = 0.0f;   ///< the event's transposition, semitones
         Layer layer[2];                  ///< A and B
-        Envelope amp, filt;              ///< the amp and filter envelopes
+        Envelope amp;   ///< the amp envelope
+        Envelope filt;   ///< the filter envelope
         Modulator mod;                   ///< the modulation block
-        Svf svfL, svfR, lowL1, lowR1, lowL2, lowR2;   ///< the state-variable filter and the low cut's two sections
-        FilterLane laneL, laneR;         ///< the circuit models
+        Svf svfL;   ///< the state-variable filter, left
+        Svf svfR;   ///< ... right
+        Svf lowL1;   ///< the low cut's first section, left
+        Svf lowR1;   ///< ... right
+        Svf lowL2;   ///< the low cut's second section, left
+        Svf lowR2;   ///< ... right
+        FilterLane laneL;   ///< the circuit model, left
+        FilterLane laneR;   ///< ... right
         float sums[kModDests] = {};      ///< the modulation's latest sums
         // The control step's results.
-        float gainNow = 1.0f, panL = 1.0f, panR = 1.0f, pitchMod = 0.0f;   ///< level and pan gains, pitch offset
-        float g = 0.0f, k = 1.0f, mode = 0.0f, trim = 1.0f;   ///< the circuit model's coefficients
+        float gainNow = 1.0f;   ///< the level now
+        float panL = 1.0f;   ///< the pan's gain, left
+        float panR = 1.0f;   ///< ... right
+        float pitchMod = 0.0f;   ///< the pitch offset
+        float g = 0.0f;   ///< the circuit model's tan(pi fc / fs)
+        float k = 1.0f;   ///< ... its feedback
+        float mode = 0.0f;   ///< ... its mode
+        float trim = 1.0f;   ///< ... its makeup
     };
     /** @brief Sets a layer up for an event (its recording held or asked for). */
     void startLayer(Layer& l, int index, float gain, float semis, bool reverse, double start);
@@ -142,7 +160,14 @@ public:
     void process(float* L, float* R, int n);
 private:
     /** @brief One shot: its recording (held while it plays, or asked for until it is there) and its playhead. */
-    struct Voice { FieldClip* clip = nullptr; int index = -1; double p = 0.0; float gain = 0.0f; bool on = false; float pan = 0.0f; };
+    struct Voice {
+        FieldClip* clip = nullptr;   ///< the recording, null while it is asked for
+        int index = -1;              ///< its index in the library
+        double p = 0.0;              ///< the playhead, frames
+        float gain = 0.0f;           ///< its level
+        bool on = false;             ///< it sounds
+        float pan = 0.0f;            ///< its place, -1 .. 1
+    };
     double sr_ = 48000.0;       ///< sample rate
     Voice voice_[kVoices];      ///< the shots
     int next_ = 0;              ///< the voice the next shot takes

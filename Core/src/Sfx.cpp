@@ -16,7 +16,7 @@ const char* const kSfxTypeNames[kNumSfxTypes] = { "Riser", "Downlifter", "Impact
                                                   "Singing Bowl", "Didgeridoo", "Jaw Harp", "Atmosphere", "Space Shot" };
 
 namespace {
-constexpr double kPiD = 3.141592653589793;
+constexpr double kPiD = 3.141592653589793;   ///< pi
 
 /**
  * @brief Level of each type relative to sfx.level, in dB (18.09.2026, round "mix-foundation").

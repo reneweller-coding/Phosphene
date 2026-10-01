@@ -10,7 +10,7 @@
 namespace phos {
 
 namespace {
-constexpr double kPiD = 3.141592653589793;
+constexpr double kPiD = 3.141592653589793;   ///< pi
 constexpr float kResonanceMax = 16.0f;       ///< feedback at Resonance 1: below the self-oscillation at 17, as on the TB-303
 constexpr float kLadderComp = 0.3f;          ///< input gain (1 + 0.3 k) against the passband loss 1/(1 + k)
 constexpr double kAccentDecayMax = 0.2;      ///< an accented note's filter envelope lasts at most 200 ms

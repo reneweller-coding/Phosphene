@@ -27,13 +27,18 @@ namespace mel {
 
 /** @name Indices of the melodic parts in the arrays kept per part (Form.h, MelodyPart)
  *  @{ */
-constexpr int kAcidI = mpIndex(MelodyPart::Acid), kLeadI = mpIndex(MelodyPart::Lead), kCounterI = mpIndex(MelodyPart::Counter),
-              kArpI = mpIndex(MelodyPart::Arp), kStabI = mpIndex(MelodyPart::Stab), kPadI = mpIndex(MelodyPart::Pad),
-              kDroneI = mpIndex(MelodyPart::Drone);
+constexpr int kAcidI = mpIndex(MelodyPart::Acid);         ///< the acid
+constexpr int kLeadI = mpIndex(MelodyPart::Lead);         ///< the lead
+constexpr int kCounterI = mpIndex(MelodyPart::Counter);   ///< the counter
+constexpr int kArpI = mpIndex(MelodyPart::Arp);           ///< the arp
+constexpr int kStabI = mpIndex(MelodyPart::Stab);         ///< the stab
+constexpr int kPadI = mpIndex(MelodyPart::Pad);           ///< the pad
+constexpr int kDroneI = mpIndex(MelodyPart::Drone);       ///< the drone
 /** @} */
 
-using Allowed = std::vector<std::vector<uint8_t>>;
+using Allowed = std::vector<std::vector<uint8_t>>;   ///< Per position: the symbols allowed (1) or not (0).
 
+/** @brief The symbol of interval @p rel, clamped into the alphabet. */
 inline int sym(int rel) { return PitchModel::symbol(std::clamp(rel, kCorpusRelMin, kCorpusRelMax)); }
 
 /**

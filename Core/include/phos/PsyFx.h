@@ -56,9 +56,14 @@ private:
     /** @brief Reads buffer @p b @p delay samples back, linearly interpolated. */
     float read(const std::vector<float>& b, double delay) const;
     double sr_ = 48000.0;   ///< sample rate
-    std::vector<float> bufL_, bufR_;   ///< the delay lines, a power of two long
-    size_t mask_ = 0, write_ = 0;   ///< index mask and write position
-    float period_ = 8.0f, depth_ = 0.7f, fb_ = 0.6f, mix_ = 0.0f;   ///< set(): period in beats, depth, feedback, mix
+    std::vector<float> bufL_;   ///< the left delay line, a power of two long
+    std::vector<float> bufR_;   ///< ... the right one
+    size_t mask_ = 0;   ///< the index mask
+    size_t write_ = 0;   ///< the write position
+    float period_ = 8.0f;   ///< set(): the period, beats
+    float depth_ = 0.7f;   ///< set(): the depth
+    float fb_ = 0.6f;   ///< set(): the feedback
+    float mix_ = 0.0f;   ///< set(): the mix
 };
 
 /** @brief Six-stage stereo phaser with feedback, tempo-synchronised. */
@@ -78,9 +83,14 @@ private:
     /** @brief The six all-pass stages with feedback for one channel and one sample. */
     float stage(float x, float a, float* z, float& fbState);
     double sr_ = 48000.0;   ///< sample rate
-    float zL_[kStages] = {}, zR_[kStages] = {};   ///< the all-passes' states
-    float fbL_ = 0.0f, fbR_ = 0.0f;   ///< the last stage's output, fed back
-    float period_ = 16.0f, depth_ = 0.8f, fb_ = 0.5f, mix_ = 0.0f;   ///< set(): period in beats, depth, feedback, mix
+    float zL_[kStages] = {};   ///< the all-passes' states, left
+    float zR_[kStages] = {};   ///< ... right
+    float fbL_ = 0.0f;   ///< the last stage's output, fed back, left
+    float fbR_ = 0.0f;   ///< ... right
+    float period_ = 16.0f;   ///< set(): the period, beats
+    float depth_ = 0.8f;   ///< set(): the depth
+    float fb_ = 0.5f;   ///< set(): the feedback
+    float mix_ = 0.0f;   ///< set(): the mix
 };
 
 /**
@@ -89,7 +99,10 @@ private:
  * Public so that the self test can measure it on its own.
  */
 struct HilbertPair {
-    double xa[4][2] = {}, ya[4][2] = {}, xb[4][2] = {}, yb[4][2] = {};   ///< the two chains' second-order sections: inputs and outputs, two samples back
+    double xa[4][2] = {};   ///< chain a's second-order sections: inputs, two samples back
+    double ya[4][2] = {};   ///< ... outputs
+    double xb[4][2] = {};   ///< chain b's: inputs
+    double yb[4][2] = {};   ///< ... outputs
     double delayA = 0.0;   ///< chain A's output one sample late (the 90 degrees against chain B)
     /** @brief One sample in; @p i and @p q receive the in-phase and the quadrature output. */
     void tick(double x, double& i, double& q);
@@ -110,9 +123,11 @@ public:
     void tick(float& l, float& r);
 private:
     double sr_ = 48000.0;   ///< sample rate
-    HilbertPair hl_, hr_;   ///< the quadrature networks of the two channels
+    HilbertPair hl_;   ///< the quadrature network, left
+    HilbertPair hr_;   ///< ... right
     double phase_ = 0.0;   ///< the carrier's phase, in cycles
-    float hz_ = 0.0f, mix_ = 0.0f;   ///< set(): shift in Hz and mix
+    float hz_ = 0.0f;   ///< set(): the shift, Hz
+    float mix_ = 0.0f;   ///< set(): the mix
 };
 
 /**
@@ -153,7 +168,8 @@ private:
     Phaser phaser_;   ///< second
     FreqShifter shifter_;   ///< third
     float v_[psyfx::Count] = {};   ///< the psyfx parameters as update() read them (sized by the table, as Poly's since 25.09.2026)
-    float motionHz_ = 0.0f, motionFlange_ = 0.0f;   ///< setMotion()
+    float motionHz_ = 0.0f;   ///< setMotion(): the shift's motion, Hz
+    float motionFlange_ = 0.0f;   ///< setMotion(): the flanger's motion
 };
 
 /** @brief Buffer repeat of a stereo bus for the length of an event (the glitch of the psychedelic layer). */
@@ -174,9 +190,12 @@ public:
     /** @brief One stereo sample: records it and returns the live sample or the repeat in its place. */
     void tick(float& l, float& r);
 private:
-    std::vector<float> recL_, recR_;   ///< the recorded live signal
+    std::vector<float> recL_;   ///< the recorded live signal, left
+    std::vector<float> recR_;   ///< ... right
     bool on_ = false;   ///< a repeat is running
-    long long pos_ = 0, length_ = 0, slice_ = 1;   ///< samples into the repeat, its length, the slice repeated
+    long long pos_ = 0;   ///< samples into the repeat
+    long long length_ = 0;   ///< its length, samples
+    long long slice_ = 1;   ///< the slice repeated, samples
     int fade_ = 48;   ///< crossfade at the slice's seams, samples (1 ms)
 };
 

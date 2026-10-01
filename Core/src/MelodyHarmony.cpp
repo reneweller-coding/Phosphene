@@ -36,7 +36,12 @@ namespace mel {
  * A pendulum exists only where the mode has its second degree at the interval the name says:
  * bII wants a semitone, bVII a whole tone under the octave, bVI a minor sixth.
  */
-struct Pendulum { int b; int semis; double weight[kNumStyles]; };
+struct Pendulum {
+    int b;                       ///< the other degree (0-based)
+    int semis;                   ///< its interval above the root
+    double weight[kNumStyles];   ///< each style's taste for it
+};
+/** @brief The pendulums and the styles' tastes for them. */
 const Pendulum kPendulums[] = {
     //  b  semis   Goa   FullOn  Prog   Dark   HiTech
     { 1,  1,  { 0.50, 0.20, 0.00, 0.50, 0.50 } },   // i <-> bII
@@ -45,7 +50,7 @@ const Pendulum kPendulums[] = {
     { 5,  8,  { 0.00, 0.10, 0.30, 0.20, 0.00 } },   // i <-> bVI
     { 4,  7,  { 0.00, 0.15, 0.00, 0.00, 0.00 } },   // i <-> v
 };
-constexpr int kNumPendulums = static_cast<int>(sizeof(kPendulums) / sizeof(kPendulums[0]));
+constexpr int kNumPendulums = static_cast<int>(sizeof(kPendulums) / sizeof(kPendulums[0]));   ///< how many pendulums there are
 
 /**
  * @brief Each style's taste for the chord types of Harmony.h, in ChordType order:
@@ -123,17 +128,22 @@ int drawChordType(Rng& r, int scale, int degree, int styleIdx, bool classical = 
  * aeolian three, its turn, the plagal-dominant swing, and the descending four. Each names its degrees
  * over the four slots and what pitch class each degree has to be for the loop to exist in a mode.
  */
-struct Loop { int deg[4]; int semis[4]; const char* name; };
+struct Loop {
+    int deg[4];         ///< the degrees over the four slots
+    int semis[4];       ///< the pitch class each has to be
+    const char* name;   ///< its name ("i-bVI-bVII-i")
+};
+/** @brief The minor loops. */
 const Loop kLoops[4] = {
     { { 0, 5, 6, 0 }, { 0, 8, 10, 0 },  "i-bVI-bVII-i" },
     { { 0, 6, 5, 6 }, { 0, 10, 8, 10 }, "i-bVII-bVI-bVII" },
     { { 0, 3, 0, 4 }, { 0, 5, 0, 7 },   "i-iv-i-v" },
     { { 0, 2, 6, 3 }, { 0, 3, 10, 5 },  "i-bIII-bVII-iv" },
 };
-constexpr int kNumLoops = 4;
+constexpr int kNumLoops = 4;   ///< how many loops there are
 /** @brief How often a style plays a loop instead of a pendulum, and how often the second half changes. */
 const float kLoopChance[kNumStyles] = { 0.20f, 0.35f, 0.45f, 0.15f, 0.10f };      // Goa, Full-On, Progressive, Dark, Hi-Tech
-const float kSecondHalfChance[kNumStyles] = { 0.30f, 0.30f, 0.40f, 0.25f, 0.20f };
+const float kSecondHalfChance[kNumStyles] = { 0.30f, 0.30f, 0.40f, 0.25f, 0.20f };   ///< how often the second half of a loop changes, per style
 
 /** @brief Whether every degree of @p loop exists in @p scale with the loop's pitch class and a perfect fifth over it. */
 bool loopFits(int scale, const Loop& loop)

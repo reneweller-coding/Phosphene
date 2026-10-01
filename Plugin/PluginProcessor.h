@@ -113,17 +113,17 @@ public:
     /** @brief The global id of the store's parameter this one is. */
     int storeId() const { return id_; }
 
-    float getValue() const override;
-    void  setValue(float newValue) override;
-    float getDefaultValue() const override;
-    juce::String getName(int maximumStringLength) const override;
-    juce::String getLabel() const override;
-    int  getNumSteps() const override;
-    bool isDiscrete() const override;
-    bool isBoolean() const override;
-    juce::String getText(float normalisedValue, int maximumStringLength) const override;
-    float getValueForText(const juce::String& text) const override;
-    const juce::NormalisableRange<float>& getNormalisableRange() const override { return range_; }
+    float getValue() const override;   ///< the store's value, normalised
+    void  setValue(float newValue) override;   ///< writes the store (relaxed atomic)
+    float getDefaultValue() const override;   ///< the descriptor's default, normalised
+    juce::String getName(int maximumStringLength) const override;   ///< the display name (0: no limit)
+    juce::String getLabel() const override;   ///< the unit
+    int  getNumSteps() const override;   ///< steps of a discrete parameter
+    bool isDiscrete() const override;   ///< Int, Choice and Toggle are discrete
+    bool isBoolean() const override;   ///< a Toggle is boolean
+    juce::String getText(float normalisedValue, int maximumStringLength) const override;   ///< the value as the panel shows it
+    float getValueForText(const juce::String& text) const override;   ///< parses a choice name, On/Off or a number
+    const juce::NormalisableRange<float>& getNormalisableRange() const override { return range_; }   ///< the store's own mapping
 
     /** @brief The global id in the store. */
     int paramId() const { return id_; }
@@ -245,7 +245,8 @@ private:
     bool writeTempo_ = true;   ///< send the tempo walk's control events (not when the host sets the tempo)
     std::vector<phos::NoteEvent> notes_;   ///< the last composed bar's notes
     std::vector<phos::ControlEvent> controls_;   ///< and its control events
-    size_t notePos_ = 0, controlPos_ = 0;   ///< how many of them are in the engine's rings
+    size_t notePos_ = 0;   ///< how many of the notes are in the engine's rings
+    size_t controlPos_ = 0;   ///< ... and of the control events
     mutable std::mutex previewLock_;               ///< guards #preview_ (composer writes, editor reads)
     std::vector<phos::NoteEvent> preview_;         ///< the last kPreviewBars bars, in musical beats
     phos::CueMarkRing* marks_ = nullptr;           ///< where the cue marks go, null = the bridge is off
@@ -281,6 +282,7 @@ public:
         uint64_t seed = 1;                                            ///< the set seed
         std::map<int, uint8_t> locks[phos::kNumLockUnits];            ///< the lock mirror
         std::map<int, uint32_t> variations[phos::kNumLockUnits];      ///< the reroll counters
+        /** @brief Whether two states are the same (a step that changes nothing is not recorded). */
         bool operator==(const UndoState& o) const;
     };
     /** @brief The state an undo step records (message thread). */
@@ -329,31 +331,34 @@ public:
     PhospheneProcessor();
     ~PhospheneProcessor() override;
 
-    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;   ///< prepares the engine and reloads the score
+    void releaseResources() override {}   ///< nothing to release
     /** @brief Offline: the audio thread takes the composer's work over, so a render is reproducible. */
     void setNonRealtime(bool offline) noexcept override;
-    bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
-    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    bool isBusesLayoutSupported(const BusesLayout& layouts) const override;   ///< stereo out only
+    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;   ///< plays, following the host's playhead
 
-    juce::AudioProcessorEditor* createEditor() override;
-    bool hasEditor() const override { return true; }
+    juce::AudioProcessorEditor* createEditor() override;   ///< the panel
+    bool hasEditor() const override { return true; }   ///< it has one
 
-    const juce::String getName() const override { return JucePlugin_Name; }
+    const juce::String getName() const override { return JucePlugin_Name; }   ///< "Phosphene"
     /** @brief Since 23.09.2026 the plugin reads MIDI controllers (MIDI learn, phos/MidiMap.h); notes it ignores. */
     bool acceptsMidi() const override { return true; }
+    /** @brief Yes: the parts go out as MIDI. */
     bool producesMidi() const override { return true; }
+    /** @brief No: it makes sound. */
     bool isMidiEffect() const override { return false; }
+    /** @brief Four seconds: the rooms ring on. */
     double getTailLengthSeconds() const override { return 4.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return "Set"; }
-    void changeProgramName(int, const juce::String&) override {}
+    int getNumPrograms() override { return 1; }   ///< one program
+    int getCurrentProgram() override { return 0; }   ///< always the one
+    void setCurrentProgram(int) override {}   ///< nothing to switch
+    const juce::String getProgramName(int) override { return "Set"; }   ///< "Set"
+    void changeProgramName(int, const juce::String&) override {}   ///< not renameable
 
-    void getStateInformation(juce::MemoryBlock& destData) override;
-    void setStateInformation(const void* data, int sizeInBytes) override;
+    void getStateInformation(juce::MemoryBlock& destData) override;   ///< seed, rerolls, parameters, controllers as XML
+    void setStateInformation(const void* data, int sizeInBytes) override;   ///< restores them and composes
     /**
      * @brief The version of the state this build writes.
      *
@@ -456,6 +461,7 @@ public:
     // ------------------------------------------------------------------ the set
     /** @brief The engine's parameters -- the single copy of every value. */
     phos::ParamStore& params() { return engine_->params(); }
+    /** @brief The engine's parameters (read only). */
     const phos::ParamStore& params() const { return engine_->params(); }
     /** @brief The engine, for the editor's meters. */
     const phos::Engine& engine() const { return *engine_; }
@@ -844,13 +850,24 @@ private:
     // ---- MIDI out
     phos::EventRing<phos::NoteEvent> midiRing_{ 4096 };   ///< composer to audio thread, for the MIDI out
     /** @brief A note waiting for its note-off, in engine beats. */
-    struct HeldNote { double endBeat = 0.0; int channel = 0; int pitch = 0; bool active = false; };
+    struct HeldNote {
+        double endBeat = 0.0;   ///< when its note-off is due, engine beats
+        int channel = 0;        ///< its MIDI channel
+        int pitch = 0;          ///< its MIDI note
+        bool active = false;    ///< it sounds
+    };
     static constexpr int kMaxHeld = 128;   ///< notes that may sound at once on the MIDI output
     HeldNote held_[kMaxHeld];              ///< audio thread only
 
     // ---- MIDI in: a keyboard on one voice (23.09.2026, phos::Engine::liveNoteOn)
     /** @brief A note message of the incoming block, kept past the buffer's clear(). */
-    struct LiveNote { int at = 0; int pitch = 0; int velocity = 0; int channel = 0; bool on = false; };
+    struct LiveNote {
+        int at = 0;          ///< its sample in the block
+        int pitch = 0;       ///< MIDI note
+        int velocity = 0;    ///< 1..127
+        int channel = 0;     ///< 0..15
+        bool on = false;     ///< a note-on (else a note-off)
+    };
     static constexpr int kMaxLive = 256;   ///< note messages per block; more are dropped (a controller flood, not a player)
     LiveNote live_[kMaxLive];              ///< audio thread only
     int keyboardPartSeen_ = 0;             ///< audio thread: mix.keyboard_part as the last block had it
@@ -907,6 +924,7 @@ private:
     phos::MidiMap midiMap_;
 
     // ---- undo (message thread)
+    /** @brief Nothing: a value alone is no step (the gestures are). */
     void parameterValueChanged(int, float) override {}
     /** @brief A knob gesture from the editor: its start takes the before-state, its end records the step. */
     void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override;

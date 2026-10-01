@@ -66,8 +66,10 @@ constexpr double kDisperseHalfSpan = 1.6609640474436813;   // log2(sqrt(10)): a 
  * coefficient set.
  */
 struct DisperserChannel {
-    float x1[kDisperseStages] = {}, x2[kDisperseStages] = {};   ///< input history per section
-    float y1[kDisperseStages] = {}, y2[kDisperseStages] = {};   ///< output history per section
+    float x1[kDisperseStages] = {};   ///< per section: the last input
+    float x2[kDisperseStages] = {};   ///< per section: the input before
+    float y1[kDisperseStages] = {};   ///< per section: the last output
+    float y2[kDisperseStages] = {};   ///< per section: the output before
 
     /** @brief Clears the state of every section. */
     void reset()
@@ -97,7 +99,8 @@ struct DisperserChannel {
 
 /** @brief The coefficients of a disperser chain, computed once per update(). */
 struct Disperser {
-    float c[kDisperseStages] = {}, d[kDisperseStages] = {};   ///< each all-pass section's two coefficients
+    float c[kDisperseStages] = {};   ///< per section: the all-pass's first coefficient
+    float d[kDisperseStages] = {};   ///< per section: the all-pass's second coefficient
     int stages = 0;   ///< sections in use
 
     /**

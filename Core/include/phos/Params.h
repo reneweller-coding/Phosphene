@@ -314,7 +314,7 @@ enum : int { Level, Noise, Resonance, Brightness, ImpactDecay, Vowel, SwellDecay
              Count };
 /** @brief The first of the per-family preset choices, and how many there are. */
 constexpr int kFirstPreset = PresetRiser;
-constexpr int kNumPresetChoices = PresetAtmosphere - PresetRiser + 1;
+constexpr int kNumPresetChoices = PresetAtmosphere - PresetRiser + 1;   ///< how many per-family preset choices there are
 }
 /** @brief Parameters of the shamanic bed (module Texture, prefix "texture"; Texture.h). */
 namespace texture {
@@ -418,6 +418,8 @@ enum : int { KickMute, BassMute, TrackGain, PercMute, PercLevel, AcidMute, AcidL
              // 23.09.2026, round "Keyboard": which voice a MIDI keyboard plays, and whether it replaces that voice's
              // generated notes or plays over them (Engine.h, liveNoteOn).
              KeyboardPart, KeyboardMode,
+             // 01.10.2026: off, only what the keyboard plays sounds -- every generated note is left out (live play only).
+             Composer,
              /** @name Appended 25.09.2026 (the mix guide): the lines' duck release (the pads and the bed keep
               *  duck_release), the counter's duck under the lead, and the pad's presence band under the lead
               *  @{ */
@@ -560,7 +562,7 @@ private:
     std::vector<float> defaults_;   ///< the defaults, by global id
     std::unordered_map<std::string, int> index_;   ///< key -> global id
     static constexpr int kMaxInstances = 16;   ///< instances a module may have (base() table)
-    int bases_[static_cast<int>(Module::Count)][kMaxInstances] = {};
+    int bases_[static_cast<int>(Module::Count)][kMaxInstances] = {};   ///< per module and instance: the id of its first parameter, -1 none
 };
 
 } // namespace phos

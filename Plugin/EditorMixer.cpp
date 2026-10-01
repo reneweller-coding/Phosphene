@@ -15,19 +15,20 @@ namespace {
 
 constexpr float kTopDb = 6.0f;       ///< the meter's top
 constexpr float kFloorDb = -60.0f;   ///< and its floor
-constexpr double kHoldSeconds = 1.5;
-constexpr double kFallDbPerSecond = 20.0;
+constexpr double kHoldSeconds = 1.5;   ///< how long the held peak stays, s
+constexpr double kFallDbPerSecond = 20.0;   ///< how fast it falls then, dB per second
 constexpr double kRmsRelease = 0.3;  ///< seconds for the RMS bar to fall by 1/e of its distance
 
+/** @brief A linear level in dB, -100 for silence. */
 float toDb(float linear) { return linear > 1.0e-5f ? 20.0f * std::log10(linear) : -100.0f; }
 
 /** @brief What one strip binds: its fader, its mute and its knobs (key, name under the knob). */
 struct StripSpec {
-    const char* name;
+    const char* name;   ///< the strip's name
     int tab;   ///< the page whose colour it takes
-    const char* level;
-    const char* mute;
-    std::vector<std::pair<const char*, const char*>> knobs;
+    const char* level;   ///< its fader's key
+    const char* mute;   ///< its mute's key
+    std::vector<std::pair<const char*, const char*>> knobs;   ///< its knobs: key, name under the knob
 };
 
 /** @brief The strips in phos::Part order. The kick and the bass have no strip level of their own: their fader is the synth's. */

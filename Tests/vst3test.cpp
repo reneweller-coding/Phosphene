@@ -22,8 +22,8 @@
 
 namespace {
 
-int failures = 0;
-int checks = 0;
+int failures = 0;   ///< checks that failed
+int checks = 0;   ///< checks made
 
 /** @brief Records one check's result and prints it. */
 void check(bool ok, const juce::String& what)
@@ -35,6 +35,7 @@ void check(bool ok, const juce::String& what)
 /** @brief A transport a host would offer: playing, at a tempo, from a position. */
 class TestPlayHead final : public juce::AudioPlayHead {
 public:
+    /** @brief The transport as it stands: playing, at bpm, at ppq and samples. */
     juce::Optional<PositionInfo> getPosition() const override
     {
         PositionInfo info;
@@ -45,8 +46,11 @@ public:
         info.setIsPlaying(true);
         return info;
     }
-    void advance(int n) { samples += n; ppq += n * bpm / (60.0 * sampleRate); }
-    double bpm = 145.0, ppq = 0.0, sampleRate = 48000.0, samples = 0.0;
+    void advance(int n) { samples += n; ppq += n * bpm / (60.0 * sampleRate); }   ///< moves on by @p n samples
+    double bpm = 145.0;   ///< the tempo
+    double ppq = 0.0;   ///< the position, quarter notes
+    double sampleRate = 48000.0;   ///< the sample rate, Hz
+    double samples = 0.0;   ///< the position, samples
 };
 
 } // namespace

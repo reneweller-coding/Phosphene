@@ -61,10 +61,17 @@ public:
         return 1.0f - depth_ * amount_;
     }
 private:
+    /** @brief The curve's stages. */
     enum class Stage { Idle, Attack, Hold, Release };
     double sr_ = 48000.0;   ///< sample rate
-    float depth_ = 0.5f, amount_ = 0.0f, from_ = 0.0f, late_ = 0.0f;   ///< depth, the current amount (0..1, scaled by depth), where the attack started, the sub-sample offset
-    int attack_ = 48, hold_ = 0, release_ = 2880, pos_ = 0;   ///< stage lengths in samples, samples into the stage
+    float depth_ = 0.5f;   ///< the depth, 0..1
+    float amount_ = 0.0f;   ///< the current amount (0..1, scaled by the depth)
+    float from_ = 0.0f;   ///< where the attack started
+    float late_ = 0.0f;   ///< the trigger's sub-sample offset
+    int attack_ = 48;   ///< the attack's length, samples
+    int hold_ = 0;   ///< the hold's length, samples
+    int release_ = 2880;   ///< the release's length, samples
+    int pos_ = 0;   ///< samples into the stage
     Stage stage_ = Stage::Idle;   ///< where it is
 };
 

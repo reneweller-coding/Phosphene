@@ -58,6 +58,7 @@ public:
     static constexpr const char* kLatestReleaseApi = "https://api.github.com/repos/reneweller-coding/Phosphene/releases/latest";
 
 private:
+    /** @brief The thread: asks GitHub for the latest release and keeps what it says. */
     void run() override;
     /** @brief Reads the cached answer out of the state file. */
     void loadCache(const juce::File& stateFile);

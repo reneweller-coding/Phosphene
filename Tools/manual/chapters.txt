@@ -363,10 +363,12 @@ Drop-out is a press, not a hold: it takes the kick and the bass out and lets the
 bar line. Stutter is held. Filter Sweep and Gate Depth stay where you leave them, and a double click
 puts them back to neutral.
 
-Keyboard: notes from a MIDI keyboard can play one voice -- the acid or any of the six melodic voices,
-or "By channel" (channel 1 the acid, 2 the lead ... 7 the drone) -- with the sound that voice's tab
-has. Replace leaves the generator's notes of that voice out, Layer plays over them. The keyboard plays
-while the set runs.
+Keyboard: notes from a MIDI keyboard can play one voice -- the acid, any of the six melodic voices,
+the bass or the kit (C1 the kick, C#1 to C2 the twelve lanes), or "By channel" (channel 1 the acid,
+2 the lead ... 7 the drone, 8 the bass, 10 the kit) -- with the sound that voice's tab has. Replace
+leaves the generator's notes of that voice out, Layer plays over them. Composer off leaves every
+generated note out: then only what you play sounds, through the mix and the effects as composed.
+The keyboard plays while the set runs; an export always plays what was composed.
 
 MIDI: every knob, switch and chooser, and the four macros, can be put on a hardware controller. Right
 click the control, choose MIDI Learn and turn the knob on your controller. The MIDI group lists every

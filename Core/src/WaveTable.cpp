@@ -12,8 +12,8 @@ namespace phos {
 
 namespace {
 
-using Coeffs = std::vector<std::complex<double>>;
-constexpr double kPiD = 3.14159265358979323846;
+using Coeffs = std::vector<std::complex<double>>;   ///< A table frame's harmonics as complex coefficients.
+constexpr double kPiD = 3.14159265358979323846;   ///< pi
 
 /** @brief One stored cycle at a level from the harmonics it keeps; writes the guards as well. */
 void synthesise(const Coeffs& c, double gain, int level, const Fft& fft, std::vector<std::complex<double>>& buf, float* out)
@@ -51,7 +51,7 @@ std::complex<double> sawHarmonic(int h) { return kSine * (-2.0 / (kPiD * h)); }
 
 /** @brief The built-in wavetables, built once on first use. */
 struct Builtins {
-    WaveTable t[kNumBuiltinWaveTables];
+    WaveTable t[kNumBuiltinWaveTables];   ///< the built-in tables
     Builtins()
     {
         const int H = WaveTable::levelHarmonics(0);

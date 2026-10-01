@@ -107,6 +107,8 @@ public:
      * @param fundamentalPhase sine phase of the fundamental at the ideal start, in cycles
      */
     void noteOn(int pitch, float velocity, int gateSamples, double late, double fundamentalPhase);
+    /** @brief Ends the note's gate at the next sample (a played key's release, 01.10.2026; Engine::liveNoteOff). */
+    void release() { if (gate_ > 1) gate_ = 1; }
     /** @brief Starts a sidechain duck (called on every kick); @p late as for noteOn. */
     void duck(double late = 0.0) { ducker_.trigger(late); }
     /** @brief Renders @p n samples, replacing @p out. */
@@ -149,11 +151,16 @@ private:
     float resBase_ = 0.0f;                                     ///< bass.resonance, 0..1 (the resonance destination adds to it)
     /** @} */
     int   modelIndex_ = 0;         ///< bass.filter_model: 0 the ladder above
-    float modelK_ = 0.0f, modelMode_ = 0.0f;   ///< the model's feedback (FilterVoicing::feedback) and bass.filter_mode
+    float modelK_ = 0.0f;   ///< the model's feedback (FilterVoicing::feedback)
+    float modelMode_ = 0.0f;   ///< bass.filter_mode
     float modelTrim_ = 1.0f;                   ///< the model's level against the bass ladder, made good (Bass.cpp)
     HalfbandDown<float> down_;   ///< back from the oversampled rate
-    Svf                 hp1_, hp2_, hp3_, hp4_;   ///< the Split high pass, Linkwitz-Riley 8th order
-    Svf                 bite1_, bite2_;     ///< the bite's 4-pole low pass (two Butterworth sections)
+    Svf                 hp1_;   ///< the Split high pass (Linkwitz-Riley, 8th order): first section
+    Svf                 hp2_;   ///< ... second
+    Svf                 hp3_;   ///< ... third
+    Svf                 hp4_;   ///< ... fourth
+    Svf                 bite1_;   ///< the bite's 4-pole low pass: first Butterworth section
+    Svf                 bite2_;   ///< ... second
     Svf                 biteHp_;            ///< the bite's floor, a 2-pole high pass under the band
     Envelope            amp_;   ///< amplitude envelope
     Ducker              ducker_;   ///< the sidechain duck under the kick
@@ -165,15 +172,27 @@ private:
     double subPhase_ = 0.0;   ///< the sub sine's phase, in cycles
 
     // Settings from update().
-    float  wave_ = 0.0f, pw_ = 0.5f, subLevel_ = 0.42f, splitRatio_ = 2.0f;   ///< waveform, pulse width, sub level, Split crossover as a multiple of f0
+    float  wave_ = 0.0f;   ///< the waveform
+    float  pw_ = 0.5f;   ///< the pulse width
+    float  subLevel_ = 0.42f;   ///< the sub's level
+    float  splitRatio_ = 2.0f;   ///< the Split crossover as a multiple of f0
     float  octLevel_ = 0.0f;        ///< amplitude of the sub's octave (sin at 2 f0, same phase course)
     int    subMode_ = 1;   ///< bass.sub_mode (SubMode)
     bool   retrigger_ = true;   ///< bass.retrigger: every note restarts the envelopes
     float  startPhase_ = 0.5f;   ///< bass.start_phase
-    float  cutoff_ = 140.0f, k_ = 1.0f, envOct_ = 4.0f, keyTrack_ = 0.6f, velCut_ = 0.25f;   ///< cutoff, ladder feedback, envelope depth (octaves), key tracking, velocity to cutoff
+    float  cutoff_ = 140.0f;   ///< the cutoff, Hz
+    float  k_ = 1.0f;   ///< the ladder's feedback
+    float  envOct_ = 4.0f;   ///< the envelope's depth, octaves
+    float  keyTrack_ = 0.6f;   ///< the key tracking
+    float  velCut_ = 0.25f;   ///< velocity to cutoff
     float  fDecay_ = 0.999f;   ///< the filter envelope's per-sample decay
-    float  driveIn_ = 1.0f, driveOut_ = 1.0f;   ///< drive into the ladder and the gain back out
-    float  attack_ = 0.0008f, decay_ = 0.18f, sustain_ = 0.55f, release_ = 0.01f, releaseUsed_ = 0.01f;   ///< the amplitude envelope (s), and the release used after its floor
+    float  driveIn_ = 1.0f;   ///< the drive into the ladder
+    float  driveOut_ = 1.0f;   ///< ... and the gain back out
+    float  attack_ = 0.0008f;   ///< the amplitude envelope's attack, s
+    float  decay_ = 0.18f;   ///< ... decay, s
+    float  sustain_ = 0.55f;   ///< ... sustain
+    float  release_ = 0.01f;   ///< ... release, s
+    float  releaseUsed_ = 0.01f;   ///< the release used after its floor, s
     float  level_ = 0.5f;   ///< bass.level, linear
     /** @name The bite layer (see the file comment)
      *  @{ */

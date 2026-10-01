@@ -62,9 +62,14 @@ class PhospheneLookAndFeel final : public frame::LookAndFeel {
 public:
     /** @brief The frame's look in Phosphene's skin. */
     PhospheneLookAndFeel();
+    /** @brief A button in Phosphene's skin: a flat rounded box, its glow when it is on. */
     void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour& background, bool highlighted, bool down) override;
+    /** @brief Phosphene's text font for a label. */
     juce::Font getLabelFont(juce::Label&) override;
+    /** @brief ... for a chooser. */
     juce::Font getComboBoxFont(juce::ComboBox&) override;
+    /** @brief ... for a button. */
     juce::Font getTextButtonFont(juce::TextButton&, int buttonHeight) override;
+    /** @brief ... for the menus. */
     juce::Font getPopupMenuFont() override;
 };

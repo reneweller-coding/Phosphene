@@ -12,8 +12,8 @@ namespace phos {
 
 namespace {
 
-constexpr double kPiD = 3.141592653589793;
-constexpr double kLn1000 = 6.907755278982137;
+constexpr double kPiD = 3.141592653589793;   ///< pi
+constexpr double kLn1000 = 6.907755278982137;   ///< ln 1000: a decay of 60 dB
 
 /** @brief Mode frequency ratios: membrane (Bessel zeros), free-free bar, loaded membrane (tabla). */
 constexpr double kModeRatios[3][kPercModes] = {
@@ -32,6 +32,7 @@ constexpr double kMetalHz[kPercMetalOsc] = { 205.3, 304.4, 369.6, 522.7, 540.0, 
 /** @brief How far a metal lane's noise pulls its squares down: at noise 1 they keep 1 - 0.8 = 0.2 (-14 dB). */
 constexpr float kMetalNoiseTrade = 0.8f;
 
+/** @brief The per-sample factor of a decay of 60 dB in @p seconds at rate @p sr. */
 double decayFactor(double seconds, double sr) { return std::exp(-kLn1000 / (std::max(seconds, 1.0e-4) * sr)); }
 
 /**

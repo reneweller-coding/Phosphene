@@ -64,7 +64,7 @@ namespace phostest {
 
 using namespace phos;
 
-constexpr double kPiD = 3.141592653589793;
+constexpr double kPiD = 3.141592653589793;   ///< pi
 
 /**
  * @brief Amplitude of the component with exactly @p cycles periods in @p n samples.
@@ -687,8 +687,9 @@ inline double lowShareDb(const std::vector<float>& x, double hz, bool windowed =
 
 /** @brief A small order-2 model with a dense random table, for checks against brute force. */
 struct ToyModel {
-    int n = 4;
-    std::vector<double> p;
+    int n = 4;   ///< the alphabet
+    std::vector<double> p;   ///< the table: P(c | a, b) at (a n + b) n + c
+    /** @brief A table drawn from @p seed, every row normalised. */
     explicit ToyModel(uint64_t seed)
     {
         Rng r;
@@ -700,17 +701,26 @@ struct ToyModel {
             for (int c = 0; c < n; ++c) p[static_cast<size_t>(ab * n + c)] /= sum;
         }
     }
+    /** @brief The alphabet's size. */
     int alphabet() const { return n; }
+    /** @brief P(@p c | @p a, @p b). */
     double prob(int a, int b, int c) const { return p[static_cast<size_t>((a * n + b) * n + c)]; }
 };
 
 /** @brief One case of a `<model>.ref.txt`: what the trainer's PyTorch computed for that input. */
 struct RefCase {
-    int role = 0, style = 0, bars = 0;
-    std::vector<int> tok, step, bar, idx, gap;
+    int role = 0;   ///< the role it was computed for
+    int style = 0;   ///< the style
+    int bars = 0;   ///< the bars
+    std::vector<int> tok;   ///< the input tokens
+    std::vector<int> step;   ///< their steps
+    std::vector<int> bar;   ///< their bars
+    std::vector<int> idx;   ///< their index in the bar
+    std::vector<int> gap;   ///< the gaps before them
     std::vector<int> kick;   ///< empty in a reference file of a three-role model (MODEL_FORMAT 3)
     int mode = -1;           ///< -1 when the case records no mode, i.e. a file without condMode
-    std::vector<double> logits, probs;
+    std::vector<double> logits;   ///< the network's logits
+    std::vector<double> probs;   ///< ... and the probabilities
 };
 
 /**
@@ -783,22 +793,34 @@ inline bool feedRefCase(NeuralModel& model, const RefCase& c)
 
 /** @brief The order-2 toy model of testSampler, driven the way sampleMasked() drives a network. */
 struct ToyStepper {
-    const ToyModel* model = nullptr;
-    int a = 0, b = 0;
+    const ToyModel* model = nullptr;   ///< the model
+    int a = 0;   ///< the symbol before the last
+    int b = 0;   ///< the last symbol
+    /** @brief The model's alphabet. */
     int alphabet() const { return model->alphabet(); }
+    /** @brief Starts from @p start2, @p start1. */
     void begin(int start2, int start1) { a = start2; b = start1; }
+    /** @brief Moves on (always possible). */
     bool advance(int) { return true; }
+    /** @brief Takes symbol @p s as drawn. */
     void observe(int s) { a = b; b = s; }
+    /** @brief P(@p c | a, b). */
     double prob(int c) const { return model->prob(a, b, c); }
 };
 
 /** @brief A stepper whose distribution sits entirely on one symbol: the numerical failure case. */
 struct PeakedStepper {
-    int n = 4, peak = 0;
+    int n = 4;   ///< the alphabet
+    int peak = 0;   ///< the symbol that has it all
+    /** @brief The alphabet's size. */
     int alphabet() const { return n; }
+    /** @brief Nothing to start from. */
     void begin(int, int) {}
+    /** @brief Moves on (always possible). */
     bool advance(int) { return true; }
+    /** @brief Nothing to remember. */
     void observe(int) {}
+    /** @brief Almost 1 for the peak, 1e-9 for the rest. */
     double prob(int c) const { return c == peak ? 1.0 - 3e-9 : 1e-9; }
 };
 
@@ -1206,7 +1228,7 @@ inline std::vector<double> framePowerSpectrum(const WaveTable& t, int frame)
 
 /** @brief The spectral-evolution numbers of one table: the steps between neighbouring frames. */
 struct MorphMeasure {
-    int frames = 0;
+    int frames = 0;   ///< the table's frames
     double move = 0.0;        ///< median total variation between neighbouring frames, in [0, 1]
     double moveMax = 0.0;     ///< the largest single step: the worst jump the position knob walks over
     double travel = 0.0;      ///< total variation between the first and the last frame
@@ -1267,12 +1289,13 @@ inline double bandShare(const std::vector<float>& x, double sr, double lo, doubl
  * cancel in a ratio. One FFT per 1.4 s of audio is all this costs.
  */
 struct BandAccumulator {
-    static constexpr size_t kN = 1u << 16;
-    std::vector<float> buf = std::vector<float>(kN, 0.0f);
-    std::vector<double> power = std::vector<double>(kN / 2 + 1, 0.0);
-    size_t fill = 0;
-    int windows = 0;
+    static constexpr size_t kN = 1u << 16;   ///< the window, samples
+    std::vector<float> buf = std::vector<float>(kN, 0.0f);   ///< the window being filled
+    std::vector<double> power = std::vector<double>(kN / 2 + 1, 0.0);   ///< the summed power per bin
+    size_t fill = 0;   ///< samples in buf
+    int windows = 0;   ///< windows summed
 
+    /** @brief Adds @p n samples of @p x; complete windows are transformed as they fill. */
     void push(const float* x, int n)
     {
         while (n > 0) {
@@ -1290,6 +1313,7 @@ struct BandAccumulator {
         }
     }
 
+    /** @brief The summed power from @p lo to @p hi Hz. */
     double band(double lo, double hi) const
     {
         double s = 0.0;
@@ -1311,12 +1335,14 @@ struct BandAccumulator {
  * contradict each other (Blauert, "Spatial Hearing", MIT Press 1997, ch. 3, on interaural coherence).
  */
 struct StereoBandAccumulator {
-    static constexpr size_t kN = 1u << 16;
-    std::vector<float> bufL = std::vector<float>(kN, 0.0f), bufR = std::vector<float>(kN, 0.0f);
-    std::vector<double> pl = std::vector<double>(kN / 2 + 1, 0.0), pr = std::vector<double>(kN / 2 + 1, 0.0),
-                        cc = std::vector<double>(kN / 2 + 1, 0.0);
-    size_t fill = 0;
-    int windows = 0;
+    static constexpr size_t kN = 1u << 16;   ///< the window, samples
+    std::vector<float> bufL = std::vector<float>(kN, 0.0f);   ///< the left window being filled
+    std::vector<float> bufR = std::vector<float>(kN, 0.0f);   ///< the right one
+    std::vector<double> pl = std::vector<double>(kN / 2 + 1, 0.0);   ///< the summed power per bin, left
+    std::vector<double> pr = std::vector<double>(kN / 2 + 1, 0.0);   ///< ... right
+    std::vector<double> cc = std::vector<double>(kN / 2 + 1, 0.0);   ///< the summed Re{X_L conj(X_R)} per bin
+    size_t fill = 0;   ///< samples in the buffers
+    int windows = 0;   ///< windows summed
 
     /** @brief Adds @p n samples of both channels; complete windows are transformed as they fill. */
     void push(const float* l, const float* r, int n)

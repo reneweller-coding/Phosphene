@@ -336,8 +336,8 @@ float typeEnergy(SectionType type);
  * +0.17 dB at the master's output over drop 1 on the listening seed); the audible rest of the climax is
  * density -- open hats, ride, the second lead, the arp an octave up, squelches in the gaps.
  * @{ */
-constexpr float kDrop1Share = 0.88f;
-constexpr float kClimaxMargin = 0.20f;
+constexpr float kDrop1Share = 0.88f;   ///< drop 1's energy as a share of drop 2's
+constexpr float kClimaxMargin = 0.20f;   ///< how far drop 2 stands above every other section
 /** @} */
 
 /**
@@ -484,8 +484,10 @@ bool formConstraintsHold(const FormPlan& f);
 struct PartAvailability {
     bool part[kMelodyParts] = {};   ///< which melodic parts exist in this track (MelodyPart order)
     float amount[kMelodyParts] = {};  ///< how much each part should play, 0..1 (MelodyPlan::amount)
-    int  leadLo = 59, leadHi = 79;   ///< the lead's pitch range (the masking rule)
-    int  arpLo = 55, arpHi = 74;     ///< the arp's pitch range
+    int  leadLo = 59;   ///< the lead's lowest pitch (the masking rule)
+    int  leadHi = 79;   ///< ... its highest
+    int  arpLo = 55;   ///< the arp's lowest pitch
+    int  arpHi = 74;   ///< ... its highest
     int  percLayers = 4;     ///< percussion layers the track's kit offers
     int  hatLayers = 1;      ///< how many of them are the hats at the head of the layer order (PercPlan::hatLayers)
 };

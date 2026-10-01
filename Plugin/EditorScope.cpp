@@ -17,13 +17,15 @@ namespace phosui {
 
 namespace {
 
-constexpr double kSr = 48000.0;
+constexpr double kSr = 48000.0;   ///< the rate the scope renders at, Hz
 constexpr int kColumns = 400;       ///< time and frequency resolution of the curves
-constexpr double kLoHz = 20.0, kHiHz = 20000.0;
+constexpr double kLoHz = 20.0;   ///< the spectrum's lowest frequency, Hz
+constexpr double kHiHz = 20000.0;   ///< ... its highest
 
 /** @brief A whole number: juce::String(x, 0) prints every digit, not none. */
 juce::String whole(double x) { return juce::String(juce::roundToInt(x)); }
 
+/** @brief The name of MIDI note @p midi ("A3"). */
 juce::String noteName(int midi) { return juce::String(kKeyNames[((midi % 12) + 12) % 12]) + juce::String(midi / 12 - 1); }
 
 /** @brief The nearest MIDI note of @p hz and how many cents it lies off it. */

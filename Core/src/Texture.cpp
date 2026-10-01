@@ -10,7 +10,7 @@
 namespace phos {
 
 namespace {
-constexpr double kPiD = 3.141592653589793;
+constexpr double kPiD = 3.141592653589793;   ///< pi
 
 /**
  * @name Levels of the bed against texture.level (calibrated 19.09.2026)

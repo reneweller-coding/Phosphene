@@ -54,18 +54,25 @@ constexpr int kPercMetalOsc = 6;     ///< square oscillators per lane
 
 /** @brief The evolving state of every lane (structure of arrays). */
 struct PercState {
-    alignas(32) float cr[kPercLaneSlots] = {}, ci[kPercLaneSlots] = {};   ///< carrier phasor
-    alignas(32) float mr[kPercLaneSlots] = {}, mi[kPercLaneSlots] = {};   ///< modulator phasor
+    alignas(32) float cr[kPercLaneSlots] = {};   ///< the carrier phasor's real part
+    alignas(32) float ci[kPercLaneSlots] = {};   ///< the carrier phasor's imaginary part
+    alignas(32) float mr[kPercLaneSlots] = {};   ///< the modulator phasor's real part
+    alignas(32) float mi[kPercLaneSlots] = {};   ///< the modulator phasor's imaginary part
     alignas(32) float envA[kPercLaneSlots] = {};                          ///< tone and metal amplitude
     alignas(32) float envP[kPercLaneSlots] = {};                          ///< pitch and FM-index envelope
     alignas(32) float envN[kPercLaneSlots] = {};                          ///< noise amplitude
     alignas(32) float choke[kPercLaneSlots] = {};                         ///< choke gain
-    alignas(32) float ic1[kPercLaneSlots] = {}, ic2[kPercLaneSlots] = {};  ///< main filter
-    alignas(32) float la1[kPercLaneSlots] = {}, la2[kPercLaneSlots] = {};  ///< low cut, first section
-    alignas(32) float lb1[kPercLaneSlots] = {}, lb2[kPercLaneSlots] = {};  ///< low cut, second section
-    alignas(32) float zr[kPercModes][kPercLaneSlots] = {}, zi[kPercModes][kPercLaneSlots] = {};   ///< mode phasors
+    alignas(32) float ic1[kPercLaneSlots] = {};   ///< the main filter's first state
+    alignas(32) float ic2[kPercLaneSlots] = {};   ///< the main filter's second state
+    alignas(32) float la1[kPercLaneSlots] = {};   ///< the low cut's first section, first state
+    alignas(32) float la2[kPercLaneSlots] = {};   ///< the low cut's first section, second state
+    alignas(32) float lb1[kPercLaneSlots] = {};   ///< the low cut's second section, first state
+    alignas(32) float lb2[kPercLaneSlots] = {};   ///< the low cut's second section, second state
+    alignas(32) float zr[kPercModes][kPercLaneSlots] = {};   ///< the mode phasors' real parts
+    alignas(32) float zi[kPercModes][kPercLaneSlots] = {};   ///< the mode phasors' imaginary parts
     alignas(32) float mt[kPercMetalOsc][kPercLaneSlots] = {};             ///< metal oscillator phases
-    alignas(32) float pr[kPercLaneSlots] = {}, pi[kPercLaneSlots] = {};   ///< auto-pan phasor (16.09.2026)
+    alignas(32) float pr[kPercLaneSlots] = {};   ///< the auto-pan phasor's real part
+    alignas(32) float pi[kPercLaneSlots] = {};   ///< the auto-pan phasor's imaginary part (16.09.2026)
 };
 
 /** @brief Per-lane coefficients, constant within a rendered segment. */
@@ -74,17 +81,32 @@ struct PercCoefs {
     alignas(32) float pAmt[kPercLaneSlots] = {};     ///< pitch envelope depth: start frequency / end - 1
     alignas(32) float dP[kPercLaneSlots] = {};       ///< pitch envelope factor per sample
     alignas(32) float fmIdx[kPercLaneSlots] = {};    ///< FM index at the start
-    alignas(32) float mc[kPercLaneSlots] = {}, ms[kPercLaneSlots] = {};   ///< modulator rotation
+    alignas(32) float mc[kPercLaneSlots] = {};   ///< the modulator's rotation: cosine
+    alignas(32) float ms[kPercLaneSlots] = {};   ///< the modulator's rotation: sine
     alignas(32) float dA[kPercLaneSlots] = {};       ///< amplitude factor per sample
-    alignas(32) float wTone[kPercLaneSlots] = {}, wModal[kPercLaneSlots] = {}, wMetal[kPercLaneSlots] = {}, wNoise[kPercLaneSlots] = {};
-    alignas(32) float modeC[kPercModes][kPercLaneSlots] = {}, modeS[kPercModes][kPercLaneSlots] = {};   ///< damped mode rotations
-    alignas(32) float a1[kPercLaneSlots] = {}, a2[kPercLaneSlots] = {}, a3[kPercLaneSlots] = {}, k[kPercLaneSlots] = {};
-    alignas(32) float mLp[kPercLaneSlots] = {}, mBp[kPercLaneSlots] = {}, mHp[kPercLaneSlots] = {};
-    alignas(32) float c1[kPercLaneSlots] = {}, c2[kPercLaneSlots] = {}, c3[kPercLaneSlots] = {};   ///< low cut (damping sqrt 2)
-    alignas(32) float drvG[kPercLaneSlots] = {}, drvN[kPercLaneSlots] = {};
-    alignas(32) float chokeD[kPercLaneSlots] = {};
-    alignas(32) float gL[kPercLaneSlots] = {}, gR[kPercLaneSlots] = {};
-    alignas(32) float dt[kPercMetalOsc][kPercLaneSlots] = {}, inv[kPercMetalOsc][kPercLaneSlots] = {};
+    alignas(32) float wTone[kPercLaneSlots] = {};   ///< the tone's weight in the sum
+    alignas(32) float wModal[kPercLaneSlots] = {};   ///< the modes' weight
+    alignas(32) float wMetal[kPercLaneSlots] = {};   ///< the metal's weight
+    alignas(32) float wNoise[kPercLaneSlots] = {};   ///< the noise's weight
+    alignas(32) float modeC[kPercModes][kPercLaneSlots] = {};   ///< the damped mode rotations: radius times cosine
+    alignas(32) float modeS[kPercModes][kPercLaneSlots] = {};   ///< the damped mode rotations: radius times sine
+    alignas(32) float a1[kPercLaneSlots] = {};   ///< the main filter's coefficient a1 (trapezoidal SVF)
+    alignas(32) float a2[kPercLaneSlots] = {};   ///< ... a2
+    alignas(32) float a3[kPercLaneSlots] = {};   ///< ... a3
+    alignas(32) float k[kPercLaneSlots] = {};   ///< ... its damping
+    alignas(32) float mLp[kPercLaneSlots] = {};   ///< the main filter's low-pass weight
+    alignas(32) float mBp[kPercLaneSlots] = {};   ///< its band-pass weight
+    alignas(32) float mHp[kPercLaneSlots] = {};   ///< its high-pass weight
+    alignas(32) float c1[kPercLaneSlots] = {};   ///< the low cut's coefficient c1
+    alignas(32) float c2[kPercLaneSlots] = {};   ///< ... c2
+    alignas(32) float c3[kPercLaneSlots] = {};   ///< ... c3 (low cut, damping sqrt 2)
+    alignas(32) float drvG[kPercLaneSlots] = {};   ///< the drive's gain into the clip
+    alignas(32) float drvN[kPercLaneSlots] = {};   ///< the gain that keeps the level after it
+    alignas(32) float chokeD[kPercLaneSlots] = {};   ///< the choke's factor per sample (1: not choked)
+    alignas(32) float gL[kPercLaneSlots] = {};   ///< the pan's gain, left
+    alignas(32) float gR[kPercLaneSlots] = {};   ///< the pan's gain, right
+    alignas(32) float dt[kPercMetalOsc][kPercLaneSlots] = {};   ///< per metal oscillator: its phase step
+    alignas(32) float inv[kPercMetalOsc][kPercLaneSlots] = {};   ///< ... and the inverse, for its PolyBLEP
     /**
      * @name The auto-pan (16.09.2026)
      * panC and panS turn the lane's LFO phasor by one sample of its period; the angle the pan gains
@@ -92,8 +114,10 @@ struct PercCoefs {
      * puts the lane's own position (perc.pan) at the middle of the swing. Both are zero when the lane
      * does not move, and then the rotation below is the exact identity.
      * @{ */
-    alignas(32) float panC[kPercLaneSlots] = {}, panS[kPercLaneSlots] = {};
-    alignas(32) float panA[kPercLaneSlots] = {}, panB[kPercLaneSlots] = {};
+    alignas(32) float panC[kPercLaneSlots] = {};   ///< the auto-pan rotation's cosine
+    alignas(32) float panS[kPercLaneSlots] = {};   ///< its sine
+    alignas(32) float panA[kPercLaneSlots] = {};   ///< the swing
+    alignas(32) float panB[kPercLaneSlots] = {};   ///< the standing offset
     /** @} */
 };
 

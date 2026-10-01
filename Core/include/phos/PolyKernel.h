@@ -44,8 +44,12 @@ struct PolySlots {
     alignas(32) float idxDecay[kPolySlots] = {}; ///< FM index factor per sample
     alignas(32) float idxFloor[kPolySlots] = {}; ///< FM index that remains
     alignas(32) float pw[kPolySlots] = {};       ///< pulse width
-    alignas(32) float wSaw[kPolySlots] = {}, wPulse[kPolySlots] = {}, wFm[kPolySlots] = {}, wWt[kPolySlots] = {};   ///< source weights
-    alignas(32) float gL[kPolySlots] = {}, gR[kPolySlots] = {};   ///< slot gain and pan
+    alignas(32) float wSaw[kPolySlots] = {};   ///< the saw's weight in the source
+    alignas(32) float wPulse[kPolySlots] = {};   ///< the pulse's weight
+    alignas(32) float wFm[kPolySlots] = {};   ///< the FM's weight
+    alignas(32) float wWt[kPolySlots] = {};   ///< the wavetable's weight
+    alignas(32) float gL[kPolySlots] = {};   ///< the slot's gain and pan, left
+    alignas(32) float gR[kPolySlots] = {};   ///< ... right
 };
 
 /** @brief Voice channel state and coefficients. */
@@ -54,11 +58,18 @@ struct PolySlots {
 #pragma warning(disable : 4324)   // padded to its 32-byte lanes on purpose
 #endif
 struct PolyChannels {
-    alignas(32) float ic1[kPolyLanes] = {}, ic2[kPolyLanes] = {};   ///< low pass
-    alignas(32) float ha1[kPolyLanes] = {}, ha2[kPolyLanes] = {};   ///< high pass, first section
-    alignas(32) float hb1[kPolyLanes] = {}, hb2[kPolyLanes] = {};   ///< high pass, second section
-    alignas(32) float a1[kPolyLanes] = {}, a2[kPolyLanes] = {}, a3[kPolyLanes] = {};   ///< low-pass coefficients
-    alignas(32) float c1[kPolyLanes] = {}, c2[kPolyLanes] = {}, c3[kPolyLanes] = {};   ///< high-pass coefficients (damping sqrt 2)
+    alignas(32) float ic1[kPolyLanes] = {};   ///< the low pass's first state
+    alignas(32) float ic2[kPolyLanes] = {};   ///< ... its second
+    alignas(32) float ha1[kPolyLanes] = {};   ///< the high pass's first section: first state
+    alignas(32) float ha2[kPolyLanes] = {};   ///< ... second state
+    alignas(32) float hb1[kPolyLanes] = {};   ///< the high pass's second section: first state
+    alignas(32) float hb2[kPolyLanes] = {};   ///< ... second state
+    alignas(32) float a1[kPolyLanes] = {};   ///< the low pass's coefficient a1
+    alignas(32) float a2[kPolyLanes] = {};   ///< ... a2
+    alignas(32) float a3[kPolyLanes] = {};   ///< ... a3
+    alignas(32) float c1[kPolyLanes] = {};   ///< the high pass's coefficient c1
+    alignas(32) float c2[kPolyLanes] = {};   ///< ... c2
+    alignas(32) float c3[kPolyLanes] = {};   ///< ... c3 (damping sqrt 2)
     /**
      * @name The filter's response (poly.filter_type, 19.09.2026)
      * The output is v2 + (m0 x + m1 v1 + m2 v2), the textbook mixing of a state-variable filter's
@@ -66,7 +77,9 @@ struct PolyChannels {
      * band pass normalised to unity at the centre (0, k, -1), high pass (1, -k, -2), notch (1, -k, -1),
      * with k the damping. Zero is the low pass the kernel always had: v2 + 0 is v2.
      * @{ */
-    alignas(32) float m0[kPolyLanes] = {}, m1[kPolyLanes] = {}, m2[kPolyLanes] = {};
+    alignas(32) float m0[kPolyLanes] = {};   ///< the response: the weight of x
+    alignas(32) float m1[kPolyLanes] = {};   ///< ... of v1
+    alignas(32) float m2[kPolyLanes] = {};   ///< ... of v2
     /** @} */
     /**
      * @name The filter models (poly.filter_model, 26.09.2026; Filters.h)
@@ -177,6 +190,10 @@ template <class V>
 void polyModelKernel(PolyChannels& c, int lane, int n, const float* in, const float* amp, float* out);
 
 template <class V>
+/**
+ * @brief The voices' channels [lane, lane + width): @p in through the high and low pass (or the model) times @p amp into @p
+ *        out, @p n samples.
+ */
 void polyChannelKernel(PolyChannels& c, int lane, int n, const float* in, const float* amp, float* out)
 {
     if (c.model != 0) { polyModelKernel<V>(c, lane, n, in, amp, out); return; }

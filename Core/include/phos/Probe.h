@@ -108,7 +108,9 @@ void setBuildIdForTest(const char* id);
 
 /** @brief A 128-bit cache key. */
 struct Key {
-    uint64_t a = 0, b = 0;   ///< the two halves
+    uint64_t a = 0;   ///< the first half
+    uint64_t b = 0;   ///< the second half
+    /** @brief Whether two keys are the same. */
     bool operator==(const Key& o) const { return a == o.a && b == o.b; }
 };
 

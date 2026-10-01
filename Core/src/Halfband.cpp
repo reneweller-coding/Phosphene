@@ -14,7 +14,7 @@ namespace phos {
 
 namespace {
 
-constexpr double kPiD = 3.14159265358979323846;
+constexpr double kPiD = 3.14159265358979323846;   ///< pi
 
 /** @brief The elliptic modulus @p k and nome @p q of a half-band design with the given transition width. */
 void transitionParams(double transition, double& k, double& q)

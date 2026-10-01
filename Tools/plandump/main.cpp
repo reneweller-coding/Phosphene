@@ -56,8 +56,10 @@ uint32_t bits(float v) { uint32_t u; std::memcpy(&u, &v, sizeof(u)); return u; }
 
 /** @brief FNV-1a over 64-bit words. */
 struct Fnv {
-    uint64_t h = 1469598103934665603ull;
+    uint64_t h = 1469598103934665603ull;   ///< the hash
+    /** @brief Adds the eight bytes of @p v. */
     void add(int64_t v) { for (int i = 0; i < 8; ++i) { h ^= static_cast<uint64_t>(v >> (8 * i)) & 0xFFu; h *= 1099511628211ull; } }
+    /** @brief Adds the bytes of @p s and its length. */
     void add(const std::string& s) { for (unsigned char c : s) { h ^= c; h *= 1099511628211ull; } add(static_cast<int64_t>(s.size())); }
 };
 
@@ -154,6 +156,7 @@ void dumpDecisions(Composer& composer, const ParamStore& params, uint64_t seed, 
 }
 } // namespace
 
+/** @brief Renders what the command line asks for; the exit code is 0 on success. */
 int main(int argc, char** argv)
 {
     uint64_t seed = 1;

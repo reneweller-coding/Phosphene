@@ -81,7 +81,8 @@ private:
     bool dither_ = true;   ///< TPDF dither when writing 24-bit PCM
     uint64_t rng_ = 0x9E3779B97F4A7C15ull;   ///< the dither's generator state
     FILE* f_ = nullptr;   ///< the open file
-    int sampleRate_ = 48000, channels_ = 2;   ///< the stream's format
+    int sampleRate_ = 48000;   ///< the sample rate, Hz
+    int channels_ = 2;   ///< how many channels
     WavFormat format_ = WavFormat::Float32;   ///< sample format
     uint64_t frames_ = 0;   ///< frames written
     uint32_t clipped_ = 0;   ///< PCM samples clipped at full scale

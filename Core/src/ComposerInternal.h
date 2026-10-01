@@ -67,41 +67,41 @@ struct VoicePalette {
     double interval[static_cast<int>(PolyOsc2Interval::Count)];   ///< weight per PolyOsc2Interval
     float  scale[kNumVoiceMacros];                      ///< how far each direction reaches for this voice
 };
-constexpr int8_t kLanePad = static_cast<int8_t>(WaveTableLane::Pad);
-constexpr int8_t kLaneLead = static_cast<int8_t>(WaveTableLane::Lead);
-constexpr int8_t kLaneArp = static_cast<int8_t>(WaveTableLane::Arp);
-constexpr int8_t kLaneDrone = static_cast<int8_t>(WaveTableLane::Drone);
-constexpr int8_t kLaneCounter = static_cast<int8_t>(WaveTableLane::Counter);
-// The drone's second oscillator never goes *below* it, which is the one row where that matters and
-// where the first attempt at these weights was wrong. The drone is already the lowest voice, and
-// rule 20 is explicit about the band under 140 Hz: it belongs to the kick and the bass from their
-// first beat back, which is why the drone moves up an octave when they return (Melody.cpp,
-// makeDrone). An octave-down partner put it straight back there -- testVoices.droneRender measured
-// -5.9 dB in the two bars after the breakdown where it wants -18 dB or less. Unison, a fifth up or
-// an octave up give it an organ-like body instead, in its own register.
-//
-// The pad never answers below its own note either, and the reason is sharper than the drone's. Its
-// high pass tracks the note, so an octave-down partner is filtered away -- *except* in a breakdown,
-// where rule 20 opens that high pass to 40 Hz on purpose so the pad can carry the floor kick and
-// bass have left. So the one place the low partner is audible at all is the one place it does harm:
-// bisected to this row, the breakdown's 40..140 Hz band went from 23.7 dB under the core to 18.1,
-// against the 20 dB the section rule asks for (testSectionRules). Unison with a few cents of detune
-// is what changes the pad's *colour* rather than its weight anyway -- with an octave-down partner on
-// every pad the rendered spread of the pad's centroid across twenty tracks fell from 915 to 321
-// cents, because a low partner pulls every track's centroid to the same place.
-//
-// Nor does the pad answer at a fifth (24.09.2026). The partner doubles every tone of the chord, so a
-// fifth over a chord is a second chord a fifth higher: over F# Phrygian's C# it plays G#, which the
-// mode does not have, and over a sus2 or an m7 it stacks new seconds onto the ones the chord already
-// has. The drone plays one note -- a fifth there is an organ; under a held chord it was part of what the
-// user heard as "schraeg". The stab plays the same chords, short, and lost its fifths the same day.
-//
-// Per row: the first oscillator's weights; the built-in candidate tables; the library lanes; the
-// filter responses; the second oscillator's weights (index 0 = none, and it is the largest
-// everywhere -- a second oscillator is a colour a track may draw, not a thing every track has); the
-// interval it answers at (-2 Oct, -1 Oct, -5th, Unison, +5th, +1 Oct); and the reach of the five
-// directions.
-//                                     Supersaw VA   FM   WT      built-ins                  lanes                             LP    BP    HP   Notch     off   sup   va    fm    wt          -2oct -1oct -5th  uni   +5th  +1oct     bright soft thick space motion
+constexpr int8_t kLanePad = static_cast<int8_t>(WaveTableLane::Pad);   ///< the pad's wavetable lane
+constexpr int8_t kLaneLead = static_cast<int8_t>(WaveTableLane::Lead);   ///< the lead's
+constexpr int8_t kLaneArp = static_cast<int8_t>(WaveTableLane::Arp);   ///< the arp's
+constexpr int8_t kLaneDrone = static_cast<int8_t>(WaveTableLane::Drone);   ///< the drone's
+constexpr int8_t kLaneCounter = static_cast<int8_t>(WaveTableLane::Counter);   ///< the counter's
+/// The drone's second oscillator never goes *below* it, which is the one row where that matters and
+/// where the first attempt at these weights was wrong. The drone is already the lowest voice, and
+/// rule 20 is explicit about the band under 140 Hz: it belongs to the kick and the bass from their
+/// first beat back, which is why the drone moves up an octave when they return (Melody.cpp,
+/// makeDrone). An octave-down partner put it straight back there -- testVoices.droneRender measured
+/// -5.9 dB in the two bars after the breakdown where it wants -18 dB or less. Unison, a fifth up or
+/// an octave up give it an organ-like body instead, in its own register.
+///
+/// The pad never answers below its own note either, and the reason is sharper than the drone's. Its
+/// high pass tracks the note, so an octave-down partner is filtered away -- *except* in a breakdown,
+/// where rule 20 opens that high pass to 40 Hz on purpose so the pad can carry the floor kick and
+/// bass have left. So the one place the low partner is audible at all is the one place it does harm:
+/// bisected to this row, the breakdown's 40..140 Hz band went from 23.7 dB under the core to 18.1,
+/// against the 20 dB the section rule asks for (testSectionRules). Unison with a few cents of detune
+/// is what changes the pad's *colour* rather than its weight anyway -- with an octave-down partner on
+/// every pad the rendered spread of the pad's centroid across twenty tracks fell from 915 to 321
+/// cents, because a low partner pulls every track's centroid to the same place.
+///
+/// Nor does the pad answer at a fifth (24.09.2026). The partner doubles every tone of the chord, so a
+/// fifth over a chord is a second chord a fifth higher: over F# Phrygian's C# it plays G#, which the
+/// mode does not have, and over a sus2 or an m7 it stacks new seconds onto the ones the chord already
+/// has. The drone plays one note -- a fifth there is an organ; under a held chord it was part of what the
+/// user heard as "schraeg". The stab plays the same chords, short, and lost its fifths the same day.
+///
+/// Per row: the first oscillator's weights; the built-in candidate tables; the library lanes; the
+/// filter responses; the second oscillator's weights (index 0 = none, and it is the largest
+/// everywhere -- a second oscillator is a colour a track may draw, not a thing every track has); the
+/// interval it answers at (-2 Oct, -1 Oct, -5th, Unison, +5th, +1 Oct); and the reach of the five
+/// directions.
+///                                     Supersaw VA   FM   WT      built-ins                  lanes                             LP    BP    HP   Notch     off   sup   va    fm    wt          -2oct -1oct -5th  uni   +5th  +1oct     bright soft thick space motion
 inline const VoicePalette kVoicePalette[kPolyInstances] = {
     /* lead    */ { { 0.30, 0.12, 0.13, 0.45 }, { 4, 5, -1, -1, -1, -1 },  { kLaneLead, -1, -1 },        { 0.80, 0.10, 0.0, 0.10 }, { 0.45, 0.15, 0.15, 0.10, 0.15 }, { 0.05, 0.35, 0.10, 0.20, 0.05, 0.25 }, { 1.0f, 0.6f, 1.0f, 1.0f, 0.8f } },
     /* counter */ { { 0.08, 0.17, 0.20, 0.55 }, { 5, 1, 2, -1, -1, -1 },   { kLaneCounter, -1, -1 },     { 0.40, 0.40, 0.0, 0.20 }, { 0.45, 0.05, 0.20, 0.20, 0.10 }, { 0.05, 0.30, 0.10, 0.30, 0.05, 0.20 }, { 1.0f, 0.8f, 0.8f, 1.0f, 1.0f } },

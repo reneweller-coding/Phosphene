@@ -53,7 +53,9 @@ bool readGalleryEntry(std::string_view text, GalleryEntry& out);
 
 /** @brief The listener's verdicts per set seed (Rating.h). */
 struct RatingCount {
-    int good = 0, bad = 0, notes = 0;   ///< verdicts and written notes
+    int good = 0;   ///< the good verdicts
+    int bad = 0;   ///< the bad verdicts
+    int notes = 0;   ///< the written notes
 };
 /** @brief Counts the verdicts of a ratings file by seed; an unreadable file gives an empty map. */
 std::map<uint64_t, RatingCount> ratingsBySeed(const char* path);

@@ -37,18 +37,22 @@ namespace phos {
 namespace {
 
 /** @brief One move of a perceptual direction: parameter (module table index), direction, weight. */
-struct Loading { int param; int macro; float weight; };
+struct Loading {
+    int param;      ///< the parameter (module table index)
+    int macro;      ///< the direction
+    float weight;   ///< its weight
+};
 
-// Kick: length, punch, body, grit, click. Weights in normalised knob units at full variation.
-//
-// Widened 19.09.2026 where the reference kicks spread (Tools/ref_kick.py, 24 recordings): the click
-// band against the body has quartiles -31 .. -23 dB, eight decibels, where the old click weights moved
-// it by about two; the length direction is *narrower* than before, because the reference kicks hardly
-// spread there (body 101 .. 108 ms between the quartiles) and a short recipe took the track's low end
-// with it (track 2 of the listening seed: 55 ms of body, the drop 3 dB lighter under its lead and arp);
-// and the body direction now moves the end
-// pitch, whose reference quartiles are 54 .. 71 Hz -- with Tune = Key the end pitch still lands on the
-// key's root or fifth, so a recipe changes *which* of the two, never the tuning.
+/// Kick: length, punch, body, grit, click. Weights in normalised knob units at full variation.
+///
+/// Widened 19.09.2026 where the reference kicks spread (Tools/ref_kick.py, 24 recordings): the click
+/// band against the body has quartiles -31 .. -23 dB, eight decibels, where the old click weights moved
+/// it by about two; the length direction is *narrower* than before, because the reference kicks hardly
+/// spread there (body 101 .. 108 ms between the quartiles) and a short recipe took the track's low end
+/// with it (track 2 of the listening seed: 55 ms of body, the drop 3 dB lighter under its lead and arp);
+/// and the body direction now moves the end
+/// pitch, whose reference quartiles are 54 .. 71 Hz -- with Tune = Key the end pitch still lands on the
+/// key's root or fifth, so a recipe changes *which* of the two, never the tuning.
 const Loading kKickLoadings[] = {
     { kick::AmpHold,    0,  0.10f }, { kick::AmpDecay,   0,  0.15f }, { kick::PitchDecay, 0,  0.10f },
     { kick::Punch,      1,  0.40f }, { kick::PunchDecay, 1, -0.25f }, { kick::PitchStart, 1,  0.25f },
@@ -56,13 +60,13 @@ const Loading kKickLoadings[] = {
     { kick::Drive,      3,  0.45f }, { kick::ClickLevel, 3,  0.10f }, { kick::Level,      3, -0.05f },
     { kick::ClickLevel, 4,  0.75f }, { kick::ClickTone,  4,  0.40f }, { kick::ClickDecay, 4,  0.20f },
 };
-// Bass: brightness, pluck, squelch, grit, weight -- since 19.09.2026 the four bass characters of the
-// round's brief as directions of one space rather than four presets: "clean sub + bite" is the centre
-// and positive weight, "gritty/overdriven" is grit (both drives and the pulse), "rubbery/resonant" is
-// squelch (the ladder's and the bite's resonance, a longer filter decay), "plucky/short" is pluck (every
-// decay shorter, less sustain). The weights are three to four times the old ones: at the default Sound
-// Variation of 0.5 and a typical draw of 0.4 the old table moved no knob by more than 0.06 of its range,
-// which renders a different number and the same sound.
+/// Bass: brightness, pluck, squelch, grit, weight -- since 19.09.2026 the four bass characters of the
+/// round's brief as directions of one space rather than four presets: "clean sub + bite" is the centre
+/// and positive weight, "gritty/overdriven" is grit (both drives and the pulse), "rubbery/resonant" is
+/// squelch (the ladder's and the bite's resonance, a longer filter decay), "plucky/short" is pluck (every
+/// decay shorter, less sustain). The weights are three to four times the old ones: at the default Sound
+/// Variation of 0.5 and a typical draw of 0.4 the old table moved no knob by more than 0.06 of its range,
+/// which renders a different number and the same sound.
 const Loading kBassLoadings[] = {
     { bass::Cutoff,      0,  0.25f }, { bass::EnvAmount,   0,  0.20f }, { bass::BiteCutoff, 0,  0.60f }, { bass::BiteEnv, 0, 0.35f },
     { bass::FilterDecay, 1, -0.40f }, { bass::AmpDecay,    1, -0.50f }, { bass::AmpSustain, 1, -0.60f }, { bass::BiteDecay, 1, -0.70f },
@@ -88,7 +92,13 @@ const Loading kBassLoadings[] = {
  * Cutoff and Env Amount are also written per section (`sectionControls`); there the voicing's offset is
  * added to the section's own base, so it survives.
  */
-struct AcidVoicingParam { int param; float clean, liquid; };
+/** @brief One parameter of the acid voicing and its offsets. */
+struct AcidVoicingParam {
+    int param;      ///< the parameter (acid::)
+    float clean;    ///< its offset towards clean
+    float liquid;   ///< its offset towards liquid
+};
+/** @brief The acid voicing: per parameter its offset towards clean and towards liquid. */
 const AcidVoicingParam kAcidVoicingTable[] = {
     { acid::Wave,          0.0f,   0.5f },
     { acid::Cutoff,      600.0f, 450.0f },
@@ -158,7 +168,11 @@ const Loading kVoiceLoadings[] = {
 constexpr float kVoiceHallWeight = 0.12f;
 
 /** @brief Bass parameters that move in slow arcs within a track, with their arc size at full variation. */
-struct Arc { int param; float size; };
+struct Arc {
+    int param;    ///< the parameter (bass::)
+    float size;   ///< its arc at full variation
+};
+/** @brief The bass parameters that move in slow arcs. */
 const Arc kBassArcs[] = { { bass::Cutoff, 0.08f }, { bass::EnvAmount, 0.06f }, { bass::Resonance, 0.06f } };
 
 } // namespace
@@ -480,7 +494,13 @@ void Composer::levelControls(const ParamStore& p, const TrackPlan& plan, double 
  *  - **rampBars**: how long the change takes -- one bar into a drop, four into a breakdown (the guide: 1 .. 2
  *    and 4 .. 8), the buildup its whole length.
  */
-struct PhaseMix { float padWidth, leadDistance, padLevelDb, padDuck, rampBars; };
+struct PhaseMix {
+    float padWidth;       ///< the pad's width
+    float leadDistance;   ///< the lead's distance (poly.distance)
+    float padLevelDb;     ///< the pad's level, dB
+    float padDuck;        ///< the pad's and the drone's duck, dB
+    float rampBars;       ///< how long the change takes, bars
+};
 
 /** @brief The phase values of a section type (see PhaseMix). */
 PhaseMix phaseMix(SectionType t)

@@ -10,7 +10,7 @@ namespace phos {
 
 namespace {
 
-constexpr double kPi2 = 1.5707963267948966;   // pi / 2
+constexpr double kPi2 = 1.5707963267948966;   ///< pi / 2
 
 /** @brief The 4-point Hermite interpolation of @p s at @p p (indices clamped to the recording). */
 inline float hermite(const float* s, int n, double p)
@@ -25,12 +25,12 @@ inline float hermite(const float* s, int n, double p)
     return ((c3 * t + c2) * t + c1) * t + x1;
 }
 
-/** @brief The circuit models' level against the state-variable filter (Poly.cpp, 26.09.2026): a + b res in dB. */
+/** @brief The circuit models' level against the state-variable filter (Poly.cpp, 26.09.2026): a + b res in dB; a per model. */
 constexpr float kTrimA[kVoiceFilterModels] = { 0.0f, 1.32f, 1.28f, 1.94f, 0.0f, 1.28f, 5.8f, 0.4f, 0.0f, 0.0f };
-constexpr float kTrimB[kVoiceFilterModels] = { 0.0f, 3.4f, 3.6f, 6.8f, 0.0f, 3.6f, 4.0f, 0.0f, 0.0f, 0.0f };
+constexpr float kTrimB[kVoiceFilterModels] = { 0.0f, 3.4f, 3.6f, 6.8f, 0.0f, 3.6f, 4.0f, 0.0f, 0.0f, 0.0f };   ///< ... and b, per model
 
 /** @brief The Butterworth low cut's two sections (24 dB/octave): their quality factors. */
-constexpr float kLowQ1 = 0.5412f, kLowQ2 = 1.3066f;
+constexpr float kLowQ1 = 0.5412f, kLowQ2 = 1.3066f;   ///< the second's
 
 } // namespace
 

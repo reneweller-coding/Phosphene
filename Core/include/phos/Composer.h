@@ -176,7 +176,8 @@ struct VoiceRecipe {
     int   osc = -1;                    ///< override of poly.osc, -1 = the knob
     int   table = -1;                  ///< override of poly.table, -1 = the knob
     int   filter = -1;                 ///< override of poly.filter_type, -1 = the knob
-    int   delayL = -1, delayR = -1;    ///< overrides of the delay times, -1 = the knob
+    int   delayL = -1;   ///< override of the left delay time, -1 = the knob
+    int   delayR = -1;   ///< ... of the right one
     /** @name The second oscillator (22.09.2026, round "Klangfarben"; Params.h, poly::Osc2)
      *  Two discrete choices, because that is what they are: *which* oscillator answers the first one
      *  and *at which interval*. The mix between them is continuous and rides on the thickness
@@ -248,7 +249,8 @@ struct TrackPlan {
     uint64_t formSeed = 0;          ///< seed of the track's form
     FormPlan form;                  ///< sections, their energies and the effects on their boundaries
     uint64_t sectionSeed[kMaxSections] = {};   ///< seed of each section (lockable, rerollable)
-    float  arcIn = 0.7f, arcOut = 0.7f;        ///< the set's energy arc where the track starts and ends
+    float  arcIn = 0.7f;   ///< the set's energy arc where the track starts
+    float  arcOut = 0.7f;   ///< ... and where it ends
     double partLoudness[kMelodyParts] = {};   ///< probe loudness of each melodic part alone, LUFS
     /**
      * @name The level match's reference (26.09.2026)
@@ -257,8 +259,8 @@ struct TrackPlan {
      * (it used to be the reference as it stood, and with presets a reference drawn by chance: the Full-On breakdown's
      * counter came out 7 dB under the calibrated one). Equal to loudness and partLoudness where it plays none.
      * @{ */
-    double refLoudness = 0.0;
-    double refPartLoudness[kMelodyParts] = {};
+    double refLoudness = 0.0;   ///< the first track's loudness with the presets off, LUFS
+    double refPartLoudness[kMelodyParts] = {};   ///< ... and its parts', LUFS
     /** @} */
     float  partGainDb[kMelodyParts] = {};     ///< level correction of each melodic part against the first track's
     /**
@@ -623,6 +625,10 @@ private:
     /** @brief The part-level events of trackStartControls and levelControls, one formula for both. */
     void pushPartLevels(const ParamStore& params, const TrackPlan& plan, double beat, float length, bool floor, bool voices,
                         std::vector<ControlEvent>& out) const;
+    /**
+     * @brief The control events of bar @p bar of @p plan at @p beat into @p out: the section's rides and the voicing (@p
+     *        scope: which of them).
+     */
     void sectionControls(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar, double beat,
                          std::vector<ControlEvent>& out, ControlScope scope = ControlScope::All) const;
     /** @brief The lead's cutoff offset at a bar, as sectionControls ramps it (22.09.2026). */
@@ -693,7 +699,8 @@ private:
     int nextBar_ = 0;   ///< the next bar to compose
     std::vector<NoteEvent> notes_;   ///< the last composed bar's notes
     std::vector<ControlEvent> controls_;   ///< and its control events
-    size_t notePos_ = 0, controlPos_ = 0;   ///< how many of them are in the engine's rings
+    size_t notePos_ = 0;   ///< how many of the notes are in the engine's rings
+    size_t controlPos_ = 0;   ///< ... and of the control events
 };
 
 } // namespace phos

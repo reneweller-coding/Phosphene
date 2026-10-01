@@ -24,9 +24,9 @@ const char* const kArpStyleFeatureNames[6] = { "corpus", "up", "down", "up-down"
 const char* const kCounterModeFeatureNames[4] = { "Echo", "Answer", "Timbral", "Hocket" };
 
 namespace {
-std::mutex gLock;
-std::shared_ptr<const Preferences> gPrefs;
-std::atomic<unsigned> gRevision{ 0 };
+std::mutex gLock;   ///< guards gPrefs
+std::shared_ptr<const Preferences> gPrefs;   ///< the preferences in force
+std::atomic<unsigned> gRevision{ 0 };   ///< counts their changes
 } // namespace
 
 bool Preferences::parse(std::string_view text, std::string* error)

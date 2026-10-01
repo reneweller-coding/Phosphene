@@ -16,7 +16,7 @@
 namespace phos {
 
 namespace {
-constexpr double kPiD = 3.141592653589793;
+constexpr double kPiD = 3.141592653589793;   ///< pi
 
 /** @brief The IMA ADPCM step sizes (89 entries) and index changes, as the IMA/DVI recommendation has them. */
 constexpr int kImaStep[89] = {
@@ -25,7 +25,7 @@ constexpr int kImaStep[89] = {
     876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327, 3660, 4026, 4428,
     4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899, 15289, 16818, 18500, 20350,
     22385, 24623, 27086, 29794, 32767 };
-constexpr int kImaIndex[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
+constexpr int kImaIndex[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };   ///< the index changes
 
 /**
  * @brief Peterson and Barney's vowel formants, male averages F1, F2, F3 in Hz (J. Acoust. Soc. Am.
@@ -34,7 +34,7 @@ constexpr int kImaIndex[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
 constexpr float kVowels[10][3] = {
     { 270, 2290, 3010 }, { 390, 1990, 2550 }, { 530, 1840, 2480 }, { 660, 1720, 2410 }, { 730, 1090, 2440 },
     { 570, 840, 2410 },  { 440, 1020, 2240 }, { 300, 870, 2240 },  { 520, 1190, 2390 }, { 490, 1350, 1690 } };
-constexpr int kNumVowels = 10;
+constexpr int kNumVowels = 10;   ///< how many vowels the table has
 
 /**
  * @brief Level of each vocal type against vocal.level, in dB (calibrated 19.09.2026 on the listening
@@ -65,13 +65,16 @@ float vocalTypeGain(SfxType t)
  * first thread's parse() was still filling it in.
  */
 struct Pack {
-    std::atomic<bool> attempted{ false };
-    std::mutex mutex;
-    std::vector<VoicePhrase> phrases;
+    std::atomic<bool> attempted{ false };   ///< the pack was looked for (the call-once gate)
+    std::mutex mutex;   ///< serialises the threads that find it false
+    std::vector<VoicePhrase> phrases;   ///< the phrases of the pack
 };
+/** @brief The pack, created on first use. */
 Pack& pack() { static Pack p; return p; }
+/** @brief Where the voice pack is looked for. */
 std::string& voiceSearchPath() { static std::string s; return s; }
 
+/** @brief A little-endian 32-bit word at @p p. */
 uint32_t rd32(const uint8_t* p) { return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24); }
 
 /** @brief Parses a voice pack (PHOSVX01) into its phrases; false, with a reason in @p error, if it is not one. */

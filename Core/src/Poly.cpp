@@ -13,7 +13,7 @@ namespace phos {
 
 namespace {
 
-constexpr double kPiD = 3.141592653589793;
+constexpr double kPiD = 3.141592653589793;   ///< pi
 
 /** @brief Pan position of each unison oscillator: low and high partners on opposite sides. */
 constexpr double kUnisonPan[kPolyUnison] = { -1.0, 0.67, -0.33, 0.0, 0.33, -0.67, 1.0 };

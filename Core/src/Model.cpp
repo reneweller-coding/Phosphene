@@ -36,10 +36,10 @@ namespace phos {
 
 namespace {
 
-using V = VecF;
+using V = VecF;   ///< The vector type of this build.
 constexpr int kLanes = kVecWidth;   ///< lanes of the path this was built for
 
-constexpr size_t kNameBytes = 48;
+constexpr size_t kNameBytes = 48;   ///< a tensor's name in the file, bytes
 constexpr size_t kTensorFixed = kNameBytes + 1 + 1 + 2 + 16;   ///< name, dtype, ndim, reserved, dim[4]
 constexpr size_t kAlign = 32;                                   ///< payloads start on this boundary
 
@@ -52,15 +52,17 @@ std::string& searchPath()
 
 /** @brief One tensor as it sits in the file. */
 struct Tensor {
-    std::string name;
+    std::string name;   ///< its name
     int dtype = 0;               ///< 0 float32, 1 int8 with one scale per row
-    int dim[4] = { 1, 1, 1, 1 };
-    const float* scale = nullptr;
-    const void* data = nullptr;
-    size_t count = 0;
+    int dim[4] = { 1, 1, 1, 1 };   ///< its dimensions
+    const float* scale = nullptr;   ///< the rows' scales (int8), else null
+    const void* data = nullptr;   ///< its payload
+    size_t count = 0;   ///< its elements
 };
 
+/** @brief A little-endian 32-bit word at @p p. */
 uint32_t readU32(const uint8_t* p) { uint32_t v; std::memcpy(&v, p, 4); return v; }
+/** @brief A little-endian 16-bit word at @p p. */
 uint16_t readU16(const uint8_t* p) { uint16_t v; std::memcpy(&v, p, 2); return v; }
 
 /** @brief The value of @p key in a "key=value\n" header, or an empty string. */

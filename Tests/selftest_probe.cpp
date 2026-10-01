@@ -87,8 +87,8 @@ void checkSame(const std::vector<TrackPlan>& got, const std::vector<TrackPlan>& 
 
 /** @brief Puts the process's probe settings back when a section ends, however it ends. */
 struct RestoreProbeSettings {
-    int threads = probe::threads();
-    std::string dir = probe::cacheDir();
+    int threads = probe::threads();   ///< the threads as they were
+    std::string dir = probe::cacheDir();   ///< the cache folder as it was
     ~RestoreProbeSettings()
     {
         probe::setThreads(threads);

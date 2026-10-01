@@ -148,7 +148,8 @@ private:
     PercCoefs c_;   ///< every lane's coefficients (PercKernel.h)
     float values_[kPercLanes][perc::Count] = {};   ///< each lane's parameters as update() read them
     bool  valid_[kPercLanes] = {};   ///< the lane has been updated at least once
-    int   keyRoot_[kPercLanes] = {}, scale_[kPercLanes] = {};   ///< the key and scale each lane was tuned to
+    int   keyRoot_[kPercLanes] = {};   ///< per lane: the key it was tuned to
+    int   scale_[kPercLanes] = {};   ///< per lane: the scale it was tuned to
     int   role_[kPercLanes] = {};   ///< perc.role per lane (PercRole)
     int   engine_[kPercLanes] = {};   ///< perc.engine per lane
     int   choke_[kPercLanes] = {};   ///< perc.choke group per lane (0 = none)
@@ -161,12 +162,18 @@ private:
     double modeR_[kPercModes][kPercLanes] = {};   ///< their per-sample radii (the decays)
     // Noise and bursts.
     Rng   noiseRng_[kPercLanes];   ///< each lane's noise source
-    float noiseTail_[kPercLanes] = {}, noiseFast_[kPercLanes] = {};   ///< the noise's per-sample decay after the hit and between the bursts of a clap
+    float noiseTail_[kPercLanes] = {};   ///< per lane: the noise's per-sample decay after the hit
+    float noiseFast_[kPercLanes] = {};   ///< ... and between the bursts of a clap
     int   burstsLeft_[kPercLanes] = {};   ///< a clap's bursts still to come
-    double burstTimer_[kPercLanes] = {}, burstSpacing_[kPercLanes] = {};   ///< samples to the next burst, and between bursts
+    double burstTimer_[kPercLanes] = {};   ///< per lane: samples to the next burst
+    double burstSpacing_[kPercLanes] = {};   ///< ... and between bursts
     float burstVel_[kPercLanes] = {};   ///< the bursts' level
     float chokeFactor_ = 0.999f;   ///< the per-sample decay of a choked lane (8 ms)
-    std::vector<float> noise_, reset_, dNoise_, outL_, outR_;   ///< a block's noise, burst restarts and noise decays per lane, and the kit's output
+    std::vector<float> noise_;   ///< a block's noise, per sample and lane
+    std::vector<float> reset_;   ///< a block's burst restarts
+    std::vector<float> dNoise_;   ///< a block's noise decays
+    std::vector<float> outL_;   ///< the kit's output, left
+    std::vector<float> outR_;   ///< ... right
 };
 
 } // namespace phos

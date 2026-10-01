@@ -36,7 +36,10 @@ constexpr int kCorpusRelMax = 24;    ///< highest
 constexpr int kCorpusAlphabet = kCorpusRelMax - kCorpusRelMin + 1;   ///< 37 symbols
 
 /** @brief One n-gram count: key = symbols in base kCorpusAlphabet, most significant first. */
-struct CorpusGram { uint32_t key; uint32_t count; };
+struct CorpusGram {
+    uint32_t key;     ///< the succession, packed
+    uint32_t count;   ///< how often it occurs
+};
 
 /** @brief The tables of one role. */
 struct CorpusRole {
@@ -56,7 +59,7 @@ struct CorpusRole {
 
 /** @brief Roles in the tables. */
 enum class CorpusRoleId : int { Acid = 0, Lead, Arp, Count };
-constexpr int kNumCorpusRoles = static_cast<int>(CorpusRoleId::Count);
+constexpr int kNumCorpusRoles = static_cast<int>(CorpusRoleId::Count);   ///< how many roles the tables have
 extern const CorpusRole kCorpusRoles[kNumCorpusRoles];
 
 extern const uint32_t kCorpusChordTransitions[12][12];   ///< bar-to-bar chord roots, interval to the tonic
@@ -114,9 +117,15 @@ double chordTransition(int fromRel, int toRel);
  * skeletons -- the corpus fills what the rules leave open, never the other way round.
  * @{ */
 /** @brief One bar pattern: a 16-bit onset mask (bit s = sixteenth s) and how many bars played it. */
-struct CorpusBarMask { uint16_t mask; uint32_t count; };
+struct CorpusBarMask {
+    uint16_t mask;    ///< the bar's onsets, bit s for sixteenth s
+    uint32_t count;   ///< how often it occurs
+};
 /** @brief One skeleton: the pitch at the start of beats 2, 3 and 4 relative to beat 1, semitones, and its count. */
-struct CorpusSkeleton { int8_t d[3]; uint32_t count; };
+struct CorpusSkeleton {
+    int8_t d[3];      ///< the pitch at the start of beats 2, 3 and 4 relative to beat 1, semitones
+    uint32_t count;   ///< how often it occurs
+};
 extern const CorpusBarMask* const kCorpusRoleBars[kNumCorpusRoles];     ///< per role, sorted by count
 extern const int kNumCorpusRoleBars[kNumCorpusRoles];                   ///< entries per role
 extern const CorpusSkeleton* const kCorpusRoleSkeletons[kNumCorpusRoles];
@@ -127,9 +136,16 @@ extern const int kCorpusTemplateLines[kNumCorpusRoles];                 ///< ded
 // ------------------------------------------------------------------------------------ bass rhythm
 
 /** @brief One entry of the bass bar-pattern lookup: a 16-bit onset mask and its count. */
-struct CorpusBassBar { uint16_t mask; uint32_t count; };
+struct CorpusBassBar {
+    uint16_t mask;    ///< the bar's onsets, bit s for sixteenth s
+    uint32_t count;   ///< how often it occurs
+};
 /** @brief One context of the parametric bass onset chain: a packed key and its two outcomes. */
-struct CorpusBassStep { uint16_t key; uint32_t miss; uint32_t hit; };
+struct CorpusBassStep {
+    uint16_t key;    ///< the context, packed
+    uint32_t miss;   ///< how often no onset followed
+    uint32_t hit;    ///< how often one did
+};
 
 extern const CorpusBassBar* const kCorpusBassBars;   ///< bar patterns, sorted by mask
 extern const int kNumCorpusBassBars;                 ///< entries of kCorpusBassBars

@@ -219,22 +219,62 @@ private:
 
     ModelInfo info_;   ///< the file's header: architecture and sizes
     bool loaded_ = false;   ///< a model file was read
-    int role_ = 0, style_ = 0, bars_ = 0, mode_ = 0, pos_ = 0;   ///< the conditioning rows of the current sequence, and its position
+    int role_ = 0;   ///< the line's role (a conditioning row)
+    int style_ = 0;   ///< its style
+    int bars_ = 0;   ///< its bars
+    int mode_ = 0;   ///< its mode
+    int pos_ = 0;   ///< the position in the line
     int headDim_ = 0;   ///< dimensions per attention head
-    int dimP_ = 0, ffnP_ = 0, vocabP_ = 0, headDimP_ = 0, ctxP_ = 0, qkvP_ = 0;   ///< the sizes padded to the lane width, as the panels are stored
+    int dimP_ = 0;   ///< the residual width, padded to the lane width
+    int ffnP_ = 0;   ///< the feed-forward width, padded
+    int vocabP_ = 0;   ///< the alphabet, padded
+    int headDimP_ = 0;   ///< a head's width, padded
+    int ctxP_ = 0;   ///< the context, padded
+    int qkvP_ = 0;   ///< the qkv width, padded
 
     /** @brief Weights of one block, already packed into panels (empty for the other architecture). */
     struct Block {
-        std::vector<float> n1w, n1b, n2w, n2b;                      ///< the norms
-        std::vector<float> qkv, qkvB, out, outB, up, upB, down, downB;   ///< the transformer
-        std::vector<float> kCache, vCache;                          ///< keys in time panels, values row major
+        std::vector<float> n1w;   ///< the first norm's weights
+        std::vector<float> n1b;   ///< ... its biases
+        std::vector<float> n2w;   ///< the second norm's weights
+        std::vector<float> n2b;   ///< ... its biases
+        std::vector<float> qkv;   ///< the query, key and value projection
+        std::vector<float> qkvB;   ///< ... its biases
+        std::vector<float> out;   ///< the attention's output projection
+        std::vector<float> outB;   ///< ... its biases
+        std::vector<float> up;   ///< the feed-forward's up projection
+        std::vector<float> upB;   ///< ... its biases
+        std::vector<float> down;   ///< the feed-forward's down projection
+        std::vector<float> downB;   ///< ... its biases
+        std::vector<float> kCache;   ///< the keys so far, in time panels
+        std::vector<float> vCache;   ///< the values so far, row major
     };
     std::vector<Block> blocks_;   ///< the layers
     /** @brief The nine embedding tables, in the order of MODEL_FORMAT.md section 4, plus the two
      *         optional ones (kick.emb, mode.emb) that are empty in a file that does not carry them. */
-    std::vector<float> tok_, posE_, roleE_, styleE_, barsE_, stepE_, barE_, gapE_, idxE_, kickE_, modeE_;
-    std::vector<float> normW_, normB_, head_, headB_;   ///< the final norm and the output head
-    std::vector<float> x_, nx_, qkvBuf_, att_, ff_, accum_, scores_, logits_;   ///< the forward pass's working buffers
+    std::vector<float> tok_;   ///< the token embedding
+    std::vector<float> posE_;   ///< the position embedding
+    std::vector<float> roleE_;   ///< the role embedding
+    std::vector<float> styleE_;   ///< the style embedding
+    std::vector<float> barsE_;   ///< the bars embedding
+    std::vector<float> stepE_;   ///< the step embedding
+    std::vector<float> barE_;   ///< the bar embedding
+    std::vector<float> gapE_;   ///< the gap embedding
+    std::vector<float> idxE_;   ///< the index embedding
+    std::vector<float> kickE_;   ///< the kick embedding (empty without condKick)
+    std::vector<float> modeE_;   ///< the mode embedding (empty without condMode)
+    std::vector<float> normW_;   ///< the final norm's weights
+    std::vector<float> normB_;   ///< ... its biases
+    std::vector<float> head_;   ///< the output head
+    std::vector<float> headB_;   ///< the head's biases
+    std::vector<float> x_;   ///< the residual stream
+    std::vector<float> nx_;   ///< the normed stream
+    std::vector<float> qkvBuf_;   ///< the queries, keys and values of the position
+    std::vector<float> att_;   ///< the attention's output
+    std::vector<float> ff_;   ///< the feed-forward's hidden layer
+    std::vector<float> accum_;   ///< the accumulators of a product
+    std::vector<float> scores_;   ///< the attention scores
+    std::vector<float> logits_;   ///< the logits
     std::vector<double> probs_;   ///< softmax of the logits
 };
 
@@ -291,11 +331,15 @@ struct NeuralStepper {
                                               ///< draw in Composer.cpp initialises this aggregate
                                               ///< positionally and does not name the mode.
 
+    /** @brief The model's alphabet. */
     int alphabet() const { return model->alphabet(); }
     /** @brief Resets; an order-2 context's older symbol means nothing to a long-context model. */
     void begin(int, int start1) { model->begin(role, style, bars, mode); previous = start1; }
+    /** @brief Computes the distribution at position @p i of the line; false where the model cannot. */
     bool advance(int i) { return model->step(previous, (*cond)[static_cast<size_t>(i)]); }
+    /** @brief Takes @p symbol as drawn. */
     void observe(int symbol) { previous = symbol; }
+    /** @brief The probability of symbol @p c. */
     double prob(int c) const { return model->prob(c); }
 };
 

@@ -49,7 +49,12 @@ namespace mel {
  * 0.538, lead 0.582 to 0.484), the opposite of a phrase-final resolution. So only these two effects
  * are implemented.
  */
-struct TensionCurve { double beat[4]; double parity; };
+/** @brief A role's tension: per beat of the bar and the bar parity. */
+struct TensionCurve {
+    double beat[4];   ///< the tension on each beat of the bar
+    double parity;    ///< the bar parity's
+};
+/** @brief Each role's tension over the beats of a bar and its bar parity. */
 constexpr TensionCurve kTensionCurve[kNumCorpusRoles] = {
     { { -0.179, 0.025, 0.097, 0.057 }, 0.070 },   // acid
     { { -0.213, -0.064, 0.024, 0.254 }, 0.100 },  // lead
@@ -267,7 +272,8 @@ int drawLength(Rng& r, const CorpusRole& role, int step, int gap)
 
 /** @brief The uniform source the sampler draws from. */
 struct Uniform {
-    Rng* r;
+    Rng* r;   ///< the stream
+    /** @brief A uniform draw in [0, 1). */
     double operator()() const { return static_cast<double>(r->uniform()); }
 };
 
@@ -678,8 +684,8 @@ namespace mel {
  * plus a release of a few tens of milliseconds).
  */
 struct RegisterMap {
-    int lo[kStepsPerBar];
-    int hi[kStepsPerBar];
+    int lo[kStepsPerBar];   ///< per sixteenth: the lowest note sounding
+    int hi[kStepsPerBar];   ///< per sixteenth: the highest note sounding
     RegisterMap() { for (int s = 0; s < kStepsPerBar; ++s) { lo[s] = 1000; hi[s] = -1000; } }
     /** @brief Marks @p pitch as sounding from @p first for @p span sixteenths (clipped to the bar). */
     void add(int first, int span, int pitch)

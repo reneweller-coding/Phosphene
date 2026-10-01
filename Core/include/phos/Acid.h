@@ -157,30 +157,56 @@ private:
     HalfbandDown<float> down_;   ///< back from the oversampled rate
     Envelope amp_;   ///< amplitude envelope
     TanhAdaa shaper_;   ///< the drive stage
-    Svf lc1_, lc2_;   ///< the low cut (acid.low_cut), two sections
+    Svf lc1_;   ///< the low cut (acid.low_cut): its first section
+    Svf lc2_;   ///< ... its second
     Disperser disperse_;             ///< all-pass chain coefficients (Disperser.h)
     DisperserChannel dispState_;     ///< its state; the acid is mono until the delay
     TempoDelay delay_;   ///< the acid's own tempo delay
     std::vector<float> comb_;   ///< the squelch's feedback comb, tuned to the note
     size_t combPos_ = 0;   ///< its write position
-    std::vector<float> mono_, send_;   ///< a block's dry signal and delay send
+    std::vector<float> mono_;   ///< a block's dry signal
+    std::vector<float> send_;   ///< a block's delay send
 
-    // Note state.
+    /// Note state.
     double pitchNow_ = 57.0, pitchTarget_ = 57.0;   ///< MIDI pitch now and where a slide goes
     float  velocity_ = 1.0f;   ///< the note's velocity, 0..1
-    bool   accent_ = false, slidePending_ = false, legato_ = false;   ///< the note's accent, a slide into the next note, and a slid (legato) note
+    bool   accent_ = false;   ///< the note's accent
+    bool   slidePending_ = false;   ///< the note slides into the next
+    bool   legato_ = false;   ///< a slid (legato) note
     int    gate_ = 0;   ///< samples until the note is released
-    float  fenv_ = 0.0f, fDecayNote_ = 0.999f, sq_ = 0.0f;   ///< filter envelope, its per-sample decay for this note, and the squelch envelope
-    float  pulse_ = 0.0f, sweep_ = 0.0f;   ///< the accent pulse and the accent sweep capacitor it charges
-    float  accentGain_ = 1.0f, accentGainTarget_ = 1.0f;   ///< the accent's level, smoothed towards its target
+    float  fenv_ = 0.0f;   ///< the filter envelope
+    float  fDecayNote_ = 0.999f;   ///< its per-sample decay for this note
+    float  sq_ = 0.0f;   ///< the squelch envelope
+    float  pulse_ = 0.0f;   ///< the accent pulse
+    float  sweep_ = 0.0f;   ///< the accent sweep capacitor it charges
+    float  accentGain_ = 1.0f;   ///< the accent's level
+    float  accentGainTarget_ = 1.0f;   ///< ... its target
 
     // Settings from update().
-    float wave_ = 0.0f, cutoff_ = 420.0f, k_ = 10.0f, envOct_ = 2.6f, accentAmt_ = 0.6f, keyTrack_ = 0.5f;   ///< waveform, cutoff, ladder feedback, envelope depth (octaves), accent amount, key tracking
-    float fDecay_ = 0.999f, fDecayAccent_ = 0.999f, glide_ = 0.001f, driveIn_ = 1.0f, driveOut_ = 1.0f;   ///< filter decay (plain and accented), slide coefficient, drive in and out
+    float wave_ = 0.0f;   ///< the waveform
+    float cutoff_ = 420.0f;   ///< the cutoff, Hz
+    float k_ = 10.0f;   ///< the ladder's feedback
+    float envOct_ = 2.6f;   ///< the envelope's depth, octaves
+    float accentAmt_ = 0.6f;   ///< the accent's amount
+    float keyTrack_ = 0.5f;   ///< the key tracking
+    float fDecay_ = 0.999f;   ///< the filter's per-sample decay
+    float fDecayAccent_ = 0.999f;   ///< ... on an accented note
+    float glide_ = 0.001f;   ///< the slide's coefficient
+    float driveIn_ = 1.0f;   ///< the drive into the filter
+    float driveOut_ = 1.0f;   ///< ... and the gain after it
     bool  squelch_ = false;   ///< acid.squelch
-    float sqOct_ = 3.5f, sqDecay_ = 0.999f, combMix_ = 0.5f, combFb_ = 0.8f;   ///< the squelch's start (octaves) and decay, the comb's mix and feedback
-    float pulseDecay_ = 0.999f, sweepCharge_ = 0.001f, level_ = 0.3f, sendAmt_ = 0.25f, resonance_ = 0.7f;   ///< accent pulse decay, sweep charge rate, level, delay send, resonance
-    float ampDecay_ = 0.9f, hz_ = 220.0f, accentSmooth_ = 0.01f;   ///< amplitude decay, the frequency sounding, the accent gain's smoothing
+    float sqOct_ = 3.5f;   ///< the squelch's start, octaves
+    float sqDecay_ = 0.999f;   ///< the squelch's per-sample decay
+    float combMix_ = 0.5f;   ///< the comb's mix
+    float combFb_ = 0.8f;   ///< the comb's feedback
+    float pulseDecay_ = 0.999f;   ///< the accent pulse's decay
+    float sweepCharge_ = 0.001f;   ///< the sweep's charge rate
+    float level_ = 0.3f;   ///< the level
+    float sendAmt_ = 0.25f;   ///< the delay send
+    float resonance_ = 0.7f;   ///< the resonance
+    float ampDecay_ = 0.9f;   ///< the amplitude's decay
+    float hz_ = 220.0f;   ///< the frequency sounding
+    float accentSmooth_ = 0.01f;   ///< the accent gain's smoothing
     /** @name The acid's own modulation (26.09.2026, Modulation.h), every 16 samples on the absolute count
      *  @{ */
     Modulator mod_;                       ///< envelope, LFOs, matrix

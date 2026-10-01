@@ -56,7 +56,8 @@ struct VoicePhrase {
     int sampleRate = 16000;       ///< rate of @c samples
     std::vector<float> samples;   ///< decoded, -1..1
     uint32_t throwAt = 0;         ///< first sample of the last word
-    uint32_t chopStart = 0, chopLength = 0;   ///< the first word
+    uint32_t chopStart = 0;   ///< the first word: its first sample
+    uint32_t chopLength = 0;   ///< ... its length, samples
 };
 
 /**
@@ -126,19 +127,33 @@ private:
     struct Voice {
         SfxType type = SfxType::SpokenWord;   ///< which kind of voice
         bool on = false;   ///< sounding
-        long long pos = 0, length = 1;   ///< samples played and the event's length
-        double late = 0.0, spb = 20000.0;   ///< sub-sample onset, samples per beat
-        float velocity = 1.0f, fade = 1.0f, pan = 0.0f;   ///< level, the handover's fade, pan
+        long long pos = 0;   ///< samples played
+        long long length = 1;   ///< the event's length, samples
+        double late = 0.0;   ///< the sub-sample onset
+        double spb = 20000.0;   ///< samples per beat
+        float velocity = 1.0f;   ///< the level
+        float fade = 1.0f;   ///< the handover's fade
+        float pan = 0.0f;   ///< the place, -1 .. 1
         bool fading = false;   ///< fading out under a new voice
         int phrase = -1;   ///< the voice pack phrase it plays (spoken word, chop)
-        double read = 0.0, rate = 1.0 / 3.0;   ///< read position in the phrase and its step per sample
+        double read = 0.0;   ///< the read position in the phrase
+        double rate = 1.0 / 3.0;   ///< its step per sample
         Rng rng;   ///< the event's own random stream
         VaOscillator osc;   ///< the sung and chattered voices' source
-        Svf formant[3], hp1, hp2, lp;   ///< three formants, the high pass and the low pass
-        float tilt = 0.0f, throwW = 0.0f;   ///< the source's spectral tilt state, the weight for the delay throw
-        double vibPh = 0.0, ringPh = 0.0, ringHz = 700.0, pitchHz = 150.0, glide = 0.0;   ///< vibrato and ring-mod phases, ring-mod and sung frequencies, the glide (semitones)
+        Svf formant[3];   ///< three formants
+        Svf hp1;   ///< the high pass: first section
+        Svf hp2;   ///< ... second
+        Svf lp;   ///< the low pass
+        float tilt = 0.0f;   ///< the source's spectral tilt state
+        float throwW = 0.0f;   ///< the weight for the delay throw
+        double vibPh = 0.0;   ///< the vibrato's phase
+        double ringPh = 0.0;   ///< the ring modulator's phase
+        double ringHz = 700.0;   ///< the ring modulator's frequency, Hz
+        double pitchHz = 150.0;   ///< the sung frequency, Hz
+        double glide = 0.0;   ///< the glide, semitones
         int vowel[3] = { 0, 4, 7 };   ///< the vowels a sung phrase moves through
-        long long sylEnd = 0, sylLen = 1;   ///< the chatter's current syllable: where it ends and how long it is
+        long long sylEnd = 0;   ///< the chatter's syllable: where it ends
+        long long sylLen = 1;   ///< ... how long it is
         float sylF[3] = { 700, 1100, 2400 };   ///< its formant frequencies
     };
     /** @brief One sample of voice @p v; its weight for the delay throw goes to @p throwW. */
@@ -147,7 +162,9 @@ private:
     double sr_ = 48000.0;   ///< sample rate
     Voice voice_[2];   ///< the voice and the one fading out
     int keyRoot_ = 6;   ///< the key's pitch class, for the sung voice
-    float pitch_ = 3.0f, drive_ = 0.35f, width_ = 0.5f;   ///< vocal.pitch, vocal.drive, vocal.width
+    float pitch_ = 3.0f;   ///< vocal.pitch
+    float drive_ = 0.35f;   ///< vocal.drive
+    float width_ = 0.5f;   ///< vocal.width
 };
 
 } // namespace phos

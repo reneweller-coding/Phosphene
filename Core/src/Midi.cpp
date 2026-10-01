@@ -15,7 +15,7 @@ namespace {
 
 /** @brief A raw timed MIDI message before delta encoding. */
 struct RawEvent {
-    int64_t tick;
+    int64_t tick;   ///< when, in ticks
     int order;                    ///< tie-break at equal ticks: meta 0, note-off 1, note-on 2
     std::vector<uint8_t> bytes;   ///< status and data, or FF type len data for meta
 };
@@ -67,6 +67,7 @@ RawEvent tempoMeta(int64_t tick, double bpm)
     return meta(tick, 0x51, { static_cast<uint8_t>(mpq >> 16), static_cast<uint8_t>(mpq >> 8), static_cast<uint8_t>(mpq) });
 }
 
+/** @brief Beat @p beat in ticks (kMidiPpq per beat). */
 int64_t toTick(double beat) { return static_cast<int64_t>(std::llround(beat * kMidiPpq)); }
 
 /** @brief Sorts and delta-encodes events into an MTrk chunk. */

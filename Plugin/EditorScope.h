@@ -27,6 +27,7 @@ namespace phosui {
 /** @brief One synth's scope. */
 class SynthScope final : public juce::Component, private juce::Timer {
 public:
+    /** @brief Which synth it shows. */
     enum class Kind { Kick, Bass };
     /** @brief A scope of the kick or the bass of @p proc. */
     SynthScope(PhospheneProcessor& proc, Kind kind);
@@ -38,9 +39,11 @@ public:
     float renderedPeak() const { return peak_; }
     double landingHz() const { return landHz_; }   ///< @copydoc renderedPeak
 
+    /** @brief The wave, the pitch or cutoff curve, the spectrum and the figures. */
     void paint(juce::Graphics&) override;
 
 private:
+    /** @brief Renders again while it is shown (ten times a second). */
     void timerCallback() override { if (isShowing()) refresh(); }
     /** @brief Renders one hit or note with the synth values @p v, the key and the tempo, and derives the curves. */
     void render(const std::vector<float>& v, int key, double bpm);
@@ -53,7 +56,9 @@ private:
     std::vector<float> spectrumDb_;    ///< per log-frequency column
     double seconds_ = 0.6;   ///< the length rendered
     float peak_ = 0.0f;   ///< its peak, linear
-    double startHz_ = 0.0, landHz_ = 0.0, lengthMs_ = 0.0;   ///< where the curve starts and lands, the length to -60 dB
+    double startHz_ = 0.0;   ///< where the curve starts, Hz
+    double landHz_ = 0.0;   ///< where it lands, Hz
+    double lengthMs_ = 0.0;   ///< the length to -60 dB, ms
     int note_ = -1;   ///< the bass note, MIDI (-1 for the kick)
 };
 

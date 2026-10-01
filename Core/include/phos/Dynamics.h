@@ -101,8 +101,15 @@ public:
     float reduction() const { return reduction_; }
 
 private:
-    double sr_ = 48000.0, aA_ = 0.99, aR_ = 0.999, y1_ = 0.0, yL_ = 0.0;   ///< sample rate, attack and release coefficients, the detector's two states
-    float T_ = -12.0f, R_ = 2.0f, W_ = 6.0f, reduction_ = 0.0f;   ///< threshold (dB), ratio, knee width (dB), the last gain reduction (dB)
+    double sr_ = 48000.0;   ///< the sample rate, Hz
+    double aA_ = 0.99;   ///< the detector's attack coefficient
+    double aR_ = 0.999;   ///< the detector's release coefficient
+    double y1_ = 0.0;   ///< the detector's peak stage, dB of reduction
+    double yL_ = 0.0;   ///< its smoothed stage: the reduction applied
+    float T_ = -12.0f;   ///< the threshold, dB
+    float R_ = 2.0f;   ///< the ratio
+    float W_ = 6.0f;   ///< the knee's width, dB
+    float reduction_ = 0.0f;   ///< the reduction of the last sample, dB
 };
 
 /** @brief 8x interpolation for true-peak estimates: seven phases of twenty-four taps each. */
@@ -184,20 +191,23 @@ private:
     double release_ = 0.999;   ///< the release coefficient
     // Input history for the interpolator (both channels): 2 * kTaps slots, every sample written into
     // both halves, so the kTaps the filter needs are always contiguous (see process()).
-    std::vector<float> histL_, histR_;   ///< input history, written twice (see above)
+    std::vector<float> histL_;   ///< the interpolator's input history, left
+    std::vector<float> histR_;   ///< ... right
     int histPos_ = 0;   ///< its position
     double prevBetween_ = 0.0;   ///< the last inter-sample peak
     // Required gains, the sliding-minimum deque and the moving average.
     std::vector<double> req_;   ///< the gain each sample requires
     std::vector<int> dq_;   ///< the sliding-minimum deque over req_
-    int dqHead_ = 0, dqTail_ = 0;   ///< its ends
+    int dqHead_ = 0;   ///< the deque's head
+    int dqTail_ = 0;   ///< the deque's tail
     std::vector<double> minRing_;   ///< the window's minima, for the moving average
     double minSum_ = 0.0;   ///< their sum
     long long t_ = 0;   ///< samples processed
     int sinceRecompute_ = 0;   ///< samples since minSum_ was summed afresh (against drift)
     double gain_ = 1.0;   ///< the gain applied
     // The audio delay.
-    std::vector<float> delayL_, delayR_;   ///< the audio's lookahead delay
+    std::vector<float> delayL_;   ///< the audio delay, left
+    std::vector<float> delayR_;   ///< the audio delay, right
     int delayPos_ = 0;   ///< its position
     float reduction_ = 0.0f;   ///< the last gain reduction, dB
 };

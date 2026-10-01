@@ -24,20 +24,20 @@ namespace phos::salts {
 
 /** @brief Salts of the set walk, the recipes, the voices, the bass (Composer.cpp). */
 namespace composer {
-constexpr uint64_t kSaltTrack      = 0x545241434B000001ull;
+constexpr uint64_t kSaltTrack      = 0x545241434B000001ull;   ///< a track's seed from the set's
 constexpr uint64_t kSaltMotif      = 0x4D4F544946000017ull;   ///< the set's motif (23.09.2026, round "Set-Kurve"): its own stream, so no older draw of the walk moves
-constexpr uint64_t kSaltRecipe     = 0x5245434950450002ull;
-constexpr uint64_t kSaltBlock      = 0x424C4F434B000003ull;
-constexpr uint64_t kSaltPhrase     = 0x5048524153450004ull;
-constexpr uint64_t kSaltArc        = 0x4152430000000005ull;
-constexpr uint64_t kSaltPerc       = 0x5045524300000006ull;
-constexpr uint64_t kSaltMelody     = 0x4D454C4F44590007ull;
-constexpr uint64_t kSaltWalk       = 0x57414C4B00000008ull;
+constexpr uint64_t kSaltRecipe     = 0x5245434950450002ull;   ///< the tracks' sound recipes (the best of the candidates against the last four)
+constexpr uint64_t kSaltBlock      = 0x424C4F434B000003ull;   ///< the bass's pattern of a 16-bar block (the secondary one or not)
+constexpr uint64_t kSaltPhrase     = 0x5048524153450004ull;   ///< the bass's phrase figures of a four-bar phrase
+constexpr uint64_t kSaltArc        = 0x4152430000000005ull;   ///< a section's arc of the controls
+constexpr uint64_t kSaltPerc       = 0x5045524300000006ull;   ///< a track's percussion seed
+constexpr uint64_t kSaltMelody     = 0x4D454C4F44590007ull;   ///< a track's melody seed
+constexpr uint64_t kSaltWalk       = 0x57414C4B00000008ull;   ///< the set's walk through keys and tempi
 constexpr uint64_t kSaltStyle      = 0x5354594C45000016ull;   ///< the style journey (22.09.2026): its own stream, so no older draw of the walk moves
-constexpr uint64_t kSaltFormU      = 0x464F524D55000009ull;
-constexpr uint64_t kSaltSectU      = 0x5345435455000010ull;
-constexpr uint64_t kSaltLaneU      = 0x4C414E4555000011ull;
-constexpr uint64_t kSaltReroll     = 0x5245524F4C4C0012ull;
+constexpr uint64_t kSaltFormU      = 0x464F524D55000009ull;   ///< a track's form seed (the form unit)
+constexpr uint64_t kSaltSectU      = 0x5345435455000010ull;   ///< a section's seed (the section unit)
+constexpr uint64_t kSaltLaneU      = 0x4C414E4555000011ull;   ///< a percussion lane's seed (the lane unit)
+constexpr uint64_t kSaltReroll     = 0x5245524F4C4C0012ull;   ///< a unit's seed after a reroll
 constexpr uint64_t kSaltAcidVoice  = 0x4143494456434500ull;   ///< Salt of the acid voicing draw: its own, so no other draw of the walk moves.
 constexpr uint64_t kSaltSoundPreset = 0x534E445052535401ull;   ///< Salt of the track's sound presets (26.09.2026): their own stream, so no other draw of the walk moves.
 constexpr uint64_t kSaltVoice      = 0x564F494345520014ull;   ///< Salt of the voice recipes (19.09.2026): their own generator, so no other draw of the walk moves.
@@ -49,12 +49,12 @@ constexpr uint64_t kSaltBassRhythm = 0x424153535248546Dull;   ///< Salt of the d
 
 /** @brief Salts of the form, its sections and its effects (Form.cpp, FormSfx.cpp). */
 namespace form {
-constexpr uint64_t kSaltForm     = 0x464F524D00000001ull;
+constexpr uint64_t kSaltForm     = 0x464F524D00000001ull;   ///< the form
 constexpr uint64_t kSaltKickRoll = 0x4B49434B524F4C0Eull;   ///< the kick's roll before the pre-drop break (23.09.2026, round "Set-Kurve")
 constexpr uint64_t kSaltAbriss   = 0x41425249535300F0ull;   ///< the kick's Abriss before a sixteen-bar line of a drop (23.09.2026)
-constexpr uint64_t kSaltSection  = 0x5345435449000002ull;
-constexpr uint64_t kSaltGroup    = 0x47524F5550000003ull;
-constexpr uint64_t kSaltSfx      = 0x5346580000000004ull;
+constexpr uint64_t kSaltSection  = 0x5345435449000002ull;   ///< the sections' details
+constexpr uint64_t kSaltGroup    = 0x47524F5550000003ull;   ///< a group of sections' draw
+constexpr uint64_t kSaltSfx      = 0x5346580000000004ull;   ///< the form's effects
 constexpr uint64_t kSaltFuzz     = 0x46555A5A0000000Dull;   ///< the form's fuzziness (23.09.2026, round "Form")
 constexpr uint64_t kSaltMode     = 0x4D4F44450000005ull;   ///< the section's borrowed mode (16.09.2026)
 constexpr uint64_t kSaltRide     = 0x5249444500000006ull;   ///< the section's macro ride (16.09.2026)
@@ -68,12 +68,12 @@ constexpr uint64_t kSaltClimax   = 0x434C494D0000000Cull;   ///< drop 2's squelc
 
 /** @brief Salts of the melodic material (Melody.cpp). */
 namespace melody {
-constexpr uint64_t kSaltChords  = 0x43484F5244000001ull;
-constexpr uint64_t kSaltAcid    = 0x4143494400000002ull;
-constexpr uint64_t kSaltLead    = 0x4C45414400000003ull;
-constexpr uint64_t kSaltArp     = 0x4152500000000004ull;
-constexpr uint64_t kSaltSound   = 0x534F554E44000006ull;
-constexpr uint64_t kSaltPad     = 0x5041440000000007ull;
+constexpr uint64_t kSaltChords  = 0x43484F5244000001ull;   ///< the chords
+constexpr uint64_t kSaltAcid    = 0x4143494400000002ull;   ///< the acid's line
+constexpr uint64_t kSaltLead    = 0x4C45414400000003ull;   ///< the lead's line
+constexpr uint64_t kSaltArp     = 0x4152500000000004ull;   ///< the arp's line
+constexpr uint64_t kSaltSound   = 0x534F554E44000006ull;   ///< the parts' sounds
+constexpr uint64_t kSaltPad     = 0x5041440000000007ull;   ///< the pad's voicing
 constexpr uint64_t kSaltMode    = 0x4D4F44450000008ull;   ///< the material of a borrowed mode (16.09.2026)
 constexpr uint64_t kSaltCounter = 0x434F554E5445000Aull;   ///< the counter-lead's material (19.09.2026)
 constexpr uint64_t kSaltStab    = 0x535441420000000Bull;   ///< the stab's rhythm and material (19.09.2026)
@@ -83,10 +83,10 @@ constexpr uint64_t kSaltColour  = 0x434F4C4F55520009ull;   ///< the colour slots
 
 /** @brief Salts of the percussion (Rhythm.cpp). */
 namespace rhythm {
-constexpr uint64_t kSaltPlan   = 0x5045524350000001ull;
-constexpr uint64_t kSaltPhrase = 0x5045524350000002ull;
-constexpr uint64_t kSaltFill   = 0x5045524350000004ull;
-constexpr uint64_t kSaltLane   = 0x5045524350000005ull;
+constexpr uint64_t kSaltPlan   = 0x5045524350000001ull;   ///< the percussion's plan
+constexpr uint64_t kSaltPhrase = 0x5045524350000002ull;   ///< the percussion's phrase of four bars
+constexpr uint64_t kSaltFill   = 0x5045524350000004ull;   ///< a bar's fill
+constexpr uint64_t kSaltLane   = 0x5045524350000005ull;   ///< a lane's own stream
 } // namespace rhythm
 
 /** @brief Every salt above, for the uniqueness check. */

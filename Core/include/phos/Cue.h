@@ -677,8 +677,10 @@ private:
     }
     SocketHandle sock_ = INVALID_SOCKET;   ///< the UDP socket
 #else
-    using SocketHandle = int;
+    using SocketHandle = int;   ///< A socket.
+    /** @brief Whether @p s is an open socket. */
     static bool validSocket(SocketHandle s) { return s >= 0; }
+    /** @brief Closes the socket. */
     void closeSocket() { if (validSocket(sock_)) { ::close(sock_); sock_ = -1; } }
     SocketHandle sock_ = -1;   ///< the UDP socket
 #endif
@@ -688,7 +690,8 @@ private:
     std::atomic<bool> run_{ false };   ///< the thread runs
     std::thread thread_;   ///< the sender thread
     CueRing queue_{ 1024 };   ///< cues waiting to go out
-    std::atomic<uint64_t> sent_{ 0 }, dropped_{ 0 };   ///< datagrams sent and cues dropped
+    std::atomic<uint64_t> sent_{ 0 };   ///< cues sent
+    std::atomic<uint64_t> dropped_{ 0 };   ///< cues that could not be sent
     std::atomic<int64_t> worstLate_{ 0 };   ///< the latest a cue went out after its due time, ns
 };
 

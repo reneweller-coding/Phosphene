@@ -60,6 +60,7 @@ struct Arrival {
  */
 class UdpIn {
 public:
+    /** @brief Opens a UDP socket on @p port of the loopback and starts recording; false if it cannot. */
     bool open(int port)
     {
 #if defined(_WIN32)
@@ -82,6 +83,7 @@ public:
         thread_ = std::thread([this] { loop(); });
         return true;
     }
+    /** @brief Stops recording and closes the socket. */
     void close()
     {
         run_ = false;
@@ -96,6 +98,7 @@ public:
     const std::vector<Arrival>& arrivals() const { return arrivals_; }
 
 private:
+    /** @brief The thread: records every datagram that arrives, with its time and its address. */
     void loop()
     {
         char buf[512];
@@ -110,10 +113,10 @@ private:
             arrivals_.push_back(a);
         }
     }
-    intptr_t sock_ = -1;
-    bool run_ = false;
-    std::thread thread_;
-    std::vector<Arrival> arrivals_;
+    intptr_t sock_ = -1;   ///< the socket, -1 closed
+    bool run_ = false;   ///< the thread runs
+    std::thread thread_;   ///< the recording thread
+    std::vector<Arrival> arrivals_;   ///< what arrived
 };
 
 /** @brief The address a cue will carry, for matching an arrival to its due time. */

@@ -27,7 +27,7 @@ constexpr float kSubScale = 0.7f;       ///< sub (and sub octave) knob to amplit
  */
 constexpr float kBiteScale = 1.344f;
 /** @brief Butterworth dampings of the two sections: 2 cos(pi/8) and 2 cos(3 pi/8). */
-constexpr float kBiteK1 = 1.8477590f, kBiteK2 = 0.7653669f;
+constexpr float kBiteK1 = 1.8477590f, kBiteK2 = 0.7653669f;   ///< 2 cos(3 pi/8)
 /** @brief Corner of the bite's high pass as a fraction of Bite Cutoff (see update()). */
 constexpr float kBiteHpRatio = 0.4f;
 } // namespace

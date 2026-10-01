@@ -12,6 +12,7 @@
 namespace phos {
 
 namespace {
+/** @brief The presets of the Field track (FieldPresetData.inl). */
 const FieldPreset kRows[] = {
 #include "FieldPresetData.inl"
 };

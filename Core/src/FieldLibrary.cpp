@@ -41,50 +41,52 @@ namespace fs = std::filesystem;
 
 /** @brief One file. Entries live as long as the program, so an index into any catalogue stays valid. */
 struct Entry {
-    std::string path;
-    std::string name;
-    int category = -1;
-    std::atomic<FieldClip*> clip{ nullptr };
-    std::atomic<bool> wanted{ false };
-    std::atomic<int64_t> lastUse{ 0 };
+    std::string path;   ///< the file
+    std::string name;   ///< its name (the file name without extension)
+    int category = -1;   ///< its category (field::), the hidden shot category, or -1
+    std::atomic<FieldClip*> clip{ nullptr };   ///< the recording once loaded, else null
+    std::atomic<bool> wanted{ false };   ///< the loader is asked to load it
+    std::atomic<int64_t> lastUse{ 0 };   ///< when it was last asked for, ms
     bool pinned = false;   ///< made in memory (addFieldClip): no file behind it, never evicted
 };
 
 /** @brief One scan's result: immutable once published. */
 struct Catalogue {
-    std::vector<Entry*> entries;
-    std::vector<std::vector<int>> byCategory;
-    std::vector<std::string> folders;
+    std::vector<Entry*> entries;   ///< the files, in the order they were found
+    std::vector<std::vector<int>> byCategory;   ///< per category: indices into entries
+    std::vector<std::string> folders;   ///< the folders scanned
 };
 
 /** @brief An evicted recording, freed when its grace has run out. */
 struct Retired {
-    FieldClip* clip;
-    int64_t at;
+    FieldClip* clip;   ///< the recording
+    int64_t at;   ///< when it was evicted, ms
 };
 
-constexpr int64_t kGraceMs = 5000;    // an evicted recording is freed this long after the eviction
-constexpr int64_t kIdleMs = 10000;    // and only a recording not asked for this long is evicted
-std::atomic<size_t> gCacheBytes{ kFieldCacheBytes };   // setFieldCacheBytes
+constexpr int64_t kGraceMs = 5000;   ///< an evicted recording is freed this long after the eviction
+constexpr int64_t kIdleMs = 10000;   ///< and only a recording not asked for this long is evicted
+std::atomic<size_t> gCacheBytes{ kFieldCacheBytes };   ///< setFieldCacheBytes
 
+/** @brief The library: the files ever seen, the catalogues, the cache, the loader thread. */
 struct Library {
-    std::mutex mutex;                                        // scans, loads, eviction, the loader's start and stop
-    std::string searchPath, userFolder;
-    bool stale = true;
-    bool shipped = true;   // setFieldShippedFolder
-    std::map<std::string, std::unique_ptr<Entry>> pool;      // every file ever seen, by path ("mem:" + name for addFieldClip)
-    std::vector<Entry*> memory;                              // the recordings made in memory, in every catalogue
-    std::vector<std::unique_ptr<Catalogue>> catalogues;      // every catalogue ever published (a rescan is rare)
-    std::atomic<Catalogue*> current{ nullptr };
-    std::vector<Retired> graveyard;
-    size_t bytes = 0;
-    // The loader thread.
+    std::mutex mutex;   ///< scans, loads, eviction, the loader's start and stop
+    std::string searchPath;   ///< the search path (setFieldSearchPath)
+    std::string userFolder;   ///< the user's folder
+    bool stale = true;   ///< the next request scans again
+    bool shipped = true;   ///< setFieldShippedFolder
+    std::map<std::string, std::unique_ptr<Entry>> pool;   ///< every file ever seen, by path ("mem:" + name for addFieldClip)
+    std::vector<Entry*> memory;   ///< the recordings made in memory, in every catalogue
+    std::vector<std::unique_ptr<Catalogue>> catalogues;   ///< every catalogue ever published (a rescan is rare)
+    std::atomic<Catalogue*> current{ nullptr };   ///< the catalogue in force
+    std::vector<Retired> graveyard;   ///< evicted recordings waiting for their grace to run out
+    size_t bytes = 0;   ///< bytes the loaded recordings take
+    /// The loader thread.
     std::thread loader;
-    int holders = 0;
-    std::condition_variable wake;
-    std::mutex wakeMutex;
-    std::atomic<bool> pending{ false };
-    std::atomic<bool> stop{ false };
+    int holders = 0;   ///< engines that hold the loader thread
+    std::condition_variable wake;   ///< wakes the loader
+    std::mutex wakeMutex;   ///< ... with this mutex
+    std::atomic<bool> pending{ false };   ///< a load is asked for
+    std::atomic<bool> stop{ false };   ///< the loader is to end
     ~Library()
     {
         // An engine that was never destroyed still holds the thread: let it go rather than join it here (a DLL's
@@ -95,12 +97,14 @@ struct Library {
     }
 };
 
+/** @brief The library, created on first use. */
 Library& lib()
 {
     static Library l;
     return l;
 }
 
+/** @brief The steady clock, ms. */
 int64_t nowMs()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -109,6 +113,7 @@ int64_t nowMs()
 /** @brief The hidden category of the NASA shots, after the visible ones. */
 constexpr int kShotCategory = field::kCategories;
 
+/** @brief The category of @p file by its name ("fr-<slug>-..."), the NASA ones by their folder; -1 none. */
 int categoryOf(const fs::path& file, bool inNasa, bool inShots)
 {
     if (inNasa) return inShots ? kShotCategory : field::kCategories - 1;   // the last visible category is "nasa"
@@ -121,6 +126,7 @@ int categoryOf(const fs::path& file, bool inNasa, bool inShots)
     return -1;
 }
 
+/** @brief Adds the .flac files under @p root to @p cat (new ones to the pool of @p l). */
 void scanFolder(Library& l, Catalogue& cat, const fs::path& root)
 {
     std::error_code ec;
@@ -150,6 +156,7 @@ void scanFolder(Library& l, Catalogue& cat, const fs::path& root)
     }
 }
 
+/** @brief Scans every root and publishes a new catalogue (the mutex held). */
 void scanLocked(Library& l)
 {
     auto cat = std::make_unique<Catalogue>();
@@ -187,6 +194,7 @@ void scanLocked(Library& l)
     l.stale = false;
 }
 
+/** @brief Entry @p index of the current catalogue, null where there is none. */
 Entry* entryAt(int index)
 {
     const Catalogue* c = lib().current.load(std::memory_order_acquire);
@@ -236,6 +244,7 @@ void normalise(FieldClip& clip)
     c->norm = static_cast<float>(std::min(0.1 / rms, 0.891 / (static_cast<double>(peak) + 1e-9)));
 }
 
+/** @brief The bytes recording @p c takes. */
 size_t clipBytes(const FieldClip* c) { return (c->left.size() + c->right.size()) * sizeof(float); }
 
 /** @brief Frees what has served its grace, then evicts idle recordings until @p need more bytes fit. Under the lock. */
@@ -261,6 +270,7 @@ void makeRoom(Library& l, size_t need)
     }
 }
 
+/** @brief Loads @p e unless it is loaded (making room in the cache); false if it cannot be read. */
 bool loadEntry(Library& l, Entry* e)
 {
     if (e == nullptr) return false;
@@ -276,6 +286,7 @@ bool loadEntry(Library& l, Entry* e)
     return true;
 }
 
+/** @brief The loader thread: loads what is wanted, until stop. */
 void loaderMain()
 {
     Library& l = lib();
@@ -345,6 +356,7 @@ int fieldClipCount(int category)
 }
 
 namespace {
+/** @brief The index of variation @p variation (wrapped) of category @p category, -1 none. */
 int indexIn(int category, int variation)
 {
     const Catalogue* c = lib().current.load(std::memory_order_acquire);
@@ -442,7 +454,7 @@ void addFieldClip(int category, const std::string& name, std::vector<float> left
 }
 
 namespace {
-std::atomic<bool> gPreloadBlocking{ false };
+std::atomic<bool> gPreloadBlocking{ false };   ///< preloads load at once on the calling thread (the renders), not on the loader
 } // namespace
 
 void setFieldPreloadBlocking(bool blocking)

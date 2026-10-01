@@ -32,7 +32,7 @@ using namespace phostest;
 
 namespace {
 
-constexpr int W = kVecWidth;
+constexpr int W = kVecWidth;   ///< the lanes of the vector type compiled here
 
 /** @brief Deterministic test values covering signs, tiny and large magnitudes. */
 float testValue(uint32_t i)
@@ -49,6 +49,7 @@ float testValue(uint32_t i)
     }
 }
 
+/** @brief Whether @p a and @p b are the same float, bit for bit. */
 bool sameBits(float a, float b) { return std::memcmp(&a, &b, sizeof(float)) == 0; }
 
 /** @brief Vector test: vector operations, lane by lane. */
@@ -688,6 +689,7 @@ void testPolyModels()
     check(std::isfinite(maxAbs) && maxAbs < 20.0f, "the models stay bounded under modulated resonance and mode", fmt("max |y| = %.3f", static_cast<double>(maxAbs)));
 }
 
+/** @brief Runs the tests; the exit code is the number of failures. */
 int main()
 {
     std::printf("phos_vectest: path %s, %d lanes\n", kVecPathName, W);

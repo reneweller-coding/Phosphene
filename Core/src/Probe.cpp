@@ -15,6 +15,7 @@
 #if !defined(PHOS_BUILD_ID)
 // A build that did not go through Core/CMakeLists.txt has no id. The cache must then never serve anything:
 // cacheEnabled() refuses while the id is empty.
+/** @brief The build id the cache keys carry (Core/CMakeLists.txt sets it; empty: no cache). */
 #define PHOS_BUILD_ID ""
 #endif
 
@@ -47,19 +48,22 @@ namespace {
 
 /** @brief Settings of the process. One mutex: they are written at start-up or by a test, read per plan. */
 struct Settings {
-    std::mutex lock;
+    std::mutex lock;   ///< guards the settings
     int threads = 1;               ///< the library's default: serial
     std::string cacheDir;          ///< empty = no cache
     std::string buildIdOverride;   ///< setBuildIdForTest()
-    bool buildIdOverridden = false;
+    bool buildIdOverridden = false;   ///< setBuildIdForTest() was called
 };
+/** @brief The process's settings. */
 Settings& settings() { static Settings s; return s; }
 
-std::atomic<uint64_t> gHits{ 0 }, gMisses{ 0 }, gStores{ 0 };
-std::atomic<uint64_t> gTempCounter{ 0 };
+std::atomic<uint64_t> gHits{ 0 };   ///< cache hits
+std::atomic<uint64_t> gMisses{ 0 };   ///< cache misses
+std::atomic<uint64_t> gStores{ 0 };   ///< entries stored
+std::atomic<uint64_t> gTempCounter{ 0 };   ///< counts the cache's temporary files (unique names)
 
 constexpr size_t kWorkerStack = 16u * 1024u * 1024u;   ///< as the JUCE-linked programs' main threads (/STACK)
-constexpr char kMagic[8] = { 'P', 'H', 'O', 'S', 'P', 'R', 'B', '1' };
+constexpr char kMagic[8] = { 'P', 'H', 'O', 'S', 'P', 'R', 'B', '1' };   ///< a cache entry's magic
 constexpr size_t kEntryBytes = 8 + 16 + 24 + 8;        ///< magic, key, three doubles, check
 
 /** @brief The machine's hardware threads, at least one. */
@@ -98,8 +102,9 @@ unsigned long long processId()
 
 /** @brief What a worker thread runs: tasks by a shared counter until none is left. */
 struct Job {
-    const std::vector<std::function<void()>>* tasks = nullptr;
-    std::atomic<size_t> next{ 0 };
+    const std::vector<std::function<void()>>* tasks = nullptr;   ///< the tasks
+    std::atomic<size_t> next{ 0 };   ///< the next task to take
+    /** @brief Takes tasks until none is left. */
     void work()
     {
         for (;;) {
@@ -113,6 +118,7 @@ struct Job {
 #if defined(_WIN32)
 unsigned __stdcall workerEntry(void* arg) { static_cast<Job*>(arg)->work(); return 0; }
 #else
+/** @brief A worker thread: runs the job @p arg points to. */
 void* workerEntry(void* arg) { static_cast<Job*>(arg)->work(); return nullptr; }
 #endif
 

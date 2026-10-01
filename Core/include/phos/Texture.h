@@ -74,24 +74,38 @@ private:
     struct Voice {
         SfxType type = SfxType::Bowl;   ///< which instrument
         bool on = false;   ///< sounding
-        long long pos = 0, length = 1;   ///< samples played and the event's length
-        double late = 0.0, spb = 20000.0;   ///< sub-sample onset, samples per beat
+        long long pos = 0;   ///< samples played
+        long long length = 1;   ///< the event's length, samples
+        double late = 0.0;   ///< the sub-sample onset
+        double spb = 20000.0;   ///< samples per beat
         float velocity = 1.0f;   ///< 0..1
         uint64_t age = 0;   ///< trigger order, for voice stealing
         Rng rng;   ///< the event's own random stream
         // Bowl: two partials per mode as rotating phasors (re, im) with their per-sample rotation.
-        double re[2 * kModes] = {}, im[2 * kModes] = {}, c[2 * kModes] = {}, s[2 * kModes] = {};   ///< phasor state and per-sample rotation
+        double re[2 * kModes] = {};   ///< the partials' phasors: real part
+        double im[2 * kModes] = {};   ///< ... imaginary part
+        double c[2 * kModes] = {};   ///< their rotation per sample: cosine
+        double s[2 * kModes] = {};   ///< ... sine
         double amp[2 * kModes] = {};   ///< each partial's amplitude
         // Didgeridoo and jaw harp.
-        double f0 = 100.0, ph = 0.0;   ///< the drone's fundamental (Hz) and phase (cycles)
+        double f0 = 100.0;   ///< the drone's fundamental, Hz
+        double ph = 0.0;   ///< ... and its phase, cycles
         static constexpr int kMaxHarmonics = 96;   ///< 6 kHz over the lowest root (65 Hz)
         float hw[kMaxHarmonics] = {};               ///< harmonic weights, computed at the trigger
         int harmonics = 0;   ///< harmonics in use
         uint8_t pattern = 0;   ///< eighth notes of a bar that carry an accent or a pluck
         int lastEighth = -1;   ///< the eighth note last looked at
-        float accent = 0.0f, pluck = 0.0f, formant = 0.0f, target = 0.0f;   ///< the accent's level, the pluck's envelope, the formant's position and where it goes
+        float accent = 0.0f;   ///< the accent's level
+        float pluck = 0.0f;   ///< the pluck's envelope
+        float formant = 0.0f;   ///< the formant's position
+        float target = 0.0f;   ///< where it goes
         bool up = false;   ///< the jaw harp's sweep goes up on this pluck (it alternates)
-        Svf f1, f2, hp1, hp2, hp3, breathBp;   ///< formant, high-pass and breath filters
+        Svf f1;   ///< the first formant
+        Svf f2;   ///< the second formant
+        Svf hp1;   ///< the high pass: first section
+        Svf hp2;   ///< ... second
+        Svf hp3;   ///< ... third
+        Svf breathBp;   ///< the breath's band pass
         double panPh = 0.0;   ///< the slow pan's phase
     };
     /** @brief One sample of a voice, already placed in the stereo field. */
@@ -101,7 +115,12 @@ private:
     Voice voice_[kVoices];   ///< the instruments
     uint64_t counter_ = 0;   ///< triggers so far (the voices' age)
     int keyRoot_ = 6;   ///< the key's pitch class, for the tuning
-    float width_ = 0.8f, bowlDecay_ = 7.0f, bowlBright_ = 0.4f, didgeFormant_ = 0.5f, didgeBreath_ = 0.5f, jawSweep_ = 0.6f;   ///< the texture parameters as update() read them
+    float width_ = 0.8f;   ///< the width
+    float bowlDecay_ = 7.0f;   ///< the bowl's decay, s
+    float bowlBright_ = 0.4f;   ///< the bowl's brightness
+    float didgeFormant_ = 0.5f;   ///< the didgeridoo's formant
+    float didgeBreath_ = 0.5f;   ///< the didgeridoo's breath
+    float jawSweep_ = 0.6f;   ///< the jaw harp's sweep
 };
 
 } // namespace phos

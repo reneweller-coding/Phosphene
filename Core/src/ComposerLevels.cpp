@@ -38,7 +38,12 @@ constexpr double kPresenceCutDb = 6.0;     ///< the most the lines are taken dow
 constexpr double kPresenceLiftDb = 3.0;    ///< the most they are brought up
 
 constexpr double kAudibleLiftDb = 4.0;   ///< the most one line is lifted
-struct AudibleWant { MelodyPart part; double share; };
+/** @brief A line that should be heard and the share of the time it wants to be. */
+struct AudibleWant {
+    MelodyPart part;   ///< the line
+    double share;      ///< the share it wants
+};
+/** @brief The lines that should be heard, with the share each wants. */
 constexpr AudibleWant kAudibleWant[] = { { MelodyPart::Counter, 0.60 }, { MelodyPart::Arp, 0.35 }, { MelodyPart::Stab, 0.35 } };
 
 } // namespace

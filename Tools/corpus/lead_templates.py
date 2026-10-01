@@ -125,10 +125,12 @@ def emit_lines(root):
         top = masks[r].most_common(TOP_MASKS)
         top.sort(key=lambda kv: (-kv[1], kv[0]))
         body = ", ".join(f"{{{m},{n}}}" for m, n in top) or "{0,0}"
+        out.append(f"/// {r}: the commonest bars' onset masks and their counts")
         out.append(f"const CorpusBarMask k_{r}_bars[] = {{ {body} }};")
         tops = skels[r].most_common(TOP_SKELETONS)
         tops.sort(key=lambda kv: (-kv[1], kv[0]))
         body = ", ".join(f"{{{{{d[0]},{d[1]},{d[2]}}},{n}}}" for d, n in tops) or "{{0,0,0},0}"
+        out.append(f"/// {r}: the commonest skeletons and their counts")
         out.append(f"const CorpusSkeleton k_{r}_skeletons[] = {{ {body} }};")
     out.append("} // namespace")
     out.append("")

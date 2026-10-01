@@ -131,12 +131,15 @@ const StyleProfile kProfiles[kNumStyles] = {
 };
 
 /** @brief Control points of the arcs: (t, E) pairs, interpolated with raised cosines. */
-struct ArcPoint { double t, e; };
-const ArcPoint kWarmUp[]   = { { 0.0, 0.25 }, { 0.35, 0.45 }, { 0.75, 0.70 }, { 1.0, 0.85 } };
-const ArcPoint kPeakTime[] = { { 0.0, 0.70 }, { 0.30, 0.95 }, { 0.65, 1.00 }, { 1.0, 0.85 } };
-const ArcPoint kMorning[]  = { { 0.0, 0.80 }, { 0.30, 0.70 }, { 0.70, 0.55 }, { 1.0, 0.45 } };
-const ArcPoint kClosing[]  = { { 0.0, 0.90 }, { 0.25, 0.75 }, { 0.70, 0.45 }, { 1.0, 0.20 } };
-const ArcPoint kFlat[]     = { { 0.0, 0.70 }, { 1.0, 0.70 } };
+struct ArcPoint {
+    double t;   ///< where in the set, 0..1
+    double e;   ///< the energy there
+};
+const ArcPoint kWarmUp[]   = { { 0.0, 0.25 }, { 0.35, 0.45 }, { 0.75, 0.70 }, { 1.0, 0.85 } };   ///< the warm-up: rising
+const ArcPoint kPeakTime[] = { { 0.0, 0.70 }, { 0.30, 0.95 }, { 0.65, 1.00 }, { 1.0, 0.85 } };   ///< peak time: high from early on
+const ArcPoint kMorning[]  = { { 0.0, 0.80 }, { 0.30, 0.70 }, { 0.70, 0.55 }, { 1.0, 0.45 } };   ///< the morning: falling slowly
+const ArcPoint kClosing[]  = { { 0.0, 0.90 }, { 0.25, 0.75 }, { 0.70, 0.45 }, { 1.0, 0.20 } };   ///< the closing: falling
+const ArcPoint kFlat[]     = { { 0.0, 0.70 }, { 1.0, 0.70 } };   ///< flat
 
 /**
  * @brief The two-drop templates (19.09.2026, round "arrangement"): the user's macro form, one per
@@ -171,8 +174,10 @@ struct Template {
     int grow[8];           ///< the slots that take 16 more bars when the track is longer, in order (-1 ends)
     int growCap[8];        ///< the length each of those grows to at most
 };
+/** @brief each slot's section type */
 const SectionType kSlotType[kSlots] = { SectionType::Intro, SectionType::Groove, SectionType::Build, SectionType::Drop,
                                         SectionType::Break, SectionType::Build, SectionType::Drop, SectionType::Outro };
+/** @brief The form templates, one per body. */
 const Template kTemplates[kNumBodies] = {
     // Full-On (and Hi-Tech): the strict two-drop form.
     { { 32, 32, 16, 32, 32, 32, 48, 32 }, { kSlotDrop2, kSlotDrop1, kSlotBreak, kSlotGroove, kSlotDrop1, kSlotBreak, kSlotGroove, -1 },

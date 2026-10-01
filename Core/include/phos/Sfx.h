@@ -192,6 +192,7 @@ inline Part routedPart(const NoteEvent& e)
  */
 double sfxToneInterval(int scale, double iv);
 
+/** @brief The effects (SfxType: risers, downlifters, impacts, sweeps, voices, sub drops ...), a few at once (see the file comment). */
 class Sfx {
 public:
     static constexpr int kVoices = 4;   ///< simultaneous effects
@@ -244,16 +245,30 @@ private:
     struct Voice {
         SfxType type = SfxType::Riser;   ///< which effect
         bool on = false;   ///< sounding
-        long long pos = 0, length = 1;   ///< samples played and the event's length
+        long long pos = 0;   ///< samples played
+        long long length = 1;   ///< the event's length, samples
         double late = 0.0;   ///< sub-sample onset
         float velocity = 1.0f;   ///< 0..1
         float typeGain = 1.0f;   ///< the type's level against sfx.level (Sfx.cpp, kTypeGainDb)
         Rng rng;   ///< the event's own random stream
-        VaOscillator saw1, saw2;   ///< the tonal layer's oscillators
-        Svf bp, lp, formant[3], hpL1, hpL2, hpR1, hpR2;   ///< the effect's filters and the stereo high pass
-        double sinePh = 0.0, panPh = 0.0, chordPh[3] = {};   ///< sine, auto-pan and chord phases
+        VaOscillator saw1;   ///< the tonal layer's first oscillator
+        VaOscillator saw2;   ///< ... and its second
+        Svf bp;   ///< the effect's band pass
+        Svf lp;   ///< the effect's low pass
+        Svf formant[3];   ///< the effect's three formants
+        Svf hpL1;   ///< the stereo high pass: left, first stage
+        Svf hpL2;   ///< ... left, second stage
+        Svf hpR1;   ///< ... right, first stage
+        Svf hpR2;   ///< ... right, second stage
+        double sinePh = 0.0;   ///< the sine's phase
+        double panPh = 0.0;   ///< the auto-pan's phase
+        double chordPh[3] = {};   ///< the chord's three phases
         /// Bubble burst: onset (s), start frequency (Hz), decay time constant (s), rise per second, phase.
-        double bubT[kBubbles] = {}, bubF[kBubbles] = {}, bubTau[kBubbles] = {}, bubRise[kBubbles] = {}, bubPh[kBubbles] = {};
+        double bubT[kBubbles] = {};   ///< per bubble of the burst: its onset, s
+        double bubF[kBubbles] = {};   ///< its start frequency, Hz
+        double bubTau[kBubbles] = {};   ///< its decay time constant, s
+        double bubRise[kBubbles] = {};   ///< its rise per second
+        double bubPh[kBubbles] = {};   ///< its phase
         int bubbles = 0;   ///< bubbles in the burst
         uint64_t age = 0;   ///< trigger order, for voice stealing
         /// @name The wandering trajectory (20.09.2026, round "wandering-fx"), drawn once at trigger()
@@ -275,7 +290,14 @@ private:
     Voice voice_[kVoices];   ///< the sounding events
     uint64_t counter_ = 0;   ///< triggers so far (the voices' age)
     int keyRoot_ = 6;   ///< the key's pitch class, for the tonal layers
-    float level_ = 0.5f, noise_ = 0.6f, resonance_ = 0.5f, brightness_ = 0.5f, impactDecay_ = 1.2f, vowel_ = 0.0f, swellDecay_ = 1.5f, width_ = 0.7f;   ///< the sfx parameters as update() read them (levels linear, decays in seconds)
+    float level_ = 0.5f;   ///< sfx.level, linear
+    float noise_ = 0.6f;   ///< the noise's share
+    float resonance_ = 0.5f;   ///< the filters' resonance
+    float brightness_ = 0.5f;   ///< the brightness
+    float impactDecay_ = 1.2f;   ///< an impact's decay, s
+    float vowel_ = 0.0f;   ///< the formants' vowel
+    float swellDecay_ = 1.5f;   ///< a swell's decay, s
+    float width_ = 0.7f;   ///< the width
     float subLevel_ = 0.5f;   ///< sfx.sub_level, linear
     bool wander_ = false;          ///< sfx.wander
     float wanderSend_ = 0.85f;     ///< sfx.wander_send

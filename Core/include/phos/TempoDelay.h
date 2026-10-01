@@ -108,12 +108,21 @@ private:
     }
 
     double sr_ = 48000.0;   ///< sample rate
-    std::vector<float> bufL_, bufR_;   ///< the delay lines, a power of two long
-    size_t mask_ = 0, write_ = 0;   ///< index mask and write position
-    float timeL_ = 1000.0f, timeR_ = 1000.0f, targetL_ = 1000.0f, targetR_ = 1000.0f, glide_ = 0.001f;   ///< delay times now and where they glide to (samples), and the glide coefficient
+    std::vector<float> bufL_;   ///< the left delay line, a power of two long
+    std::vector<float> bufR_;   ///< the right delay line
+    size_t mask_ = 0;   ///< the index mask
+    size_t write_ = 0;   ///< the write position
+    float timeL_ = 1000.0f;   ///< the left delay time now, samples
+    float timeR_ = 1000.0f;   ///< the right delay time now, samples
+    float targetL_ = 1000.0f;   ///< where the left one glides to
+    float targetR_ = 1000.0f;   ///< where the right one glides to
+    float glide_ = 0.001f;   ///< the glide coefficient
     float feedback_ = 0.4f;   ///< feedback
     bool primed_ = false;   ///< the times have been set once (the first set() jumps, later ones glide)
-    Svf hpL_, hpR_, lpL_, lpR_;   ///< the feedback path's high and low pass
+    Svf hpL_;   ///< the feedback path's high pass, left
+    Svf hpR_;   ///< ... right
+    Svf lpL_;   ///< the feedback path's low pass, left
+    Svf lpR_;   ///< ... right
 };
 
 } // namespace phos

@@ -202,9 +202,11 @@ void printVersion()
  */
 struct Excerpt {
     std::string path;              ///< the file
-    uint64_t start = 0, end = 0;   ///< sample range in the render, end exclusive
+    uint64_t start = 0;   ///< the first sample in the render
+    uint64_t end = 0;   ///< sample range in the render, end exclusive
     WavWriter wav;                 ///< opened at the first sample, closed after the last
-    bool opened = false, closed = false;
+    bool opened = false;   ///< the writer is open
+    bool closed = false;   ///< the writer is closed
 };
 
 /** @brief A style name as a file name part: "Dark Forest" -> "Dark-Forest". */
@@ -416,6 +418,7 @@ bool readFile(const char* path, std::string& out)
 
 } // namespace
 
+/** @brief Renders what the command line asks for; the exit code is 0 on success. */
 int main(int argc, char** argv)
 {
     // An offline render waits for the Field track's recordings (FieldLibrary.h): the same seed, the same audio.

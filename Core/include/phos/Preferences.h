@@ -43,7 +43,9 @@ public:
     double factor(const std::string& name, const std::string& value) const;
     /** @brief The weight itself (0 when absent). */
     double weight(const std::string& feature) const;
+    /** @brief Whether no weight is set. */
     bool empty() const { return w_.empty(); }
+    /** @brief How many weights are set. */
     size_t size() const { return w_.size(); }
     /** @brief Sets one weight (the fitter and the tests). */
     void set(const std::string& feature, double weight) { w_[feature] = weight; }

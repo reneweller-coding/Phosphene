@@ -51,7 +51,9 @@ public:
     /** @brief Where the meter is drawn, in the strip's coordinates (the host test compares them). */
     juce::Rectangle<int> meterArea() const { return meterArea_; }
 
+    /** @brief The name, the meter (RMS, the held peak) and its scale. */
     void paint(juce::Graphics&) override;
+    /** @brief The knobs, the mute, the fader and the meter. */
     void resized() override;
 
 private:
@@ -68,7 +70,8 @@ private:
     std::vector<std::pair<juce::Component*, int>> controls_;   ///< controls()
     juce::Rectangle<int> meterArea_;   ///< where the meter is drawn
     int knobRowsShown_ = 0;   ///< setKnobRows()
-    float rmsDb_ = -100.0f, holdDb_ = -100.0f;   ///< the RMS bar and the held peak, dB
+    float rmsDb_ = -100.0f;   ///< the RMS bar, dB
+    float holdDb_ = -100.0f;   ///< the held peak, dB
     double holdAge_ = 0.0;   ///< seconds the peak has been held
 };
 
@@ -87,7 +90,9 @@ public:
     /** @brief Reads the meters now instead of waiting for the timer (the host test). */
     void pollMeters() { timerCallback(); }
 
+    /** @brief The console's background. */
     void paint(juce::Graphics&) override;
+    /** @brief The strips side by side. */
     void resized() override;
 
 private:
