@@ -48,7 +48,7 @@
 ; dann funktioniert, wenn die Samples nicht heruntergeladen wurden").
 
 #ifndef Version
-  #define Version "1.2.0"
+  #define Version "1.3.0"
 #endif
 #define AppName "Phosphene"
 #define Publisher "Rene Weller"

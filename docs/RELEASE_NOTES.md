@@ -1,6 +1,6 @@
 # Phosphene release notes
 
-## Next: the family's panel (01.10.2026, not yet released)
+## 1.3.0 (01.10.2026): the family's panel
 
 **One panel for the family.** Phosphene shares its panel with Ephemeris, Totality and Parhelion now (Plugin/Frame.h,
 the same file in each): the header's two rows, the overview, the tabs in groups with small tabs (Set, Arrange, Low End,
@@ -14,6 +14,10 @@ in the grammar every generator's headset shares, with the plugin's four macros.
 8 the bass, 10 the kit), and Composer (beside Keyboard Plays) off leaves every generated note out, so only what is
 played sounds. Replace and the composer switch act in the plugin only: an export and phos_render play what was
 composed, whatever a set's keyboard knobs say.
+
+**A loaded set lets go of the macros.** Filter Sweep, Gate Depth, Drop-out and Stutter are performance, not part of
+the set; loading a set (or a DAW restoring its project) now puts all four back to neutral. Before, pluginval's state
+test failed in about every second run: the drop-out let go by itself while the state was being restored.
 
 **One layout for the repositories.** Every instrument of the family builds the same way now: `build.ps1` (msvc, icx,
 release, quest) on the presets of `CMakePresets.json`, the build trees under `build\<preset>`, everything that can be
