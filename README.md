@@ -337,6 +337,10 @@ requires every lane of the vectorised DSP to equal the scalar computation bit fo
 Some modules are copied from [Noctuary](https://github.com/reneweller-coding/Noctuary) and name their
 origin and commit in their file header.
 
+## The family
+
+Phosphene is one of five instruments that share their build, their panel (or part of it) and the hands of a Meta Quest: [Noctuary](https://github.com/reneweller-coding/Noctuary) (ambient), [Phosphene](https://github.com/reneweller-coding/Phosphene) (psytrance), [Ephemeris](https://github.com/reneweller-coding/Ephemeris) (Berlin School), [Totality](https://github.com/reneweller-coding/Totality) (techno) and [Parhelion](https://github.com/reneweller-coding/Parhelion) (trance).
+
 ## Licence
 
 AGPL-3.0, as Noctuary.
