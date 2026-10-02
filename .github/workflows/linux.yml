@@ -63,7 +63,9 @@ jobs:
           mkdir -p "$out"
           cp "$app" "$cli" "$out/"
           cp -R "$vst" "$lv2" "$out/"
-          strip "$out/Phosphene" "$out/phos_render" "$out/Phosphene.vst3/Contents/x86_64-linux/Phosphene.so" "$out/Phosphene.lv2/Phosphene.so"
+          strip "$out/Phosphene" "$out/phos_render" "$out/Phosphene.vst3/Contents/x86_64-linux/Phosphene.so"
+          find "$out/Phosphene.lv2" -name "*.so" -exec strip {} +
+          ls "$out/Phosphene.lv2"
           for f in library.phoswt melody.phosmdl bass.phosmdl voices.phosvx; do
             cp "$(dirname "$app")/$f" "$out/"
             test -f "$out/Phosphene.vst3/Contents/Resources/$f"
