@@ -281,8 +281,8 @@ void PhospheneEditor::buildExportPage()
     const juce::Colour tint = partColour(TabExport);
     const int gr = page->addGroup("Record", tint, 6);
     {
-        auto rec = std::make_unique<juce::TextButton>("Record...");
-        rec->setTooltip("Records the output into a WAV file until you press again");
+        auto rec = std::make_unique<frame::IconButton>(frame::IconButton::Icon::Record, "Records the output into a WAV file until you press again");
+        rec->setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xffb03030));
         rec->onClick = [this] {
             if (proc_.isRecording()) { proc_.stopRecording(); return; }
             chooser_ = std::make_unique<juce::FileChooser>("Record the output", juce::File(), "*.wav");
@@ -293,7 +293,7 @@ void PhospheneEditor::buildExportPage()
                                   });
         };
         recordButton_ = rec.get();
-        page->addControl(gr, std::move(rec), "", 3, true);
+        page->addControl(gr, std::move(rec), "", 1, true);
         auto note = std::make_unique<juce::Label>(juce::String(), "the output as it plays, 32-bit float");
         note->setColour(juce::Label::textColourId, dim);
         page->addControl(gr, std::move(note), "", 3, true);
@@ -319,8 +319,7 @@ void PhospheneEditor::buildExportPage()
         exportMidi_ = midi.get();
         page->addControl(ge, std::move(midi), "", 3, true);
 
-        auto set = std::make_unique<juce::TextButton>("Export set...");
-        set->setTooltip("Writes the set -- seed, locks, rerolls and every changed knob -- as a .phosset (Ctrl+S)");
+        auto set = std::make_unique<frame::IconButton>(frame::IconButton::Icon::Save, "Writes the set -- seed, locks, rerolls and every changed knob -- as a .phosset (Ctrl+S)");
         set->onClick = [this] {
             chooser_ = std::make_unique<juce::FileChooser>("Write the set", juce::File(), "*.phosset");
             chooser_->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
@@ -330,10 +329,9 @@ void PhospheneEditor::buildExportPage()
                                   });
         };
         exportSet_ = set.get();
-        page->addControl(ge, std::move(set), "", 2, true);
+        page->addControl(ge, std::move(set), "", 1, true);
 
-        auto load = std::make_unique<juce::TextButton>("Load set...");
-        load->setTooltip("Reads a .phosset and plays it (Ctrl+O)");
+        auto load = std::make_unique<frame::IconButton>(frame::IconButton::Icon::Open, "Reads a .phosset and plays it (Ctrl+O)");
         load->onClick = [this] {
             chooser_ = std::make_unique<juce::FileChooser>("Read a set", juce::File(), "*.phosset");
             chooser_->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
@@ -348,7 +346,7 @@ void PhospheneEditor::buildExportPage()
                                   });
         };
         loadSet_ = load.get();
-        page->addControl(ge, std::move(load), "", 2, true);
+        page->addControl(ge, std::move(load), "", 1, true);
     }
     page->addModuleGroup(proc_, Module::Cue, 0, "Score Cues (OSC)", tint, 4);   // 23.09.2026, on the Mixer tab until 01.10.2026
     pages_[static_cast<size_t>(TabExport)] = std::move(page);
@@ -356,5 +354,8 @@ void PhospheneEditor::buildExportPage()
 
 void PhospheneEditor::refreshExportPage()
 {
-    if (recordButton_ != nullptr) recordButton_->setButtonText(proc_.isRecording() ? "Stop recording" : "Record...");
+    if (recordButton_ != nullptr) {
+        recordButton_->setToggleState(proc_.isRecording(), juce::dontSendNotification);
+        recordButton_->show(frame::IconButton::Icon::Record, proc_.isRecording() ? "Stop recording" : "Records the output into a WAV file until you press again");
+    }
 }

@@ -73,7 +73,7 @@ of whole tracks, the presence of the melodic lines, and the audibility of the qu
 lead.
 
 Export MIDI writes the score of the first N bars as a Standard MIDI File with a named track per part,
-section markers and the tempo map. Export set writes a .phosset -- the seed, the style, the arc, the
+section markers and the tempo map. The disk on the Export page writes a .phosset -- the seed, the style, the arc, the
 knobs that differ from their defaults, and every lock and reroll -- which phos_render will play back
 byte for byte.
 
@@ -392,10 +392,10 @@ towards what you liked. The genre's rules always stay above your taste.
 
 == Export ==
 
-What leaves the instrument, in one place, as every generator of the family has it (01.10.2026): Record writes the output
+What leaves the instrument, in one place, as every generator of the family has it (01.10.2026): Record (the red disc) writes the output
 as it plays into a WAV file until it is pressed again; Export MIDI writes the score of so many bars from the start, a
-channel per part; Export set writes the set -- the seed, the locks, the rerolls and every knob that differs from the
-factory -- as a .phosset, and Load set reads one and plays it. The score cues (OSC) send the set's beats, bars, sections
+channel per part; the disk writes the set -- the seed, the locks, the rerolls and every knob that differs from the
+factory -- as a .phosset, and the folder reads one and plays it. The score cues (OSC) send the set's beats, bars, sections
 and keys to a light show or a VJ program at the moment they are heard.
 
 The keys: Ctrl+E exports the MIDI, Ctrl+S the set, Ctrl+O loads one.
@@ -480,7 +480,7 @@ the kick (no pitch, no pan), the acid what suits a 303 line.
 == Sound presets ==
 
 Every synth tab starts with a Sound group: the synth's presets in a chooser, grouped by kind, a
-Save... button for presets of your own, and the Own Sound switch.
+disk for presets of your own, and the Own Sound switch.
 
 Every track of a set plays a preset on every synth that is not on Own Sound: the composer chooses one
 by the track's style -- a Hoover or a Supersaw Anthem for Full-On, a Growl or a Screaming Glide for
@@ -524,10 +524,12 @@ Phosphene shares its panel with the other generators of the family -- Ephemeris,
 on the others: the same places, the same keys, the same controllers, the same hands. Each keeps its own colours, its
 own letters and the picture behind its panel (Settings > Picture behind the panel takes it away).
 
-The header's first row: the logo, the style, the key and the scale, what is composed and its length, Compose, New
-seed, Play and Mute. Its second row: Good here and Bad here -- a verdict on what plays, for your taste --, the status line, and at the right Undo, Redo, Help and the settings.
+The header's first row: the logo, the style, the key and the scale, what is composed and its length, Compose, the
+die (a new seed), Play and the speaker (mute). Its second row: Good here and Bad here -- a verdict on what plays, for your taste --, the status line, and at the right Undo, Redo, Help and the settings.
 Under the header the whole set at a glance; a click jumps there. The tabs come in one order everywhere: Set,
 Arrange, the instrument's own pages -- a page of several has small tabs of its own --, Mixer, Perform, Export, Gallery.
+
+The unambiguous actions are icons since 03.10.2026, their words in the tooltips: the die draws a new seed, the triangle plays and the square stops, the speaker mutes (crossed out while muted), the disk saves and the folder loads, the red disc records (Export).
 
 A page taller than the window shows its groups in sections, one at a time, with a switch at its top right: a synth's
 sound and its modulation apart (Sound, Modulation), and where even those do not fit, cut further, each named after its

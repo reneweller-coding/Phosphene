@@ -366,7 +366,10 @@ private:
     juce::Slider length_;                             ///< compose.set_minutes: the time the arc spans
     std::unique_ptr<juce::SliderParameterAttachment> lengthLink_;
     juce::Label lengthLabel_;
-    juce::TextButton compose_{ "Compose set" }, newSeed_{ "New seed" }, play_{ "Play" }, mute_{ "Mute" };
+    juce::TextButton compose_{ "Compose set" };   ///< plans the set again
+    frame::IconButton newSeed_{ frame::IconButton::Icon::Dice, "New seed" };   ///< a new seed: a die
+    frame::IconButton play_{ frame::IconButton::Icon::Play, "Play (Space)" };   ///< play and stop: a triangle, a square
+    frame::IconButton mute_{ frame::IconButton::Icon::Speaker, "Silence the output" };   ///< mutes the output: a speaker, crossed out when muted
     juce::Label status_, where_;                      ///< seed, clock and state; the track and the bar
     ArrangeDisplay overview_;                         ///< the set strip under the header
     uint64_t overviewHash_ = 0;                       ///< what it draws
@@ -432,7 +435,7 @@ private:
     juce::TextEditor* seedEditor_ = nullptr;   ///< the seed field
     juce::TextButton* playButton_ = nullptr;   ///< Play
     juce::TextButton* stopButton_ = nullptr;   ///< Stop
-    juce::TextButton* recordButton_ = nullptr;   ///< Record...
+    frame::IconButton* recordButton_ = nullptr;   ///< Record (a red disc, lit while it records)
     juce::TextButton* followButton_ = nullptr;   ///< Follow host
     juce::TextButton* muteButton_ = nullptr;   ///< Mute
     juce::Label*      statusLabel_ = nullptr;   ///< clock, bar, beat and tempo
@@ -440,8 +443,8 @@ private:
     TrackDisplay*     tracks_ = nullptr;   ///< the track list
     juce::Slider*     exportBars_ = nullptr;   ///< bars for the MIDI export
     juce::TextButton* exportMidi_ = nullptr;   ///< the Export tab's buttons (Ctrl+E, Ctrl+S, Ctrl+O)
-    juce::TextButton* exportSet_ = nullptr;    ///< @copydoc exportMidi_
-    juce::TextButton* loadSet_ = nullptr;      ///< @copydoc exportMidi_
+    juce::Button* exportSet_ = nullptr;        ///< @copydoc exportMidi_
+    juce::Button* loadSet_ = nullptr;          ///< @copydoc exportMidi_
     /** @name The factory-defaults group of the Set tab (20.09.2026, round "dialogue")
      *  @{ */
     juce::TextButton* legacyButton_ = nullptr;   ///< "Load the saved knobs anyway", shown only while one is held

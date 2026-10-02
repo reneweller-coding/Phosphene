@@ -820,8 +820,7 @@ void PhospheneEditor::addSoundGroup(ControlPage& page, Module module, int instan
     };
     fillPresetBox(*pb);
 
-    auto save = std::make_unique<juce::TextButton>("Save...");
-    save->setTooltip("Saves this synth's knobs as a preset of your own (group \"User\")");
+    auto save = std::make_unique<frame::IconButton>(frame::IconButton::Icon::Save, "Saves this synth's knobs as a preset of your own (group \"User\")");
     save->onClick = [this, raw] {
         presetNameDialog_ = std::make_unique<juce::AlertWindow>("Save preset", "A name for this sound:", juce::MessageBoxIconType::NoIcon, this);
         presetNameDialog_->addTextEditor("name", raw->box->getSelectedId() > 0 ? raw->box->getText() : juce::String("My sound"));
@@ -1031,7 +1030,7 @@ void PhospheneEditor::layoutContent()
     h.choices = { { &style_, 124 }, { &key_, 60 }, { &scale_, 150 } };
     h.lengthLabel = &lengthLabel_;
     h.length = &length_;
-    h.actions = { { &compose_, 112 }, { &newSeed_, 88 } };
+    h.actions = { { &compose_, 112 }, { &newSeed_, frame::kIconWidth } };
     h.play = &play_;
     h.mute = &mute_;
     h.like = &likeIcon_;
@@ -1126,10 +1125,12 @@ void PhospheneEditor::showSettings()
 void PhospheneEditor::refreshHeader()
 {
     const TransportView t = proc_.transport();
-    play_.setButtonText(proc_.isPlaying() ? "Stop" : "Play");
+    play_.show(proc_.isPlaying() ? frame::IconButton::Icon::Stop : frame::IconButton::Icon::Play, proc_.isPlaying() ? "Stop (Space)" : "Play (Space)");
     const bool muted = proc_.muted() && !shooting_;   // the pictures are taken muted by design (26.09.2026)
     mute_.setToggleState(muted, juce::dontSendNotification);
-    mute_.setButtonText(muted ? (proc_.muteForced() ? "Muted (env)" : "Muted") : "Mute");
+    mute_.show(muted ? frame::IconButton::Icon::SpeakerOff : frame::IconButton::Icon::Speaker,
+               muted ? (proc_.muteForced() ? "Muted by PHOS_MUTE: an automated run makes no sound" : "Muted: click to hear the output again")
+                     : "Silence the output");
     juce::String info;
     info << "seed " << juce::String(proc_.seed()) << "   " << juce::String(t.bpm, 1) << " BPM   " << (t.hostSync ? "host clock" : "own clock")
          << "   " << (t.restarting ? "planning" : (t.playing ? "playing" : "stopped"));
