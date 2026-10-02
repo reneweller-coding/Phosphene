@@ -881,6 +881,16 @@ private:
     LiveNote live_[kMaxLive];              ///< audio thread only
     int keyboardPartSeen_ = 0;             ///< audio thread: mix.keyboard_part as the last block had it
     frame::KeyMemory keyMemory_;           ///< audio thread: where each held key went (the split, Scale Lock; 02.10.2026)
+    // The stems as outputs of their own (02.10.2026): a stereo bus per part and one for the returns (phos::kStemNames),
+    // off until the host switches one on; then the engine writes its StemTap, offset to every render of a split block.
+    std::vector<float> stemBuf_;                              ///< kNumStems x 2 x block (prepareToPlay)
+    std::array<float*, phos::kNumStems> stemL_{};             ///< per stem: its left channel in stemBuf_
+    std::array<float*, phos::kNumStems> stemR_{};             ///< per stem: its right channel in stemBuf_
+    phos::StemTap stemTap_;                                   ///< the engine's view of them, moved to each render's start
+    int stemBlock_ = 0;                                       ///< the block the stems' buffers hold
+    bool stemsOn_ = false;                                    ///< audio thread: the engine writes the stems now
+    /** @brief The buses: the main output, then one stereo output per part and one for the returns, those off. */
+    static BusesProperties busLayout();
 
     // ---- the effects page's audition and the mixer's meters (24.09.2026)
     std::atomic<int> sfxPreview_{ -1 };                             ///< choice << 12 | preset, -1 none (previewSfx)

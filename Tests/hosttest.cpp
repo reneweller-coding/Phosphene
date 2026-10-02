@@ -1442,8 +1442,10 @@ int main(int argc, char** argv)
     if (partRest) {
         auto p = std::make_unique<PhospheneProcessor>();
         check(p->producesMidi() && p->acceptsMidi(), "the plugin writes MIDI and reads controllers (MIDI learn)");
-        juce::AudioProcessor::BusesLayout stereo;
-        stereo.outputBuses.add(juce::AudioChannelSet::stereo());
+        // The layout as the processor has it -- since 02.10.2026 the main output and a stem's output per part, those
+        // off -- with the main output stereo.
+        juce::AudioProcessor::BusesLayout stereo = p->getBusesLayout();
+        stereo.outputBuses.getReference(0) = juce::AudioChannelSet::stereo();
         juce::AudioProcessor::BusesLayout withInput = stereo;
         withInput.inputBuses.add(juce::AudioChannelSet::stereo());
         check(p->checkBusesLayoutSupported(stereo), "stereo out is supported");
@@ -1599,6 +1601,7 @@ int main(int argc, char** argv)
                     for (int i = 0; i < ps.count(); ++i) sig << juce::String(ps.get(i), 4) << ",";
                     const TransportView tv = p->transport();
                     sig << juce::String(p->pendingSfxPreview()) << ",";   // the effect presets' audition (24.09.2026)
+                    sig << juce::String(p->ratingsFile().getSize()) << ",";   // a verdict ("Good here") written (02.10.2026)
                     sig << (tv.playing ? "P" : "-") << juce::String(p->seed()) << "," << juce::String(tv.bar)
                         << "," << juce::String(phos->tab()) << "," << juce::String(p->restartCount())
                         << (p->muted() ? "M" : "-") << (p->followsHost() ? "F" : "-");
@@ -1643,6 +1646,9 @@ int main(int argc, char** argv)
                         const juce::String name = b->getButtonText().isNotEmpty() ? b->getButtonText() : b->getName();
                         if (name.isEmpty() || !b->isVisible()) continue;
                         if (name.endsWithChar('.')) { dialogs.addIfNotAlreadyThere(name); continue; }
+                        // A lit button that does not toggle -- the group tab or the section a page is on (Frame.h,
+                        // 01.10.2026) -- is where the page already is: there is nothing for it to change.
+                        if (b->getToggleState() && !b->getClickingTogglesState()) continue;
                         p->params().copyValuesFrom(pristine);
                         p->clearCuration();
                         // And the transport runs again: "Stop" is one of the buttons this walk

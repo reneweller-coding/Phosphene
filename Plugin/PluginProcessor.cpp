@@ -168,7 +168,7 @@ bool macroIsMomentary(Macro m) { return m == Macro::DropOut || m == Macro::Stutt
 // ==================================================================== PhospheneProcessor
 
 PhospheneProcessor::PhospheneProcessor()
-    : juce::AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true))
+    : juce::AudioProcessor(busLayout())
 {
     for (auto& a : shownIndex_) a.store(-1, std::memory_order_relaxed);   // no composer preset shown yet (26.09.2026)
     // Before anything prepares an engine -- this instance's, or one of the composer thread's probe
@@ -331,11 +331,23 @@ PhospheneProcessor::LearnedModels PhospheneProcessor::learnedModels() const
     return gLearnedModels;
 }
 
+juce::AudioProcessor::BusesProperties PhospheneProcessor::busLayout()
+{
+    BusesProperties b = BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true);
+    for (int s = 0; s < phos::kNumStems; ++s) b = b.withOutput(phos::kStemNames[s], juce::AudioChannelSet::stereo(), false);
+    return b;
+}
+
 bool PhospheneProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
     if (layouts.getMainInputChannels() != 0) return false;
     const auto& out = layouts.getMainOutputChannelSet();
-    return out == juce::AudioChannelSet::stereo() || out == juce::AudioChannelSet::mono();
+    if (out != juce::AudioChannelSet::stereo() && out != juce::AudioChannelSet::mono()) return false;
+    for (int b = 1; b < layouts.outputBuses.size(); ++b) {   // a stem's bus (02.10.2026): stereo, or off
+        const juce::AudioChannelSet& set = layouts.outputBuses.getReference(b);
+        if (!set.isDisabled() && set != juce::AudioChannelSet::stereo()) return false;
+    }
+    return true;
 }
 
 void PhospheneProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -347,6 +359,15 @@ void PhospheneProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
         const std::lock_guard<std::mutex> lock(engineLock_);
         sampleRate_ = sampleRate;
         scratch_.setSize(2, juce::jmax(64, samplesPerBlock), false, true, true);
+        // The stems' buffers for their outputs (02.10.2026); the engine writes them only while a stem's bus is on.
+        stemBlock_ = juce::jmax(64, samplesPerBlock);
+        stemBuf_.assign(static_cast<size_t>(phos::kNumStems * 2 * stemBlock_), 0.0f);
+        for (int s = 0; s < phos::kNumStems; ++s) {
+            stemL_[static_cast<size_t>(s)] = stemBuf_.data() + static_cast<size_t>(2 * s * stemBlock_);
+            stemR_[static_cast<size_t>(s)] = stemBuf_.data() + static_cast<size_t>((2 * s + 1) * stemBlock_);
+        }
+        engine_->setStemTap(nullptr);
+        stemsOn_ = false;
         engine_->prepare(sampleRate, samplesPerBlock);
         engine_->setMetering(true);   // reading only: the mix is the same to the bit (Engine.h)
         for (HeldNote& h : held_) h = HeldNote{};
@@ -1453,9 +1474,26 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     // ---------------------------------------------------------------- render
     const double beatAtStart = engine_->beatPosition();
     float* L = buffer.getWritePointer(0);
-    float* R = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
+    // The main bus only: with the stems' outputs on, the channels after it are theirs (02.10.2026).
+    const auto* mainBus = getBus(false, 0);
+    float* R = (mainBus != nullptr ? mainBus->getNumberOfChannels() : buffer.getNumChannels()) > 1 ? buffer.getWritePointer(1) : nullptr;
+    {   // The stems' outputs (02.10.2026): the engine writes its StemTap while the host has one of their buses on.
+        bool want = false;
+        for (int b = 1; b < getBusCount(false) && !want; ++b)
+            if (const auto* bus = getBus(false, b)) want = bus->isEnabled();
+        want = want && n <= stemBlock_;   // the stems' buffers hold the prepared block
+        if (want != stemsOn_) {
+            engine_->setStemTap(want ? &stemTap_ : nullptr);
+            stemsOn_ = want;
+        }
+    }
     auto render = [&](int from, int count) {
         if (count <= 0) return;
+        if (stemsOn_)   // every render of a split block writes its stems from its own start
+            for (int s = 0; s < phos::kNumStems; ++s) {
+                stemTap_.L[s] = stemL_[static_cast<size_t>(s)] + from;
+                stemTap_.R[s] = stemR_[static_cast<size_t>(s)] + from;
+            }
         if (R == nullptr) {
             // Mono device: render the stereo pair into the scratch and fold it down.
             const int m = juce::jmin(count, scratch_.getNumSamples() - from);
@@ -1479,6 +1517,15 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         else engine_->liveNoteOff(ln.pitch, ln.channel);
     }
     render(done, n - done);
+    if (stemsOn_)
+        for (int b = 1; b < getBusCount(false) && b - 1 < phos::kNumStems; ++b) {
+            const auto* bus = getBus(false, b);
+            if (bus == nullptr || !bus->isEnabled()) continue;
+            auto out = getBusBuffer(buffer, false, b);
+            if (out.getNumChannels() < 2) continue;
+            out.copyFrom(0, 0, stemL_[static_cast<size_t>(b - 1)], n);
+            out.copyFrom(1, 0, stemR_[static_cast<size_t>(b - 1)], n);
+        }
     if (link_.enabled() && !linkFollow && !hostSync)   // alone in the Link session: it takes this set's tempo
         link_.proposeTempo(60.0 * (engine_->beatPosition() - beatAtStart) * sampleRate_ / static_cast<double>(n), 0.0);
     {
