@@ -18,22 +18,22 @@ Licence: AGPL-3.0.
 
 ## Download
 
-**[Phosphene-1.4.0-Setup.exe](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-1.4.0-Setup.exe)**
+**[Phosphene-1.5.0-Setup.exe](https://github.com/reneweller-coding/Phosphene/releases/download/v1.5.0/Phosphene-1.5.0-Setup.exe)**
 installs the standalone and the VST3 and fetches the data it needs (the wavetable pack, the two
 learned models, the spoken phrases) and, if you leave the box ticked, the Field track's recordings
 (2 GB, from the [field-data-1](https://github.com/reneweller-coding/Phosphene/releases/tag/field-data-1)
 release). Nothing else has to be installed: the runtime is linked in.
 There is a
-**[portable zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-1.4.0-portable.zip)**
+**[portable zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.5.0/Phosphene-1.5.0-portable.zip)**
 with everything in it for anyone who would rather not run an installer, and the
-**[manual](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-Manual.pdf)** —
+**[manual](https://github.com/reneweller-coding/Phosphene/releases/download/v1.5.0/Phosphene-Manual.pdf)** —
 every tab as a picture, every parameter, and the reasons behind the design.
 
-**[macOS zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-1.4.0-macOS.zip)** for Apple Silicon (macOS 12 or newer): the standalone,
+**[macOS zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.5.0/Phosphene-1.5.0-macOS.zip)** for Apple Silicon (macOS 12 or newer): the standalone,
 the VST3 and the Audio Unit, built on GitHub's runners and attached to the release within the hour after it; signed ad hoc,
 not notarized (README-macOS.txt inside says how to open it), and not yet tried on a real Mac.
 
-**[Linux archive](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-1.4.0-linux-x86_64.tar.gz)** for x86-64 (glibc 2.35 or newer: Ubuntu 22.04, Debian 12,
+**[Linux archive](https://github.com/reneweller-coding/Phosphene/releases/download/v1.5.0/Phosphene-1.5.0-linux-x86_64.tar.gz)** for x86-64 (glibc 2.35 or newer: Ubuntu 22.04, Debian 12,
 Fedora 36 and later): the standalone, the VST3, the LV2 and the renderer, built and tested on GitHub's Ubuntu runners
 and tried under WSL; README-Linux.txt inside says where everything goes.
 
