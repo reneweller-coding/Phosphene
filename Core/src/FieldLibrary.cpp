@@ -168,6 +168,20 @@ void scanLocked(Library& l)
     // standalone and the plug-in, not a second 2 GB in the VST3 bundle -- the machine-wide place, or the user's.
     for (const char* var : { "PROGRAMDATA", "APPDATA" })
         if (const char* v = std::getenv(var)) if (*v != 0) roots.push_back(fs::path(v) / "Phosphene" / "field");
+#if !defined(_WIN32)
+    // Linux and macOS (02.10.2026): the user's data folder, where the README of their archives says to unpack them --
+    // $XDG_DATA_HOME (else ~/.local/share) on Linux, ~/Library/Application Support on a Mac.
+    {
+        const char* home = std::getenv("HOME");
+  #if defined(__APPLE__)
+        if (home != nullptr && *home != 0) roots.push_back(fs::path(home) / "Library" / "Application Support" / "Phosphene" / "field");
+  #else
+        const char* xdg = std::getenv("XDG_DATA_HOME");
+        if (xdg != nullptr && *xdg != 0) roots.push_back(fs::path(xdg) / "Phosphene" / "field");
+        else if (home != nullptr && *home != 0) roots.push_back(fs::path(home) / ".local" / "share" / "Phosphene" / "field");
+  #endif
+    }
+#endif
 #if defined(PHOS_SOURCE_DATA_DIR)
     roots.push_back(fs::path(PHOS_SOURCE_DATA_DIR) / "field");
 #endif

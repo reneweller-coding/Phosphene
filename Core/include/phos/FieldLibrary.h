@@ -10,7 +10,8 @@
  *
  * **Where the recordings are.** A folder `field` beside the data files (the working directory, setFieldSearchPath()'s,
  * waveTableSearchPath()'s, then where the Windows setup puts it -- `%PROGRAMDATA%\Phosphene\field` or
- * `%APPDATA%\Phosphene\field` --, then PHOS_SOURCE_DATA_DIR's), the first that exists, and optionally one more folder the user
+ * `%APPDATA%\Phosphene\field` --, on Linux `$XDG_DATA_HOME/Phosphene/field` (else `~/.local/share/...`) and on a Mac
+ * `~/Library/Application Support/Phosphene/field`, then PHOS_SOURCE_DATA_DIR's), the first that exists, and optionally one more folder the user
  * names (setFieldUserFolder(): Noctuary's whole library, say). Files named `fr-<category>-*.flac` belong to that
  * category of kFieldCategorySlugs; files below a subfolder named `nasa` to the category "nasa", except those below
  * `nasa/shots`, which are the effect shots (SfxType::SpaceShot, fieldShotCount); others are ignored.

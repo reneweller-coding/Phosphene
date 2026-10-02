@@ -63,6 +63,8 @@ jobs:
           Built on GitHub's runners and not yet tried on a Mac by its author -- reports are welcome.
 
           The wavetables, the two learned models and the voices are inside both bundles (Contents/Resources).
+          The field recordings are a separate download (the release field-data-1); unpack them into
+          ~/Library/Application Support/Phosphene/field.
           EOF
           sed -i '' 's/^          //' "$out/README-macOS.txt"
           (cd dist && ditto -c -k --sequesterRsrc --keepParent "Phosphene" "Phosphene-$version-macOS.zip")
