@@ -1,0 +1,108 @@
+{
+ "render": "phos_render",
+ "mix_tol": 1.0,
+ "stem_tol": 3.0,
+ "quiet": -40.0,
+ "cases": {
+  "darkforest": {
+   "mix": -8.46,
+   "stems": {
+    "01_Kick": -0.54,
+    "02_Bass": 1.51,
+    "03_Perc": -2.92,
+    "04_Acid": -6.68,
+    "05_Lead": -3.0,
+    "06_Counter": null,
+    "07_Arp": -7.61,
+    "08_Stab": null,
+    "09_Pad": -5.49,
+    "10_Drone": -7.97,
+    "11_Sfx": -3.09,
+    "12_Texture": -7.96,
+    "13_Vocal": 2.95,
+    "14_Field": -26.77,
+    "15_Returns": -19.3
+   }
+  },
+  "fullon": {
+   "mix": -8.47,
+   "stems": {
+    "01_Kick": -0.31,
+    "02_Bass": 0.48,
+    "03_Perc": -0.69,
+    "04_Acid": -6.53,
+    "05_Lead": -2.09,
+    "06_Counter": null,
+    "07_Arp": -8.99,
+    "08_Stab": -3.96,
+    "09_Pad": -1.0,
+    "10_Drone": -11.63,
+    "11_Sfx": -2.3,
+    "12_Texture": -9.82,
+    "13_Vocal": -2.49,
+    "14_Field": -20.27,
+    "15_Returns": -16.56
+   }
+  },
+  "goa": {
+   "mix": -9.33,
+   "stems": {
+    "01_Kick": -1.14,
+    "02_Bass": 1.22,
+    "03_Perc": -3.6,
+    "04_Acid": -6.81,
+    "05_Lead": -7.44,
+    "06_Counter": null,
+    "07_Arp": -14.89,
+    "08_Stab": -5.07,
+    "09_Pad": -2.59,
+    "10_Drone": -11.61,
+    "11_Sfx": -5.24,
+    "12_Texture": -16.4,
+    "13_Vocal": -3.09,
+    "14_Field": -34.22,
+    "15_Returns": -21.04
+   }
+  },
+  "hitech": {
+   "mix": -8.49,
+   "stems": {
+    "01_Kick": -1.24,
+    "02_Bass": 2.74,
+    "03_Perc": -2.1,
+    "04_Acid": -5.11,
+    "05_Lead": -2.77,
+    "06_Counter": null,
+    "07_Arp": -7.29,
+    "08_Stab": -10.37,
+    "09_Pad": -1.86,
+    "10_Drone": -12.99,
+    "11_Sfx": -3.99,
+    "12_Texture": -18.49,
+    "13_Vocal": -1.24,
+    "14_Field": -17.9,
+    "15_Returns": -20.6
+   }
+  },
+  "progressive": {
+   "mix": -8.25,
+   "stems": {
+    "01_Kick": -1.97,
+    "02_Bass": 3.57,
+    "03_Perc": -2.45,
+    "04_Acid": -5.63,
+    "05_Lead": null,
+    "06_Counter": null,
+    "07_Arp": -14.55,
+    "08_Stab": null,
+    "09_Pad": -1.16,
+    "10_Drone": -12.1,
+    "11_Sfx": -3.09,
+    "12_Texture": -10.98,
+    "13_Vocal": 3.25,
+    "14_Field": -28.79,
+    "15_Returns": -15.75
+   }
+  }
+ }
+}
