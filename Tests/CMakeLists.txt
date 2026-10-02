@@ -198,6 +198,8 @@ if(TARGET Phosphene)
         target_compile_definitions(phos_hosttest PRIVATE _CRT_SECURE_NO_WARNINGS)
         # The composer's probe renders put whole engines on the stack.
         target_link_options(phos_hosttest PRIVATE "LINKER:/STACK:16777216")
+    elseif(APPLE)
+        target_link_options(phos_hosttest PRIVATE "LINKER:-stack_size,0x1000000")
     endif()
     # The shipped data beside the test binary, exactly as Plugin/CMakeLists.txt installs it beside
     # the artefacts: the pack and, since the models reached the plugin, the two .phosmdl as well.
@@ -264,6 +266,8 @@ if(TARGET Phosphene_VST3)
         target_compile_options(phos_vst3test PRIVATE /W4 /permissive- /utf-8)
         target_compile_definitions(phos_vst3test PRIVATE _CRT_SECURE_NO_WARNINGS)
         target_link_options(phos_vst3test PRIVATE "LINKER:/STACK:16777216")
+    elseif(APPLE)
+        target_link_options(phos_vst3test PRIVATE "LINKER:-stack_size,0x1000000")
     endif()
     # The module inside the .vst3 bundle: on Windows that file is what the host loads, and it is
     # the one CMake can name (the bundle itself is a directory made by a post-build step).

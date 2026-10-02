@@ -1,0 +1,82 @@
+# Phosphene for macOS (02.10.2026): built on GitHub's Apple Silicon runners, since nobody here has a Mac.
+#
+# A tag v* (the release, Deploy/publish_release.ps1) or "Run workflow" by hand: the core, the tests and the plugin --
+# VST3 and the standalone app, arm64 -- built in Release, the quick tests run, both bundles signed ad hoc (codesign -s -:
+# no Apple developer account, so not notarized: macOS asks once, see README-macOS.txt in the zip), zipped, kept as the
+# run's artifact and, for a tag, attached to its release once the release exists. JUCE and Ableton Link are fetched by
+# cmake/Family.cmake. Nobody waits for it: it runs beside the Windows release.
+name: macos
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure (Release, arm64, the plugin and the tools)
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DPHOS_BUILD_PLUGIN=ON -DPHOS_SHIP=ON
+
+      - name: Build
+        run: cmake --build build --parallel 4
+
+      - name: Test (the quick ones)
+        env:
+          PHOS_MUTE: "1"
+        run: ctest --test-dir build -LE "slow|docs|sound" --output-on-failure
+
+      - name: Package (signed ad hoc)
+        run: |
+          version=$(sed -nE 's/^project\(Phosphene VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)
+          app=$(find build -path "*_artefacts*" -name "Phosphene.app" -maxdepth 6 | head -1)
+          vst=$(find build -path "*_artefacts*" -name "Phosphene.vst3" -maxdepth 6 | head -1)
+          test -n "$app" && test -n "$vst"
+          out="dist/Phosphene"
+          mkdir -p "$out"
+          cp -R "$app" "$vst" "$out/"
+          for f in library.phoswt melody.phosmdl bass.phosmdl voices.phosvx; do
+            test -f "$out/Phosphene.app/Contents/Resources/$f"
+            test -f "$out/Phosphene.vst3/Contents/Resources/$f"
+          done
+          cp Core/data/CREDITS-wavetables.md Core/data/CREDITS-voices.md "$out/"
+          codesign --force --deep -s - "$out/Phosphene.app"
+          codesign --force --deep -s - "$out/Phosphene.vst3"
+          cp LICENSE "$out/LICENSE.txt"
+          if [ -f docs/manual/Phosphene-Manual.pdf ]; then cp docs/manual/Phosphene-Manual.pdf "$out/"; fi
+          cat > "$out/README-macOS.txt" <<'EOF'
+          Phosphene for macOS (Apple Silicon)
+
+          Phosphene.app      the standalone: drag it into Applications.
+          Phosphene.vst3     the plugin: copy it into ~/Library/Audio/Plug-Ins/VST3 (or /Library/Audio/Plug-Ins/VST3).
+
+          The app and the plugin are signed ad hoc, not notarized (that needs a paid Apple developer account). macOS
+          therefore asks once: open the app with a right click > Open > Open. For the plugin, or if macOS refuses:
+              xattr -dr com.apple.quarantine "/path/to/Phosphene.app"
+              xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Phosphene.vst3
+          Built on GitHub's runners and not yet tried on a Mac by its author -- reports are welcome.
+
+          The wavetables, the two learned models and the voices are inside both bundles (Contents/Resources).
+          EOF
+          sed -i '' 's/^          //' "$out/README-macOS.txt"
+          (cd dist && ditto -c -k --sequesterRsrc --keepParent "Phosphene" "Phosphene-$version-macOS.zip")
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Phosphene-macOS
+          path: dist/*.zip
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 60); do gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break; sleep 60; done
+          gh release upload "$GITHUB_REF_NAME" dist/*.zip --clobber

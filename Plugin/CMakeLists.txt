@@ -79,12 +79,20 @@ target_link_libraries(Phosphene
 # with it. The release staging packages exactly these two locations (Deploy/build_release.ps1) and
 # the package check proves both are filled (Tools/release/check_package.ps1).
 # 19.09.2026: the voice pack (Vocal.h) beside them; the core finds it through the wavetables' search path.
+# 02.10.2026: on macOS the standalone is a bundle too, and its data goes to Contents/Resources -- codesign takes every
+# file in Contents/MacOS for code and refuses the bundle. resolveResourceDirectory() looks there as well.
 set(PHOS_RESOURCES library.phoswt melody.phosmdl bass.phosmdl voices.phosvx)
+if(APPLE)
+    set(PHOS_STANDALONE_RESOURCES "$<TARGET_FILE_DIR:Phosphene_Standalone>/../Resources")
+else()
+    set(PHOS_STANDALONE_RESOURCES "$<TARGET_FILE_DIR:Phosphene_Standalone>")
+endif()
 foreach(f ${PHOS_RESOURCES})
     if(TARGET Phosphene_Standalone)
         add_custom_command(TARGET Phosphene_Standalone POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${PHOS_STANDALONE_RESOURCES}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${CMAKE_CURRENT_SOURCE_DIR}/../Core/data/${f}" "$<TARGET_FILE_DIR:Phosphene_Standalone>/${f}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/../Core/data/${f}" "${PHOS_STANDALONE_RESOURCES}/${f}"
             VERBATIM)
     endif()
     if(TARGET Phosphene_VST3)
@@ -105,6 +113,9 @@ if(MSVC)
             target_link_options(${t} PRIVATE "LINKER:/STACK:16777216")
         endif()
     endforeach()
+elseif(APPLE AND TARGET Phosphene_Standalone)
+    # The same 16 MB for the macOS app's main thread (02.10.2026); a plugin cannot set its host's.
+    target_link_options(Phosphene_Standalone PRIVATE "LINKER:-stack_size,0x1000000")
 endif()
 
 # Into bin/<preset> after every build (cmake/Family.cmake, 01.10.2026): the standalone with the files it reads
