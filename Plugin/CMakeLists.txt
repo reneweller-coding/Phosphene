@@ -41,7 +41,7 @@ target_sources(Phosphene PRIVATE
     EditorScope.cpp
     UpdateCheck.cpp
     PhospheneLookAndFeel.cpp
-    Frame.cpp)
+    Frame.cpp LinkClock.cpp)
 
 # The help page's text (23.09.2026, EditorHelp.cpp): the manual's prose, compiled in, so the help and the PDF
 # are one text.
@@ -115,3 +115,5 @@ foreach(f ${PHOS_RESOURCES})
 endforeach()
 family_bin(Phosphene_Standalone FILES ${PHOS_BIN_RESOURCES})
 family_bin(Phosphene_VST3 VST3)
+
+family_link(Phosphene)   # Ableton Link in the standalone (cmake/Family.cmake, 02.10.2026)

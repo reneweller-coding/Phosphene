@@ -362,6 +362,10 @@ void PhospheneProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
 void PhospheneProcessor::timerCallback()
 {
+    // Ableton Link (02.10.2026): the standalone joins the session while the setting is on (or FAMILY_LINK=1); a DAW's
+    // transport rules the plugin.
+    link_.setEnabled(wrapperType == wrapperType_Standalone && (frame::Settings::of("Phosphene").link() || frame::LinkClock::forcedOn()));
+    link_.tick();
     // The fast job is the macros: a drop-out has to let go on the bar line, and 33 ms is a
     // sixty-fourth note at 145 BPM. Everything else here is housekeeping and runs every eighth tick.
     pollHeadset();   // the headset's hands move macros too (01.10.2026)
@@ -716,6 +720,13 @@ void PhospheneProcessor::stopMeasureJob()
     if (measureJob_ != nullptr) measureJob_->abort.store(true, std::memory_order_relaxed);
     if (measureThread_.joinable()) measureThread_.join();
     measureJob_.reset();
+}
+
+juce::String PhospheneProcessor::linkStatus() const
+{
+    if (!link_.enabled()) return "off";
+    const int n = link_.peers();
+    return n == 0 ? "alone in the session: it takes this tempo" : juce::String(n) + (n == 1 ? " other app" : " other apps");
 }
 
 void PhospheneProcessor::requestSeek(int bar, double beatOffset)
@@ -1298,6 +1309,27 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             }
         }
     }
+    // Ableton Link (02.10.2026, LinkClock.h), the standalone only: with other apps in the session it rules as a host
+    // does -- its tempo (compose.bpm below), its bar phase (the conductor's offset, after the restarts), its start and
+    // stop; alone in it, the standalone leads (its tempo goes out after the render).
+    bool linkFollow = false;
+    if (!hostSync && link_.enabled()) {
+        const double latency = static_cast<double>(getLatencySamples() + n) / sampleRate_;
+        const frame::LinkClock::Now ln = link_.capture(latency, 4.0);
+        linkFollow = ln.peers > 0;
+        if (linkFollow) {
+            if (playing != linkPlayed_) {
+                link_.setPlaying(playing, latency, 4.0);   // Play or Stop pressed here: to the session
+            } else if (ln.playing != playing) {
+                playing = ln.playing;                      // pressed elsewhere: here too
+                playRequest_.store(playing, std::memory_order_relaxed);
+            }
+            hostBpm_.store(ln.bpm, std::memory_order_relaxed);
+            linkBeat_ = ln.beat;
+        }
+        linkPlayed_ = playing;
+    }
+    linkFollowing_.store(linkFollow, std::memory_order_relaxed);
     hostSyncNow_.store(hostSync, std::memory_order_relaxed);
     // PHOS_TRACE=1: a line every hundred blocks on stderr saying what the transport and the
     // handshake are doing. The only way to see inside a plugin that a host has loaded and that is
@@ -1311,7 +1343,7 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     // Under a host the tempo is the host's. compose.bpm is written directly rather than through the
     // host parameter, so the value the user sees follows the transport without an automation fight;
     // "Follow host" in the Set tab switches the whole arrangement off.
-    if (hostSync) {
+    if (hostSync || linkFollow) {
         const double bpm = hostBpm_.load(std::memory_order_relaxed);
         const int id = params().base(Module::Compose) + compose::Bpm;
         if (bpm > 1.0 && std::fabs(static_cast<double>(params().get(id)) - bpm) > 0.005) params().set(id, static_cast<float>(bpm));
@@ -1361,6 +1393,15 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             // the events stay where the host expects them and nothing clicks.
             conductor_->nudgeOffset(drift);
         }
+    } else if (linkFollow && playing && wasPlaying_ && !restarting) {
+        // The Link session's bar phase: the bars line up, the place in the set stays. Drift is nudged into the
+        // conductor's offset as a host's is; a jump (another app started its bar elsewhere) is a seek.
+        const double expected = engine_->beatPosition() + conductor_->beatOffset();
+        double d = std::fmod(linkBeat_ - expected, 4.0);
+        if (d > 2.0) d -= 4.0;
+        else if (d <= -2.0) d += 4.0;
+        if (std::fabs(d) > 0.25) requestSeek(static_cast<int>(std::floor((expected + d) / kBeatsPerBar)), expected + d);
+        else if (std::fabs(d) > 1.0e-9) conductor_->nudgeOffset(d);
     } else if (!hostSync && playing && !wasPlaying_ && !restarting) {
         requestSeek(pendingBar_.load(std::memory_order_relaxed), pendingOffset_.load(std::memory_order_relaxed));
     }
@@ -1438,6 +1479,8 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         else engine_->liveNoteOff(ln.pitch, ln.channel);
     }
     render(done, n - done);
+    if (link_.enabled() && !linkFollow && !hostSync)   // alone in the Link session: it takes this set's tempo
+        link_.proposeTempo(60.0 * (engine_->beatPosition() - beatAtStart) * sampleRate_ / static_cast<double>(n), 0.0);
     {
         // The channel meters: raised here, taken by the mixer page (takeChannelMeters). One writer, so a load and a
         // store will do; a block the editor takes in between is at worst counted in the next reading.

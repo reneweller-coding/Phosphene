@@ -52,6 +52,7 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Frame.h"
+#include "LinkClock.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "phos/Composer.h"
 #include "phos/Cue.h"
@@ -644,6 +645,8 @@ public:
     void seekToBar(int bar);
     /** @brief Whether the standalone clock is running. */
     bool isPlaying() const { return playRequest_.load(std::memory_order_relaxed); }
+    /** @brief The standalone's Ableton Link, as the settings menu says it: off, alone, or how many apps are with it. */
+    juce::String linkStatus() const;
     /** @brief A snapshot of where we are, for the editor. */
     TransportView transport() const;
     /** @brief Whether the plugin takes tempo and position from the host. */
@@ -814,6 +817,11 @@ private:
     std::atomic<bool> restartRequest_{ false };  ///< message thread asks for a restart at the next block
     std::atomic<bool> hostSyncNow_{ false };     ///< the last block followed a host playhead
     std::atomic<double> hostBpm_{ 0.0 };         ///< tempo the host reported, 0 = none
+    // Ableton Link in the standalone (02.10.2026, LinkClock.h; Settings > Ableton Link).
+    frame::LinkClock link_;                       ///< the session (joined on the timer when the setting is on)
+    std::atomic<bool> linkFollowing_{ false };    ///< other apps are in the session: its tempo and bar phase rule
+    bool linkPlayed_ = false;                     ///< audio thread: the transport last told to or taken from the session
+    double linkBeat_ = 0.0;                       ///< audio thread: the session's beat at this block (its bar phase)
 
     std::thread composerThread_;   ///< plans, composes and measures behind the audio thread
     /**
