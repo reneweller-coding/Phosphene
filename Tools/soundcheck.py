@@ -1,6 +1,6 @@
 """Phosphene -- the sound regression check: fixed seeds rendered, measured, and held against Tests/golden/soundcheck.json.
 
-    python Tools/soundcheck.py [--exe path\to\phos_render.exe] [--update] [--only CASE] [--jobs N]
+    python Tools/soundcheck.py [--exe path/to/phos_render.exe] [--update] [--only CASE] [--jobs N]
 
 A change of the code must not thin or swell the sound without anybody noticing (02.10.2026; Totality's "only kick and
 hats" rounds were found by ear, never by a test). For every case below the render tool writes the mix and its stems;
@@ -28,6 +28,10 @@ ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 GOLDEN = os.path.join(ROOT, "Tests", "golden", "soundcheck.json")
 RENDER = "phos_render"
 STEMS = "dir"   # "dir": --stems names a directory; "prefix": --stems names a prefix, files <prefix>_<stem>.wav
+# Where the renderer starts (02.10.2026): in Core/data, because a release build (PHOS_SHIP) has no path into the
+# sources compiled in and finds the wavetables, the two models, the voices and the field recordings only as bare names
+# in its working directory -- without them the Field stem is silent and the composer writes other leads.
+RUN_DIR = os.path.join(ROOT, "Core", "data")
 MIX_TOL = 1.0       # LU: the mix's integrated loudness
 STEM_TOL = 3.0      # LU: a stem's loudness relative to the mix
 QUIET = -40.0       # LU below the mix: quieter than this, a stem is only checked for staying quiet (under -34)
@@ -111,7 +115,7 @@ def run_case(exe, work, name, args):
         env.pop(k, None)
     if RENDER == "ambient_render":
         env.setdefault("AMBIENT_PACKS", os.path.join(ROOT, "Library", "Packs"))
-    p = subprocess.run([exe] + args + ["--out", mix, "--stems", stems], cwd=ROOT, env=env,
+    p = subprocess.run([exe] + args + ["--out", mix, "--stems", stems], cwd=RUN_DIR, env=env,
                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
     if p.returncode != 0 or not os.path.exists(mix):
         raise RuntimeError("%s: the render failed (%d)\n%s" % (name, p.returncode, p.stdout[-2000:]))
