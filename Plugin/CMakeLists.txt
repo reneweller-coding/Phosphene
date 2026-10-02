@@ -17,6 +17,7 @@ juce_add_plugin(Phosphene
     PLUGIN_MANUFACTURER_CODE    Rnwl
     PLUGIN_CODE                 Phos
     FORMATS                     VST3 Standalone
+    NEEDS_CURL                  TRUE
     VST3_CATEGORIES             Instrument Synth
     VERSION                     ${PROJECT_VERSION}
     # The logo's rings (23.09.2026, Tools/logo/make_logo.py --install rings): the standalone's window, taskbar and
@@ -53,7 +54,11 @@ juce_add_binary_data(PhospheneHelpData
 
 target_compile_definitions(Phosphene PUBLIC
     JUCE_WEB_BROWSER=0
-    JUCE_USE_CURL=0
+    # The update check fetches GitHub over https, which JUCE does on Linux only through libcurl (02.10.2026): there
+    # NEEDS_CURL sets JUCE_USE_CURL itself, and the library is loaded when the check runs, so a machine without it
+    # only goes without the check. Windows and macOS have their own https and keep curl out.
+    $<$<NOT:$<PLATFORM_ID:Linux>>:JUCE_USE_CURL=0>
+    JUCE_LOAD_CURL_SYMBOLS_LAZILY=1
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_REPORT_APP_USAGE=0)

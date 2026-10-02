@@ -23,6 +23,12 @@
 # table has and this list does not is labelled `slow` until somebody measures it, so `ctest -L quick`
 # never turns into a long run by accident; a name here that the table no longer has is reported.
 
+# IN_LIST below (02.10.2026): ctest reads this file without a cmake_minimum_required, and CMake 3.x then applies the
+# old behaviour of CMP0057 and refuses the operator (CMake 4 has only the new one). Pushed and popped, so the setting
+# stays in this file (CMP0011).
+cmake_policy(PUSH)
+cmake_policy(SET CMP0057 NEW)
+
 # Seconds of each section (each in its own process; since 20.09.2026, round "speed", from a `ctest -C Release
 # -j 8` with an *empty* probe cache and eight probe threads, i9-12900K, Release, another round's builds and
 # tests beside it -- with the cache filled the planning sections take a fraction, see docs/rounds/2026-09.md; the
@@ -391,3 +397,5 @@ if("$ENV{PHOS_SELFTEST_FULL}")
     phos_selftest_env(selftest)
     set_tests_properties(selftest PROPERTIES LABELS "selftest;full" RESOURCE_LOCK phos_selftest_cwd COST 0)
 endif()
+
+cmake_policy(POP)
