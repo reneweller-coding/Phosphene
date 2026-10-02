@@ -43,7 +43,7 @@ target_sources(Phosphene PRIVATE
     EditorScope.cpp
     UpdateCheck.cpp
     PhospheneLookAndFeel.cpp
-    Frame.cpp LinkClock.cpp)
+    Frame.cpp LinkClock.cpp Jam.cpp)
 
 # The help page's text (23.09.2026, EditorHelp.cpp): the manual's prose, compiled in, so the help and the PDF
 # are one text.

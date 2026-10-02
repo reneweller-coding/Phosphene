@@ -157,6 +157,7 @@ set(PHOS_SELFTEST_SECONDS
     testSoundPresets        20.0
     testDeferredPlan        45.0
     testKeyboard            40.0
+    testJam                 24.0
     testAudibility           8.0
     testAudibilityMatch     70.0
     testSampler              1.5

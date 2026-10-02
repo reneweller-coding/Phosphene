@@ -158,6 +158,16 @@ public:
     void liveAllOff();
     /** @brief Whether the composer's notes of @p part are replaced by the keyboard (the plugin's MIDI out skips them too). */
     bool generatedSilenced(Part part) const;
+    /**
+     * @brief The family jam (02.10.2026, the plugin's Jam.h), live only: the melodic voices' notes (the acid, the bass,
+     *        the lead and the others) @p transpose semitones from where they were written, and with @p rhythmOut the
+     *        kick and the bass out for the leader's break.
+     */
+    void setJam(int transpose, bool rhythmOut) { jamTranspose_ = transpose; jamRhythmOut_ = rhythmOut; }
+    /** @brief Whether the family jam leaves @p part's notes out now (the kick and the bass in the leader's break). */
+    bool jamSilenced(Part part) const { return jamRhythmOut_ && (part == Part::Kick || part == Part::Bass); }
+    /** @brief @p pitch as the family jam plays @p part's notes now (moved by its transposition, or as it is). */
+    int jamPitch(Part part, int pitch) const;
     /** @} */
 
     /**
@@ -297,6 +307,8 @@ public:
     int scale() const { return scale_; }
 
 private:
+    int jamTranspose_ = 0;       ///< the family jam's transposition of the melodic voices (setJam)
+    bool jamRhythmOut_ = false;  ///< the family jam: kick and bass out for the leader's break (setJam)
     /** @brief Moves every running offset ramp to the current chunk's beat. */
     void advanceRamps();
     /** @brief Recomputes the effective values that moved and hands them to every generator (Engine.h, raw_). */

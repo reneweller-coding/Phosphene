@@ -1240,6 +1240,84 @@ void testSoundPresets()
 }
 
 /**
+ * @brief The family jam (02.10.2026, the plugin's Jam.h): a follower's engine.
+ *
+ * The melodic voices move by the jam's transposition, the kit does not; in the leader's break the kick and the
+ * bass are out and the rest plays on. The set's walk (Composer::setJam) holds its key while it follows and takes the
+ * leader's mode from the next track on. A set's first 24 bars, the stems taken: the kick and the bass from bar 17 on.
+ */
+void testJam()
+{
+    section("family jam (a follower's engine)");
+    {
+        Engine e;
+        e.setJam(3, false);
+        check(e.jamPitch(Part::Lead, 60) == 63 && e.jamPitch(Part::Bass, 40) == 43 && e.jamPitch(Part::Kick, 36) == 36
+                  && e.jamPitch(Part::Lead, 126) == 127 && !e.jamSilenced(Part::Kick),
+              "the melodic voices move by the transposition (within MIDI's range), the kit does not");
+        e.setJam(0, true);
+        check(e.jamSilenced(Part::Kick) && e.jamSilenced(Part::Bass) && !e.jamSilenced(Part::Lead),
+              "in a break the kick and the bass are out, the lead is not");
+    }
+    {
+        ParamStore p;
+        Composer own(5), held(5);
+        own.setDeferMasterGain(true);
+        held.setDeferMasterGain(true);
+        held.setJam(true, 1);
+        const int key0 = held.track(p, 0).key;
+        bool keys = true, scales = true;
+        int moves = 0;
+        for (int i = 1; i < 5; ++i) {
+            keys = keys && held.track(p, i).key == key0;
+            scales = scales && held.track(p, i).scale == 1;
+            moves += own.track(p, i).key != own.track(p, i - 1).key ? 1 : 0;
+        }
+        check(keys && scales && moves > 0, "following, the set's walk holds its key and takes the leader's mode (its own walk moves)",
+              fmt("%d key moves of its own in four tracks", moves));
+    }
+    constexpr int kBlock = 256;
+    const double sr = 48000.0;
+    auto render = [&](int transpose, bool rhythmOut) {
+        auto engine = std::make_unique<Engine>();
+        engine->setLive(true);
+        ParamStore& p = engine->params();
+        p.parseText("compose.level_match=Off master.auto_gain=Off compose.presence_match=Off compose.audibility_match=Off");
+        const size_t total = static_cast<size_t>(std::llround(24 * kBeatsPerBar * 60.0 / p.get(p.base(Module::Compose) + compose::Bpm) * sr));
+        Composer composer(1);
+        engine->prepare(sr, kBlock);
+        engine->setJam(transpose, rhythmOut);
+        Conductor conductor(*engine, composer);
+        std::vector<std::vector<float>> stem(kNumStems, std::vector<float>(total));
+        std::vector<float> L(kBlock), R(kBlock);
+        std::vector<std::vector<float>> bl(kNumStems, std::vector<float>(kBlock)), br(kNumStems, std::vector<float>(kBlock));
+        StemTap tap;
+        for (int s = 0; s < kNumStems; ++s) { tap.L[s] = bl[static_cast<size_t>(s)].data(); tap.R[s] = br[static_cast<size_t>(s)].data(); }
+        engine->setStemTap(&tap);
+        for (size_t done = 0; done < total; done += kBlock) {
+            const int n = static_cast<int>(std::min<size_t>(kBlock, total - done));
+            conductor.pump(p, 32.0);
+            engine->process(L.data(), R.data(), n);
+            for (int s = 0; s < kNumStems; ++s)
+                std::copy(bl[static_cast<size_t>(s)].begin(), bl[static_cast<size_t>(s)].begin() + n,
+                          stem[static_cast<size_t>(s)].begin() + static_cast<std::ptrdiff_t>(done));
+        }
+        engine->setStemTap(nullptr);
+        return stem;
+    };
+    auto energy = [](const std::vector<float>& x) { double e = 0.0; for (float v : x) e += static_cast<double>(v) * v; return e; };
+    const auto plain = render(0, false), up = render(3, false), brk = render(0, true);
+    const auto kick = static_cast<size_t>(Part::Kick), bass = static_cast<size_t>(Part::Bass);
+    check(energy(plain[kick]) > 0.0 && up[kick] == plain[kick], "transposed, the kick plays as written");
+    check(energy(plain[bass]) > 0.0 && up[bass] != plain[bass], "transposed, the bass plays other notes");
+    double rest = 0.0;
+    for (size_t s = 0; s < brk.size(); ++s) if (s != kick && s != bass) rest += energy(brk[s]);
+    check(energy(brk[kick]) == 0.0 && energy(brk[bass]) == 0.0 && rest > 0.0, "in the leader's break the kick and the bass are out, the rest plays",
+          fmt("kick %.3g and bass %.3g as written, %.3g and %.3g in the break", energy(plain[kick]), energy(plain[bass]),
+              energy(brk[kick]), energy(brk[bass])));
+}
+
+/**
  * @brief A MIDI keyboard on one voice (23.09.2026, round "Keyboard", Engine::liveNoteOn).
  *
  * A set, the stems taken. Replace on a voice empties its stem of the composer's notes; a played note then sounds on

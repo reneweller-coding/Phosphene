@@ -724,11 +724,25 @@ void Engine::applyParams()
     clipperT_ = dbToGain(e(ms + master::Ceiling) + e(ms + master::ClipperThreshold));
 }
 
-void Engine::dispatch(const NoteEvent& e, double late)
+int Engine::jamPitch(Part part, int pitch) const
+{
+    switch (part) {
+    case Part::Bass: case Part::Acid: case Part::Lead: case Part::Counter: case Part::Arp: case Part::Stab: case Part::Pad:
+    case Part::Drone:
+        return std::clamp(pitch + jamTranspose_, 0, 127);
+    default:
+        return pitch;
+    }
+}
+
+void Engine::dispatch(const NoteEvent& in, double late)
 {
     flushParams();   // a note reads what the controls before it at this instant set
     // A voice the keyboard plays in Replace mode leaves the composer's notes out (23.09.2026, liveNoteOn).
-    if (generatedSilenced(e.part)) return;
+    if (generatedSilenced(in.part)) return;
+    if (jamSilenced(in.part)) return;   // the family jam: the leader's break (02.10.2026)
+    NoteEvent e = in;                   // and its root: the melodic voices moved to it
+    e.pitch = static_cast<decltype(e.pitch)>(jamPitch(in.part, in.pitch));
     const float vel = static_cast<float>(e.velocity) / 127.0f;
     switch (e.part) {
     case Part::Kick:

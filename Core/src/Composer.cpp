@@ -707,6 +707,11 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
             // Mode: mostly kept; when it changes, the track's style profile's weights decide.
             w.scale = prev.scale;
             if (r.uniform() < 0.25f * tv) w.scale = pick(r, ts.scaleWeight, kNumScales);
+            // The family jam (02.10.2026, setJam): a follower holds its key and takes the leader's mode.
+            if (jamHold_) {
+                w.key = prev.key;
+                if (jamScale_ >= 0 && jamScale_ < kNumScales) w.scale = jamScale_;
+            }
             // Tempo: mean-reverting walk around the track's centre, inside its range, on half-BPM steps.
             // The centre itself follows the set's energy arc (kArcTempoPerUnit): where the night rises the
             // tracks run a little faster, where it closes a little slower.

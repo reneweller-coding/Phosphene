@@ -387,6 +387,21 @@ void PhospheneProcessor::timerCallback()
     // transport rules the plugin.
     link_.setEnabled(wrapperType == wrapperType_Standalone && (frame::Settings::of("Phosphene").link() || frame::LinkClock::forcedOn()));
     link_.tick();
+    // The family jam (02.10.2026, Jam.h): the role from the settings; a follower's walk holds its key and takes the
+    // leader's mode with its next track (the composer thread hands it on, serviceComposer).
+    jam_.setRole(frame::Settings::of("Phosphene").jamRole());
+    {
+        const bool following = jam_.role() == frame::Settings::JamRole::Follow && jam_.leaderRoot() >= 0;
+        jamWalkHold_.store(following, std::memory_order_relaxed);
+        jamWalkScale_.store(following ? scaleOfMode(jam_.leaderMode()) : -1, std::memory_order_relaxed);
+    }
+    if (const char* logFile = std::getenv("FAMILY_JAM_LOG")) {   // a test aid: what the jam does, whenever it changes
+        const juce::String line = jam_.status() + "; transposed " + juce::String(jamTransposeOut_.load());
+        if (line != jamLogged_) {
+            jamLogged_ = line;
+            juce::File(logFile).appendText(juce::Time::getCurrentTime().toString(false, true, true, true) + "  " + line + "\n");
+        }
+    }
     // The fast job is the macros: a drop-out has to let go on the bar line, and 33 ms is a
     // sixty-fourth note at 145 BPM. Everything else here is housekeeping and runs every eighth tick.
     pollHeadset();   // the headset's hands move macros too (01.10.2026)
@@ -590,6 +605,7 @@ void PhospheneProcessor::serviceComposer(bool warmUp)
 {
     const std::lock_guard<std::mutex> lock(composeLock_);
     drainCuration();
+    composer_->setJam(jamWalkHold_.load(std::memory_order_relaxed), jamWalkScale_.load(std::memory_order_relaxed));   // the family jam
     const int want = genWanted_.load(std::memory_order_acquire);
     // One set of knobs for the whole turn (composeParams_, PluginProcessor.h); a restart takes every knob over.
     refreshComposeParams(want != genLocal_);
@@ -741,6 +757,70 @@ void PhospheneProcessor::stopMeasureJob()
     if (measureJob_ != nullptr) measureJob_->abort.store(true, std::memory_order_relaxed);
     if (measureThread_.joinable()) measureThread_.join();
     measureJob_.reset();
+}
+
+// ------------------------------------------------------------------ the family jam (02.10.2026, Jam.h)
+
+void PhospheneProcessor::jamFollow(double musicalBefore, double shared)
+{
+    if (jam_.role() != frame::Settings::JamRole::Follow) {
+        if (jamFollowing_) engine_->setJam(0, false);
+        jamFollowing_ = false;
+        jamTranspose_ = 0;
+        jamTransposeOut_ = 0;
+        jamEnergyOut_ = -1.0f;
+        jamLastBefore_ = musicalBefore;
+        return;
+    }
+    const double step = (jamLastBefore_ >= 0.0 && musicalBefore > jamLastBefore_ && musicalBefore - jamLastBefore_ < 1.0)
+                      ? musicalBefore - jamLastBefore_ : 0.0;
+    jamLastBefore_ = musicalBefore;
+    const frame::JamState js = jam_.stateAt(shared >= 0.0 ? shared + step : -1.0);
+    int want = 0;
+    if (js.root >= 0) {
+        // From the key of the track playing: the set walks its keys, the jam moves the whole to the leader's root.
+        const int d = ((js.root - engine_->keyRoot()) % 12 + 12) % 12;
+        want = d > 6 ? d - 12 : d;
+    }
+    const bool barLine = step <= 0.0 || std::floor((musicalBefore + step) / 4.0) > std::floor(musicalBefore / 4.0);
+    if (want != jamTranspose_ && barLine) jamTranspose_ = want;
+    jamTransposeOut_ = jamTranspose_;
+    jamEnergyOut_ = js.root >= 0 ? js.energy : -1.0f;
+    engine_->setJam(jamTranspose_, js.root >= 0 && js.rhythmOut);
+    jamFollowing_ = true;
+}
+
+void PhospheneProcessor::jamLead(double musicalBefore, double shared)
+{
+    if (jam_.role() != frame::Settings::JamRole::Lead) {
+        jamLeadStarted_ = false;
+        return;
+    }
+    const phos::CueMark* m = cueTap_.lastMark();
+    if (m == nullptr) return;
+    if (jamLeadStarted_ && cueTap_.marksPassed() == jamMarksSeen_) return;
+    const bool first = !jamLeadStarted_;
+    jamLeadStarted_ = true;
+    jamMarksSeen_ = cueTap_.marksPassed();
+    if (first || m->keyChanged) jam_.postKey(m->key, phos::kScaleNames[juce::jlimit(0, phos::kNumScales - 1, static_cast<int>(m->scale))]);
+    float e = 0.5f;
+    bool drop = false;
+    const frame::JamSection s = frame::jamSectionOf(phos::kSectionNames[juce::jlimit(0, static_cast<int>(phos::SectionType::Count) - 1, static_cast<int>(m->type))], e, drop);
+    const int64_t bar = (shared >= 0.0 && !first) ? static_cast<int64_t>(std::llround((shared + m->beat - musicalBefore) / 4.0)) : int64_t(-1);
+    jam_.postSection(s, m->energy, !first && drop, bar);
+}
+
+int PhospheneProcessor::scaleOfMode(const juce::String& mode)
+{
+    const juce::String m = mode.trim();
+    for (int i = 0; i < phos::kNumScales; ++i)
+        if (m.equalsIgnoreCase(phos::kScaleNames[i])) return i;
+    if (m.containsIgnoreCase("major") || m.containsIgnoreCase("ionian") || m.containsIgnoreCase("lydian")
+        || m.containsIgnoreCase("locrian"))
+        return -1;   // the family's major modes (and the Locrian): psytrance's palette has none
+    if (m.containsIgnoreCase("minor") || m.containsIgnoreCase("penta") || m.containsIgnoreCase("hexachord"))
+        return 0;    // a minor, its pentatonic, Totality's hexachord: an Aeolian
+    return -1;
 }
 
 juce::String PhospheneProcessor::linkStatus() const
@@ -1190,6 +1270,23 @@ void PhospheneProcessor::serviceMacros()
         }
     }
 
+    // The family jam (02.10.2026): the leader's energy as a filter sweep of the jam's own -- closed by up to 0.6 at low
+    // energy, gliding at the timer's pace --, wanted only while the Filter Sweep macro rests (the hand comes first).
+    {
+        const float e = jamEnergyOut_.load(std::memory_order_relaxed);
+        const float target = e >= 0.0f ? (juce::jlimit(0.0f, 1.0f, e) - 1.0f) * 0.6f : 0.0f;
+        jamSweep_ += (target - jamSweep_) * 0.15f;
+        if (std::fabs(jamSweep_) > 0.01f && macro_[static_cast<size_t>(Macro::FilterSweep)].value == 0.0f) {
+            MacroTarget t[kMaxMacroTargets];
+            const int c = macroTargets(Macro::FilterSweep, jamSweep_, t);
+            for (int k = 0; k < c && n < kNumMacros * kMaxMacroTargets; ++k) {
+                int found = -1;
+                for (int j = 0; j < n; ++j) if (want[j].param == t[k].param) { found = j; break; }
+                if (found < 0) want[n++] = t[k];
+                else if (!t[k].absolute && !want[found].absolute) want[found].value += t[k].value;
+            }
+        }
+    }
     ParamStore& p = params();
     for (int i = 0; i < n; ++i) {
         const int id = want[i].param;
@@ -1250,6 +1347,8 @@ void PhospheneProcessor::emitMidi(juce::MidiBuffer& midi, double beatAtStart, do
         if (e.beat >= endBeat) break;
         midiRing_.pop(e);
         if (engine_->generatedSilenced(e.part)) continue;   // the keyboard plays this voice (Replace)
+        if (engine_->jamSilenced(e.part)) continue;         // the family jam: the leader's break
+        e.pitch = static_cast<decltype(e.pitch)>(engine_->jamPitch(e.part, e.pitch));   // and its root
         const int channel = midiChannelOf(e.part);
         const int at = sampleOf(e.beat);
         midi.addEvent(juce::MidiMessage::noteOn(channel + 1, e.pitch, static_cast<juce::uint8>(juce::jlimit(1, 127, static_cast<int>(e.velocity)))), at);
@@ -1473,6 +1572,9 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 
     // ---------------------------------------------------------------- render
     const double beatAtStart = engine_->beatPosition();
+    // The family jam's shared timeline (Jam.h): the host's beat in a DAW, Link's with others in the session; none alone.
+    const double jamShared = hostSync ? hostBeat : linkFollow ? linkBeat_ : -1.0;
+    jamFollow(beatAtStart + conductor_->beatOffset(), jamShared);
     float* L = buffer.getWritePointer(0);
     // The main bus only: with the stems' outputs on, the channels after it are theirs (02.10.2026).
     const auto* mainBus = getBus(false, 0);
@@ -1590,6 +1692,7 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         if (cueAnnounce_.exchange(false, std::memory_order_acq_rel))
             cueTap_.announce(now + leadNanos, cues_.queue());
         cueTap_.scan(beatAtStart + offset, beatAfter + offset, now, leadNanos, blockNanos, cueMarks_, cues_.queue());
+        jamLead(beatAtStart + offset, hostSync ? hostBeat : linkFollow ? linkBeat_ : -1.0);
         // With the bridge off the tap still runs -- it costs a handful of comparisons, it keeps the
         // mark ring empty, and it remembers the section that is playing, so switching the bridge on
         // says where we are at once instead of waiting for the next boundary.

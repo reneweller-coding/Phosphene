@@ -463,6 +463,10 @@ public:
 
     /** @brief Forgets the last mark (a new set, a new seed). */
     void forget() { haveLast_ = false; }
+    /** @brief The last section mark that went out, or null before the first (the family jam's leader reads it). */
+    const CueMark* lastMark() const { return haveLast_ ? &last_ : nullptr; }
+    /** @brief How many section marks have gone out so far (the family jam's leader sends each once). */
+    uint32_t marksPassed() const { return marksPassed_; }
 
 private:
     /** @brief A section mark becomes a key cue (if the key moved), a section cue and, on a core, a drop. */
@@ -471,6 +475,7 @@ private:
     {
         last_ = m;
         haveLast_ = true;
+        ++marksPassed_;
         if (m.keyChanged) {
             Cue c;
             c.kind = Cue::Kind::Key;
@@ -496,6 +501,7 @@ private:
     bool sendBeats_ = true;   ///< cue.beats: a beat cue on every beat, not only the marks
     CueMark last_;              ///< the last section mark that went out, for #announce
     bool haveLast_ = false;     ///< @copydoc last_
+    uint32_t marksPassed_ = 0;  ///< marksPassed()
 };
 
 // ---------------------------------------------------------------------------- the sender

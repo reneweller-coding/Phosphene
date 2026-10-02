@@ -1,5 +1,28 @@
 # Phosphene release notes
 
+## 1.5.0 (03.10.2026): the family plays together
+
+**The family jam** (Settings > Family jam: Off, Lead or Follow; in the plugin and in the standalone). The five
+instruments -- Totality, Parhelion, Ephemeris, Phosphene and Noctuary -- play as one band on the local network. The
+leader's key, the energy of its sections and its breaks and drops go out over UDP multicast; a follower takes the new
+root at its next bar line by the shortest way and the mode with its next track, and in Phosphene the bass, the 303,
+the lead, the counter, the arp, the stab, the pad and the drone move to the leader's key while the kit and the effects
+play as written, and the set's walk holds its key; the Filter Sweep macro closes with a quiet section of the leader's;
+and in the leader's breaks the kick and the bass are out until its drop. A major mode of the leader's it leaves be:
+psytrance's palette has none. Ableton Link or the DAW's transport gives them the same bars, so that a section lands on
+the same bar line everywhere; a leader that falls silent for four seconds leaves its followers to themselves.
+
+**An Audio Unit on the Mac, an LV2 on Linux.** The macOS zip has the Audio Unit beside the standalone and the VST3
+(Logic, GarageBand, MainStage), passed by Apple's `auval -strict` on GitHub's runners; the Linux archive has the LV2
+(Ardour, Carla, Reaper, Qtractor), read by lilv there.
+
+**Kaleidoscope.** KaleidoscopeEnhanced understands the score cues of all five instruments as they come (since
+02.10.2026) -- Totality's blocks and keys, Parhelion's sections, Ephemeris' phases, Phosphene's sections and drops,
+Noctuary's bars, keys and scenes -- and cuts its pictures to them, on a drop at once.
+
+**Behind the panel.** A test of the follower's engine (`testJam`): the transposition note for note, the drums as
+written, the break without its foundation. The jam's bus (Plugin/Jam.h) is the same file in all five repositories.
+
 ## 1.4.0 (02.10.2026): with a DAW, on a Mac, and heard
 
 **MIDI out, written down.** The plugin has always sent its score as MIDI in a DAW, a channel per part; the manual

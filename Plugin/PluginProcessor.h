@@ -53,6 +53,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Frame.h"
 #include "LinkClock.h"
+#include "Jam.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "phos/Composer.h"
 #include "phos/Cue.h"
@@ -647,6 +648,8 @@ public:
     bool isPlaying() const { return playRequest_.load(std::memory_order_relaxed); }
     /** @brief The standalone's Ableton Link, as the settings menu says it: off, alone, or how many apps are with it. */
     juce::String linkStatus() const;
+    /** @brief The family jam, as the settings menu says it (Jam.h): off, leading, or whom it follows. */
+    juce::String jamStatus() const { return jam_.status(); }
     /** @brief A snapshot of where we are, for the editor. */
     TransportView transport() const;
     /** @brief Whether the plugin takes tempo and position from the host. */
@@ -822,6 +825,29 @@ private:
     std::atomic<bool> linkFollowing_{ false };    ///< other apps are in the session: its tempo and bar phase rule
     bool linkPlayed_ = false;                     ///< audio thread: the transport last told to or taken from the session
     double linkBeat_ = 0.0;                       ///< audio thread: the session's beat at this block (its bar phase)
+    // The family jam (02.10.2026, Jam.h; Settings > Family jam).
+    /** @brief Audio thread: as a follower, the engine takes the leader's root (on a bar line) and its breaks. */
+    void jamFollow(double musicalBefore, double shared);
+    /** @brief Audio thread: as the leader, the section marks the cue tap has passed go out, stamped with their bar. */
+    void jamLead(double musicalBefore, double shared);
+    /**
+     * @brief The scale of compose.scale a leader's mode names (Jam.h): its own name, or the family's other names for
+     *        it (a minor is an Aeolian, so is a minor pentatonic or a hexachord); -1 for a mode Phosphene has not (a
+     *        major one) -- the walk keeps its own.
+     */
+    static int scaleOfMode(const juce::String& mode);
+    frame::JamBus jam_ { "Phosphene" };           ///< the family jam's bus
+    bool jamLeadStarted_ = false;                 ///< audio thread: the leader has said where it stands
+    uint32_t jamMarksSeen_ = 0;                   ///< audio thread: the cue tap's marks already sent
+    double jamLastBefore_ = -1.0;                 ///< audio thread: the previous block's musical beat (its length)
+    int jamTranspose_ = 0;                        ///< audio thread: the transposition the engine plays now
+    std::atomic<int> jamTransposeOut_ { 0 };      ///< the same, for the message thread
+    std::atomic<float> jamEnergyOut_ { -1.0f };   ///< the leader's energy for the message thread (-1: none)
+    bool jamFollowing_ = false;                   ///< audio thread: the engine follows the jam (setJam was called)
+    std::atomic<bool> jamWalkHold_ { false };     ///< message thread to composer thread: the set's walk holds its key
+    std::atomic<int> jamWalkScale_ { -1 };        ///< message thread to composer thread: the leader's mode as a scale, -1 none
+    float jamSweep_ = 0.0f;                       ///< message thread: the filter sweep the jam's energy asks for, glided
+    juce::String jamLogged_;                      ///< the last line written to FAMILY_JAM_LOG
 
     std::thread composerThread_;   ///< plans, composes and measures behind the audio thread
     /**

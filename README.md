@@ -10,7 +10,7 @@ tempo, form, kick and rolling bass, percussion, 303 acid, leads, counter-leads, 
 pads, drones and effects — and plays it through its own synthesizers, mixer and mastering chain.
 The same seed always gives the same night, so a set fits in seven lines of text.
 
-**Standalone and VST3 plugin** for Windows (x64), macOS (Apple Silicon) and Linux (x86-64), and a native build for **Meta Quest**.
+**Standalone and VST3 plugin** (on macOS also an Audio Unit, on Linux an LV2) for Windows (x64), macOS (Apple Silicon) and Linux (x86-64), and a native build for **Meta Quest**.
 Generative music, algorithmic composition and sound design in one instrument; C++20, JUCE.
 Licence: AGPL-3.0.
 
@@ -29,12 +29,12 @@ with everything in it for anyone who would rather not run an installer, and the
 **[manual](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-Manual.pdf)** —
 every tab as a picture, every parameter, and the reasons behind the design.
 
-**[macOS zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-1.4.0-macOS.zip)** for Apple Silicon (macOS 12 or newer): the standalone and
-the VST3, built on GitHub's runners and attached to the release within the hour after it; signed ad hoc,
+**[macOS zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-1.4.0-macOS.zip)** for Apple Silicon (macOS 12 or newer): the standalone,
+the VST3 and the Audio Unit, built on GitHub's runners and attached to the release within the hour after it; signed ad hoc,
 not notarized (README-macOS.txt inside says how to open it), and not yet tried on a real Mac.
 
 **[Linux archive](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-1.4.0-linux-x86_64.tar.gz)** for x86-64 (glibc 2.35 or newer: Ubuntu 22.04, Debian 12,
-Fedora 36 and later): the standalone, the VST3 and the renderer, built and tested on GitHub's Ubuntu runners
+Fedora 36 and later): the standalone, the VST3, the LV2 and the renderer, built and tested on GitHub's Ubuntu runners
 and tried under WSL; README-Linux.txt inside says where everything goes.
 
 Requirements: Windows 10 or 11, a 64-bit processor with AVX2 (every x86-64 since 2013), and a VST3
@@ -124,6 +124,12 @@ stereo output per stem besides the main one, off until the host switches them on
 notes or mixed on a channel of its own. The standalone joins an **Ableton Link** session (Settings > Ableton
 Link): the session's tempo, its bars, its start and stop. A MIDI keyboard can be split between two voices,
 locked to the scale and given a velocity curve (the Keyboard group). The manual has the details (Export).
+
+**The family jam** (Settings > Family jam): the five instruments play as one band on the local network. One leads, the
+others follow -- its key (the root at their next bar line, the mode with their next track), the energy of its
+sections, its breaks and drops --, on the bars Ableton Link or the DAW gives them all.
+[KaleidoscopeEnhanced](https://github.com/reneweller-coding/KaleidoscopeEnhanced) cuts its pictures to the score cues
+of all five.
 
 ## Build
 

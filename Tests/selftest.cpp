@@ -278,6 +278,7 @@ int main(int argc, char** argv)
     run("testDeferredPlan", testDeferredPlan);
     run("testPlanCacheLive", testPlanCacheLive);
     run("testKeyboard", testKeyboard);
+    run("testJam", testJam);
     run("testAudibility", testAudibility);
     run("testAudibilityMatch", testAudibilityMatch);
     run("testArrangeDynamics", testArrangeDynamics);

@@ -343,6 +343,13 @@ public:
     /** @brief Changes the set seed (forgets cached plans). */
     void setSeed(uint64_t seed) { seed_ = seed; plans_.clear(); walk_.clear(); ++planGeneration_; }
     /**
+     * @brief The family jam (02.10.2026, the plugin's Jam.h), composer thread: while @p hold the tracks walked from now
+     *        on keep the key of the track before them -- a follower's engine moves the whole set to the leader's root,
+     *        and so the track that blends in by as much as the one that blends out -- and take the scale @p scale
+     *        (-1: their own walk's). The tracks already walked stay as they are; the walk's draws keep their place.
+     */
+    void setJam(bool hold, int scale) { jamHold_ = hold; jamScale_ = scale; }
+    /**
      * @brief Counts the times the cached plans were thrown away (a seed, a lock, a reroll, a knob the plans depend
      *        on). A measurement made on a copy of this composer belongs to the generation it was started in.
      */
@@ -664,6 +671,8 @@ private:
     mutable std::deque<TrackPlan> plans_;   ///< the tracks planned so far, made on demand (a deque: growing never moves one)
     int soloTrack_ = -1;   ///< setSoloTrack: the one track composeBars sends, -1 = the set
     mutable std::deque<TrackWalk> walk_;   ///< the style, key and tempo walk, made on demand
+    bool jamHold_ = false;                 ///< setJam: the walk holds its key
+    int jamScale_ = -1;                    ///< setJam: the scale the walk takes, -1 its own
     mutable std::vector<float> planKnobs_;   ///< the knobs the plans were made with (validate)
     mutable int depth_ = 0;   ///< Entry: how many calls that read the plans are running (only the outermost validates)
     mutable bool bassModelReported_ = false;           ///< the missing-weight-file line is printed once

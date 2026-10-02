@@ -91,6 +91,7 @@ void testDeferredPlan();   ///< selftest_composer.cpp
 void testPlanCacheLive();   ///< selftest_composer.cpp
 void testSoundPresets();   ///< selftest_composer.cpp
 void testKeyboard();   ///< selftest_composer.cpp
+void testJam();   ///< selftest_composer.cpp
 void testKnobFuzz();   ///< selftest_composer.cpp
 void testPreferences();   ///< selftest_composer.cpp
 void testSoloTrack();   ///< selftest_composer.cpp
