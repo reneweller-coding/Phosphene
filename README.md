@@ -10,7 +10,7 @@ tempo, form, kick and rolling bass, percussion, 303 acid, leads, counter-leads, 
 pads, drones and effects — and plays it through its own synthesizers, mixer and mastering chain.
 The same seed always gives the same night, so a set fits in seven lines of text.
 
-**Standalone and VST3 plugin** for Windows (x64), and a native build for **Meta Quest**.
+**Standalone and VST3 plugin** for Windows (x64) and macOS (Apple Silicon), and a native build for **Meta Quest**.
 Generative music, algorithmic composition and sound design in one instrument; C++20, JUCE.
 Licence: AGPL-3.0.
 
@@ -18,20 +18,33 @@ Licence: AGPL-3.0.
 
 ## Download
 
-**[Phosphene-1.3.0-Setup.exe](https://github.com/reneweller-coding/Phosphene/releases/download/v1.3.0/Phosphene-1.3.0-Setup.exe)**
+**[Phosphene-1.4.0-Setup.exe](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-1.4.0-Setup.exe)**
 installs the standalone and the VST3 and fetches the data it needs (the wavetable pack, the two
 learned models, the spoken phrases) and, if you leave the box ticked, the Field track's recordings
 (2 GB, from the [field-data-1](https://github.com/reneweller-coding/Phosphene/releases/tag/field-data-1)
 release). Nothing else has to be installed: the runtime is linked in.
 There is a
-**[portable zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.3.0/Phosphene-1.3.0-portable.zip)**
+**[portable zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-1.4.0-portable.zip)**
 with everything in it for anyone who would rather not run an installer, and the
-**[manual](https://github.com/reneweller-coding/Phosphene/releases/download/v1.3.0/Phosphene-Manual.pdf)** —
+**[manual](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-Manual.pdf)** —
 every tab as a picture, every parameter, and the reasons behind the design.
+
+**[macOS zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-1.4.0-macOS.zip)** for Apple Silicon (macOS 12 or newer): the standalone and
+the VST3, built on GitHub's runners and attached to the release within the hour after it; signed ad hoc,
+not notarized (README-macOS.txt inside says how to open it), and not yet tried on a real Mac.
 
 Requirements: Windows 10 or 11, a 64-bit processor with AVX2 (every x86-64 since 2013), and a VST3
 host if you want the plugin. In a host Phosphene follows the transport and sends the score out as
 MIDI, one channel per part.
+
+## Demos
+
+[![Phosphene, the Goa demo, with pictures by KaleidoscopeEnhanced (click for the video)](docs/demo.jpg)](https://github.com/reneweller-coding/Phosphene/releases/download/demos/goa.mp4)
+
+A track per style, rendered by `phos_render` and nothing else: [Goa](https://github.com/reneweller-coding/Phosphene/releases/download/demos/goa.mp3), [Full-On](https://github.com/reneweller-coding/Phosphene/releases/download/demos/fullon.mp3), [Progressive](https://github.com/reneweller-coding/Phosphene/releases/download/demos/progressive.mp3), [Dark Forest](https://github.com/reneweller-coding/Phosphene/releases/download/demos/darkforest.mp3), [Hi-Tech](https://github.com/reneweller-coding/Phosphene/releases/download/demos/hitech.mp3) (MP3). The video is the Goa demo with pictures by
+[KaleidoscopeEnhanced](https://github.com/reneweller-coding/KaleidoscopeEnhanced), its cuts placed by the
+track's own score cues (the bars, the sections, the drops). `Tools/demo/make_demos.py` renders them all again; they live on the release
+[demos](https://github.com/reneweller-coding/Phosphene/releases/tag/demos).
 
 ## How it is put together
 
@@ -99,6 +112,14 @@ does not imitate a named artist — the presets and styles are genres, not peopl
 The design and the literature behind each building block are in [docs/PLAN.md](https://github.com/reneweller-coding/Phosphene/blob/master/docs/PLAN.md)
 (German); what each development round built, measured and decided is in the journal,
 [docs/rounds/](docs/rounds/) (German, one file per month).
+
+## With a DAW and other apps
+
+In a DAW Phosphene sends what it plays as MIDI — every part on a channel of its own, as in the MIDI export — and has a
+stereo output per stem besides the main one, off until the host switches them on, so a part can be recorded as
+notes or mixed on a channel of its own. The standalone joins an **Ableton Link** session (Settings > Ableton
+Link): the session's tempo, its bars, its start and stop. A MIDI keyboard can be split between two voices,
+locked to the scale and given a velocity curve (the Keyboard group). The manual has the details (Export).
 
 ## Build
 
@@ -340,6 +361,8 @@ origin and commit in their file header.
 ## The family
 
 Phosphene is one of five instruments that share their build, their panel (or part of it) and the hands of a Meta Quest: [Noctuary](https://github.com/reneweller-coding/Noctuary) (ambient), [Phosphene](https://github.com/reneweller-coding/Phosphene) (psytrance), [Ephemeris](https://github.com/reneweller-coding/Ephemeris) (Berlin School), [Totality](https://github.com/reneweller-coding/Totality) (techno) and [Parhelion](https://github.com/reneweller-coding/Parhelion) (trance).
+
+All five, with their demos, on one page: **[reneweller-coding.github.io/VRAudio](https://reneweller-coding.github.io/VRAudio/)**.
 
 ## Licence
 

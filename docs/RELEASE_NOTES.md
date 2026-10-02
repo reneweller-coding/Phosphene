@@ -1,5 +1,35 @@
 # Phosphene release notes
 
+## 1.4.0 (02.10.2026): with a DAW, on a Mac, and heard
+
+**MIDI out, written down.** The plugin has always sent its score as MIDI in a DAW, a channel per part; the manual
+says so now (Export).
+
+**Outputs of their own.** Besides the main output, a stereo output for each of its stems (the kick, the bass, the percussion, the acid, the lead, the counter, the arp, the stab, the pad, the drone, the effects, the texture, the voice, the field recordings and the returns), off until the
+DAW switches them on; each carries its part before the master while the main output plays on.
+
+**Ableton Link** in the standalone (Settings > Ableton Link, off to begin with): with other Link apps in the session
+Phosphene takes their tempo, lines its bars up with theirs and starts and stops with them; alone it offers its own tempo.
+
+**The keyboard's options**, each off until chosen (the Keyboard group): Lower Keys Play and Split At divide the keys
+between two voices, Scale Lock keeps every key in the track's key and mode, Velocity Curve (As Played, Soft, Hard, Fixed) shapes the
+touch. A release always ends the note its press started.
+
+**On a Mac.** Every release gets a build for Apple Silicon (macOS 12 or newer) -- the standalone and the VST3 --,
+built and tested on GitHub's runners by the workflow `macos` and attached to the release as `Phosphene-<version>-macOS.zip`.
+It is signed ad hoc, not notarized (that takes a paid Apple account; README-macOS.txt in the zip says how to open it),
+and it has not yet been played on a real Mac.
+
+**Demos.** The release "demos" holds a track per style as an MP3 and one of them as a video with pictures by
+[KaleidoscopeEnhanced](https://github.com/reneweller-coding/KaleidoscopeEnhanced), its cuts placed by the track's own
+score cues; `Tools/demo/make_demos.py` renders them all again.
+
+**Behind the panel.** A sound check (`Tools/soundcheck.py`, `ctest -L sound`): five styles, three minutes each, and their stems, measured by loudness
+(BS.1770) against `Tests/golden/soundcheck.json`, so a change that makes a style louder, quieter or emptier shows up
+before anybody listens. A CI run on every push (GitHub Actions: the build and the tests on Windows, the documentation
+check on Linux) that nobody waits for. One release script for the family (`Deploy/publish_release.ps1`: the notes from
+this file, the checksums, the tag, the release).
+
 ## 1.3.0 (01.10.2026): the family's panel
 
 **One panel for the family.** Phosphene shares its panel with Ephemeris, Totality and Parhelion now (Plugin/Frame.h,
