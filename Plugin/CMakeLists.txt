@@ -16,7 +16,8 @@ juce_add_plugin(Phosphene
     COPY_PLUGIN_AFTER_BUILD     FALSE
     PLUGIN_MANUFACTURER_CODE    Rnwl
     PLUGIN_CODE                 Phos
-    FORMATS                     VST3 Standalone
+    FORMATS                     ${FAMILY_PLUGIN_FORMATS}   # VST3, Standalone; AU on macOS, LV2 on Linux (Family.cmake)
+    LV2URI                      "https://github.com/reneweller-coding/Phosphene"
     NEEDS_CURL                  TRUE
     VST3_CATEGORIES             Instrument Synth
     VERSION                     ${PROJECT_VERSION}
@@ -105,6 +106,21 @@ foreach(f ${PHOS_RESOURCES})
             COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Phosphene_VST3>/../Resources"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${CMAKE_CURRENT_SOURCE_DIR}/../Core/data/${f}" "$<TARGET_FILE_DIR:Phosphene_VST3>/../Resources/${f}"
+            VERBATIM)
+    endif()
+    # 02.10.2026: the Audio Unit keeps them in its bundle's Contents/Resources as the VST3 does; the LV2 bundle has no
+    # Contents, its binary lies at its top, and they lie beside it (resolveResourceDirectory() looks in both places).
+    if(TARGET Phosphene_AU)
+        add_custom_command(TARGET Phosphene_AU POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Phosphene_AU>/../Resources"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${CMAKE_CURRENT_SOURCE_DIR}/../Core/data/${f}" "$<TARGET_FILE_DIR:Phosphene_AU>/../Resources/${f}"
+            VERBATIM)
+    endif()
+    if(TARGET Phosphene_LV2)
+        add_custom_command(TARGET Phosphene_LV2 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${CMAKE_CURRENT_SOURCE_DIR}/../Core/data/${f}" "$<TARGET_FILE_DIR:Phosphene_LV2>/${f}"
             VERBATIM)
     endif()
 endforeach()
