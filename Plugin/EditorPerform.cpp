@@ -118,7 +118,12 @@ void PhospheneEditor::buildPerformPage()
     // and what is bound, and forgets everything at once.
     // The keyboard (23.09.2026, Engine::liveNoteOn): notes coming in play the chosen voice with its sound as its page
     // has it. Replace leaves out the generator's notes of that voice, Layer plays over them.
-    const int gk = page->addModuleGroup(proc_, Module::Mix, 0, "Keyboard", tint, 16, mix::KeyboardPart, 3);   // with the composer switch
+    // With the composer switch and, since 02.10.2026, the options appended to the mix module: the voice under a split,
+    // the split key, Scale Lock, the velocity curve -- all off by default.
+    const int mb = proc_.params().base(Module::Mix);
+    const int gk = page->addParamsGroup(proc_, "Keyboard", tint, 16,
+                                        { mb + mix::KeyboardPart, mb + mix::KeyboardMode, mb + mix::Composer, mb + mix::KeyboardLower,
+                                          mb + mix::KeyboardSplit, mb + mix::KeyboardScale, mb + mix::KeyboardVelocity });
     {
         auto note = std::make_unique<juce::Label>(juce::String(),
             "Notes from a MIDI keyboard play this voice, with the sound its page has. By channel: 1 acid, 2 lead, "

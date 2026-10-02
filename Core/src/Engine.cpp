@@ -87,10 +87,11 @@ int Engine::keyboardTarget(int channel) const
     return std::min(part, 7) - 1;   // 0 acid, 1 .. 6 the polyphonic voices
 }
 
-void Engine::liveNoteOn(int pitch, int velocity, int channel)
+void Engine::liveNoteOn(int pitch, int velocity, int channel, int part)
 {
     if (pitch < 0 || pitch > 127) return;
-    const int target = keyboardTarget(channel);
+    // A note that names its voice (the split, 02.10.2026) goes there; mix.keyboard_part's values, By channel excepted.
+    const int target = part == 9 ? 7 : part == 10 ? 8 : part >= 1 && part <= 7 ? part - 1 : keyboardTarget(channel);
     if (target < 0) return;
     const float vel = static_cast<float>(std::clamp(velocity, 1, 127)) / 127.0f;
     constexpr int kHeld = 1 << 30;   // a gate that does not run out: the key's release ends the note

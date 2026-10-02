@@ -1326,6 +1326,27 @@ void testKeyboard()
           fmt("%s: mean square %.3g held, %.3g from 8 s after the release (%.1f dB); before the chord %.3g; other stems %s",
               kStemNames[voice], heldPerSample, afterPerSample, 10.0 * std::log10((afterPerSample + 1e-30) / (heldPerSample + 1e-30)), before,
               othersSame ? "unchanged" : "CHANGED"));
+    // The split (02.10.2026): a note that names its voice plays it, whatever mix.keyboard_part says -- with Keyboard
+    // Plays off a plain note goes nowhere, a note naming the lead sounds.
+    {
+        auto split = [&](int named) {
+            auto engine = std::make_unique<Engine>();
+            engine->setLive(true);
+            engine->prepare(sr, kBlock);
+            std::vector<float> a(kBlock), b(kBlock);
+            double sum = 0.0;
+            engine->liveNoteOn(60, 100, 0, named);
+            for (int k = 0; k < 60; ++k) {
+                engine->process(a.data(), b.data(), kBlock);
+                for (float x : a) sum += static_cast<double>(x) * x;
+            }
+            engine->liveNoteOff(60, 0);
+            return sum;
+        };
+        const double plain = split(-1), named = split(2);
+        check(plain == 0.0 && named > 0.0, "a note naming its voice plays it; with Keyboard Plays off a plain one goes nowhere",
+              fmt("%.3g named, %.3g plain", named, plain));
+    }
 }
 
 /**

@@ -890,6 +890,10 @@ const ParamDesc kFxParams[fx::Count] = {
 /// 01.10.2026: the bass and the kit appended (the values before them stay what they were in a saved set).
 const char* const kKeyboardPartNames[] = { "Off", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "By channel", "Bass", "Kit" };
 const char* const kKeyboardModeNames[] = { "Replace", "Layer" };   ///< perform.keyboard_mode
+/// mix.keyboard_lower (02.10.2026): the voices of kKeyboardPartNames without "By channel" (the plugin maps them back).
+const char* const kKeyboardLowerNames[] = { "Off", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "Bass", "Kit" };
+const char* const kKeyboardSplitNames[] = { "C1", "C2", "C3", "C4", "C5" };   ///< mix.keyboard_split: 36 .. 84
+const char* const kKeyboardVelocityNames[] = { "As Played", "Soft", "Hard", "Fixed" };   ///< mix.keyboard_velocity
 const char* const kMonitorNames[] = { "Normal", "Mono", "Sub", "Side" };   ///< master.monitor: what the output plays
 /** @brief The mix: the strips' levels, mutes and sends, the ducks. */
 const ParamDesc kMixParams[mix::Count] = {
@@ -996,6 +1000,11 @@ const ParamDesc kMixParams[mix::Count] = {
     // of all parts (69.7 against the voices' 57.7), at -10 still 48; at -14 it sits by the shamanic bed (33), a
     // background, as a place should.
     { "field_level",   "Field Level",   "dB", -24.0f, 12.0f, -14.0f, Curve::Linear },
+    // 02.10.2026: the keyboard's options, all off by default.
+    { "keyboard_lower",    "Lower Keys Play", "", 0.0f, 9.0f, 0.0f, Curve::Choice, kKeyboardLowerNames },
+    { "keyboard_split",    "Split At",        "", 0.0f, 4.0f, 2.0f, Curve::Choice, kKeyboardSplitNames },
+    { "keyboard_scale",    "Scale Lock",      "", 0.0f, 1.0f, 0.0f, Curve::Toggle },
+    { "keyboard_velocity", "Velocity Curve",  "", 0.0f, 3.0f, 0.0f, Curve::Choice, kKeyboardVelocityNames },
 };
 
 /** @brief The master: the bus compressor, the clipper, the limiter, the loudness. */

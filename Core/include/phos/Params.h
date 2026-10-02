@@ -427,6 +427,12 @@ enum : int { KickMute, BassMute, TrackGain, PercMute, PercLevel, AcidMute, AcidL
              /** @} */
              /** @brief Appended 27.09.2026: the Field track's strip (FieldPlayer.h). */
              FieldMute, FieldLevel,
+             /** @name Appended 02.10.2026: the keyboard's options, all off by default -- the voice under a split
+              *  (kKeyboardLowerNames; Off: no split), the split key C1 .. C5, Scale Lock (a played key to the nearest
+              *  note of the track's key and scale; not the kit), the velocity curve (frame::shapeVelocity)
+              *  @{ */
+             KeyboardLower, KeyboardSplit, KeyboardScale, KeyboardVelocity,
+             /** @} */
              Count };
 /** @brief The "own sound" switch of a polyphonic instance. */
 constexpr int polyOwn(PolyInstance i) { return LeadOwn + static_cast<int>(i); }

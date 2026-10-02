@@ -149,8 +149,9 @@ public:
      * event, so a note starts on its sample.
      * @{ */
     /** @brief Starts a note played live.
-     *  @param pitch MIDI note; @param velocity 1..127; @param channel 0..15 */
-    void liveNoteOn(int pitch, int velocity, int channel);
+     *  @param pitch MIDI note; @param velocity 1..127; @param channel 0..15; @param part the voice it names
+     *  (mix.keyboard_part's values; the keyboard split, 02.10.2026), -1 for the keyboard's own */
+    void liveNoteOn(int pitch, int velocity, int channel, int part = -1);
     /** @brief Releases the note @p pitch on whichever voice its note-on went to. */
     void liveNoteOff(int pitch, int channel);
     /** @brief Releases every played note (transport stop, a changed keyboard part). */
@@ -292,6 +293,8 @@ public:
     void playedValues(float* out) const;
     /** @brief The key's pitch class the engine plays in (0 = C), as last applied (audio thread view; the scopes). */
     int keyRoot() const { return keyRoot_; }
+    /** @brief The scale the engine plays in (index into kScaleSteps / kScaleNames), as last applied. */
+    int scale() const { return scale_; }
 
 private:
     /** @brief Moves every running offset ramp to the current chunk's beat. */

@@ -1250,11 +1250,30 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     for (const juce::MidiMessageMetadata meta : midiMessages) {
         const juce::MidiMessage msg = meta.getMessage();
         if ((msg.isNoteOn() || msg.isNoteOff()) && liveCount < kMaxLive) {
-            live_[liveCount++] = { juce::jlimit(0, juce::jmax(0, n - 1), meta.samplePosition), msg.getNoteNumber(),
-                                   msg.getVelocity(), msg.getChannel() - 1, msg.isNoteOn() };
+            // The keyboard's options (02.10.2026): the keys under the split play the lower voice, Scale Lock moves a key
+            // to the nearest note of the track's key and scale (not on the kit, whose keys are its instruments), the
+            // velocity goes through its curve. Where a press went, its release goes too.
+            const int ch = msg.getChannel() - 1, key = msg.getNoteNumber();
+            LiveNote ln{ juce::jlimit(0, juce::jmax(0, n - 1), meta.samplePosition), key, msg.getVelocity(), ch, msg.isNoteOn() };
+            if (ln.on) {
+                const int mb = params().base(Module::Mix);
+                const int lower = static_cast<int>(std::lround(params().get(mb + phos::mix::KeyboardLower)));
+                const int split = 36 + 12 * static_cast<int>(std::lround(params().get(mb + phos::mix::KeyboardSplit)));
+                ln.part = lower > 0 && key < split ? (lower <= 7 ? lower : lower + 1) : -1;   // Bass and Kit sit past By channel
+                const int part = ln.part > 0 ? ln.part : static_cast<int>(std::lround(params().get(mb + phos::mix::KeyboardPart)));
+                const bool kit = part == 10 || (part == 8 && ch == 9);
+                if (params().get(mb + phos::mix::KeyboardScale) >= 0.5f && !kit)
+                    ln.pitch = frame::snapToScale(key, engine_->keyRoot(),
+                                                  frame::scaleMask(phos::kScaleNames[juce::jlimit(0, 5, engine_->scale())]));
+                ln.velocity = frame::shapeVelocity(ln.velocity, static_cast<int>(std::lround(params().get(mb + phos::mix::KeyboardVelocity))));
+                keyMemory_.press(ch, key, ln.part, ln.pitch);
+            } else {
+                keyMemory_.release(ch, key, ln.part, ln.pitch);
+            }
+            live_[liveCount++] = ln;
             continue;
         }
-        if (msg.isAllNotesOff() || msg.isAllSoundOff()) { engine_->liveAllOff(); continue; }
+        if (msg.isAllNotesOff() || msg.isAllSoundOff()) { engine_->liveAllOff(); keyMemory_.clear(); continue; }
         if (!msg.isController()) continue;
         float norm = 0.0f;
         const int target = midiMap_.handleCc(msg.getChannel() - 1, msg.getControllerNumber(), msg.getControllerValue(), norm);
@@ -1415,7 +1434,7 @@ void PhospheneProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         const LiveNote& ln = live_[k];
         render(done, ln.at - done);
         done = juce::jmax(done, ln.at);
-        if (ln.on) engine_->liveNoteOn(ln.pitch, ln.velocity, ln.channel);
+        if (ln.on) engine_->liveNoteOn(ln.pitch, ln.velocity, ln.channel, ln.part);
         else engine_->liveNoteOff(ln.pitch, ln.channel);
     }
     render(done, n - done);

@@ -867,10 +867,12 @@ private:
         int velocity = 0;    ///< 1..127
         int channel = 0;     ///< 0..15
         bool on = false;     ///< a note-on (else a note-off)
+        int part = -1;       ///< the voice it names (mix.keyboard_part's values; the split), -1 for the keyboard's own
     };
     static constexpr int kMaxLive = 256;   ///< note messages per block; more are dropped (a controller flood, not a player)
     LiveNote live_[kMaxLive];              ///< audio thread only
     int keyboardPartSeen_ = 0;             ///< audio thread: mix.keyboard_part as the last block had it
+    frame::KeyMemory keyMemory_;           ///< audio thread: where each held key went (the split, Scale Lock; 02.10.2026)
 
     // ---- the effects page's audition and the mixer's meters (24.09.2026)
     std::atomic<int> sfxPreview_{ -1 };                             ///< choice << 12 | preset, -1 none (previewSfx)
