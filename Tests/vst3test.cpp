@@ -301,7 +301,9 @@ int main(int argc, char** argv)
         juce::MidiBuffer midi;
         std::vector<double> peak(static_cast<size_t>(buses), 0.0);
         bool finite = true;
-        for (int i = 0; i < 48000 * 6 / 256; ++i) {
+        // Up to forty seconds: a new playhead is a restart, and the set is planned at its bar before it sounds.
+        auto soundingNow = [&] { int k = 0; for (int b = 1; b < buses; ++b) if (peak[static_cast<size_t>(b)] > 0.001) ++k; return k; };
+        for (int i = 0; i < 48000 * 40 / 256 && (i < 48000 * 6 / 256 || peak[0] <= 0.05 || soundingNow() < 3); ++i) {
             if (i % 16 == 0) juce::MessageManager::getInstance()->runDispatchLoopUntil(5);
             buf.clear();
             midi.clear();
