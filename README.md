@@ -10,7 +10,7 @@ tempo, form, kick and rolling bass, percussion, 303 acid, leads, counter-leads, 
 pads, drones and effects — and plays it through its own synthesizers, mixer and mastering chain.
 The same seed always gives the same night, so a set fits in seven lines of text.
 
-**Standalone and VST3 plugin** for Windows (x64) and macOS (Apple Silicon), and a native build for **Meta Quest**.
+**Standalone and VST3 plugin** for Windows (x64), macOS (Apple Silicon) and Linux (x86-64), and a native build for **Meta Quest**.
 Generative music, algorithmic composition and sound design in one instrument; C++20, JUCE.
 Licence: AGPL-3.0.
 
@@ -32,6 +32,10 @@ every tab as a picture, every parameter, and the reasons behind the design.
 **[macOS zip](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-1.4.0-macOS.zip)** for Apple Silicon (macOS 12 or newer): the standalone and
 the VST3, built on GitHub's runners and attached to the release within the hour after it; signed ad hoc,
 not notarized (README-macOS.txt inside says how to open it), and not yet tried on a real Mac.
+
+**[Linux archive](https://github.com/reneweller-coding/Phosphene/releases/download/v1.4.0/Phosphene-1.4.0-linux-x86_64.tar.gz)** for x86-64 (glibc 2.35 or newer: Ubuntu 22.04, Debian 12,
+Fedora 36 and later): the standalone, the VST3 and the renderer, built and tested on GitHub's Ubuntu runners
+and tried under WSL; README-Linux.txt inside says where everything goes.
 
 Requirements: Windows 10 or 11, a 64-bit processor with AVX2 (every x86-64 since 2013), and a VST3
 host if you want the plugin. In a host Phosphene follows the transport and sends the score out as
