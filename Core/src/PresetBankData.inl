@@ -4,7 +4,7 @@
 const std::vector<Synth>& synths()
 {
     static const std::vector<Synth> k = {
-    { "lead", Module::Poly, 0, { "Umbral", "Nocturne", "Obsidian", "Twilight", "Lunar", "Solar", "Prismatic", "Supernova" }, {
+    { "lead", ModuleE::POLY, 0, { "Umbral", "Nocturne", "Obsidian", "Twilight", "Lunar", "Solar", "Prismatic", "Supernova" }, {
         { "Supersaw Anthem", { "Anthem", "Horizon", "Eclipse", "Zenith", "Beacon", "Summit", "Pinnacle", "Crown" }, { 1.0f, 3.0f, 2.0f, 0.5f, 1.0f },
           { { "osc", 0.0f, 0.0f, 'C', nullptr }, { "detune", 0.45f, 0.85f, 'B', nullptr }, { "mix", 0.55f, 0.9f, 'R', nullptr }, { "cutoff", 2500.0f, 16000.0f, 'A', nullptr }, { "resonance", 0.05f, 0.3f, 'R', nullptr }, { "env_amount", 0.5f, 2.5f, 'B', nullptr }, { "filter_decay", 150.0f, 900.0f, 'B', nullptr }, { "glide", 0.0f, 40.0f, 'R', nullptr }, { "drift", 0.5f, 2.0f, 'R', nullptr }, { "amp_attack", 1.0f, 12.0f, 'R', nullptr }, { "amp_decay", 300.0f, 1200.0f, 'R', nullptr }, { "amp_sustain", 0.7f, 1.0f, 'R', nullptr }, { "amp_release", 120.0f, 500.0f, 'B', nullptr } },
           { { 0, 0.0f, 0.0f }, { 2, 0.0f, 0.0f }, { 3, 0.0f, 0.0f }, { 1, 0.0f, 0.0f } },
@@ -70,7 +70,7 @@ const std::vector<Synth>& synths()
           { { 0, 0.0f, 0.0f }, { 4, 0.0f, 0.1f }, { 3, 0.0f, 0.0f } },
           { { 0.6f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 10.0f, 10.0f, 'C', nullptr }, { "mx#_amount", 0.3f, 0.6f, 'R', nullptr }, { "lfo@_shape", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_sync", 3.0f, 3.0f, 'C', nullptr } } }, { 0.4f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 6.0f, 6.0f, 'C', nullptr }, { "mx#_amount", 0.05f, 0.12f, 'R', nullptr }, { "lfo@_shape", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_sync", 4.0f, 4.0f, 'C', nullptr } } } } }
     } },
-    { "counter", Module::Poly, 1, { "Shadow", "Velvet", "Smoke", "Dusk", "Silver", "Amber", "Neon", "Radiant" }, {
+    { "counter", ModuleE::POLY, 1, { "Shadow", "Velvet", "Smoke", "Dusk", "Silver", "Amber", "Neon", "Radiant" }, {
         { "Dry Saw", { "Whip", "Lash", "Crack", "Snap", "Strike", "Flick", "Jolt", "Spur" }, { 1.0f, 2.0f, 1.0f, 1.0f, 2.0f },
           { { "osc", 0.0f, 0.0f, 'C', nullptr }, { "detune", 0.2f, 0.5f, 'B', nullptr }, { "cutoff", 1500.0f, 9000.0f, 'A', nullptr }, { "resonance", 0.1f, 0.35f, 'R', nullptr }, { "env_amount", 1.5f, 3.5f, 'R', nullptr }, { "filter_decay", 60.0f, 300.0f, 'B', nullptr }, { "glide", 0.0f, 0.0f, 'C', nullptr }, { "amp_attack", 0.3f, 3.0f, 'R', nullptr }, { "amp_decay", 80.0f, 400.0f, 'B', nullptr }, { "amp_sustain", 0.0f, 0.25f, 'R', nullptr }, { "amp_release", 40.0f, 200.0f, 'B', nullptr } },
           { { 0, 0.0f, 0.0f }, { 2, 0.0f, 0.0f }, { 1, 0.0f, 0.0f } },
@@ -136,7 +136,7 @@ const std::vector<Synth>& synths()
           { { 0, 0.0f, 0.0f }, { 4, 0.0f, 0.1f }, { 3, 0.0f, 0.0f } },
           { { 0.6f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 10.0f, 10.0f, 'C', nullptr }, { "mx#_amount", 0.3f, 0.6f, 'R', nullptr }, { "lfo@_shape", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_sync", 3.0f, 3.0f, 'C', nullptr } } }, { 0.4f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 6.0f, 6.0f, 'C', nullptr }, { "mx#_amount", 0.05f, 0.12f, 'R', nullptr }, { "lfo@_shape", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_sync", 4.0f, 4.0f, 'C', nullptr } } } } }
     } },
-    { "arp", Module::Poly, 2, { "Deep", "Murky", "Hazy", "Misty", "Clear", "Crystal", "Glinting", "Dazzling" }, {
+    { "arp", ModuleE::POLY, 2, { "Deep", "Murky", "Hazy", "Misty", "Clear", "Crystal", "Glinting", "Dazzling" }, {
         { "Rolling Sequence", { "Rotor", "Turbine", "Gyro", "Spinner", "Carousel", "Whirl", "Cyclone", "Dynamo" }, { 2.0f, 2.0f, 2.0f, 1.0f, 1.0f },
           { { "osc", 1.0f, 1.0f, 'C', nullptr }, { "wave", 0.0f, 0.4f, 'R', nullptr }, { "cutoff", 700.0f, 5000.0f, 'A', nullptr }, { "resonance", 0.25f, 0.55f, 'B', nullptr }, { "env_amount", 1.5f, 4.0f, 'R', nullptr }, { "filter_decay", 60.0f, 300.0f, 'B', nullptr }, { "amp_attack", 0.3f, 3.0f, 'R', nullptr }, { "amp_decay", 80.0f, 400.0f, 'B', nullptr }, { "amp_sustain", 0.0f, 0.25f, 'R', nullptr }, { "amp_release", 40.0f, 200.0f, 'B', nullptr } },
           { { 1, 0.0f, 0.0f }, { 2, 0.0f, 0.0f }, { 6, 0.0f, 0.0f }, { 0, 0.0f, 0.0f } },
@@ -202,7 +202,7 @@ const std::vector<Synth>& synths()
           { { 0, 0.0f, 0.0f }, { 4, 0.0f, 0.1f }, { 3, 0.0f, 0.0f } },
           { { 0.6f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 10.0f, 10.0f, 'C', nullptr }, { "mx#_amount", 0.3f, 0.6f, 'R', nullptr }, { "lfo@_shape", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_sync", 3.0f, 3.0f, 'C', nullptr } } }, { 0.4f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 6.0f, 6.0f, 'C', nullptr }, { "mx#_amount", 0.05f, 0.12f, 'R', nullptr }, { "lfo@_shape", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_sync", 4.0f, 4.0f, 'C', nullptr } } } } }
     } },
-    { "stab", Module::Poly, 3, { "Buried", "Muffled", "Dusty", "Warm", "Crisp", "Sharp", "Searing", "Blinding" }, {
+    { "stab", ModuleE::POLY, 3, { "Buried", "Muffled", "Dusty", "Warm", "Crisp", "Sharp", "Searing", "Blinding" }, {
         { "Chord Stab", { "Stab", "Hit", "Punch", "Blow", "Jab", "Thrust", "Impact", "Slam" }, { 1.0f, 3.0f, 2.0f, 0.5f, 1.0f },
           { { "osc", 0.0f, 0.0f, 'C', nullptr }, { "detune", 0.4f, 0.75f, 'B', nullptr }, { "cutoff", 1500.0f, 10000.0f, 'A', nullptr }, { "resonance", 0.1f, 0.3f, 'R', nullptr }, { "env_amount", 1.5f, 3.5f, 'R', nullptr }, { "filter_decay", 60.0f, 300.0f, 'B', nullptr }, { "amp_attack", 0.3f, 3.0f, 'R', nullptr }, { "amp_decay", 80.0f, 400.0f, 'B', nullptr }, { "amp_sustain", 0.0f, 0.25f, 'R', nullptr }, { "amp_release", 40.0f, 200.0f, 'B', nullptr } },
           { { 0, 0.0f, 0.0f }, { 3, 0.0f, 0.0f }, { 2, 0.0f, 0.0f } },
@@ -268,7 +268,7 @@ const std::vector<Synth>& synths()
           { { 0, 0.0f, 0.0f }, { 2, 0.0f, 0.0f }, { 3, 0.0f, 0.0f }, { 1, 0.0f, 0.0f } },
           { { 0.6f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 6.0f, 6.0f, 'C', nullptr }, { "mx#_amount", 0.04f, 0.12f, 'R', nullptr }, { "lfo@_shape", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_sync", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_rate", 0.05f, 0.3f, 'R', nullptr } } }, { 0.3f, { { "mx#_src", 7.0f, 7.0f, 'C', nullptr }, { "mx#_dst", 6.0f, 6.0f, 'C', nullptr }, { "mx#_amount", 0.1f, 0.25f, 'R', nullptr } } } } }
     } },
-    { "pad", Module::Poly, 4, { "Abyssal", "Oceanic", "Twilight", "Nebular", "Aurora", "Celestial", "Luminous", "Radiant" }, {
+    { "pad", ModuleE::POLY, 4, { "Abyssal", "Oceanic", "Twilight", "Nebular", "Aurora", "Celestial", "Luminous", "Radiant" }, {
         { "Warm Pad", { "Haze", "Veil", "Mist", "Cloudbank", "Breath", "Down", "Fleece", "Murmur Pad" }, { 2.0f, 1.0f, 3.0f, 1.0f, 1.0f },
           { { "osc", 0.0f, 0.0f, 'C', nullptr }, { "detune", 0.3f, 0.6f, 'B', nullptr }, { "mix", 0.6f, 0.9f, 'R', nullptr }, { "cutoff", 700.0f, 5000.0f, 'A', nullptr }, { "resonance", 0.05f, 0.2f, 'R', nullptr }, { "env_amount", 0.0f, 1.0f, 'R', nullptr }, { "drift", 1.0f, 3.0f, 'R', nullptr }, { "amp_attack", 150.0f, 1500.0f, 'B', nullptr }, { "amp_decay", 800.0f, 3000.0f, 'R', nullptr }, { "amp_sustain", 0.7f, 1.0f, 'R', nullptr }, { "amp_release", 600.0f, 3000.0f, 'B', nullptr } },
           { { 3, 0.0f, 0.0f }, { 2, 0.0f, 0.0f }, { 0, 0.0f, 0.0f }, { 4, 0.0f, 0.0f } },
@@ -334,7 +334,7 @@ const std::vector<Synth>& synths()
           { { 0, 0.0f, 0.0f }, { 3, 0.0f, 0.0f } },
           { { 1.0f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 9.0f, 9.0f, 'C', nullptr }, { "mx#_amount", -0.45f, -0.25f, 'R', nullptr }, { "lfo@_shape", 1.0f, 1.0f, 'C', nullptr }, { "lfo@_sync", 6.0f, 6.0f, 'C', nullptr } } }, { 0.4f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 6.0f, 6.0f, 'C', nullptr }, { "mx#_amount", 0.05f, 0.12f, 'R', nullptr }, { "lfo@_shape", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_sync", 1.0f, 1.0f, 'C', nullptr } } } } }
     } },
-    { "drone", Module::Poly, 5, { "Primordial", "Subterranean", "Cavernous", "Earthen", "Misty", "Aethereal", "Astral", "Sidereal" }, {
+    { "drone", ModuleE::POLY, 5, { "Primordial", "Subterranean", "Cavernous", "Earthen", "Misty", "Aethereal", "Astral", "Sidereal" }, {
         { "Sub Drone", { "Bedrock", "Mantle", "Core", "Magma", "Tectonic", "Fault", "Strata", "Basalt" }, { 1.0f, 1.0f, 1.0f, 2.0f, 1.0f },
           { { "osc", 1.0f, 1.0f, 'C', nullptr }, { "wave", 0.0f, 0.3f, 'R', nullptr }, { "cutoff", 200.0f, 900.0f, 'A', nullptr }, { "resonance", 0.05f, 0.25f, 'R', nullptr }, { "drift", 1.0f, 4.0f, 'R', nullptr }, { "amp_attack", 400.0f, 2000.0f, 'B', nullptr }, { "amp_decay", 1500.0f, 4000.0f, 'R', nullptr }, { "amp_sustain", 0.85f, 1.0f, 'R', nullptr }, { "amp_release", 1200.0f, 4000.0f, 'B', nullptr } },
           { { 1, 0.0f, 0.0f }, { 0, 0.0f, 0.0f }, { 6, 0.0f, 0.0f } },
@@ -400,7 +400,7 @@ const std::vector<Synth>& synths()
           { { 4, 0.2f, 0.4f }, { 5, 0.2857142857142857f, 0.2857142857142857f }, { 7, 0.0f, 0.0f } },
           { { 1.0f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 6.0f, 6.0f, 'C', nullptr }, { "mx#_amount", 0.15f, 0.35f, 'R', nullptr }, { "lfo@_shape", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_sync", 6.0f, 6.0f, 'C', nullptr } } }, { 0.5f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 8.0f, 8.0f, 'C', nullptr }, { "mx#_amount", 0.1f, 0.2f, 'R', nullptr }, { "lfo@_shape", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_sync", 3.0f, 3.0f, 'C', nullptr } } } } }
     } },
-    { "bass", Module::Bass, 0, { "Subsonic", "Abyssal", "Deep", "Dark", "Solid", "Punchy", "Gritty", "Razor" }, {
+    { "bass", ModuleE::BASS, 0, { "Subsonic", "Abyssal", "Deep", "Dark", "Solid", "Punchy", "Gritty", "Razor" }, {
         { "Rolling", { "Roller", "Groove", "Engine Room", "Locomotive", "Conveyor", "Treadmill", "Piston", "Crankshaft" }, { 1.0f, 2.0f, 1.0f, 1.0f, 1.0f },
           { { "wave", 0.0f, 0.3f, 'R', nullptr }, { "cutoff", 150.0f, 700.0f, 'A', nullptr }, { "resonance", 0.1f, 0.4f, 'R', nullptr }, { "env_amount", 2.0f, 5.0f, 'B', nullptr }, { "filter_decay", 40.0f, 150.0f, 'B', nullptr }, { "drive", 0.2f, 0.5f, 'R', nullptr }, { "bite", 0.3f, 0.6f, 'R', nullptr }, { "bite_cutoff", 300.0f, 1200.0f, 'A', nullptr } },
           { { 0, 0.0f, 0.0f }, { 1, 0.0f, 0.0f }, { 2, 0.0f, 0.0f } },
@@ -466,7 +466,7 @@ const std::vector<Synth>& synths()
           { { 4, 0.0f, 0.3f }, { 5, 0.14285714285714285f, 0.2857142857142857f } },
           { { 1.0f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 4.0f, 4.0f, 'C', nullptr }, { "mx#_amount", 0.1f, 0.3f, 'R', nullptr }, { "lfo@_shape", 1.0f, 1.0f, 'C', nullptr }, { "lfo@_sync", 3.0f, 3.0f, 'C', nullptr } } } } }
     } },
-    { "acid", Module::Acid, 0, { "Murky", "Swampy", "Toxic", "Rubbery", "Liquid", "Neon", "Acidic", "Molten" }, {
+    { "acid", ModuleE::ACID, 0, { "Murky", "Swampy", "Toxic", "Rubbery", "Liquid", "Neon", "Acidic", "Molten" }, {
         { "Classic 303", { "Silverbox", "Bassline", "Phuture", "Chicago", "Warehouse 303", "Detroit", "Acid Trax", "Hardfloor" }, { 3.0f, 1.0f, 0.5f, 1.0f, 1.0f },
           { { "wave", 0.0f, 0.0f, 'C', nullptr }, { "cutoff", 300.0f, 2500.0f, 'A', nullptr }, { "resonance", 0.55f, 0.85f, 'B', nullptr }, { "env_amount", 2.5f, 5.0f, 'R', nullptr }, { "decay", 100.0f, 500.0f, 'B', nullptr }, { "accent", 0.5f, 0.9f, 'R', nullptr }, { "drive", 0.5f, 0.9f, 'R', nullptr } },
           {  },
@@ -532,7 +532,7 @@ const std::vector<Synth>& synths()
           {  },
           { { 1.0f, { { "mx#_src", -1.0f, -1.0f, 'C', nullptr }, { "mx#_dst", 1.0f, 1.0f, 'C', nullptr }, { "mx#_amount", 0.05f, 0.08f, 'R', nullptr }, { "lfo@_shape", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_sync", 0.0f, 0.0f, 'C', nullptr }, { "lfo@_rate", 4.5f, 6.5f, 'R', nullptr }, { "lfo@_retrig", 1.0f, 1.0f, 'C', nullptr }, { "lfo@_fade", 0.2f, 0.8f, 'R', nullptr } } } } }
     } },
-    { "kick", Module::Kick, 0, { "Subterranean", "Deep", "Heavy", "Solid", "Tight", "Punchy", "Snappy", "Razor" }, {
+    { "kick", ModuleE::KICK, 0, { "Subterranean", "Deep", "Heavy", "Solid", "Tight", "Punchy", "Snappy", "Razor" }, {
         { "Full-On", { "Stomp", "Hammerfall", "Pound Kick", "Jackhammer", "Pile Driver", "Battering Ram", "Wrecking Ball", "Sledge" }, { 0.3f, 6.0f, 0.5f, 0.3f, 1.0f },
           { { "engine", 0.0f, 0.0f, 'C', nullptr }, { "pitch_start", 250.0f, 600.0f, 'A', nullptr }, { "pitch_end", 40.0f, 60.0f, 'R', nullptr }, { "pitch_decay", 8.0f, 14.0f, 'B', nullptr }, { "punch", 0.4f, 0.8f, 'R', nullptr }, { "amp_decay", 180.0f, 350.0f, 'B', nullptr }, { "click_level", 0.3f, 0.7f, 'A', nullptr }, { "drive", 0.2f, 0.5f, 'R', nullptr } },
           {  },

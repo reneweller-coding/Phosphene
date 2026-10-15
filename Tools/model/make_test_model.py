@@ -26,9 +26,9 @@ import numpy as np
 
 MAGIC = b"PHOSMDL1"
 END = b"PHOSEND1"
-VOCAB = 37        # kCorpusAlphabet
-REL_MIN = -12     # kCorpusRelMin
-REL_MAX = 24      # kCorpusRelMax
+VOCAB = 37        # CorpusAlphabet
+REL_MIN = -12     # CorpusRelMin
+REL_MAX = 24      # CorpusRelMax
 START_TOKEN = -REL_MIN   # the symbol of the interval 0, section 3 of the format
 ROLES, STYLES = 3, 6
 COND_BARS, COND_STEP, COND_BAR, COND_GAP, COND_IDX = 8, 16, 8, 10, 8

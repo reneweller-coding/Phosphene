@@ -6,7 +6,7 @@ University Press 1990) against the Krumhansl-Kessler **minor** profile, takes th
 as the tonic and writes every note as its interval to that tonic. What the file never says, and what
 no file name in the three psytrance packs says either (1 264 files scanned on 16.09.2026: six say
 "min" or "minor", none says Phrygian, Dorian, harmonic, Hijaz or any other mode), is **which of the
-six modes of ``phos::kScaleSteps``** that minor is. So a mode label for training has to be inferred
+six modes of ``phos::ScaleSteps``** that minor is. So a mode label for training has to be inferred
 from the notes, and the size of the inference error is part of the finding rather than a footnote.
 
 **The estimator** is the Bayesian key-profile model of Temperley (*Music and Probability*, MIT Press
@@ -43,7 +43,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import dataset                                                # noqa: E402
 
-#: The six modes of ``phos::kScaleSteps`` (Core/include/phos/Harmony.h), in that order. Mirrored, not
+#: The six modes of ``phos::ScaleSteps`` (Core/include/phos/Harmony.h), in that order. Mirrored, not
 #: imported: this file is the training side and the header is the inference side, and the self test
 #: checks that the two agree.
 SCALES = (

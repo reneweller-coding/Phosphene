@@ -64,7 +64,7 @@ namespace phostest {
 
 using namespace phos;
 
-constexpr double kPiD = 3.141592653589793;   ///< pi
+constexpr double PiD = 3.141592653589793;   ///< pi
 
 /**
  * @brief Amplitude of the component with exactly @p cycles periods in @p n samples.
@@ -75,7 +75,7 @@ inline double toneAmplitude(const float* x, size_t n, double cycles)
 {
     double re = 0.0, im = 0.0;
     for (size_t i = 0; i < n; ++i) {
-        const double ph = 2.0 * kPiD * cycles * static_cast<double>(i) / static_cast<double>(n);
+        const double ph = 2.0 * PiD * cycles * static_cast<double>(i) / static_cast<double>(n);
         re += x[i] * std::cos(ph);
         im += x[i] * std::sin(ph);
     }
@@ -86,8 +86,8 @@ inline double toneAmplitude(const float* x, size_t n, double cycles)
 inline std::vector<float> renderEngine(Engine& engine, const Composer& composer, double beats, int block, double sr, std::vector<float>* right = nullptr)
 {
     Conductor conductor(engine, composer);
-    const int cb = engine.params().base(Module::Compose);
-    const double bpm = engine.params().get(cb + compose::Bpm);
+    const int cb = engine.params().base(ModuleE::COMPOSE);
+    const double bpm = engine.params().get(cb + compose::BPM);
     const size_t total = static_cast<size_t>(std::llround(beats * 60.0 / bpm * sr));
     std::vector<float> L(total), R(total);
     size_t done = 0;
@@ -107,8 +107,8 @@ inline std::vector<float> renderEngine(Engine& engine, const Composer& composer,
 inline int firstCoreBar(const ParamStore& p, const Composer& c)
 {
     const TrackPlan t = c.track(p, 0);
-    for (int i = 0; i < t.form.count; ++i)
-        if (t.form.section[i].type == SectionType::Groove || t.form.section[i].type == SectionType::Drop) return t.form.section[i].startBar;
+    for (int i = 0; i < t.m_form.m_count; ++i)
+        if (t.m_form.m_section[i].m_type == SectionTypeE::GROOVE || t.m_form.m_section[i].m_type == SectionTypeE::DROP) return t.m_form.m_section[i].m_startBar;
     return 0;
 }
 
@@ -120,17 +120,17 @@ inline int firstCoreBar(const ParamStore& p, const Composer& c)
  */
 struct RuleRef {
     /** @brief Semitones of degree @p d of @p scale above the tonic, octaves folded in. */
-    static int deg(int scale, int d) { return kScaleSteps[scale][d % 7] + 12 * (d / 7); }   // d >= 0
+    static int deg(int scale, int d) { return ScaleSteps[scale][d % 7] + 12 * (d / 7); }   // d >= 0
     /** @brief Whether pitch class @p pc (above the tonic) is a colour tone of @p scale. */
     static bool colour(int scale, int pc)
     {
         pc = ((pc % 12) + 12) % 12;
         bool in = false;
-        for (int d = 0; d < 7; ++d) in = in || kScaleSteps[scale][d] == pc;
+        for (int d = 0; d < 7; ++d) in = in || ScaleSteps[scale][d] == pc;
         if (!in) return false;
         if (pc == 1) return true;
         for (int d = 1; d < 7; ++d)
-            if (kScaleSteps[scale][d] - kScaleSteps[scale][d - 1] == 3 && kScaleSteps[scale][d] == pc) return true;
+            if (ScaleSteps[scale][d] - ScaleSteps[scale][d - 1] == 3 && ScaleSteps[scale][d] == pc) return true;
         return false;
     }
     /** @brief Pitch class (above the tonic) of the root of the chord on degree @p d. */
@@ -138,27 +138,27 @@ struct RuleRef {
     /**
      * @brief The register rule of 19.09.2026, read off a score: at how many sixteenths of bars
      *        [@p from, @p to) two of the line voices (lead, counter-lead, stab, arp) sound with their
-     *        pitch spans less than kRegisterGap semitones apart.
+     *        pitch spans less than RegisterGap semitones apart.
      *
      * Independent of Melody.cpp's guard: a note sounds at a sixteenth when its onset is at or before the
      * sixteenth and its written length reaches past it -- nothing about spans in steps or priorities.
      */
     static int registerClashes(const std::vector<NoteEvent>& ev, int from, int to)
     {
-        const Part lines[4] = { Part::Lead, Part::Counter, Part::Stab, Part::Arp };
+        const PartE lines[4] = { PartE::LEAD, PartE::COUNTER, PartE::STAB, PartE::ARP };
         std::map<int, std::array<std::pair<int, int>, 4>> at;   // sixteenth -> (lo, hi) per voice
         for (const NoteEvent& e : ev) {
             int v = -1;
-            for (int k = 0; k < 4; ++k) if (e.part == lines[k]) v = k;
+            for (int k = 0; k < 4; ++k) if (e.m_part == lines[k]) v = k;
             if (v < 0) continue;
-            const int first = static_cast<int>(std::ceil(e.beat * 4.0 - 1e-6));
-            for (int s = first; s * 0.25 < e.beat + e.length - 1e-6; ++s) {
+            const int first = static_cast<int>(std::ceil(e.m_beat * 4.0 - 1e-6));
+            for (int s = first; s * 0.25 < e.m_beat + e.m_length - 1e-6; ++s) {
                 if (s < from * 16 || s >= to * 16) continue;
                 auto it = at.find(s);
                 if (it == at.end()) { std::array<std::pair<int, int>, 4> init; init.fill({ 1000, -1000 }); it = at.emplace(s, init).first; }
                 auto& span = it->second[static_cast<size_t>(v)];
-                span.first = std::min(span.first, static_cast<int>(e.pitch));
-                span.second = std::max(span.second, static_cast<int>(e.pitch));
+                span.first = std::min(span.first, static_cast<int>(e.m_pitch));
+                span.second = std::max(span.second, static_cast<int>(e.m_pitch));
             }
         }
         int clashes = 0;
@@ -169,7 +169,7 @@ struct RuleRef {
                     const auto& x = kv.second[static_cast<size_t>(a)];
                     const auto& y = kv.second[static_cast<size_t>(b)];
                     if (x.first > x.second || y.first > y.second) continue;
-                    if (!(x.first - y.second >= kRegisterGap || y.first - x.second >= kRegisterGap)) clash = true;
+                    if (!(x.first - y.second >= RegisterGap || y.first - x.second >= RegisterGap)) clash = true;
                 }
             clashes += clash ? 1 : 0;
         }
@@ -213,7 +213,7 @@ inline double aliasDb(const std::vector<float>& x, size_t n, size_t harmonicBin,
 }
 
 /** @brief Current values of one module as an array indexed like its table. */
-inline std::vector<float> moduleValues(const ParamStore& p, Module m, int instance = 0)
+inline std::vector<float> moduleValues(const ParamStore& p, ModuleE m, int instance = 0)
 {
     std::vector<float> v(static_cast<size_t>(ParamStore::moduleCount(m)));
     p.readModule(m, instance, v.data());
@@ -230,8 +230,8 @@ inline std::vector<float> moduleValues(const ParamStore& p, Module m, int instan
  * window from -1/2 to 1/2: an amplitude that varies linearly no longer leaks into the phase, which is
  * atan2(c, a) at the centre.
  */
-template <class RefFn>
-double phaseAgainst(const float* y, size_t n, RefFn&& ref)
+template <class RefFnT>
+double phaseAgainst(const float* y, size_t n, RefFnT&& ref)
 {
     const double r0 = ref(0);
     const double whole = std::floor(ref(n - 1) - r0);
@@ -239,7 +239,7 @@ double phaseAgainst(const float* y, size_t n, RefFn&& ref)
     if (whole >= 1.0) { m = 0; while (m < n && ref(m) - r0 < whole) ++m; }
     double A[4][5] = {};
     for (size_t i = 0; i < m; ++i) {
-        const double ph = 2.0 * kPiD * ref(i);
+        const double ph = 2.0 * PiD * ref(i);
         const double u = (static_cast<double>(i) + 0.5) / static_cast<double>(m) - 0.5;
         const double col[4] = { std::sin(ph), std::cos(ph), u * std::sin(ph), u * std::cos(ph) };
         for (int r = 0; r < 4; ++r) {
@@ -258,7 +258,7 @@ double phaseAgainst(const float* y, size_t n, RefFn&& ref)
         }
     }
     const double a = A[0][4] / A[0][0], c = A[1][4] / A[1][1];
-    return std::atan2(c, a) * 180.0 / kPiD;
+    return std::atan2(c, a) * 180.0 / PiD;
 }
 
 /**
@@ -275,8 +275,8 @@ double phaseAgainst(const float* y, size_t n, RefFn&& ref)
  * (a_k + b_k u) sin(2 pi k ref) + (c_k + d_k u) cos(2 pi k ref); the fundamental's phase is read as
  * before. With H = 1 this is exactly phaseAgainst().
  */
-template <int H, class RefFn>
-double phaseAgainstH(const float* y, size_t n, RefFn&& ref)
+template <int H, class RefFnT>
+double phaseAgainstH(const float* y, size_t n, RefFnT&& ref)
 {
     constexpr int N = 4 * H;
     const double r0 = ref(0);
@@ -285,7 +285,7 @@ double phaseAgainstH(const float* y, size_t n, RefFn&& ref)
     if (whole >= 1.0) { m = 0; while (m < n && ref(m) - r0 < whole) ++m; }
     double A[N][N + 1] = {};
     for (size_t i = 0; i < m; ++i) {
-        const double ph = 2.0 * kPiD * ref(i);
+        const double ph = 2.0 * PiD * ref(i);
         const double u = (static_cast<double>(i) + 0.5) / static_cast<double>(m) - 0.5;
         double col[N];
         for (int h = 0; h < H; ++h) {
@@ -308,7 +308,7 @@ double phaseAgainstH(const float* y, size_t n, RefFn&& ref)
         }
     }
     const double a = A[0][N] / A[0][0], c = A[1][N] / A[1][1];
-    return std::atan2(c, a) * 180.0 / kPiD;
+    return std::atan2(c, a) * 180.0 / PiD;
 }
 
 /** @brief Wraps degrees into (-180, 180]. */
@@ -320,7 +320,7 @@ inline std::vector<float> bassNote(const char* settings, int pitch, int gate, si
     ParamStore q;
     q.parseText("bass.duck_depth=0 bass.level=0");
     q.parseText(settings);
-    std::vector<float> v = moduleValues(q, Module::Bass);
+    std::vector<float> v = moduleValues(q, ModuleE::BASS);
     Bass b;
     b.prepare(48000.0);
     b.update(v.data());
@@ -371,16 +371,16 @@ inline double measureLock(const char* settings, double bpm, double& spread, doub
             if (firstCoreBar(e->params(), probe) <= 8) { seed = k; break; }
         }
         Composer c(seed);
-        coreBeat = firstCoreBar(e->params(), c) * kBeatsPerBar;
+        coreBeat = firstCoreBar(e->params(), c) * BeatsPerBar;
         std::vector<float> y = renderEngine(*e, c, coreBeat + 32.0, 256, sr);
         if (keepKick) { kickModel = e->kick(); kickPhaseAtSlot = e->kick().outputPhaseAt(slotT); }
         return y;
     };
     // Nothing but the part being measured: since Phase 5 a core carries acid, arp and pad as well, and
     // their energy leaks into a projection that is only two fundamental periods long.
-    const char* const kOnlyKick = "mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1";
-    const char* const kOnlyBass = "mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1";
-    const std::vector<float> kickY = render(kOnlyKick, true), bassY = render(kOnlyBass, false);
+    const char* const OnlyKick = "mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1";
+    const char* const OnlyBass = "mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1";
+    const std::vector<float> kickY = render(OnlyKick, true), bassY = render(OnlyBass, false);
     const double f0 = midiToHz(30);
     const double beat = 60.0 / bpm * sr;
     const size_t per = static_cast<size_t>(std::lround(sr / f0));
@@ -431,7 +431,7 @@ inline double lowendBandPower(const std::vector<float>& x, size_t a, size_t b, d
     const size_t fade = std::min(len / 4, static_cast<size_t>(0.003 * sr));
     for (size_t i = 0; i < len; ++i) {
         double w = 1.0;
-        if (fade > 0 && i + fade >= len) w = 0.5 + 0.5 * std::cos(kPiD * static_cast<double>(i + fade - len) / static_cast<double>(fade));
+        if (fade > 0 && i + fade >= len) w = 0.5 + 0.5 * std::cos(PiD * static_cast<double>(i + fade - len) / static_cast<double>(fade));
         s[i] = static_cast<double>(x[a + i]) * w;
     }
     fft(s);
@@ -483,8 +483,8 @@ inline std::vector<float> lowendRollingBass(const std::vector<float>& bv, int be
  * the plans are the ones a fresh composer gives (plans are made in track order either way).
  */
 struct ListeningPlanner {
-    ParamStore p;                    ///< default knobs
-    std::unique_ptr<Composer> c;     ///< the composer, asked only for track()
+    ParamStore m_p;                    ///< default knobs
+    std::unique_ptr<Composer> m_c;     ///< the composer, asked only for track()
 };
 
 /** @brief The shared ListeningPlanner, made on first use. */
@@ -493,7 +493,7 @@ inline ListeningPlanner& listeningPlanner()
     static std::unique_ptr<ListeningPlanner> s;
     if (!s) {
         s = std::make_unique<ListeningPlanner>();
-        s->c = std::make_unique<Composer>(864566672ull);
+        s->m_c = std::make_unique<Composer>(864566672ull);
     }
     return *s;
 }
@@ -504,7 +504,7 @@ inline ListeningPlanner& listeningPlanner()
  */
 inline float acidValueAt(const ParamStore& p, int param, const float* off)
 {
-    const int id = p.base(Module::Acid) + param;
+    const int id = p.base(ModuleE::ACID) + param;
     return p.fromNormalised(id, p.toNormalised(id, p.get(id)) + off[param]);
 }
 
@@ -556,31 +556,31 @@ inline double measureFreeLock(double bpm, const char* rhythm, int& onsets, int& 
             Composer probe(k);
             const TrackPlan t = probe.track(e->params(), 0);
             std::set<int> firsts;
-            for (int b = 0; b < kBassPhraseBars; ++b)
-                for (int beat = 0; beat < kBeatsPerBar; ++beat)
+            for (int b = 0; b < BassPhraseBars; ++b)
+                for (int beat = 0; beat < BeatsPerBar; ++beat)
                     for (int s = 1; s < 4; ++s)
-                        if ((t.bassMask[0][b] >> (beat * 4 + s)) & 1u) { firsts.insert(s); break; }
-            if (!t.bassRhythm || firsts.size() >= 2) { seed = k; break; }
+                        if ((t.m_bassMask[0][b] >> (beat * 4 + s)) & 1u) { firsts.insert(s); break; }
+            if (!t.m_bassRhythm || firsts.size() >= 2) { seed = k; break; }
         }
         Composer c(seed);
-        coreBeat = firstCoreBar(e->params(), c) * kBeatsPerBar;
-        if (notes.empty()) c.composeBars(e->params(), 0, coreBeat / kBeatsPerBar + 32, notes);
+        coreBeat = firstCoreBar(e->params(), c) * BeatsPerBar;
+        if (notes.empty()) c.composeBars(e->params(), 0, coreBeat / BeatsPerBar + 32, notes);
         std::vector<float> y = renderEngine(*e, c, coreBeat + 32.0, 256, sr);
         if (keepKick) kickModel = e->kick();
         return y;
     };
-    const char* const kOnlyKick = "mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1";
-    const char* const kOnlyBass = "mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1";
-    const std::vector<float> kickY = render(kOnlyKick, true), bassY = render(kOnlyBass, false);
+    const char* const OnlyKick = "mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1";
+    const char* const OnlyBass = "mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1";
+    const std::vector<float> kickY = render(OnlyKick, true), bassY = render(OnlyBass, false);
 
     // The first bass onset of every beat of the window, with its pitch.
     std::map<int, std::pair<double, int>> first;   // beat -> (offset in beats, pitch)
     for (const NoteEvent& n : notes) {
-        if (n.part != Part::Bass) continue;
-        const int b = static_cast<int>(std::floor(n.beat + 1e-9));
-        const double off = n.beat - b;
+        if (n.m_part != PartE::BASS) continue;
+        const int b = static_cast<int>(std::floor(n.m_beat + 1e-9));
+        const double off = n.m_beat - b;
         auto it = first.find(b);
-        if (it == first.end() || off < it->second.first) first[b] = { off, static_cast<int>(n.pitch) };
+        if (it == first.end() || off < it->second.first) first[b] = { off, static_cast<int>(n.m_pitch) };
     }
     const double beatSamples = 60.0 / bpm * sr;
     double sumD = 0.0;
@@ -615,7 +615,7 @@ inline double measureFreeLock(double bpm, const char* rhythm, int& onsets, int& 
 inline std::vector<NoteEvent> bassNotesOf(const std::vector<NoteEvent>& all)
 {
     std::vector<NoteEvent> out;
-    for (const NoteEvent& n : all) if (n.part == Part::Bass) out.push_back(n);
+    for (const NoteEvent& n : all) if (n.m_part == PartE::BASS) out.push_back(n);
     return out;
 }
 
@@ -624,9 +624,9 @@ inline std::map<int, unsigned> barMasksOf(const std::vector<NoteEvent>& all)
 {
     std::map<int, unsigned> bars;
     for (const NoteEvent& n : all) {
-        if (n.part != Part::Bass) continue;
-        const int bar = static_cast<int>(std::floor(n.beat / kBeatsPerBar + 1e-9));
-        const int step = static_cast<int>(std::lround((n.beat - static_cast<double>(bar) * kBeatsPerBar) * 4.0));
+        if (n.m_part != PartE::BASS) continue;
+        const int bar = static_cast<int>(std::floor(n.m_beat / BeatsPerBar + 1e-9));
+        const int step = static_cast<int>(std::lround((n.m_beat - static_cast<double>(bar) * BeatsPerBar) * 4.0));
         if (step >= 0 && step < 16) bars[bar] |= 1u << step;
     }
     return bars;
@@ -637,8 +637,8 @@ inline std::unique_ptr<PercKit> makeKit(const ParamStore& p, int key = 6, int sc
 {
     auto kit = std::make_unique<PercKit>();
     kit->prepare(48000.0);
-    for (int l = 0; l < kPercLanes; ++l) {
-        std::vector<float> v = moduleValues(p, Module::Perc, l);
+    for (int l = 0; l < PercLanes; ++l) {
+        std::vector<float> v = moduleValues(p, ModuleE::PERC, l);
         kit->update(l, v.data(), key, scale);
     }
     return kit;
@@ -687,40 +687,40 @@ inline double lowShareDb(const std::vector<float>& x, double hz, bool windowed =
 
 /** @brief A small order-2 model with a dense random table, for checks against brute force. */
 struct ToyModel {
-    int n = 4;   ///< the alphabet
-    std::vector<double> p;   ///< the table: P(c | a, b) at (a n + b) n + c
+    int m_n = 4;   ///< the alphabet
+    std::vector<double> m_p;   ///< the table: P(c | a, b) at (a n + b) n + c
     /** @brief A table drawn from @p seed, every row normalised. */
     explicit ToyModel(uint64_t seed)
     {
         Rng r;
         r.seed(seed);
-        p.resize(static_cast<size_t>(n * n * n));
-        for (int ab = 0; ab < n * n; ++ab) {
+        m_p.resize(static_cast<size_t>(m_n * m_n * m_n));
+        for (int ab = 0; ab < m_n * m_n; ++ab) {
             double sum = 0.0;
-            for (int c = 0; c < n; ++c) { p[static_cast<size_t>(ab * n + c)] = 0.05 + r.uniform(); sum += p[static_cast<size_t>(ab * n + c)]; }
-            for (int c = 0; c < n; ++c) p[static_cast<size_t>(ab * n + c)] /= sum;
+            for (int c = 0; c < m_n; ++c) { m_p[static_cast<size_t>(ab * m_n + c)] = 0.05 + r.uniform(); sum += m_p[static_cast<size_t>(ab * m_n + c)]; }
+            for (int c = 0; c < m_n; ++c) m_p[static_cast<size_t>(ab * m_n + c)] /= sum;
         }
     }
     /** @brief The alphabet's size. */
-    int alphabet() const { return n; }
+    int alphabet() const { return m_n; }
     /** @brief P(@p c | @p a, @p b). */
-    double prob(int a, int b, int c) const { return p[static_cast<size_t>((a * n + b) * n + c)]; }
+    double prob(int a, int b, int c) const { return m_p[static_cast<size_t>((a * m_n + b) * m_n + c)]; }
 };
 
 /** @brief One case of a `<model>.ref.txt`: what the trainer's PyTorch computed for that input. */
 struct RefCase {
-    int role = 0;   ///< the role it was computed for
-    int style = 0;   ///< the style
-    int bars = 0;   ///< the bars
-    std::vector<int> tok;   ///< the input tokens
-    std::vector<int> step;   ///< their steps
-    std::vector<int> bar;   ///< their bars
-    std::vector<int> idx;   ///< their index in the bar
-    std::vector<int> gap;   ///< the gaps before them
-    std::vector<int> kick;   ///< empty in a reference file of a three-role model (MODEL_FORMAT 3)
-    int mode = -1;           ///< -1 when the case records no mode, i.e. a file without condMode
-    std::vector<double> logits;   ///< the network's logits
-    std::vector<double> probs;   ///< ... and the probabilities
+    int m_role = 0;   ///< the role it was computed for
+    int m_style = 0;   ///< the style
+    int m_bars = 0;   ///< the bars
+    std::vector<int> m_tok;   ///< the input tokens
+    std::vector<int> m_step;   ///< their steps
+    std::vector<int> m_bar;   ///< their bars
+    std::vector<int> m_idx;   ///< their index in the bar
+    std::vector<int> m_gap;   ///< the gaps before them
+    std::vector<int> m_kick;   ///< empty in a reference file of a three-role model (MODEL_FORMAT 3)
+    int m_mode = -1;           ///< -1 when the case records no mode, i.e. a file without condMode
+    std::vector<double> m_logits;   ///< the network's logits
+    std::vector<double> m_probs;   ///< ... and the probabilities
 };
 
 /**
@@ -746,18 +746,18 @@ inline std::vector<RefCase> readRefCases(const std::string& path)
         RefCase& c = cases.back();
         auto ints = [&](std::vector<int>& dst) { dst.clear(); int v; while (vals >> v) dst.push_back(v); };
         auto reals = [&](std::vector<double>& dst) { dst.clear(); double v; while (vals >> v) dst.push_back(v); };
-        if (key == "role") vals >> c.role;
-        else if (key == "style") vals >> c.style;
-        else if (key == "bars") vals >> c.bars;
-        else if (key == "mode") vals >> c.mode;
-        else if (key == "tok") ints(c.tok);
-        else if (key == "step") ints(c.step);
-        else if (key == "bar") ints(c.bar);
-        else if (key == "gap") ints(c.gap);
-        else if (key == "idx") ints(c.idx);
-        else if (key == "kick") ints(c.kick);
-        else if (key == "logits") reals(c.logits);
-        else if (key == "probs") reals(c.probs);
+        if (key == "role") vals >> c.m_role;
+        else if (key == "style") vals >> c.m_style;
+        else if (key == "bars") vals >> c.m_bars;
+        else if (key == "mode") vals >> c.m_mode;
+        else if (key == "tok") ints(c.m_tok);
+        else if (key == "step") ints(c.m_step);
+        else if (key == "bar") ints(c.m_bar);
+        else if (key == "gap") ints(c.m_gap);
+        else if (key == "idx") ints(c.m_idx);
+        else if (key == "kick") ints(c.m_kick);
+        else if (key == "logits") reals(c.m_logits);
+        else if (key == "probs") reals(c.m_probs);
     }
     return cases;
 }
@@ -768,52 +768,52 @@ inline std::string modelPath(const char* name) { return std::string(PHOS_SOURCE_
 /** @brief Feeds one reference case into a model; false when the file and the case disagree. */
 inline bool feedRefCase(NeuralModel& model, const RefCase& c)
 {
-    const size_t n = c.tok.size();
-    if (n == 0 || c.step.size() != n || c.bar.size() != n || c.gap.size() != n || c.idx.size() != n) return false;
+    const size_t n = c.m_tok.size();
+    if (n == 0 || c.m_step.size() != n || c.m_bar.size() != n || c.m_gap.size() != n || c.m_idx.size() != n) return false;
     // A four-role file's cases carry a kick class per position; a three-role file's do not, and then
     // the model has no kick.emb either and the field is not read (docs/MODEL_FORMAT.md, section 3).
-    if (!c.kick.empty() && c.kick.size() != n) return false;
+    if (!c.m_kick.empty() && c.m_kick.size() != n) return false;
     // A model that declares condMode has to be fed the case's mode, and a case that records none
     // cannot judge such a model at all: the logits would be recomputed under a row the trainer never
     // used and the mismatch would read as a reader bug. Refusing instead is the rule the other side
     // of the contract follows too (_conditioning_gap in Tools/train/export.py).
-    if (model.info().condMode > 0 && c.mode < 0) return false;
-    model.begin(c.role, c.style, c.bars + 1, c.mode < 0 ? 0 : c.mode);   // the file stores bars - 1
+    if (model.info().m_condMode > 0 && c.m_mode < 0) return false;
+    model.begin(c.m_role, c.m_style, c.m_bars + 1, c.m_mode < 0 ? 0 : c.m_mode);   // the file stores bars - 1
     for (size_t t = 0; t < n; ++t) {
         NoteCond cond;
-        cond.step = c.step[t];
-        cond.bar = c.bar[t];
-        cond.gap = c.gap[t];
-        cond.idx = c.idx[t];
-        cond.kick = c.kick.empty() ? 0 : c.kick[t];
-        if (!model.step(c.tok[t], cond)) return false;
+        cond.m_step = c.m_step[t];
+        cond.m_bar = c.m_bar[t];
+        cond.m_gap = c.m_gap[t];
+        cond.m_idx = c.m_idx[t];
+        cond.m_kick = c.m_kick.empty() ? 0 : c.m_kick[t];
+        if (!model.step(c.m_tok[t], cond)) return false;
     }
     return true;
 }
 
 /** @brief The order-2 toy model of testSampler, driven the way sampleMasked() drives a network. */
 struct ToyStepper {
-    const ToyModel* model = nullptr;   ///< the model
-    int a = 0;   ///< the symbol before the last
-    int b = 0;   ///< the last symbol
+    const ToyModel* m_model = nullptr;   ///< the model
+    int m_a = 0;   ///< the symbol before the last
+    int m_b = 0;   ///< the last symbol
     /** @brief The model's alphabet. */
-    int alphabet() const { return model->alphabet(); }
+    int alphabet() const { return m_model->alphabet(); }
     /** @brief Starts from @p start2, @p start1. */
-    void begin(int start2, int start1) { a = start2; b = start1; }
+    void begin(int start2, int start1) { m_a = start2; m_b = start1; }
     /** @brief Moves on (always possible). */
     bool advance(int) { return true; }
     /** @brief Takes symbol @p s as drawn. */
-    void observe(int s) { a = b; b = s; }
+    void observe(int s) { m_a = m_b; m_b = s; }
     /** @brief P(@p c | a, b). */
-    double prob(int c) const { return model->prob(a, b, c); }
+    double prob(int c) const { return m_model->prob(m_a, m_b, c); }
 };
 
 /** @brief A stepper whose distribution sits entirely on one symbol: the numerical failure case. */
 struct PeakedStepper {
-    int n = 4;   ///< the alphabet
-    int peak = 0;   ///< the symbol that has it all
+    int m_n = 4;   ///< the alphabet
+    int m_peak = 0;   ///< the symbol that has it all
     /** @brief The alphabet's size. */
-    int alphabet() const { return n; }
+    int alphabet() const { return m_n; }
     /** @brief Nothing to start from. */
     void begin(int, int) {}
     /** @brief Moves on (always possible). */
@@ -821,15 +821,15 @@ struct PeakedStepper {
     /** @brief Nothing to remember. */
     void observe(int) {}
     /** @brief Almost 1 for the peak, 1e-9 for the rest. */
-    double prob(int c) const { return c == peak ? 1.0 - 3e-9 : 1e-9; }
+    double prob(int c) const { return c == m_peak ? 1.0 - 3e-9 : 1e-9; }
 };
 
 /** @brief Scale tones in [lo, hi] semitones above the root, with the colour weight on the flat second. */
 inline std::vector<uint8_t> scaleAllowed(int scale, int lo, int hi, int colour)
 {
-    std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
+    std::vector<uint8_t> a(static_cast<size_t>(CorpusAlphabet), 0);
     for (int rel = lo; rel <= hi; ++rel) {
-        if (rel < kCorpusRelMin || rel > kCorpusRelMax || !inScale(scale, rel)) continue;
+        if (rel < CorpusRelMin || rel > CorpusRelMax || !inScale(scale, rel)) continue;
         a[static_cast<size_t>(PitchModel::symbol(rel))] = static_cast<uint8_t>(((rel % 12 + 12) % 12) == 1 ? colour : 8);
     }
     return a;
@@ -840,9 +840,9 @@ inline std::vector<uint8_t> chordAllowed(int scale, int degree, int lo, int hi)
 {
     int pcs[3];
     chordTones(scale, degree, pcs);
-    std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
+    std::vector<uint8_t> a(static_cast<size_t>(CorpusAlphabet), 0);
     for (int rel = lo; rel <= hi; ++rel) {
-        if (rel < kCorpusRelMin || rel > kCorpusRelMax) continue;
+        if (rel < CorpusRelMin || rel > CorpusRelMax) continue;
         const int pc = ((rel % 12) + 12) % 12;
         if (pc == pcs[0] || pc == pcs[1] || pc == pcs[2]) a[static_cast<size_t>(PitchModel::symbol(rel))] = 1;
     }
@@ -850,12 +850,12 @@ inline std::vector<uint8_t> chordAllowed(int scale, int degree, int lo, int hi)
 }
 
 /** @brief Steady-state amplitude of a filter's response to a sine (amplitude @p amp) after @p settle samples. */
-template <class Tick>
-double sineGain(Tick&& tick, double hz, double sr, double amp, size_t settle, size_t window)
+template <class TickT>
+double sineGain(TickT&& tick, double hz, double sr, double amp, size_t settle, size_t window)
 {
     std::vector<float> y(window);
     for (size_t i = 0; i < settle + window; ++i) {
-        const float x = static_cast<float>(amp * std::sin(2.0 * kPiD * hz * static_cast<double>(i) / sr));
+        const float x = static_cast<float>(amp * std::sin(2.0 * PiD * hz * static_cast<double>(i) / sr));
         const float o = tick(x);
         if (i >= settle) y[i - settle] = o;
     }
@@ -868,7 +868,7 @@ inline std::unique_ptr<Acid> makeAcid(const char* settings, ParamStore& p)
     p.parseText(settings);
     auto a = std::make_unique<Acid>();
     a->prepare(48000.0);
-    std::vector<float> v = moduleValues(p, Module::Acid);
+    std::vector<float> v = moduleValues(p, ModuleE::ACID);
     a->update(v.data(), 145.0);
     return a;
 }
@@ -912,8 +912,8 @@ inline double supersawAliasDb(const std::vector<float>& y, size_t offset, double
     const std::vector<double> pw = powerSpectrum(y.data() + offset, N);
     std::vector<char> legit(N / 2 + 1, 0);
     const double nyq = 0.5 * sr;
-    for (int u = 0; u < kPolyUnison; ++u) {
-        const double fu = f0 * (1.0 + kSupersawOffsets[u] * detuneY);
+    for (int u = 0; u < PolyUnison; ++u) {
+        const double fu = f0 * (1.0 + SupersawOffsets[u] * detuneY);
         for (int h = 1; static_cast<double>(h) * fu < nyq; ++h) {
             const double k = static_cast<double>(h) * fu * static_cast<double>(N) / sr;
             for (int b = static_cast<int>(std::floor(k)) - 6; b <= static_cast<int>(std::ceil(k)) + 6; ++b)
@@ -981,12 +981,12 @@ inline std::vector<double> harmonicLines(double f0, double sr)
 }
 
 /** @brief A polyphonic engine instance with the given settings. */
-inline std::unique_ptr<Poly> makePoly(const char* settings, ParamStore& p, PolyInstance inst)
+inline std::unique_ptr<Poly> makePoly(const char* settings, ParamStore& p, PolyInstanceE inst)
 {
     p.parseText(settings);
     auto e = std::make_unique<Poly>();
     e->prepare(48000.0);
-    std::vector<float> v = moduleValues(p, Module::Poly, static_cast<int>(inst));
+    std::vector<float> v = moduleValues(p, ModuleE::POLY, static_cast<int>(inst));
     e->update(v.data(), 145.0);
     return e;
 }
@@ -1010,7 +1010,7 @@ inline double partialMag(const std::vector<double>& pw, double hz, double sr, si
 }
 
 /**
- * @brief Slope-free evenness at @p f0: 20 log10(a_n / sqrt(a_(n-1) a_(n+1))) for the even harmonic @p n.
+ * @brief Slope-free evenness at @p f0: 20 log10(a_n / sqrt(m_a(n-1) m_a(n+1))) for the even harmonic @p n.
  *
  * Comparing an even partial with the geometric mean of its two odd neighbours divides out any smooth
  * spectral envelope through that region, so the number says how much more or less even content there
@@ -1033,18 +1033,18 @@ inline double evennessDb(const std::vector<float>& y, size_t offset, double f0, 
 inline void disperserResponse(const Disperser& d, double hz, double sr, double& magDb, double& gdMs)
 {
     auto at = [&](double f) {
-        const double w = 2.0 * kPiD * f / sr;
+        const double w = 2.0 * PiD * f / sr;
         const std::complex<double> z1 = std::polar(1.0, -w), z2 = z1 * z1;
         std::complex<double> h(1.0, 0.0);
-        for (int i = 0; i < d.stages; ++i)
-            h *= (static_cast<double>(d.c[i]) + static_cast<double>(d.d[i]) * z1 + z2)
-               / (1.0 + static_cast<double>(d.d[i]) * z1 + static_cast<double>(d.c[i]) * z2);
+        for (int i = 0; i < d.m_stages; ++i)
+            h *= (static_cast<double>(d.m_c[i]) + static_cast<double>(d.m_d[i]) * z1 + z2)
+               / (1.0 + static_cast<double>(d.m_d[i]) * z1 + static_cast<double>(d.m_c[i]) * z2);
         return h;
     };
     const std::complex<double> h = at(hz);
     magDb = 20.0 * std::log10(std::abs(h));
     const double e = std::max(0.5, hz * 1e-3);
-    gdMs = -std::arg(at(hz + e) / h) / (2.0 * kPiD * e) * 1000.0;
+    gdMs = -std::arg(at(hz + e) / h) / (2.0 * PiD * e) * 1000.0;
 }
 
 /**
@@ -1133,13 +1133,13 @@ inline double inharmonicDb(const std::vector<float>& y, size_t offset, double f0
 }
 
 /** @brief Renders one sustained note of a Poly at @p rate; 96 kHz is decimated to 48 kHz. */
-inline std::vector<float> renderPolyNote(const std::string& settings, PolyInstance inst, int pitch, size_t n, double rate)
+inline std::vector<float> renderPolyNote(const std::string& settings, PolyInstanceE inst, int pitch, size_t n, double rate)
 {
     ParamStore p;
     p.parseText(settings);
     auto e = std::make_unique<Poly>();
     e->prepare(rate);
-    std::vector<float> v = moduleValues(p, Module::Poly, static_cast<int>(inst));
+    std::vector<float> v = moduleValues(p, ModuleE::POLY, static_cast<int>(inst));
     e->update(v.data(), 145.0);
     e->noteOn(pitch, 1.0f, 8.0, 1 << 24, 0.0);
     if (rate <= 48000.5) return renderMono([&](float* L, float* R, int k) { e->process(L, R, k); }, n);
@@ -1155,10 +1155,10 @@ inline std::vector<float> renderPolyNote(const std::string& settings, PolyInstan
 inline std::string commonPoly(const char* pfx, double detune)
 {
     std::string s;
-    static const char* const kKeys[] = { "cutoff=18000", "env_amount=0", "key_track=0", "resonance=0", "hp_track=0", "hp_floor=150",
+    static const char* const Keys[] = { "cutoff=18000", "env_amount=0", "key_track=0", "resonance=0", "hp_track=0", "hp_floor=150",
                                          "width=0", "delay_send=0", "dynamic_detune=0", "amp_attack=1", "amp_sustain=1",
                                          "amp_decay=4000", "vel_sens=0", "mix=0.75", "gate=0" };
-    for (const char* k : kKeys) s += std::string(pfx) + "." + k + " ";
+    for (const char* k : Keys) s += std::string(pfx) + "." + k + " ";
     return s + fmt("%s.detune=%g ", pfx, detune);
 }
 
@@ -1228,21 +1228,21 @@ inline std::vector<double> framePowerSpectrum(const WaveTable& t, int frame)
 
 /** @brief The spectral-evolution numbers of one table: the steps between neighbouring frames. */
 struct MorphMeasure {
-    int frames = 0;   ///< the table's frames
-    double move = 0.0;        ///< median total variation between neighbouring frames, in [0, 1]
-    double moveMax = 0.0;     ///< the largest single step: the worst jump the position knob walks over
-    double travel = 0.0;      ///< total variation between the first and the last frame
-    double path = 0.0;        ///< the sum of all the steps
-    double directness = 0.0;  ///< travel / path, at most 1 by the triangle inequality
+    int m_frames = 0;   ///< the table's frames
+    double m_move = 0.0;        ///< median total variation between neighbouring frames, in [0, 1]
+    double m_moveMax = 0.0;     ///< the largest single step: the worst jump the position knob walks over
+    double m_travel = 0.0;      ///< total variation between the first and the last frame
+    double m_path = 0.0;        ///< the sum of all the steps
+    double m_directness = 0.0;  ///< travel / path, at most 1 by the triangle inequality
 };
 
 /** @brief measure_table()'s `move`, `travel`, `path` and `directness` for a built table. */
 inline MorphMeasure measureMorph(const WaveTable& t)
 {
     MorphMeasure m;
-    m.frames = t.frames;
+    m.m_frames = t.m_frames;
     std::vector<std::vector<double>> spec;
-    for (int f = 0; f < t.frames; ++f) {
+    for (int f = 0; f < t.m_frames; ++f) {
         std::vector<double> p = framePowerSpectrum(t, f);
         if (!p.empty()) spec.push_back(std::move(p));
     }
@@ -1253,14 +1253,14 @@ inline MorphMeasure measureMorph(const WaveTable& t)
         for (size_t h = 0; h < spec[f].size(); ++h) d += std::fabs(spec[f][h] - spec[f - 1][h]);
         step.push_back(0.5 * d);
     }
-    for (size_t h = 0; h < spec.back().size(); ++h) m.travel += std::fabs(spec.back()[h] - spec.front()[h]);
-    m.travel *= 0.5;
-    for (double s : step) m.path += s;
-    m.moveMax = *std::max_element(step.begin(), step.end());
+    for (size_t h = 0; h < spec.back().size(); ++h) m.m_travel += std::fabs(spec.back()[h] - spec.front()[h]);
+    m.m_travel *= 0.5;
+    for (double s : step) m.m_path += s;
+    m.m_moveMax = *std::max_element(step.begin(), step.end());
     std::vector<double> sorted = step;
     std::sort(sorted.begin(), sorted.end());
-    m.move = sorted[sorted.size() / 2];
-    m.directness = m.path > 1e-12 ? m.travel / m.path : 0.0;
+    m.m_move = sorted[sorted.size() / 2];
+    m.m_directness = m.m_path > 1e-12 ? m.m_travel / m.m_path : 0.0;
     return m;
 }
 
@@ -1289,26 +1289,26 @@ inline double bandShare(const std::vector<float>& x, double sr, double lo, doubl
  * cancel in a ratio. One FFT per 1.4 s of audio is all this costs.
  */
 struct BandAccumulator {
-    static constexpr size_t kN = 1u << 16;   ///< the window, samples
-    std::vector<float> buf = std::vector<float>(kN, 0.0f);   ///< the window being filled
-    std::vector<double> power = std::vector<double>(kN / 2 + 1, 0.0);   ///< the summed power per bin
-    size_t fill = 0;   ///< samples in buf
-    int windows = 0;   ///< windows summed
+    static constexpr size_t N = 1u << 16;   ///< the window, samples
+    std::vector<float> m_buf = std::vector<float>(N, 0.0f);   ///< the window being filled
+    std::vector<double> m_power = std::vector<double>(N / 2 + 1, 0.0);   ///< the summed power per bin
+    size_t m_fill = 0;   ///< samples in buf
+    int m_windows = 0;   ///< windows summed
 
     /** @brief Adds @p n samples of @p x; complete windows are transformed as they fill. */
     void push(const float* x, int n)
     {
         while (n > 0) {
-            const size_t take = std::min(static_cast<size_t>(n), kN - fill);
-            std::copy(x, x + take, buf.begin() + static_cast<ptrdiff_t>(fill));
-            fill += take;
+            const size_t take = std::min(static_cast<size_t>(n), N - m_fill);
+            std::copy(x, x + take, m_buf.begin() + static_cast<ptrdiff_t>(m_fill));
+            m_fill += take;
             x += take;
             n -= static_cast<int>(take);
-            if (fill == kN) {
-                const std::vector<double> p = powerSpectrum(buf.data(), kN);
-                for (size_t i = 0; i < p.size(); ++i) power[i] += p[i];
-                fill = 0;
-                ++windows;
+            if (m_fill == N) {
+                const std::vector<double> p = powerSpectrum(m_buf.data(), N);
+                for (size_t i = 0; i < p.size(); ++i) m_power[i] += p[i];
+                m_fill = 0;
+                ++m_windows;
             }
         }
     }
@@ -1317,9 +1317,9 @@ struct BandAccumulator {
     double band(double lo, double hi) const
     {
         double s = 0.0;
-        for (size_t k = 1; k < kN / 2; ++k) {
-            const double f = static_cast<double>(k) * 48000.0 / static_cast<double>(kN);
-            if (f >= lo && f < hi) s += power[k];
+        for (size_t k = 1; k < N / 2; ++k) {
+            const double f = static_cast<double>(k) * 48000.0 / static_cast<double>(N);
+            if (f >= lo && f < hi) s += m_power[k];
         }
         return s;
     }
@@ -1335,43 +1335,43 @@ struct BandAccumulator {
  * contradict each other (Blauert, "Spatial Hearing", MIT Press 1997, ch. 3, on interaural coherence).
  */
 struct StereoBandAccumulator {
-    static constexpr size_t kN = 1u << 16;   ///< the window, samples
-    std::vector<float> bufL = std::vector<float>(kN, 0.0f);   ///< the left window being filled
-    std::vector<float> bufR = std::vector<float>(kN, 0.0f);   ///< the right one
-    std::vector<double> pl = std::vector<double>(kN / 2 + 1, 0.0);   ///< the summed power per bin, left
-    std::vector<double> pr = std::vector<double>(kN / 2 + 1, 0.0);   ///< ... right
-    std::vector<double> cc = std::vector<double>(kN / 2 + 1, 0.0);   ///< the summed Re{X_L conj(X_R)} per bin
-    size_t fill = 0;   ///< samples in the buffers
-    int windows = 0;   ///< windows summed
+    static constexpr size_t N = 1u << 16;   ///< the window, samples
+    std::vector<float> m_bufL = std::vector<float>(N, 0.0f);   ///< the left window being filled
+    std::vector<float> m_bufR = std::vector<float>(N, 0.0f);   ///< the right one
+    std::vector<double> m_pl = std::vector<double>(N / 2 + 1, 0.0);   ///< the summed power per bin, left
+    std::vector<double> m_pr = std::vector<double>(N / 2 + 1, 0.0);   ///< ... right
+    std::vector<double> m_cc = std::vector<double>(N / 2 + 1, 0.0);   ///< the summed Re{X_L conj(X_R)} per bin
+    size_t m_fill = 0;   ///< samples in the buffers
+    int m_windows = 0;   ///< windows summed
 
     /** @brief Adds @p n samples of both channels; complete windows are transformed as they fill. */
     void push(const float* l, const float* r, int n)
     {
         while (n > 0) {
-            const size_t take = std::min(static_cast<size_t>(n), kN - fill);
-            std::copy(l, l + take, bufL.begin() + static_cast<ptrdiff_t>(fill));
-            std::copy(r, r + take, bufR.begin() + static_cast<ptrdiff_t>(fill));
-            fill += take;
+            const size_t take = std::min(static_cast<size_t>(n), N - m_fill);
+            std::copy(l, l + take, m_bufL.begin() + static_cast<ptrdiff_t>(m_fill));
+            std::copy(r, r + take, m_bufR.begin() + static_cast<ptrdiff_t>(m_fill));
+            m_fill += take;
             l += take;
             r += take;
             n -= static_cast<int>(take);
-            if (fill == kN) {
-                std::vector<std::complex<double>> a(kN), b(kN);
-                for (size_t i = 0; i < kN; ++i) {
-                    const double t = 2.0 * 3.141592653589793 * static_cast<double>(i) / static_cast<double>(kN);
+            if (m_fill == N) {
+                std::vector<std::complex<double>> a(N), b(N);
+                for (size_t i = 0; i < N; ++i) {
+                    const double t = 2.0 * 3.141592653589793 * static_cast<double>(i) / static_cast<double>(N);
                     const double w = 0.35875 - 0.48829 * std::cos(t) + 0.14128 * std::cos(2 * t) - 0.01168 * std::cos(3 * t);
-                    a[i] = static_cast<double>(bufL[i]) * w;
-                    b[i] = static_cast<double>(bufR[i]) * w;
+                    a[i] = static_cast<double>(m_bufL[i]) * w;
+                    b[i] = static_cast<double>(m_bufR[i]) * w;
                 }
                 fft(a);
                 fft(b);
-                for (size_t i = 0; i <= kN / 2; ++i) {
-                    pl[i] += std::norm(a[i]);
-                    pr[i] += std::norm(b[i]);
-                    cc[i] += (a[i] * std::conj(b[i])).real();
+                for (size_t i = 0; i <= N / 2; ++i) {
+                    m_pl[i] += std::norm(a[i]);
+                    m_pr[i] += std::norm(b[i]);
+                    m_cc[i] += (a[i] * std::conj(b[i])).real();
                 }
-                fill = 0;
-                ++windows;
+                m_fill = 0;
+                ++m_windows;
             }
         }
     }
@@ -1380,9 +1380,9 @@ struct StereoBandAccumulator {
     void sums(double lo, double hi, double& a, double& b, double& c) const
     {
         a = b = c = 0.0;
-        for (size_t k = 1; k < kN / 2; ++k) {
-            const double f = static_cast<double>(k) * 48000.0 / static_cast<double>(kN);
-            if (f >= lo && f < hi) { a += pl[k]; b += pr[k]; c += cc[k]; }
+        for (size_t k = 1; k < N / 2; ++k) {
+            const double f = static_cast<double>(k) * 48000.0 / static_cast<double>(N);
+            if (f >= lo && f < hi) { a += m_pl[k]; b += m_pr[k]; c += m_cc[k]; }
         }
     }
     /** @brief Side-over-mid power in a band, in dB. Mono reads far below zero, a pure side signal 0. */
@@ -1466,10 +1466,10 @@ inline double rmsDb(const std::vector<float>& x, size_t from, size_t n)
 inline int instabilityOf(int pitch, int key) { return lerdahlInstability(pitch - key); }
 
 /// Seed slices per mode of testModalInterchange's presence measurement (12 tracks at most per mode).
-constexpr int kPresenceSlices = 2;
-/// Tracks one slice renders: the qualifying seeds with index [slice * kPresencePerSlice, + kPresencePerSlice).
-constexpr int kPresencePerSlice = 6;
-static_assert(kPresenceSlices * kPresencePerSlice == 12, "the slices must cover exactly the 12 tracks the measurement takes per mode");
+constexpr int PresenceSlices = 2;
+/// Tracks one slice renders: the qualifying seeds with index [slice * PresencePerSlice, + PresencePerSlice).
+constexpr int PresencePerSlice = 6;
+static_assert(PresenceSlices * PresencePerSlice == 12, "the slices must cover exactly the 12 tracks the measurement takes per mode");
 
 /**
  * @brief testModalInterchange, part (4): what the borrowed mode costs the presence band across the
@@ -1489,13 +1489,13 @@ static_assert(kPresenceSlices * kPresencePerSlice == 12, "the slices must cover 
  * every slice of a mode -- the number the old check held against 8.
  *
  * @param mode  0 = compose.modal_interchange On, 1 = Off
- * @param slice 0 .. kPresenceSlices - 1
+ * @param slice 0 .. PresenceSlices - 1
  */
 inline void modalPresence(int mode, int slice)
 {
     section(fmt("modal interchange over the tonic pedal: presence band across the break, interchange %s, "
                 "qualifying tracks %d..%d of 12", mode == 0 ? "on" : "off",
-                slice * kPresencePerSlice + 1, (slice + 1) * kPresencePerSlice).c_str());
+                slice * PresencePerSlice + 1, (slice + 1) * PresencePerSlice).c_str());
 
     // What the borrowed mode costs the presence band across the break. Solberg and Dibben's Track 2
     // rule (testSectionRules) asks that the drop after a breakdown be no duller between 1.5 and
@@ -1513,11 +1513,11 @@ inline void modalPresence(int mode, int slice)
         p.parseText(mode == 0 ? "compose.modal_interchange=On" : "compose.modal_interchange=Off");
         double worst = 1e9, sum = 0.0, changedSum = 0.0;
         int count = 0, rendered = 0, changed = 0;
-        const int from = slice * kPresencePerSlice, to = from + kPresencePerSlice;
+        const int from = slice * PresencePerSlice, to = from + PresencePerSlice;
         // Parallelised 20.09.2026 (round "test-speed-rest"): which of the seeds 1..40 qualify (carry the
         // break routine) stays exactly this serial loop -- it is cheap (a plan only, no audio) and its
         // *order* is what the function comment's slicing contract depends on (`count` must be the same
-        // number every slice would compute). Only the up to kPresencePerSlice full track renders this
+        // number every slice would compute). Only the up to PresencePerSlice full track renders this
         // slice owns are deferred into a second, parallel phase below: a candidate keeps the Composer
         // its qualifying plan came from (the render walks it further through a Conductor, so it must be
         // the same instance, not a new one), and phos::probe::runAll hands the candidates to its worker
@@ -1527,19 +1527,19 @@ inline void modalPresence(int mode, int slice)
         // walking the candidates in the same ascending-seed order the serial loop rendered them in, so
         // it is bit for bit the same sequence of additions and comparisons as before.
         struct Candidate {
-            std::unique_ptr<Composer> comp;
-            TrackPlan plan;
-            int coreA = -1, drop = -1;
+            std::unique_ptr<Composer> m_comp;
+            TrackPlan m_plan;
+            int m_coreA = -1, m_drop = -1;
         };
-        std::vector<Candidate> slice_;
+        std::vector<Candidate> m_slice;
         for (uint64_t s = 1; s <= 40 && count < 12; ++s) {
             auto comp = std::make_unique<Composer>(s);
             const TrackPlan plan = comp->track(p, 0);
             int coreA = -1, drop = -1;
-            for (int i = 3; i < plan.form.count; ++i) {
-                if (plan.form.section[i - 3].type != SectionType::Groove && plan.form.section[i - 3].type != SectionType::Drop) continue;
-                if (plan.form.section[i - 2].type != SectionType::Break || plan.form.section[i - 1].type != SectionType::Build) continue;
-                if (plan.form.section[i].type != SectionType::Drop) continue;
+            for (int i = 3; i < plan.m_form.m_count; ++i) {
+                if (plan.m_form.m_section[i - 3].m_type != SectionTypeE::GROOVE && plan.m_form.m_section[i - 3].m_type != SectionTypeE::DROP) continue;
+                if (plan.m_form.m_section[i - 2].m_type != SectionTypeE::BREAK || plan.m_form.m_section[i - 1].m_type != SectionTypeE::BUILD) continue;
+                if (plan.m_form.m_section[i].m_type != SectionTypeE::DROP) continue;
                 coreA = i - 3;
                 drop = i;
                 break;
@@ -1547,27 +1547,27 @@ inline void modalPresence(int mode, int slice)
             if (coreA < 0) continue;
             // The qualifying seed number `count`: another slice renders it.
             if (count < from || count >= to) { ++count; continue; }
-            slice_.push_back({ std::move(comp), plan, coreA, drop });
+            m_slice.push_back({ std::move(comp), plan, coreA, drop });
             ++count;
         }
         struct Result {
-            double d = 0.0;
-            bool changed = false;
+            double m_d = 0.0;
+            bool m_changed = false;
         };
-        std::vector<Result> results(slice_.size());
+        std::vector<Result> results(m_slice.size());
         std::vector<std::function<void()>> tasks;
-        for (size_t i = 0; i < slice_.size(); ++i) {
+        for (size_t i = 0; i < m_slice.size(); ++i) {
             tasks.push_back([&, i] {
-                Candidate& c = slice_[i];
+                Candidate& c = m_slice[i];
                 constexpr double sr = 48000.0;
                 auto e = std::make_unique<Engine>();
                 e->prepare(sr, 512);
                 e->params().copyValuesFrom(p);
-                TempoMap tm = c.comp->tempoMap(e->params(), c.plan.bars);
+                TempoMap tm = c.m_comp->tempoMap(e->params(), c.m_plan.m_bars);
                 e->setTempoMap(tm);
-                Conductor cond(*e, *c.comp);
-                const double barSec = kBeatsPerBar * 60.0 / c.plan.bpm;
-                const size_t total = static_cast<size_t>(tm.secondsAt(c.plan.bars * static_cast<double>(kBeatsPerBar)) * sr);
+                Conductor cond(*e, *c.m_comp);
+                const double barSec = BeatsPerBar * 60.0 / c.m_plan.m_bpm;
+                const size_t total = static_cast<size_t>(tm.secondsAt(c.m_plan.m_bars * static_cast<double>(BeatsPerBar)) * sr);
                 std::vector<float> mono(total), L(512), R(512);
                 size_t done = 0;
                 while (done < total) {
@@ -1582,20 +1582,20 @@ inline void modalPresence(int mode, int slice)
                     return bandPowerDb(mono, static_cast<size_t>(fromBar * barSec * sr) + lat,
                                        static_cast<size_t>(bars * barSec * sr), 1500.0, 6000.0);
                 };
-                const Section& sc = c.plan.form.section[c.coreA];
-                const Section& sd = c.plan.form.section[c.drop];
-                const int w = std::min(16, sc.bars - 2);
-                results[i].d = band(sd.startBar, std::min(16, sd.bars)) - band(sc.startBar + sc.bars - w, w);
-                results[i].changed = mode == 0 && sc.scale != sd.scale;
+                const Section& sc = c.m_plan.m_form.m_section[c.m_coreA];
+                const Section& sd = c.m_plan.m_form.m_section[c.m_drop];
+                const int w = std::min(16, sc.m_bars - 2);
+                results[i].m_d = band(sd.m_startBar, std::min(16, sd.m_bars)) - band(sc.m_startBar + sc.m_bars - w, w);
+                results[i].m_changed = mode == 0 && sc.m_scale != sd.m_scale;
             });
         }
         phos::probe::warmSharedData();
         phos::probe::runAll(tasks);
         for (const Result& r : results) {
-            worst = std::min(worst, r.d);
-            sum += r.d;
+            worst = std::min(worst, r.m_d);
+            sum += r.m_d;
             ++rendered;
-            if (r.changed) { changedSum += r.d; ++changed; }
+            if (r.m_changed) { changedSum += r.m_d; ++changed; }
         }
         // `count >= 8` is the old bound on the tracks one mode is measured over (the qualifying seeds,
         // not this slice's share of them); `worst` is this slice's minimum.
@@ -1660,13 +1660,13 @@ inline void modalPresence(int mode, int slice)
  * coverage beside it rather than subsuming it (different track, different bound, different rationale).
  *
  * @param mode  0 = compose.modal_interchange On, 1 = Off
- * @param slice 0 .. kPresenceSlices - 1
+ * @param slice 0 .. PresenceSlices - 1
  */
 inline void modalPresenceArc(int mode, int slice)
 {
     section(fmt("modal interchange over the tonic pedal: presence band across the break on the set's "
                 "second track, interchange %s, qualifying tracks %d..%d of 12", mode == 0 ? "on" : "off",
-                slice * kPresencePerSlice + 1, (slice + 1) * kPresencePerSlice).c_str());
+                slice * PresencePerSlice + 1, (slice + 1) * PresencePerSlice).c_str());
 
     {
         ParamStore p;
@@ -1675,29 +1675,29 @@ inline void modalPresenceArc(int mode, int slice)
         p.parseText(mode == 0 ? "compose.modal_interchange=On" : "compose.modal_interchange=Off");
         double worst = 1e9, sum = 0.0, changedSum = 0.0;
         int count = 0, rendered = 0, changed = 0;
-        const int from = slice * kPresencePerSlice, to = from + kPresencePerSlice;
+        const int from = slice * PresencePerSlice, to = from + PresencePerSlice;
         // Parallelised 20.09.2026 (round "test-speed-rest"), the same way as modalPresence above (see
         // its comment): the cheap, order-defining qualification loop over seeds 1..40 stays serial, and
-        // only the up to kPresencePerSlice full track renders this slice owns move to a second, parallel
+        // only the up to PresencePerSlice full track renders this slice owns move to a second, parallel
         // phase over phos::probe::runAll. The fold afterwards walks the candidates in the same
         // ascending-seed order the serial loop rendered them in, so it is bit for bit the same
         // sequence of additions and comparisons as before.
         struct Candidate {
-            std::unique_ptr<Composer> comp;
-            TrackPlan plan;
-            int coreA = -1, drop = -1;
+            std::unique_ptr<Composer> m_comp;
+            TrackPlan m_plan;
+            int m_coreA = -1, m_drop = -1;
         };
-        std::vector<Candidate> slice_;
+        std::vector<Candidate> m_slice;
         for (uint64_t s = 1; s <= 40 && count < 12; ++s) {
             auto comp = std::make_unique<Composer>(s);
             // Track 1 (index 1): the set's second track, which unlike track 0 is never the level
             // match's own uncorrected reference.
             const TrackPlan plan = comp->track(p, 1);
             int coreA = -1, drop = -1;
-            for (int i = 3; i < plan.form.count; ++i) {
-                if (plan.form.section[i - 3].type != SectionType::Groove && plan.form.section[i - 3].type != SectionType::Drop) continue;
-                if (plan.form.section[i - 2].type != SectionType::Break || plan.form.section[i - 1].type != SectionType::Build) continue;
-                if (plan.form.section[i].type != SectionType::Drop) continue;
+            for (int i = 3; i < plan.m_form.m_count; ++i) {
+                if (plan.m_form.m_section[i - 3].m_type != SectionTypeE::GROOVE && plan.m_form.m_section[i - 3].m_type != SectionTypeE::DROP) continue;
+                if (plan.m_form.m_section[i - 2].m_type != SectionTypeE::BREAK || plan.m_form.m_section[i - 1].m_type != SectionTypeE::BUILD) continue;
+                if (plan.m_form.m_section[i].m_type != SectionTypeE::DROP) continue;
                 coreA = i - 3;
                 drop = i;
                 break;
@@ -1705,36 +1705,36 @@ inline void modalPresenceArc(int mode, int slice)
             if (coreA < 0) continue;
             // The qualifying seed number `count`: another slice renders it.
             if (count < from || count >= to) { ++count; continue; }
-            slice_.push_back({ std::move(comp), plan, coreA, drop });
+            m_slice.push_back({ std::move(comp), plan, coreA, drop });
             ++count;
         }
         struct Result {
-            double d = 0.0;
-            bool changed = false;
+            double m_d = 0.0;
+            bool m_changed = false;
         };
-        std::vector<Result> results(slice_.size());
+        std::vector<Result> results(m_slice.size());
         std::vector<std::function<void()>> tasks;
-        for (size_t idx = 0; idx < slice_.size(); ++idx) {
+        for (size_t idx = 0; idx < m_slice.size(); ++idx) {
             tasks.push_back([&, idx] {
-                Candidate& c = slice_[idx];
+                Candidate& c = m_slice[idx];
                 constexpr double sr = 48000.0;
                 auto e = std::make_unique<Engine>();
                 e->prepare(sr, 512);
                 e->params().copyValuesFrom(p);
-                const Section& sc = c.plan.form.section[c.coreA];
-                const Section& sd = c.plan.form.section[c.drop];
-                const int w = std::min(16, sc.bars - 2);
-                const int dropLen = std::min(16, sd.bars);
+                const Section& sc = c.m_plan.m_form.m_section[c.m_coreA];
+                const Section& sd = c.m_plan.m_form.m_section[c.m_drop];
+                const int w = std::min(16, sc.m_bars - 2);
+                const int dropLen = std::min(16, sd.m_bars);
                 // Global bar numbers on the set's timeline (see the function comment): local
                 // Section::startBar plus the track's own hand-over bar.
-                const int coreEnd = c.plan.firstBar + sc.startBar + sc.bars;
-                const int dropStart = c.plan.firstBar + sd.startBar;
+                const int coreEnd = c.m_plan.m_firstBar + sc.m_startBar + sc.m_bars;
+                const int dropStart = c.m_plan.m_firstBar + sd.m_startBar;
                 // The whole track, on the set's timeline (plan.firstBar is 0 only for track 0).
-                const int renderBars = c.plan.firstBar + c.plan.bars;
-                TempoMap tm = c.comp->tempoMap(e->params(), renderBars);
+                const int renderBars = c.m_plan.m_firstBar + c.m_plan.m_bars;
+                TempoMap tm = c.m_comp->tempoMap(e->params(), renderBars);
                 e->setTempoMap(tm);
-                Conductor cond(*e, *c.comp);
-                const size_t total = static_cast<size_t>(tm.secondsAt(renderBars * static_cast<double>(kBeatsPerBar)) * sr);
+                Conductor cond(*e, *c.m_comp);
+                const size_t total = static_cast<size_t>(tm.secondsAt(renderBars * static_cast<double>(BeatsPerBar)) * sr);
                 std::vector<float> mono(total), L(512), R(512);
                 size_t done = 0;
                 while (done < total) {
@@ -1747,21 +1747,21 @@ inline void modalPresenceArc(int mode, int slice)
                 const size_t lat = static_cast<size_t>(e->latencySamples());
                 // Bar-to-sample through the real tempo map, not a constant BPM (see the function comment).
                 auto band = [&](int fromBar, int bars) {
-                    const double t0 = tm.secondsAt(fromBar * static_cast<double>(kBeatsPerBar));
-                    const double t1 = tm.secondsAt((fromBar + bars) * static_cast<double>(kBeatsPerBar));
+                    const double t0 = tm.secondsAt(fromBar * static_cast<double>(BeatsPerBar));
+                    const double t1 = tm.secondsAt((fromBar + bars) * static_cast<double>(BeatsPerBar));
                     return bandPowerDb(mono, static_cast<size_t>(t0 * sr) + lat, static_cast<size_t>((t1 - t0) * sr), 1500.0, 6000.0);
                 };
-                results[idx].d = band(dropStart, dropLen) - band(coreEnd - w, w);
-                results[idx].changed = mode == 0 && sc.scale != sd.scale;
+                results[idx].m_d = band(dropStart, dropLen) - band(coreEnd - w, w);
+                results[idx].m_changed = mode == 0 && sc.m_scale != sd.m_scale;
             });
         }
         phos::probe::warmSharedData();
         phos::probe::runAll(tasks);
         for (const Result& r : results) {
-            worst = std::min(worst, r.d);
-            sum += r.d;
+            worst = std::min(worst, r.m_d);
+            sum += r.m_d;
             ++rendered;
-            if (r.changed) { changedSum += r.d; ++changed; }
+            if (r.m_changed) { changedSum += r.m_d; ++changed; }
         }
         const double mean = sum / std::max(1, rendered);
         // Gated on the mean, not the worst case (unlike modalPresence above): measured on this track,
@@ -1775,7 +1775,7 @@ inline void modalPresenceArc(int mode, int slice)
         check(count >= 8 && mean > 1.0,
               fmt("on the set's second track, a borrowed mode costs the presence band across the break less than 1.0 dB "
                   "on average (interchange %s, tracks %d-%d)", mode == 0 ? "on" : "off",
-                  slice * kPresencePerSlice + 1, (slice + 1) * kPresencePerSlice).c_str(),
+                  slice * PresencePerSlice + 1, (slice + 1) * PresencePerSlice).c_str(),
               fmt("interchange %s: %d qualifying tracks, this slice %d of them: mean %+.2f dB, worst %+.2f dB (%d changed mode "
                   "across the break, mean %+.2f dB)",
                   mode == 0 ? "on" : "off", count, rendered, sum / std::max(1, rendered), worst, changed,
@@ -1793,9 +1793,9 @@ inline void modalPresenceArc(int mode, int slice)
  * ask it for track plans (`track`, `trackOfBar`) after the fact.
  */
 struct BorrowedScore {
-    ParamStore p;                    ///< the knobs the score was composed with
-    std::unique_ptr<Composer> c;     ///< the composer that wrote it, asked for its plans afterwards
-    std::vector<NoteEvent> ev;       ///< the 1536 bars' notes
+    ParamStore m_p;                    ///< the knobs the score was composed with
+    std::unique_ptr<Composer> m_c;     ///< the composer that wrote it, asked for its plans afterwards
+    std::vector<NoteEvent> m_ev;       ///< the 1536 bars' notes
 };
 
 /** @brief BorrowedScore for @p which (0 Markov, 1 neural), composed on first use. */
@@ -1805,11 +1805,11 @@ inline BorrowedScore& borrowedScore(int which)
     std::unique_ptr<BorrowedScore>& s = cache[which];
     if (!s) {
         s = std::make_unique<BorrowedScore>();
-        s->p.parseText("compose.track_bars=128 compose.lead_amount=1 compose.acid_amount=1 compose.arp_amount=1 "
+        s->m_p.parseText("compose.track_bars=128 compose.lead_amount=1 compose.acid_amount=1 compose.arp_amount=1 "
                        "compose.style=Goa compose.modal_interchange=On compose.level_match=Off master.auto_gain=Off");
-        s->p.parseText(which == 0 ? "compose.melody_model=Markov" : "compose.melody_model=Neural");
-        s->c = std::make_unique<Composer>(31337);
-        s->c->composeBars(s->p, 0, 12 * 128, s->ev);
+        s->m_p.parseText(which == 0 ? "compose.melody_model=Markov" : "compose.melody_model=Neural");
+        s->m_c = std::make_unique<Composer>(31337);
+        s->m_c->composeBars(s->m_p, 0, 12 * 128, s->m_ev);
     }
     return *s;
 }
@@ -1817,7 +1817,7 @@ inline BorrowedScore& borrowedScore(int which)
 /**
  * @brief Drains a cue ring into a vector, so a test can look at what a block produced.
  */
-inline std::vector<Cue> drainCues(CueRing& ring)
+inline std::vector<Cue> drainCues(CueRingT& ring)
 {
     std::vector<Cue> out;
     Cue c;
@@ -1826,11 +1826,11 @@ inline std::vector<Cue> drainCues(CueRing& ring)
 }
 
 /** @brief The lane that plays @p role in the knobs' kit, or -1 (test side: read from the knobs, not from Rhythm.cpp). */
-inline int testLaneOfRole(const ParamStore& p, PercRole role)
+inline int testLaneOfRole(const ParamStore& p, PercRoleE role)
 {
-    for (int l = 0; l < kPercLanes; ++l) {
-        const int b = p.base(Module::Perc, l);
-        if (p.getBool(b + perc::Active) && p.getInt(b + perc::Role) == static_cast<int>(role)) return l;
+    for (int l = 0; l < PercLanes; ++l) {
+        const int b = p.base(ModuleE::PERC, l);
+        if (p.getBool(b + perc::ACTIVE) && p.getInt(b + perc::ROLE) == static_cast<int>(role)) return l;
     }
     return -1;
 }
@@ -1848,16 +1848,16 @@ inline double offsetAt(const std::vector<ControlEvent>& controls, int param, dou
     auto at = [&](double t) {
         if (length <= 0.0 || t >= start + length) return target;
         const double u = (t - start) / length;
-        return from + (target - from) * 0.5 * (1.0 - std::cos(kPiD * u));
+        return from + (target - from) * 0.5 * (1.0 - std::cos(PiD * u));
     };
     for (const ControlEvent& c : controls) {
-        if (c.param != param || c.kind != ControlEvent::Kind::Offset) continue;
-        if (c.beat > beat) break;
-        value = at(c.beat);
+        if (c.m_param != param || c.m_kind != ControlEvent::KindE::OFFSET) continue;
+        if (c.m_beat > beat) break;
+        value = at(c.m_beat);
         from = value;
-        target = c.value;
-        start = c.beat;
-        length = c.length;
+        target = c.m_value;
+        start = c.m_beat;
+        length = c.m_length;
     }
     return at(beat);
 }
@@ -1880,9 +1880,9 @@ inline double offsetAt(const std::vector<ControlEvent>& controls, int param, dou
  * because both readers ask it for track plans after the fact.
  */
 struct ListeningScore {
-    ParamStore q;                    ///< default knobs
-    std::unique_ptr<Composer> c;     ///< the composer that wrote the score
-    std::vector<NoteEvent> ev;       ///< 768 bars of notes
+    ParamStore m_q;                    ///< default knobs
+    std::unique_ptr<Composer> m_c;     ///< the composer that wrote the score
+    std::vector<NoteEvent> m_ev;       ///< 768 bars of notes
 };
 
 /** @brief The ListeningScore, composed on first use. */
@@ -1891,8 +1891,8 @@ inline ListeningScore& listeningScore()
     static std::unique_ptr<ListeningScore> s;
     if (!s) {
         s = std::make_unique<ListeningScore>();
-        s->c = std::make_unique<Composer>(864566672ull);
-        s->c->composeBars(s->q, 0, 768, s->ev);
+        s->m_c = std::make_unique<Composer>(864566672ull);
+        s->m_c->composeBars(s->m_q, 0, 768, s->m_ev);
     }
     return *s;
 }
@@ -1919,41 +1919,41 @@ inline void voicesCounterSound(uint64_t seed)
         std::unique_ptr<ListeningPlanner> own;
         if (seed != 864566672ull) {
             own = std::make_unique<ListeningPlanner>();
-            own->c = std::make_unique<Composer>(seed);
+            own->m_c = std::make_unique<Composer>(seed);
         }
         ListeningPlanner& lp = own ? *own : listeningPlanner();
-        ParamStore& p = lp.p;
-        const float sv = p.get(p.base(Module::Compose) + compose::SoundVariation);
+        ParamStore& p = lp.m_p;
+        const float sv = p.get(p.base(ModuleE::COMPOSE) + compose::SOUND_VARIATION);
         int tracks = 0, samePair = 0, shareOne = 0;
         std::vector<double> dCents, dBright;
-        const int lb = p.base(PolyInstance::Lead), cbI = p.base(PolyInstance::Counter);
+        const int lb = p.base(PolyInstanceE::LEAD), cbI = p.base(PolyInstanceE::COUNTER);
         {
-            Composer& lc = *lp.c;
+            Composer& lc = *lp.m_c;
             for (int ti = 0; ti < 24; ++ti) {
                 const TrackPlan& plan = lc.track(p, ti);
                 ++tracks;
                 double cents[2] = {}, bright[2] = {};
                 int osc[2] = {}, table[2] = {};
                 for (int k = 0; k < 2; ++k) {
-                    const PolyInstance inst = k == 0 ? PolyInstance::Lead : PolyInstance::Counter;
+                    const PolyInstanceE inst = k == 0 ? PolyInstanceE::LEAD : PolyInstanceE::COUNTER;
                     const int v = polyIndex(inst);
-                    const VoiceRecipe& rc = plan.voice[v];
+                    const VoiceRecipe& rc = plan.m_voice[v];
                     ParamStore s;
                     const int b = s.base(inst);
-                    float off[poly::Count] = {};
+                    float off[poly::COUNT] = {};
                     Composer::voiceRecipeOffsets(inst, rc, sv, off);
-                    if (rc.osc >= 0) s.set(b + poly::Osc, static_cast<float>(rc.osc));
-                    if (rc.table >= 0) s.set(b + poly::Table, static_cast<float>(rc.table));
-                    if (rc.filter >= 0) s.set(b + poly::FilterType, static_cast<float>(rc.filter));
-                    for (int q = 0; q < poly::Count; ++q)
+                    if (rc.m_osc >= 0) s.set(b + poly::OSC, static_cast<float>(rc.m_osc));
+                    if (rc.m_table >= 0) s.set(b + poly::TABLE, static_cast<float>(rc.m_table));
+                    if (rc.m_filter >= 0) s.set(b + poly::FILTER_TYPE, static_cast<float>(rc.m_filter));
+                    for (int q = 0; q < poly::COUNT; ++q)
                         if (off[q] != 0.0f) s.set(b + q, s.fromNormalised(b + q, s.toNormalised(b + q, s.get(b + q)) + off[q]));
-                    s.set(b + poly::DelaySend, 0.0f);
-                    s.set(b + poly::Drift, 0.0f);
-                    osc[k] = s.getInt(b + poly::Osc);
-                    table[k] = s.getInt(b + poly::Table);
+                    s.set(b + poly::DELAY_SEND, 0.0f);
+                    s.set(b + poly::DRIFT, 0.0f);
+                    osc[k] = s.getInt(b + poly::OSC);
+                    table[k] = s.getInt(b + poly::TABLE);
                     auto e = std::make_unique<Poly>();
                     e->prepare(48000.0);
-                    std::vector<float> vals = moduleValues(s, Module::Poly, v);
+                    std::vector<float> vals = moduleValues(s, ModuleE::POLY, v);
                     e->update(vals.data(), 145.0);
                     e->noteOn(69, 1.0f, 4.0, 1 << 24, 0.0);
                     const size_t n = 16384;
@@ -1966,9 +1966,9 @@ inline void voicesCounterSound(uint64_t seed)
                 }
                 (void)lb; (void)cbI;
                 // A table only colours the wavetable oscillator; the others read none.
-                const bool sameTable = osc[0] == static_cast<int>(PolyOsc::Wavetable) && osc[1] == osc[0] && table[0] == table[1];
-                if (osc[0] == osc[1] && (sameTable || osc[0] != static_cast<int>(PolyOsc::Wavetable))) ++samePair;
-                if (osc[0] == osc[1] || (table[0] == table[1] && osc[0] == static_cast<int>(PolyOsc::Wavetable) && osc[1] == osc[0])) ++shareOne;
+                const bool sameTable = osc[0] == static_cast<int>(PolyOscE::WAVETABLE) && osc[1] == osc[0] && table[0] == table[1];
+                if (osc[0] == osc[1] && (sameTable || osc[0] != static_cast<int>(PolyOscE::WAVETABLE))) ++samePair;
+                if (osc[0] == osc[1] || (table[0] == table[1] && osc[0] == static_cast<int>(PolyOscE::WAVETABLE) && osc[1] == osc[0])) ++shareOne;
                 dCents.push_back(std::fabs(cents[1] - cents[0]));
                 dBright.push_back(std::fabs(bright[1] - bright[0]));
             }

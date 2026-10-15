@@ -3,7 +3,7 @@
 **Why.** Phosphene draws the acid accent independently per step (``Core/src/Melody.cpp``,
 ``makeAcid``: 0.32 on the third sixteenth, 0.12 on the downbeat, 0.2 elsewhere). The accent of a
 TB-303 charges a capacitor with a time constant of about 150 ms (``Core/src/Acid.cpp``,
-``kSweepTau``), so a *single* accent charges the sweep and lets it discharge again, while accents
+``SweepTau``), so a *single* accent charges the sweep and lets it discharge again, while accents
 that follow one another charge it before it has discharged and their sweeps climb -- the "wow" of an
 accented run. Independent draws produce that run only by chance. Before changing the draw, measure
 whether the bought loops actually place accents in runs, and by how much.

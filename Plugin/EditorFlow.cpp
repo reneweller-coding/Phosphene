@@ -12,17 +12,17 @@ using namespace phosui;
 
 void SignalFlow::paint(juce::Graphics& g)
 {
-    const float sc = juce::jmin(static_cast<float>(getWidth()) / kCanvasW, static_cast<float>(getHeight()) / kCanvasH);
+    const float sc = juce::jmin(static_cast<float>(getWidth()) / CanvasW, static_cast<float>(getHeight()) / CanvasH);
     if (sc <= 0.05f) return;
-    g.fillAll(bg0);
+    g.fillAll(Bg0);
     g.addTransform(juce::AffineTransform::scale(sc));
     auto node = [&](float x, float y, float w, float h, const juce::String& t, juce::Colour c, float fs = 11.0f) {
         const juce::Rectangle<float> r(x, y, w, h);
-        g.setColour(group);
+        g.setColour(GroupColour);
         g.fillRoundedRectangle(r, 6.0f);
         g.setColour(c.withAlpha(0.9f));
         g.drawRoundedRectangle(r.reduced(0.5f), 6.0f, 1.2f);
-        g.setColour(text);
+        g.setColour(Text);
         g.setFont(body(fs));
         g.drawFittedText(t, r.reduced(6.0f, 2.0f).toNearestInt(), juce::Justification::centred, 3, 0.85f);
         return r;
@@ -63,7 +63,7 @@ void SignalFlow::paint(juce::Graphics& g)
     };
 
     const juce::Colour setC = partColour(0), lowC = partColour(2), percC = partColour(4), acidC = partColour(5),
-                       lineC = partColour(6), spaceC = partColour(10), mixC = partColour(TabMix);
+                       lineC = partColour(6), spaceC = partColour(10), mixC = partColour(TAB_MIX);
 
     // ---- the composer: what a set is before it sounds
     node(20, 14, 960, 30, "COMPOSER   seed  ->  set arc (energy, style morph)  ->  tracks: key, tempo, style, form "
@@ -87,7 +87,7 @@ void SignalFlow::paint(juce::Graphics& g)
     const auto voiceEnd = node(30, 334, 432, 26, "Amp, filter and mod envelopes  -  voice FX  -  delay", lineC, 9.5f);
     const auto sfx = node(22, 376, 448, 19, "SFX, bed and voices: risers, zips, impacts, sub drop, shamanic texture, phrases, NASA shots", spaceC, 9.0f);
     // 27.09.2026: the Field track, a sampler of field recordings (FieldPlayer.h).
-    const auto fieldNode = node(22, 400, 448, 19, "Field: recordings of places - two layers, crossfade loop, filter, envelopes", partColour(TabField), 9.0f);
+    const auto fieldNode = node(22, 400, 448, 19, "Field: recordings of places - two layers, crossfade loop, filter, envelopes", partColour(TAB_FIELD), 9.0f);
     arrow({ 500.0f, 136.0f }, { 500.0f, 146.0f }, setC);
 
     // ---- the strips and the space
@@ -98,7 +98,7 @@ void SignalFlow::paint(juce::Graphics& g)
     arrow({ acid.getRight(), acid.getCentreY() }, { 500.0f, 198.0f }, acidC);
     arrow({ voiceEnd.getRight(), voiceEnd.getCentreY() }, { 500.0f, 200.0f }, lineC);
     arrow({ sfx.getRight(), sfx.getCentreY() }, { 500.0f, 202.0f }, spaceC);
-    arrow({ fieldNode.getRight(), fieldNode.getCentreY() }, { 500.0f, 203.0f }, partColour(TabField));
+    arrow({ fieldNode.getRight(), fieldNode.getCentreY() }, { 500.0f, 203.0f }, partColour(TAB_FIELD));
     // Sends and effects in one frame: every strip sends into it, and its returns join the master.
     frame(494, 212, 492, 98, "SPACE AND EFFECTS   sends and returns", spaceC);
     const auto room = node(500, 232, 110, 32, "Room\nthe near plane", spaceC, 9.0f);
@@ -107,7 +107,7 @@ void SignalFlow::paint(juce::Graphics& g)
     const auto gated = node(860, 232, 120, 32, "Gated hall\nper voice (hall gate)", spaceC, 9.0f);
     arrow({ plate.getRight(), 248.0f }, { hall.getX(), 248.0f }, spaceC);
     const auto fx = node(500, 272, 230, 32, "PsyFx: flanger, phaser, shifter\n(the SFX insert; bed and voices send)", spaceC, 9.0f);
-    const auto stut = node(740, 272, 240, 32, "Stutter: a slice of the melodic bus\nin place of the live signal", accent, 9.0f);
+    const auto stut = node(740, 272, 240, 32, "Stutter: a slice of the melodic bus\nin place of the live signal", Accent, 9.0f);
     arrow({ 740.0f, strip.getBottom() }, { 740.0f, 212.0f }, spaceC);
 
     // ---- the master and what leaves the plugin
@@ -134,12 +134,12 @@ void SignalFlow::paint(juce::Graphics& g)
         g.fillPath(p);
     }
     arrow({ 18.0f, 309.0f }, { 30.0f, 309.0f }, lineC);
-    label(500, 420, "the editor's live ring shows every value as it plays: the composer's rides, corrections and the modulation", dim);
+    label(500, 420, "the editor's live ring shows every value as it plays: the composer's rides, corrections and the modulation", Dim);
     juce::ignoreUnused(bass, stut, fx, room, hall, gated);
 }
 
 juce::Rectangle<int> SignalFlow::drawn() const
 {
-    const float sc = juce::jmin(static_cast<float>(getWidth()) / kCanvasW, static_cast<float>(getHeight()) / kCanvasH);
-    return { 0, 0, juce::roundToInt(kCanvasW * sc), juce::roundToInt(kCanvasH * sc) };
+    const float sc = juce::jmin(static_cast<float>(getWidth()) / CanvasW, static_cast<float>(getHeight()) / CanvasH);
+    return { 0, 0, juce::roundToInt(CanvasW * sc), juce::roundToInt(CanvasH * sc) };
 }

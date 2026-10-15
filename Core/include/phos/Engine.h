@@ -55,9 +55,9 @@
  *
  * **Wandering effects (20.09.2026, round "wandering-fx").** With `sfx.wander` on, an effect voice's pan
  * sweeps across the field instead of oscillating and its content crosses from dry to the hall's send over
- * its own length (Sfx.h); the growing wet share (`sfxWetL_`/`sfxWetR_`) is added straight into the plain
+ * its own length (Sfx.h); the growing wet share (`m_sfxWetL`/`m_sfxWetR`) is added straight into the plain
  * hall's send in renderSegment(), alongside the (correspondingly shrinking) dry mix's own constant
- * sfx.hall_send fraction -- not into Engine::hallGate_, whose self-duck and bar-line cut are built for a
+ * sfx.hall_send fraction -- not into Engine::m_hallGate, whose self-duck and bar-line cut are built for a
  * continuous voice, not a one-shot event's own growing trajectory into a tail that is meant to run past
  * the bar. Off by default, so no existing render changes.
  *
@@ -103,8 +103,8 @@ namespace phos {
  * melodic bus the stutter replaces. So the stems sum to the mix as it enters the master, and a stem is what
  * a mixing engineer would get from a bounce of that channel.
  * @{ */
-constexpr int kNumStems = kNumParts + 1;           ///< the parts and the returns
-extern const char* const kStemNames[kNumStems];    ///< "Kick" ... "Vocal", "Returns"
+constexpr int NumStems = NumParts + 1;           ///< the parts and the returns
+extern const char* const StemNames[NumStems];    ///< "Kick" ... "Vocal", "Returns"
 /**
  * @brief Where the engine writes the stems while it renders (Engine::setStemTap).
  *
@@ -112,15 +112,15 @@ extern const char* const kStemNames[kNumStems];    ///< "Kick" ... "Vocal", "Ret
  * sample i of a call at index i, exactly as it writes the mix.
  */
 struct StemTap {
-    float* L[kNumStems] = {};   ///< left channel of each stem
-    float* R[kNumStems] = {};   ///< right channel of each stem
+    float* m_L[NumStems] = {};   ///< left channel of each stem
+    float* m_R[NumStems] = {};   ///< right channel of each stem
 };
 /** @} */
 
 /** @brief The Phosphene engine. */
 class Engine {
 public:
-    static constexpr int kChunk = 32;   ///< samples per time/parameter chunk
+    static constexpr int Chunk = 32;   ///< samples per time/parameter chunk
 
     /**
      * @brief Writes the stems into @p tap on every following process() call; nullptr stops it (StemTap).
@@ -129,13 +129,13 @@ public:
      * bit for bit either way (the self test measures that). Not for the audio thread of a host: set it
      * before rendering, from the thread that renders.
      */
-    void setStemTap(StemTap* tap) { tap_ = tap; }
+    void setStemTap(StemTap* tap) { m_tap = tap; }
     /**
      * @brief Live play (01.10.2026; the plugin's engine): the keyboard's Replace and the composer switch (mix.composer)
      *        act. Off (phos_render, the exports, the probes, the default): the set plays as it was composed, whatever its
      *        keyboard knobs say.
      */
-    void setLive(bool on) { live_ = on; }
+    void setLive(bool on) { m_live = on; }
 
     /**
      * @name A MIDI keyboard on one voice (23.09.2026, round "Keyboard")
@@ -157,22 +157,22 @@ public:
     /** @brief Releases every played note (transport stop, a changed keyboard part). */
     void liveAllOff();
     /** @brief Whether the composer's notes of @p part are replaced by the keyboard (the plugin's MIDI out skips them too). */
-    bool generatedSilenced(Part part) const;
+    bool generatedSilenced(PartE part) const;
     /**
      * @brief The family jam (02.10.2026, the plugin's Jam.h), live only: the melodic voices' notes (the acid, the bass,
      *        the lead and the others) @p transpose semitones from where they were written, and with @p rhythmOut the
      *        kick and the bass out for the leader's break.
      */
-    void setJam(int transpose, bool rhythmOut) { jamTranspose_ = transpose; jamRhythmOut_ = rhythmOut; }
+    void setJam(int transpose, bool rhythmOut) { m_jamTranspose = transpose; m_jamRhythmOut = rhythmOut; }
     /** @brief Whether the family jam leaves @p part's notes out now (the kick and the bass in the leader's break). */
-    bool jamSilenced(Part part) const { return jamRhythmOut_ && (part == Part::Kick || part == Part::Bass); }
+    bool jamSilenced(PartE part) const { return m_jamRhythmOut && (part == PartE::KICK || part == PartE::BASS); }
     /** @brief @p pitch as the family jam plays @p part's notes now (moved by its transposition, or as it is). */
-    int jamPitch(Part part, int pitch) const;
+    int jamPitch(PartE part, int pitch) const;
     /** @} */
 
     /**
      * @brief Plays bank preset @p preset of the family behind preset choice @p choice now, for the effects page's
-     *        audition (24.09.2026; Sfx.h, kPresetChoiceType). Rendering thread, between process() calls. The
+     *        audition (24.09.2026; Sfx.h, PresetChoiceType). Rendering thread, between process() calls. The
      *        family's sfx.preset_* choice still wins inside Sfx::trigger, so the page passes the preset it shows.
      */
     void previewSfx(int choice, int preset);
@@ -185,11 +185,11 @@ public:
      * same to the bit either way.
      * @{ */
     /** @brief Switches the gathering on or off (rendering thread). */
-    void setMetering(bool on) { metering_ = on; }
+    void setMetering(bool on) { m_metering = on; }
     /**
      * @brief Hands over what was gathered since the last call and starts again (rendering thread).
-     * @param peak  kNumParts peaks (absolute sample values)
-     * @param sumSq kNumParts sums of squares
+     * @param peak  NumParts peaks (absolute sample values)
+     * @param sumSq NumParts sums of squares
      * @return the number of samples they cover
      */
     int takeMeters(float* peak, double* sumSq);
@@ -226,24 +226,24 @@ public:
      */
     void ensureVoiceTables();
     /** @brief The level prepare() was called with. */
-    const Quality& quality() const { return quality_; }
+    const Quality& quality() const { return m_quality; }
     /** @brief Back to beat 0; clears events, offsets, overrides and all sound. */
     void reset();
 
     /** @brief The parameters (the knobs). */
-    ParamStore& params() { return params_; }
+    ParamStore& params() { return m_params; }
     /** @brief The parameters, read-only. */
-    const ParamStore& params() const { return params_; }
+    const ParamStore& params() const { return m_params; }
 
     /** @brief Uses a tempo map instead of compose.bpm (call while stopped). */
-    void setTempoMap(const TempoMap& map) { tempo_ = map; useTempoMap_ = true; }
+    void setTempoMap(const TempoMap& map) { m_tempo = map; m_useTempoMap = true; }
     /** @brief Goes back to compose.bpm. */
-    void clearTempoMap() { useTempoMap_ = false; }
+    void clearTempoMap() { m_useTempoMap = false; }
 
     /** @brief Queues a note (producer thread); false if the ring is full. */
-    bool pushEvent(const NoteEvent& e) { return notes_.push(e); }
+    bool pushEvent(const NoteEvent& e) { return m_notes.push(e); }
     /** @brief Queues a control event (producer thread); false if the ring is full. */
-    bool pushControl(const ControlEvent& e) { return controls_.push(e); }
+    bool pushControl(const ControlEvent& e) { return m_controls.push(e); }
     /**
      * @brief Queues a control event that takes effect at the next chunk, ahead of everything queued (producer
      *        thread, the same one that pushes the others); false if its ring is full.
@@ -254,44 +254,44 @@ public:
      * was still short of its target when it looked). This ring is read at every chunk start before anything
      * else; an event whose beat has passed starts there, so a ramp runs its full length from now.
      */
-    bool pushImmediate(const ControlEvent& e) { return immediate_.push(e); }
+    bool pushImmediate(const ControlEvent& e) { return m_immediate.push(e); }
     /** @brief Beat position of the next sample to be rendered (any thread). */
-    double beatPosition() const { return beatNow_.load(std::memory_order_relaxed); }
+    double beatPosition() const { return m_beatNow.load(std::memory_order_relaxed); }
     /** @brief Samples rendered since reset. */
-    uint64_t samplePosition() const { return samples_; }
+    uint64_t samplePosition() const { return m_samples; }
 
     /** @brief Renders @p n stereo samples. */
     void process(float* L, float* R, int n);
 
     /** @brief The kick, for tests and displays. */
-    const Kick& kick() const { return kick_; }
+    const Kick& kick() const { return m_kick; }
     /** @brief The bass, for tests and displays. */
-    const Bass& bass() const { return bass_; }
+    const Bass& bass() const { return m_bass; }
     /** @brief The percussion kit, for tests and displays. */
-    const PercKit& percKit() const { return perc_; }
+    const PercKit& percKit() const { return m_perc; }
     /** @brief The acid voice, for tests and displays. */
-    const Acid& acid() const { return acid_; }
+    const Acid& acid() const { return m_acid; }
     /** @brief A polyphonic engine (lead or arp), for tests and displays. */
-    const Poly& poly(PolyInstance i) const { return poly_[static_cast<int>(i)]; }
+    const Poly& poly(PolyInstanceE i) const { return m_poly[static_cast<int>(i)]; }
     /** @brief The effect generator, for tests and displays. */
-    const Sfx& sfx() const { return sfx_; }
+    const Sfx& sfx() const { return m_sfx; }
     /** @brief The shamanic bed, for tests and displays. */
-    const Texture& texture() const { return texture_; }
+    const Texture& texture() const { return m_texture; }
     /** @brief The voices, for tests and displays. */
-    const Vocal& vocal() const { return vocal_; }
+    const Vocal& vocal() const { return m_vocal; }
     /** @brief True while a stutter replaces the melodic bus (tests). */
-    bool stuttering() const { return stutter_.active(); }
+    bool stuttering() const { return m_stutter.active(); }
     /** @brief The SFX strip's modulation chain (tests: the event motion in force). */
-    const PsyFxChain& sfxChain() const { return sfxFx_; }
+    const PsyFxChain& sfxChain() const { return m_sfxFx; }
     /** @brief Samples by which the output lags the events (the limiter's lookahead; 0 when it is off). */
-    int latencySamples() const { return limiterOn_ ? limiter_.latency() : 0; }
+    int latencySamples() const { return m_limiterOn ? m_limiter.latency() : 0; }
     /** @brief The meter on the master output (audio thread; read it when not processing). */
-    LoudnessReading meter() const { return meter_.read(); }
+    LoudnessReading meter() const { return m_meter.read(); }
     /** @brief Restarts the meter. */
-    void resetMeter() { meter_.reset(); }
+    void resetMeter() { m_meter.reset(); }
     /** @brief Gain reduction of the bus compressor and the limiter at the end of the last block, dB. */
-    float compReduction() const { return comp_.reduction(); }
-    float limiterReduction() const { return limiter_.reduction(); }   ///< @copydoc compReduction
+    float compReduction() const { return m_comp.reduction(); }
+    float limiterReduction() const { return m_limiter.reduction(); }   ///< @copydoc compReduction
     /** @brief Effective value of a parameter as last applied (audio thread view). */
     float effective(int id) const;
     /**
@@ -302,16 +302,16 @@ public:
      */
     void playedValues(float* out) const;
     /** @brief The key's pitch class the engine plays in (0 = C), as last applied (audio thread view; the scopes). */
-    int keyRoot() const { return keyRoot_; }
-    /** @brief The scale the engine plays in (index into kScaleSteps / kScaleNames), as last applied. */
-    int scale() const { return scale_; }
+    int keyRoot() const { return m_keyRoot; }
+    /** @brief The scale the engine plays in (index into ScaleSteps / ScaleNames), as last applied. */
+    int scale() const { return m_scale; }
 
 private:
-    int jamTranspose_ = 0;       ///< the family jam's transposition of the melodic voices (setJam)
-    bool jamRhythmOut_ = false;  ///< the family jam: kick and bass out for the leader's break (setJam)
+    int m_jamTranspose = 0;       ///< the family jam's transposition of the melodic voices (setJam)
+    bool m_jamRhythmOut = false;  ///< the family jam: kick and bass out for the leader's break (setJam)
     /** @brief Moves every running offset ramp to the current chunk's beat. */
     void advanceRamps();
-    /** @brief Recomputes the effective values that moved and hands them to every generator (Engine.h, raw_). */
+    /** @brief Recomputes the effective values that moved and hands them to every generator (Engine.h, m_raw). */
     void applyParams();
     /** @brief Renders @p count samples at @p offset: every generator, the strips, the sends and the master. */
     void renderSegment(float* L, float* R, int offset, int count);
@@ -322,138 +322,138 @@ private:
     /** @brief Seconds from the kick to the bass's first slot of the beat (the phase lock's target). */
     double firstSlotSeconds() const;
 
-    ParamStore params_;   ///< the knobs (the host's and the command line's)
-    double sr_ = 48000.0;   ///< sample rate
-    Quality quality_;   ///< what each part may spend (Quality.h)
+    ParamStore m_params;   ///< the knobs (the host's and the command line's)
+    double m_sr = 48000.0;   ///< sample rate
+    Quality m_quality;   ///< what each part may spend (Quality.h)
 
-    TempoMap tempo_;   ///< the tempo ramps, when a render has them
-    bool useTempoMap_ = false;   ///< true: beats per sample follow tempo_, not compose.bpm
+    TempoMap m_tempo;   ///< the tempo ramps, when a render has them
+    bool m_useTempoMap = false;   ///< true: beats per sample follow m_tempo, not compose.bpm
 
-    EventRing<NoteEvent> notes_;   ///< notes from the composer, in beat order
-    EventRing<ControlEvent> controls_;   ///< control events from the composer, in beat order
-    EventRing<ControlEvent> immediate_;    ///< pushImmediate()
-    uint64_t samples_ = 0;   ///< samples rendered since the last reset
-    double chunkBeat_ = 0.0;   ///< the beat at the start of the current 32-sample chunk
-    double beatsPerSample_ = 0.0;   ///< the tempo of the current chunk
-    int chunkPos_ = 0;   ///< samples of the current chunk already rendered
-    std::atomic<double> beatNow_{ 0.0 };   ///< the beat reached, for other threads (beatPosition)
+    EventRing<NoteEvent> m_notes;   ///< notes from the composer, in beat order
+    EventRing<ControlEvent> m_controls;   ///< control events from the composer, in beat order
+    EventRing<ControlEvent> m_immediate;    ///< pushImmediate()
+    uint64_t m_samples = 0;   ///< samples rendered since the last reset
+    double m_chunkBeat = 0.0;   ///< the beat at the start of the current 32-sample chunk
+    double m_beatsPerSample = 0.0;   ///< the tempo of the current chunk
+    int m_chunkPos = 0;   ///< samples of the current chunk already rendered
+    std::atomic<double> m_beatNow{ 0.0 };   ///< the beat reached, for other threads (beatPosition)
 
     /** @brief State of a parameter's variation. */
     struct Variation {
-        float offset = 0.0f;               ///< current normalised offset
-        float from = 0.0f;   ///< the ramp's start
-        float to = 0.0f;   ///< the ramp's end
-        double start = 0.0;   ///< where the ramp begins, beats
-        double length = 0.0;   ///< how long it takes, beats; 0: not ramping
-        float override = -1.0f;            ///< discrete override, < 0 = none
-        float base = std::numeric_limits<float>::quiet_NaN();   ///< ControlEvent::Kind::Base: the value in place of the knob, NaN = none
+        float m_offset = 0.0f;               ///< current normalised offset
+        float m_from = 0.0f;   ///< the ramp's start
+        float m_to = 0.0f;   ///< the ramp's end
+        double m_start = 0.0;   ///< where the ramp begins, beats
+        double m_length = 0.0;   ///< how long it takes, beats; 0: not ramping
+        float m_override = -1.0f;            ///< discrete override, < 0 = none
+        float m_base = std::numeric_limits<float>::quiet_NaN();   ///< ControlEvent::Kind::Base: the value in place of the knob, NaN = none
     };
-    std::unique_ptr<Variation[]> var_;   ///< every parameter's offset and override
-    std::vector<float> eff_;               ///< effective values, indexed by global id
+    std::unique_ptr<Variation[]> m_var;   ///< every parameter's offset and override
+    std::vector<float> m_eff;               ///< effective values, indexed by global id
     /**
      * @name What applyParams() can skip (23.09.2026, round "Planung + applyParams")
      * VTune put applyParams at 6 % of a render: every 32-sample chunk and every control event recomputed all ~3000
      * effective values, each continuous one with an offset through fromNormalised(toNormalised()) -- powf and log
      * for every logarithmic knob -- and a track start dispatches hundreds of events at one instant, each of them a
      * full pass. Now a value is recomputed only when its knob, its offset or override, or its own-sound switch
-     * moved (raw_ keeps the result before Kick::constrain, which edits eff_ in place), and events at one sample
+     * moved (m_raw keeps the result before Kick::constrain, which edits m_eff in place), and events at one sample
      * are applied once, before anything reads them. The output is the same to the bit (checked on three sets).
      * @{ */
-    std::vector<float> raw_;               ///< effective values before the kick's constraints, per id
-    std::vector<float> rawKnob_;           ///< the knob value raw_ was computed from
-    std::vector<uint8_t> rawDirty_;        ///< 1: the offset or override moved since raw_ was computed
-    bool ownSeen_[9] = {};                 ///< the own-sound switches as the last pass saw them
-    bool rawValid_ = false;                ///< false: recompute everything (construction, reset)
-    bool paramsPending_ = false;           ///< control events dispatched, applyParams() not yet run for them
-    double polyBpm_[kPolyInstances] = {};  ///< the tempo each voice's last Poly::update() was given
+    std::vector<float> m_raw;               ///< effective values before the kick's constraints, per id
+    std::vector<float> m_rawKnob;           ///< the knob value m_raw was computed from
+    std::vector<uint8_t> m_rawDirty;        ///< 1: the offset or override moved since m_raw was computed
+    bool m_ownSeen[9] = {};                 ///< the own-sound switches as the last pass saw them
+    bool m_rawValid = false;                ///< false: recompute everything (construction, reset)
+    bool m_paramsPending = false;           ///< control events dispatched, applyParams() not yet run for them
+    double m_polyBpm[PolyInstances] = {};  ///< the tempo each voice's last Poly::update() was given
     /** @brief Runs applyParams() if control events are waiting for it (before a note, a render or the next chunk). */
-    void flushParams() { if (paramsPending_) applyParams(); }
+    void flushParams() { if (m_paramsPending) applyParams(); }
     /** @} */
 
-    Kick kick_;   ///< the kick
-    Bass bass_;   ///< the bass
-    PercKit perc_;   ///< the twelve percussion lanes
-    int keyRoot_ = 6;   ///< the key's pitch class (0 = C)
-    int scale_ = 1;   ///< the scale (index into kScaleSteps)
-    bool percMute_ = false;   ///< mix.perc_mute
-    float percGain_ = 1.0f;   ///< the percussion strip's gain (mute and level)
-    std::vector<float> percL_;   ///< the percussion's output of a segment, left
-    std::vector<float> percR_;   ///< ... right
-    int pattern_ = 0;   ///< compose.bass_pattern, for the bass's first slot (firstSlotSeconds)
+    Kick m_kick;   ///< the kick
+    Bass m_bass;   ///< the bass
+    PercKit m_perc;   ///< the twelve percussion lanes
+    int m_keyRoot = 6;   ///< the key's pitch class (0 = C)
+    int m_scale = 1;   ///< the scale (index into ScaleSteps)
+    bool m_percMute = false;   ///< mix.perc_mute
+    float m_percGain = 1.0f;   ///< the percussion strip's gain (mute and level)
+    std::vector<float> m_percL;   ///< the percussion's output of a segment, left
+    std::vector<float> m_percR;   ///< ... right
+    int m_pattern = 0;   ///< compose.bass_pattern, for the bass's first slot (firstSlotSeconds)
     /**
      * @brief The first sounding bass slot of the current beat in beats, or <= 0 for "derive it".
      *
      * Set by a `ControlEvent::Kind::BassSlot` and read by firstSlotSeconds(). While it is <= 0 --
      * which it is on every bar the composer plays from a pattern family, because such a bar sends a
-     * clearing event of -1 -- the engine derives the slot from `firstBassSlot(pattern_)` exactly as
+     * clearing event of -1 -- the engine derives the slot from `firstBassSlot(m_pattern)` exactly as
      * it did before 16.09.2026, so a Pattern render is bit-identical to every earlier one. That
      * clearing event is what lets `compose.bass_rhythm` be switched back *during* playback: without
      * it the engine could not tell "nothing sent yet" from "nothing sent any more".
      */
-    double slotBeats_ = -1.0;
-    int lockMode_ = 2;   ///< bass.kick_lock (KickLock): who follows whom in the phase lock
-    double bassPhase_ = 0.0;               ///< fundamental phase for the next bass note
-    bool kickMute_ = false;   ///< mix.kick_mute
-    bool bassMute_ = false;   ///< mix.bass_mute
-    float masterGain_ = 1.0f;   ///< master.level, linear
-    float ceiling_ = 1.0f;   ///< master.gain (with Auto Gain's offset) and master.ceiling, linear
-    StemTap* tap_ = nullptr;               ///< where the stems go (setStemTap), null = nowhere
-    bool metering_ = false;                ///< setMetering()
-    float meterPeak_[kNumParts] = {};      ///< takeMeters(): peak per part
-    double meterSum_[kNumParts] = {};      ///< takeMeters(): sum of squares per part
-    int meterCount_ = 0;                   ///< takeMeters(): samples gathered
+    double m_slotBeats = -1.0;
+    int m_lockMode = 2;   ///< bass.kick_lock (KickLock): who follows whom in the phase lock
+    double m_bassPhase = 0.0;               ///< fundamental phase for the next bass note
+    bool m_kickMute = false;   ///< mix.kick_mute
+    bool m_bassMute = false;   ///< mix.bass_mute
+    float m_masterGain = 1.0f;   ///< master.level, linear
+    float m_ceiling = 1.0f;   ///< master.gain (with Auto Gain's offset) and master.ceiling, linear
+    StemTap* m_tap = nullptr;               ///< where the stems go (setStemTap), null = nowhere
+    bool m_metering = false;                ///< setMetering()
+    float m_meterPeak[NumParts] = {};      ///< takeMeters(): peak per part
+    double m_meterSum[NumParts] = {};      ///< takeMeters(): sum of squares per part
+    int m_meterCount = 0;                   ///< takeMeters(): samples gathered
     /** @brief Adds one stereo sample of part @p part to the meters. */
     void meterAdd(int part, float l, float r)
     {
         const float a = std::max(std::fabs(l), std::fabs(r));
-        if (a > meterPeak_[part]) meterPeak_[part] = a;
-        meterSum_[part] += 0.5 * (static_cast<double>(l) * l + static_cast<double>(r) * r);
+        if (a > m_meterPeak[part]) m_meterPeak[part] = a;
+        m_meterSum[part] += 0.5 * (static_cast<double>(l) * l + static_cast<double>(r) * r);
     }
-    std::vector<int8_t> ownOf_;            ///< per parameter: which own-sound switch governs it (0 kick .. 8 drone), -1 none
-    int liveTarget_[128];                  ///< per pitch: the voice a played note went to (0 acid, 1.. poly, 7 bass), -1 none
-    bool live_ = false;                    ///< setLive: the keyboard's Replace and the composer switch act
-    unsigned livePlayed_ = 0;              ///< voices the keyboard has played ("By channel" replaces from the first note)
+    std::vector<int8_t> m_ownOf;            ///< per parameter: which own-sound switch governs it (0 kick .. 8 drone), -1 none
+    int m_liveTarget[128];                  ///< per pitch: the voice a played note went to (0 acid, 1.. poly, 7 bass), -1 none
+    bool m_live = false;                    ///< setLive: the keyboard's Replace and the composer switch act
+    unsigned m_livePlayed = 0;              ///< voices the keyboard has played ("By channel" replaces from the first note)
     /** @brief The voice the keyboard plays on @p channel (0 acid, 1 .. 6 poly, 7 bass, 8 kit), -1 none. */
     int keyboardTarget(int channel) const;
-    bool clip_ = true;   ///< master.clip: the safety clip after the limiter
-    TanhAdaa clipL_;   ///< the safety clip, left (antiderivative anti-aliased)
-    TanhAdaa clipR_;   ///< ... right
+    bool m_clip = true;   ///< master.clip: the safety clip after the limiter
+    TanhAdaa m_clipL;   ///< the safety clip, left (antiderivative anti-aliased)
+    TanhAdaa m_clipR;   ///< ... right
 
-    std::vector<float> kickBuf_;   ///< the kick's output of a segment
-    std::vector<float> bassBuf_;   ///< the bass's output of a segment
+    std::vector<float> m_kickBuf;   ///< the kick's output of a segment
+    std::vector<float> m_bassBuf;   ///< the bass's output of a segment
 
-    Acid acid_;   ///< the acid line
-    Poly poly_[kPolyInstances];   ///< the six polyphonic voices, PolyInstance order
-    Sfx sfx_;   ///< the effect generator
-    std::vector<float> acidL_;   ///< the acid's output of a segment, left
-    std::vector<float> acidR_;   ///< ... right
-    std::vector<float> polyL_[kPolyInstances];   ///< each polyphonic voice's output of a segment, left
-    std::vector<float> polyR_[kPolyInstances];   ///< ... right
-    std::vector<float> sfxL_;   ///< the effects' output of a segment, left
-    std::vector<float> sfxR_;   ///< ... right
+    Acid m_acid;   ///< the acid line
+    Poly m_poly[PolyInstances];   ///< the six polyphonic voices, PolyInstance order
+    Sfx m_sfx;   ///< the effect generator
+    std::vector<float> m_acidL;   ///< the acid's output of a segment, left
+    std::vector<float> m_acidR;   ///< ... right
+    std::vector<float> m_polyL[PolyInstances];   ///< each polyphonic voice's output of a segment, left
+    std::vector<float> m_polyR[PolyInstances];   ///< ... right
+    std::vector<float> m_sfxL;   ///< the effects' output of a segment, left
+    std::vector<float> m_sfxR;   ///< ... right
     /// The wandering trajectory's reverb-send share (20.09.2026, round "wandering-fx"; Sfx.h,
-    /// sfx.wander): energy the dry sfxL_/sfxR_ above lose as an event nears its tail, added straight into
+    /// sfx.wander): energy the dry m_sfxL/m_sfxR above lose as an event nears its tail, added straight into
     /// the plain hall's send in renderSegment() -- silent whenever sfx.wander is off.
-    std::vector<float> sfxWetL_, sfxWetR_;   ///< ... right
+    std::vector<float> m_sfxWetL, m_sfxWetR;   ///< ... right
 
-    Texture texture_;   ///< the shamanic bed
-    Vocal vocal_;   ///< the voices
-    std::vector<float> texL_;   ///< the bed's output of a segment, left
-    std::vector<float> texR_;   ///< ... right
-    std::vector<float> vocL_;   ///< the voices' output of a segment, left
-    std::vector<float> vocR_;   ///< ... right
-    std::vector<float> vocThrow_;   ///< the voices' send into the delay throw
-    std::vector<float> subBuf_;   ///< the effects' sub layer (the sub drop), mono
-    std::vector<float> throwIn_;   ///< the delay throw's input
-    std::vector<float> sendL_;   ///< the send into the mixer's effects, left
-    std::vector<float> sendR_;   ///< the send into the mixer's effects, right
-    std::vector<float> bedSendL_;   ///< the bed's share of the modulation send, left
-    std::vector<float> bedSendR_;   ///< ... right
+    Texture m_texture;   ///< the shamanic bed
+    Vocal m_vocal;   ///< the voices
+    std::vector<float> m_texL;   ///< the bed's output of a segment, left
+    std::vector<float> m_texR;   ///< ... right
+    std::vector<float> m_vocL;   ///< the voices' output of a segment, left
+    std::vector<float> m_vocR;   ///< ... right
+    std::vector<float> m_vocThrow;   ///< the voices' send into the delay throw
+    std::vector<float> m_subBuf;   ///< the effects' sub layer (the sub drop), mono
+    std::vector<float> m_throwIn;   ///< the delay throw's input
+    std::vector<float> m_sendL;   ///< the send into the mixer's effects, left
+    std::vector<float> m_sendR;   ///< the send into the mixer's effects, right
+    std::vector<float> m_bedSendL;   ///< the bed's share of the modulation send, left
+    std::vector<float> m_bedSendR;   ///< ... right
     /** @name The Field track (27.09.2026; FieldPlayer.h): the sampler on its own strip, and the NASA shots on the SFX strip's
      *  @{ */
-    FieldPlayer field_;                        ///< the field recordings' sampler
-    FieldShot shot_;                           ///< the NASA shots (SfxType::SpaceShot)
-    std::vector<float> fieldL_, fieldR_;       ///< the sampler's output of a segment
+    FieldPlayer m_field;                        ///< the field recordings' sampler
+    FieldShot m_shot;                           ///< the NASA shots (SfxType::SpaceShot)
+    std::vector<float> m_fieldL, m_fieldR;       ///< the sampler's output of a segment
     /** @} */
 
     /**
@@ -462,65 +462,65 @@ private:
      *        StripAcid .. StripStab is the melodic bus a stutter repeats: acid, the two leads, arp and stab;
      *        pad and drone keep holding underneath the glitch.
      */
-    enum Strip : int { StripPerc = 0, StripAcid, StripLead, StripCounter, StripArp, StripStab, StripPad, StripDrone,
-                       StripSfx, StripTexture, StripVocal, StripField, StripCount };
-    static_assert(StripDrone - StripLead + 1 == kPolyInstances && StripStab - StripLead == static_cast<int>(PolyInstance::Stab),
+    enum StripE : int { STRIP_PERC = 0, STRIP_ACID, STRIP_LEAD, STRIP_COUNTER, STRIP_ARP, STRIP_STAB, STRIP_PAD, STRIP_DRONE,
+                       STRIP_SFX, STRIP_TEXTURE, STRIP_VOCAL, STRIP_FIELD, STRIP_COUNT };
+    static_assert(STRIP_DRONE - STRIP_LEAD + 1 == PolyInstances && STRIP_STAB - STRIP_LEAD == static_cast<int>(PolyInstanceE::STAB),
                   "the polyphonic strips must follow PolyInstance");
-    float stripGain_[StripCount] = {};   ///< each strip's gain (mute and level)
-    float stripRoom_[StripCount] = {};   ///< each strip's room send
-    float stripHall_[StripCount] = {};   ///< each strip's hall send
-    float stripPlate_[StripCount] = {};   ///< each strip's plate send (the middle plane, 25.09.2026)
-    float stripFx_[StripCount] = {};       ///< send into the modulation chain (texture and vocal only)
+    float m_stripGain[STRIP_COUNT] = {};   ///< each strip's gain (mute and level)
+    float m_stripRoom[STRIP_COUNT] = {};   ///< each strip's room send
+    float m_stripHall[STRIP_COUNT] = {};   ///< each strip's hall send
+    float m_stripPlate[STRIP_COUNT] = {};   ///< each strip's plate send (the middle plane, 25.09.2026)
+    float m_stripFx[STRIP_COUNT] = {};       ///< send into the modulation chain (texture and vocal only)
 
-    PsyFxChain sfxFx_;   ///< the SFX strip's insert chain
-    PsyFxChain sendFx_;   ///< the send chain (the voices')
+    PsyFxChain m_sfxFx;   ///< the SFX strip's insert chain
+    PsyFxChain m_sendFx;   ///< the send chain (the voices')
     /**
-     * @brief The bed's modulation send (24.09.2026): the same chain and knobs as sendFx_, without the spoken
+     * @brief The bed's modulation send (24.09.2026): the same chain and knobs as m_sendFx, without the spoken
      *        phrases' frequency shift.
      *
      * A frequency shifter moves every partial by the same number of hertz, so it turns any pitched sound
-     * inharmonic. Every spoken phrase shifts the send chain by 8 to 25 Hz (dispatch, sendMotion_) -- meant for
+     * inharmonic. Every spoken phrase shifts the send chain by 8 to 25 Hz (dispatch, m_sendMotion) -- meant for
      * the voice, which is speech and has no pitch to lose -- and the bed shared that chain: under the intro's
      * phrases the didgeridoo's tonic drone got a copy of itself a few hertz off every harmonic. The user,
      * asked to have every voice checked for such detunings after the pad's: "Bitte untersuche, ob es zu solchen
      * Verstimmungen auch in den anderen Stimmen kommen kann". Flanger and phaser, which only colour, stay.
      */
-    PsyFxChain bedFx_;
+    PsyFxChain m_bedFx;
     /** @name The per-voice modulation insert (20.09.2026, round "dialogue"; Params.h, PolyMod)
      *  One flanger and one phaser per polyphonic instance, behind the voice and before its strip gain,
      *  so that the comb / flanger / phaser colour the user's effect list asks for is a property of the
      *  *voice* and not of the effects bus alone. At poly.mod = Off neither is ticked and the strip is
      *  sample for sample the strip without inserts.
      *  @{ */
-    Flanger polyFlanger_[kPolyInstances];   ///< each voice's flanger (and comb)
-    Phaser  polyPhaser_[kPolyInstances];   ///< each voice's phaser
-    int     polyMod_[kPolyInstances] = {};   ///< each voice's poly.mod (PolyMod)
+    Flanger m_polyFlanger[PolyInstances];   ///< each voice's flanger (and comb)
+    Phaser  m_polyPhaser[PolyInstances];   ///< each voice's phaser
+    int     m_polyMod[PolyInstances] = {};   ///< each voice's poly.mod (PolyMod)
     /** @} */
-    float sendReturn_ = 0.7f;              ///< psyfx.return
-    float motion_ = 0.7f;                  ///< psyfx.motion: how far events move the chains
+    float m_sendReturn = 0.7f;              ///< psyfx.return
+    float m_motion = 0.7f;                  ///< psyfx.motion: how far events move the chains
     /**
      * @brief The event motion of one chain: which event last moved it, from when and for how long
      *        (in beats), and how far. Evaluated at every chunk start from the chunk's beat, so the motion
      *        is a function of the score alone.
      */
     struct Motion {
-        double start = 0.0;     ///< the beat the event began
-        double length = 0.0;    ///< how long it moves the chain, beats
-        float shiftHz = 0.0f;   ///< how far it shifts, Hz
-        float flange = 0.0f;    ///< how far it moves the flanger
+        double m_start = 0.0;     ///< the beat the event began
+        double m_length = 0.0;    ///< how long it moves the chain, beats
+        float m_shiftHz = 0.0f;   ///< how far it shifts, Hz
+        float m_flange = 0.0f;    ///< how far it moves the flanger
     };
-    Motion sfxShift_;   ///< the SFX chain's shift strand
-    Motion sfxFlange_;   ///< the SFX chain's flanger strand
-    Motion sendMotion_;   ///< the send chain's motion
+    Motion m_sfxShift;   ///< the SFX chain's shift strand
+    Motion m_sfxFlange;   ///< the SFX chain's flanger strand
+    Motion m_sendMotion;   ///< the send chain's motion
     /** @brief Evaluates the effect events' motion (shift and flanger) for the current chunk and hands it to the chains. */
     void applyMotion();
 
-    TempoDelay throw_;                     ///< the vocal's delay throw
-    float throwSend_ = 0.6f;   ///< vocal.throw_send
-    Stutter stutter_;                      ///< buffer repeat of the melodic bus
-    Ducker subDuck_;                       ///< the kick's hold on the sub drop
-    Ducker duck_[StripCount];   ///< each strip's duck under the kick
-    Ducker returnDuck_;   ///< the returns' duck under the kick
+    TempoDelay m_throw;                     ///< the vocal's delay throw
+    float m_throwSend = 0.6f;   ///< vocal.throw_send
+    Stutter m_stutter;                      ///< buffer repeat of the melodic bus
+    Ducker m_subDuck;                       ///< the kick's hold on the sub drop
+    Ducker m_duck[STRIP_COUNT];   ///< each strip's duck under the kick
+    Ducker m_returnDuck;   ///< the returns' duck under the kick
     /** @name The mix guide's two ducks that are not the kick's (25.09.2026)
      *  The counter gives way to the lead (mix.counter_duck, 1 .. 3 dB, back in 50 ms), and the pad's presence band
      *  -- a bell at 1.2 kHz, an octave and a half wide, over 500 Hz .. 3 kHz -- drops by mix.pad_lead_duck while a
@@ -528,95 +528,95 @@ private:
      *  stepping back exactly where and while the lead speaks. Both are driven by the lead's notes, as the kick's
      *  ducks are by the kick's: deterministic, no detector.
      *  @{ */
-    Ducker leadDuck_;             ///< the counter's gain under the lead
-    Ducker padBandDuck_;          ///< the pad's presence band under the lead
-    Svf padBandL_, padBandR_;     ///< the band's filters (a bandpass whose share is subtracted)
-    float counterDuck_ = 0.0f;    ///< mix.counter_duck
-    float padBandCut_ = 1.0f;     ///< linear gain of the band at full depth (mix.pad_lead_duck)
+    Ducker m_leadDuck;             ///< the counter's gain under the lead
+    Ducker m_padBandDuck;          ///< the pad's presence band under the lead
+    Svf m_padBandL, m_padBandR;     ///< the band's filters (a bandpass whose share is subtracted)
+    float m_counterDuck = 0.0f;    ///< mix.counter_duck
+    float m_padBandCut = 1.0f;     ///< linear gain of the band at full depth (mix.pad_lead_duck)
     /** @} */
-    TranceGate gate_[kPolyInstances];   ///< each voice's trance gate
-    bool  gateOn_[kPolyInstances] = {};   ///< poly.gate per voice
-    int   gatePattern_[kPolyInstances] = {};   ///< poly.gate_pattern per voice
-    float gateDepth_[kPolyInstances] = {};   ///< the gate's depth per voice
-    float gateDuty_[kPolyInstances] = {};   ///< the gate's duty per voice
-    float gateTone_[kPolyInstances] = {};   ///< the gate's tone per voice
-    double gateAttack_[kPolyInstances] = {};   ///< the gate's attack per voice, beats
-    double gateRelease_[kPolyInstances] = {};   ///< the gate's release per voice, beats
+    TranceGate m_gate[PolyInstances];   ///< each voice's trance gate
+    bool  m_gateOn[PolyInstances] = {};   ///< poly.gate per voice
+    int   m_gatePattern[PolyInstances] = {};   ///< poly.gate_pattern per voice
+    float m_gateDepth[PolyInstances] = {};   ///< the gate's depth per voice
+    float m_gateDuty[PolyInstances] = {};   ///< the gate's duty per voice
+    float m_gateTone[PolyInstances] = {};   ///< the gate's tone per voice
+    double m_gateAttack[PolyInstances] = {};   ///< the gate's attack per voice, beats
+    double m_gateRelease[PolyInstances] = {};   ///< the gate's release per voice, beats
 
-    Reverb room_;   ///< the room (send)
-    Reverb hall_;   ///< the hall (send)
+    Reverb m_room;   ///< the room (send)
+    Reverb m_hall;   ///< the hall (send)
     /** @brief The plate (25.09.2026): the middle plane of depth -- acid, counter, arp and stab -- between the dry front
      *         and the hall; short, bright, its pre-delay on the tempo grid (fx.plate_*). */
-    Reverb plate_;
-    float plateReturn_ = 0.0f;   ///< fx.plate_return, linear
-    float plateToHall_ = 0.0f;   ///< fx.plate_to_hall: the plate's output share that feeds the far room (the addon)
+    Reverb m_plate;
+    float m_plateReturn = 0.0f;   ///< fx.plate_return, linear
+    float m_plateToHall = 0.0f;   ///< fx.plate_to_hall: the plate's output share that feeds the far room (the addon)
     /** @name Distance (25.09.2026, the Dark-Ambient addon)
      *  One cue for the five of distance, per polyphonic voice: poly.distance against the voice's own plane
-     *  (kDistancePlane) moves its level, a low pass, its plate send and its width together (distanceCue), so a
+     *  (DistancePlane) moves its level, a low pass, its plate send and its width together (distanceCue), so a
      *  voice is never near by one cue and far by another -- the addon's "half assignment" that sticks to the
      *  speakers. At the default the deltas are nil and nothing is processed.
      *  @{ */
-    float distGain_[kPolyInstances] = {};       ///< linear gain against the plane's
-    float distWet_[kPolyInstances] = {};        ///< plate send added (may take away)
-    float distWidth_[kPolyInstances] = {};      ///< side gain against the plane's
-    bool distLpOn_[kPolyInstances] = {};        ///< the low pass is engaged (the voice is further than its plane)
-    Svf distLpL_[kPolyInstances], distLpR_[kPolyInstances];   ///< the low passes
+    float m_distGain[PolyInstances] = {};       ///< linear gain against the plane's
+    float m_distWet[PolyInstances] = {};        ///< plate send added (may take away)
+    float m_distWidth[PolyInstances] = {};      ///< side gain against the plane's
+    bool m_distLpOn[PolyInstances] = {};        ///< the low pass is engaged (the voice is further than its plane)
+    Svf m_distLpL[PolyInstances], m_distLpR[PolyInstances];   ///< the low passes
     /** @} */
-    float slowWidth_[kPolyInstances] = {};      ///< poly.slow_mod, for the width's free movement (Engine.cpp)
-    int monitor_ = 0;                           ///< master.monitor
-    float slowSide_ = 0.0f;                     ///< the free width movement's sine, renewed every 32 samples
-    Svf monLp1_;   ///< the sub monitor's low pass at 80 Hz: first stage
-    Svf monLp2_;   ///< ... second stage
-    std::vector<float> plateInL_;   ///< the plate's send, left
-    std::vector<float> plateInR_;   ///< ... right
-    std::vector<float> plateOutL_;   ///< the plate's return, left
-    std::vector<float> plateOutR_;   ///< ... right
-    float roomReturn_ = 0.5f;   ///< the room's return, linear
-    float hallReturn_ = 0.5f;   ///< the hall's return, linear
-    std::vector<float> roomInL_;   ///< the room's input of a segment, left
-    std::vector<float> roomInR_;   ///< ... right
-    std::vector<float> hallInL_;   ///< the hall's input, left
-    std::vector<float> hallInR_;   ///< ... right
-    std::vector<float> roomOutL_;   ///< the room's output, left
-    std::vector<float> roomOutR_;   ///< ... right
-    std::vector<float> hallOutL_;   ///< the hall's output, left
-    std::vector<float> hallOutR_;   ///< ... right
+    float m_slowWidth[PolyInstances] = {};      ///< poly.slow_mod, for the width's free movement (Engine.cpp)
+    int m_monitor = 0;                           ///< master.monitor
+    float m_slowSide = 0.0f;                     ///< the free width movement's sine, renewed every 32 samples
+    Svf m_monLp1;   ///< the sub monitor's low pass at 80 Hz: first stage
+    Svf m_monLp2;   ///< ... second stage
+    std::vector<float> m_plateInL;   ///< the plate's send, left
+    std::vector<float> m_plateInR;   ///< ... right
+    std::vector<float> m_plateOutL;   ///< the plate's return, left
+    std::vector<float> m_plateOutR;   ///< ... right
+    float m_roomReturn = 0.5f;   ///< the room's return, linear
+    float m_hallReturn = 0.5f;   ///< the hall's return, linear
+    std::vector<float> m_roomInL;   ///< the room's input of a segment, left
+    std::vector<float> m_roomInR;   ///< ... right
+    std::vector<float> m_hallInL;   ///< the hall's input, left
+    std::vector<float> m_hallInR;   ///< ... right
+    std::vector<float> m_roomOutL;   ///< the room's output, left
+    std::vector<float> m_roomOutR;   ///< ... right
+    std::vector<float> m_hallOutL;   ///< the hall's output, left
+    std::vector<float> m_hallOutR;   ///< ... right
     /**
      * @name The gated hall (20.09.2026, round "reverb"; A2-gated-reverb.md)
      * A second, dedicated hall a voice's hall_send is routed into instead of the plain one when its own
      * `hall_gate` is on (poly.hall_gate, acid.hall_gate) -- so gating is an independent per-voice choice
      * and never touches the plain hall's tail for the voices that leave it alone. Recipe is fixed
      * (Engine.cpp, applyParams()): the brief names a result ("a big hall ... ducked ... cut hard"), not
-     * a set of knobs. hallGateOn_ is indexed like Strip (Reverb.h `Strip` below), so an off entry for a
+     * a set of knobs. m_hallGateOn is indexed like Strip (Reverb.h `Strip` below), so an off entry for a
      * strip that never sets it (perc, sfx, texture, vocal) reads false, its default.
      * @{
      */
-    Reverb hallGate_;
-    std::vector<float> hallGateInL_, hallGateInR_, hallGateOutL_, hallGateOutR_;   ///< the gated hall's input and output of a segment
-    bool hallGateOn_[StripCount] = {};   ///< per strip: its hall send goes to the gated hall
+    Reverb m_hallGate;
+    std::vector<float> m_hallGateInL, m_hallGateInR, m_hallGateOutL, m_hallGateOutR;   ///< the gated hall's input and output of a segment
+    bool m_hallGateOn[STRIP_COUNT] = {};   ///< per strip: its hall send goes to the gated hall
     /// closeBeats_/holdBeats_/openBeats_ converted each chunk from fixed ms constants at the current
     /// tempo (Reverb::barGate() takes beats, like TranceGate::open() -- the same reason: tempo ramps
     /// between chunks, beats do not drift with it).
-    double hallGateCloseBeats_ = 0.001, hallGateHoldBeats_ = 0.0, hallGateOpenBeats_ = 0.001;
+    double m_hallGateCloseBeats = 0.001, m_hallGateHoldBeats = 0.0, m_hallGateOpenBeats = 0.001;
     /** @} */
 
-    BusCompressor comp_;   ///< the master's bus compressor
-    Svf sideHp1_;   ///< mono below (master.mono_below): the side's high pass, first stage
-    Svf sideHp2_;   ///< ... and the second (fourth-order Butterworth together)
-    HalfbandUp<float> clipUpL_;   ///< the clipper's 2x upsampling, left
-    HalfbandUp<float> clipUpR_;   ///< ... right
-    HalfbandDown<float> clipDownL_;   ///< its way back down, left
-    HalfbandDown<float> clipDownR_;   ///< ... right
-    bool clipperOn_ = true;   ///< master.clipper
-    float clipperT_ = 1.0f;   ///< the clipper's threshold, linear
+    BusCompressor m_comp;   ///< the master's bus compressor
+    Svf m_sideHp1;   ///< mono below (master.mono_below): the side's high pass, first stage
+    Svf m_sideHp2;   ///< ... and the second (fourth-order Butterworth together)
+    HalfbandUp<float> m_clipUpL;   ///< the clipper's 2x upsampling, left
+    HalfbandUp<float> m_clipUpR;   ///< ... right
+    HalfbandDown<float> m_clipDownL;   ///< its way back down, left
+    HalfbandDown<float> m_clipDownR;   ///< ... right
+    bool m_clipperOn = true;   ///< master.clipper
+    float m_clipperT = 1.0f;   ///< the clipper's threshold, linear
     /// The upper end of the programme (Dsp.h, BandLimit). It sits after the clipper and before the
     /// limiter on purpose: the limiter's ceiling is a true-peak claim, and a true-peak estimate is a
     /// band-limited reconstruction, so the limiter has to be handed a signal that lives inside its
     /// own band -- otherwise it reads 0.9 dB low and lets the ceiling through (measured 16.09.2026).
-    BandLimit bandLimitL_, bandLimitR_;   ///< ... right
-    TruePeakLimiter limiter_;   ///< the lookahead true-peak limiter
-    bool limiterOn_ = true;   ///< master.limiter
-    LoudnessMeter meter_;   ///< the output meter (BS.1770)
+    BandLimit m_bandLimitL, m_bandLimitR;   ///< ... right
+    TruePeakLimiter m_limiter;   ///< the lookahead true-peak limiter
+    bool m_limiterOn = true;   ///< master.limiter
+    LoudnessMeter m_meter;   ///< the output meter (BS.1770)
 };
 
 } // namespace phos

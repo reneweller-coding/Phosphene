@@ -23,7 +23,7 @@
  *    have (Filters.h), with the same level trims as the melodic voices; a 24 dB/octave low cut after it, because the depth
  *    rule leaves the range under 100 Hz to kick and bass, and a wind or a river has most of its power there.
  *  - **Modulation.** The synths' block (Modulation.h): a modulation envelope, four LFOs, eight matrix slots onto pitch,
- *    cutoff, resonance, the filter's mode, level and pan (kFieldModDestNames).
+ *    cutoff, resonance, the filter's mode, level and pan (FieldModDestNames).
  *  - **Width and pan** on the voice's output.
  *
  * **Determinism.** The event's own seed (Engine.cpp, from its position and lane) draws the start and the random source,
@@ -47,8 +47,8 @@ namespace phos {
 /** @brief The Field track's sampler (part Field). */
 class FieldPlayer {
 public:
-    static constexpr int kVoices = 3;     ///< events sounding at once (one entering while one releases, and one spare)
-    static constexpr int kControl = 16;   ///< samples between two evaluations of modulation and filter
+    static constexpr int Voices = 3;     ///< events sounding at once (one entering while one releases, and one spare)
+    static constexpr int Control = 16;   ///< samples between two evaluations of modulation and filter
 
     /** @brief Prepares for @p sampleRate; @p seed seeds the LFOs' random shapes. */
     void prepare(double sampleRate, uint64_t seed = 0x46494Cull);
@@ -75,57 +75,57 @@ public:
     /** @brief The library indices the current settings name for layers A and B (-1: none), for a preload. */
     void wantedClips(int& a, int& b) const;
     /** @brief The latest voice's modulation sum per ModDest (the editor's live ring), zero when nothing sounds. */
-    float displayModulation(ModDest d) const;
+    float displayModulation(ModDestE d) const;
 
 private:
     /** @brief One layer of a voice: a recording and a playhead on it. */
     struct Layer {
-        int index = -1;              ///< library index, -1 none
-        FieldClip* clip = nullptr;   ///< held while it plays (acquireFieldClip)
-        bool on = false;             ///< the layer takes part in this event
-        bool done = false;           ///< a layer without a loop has run off its recording's end
-        double p = 0.0;              ///< playhead, in the recording's frames (negative: not placed yet)
-        double start = 0.0;          ///< where it starts once the recording is there (0..1 of the length)
-        double ls = 0.0;   ///< the loop's start, frames (control step)
-        double le = 0.0;   ///< the loop's end, frames
-        double x = 0.0;   ///< the loop's crossfade, frames
-        double ratio = 1.0;          ///< frames per output sample (control step)
-        bool loop = false;           ///< the loop is on (control step)
-        float gain = 1.0f;           ///< its level and share
-        float semis = 0.0f;          ///< its transposition
-        bool reverse = false;        ///< reads backwards
+        int m_index = -1;              ///< library index, -1 none
+        FieldClip* m_clip = nullptr;   ///< held while it plays (acquireFieldClip)
+        bool m_on = false;             ///< the layer takes part in this event
+        bool m_done = false;           ///< a layer without a loop has run off its recording's end
+        double m_p = 0.0;              ///< playhead, in the recording's frames (negative: not placed yet)
+        double m_start = 0.0;          ///< where it starts once the recording is there (0..1 of the length)
+        double m_ls = 0.0;   ///< the loop's start, frames (control step)
+        double m_le = 0.0;   ///< the loop's end, frames
+        double m_x = 0.0;   ///< the loop's crossfade, frames
+        double m_ratio = 1.0;          ///< frames per output sample (control step)
+        bool m_loop = false;           ///< the loop is on (control step)
+        float m_gain = 1.0f;           ///< its level and share
+        float m_semis = 0.0f;          ///< its transposition
+        bool m_reverse = false;        ///< reads backwards
     };
     /** @brief One event. */
     struct Voice {
-        bool on = false;                 ///< sounding
-        int64_t pos = 0;   ///< samples since the onset
-        int64_t length = 1;   ///< the event's length, samples
-        uint64_t age = 0;                ///< trigger order (stealing)
-        float velocity = 1.0f;   ///< the event's velocity
-        float random = 0.0f;   ///< the event's random source
-        float keySemis = 0.0f;   ///< the event's transposition, semitones
-        Layer layer[2];                  ///< A and B
-        Envelope amp;   ///< the amp envelope
-        Envelope filt;   ///< the filter envelope
-        Modulator mod;                   ///< the modulation block
-        Svf svfL;   ///< the state-variable filter, left
-        Svf svfR;   ///< ... right
-        Svf lowL1;   ///< the low cut's first section, left
-        Svf lowR1;   ///< ... right
-        Svf lowL2;   ///< the low cut's second section, left
-        Svf lowR2;   ///< ... right
-        FilterLane laneL;   ///< the circuit model, left
-        FilterLane laneR;   ///< ... right
-        float sums[kModDests] = {};      ///< the modulation's latest sums
+        bool m_on = false;                 ///< sounding
+        int64_t m_pos = 0;   ///< samples since the onset
+        int64_t m_length = 1;   ///< the event's length, samples
+        uint64_t m_age = 0;                ///< trigger order (stealing)
+        float m_velocity = 1.0f;   ///< the event's velocity
+        float m_random = 0.0f;   ///< the event's random source
+        float m_keySemis = 0.0f;   ///< the event's transposition, semitones
+        Layer m_layer[2];                  ///< A and B
+        Envelope m_amp;   ///< the amp envelope
+        Envelope m_filt;   ///< the filter envelope
+        Modulator m_mod;                   ///< the modulation block
+        Svf m_svfL;   ///< the state-variable filter, left
+        Svf m_svfR;   ///< ... right
+        Svf m_lowL1;   ///< the low cut's first section, left
+        Svf m_lowR1;   ///< ... right
+        Svf m_lowL2;   ///< the low cut's second section, left
+        Svf m_lowR2;   ///< ... right
+        FilterLane m_laneL;   ///< the circuit model, left
+        FilterLane m_laneR;   ///< ... right
+        float m_sums[ModDests] = {};      ///< the modulation's latest sums
         // The control step's results.
-        float gainNow = 1.0f;   ///< the level now
-        float panL = 1.0f;   ///< the pan's gain, left
-        float panR = 1.0f;   ///< ... right
-        float pitchMod = 0.0f;   ///< the pitch offset
-        float g = 0.0f;   ///< the circuit model's tan(pi fc / fs)
-        float k = 1.0f;   ///< ... its feedback
-        float mode = 0.0f;   ///< ... its mode
-        float trim = 1.0f;   ///< ... its makeup
+        float m_gainNow = 1.0f;   ///< the level now
+        float m_panL = 1.0f;   ///< the pan's gain, left
+        float m_panR = 1.0f;   ///< ... right
+        float m_pitchMod = 0.0f;   ///< the pitch offset
+        float m_g = 0.0f;   ///< the circuit model's tan(pi fc / fs)
+        float m_k = 1.0f;   ///< ... its feedback
+        float m_mode = 0.0f;   ///< ... its mode
+        float m_trim = 1.0f;   ///< ... its makeup
     };
     /** @brief Sets a layer up for an event (its recording held or asked for). */
     void startLayer(Layer& l, int index, float gain, float semis, bool reverse, double start);
@@ -136,22 +136,22 @@ private:
     /** @brief A voice's control step: the modulation, the filter's coefficients, the layers' loops and ratios. */
     void control(Voice& v, int64_t at, double beat);
 
-    double sr_ = 48000.0;            ///< sample rate
-    Voice voice_[kVoices];           ///< the events
-    uint64_t counter_ = 0;           ///< triggers so far (the voices' age)
-    int64_t at_ = 0;                 ///< samples rendered since the last reset (the LFOs' clock)
-    float v_[field::Count] = {};     ///< the effective parameters as update() read them
-    int latest_ = -1;                ///< the latest voice (displayModulation)
-    bool filterOff_ = true;          ///< the filter is transparent (LP at the top, no envelope, no modulation on it)
+    double m_sr = 48000.0;            ///< sample rate
+    Voice m_voice[Voices];           ///< the events
+    uint64_t m_counter = 0;           ///< triggers so far (the voices' age)
+    int64_t m_at = 0;                 ///< samples rendered since the last reset (the LFOs' clock)
+    float m_v[field::COUNT] = {};     ///< the effective parameters as update() read them
+    int m_latest = -1;                ///< the latest voice (displayModulation)
+    bool m_filterOff = true;          ///< the filter is transparent (LP at the top, no envelope, no modulation on it)
 };
 
 /** @brief The NASA shots (SfxType::SpaceShot): a recording of the category "nasa" up to 25 s, once, whole. */
 class FieldShot {
 public:
-    static constexpr int kVoices = 2;   ///< shots at once
-    static constexpr double kMaxSeconds = 25.0;   ///< longer NASA recordings are atmospheres, for the Field track
+    static constexpr int Voices = 2;   ///< shots at once
+    static constexpr double MaxSeconds = 25.0;   ///< longer NASA recordings are atmospheres, for the Field track
     /** @brief Prepares for @p sampleRate. */
-    void prepare(double sampleRate) { sr_ = sampleRate; reset(); }
+    void prepare(double sampleRate) { m_sr = sampleRate; reset(); }
     /** @brief Silences every shot and gives its recordings back. */
     void reset();
     /** @brief Starts a shot drawn by @p pick at @p velocity. */
@@ -161,16 +161,16 @@ public:
 private:
     /** @brief One shot: its recording (held while it plays, or asked for until it is there) and its playhead. */
     struct Voice {
-        FieldClip* clip = nullptr;   ///< the recording, null while it is asked for
-        int index = -1;              ///< its index in the library
-        double p = 0.0;              ///< the playhead, frames
-        float gain = 0.0f;           ///< its level
-        bool on = false;             ///< it sounds
-        float pan = 0.0f;            ///< its place, -1 .. 1
+        FieldClip* m_clip = nullptr;   ///< the recording, null while it is asked for
+        int m_index = -1;              ///< its index in the library
+        double m_p = 0.0;              ///< the playhead, frames
+        float m_gain = 0.0f;           ///< its level
+        bool m_on = false;             ///< it sounds
+        float m_pan = 0.0f;            ///< its place, -1 .. 1
     };
-    double sr_ = 48000.0;       ///< sample rate
-    Voice voice_[kVoices];      ///< the shots
-    int next_ = 0;              ///< the voice the next shot takes
+    double m_sr = 48000.0;       ///< sample rate
+    Voice m_voice[Voices];      ///< the shots
+    int m_next = 0;              ///< the voice the next shot takes
 };
 
 } // namespace phos

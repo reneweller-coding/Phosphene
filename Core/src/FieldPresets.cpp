@@ -13,14 +13,14 @@ namespace phos {
 
 namespace {
 /** @brief The presets of the Field track (FieldPresetData.inl). */
-const FieldPreset kRows[] = {
+const FieldPreset Rows[] = {
 #include "FieldPresetData.inl"
 };
 } // namespace
 
 const std::vector<FieldPreset>& fieldPresets()
 {
-    static const std::vector<FieldPreset> presets(std::begin(kRows), std::end(kRows));
+    static const std::vector<FieldPreset> presets(std::begin(Rows), std::end(Rows));
     return presets;
 }
 
@@ -34,34 +34,34 @@ int fieldVariationOf(int category, const std::string& stem)
 
 bool fieldPresetAvailable(const FieldPreset& preset)
 {
-    return fieldVariationOf(preset.categoryA, preset.fileA) >= 0
-        && (preset.categoryB < 0 || fieldVariationOf(preset.categoryB, preset.fileB) >= 0);
+    return fieldVariationOf(preset.m_categoryA, preset.m_fileA) >= 0
+        && (preset.m_categoryB < 0 || fieldVariationOf(preset.m_categoryB, preset.m_fileB) >= 0);
 }
 
 std::vector<std::pair<int, float>> fieldPresetValues(const ParamStore& p, const FieldPreset& preset)
 {
-    const int b = p.base(Module::Field);
-    std::vector<float> v(static_cast<size_t>(field::Count));
-    for (int i = 0; i < field::Count; ++i) v[static_cast<size_t>(i)] = p.defaultValue(b + i);
-    std::istringstream in(preset.text);
+    const int b = p.base(ModuleE::FIELD);
+    std::vector<float> v(static_cast<size_t>(field::COUNT));
+    for (int i = 0; i < field::COUNT; ++i) v[static_cast<size_t>(i)] = p.defaultValue(b + i);
+    std::istringstream in(preset.m_text);
     std::string line;
     while (std::getline(in, line)) {
         const size_t eq = line.find('=');
         if (eq == std::string::npos) continue;
         const int id = p.find("field." + line.substr(0, eq));
-        if (id < b || id >= b + field::Count) continue;
+        if (id < b || id >= b + field::COUNT) continue;
         v[static_cast<size_t>(id - b)] = std::strtof(line.c_str() + eq + 1, nullptr);
     }
-    v[field::ACategory] = static_cast<float>(preset.categoryA + 1);
-    v[field::AVariation] = static_cast<float>(fieldPresetVariation(preset.categoryA, preset.fileA, preset.variationA));
-    v[field::BOn] = preset.categoryB >= 0 ? 1.0f : 0.0f;
-    if (preset.categoryB >= 0) {
-        v[field::BCategory] = static_cast<float>(preset.categoryB + 1);
-        v[field::BVariation] = static_cast<float>(fieldPresetVariation(preset.categoryB, preset.fileB, preset.variationB));
+    v[field::A_CATEGORY] = static_cast<float>(preset.m_categoryA + 1);
+    v[field::A_VARIATION] = static_cast<float>(fieldPresetVariation(preset.m_categoryA, preset.m_fileA, preset.m_variationA));
+    v[field::B_ON] = preset.m_categoryB >= 0 ? 1.0f : 0.0f;
+    if (preset.m_categoryB >= 0) {
+        v[field::B_CATEGORY] = static_cast<float>(preset.m_categoryB + 1);
+        v[field::B_VARIATION] = static_cast<float>(fieldPresetVariation(preset.m_categoryB, preset.m_fileB, preset.m_variationB));
     }
     std::vector<std::pair<int, float>> out;
-    out.reserve(static_cast<size_t>(field::Count));
-    for (int i = 0; i < field::Count; ++i) out.emplace_back(i, v[static_cast<size_t>(i)]);
+    out.reserve(static_cast<size_t>(field::COUNT));
+    for (int i = 0; i < field::COUNT; ++i) out.emplace_back(i, v[static_cast<size_t>(i)]);
     return out;
 }
 
@@ -79,7 +79,7 @@ int fieldPresetFor(int style, uint64_t seed)
     std::vector<double> w(all.size(), 0.0);
     for (size_t i = 0; i < all.size(); ++i) {
         // Squared: a style's own places come up far more often than the ones that only fit it.
-        w[i] = static_cast<double>(all[i].style[s]) * all[i].style[s];
+        w[i] = static_cast<double>(all[i].m_style[s]) * all[i].m_style[s];
         total += w[i];
     }
     if (total <= 0.0) return -1;

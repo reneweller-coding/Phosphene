@@ -13,14 +13,14 @@
  * `%APPDATA%\Phosphene\field` --, on Linux `$XDG_DATA_HOME/Phosphene/field` (else `~/.local/share/...`) and on a Mac
  * `~/Library/Application Support/Phosphene/field`, then PHOS_SOURCE_DATA_DIR's), the first that exists, and optionally one more folder the user
  * names (setFieldUserFolder(): Noctuary's whole library, say). Files named `fr-<category>-*.flac` belong to that
- * category of kFieldCategorySlugs; files below a subfolder named `nasa` to the category "nasa", except those below
+ * category of FieldCategorySlugs; files below a subfolder named `nasa` to the category "nasa", except those below
  * `nasa/shots`, which are the effect shots (SfxType::SpaceShot, fieldShotCount); others are ignored.
  * Within a category the files are sorted by name, so a variation number names the same file on every machine that has
  * the same files.
  *
  * **Threads.** A scan publishes an immutable catalogue; a rescan publishes a new one and the old one stays readable, so
  * the audio thread never sees an index vanish under it. A loaded recording stays until the cache is full
- * (kFieldCacheBytes); then the least recently used one that no voice holds (acquireFieldClip / releaseFieldClip) is
+ * (FieldCacheBytes); then the least recently used one that no voice holds (acquireFieldClip / releaseFieldClip) is
  * evicted, and freed only seconds later, so a voice that took it an instant before the eviction still reads valid memory.
  * The loader thread runs while an engine holds it (retainFieldLoader / releaseFieldLoader), so it is started and joined
  * by a plugin's own objects and never by a DLL's static destructors.
@@ -36,29 +36,29 @@ namespace phos {
 
 /** @brief One recording, decoded. */
 struct FieldClip {
-    std::string name;              ///< the file's stem
-    int category = -1;             ///< index into kFieldCategorySlugs
-    int sampleRate = 44100;        ///< the file's own rate
-    std::vector<float> left;   ///< the left channel, -1..1
-    std::vector<float> right;   ///< the right one; empty for a mono file (right() reads left)
-    std::atomic<int> users{ 0 };   ///< voices playing it now (eviction skips it)
+    std::string m_name;              ///< the file's stem
+    int m_category = -1;             ///< index into FieldCategorySlugs
+    int m_sampleRate = 44100;        ///< the file's own rate
+    std::vector<float> m_left;   ///< the left channel, -1..1
+    std::vector<float> m_right;   ///< the right one; empty for a mono file (right() reads left)
+    std::atomic<int> m_users{ 0 };   ///< voices playing it now (eviction skips it)
     /**
      * @brief The gain that brings it to the library's level: RMS -20 dBFS, the peak held at -1 dBFS.
      *
      * The files stay as they are; the sampler plays them at this gain, so that a quiet night recording and a loud river
      * sit at the same place under the same knob.
      */
-    float norm = 1.0f;
+    float m_norm = 1.0f;
     /** @brief Frames. */
-    int frames() const { return static_cast<int>(left.size()); }
+    int frames() const { return static_cast<int>(m_left.size()); }
     /** @brief The left channel's samples. */
-    const float* dataL() const { return left.data(); }
+    const float* dataL() const { return m_left.data(); }
     /** @brief The right channel's samples (the left one's for a mono file). */
-    const float* dataR() const { return right.empty() ? left.data() : right.data(); }
+    const float* dataR() const { return m_right.empty() ? m_left.data() : m_right.data(); }
 };
 
 /** @brief How many bytes of decoded recordings the cache holds by default before it evicts unused ones (1.5 GB). */
-constexpr size_t kFieldCacheBytes = size_t(1536) * 1024 * 1024;
+constexpr size_t FieldCacheBytes = size_t(1536) * 1024 * 1024;
 /** @brief Sets that budget (the Quest app: 512 MB). */
 void setFieldCacheBytes(size_t bytes);
 
@@ -77,7 +77,7 @@ void setFieldUserFolder(const std::string& directory);
 std::vector<std::string> fieldLibraryFolders();
 /** @brief Scans the folders if the catalogue is stale. Not on the audio thread. Returns the number of recordings. */
 int scanFieldLibrary();
-/** @brief Recordings of category @p category (index into kFieldCategorySlugs) in the current catalogue. Lock-free. */
+/** @brief Recordings of category @p category (index into FieldCategorySlugs) in the current catalogue. Lock-free. */
 int fieldClipCount(int category);
 /** @brief The index of variation @p variation of @p category (wrapped), -1 if the category is empty. Lock-free. */
 int fieldClipIndex(int category, int variation);
@@ -94,7 +94,7 @@ void releaseFieldClip(FieldClip* clip);
 /** @brief Whether the recording behind @p index is in memory. Lock-free. */
 bool fieldClipLoaded(int index);
 /**
- * @brief Adds a recording made in memory under @p category (a kFieldCategorySlugs index; the tests' material), always
+ * @brief Adds a recording made in memory under @p category (a FieldCategorySlugs index; the tests' material), always
  *        loaded and never evicted; the next scan sorts it in by @p name. Not on the audio thread.
  */
 void addFieldClip(int category, const std::string& name, std::vector<float> left, std::vector<float> right, int sampleRate);

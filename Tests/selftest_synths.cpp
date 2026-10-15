@@ -13,7 +13,7 @@ void testDiodeLadder()
 {
     section("diode ladder");
     const double sr = 96000.0, fc = 1000.0;
-    const float g = static_cast<float>(std::sqrt(2.0) * std::tan(kPiD * fc / sr));
+    const float g = static_cast<float>(std::sqrt(2.0) * std::tan(PiD * fc / sr));
     double worst = 0.0;
     std::string detail;
     for (float k : { 0.0f, 8.0f, 16.0f }) {
@@ -22,7 +22,7 @@ void testDiodeLadder()
             f.reset();
             const double got = sineGain([&](float x) { return f.tick(x, lanes<float>(g), lanes<float>(k), lanes<float>(0.0f)); }, hz, sr, 1e-3, 96000, 48000);
             // Zavalishin eq. 5.29 through the bilinear transform: s = j tan(pi f / fs) / g.
-            const std::complex<double> s(0.0, std::tan(kPiD * hz / sr) / g);
+            const std::complex<double> s(0.0, std::tan(PiD * hz / sr) / g);
             const std::complex<double> one(1.0, 0.0);
             const std::complex<double> den = 8.0 * std::pow(one + s, 4) - 8.0 * std::pow(one + s, 2) + one + static_cast<double>(k);
             const double want = 1.0 / std::abs(den);
@@ -134,7 +134,7 @@ void testAcid()
     {
         ParamStore p;
         auto a = makeAcid("acid.drive=1 acid.delay_send=0.6 acid.resonance=1", p);
-        a->noteOn(kAcidLowest, 1.0f, true, false, 30000, 0.0);
+        a->noteOn(AcidLowest, 1.0f, true, false, 30000, 0.0);
         const std::vector<float> y = renderMono([&](float* L, float* R, int n) { a->process(L, R, n); }, 32768);
         const double low = lowShareDb(y, 140.0, true);
         check(low < -30.0, "acid at D3 with full drive and resonance: under -30 dB of its power below 140 Hz", fmt("%.1f dB", low));
@@ -148,36 +148,36 @@ void testPoly()
     const double sr = 48000.0;
     // Szabo's measured tables against the curves.
     {
-        static const double kDetune[][2] = { { 0.055118, 0.00967268 }, { 0.118110, 0.0220363 }, { 0.181102, 0.0339636 }, { 0.244094, 0.0467636 },
+        static const double Detune[][2] = { { 0.055118, 0.00967268 }, { 0.118110, 0.0220363 }, { 0.181102, 0.0339636 }, { 0.244094, 0.0467636 },
                                              { 0.307086, 0.0591273 }, { 0.370078, 0.0714909 }, { 0.433070, 0.0838545 }, { 0.496062, 0.0967273 },
                                              { 0.559055, 0.121527 }, { 0.622047, 0.147127 }, { 0.685039, 0.193455 }, { 0.748031, 0.243418 },
                                              { 0.811023, 0.2933815 }, { 0.874015, 0.343345 }, { 0.937007, 0.3928 }, { 1.0, 1.0 } };
-        static const double kMix[][3] = { { 0.0, 1.0, 0.03836 }, { 0.244094, 0.86, 0.31 }, { 0.496062, 0.72, 0.5 }, { 0.748031, 0.585, 0.59 }, { 1.0, 0.445, 0.59 } };
+        static const double Mix[][3] = { { 0.0, 1.0, 0.03836 }, { 0.244094, 0.86, 0.31 }, { 0.496062, 0.72, 0.5 }, { 0.748031, 0.585, 0.59 }, { 1.0, 0.445, 0.59 } };
         double wd = 0.0, wm = 0.0;
-        for (const auto& d : kDetune) wd = std::max(wd, std::fabs(Poly::detuneCurve(d[0]) - d[1]));
-        for (const auto& m : kMix) { double c, s; Poly::mixGains(m[0], c, s); wm = std::max({ wm, std::fabs(c - m[1]), std::fabs(s - m[2]) }); }
+        for (const auto& d : Detune) wd = std::max(wd, std::fabs(Poly::detuneCurve(d[0]) - d[1]));
+        for (const auto& m : Mix) { double c, s; Poly::mixGains(m[0], c, s); wm = std::max({ wm, std::fabs(c - m[1]), std::fabs(s - m[2]) }); }
         check(wd < 0.02 && wm < 0.04, "detune and mix curves match Szabo's JP-8000 measurements (tables 2 and 3)",
               fmt("largest deviation: detune %.4f, mix %.4f", wd, wm));
         check(std::fabs(Poly::dynamicDetune(0.8, 0.6, 0.25) - 0.32) < 1e-9 && std::fabs(Poly::dynamicDetune(0.8, 0.6, 1.0) - 0.8) < 1e-9
               && std::fabs(Poly::dynamicDetune(0.8, 0.6, 0.5) - 0.56) < 1e-9, "dynamic detune: narrow on sixteenths, the knob from a beat, log2 between");
         double se = 0.0;
-        for (int i = 0; i <= 20000; ++i) { const float x = -3.0f + 6.0f * static_cast<float>(i) / 20000.0f; se = std::max(se, std::fabs(static_cast<double>(laneSin01<float>(x)) - std::sin(2.0 * kPiD * x))); }
+        for (int i = 0; i <= 20000; ++i) { const float x = -3.0f + 6.0f * static_cast<float>(i) / 20000.0f; se = std::max(se, std::fabs(static_cast<double>(laneSin01<float>(x)) - std::sin(2.0 * PiD * x))); }
         check(se < 2e-6, "lane sine (folded Taylor series) matches sin to float precision", fmt("largest error %.2e", se));
     }
     // Supersaw spectrum: seven lines at Szabo's offsets, centre and sides in the mix ratio.
     {
         ParamStore p;
         auto e = makePoly("lead.detune=1 lead.dynamic_detune=0 lead.mix=0.75 lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 "
-                          "lead.hp_track=0.2 lead.hp_floor=150 lead.width=0 lead.delay_send=0 lead.amp_attack=0.3 lead.amp_sustain=1", p, PolyInstance::Lead);
+                          "lead.hp_track=0.2 lead.hp_floor=150 lead.width=0 lead.delay_send=0 lead.amp_attack=0.3 lead.amp_sustain=1", p, PolyInstanceE::LEAD);
         e->noteOn(69, 1.0f, 4.0, 200000, 0.0);
         const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 4800 + 65536);
         const std::vector<double> pw = powerSpectrum(y.data() + 4800, 65536);
         const double y1 = Poly::detuneCurve(1.0);
         double c, s;
         Poly::mixGains(0.75, c, s);
-        double worstHz = 0.0, amps[kPolyUnison] = {};
-        for (int u = 0; u < kPolyUnison; ++u) {
-            const double hz = 440.0 * (1.0 + kSupersawOffsets[u] * y1);
+        double worstHz = 0.0, amps[PolyUnison] = {};
+        for (int u = 0; u < PolyUnison; ++u) {
+            const double hz = 440.0 * (1.0 + SupersawOffsets[u] * y1);
             const size_t k0 = static_cast<size_t>(std::lround(hz * 65536.0 / sr));
             size_t best = k0;
             for (size_t k = k0 - 3; k <= k0 + 3; ++k) if (pw[k] > pw[best]) best = k;
@@ -193,7 +193,7 @@ void testPoly()
     // Random phases: two identical notes do not start with the same waveform.
     {
         ParamStore p;
-        auto e = makePoly("lead.delay_send=0 lead.amp_attack=0.3", p, PolyInstance::Lead);
+        auto e = makePoly("lead.delay_send=0 lead.amp_attack=0.3", p, PolyInstanceE::LEAD);
         e->noteOn(69, 1.0f, 0.25, 2000, 0.0);
         const std::vector<float> a = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 24000);
         e->noteOn(69, 1.0f, 0.25, 2000, 0.0);
@@ -208,7 +208,7 @@ void testPoly()
         ParamStore p;
         // The key-tracked high pass out of the way: at 0.7 f0 it takes 1.9 dB off the carrier alone.
         auto e = makePoly("lead.osc=FM lead.fm_ratio=3.5 lead.fm_index=4 lead.fm_decay=5 lead.detune=0 lead.mix=0 lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.hp_track=0 lead.hp_floor=150 "
-                          "lead.key_track=0 lead.resonance=0 lead.width=0 lead.delay_send=0 lead.amp_sustain=1 lead.amp_attack=0.3", p, PolyInstance::Lead);
+                          "lead.key_track=0 lead.resonance=0 lead.width=0 lead.delay_send=0 lead.amp_sustain=1 lead.amp_attack=0.3", p, PolyInstanceE::LEAD);
         e->noteOn(69, 1.0f, 4.0, 200000, 0.0);
         const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 32768);
         const std::vector<double> pw = powerSpectrum(y.data() + 9600, 32768);
@@ -229,16 +229,16 @@ void testPoly()
     // Depth rule for lead and arp at their lowest notes.
     {
         double worst = -1e9;
-        for (PolyInstance inst : { PolyInstance::Lead, PolyInstance::Arp }) {
+        for (PolyInstanceE inst : { PolyInstanceE::LEAD, PolyInstanceE::ARP }) {
             for (int osc = 0; osc < 3; ++osc) {
                 ParamStore p;
-                const char* name = inst == PolyInstance::Lead ? "lead" : "arp";
+                const char* name = inst == PolyInstanceE::LEAD ? "lead" : "arp";
                 // Three %s, three names: the third argument was missing here, so the third conversion
                 // read whatever stood on the stack. It happened not to crash until the allocations of
                 // this file changed; a garbage module name also meant amp_sustain was never set.
                 auto e = makePoly(fmt("%s.osc=%d %s.delay_send=0.5 %s.amp_sustain=1", name, osc, name, name).c_str(), p, inst);
-                e->noteOn(inst == PolyInstance::Lead ? kLeadLowest : kArpLowest, 1.0f, 1.0, 30000, 0.0);
-                e->noteOn((inst == PolyInstance::Lead ? kLeadLowest : kArpLowest) + 3, 1.0f, 1.0, 30000, 0.0);
+                e->noteOn(inst == PolyInstanceE::LEAD ? LeadLowest : ArpLowest, 1.0f, 1.0, 30000, 0.0);
+                e->noteOn((inst == PolyInstanceE::LEAD ? LeadLowest : ArpLowest) + 3, 1.0f, 1.0, 30000, 0.0);
                 const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 32768);
                 worst = std::max(worst, lowShareDb(y, 140.0, true));
             }
@@ -248,14 +248,14 @@ void testPoly()
     // The supersaw reads the mipmapped saw, not a PolyBLEP ramp (measured 16.09.2026: the ramp left
     // -46.6 / -43.3 / -40.9 dB at C5 / C6 / A6 with detune 1, the table -72.4 / -68.9 / -61.6 dB).
     {
-        const char* const kBench = "lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 "
+        const char* const Bench = "lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 "
                                    "lead.width=0 lead.delay_send=0 lead.dynamic_detune=0 lead.amp_attack=1 lead.amp_sustain=1 "
                                    "lead.amp_decay=4000 lead.vel_sens=0 lead.mix=0.75 lead.detune=1";
         double worst = 1e9, alias[3] = {};
         int i = 0;
         for (int pitch : { 72, 84, 93 }) {
             ParamStore p;
-            auto e = makePoly(kBench, p, PolyInstance::Lead);
+            auto e = makePoly(Bench, p, PolyInstanceE::LEAD);
             e->noteOn(pitch, 1.0f, 8.0, 1 << 24, 0.0);
             const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
             alias[i] = supersawAliasDb(y, 9600, midiToHz(pitch), Poly::detuneCurve(1.0), sr);
@@ -270,7 +270,7 @@ void testPoly()
         ParamStore p;
         auto e = makePoly("lead.osc=Supersaw lead.detune=0.55 lead.mix=0.75 lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 "
                           "lead.hp_track=0 lead.hp_floor=150 lead.width=0 lead.delay_send=0 lead.dynamic_detune=0 lead.amp_attack=1 "
-                          "lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0 lead.level=0", p, PolyInstance::Lead);
+                          "lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0 lead.level=0", p, PolyInstanceE::LEAD);
         e->noteOn(60, 1.0f, 8.0, 1 << 24, 0.0);
         const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 4800 + 48000);
         double e2 = 0.0;
@@ -287,7 +287,7 @@ void testPoly()
             ParamStore p;
             auto e = makePoly(fmt("lead.osc=%s lead.wave=0 lead.detune=0 lead.mix=0 lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 "
                                   "lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 lead.width=0 lead.delay_send=0 lead.dynamic_detune=0 "
-                                  "lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0", osc).c_str(), p, PolyInstance::Lead);
+                                  "lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0", osc).c_str(), p, PolyInstanceE::LEAD);
             e->noteOn(pitch, 1.0f, 8.0, 1 << 24, 0.0);
             const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
             const std::vector<double> pw = powerSpectrum(y.data() + 9600, 65536);
@@ -308,7 +308,7 @@ void testPoly()
     // The FM index is limited per note to the bandwidth Carson's rule allows. Without the limit,
     // index 10 at ratio 7.3 put 6 dB more power into aliasing than into its own carrier at C6.
     {
-        struct Case { double ratio; int pitch; const char* what; };
+        struct Case { double m_ratio; int m_pitch; const char* m_what; };
         double worst = -1e9;
         std::string detail;
         for (const Case& c : { Case{ 7.5, 84, "C6 r=7.5" }, Case{ 7.5, 93, "A6 r=7.5" }, Case{ 3.5, 84, "C6 r=3.5" } }) {   // 7.3 until 24.09.2026: a voice plays the ratio to the nearest half (Poly.cpp, harmonicFmRatio)
@@ -316,12 +316,12 @@ void testPoly()
             auto e = makePoly(fmt("lead.osc=FM lead.fm_index=10 lead.fm_ratio=%g lead.fm_decay=2000 lead.detune=0 lead.mix=0 lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 "
                                   "lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 lead.width=0 "
                                   "lead.delay_send=0 lead.dynamic_detune=0 lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0",
-                                  c.ratio).c_str(), p, PolyInstance::Lead);
-            e->noteOn(c.pitch, 1.0f, 8.0, 1 << 24, 0.0);
+                                  c.m_ratio).c_str(), p, PolyInstanceE::LEAD);
+            e->noteOn(c.m_pitch, 1.0f, 8.0, 1 << 24, 0.0);
             const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
-            const double a = lineAliasDb(y, 9600, fmLines(midiToHz(c.pitch), c.ratio, sr), midiToHz(c.pitch), sr, 12000.0);
+            const double a = lineAliasDb(y, 9600, fmLines(midiToHz(c.m_pitch), c.m_ratio, sr), midiToHz(c.m_pitch), sr, 12000.0);
             worst = std::max(worst, a);
-            detail += fmt("%s %.1f dB  ", c.what, a);
+            detail += fmt("%s %.1f dB  ", c.m_what, a);
         }
         check(worst < -45.0, "FM: the index is limited to the bandwidth Carson's rule allows, so a high note does not alias over its own carrier", detail);
     }
@@ -334,7 +334,7 @@ void testPoly()
         auto e = makePoly("lead.osc=FM lead.fm_ratio=1.91 lead.fm_index=3 lead.fm_decay=2000 lead.detune=0 lead.mix=0 lead.osc2=Off lead.lfo_cutoff=0 "
                           "lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 "
                           "lead.hp_floor=40 lead.width=0 lead.delay_send=0 lead.dynamic_detune=0 lead.drift=0 lead.amp_attack=1 lead.amp_sustain=1 "
-                          "lead.amp_decay=4000 lead.vel_sens=0", p, PolyInstance::Lead);
+                          "lead.amp_decay=4000 lead.vel_sens=0", p, PolyInstanceE::LEAD);
         e->noteOn(57, 1.0f, 8.0, 1 << 24, 0.0);
         const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
         const double off = lineAliasDb(y, 9600, harmonicLines(midiToHz(57), sr), midiToHz(57), sr, 20.0);
@@ -347,7 +347,7 @@ void testPoly()
         auto render = [&](const char* tablePos) {
             ParamStore p;
             auto e = makePoly(fmt("lead.osc=Supersaw lead.detune=0.55 %s lead.pos_env=0.7 lead.pos_lfo_depth=0.4 lead.delay_send=0 "
-                                  "lead.amp_attack=1 lead.amp_sustain=1", tablePos).c_str(), p, PolyInstance::Lead);
+                                  "lead.amp_attack=1 lead.amp_sustain=1", tablePos).c_str(), p, PolyInstanceE::LEAD);
             e->noteOn(69, 1.0f, 2.0, 1 << 20, 0.0);
             return renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 24000);
         };
@@ -370,10 +370,10 @@ void testPoly()
         // weights remain, which is what decides the group's flags.
         auto e = makePoly("lead.osc=FM lead.fm_index=3 lead.fm_ratio=2 lead.detune=1 lead.dynamic_detune=0 lead.mix=0.75 lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 "
                           "lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 lead.width=0 "
-                          "lead.delay_send=0 lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=1", p, PolyInstance::Lead);
+                          "lead.delay_send=0 lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=1", p, PolyInstanceE::LEAD);
         e->noteOn(48, 0.0f, 8.0, 1 << 24, 0.0);
         p.parseText("lead.osc=Supersaw lead.vel_sens=0");
-        std::vector<float> v = moduleValues(p, Module::Poly, polyIndex(PolyInstance::Lead));
+        std::vector<float> v = moduleValues(p, ModuleE::POLY, polyIndex(PolyInstanceE::LEAD));
         e->update(v.data(), 145.0);
         e->noteOn(69, 1.0f, 8.0, 1 << 24, 0.0);
         const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
@@ -386,7 +386,7 @@ void testPoly()
             return best;
         };
         double weakest = 1e30;
-        for (int u = 0; u < kPolyUnison; ++u) weakest = std::min(weakest, line(440.0 * (1.0 + kSupersawOffsets[u] * y1)));
+        for (int u = 0; u < PolyUnison; ++u) weakest = std::min(weakest, line(440.0 * (1.0 + SupersawOffsets[u] * y1)));
         const double db = powDb(weakest / line(440.0));
         check(db > -12.0, "an FM voice and a supersaw voice sharing a slot group: all seven supersaw lines still sound",
               fmt("weakest of the seven %.1f dB under the centre", db));
@@ -396,30 +396,30 @@ void testPoly()
     // check is the one that tells the two apart: zeroing the outer gains gives exactly the same
     // spectrum and the same level while the pre-pass still reads seven tables per sample.
     {
-        const char* const kLimit = "lead.osc=Supersaw lead.detune=1 lead.dynamic_detune=0 lead.mix=0.75 lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 "
+        const char* const Limit = "lead.osc=Supersaw lead.detune=1 lead.dynamic_detune=0 lead.mix=0.75 lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 "
                                    "lead.key_track=0 lead.resonance=0 lead.hp_track=0 lead.hp_floor=150 lead.width=0 lead.delay_send=0 "
                                    "lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0";
-        constexpr size_t kSkip = 4800, kLen = 65536;
+        constexpr size_t Skip = 4800, Len = 65536;
         double rms[2] = {};
         uint64_t reads[2] = {};
         std::vector<float> y[2];
         int which = 0;
-        for (int unison : { kPolyUnison, 3 }) {
+        for (int unison : { PolyUnison, 3 }) {
             ParamStore p;
-            auto e = makePoly(kLimit, p, PolyInstance::Lead);
-            e->setQuality(unison, kPolyVoices);
+            auto e = makePoly(Limit, p, PolyInstanceE::LEAD);
+            e->setQuality(unison, PolyVoices);
             e->noteOnLimited(69, 1.0f, 8.0, 1 << 24, 0.0);
-            y[which] = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, kSkip + kLen);
+            y[which] = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, Skip + Len);
             double e2 = 0.0;
-            for (size_t k = kSkip; k < y[which].size(); ++k) e2 += static_cast<double>(y[which][k]) * y[which][k];
-            rms[which] = std::sqrt(e2 / static_cast<double>(y[which].size() - kSkip));
+            for (size_t k = Skip; k < y[which].size(); ++k) e2 += static_cast<double>(y[which][k]) * y[which][k];
+            rms[which] = std::sqrt(e2 / static_cast<double>(y[which].size() - Skip));
             reads[which] = e->tableReads();
             ++which;
         }
-        const std::vector<double> pw = powerSpectrum(y[1].data() + kSkip, kLen);
+        const std::vector<double> pw = powerSpectrum(y[1].data() + Skip, Len);
         const double y1 = Poly::detuneCurve(1.0);
         auto line = [&](int u) {
-            const size_t k0 = static_cast<size_t>(std::lround(440.0 * (1.0 + kSupersawOffsets[u] * y1) * static_cast<double>(kLen) / sr));
+            const size_t k0 = static_cast<size_t>(std::lround(440.0 * (1.0 + SupersawOffsets[u] * y1) * static_cast<double>(Len) / sr));
             double best = 0.0;
             for (size_t k = k0 - 3; k <= k0 + 3; ++k) best = std::max(best, pw[k]);
             return best;
@@ -430,12 +430,12 @@ void testPoly()
         const double sep = powDb(kept / dropped), level = 20.0 * std::log10(rms[1] / rms[0]);
         check(sep > 30.0 && std::fabs(level) < 0.5, "quest unison 3: only the middle three lines (Szabo's +-0.01952356 y and 0), at the level of all seven",
               fmt("weakest kept line %.1f dB over the loudest dropped one, level %+.2f dB against unison 7", sep, level));
-        const uint64_t want = static_cast<uint64_t>(kSkip + kLen);
-        check(reads[1] == want * 3 && reads[0] == want * static_cast<uint64_t>(kPolyUnison),
+        const uint64_t want = static_cast<uint64_t>(Skip + Len);
+        check(reads[1] == want * 3 && reads[0] == want * static_cast<uint64_t>(PolyUnison),
               "quest unison 3: the wavetable pre-pass reads three tables per sample, not seven of which four are multiplied by zero",
               fmt("%llu reads at unison 3 (want %llu), %llu at unison 7 (want %llu)",
                   static_cast<unsigned long long>(reads[1]), static_cast<unsigned long long>(want * 3),
-                  static_cast<unsigned long long>(reads[0]), static_cast<unsigned long long>(want * kPolyUnison)));
+                  static_cast<unsigned long long>(reads[0]), static_cast<unsigned long long>(want * PolyUnison)));
     }
 }
 
@@ -459,7 +459,7 @@ void testAcidColour()
         const double f0 = 220.0;
         for (int h = 1; h <= 40; ++h)
             for (size_t i = 0; i < saw.size(); ++i) {
-                const double s = std::sin(2.0 * kPiD * h * f0 * static_cast<double>(i) / sr) / h;
+                const double s = std::sin(2.0 * PiD * h * f0 * static_cast<double>(i) / sr) / h;
                 saw[i] += static_cast<float>(s);
                 if (h % 2 == 1) sq[i] += static_cast<float>(s);
             }
@@ -484,10 +484,10 @@ void testAcidColour()
         for (uint64_t s = 0; s < 8; ++s) {
             Composer c(1000 + s);
             for (int i = 0; i < 40; ++i) {
-                const std::vector<MelodyNote>& a = c.track(q, i).melody.acid[0];
+                const std::vector<MelodyNote>& a = c.track(q, i).m_melody.m_acid[0];
                 for (size_t k = 0; k < a.size(); ++k) {
-                    const bool acc = (a[k].flags & kNoteAccent) != 0;
-                    const int pos = a[k].step % 4;
+                    const bool acc = (a[k].m_flags & NOTE_ACCENT) != 0;
+                    const int pos = a[k].m_step % 4;
                     // 18.09.2026, rule 8 of the genre rules: accents on the "e" and the "a", none on
                     // the beat (the kick step), few on the "and" (MelodyParts.cpp, makeAcid).
                     wantMarginal += (pos == 1 || pos == 3) ? 0.36 : (pos == 2 ? 0.06 : 0.0);
@@ -499,8 +499,8 @@ void testAcidColour()
                     // Both onsets on an "e" or an "a": then both carry the same target rate and the
                     // chain's ratio is its lift exactly (Melody.cpp); a kick step before would mix in a
                     // rate of 0.
-                    if (k + 1 < a.size() && a[k + 1].step % 2 == 1 && a[k].step % 2 == 1) {
-                        const bool nxt = (a[k + 1].flags & kNoteAccent) != 0;
+                    if (k + 1 < a.size() && a[k + 1].m_step % 2 == 1 && a[k].m_step % 2 == 1) {
+                        const bool nxt = (a[k + 1].m_flags & NOTE_ACCENT) != 0;
                         if (acc) { ++nAfterAcc; runAfterAcc += nxt ? 1 : 0; }
                         else { ++nAfterPlain; runAfterPlain += nxt ? 1 : 0; }
                     }
@@ -531,7 +531,7 @@ void testAcidColour()
         // cannot get the capacitor past 0.216 at the end of its own sixteenth (the value the accent
         // check of testAcid measures), so a higher reading is a second accent arriving before the
         // first has discharged. What is measured is the charge *the accented notes themselves see*,
-        // because that is what lifts their cutoff: kSweepOctaves x Accent x Resonance x charge.
+        // because that is what lifts their cutoff: SweepOctaves x Accent x Resonance x charge.
         {
             ParamStore plain;
             plain.parseText("compose.level_match=Off master.auto_gain=Off");
@@ -544,15 +544,15 @@ void testAcidColour()
             for (uint64_t s = 0; s < 6; ++s) {
                 Composer c(2000 + s);
                 for (int i = 0; i < 20; ++i) {
-                    const MelodyPlan& m = c.track(plain, i).melody;
-                    const std::vector<MelodyNote>& a = m.acid[0];
+                    const MelodyPlan& m = c.track(plain, i).m_melody;
+                    const std::vector<MelodyNote>& a = m.m_acid[0];
                     voice->reset();
                     size_t next = 0;
-                    for (int step = 0; step < m.acidSteps; ++step) {
+                    for (int step = 0; step < m.m_acidSteps; ++step) {
                         bool accented = false;
-                        if (next < a.size() && a[next].step == step) {
-                            accented = (a[next].flags & kNoteAccent) != 0;
-                            voice->noteOn(50 + a[next].rel, a[next].velocity / 127.0f, accented, false,
+                        if (next < a.size() && a[next].m_step == step) {
+                            accented = (a[next].m_flags & NOTE_ACCENT) != 0;
+                            voice->noteOn(50 + a[next].m_rel, a[next].m_velocity / 127.0f, accented, false,
                                           static_cast<int>(sixteenth / 2), 0.0);
                             ++next;
                         }
@@ -584,12 +584,12 @@ void testAcidColour()
     // --------------------------------------------------------------- the disperser is an all-pass
     {
         Disperser d;
-        d.set(kDisperseStages, 1250.0, sr);
+        d.set(DisperseStages, 1250.0, sr);
         DisperserChannel ch;
         constexpr size_t N = 32768;
         std::vector<std::complex<double>> a(N);
         std::vector<float> ir(N);
-        for (size_t i = 0; i < N; ++i) { ir[i] = ch.tick(i == 0 ? 1.0f : 0.0f, d.c, d.d, d.stages); a[i] = ir[i]; }
+        for (size_t i = 0; i < N; ++i) { ir[i] = ch.tick(i == 0 ? 1.0f : 0.0f, d.m_c, d.m_d, d.m_stages); a[i] = ir[i]; }
         fft(a);
         double worst = 0.0, worstHz = 0.0;
         for (size_t k = 1; k < N / 2; ++k) {
@@ -606,13 +606,13 @@ void testAcidColour()
         double gd[5] = {}, want[5] = {}, mag = 0.0, worstGd = 0.0;
         auto dft = [&](double hz) {
             std::complex<double> s(0.0, 0.0);
-            for (size_t n2 = 0; n2 < N; ++n2) s += static_cast<double>(ir[n2]) * std::polar(1.0, -2.0 * kPiD * hz * static_cast<double>(n2) / sr);
+            for (size_t n2 = 0; n2 < N; ++n2) s += static_cast<double>(ir[n2]) * std::polar(1.0, -2.0 * PiD * hz * static_cast<double>(n2) / sr);
             return s;
         };
         for (int i = 0; i < 5; ++i) {
             disperserResponse(d, at[i], sr, mag, want[i]);
             const double e = std::max(0.5, at[i] * 1e-3);
-            gd[i] = -std::arg(dft(at[i] + e) / dft(at[i])) / (2.0 * kPiD * e) * 1000.0;
+            gd[i] = -std::arg(dft(at[i] + e) / dft(at[i])) / (2.0 * PiD * e) * 1000.0;
             worstGd = std::max(worstGd, std::fabs(gd[i] - want[i]));
         }
         check(worstGd < 0.05 && gd[1] > gd[0] && gd[1] > 3.0 && gd[4] < 0.1,
@@ -655,7 +655,7 @@ void testAcidColour()
 
         ParamStore p;
         auto a = makeAcid("acid.disperse=8 acid.drive=1 acid.resonance=1 acid.delay_send=0", p);
-        a->noteOn(kAcidLowest, 1.0f, true, false, 30000, 0.0);
+        a->noteOn(AcidLowest, 1.0f, true, false, 30000, 0.0);
         const std::vector<float> y = renderMono([&](float* L, float* R, int n) { a->process(L, R, n); }, 32768);
         const double low = lowShareDb(y, 140.0, true);
         check(low < -30.0, "disperser: the depth rule holds with the chain at full length",
@@ -688,7 +688,7 @@ void testAcidColour()
         double worstErr = 0.0;
         for (double hz : { 2000.0, 5000.0, 10000.0 }) {
             std::complex<double> h(0.0, 0.0);
-            for (int t = 0; t < 4; ++t) h += static_cast<double>(lag5[t]) * std::polar(1.0, -2.0 * kPiD * hz / sr * t);
+            for (int t = 0; t < 4; ++t) h += static_cast<double>(lag5[t]) * std::polar(1.0, -2.0 * PiD * hz / sr * t);
             const double want = 20.0 * std::log10(1.0 / (1.0 - static_cast<double>(fb) * std::abs(h)));
             worstErr = std::max(worstErr, std::fabs(combPeakDb(lag5, delay, fb, hz, sr) - want));
         }
@@ -814,13 +814,13 @@ void testAcidColour()
         // x += (w - x) alpha with w uniform on [-1, 1] the standing variance is alpha / (2 - alpha)
         // times var(w) = 1/3, and update() divides exactly that out again.
         ParamStore p;
-        auto e = makePoly("lead.drift=2 lead.delay_send=0", p, PolyInstance::Lead);
+        auto e = makePoly("lead.drift=2 lead.delay_send=0", p, PolyInstanceE::LEAD);
         std::vector<float> L(4800), R(4800);
         double s = 0.0, s2 = 0.0, worst = 0.0;
         int n = 0;
         for (int b = 0; b < 400; ++b) {          // 40 s: about fifty correlation times
             e->process(L.data(), R.data(), 4800);
-            for (int slot = 0; slot < kPolySlots; ++slot) {
+            for (int slot = 0; slot < PolySlotCount; ++slot) {
                 const double v = e->slotDrift(slot);
                 s += v;
                 s2 += v * v;
@@ -838,7 +838,7 @@ void testAcidColour()
         // sample grid, so cutting the render differently must change nothing at all.
         auto render = [&](uint64_t seed, int block) {
             ParamStore p;
-            auto e = makePoly("lead.drift=3 lead.delay_send=0.4", p, PolyInstance::Lead);
+            auto e = makePoly("lead.drift=3 lead.delay_send=0.4", p, PolyInstanceE::LEAD);
             e->seedPhases(seed);
             std::vector<float> L(48000), R(48000);
             int done = 0, note = 0;
@@ -867,12 +867,12 @@ void testAcidColour()
         // With the drift switched off nothing drifts at all, and the start phases are untouched either
         // way -- the drift has its own generator, so drift 0 is the engine that never had one.
         ParamStore p;
-        auto off = makePoly("lead.drift=0 lead.delay_send=0", p, PolyInstance::Lead);
+        auto off = makePoly("lead.drift=0 lead.delay_send=0", p, PolyInstanceE::LEAD);
         std::vector<float> L(9600), R(9600);
         off->process(L.data(), R.data(), 9600);
         double worst = 0.0;
-        for (int s2 = 0; s2 < kPolySlots; ++s2) worst = std::max(worst, std::fabs(static_cast<double>(off->slotDrift(s2))));
-        for (int v = 0; v < kPolyVoices; ++v) worst = std::max(worst, std::fabs(static_cast<double>(off->voiceDrift(v))));
+        for (int s2 = 0; s2 < PolySlotCount; ++s2) worst = std::max(worst, std::fabs(static_cast<double>(off->slotDrift(s2))));
+        for (int v = 0; v < PolyVoices; ++v) worst = std::max(worst, std::fabs(static_cast<double>(off->voiceDrift(v))));
         check(worst == 0.0, "drift: at 0 cents no walk ever leaves zero, so the sound from before it existed is reachable exactly",
               fmt("largest walk value %g after 0.2 s", worst));
     }
@@ -888,14 +888,14 @@ void testAcidColour()
         // the undrifted lines the same signal reads -22.9 dB, because +-6 bins is +-4.4 Hz and one
         // cent at the tenth harmonic of A6 is already 10 Hz -- which is exactly the reading a drift
         // applied *during* the note would deserve, and the reason it is held (Poly.h).
-        const char* const kBench = "lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 "
+        const char* const Bench = "lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 "
                                    "lead.hp_floor=150 lead.width=0 lead.delay_send=0 lead.dynamic_detune=0 lead.amp_attack=1 "
                                    "lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0 lead.mix=0.75 lead.detune=1";
         double worst = 1e9, worstNominal = 1e9;
         std::string detail;
         for (int pitch : { 84, 93 }) {
             ParamStore p;
-            auto e = makePoly(fmt("%s lead.drift=1", kBench).c_str(), p, PolyInstance::Lead);
+            auto e = makePoly(fmt("%s lead.drift=1", Bench).c_str(), p, PolyInstanceE::LEAD);
             e->seedPhases(4711);
             std::vector<float> warm(48000), warmR(48000);
             e->process(warm.data(), warmR.data(), 48000);      // the walks reach their standing spread
@@ -904,10 +904,10 @@ void testAcidColour()
             const double f0 = midiToHz(pitch), yDet = Poly::detuneCurve(1.0);
             std::vector<double> lines;
             double moved = 0.0;
-            for (int u = 0; u < kPolyUnison; ++u) {
+            for (int u = 0; u < PolyUnison; ++u) {
                 const double cents = e->slotDrift(u);
                 moved = std::max(moved, std::fabs(cents));
-                const double fu = f0 * (1.0 + kSupersawOffsets[u] * yDet) * (1.0 + cents * (0.6931471805599453 / 1200.0));
+                const double fu = f0 * (1.0 + SupersawOffsets[u] * yDet) * (1.0 + cents * (0.6931471805599453 / 1200.0));
                 for (int h = 1; static_cast<double>(h) * fu < 0.5 * sr; ++h) lines.push_back(static_cast<double>(h) * fu);
             }
             const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
@@ -930,7 +930,7 @@ void testAcidColour()
                            "lead.amp_attack=1 lead.amp_sustain=1 lead.amp_decay=4000 lead.vel_sens=0 lead.dynamic_detune=0";
         auto f0Of = [&](double drift, uint64_t seed) {
             ParamStore p;
-            auto e = makePoly(fmt("%s lead.drift=%g", kOne, drift).c_str(), p, PolyInstance::Lead);
+            auto e = makePoly(fmt("%s lead.drift=%g", kOne, drift).c_str(), p, PolyInstanceE::LEAD);
             e->seedPhases(seed);
             std::vector<float> L(96000), R(96000);
             e->process(L.data(), R.data(), 48000);            // let the walk reach its standing spread
@@ -978,59 +978,59 @@ void testMelodyScore()
     c.composeBars(p, 0, tracks * 128, ev);
     int outside = 0, notes = 0, weak = 0, strong = 0, arpOff = 0, arpNotes = 0, tooLow = 0, slides = 0, slideGaps = 0, masked = 0, sharedBlocks = 0;
     std::vector<const NoteEvent*> acidNotes;
-    struct Range { int lo = 127, hi = 0; };
+    struct Range { int m_lo = 127, m_hi = 0; };
     // Grouped by section, not by sixteen-bar block: since Phase 5 the masking rule is decided per
     // section of the form (Form.h), and a sixteen-bar block may straddle two of them.
     // 18.09.2026: grouped by bar -- the arp stays in its own register now and never changes octave
     // inside a section, so the masking that matters is what sounds together (Melody.cpp).
     std::vector<Range> leadR(static_cast<size_t>(tracks * 128)), arpR(static_cast<size_t>(tracks * 128));
     for (const NoteEvent& e : ev) {
-        if (e.part != Part::Acid && e.part != Part::Lead && e.part != Part::Arp) continue;
-        const int bar = static_cast<int>(e.beat / kBeatsPerBar);
+        if (e.m_part != PartE::ACID && e.m_part != PartE::LEAD && e.m_part != PartE::ARP) continue;
+        const int bar = static_cast<int>(e.m_beat / BeatsPerBar);
         const int ti = c.trackOfBar(p, bar);
         const TrackPlan t = c.track(p, ti);
-        const int inTrack = bar - t.firstBar;
+        const int inTrack = bar - t.m_firstBar;
         ++notes;
         // The mode of the *section*, not of the track: since 16.09.2026 a section may borrow another
         // mode over the tonic pedal (Form.h), and the melodic layer is drawn in the mode its section
         // plays. The tonic never moves, so "in the scale" is still measured against the track's key.
-        const int sc = t.form.section[sectionOfBar(t.form, inTrack)].scale;
-        if (!inScale(sc, e.pitch - t.key)) ++outside;
-        const int lowest = e.part == Part::Acid ? kAcidLowest : (e.part == Part::Lead ? kLeadLowest : kArpLowest);
-        if (e.pitch < lowest) ++tooLow;
+        const int sc = t.m_form.m_section[sectionOfBar(t.m_form, inTrack)].m_scale;
+        if (!inScale(sc, e.m_pitch - t.m_key)) ++outside;
+        const int lowest = e.m_part == PartE::ACID ? AcidLowest : (e.m_part == PartE::LEAD ? LeadLowest : ArpLowest);
+        if (e.m_pitch < lowest) ++tooLow;
         int pcs[3];
         chordTones(sc, 0, pcs);   // the lines anchor on the tonic chord over the Bordun bass (22.09.2026)
-        const int pc = ((e.pitch - t.key) % 12 + 12) % 12;
+        const int pc = ((e.m_pitch - t.m_key) % 12 + 12) % 12;
         const bool chordTone = pc == pcs[0] || pc == pcs[1] || pc == pcs[2];
-        const double inBar = e.beat - bar * kBeatsPerBar;
-        if (e.part == Part::Lead && std::fabs(inBar - std::round(inBar / 2.0) * 2.0) < 1e-9) { ++strong; if (!chordTone) ++weak; }
-        if (e.part == Part::Arp) {
+        const double inBar = e.m_beat - bar * BeatsPerBar;
+        if (e.m_part == PartE::LEAD && std::fabs(inBar - std::round(inBar / 2.0) * 2.0) < 1e-9) { ++strong; if (!chordTone) ++weak; }
+        if (e.m_part == PartE::ARP) {
             // Since 18.09.2026 (rule 13) the arp plays sus2 / sus4 / add9 material over the chord root --
             // over the tonic where the chord root is itself a colour tone -- and a colour tone only as a
             // glint; RuleRef derives the material from the scale table.
             ++arpNotes;
-            const int d0 = t.melody.chordDegree[chordIndexAt(t.melody, inTrack)];
+            const int d0 = t.m_melody.m_chordDegree[chordIndexAt(t.m_melody, inTrack)];
             const int d = RuleRef::colour(sc, RuleRef::chordRoot(sc, d0)) ? 0 : d0;
             std::set<int> material = { RuleRef::chordRoot(sc, d), RuleRef::deg(sc, d + 4) % 12 };
-            if (t.melody.arpTones == 0) material.insert(RuleRef::deg(sc, d + 1) % 12);
-            if (t.melody.arpTones == 1) material.insert(RuleRef::deg(sc, d + 3) % 12);
-            if (t.melody.arpTones == 2) { material.insert(RuleRef::deg(sc, d + 2) % 12); material.insert(RuleRef::deg(sc, d + 1) % 12); }
+            if (t.m_melody.m_arpTones == 0) material.insert(RuleRef::deg(sc, d + 1) % 12);
+            if (t.m_melody.m_arpTones == 1) material.insert(RuleRef::deg(sc, d + 3) % 12);
+            if (t.m_melody.m_arpTones == 2) { material.insert(RuleRef::deg(sc, d + 2) % 12); material.insert(RuleRef::deg(sc, d + 1) % 12); }
             if (material.count(pc) == 0 && !RuleRef::colour(sc, pc)) ++arpOff;
         }
-        if (e.part == Part::Acid) acidNotes.push_back(&e);
+        if (e.m_part == PartE::ACID) acidNotes.push_back(&e);
         const size_t block = static_cast<size_t>(bar);
-        if (e.part == Part::Lead) { leadR[block].lo = std::min(leadR[block].lo, int(e.pitch)); leadR[block].hi = std::max(leadR[block].hi, int(e.pitch)); }
-        if (e.part == Part::Arp) { arpR[block].lo = std::min(arpR[block].lo, int(e.pitch)); arpR[block].hi = std::max(arpR[block].hi, int(e.pitch)); }
+        if (e.m_part == PartE::LEAD) { leadR[block].m_lo = std::min(leadR[block].m_lo, int(e.m_pitch)); leadR[block].m_hi = std::max(leadR[block].m_hi, int(e.m_pitch)); }
+        if (e.m_part == PartE::ARP) { arpR[block].m_lo = std::min(arpR[block].m_lo, int(e.m_pitch)); arpR[block].m_hi = std::max(arpR[block].m_hi, int(e.m_pitch)); }
     }
     for (size_t i = 0; i + 1 < acidNotes.size(); ++i) {
-        if (!(acidNotes[i]->flags & kNoteSlide)) continue;
+        if (!(acidNotes[i]->m_flags & NOTE_SLIDE)) continue;
         ++slides;
-        if (acidNotes[i]->beat + acidNotes[i]->length <= acidNotes[i + 1]->beat) ++slideGaps;
+        if (acidNotes[i]->m_beat + acidNotes[i]->m_length <= acidNotes[i + 1]->m_beat) ++slideGaps;
     }
     for (size_t b = 0; b < leadR.size(); ++b) {
-        if (leadR[b].hi == 0 || arpR[b].hi == 0) continue;
+        if (leadR[b].m_hi == 0 || arpR[b].m_hi == 0) continue;
         ++sharedBlocks;
-        if (std::min(leadR[b].hi, arpR[b].hi) - std::max(leadR[b].lo, arpR[b].lo) > 2) ++masked;
+        if (std::min(leadR[b].m_hi, arpR[b].m_hi) - std::max(leadR[b].m_lo, arpR[b].m_lo) > 2) ++masked;
     }
     check(notes > 1000 && outside == 0, "every acid, lead and arp note in its track's scale", fmt("%d of %d outside", outside, notes));
     check(weak == 0 && arpOff == 0 && strong > 50, "lead on the strong beats tones of the tonic chord, every arp note on its chord's sus / add9 material",
@@ -1045,7 +1045,7 @@ void testMelodyScore()
     const int clashes = RuleRef::registerClashes(ev, 0, tracks * 128);
     check(clashes == 0 && sharedBlocks > 50, "where lead and arp play together they never sound in one register at the same instant",
           fmt("%d shared bars (%d with overlapping bar ranges), %d sixteenths with two line voices closer than %d semitones",
-              sharedBlocks, masked, clashes, kRegisterGap));
+              sharedBlocks, masked, clashes, RegisterGap));
 }
 
 /** @brief Melody, part `.variety`: the melodic identity changes from track to track (24 plans). */
@@ -1058,18 +1058,18 @@ void testMelodyVariety()
         q.parseText("compose.level_match=Off master.auto_gain=Off");
         Composer cv(4711);
         std::vector<uint64_t> acids;
-        int progressions = 0, styles[kNumArpStyles] = {}, oscs[4] = {}, squelch = 0, silent = 0;
+        int progressions = 0, styles[NumArpStyles] = {}, oscs[4] = {}, squelch = 0, silent = 0;
         for (int i = 0; i < 24; ++i) {
             const TrackPlan t = cv.track(q, i);
             uint64_t h = 1469598103934665603ull;
-            for (const MelodyNote& n : t.melody.acid[0]) h = (h ^ static_cast<uint64_t>(n.step * 131 + n.rel + 40)) * 1099511628211ull;
+            for (const MelodyNote& n : t.m_melody.m_acid[0]) h = (h ^ static_cast<uint64_t>(n.m_step * 131 + n.m_rel + 40)) * 1099511628211ull;
             acids.push_back(h);
-            if (t.melody.chordDegree[1] || t.melody.chordDegree[2] || t.melody.chordDegree[3]) ++progressions;
-            ++styles[t.melody.arpStyle];
+            if (t.m_melody.m_chordDegree[1] || t.m_melody.m_chordDegree[2] || t.m_melody.m_chordDegree[3]) ++progressions;
+            ++styles[t.m_melody.m_arpStyle];
             // Since 19.09.2026 the lead's oscillator is part of its voice recipe (Composer.h, VoiceRecipe).
-            if (t.voice[polyIndex(PolyInstance::Lead)].osc >= 0) ++oscs[t.voice[polyIndex(PolyInstance::Lead)].osc];
-            squelch += t.melody.acidSquelch == 1 ? 1 : 0;
-            if (!t.melody.present[mpIndex(MelodyPart::Acid)] && !t.melody.present[mpIndex(MelodyPart::Lead)] && !t.melody.present[mpIndex(MelodyPart::Arp)]) ++silent;
+            if (t.m_voice[polyIndex(PolyInstanceE::LEAD)].m_osc >= 0) ++oscs[t.m_voice[polyIndex(PolyInstanceE::LEAD)].m_osc];
+            squelch += t.m_melody.m_acidSquelch == 1 ? 1 : 0;
+            if (!t.m_melody.m_present[mpIndex(MelodyPartE::ACID)] && !t.m_melody.m_present[mpIndex(MelodyPartE::LEAD)] && !t.m_melody.m_present[mpIndex(MelodyPartE::ARP)]) ++silent;
         }
         std::sort(acids.begin(), acids.end());
         const int distinct = static_cast<int>(std::unique(acids.begin(), acids.end()) - acids.begin());
@@ -1096,7 +1096,7 @@ void testMelodyDepthRender()
         e->params().parseText("compose.track_bars=64 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 mix.kick_mute=1 mix.bass_mute=1 mix.perc_mute=1 "
                               "mix.pad_mute=1 mix.drone_mute=1 mix.sfx_mute=1 mix.texture_mute=1 mix.vocal_mute=1");
         Composer cm(3);
-        const std::vector<float> y = renderEngine(*e, cm, 64.0 * kBeatsPerBar, 512, 48000.0);
+        const std::vector<float> y = renderEngine(*e, cm, 64.0 * BeatsPerBar, 512, 48000.0);
         const std::vector<float> tail(y.begin() + static_cast<long>(y.size() / 2), y.end());
         double pk = 0.0;
         for (float v : tail) pk = std::max(pk, static_cast<double>(std::fabs(v)));
@@ -1120,7 +1120,7 @@ void testMelodyBlockSize()
             e->params().parseText("compose.track_bars=32 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
                                   "compose.pad_amount=1 compose.gate_chance=1 compose.sfx_amount=1");
             Composer cb(21);
-            renders.push_back(renderEngine(*e, cb, 20.0 * kBeatsPerBar, block, 48000.0));
+            renders.push_back(renderEngine(*e, cb, 20.0 * BeatsPerBar, block, 48000.0));
         }
         bool identical = true;
         for (size_t k = 1; k < renders.size(); ++k) identical = identical && renders[k] == renders[0];
@@ -1136,10 +1136,10 @@ void testMelodyMidi()
     {
         Score s;
         NoteEvent a;
-        a.part = Part::Acid; a.beat = 0.0; a.length = 0.28f; a.pitch = 57; a.velocity = 120; a.flags = kNoteSlide | kNoteAccent;
-        s.notes.push_back(a);
-        a.beat = 0.25; a.length = 0.1f; a.pitch = 60; a.velocity = 88; a.flags = 0;
-        s.notes.push_back(a);
+        a.m_part = PartE::ACID; a.m_beat = 0.0; a.m_length = 0.28f; a.m_pitch = 57; a.m_velocity = 120; a.m_flags = NOTE_SLIDE | NOTE_ACCENT;
+        s.m_notes.push_back(a);
+        a.m_beat = 0.25; a.m_length = 0.1f; a.m_pitch = 60; a.m_velocity = 88; a.m_flags = 0;
+        s.m_notes.push_back(a);
         const std::vector<uint8_t> bytes = encodeMidi(s);
         int on = 0, off = 0;
         for (size_t i = 0; i + 2 < bytes.size(); ++i) {
@@ -1149,8 +1149,8 @@ void testMelodyMidi()
         MidiFileData d;
         decodeMidi(bytes.data(), bytes.size(), d);
         bool overlap = false;
-        for (const MidiTrackData& t : d.tracks)
-            if (t.notes.size() == 2) overlap = t.notes[0].beat + t.notes[0].length > t.notes[1].beat && t.notes[0].velocity >= 100;
+        for (const MidiTrackData& t : d.m_tracks)
+            if (t.m_notes.size() == 2) overlap = t.m_notes[0].m_beat + t.m_notes[0].m_length > t.m_notes[1].m_beat && t.m_notes[0].m_velocity >= 100;
         check(on == 1 && off == 1 && overlap, "MIDI acid: slide as overlapping notes with CC 65, accent as velocity", fmt("CC65 on %d, off %d", on, off));
     }
 }
@@ -1175,7 +1175,7 @@ void testWaveTable()
         double worst = 0.0;
         const double a1 = std::abs(a[1]);
         for (int h = 2; h <= 256; ++h) worst = std::max(worst, std::fabs(20.0 * std::log10(std::abs(a[static_cast<size_t>(h)]) * h / a1)));
-        check(t.frames == 5 && worst < 0.01, "classic table: the saw frame has its harmonics at 1/h up to the 256th", fmt("largest deviation %.4f dB", worst));
+        check(t.m_frames == 5 && worst < 0.01, "classic table: the saw frame has its harmonics at 1/h up to the 256th", fmt("largest deviation %.4f dB", worst));
     }
     // Anti-aliasing: a saw read at A6 from the level the note chooses, against the same saw read from
     // the full-resolution level.
@@ -1199,7 +1199,7 @@ void testWaveTable()
     {
         ParamStore p;
         auto e = makePoly("pad.table=Classic pad.position=0.5 pad.pos_env=0 pad.pos_lfo_depth=0 pad.detune=0 pad.osc2=Off pad.lfo_cutoff=0 pad.lfo_pitch=0 pad.lfo_amp=0 pad.cutoff=18000 pad.amp_attack=0.3 "
-                          "pad.hp_track=0 pad.hp_floor=150 pad.delay_send=0 pad.width=0", p, PolyInstance::Pad);
+                          "pad.hp_track=0 pad.hp_floor=150 pad.delay_send=0 pad.width=0", p, PolyInstanceE::PAD);
         e->noteOn(93, 1.0f, 8.0, 1 << 20, 0.0);   // A6
         const std::vector<float> y = renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 9600 + 65536);
         // Szabo's detune polynomial is 0.003 at its zero, so the seven oscillators still spread each harmonic by
@@ -1263,7 +1263,7 @@ void testProbeAudit()
         pe->params().parseText((knobs + "compose.level_match=On").c_str());
         Composer pc(seed);
         std::vector<double> probe(static_cast<size_t>(tracksN));
-        for (int t = 0; t < tracksN; ++t) probe[static_cast<size_t>(t)] = pc.track(pe->params(), t).loudness;
+        for (int t = 0; t < tracksN; ++t) probe[static_cast<size_t>(t)] = pc.track(pe->params(), t).m_loudness;
         // The real tracks, measured in their first core, with the match off.
         auto e = std::make_unique<Engine>();
         e->prepare(48000.0, 512);
@@ -1277,15 +1277,15 @@ void testProbeAudit()
         for (int t = 0; t < tracksN; ++t) {
             const TrackPlan tp = ce.track(e->params(), t);
             int coreBar = 0, coreBars = 16;
-            for (int i = 0; i < tp.form.count; ++i)
-                if (tp.form.section[i].type == SectionType::Groove || tp.form.section[i].type == SectionType::Drop) {
-                    coreBar = tp.form.section[i].startBar;
-                    coreBars = tp.form.section[i].bars;
+            for (int i = 0; i < tp.m_form.m_count; ++i)
+                if (tp.m_form.m_section[i].m_type == SectionTypeE::GROOVE || tp.m_form.m_section[i].m_type == SectionTypeE::DROP) {
+                    coreBar = tp.m_form.m_section[i].m_startBar;
+                    coreBars = tp.m_form.m_section[i].m_bars;
                     break;
                 }
             const int window = std::min(24, coreBars - 4);
-            const uint64_t a = static_cast<uint64_t>(tm.secondsAt((tp.firstBar + coreBar + 2) * 4.0) * 48000.0);
-            const uint64_t b = static_cast<uint64_t>(tm.secondsAt((tp.firstBar + coreBar + 2 + window) * 4.0) * 48000.0);
+            const uint64_t a = static_cast<uint64_t>(tm.secondsAt((tp.m_firstBar + coreBar + 2) * 4.0) * 48000.0);
+            const uint64_t b = static_cast<uint64_t>(tm.secondsAt((tp.m_firstBar + coreBar + 2 + window) * 4.0) * 48000.0);
             LoudnessMeter m;
             m.prepare(48000.0);
             while (e->samplePosition() < b) {
@@ -1294,8 +1294,8 @@ void testProbeAudit()
                 e->process(L.data(), R.data(), n);
                 if (e->samplePosition() > a) m.process(L.data(), R.data(), n);
             }
-            real[static_cast<size_t>(t)] = m.read().integrated;
-            const uint64_t next = static_cast<uint64_t>(tm.secondsAt(static_cast<double>(tp.firstBar + tp.bars) * 4.0) * 48000.0);
+            real[static_cast<size_t>(t)] = m.read().m_integrated;
+            const uint64_t next = static_cast<uint64_t>(tm.secondsAt(static_cast<double>(tp.m_firstBar + tp.m_bars) * 4.0) * 48000.0);
             while (e->samplePosition() < next) {
                 cond.pump(e->params(), 32.0);
                 e->process(L.data(), R.data(), static_cast<int>(std::min<uint64_t>(512, next - e->samplePosition())));
@@ -1312,10 +1312,10 @@ void testProbeAudit()
             const TrackPlan tp = ce.track(e->params(), t);
             float energy = 0.5f;
             int coreType = 0;
-            for (int i = 0; i < tp.form.count; ++i)
-                if (tp.form.section[i].type == SectionType::Groove || tp.form.section[i].type == SectionType::Drop) {
-                    energy = 0.5f * (tp.form.section[i].energy + tp.form.section[i].energyTo);
-                    coreType = static_cast<int>(tp.form.section[i].type);
+            for (int i = 0; i < tp.m_form.m_count; ++i)
+                if (tp.m_form.m_section[i].m_type == SectionTypeE::GROOVE || tp.m_form.m_section[i].m_type == SectionTypeE::DROP) {
+                    energy = 0.5f * (tp.m_form.m_section[i].m_energy + tp.m_form.m_section[i].m_energyTo);
+                    coreType = static_cast<int>(tp.m_form.m_section[i].m_type);
                     break;
                 }
             const double arc = std::clamp((static_cast<double>(energy) - 0.7) * 5.0, -2.0, 2.0);
@@ -1334,32 +1334,32 @@ void testMeasure()
 {
     section("MEASUREMENT BENCH");
     const double sr = 48000.0;
-    const int kPitches[4] = { 60, 72, 84, 93 };
-    const char* const kNames[4] = { "C4", "C5", "C6", "A6" };
-    const std::string kWt = "pad.osc=Wavetable pad.table=Classic pad.position=0.5 pad.pos_env=0 pad.pos_lfo_depth=0 ";
+    const int Pitches[4] = { 60, 72, 84, 93 };
+    const char* const Names[4] = { "C4", "C5", "C6", "A6" };
+    const std::string Wt = "pad.osc=Wavetable pad.table=Classic pad.position=0.5 pad.pos_env=0 pad.pos_lfo_depth=0 ";
     std::printf("\n  supersaw aliasing, sustained note, 65536-sample window 0.2 s after the onset\n");
     std::printf("  %-4s %-7s | %-22s | %-22s | %-22s | legit\n", "note", "detune", "lead (supersaw)", "pad path (wavetable)", "lead at 2x + halfband");
     for (double detune : { 1.0, 0.55 }) {
         const double yDet = Poly::detuneCurve(detune);
         for (int i = 0; i < 4; ++i) {
-            const double f0 = midiToHz(kPitches[i]);
+            const double f0 = midiToHz(Pitches[i]);
             const std::string lead = commonPoly("lead", detune);
-            const std::string pad = kWt + commonPoly("pad", detune);
+            const std::string pad = Wt + commonPoly("pad", detune);
             double cv = 0.0;
-            const std::vector<float> a = renderPolyNote(lead, PolyInstance::Lead, kPitches[i], 9600 + 65536, 48000.0);
-            const std::vector<float> b = renderPolyNote(pad, PolyInstance::Pad, kPitches[i], 9600 + 65536, 48000.0);
-            const std::vector<float> c = renderPolyNote(lead, PolyInstance::Lead, kPitches[i], 9600 + 65536, 96000.0);
+            const std::vector<float> a = renderPolyNote(lead, PolyInstanceE::LEAD, Pitches[i], 9600 + 65536, 48000.0);
+            const std::vector<float> b = renderPolyNote(pad, PolyInstanceE::PAD, Pitches[i], 9600 + 65536, 48000.0);
+            const std::vector<float> c = renderPolyNote(lead, PolyInstanceE::LEAD, Pitches[i], 9600 + 65536, 96000.0);
             const double aa = supersawAliasDb(a, 9600, f0, yDet, sr, &cv);
             const double ab = supersawAliasDb(b, 9600, f0, yDet, sr);
             const double ac = supersawAliasDb(c, 9600, f0, yDet, sr);
             const double ia = inharmonicDb(a, 9600, f0, sr), ib = inharmonicDb(b, 9600, f0, sr), ic = inharmonicDb(c, 9600, f0, sr);
             std::printf("  %-4s %-7.2f | alias %6.1f  inh %5.1f | alias %6.1f  inh %5.1f | alias %6.1f  inh %5.1f | %.0f %%\n",
-                        kNames[i], detune, aa, ia, ab, ib, ac, ic, 100.0 * cv);
+                        Names[i], detune, aa, ia, ab, ib, ac, ic, 100.0 * cv);
         }
     }
     std::printf("\n  top end, detune 0.55: power above 8 kHz relative to 100 Hz .. 18 kHz\n");
     for (int i = 0; i < 4; ++i) {
-        const double f0 = midiToHz(kPitches[i]);
+        const double f0 = midiToHz(Pitches[i]);
         auto share = [&](const std::vector<float>& y) {
             const std::vector<double> pw = powerSpectrum(y.data() + 9600, 65536);
             double hi = 0.0, all = 0.0;
@@ -1371,16 +1371,16 @@ void testMeasure()
             }
             return powDb(hi / all);
         };
-        const std::vector<float> a = renderPolyNote(commonPoly("lead", 0.55), PolyInstance::Lead, kPitches[i], 9600 + 65536, 48000.0);
-        const std::vector<float> b = renderPolyNote(kWt + commonPoly("pad", 0.55), PolyInstance::Pad, kPitches[i], 9600 + 65536, 48000.0);
+        const std::vector<float> a = renderPolyNote(commonPoly("lead", 0.55), PolyInstanceE::LEAD, Pitches[i], 9600 + 65536, 48000.0);
+        const std::vector<float> b = renderPolyNote(Wt + commonPoly("pad", 0.55), PolyInstanceE::PAD, Pitches[i], 9600 + 65536, 48000.0);
         const int lvl = waveLevelFor(f0, sr, -1);
         std::printf("  %-4s f0 %7.1f Hz  level %d keeps %3d harmonics (to %5.0f Hz)  lead %+6.1f dB, pad path %+6.1f dB\n",
-                    kNames[i], f0, lvl, WaveTable::levelHarmonics(lvl), f0 * WaveTable::levelHarmonics(lvl), share(a), share(b));
+                    Names[i], f0, lvl, WaveTable::levelHarmonics(lvl), f0 * WaveTable::levelHarmonics(lvl), share(a), share(b));
     }
     // Task 3: does the lead need 2x? The FM and VA oscillators, aliasing above 12 kHz against the fundamental.
     std::printf("\n  FM and VA lead, aliasing above 12 kHz relative to the fundamental (1x, and 2x + halfband)\n");
-    struct Case { const char* name; const char* set; double ratio; };
-    const Case kCases[] = {
+    struct Case { const char* m_name; const char* m_set; double m_ratio; };
+    const Case Cases[] = {
         { "VA saw",        "lead.osc=VA lead.wave=0", 0.0 },
         { "VA pulse 25 %", "lead.osc=VA lead.wave=1 lead.pulse_width=0.25", 0.0 },
         { "FM I=2.5 r=2",  "lead.osc=FM lead.fm_index=2.5 lead.fm_ratio=2 lead.fm_decay=2000", 2.0 },
@@ -1389,28 +1389,28 @@ void testMeasure()
         { "FM I=10 r=3.5", "lead.osc=FM lead.fm_index=10 lead.fm_ratio=3.5 lead.fm_decay=2000", 3.5 },
         { "FM I=10 r=7.5", "lead.osc=FM lead.fm_index=10 lead.fm_ratio=7.5 lead.fm_decay=2000", 7.5 },
     };
-    for (const Case& c : kCases) {
-        std::printf("  %-14s", c.name);
+    for (const Case& c : Cases) {
+        std::printf("  %-14s", c.m_name);
         for (int i = 1; i < 4; ++i) {
-            const double f0 = midiToHz(kPitches[i]);
-            const std::string s = std::string(c.set) + " " + commonPoly("lead", 0.0);
-            const std::vector<double> lines = c.ratio > 0.0 ? fmLines(f0, c.ratio, sr) : harmonicLines(f0, sr);
-            const std::vector<float> a = renderPolyNote(s, PolyInstance::Lead, kPitches[i], 9600 + 65536, 48000.0);
-            const std::vector<float> b = renderPolyNote(s, PolyInstance::Lead, kPitches[i], 9600 + 65536, 96000.0);
-            std::printf("  %s 1x %6.1f / 2x %6.1f", kNames[i], lineAliasDb(a, 9600, lines, f0, sr, 12000.0), lineAliasDb(b, 9600, lines, f0, sr, 12000.0));
+            const double f0 = midiToHz(Pitches[i]);
+            const std::string s = std::string(c.m_set) + " " + commonPoly("lead", 0.0);
+            const std::vector<double> lines = c.m_ratio > 0.0 ? fmLines(f0, c.m_ratio, sr) : harmonicLines(f0, sr);
+            const std::vector<float> a = renderPolyNote(s, PolyInstanceE::LEAD, Pitches[i], 9600 + 65536, 48000.0);
+            const std::vector<float> b = renderPolyNote(s, PolyInstanceE::LEAD, Pitches[i], 9600 + 65536, 96000.0);
+            std::printf("  %s 1x %6.1f / 2x %6.1f", Names[i], lineAliasDb(a, 9600, lines, f0, sr, 12000.0), lineAliasDb(b, 9600, lines, f0, sr, 12000.0));
         }
         std::printf("\n");
     }
     // The same, with the voice filter where the lead really stands (cutoff 10 kHz, the Phase-4 value).
     std::printf("\n  the same at the lead's own cutoff of 10 kHz (what actually reaches the mix)\n");
-    for (const Case& c : kCases) {
-        std::printf("  %-14s", c.name);
+    for (const Case& c : Cases) {
+        std::printf("  %-14s", c.m_name);
         for (int i = 1; i < 4; ++i) {
-            const double f0 = midiToHz(kPitches[i]);
-            std::string s = std::string(c.set) + " " + commonPoly("lead", 0.0) + " lead.cutoff=10000";
-            const std::vector<double> lines = c.ratio > 0.0 ? fmLines(f0, c.ratio, sr) : harmonicLines(f0, sr);
-            const std::vector<float> a = renderPolyNote(s, PolyInstance::Lead, kPitches[i], 9600 + 65536, 48000.0);
-            std::printf("  %s 1x %6.1f", kNames[i], lineAliasDb(a, 9600, lines, f0, sr, 12000.0));
+            const double f0 = midiToHz(Pitches[i]);
+            std::string s = std::string(c.m_set) + " " + commonPoly("lead", 0.0) + " lead.cutoff=10000";
+            const std::vector<double> lines = c.m_ratio > 0.0 ? fmLines(f0, c.m_ratio, sr) : harmonicLines(f0, sr);
+            const std::vector<float> a = renderPolyNote(s, PolyInstanceE::LEAD, Pitches[i], 9600 + 65536, 48000.0);
+            std::printf("  %s 1x %6.1f", Names[i], lineAliasDb(a, 9600, lines, f0, sr, 12000.0));
         }
         std::printf("\n");
     }
@@ -1432,13 +1432,13 @@ void testWaveTableLibrary()
     // its own model of the level build and the Catmull-Rom read -- never from the pack this test
     // reads. Two independent paths therefore have to agree: Python from the WAV, and C++ from the
     // packed coefficients through buildFromHarmonics().
-    struct LibraryRef { const char* name; int frames; double rms0; double aliasC5; double aliasC6; };
+    struct LibraryRef { const char* m_name; int m_frames; double m_rms0; double m_aliasC5; double m_aliasC6; };
     // The block itself is generated (`python Tools/wt_pack.py --reference`) -- 464 tables since
     // 22.09.2026, which is no longer something to keep by hand -- and the static_assert below is
     // what makes a stale one a build error rather than a quiet half-check.
 #include "WaveTableRef.inl"
 
-    static_assert(sizeof(kLibraryRef) / sizeof(kLibraryRef[0]) == kNumLibraryWaveTables,
+    static_assert(sizeof(LibraryRefs) / sizeof(LibraryRefs[0]) == NumLibraryWaveTables,
                   "the reference block and the shipped selection have come apart");
 
     // 22.09.2026: the pack is only *indexed* at load now -- a table is expanded into its mip levels
@@ -1448,10 +1448,10 @@ void testWaveTableLibrary()
     // be 900 MB, so the ones that walk the whole library walk it in chunks and reload between them.
     const auto expand = [](int first, int count) {
         std::vector<int> want;
-        for (int i = first; i < first + count && i < kNumWaveTables; ++i) want.push_back(i);
+        for (int i = first; i < first + count && i < NumWaveTables; ++i) want.push_back(i);
         if (!want.empty()) ensureWaveTables(want.data(), static_cast<int>(want.size()));
     };
-    constexpr int kChunk = 32;   // 32 tables is about 62 MB, well inside the default budget
+    constexpr int Chunk = 32;   // 32 tables is about 62 MB, well inside the default budget
 
     // The compatibility contract, first, because it is the one a saved set depends on: the six
     // built-in tables keep indices 0..5 and the library begins at 6. A `.phosset` and a plugin
@@ -1459,7 +1459,7 @@ void testWaveTableLibrary()
     // the sound of every set ever saved.
     {
         int wrong = 0;
-        for (int i = 0; i < kNumBuiltinWaveTables; ++i) if (&waveTable(i) != &builtinWaveTable(i)) ++wrong;
+        for (int i = 0; i < NumBuiltinWaveTables; ++i) if (&waveTable(i) != &builtinWaveTable(i)) ++wrong;
         ParamStore p;
         const int id = p.find("lead.table");
         p.parseText("lead.table=1");
@@ -1468,10 +1468,10 @@ void testWaveTableLibrary()
         const bool sync = p.getInt(id) == 4;
         p.parseText("pad.table=5");
         const bool five = p.format(p.find("pad.table")) == std::string("Formant Saw");
-        check(wrong == 0 && one && sync && five && kNumWaveTables > kNumBuiltinWaveTables,
+        check(wrong == 0 && one && sync && five && NumWaveTables > NumBuiltinWaveTables,
               "old sets: indices 0..5 are still the six built-in tables and the library begins at 6",
               fmt("%d of the six moved; \"1\" reads %s, \"Sync\" reads %d, \"5\" reads %s; %d tables in all",
-                  wrong, one ? "Vocal" : "something else", p.getInt(id), five ? "Formant Saw" : "something else", kNumWaveTables));
+                  wrong, one ? "Vocal" : "something else", p.getInt(id), five ? "Formant Saw" : "something else", NumWaveTables));
     }
 
     // The fallback, before anything is loaded: a set saved on a machine with the library must still
@@ -1480,13 +1480,13 @@ void testWaveTableLibrary()
     {
         resetWaveTableLibrary();
         int wrong = 0;
-        for (int i = 0; i < kNumLibraryWaveTables; ++i) {
-            if (&waveTable(kNumBuiltinWaveTables + i) != &builtinWaveTable(kLibraryTables[i].fallback)) ++wrong;
-            if (waveTableLoaded(kNumBuiltinWaveTables + i)) ++wrong;
+        for (int i = 0; i < NumLibraryWaveTables; ++i) {
+            if (&waveTable(NumBuiltinWaveTables + i) != &builtinWaveTable(LibraryTables[i].m_fallback)) ++wrong;
+            if (waveTableLoaded(NumBuiltinWaveTables + i)) ++wrong;
         }
         check(wrong == 0 && waveTableLibraryBytes() == 0,
               "no library file: every library index falls back to the built-in its descriptor names",
-              fmt("%d of %d wrong, %zu bytes held", wrong, kNumLibraryWaveTables, waveTableLibraryBytes()));
+              fmt("%d of %d wrong, %zu bytes held", wrong, NumLibraryWaveTables, waveTableLibraryBytes()));
     }
 
     // A broken file must leave nothing half-built. The pack is copied with its end marker cut off,
@@ -1506,13 +1506,13 @@ void testWaveTableLibrary()
         std::string error;
         const int n = loadWaveTableLibrary(cut.c_str(), &error);
         int fellBack = 0;
-        for (int i = 0; i < kNumLibraryWaveTables; ++i)
-            if (&waveTable(kNumBuiltinWaveTables + i) == &builtinWaveTable(kLibraryTables[i].fallback)) ++fellBack;
+        for (int i = 0; i < NumLibraryWaveTables; ++i)
+            if (&waveTable(NumBuiltinWaveTables + i) == &builtinWaveTable(LibraryTables[i].m_fallback)) ++fellBack;
         std::error_code ec;
         std::filesystem::remove(cut, ec);
-        check(!good.empty() && n == 0 && !error.empty() && fellBack == kNumLibraryWaveTables,
+        check(!good.empty() && n == 0 && !error.empty() && fellBack == NumLibraryWaveTables,
               "a truncated pack loads nothing at all and says why, rather than half a library",
-              fmt("%d tables, %d of %d fell back, error \"%s\"", n, fellBack, kNumLibraryWaveTables, error.c_str()));
+              fmt("%d tables, %d of %d fell back, error \"%s\"", n, fellBack, NumLibraryWaveTables, error.c_str()));
     }
 
     // The frame limit (the Quest lever): frames thinned evenly, both ends kept. Checked before the
@@ -1521,20 +1521,20 @@ void testWaveTableLibrary()
         resetWaveTableLibrary();
         setWaveTableFrameLimit(16);
         const int n = loadWaveTableLibrary();
-        expand(kNumBuiltinWaveTables, 1);
+        expand(NumBuiltinWaveTables, 1);
         std::vector<float> first, last;
         int frames = 0;
         {
-            const WaveTable& a = waveTable(kNumBuiltinWaveTables);
-            frames = a.frames;
+            const WaveTable& a = waveTable(NumBuiltinWaveTables);
+            frames = a.m_frames;
             first.assign(a.cycle(0, 0), a.cycle(0, 0) + WaveTable::levelLength(0));
             last.assign(a.cycle(0, frames - 1), a.cycle(0, frames - 1) + WaveTable::levelLength(0));
         }
         resetWaveTableLibrary();
         setWaveTableFrameLimit(0);
         loadWaveTableLibrary();
-        expand(kNumBuiltinWaveTables, 1);
-        const WaveTable& b = waveTable(kNumBuiltinWaveTables);
+        expand(NumBuiltinWaveTables, 1);
+        const WaveTable& b = waveTable(NumBuiltinWaveTables);
         // Not bit-equal, and not even equal in level: the whole table is scaled by its loudest
         // frame, and thinning can drop that frame -- on a lead-lane table, whose frames travel a long
         // way in brightness, that is a decibel or so. The claim is about the *wave*, so each end is
@@ -1552,10 +1552,10 @@ void testWaveTableLibrary()
             return worst * std::sqrt(static_cast<double>(len));
         };
         const double dFirst = shapeDiff(first, b.cycle(0, 0), WaveTable::levelLength(0));
-        const double dLast = shapeDiff(last, b.cycle(0, b.frames - 1), WaveTable::levelLength(0));
-        check(n == kNumLibraryWaveTables && frames == 16 && b.frames == 64 && dFirst < 1e-3 && dLast < 1e-3,
+        const double dLast = shapeDiff(last, b.cycle(0, b.m_frames - 1), WaveTable::levelLength(0));
+        check(n == NumLibraryWaveTables && frames == 16 && b.m_frames == 64 && dFirst < 1e-3 && dLast < 1e-3,
               "the frame limit thins evenly and keeps both ends of the table",
-              fmt("%d frames at the limit, %d without it; ends differ by %.2e / %.2e", frames, b.frames, dFirst, dLast));
+              fmt("%d frames at the limit, %d without it; ends differ by %.2e / %.2e", frames, b.m_frames, dFirst, dLast));
     }
 
     // The library itself, against the reference block.
@@ -1564,52 +1564,52 @@ void testWaveTableLibrary()
         int n = 0;
         int badFrames = 0, badRms = 0, badAlias = 0, badName = 0;
         double worstRms = 0.0, worstAlias = 0.0;
-        for (int i = 0; i < kNumLibraryWaveTables; ++i) {
-            if (i % kChunk == 0) {                      // a fresh library, so the memory does not pile up
+        for (int i = 0; i < NumLibraryWaveTables; ++i) {
+            if (i % Chunk == 0) {                      // a fresh library, so the memory does not pile up
                 resetWaveTableLibrary();
                 setWaveTableFrameLimit(0);
                 n = loadWaveTableLibrary(nullptr, &error);
-                expand(kNumBuiltinWaveTables + i, kChunk);
+                expand(NumBuiltinWaveTables + i, Chunk);
             }
-            const LibraryRef& r = kLibraryRef[i];
-            const WaveTable& t = waveTable(kNumBuiltinWaveTables + i);
-            if (t.frames != r.frames) ++badFrames;
+            const LibraryRef& r = LibraryRefs[i];
+            const WaveTable& t = waveTable(NumBuiltinWaveTables + i);
+            if (t.m_frames != r.m_frames) ++badFrames;
             const double rms = tableFrameRms(t, 0, 0);
-            worstRms = std::max(worstRms, std::fabs(rms - r.rms0));
-            if (std::fabs(rms - r.rms0) > 1e-3) ++badRms;
+            worstRms = std::max(worstRms, std::fabs(rms - r.m_rms0));
+            if (std::fabs(rms - r.m_rms0) > 1e-3) ++badRms;
             for (const double hz : { 523.2511, 1046.502 }) {
-                const double want = hz < 700.0 ? r.aliasC5 : r.aliasC6;
+                const double want = hz < 700.0 ? r.m_aliasC5 : r.m_aliasC6;
                 const double got = tableFrameAliasDb(t, 0, hz, sr);
                 worstAlias = std::max(worstAlias, std::fabs(got - want));
                 if (std::fabs(got - want) > 1.5) ++badAlias;
             }
-            if (std::strcmp(kLibraryTables[i].name, r.name) != 0) ++badName;
+            if (std::strcmp(LibraryTables[i].m_name, r.m_name) != 0) ++badName;
         }
-        check(n == kNumLibraryWaveTables && badFrames == 0 && badRms == 0 && badAlias == 0 && badName == 0,
+        check(n == NumLibraryWaveTables && badFrames == 0 && badRms == 0 && badAlias == 0 && badName == 0,
               "the pack decodes to the tables Python measured from the source files",
               fmt("%d tables; %d wrong frame counts, %d names, %d RMS (worst %.2e), %d aliasing (worst %.2f dB)",
                   n, badFrames, badName, badRms, worstRms, badAlias, worstAlias));
     }
 
     // A loaded table and a built-in one are the same object downstream. The proof is the table's
-    // own contract: buildFromHarmonics() scales the loudest frame to kTargetRms, and the library
+    // own contract: buildFromHarmonics() scales the loudest frame to TargetRms, and the library
     // goes through exactly that call, so the loudest frame of every shipped table must land there.
     {
         double worst = 0.0;
-        for (int i = 0; i < kNumLibraryWaveTables; ++i) {
-            if (i % kChunk == 0) {
+        for (int i = 0; i < NumLibraryWaveTables; ++i) {
+            if (i % Chunk == 0) {
                 resetWaveTableLibrary();
                 setWaveTableFrameLimit(0);
                 loadWaveTableLibrary();
-                expand(kNumBuiltinWaveTables + i, kChunk);
+                expand(NumBuiltinWaveTables + i, Chunk);
             }
-            const WaveTable& t = waveTable(kNumBuiltinWaveTables + i);
+            const WaveTable& t = waveTable(NumBuiltinWaveTables + i);
             double loudest = 0.0;
-            for (int f = 0; f < t.frames; ++f) loudest = std::max(loudest, tableFrameRms(t, 0, f));
-            worst = std::max(worst, std::fabs(loudest - static_cast<double>(WaveTable::kTargetRms)));
+            for (int f = 0; f < t.m_frames; ++f) loudest = std::max(loudest, tableFrameRms(t, 0, f));
+            worst = std::max(worst, std::fabs(loudest - static_cast<double>(WaveTable::TargetRms)));
         }
         check(worst < 1e-4, "a loaded table carries the same normalisation a built-in one does",
-              fmt("the loudest frame is off kTargetRms by at most %.2e", worst));
+              fmt("the loudest frame is off TargetRms by at most %.2e", worst));
     }
 
     // The supersaw does not read the library, whatever the table parameter says: Poly keeps a
@@ -1620,7 +1620,7 @@ void testWaveTableLibrary()
                                    "pad.hp_track=0 pad.hp_floor=150 pad.delay_send=0 pad.width=0 pad.amp_attack=0.3 pad.amp_sustain=1 ";
         auto render = [&](const char* table) {
             ParamStore q;
-            auto e = makePoly((common + table).c_str(), q, PolyInstance::Pad);
+            auto e = makePoly((common + table).c_str(), q, PolyInstanceE::PAD);
             e->seedPhases(0x5AFE5AFEull);
             e->noteOn(69, 1.0f, 8.0, 1 << 20, 0.0);
             return renderMono([&](float* L, float* R, int n) { e->process(L, R, n); }, 4096);
@@ -1642,7 +1642,7 @@ void testWaveTableLibrary()
                                    "pad.delay_send=0 pad.width=0 pad.amp_attack=0.3 pad.amp_sustain=1 ";
         auto render = [&](const char* table, int pitch, size_t n) {
             ParamStore q;
-            auto e = makePoly((common + table).c_str(), q, PolyInstance::Pad);
+            auto e = makePoly((common + table).c_str(), q, PolyInstanceE::PAD);
             e->seedPhases(0x5AFE5AFEull);
             e->noteOn(pitch, 1.0f, 8.0, 1 << 20, 0.0);
             return renderMono([&](float* L, float* R, int n2) { e->process(L, R, n2); }, n);
@@ -1674,29 +1674,29 @@ void testWaveTableLibrary()
         const double packMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         const size_t idle = waveTableLibraryBytes();
         const auto t1 = std::chrono::steady_clock::now();
-        expand(kNumBuiltinWaveTables, 6);
+        expand(NumBuiltinWaveTables, 6);
         const double trackMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t1).count();
         const size_t track = waveTableLibraryBytes();
-        expand(kNumBuiltinWaveTables + 6, kChunk - 6);
+        expand(NumBuiltinWaveTables + 6, Chunk - 6);
         const size_t chunk = waveTableLibraryBytes();
         int frames = 0;
-        for (int i = 0; i < kChunk; ++i) frames += waveTable(kNumBuiltinWaveTables + i).frames;
-        const double perTable = static_cast<double>(chunk) / kChunk;
+        for (int i = 0; i < Chunk; ++i) frames += waveTable(NumBuiltinWaveTables + i).m_frames;
+        const double perTable = static_cast<double>(chunk) / Chunk;
         std::error_code ec;
         const double packMb = static_cast<double>(std::filesystem::file_size(
             std::string(PHOS_SOURCE_DATA_DIR) + "/library.phoswt", ec)) / (1024.0 * 1024.0);
         std::printf("  %d library tables in the pack (%.2f MB, indexed in %.1f ms, %zu bytes expanded);"
                     " a track's six voices cost %.2f MB and %.0f ms, a table %.2f MB,"
                     " the whole library would be %.0f MB\n",
-                    kNumLibraryWaveTables, packMb, packMs, idle, track / (1024.0 * 1024.0), trackMs,
-                    perTable / (1024.0 * 1024.0), perTable * kNumLibraryWaveTables / (1024.0 * 1024.0));
+                    NumLibraryWaveTables, packMb, packMs, idle, track / (1024.0 * 1024.0), trackMs,
+                    perTable / (1024.0 * 1024.0), perTable * NumLibraryWaveTables / (1024.0 * 1024.0));
         const char* src = std::getenv("PHOS_WT_SOURCE");
         if (src != nullptr && src[0] != 0) {
             const auto t2 = std::chrono::steady_clock::now();
             int read = 0;
             size_t wavBytes = 0;
-            for (int i = 0; i < kChunk; ++i) {
-                const std::string q = std::string(src) + "/" + kLibraryTables[i].id + ".wav";
+            for (int i = 0; i < Chunk; ++i) {
+                const std::string q = std::string(src) + "/" + LibraryTables[i].m_id + ".wav";
                 std::vector<std::vector<std::complex<double>>> coeffs;
                 int cycleLen = 0;
                 if (!readWaveTableWav(q.c_str(), coeffs, cycleLen)) continue;
@@ -1715,7 +1715,7 @@ void testWaveTableLibrary()
         // carried. And a table must still cost about what it always did: the on-demand path goes
         // through the very same buildFromHarmonics(), so a table that suddenly costs half as much
         // would mean frames were being dropped somewhere.
-        check(n == kNumLibraryWaveTables && idle == 0 && track > 0 && track < 16u * 1024u * 1024u
+        check(n == NumLibraryWaveTables && idle == 0 && track > 0 && track < 16u * 1024u * 1024u
               && perTable > 1.0e6 && perTable < 3.0e6,
               "the library's memory is what the plan says it is: nothing until a track asks, then a table at a time",
               fmt("%zu bytes idle, %zu for a track's six voices, %.0f bytes a table", idle, track, perTable));
@@ -1730,15 +1730,15 @@ void testWaveTableLibrary()
         setWaveTableFrameLimit(0);
         loadWaveTableLibrary();
         setWaveTableBudgetBytes(8u * 1024u * 1024u);   // room for four tables or so
-        expand(kNumBuiltinWaveTables, 64);
+        expand(NumBuiltinWaveTables, 64);
         const size_t held = waveTableLibraryBytes();
         const int built = waveTablesBuilt();
         // Every index still answers, and the ones that were refused answer with their fallback.
         int wrong = 0;
         for (int i = 0; i < 64; ++i) {
-            const int idx = kNumBuiltinWaveTables + i;
+            const int idx = NumBuiltinWaveTables + i;
             const WaveTable& t = waveTable(idx);
-            if (!waveTableLoaded(idx) && &t != &builtinWaveTable(kLibraryTables[i].fallback)) ++wrong;
+            if (!waveTableLoaded(idx) && &t != &builtinWaveTable(LibraryTables[i].m_fallback)) ++wrong;
         }
         setWaveTableBudgetBytes(192u * 1024u * 1024u);
         check(built > 0 && built < 64 && held <= 10u * 1024u * 1024u && wrong == 0,
@@ -1778,14 +1778,14 @@ void testLoaderThreadSafety()
     section("shared-data loaders are thread-safe at the source (WaveTableFile.cpp, Vocal.cpp)");
     const unsigned hw = std::thread::hardware_concurrency();
     const int threadsPerRound = static_cast<int>(std::clamp(hw == 0 ? 8u : hw, 4u, 16u));
-    constexpr int kRounds = 30;
+    constexpr int Rounds = 30;
 
     auto hammer = [&](const char* what, const std::function<void()>& reset, const std::function<int()>& load) {
         reset();
         const int reference = load();
         int mismatches = 0, cameBackEmpty = 0;
         const auto t0 = std::chrono::steady_clock::now();
-        for (int round = 0; round < kRounds; ++round) {
+        for (int round = 0; round < Rounds; ++round) {
             reset();
             // A start gate: every thread spins on it so its first loadXxx() call lands as close to the
             // others as the scheduler allows. Threads started one after another would mostly just queue
@@ -1808,9 +1808,9 @@ void testLoaderThreadSafety()
         }
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         check(reference > 0 && mismatches == 0,
-              fmt("%s: %d threads x %d rounds of a fresh first load, every call agrees", what, threadsPerRound, kRounds).c_str(),
+              fmt("%s: %d threads x %d rounds of a fresh first load, every call agrees", what, threadsPerRound, Rounds).c_str(),
               fmt("reference %d; %d of %d raced calls disagreed (%d came back empty); %.0f ms", reference, mismatches,
-                  threadsPerRound * kRounds, cameBackEmpty, ms));
+                  threadsPerRound * Rounds, cameBackEmpty, ms));
     };
 
     hammer("wavetable library", [] { resetWaveTableLibrary(); }, [] { return loadWaveTableLibrary(); });
@@ -1841,49 +1841,49 @@ void testWaveTableQuality()
     // arp -- a sixteenth note is over before a sweep arrives (docs/rounds/2026-09.md, 16.09.2026) -- and three
     // of those seven tables step by 0.5 and more at every frame count, thinned or not. Holding them
     // to a gliding table's bound would measure the selection, not the thinning.
-    constexpr double kShakerMove = 0.49;
-    const int kLimits[] = { 0, 48, 32, 24, 16 };
+    constexpr double ShakerMove = 0.49;
+    const int Limits[] = { 0, 48, 32, 24, 16 };
     std::map<int, std::vector<MorphMeasure>> byLimit;
-    for (int limit : kLimits) {
+    for (int limit : Limits) {
         resetWaveTableLibrary();
         setWaveTableFrameLimit(limit);
         loadWaveTableLibrary();
         std::vector<MorphMeasure> ms;
-        for (int i = 0; i < kNumLibraryWaveTables; ++i) ms.push_back(measureMorph(waveTable(kNumBuiltinWaveTables + i)));
+        for (int i = 0; i < NumLibraryWaveTables; ++i) ms.push_back(measureMorph(waveTable(NumBuiltinWaveTables + i)));
         byLimit[limit] = std::move(ms);
     }
     std::printf("  what the frame limit costs the morph (median step / largest single step, per frame limit)\n");
     std::printf("  %-22s %-5s", "table", "lane");
-    for (int limit : kLimits) std::printf("  %11s", limit == 0 ? "64 (all)" : fmt("%d", limit).c_str());
+    for (int limit : Limits) std::printf("  %11s", limit == 0 ? "64 (all)" : fmt("%d", limit).c_str());
     std::printf("\n");
-    for (int i = 0; i < kNumLibraryWaveTables; ++i) {
-        const char* lane = kLibraryTables[i].lane == WaveTableLane::Pad ? "pad"
-                         : (kLibraryTables[i].lane == WaveTableLane::Lead ? "lead"
-                         : (kLibraryTables[i].lane == WaveTableLane::Arp ? "arp" : "drone"));
-        std::printf("  %-22s %-5s", kLibraryTables[i].name, lane);
-        for (int limit : kLimits) {
+    for (int i = 0; i < NumLibraryWaveTables; ++i) {
+        const char* lane = LibraryTables[i].m_lane == WaveTableLaneE::PAD ? "pad"
+                         : (LibraryTables[i].m_lane == WaveTableLaneE::LEAD ? "lead"
+                         : (LibraryTables[i].m_lane == WaveTableLaneE::ARP ? "arp" : "drone"));
+        std::printf("  %-22s %-5s", LibraryTables[i].m_name, lane);
+        for (int limit : Limits) {
             const MorphMeasure& m = byLimit[limit][static_cast<size_t>(i)];
-            std::printf("  %.3f/%.3f", m.move, m.moveMax);
+            std::printf("  %.3f/%.3f", m.m_move, m.m_moveMax);
         }
         std::printf("\n");
     }
     {
         double worstMove = 0.0, wholeMove = 0.0, worstDirect = 1.0, wholeDirect = 1.0, worst16 = 0.0;
         const char* worstName = "";
-        for (int i = 0; i < kNumLibraryWaveTables; ++i) {
-            if (kLibraryTables[i].lane != WaveTableLane::Pad) continue;
+        for (int i = 0; i < NumLibraryWaveTables; ++i) {
+            if (LibraryTables[i].m_lane != WaveTableLaneE::PAD) continue;
             const MorphMeasure& m = byLimit[32][static_cast<size_t>(i)];
             const MorphMeasure& all = byLimit[0][static_cast<size_t>(i)];
-            if (m.move > worstMove) { worstMove = m.move; wholeMove = all.move; worstName = kLibraryTables[i].name; }
-            worst16 = std::max(worst16, byLimit[16][static_cast<size_t>(i)].move);
-            worstDirect = std::min(worstDirect, m.directness);
-            wholeDirect = std::min(wholeDirect, all.directness);
+            if (m.m_move > worstMove) { worstMove = m.m_move; wholeMove = all.m_move; worstName = LibraryTables[i].m_name; }
+            worst16 = std::max(worst16, byLimit[16][static_cast<size_t>(i)].m_move);
+            worstDirect = std::min(worstDirect, m.m_directness);
+            wholeDirect = std::min(wholeDirect, all.m_directness);
         }
-        check(worstMove < kShakerMove && worstDirect >= wholeDirect - 1e-9,
+        check(worstMove < ShakerMove && worstDirect >= wholeDirect - 1e-9,
               "at 32 frames the pad tables still glide: no step near the ones the selection rejected",
               fmt("worst median pad step %.3f (%s, %.3f with all 64 frames) against the %.2f of a rejected bank;"
                   " 16 frames would make it %.3f. Worst pad directness %.3f, and %.3f unthinned",
-                  worstMove, worstName, wholeMove, kShakerMove, worst16, worstDirect, wholeDirect));
+                  worstMove, worstName, wholeMove, ShakerMove, worst16, worstDirect, wholeDirect));
     }
 
     // The lever itself, through the path a host takes: Engine::prepare(sr, block, quality). The
@@ -1904,14 +1904,14 @@ void testWaveTableQuality()
             // The frame limit is read when a table is built, and since 22.09.2026 that is when
             // somebody asks. prepare() asked for whatever the parameters name; this check is about
             // the *limit*, so it asks for a known library table itself.
-            const int one = kNumBuiltinWaveTables;
+            const int one = NumBuiltinWaveTables;
             ensureWaveTables(&one, 1);
-            const WaveTable& t = waveTable(kNumBuiltinWaveTables);
-            desktopFrames = t.frames;
+            const WaveTable& t = waveTable(NumBuiltinWaveTables);
+            desktopFrames = t.m_frames;
             desktopBytes = waveTableLibraryBytes();
             const int len = WaveTable::levelLength(0);
             first.assign(t.cycle(0, 0), t.cycle(0, 0) + len);
-            last.assign(t.cycle(0, t.frames - 1), t.cycle(0, t.frames - 1) + len);
+            last.assign(t.cycle(0, t.m_frames - 1), t.cycle(0, t.m_frames - 1) + len);
         }
         double dFirst = 0.0, dLast = 0.0;
         {
@@ -1921,10 +1921,10 @@ void testWaveTableQuality()
             const auto t0 = std::chrono::steady_clock::now();
             e.prepare(48000.0, 256, Quality::quest());
             questMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-            const int one = kNumBuiltinWaveTables;
+            const int one = NumBuiltinWaveTables;
             ensureWaveTables(&one, 1);
-            const WaveTable& t = waveTable(kNumBuiltinWaveTables);
-            questFrames = t.frames;
+            const WaveTable& t = waveTable(NumBuiltinWaveTables);
+            questFrames = t.m_frames;
             questBytes = waveTableLibraryBytes();
             // Shapes, not samples: thinning can drop the loudest frame and rescale the table
             // (the same comparison the library section's frame-limit check uses, 22.09.2026).
@@ -1939,11 +1939,11 @@ void testWaveTableQuality()
                 return worst * std::sqrt(static_cast<double>(len));
             };
             dFirst = shape(first, t.cycle(0, 0), WaveTable::levelLength(0));
-            dLast = shape(last, t.cycle(0, t.frames - 1), WaveTable::levelLength(0));
+            dLast = shape(last, t.cycle(0, t.m_frames - 1), WaveTable::levelLength(0));
         }
         // Not bit-equal: the table is scaled by its loudest frame and thinning can drop that frame
         // (the same tolerance the frame-limit check of the library section uses).
-        check(desktopFrames == WaveTable::kMaxFrames && questFrames == 32 && dFirst < 1e-3 && dLast < 1e-3,
+        check(desktopFrames == WaveTable::MaxFrames && questFrames == 32 && dFirst < 1e-3 && dLast < 1e-3,
               "Engine::prepare pulls the lever: the Quest level thins to 32 frames, the desktop level keeps all 64",
               fmt("desktop %d frames, quest %d; the kept ends differ by %.2e / %.2e", desktopFrames, questFrames, dFirst, dLast));
         check(questBytes * 3 < desktopBytes * 2,
@@ -1978,21 +1978,21 @@ void testPads()
     r.seed(99);
     int mismatches = 0, badNotes = 0, cases = 0;
     for (int trial = 0; trial < 300; ++trial) {
-        const int scale = r.below(kNumScales), key = r.below(12);
-        const int prevDegree = r.below(7), prevType = r.below(kNumChordTypes);
+        const int scale = r.below(NumScales), key = r.below(12);
+        const int prevDegree = r.below(7), prevType = r.below(NumChordTypes);
         const std::vector<int> prev = voiceChord(scale, key, prevDegree, prevType, nullptr);
-        const int degree = r.below(7), type = r.below(kNumChordTypes);
+        const int degree = r.below(7), type = r.below(NumChordTypes);
         const std::vector<int> got = voiceChord(scale, key, degree, type, &prev);
         // The chord the pad may hold (Harmony.h, padChordIntervals): no b9, the bII as the tonic's minor sixth.
         int iv[4], rootSemis = 0;
-        const int n = padChordIntervals(static_cast<ChordType>(type), scale, degree, rootSemis, iv);
+        const int n = padChordIntervals(static_cast<ChordTypeE>(type), scale, degree, rootSemis, iv);
         const int rootPc = (key + rootSemis) % 12;
-        const int root = kPadLowest + ((rootPc - kPadLowest) % 12 + 12) % 12;
+        const int root = PadLowest + ((rootPc - PadLowest) % 12 + 12) % 12;
         const int fifth = root + iv[0];
         std::vector<std::vector<int>> cand;
         for (int i = 1; i < n; ++i) {
             std::vector<int> c;
-            for (int x = fifth + 1; x <= kPadHighest; ++x)
+            for (int x = fifth + 1; x <= PadHighest; ++x)
                 if (((x - root) % 12 + 12) % 12 == ((iv[i] % 12) + 12) % 12) c.push_back(x);
             cand.push_back(c);
         }
@@ -2026,7 +2026,7 @@ void testPads()
                 std::printf("\n");
             }
         }
-        for (int x : got) if (x < kPadLowest || x > kPadHighest) ++badNotes;
+        for (int x : got) if (x < PadLowest || x > PadHighest) ++badNotes;
     }
     check(mismatches == 0 && badNotes == 0,
           "every pad voicing is the open root-position placement of its chord type that moves the voices least (rule 19, 22.09.2026)",
@@ -2041,28 +2041,28 @@ void testPads()
     c.composeBars(p, 0, 4 * 128, ev);
     // Under D3 only the sub foundation (rule 20): the chord root, in a bar without kick and bass.
     std::set<int> loud;
-    for (const NoteEvent& e : ev) if (e.part == Part::Kick || e.part == Part::Bass) loud.insert(static_cast<int>(e.beat / kBeatsPerBar));
+    for (const NoteEvent& e : ev) if (e.m_part == PartE::KICK || e.m_part == PartE::BASS) loud.insert(static_cast<int>(e.m_beat / BeatsPerBar));
     int pads = 0, off = 0;
     for (const NoteEvent& e : ev) {
-        if (e.part != Part::Pad) continue;
-        const int bar = static_cast<int>(e.beat / kBeatsPerBar);
+        if (e.m_part != PartE::PAD) continue;
+        const int bar = static_cast<int>(e.m_beat / BeatsPerBar);
         const int incoming = c.incomingOfBar(p, bar);
         const int ti = incoming >= 0 ? incoming : c.trackOfBar(p, bar);
         const TrackPlan t = c.track(p, ti);
         // The section's mode, not the track's: since 16.09.2026 a section may borrow another mode
         // over the tonic pedal (Form.h), and the pad is voiced in the mode its section plays.
-        const int sc = t.form.section[sectionOfBar(t.form, bar - t.firstBar)].scale;
+        const int sc = t.m_form.m_section[sectionOfBar(t.m_form, bar - t.m_firstBar)].m_scale;
         // The pad's chord for this bar (22.09.2026): the pendulum, or in the main breakdown its own
         // progression; its tones are the chord type's over its root, not the scale triad's.
-        const PadChord pcd = padChordAt(t.melody, t.form, bar - t.firstBar);
+        const PadChord pcd = padChordAt(t.m_melody, t.m_form, bar - t.m_firstBar);
         int iv[4], chordRootPc = 0;
-        const int n = padChordIntervals(static_cast<ChordType>(pcd.type), sc, pcd.degree, chordRootPc, iv);
+        const int n = padChordIntervals(static_cast<ChordTypeE>(pcd.m_type), sc, pcd.m_degree, chordRootPc, iv);
         std::set<int> tones = { chordRootPc };
         for (int i = 0; i < n; ++i) tones.insert(((chordRootPc + iv[i]) % 12 + 12) % 12);
-        const int pc = ((e.pitch - t.key) % 12 + 12) % 12;
+        const int pc = ((e.m_pitch - t.m_key) % 12 + 12) % 12;
         ++pads;
-        const bool sub = e.pitch < kPadLowest;
-        if (tones.count(pc) == 0 || (sub && (loud.count(bar) != 0 || pc != chordRootPc || e.pitch < kPadFoundationLowest))) ++off;
+        const bool sub = e.m_pitch < PadLowest;
+        if (tones.count(pc) == 0 || (sub && (loud.count(bar) != 0 || pc != chordRootPc || e.m_pitch < PadFoundationLowest))) ++off;
     }
     check(pads > 100 && off == 0, "pad notes are tones of their bar's chord, D3 and above -- under it only the sub root (F#1 and up) where kick and bass rest",
           fmt("%d of %d off", off, pads));

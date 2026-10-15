@@ -19,7 +19,7 @@
  * though the last two are also parameters (`compose.style`, `compose.arc`), because they are what the
  * file is about; reading a file applies them to the parameters. Everything else is `ParamStore::toText`
  * with only the changed values, so a file stays short and survives new parameters with sensible
- * defaults. Unit names of locks and rerolls are those of kLockUnitNames ("set", "track", "section",
+ * defaults. Unit names of locks and rerolls are those of LockUnitNames ("set", "track", "section",
  * "lane").
  *
  * **Versions.** "phosset 2" since 19.09.2026 (round "voices": the counter-lead, the stab and the drone,

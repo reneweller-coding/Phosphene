@@ -20,7 +20,7 @@
  * from 0 dB over 50 Hz to 20 kHz), and it measures the group delay against the design.
  *
  * **The design.** @p stages second-order all-pass sections with centre frequencies spaced
- * logarithmically over a decade around @p centreHz, each with Q = kDisperseQ:
+ * logarithmically over a decade around @p centreHz, each with Q = DisperseQ:
  * @code
  *   H(z) = (c + d z^-1 + z^-2) / (1 + d z^-1 + c z^-2)
  *   alpha = sin(w0) / (2 Q),  c = (1 - alpha) / (1 + alpha),  d = -2 cos(w0) / (1 + alpha)
@@ -52,29 +52,29 @@
 namespace phos {
 
 /** @brief Sections the disperser can run. */
-constexpr int kDisperseStages = 8;
+constexpr int DisperseStages = 8;
 /** @brief Q of every section (see the file comment for why 1 and not 0.7). */
-constexpr double kDisperseQ = 1.0;
+constexpr double DisperseQ = 1.0;
 /** @brief Half-width of the band in octaves: the sections span centreHz / 2^k to centreHz * 2^k. */
-constexpr double kDisperseHalfSpan = 1.6609640474436813;   // log2(sqrt(10)): a decade
+constexpr double DisperseHalfSpan = 1.6609640474436813;   // log2(sqrt(10)): a decade
 
 /**
- * @brief A chain of up to kDisperseStages second-order all-pass sections, one channel.
+ * @brief A chain of up to DisperseStages second-order all-pass sections, one channel.
  *
  * Direct form I per section: the coefficients are shared between the channels of a stereo pair, the
  * state is not, so a Disperser instance is one channel and a stereo effect holds two of them and one
  * coefficient set.
  */
 struct DisperserChannel {
-    float x1[kDisperseStages] = {};   ///< per section: the last input
-    float x2[kDisperseStages] = {};   ///< per section: the input before
-    float y1[kDisperseStages] = {};   ///< per section: the last output
-    float y2[kDisperseStages] = {};   ///< per section: the output before
+    float m_x1[DisperseStages] = {};   ///< per section: the last input
+    float m_x2[DisperseStages] = {};   ///< per section: the input before
+    float m_y1[DisperseStages] = {};   ///< per section: the last output
+    float m_y2[DisperseStages] = {};   ///< per section: the output before
 
     /** @brief Clears the state of every section. */
     void reset()
     {
-        for (int i = 0; i < kDisperseStages; ++i) { x1[i] = x2[i] = 0.0f; y1[i] = y2[i] = 0.0f; }
+        for (int i = 0; i < DisperseStages; ++i) { m_x1[i] = m_x2[i] = 0.0f; m_y1[i] = m_y2[i] = 0.0f; }
     }
 
     /**
@@ -86,11 +86,11 @@ struct DisperserChannel {
     inline float tick(float x, const float* c, const float* d, int stages)
     {
         for (int i = 0; i < stages; ++i) {
-            const float y = c[i] * x + d[i] * x1[i] + x2[i] - d[i] * y1[i] - c[i] * y2[i];
-            x2[i] = x1[i];
-            x1[i] = x;
-            y2[i] = y1[i];
-            y1[i] = y;
+            const float y = c[i] * x + d[i] * m_x1[i] + m_x2[i] - d[i] * m_y1[i] - c[i] * m_y2[i];
+            m_x2[i] = m_x1[i];
+            m_x1[i] = x;
+            m_y2[i] = m_y1[i];
+            m_y1[i] = y;
             x = y;
         }
         return x;
@@ -99,13 +99,13 @@ struct DisperserChannel {
 
 /** @brief The coefficients of a disperser chain, computed once per update(). */
 struct Disperser {
-    float c[kDisperseStages] = {};   ///< per section: the all-pass's first coefficient
-    float d[kDisperseStages] = {};   ///< per section: the all-pass's second coefficient
-    int stages = 0;   ///< sections in use
+    float m_c[DisperseStages] = {};   ///< per section: the all-pass's first coefficient
+    float m_d[DisperseStages] = {};   ///< per section: the all-pass's second coefficient
+    int m_stages = 0;   ///< sections in use
 
     /**
      * @brief Places @p n sections logarithmically over a decade around @p centreHz.
-     * @param n         sections, clamped to 0 .. kDisperseStages
+     * @param n         sections, clamped to 0 .. DisperseStages
      * @param centreHz  geometric centre of the band
      * @param sr        sample rate
      *
@@ -115,17 +115,17 @@ struct Disperser {
      */
     void set(int n, double centreHz, double sr)
     {
-        stages = n < 0 ? 0 : (n > kDisperseStages ? kDisperseStages : n);
-        const double lo = centreHz * std::pow(2.0, -kDisperseHalfSpan);
-        const double hi = centreHz * std::pow(2.0, kDisperseHalfSpan);
-        for (int i = 0; i < stages; ++i) {
-            const double t = stages > 1 ? static_cast<double>(i) / (stages - 1) : 0.5;
+        m_stages = n < 0 ? 0 : (n > DisperseStages ? DisperseStages : n);
+        const double lo = centreHz * std::pow(2.0, -DisperseHalfSpan);
+        const double hi = centreHz * std::pow(2.0, DisperseHalfSpan);
+        for (int i = 0; i < m_stages; ++i) {
+            const double t = m_stages > 1 ? static_cast<double>(i) / (m_stages - 1) : 0.5;
             double f0 = lo * std::pow(hi / lo, t);
             f0 = f0 < 20.0 ? 20.0 : (f0 > 0.45 * sr ? 0.45 * sr : f0);
             const double w0 = 2.0 * 3.141592653589793 * f0 / sr;
-            const double alpha = std::sin(w0) / (2.0 * kDisperseQ);
-            c[i] = static_cast<float>((1.0 - alpha) / (1.0 + alpha));
-            d[i] = static_cast<float>(-2.0 * std::cos(w0) / (1.0 + alpha));
+            const double alpha = std::sin(w0) / (2.0 * DisperseQ);
+            m_c[i] = static_cast<float>((1.0 - alpha) / (1.0 + alpha));
+            m_d[i] = static_cast<float>(-2.0 * std::cos(w0) / (1.0 + alpha));
         }
     }
 };

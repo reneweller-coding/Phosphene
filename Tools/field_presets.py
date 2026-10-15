@@ -29,7 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SELECTION = os.path.join(ROOT, "Tools", "field_selection.json")
 OUT = os.path.join(ROOT, "Core", "src", "FieldPresetData.inl")
 
-# Params.cpp, kFieldCategorySlugs (the last is "nasa").
+# Params.cpp, FieldCategorySlugs (the last is "nasa").
 SLUGS = ["rainforest", "night-country", "insects", "foliage", "wetland", "mud-bubbles", "cave", "river", "sea",
          "rain-land", "rain-roof", "wind", "underwater", "ice-snow", "desert", "fire", "geothermal", "seismic",
          "ritual-objects", "abandoned", "tunnel", "metal-creak", "dark-drone-noise", "electric", "ventilation",

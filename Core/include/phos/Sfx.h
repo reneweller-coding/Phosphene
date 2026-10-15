@@ -4,7 +4,7 @@
  *        sweeps, formant shots, reverse swells and zaps.
  *
  * Everything is synthesised; there are no samples. A note of Part::Sfx names the type by its pitch
- * (kSfxBaseNote + type, so the MIDI export shows each type on its own key) and its length in beats;
+ * (SfxBaseNote + type, so the MIDI export shows each type on its own key) and its length in beats;
  * tonal parts are tuned to the key the engine plays in.
  *
  *  - **Riser**: noise through a band pass whose centre climbs from 400 Hz to 8 kHz with rising
@@ -62,7 +62,7 @@
  *    exactly `sfx.wander_send` at the target beat, whatever `wetExpo` the seed drew (0^k = 0 and 1^k = 1
  *    for any k > 0). `Sfx::processSplit()` splits each voice's already-panned, already-filtered sample
  *    into `(1 - wetFrac)` for the ordinary dry buffer and `wetFrac` for a second, `wet` buffer Engine.cpp
- *    adds directly into the plain hall's send (not `Engine::hallGate_`: that hall's self-duck pulls its
+ *    adds directly into the plain hall's send (not `Engine::m_hallGate`: that hall's self-duck pulls its
  *    return down while a send is loud and its bar-line cut would truncate a tail that is meant to run on
  *    -- both fight a trajectory built to grow loud towards a long tail; docs/rounds/2026-09.md has the reasoning).
  *    The dry buffer's own share of `sfx.hall_send`/`sfx.room_send` shrinks together with it, so the two
@@ -77,20 +77,20 @@
 namespace phos {
 
 /** @brief Effect types, in the order of their MIDI notes. Appended only (the notes sit in MIDI files). */
-enum class SfxType : int { Riser = 0, Downlifter, Impact, Sweep, FormantShot, ReverseSwell, Zap,
+enum class SfxTypeE : int { RISER = 0, DOWNLIFTER, IMPACT, SWEEP, FORMANT_SHOT, REVERSE_SWELL, ZAP,
                            // 19.09.2026, round "fx-psychedelia"
-                           Squelch, Bubble, Stutter, SubDrop, ReverseCrash,
-                           FormantVoice, AlienChatter, SpokenWord, VoiceChop,
-                           Bowl, Didgeridoo, JawHarp,
+                           SQUELCH, BUBBLE, STUTTER, SUB_DROP, REVERSE_CRASH,
+                           FORMANT_VOICE, ALIEN_CHATTER, SPOKEN_WORD, VOICE_CHOP,
+                           BOWL, DIDGERIDOO, JAW_HARP,
                            // 23.09.2026, round "SFX": the long, pad-like layer the user asked for ("flaechigere und
                            // laengere Effekte"): layered noise and detuned saws under a slow swell, two to eight bars.
-                           Atmosphere,
+                           ATMOSPHERE,
                            // 27.09.2026: a NASA recording up to 25 s, played whole (FieldPlayer.h, FieldShot).
-                           SpaceShot,
-                           Count };
-constexpr int kNumSfxTypes = static_cast<int>(SfxType::Count);   ///< number of types
-constexpr int kSfxBaseNote = 48;                                   ///< MIDI note of the riser
-extern const char* const kSfxTypeNames[kNumSfxTypes];             ///< display names
+                           SPACE_SHOT,
+                           COUNT };
+constexpr int NumSfxTypes = static_cast<int>(SfxTypeE::COUNT);   ///< number of types
+constexpr int SfxBaseNote = 48;                                   ///< MIDI note of the riser
+extern const char* const SfxTypeNames[NumSfxTypes];             ///< display names
 
 /**
  * @brief One preset of the effect bank (23.09.2026, round "SFX"; Tools/sfx_bank.py).
@@ -102,52 +102,52 @@ extern const char* const kSfxTypeNames[kNumSfxTypes];             ///< display n
  * A lane of 0 plays the type as it always did.
  */
 struct SfxPreset {
-    float lengthScale;    ///< multiplier on the written length (one-shots only; risers and swells end on their beat)
-    float toneMix;        ///< 0..1: tonal layer against noise
-    float filterLo;       ///< octaves above 200 Hz where the filter starts (or sits low)
-    float filterHi;       ///< octaves above 200 Hz where it ends (or sits high)
-    float resonance;      ///< 0..1
-    float envShape;       ///< exponent or attack share of the envelope, by type
-    float pitchInterval;  ///< semitones of the tonal layer over the key's root
-    float detune;         ///< 0..1: spread of the detuned saws
-    float motionRate;     ///< Hz (or a type's own unit) of the slow modulation
-    float panSpeed;       ///< 0..1: how fast the event travels
-    float wet;            ///< 0..1: extra share into the hall (with sfx.wander)
-    float metal;          ///< 0..1: ring-modulated, metallic partials
+    float m_lengthScale;    ///< multiplier on the written length (one-shots only; risers and swells end on their beat)
+    float m_toneMix;        ///< 0..1: tonal layer against noise
+    float m_filterLo;       ///< octaves above 200 Hz where the filter starts (or sits low)
+    float m_filterHi;       ///< octaves above 200 Hz where it ends (or sits high)
+    float m_resonance;      ///< 0..1
+    float m_envShape;       ///< exponent or attack share of the envelope, by type
+    float m_pitchInterval;  ///< semitones of the tonal layer over the key's root
+    float m_detune;         ///< 0..1: spread of the detuned saws
+    float m_motionRate;     ///< Hz (or a type's own unit) of the slow modulation
+    float m_panSpeed;       ///< 0..1: how fast the event travels
+    float m_wet;            ///< 0..1: extra share into the hall (with sfx.wander)
+    float m_metal;          ///< 0..1: ring-modulated, metallic partials
 };
-extern const SfxPreset kSfxBank[];                 ///< every preset, family by family (SfxBankTables.cpp)
-extern const int kSfxBankSize;                     ///< 2048
-extern const int kSfxBankOffset[kNumSfxTypes];     ///< first preset of each type's family in kSfxBank
-extern const int kSfxBankCount[kNumSfxTypes];      ///< presets per type (0 for the types without a family)
+extern const SfxPreset SfxBank[];                 ///< every preset, family by family (SfxBankTables.cpp)
+extern const int SfxBankSize;                     ///< 2048
+extern const int SfxBankOffset[NumSfxTypes];     ///< first preset of each type's family in SfxBank
+extern const int SfxBankCount[NumSfxTypes];      ///< presets per type (0 for the types without a family)
 /** @brief The preset @p index (1-based, as the event's lane carries it) of @p type, or null for 0 / out of range. */
-inline const SfxPreset* sfxPreset(SfxType type, int index)
+inline const SfxPreset* sfxPreset(SfxTypeE type, int index)
 {
     const int t = static_cast<int>(type);
-    if (t < 0 || t >= kNumSfxTypes || index <= 0 || index > kSfxBankCount[t]) return nullptr;
-    return &kSfxBank[kSfxBankOffset[t] + index - 1];
+    if (t < 0 || t >= NumSfxTypes || index <= 0 || index > SfxBankCount[t]) return nullptr;
+    return &SfxBank[SfxBankOffset[t] + index - 1];
 }
-static_assert(kSfxBaseNote + kNumSfxTypes <= 128, "every effect type needs a MIDI note");
+static_assert(SfxBaseNote + NumSfxTypes <= 128, "every effect type needs a MIDI note");
 
 /**
  * @brief The effect family each preset choice of the effects page names (sfx::PresetRiser ..), in their order.
  *
- * The eleven types with a family in the bank (kSfxBankCount > 0). sfxPresetChoice() is the other direction.
+ * The eleven types with a family in the bank (SfxBankCount > 0). sfxPresetChoice() is the other direction.
  */
-inline constexpr SfxType kPresetChoiceType[sfx::kNumPresetChoices] = {
-    SfxType::Riser, SfxType::Downlifter, SfxType::Impact, SfxType::Sweep, SfxType::FormantShot, SfxType::ReverseSwell,
-    SfxType::Zap, SfxType::Squelch, SfxType::Bubble, SfxType::ReverseCrash, SfxType::Atmosphere,
+inline constexpr SfxTypeE PresetChoiceType[sfx::NumPresetChoices] = {
+    SfxTypeE::RISER, SfxTypeE::DOWNLIFTER, SfxTypeE::IMPACT, SfxTypeE::SWEEP, SfxTypeE::FORMANT_SHOT, SfxTypeE::REVERSE_SWELL,
+    SfxTypeE::ZAP, SfxTypeE::SQUELCH, SfxTypeE::BUBBLE, SfxTypeE::REVERSE_CRASH, SfxTypeE::ATMOSPHERE,
 };
-/** @brief The preset choice (0 .. sfx::kNumPresetChoices - 1) of a type, or -1 for a type without a family. */
-constexpr int sfxPresetChoice(SfxType t)
+/** @brief The preset choice (0 .. sfx::NumPresetChoices - 1) of a type, or -1 for a type without a family. */
+constexpr int sfxPresetChoice(SfxTypeE t)
 {
-    for (int i = 0; i < sfx::kNumPresetChoices; ++i) if (kPresetChoiceType[i] == t) return i;
+    for (int i = 0; i < sfx::NumPresetChoices; ++i) if (PresetChoiceType[i] == t) return i;
     return -1;
 }
 /**
  * @brief How long an audition of a family plays, in beats (Engine::previewSfx): about what the composer
  *        writes for it -- a riser's four bars, a zap's eighth.
  */
-inline constexpr float kPresetPreviewBeats[sfx::kNumPresetChoices] = { 16.0f, 8.0f, 4.0f, 4.0f, 1.0f, 4.0f, 0.5f, 0.5f, 1.0f, 2.0f, 16.0f };
+inline constexpr float PresetPreviewBeats[sfx::NumPresetChoices] = { 16.0f, 8.0f, 4.0f, 4.0f, 1.0f, 4.0f, 0.5f, 0.5f, 1.0f, 2.0f, 16.0f };
 
 /**
  * @brief Which generator, and so which part and mix strip, plays an effect type.
@@ -156,11 +156,11 @@ inline constexpr float kPresetPreviewBeats[sfx::kNumPresetChoices] = { 16.0f, 8.
  * MIDI export route it by its type, so the shamanic bed and the voices get their own strips and their
  * own MIDI tracks without the composer knowing either exists.
  */
-constexpr Part sfxTypePart(SfxType t)
+constexpr PartE sfxTypePart(SfxTypeE t)
 {
-    return (t >= SfxType::FormantVoice && t <= SfxType::VoiceChop) ? Part::Vocal
-         : (t >= SfxType::Bowl && t <= SfxType::JawHarp) ? Part::Texture
-         : Part::Sfx;
+    return (t >= SfxTypeE::FORMANT_VOICE && t <= SfxTypeE::VOICE_CHOP) ? PartE::VOCAL
+         : (t >= SfxTypeE::BOWL && t <= SfxTypeE::JAW_HARP) ? PartE::TEXTURE
+         : PartE::SFX;
 }
 /**
  * @brief Whether an effect type counts towards the user's density rule (20.09.2026, round "dialogue").
@@ -173,20 +173,20 @@ constexpr Part sfxTypePart(SfxType t)
  * another layer with another job, and a groove carried by chant alone would otherwise satisfy a rule
  * that is about the candy. FormSfx.cpp's density floor keeps it.
  */
-constexpr bool isDensityEvent(SfxType t) { return sfxTypePart(t) == Part::Sfx && t != SfxType::SpaceShot; }
+constexpr bool isDensityEvent(SfxTypeE t) { return sfxTypePart(t) == PartE::SFX && t != SfxTypeE::SPACE_SHOT; }
 
 /** @brief The part a note is played by: its own, or for an effect note the part of its type. */
-inline Part routedPart(const NoteEvent& e)
+inline PartE routedPart(const NoteEvent& e)
 {
-    if (e.part != Part::Sfx && e.part != Part::Texture && e.part != Part::Vocal) return e.part;
-    const int type = static_cast<int>(e.pitch) - kSfxBaseNote;
-    return type >= 0 && type < kNumSfxTypes ? sfxTypePart(static_cast<SfxType>(type)) : e.part;
+    if (e.m_part != PartE::SFX && e.m_part != PartE::TEXTURE && e.m_part != PartE::VOCAL) return e.m_part;
+    const int type = static_cast<int>(e.m_pitch) - SfxBaseNote;
+    return type >= 0 && type < NumSfxTypes ? sfxTypePart(static_cast<SfxTypeE>(type)) : e.m_part;
 }
 
 /** @brief The effect generator. */
 /**
  * @brief The tonal layer's interval over the key's root in mode @p scale, for a preset that asks for @p iv semitones.
- * @param scale index into kScaleSteps, or -1 for no mapping
+ * @param scale index into ScaleSteps, or -1 for no mapping
  * @param iv    the preset's interval in semitones
  * @return the interval the effect plays
  */
@@ -195,7 +195,7 @@ double sfxToneInterval(int scale, double iv);
 /** @brief The effects (SfxType: risers, downlifters, impacts, sweeps, voices, sub drops ...), a few at once (see the file comment). */
 class Sfx {
 public:
-    static constexpr int kVoices = 4;   ///< simultaneous effects
+    static constexpr int Voices = 4;   ///< simultaneous effects
 
     /** @brief Prepares for a sample rate. */
     void prepare(double sampleRate);
@@ -212,7 +212,7 @@ public:
      * @param preset   1-based index into the type's family of the bank (SfxPreset), 0 = the type as before;
      *                 the family's sfx.preset_* choice replaces it when that is not Auto
      */
-    void trigger(SfxType type, int samples, float velocity, double late, int preset = 0);
+    void trigger(SfxTypeE type, int samples, float velocity, double late, int preset = 0);
     /**
      * @brief Renders @p n stereo samples, replacing @p L and @p R; a sub drop is added to both, centred.
      *        A wandering event's growing reverb-send trajectory (sfx.wander) is folded back in here too
@@ -230,81 +230,81 @@ public:
     /** @brief Voices sounding. */
     int active() const;
     /**
-     * @brief The scale the tonal layers keep to (index into kScaleSteps), -1 for none (24.09.2026).
+     * @brief The scale the tonal layers keep to (index into ScaleSteps), -1 for none (24.09.2026).
      *
      * A bank preset gives its tonal layer an interval over the key's root -- a minor third or a minor seventh among
      * them -- and a long atmosphere held the minor seventh over harmonic minor's leading tone for eight bars. With a
      * scale, an interval the mode does not have takes its neighbour that it does (interval()). The engine sets it;
      * a direct caller that does not keeps the intervals as the bank has them.
      */
-    void setScale(int scale) { scale_ = scale; }
+    void setScale(int scale) { m_scale = scale; }
 
 private:
-    static constexpr int kBubbles = 8;   ///< bubbles a Bubble event can hold
+    static constexpr int Bubbles = 8;   ///< bubbles a Bubble event can hold
     /** @brief One sounding effect event. */
     struct Voice {
-        SfxType type = SfxType::Riser;   ///< which effect
-        bool on = false;   ///< sounding
-        long long pos = 0;   ///< samples played
-        long long length = 1;   ///< the event's length, samples
-        double late = 0.0;   ///< sub-sample onset
-        float velocity = 1.0f;   ///< 0..1
-        float typeGain = 1.0f;   ///< the type's level against sfx.level (Sfx.cpp, kTypeGainDb)
-        Rng rng;   ///< the event's own random stream
-        VaOscillator saw1;   ///< the tonal layer's first oscillator
-        VaOscillator saw2;   ///< ... and its second
-        Svf bp;   ///< the effect's band pass
-        Svf lp;   ///< the effect's low pass
-        Svf formant[3];   ///< the effect's three formants
-        Svf hpL1;   ///< the stereo high pass: left, first stage
-        Svf hpL2;   ///< ... left, second stage
-        Svf hpR1;   ///< ... right, first stage
-        Svf hpR2;   ///< ... right, second stage
-        double sinePh = 0.0;   ///< the sine's phase
-        double panPh = 0.0;   ///< the auto-pan's phase
-        double chordPh[3] = {};   ///< the chord's three phases
+        SfxTypeE m_type = SfxTypeE::RISER;   ///< which effect
+        bool m_on = false;   ///< sounding
+        long long m_pos = 0;   ///< samples played
+        long long m_length = 1;   ///< the event's length, samples
+        double m_late = 0.0;   ///< sub-sample onset
+        float m_velocity = 1.0f;   ///< 0..1
+        float m_typeGain = 1.0f;   ///< the type's level against sfx.level (Sfx.cpp, TypeGainDb)
+        Rng m_rng;   ///< the event's own random stream
+        VaOscillator m_saw1;   ///< the tonal layer's first oscillator
+        VaOscillator m_saw2;   ///< ... and its second
+        Svf m_bp;   ///< the effect's band pass
+        Svf m_lp;   ///< the effect's low pass
+        Svf m_formant[3];   ///< the effect's three formants
+        Svf m_hpL1;   ///< the stereo high pass: left, first stage
+        Svf m_hpL2;   ///< ... left, second stage
+        Svf m_hpR1;   ///< ... right, first stage
+        Svf m_hpR2;   ///< ... right, second stage
+        double m_sinePh = 0.0;   ///< the sine's phase
+        double m_panPh = 0.0;   ///< the auto-pan's phase
+        double m_chordPh[3] = {};   ///< the chord's three phases
         /// Bubble burst: onset (s), start frequency (Hz), decay time constant (s), rise per second, phase.
-        double bubT[kBubbles] = {};   ///< per bubble of the burst: its onset, s
-        double bubF[kBubbles] = {};   ///< its start frequency, Hz
-        double bubTau[kBubbles] = {};   ///< its decay time constant, s
-        double bubRise[kBubbles] = {};   ///< its rise per second
-        double bubPh[kBubbles] = {};   ///< its phase
-        int bubbles = 0;   ///< bubbles in the burst
-        uint64_t age = 0;   ///< trigger order, for voice stealing
+        double m_bubT[Bubbles] = {};   ///< per bubble of the burst: its onset, s
+        double m_bubF[Bubbles] = {};   ///< its start frequency, Hz
+        double m_bubTau[Bubbles] = {};   ///< its decay time constant, s
+        double m_bubRise[Bubbles] = {};   ///< its rise per second
+        double m_bubPh[Bubbles] = {};   ///< its phase
+        int m_bubbles = 0;   ///< bubbles in the burst
+        uint64_t m_age = 0;   ///< trigger order, for voice stealing
         /// @name The wandering trajectory (20.09.2026, round "wandering-fx"), drawn once at trigger()
         /// from this voice's own seed stream; unused while `wander` is false (the SubDrop type and every
         /// voice while sfx.wander is off).
         /// @{
-        bool wander = false;
-        float panFrom = -1.0f, panTo = 1.0f;   ///< pan at x = 0 and x = 1 (before the sfx.width scale)
-        float panCurve = 1.0f;                 ///< pan(x) eases with x^panCurve
-        float wetExpo = 1.0f;                  ///< the dry/wet crossfade eases with x^wetExpo
+        bool m_wander = false;
+        float m_panFrom = -1.0f, m_panTo = 1.0f;   ///< pan at x = 0 and x = 1 (before the sfx.width scale)
+        float m_panCurve = 1.0f;                 ///< pan(x) eases with x^panCurve
+        float m_wetExpo = 1.0f;                  ///< the dry/wet crossfade eases with x^wetExpo
         /// @}
-        const SfxPreset* preset = nullptr;    ///< the bank preset this event plays, or null (23.09.2026)
-        double lfoPh = 0.0;                    ///< the atmosphere's slow motion
+        const SfxPreset* m_preset = nullptr;    ///< the bank preset this event plays, or null (23.09.2026)
+        double m_lfoPh = 0.0;                    ///< the atmosphere's slow motion
     };
     /** @brief One sample of voice @p v; its pan and its share for the reverb go to @p pan and @p wetFrac. */
     float voiceSample(Voice& v, float& pan, float& wetFrac);
 
-    double sr_ = 48000.0;   ///< sample rate
-    Voice voice_[kVoices];   ///< the sounding events
-    uint64_t counter_ = 0;   ///< triggers so far (the voices' age)
-    int keyRoot_ = 6;   ///< the key's pitch class, for the tonal layers
-    float level_ = 0.5f;   ///< sfx.level, linear
-    float noise_ = 0.6f;   ///< the noise's share
-    float resonance_ = 0.5f;   ///< the filters' resonance
-    float brightness_ = 0.5f;   ///< the brightness
-    float impactDecay_ = 1.2f;   ///< an impact's decay, s
-    float vowel_ = 0.0f;   ///< the formants' vowel
-    float swellDecay_ = 1.5f;   ///< a swell's decay, s
-    float width_ = 0.7f;   ///< the width
-    float subLevel_ = 0.5f;   ///< sfx.sub_level, linear
-    bool wander_ = false;          ///< sfx.wander
-    float wanderSend_ = 0.85f;     ///< sfx.wander_send
-    int scale_ = -1;                           ///< setScale()
+    double m_sr = 48000.0;   ///< sample rate
+    Voice m_voice[Voices];   ///< the sounding events
+    uint64_t m_counter = 0;   ///< triggers so far (the voices' age)
+    int m_keyRoot = 6;   ///< the key's pitch class, for the tonal layers
+    float m_level = 0.5f;   ///< sfx.level, linear
+    float m_noise = 0.6f;   ///< the noise's share
+    float m_resonance = 0.5f;   ///< the filters' resonance
+    float m_brightness = 0.5f;   ///< the brightness
+    float m_impactDecay = 1.2f;   ///< an impact's decay, s
+    float m_vowel = 0.0f;   ///< the formants' vowel
+    float m_swellDecay = 1.5f;   ///< a swell's decay, s
+    float m_width = 0.7f;   ///< the width
+    float m_subLevel = 0.5f;   ///< sfx.sub_level, linear
+    bool m_wander = false;          ///< sfx.wander
+    float m_wanderSend = 0.85f;     ///< sfx.wander_send
+    int m_scale = -1;                           ///< setScale()
     /** @brief The preset's tonal interval (or @p fallback without one), kept to the scale. */
     double interval(const SfxPreset* P, double fallback) const;
-    int fixed_[sfx::kNumPresetChoices] = {};   ///< sfx.preset_*: the bank preset a family always plays, 0 = the event's own
+    int m_fixed[sfx::NumPresetChoices] = {};   ///< sfx.preset_*: the bank preset a family always plays, 0 = the event's own
 };
 
 } // namespace phos

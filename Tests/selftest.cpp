@@ -137,14 +137,14 @@ int main(int argc, char** argv)
         }
     }
     if (haveOnly && wanted.empty()) { std::fprintf(stderr, "phos_selftest: --only names no section\n"); return 2; }
-    if (!listOnly) std::printf("phos_selftest (vector path %s)\n", kVecPathName);
+    if (!listOnly) std::printf("phos_selftest (vector path %s)\n", VecPathName);
     // PHOS_ONLY=testName[,testName...] runs only those tests (for work on one building block).
     const char* only = (listOnly || haveOnly) ? nullptr : std::getenv("PHOS_ONLY");
     // Every --only name is charged as a failed check up front and discharged when its section is
     // reached; what is left at finish() is a name the table does not have.
     std::vector<bool> reached(wanted.size(), false);
     if (listOnly) { wanted.clear(); haveOnly = false; }
-    tally().failed += static_cast<int>(wanted.size());
+    tally().m_failed += static_cast<int>(wanted.size());
     if (haveOnly) std::printf("only %zu section(s); a name not in the run table stays counted as a failed check\n", wanted.size());
     // A section split into parts (19.09.2026, round "test-split") is a group `name.part`: `--only name`
     // runs all its parts, `--only name.part` one of them. Still whole names -- testMidi is not a group
@@ -153,7 +153,7 @@ int main(int argc, char** argv)
     auto pick = [&](const char* name) {
         for (size_t k = 0; k < wanted.size(); ++k)
             if (wanted[k] == name || wanted[k] == groupOf(name)) {
-                if (!reached[k]) { reached[k] = true; --tally().failed; }
+                if (!reached[k]) { reached[k] = true; --tally().m_failed; }
                 return true;
             }
         return false;

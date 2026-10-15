@@ -20,10 +20,10 @@
 
 namespace phos {
 
-constexpr int kNumScales = 6;   ///< entries of kScaleNames (Params.h)
+constexpr int NumScales = 6;   ///< entries of ScaleNames (Params.h)
 
 /** @brief Semitone offsets of the seven degrees of each scale. */
-inline constexpr int kScaleSteps[kNumScales][7] = {
+inline constexpr int ScaleSteps[NumScales][7] = {
     { 0, 2, 3, 5, 7, 8, 10 },   // Aeolian
     { 0, 1, 3, 5, 7, 8, 10 },   // Phrygian
     { 0, 2, 3, 5, 7, 8, 11 },   // Harmonic minor
@@ -34,16 +34,16 @@ inline constexpr int kScaleSteps[kNumScales][7] = {
 
 /**
  * @brief Semitones of a scale degree, extended over octaves.
- * @param scale  index into kScaleSteps
+ * @param scale  index into ScaleSteps
  * @param degree 0 = root, 7 = root an octave up, -1 = the seventh below
  */
 inline int scaleDegree(int scale, int degree)
 {
-    const int s = scale < 0 ? 0 : (scale >= kNumScales ? kNumScales - 1 : scale);
+    const int s = scale < 0 ? 0 : (scale >= NumScales ? NumScales - 1 : scale);
     int oct = 0;
     while (degree < 0) { degree += 7; --oct; }
     while (degree >= 7) { degree -= 7; ++oct; }
-    return kScaleSteps[s][degree] + 12 * oct;
+    return ScaleSteps[s][degree] + 12 * oct;
 }
 
 /** @brief Whether a pitch class (relative to the root) belongs to the scale. */
@@ -162,18 +162,18 @@ inline int bassRootNote(int keyRoot, int registerOffset)
  * octave is the same semitone rub a b9 is. A major seventh stays where its seventh is not the leading
  * tone (bVI and bIII as maj7), rarely.
  * @{ */
-enum class ChordType : int {
-    Triad = 0,   ///< root, third, fifth -- the scale's own
-    Sus2,        ///< 1 - 2 - 5: open, weightless
-    Sus4,        ///< 1 - 4 - 5
-    Min7,        ///< 1 - b3 - 5 - b7: depth and room (progressive, morning)
-    Min9,        ///< 1 - b3 - 5 - b7 - 9
-    Maj7,        ///< 1 - 3 - 5 - 7: bVI or bIII as a floating major seventh
-    Quartal,     ///< stacked fourths from the fifth: modern, cool, blurred
-    Count
+enum class ChordTypeE : int {
+    TRIAD = 0,   ///< root, third, fifth -- the scale's own
+    SUS2,        ///< 1 - 2 - 5: open, weightless
+    SUS4,        ///< 1 - 4 - 5
+    MIN7,        ///< 1 - b3 - 5 - b7: depth and room (progressive, morning)
+    MIN9,        ///< 1 - b3 - 5 - b7 - 9
+    MAJ7,        ///< 1 - 3 - 5 - 7: bVI or bIII as a floating major seventh
+    QUARTAL,     ///< stacked fourths from the fifth: modern, cool, blurred
+    COUNT
 };
-constexpr int kNumChordTypes = static_cast<int>(ChordType::Count);
-inline constexpr const char* kChordTypeNames[kNumChordTypes] = {
+constexpr int NumChordTypes = static_cast<int>(ChordTypeE::COUNT);
+inline constexpr const char* ChordTypeNames[NumChordTypes] = {
     "triad", "sus2", "sus4", "m7", "m9", "maj7", "quartal"
 };
 
@@ -187,19 +187,19 @@ inline constexpr const char* kChordTypeNames[kNumChordTypes] = {
  * "Triad" on the bII of Phrygian is the major chord the pendulum wants.
  * @return how many intervals were written (2 .. 4)
  */
-inline int chordIntervals(ChordType type, int scale, int degree, int out[4])
+inline int chordIntervals(ChordTypeE type, int scale, int degree, int out[4])
 {
     const int third = scaleDegree(scale, degree + 2) - scaleDegree(scale, degree);   // 3 or 4
     int n = 0;
     auto put = [&](int iv) { if (n < 4) out[n++] = iv; };
     switch (type) {
-    case ChordType::Sus2:     put(7);  put(14); break;
-    case ChordType::Sus4:     put(7);  put(17); break;
-    case ChordType::Min7:     put(7);  put(third + 12); put(10); break;
-    case ChordType::Min9:     put(7);  put(third + 12); put(10); put(14); break;
-    case ChordType::Maj7:     put(7);  put(third + 12); put(11); break;
-    case ChordType::Quartal:  put(7);  put(12); put(17); put(22); break;
-    case ChordType::Triad:
+    case ChordTypeE::SUS2:     put(7);  put(14); break;
+    case ChordTypeE::SUS4:     put(7);  put(17); break;
+    case ChordTypeE::MIN7:     put(7);  put(third + 12); put(10); break;
+    case ChordTypeE::MIN9:     put(7);  put(third + 12); put(10); put(14); break;
+    case ChordTypeE::MAJ7:     put(7);  put(third + 12); put(11); break;
+    case ChordTypeE::QUARTAL:  put(7);  put(12); put(17); put(22); break;
+    case ChordTypeE::TRIAD:
     default:                  put(7);  put(third + 12); break;
     }
     return n;
@@ -212,7 +212,7 @@ inline int chordIntervals(ChordType type, int scale, int degree, int out[4])
  * The style says which types it likes, the mode says which of them exist: m9 needs the major ninth,
  * so it lives in Aeolian and Dorian and not in Phrygian.
  */
-inline bool chordTypeFits(int scale, int degree, ChordType type)
+inline bool chordTypeFits(int scale, int degree, ChordTypeE type)
 {
     int iv[4];
     const int n = chordIntervals(type, scale, degree, iv);
@@ -229,7 +229,7 @@ inline bool rubsTonic(int pcFromKey) { const int pc = ((pcFromKey % 12) + 12) % 
  *        (rubsTonic: the b2, a minor ninth over it, or the leading tone under its octave), and no tone is a
  *        minor ninth or a tritone over the chord's own root.
  */
-inline bool padAvoidsRubs(int scale, int degree, ChordType type)
+inline bool padAvoidsRubs(int scale, int degree, ChordTypeE type)
 {
     int iv[4];
     const int n = chordIntervals(type, scale, degree, iv);
@@ -251,13 +251,13 @@ inline bool padAvoidsRubs(int scale, int degree, ChordType type)
  * stands on the major third, and its fifth is the leading tone). Any other tone that would rub against the tonic
  * or the root (only a type chosen when nothing else fitted can have one) is left out.
  * @param type   the chord's type
- * @param scale  index into kScaleSteps
+ * @param scale  index into ScaleSteps
  * @param degree the chord's scale degree
  * @param root   receives the pad's root in semitones over the key, 0..11
  * @param out    receives the intervals over that root, the fifth first
  * @return how many intervals were written (2 .. 4)
  */
-inline int padChordIntervals(ChordType type, int scale, int degree, int& root, int out[4])
+inline int padChordIntervals(ChordTypeE type, int scale, int degree, int& root, int out[4])
 {
     int iv[4];
     const int m = chordIntervals(type, scale, degree, iv);

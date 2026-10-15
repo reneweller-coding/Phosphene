@@ -51,11 +51,11 @@ namespace mel {
  */
 /** @brief A role's tension: per beat of the bar and the bar parity. */
 struct TensionCurve {
-    double beat[4];   ///< the tension on each beat of the bar
-    double parity;    ///< the bar parity's
+    double m_beat[4];   ///< the tension on each beat of the bar
+    double m_parity;    ///< the bar parity's
 };
 /** @brief Each role's tension over the beats of a bar and its bar parity. */
-constexpr TensionCurve kTensionCurve[kNumCorpusRoles] = {
+constexpr TensionCurve TensionCurves[NumCorpusRoles] = {
     { { -0.179, 0.025, 0.097, 0.057 }, 0.070 },   // acid
     { { -0.213, -0.064, 0.024, 0.254 }, 0.100 },  // lead
     { { -0.097, -0.057, -0.009, 0.162 }, 0.058 }, // arp
@@ -64,7 +64,7 @@ constexpr TensionCurve kTensionCurve[kNumCorpusRoles] = {
 /**
  * @brief How hard the measured curve tilts a position's weights, per role.
  *
- * The weights are an exponential tilt @c exp(kTensionTilt * D * instability). A first-order estimate
+ * The weights are an exponential tilt @c exp(TensionTilt * D * instability). A first-order estimate
  * says the expected instability at a position then moves by about @c tilt * D * Var(instability)
  * over the position's allowed set, which for the seven degrees of a minor mode is roughly 1.27 and
  * would put the tilt near 0.8. **Measured, that overshoots by three to one**: at 0.8 the composer's
@@ -93,7 +93,7 @@ constexpr TensionCurve kTensionCurve[kNumCorpusRoles] = {
  * to act on. Carrying it would mean letting the arp off the chord, which is a bigger change than the
  * curve is worth, so the arp's curve is reported and not implemented.
  */
-constexpr double kTensionTilt[kNumCorpusRoles] = { 0.20, 0.20, 0.0 };
+constexpr double TensionTilt[NumCorpusRoles] = { 0.20, 0.20, 0.0 };
 
 /**
  * @brief How much of the tilt the bar-parity term carries, relative to the within-bar term.
@@ -105,7 +105,7 @@ constexpr double kTensionTilt[kNumCorpusRoles] = { 0.20, 0.20, 0.0 };
  * whole bar and moves a line's mean about twice as hard as a difference *within* a bar does. So the
  * parity term carries half the gain, which is what puts both contrasts inside both intervals.
  */
-constexpr double kParityGain = 0.5;
+constexpr double ParityGain = 0.5;
 
 /**
  * @brief The curve's tilt at one step of a pattern: the measured deviation times the role's tilt.
@@ -117,14 +117,14 @@ constexpr double kParityGain = 0.5;
  * @return 0 where the curve is not implemented (the arp), which leaves the allowed sets exactly as
  *         they were before 16.09.2026.
  */
-double tensionAt(CorpusRoleId role, int step, int bars)
+double tensionAt(CorpusRoleIdE role, int step, int bars)
 {
     const int r = static_cast<int>(role);
-    if (kTensionTilt[r] == 0.0) return 0.0;
-    const TensionCurve& c = kTensionCurve[r];
-    double d = c.beat[((step % 16) + 16) % 16 / 4];
-    if (bars >= 2) d += kParityGain * (((step / 16) % 2 == 0) ? -c.parity : c.parity);
-    return kTensionTilt[r] * d;
+    if (TensionTilt[r] == 0.0) return 0.0;
+    const TensionCurve& c = TensionCurves[r];
+    double d = c.m_beat[((step % 16) + 16) % 16 / 4];
+    if (bars >= 2) d += ParityGain * (((step / 16) % 2 == 0) ? -c.m_parity : c.m_parity);
+    return TensionTilt[r] * d;
 }
 
 /**
@@ -145,12 +145,12 @@ double tensionAt(CorpusRoleId role, int step, int bars)
  * colour (Composer.cpp: style x arc, 0.82 at the default) scales the target between 0.6 and 1.0 of
  * these values: Farbood's dissonance as one of the quantities an energy arc moves.
  */
-constexpr double kColourShare[kNumCorpusRoles] = { 0.11, 0.13, 0.055 };
+constexpr double ColourShare[NumCorpusRoles] = { 0.11, 0.13, 0.055 };
 
 /** @brief The target colour share of a role at the arc's colour @p colour (0..1). */
-double colourTarget(CorpusRoleId role, float colour)
+double colourTarget(CorpusRoleIdE role, float colour)
 {
-    return kColourShare[static_cast<int>(role)] * (0.6 + 0.4 * std::clamp(static_cast<double>(colour), 0.0, 1.0));
+    return ColourShare[static_cast<int>(role)] * (0.6 + 0.4 * std::clamp(static_cast<double>(colour), 0.0, 1.0));
 }
 
 /**
@@ -178,7 +178,7 @@ bool emptySet(const std::vector<uint8_t>& a)
  * @brief Allowed symbols: the chord's tones in [lo, hi], optionally tilted by the tension curve.
  * @param noColour leave out the chord tones that are colour tones of the mode (rule 1: those are
  *                 neighbour tones and are placed only at colour slots)
- * @param scale      index into kScaleSteps
+ * @param scale      index into ScaleSteps
  * @param degree     the chord's scale degree
  * @param rootOffset the part root's distance from the key, in semitones
  * @param lo,hi      the interval range to the part root
@@ -189,10 +189,10 @@ std::vector<uint8_t> chordSet(int scale, int degree, int rootOffset, int lo, int
 {
     int pcs[3];
     chordTones(scale, degree, pcs);
-    std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
-    std::vector<double> w(static_cast<size_t>(kCorpusAlphabet), 0.0);
+    std::vector<uint8_t> a(static_cast<size_t>(CorpusAlphabet), 0);
+    std::vector<double> w(static_cast<size_t>(CorpusAlphabet), 0.0);
     for (int rel = lo; rel <= hi; ++rel) {
-        if (rel < kCorpusRelMin || rel > kCorpusRelMax) continue;
+        if (rel < CorpusRelMin || rel > CorpusRelMax) continue;
         const int pc = ((rel + rootOffset) % 12 + 12) % 12;
         if (pc != pcs[0] && pc != pcs[1] && pc != pcs[2]) continue;
         if (noColour && isColourTone(scale, pc)) continue;
@@ -206,7 +206,7 @@ std::vector<uint8_t> chordSet(int scale, int degree, int rootOffset, int lo, int
 /** @brief An allowed-symbol set that admits the one interval @p rel. */
 std::vector<uint8_t> single(int rel)
 {
-    std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
+    std::vector<uint8_t> a(static_cast<size_t>(CorpusAlphabet), 0);
     a[static_cast<size_t>(sym(rel))] = 1;
     return a;
 }
@@ -223,12 +223,12 @@ bool placeColour(int scale, int rootOffset, int lo, int hi, int resHi, int near,
 {
     const std::vector<int> pcs = colourPcs(scale, line);
     if (pcs.empty()) return false;
-    // The sampler's alphabet ends at kCorpusRelMin / kCorpusRelMax: a pitch outside it could not be
+    // The sampler's alphabet ends at CorpusRelMin / CorpusRelMax: a pitch outside it could not be
     // written into a set (sym() would clamp it onto another pitch -- the arp's glint under a G#3
     // anchor landed on the anchor itself).
-    lo = std::max(lo, kCorpusRelMin);
-    hi = std::min(hi, kCorpusRelMax);
-    resHi = std::min(resHi, kCorpusRelMax);
+    lo = std::max(lo, CorpusRelMin);
+    hi = std::min(hi, CorpusRelMax);
+    resHi = std::min(resHi, CorpusRelMax);
     // The flat second is the genre's signature interval (Easwaran 2004): twice as likely as the others.
     std::vector<double> w;
     for (int pc : pcs) w.push_back(pc == 1 ? 2.0 : 1.0);
@@ -252,7 +252,7 @@ std::vector<int> drawOnsets(Rng& r, const CorpusRole& role, int steps)
     std::vector<int> on;
     int prev = 1;
     for (int s = 0; s < steps; ++s) {
-        const auto& c = role.onset[s % 16][prev];
+        const auto& c = role.m_onset[s % 16][prev];
         const double total = static_cast<double>(c[0]) + c[1];
         const double pOn = total > 0.0 ? c[1] / total : 0.5;
         const bool hit = s == 0 || r.uniform() < pOn;
@@ -266,15 +266,15 @@ std::vector<int> drawOnsets(Rng& r, const CorpusRole& role, int steps)
 int drawLength(Rng& r, const CorpusRole& role, int step, int gap)
 {
     double w[8];
-    for (int k = 0; k < 8; ++k) w[k] = role.length[step % 16][k + 1];
+    for (int k = 0; k < 8; ++k) w[k] = role.m_length[step % 16][k + 1];
     return std::clamp(drawIndex(r, w, 8) + 1, 1, std::max(1, gap));
 }
 
 /** @brief The uniform source the sampler draws from. */
 struct Uniform {
-    Rng* r;   ///< the stream
+    Rng* m_r;   ///< the stream
     /** @brief A uniform draw in [0, 1). */
-    double operator()() const { return static_cast<double>(r->uniform()); }
+    double operator()() const { return static_cast<double>(m_r->uniform()); }
 };
 
 /**
@@ -292,10 +292,10 @@ std::vector<NoteCond> noteConds(const std::vector<int>& steps)
     for (size_t i = 0; i < steps.size(); ++i) {
         const int s = steps[i];
         const bool hasNext = i + 1 < steps.size();
-        c[i].step = (s % 16 + 16) % 16;
-        c[i].bar = (s / 16 % 8 + 8) % 8;
-        c[i].gap = noteGapCode(s, hasNext ? steps[i + 1] : 0, hasNext);
-        c[i].idx = noteIndexBucket(static_cast<int>(i));
+        c[i].m_step = (s % 16 + 16) % 16;
+        c[i].m_bar = (s / 16 % 8 + 8) % 8;
+        c[i].m_gap = noteGapCode(s, hasNext ? steps[i + 1] : 0, hasNext);
+        c[i].m_idx = noteIndexBucket(static_cast<int>(i));
     }
     return c;
 }
@@ -312,15 +312,15 @@ std::vector<NoteCond> noteConds(const std::vector<int>& steps)
  * @param temperature the sampler's temperature
  * @param r       the stream the draw consumes
  */
-std::vector<int> drawPitches(const PitchModel& model, CorpusRoleId role, const DrawSource& src,
-                             const Allowed& allowed, const std::vector<int>& steps, int bars,
+std::vector<int> drawPitches(const PitchModel& model, CorpusRoleIdE role, const DrawSource& src,
+                             const AllowedT& allowed, const std::vector<int>& steps, int bars,
                              int ctx2, int ctx1, double temperature, Rng& r)
 {
     std::vector<int> syms;
     bool ok = false;
-    if (src.nn != nullptr && steps.size() == allowed.size()) {
+    if (src.m_nn != nullptr && steps.size() == allowed.size()) {
         const std::vector<NoteCond> cond = noteConds(steps);
-        NeuralStepper stepper{ src.nn, static_cast<int>(role), src.style, bars, &cond, 0, src.mode };
+        NeuralStepper stepper{ src.m_nn, static_cast<int>(role), src.m_style, bars, &cond, 0, src.m_mode };
         // Stage B has no order-2 state: it is primed with the previous symbol only, and before the
         // first note that is the start token docs/MODEL_FORMAT.md section 3 fixes at the interval 0.
         ok = sampleMasked(stepper, allowed, sym(ctx2), sym(ctx1), temperature, Uniform{ &r }, syms);
@@ -331,7 +331,7 @@ std::vector<int> drawPitches(const PitchModel& model, CorpusRoleId role, const D
         syms.clear();
         for (const auto& a : allowed) {
             int s = 0;
-            while (s < kCorpusAlphabet - 1 && !a[static_cast<size_t>(s)]) ++s;
+            while (s < CorpusAlphabet - 1 && !a[static_cast<size_t>(s)]) ++s;
             syms.push_back(s);
         }
     }
@@ -358,7 +358,7 @@ std::vector<int> drawPitches(const PitchModel& model, CorpusRoleId role, const D
  * @param r     the stream the repairs consume
  * @param rels  the line, intervals to the part root, repaired in place
  */
-void enforceLine(const PitchModel& model, CorpusRoleId role, const DrawSource& src, const Allowed& allowed,
+void enforceLine(const PitchModel& model, CorpusRoleIdE role, const DrawSource& src, const AllowedT& allowed,
                  const std::vector<int>& steps, int bars, std::vector<uint8_t> fixed, const LineRules& rules,
                  int ctx2, int ctx1, double temperature, Rng& r, std::vector<int>& rels)
 {
@@ -369,12 +369,12 @@ void enforceLine(const PitchModel& model, CorpusRoleId role, const DrawSource& s
         int pos = -1;
         std::vector<uint8_t> set;
         // Runs: the last free note of a run of maxRun + 1 loses the run's pitch.
-        const size_t len = rules.loop ? n + static_cast<size_t>(rules.maxRun) : n;
-        for (size_t k = static_cast<size_t>(rules.maxRun); k < len && pos < 0; ++k) {
+        const size_t len = rules.m_loop ? n + static_cast<size_t>(rules.m_maxRun) : n;
+        for (size_t k = static_cast<size_t>(rules.m_maxRun); k < len && pos < 0; ++k) {
             bool run = true;
-            for (int d = 1; d <= rules.maxRun && run; ++d) run = rels[k % n] == rels[(k - static_cast<size_t>(d)) % n];
+            for (int d = 1; d <= rules.m_maxRun && run; ++d) run = rels[k % n] == rels[(k - static_cast<size_t>(d)) % n];
             if (!run) continue;
-            for (int d = 0; d <= rules.maxRun; ++d) {
+            for (int d = 0; d <= rules.m_maxRun; ++d) {
                 const size_t c = (k - static_cast<size_t>(d)) % n;
                 if (fixed[c]) continue;
                 set = allowed[c];
@@ -385,17 +385,17 @@ void enforceLine(const PitchModel& model, CorpusRoleId role, const DrawSource& s
             }
         }
         // Pitch classes per window.
-        if (pos < 0 && rules.pcLo > 0) {
-            const int windows = std::max(1, (steps.empty() ? 0 : steps.back()) / rules.window + 1);
+        if (pos < 0 && rules.m_pcLo > 0) {
+            const int windows = std::max(1, (steps.empty() ? 0 : steps.back()) / rules.m_window + 1);
             for (int w = 0; w < windows && pos < 0; ++w) {
                 int count[12] = {};
                 std::vector<size_t> idx;
                 for (size_t i = 0; i < n; ++i)
-                    if (steps[i] / rules.window == w) { idx.push_back(i); ++count[pcOf(rels[i])]; }
+                    if (steps[i] / rules.m_window == w) { idx.push_back(i); ++count[pcOf(rels[i])]; }
                 int distinct = 0;
                 for (int c : count) distinct += c > 0 ? 1 : 0;
-                if (idx.empty() || (distinct >= rules.pcLo && distinct <= rules.pcHi)) continue;
-                const bool tooFew = distinct < rules.pcLo;
+                if (idx.empty() || (distinct >= rules.m_pcLo && distinct <= rules.m_pcHi)) continue;
+                const bool tooFew = distinct < rules.m_pcLo;
                 // Too few: the commonest class gives a note away to a class the window lacks.
                 // Too many: the rarest class's note moves onto a class the window already has.
                 std::vector<size_t> order(idx.rbegin(), idx.rend());
@@ -418,7 +418,7 @@ void enforceLine(const PitchModel& model, CorpusRoleId role, const DrawSource& s
             }
         }
         if (pos < 0) return;
-        Allowed one;
+        AllowedT one;
         for (size_t i = 0; i < n; ++i) one.push_back(static_cast<int>(i) == pos ? set : single(rels[i]));
         const std::vector<int> redrawn = drawPitches(model, role, src, one, steps, bars, ctx2, ctx1, temperature, r);
         if (redrawn[static_cast<size_t>(pos)] == rels[static_cast<size_t>(pos)]) { fixed[static_cast<size_t>(pos)] = 1; continue; }
@@ -430,26 +430,26 @@ void enforceLine(const PitchModel& model, CorpusRoleId role, const DrawSource& s
 bool lineKeeps(const std::vector<int>& rels, const std::vector<int>& steps, const LineRules& rules)
 {
     const size_t n = rels.size();
-    if (n >= static_cast<size_t>(rules.maxRun) + 1) {
-        const size_t len = rules.loop ? n + static_cast<size_t>(rules.maxRun) : n;
-        for (size_t k = static_cast<size_t>(rules.maxRun); k < len; ++k) {
+    if (n >= static_cast<size_t>(rules.m_maxRun) + 1) {
+        const size_t len = rules.m_loop ? n + static_cast<size_t>(rules.m_maxRun) : n;
+        for (size_t k = static_cast<size_t>(rules.m_maxRun); k < len; ++k) {
             bool run = true;
-            for (int d = 1; d <= rules.maxRun && run; ++d) run = rels[k % n] == rels[(k - static_cast<size_t>(d)) % n];
+            for (int d = 1; d <= rules.m_maxRun && run; ++d) run = rels[k % n] == rels[(k - static_cast<size_t>(d)) % n];
             if (run) return false;
         }
     }
-    if (rules.pcLo > 0 && n > 0) {
-        const int windows = steps.back() / rules.window + 1;
+    if (rules.m_pcLo > 0 && n > 0) {
+        const int windows = steps.back() / rules.m_window + 1;
         for (int w = 0; w < windows; ++w) {
             bool seen[12] = {};
             int distinct = 0, notes = 0;
             for (size_t i = 0; i < n; ++i) {
-                if (steps[i] / rules.window != w) continue;
+                if (steps[i] / rules.m_window != w) continue;
                 ++notes;
                 const int pc = ((rels[i] % 12) + 12) % 12;
                 if (!seen[pc]) { seen[pc] = true; ++distinct; }
             }
-            if (notes > 0 && (distinct < rules.pcLo || distinct > rules.pcHi)) return false;
+            if (notes > 0 && (distinct < rules.m_pcLo || distinct > rules.m_pcHi)) return false;
         }
     }
     return true;
@@ -478,32 +478,32 @@ int median(const uint32_t* counts, int n)
  * at the same written span -- and far more where the counter's block gave it four or six sixteenths
  * to hold, which is where it used to sustain over the lead's riff.
  */
-constexpr double kCounterStaccato = 0.45;
+constexpr double CounterStaccato = 0.45;
 } // namespace mel
 
 MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64_t seed, int key, int scale,
                           bool firstTrack, float colour, uint32_t scaleMask, unsigned bassMask, const SetMotif& motif)
 {
-    const int cb = p.base(Module::Compose);
-    const double temperature = p.get(cb + compose::MelodyTemperature);
+    const int cb = p.base(ModuleE::COMPOSE);
+    const double temperature = p.get(cb + compose::MELODY_TEMPERATURE);
     // 22.09.2026, round "Lead": the two knobs over the style's lead vector (Form.h, LeadStyle); 0 = Auto.
-    const int leadDensity = p.getInt(cb + compose::LeadDensity);
-    const int pitchEntropy = p.getInt(cb + compose::PitchEntropy);
-    const int counterKnob = p.getInt(cb + compose::CounterMode);   // 23.09.2026: 0 = Auto (the style's weights)
-    const float mv = p.get(cb + compose::MelodyVariation);
+    const int leadDensity = p.getInt(cb + compose::LEAD_DENSITY);
+    const int pitchEntropy = p.getInt(cb + compose::PITCH_ENTROPY);
+    const int counterKnob = p.getInt(cb + compose::COUNTER_MODE);   // 23.09.2026: 0 = Auto (the style's weights)
+    const float mv = p.get(cb + compose::MELODY_VARIATION);
     MelodyPlan m;
     Rng r;
     r.seed(seed);
     // The style profile scales the knobs' amounts; Full-On, the default, scales everything by one.
-    static const int kAmountKnob[kMelodyParts] = { compose::AcidAmount, compose::LeadAmount, compose::CounterAmount, compose::ArpAmount,
-                                                   compose::StabAmount, compose::PadAmount, compose::DroneAmount };
-    float amounts[kMelodyParts];
-    for (int k = 0; k < kMelodyParts; ++k) amounts[k] = std::clamp(p.get(cb + kAmountKnob[k]) * style.partAmount[k], 0.0f, 1.0f);
+    static const int AmountKnob[MelodyParts] = { compose::ACID_AMOUNT, compose::LEAD_AMOUNT, compose::COUNTER_AMOUNT, compose::ARP_AMOUNT,
+                                                   compose::STAB_AMOUNT, compose::PAD_AMOUNT, compose::DRONE_AMOUNT };
+    float amounts[MelodyParts];
+    for (int k = 0; k < MelodyParts; ++k) amounts[k] = std::clamp(p.get(cb + AmountKnob[k]) * style.m_partAmount[k], 0.0f, 1.0f);
     // The four older parts draw first and in their old order (acid, lead, arp, pad), so that which of
     // them a track has did not move when the three new voices joined (19.09.2026); then the new ones.
     // The counter-lead answers the lead, so a track without a lead has none.
-    for (int k = 0; k < kMelodyParts; ++k) m.amount[k] = amounts[k];
-    for (int k : { kAcidI, kLeadI, kArpI, kPadI }) m.present[k] = r.uniform() < amounts[k];
+    for (int k = 0; k < MelodyParts; ++k) m.m_amount[k] = amounts[k];
+    for (int k : { AcidI, LeadI, ArpI, PadI }) m.m_present[k] = r.uniform() < amounts[k];
     // 21.09.2026: the lead is not a coin flip any more. Drawing it per track meant that "Lead
     // Amount 0.5" gave half the tracks a lead and the other half none at all -- measured over four
     // seeds, two of them had no lead in 256 bars, and with it went the counter-lead, which only
@@ -519,17 +519,17 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     // had none of the three. The knob still says how much each plays; it says it per *section* now
     // (Form.cpp, the section draws), so a line comes and goes inside a track instead of being absent
     // from the whole of it -- which is how a psytrance arrangement works anyway.
-    for (int k : { kAcidI, kLeadI, kArpI, kPadI }) m.present[k] = amounts[k] > 0.0f;
+    for (int k : { AcidI, LeadI, ArpI, PadI }) m.m_present[k] = amounts[k] > 0.0f;
     // Every track has at least one melodic part unless all three amounts are zero: the likeliest one.
-    if (!m.present[kAcidI] && !m.present[kLeadI] && !m.present[kArpI]) {
-        static const int kLine[3] = { kAcidI, kLeadI, kArpI };
+    if (!m.m_present[AcidI] && !m.m_present[LeadI] && !m.m_present[ArpI]) {
+        static const int Line[3] = { AcidI, LeadI, ArpI };
         int best = 0;
-        for (int k = 1; k < 3; ++k) if (amounts[kLine[k]] * r.uniform() > amounts[kLine[best]] * r.uniform()) best = k;
-        m.present[kLine[best]] = amounts[kLine[best]] > 0.0f;
+        for (int k = 1; k < 3; ++k) if (amounts[Line[k]] * r.uniform() > amounts[Line[best]] * r.uniform()) best = k;
+        m.m_present[Line[best]] = amounts[Line[best]] > 0.0f;
     }
-    for (int k : { kCounterI, kStabI, kDroneI }) m.present[k] = r.uniform() < amounts[k];
-    m.present[kDroneI] = amounts[kDroneI] > 0.0f;   // see above: its share is the sections', not the tracks'
-    m.present[kCounterI] = m.present[kCounterI] && m.present[kLeadI];
+    for (int k : { CounterI, StabI, DroneI }) m.m_present[k] = r.uniform() < amounts[k];
+    m.m_present[DroneI] = amounts[DroneI] > 0.0f;   // see above: its share is the sections', not the tracks'
+    m.m_present[CounterI] = m.m_present[CounterI] && m.m_present[LeadI];
     // 20.09.2026, round "climax-polish": the guarantee above can be satisfied by the acid alone, and acid
     // is not a "line" for the presence match or for a drop's brightness (ComposerLevels.cpp, matchPresence and
     // probeLoudness's isLine: lead, counter, arp, stab). Measured over 30 tracks: 5 of them had none of
@@ -541,36 +541,36 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     // tried first, the same weighted draw as the guarantee above, and the stab only if both their amounts
     // are zero. Scoped to the tracks that actually have nothing: a track that already carries a line does
     // not have its melody touched.
-    if (!m.present[kLeadI] && !m.present[kArpI] && !m.present[kStabI]) {
-        static const int kVoice[3] = { kLeadI, kArpI, kStabI };
+    if (!m.m_present[LeadI] && !m.m_present[ArpI] && !m.m_present[StabI]) {
+        static const int Voice[3] = { LeadI, ArpI, StabI };
         int best = 0;
-        for (int k = 1; k < 3; ++k) if (amounts[kVoice[k]] * r.uniform() > amounts[kVoice[best]] * r.uniform()) best = k;
-        m.present[kVoice[best]] = amounts[kVoice[best]] > 0.0f;
+        for (int k = 1; k < 3; ++k) if (amounts[Voice[k]] * r.uniform() > amounts[Voice[best]] * r.uniform()) best = k;
+        m.m_present[Voice[best]] = amounts[Voice[best]] > 0.0f;
     }
-    m.key = ((key % 12) + 12) % 12;
-    m.root[kAcidI] = kAcidLowest + ((key - 2) % 12 + 12) % 12;   // D3 .. C#4
+    m.m_key = ((key % 12) + 12) % 12;
+    m.m_root[AcidI] = AcidLowest + ((key - 2) % 12 + 12) % 12;   // D3 .. C#4
     // 20.09.2026, round "dialogue": the lead's tonic moved down into the rule's window. With the root at
     // E4 .. D#5 and the window narrowed to C4 .. G4, the highest keys would have had a window of four
     // semitones and the lowest one of eight; from C4 .. B4 every key keeps the full fifth, and every
-    // interval to the root still fits the corpus alphabet (kCorpusRelMin .. kCorpusRelMax).
+    // interval to the root still fits the corpus alphabet (CorpusRelMin .. CorpusRelMax).
     // 23.09.2026, round "Counter": the window stands the style's registerShift above C4, with a semitone of
     // jitter per track (the literature's 250 Hz .. 2 kHz, weight at 500 Hz .. 1 kHz; the user: "teils zu tief").
-    m.leadWindowLo = kLeadLowest + std::clamp(style.lead.registerShift + (r.below(3) - 1), 0, 12);
-    m.root[kLeadI] = m.leadWindowLo + ((key - m.leadWindowLo) % 12 + 12) % 12;   // the window's octave
-    m.root[kCounterI] = m.root[kLeadI] + 12;                      // C5 .. B5: the lead's register an octave up
-    m.root[kArpI] = 57 + ((key - 9) % 12 + 12) % 12;            // A3 .. G#4
-    m.root[kStabI] = m.root[kArpI];                               // unused: the stab's chord carries its own root
-    m.root[kPadI] = kPadLowest;                                   // unused: the voicings carry their own
-    m.root[kDroneI] = kDroneLowest + ((key - 2) % 12 + 12) % 12;  // D2 .. C#3: the drone's low root
+    m.m_leadWindowLo = LeadLowest + std::clamp(style.m_lead.m_registerShift + (r.below(3) - 1), 0, 12);
+    m.m_root[LeadI] = m.m_leadWindowLo + ((key - m.m_leadWindowLo) % 12 + 12) % 12;   // the window's octave
+    m.m_root[CounterI] = m.m_root[LeadI] + 12;                      // C5 .. B5: the lead's register an octave up
+    m.m_root[ArpI] = 57 + ((key - 9) % 12 + 12) % 12;            // A3 .. G#4
+    m.m_root[StabI] = m.m_root[ArpI];                               // unused: the stab's chord carries its own root
+    m.m_root[PadI] = PadLowest;                                   // unused: the voicings carry their own
+    m.m_root[DroneI] = DroneLowest + ((key - 2) % 12 + 12) % 12;  // D2 .. C#3: the drone's low root
     makeChords(m, scale, seed, temperature, style);
     // The predictive model of the melodic lines (Phase 8). Loaded once, on whichever thread composes
     // first -- never the audio thread -- and null whenever the knob says Markov or no weight file is
     // there, in which case every draw below is exactly the Phase 5 draw.
     DrawSource src;
-    if (p.getInt(cb + compose::MelodyModel) == 1) {
+    if (p.getInt(cb + compose::MELODY_MODEL) == 1) {
         std::string note;
-        src.nn = sharedMelodyModel(&note);
-        if (src.nn == nullptr) {
+        src.m_nn = sharedMelodyModel(&note);
+        if (src.m_nn == nullptr) {
             static bool told = false;
             if (!told) { told = true; std::printf("%s\n", note.c_str()); }
         }
@@ -578,24 +578,24 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     // The style slot stays 0, "unknown": the MIDI packs carry no label that maps onto the five
     // style profiles, so every training line was labelled 0 and the inference side must match
     // (docs/MODEL_FORMAT.md section 3, the warning). The slot exists for a labelled corpus later.
-    src.style = 0;
-    m.scale = std::clamp(scale, 0, kNumScales - 1);
+    src.m_style = 0;
+    m.m_scale = std::clamp(scale, 0, NumScales - 1);
     makeAcid(m, key, scale, seed, temperature, colour, src);
-    makeLead(m, key, scale, seed, temperature, colour, src, style.lead, leadDensity, pitchEntropy, bassMask, motif);
+    makeLead(m, key, scale, seed, temperature, colour, src, style.m_lead, leadDensity, pitchEntropy, bassMask, motif);
     makeArp(m, key, scale, seed, temperature, colour, src);
-    for (int c = 0; c < 4; ++c) m.padVoicing[c] = voiceChord(scale, key, m.chordDegree[c], m.chordType[c], c > 0 ? &m.padVoicing[c - 1] : nullptr);
-    for (int c = 0; c < 4; ++c) m.breakVoicing[c] = voiceChord(scale, key, m.breakDegree[c], m.breakType[c], c > 0 ? &m.breakVoicing[c - 1] : nullptr);
-    if (m.secondHalf)
-        for (int c = 0; c < 4; ++c) m.padVoicing2[c] = voiceChord(scale, key, m.chordDegree2[c], m.chordType2[c], c > 0 ? &m.padVoicing2[c - 1] : nullptr);
+    for (int c = 0; c < 4; ++c) m.m_padVoicing[c] = voiceChord(scale, key, m.m_chordDegree[c], m.m_chordType[c], c > 0 ? &m.m_padVoicing[c - 1] : nullptr);
+    for (int c = 0; c < 4; ++c) m.m_breakVoicing[c] = voiceChord(scale, key, m.m_breakDegree[c], m.m_breakType[c], c > 0 ? &m.m_breakVoicing[c - 1] : nullptr);
+    if (m.m_secondHalf)
+        for (int c = 0; c < 4; ++c) m.m_padVoicing2[c] = voiceChord(scale, key, m.m_chordDegree2[c], m.m_chordType2[c], c > 0 ? &m.m_padVoicing2[c - 1] : nullptr);
     // The three new voices (19.09.2026), each from a salt of its own, after everything older: nothing
     // any older maker drew moves because of them.
     // The counter's mode (23.09.2026): the knob, else the style's weights, from the counter's own stream.
     {
         Rng cm;
-        cm.seed(mixSeed(seed ^ kSaltCounter, 77u));
-        double modeWeight[kNumCounterModes];   // times the listener's preferences (Preferences.h)
-        for (int a = 0; a < kNumCounterModes; ++a) modeWeight[a] = style.lead.counterMode[a] * preferenceFactor("counter.mode", kCounterModeFeatureNames[a]);
-        m.counterMode = counterKnob > 0 ? counterKnob - 1 : drawIndex(cm, modeWeight, kNumCounterModes);
+        cm.seed(mixSeed(seed ^ SaltCounter, 77u));
+        double modeWeight[NumCounterModes];   // times the listener's preferences (Preferences.h)
+        for (int a = 0; a < NumCounterModes; ++a) modeWeight[a] = style.m_lead.m_counterMode[a] * preferenceFactor("counter.mode", CounterModeFeatureNames[a]);
+        m.m_counterMode = counterKnob > 0 ? counterKnob - 1 : drawIndex(cm, modeWeight, NumCounterModes);
     }
     makeCounter(m, key, scale, seed);
     makeStab(m, seed);
@@ -606,44 +606,44 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
     // second riff. The scratch plan carries the chords, the roots and the part switches, which are
     // the track's and do not belong to a mode. Nothing here can move the base mode's material: the
     // makers above have already run, and each of these calls starts its own Rng.
-    for (int sc = 0; sc < kNumScales; ++sc) {
-        if (sc == m.scale || (scaleMask & (1u << sc)) == 0) continue;
+    for (int sc = 0; sc < NumScales; ++sc) {
+        if (sc == m.m_scale || (scaleMask & (1u << sc)) == 0) continue;
         MelodyPlan tmp = m;
         makeAcid(tmp, key, sc, seed, temperature, colour, src);
-        makeLead(tmp, key, sc, seed, temperature, colour, src, style.lead, leadDensity, pitchEntropy, bassMask, motif);
+        makeLead(tmp, key, sc, seed, temperature, colour, src, style.m_lead, leadDensity, pitchEntropy, bassMask, motif);
         makeArp(tmp, key, sc, seed, temperature, colour, src);
         makeCounter(tmp, key, sc, seed);
         for (int c = 0; c < 4; ++c)
-            tmp.padVoicing[c] = voiceChord(sc, key, tmp.chordDegree[c], tmp.chordType[c], c > 0 ? &tmp.padVoicing[c - 1] : nullptr);
+            tmp.m_padVoicing[c] = voiceChord(sc, key, tmp.m_chordDegree[c], tmp.m_chordType[c], c > 0 ? &tmp.m_padVoicing[c - 1] : nullptr);
         for (int c = 0; c < 4; ++c)
-            tmp.breakVoicing[c] = voiceChord(sc, key, tmp.breakDegree[c], tmp.breakType[c], c > 0 ? &tmp.breakVoicing[c - 1] : nullptr);
-        if (m.secondHalf)
+            tmp.m_breakVoicing[c] = voiceChord(sc, key, tmp.m_breakDegree[c], tmp.m_breakType[c], c > 0 ? &tmp.m_breakVoicing[c - 1] : nullptr);
+        if (m.m_secondHalf)
             for (int c = 0; c < 4; ++c)
-                tmp.padVoicing2[c] = voiceChord(sc, key, tmp.chordDegree2[c], tmp.chordType2[c], c > 0 ? &tmp.padVoicing2[c - 1] : nullptr);
-        ModeMaterial& mm = m.mode[sc];
-        for (int i = 0; i < kAcidCells; ++i) mm.acid[i] = tmp.acid[i];
-        for (int i = 0; i < 2; ++i) mm.lead[i] = tmp.lead[i];
-        for (int i = 0; i < 2; ++i) mm.counter[i] = tmp.counter[i];
-        for (int i = 0; i < kArpCells; ++i) mm.arp[i] = tmp.arp[i];
-        for (int c = 0; c < 4; ++c) mm.padVoicing[c] = tmp.padVoicing[c];
-        for (int c = 0; c < 4; ++c) mm.breakVoicing[c] = tmp.breakVoicing[c];
-        for (int c = 0; c < 4; ++c) mm.padVoicing2[c] = tmp.padVoicing2[c];
-        mm.built = true;
+                tmp.m_padVoicing2[c] = voiceChord(sc, key, tmp.m_chordDegree2[c], tmp.m_chordType2[c], c > 0 ? &tmp.m_padVoicing2[c - 1] : nullptr);
+        ModeMaterial& mm = m.m_mode[sc];
+        for (int i = 0; i < AcidCells; ++i) mm.m_acid[i] = tmp.m_acid[i];
+        for (int i = 0; i < 2; ++i) mm.m_lead[i] = tmp.m_lead[i];
+        for (int i = 0; i < 2; ++i) mm.m_counter[i] = tmp.m_counter[i];
+        for (int i = 0; i < ArpCells; ++i) mm.m_arp[i] = tmp.m_arp[i];
+        for (int c = 0; c < 4; ++c) mm.m_padVoicing[c] = tmp.m_padVoicing[c];
+        for (int c = 0; c < 4; ++c) mm.m_breakVoicing[c] = tmp.m_breakVoicing[c];
+        for (int c = 0; c < 4; ++c) mm.m_padVoicing2[c] = tmp.m_padVoicing2[c];
+        mm.m_built = true;
     }
     makeRangesAndPad(m, seed);
 
     Rng s;
-    s.seed(seed ^ kSaltSound);
+    s.seed(seed ^ SaltSound);
     if (!firstTrack) {
         // The older parts' draws first and in their old order, then the new voices' (19.09.2026).
-        for (int k : { kAcidI, kLeadI, kArpI, kPadI }) m.recipe[k] = (2.0f * s.uniform() - 1.0f) * mv;
-        const float chance = std::clamp(p.get(cb + compose::SquelchChance) * style.squelchChance, 0.0f, 1.0f);
-        m.acidSquelch = s.uniform() < chance ? 1 : 0;
+        for (int k : { AcidI, LeadI, ArpI, PadI }) m.m_recipe[k] = (2.0f * s.uniform() - 1.0f) * mv;
+        const float chance = std::clamp(p.get(cb + compose::SQUELCH_CHANCE) * style.m_squelchChance, 0.0f, 1.0f);
+        m.m_acidSquelch = s.uniform() < chance ? 1 : 0;
         const float o = s.uniform();
-        m.leadOsc = o < 0.65f ? static_cast<int>(PolyOsc::Supersaw) : (o < 0.85f ? static_cast<int>(PolyOsc::Fm) : static_cast<int>(PolyOsc::Va));
-        static const int kLeft[3] = { 2, 1, 4 }, kRight[3] = { 3, 2, 1 };
-        for (int k : { kAcidI, kLeadI, kArpI }) { m.delay[k][0] = kLeft[s.below(3)]; m.delay[k][1] = kRight[s.below(3)]; }
-        for (int k : { kCounterI, kStabI, kDroneI }) m.recipe[k] = (2.0f * s.uniform() - 1.0f) * mv;
+        m.m_leadOsc = o < 0.65f ? static_cast<int>(PolyOscE::SUPERSAW) : (o < 0.85f ? static_cast<int>(PolyOscE::FM) : static_cast<int>(PolyOscE::VA));
+        static const int Left[3] = { 2, 1, 4 }, Right[3] = { 3, 2, 1 };
+        for (int k : { AcidI, LeadI, ArpI }) { m.m_delay[k][0] = Left[s.below(3)]; m.m_delay[k][1] = Right[s.below(3)]; }
+        for (int k : { CounterI, StabI, DroneI }) m.m_recipe[k] = (2.0f * s.uniform() - 1.0f) * mv;
     }
     return m;
 }
@@ -651,11 +651,11 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
 BarPlan allPartsBar(const MelodyPlan& m)
 {
     BarPlan bp;
-    bp.parts = 0;
-    for (int k = 0; k < kMelodyParts; ++k) if (m.present[k]) bp.parts = static_cast<uint8_t>(bp.parts | partBit(static_cast<MelodyPart>(k)));
-    bp.partsNext = bp.parts;
-    bp.type = SectionType::Drop;
-    bp.energy = 1.0f;
+    bp.m_parts = 0;
+    for (int k = 0; k < MelodyParts; ++k) if (m.m_present[k]) bp.m_parts = static_cast<uint8_t>(bp.m_parts | partBit(static_cast<MelodyPartE>(k)));
+    bp.m_partsNext = bp.m_parts;
+    bp.m_type = SectionTypeE::DROP;
+    bp.m_energy = 1.0f;
     return bp;
 }
 
@@ -669,8 +669,8 @@ BarPlan allPartsBar(const MelodyPlan& m)
  */
 static const ModeMaterial* materialOf(const MelodyPlan& m, int scale)
 {
-    if (scale < 0 || scale >= kNumScales || scale == m.scale) return nullptr;
-    return m.mode[scale].built ? &m.mode[scale] : nullptr;
+    if (scale < 0 || scale >= NumScales || scale == m.m_scale) return nullptr;
+    return m.m_mode[scale].m_built ? &m.m_mode[scale] : nullptr;
 }
 
 namespace mel {
@@ -684,22 +684,22 @@ namespace mel {
  * plus a release of a few tens of milliseconds).
  */
 struct RegisterMap {
-    int lo[kStepsPerBar];   ///< per sixteenth: the lowest note sounding
-    int hi[kStepsPerBar];   ///< per sixteenth: the highest note sounding
-    RegisterMap() { for (int s = 0; s < kStepsPerBar; ++s) { lo[s] = 1000; hi[s] = -1000; } }
+    int m_lo[StepsPerBar];   ///< per sixteenth: the lowest note sounding
+    int m_hi[StepsPerBar];   ///< per sixteenth: the highest note sounding
+    RegisterMap() { for (int s = 0; s < StepsPerBar; ++s) { m_lo[s] = 1000; m_hi[s] = -1000; } }
     /** @brief Marks @p pitch as sounding from @p first for @p span sixteenths (clipped to the bar). */
     void add(int first, int span, int pitch)
     {
-        for (int s = std::max(0, first); s < std::min(kStepsPerBar, first + std::max(1, span)); ++s) {
-            lo[s] = std::min(lo[s], pitch);
-            hi[s] = std::max(hi[s], pitch);
+        for (int s = std::max(0, first); s < std::min(StepsPerBar, first + std::max(1, span)); ++s) {
+            m_lo[s] = std::min(m_lo[s], pitch);
+            m_hi[s] = std::max(m_hi[s], pitch);
         }
     }
-    /** @brief Whether the span [a, b] at step @p s keeps kRegisterGap semitones from everything marked. */
+    /** @brief Whether the span [a, b] at step @p s keeps RegisterGap semitones from everything marked. */
     bool clear(int s, int a, int b) const
     {
-        if (s < 0 || s >= kStepsPerBar || lo[s] > hi[s]) return true;
-        return a - hi[s] >= kRegisterGap || lo[s] - b >= kRegisterGap;
+        if (s < 0 || s >= StepsPerBar || m_lo[s] > m_hi[s]) return true;
+        return a - m_hi[s] >= RegisterGap || m_lo[s] - b >= RegisterGap;
     }
 };
 
@@ -735,83 +735,83 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
                       const BarPlan& bp, std::vector<NoteEvent>& out, const MelodyContext& ctx)
 {
     (void)scale;
-    const ModeMaterial* mat = materialOf(m, bp.scale);
-    const std::vector<MelodyNote>* acid = mat != nullptr ? mat->acid : m.acid;
-    const std::vector<MelodyNote>* lead = mat != nullptr ? mat->lead : m.lead;
-    const std::vector<MelodyNote>* counter = mat != nullptr ? mat->counter : m.counter;
-    const std::vector<MelodyNote>* arp = mat != nullptr ? mat->arp : m.arp;
-    const std::vector<int>* voicing = mat != nullptr ? mat->padVoicing : m.padVoicing;
-    const std::vector<int>* breakVoicing = mat != nullptr ? mat->breakVoicing : m.breakVoicing;
-    const std::vector<int>* voicing2 = mat != nullptr ? mat->padVoicing2 : m.padVoicing2;   // the second half's (23.09.2026)
-    const int set = std::clamp(ctx.material, 0, kMaterialSets - 1);
-    const int cb = p.base(Module::Compose);
-    const float swing = p.get(cb + compose::Swing);
-    const double barBeat = static_cast<double>(bar) * kBeatsPerBar;
-    const uint8_t parts = bp.parts;
-    auto has = [&](MelodyPart part) { return (parts & partBit(part)) != 0; };
+    const ModeMaterial* mat = materialOf(m, bp.m_scale);
+    const std::vector<MelodyNote>* acid = mat != nullptr ? mat->m_acid : m.m_acid;
+    const std::vector<MelodyNote>* lead = mat != nullptr ? mat->m_lead : m.m_lead;
+    const std::vector<MelodyNote>* counter = mat != nullptr ? mat->m_counter : m.m_counter;
+    const std::vector<MelodyNote>* arp = mat != nullptr ? mat->m_arp : m.m_arp;
+    const std::vector<int>* voicing = mat != nullptr ? mat->m_padVoicing : m.m_padVoicing;
+    const std::vector<int>* breakVoicing = mat != nullptr ? mat->m_breakVoicing : m.m_breakVoicing;
+    const std::vector<int>* voicing2 = mat != nullptr ? mat->m_padVoicing2 : m.m_padVoicing2;   // the second half's (23.09.2026)
+    const int set = std::clamp(ctx.m_material, 0, MaterialSets - 1);
+    const int cb = p.base(ModuleE::COMPOSE);
+    const float swing = p.get(cb + compose::SWING);
+    const double barBeat = static_cast<double>(bar) * BeatsPerBar;
+    const uint8_t parts = bp.m_parts;
+    auto has = [&](MelodyPartE part) { return (parts & partBit(part)) != 0; };
     // The cut of Grosz et al.: for its first beats a breakdown holds nothing but the reverb tail.
-    const double cut = static_cast<double>(bp.cutBeats);
+    const double cut = static_cast<double>(bp.m_cutBeats);
     auto beatOf = [&](int stepInBar) {
         double b = barBeat + stepInBar * 0.25;
         if (stepInBar % 2 == 1) b += swing * 0.25;
         return b;
     };
-    auto emit = [&](Part part, const MelodyNote& n, int stepInBar, int pitch, double lengthBeats) {
+    auto emit = [&](PartE part, const MelodyNote& n, int stepInBar, int pitch, double lengthBeats) {
         const double beat = beatOf(stepInBar);
         if (beat < barBeat + cut) return;
         NoteEvent e;
-        e.beat = beat;
-        e.length = static_cast<float>(lengthBeats);
-        e.part = part;
-        e.pitch = static_cast<uint8_t>(std::clamp(pitch, 0, 127));
-        e.velocity = n.velocity;
-        e.flags = n.flags;
+        e.m_beat = beat;
+        e.m_length = static_cast<float>(lengthBeats);
+        e.m_part = part;
+        e.m_pitch = static_cast<uint8_t>(std::clamp(pitch, 0, 127));
+        e.m_velocity = n.m_velocity;
+        e.m_flags = n.m_flags;
         out.push_back(e);
     };
 
-    if (has(MelodyPart::Acid)) {
+    if (has(MelodyPartE::ACID)) {
         // A A A' A'' over four cell lengths (rule 4): four bars for a one-bar cell, eight for two.
-        const int steps = m.acidSteps;
+        const int steps = m.m_acidSteps;
         const int cellBars = steps / 16;
         const int inPhrase = barInTrack % (4 * cellBars);
         const int offset = (inPhrase % cellBars) * 16;
         for (const MelodyNote& n : acid[acidCell(set, variantOfBar(inPhrase, cellBars))]) {
-            if (n.step < offset || n.step >= offset + 16) continue;
+            if (n.m_step < offset || n.m_step >= offset + 16) continue;
             // A slide overlaps the next note by a little; other steps are short, as a 303's gate.
             MelodyNote note = n;
             // A slide that reaches into the next bar needs a note there to slide into; where the acid
             // stops at the end of a section it is a plain short note instead.
-            if ((note.flags & kNoteSlide) != 0 && note.step - offset + note.len >= 16 && (bp.partsNext & partBit(MelodyPart::Acid)) == 0)
-                note.flags = static_cast<uint8_t>(note.flags & ~kNoteSlide);
-            const double len = (note.flags & kNoteSlide) ? note.len * 0.25 + 0.03 : std::min<int>(note.len, 2) * 0.25 * 0.55;
-            emit(Part::Acid, note, note.step - offset, m.root[kAcidI] + note.rel, len);
+            if ((note.m_flags & NOTE_SLIDE) != 0 && note.m_step - offset + note.m_len >= 16 && (bp.m_partsNext & partBit(MelodyPartE::ACID)) == 0)
+                note.m_flags = static_cast<uint8_t>(note.m_flags & ~NOTE_SLIDE);
+            const double len = (note.m_flags & NOTE_SLIDE) ? note.m_len * 0.25 + 0.03 : std::min<int>(note.m_len, 2) * 0.25 * 0.55;
+            emit(PartE::ACID, note, note.m_step - offset, m.m_root[AcidI] + note.m_rel, len);
         }
     }
 
     // The line voices -- lead, counter-lead, stab, arp -- in that order of priority, under the register
     // guard (19.09.2026, round "voices"): at every sixteenth their sounding notes lie in disjoint spans
-    // at least kRegisterGap semitones apart ("two voices never double the same register at the same
+    // at least RegisterGap semitones apart ("two voices never double the same register at the same
     // time"). The lead is placed as written; each voice after it takes, for the whole bar, the octave
     // that collides least with what is already placed, and gives up the few events that still collide.
     RegisterMap taken;
     const int window = (barInTrack / 8) % 2;
     const int stepBase = (barInTrack % 8) * 16;
-    if (has(MelodyPart::Lead)) {
+    if (has(MelodyPartE::LEAD)) {
         // The form's octave for the lead only where the whole phrase stays inside B3..A5 (rule 17).
-        int shift = 12 * bp.leadOctave;
+        int shift = 12 * bp.m_leadOctave;
         for (const MelodyNote& n : lead[window]) {
-            const int pitch = m.root[kLeadI] + n.rel + shift;
-            if (pitch < m.leadWindowLo || pitch > leadWindowHi(m)) { shift = 0; break; }
+            const int pitch = m.m_root[LeadI] + n.m_rel + shift;
+            if (pitch < m.m_leadWindowLo || pitch > leadWindowHi(m)) { shift = 0; break; }
         }
         for (const MelodyNote& n : lead[window]) {
             // A note that started in the bar before and still holds here keeps its place in the guard.
-            if (n.step + n.len > stepBase && n.step < stepBase + 16) taken.add(n.step - stepBase, n.len, m.root[kLeadI] + n.rel + shift);
-            if (n.step < stepBase || n.step >= stepBase + 16) continue;
-            // kNoteShort (22.09.2026): the lead's staccato gate, half the written length.
-            emit(Part::Lead, n, n.step - stepBase, m.root[kLeadI] + n.rel + shift, n.len * 0.25 * 0.92 * ((n.flags & kNoteShort) ? 0.5 : 1.0));
+            if (n.m_step + n.m_len > stepBase && n.m_step < stepBase + 16) taken.add(n.m_step - stepBase, n.m_len, m.m_root[LeadI] + n.m_rel + shift);
+            if (n.m_step < stepBase || n.m_step >= stepBase + 16) continue;
+            // NOTE_SHORT (22.09.2026): the lead's staccato gate, half the written length.
+            emit(PartE::LEAD, n, n.m_step - stepBase, m.m_root[LeadI] + n.m_rel + shift, n.m_len * 0.25 * 0.92 * ((n.m_flags & NOTE_SHORT) ? 0.5 : 1.0));
         }
     }
-    if (has(MelodyPart::Counter)) {
+    if (has(MelodyPartE::COUNTER)) {
         // The answer to the lead (makeCounter), in the lead's register an octave up; the guard may take
         // it one more octave up, or down one, and drops a note that still sits on a lead note.
         std::vector<std::array<int, 3>> ev;
@@ -819,19 +819,19 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         for (const MelodyNote& n : counter[window]) {
             // Only the notes that start in this bar: a counter note is cut at the bar line (below), so
             // nothing of it reaches into the next bar, whose guard could not see it.
-            if (n.step < stepBase || n.step >= stepBase + 16) continue;
-            const int pitch = m.root[kCounterI] + n.rel;
-            for (int s = n.step - stepBase; s < std::min(16, n.step - stepBase + n.len); ++s) ev.push_back({ s, pitch, pitch });
+            if (n.m_step < stepBase || n.m_step >= stepBase + 16) continue;
+            const int pitch = m.m_root[CounterI] + n.m_rel;
+            for (int s = n.m_step - stepBase; s < std::min(16, n.m_step - stepBase + n.m_len); ++s) ev.push_back({ s, pitch, pitch });
             notes.push_back(&n);
         }
         const int shift = bestShift(ev, taken, { 0, 12, -12 }, counterWindowLo(m), counterWindowHi(m));
         for (const MelodyNote* n : notes) {
-            const int first = n->step - stepBase, span = std::min(n->len, static_cast<int16_t>(16 - first));
+            const int first = n->m_step - stepBase, span = std::min(n->m_len, static_cast<int16_t>(16 - first));
             // The bar's octave first; a single note that still collides tries the octave above and the
             // one below before it gives way, so that an answer keeps its resting note where it can.
             int pitch = -1;
             for (int extra : { 0, 12, -12 }) {
-                const int cand = m.root[kCounterI] + n->rel + shift + extra;
+                const int cand = m.m_root[CounterI] + n->m_rel + shift + extra;
                 if (cand < counterWindowLo(m) || cand > counterWindowHi(m)) continue;
                 bool ok = true;
                 for (int s = first; s < first + span; ++s) ok = ok && taken.clear(s, cand, cand);
@@ -841,42 +841,42 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
             taken.add(first, span, pitch);
             // The gate by mode (23.09.2026; Form.h, CounterMode). The written note keeps its place in the
             // register guard for its whole span -- the guard is about what *may* sound there. Hocket whips
-            // (kCounterStaccato of a sixteenth, at most two sixteenths' worth: the staccato of 20.09.2026);
+            // (CounterStaccato of a sixteenth, at most two sixteenths' worth: the staccato of 20.09.2026);
             // an answer sounds for an eighth at most, at 0.6 of its span; an echo and a timbral note for
             // what they were written.
-            const CounterMode cmode = static_cast<CounterMode>(std::clamp(m.counterMode, 0, kNumCounterModes - 1));
-            const double gate = cmode == CounterMode::Hocket ? std::min(span, 2) * 0.25 * kCounterStaccato
-                              : cmode == CounterMode::Answer ? std::min(span, 2) * 0.25 * 0.6
-                              : cmode == CounterMode::Echo ? span * 0.25 * 0.8 : span * 0.25 * 0.95;
-            emit(Part::Counter, *n, first, pitch, gate);
+            const CounterModeE cmode = static_cast<CounterModeE>(std::clamp(m.m_counterMode, 0, NumCounterModes - 1));
+            const double gate = cmode == CounterModeE::HOCKET ? std::min(span, 2) * 0.25 * CounterStaccato
+                              : cmode == CounterModeE::ANSWER ? std::min(span, 2) * 0.25 * 0.6
+                              : cmode == CounterModeE::ECHO ? span * 0.25 * 0.8 : span * 0.25 * 0.95;
+            emit(PartE::COUNTER, *n, first, pitch, gate);
         }
     }
-    if (has(MelodyPart::Stab) && ((m.stabBars >> (barInTrack % 4)) & 1u) != 0) {
+    if (has(MelodyPartE::STAB) && ((m.m_stabBars >> (barInTrack % 4)) & 1u) != 0) {
         // Short chord hits on the off-sixteenths of the track's figure (makeStab), over the bar's chord.
-        const std::vector<int> chord = stabChordImpl(bp.scale >= 0 ? bp.scale : m.scale, padChordAt(m, bp, barInTrack).degree,
-                                                     m.key, m.stabTones);
-        const uint16_t mask = m.stabMask[barInTrack % 2];
+        const std::vector<int> chord = stabChordImpl(bp.m_scale >= 0 ? bp.m_scale : m.m_scale, padChordAt(m, bp, barInTrack).m_degree,
+                                                     m.m_key, m.m_stabTones);
+        const uint16_t mask = m.m_stabMask[barInTrack % 2];
         std::vector<std::array<int, 3>> ev;
         // A hit sounds for an eighth (two sixteenths), cut at the bar line so the next bar starts clear.
-        for (int s = 0; s < kStepsPerBar; ++s) {
+        for (int s = 0; s < StepsPerBar; ++s) {
             if (((mask >> s) & 1u) == 0 || chord.empty()) continue;
             ev.push_back({ s, chord.front(), chord.back() });
-            if (s + 1 < kStepsPerBar) ev.push_back({ s + 1, chord.front(), chord.back() });
+            if (s + 1 < StepsPerBar) ev.push_back({ s + 1, chord.front(), chord.back() });
         }
         // The bar's octave first: the chord's own (G3 up), an octave under it where the lead sits above
         // (down to D3, the depth rule's floor), or one or two over it where the lead sits below. A hit
         // that still meets a lead or counter note tries the other octaves on its own before it gives way
         // -- the whole chord or nothing.
-        const int shift = bestShift(ev, taken, { 0, -12, 12, 24 }, kStabLowest, kStabHighest);
+        const int shift = bestShift(ev, taken, { 0, -12, 12, 24 }, StabLowest, StabHighest);
         MelodyNote hit;
-        hit.velocity = 108;
-        for (int s = 0; s < kStepsPerBar; ++s) {
+        hit.m_velocity = 108;
+        for (int s = 0; s < StepsPerBar; ++s) {
             if (((mask >> s) & 1u) == 0 || chord.empty()) continue;
-            const int span = s + 1 < kStepsPerBar ? 2 : 1;
+            const int span = s + 1 < StepsPerBar ? 2 : 1;
             int at = -1000;
             for (int extra : { 0, -12, 12, 24, -24 }) {
                 const int lo = chord.front() + shift + extra, hi = chord.back() + shift + extra;
-                if (lo < kStabLowest || hi > kStabHighest) continue;
+                if (lo < StabLowest || hi > StabHighest) continue;
                 if (!taken.clear(s, lo, hi) || (span == 2 && !taken.clear(s + 1, lo, hi))) continue;
                 at = shift + extra;
                 break;
@@ -884,11 +884,11 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
             if (at == -1000) continue;
             for (int pitch : chord) {
                 taken.add(s, span, pitch + at);
-                emit(Part::Stab, hit, s, pitch + at, 0.25 * span);
+                emit(PartE::STAB, hit, s, pitch + at, 0.25 * span);
             }
         }
     }
-    if (has(MelodyPart::Arp)) {
+    if (has(MelodyPartE::ARP)) {
         const int c = chordIndexAt(m, barInTrack);
         const std::vector<MelodyNote>& cell = arp[arpCell(set, variantOfBar(barInTrack % 4, 1), c)];
         // G3..G5 whatever the form's octave and the octave jump ask for (rule 14): a shift is played
@@ -897,26 +897,26 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         // rule 14 there -- the form's octave (BarPlan::arpOctave, set only in drop 2) may take the cell up to
         // G6, the ceiling the register guard already allows beside the lead; the octave jump comes on top
         // only where it still fits.
-        const int ceiling = bp.arpOctave > 0 ? kArpOverHighest : kArpHighest;
+        const int ceiling = bp.m_arpOctave > 0 ? ArpOverHighest : ArpHighest;
         auto fits = [&](int sh) {
             for (const MelodyNote& n : cell) {
-                const int pitch = m.root[kArpI] + n.rel + sh;
-                if (pitch < kArpLowest || pitch > ceiling) return false;
+                const int pitch = m.m_root[ArpI] + n.m_rel + sh;
+                if (pitch < ArpLowest || pitch > ceiling) return false;
             }
             return true;
         };
-        int shift = ((m.arpOctaveJump && (barInTrack / 2) % 2 == 1) ? 12 : 0) + 12 * bp.arpOctave;
+        int shift = ((m.m_arpOctaveJump && (barInTrack / 2) % 2 == 1) ? 12 : 0) + 12 * bp.m_arpOctave;
         // In drop 2 the octave is the rule's and is kept: a cell too wide for G6 folds its top notes down an
         // octave instead of giving the octave up (below, where the events are built).
-        if (!fits(shift)) shift = (bp.arpOctave > 0 || fits(12 * bp.arpOctave)) ? 12 * bp.arpOctave : 0;
+        if (!fits(shift)) shift = (bp.m_arpOctave > 0 || fits(12 * bp.m_arpOctave)) ? 12 * bp.m_arpOctave : 0;
         // Which note sounds on which sixteenth: the cell as written, or the polymeter's three-sixteenth
         // cell read at the *absolute* sixteenth of the track (it starts one step later in every bar and
         // comes home every three bars; its high note precesses with it).
         std::vector<std::pair<int, const MelodyNote*>> steps;
-        if (m.arpPolymeter && cell.size() == 3) {
-            for (int s = 0; s < kStepsPerBar; ++s) steps.emplace_back(s, &cell[static_cast<size_t>((barInTrack + s) % 3)]);
+        if (m.m_arpPolymeter && cell.size() == 3) {
+            for (int s = 0; s < StepsPerBar; ++s) steps.emplace_back(s, &cell[static_cast<size_t>((barInTrack + s) % 3)]);
         } else {
-            for (const MelodyNote& n : cell) steps.emplace_back(n.step, &n);
+            for (const MelodyNote& n : cell) steps.emplace_back(n.m_step, &n);
         }
         // The arp beside the lead (19.09.2026). Until then the form silenced the arp in every bar the
         // lead played (Composer::restoreArp put it back only where the lead rested). Now the register
@@ -928,46 +928,46 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         // it always was.
         std::vector<std::array<int, 3>> ev;
         for (const auto& st : steps) {
-            int pitch = m.root[kArpI] + st.second->rel + shift;
-            while (bp.arpOctave > 0 && pitch > ceiling) pitch -= 12;
+            int pitch = m.m_root[ArpI] + st.second->m_rel + shift;
+            while (bp.m_arpOctave > 0 && pitch > ceiling) pitch -= 12;
             ev.push_back({ st.first, pitch, pitch });
         }
-        const bool shared = has(MelodyPart::Lead) || has(MelodyPart::Counter) || has(MelodyPart::Stab);
+        const bool shared = has(MelodyPartE::LEAD) || has(MelodyPartE::COUNTER) || has(MelodyPartE::STAB);
         // In drop 2 the guard may lift the arp further but never take it back under its climax octave.
         // 22.09.2026: **the octave over G5 belongs to the climax.** Outside drop 2 the guard clears the
         // lead within rule 14's own ceiling -- under the lead's lowest note, or interlocked into its
         // rests, both of which it already prefers -- and only drop 2 may go up to G6. Until now both
-        // used kArpOverHighest, so in a track whose lead sat in the guard's way the arp was already at
+        // used ArpOverHighest, so in a track whose lead sat in the guard's way the arp was already at
         // the top in drop 1 and drop 2's octave had nowhere to go: the cell was pulled back under the
         // ceiling note by note and the two drops stood level. That is the brief's climax rule not
         // happening at all, and it got much more common once the lead played in every track
         // (21.09.2026) -- measured, the arp rose in drop 2 in 14 of 17 tracks before that and in 9 of
         // 30 after it.
-        const int move = !shared ? 0 : bp.arpOctave > 0 ? bestShift(ev, taken, { 0, 12 }, kArpLowest, kArpOverHighest)
-                                                        : bestShift(ev, taken, { 0, -12, 12, 24 }, kArpLowest, kArpHighest);
-        // The gate (rule 15): kArpGate of a sixteenth; the arp's own release (Params.cpp) finishes it.
-        const double gate = 0.25 * kArpGate;
+        const int move = !shared ? 0 : bp.m_arpOctave > 0 ? bestShift(ev, taken, { 0, 12 }, ArpLowest, ArpOverHighest)
+                                                        : bestShift(ev, taken, { 0, -12, 12, 24 }, ArpLowest, ArpHighest);
+        // The gate (rule 15): ArpGate of a sixteenth; the arp's own release (Params.cpp) finishes it.
+        const double gate = 0.25 * ArpGate;
         // 23.09.2026, round "Counter": the lead window moved up into the arp's octaves (Form.h, registerShift),
         // and the sixteenths the bar's best shift still left colliding were *dropped* -- 4 and 13 % holes in
         // the listening seed's arps, measured, in a line whose rule is "continuous sixteenths" (rule 11). A
         // colliding note now moves by an octave on its own -- up, down, two up -- inside the guard's ceiling,
         // and gives way only where no octave is clear. Same pitch class, so the material stands.
-        const int guardCeiling = bp.arpOctave > 0 ? kArpOverHighest : kArpHighest;
+        const int guardCeiling = bp.m_arpOctave > 0 ? ArpOverHighest : ArpHighest;
         for (const auto& st : steps) {
-            int pitch = m.root[kArpI] + st.second->rel + shift + move;
+            int pitch = m.m_root[ArpI] + st.second->m_rel + shift + move;
             if (!taken.clear(st.first, pitch, pitch)) {
                 int alt = -1;
                 for (int d : { 12, -12, 24 }) {
                     const int cand = pitch + d;
-                    if (cand >= kArpLowest && cand <= guardCeiling && taken.clear(st.first, cand, cand)) { alt = cand; break; }
+                    if (cand >= ArpLowest && cand <= guardCeiling && taken.clear(st.first, cand, cand)) { alt = cand; break; }
                 }
                 if (alt < 0) continue;
                 pitch = alt;
             }
-            emit(Part::Arp, *st.second, st.first, pitch, gate);
+            emit(PartE::ARP, *st.second, st.first, pitch, gate);
         }
     }
-    if (has(MelodyPart::Pad)) {
+    if (has(MelodyPartE::PAD)) {
         // The block's onsets are worked out every bar and only this bar's are written: the conductor
         // composes one bar at a time into the engine's ring, in beat order (22.09.2026, round "Figuren").
         //
@@ -977,30 +977,30 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         // chord never rings past its section either: a block that straddles a section boundary is
         // cut there, so the breakdown's first chord is not heard under the tail of the groove's last.
         const PadChord chord = padChordAt(m, bp, barInTrack);
-        const int barsLeft = std::max(1, std::min(chord.blockBars - chord.barInBlock, bp.sectionBars - bp.barInSection));
+        const int barsLeft = std::max(1, std::min(chord.m_blockBars - chord.m_barInBlock, bp.m_sectionBars - bp.m_barInSection));
         MelodyNote held;
-        held.velocity = 90;
-        const double barBeats = static_cast<double>(kBeatsPerBar);
-        const std::vector<int>& v = (chord.inBreak ? breakVoicing : (chord.secondSet ? voicing2 : voicing))[chord.slot];
+        held.m_velocity = 90;
+        const double barBeats = static_cast<double>(BeatsPerBar);
+        const std::vector<int>& v = (chord.m_inBreak ? breakVoicing : (chord.m_secondSet ? voicing2 : voicing))[chord.m_slot];
         // Intro, breakdown, buildup and outro hold whatever figure the track drew (round "Figuren").
-        const bool carpet = bp.type == SectionType::Intro || bp.type == SectionType::Break
-                         || bp.type == SectionType::Outro || bp.type == SectionType::Build;
+        const bool carpet = bp.m_type == SectionTypeE::INTRO || bp.m_type == SectionTypeE::BREAK
+                         || bp.m_type == SectionTypeE::OUTRO || bp.m_type == SectionTypeE::BUILD;
         std::vector<std::pair<int, double>> onsets;
-        const int figure = carpet ? static_cast<int>(PadFigure::Held)
-                         : bp.type == SectionType::Groove ? m.padFigureGroove : m.padFigure;
-        padOnsets(figure, chord.blockBars, onsets);
+        const int figure = carpet ? static_cast<int>(PadFigureE::HELD)
+                         : bp.m_type == SectionTypeE::GROOVE ? m.m_padFigureGroove : m.m_padFigure;
+        padOnsets(figure, chord.m_blockBars, onsets);
         const double blockEnd = barsLeft * barBeats;
         std::vector<std::pair<int, double>> here;
         for (const auto& on : onsets) {
-            if (on.first / kStepsPerBar != chord.barInBlock) continue;
-            double at = (on.first % kStepsPerBar) * 0.25;
+            if (on.first / StepsPerBar != chord.m_barInBlock) continue;
+            double at = (on.first % StepsPerBar) * 0.25;
             double len = on.second;
             if (at < cut - 1e-9) { len -= cut - at; at = cut; }
             len = std::min(len, blockEnd - at) - 1.0 / 16.0;
             if (len > 1.0 / 16.0) here.emplace_back(static_cast<int>(std::lround(at * 4.0)), len);
         }
         const int step = static_cast<int>(std::lround(cut * 4.0));
-        const bool foundation = ctx.foundationBars > 0 && v.size() >= 2;
+        const bool foundation = ctx.m_foundationBars > 0 && v.size() >= 2;
         // Composer sets foundationBars on the bar a foundation starts -- a block start, or the first
         // bar the floor falls silent inside a held chord -- and nowhere else, so this is that bar.
         if (foundation) {
@@ -1011,28 +1011,28 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
             // *filling* the band under 140 Hz, and a stabbed foundation leaves it empty between hits.
             const std::vector<int> f = foundationVoicing(v);
             const double length = barsLeft * barBeats - 1.0 / 16.0 - cut;
-            const double silentBeats = ctx.foundationBars * barBeats;
-            const double subLength = ctx.foundationBars > barsLeft
+            const double silentBeats = ctx.m_foundationBars * barBeats;
+            const double subLength = ctx.m_foundationBars > barsLeft
                 ? length
                 : std::max(0.5 * barBeats, silentBeats - barBeats) - 1.0 / 16.0 - cut;
             MelodyNote sub = held;
-            sub.velocity = 118;   // +1 dB at the pad's velocity sensitivity: one voice carrying the register
-            emit(Part::Pad, sub, step, f[0], subLength);
+            sub.m_velocity = 118;   // +1 dB at the pad's velocity sensitivity: one voice carrying the register
+            emit(PartE::PAD, sub, step, f[0], subLength);
             for (size_t i = 1; i < f.size(); ++i)
-                for (const auto& on : here) emit(Part::Pad, held, on.first, f[i], on.second);
+                for (const auto& on : here) emit(PartE::PAD, held, on.first, f[i], on.second);
         } else {
             // The third belongs to the lead while the bass runs (25.09.2026, the Dark-Ambient addon: "Pad-Grundton zum
             // Bass in reiner Oktave oder Quinte; die Terz liegt im Lead, nicht im Pad, sobald der Bass laeuft"): over a
             // floor with bass the pad leaves out every tone a third over its root and keeps root, fifth and colour.
-            const bool bassRuns = bp.bassBeats != 0 && !bp.floorSilent;
+            const bool bassRuns = bp.m_bassBeats != 0 && !bp.m_floorSilent;
             for (int pitch : v) {
                 const int iv = ((pitch - v[0]) % 12 + 12) % 12;
                 if (bassRuns && v.size() > 2 && (iv == 3 || iv == 4)) continue;
-                for (const auto& on : here) emit(Part::Pad, held, on.first, pitch, on.second);
+                for (const auto& on : here) emit(PartE::PAD, held, on.first, pitch, on.second);
             }
         }
     }
-    if (has(MelodyPart::Drone) && ctx.droneBars > 0) {
+    if (has(MelodyPartE::DRONE) && ctx.m_droneBars > 0) {
         // The tonic drone (19.09.2026): one held chord per run of the form (Composer.cpp, melodyContext),
         // the root and the fifth, the octave above where the track takes it and the pad is silent. On a
         // silent floor it lies an octave under the pad's register (D2 .. C#3, the exception the pad's sub
@@ -1046,16 +1046,16 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
         // is a fundamental and not a second voicing of the chord. With the band to itself it holds root
         // and fifth as before.
         MelodyNote held;
-        held.velocity = ctx.droneLow ? 110 : (ctx.droneShaded ? 48 : 64);
-        const int root = m.root[kDroneI] + (ctx.droneLow ? 0 : 12);
+        held.m_velocity = ctx.m_droneLow ? 110 : (ctx.m_droneShaded ? 48 : 64);
+        const int root = m.m_root[DroneI] + (ctx.m_droneLow ? 0 : 12);
         std::vector<int> pitches = { root };
-        if (!ctx.droneShaded) pitches.push_back(root + 7);
-        if (m.droneOctave && !ctx.droneShaded && !has(MelodyPart::Pad)) pitches.push_back(root + 12);
-        const double run = ctx.droneBars * static_cast<double>(kBeatsPerBar);
-        const double tail = ctx.droneLow ? std::min(run - 0.5 * kBeatsPerBar, ctx.droneTail * static_cast<double>(kBeatsPerBar)) : 0.0;
-        const double length = std::max(0.5 * kBeatsPerBar, run - tail) - 1.0 / 16.0 - cut;
+        if (!ctx.m_droneShaded) pitches.push_back(root + 7);
+        if (m.m_droneOctave && !ctx.m_droneShaded && !has(MelodyPartE::PAD)) pitches.push_back(root + 12);
+        const double run = ctx.m_droneBars * static_cast<double>(BeatsPerBar);
+        const double tail = ctx.m_droneLow ? std::min(run - 0.5 * BeatsPerBar, ctx.m_droneTail * static_cast<double>(BeatsPerBar)) : 0.0;
+        const double length = std::max(0.5 * BeatsPerBar, run - tail) - 1.0 / 16.0 - cut;
         const int step = static_cast<int>(std::lround(cut * 4.0));
-        for (int pitch : pitches) emit(Part::Drone, held, step, pitch, length);
+        for (int pitch : pitches) emit(PartE::DRONE, held, step, pitch, length);
     }
 }
 
@@ -1065,33 +1065,33 @@ void composeSfxBar(const FormPlan& f, double trackBeat, int barInTrack, std::vec
     // effects: nothing of this track's is played over its last overlapTail bars. The events were placed when
     // the form was made, before the next track -- and so the blend's length -- existed, which is why the cut
     // is made here and not in makeFormSfx.
-    const bool outroEnd = f.count > 0 && f.section[f.count - 1].type == SectionType::Outro;
-    if (outroEnd && barInTrack >= f.bars - std::clamp(f.overlapTail, 0, f.bars)) return;
-    for (const SfxEvent& s : f.sfx) {
-        if (static_cast<int>(std::floor(s.beat / kBeatsPerBar)) != barInTrack) continue;
+    const bool outroEnd = f.m_count > 0 && f.m_section[f.m_count - 1].m_type == SectionTypeE::OUTRO;
+    if (outroEnd && barInTrack >= f.m_bars - std::clamp(f.m_overlapTail, 0, f.m_bars)) return;
+    for (const SfxEvent& s : f.m_sfx) {
+        if (static_cast<int>(std::floor(s.m_beat / BeatsPerBar)) != barInTrack) continue;
         NoteEvent e;
-        e.beat = trackBeat + s.beat;
-        e.length = s.length;
+        e.m_beat = trackBeat + s.m_beat;
+        e.m_length = s.m_length;
         // Since 19.09.2026 the score carries the part that plays the event -- Sfx, Texture or Vocal
         // (Sfx.h, sfxTypePart) -- instead of leaving the engine and the MIDI export to re-route every
         // effect by its type; and a voice's or the bed's variant rides in the lane (Form.h, SfxEvent).
-        e.part = sfxTypePart(static_cast<SfxType>(std::clamp(s.type, 0, kNumSfxTypes - 1)));
-        e.lane = s.variant;
-        e.pitch = static_cast<uint8_t>(kSfxBaseNote + s.type);
-        e.velocity = 110;
+        e.m_part = sfxTypePart(static_cast<SfxTypeE>(std::clamp(s.m_type, 0, NumSfxTypes - 1)));
+        e.m_lane = s.m_variant;
+        e.m_pitch = static_cast<uint8_t>(SfxBaseNote + s.m_type);
+        e.m_velocity = 110;
         out.push_back(e);
     }
     // The Field track (27.09.2026, Form.h FormPlan::field): a place, at middle C (no transposition), its velocity in
     // the variant.
-    for (const SfxEvent& s : f.field) {
-        if (static_cast<int>(std::floor(s.beat / kBeatsPerBar)) != barInTrack) continue;
+    for (const SfxEvent& s : f.m_field) {
+        if (static_cast<int>(std::floor(s.m_beat / BeatsPerBar)) != barInTrack) continue;
         NoteEvent e;
-        e.beat = trackBeat + s.beat;
-        e.length = s.length;
-        e.part = Part::Field;
-        e.lane = 0;
-        e.pitch = 60;
-        e.velocity = static_cast<uint8_t>(std::clamp(static_cast<int>(s.variant), 1, 127));
+        e.m_beat = trackBeat + s.m_beat;
+        e.m_length = s.m_length;
+        e.m_part = PartE::FIELD;
+        e.m_lane = 0;
+        e.m_pitch = 60;
+        e.m_velocity = static_cast<uint8_t>(std::clamp(static_cast<int>(s.m_variant), 1, 127));
         out.push_back(e);
     }
 }

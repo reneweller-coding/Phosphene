@@ -35,7 +35,7 @@ namespace {
 
 /** @brief The seed of the listening excerpts (briefs/listen.py): its first two tracks both lie outside the
  *         presence band, so the presence gain the first mix probe depends on is not zero in either. */
-constexpr uint64_t kListeningSeed = 864566672ull;
+constexpr uint64_t ListeningSeed = 864566672ull;
 
 /**
  * @brief Whether two plans agree, bit for bit, in every field a probe render writes or decides.
@@ -52,15 +52,15 @@ bool sameNumbers(const TrackPlan& a, const TrackPlan& b, std::string& where)
         return false;
     };
     bool ok = true;
-    ok &= same("loudness", &a.loudness, &b.loudness, sizeof(a.loudness));
-    ok &= same("gainDb", &a.gainDb, &b.gainDb, sizeof(a.gainDb));
-    ok &= same("partLoudness", a.partLoudness, b.partLoudness, sizeof(a.partLoudness));
-    ok &= same("partGainDb", a.partGainDb, b.partGainDb, sizeof(a.partGainDb));
-    ok &= same("mixLoudness", &a.mixLoudness, &b.mixLoudness, sizeof(a.mixLoudness));
-    ok &= same("masterGainDb", &a.masterGainDb, &b.masterGainDb, sizeof(a.masterGainDb));
-    ok &= same("presenceDb", &a.presenceDb, &b.presenceDb, sizeof(a.presenceDb));
-    ok &= same("presenceAfterDb", &a.presenceAfterDb, &b.presenceAfterDb, sizeof(a.presenceAfterDb));
-    ok &= same("presenceGainDb", &a.presenceGainDb, &b.presenceGainDb, sizeof(a.presenceGainDb));
+    ok &= same("loudness", &a.m_loudness, &b.m_loudness, sizeof(a.m_loudness));
+    ok &= same("gainDb", &a.m_gainDb, &b.m_gainDb, sizeof(a.m_gainDb));
+    ok &= same("partLoudness", a.m_partLoudness, b.m_partLoudness, sizeof(a.m_partLoudness));
+    ok &= same("partGainDb", a.m_partGainDb, b.m_partGainDb, sizeof(a.m_partGainDb));
+    ok &= same("mixLoudness", &a.m_mixLoudness, &b.m_mixLoudness, sizeof(a.m_mixLoudness));
+    ok &= same("masterGainDb", &a.m_masterGainDb, &b.m_masterGainDb, sizeof(a.m_masterGainDb));
+    ok &= same("presenceDb", &a.m_presenceDb, &b.m_presenceDb, sizeof(a.m_presenceDb));
+    ok &= same("presenceAfterDb", &a.m_presenceAfterDb, &b.m_presenceAfterDb, sizeof(a.m_presenceAfterDb));
+    ok &= same("presenceGainDb", &a.m_presenceGainDb, &b.m_presenceGainDb, sizeof(a.m_presenceGainDb));
     return ok;
 }
 
@@ -87,18 +87,18 @@ void checkSame(const std::vector<TrackPlan>& got, const std::vector<TrackPlan>& 
 
 /** @brief Puts the process's probe settings back when a section ends, however it ends. */
 struct RestoreProbeSettings {
-    int threads = probe::threads();   ///< the threads as they were
-    std::string dir = probe::cacheDir();   ///< the cache folder as it was
+    int m_threads = probe::threads();   ///< the threads as they were
+    std::string m_dir = probe::cacheDir();   ///< the cache folder as it was
     ~RestoreProbeSettings()
     {
-        probe::setThreads(threads);
-        probe::setCacheDir(dir);
+        probe::setThreads(m_threads);
+        probe::setCacheDir(m_dir);
         probe::setBuildIdForTest(nullptr);
     }
 };
 
 /** @brief How many probes one plan of the first track renders: foundation, seven parts, lines, rest, mix twice. */
-constexpr uint64_t kProbesFirstTrack = 1 + kMelodyParts + 2 + 2;
+constexpr uint64_t ProbesFirstTrack = 1 + MelodyParts + 2 + 2;
 
 } // namespace
 
@@ -122,9 +122,9 @@ void testProbeSchedule()
     ParamStore params;
 
     // First of all, before anything in this process has loaded the shared data.
-    probe::setThreads(probe::kMaxThreads);
+    probe::setThreads(probe::MaxThreads);
     const auto t0 = std::chrono::steady_clock::now();
-    const std::vector<TrackPlan> coldParallel = planTracks(params, kListeningSeed, 1);
+    const std::vector<TrackPlan> coldParallel = planTracks(params, ListeningSeed, 1);
     const double parallelSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 
     probe::setThreads(1);
@@ -139,31 +139,31 @@ void testProbeSchedule()
     // with a live correction exercises that ordering exactly as two do.
     std::vector<TrackPlan> serial;
     {
-        Composer serialComposer(kListeningSeed);
-        auto anyGain = [&]() { for (const TrackPlan& t : serial) if (t.presenceGainDb != 0.0f) return true; return false; };
+        Composer serialComposer(ListeningSeed);
+        auto anyGain = [&]() { for (const TrackPlan& t : serial) if (t.m_presenceGainDb != 0.0f) return true; return false; };
         for (int i = 0; i < 2; ++i) serial.push_back(serialComposer.track(params, i));
         while (serial.size() < 6 && !anyGain()) serial.push_back(serialComposer.track(params, static_cast<int>(serial.size())));
     }
     const int refTracks = static_cast<int>(serial.size());
     const double serialSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
     std::string gains;
-    for (const TrackPlan& t : serial) gains += fmt(" %+.2f", static_cast<double>(t.presenceGainDb));
-    check(std::any_of(serial.begin(), serial.end(), [](const TrackPlan& t) { return t.presenceGainDb != 0.0f; }),
+    for (const TrackPlan& t : serial) gains += fmt(" %+.2f", static_cast<double>(t.m_presenceGainDb));
+    check(std::any_of(serial.begin(), serial.end(), [](const TrackPlan& t) { return t.m_presenceGainDb != 0.0f; }),
           "at least one reference track carries a presence gain (or the first mix probe's dependency would go untested)",
           fmt("%d reference tracks, gains%s dB", refTracks, gains.c_str()));
-    check(serial[0].loudness < -5.0 && serial[0].loudness > -40.0 && serial[0].mixLoudness < -5.0 && serial[0].mixLoudness > -40.0,
-          "and the probes measured something", fmt("foundation %.2f LUFS, mix %.2f LUFS", serial[0].loudness, serial[0].mixLoudness));
+    check(serial[0].m_loudness < -5.0 && serial[0].m_loudness > -40.0 && serial[0].m_mixLoudness < -5.0 && serial[0].m_mixLoudness > -40.0,
+          "and the probes measured something", fmt("foundation %.2f LUFS, mix %.2f LUFS", serial[0].m_loudness, serial[0].m_mixLoudness));
     checkSame(coldParallel, std::vector<TrackPlan>(serial.begin(), serial.begin() + 1),
               "a parallel plan as the process's first use of the shared data equals the serial plan");
 
-    probe::setThreads(probe::kMaxThreads);
-    checkSame(planTracks(params, kListeningSeed, refTracks), serial, "the reference tracks planned with 8 probe threads equal the serial plans");
+    probe::setThreads(probe::MaxThreads);
+    checkSame(planTracks(params, ListeningSeed, refTracks), serial, "the reference tracks planned with 8 probe threads equal the serial plans");
     resetWaveTableLibrary();
     resetVoicePack();
-    checkSame(planTracks(params, kListeningSeed, 1), std::vector<TrackPlan>(serial.begin(), serial.begin() + 1),
+    checkSame(planTracks(params, ListeningSeed, 1), std::vector<TrackPlan>(serial.begin(), serial.begin() + 1),
               "and again after the wavetable library and the voice pack were reset");
     probe::setThreads(3);
-    checkSame(planTracks(params, kListeningSeed, 1), std::vector<TrackPlan>(serial.begin(), serial.begin() + 1),
+    checkSame(planTracks(params, ListeningSeed, 1), std::vector<TrackPlan>(serial.begin(), serial.begin() + 1),
               "three threads, fewer than a stage has probes");
 
     // The one case where the first mix probe may run beside the presence probes: the match is off, so the
@@ -172,11 +172,11 @@ void testProbeSchedule()
     params.parseText("compose.presence_match=Off", &err);
     probe::setThreads(1);
     const std::vector<TrackPlan> serialOff = planTracks(params, 3, 1);
-    probe::setThreads(probe::kMaxThreads);
+    probe::setThreads(probe::MaxThreads);
     checkSame(planTracks(params, 3, 1), serialOff, "presence match off (the first mix probe runs early): equal to serial");
-    check(serialOff[0].presenceGainDb == 0.0f && serialOff[0].presenceDb != 0.0, "with the match off the presence is still measured and nothing is moved");
+    check(serialOff[0].m_presenceGainDb == 0.0f && serialOff[0].m_presenceDb != 0.0, "with the match off the presence is still measured and nothing is moved");
     std::printf("         first track: %.1f s with %d probe threads (shared data cold), %d tracks serial %.1f s\n", parallelSeconds,
-                probe::kMaxThreads, refTracks, serialSeconds);
+                probe::MaxThreads, refTracks, serialSeconds);
 }
 
 /**
@@ -193,44 +193,44 @@ void testProbeCache()
     const fs::path dir = fs::temp_directory_path() / "phos_probe_cache_test";
     std::error_code ec;
     fs::remove_all(dir, ec);
-    probe::setThreads(probe::kMaxThreads);
+    probe::setThreads(probe::MaxThreads);
     ParamStore params;
 
     probe::setCacheDir("");
-    const std::vector<TrackPlan> reference = planTracks(params, kListeningSeed, 1);
+    const std::vector<TrackPlan> reference = planTracks(params, ListeningSeed, 1);
     check(!fs::exists(dir), "with the cache off nothing is written");
 
     probe::setCacheDir(dir.string());
     probe::resetCacheStats();
-    const std::vector<TrackPlan> cold = planTracks(params, kListeningSeed, 1);
+    const std::vector<TrackPlan> cold = planTracks(params, ListeningSeed, 1);
     probe::CacheStats s = probe::cacheStats();
-    check(s.hits == 0 && s.misses == kProbesFirstTrack && s.stores == kProbesFirstTrack, "cold: every probe of the first track misses and is stored",
-          fmt("%llu hits, %llu misses, %llu stores (12 probes)", static_cast<unsigned long long>(s.hits), static_cast<unsigned long long>(s.misses), static_cast<unsigned long long>(s.stores)));
+    check(s.m_hits == 0 && s.m_misses == ProbesFirstTrack && s.m_stores == ProbesFirstTrack, "cold: every probe of the first track misses and is stored",
+          fmt("%llu hits, %llu misses, %llu stores (12 probes)", static_cast<unsigned long long>(s.m_hits), static_cast<unsigned long long>(s.m_misses), static_cast<unsigned long long>(s.m_stores)));
     checkSame(cold, reference, "cold: the plan equals the uncached plan");
     size_t files = 0, strays = 0;
     for (const fs::directory_entry& e : fs::directory_iterator(dir, ec)) {
         if (e.path().extension() == ".probe" && e.file_size() == 56) ++files; else ++strays;
     }
-    check(files == kProbesFirstTrack && strays == 0, "twelve entries of 56 bytes, no temporary file left behind",
+    check(files == ProbesFirstTrack && strays == 0, "twelve entries of 56 bytes, no temporary file left behind",
           fmt("%d entries, %d other files", static_cast<int>(files), static_cast<int>(strays)));
 
     probe::resetCacheStats();
     const auto w0 = std::chrono::steady_clock::now();
-    const std::vector<TrackPlan> warm = planTracks(params, kListeningSeed, 1);
+    const std::vector<TrackPlan> warm = planTracks(params, ListeningSeed, 1);
     const double warmSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - w0).count();
     s = probe::cacheStats();
-    check(s.hits == kProbesFirstTrack && s.misses == 0 && s.stores == 0, "warm: every probe hits",
-          fmt("%llu hits, %llu misses, %llu stores in %.2f s", static_cast<unsigned long long>(s.hits), static_cast<unsigned long long>(s.misses),
-              static_cast<unsigned long long>(s.stores), warmSeconds));
+    check(s.m_hits == ProbesFirstTrack && s.m_misses == 0 && s.m_stores == 0, "warm: every probe hits",
+          fmt("%llu hits, %llu misses, %llu stores in %.2f s", static_cast<unsigned long long>(s.m_hits), static_cast<unsigned long long>(s.m_misses),
+              static_cast<unsigned long long>(s.m_stores), warmSeconds));
     checkSame(warm, reference, "warm: the plan equals the uncached plan, bit for bit");
 
     // Another core: nothing of this one's may be served, and what it stores must not disturb this one's.
     probe::setBuildIdForTest("another core");
     probe::resetCacheStats();
-    const std::vector<TrackPlan> other = planTracks(params, kListeningSeed, 1);
+    const std::vector<TrackPlan> other = planTracks(params, ListeningSeed, 1);
     s = probe::cacheStats();
-    check(s.hits == 0 && s.misses == kProbesFirstTrack, "a changed build id misses every entry",
-          fmt("%llu hits, %llu misses", static_cast<unsigned long long>(s.hits), static_cast<unsigned long long>(s.misses)));
+    check(s.m_hits == 0 && s.m_misses == ProbesFirstTrack, "a changed build id misses every entry",
+          fmt("%llu hits, %llu misses", static_cast<unsigned long long>(s.m_hits), static_cast<unsigned long long>(s.m_misses)));
     checkSame(other, reference, "and renders the same plan");
     probe::setBuildIdForTest("");
     check(!probe::cacheEnabled(), "a core without a build id does not use the cache at all");
@@ -242,16 +242,16 @@ void testProbeCache()
     // knowing which parameter cannot reach which probe is exactly the knowledge a cache must not need.
     ParamStore louder;
     louder.copyValuesFrom(params);
-    const int percLevel = louder.base(Module::Mix) + mix::PercLevel;
+    const int percLevel = louder.base(ModuleE::MIX) + mix::PERC_LEVEL;
     louder.set(percLevel, louder.get(percLevel) - 1.5f);
     probe::setCacheDir("");
-    const std::vector<TrackPlan> louderReference = planTracks(louder, kListeningSeed, 1);
+    const std::vector<TrackPlan> louderReference = planTracks(louder, ListeningSeed, 1);
     probe::setCacheDir(dir.string());
     probe::resetCacheStats();
-    const std::vector<TrackPlan> louderCached = planTracks(louder, kListeningSeed, 1);
+    const std::vector<TrackPlan> louderCached = planTracks(louder, ListeningSeed, 1);
     s = probe::cacheStats();
-    check(s.hits == 0 && s.misses == kProbesFirstTrack, "a changed parameter (percussion level -1.5 dB) misses every entry",
-          fmt("%llu hits, %llu misses", static_cast<unsigned long long>(s.hits), static_cast<unsigned long long>(s.misses)));
+    check(s.m_hits == 0 && s.m_misses == ProbesFirstTrack, "a changed parameter (percussion level -1.5 dB) misses every entry",
+          fmt("%llu hits, %llu misses", static_cast<unsigned long long>(s.m_hits), static_cast<unsigned long long>(s.m_misses)));
     checkSame(louderCached, louderReference, "and the plan is the changed knob's plan");
     std::string differs;
     const bool otherPlan = !sameNumbers(louderReference[0], reference[0], differs);
@@ -271,10 +271,10 @@ void testProbeCache()
         ++damaged;
     }
     probe::resetCacheStats();
-    const std::vector<TrackPlan> repaired = planTracks(params, kListeningSeed, 1);
+    const std::vector<TrackPlan> repaired = planTracks(params, ListeningSeed, 1);
     s = probe::cacheStats();
-    check(damaged >= 3 * kProbesFirstTrack && s.hits == 0 && s.stores == kProbesFirstTrack, "damaged entries are misses and are written again",
-          fmt("%d files damaged; %llu hits, %llu stores", static_cast<int>(damaged), static_cast<unsigned long long>(s.hits), static_cast<unsigned long long>(s.stores)));
+    check(damaged >= 3 * ProbesFirstTrack && s.m_hits == 0 && s.m_stores == ProbesFirstTrack, "damaged entries are misses and are written again",
+          fmt("%d files damaged; %llu hits, %llu stores", static_cast<int>(damaged), static_cast<unsigned long long>(s.m_hits), static_cast<unsigned long long>(s.m_stores)));
     checkSame(repaired, reference, "and the plan is still the uncached plan");
     {
         // A truncated file, as a crashed writer without the rename would leave it.
@@ -286,7 +286,7 @@ void testProbeCache()
         probe::cacheStore(key, v);
         const bool whole = probe::cacheLookup(key, r) && std::memcmp(r, v, sizeof(v)) == 0;
         char name[64];
-        std::snprintf(name, sizeof(name), "%016llx%016llx.probe", static_cast<unsigned long long>(key.a), static_cast<unsigned long long>(key.b));
+        std::snprintf(name, sizeof(name), "%016llx%016llx.probe", static_cast<unsigned long long>(key.m_a), static_cast<unsigned long long>(key.m_b));
         const bool there = fs::exists(dir / name);
         fs::resize_file(dir / name, 20, ec);
         const bool truncatedMisses = !probe::cacheLookup(key, r);

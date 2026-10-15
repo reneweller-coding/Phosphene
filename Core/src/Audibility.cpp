@@ -13,14 +13,14 @@ namespace phos {
 
 namespace {
 
-constexpr int kFrame = 2048;   ///< the analysis frame, samples
-constexpr int kHop = 1024;   ///< the hop between frames, samples
-constexpr double kAlpha = 0.2;          ///< the compressive exponent of specific loudness
-constexpr double kFullScaleSpl = 100.0; ///< dB SPL of a full-scale sine
-constexpr double kCamStep = 0.5;        ///< band width in Cam
-constexpr double kLowerSlope = 27.0;    ///< dB per Bark on the low side of a source (Terhardt 1979)
-constexpr double kMinUpperSlope = 5.0;  ///< the upper slope never flattens below this (dB per Bark)
-constexpr double kAudibleFrame = 0.25;  ///< a frame counts when the part alone is this loud (units; 1 = 1 kHz at 40 dB SPL)
+constexpr int Frame = 2048;   ///< the analysis frame, samples
+constexpr int Hop = 1024;   ///< the hop between frames, samples
+constexpr double Alpha = 0.2;          ///< the compressive exponent of specific loudness
+constexpr double FullScaleSpl = 100.0; ///< dB SPL of a full-scale sine
+constexpr double CamStep = 0.5;        ///< band width in Cam
+constexpr double LowerSlope = 27.0;    ///< dB per Bark on the low side of a source (Terhardt 1979)
+constexpr double MinUpperSlope = 5.0;  ///< the upper slope never flattens below this (dB per Bark)
+constexpr double AudibleFrame = 0.25;  ///< a frame counts when the part alone is this loud (units; 1 = 1 kHz at 40 dB SPL)
 
 /** @brief Critical-band rate in Bark (Traunmueller 1990). */
 double bark(double hz) { return 26.81 * hz / (1960.0 + hz) - 0.53; }
@@ -44,63 +44,63 @@ double thresholdDb(double hz)
 
 } // namespace
 
-AudibilityMeter::AudibilityMeter(int stems, double sampleRate) : stems_(std::max(1, stems)), sr_(sampleRate)
+AudibilityMeter::AudibilityMeter(int stems, double sampleRate) : m_stems(std::max(1, stems)), m_sr(sampleRate)
 {
-    fft_ = std::make_unique<Fft>(kFrame);
-    window_.resize(kFrame);
+    m_fft = std::make_unique<Fft>(Frame);
+    m_window.resize(Frame);
     double w2 = 0.0;
-    for (int i = 0; i < kFrame; ++i) {
-        window_[static_cast<size_t>(i)] = 0.5 - 0.5 * std::cos(2.0 * 3.141592653589793 * i / kFrame);
-        w2 += window_[static_cast<size_t>(i)] * window_[static_cast<size_t>(i)];
+    for (int i = 0; i < Frame; ++i) {
+        m_window[static_cast<size_t>(i)] = 0.5 - 0.5 * std::cos(2.0 * 3.141592653589793 * i / Frame);
+        w2 += m_window[static_cast<size_t>(i)] * m_window[static_cast<size_t>(i)];
     }
     const double lo = cam(50.0), hi = cam(15000.0);
-    bands_ = static_cast<int>(std::floor((hi - lo) / kCamStep)) + 1;
+    m_bands = static_cast<int>(std::floor((hi - lo) / CamStep)) + 1;
     // One side of the spectrum: the bins in a band sum to the mean square of the windowed signal times 2 / (N sum w^2)
-    // (Parseval), a full-scale sine's mean square is 1/2, and that is kFullScaleSpl.
-    const double toMeanSquare = 2.0 / (static_cast<double>(kFrame) * w2);
-    bandOfBin_.assign(kFrame / 2, -1);
-    binGain_.assign(kFrame / 2, 0.0);
-    for (int k = 1; k < kFrame / 2; ++k) {
-        const double hz = k * sr_ / kFrame;
+    // (Parseval), a full-scale sine's mean square is 1/2, and that is FullScaleSpl.
+    const double toMeanSquare = 2.0 / (static_cast<double>(Frame) * w2);
+    m_bandOfBin.assign(Frame / 2, -1);
+    m_binGain.assign(Frame / 2, 0.0);
+    for (int k = 1; k < Frame / 2; ++k) {
+        const double hz = k * m_sr / Frame;
         if (hz < 50.0 || hz > 15000.0) continue;
-        const int b = std::clamp(static_cast<int>(std::lround((cam(hz) - lo) / kCamStep)), 0, bands_ - 1);
-        bandOfBin_[static_cast<size_t>(k)] = b;
-        binGain_[static_cast<size_t>(k)] = toMeanSquare / 0.5 * std::pow(10.0, (kFullScaleSpl + earWeightDb(hz)) / 10.0);
+        const int b = std::clamp(static_cast<int>(std::lround((cam(hz) - lo) / CamStep)), 0, m_bands - 1);
+        m_bandOfBin[static_cast<size_t>(k)] = b;
+        m_binGain[static_cast<size_t>(k)] = toMeanSquare / 0.5 * std::pow(10.0, (FullScaleSpl + earWeightDb(hz)) / 10.0);
     }
-    spread_.assign(static_cast<size_t>(bands_) * static_cast<size_t>(bands_), 0.0);
-    threshold_.assign(static_cast<size_t>(bands_), 0.0);
-    centre_.assign(static_cast<size_t>(bands_), 0.0);
-    for (int r = 0; r < bands_; ++r) {
+    m_spread.assign(static_cast<size_t>(m_bands) * static_cast<size_t>(m_bands), 0.0);
+    m_threshold.assign(static_cast<size_t>(m_bands), 0.0);
+    m_centre.assign(static_cast<size_t>(m_bands), 0.0);
+    for (int r = 0; r < m_bands; ++r) {
         // Centre frequency of the band from its Cam value.
-        const double c = lo + r * kCamStep;
+        const double c = lo + r * CamStep;
         const double hz = (std::pow(10.0, c / 21.4) - 1.0) / 4.37e-3;
-        centre_[static_cast<size_t>(r)] = hz;
-        threshold_[static_cast<size_t>(r)] = std::pow(10.0, thresholdDb(hz) / 10.0);
+        m_centre[static_cast<size_t>(r)] = hz;
+        m_threshold[static_cast<size_t>(r)] = std::pow(10.0, thresholdDb(hz) / 10.0);
     }
     // The spreading works in Bark (the slopes are Terhardt's, stated per Bark): distance of every receiver from every
     // source, positive when the receiver lies above.
-    for (int r = 0; r < bands_; ++r)
-        for (int s = 0; s < bands_; ++s)
-            spread_[static_cast<size_t>(r) * static_cast<size_t>(bands_) + static_cast<size_t>(s)] = bark(centre_[static_cast<size_t>(r)]) - bark(centre_[static_cast<size_t>(s)]);
+    for (int r = 0; r < m_bands; ++r)
+        for (int s = 0; s < m_bands; ++s)
+            m_spread[static_cast<size_t>(r) * static_cast<size_t>(m_bands) + static_cast<size_t>(s)] = bark(m_centre[static_cast<size_t>(r)]) - bark(m_centre[static_cast<size_t>(s)]);
     // Calibration through the path every frame takes: a 1 kHz sine at 40 dB SPL (-60 dBFS) in both channels.
     // (Placing its intensity in one band by hand read 1.38 in the real path: the window spreads a tone over
     // neighbouring bins, those can fall into two bands, and the compressive loudness of two halves is more than
     // that of the whole.)
     {
-        scale_ = 1.0;
-        std::vector<float> sine(kFrame);
-        const double amp = std::pow(10.0, (40.0 - kFullScaleSpl) / 20.0);   // peak of a sine at 40 dB SPL (full scale = kFullScaleSpl)
-        for (int i = 0; i < kFrame; ++i) sine[static_cast<size_t>(i)] = static_cast<float>(amp * std::sin(2.0 * 3.141592653589793 * 1000.0 * i / sr_));
-        std::vector<std::complex<double>> x(kFrame);
-        std::vector<double> in(static_cast<size_t>(bands_), 0.0), e(static_cast<size_t>(bands_), 0.0);
+        m_scale = 1.0;
+        std::vector<float> sine(Frame);
+        const double amp = std::pow(10.0, (40.0 - FullScaleSpl) / 20.0);   // peak of a sine at 40 dB SPL (full scale = FullScaleSpl)
+        for (int i = 0; i < Frame; ++i) sine[static_cast<size_t>(i)] = static_cast<float>(amp * std::sin(2.0 * 3.141592653589793 * 1000.0 * i / m_sr));
+        std::vector<std::complex<double>> x(Frame);
+        std::vector<double> in(static_cast<size_t>(m_bands), 0.0), e(static_cast<size_t>(m_bands), 0.0);
         bandIntensity(sine, in, x);
         bandIntensity(sine, in, x);
         double alone = 0.0, inMix = 0.0;
         if (excite(in, e)) loudness(e, nullptr, alone, inMix);
-        scale_ = alone > 0.0 ? 1.0 / alone : 1.0;
+        m_scale = alone > 0.0 ? 1.0 / alone : 1.0;
     }
-    bufL_.assign(static_cast<size_t>(stems_), std::vector<float>(kFrame, 0.0f));
-    bufR_.assign(static_cast<size_t>(stems_), std::vector<float>(kFrame, 0.0f));
+    m_bufL.assign(static_cast<size_t>(m_stems), std::vector<float>(Frame, 0.0f));
+    m_bufR.assign(static_cast<size_t>(m_stems), std::vector<float>(Frame, 0.0f));
     reset();
 }
 
@@ -108,22 +108,22 @@ AudibilityMeter::~AudibilityMeter() = default;
 
 void AudibilityMeter::reset()
 {
-    fill_ = 0;
-    for (auto& b : bufL_) std::fill(b.begin(), b.end(), 0.0f);
-    for (auto& b : bufR_) std::fill(b.begin(), b.end(), 0.0f);
-    sumAlone_.assign(static_cast<size_t>(stems_), 0.0);
-    sumMix_.assign(static_cast<size_t>(stems_), 0.0);
-    frames_.assign(static_cast<size_t>(stems_), 0);
+    m_fill = 0;
+    for (auto& b : m_bufL) std::fill(b.begin(), b.end(), 0.0f);
+    for (auto& b : m_bufR) std::fill(b.begin(), b.end(), 0.0f);
+    m_sumAlone.assign(static_cast<size_t>(m_stems), 0.0);
+    m_sumMix.assign(static_cast<size_t>(m_stems), 0.0);
+    m_frames.assign(static_cast<size_t>(m_stems), 0);
 }
 
 void AudibilityMeter::add(const float* const* L, const float* const* R, int n)
 {
     int done = 0;
     while (done < n) {
-        const int take = std::min(n - done, kFrame - fill_);
-        for (int k = 0; k < stems_; ++k) {
-            float* bl = bufL_[static_cast<size_t>(k)].data() + fill_;
-            float* br = bufR_[static_cast<size_t>(k)].data() + fill_;
+        const int take = std::min(n - done, Frame - m_fill);
+        for (int k = 0; k < m_stems; ++k) {
+            float* bl = m_bufL[static_cast<size_t>(k)].data() + m_fill;
+            float* br = m_bufR[static_cast<size_t>(k)].data() + m_fill;
             const float* l = L[k];
             const float* r = R != nullptr ? R[k] : nullptr;
             for (int i = 0; i < take; ++i) {
@@ -131,16 +131,16 @@ void AudibilityMeter::add(const float* const* L, const float* const* R, int n)
                 br[i] = r != nullptr ? r[done + i] : bl[i];
             }
         }
-        fill_ += take;
+        m_fill += take;
         done += take;
-        if (fill_ == kFrame) {
+        if (m_fill == Frame) {
             frame();
-            // Keep the second half: the next frame overlaps this one by kFrame - kHop samples.
-            for (int k = 0; k < stems_; ++k) {
-                std::copy(bufL_[static_cast<size_t>(k)].begin() + kHop, bufL_[static_cast<size_t>(k)].end(), bufL_[static_cast<size_t>(k)].begin());
-                std::copy(bufR_[static_cast<size_t>(k)].begin() + kHop, bufR_[static_cast<size_t>(k)].end(), bufR_[static_cast<size_t>(k)].begin());
+            // Keep the second half: the next frame overlaps this one by Frame - Hop samples.
+            for (int k = 0; k < m_stems; ++k) {
+                std::copy(m_bufL[static_cast<size_t>(k)].begin() + Hop, m_bufL[static_cast<size_t>(k)].end(), m_bufL[static_cast<size_t>(k)].begin());
+                std::copy(m_bufR[static_cast<size_t>(k)].begin() + Hop, m_bufR[static_cast<size_t>(k)].end(), m_bufR[static_cast<size_t>(k)].begin());
             }
-            fill_ = kFrame - kHop;
+            m_fill = Frame - Hop;
         }
     }
 }
@@ -148,22 +148,22 @@ void AudibilityMeter::add(const float* const* L, const float* const* R, int n)
 void AudibilityMeter::bandIntensity(const std::vector<float>& buf, std::vector<double>& out, std::vector<std::complex<double>>& x) const
 {
     bool any = false;
-    for (int i = 0; i < kFrame; ++i) {
-        x[static_cast<size_t>(i)] = std::complex<double>(buf[static_cast<size_t>(i)] * window_[static_cast<size_t>(i)], 0.0);
+    for (int i = 0; i < Frame; ++i) {
+        x[static_cast<size_t>(i)] = std::complex<double>(buf[static_cast<size_t>(i)] * m_window[static_cast<size_t>(i)], 0.0);
         any = any || buf[static_cast<size_t>(i)] != 0.0f;
     }
     if (!any) return;
-    fft_->transform(x, false);
-    for (int b = 1; b < kFrame / 2; ++b) {
-        const int band = bandOfBin_[static_cast<size_t>(b)];
+    m_fft->transform(x, false);
+    for (int b = 1; b < Frame / 2; ++b) {
+        const int band = m_bandOfBin[static_cast<size_t>(b)];
         if (band < 0) continue;
-        out[static_cast<size_t>(band)] += 0.5 * std::norm(x[static_cast<size_t>(b)]) * binGain_[static_cast<size_t>(b)];   // two channels averaged
+        out[static_cast<size_t>(band)] += 0.5 * std::norm(x[static_cast<size_t>(b)]) * m_binGain[static_cast<size_t>(b)];   // two channels averaged
     }
 }
 
 bool AudibilityMeter::excite(const std::vector<double>& in, std::vector<double>& out) const
 {
-    const size_t B = static_cast<size_t>(bands_);
+    const size_t B = static_cast<size_t>(m_bands);
     bool any = false;
     for (double v : in) any = any || v > 0.0;
     if (!any) return false;
@@ -171,14 +171,14 @@ bool AudibilityMeter::excite(const std::vector<double>& in, std::vector<double>&
     // 24 + 230 / f - 0.2 L dB per Bark -- the upper skirt flattens as the source gets louder, which is the upward
     // spread of masking that lets a loud bass or kick cover what lies above it.
     std::fill(out.begin(), out.end(), 0.0);
-    constexpr double kLn10Over10 = 0.23025850929940458;
+    constexpr double Ln10Over10 = 0.23025850929940458;
     for (size_t s = 0; s < B; ++s) {
         if (in[s] <= 0.0) continue;
         const double level = 10.0 * std::log10(in[s]);
-        const double upper = std::max(kMinUpperSlope, 24.0 + 230.0 / centre_[s] - 0.2 * level);
+        const double upper = std::max(MinUpperSlope, 24.0 + 230.0 / m_centre[s] - 0.2 * level);
         for (size_t r = 0; r < B; ++r) {
-            const double dz = spread_[r * B + s];
-            out[r] += in[s] * std::exp(kLn10Over10 * (dz >= 0.0 ? -upper * dz : kLowerSlope * dz));
+            const double dz = m_spread[r * B + s];
+            out[r] += in[s] * std::exp(Ln10Over10 * (dz >= 0.0 ? -upper * dz : LowerSlope * dz));
         }
     }
     return true;
@@ -197,8 +197,8 @@ void AudibilityMeter::loudness(const std::vector<double>& es, const std::vector<
     for (size_t r = 0; r < es.size(); ++r) {
         const double s = es[r];
         if (s <= 0.0) continue;
-        const double t = threshold_[r], a = 2.0 * t;
-        const double nq = std::pow(s + a, kAlpha) - std::pow(a, kAlpha);
+        const double t = m_threshold[r], a = 2.0 * t;
+        const double nq = std::pow(s + a, Alpha) - std::pow(a, Alpha);
         alone += nq;
         const double n = em != nullptr ? (*em)[r] : 0.0;
         if (n <= 0.0) { inMix += nq; continue; }
@@ -206,12 +206,12 @@ void AudibilityMeter::loudness(const std::vector<double>& es, const std::vector<
         const double thrN = K * n + t;
         double np;
         if (s >= thrN) {
-            np = (std::pow(s + n + a, kAlpha) - std::pow(a, kAlpha))
-               - (std::pow(n * (1.0 + K) + t + a, kAlpha) - std::pow(t + a, kAlpha)) * std::pow(thrN / s, 0.3);
+            np = (std::pow(s + n + a, Alpha) - std::pow(a, Alpha))
+               - (std::pow(n * (1.0 + K) + t + a, Alpha) - std::pow(t + a, Alpha)) * std::pow(thrN / s, 0.3);
         } else {
-            const double den = std::pow(n * (1.0 + K) + t + a, kAlpha) - std::pow(n * (1.0 + K) + a, kAlpha);
-            np = std::pow(2.0 * s / (s + thrN), 1.5) * (den > 0.0 ? (std::pow(t + a, kAlpha) - std::pow(a, kAlpha)) / den : 0.0)
-               * (std::pow(s + n + a, kAlpha) - std::pow(n + a, kAlpha));
+            const double den = std::pow(n * (1.0 + K) + t + a, Alpha) - std::pow(n * (1.0 + K) + a, Alpha);
+            np = std::pow(2.0 * s / (s + thrN), 1.5) * (den > 0.0 ? (std::pow(t + a, Alpha) - std::pow(a, Alpha)) / den : 0.0)
+               * (std::pow(s + n + a, Alpha) - std::pow(n + a, Alpha));
         }
         inMix += std::clamp(np, 0.0, nq);
     }
@@ -219,44 +219,44 @@ void AudibilityMeter::loudness(const std::vector<double>& es, const std::vector<
 
 void AudibilityMeter::frame()
 {
-    const size_t B = static_cast<size_t>(bands_);
-    std::vector<std::complex<double>> x(kFrame);
-    std::vector<std::vector<double>> exc(static_cast<size_t>(stems_), std::vector<double>(B, 0.0));
-    std::vector<bool> sounding(static_cast<size_t>(stems_), false);
+    const size_t B = static_cast<size_t>(m_bands);
+    std::vector<std::complex<double>> x(Frame);
+    std::vector<std::vector<double>> exc(static_cast<size_t>(m_stems), std::vector<double>(B, 0.0));
+    std::vector<bool> sounding(static_cast<size_t>(m_stems), false);
     std::vector<double> total(B, 0.0), in(B);
-    for (int k = 0; k < stems_; ++k) {
+    for (int k = 0; k < m_stems; ++k) {
         std::fill(in.begin(), in.end(), 0.0);
-        bandIntensity(bufL_[static_cast<size_t>(k)], in, x);
-        bandIntensity(bufR_[static_cast<size_t>(k)], in, x);
+        bandIntensity(m_bufL[static_cast<size_t>(k)], in, x);
+        bandIntensity(m_bufR[static_cast<size_t>(k)], in, x);
         // Excitation: every stem's intensity spread over the bands; the total, from which each stem's masker is the rest.
         sounding[static_cast<size_t>(k)] = excite(in, exc[static_cast<size_t>(k)]);
         if (sounding[static_cast<size_t>(k)]) for (size_t r = 0; r < B; ++r) total[r] += exc[static_cast<size_t>(k)][r];
     }
     std::vector<double> masker(B);
-    for (int k = 0; k < stems_; ++k) {
+    for (int k = 0; k < m_stems; ++k) {
         if (!sounding[static_cast<size_t>(k)]) continue;
         for (size_t r = 0; r < B; ++r) masker[r] = std::max(0.0, total[r] - exc[static_cast<size_t>(k)][r]);
         double alone = 0.0, inMix = 0.0;
         loudness(exc[static_cast<size_t>(k)], &masker, alone, inMix);
-        // Only frames in which the part is heard at all on its own (kAudibleFrame): a voice's release tail is never
+        // Only frames in which the part is heard at all on its own (AudibleFrame): a voice's release tail is never
         // exactly zero, and averaging it in read a line with pauses between its phrases as far quieter than it
         // plays -- the counter of seed 1's drop 2 at a third of the lead where the probe of its phrases read it level.
-        if (alone * scale_ < kAudibleFrame) continue;
-        sumAlone_[static_cast<size_t>(k)] += alone * scale_;
-        sumMix_[static_cast<size_t>(k)] += inMix * scale_;
-        ++frames_[static_cast<size_t>(k)];
+        if (alone * m_scale < AudibleFrame) continue;
+        m_sumAlone[static_cast<size_t>(k)] += alone * m_scale;
+        m_sumMix[static_cast<size_t>(k)] += inMix * m_scale;
+        ++m_frames[static_cast<size_t>(k)];
     }
 }
 
 AudibilityReading AudibilityMeter::read(int k) const
 {
     AudibilityReading r;
-    if (k < 0 || k >= stems_) return r;
-    r.frames = frames_[static_cast<size_t>(k)];
-    if (r.frames == 0) return r;
-    r.alone = sumAlone_[static_cast<size_t>(k)] / r.frames;
-    r.inMix = sumMix_[static_cast<size_t>(k)] / r.frames;
-    r.ratio = r.alone > 0.0 ? r.inMix / r.alone : 0.0;
+    if (k < 0 || k >= m_stems) return r;
+    r.m_frames = m_frames[static_cast<size_t>(k)];
+    if (r.m_frames == 0) return r;
+    r.m_alone = m_sumAlone[static_cast<size_t>(k)] / r.m_frames;
+    r.m_inMix = m_sumMix[static_cast<size_t>(k)] / r.m_frames;
+    r.m_ratio = r.m_alone > 0.0 ? r.m_inMix / r.m_alone : 0.0;
     return r;
 }
 

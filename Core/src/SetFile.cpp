@@ -18,7 +18,7 @@ namespace {
 /** @brief The unit a name stands for, or -1. */
 int unitOfName(std::string_view name)
 {
-    for (int u = 0; u < kNumLockUnits; ++u) if (name == kLockUnitNames[u]) return u;
+    for (int u = 0; u < NumLockUnits; ++u) if (name == LockUnitNames[u]) return u;
     return -1;
 }
 
@@ -57,7 +57,7 @@ int choiceIndex(std::string_view name, const char* const* names, int count)
 
 std::string writeSetText(const Composer& composer, const ParamStore& p)
 {
-    const int cb = p.base(Module::Compose);
+    const int cb = p.base(ModuleE::COMPOSE);
     // Version 2 since 19.09.2026 (round "voices"): the counter-lead, the stab and the drone exist and the
     // voices were reordered (Params.h, PolyInstance). A set names its knobs by key, so that order never
     // reached a file; the number tells a reader which voices the file knew about (readSetText).
@@ -65,18 +65,18 @@ std::string writeSetText(const Composer& composer, const ParamStore& p)
     char buf[128];
     std::snprintf(buf, sizeof(buf), "seed=%llu\n", static_cast<unsigned long long>(composer.seed()));
     out += buf;
-    out += std::string("style=") + kStyleNames[static_cast<int>(styleOf(p))] + "\n";
-    out += std::string("arc=") + kArcNames[static_cast<int>(arcOf(p))] + "\n";
+    out += std::string("style=") + StyleNames[static_cast<int>(styleOf(p))] + "\n";
+    out += std::string("arc=") + ArcNames[static_cast<int>(arcOf(p))] + "\n";
     (void)cb;
     out += p.toText(true);
-    for (int u = 0; u < kNumLockUnits; ++u) {
-        for (const auto& kv : composer.locks(static_cast<LockUnit>(u))) {
-            std::snprintf(buf, sizeof(buf), "lock.%s.%d=1\n", kLockUnitNames[u], kv.first);
+    for (int u = 0; u < NumLockUnits; ++u) {
+        for (const auto& kv : composer.locks(static_cast<LockUnitE>(u))) {
+            std::snprintf(buf, sizeof(buf), "lock.%s.%d=1\n", LockUnitNames[u], kv.first);
             out += buf;
         }
-        for (const auto& kv : composer.variations(static_cast<LockUnit>(u))) {
+        for (const auto& kv : composer.variations(static_cast<LockUnitE>(u))) {
             if (kv.second == 0) continue;
-            std::snprintf(buf, sizeof(buf), "reroll.%s.%d=%u\n", kLockUnitNames[u], kv.first, kv.second);
+            std::snprintf(buf, sizeof(buf), "reroll.%s.%d=%u\n", LockUnitNames[u], kv.first, kv.second);
             out += buf;
         }
     }
@@ -122,12 +122,12 @@ bool readSetText(std::string_view text, Composer& composer, ParamStore& p, std::
             composer.setSeed(std::strtoull(std::string(value).c_str(), nullptr, 10));
         } else if (key == "style" || key == "arc") {
             const bool isStyle = key == "style";
-            const int i = choiceIndex(value, isStyle ? kStyleNames : kArcNames, isStyle ? kNumStyles : kNumArcs);
+            const int i = choiceIndex(value, isStyle ? StyleNames : ArcNames, isStyle ? NumStyles : NumArcs);
             if (i < 0) {
                 if (error != nullptr && ok) *error = "unknown " + std::string(key) + ": " + std::string(value);
                 ok = false;
             } else {
-                p.set(p.base(Module::Compose) + (isStyle ? compose::Style : compose::Arc), static_cast<float>(i));
+                p.set(p.base(ModuleE::COMPOSE) + (isStyle ? compose::STYLE : compose::ARC), static_cast<float>(i));
             }
         } else if (key.rfind("lock.", 0) == 0 || key.rfind("reroll.", 0) == 0) {
             std::string_view head;
@@ -138,8 +138,8 @@ bool readSetText(std::string_view text, Composer& composer, ParamStore& p, std::
                 continue;
             }
             const long v = std::strtol(std::string(value).c_str(), nullptr, 10);
-            if (head == "lock") composer.setLock(static_cast<LockUnit>(unit), index, v != 0);
-            else composer.setVariation(static_cast<LockUnit>(unit), index, static_cast<uint32_t>(v < 0 ? 0 : v));
+            if (head == "lock") composer.setLock(static_cast<LockUnitE>(unit), index, v != 0);
+            else composer.setVariation(static_cast<LockUnitE>(unit), index, static_cast<uint32_t>(v < 0 ? 0 : v));
         } else {
             knobs += std::string(line);
             knobs += '\n';

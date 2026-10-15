@@ -48,65 +48,65 @@
 
 namespace phos {
 
-constexpr int kPercLaneSlots = 16;   ///< lane arrays hold 16 entries (12 lanes, padded to the widest register)
-constexpr int kPercModes = 4;        ///< modes per lane
-constexpr int kPercMetalOsc = 6;     ///< square oscillators per lane
+constexpr int PercLaneSlots = 16;   ///< lane arrays hold 16 entries (12 lanes, padded to the widest register)
+constexpr int PercModes = 4;        ///< modes per lane
+constexpr int PercMetalOsc = 6;     ///< square oscillators per lane
 
 /** @brief The evolving state of every lane (structure of arrays). */
 struct PercState {
-    alignas(32) float cr[kPercLaneSlots] = {};   ///< the carrier phasor's real part
-    alignas(32) float ci[kPercLaneSlots] = {};   ///< the carrier phasor's imaginary part
-    alignas(32) float mr[kPercLaneSlots] = {};   ///< the modulator phasor's real part
-    alignas(32) float mi[kPercLaneSlots] = {};   ///< the modulator phasor's imaginary part
-    alignas(32) float envA[kPercLaneSlots] = {};                          ///< tone and metal amplitude
-    alignas(32) float envP[kPercLaneSlots] = {};                          ///< pitch and FM-index envelope
-    alignas(32) float envN[kPercLaneSlots] = {};                          ///< noise amplitude
-    alignas(32) float choke[kPercLaneSlots] = {};                         ///< choke gain
-    alignas(32) float ic1[kPercLaneSlots] = {};   ///< the main filter's first state
-    alignas(32) float ic2[kPercLaneSlots] = {};   ///< the main filter's second state
-    alignas(32) float la1[kPercLaneSlots] = {};   ///< the low cut's first section, first state
-    alignas(32) float la2[kPercLaneSlots] = {};   ///< the low cut's first section, second state
-    alignas(32) float lb1[kPercLaneSlots] = {};   ///< the low cut's second section, first state
-    alignas(32) float lb2[kPercLaneSlots] = {};   ///< the low cut's second section, second state
-    alignas(32) float zr[kPercModes][kPercLaneSlots] = {};   ///< the mode phasors' real parts
-    alignas(32) float zi[kPercModes][kPercLaneSlots] = {};   ///< the mode phasors' imaginary parts
-    alignas(32) float mt[kPercMetalOsc][kPercLaneSlots] = {};             ///< metal oscillator phases
-    alignas(32) float pr[kPercLaneSlots] = {};   ///< the auto-pan phasor's real part
-    alignas(32) float pi[kPercLaneSlots] = {};   ///< the auto-pan phasor's imaginary part (16.09.2026)
+    alignas(32) float m_cr[PercLaneSlots] = {};   ///< the carrier phasor's real part
+    alignas(32) float m_ci[PercLaneSlots] = {};   ///< the carrier phasor's imaginary part
+    alignas(32) float m_mr[PercLaneSlots] = {};   ///< the modulator phasor's real part
+    alignas(32) float m_mi[PercLaneSlots] = {};   ///< the modulator phasor's imaginary part
+    alignas(32) float m_envA[PercLaneSlots] = {};                          ///< tone and metal amplitude
+    alignas(32) float m_envP[PercLaneSlots] = {};                          ///< pitch and FM-index envelope
+    alignas(32) float m_envN[PercLaneSlots] = {};                          ///< noise amplitude
+    alignas(32) float m_choke[PercLaneSlots] = {};                         ///< choke gain
+    alignas(32) float m_ic1[PercLaneSlots] = {};   ///< the main filter's first state
+    alignas(32) float m_ic2[PercLaneSlots] = {};   ///< the main filter's second state
+    alignas(32) float m_la1[PercLaneSlots] = {};   ///< the low cut's first section, first state
+    alignas(32) float m_la2[PercLaneSlots] = {};   ///< the low cut's first section, second state
+    alignas(32) float m_lb1[PercLaneSlots] = {};   ///< the low cut's second section, first state
+    alignas(32) float m_lb2[PercLaneSlots] = {};   ///< the low cut's second section, second state
+    alignas(32) float m_zr[PercModes][PercLaneSlots] = {};   ///< the mode phasors' real parts
+    alignas(32) float m_zi[PercModes][PercLaneSlots] = {};   ///< the mode phasors' imaginary parts
+    alignas(32) float m_mt[PercMetalOsc][PercLaneSlots] = {};             ///< metal oscillator phases
+    alignas(32) float m_pr[PercLaneSlots] = {};   ///< the auto-pan phasor's real part
+    alignas(32) float m_pi[PercLaneSlots] = {};   ///< the auto-pan phasor's imaginary part (16.09.2026)
 };
 
 /** @brief Per-lane coefficients, constant within a rendered segment. */
 struct PercCoefs {
-    alignas(32) float w0[kPercLaneSlots] = {};       ///< carrier step at the end of the pitch envelope, radians
-    alignas(32) float pAmt[kPercLaneSlots] = {};     ///< pitch envelope depth: start frequency / end - 1
-    alignas(32) float dP[kPercLaneSlots] = {};       ///< pitch envelope factor per sample
-    alignas(32) float fmIdx[kPercLaneSlots] = {};    ///< FM index at the start
-    alignas(32) float mc[kPercLaneSlots] = {};   ///< the modulator's rotation: cosine
-    alignas(32) float ms[kPercLaneSlots] = {};   ///< the modulator's rotation: sine
-    alignas(32) float dA[kPercLaneSlots] = {};       ///< amplitude factor per sample
-    alignas(32) float wTone[kPercLaneSlots] = {};   ///< the tone's weight in the sum
-    alignas(32) float wModal[kPercLaneSlots] = {};   ///< the modes' weight
-    alignas(32) float wMetal[kPercLaneSlots] = {};   ///< the metal's weight
-    alignas(32) float wNoise[kPercLaneSlots] = {};   ///< the noise's weight
-    alignas(32) float modeC[kPercModes][kPercLaneSlots] = {};   ///< the damped mode rotations: radius times cosine
-    alignas(32) float modeS[kPercModes][kPercLaneSlots] = {};   ///< the damped mode rotations: radius times sine
-    alignas(32) float a1[kPercLaneSlots] = {};   ///< the main filter's coefficient a1 (trapezoidal SVF)
-    alignas(32) float a2[kPercLaneSlots] = {};   ///< ... a2
-    alignas(32) float a3[kPercLaneSlots] = {};   ///< ... a3
-    alignas(32) float k[kPercLaneSlots] = {};   ///< ... its damping
-    alignas(32) float mLp[kPercLaneSlots] = {};   ///< the main filter's low-pass weight
-    alignas(32) float mBp[kPercLaneSlots] = {};   ///< its band-pass weight
-    alignas(32) float mHp[kPercLaneSlots] = {};   ///< its high-pass weight
-    alignas(32) float c1[kPercLaneSlots] = {};   ///< the low cut's coefficient c1
-    alignas(32) float c2[kPercLaneSlots] = {};   ///< ... c2
-    alignas(32) float c3[kPercLaneSlots] = {};   ///< ... c3 (low cut, damping sqrt 2)
-    alignas(32) float drvG[kPercLaneSlots] = {};   ///< the drive's gain into the clip
-    alignas(32) float drvN[kPercLaneSlots] = {};   ///< the gain that keeps the level after it
-    alignas(32) float chokeD[kPercLaneSlots] = {};   ///< the choke's factor per sample (1: not choked)
-    alignas(32) float gL[kPercLaneSlots] = {};   ///< the pan's gain, left
-    alignas(32) float gR[kPercLaneSlots] = {};   ///< the pan's gain, right
-    alignas(32) float dt[kPercMetalOsc][kPercLaneSlots] = {};   ///< per metal oscillator: its phase step
-    alignas(32) float inv[kPercMetalOsc][kPercLaneSlots] = {};   ///< ... and the inverse, for its PolyBLEP
+    alignas(32) float m_w0[PercLaneSlots] = {};       ///< carrier step at the end of the pitch envelope, radians
+    alignas(32) float m_pAmt[PercLaneSlots] = {};     ///< pitch envelope depth: start frequency / end - 1
+    alignas(32) float m_dP[PercLaneSlots] = {};       ///< pitch envelope factor per sample
+    alignas(32) float m_fmIdx[PercLaneSlots] = {};    ///< FM index at the start
+    alignas(32) float m_mc[PercLaneSlots] = {};   ///< the modulator's rotation: cosine
+    alignas(32) float m_ms[PercLaneSlots] = {};   ///< the modulator's rotation: sine
+    alignas(32) float m_dA[PercLaneSlots] = {};       ///< amplitude factor per sample
+    alignas(32) float m_wTone[PercLaneSlots] = {};   ///< the tone's weight in the sum
+    alignas(32) float m_wModal[PercLaneSlots] = {};   ///< the modes' weight
+    alignas(32) float m_wMetal[PercLaneSlots] = {};   ///< the metal's weight
+    alignas(32) float m_wNoise[PercLaneSlots] = {};   ///< the noise's weight
+    alignas(32) float m_modeC[PercModes][PercLaneSlots] = {};   ///< the damped mode rotations: radius times cosine
+    alignas(32) float m_modeS[PercModes][PercLaneSlots] = {};   ///< the damped mode rotations: radius times sine
+    alignas(32) float m_a1[PercLaneSlots] = {};   ///< the main filter's coefficient a1 (trapezoidal SVF)
+    alignas(32) float m_a2[PercLaneSlots] = {};   ///< ... a2
+    alignas(32) float m_a3[PercLaneSlots] = {};   ///< ... a3
+    alignas(32) float m_k[PercLaneSlots] = {};   ///< ... its damping
+    alignas(32) float m_mLp[PercLaneSlots] = {};   ///< the main filter's low-pass weight
+    alignas(32) float m_mBp[PercLaneSlots] = {};   ///< its band-pass weight
+    alignas(32) float m_mHp[PercLaneSlots] = {};   ///< its high-pass weight
+    alignas(32) float m_c1[PercLaneSlots] = {};   ///< the low cut's coefficient c1
+    alignas(32) float m_c2[PercLaneSlots] = {};   ///< ... c2
+    alignas(32) float m_c3[PercLaneSlots] = {};   ///< ... c3 (low cut, damping sqrt 2)
+    alignas(32) float m_drvG[PercLaneSlots] = {};   ///< the drive's gain into the clip
+    alignas(32) float m_drvN[PercLaneSlots] = {};   ///< the gain that keeps the level after it
+    alignas(32) float m_chokeD[PercLaneSlots] = {};   ///< the choke's factor per sample (1: not choked)
+    alignas(32) float m_gL[PercLaneSlots] = {};   ///< the pan's gain, left
+    alignas(32) float m_gR[PercLaneSlots] = {};   ///< the pan's gain, right
+    alignas(32) float m_dt[PercMetalOsc][PercLaneSlots] = {};   ///< per metal oscillator: its phase step
+    alignas(32) float m_inv[PercMetalOsc][PercLaneSlots] = {};   ///< ... and the inverse, for its PolyBLEP
     /**
      * @name The auto-pan (16.09.2026)
      * panC and panS turn the lane's LFO phasor by one sample of its period; the angle the pan gains
@@ -114,10 +114,10 @@ struct PercCoefs {
      * puts the lane's own position (perc.pan) at the middle of the swing. Both are zero when the lane
      * does not move, and then the rotation below is the exact identity.
      * @{ */
-    alignas(32) float panC[kPercLaneSlots] = {};   ///< the auto-pan rotation's cosine
-    alignas(32) float panS[kPercLaneSlots] = {};   ///< its sine
-    alignas(32) float panA[kPercLaneSlots] = {};   ///< the swing
-    alignas(32) float panB[kPercLaneSlots] = {};   ///< the standing offset
+    alignas(32) float m_panC[PercLaneSlots] = {};   ///< the auto-pan rotation's cosine
+    alignas(32) float m_panS[PercLaneSlots] = {};   ///< its sine
+    alignas(32) float m_panA[PercLaneSlots] = {};   ///< the swing
+    alignas(32) float m_panB[PercLaneSlots] = {};   ///< the standing offset
     /** @} */
 };
 
@@ -138,48 +138,48 @@ struct PercCoefs {
  *               moving lane would make the phase depend on the history of the knobs.
  * @param outL,outR per sample and lane outputs
  */
-template <class V>
+template <class VT>
 void percKernel(PercState& s, const PercCoefs& c, int lane, int n, const float* noise, const float* reset,
                 const float* dNoise, bool tone, bool modal, bool metal, bool pan, float* outL, float* outR)
 {
-    auto at = [lane](const float* a) { return loadLanes<V>(a + lane); };
-    const V zero = lanes<V>(0.0f), one = lanes<V>(1.0f), two = lanes<V>(2.0f), half = lanes<V>(0.5f), threeHalves = lanes<V>(1.5f);
-    const V sqrt2 = lanes<V>(1.41421356f), sixth = lanes<V>(1.0f / 6.0f);
-    const V t2 = lanes<V>(0.5f), t24 = lanes<V>(1.0f / 24.0f), t720 = lanes<V>(1.0f / 720.0f);
-    const V t6 = lanes<V>(1.0f / 6.0f), t120 = lanes<V>(1.0f / 120.0f), t5040 = lanes<V>(1.0f / 5040.0f);
-    const V wMax = lanes<V>(1.2f), wMin = lanes<V>(-1.2f);
+    auto at = [lane](const float* a) { return loadLanes<VT>(a + lane); };
+    const VT zero = lanes<VT>(0.0f), one = lanes<VT>(1.0f), two = lanes<VT>(2.0f), half = lanes<VT>(0.5f), threeHalves = lanes<VT>(1.5f);
+    const VT sqrt2 = lanes<VT>(1.41421356f), sixth = lanes<VT>(1.0f / 6.0f);
+    const VT t2 = lanes<VT>(0.5f), t24 = lanes<VT>(1.0f / 24.0f), t720 = lanes<VT>(1.0f / 720.0f);
+    const VT t6 = lanes<VT>(1.0f / 6.0f), t120 = lanes<VT>(1.0f / 120.0f), t5040 = lanes<VT>(1.0f / 5040.0f);
+    const VT wMax = lanes<VT>(1.2f), wMin = lanes<VT>(-1.2f);
 
-    V cr = at(s.cr), ci = at(s.ci), mr = at(s.mr), mi = at(s.mi);
-    V envA = at(s.envA), envP = at(s.envP), envN = at(s.envN), choke = at(s.choke);
-    V ic1 = at(s.ic1), ic2 = at(s.ic2), la1 = at(s.la1), la2 = at(s.la2), lb1 = at(s.lb1), lb2 = at(s.lb2);
-    V zr[kPercModes], zi[kPercModes], mC[kPercModes], mS[kPercModes];
-    for (int m = 0; m < kPercModes; ++m) { zr[m] = at(s.zr[m]); zi[m] = at(s.zi[m]); mC[m] = at(c.modeC[m]); mS[m] = at(c.modeS[m]); }
-    V mt[kPercMetalOsc], dt[kPercMetalOsc], iv[kPercMetalOsc];
-    for (int j = 0; j < kPercMetalOsc; ++j) { mt[j] = at(s.mt[j]); dt[j] = at(c.dt[j]); iv[j] = at(c.inv[j]); }
-    const V w0 = at(c.w0), pAmt = at(c.pAmt), dP = at(c.dP), fmIdx = at(c.fmIdx), mc = at(c.mc), ms = at(c.ms), dA = at(c.dA);
-    const V wTone = at(c.wTone), wModal = at(c.wModal), wMetal = at(c.wMetal), wNoise = at(c.wNoise);
-    const V a1 = at(c.a1), a2 = at(c.a2), a3 = at(c.a3), kk = at(c.k), mLp = at(c.mLp), mBp = at(c.mBp), mHp = at(c.mHp);
-    const V c1 = at(c.c1), c2 = at(c.c2), c3 = at(c.c3), drvG = at(c.drvG), drvN = at(c.drvN), chokeD = at(c.chokeD);
-    const V gL = at(c.gL), gR = at(c.gR);
-    V pr = at(s.pr), pi = at(s.pi);
-    const V panC = at(c.panC), panS = at(c.panS), panA = at(c.panA), panB = at(c.panB);
+    VT cr = at(s.m_cr), ci = at(s.m_ci), mr = at(s.m_mr), mi = at(s.m_mi);
+    VT envA = at(s.m_envA), envP = at(s.m_envP), envN = at(s.m_envN), choke = at(s.m_choke);
+    VT ic1 = at(s.m_ic1), ic2 = at(s.m_ic2), la1 = at(s.m_la1), la2 = at(s.m_la2), lb1 = at(s.m_lb1), lb2 = at(s.m_lb2);
+    VT zr[PercModes], zi[PercModes], mC[PercModes], mS[PercModes];
+    for (int m = 0; m < PercModes; ++m) { zr[m] = at(s.m_zr[m]); zi[m] = at(s.m_zi[m]); mC[m] = at(c.m_modeC[m]); mS[m] = at(c.m_modeS[m]); }
+    VT mt[PercMetalOsc], dt[PercMetalOsc], iv[PercMetalOsc];
+    for (int j = 0; j < PercMetalOsc; ++j) { mt[j] = at(s.m_mt[j]); dt[j] = at(c.m_dt[j]); iv[j] = at(c.m_inv[j]); }
+    const VT w0 = at(c.m_w0), pAmt = at(c.m_pAmt), dP = at(c.m_dP), fmIdx = at(c.m_fmIdx), mc = at(c.m_mc), ms = at(c.m_ms), dA = at(c.m_dA);
+    const VT wTone = at(c.m_wTone), wModal = at(c.m_wModal), wMetal = at(c.m_wMetal), wNoise = at(c.m_wNoise);
+    const VT a1 = at(c.m_a1), a2 = at(c.m_a2), a3 = at(c.m_a3), kk = at(c.m_k), mLp = at(c.m_mLp), mBp = at(c.m_mBp), mHp = at(c.m_mHp);
+    const VT c1 = at(c.m_c1), c2 = at(c.m_c2), c3 = at(c.m_c3), drvG = at(c.m_drvG), drvN = at(c.m_drvN), chokeD = at(c.m_chokeD);
+    const VT gL = at(c.m_gL), gR = at(c.m_gR);
+    VT pr = at(s.m_pr), pi = at(s.m_pi);
+    const VT panC = at(c.m_panC), panS = at(c.m_panS), panA = at(c.m_panA), panB = at(c.m_panB);
 
     for (int i = 0; i < n; ++i) {
-        const int row = i * kPercLaneSlots + lane;
-        V src = zero;
+        const int row = i * PercLaneSlots + lane;
+        VT src = zero;
         if (tone) {
             // Modulator: exact rotation, renormalised.
-            const V nmr = mr * mc - mi * ms, nmi = mr * ms + mi * mc;
-            V fix = threeHalves - half * (nmr * nmr + nmi * nmi);
+            const VT nmr = mr * mc - mi * ms, nmi = mr * ms + mi * mc;
+            VT fix = threeHalves - half * (nmr * nmr + nmi * nmi);
             mr = nmr * fix;
             mi = nmi * fix;
             // Carrier step: base, pitch envelope, frequency modulation; clamped.
-            V w = w0 * (one + pAmt * envP) * (one + fmIdx * envP * mi);
+            VT w = w0 * (one + pAmt * envP) * (one + fmIdx * envP * mi);
             w = vmin(vmax(w, wMin), wMax);
-            const V q = w * w;
-            const V cs = one - q * (t2 - q * (t24 - q * t720));
-            const V sn = w * (one - q * (t6 - q * (t120 - q * t5040)));
-            const V ncr = cr * cs - ci * sn, nci = cr * sn + ci * cs;
+            const VT q = w * w;
+            const VT cs = one - q * (t2 - q * (t24 - q * t720));
+            const VT sn = w * (one - q * (t6 - q * (t120 - q * t5040)));
+            const VT ncr = cr * cs - ci * sn, nci = cr * sn + ci * cs;
             fix = threeHalves - half * (ncr * ncr + nci * nci);
             cr = ncr * fix;
             ci = nci * fix;
@@ -187,9 +187,9 @@ void percKernel(PercState& s, const PercCoefs& c, int lane, int n, const float* 
             envP = envP * dP;
         }
         if (modal) {
-            V sum = zero;
-            for (int m = 0; m < kPercModes; ++m) {
-                const V nr = zr[m] * mC[m] - zi[m] * mS[m];
+            VT sum = zero;
+            for (int m = 0; m < PercModes; ++m) {
+                const VT nr = zr[m] * mC[m] - zi[m] * mS[m];
                 zi[m] = zr[m] * mS[m] + zi[m] * mC[m];
                 zr[m] = nr;
                 sum = sum + zi[m];
@@ -197,39 +197,39 @@ void percKernel(PercState& s, const PercCoefs& c, int lane, int n, const float* 
             src = src + wModal * sum;
         }
         if (metal) {
-            V acc = zero;
-            for (int j = 0; j < kPercMetalOsc; ++j) {
-                const V t = mt[j], d = dt[j], inv = iv[j];
-                V sq = vselect(vlt(t, half), one, -one);
-                const V x1 = t * inv;
+            VT acc = zero;
+            for (int j = 0; j < PercMetalOsc; ++j) {
+                const VT t = mt[j], d = dt[j], inv = iv[j];
+                VT sq = vselect(vlt(t, half), one, -one);
+                const VT x1 = t * inv;
                 sq = sq + vselect(vlt(t, d), x1 + x1 - x1 * x1 - one, zero);
-                const V x2 = (t - one) * inv;
+                const VT x2 = (t - one) * inv;
                 sq = sq + vselect(vgt(t, one - d), x2 * x2 + x2 + x2 + one, zero);
-                V u = t + half;
+                VT u = t + half;
                 u = vselect(vge(u, one), u - one, u);
-                const V x3 = u * inv;
+                const VT x3 = u * inv;
                 sq = sq - vselect(vlt(u, d), x3 + x3 - x3 * x3 - one, zero);
-                const V x4 = (u - one) * inv;
+                const VT x4 = (u - one) * inv;
                 sq = sq - vselect(vgt(u, one - d), x4 * x4 + x4 + x4 + one, zero);
                 acc = acc + sq;
-                const V nt = t + d;
+                const VT nt = t + d;
                 mt[j] = vselect(vge(nt, one), nt - one, nt);
             }
             src = src + wMetal * acc * sixth * envA;
         }
-        const V rst = loadLanes<V>(reset + row);
+        const VT rst = loadLanes<VT>(reset + row);
         envN = vselect(vgt(rst, zero), rst, envN);
-        src = src + wNoise * loadLanes<V>(noise + row) * envN;
-        envN = envN * loadLanes<V>(dNoise + row);
+        src = src + wNoise * loadLanes<VT>(noise + row) * envN;
+        envN = envN * loadLanes<VT>(dNoise + row);
         envA = envA * dA;
 
         // Main filter (trapezoidal SVF), output chosen by weights.
-        V v3 = src - ic2;
-        V v1 = a1 * ic1 + a2 * v3;
-        V v2 = ic2 + a2 * ic1 + a3 * v3;
+        VT v3 = src - ic2;
+        VT v1 = a1 * ic1 + a2 * v3;
+        VT v2 = ic2 + a2 * ic1 + a3 * v3;
         ic1 = two * v1 - ic1;
         ic2 = two * v2 - ic2;
-        V y = mLp * v2 + mBp * kk * v1 + mHp * (src - kk * v1 - v2);
+        VT y = mLp * v2 + mBp * kk * v1 + mHp * (src - kk * v1 - v2);
         // Low cut: two Butterworth high-pass sections.
         v3 = y - la2;
         v1 = c1 * la1 + c2 * v3;
@@ -244,23 +244,23 @@ void percKernel(PercState& s, const PercCoefs& c, int lane, int n, const float* 
         lb2 = two * v2 - lb2;
         y = y - sqrt2 * v1 - v2;
         // Drive: algebraic sigmoid, unity gain for small signals.
-        const V yg = y * drvG;
+        const VT yg = y * drvG;
         y = yg / vsqrt(one + yg * yg) * drvN;
         y = y * choke;
         choke = choke * chokeD;
         // The auto-pan: turn (gL, gR) on the unit circle by d = panA * cos(phase) + panB. The phasor
         // is renormalised the same way the carrier is, and so is the (cos d, sin d) pair, which is
         // what makes the two channel powers sum to a constant to float precision.
-        V gl = gL, gr = gR;
+        VT gl = gL, gr = gR;
         if (pan) {
-            const V npr = pr * panC - pi * panS, npi = pr * panS + pi * panC;
-            V fix = threeHalves - half * (npr * npr + npi * npi);
+            const VT npr = pr * panC - pi * panS, npi = pr * panS + pi * panC;
+            VT fix = threeHalves - half * (npr * npr + npi * npi);
             pr = npr * fix;
             pi = npi * fix;
-            const V d = panA * pr + panB;
-            const V q = d * d;
-            V cs = one - q * (t2 - q * (t24 - q * t720));
-            V sn = d * (one - q * (t6 - q * (t120 - q * t5040)));
+            const VT d = panA * pr + panB;
+            const VT q = d * d;
+            VT cs = one - q * (t2 - q * (t24 - q * t720));
+            VT sn = d * (one - q * (t6 - q * (t120 - q * t5040)));
             fix = threeHalves - half * (cs * cs + sn * sn);
             cs = cs * fix;
             sn = sn * fix;
@@ -271,13 +271,13 @@ void percKernel(PercState& s, const PercCoefs& c, int lane, int n, const float* 
         vstore(outR + row, y * gr);
     }
 
-    auto put = [lane](float* a, V v) { vstore(a + lane, v); };
-    put(s.pr, pr); put(s.pi, pi);
-    put(s.cr, cr); put(s.ci, ci); put(s.mr, mr); put(s.mi, mi);
-    put(s.envA, envA); put(s.envP, envP); put(s.envN, envN); put(s.choke, choke);
-    put(s.ic1, ic1); put(s.ic2, ic2); put(s.la1, la1); put(s.la2, la2); put(s.lb1, lb1); put(s.lb2, lb2);
-    for (int m = 0; m < kPercModes; ++m) { put(s.zr[m], zr[m]); put(s.zi[m], zi[m]); }
-    for (int j = 0; j < kPercMetalOsc; ++j) put(s.mt[j], mt[j]);
+    auto put = [lane](float* a, VT v) { vstore(a + lane, v); };
+    put(s.m_pr, pr); put(s.m_pi, pi);
+    put(s.m_cr, cr); put(s.m_ci, ci); put(s.m_mr, mr); put(s.m_mi, mi);
+    put(s.m_envA, envA); put(s.m_envP, envP); put(s.m_envN, envN); put(s.m_choke, choke);
+    put(s.m_ic1, ic1); put(s.m_ic2, ic2); put(s.m_la1, la1); put(s.m_la2, la2); put(s.m_lb1, lb1); put(s.m_lb2, lb2);
+    for (int m = 0; m < PercModes; ++m) { put(s.m_zr[m], zr[m]); put(s.m_zi[m], zi[m]); }
+    for (int j = 0; j < PercMetalOsc; ++j) put(s.m_mt[j], mt[j]);
 }
 
 } // namespace phos

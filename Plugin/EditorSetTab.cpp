@@ -47,9 +47,9 @@ juce::String modelLine(const char* part, const char* fallback, bool learned, dou
 /** @brief The melodic parts a track has, by name, in the order of the voices' groups (Form.h, MelodyPart). */
 juce::String melodicParts(const TrackPlan& plan)
 {
-    static const char* const kNames[kMelodyParts] = { "acid", "lead", "counter", "arp", "stab", "pad", "drone" };
+    static const char* const Names[MelodyParts] = { "acid", "lead", "counter", "arp", "stab", "pad", "drone" };
     juce::String s;
-    for (int k = 0; k < kMelodyParts; ++k) if (plan.melody.present[k]) s << "  " << kNames[k];
+    for (int k = 0; k < MelodyParts; ++k) if (plan.m_melody.m_present[k]) s << "  " << Names[k];
     return s;
 }
 } // namespace
@@ -66,35 +66,35 @@ void PhospheneEditor::buildSetPage()
     const int gt = page->addGroup("Seed and Clock", tint, 12);
     {
         auto seed = std::make_unique<juce::TextEditor>();
-        seed->setText(juce::String(proc_.seed()), false);
+        seed->setText(juce::String(m_proc.seed()), false);
         seed->setJustification(juce::Justification::centred);
         seed->onReturnKey = [this] {
-            const juce::int64 v = seedEditor_->getText().getLargeIntValue();
-            proc_.undoable("Seed", [this, v] { proc_.setSeed(static_cast<uint64_t>(juce::jmax<juce::int64>(1, v))); });
+            const juce::int64 v = m_seedEditor->getText().getLargeIntValue();
+            m_proc.undoable("Seed", [this, v] { m_proc.setSeed(static_cast<uint64_t>(juce::jmax<juce::int64>(1, v))); });
         };
-        seed->onFocusLost = [this] { seedEditor_->setText(juce::String(proc_.seed()), false); };
-        seedEditor_ = seed.get();
+        seed->onFocusLost = [this] { m_seedEditor->setText(juce::String(m_proc.seed()), false); };
+        m_seedEditor = seed.get();
         page->addControl(gt, std::move(seed), "Seed", 2);
 
         auto dice = std::make_unique<juce::TextButton>("Randomize seed");
         dice->onClick = [this] {
-            proc_.undoable("Randomize seed", [this] { proc_.randomiseSeed(); });
-            seedEditor_->setText(juce::String(proc_.seed()), false);
-            trackRows_.clear();
-            rowsSeed_ = 0;
+            m_proc.undoable("Randomize seed", [this] { m_proc.randomiseSeed(); });
+            m_seedEditor->setText(juce::String(m_proc.seed()), false);
+            m_trackRows.clear();
+            m_rowsSeed = 0;
         };
         page->addControl(gt, std::move(dice), "", 3, true);
 
         auto follow = makeToggle("Follow host");
-        follow->setToggleState(proc_.followsHost(), juce::dontSendNotification);
-        follow->onClick = [this] { proc_.setFollowHost(followButton_->getToggleState()); };
-        followButton_ = follow.get();
+        follow->setToggleState(m_proc.followsHost(), juce::dontSendNotification);
+        follow->onClick = [this] { m_proc.setFollowHost(m_followButton->getToggleState()); };
+        m_followButton = follow.get();
         page->addControl(gt, std::move(follow), "", 2, true);
 
         auto status = std::make_unique<juce::Label>(juce::String(), "stopped");
         status->setJustificationType(juce::Justification::centredLeft);
-        status->setColour(juce::Label::textColourId, dim);
-        statusLabel_ = status.get();
+        status->setColour(juce::Label::textColourId, Dim);
+        m_statusLabel = status.get();
         page->addControl(gt, std::move(status), "", 5, true);
     }
 
@@ -104,23 +104,23 @@ void PhospheneEditor::buildSetPage()
     // pattern, the style fourteen knobs further down under "Form", and "Style Tempo" -- which replaces the tempo and
     // its range -- in a different group from both. Style, key, scale and tempo are where the set *starts*: the style
     // walks with Style Mix and the key and tempo walk from track to track, which the names now say.
-    const int cb = proc_.params().base(Module::Compose);
+    const int cb = m_proc.params().base(ModuleE::COMPOSE);
     auto ids = [cb](std::initializer_list<int> ks) { std::vector<int> v; for (int k : ks) v.push_back(cb + k); return v; };
     using namespace compose;
     const std::vector<std::pair<const char*, std::vector<int>>> groups = {
-        { "Start & Style", ids({ Style, StyleMix, StyleTempo, Bpm, TempoRange, Key, Scale }) },
-        { "Set Journey",   ids({ compose::Arc, SetMinutes, TrackBars, TrackVariation, SoundVariation, SoundPresets }) },
-        { "Kick & Bass",   ids({ KickPattern, BassPattern, BassGate, BassVariation, BassRegister, BassFollowsChords, BassModel, BassRhythm }) },
-        { "Rhythm",        ids({ PercDensity, PercVariation, Swing, GateChance }) },
-        { "Melody",        ids({ AcidAmount, ArpAmount, MelodyVariation, MelodyTemperature, SquelchChance, ModalInterchange, MelodyModel, PitchEntropy }) },
-        { "Lead",          ids({ LeadAmount, LeadDensity, compose::CounterMode }) },
-        { "Voices",        ids({ CounterAmount, StabAmount, PadAmount, DroneAmount, SfxAmount, VoiceDensity, BedDensity, FieldDensity }) },
-        { "Levels",        ids({ LevelMatch, PresenceMatch, AudibilityMatch }) },
+        { "Start & Style", ids({ STYLE, STYLE_MIX, STYLE_TEMPO, BPM, TEMPO_RANGE, KEY, SCALE }) },
+        { "Set Journey",   ids({ compose::ARC, SET_MINUTES, TRACK_BARS, TRACK_VARIATION, SOUND_VARIATION, SOUND_PRESETS }) },
+        { "Kick & Bass",   ids({ KICK_PATTERN, BASS_PATTERN, BASS_GATE, BASS_VARIATION, BASS_REGISTER, BASS_FOLLOWS_CHORDS, BASS_MODEL, BASS_RHYTHM }) },
+        { "Rhythm",        ids({ PERC_DENSITY, PERC_VARIATION, SWING, GATE_CHANCE }) },
+        { "Melody",        ids({ ACID_AMOUNT, ARP_AMOUNT, MELODY_VARIATION, MELODY_TEMPERATURE, SQUELCH_CHANCE, MODAL_INTERCHANGE, MELODY_MODEL, PITCH_ENTROPY }) },
+        { "Lead",          ids({ LEAD_AMOUNT, LEAD_DENSITY, compose::COUNTER_MODE }) },
+        { "Voices",        ids({ COUNTER_AMOUNT, STAB_AMOUNT, PAD_AMOUNT, DRONE_AMOUNT, SFX_AMOUNT, VOICE_DENSITY, BED_DENSITY, FIELD_DENSITY }) },
+        { "Levels",        ids({ LEVEL_MATCH, PRESENCE_MATCH, AUDIBILITY_MATCH }) },
     };
-    static const int kColumns[] = { 5, 3, 5, 4, 5, 5, 4, 3 };
+    static const int Columns[] = { 5, 3, 5, 4, 5, 5, 4, 3 };
     size_t claimed = 0;
     for (size_t i = 0; i < groups.size(); ++i) {
-        page->addParamsGroup(proc_, groups[i].first, tint, kColumns[i], groups[i].second);
+        page->addParamsGroup(m_proc, groups[i].first, tint, Columns[i], groups[i].second);
         claimed += groups[i].second.size();
     }
     // Every compose knob in exactly one group: a knob appended to the table must be placed here by hand now.
@@ -141,24 +141,24 @@ void PhospheneEditor::buildSetPage()
     // which is the case that works here and nowhere else. It is built once and never refreshed:
     // both models are loaded once per process, before the first engine, and cannot change afterwards
     // (PluginProcessor.cpp, installSearchPaths()).
-    const PhospheneProcessor::LearnedModels m = proc_.learnedModels();
+    const PhospheneProcessor::LearnedModels m = m_proc.learnedModels();
     const int gn = page->addGroup("Pitch models", tint, 6);
     {
-        struct Line { const char* part; const char* fallback; bool learned; double nll; juce::String note; };
-        const Line lines[2] = { { "Melody", "Markov",  m.melody, m.melodyNll, m.melodyNote },
-                                { "Bass",   "Pattern", m.bass,   m.bassNll,   m.bassNote } };
+        struct Line { const char* m_part; const char* m_fallback; bool m_learned; double m_nll; juce::String m_note; };
+        const Line lines[2] = { { "Melody", "Markov",  m.m_melody, m.m_melodyNll, m.m_melodyNote },
+                                { "Bass",   "Pattern", m.m_bass,   m.m_bassNll,   m.m_bassNote } };
         for (const Line& l : lines) {
             auto lab = std::make_unique<juce::Label>(juce::String(),
-                                                     modelLine(l.part, l.fallback, l.learned, l.nll, m.fromSourceTree));
+                                                     modelLine(l.m_part, l.m_fallback, l.m_learned, l.m_nll, m.m_fromSourceTree));
             lab->setJustificationType(juce::Justification::centredLeft);
             // The palette's own "over" colour, the one the loudness meter uses when a reading is not
             // what it should be: a fallback is not an error, but it is not the product either.
-            lab->setColour(juce::Label::textColourId, l.learned ? dim : red);
+            lab->setColour(juce::Label::textColourId, l.m_learned ? Dim : Red);
             // The whole truth, for anyone who wants it: the directory the plugin looked in, or the
             // core's own message naming every path it tried.
-            lab->setTooltip(l.learned ? (m.directory.isEmpty() ? juce::String("found outside this installation")
-                                                              : m.directory)
-                                      : l.note);
+            lab->setTooltip(l.m_learned ? (m.m_directory.isEmpty() ? juce::String("found outside this installation")
+                                                              : m.m_directory)
+                                      : l.m_note);
             page->addControl(gn, std::move(lab), "", 6, true);
         }
     }
@@ -167,28 +167,28 @@ void PhospheneEditor::buildSetPage()
     const int gm = page->addGroup("Loudness", tint, 3);
     {
         auto meter = std::make_unique<LoudnessDisplay>();
-        loudness_ = meter.get();
+        m_loudness = meter.get();
         page->addControl(gm, std::move(meter), "", 3, true, 2);
     }
     const int gp = page->addGroup("Plan", tint, 5);
     {
         auto list = std::make_unique<TrackDisplay>();
-        list->onJump = [this](int bar) { proc_.seekToBar(bar); };
-        tracks_ = list.get();
+        list->m_onJump = [this](int bar) { m_proc.seekToBar(bar); };
+        m_tracks = list.get();
         page->addControl(gp, std::move(list), "", 7, true, 3);
     }
     // 20.09.2026, round "dialogue". Two things the rule asks for, in one place where they can be seen:
     // a visible way back to the shipped calibration, and -- when a state older than version 3 was
-    // loaded -- the offer that replaces silently applying it (PluginProcessor.h, kStateVersion).
+    // loaded -- the offer that replaces silently applying it (PluginProcessor.h, StateVersion).
     const int gd = page->addGroup("Factory defaults", tint, 4);
     {
         auto reset = std::make_unique<juce::TextButton>("Reset to factory defaults");
         reset->setTooltip("Puts every knob back to the value this build ships with. The set itself -- seed, "
                           "locks and rerolls -- is left alone.");
         reset->onClick = [this] {
-            proc_.undoable("Reset to factory defaults", [this] { proc_.resetToFactoryDefaults(); });
-            if (legacyNote_ != nullptr) legacyNote_->setText(juce::String(), juce::dontSendNotification);
-            if (legacyButton_ != nullptr) legacyButton_->setVisible(false);
+            m_proc.undoable("Reset to factory defaults", [this] { m_proc.resetToFactoryDefaults(); });
+            if (m_legacyNote != nullptr) m_legacyNote->setText(juce::String(), juce::dontSendNotification);
+            if (m_legacyButton != nullptr) m_legacyButton->setVisible(false);
         };
         page->addControl(gd, std::move(reset), "", 2, true);
 
@@ -196,48 +196,48 @@ void PhospheneEditor::buildSetPage()
         adopt->setTooltip("Applies the knob values of the older session that was loaded. They were saved "
                           "before this build's calibration and will replace it.");
         adopt->onClick = [this] {
-            proc_.undoable("Load the saved knobs", [this] { proc_.adoptLegacyState(); });
-            if (legacyNote_ != nullptr) legacyNote_->setText("The older session's knobs are in.", juce::dontSendNotification);
-            if (legacyButton_ != nullptr) legacyButton_->setVisible(false);
+            m_proc.undoable("Load the saved knobs", [this] { m_proc.adoptLegacyState(); });
+            if (m_legacyNote != nullptr) m_legacyNote->setText("The older session's knobs are in.", juce::dontSendNotification);
+            if (m_legacyButton != nullptr) m_legacyButton->setVisible(false);
         };
-        legacyButton_ = adopt.get();
-        legacyButton_->setVisible(false);
+        m_legacyButton = adopt.get();
+        m_legacyButton->setVisible(false);
         page->addControl(gd, std::move(adopt), "", 2, true);
 
         auto note = std::make_unique<juce::Label>();
         note->setJustificationType(juce::Justification::centredLeft);
         note->setMinimumHorizontalScale(1.0f);
-        legacyNote_ = note.get();
+        m_legacyNote = note.get();
         page->addControl(gd, std::move(note), "", 4, true);
     }
-    pages_[0] = std::move(page);
+    m_pages[0] = std::move(page);
 }
 
 void PhospheneEditor::refreshSetPage()
 {
-    if (loudness_ == nullptr) return;
-    const ParamStore& p = proc_.params();
-    loudness_->update(proc_.engine().meter(), proc_.engine().compReduction(), proc_.engine().limiterReduction(),
-                      p.get(p.base(Module::Master) + master::TargetLufs));
+    if (m_loudness == nullptr) return;
+    const ParamStore& p = m_proc.params();
+    m_loudness->update(m_proc.engine().meter(), m_proc.engine().compReduction(), m_proc.engine().limiterReduction(),
+                      p.get(p.base(ModuleE::MASTER) + master::TARGET_LUFS));
 
-    const TransportView t = proc_.transport();
-    if (followButton_ != nullptr) followButton_->setToggleState(proc_.followsHost(), juce::dontSendNotification);
-    if (statusLabel_ != nullptr) {
+    const TransportView t = m_proc.transport();
+    if (m_followButton != nullptr) m_followButton->setToggleState(m_proc.followsHost(), juce::dontSendNotification);
+    if (m_statusLabel != nullptr) {
         juce::String s;
-        if (t.restarting) s << "planning the next bars...   ";
-        s << (t.hostSync ? "host transport" : "own clock") << "   bar " << juce::String(t.bar + 1)
-          << "   beat " << juce::String(t.musicalBeat, 2) << "   " << juce::String(t.bpm, 1) << " BPM";
-        if (proc_.isRecording()) s << "   recording " << juce::String(proc_.recordedSeconds(), 1) << " s";
-        statusLabel_->setText(s, juce::dontSendNotification);
+        if (t.m_restarting) s << "planning the next bars...   ";
+        s << (t.m_hostSync ? "host transport" : "own clock") << "   bar " << juce::String(t.m_bar + 1)
+          << "   beat " << juce::String(t.m_musicalBeat, 2) << "   " << juce::String(t.m_bpm, 1) << " BPM";
+        if (m_proc.isRecording()) s << "   recording " << juce::String(m_proc.recordedSeconds(), 1) << " s";
+        m_statusLabel->setText(s, juce::dontSendNotification);
     }
     // The older-state offer (20.09.2026). It appears only while a state of version 1 or 2 is held back,
     // and it names the version, so the user can see why their session came up on the defaults.
-    if (legacyButton_ != nullptr && legacyNote_ != nullptr) {
-        const bool held = proc_.pendingLegacyState().isNotEmpty();
-        if (held != legacyButton_->isVisible()) {
-            legacyButton_->setVisible(held);
-            legacyNote_->setText(held ? "This session was saved by an older build (state version "
-                                            + juce::String(proc_.lastStateVersion())
+    if (m_legacyButton != nullptr && m_legacyNote != nullptr) {
+        const bool held = m_proc.pendingLegacyState().isNotEmpty();
+        if (held != m_legacyButton->isVisible()) {
+            m_legacyButton->setVisible(held);
+            m_legacyNote->setText(held ? "This session was saved by an older build (state version "
+                                            + juce::String(m_proc.lastStateVersion())
                                             + "). Such a state stores every knob of its own session, including the ones "
                                               "later calibration changed, so it was not applied: you are hearing this "
                                               "build's defaults."
@@ -248,27 +248,27 @@ void PhospheneEditor::refreshSetPage()
 
     // The plan as the composer has published it. Reading it is a copy under a short lock and never
     // waits for a probe render; the list grows as the composer's spare time plans the next track.
-    if (tracks_ == nullptr) return;
-    trackRows_.clear();
+    if (m_tracks == nullptr) return;
+    m_trackRows.clear();
     for (int i = 0; i < 24; ++i) {
         TrackPlan plan;
-        if (!proc_.tryReadTrack(i, plan)) break;
+        if (!m_proc.tryReadTrack(i, plan)) break;
         TrackDisplay::Row row;
-        row.index = plan.index;
-        row.bar = plan.firstBar;
-        row.bars = plan.bars;
-        row.bpm = plan.bpm;
-        row.text = juce::String(plan.index + 1) + "   bar " + juce::String(plan.firstBar + 1)
-                 + "   " + juce::String(plan.bars) + " bars   " + juce::String(plan.bpm, 1) + " BPM   "
-                 + kKeyNames[plan.key] + " " + kScaleNames[plan.scale]
-                 + "   bass " + kBassPatternNames[plan.primaryPattern]
-                 + "   " + juce::String(plan.perc.layers) + " perc"
+        row.m_index = plan.m_index;
+        row.m_bar = plan.m_firstBar;
+        row.m_bars = plan.m_bars;
+        row.m_bpm = plan.m_bpm;
+        row.m_text = juce::String(plan.m_index + 1) + "   bar " + juce::String(plan.m_firstBar + 1)
+                 + "   " + juce::String(plan.m_bars) + " bars   " + juce::String(plan.m_bpm, 1) + " BPM   "
+                 + KeyNames[plan.m_key] + " " + ScaleNames[plan.m_scale]
+                 + "   bass " + BassPatternNames[plan.m_primaryPattern]
+                 + "   " + juce::String(plan.m_perc.m_layers) + " perc"
                  + melodicParts(plan)
-                 + "   " + juce::String(plan.gainDb, 1) + " dB";
-        trackRows_.push_back(row);
+                 + "   " + juce::String(plan.m_gainDb, 1) + " dB";
+        m_trackRows.push_back(row);
     }
-    if (trackRows_.size() != rowsSeed_) { rowsSeed_ = trackRows_.size(); tracks_->setRows(trackRows_); }
-    tracks_->setPosition(proc_.transport().bar);
+    if (m_trackRows.size() != m_rowsSeed) { m_rowsSeed = m_trackRows.size(); m_tracks->setRows(m_trackRows); }
+    m_tracks->setPosition(m_proc.transport().m_bar);
 }
 
 // ==================================================================== the Export tab (01.10.2026)
@@ -278,24 +278,24 @@ void PhospheneEditor::buildExportPage()
     // What leaves the instrument, in one place as every generator has it: the recording of the output, the score as
     // MIDI, the set as a file (and back), the score cues over OSC.
     auto page = std::make_unique<ControlPage>();
-    const juce::Colour tint = partColour(TabExport);
+    const juce::Colour tint = partColour(TAB_EXPORT);
     const int gr = page->addGroup("Record", tint, 6);
     {
-        auto rec = std::make_unique<frame::IconButton>(frame::IconButton::Icon::Record, "Records the output into a WAV file until you press again");
+        auto rec = std::make_unique<frame::IconButton>(frame::IconButton::IconE::RECORD, "Records the output into a WAV file until you press again");
         rec->setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xffb03030));
         rec->onClick = [this] {
-            if (proc_.isRecording()) { proc_.stopRecording(); return; }
-            chooser_ = std::make_unique<juce::FileChooser>("Record the output", juce::File(), "*.wav");
-            chooser_->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
+            if (m_proc.isRecording()) { m_proc.stopRecording(); return; }
+            m_chooser = std::make_unique<juce::FileChooser>("Record the output", juce::File(), "*.wav");
+            m_chooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
                                   [this](const juce::FileChooser& fc) {
                                       const juce::File f = fc.getResult();
-                                      if (f != juce::File()) proc_.startRecording(f.withFileExtension("wav"));
+                                      if (f != juce::File()) m_proc.startRecording(f.withFileExtension("wav"));
                                   });
         };
-        recordButton_ = rec.get();
+        m_recordButton = rec.get();
         page->addControl(gr, std::move(rec), "", 1, true);
         auto note = std::make_unique<juce::Label>(juce::String(), "the output as it plays, 32-bit float");
-        note->setColour(juce::Label::textColourId, dim);
+        note->setColour(juce::Label::textColourId, Dim);
         page->addControl(gr, std::move(note), "", 3, true);
     }
     const int ge = page->addGroup("Score and Set", tint, 8);
@@ -303,59 +303,59 @@ void PhospheneEditor::buildExportPage()
         auto bars = std::make_unique<juce::Slider>(juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox);
         bars->setRange(4.0, 1024.0, 4.0);
         bars->setValue(64.0, juce::dontSendNotification);
-        exportBars_ = bars.get();
+        m_exportBars = bars.get();
         page->addControl(ge, std::move(bars), "Bars", 1);
 
         auto midi = std::make_unique<juce::TextButton>("Export MIDI...");
         midi->setTooltip("Writes the score of that many bars from the start as a MIDI file, a channel per part (Ctrl+E)");
         midi->onClick = [this] {
-            chooser_ = std::make_unique<juce::FileChooser>("Write the score", juce::File(), "*.mid");
-            chooser_->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
+            m_chooser = std::make_unique<juce::FileChooser>("Write the score", juce::File(), "*.mid");
+            m_chooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
                                   [this](const juce::FileChooser& fc) {
                                       const juce::File f = fc.getResult();
-                                      if (f != juce::File()) proc_.exportMidi(f.withFileExtension("mid"), static_cast<int>(exportBars_->getValue()));
+                                      if (f != juce::File()) m_proc.exportMidi(f.withFileExtension("mid"), static_cast<int>(m_exportBars->getValue()));
                                   });
         };
-        exportMidi_ = midi.get();
+        m_exportMidi = midi.get();
         page->addControl(ge, std::move(midi), "", 3, true);
 
-        auto set = std::make_unique<frame::IconButton>(frame::IconButton::Icon::Save, "Writes the set -- seed, locks, rerolls and every changed knob -- as a .phosset (Ctrl+S)");
+        auto set = std::make_unique<frame::IconButton>(frame::IconButton::IconE::SAVE, "Writes the set -- seed, locks, rerolls and every changed knob -- as a .phosset (Ctrl+S)");
         set->onClick = [this] {
-            chooser_ = std::make_unique<juce::FileChooser>("Write the set", juce::File(), "*.phosset");
-            chooser_->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
+            m_chooser = std::make_unique<juce::FileChooser>("Write the set", juce::File(), "*.phosset");
+            m_chooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
                                   [this](const juce::FileChooser& fc) {
                                       const juce::File f = fc.getResult();
-                                      if (f != juce::File()) proc_.exportSet(f.withFileExtension("phosset"));
+                                      if (f != juce::File()) m_proc.exportSet(f.withFileExtension("phosset"));
                                   });
         };
-        exportSet_ = set.get();
+        m_exportSet = set.get();
         page->addControl(ge, std::move(set), "", 1, true);
 
-        auto load = std::make_unique<frame::IconButton>(frame::IconButton::Icon::Open, "Reads a .phosset and plays it (Ctrl+O)");
+        auto load = std::make_unique<frame::IconButton>(frame::IconButton::IconE::OPEN, "Reads a .phosset and plays it (Ctrl+O)");
         load->onClick = [this] {
-            chooser_ = std::make_unique<juce::FileChooser>("Read a set", juce::File(), "*.phosset");
-            chooser_->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+            m_chooser = std::make_unique<juce::FileChooser>("Read a set", juce::File(), "*.phosset");
+            m_chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                                   [this](const juce::FileChooser& fc) {
                                       const juce::File f = fc.getResult();
                                       bool ok = false;
-                                      if (f != juce::File()) proc_.undoable("Load set", [this, f, &ok] { ok = proc_.importSet(f); });
+                                      if (f != juce::File()) m_proc.undoable("Load set", [this, f, &ok] { ok = m_proc.importSet(f); });
                                       if (!ok) return;
-                                      if (seedEditor_ != nullptr) seedEditor_->setText(juce::String(proc_.seed()), false);
-                                      trackRows_.clear();
-                                      rowsSeed_ = 0;
+                                      if (m_seedEditor != nullptr) m_seedEditor->setText(juce::String(m_proc.seed()), false);
+                                      m_trackRows.clear();
+                                      m_rowsSeed = 0;
                                   });
         };
-        loadSet_ = load.get();
+        m_loadSet = load.get();
         page->addControl(ge, std::move(load), "", 1, true);
     }
-    page->addModuleGroup(proc_, Module::Cue, 0, "Score Cues (OSC)", tint, 4);   // 23.09.2026, on the Mixer tab until 01.10.2026
-    pages_[static_cast<size_t>(TabExport)] = std::move(page);
+    page->addModuleGroup(m_proc, ModuleE::CUE, 0, "Score Cues (OSC)", tint, 4);   // 23.09.2026, on the Mixer tab until 01.10.2026
+    m_pages[static_cast<size_t>(TAB_EXPORT)] = std::move(page);
 }
 
 void PhospheneEditor::refreshExportPage()
 {
-    if (recordButton_ != nullptr) {
-        recordButton_->setToggleState(proc_.isRecording(), juce::dontSendNotification);
-        recordButton_->show(frame::IconButton::Icon::Record, proc_.isRecording() ? "Stop recording" : "Records the output into a WAV file until you press again");
+    if (m_recordButton != nullptr) {
+        m_recordButton->setToggleState(m_proc.isRecording(), juce::dontSendNotification);
+        m_recordButton->show(frame::IconButton::IconE::RECORD, m_proc.isRecording() ? "Stop recording" : "Records the output into a WAV file until you press again");
     }
 }

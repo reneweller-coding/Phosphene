@@ -16,17 +16,17 @@ namespace phos {
 class Fft {
 public:
     /** @brief Prepares for @p n samples (a power of two). */
-    explicit Fft(int n) : n_(n)
+    explicit Fft(int n) : m_n(n)
     {
-        cosT_.resize(static_cast<size_t>(n / 2));
-        sinT_.resize(static_cast<size_t>(n / 2));
+        m_cosT.resize(static_cast<size_t>(n / 2));
+        m_sinT.resize(static_cast<size_t>(n / 2));
         for (int i = 0; i < n / 2; ++i) {
-            cosT_[static_cast<size_t>(i)] = std::cos(2.0 * 3.141592653589793 * i / n);
-            sinT_[static_cast<size_t>(i)] = std::sin(2.0 * 3.141592653589793 * i / n);
+            m_cosT[static_cast<size_t>(i)] = std::cos(2.0 * 3.141592653589793 * i / n);
+            m_sinT[static_cast<size_t>(i)] = std::sin(2.0 * 3.141592653589793 * i / n);
         }
     }
     /** @brief The size. */
-    int size() const { return n_; }
+    int size() const { return m_n; }
     /**
      * @brief Transforms in place.
      * @param a       n complex values
@@ -34,7 +34,7 @@ public:
      */
     void transform(std::vector<std::complex<double>>& a, bool inverse) const
     {
-        const int n = n_;
+        const int n = m_n;
         for (int i = 1, j = 0; i < n; ++i) {
             int bit = n >> 1;
             for (; j & bit; bit >>= 1) j ^= bit;
@@ -45,7 +45,7 @@ public:
             const int step = n / len;
             for (int i = 0; i < n; i += len) {
                 for (int k = 0; k < len / 2; ++k) {
-                    const std::complex<double> w(cosT_[static_cast<size_t>(k * step)], inverse ? sinT_[static_cast<size_t>(k * step)] : -sinT_[static_cast<size_t>(k * step)]);
+                    const std::complex<double> w(m_cosT[static_cast<size_t>(k * step)], inverse ? m_sinT[static_cast<size_t>(k * step)] : -m_sinT[static_cast<size_t>(k * step)]);
                     const std::complex<double> u = a[static_cast<size_t>(i + k)], v = a[static_cast<size_t>(i + k + len / 2)] * w;
                     a[static_cast<size_t>(i + k)] = u + v;
                     a[static_cast<size_t>(i + k + len / 2)] = u - v;
@@ -56,9 +56,9 @@ public:
     }
 
 private:
-    int n_;   ///< size
-    std::vector<double> cosT_;   ///< the twiddle factors: cosines
-    std::vector<double> sinT_;   ///< ... sines
+    int m_n;   ///< size
+    std::vector<double> m_cosT;   ///< the twiddle factors: cosines
+    std::vector<double> m_sinT;   ///< ... sines
 };
 
 } // namespace phos

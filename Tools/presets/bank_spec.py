@@ -18,10 +18,10 @@ This file is the source; `python Tools/presets/gen_bank.py` writes Core/src/Pres
 """
 
 # ---------------------------------------------------------------- vocabulary of the matrix (Params.cpp)
-LFO, MENV, FENV, VEL, KEY, RND = -1, 5, 6, 7, 8, 9                          # sources (kModSourceNames)
-P, O2, PW, TP, FMI, CUT, RES, FMODE, LVL, PAN = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10  # poly targets (kModDestNames)
-B_PW, B_CUT, B_RES, B_FMODE, B_LVL = 1, 2, 3, 4, 5                          # bass targets (kBassModDestNames)
-A_P, A_CUT, A_RES, A_LVL, A_PAN = 1, 2, 3, 4, 5                             # acid targets (kAcidModDestNames)
+LFO, MENV, FENV, VEL, KEY, RND = -1, 5, 6, 7, 8, 9                          # sources (ModSourceNames)
+P, O2, PW, TP, FMI, CUT, RES, FMODE, LVL, PAN = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10  # poly targets (ModDestNames)
+B_PW, B_CUT, B_RES, B_FMODE, B_LVL = 1, 2, 3, 4, 5                          # bass targets (BassModDestNames)
+A_P, A_CUT, A_RES, A_LVL, A_PAN = 1, 2, 3, 4, 5                             # acid targets (AcidModDestNames)
 SINE, TRI, SAWUP, SAWDN, SQUARE, SH, SMOOTH = range(7)                      # LFO shapes
 FREE, BARS4, BARS2, BAR1, HALF, QUARTER, EIGHTH, SIXTEENTH, QT, ET = range(10)  # LFO syncs
 OWN, MOOG, PROPHET, JUNO, SEM, XPANDER, DIODE, KORG, POLIVOKS, WASP = range(10)  # filter models

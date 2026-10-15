@@ -15,12 +15,12 @@
  * Virus, Microwave and Serum pad idiom the plan asks for: Classic (sine to pulse), Vocal (a saw through
  * the formants of five vowels, a to u), Glass (sparse, brightening partials), PWM (pulse width 50 % to
  * 5 %), Sync (a hard-synced saw, slave ratio 1 to 8) and Formant Saw (a saw with a resonant peak moving
- * up the harmonics). They cost no file, they are always there, and `kClassicSawFrame` of table 0 is
+ * up the harmonics). They cost no file, they are always there, and `ClassicSawFrame` of table 0 is
  * what the supersaw reads (Poly.h), so they stay whatever else is added beside them.
  *
  * **The library beside them.** Since 16.09.2026 a shipped file (`Core/data/library.phoswt`,
  * WaveTableFile.h) adds tables chosen by measurement from Noctuary's own 2191-table library. They are
- * addressed by the same `table` parameter, at indices from `kNumBuiltinWaveTables` up, and they end in
+ * addressed by the same `table` parameter, at indices from `NumBuiltinWaveTables` up, and they end in
  * the same `buildFromHarmonics()` -- nothing downstream can tell a loaded table from a built-in one.
  * "No samples" was always about sample *playback*; a wavetable is a spectrum, and this one is the
  * user's own (PLAN 5.7 says as much: the generated tables of Noctuary's `Tools/WavetableLib` "kommen
@@ -38,32 +38,32 @@
 
 namespace phos {
 
-constexpr int kNumBuiltinWaveTables = 6;   ///< tables written as spectra in code (names in Params.cpp)
-constexpr int kClassicTable  = 0;   ///< built-in table 0: sine, triangle, saw, square, narrow pulse
-constexpr int kClassicSawFrame = 2; ///< the sawtooth frame of the Classic table (the supersaw reads it)
+constexpr int NumBuiltinWaveTables = 6;   ///< tables written as spectra in code (names in Params.cpp)
+constexpr int ClassicTable  = 0;   ///< built-in table 0: sine, triangle, saw, square, narrow pulse
+constexpr int ClassicSawFrame = 2; ///< the sawtooth frame of the Classic table (the supersaw reads it)
 
 /** @brief One table: frames at ten levels. */
 struct WaveTable {
-    static constexpr int kStoreLen  = 4096;   ///< samples per stored cycle at the finest level
-    static constexpr int kMaxFrames = 64;     ///< frames per table
-    static constexpr int kLevels    = 10;     ///< 4096 .. 32 samples, 512 .. 1 harmonics
-    static constexpr int kGuard     = 3;      ///< one sample before each cycle, two after it
-    static constexpr float kTargetRms = 0.35355339f;   ///< RMS of the loudest frame
+    static constexpr int StoreLen  = 4096;   ///< samples per stored cycle at the finest level
+    static constexpr int MaxFrames = 64;     ///< frames per table
+    static constexpr int Levels    = 10;     ///< 4096 .. 32 samples, 512 .. 1 harmonics
+    static constexpr int Guard     = 3;      ///< one sample before each cycle, two after it
+    static constexpr float TargetRms = 0.35355339f;   ///< RMS of the loudest frame
 
-    int frames = 0;                   ///< frames in the table
-    int offset[kLevels] = {};         ///< start of each level in data
-    std::vector<float> data;          ///< all levels, all frames
+    int m_frames = 0;                   ///< frames in the table
+    int m_offset[Levels] = {};         ///< start of each level in data
+    std::vector<float> m_data;          ///< all levels, all frames
 
     /** @brief Samples per cycle at a level. */
-    static int levelLength(int level)    { const int n = kStoreLen >> level; return n < 32 ? 32 : n; }
+    static int levelLength(int level)    { const int n = StoreLen >> level; return n < 32 ? 32 : n; }
     /** @brief Harmonics kept at a level. */
-    static int levelHarmonics(int level) { const int h = (kStoreLen / 8) >> level; return h < 1 ? 1 : h; }
+    static int levelHarmonics(int level) { const int h = (StoreLen / 8) >> level; return h < 1 ? 1 : h; }
 
     /** @brief The stored cycle of frame @p f at a level; readable from index -1 to levelLength + 1. */
     const float* cycle(int level, int f) const
     {
-        return data.data() + static_cast<size_t>(offset[level])
-             + static_cast<size_t>(f) * static_cast<size_t>(levelLength(level) + kGuard) + 1;
+        return m_data.data() + static_cast<size_t>(m_offset[level])
+             + static_cast<size_t>(f) * static_cast<size_t>(levelLength(level) + Guard) + 1;
     }
     /** @brief One sample of frame @p f at a level and a phase in [0, 1): Catmull-Rom through four samples. */
     float sample(int level, int f, double phase) const
@@ -89,12 +89,12 @@ struct WaveTable {
      */
     float sampleAt(int level, float position, double phase) const
     {
-        const float p = (position < 0.0f ? 0.0f : (position > 1.0f ? 1.0f : position)) * static_cast<float>(frames - 1);
+        const float p = (position < 0.0f ? 0.0f : (position > 1.0f ? 1.0f : position)) * static_cast<float>(m_frames - 1);
         int f = static_cast<int>(p);
-        if (f >= frames - 1) f = frames - 2 < 0 ? 0 : frames - 2;
-        const float t = frames > 1 ? p - static_cast<float>(f) : 0.0f;
+        if (f >= m_frames - 1) f = m_frames - 2 < 0 ? 0 : m_frames - 2;
+        const float t = m_frames > 1 ? p - static_cast<float>(f) : 0.0f;
         const float a = sample(level, f, phase);
-        return frames > 1 ? a + t * (sample(level, f + 1, phase) - a) : a;
+        return m_frames > 1 ? a + t * (sample(level, f + 1, phase) - a) : a;
     }
     /**
      * @brief Builds from Fourier coefficients, one vector per frame: element h-1 is harmonic h as the
@@ -106,11 +106,11 @@ struct WaveTable {
 /**
  * @brief Gain that lifts a stored frame to the loudness of the ramp 2t - 1.
  *
- * buildFromHarmonics() normalises every frame to @c kTargetRms = 1/(2 sqrt 2); the ramp has RMS
+ * buildFromHarmonics() normalises every frame to @c TargetRms = 1/(2 sqrt 2); the ramp has RMS
  * 1/sqrt 3. The supersaw reads the saw frame instead of generating a PolyBLEP ramp and multiplies by
  * this, so the change of oscillator does not change the level of the lead: 2 sqrt(2/3).
  */
-inline constexpr float kSawTableGain = 1.63299316f;
+inline constexpr float SawTableGain = 1.63299316f;
 
 /**
  * @brief The level a cycle at @p hz reads: the richest whose highest harmonic lies below Nyquist.
@@ -120,7 +120,7 @@ inline constexpr float kSawTableGain = 1.63299316f;
  */
 int waveLevelFor(double hz, double sampleRate, int current);
 
-/** @brief A built-in table (0 .. kNumBuiltinWaveTables-1), built on first use -- in prepare(), never on the audio thread. */
+/** @brief A built-in table (0 .. NumBuiltinWaveTables-1), built on first use -- in prepare(), never on the audio thread. */
 const WaveTable& builtinWaveTable(int index);
 
 } // namespace phos

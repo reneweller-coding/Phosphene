@@ -17,9 +17,9 @@ namespace phos {
 class Ducker {
 public:
     /** @brief Sets the sample rate. */
-    void prepare(double sr) { sr_ = sr; reset(); }
+    void prepare(double sr) { m_sr = sr; reset(); }
     /** @brief Back to unity, idle. */
-    void reset() { amount_ = 0.0f; stage_ = Stage::Idle; }
+    void reset() { m_amount = 0.0f; m_stage = StageE::IDLE; }
     /**
      * @brief Shape of the duck.
      * @param depth     0..1, how far the gain falls (1 = silence)
@@ -29,10 +29,10 @@ public:
      */
     void set(float depth, float attackMs, float holdMs, float releaseMs)
     {
-        depth_ = clampv(depth, 0.0f, 1.0f);
-        attack_ = std::max(1, static_cast<int>(attackMs * 0.001 * sr_));
-        hold_ = std::max(0, static_cast<int>(holdMs * 0.001 * sr_));
-        release_ = std::max(1, static_cast<int>(releaseMs * 0.001 * sr_));
+        m_depth = clampv(depth, 0.0f, 1.0f);
+        m_attack = std::max(1, static_cast<int>(attackMs * 0.001 * m_sr));
+        m_hold = std::max(0, static_cast<int>(holdMs * 0.001 * m_sr));
+        m_release = std::max(1, static_cast<int>(releaseMs * 0.001 * m_sr));
     }
     /**
      * @brief Starts a duck.
@@ -40,39 +40,39 @@ public:
      *             evaluated that much further along, so it keeps the same shape relative to the kick
      *             whatever the kick's position between samples
      */
-    void trigger(double late = 0.0) { stage_ = Stage::Attack; pos_ = 0; from_ = amount_; late_ = static_cast<float>(late); }
+    void trigger(double late = 0.0) { m_stage = StageE::ATTACK; m_pos = 0; m_from = m_amount; m_late = static_cast<float>(late); }
     /** @brief Next gain factor. */
     inline float next()
     {
-        switch (stage_) {
-        case Stage::Attack:
-            amount_ = from_ + (1.0f - from_) * std::min(1.0f, (static_cast<float>(pos_ + 1) + late_) / static_cast<float>(attack_));
-            if (++pos_ >= attack_) { stage_ = Stage::Hold; pos_ = 0; amount_ = 1.0f; }
+        switch (m_stage) {
+        case StageE::ATTACK:
+            m_amount = m_from + (1.0f - m_from) * std::min(1.0f, (static_cast<float>(m_pos + 1) + m_late) / static_cast<float>(m_attack));
+            if (++m_pos >= m_attack) { m_stage = StageE::HOLD; m_pos = 0; m_amount = 1.0f; }
             break;
-        case Stage::Hold:
-            if (++pos_ >= hold_) { stage_ = Stage::Release; pos_ = 0; }
+        case StageE::HOLD:
+            if (++m_pos >= m_hold) { m_stage = StageE::RELEASE; m_pos = 0; }
             break;
-        case Stage::Release:
-            amount_ = 0.5f + 0.5f * std::cos(kPi * std::min(1.0f, (static_cast<float>(pos_ + 1) + late_) / static_cast<float>(release_)));
-            if (++pos_ >= release_) { stage_ = Stage::Idle; amount_ = 0.0f; }
+        case StageE::RELEASE:
+            m_amount = 0.5f + 0.5f * std::cos(Pi * std::min(1.0f, (static_cast<float>(m_pos + 1) + m_late) / static_cast<float>(m_release)));
+            if (++m_pos >= m_release) { m_stage = StageE::IDLE; m_amount = 0.0f; }
             break;
         default: break;
         }
-        return 1.0f - depth_ * amount_;
+        return 1.0f - m_depth * m_amount;
     }
 private:
     /** @brief The curve's stages. */
-    enum class Stage { Idle, Attack, Hold, Release };
-    double sr_ = 48000.0;   ///< sample rate
-    float depth_ = 0.5f;   ///< the depth, 0..1
-    float amount_ = 0.0f;   ///< the current amount (0..1, scaled by the depth)
-    float from_ = 0.0f;   ///< where the attack started
-    float late_ = 0.0f;   ///< the trigger's sub-sample offset
-    int attack_ = 48;   ///< the attack's length, samples
-    int hold_ = 0;   ///< the hold's length, samples
-    int release_ = 2880;   ///< the release's length, samples
-    int pos_ = 0;   ///< samples into the stage
-    Stage stage_ = Stage::Idle;   ///< where it is
+    enum class StageE { IDLE, ATTACK, HOLD, RELEASE };
+    double m_sr = 48000.0;   ///< sample rate
+    float m_depth = 0.5f;   ///< the depth, 0..1
+    float m_amount = 0.0f;   ///< the current amount (0..1, scaled by the depth)
+    float m_from = 0.0f;   ///< where the attack started
+    float m_late = 0.0f;   ///< the trigger's sub-sample offset
+    int m_attack = 48;   ///< the attack's length, samples
+    int m_hold = 0;   ///< the hold's length, samples
+    int m_release = 2880;   ///< the release's length, samples
+    int m_pos = 0;   ///< samples into the stage
+    StageE m_stage = StageE::IDLE;   ///< where it is
 };
 
 } // namespace phos

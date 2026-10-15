@@ -67,26 +67,26 @@ public:
     juce::Optional<PositionInfo> getPosition() const override
     {
         PositionInfo info;
-        info.setBpm(bpm);
-        info.setPpqPosition(ppq);
-        info.setTimeInSamples(static_cast<juce::int64>(samples));
-        info.setTimeInSeconds(static_cast<double>(samples) / sampleRate);
-        info.setIsPlaying(playing);
+        info.setBpm(m_bpm);
+        info.setPpqPosition(m_ppq);
+        info.setTimeInSamples(static_cast<juce::int64>(m_samples));
+        info.setTimeInSeconds(static_cast<double>(m_samples) / m_sampleRate);
+        info.setIsPlaying(m_playing);
         info.setIsRecording(false);
         return info;
     }
     /** @brief Advances the transport by a block. */
     void advance(int n)
     {
-        if (!playing) return;
-        samples += n;
-        ppq += n * bpm / (60.0 * sampleRate);
+        if (!m_playing) return;
+        m_samples += n;
+        m_ppq += n * m_bpm / (60.0 * m_sampleRate);
     }
-    double bpm = 145.0;   ///< the tempo
-    double ppq = 0.0;   ///< the position, quarter notes
-    double sampleRate = 48000.0;   ///< the sample rate, Hz
-    double samples = 0.0;   ///< the position, samples
-    bool playing = true;   ///< the transport runs
+    double m_bpm = 145.0;   ///< the tempo
+    double m_ppq = 0.0;   ///< the position, quarter notes
+    double m_sampleRate = 48000.0;   ///< the sample rate, Hz
+    double m_samples = 0.0;   ///< the position, samples
+    bool m_playing = true;   ///< the transport runs
 };
 
 /** @brief Runs @p blocks blocks through the processor, collecting the MIDI it produces. */
@@ -122,7 +122,7 @@ std::vector<float> referenceRender(uint64_t seed, double sr, int block, int samp
     int done = 0;
     while (done < samples) {
         const int n = std::min(block, samples - done);
-        conductor.pump(engine->params(), 8.0 * kBeatsPerBar, nullptr);
+        conductor.pump(engine->params(), 8.0 * BeatsPerBar, nullptr);
         engine->process(L.data(), R.data(), n);
         for (int i = 0; i < n; ++i) { out.push_back(L[static_cast<size_t>(i)]); out.push_back(R[static_cast<size_t>(i)]); }
         done += n;
@@ -232,7 +232,7 @@ int probeModels()
     const PhospheneProcessor::LearnedModels m = p->learnedModels();
     // Eight bars: a track opens with a sparse intro and the kick enters between bars five and nine,
     // so anything shorter would measure the atmosphere and not the set.
-    const int samples = static_cast<int>(8.0 * kBeatsPerBar * 60.0 / 145.0 * 48000.0);
+    const int samples = static_cast<int>(8.0 * BeatsPerBar * 60.0 / 145.0 * 48000.0);
     const double rms = renderRms(*p, 256, samples);
     int marks = 0;
     std::unique_ptr<juce::AudioProcessorEditor> editor(p->createEditor());
@@ -242,8 +242,8 @@ int probeModels()
     }
     editor.reset();
     std::printf("probe melody=%d bass=%d source=%d marks=%d rms=%.5f dir=%s\n",
-                m.melody ? 1 : 0, m.bass ? 1 : 0, m.fromSourceTree ? 1 : 0, marks, rms,
-                m.directory.isEmpty() ? "(none)" : m.directory.toRawUTF8());
+                m.m_melody ? 1 : 0, m.m_bass ? 1 : 0, m.m_fromSourceTree ? 1 : 0, marks, rms,
+                m.m_directory.isEmpty() ? "(none)" : m.m_directory.toRawUTF8());
     return 0;
 }
 
@@ -260,44 +260,44 @@ void clickAt(juce::Component& c, int x, int y)
 /**
  * @brief A sixty-minute set as the editor copies it out of the published plans.
  *
- * Every track starts kDjOverlap bars before the previous one ends, as the composer plans them since the
+ * Every track starts DjOverlap bars before the previous one ends, as the composer plans them since the
  * arrangement round (19.09.2026); until then this set was back to back and the view was never shown two
  * tracks sharing bars.
  */
 ArrangeDisplay::Snapshot bigSet()
 {
-    static const SectionType kinds[] = { SectionType::Intro, SectionType::Groove, SectionType::Build,
-                                         SectionType::Pdb,   SectionType::Drop,   SectionType::Cut,
-                                         SectionType::Break, SectionType::Build,  SectionType::Drop,
-                                         SectionType::Outro };
+    static const SectionTypeE kinds[] = { SectionTypeE::INTRO, SectionTypeE::GROOVE, SectionTypeE::BUILD,
+                                         SectionTypeE::PDB,   SectionTypeE::DROP,   SectionTypeE::CUT,
+                                         SectionTypeE::BREAK, SectionTypeE::BUILD,  SectionTypeE::DROP,
+                                         SectionTypeE::OUTRO };
     ArrangeDisplay::Snapshot s;
     int bar = 0;
     for (int t = 0; t < 9; ++t) {
         ArrangeDisplay::Trk trk;
-        trk.index = t;
-        trk.firstBar = bar;
-        trk.bars = 256;
-        trk.key = (t * 7) % 12;
-        trk.bpm = 139.5 + 0.5 * t;
+        trk.m_index = t;
+        trk.m_firstBar = bar;
+        trk.m_bars = 256;
+        trk.m_key = (t * 7) % 12;
+        trk.m_bpm = 139.5 + 0.5 * t;
         int in = 0;
         for (int i = 0; i < 11; ++i) {
             ArrangeDisplay::Sec sec;
-            sec.index = i;
-            sec.bar = bar + in;
-            sec.bars = i == 10 ? 256 - in : (i % 3 == 0 ? 16 : 32);
-            if (sec.bars <= 0) break;
-            sec.type = kinds[i % 10];
-            sec.energy = 0.3f + 0.06f * (i % 8);
-            sec.energyTo = sec.energy + 0.05f;
-            trk.sections.push_back(sec);
-            in += sec.bars;
+            sec.m_index = i;
+            sec.m_bar = bar + in;
+            sec.m_bars = i == 10 ? 256 - in : (i % 3 == 0 ? 16 : 32);
+            if (sec.m_bars <= 0) break;
+            sec.m_type = kinds[i % 10];
+            sec.m_energy = 0.3f + 0.06f * (i % 8);
+            sec.m_energyTo = sec.m_energy + 0.05f;
+            trk.m_sections.push_back(sec);
+            in += sec.m_bars;
             if (in >= 256) break;
         }
-        s.bars = bar + trk.bars;
-        bar += trk.bars - kDjOverlap;
-        s.tracks.push_back(std::move(trk));
+        s.m_bars = bar + trk.m_bars;
+        bar += trk.m_bars - DjOverlap;
+        s.m_tracks.push_back(std::move(trk));
     }
-    s.minutes = 60;
+    s.m_minutes = 60;
     return s;
 }
 
@@ -335,11 +335,11 @@ int liveDiagnosis()
         p->processBlock(buf, midi);
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    const int startBar = juce::jmax(0, first.bars - env("PHOS_LIVE_BEFORE_END", "12").getIntValue());
-    std::printf("live: track 1 has %d bars, starting at bar %d\n", first.bars, startBar + 1);
+    const int startBar = juce::jmax(0, first.m_bars - env("PHOS_LIVE_BEFORE_END", "12").getIntValue());
+    std::printf("live: track 1 has %d bars, starting at bar %d\n", first.m_bars, startBar + 1);
     p->play();
     p->seekToBar(startBar);
-    while (p->transport().restarting) {
+    while (p->transport().m_restarting) {
         buf.clear(); midi.clear();
         p->processBlock(buf, midi);
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -359,14 +359,14 @@ int liveDiagnosis()
         late += took > blockSeconds ? 1 : 0;
         if (buf.getMagnitude(0, block) < 1.0e-4f) {
             ++silent;
-            if (++silentRun > worstRun) { worstRun = silentRun; worstAt = p->transport().bar + 1; }
+            if (++silentRun > worstRun) { worstRun = silentRun; worstAt = p->transport().m_bar + 1; }
         } else {
             silentRun = 0;
         }
         if ((i + 1) % perSecond == 0) {
             const TransportView t = p->transport();
             std::printf("  %3d s  bar %4d (track %d, bar %3d)  slowest block %6.2f ms  late %3d  silent %3d of %d\n", (i + 1) / perSecond,
-                        t.bar + 1, t.track + 1, t.barInTrack + 1, 1000.0 * worstBlock, late, silent, perSecond);
+                        t.m_bar + 1, t.m_track + 1, t.m_barInTrack + 1, 1000.0 * worstBlock, late, silent, perSecond);
             worstBlock = 0.0; late = 0; silent = 0;
         }
         const auto due = started + std::chrono::microseconds(static_cast<long long>((i + 1) * block * 1.0e6 / sr));
@@ -441,13 +441,13 @@ int main(int argc, char** argv)
         p->setPlayConfigDetails(0, 2, 48000.0, 256);
         p->prepareToPlay(48000.0, 256);
         const PhospheneProcessor::WaveTableLibrary lib = p->waveTableLibrary();
-        check(juce::File(lib.directory) == beside.getParentDirectory(),
+        check(juce::File(lib.m_directory) == beside.getParentDirectory(),
               "the plugin looks for the pack beside its own binary, not in a source tree (found \""
-                  + lib.directory + "\")");
-        check(lib.shipped > 0 && lib.loaded == lib.shipped,
-              "and it holds every table this build ships (" + juce::String(lib.built) + " expanded so far, "
-                  + juce::String(lib.loaded) + " of "
-                  + juce::String(lib.shipped) + ")");
+                  + lib.m_directory + "\")");
+        check(lib.m_shipped > 0 && lib.m_loaded == lib.m_shipped,
+              "and it holds every table this build ships (" + juce::String(lib.m_built) + " expanded so far, "
+                  + juce::String(lib.m_loaded) + " of "
+                  + juce::String(lib.m_shipped) + ")");
     }
 
     // The other half: no pack at all. The library is process-global and is loaded once, so the
@@ -466,31 +466,31 @@ int main(int argc, char** argv)
         p->prepareToPlay(48000.0, 256);
         p->play();
         const PhospheneProcessor::WaveTableLibrary lib = p->waveTableLibrary();
-        check(lib.loaded == 0 && lib.shipped > 0,
-              "with no pack the plugin says so: " + juce::String(lib.loaded) + " of "
-                  + juce::String(lib.shipped) + " library tables");
+        check(lib.m_loaded == 0 && lib.m_shipped > 0,
+              "with no pack the plugin says so: " + juce::String(lib.m_loaded) + " of "
+                  + juce::String(lib.m_shipped) + " library tables");
         // Eight bars, because a track opens with a sparse intro (the kick enters between bars 5
         // and 9): four bars of atmosphere would prove nothing about the fallback.
-        const int samples = static_cast<int>(8.0 * kBeatsPerBar * 60.0 / 145.0 * 48000.0);
+        const int samples = static_cast<int>(8.0 * BeatsPerBar * 60.0 / 145.0 * 48000.0);
         const double rms = renderRms(*p, 256, samples);
         check(rms > 0.01, "and it still makes sound, on the built-in tables (RMS " + juce::String(rms, 4) + ")");
 
         std::unique_ptr<juce::AudioProcessorEditor> editor(p->createEditor());
         auto* phos = dynamic_cast<PhospheneEditor*>(editor.get());
-        if (phos != nullptr) phos->setTab(TabPad);
+        if (phos != nullptr) phos->setTab(TAB_PAD);
         juce::ComboBox* table = editor != nullptr ? findCombo(*editor, "pad.table") : nullptr;
-        check(table != nullptr && table->getNumItems() == phos::kNumWaveTables,
+        check(table != nullptr && table->getNumItems() == phos::NumWaveTables,
               "the table chooser offers every index the parameter has");
         if (table != nullptr) {
             int marked = 0, builtinMarked = 0;
             for (int i = 0; i < table->getNumItems(); ++i) {
                 const bool mark = table->getItemText(i).contains("missing");
-                if (i >= phos::kNumBuiltinWaveTables) marked += mark ? 1 : 0;
+                if (i >= phos::NumBuiltinWaveTables) marked += mark ? 1 : 0;
                 else builtinMarked += mark ? 1 : 0;
             }
-            check(marked == phos::kNumLibraryWaveTables && builtinMarked == 0,
+            check(marked == phos::NumLibraryWaveTables && builtinMarked == 0,
                   "and marks exactly the library entries that are not there ("
-                      + juce::String(marked) + " of " + juce::String(phos::kNumLibraryWaveTables) + " marked, "
+                      + juce::String(marked) + " of " + juce::String(phos::NumLibraryWaveTables) + " marked, "
                       + juce::String(builtinMarked) + " built-in tables wrongly marked)");
         }
         editor.reset();
@@ -518,21 +518,21 @@ int main(int argc, char** argv)
         p->setPlayConfigDetails(0, 2, 48000.0, 256);
         p->prepareToPlay(48000.0, 256);
         const PhospheneProcessor::LearnedModels m = p->learnedModels();
-        check(juce::File(m.directory) == beside,
-              "the plugin points the core at its own directory, not at a source tree (found \"" + m.directory + "\")");
-        check(m.melody && m.bass && !m.fromSourceTree,
-              "and both learned models really loaded (melody " + juce::String(m.melody ? "yes" : "no")
-                  + ", bass " + juce::String(m.bass ? "yes" : "no") + ", from the source tree "
-                  + juce::String(m.fromSourceTree ? "yes" : "no") + ")");
-        check(m.melodyNll > 0.0 && m.bassNll > 0.0,
-              "with the held-out score out of the files themselves (" + juce::String(m.melodyNll, 3)
-                  + " / " + juce::String(m.bassNll, 3) + " nats)");
+        check(juce::File(m.m_directory) == beside,
+              "the plugin points the core at its own directory, not at a source tree (found \"" + m.m_directory + "\")");
+        check(m.m_melody && m.m_bass && !m.m_fromSourceTree,
+              "and both learned models really loaded (melody " + juce::String(m.m_melody ? "yes" : "no")
+                  + ", bass " + juce::String(m.m_bass ? "yes" : "no") + ", from the source tree "
+                  + juce::String(m.m_fromSourceTree ? "yes" : "no") + ")");
+        check(m.m_melodyNll > 0.0 && m.m_bassNll > 0.0,
+              "with the held-out score out of the files themselves (" + juce::String(m.m_melodyNll, 3)
+                  + " / " + juce::String(m.m_bassNll, 3) + " nats)");
 
         // And the Set tab says so, which is the whole point: the knob says what is asked for, the
         // line says what the process has.
         std::unique_ptr<juce::AudioProcessorEditor> editor(p->createEditor());
         auto* phos = dynamic_cast<PhospheneEditor*>(editor.get());
-        if (phos != nullptr) phos->setTab(TabSet);
+        if (phos != nullptr) phos->setTab(TAB_SET);
         juce::Label* melodyLine = editor != nullptr ? findLabel(*editor, "Melody:") : nullptr;
         juce::Label* bassLine = editor != nullptr ? findLabel(*editor, "Bass:") : nullptr;
         check(melodyLine != nullptr && bassLine != nullptr, "the Set tab carries a line for each of the two parts");
@@ -641,7 +641,7 @@ int main(int argc, char** argv)
         // Eight bars at the default tempo: since Phase 5 a track opens with an intro whose first bars
         // carry only the atmosphere (the kick enters between bars 5 and 9), so four bars could be
         // silence on both sides and prove nothing.
-        const int samples = static_cast<int>(8.0 * kBeatsPerBar * 60.0 / 145.0 * sr);
+        const int samples = static_cast<int>(8.0 * BeatsPerBar * 60.0 / 145.0 * sr);
         const std::vector<float> a = referenceRender(1, sr, block, samples, 16);
         const std::vector<float> b = pluginRender(1, sr, block, samples);
         check(a.size() == b.size(), "the plugin renders as many samples as phos_render");
@@ -670,11 +670,11 @@ int main(int argc, char** argv)
         p->setPlayConfigDetails(0, 2, sr, 512);
         p->prepareToPlay(sr, 512);
         TestPlayHead head;
-        head.sampleRate = sr;
+        head.m_sampleRate = sr;
         // From bar 16: the intro before it is sparse by design (Phase 5: the atmosphere first, the kick
         // from bar 5 to 9, layers one by one), and this test counts notes.
-        head.ppq = 64.0;
-        head.samples = 64.0 * 60.0 / 145.0 * sr;
+        head.m_ppq = 64.0;
+        head.m_samples = 64.0 * 60.0 / 145.0 * sr;
         p->setPlayHead(&head);
         juce::AudioBuffer<float> buf(2, 512);
         juce::MidiBuffer midi;
@@ -698,9 +698,9 @@ int main(int argc, char** argv)
             // And one knob that never stops moving, on purpose (25.09.2026, same day): Track Variation, which every
             // plan depends on, gets a new value on every pass, as a host automating it on every block would give it.
             // The composer takes a plan knob over only once it has rested for a bar (PluginProcessor.h,
-            // composeParams_) and checks the knobs once per call (Composer.h), so the set plays on under the plans
+            // m_composeParams) and checks the knobs once per call (Composer.h), so the set plays on under the plans
             // it has; before, this was the endless re-planning and the crash.
-            const int moving = store.base(Module::Compose) + compose::TrackVariation;
+            const int moving = store.base(ModuleE::COMPOSE) + compose::TRACK_VARIATION;
             uint32_t i = 0;
             while (!stopThread.load(std::memory_order_relaxed)) {
                 const int id = static_cast<int>((i * 37u) % static_cast<uint32_t>(store.count()));
@@ -726,7 +726,7 @@ int main(int argc, char** argv)
             head.advance(n);
             rendered += n;
             // A seek in the middle, the way a host jumps when the user clicks the ruler.
-            if (rendered > total / 2 && head.ppq < 90.0) { head.ppq = 512.0; head.samples = 512.0 * 60.0 / 145.0 * sr; }
+            if (rendered > total / 2 && head.m_ppq < 90.0) { head.m_ppq = 512.0; head.m_samples = 512.0 * 60.0 / 145.0 * sr; }
         }
         stopThread.store(true);
         writer.join();
@@ -752,9 +752,9 @@ int main(int argc, char** argv)
         p->prepareToPlay(sr, 512);
         p->params().parseText("compose.sound_presets=0 acid.disperse=4");
         TestPlayHead head;
-        head.sampleRate = sr;
-        head.ppq = 64.0;
-        head.samples = 64.0 * 60.0 / 145.0 * sr;
+        head.m_sampleRate = sr;
+        head.m_ppq = 64.0;
+        head.m_samples = 64.0 * 60.0 / 145.0 * sr;
         p->setPlayHead(&head);
         juce::AudioBuffer<float> buf(2, 512);
         juce::MidiBuffer midi;
@@ -778,9 +778,9 @@ int main(int argc, char** argv)
         p->setPlayConfigDetails(0, 2, sr, 256);
         p->prepareToPlay(sr, 256);
         TestPlayHead head;
-        head.sampleRate = sr;
-        head.bpm = 132.0;
-        head.ppq = 64.0;      // the host starts in the middle of the set
+        head.m_sampleRate = sr;
+        head.m_bpm = 132.0;
+        head.m_ppq = 64.0;      // the host starts in the middle of the set
         p->setPlayHead(&head);
         juce::AudioBuffer<float> buf(2, 256);
         juce::MidiBuffer midi;
@@ -790,14 +790,14 @@ int main(int argc, char** argv)
             head.advance(256);
         }
         const TransportView t = p->transport();
-        check(t.hostSync, "the plugin follows the host's play head");
-        check(std::fabs(t.musicalBeat - head.ppq) < 0.25, "the plugin sits where the host says (" + juce::String(t.musicalBeat, 3)
-                                                              + " against " + juce::String(head.ppq, 3) + ")");
+        check(t.m_hostSync, "the plugin follows the host's play head");
+        check(std::fabs(t.m_musicalBeat - head.m_ppq) < 0.25, "the plugin sits where the host says (" + juce::String(t.m_musicalBeat, 3)
+                                                              + " against " + juce::String(head.m_ppq, 3) + ")");
         const ParamStore& store = p->params();
-        check(std::fabs(store.get(store.base(Module::Compose) + compose::Bpm) - 132.0f) < 0.01f, "the tempo follows the host");
+        check(std::fabs(store.get(store.base(ModuleE::COMPOSE) + compose::BPM) - 132.0f) < 0.01f, "the tempo follows the host");
         check(buf.getMagnitude(0, 256) > 0.0f, "the plugin sounds when the host plays");
         // Stopping the host stops the plugin.
-        head.playing = false;
+        head.m_playing = false;
         buf.clear(); midi.clear();
         p->processBlock(buf, midi);
         check(buf.getMagnitude(0, 256) == 0.0f, "a stopped host leaves the output silent");
@@ -815,7 +815,7 @@ int main(int argc, char** argv)
         const int block = 256;
         // What is timed here is the shipped plugin's plan, so the thread count is the plugin's own --
         // which since 22.09.2026 it sets itself in its constructor (the machine's cores, clamped to
-        // Probe.h's kMaxThreads). Until then this pinned it to 1, which was the shipped behaviour and
+        // Probe.h's MaxThreads). Until then this pinned it to 1, which was the shipped behaviour and
         // is what made "Play to the first sample" take 12.8 s. The cache stays off: a user starting
         // the plugin for the first time has none either.
         const int probeThreads = phos::probe::threads();
@@ -835,7 +835,7 @@ int main(int argc, char** argv)
         // two seconds. The plugin renders silence and says "planning" while that happens; here we
         // simply wait for it, and then measure what the live path does once it is under way.
         const auto planStart = std::chrono::steady_clock::now();
-        while (p->transport().restarting && std::chrono::duration<double>(std::chrono::steady_clock::now() - planStart).count() < 60.0) {
+        while (p->transport().m_restarting && std::chrono::duration<double>(std::chrono::steady_clock::now() - planStart).count() < 60.0) {
             buf.clear(); midi.clear();
             p->processBlock(buf, midi);
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -879,7 +879,7 @@ int main(int argc, char** argv)
         std::vector<NoteEvent> heldWindow;
         p->readPattern(17, 1, heldWindow);
         int held = 0;
-        for (const NoteEvent& e : heldWindow) held += e.beat < 17.0 * kBeatsPerBar ? 1 : 0;
+        for (const NoteEvent& e : heldWindow) held += e.m_beat < 17.0 * BeatsPerBar ? 1 : 0;
         check(held > 0, "the pattern preview shows the notes still sounding from before its window (" + juce::String(held)
                             + " held into bar 17)");
         // 22.09.2026: Auto Gain is measured after the start now, so the check is that it *arrives*.
@@ -893,36 +893,36 @@ int main(int argc, char** argv)
             while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 60.0) {
                 buf.clear(); midi.clear();
                 p->processBlock(buf, midi);
-                if (p->tryReadTrack(0, first) && !first.masterDeferred && first.masterGainDb != 0.0f) { arrived = true; break; }
+                if (p->tryReadTrack(0, first) && !first.m_masterDeferred && first.m_masterGainDb != 0.0f) { arrived = true; break; }
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
             check(arrived, "the deferred Auto Gain offset is measured while the set plays ("
-                               + juce::String(first.masterGainDb, 2) + " dB)");
+                               + juce::String(first.m_masterGainDb, 2) + " dB)");
             // And it reaches the engine: the ramp is two bars, so a few of them are rendered here.
             const int gainId = p->params().find("master.gain");
             const float knob = p->params().get(gainId);
             float eff = knob;
-            for (int i = 0; i < 2000 && std::fabs(eff - (knob + first.masterGainDb)) > 0.25f; ++i) {
+            for (int i = 0; i < 2000 && std::fabs(eff - (knob + first.m_masterGainDb)) > 0.25f; ++i) {
                 buf.clear(); midi.clear();
                 p->processBlock(buf, midi);
                 eff = p->engine().effective(gainId);
             }
             std::printf("Auto Gain: nachtraeglich gemessen %+.2f dB, im Engine-Wert %+.2f dB (Knopf %+.2f)\n",
-                        static_cast<double>(first.masterGainDb), static_cast<double>(eff), static_cast<double>(knob));
-            check(std::fabs(eff - (knob + first.masterGainDb)) <= 0.25f,
+                        static_cast<double>(first.m_masterGainDb), static_cast<double>(eff), static_cast<double>(knob));
+            check(std::fabs(eff - (knob + first.m_masterGainDb)) <= 0.25f,
                   "and rides into the engine over its ramp (knob " + juce::String(knob, 2)
                       + " dB, effective " + juce::String(eff, 2) + " dB, wanted "
-                      + juce::String(knob + first.masterGainDb, 2) + ")");
+                      + juce::String(knob + first.m_masterGainDb, 2) + ")");
             // The lines' levels were measured before Auto Gain and sent the same way (23.09.2026): the published
             // plan is measured, and the counter's and the lead's levels in the engine carry their corrections.
             phos::TrackPlan measured;
-            const bool published = p->tryReadTrack(0, measured) && !measured.measureDeferred;
+            const bool published = p->tryReadTrack(0, measured) && !measured.m_measureDeferred;
             juce::String lines;
             bool linesIn = published;
-            for (PolyInstance v : { PolyInstance::Lead, PolyInstance::Counter }) {
-                const int id = p->params().base(Module::Mix) + mix::polyLevel(v);
-                const int k = mpIndex(v == PolyInstance::Lead ? MelodyPart::Lead : MelodyPart::Counter);
-                const float wantDb = p->params().get(id) + measured.partGainDb[k] + measured.presenceGainDb;
+            for (PolyInstanceE v : { PolyInstanceE::LEAD, PolyInstanceE::COUNTER }) {
+                const int id = p->params().base(ModuleE::MIX) + mix::polyLevel(v);
+                const int k = mpIndex(v == PolyInstanceE::LEAD ? MelodyPartE::LEAD : MelodyPartE::COUNTER);
+                const float wantDb = p->params().get(id) + measured.m_partGainDb[k] + measured.m_presenceGainDb;
                 float got = p->engine().effective(id);
                 for (int i = 0; i < 2000 && std::fabs(got - wantDb) > 0.05f; ++i) {
                     buf.clear(); midi.clear();
@@ -939,8 +939,8 @@ int main(int argc, char** argv)
         const bool got = gotPattern;
         int kicks = 0, percs = 0;
         for (const NoteEvent& e : pattern) {
-            kicks += e.part == Part::Kick ? 1 : 0;
-            percs += e.part == Part::Perc ? 1 : 0;
+            kicks += e.m_part == PartE::KICK ? 1 : 0;
+            percs += e.m_part == PartE::PERC ? 1 : 0;
         }
         check(got && !pattern.empty(), "the pattern preview has bars 16 to 20 in it ("
                                            + juce::String(static_cast<int>(pattern.size())) + " notes)");
@@ -956,7 +956,7 @@ int main(int argc, char** argv)
         // that is what the arrangement view draws from (tryReadTrack).
         {
             const int trackBars = static_cast<int>(std::lround(p->params().get(
-                p->params().base(Module::Compose) + compose::TrackBars)));
+                p->params().base(ModuleE::COMPOSE) + compose::TRACK_BARS)));
             const int bar2 = trackBars + 24;            // well inside the second track
             p->seekToBar(bar2);
             const auto t0 = std::chrono::steady_clock::now();
@@ -967,9 +967,9 @@ int main(int argc, char** argv)
                 buf.clear(); midi.clear();
                 p->processBlock(buf, midi);
                 const TransportView t = p->transport();
-                atBar = t.bar;
-                if (!t.restarting && t.bar >= bar2) {
-                    if (p->readPattern((t.bar / 4) * 4, 4, late) && !late.empty()) { arrived = true; break; }
+                atBar = t.m_bar;
+                if (!t.m_restarting && t.m_bar >= bar2) {
+                    if (p->readPattern((t.m_bar / 4) * 4, 4, late) && !late.empty()) { arrived = true; break; }
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
@@ -1008,7 +1008,7 @@ int main(int argc, char** argv)
                 if (buf.getMagnitude(0, block) > 1.0e-6f) { tail = buf.getReadPointer(0)[block - 1]; sounding = true; }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
-            const int here = p->transport().bar;
+            const int here = p->transport().m_bar;
             p->seekToBar(here + 8);
             const auto t0 = std::chrono::steady_clock::now();
             bool wentQuiet = false;
@@ -1074,7 +1074,7 @@ int main(int argc, char** argv)
 
         // ------------------------------------------------ 20.09.2026, round "dialogue": state version 3
         // A version-3 state names only the knobs that differ from the defaults of the build that wrote
-        // it (PluginProcessor.h, kStateVersion). Three things follow, and each is checked here.
+        // it (PluginProcessor.h, StateVersion). Three things follow, and each is checked here.
 
         // (1) A fresh instance's state names no knob at all, and one moved knob is the only one in it.
         {
@@ -1091,8 +1091,8 @@ int main(int argc, char** argv)
             check(cx != nullptr && ox != nullptr && empty.isEmpty() && text.contains("acid.cutoff")
                       && !text.contains("sfx.level") && !text.contains("kick.level")
                       && juce::StringArray::fromLines(text).size() == 1
-                      && cx->getIntAttribute("version", 0) == PhospheneProcessor::kStateVersion,
-                  "a state of version " + juce::String(PhospheneProcessor::kStateVersion)
+                      && cx->getIntAttribute("version", 0) == PhospheneProcessor::StateVersion,
+                  "a state of version " + juce::String(PhospheneProcessor::StateVersion)
                       + " holds only what the user changed (untouched: \"" + empty + "\", one knob moved: \"" + text + "\")");
         }
 
@@ -1165,11 +1165,11 @@ int main(int argc, char** argv)
         auto p = std::make_unique<PhospheneProcessor>();
         const ParamStore& store = p->params();
         // Since 23.09.2026 the four macros follow the store's parameters as host parameters of their own.
-        check(p->getParameters().size() == store.count() + kNumMacros,
+        check(p->getParameters().size() == store.count() + NumMacros,
               "every parameter of the store is a host parameter (" + juce::String(store.count()) + "), and the four macros after them");
         bool textRoundTrip = true, namesUnique = true, rangesSane = true;
         juce::StringArray ids;
-        for (int i = 0; i < kNumMacros; ++i)
+        for (int i = 0; i < NumMacros; ++i)
             if (auto* hp = p->hostParameter(store.count() + i)) ids.add(hp->getParameterID());
         for (int i = 0; i < store.count(); ++i) {
             auto* param = p->parameterFor(i);
@@ -1178,7 +1178,7 @@ int main(int argc, char** argv)
             // Text out and back must land on the same value for the discrete parameters, where a
             // host may well round-trip through the name.
             const ParamDesc& d = store.desc(i);
-            if (d.curve == Curve::Choice || d.curve == Curve::Toggle) {
+            if (d.m_curve == CurveE::CHOICE || d.m_curve == CurveE::TOGGLE) {
                 for (float v : { 0.0f, 0.5f, 1.0f }) {
                     const juce::String t = param->getText(v, 64);
                     const float back = param->getValueForText(t);
@@ -1203,7 +1203,7 @@ int main(int argc, char** argv)
         p->setPlayConfigDetails(0, 2, 48000.0, 256);
         p->prepareToPlay(48000.0, 256);
         const int cutoff = p->params().find("lead.cutoff");
-        const int sweepTarget = p->params().count() + static_cast<int>(Macro::FilterSweep);
+        const int sweepTarget = p->params().count() + static_cast<int>(MacroE::FILTER_SWEEP);
         // A controller arrives while lead.cutoff is armed: it binds, and it sets the knob in the same block.
         p->midiMap().arm(cutoff);
         juce::AudioBuffer<float> buf(2, 256);
@@ -1229,9 +1229,9 @@ int main(int argc, char** argv)
         in3.addEvent(juce::MidiMessage::controllerEvent(1, 1, 127), 0);
         p->processBlock(buf, in3);
         p->serviceMacros();
-        const float sweep = p->macroValue(Macro::FilterSweep);
-        p->setMacro(Macro::GateDepth, 0.5f);
-        auto* depth = p->hostParameter(p->params().count() + static_cast<int>(Macro::GateDepth));
+        const float sweep = p->macroValue(MacroE::FILTER_SWEEP);
+        p->setMacro(MacroE::GATE_DEPTH, 0.5f);
+        auto* depth = p->hostParameter(p->params().count() + static_cast<int>(MacroE::GATE_DEPTH));
         const float depthHost = depth != nullptr ? depth->convertFrom0to1(depth->getValue()) : -1.0f;
         check(std::fabs(sweep - 1.0f) < 1e-6f && std::fabs(depthHost - 0.5f) < 1e-4f,
               juce::String("the macros are host parameters: a controller on one moves the macro, a macro moved in the editor moves its host value -- ")
@@ -1268,7 +1268,7 @@ int main(int argc, char** argv)
         q->setPlayConfigDetails(0, 2, 48000.0, 256);
         q->prepareToPlay(48000.0, 256);
         const bool loaded = q->importSet(f);
-        check(read && e.seed == 4711 && e.name == "test   set" && loaded && q->seed() == 4711,
+        check(read && e.m_seed == 4711 && e.m_name == "test   set" && loaded && q->seed() == 4711,
               "the gallery: a saved set lands in the gallery folder with its name and seed, and loads back as a set -- " + f.getFileName());
         // Back to the test's own user folder, never to the user's real gallery.
 #if defined(_WIN32)
@@ -1286,9 +1286,9 @@ int main(int argc, char** argv)
         // Six verdicts: the Surge archetype liked three times, the Pedal one disliked three times.
         for (int i = 0; i < 6; ++i) {
             phos::RatingEntry r;
-            r.seed = 1;
-            r.verdict = i < 3 ? 1 : -1;
-            r.features = i < 3 ? "style=Goa;lead.archetype=Surge" : "style=Goa;lead.archetype=Pedal";
+            r.m_seed = 1;
+            r.m_verdict = i < 3 ? 1 : -1;
+            r.m_features = i < 3 ? "style=Goa;lead.archetype=Surge" : "style=Goa;lead.archetype=Pedal";
             phos::appendRating(p->ratingsFile().getFullPathName().toRawUTF8(), r);
         }
         int verdicts = 0;
@@ -1325,10 +1325,10 @@ int main(int argc, char** argv)
               juce::String("undo: a knob gesture is one step, back and forth -- ") + juce::String::formatted("%.3f -> 0.200, undo %.3f, redo %.3f", v0, back, again)
                   + " (" + p->undoName() + ")");
         // A reroll and a seed, through undoable() as the editor calls them.
-        p->undoable("Reroll this track", [&] { p->reroll(phos::LockUnit::Track, 0); });
-        const uint32_t rolled = p->variation(phos::LockUnit::Track, 0);
+        p->undoable("Reroll this track", [&] { p->reroll(phos::LockUnitE::TRACK, 0); });
+        const uint32_t rolled = p->variation(phos::LockUnitE::TRACK, 0);
         p->undo();
-        const uint32_t unrolled = p->variation(phos::LockUnit::Track, 0);
+        const uint32_t unrolled = p->variation(phos::LockUnitE::TRACK, 0);
         const uint64_t seed0 = p->seed();
         p->undoable("Seed", [&] { p->setSeed(seed0 + 1234); });
         const uint64_t seed1 = p->seed();
@@ -1360,33 +1360,33 @@ int main(int argc, char** argv)
         phos::ParamStore& ps = p->params();
         const int arpLevel = ps.find("arp.level");
         ps.set(arpLevel, 0.37f);
-        const std::vector<phos::SoundPreset>& arp = phos::factoryPresets(phos::Module::Poly, static_cast<int>(phos::PolyInstance::Arp));
+        const std::vector<phos::SoundPreset>& arp = phos::factoryPresets(phos::ModuleE::POLY, static_cast<int>(phos::PolyInstanceE::ARP));
         // The palette decides which oscillators a voice has presets for; the arp's middle one is taken, whatever it is
         // (24.09.2026: the names are made of the sound now, "Solar Cascade" and the like, and no longer end in "Bright").
         const phos::SoundPreset* fm = arp.empty() ? nullptr : &arp[arp.size() / 2];
         const std::string before = ps.toText(false);
-        if (fm != nullptr) p->applyPreset(phos::Module::Poly, static_cast<int>(phos::PolyInstance::Arp), *fm);
+        if (fm != nullptr) p->applyPreset(phos::ModuleE::POLY, static_cast<int>(phos::PolyInstanceE::ARP), *fm);
         phos::ParamStore expect;
         expect.copyValuesFrom(ps);
-        if (fm != nullptr) phos::applySoundPreset(expect, phos::Module::Poly, static_cast<int>(phos::PolyInstance::Arp), fm->text);
+        if (fm != nullptr) phos::applySoundPreset(expect, phos::ModuleE::POLY, static_cast<int>(phos::PolyInstanceE::ARP), fm->m_text);
         const bool applied = fm != nullptr && ps.toText(false) != before && ps.get(ps.find("mix.arp_own")) == 1.0f
                           && ps.get(ps.find("arp.osc")) == expect.get(expect.find("arp.osc")) && ps.get(arpLevel) == 0.37f;
         p->undo();
         const bool undone = ps.toText(false) == before;
         // A user preset: saved from the knobs, listed under "User", and written into the test's folder only.
         p->redo();
-        const juce::File saved = p->saveUserPreset(phos::Module::Poly, static_cast<int>(phos::PolyInstance::Arp), "Hosttest sound");
-        const std::vector<phos::SoundPreset> mine = p->userPresets(phos::Module::Poly, static_cast<int>(phos::PolyInstance::Arp));
-        const bool listed = mine.size() == 1 && mine[0].group == "User" && mine[0].name == "Hosttest sound" && fm != nullptr && mine[0].text == fm->text;
+        const juce::File saved = p->saveUserPreset(phos::ModuleE::POLY, static_cast<int>(phos::PolyInstanceE::ARP), "Hosttest sound");
+        const std::vector<phos::SoundPreset> mine = p->userPresets(phos::ModuleE::POLY, static_cast<int>(phos::PolyInstanceE::ARP));
+        const bool listed = mine.size() == 1 && mine[0].m_group == "User" && mine[0].m_name == "Hosttest sound" && fm != nullptr && mine[0].m_text == fm->m_text;
         const bool isolated = saved.isAChildOf(p->userFolder()) && p->userFolder().getFileName().startsWith("phos_hosttest_user");
         saved.deleteFile();
         size_t total = 0;
-        for (int v = 0; v < phos::kPolyInstances; ++v) total += phos::factoryPresets(phos::Module::Poly, v).size();
-        total += phos::factoryPresets(phos::Module::Kick).size() + phos::factoryPresets(phos::Module::Bass).size() + phos::factoryPresets(phos::Module::Acid).size();
+        for (int v = 0; v < phos::PolyInstances; ++v) total += phos::factoryPresets(phos::ModuleE::POLY, v).size();
+        total += phos::factoryPresets(phos::ModuleE::KICK).size() + phos::factoryPresets(phos::ModuleE::BASS).size() + phos::factoryPresets(phos::ModuleE::ACID).size();
         check(applied && undone && listed && isolated,
               juce::String("presets: a factory preset sets the arp, switches its own sound on and leaves its level; undo takes it back; "
                            "a user preset is saved, listed and kept in the test's folder (")
-                  + (fm != nullptr ? juce::String(fm->name) : juce::String("no preset")) + juce::String::formatted(
+                  + (fm != nullptr ? juce::String(fm->m_name) : juce::String("no preset")) + juce::String::formatted(
                         "; applied %d, undone %d, listed %d, isolated %d; ", (int)applied, (int)undone, (int)listed, (int)isolated)
                   + juce::String(static_cast<int>(total)) + " factory presets)");
     }
@@ -1396,34 +1396,34 @@ int main(int argc, char** argv)
         // Three renders of one set: the keyboard off; on the lead in Layer mode without a note (must be the same
         // samples -- a block without a played note is one process() call, as before); and with a chord played
         // from block 30, sample 100, released at block 60 (must be the same up to the note, and differ after it).
-        constexpr int kBlock = 512, kBlocks = 90, kOnBlock = 30, kOnAt = 100, kOffBlock = 60;
+        constexpr int Block = 512, Blocks = 90, OnBlock = 30, OnAt = 100, OffBlock = 60;
         auto render = [&](int part, bool notes) {
             auto p = std::make_unique<PhospheneProcessor>();
             p->setFollowHost(false);
             p->setNonRealtime(true);
             p->setSeed(20260923);
-            p->setPlayConfigDetails(0, 2, 48000.0, kBlock);
-            p->prepareToPlay(48000.0, kBlock);
+            p->setPlayConfigDetails(0, 2, 48000.0, Block);
+            p->prepareToPlay(48000.0, Block);
             p->params().set(p->params().find("mix.keyboard_part"), static_cast<float>(part));
             p->params().set(p->params().find("mix.keyboard_mode"), 1.0f);   // Layer
             p->play();
-            juce::AudioBuffer<float> buf(2, kBlock);
+            juce::AudioBuffer<float> buf(2, Block);
             juce::MidiBuffer midi;
             std::vector<float> out;
-            for (int b = 0; b < kBlocks; ++b) {
+            for (int b = 0; b < Blocks; ++b) {
                 buf.clear();
                 midi.clear();
-                if (notes && b == kOnBlock)
-                    for (int pitch : { 62, 65, 69 }) midi.addEvent(juce::MidiMessage::noteOn(1, pitch, static_cast<juce::uint8>(112)), kOnAt);
-                if (notes && b == kOffBlock)
+                if (notes && b == OnBlock)
+                    for (int pitch : { 62, 65, 69 }) midi.addEvent(juce::MidiMessage::noteOn(1, pitch, static_cast<juce::uint8>(112)), OnAt);
+                if (notes && b == OffBlock)
                     for (int pitch : { 62, 65, 69 }) midi.addEvent(juce::MidiMessage::noteOff(1, pitch), 7);
                 p->processBlock(buf, midi);
-                for (int i = 0; i < kBlock; ++i) { out.push_back(buf.getReadPointer(0)[i]); out.push_back(buf.getReadPointer(1)[i]); }
+                for (int i = 0; i < Block; ++i) { out.push_back(buf.getReadPointer(0)[i]); out.push_back(buf.getReadPointer(1)[i]); }
             }
             return out;
         };
         const std::vector<float> off = render(0, false), layerQuiet = render(2, false), played = render(2, true);
-        const size_t noteAt = static_cast<size_t>(kOnBlock * kBlock + kOnAt) * 2;
+        const size_t noteAt = static_cast<size_t>(OnBlock * Block + OnAt) * 2;
         const bool same = off == layerQuiet;
         bool untilNote = played.size() == off.size();
         for (size_t i = 0; untilNote && i < noteAt; ++i) untilNote = played[i] == off[i];
@@ -1484,7 +1484,7 @@ int main(int argc, char** argv)
                 if (HelpView* hv = phos->helpView()) {
                     juce::StringArray noChapter;
                     for (const juce::String& t : PhospheneEditor::tabNames()) if (!hv->topicNames().contains(t)) noChapter.add(t);
-                    phos->setTab(TabLead);
+                    phos->setTab(TAB_LEAD);
                     phos->setHelpVisible(true);
                     const bool opened = hv->isVisible() && hv->selectedTopic() >= 0 && hv->topicNames()[hv->selectedTopic()] == "Lead";
                     const int paramsTopic = hv->topicNames().indexOf("Parameters: Lead");
@@ -1499,12 +1499,12 @@ int main(int argc, char** argv)
                 // anzeigen [...] Vielleicht sogar ganze Channel-Strips?" A strip per part, its meter reading what the
                 // part puts into the mix: loud where it plays, nothing at all where its mute is on.
                 if (phosui::MixerConsole* mc = phos->mixerConsole()) {
-                    phos->setTab(TabMix);
+                    phos->setTab(TAB_MIX);
                     p->play();
                     juce::AudioBuffer<float> run(2, 256);
                     // The start is a handshake with the composer thread; until it is done the engine renders nothing,
                     // and "restarting" is not even raised until the thread has seen the request. So: until sound comes.
-                    float pk[phos::kNumParts], rms[phos::kNumParts];
+                    float pk[phos::NumParts], rms[phos::NumParts];
                     bool sounding = false;
                     for (int i = 0; i < 4000 && !sounding; ++i) {
                         feed(*p, run, 1);
@@ -1526,16 +1526,16 @@ int main(int argc, char** argv)
                     feed(*p, run, 100);
                     p->takeChannelMeters(pk, rms);
                     int others = 0;
-                    for (int k = 0; k < phos::kNumParts; ++k) others += k != loudest && rms[k] > 1.0e-4f ? 1 : 0;
+                    for (int k = 0; k < phos::NumParts; ++k) others += k != loudest && rms[k] > 1.0e-4f ? 1 : 0;
                     const float mutedPeak = pk[loudest];
                     if (muteId >= 0) p->params().set(muteId, 0.0f);
                     juce::Image img(juce::Image::ARGB, 1280, 800, true);
                     juce::Graphics g(img);
                     phos->setBounds(0, 0, 1280, 800);
                     phos->paintEntireComponent(g, true);
-                    check(mc->stripCount() == phos::kNumParts && before > -40.0f && muteId >= 0 && mutedPeak == 0.0f && others >= 1,
+                    check(mc->stripCount() == phos::NumParts && before > -40.0f && muteId >= 0 && mutedPeak == 0.0f && others >= 1,
                           "mixer: a strip per part (" + juce::String(mc->stripCount()) + "); the loudest, "
-                              + juce::String(phos::kPartNames[loudest]) + ", read " + juce::String(before, 1) + " dB RMS and nothing ("
+                              + juce::String(phos::PartNames[loudest]) + ", read " + juce::String(before, 1) + " dB RMS and nothing ("
                               + juce::String(mutedPeak) + ") once its mute was on, while " + juce::String(others) + " others played on");
                     // 26.09.2026, the user: "dass alle Meter die gleiche Höhe haben". The strips hold two to five knobs;
                     // each made room for its own rows, so fader and meter began lower in a strip with more knobs.
@@ -1560,7 +1560,7 @@ int main(int argc, char** argv)
                 // 24.09.2026, the user: "Im SFX-Fenster ist nach wie vor keine Auswahl fuer das Preset". Every family's
                 // chooser holds Auto and every preset of the family, and choosing one sets its parameter.
                 {
-                    phos->setTab(TabFx);
+                    phos->setTab(TAB_FX);
                     std::vector<juce::ComboBox*> boxes;
                     std::function<void(juce::Component&)> find = [&](juce::Component& c) {
                         for (int i = 0; i < c.getNumChildComponents(); ++i) {
@@ -1570,9 +1570,9 @@ int main(int argc, char** argv)
                         }
                     };
                     find(*phos);
-                    bool sizes = boxes.size() == static_cast<size_t>(phos::sfx::kNumPresetChoices);
+                    bool sizes = boxes.size() == static_cast<size_t>(phos::sfx::NumPresetChoices);
                     for (size_t i = 0; sizes && i < boxes.size(); ++i)
-                        sizes = boxes[i]->getNumItems() == 1 + phos::kSfxBankCount[static_cast<int>(phos::kPresetChoiceType[i])];
+                        sizes = boxes[i]->getNumItems() == 1 + phos::SfxBankCount[static_cast<int>(phos::PresetChoiceType[i])];
                     const int zapId = p->params().find("sfx.preset_zap");
                     juce::ComboBox* zap = nullptr;
                     for (juce::ComboBox* cb : boxes) if (cb->getTooltip().startsWith("sfx.preset_zap")) zap = cb;
@@ -1602,17 +1602,17 @@ int main(int argc, char** argv)
                     const TransportView tv = p->transport();
                     sig << juce::String(p->pendingSfxPreview()) << ",";   // the effect presets' audition (24.09.2026)
                     sig << juce::String(p->ratingsFile().getSize()) << ",";   // a verdict ("Good here") written (02.10.2026)
-                    sig << (tv.playing ? "P" : "-") << juce::String(p->seed()) << "," << juce::String(tv.bar)
+                    sig << (tv.m_playing ? "P" : "-") << juce::String(p->seed()) << "," << juce::String(tv.m_bar)
                         << "," << juce::String(phos->tab()) << "," << juce::String(p->restartCount())
                         << (p->muted() ? "M" : "-") << (p->followsHost() ? "F" : "-");
                     for (int u = 0; u < 4; ++u)
-                        for (int k = 0; k < 4; ++k) sig << (p->isLocked(static_cast<phos::LockUnit>(u), k) ? "L" : ".");
+                        for (int k = 0; k < 4; ++k) sig << (p->isLocked(static_cast<phos::LockUnitE>(u), k) ? "L" : ".");
                     // And the page itself: the twelve percussion lane buttons choose which lane the
                     // page shows and touch no parameter at all, which is working, not dead.
                     for (const juce::Button* x : buttons) sig << (x->getToggleState() ? "1" : "0");
                     for (int u = 0; u < 4; ++u)
                         for (int k = 0; k < 4; ++k)
-                            sig << juce::String(p->variation(static_cast<phos::LockUnit>(u), k));
+                            sig << juce::String(p->variation(static_cast<phos::LockUnitE>(u), k));
                     return sig;
                 };
                 // The transport runs: a drop-out means "one bar, from here", so with nothing playing
@@ -1660,15 +1660,15 @@ int main(int argc, char** argv)
                         // they have nothing to undo. Each gets the state it is for.
                         if (name == "Play") p->stop();
                         if (name.startsWith("Reset")) p->params().set(p->params().find("compose.bpm"), 151.0f);
-                        if (name.startsWith("Clear all")) p->setLock(phos::LockUnit::Track, 0, true);
+                        if (name.startsWith("Clear all")) p->setLock(phos::LockUnitE::TRACK, 0, true);
                         // Undo and redo (23.09.2026) need a step to take back or to do again.
                         if (name == "Undo" || name == "Redo")
                             p->undoable("tempo", [&] { p->params().set(p->params().find("compose.bpm"), 151.0f); });
                         if (name == "Redo") p->undo();
                         // A lane button that is already the chosen lane has nothing to change, and
                         // lane 1 is the default one. Stand somewhere else first.
-                        if (t == TabPerc && name.containsOnly("0123456789"))
-                            phos->setPercLane((name.getIntValue() - 1 + 1) % kPercLanes);   // any lane but its own
+                        if (t == TAB_PERC && name.containsOnly("0123456789"))
+                            phos->setPercLane((name.getIntValue() - 1 + 1) % PercLanes);   // any lane but its own
                         // The header's own tab buttons are pressed on one page only: pressing them
                         // is what changes the page, and every later button of this page would then
                         // be hidden and skipped (measured: the walk fell from 237 presses to 24).
@@ -1694,8 +1694,8 @@ int main(int argc, char** argv)
                         // it is read here rather than after the release, where it is back at zero by
                         // design and would look dead.
                         const bool heldDoesSomething = snapshot() != before
-                                                    || p->macroValue(Macro::Stutter) != 0.0f
-                                                    || p->macroValue(Macro::DropOut) != 0.0f;
+                                                    || p->macroValue(MacroE::STUTTER) != 0.0f
+                                                    || p->macroValue(MacroE::DROP_OUT) != 0.0f;
                         asComponent->mouseUp(me);
                         p->serviceMacros();   // the processor's 30 Hz tick, turned by hand
                         const juce::String after = snapshot();
@@ -1726,7 +1726,7 @@ int main(int argc, char** argv)
         ArrangeDisplay view;
         ArrangeDisplay::Snapshot snap = bigSet();
         int sections = 0;
-        for (const auto& t : snap.tracks) sections += static_cast<int>(t.sections.size());
+        for (const auto& t : snap.m_tracks) sections += static_cast<int>(t.m_sections.size());
         view.setSize(1216, 420);
         const auto r0 = std::chrono::steady_clock::now();
         for (int i = 0; i < 20; ++i) view.setSnapshot(snap);
@@ -1737,34 +1737,34 @@ int main(int argc, char** argv)
         const auto p0 = std::chrono::steady_clock::now();
         const int frames = 120;
         for (int i = 0; i < frames; ++i) {
-            moved += view.setPosition(i * 4.0 * kBeatsPerBar / 3.0) ? 1 : 0;
+            moved += view.setPosition(i * 4.0 * BeatsPerBar / 3.0) ? 1 : 0;
             juce::Graphics g(img);
             view.paintEntireComponent(g, true);
         }
         const double tick = std::chrono::duration<double>(std::chrono::steady_clock::now() - p0).count() / frames;
         std::printf("arrange: %d tracks, %d bars, %d sections -- full redraw %.2f ms, a tick %.3f ms\n",
-                    static_cast<int>(snap.tracks.size()), snap.bars, sections, redraw * 1000.0, tick * 1000.0);
+                    static_cast<int>(snap.m_tracks.size()), snap.m_bars, sections, redraw * 1000.0, tick * 1000.0);
         check(sections >= 90, "the timeline holds a whole night (" + juce::String(sections) + " sections)");
         check(tick < 0.004, "a tick of the timeline costs under 4 ms (" + juce::String(tick * 1000.0, 3) + " ms)");
         check(tick < redraw, "and less than drawing the set again (" + juce::String(redraw * 1000.0, 2) + " ms)");
         check(moved > frames / 2, "the play head reports when it has moved far enough to repaint");
 
         // The DJ overlap drawn legibly (19.09.2026, round "polish"): in the set strip neighbouring tracks
-        // share kDjOverlap bars, so their blocks must run side by side in x -- each over its whole length --
+        // share DjOverlap bars, so their blocks must run side by side in x -- each over its whole length --
         // without one covering the other; and the view knows which bars each track shares.
         {
             int pairs = 0, covered = 0, notSideBySide = 0, wrongLength = 0, wrongShare = 0;
             const int w = view.trackBlock(0).getWidth() > 0 ? view.getWidth() : 0;
-            for (size_t i = 0; i < snap.tracks.size(); ++i) {
+            for (size_t i = 0; i < snap.m_tracks.size(); ++i) {
                 const juce::Rectangle<int> b = view.trackBlock(i);
                 // The block's width against the strip's scale: its bars over the set's, within two pixels.
-                const juce::Rectangle<int> first = view.trackBlock(0), last = view.trackBlock(snap.tracks.size() - 1);
+                const juce::Rectangle<int> first = view.trackBlock(0), last = view.trackBlock(snap.m_tracks.size() - 1);
                 const double stripW = last.getRight() - first.getX();
-                const double want = stripW * snap.tracks[i].bars / snap.bars;
+                const double want = stripW * snap.m_tracks[i].m_bars / snap.m_bars;
                 if (std::abs(b.getWidth() - want) > 2.0) ++wrongLength;
                 const auto share = view.overlapOf(i);
-                if (share.first != (i > 0 ? kDjOverlap : 0) || share.second != (i + 1 < snap.tracks.size() ? kDjOverlap : 0)) ++wrongShare;
-                if (i + 1 < snap.tracks.size()) {
+                if (share.first != (i > 0 ? DjOverlap : 0) || share.second != (i + 1 < snap.m_tracks.size() ? DjOverlap : 0)) ++wrongShare;
+                if (i + 1 < snap.m_tracks.size()) {
                     const juce::Rectangle<int> n = view.trackBlock(i + 1);
                     ++pairs;
                     if (b.intersects(n)) ++covered;
@@ -1786,18 +1786,18 @@ int main(int argc, char** argv)
         juce::SortedSet<int> tracksReached, locksReached, sectionLocks, sectionRolls;
         // A jump lands in the latest track that contains its bar: a track's first bar lies inside the previous
         // track's outro (the DJ overlap), and a jump there means "this track from its start".
-        view.onSeek = [&](int bar) {
+        view.m_onSeek = [&](int bar) {
             ++seeks;
             lastBar = bar;
             int reached = -1;
-            for (const auto& t : snap.tracks) if (bar >= t.firstBar && bar < t.firstBar + t.bars) reached = t.index;
+            for (const auto& t : snap.m_tracks) if (bar >= t.m_firstBar && bar < t.m_firstBar + t.m_bars) reached = t.m_index;
             if (reached >= 0) tracksReached.add(reached);
         };
-        view.onLock = [&](LockUnit unit, int index, bool) {
-            if (unit == LockUnit::Track) locksReached.add(index);
+        view.m_onLock = [&](LockUnitE unit, int index, bool) {
+            if (unit == LockUnitE::TRACK) locksReached.add(index);
             else sectionLocks.add(index);
         };
-        view.onReroll = [&](LockUnit unit, int index) { if (unit == LockUnit::Section) sectionRolls.add(index); };
+        view.m_onReroll = [&](LockUnitE unit, int index) { if (unit == LockUnitE::SECTION) sectionRolls.add(index); };
         for (int y = 0; y < view.getHeight(); ++y) {
             clickAt(view, view.getWidth() - 20, y);   // the end of a row: its last section
             clickAt(view, 156, y);                    // the track's own lock, at the end of its name
@@ -1830,12 +1830,12 @@ int main(int argc, char** argv)
         p->tryReadTrack(0, first0);
         p->tryReadTrack(1, first1);
 
-        p->setLock(LockUnit::Track, 0, true);
-        check(p->isLocked(LockUnit::Track, 0), "a lock shows at once, without waiting for the composer");
-        p->reroll(LockUnit::Track, 1);
-        check(p->variation(LockUnit::Track, 1) == 1, "a reroll counts up");
-        p->reroll(LockUnit::Track, 0);
-        check(p->variation(LockUnit::Track, 0) == 0, "and a locked unit refuses to be rerolled");
+        p->setLock(LockUnitE::TRACK, 0, true);
+        check(p->isLocked(LockUnitE::TRACK, 0), "a lock shows at once, without waiting for the composer");
+        p->reroll(LockUnitE::TRACK, 1);
+        check(p->variation(LockUnitE::TRACK, 1) == 1, "a reroll counts up");
+        p->reroll(LockUnitE::TRACK, 0);
+        check(p->variation(LockUnitE::TRACK, 0) == 0, "and a locked unit refuses to be rerolled");
 
         // Wait for the composer to publish the plans again.
         const auto t0 = std::chrono::steady_clock::now();
@@ -1843,12 +1843,12 @@ int main(int argc, char** argv)
         bool changed = false;
         while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 90.0) {
             feed(*p, buf, 1);
-            if (p->tryReadTrack(1, now1) && now1.melodySeed != first1.melodySeed) { changed = true; break; }
+            if (p->tryReadTrack(1, now1) && now1.m_melodySeed != first1.m_melodySeed) { changed = true; break; }
             std::this_thread::sleep_for(std::chrono::milliseconds(4));
         }
         check(changed, "rerolling a track reaches the composer and changes that track");
-        check(p->tryReadTrack(0, now0) && now0.melodySeed == first0.melodySeed && now0.formSeed == first0.formSeed
-                  && now0.percSeed == first0.percSeed && now0.bpm == first0.bpm,
+        check(p->tryReadTrack(0, now0) && now0.m_melodySeed == first0.m_melodySeed && now0.m_formSeed == first0.m_formSeed
+                  && now0.m_percSeed == first0.m_percSeed && now0.m_bpm == first0.m_bpm,
               "and leaves the track before it exactly as it was");
         p->stop();
     }
@@ -1857,7 +1857,7 @@ int main(int argc, char** argv)
     if (partRest) {
         const double sr = 48000.0;
         const int block = 256;
-        const int bar = static_cast<int>(kBeatsPerBar * 60.0 / 145.0 * sr / block) * block;
+        const int bar = static_cast<int>(BeatsPerBar * 60.0 / 145.0 * sr / block) * block;
         auto p = std::make_unique<PhospheneProcessor>();
         p->setFollowHost(false);
         p->setNonRealtime(true);
@@ -1867,21 +1867,21 @@ int main(int argc, char** argv)
         juce::AudioBuffer<float> warm(2, block);
         feed(*p, warm, 12);
         // Past the sparse intro the form grammar writes: there is nothing to take away in bar 1.
-        while (p->transport().bar < 24) feed(*p, warm, 1);
+        while (p->transport().m_bar < 24) feed(*p, warm, 1);
 
         ParamStore& store = p->params();
-        const int cutoffId = store.base(Module::Acid) + acid::Cutoff;
-        const int gateId = store.base(Module::Poly, static_cast<int>(PolyInstance::Lead)) + poly::Gate;
-        const int depthId = store.base(Module::Poly, static_cast<int>(PolyInstance::Lead)) + poly::GateDepth;
-        const int kickMuteId = store.base(Module::Mix) + mix::KickMute;
+        const int cutoffId = store.base(ModuleE::ACID) + acid::CUTOFF;
+        const int gateId = store.base(ModuleE::POLY, static_cast<int>(PolyInstanceE::LEAD)) + poly::GATE;
+        const int depthId = store.base(ModuleE::POLY, static_cast<int>(PolyInstanceE::LEAD)) + poly::GATE_DEPTH;
+        const int kickMuteId = store.base(ModuleE::MIX) + mix::KICK_MUTE;
         const float cutoffWas = store.get(cutoffId), gateWas = store.get(gateId), depthWas = store.get(depthId);
 
         // Filter Sweep: one gesture, three filters, and the knobs come back to the value they had.
-        p->setMacro(Macro::FilterSweep, 1.0f);
+        p->setMacro(MacroE::FILTER_SWEEP, 1.0f);
         const float cutoffUp = store.get(cutoffId);
-        p->setMacro(Macro::FilterSweep, -1.0f);
+        p->setMacro(MacroE::FILTER_SWEEP, -1.0f);
         const float cutoffDown = store.get(cutoffId);
-        p->setMacro(Macro::FilterSweep, 0.0f);
+        p->setMacro(MacroE::FILTER_SWEEP, 0.0f);
         std::printf("filter sweep: acid cutoff %.0f .. %.0f .. %.0f Hz, back to %.0f\n",
                     cutoffDown, cutoffWas, cutoffUp, store.get(cutoffId));
         check(cutoffUp > cutoffWas * 1.2f && cutoffDown < cutoffWas * 0.9f,
@@ -1890,14 +1890,14 @@ int main(int argc, char** argv)
         check(store.get(cutoffId) == cutoffWas, "and letting go puts the knob back exactly");
 
         // Stutter: held, and it takes the gate with it.
-        p->setMacro(Macro::Stutter, 1.0f);
+        p->setMacro(MacroE::STUTTER, 1.0f);
         check(store.get(gateId) >= 0.5f && store.get(depthId) >= 0.99f, "stutter switches the gate on at full depth");
-        p->setMacro(Macro::Stutter, 0.0f);
+        p->setMacro(MacroE::STUTTER, 0.0f);
         check(store.get(gateId) == gateWas && store.get(depthId) == depthWas, "and gives the gate back");
 
         // Drop-out: measured, not asserted. One bar with the low end, one without.
         const double loud = renderRms(*p, block, bar);
-        p->setMacro(Macro::DropOut, 1.0f);
+        p->setMacro(MacroE::DROP_OUT, 1.0f);
         check(store.get(kickMuteId) >= 0.5f, "a drop-out takes the kick out");
         const double gone = renderRms(*p, block, bar);
         const double drop = 20.0 * std::log10(juce::jmax(1.0e-9, gone) / juce::jmax(1.0e-9, loud));
@@ -1906,7 +1906,7 @@ int main(int argc, char** argv)
         // It lets go on the bar line by itself: the macro tick is what a message loop would run.
         p->serviceMacros();
         check(store.get(kickMuteId) == 0.0f, "and it lets go on the next bar line without being asked");
-        check(p->macroValue(Macro::DropOut) == 0.0f, "the macro reports that it has let go");
+        check(p->macroValue(MacroE::DROP_OUT) == 0.0f, "the macro reports that it has let go");
     }
 
     // ---------------------------------------------------------------- a set through the editor
@@ -1916,10 +1916,10 @@ int main(int argc, char** argv)
         auto p = std::make_unique<PhospheneProcessor>();
         p->setSeed(20260916);
         ParamStore& store = p->params();
-        const int bpmId = store.base(Module::Compose) + compose::Bpm;
+        const int bpmId = store.base(ModuleE::COMPOSE) + compose::BPM;
         store.set(bpmId, 139.0f);
-        p->setLock(LockUnit::Track, 2, true);
-        p->reroll(LockUnit::Track, 3);
+        p->setLock(LockUnitE::TRACK, 2, true);
+        p->reroll(LockUnitE::TRACK, 3);
         const juce::File file = juce::File::createTempFile("phosset");
         bool wrote = false;
         const auto t0 = std::chrono::steady_clock::now();
@@ -1938,8 +1938,8 @@ int main(int argc, char** argv)
         auto q = std::make_unique<PhospheneProcessor>();
         const bool read = q->importSet(file);
         check(read && q->seed() == 20260916, "Load set reads the seed back");
-        check(q->params().get(q->params().base(Module::Compose) + compose::Bpm) == 139.0f, "and the knobs");
-        check(q->isLocked(LockUnit::Track, 2) && q->variation(LockUnit::Track, 3) == 1,
+        check(q->params().get(q->params().base(ModuleE::COMPOSE) + compose::BPM) == 139.0f, "and the knobs");
+        check(q->isLocked(LockUnitE::TRACK, 2) && q->variation(LockUnitE::TRACK, 3) == 1,
               "and the locks, in the editor's own mirror");
         file.deleteFile();
     }

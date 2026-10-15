@@ -50,13 +50,13 @@ juce::Font body(float height)
 
 namespace {
 /** @brief The frame's families in Phosphene's fluorescent tones (the same hues as in every generator). */
-juce::Colour familyTone(frame::Family f)
+juce::Colour familyTone(frame::FamilyE f)
 {
     switch (f) {
-    case frame::Family::Source:   return juce::Colour(0xffffc247);   // gold
-    case frame::Family::Filter:   return juce::Colour(0xffff7a45);   // orange
-    case frame::Family::Envelope: return juce::Colour(0xff8dff5a);   // acid green
-    case frame::Family::Motion:   return juce::Colour(0xff22e4ff);   // UV cyan
+    case frame::FamilyE::SOURCE:   return juce::Colour(0xffffc247);   // gold
+    case frame::FamilyE::FILTER:   return juce::Colour(0xffff7a45);   // orange
+    case frame::FamilyE::ENVELOPE: return juce::Colour(0xff8dff5a);   // acid green
+    case frame::FamilyE::MOTION:   return juce::Colour(0xff22e4ff);   // UV cyan
     default:                      return juce::Colour(0xff8c8dff);   // UV blue
     }
 }
@@ -69,15 +69,15 @@ juce::Colour groupColour(const juce::String& title, juce::Colour page)
         for (const char* w : words) if (t.contains(w)) return true;
         return false;
     };
-    using F = frame::Family;
+    using F = frame::FamilyE;
     // The order matters: "Filter Envelope" is an envelope, "Wavetable Motion" moves.
-    if (has({ "envelope", "amp", "punch" })) return familyTone(F::Envelope);
-    if (has({ "lfo", "mod", "matrix", "gate", "vibrato", "tremolo", "motion", "stutter", "glide", "psy fx", "voice fx" })) return familyTone(F::Motion);
-    if (has({ "filter", "tone", "eq" })) return familyTone(F::Filter);
+    if (has({ "envelope", "amp", "punch" })) return familyTone(F::ENVELOPE);
+    if (has({ "lfo", "mod", "matrix", "gate", "vibrato", "tremolo", "motion", "stutter", "glide", "psy fx", "voice fx" })) return familyTone(F::MOTION);
+    if (has({ "filter", "tone", "eq" })) return familyTone(F::FILTER);
     if (has({ "delay", "space", "reverb", "room", "hall", "send", "output", "level", "sidechain", "image", "compressor", "gain", "monitor" }))
-        return familyTone(F::Space);
+        return familyTone(F::SPACE);
     if (has({ "osc", "wave", "fm", "noise", "click", "body", "engine", "sample", "layer", "sub", "pitch", "fundamental", "harmonic" }))
-        return familyTone(F::Source);
+        return familyTone(F::SOURCE);
     return page;
 }
 
@@ -85,33 +85,33 @@ const frame::Skin& skin()
 {
     static const frame::Skin s = [] {
         frame::Skin k;
-        k.name = "Phosphene";
-        k.bg = bg0;
-        k.panel = card.withAlpha(0.62f);   // the phosphenes show faintly through a page
-        k.group = group;
-        k.raised = card.brighter(0.12f);
-        k.edge = edge;
-        k.ink = text;
-        k.dim = dim;
-        k.faint = faint;
-        k.accent = accent;
-        k.onset = warm;
-        k.good = green;
-        k.bad = red;
-        for (int f = 0; f < 5; ++f) k.families[f] = familyTone(static_cast<frame::Family>(f));
-        k.decks[0] = juce::Colour(0xffff2e97);
-        k.decks[1] = juce::Colour(0xff22e4ff);
-        k.decks[2] = juce::Colour(0xff9b6bff);
-        k.radius = 5.0f;
-        k.tracking = 0.3f;
-        k.titleBold = true;
-        k.glow = true;
-        k.valueInKnob = true;            // six hundred knobs on ten pages: the value inside the ring
-        k.backdropData = PhospheneHelpData::backdrop_jpg;
-        k.backdropSize = PhospheneHelpData::backdrop_jpgSize;
-        k.backdropTop = 0.9f;
-        k.backdropPage = 0.6f;
-        k.logo = [](juce::Graphics& g, juce::Rectangle<float> r) {   // from the image cache: no image outlives JUCE
+        k.m_name = "Phosphene";
+        k.m_bg = Bg0;
+        k.m_panel = Card.withAlpha(0.62f);   // the phosphenes show faintly through a page
+        k.m_group = GroupColour;
+        k.m_raised = Card.brighter(0.12f);
+        k.m_edge = Edge;
+        k.m_ink = Text;
+        k.m_dim = Dim;
+        k.m_faint = Faint;
+        k.m_accent = Accent;
+        k.m_onset = Warm;
+        k.m_good = Green;
+        k.m_bad = Red;
+        for (int f = 0; f < 5; ++f) k.m_families[f] = familyTone(static_cast<frame::FamilyE>(f));
+        k.m_decks[0] = juce::Colour(0xffff2e97);
+        k.m_decks[1] = juce::Colour(0xff22e4ff);
+        k.m_decks[2] = juce::Colour(0xff9b6bff);
+        k.m_radius = 5.0f;
+        k.m_tracking = 0.3f;
+        k.m_titleBold = true;
+        k.m_glow = true;
+        k.m_valueInKnob = true;            // six hundred knobs on ten pages: the value inside the ring
+        k.m_backdropData = PhospheneHelpData::backdrop_jpg;
+        k.m_backdropSize = PhospheneHelpData::backdrop_jpgSize;
+        k.m_backdropTop = 0.9f;
+        k.m_backdropPage = 0.6f;
+        k.m_logo = [](juce::Graphics& g, juce::Rectangle<float> r) {   // from the image cache: no image outlives JUCE
             g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
             g.drawImage(juce::ImageCache::getFromMemory(PhospheneHelpData::iconsmall_png, PhospheneHelpData::iconsmall_pngSize), r,
                         juce::RectanglePlacement::centred);
@@ -128,11 +128,11 @@ PhospheneLookAndFeel::PhospheneLookAndFeel() : frame::LookAndFeel(phosui::skin()
     using namespace phosui;
     // What the frame does not set, as Phosphene had it.
     setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
-    setColour(juce::Slider::rotarySliderOutlineColourId, edge);
-    setColour(juce::Slider::textBoxTextColourId, text);
+    setColour(juce::Slider::rotarySliderOutlineColourId, Edge);
+    setColour(juce::Slider::textBoxTextColourId, Text);
     setColour(juce::TextButton::textColourOnId, juce::Colours::white);
-    setColour(juce::ToggleButton::textColourId, text);
-    setColour(juce::TextEditor::backgroundColourId, bg0);
+    setColour(juce::ToggleButton::textColourId, Text);
+    setColour(juce::TextEditor::backgroundColourId, Bg0);
 }
 
 void PhospheneLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b, const juce::Colour& background,
@@ -151,7 +151,7 @@ void PhospheneLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button&
     const bool open = b.getToggleState();
     g.setColour(open ? own.withAlpha(0.22f) : background.brighter(down ? 0.22f : (highlighted ? 0.12f : 0.0f)));
     g.fillRoundedRectangle(r, 5.0f);
-    g.setColour(open ? own : edge);
+    g.setColour(open ? own : Edge);
     g.drawRoundedRectangle(r.reduced(0.5f), 5.0f, 1.0f);
     g.setColour(own.withAlpha(open ? 1.0f : 0.55f));
     g.fillRoundedRectangle(r.withTop(r.getBottom() - 2.5f).reduced(5.0f, 0.0f), 1.2f);

@@ -31,7 +31,7 @@ std::vector<float> renderBlocks(const std::string& settings, const std::vector<N
     e->params().parseText(("mix.kick_mute=1 mix.perc_mute=1 master.limiter=Off master.clipper=Off master.clip=Off "
                            "master.comp_ratio=1 fx.hall_return=-36 fx.room_return=-36 fx.plate_return=-36 " + settings).c_str());
     std::vector<NoteEvent> sorted = notes;
-    std::stable_sort(sorted.begin(), sorted.end(), [](const NoteEvent& x, const NoteEvent& y) { return x.beat < y.beat; });
+    std::stable_sort(sorted.begin(), sorted.end(), [](const NoteEvent& x, const NoteEvent& y) { return x.m_beat < y.m_beat; });
     for (const NoteEvent& n : sorted) e->pushEvent(n);
     std::vector<float> L(static_cast<size_t>(48000.0 * seconds)), R(L.size());
     for (size_t done = 0; done < L.size();) {
@@ -52,10 +52,10 @@ double rmsDb(const std::vector<float>& y, double a, double b)
 }
 
 /** @brief One note of @p part. */
-NoteEvent note(Part part, double beat, float length, int pitch)
+NoteEvent note(PartE part, double beat, float length, int pitch)
 {
     NoteEvent n;
-    n.part = part; n.beat = beat; n.length = length; n.pitch = static_cast<uint8_t>(pitch); n.velocity = 100;
+    n.m_part = part; n.m_beat = beat; n.m_length = length; n.m_pitch = static_cast<uint8_t>(pitch); n.m_velocity = 100;
     return n;
 }
 
@@ -63,22 +63,22 @@ NoteEvent note(Part part, double beat, float length, int pitch)
 
 /**
  * @brief Filter models, part `.levels`: every model of the lead and the bass sounds, stays finite and holds the level
- *        of the synth's own filter within a few dB -- the calibration of Poly.cpp (kTrimA/B) and the bass's drive.
+ *        of the synth's own filter within a few dB -- the calibration of Poly.cpp (TrimA/B) and the bass's drive.
  */
 void testFilterModelsLevels()
 {
     section("filter models: every model sounds, stays finite and near the synth's own filter's level");
     std::vector<NoteEvent> leads, basses;
     for (int b = 0; b < 16; ++b) {
-        leads.push_back(note(Part::Lead, b, 0.5f, 62 + (b % 4) * 3));
-        basses.push_back(note(Part::Bass, b + 0.5, 0.25f, 38));
+        leads.push_back(note(PartE::LEAD, b, 0.5f, 62 + (b % 4) * 3));
+        basses.push_back(note(PartE::BASS, b + 0.5, 0.25f, 38));
     }
     std::string worst;
     int bad = 0;
     for (const char* part : { "lead", "bass" }) {
         const bool lead = std::string(part) == "lead";
         double ref = 0.0;
-        for (int m = 0; m < kVoiceFilterModels; ++m) {
+        for (int m = 0; m < VoiceFilterModels; ++m) {
             const std::string s = fmt("mix.%s=1 %s.filter_model=%d %s.resonance=0.45 %s.delay_send=0", lead ? "bass_mute" : "lead_mute",
                                       part, m, part, part);
             const std::vector<float> y = renderBlocks(s, lead ? leads : basses, 7.0, 256);
@@ -117,7 +117,7 @@ void testModulationBlockSize()
         e->prepare(48000.0, block);
         e->params().parseText(s.c_str());
         Composer cb(21);
-        r.push_back(renderEngine(*e, cb, 20.0 * kBeatsPerBar, block, 48000.0));
+        r.push_back(renderEngine(*e, cb, 20.0 * BeatsPerBar, block, 48000.0));
     }
     int differ = 0;
     double energy = 0.0;
@@ -136,7 +136,7 @@ void testModulationSync()
 {
     section("modulation: a synced LFO sits on the beat");
     const double beat = 60.0 / 145.0 * 48000.0;
-    std::vector<NoteEvent> notes { note(Part::Pad, 0.37, 12.0f, 60) };
+    std::vector<NoteEvent> notes { note(PartE::PAD, 0.37, 12.0f, 60) };
     const std::vector<float> y = renderBlocks("mix.bass_mute=1 pad.amp_attack=1 pad.amp_sustain=1 pad.delay_send=0 pad.lfo1_shape=4 pad.lfo1_sync=5 "
                                               "pad.mx1_src=1 pad.mx1_dst=9 pad.mx1_amount=1 pad.gate=0",
                                               notes, 6.0, 256);
@@ -158,7 +158,7 @@ void testModulationFilterAdsr()
 {
     section("modulation: the filter envelope as an ADSR");
     const double beat = 60.0 / 145.0 * 48000.0;
-    std::vector<NoteEvent> notes { note(Part::Lead, 0.0, 6.0f, 57) };
+    std::vector<NoteEvent> notes { note(PartE::LEAD, 0.0, 6.0f, 57) };
     auto bright = [&](const char* s) {
         const std::vector<float> y = renderBlocks(std::string("mix.bass_mute=1 lead.amp_sustain=1 lead.delay_send=0 lead.cutoff=300 "
                                                               "lead.env_amount=4 lead.filter_decay=150 lead.lfo_cutoff=0 ") + s, notes, 4.0, 256);
@@ -185,9 +185,9 @@ void testModulationDisplay()
     e->prepare(48000.0, 512);
     e->params().parseText("mix.kick_mute=1 mix.bass_mute=1 lead.osc=Wavetable lead.position=0.5 lead.lfo1_rate=2 "
                           "lead.mx1_src=LFO 1 lead.mx1_dst=Table Position lead.mx1_amount=0.3");
-    e->pushEvent(note(Part::Lead, 0.0, 8.0f, 60));
+    e->pushEvent(note(PartE::LEAD, 0.0, 8.0f, 60));
     const ParamStore& p = e->params();
-    const int pos = p.base(Module::Poly, 0) + poly::Position, cut = p.base(Module::Poly, 0) + poly::Cutoff;
+    const int pos = p.base(ModuleE::POLY, 0) + poly::POSITION, cut = p.base(ModuleE::POLY, 0) + poly::CUTOFF;
     std::vector<float> L(512), R(512), shown(static_cast<size_t>(p.count()));
     double lo = 1.0, hi = 0.0, cutOff = 0.0;
     for (int b = 0; b < 200; ++b) {   // about two seconds: four LFO cycles
@@ -212,19 +212,19 @@ void testPresetBank()
     section("preset bank: 1024 per synth, unique names, every group sounds");
     std::string unknown;
     const int bad = bankUnknownKeys(&unknown);
-    struct S { Module m; int inst; Part part; int pitch; const char* key; };
-    const S synths[] = { { Module::Poly, 0, Part::Lead, 67, "lead" }, { Module::Poly, 1, Part::Counter, 72, "counter" },
-                         { Module::Poly, 2, Part::Arp, 64, "arp" }, { Module::Poly, 3, Part::Stab, 60, "stab" },
-                         { Module::Poly, 4, Part::Pad, 57, "pad" }, { Module::Poly, 5, Part::Drone, 45, "drone" },
-                         { Module::Bass, 0, Part::Bass, 38, "bass" }, { Module::Acid, 0, Part::Acid, 50, "acid" },
-                         { Module::Kick, 0, Part::Kick, 36, "kick" } };
+    struct S { ModuleE m_m; int m_inst; PartE m_part; int m_pitch; const char* m_key; };
+    const S synths[] = { { ModuleE::POLY, 0, PartE::LEAD, 67, "lead" }, { ModuleE::POLY, 1, PartE::COUNTER, 72, "counter" },
+                         { ModuleE::POLY, 2, PartE::ARP, 64, "arp" }, { ModuleE::POLY, 3, PartE::STAB, 60, "stab" },
+                         { ModuleE::POLY, 4, PartE::PAD, 57, "pad" }, { ModuleE::POLY, 5, PartE::DRONE, 45, "drone" },
+                         { ModuleE::BASS, 0, PartE::BASS, 38, "bass" }, { ModuleE::ACID, 0, PartE::ACID, 50, "acid" },
+                         { ModuleE::KICK, 0, PartE::KICK, 36, "kick" } };
     int wrongCount = 0, dupNames = 0, silent = 0, loud = 0, nonFinite = 0, rendered = 0;
     std::string detail;
     // PHOS_BANK_TRIMS=<Core/src/PresetTrims.inl> (26.09.2026) renders every preset and writes that table: each preset's
     // K-weighted level (kick and bass: their low band) against the synth's default knobs, the correction the composer
     // rides on the synth's Level.
     const char* trimsPath = std::getenv("PHOS_BANK_TRIMS");
-    std::vector<std::vector<int>> trims(kSoundSynths);
+    std::vector<std::vector<int>> trims(SoundSynths);
     // K-weighted RMS (BS.1770's weighting, ungated: a note pattern, not a programme), dB.
     auto kLevel = [](const std::vector<float>& y) {
         KFilter kf;
@@ -253,37 +253,37 @@ void testPresetBank()
         return 10.0 * std::log10(std::max(acc / static_cast<double>(std::max<size_t>(y.size(), 1)), 1e-30));
     };
     for (const S& sy : synths) {
-        const bool low = sy.m == Module::Kick || sy.m == Module::Bass;
+        const bool low = sy.m_m == ModuleE::KICK || sy.m_m == ModuleE::BASS;
         // The pad unweighted (26.09.2026): the bed is judged by its body, and K-weighting pulled the bright supersaw pads
         // down until their wide mids went missing from the mix (testStereoWidth, mid band 0.55 dB narrower).
-        const bool flat = sy.m == Module::Poly && sy.inst == static_cast<int>(PolyInstance::Pad);
+        const bool flat = sy.m_m == ModuleE::POLY && sy.m_inst == static_cast<int>(PolyInstanceE::PAD);
         auto level = [&](const std::vector<float>& y) { return low ? lowLevel(y) : flat ? rmsDb(y, 0.0, static_cast<double>(y.size())) : kLevel(y); };
-        const std::vector<SoundPreset>& ps = factoryPresets(sy.m, sy.inst);
-        if (ps.size() != 1024) { ++wrongCount; detail += fmt(" %s has %d;", sy.key, static_cast<int>(ps.size())); }
+        const std::vector<SoundPreset>& ps = factoryPresets(sy.m_m, sy.m_inst);
+        if (ps.size() != 1024) { ++wrongCount; detail += fmt(" %s has %d;", sy.m_key, static_cast<int>(ps.size())); }
         std::set<std::string> names;
-        for (const SoundPreset& x : ps) if (!names.insert(x.name).second) ++dupNames;
+        for (const SoundPreset& x : ps) if (!names.insert(x.m_name).second) ++dupNames;
         std::vector<NoteEvent> notes;
-        for (int b = 0; b < 8; ++b) notes.push_back(note(sy.part, b * 0.5, sy.part == Part::Pad || sy.part == Part::Drone ? 3.0f : 0.25f, sy.pitch + (b % 3) * 2));
+        for (int b = 0; b < 8; ++b) notes.push_back(note(sy.m_part, b * 0.5, sy.m_part == PartE::PAD || sy.m_part == PartE::DRONE ? 3.0f : 0.25f, sy.m_pitch + (b % 3) * 2));
         // Pad and drone are measured for the level correction as they play: a triad held for twelve beats, read from 2.5 s
         // to 4.5 s, past every attack of the bank (26.09.2026: eight staggered notes in 3 s under-read the slow attacks, and
         // the Dark Forest breakdown stood 0.2 dB too far under its drop, mix_audit drop_break_db).
-        const bool bed = sy.part == Part::Pad || sy.part == Part::Drone;
+        const bool bed = sy.m_part == PartE::PAD || sy.m_part == PartE::DRONE;
         // The drone as it plays: its low root and the fifth (Melody.cpp, D2 .. C#3), not the pad's triad.
         std::vector<NoteEvent> held;
-        if (sy.part == Part::Drone) {
-            for (int iv : { 0, 7 }) held.push_back(note(sy.part, 0.0, 12.0f, 40 + iv));
+        if (sy.m_part == PartE::DRONE) {
+            for (int iv : { 0, 7 }) held.push_back(note(sy.m_part, 0.0, 12.0f, 40 + iv));
         } else {
-            for (int iv : { 0, 4, 7 }) held.push_back(note(sy.part, 0.0, 12.0f, sy.pitch + iv));
+            for (int iv : { 0, 4, 7 }) held.push_back(note(sy.m_part, 0.0, 12.0f, sy.m_pitch + iv));
         }
         // Lead and counter as a phrase: four sixteenths, a quarter, an eighth and a held half (26.09.2026). The counter's
         // stage is the breakdown, where it plays long notes alone; matched on sixteenths only, its sustained presets came
         // out 7 dB under the default counter there (mix_audit p90_p10_db).
-        const bool line = sy.part == Part::Lead || sy.part == Part::Counter;
+        const bool line = sy.m_part == PartE::LEAD || sy.m_part == PartE::COUNTER;
         std::vector<NoteEvent> phrase;
-        for (int q = 0; q < 4; ++q) phrase.push_back(note(sy.part, q * 0.5, 0.25f, sy.pitch + (q % 3) * 2));
-        phrase.push_back(note(sy.part, 2.0, 1.0f, sy.pitch + 3));
-        phrase.push_back(note(sy.part, 3.0, 0.5f, sy.pitch + 5));
-        phrase.push_back(note(sy.part, 3.5, 2.0f, sy.pitch));
+        for (int q = 0; q < 4; ++q) phrase.push_back(note(sy.m_part, q * 0.5, 0.25f, sy.m_pitch + (q % 3) * 2));
+        phrase.push_back(note(sy.m_part, 2.0, 1.0f, sy.m_pitch + 3));
+        phrase.push_back(note(sy.m_part, 3.0, 0.5f, sy.m_pitch + 5));
+        phrase.push_back(note(sy.m_part, 3.5, 2.0f, sy.m_pitch));
         auto trimLevel = [&](const std::string& text) {
             if (line) return level(renderBlocks(text, phrase, 3.0, 512));
             if (!bed) return level(renderBlocks(text, notes, 3.0, 512));
@@ -297,18 +297,18 @@ void testPresetBank()
         const bool full = std::getenv("PHOS_BANK_FULL") != nullptr || trimsPath != nullptr;
         std::vector<size_t> which;
         for (size_t i = 0; full && i < ps.size(); ++i) which.push_back(i);
-        struct R { double rms = 0.0, peak = 0.0, k = 0.0; bool finite = true; };
+        struct R { double m_rms = 0.0, m_peak = 0.0, m_k = 0.0; bool m_finite = true; };
         std::vector<R> res(which.size());
         std::atomic<size_t> nextJob{ 0 };
         auto work = [&] {
             for (size_t j = nextJob++; j < which.size(); j = nextJob++) {
                 std::string oneLine;
-                for (char c : ps[which[j]].text) oneLine += c == '\n' ? ' ' : c;
+                for (char c : ps[which[j]].m_text) oneLine += c == '\n' ? ' ' : c;
                 const std::vector<float> y = renderBlocks("mix.kick_mute=0 " + oneLine, notes, full ? 3.0 : 5.0, 512);
                 R& r = res[j];
-                for (float x : y) { r.finite = r.finite && std::isfinite(x); r.peak = std::max(r.peak, static_cast<double>(std::fabs(x))); }
-                r.rms = rmsDb(y, 0.0, static_cast<double>(y.size()));
-                if (trimsPath != nullptr) r.k = bed || line ? trimLevel("mix.kick_mute=0 " + oneLine) : level(y);
+                for (float x : y) { r.m_finite = r.m_finite && std::isfinite(x); r.m_peak = std::max(r.m_peak, static_cast<double>(std::fabs(x))); }
+                r.m_rms = rmsDb(y, 0.0, static_cast<double>(y.size()));
+                if (trimsPath != nullptr) r.m_k = bed || line ? trimLevel("mix.kick_mute=0 " + oneLine) : level(y);
             }
         };
         std::vector<std::thread> pool;
@@ -317,28 +317,28 @@ void testPresetBank()
         std::vector<double> levels;
         for (size_t j = 0; j < which.size(); ++j) {
             const R& r = res[j];
-            const std::string& nm = ps[which[j]].name;
+            const std::string& nm = ps[which[j]].m_name;
             ++rendered;
-            if (!r.finite) { ++nonFinite; detail += fmt(" %s '%s' not finite;", sy.key, nm.c_str()); }
-            else if (r.rms < -60.0) { ++silent; detail += fmt(" %s '%s' %.1f dB;", sy.key, nm.c_str(), r.rms); }
-            else if (r.peak > 4.0) { ++loud; detail += fmt(" %s '%s' peak %.1f;", sy.key, nm.c_str(), r.peak); }
-            if (r.finite && r.rms > -60.0) levels.push_back(r.rms);
+            if (!r.m_finite) { ++nonFinite; detail += fmt(" %s '%s' not finite;", sy.m_key, nm.c_str()); }
+            else if (r.m_rms < -60.0) { ++silent; detail += fmt(" %s '%s' %.1f dB;", sy.m_key, nm.c_str(), r.m_rms); }
+            else if (r.m_peak > 4.0) { ++loud; detail += fmt(" %s '%s' peak %.1f;", sy.m_key, nm.c_str(), r.m_peak); }
+            if (r.m_finite && r.m_rms > -60.0) levels.push_back(r.m_rms);
         }
         if (trimsPath != nullptr) {
             const double ref = trimLevel("mix.kick_mute=0");
-            const int k = sy.m == Module::Kick ? 0 : sy.m == Module::Bass ? 1 : sy.m == Module::Acid ? 2 : 3 + sy.inst;
-            for (const R& r : res) trims[static_cast<size_t>(k)].push_back(static_cast<int>(std::lround(10.0 * std::clamp(ref - r.k, -20.0, 20.0))));
+            const int k = sy.m_m == ModuleE::KICK ? 0 : sy.m_m == ModuleE::BASS ? 1 : sy.m_m == ModuleE::ACID ? 2 : 3 + sy.m_inst;
+            for (const R& r : res) trims[static_cast<size_t>(k)].push_back(static_cast<int>(std::lround(10.0 * std::clamp(ref - r.m_k, -20.0, 20.0))));
         }
         std::sort(levels.begin(), levels.end());
         if (!levels.empty())
-            std::printf("    %-8s %4d rendered, level %.1f / %.1f / %.1f dB (10th / median / 90th percentile)\n", sy.key,
+            std::printf("    %-8s %4d rendered, level %.1f / %.1f / %.1f dB (10th / median / 90th percentile)\n", sy.m_key,
                         static_cast<int>(which.size()), levels[levels.size() / 10], levels[levels.size() / 2], levels[levels.size() * 9 / 10]);
     }
     if (trimsPath != nullptr) {
         if (FILE* f = std::fopen(trimsPath, "wb")) {
             std::fprintf(f, "// Generated by phos_selftest --only testPresetBank with PHOS_BANK_TRIMS=<this file> (Tests/selftest_modulation.cpp).\n"
                             "/// Do not edit: each preset's level correction in tenths of a dB, kick, bass, acid, lead .. drone, 1024 each.\n"
-                            "static const short kPresetTrimTenths[9][1024] = {\n");
+                            "static const short PresetTrimTenths[9][1024] = {\n");
             for (const std::vector<int>& t : trims) {
                 std::fprintf(f, "{");
                 for (size_t i = 0; i < 1024; ++i) std::fprintf(f, "%s%d", i == 0 ? "" : (i % 32 == 0 ? ",\n" : ","), i < t.size() ? t[i] : 0);
@@ -354,7 +354,7 @@ void testPresetBank()
         ParamStore ps;
         ps.parseText("compose.level_match=Off master.auto_gain=Off");   // the plans only, no probe renders
         auto oscOf = [](const SoundPreset& sp) {
-            for (const auto& kv : sp.values) if (kv.first == poly::Osc) return static_cast<int>(std::lround(kv.second));
+            for (const auto& kv : sp.m_values) if (kv.first == poly::OSC) return static_cast<int>(std::lround(kv.second));
             return -1;
         };
         int same = 0, seen = 0;

@@ -11,26 +11,26 @@
 
 namespace phos {
 
-bool presetLeaves(Module m, int k)
+bool presetLeaves(ModuleE m, int k)
 {
     switch (m) {
     // 26.09.2026: and what ties kick and bass together -- the kick's tuning to the key (its end pitch is what the tuning
     // snaps: a preset's 40 Hz and 60 Hz landed in different octaves of the root and beat against the bass at 11 Hz),
     // its tail limit, the bass's lock to the kick, its retrigger and start phase.
-    case Module::Kick: return k == kick::Level || k == kick::Tune || k == kick::PitchEnd || k == kick::TailLimit;
-    case Module::Bass:
-        return k == bass::Level || k == bass::DuckDepth || k == bass::DuckHold || k == bass::DuckRelease || k == bass::KickLock
-            || k == bass::Retrigger || k == bass::StartPhase;
-    case Module::Acid:
-        return k == acid::Level || k == acid::Duck || k == acid::RoomSend || k == acid::HallSend || k == acid::PlateSend
-            || k == acid::HallGate;
-    case Module::Poly:
+    case ModuleE::KICK: return k == kick::LEVEL || k == kick::TUNE || k == kick::PITCH_END || k == kick::TAIL_LIMIT;
+    case ModuleE::BASS:
+        return k == bass::LEVEL || k == bass::DUCK_DEPTH || k == bass::DUCK_HOLD || k == bass::DUCK_RELEASE || k == bass::KICK_LOCK
+            || k == bass::RETRIGGER || k == bass::START_PHASE;
+    case ModuleE::ACID:
+        return k == acid::LEVEL || k == acid::DUCK || k == acid::ROOM_SEND || k == acid::HALL_SEND || k == acid::PLATE_SEND
+            || k == acid::HALL_GATE;
+    case ModuleE::POLY:
         // 26.09.2026: the sends to the rooms, the pan, the distance and the slow movement too -- where the mix guide
         // puts a voice, as the BerlinSchoolGenerator's presets leave them.
-        return k == poly::Level || k == poly::Duck || k == poly::HpFloor || k == poly::HpTrack || k == poly::Gate
-            || k == poly::GatePattern || k == poly::GateDepth || k == poly::GateDuty || k == poly::GateAttack
-            || k == poly::GateRelease || k == poly::GateTone || k == poly::RoomSend || k == poly::HallSend
-            || k == poly::PlateSend || k == poly::Pan || k == poly::Distance || k == poly::SlowMod || k == poly::HallGate;
+        return k == poly::LEVEL || k == poly::DUCK || k == poly::HP_FLOOR || k == poly::HP_TRACK || k == poly::GATE
+            || k == poly::GATE_PATTERN || k == poly::GATE_DEPTH || k == poly::GATE_DUTY || k == poly::GATE_ATTACK
+            || k == poly::GATE_RELEASE || k == poly::GATE_TONE || k == poly::ROOM_SEND || k == poly::HALL_SEND
+            || k == poly::PLATE_SEND || k == poly::PAN || k == poly::DISTANCE || k == poly::SLOW_MOD || k == poly::HALL_GATE;
     default: return false;
     }
 }
@@ -38,7 +38,7 @@ bool presetLeaves(Module m, int k)
 namespace {
 
 /** @brief Puts every knob of a module instance to its default. */
-void moduleToDefaults(ParamStore& p, Module m, int instance)
+void moduleToDefaults(ParamStore& p, ModuleE m, int instance)
 {
     const int b = p.base(m, instance);
     for (int k = 0; k < ParamStore::moduleCount(m); ++k) p.set(b + k, p.defaultValue(b + k));
@@ -46,16 +46,16 @@ void moduleToDefaults(ParamStore& p, Module m, int instance)
 
 } // namespace
 
-const std::vector<SoundPreset>& factoryPresets(Module module, int instance)
+const std::vector<SoundPreset>& factoryPresets(ModuleE module, int instance)
 {
     static std::mutex lock;
     static std::map<int, std::vector<SoundPreset>> cache;
     static const std::vector<SoundPreset> none;
     int key = -1;
-    if (module == Module::Kick) key = 0;
-    else if (module == Module::Bass) key = 1;
-    else if (module == Module::Acid) key = 2;
-    else if (module == Module::Poly && instance >= 0 && instance < kPolyInstances) key = 3 + instance;
+    if (module == ModuleE::KICK) key = 0;
+    else if (module == ModuleE::BASS) key = 1;
+    else if (module == ModuleE::ACID) key = 2;
+    else if (module == ModuleE::POLY && instance >= 0 && instance < PolyInstances) key = 3 + instance;
     if (key < 0) return none;
     const std::lock_guard<std::mutex> guard(lock);
     auto it = cache.find(key);
@@ -63,7 +63,7 @@ const std::vector<SoundPreset>& factoryPresets(Module module, int instance)
     return cache.emplace(key, bankPresets(module, instance)).first->second;
 }
 
-bool applySoundPreset(ParamStore& p, Module module, int instance, const std::string& text)
+bool applySoundPreset(ParamStore& p, ModuleE module, int instance, const std::string& text)
 {
     const int b = p.base(module, instance);
     const int n = ParamStore::moduleCount(module);
@@ -75,7 +75,7 @@ bool applySoundPreset(ParamStore& p, Module module, int instance, const std::str
     return ok;
 }
 
-std::string moduleText(const ParamStore& p, Module module, int instance)
+std::string moduleText(const ParamStore& p, ModuleE module, int instance)
 {
     const int b = p.base(module, instance);
     std::string s;

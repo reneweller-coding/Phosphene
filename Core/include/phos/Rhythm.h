@@ -35,7 +35,7 @@
 
 namespace phos {
 
-constexpr int kStepsPerBar = 16;   ///< the sixteenth grid of a 4/4 bar
+constexpr int StepsPerBar = 16;   ///< the sixteenth grid of a 4/4 bar
 
 /**
  * @brief Semitones the buildup's snare roll rises by from its first hit to the drop (16.09.2026).
@@ -45,7 +45,7 @@ constexpr int kStepsPerBar = 16;   ///< the sixteenth grid of a 4/4 bar
  * break's silence stands about eleven semitones up. The lane's high pass follows the same shift
  * through @c perc.cut_track (Perc.h), which is the thinning half of the gesture.
  */
-constexpr int kRollSemitones = 12;
+constexpr int RollSemitones = 12;
 
 /** @brief Bjorklund's Euclidean rhythm E(pulses, steps), rotated right by @p rotation steps. */
 std::vector<bool> euclid(int pulses, int steps, int rotation);
@@ -57,19 +57,19 @@ int lhlWeight(int step);
 int lhlSyncopation(const bool* steps);
 
 /** @brief Kinds of fill in the last bar of a phrase. */
-enum class FillType : int { None = 0, SnareRoll, TomRun, ZapBurst, ClapTriplet, HatDrop, Count };
+enum class FillTypeE : int { NONE = 0, SNARE_ROLL, TOM_RUN, ZAP_BURST, CLAP_TRIPLET, HAT_DROP, COUNT };
 
 /** @brief Percussion decisions that hold for a whole track. */
 struct PercPlan {
-    int  layerOrder[kPercLanes] = {};   ///< lanes in the order they enter the groove
-    int  layers = 0;                    ///< how many of them take part at most
-    int  hatMode = 0;                   ///< 0 closed offbeat, 1 open offbeat + closed sixteenths, 2 closed offbeat + shaker
-    bool clapBackbeat = true;           ///< clap on 2 and 4
-    int  pulses[kPercLanes] = {};       ///< Euclidean onsets per bar for the Euclidean roles
-    int  rotation[kPercLanes] = {};     ///< and their rotation
-    float macro[3] = {};                ///< sound recipe: brightness, tightness, grit (-1..1)
-    int  engineOverride[kPercLanes] = {};   ///< -1 = the knob
-    int  modeSetOverride[kPercLanes] = {};  ///< -1 = the knob
+    int  m_layerOrder[PercLanes] = {};   ///< lanes in the order they enter the groove
+    int  m_layers = 0;                    ///< how many of them take part at most
+    int  m_hatMode = 0;                   ///< 0 closed offbeat, 1 open offbeat + closed sixteenths, 2 closed offbeat + shaker
+    bool m_clapBackbeat = true;           ///< clap on 2 and 4
+    int  m_pulses[PercLanes] = {};       ///< Euclidean onsets per bar for the Euclidean roles
+    int  m_rotation[PercLanes] = {};     ///< and their rotation
+    float m_macro[3] = {};                ///< sound recipe: brightness, tightness, grit (-1..1)
+    int  m_engineOverride[PercLanes] = {};   ///< -1 = the knob
+    int  m_modeSetOverride[PercLanes] = {};  ///< -1 = the knob
     /**
      * @brief How many lanes at the head of layerOrder are hats (the closed hat, and the open hat or the
      *        shaker its hat mode leans on) -- 19.09.2026, round "arrangement".
@@ -78,7 +78,7 @@ struct PercPlan {
      * on 2 and 4, then congas, then ride)", then the rest by weight. The groove adds one layer per group
      * on top of the hats (Form.cpp).
      */
-    int  hatLayers = 1;
+    int  m_hatLayers = 1;
 };
 
 /**
@@ -99,23 +99,23 @@ PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack, const
  * buildup and leave again through an outro.
  */
 struct PercBarSpec {
-    int   layers = 4;        ///< how many layers of the plan play
-    bool  fills = true;      ///< fills allowed in this bar
-    bool  hatsDense = false; ///< the closed hat plays every sixteenth (buildup)
-    int   rollBar = -1;      ///< 0..rollBars-1: which bar of the buildup's snare roll this is
-    bool  pdb = false;       ///< the pre-drop break: the roll ends on beat 3, beat 4 stays empty
-    bool  crash = false;     ///< open the bar with a crash (a drop's downbeat)
-    float cutBeats = 0.0f;   ///< beats of silence at the start of the bar (the cut)
+    int   m_layers = 4;        ///< how many layers of the plan play
+    bool  m_fills = true;      ///< fills allowed in this bar
+    bool  m_hatsDense = false; ///< the closed hat plays every sixteenth (buildup)
+    int   m_rollBar = -1;      ///< 0..rollBars-1: which bar of the buildup's snare roll this is
+    bool  m_pdb = false;       ///< the pre-drop break: the roll ends on beat 3, beat 4 stays empty
+    bool  m_crash = false;     ///< open the bar with a crash (a drop's downbeat)
+    float m_cutBeats = 0.0f;   ///< beats of silence at the start of the bar (the cut)
     /** @name 19.09.2026, round "arrangement" (Form.h, BarPlan has the same fields)
      *  @{ */
-    int   rollBars = 4;      ///< length of the roll: its quarters play 1/4, 1/8, 1/16 and 1/32 notes
-    bool  quietHats = false; ///< a quiet closed hat on every sixteenth but the downbeat (the intro's first half)
-    bool  shaker = false;    ///< the shaker plays whether or not it is a layer
-    bool  offbeatHat = false;///< the closed hat plays its eighth offbeat whether or not it is a layer
-    float hatLevel = 1.0f;   ///< velocity factor of what quietHats, shaker and offbeatHat add
-    bool  openHats = false;  ///< the open hat on every offbeat (drop 2)
-    bool  ride = false;      ///< the ride plays whether or not it is a layer (drop 2)
-    int   cycleBar = -1;     ///< bar within the section's 32-bar cycle, -1 = unknown (the fill falls back on barInTrack)
+    int   m_rollBars = 4;      ///< length of the roll: its quarters play 1/4, 1/8, 1/16 and 1/32 notes
+    bool  m_quietHats = false; ///< a quiet closed hat on every sixteenth but the downbeat (the intro's first half)
+    bool  m_shaker = false;    ///< the shaker plays whether or not it is a layer
+    bool  m_offbeatHat = false;///< the closed hat plays its eighth offbeat whether or not it is a layer
+    float m_hatLevel = 1.0f;   ///< velocity factor of what quietHats, shaker and offbeatHat add
+    bool  m_openHats = false;  ///< the open hat on every offbeat (drop 2)
+    bool  m_ride = false;      ///< the ride plays whether or not it is a layer (drop 2)
+    int   m_cycleBar = -1;     ///< bar within the section's 32-bar cycle, -1 = unknown (the fill falls back on barInTrack)
     /** @} */
 };
 
@@ -142,7 +142,7 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
  * "bar 8 a snare fill or tom run"), the sixteenth and the thirty-second with the snare roll. With
  * @p cycleBar -1 the bar of the track decides, as before.
  */
-FillType chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack, int cycleBar = -1);
+FillTypeE chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack, int cycleBar = -1);
 
 /**
  * @brief Normalised offsets of the percussion recipe for one lane, indexed by perc::.

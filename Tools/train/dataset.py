@@ -102,7 +102,7 @@ TOKEN_VERSION = 1
 
 # Conditioning table sizes; mirrored in docs/MODEL_FORMAT.md section 3 and in the .phosmdl header.
 N_ROLE, N_STYLE, N_BARS, N_STEP, N_BAR, N_GAP, N_IDX = 3, 6, 8, 16, 8, 10, 8
-#: Rows of ``mode.emb``: the six modes of ``phos::kScaleSteps``. The mode of a corpus line is
+#: Rows of ``mode.emb``: the six modes of ``phos::ScaleSteps``. The mode of a corpus line is
 #: **estimated**, not read -- see ``Tools/train/mode.py`` for the estimator and for how much of the
 #: label is noise. Optional in the format exactly as ``condKick`` is, so a file without it still
 #: loads and is the model it was without the mode label.

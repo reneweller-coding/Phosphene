@@ -31,39 +31,39 @@ namespace bank {
 
 /** @brief One knob of a group: its key inside the module, its range, its axis; a table's spec in place of a range. */
 struct Knob {
-    const char* key;     ///< e.g. "cutoff", "lfo@_rate", "mx#_amount"
-    float lo;   ///< the low end of the range (the constant for an axis of C)
-    float hi;   ///< the high end of the range
-    char axis;           ///< 'A' the row, 'B' the column, 'R' drawn, 'C' constant
-    const char* table;   ///< for "table": "lane:<WaveTableLane>" or "list:<index>,<index>..."; else null
+    const char* m_key;     ///< e.g. "cutoff", "lfo@_rate", "mx#_amount"
+    float m_lo;   ///< the low end of the range (the constant for an axis of C)
+    float m_hi;   ///< the high end of the range
+    char m_axis;           ///< 'A' the row, 'B' the column, 'R' drawn, 'C' constant
+    const char* m_table;   ///< for "table": "lane:<WaveTableLane>" or "list:<index>,<index>..."; else null
 };
 /** @brief A filter model a group allows, with the range of its mode. */
 struct Filter {
-    int model;      ///< the filter model
-    float modeLo;   ///< the low end of its mode's range
-    float modeHi;   ///< ... the high end
+    int m_model;      ///< the filter model
+    float m_modeLo;   ///< the low end of its mode's range
+    float m_modeHi;   ///< ... the high end
 };
 /** @brief A modulation recipe: its chance and its knobs. */
 struct Mod {
-    float chance;              ///< how often a preset of the group gets it, 0..1
-    std::vector<Knob> knobs;   ///< the knobs it sets
+    float m_chance;              ///< how often a preset of the group gets it, 0..1
+    std::vector<Knob> m_knobs;   ///< the knobs it sets
 };
 /** @brief A group: its name, its eight nouns, its knobs, its filters and its modulation recipes. */
 struct Group {
-    const char* name;   ///< the group's name
-    const char* nouns[8];   ///< its eight nouns
-    float style[5];   ///< the group's weight in each style (StyleId order), for the composer's choice
-    std::vector<Knob> knobs;   ///< its knobs
-    std::vector<Filter> filters;   ///< the filter models it allows
-    std::vector<Mod> mods;   ///< its modulation recipes
+    const char* m_name;   ///< the group's name
+    const char* m_nouns[8];   ///< its eight nouns
+    float m_style[5];   ///< the group's weight in each style (StyleId order), for the composer's choice
+    std::vector<Knob> m_knobs;   ///< its knobs
+    std::vector<Filter> m_filters;   ///< the filter models it allows
+    std::vector<Mod> m_mods;   ///< its modulation recipes
 };
 /** @brief A synth: its label, module and instance, its eight adjectives and its sixteen groups. */
 struct Synth {
-    const char* label;   ///< the bank's label: the module's key prefix
-    Module module;   ///< the module
-    int instance;   ///< the instance
-    const char* adj[8];   ///< its eight adjectives
-    std::vector<Group> groups;   ///< its sixteen groups
+    const char* m_label;   ///< the bank's label: the module's key prefix
+    ModuleE m_module;   ///< the module
+    int m_instance;   ///< the instance
+    const char* m_adj[8];   ///< its eight adjectives
+    std::vector<Group> m_groups;   ///< its sixteen groups
 };
 
 #include "PresetBankData.inl"
@@ -89,7 +89,7 @@ std::vector<int> tablesOf(const char* spec)
     const std::string s(spec != nullptr ? spec : "");
     if (s.rfind("lane:", 0) == 0) {
         const int lane = std::atoi(s.c_str() + 5);
-        if (lane >= 0 && lane < kNumWaveTableLanes) out = waveTableLaneTables(static_cast<WaveTableLane>(lane));
+        if (lane >= 0 && lane < NumWaveTableLanes) out = waveTableLaneTables(static_cast<WaveTableLaneE>(lane));
     } else if (s.rfind("list:", 0) == 0) {
         size_t i = 5;
         while (i < s.size()) {
@@ -106,7 +106,7 @@ std::vector<int> tablesOf(const char* spec)
 /** @brief Sets knob @p key of the synth to the value its range and axis give at row @p row, column @p col. */
 bool setKnob(ParamStore& p, const Synth& s, const std::string& key, float lo, float hi, char axis, int row, int col, Rng& rng)
 {
-    const std::string full = (s.module == Module::Poly ? std::string(kPolyInstanceNames[s.instance]) : std::string(s.label)) + "." + key;
+    const std::string full = (s.m_module == ModuleE::POLY ? std::string(PolyInstanceNames[s.m_instance]) : std::string(s.m_label)) + "." + key;
     const int id = p.find(full);
     if (id < 0) return false;
     float t = 0.0f;
@@ -117,7 +117,7 @@ bool setKnob(ParamStore& p, const Synth& s, const std::string& key, float lo, fl
     default: t = 0.0f; break;
     }
     const ParamDesc& d = p.desc(id);
-    if (d.curve == Curve::Choice || d.curve == Curve::Int || d.curve == Curve::Toggle) {
+    if (d.m_curve == CurveE::CHOICE || d.m_curve == CurveE::INT || d.m_curve == CurveE::TOGGLE) {
         p.set(id, std::round(lo + t * (hi - lo)));
     } else if (axis == 'C' || lo == hi) {
         p.set(id, lo);
@@ -135,58 +135,58 @@ std::vector<SoundPreset> build(const Synth& s)
 {
     std::vector<SoundPreset> out;
     ParamStore p;
-    const int base = p.base(s.module, s.instance);
-    const int count = ParamStore::moduleCount(s.module);
+    const int base = p.base(s.m_module, s.m_instance);
+    const int count = ParamStore::moduleCount(s.m_module);
     uint64_t salt = 0x50524553'45544231ull;   // "PRESETB1"
-    for (const char* c = s.label; *c != 0; ++c) salt = mixSeed(salt, static_cast<uint64_t>(*c));
-    out.reserve(s.groups.size() * 64);
-    for (size_t g = 0; g < s.groups.size(); ++g) {
-        const Group& grp = s.groups[g];
+    for (const char* c = s.m_label; *c != 0; ++c) salt = mixSeed(salt, static_cast<uint64_t>(*c));
+    out.reserve(s.m_groups.size() * 64);
+    for (size_t g = 0; g < s.m_groups.size(); ++g) {
+        const Group& grp = s.m_groups[g];
         for (int row = 0; row < 8; ++row)
             for (int col = 0; col < 8; ++col) {
                 for (int k = 0; k < count; ++k) p.set(base + k, p.defaultValue(base + k));
                 Rng rng;
                 rng.seed(mixSeed(salt, static_cast<uint64_t>(g * 64 + row * 8 + col)));
-                for (const Knob& k : grp.knobs) {
-                    if (k.table != nullptr) {
-                        const std::vector<int> t = tablesOf(k.table);
+                for (const Knob& k : grp.m_knobs) {
+                    if (k.m_table != nullptr) {
+                        const std::vector<int> t = tablesOf(k.m_table);
                         setKnob(p, s, "table", static_cast<float>(t[static_cast<size_t>(rng.below(static_cast<int>(t.size())))]), 0.0f, 'C', row, col, rng);
                         continue;
                     }
-                    setKnob(p, s, k.key, k.lo, k.hi, k.axis, row, col, rng);
+                    setKnob(p, s, k.m_key, k.m_lo, k.m_hi, k.m_axis, row, col, rng);
                 }
-                if (!grp.filters.empty()) {
-                    const Filter& f = grp.filters[static_cast<size_t>(rng.below(static_cast<int>(grp.filters.size())))];
-                    setKnob(p, s, "filter_model", static_cast<float>(f.model), 0.0f, 'C', row, col, rng);
-                    setKnob(p, s, "filter_mode", f.modeLo, f.modeHi, 'R', row, col, rng);
+                if (!grp.m_filters.empty()) {
+                    const Filter& f = grp.m_filters[static_cast<size_t>(rng.below(static_cast<int>(grp.m_filters.size())))];
+                    setKnob(p, s, "filter_model", static_cast<float>(f.m_model), 0.0f, 'C', row, col, rng);
+                    setKnob(p, s, "filter_mode", f.m_modeLo, f.m_modeHi, 'R', row, col, rng);
                 }
                 int lfoNext = 1, slotNext = 1;
-                for (const Mod& m : grp.mods) {
+                for (const Mod& m : grp.m_mods) {
                     const float roll = rng.uniform();
-                    if (roll >= m.chance || slotNext > kModSlots) continue;
+                    if (roll >= m.m_chance || slotNext > ModSlots) continue;
                     bool usesLfo = false;
-                    for (const Knob& k : m.knobs) usesLfo = usesLfo || std::string(k.key).find('@') != std::string::npos;
-                    if (usesLfo && lfoNext > kLfos) continue;
-                    for (const Knob& k : m.knobs) {
-                        const std::string key = replaceAll(replaceAll(k.key, '@', lfoNext), '#', slotNext);
+                    for (const Knob& k : m.m_knobs) usesLfo = usesLfo || std::string(k.m_key).find('@') != std::string::npos;
+                    if (usesLfo && lfoNext > Lfos) continue;
+                    for (const Knob& k : m.m_knobs) {
+                        const std::string key = replaceAll(replaceAll(k.m_key, '@', lfoNext), '#', slotNext);
                         // A source of -1 is the LFO this recipe took (ModSource: LFO n is n).
-                        const bool theLfo = key.find("_src") != std::string::npos && k.lo < 0.0f;
+                        const bool theLfo = key.find("_src") != std::string::npos && k.m_lo < 0.0f;
                         if (theLfo) setKnob(p, s, key, static_cast<float>(lfoNext), 0.0f, 'C', row, col, rng);
-                        else setKnob(p, s, key, k.lo, k.hi, k.axis, row, col, rng);
+                        else setKnob(p, s, key, k.m_lo, k.m_hi, k.m_axis, row, col, rng);
                     }
                     if (usesLfo) ++lfoNext;
                     ++slotNext;
                 }
                 SoundPreset sp;
-                sp.group = grp.name;
-                sp.name = std::string(s.adj[row]) + " " + grp.nouns[col];
-                sp.text = moduleText(p, s.module, s.instance);
-                sp.groupIndex = static_cast<int>(g);
-                for (int k = 0; k < 5; ++k) sp.style[k] = grp.style[k];
-                const int synth = s.module == Module::Kick ? 0 : s.module == Module::Bass ? 1 : s.module == Module::Acid ? 2 : 3 + s.instance;
-                if (out.size() < 1024) sp.trimDb = 0.1f * static_cast<float>(kPresetTrimTenths[synth][out.size()]);
+                sp.m_group = grp.m_name;
+                sp.m_name = std::string(s.m_adj[row]) + " " + grp.m_nouns[col];
+                sp.m_text = moduleText(p, s.m_module, s.m_instance);
+                sp.m_groupIndex = static_cast<int>(g);
+                for (int k = 0; k < 5; ++k) sp.m_style[k] = grp.m_style[k];
+                const int synth = s.m_module == ModuleE::KICK ? 0 : s.m_module == ModuleE::BASS ? 1 : s.m_module == ModuleE::ACID ? 2 : 3 + s.m_instance;
+                if (out.size() < 1024) sp.m_trimDb = 0.1f * static_cast<float>(PresetTrimTenths[synth][out.size()]);
                 for (int k = 0; k < count; ++k)
-                    if (!presetLeaves(s.module, k)) sp.values.emplace_back(k, p.get(base + k));
+                    if (!presetLeaves(s.m_module, k)) sp.m_values.emplace_back(k, p.get(base + k));
                 out.push_back(std::move(sp));
             }
     }
@@ -200,17 +200,17 @@ int bankUnknownKeys(std::string* first)
     ParamStore p;
     int bad = 0;
     for (const bank::Synth& s : bank::synths()) {
-        const std::string prefix = s.module == Module::Poly ? std::string(kPolyInstanceNames[s.instance]) : std::string(s.label);
+        const std::string prefix = s.m_module == ModuleE::POLY ? std::string(PolyInstanceNames[s.m_instance]) : std::string(s.m_label);
         auto check = [&](const std::string& key) {
             if (p.find(prefix + "." + key) >= 0) return;
             if (bad++ == 0 && first != nullptr) *first = prefix + "." + key;
         };
-        for (const bank::Group& g : s.groups) {
-            for (const bank::Knob& k : g.knobs) check(k.key);
-            if (!g.filters.empty()) { check("filter_model"); check("filter_mode"); }
-            for (const bank::Mod& m : g.mods)
-                for (const bank::Knob& k : m.knobs) {
-                    std::string key = k.key;
+        for (const bank::Group& g : s.m_groups) {
+            for (const bank::Knob& k : g.m_knobs) check(k.m_key);
+            if (!g.m_filters.empty()) { check("filter_model"); check("filter_mode"); }
+            for (const bank::Mod& m : g.m_mods)
+                for (const bank::Knob& k : m.m_knobs) {
+                    std::string key = k.m_key;
                     for (char& c : key) if (c == '@' || c == '#') c = '1';
                     check(key);
                 }
@@ -219,10 +219,10 @@ int bankUnknownKeys(std::string* first)
     return bad;
 }
 
-std::vector<SoundPreset> bankPresets(Module module, int instance)
+std::vector<SoundPreset> bankPresets(ModuleE module, int instance)
 {
     for (const bank::Synth& s : bank::synths())
-        if (s.module == module && (module != Module::Poly || s.instance == instance)) return bank::build(s);
+        if (s.m_module == module && (module != ModuleE::POLY || s.m_instance == instance)) return bank::build(s);
     return {};
 }
 

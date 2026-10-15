@@ -36,63 +36,63 @@ inline void showLive(juce::Slider& s, double played)
     s.repaint();
 }
 
-constexpr int kCellW = 76;        ///< width of one cell unit
-constexpr int kCellH = 84;        ///< height of a cell: knob plus its name
-constexpr int kLabelH = 15;       ///< the name under the knob
-constexpr int kGroupPad = 9;      ///< inside a group box
-constexpr int kGroupTitleH = 21;  ///< the group's title bar
-constexpr int kGroupGap = 9;      ///< between group boxes
-constexpr int kPagePad = 12;      ///< around the page
+constexpr int CellW = 76;        ///< width of one cell unit
+constexpr int CellH = 84;        ///< height of a cell: knob plus its name
+constexpr int LabelH = 15;       ///< the name under the knob
+constexpr int GroupPad = 9;      ///< inside a group box
+constexpr int GroupTitleH = 21;  ///< the group's title bar
+constexpr int GroupGap = 9;      ///< between group boxes
+constexpr int PagePad = 12;      ///< around the page
 /**
  * @name The grid inside a group (26.09.2026)
  * The user: "wichtigere Encoder größer machen (sowas wie Cutoff im Filter ...) und die Funktionsgruppen sinnvoll und
- * platzsparend, ohne zu große Lücken, anordnen". A cell used to be one kCellW by kCellH box; the grid is now a half
+ * platzsparend, ohne zu große Lücken, anordnen". A cell used to be one CellW by CellH box; the grid is now a half
  * cell wide and a third of one tall, so that three sizes of control fit together: a normal knob is 2 x 3 of these,
  * a large one 4 x 5 (its knob nearly twice as wide), a small one -- sends, fine settings -- and a switch or a
  * chooser 2 (or 4) x 2. Widths and heights handed in as cell units (Group::columns, addControl) mean normal cells.
  * @{ */
-constexpr int kColU = kCellW / 2;  ///< grid column, pixels
-constexpr int kRowU = kCellH / 3;  ///< grid row, pixels
+constexpr int ColU = CellW / 2;  ///< grid column, pixels
+constexpr int RowU = CellH / 3;  ///< grid row, pixels
 /** @} */
 
 /** @brief How large a parameter's control is drawn (26.09.2026). */
-enum class CellSize { Small, Normal, Large };
+enum class CellSizeE { SMALL, NORMAL, LARGE };
 /** @brief A parameter and the size of its control, for ControlPage::addSizedGroup. */
 struct SizedParam {
-    int id = -1;                        ///< global parameter id
-    CellSize size = CellSize::Normal;   ///< how large
+    int m_id = -1;                        ///< global parameter id
+    CellSizeE m_size = CellSizeE::NORMAL;   ///< how large
 };
 
 /** @brief One control and the name under it. */
 struct Cell {
-    int param = -1;                                   ///< global parameter id, -1 for an added control
-    std::vector<int> bound;                           ///< the parameters an added control drives (addControl)
-    int units = 1;                                    ///< width in cell units
-    int heightRows = 1;                               ///< height in cell rows (added controls)
-    CellSize size = CellSize::Normal;                 ///< a parameter's control: small, normal or large
-    int gridW = 2;   ///< its footprint in grid units (kColU): width
-    int gridH = 3;   ///< ... height (kRowU)
-    bool tall = false;                                ///< occupies the whole cell height (no label line)
-    std::unique_ptr<juce::Component> comp;            ///< the control
-    std::unique_ptr<juce::Label> label;               ///< its name, under it
-    std::unique_ptr<juce::SliderParameterAttachment> slider;    ///< host link for a knob
-    std::unique_ptr<juce::ButtonParameterAttachment> button;    ///< host link for a switch
-    std::unique_ptr<juce::ComboBoxParameterAttachment> combo;   ///< host link for a chooser
-    juce::Rectangle<int> bounds;                      ///< filled by the layout pass
+    int m_param = -1;                                   ///< global parameter id, -1 for an added control
+    std::vector<int> m_bound;                           ///< the parameters an added control drives (addControl)
+    int m_units = 1;                                    ///< width in cell units
+    int m_heightRows = 1;                               ///< height in cell rows (added controls)
+    CellSizeE m_size = CellSizeE::NORMAL;                 ///< a parameter's control: small, normal or large
+    int m_gridW = 2;   ///< its footprint in grid units (ColU): width
+    int m_gridH = 3;   ///< ... height (RowU)
+    bool m_tall = false;                                ///< occupies the whole cell height (no label line)
+    std::unique_ptr<juce::Component> m_comp;            ///< the control
+    std::unique_ptr<juce::Label> m_label;               ///< its name, under it
+    std::unique_ptr<juce::SliderParameterAttachment> m_slider;    ///< host link for a knob
+    std::unique_ptr<juce::ButtonParameterAttachment> m_button;    ///< host link for a switch
+    std::unique_ptr<juce::ComboBoxParameterAttachment> m_combo;   ///< host link for a chooser
+    juce::Rectangle<int> m_bounds;                      ///< filled by the layout pass
 };
 
 /** @brief A titled box of cells. */
 struct Group {
-    juce::String title;             ///< shown in the box's title bar
-    juce::Colour tint;              ///< the page's colour, for the title
-    int columns = 5;                ///< cell units per row
-    std::vector<int> cells;         ///< indices into ControlPage::cells_
-    juce::Rectangle<int> bounds;    ///< filled by the layout pass
-    int rows = 1;                   ///< filled by the layout pass
-    int extraColumns = 0;           ///< columns the layout pass added where the page had room (26.09.2026)
-    bool fill = false;              ///< spans the page's width, its one control with it (setFillWidth)
-    bool hidden = false;            ///< left out of the layout and not drawn (setGroupVisible, or another section)
-    bool off = false;               ///< hidden by setGroupVisible, in every section
+    juce::String m_title;             ///< shown in the box's title bar
+    juce::Colour m_tint;              ///< the page's colour, for the title
+    int m_columns = 5;                ///< cell units per row
+    std::vector<int> m_cells;         ///< indices into ControlPage::m_cells
+    juce::Rectangle<int> m_bounds;    ///< filled by the layout pass
+    int m_rows = 1;                   ///< filled by the layout pass
+    int m_extraColumns = 0;           ///< columns the layout pass added where the page had room (26.09.2026)
+    bool m_fill = false;              ///< spans the page's width, its one control with it (setFillWidth)
+    bool m_hidden = false;            ///< left out of the layout and not drawn (setGroupVisible, or another section)
+    bool m_off = false;               ///< hidden by setGroupVisible, in every section
 };
 
 /**
@@ -119,7 +119,7 @@ public:
      * @param count    how many entries, -1 = to the end of the table
      * @return the group's index
      */
-    int addModuleGroup(PhospheneProcessor& proc, phos::Module module, int instance, const juce::String& title,
+    int addModuleGroup(PhospheneProcessor& proc, phos::ModuleE module, int instance, const juce::String& title,
                        juce::Colour tint, int columns, int first = 0, int count = -1);
     /**
      * @brief Adds a group of parameters named one by one (23.09.2026: the Set tab groups the composer's knobs by
@@ -162,7 +162,7 @@ public:
     /** @brief The group @p groupIndex spans the page's whole width, and so does the control in it (the pattern rolls). */
     void setFillWidth(int groupIndex)
     {
-        if (groupIndex >= 0 && groupIndex < static_cast<int>(groups_.size())) groups_[static_cast<size_t>(groupIndex)].fill = true;
+        if (groupIndex >= 0 && groupIndex < static_cast<int>(m_groups.size())) m_groups[static_cast<size_t>(groupIndex)].m_fill = true;
     }
     /** @brief Shows or hides group @p groupIndex and its controls (01.10.2026: the headset's, while one sends). */
     void setGroupVisible(int groupIndex, bool visible);
@@ -173,11 +173,11 @@ public:
      */
     void enableSections(const frame::Skin& skin, std::function<void()> changed);
     /** @brief The height the page has in its window (the editor says so before layout()). */
-    void setAvailableHeight(int h) { available_ = h; }
+    void setAvailableHeight(int h) { m_available = h; }
     /** @brief Measures and places everything for a page @p width; returns the height it needs. */
     int layout(int width);
     /** @brief The height the last layout() needed. */
-    int contentHeight() const { return contentHeight_; }
+    int contentHeight() const { return m_contentHeight; }
     /** @brief The narrowest width that still lets the widest group fit. */
     int minimumWidth() const;
 
@@ -186,8 +186,8 @@ public:
      *  parameters went into them, so the manual is the layout rather than a description of it, and
      *  a parameter that no group claimed shows up as a hole.
      *  @{ */
-    int groupCount() const { return static_cast<int>(groups_.size()); }   ///< number of groups
-    const juce::String& groupTitle(int index) const { return groups_[static_cast<size_t>(index)].title; }
+    int groupCount() const { return static_cast<int>(m_groups.size()); }   ///< number of groups
+    const juce::String& groupTitle(int index) const { return m_groups[static_cast<size_t>(index)].m_title; }
     /** @brief The global parameter ids of a group, in the order they are drawn (an added control's bound ids with it). */
     std::vector<int> groupParams(int index) const;
     /** @} */
@@ -222,7 +222,7 @@ public:
     /** @brief The name under cell @p cell anew (the preset chooser's star). */
     void setCellName(int cell, const juce::String& name);
     /** @brief The modulation at the knob (15.10.2026; the editor's): the right-click menu's rows and the arcs. */
-    frame::ModulationAtKnob* modulation = nullptr;
+    frame::ModulationAtKnob* m_modulation = nullptr;
 
 private:
     /** @brief Packs every group's cells and places the groups on the page (one pass of layout()); returns the bottom. */
@@ -232,25 +232,25 @@ private:
     /** @brief Packs @p g's cells into @p gridCols grid columns; returns the rows used; @p apply writes the cells' bounds. */
     int pack(Group& g, int gridCols, bool apply);
     /** @brief Builds the control a descriptor asks for -- knob, switch or chooser -- and attaches it. */
-    void addParamCell(PhospheneProcessor& proc, int groupIndex, int paramId, CellSize size = CellSize::Normal);
-    PhospheneProcessor* learnProc_ = nullptr;                    ///< set by the first enableMidiLearn
-    std::vector<std::pair<juce::Component*, int>> learnTargets_; ///< control -> target
-    std::vector<Cell> cells_;    ///< every control on the page, in the order it was added
-    std::vector<Group> groups_;  ///< the boxes, each naming the cells that belong to it
-    int contentHeight_ = 0;      ///< what the last layout() needed
-    const frame::Skin* skin_ = nullptr;                ///< set by enableSections: the page may have sections
-    std::unique_ptr<frame::SectionSwitch> sections_;   ///< the switch, while the page has more than one section
-    std::vector<int> sectionOf_;                       ///< per group its section
-    std::function<void()> sectionChanged_;   ///< called when another section is chosen
-    int available_ = 0;   ///< the height of the window (setAvailableHeight)
-    int plannedWidth_ = -1;   ///< the width the sections were planned for, -1 never
-    int plannedAvailable_ = -1;   ///< the height the sections were planned for, -1 never
-    bool planning_ = false;                            ///< measuring: the switch's row counted in
-    void plan(int usable);                             ///< the sections for this width and available_
+    void addParamCell(PhospheneProcessor& proc, int groupIndex, int paramId, CellSizeE size = CellSizeE::NORMAL);
+    PhospheneProcessor* m_learnProc = nullptr;                    ///< set by the first enableMidiLearn
+    std::vector<std::pair<juce::Component*, int>> m_learnTargets; ///< control -> target
+    std::vector<Cell> m_cells;    ///< every control on the page, in the order it was added
+    std::vector<Group> m_groups;  ///< the boxes, each naming the cells that belong to it
+    int m_contentHeight = 0;      ///< what the last layout() needed
+    const frame::Skin* m_skin = nullptr;                ///< set by enableSections: the page may have sections
+    std::unique_ptr<frame::SectionSwitch> m_sections;   ///< the switch, while the page has more than one section
+    std::vector<int> m_sectionOf;                       ///< per group its section
+    std::function<void()> m_sectionChanged;   ///< called when another section is chosen
+    int m_available = 0;   ///< the height of the window (setAvailableHeight)
+    int m_plannedWidth = -1;   ///< the width the sections were planned for, -1 never
+    int m_plannedAvailable = -1;   ///< the height the sections were planned for, -1 never
+    bool m_planning = false;                            ///< measuring: the switch's row counted in
+    void plan(int usable);                             ///< the sections for this width and m_available
     void applySections();                              ///< the groups of the section shown, the others hidden
     /** @brief Whether the page shows its groups in sections. */
-    bool split() const { return sections_ != nullptr && sections_->isVisible(); }
-    int topBar() const { return planning_ || split() ? 32 : 0; }   ///< room for the switch above the groups
+    bool split() const { return m_sections != nullptr && m_sections->isVisible(); }
+    int topBar() const { return m_planning || split() ? 32 : 0; }   ///< room for the switch above the groups
 };
 
 } // namespace phosui

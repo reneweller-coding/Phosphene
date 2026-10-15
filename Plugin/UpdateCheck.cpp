@@ -72,47 +72,47 @@ void UpdateCheck::setEnabled(const juce::File& stateFile, bool on)
 void UpdateCheck::loadCache(const juce::File& stateFile)
 {
     const juce::StringPairArray kv = readState(stateFile);
-    const std::lock_guard<std::mutex> g(lock_);
-    result_.when = juce::Time(kv["last"].getLargeIntValue());
-    result_.latest = kv["latest"];
-    result_.url = kv["url"];
-    result_.ok = result_.latest.isNotEmpty();
-    result_.asked = kv["last"].isNotEmpty();
-    result_.newer = result_.ok && isNewer(result_.latest, JucePlugin_VersionString);
-    result_.message = kv["message"];
+    const std::lock_guard<std::mutex> g(m_lock);
+    m_result.m_when = juce::Time(kv["last"].getLargeIntValue());
+    m_result.m_latest = kv["latest"];
+    m_result.m_url = kv["url"];
+    m_result.m_ok = m_result.m_latest.isNotEmpty();
+    m_result.m_asked = kv["last"].isNotEmpty();
+    m_result.m_newer = m_result.m_ok && isNewer(m_result.m_latest, JucePlugin_VersionString);
+    m_result.m_message = kv["message"];
 }
 
 void UpdateCheck::startIfDue(const juce::File& stateFile, bool force)
 {
     if (switchedOffForProcess()) {
-        const std::lock_guard<std::mutex> g(lock_);
-        result_.message = "The update check is switched off in this process (PHOS_NO_UPDATE_CHECK).";
+        const std::lock_guard<std::mutex> g(m_lock);
+        m_result.m_message = "The update check is switched off in this process (PHOS_NO_UPDATE_CHECK).";
         return;
     }
     if (isThreadRunning()) return;
-    stateFile_ = stateFile;
+    m_stateFile = stateFile;
     loadCache(stateFile);
     if (!force) {
         if (!enabled(stateFile)) return;
-        const std::lock_guard<std::mutex> g(lock_);
-        if (result_.asked && juce::Time::getCurrentTime() - result_.when < juce::RelativeTime::hours(24)) return;
+        const std::lock_guard<std::mutex> g(m_lock);
+        if (m_result.m_asked && juce::Time::getCurrentTime() - m_result.m_when < juce::RelativeTime::hours(24)) return;
     }
     startThread(juce::Thread::Priority::background);
 }
 
 UpdateCheck::Result UpdateCheck::result() const
 {
-    const std::lock_guard<std::mutex> g(lock_);
-    return result_;
+    const std::lock_guard<std::mutex> g(m_lock);
+    return m_result;
 }
 
 void UpdateCheck::run()
 {
     Result r;
-    r.asked = true;
-    r.when = juce::Time::getCurrentTime();
+    r.m_asked = true;
+    r.m_when = juce::Time::getCurrentTime();
     int status = 0;
-    const juce::URL url(kLatestReleaseApi);
+    const juce::URL url(LatestReleaseApi);
     auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
                        .withConnectionTimeoutMs(8000)
                        .withExtraHeaders(juce::String("User-Agent: Phosphene/") + JucePlugin_VersionString + "\r\nAccept: application/vnd.github+json")
@@ -120,31 +120,31 @@ void UpdateCheck::run()
     std::unique_ptr<juce::InputStream> in = url.createInputStream(options);
     if (threadShouldExit()) return;
     if (in == nullptr) {
-        r.message = "GitHub could not be reached.";
+        r.m_message = "GitHub could not be reached.";
     } else if (status == 404) {
-        r.message = "GitHub knows no public release of Phosphene yet.";
+        r.m_message = "GitHub knows no public release of Phosphene yet.";
     } else if (status != 200) {
-        r.message = "GitHub answered " + juce::String(status) + ".";
+        r.m_message = "GitHub answered " + juce::String(status) + ".";
     } else {
         const juce::var json = juce::JSON::parse(in->readEntireStreamAsString());
-        r.latest = json.getProperty("tag_name", juce::var()).toString();
-        r.url = json.getProperty("html_url", juce::var()).toString();
-        r.ok = r.latest.isNotEmpty();
-        r.newer = r.ok && isNewer(r.latest, JucePlugin_VersionString);
-        r.message = !r.ok ? juce::String("GitHub's answer named no release.")
-                  : r.newer ? "Phosphene " + r.latest.trimCharactersAtStart("vV") + " is available."
+        r.m_latest = json.getProperty("tag_name", juce::var()).toString();
+        r.m_url = json.getProperty("html_url", juce::var()).toString();
+        r.m_ok = r.m_latest.isNotEmpty();
+        r.m_newer = r.m_ok && isNewer(r.m_latest, JucePlugin_VersionString);
+        r.m_message = !r.m_ok ? juce::String("GitHub's answer named no release.")
+                  : r.m_newer ? "Phosphene " + r.m_latest.trimCharactersAtStart("vV") + " is available."
                             : "This is the latest version.";
     }
     {
-        const std::lock_guard<std::mutex> g(lock_);
-        result_ = r;
+        const std::lock_guard<std::mutex> g(m_lock);
+        m_result = r;
     }
-    juce::StringPairArray kv = readState(stateFile_);
-    kv.set("last", juce::String(r.when.toMilliseconds()));
-    kv.set("latest", r.latest);
-    kv.set("url", r.url);
-    kv.set("message", r.message);
-    writeState(stateFile_, kv);
+    juce::StringPairArray kv = readState(m_stateFile);
+    kv.set("last", juce::String(r.m_when.toMilliseconds()));
+    kv.set("latest", r.m_latest);
+    kv.set("url", r.m_url);
+    kv.set("message", r.m_message);
+    writeState(m_stateFile, kv);
 }
 
 } // namespace phosui

@@ -27,13 +27,13 @@ class UpdateCheck : private juce::Thread {
 public:
     /** @brief What the last check found. */
     struct Result {
-        bool asked = false;        ///< a check has run (now or from the cache)
-        bool ok = false;           ///< the answer arrived and was understood
-        bool newer = false;        ///< the latest release is newer than this build
-        juce::String latest;       ///< the latest release's tag ("v1.1.0")
-        juce::String url;          ///< its page
-        juce::String message;      ///< one line for the help page: what happened
-        juce::Time when;           ///< when GitHub was last asked
+        bool m_asked = false;        ///< a check has run (now or from the cache)
+        bool m_ok = false;           ///< the answer arrived and was understood
+        bool m_newer = false;        ///< the latest release is newer than this build
+        juce::String m_latest;       ///< the latest release's tag ("v1.1.0")
+        juce::String m_url;          ///< its page
+        juce::String m_message;      ///< one line for the help page: what happened
+        juce::Time m_when;           ///< when GitHub was last asked
     };
 
     /** @brief Creates the (not yet running) check thread; nothing is fetched until startIfDue(). */
@@ -55,16 +55,16 @@ public:
     /** @brief Whether @p candidate ("v1.2.0", "1.10") is a later version than @p current, number by number. */
     static bool isNewer(const juce::String& candidate, const juce::String& current);
     /** @brief The address asked. */
-    static constexpr const char* kLatestReleaseApi = "https://api.github.com/repos/reneweller-coding/Phosphene/releases/latest";
+    static constexpr const char* LatestReleaseApi = "https://api.github.com/repos/reneweller-coding/Phosphene/releases/latest";
 
 private:
     /** @brief The thread: asks GitHub for the latest release and keeps what it says. */
     void run() override;
     /** @brief Reads the cached answer out of the state file. */
     void loadCache(const juce::File& stateFile);
-    mutable std::mutex lock_;   ///< guards result_
-    Result result_;   ///< what the last check found
-    juce::File stateFile_;   ///< update.txt in the user folder
+    mutable std::mutex m_lock;   ///< guards m_result
+    Result m_result;   ///< what the last check found
+    juce::File m_stateFile;   ///< update.txt in the user folder
 };
 
 } // namespace phosui

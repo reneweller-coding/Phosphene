@@ -10,16 +10,16 @@
 
 namespace phos {
 
-constexpr int kNumBassPatterns = 5;   ///< entries of kBassPatternNames (Params.h)
+constexpr int NumBassPatterns = 5;   ///< entries of BassPatternNames (Params.h)
 
 /** @brief Slots of a bass pattern within one beat, in beats after the kick. */
 struct BassPatternDef {
-    int count;        ///< notes per beat
-    double pos[3];    ///< positions in beats, ascending
+    int m_count;        ///< notes per beat
+    double m_pos[3];    ///< positions in beats, ascending
 };
 
 /** @brief K-B-B-B, K-.-B-B, K-B-.-B, K-.-B-., K-B-B (triplets). */
-inline constexpr BassPatternDef kBassPatterns[kNumBassPatterns] = {
+inline constexpr BassPatternDef BassPatterns[NumBassPatterns] = {
     { 3, { 0.25, 0.5, 0.75 } },               // Rolling
     { 2, { 0.5, 0.75, 0.0 } },                // Gallop
     { 2, { 0.25, 0.75, 0.0 } },               // Skip
@@ -30,8 +30,8 @@ inline constexpr BassPatternDef kBassPatterns[kNumBassPatterns] = {
 /** @brief Beats from the kick to the first bass note of a pattern. */
 inline double firstBassSlot(int pattern)
 {
-    const int p = pattern < 0 ? 0 : (pattern >= kNumBassPatterns ? kNumBassPatterns - 1 : pattern);
-    return kBassPatterns[p].pos[0];
+    const int p = pattern < 0 ? 0 : (pattern >= NumBassPatterns ? NumBassPatterns - 1 : pattern);
+    return BassPatterns[p].m_pos[0];
 }
 
 /**
@@ -40,10 +40,10 @@ inline double firstBassSlot(int pattern)
  */
 inline double shortestBassSlot(int pattern)
 {
-    const int p = pattern < 0 ? 0 : (pattern >= kNumBassPatterns ? kNumBassPatterns - 1 : pattern);
-    const BassPatternDef& d = kBassPatterns[p];
-    double best = 1.0 - d.pos[d.count - 1];
-    for (int i = 0; i + 1 < d.count; ++i) best = d.pos[i + 1] - d.pos[i] < best ? d.pos[i + 1] - d.pos[i] : best;
+    const int p = pattern < 0 ? 0 : (pattern >= NumBassPatterns ? NumBassPatterns - 1 : pattern);
+    const BassPatternDef& d = BassPatterns[p];
+    double best = 1.0 - d.m_pos[d.m_count - 1];
+    for (int i = 0; i + 1 < d.m_count; ++i) best = d.m_pos[i + 1] - d.m_pos[i] < best ? d.m_pos[i + 1] - d.m_pos[i] : best;
     return best;
 }
 

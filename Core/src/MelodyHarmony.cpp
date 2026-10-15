@@ -37,12 +37,12 @@ namespace mel {
  * bII wants a semitone, bVII a whole tone under the octave, bVI a minor sixth.
  */
 struct Pendulum {
-    int b;                       ///< the other degree (0-based)
-    int semis;                   ///< its interval above the root
-    double weight[kNumStyles];   ///< each style's taste for it
+    int m_b;                       ///< the other degree (0-based)
+    int m_semis;                   ///< its interval above the root
+    double m_weight[NumStyles];   ///< each style's taste for it
 };
 /** @brief The pendulums and the styles' tastes for them. */
-const Pendulum kPendulums[] = {
+const Pendulum Pendulums[] = {
     //  b  semis   Goa   FullOn  Prog   Dark   HiTech
     { 1,  1,  { 0.50, 0.20, 0.00, 0.50, 0.50 } },   // i <-> bII
     { 6, 10,  { 0.30, 0.40, 0.35, 0.15, 0.30 } },   // i <-> bVII
@@ -50,7 +50,7 @@ const Pendulum kPendulums[] = {
     { 5,  8,  { 0.00, 0.10, 0.30, 0.20, 0.00 } },   // i <-> bVI
     { 4,  7,  { 0.00, 0.15, 0.00, 0.00, 0.00 } },   // i <-> v
 };
-constexpr int kNumPendulums = static_cast<int>(sizeof(kPendulums) / sizeof(kPendulums[0]));   ///< how many pendulums there are
+constexpr int NumPendulums = static_cast<int>(sizeof(Pendulums) / sizeof(Pendulums[0]));   ///< how many pendulums there are
 
 /**
  * @brief Each style's taste for the chord types of Harmony.h, in ChordType order:
@@ -62,7 +62,7 @@ constexpr int kNumPendulums = static_cast<int>(sizeof(kPendulums) / sizeof(kPend
  * their weight went to the suspensions and the fourths, which keep a pad open and unresolved without the
  * rub. The major seventh stays a rare colour, at most 8 %.
  */
-const double kTypeWeight[kNumStyles][kNumChordTypes] = {
+const double TypeWeight[NumStyles][NumChordTypes] = {
     //  triad sus2  sus4  m7    m9    maj7  quartal
     { 0.15, 0.20, 0.32, 0.05, 0.00, 0.08, 0.20 },   // Goa
     { 0.20, 0.25, 0.25, 0.20, 0.05, 0.08, 0.05 },   // Full-On
@@ -72,7 +72,7 @@ const double kTypeWeight[kNumStyles][kNumChordTypes] = {
 };
 
 /** @brief How long a chord holds in the cores: 4, 8 or 16 bars, by style ("oft nur alle 4, 8 oder 16 Takte"). */
-const double kBarsWeight[kNumStyles][3] = {
+const double BarsWeight[NumStyles][3] = {
     { 0.20, 0.50, 0.30 },   // Goa
     { 0.40, 0.50, 0.10 },   // Full-On
     { 0.00, 0.40, 0.60 },   // Progressive
@@ -87,7 +87,7 @@ const double kBarsWeight[kNumStyles][3] = {
  * A loop is the answer to "sonst klingt immer alles schraeg": no suspension it could do without, and the major
  * seventh as rare as in the styles' own taste.
  */
-const double kClassicalWeight[kNumChordTypes] = {
+const double ClassicalWeight[NumChordTypes] = {
     //  triad sus2  sus4  m7    m9    maj7  quartal
     0.50, 0.12, 0.08, 0.20, 0.05, 0.08, 0.03,
 };
@@ -99,24 +99,24 @@ const double kClassicalWeight[kNumChordTypes] = {
  */
 int drawChordType(Rng& r, int scale, int degree, int styleIdx, bool classical = false)
 {
-    double w[kNumChordTypes] = {};
+    double w[NumChordTypes] = {};
     double sum = 0.0;
-    for (int t = 0; t < kNumChordTypes; ++t) {
-        const ChordType ct = static_cast<ChordType>(t);
+    for (int t = 0; t < NumChordTypes; ++t) {
+        const ChordTypeE ct = static_cast<ChordTypeE>(t);
         const bool fits = chordTypeFits(scale, degree, ct) && padAvoidsRubs(scale, degree, ct);
-        w[t] = fits ? (classical ? kClassicalWeight[t] : kTypeWeight[styleIdx][t]) : 0.0;
+        w[t] = fits ? (classical ? ClassicalWeight[t] : TypeWeight[styleIdx][t]) : 0.0;
         sum += w[t];
     }
     if (sum <= 0.0) {
         // Nothing the style likes fits: the first type that fits at all, and the triad only when
         // even that is wanting -- a chord must never hand the pad a note outside its mode, nor a b9.
-        for (int t = 0; t < kNumChordTypes; ++t) {
-            const ChordType ct = static_cast<ChordType>(t);
+        for (int t = 0; t < NumChordTypes; ++t) {
+            const ChordTypeE ct = static_cast<ChordTypeE>(t);
             if (chordTypeFits(scale, degree, ct) && padAvoidsRubs(scale, degree, ct)) return t;
         }
-        return static_cast<int>(ChordType::Triad);
+        return static_cast<int>(ChordTypeE::TRIAD);
     }
-    return drawIndex(r, w, kNumChordTypes);
+    return drawIndex(r, w, NumChordTypes);
 }
 
 /**
@@ -129,28 +129,28 @@ int drawChordType(Rng& r, int scale, int degree, int styleIdx, bool classical = 
  * over the four slots and what pitch class each degree has to be for the loop to exist in a mode.
  */
 struct Loop {
-    int deg[4];         ///< the degrees over the four slots
-    int semis[4];       ///< the pitch class each has to be
-    const char* name;   ///< its name ("i-bVI-bVII-i")
+    int m_deg[4];         ///< the degrees over the four slots
+    int m_semis[4];       ///< the pitch class each has to be
+    const char* m_name;   ///< its name ("i-bVI-bVII-i")
 };
 /** @brief The minor loops. */
-const Loop kLoops[4] = {
+const Loop Loops[4] = {
     { { 0, 5, 6, 0 }, { 0, 8, 10, 0 },  "i-bVI-bVII-i" },
     { { 0, 6, 5, 6 }, { 0, 10, 8, 10 }, "i-bVII-bVI-bVII" },
     { { 0, 3, 0, 4 }, { 0, 5, 0, 7 },   "i-iv-i-v" },
     { { 0, 2, 6, 3 }, { 0, 3, 10, 5 },  "i-bIII-bVII-iv" },
 };
-constexpr int kNumLoops = 4;   ///< how many loops there are
+constexpr int NumLoops = 4;   ///< how many loops there are
 /** @brief How often a style plays a loop instead of a pendulum, and how often the second half changes. */
-const float kLoopChance[kNumStyles] = { 0.20f, 0.35f, 0.45f, 0.15f, 0.10f };      // Goa, Full-On, Progressive, Dark, Hi-Tech
-const float kSecondHalfChance[kNumStyles] = { 0.30f, 0.30f, 0.40f, 0.25f, 0.20f };   ///< how often the second half of a loop changes, per style
+const float LoopChance[NumStyles] = { 0.20f, 0.35f, 0.45f, 0.15f, 0.10f };      // Goa, Full-On, Progressive, Dark, Hi-Tech
+const float SecondHalfChance[NumStyles] = { 0.30f, 0.30f, 0.40f, 0.25f, 0.20f };   ///< how often the second half of a loop changes, per style
 
 /** @brief Whether every degree of @p loop exists in @p scale with the loop's pitch class and a perfect fifth over it. */
 bool loopFits(int scale, const Loop& loop)
 {
     for (int c = 0; c < 4; ++c) {
-        const int d = loop.deg[c];
-        if (scaleDegree(scale, d) % 12 != loop.semis[c]) return false;
+        const int d = loop.m_deg[c];
+        if (scaleDegree(scale, d) % 12 != loop.m_semis[c]) return false;
         if (scaleDegree(scale, d + 4) - scaleDegree(scale, d) != 7) return false;
     }
     return true;
@@ -164,36 +164,36 @@ bool loopFits(int scale, const Loop& loop)
 int drawProgression(Rng& r, Rng& lr, int scale, int si, int* deg, int* type, int& which)
 {
     which = -1;
-    double lw[kNumLoops] = {};
+    double lw[NumLoops] = {};
     double lsum = 0.0;
-    for (int i = 0; i < kNumLoops; ++i) { lw[i] = loopFits(scale, kLoops[i]) ? 1.0 : 0.0; lsum += lw[i]; }
+    for (int i = 0; i < NumLoops; ++i) { lw[i] = loopFits(scale, Loops[i]) ? 1.0 : 0.0; lsum += lw[i]; }
     // The loop's chance against the pendulum's, reweighted by the listener's preferences (Preferences.h); without
     // them the chance itself, so that not a bit of the draw moves.
-    float loopChance = kLoopChance[si];
+    float loopChance = LoopChance[si];
     {
         const double fl = preferenceFactor("harmony", "loop"), fp = preferenceFactor("harmony", "pendulum");
         if (fl != 1.0 || fp != 1.0) loopChance = static_cast<float>(loopChance * fl / (loopChance * fl + (1.0 - loopChance) * fp));
     }
     const bool loop = lr.uniform() < loopChance && lsum > 0.0;
-    const int pick = drawIndex(lr, lw, kNumLoops);   // drawn whatever the coin: the pendulum path keeps its stream
+    const int pick = drawIndex(lr, lw, NumLoops);   // drawn whatever the coin: the pendulum path keeps its stream
     if (loop) {
         which = pick;
-        for (int c = 0; c < 4; ++c) { deg[c] = kLoops[pick].deg[c]; type[c] = drawChordType(lr, scale, deg[c], si, true); }
+        for (int c = 0; c < 4; ++c) { deg[c] = Loops[pick].m_deg[c]; type[c] = drawChordType(lr, scale, deg[c], si, true); }
         // The tonic's two slots take one type, as the pendulum's do.
-        type[3] = kLoops[pick].deg[3] == 0 ? type[0] : type[3];
-        type[2] = kLoops[pick].deg[2] == 0 ? type[0] : type[2];
+        type[3] = Loops[pick].m_deg[3] == 0 ? type[0] : type[3];
+        type[2] = Loops[pick].m_deg[2] == 0 ? type[0] : type[2];
         return 1;
     }
-    double pw[kNumPendulums] = {};
+    double pw[NumPendulums] = {};
     double psum = 0.0;
-    for (int i = 0; i < kNumPendulums; ++i) {
-        const Pendulum& pd = kPendulums[i];
-        if (scaleDegree(scale, pd.b) % 12 != pd.semis) continue;
-        if (scaleDegree(scale, pd.b + 4) - scaleDegree(scale, pd.b) != 7) continue;
-        pw[i] = pd.weight[si];
+    for (int i = 0; i < NumPendulums; ++i) {
+        const Pendulum& pd = Pendulums[i];
+        if (scaleDegree(scale, pd.m_b) % 12 != pd.m_semis) continue;
+        if (scaleDegree(scale, pd.m_b + 4) - scaleDegree(scale, pd.m_b) != 7) continue;
+        pw[i] = pd.m_weight[si];
         psum += pw[i];
     }
-    const int other = psum > 0.0 ? kPendulums[drawIndex(r, pw, kNumPendulums)].b : 3;   // iv exists in every mode
+    const int other = psum > 0.0 ? Pendulums[drawIndex(r, pw, NumPendulums)].m_b : 3;   // iv exists in every mode
     deg[0] = 0; deg[1] = other; deg[2] = 0; deg[3] = other;
     const int typeI = drawChordType(r, scale, 0, si), typeOther = drawChordType(r, scale, other, si);
     type[0] = typeI; type[1] = typeOther; type[2] = typeI; type[3] = typeOther;
@@ -205,10 +205,10 @@ void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, con
 {
     (void)temperature;   // the corpus successions this used to temper are no longer the rule (22.09.2026)
     Rng r;
-    r.seed(seed ^ kSaltChords);
-    const int si = std::clamp(static_cast<int>(style.id), 0, kNumStyles - 1);
+    r.seed(seed ^ SaltChords);
+    const int si = std::clamp(static_cast<int>(style.m_id), 0, NumStyles - 1);
     Rng lr;   // the loops' and the second half's own stream (23.09.2026): nothing older moves because of them
-    lr.seed(mixSeed(seed ^ kSaltChords, 0x4C4F4F50ull));
+    lr.seed(mixSeed(seed ^ SaltChords, 0x4C4F4F50ull));
 
     // The pendulum: among those the mode has, by the style's taste. The corpus successions
     // (chordTransition) decided this until 22.09.2026 and gave four degrees every 2 or 4 bars --
@@ -218,21 +218,21 @@ void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, con
     // (The pendulum's chord has to stand on a perfect fifth: v in Phrygian is C# over F#, and its scale
     // fifth is G, a tritone -- no type of Harmony.h fits such a root and the pad would be handed a note
     // outside the mode; measured on seed 7, track 3. drawProgression keeps that rule for loops as well.)
-    m.progression = drawProgression(r, lr, scale, si, m.chordDegree, m.chordType, m.loop);
-    const int typeI = m.chordType[0];
-    static const int kBars[3] = { 4, 8, 16 };
-    m.chordBars = kBars[drawIndex(r, kBarsWeight[si], 3)];
+    m.m_progression = drawProgression(r, lr, scale, si, m.m_chordDegree, m.m_chordType, m.m_loop);
+    const int typeI = m.m_chordType[0];
+    static const int Bars[3] = { 4, 8, 16 };
+    m.m_chordBars = Bars[drawIndex(r, BarsWeight[si], 3)];
     // The second half (23.09.2026): behind the main breakdown a progression of its own, in the style's
     // share of tracks -- another pendulum or a loop, never the first one again. The lines and the bass
     // stay on the tonic (the Bordun), so this is the pad's and the stab's colour changing, not a key.
-    m.secondHalf = lr.uniform() < kSecondHalfChance[si];
-    if (m.secondHalf) {
+    m.m_secondHalf = lr.uniform() < SecondHalfChance[si];
+    if (m.m_secondHalf) {
         for (int attempt = 0; attempt < 4; ++attempt) {
-            m.progression2 = drawProgression(lr, lr, scale, si, m.chordDegree2, m.chordType2, m.loop2);
-            bool same = m.progression2 == m.progression;
-            for (int c = 0; c < 4 && same; ++c) same = m.chordDegree2[c] == m.chordDegree[c];
+            m.m_progression2 = drawProgression(lr, lr, scale, si, m.m_chordDegree2, m.m_chordType2, m.m_loop2);
+            bool same = m.m_progression2 == m.m_progression;
+            for (int c = 0; c < 4 && same; ++c) same = m.m_chordDegree2[c] == m.m_chordDegree[c];
             if (!same) break;
-            if (attempt == 3) m.secondHalf = false;
+            if (attempt == 3) m.m_secondHalf = false;
         }
     }
 
@@ -241,17 +241,17 @@ void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, con
     // chord held through it, the most emotional type the mode allows (m9, m7, else the tonic's own).
     const bool hasVI = scaleDegree(scale, 5) % 12 == 8, hasVII = scaleDegree(scale, 6) % 12 == 10;
     if (hasVI && hasVII) {
-        m.breakHolds = false;
-        m.breakChordBars = 8;
+        m.m_breakHolds = false;
+        m.m_breakChordBars = 8;
         const int deg[4] = { 0, 5, 6, 0 };
-        for (int c = 0; c < 4; ++c) { m.breakDegree[c] = deg[c]; m.breakType[c] = drawChordType(r, scale, deg[c], si); }
+        for (int c = 0; c < 4; ++c) { m.m_breakDegree[c] = deg[c]; m.m_breakType[c] = drawChordType(r, scale, deg[c], si); }
     } else {
-        m.breakHolds = true;
-        m.breakChordBars = 16;
+        m.m_breakHolds = true;
+        m.m_breakChordBars = 16;
         int t = typeI;
-        if (chordTypeFits(scale, 0, ChordType::Min9)) t = static_cast<int>(ChordType::Min9);
-        else if (chordTypeFits(scale, 0, ChordType::Min7)) t = static_cast<int>(ChordType::Min7);
-        for (int c = 0; c < 4; ++c) { m.breakDegree[c] = 0; m.breakType[c] = t; }
+        if (chordTypeFits(scale, 0, ChordTypeE::MIN9)) t = static_cast<int>(ChordTypeE::MIN9);
+        else if (chordTypeFits(scale, 0, ChordTypeE::MIN7)) t = static_cast<int>(ChordTypeE::MIN7);
+        for (int c = 0; c < 4; ++c) { m.m_breakDegree[c] = 0; m.m_breakType[c] = t; }
     }
 }
 
@@ -260,28 +260,28 @@ void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, con
 PadChord padChordAt(const MelodyPlan& m, const BarPlan& bp, int barInTrack)
 {
     PadChord c;
-    if (bp.type == SectionType::Break) {
-        c.inBreak = true;
-        if (bp.mainBreak && !m.breakHolds) {
-            c.blockBars = m.breakChordBars;
-            c.slot = (bp.barInSection / c.blockBars) % 4;
-            c.barInBlock = bp.barInSection % c.blockBars;
+    if (bp.m_type == SectionTypeE::BREAK) {
+        c.m_inBreak = true;
+        if (bp.m_mainBreak && !m.m_breakHolds) {
+            c.m_blockBars = m.m_breakChordBars;
+            c.m_slot = (bp.m_barInSection / c.m_blockBars) % 4;
+            c.m_barInBlock = bp.m_barInSection % c.m_blockBars;
         } else {
             // Held for the whole section: one chord from its first bar to its last.
-            c.blockBars = std::max(1, bp.sectionBars);
-            c.slot = 0;
-            c.barInBlock = bp.barInSection;
+            c.m_blockBars = std::max(1, bp.m_sectionBars);
+            c.m_slot = 0;
+            c.m_barInBlock = bp.m_barInSection;
         }
-        c.degree = m.breakDegree[c.slot];
-        c.type = m.breakType[c.slot];
+        c.m_degree = m.m_breakDegree[c.m_slot];
+        c.m_type = m.m_breakType[c.m_slot];
         return c;
     }
-    c.blockBars = m.chordBars;
-    c.slot = chordIndexAt(m, barInTrack);
-    c.barInBlock = barInTrack % m.chordBars;
-    c.secondSet = m.secondHalf && bp.afterMainBreak;
-    c.degree = c.secondSet ? m.chordDegree2[c.slot] : m.chordDegree[c.slot];
-    c.type = c.secondSet ? m.chordType2[c.slot] : m.chordType[c.slot];
+    c.m_blockBars = m.m_chordBars;
+    c.m_slot = chordIndexAt(m, barInTrack);
+    c.m_barInBlock = barInTrack % m.m_chordBars;
+    c.m_secondSet = m.m_secondHalf && bp.m_afterMainBreak;
+    c.m_degree = c.m_secondSet ? m.m_chordDegree2[c.m_slot] : m.m_chordDegree[c.m_slot];
+    c.m_type = c.m_secondSet ? m.m_chordType2[c.m_slot] : m.m_chordType[c.m_slot];
     return c;
 }
 
@@ -292,21 +292,21 @@ PadChord padChordAt(const MelodyPlan& m, const FormPlan& f, int barInTrack)
     // whether it is the breakdown before the climax drop.
     BarPlan bp;
     const int si = sectionOfBar(f, barInTrack);
-    const Section& s = f.section[std::clamp(si, 0, std::max(0, f.count - 1))];
-    bp.type = s.type;
-    bp.barInSection = barInTrack - s.startBar;
-    bp.sectionBars = s.bars;
-    if (s.type == SectionType::Break)
-        for (int j = si + 1; j < f.count; ++j) {
-            if (f.section[j].type != SectionType::Drop) continue;
-            bp.mainBreak = f.section[j].climax;
+    const Section& s = f.m_section[std::clamp(si, 0, std::max(0, f.m_count - 1))];
+    bp.m_type = s.m_type;
+    bp.m_barInSection = barInTrack - s.m_startBar;
+    bp.m_sectionBars = s.m_bars;
+    if (s.m_type == SectionTypeE::BREAK)
+        for (int j = si + 1; j < f.m_count; ++j) {
+            if (f.m_section[j].m_type != SectionTypeE::DROP) continue;
+            bp.m_mainBreak = f.m_section[j].m_climax;
             break;
         }
     for (int k = 0; k < si; ++k) {
-        if (f.section[k].type != SectionType::Break) continue;
-        for (int j = k + 1; j < f.count; ++j) {
-            if (f.section[j].type != SectionType::Drop) continue;
-            if (f.section[j].climax) bp.afterMainBreak = true;
+        if (f.m_section[k].m_type != SectionTypeE::BREAK) continue;
+        for (int j = k + 1; j < f.m_count; ++j) {
+            if (f.m_section[j].m_type != SectionTypeE::DROP) continue;
+            if (f.m_section[j].m_climax) bp.m_afterMainBreak = true;
             break;
         }
     }
@@ -328,7 +328,7 @@ std::vector<int> stabChordImpl(int scale, int degree, int key, int tones)
     int d = degree;
     if (isColourTone(scale, scaleDegree(scale, d) % 12)) d = 0;
     const int rootPc = ((key + scaleDegree(scale, d)) % 12 + 12) % 12;
-    const int root = kArpLowest + ((rootPc - kArpLowest) % 12 + 12) % 12;   // G3 .. F#4
+    const int root = ArpLowest + ((rootPc - ArpLowest) % 12 + 12) % 12;   // G3 .. F#4
     auto iv = [&](int k) { return scaleDegree(scale, d + k) - scaleDegree(scale, d); };
     std::vector<int> rel = { 0 };
     if (tones == 0) rel.push_back(iv(1));
@@ -375,9 +375,9 @@ std::vector<int> voiceChord(int scale, int key, int degree, int type, const std:
 {
     int iv[4];
     int rootSemis = 0;
-    const int n = padChordIntervals(static_cast<ChordType>(std::clamp(type, 0, kNumChordTypes - 1)), scale, degree, rootSemis, iv);
+    const int n = padChordIntervals(static_cast<ChordTypeE>(std::clamp(type, 0, NumChordTypes - 1)), scale, degree, rootSemis, iv);
     const int rootPc = ((key + rootSemis) % 12 + 12) % 12;
-    const int root = kPadLowest + ((rootPc - kPadLowest) % 12 + 12) % 12;   // D3 .. C#4
+    const int root = PadLowest + ((rootPc - PadLowest) % 12 + 12) % 12;   // D3 .. C#4
     const int fifth = root + iv[0];
     // The reference without a voicing before: every colour tone at its base position.
     std::vector<int> reference = { root, fifth };
@@ -402,7 +402,7 @@ std::vector<int> voiceChord(int scale, int key, int degree, int type, const std:
             int c = code;
             for (int i = 1; i < use; ++i) { v.push_back(root + low[i] + 12 * (c % 3)); c /= 3; }
             std::sort(v.begin() + 2, v.end());
-            bool ok = v.back() <= kPadHighest;
+            bool ok = v.back() <= PadHighest;
             for (size_t k = 1; k < v.size() && ok; ++k) { const int gap = v[k] - v[k - 1]; ok = gap >= 3 && gap <= 12; }
             if (!ok) continue;
             int cost = 0;
@@ -422,7 +422,7 @@ std::vector<int> foundationVoicing(const std::vector<int>& voicing)
     // (22.09.2026, the brief: "immer eine Bassnote in Oktave 1 oder 2 mitfuehren ... bis 50 Hz hinab").
     // Until then it was one octave down from a D3 .. C#4 root, i.e. D2 .. C#3, 73 .. 139 Hz -- an
     // octave short of what the brief calls the fundament. The pad's high pass opens to 40 Hz for it.
-    const int sub = voicing[0] - 24 >= kPadFoundationLowest ? voicing[0] - 24 : voicing[0] - 12;
+    const int sub = voicing[0] - 24 >= PadFoundationLowest ? voicing[0] - 24 : voicing[0] - 12;
     // Root, fifth and the first colour tone over the sub: at most four voices, as before.
     std::vector<int> out = { sub, voicing[0], voicing[1] };
     if (voicing.size() > 2) out.push_back(voicing[2]);
@@ -439,7 +439,7 @@ int voicingMovement(const std::vector<int>& a, const std::vector<int>& b)
 int bassChordShift(const PadChord& chord, int scale, int bassRoot)
 {
     int iv[4], shift = 0;
-    padChordIntervals(static_cast<ChordType>(std::clamp(chord.type, 0, kNumChordTypes - 1)), scale, chord.degree, shift, iv);
+    padChordIntervals(static_cast<ChordTypeE>(std::clamp(chord.m_type, 0, NumChordTypes - 1)), scale, chord.m_degree, shift, iv);
     if (shift > 6 && bassRoot + shift - 12 >= 28) shift -= 12;   // the nearer octave, never under E1
     return shift;
 }

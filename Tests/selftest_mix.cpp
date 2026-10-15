@@ -32,12 +32,12 @@ void testGateAndDuck()
                                   "master.comp_ratio=1 fx.hall_return=-36 fx.room_return=-36 fx.plate_return=-36 pad.hall_send=0 pad.amp_attack=1 %s", settings).c_str());
         for (int pitch : { 60, 64, 67, 71 }) {
             NoteEvent n;
-            n.part = Part::Pad; n.pitch = static_cast<uint8_t>(pitch); n.length = 64.0f; n.velocity = 100;
+            n.m_part = PartE::PAD; n.m_pitch = static_cast<uint8_t>(pitch); n.m_length = 64.0f; n.m_velocity = 100;
             e->pushEvent(n);
         }
         for (int b = 0; b < 32; ++b) {
             NoteEvent k;
-            k.part = Part::Kick; k.beat = b; k.velocity = 127;
+            k.m_part = PartE::KICK; k.m_beat = b; k.m_velocity = 127;
             e->pushEvent(k);
         }
         std::vector<float> L(48000 * 12), R(48000 * 12);
@@ -124,7 +124,7 @@ void testReverb()
 void testGatedReverb()
 {
     section("gated hall");
-    // barGate(): stateless, a function of the absolute beat alone (Reverb.h/.cpp; Clock.h, kBeatsPerBar
+    // barGate(): stateless, a function of the absolute beat alone (Reverb.h/.cpp; Clock.h, BeatsPerBar
     // = 4). Chosen beats, not the round's own ms constants, so this exercises the formula and not a
     // second copy of Engine.cpp's numbers.
     {
@@ -169,12 +169,12 @@ void testGatedReverb()
         std::vector<float> inL(n), inR(n), poL(n), poR(n), duL(n), duR(n);
         Rng r;
         for (size_t i = 0; i < nPre; ++i) {
-            inL[i] = 0.001f * static_cast<float>(std::sin(2.0 * kPiD * 233.0 * static_cast<double>(i) / sr));
+            inL[i] = 0.001f * static_cast<float>(std::sin(2.0 * PiD * 233.0 * static_cast<double>(i) / sr));
             inR[i] = inL[i];
         }
         for (size_t i = nPre; i < nPre + nLoud; ++i) {
             const double t = static_cast<double>(i - nPre);
-            inL[i] = 0.4f * static_cast<float>(std::sin(2.0 * kPiD * 311.0 * t / sr)) + 0.05f * r.bipolar();
+            inL[i] = 0.4f * static_cast<float>(std::sin(2.0 * PiD * 311.0 * t / sr)) + 0.05f * r.bipolar();
             inR[i] = inL[i];
         }
         // inL/inR stay at the pre-roll's own last value's silence-adjacent level for the third: silence
@@ -214,7 +214,7 @@ void testGatedReverb()
     }
     // Engine wiring (Engine.cpp send routing): a voice's hall_gate reroutes its hall send from the plain
     // hall to the gated one -- never both, never neither -- and the gated hall's bar-line cut reaches the
-    // master output through the full chunked process() path (chunkBeat_, beatsPerSample_), not just the
+    // master output through the full chunked process() path (m_chunkBeat, m_beatsPerSample), not just the
     // bare Reverb class tested above.
     {
         auto render = [](bool gate, float hallSend) {
@@ -227,7 +227,7 @@ void testGatedReverb()
                 "pad.amp_attack=1 pad.amp_decay=1 pad.amp_sustain=1 pad.amp_release=2000 pad.hall_gate=%d",
                 static_cast<double>(hallSend), gate ? 1 : 0).c_str());
             NoteEvent n;
-            n.part = Part::Pad; n.pitch = 60; n.length = 64.0f; n.velocity = 110;
+            n.m_part = PartE::PAD; n.m_pitch = 60; n.m_length = 64.0f; n.m_velocity = 110;
             e->pushEvent(n);
             std::vector<float> L(48000 * 12), R(48000 * 12);
             e->process(L.data(), R.data(), static_cast<int>(L.size()));
@@ -236,9 +236,9 @@ void testGatedReverb()
         const std::vector<float> off = render(false, 1.0f), on = render(true, 1.0f);
         // The dry pad's own settings (level -36 dB, a fast attack) push it well under the reverb return's
         // reach, but at these settings the dry sum still outweighs the return by 10+ dB and its own slow
-        // table-position drift (kDefaultPoly, pad.pos_lfo_beats = 16, four bars) is on the same order as
+        // table-position drift (DefaultPoly, pad.pos_lfo_beats = 16, four bars) is on the same order as
         // the return itself -- so a plain before/after window inside "on" cannot see the cut past the
-        // dry's own wander. The dry sum never reads stripHall_ (Engine.cpp: sl feeds l/r before the send
+        // dry's own wander. The dry sum never reads m_stripHall (Engine.cpp: sl feeds l/r before the send
         // terms are added, not after it), so it is bit-identical whichever hall a voice's send reaches, or
         // none at all: a third render with hall_send=0 gives that dry sum exactly, and subtracting it out
         // extracts the wet return with no approximation, not just an improved signal-to-dry ratio.
@@ -254,7 +254,7 @@ void testGatedReverb()
         };
         // Bar 6, long past the pad's 1 ms attack: "before" is the last 20 ms of the bar, "after" is
         // 15 .. 35 ms into the next one -- inside the fixed close/hold window (Engine.cpp,
-        // kHallGateCloseMs = 8, kHallGateHoldMs = 40) -- "mid" is deep in the open part of the bar.
+        // HallGateCloseMs = 8, HallGateHoldMs = 40) -- "mid" is deep in the open part of the bar.
         const double barStart = 6.0 * bar;
         const double beforeOn = rmsDb(wetOn, barStart - 0.020 * 48000.0, barStart);
         const double afterOn = rmsDb(wetOn, barStart + 0.015 * 48000.0, barStart + 0.035 * 48000.0);
@@ -308,16 +308,16 @@ void testDynamics()
     // holds it -- the three samples a limiter has in hand when it decides that sample's gain.
     {
         TruePeakInterpolator tp;
-        constexpr int kMid = 64;
+        constexpr int Mid = 64;
         double lo = 0.0, hi = 0.0, worstF = 0.0, worstOff = 0.0, naive = 1.0;
         for (double f : { 0.05, 0.11, 0.17, 0.23, 0.29, 0.35, 0.41, 0.45 }) {
             for (double off : { 0.0, 0.125, 0.25, 0.375, 0.5 }) {
-                // Crest of sin(2 pi f t + phi) at t = kMid + off, so the true peak is exactly 1.
-                const double phase = 0.5 * kPiD - 2.0 * kPiD * f * (kMid + off);
+                // Crest of sin(2 pi f t + phi) at t = Mid + off, so the true peak is exactly 1.
+                const double phase = 0.5 * PiD - 2.0 * PiD * f * (Mid + off);
                 std::vector<float> x(128);
-                for (int i = 0; i < 128; ++i) x[static_cast<size_t>(i)] = static_cast<float>(std::sin(2.0 * kPiD * f * i + phase));
+                for (int i = 0; i < 128; ++i) x[static_cast<size_t>(i)] = static_cast<float>(std::sin(2.0 * PiD * f * i + phase));
                 double est = 0.0, samplePeak = 0.0;
-                for (int i = kMid - 1; i <= kMid + 1; ++i) {
+                for (int i = Mid - 1; i <= Mid + 1; ++i) {
                     est = std::max({ est, std::fabs(static_cast<double>(x[static_cast<size_t>(i)])), tp.between(x.data() + i) });
                     samplePeak = std::max(samplePeak, std::fabs(static_cast<double>(x[static_cast<size_t>(i)])));
                 }
@@ -333,7 +333,7 @@ void testDynamics()
         std::vector<float> s(256);
         for (int i = 0; i < 256; ++i) {
             const double u = 0.9 * (static_cast<double>(i - 128) - 0.5);
-            s[static_cast<size_t>(i)] = static_cast<float>(std::fabs(u) < 1e-12 ? 1.0 : std::sin(kPiD * u) / (kPiD * u));
+            s[static_cast<size_t>(i)] = static_cast<float>(std::fabs(u) < 1e-12 ? 1.0 : std::sin(PiD * u) / (PiD * u));
         }
         double sincEst = 0.0, sincSample = 0.0;
         for (int i = 120; i < 136; ++i) {
@@ -365,9 +365,9 @@ void testDynamics()
         for (size_t i = 0; i < N; ++i) {
             const double t = static_cast<double>(i) / sr;
             const double beatPos = std::fmod(t * 145.0 / 60.0, 1.0);
-            const double kick = std::exp(-beatPos * 40.0) * std::sin(2.0 * kPiD * 60.0 * t);
-            L[i] = static_cast<float>(3.5 * (0.6 * kick + 0.3 * std::sin(2.0 * kPiD * 7000.0 * t + 0.7) + 0.3 * r.bipolar()));
-            R[i] = static_cast<float>(3.5 * (0.6 * kick + 0.3 * std::sin(2.0 * kPiD * 9000.0 * t) + 0.3 * r.bipolar()));
+            const double kick = std::exp(-beatPos * 40.0) * std::sin(2.0 * PiD * 60.0 * t);
+            L[i] = static_cast<float>(3.5 * (0.6 * kick + 0.3 * std::sin(2.0 * PiD * 7000.0 * t + 0.7) + 0.3 * r.bipolar()));
+            R[i] = static_cast<float>(3.5 * (0.6 * kick + 0.3 * std::sin(2.0 * PiD * 9000.0 * t) + 0.3 * r.bipolar()));
         }
         // Zero every bin above 0.45 fs, both halves of the spectrum, and transform back. Exact, so the
         // material carries no energy at all where the estimate is not claimed to hold.
@@ -413,7 +413,7 @@ void testDynamics()
         LoudnessMeter own;
         own.prepare(sr);
         own.process(yl.data() + 4096, yr.data() + 4096, static_cast<int>(N - 4096));
-        const double tpOwn = static_cast<double>(own.read().truePeak);
+        const double tpOwn = static_cast<double>(own.read().m_truePeak);
         // The same program only sample-clipped at the ceiling shows what the true-peak estimate is for.
         std::vector<float> cl = L;
         const float ceil1 = dbToGain(-1.0f);
@@ -447,7 +447,7 @@ void testDynamics()
             largestStep = std::max(largestStep, std::fabs(g1 - g0));
             deepest = std::min(deepest, g1);
         }
-        const int window = lat - TruePeakInterpolator::kHalf + 1;
+        const int window = lat - TruePeakInterpolator::Half + 1;
         check(largestStep <= (1.0 - deepest) / window * 1.05 + 1e-6, "limiter: the gain ramps down over the lookahead window instead of stepping",
               fmt("largest change %.4f per sample, reduction to %.3f over %d samples", largestStep, deepest, window));
         // The ceiling has to hold against a measurement that shares nothing with the estimator: the
@@ -465,17 +465,17 @@ void testSfx()
     section("effects");
     const double sr = 48000.0;
     ParamStore p;
-    auto renderType = [&](SfxType type, double seconds, double tail) {
+    auto renderType = [&](SfxTypeE type, double seconds, double tail) {
         Sfx s;
         s.prepare(sr);
-        std::vector<float> v = moduleValues(p, Module::Sfx);
+        std::vector<float> v = moduleValues(p, ModuleE::SFX);
         s.update(v.data(), 6);
         s.trigger(type, static_cast<int>(seconds * sr), 1.0f, 0.0);
         return renderMono([&](float* L, float* R, int n) { s.process(L, R, n); }, static_cast<size_t>((seconds + tail) * sr));
     };
     auto rms = [](const std::vector<float>& y, size_t a, size_t n) { double e = 0.0; for (size_t i = a; i < a + n && i < y.size(); ++i) e += static_cast<double>(y[i]) * y[i]; return 10.0 * std::log10(e / n + 1e-30); };
     {
-        const std::vector<float> y = renderType(SfxType::Riser, 4.0, 0.2);
+        const std::vector<float> y = renderType(SfxTypeE::RISER, 4.0, 0.2);
         const double first = rms(y, 4800, 19200), last = rms(y, 172800, 19200), after = rms(y, 196800, 4800);
         std::vector<float> a(y.begin() + 9600, y.begin() + 9600 + 4096), b(y.begin() + 180000, y.begin() + 180000 + 4096);
         const double c0 = centroid(a.data(), sr, 4096), c1 = centroid(b.data(), sr, 4096);
@@ -483,14 +483,14 @@ void testSfx()
               fmt("%+.1f dB, centroid %.0f -> %.0f Hz, %.1f dB after the end", last - first, c0, c1, after - last));
     }
     {
-        const std::vector<float> y = renderType(SfxType::ReverseSwell, 2.0, 0.1);
+        const std::vector<float> y = renderType(SfxTypeE::REVERSE_SWELL, 2.0, 0.1);
         double best = -1e9;
         size_t at = 0;
         for (size_t i = 0; i + 2400 <= 96000; i += 2400) { const double v = rms(y, i, 2400); if (v > best) { best = v; at = i; } }
         check(at >= 96000 - 4800, "reverse swell: loudest in the last 100 ms before its target", fmt("loudest window at %.2f s of 2.00 s", at / sr));
     }
     {
-        const std::vector<float> y = renderType(SfxType::Impact, 0.5, 1.5);
+        const std::vector<float> y = renderType(SfxTypeE::IMPACT, 0.5, 1.5);
         double best = -1e9;
         size_t at = 0;
         for (size_t i = 0; i + 240 <= 48000; i += 240) { const double v = rms(y, i, 240); if (v > best) { best = v; at = i; } }
@@ -503,9 +503,9 @@ void testSfx()
         // effects" checks both) -- and less the stutter, which is the engine's and silent here. The bed
         // and the voices have their own generators and their own check in that section.
         double worst = -1e9;
-        for (int k = 0; k < kNumSfxTypes; ++k) {
-            const SfxType t = static_cast<SfxType>(k);
-            if (sfxTypePart(t) != Part::Sfx || t == SfxType::SubDrop || t == SfxType::Stutter) continue;
+        for (int k = 0; k < NumSfxTypes; ++k) {
+            const SfxTypeE t = static_cast<SfxTypeE>(k);
+            if (sfxTypePart(t) != PartE::SFX || t == SfxTypeE::SUB_DROP || t == SfxTypeE::STUTTER) continue;
             const std::vector<float> y = renderType(t, 2.0, 0.8);
             worst = std::max(worst, lowShareDb(y, 140.0, true));
         }
@@ -523,42 +523,42 @@ void testSfx()
             const TrackPlan t = c.track(q, ti);
             // The bars on which a core begins after a buildup, and the last bar of every buildup.
             std::vector<double> dropBeats, pdbEnd;
-            for (int i = 0; i < t.form.count; ++i) {
-                const Section& sec = t.form.section[i];
-                if (sec.type != SectionType::Build) continue;
-                if (sec.pdbBars > 0) pdbEnd.push_back(static_cast<double>(sec.startBar + sec.bars) * kBeatsPerBar);
-                dropBeats.push_back(static_cast<double>(sec.startBar + sec.bars) * kBeatsPerBar);
+            for (int i = 0; i < t.m_form.m_count; ++i) {
+                const Section& sec = t.m_form.m_section[i];
+                if (sec.m_type != SectionTypeE::BUILD) continue;
+                if (sec.m_pdbBars > 0) pdbEnd.push_back(static_cast<double>(sec.m_startBar + sec.m_bars) * BeatsPerBar);
+                dropBeats.push_back(static_cast<double>(sec.m_startBar + sec.m_bars) * BeatsPerBar);
             }
             auto isAt = [](const std::vector<double>& v, double x) {
                 for (double b : v) if (std::fabs(b - x) < 1e-6) return true;
                 return false;
             };
-            for (const SfxEvent& s : t.form.sfx) {
-                const double end = s.beat + s.length;
-                if (s.type == static_cast<int>(SfxType::Impact)) {
+            for (const SfxEvent& s : t.m_form.m_sfx) {
+                const double end = s.m_beat + s.m_length;
+                if (s.m_type == static_cast<int>(SfxTypeE::IMPACT)) {
                     ++impacts;
                     // The downbeat of a drop: one that follows a buildup, or since 18.09.2026 any other
                     // drop too (out of a breakdown, a groove, or a first drop into a second).
-                    bool ok = isAt(dropBeats, s.beat);
-                    for (int i = 1; i < t.form.count && !ok; ++i)
-                        ok = t.form.section[i].type == SectionType::Drop
-                          && std::fabs(static_cast<double>(t.form.section[i].startBar) * kBeatsPerBar - s.beat) < 1e-6;
+                    bool ok = isAt(dropBeats, s.m_beat);
+                    for (int i = 1; i < t.m_form.m_count && !ok; ++i)
+                        ok = t.m_form.m_section[i].m_type == SectionTypeE::DROP
+                          && std::fabs(static_cast<double>(t.m_form.m_section[i].m_startBar) * BeatsPerBar - s.m_beat) < 1e-6;
                     // 23.09.2026, round "DJ": the bass swap of the blend -- the incoming kick's first bar, the hand-over.
-                    ok = ok || (t.form.handover > 0 && std::fabs(static_cast<double>(t.form.handover) * kBeatsPerBar - s.beat) < 1e-6);
+                    ok = ok || (t.m_form.m_handover > 0 && std::fabs(static_cast<double>(t.m_form.m_handover) * BeatsPerBar - s.m_beat) < 1e-6);
                     if (!ok) ++misplaced;
                 }
-                if (s.type == static_cast<int>(SfxType::FormantShot)) ++misplaced;   // replaced by the vocal or zap (19.09.2026)
+                if (s.m_type == static_cast<int>(SfxTypeE::FORMANT_SHOT)) ++misplaced;   // replaced by the vocal or zap (19.09.2026)
                 // A riser arrives on the drop, or -- where a pre-drop break stops everything on beat 4 -- on beat 4.
-                if (s.type == static_cast<int>(SfxType::Riser)) { ++risers; if (!isAt(dropBeats, end) && !isAt(pdbEnd, end + 1.0)) ++misplaced; }
-                if (s.type == static_cast<int>(SfxType::Sweep)) ++sweeps;
+                if (s.m_type == static_cast<int>(SfxTypeE::RISER)) { ++risers; if (!isAt(dropBeats, end) && !isAt(pdbEnd, end + 1.0)) ++misplaced; }
+                if (s.m_type == static_cast<int>(SfxTypeE::SWEEP)) ++sweeps;
                 // Nothing of this track in its outro's bare bars (kick, bass and a hat).
-                if (s.beat >= static_cast<double>(t.bars - 16) * kBeatsPerBar - 1e-6) ++misplaced;
+                if (s.m_beat >= static_cast<double>(t.m_bars - 16) * BeatsPerBar - 1e-6) ++misplaced;
             }
             // Beat 4 of every pre-drop break: the vocal (a voice chop) or a single laser zap.
             for (double z : pdbEnd) {
                 bool one = false;
-                for (const SfxEvent& s : t.form.sfx)
-                    if ((s.type == static_cast<int>(SfxType::VoiceChop) || s.type == static_cast<int>(SfxType::Zap)) && std::fabs(s.beat - (z - 1.0)) < 1e-6) one = true;
+                for (const SfxEvent& s : t.m_form.m_sfx)
+                    if ((s.m_type == static_cast<int>(SfxTypeE::VOICE_CHOP) || s.m_type == static_cast<int>(SfxTypeE::ZAP)) && std::fabs(s.m_beat - (z - 1.0)) < 1e-6) one = true;
                 if (one) ++shots; else ++misplaced;
             }
         }
@@ -573,14 +573,14 @@ void testSfx()
         // "flaechigere und laengere Effekte".
         {
             int families = 0, total = 0, badField = 0;
-            for (int t = 0; t < kNumSfxTypes; ++t) {
-                if (kSfxBankCount[t] <= 0) continue;
+            for (int t = 0; t < NumSfxTypes; ++t) {
+                if (SfxBankCount[t] <= 0) continue;
                 ++families;
-                total += kSfxBankCount[t];
-                for (int k = 1; k <= kSfxBankCount[t]; ++k) {
-                    const SfxPreset* pr = sfxPreset(static_cast<SfxType>(t), k);
+                total += SfxBankCount[t];
+                for (int k = 1; k <= SfxBankCount[t]; ++k) {
+                    const SfxPreset* pr = sfxPreset(static_cast<SfxTypeE>(t), k);
                     if (pr == nullptr) { ++badField; continue; }
-                    const float* f = &pr->lengthScale;
+                    const float* f = &pr->m_lengthScale;
                     for (int x = 0; x < 12; ++x) if (!std::isfinite(f[x]) || f[x] < -12.0f || f[x] > 24.0f) ++badField;
                 }
             }
@@ -590,21 +590,21 @@ void testSfx()
             for (int ti = 0; ti < 8; ++ti) {
                 const TrackPlan t = c.track(q, ti);
                 std::set<std::pair<int, int>> seen;
-                std::vector<int> perType(static_cast<size_t>(kNumSfxTypes), 0);
-                for (const SfxEvent& e : t.form.sfx) {
-                    if (sfxTypePart(static_cast<SfxType>(e.type)) != Part::Sfx || e.type == static_cast<int>(SfxType::Stutter)
-                        || e.type == static_cast<int>(SfxType::SubDrop) || e.type == static_cast<int>(SfxType::SpaceShot)) continue;   // no family: a NASA recording
+                std::vector<int> perType(static_cast<size_t>(NumSfxTypes), 0);
+                for (const SfxEvent& e : t.m_form.m_sfx) {
+                    if (sfxTypePart(static_cast<SfxTypeE>(e.m_type)) != PartE::SFX || e.m_type == static_cast<int>(SfxTypeE::STUTTER)
+                        || e.m_type == static_cast<int>(SfxTypeE::SUB_DROP) || e.m_type == static_cast<int>(SfxTypeE::SPACE_SHOT)) continue;   // no family: a NASA recording
                     ++events;
-                    if (e.variant > 0) ++withPreset;
-                    if (!seen.insert({ e.type, static_cast<int>(e.variant) }).second) { ++repeats; repeatDetail += fmt(" track %d %s #%d;", ti + 1, kSfxTypeNames[e.type], static_cast<int>(e.variant)); }
-                    ++perType[static_cast<size_t>(e.type)];
-                    if (e.type == static_cast<int>(SfxType::Atmosphere)) ++atmospheres;
-                    allBeats += e.length;
-                    if (e.length >= 2.0 * kBeatsPerBar) longBeats += e.length;
+                    if (e.m_variant > 0) ++withPreset;
+                    if (!seen.insert({ e.m_type, static_cast<int>(e.m_variant) }).second) { ++repeats; repeatDetail += fmt(" track %d %s #%d;", ti + 1, SfxTypeNames[e.m_type], static_cast<int>(e.m_variant)); }
+                    ++perType[static_cast<size_t>(e.m_type)];
+                    if (e.m_type == static_cast<int>(SfxTypeE::ATMOSPHERE)) ++atmospheres;
+                    allBeats += e.m_length;
+                    if (e.m_length >= 2.0 * BeatsPerBar) longBeats += e.m_length;
                 }
             }
-            check(kSfxBankSize == total && total == 2048 && families == 11 && badField == 0 && sfxPreset(SfxType::Riser, 0) == nullptr
-                      && sfxPreset(SfxType::Stutter, 1) == nullptr,
+            check(SfxBankSize == total && total == 2048 && families == 11 && badField == 0 && sfxPreset(SfxTypeE::RISER, 0) == nullptr
+                      && sfxPreset(SfxTypeE::STUTTER, 1) == nullptr,
                   "the effect bank: 2048 presets in eleven families, every field a finite number, lane 0 and a family-less type give no preset",
                   fmt("%d presets in %d families, %d bad fields", total, families, badField));
             check(events > 100 && withPreset == events && repeats == 0 && atmospheres > 8 && longBeats >= 0.6 * allBeats,
@@ -618,36 +618,36 @@ void testSfx()
     // The expectations are read off the form itself, section by section, not off Form.cpp's code.
     {
         auto run = [](float amount, int& transitions, int& marked, int& intrusions, int& candy, double& candyBars,
-                      std::vector<std::array<int, kNumSfxTypes>>& perTrack) {
+                      std::vector<std::array<int, NumSfxTypes>>& perTrack) {
             ParamStore q;
             q.parseText(fmt("compose.sfx_amount=%.2f compose.track_bars=256 compose.level_match=Off master.auto_gain=Off", amount));
             Composer c(303);
             for (int ti = 0; ti < 8; ++ti) {
                 const TrackPlan t = c.track(q, ti);
-                std::array<int, kNumSfxTypes> hist{};
-                auto has = [&](SfxType type, double beat, bool atEnd) {
-                    for (const SfxEvent& s : t.form.sfx)
-                        if (s.type == static_cast<int>(type) && std::fabs((atEnd ? s.beat + s.length : s.beat) - beat) < 1e-6) return true;
+                std::array<int, NumSfxTypes> hist{};
+                auto has = [&](SfxTypeE type, double beat, bool atEnd) {
+                    for (const SfxEvent& s : t.m_form.m_sfx)
+                        if (s.m_type == static_cast<int>(type) && std::fabs((atEnd ? s.m_beat + s.m_length : s.m_beat) - beat) < 1e-6) return true;
                     return false;
                 };
-                for (int i = 1; i < t.form.count; ++i) {
-                    const Section& s = t.form.section[i];
-                    const double at = static_cast<double>(s.startBar) * kBeatsPerBar;
+                for (int i = 1; i < t.m_form.m_count; ++i) {
+                    const Section& s = t.m_form.m_section[i];
+                    const double at = static_cast<double>(s.m_startBar) * BeatsPerBar;
                     bool ok = true;
-                    if (s.type == SectionType::Build) ok = has(SfxType::ReverseSwell, at, true);
-                    else if (s.type == SectionType::Break) ok = has(SfxType::ReverseSwell, at, true) && has(SfxType::Downlifter, at, false);
-                    else if (s.type == SectionType::Drop) ok = has(SfxType::Impact, at, false);
-                    else if (s.type == SectionType::Outro) ok = has(SfxType::Downlifter, at, false);
+                    if (s.m_type == SectionTypeE::BUILD) ok = has(SfxTypeE::REVERSE_SWELL, at, true);
+                    else if (s.m_type == SectionTypeE::BREAK) ok = has(SfxTypeE::REVERSE_SWELL, at, true) && has(SfxTypeE::DOWNLIFTER, at, false);
+                    else if (s.m_type == SectionTypeE::DROP) ok = has(SfxTypeE::IMPACT, at, false);
+                    else if (s.m_type == SectionTypeE::OUTRO) ok = has(SfxTypeE::DOWNLIFTER, at, false);
                     else continue;
                     ++transitions;
                     if (ok) ++marked;
                 }
-                for (int i = 0; i < t.form.count; ++i) {
-                    const Section& s = t.form.section[i];
-                    const double a = static_cast<double>(s.startBar) * kBeatsPerBar, z = a + s.bars * kBeatsPerBar;
-                    if (s.type != SectionType::Build) { candyBars += s.bars; continue; }
-                    for (const SfxEvent& e : t.form.sfx) {
-                        if (e.beat < a - 1e-9 || e.beat >= z - 1e-9) continue;
+                for (int i = 0; i < t.m_form.m_count; ++i) {
+                    const Section& s = t.m_form.m_section[i];
+                    const double a = static_cast<double>(s.m_startBar) * BeatsPerBar, z = a + s.m_bars * BeatsPerBar;
+                    if (s.m_type != SectionTypeE::BUILD) { candyBars += s.m_bars; continue; }
+                    for (const SfxEvent& e : t.m_form.m_sfx) {
+                        if (e.m_beat < a - 1e-9 || e.m_beat >= z - 1e-9) continue;
                         // Inside a buildup only its own four: the riser and the sweep that end on the drop,
                         // the formant shot on the last beat, and nothing else -- since 19.09.2026 but for a
                         // spoken phrase on its very first downbeat ("the start of builds", round
@@ -655,30 +655,30 @@ void testSfx()
                         // Since 19.09.2026 (round "arrangement"): risers and the sweep arrive on the drop, or on
                         // beat 4 of the pre-drop break where one stops everything; beat 4 holds a vocal or a zap;
                         // the spoken phrase on the first downbeat moved into the pre-drop break.
-                        const double arrive = s.pdbBars > 0 ? z - 1.0 : z;
-                        const bool own = (e.type == static_cast<int>(SfxType::Riser) && std::fabs(e.beat + e.length - arrive) < 1e-6)
-                                      || (e.type == static_cast<int>(SfxType::Sweep) && std::fabs(e.beat + e.length - arrive) < 1e-6
-                                          && e.length <= 2.0f * kBeatsPerBar + 1e-6)
-                                      || ((e.type == static_cast<int>(SfxType::VoiceChop) || e.type == static_cast<int>(SfxType::Zap))
-                                          && s.pdbBars > 0 && std::fabs(e.beat - (z - 1.0)) < 1e-6);
+                        const double arrive = s.m_pdbBars > 0 ? z - 1.0 : z;
+                        const bool own = (e.m_type == static_cast<int>(SfxTypeE::RISER) && std::fabs(e.m_beat + e.m_length - arrive) < 1e-6)
+                                      || (e.m_type == static_cast<int>(SfxTypeE::SWEEP) && std::fabs(e.m_beat + e.m_length - arrive) < 1e-6
+                                          && e.m_length <= 2.0f * BeatsPerBar + 1e-6)
+                                      || ((e.m_type == static_cast<int>(SfxTypeE::VOICE_CHOP) || e.m_type == static_cast<int>(SfxTypeE::ZAP))
+                                          && s.m_pdbBars > 0 && std::fabs(e.m_beat - (z - 1.0)) < 1e-6);
                         if (!own) ++intrusions;
                     }
                 }
-                for (const SfxEvent& e : t.form.sfx) {
-                    ++hist[static_cast<size_t>(e.type)];
-                    if (e.type == static_cast<int>(SfxType::Zap) || (e.length <= 2.0f * kBeatsPerBar + 1e-6
-                        && (e.type == static_cast<int>(SfxType::Sweep) || e.type == static_cast<int>(SfxType::ReverseSwell)))) ++candy;
+                for (const SfxEvent& e : t.m_form.m_sfx) {
+                    ++hist[static_cast<size_t>(e.m_type)];
+                    if (e.m_type == static_cast<int>(SfxTypeE::ZAP) || (e.m_length <= 2.0f * BeatsPerBar + 1e-6
+                        && (e.m_type == static_cast<int>(SfxTypeE::SWEEP) || e.m_type == static_cast<int>(SfxTypeE::REVERSE_SWELL)))) ++candy;
                 }
                 perTrack.push_back(hist);
             }
         };
         int tr = 0, mk = 0, intr = 0, candy = 0;
         double bars = 0.0;
-        std::vector<std::array<int, kNumSfxTypes>> hist;
+        std::vector<std::array<int, NumSfxTypes>> hist;
         run(0.7f, tr, mk, intr, candy, bars, hist);
         int tr0 = 0, mk0 = 0, intr0 = 0, candy0 = 0;
         double bars0 = 0.0;
-        std::vector<std::array<int, kNumSfxTypes>> hist0;
+        std::vector<std::array<int, NumSfxTypes>> hist0;
         run(0.0f, tr0, mk0, intr0, candy0, bars0, hist0);
         // Distinct palettes: at least two tracks whose type histograms differ in shape.
         int differing = 0;
@@ -708,16 +708,16 @@ void testWanderingFx()
     // filter, which cancel out of the ratio.
     {
         ParamStore p;
-        p.set(p.base(Module::Sfx) + sfx::Wander, 1.0f);
-        p.set(p.base(Module::Sfx) + sfx::WanderSend, 0.8f);
+        p.set(p.base(ModuleE::SFX) + sfx::WANDER, 1.0f);
+        p.set(p.base(ModuleE::SFX) + sfx::WANDER_SEND, 0.8f);
         Sfx s;
         s.prepare(sr);
-        const std::vector<float> v = moduleValues(p, Module::Sfx);
+        const std::vector<float> v = moduleValues(p, ModuleE::SFX);
         s.update(v.data(), 6);
         // ReverseSwell: loud (amp = 1) exactly at x = 1, unlike types whose own envelope also happens to
         // vanish at their own ends (Sweep, Zap) -- needed so the ratio at the tail is not 0 / 0.
         const int length = static_cast<int>(sr);   // 1 s, exactly: seconds*sr round-trips to samples
-        s.trigger(SfxType::ReverseSwell, length, 1.0f, 0.0);
+        s.trigger(SfxTypeE::REVERSE_SWELL, length, 1.0f, 0.0);
         const int n = length + 1;   // one sample past the length: x = min(1, length/length) = 1 exactly
         std::vector<float> L(static_cast<size_t>(n)), R(static_cast<size_t>(n)), sub(static_cast<size_t>(n)),
                             wetL(static_cast<size_t>(n)), wetR(static_cast<size_t>(n));
@@ -737,14 +737,14 @@ void testWanderingFx()
     // and panTo are always drawn with opposite signs and magnitude >= 0.75, Sfx.cpp).
     {
         ParamStore p;
-        p.set(p.base(Module::Sfx) + sfx::Wander, 1.0f);
-        p.set(p.base(Module::Sfx) + sfx::WanderSend, 0.0f);   // isolate pan: nothing splits off into wetL/R
+        p.set(p.base(ModuleE::SFX) + sfx::WANDER, 1.0f);
+        p.set(p.base(ModuleE::SFX) + sfx::WANDER_SEND, 0.0f);   // isolate pan: nothing splits off into wetL/R
         Sfx s;
         s.prepare(sr);
-        const std::vector<float> v = moduleValues(p, Module::Sfx);
+        const std::vector<float> v = moduleValues(p, ModuleE::SFX);
         s.update(v.data(), 6);
         const int length = static_cast<int>(2.0 * sr);
-        s.trigger(SfxType::Sweep, length, 1.0f, 0.0);
+        s.trigger(SfxTypeE::SWEEP, length, 1.0f, 0.0);
         std::vector<float> L(static_cast<size_t>(length)), R(static_cast<size_t>(length)), sub(static_cast<size_t>(length)),
                             wetL(static_cast<size_t>(length)), wetR(static_cast<size_t>(length));
         s.processSplit(L.data(), R.data(), sub.data(), wetL.data(), wetR.data(), length);
@@ -763,13 +763,13 @@ void testWanderingFx()
         ParamStore p;
         Sfx s;
         s.prepare(sr);
-        const std::vector<float> v = moduleValues(p, Module::Sfx);
-        check(v[sfx::Wander] == 0.0f, "sfx.wander defaults to off", fmt("%.3f", static_cast<double>(v[sfx::Wander])));
+        const std::vector<float> v = moduleValues(p, ModuleE::SFX);
+        check(v[sfx::WANDER] == 0.0f, "sfx.wander defaults to off", fmt("%.3f", static_cast<double>(v[sfx::WANDER])));
     }
     // (d) Engine wiring: the growing wet trajectory reaches the master output through the plain hall, and
     // only through it -- with sfx.hall_send and sfx.room_send at 0, nothing else can. Two configurations
     // with fx.hall_return differing 96 dB (effectively off vs. on) isolate exactly the hall-return term of
-    // renderSegment()'s final sum (everything else -- the dry mix, masterGain_ -- is identical between
+    // renderSegment()'s final sum (everything else -- the dry mix, m_masterGain -- is identical between
     // them, so it cancels in the difference; the same technique testGatedReverb uses above).
     {
         auto render = [](bool wander, float hallReturnDb) {
@@ -782,11 +782,11 @@ void testWanderingFx()
                 "sfx.room_send=0 sfx.hall_send=0 sfx.duck=0 sfx.level=0 sfx.wander=%d sfx.wander_send=0.9",
                 static_cast<double>(hallReturnDb), wander ? 1 : 0).c_str());
             NoteEvent n;
-            n.part = Part::Sfx;
-            n.pitch = static_cast<uint8_t>(kSfxBaseNote + static_cast<int>(SfxType::ReverseSwell));
-            n.beat = 0.0;
-            n.length = 2.0f;
-            n.velocity = 127;
+            n.m_part = PartE::SFX;
+            n.m_pitch = static_cast<uint8_t>(SfxBaseNote + static_cast<int>(SfxTypeE::REVERSE_SWELL));
+            n.m_beat = 0.0;
+            n.m_length = 2.0f;
+            n.m_velocity = 127;
             e->pushEvent(n);
             std::vector<float> L(static_cast<size_t>(48000 * 5)), R(L.size());
             e->process(L.data(), R.data(), static_cast<int>(L.size()));
@@ -804,7 +804,7 @@ void testWanderingFx()
         const double early = diffDb(onLoud, onSilent, 0, s48 / 4);                         // 0 .. 250 ms: onset
         const double late = diffDb(onLoud, onSilent, 3 * s48 / 2, static_cast<size_t>(2.3 * static_cast<double>(s48)));   // 1.5 .. 2.3 s: the tail
         const double offDiff = diffDb(offLoud, offSilent, 0, 3 * s48);
-        check(late > early + 10.0, "wander on: the hall's own return grows well past the event's onset towards its tail (Engine.cpp, hallInL_/hallInR_)",
+        check(late > early + 10.0, "wander on: the hall's own return grows well past the event's onset towards its tail (Engine.cpp, m_hallInL/m_hallInR)",
               fmt("%.1f dB in the first 250 ms, %.1f dB in the tail (1.5..2.3 s, +%.1f dB)", early, late, late - early));
         check(offDiff < -80.0, "wander off: fx.hall_return changes nothing -- with sfx.hall_send and sfx.room_send at 0, no path reaches the hall at all",
               fmt("%.1f dB", offDiff));
@@ -825,33 +825,33 @@ void testWanderingFx()
                 wander ? 1 : 0).c_str());
             for (int b = 0; b < 8; ++b) {
                 NoteEvent k;
-                k.part = Part::Kick;
-                k.beat = static_cast<double>(b);
-                k.velocity = 120;
+                k.m_part = PartE::KICK;
+                k.m_beat = static_cast<double>(b);
+                k.m_velocity = 120;
                 e->pushEvent(k);
                 NoteEvent bs;
-                bs.part = Part::Bass;
-                bs.beat = static_cast<double>(b) + 0.5;
-                bs.pitch = 36;
-                bs.length = 0.4f;
-                bs.velocity = 110;
+                bs.m_part = PartE::BASS;
+                bs.m_beat = static_cast<double>(b) + 0.5;
+                bs.m_pitch = 36;
+                bs.m_length = 0.4f;
+                bs.m_velocity = 110;
                 e->pushEvent(bs);
             }
             // Two long, overlapping wandering-shaped effect events, so the reverb tail they leave behind
             // is well established by the end of the eight bars this renders.
             NoteEvent s1;
-            s1.part = Part::Sfx;
-            s1.pitch = static_cast<uint8_t>(kSfxBaseNote + static_cast<int>(SfxType::ReverseSwell));
-            s1.beat = 0.0;
-            s1.length = 3.5f;
-            s1.velocity = 120;
+            s1.m_part = PartE::SFX;
+            s1.m_pitch = static_cast<uint8_t>(SfxBaseNote + static_cast<int>(SfxTypeE::REVERSE_SWELL));
+            s1.m_beat = 0.0;
+            s1.m_length = 3.5f;
+            s1.m_velocity = 120;
             e->pushEvent(s1);
             NoteEvent s2;
-            s2.part = Part::Sfx;
-            s2.pitch = static_cast<uint8_t>(kSfxBaseNote + static_cast<int>(SfxType::Sweep));
-            s2.beat = 4.0;
-            s2.length = 3.0f;
-            s2.velocity = 120;
+            s2.m_part = PartE::SFX;
+            s2.m_pitch = static_cast<uint8_t>(SfxBaseNote + static_cast<int>(SfxTypeE::SWEEP));
+            s2.m_beat = 4.0;
+            s2.m_length = 3.0f;
+            s2.m_velocity = 120;
             e->pushEvent(s2);
             std::vector<float> L(static_cast<size_t>(48000 * 4)), R(L.size());
             e->process(L.data(), R.data(), static_cast<int>(L.size()));
@@ -864,7 +864,7 @@ void testWanderingFx()
         // cannot itself smear a difference into the passband -- kick and bass are mono and centred
         // (Engine.h), so the mid signal already carries their full content undiminished.
         auto lowpass140 = [&](std::vector<float> x) {
-            const float c = 1.0f - std::exp(static_cast<float>(-2.0 * kPiD * 140.0 / 48000.0));
+            const float c = 1.0f - std::exp(static_cast<float>(-2.0 * PiD * 140.0 / 48000.0));
             auto onePole = [&](std::vector<float>& y) { float s0 = 0.0f; for (float& v : y) { s0 += c * (v - s0); v = s0; } };
             for (int k = 0; k < 4; ++k) onePole(x);
             std::reverse(x.begin(), x.end());
@@ -900,7 +900,7 @@ void testPsychedelia()
 {
     section("psychedelic effects (round fx-psychedelia)");
     const double sr = 48000.0;
-    const double kPiT = 3.141592653589793;
+    const double PiT = 3.141592653589793;
     ParamStore p;
 
     // (a) The 90-degree network: in quadrature and equally loud from 50 Hz to 20 kHz. Derived from the
@@ -913,11 +913,11 @@ void testPsychedelia()
             const int n = 96000;
             for (int k = 0; k < n; ++k) {
                 double i, q;
-                h.tick(std::sin(2.0 * kPiT * f * k / sr), i, q);
+                h.tick(std::sin(2.0 * PiT * f * k / sr), i, q);
                 if (k < n / 2) continue;
                 sii += i * i; sqq += q * q; siq += i * q;
             }
-            const double deg = std::acos(siq / std::sqrt(sii * sqq)) * 180.0 / kPiT;
+            const double deg = std::acos(siq / std::sqrt(sii * sqq)) * 180.0 / PiT;
             worstDeg = std::max(worstDeg, std::fabs(deg - 90.0));
             worstDb = std::max(worstDb, std::fabs(powDb(sii / sqq)));
         }
@@ -932,7 +932,7 @@ void testPsychedelia()
             s.set(hz, 1.0f);
             std::vector<float> y(1u << 15);
             for (size_t k = 0; k < 9600 + y.size(); ++k) {
-                float l = static_cast<float>(std::sin(2.0 * kPiT * 1000.0 * k / sr)), r = l;
+                float l = static_cast<float>(std::sin(2.0 * PiT * 1000.0 * k / sr)), r = l;
                 s.tick(l, r);
                 if (k >= 9600) y[k - 9600] = l;
             }
@@ -980,7 +980,7 @@ void testPsychedelia()
             double e = 0.0, ein = 0.0;
             bool identity = true;
             for (int k = 0; k < 96000; ++k) {
-                const float x = static_cast<float>(std::sin(2.0 * kPiT * f * k / sr));
+                const float x = static_cast<float>(std::sin(2.0 * PiT * f * k / sr));
                 float l = x, r = x;
                 ph.tick(l, r, 0.0);
                 identity = identity && l == x;
@@ -1021,51 +1021,51 @@ void testPsychedelia()
     std::string pockets;
     bool pocketOk = true;
     {
-        auto sfxAlone = [&](SfxType t, double seconds) {
+        auto sfxAlone = [&](SfxTypeE t, double seconds) {
             Sfx s;
             s.prepare(sr);
-            std::vector<float> v = moduleValues(p, Module::Sfx);
+            std::vector<float> v = moduleValues(p, ModuleE::SFX);
             s.update(v.data(), 6);
             s.trigger(t, static_cast<int>(seconds * sr), 1.0f, 0.0);
             return renderMono([&](float* L, float* R, int n) { s.process(L, R, n); }, static_cast<size_t>((seconds + 0.5) * sr));
         };
-        auto textureAlone = [&](SfxType t, double seconds) {
+        auto textureAlone = [&](SfxTypeE t, double seconds) {
             Texture x;
             x.prepare(sr);
-            std::vector<float> v = moduleValues(p, Module::Texture);
+            std::vector<float> v = moduleValues(p, ModuleE::TEXTURE);
             x.update(v.data(), 6);
             x.trigger(t, static_cast<int>(seconds * sr), 1.0f, 0.0, sr * 60.0 / 145.0, 12345);
             return renderMono([&](float* L, float* R, int n) { x.process(L, R, n); }, static_cast<size_t>(seconds * sr));
         };
-        auto vocalAlone = [&](SfxType t, double seconds, uint64_t pick) {
+        auto vocalAlone = [&](SfxTypeE t, double seconds, uint64_t pick) {
             Vocal x;
             x.prepare(sr);
-            std::vector<float> v = moduleValues(p, Module::Vocal);
+            std::vector<float> v = moduleValues(p, ModuleE::VOCAL);
             x.update(v.data(), 6);
             x.trigger(t, static_cast<int>(seconds * sr), 1.0f, 0.0, sr * 60.0 / 145.0, pick);
             std::vector<float> w(64);
             return renderMono([&](float* L, float* R, int n) { x.process(L, R, w.data(), n); }, static_cast<size_t>((seconds + 0.5) * sr));
         };
-        struct Want { const char* name; std::vector<float> y; double lo, hi, min; bool depth; };
+        struct Want { const char* m_name; std::vector<float> m_y; double m_lo, m_hi, m_min; bool m_depth; };
         std::vector<Want> w;
-        w.push_back({ "squelch 3-8 kHz", sfxAlone(SfxType::Squelch, 0.3), 3000.0, 8000.0, 0.5, true });
-        w.push_back({ "bubble 1-5 kHz", sfxAlone(SfxType::Bubble, 0.5), 1000.0, 5000.0, 0.7, true });
-        w.push_back({ "reverse crash >4 kHz", sfxAlone(SfxType::ReverseCrash, 1.0), 4000.0, 24000.0, 0.6, true });
-        w.push_back({ "sub drop 25-120 Hz", sfxAlone(SfxType::SubDrop, 1.6), 25.0, 120.0, 0.8, false });
-        w.push_back({ "bowl 250 Hz-3 kHz", textureAlone(SfxType::Bowl, 3.0), 250.0, 3000.0, 0.8, true });
-        w.push_back({ "didgeridoo 140 Hz-2 kHz", textureAlone(SfxType::Didgeridoo, 4.0), 140.0, 2000.0, 0.6, true });
-        w.push_back({ "jaw harp 400 Hz-4 kHz", textureAlone(SfxType::JawHarp, 4.0), 400.0, 4000.0, 0.5, true });
-        w.push_back({ "formant voice 250 Hz-4 kHz", vocalAlone(SfxType::FormantVoice, 2.0, 7), 250.0, 4000.0, 0.8, true });
-        w.push_back({ "alien chatter 250 Hz-4 kHz", vocalAlone(SfxType::AlienChatter, 1.0, 7), 250.0, 4000.0, 0.8, true });
-        w.push_back({ "spoken word 250 Hz-4 kHz", vocalAlone(SfxType::SpokenWord, 3.0, 7), 250.0, 4000.0, 0.8, true });
-        w.push_back({ "voice chop 250 Hz-4 kHz", vocalAlone(SfxType::VoiceChop, 1.0, 7), 250.0, 4000.0, 0.8, true });
+        w.push_back({ "squelch 3-8 kHz", sfxAlone(SfxTypeE::SQUELCH, 0.3), 3000.0, 8000.0, 0.5, true });
+        w.push_back({ "bubble 1-5 kHz", sfxAlone(SfxTypeE::BUBBLE, 0.5), 1000.0, 5000.0, 0.7, true });
+        w.push_back({ "reverse crash >4 kHz", sfxAlone(SfxTypeE::REVERSE_CRASH, 1.0), 4000.0, 24000.0, 0.6, true });
+        w.push_back({ "sub drop 25-120 Hz", sfxAlone(SfxTypeE::SUB_DROP, 1.6), 25.0, 120.0, 0.8, false });
+        w.push_back({ "bowl 250 Hz-3 kHz", textureAlone(SfxTypeE::BOWL, 3.0), 250.0, 3000.0, 0.8, true });
+        w.push_back({ "didgeridoo 140 Hz-2 kHz", textureAlone(SfxTypeE::DIDGERIDOO, 4.0), 140.0, 2000.0, 0.6, true });
+        w.push_back({ "jaw harp 400 Hz-4 kHz", textureAlone(SfxTypeE::JAW_HARP, 4.0), 400.0, 4000.0, 0.5, true });
+        w.push_back({ "formant voice 250 Hz-4 kHz", vocalAlone(SfxTypeE::FORMANT_VOICE, 2.0, 7), 250.0, 4000.0, 0.8, true });
+        w.push_back({ "alien chatter 250 Hz-4 kHz", vocalAlone(SfxTypeE::ALIEN_CHATTER, 1.0, 7), 250.0, 4000.0, 0.8, true });
+        w.push_back({ "spoken word 250 Hz-4 kHz", vocalAlone(SfxTypeE::SPOKEN_WORD, 3.0, 7), 250.0, 4000.0, 0.8, true });
+        w.push_back({ "voice chop 250 Hz-4 kHz", vocalAlone(SfxTypeE::VOICE_CHOP, 1.0, 7), 250.0, 4000.0, 0.8, true });
         double worstLow = -1e9;
         for (const Want& x : w) {
-            const double share = bandShare(x.y, sr, x.lo, x.hi);
-            const double low = powDb(bandShare(x.y, sr, 0.0, 140.0));
-            if (x.depth) worstLow = std::max(worstLow, low);
-            pocketOk = pocketOk && share >= x.min && (!x.depth || low < -30.0);
-            pockets += fmt("%s %.0f%% (<140 Hz %.0f dB); ", x.name, 100.0 * share, low);
+            const double share = bandShare(x.m_y, sr, x.m_lo, x.m_hi);
+            const double low = powDb(bandShare(x.m_y, sr, 0.0, 140.0));
+            if (x.m_depth) worstLow = std::max(worstLow, low);
+            pocketOk = pocketOk && share >= x.m_min && (!x.m_depth || low < -30.0);
+            pockets += fmt("%s %.0f%% (<140 Hz %.0f dB); ", x.m_name, 100.0 * share, low);
         }
         check(pocketOk, "every new sound sits in its pocket, and all but the sub drop keep out of the kick's and the bass's band",
               pockets);
@@ -1075,9 +1075,9 @@ void testPsychedelia()
     {
         Texture x;
         x.prepare(sr);
-        std::vector<float> v = moduleValues(p, Module::Texture);
+        std::vector<float> v = moduleValues(p, ModuleE::TEXTURE);
         x.update(v.data(), 0);   // C: the fundamental at C4 or C5
-        x.trigger(SfxType::Bowl, 1, 1.0f, 0.0, 20000.0, 99);
+        x.trigger(SfxTypeE::BOWL, 1, 1.0f, 0.0, 20000.0, 99);
         const std::vector<float> y = renderMono([&](float* L, float* R, int n) { x.process(L, R, n); }, 1u << 17);
         const std::vector<double> pw = powerSpectrum(y.data(), y.size());
         auto band = [&](double f, double rel) {
@@ -1108,12 +1108,12 @@ void testPsychedelia()
                               "mix.arp_mute=On mix.pad_mute=On mix.texture_mute=On mix.vocal_mute=On mix.counter_mute=On mix.stab_mute=On mix.drone_mute=On");
         // In beat order: the engine plays its ring as a queue (a note pushed after a later one waits).
         std::vector<NoteEvent> ev;
-        for (int b = 0; b < 8; ++b) { NoteEvent k; k.beat = b; k.part = Part::Kick; k.velocity = 127; ev.push_back(k); }
+        for (int b = 0; b < 8; ++b) { NoteEvent k; k.m_beat = b; k.m_part = PartE::KICK; k.m_velocity = 127; ev.push_back(k); }
         NoteEvent s;
-        s.beat = 0.0;
-        s.length = 8.0f;
-        s.part = Part::Sfx;
-        s.pitch = static_cast<uint8_t>(kSfxBaseNote + static_cast<int>(SfxType::SubDrop));
+        s.m_beat = 0.0;
+        s.m_length = 8.0f;
+        s.m_part = PartE::SFX;
+        s.m_pitch = static_cast<uint8_t>(SfxBaseNote + static_cast<int>(SfxTypeE::SUB_DROP));
         ev.push_back(s);
         std::stable_sort(ev.begin(), ev.end(), noteLess);
         for (const NoteEvent& x : ev) e->pushEvent(x);
@@ -1149,21 +1149,21 @@ void testPsychedelia()
         double shortest = 1e9, longest = 0.0;
         for (int k = 0; k < count; ++k) {
             const VoicePhrase& ph = voicePhrase(k);
-            const double sec = static_cast<double>(ph.samples.size()) / ph.sampleRate;
+            const double sec = static_cast<double>(ph.m_samples.size()) / ph.m_sampleRate;
             shortest = std::min(shortest, sec);
             longest = std::max(longest, sec);
-            if (ph.throwAt >= ph.samples.size() || ph.chopLength == 0 || ph.chopStart + ph.chopLength > ph.samples.size()) ++badMarks;
+            if (ph.m_throwAt >= ph.m_samples.size() || ph.m_chopLength == 0 || ph.m_chopStart + ph.m_chopLength > ph.m_samples.size()) ++badMarks;
         }
         resetVoicePack();
         std::string why;
         const int none = loadVoicePack("phosphene-no-such-pack.phosvx", &why);
         Vocal x;
         x.prepare(sr);
-        std::vector<float> v = moduleValues(p, Module::Vocal), w(64);
+        std::vector<float> v = moduleValues(p, ModuleE::VOCAL), w(64);
         x.update(v.data(), 6);
-        x.trigger(SfxType::SpokenWord, 48000, 1.0f, 0.0, 20000.0, 1);
+        x.trigger(SfxTypeE::SPOKEN_WORD, 48000, 1.0f, 0.0, 20000.0, 1);
         const std::vector<float> silent = renderMono([&](float* L, float* R, int n) { x.process(L, R, w.data(), n); }, 48000);
-        x.trigger(SfxType::FormantVoice, 48000, 1.0f, 0.0, 20000.0, 1);
+        x.trigger(SfxTypeE::FORMANT_VOICE, 48000, 1.0f, 0.0, 20000.0, 1);
         const std::vector<float> chant = renderMono([&](float* L, float* R, int n) { x.process(L, R, w.data(), n); }, 48000);
         double eS = 0.0, eC = 0.0;
         for (float s : silent) eS += static_cast<double>(s) * s;
@@ -1182,12 +1182,12 @@ void testPsychedelia()
         loadVoicePack();
         Vocal x;
         x.prepare(sr);
-        std::vector<float> v = moduleValues(p, Module::Vocal);
+        std::vector<float> v = moduleValues(p, ModuleE::VOCAL);
         x.update(v.data(), 6);
-        x.trigger(SfxType::SpokenWord, 1, 1.0f, 0.0, 20000.0, 3);
+        x.trigger(SfxTypeE::SPOKEN_WORD, 1, 1.0f, 0.0, 20000.0, 3);
         std::vector<float> L(48000 * 20), R(L.size()), T(L.size());   // 20 s: a radio phrase runs to 16 s (27.09.2026)
         x.process(L.data(), R.data(), T.data(), 24000);
-        x.trigger(SfxType::SpokenWord, 1, 1.0f, 0.0, 20000.0, 4);
+        x.trigger(SfxTypeE::SPOKEN_WORD, 1, 1.0f, 0.0, 20000.0, 4);
         const int during = x.active();
         x.process(L.data(), R.data(), T.data(), 960);
         const int after = x.active();
@@ -1196,7 +1196,7 @@ void testPsychedelia()
         y.prepare(sr);
         y.update(v.data(), 6);
         uint64_t pick = 11;
-        y.trigger(SfxType::SpokenWord, 1, 1.0f, 0.0, 20000.0, pick);
+        y.trigger(SfxTypeE::SPOKEN_WORD, 1, 1.0f, 0.0, 20000.0, pick);
         for (size_t done = 0; done < L.size(); done += 64) y.process(L.data() + done, R.data() + done, T.data() + done, 64);
         // Where the last word starts, in output samples, found from the weight itself: the first sample
         // over half its maximum. It has to lie after the first third of the phrase, and the weight has
@@ -1218,69 +1218,69 @@ void testPsychedelia()
     //     the bed never in a drop or a buildup; a sub drop under every impact; nothing of it at
     //     compose.sfx_amount 0; every track its own mix.
     {
-        auto isNew = [](int t) { return t >= static_cast<int>(SfxType::Squelch); };
+        auto isNew = [](int t) { return t >= static_cast<int>(SfxTypeE::SQUELCH); };
         auto candyType = [](int t) {
-            return t == static_cast<int>(SfxType::Squelch) || t == static_cast<int>(SfxType::Bubble) || t == static_cast<int>(SfxType::Stutter);
+            return t == static_cast<int>(SfxTypeE::SQUELCH) || t == static_cast<int>(SfxTypeE::BUBBLE) || t == static_cast<int>(SfxTypeE::STUTTER);
         };
         int closeVoices = 0, misplacedVoices = 0, onBeat = 0, bedWrong = 0, impactsWithoutSub = 0, newAtZero = 0, crashInBuild = 0, voices = 0, beds = 0;
-        double candy[static_cast<int>(SectionType::Count)] = {}, bars[static_cast<int>(SectionType::Count)] = {};
-        std::vector<std::array<int, kNumSfxTypes>> hist;
+        double candy[static_cast<int>(SectionTypeE::COUNT)] = {}, bars[static_cast<int>(SectionTypeE::COUNT)] = {};
+        std::vector<std::array<int, NumSfxTypes>> hist;
         for (float amount : { 0.7f, 0.0f }) {
             ParamStore q;
             q.parseText(fmt("compose.sfx_amount=%.2f compose.track_bars=256 compose.level_match=Off master.auto_gain=Off", amount));
             Composer c(303);
             for (int ti = 0; ti < 8; ++ti) {
                 const TrackPlan t = c.track(q, ti);
-                std::array<int, kNumSfxTypes> h{};
+                std::array<int, NumSfxTypes> h{};
                 std::vector<double> vocal;
-                for (const SfxEvent& e : t.form.sfx) {
-                    if (amount == 0.0f) { newAtZero += isNew(e.type) ? 1 : 0; continue; }
-                    ++h[static_cast<size_t>(e.type)];
-                    const int si = sectionOfBar(t.form, static_cast<int>(std::floor(e.beat / kBeatsPerBar)));
-                    const Section& s = t.form.section[si];
-                    const double at = static_cast<double>(s.startBar) * kBeatsPerBar;
-                    const SfxType type = static_cast<SfxType>(e.type);
-                    if (sfxTypePart(type) == Part::Vocal) {
+                for (const SfxEvent& e : t.m_form.m_sfx) {
+                    if (amount == 0.0f) { newAtZero += isNew(e.m_type) ? 1 : 0; continue; }
+                    ++h[static_cast<size_t>(e.m_type)];
+                    const int si = sectionOfBar(t.m_form, static_cast<int>(std::floor(e.m_beat / BeatsPerBar)));
+                    const Section& s = t.m_form.m_section[si];
+                    const double at = static_cast<double>(s.m_startBar) * BeatsPerBar;
+                    const SfxTypeE type = static_cast<SfxTypeE>(e.m_type);
+                    if (sfxTypePart(type) == PartE::VOCAL) {
                         ++voices;
-                        vocal.push_back(e.beat);
-                        const bool ok = s.type == SectionType::Intro || s.type == SectionType::Break
+                        vocal.push_back(e.m_beat);
+                        const bool ok = s.m_type == SectionTypeE::INTRO || s.m_type == SectionTypeE::BREAK
                                      // 19.09.2026: a buildup's vocal is the chop on beat 4 of its pre-drop break.
-                                     || (s.type == SectionType::Build && type == SfxType::VoiceChop && s.pdbBars > 0
-                                         && std::fabs(e.beat - (at + s.bars * kBeatsPerBar - 1.0)) < 1e-9)
-                                     || ((s.type == SectionType::Drop || s.type == SectionType::Groove) && (type == SfxType::VoiceChop || type == SfxType::AlienChatter))
-                                     || (s.type == SectionType::Outro && type == SfxType::AlienChatter);
+                                     || (s.m_type == SectionTypeE::BUILD && type == SfxTypeE::VOICE_CHOP && s.m_pdbBars > 0
+                                         && std::fabs(e.m_beat - (at + s.m_bars * BeatsPerBar - 1.0)) < 1e-9)
+                                     || ((s.m_type == SectionTypeE::DROP || s.m_type == SectionTypeE::GROOVE) && (type == SfxTypeE::VOICE_CHOP || type == SfxTypeE::ALIEN_CHATTER))
+                                     || (s.m_type == SectionTypeE::OUTRO && type == SfxTypeE::ALIEN_CHATTER);
                         if (!ok) ++misplacedVoices;
                     }
-                    if (sfxTypePart(type) == Part::Texture) {
+                    if (sfxTypePart(type) == PartE::TEXTURE) {
                         ++beds;
-                        if (s.type == SectionType::Drop || s.type == SectionType::Build) ++bedWrong;
+                        if (s.m_type == SectionTypeE::DROP || s.m_type == SectionTypeE::BUILD) ++bedWrong;
                     }
-                    if (candyType(e.type) || (type == SfxType::AlienChatter && e.length <= 1.5f)) {
-                        if (std::fabs(e.beat - std::round(e.beat)) < 1e-9) ++onBeat;
-                        candy[static_cast<int>(s.type)] += 1.0;
+                    if (candyType(e.m_type) || (type == SfxTypeE::ALIEN_CHATTER && e.m_length <= 1.5f)) {
+                        if (std::fabs(e.m_beat - std::round(e.m_beat)) < 1e-9) ++onBeat;
+                        candy[static_cast<int>(s.m_type)] += 1.0;
                     }
-                    if (type == SfxType::ReverseCrash && s.type == SectionType::Build) ++crashInBuild;
-                    if (type == SfxType::Impact) {
+                    if (type == SfxTypeE::REVERSE_CRASH && s.m_type == SectionTypeE::BUILD) ++crashInBuild;
+                    if (type == SfxTypeE::IMPACT) {
                         bool sub = false;
-                        for (const SfxEvent& o : t.form.sfx) sub = sub || (o.type == static_cast<int>(SfxType::SubDrop) && std::fabs(o.beat - e.beat) < 1e-9);
+                        for (const SfxEvent& o : t.m_form.m_sfx) sub = sub || (o.m_type == static_cast<int>(SfxTypeE::SUB_DROP) && std::fabs(o.m_beat - e.m_beat) < 1e-9);
                         if (!sub) ++impactsWithoutSub;
                     }
                 }
                 if (amount == 0.0f) continue;
-                for (int i = 0; i < t.form.count; ++i) bars[static_cast<int>(t.form.section[i].type)] += t.form.section[i].bars;
+                for (int i = 0; i < t.m_form.m_count; ++i) bars[static_cast<int>(t.m_form.m_section[i].m_type)] += t.m_form.m_section[i].m_bars;
                 std::sort(vocal.begin(), vocal.end());
-                for (size_t k = 1; k < vocal.size(); ++k) if (vocal[k] - vocal[k - 1] < 4.0 * kBeatsPerBar - 1e-9) ++closeVoices;
+                for (size_t k = 1; k < vocal.size(); ++k) if (vocal[k] - vocal[k - 1] < 4.0 * BeatsPerBar - 1e-9) ++closeVoices;
                 hist.push_back(h);
             }
         }
-        auto per16 = [&](SectionType s) { const int i = static_cast<int>(s); return bars[i] > 0.0 ? 16.0 * candy[i] / bars[i] : 0.0; };
+        auto per16 = [&](SectionTypeE s) { const int i = static_cast<int>(s); return bars[i] > 0.0 ? 16.0 * candy[i] / bars[i] : 0.0; };
         int differing = 0;
         for (size_t i = 1; i < hist.size(); ++i) {
             bool diff = false;
-            for (int k = static_cast<int>(SfxType::Squelch); k < kNumSfxTypes; ++k) diff = diff || hist[i][static_cast<size_t>(k)] != hist[0][static_cast<size_t>(k)];
+            for (int k = static_cast<int>(SfxTypeE::SQUELCH); k < NumSfxTypes; ++k) diff = diff || hist[i][static_cast<size_t>(k)] != hist[0][static_cast<size_t>(k)];
             differing += diff ? 1 : 0;
         }
-        const double dDrop = per16(SectionType::Drop), dGroove = per16(SectionType::Groove), dIntro = per16(SectionType::Intro);
+        const double dDrop = per16(SectionTypeE::DROP), dGroove = per16(SectionTypeE::GROOVE), dIntro = per16(SectionTypeE::INTRO);
         check(closeVoices == 0 && misplacedVoices == 0 && voices > 20 && onBeat == 0 && dDrop > dGroove && dGroove > dIntro && dDrop > 1.5
                   && bedWrong == 0 && beds > 10 && impactsWithoutSub == 0 && crashInBuild == 0 && newAtZero == 0 && differing >= 4,
               "voices apart and in their sections, ear candy on free sixteenths and densest in drops, the bed out of drops, a sub drop under every impact",
@@ -1302,31 +1302,31 @@ void testPsychedelia()
         for (int bar = 0; bar < 136; ++bar) {
             std::vector<NoteEvent> inSeq;
             for (const NoteEvent& x : seq)
-                if (x.part == Part::Sfx && x.beat >= bar * kBeatsPerBar && x.beat < (bar + 1) * kBeatsPerBar) inSeq.push_back(x);
+                if (x.m_part == PartE::SFX && x.m_beat >= bar * BeatsPerBar && x.m_beat < (bar + 1) * BeatsPerBar) inSeq.push_back(x);
             bool any = false;
-            for (const NoteEvent& x : inSeq) any = any || x.pitch >= kSfxBaseNote + static_cast<int>(SfxType::Squelch);
+            for (const NoteEvent& x : inSeq) any = any || x.m_pitch >= SfxBaseNote + static_cast<int>(SfxTypeE::SQUELCH);
             if (!any) continue;
             Composer fresh(864566672ull);
             std::vector<NoteEvent> alone, one;
             fresh.composeBars(q, bar, 1, alone, nullptr);
-            for (const NoteEvent& x : alone) if (x.part == Part::Sfx) one.push_back(x);
+            for (const NoteEvent& x : alone) if (x.m_part == PartE::SFX) one.push_back(x);
             ++barsChecked;
             bool same = one.size() == inSeq.size();
-            for (size_t i = 0; same && i < one.size(); ++i) same = one[i].beat == inSeq[i].beat && one[i].pitch == inSeq[i].pitch && one[i].length == inSeq[i].length;
+            for (size_t i = 0; same && i < one.size(); ++i) same = one[i].m_beat == inSeq[i].m_beat && one[i].m_pitch == inSeq[i].m_pitch && one[i].m_length == inSeq[i].m_length;
             if (!same) ++differ;
-            for (const NoteEvent& x : inSeq) typesSeen.insert(x.pitch - kSfxBaseNote);
+            for (const NoteEvent& x : inSeq) typesSeen.insert(x.m_pitch - SfxBaseNote);
         }
         Score sc;
-        for (const NoteEvent& x : seq) if (x.part == Part::Sfx) sc.notes.push_back(x);
+        for (const NoteEvent& x : seq) if (x.m_part == PartE::SFX) sc.m_notes.push_back(x);
         sc.sort();
         MidiFileData md;
         const std::vector<uint8_t> bytes = encodeMidi(sc);
         decodeMidi(bytes.data(), bytes.size(), md);
         int routed = 0, wrongRoute = 0;
-        for (const MidiTrackData& tr : md.tracks)
-            for (const NoteEvent& x : tr.notes) {
-                const Part want = sfxTypePart(static_cast<SfxType>(x.pitch - kSfxBaseNote));
-                if (x.part == want) ++routed; else ++wrongRoute;
+        for (const MidiTrackData& tr : md.m_tracks)
+            for (const NoteEvent& x : tr.m_notes) {
+                const PartE want = sfxTypePart(static_cast<SfxTypeE>(x.m_pitch - SfxBaseNote));
+                if (x.m_part == want) ++routed; else ++wrongRoute;
             }
         check(barsChecked > 10 && differ == 0 && wrongRoute == 0 && routed > 0,
               "effect bars composed alone equal the same bars in sequence, and the bed and the voices land on MIDI tracks of their own",
@@ -1341,19 +1341,19 @@ void testPsychedelia()
             e->prepare(sr, 512);
             e->params().parseText("compose.bpm=145");
             std::vector<NoteEvent> ev;
-            for (int b = 0; b < 32; ++b) { NoteEvent k; k.beat = b; k.part = Part::Kick; k.velocity = 127; ev.push_back(k); }
-            for (int b = 0; b < 32; ++b) { NoteEvent a; a.beat = b + 0.5; a.length = 0.25f; a.part = Part::Acid; a.pitch = 50; ev.push_back(a); }
+            for (int b = 0; b < 32; ++b) { NoteEvent k; k.m_beat = b; k.m_part = PartE::KICK; k.m_velocity = 127; ev.push_back(k); }
+            for (int b = 0; b < 32; ++b) { NoteEvent a; a.m_beat = b + 0.5; a.m_length = 0.25f; a.m_part = PartE::ACID; a.m_pitch = 50; ev.push_back(a); }
             int beat = 0;
-            for (int t = static_cast<int>(SfxType::Squelch); t < kNumSfxTypes; ++t) {
+            for (int t = static_cast<int>(SfxTypeE::SQUELCH); t < NumSfxTypes; ++t) {
                 NoteEvent s;
-                s.beat = beat + 0.25;
-                s.length = t >= static_cast<int>(SfxType::Bowl) ? 8.0f : 1.0f;
-                s.part = Part::Sfx;
-                s.pitch = static_cast<uint8_t>(kSfxBaseNote + t);
+                s.m_beat = beat + 0.25;
+                s.m_length = t >= static_cast<int>(SfxTypeE::BOWL) ? 8.0f : 1.0f;
+                s.m_part = PartE::SFX;
+                s.m_pitch = static_cast<uint8_t>(SfxBaseNote + t);
                 ev.push_back(s);
                 beat += 2;
             }
-            NoteEvent r; r.beat = 0.0; r.length = 16.0f; r.part = Part::Sfx; r.pitch = kSfxBaseNote; ev.push_back(r);
+            NoteEvent r; r.m_beat = 0.0; r.m_length = 16.0f; r.m_part = PartE::SFX; r.m_pitch = SfxBaseNote; ev.push_back(r);
             std::stable_sort(ev.begin(), ev.end(), noteLess);
             for (const NoteEvent& x : ev) e->pushEvent(x);
             const size_t n = static_cast<size_t>(32.0 * 60.0 / 145.0 * sr);
@@ -1375,42 +1375,42 @@ void testPsychedelia()
     {
         // withSweep: the two-bar sweep that falls into every drop starts over the riser's last bars; it
         // must open the flanger without taking the riser's climb away (the first version did).
-        auto motionAt = [&](SfxType t, double atBeat, bool withSweep) {
+        auto motionAt = [&](SfxTypeE t, double atBeat, bool withSweep) {
             auto e = std::make_unique<Engine>();
             e->prepare(sr, 512);
             e->params().parseText("compose.bpm=145");
-            NoteEvent s; s.beat = 0.0; s.length = 16.0f; s.part = Part::Sfx; s.pitch = static_cast<uint8_t>(kSfxBaseNote + static_cast<int>(t));
+            NoteEvent s; s.m_beat = 0.0; s.m_length = 16.0f; s.m_part = PartE::SFX; s.m_pitch = static_cast<uint8_t>(SfxBaseNote + static_cast<int>(t));
             e->pushEvent(s);
-            if (withSweep) { s.beat = 8.0; s.length = 8.0f; s.pitch = static_cast<uint8_t>(kSfxBaseNote + static_cast<int>(SfxType::Sweep)); e->pushEvent(s); }
+            if (withSweep) { s.m_beat = 8.0; s.m_length = 8.0f; s.m_pitch = static_cast<uint8_t>(SfxBaseNote + static_cast<int>(SfxTypeE::SWEEP)); e->pushEvent(s); }
             const size_t n = static_cast<size_t>(atBeat * 60.0 / 145.0 * sr);
             std::vector<float> L(512), R(512);
             for (size_t done = 0; done < n; done += 512) e->process(L.data(), R.data(), static_cast<int>(std::min<size_t>(512, n - done)));
             return std::make_pair(e->sfxChain().motionHz(), e->sfxChain().motionFlange());
         };
-        const float motion = p.get(p.base(Module::PsyFx) + psyfx::Motion);
-        const float up = motionAt(SfxType::Riser, 8.0, false).first, down = motionAt(SfxType::Downlifter, 8.0, false).first;
-        const auto late = motionAt(SfxType::Riser, 12.0, true);
+        const float motion = p.get(p.base(ModuleE::PSY_FX) + psyfx::MOTION);
+        const float up = motionAt(SfxTypeE::RISER, 8.0, false).first, down = motionAt(SfxTypeE::DOWNLIFTER, 8.0, false).first;
+        const auto late = motionAt(SfxTypeE::RISER, 12.0, true);
         const bool climbKept = std::fabs(late.first - 150.0f * 0.75f * motion) < 3.0f && late.second > 0.4f * motion;
         std::vector<ControlEvent> build, drop, brk;
-        Section sb; sb.type = SectionType::Build; sb.bars = 16;
-        Section sd; sd.type = SectionType::Drop; sd.bars = 32;
-        Section sk; sk.type = SectionType::Break; sk.bars = 32;
+        Section sb; sb.m_type = SectionTypeE::BUILD; sb.m_bars = 16;
+        Section sd; sd.m_type = SectionTypeE::DROP; sd.m_bars = 32;
+        Section sk; sk.m_type = SectionTypeE::BREAK; sk.m_bars = 32;
         sectionAutomation(p, sb, 5, 64.0, 0.0f, 0.0f, false, build);
         sectionAutomation(p, sd, 5, 128.0, 0.0f, 0.0f, false, drop);
         sectionAutomation(p, sk, 5, 256.0, 0.0f, 0.0f, false, brk);
-        const int shiftId = p.base(Module::PsyFx) + psyfx::ShiftHz, phaseId = p.base(Module::PsyFx) + psyfx::PhaserMix;
-        auto last = [&](const std::vector<ControlEvent>& v, int id) { ControlEvent c; c.param = -1; for (const ControlEvent& x : v) if (x.param == id) c = x; return c; };
-        const ControlEvent bShift = last(build, shiftId), dShift = last(drop, shiftId), kPhase = last(brk, phaseId);
-        const float hzPerNorm = p.desc(shiftId).maxValue - p.desc(shiftId).minValue;
+        const int shiftId = p.base(ModuleE::PSY_FX) + psyfx::SHIFT_HZ, phaseId = p.base(ModuleE::PSY_FX) + psyfx::PHASER_MIX;
+        auto last = [&](const std::vector<ControlEvent>& v, int id) { ControlEvent c; c.m_param = -1; for (const ControlEvent& x : v) if (x.m_param == id) c = x; return c; };
+        const ControlEvent bShift = last(build, shiftId), dShift = last(drop, shiftId), Phase = last(brk, phaseId);
+        const float hzPerNorm = p.desc(shiftId).m_maxValue - p.desc(shiftId).m_minValue;
         check(std::fabs(up - 75.0f * motion) < 3.0f && std::fabs(down + 60.0f * motion) < 3.0f && climbKept
-                  && bShift.param == shiftId && bShift.value * hzPerNorm >= 60.0f && std::fabs(bShift.length - 64.0f) < 1e-3f
-                  && dShift.param == shiftId && dShift.value == 0.0f && dShift.length == 0.0f && kPhase.value > 0.2f,
+                  && bShift.m_param == shiftId && bShift.m_value * hzPerNorm >= 60.0f && std::fabs(bShift.m_length - 64.0f) < 1e-3f
+                  && dShift.m_param == shiftId && dShift.m_value == 0.0f && dShift.m_length == 0.0f && Phase.m_value > 0.2f,
               "the modulation moves per event (a riser drags the shifter up, a downlifter down) and per section (buildup up, drop reset, breakdown phaser)",
               fmt("half-way through a riser %+.1f Hz (want %+.1f), a downlifter %+.1f Hz (want %+.1f); three quarters through a riser with "
                   "a sweep on top %+.1f Hz (want %+.1f), flanger %+.2f; buildup shift to %+.0f Hz over %.0f beats; "
                   "drop %+.0f Hz over %.0f beats; breakdown phaser mix %+.2f",
-                  up, 75.0f * motion, down, -60.0f * motion, late.first, 112.5f * motion, late.second, bShift.value * hzPerNorm, bShift.length,
-                  dShift.value * hzPerNorm, dShift.length, kPhase.value));
+                  up, 75.0f * motion, down, -60.0f * motion, late.first, 112.5f * motion, late.second, bShift.m_value * hzPerNorm, bShift.m_length,
+                  dShift.m_value * hzPerNorm, dShift.m_length, Phase.m_value));
     }
 }
 
@@ -1423,21 +1423,21 @@ void testMaster()
     e->prepare(48000.0, 512);
     e->params().parseText("compose.track_bars=288 compose.pad_amount=1 compose.sfx_amount=1");
     Composer c(8);
-    const double target = e->params().get(e->params().base(Module::Master) + master::TargetLufs);
+    const double target = e->params().get(e->params().base(ModuleE::MASTER) + master::TARGET_LUFS);
     const TempoMap tm = c.tempoMap(e->params(), 288);
     e->setTempoMap(tm);
     Conductor cond(*e, c);
-    const uint64_t total = static_cast<uint64_t>(tm.secondsAt(288.0 * kBeatsPerBar) * 48000.0);
+    const uint64_t total = static_cast<uint64_t>(tm.secondsAt(288.0 * BeatsPerBar) * 48000.0);
     std::vector<float> L(512), R(512);
     while (e->samplePosition() < total) {
         cond.pump(e->params(), 32.0);
         e->process(L.data(), R.data(), static_cast<int>(std::min<uint64_t>(512, total - e->samplePosition())));
     }
     const LoudnessReading rd = e->meter();
-    check(std::fabs(rd.integrated - target) < 1.0 && rd.truePeak <= -0.9f && rd.seconds > 470.0f,
+    check(std::fabs(rd.m_integrated - target) < 1.0 && rd.m_truePeak <= -0.9f && rd.m_seconds > 470.0f,
           "eight-minute track at the defaults: integrated loudness within 1 LU of the target, true peak at the -1 dBTP ceiling",
-          fmt("%.1f s, %.2f LUFS (target %.1f), true peak %.2f dBTP, range %.1f LU", static_cast<double>(rd.seconds), static_cast<double>(rd.integrated), target,
-              static_cast<double>(rd.truePeak), static_cast<double>(rd.range)));
+          fmt("%.1f s, %.2f LUFS (target %.1f), true peak %.2f dBTP, range %.1f LU", static_cast<double>(rd.m_seconds), static_cast<double>(rd.m_integrated), target,
+              static_cast<double>(rd.m_truePeak), static_cast<double>(rd.m_range)));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1494,13 +1494,13 @@ void testSfxLevel()
         const TempoMap tm = c.tempoMap(e->params(), 118);
         e->setTempoMap(tm);
         Conductor cond(*e, c);
-        const uint64_t total = static_cast<uint64_t>(tm.secondsAt(118.0 * kBeatsPerBar) * sr);
+        const uint64_t total = static_cast<uint64_t>(tm.secondsAt(118.0 * BeatsPerBar) * sr);
         std::vector<float> L(512), R(512), p;
         p.reserve(static_cast<size_t>(total));
         // K-weighting with the coefficients ITU-R BS.1770-4 tabulates for 48 kHz (pre-filter shelf,
         // then the RLB high pass), so a riser's top end counts the way a listener's loudness does.
-        struct Biquad { double b0, b1, b2, a1, a2, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-            double tick(double x) { const double y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; } };
+        struct Biquad { double m_b0, m_b1, m_b2, m_a1, m_a2, m_x1 = 0, m_x2 = 0, m_y1 = 0, m_y2 = 0;
+            double tick(double x) { const double y = m_b0 * x + m_b1 * m_x1 + m_b2 * m_x2 - m_a1 * m_y1 - m_a2 * m_y2; m_x2 = m_x1; m_x1 = x; m_y2 = m_y1; m_y1 = y; return y; } };
         Biquad kw[2][2];
         for (auto& ch : kw) {
             ch[0] = { 1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241, 0.73248077421585 };
@@ -1528,8 +1528,8 @@ void testSfxLevel()
     };
     // The loudest window of the SFX strip between two bars, and the mix in the same window.
     auto marker = [&](double bar0, double bar1) {
-        const size_t a = static_cast<size_t>(mix.second.secondsAt(bar0 * kBeatsPerBar) * sr);
-        const size_t z = static_cast<size_t>(mix.second.secondsAt(bar1 * kBeatsPerBar) * sr);
+        const size_t a = static_cast<size_t>(mix.second.secondsAt(bar0 * BeatsPerBar) * sr);
+        const size_t z = static_cast<size_t>(mix.second.secondsAt(bar1 * BeatsPerBar) * sr);
         double best = -1e9;
         size_t at = a;
         for (size_t i = a; i + win <= z; i += hop) { const double v = windowDb(sfx.first, i); if (v > best) { best = v; at = i; } }
@@ -1547,10 +1547,10 @@ void testSfxLevel()
     // this seed breaks at bar 112 (the two-drop form; until 19.09.2026 at 72).
     double downPeak = -1e9, dropMean = 0.0;
     {
-        const size_t a = static_cast<size_t>(mix.second.secondsAt(112.0 * kBeatsPerBar) * sr);
-        const size_t z = static_cast<size_t>(mix.second.secondsAt(116.0 * kBeatsPerBar) * sr);
+        const size_t a = static_cast<size_t>(mix.second.secondsAt(112.0 * BeatsPerBar) * sr);
+        const size_t z = static_cast<size_t>(mix.second.secondsAt(116.0 * BeatsPerBar) * sr);
         for (size_t i = a; i + win <= z; i += hop) downPeak = std::max(downPeak, windowDb(sfx.first, i));
-        const size_t d0 = static_cast<size_t>(mix.second.secondsAt(104.0 * kBeatsPerBar) * sr);
+        const size_t d0 = static_cast<size_t>(mix.second.secondsAt(104.0 * BeatsPerBar) * sr);
         for (size_t i = d0; i < a; ++i) dropMean += mix.first[i];
         dropMean = 10.0 * std::log10(dropMean / static_cast<double>(a - d0) + 1e-30);
     }
@@ -1567,13 +1567,13 @@ void testMixBalance()
 
     // (a) The lanes that carry the top end are band limited, each on its own.
     {
-        static const int kTop[3] = { 0, 1, 7 };                 // closed hat, open hat, shaker
+        static const int Top[3] = { 0, 1, 7 };                 // closed hat, open hat, shaker
         double worst = -1e9;
         std::string detail;
         for (int t = 0; t < 3; ++t) {
-            const int l = kTop[t];
+            const int l = Top[t];
             ParamStore q;
-            for (int j = 0; j < kPercLanes; ++j) if (j != l) q.set(q.base(Module::Perc, j) + perc::Level, -36.0f);
+            for (int j = 0; j < PercLanes; ++j) if (j != l) q.set(q.base(ModuleE::PERC, j) + perc::LEVEL, -36.0f);
             auto kit = makeKit(q);
             kit->trigger(l, 1.0f, 0, 0.0);
             const std::vector<float> y = renderKit(*kit, 1u << 16);
@@ -1588,7 +1588,7 @@ void testMixBalance()
             };
             const double r = powDb(band(14000.0, 20000.0) / band(4000.0, 8000.0));
             worst = std::max(worst, r);
-            detail += fmt("%s %+.1f  ", kPercRoleNames[static_cast<int>(kit->role(l))], r);
+            detail += fmt("%s %+.1f  ", PercRoleNames[static_cast<int>(kit->role(l))], r);
         }
         check(worst <= -1.2,
               "hat, open hat and shaker are band limited: no more power above 14 kHz than the brightest reference recording (-1.2 dB against 4..8 kHz)",
@@ -1612,7 +1612,7 @@ void testMixBalance()
         const TempoMap tm = c.tempoMap(e->params(), 8);
         e->setTempoMap(tm);
         Conductor cond(*e, c);
-        const uint64_t total = static_cast<uint64_t>(tm.secondsAt(8.0 * kBeatsPerBar) * 48000.0);
+        const uint64_t total = static_cast<uint64_t>(tm.secondsAt(8.0 * BeatsPerBar) * 48000.0);
         std::vector<float> L(512), R(512);
         double worst = 0.0;
         while (e->samplePosition() < total) {
@@ -1636,7 +1636,7 @@ void testMixBalance()
             const TempoMap tm = c.tempoMap(e->params(), 96);
             e->setTempoMap(tm);
             Conductor cond(*e, c);
-            const uint64_t total = static_cast<uint64_t>(tm.secondsAt(96.0 * kBeatsPerBar) * 48000.0);
+            const uint64_t total = static_cast<uint64_t>(tm.secondsAt(96.0 * BeatsPerBar) * 48000.0);
             std::vector<float> L(512), R(512);
             while (e->samplePosition() < total) {
                 cond.pump(e->params(), 32.0);
@@ -1654,7 +1654,7 @@ void testMixBalance()
         const double top = powDb(band(2500.0, 16000.0) / low);
         check(roll <= -4.0,
               "the mix rolls off above 14 kHz like the recordings do (reference median -9.8 dB against 4..8 kHz)",
-              fmt("%.2f dB over %d windows", roll, accL.windows));
+              fmt("%.2f dB over %d windows", roll, accL.m_windows));
         // Above 2.5 kHz a psytrance mix is its percussion carpet: in a solo measurement of this
         // engine the kit is within 1.2 dB of the whole mix in every third octave from there up. The
         // weight of that carpet against the kick band is therefore one number that carries both the
@@ -1771,7 +1771,7 @@ void testBandLimit()
             m.prepare(48000.0);
             std::vector<float> a = x, b = x;
             m.process(a.data(), b.data(), static_cast<int>(N));
-            return static_cast<double>(m.read().truePeak);
+            return static_cast<double>(m.read().m_truePeak);
         };
         std::vector<float> half(N);
         for (size_t i = 0; i < N; ++i) half[i] = 0.5f * band[i];
@@ -1817,7 +1817,7 @@ void testBandLimit()
         const TempoMap tm = c.tempoMap(e->params(), 24);
         e->setTempoMap(tm);
         Conductor cond(*e, c);
-        const uint64_t total = static_cast<uint64_t>(tm.secondsAt(24.0 * kBeatsPerBar) * 48000.0);
+        const uint64_t total = static_cast<uint64_t>(tm.secondsAt(24.0 * BeatsPerBar) * 48000.0);
         BandAccumulator accL, accR;
         std::vector<float> L(512), R(512), outL, outR;
         while (e->samplePosition() < total) {
@@ -1843,7 +1843,7 @@ void testBandLimit()
         const double exact = 20.0 * std::log10(exactPeak(outL, 8192));
         const double exactR = 20.0 * std::log10(exactPeak(outR, 8192));
         const double worstExact = std::max(exact, exactR);
-        const double meterTp = static_cast<double>(e->meter().truePeak);
+        const double meterTp = static_cast<double>(e->meter().m_truePeak);
         check(std::fabs(worstExact - meterTp) <= 0.15 && worstExact <= -0.85,
               "the true-peak meter tells the truth and the ceiling holds against an exact measurement (-1 dBTP)",
               fmt("meter %+.3f dBTP, exact %+.3f dBTP (difference %+.3f)", meterTp, worstExact, worstExact - meterTp));
@@ -1889,14 +1889,14 @@ void testStereoWidth()
             else rv.set(1.6f, 4.5f, 0.45f, 0.0f, 300.0f, 9000.0f);                 // hall, as the defaults
             Rng rng;
             rng.seed(0xB00Bu + static_cast<uint64_t>(which));
-            constexpr int kBlock = 512;
-            const size_t total = static_cast<size_t>(StereoBandAccumulator::kN) * 4 + 48000;
+            constexpr int Block = 512;
+            const size_t total = static_cast<size_t>(StereoBandAccumulator::N) * 4 + 48000;
             StereoBandAccumulator acc;
-            std::vector<float> inL(kBlock), inR(kBlock), outL(kBlock), outR(kBlock);
-            for (size_t done = 0; done < total; done += kBlock) {
-                for (int i = 0; i < kBlock; ++i) { inL[i] = rng.bipolar(); inR[i] = inL[i]; }
-                rv.process(inL.data(), inR.data(), outL.data(), outR.data(), kBlock);
-                if (done >= 48000) acc.push(outL.data(), outR.data(), kBlock);      // skip the build-up
+            std::vector<float> inL(Block), inR(Block), outL(Block), outR(Block);
+            for (size_t done = 0; done < total; done += Block) {
+                for (int i = 0; i < Block; ++i) { inL[i] = rng.bipolar(); inR[i] = inL[i]; }
+                rv.process(inL.data(), inR.data(), outL.data(), outR.data(), Block);
+                if (done >= 48000) acc.push(outL.data(), outR.data(), Block);      // skip the build-up
             }
             const double w = acc.width(500.0, 8000.0);
             const double r = acc.rho(500.0, 8000.0);
@@ -1929,13 +1929,13 @@ void testStereoWidth()
         auto kit = makeKit(p);
         const DenormalGuard guard;
         StereoBandAccumulator acc;
-        constexpr int kBlock = 64;
-        std::vector<float> L(kBlock), R(kBlock);
+        constexpr int Block = 64;
+        std::vector<float> L(Block), R(Block);
         // Sixteenths at 145 bpm: 3103 samples per sixteenth at 48 kHz.
         const int step = 3103;
         int next = 0, k = 0;
-        for (size_t done = 0; done < static_cast<size_t>(StereoBandAccumulator::kN) * 6; done += kBlock) {
-            while (next < static_cast<int>(done) + kBlock) {
+        for (size_t done = 0; done < static_cast<size_t>(StereoBandAccumulator::N) * 6; done += Block) {
+            while (next < static_cast<int>(done) + Block) {
                 const int s = k % 16;
                 kit->trigger(0, 0.9f, 0, 0.0);                         // closed hat on every sixteenth
                 if (s % 4 == 2) kit->trigger(1, 0.8f, 0, 0.0);         // open hat offbeat
@@ -1946,8 +1946,8 @@ void testStereoWidth()
                 next += step;
                 ++k;
             }
-            kit->process(L.data(), R.data(), kBlock);
-            acc.push(L.data(), R.data(), kBlock);
+            kit->process(L.data(), R.data(), Block);
+            acc.push(L.data(), R.data(), Block);
         }
         const double air = acc.width(6000.0, 16000.0);
         const double presence = acc.width(1500.0, 6000.0);
@@ -1971,7 +1971,7 @@ void testStereoWidth()
             const TempoMap tm = c.tempoMap(e->params(), 96);
             e->setTempoMap(tm);
             Conductor cond(*e, c);
-            const uint64_t total = static_cast<uint64_t>(tm.secondsAt(96.0 * kBeatsPerBar) * 48000.0);
+            const uint64_t total = static_cast<uint64_t>(tm.secondsAt(96.0 * BeatsPerBar) * 48000.0);
             std::vector<float> L(512), R(512), m(512);
             while (e->samplePosition() < total) {
                 cond.pump(e->params(), 32.0);
@@ -2046,7 +2046,7 @@ void testModalInterchangeBass()
         }
         auto foundation = [](const std::vector<NoteEvent>& ev) {
             std::vector<NoteEvent> out;
-            for (const NoteEvent& e : ev) if (e.part == Part::Bass || e.part == Part::Kick) out.push_back(e);
+            for (const NoteEvent& e : ev) if (e.m_part == PartE::BASS || e.m_part == PartE::KICK) out.push_back(e);
             return out;
         };
         const std::vector<NoteEvent> a = foundation(on), b = foundation(off);
@@ -2055,8 +2055,8 @@ void testModalInterchangeBass()
         for (size_t i = 0; i < n; ++i) {
             const NoteEvent& x = a[i];
             const NoteEvent& y = b[i];
-            if (x.beat != y.beat || x.length != y.length || x.pitch != y.pitch || x.velocity != y.velocity
-                || x.flags != y.flags || x.part != y.part)
+            if (x.m_beat != y.m_beat || x.m_length != y.m_length || x.m_pitch != y.m_pitch || x.m_velocity != y.m_velocity
+                || x.m_flags != y.m_flags || x.m_part != y.m_part)
                 ++moved;
         }
         // The first bass note of every track is what the kick phase lock hangs on, so its beat and
@@ -2065,10 +2065,10 @@ void testModalInterchangeBass()
         {
             double lastBar = -1.0;
             for (size_t i = 0, j = 0; i < a.size() && j < b.size(); ++i, ++j) {
-                if (a[i].part != Part::Bass) { --j; continue; }
-                while (j < b.size() && b[j].part != Part::Bass) ++j;
+                if (a[i].m_part != PartE::BASS) { --j; continue; }
+                while (j < b.size() && b[j].m_part != PartE::BASS) ++j;
                 if (j >= b.size()) break;
-                if (a[i].beat > lastBar) { lastBar = a[i].beat; if (a[i].beat != b[j].beat || a[i].pitch != b[j].pitch) ++firstMoved; }
+                if (a[i].m_beat > lastBar) { lastBar = a[i].m_beat; if (a[i].m_beat != b[j].m_beat || a[i].m_pitch != b[j].m_pitch) ++firstMoved; }
             }
         }
         int melodicDiff = 0;
@@ -2076,13 +2076,13 @@ void testModalInterchangeBass()
             auto melodic = [](const std::vector<NoteEvent>& ev) {
                 std::vector<NoteEvent> out;
                 for (const NoteEvent& e : ev)
-                    if (e.part == Part::Acid || e.part == Part::Lead || e.part == Part::Arp || e.part == Part::Pad)
+                    if (e.m_part == PartE::ACID || e.m_part == PartE::LEAD || e.m_part == PartE::ARP || e.m_part == PartE::PAD)
                         out.push_back(e);
                 return out;
             };
             const std::vector<NoteEvent> ma = melodic(on), mb = melodic(off);
             const size_t k = std::min(ma.size(), mb.size());
-            for (size_t i = 0; i < k; ++i) if (ma[i].pitch != mb[i].pitch) ++melodicDiff;
+            for (size_t i = 0; i < k; ++i) if (ma[i].m_pitch != mb[i].m_pitch) ++melodicDiff;
         }
         check(a.size() == b.size() && a.size() > 5000 && moved == 0 && firstMoved == 0 && melodicDiff > 200,
               "modal interchange leaves the kick and the bass bit-identical while the melody moves",
@@ -2100,26 +2100,26 @@ void testModalInterchangeModes()
     // reaches. Progressive may only borrow Dorian and Aeolian; Goa reaches the Hijaz modes, and it
     // reaches them more often where the energy is high than where it is low.
     {
-        int progressiveOff = 0, borrowed[kNumStyles] = {}, sections[kNumStyles] = {};
+        int progressiveOff = 0, borrowed[NumStyles] = {}, sections[NumStyles] = {};
         int goaHijazHigh = 0, goaHigh = 0, goaHijazLow = 0, goaLow = 0;
-        for (int st = 0; st < kNumStyles; ++st) {
-            const StyleProfile& s = styleProfile(static_cast<StyleId>(st));
+        for (int st = 0; st < NumStyles; ++st) {
+            const StyleProfile& s = styleProfile(static_cast<StyleIdE>(st));
             for (uint64_t seed = 1; seed <= 400; ++seed) {
-                uint64_t ss[kMaxSections];
-                for (int i = 0; i < kMaxSections; ++i) ss[i] = mixSeed(seed * 7919ull + 13ull, static_cast<uint64_t>(i));
-                const int trackScale = static_cast<int>(seed % kNumScales);
+                uint64_t ss[MaxSections];
+                for (int i = 0; i < MaxSections; ++i) ss[i] = mixSeed(seed * 7919ull + 13ull, static_cast<uint64_t>(i));
+                const int trackScale = static_cast<int>(seed % NumScales);
                 const FormPlan f = makeFormPlan(s, seed, 192, 0.25, 0.95, trackScale, ss);
-                for (int i = 0; i < f.count; ++i) {
-                    const Section& sec = f.section[i];
+                for (int i = 0; i < f.m_count; ++i) {
+                    const Section& sec = f.m_section[i];
                     ++sections[st];
-                    if (sec.scale != trackScale) ++borrowed[st];
-                    if (st == static_cast<int>(StyleId::Progressive) && sec.scale != trackScale
-                        && sec.scale != static_cast<int>(1 /*Phrygian*/)
-                        && sec.scale != 0 && sec.scale != 5)
+                    if (sec.m_scale != trackScale) ++borrowed[st];
+                    if (st == static_cast<int>(StyleIdE::PROGRESSIVE) && sec.m_scale != trackScale
+                        && sec.m_scale != static_cast<int>(1 /*Phrygian*/)
+                        && sec.m_scale != 0 && sec.m_scale != 5)
                         ++progressiveOff;
-                    if (st == static_cast<int>(StyleId::Goa) && sec.scale != trackScale) {
-                        const bool hijaz = scaleColourTones(sec.scale) >= 2;
-                        const float e = 0.5f * (sec.energy + sec.energyTo);
+                    if (st == static_cast<int>(StyleIdE::GOA) && sec.m_scale != trackScale) {
+                        const bool hijaz = scaleColourTones(sec.m_scale) >= 2;
+                        const float e = 0.5f * (sec.m_energy + sec.m_energyTo);
                         if (e >= 0.8f) { ++goaHigh; goaHijazHigh += hijaz ? 1 : 0; }
                         else if (e <= 0.5f) { ++goaLow; goaHijazLow += hijaz ? 1 : 0; }
                     }
@@ -2138,20 +2138,20 @@ void testModalInterchangeModes()
     // The mode is a function of the section's seed alone: the same seeds give the same modes, other
     // seeds give other ones. (The bar-by-bar determinism of the whole composer is testComposer's.)
     {
-        const StyleProfile& s = styleProfile(StyleId::Goa);
-        uint64_t ss[kMaxSections], other[kMaxSections];
-        for (int i = 0; i < kMaxSections; ++i) { ss[i] = mixSeed(4242ull, static_cast<uint64_t>(i)); other[i] = mixSeed(4243ull, static_cast<uint64_t>(i)); }
+        const StyleProfile& s = styleProfile(StyleIdE::GOA);
+        uint64_t ss[MaxSections], other[MaxSections];
+        for (int i = 0; i < MaxSections; ++i) { ss[i] = mixSeed(4242ull, static_cast<uint64_t>(i)); other[i] = mixSeed(4243ull, static_cast<uint64_t>(i)); }
         const FormPlan a = makeFormPlan(s, 77, 192, 0.3, 0.9, 1, ss);
         const FormPlan b = makeFormPlan(s, 77, 192, 0.3, 0.9, 1, ss);
         const FormPlan d = makeFormPlan(s, 77, 192, 0.3, 0.9, 1, other);
         int same = 0, differ = 0;
-        for (int i = 0; i < a.count; ++i) {
-            if (a.section[i].scale != b.section[i].scale) ++differ;
-            if (a.section[i].scale == d.section[i].scale) ++same;
+        for (int i = 0; i < a.m_count; ++i) {
+            if (a.m_section[i].m_scale != b.m_section[i].m_scale) ++differ;
+            if (a.m_section[i].m_scale == d.m_section[i].m_scale) ++same;
         }
-        check(differ == 0 && same < a.count && a.scaleMask != (1u << 1),
+        check(differ == 0 && same < a.m_count && a.m_scaleMask != (1u << 1),
               "a section's mode is a function of its own seed", fmt("%d of %d differ on a repeat, %d of %d match another seed, mask 0x%x",
-                                                                    differ, a.count, same, a.count, a.scaleMask));
+                                                                    differ, a.m_count, same, a.m_count, a.m_scaleMask));
     }
 }
 
@@ -2166,7 +2166,7 @@ void testSfxToneIntervals()
 {
     section("effects: the tonal layer's interval, mapped into the mode, is never a b9 or a leading tone");
     int cases = 0, bad = 0;
-    for (int scale = 0; scale < kNumScales; ++scale)
+    for (int scale = 0; scale < NumScales; ++scale)
         for (int iv = -12; iv <= 24; ++iv) {
             const int pc = ((static_cast<int>(std::lround(sfxToneInterval(scale, iv))) % 12) + 12) % 12;
             ++cases;

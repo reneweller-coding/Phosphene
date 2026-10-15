@@ -27,12 +27,12 @@ namespace phos {
 
 namespace {
 
-using Coeffs = std::vector<std::complex<double>>;   ///< A table frame's harmonics as complex coefficients.
+using CoeffsT = std::vector<std::complex<double>>;   ///< A table frame's harmonics as complex coefficients.
 
-constexpr size_t kNameBytes = 32;   ///< a table's name in the pack, bytes
-constexpr size_t kIdBytes = 64;   ///< a table's id in the pack, bytes
-constexpr size_t kAlign = 32;   ///< the alignment of the pack's records, bytes
-constexpr int kTopHarmonics = WaveTable::kStoreLen / 8;   ///< levelHarmonics(0)
+constexpr size_t NameBytes = 32;   ///< a table's name in the pack, bytes
+constexpr size_t IdBytes = 64;   ///< a table's id in the pack, bytes
+constexpr size_t Align = 32;   ///< the alignment of the pack's records, bytes
+constexpr int TopHarmonics = WaveTable::StoreLen / 8;   ///< levelHarmonics(0)
 
 /** @brief Where a bare library file name is looked for, after the working directory. */
 std::string& searchPath()
@@ -74,7 +74,7 @@ int bandOf(int h)
  */
 std::vector<int> frameIndices(int total, int limit)
 {
-    const int keep = (limit > 0 && limit < total) ? limit : std::min(total, WaveTable::kMaxFrames);
+    const int keep = (limit > 0 && limit < total) ? limit : std::min(total, WaveTable::MaxFrames);
     std::vector<int> idx(static_cast<size_t>(keep));
     for (int k = 0; k < keep; ++k)
         idx[static_cast<size_t>(k)] = (keep == total)
@@ -94,12 +94,12 @@ std::vector<int> frameIndices(int total, int limit)
  * yet falls back to its built-in, exactly as a missing library file already did.
  */
 struct LibraryEntry {
-    WaveTable table;   ///< the table, its mip levels once built
-    size_t at = 0;            ///< byte offset of this table's first frame record in the pack
-    int frameCount = 0;       ///< frames the pack holds for it
-    int dtype = 0;            ///< 0 = float32 coefficients, 1 = int16 with per-band scales
-    bool indexed = false;     ///< the pack has this table and the three fields above are valid
-    std::atomic<bool> ready{ false };   ///< the mip levels are built; only ever false -> true
+    WaveTable m_table;   ///< the table, its mip levels once built
+    size_t m_at = 0;            ///< byte offset of this table's first frame record in the pack
+    int m_frameCount = 0;       ///< frames the pack holds for it
+    int m_dtype = 0;            ///< 0 = float32 coefficients, 1 = int16 with per-band scales
+    bool m_indexed = false;     ///< the pack has this table and the three fields above are valid
+    std::atomic<bool> m_ready{ false };   ///< the mip levels are built; only ever false -> true
 };
 
 /**
@@ -113,12 +113,12 @@ struct LibraryEntry {
  * return `count` -- still 0 -- while the first thread's parse was still in flight).
  */
 struct Library {
-    LibraryEntry entry[kNumLibraryWaveTables > 0 ? kNumLibraryWaveTables : 1];   ///< the tables of the pack, by index
-    std::vector<uint8_t> file;   ///< the pack itself, kept so a table can be expanded later
-    std::atomic<bool> attempted{ false };   ///< loadWaveTableLibrary() ran (or runs): the call-once gate
-    std::mutex mutex;   ///< serialises the threads that find it false
-    int count = 0;               ///< tables the pack offers (indexed), not tables built
-    size_t bytes = 0;            ///< memory the built tables occupy; written under `mutex`
+    LibraryEntry m_entry[NumLibraryWaveTables > 0 ? NumLibraryWaveTables : 1];   ///< the tables of the pack, by index
+    std::vector<uint8_t> m_file;   ///< the pack itself, kept so a table can be expanded later
+    std::atomic<bool> m_attempted{ false };   ///< loadWaveTableLibrary() ran (or runs): the call-once gate
+    std::mutex m_mutex;   ///< serialises the threads that find it false
+    int m_count = 0;               ///< tables the pack offers (indexed), not tables built
+    size_t m_bytes = 0;            ///< memory the built tables occupy; written under `mutex`
 };
 
 /** @brief The process's one wavetable library. */
@@ -136,7 +136,7 @@ Library& library()
  * same bytes again with a buffer to fill.
  */
 bool walkTableFrames(const std::vector<uint8_t>& file, size_t& at, int frameCount, int dtype,
-                     const std::vector<int>& keep, std::vector<Coeffs>* out, std::string* error)
+                     const std::vector<int>& keep, std::vector<CoeffsT>* out, std::string* error)
 {
     const size_t n = file.size();
     size_t next = 0;
@@ -145,14 +145,14 @@ bool walkTableFrames(const std::vector<uint8_t>& file, size_t& at, int frameCoun
         const int harmonics = readU16(file.data() + at);
         const int bands = readU16(file.data() + at + 2);
         at += 4;
-        if (harmonics < 0 || harmonics > kTopHarmonics) return fileError(error, "harmonics out of range", at - 4);
+        if (harmonics < 0 || harmonics > TopHarmonics) return fileError(error, "harmonics out of range", at - 4);
         const size_t scaleBytes = static_cast<size_t>(bands) * 4;
         const size_t dataBytes = static_cast<size_t>(harmonics) * (dtype == 0 ? 8u : 4u);
         if (at + scaleBytes + dataBytes > n) return fileError(error, "frame data runs past the end", at);
         const uint8_t* scales = file.data() + at;
         const uint8_t* data = scales + scaleBytes;
         if (out != nullptr && next < keep.size() && keep[next] == k) {
-            Coeffs c(static_cast<size_t>(harmonics));
+            CoeffsT c(static_cast<size_t>(harmonics));
             for (int h = 1; h <= harmonics; ++h) {
                 const size_t i = static_cast<size_t>(h - 1);
                 if (dtype == 0) {
@@ -180,39 +180,39 @@ std::atomic<size_t>& budgetBytes()
 /** @brief Empties an entry. Not an assignment: LibraryEntry holds an atomic and is not copyable. */
 void clearEntry(LibraryEntry& e)
 {
-    e.table = WaveTable{};
-    e.at = 0;
-    e.frameCount = 0;
-    e.dtype = 0;
-    e.indexed = false;
-    e.ready.store(false, std::memory_order_release);
+    e.m_table = WaveTable{};
+    e.m_at = 0;
+    e.m_frameCount = 0;
+    e.m_dtype = 0;
+    e.m_indexed = false;
+    e.m_ready.store(false, std::memory_order_release);
 }
 
 /** @brief Expands one indexed table into its mip levels and publishes it. Caller holds the mutex. */
 bool buildSlot(Library& lib, int slot)
 {
-    LibraryEntry& e = lib.entry[slot];
-    if (e.ready.load(std::memory_order_relaxed)) return true;
-    if (!e.indexed) return false;
+    LibraryEntry& e = lib.m_entry[slot];
+    if (e.m_ready.load(std::memory_order_relaxed)) return true;
+    if (!e.m_indexed) return false;
     // The ceiling (WaveTableFile.h, setWaveTableBudgetBytes). Checked before the work, not after:
     // the point is not to allocate the table at all once the library is full, and a voice whose
     // table is refused here sounds its built-in fallback, which is audible but never a fault.
     const size_t budget = budgetBytes().load(std::memory_order_relaxed);
-    if (budget != 0 && lib.bytes >= budget) return false;
-    const std::vector<int> keep = frameIndices(e.frameCount, frameLimit());
-    std::vector<Coeffs> frames(keep.size());
-    size_t at = e.at;
-    if (!walkTableFrames(lib.file, at, e.frameCount, e.dtype, keep, &frames, nullptr)) return false;
-    if (frames.empty() || !e.table.buildFromHarmonics(frames)) return false;
-    lib.bytes += e.table.data.size() * sizeof(float);
+    if (budget != 0 && lib.m_bytes >= budget) return false;
+    const std::vector<int> keep = frameIndices(e.m_frameCount, frameLimit());
+    std::vector<CoeffsT> frames(keep.size());
+    size_t at = e.m_at;
+    if (!walkTableFrames(lib.m_file, at, e.m_frameCount, e.m_dtype, keep, &frames, nullptr)) return false;
+    if (frames.empty() || !e.m_table.buildFromHarmonics(frames)) return false;
+    lib.m_bytes += e.m_table.m_data.size() * sizeof(float);
     // Release: everything buildFromHarmonics() wrote is visible to any thread that sees `ready`.
-    e.ready.store(true, std::memory_order_release);
+    e.m_ready.store(true, std::memory_order_release);
     return true;
 }
 
 
 /**
- * @brief Parses the pack into @p out, indexed by the position of an id in kLibraryTables.
+ * @brief Parses the pack into @p out, indexed by the position of an id in LibraryTables.
  *
  * A table the file holds but this build does not ship is skipped, and a table this build ships but
  * the file does not hold stays unloaded -- both so that a newer pack and an older binary, or the
@@ -227,31 +227,31 @@ bool parsePack(const std::vector<uint8_t>& file, Library& out, std::string* erro
     const uint32_t headerLen = readU32(file.data() + 16);
     size_t at = 20 + headerLen;
     if (at > n) return fileError(error, "headerLen runs past the end of the file", 16);
-    at = (at + kAlign - 1) / kAlign * kAlign;
+    at = (at + Align - 1) / Align * Align;
 
     for (uint32_t t = 0; t < tables; ++t) {
-        if (at + kNameBytes + kIdBytes + 8 > n) return fileError(error, "a table record runs past the end", at);
-        const char* id = reinterpret_cast<const char*>(file.data() + at + kNameBytes);
-        at += kNameBytes + kIdBytes;
+        if (at + NameBytes + IdBytes + 8 > n) return fileError(error, "a table record runs past the end", at);
+        const char* id = reinterpret_cast<const char*>(file.data() + at + NameBytes);
+        at += NameBytes + IdBytes;
         const int frameCount = readU16(file.data() + at);
         const int dtype = file[at + 4];
         at += 8;
         // Which of the shipped tables this is, by its library id -- never by its position.
         int slot = -1;
-        for (int i = 0; i < kNumLibraryWaveTables; ++i)
-            if (std::strncmp(id, kLibraryTables[i].id, kIdBytes) == 0) slot = i;
+        for (int i = 0; i < NumLibraryWaveTables; ++i)
+            if (std::strncmp(id, LibraryTables[i].m_id, IdBytes) == 0) slot = i;
 
         // Indexing only: the frames are walked to find the end of the record, not decoded. What the
         // entry keeps is where they begin, so ensureWaveTables() can come back for them.
         const size_t framesAt = at;
         if (!walkTableFrames(file, at, frameCount, dtype, {}, nullptr, error)) return false;
         if (slot >= 0) {
-            LibraryEntry& e = out.entry[slot];
-            e.at = framesAt;
-            e.frameCount = frameCount;
-            e.dtype = dtype;
-            e.indexed = true;
-            ++out.count;
+            LibraryEntry& e = out.m_entry[slot];
+            e.m_at = framesAt;
+            e.m_frameCount = frameCount;
+            e.m_dtype = dtype;
+            e.m_indexed = true;
+            ++out.m_count;
         }
     }
     if (at + 8 > n || std::memcmp(file.data() + at, "PHOSWTE1", 8) != 0)
@@ -263,7 +263,7 @@ bool parsePack(const std::vector<uint8_t>& file, Library& out, std::string* erro
 
 /// The generated list, once as data.
 #define PHOS_WT(index, name, id, lane, fallback) { name, id, lane, fallback },
-const LibraryTableDesc kLibraryTables[kNumLibraryWaveTables] = {
+const LibraryTableDesc LibraryTables[NumLibraryWaveTables] = {
 #include "phos/WaveTableList.inl"
 };
 #undef PHOS_WT
@@ -273,7 +273,7 @@ const std::string& waveTableSearchPath() { return searchPath(); }
 
 void setWaveTableFrameLimit(int frames)
 {
-    if (!library().attempted.load(std::memory_order_acquire)) frameLimit() = frames;
+    if (!library().m_attempted.load(std::memory_order_acquire)) frameLimit() = frames;
 }
 
 int loadWaveTableLibrary(const char* path, std::string* error)
@@ -281,11 +281,11 @@ int loadWaveTableLibrary(const char* path, std::string* error)
     Library& lib = library();
     // Hot path: once loaded (by this call or another thread), no lock -- an acquire load that pairs
     // with the release store at the bottom of the slow path below.
-    if (lib.attempted.load(std::memory_order_acquire)) return lib.count;
-    std::lock_guard<std::mutex> guard(lib.mutex);
+    if (lib.m_attempted.load(std::memory_order_acquire)) return lib.m_count;
+    std::lock_guard<std::mutex> guard(lib.m_mutex);
     // Lost the race for the lock: whoever got there first already finished (attempted is set only
     // after the load is complete), so there is nothing left to do.
-    if (lib.attempted.load(std::memory_order_relaxed)) return lib.count;
+    if (lib.m_attempted.load(std::memory_order_relaxed)) return lib.m_count;
     if (error != nullptr) error->clear();
     const char* name = (path != nullptr && path[0] != 0) ? path : "library.phoswt";
     std::vector<uint8_t> file;
@@ -309,23 +309,23 @@ int loadWaveTableLibrary(const char* path, std::string* error)
             if (error != nullptr) *error = "cannot open the wavetable library (" + tried + ")";
             // The one attempt is made either way -- a missing file does not retry on the next call --
             // so the gate opens here too, after the release store every other thread's acquire load pairs with.
-            lib.attempted.store(true, std::memory_order_release);
+            lib.m_attempted.store(true, std::memory_order_release);
             return 0;
         }
     }
-    lib.file = std::move(file);
+    lib.m_file = std::move(file);
     std::string why;
-    if (!parsePack(lib.file, lib, &why)) {
+    if (!parsePack(lib.m_file, lib, &why)) {
         // A broken file must leave nothing half-built: every table falls back to its built-in.
-        for (int i = 0; i < kNumLibraryWaveTables; ++i) clearEntry(lib.entry[i]);
-        lib.count = 0;
-        lib.bytes = 0;
+        for (int i = 0; i < NumLibraryWaveTables; ++i) clearEntry(lib.m_entry[i]);
+        lib.m_count = 0;
+        lib.m_bytes = 0;
         if (error != nullptr) *error = why;
-        lib.attempted.store(true, std::memory_order_release);
+        lib.m_attempted.store(true, std::memory_order_release);
         return 0;
     }
-    lib.attempted.store(true, std::memory_order_release);
-    return lib.count;
+    lib.m_attempted.store(true, std::memory_order_release);
+    return lib.m_count;
 }
 
 void resetWaveTableLibrary()
@@ -334,23 +334,23 @@ void resetWaveTableLibrary()
     // Guarded by the same mutex as the load: cheap (a test-only call, never during a load), and it
     // rules out a reset landing between a concurrent loader's release store and a reader still using
     // the entries it is about to clear.
-    std::lock_guard<std::mutex> guard(lib.mutex);
-    for (int i = 0; i < kNumLibraryWaveTables; ++i) clearEntry(lib.entry[i]);
-    lib.file.clear();
-    lib.file.shrink_to_fit();
-    lib.attempted.store(false, std::memory_order_release);
-    lib.count = 0;
-    lib.bytes = 0;
+    std::lock_guard<std::mutex> guard(lib.m_mutex);
+    for (int i = 0; i < NumLibraryWaveTables; ++i) clearEntry(lib.m_entry[i]);
+    lib.m_file.clear();
+    lib.m_file.shrink_to_fit();
+    lib.m_attempted.store(false, std::memory_order_release);
+    lib.m_count = 0;
+    lib.m_bytes = 0;
 }
 
 bool waveTableIsLibrary(int index)
 {
-    return index >= kNumBuiltinWaveTables && index < kNumWaveTables;
+    return index >= NumBuiltinWaveTables && index < NumWaveTables;
 }
 
 bool waveTableLoaded(int index)
 {
-    return waveTableIsLibrary(index) && library().entry[index - kNumBuiltinWaveTables].ready.load(std::memory_order_acquire);
+    return waveTableIsLibrary(index) && library().m_entry[index - NumBuiltinWaveTables].m_ready.load(std::memory_order_acquire);
 }
 
 void ensureWaveTables(const int* indices, int count)
@@ -361,72 +361,72 @@ void ensureWaveTables(const int* indices, int count)
     // where loadWaveTableLibrary()'s own gate makes the call free once it has been done.
     loadWaveTableLibrary();
     Library& lib = library();
-    if (!lib.attempted.load(std::memory_order_acquire)) return;
+    if (!lib.m_attempted.load(std::memory_order_acquire)) return;
     // Cheap pass first: the common case is a track whose tables are all built already, and that must
     // not take the lock -- the composer calls this for every track it plans.
     bool missing = false;
     for (int i = 0; i < count && !missing; ++i) {
         const int idx = indices[i];
-        if (idx >= kNumBuiltinWaveTables && idx < kNumWaveTables)
-            missing = !lib.entry[idx - kNumBuiltinWaveTables].ready.load(std::memory_order_acquire);
+        if (idx >= NumBuiltinWaveTables && idx < NumWaveTables)
+            missing = !lib.m_entry[idx - NumBuiltinWaveTables].m_ready.load(std::memory_order_acquire);
     }
     if (!missing) return;
-    std::lock_guard<std::mutex> guard(lib.mutex);
+    std::lock_guard<std::mutex> guard(lib.m_mutex);
     for (int i = 0; i < count; ++i) {
         const int idx = indices[i];
-        if (idx >= kNumBuiltinWaveTables && idx < kNumWaveTables) buildSlot(lib, idx - kNumBuiltinWaveTables);
+        if (idx >= NumBuiltinWaveTables && idx < NumWaveTables) buildSlot(lib, idx - NumBuiltinWaveTables);
     }
 }
 
 void setWaveTableBudgetBytes(size_t bytes) { budgetBytes().store(bytes, std::memory_order_relaxed); }
 
-const std::vector<int>& waveTableLaneTables(WaveTableLane lane)
+const std::vector<int>& waveTableLaneTables(WaveTableLaneE lane)
 {
     // Built once on first use; the function-local static makes that thread safe without a lock of
-    // our own, and nothing here can change afterwards -- kLibraryTables is compiled in.
+    // our own, and nothing here can change afterwards -- LibraryTables is compiled in.
     static const std::vector<std::vector<int>> byLane = [] {
-        std::vector<std::vector<int>> v(static_cast<size_t>(kNumWaveTableLanes));
-        for (int i = 0; i < kNumLibraryWaveTables; ++i) {
-            const int l = static_cast<int>(kLibraryTables[i].lane);
-            if (l >= 0 && l < kNumWaveTableLanes) v[static_cast<size_t>(l)].push_back(kNumBuiltinWaveTables + i);
+        std::vector<std::vector<int>> v(static_cast<size_t>(NumWaveTableLanes));
+        for (int i = 0; i < NumLibraryWaveTables; ++i) {
+            const int l = static_cast<int>(LibraryTables[i].m_lane);
+            if (l >= 0 && l < NumWaveTableLanes) v[static_cast<size_t>(l)].push_back(NumBuiltinWaveTables + i);
         }
         return v;
     }();
     const int l = static_cast<int>(lane);
     static const std::vector<int> none;
-    return l >= 0 && l < kNumWaveTableLanes ? byLane[static_cast<size_t>(l)] : none;
+    return l >= 0 && l < NumWaveTableLanes ? byLane[static_cast<size_t>(l)] : none;
 }
 
-int waveTablesIndexed() { return library().count; }
+int waveTablesIndexed() { return library().m_count; }
 
 int waveTablesBuilt()
 {
     const Library& lib = library();
     int n = 0;
-    for (int i = 0; i < kNumLibraryWaveTables; ++i) n += lib.entry[i].ready.load(std::memory_order_acquire) ? 1 : 0;
+    for (int i = 0; i < NumLibraryWaveTables; ++i) n += lib.m_entry[i].m_ready.load(std::memory_order_acquire) ? 1 : 0;
     return n;
 }
 
-size_t waveTableLibraryBytes() { return library().bytes; }
+size_t waveTableLibraryBytes() { return library().m_bytes; }
 
 const WaveTable& waveTable(int index)
 {
-    if (index < kNumBuiltinWaveTables) return builtinWaveTable(index);
-    const int i = index < kNumWaveTables ? index - kNumBuiltinWaveTables : kNumLibraryWaveTables - 1;
-    if (kNumLibraryWaveTables <= 0) return builtinWaveTable(0);
-    const LibraryEntry& e = library().entry[i];
+    if (index < NumBuiltinWaveTables) return builtinWaveTable(index);
+    const int i = index < NumWaveTables ? index - NumBuiltinWaveTables : NumLibraryWaveTables - 1;
+    if (NumLibraryWaveTables <= 0) return builtinWaveTable(0);
+    const LibraryEntry& e = library().m_entry[i];
     // Acquire pairs with buildSlot()'s release store. Never builds here: this runs on the audio
     // thread, where an allocation or a file read would be a fault, so a table that has not been
     // asked for yet sounds as its built-in fallback rather than stalling the mix.
-    if (e.ready.load(std::memory_order_acquire)) return e.table;
-    return builtinWaveTable(kLibraryTables[i].fallback);
+    if (e.m_ready.load(std::memory_order_acquire)) return e.m_table;
+    return builtinWaveTable(LibraryTables[i].m_fallback);
 }
 
 /**
  * @brief Reads a single-cycle wavetable WAV at @p path into @p out (a frame's harmonics each, at most @p maxFrames) and its
  *        cycle length into @p cycleLen; false if it cannot.
  */
-bool readWaveTableWav(const char* path, std::vector<Coeffs>& out, int& cycleLen, int maxFrames)
+bool readWaveTableWav(const char* path, std::vector<CoeffsT>& out, int& cycleLen, int maxFrames)
 {
     out.clear();
     cycleLen = 0;
@@ -489,7 +489,7 @@ bool readWaveTableWav(const char* path, std::vector<Coeffs>& out, int& cycleLen,
     const int frameCount = static_cast<int>(mono.size()) / cycleLen;
     if (frameCount < 1) return false;
     const std::vector<int> keep = frameIndices(frameCount, maxFrames);
-    const int top = std::min(kTopHarmonics, (cycleLen - 1) / 2);
+    const int top = std::min(TopHarmonics, (cycleLen - 1) / 2);
     const bool pow2 = (cycleLen & (cycleLen - 1)) == 0;
     std::unique_ptr<Fft> fft;
     std::vector<std::complex<double>> buf;
@@ -497,19 +497,19 @@ bool readWaveTableWav(const char* path, std::vector<Coeffs>& out, int& cycleLen,
         fft = std::make_unique<Fft>(cycleLen);
         buf.assign(static_cast<size_t>(cycleLen), std::complex<double>(0.0, 0.0));
     }
-    out.assign(keep.size(), Coeffs());
+    out.assign(keep.size(), CoeffsT());
     for (size_t k = 0; k < keep.size(); ++k) {
         const float* x = mono.data() + static_cast<size_t>(keep[k]) * static_cast<size_t>(cycleLen);
-        Coeffs c(static_cast<size_t>(std::max(top, 0)));
+        CoeffsT c(static_cast<size_t>(std::max(top, 0)));
         const double scale = 2.0 / static_cast<double>(cycleLen);
         if (fft != nullptr) {
             for (int i = 0; i < cycleLen; ++i) buf[static_cast<size_t>(i)] = std::complex<double>(x[i], 0.0);
             fft->transform(buf, false);
             for (int h = 1; h <= top; ++h) c[static_cast<size_t>(h - 1)] = buf[static_cast<size_t>(h)] * scale;
         } else {
-            constexpr double kPiD = 3.14159265358979323846;
+            constexpr double PiD = 3.14159265358979323846;
             for (int h = 1; h <= top; ++h) {
-                const double w = 2.0 * kPiD * h / static_cast<double>(cycleLen);
+                const double w = 2.0 * PiD * h / static_cast<double>(cycleLen);
                 double sr = 0.0, si = 0.0;
                 for (int i = 0; i < cycleLen; ++i) { sr += x[i] * std::cos(w * i); si -= x[i] * std::sin(w * i); }
                 c[static_cast<size_t>(h - 1)] = std::complex<double>(sr, si) * scale;

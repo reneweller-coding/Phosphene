@@ -32,7 +32,7 @@ using namespace phostest;
 
 namespace {
 
-constexpr int W = kVecWidth;   ///< the lanes of the vector type compiled here
+constexpr int W = VecWidth;   ///< the lanes of the vector type compiled here
 
 /** @brief Deterministic test values covering signs, tiny and large magnitudes. */
 float testValue(uint32_t i)
@@ -152,9 +152,9 @@ void testPerc()
     auto a = std::make_unique<PercKit>(), b = std::make_unique<PercKit>();
     a->prepare(48000.0);
     b->prepare(48000.0);
-    for (int l = 0; l < kPercLanes; ++l) {
-        std::vector<float> v(static_cast<size_t>(perc::Count));
-        p.readModule(Module::Perc, l, v.data());
+    for (int l = 0; l < PercLanes; ++l) {
+        std::vector<float> v(static_cast<size_t>(perc::COUNT));
+        p.readModule(ModuleE::PERC, l, v.data());
         a->update(l, v.data(), 6, 1);
         b->update(l, v.data(), 6, 1);
     }
@@ -164,7 +164,7 @@ void testPerc()
     for (int block = 0; block < 1500; ++block) {
         // Hits on changing lanes, with velocities, shifts and sub-sample offsets.
         if (block % 7 == 0) {
-            const int lane = (block / 7) % kPercLanes;
+            const int lane = (block / 7) % PercLanes;
             const float vel = 0.4f + 0.05f * static_cast<float>(block % 13);
             const int shift = (block % 5) - 2;
             const double late = static_cast<double>(block % 10) / 10.0;
@@ -185,15 +185,15 @@ void testPerc()
     auto time = [&](bool vec) {
         auto k = std::make_unique<PercKit>();
         k->prepare(48000.0);
-        for (int l = 0; l < kPercLanes; ++l) {
-            std::vector<float> v(static_cast<size_t>(perc::Count));
-            p.readModule(Module::Perc, l, v.data());
+        for (int l = 0; l < PercLanes; ++l) {
+            std::vector<float> v(static_cast<size_t>(perc::COUNT));
+            p.readModule(ModuleE::PERC, l, v.data());
             k->update(l, v.data(), 6, 1);
         }
         std::vector<float> L(32), R(32);
         const auto t0 = std::chrono::steady_clock::now();
         for (int block = 0; block < 15000; ++block) {
-            if (block % 50 == 0) for (int l = 0; l < kPercLanes; ++l) k->trigger(l, 1.0f, 0, 0.0);
+            if (block % 50 == 0) for (int l = 0; l < PercLanes; ++l) k->trigger(l, 1.0f, 0, 0.0);
             if (vec) k->processWith<VecF>(L.data(), R.data(), 32);
             else k->processWith<float>(L.data(), R.data(), 32);
         }
@@ -201,7 +201,7 @@ void testPerc()
     };
     const double ts = time(false), tv = time(true);
     std::printf("         cost of 10 s, all lanes busy: scalar %.1f %% of a core, %s %.1f %% (x%.2f)\n",
-                ts * 10.0, kVecPathName, tv * 10.0, ts / tv);
+                ts * 10.0, VecPathName, tv * 10.0, ts / tv);
 }
 
 /** @brief Vector test: diode ladder lanes against the scalar diode ladder. */
@@ -257,8 +257,8 @@ void testPoly()
                             "lead.wave=0.5 lead.drift=4 lead.disperse=%d lead.disperse_freq=900",
                             (block / 250) % 4, (block / 250) % 6, 0.1 + 0.07 * (block / 250 % 10), block / 250 % 7,
                             1 + (block / 250) % 8).c_str());
-            std::vector<float> v(static_cast<size_t>(poly::Count));
-            p.readModule(Module::Poly, 0, v.data());
+            std::vector<float> v(static_cast<size_t>(poly::COUNT));
+            p.readModule(ModuleE::POLY, 0, v.data());
             a->update(v.data(), 145.0);
             b->update(v.data(), 145.0);
         }
@@ -282,16 +282,16 @@ void testPoly()
     // each at the full unison of the desktop level and at the three oscillators of the Quest level
     // (Quality.h). The limited runs go through setQuality() and noteOnLimited(), which is the path
     // Engine::dispatch takes; the voice limit stays at eight so that only the unison differs.
-    auto time = [&](const char* settings, PolyInstance inst, bool vec, int unison) {
+    auto time = [&](const char* settings, PolyInstanceE inst, bool vec, int unison) {
         auto e = std::make_unique<Poly>();
         e->prepare(48000.0);
-        e->setQuality(unison, kPolyVoices);
+        e->setQuality(unison, PolyVoices);
         ParamStore q;
         q.parseText(settings);
-        std::vector<float> v(static_cast<size_t>(poly::Count));
-        q.readModule(Module::Poly, static_cast<int>(inst), v.data());
+        std::vector<float> v(static_cast<size_t>(poly::COUNT));
+        q.readModule(ModuleE::POLY, static_cast<int>(inst), v.data());
         e->update(v.data(), 145.0);
-        for (int k = 0; k < kPolyVoices; ++k) e->noteOnLimited(60 + 3 * k, 1.0f, 4.0, 1 << 30, 0.0);
+        for (int k = 0; k < PolyVoices; ++k) e->noteOnLimited(60 + 3 * k, 1.0f, 4.0, 1 << 30, 0.0);
         std::vector<float> L(32), R(32);
         const auto t0 = std::chrono::steady_clock::now();
         for (int block = 0; block < 15000; ++block) {
@@ -300,20 +300,20 @@ void testPoly()
         }
         return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     };
-    const char* const kLead = "lead.amp_sustain=1 lead.delay_send=0.3";
-    const char* const kPad = "pad.amp_sustain=1 pad.amp_attack=1";
-    const double ts = time(kLead, PolyInstance::Lead, false, kPolyUnison), tv = time(kLead, PolyInstance::Lead, true, kPolyUnison);
+    const char* const Lead = "lead.amp_sustain=1 lead.delay_send=0.3";
+    const char* const Pad = "pad.amp_sustain=1 pad.amp_attack=1";
+    const double ts = time(Lead, PolyInstanceE::LEAD, false, PolyUnison), tv = time(Lead, PolyInstanceE::LEAD, true, PolyUnison);
     std::printf("         cost of 10 s, eight supersaw voices: scalar %.1f %% of a core, %s %.1f %% (x%.2f)\n",
-                ts * 10.0, kVecPathName, tv * 10.0, ts / tv);
-    const double ts3 = time(kLead, PolyInstance::Lead, false, 3), tv3 = time(kLead, PolyInstance::Lead, true, 3);
+                ts * 10.0, VecPathName, tv * 10.0, ts / tv);
+    const double ts3 = time(Lead, PolyInstanceE::LEAD, false, 3), tv3 = time(Lead, PolyInstanceE::LEAD, true, 3);
     std::printf("         cost of 10 s, eight supersaw voices, unison 3 (quest): scalar %.1f %% of a core, %s %.1f %% (x%.2f); %s %+.0f %% against unison 7\n",
-                ts3 * 10.0, kVecPathName, tv3 * 10.0, ts3 / tv3, kVecPathName, (tv3 / tv - 1.0) * 100.0);
-    const double ps = time(kPad, PolyInstance::Pad, false, kPolyUnison), pv = time(kPad, PolyInstance::Pad, true, kPolyUnison);
+                ts3 * 10.0, VecPathName, tv3 * 10.0, ts3 / tv3, VecPathName, (tv3 / tv - 1.0) * 100.0);
+    const double ps = time(Pad, PolyInstanceE::PAD, false, PolyUnison), pv = time(Pad, PolyInstanceE::PAD, true, PolyUnison);
     std::printf("         cost of 10 s, eight wavetable pad voices: scalar %.1f %% of a core, %s %.1f %% (x%.2f)\n",
-                ps * 10.0, kVecPathName, pv * 10.0, ps / pv);
-    const double ps3 = time(kPad, PolyInstance::Pad, false, 3), pv3 = time(kPad, PolyInstance::Pad, true, 3);
+                ps * 10.0, VecPathName, pv * 10.0, ps / pv);
+    const double ps3 = time(Pad, PolyInstanceE::PAD, false, 3), pv3 = time(Pad, PolyInstanceE::PAD, true, 3);
     std::printf("         cost of 10 s, eight wavetable pad voices, unison 3 (quest): scalar %.1f %% of a core, %s %.1f %% (x%.2f); %s %+.0f %% against unison 7\n",
-                ps3 * 10.0, kVecPathName, pv3 * 10.0, ps3 / pv3, kVecPathName, (pv3 / pv - 1.0) * 100.0);
+                ps3 * 10.0, VecPathName, pv3 * 10.0, ps3 / pv3, VecPathName, (pv3 / pv - 1.0) * 100.0);
 }
 
 /**
@@ -330,7 +330,7 @@ void testPoly()
 void testModelKernels()
 {
     section("the model's lane kernels against their scalar instantiation");
-    constexpr int kRows = 53, kCols = 71;   // neither a multiple of 8 nor of 4
+    constexpr int Rows = 53, Cols = 71;   // neither a multiple of 8 nor of 4
 
     // The exponential, tanh, GELU: elementwise, so they must agree on every lane.
     int bad = 0, total = 0;
@@ -338,10 +338,10 @@ void testModelKernels()
     for (uint32_t round = 0; round < 4000; ++round) {
         for (int i = 0; i < 8; ++i) in[i] = testValue(round * 8 + i) * (round % 3 == 0 ? 30.0f : 1.0f);
         const VecF v = loadLanes<VecF>(in);
-        const VecF r[] = { laneExp(v), laneTanh(v), laneGelu(v), lanePow2i(vfloor(v)), laneAct(v, ModelAct::Relu), laneAct(v, ModelAct::Silu) };
+        const VecF r[] = { laneExp(v), laneTanh(v), laneGelu(v), lanePow2i(vfloor(v)), laneAct(v, ModelActE::RELU), laneAct(v, ModelActE::SILU) };
         for (int l = 0; l < W; ++l) {
             const float x = in[l];
-            const float s[] = { laneExp(x), laneTanh(x), laneGelu(x), lanePow2i(vfloor(x)), laneAct(x, ModelAct::Relu), laneAct(x, ModelAct::Silu) };
+            const float s[] = { laneExp(x), laneTanh(x), laneGelu(x), lanePow2i(vfloor(x)), laneAct(x, ModelActE::RELU), laneAct(x, ModelActE::SILU) };
             for (size_t k = 0; k < sizeof(s) / sizeof(s[0]); ++k) {
                 ++total;
                 if (!sameBits(laneOf(r[k], l), s[k])) ++bad;
@@ -352,32 +352,32 @@ void testModelKernels()
     (void)outV;
 
     // The matrix-vector product with the output rows in the lanes, packed each way.
-    std::vector<float> w(static_cast<size_t>(kRows) * kCols), b(static_cast<size_t>(roundUpTo(kRows, 8))), x(kCols);
+    std::vector<float> w(static_cast<size_t>(Rows) * Cols), b(static_cast<size_t>(roundUpTo(Rows, 8))), x(Cols);
     for (size_t i = 0; i < w.size(); ++i) w[i] = testValue(static_cast<uint32_t>(i) + 7);
     for (size_t i = 0; i < b.size(); ++i) b[i] = testValue(static_cast<uint32_t>(i) + 101);
     for (size_t i = 0; i < x.size(); ++i) x[i] = testValue(static_cast<uint32_t>(i) + 303);
-    std::vector<float> panelV(static_cast<size_t>(roundUpTo(kRows, W)) * kCols, 0.0f), panelS(static_cast<size_t>(kRows) * kCols, 0.0f);
-    std::vector<float> yv(static_cast<size_t>(roundUpTo(kRows, W)), 0.0f), ys(static_cast<size_t>(kRows), 0.0f);
-    packPanels<VecF>(w.data(), nullptr, kRows, kCols, panelV.data());
-    packPanels<float>(w.data(), nullptr, kRows, kCols, panelS.data());
-    matvecPanel<VecF>(panelV.data(), b.data(), x.data(), kRows, kCols, yv.data());
-    matvecPanel<float>(panelS.data(), b.data(), x.data(), kRows, kCols, ys.data());
+    std::vector<float> panelV(static_cast<size_t>(roundUpTo(Rows, W)) * Cols, 0.0f), panelS(static_cast<size_t>(Rows) * Cols, 0.0f);
+    std::vector<float> yv(static_cast<size_t>(roundUpTo(Rows, W)), 0.0f), ys(static_cast<size_t>(Rows), 0.0f);
+    packPanels<VecF>(w.data(), nullptr, Rows, Cols, panelV.data());
+    packPanels<float>(w.data(), nullptr, Rows, Cols, panelS.data());
+    matvecPanel<VecF>(panelV.data(), b.data(), x.data(), Rows, Cols, yv.data());
+    matvecPanel<float>(panelS.data(), b.data(), x.data(), Rows, Cols, ys.data());
     int mv = 0;
-    for (int i = 0; i < kRows; ++i) if (!sameBits(yv[static_cast<size_t>(i)], ys[static_cast<size_t>(i)])) ++mv;
-    check(mv == 0, "matvecPanel identical to scalar for every output row", fmt("%d of %d rows differ", mv, kRows));
+    for (int i = 0; i < Rows; ++i) if (!sameBits(yv[static_cast<size_t>(i)], ys[static_cast<size_t>(i)])) ++mv;
+    check(mv == 0, "matvecPanel identical to scalar for every output row", fmt("%d of %d rows differ", mv, Rows));
 
     // The same with int8 weights and one scale per row, which is how a quantized model is packed.
-    std::vector<int8_t> q(static_cast<size_t>(kRows) * kCols);
-    std::vector<float> scale(static_cast<size_t>(kRows));
+    std::vector<int8_t> q(static_cast<size_t>(Rows) * Cols);
+    std::vector<float> scale(static_cast<size_t>(Rows));
     for (size_t i = 0; i < q.size(); ++i) q[i] = static_cast<int8_t>(static_cast<int>(testValue(static_cast<uint32_t>(i) + 55) * 90.0f) % 127);
-    for (int i = 0; i < kRows; ++i) scale[static_cast<size_t>(i)] = 1e-3f * (1.0f + static_cast<float>(i));
-    packPanels<VecF>(q.data(), scale.data(), kRows, kCols, panelV.data());
-    packPanels<float>(q.data(), scale.data(), kRows, kCols, panelS.data());
-    matvecPanel<VecF>(panelV.data(), b.data(), x.data(), kRows, kCols, yv.data());
-    matvecPanel<float>(panelS.data(), b.data(), x.data(), kRows, kCols, ys.data());
+    for (int i = 0; i < Rows; ++i) scale[static_cast<size_t>(i)] = 1e-3f * (1.0f + static_cast<float>(i));
+    packPanels<VecF>(q.data(), scale.data(), Rows, Cols, panelV.data());
+    packPanels<float>(q.data(), scale.data(), Rows, Cols, panelS.data());
+    matvecPanel<VecF>(panelV.data(), b.data(), x.data(), Rows, Cols, yv.data());
+    matvecPanel<float>(panelS.data(), b.data(), x.data(), Rows, Cols, ys.data());
     int mq = 0;
-    for (int i = 0; i < kRows; ++i) if (!sameBits(yv[static_cast<size_t>(i)], ys[static_cast<size_t>(i)])) ++mq;
-    check(mq == 0, "int8 weights with per-row scales identical to scalar", fmt("%d of %d rows differ", mq, kRows));
+    for (int i = 0; i < Rows; ++i) if (!sameBits(yv[static_cast<size_t>(i)], ys[static_cast<size_t>(i)])) ++mq;
+    check(mq == 0, "int8 weights with per-row scales identical to scalar", fmt("%d of %d rows differ", mq, Rows));
 
     // Layer norm, softmax, the accumulate and the scale.
     const int n = 40, nP = roundUpTo(n, 8);
@@ -479,11 +479,11 @@ void testModelForwardFile(const std::string& file, const char* label, bool bench
     model.begin(role, style, bars + 1, modeOf < 0 ? 0 : modeOf);
     for (size_t i = 0; i < n; ++i) {
         NoteCond c;
-        c.step = stepOf[i];
-        c.bar = barOf[i];
-        c.gap = gapOf[i];
-        c.idx = idxOf[i];
-        c.kick = kickOf.empty() ? 0 : kickOf[i];
+        c.m_step = stepOf[i];
+        c.m_bar = barOf[i];
+        c.m_gap = gapOf[i];
+        c.m_idx = idxOf[i];
+        c.m_kick = kickOf.empty() ? 0 : kickOf[i];
         if (!model.step(tok[i], c)) { check(false, fmt("%s: feeds the reference context", label).c_str(), fmt("stopped at position %zu", i)); return; }
     }
     double worst = 0.0;
@@ -506,18 +506,18 @@ void testModelForwardFile(const std::string& file, const char* label, bool bench
     // to *reach* the output, which a wrong row index or a table read past its rows would not. Both
     // are checked here: every row of mode.emb is fed through the same context, the logits are
     // printed as bits for the cross-path diff, and no two rows may leave the same output.
-    if (model.info().condMode > 0) {
+    if (model.info().m_condMode > 0) {
         std::vector<std::string> perMode;
-        for (int md = 0; md < model.info().condMode; ++md) {
+        for (int md = 0; md < model.info().m_condMode; ++md) {
             model.begin(role, style, bars + 1, md);
             bool fine = true;
             for (size_t i = 0; i < n && fine; ++i) {
                 NoteCond c;
-                c.step = stepOf[i];
-                c.bar = barOf[i];
-                c.gap = gapOf[i];
-                c.idx = idxOf[i];
-                c.kick = kickOf.empty() ? 0 : kickOf[i];
+                c.m_step = stepOf[i];
+                c.m_bar = barOf[i];
+                c.m_gap = gapOf[i];
+                c.m_idx = idxOf[i];
+                c.m_kick = kickOf.empty() ? 0 : kickOf[i];
                 fine = model.step(tok[i], c);
             }
             std::string b;
@@ -546,15 +546,15 @@ void testModelForwardFile(const std::string& file, const char* label, bool bench
         model.begin(d % 3, 0, 1 + d % 8);
         for (int i = 0; i < notes; ++i) {
             NoteCond c;
-            c.step = i % 16;
-            c.gap = 1 + i % 8;
-            c.idx = noteIndexBucket(i);
+            c.m_step = i % 16;
+            c.m_gap = 1 + i % 8;
+            c.m_idx = noteIndexBucket(i);
             model.step((i * 7 + d) % model.alphabet(), c);
         }
     }
     const double us = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() * 1e6;
     std::printf("         cost %s, %zu parameters: %.2f us per symbol, %.2f ms per 16-note line\n",
-                kVecPathName, model.info().parameters, us / (lines * notes), us / lines / 1000.0);
+                VecPathName, model.info().m_parameters, us / (lines * notes), us / lines / 1000.0);
 }
 
 /** @brief Vector test: the model's forward pass, on this path, against the trainer's reference vectors. */
@@ -585,11 +585,11 @@ void testParts()
     section("cost of kick, bass and acid (no check, a measurement)");
     const DenormalGuard guard;
     ParamStore p;
-    const int kb = p.base(Module::Kick), bb = p.base(Module::Bass), ab = p.base(Module::Acid);
-    std::vector<float> kv(static_cast<size_t>(kick::Count)), bv(static_cast<size_t>(bass::Count)), av(static_cast<size_t>(acid::Count));
-    for (int i = 0; i < kick::Count; ++i) kv[static_cast<size_t>(i)] = p.get(kb + i);
-    for (int i = 0; i < bass::Count; ++i) bv[static_cast<size_t>(i)] = p.get(bb + i);
-    for (int i = 0; i < acid::Count; ++i) av[static_cast<size_t>(i)] = p.get(ab + i);
+    const int kb = p.base(ModuleE::KICK), bb = p.base(ModuleE::BASS), ab = p.base(ModuleE::ACID);
+    std::vector<float> kv(static_cast<size_t>(kick::COUNT)), bv(static_cast<size_t>(bass::COUNT)), av(static_cast<size_t>(acid::COUNT));
+    for (int i = 0; i < kick::COUNT; ++i) kv[static_cast<size_t>(i)] = p.get(kb + i);
+    for (int i = 0; i < bass::COUNT; ++i) bv[static_cast<size_t>(i)] = p.get(bb + i);
+    for (int i = 0; i < acid::COUNT; ++i) av[static_cast<size_t>(i)] = p.get(ab + i);
 
     // 145 BPM: a kick every beat (12414 samples), bass and acid on every sixteenth.
     const int beat = 19862, sixteenth = beat / 4;
@@ -621,8 +621,8 @@ void testParts()
         acid.process(aL.data(), aR.data(), 32);
     }
     const double ta = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    std::printf("         cost of 10 s, kick + rolling bass: %s %.2f %% of a core\n", kVecPathName, tkb * 10.0);
-    std::printf("         cost of 10 s, acid on every sixteenth: %s %.2f %% of a core\n", kVecPathName, ta * 10.0);
+    std::printf("         cost of 10 s, kick + rolling bass: %s %.2f %% of a core\n", VecPathName, tkb * 10.0);
+    std::printf("         cost of 10 s, acid on every sixteenth: %s %.2f %% of a core\n", VecPathName, ta * 10.0);
 }
 #endif
 
@@ -661,8 +661,8 @@ void testPolyModels()
                             "lead.mx5_src=4 lead.mx5_dst=1 lead.mx5_amount=0.1 lead.mx6_src=9 lead.mx6_dst=10 lead.mx6_amount=0.6 "
                             "lead.mx7_src=7 lead.mx7_dst=9 lead.mx7_amount=-0.4 lead.mx8_src=6 lead.mx8_dst=3 lead.mx8_amount=0.5",
                             m, 0.11 * (block / 500 % 9), 0.2 + 0.09 * (block / 500 % 9), (block / 500) % 4).c_str());
-            std::vector<float> v(static_cast<size_t>(poly::Count));
-            p.readModule(Module::Poly, 0, v.data());
+            std::vector<float> v(static_cast<size_t>(poly::COUNT));
+            p.readModule(ModuleE::POLY, 0, v.data());
             a->update(v.data(), 145.0);
             b->update(v.data(), 145.0);
         }
@@ -692,9 +692,9 @@ void testPolyModels()
 /** @brief Runs the tests; the exit code is the number of failures. */
 int main()
 {
-    std::printf("phos_vectest: path %s, %d lanes\n", kVecPathName, W);
+    std::printf("phos_vectest: path %s, %d lanes\n", VecPathName, W);
 #if defined(PHOS_EXPECT_PATH)
-    check(std::strcmp(kVecPathName, PHOS_EXPECT_PATH) == 0, "built for the expected path", fmt("expected %s, got %s", PHOS_EXPECT_PATH, kVecPathName));
+    check(std::strcmp(VecPathName, PHOS_EXPECT_PATH) == 0, "built for the expected path", fmt("expected %s, got %s", PHOS_EXPECT_PATH, VecPathName));
 #endif
     testOps();
     testLadder();

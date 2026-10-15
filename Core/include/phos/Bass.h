@@ -91,13 +91,13 @@ public:
      */
     void setOversampling(int factor);
     /** @brief The factor set by setOversampling(). */
-    int oversampling() const { return os_; }
+    int oversampling() const { return m_os; }
     /** @brief Silences and clears all state. */
     void reset();
     /** @brief Reads the effective parameter values, indexed by bass::. */
     void update(const float* v);
     /** @brief The set's beat at the next sample and the beats per sample (Engine.cpp, per chunk): the synced LFOs' clock. */
-    void setClock(double beat, double beatsPerSample) { beat_ = beat; beatsPerSample_ = beatsPerSample; }
+    void setClock(double beat, double beatsPerSample) { m_beat = beat; m_beatsPerSample = beatsPerSample; }
     /**
      * @brief Starts a note.
      * @param pitch            MIDI note number
@@ -108,102 +108,102 @@ public:
      */
     void noteOn(int pitch, float velocity, int gateSamples, double late, double fundamentalPhase);
     /** @brief Ends the note's gate at the next sample (a played key's release, 01.10.2026; Engine::liveNoteOff). */
-    void release() { if (gate_ > 1) gate_ = 1; }
+    void release() { if (m_gate > 1) m_gate = 1; }
     /** @brief Starts a sidechain duck (called on every kick); @p late as for noteOn. */
-    void duck(double late = 0.0) { ducker_.trigger(late); }
+    void duck(double late = 0.0) { m_ducker.trigger(late); }
     /** @brief Renders @p n samples, replacing @p out. */
     void process(float* out, int n);
     /** @brief Whether the amplitude envelope is open. */
-    bool active() const { return amp_.isActive(); }
+    bool active() const { return m_amp.isActive(); }
     /** @brief The release actually used for the current note, in seconds (after the floor). */
-    float effectiveRelease() const { return releaseUsed_; }
+    float effectiveRelease() const { return m_releaseUsed; }
     /** @brief Fundamental phase the Start Phase knob stands for. */
-    double knobPhase() const { return static_cast<double>(startPhase_) - 0.5; }
+    double knobPhase() const { return static_cast<double>(m_startPhase) - 0.5; }
 
     /**
      * @brief The modulation to show on the knobs (26.09.2026, the live ring): the sums per destination (ModDest) of the
      *        modulator, or null where nothing moves. Rendering thread.
      */
-    const float* displayModulation() const { return modOn_ && mod_.active() ? modSum_ : nullptr; }
+    const float* displayModulation() const { return m_modOn && m_mod.active() ? m_modSum : nullptr; }
 private:
     /** @brief Sets what depends on the note's pitch: the release floor, the envelope times and the Split high pass. */
     void applyNoteSettings();
 
-    double sr_ = 48000.0;   ///< output sample rate
-    int    os_ = 2;                 ///< oscillator/ladder rate as a multiple of sr_ (1 or 2)
-    double osRate_ = 96000.0;       ///< sr_ * os_, the rate the voice runs at
-    VaOscillator        osc_;   ///< saw-to-pulse oscillator
-    LadderT<float>      ladder_;   ///< the four-pole ladder
-    FilterLane          model_;    ///< bass.filter_model 1 .. 9 (26.09.2026, Filters.h), in the ladder's place
+    double m_sr = 48000.0;   ///< output sample rate
+    int    m_os = 2;                 ///< oscillator/ladder rate as a multiple of m_sr (1 or 2)
+    double m_osRate = 96000.0;       ///< m_sr * m_os, the rate the voice runs at
+    VaOscillator        m_osc;   ///< saw-to-pulse oscillator
+    LadderT<float>      m_ladder;   ///< the four-pole ladder
+    FilterLane          m_model;    ///< bass.filter_model 1 .. 9 (26.09.2026, Filters.h), in the ladder's place
     /** @name The bass's own modulation (26.09.2026, Modulation.h), evaluated every 16 samples on the absolute count
      *  @{ */
-    Modulator mod_;                       ///< envelope, LFOs, matrix
-    float modSum_[kModDests] = {};        ///< the sums per destination
-    bool  modOn_ = false;                 ///< some slot reaches something
-    Envelope fAdsr_;                      ///< the filter envelope as an ADSR
-    bool  fAdsrOn_ = false;               ///< the ADSR runs (attack at its minimum and sustain 0: the exponential decay)
-    float noteRand_ = 0.0f;               ///< the Random source, per note
-    Rng   modRng_;                        ///< its stream
-    uint64_t modPos_ = 0;                 ///< samples since reset (the evaluation grid)
-    double beat_ = 0.0, beatsPerSample_ = 0.0;   ///< setClock()
-    float kMod_ = 0.0f, modelKMod_ = 0.0f, modeMod_ = 0.0f;   ///< the feedbacks and the mode as modulated
-    float cutMod_ = 0.0f, levelMod_ = 1.0f;                   ///< the cutoff's octaves and the level's factor
-    float resBase_ = 0.0f;                                     ///< bass.resonance, 0..1 (the resonance destination adds to it)
+    Modulator m_mod;                       ///< envelope, LFOs, matrix
+    float m_modSum[ModDests] = {};        ///< the sums per destination
+    bool  m_modOn = false;                 ///< some slot reaches something
+    Envelope m_fAdsr;                      ///< the filter envelope as an ADSR
+    bool  m_fAdsrOn = false;               ///< the ADSR runs (attack at its minimum and sustain 0: the exponential decay)
+    float m_noteRand = 0.0f;               ///< the Random source, per note
+    Rng   m_modRng;                        ///< its stream
+    uint64_t m_modPos = 0;                 ///< samples since reset (the evaluation grid)
+    double m_beat = 0.0, m_beatsPerSample = 0.0;   ///< setClock()
+    float m_kMod = 0.0f, m_modelKMod = 0.0f, m_modeMod = 0.0f;   ///< the feedbacks and the mode as modulated
+    float m_cutMod = 0.0f, m_levelMod = 1.0f;                   ///< the cutoff's octaves and the level's factor
+    float m_resBase = 0.0f;                                     ///< bass.resonance, 0..1 (the resonance destination adds to it)
     /** @} */
-    int   modelIndex_ = 0;         ///< bass.filter_model: 0 the ladder above
-    float modelK_ = 0.0f;   ///< the model's feedback (FilterVoicing::feedback)
-    float modelMode_ = 0.0f;   ///< bass.filter_mode
-    float modelTrim_ = 1.0f;                   ///< the model's level against the bass ladder, made good (Bass.cpp)
-    HalfbandDown<float> down_;   ///< back from the oversampled rate
-    Svf                 hp1_;   ///< the Split high pass (Linkwitz-Riley, 8th order): first section
-    Svf                 hp2_;   ///< ... second
-    Svf                 hp3_;   ///< ... third
-    Svf                 hp4_;   ///< ... fourth
-    Svf                 bite1_;   ///< the bite's 4-pole low pass: first Butterworth section
-    Svf                 bite2_;   ///< ... second
-    Svf                 biteHp_;            ///< the bite's floor, a 2-pole high pass under the band
-    Envelope            amp_;   ///< amplitude envelope
-    Ducker              ducker_;   ///< the sidechain duck under the kick
+    int   m_modelIndex = 0;         ///< bass.filter_model: 0 the ladder above
+    float m_modelK = 0.0f;   ///< the model's feedback (FilterVoicing::feedback)
+    float m_modelMode = 0.0f;   ///< bass.filter_mode
+    float m_modelTrim = 1.0f;                   ///< the model's level against the bass ladder, made good (Bass.cpp)
+    HalfbandDown<float> m_down;   ///< back from the oversampled rate
+    Svf                 m_hp1;   ///< the Split high pass (Linkwitz-Riley, 8th order): first section
+    Svf                 m_hp2;   ///< ... second
+    Svf                 m_hp3;   ///< ... third
+    Svf                 m_hp4;   ///< ... fourth
+    Svf                 m_bite1;   ///< the bite's 4-pole low pass: first Butterworth section
+    Svf                 m_bite2;   ///< ... second
+    Svf                 m_biteHp;            ///< the bite's floor, a 2-pole high pass under the band
+    Envelope            m_amp;   ///< amplitude envelope
+    Ducker              m_ducker;   ///< the sidechain duck under the kick
 
-    int    pitch_ = 30;   ///< the note's MIDI pitch
-    float  velocity_ = 1.0f;   ///< 0..1
-    int    gate_ = 0;   ///< samples until the note is released
-    float  fenv_ = 0.0f;   ///< filter envelope
-    double subPhase_ = 0.0;   ///< the sub sine's phase, in cycles
+    int    m_pitch = 30;   ///< the note's MIDI pitch
+    float  m_velocity = 1.0f;   ///< 0..1
+    int    m_gate = 0;   ///< samples until the note is released
+    float  m_fenv = 0.0f;   ///< filter envelope
+    double m_subPhase = 0.0;   ///< the sub sine's phase, in cycles
 
     // Settings from update().
-    float  wave_ = 0.0f;   ///< the waveform
-    float  pw_ = 0.5f;   ///< the pulse width
-    float  subLevel_ = 0.42f;   ///< the sub's level
-    float  splitRatio_ = 2.0f;   ///< the Split crossover as a multiple of f0
-    float  octLevel_ = 0.0f;        ///< amplitude of the sub's octave (sin at 2 f0, same phase course)
-    int    subMode_ = 1;   ///< bass.sub_mode (SubMode)
-    bool   retrigger_ = true;   ///< bass.retrigger: every note restarts the envelopes
-    float  startPhase_ = 0.5f;   ///< bass.start_phase
-    float  cutoff_ = 140.0f;   ///< the cutoff, Hz
-    float  k_ = 1.0f;   ///< the ladder's feedback
-    float  envOct_ = 4.0f;   ///< the envelope's depth, octaves
-    float  keyTrack_ = 0.6f;   ///< the key tracking
-    float  velCut_ = 0.25f;   ///< velocity to cutoff
-    float  fDecay_ = 0.999f;   ///< the filter envelope's per-sample decay
-    float  driveIn_ = 1.0f;   ///< the drive into the ladder
-    float  driveOut_ = 1.0f;   ///< ... and the gain back out
-    float  attack_ = 0.0008f;   ///< the amplitude envelope's attack, s
-    float  decay_ = 0.18f;   ///< ... decay, s
-    float  sustain_ = 0.55f;   ///< ... sustain
-    float  release_ = 0.01f;   ///< ... release, s
-    float  releaseUsed_ = 0.01f;   ///< the release used after its floor, s
-    float  level_ = 0.5f;   ///< bass.level, linear
+    float  m_wave = 0.0f;   ///< the waveform
+    float  m_pw = 0.5f;   ///< the pulse width
+    float  m_subLevel = 0.42f;   ///< the sub's level
+    float  m_splitRatio = 2.0f;   ///< the Split crossover as a multiple of f0
+    float  m_octLevel = 0.0f;        ///< amplitude of the sub's octave (sin at 2 f0, same phase course)
+    int    m_subMode = 1;   ///< bass.sub_mode (SubMode)
+    bool   m_retrigger = true;   ///< bass.retrigger: every note restarts the envelopes
+    float  m_startPhase = 0.5f;   ///< bass.start_phase
+    float  m_cutoff = 140.0f;   ///< the cutoff, Hz
+    float  m_k = 1.0f;   ///< the ladder's feedback
+    float  m_envOct = 4.0f;   ///< the envelope's depth, octaves
+    float  m_keyTrack = 0.6f;   ///< the key tracking
+    float  m_velCut = 0.25f;   ///< velocity to cutoff
+    float  m_fDecay = 0.999f;   ///< the filter envelope's per-sample decay
+    float  m_driveIn = 1.0f;   ///< the drive into the ladder
+    float  m_driveOut = 1.0f;   ///< ... and the gain back out
+    float  m_attack = 0.0008f;   ///< the amplitude envelope's attack, s
+    float  m_decay = 0.18f;   ///< ... decay, s
+    float  m_sustain = 0.55f;   ///< ... sustain
+    float  m_release = 0.01f;   ///< ... release, s
+    float  m_releaseUsed = 0.01f;   ///< the release used after its floor, s
+    float  m_level = 0.5f;   ///< bass.level, linear
     /** @name The bite layer (see the file comment)
      *  @{ */
-    float  biteLevel_ = 0.0f;       ///< output gain of the layer (knob x kBiteScale)
-    float  biteCut_ = 600.0f;       ///< resting cutoff, Hz
-    float  biteEnvOct_ = 1.5f;      ///< envelope depth, octaves
-    float  biteDecay_ = 0.999f;     ///< per-sample factor of the bite envelope (-60 dB over Bite Decay)
-    float  biteEnv_ = 0.0f;         ///< the bite envelope's current value, 1 at the onset
-    float  biteGain_ = 1.0f;        ///< saturator input gain
-    float  biteNorm_ = 1.0f;        ///< 1 / tanh(biteGain_): a full-scale saw stays full scale
-    float  biteK2_ = 0.765f;        ///< damping of the second section (resonance)
+    float  m_biteLevel = 0.0f;       ///< output gain of the layer (knob x BiteScale)
+    float  m_biteCut = 600.0f;       ///< resting cutoff, Hz
+    float  m_biteEnvOct = 1.5f;      ///< envelope depth, octaves
+    float  m_biteDecay = 0.999f;     ///< per-sample factor of the bite envelope (-60 dB over Bite Decay)
+    float  m_biteEnv = 0.0f;         ///< the bite envelope's current value, 1 at the onset
+    float  m_biteGain = 1.0f;        ///< saturator input gain
+    float  m_biteNorm = 1.0f;        ///< 1 / tanh(m_biteGain): a full-scale saw stays full scale
+    float  m_biteK2 = 0.765f;        ///< damping of the second section (resonance)
     /** @} */
 };
 

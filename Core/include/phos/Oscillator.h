@@ -45,9 +45,9 @@ public:
      */
     void set(double hz, double sampleRate, float wave, float pulseWidth)
     {
-        dt_ = static_cast<float>(clampv(hz / sampleRate, 1e-7, 0.45));
-        wave_ = clampv(wave, 0.0f, 1.0f);
-        pw_ = clampv(pulseWidth, 0.05f, 0.95f);
+        m_dt = static_cast<float>(clampv(hz / sampleRate, 1e-7, 0.45));
+        m_wave = clampv(wave, 0.0f, 1.0f);
+        m_pw = clampv(pulseWidth, 0.05f, 0.95f);
     }
     /**
      * @brief Restarts so that the fundamental has sine phase @p fundamentalPhase at the time of the
@@ -57,30 +57,30 @@ public:
      */
     void restart(double fundamentalPhase, double late)
     {
-        double t = fundamentalPhase + 0.5 + late * static_cast<double>(dt_);
+        double t = fundamentalPhase + 0.5 + late * static_cast<double>(m_dt);
         t -= std::floor(t);
-        phase_ = static_cast<float>(t);
-        pendingJump_ = shapeAt(phase_) - lastValue_;
-        hasJump_ = true;
+        m_phase = static_cast<float>(t);
+        m_pendingJump = shapeAt(m_phase) - m_lastValue;
+        m_hasJump = true;
     }
     /** @brief Next sample. */
     inline float next()
     {
-        const float t = phase_;
-        const float saw = 2.0f * t - 1.0f - polyBlep(t, dt_);
-        float t2 = t + 1.0f - pw_;
+        const float t = m_phase;
+        const float saw = 2.0f * t - 1.0f - polyBlep(t, m_dt);
+        float t2 = t + 1.0f - m_pw;
         if (t2 >= 1.0f) t2 -= 1.0f;
-        const float pulse = -((t < pw_ ? 1.0f : -1.0f) + polyBlep(t, dt_) - polyBlep(t2, dt_));
-        float v = saw + wave_ * (pulse - saw);
-        if (hasJump_) {
+        const float pulse = -((t < m_pw ? 1.0f : -1.0f) + polyBlep(t, m_dt) - polyBlep(t2, m_dt));
+        float v = saw + m_wave * (pulse - saw);
+        if (m_hasJump) {
             // The sample before the restart already went out; the first one after it carries half
             // of the step, which spreads the edge over two samples.
-            v -= 0.5f * pendingJump_;
-            hasJump_ = false;
+            v -= 0.5f * m_pendingJump;
+            m_hasJump = false;
         }
-        lastValue_ = v;
-        phase_ += dt_;
-        if (phase_ >= 1.0f) phase_ -= 1.0f;
+        m_lastValue = v;
+        m_phase += m_dt;
+        if (m_phase >= 1.0f) m_phase -= 1.0f;
         return v;
     }
 
@@ -89,16 +89,16 @@ private:
     float shapeAt(float t) const
     {
         const float saw = 2.0f * t - 1.0f;
-        const float pulse = t < pw_ ? -1.0f : 1.0f;
-        return saw + wave_ * (pulse - saw);
+        const float pulse = t < m_pw ? -1.0f : 1.0f;
+        return saw + m_wave * (pulse - saw);
     }
-    float phase_ = 0.5f;   ///< the phase, 0..1
-    float dt_ = 0.001f;   ///< the phase step per sample
-    float wave_ = 0.0f;   ///< the wave: 0 saw .. 1 pulse
-    float pw_ = 0.5f;   ///< the pulse's width
-    float lastValue_ = 0.0f;   ///< the last sample before its correction
-    float pendingJump_ = 0.0f;   ///< a jump still to be smoothed in the next sample (its PolyBLEP's second half)
-    bool  hasJump_ = false;   ///< pendingJump_ applies to the next sample
+    float m_phase = 0.5f;   ///< the phase, 0..1
+    float m_dt = 0.001f;   ///< the phase step per sample
+    float m_wave = 0.0f;   ///< the wave: 0 saw .. 1 pulse
+    float m_pw = 0.5f;   ///< the pulse's width
+    float m_lastValue = 0.0f;   ///< the last sample before its correction
+    float m_pendingJump = 0.0f;   ///< a jump still to be smoothed in the next sample (its PolyBLEP's second half)
+    bool  m_hasJump = false;   ///< m_pendingJump applies to the next sample
 };
 
 } // namespace phos

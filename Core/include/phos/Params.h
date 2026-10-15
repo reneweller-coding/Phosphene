@@ -26,38 +26,38 @@
 namespace phos {
 
 /** @brief How a parameter maps between its real value and the normalised 0..1 of a knob. */
-enum class Curve : uint8_t {
-    Linear,   ///< proportional
-    Log,      ///< logarithmic; minimum must be > 0
-    Int,      ///< integer steps, linear
-    Choice,   ///< integer index into a list of names
-    Toggle,   ///< 0 or 1
+enum class CurveE : uint8_t {
+    LINEAR,   ///< proportional
+    LOG,      ///< logarithmic; minimum must be > 0
+    INT,      ///< integer steps, linear
+    CHOICE,   ///< integer index into a list of names
+    TOGGLE,   ///< 0 or 1
 };
 
 /** @brief Static description of one parameter. */
 struct ParamDesc {
-    const char* key;                    ///< identifier inside the module, snake_case
-    const char* name;                   ///< display name (English)
-    const char* unit;                   ///< unit for display, may be empty
-    float minValue;                     ///< lowest real value
-    float maxValue;                     ///< highest real value
-    float defValue;                     ///< default real value
-    Curve curve;                        ///< mapping to the knob
-    const char* const* choices = nullptr;   ///< names for Curve::Choice (maxValue + 1 entries)
+    const char* m_key;                    ///< identifier inside the module, snake_case
+    const char* m_name;                   ///< display name (English)
+    const char* m_unit;                   ///< unit for display, may be empty
+    float m_minValue;                     ///< lowest real value
+    float m_maxValue;                     ///< highest real value
+    float m_defValue;                     ///< default real value
+    CurveE m_curve;                        ///< mapping to the knob
+    const char* const* m_choices = nullptr;   ///< names for Curve::Choice (maxValue + 1 entries)
 };
 
 /** @brief The modules that own parameters. */
-enum class Module : int { Compose = 0, Kick, Bass, Perc, Acid, Poly, Sfx, Fx, Mix, Master,
+enum class ModuleE : int { COMPOSE = 0, KICK, BASS, PERC, ACID, POLY, SFX, FX, MIX, MASTER,
                           /** The cue bridge of PLAN 8.3; appended, so no existing id moved. */
-                          Cue,
+                          CUE,
                           /** 19.09.2026, round "fx-psychedelia": the shamanic bed (Texture.h), the voices
                            *  (Vocal.h) and the modulation effects of the SFX bus (PsyFx.h). Appended. */
-                          Texture, Vocal, PsyFx,
+                          TEXTURE, VOCAL, PSY_FX,
                           /** 27.09.2026: the Field track's sampler (FieldPlayer.h). Appended. */
-                          Field,
-                          Count };
+                          FIELD,
+                          COUNT };
 
-constexpr int kPercLanes = 12;   ///< instances of the percussion lane module
+constexpr int PercLanes = 12;   ///< instances of the percussion lane module
 /**
  * @brief The instances of Module::Poly, in the order the user sees them.
  *
@@ -72,156 +72,156 @@ constexpr int kPercLanes = 12;   ///< instances of the percussion lane module
  *
  * Nothing may address an instance by a bare number: use polyBase() or `static_cast<int>(PolyInstance::X)`.
  */
-enum class PolyInstance : int { Lead = 0, Counter, Arp, Stab, Pad, Drone, Count };
-constexpr int kPolyInstances = static_cast<int>(PolyInstance::Count); ///< instances of the polyphonic engine module
+enum class PolyInstanceE : int { LEAD = 0, COUNTER, ARP, STAB, PAD, DRONE, COUNT };
+constexpr int PolyInstances = static_cast<int>(PolyInstanceE::COUNT); ///< instances of the polyphonic engine module
 /** @brief The index of an instance, for arrays kept per instance. */
-constexpr int polyIndex(PolyInstance i) { return static_cast<int>(i); }
-extern const char* const kPolyInstanceNames[kPolyInstances];   ///< "lead", "counter", "arp", "stab", "pad", "drone"
+constexpr int polyIndex(PolyInstanceE i) { return static_cast<int>(i); }
+extern const char* const PolyInstanceNames[PolyInstances];   ///< "lead", "counter", "arp", "stab", "pad", "drone"
 
 /** @brief Parameters of the composer (read as a snapshot when bars are composed). */
 namespace compose {
-enum : int { Bpm, Key, Scale, KickPattern, BassPattern, BassGate, BassVariation, BassRegister,
-             TrackBars, TrackVariation, SoundVariation, TempoRange, LevelMatch,
-             PercDensity, PercVariation, Swing,
-             AcidAmount, LeadAmount, ArpAmount, MelodyVariation, MelodyTemperature, SquelchChance,
-             BassFollowsChords, PadAmount, SfxAmount, GateChance,
-             Style, Arc, StyleTempo, SetMinutes,
+enum : int { BPM, KEY, SCALE, KICK_PATTERN, BASS_PATTERN, BASS_GATE, BASS_VARIATION, BASS_REGISTER,
+             TRACK_BARS, TRACK_VARIATION, SOUND_VARIATION, TEMPO_RANGE, LEVEL_MATCH,
+             PERC_DENSITY, PERC_VARIATION, SWING,
+             ACID_AMOUNT, LEAD_AMOUNT, ARP_AMOUNT, MELODY_VARIATION, MELODY_TEMPERATURE, SQUELCH_CHANCE,
+             BASS_FOLLOWS_CHORDS, PAD_AMOUNT, SFX_AMOUNT, GATE_CHANCE,
+             STYLE, ARC, STYLE_TEMPO, SET_MINUTES,
              // Phase 8: which predictive model the melodic lines are drawn from (Model.h).
-             MelodyModel,
+             MELODY_MODEL,
              // Phase 8, bass round: where the pitch of each bass note comes from -- the pattern
              // families of Patterns.h with their phrase figures, or the learned fourth role (Model.h).
-             BassModel,
+             BASS_MODEL,
              // 16.09.2026: modal interchange over the tonic pedal (Form.h). Off reproduces every
              // note the program played before that date, which is what the self test measures against.
-             ModalInterchange,
+             MODAL_INTERCHANGE,
              // 16.09.2026, bass rhythm round: where the *onset pattern* of a bar comes from -- the
              // five pattern families of Patterns.h, or a bar drawn from the corpus onset model
              // (Corpus.h, BassRhythm). Pattern is the default and reproduces every note bit for bit.
-             BassRhythm,
+             BASS_RHYTHM,
              // 19.09.2026, round "voices": how often a track has each of the three new voices, and the
              // density of the voices (speech, chants) and of the shamanic bed (FormSfx.cpp, placePsychedelia).
              // Appended: the compose block is not part of the reordering, which concerns the voices only.
-             CounterAmount, StabAmount, DroneAmount, VoiceDensity, BedDensity,
+             COUNTER_AMOUNT, STAB_AMOUNT, DRONE_AMOUNT, VOICE_DENSITY, BED_DENSITY,
              // 19.09.2026, round "polish": the presence match -- each track's lines (lead, counter, arp, stab)
              // brought to a band around the reference median's presence (ComposerLevels.cpp, matchPresence).
              // 22.09.2026: the styles walk through the night instead of one style for all of it
              // (Composer.cpp, walkAt). On by default; off, every track is compose.style as before.
-             StyleMix,
-             PresenceMatch,
+             STYLE_MIX,
+             PRESENCE_MATCH,
              // 22.09.2026, round "Lead": the lead's density and the pitch entropy of the lines, each a
              // choice whose first entry is "Auto (Style)" -- the style profile's vector decides (Form.h,
              // LeadStyle) unless the user takes the knob. Appended, never reordered.
-             LeadDensity, PitchEntropy,
+             LEAD_DENSITY, PITCH_ENTROPY,
              // 23.09.2026, round "Counter": how the counter-lead answers (Form.h, CounterMode); "Auto (Style)" first.
-             CounterMode,
+             COUNTER_MODE,
              // 23.09.2026, round "Hoerbarkeit": the quiet lines lifted to a share of the lead's partial loudness
              // (ComposerLevels.cpp, matchAudibility). Appended, in the same place in the table.
-             AudibilityMatch,
+             AUDIBILITY_MATCH,
              // 26.09.2026: the track's sounds come from the preset bank (on) or from the older recipes (off; Composer::presetOf).
-             SoundPresets,
+             SOUND_PRESETS,
              // 27.09.2026: how often the Field track plays (FormSfx.cpp, placeField); 1 the style's own density.
-             FieldDensity,
-             Count };
+             FIELD_DENSITY,
+             COUNT };
 }
 /** @brief Parameters of one percussion lane (module Perc, twelve instances "perc1" .. "perc12"). */
 namespace perc {
-enum : int { Active, Role, Engine, Pitch, PitchAmount, PitchDecay, FmRatio, FmIndex, ModeSet, ModeDamp,
-             MetalScale, Noise, NoiseDecay, Bursts, BurstSpacing, Decay, Filter, Cutoff, Resonance, LowCut,
-             Drive, Level, Pan, Choke, Shift, Density, Tune,
+enum : int { ACTIVE, ROLE, ENGINE, PITCH, PITCH_AMOUNT, PITCH_DECAY, FM_RATIO, FM_INDEX, MODE_SET, MODE_DAMP,
+             METAL_SCALE, NOISE, NOISE_DECAY, BURSTS, BURST_SPACING, DECAY, FILTER, CUTOFF, RESONANCE, LOW_CUT,
+             DRIVE, LEVEL, PAN, CHOKE, SHIFT, DENSITY, TUNE,
              // 16.09.2026, arrangement dynamics. Appended, never reordered: the indices above sit in
              // saved presets, in .phosset files and in the plugin's state.
-             PanDepth,   ///< 0..1: how far the tempo-synchronous auto-pan swings the lane (Perc.h)
-             PanBars,    ///< the period of that swing in bars (PercKit::setTempo; 145 BPM until it is called)
-             CutTrack,   ///< 0..2: the exponent with which the low cut follows a hit's pitch shift (Perc.h)
-             Count };
+             PAN_DEPTH,   ///< 0..1: how far the tempo-synchronous auto-pan swings the lane (Perc.h)
+             PAN_BARS,    ///< the period of that swing in bars (PercKit::setTempo; 145 BPM until it is called)
+             CUT_TRACK,   ///< 0..2: the exponent with which the low cut follows a hit's pitch shift (Perc.h)
+             COUNT };
 }
 /** @brief What a percussion lane plays in the groove; decides its patterns and its MIDI note. */
-enum class PercRole : int { ClosedHat = 0, OpenHat, Ride, Crash, Clap, Snare, Rim, Shaker, Tom, Conga, Zap, Blip, Count };
-constexpr int kNumPercRoles = static_cast<int>(PercRole::Count);   ///< number of roles
+enum class PercRoleE : int { CLOSED_HAT = 0, OPEN_HAT, RIDE, CRASH, CLAP, SNARE, RIM, SHAKER, TOM, CONGA, ZAP, BLIP, COUNT };
+constexpr int NumPercRoles = static_cast<int>(PercRoleE::COUNT);   ///< number of roles
 /** @brief Sound sources of a percussion lane. */
-enum class PercEngine : int { Noise = 0, Metal, Modal, Tone, Fm, Count };
-extern const char* const kPercRoleNames[kNumPercRoles];   ///< display names of perc.role
+enum class PercEngineE : int { NOISE = 0, METAL, MODAL, TONE, FM, COUNT };
+extern const char* const PercRoleNames[NumPercRoles];   ///< display names of perc.role
 /** @brief Parameters of the kick drum. */
 namespace kick {
-enum : int { Engine, Tune, PitchEnd, PitchStart, PitchDecay, PunchDecay, Punch, AmpAttack, AmpHold, AmpDecay,
-             Drive, Clip, ClickLevel, ClickTone, ClickDecay, Tone, Level, TailLimit, Count };
+enum : int { ENGINE, TUNE, PITCH_END, PITCH_START, PITCH_DECAY, PUNCH_DECAY, PUNCH, AMP_ATTACK, AMP_HOLD, AMP_DECAY,
+             DRIVE, CLIP, CLICK_LEVEL, CLICK_TONE, CLICK_DECAY, TONE, LEVEL, TAIL_LIMIT, COUNT };
 }
 /** @brief Parameters of the bass. */
 namespace bass {
-enum : int { Wave, PulseWidth, Sub, SubMode, SplitRatio, KickLock, Retrigger, StartPhase, Cutoff, Resonance,
-             EnvAmount, FilterDecay, KeyTrack, VelToCutoff, Drive, AmpAttack, AmpDecay, AmpSustain, AmpRelease,
-             DuckDepth, DuckHold, DuckRelease, Level,
+enum : int { WAVE, PULSE_WIDTH, SUB, SUB_MODE, SPLIT_RATIO, KICK_LOCK, RETRIGGER, START_PHASE, CUTOFF, RESONANCE,
+             ENV_AMOUNT, FILTER_DECAY, KEY_TRACK, VEL_TO_CUTOFF, DRIVE, AMP_ATTACK, AMP_DECAY, AMP_SUSTAIN, AMP_RELEASE,
+             DUCK_DEPTH, DUCK_HOLD, DUCK_RELEASE, LEVEL,
              // Appended 19.09.2026 (round "lowend-acid"): the bite layer (Bass.h). New entries go at
              // the end: stored sets, presets and plugin state refer to a parameter by its index.
-             Bite, BiteCutoff, BiteEnv, BiteDecay, BiteDrive, BiteResonance, SubOctave,
+             BITE, BITE_CUTOFF, BITE_ENV, BITE_DECAY, BITE_DRIVE, BITE_RESONANCE, SUB_OCTAVE,
              // 26.09.2026: the filter models (Filters.h); 0 is the bass's own ladder (Ladder.h), as before.
-             FilterModel, FilterMode,
-             // 26.09.2026: the modulation block (Modulation.h, kModBlockSize knobs), with the bass's own targets
-             // (kBassModDestNames: no pitch -- the kick lock sits on it -- and no pan).
-             FiltAttack, FiltSustain, FiltRelease, MenvAttack, MenvDecay, MenvSustain, MenvRelease, Lfo1Rate,
-             Lfo1Shape, Lfo1Sync, Lfo1Retrig, Lfo1Fade, Lfo2Rate, Lfo2Shape, Lfo2Sync, Lfo2Retrig, Lfo2Fade,
-             Lfo3Rate, Lfo3Shape, Lfo3Sync, Lfo3Retrig, Lfo3Fade, Lfo4Rate, Lfo4Shape, Lfo4Sync, Lfo4Retrig,
-             Lfo4Fade, Mx1Src, Mx1Dst, Mx1Amount, Mx2Src, Mx2Dst, Mx2Amount, Mx3Src, Mx3Dst, Mx3Amount, Mx4Src,
-             Mx4Dst, Mx4Amount, Mx5Src, Mx5Dst, Mx5Amount, Mx6Src, Mx6Dst, Mx6Amount, Mx7Src, Mx7Dst, Mx7Amount,
-             Mx8Src, Mx8Dst, Mx8Amount,
-             Count };
+             FILTER_MODEL, FILTER_MODE,
+             // 26.09.2026: the modulation block (Modulation.h, ModBlockSize knobs), with the bass's own targets
+             // (BassModDestNames: no pitch -- the kick lock sits on it -- and no pan).
+             FILT_ATTACK, FILT_SUSTAIN, FILT_RELEASE, MENV_ATTACK, MENV_DECAY, MENV_SUSTAIN, MENV_RELEASE, LFO1_RATE,
+             LFO1_SHAPE, LFO1_SYNC, LFO1_RETRIG, LFO1_FADE, LFO2_RATE, LFO2_SHAPE, LFO2_SYNC, LFO2_RETRIG, LFO2_FADE,
+             LFO3_RATE, LFO3_SHAPE, LFO3_SYNC, LFO3_RETRIG, LFO3_FADE, LFO4_RATE, LFO4_SHAPE, LFO4_SYNC, LFO4_RETRIG,
+             LFO4_FADE, MX1_SRC, MX1_DST, MX1_AMOUNT, MX2_SRC, MX2_DST, MX2_AMOUNT, MX3_SRC, MX3_DST, MX3_AMOUNT, MX4_SRC,
+             MX4_DST, MX4_AMOUNT, MX5_SRC, MX5_DST, MX5_AMOUNT, MX6_SRC, MX6_DST, MX6_AMOUNT, MX7_SRC, MX7_DST, MX7_AMOUNT,
+             MX8_SRC, MX8_DST, MX8_AMOUNT,
+             COUNT };
 }
 /** @brief Parameters of the acid voice (module Acid, prefix "acid"). */
 namespace acid {
-enum : int { Wave, Cutoff, Resonance, EnvAmount, Decay, Accent, SlideTime, AmpDecay, KeyTrack, Drive,
-             Squelch, SquelchStart, SquelchTime, CombMix, CombFeedback, LowCut,
-             DelaySend, DelayLeft, DelayRight, DelayFeedback, DelayHighPass, DelayLowPass,
-             RoomSend, HallSend, Duck, Level,
+enum : int { WAVE, CUTOFF, RESONANCE, ENV_AMOUNT, DECAY, ACCENT, SLIDE_TIME, AMP_DECAY, KEY_TRACK, DRIVE,
+             SQUELCH, SQUELCH_START, SQUELCH_TIME, COMB_MIX, COMB_FEEDBACK, LOW_CUT,
+             DELAY_SEND, DELAY_LEFT, DELAY_RIGHT, DELAY_FEEDBACK, DELAY_HIGH_PASS, DELAY_LOW_PASS,
+             ROOM_SEND, HALL_SEND, DUCK, LEVEL,
              // Appended 16.09.2026 (acid colour round). New entries go at the end: the index of a
              // parameter is its position in this list and every stored set, preset and automation
              // slot refers to it by that index.
-             Disperse, DisperseFreq,
+             DISPERSE, DISPERSE_FREQ,
              // Appended 20.09.2026 (round "reverb"): routes hall_send into the gated hall (Reverb.h,
              // Engine.cpp) instead of the plain one -- a big hall that ducks while this voice plays and
              // is cut hard on the absolute bar line. Off by default, so older sets render unchanged.
-             HallGate,
-             PlateSend,   ///< 25.09.2026, the mix guide: the send into the plate, the middle plane of depth (Engine.h)
+             HALL_GATE,
+             PLATE_SEND,   ///< 25.09.2026, the mix guide: the send into the plate, the middle plane of depth (Engine.h)
              // 26.09.2026: the modulation block (Modulation.h) without the filter envelope -- the acid keeps its 303
-             // envelope -- and with the acid's own targets (kAcidModDestNames).
-             MenvAttack, MenvDecay, MenvSustain, MenvRelease, Lfo1Rate, Lfo1Shape, Lfo1Sync, Lfo1Retrig, Lfo1Fade,
-             Lfo2Rate, Lfo2Shape, Lfo2Sync, Lfo2Retrig, Lfo2Fade, Lfo3Rate, Lfo3Shape, Lfo3Sync, Lfo3Retrig,
-             Lfo3Fade, Lfo4Rate, Lfo4Shape, Lfo4Sync, Lfo4Retrig, Lfo4Fade, Mx1Src, Mx1Dst, Mx1Amount, Mx2Src,
-             Mx2Dst, Mx2Amount, Mx3Src, Mx3Dst, Mx3Amount, Mx4Src, Mx4Dst, Mx4Amount, Mx5Src, Mx5Dst, Mx5Amount,
-             Mx6Src, Mx6Dst, Mx6Amount, Mx7Src, Mx7Dst, Mx7Amount, Mx8Src, Mx8Dst, Mx8Amount,
-             Count };
+             // envelope -- and with the acid's own targets (AcidModDestNames).
+             MENV_ATTACK, MENV_DECAY, MENV_SUSTAIN, MENV_RELEASE, LFO1_RATE, LFO1_SHAPE, LFO1_SYNC, LFO1_RETRIG, LFO1_FADE,
+             LFO2_RATE, LFO2_SHAPE, LFO2_SYNC, LFO2_RETRIG, LFO2_FADE, LFO3_RATE, LFO3_SHAPE, LFO3_SYNC, LFO3_RETRIG,
+             LFO3_FADE, LFO4_RATE, LFO4_SHAPE, LFO4_SYNC, LFO4_RETRIG, LFO4_FADE, MX1_SRC, MX1_DST, MX1_AMOUNT, MX2_SRC,
+             MX2_DST, MX2_AMOUNT, MX3_SRC, MX3_DST, MX3_AMOUNT, MX4_SRC, MX4_DST, MX4_AMOUNT, MX5_SRC, MX5_DST, MX5_AMOUNT,
+             MX6_SRC, MX6_DST, MX6_AMOUNT, MX7_SRC, MX7_DST, MX7_AMOUNT, MX8_SRC, MX8_DST, MX8_AMOUNT,
+             COUNT };
 }
 /** @brief Parameters of a polyphonic engine (module Poly, the six instances of PolyInstance). */
 namespace poly {
-enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex, FmDecay,
-             Table, Position, PosEnv, PosDecay, PosLfoDepth, PosLfoBeats,
-             Cutoff, Resonance, EnvAmount, FilterDecay, KeyTrack, HpFloor, HpTrack,
-             AmpAttack, AmpDecay, AmpSustain, AmpRelease, Width, VelSens,
-             DelaySend, DelayLeft, DelayRight, DelayFeedback, DelayHighPass, DelayLowPass,
-             RoomSend, HallSend, Duck, Gate, GatePattern, GateDepth, GateDuty, GateAttack, GateRelease, GateTone,
-             Level,
+enum : int { OSC, DETUNE, MIX, DYNAMIC_DETUNE, WAVE, PULSE_WIDTH, FM_RATIO, FM_INDEX, FM_DECAY,
+             TABLE, POSITION, POS_ENV, POS_DECAY, POS_LFO_DEPTH, POS_LFO_BEATS,
+             CUTOFF, RESONANCE, ENV_AMOUNT, FILTER_DECAY, KEY_TRACK, HP_FLOOR, HP_TRACK,
+             AMP_ATTACK, AMP_DECAY, AMP_SUSTAIN, AMP_RELEASE, WIDTH, VEL_SENS,
+             DELAY_SEND, DELAY_LEFT, DELAY_RIGHT, DELAY_FEEDBACK, DELAY_HIGH_PASS, DELAY_LOW_PASS,
+             ROOM_SEND, HALL_SEND, DUCK, GATE, GATE_PATTERN, GATE_DEPTH, GATE_DUTY, GATE_ATTACK, GATE_RELEASE, GATE_TONE,
+             LEVEL,
              // Appended 16.09.2026 (acid colour round), at the end for the same reason as above.
-             Disperse, DisperseFreq, Drift,
+             DISPERSE, DISPERSE_FREQ, DRIFT,
              // Appended 19.09.2026 (round "voices"): the voice filter's response (PolyFilter) -- the
              // per-track recipes of every voice may choose a band pass or a notch instead of the low pass.
-             FilterType,
+             FILTER_TYPE,
              // Appended 20.09.2026 (round "dialogue"), for the user's articulation and stereo rules:
-             Glide,   ///< ms: the time constant of the portamento between two notes of this voice (Poly.h)
-             Pan,     ///< -1 .. 1: where the voice's dry signal stands (its delay keeps its own image)
+             GLIDE,   ///< ms: the time constant of the portamento between two notes of this voice (Poly.h)
+             PAN,     ///< -1 .. 1: where the voice's dry signal stands (its delay keeps its own image)
              /** @name The voice's own modulation insert (Engine.h; PsyFx.h supplies the two effects)
               *  The user's effect list asks for "Kammfilter / Flanger / Phaser als Klangfarbe auf Lead,
               *  Counter und Arp -- nicht nur auf dem FX-Bus": the alien, hollow character, tempo-synced.
               *  On the effects strip alone they would colour every voice at once.
               *  @{ */
-             Mod,          ///< PolyMod: off, flanger, phaser or a static comb
-             ModBeats,     ///< the sweep's period in beats (tempo-synchronised, so it never drifts)
-             ModDepth,     ///< 0 .. 1: how far the comb's teeth or the phaser's notches travel
-             ModFeedback,  ///< -0.9 .. 0.9: how sharp they are
-             ModMix,       ///< 0 .. 1: how much of the voice goes through it
+             MOD,          ///< PolyMod: off, flanger, phaser or a static comb
+             MOD_BEATS,     ///< the sweep's period in beats (tempo-synchronised, so it never drifts)
+             MOD_DEPTH,     ///< 0 .. 1: how far the comb's teeth or the phaser's notches travel
+             MOD_FEEDBACK,  ///< -0.9 .. 0.9: how sharp they are
+             MOD_MIX,       ///< 0 .. 1: how much of the voice goes through it
              /** @} */
              // Appended 20.09.2026 (round "reverb"): routes hall_send into the gated hall (Reverb.h,
              // Engine.cpp) instead of the plain one -- a big hall that ducks while this voice plays and
              // is cut hard on the absolute bar line. Off by default, so older sets render unchanged.
-             HallGate,
+             HALL_GATE,
              /** @name The second oscillator (22.09.2026, round "Klangfarben")
               *  The user: "Eventuell sollte man bei Pads auch mindestens zwei Oszillatoren nehmen, um
               *  mehr Varianz zuzulassen." It costs no render pass: a voice already spreads over seven
@@ -229,10 +229,10 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
               *  second oscillator is the outermost pair of those slots given another source and another
               *  pitch. Off by default, so older sets render unchanged.
               *  @{ */
-             Osc2,        ///< PolyOsc2: off, or one of the four oscillators, on the outer unison pair
-             Osc2Mix,     ///< 0 .. 1: the share of the voice's power the second oscillator carries
-             Osc2Interval,///< PolyOsc2Interval: its interval against the note, a *choice* so a recipe can override it
-             Osc2Detune,  ///< -50 .. +50 cents on top, for the slow beating of two nearly equal pitches
+             OSC2,        ///< PolyOsc2: off, or one of the four oscillators, on the outer unison pair
+             OSC2_MIX,     ///< 0 .. 1: the share of the voice's power the second oscillator carries
+             OSC2_INTERVAL,///< PolyOsc2Interval: its interval against the note, a *choice* so a recipe can override it
+             OSC2_DETUNE,  ///< -50 .. +50 cents on top, for the slow beating of two nearly equal pitches
              /** @} */
              /** @name The voice LFO (22.09.2026, round "Klangfarben")
               *  A second, tempo-synced LFO beside the position one, free-running for the whole instance
@@ -241,88 +241,88 @@ enum : int { Osc, Detune, Mix, DynamicDetune, Wave, PulseWidth, FmRatio, FmIndex
               *  it does not: the cutoff destination rides in lowPassCoefs(), which already runs once per
               *  16-sample grid, and the amplitude one is a multiply in a loop that exists.
               *  @{ */
-             LfoBeats,    ///< its period in beats (tempo-synchronised, so it never drifts against the bar)
-             LfoCutoff,   ///< +- octaves on the filter cutoff
-             LfoPitch,    ///< +- cents on every oscillator of the voice (vibrato, or a slow warp)
-             LfoAmp,      ///< 0 .. 1: tremolo depth
+             LFO_BEATS,    ///< its period in beats (tempo-synchronised, so it never drifts against the bar)
+             LFO_CUTOFF,   ///< +- octaves on the filter cutoff
+             LFO_PITCH,    ///< +- cents on every oscillator of the voice (vibrato, or a slow warp)
+             LFO_AMP,      ///< 0 .. 1: tremolo depth
              /** @} */
-             PlateSend,   ///< 25.09.2026, the mix guide: the send into the plate, the middle plane of depth (Engine.h)
-             Distance,    ///< 25.09.2026, the addon: 0 near .. 1 far -- level, low pass, wet and width together (Engine.h)
-             SlowMod,     ///< 25.09.2026, the addon: depth of the free slow movement (13 .. 34 s) of cutoff, colour, width
+             PLATE_SEND,   ///< 25.09.2026, the mix guide: the send into the plate, the middle plane of depth (Engine.h)
+             DISTANCE,    ///< 25.09.2026, the addon: 0 near .. 1 far -- level, low pass, wet and width together (Engine.h)
+             SLOW_MOD,     ///< 25.09.2026, the addon: depth of the free slow movement (13 .. 34 s) of cutoff, colour, width
              // 26.09.2026, the filter models of the BerlinSchoolGenerator (Filters.h): which circuit the voice filter is
              // (0 = the state-variable filter it always had, so older sets render unchanged) and its mode -- the SEM's
              // morph from low pass through notch to high pass, the Xpander's eight pole mixes, the Polivoks' band pass.
-             FilterModel, FilterMode,
+             FILTER_MODEL, FILTER_MODE,
              // 26.09.2026, the voice's own modulation (Modulation.h): the filter envelope's attack, sustain and release (its
              // decay is FilterDecay; attack at its minimum and sustain 0 keep the exponential decay the voice always had),
              // the modulation envelope, four LFOs and the eight slots of the matrix.
-             FiltAttack, FiltSustain, FiltRelease, MenvAttack, MenvDecay, MenvSustain, MenvRelease, Lfo1Rate,
-             Lfo1Shape, Lfo1Sync, Lfo1Retrig, Lfo1Fade, Lfo2Rate, Lfo2Shape, Lfo2Sync, Lfo2Retrig, Lfo2Fade,
-             Lfo3Rate, Lfo3Shape, Lfo3Sync, Lfo3Retrig, Lfo3Fade, Lfo4Rate, Lfo4Shape, Lfo4Sync, Lfo4Retrig,
-             Lfo4Fade, Mx1Src, Mx1Dst, Mx1Amount, Mx2Src, Mx2Dst, Mx2Amount, Mx3Src, Mx3Dst, Mx3Amount, Mx4Src,
-             Mx4Dst, Mx4Amount, Mx5Src, Mx5Dst, Mx5Amount, Mx6Src, Mx6Dst, Mx6Amount, Mx7Src, Mx7Dst, Mx7Amount,
-             Mx8Src, Mx8Dst, Mx8Amount,
-             Count };
+             FILT_ATTACK, FILT_SUSTAIN, FILT_RELEASE, MENV_ATTACK, MENV_DECAY, MENV_SUSTAIN, MENV_RELEASE, LFO1_RATE,
+             LFO1_SHAPE, LFO1_SYNC, LFO1_RETRIG, LFO1_FADE, LFO2_RATE, LFO2_SHAPE, LFO2_SYNC, LFO2_RETRIG, LFO2_FADE,
+             LFO3_RATE, LFO3_SHAPE, LFO3_SYNC, LFO3_RETRIG, LFO3_FADE, LFO4_RATE, LFO4_SHAPE, LFO4_SYNC, LFO4_RETRIG,
+             LFO4_FADE, MX1_SRC, MX1_DST, MX1_AMOUNT, MX2_SRC, MX2_DST, MX2_AMOUNT, MX3_SRC, MX3_DST, MX3_AMOUNT, MX4_SRC,
+             MX4_DST, MX4_AMOUNT, MX5_SRC, MX5_DST, MX5_AMOUNT, MX6_SRC, MX6_DST, MX6_AMOUNT, MX7_SRC, MX7_DST, MX7_AMOUNT,
+             MX8_SRC, MX8_DST, MX8_AMOUNT,
+             COUNT };
 }
 /** @brief Values of poly.mod: the voice's modulation insert (20.09.2026, round "dialogue"). */
-enum class PolyMod : int {
-    Off = 0,   ///< no insert: the plain voice, sample for sample
-    Flanger,   ///< a comb filter whose teeth slide (PsyFx.h, Flanger)
-    Phaser,    ///< notches that slide (PsyFx.h, Phaser)
-    Comb,      ///< the flanger with its sweep stopped: a *static* comb, the hollow metallic colour
-    Count
+enum class PolyModE : int {
+    OFF = 0,   ///< no insert: the plain voice, sample for sample
+    FLANGER,   ///< a comb filter whose teeth slide (PsyFx.h, Flanger)
+    PHASER,    ///< notches that slide (PsyFx.h, Phaser)
+    COMB,      ///< the flanger with its sweep stopped: a *static* comb, the hollow metallic colour
+    COUNT
 };
 /** @brief Values of poly.filter_type: the outputs of the voice's state-variable filter (PolyKernel.h). */
-enum class PolyFilter : int { LowPass = 0, BandPass, HighPass, Notch, Count };
+enum class PolyFilterE : int { LOW_PASS = 0, BAND_PASS, HIGH_PASS, NOTCH, COUNT };
 // Names of the modulation block's choices (Modulation.h; Params.cpp), 26.09.2026.
-extern const char* const kLfoShapeNames[];    ///< LfoShape
-extern const char* const kLfoSyncNames[];     ///< lfoCyclesPerBeat's divisions
-extern const char* const kModSourceNames[];   ///< ModSource
-extern const char* const kModDestNames[];     ///< ModDest
-extern const char* const kBassModDestNames[]; ///< the bass's targets (kBassModDests maps them to ModDest)
-constexpr int kBassModDests = 6;              ///< entries of kBassModDestNames
-extern const int kBassModDestMap[kBassModDests];   ///< kBassModDestNames -> ModDest
-extern const char* const kAcidModDestNames[]; ///< the acid's targets
-constexpr int kAcidModDests = 6;              ///< entries of kAcidModDestNames
-extern const int kAcidModDestMap[kAcidModDests];   ///< kAcidModDestNames -> ModDest
+extern const char* const LfoShapeNames[];    ///< LfoShape
+extern const char* const LfoSyncNames[];     ///< lfoCyclesPerBeat's divisions
+extern const char* const ModSourceNames[];   ///< ModSource
+extern const char* const ModDestNames[];     ///< ModDest
+extern const char* const BassModDestNames[]; ///< the bass's targets (BassModDests maps them to ModDest)
+constexpr int BassModDests = 6;              ///< entries of BassModDestNames
+extern const int BassModDestMap[BassModDests];   ///< BassModDestNames -> ModDest
+extern const char* const AcidModDestNames[]; ///< the acid's targets
+constexpr int AcidModDests = 6;              ///< entries of AcidModDestNames
+extern const int AcidModDestMap[AcidModDests];   ///< AcidModDestNames -> ModDest
 /**
  * @brief Values of poly.filter_model and bass.filter_model (26.09.2026): entry 0 is the synth's own filter (the
  *        state-variable filter of a voice, the ladder of the bass), entries 1 .. 9 are Filters.h's FilterModel from
  *        Moog to Wasp (the comb is left out: the voices have one in their modulation insert).
  */
-constexpr int kVoiceFilterModels = 10;   ///< entries of the two lists (Params.cpp kPolyFilterModelNames, kBassFilterModelNames)
+constexpr int VoiceFilterModels = 10;   ///< entries of the two lists (Params.cpp PolyFilterModelNames, BassFilterModelNames)
 /** @brief Parameters of the effect generator (module Sfx, prefix "sfx"). */
 namespace sfx {
-enum : int { Level, Noise, Resonance, Brightness, ImpactDecay, Vowel, SwellDecay, Width, RoomSend, HallSend, Duck,
+enum : int { LEVEL, NOISE, RESONANCE, BRIGHTNESS, IMPACT_DECAY, VOWEL, SWELL_DECAY, WIDTH, ROOM_SEND, HALL_SEND, DUCK,
              // 19.09.2026, round "fx-psychedelia". Appended.
-             SubLevel,     ///< dB: the sub drop against sfx.level (Sfx.h; it plays mono and ducks under the kick)
-             SubDuck,      ///< 0..1: how deep the kick ducks the sub drop
+             SUB_LEVEL,     ///< dB: the sub drop against sfx.level (Sfx.h; it plays mono and ducks under the kick)
+             SUB_DUCK,      ///< 0..1: how deep the kick ducks the sub drop
              // 20.09.2026, round "wandering-fx" (Sfx.h): a directed pan trajectory plus a reverb-send
              // trajectory over an event's own length, drawn from its own seed. Off by default, so older
              // sets render unchanged.
-             Wander,       ///< toggle: an event's pan sweeps from one side to the other and its content
+             WANDER,       ///< toggle: an event's pan sweeps from one side to the other and its content
                            ///< crosses from dry to the hall's send over its length, instead of the
                            ///< oscillating auto-pan and the constant hall_send fraction
-             WanderSend,   ///< 0..1: how far the crossfade reaches by the event's own tail (x = 1)
+             WANDER_SEND,   ///< 0..1: how far the crossfade reaches by the event's own tail (x = 1)
              // 24.09.2026, the user: "Im SFX-Fenster ist nach wie vor keine Auswahl fuer das Preset". One per
              // family of the effect bank (Sfx.h, SfxPreset): 0 = Auto, the composer's draw per event as before;
              // n = every event of that family plays bank preset n (Sfx::trigger). Appended; Auto everywhere is
              // the composer's own draw, sample for sample.
-             PresetRiser, PresetDownlifter, PresetImpact, PresetSweep, PresetFormantShot, PresetReverseSwell,
-             PresetZap, PresetSquelch, PresetBubble, PresetReverseCrash, PresetAtmosphere,
-             PlateSend,   ///< 25.09.2026: the effects' send into the plate (the throw rides it; the hall is the far room now)
-             Count };
+             PRESET_RISER, PRESET_DOWNLIFTER, PRESET_IMPACT, PRESET_SWEEP, PRESET_FORMANT_SHOT, PRESET_REVERSE_SWELL,
+             PRESET_ZAP, PRESET_SQUELCH, PRESET_BUBBLE, PRESET_REVERSE_CRASH, PRESET_ATMOSPHERE,
+             PLATE_SEND,   ///< 25.09.2026: the effects' send into the plate (the throw rides it; the hall is the far room now)
+             COUNT };
 /** @brief The first of the per-family preset choices, and how many there are. */
-constexpr int kFirstPreset = PresetRiser;
-constexpr int kNumPresetChoices = PresetAtmosphere - PresetRiser + 1;   ///< how many per-family preset choices there are
+constexpr int FirstPreset = PRESET_RISER;
+constexpr int NumPresetChoices = PRESET_ATMOSPHERE - PRESET_RISER + 1;   ///< how many per-family preset choices there are
 }
 /** @brief Parameters of the shamanic bed (module Texture, prefix "texture"; Texture.h). */
 namespace texture {
-enum : int { Width, BowlDecay, BowlBright, DidgeFormant, DidgeBreath, JawSweep, RoomSend, HallSend, FxSend, Duck, Count };
+enum : int { WIDTH, BOWL_DECAY, BOWL_BRIGHT, DIDGE_FORMANT, DIDGE_BREATH, JAW_SWEEP, ROOM_SEND, HALL_SEND, FX_SEND, DUCK, COUNT };
 }
 /** @brief Parameters of the voices (module Vocal, prefix "vocal"; Vocal.h). */
 namespace vocal {
-enum : int { Pitch, Drive, ThrowSend, ThrowBeats, ThrowFeedback, FxSend, HallSend, Duck, Width, Count };
+enum : int { PITCH, DRIVE, THROW_SEND, THROW_BEATS, THROW_FEEDBACK, FX_SEND, HALL_SEND, DUCK, WIDTH, COUNT };
 }
 /**
  * @brief Parameters of the Field track's sampler (module Field, prefix "field"; FieldPlayer.h, 27.09.2026).
@@ -334,52 +334,52 @@ enum : int { Pitch, Drive, ThrowSend, ThrowBeats, ThrowFeedback, FxSend, HallSen
  * synth's, from filt_attack to mx8_amount.
  */
 namespace field {
-enum : int { ACategory, AVariation, ALevel, APitch, AFine, AStart, AStartRandom, AReverse,
-             BOn, BCategory, BVariation, BLevel, BPitch, BFine, BStart, BStartRandom, BReverse,
-             LayerMix, Loop, LoopStart, LoopEnd, LoopXfade,
-             AmpAttack, AmpDecay, AmpSustain, AmpRelease,
-             FilterModel, FilterType, Cutoff, Resonance, FilterMode, EnvAmount, FilterDecay, LowCut,
-             FiltAttack, FiltSustain, FiltRelease, MenvAttack, MenvDecay, MenvSustain, MenvRelease, Lfo1Rate,
-             Lfo1Shape, Lfo1Sync, Lfo1Retrig, Lfo1Fade, Lfo2Rate, Lfo2Shape, Lfo2Sync, Lfo2Retrig, Lfo2Fade,
-             Lfo3Rate, Lfo3Shape, Lfo3Sync, Lfo3Retrig, Lfo3Fade, Lfo4Rate, Lfo4Shape, Lfo4Sync, Lfo4Retrig,
-             Lfo4Fade, Mx1Src, Mx1Dst, Mx1Amount, Mx2Src, Mx2Dst, Mx2Amount, Mx3Src, Mx3Dst, Mx3Amount, Mx4Src,
-             Mx4Dst, Mx4Amount, Mx5Src, Mx5Dst, Mx5Amount, Mx6Src, Mx6Dst, Mx6Amount, Mx7Src, Mx7Dst, Mx7Amount,
-             Mx8Src, Mx8Dst, Mx8Amount,
-             Width, Pan, RoomSend, PlateSend, HallSend, Duck,
-             Count };
+enum : int { A_CATEGORY, A_VARIATION, A_LEVEL, A_PITCH, A_FINE, A_START, A_START_RANDOM, A_REVERSE,
+             B_ON, B_CATEGORY, B_VARIATION, B_LEVEL, B_PITCH, B_FINE, B_START, B_START_RANDOM, B_REVERSE,
+             LAYER_MIX, LOOP, LOOP_START, LOOP_END, LOOP_XFADE,
+             AMP_ATTACK, AMP_DECAY, AMP_SUSTAIN, AMP_RELEASE,
+             FILTER_MODEL, FILTER_TYPE, CUTOFF, RESONANCE, FILTER_MODE, ENV_AMOUNT, FILTER_DECAY, LOW_CUT,
+             FILT_ATTACK, FILT_SUSTAIN, FILT_RELEASE, MENV_ATTACK, MENV_DECAY, MENV_SUSTAIN, MENV_RELEASE, LFO1_RATE,
+             LFO1_SHAPE, LFO1_SYNC, LFO1_RETRIG, LFO1_FADE, LFO2_RATE, LFO2_SHAPE, LFO2_SYNC, LFO2_RETRIG, LFO2_FADE,
+             LFO3_RATE, LFO3_SHAPE, LFO3_SYNC, LFO3_RETRIG, LFO3_FADE, LFO4_RATE, LFO4_SHAPE, LFO4_SYNC, LFO4_RETRIG,
+             LFO4_FADE, MX1_SRC, MX1_DST, MX1_AMOUNT, MX2_SRC, MX2_DST, MX2_AMOUNT, MX3_SRC, MX3_DST, MX3_AMOUNT, MX4_SRC,
+             MX4_DST, MX4_AMOUNT, MX5_SRC, MX5_DST, MX5_AMOUNT, MX6_SRC, MX6_DST, MX6_AMOUNT, MX7_SRC, MX7_DST, MX7_AMOUNT,
+             MX8_SRC, MX8_DST, MX8_AMOUNT,
+             WIDTH, PAN, ROOM_SEND, PLATE_SEND, HALL_SEND, DUCK,
+             COUNT };
 /** @brief The categories of the field library, in the order of the category choice (index 0 is "Auto"). */
-constexpr int kCategories = 31;
+constexpr int Categories = 31;
 }
-extern const char* const kFieldCategoryNames[field::kCategories + 1];   ///< "Auto", then the categories' names
-extern const char* const kFieldCategorySlugs[field::kCategories];       ///< the file names' category tokens ("rainforest", ...)
-extern const char* const kFieldModDestNames[7];                          ///< the matrix's targets on the Field track
-extern const int kFieldModDestMap[7];                                    ///< and the ModDest each one is
+extern const char* const FieldCategoryNames[field::Categories + 1];   ///< "Auto", then the categories' names
+extern const char* const FieldCategorySlugs[field::Categories];       ///< the file names' category tokens ("rainforest", ...)
+extern const char* const FieldModDestNames[7];                          ///< the matrix's targets on the Field track
+extern const int FieldModDestMap[7];                                    ///< and the ModDest each one is
 
 /** @brief Parameters of the modulation effects (module PsyFx, prefix "psyfx"; PsyFx.h). */
 namespace psyfx {
-enum : int { FlangerBeats, FlangerDepth, FlangerFeedback, FlangerMix, PhaserBeats, PhaserDepth, PhaserFeedback,
-             PhaserMix, ShiftHz, ShiftMix, Return, Motion, Count };
+enum : int { FLANGER_BEATS, FLANGER_DEPTH, FLANGER_FEEDBACK, FLANGER_MIX, PHASER_BEATS, PHASER_DEPTH, PHASER_FEEDBACK,
+             PHASER_MIX, SHIFT_HZ, SHIFT_MIX, RETURN, MOTION, COUNT };
 }
 /** @brief Parameters of the send effects (module Fx, prefix "fx"): a short room and a long hall. */
 namespace fx {
-enum : int { RoomSize, RoomDecay, RoomDamping, HallSize, HallDecay, HallDamping, HallPreDelay, LowCut, HighCut,
-             RoomReturn, HallReturn, ReturnDuck,
+enum : int { ROOM_SIZE, ROOM_DECAY, ROOM_DAMPING, HALL_SIZE, HALL_DECAY, HALL_DAMPING, HALL_PRE_DELAY, LOW_CUT, HIGH_CUT,
+             ROOM_RETURN, HALL_RETURN, RETURN_DUCK,
              /** @name Appended 25.09.2026 (the mix guide): the returns' own duck release, and the plate -- the middle
               *  plane between the dry front (kick, bass, lead) and the hall at the back (Engine.h)
               *  @{ */
-             ReturnDuckRelease, PlateSize, PlateDecay, PlateDamping, PlatePreDelay, PlateReturn,
+             RETURN_DUCK_RELEASE, PLATE_SIZE, PLATE_DECAY, PLATE_DAMPING, PLATE_PRE_DELAY, PLATE_RETURN,
              /** @} */
              /** @name Appended 25.09.2026 (the Dark-Ambient addon): the near room's pre-delay, a send filter per room,
               *  and the far room fed from the plate (Engine.h)
               *  @{ */
-             RoomPreDelay, RoomLowCut, RoomHighCut, PlateLowCut, PlateHighCut, PlateToHall,
+             ROOM_PRE_DELAY, ROOM_LOW_CUT, ROOM_HIGH_CUT, PLATE_LOW_CUT, PLATE_HIGH_CUT, PLATE_TO_HALL,
              /** @} */
-             Count };
+             COUNT };
 }
 /** @brief Values of poly.osc. */
-enum class PolyOsc : int { Supersaw = 0, Va, Fm, Wavetable, Count };
+enum class PolyOscE : int { SUPERSAW = 0, VA, FM, WAVETABLE, COUNT };
 /** @brief Values of poly.osc2: the second oscillator, or none (22.09.2026, round "Klangfarben"). */
-enum class PolyOsc2 : int { Off = 0, Supersaw, Va, Fm, Wavetable, Count };
+enum class PolyOsc2E : int { OFF = 0, SUPERSAW, VA, FM, WAVETABLE, COUNT };
 /**
  * @brief Values of poly.osc2_interval: where the second oscillator sits against the note.
  *
@@ -389,59 +389,59 @@ enum class PolyOsc2 : int { Off = 0, Supersaw, Va, Fm, Wavetable, Count };
  * unison is not a waste of one: with poly.osc2_detune it is the slow beat of two analogue
  * oscillators that never quite agree.
  */
-enum class PolyOsc2Interval : int { TwoOctavesDown = 0, OctaveDown, FifthDown, Unison, FifthUp, OctaveUp, Count };
+enum class PolyOsc2IntervalE : int { TWO_OCTAVES_DOWN = 0, OCTAVE_DOWN, FIFTH_DOWN, UNISON, FIFTH_UP, OCTAVE_UP, COUNT };
 /** @brief The semitones each PolyOsc2Interval stands for. */
-constexpr int kOsc2IntervalSemis[] = { -24, -12, -7, 0, 7, 12 };
+constexpr int Osc2IntervalSemis[] = { -24, -12, -7, 0, 7, 12 };
 /** @brief Delay times offered by the delay-time choices, in beats. */
-inline constexpr float kDelayBeats[] = { 0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f };
-constexpr int kNumDelayTimes = 6;   ///< entries of kDelayBeats
+inline constexpr float DelayBeats[] = { 0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f };
+constexpr int NumDelayTimes = 6;   ///< entries of DelayBeats
 
 /** @brief Values of bass.sub_mode. */
-enum class SubMode : int { Mixed = 0, Split };
+enum class SubModeE : int { MIXED = 0, SPLIT };
 /** @brief Values of bass.kick_lock. */
-enum class KickLock : int { Off = 0, BassFollowsKick, KickFollowsBass };
+enum class KickLockE : int { OFF = 0, BASS_FOLLOWS_KICK, KICK_FOLLOWS_BASS };
 /** @brief Parameters of the mixer. */
 namespace mix {
 // 19.09.2026, round "voices": the strips follow the voices' groups (PolyInstance), so the counter-lead's
 // strip stands beside the lead's, the stab's beside the arp's and the drone's beside the pad's. The keys
 // ("mix.lead_level") did not change, only the indices -- see PolyInstance.
-enum : int { KickMute, BassMute, TrackGain, PercMute, PercLevel, AcidMute, AcidLevel,
-             LeadMute, LeadLevel, CounterMute, CounterLevel, ArpMute, ArpLevel, StabMute, StabLevel,
-             PadMute, PadLevel, DroneMute, DroneLevel,
-             SfxMute, SfxLevel, PercRoom, PercHall,
-             DuckAttack, DuckHold, DuckRelease,
+enum : int { KICK_MUTE, BASS_MUTE, TRACK_GAIN, PERC_MUTE, PERC_LEVEL, ACID_MUTE, ACID_LEVEL,
+             LEAD_MUTE, LEAD_LEVEL, COUNTER_MUTE, COUNTER_LEVEL, ARP_MUTE, ARP_LEVEL, STAB_MUTE, STAB_LEVEL,
+             PAD_MUTE, PAD_LEVEL, DRONE_MUTE, DRONE_LEVEL,
+             SFX_MUTE, SFX_LEVEL, PERC_ROOM, PERC_HALL,
+             DUCK_ATTACK, DUCK_HOLD, DUCK_RELEASE,
              // 19.09.2026, round "fx-psychedelia": the strips of the two new parts.
-             TextureMute, TextureLevel, VocalMute, VocalLevel,
+             TEXTURE_MUTE, TEXTURE_LEVEL, VOCAL_MUTE, VOCAL_LEVEL,
              // 23.09.2026, round "Presets": a synth whose sound is the user's -- a preset picked on its page, or knobs
              // set by hand -- and which the composer's per-track recipes leave alone (Engine.cpp, dispatchControl).
-             KickOwn, BassOwn, AcidOwn, LeadOwn, CounterOwn, ArpOwn, StabOwn, PadOwn, DroneOwn,
+             KICK_OWN, BASS_OWN, ACID_OWN, LEAD_OWN, COUNTER_OWN, ARP_OWN, STAB_OWN, PAD_OWN, DRONE_OWN,
              // 23.09.2026, round "Keyboard": which voice a MIDI keyboard plays, and whether it replaces that voice's
              // generated notes or plays over them (Engine.h, liveNoteOn).
-             KeyboardPart, KeyboardMode,
+             KEYBOARD_PART, KEYBOARD_MODE,
              // 01.10.2026: off, only what the keyboard plays sounds -- every generated note is left out (live play only).
-             Composer,
+             COMPOSER,
              /** @name Appended 25.09.2026 (the mix guide): the lines' duck release (the pads and the bed keep
               *  duck_release), the counter's duck under the lead, and the pad's presence band under the lead
               *  @{ */
-             DuckReleaseLines, CounterDuck, PadLeadDuck,
+             DUCK_RELEASE_LINES, COUNTER_DUCK, PAD_LEAD_DUCK,
              /** @} */
              /** @brief Appended 27.09.2026: the Field track's strip (FieldPlayer.h). */
-             FieldMute, FieldLevel,
+             FIELD_MUTE, FIELD_LEVEL,
              /** @name Appended 02.10.2026: the keyboard's options, all off by default -- the voice under a split
-              *  (kKeyboardLowerNames; Off: no split), the split key C1 .. C5, Scale Lock (a played key to the nearest
+              *  (KeyboardLowerNames; Off: no split), the split key C1 .. C5, Scale Lock (a played key to the nearest
               *  note of the track's key and scale; not the kit), the velocity curve (frame::shapeVelocity)
               *  @{ */
-             KeyboardLower, KeyboardSplit, KeyboardScale, KeyboardVelocity,
+             KEYBOARD_LOWER, KEYBOARD_SPLIT, KEYBOARD_SCALE, KEYBOARD_VELOCITY,
              /** @} */
-             Count };
+             COUNT };
 /** @brief The "own sound" switch of a polyphonic instance. */
-constexpr int polyOwn(PolyInstance i) { return LeadOwn + static_cast<int>(i); }
-static_assert(polyOwn(PolyInstance::Drone) == DroneOwn, "the own-sound switches follow PolyInstance");
+constexpr int polyOwn(PolyInstanceE i) { return LEAD_OWN + static_cast<int>(i); }
+static_assert(polyOwn(PolyInstanceE::DRONE) == DRONE_OWN, "the own-sound switches follow PolyInstance");
 /** @brief The mute of a polyphonic instance's strip. */
-constexpr int polyMute(PolyInstance i) { return LeadMute + 2 * static_cast<int>(i); }
+constexpr int polyMute(PolyInstanceE i) { return LEAD_MUTE + 2 * static_cast<int>(i); }
 /** @brief The level of a polyphonic instance's strip. */
-constexpr int polyLevel(PolyInstance i) { return LeadLevel + 2 * static_cast<int>(i); }
-static_assert(polyMute(PolyInstance::Drone) == DroneMute && polyLevel(PolyInstance::Stab) == StabLevel,
+constexpr int polyLevel(PolyInstanceE i) { return LEAD_LEVEL + 2 * static_cast<int>(i); }
+static_assert(polyMute(PolyInstanceE::DRONE) == DRONE_MUTE && polyLevel(PolyInstanceE::STAB) == STAB_LEVEL,
               "the mix strips of the polyphonic instances must follow PolyInstance pair by pair");
 }
 /**
@@ -453,28 +453,28 @@ static_assert(polyMute(PolyInstance::Drone) == DroneMute && polyLevel(PolyInstan
  * in the Quest's `phos.cfg`, next to the port.
  */
 namespace cue {
-enum : int { Send, Port, Beats, LeadMs, Count };
+enum : int { SEND, PORT, BEATS, LEAD_MS, COUNT };
 }
 /** @brief Parameters of the master section. */
 namespace master {
-enum : int { Gain, Ceiling, Clip, CompThreshold, CompRatio, CompKnee, CompAttack, CompRelease, MonoBass,
-             Limiter, LimiterRelease, TargetLufs, AutoGain, Clipper, ClipperThreshold,
-             Monitor,   ///< 25.09.2026, the addon's monitoring: Normal, Mono, Sub (80 Hz low pass) or Side, after the meter
-             Count };
+enum : int { GAIN, CEILING, CLIP, COMP_THRESHOLD, COMP_RATIO, COMP_KNEE, COMP_ATTACK, COMP_RELEASE, MONO_BASS,
+             LIMITER, LIMITER_RELEASE, TARGET_LUFS, AUTO_GAIN, CLIPPER, CLIPPER_THRESHOLD,
+             MONITOR,   ///< 25.09.2026, the addon's monitoring: Normal, Mono, Sub (80 Hz low pass) or Side, after the meter
+             COUNT };
 }
 
-extern const char* const kKeyNames[12];         ///< C, C#, ... B
-extern const char* const kScaleNames[];         ///< names of compose.scale
-extern const char* const kStyleNames[];         ///< names of compose.style (Form.h)
-extern const char* const kArcNames[];           ///< names of compose.arc (Form.h)
-extern const char* const kKickPatternNames[];   ///< names of compose.kick_pattern
-extern const char* const kBassPatternNames[];   ///< names of compose.bass_pattern
-extern const char* const kMelodyModelNames[];   ///< names of compose.melody_model (Model.h)
-extern const char* const kBassModelNames[];     ///< names of compose.bass_model (Model.h)
-extern const char* const kBassRhythmNames[];    ///< names of compose.bass_rhythm (Corpus.h)
-extern const char* const kLeadDensityNames[];   ///< names of compose.lead_density (22.09.2026)
-extern const char* const kPitchEntropyNames[];  ///< names of compose.pitch_entropy (22.09.2026)
-extern const char* const kCounterModeNames[];   ///< names of compose.counter_mode (23.09.2026)
+extern const char* const KeyNames[12];         ///< C, C#, ... B
+extern const char* const ScaleNames[];         ///< names of compose.scale
+extern const char* const StyleNames[];         ///< names of compose.style (Form.h)
+extern const char* const ArcNames[];           ///< names of compose.arc (Form.h)
+extern const char* const KickPatternNames[];   ///< names of compose.kick_pattern
+extern const char* const BassPatternNames[];   ///< names of compose.bass_pattern
+extern const char* const MelodyModelNames[];   ///< names of compose.melody_model (Model.h)
+extern const char* const BassModelNames[];     ///< names of compose.bass_model (Model.h)
+extern const char* const BassRhythmNames[];    ///< names of compose.bass_rhythm (Corpus.h)
+extern const char* const LeadDensityNames[];   ///< names of compose.lead_density (22.09.2026)
+extern const char* const PitchEntropyNames[];  ///< names of compose.pitch_entropy (22.09.2026)
+extern const char* const CounterModeNames[];   ///< names of compose.counter_mode (23.09.2026)
 
 /**
  * @brief All parameter values of one engine, lock-free readable from the audio thread.
@@ -490,20 +490,20 @@ public:
     ParamStore& operator=(const ParamStore&) = delete;
 
     /** @brief Number of parameters. */
-    int count() const { return static_cast<int>(entries_.size()); }
+    int count() const { return static_cast<int>(m_entries.size()); }
     /** @brief First id of a module instance; -1 if it does not exist. */
-    int base(Module m, int instance = 0) const;
+    int base(ModuleE m, int instance = 0) const;
     /** @brief First id of a polyphonic instance: the one way to address a voice's parameters by name. */
-    int base(PolyInstance i) const { return base(Module::Poly, polyIndex(i)); }
+    int base(PolyInstanceE i) const { return base(ModuleE::POLY, polyIndex(i)); }
     /** @brief Descriptor of @p id. */
-    const ParamDesc& desc(int id) const { return *entries_[static_cast<size_t>(id)].desc; }
+    const ParamDesc& desc(int id) const { return *m_entries[static_cast<size_t>(id)].m_desc; }
     /** @brief Full text key of @p id ("kick.pitch_start"). */
-    const std::string& key(int id) const { return entries_[static_cast<size_t>(id)].key; }
+    const std::string& key(int id) const { return m_entries[static_cast<size_t>(id)].m_key; }
     /** @brief Id for a text key, or -1. */
     int find(std::string_view key) const;
 
     /** @brief Current real value. */
-    float get(int id) const { return values_[static_cast<size_t>(id)].load(std::memory_order_relaxed); }
+    float get(int id) const { return m_values[static_cast<size_t>(id)].load(std::memory_order_relaxed); }
     /** @brief Current value rounded to an integer (Int, Choice, Toggle). */
     int getInt(int id) const;
     /** @brief Current value as a switch. */
@@ -524,7 +524,7 @@ public:
      * @brief Default of @p id: the descriptor's default, or the instance's own where a module's
      *        instances start from different values (the twelve lanes of the percussion kit).
      */
-    float defaultValue(int id) const { return defaults_[static_cast<size_t>(id)]; }
+    float defaultValue(int id) const { return m_defaults[static_cast<size_t>(id)]; }
     /** @brief Copies every value from another store (for snapshots on another thread). */
     void copyValuesFrom(const ParamStore& other);
     /**
@@ -533,9 +533,9 @@ public:
      * @param instance instance index
      * @param out      at least as many floats as the module has parameters
      */
-    void readModule(Module m, int instance, float* out) const;
+    void readModule(ModuleE m, int instance, float* out) const;
     /** @brief Number of parameters of a module. */
-    static int moduleCount(Module m);
+    static int moduleCount(ModuleE m);
 
     /**
      * @brief Applies "key=value" assignments separated by whitespace, newlines or ';'.
@@ -558,17 +558,17 @@ public:
 private:
     /** @brief One registered parameter: its descriptor, key, module and instance. */
     struct Entry {
-        const ParamDesc* desc;   ///< the descriptor in the module table
-        std::string key;   ///< "module.name"
-        Module module;   ///< which module
-        int instance;   ///< which instance of it
+        const ParamDesc* m_desc;   ///< the descriptor in the module table
+        std::string m_key;   ///< "module.name"
+        ModuleE m_module;   ///< which module
+        int m_instance;   ///< which instance of it
     };
-    std::vector<Entry> entries_;   ///< every parameter, by global id
-    std::unique_ptr<std::atomic<float>[]> values_;   ///< the values, lock-free for the audio thread
-    std::vector<float> defaults_;   ///< the defaults, by global id
-    std::unordered_map<std::string, int> index_;   ///< key -> global id
-    static constexpr int kMaxInstances = 16;   ///< instances a module may have (base() table)
-    int bases_[static_cast<int>(Module::Count)][kMaxInstances] = {};   ///< per module and instance: the id of its first parameter, -1 none
+    std::vector<Entry> m_entries;   ///< every parameter, by global id
+    std::unique_ptr<std::atomic<float>[]> m_values;   ///< the values, lock-free for the audio thread
+    std::vector<float> m_defaults;   ///< the defaults, by global id
+    std::unordered_map<std::string, int> m_index;   ///< key -> global id
+    static constexpr int MaxInstances = 16;   ///< instances a module may have (base() table)
+    int m_bases[static_cast<int>(ModuleE::COUNT)][MaxInstances] = {};   ///< per module and instance: the id of its first parameter, -1 none
 };
 
 } // namespace phos

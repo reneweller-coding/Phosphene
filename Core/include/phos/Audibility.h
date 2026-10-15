@@ -47,10 +47,10 @@ class Fft;
 
 /** @brief What the meter says about one stem. */
 struct AudibilityReading {
-    double alone = 0.0;   ///< mean loudness of the stem on its own (sone-like)
-    double inMix = 0.0;   ///< mean partial loudness in the mix of all stems
-    double ratio = 0.0;   ///< inMix / alone, 0 when the stem was silent
-    int    frames = 0;    ///< frames in which the stem alone was heard (at least a quarter unit; release tails do not count)
+    double m_alone = 0.0;   ///< mean loudness of the stem on its own (sone-like)
+    double m_inMix = 0.0;   ///< mean partial loudness in the mix of all stems
+    double m_ratio = 0.0;   ///< inMix / alone, 0 when the stem was silent
+    int    m_frames = 0;    ///< frames in which the stem alone was heard (at least a quarter unit; release tails do not count)
 };
 
 /** @brief Partial loudness of each of a set of stems against the sum of the others. */
@@ -84,23 +84,23 @@ private:
     bool excite(const std::vector<double>& in, std::vector<double>& out) const;
     /** @brief Loudness of excitation @p es alone and in the masker @p em (null: in quiet), unscaled. */
     void loudness(const std::vector<double>& es, const std::vector<double>* em, double& alone, double& inMix) const;
-    int stems_;   ///< stems per add()
-    double sr_;   ///< their sample rate
-    std::unique_ptr<Fft> fft_;   ///< one frame's transform
-    std::vector<double> window_;   ///< the analysis window
-    std::vector<int> bandOfBin_;                 ///< -1 for bins outside 50 Hz .. 15 kHz
-    std::vector<double> binGain_;                ///< ear weighting and level reference per bin
-    std::vector<double> spread_;                 ///< bands x bands, Bark distance of receiver above source
-    std::vector<double> centre_;                 ///< centre frequency of each band, Hz
-    std::vector<double> threshold_;              ///< threshold excitation per band
-    int bands_ = 0;   ///< critical bands in use
-    double scale_ = 1.0;                         ///< makes a 1 kHz tone at 40 dB SPL one unit
-    std::vector<std::vector<float>> bufL_;   ///< the current frame of each stem, left
-    std::vector<std::vector<float>> bufR_;   ///< ... right
-    int fill_ = 0;   ///< samples in the current frame
-    std::vector<double> sumAlone_;   ///< per stem: the loudness alone, summed over frames
-    std::vector<double> sumMix_;   ///< ... and its partial loudness in the mix
-    std::vector<int> frames_;   ///< per stem: the frames it sounded in
+    int m_stems;   ///< stems per add()
+    double m_sr;   ///< their sample rate
+    std::unique_ptr<Fft> m_fft;   ///< one frame's transform
+    std::vector<double> m_window;   ///< the analysis window
+    std::vector<int> m_bandOfBin;                 ///< -1 for bins outside 50 Hz .. 15 kHz
+    std::vector<double> m_binGain;                ///< ear weighting and level reference per bin
+    std::vector<double> m_spread;                 ///< bands x bands, Bark distance of receiver above source
+    std::vector<double> m_centre;                 ///< centre frequency of each band, Hz
+    std::vector<double> m_threshold;              ///< threshold excitation per band
+    int m_bands = 0;   ///< critical bands in use
+    double m_scale = 1.0;                         ///< makes a 1 kHz tone at 40 dB SPL one unit
+    std::vector<std::vector<float>> m_bufL;   ///< the current frame of each stem, left
+    std::vector<std::vector<float>> m_bufR;   ///< ... right
+    int m_fill = 0;   ///< samples in the current frame
+    std::vector<double> m_sumAlone;   ///< per stem: the loudness alone, summed over frames
+    std::vector<double> m_sumMix;   ///< ... and its partial loudness in the mix
+    std::vector<int> m_frames;   ///< per stem: the frames it sounded in
 };
 
 } // namespace phos

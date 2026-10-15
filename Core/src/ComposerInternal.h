@@ -59,19 +59,19 @@ namespace phos {
  * towards VA and FM, the pad towards a low-index FM (a classic pad, not a bell).
  */
 struct VoicePalette {
-    double osc[static_cast<int>(PolyOsc::Count)];       ///< weight per PolyOsc
-    int    builtin[6];                                  ///< built-in candidates (-1 ends the list)
-    int8_t lane[3];                                     ///< lanes drawn from (-1 ends the list)
-    double filter[static_cast<int>(PolyFilter::Count)]; ///< weight per PolyFilter
-    double osc2[static_cast<int>(PolyOsc2::Count)];     ///< weight per PolyOsc2, index 0 = no second oscillator
-    double interval[static_cast<int>(PolyOsc2Interval::Count)];   ///< weight per PolyOsc2Interval
-    float  scale[kNumVoiceMacros];                      ///< how far each direction reaches for this voice
+    double m_osc[static_cast<int>(PolyOscE::COUNT)];       ///< weight per PolyOsc
+    int    m_builtin[6];                                  ///< built-in candidates (-1 ends the list)
+    int8_t m_lane[3];                                     ///< lanes drawn from (-1 ends the list)
+    double m_filter[static_cast<int>(PolyFilterE::COUNT)]; ///< weight per PolyFilter
+    double m_osc2[static_cast<int>(PolyOsc2E::COUNT)];     ///< weight per PolyOsc2, index 0 = no second oscillator
+    double m_interval[static_cast<int>(PolyOsc2IntervalE::COUNT)];   ///< weight per PolyOsc2Interval
+    float  m_scale[NumVoiceMacros];                      ///< how far each direction reaches for this voice
 };
-constexpr int8_t kLanePad = static_cast<int8_t>(WaveTableLane::Pad);   ///< the pad's wavetable lane
-constexpr int8_t kLaneLead = static_cast<int8_t>(WaveTableLane::Lead);   ///< the lead's
-constexpr int8_t kLaneArp = static_cast<int8_t>(WaveTableLane::Arp);   ///< the arp's
-constexpr int8_t kLaneDrone = static_cast<int8_t>(WaveTableLane::Drone);   ///< the drone's
-constexpr int8_t kLaneCounter = static_cast<int8_t>(WaveTableLane::Counter);   ///< the counter's
+constexpr int8_t LanePad = static_cast<int8_t>(WaveTableLaneE::PAD);   ///< the pad's wavetable lane
+constexpr int8_t LaneLead = static_cast<int8_t>(WaveTableLaneE::LEAD);   ///< the lead's
+constexpr int8_t LaneArp = static_cast<int8_t>(WaveTableLaneE::ARP);   ///< the arp's
+constexpr int8_t LaneDrone = static_cast<int8_t>(WaveTableLaneE::DRONE);   ///< the drone's
+constexpr int8_t LaneCounter = static_cast<int8_t>(WaveTableLaneE::COUNTER);   ///< the counter's
 /// The drone's second oscillator never goes *below* it, which is the one row where that matters and
 /// where the first attempt at these weights was wrong. The drone is already the lowest voice, and
 /// rule 20 is explicit about the band under 140 Hz: it belongs to the kick and the bass from their
@@ -102,13 +102,13 @@ constexpr int8_t kLaneCounter = static_cast<int8_t>(WaveTableLane::Counter);   /
 /// interval it answers at (-2 Oct, -1 Oct, -5th, Unison, +5th, +1 Oct); and the reach of the five
 /// directions.
 ///                                     Supersaw VA   FM   WT      built-ins                  lanes                             LP    BP    HP   Notch     off   sup   va    fm    wt          -2oct -1oct -5th  uni   +5th  +1oct     bright soft thick space motion
-inline const VoicePalette kVoicePalette[kPolyInstances] = {
-    /* lead    */ { { 0.30, 0.12, 0.13, 0.45 }, { 4, 5, -1, -1, -1, -1 },  { kLaneLead, -1, -1 },        { 0.80, 0.10, 0.0, 0.10 }, { 0.45, 0.15, 0.15, 0.10, 0.15 }, { 0.05, 0.35, 0.10, 0.20, 0.05, 0.25 }, { 1.0f, 0.6f, 1.0f, 1.0f, 0.8f } },
-    /* counter */ { { 0.08, 0.17, 0.20, 0.55 }, { 5, 1, 2, -1, -1, -1 },   { kLaneCounter, -1, -1 },     { 0.40, 0.40, 0.0, 0.20 }, { 0.45, 0.05, 0.20, 0.20, 0.10 }, { 0.05, 0.30, 0.10, 0.30, 0.05, 0.20 }, { 1.0f, 0.8f, 0.8f, 1.0f, 1.0f } },
-    /* arp     */ { { 0.22, 0.20, 0.13, 0.45 }, { 2, 3, -1, -1, -1, -1 },  { kLaneArp, -1, -1 },         { 0.75, 0.25, 0.0, 0.00 }, { 0.50, 0.10, 0.15, 0.10, 0.15 }, { 0.02, 0.28, 0.05, 0.25, 0.05, 0.35 }, { 1.0f, 0.0f, 0.8f, 1.0f, 0.6f } },
-    /* stab    */ { { 0.28, 0.18, 0.09, 0.45 }, { 3, 4, -1, -1, -1, -1 },  { kLaneArp, kLaneLead, -1 },  { 0.70, 0.30, 0.0, 0.00 }, { 0.45, 0.15, 0.15, 0.10, 0.15 }, { 0.05, 0.40, 0.00, 0.25, 0.00, 0.30 }, { 1.0f, 0.0f, 1.0f, 1.0f, 0.5f } },
-    /* pad     */ { { 0.15, 0.08, 0.12, 0.65 }, { 1, 2, 5, -1, -1, -1 },   { kLanePad, -1, -1 },         { 0.85, 0.00, 0.0, 0.15 }, { 0.30, 0.10, 0.25, 0.15, 0.20 }, { 0.00, 0.00, 0.00, 0.60, 0.00, 0.40 }, { 0.8f, 1.0f, 1.0f, 1.0f, 1.0f } },
-    /* drone   */ { { 0.06, 0.20, 0.09, 0.65 }, { 1, -1, -1, -1, -1, -1 }, { kLaneDrone, kLanePad, -1 }, { 0.90, 0.10, 0.0, 0.00 }, { 0.30, 0.05, 0.30, 0.10, 0.25 }, { 0.00, 0.00, 0.05, 0.45, 0.20, 0.30 }, { 0.7f, 0.6f, 1.0f, 0.8f, 1.0f } },
+inline const VoicePalette VoicePalettes[PolyInstances] = {
+    /* lead    */ { { 0.30, 0.12, 0.13, 0.45 }, { 4, 5, -1, -1, -1, -1 },  { LaneLead, -1, -1 },        { 0.80, 0.10, 0.0, 0.10 }, { 0.45, 0.15, 0.15, 0.10, 0.15 }, { 0.05, 0.35, 0.10, 0.20, 0.05, 0.25 }, { 1.0f, 0.6f, 1.0f, 1.0f, 0.8f } },
+    /* counter */ { { 0.08, 0.17, 0.20, 0.55 }, { 5, 1, 2, -1, -1, -1 },   { LaneCounter, -1, -1 },     { 0.40, 0.40, 0.0, 0.20 }, { 0.45, 0.05, 0.20, 0.20, 0.10 }, { 0.05, 0.30, 0.10, 0.30, 0.05, 0.20 }, { 1.0f, 0.8f, 0.8f, 1.0f, 1.0f } },
+    /* arp     */ { { 0.22, 0.20, 0.13, 0.45 }, { 2, 3, -1, -1, -1, -1 },  { LaneArp, -1, -1 },         { 0.75, 0.25, 0.0, 0.00 }, { 0.50, 0.10, 0.15, 0.10, 0.15 }, { 0.02, 0.28, 0.05, 0.25, 0.05, 0.35 }, { 1.0f, 0.0f, 0.8f, 1.0f, 0.6f } },
+    /* stab    */ { { 0.28, 0.18, 0.09, 0.45 }, { 3, 4, -1, -1, -1, -1 },  { LaneArp, LaneLead, -1 },  { 0.70, 0.30, 0.0, 0.00 }, { 0.45, 0.15, 0.15, 0.10, 0.15 }, { 0.05, 0.40, 0.00, 0.25, 0.00, 0.30 }, { 1.0f, 0.0f, 1.0f, 1.0f, 0.5f } },
+    /* pad     */ { { 0.15, 0.08, 0.12, 0.65 }, { 1, 2, 5, -1, -1, -1 },   { LanePad, -1, -1 },         { 0.85, 0.00, 0.0, 0.15 }, { 0.30, 0.10, 0.25, 0.15, 0.20 }, { 0.00, 0.00, 0.00, 0.60, 0.00, 0.40 }, { 0.8f, 1.0f, 1.0f, 1.0f, 1.0f } },
+    /* drone   */ { { 0.06, 0.20, 0.09, 0.65 }, { 1, -1, -1, -1, -1, -1 }, { LaneDrone, LanePad, -1 }, { 0.90, 0.10, 0.0, 0.00 }, { 0.30, 0.05, 0.30, 0.10, 0.25 }, { 0.00, 0.00, 0.05, 0.45, 0.20, 0.30 }, { 0.7f, 0.6f, 1.0f, 0.8f, 1.0f } },
 };
 
 /**
@@ -121,21 +121,21 @@ inline const VoicePalette kVoicePalette[kPolyInstances] = {
 inline int paletteTableCount(const VoicePalette& pal)
 {
     int n = 0;
-    for (int b : pal.builtin) if (b >= 0) ++n;
-    for (int8_t l : pal.lane) if (l >= 0) n += static_cast<int>(waveTableLaneTables(static_cast<WaveTableLane>(l)).size());
+    for (int b : pal.m_builtin) if (b >= 0) ++n;
+    for (int8_t l : pal.m_lane) if (l >= 0) n += static_cast<int>(waveTableLaneTables(static_cast<WaveTableLaneE>(l)).size());
     return n;
 }
 
 /** @brief Candidate @p k of a palette: the built-ins first, then each lane in turn. */
 inline int paletteTableAt(const VoicePalette& pal, int k)
 {
-    for (int b : pal.builtin) {
+    for (int b : pal.m_builtin) {
         if (b < 0) break;
         if (k-- == 0) return b;
     }
-    for (int8_t l : pal.lane) {
+    for (int8_t l : pal.m_lane) {
         if (l < 0) break;
-        const std::vector<int>& lane = waveTableLaneTables(static_cast<WaveTableLane>(l));
+        const std::vector<int>& lane = waveTableLaneTables(static_cast<WaveTableLaneE>(l));
         if (k < static_cast<int>(lane.size())) return lane[static_cast<size_t>(k)];
         k -= static_cast<int>(lane.size());
     }

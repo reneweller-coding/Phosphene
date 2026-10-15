@@ -23,17 +23,17 @@
  * Neighbours within a family differ by a small step, so a tab is still recognised by its colour.
  */
 namespace phosui {
-const juce::Colour bg0     { 0xff0b0a12 };   ///< window background
-const juce::Colour card    { 0xff12101b };   ///< a page's background
-const juce::Colour group   { 0xff191625 };   ///< a group box
-const juce::Colour edge    { 0xff2b2641 };   ///< hairlines
-const juce::Colour text    { 0xffeceaf6 };   ///< body text
-const juce::Colour dim     { 0xffa39dc2 };   ///< labels
-const juce::Colour faint   { 0xff5f5982 };   ///< axes, disabled
-const juce::Colour accent  { 0xffa46bff };   ///< the plugin's colour: UV violet
-const juce::Colour warm    { 0xffff2e97 };   ///< kick and bass: hot magenta
-const juce::Colour green   { 0xff8dff5a };   ///< meters in range
-const juce::Colour red     { 0xffff4d6d };   ///< meters over
+const juce::Colour Bg0     { 0xff0b0a12 };   ///< window background
+const juce::Colour Card    { 0xff12101b };   ///< a page's background
+const juce::Colour GroupColour   { 0xff191625 };   ///< a group box
+const juce::Colour Edge    { 0xff2b2641 };   ///< hairlines
+const juce::Colour Text    { 0xffeceaf6 };   ///< body text
+const juce::Colour Dim     { 0xffa39dc2 };   ///< labels
+const juce::Colour Faint   { 0xff5f5982 };   ///< axes, disabled
+const juce::Colour Accent  { 0xffa46bff };   ///< the plugin's colour: UV violet
+const juce::Colour Warm    { 0xffff2e97 };   ///< kick and bass: hot magenta
+const juce::Colour Green   { 0xff8dff5a };   ///< meters in range
+const juce::Colour Red     { 0xffff4d6d };   ///< meters over
 /** @brief The colour of the tab @p index (PluginEditor.h, Tab): its family's, stepped a little per tab. */
 juce::Colour partColour(int index);
 /** @brief The colour of the tab that shows @p part (Score.h, Part). */

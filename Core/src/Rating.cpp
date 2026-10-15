@@ -30,9 +30,9 @@ const char* ratingHeader()
 std::string formatRating(const RatingEntry& e)
 {
     char nums[160];
-    std::snprintf(nums, sizeof(nums), "%llu\t%d\t%d\t%d", static_cast<unsigned long long>(e.seed), e.track, e.bar, e.barInTrack);
-    const char* verdict = e.verdict > 0 ? "good" : (e.verdict < 0 ? "bad" : "note");
-    return clean(e.time) + "\t" + nums + "\t" + clean(e.section) + "\t" + clean(e.style) + "\t" + verdict + "\t" + clean(e.note) + "\t" + clean(e.source) + "\t" + clean(e.features);
+    std::snprintf(nums, sizeof(nums), "%llu\t%d\t%d\t%d", static_cast<unsigned long long>(e.m_seed), e.m_track, e.m_bar, e.m_barInTrack);
+    const char* verdict = e.m_verdict > 0 ? "good" : (e.m_verdict < 0 ? "bad" : "note");
+    return clean(e.m_time) + "\t" + nums + "\t" + clean(e.m_section) + "\t" + clean(e.m_style) + "\t" + verdict + "\t" + clean(e.m_note) + "\t" + clean(e.m_source) + "\t" + clean(e.m_features);
 }
 
 bool parseRating(const std::string& line, RatingEntry& out)
@@ -48,17 +48,17 @@ bool parseRating(const std::string& line, RatingEntry& out)
     if (f.size() < 10 || f[1] == "seed") return false;
     if (!f.back().empty() && f.back().back() == '\r') f.back().pop_back();
     RatingEntry e;
-    e.time = f[0];
-    e.seed = std::strtoull(f[1].c_str(), nullptr, 10);
-    e.track = std::atoi(f[2].c_str());
-    e.bar = std::atoi(f[3].c_str());
-    e.barInTrack = std::atoi(f[4].c_str());
-    e.section = f[5];
-    e.style = f[6];
-    e.verdict = f[7] == "good" ? 1 : (f[7] == "bad" ? -1 : 0);
-    e.note = f[8];
-    e.source = f[9];
-    if (f.size() > 10) e.features = f[10];   // since 23.09.2026; older files have ten columns
+    e.m_time = f[0];
+    e.m_seed = std::strtoull(f[1].c_str(), nullptr, 10);
+    e.m_track = std::atoi(f[2].c_str());
+    e.m_bar = std::atoi(f[3].c_str());
+    e.m_barInTrack = std::atoi(f[4].c_str());
+    e.m_section = f[5];
+    e.m_style = f[6];
+    e.m_verdict = f[7] == "good" ? 1 : (f[7] == "bad" ? -1 : 0);
+    e.m_note = f[8];
+    e.m_source = f[9];
+    if (f.size() > 10) e.m_features = f[10];   // since 23.09.2026; older files have ten columns
     out = e;
     return true;
 }

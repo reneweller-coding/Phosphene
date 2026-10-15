@@ -32,24 +32,24 @@ namespace phos {
 
 /** @brief One binding, as the message thread lists them. */
 struct MidiBinding {
-    int channel = 0;   ///< 0..15
-    int cc = 0;        ///< 0..127
-    int target = -1;   ///< the owner's target index
+    int m_channel = 0;   ///< 0..15
+    int m_cc = 0;        ///< 0..127
+    int m_target = -1;   ///< the owner's target index
 };
 
 /** @brief Controller-to-target table with learning (see the file comment). */
 class MidiMap {
 public:
-    static constexpr int kChannels = 16;   ///< MIDI channels
-    static constexpr int kControllers = 128;   ///< controllers per channel
+    static constexpr int Channels = 16;   ///< MIDI channels
+    static constexpr int Controllers = 128;   ///< controllers per channel
 
     /** @brief An empty map: no controller bound. */
     MidiMap();
 
     /** @brief The next controller message binds to @p target (message thread); -1 disarms. */
-    void arm(int target) { armed_.store(target, std::memory_order_release); }
+    void arm(int target) { m_armed.store(target, std::memory_order_release); }
     /** @brief The target waiting for a controller, or -1. */
-    int armed() const { return armed_.load(std::memory_order_acquire); }
+    int armed() const { return m_armed.load(std::memory_order_acquire); }
 
     /**
      * @brief A controller message arrived (audio thread).
@@ -72,7 +72,7 @@ public:
     /** @brief Every binding, by channel and number. */
     std::vector<MidiBinding> bindings() const;
     /** @brief A counter that moves on every change of the table (so a display knows when to redraw). */
-    uint32_t revision() const { return revision_.load(std::memory_order_acquire); }
+    uint32_t revision() const { return m_revision.load(std::memory_order_acquire); }
 
     /** @brief The bindings as text, one `cc <channel> <number> <name>` line each; @p name gives a target's key. */
     std::string toText(const std::function<std::string(int)>& name) const;
@@ -85,9 +85,9 @@ public:
 private:
     /** @brief Binds a controller to a target, releasing both from any other binding. */
     void bindLocked(int channel, int cc, int target);
-    std::atomic<int32_t> table_[kChannels * kControllers];   ///< target + 1, 0 = unbound
-    std::atomic<int32_t> armed_{ -1 };   ///< the target MIDI learn waits for, -1 none
-    std::atomic<uint32_t> revision_{ 0 };   ///< bumped on every change (the editor redraws)
+    std::atomic<int32_t> m_table[Channels * Controllers];   ///< target + 1, 0 = unbound
+    std::atomic<int32_t> m_armed{ -1 };   ///< the target MIDI learn waits for, -1 none
+    std::atomic<uint32_t> m_revision{ 0 };   ///< bumped on every change (the editor redraws)
 };
 
 } // namespace phos

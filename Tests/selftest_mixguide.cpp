@@ -28,8 +28,8 @@ void testMixGuideMatrix()
     ParamStore p;
     auto db = [&](const char* key) { return 20.0 * std::log10(std::max(1e-6, 1.0 - static_cast<double>(p.get(p.find(key))))); };
     auto v = [&](const char* key) { return static_cast<double>(p.get(p.find(key))); };
-    struct Row { const char* key; double lo, hi; };
-    static const Row kDepth[] = {
+    struct Row { const char* m_key; double m_lo, m_hi; };
+    static const Row Depth[] = {
         { "bass.duck_depth", -4.0, -2.0 }, { "acid.duck", -2.0, -1.0 }, { "lead.duck", -2.0, -1.0 },
         { "counter.duck", -2.0, -1.0 }, { "arp.duck", -2.0, -1.0 }, { "stab.duck", -2.0, -1.0 },
         { "pad.duck", -8.0, -4.0 }, { "drone.duck", -8.0, -4.0 }, { "texture.duck", -8.0, -4.0 }, { "vocal.duck", -8.0, -4.0 },
@@ -37,10 +37,10 @@ void testMixGuideMatrix()
     };
     std::string detail;
     int bad = 0;
-    for (const Row& r : kDepth) {
-        const double d = db(r.key);
-        detail += fmt("%s %.1f  ", r.key, d);
-        if (d < r.lo - 0.05 || d > r.hi + 0.05) ++bad;
+    for (const Row& r : Depth) {
+        const double d = db(r.m_key);
+        detail += fmt("%s %.1f  ", r.m_key, d);
+        if (d < r.m_lo - 0.05 || d > r.m_hi + 0.05) ++bad;
     }
     check(bad == 0, "every strip's duck under the kick inside the guide's matrix (bass 2..4, lines 1..2, back plane 4..8, returns 3..6 dB)", detail);
     const double rBass = v("bass.duck_release"), rLines = v("mix.duck_release_lines"), rBack = v("mix.duck_release"), rRet = v("fx.return_duck_release");
@@ -59,7 +59,7 @@ static std::vector<float> renderNotes(const std::string& settings, const std::ve
                            "master.comp_ratio=1 fx.hall_return=-36 fx.room_return=-36 fx.plate_return=-36 " + settings).c_str());
     // The engine's rings are in time order: an event queued behind a later one waits for it.
     std::vector<NoteEvent> sorted = notes;
-    std::stable_sort(sorted.begin(), sorted.end(), [](const NoteEvent& x, const NoteEvent& y) { return x.beat < y.beat; });
+    std::stable_sort(sorted.begin(), sorted.end(), [](const NoteEvent& x, const NoteEvent& y) { return x.m_beat < y.m_beat; });
     for (const NoteEvent& n : sorted) e->pushEvent(n);
     std::vector<float> L(static_cast<size_t>(48000.0 * seconds)), R(L.size());
     e->process(L.data(), R.data(), static_cast<int>(L.size()));
@@ -86,7 +86,7 @@ void testMixGuideLeadDucks()
     std::vector<NoteEvent> leads;
     for (int b = 8; b < 24; b += 2) {
         NoteEvent l;
-        l.part = Part::Lead; l.beat = b; l.length = 0.25f; l.pitch = 67; l.velocity = 100;
+        l.m_part = PartE::LEAD; l.m_beat = b; l.m_length = 0.25f; l.m_pitch = 67; l.m_velocity = 100;
         leads.push_back(l);
     }
     // (a) The counter: a held note, lead notes on every other beat. Right after a lead onset against the same
@@ -95,7 +95,7 @@ void testMixGuideLeadDucks()
         auto run = [&](const char* duck) {
             std::vector<NoteEvent> notes = leads;
             NoteEvent c;
-            c.part = Part::Counter; c.pitch = 76; c.length = 40.0f; c.velocity = 100;
+            c.m_part = PartE::COUNTER; c.m_pitch = 76; c.m_length = 40.0f; c.m_velocity = 100;
             notes.push_back(c);
             const std::vector<float> y = renderNotes(std::string("mix.lead_mute=1 counter.amp_sustain=1 counter.amp_decay=5000 "
                                                                  "counter.delay_send=0 counter.duck=0 ") + duck, notes, 12.0);
@@ -112,10 +112,10 @@ void testMixGuideLeadDucks()
     //     lead note sounds against the beat after it, and the band 100 .. 300 Hz the same way.
     {
         std::vector<NoteEvent> notes;
-        for (NoteEvent l : leads) { l.length = 1.0f; notes.push_back(l); }
+        for (NoteEvent l : leads) { l.m_length = 1.0f; notes.push_back(l); }
         for (int pitch : { 48, 55, 60, 64, 67 }) {
             NoteEvent n;
-            n.part = Part::Pad; n.pitch = static_cast<uint8_t>(pitch); n.length = 40.0f; n.velocity = 100;
+            n.m_part = PartE::PAD; n.m_pitch = static_cast<uint8_t>(pitch); n.m_length = 40.0f; n.m_velocity = 100;
             notes.push_back(n);
         }
         // Rendered with the band's duck and without: the pad's own movement (its tremolo, its position envelope) is
@@ -216,7 +216,7 @@ void testMixGuideDistance()
     // (a) The lead from its plane (0) to the back (1): about 15 dB down, the highs further down than the lows.
     std::vector<NoteEvent> notes;
     NoteEvent n;
-    n.part = Part::Lead; n.pitch = 64; n.length = 6.0f; n.velocity = 100;
+    n.m_part = PartE::LEAD; n.m_pitch = 64; n.m_length = 6.0f; n.m_velocity = 100;
     notes.push_back(n);
     const char* base = "lead.amp_sustain=1 lead.amp_decay=5000 lead.delay_send=0 lead.room_send=0 lead.duck=0 lead.lfo_amp=0 ";
     // The mid signal: level and low pass alone (the far lead is also wider, which a single channel would count).
@@ -243,7 +243,7 @@ void testMixGuideDistance()
         std::vector<NoteEvent> pad;
         for (int pitch : { 48, 60, 67, 76 }) {
             NoteEvent q;
-            q.part = Part::Pad; q.pitch = static_cast<uint8_t>(pitch); q.length = 6.0f; q.velocity = 100;
+            q.m_part = PartE::PAD; q.m_pitch = static_cast<uint8_t>(pitch); q.m_length = 6.0f; q.m_velocity = 100;
             pad.push_back(q);
         }
         auto render2 = [&](const char* mon, std::vector<float>& R) {
@@ -275,7 +275,7 @@ void testMixGuideDistance()
         std::vector<NoteEvent> pad;
         for (int pitch : { 48, 55, 60, 64 }) {
             NoteEvent q;
-            q.part = Part::Pad; q.pitch = static_cast<uint8_t>(pitch); q.length = 80.0f; q.velocity = 100;
+            q.m_part = PartE::PAD; q.m_pitch = static_cast<uint8_t>(pitch); q.m_length = 80.0f; q.m_velocity = 100;
             pad.push_back(q);
         }
         // Per 0.7-second window, every two seconds: the brightness (2 .. 8 kHz against 100 Hz .. 1 kHz). The unison's
@@ -302,7 +302,7 @@ void testMixGuideDistance()
 /**
  * @brief Mix guide, part `.phase`: the mix by phase in the control events of a composed track.
  *
- * The second track of a set (the first section of the first keeps the knobs): its breakdown stands kBreakTrimDb
+ * The second track of a set (the first section of the first keeps the knobs): its breakdown stands BreakTrimDb
  * and more under its first drop; the pad is as wide there as in the drop and the lead further back; a buildup
  * ramps the plate's decay down to 1.2 s and the lines' high pass up over its length, both back with the drop's
  * first bar; the far room (the hall) is open in the breakdown and muted in the drop; and the effects are thrown into
@@ -317,61 +317,61 @@ void testMixGuidePhase()
     const TrackPlan t = c.track(p, 1);
     std::vector<NoteEvent> ev;
     std::vector<ControlEvent> ctl;
-    c.composeBars(p, t.firstBar, t.bars, ev, &ctl);
+    c.composeBars(p, t.m_firstBar, t.m_bars, ev, &ctl);
     auto at = [&](int id, double beat, float& value, float& length) {
         for (const ControlEvent& e : ctl)
-            if (e.param == id && std::fabs(e.beat - beat) < 1e-6 && e.kind == ControlEvent::Kind::Offset) { value = e.value; length = e.length; return true; }
+            if (e.m_param == id && std::fabs(e.m_beat - beat) < 1e-6 && e.m_kind == ControlEvent::KindE::OFFSET) { value = e.m_value; length = e.m_length; return true; }
         return false;
     };
     int breakIdx = -1, dropIdx = -1, buildIdx = -1;
-    for (int i = 0; i < t.form.count; ++i) {
-        const Section& s = t.form.section[i];
-        if (s.type == SectionType::Drop && !s.climax && dropIdx < 0) dropIdx = i;
-        if (s.type == SectionType::Break && breakIdx < 0 && dropIdx >= 0) breakIdx = i;
-        if (s.type == SectionType::Build && buildIdx < 0 && breakIdx >= 0) buildIdx = i;
+    for (int i = 0; i < t.m_form.m_count; ++i) {
+        const Section& s = t.m_form.m_section[i];
+        if (s.m_type == SectionTypeE::DROP && !s.m_climax && dropIdx < 0) dropIdx = i;
+        if (s.m_type == SectionTypeE::BREAK && breakIdx < 0 && dropIdx >= 0) breakIdx = i;
+        if (s.m_type == SectionTypeE::BUILD && buildIdx < 0 && breakIdx >= 0) buildIdx = i;
     }
     check(dropIdx >= 0 && breakIdx >= 0 && buildIdx >= 0, "the track has a drop, a breakdown after it and a buildup after that",
           fmt("drop %d, break %d, build %d", dropIdx, breakIdx, buildIdx));
     if (dropIdx < 0 || breakIdx < 0 || buildIdx < 0) return;
-    auto startBeat = [&](int i) { return static_cast<double>(t.firstBar + t.form.section[i].startBar) * kBeatsPerBar; };
-    const int mb = p.base(Module::Mix);
+    auto startBeat = [&](int i) { return static_cast<double>(t.m_firstBar + t.m_form.m_section[i].m_startBar) * BeatsPerBar; };
+    const int mb = p.base(ModuleE::MIX);
     float gDrop = 0, gBreak = 0, len = 0;
-    const bool gainOk = at(mb + mix::TrackGain, startBeat(dropIdx), gDrop, len) && at(mb + mix::TrackGain, startBeat(breakIdx), gBreak, len);
-    const float span = p.desc(mb + mix::TrackGain).maxValue - p.desc(mb + mix::TrackGain).minValue;
+    const bool gainOk = at(mb + mix::TRACK_GAIN, startBeat(dropIdx), gDrop, len) && at(mb + mix::TRACK_GAIN, startBeat(breakIdx), gBreak, len);
+    const float span = p.desc(mb + mix::TRACK_GAIN).m_maxValue - p.desc(mb + mix::TRACK_GAIN).m_minValue;
     const double fall = (gDrop - gBreak) * span;
-    check(gainOk && fall >= kBreakTrimDb - 1e-3, "the breakdown stands at least kBreakTrimDb under the drop before it",
-          fmt("%.2f dB (kBreakTrimDb %.1f)", fall, static_cast<double>(kBreakTrimDb)));
-    const int padW = p.base(PolyInstance::Pad) + poly::Width, leadH = p.base(PolyInstance::Lead) + poly::Distance;
+    check(gainOk && fall >= BreakTrimDb - 1e-3, "the breakdown stands at least BreakTrimDb under the drop before it",
+          fmt("%.2f dB (BreakTrimDb %.1f)", fall, static_cast<double>(BreakTrimDb)));
+    const int padW = p.base(PolyInstanceE::PAD) + poly::WIDTH, leadH = p.base(PolyInstanceE::LEAD) + poly::DISTANCE;
     float wDrop = 0, wBreak = 0, hDrop = 0, hBreak = 0, lDrop = 0, lBreak = 0;
     const bool widthOk = at(padW, startBeat(dropIdx), wDrop, lDrop) && at(padW, startBeat(breakIdx), wBreak, lBreak);
     const bool hallOk = at(leadH, startBeat(dropIdx), hDrop, len) && at(leadH, startBeat(breakIdx), hBreak, len);
     check(widthOk && hallOk && std::fabs(wBreak - wDrop) < 1e-4f && hBreak - hDrop > 0.5f
-              && std::fabs(lDrop - kBeatsPerBar) < 1e-4f && std::fabs(lBreak - 4.0f * kBeatsPerBar) < 1e-4f,
+              && std::fabs(lDrop - BeatsPerBar) < 1e-4f && std::fabs(lBreak - 4.0f * BeatsPerBar) < 1e-4f,
           "the pad as wide in the drop as in the breakdown, the lead further back there; one bar into the drop, four into the break",
           fmt("pad width %+.2f against %+.2f, lead distance %+.2f against %+.2f, ramps %.0f and %.0f beats", wBreak, wDrop, hBreak, hDrop, lDrop, lBreak));
-    const int decay = p.base(Module::Fx) + fx::PlateDecay, hp = p.base(PolyInstance::Lead) + poly::HpFloor;
-    const int hallRet = p.base(Module::Fx) + fx::HallReturn;
+    const int decay = p.base(ModuleE::FX) + fx::PLATE_DECAY, hp = p.base(PolyInstanceE::LEAD) + poly::HP_FLOOR;
+    const int hallRet = p.base(ModuleE::FX) + fx::HALL_RETURN;
     float dBuild = 0, dLen = 0, dDrop = 1, hBuild = 0, hLen = 0;
     const int after = buildIdx + 1;
     const bool buildOk = at(decay, startBeat(buildIdx), dBuild, dLen) && at(hp, startBeat(buildIdx), hBuild, hLen)
-                         && after < t.form.count && at(decay, startBeat(after), dDrop, len);
+                         && after < t.m_form.m_count && at(decay, startBeat(after), dDrop, len);
     const float want = p.toNormalised(decay, 1.2f) - p.toNormalised(decay, p.get(decay));
     float rDrop = 0, rBreak = 1;
     const bool roomsOk = at(hallRet, startBeat(dropIdx), rDrop, len) && at(hallRet, startBeat(breakIdx), rBreak, len);
-    const float muted = p.toNormalised(hallRet, p.desc(hallRet).minValue) - p.toNormalised(hallRet, p.get(hallRet));
-    check(buildOk && roomsOk && std::fabs(dBuild - want) < 1e-4f && std::fabs(dLen - t.form.section[buildIdx].bars * kBeatsPerBar) < 1e-3f
+    const float muted = p.toNormalised(hallRet, p.desc(hallRet).m_minValue) - p.toNormalised(hallRet, p.get(hallRet));
+    check(buildOk && roomsOk && std::fabs(dBuild - want) < 1e-4f && std::fabs(dLen - t.m_form.m_section[buildIdx].m_bars * BeatsPerBar) < 1e-3f
               && hBuild > 0.0f && dDrop == 0.0f && std::fabs(rDrop - muted) < 1e-4f && rBreak == 0.0f,
           "a buildup pulls the plate down to 1.2 s and lifts the lines' high pass; the drop takes both back, the far room is open in the break and muted in the drop",
           fmt("plate decay offset %+.3f (want %+.3f) over %.0f beats, lead high pass %+.3f, at the drop %+.3f; hall return %+.3f in the drop, %+.3f in the break",
               dBuild, want, dLen, hBuild, dDrop, rDrop, rBreak));
     int throws = 0, backs = 0, wrong = 0;
-    const int sh = p.base(Module::Sfx) + sfx::PlateSend;
+    const int sh = p.base(ModuleE::SFX) + sfx::PLATE_SEND;
     for (const ControlEvent& e : ctl) {
-        if (e.param != sh) continue;
-        const double inBar = e.beat - std::floor(e.beat / kBeatsPerBar) * kBeatsPerBar;
-        const int bar = static_cast<int>(std::floor(e.beat / kBeatsPerBar)) - t.firstBar;
-        if (e.value > 0.4f) { ++throws; if (std::fabs(inBar - 3.0) > 1e-6 || bar % 8 != 7) ++wrong; }
-        else if (e.value == 0.0f) { ++backs; if (inBar != 0.0 || bar % 8 != 0) ++wrong; }
+        if (e.m_param != sh) continue;
+        const double inBar = e.m_beat - std::floor(e.m_beat / BeatsPerBar) * BeatsPerBar;
+        const int bar = static_cast<int>(std::floor(e.m_beat / BeatsPerBar)) - t.m_firstBar;
+        if (e.m_value > 0.4f) { ++throws; if (std::fabs(inBar - 3.0) > 1e-6 || bar % 8 != 7) ++wrong; }
+        else if (e.m_value == 0.0f) { ++backs; if (inBar != 0.0 || bar % 8 != 0) ++wrong; }
     }
     check(throws > 3 && backs >= throws && wrong == 0, "the effects thrown into the plate on beat 4 before every eight-bar change, back on the downbeat",
           fmt("%d throws, %d returns, %d off the grid", throws, backs, wrong));

@@ -44,14 +44,14 @@ public:
     /** @brief The weight itself (0 when absent). */
     double weight(const std::string& feature) const;
     /** @brief Whether no weight is set. */
-    bool empty() const { return w_.empty(); }
+    bool empty() const { return m_w.empty(); }
     /** @brief How many weights are set. */
-    size_t size() const { return w_.size(); }
+    size_t size() const { return m_w.size(); }
     /** @brief Sets one weight (the fitter and the tests). */
-    void set(const std::string& feature, double weight) { w_[feature] = weight; }
+    void set(const std::string& feature, double weight) { m_w[feature] = weight; }
 
 private:
-    std::map<std::string, double> w_;   ///< "name=value" -> weight
+    std::map<std::string, double> m_w;   ///< "name=value" -> weight
 };
 
 /**
@@ -74,9 +74,9 @@ double preferenceFactor(const char* name, const std::string& value);
 
 /** @name The feature values' names at the draw sites (so the features and the factors spell them alike)
  *  @{ */
-extern const char* const kFormTemplateFeatureNames[4];   ///< "Full-On", "Progressive", "Goa", "Dark Forest"
-extern const char* const kArpStyleFeatureNames[6];       ///< "corpus", "up", "down", "up-down", "Euclid", "polymeter"
-extern const char* const kCounterModeFeatureNames[4];    ///< "Echo", "Answer", "Timbral", "Hocket"
+extern const char* const FormTemplateFeatureNames[4];   ///< "Full-On", "Progressive", "Goa", "Dark Forest"
+extern const char* const ArpStyleFeatureNames[6];       ///< "corpus", "up", "down", "up-down", "Euclid", "polymeter"
+extern const char* const CounterModeFeatureNames[4];    ///< "Echo", "Answer", "Timbral", "Hocket"
 /** @} */
 
 } // namespace phos

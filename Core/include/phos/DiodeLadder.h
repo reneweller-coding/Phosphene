@@ -43,26 +43,26 @@
 namespace phos {
 
 /** @brief Feedback at which the linear diode ladder self-oscillates (Zavalishin, section 5.10). */
-constexpr double kDiodeLadderSelfOsc = 17.0;
+constexpr double DiodeLadderSelfOsc = 17.0;
 
-template <class V>
+template <class VT>
 /** @brief The four-pole diode ladder (the 303's filter), one instance per SIMD lane type @p V. */
 struct DiodeLadderT {
-    V s[4];     ///< trapezoidal integrator states
-    V d[4];     ///< saturated differences of the previous sample (gain estimates)
-    V u;        ///< input of the previous sample (gain estimate of the input stage)
+    VT m_s[4];     ///< trapezoidal integrator states
+    VT m_d[4];     ///< saturated differences of the previous sample (gain estimates)
+    VT m_u;        ///< input of the previous sample (gain estimate of the input stage)
 
     /** @brief Clears all states. */
     void reset()
     {
-        for (int i = 0; i < 4; ++i) { s[i] = lanes<V>(0.0f); d[i] = lanes<V>(0.0f); }
-        u = lanes<V>(0.0f);
+        for (int i = 0; i < 4; ++i) { m_s[i] = lanes<VT>(0.0f); m_d[i] = lanes<VT>(0.0f); }
+        m_u = lanes<VT>(0.0f);
     }
 
     /** @brief Local gain of the algebraic sigmoid: sigma(v)/v = 1/sqrt(1 + v^2). */
-    static inline V gainOf(V v)
+    static inline VT gainOf(VT v)
     {
-        const V one = lanes<V>(1.0f);
+        const VT one = lanes<VT>(1.0f);
         return one / vsqrt(vfmadd(v, v, one));
     }
 
@@ -74,42 +74,42 @@ struct DiodeLadderT {
      * @param comp input gain (1 + comp k), which restores part of the passband lost to the feedback
      * @return the low-pass output y4
      */
-    inline V tick(V x, V g, V k, V comp)
+    inline VT tick(VT x, VT g, VT k, VT comp)
     {
-        const V one = lanes<V>(1.0f), half = lanes<V>(0.5f), two = lanes<V>(2.0f);
-        const V t0 = gainOf(u), t1 = gainOf(d[0]), t2 = gainOf(d[1]), t3 = gainOf(d[2]), t4 = gainOf(d[3]);
+        const VT one = lanes<VT>(1.0f), half = lanes<VT>(0.5f), two = lanes<VT>(2.0f);
+        const VT t0 = gainOf(m_u), t1 = gainOf(m_d[0]), t2 = gainOf(m_d[1]), t3 = gainOf(m_d[2]), t4 = gainOf(m_d[3]);
         // One-pole stages in instantaneous-response form: y = G in + S.
-        const V gt1 = g * t1, gt2 = g * t2, gt3 = g * t3, gt4 = g * t4;
-        const V e1 = one / (one + gt1), e2 = one / (one + gt2), e3 = one / (one + gt3), e4 = one / (one + gt4);
-        const V G1 = gt1 * e1, G2 = half * gt2 * e2, G3 = half * gt3 * e3, G4 = half * gt4 * e4;
-        const V S1 = s[0] * e1, S2 = s[1] * e2, S3 = s[2] * e3, S4 = s[3] * e4;
+        const VT gt1 = g * t1, gt2 = g * t2, gt3 = g * t3, gt4 = g * t4;
+        const VT e1 = one / (one + gt1), e2 = one / (one + gt2), e3 = one / (one + gt3), e4 = one / (one + gt4);
+        const VT G1 = gt1 * e1, G2 = half * gt2 * e2, G3 = half * gt3 * e3, G4 = half * gt4 * e4;
+        const VT S1 = m_s[0] * e1, S2 = m_s[1] * e2, S3 = m_s[2] * e3, S4 = m_s[3] * e4;
         // Nested solution, innermost first.
-        const V i34 = one / (one - G3 * G4);
-        const V g23 = G3 * i34, s23 = vfmadd(G3, S4, S3) * i34;
-        const V i23 = one / (one - G2 * g23);
-        const V g12 = G2 * i23, s12 = vfmadd(G2, s23, S2) * i23;
-        const V i12 = one / (one - G1 * g12);
-        const V g01 = G1 * i12, s01 = vfmadd(G1, s12, S1) * i12;
-        const V g24 = G4 * g23, s24 = vfmadd(G4, s23, S4);
-        const V g14 = g24 * g12, s14 = vfmadd(g24, s12, s24);
-        const V g04 = g14 * g01, s04 = vfmadd(g14, s01, s14);
+        const VT i34 = one / (one - G3 * G4);
+        const VT g23 = G3 * i34, s23 = vfmadd(G3, S4, S3) * i34;
+        const VT i23 = one / (one - G2 * g23);
+        const VT g12 = G2 * i23, s12 = vfmadd(G2, s23, S2) * i23;
+        const VT i12 = one / (one - G1 * g12);
+        const VT g01 = G1 * i12, s01 = vfmadd(G1, s12, S1) * i12;
+        const VT g24 = G4 * g23, s24 = vfmadd(G4, s23, S4);
+        const VT g14 = g24 * g12, s14 = vfmadd(g24, s12, s24);
+        const VT g04 = g14 * g01, s04 = vfmadd(g14, s01, s14);
         // Outer loop: u = xin - k (g04 t0 u + s04).
-        const V xin = x * vfmadd(comp, k, one);
-        const V un = (xin - k * s04) / vfmadd(k * g04, t0, one);
-        const V us = t0 * un;
-        const V y1 = vfmadd(g01, us, s01);
-        const V y2 = vfmadd(g12, y1, s12);
-        const V y3 = vfmadd(g23, y2, s23);
-        const V y4 = vfmadd(G4, y3, S4);
-        s[0] = two * y1 - s[0];
-        s[1] = two * y2 - s[1];
-        s[2] = two * y3 - s[2];
-        s[3] = two * y4 - s[3];
-        d[0] = (us + y2) - y1;
-        d[1] = half * (y1 + y3) - y2;
-        d[2] = half * (y2 + y4) - y3;
-        d[3] = half * y3 - y4;
-        u = un;
+        const VT xin = x * vfmadd(comp, k, one);
+        const VT un = (xin - k * s04) / vfmadd(k * g04, t0, one);
+        const VT us = t0 * un;
+        const VT y1 = vfmadd(g01, us, s01);
+        const VT y2 = vfmadd(g12, y1, s12);
+        const VT y3 = vfmadd(g23, y2, s23);
+        const VT y4 = vfmadd(G4, y3, S4);
+        m_s[0] = two * y1 - m_s[0];
+        m_s[1] = two * y2 - m_s[1];
+        m_s[2] = two * y3 - m_s[2];
+        m_s[3] = two * y4 - m_s[3];
+        m_d[0] = (us + y2) - y1;
+        m_d[1] = half * (y1 + y3) - y2;
+        m_d[2] = half * (y2 + y4) - y3;
+        m_d[3] = half * y3 - y4;
+        m_u = un;
         return y4;
     }
 };

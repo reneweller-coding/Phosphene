@@ -86,7 +86,7 @@ def read_midi_tracks(path):
     """(ppq, {track name: [(start, end, pitch, velocity)]}) -- ``read_midi`` keeps no track identity.
 
     ``build_corpus.read_midi`` merges every track and drops channel 10; a Phosphene export needs the
-    opposite, because its parts are one track each and named after ``phos::kPartNames``. The parsing
+    opposite, because its parts are one track each and named after ``phos::PartNames``. The parsing
     below is that function's, split per track and without the channel filter (the kick is on channel
     10 and is wanted here).
     """

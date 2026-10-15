@@ -15,9 +15,9 @@ namespace {
 
 /** @brief A raw timed MIDI message before delta encoding. */
 struct RawEvent {
-    int64_t tick;   ///< when, in ticks
-    int order;                    ///< tie-break at equal ticks: meta 0, note-off 1, note-on 2
-    std::vector<uint8_t> bytes;   ///< status and data, or FF type len data for meta
+    int64_t m_tick;   ///< when, in ticks
+    int m_order;                    ///< tie-break at equal ticks: meta 0, note-off 1, note-on 2
+    std::vector<uint8_t> m_bytes;   ///< status and data, or FF type len data for meta
 };
 
 /** @brief Appends @p v as a MIDI variable-length quantity. */
@@ -47,10 +47,10 @@ void put16(std::vector<uint8_t>& out, uint16_t v)
 RawEvent meta(int64_t tick, uint8_t type, const std::vector<uint8_t>& payload)
 {
     RawEvent e{ tick, 0, {} };
-    e.bytes.push_back(0xFF);
-    e.bytes.push_back(type);
-    putVlq(e.bytes, static_cast<uint32_t>(payload.size()));
-    e.bytes.insert(e.bytes.end(), payload.begin(), payload.end());
+    e.m_bytes.push_back(0xFF);
+    e.m_bytes.push_back(type);
+    putVlq(e.m_bytes, static_cast<uint32_t>(payload.size()));
+    e.m_bytes.insert(e.m_bytes.end(), payload.begin(), payload.end());
     return e;
 }
 
@@ -67,22 +67,22 @@ RawEvent tempoMeta(int64_t tick, double bpm)
     return meta(tick, 0x51, { static_cast<uint8_t>(mpq >> 16), static_cast<uint8_t>(mpq >> 8), static_cast<uint8_t>(mpq) });
 }
 
-/** @brief Beat @p beat in ticks (kMidiPpq per beat). */
-int64_t toTick(double beat) { return static_cast<int64_t>(std::llround(beat * kMidiPpq)); }
+/** @brief Beat @p beat in ticks (MidiPpq per beat). */
+int64_t toTick(double beat) { return static_cast<int64_t>(std::llround(beat * MidiPpq)); }
 
 /** @brief Sorts and delta-encodes events into an MTrk chunk. */
 void emitTrack(std::vector<uint8_t>& file, std::vector<RawEvent>& events)
 {
     std::stable_sort(events.begin(), events.end(), [](const RawEvent& a, const RawEvent& b) {
-        return a.tick != b.tick ? a.tick < b.tick : a.order < b.order;
+        return a.m_tick != b.m_tick ? a.m_tick < b.m_tick : a.m_order < b.m_order;
     });
     std::vector<uint8_t> body;
     int64_t last = 0;
     for (const RawEvent& e : events) {
-        const int64_t t = e.tick < 0 ? 0 : e.tick;
+        const int64_t t = e.m_tick < 0 ? 0 : e.m_tick;
         putVlq(body, static_cast<uint32_t>(t - last));
         last = t;
-        body.insert(body.end(), e.bytes.begin(), e.bytes.end());
+        body.insert(body.end(), e.m_bytes.begin(), e.m_bytes.end());
     }
     putVlq(body, 0);
     body.push_back(0xFF); body.push_back(0x2F); body.push_back(0x00);
@@ -93,24 +93,24 @@ void emitTrack(std::vector<uint8_t>& file, std::vector<RawEvent>& events)
 
 } // namespace
 
-int midiChannelOf(Part part)
+int midiChannelOf(PartE part)
 {
     switch (part) {
-    case Part::Kick: case Part::Perc: return 9;
-    case Part::Bass: return 0;
-    case Part::Acid: return 1;
+    case PartE::KICK: case PartE::PERC: return 9;
+    case PartE::BASS: return 0;
+    case PartE::ACID: return 1;
     // 19.09.2026, round "voices": the six polyphonic voices on channels 3 to 8 in the order of their
     // groups (Params.h, PolyInstance), then the effects; channel 10 (index 9) stays the drums'.
-    case Part::Lead:    return 2;
-    case Part::Counter: return 3;
-    case Part::Arp:     return 4;
-    case Part::Stab:    return 5;
-    case Part::Pad:     return 6;
-    case Part::Drone:   return 7;
-    case Part::Sfx:     return 8;
-    case Part::Texture: return 10;   // the shamanic bed and the voices on their own channels
-    case Part::Vocal:   return 11;
-    case Part::Field:   return 12;   // 27.09.2026: the field recordings
+    case PartE::LEAD:    return 2;
+    case PartE::COUNTER: return 3;
+    case PartE::ARP:     return 4;
+    case PartE::STAB:    return 5;
+    case PartE::PAD:     return 6;
+    case PartE::DRONE:   return 7;
+    case PartE::SFX:     return 8;
+    case PartE::TEXTURE: return 10;   // the shamanic bed and the voices on their own channels
+    case PartE::VOCAL:   return 11;
+    case PartE::FIELD:   return 12;   // 27.09.2026: the field recordings
     default: return 15;
     }
 }
@@ -119,8 +119,8 @@ int minorKeySharps(int root)
 {
     // Minor keys around the circle of fifths from A minor, choosing the spelling with at most six
     // accidentals: C -3, C# 4, D -1, D# 6, E 1, F -4, F# 3, G -2, G# 5, A 0, A# -5 (Bb), B 2.
-    static const int kSharps[12] = { -3, 4, -1, 6, 1, -4, 3, -2, 5, 0, -5, 2 };
-    return kSharps[((root % 12) + 12) % 12];
+    static const int Sharps[12] = { -3, 4, -1, 6, 1, -4, 3, -2, 5, 0, -5, 2 };
+    return Sharps[((root % 12) + 12) % 12];
 }
 
 std::vector<uint8_t> encodeMidi(const Score& score)
@@ -132,29 +132,29 @@ std::vector<uint8_t> encodeMidi(const Score& score)
         std::vector<RawEvent> ev;
         ev.push_back(textMeta(0, 0x03, "Phosphene"));
         ev.push_back(meta(0, 0x58, { 4, 2, 24, 8 }));
-        ev.push_back(meta(0, 0x59, { static_cast<uint8_t>(static_cast<int8_t>(minorKeySharps(score.keyRoot))), 1 }));
-        for (const KeyChange& k : score.keyChanges)
-            ev.push_back(meta(toTick(k.beat), 0x59, { static_cast<uint8_t>(static_cast<int8_t>(minorKeySharps(k.root))), 1 }));
-        const auto& pts = score.tempo.points();
-        const double end = std::max(score.endBeat(), pts.back().beat) + 1.0;
+        ev.push_back(meta(0, 0x59, { static_cast<uint8_t>(static_cast<int8_t>(minorKeySharps(score.m_keyRoot))), 1 }));
+        for (const KeyChange& k : score.m_keyChanges)
+            ev.push_back(meta(toTick(k.m_beat), 0x59, { static_cast<uint8_t>(static_cast<int8_t>(minorKeySharps(k.m_root))), 1 }));
+        const auto& pts = score.m_tempo.points();
+        const double end = std::max(score.endBeat(), pts.back().m_beat) + 1.0;
         for (size_t i = 0; i < pts.size(); ++i) {
             const TempoPoint& p = pts[i];
-            if (!p.rampToNext || i + 1 >= pts.size()) {
-                ev.push_back(tempoMeta(toTick(p.beat), p.bpm));
+            if (!p.m_rampToNext || i + 1 >= pts.size()) {
+                ev.push_back(tempoMeta(toTick(p.m_beat), p.m_bpm));
                 continue;
             }
             // One held tempo per beat of the ramp, chosen so the beat's duration is exact.
-            const double stop = std::min(pts[i + 1].beat, end);
-            for (double b = p.beat; b < stop - 1e-9; b += 1.0) {
+            const double stop = std::min(pts[i + 1].m_beat, end);
+            for (double b = p.m_beat; b < stop - 1e-9; b += 1.0) {
                 const double nb = std::min(b + 1.0, stop);
-                const double dt = score.tempo.secondsAt(nb) - score.tempo.secondsAt(b);
+                const double dt = score.m_tempo.secondsAt(nb) - score.m_tempo.secondsAt(b);
                 ev.push_back(tempoMeta(toTick(b), 60.0 * (nb - b) / dt));
             }
         }
-        for (const SectionMark& s : score.sections) {
+        for (const SectionMark& s : score.m_sections) {
             char buf[64];
-            std::snprintf(buf, sizeof(buf), "%s (track %d)", kSectionNames[static_cast<int>(s.type)], s.track + 1);
-            ev.push_back(textMeta(toTick(s.beat), 0x06, buf));
+            std::snprintf(buf, sizeof(buf), "%s (track %d)", SectionNames[static_cast<int>(s.m_type)], s.m_track + 1);
+            ev.push_back(textMeta(toTick(s.m_beat), 0x06, buf));
         }
         tracks.push_back(std::move(ev));
     }
@@ -162,28 +162,28 @@ std::vector<uint8_t> encodeMidi(const Score& score)
     // One track per part that has notes. Effect notes go to the track of the part their type belongs
     // to (Sfx.h, routedPart): the composer writes the shamanic bed and the voices as Part::Sfx notes,
     // and a producer opening the file wants them on tracks of their own.
-    for (int p = 0; p < kNumParts; ++p) {
+    for (int p = 0; p < NumParts; ++p) {
         std::vector<RawEvent> ev;
-        const uint8_t ch = static_cast<uint8_t>(midiChannelOf(static_cast<Part>(p)));
+        const uint8_t ch = static_cast<uint8_t>(midiChannelOf(static_cast<PartE>(p)));
         bool portamento = false;
-        for (const NoteEvent& n : score.notes) {
+        for (const NoteEvent& n : score.m_notes) {
             if (static_cast<int>(routedPart(n)) != p) continue;
-            const int64_t on = toTick(n.beat);
-            const int64_t off = std::max(on + 1, toTick(n.beat + static_cast<double>(n.length)));
+            const int64_t on = toTick(n.m_beat);
+            const int64_t off = std::max(on + 1, toTick(n.m_beat + static_cast<double>(n.m_length)));
             // Slides: the notes overlap already; CC 65 (portamento) is on from the first sliding note
             // until the note a slide ends in has finished.
-            if (n.flags & kNoteSlide) {
+            if (n.m_flags & NOTE_SLIDE) {
                 if (!portamento) ev.push_back(RawEvent{ on, 1, { static_cast<uint8_t>(0xB0 | ch), 65, 127 } });
                 portamento = true;
             } else if (portamento) {
                 ev.push_back(RawEvent{ off, 1, { static_cast<uint8_t>(0xB0 | ch), 65, 0 } });
                 portamento = false;
             }
-            ev.push_back(RawEvent{ on, 2, { static_cast<uint8_t>(0x90 | ch), n.pitch, std::max<uint8_t>(1, n.velocity) } });
-            ev.push_back(RawEvent{ off, 1, { static_cast<uint8_t>(0x80 | ch), n.pitch, 0 } });
+            ev.push_back(RawEvent{ on, 2, { static_cast<uint8_t>(0x90 | ch), n.m_pitch, std::max<uint8_t>(1, n.m_velocity) } });
+            ev.push_back(RawEvent{ off, 1, { static_cast<uint8_t>(0x80 | ch), n.m_pitch, 0 } });
         }
         if (ev.empty()) continue;
-        ev.push_back(textMeta(0, 0x03, kPartNames[p]));
+        ev.push_back(textMeta(0, 0x03, PartNames[p]));
         tracks.push_back(std::move(ev));
     }
 
@@ -192,7 +192,7 @@ std::vector<uint8_t> encodeMidi(const Score& score)
     put32(file, 6);
     put16(file, 1);
     put16(file, static_cast<uint16_t>(tracks.size()));
-    put16(file, static_cast<uint16_t>(kMidiPpq));
+    put16(file, static_cast<uint16_t>(MidiPpq));
     for (auto& t : tracks) emitTrack(file, t);
     return file;
 }
@@ -215,11 +215,11 @@ bool decodeMidi(const uint8_t* d, size_t size, MidiFileData& out, std::string* e
     auto rd16 = [&](size_t p) { return static_cast<uint16_t>((d[p] << 8) | d[p + 1]); };
     const uint32_t hlen = rd32(4);
     if (hlen < 6 || 8 + static_cast<size_t>(hlen) > size) return fail("bad header");
-    out.format = rd16(8);
+    out.m_format = rd16(8);
     const int ntracks = rd16(10);
     const uint16_t div = rd16(12);
     if (div & 0x8000) return fail("SMPTE time division is not supported");
-    out.ppq = div == 0 ? 480 : div;
+    out.m_ppq = div == 0 ? 480 : div;
     size_t pos = 8 + hlen;
 
     for (int t = 0; t < ntracks; ++t) {
@@ -236,7 +236,7 @@ bool decodeMidi(const uint8_t* d, size_t size, MidiFileData& out, std::string* e
         pos = end;
 
         MidiTrackData track;
-        struct Open { int64_t tick; uint8_t vel; bool used; };
+        struct Open { int64_t m_tick; uint8_t m_vel; bool m_used; };
         Open open[16][128] = {};
         int64_t tick = 0;
         uint8_t running = 0;
@@ -263,18 +263,18 @@ bool decodeMidi(const uint8_t* d, size_t size, MidiFileData& out, std::string* e
                 p += 2;
                 uint32_t mlen = 0;
                 if (!vlq(mlen) || p + mlen > end) return fail("bad meta length");
-                const double beat = static_cast<double>(tick) / out.ppq;
-                if (type == 0x03 && track.name.empty()) track.name.assign(reinterpret_cast<const char*>(d + p), mlen);
-                else if (type == 0x06) out.markers.emplace_back(beat, std::string(reinterpret_cast<const char*>(d + p), mlen));
+                const double beat = static_cast<double>(tick) / out.m_ppq;
+                if (type == 0x03 && track.m_name.empty()) track.m_name.assign(reinterpret_cast<const char*>(d + p), mlen);
+                else if (type == 0x06) out.m_markers.emplace_back(beat, std::string(reinterpret_cast<const char*>(d + p), mlen));
                 else if (type == 0x51 && mlen == 3) {
                     const uint32_t mpq = (uint32_t(d[p]) << 16) | (uint32_t(d[p + 1]) << 8) | d[p + 2];
-                    if (mpq > 0) out.tempos.push_back(TempoPoint{ beat, 60000000.0 / mpq, false });
+                    if (mpq > 0) out.m_tempos.push_back(TempoPoint{ beat, 60000000.0 / mpq, false });
                 } else if (type == 0x59 && mlen == 2) {
-                    if (out.keys.empty()) {
-                        out.keySharps = static_cast<int8_t>(d[p]);
-                        out.keyMinor = d[p + 1] != 0;
+                    if (out.m_keys.empty()) {
+                        out.m_keySharps = static_cast<int8_t>(d[p]);
+                        out.m_keyMinor = d[p + 1] != 0;
                     }
-                    out.keys.emplace_back(beat, static_cast<int>(static_cast<int8_t>(d[p])));
+                    out.m_keys.emplace_back(beat, static_cast<int>(static_cast<int8_t>(d[p])));
                 }
                 p += mlen;
                 continue;
@@ -295,30 +295,30 @@ bool decodeMidi(const uint8_t* d, size_t size, MidiFileData& out, std::string* e
             const uint8_t a = d[p], b = nData > 1 ? d[p + 1] : 0;
             p += static_cast<size_t>(nData);
             if (hi == 0x90 && b > 0) {
-                if (track.channel < 0) track.channel = ch;
+                if (track.m_channel < 0) track.m_channel = ch;
                 open[ch][a & 0x7F] = Open{ tick, b, true };
             } else if (hi == 0x80 || (hi == 0x90 && b == 0)) {
                 Open& o = open[ch][a & 0x7F];
-                if (o.used) {
+                if (o.m_used) {
                     NoteEvent n;
-                    n.beat = static_cast<double>(o.tick) / out.ppq;
-                    n.length = static_cast<float>(static_cast<double>(tick - o.tick) / out.ppq);
-                    n.pitch = a & 0x7F;
-                    n.velocity = o.vel;
-                    n.lane = ch;
+                    n.m_beat = static_cast<double>(o.m_tick) / out.m_ppq;
+                    n.m_length = static_cast<float>(static_cast<double>(tick - o.m_tick) / out.m_ppq);
+                    n.m_pitch = a & 0x7F;
+                    n.m_velocity = o.m_vel;
+                    n.m_lane = ch;
                     notes.push_back(n);
-                    o.used = false;
+                    o.m_used = false;
                 }
             }
         }
-        Part part = Part::Count;
-        for (int k = 0; k < kNumParts; ++k) if (track.name == kPartNames[k]) part = static_cast<Part>(k);
-        for (NoteEvent& n : notes) { n.part = part == Part::Count ? Part::Lead : part; n.lane = 0; }
+        PartE part = PartE::COUNT;
+        for (int k = 0; k < NumParts; ++k) if (track.m_name == PartNames[k]) part = static_cast<PartE>(k);
+        for (NoteEvent& n : notes) { n.m_part = part == PartE::COUNT ? PartE::LEAD : part; n.m_lane = 0; }
         std::stable_sort(notes.begin(), notes.end(), noteLess);
-        track.notes = std::move(notes);
-        out.tracks.push_back(std::move(track));
+        track.m_notes = std::move(notes);
+        out.m_tracks.push_back(std::move(track));
     }
-    std::stable_sort(out.tempos.begin(), out.tempos.end(), [](const TempoPoint& x, const TempoPoint& y) { return x.beat < y.beat; });
+    std::stable_sort(out.m_tempos.begin(), out.m_tempos.end(), [](const TempoPoint& x, const TempoPoint& y) { return x.m_beat < y.m_beat; });
     return true;
 }
 

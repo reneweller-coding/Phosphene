@@ -7,28 +7,28 @@
 
 namespace phos {
 
-const char* const kPartNames[kNumParts] = { "Kick", "Bass", "Perc", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone",
+const char* const PartNames[NumParts] = { "Kick", "Bass", "Perc", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone",
                                             "Sfx", "Texture", "Vocal", "Field" };
-const char* const kSectionNames[static_cast<int>(SectionType::Count)] = { "Intro", "Groove", "Build", "Drop", "Break", "Outro", "PDB", "Cut" };
+const char* const SectionNames[static_cast<int>(SectionTypeE::COUNT)] = { "Intro", "Groove", "Build", "Drop", "Break", "Outro", "PDB", "Cut" };
 
 bool noteLess(const NoteEvent& a, const NoteEvent& b)
 {
-    if (a.beat != b.beat) return a.beat < b.beat;
-    if (a.part != b.part) return a.part < b.part;
-    if (a.lane != b.lane) return a.lane < b.lane;
-    return a.pitch < b.pitch;
+    if (a.m_beat != b.m_beat) return a.m_beat < b.m_beat;
+    if (a.m_part != b.m_part) return a.m_part < b.m_part;
+    if (a.m_lane != b.m_lane) return a.m_lane < b.m_lane;
+    return a.m_pitch < b.m_pitch;
 }
 
 void Score::sort()
 {
-    std::stable_sort(notes.begin(), notes.end(), noteLess);
-    std::stable_sort(sections.begin(), sections.end(), [](const SectionMark& a, const SectionMark& b) { return a.beat < b.beat; });
+    std::stable_sort(m_notes.begin(), m_notes.end(), noteLess);
+    std::stable_sort(m_sections.begin(), m_sections.end(), [](const SectionMark& a, const SectionMark& b) { return a.m_beat < b.m_beat; });
 }
 
 double Score::endBeat() const
 {
     double e = 0.0;
-    for (const NoteEvent& n : notes) e = std::max(e, n.beat + static_cast<double>(n.length));
+    for (const NoteEvent& n : m_notes) e = std::max(e, n.m_beat + static_cast<double>(n.m_length));
     return e;
 }
 

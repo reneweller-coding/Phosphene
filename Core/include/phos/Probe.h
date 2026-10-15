@@ -57,12 +57,12 @@
 namespace phos::probe {
 
 /** @brief The most probe renders that ever run at once, whatever is asked for. */
-constexpr int kMaxThreads = 8;
+constexpr int MaxThreads = 8;
 
 /**
  * @brief How many probes of one stage may render at once.
  * @param n 1 = serial, one probe after the other (the library's default); 0 = the hardware's
- *          threads, at most kMaxThreads; anything else is clamped to 1..kMaxThreads. Ignored on Android.
+ *          threads, at most MaxThreads; anything else is clamped to 1..kMaxThreads. Ignored on Android.
  */
 void setThreads(int n);
 
@@ -87,9 +87,9 @@ void configureFromEnvironment();
 
 /** @brief What the cache did in this process since the last resetCacheStats(). */
 struct CacheStats {
-    uint64_t hits = 0;     ///< probes answered from a file
-    uint64_t misses = 0;   ///< probes rendered because no valid file was there
-    uint64_t stores = 0;   ///< files written
+    uint64_t m_hits = 0;     ///< probes answered from a file
+    uint64_t m_misses = 0;   ///< probes rendered because no valid file was there
+    uint64_t m_stores = 0;   ///< files written
 };
 /** @brief The counters (any thread). */
 CacheStats cacheStats();
@@ -108,10 +108,10 @@ void setBuildIdForTest(const char* id);
 
 /** @brief A 128-bit cache key. */
 struct Key {
-    uint64_t a = 0;   ///< the first half
-    uint64_t b = 0;   ///< the second half
+    uint64_t m_a = 0;   ///< the first half
+    uint64_t m_b = 0;   ///< the second half
     /** @brief Whether two keys are the same. */
-    bool operator==(const Key& o) const { return a == o.a && b == o.b; }
+    bool operator==(const Key& o) const { return m_a == o.m_a && m_b == o.m_b; }
 };
 
 /**
@@ -138,9 +138,9 @@ public:
     Key finish() const;
 
 private:
-    uint64_t a_ = 0xcbf29ce484222325ull;   ///< FNV-1a, 64 bit
-    uint64_t b_ = 0x9e3779b97f4a7c15ull;   ///< a multiply-rotate stream with other constants
-    uint64_t n_ = 0;                       ///< bytes added (part of the key)
+    uint64_t m_a = 0xcbf29ce484222325ull;   ///< FNV-1a, 64 bit
+    uint64_t m_b = 0x9e3779b97f4a7c15ull;   ///< a multiply-rotate stream with other constants
+    uint64_t m_n = 0;                       ///< bytes added (part of the key)
 };
 
 /**

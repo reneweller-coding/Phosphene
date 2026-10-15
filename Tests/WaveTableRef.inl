@@ -2,7 +2,7 @@
 // .wav files of Noctuary's library, not from the pack the test reads. Regenerate it
 // whenever the selection changes -- the self test static_asserts its length against
 // kNumLibraryWaveTables, so the two cannot drift apart unnoticed.
-const LibraryRef kLibraryRef[] = {
+const LibraryRef LibraryRefs[] = {
     { "WaveEdit Hienharm", 64, 0.321237, -115.80, -111.50 },
     { "WaveEdit Junox_ho", 64, 0.104091, -69.24, -69.09 },
     { "WaveEdit Euclidea", 64, 0.171836, -71.87, -69.44 },

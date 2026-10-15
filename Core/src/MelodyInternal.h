@@ -27,19 +27,19 @@ namespace mel {
 
 /** @name Indices of the melodic parts in the arrays kept per part (Form.h, MelodyPart)
  *  @{ */
-constexpr int kAcidI = mpIndex(MelodyPart::Acid);         ///< the acid
-constexpr int kLeadI = mpIndex(MelodyPart::Lead);         ///< the lead
-constexpr int kCounterI = mpIndex(MelodyPart::Counter);   ///< the counter
-constexpr int kArpI = mpIndex(MelodyPart::Arp);           ///< the arp
-constexpr int kStabI = mpIndex(MelodyPart::Stab);         ///< the stab
-constexpr int kPadI = mpIndex(MelodyPart::Pad);           ///< the pad
-constexpr int kDroneI = mpIndex(MelodyPart::Drone);       ///< the drone
+constexpr int AcidI = mpIndex(MelodyPartE::ACID);         ///< the acid
+constexpr int LeadI = mpIndex(MelodyPartE::LEAD);         ///< the lead
+constexpr int CounterI = mpIndex(MelodyPartE::COUNTER);   ///< the counter
+constexpr int ArpI = mpIndex(MelodyPartE::ARP);           ///< the arp
+constexpr int StabI = mpIndex(MelodyPartE::STAB);         ///< the stab
+constexpr int PadI = mpIndex(MelodyPartE::PAD);           ///< the pad
+constexpr int DroneI = mpIndex(MelodyPartE::DRONE);       ///< the drone
 /** @} */
 
-using Allowed = std::vector<std::vector<uint8_t>>;   ///< Per position: the symbols allowed (1) or not (0).
+using AllowedT = std::vector<std::vector<uint8_t>>;   ///< Per position: the symbols allowed (1) or not (0).
 
 /** @brief The symbol of interval @p rel, clamped into the alphabet. */
-inline int sym(int rel) { return PitchModel::symbol(std::clamp(rel, kCorpusRelMin, kCorpusRelMax)); }
+inline int sym(int rel) { return PitchModel::symbol(std::clamp(rel, CorpusRelMin, CorpusRelMax)); }
 
 /**
  * @brief Quantises real per-position weights into the sampler's uint8 entries.
@@ -71,12 +71,12 @@ inline void quantise(const std::vector<double>& w, std::vector<uint8_t>& out)
  * @param lo,hi      the interval range to the part root
  * @param weight     weight(rel), the weight of an interval to the part root
  */
-template <class F>
-std::vector<uint8_t> weightedSet(int rootOffset, int lo, int hi, F weight, double tension)
+template <class FT>
+std::vector<uint8_t> weightedSet(int rootOffset, int lo, int hi, FT weight, double tension)
 {
-    std::vector<uint8_t> a(static_cast<size_t>(kCorpusAlphabet), 0);
-    std::vector<double> w(static_cast<size_t>(kCorpusAlphabet), 0.0);
-    for (int rel = std::max(lo, kCorpusRelMin); rel <= std::min(hi, kCorpusRelMax); ++rel) {
+    std::vector<uint8_t> a(static_cast<size_t>(CorpusAlphabet), 0);
+    std::vector<double> w(static_cast<size_t>(CorpusAlphabet), 0.0);
+    for (int rel = std::max(lo, CorpusRelMin); rel <= std::min(hi, CorpusRelMax); ++rel) {
         const double v = weight(rel);
         if (v <= 0.0) continue;
         w[static_cast<size_t>(sym(rel))] = v * std::exp(tension * lerdahlInstability(rel + rootOffset));
@@ -102,9 +102,9 @@ std::vector<uint8_t> weightedSet(int rootOffset, int lo, int hi, F weight, doubl
  * @param target the role's target share of notes on colour slots
  * @param cr     the stream the rounding of the slot count draws from
  */
-template <class R>
+template <class RT>
 std::vector<int> colourSlots(const std::vector<int>& steps, const std::vector<int>& lens, const std::vector<uint8_t>& taken,
-                             bool loop, int cellSteps, double target, Rng& cr, R resolves)
+                             bool loop, int cellSteps, double target, Rng& cr, RT resolves)
 {
     const int n = static_cast<int>(steps.size());
     std::vector<int> cand;
@@ -148,10 +148,10 @@ std::vector<int> colourSlots(const std::vector<int>& steps, const std::vector<in
  * weight file was found, and then nothing at all changes.
  */
 struct DrawSource {
-    NeuralModel* nn = nullptr;   ///< the neural model, or null for the corpus Markov model
-    int style = 0;               ///< the style label of the conditioning; 0 ("unknown") is all the
+    NeuralModel* m_nn = nullptr;   ///< the neural model, or null for the corpus Markov model
+    int m_style = 0;               ///< the style label of the conditioning; 0 ("unknown") is all the
                                  ///< trained model was ever shown (docs/MODEL_FORMAT.md, section 3)
-    int mode = 0;                ///< the mode of the line, as the section plays it (kScaleSteps). Read
+    int m_mode = 0;                ///< the mode of the line, as the section plays it (ScaleSteps). Read
                                  ///< only by a weight file whose header carries @c condMode; every
                                  ///< older file ignores it, which is why the makers may always set it.
 };
@@ -161,17 +161,17 @@ struct DrawSource {
  *        windows of notes rather than about one note (rules 6 and 7).
  */
 struct LineRules {
-    bool loop = false;     ///< the line repeats: its end runs on into its start
-    int  maxRun = 2;       ///< at most this many identical pitches in a row (an octave is a change)
-    int  window = 16;      ///< sixteenths per window of the pitch-class rule
-    int  pcLo = 0;         ///< at least this many pitch classes per window (0 = no rule)
-    int  pcHi = 12;        ///< at most this many
+    bool m_loop = false;     ///< the line repeats: its end runs on into its start
+    int  m_maxRun = 2;       ///< at most this many identical pitches in a row (an octave is a change)
+    int  m_window = 16;      ///< sixteenths per window of the pitch-class rule
+    int  m_pcLo = 0;         ///< at least this many pitch classes per window (0 = no rule)
+    int  m_pcHi = 12;        ///< at most this many
 };
 
 /** @brief The curve's tilt at one step of a pattern: the measured deviation times the role's tilt. Defined in Melody.cpp. */
-double tensionAt(CorpusRoleId role, int step, int bars);
+double tensionAt(CorpusRoleIdE role, int step, int bars);
 /** @brief The target colour share of a role at the arc's colour @p colour (0..1). Defined in Melody.cpp. */
-double colourTarget(CorpusRoleId role, float colour);
+double colourTarget(CorpusRoleIdE role, float colour);
 /** @brief Whether a set admits nothing at all. Defined in Melody.cpp. */
 bool emptySet(const std::vector<uint8_t>& a);
 /** @brief An allowed-symbol set that admits the one interval @p rel. Defined in Melody.cpp. */
@@ -179,9 +179,9 @@ std::vector<uint8_t> single(int rel);
 /** @brief Where a colour tone and its resolution stand, inside the given windows; false where none fits. Defined in Melody.cpp. */
 bool placeColour(int scale, int rootOffset, int lo, int hi, int resHi, int near, Rng& cr, int& colourRel, int& tonicRel, bool line);
 /** @brief Draws pitches for a sequence of allowed sets; falls back to the lowest allowed symbol of each. Defined in Melody.cpp. */
-std::vector<int> drawPitches(const PitchModel& model, CorpusRoleId role, const DrawSource& src, const Allowed& allowed, const std::vector<int>& steps, int bars, int ctx2, int ctx1, double temperature, Rng& r);
+std::vector<int> drawPitches(const PitchModel& model, CorpusRoleIdE role, const DrawSource& src, const AllowedT& allowed, const std::vector<int>& steps, int bars, int ctx2, int ctx1, double temperature, Rng& r);
 /** @brief Redraws single notes of a drawn line until it keeps @p rules. Defined in Melody.cpp. */
-void enforceLine(const PitchModel& model, CorpusRoleId role, const DrawSource& src, const Allowed& allowed, const std::vector<int>& steps, int bars, std::vector<uint8_t> fixed, const LineRules& rules, int ctx2, int ctx1, double temperature, Rng& r, std::vector<int>& rels);
+void enforceLine(const PitchModel& model, CorpusRoleIdE role, const DrawSource& src, const AllowedT& allowed, const std::vector<int>& steps, int bars, std::vector<uint8_t> fixed, const LineRules& rules, int ctx2, int ctx1, double temperature, Rng& r, std::vector<int>& rels);
 /** @brief Whether a line keeps @p rules (the check enforceLine works towards). Defined in Melody.cpp. */
 bool lineKeeps(const std::vector<int>& rels, const std::vector<int>& steps, const LineRules& rules);
 /** @brief Draws the track's harmony: its progression (pendulum or loop), the chord length, a second half and the breakdown's chords. Defined in MelodyHarmony.cpp. */

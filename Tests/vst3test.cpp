@@ -39,18 +39,18 @@ public:
     juce::Optional<PositionInfo> getPosition() const override
     {
         PositionInfo info;
-        info.setBpm(bpm);
-        info.setPpqPosition(ppq);
-        info.setTimeInSamples(static_cast<juce::int64>(samples));
-        info.setTimeInSeconds(static_cast<double>(samples) / sampleRate);
+        info.setBpm(m_bpm);
+        info.setPpqPosition(m_ppq);
+        info.setTimeInSamples(static_cast<juce::int64>(m_samples));
+        info.setTimeInSeconds(static_cast<double>(m_samples) / m_sampleRate);
         info.setIsPlaying(true);
         return info;
     }
-    void advance(int n) { samples += n; ppq += n * bpm / (60.0 * sampleRate); }   ///< moves on by @p n samples
-    double bpm = 145.0;   ///< the tempo
-    double ppq = 0.0;   ///< the position, quarter notes
-    double sampleRate = 48000.0;   ///< the sample rate, Hz
-    double samples = 0.0;   ///< the position, samples
+    void advance(int n) { m_samples += n; m_ppq += n * m_bpm / (60.0 * m_sampleRate); }   ///< moves on by @p n samples
+    double m_bpm = 145.0;   ///< the tempo
+    double m_ppq = 0.0;   ///< the position, quarter notes
+    double m_sampleRate = 48000.0;   ///< the sample rate, Hz
+    double m_samples = 0.0;   ///< the position, samples
 };
 
 } // namespace
@@ -140,9 +140,9 @@ int main(int argc, char** argv)
     check(instance->getTotalNumInputChannels() == 0 && instance->getTotalNumOutputChannels() == 2,
           "the instance has no inputs and a stereo output");
     TestPlayHead head;
-    head.bpm = 132.0;   // not the default: if compose.bpm follows, the play head really arrived
-    head.ppq = 32.0;    // bar 8: the intro before it is sparse by design (Phase 5)
-    head.samples = 32.0 * 60.0 / 132.0 * 48000.0;
+    head.m_bpm = 132.0;   // not the default: if compose.bpm follows, the play head really arrived
+    head.m_ppq = 32.0;    // bar 8: the intro before it is sparse by design (Phase 5)
+    head.m_samples = 32.0 * 60.0 / 132.0 * 48000.0;
     instance->setPlayHead(&head);
     juce::AudioProcessorParameter* tempoParam = nullptr;
     for (auto* p : params) if (p->getName(64) == "Set Tempo") tempoParam = p;
@@ -261,8 +261,8 @@ int main(int argc, char** argv)
             second->setPlayConfigDetails(0, 2, 48000.0, 256);
             second->prepareToPlay(48000.0, 256);
             TestPlayHead head2;
-            head2.ppq = 32.0;   // past the sparse intro, as above
-            head2.samples = 32.0 * 60.0 / 145.0 * 48000.0;
+            head2.m_ppq = 32.0;   // past the sparse intro, as above
+            head2.m_samples = 32.0 * 60.0 / 145.0 * 48000.0;
             second->setPlayHead(&head2);
             juce::AudioBuffer<float> b2(2, 256);
             juce::MidiBuffer m2;
@@ -294,7 +294,7 @@ int main(int argc, char** argv)
         check(instance->setBusesLayout(layout), "the host can switch every stem's output on");
         instance->prepareToPlay(48000.0, 256);
         TestPlayHead h;   // the rates' section left the instance without a transport
-        h.ppq = 300.0;
+        h.m_ppq = 300.0;
         instance->setPlayHead(&h);
         const int channels = instance->getTotalNumOutputChannels();
         juce::AudioBuffer<float> buf(channels, 256);

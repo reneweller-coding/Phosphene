@@ -19,9 +19,9 @@
 
 namespace phos {
 
-const char* const kFormTemplateFeatureNames[4] = { "Full-On", "Progressive", "Goa", "Dark Forest" };
-const char* const kArpStyleFeatureNames[6] = { "corpus", "up", "down", "up-down", "Euclid", "polymeter" };
-const char* const kCounterModeFeatureNames[4] = { "Echo", "Answer", "Timbral", "Hocket" };
+const char* const FormTemplateFeatureNames[4] = { "Full-On", "Progressive", "Goa", "Dark Forest" };
+const char* const ArpStyleFeatureNames[6] = { "corpus", "up", "down", "up-down", "Euclid", "polymeter" };
+const char* const CounterModeFeatureNames[4] = { "Echo", "Answer", "Timbral", "Hocket" };
 
 namespace {
 std::mutex gLock;   ///< guards gPrefs
@@ -31,7 +31,7 @@ std::atomic<unsigned> gRevision{ 0 };   ///< counts their changes
 
 bool Preferences::parse(std::string_view text, std::string* error)
 {
-    w_.clear();
+    m_w.clear();
     std::istringstream in{ std::string(text) };
     std::string line;
     int n = 0;
@@ -58,7 +58,7 @@ bool Preferences::parse(std::string_view text, std::string* error)
             if (error != nullptr) *error = "line " + std::to_string(n) + ": the weight is not a number";
             return false;
         }
-        w_[feature] = std::clamp(w, -3.0, 3.0);
+        m_w[feature] = std::clamp(w, -3.0, 3.0);
     }
     return true;
 }
@@ -66,7 +66,7 @@ bool Preferences::parse(std::string_view text, std::string* error)
 std::string Preferences::toText() const
 {
     std::string s = "# Phosphene preferences: one 'name=value weight' per line, the draw's weight times exp(weight).\n";
-    for (const auto& kv : w_) {
+    for (const auto& kv : m_w) {
         char num[32];
         std::snprintf(num, sizeof(num), " %.3f\n", kv.second);
         s += kv.first + num;
@@ -76,27 +76,27 @@ std::string Preferences::toText() const
 
 double Preferences::weight(const std::string& feature) const
 {
-    const auto it = w_.find(feature);
-    return it == w_.end() ? 0.0 : it->second;
+    const auto it = m_w.find(feature);
+    return it == m_w.end() ? 0.0 : it->second;
 }
 
 double Preferences::factor(const std::string& name, const std::string& value) const
 {
-    const auto it = w_.find(name + "=" + value);
-    return it == w_.end() ? 1.0 : std::exp(it->second);
+    const auto it = m_w.find(name + "=" + value);
+    return it == m_w.end() ? 1.0 : std::exp(it->second);
 }
 
 Preferences fitPreferences(const std::vector<RatingEntry>& ratings)
 {
     std::map<std::string, std::pair<int, int>> counts;   // feature -> good, bad
     for (const RatingEntry& r : ratings) {
-        if (r.verdict == 0 || r.features.empty()) continue;
-        std::istringstream in(r.features);
+        if (r.m_verdict == 0 || r.m_features.empty()) continue;
+        std::istringstream in(r.m_features);
         std::string f;
         while (std::getline(in, f, ';')) {
             if (f.find('=') == std::string::npos) continue;
             auto& c = counts[f];
-            (r.verdict > 0 ? c.first : c.second) += 1;
+            (r.m_verdict > 0 ? c.first : c.second) += 1;
         }
     }
     Preferences p;
@@ -113,22 +113,22 @@ std::string decisionFeatures(const TrackPlan& t, int barInTrack)
 {
     std::string s;
     auto add = [&](const std::string& name, const std::string& value) { if (!s.empty()) s += ';'; s += name + "=" + value; };
-    add("style", kStyleNames[std::clamp(t.style, 0, kNumStyles - 1)]);
-    if (t.form.count > 0) {
-        const Section& sec = t.form.section[sectionOfBar(t.form, std::clamp(barInTrack, 0, std::max(0, t.bars - 1)))];
-        add("section", kSectionNames[static_cast<int>(sec.type)]);
-        add("climax", sec.climax ? "1" : "0");
+    add("style", StyleNames[std::clamp(t.m_style, 0, NumStyles - 1)]);
+    if (t.m_form.m_count > 0) {
+        const Section& sec = t.m_form.m_section[sectionOfBar(t.m_form, std::clamp(barInTrack, 0, std::max(0, t.m_bars - 1)))];
+        add("section", SectionNames[static_cast<int>(sec.m_type)]);
+        add("climax", sec.m_climax ? "1" : "0");
     }
-    add("form.template", kFormTemplateFeatureNames[std::clamp(t.form.body, 0, 3)]);
-    const MelodyPlan& m = t.melody;
-    if (m.present[mpIndex(MelodyPart::Lead)]) {
-        add("lead.archetype", kLeadArchetypeNames[std::clamp(m.leadArchetype[0], 0, kNumLeadArchetypes - 1)]);
-        if (m.leadArchetype[1] != m.leadArchetype[0]) add("lead.archetype", kLeadArchetypeNames[std::clamp(m.leadArchetype[1], 0, kNumLeadArchetypes - 1)]);
-        add("lead.band", std::to_string(m.leadDensityBand));
+    add("form.template", FormTemplateFeatureNames[std::clamp(t.m_form.m_body, 0, 3)]);
+    const MelodyPlan& m = t.m_melody;
+    if (m.m_present[mpIndex(MelodyPartE::LEAD)]) {
+        add("lead.archetype", LeadArchetypeNames[std::clamp(m.m_leadArchetype[0], 0, NumLeadArchetypes - 1)]);
+        if (m.m_leadArchetype[1] != m.m_leadArchetype[0]) add("lead.archetype", LeadArchetypeNames[std::clamp(m.m_leadArchetype[1], 0, NumLeadArchetypes - 1)]);
+        add("lead.band", std::to_string(m.m_leadDensityBand));
     }
-    if (m.present[mpIndex(MelodyPart::Counter)]) add("counter.mode", kCounterModeFeatureNames[std::clamp(m.counterMode, 0, 3)]);
-    if (m.present[mpIndex(MelodyPart::Arp)]) add("arp.style", kArpStyleFeatureNames[std::clamp(m.arpStyle, 0, 5)]);
-    add("harmony", m.progression == 1 ? "loop" : "pendulum");
+    if (m.m_present[mpIndex(MelodyPartE::COUNTER)]) add("counter.mode", CounterModeFeatureNames[std::clamp(m.m_counterMode, 0, 3)]);
+    if (m.m_present[mpIndex(MelodyPartE::ARP)]) add("arp.style", ArpStyleFeatureNames[std::clamp(m.m_arpStyle, 0, 5)]);
+    add("harmony", m.m_progression == 1 ? "loop" : "pendulum");
     return s;
 }
 

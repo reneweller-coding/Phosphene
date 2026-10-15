@@ -48,11 +48,11 @@ namespace {
 
 /** @brief Settings of the process. One mutex: they are written at start-up or by a test, read per plan. */
 struct Settings {
-    std::mutex lock;   ///< guards the settings
-    int threads = 1;               ///< the library's default: serial
-    std::string cacheDir;          ///< empty = no cache
-    std::string buildIdOverride;   ///< setBuildIdForTest()
-    bool buildIdOverridden = false;   ///< setBuildIdForTest() was called
+    std::mutex m_lock;   ///< guards the settings
+    int m_threads = 1;               ///< the library's default: serial
+    std::string m_cacheDir;          ///< empty = no cache
+    std::string m_buildIdOverride;   ///< setBuildIdForTest()
+    bool m_buildIdOverridden = false;   ///< setBuildIdForTest() was called
 };
 /** @brief The process's settings. */
 Settings& settings() { static Settings s; return s; }
@@ -62,9 +62,9 @@ std::atomic<uint64_t> gMisses{ 0 };   ///< cache misses
 std::atomic<uint64_t> gStores{ 0 };   ///< entries stored
 std::atomic<uint64_t> gTempCounter{ 0 };   ///< counts the cache's temporary files (unique names)
 
-constexpr size_t kWorkerStack = 16u * 1024u * 1024u;   ///< as the JUCE-linked programs' main threads (/STACK)
-constexpr char kMagic[8] = { 'P', 'H', 'O', 'S', 'P', 'R', 'B', '1' };   ///< a cache entry's magic
-constexpr size_t kEntryBytes = 8 + 16 + 24 + 8;        ///< magic, key, three doubles, check
+constexpr size_t WorkerStack = 16u * 1024u * 1024u;   ///< as the JUCE-linked programs' main threads (/STACK)
+constexpr char Magic[8] = { 'P', 'H', 'O', 'S', 'P', 'R', 'B', '1' };   ///< a cache entry's magic
+constexpr size_t EntryBytes = 8 + 16 + 24 + 8;        ///< magic, key, three doubles, check
 
 /** @brief The machine's hardware threads, at least one. */
 int hardwareThreads()
@@ -77,8 +77,8 @@ int hardwareThreads()
 std::filesystem::path entryPath(const std::string& dir, const Key& key)
 {
     char name[64];
-    std::snprintf(name, sizeof(name), "%016llx%016llx.probe", static_cast<unsigned long long>(key.a),
-                  static_cast<unsigned long long>(key.b));
+    std::snprintf(name, sizeof(name), "%016llx%016llx.probe", static_cast<unsigned long long>(key.m_a),
+                  static_cast<unsigned long long>(key.m_b));
     return std::filesystem::path(dir) / name;
 }
 
@@ -87,7 +87,7 @@ uint64_t checkOf(const unsigned char* data, size_t n)
 {
     Hasher h;
     h.bytes(data, n);
-    return h.finish().b;
+    return h.finish().m_b;
 }
 
 /** @brief This process's id: the probe cache's temporary files carry it, so two processes never write one name. */
@@ -102,15 +102,15 @@ unsigned long long processId()
 
 /** @brief What a worker thread runs: tasks by a shared counter until none is left. */
 struct Job {
-    const std::vector<std::function<void()>>* tasks = nullptr;   ///< the tasks
-    std::atomic<size_t> next{ 0 };   ///< the next task to take
+    const std::vector<std::function<void()>>* m_tasks = nullptr;   ///< the tasks
+    std::atomic<size_t> m_next{ 0 };   ///< the next task to take
     /** @brief Takes tasks until none is left. */
     void work()
     {
         for (;;) {
-            const size_t i = next.fetch_add(1, std::memory_order_relaxed);
-            if (i >= tasks->size()) return;
-            (*tasks)[i]();
+            const size_t i = m_next.fetch_add(1, std::memory_order_relaxed);
+            if (i >= m_tasks->size()) return;
+            (*m_tasks)[i]();
         }
     }
 };
@@ -129,15 +129,15 @@ void setThreads(int n)
 #if defined(__ANDROID__)
     (void)n;   // the Quest's composer has one small core (Quality.h); see the file comment of Probe.h
 #else
-    std::lock_guard<std::mutex> g(settings().lock);
-    settings().threads = std::clamp(n <= 0 ? hardwareThreads() : n, 1, kMaxThreads);
+    std::lock_guard<std::mutex> g(settings().m_lock);
+    settings().m_threads = std::clamp(n <= 0 ? hardwareThreads() : n, 1, MaxThreads);
 #endif
 }
 
 int threads()
 {
-    std::lock_guard<std::mutex> g(settings().lock);
-    return settings().threads;
+    std::lock_guard<std::mutex> g(settings().m_lock);
+    return settings().m_threads;
 }
 
 void setCacheDir(const std::string& directory)
@@ -145,15 +145,15 @@ void setCacheDir(const std::string& directory)
 #if defined(__ANDROID__)
     (void)directory;
 #else
-    std::lock_guard<std::mutex> g(settings().lock);
-    settings().cacheDir = directory;
+    std::lock_guard<std::mutex> g(settings().m_lock);
+    settings().m_cacheDir = directory;
 #endif
 }
 
 std::string cacheDir()
 {
-    std::lock_guard<std::mutex> g(settings().lock);
-    return settings().cacheDir;
+    std::lock_guard<std::mutex> g(settings().m_lock);
+    return settings().m_cacheDir;
 }
 
 void configureFromEnvironment()
@@ -167,9 +167,9 @@ void configureFromEnvironment()
 CacheStats cacheStats()
 {
     CacheStats s;
-    s.hits = gHits.load();
-    s.misses = gMisses.load();
-    s.stores = gStores.load();
+    s.m_hits = gHits.load();
+    s.m_misses = gMisses.load();
+    s.m_stores = gStores.load();
     return s;
 }
 
@@ -177,29 +177,29 @@ void resetCacheStats() { gHits = 0; gMisses = 0; gStores = 0; }
 
 std::string buildId()
 {
-    std::lock_guard<std::mutex> g(settings().lock);
-    return settings().buildIdOverridden ? settings().buildIdOverride : std::string(PHOS_BUILD_ID);
+    std::lock_guard<std::mutex> g(settings().m_lock);
+    return settings().m_buildIdOverridden ? settings().m_buildIdOverride : std::string(PHOS_BUILD_ID);
 }
 
 void setBuildIdForTest(const char* id)
 {
-    std::lock_guard<std::mutex> g(settings().lock);
-    settings().buildIdOverridden = id != nullptr;
-    settings().buildIdOverride = id != nullptr ? id : "";
+    std::lock_guard<std::mutex> g(settings().m_lock);
+    settings().m_buildIdOverridden = id != nullptr;
+    settings().m_buildIdOverride = id != nullptr ? id : "";
 }
 
 void Hasher::bytes(const void* data, size_t n)
 {
     const unsigned char* p = static_cast<const unsigned char*>(data);
-    uint64_t a = a_, b = b_;
+    uint64_t a = m_a, b = m_b;
     for (size_t i = 0; i < n; ++i) {
         a = (a ^ p[i]) * 0x100000001b3ull;
         b = (b + p[i] + 0x632be59bd9b4e019ull) * 0xff51afd7ed558ccdull;
         b ^= b >> 29;
     }
-    a_ = a;
-    b_ = b;
-    n_ += n;
+    m_a = a;
+    m_b = b;
+    m_n += n;
 }
 
 Key Hasher::finish() const
@@ -212,14 +212,14 @@ Key Hasher::finish() const
         return x;
     };
     Key k;
-    k.a = mix(a_ ^ n_);
-    k.b = mix(b_ + 0x9e3779b97f4a7c15ull * (n_ + 1));
+    k.m_a = mix(m_a ^ m_n);
+    k.m_b = mix(m_b + 0x9e3779b97f4a7c15ull * (m_n + 1));
     return k;
 }
 
 void warmSharedData()
 {
-    for (int i = 0; i < kNumBuiltinWaveTables; ++i) builtinWaveTable(i);
+    for (int i = 0; i < NumBuiltinWaveTables; ++i) builtinWaveTable(i);
     loadWaveTableLibrary();
     loadVoicePack();
     (void)sineTable();
@@ -238,19 +238,19 @@ uint64_t sharedDataId()
         for (; i + 2 <= n; i += 2) { uint64_t w; std::memcpy(&w, f + i, 8); word(w); }
         if (i < n) { uint32_t w; std::memcpy(&w, f + i, 4); word(w); }
     };
-    for (int i = 0; i < kNumWaveTables; ++i) {
+    for (int i = 0; i < NumWaveTables; ++i) {
         const WaveTable& t = waveTable(i);
         word(static_cast<uint64_t>(waveTableLoaded(i) ? 1 : 0));
-        floats(t.data.data(), t.data.size());
+        floats(t.m_data.data(), t.m_data.size());
     }
     const int phrases = voicePhraseCount();
     word(static_cast<uint64_t>(phrases));
     for (int i = 0; i < phrases; ++i) {
         const VoicePhrase& p = voicePhrase(i);
-        word(static_cast<uint64_t>(p.sampleRate));
-        word((static_cast<uint64_t>(p.throwAt) << 32) | p.chopStart);
-        word(p.chopLength);
-        floats(p.samples.data(), p.samples.size());
+        word(static_cast<uint64_t>(p.m_sampleRate));
+        word((static_cast<uint64_t>(p.m_throwAt) << 32) | p.m_chopStart);
+        word(p.m_chopLength);
+        floats(p.m_samples.data(), p.m_samples.size());
     }
     return h;
 }
@@ -260,17 +260,17 @@ bool cacheEnabled()
 #if defined(__ANDROID__)
     return false;
 #else
-    std::lock_guard<std::mutex> g(settings().lock);
-    if (settings().cacheDir.empty()) return false;
+    std::lock_guard<std::mutex> g(settings().m_lock);
+    if (settings().m_cacheDir.empty()) return false;
     // No build id, no cache: without it a changed core would be served the old core's numbers.
-    return settings().buildIdOverridden ? !settings().buildIdOverride.empty() : PHOS_BUILD_ID[0] != 0;
+    return settings().m_buildIdOverridden ? !settings().m_buildIdOverride.empty() : PHOS_BUILD_ID[0] != 0;
 #endif
 }
 
 bool cacheLookup(const Key& key, double values[3])
 {
     if (!cacheEnabled()) return false;
-    unsigned char buf[kEntryBytes + 1];
+    unsigned char buf[EntryBytes + 1];
     size_t got = 0;
     {
         std::ifstream f(entryPath(cacheDir(), key), std::ios::binary);
@@ -279,13 +279,13 @@ bool cacheLookup(const Key& key, double values[3])
             got = static_cast<size_t>(f.gcount());
         }
     }
-    bool ok = got == kEntryBytes && std::memcmp(buf, kMagic, 8) == 0;
+    bool ok = got == EntryBytes && std::memcmp(buf, Magic, 8) == 0;
     if (ok) {
         uint64_t a, b, check;
         std::memcpy(&a, buf + 8, 8);
         std::memcpy(&b, buf + 16, 8);
         std::memcpy(&check, buf + 48, 8);
-        ok = a == key.a && b == key.b && check == checkOf(buf, 48);
+        ok = a == key.m_a && b == key.m_b && check == checkOf(buf, 48);
     }
     if (!ok) { ++gMisses; return false; }
     std::memcpy(values, buf + 24, 24);
@@ -299,10 +299,10 @@ void cacheStore(const Key& key, const double values[3])
     const std::string dir = cacheDir();
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
-    unsigned char buf[kEntryBytes];
-    std::memcpy(buf, kMagic, 8);
-    std::memcpy(buf + 8, &key.a, 8);
-    std::memcpy(buf + 16, &key.b, 8);
+    unsigned char buf[EntryBytes];
+    std::memcpy(buf, Magic, 8);
+    std::memcpy(buf + 8, &key.m_a, 8);
+    std::memcpy(buf + 16, &key.m_b, 8);
     std::memcpy(buf + 24, values, 24);
     const uint64_t check = checkOf(buf, 48);
     std::memcpy(buf + 48, &check, 8);
@@ -331,12 +331,12 @@ void runAll(const std::vector<std::function<void()>>& tasks)
 {
     if (tasks.empty()) return;
     Job job;
-    job.tasks = &tasks;
+    job.m_tasks = &tasks;
     const int extra = std::min(threads(), static_cast<int>(tasks.size())) - 1;
 #if defined(_WIN32)
     std::vector<HANDLE> workers;
     for (int i = 0; i < extra; ++i) {
-        const uintptr_t h = _beginthreadex(nullptr, static_cast<unsigned>(kWorkerStack), workerEntry, &job, 0, nullptr);
+        const uintptr_t h = _beginthreadex(nullptr, static_cast<unsigned>(WorkerStack), workerEntry, &job, 0, nullptr);
         if (h != 0) workers.push_back(reinterpret_cast<HANDLE>(h));   // no thread: the others take its tasks
     }
     job.work();
@@ -345,7 +345,7 @@ void runAll(const std::vector<std::function<void()>>& tasks)
     std::vector<pthread_t> workers;
     pthread_attr_t attr;
     pthread_attr_init(&attr);
-    pthread_attr_setstacksize(&attr, kWorkerStack);
+    pthread_attr_setstacksize(&attr, WorkerStack);
     for (int i = 0; i < extra; ++i) {
         pthread_t t;
         if (pthread_create(&t, &attr, workerEntry, &job) == 0) workers.push_back(t);

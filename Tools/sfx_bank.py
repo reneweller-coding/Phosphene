@@ -128,15 +128,15 @@ def main():
         "",
         "namespace phos {",
         "",
-        f"const SfxPreset kSfxBank[{len(rows)}] = {{",
+        f"const SfxPreset SfxBank[{len(rows)}] = {{",
     ]
     for t, k, p in rows:
         vals = ", ".join(f"{p[f]:.4f}f" for f in FIELDS)
         lines.append(f"    {{ {vals} }},   // {TYPES[t]} {k + 1}")
     lines.append("};")
-    lines.append(f"const int kSfxBankSize = {len(rows)};")
-    lines.append("const int kSfxBankOffset[kNumSfxTypes] = { " + ", ".join(map(str, offsets)) + " };")
-    lines.append("const int kSfxBankCount[kNumSfxTypes] = { " + ", ".join(map(str, counts)) + " };")
+    lines.append(f"const int SfxBankSize = {len(rows)};")
+    lines.append("const int SfxBankOffset[NumSfxTypes] = { " + ", ".join(map(str, offsets)) + " };")
+    lines.append("const int SfxBankCount[NumSfxTypes] = { " + ", ".join(map(str, counts)) + " };")
     lines.append("")
     lines.append("} // namespace phos")
     with open(a.out, "w", encoding="utf-8", newline="\n") as fh:

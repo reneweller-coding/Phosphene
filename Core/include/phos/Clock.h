@@ -17,23 +17,23 @@
 namespace phos {
 
 /** @brief Note divisions in quarter-note beats (4/4). */
-enum class SyncDiv : int {
-    Free = 0, Bars64, Bars32, Bars16, Bars8, Bars4, Bars2, Bar1,
-    Half, HalfT, Quarter, QuarterD, QuarterT, Eighth, EighthD, EighthT, Sixteenth, SixteenthT, ThirtySecond,
-    Count
+enum class SyncDivE : int {
+    FREE = 0, BARS64, BARS32, BARS16, BARS8, BARS4, BARS2, BAR1,
+    HALF, HALF_T, QUARTER, QUARTER_D, QUARTER_T, EIGHTH, EIGHTH_D, EIGHTH_T, SIXTEENTH, SIXTEENTH_T, THIRTY_SECOND,
+    COUNT
 };
-constexpr int kNumSyncDivs = static_cast<int>(SyncDiv::Count);   ///< number of divisions
-extern const char* const kSyncDivNames[kNumSyncDivs];              ///< display names
-extern const double      kSyncBeats[kNumSyncDivs];                 ///< length in beats, 0 for Free
+constexpr int NumSyncDivs = static_cast<int>(SyncDivE::COUNT);   ///< number of divisions
+extern const char* const SyncDivNames[NumSyncDivs];              ///< display names
+extern const double      SyncBeats[NumSyncDivs];                 ///< length in beats, 0 for Free
 
 /** @brief Beats per bar; Phosphene is 4/4 throughout. */
-constexpr int kBeatsPerBar = 4;
+constexpr int BeatsPerBar = 4;
 
 /** @brief One point of a tempo map. */
 struct TempoPoint {
-    double beat = 0.0;         ///< position in beats
-    double bpm = 145.0;        ///< tempo at that position
-    bool   rampToNext = false; ///< ramp linearly (in beats) to the next point instead of holding
+    double m_beat = 0.0;         ///< position in beats
+    double m_bpm = 145.0;        ///< tempo at that position
+    bool   m_rampToNext = false; ///< ramp linearly (in beats) to the next point instead of holding
 };
 
 /**
@@ -56,7 +56,7 @@ public:
      */
     void add(double beat, double bpm, bool rampToNext);
     /** @brief The points, sorted by beat. */
-    const std::vector<TempoPoint>& points() const { return points_; }
+    const std::vector<TempoPoint>& points() const { return m_points; }
 
     /** @brief Tempo at @p beat. */
     double bpmAt(double beat) const;
@@ -70,8 +70,8 @@ private:
     void rebuild();
     /** @brief The index of the tempo segment @p beat falls in (0 before the first point). */
     int segmentFor(double beat) const;
-    std::vector<TempoPoint> points_;   ///< the tempo points, by beat
-    std::vector<double> seconds_;   ///< seconds at each point
+    std::vector<TempoPoint> m_points;   ///< the tempo points, by beat
+    std::vector<double> m_seconds;   ///< seconds at each point
 };
 
 } // namespace phos

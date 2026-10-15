@@ -35,36 +35,36 @@
  * @brief The tabs, by name rather than by number.
  *
  * They were plain indices until the Arrange and Perform tabs arrived in the middle of the row and
- * every `tab_ == 3` in the file meant something else.
+ * every `m_tab == 3` in the file meant something else.
  */
-enum Tab : int {
-    TabSet = 0, TabArrange, TabKick, TabBass, TabPerc, TabAcid,
+enum TabE : int {
+    TAB_SET = 0, TAB_ARRANGE, TAB_KICK, TAB_BASS, TAB_PERC, TAB_ACID,
     // 19.09.2026: the polyphonic voices in their groups (Params.h, PolyInstance), each beside its partner.
-    TabLead, TabCounter, TabArp, TabStab, TabPad, TabDrone,
-    TabFx,
-    TabField,     ///< 27.09.2026: the field recordings' sampler (FieldPlayer.h)
-    TabMix, TabPerform,
-    TabExport,    ///< 01.10.2026: the files -- the recording, the MIDI, the set, the score cues -- as every generator has them
-    TabGallery,   ///< 23.09.2026: saved sets with their form, loaded with a click (EditorGallery.cpp)
-    TabCount
+    TAB_LEAD, TAB_COUNTER, TAB_ARP, TAB_STAB, TAB_PAD, TAB_DRONE,
+    TAB_FX,
+    TAB_FIELD,     ///< 27.09.2026: the field recordings' sampler (FieldPlayer.h)
+    TAB_MIX, TAB_PERFORM,
+    TAB_EXPORT,    ///< 01.10.2026: the files -- the recording, the MIDI, the set, the score cues -- as every generator has them
+    TAB_GALLERY,   ///< 23.09.2026: saved sets with their form, loaded with a click (EditorGallery.cpp)
+    TAB_COUNT
 };
 
 /**
  * @brief The editor's fixed-size body.
  *
- * Everything is laid out once in a design space of PhospheneEditor::designW_ by designH_ and the
+ * Everything is laid out once in a design space of PhospheneEditor::m_designW by m_designH and the
  * whole body is then scaled to the window. Nothing reflows when the window is dragged -- it only
  * gets bigger or smaller -- which is what makes a picture taken at design size the truth about the
  * layout, and what keeps the measurement in one place.
  */
 class EditorContent final : public juce::Component {
 public:
-    std::function<void(juce::Graphics&)> onPaint;   ///< the editor draws the frame
-    std::function<void()> onResized;                ///< the editor places its children
+    std::function<void(juce::Graphics&)> m_onPaint;   ///< the editor draws the frame
+    std::function<void()> m_onResized;                ///< the editor places its children
     /** @brief Draws through onPaint. */
-    void paint(juce::Graphics& g) override { if (onPaint) onPaint(g); }
+    void paint(juce::Graphics& g) override { if (m_onPaint) m_onPaint(g); }
     /** @brief Lays out through onResized. */
-    void resized() override { if (onResized) onResized(); }
+    void resized() override { if (m_onResized) m_onResized(); }
 };
 
 /** @brief The bar meters of the master output, fed from phos::Engine::meter(). */
@@ -76,10 +76,10 @@ public:
     void update(const phos::LoudnessReading& r, float compDb, float limitDb, float target);
 
 private:
-    phos::LoudnessReading reading_;   ///< what the engine's meter last said
-    float comp_ = 0.0f;               ///< gain reduction of the bus compressor, dB
-    float limit_ = 0.0f;              ///< gain reduction of the limiter, dB
-    float target_ = -8.0f;            ///< master.target_lufs, drawn as the mark to hit
+    phos::LoudnessReading m_reading;   ///< what the engine's meter last said
+    float m_comp = 0.0f;               ///< gain reduction of the bus compressor, dB
+    float m_limit = 0.0f;              ///< gain reduction of the limiter, dB
+    float m_target = -8.0f;            ///< master.target_lufs, drawn as the mark to hit
 };
 
 /** @brief The set as a list of tracks: key, tempo, patterns and where the play head is. */
@@ -87,11 +87,11 @@ class TrackDisplay final : public juce::Component {
 public:
     /** @brief One line of the list. */
     struct Row {
-        int bar = 0;   ///< the track's first bar
-        int bars = 0;   ///< its length, bars
-        int index = 0;   ///< its index
-        double bpm = 145.0;   ///< its tempo
-        juce::String text;   ///< the line as drawn
+        int m_bar = 0;   ///< the track's first bar
+        int m_bars = 0;   ///< its length, bars
+        int m_index = 0;   ///< its index
+        double m_bpm = 145.0;   ///< its tempo
+        juce::String m_text;   ///< the line as drawn
     };
     /** @brief The lines, the play head marker on the track that plays. */
     void paint(juce::Graphics&) override;
@@ -100,15 +100,15 @@ public:
     /** @brief A click jumps to the track clicked (onJump). */
     void mouseDown(const juce::MouseEvent&) override;
     /** @brief Replaces the list (message thread). */
-    void setRows(std::vector<Row> rows) { rows_ = std::move(rows); repaint(); }
+    void setRows(std::vector<Row> rows) { m_rows = std::move(rows); repaint(); }
     /** @brief Moves the play head marker. */
-    void setPosition(int bar) { if (bar != bar_) { bar_ = bar; repaint(); } }
+    void setPosition(int bar) { if (bar != m_bar) { m_bar = bar; repaint(); } }
     /** @brief Called with the first bar of the track that was clicked. */
-    std::function<void(int)> onJump;
+    std::function<void(int)> m_onJump;
 
 private:
-    std::vector<Row> rows_;   ///< the tracks the composer has published
-    int bar_ = 0;             ///< where the play head stands, in bars from the start of the set
+    std::vector<Row> m_rows;   ///< the tracks the composer has published
+    int m_bar = 0;             ///< where the play head stands, in bars from the start of the set
 };
 
 /**
@@ -122,19 +122,19 @@ private:
 class PatternDisplay final : public juce::Component {
 public:
     /** @brief Which part to draw; percussion draws its twelve lanes instead of pitches. */
-    void setPart(phos::Part part, int highlightLane = -1) { part_ = part; lane_ = highlightLane; }
+    void setPart(phos::PartE part, int highlightLane = -1) { m_part = part; m_lane = highlightLane; }
     /** @brief New notes and where the play head stands, in bars and beats (message thread). */
     void update(std::vector<phos::NoteEvent> notes, int firstBar, int bars, double beat);
     /** @brief The notes of the window as a piano roll (the lanes for the percussion), the play head. */
     void paint(juce::Graphics&) override;
 
 private:
-    std::vector<phos::NoteEvent> notes_;    ///< the window's notes, in musical beats
-    phos::Part part_ = phos::Part::Kick;    ///< which part is drawn
-    int lane_ = -1;                         ///< percussion: the lane whose knobs are on screen
-    int firstBar_ = 0;                      ///< first bar of the window
-    int bars_ = 4;                          ///< how many bars it shows
-    double beat_ = 0.0;                     ///< where the engine stands, for the play head
+    std::vector<phos::NoteEvent> m_notes;    ///< the window's notes, in musical beats
+    phos::PartE m_part = phos::PartE::KICK;    ///< which part is drawn
+    int m_lane = -1;                         ///< percussion: the lane whose knobs are on screen
+    int m_firstBar = 0;                      ///< first bar of the window
+    int m_bars = 4;                          ///< how many bars it shows
+    double m_beat = 0.0;                     ///< where the engine stands, for the play head
 };
 
 /**
@@ -146,11 +146,11 @@ class GalleryDisplay final : public juce::Component {
 public:
     /** @brief One saved set. */
     struct Row {
-        juce::File file;              ///< the .phosset
-        phos::GalleryEntry entry;     ///< what its gallery lines say
-        phos::RatingCount rating;     ///< the listener's verdicts for its seed
+        juce::File m_file;              ///< the .phosset
+        phos::GalleryEntry m_entry;     ///< what its gallery lines say
+        phos::RatingCount m_rating;     ///< the listener's verdicts for its seed
     };
-    static constexpr int kRowH = 60;  ///< pixels per row
+    static constexpr int RowH = 60;  ///< pixels per row
     /** @brief Replaces the list and sizes the component to it. */
     void setRows(std::vector<Row> rows);
     /** @brief The rows: name, seed, tracks, verdicts and the strip of sections. */
@@ -162,24 +162,24 @@ public:
     /** @brief No row under the mouse. */
     void mouseExit(const juce::MouseEvent&) override;
     /** @brief Called with the file of the row that was clicked. */
-    std::function<void(const juce::File&)> onOpen;
+    std::function<void(const juce::File&)> m_onOpen;
     /** @brief How many sets the list has. */
-    int rowCount() const { return static_cast<int>(rows_.size()); }
+    int rowCount() const { return static_cast<int>(m_rows.size()); }
 
 private:
-    std::vector<Row> rows_;   ///< newest first
-    int hover_ = -1;          ///< the row under the mouse
+    std::vector<Row> m_rows;   ///< newest first
+    int m_hover = -1;          ///< the row under the mouse
 };
 
 /**
  * @brief The signal flow as a picture (26.09.2026; EditorFlow.cpp): the help page's topic "Signal flow" and the
- *        manual's figure (flow.png). A fixed canvas of kCanvasW x kCanvasH, scaled to fit.
+ *        manual's figure (flow.png). A fixed canvas of CanvasW x CanvasH, scaled to fit.
  */
 class SignalFlow final : public juce::Component {
 public:
     SignalFlow() { setInterceptsMouseClicks(false, false); }
-    static constexpr float kCanvasW = 1000.0f;   ///< the canvas's width in drawing units
-    static constexpr float kCanvasH = 486.0f;    ///< its height
+    static constexpr float CanvasW = 1000.0f;   ///< the canvas's width in drawing units
+    static constexpr float CanvasH = 486.0f;    ///< its height
     /** @brief Every unit a box in its family's colour, the buses as arrows. */
     void paint(juce::Graphics&) override;
     /** @brief The part of the component the drawing covers (the canvas keeps its proportions). */
@@ -204,11 +204,11 @@ public:
      */
     void open(const juce::String& name, const juce::String& tabName, std::vector<int> paramIds);
     /** @brief The topics, in list order. */
-    const juce::StringArray& topicNames() const { return names_; }
+    const juce::StringArray& topicNames() const { return m_names; }
     /** @brief The text a topic shows (for the tests and the manual). */
     juce::String topicText(int index) const;
     /** @brief The topic on screen. */
-    int selectedTopic() const { return list_.getSelectedRow(); }
+    int selectedTopic() const { return m_list.getSelectedRow(); }
     /** @brief The panel's background. */
     void paint(juce::Graphics&) override;
     /** @brief The topics left, the text right, the update controls under them. */
@@ -218,25 +218,25 @@ public:
 
 private:
     /** @brief How many topics there are. */
-    int getNumRows() override { return names_.size(); }
+    int getNumRows() override { return m_names.size(); }
     /** @brief A topic's name in the list, the chosen one in the accent. */
     void paintListBoxItem(int row, juce::Graphics&, int w, int h, bool selected) override;
     /** @brief Shows the topic chosen. */
     void selectedRowsChanged(int row) override;
-    PhospheneProcessor& proc_;   ///< the processor the help reads (parameters, update state)
-    juce::StringArray names_;           ///< topic names
-    juce::StringArray texts_;           ///< their text (the parameter topic is filled by open())
-    int paramTopic_ = -1;               ///< index of "Parameters on this tab"
-    int updateTopic_ = -1;              ///< index of "Updates"
-    int flowTopic_ = -1;                ///< index of "Signal flow"
-    SignalFlow flow_;                   ///< its picture, above the text
-    juce::ListBox list_;   ///< the topics
-    juce::TextEditor text_;   ///< the chosen topic's text
-    juce::ToggleButton autoCheck_{ "Look for updates once a day" };   ///< the daily update check on or off
-    juce::TextButton checkNow_{ "Check now" };   ///< asks for updates now
-    juce::TextButton openRelease_{ "Open the release page" };   ///< opens the release page when there is one
-    juce::Label updateLine_;   ///< what the last check found
-    juce::SharedResourcePointer<phosui::UpdateCheck> updates_;   ///< the process's one update check
+    PhospheneProcessor& m_proc;   ///< the processor the help reads (parameters, update state)
+    juce::StringArray m_names;           ///< topic names
+    juce::StringArray m_texts;           ///< their text (the parameter topic is filled by open())
+    int m_paramTopic = -1;               ///< index of "Parameters on this tab"
+    int m_updateTopic = -1;              ///< index of "Updates"
+    int m_flowTopic = -1;                ///< index of "Signal flow"
+    SignalFlow m_flow;                   ///< its picture, above the text
+    juce::ListBox m_list;   ///< the topics
+    juce::TextEditor m_text;   ///< the chosen topic's text
+    juce::ToggleButton m_autoCheck{ "Look for updates once a day" };   ///< the daily update check on or off
+    juce::TextButton m_checkNow{ "Check now" };   ///< asks for updates now
+    juce::TextButton m_openRelease{ "Open the release page" };   ///< opens the release page when there is one
+    juce::Label m_updateLine;   ///< what the last check found
+    juce::SharedResourcePointer<phosui::UpdateCheck> m_updates;   ///< the process's one update check
 };
 
 /** @brief The Phosphene editor. */
@@ -261,7 +261,7 @@ public:
     /** @brief Opens a tab. */
     void setTab(int index);
     /** @brief The tab that is open. */
-    int tab() const { return tab_; }
+    int tab() const { return m_tab; }
     /** @brief Shows one of the twelve percussion lanes. */
     void setPercLane(int lane);
     /**
@@ -288,14 +288,14 @@ public:
     /** @brief The keys of every parameter that stands in a group on some page, percussion lanes included. */
     juce::StringArray parametersOnPages() const;
     /** @brief The help page (tests): null until the editor has built it. */
-    HelpView* helpView() const { return help_.get(); }
+    HelpView* helpView() const { return m_help.get(); }
     /** @brief Opens or closes the help page (the Help button, F1). */
     void setHelpVisible(bool show) { showHelp(show); }
     /** @brief The mixer page's console (tests). */
-    phosui::MixerConsole* mixerConsole() const { return mixer_; }
+    phosui::MixerConsole* mixerConsole() const { return m_mixer; }
     /** @brief The kick's and the bass's scopes (tests). */
-    phosui::SynthScope* kickScope() const { return kickScope_; }
-    phosui::SynthScope* bassScope() const { return bassScope_; }   ///< @copydoc kickScope
+    phosui::SynthScope* kickScope() const { return m_kickScope; }
+    phosui::SynthScope* bassScope() const { return m_bassScope; }   ///< @copydoc kickScope
 
 private:
     /** @brief Builds the synth, effect and mixer pages (the others have their own files). */
@@ -324,22 +324,22 @@ private:
      *        submenu per group, "Save..." for a user preset, and the own-sound switch (mix.*_own).
      * @param owner the synth's own-sound number: 0 kick, 1 bass, 2 acid, 3 + instance the voices
      */
-    void addSoundGroup(phosui::ControlPage& page, phos::Module module, int instance, int owner, juce::Colour tint);
+    void addSoundGroup(phosui::ControlPage& page, phos::ModuleE module, int instance, int owner, juce::Colour tint);
     /** @brief One synth's preset chooser and the presets behind its item ids (id = index + 1). */
     struct PresetBox {
-        juce::ComboBox* box = nullptr;   ///< the chooser (owned by the page)
-        phos::Module synth = phos::Module::Kick;    ///< the synth it sets (named so: doxygen reads a member `module` as a C++20 module)
-        int instance = 0;   ///< its instance
-        std::vector<phos::SoundPreset> presets;   ///< factory and user presets, item id = index + 1
-        phosui::ControlPage* page = nullptr;   ///< the page it stands on (15.10.2026: the star under the chooser)
-        int nameCell = -1;   ///< the chooser's cell on that page
-        std::vector<std::pair<int, float>> loaded;   ///< the knobs the preset chosen put (store id, real value): the star compares
+        juce::ComboBox* m_box = nullptr;   ///< the chooser (owned by the page)
+        phos::ModuleE m_synth = phos::ModuleE::KICK;    ///< the synth it sets (named so: doxygen reads a member `module` as a C++20 module)
+        int m_instance = 0;   ///< its instance
+        std::vector<phos::SoundPreset> m_presets;   ///< factory and user presets, item id = index + 1
+        phosui::ControlPage* m_page = nullptr;   ///< the page it stands on (15.10.2026: the star under the chooser)
+        int m_nameCell = -1;   ///< the chooser's cell on that page
+        std::vector<std::pair<int, float>> m_loaded;   ///< the knobs the preset chosen put (store id, real value): the star compares
     };
     /** @brief The knobs preset @p preset puts on instance @p instance of synth @p synth (store id, real value; 15.10.2026). */
-    std::vector<std::pair<int, float>> presetTargets(phos::Module synth, int instance, const phos::SoundPreset& preset);
-    std::unique_ptr<phos::ParamStore> scratch_;   ///< a store to work out what a preset would set (presetTargets)
+    std::vector<std::pair<int, float>> presetTargets(phos::ModuleE synth, int instance, const phos::SoundPreset& preset);
+    std::unique_ptr<phos::ParamStore> m_scratch;   ///< a store to work out what a preset would set (presetTargets)
     /** @brief The page of a synth's chooser. */
-    static int tabOfSynth(phos::Module synth, int instance);
+    static int tabOfSynth(phos::ModuleE synth, int instance);
     /** @brief Fills a chooser from the factory presets and the user's, grouped (after a save, again). */
     void fillPresetBox(PresetBox& pb);
     /**
@@ -350,56 +350,56 @@ private:
     void addSfxPresetGroup(phosui::ControlPage& page, juce::Colour tint);
     /** @brief The Field tab's preset menu and library line (27.09.2026; phos/FieldPresets.h). */
     void addFieldPresetGroup(phosui::ControlPage& page, juce::Colour tint);
-    /** @brief Writes what the field library holds into fieldStatus_ (after a scan or a new folder). */
+    /** @brief Writes what the field library holds into m_fieldStatus (after a scan or a new folder). */
     void refreshFieldStatus();
-    juce::Label* fieldStatus_ = nullptr;                 ///< the Field tab's library line (owned by its page)
-    std::unique_ptr<juce::FileChooser> fieldChooser_;   ///< the folder dialog while it is open
-    std::vector<std::unique_ptr<PresetBox>> presetBoxes_;   ///< one per synth page
-    std::unique_ptr<juce::AlertWindow> presetNameDialog_;   ///< "Save preset" asks for a name
+    juce::Label* m_fieldStatus = nullptr;                 ///< the Field tab's library line (owned by its page)
+    std::unique_ptr<juce::FileChooser> m_fieldChooser;   ///< the folder dialog while it is open
+    std::vector<std::unique_ptr<PresetBox>> m_presetBoxes;   ///< one per synth page
+    std::unique_ptr<juce::AlertWindow> m_presetNameDialog;   ///< "Save preset" asks for a name
     /** @brief Follows the processor: the status, the play button, the rerolls, the update link; the screenshots. */
     void timerCallback() override;
     /** @brief Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo (23.09.2026); F1 help, Esc closes it, F11 full screen. */
     bool keyPressed(const juce::KeyPress& key) override;
     /** @name The frame's header (01.10.2026): undo, redo, help, the settings, the headset's sign, the ratings
      *  @{ */
-    frame::IconButton undoIcon_{ frame::IconButton::Icon::Undo, "Undo (Ctrl+Z)" }, redoIcon_{ frame::IconButton::Icon::Redo, "Redo (Ctrl+Y)" };
-    frame::IconButton helpIcon_{ frame::IconButton::Icon::Help, "Help (F1)" }, settingsIcon_{ frame::IconButton::Icon::Settings, "Settings" };
-    frame::IconButton headsetIcon_{ frame::IconButton::Icon::Headset, "A headset sends its hands: the Perform tab shows them" };
-    frame::IconButton likeIcon_{ frame::IconButton::Icon::ThumbUp, "Good here: rates the bar that plays (ratings.tsv)" };
-    frame::IconButton dislikeIcon_{ frame::IconButton::Icon::ThumbDown, "Bad here: rates the bar that plays (ratings.tsv)" };
-    juce::Component titleSpot_;                       ///< where the name is drawn
-    juce::Rectangle<float> logo_;                     ///< where the logo is drawn
-    juce::ComboBox style_, key_, scale_;              ///< where the set starts
-    std::vector<std::unique_ptr<juce::ComboBoxParameterAttachment>> headerLinks_;
-    juce::Slider length_;                             ///< compose.set_minutes: the time the arc spans
-    std::unique_ptr<juce::SliderParameterAttachment> lengthLink_;
-    juce::Label lengthLabel_;
-    juce::TextButton compose_{ "Compose set" };   ///< plans the set again
-    frame::IconButton newSeed_{ frame::IconButton::Icon::Dice, "New seed" };   ///< a new seed: a die
-    frame::IconButton play_{ frame::IconButton::Icon::Play, "Play (Space)" };   ///< play and stop: a triangle, a square
-    frame::IconButton mute_{ frame::IconButton::Icon::Speaker, "Silence the output" };   ///< mutes the output: a speaker, crossed out when muted
-    juce::Label status_, where_;                      ///< seed, clock and state; the track and the bar
-    ArrangeDisplay overview_;                         ///< the set strip under the header
-    uint64_t overviewHash_ = 0;                       ///< what it draws
-    unsigned overviewTicks_ = 0;
-    juce::OwnedArray<frame::FlatTab> groupTabs_;      ///< the row of tabs: one per group
-    juce::OwnedArray<juce::TextButton> subButtons_;   ///< the pages of every group of several, shown for the group that is open
-    std::vector<int> subTab_;                         ///< per sub button: its tab
-    std::vector<int> lastTabOfGroup_;                 ///< the page of each group last open
-    juce::Rectangle<int> tabRow_;                     ///< where the row of tabs is (its hairline)
-    frame::Backdrop backdrop_;                        ///< the phosphenes behind the panel
-    int headerBottom_ = 0;
-    int headsetGroup_ = -1;                           ///< the Perform page's headset group
-    bool shotHands_ = false;                          ///< PHOS_SHOT_HEADSET: the headset's hands kept alive
+    frame::IconButton m_undoIcon{ frame::IconButton::IconE::UNDO, "Undo (Ctrl+Z)" }, m_redoIcon{ frame::IconButton::IconE::REDO, "Redo (Ctrl+Y)" };
+    frame::IconButton m_helpIcon{ frame::IconButton::IconE::HELP, "Help (F1)" }, m_settingsIcon{ frame::IconButton::IconE::SETTINGS, "Settings" };
+    frame::IconButton m_headsetIcon{ frame::IconButton::IconE::HEADSET, "A headset sends its hands: the Perform tab shows them" };
+    frame::IconButton m_likeIcon{ frame::IconButton::IconE::THUMB_UP, "Good here: rates the bar that plays (ratings.tsv)" };
+    frame::IconButton m_dislikeIcon{ frame::IconButton::IconE::THUMB_DOWN, "Bad here: rates the bar that plays (ratings.tsv)" };
+    juce::Component m_titleSpot;                       ///< where the name is drawn
+    juce::Rectangle<float> m_logo;                     ///< where the logo is drawn
+    juce::ComboBox m_style, m_key, m_scale;              ///< where the set starts
+    std::vector<std::unique_ptr<juce::ComboBoxParameterAttachment>> m_headerLinks;
+    juce::Slider m_length;                             ///< compose.set_minutes: the time the arc spans
+    std::unique_ptr<juce::SliderParameterAttachment> m_lengthLink;
+    juce::Label m_lengthLabel;
+    juce::TextButton m_compose{ "Compose set" };   ///< plans the set again
+    frame::IconButton m_newSeed{ frame::IconButton::IconE::DICE, "New seed" };   ///< a new seed: a die
+    frame::IconButton m_play{ frame::IconButton::IconE::PLAY, "Play (Space)" };   ///< play and stop: a triangle, a square
+    frame::IconButton m_mute{ frame::IconButton::IconE::SPEAKER, "Silence the output" };   ///< mutes the output: a speaker, crossed out when muted
+    juce::Label m_status, m_where;                      ///< seed, clock and state; the track and the bar
+    ArrangeDisplay m_overview;                         ///< the set strip under the header
+    uint64_t m_overviewHash = 0;                       ///< what it draws
+    unsigned m_overviewTicks = 0;
+    juce::OwnedArray<frame::FlatTab> m_groupTabs;      ///< the row of tabs: one per group
+    juce::OwnedArray<juce::TextButton> m_subButtons;   ///< the pages of every group of several, shown for the group that is open
+    std::vector<int> m_subTab;                         ///< per sub button: its tab
+    std::vector<int> m_lastTabOfGroup;                 ///< the page of each group last open
+    juce::Rectangle<int> m_tabRow;                     ///< where the row of tabs is (its hairline)
+    frame::Backdrop m_backdrop;                        ///< the phosphenes behind the panel
+    int m_headerBottom = 0;
+    int m_headsetGroup = -1;                           ///< the Perform page's headset group
+    bool m_shotHands = false;                          ///< PHOS_SHOT_HEADSET: the headset's hands kept alive
     /** @} */
     /** @name Help, full screen and the update notice (23.09.2026)
      *  @{ */
-    juce::TextButton updateButton_{ "" };
-    std::unique_ptr<HelpView> help_;   ///< the help page, made on first use
-    juce::SharedResourcePointer<phosui::UpdateCheck> updates_;   ///< the process's one update check
+    juce::TextButton m_updateButton{ "" };
+    std::unique_ptr<HelpView> m_help;   ///< the help page, made on first use
+    juce::SharedResourcePointer<phosui::UpdateCheck> m_updates;   ///< the process's one update check
     /** @brief Opens or closes the help page, at the chapter of the tab that is open. */
     void showHelp(bool show);
-    bool helpShown() const { return help_ != nullptr && help_->isVisible(); }
+    bool helpShown() const { return m_help != nullptr && m_help->isVisible(); }
     /** @brief The standalone's window fills the screen, or stops filling it (a host owns its own window). */
     void toggleFullScreen();
     /** @brief The standalone's title bar gets a maximise button (as Noctuary's). */
@@ -414,80 +414,80 @@ private:
     /** @brief PHOS_SHOT, PHOS_SHOT_ALL, PHOS_MANUAL: plays, waits, writes the pictures (and the manual) and quits. */
     void runScreenshotMode();
 
-    PhospheneProcessor& proc_;   ///< the processor this editor shows
-    PhospheneLookAndFeel lnf_;   ///< the editor's look
-    EditorContent content_;   ///< the scaled content: header, tabs and page
-    juce::TooltipWindow tooltips_{ this, 700 };   ///< tooltips after 700 ms
+    PhospheneProcessor& m_proc;   ///< the processor this editor shows
+    PhospheneLookAndFeel m_lnf;   ///< the editor's look
+    EditorContent m_content;   ///< the scaled content: header, tabs and page
+    juce::TooltipWindow m_tooltips{ this, 700 };   ///< tooltips after 700 ms
 
-    std::vector<std::unique_ptr<phosui::ControlPage>> pages_;   ///< one per tab; the percussion tab's is a stand-in
-    std::vector<std::unique_ptr<phosui::ControlPage>> percPages_;   ///< one page per percussion lane
+    std::vector<std::unique_ptr<phosui::ControlPage>> m_pages;   ///< one per tab; the percussion tab's is a stand-in
+    std::vector<std::unique_ptr<phosui::ControlPage>> m_percPages;   ///< one page per percussion lane
     /** @brief The pattern preview of each tab (null for the Set tab, which has the plan instead). */
-    std::vector<PatternDisplay*> patterns_;
-    std::vector<PatternDisplay*> percPatterns_;   ///< one per lane page, each lighting its own lane
-    phosui::MixerConsole* mixer_ = nullptr;       ///< on the Mix page (24.09.2026)
-    phosui::SynthScope* kickScope_ = nullptr;     ///< on the Kick page (24.09.2026)
-    phosui::SynthScope* bassScope_ = nullptr;     ///< on the Bass page (24.09.2026)
-    /** @brief The effect preset choosers' host links; declared after pages_, so they go before their boxes do. */
-    std::vector<std::unique_ptr<juce::ComboBoxParameterAttachment>> sfxPresetLinks_;
-    std::vector<phos::NoteEvent> patternNotes_;   ///< scratch for the timer's read
-    juce::OwnedArray<juce::TextButton> laneButtons_;   ///< the percussion lane bar
-    juce::Viewport viewport_;   ///< scrolls a page taller than the window
-    int tab_ = 0;   ///< the tab on screen
-    int percLane_ = 0;   ///< the percussion lane on screen
-    int designW_ = 1280;   ///< the design width the content is laid out at before scaling
-    int designH_ = 860;   ///< ... and the design height
-    bool shooting_ = false;   ///< photographing itself (PHOS_SHOT, PHOS_SHOT_ALL, PHOS_MANUAL): the pictures leave out the mute note
+    std::vector<PatternDisplay*> m_patterns;
+    std::vector<PatternDisplay*> m_percPatterns;   ///< one per lane page, each lighting its own lane
+    phosui::MixerConsole* m_mixer = nullptr;       ///< on the Mix page (24.09.2026)
+    phosui::SynthScope* m_kickScope = nullptr;     ///< on the Kick page (24.09.2026)
+    phosui::SynthScope* m_bassScope = nullptr;     ///< on the Bass page (24.09.2026)
+    /** @brief The effect preset choosers' host links; declared after m_pages, so they go before their boxes do. */
+    std::vector<std::unique_ptr<juce::ComboBoxParameterAttachment>> m_sfxPresetLinks;
+    std::vector<phos::NoteEvent> m_patternNotes;   ///< scratch for the timer's read
+    juce::OwnedArray<juce::TextButton> m_laneButtons;   ///< the percussion lane bar
+    juce::Viewport m_viewport;   ///< scrolls a page taller than the window
+    int m_tab = 0;   ///< the tab on screen
+    int m_percLane = 0;   ///< the percussion lane on screen
+    int m_designW = 1280;   ///< the design width the content is laid out at before scaling
+    int m_designH = 860;   ///< ... and the design height
+    bool m_shooting = false;   ///< photographing itself (PHOS_SHOT, PHOS_SHOT_ALL, PHOS_MANUAL): the pictures leave out the mute note
 
     // ---- the Set tab's own controls (owned by the Set page, referenced here)
-    juce::Label*      seedLabel_ = nullptr;   ///< the seed's caption
-    juce::TextEditor* seedEditor_ = nullptr;   ///< the seed field
-    juce::TextButton* playButton_ = nullptr;   ///< Play
-    juce::TextButton* stopButton_ = nullptr;   ///< Stop
-    frame::IconButton* recordButton_ = nullptr;   ///< Record (a red disc, lit while it records)
-    juce::TextButton* followButton_ = nullptr;   ///< Follow host
-    juce::TextButton* muteButton_ = nullptr;   ///< Mute
-    juce::Label*      statusLabel_ = nullptr;   ///< clock, bar, beat and tempo
-    LoudnessDisplay*  loudness_ = nullptr;   ///< the output meter
-    TrackDisplay*     tracks_ = nullptr;   ///< the track list
-    juce::Slider*     exportBars_ = nullptr;   ///< bars for the MIDI export
-    juce::TextButton* exportMidi_ = nullptr;   ///< the Export tab's buttons (Ctrl+E, Ctrl+S, Ctrl+O)
-    juce::Button* exportSet_ = nullptr;        ///< @copydoc exportMidi_
-    juce::Button* loadSet_ = nullptr;          ///< @copydoc exportMidi_
+    juce::Label*      m_seedLabel = nullptr;   ///< the seed's caption
+    juce::TextEditor* m_seedEditor = nullptr;   ///< the seed field
+    juce::TextButton* m_playButton = nullptr;   ///< Play
+    juce::TextButton* m_stopButton = nullptr;   ///< Stop
+    frame::IconButton* m_recordButton = nullptr;   ///< Record (a red disc, lit while it records)
+    juce::TextButton* m_followButton = nullptr;   ///< Follow host
+    juce::TextButton* m_muteButton = nullptr;   ///< Mute
+    juce::Label*      m_statusLabel = nullptr;   ///< clock, bar, beat and tempo
+    LoudnessDisplay*  m_loudness = nullptr;   ///< the output meter
+    TrackDisplay*     m_tracks = nullptr;   ///< the track list
+    juce::Slider*     m_exportBars = nullptr;   ///< bars for the MIDI export
+    juce::TextButton* m_exportMidi = nullptr;   ///< the Export tab's buttons (Ctrl+E, Ctrl+S, Ctrl+O)
+    juce::Button* m_exportSet = nullptr;        ///< @copydoc m_exportMidi
+    juce::Button* m_loadSet = nullptr;          ///< @copydoc m_exportMidi
     /** @name The factory-defaults group of the Set tab (20.09.2026, round "dialogue")
      *  @{ */
-    juce::TextButton* legacyButton_ = nullptr;   ///< "Load the saved knobs anyway", shown only while one is held
-    juce::Label*      legacyNote_ = nullptr;     ///< why the session came up on the defaults
+    juce::TextButton* m_legacyButton = nullptr;   ///< "Load the saved knobs anyway", shown only while one is held
+    juce::Label*      m_legacyNote = nullptr;     ///< why the session came up on the defaults
     /** @} */
-    std::unique_ptr<juce::FileChooser> chooser_;   ///< the file dialog while it is open
+    std::unique_ptr<juce::FileChooser> m_chooser;   ///< the file dialog while it is open
     /** @brief The track list as the composer has published it so far. */
-    std::vector<TrackDisplay::Row> trackRows_;
-    size_t rowsSeed_ = 0;   ///< how many rows the display was last given, so it repaints only when it grows
+    std::vector<TrackDisplay::Row> m_trackRows;
+    size_t m_rowsSeed = 0;   ///< how many rows the display was last given, so it repaints only when it grows
 
     // ---- the Arrange tab
-    ArrangeDisplay* arrange_ = nullptr;      ///< the timeline
-    juce::Label*    arrangeNote_ = nullptr;  ///< where the play head is, in words
-    bool arrangeDirty_ = true;               ///< a lock or a reroll: read the plans again
-    unsigned arrangeTicks_ = 0;              ///< the timeline reads the plans once a second, the head every tick
-    uint64_t arrangeHash_ = 0;               ///< what the timeline is drawing, so an unchanged plan is not redrawn
+    ArrangeDisplay* m_arrange = nullptr;      ///< the timeline
+    juce::Label*    m_arrangeNote = nullptr;  ///< where the play head is, in words
+    bool m_arrangeDirty = true;               ///< a lock or a reroll: read the plans again
+    unsigned m_arrangeTicks = 0;              ///< the timeline reads the plans once a second, the head every tick
+    uint64_t m_arrangeHash = 0;               ///< what the timeline is drawing, so an unchanged plan is not redrawn
 
     // ---- the Perform tab
-    juce::Slider*     macroSlider_[kNumMacros] = {};   ///< the macros that are held at a value
-    juce::TextButton* macroButton_[kNumMacros] = {};   ///< the macros that are pressed
-    juce::Label*      macroNote_ = nullptr;            ///< what they are doing now
+    juce::Slider*     m_macroSlider[NumMacros] = {};   ///< the macros that are held at a value
+    juce::TextButton* m_macroButton[NumMacros] = {};   ///< the macros that are pressed
+    juce::Label*      m_macroNote = nullptr;            ///< what they are doing now
     /** @name Rating what is playing (23.09.2026; phos/Rating.h)
      *  @{ */
-    juce::Label*      midiNote_ = nullptr;             ///< MIDI learn: what is armed, what is bound (23.09.2026)
+    juce::Label*      m_midiNote = nullptr;             ///< MIDI learn: what is armed, what is bound (23.09.2026)
     // ---- the Gallery tab (23.09.2026)
-    GalleryDisplay*   gallery_ = nullptr;              ///< the list
-    juce::Viewport*   galleryView_ = nullptr;          ///< scrolls it
-    juce::Label*      galleryNote_ = nullptr;          ///< where the sets are, what was saved
-    std::unique_ptr<juce::AlertWindow> galleryAsk_;    ///< the name dialog of "Save to gallery..."
-    uint32_t          midiShown_ = 0xFFFFFFFFu;        ///< the map's revision the note shows
-    int               midiArmedShown_ = -2;            ///< the armed target the note shows
-    juce::TextEditor* ratingNote_ = nullptr;           ///< the note that goes with the next verdict
-    juce::Label*      ratingLast_ = nullptr;           ///< what the last press wrote, and where
-    juce::Label*      prefsNote_ = nullptr;            ///< the learned preferences in force (23.09.2026)
-    juce::TextButton* ratingButton_[2] = {};           ///< good, bad
+    GalleryDisplay*   m_gallery = nullptr;              ///< the list
+    juce::Viewport*   m_galleryView = nullptr;          ///< scrolls it
+    juce::Label*      m_galleryNote = nullptr;          ///< where the sets are, what was saved
+    std::unique_ptr<juce::AlertWindow> m_galleryAsk;    ///< the name dialog of "Save to gallery..."
+    uint32_t          m_midiShown = 0xFFFFFFFFu;        ///< the map's revision the note shows
+    int               m_midiArmedShown = -2;            ///< the armed target the note shows
+    juce::TextEditor* m_ratingNote = nullptr;           ///< the note that goes with the next verdict
+    juce::Label*      m_ratingLast = nullptr;           ///< what the last press wrote, and where
+    juce::Label*      m_prefsNote = nullptr;            ///< the learned preferences in force (23.09.2026)
+    juce::TextButton* m_ratingButton[2] = {};           ///< good, bad
     /** @brief Writes a verdict for the bar that is playing (+1 good, -1 bad) into the ratings file. */
     void rateNow(int verdict);
     /** @} */
@@ -495,17 +495,17 @@ private:
     /** @name The family's ways around the panel (15.10.2026, Frame.h, from Empyrean)
      *  @{ */
     /** @brief The command palette's button (Ctrl+K). */
-    frame::IconButton search_{ frame::IconButton::Icon::Search, "Search (Ctrl+K): any control, preset or action by a few letters" };
+    frame::IconButton m_search{ frame::IconButton::IconE::SEARCH, "Search (Ctrl+K): any control, preset or action by a few letters" };
     /** @brief Held: the synths play their presets as they were chosen; let go, your sound again. */
-    frame::IconButton compare_{ frame::IconButton::Icon::Compare, "Hold to hear the presets as they were chosen; let go for your sound" };
-    std::unique_ptr<frame::InfoLine> info_;            ///< the info line at the bottom: what the control under the mouse is
-    std::unique_ptr<frame::CommandPalette> palette_;   ///< the command palette, over everything while open
-    std::unique_ptr<frame::PresetBrowser> browser_;    ///< the preset browser, over everything while open
-    std::unique_ptr<frame::Tour> tour_;                ///< the first steps
-    frame::WindowKeeper window_;                       ///< the standalone's window back where it was left
-    std::unique_ptr<frame::ModulationAtKnob> modulation_;   ///< the voices' matrix rows on their knobs (every page's)
-    int tourTicks_ = 0;                                ///< ticks until the first start's tour (-1: considered)
-    bool comparing_ = false;                           ///< A|B is held
+    frame::IconButton m_compare{ frame::IconButton::IconE::COMPARE, "Hold to hear the presets as they were chosen; let go for your sound" };
+    std::unique_ptr<frame::InfoLine> m_info;            ///< the info line at the bottom: what the control under the mouse is
+    std::unique_ptr<frame::CommandPalette> m_palette;   ///< the command palette, over everything while open
+    std::unique_ptr<frame::PresetBrowser> m_browser;    ///< the preset browser, over everything while open
+    std::unique_ptr<frame::Tour> m_tour;                ///< the first steps
+    frame::WindowKeeper m_window;                       ///< the standalone's window back where it was left
+    std::unique_ptr<frame::ModulationAtKnob> m_modulation;   ///< the voices' matrix rows on their knobs (every page's)
+    int m_tourTicks = 0;                                ///< ticks until the first start's tour (-1: considered)
+    bool m_comparing = false;                           ///< A|B is held
     void openPalette();                                ///< the command palette (Ctrl+K)
     std::vector<frame::CommandPalette::Command> paletteCommands();   ///< what the palette can do: actions, pages, controls, presets
     void startTour();                                  ///< the first steps, from the first

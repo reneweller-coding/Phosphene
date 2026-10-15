@@ -1,6 +1,6 @@
 """The two stage-B candidates of PLAN 6.9, over the unchanged stage-A alphabet.
 
-Both models predict one of the 37 symbols of ``phos::kCorpusAlphabet`` and nothing else. What the
+Both models predict one of the 37 symbols of ``phos::CorpusAlphabet`` and nothing else. What the
 REMI and Compound-Word token streams (Huang, Yang, "Pop Music Transformer", ACM MM 2020; Hsiao,
 Liu, Yeh, Yang, "Compound Word Transformer", AAAI 2021) carry as extra token families -- the step in
 the bar, the distance to the next note, the position in the pattern -- enters here as conditioning

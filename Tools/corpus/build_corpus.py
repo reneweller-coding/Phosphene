@@ -45,6 +45,11 @@ NOTE_NAMES = {"c": 0, "c#": 1, "db": 1, "d": 2, "d#": 3, "eb": 3, "e": 4, "f": 5
 
 # ------------------------------------------------------------------------------------------------ MIDI
 
+
+def cc(role):
+    """A role's part in a generated table's name (CGVR constants: acid -> Acid, so k_acid_uni became AcidUni)."""
+    return "".join(w[:1].upper() + w[1:] for w in role.split("_"))
+
 def read_vlq(d, i):
     v = 0
     while True:
@@ -381,43 +386,43 @@ def write_tables(stats, out):
     for r in ROLES:
         st = stats[r]
         uni = [st["uni"].get(REL_MIN + i, 0) for i in range(ALPHABET)]
-        lines.append(f"/// {r}: order-0 counts of the intervals to the tonic, kCorpusAlphabet entries")
-        lines.append(f"const uint32_t k_{r}_uni[{ALPHABET}] = {{ {', '.join(map(str, uni))} }};")
+        lines.append(f"/// {r}: order-0 counts of the intervals to the tonic, CorpusAlphabet entries")
+        lines.append(f"const uint32_t {cc(r)}Uni[{ALPHABET}] = {{ {', '.join(map(str, uni))} }};")
         bi = sorted(((b - REL_MIN) * ALPHABET + (c - REL_MIN), n) for (b, c), n in st["bi"].items())
         tri = sorted(((a - REL_MIN) * ALPHABET * ALPHABET + (b - REL_MIN) * ALPHABET + (c - REL_MIN), n) for (a, b, c), n in st["tri"].items())
         lines.append(f"/// {r}: order-1 counts (key: the interval before times the alphabet plus this one), sorted by key")
-        lines.append(f"const CorpusGram k_{r}_bi[] = {{ {', '.join(f'{{{k},{n}}}' for k, n in bi) or '{0,0}'} }};")
+        lines.append(f"const CorpusGram {cc(r)}Bi[] = {{ {', '.join(f'{{{k},{n}}}' for k, n in bi) or '{0,0}'} }};")
         lines.append(f"/// {r}: order-2 counts, sorted by key")
-        lines.append(f"const CorpusGram k_{r}_tri[] = {{ {', '.join(f'{{{k},{n}}}' for k, n in tri) or '{0,0}'} }};")
+        lines.append(f"const CorpusGram {cc(r)}Tri[] = {{ {', '.join(f'{{{k},{n}}}' for k, n in tri) or '{0,0}'} }};")
         onset = ", ".join(f"{{{{{st['onset'][p][0][0]},{st['onset'][p][0][1]}}},{{{st['onset'][p][1][0]},{st['onset'][p][1][1]}}}}}" for p in range(16))
         lines.append(f"/// {r}: onsets: [step][the step before had one][this step has one]")
-        lines.append(f"const uint32_t k_{r}_onset[16][2][2] = {{ {onset} }};")
+        lines.append(f"const uint32_t {cc(r)}Onset[16][2][2] = {{ {onset} }};")
         acc = ", ".join(f"{{{st['accent'][p][0]},{st['accent'][p][1]}}}" for p in range(16))
         sl = ", ".join(f"{{{st['slide'][p][0]},{st['slide'][p][1]}}}" for p in range(16))
         ln = ", ".join("{" + ",".join(str(st["length"][p].get(k, 0)) for k in range(9)) + "}" for p in range(16))
         lines.append(f"/// {r}: accents: [step][accented]")
-        lines.append(f"const uint32_t k_{r}_accent[16][2] = {{ {acc} }};")
+        lines.append(f"const uint32_t {cc(r)}Accent[16][2] = {{ {acc} }};")
         lines.append(f"/// {r}: slides: [step][slides into the next]")
-        lines.append(f"const uint32_t k_{r}_slide[16][2] = {{ {sl} }};")
+        lines.append(f"const uint32_t {cc(r)}Slide[16][2] = {{ {sl} }};")
         lines.append(f"/// {r}: note lengths: [step][length in steps, 8 = eight or more]")
-        lines.append(f"const uint32_t k_{r}_length[16][9] = {{ {ln} }};")
+        lines.append(f"const uint32_t {cc(r)}Length[16][9] = {{ {ln} }};")
         amb = [st["ambitus"].get(i, 0) for i in range(37)]
         lines.append(f"/// {r}: the lines' ambitus: [semitones 0..36]")
-        lines.append(f"const uint32_t k_{r}_ambitus[37] = {{ {', '.join(map(str, amb))} }};")
+        lines.append(f"const uint32_t {cc(r)}Ambitus[37] = {{ {', '.join(map(str, amb))} }};")
     ch = stats["chords"]
     trans = ", ".join("{" + ",".join(str(ch["trans"].get((a, b), 0)) for b in range(12)) + "}" for a in range(12))
     lines.append("} // namespace")
     lines.append("")
-    lines.append(f"const uint32_t kCorpusChordTransitions[12][12] = {{ {trans} }};")
-    lines.append(f"const uint32_t kCorpusChordFirst[12] = {{ {', '.join(str(ch['first'].get(r, 0)) for r in range(12))} }};")
-    lines.append(f"const int kCorpusChordFiles = {ch['files']};")
+    lines.append(f"const uint32_t CorpusChordTransitions[12][12] = {{ {trans} }};")
+    lines.append(f"const uint32_t CorpusChordFirst[12] = {{ {', '.join(str(ch['first'].get(r, 0)) for r in range(12))} }};")
+    lines.append(f"const int CorpusChordFiles = {ch['files']};")
     lines.append("")
     lines.append("/// The tables of every role, in the order of CorpusRoleId.")
-    lines.append("const CorpusRole kCorpusRoles[kNumCorpusRoles] = {")
+    lines.append("const CorpusRole CorpusRoles[NumCorpusRoles] = {")
     for r in ROLES:
         st = stats[r]
         nbi, ntri = max(1, len(st["bi"])), max(1, len(st["tri"]))
-        lines.append(f"    {{ \"{r}\", {st['files']}, k_{r}_uni, k_{r}_bi, {nbi}, k_{r}_tri, {ntri}, k_{r}_onset, k_{r}_accent, k_{r}_slide, k_{r}_length, k_{r}_ambitus }},")
+        lines.append(f"    {{ \"{r}\", {st['files']}, {cc(r)}Uni, {cc(r)}Bi, {nbi}, {cc(r)}Tri, {ntri}, {cc(r)}Onset, {cc(r)}Accent, {cc(r)}Slide, {cc(r)}Length, {cc(r)}Ambitus }},")
     lines.append("};")
     lines += lead_template_lines(stats.get("root", "M:/Midi"))
     lines += bass_rhythm_lines(stats.get("root", "M:/Midi"))

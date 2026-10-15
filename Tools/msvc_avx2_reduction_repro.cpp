@@ -57,11 +57,11 @@
  */
 __declspec(noinline) int fit(int target)
 {
-    static const int kBars[8] = { 32, 32, 16, 32, 32, 32, 48, 32 };
+    static const int Bars[8] = { 32, 32, 16, 32, 32, 32, 48, 32 };
     static const int kGrow[8] = { 6, 3, 4, 1, 3, 4, 1, -1 };
     static const int kCap[8] = { 64, 48, 48, 48, 64, 64, 64, 0 };
     int bars[8];
-    for (int k = 0; k < 8; ++k) bars[k] = kBars[k];
+    for (int k = 0; k < 8; ++k) bars[k] = Bars[k];
     auto total = [&]() { int s = 0; for (int k = 0; k < 8; ++k) s += bars[k]; return s; };
     for (bool moved = true; total() < target && moved;) {
         moved = false;

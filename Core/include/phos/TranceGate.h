@@ -18,7 +18,7 @@
 
 namespace phos {
 
-constexpr int kNumGatePatterns = 6;   ///< entries of kGatePatternNames (Params.cpp)
+constexpr int NumGatePatterns = 6;   ///< entries of GatePatternNames (Params.cpp)
 
 /** @brief Gate state of one stereo channel. */
 class TranceGate {
@@ -26,11 +26,11 @@ public:
     /** @brief Sets the sample rate (for the tone filter). */
     void prepare(double sampleRate)
     {
-        lpCoef_ = static_cast<float>(1.0 - std::exp(-2.0 * 3.141592653589793 * 700.0 / sampleRate));
+        m_lpCoef = static_cast<float>(1.0 - std::exp(-2.0 * 3.141592653589793 * 700.0 / sampleRate));
         reset();
     }
     /** @brief Clears the tone filter. */
-    void reset() { lpL_ = lpR_ = 0.0f; }
+    void reset() { m_lpL = m_lpR = 0.0f; }
 
     /**
      * @brief How open the gate is at a beat position, 0..1.
@@ -43,8 +43,8 @@ public:
     static float open(double beat, int pattern, float duty, double attackBeats, double releaseBeats)
     {
         // Steps per beat and the pattern over one bar of steps.
-        static constexpr int kSteps[kNumGatePatterns] = { 4, 2, 4, 4, 4, 3 };
-        static constexpr unsigned kMask[kNumGatePatterns] = {
+        static constexpr int Steps[NumGatePatterns] = { 4, 2, 4, 4, 4, 3 };
+        static constexpr unsigned Mask[NumGatePatterns] = {
             0xFFFFu,                     // x x x x x x x x x x x x x x x x
             0x00FFu,                     // eighths: every step of two per beat
             0xEEEEu,                     // . x x x per beat (bit 0 = first step)
@@ -52,14 +52,14 @@ public:
             0x4949u | 0x0000u,           // x . . x . . x . (3-3-2 of sixteenths), twice per bar
             0x0FFFu,                     // twelve triplet eighths
         };
-        const int p = pattern < 0 ? 0 : (pattern >= kNumGatePatterns ? kNumGatePatterns - 1 : pattern);
-        const int perBeat = kSteps[p];
+        const int p = pattern < 0 ? 0 : (pattern >= NumGatePatterns ? NumGatePatterns - 1 : pattern);
+        const int perBeat = Steps[p];
         const int perBar = perBeat * 4;
         const double pos = beat * perBeat;
         const double fl = std::floor(pos);
         long long step = static_cast<long long>(fl) % perBar;
         if (step < 0) step += perBar;
-        if (((kMask[p] >> step) & 1u) == 0u) return 0.0f;
+        if (((Mask[p] >> step) & 1u) == 0u) return 0.0f;
         const double stepBeats = 1.0 / perBeat;
         const double t = (pos - fl) * stepBeats;                  // beats into the step
         const double d = clampv(static_cast<double>(duty), 0.05, 1.0) * stepBeats;
@@ -81,19 +81,19 @@ public:
      */
     inline void apply(float& l, float& r, float o, float depth, float tone)
     {
-        lpL_ += lpCoef_ * (l - lpL_);
-        lpR_ += lpCoef_ * (r - lpR_);
+        m_lpL += m_lpCoef * (l - m_lpL);
+        m_lpR += m_lpCoef * (r - m_lpR);
         const float closed = 1.0f - o;
         const float dark = tone * closed;
         const float gain = 1.0f - depth * closed;
-        l = gain * (l + dark * (lpL_ - l));
-        r = gain * (r + dark * (lpR_ - r));
+        l = gain * (l + dark * (m_lpL - l));
+        r = gain * (r + dark * (m_lpR - r));
     }
 
 private:
-    float lpCoef_ = 0.09f;   ///< the gate tone's low pass: coefficient
-    float lpL_ = 0.0f;   ///< ... state, left
-    float lpR_ = 0.0f;   ///< ... state, right
+    float m_lpCoef = 0.09f;   ///< the gate tone's low pass: coefficient
+    float m_lpL = 0.0f;   ///< ... state, left
+    float m_lpR = 0.0f;   ///< ... state, right
 };
 
 } // namespace phos

@@ -21,16 +21,16 @@ namespace phos {
 
 /** @brief One Field preset. */
 struct FieldPreset {
-    const char* group;      ///< the menu's group (the category, or "Scenes")
-    const char* name;       ///< the entry
-    int categoryA;          ///< layer A's category (kFieldCategorySlugs index)
-    const char* fileA;      ///< layer A's recording (the file's stem)
-    int variationA;         ///< its variation in the shipped library
-    int categoryB;          ///< layer B's category, -1 for no layer B
-    const char* fileB;      ///< layer B's recording
-    int variationB;         ///< its variation in the shipped library
-    const char* text;       ///< `key=value` lines of the Field module's knobs that differ from their defaults
-    float style[5];         ///< its weight in each style (StyleId order)
+    const char* m_group;      ///< the menu's group (the category, or "Scenes")
+    const char* m_name;       ///< the entry
+    int m_categoryA;          ///< layer A's category (FieldCategorySlugs index)
+    const char* m_fileA;      ///< layer A's recording (the file's stem)
+    int m_variationA;         ///< its variation in the shipped library
+    int m_categoryB;          ///< layer B's category, -1 for no layer B
+    const char* m_fileB;      ///< layer B's recording
+    int m_variationB;         ///< its variation in the shipped library
+    const char* m_text;       ///< `key=value` lines of the Field module's knobs that differ from their defaults
+    float m_style[5];         ///< its weight in each style (StyleId order)
 };
 
 /** @brief The factory presets, in menu order. */

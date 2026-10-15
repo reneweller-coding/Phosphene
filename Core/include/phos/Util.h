@@ -46,8 +46,8 @@ inline int drawIndex(Rng& r, const double* w, int n)
  */
 inline void svfCoefs(double fc, double damping, double sr, float& a1, float& a2, float& a3)
 {
-    constexpr double kPiD = 3.141592653589793;
-    const double g = std::tan(kPiD * std::clamp(fc, 10.0, 0.45 * sr) / sr);
+    constexpr double PiD = 3.141592653589793;
+    const double g = std::tan(PiD * std::clamp(fc, 10.0, 0.45 * sr) / sr);
     const double d1 = 1.0 / (1.0 + g * (g + damping));
     a1 = static_cast<float>(d1);
     a2 = static_cast<float>(g * d1);

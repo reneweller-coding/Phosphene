@@ -24,20 +24,20 @@ struct TrackPlan;
 
 /** @brief One track of a gallery entry. */
 struct GalleryTrack {
-    std::string style;   ///< kStyleNames
-    std::string key;     ///< kKeyNames
-    std::string scale;   ///< kScaleNames
-    double bpm = 0.0;   ///< tempo
-    int bars = 0;   ///< length
-    std::string form;    ///< section letters with lengths, space-separated (see the file comment)
+    std::string m_style;   ///< StyleNames
+    std::string m_key;     ///< KeyNames
+    std::string m_scale;   ///< ScaleNames
+    double m_bpm = 0.0;   ///< tempo
+    int m_bars = 0;   ///< length
+    std::string m_form;    ///< section letters with lengths, space-separated (see the file comment)
 };
 
 /** @brief What the gallery shows of a saved set. */
 struct GalleryEntry {
-    std::string name;                 ///< what the user called it
-    std::string saved;                ///< ISO 8601 local time
-    uint64_t seed = 0;                ///< from the set's own seed line
-    std::vector<GalleryTrack> tracks; ///< the tracks planned when it was saved
+    std::string m_name;                 ///< what the user called it
+    std::string m_saved;                ///< ISO 8601 local time
+    uint64_t m_seed = 0;                ///< from the set's own seed line
+    std::vector<GalleryTrack> m_tracks; ///< the tracks planned when it was saved
 };
 
 /** @brief A track's gallery line from its plan. */
@@ -53,9 +53,9 @@ bool readGalleryEntry(std::string_view text, GalleryEntry& out);
 
 /** @brief The listener's verdicts per set seed (Rating.h). */
 struct RatingCount {
-    int good = 0;   ///< the good verdicts
-    int bad = 0;   ///< the bad verdicts
-    int notes = 0;   ///< the written notes
+    int m_good = 0;   ///< the good verdicts
+    int m_bad = 0;   ///< the bad verdicts
+    int m_notes = 0;   ///< the written notes
 };
 /** @brief Counts the verdicts of a ratings file by seed; an unreadable file gives an empty map. */
 std::map<uint64_t, RatingCount> ratingsBySeed(const char* path);

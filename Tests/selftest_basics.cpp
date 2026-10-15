@@ -13,45 +13,45 @@ void testParams()
 {
     section("parameters");
     ParamStore p;
-    const int expected = static_cast<int>(compose::Count) + static_cast<int>(kick::Count) + static_cast<int>(bass::Count)
-                       + static_cast<int>(mix::Count) + static_cast<int>(master::Count) + kPercLanes * static_cast<int>(perc::Count)
-                       + static_cast<int>(acid::Count) + kPolyInstances * static_cast<int>(poly::Count)
-                       + static_cast<int>(sfx::Count) + static_cast<int>(fx::Count) + static_cast<int>(cue::Count)
+    const int expected = static_cast<int>(compose::COUNT) + static_cast<int>(kick::COUNT) + static_cast<int>(bass::COUNT)
+                       + static_cast<int>(mix::COUNT) + static_cast<int>(master::COUNT) + PercLanes * static_cast<int>(perc::COUNT)
+                       + static_cast<int>(acid::COUNT) + PolyInstances * static_cast<int>(poly::COUNT)
+                       + static_cast<int>(sfx::COUNT) + static_cast<int>(fx::COUNT) + static_cast<int>(cue::COUNT)
                        // 19.09.2026, round "fx-psychedelia": the bed, the voices, the modulation effects
-                       + static_cast<int>(texture::Count) + static_cast<int>(vocal::Count) + static_cast<int>(psyfx::Count)
+                       + static_cast<int>(texture::COUNT) + static_cast<int>(vocal::COUNT) + static_cast<int>(psyfx::COUNT)
                        // 27.09.2026: the Field track's sampler
-                       + static_cast<int>(field::Count);
+                       + static_cast<int>(field::COUNT);
     check(p.count() == expected, "every module table registered", fmt("%d parameters", p.count()));
-    check(p.find("lead.detune") == p.base(PolyInstance::Lead) + poly::Detune && p.find("arp.detune") == p.base(PolyInstance::Arp) + poly::Detune
-          && p.find("acid.cutoff") == p.base(Module::Acid) + acid::Cutoff && p.get(p.find("arp.amp_sustain")) == 0.0f,
+    check(p.find("lead.detune") == p.base(PolyInstanceE::LEAD) + poly::DETUNE && p.find("arp.detune") == p.base(PolyInstanceE::ARP) + poly::DETUNE
+          && p.find("acid.cutoff") == p.base(ModuleE::ACID) + acid::CUTOFF && p.get(p.find("arp.amp_sustain")) == 0.0f,
           "named instances (lead, arp) with their own defaults");
     const int id = p.find("kick.pitch_start");
-    check(id == p.base(Module::Kick) + kick::PitchStart, "key lookup gives base + index");
+    check(id == p.base(ModuleE::KICK) + kick::PITCH_START, "key lookup gives base + index");
     // 23.09.2026: the compose table's rows against the enum that indexes them. A row appended behind the
     // enum's order is invisible while the defaults agree -- style_mix landed behind presence_match on
     // 22.09.2026 and the presence match silently read another knob (see Params.cpp).
     {
-        struct KeyOf { int index; const char* key; };
-        static const KeyOf kKeys[] = {
-            { compose::Bpm, "bpm" }, { compose::Style, "style" }, { compose::MelodyModel, "melody_model" },
-            { compose::BassRhythm, "bass_rhythm" }, { compose::BedDensity, "bed_density" }, { compose::StyleMix, "style_mix" },
-            { compose::PresenceMatch, "presence_match" }, { compose::LeadDensity, "lead_density" }, { compose::PitchEntropy, "pitch_entropy" },
-            { compose::CounterMode, "counter_mode" },
+        struct KeyOf { int m_index; const char* m_key; };
+        static const KeyOf Keys[] = {
+            { compose::BPM, "bpm" }, { compose::STYLE, "style" }, { compose::MELODY_MODEL, "melody_model" },
+            { compose::BASS_RHYTHM, "bass_rhythm" }, { compose::BED_DENSITY, "bed_density" }, { compose::STYLE_MIX, "style_mix" },
+            { compose::PRESENCE_MATCH, "presence_match" }, { compose::LEAD_DENSITY, "lead_density" }, { compose::PITCH_ENTROPY, "pitch_entropy" },
+            { compose::COUNTER_MODE, "counter_mode" },
         };
         std::string off;
-        for (const KeyOf& k : kKeys)
-            if (std::string(p.desc(p.base(Module::Compose) + k.index).key) != k.key)
-                off += fmt(" %s->%s", k.key, p.desc(p.base(Module::Compose) + k.index).key);
+        for (const KeyOf& k : Keys)
+            if (std::string(p.desc(p.base(ModuleE::COMPOSE) + k.m_index).m_key) != k.m_key)
+                off += fmt(" %s->%s", k.m_key, p.desc(p.base(ModuleE::COMPOSE) + k.m_index).m_key);
         check(off.empty(), "every compose enum entry indexes the row of its own name", off.empty() ? "" : off);
     }
     check(p.find("kick.nonsense") < 0, "unknown key is not found");
 
     std::string err;
     check(p.parseText("compose.key=A; kick.pitch_start=500\nbass.cutoff=220 # comment", &err), "assignments parse", err);
-    check(p.getInt(p.base(Module::Compose) + compose::Key) == 9, "choice set by name");
+    check(p.getInt(p.base(ModuleE::COMPOSE) + compose::KEY) == 9, "choice set by name");
     check(p.parseText("compose.scale=Double Harmonic kick.engine=resonant mix.kick_mute=on", &err)
-          && p.getInt(p.base(Module::Compose) + compose::Scale) == 4 && p.getInt(p.base(Module::Kick) + kick::Engine) == 1
-          && p.getBool(p.base(Module::Mix) + mix::KickMute), "choice names with spaces, any case, and On/Off", err);
+          && p.getInt(p.base(ModuleE::COMPOSE) + compose::SCALE) == 4 && p.getInt(p.base(ModuleE::KICK) + kick::ENGINE) == 1
+          && p.getBool(p.base(ModuleE::MIX) + mix::KICK_MUTE), "choice names with spaces, any case, and On/Off", err);
     check(!p.parseText("bass.cutof=1", &err) && err.find("unknown") != std::string::npos, "misspelt key reported", err);
 
     int worst = 0;
@@ -60,7 +60,7 @@ void testParams()
         for (float n = 0.0f; n <= 1.0f; n += 0.125f) {
             const float v = p.fromNormalised(i, n);
             const float back = p.toNormalised(i, v);
-            if (d.curve == Curve::Linear || d.curve == Curve::Log) {
+            if (d.m_curve == CurveE::LINEAR || d.m_curve == CurveE::LOG) {
                 if (std::fabs(back - n) > 1e-4f) ++worst;
             }
         }
@@ -106,9 +106,9 @@ void testHalfband()
 {
     section("half-band filters");
     const HalfbandDesign d = designHalfband(96.0, 0.1);
-    check(d.count >= 4 && d.count <= kHalfbandMaxCoefs, "design yields a sensible order", fmt("%d coefficients", d.count));
+    check(d.m_count >= 4 && d.m_count <= HalfbandMaxCoefs, "design yields a sensible order", fmt("%d coefficients", d.m_count));
     bool monotone = true;
-    for (int i = 0; i < d.count; ++i) monotone = monotone && d.coef[i] > 0.0f && d.coef[i] < 1.0f;
+    for (int i = 0; i < d.m_count; ++i) monotone = monotone && d.m_coef[i] > 0.0f && d.m_coef[i] < 1.0f;
     check(monotone, "all coefficients in (0, 1)");
 
     // Decimator: a high-rate sine in, base-rate amplitude out. N high-rate samples, cycles per N.
@@ -119,8 +119,8 @@ void testHalfband()
         std::vector<float> out(M);
         for (size_t i = 0; i < M + settle; ++i) {
             const size_t j = i * 2;
-            const float a = static_cast<float>(std::sin(2.0 * kPiD * cycles * static_cast<double>(j) / N));
-            const float b = static_cast<float>(std::sin(2.0 * kPiD * cycles * static_cast<double>(j + 1) / N));
+            const float a = static_cast<float>(std::sin(2.0 * PiD * cycles * static_cast<double>(j) / N));
+            const float b = static_cast<float>(std::sin(2.0 * PiD * cycles * static_cast<double>(j + 1) / N));
             const float y = dn.process(a, b);
             if (i >= settle) out[i - settle] = y;
         }
@@ -144,7 +144,7 @@ void testHalfband()
     std::vector<float> hi(N);
     const double cyc = 0.1 * M;   // 4.8 kHz at 48 kHz, in cycles per M base samples
     for (size_t i = 0; i < M + settle; ++i) {
-        const float x = static_cast<float>(std::sin(2.0 * kPiD * cyc * static_cast<double>(i) / M));
+        const float x = static_cast<float>(std::sin(2.0 * PiD * cyc * static_cast<double>(i) / M));
         float o0, o1;
         up.process(x, o0, o1);
         if (i >= settle) { hi[(i - settle) * 2] = o0; hi[(i - settle) * 2 + 1] = o1; }
@@ -160,7 +160,7 @@ void testLadder()
 {
     section("ladder filter");
     const double sr = 48000.0;
-    const float g = static_cast<float>(std::tan(kPiD * 1000.0 / sr));
+    const float g = static_cast<float>(std::tan(PiD * 1000.0 / sr));
     auto response = [&](double hz, float k) {
         LadderT<float> f;
         f.reset();
@@ -168,7 +168,7 @@ void testLadder()
         std::vector<float> y(n);
         const double cycles = std::round(hz * n / sr);
         for (size_t i = 0; i < n + settle; ++i) {
-            const float x = 1.0e-4f * static_cast<float>(std::sin(2.0 * kPiD * cycles * static_cast<double>(i) / n));
+            const float x = 1.0e-4f * static_cast<float>(std::sin(2.0 * PiD * cycles * static_cast<double>(i) / n));
             const float o = f.tick(x, g, k, 0.0f);
             if (i >= settle) y[i - settle] = o;
         }
@@ -178,7 +178,7 @@ void testLadder()
     double worst = 0.0;
     std::string detail;
     for (double hz : { 100.0, 500.0, 1000.0, 3000.0, 8000.0 }) {
-        const double r = std::tan(kPiD * hz / sr) / g;
+        const double r = std::tan(PiD * hz / sr) / g;
         const double expect = 4.0 * 20.0 * std::log10(1.0 / std::sqrt(1.0 + r * r));
         const double got = response(hz, 0.0f);
         worst = std::max(worst, std::fabs(got - expect));
@@ -209,12 +209,12 @@ void testMidi()
     p.parseText("compose.level_match=Off master.auto_gain=Off");
     Composer c(5);
     Score s;
-    s.tempo.add(0.0, 140.0, true);
-    s.tempo.add(32.0, 146.0, false);
-    s.keyRoot = 6;
+    s.m_tempo.add(0.0, 140.0, true);
+    s.m_tempo.add(32.0, 146.0, false);
+    s.m_keyRoot = 6;
     // Bars 16 .. 28 (19.09.2026: the two-drop form's intro has no kick or bass before bar 17).
-    c.composeBars(p, 16, 12, s.notes);
-    s.sections.push_back(SectionMark{ 16.0, SectionType::Drop, 1.0f, 0 });
+    c.composeBars(p, 16, 12, s.m_notes);
+    s.m_sections.push_back(SectionMark{ 16.0, SectionTypeE::DROP, 1.0f, 0 });
     s.sort();
     const std::vector<uint8_t> bytes = encodeMidi(s);
     MidiFileData d;
@@ -222,49 +222,49 @@ void testMidi()
     check(decodeMidi(bytes.data(), bytes.size(), d, &err), "decodes what it encodes", err);
     size_t kickN = 0, bassN = 0;
     bool match = true;
-    for (const MidiTrackData& t : d.tracks) {
-        Part part = t.name == "Kick" ? Part::Kick : (t.name == "Bass" ? Part::Bass : Part::Count);
-        if (part == Part::Count) continue;
+    for (const MidiTrackData& t : d.m_tracks) {
+        PartE part = t.m_name == "Kick" ? PartE::KICK : (t.m_name == "Bass" ? PartE::BASS : PartE::COUNT);
+        if (part == PartE::COUNT) continue;
         size_t j = 0;
-        for (const NoteEvent& n : s.notes) {
-            if (n.part != part) continue;
-            if (j >= t.notes.size()) { match = false; break; }
-            const NoteEvent& m = t.notes[j++];
-            match = match && std::fabs(m.beat - n.beat) < 0.5 / kMidiPpq && std::fabs(m.length - n.length) < 1.0 / kMidiPpq
-                          && m.pitch == n.pitch && m.velocity == n.velocity;
+        for (const NoteEvent& n : s.m_notes) {
+            if (n.m_part != part) continue;
+            if (j >= t.m_notes.size()) { match = false; break; }
+            const NoteEvent& m = t.m_notes[j++];
+            match = match && std::fabs(m.m_beat - n.m_beat) < 0.5 / MidiPpq && std::fabs(m.m_length - n.m_length) < 1.0 / MidiPpq
+                          && m.m_pitch == n.m_pitch && m.m_velocity == n.m_velocity;
         }
-        (part == Part::Kick ? kickN : bassN) = t.notes.size();
-        match = match && j == t.notes.size();
-        if (part == Part::Kick) match = match && t.channel == 9;
+        (part == PartE::KICK ? kickN : bassN) = t.m_notes.size();
+        match = match && j == t.m_notes.size();
+        if (part == PartE::KICK) match = match && t.m_channel == 9;
     }
     check(match && kickN > 0 && bassN > 0, "every note back with its beat, length, pitch and velocity", fmt("%zu kick, %zu bass", kickN, bassN));
-    check(d.keySharps == 3 && d.keyMinor, "key signature F# minor (three sharps)");
+    check(d.m_keySharps == 3 && d.m_keyMinor, "key signature F# minor (three sharps)");
     {
         size_t percNotes = 0;
         bool gm = true;
-        for (const NoteEvent& n : s.notes) if (n.part == Part::Perc) ++percNotes;
+        for (const NoteEvent& n : s.m_notes) if (n.m_part == PartE::PERC) ++percNotes;
         const MidiTrackData* pt = nullptr;
-        for (const MidiTrackData& t : d.tracks) if (t.name == "Perc") pt = &t;
+        for (const MidiTrackData& t : d.m_tracks) if (t.m_name == "Perc") pt = &t;
         if (pt != nullptr) {
-            for (const NoteEvent& n : pt->notes) {
+            for (const NoteEvent& n : pt->m_notes) {
                 bool known = false;
-                for (int note : kPercRoleNote) known = known || n.pitch == note;
-                const bool tomRun = n.pitch <= kPercRoleNote[static_cast<int>(PercRole::Tom)] && n.pitch >= kPercRoleNote[static_cast<int>(PercRole::Tom)] - 12;
+                for (int note : PercRoleNote) known = known || n.m_pitch == note;
+                const bool tomRun = n.m_pitch <= PercRoleNote[static_cast<int>(PercRoleE::TOM)] && n.m_pitch >= PercRoleNote[static_cast<int>(PercRoleE::TOM)] - 12;
                 gm = gm && (known || tomRun);
             }
         }
-        check(pt != nullptr && pt->channel == 9 && pt->notes.size() == percNotes && percNotes > 0 && gm,
+        check(pt != nullptr && pt->m_channel == 9 && pt->m_notes.size() == percNotes && percNotes > 0 && gm,
               "percussion track on the drum channel with General MIDI notes", fmt("%zu notes", percNotes));
     }
-    check(d.markers.size() == 1 && d.markers[0].first == 16.0 && d.markers[0].second.rfind("Drop", 0) == 0, "section marker");
+    check(d.m_markers.size() == 1 && d.m_markers[0].first == 16.0 && d.m_markers[0].second.rfind("Drop", 0) == 0, "section marker");
 
     // The stepped tempo events reproduce the ramp's timing at every beat.
     double secs = 0.0, worst = 0.0;
     for (int beat = 0; beat < 40; ++beat) {
-        double bpm = d.tempos.front().bpm;
-        for (const TempoPoint& t : d.tempos) if (t.beat <= beat + 1e-9) bpm = t.bpm;
+        double bpm = d.m_tempos.front().m_bpm;
+        for (const TempoPoint& t : d.m_tempos) if (t.m_beat <= beat + 1e-9) bpm = t.m_bpm;
         secs += 60.0 / bpm;
-        worst = std::max(worst, std::fabs(secs - s.tempo.secondsAt(beat + 1.0)));
+        worst = std::max(worst, std::fabs(secs - s.m_tempo.secondsAt(beat + 1.0)));
     }
     check(worst < 1e-4, "tempo steps keep the MIDI file in time with the ramp", fmt("worst %.2f microseconds", worst * 1e6));
 }
@@ -276,7 +276,7 @@ void testWav()
     const char* path = "phos_selftest_tmp.wav";
     std::vector<float> L(1000), R(1000);
     for (int i = 0; i < 1000; ++i) { L[static_cast<size_t>(i)] = std::sin(0.01f * i) * 0.9f; R[static_cast<size_t>(i)] = -L[static_cast<size_t>(i)]; }
-    for (WavFormat f : { WavFormat::Float32, WavFormat::Pcm24 }) {
+    for (WavFormatE f : { WavFormatE::FLOAT32, WavFormatE::PCM24 }) {
         WavWriter w;
         check(w.open(path, 48000, 2, f) && w.write(L.data(), R.data(), 600) && w.write(L.data() + 600, R.data() + 600, 400) && w.close(), "writes in pieces");
         FILE* fp = std::fopen(path, "rb");
@@ -285,7 +285,7 @@ void testWav()
         size_t n;
         while (fp && (n = std::fread(buf, 1, sizeof(buf), fp)) > 0) b.insert(b.end(), buf, buf + n);
         if (fp) std::fclose(fp);
-        const int bps = f == WavFormat::Float32 ? 4 : 3;
+        const int bps = f == WavFormatE::FLOAT32 ? 4 : 3;
         uint32_t dataSize = 0;
         std::memcpy(&dataSize, b.data() + 76, 4);
         bool ok = b.size() == 80 + 1000u * 2 * bps && std::memcmp(b.data(), "RIFF", 4) == 0 && dataSize == 1000u * 2 * bps;
@@ -313,7 +313,7 @@ void testWav()
         auto readBack = [&](bool dither, const std::vector<float>& x, std::vector<int32_t>& out) {
             WavWriter w;
             w.setDither(dither);
-            w.open(path, 48000, 1, WavFormat::Pcm24);
+            w.open(path, 48000, 1, WavFormatE::PCM24);
             w.write(x.data(), nullptr, n);
             w.close();
             FILE* fp = std::fopen(path, "rb");
@@ -353,7 +353,7 @@ void testWav()
         w.addCue(480, "Drop 1");
         w.setInfo("INAM", "Track 1");
         w.setInfo("IGNR", "Psytrance");
-        const bool written = w.open(path, 48000, 1, WavFormat::Pcm24) && w.write(x.data(), nullptr, 1001) && w.close();
+        const bool written = w.open(path, 48000, 1, WavFormatE::PCM24) && w.write(x.data(), nullptr, 1001) && w.close();
         FILE* fp = std::fopen(path, "rb");
         std::vector<uint8_t> b;
         uint8_t buf[4096];
@@ -395,14 +395,14 @@ void testLoudness()
     section("loudness meter");
     const double sr = 48000.0;
     std::vector<float> x(static_cast<size_t>(sr * 10));
-    for (size_t i = 0; i < x.size(); ++i) x[i] = 0.1f * static_cast<float>(std::sin(2.0 * kPiD * 997.0 * static_cast<double>(i) / sr));
+    for (size_t i = 0; i < x.size(); ++i) x[i] = 0.1f * static_cast<float>(std::sin(2.0 * PiD * 997.0 * static_cast<double>(i) / sr));
     LoudnessMeter m;
     m.prepare(sr);
     m.process(x.data(), x.data(), static_cast<int>(x.size()));
     const LoudnessReading r = m.read();
     // BS.1770: a 997 Hz sine at -20 dBFS in both channels reads -20.0 LUFS.
-    check(std::fabs(r.integrated + 20.0f) < 0.1f, "-20 dBFS 997 Hz sine in stereo reads -20 LUFS", fmt("%.2f LUFS", static_cast<double>(r.integrated)));
-    check(std::fabs(r.truePeak + 20.0f) < 0.1f, "its true peak reads -20 dBTP", fmt("%.2f dBTP", static_cast<double>(r.truePeak)));
+    check(std::fabs(r.m_integrated + 20.0f) < 0.1f, "-20 dBFS 997 Hz sine in stereo reads -20 LUFS", fmt("%.2f LUFS", static_cast<double>(r.m_integrated)));
+    check(std::fabs(r.m_truePeak + 20.0f) < 0.1f, "its true peak reads -20 dBTP", fmt("%.2f dBTP", static_cast<double>(r.m_truePeak)));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -494,7 +494,7 @@ void testKick()
     ParamStore p;
     p.parseText("kick.tune=Free kick.pitch_end=50 kick.pitch_start=300 kick.pitch_decay=20 kick.punch=0 "
                 "kick.drive=0 kick.click_level=0 kick.tone=20000 kick.amp_hold=400 kick.level=0");
-    std::vector<float> kv = moduleValues(p, Module::Kick);
+    std::vector<float> kv = moduleValues(p, ModuleE::KICK);
     Kick k;
     k.prepare(sr);
     k.update(kv.data(), 6);
@@ -526,7 +526,7 @@ void testKick()
     // chain's phase and a sub-sample start, at the defaults (punch, two segments, drive, tone).
     {
         ParamStore q;
-        std::vector<float> qv = moduleValues(q, Module::Kick);
+        std::vector<float> qv = moduleValues(q, ModuleE::KICK);
         double worstPh = 0.0;
         for (double late : { 0.0, 0.37, 0.9 }) {
             Kick kk;
@@ -547,7 +547,7 @@ void testKick()
     {
         ParamStore q;
         q.parseText("kick.tune=Free kick.pitch_end=50 kick.pitch_start=800 kick.punch=1 kick.punch_decay=3 kick.pitch_decay=60 kick.drive=0 kick.click_level=0");
-        std::vector<float> qv = moduleValues(q, Module::Kick);
+        std::vector<float> qv = moduleValues(q, ModuleE::KICK);
         Kick kk;
         kk.prepare(sr);
         kk.update(qv.data(), 6);
@@ -581,7 +581,7 @@ void testKick()
     auto tailAt = [&](const char* settings, bool constrain, double slot) {
         ParamStore q;
         q.parseText(settings);
-        std::vector<float> qv = moduleValues(q, Module::Kick);
+        std::vector<float> qv = moduleValues(q, ModuleE::KICK);
         if (constrain) Kick::constrainTail(qv.data(), slot);
         Kick kk;
         kk.prepare(sr);
@@ -610,7 +610,7 @@ void testKick()
         tails += fmt("%.1f/%.1f  ", with, without);
     }
     // The limit is the knob's default: -15 dB since 19.09.2026, -24 before (docs/rounds/2026-09.md, "Kick-Körper").
-    const double limitDb = ParamStore().get(ParamStore().base(Module::Kick) + kick::TailLimit);
+    const double limitDb = ParamStore().get(ParamStore().base(ModuleE::KICK) + kick::TAIL_LIMIT);
     check(worstTail < limitDb + 1.0 && loosest > limitDb, "tail limit holds after saturation (unconstrained these kicks were not)",
           tails + fmt("dB with/without, limit %.0f dB", limitDb));
 
@@ -619,20 +619,20 @@ void testKick()
         const double endHz = Kick::tuneToKey(6, 50.0f);
         ParamStore q;
         q.parseText("kick.engine=Resonant kick.amp_decay=40");
-        std::vector<float> res = moduleValues(q, Module::Kick);
+        std::vector<float> res = moduleValues(q, ModuleE::KICK);
         Kick::constrain(res.data(), 0.5 * 60.0 / 145.0, 6);
         q.parseText("kick.engine=Sweep kick.amp_hold=5 kick.amp_decay=40");
-        std::vector<float> swp = moduleValues(q, Module::Kick);
+        std::vector<float> swp = moduleValues(q, ModuleE::KICK);
         Kick::constrain(swp.data(), 0.5 * 60.0 / 145.0, 6);
-        const double resBody = res[kick::AmpDecay] * 0.001 / 3.0;
-        const double swpBody = (swp[kick::AmpHold] + swp[kick::AmpDecay] / 3.0) * 0.001;
+        const double resBody = res[kick::AMP_DECAY] * 0.001 / 3.0;
+        const double swpBody = (swp[kick::AMP_HOLD] + swp[kick::AMP_DECAY] / 3.0) * 0.001;
         check(resBody >= 2.0 / endHz - 1e-6 && swpBody >= 2.0 / endHz - 1e-6, "body floor: two periods above -20 dB (knobs asked for 13 and 18 ms)",
               fmt("resonator %.1f ms, sweep %.1f ms, two periods %.1f ms", resBody * 1000.0, swpBody * 1000.0, 2000.0 / endHz));
     }
 
     // Resonant engine: level under a sweep, unit ring, 60 dB decay.
     p.parseText("kick.engine=Resonant kick.amp_decay=1500 kick.pitch_start=330 kick.pitch_end=50 kick.pitch_decay=20");
-    kv = moduleValues(p, Module::Kick);
+    kv = moduleValues(p, ModuleE::KICK);
     k.reset();
     k.update(kv.data(), 6);
     k.trigger(1.0f);
@@ -644,7 +644,7 @@ void testKick()
     check(20.0 * std::log10(swLate / swEarly) > -6.0, "swept resonator keeps its level while the pitch falls",
           fmt("%.1f dB from the first 10 ms to 100..200 ms", 20.0 * std::log10(swLate / swEarly)));
     p.parseText("kick.engine=Resonant kick.amp_decay=300 kick.pitch_start=50 kick.pitch_end=50");
-    kv = moduleValues(p, Module::Kick);
+    kv = moduleValues(p, ModuleE::KICK);
     k.reset();
     k.update(kv.data(), 6);
     k.trigger(1.0f);
@@ -722,7 +722,7 @@ void testBass()
     {
         ParamStore q;
         q.parseText("bass.amp_release=1 bass.duck_depth=0");
-        std::vector<float> v = moduleValues(q, Module::Bass);
+        std::vector<float> v = moduleValues(q, ModuleE::BASS);
         Bass b;
         b.prepare(sr);
         b.update(v.data());
@@ -746,7 +746,7 @@ void testBass()
     {
         ParamStore q;
         q.parseText("bass.duck_depth=0");
-        std::vector<float> v = moduleValues(q, Module::Bass);
+        std::vector<float> v = moduleValues(q, ModuleE::BASS);
         Bass b;
         b.prepare(sr);
         b.update(v.data());
@@ -792,16 +792,16 @@ void testComposer()
     // started yet (Form.h). The core's first sixteen bars are where "four on the floor" must hold.
     const TrackPlan& t0 = c.track(p, 0);
     int core0 = 0;
-    for (int i = 0; i < t0.form.count; ++i)
-        if (t0.form.section[i].type == SectionType::Groove || t0.form.section[i].type == SectionType::Drop) { core0 = t0.form.section[i].startBar; break; }
+    for (int i = 0; i < t0.m_form.m_count; ++i)
+        if (t0.m_form.m_section[i].m_type == SectionTypeE::GROOVE || t0.m_form.m_section[i].m_type == SectionTypeE::DROP) { core0 = t0.m_form.m_section[i].m_startBar; break; }
     std::vector<NoteEvent> ev;
     c.composeBars(p, core0, 16, ev);
     int kicks = 0, bassOnBeat = 0, bass = 0;
     for (const NoteEvent& e : ev) {
-        if (e.part == Part::Kick) ++kicks;
-        if (e.part == Part::Bass) {
+        if (e.m_part == PartE::KICK) ++kicks;
+        if (e.m_part == PartE::BASS) {
             ++bass;
-            if (std::fabs(e.beat - std::round(e.beat)) < 1e-9) ++bassOnBeat;
+            if (std::fabs(e.m_beat - std::round(e.m_beat)) < 1e-9) ++bassOnBeat;
         }
     }
     check(kicks == 16 * 4 - 2, "four on the floor in a core, with the last beat of every eighth bar left out", fmt("%d kicks in 16 bars from bar %d", kicks, core0));
@@ -817,10 +817,10 @@ void testComposer()
         cc.composeBars(q, 0, 320, e);
         int outside = 0, n = 0;
         for (const NoteEvent& x : e) {
-            if (x.part != Part::Bass) continue;
-            const TrackPlan& t = cc.track(q, cc.trackOfBar(q, static_cast<int>(x.beat / kBeatsPerBar)));
+            if (x.m_part != PartE::BASS) continue;
+            const TrackPlan& t = cc.track(q, cc.trackOfBar(q, static_cast<int>(x.m_beat / BeatsPerBar)));
             ++n;
-            if (!inScale(t.scale, x.pitch - bassRootNote(t.key, 0))) ++outside;
+            if (!inScale(t.m_scale, x.m_pitch - bassRootNote(t.m_key, 0))) ++outside;
         }
         check(outside == 0 && n > 0, "every bass note is in its track's key and scale", fmt("%d of %d outside", outside, n));
     }
@@ -837,11 +837,11 @@ void testComposer()
         fresh.composeBars(q, 67, 1, oneN, &oneC);
         std::vector<NoteEvent> sliceN;
         std::vector<ControlEvent> sliceC;
-        for (const NoteEvent& x : seqN) if (x.beat >= 268.0 && x.beat < 272.0) sliceN.push_back(x);
-        for (const ControlEvent& x : seqC) if (x.beat >= 268.0 && x.beat < 272.0) sliceC.push_back(x);
+        for (const NoteEvent& x : seqN) if (x.m_beat >= 268.0 && x.m_beat < 272.0) sliceN.push_back(x);
+        for (const ControlEvent& x : seqC) if (x.m_beat >= 268.0 && x.m_beat < 272.0) sliceC.push_back(x);
         bool same = sliceN.size() == oneN.size() && sliceC.size() == oneC.size();
-        for (size_t i = 0; same && i < sliceN.size(); ++i) same = sliceN[i].beat == oneN[i].beat && sliceN[i].pitch == oneN[i].pitch && sliceN[i].length == oneN[i].length;
-        for (size_t i = 0; same && i < sliceC.size(); ++i) same = sliceC[i].param == oneC[i].param && sliceC[i].value == oneC[i].value && sliceC[i].kind == oneC[i].kind;
+        for (size_t i = 0; same && i < sliceN.size(); ++i) same = sliceN[i].m_beat == oneN[i].m_beat && sliceN[i].m_pitch == oneN[i].m_pitch && sliceN[i].m_length == oneN[i].m_length;
+        for (size_t i = 0; same && i < sliceC.size(); ++i) same = sliceC[i].m_param == oneC[i].m_param && sliceC[i].m_value == oneC[i].m_value && sliceC[i].m_kind == oneC[i].m_kind;
         check(same && !oneC.empty(), "a bar composed alone equals the same bar in sequence, notes and sound changes");
     }
 
@@ -851,17 +851,17 @@ void testComposer()
     for (int pat = 0; pat < 5; ++pat) {
         ParamStore q;
         q.parseText("compose.level_match=Off master.auto_gain=Off");
-        q.set(q.base(Module::Compose) + compose::BassPattern, static_cast<float>(pat));
+        q.set(q.base(ModuleE::COMPOSE) + compose::BASS_PATTERN, static_cast<float>(pat));
         Composer cp(3);
         // A bar of the first core: the intro has no bass yet.
         const TrackPlan& tp = cp.track(q, 0);
         int at = 0;
-        for (int i = 0; i < tp.form.count; ++i)
-            if (tp.form.section[i].type == SectionType::Groove || tp.form.section[i].type == SectionType::Drop) { at = tp.form.section[i].startBar; break; }
+        for (int i = 0; i < tp.m_form.m_count; ++i)
+            if (tp.m_form.m_section[i].m_type == SectionTypeE::GROOVE || tp.m_form.m_section[i].m_type == SectionTypeE::DROP) { at = tp.m_form.m_section[i].m_startBar; break; }
         std::vector<NoteEvent> e;
         cp.composeBars(q, at, 1, e);
-        const int count = static_cast<int>(std::count_if(e.begin(), e.end(), [](const NoteEvent& x) { return x.part == Part::Bass; }));
-        detail += fmt("%s %d  ", kBassPatternNames[pat], count);
+        const int count = static_cast<int>(std::count_if(e.begin(), e.end(), [](const NoteEvent& x) { return x.m_part == PartE::BASS; }));
+        detail += fmt("%s %d  ", BassPatternNames[pat], count);
         patternsOk = patternsOk && count == 4 * expectPerBeat[pat];
     }
     check(patternsOk, "every bass pattern has its notes per bar", detail);
@@ -897,10 +897,10 @@ void testBassModel()
         check(keyed && inWindow && octavesAsBefore, "the bass register moves the bass's octave window, never its note: at every register the root is the key's");
     }
     ParamStore def;
-    const int cb = def.base(Module::Compose);
-    check(def.getInt(cb + compose::BassModel) == 0,
+    const int cb = def.base(ModuleE::COMPOSE);
+    check(def.getInt(cb + compose::BASS_MODEL) == 0,
           "the bass model defaults to Pattern until a listening comparison exists",
-          fmt("default %s", kBassModelNames[def.getInt(cb + compose::BassModel)]));
+          fmt("default %s", BassModelNames[def.getInt(cb + compose::BASS_MODEL)]));
 
     std::string note;
     const bool haveModel = sharedBassModel(&note) != nullptr;
@@ -924,22 +924,22 @@ void testBassModel()
         composeWith("", 4242, 64, pat);
         composeWith("compose.bass_model=Neural", 4242, 64, neu);
         std::vector<const NoteEvent*> pb, nb;
-        for (const NoteEvent& e : pat) if (e.part == Part::Bass) pb.push_back(&e);
-        for (const NoteEvent& e : neu) if (e.part == Part::Bass) nb.push_back(&e);
+        for (const NoteEvent& e : pat) if (e.m_part == PartE::BASS) pb.push_back(&e);
+        for (const NoteEvent& e : neu) if (e.m_part == PartE::BASS) nb.push_back(&e);
         bool sameRhythm = pb.size() == nb.size() && !pb.empty();
         int pitchChanges = 0;
         for (size_t i = 0; sameRhythm && i < pb.size(); ++i) {
-            sameRhythm = pb[i]->beat == nb[i]->beat && pb[i]->length == nb[i]->length
-                         && pb[i]->velocity == nb[i]->velocity;
-            if (pb[i]->pitch != nb[i]->pitch) ++pitchChanges;
+            sameRhythm = pb[i]->m_beat == nb[i]->m_beat && pb[i]->m_length == nb[i]->m_length
+                         && pb[i]->m_velocity == nb[i]->m_velocity;
+            if (pb[i]->m_pitch != nb[i]->m_pitch) ++pitchChanges;
         }
         check(sameRhythm && pitchChanges > 0,
               "the learned bass moves pitches and nothing else: every onset, length and velocity is identical",
               fmt("%zu bass notes against %zu, %d pitches changed", nb.size(), pb.size(), pitchChanges));
         // The kick is not the bass's business either.
         int kickPat = 0, kickNeu = 0;
-        for (const NoteEvent& e : pat) if (e.part == Part::Kick) ++kickPat;
-        for (const NoteEvent& e : neu) if (e.part == Part::Kick) ++kickNeu;
+        for (const NoteEvent& e : pat) if (e.m_part == PartE::KICK) ++kickPat;
+        for (const NoteEvent& e : neu) if (e.m_part == PartE::KICK) ++kickNeu;
         check(kickPat == kickNeu && kickPat > 0, "the kick is unchanged by the bass model",
               fmt("%d kicks against %d", kickNeu, kickPat));
     }
@@ -952,7 +952,7 @@ void testBassModel()
         composeWith("compose.bass_model=Neural", 77, 32, b);
         bool same = a.size() == b.size();
         for (size_t i = 0; same && i < a.size(); ++i)
-            same = a[i].beat == b[i].beat && a[i].pitch == b[i].pitch && a[i].part == b[i].part;
+            same = a[i].m_beat == b[i].m_beat && a[i].m_pitch == b[i].m_pitch && a[i].m_part == b[i].m_part;
         ParamStore q;
         q.parseText(kBase);
         q.parseText("compose.bass_model=Neural");
@@ -960,10 +960,10 @@ void testBassModel()
         std::vector<NoteEvent> one;
         fresh.composeBars(q, 21, 1, one);
         std::vector<NoteEvent> slice;
-        for (const NoteEvent& x : a) if (x.beat >= 84.0 && x.beat < 88.0) slice.push_back(x);
+        for (const NoteEvent& x : a) if (x.m_beat >= 84.0 && x.m_beat < 88.0) slice.push_back(x);
         bool sliceSame = slice.size() == one.size();
         for (size_t i = 0; sliceSame && i < slice.size(); ++i)
-            sliceSame = slice[i].beat == one[i].beat && slice[i].pitch == one[i].pitch;
+            sliceSame = slice[i].m_beat == one[i].m_beat && slice[i].m_pitch == one[i].m_pitch;
         check(same && sliceSame && !one.empty(),
               "the learned bass is deterministic from the seed, and one bar alone equals that bar in sequence",
               fmt("%zu notes twice, bar 21 alone %zu notes", a.size(), one.size()));
@@ -981,22 +981,22 @@ void testBassModel()
             Composer c(seed);
             for (int ti = 0; ti < 3; ++ti) {
                 const TrackPlan t = c.track(q, ti);
-                if (!t.bassNeural) continue;
-                const int root = bassRootNote(t.key, q.getInt(cb + compose::BassRegister));
-                const int lowest = root + scaleDegree(t.scale, 6) - 12;
+                if (!t.m_bassNeural) continue;
+                const int root = bassRootNote(t.m_key, q.getInt(cb + compose::BASS_REGISTER));
+                const int lowest = root + scaleDegree(t.m_scale, 6) - 12;
                 // From the track's hand-over: before it the previous track's bass still plays (the DJ overlap,
                 // 19.09.2026), in the previous track's key.
                 std::vector<NoteEvent> e;
-                c.composeBars(q, handoverBar(t), std::min(48, t.bars - t.form.handover), e);
+                c.composeBars(q, handoverBar(t), std::min(48, t.m_bars - t.m_form.m_handover), e);
                 for (const NoteEvent& n : e) {
-                    if (n.part != Part::Bass) continue;
+                    if (n.m_part != PartE::BASS) continue;
                     ++notes;
-                    const int rel = static_cast<int>(n.pitch) - root;
+                    const int rel = static_cast<int>(n.m_pitch) - root;
                     distinct.insert(rel);
-                    lowestSeen = std::min(lowestSeen, static_cast<int>(n.pitch));
-                    highestSeen = std::max(highestSeen, static_cast<int>(n.pitch));
-                    if (!inScale(t.scale, rel)) ++outside;
-                    if (n.pitch < lowest) ++tooLow;
+                    lowestSeen = std::min(lowestSeen, static_cast<int>(n.m_pitch));
+                    highestSeen = std::max(highestSeen, static_cast<int>(n.m_pitch));
+                    if (!inScale(t.m_scale, rel)) ++outside;
+                    if (n.m_pitch < lowest) ++tooLow;
                     if (rel > 12) ++tooHigh;
                 }
             }
@@ -1025,11 +1025,11 @@ void testBassModel()
                 Composer c(seed);
                 for (int ti = 0; ti < 3; ++ti) {
                     const TrackPlan t = c.track(q, ti);
-                    const int root = bassRootNote(t.key, q.getInt(cb + compose::BassRegister));
+                    const int root = bassRootNote(t.m_key, q.getInt(cb + compose::BASS_REGISTER));
                     std::vector<NoteEvent> e;
-                    c.composeBars(q, handoverBar(t), std::min(48, t.bars - t.form.handover), e);   // this track's bass only (the DJ overlap)
+                    c.composeBars(q, handoverBar(t), std::min(48, t.m_bars - t.m_form.m_handover), e);   // this track's bass only (the DJ overlap)
                     for (const NoteEvent& n : e)
-                        if (n.part == Part::Bass) { ++hist[static_cast<int>(n.pitch) - root]; ++total; }
+                        if (n.m_part == PartE::BASS) { ++hist[static_cast<int>(n.m_pitch) - root]; ++total; }
                 }
             }
             entropyBits = 0.0;
@@ -1066,7 +1066,7 @@ void testBassModel()
         composeWith("compose.pad_amount=1 compose.bass_follows_chords=1", 31337, 128, patOn);
         auto bassOnly = [](const std::vector<NoteEvent>& v) {
             std::vector<const NoteEvent*> out;
-            for (const NoteEvent& e : v) if (e.part == Part::Bass) out.push_back(&e);
+            for (const NoteEvent& e : v) if (e.m_part == PartE::BASS) out.push_back(&e);
             return out;
         };
         const auto a = bassOnly(off), b = bassOnly(on), c = bassOnly(patOff), d = bassOnly(patOn);
@@ -1076,12 +1076,12 @@ void testBassModel()
         // transposed, which is what this check exists to forbid.
         int neuralMoved = 0, neuralMovedOffGroupBeat = 0, patternMoved = 0;
         for (size_t i = 0; i < std::min(a.size(), b.size()); ++i)
-            if (a[i]->pitch != b[i]->pitch) {
+            if (a[i]->m_pitch != b[i]->m_pitch) {
                 ++neuralMoved;
-                const double inBar = a[i]->beat - 4.0 * std::floor(a[i]->beat / 4.0);
+                const double inBar = a[i]->m_beat - 4.0 * std::floor(a[i]->m_beat / 4.0);
                 if (!(inBar >= 1.0 && inBar < 2.0)) ++neuralMovedOffGroupBeat;
             }
-        for (size_t i = 0; i < std::min(c.size(), d.size()); ++i) if (c[i]->pitch != d[i]->pitch) ++patternMoved;
+        for (size_t i = 0; i < std::min(c.size(), d.size()); ++i) if (c[i]->m_pitch != d[i]->m_pitch) ++patternMoved;
         check(neuralMovedOffGroupBeat == 0 && patternMoved > 20 * neuralMoved,
               "compose.bass_follows_chords moves the pattern bass; of the learned one it moves only the group figure",
               fmt("%d of %zu learned notes moved, all on beat 1 (the group figure); "
@@ -1101,40 +1101,40 @@ void testVarietyPlans()
     // The probes of the level match are not what this looks at (they have their own check below).
     ParamStore p;
     p.parseText("compose.level_match=Off master.auto_gain=Off");
-    const int cb = p.base(Module::Compose);
+    const int cb = p.base(ModuleE::COMPOSE);
     Composer c(2026);
     const int tracks = 60;
-    std::vector<int> keyUse(12, 0), patUse(kNumBassPatterns, 0);
+    std::vector<int> keyUse(12, 0), patUse(NumBassPatterns, 0);
     int engineSwitches = 0, gateViolations = 0, sameAsPrevious = 0, badLength = 0;
     double minKick = 1e9, minBass = 1e9, sumKick = 0.0, bpmLo = 1e9, bpmHi = -1e9;
-    const float release = p.get(p.base(Module::Bass) + bass::AmpRelease);
+    const float release = p.get(p.base(ModuleE::BASS) + bass::AMP_RELEASE);
     for (int i = 0; i < tracks; ++i) {
         const TrackPlan t = c.track(p, i);
-        ++keyUse[static_cast<size_t>(t.key)];
-        ++patUse[static_cast<size_t>(t.primaryPattern)];
-        if (t.kickEngine >= 0) ++engineSwitches;
-        bpmLo = std::min(bpmLo, t.bpm);
-        bpmHi = std::max(bpmHi, t.bpm);
-        if (t.bars < 32 || t.bars % 16 != 0) ++badLength;
+        ++keyUse[static_cast<size_t>(t.m_key)];
+        ++patUse[static_cast<size_t>(t.m_primaryPattern)];
+        if (t.m_kickEngine >= 0) ++engineSwitches;
+        bpmLo = std::min(bpmLo, t.m_bpm);
+        bpmHi = std::max(bpmHi, t.m_bpm);
+        if (t.m_bars < 32 || t.m_bars % 16 != 0) ++badLength;
         // Gate: the lowest note's release (floored at half a period) must end before the next slot.
-        const int lowest = bassRootNote(t.key, 0) + scaleDegree(t.scale, 6) - 12;
-        for (int pat : { t.primaryPattern, t.secondaryPattern }) {
-            const double slot = shortestBassSlot(pat) * 60.0 / t.bpm;
+        const int lowest = bassRootNote(t.m_key, 0) + scaleDegree(t.m_scale, 6) - 12;
+        for (int pat : { t.m_primaryPattern, t.m_secondaryPattern }) {
+            const double slot = shortestBassSlot(pat) * 60.0 / t.m_bpm;
             const double rel = std::max(release * 0.001, 0.5 / midiToHz(lowest));
-            if (i > 0 && t.gate * slot + rel > slot + 1e-6) ++gateViolations;
+            if (i > 0 && t.m_gate * slot + rel > slot + 1e-6) ++gateViolations;
         }
         if (i > 0) {
             const TrackPlan prev = c.track(p, i - 1);
             double dk = 0.0, db = 0.0;
-            for (int m = 0; m < kNumKickMacros; ++m) dk += (t.kickMacro[m] - prev.kickMacro[m]) * (t.kickMacro[m] - prev.kickMacro[m]);
-            for (int m = 0; m < kNumBassMacros; ++m) db += (t.bassMacro[m] - prev.bassMacro[m]) * (t.bassMacro[m] - prev.bassMacro[m]);
+            for (int m = 0; m < NumKickMacros; ++m) dk += (t.m_kickMacro[m] - prev.m_kickMacro[m]) * (t.m_kickMacro[m] - prev.m_kickMacro[m]);
+            for (int m = 0; m < NumBassMacros; ++m) db += (t.m_bassMacro[m] - prev.m_bassMacro[m]) * (t.m_bassMacro[m] - prev.m_bassMacro[m]);
             if (i > 1) { minKick = std::min(minKick, std::sqrt(dk)); minBass = std::min(minBass, std::sqrt(db)); sumKick += std::sqrt(dk); }
-            if (t.key == prev.key && t.primaryPattern == prev.primaryPattern && t.bpm == prev.bpm) ++sameAsPrevious;
+            if (t.m_key == prev.m_key && t.m_primaryPattern == prev.m_primaryPattern && t.m_bpm == prev.m_bpm) ++sameAsPrevious;
         }
     }
     const int keys = static_cast<int>(std::count_if(keyUse.begin(), keyUse.end(), [](int n) { return n > 0; }));
     const int pats = static_cast<int>(std::count_if(patUse.begin(), patUse.end(), [](int n) { return n > 0; }));
-    const double base = p.get(cb + compose::Bpm), range = p.get(cb + compose::TempoRange);
+    const double base = p.get(cb + compose::BPM), range = p.get(cb + compose::TEMPO_RANGE);
     check(keys >= 6 && pats >= 4, "keys and bass patterns spread over the night",
           fmt("%d keys, %d primary patterns, %d kick engine switches in %d tracks", keys, pats, engineSwitches, tracks));
     check(bpmLo >= base - range && bpmHi <= base + range && bpmHi - bpmLo >= range, "tempo wanders inside the range", fmt("%.1f .. %.1f BPM", bpmLo, bpmHi));
@@ -1151,12 +1151,12 @@ void testVarietyPlans()
         bool allKnobs = true;
         for (int i = 0; i < 20; ++i) {
             const TrackPlan t = cz.track(q, i);
-            float off[std::max<int>(kick::Count, bass::Count)] = {};   // sized by the tables (26.09.2026)
-            Composer::recipeOffsets(true, t.kickMacro, 0.0f, off);
+            float off[std::max<int>(kick::COUNT, bass::COUNT)] = {};   // sized by the tables (26.09.2026)
+            Composer::recipeOffsets(true, t.m_kickMacro, 0.0f, off);
             float any = 0.0f;
             for (float o : off) any += std::fabs(o);
-            allKnobs = allKnobs && t.key == q.getInt(cb + compose::Key) && t.primaryPattern == q.getInt(cb + compose::BassPattern)
-                    && t.bpm == q.get(cb + compose::Bpm) && t.bars == q.getInt(cb + compose::TrackBars) && t.kickEngine < 0 && any == 0.0f;
+            allKnobs = allKnobs && t.m_key == q.getInt(cb + compose::KEY) && t.m_primaryPattern == q.getInt(cb + compose::BASS_PATTERN)
+                    && t.m_bpm == q.get(cb + compose::BPM) && t.m_bars == q.getInt(cb + compose::TRACK_BARS) && t.m_kickEngine < 0 && any == 0.0f;
         }
         check(allKnobs, "with Track and Sound Variation at 0 every track plays the knobs");
     }
@@ -1216,16 +1216,16 @@ void testVarietyLevelMatch()
                 const TrackPlan tp = ce.track(e->params(), t);
                 int coreBar = 0, coreBars = 16;
                 float energy = 0.5f;
-                for (int i = 0; i < tp.form.count; ++i)
-                    if (tp.form.section[i].type == SectionType::Groove || tp.form.section[i].type == SectionType::Drop) {
-                        coreBar = tp.form.section[i].startBar;
-                        coreBars = tp.form.section[i].bars;
-                        energy = 0.5f * (tp.form.section[i].energy + tp.form.section[i].energyTo);
+                for (int i = 0; i < tp.m_form.m_count; ++i)
+                    if (tp.m_form.m_section[i].m_type == SectionTypeE::GROOVE || tp.m_form.m_section[i].m_type == SectionTypeE::DROP) {
+                        coreBar = tp.m_form.m_section[i].m_startBar;
+                        coreBars = tp.m_form.m_section[i].m_bars;
+                        energy = 0.5f * (tp.m_form.m_section[i].m_energy + tp.m_form.m_section[i].m_energyTo);
                         break;
                     }
                 const int window = std::min(24, coreBars - 4);
-                const uint64_t a = static_cast<uint64_t>(tm.secondsAt((tp.firstBar + coreBar + 2) * 4.0) * 48000.0);
-                const uint64_t b = static_cast<uint64_t>(tm.secondsAt((tp.firstBar + coreBar + 2 + window) * 4.0) * 48000.0);
+                const uint64_t a = static_cast<uint64_t>(tm.secondsAt((tp.m_firstBar + coreBar + 2) * 4.0) * 48000.0);
+                const uint64_t b = static_cast<uint64_t>(tm.secondsAt((tp.m_firstBar + coreBar + 2 + window) * 4.0) * 48000.0);
                 LoudnessMeter m;
                 m.prepare(48000.0);
                 while (e->samplePosition() < b) {
@@ -1237,11 +1237,11 @@ void testVarietyLevelMatch()
                 // The section's own gain, written out here rather than taken from the composer, so that
                 // a change to either side shows up as a disagreement instead of cancelling out.
                 const double arc = std::clamp((static_cast<double>(energy) - 0.7) * 5.0, -2.0, 2.0);
-                const double lufs = m.read().integrated - arc;
+                const double lufs = m.read().m_integrated - arc;
                 lo = std::min(lo, lufs);
                 hi = std::max(hi, lufs);
                 // Skip to the next track's measuring window.
-                const uint64_t next = static_cast<uint64_t>(tm.secondsAt(static_cast<double>(tp.firstBar + tp.bars) * 4.0) * 48000.0);
+                const uint64_t next = static_cast<uint64_t>(tm.secondsAt(static_cast<double>(tp.m_firstBar + tp.m_bars) * 4.0) * 48000.0);
                 while (e->samplePosition() < next) {
                     cond.pump(e->params(), 32.0);
                     e->process(L.data(), R.data(), static_cast<int>(std::min<uint64_t>(512, next - e->samplePosition())));
@@ -1274,8 +1274,8 @@ void testVarietyRecipes()
         e->setTempoMap(tm);
         Conductor cond(*e, ce);
         std::vector<float> L(4096), R(4096);
-        const int kb = e->params().base(Module::Kick), bbase = e->params().base(Module::Bass);
-        const int cb = e->params().base(Module::Compose);
+        const int kb = e->params().base(ModuleE::KICK), bbase = e->params().base(ModuleE::BASS);
+        const int cb = e->params().base(ModuleE::COMPOSE);
         // 21.09.2026, at the user's decision: the first track draws a recipe like every other one.
         // Until then this check read "engine plays the knobs in track 1", and that was the contract:
         // the whole recipe machinery -- kick, bass, acid voicing and the six voices -- began at track
@@ -1285,22 +1285,22 @@ void testVarietyRecipes()
         // mode, tempo and length.
         float k1 = 0.0f, b1 = 0.0f;
         bool firstHasRecipe = false, secondDiffers = false, firstKeepsTheKnobs = false;
-        const uint64_t endSamples = static_cast<uint64_t>(tm.secondsAt(64.0 * kBeatsPerBar) * 48000.0);
+        const uint64_t endSamples = static_cast<uint64_t>(tm.secondsAt(64.0 * BeatsPerBar) * 48000.0);
         while (e->samplePosition() < endSamples) {
             cond.pump(e->params(), 32.0);
             e->process(L.data(), R.data(), 4096);
-            const double bar = e->beatPosition() / kBeatsPerBar;
+            const double bar = e->beatPosition() / BeatsPerBar;
             if (bar > 8.0 && bar < 9.0) {
-                k1 = e->effective(kb + kick::PitchDecay);
-                b1 = e->effective(bbase + bass::Resonance);
-                firstHasRecipe = k1 != e->params().get(kb + kick::PitchDecay)
-                              || b1 != e->params().get(bbase + bass::Resonance);
-                firstKeepsTheKnobs = e->effective(cb + compose::Key) == e->params().get(cb + compose::Key)
-                                  && e->effective(cb + compose::Scale) == e->params().get(cb + compose::Scale);
+                k1 = e->effective(kb + kick::PITCH_DECAY);
+                b1 = e->effective(bbase + bass::RESONANCE);
+                firstHasRecipe = k1 != e->params().get(kb + kick::PITCH_DECAY)
+                              || b1 != e->params().get(bbase + bass::RESONANCE);
+                firstKeepsTheKnobs = e->effective(cb + compose::KEY) == e->params().get(cb + compose::KEY)
+                                  && e->effective(cb + compose::SCALE) == e->params().get(cb + compose::SCALE);
             }
             if (bar > 40.0 && bar < 41.0) {
-                secondDiffers = e->effective(kb + kick::PitchDecay) != k1
-                             || e->effective(bbase + bass::Resonance) != b1;
+                secondDiffers = e->effective(kb + kick::PITCH_DECAY) != k1
+                             || e->effective(bbase + bass::RESONANCE) != b1;
             }
         }
         check(firstHasRecipe && secondDiffers && firstKeepsTheKnobs,
@@ -1333,9 +1333,9 @@ void testEngine()
     e->prepare(sr, 256);
     e->params().parseText("bass.level=-36 mix.bass_mute=1 kick.click_level=0");
     NoteEvent k;
-    k.beat = 3.3;
-    k.part = Part::Kick;
-    k.velocity = 127;
+    k.m_beat = 3.3;
+    k.m_part = PartE::KICK;
+    k.m_velocity = 127;
     e->pushEvent(k);
     std::vector<float> L(96000), R(96000);
     e->process(L.data(), R.data(), 96000);
@@ -1352,7 +1352,7 @@ void testEngine()
     er->setTempoMap(tm);
     er->params().parseText("mix.bass_mute=1 kick.click_level=0");
     NoteEvent late = k;
-    late.beat = 60.0;
+    late.m_beat = 60.0;
     er->pushEvent(late);
     const size_t total = static_cast<size_t>(tm.secondsAt(61.0) * sr);
     std::vector<float> RL(total), RR(total);
@@ -1375,9 +1375,9 @@ void testEngine()
     eb->params().parseText("mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1 "
                            "mix.texture_mute=1 mix.vocal_mute=1");
     const int coreBar = firstCoreBar(eb->params(), comp);
-    const std::vector<float> bassOnly = renderEngine(*eb, comp, (coreBar + 16) * static_cast<double>(kBeatsPerBar), 256, sr);
+    const std::vector<float> bassOnly = renderEngine(*eb, comp, (coreBar + 16) * static_cast<double>(BeatsPerBar), 256, sr);
     const double beatSamples = 60.0 / 145.0 * sr;
-    const size_t from = static_cast<size_t>(coreBar * kBeatsPerBar * beatSamples);
+    const size_t from = static_cast<size_t>(coreBar * BeatsPerBar * beatSamples);
     double inWindow = 0.0, all = 0.0;
     size_t nWindow = 0, nAll = 0;
     for (size_t i = from; i < bassOnly.size(); ++i) {
@@ -1400,7 +1400,7 @@ void testEngine()
     const LoudnessReading rd = meter.read();
     float peak = 0.0f;
     for (float v : ml) peak = std::max(peak, std::fabs(v));
-    check(rd.integrated > -20.0f && rd.integrated < -4.0f, "kick and bass loop measures in a sane loudness window", fmt("%.1f LUFS, true peak %.2f dBTP", static_cast<double>(rd.integrated), static_cast<double>(rd.truePeak)));
+    check(rd.m_integrated > -20.0f && rd.m_integrated < -4.0f, "kick and bass loop measures in a sane loudness window", fmt("%.1f LUFS, true peak %.2f dBTP", static_cast<double>(rd.m_integrated), static_cast<double>(rd.m_truePeak)));
     check(20.0f * std::log10(peak) <= -0.3f + 0.01f, "sample peak at or below the ceiling", fmt("%.2f dBFS", 20.0 * std::log10(static_cast<double>(peak))));
 
     // The tail limit inside the engine follows the pattern: an offbeat bass leaves the kick longer.
@@ -1409,10 +1409,10 @@ void testEngine()
     et->params().parseText("kick.amp_decay=800");
     std::vector<float> tl(512), tr(512);
     et->process(tl.data(), tr.data(), 512);
-    const float rolling = et->effective(et->params().base(Module::Kick) + kick::AmpDecay);
+    const float rolling = et->effective(et->params().base(ModuleE::KICK) + kick::AMP_DECAY);
     et->params().parseText("compose.bass_pattern=Offbeat");
     et->process(tl.data(), tr.data(), 512);
-    const float offbeat = et->effective(et->params().base(Module::Kick) + kick::AmpDecay);
+    const float offbeat = et->effective(et->params().base(ModuleE::KICK) + kick::AMP_DECAY);
     check(rolling < 800.0f && offbeat > 1.9f * rolling, "kick decay limited by the first bass slot (rolling tighter than offbeat)",
           fmt("rolling %.0f ms, offbeat %.0f ms", static_cast<double>(rolling), static_cast<double>(offbeat)));
 }
@@ -1440,7 +1440,7 @@ void testKickReference()
     const double sr = 48000.0;
     const double slot = 0.25 * 60.0 / 145.0;
     ParamStore p;
-    std::vector<float> kv = moduleValues(p, Module::Kick);
+    std::vector<float> kv = moduleValues(p, ModuleE::KICK);
     Kick::constrain(kv.data(), slot, 6);
     Kick k;
     k.prepare(sr);
@@ -1513,8 +1513,8 @@ void testBassBite()
         bite = powDb(pBite / p20);
     };
     ParamStore p;
-    std::vector<float> bv = moduleValues(p, Module::Bass);
-    bv[bass::DuckDepth] = 0.0f;   // the voice's own spectrum; the duck is a level, not a timbre
+    std::vector<float> bv = moduleValues(p, ModuleE::BASS);
+    bv[bass::DUCK_DEPTH] = 0.0f;   // the voice's own spectrum; the duck is a level, not a timbre
     double sub = 0.0, oct = 0.0, bite = 0.0;
     lateBands(lowendRollingBass(bv, 64), sub, oct, bite);
     check(sub >= -10.7 && sub <= -3.9 && oct >= -2.3 && oct <= -0.4 && bite >= -11.7 && bite <= -8.2,
@@ -1524,7 +1524,7 @@ void testBassBite()
     // The bite is what carries the mid band: without it the band falls back towards the old bass.
     {
         std::vector<float> nb = bv;
-        nb[bass::Bite] = 0.0f;
+        nb[bass::BITE] = 0.0f;
         double s2 = 0.0, o2 = 0.0, b2 = 0.0;
         lateBands(lowendRollingBass(nb, 64), s2, o2, b2);
         check(bite - b2 >= 3.0, "the bite layer carries more than half of the 300 Hz .. 2 kHz band", fmt("%.1f dB with it, %.1f without", bite, b2));
@@ -1540,15 +1540,15 @@ void testBassBite()
     {
         const double f0 = midiToHz(30);
         std::vector<float> leakV = bv, subV = bv;
-        leakV[bass::Sub] = 0.0f;
-        leakV[bass::SubOctave] = 0.0f;
-        leakV[bass::AmpSustain] = 1.0f;
-        subV[bass::AmpSustain] = 1.0f;
-        subV[bass::Bite] = 0.0f;
-        subV[bass::SubOctave] = 0.0f;
-        subV[bass::Cutoff] = 20.0f;
-        subV[bass::EnvAmount] = 0.0f;
-        subV[bass::KeyTrack] = 0.0f;
+        leakV[bass::SUB] = 0.0f;
+        leakV[bass::SUB_OCTAVE] = 0.0f;
+        leakV[bass::AMP_SUSTAIN] = 1.0f;
+        subV[bass::AMP_SUSTAIN] = 1.0f;
+        subV[bass::BITE] = 0.0f;
+        subV[bass::SUB_OCTAVE] = 0.0f;
+        subV[bass::CUTOFF] = 20.0f;
+        subV[bass::ENV_AMOUNT] = 0.0f;
+        subV[bass::KEY_TRACK] = 0.0f;
         auto note = [&](const std::vector<float>& v) {
             Bass b;
             b.prepare(sr);
@@ -1577,7 +1577,7 @@ void testBassBite()
     // the bite's envelope and not the ladder's pluck under it.
     {
         std::vector<float> pv = bv;
-        pv[bass::EnvAmount] = 0.0f;
+        pv[bass::ENV_AMOUNT] = 0.0f;
         const std::vector<float> y = lowendRollingBass(pv, 64);
         const size_t per = static_cast<size_t>(std::lround(sr / midiToHz(30)));
         double early = 0.0, late = 0.0;
@@ -1612,7 +1612,7 @@ void testKickBody()
     {
         const double slot = 0.25 * 60.0 / 145.0;
         ParamStore p;
-        std::vector<float> kv = moduleValues(p, Module::Kick);
+        std::vector<float> kv = moduleValues(p, ModuleE::KICK);
         Kick::constrain(kv.data(), slot, 6);
         Kick k;
         k.prepare(sr);
@@ -1662,7 +1662,7 @@ void testKickBody()
         const TempoMap tm = c.tempoMap(e->params(), 72);
         e->setTempoMap(tm);
         latency = e->latencySamples();
-        return renderEngine(*e, c, 70.0 * kBeatsPerBar, 512, sr);
+        return renderEngine(*e, c, 70.0 * BeatsPerBar, 512, sr);
     };
     const std::vector<float> ky = render("mix.bass_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1");
     const std::vector<float> by = render("mix.kick_mute=1 mix.perc_mute=1 mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1");
@@ -1672,8 +1672,8 @@ void testKickBody()
     // a heap read past the end that the AddressSanitizer build caught (docs/rounds/2026-09.md, "UB-Suche").
     auto at = [&](double beats) { return std::min(ky.size(), static_cast<size_t>(beats * beat + latency)); };
     // K-weighting, ITU-R BS.1770-4's tabulated 48 kHz coefficients (as in testSfxLevel).
-    struct Biquad { double b0, b1, b2, a1, a2, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-        double tick(double x) { const double y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; } };
+    struct Biquad { double m_b0, m_b1, m_b2, m_a1, m_a2, m_x1 = 0, m_x2 = 0, m_y1 = 0, m_y2 = 0;
+        double tick(double x) { const double y = m_b0 * x + m_b1 * m_x1 + m_b2 * m_x2 - m_a1 * m_y1 - m_a2 * m_y2; m_x2 = m_x1; m_x1 = x; m_y2 = m_y1; m_y1 = y; return y; } };
     auto kweight = [&](const std::vector<float>& x) {
         Biquad s{ 1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241, 0.73248077421585 };
         Biquad h{ 1.0, -2.0, 1.0, -1.99004745483398, 0.99007225036621 };

@@ -41,6 +41,11 @@ TOP_MASKS = 64
 TOP_SKELETONS = 48
 
 
+
+def cc(role):
+    """A role's part in a generated table's name (CGVR constants: acid -> Acid, so k_acid_uni became AcidUni)."""
+    return "".join(w[:1].upper() + w[1:] for w in role.split("_"))
+
 def _dataset():
     spec = importlib.util.spec_from_file_location("phos_dataset", os.path.join(_TRAIN, "dataset.py"))
     mod = importlib.util.module_from_spec(spec)
@@ -126,19 +131,19 @@ def emit_lines(root):
         top.sort(key=lambda kv: (-kv[1], kv[0]))
         body = ", ".join(f"{{{m},{n}}}" for m, n in top) or "{0,0}"
         out.append(f"/// {r}: the commonest bars' onset masks and their counts")
-        out.append(f"const CorpusBarMask k_{r}_bars[] = {{ {body} }};")
+        out.append(f"const CorpusBarMask {cc(r)}Bars[] = {{ {body} }};")
         tops = skels[r].most_common(TOP_SKELETONS)
         tops.sort(key=lambda kv: (-kv[1], kv[0]))
         body = ", ".join(f"{{{{{d[0]},{d[1]},{d[2]}}},{n}}}" for d, n in tops) or "{{0,0,0},0}"
         out.append(f"/// {r}: the commonest skeletons and their counts")
-        out.append(f"const CorpusSkeleton k_{r}_skeletons[] = {{ {body} }};")
+        out.append(f"const CorpusSkeleton {cc(r)}Skeletons[] = {{ {body} }};")
     out.append("} // namespace")
     out.append("")
-    out.append("const CorpusBarMask* const kCorpusRoleBars[kNumCorpusRoles] = { " + ", ".join(f"k_{r}_bars" for r in ROLES) + " };")
-    out.append("const int kNumCorpusRoleBars[kNumCorpusRoles] = { " + ", ".join(str(max(1, min(TOP_MASKS, len(masks[r])))) for r in ROLES) + " };")
-    out.append("const CorpusSkeleton* const kCorpusRoleSkeletons[kNumCorpusRoles] = { " + ", ".join(f"k_{r}_skeletons" for r in ROLES) + " };")
-    out.append("const int kNumCorpusRoleSkeletons[kNumCorpusRoles] = { " + ", ".join(str(max(1, min(TOP_SKELETONS, len(skels[r])))) for r in ROLES) + " };")
-    out.append("const int kCorpusTemplateLines[kNumCorpusRoles] = { " + ", ".join(str(lines[r]) for r in ROLES) + " };")
+    out.append("const CorpusBarMask* const CorpusRoleBars[NumCorpusRoles] = { " + ", ".join(f"{cc(r)}Bars" for r in ROLES) + " };")
+    out.append("const int NumCorpusRoleBars[NumCorpusRoles] = { " + ", ".join(str(max(1, min(TOP_MASKS, len(masks[r])))) for r in ROLES) + " };")
+    out.append("const CorpusSkeleton* const CorpusRoleSkeletons[NumCorpusRoles] = { " + ", ".join(f"{cc(r)}Skeletons" for r in ROLES) + " };")
+    out.append("const int NumCorpusRoleSkeletons[NumCorpusRoles] = { " + ", ".join(str(max(1, min(TOP_SKELETONS, len(skels[r])))) for r in ROLES) + " };")
+    out.append("const int CorpusTemplateLines[NumCorpusRoles] = { " + ", ".join(str(lines[r]) for r in ROLES) + " };")
     out.append("")
     return out
 

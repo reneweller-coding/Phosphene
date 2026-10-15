@@ -21,13 +21,13 @@ namespace {
 /** @brief The letter of a section in the form string. */
 char sectionLetter(const Section& s)
 {
-    switch (s.type) {
-    case SectionType::Intro: return 'I';
-    case SectionType::Groove: return 'G';
-    case SectionType::Build: return 'B';
-    case SectionType::Drop: return s.climax ? 'C' : 'D';
-    case SectionType::Break: return 'K';
-    case SectionType::Outro: return 'O';
+    switch (s.m_type) {
+    case SectionTypeE::INTRO: return 'I';
+    case SectionTypeE::GROOVE: return 'G';
+    case SectionTypeE::BUILD: return 'B';
+    case SectionTypeE::DROP: return s.m_climax ? 'C' : 'D';
+    case SectionTypeE::BREAK: return 'K';
+    case SectionTypeE::OUTRO: return 'O';
     default: return 'X';
     }
 }
@@ -45,26 +45,26 @@ std::string clean(const std::string& s)
 GalleryTrack galleryTrackOf(const TrackPlan& p)
 {
     GalleryTrack t;
-    t.style = kStyleNames[std::clamp(p.style, 0, kNumStyles - 1)];
-    t.key = kKeyNames[((p.key % 12) + 12) % 12];
-    t.scale = kScaleNames[std::clamp(p.scale, 0, kNumScales - 1)];
-    t.bpm = p.bpm;
-    t.bars = p.bars;
-    for (int s = 0; s < p.form.count; ++s) {
-        if (!t.form.empty()) t.form += ' ';
-        t.form += sectionLetter(p.form.section[s]);
-        t.form += std::to_string(p.form.section[s].bars);
+    t.m_style = StyleNames[std::clamp(p.m_style, 0, NumStyles - 1)];
+    t.m_key = KeyNames[((p.m_key % 12) + 12) % 12];
+    t.m_scale = ScaleNames[std::clamp(p.m_scale, 0, NumScales - 1)];
+    t.m_bpm = p.m_bpm;
+    t.m_bars = p.m_bars;
+    for (int s = 0; s < p.m_form.m_count; ++s) {
+        if (!t.m_form.empty()) t.m_form += ' ';
+        t.m_form += sectionLetter(p.m_form.m_section[s]);
+        t.m_form += std::to_string(p.m_form.m_section[s].m_bars);
     }
     return t;
 }
 
 std::string galleryComment(const GalleryEntry& e)
 {
-    std::string s = "# gallery.name=" + clean(e.name) + "\n# gallery.saved=" + clean(e.saved) + "\n";
-    for (const GalleryTrack& t : e.tracks) {
+    std::string s = "# gallery.name=" + clean(e.m_name) + "\n# gallery.saved=" + clean(e.m_saved) + "\n";
+    for (const GalleryTrack& t : e.m_tracks) {
         char bpm[32];
-        std::snprintf(bpm, sizeof(bpm), "%.1f", t.bpm);
-        s += "# gallery.track=" + clean(t.style) + "|" + clean(t.key) + "|" + clean(t.scale) + "|" + bpm + "|" + std::to_string(t.bars) + "|" + clean(t.form) + "\n";
+        std::snprintf(bpm, sizeof(bpm), "%.1f", t.m_bpm);
+        s += "# gallery.track=" + clean(t.m_style) + "|" + clean(t.m_key) + "|" + clean(t.m_scale) + "|" + bpm + "|" + std::to_string(t.m_bars) + "|" + clean(t.m_form) + "\n";
     }
     return s;
 }
@@ -84,9 +84,9 @@ bool readGalleryEntry(std::string_view text, GalleryEntry& out)
     std::string line;
     while (std::getline(in, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
-        if (line.rfind("seed=", 0) == 0) { e.seed = std::strtoull(line.c_str() + 5, nullptr, 10); haveSeed = true; continue; }
-        if (line.rfind("# gallery.name=", 0) == 0) { e.name = line.substr(15); continue; }
-        if (line.rfind("# gallery.saved=", 0) == 0) { e.saved = line.substr(16); continue; }
+        if (line.rfind("seed=", 0) == 0) { e.m_seed = std::strtoull(line.c_str() + 5, nullptr, 10); haveSeed = true; continue; }
+        if (line.rfind("# gallery.name=", 0) == 0) { e.m_name = line.substr(15); continue; }
+        if (line.rfind("# gallery.saved=", 0) == 0) { e.m_saved = line.substr(16); continue; }
         if (line.rfind("# gallery.track=", 0) == 0) {
             std::vector<std::string> f;
             std::string cell;
@@ -94,13 +94,13 @@ bool readGalleryEntry(std::string_view text, GalleryEntry& out)
             while (std::getline(cells, cell, '|')) f.push_back(cell);
             if (f.size() < 6) continue;
             GalleryTrack t;
-            t.style = f[0];
-            t.key = f[1];
-            t.scale = f[2];
-            t.bpm = std::atof(f[3].c_str());
-            t.bars = std::atoi(f[4].c_str());
-            t.form = f[5];
-            e.tracks.push_back(t);
+            t.m_style = f[0];
+            t.m_key = f[1];
+            t.m_scale = f[2];
+            t.m_bpm = std::atof(f[3].c_str());
+            t.m_bars = std::atoi(f[4].c_str());
+            t.m_form = f[5];
+            e.m_tracks.push_back(t);
         }
     }
     if (!haveSeed) return false;
@@ -116,10 +116,10 @@ std::map<uint64_t, RatingCount> ratingsBySeed(const char* path)
     while (std::getline(in, line)) {
         RatingEntry r;
         if (!parseRating(line, r)) continue;
-        RatingCount& c = out[r.seed];
-        if (r.verdict > 0) ++c.good;
-        else if (r.verdict < 0) ++c.bad;
-        else ++c.notes;
+        RatingCount& c = out[r.m_seed];
+        if (r.m_verdict > 0) ++c.m_good;
+        else if (r.m_verdict < 0) ++c.m_bad;
+        else ++c.m_notes;
     }
     return out;
 }

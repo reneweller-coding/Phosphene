@@ -33,22 +33,22 @@ inline double logCosh(double x)
  * curve at their midpoint is used, which is its limit.
  */
 struct TanhAdaa {
-    float  x1 = 0.0f;   ///< previous input
-    double f1 = 0.0;    ///< antiderivative at the previous input
+    float  m_x1 = 0.0f;   ///< previous input
+    double m_f1 = 0.0;    ///< antiderivative at the previous input
 
     /** @brief One sample; half a sample late. */
     float operator()(float x)
     {
         const double fx = logCosh(static_cast<double>(x));
-        const double dx = static_cast<double>(x) - static_cast<double>(x1);
-        const float y = std::fabs(dx) > 1.0e-5 ? static_cast<float>((fx - f1) / dx)
-                                               : std::tanh(0.5f * (x + x1));
-        x1 = x;
-        f1 = fx;
+        const double dx = static_cast<double>(x) - static_cast<double>(m_x1);
+        const float y = std::fabs(dx) > 1.0e-5 ? static_cast<float>((fx - m_f1) / dx)
+                                               : std::tanh(0.5f * (x + m_x1));
+        m_x1 = x;
+        m_f1 = fx;
         return y;
     }
     /** @brief Clears the state. */
-    void reset() { x1 = 0.0f; f1 = 0.0; }
+    void reset() { m_x1 = 0.0f; m_f1 = 0.0; }
 };
 
 /**
@@ -59,8 +59,8 @@ struct TanhAdaa {
  * body off beyond it, where tanh rounds everything a little.
  */
 struct HardClipAdaa {
-    float  x1 = 0.0f;   ///< previous input
-    double f1 = 0.0;    ///< antiderivative at the previous input
+    float  m_x1 = 0.0f;   ///< previous input
+    double m_f1 = 0.0;    ///< antiderivative at the previous input
 
     /** @brief The antiderivative of the clip. */
     static double anti(double x) { const double a = std::fabs(x); return a <= 1.0 ? 0.5 * x * x : a - 0.5; }
@@ -69,16 +69,16 @@ struct HardClipAdaa {
     float operator()(float x)
     {
         const double fx = anti(static_cast<double>(x));
-        const double dx = static_cast<double>(x) - static_cast<double>(x1);
+        const double dx = static_cast<double>(x) - static_cast<double>(m_x1);
         float y;
-        if (std::fabs(dx) > 1.0e-5) y = static_cast<float>((fx - f1) / dx);
-        else { const float m = 0.5f * (x + x1); y = m > 1.0f ? 1.0f : (m < -1.0f ? -1.0f : m); }
-        x1 = x;
-        f1 = fx;
+        if (std::fabs(dx) > 1.0e-5) y = static_cast<float>((fx - m_f1) / dx);
+        else { const float m = 0.5f * (x + m_x1); y = m > 1.0f ? 1.0f : (m < -1.0f ? -1.0f : m); }
+        m_x1 = x;
+        m_f1 = fx;
         return y;
     }
     /** @brief Clears the state. */
-    void reset() { x1 = 0.0f; f1 = 0.0; }
+    void reset() { m_x1 = 0.0f; m_f1 = 0.0; }
 };
 
 } // namespace phos

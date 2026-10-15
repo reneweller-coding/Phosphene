@@ -20,9 +20,9 @@
 
 namespace phos {
 
-template <class Model, class Uniform>
-bool sampleConstrained(const Model& model, const std::vector<std::vector<uint8_t>>& allowed, int start2, int start1,
-                       double temperature, Uniform&& uniform, std::vector<int>& out)
+template <class ModelT, class UniformT>
+bool sampleConstrained(const ModelT& model, const std::vector<std::vector<uint8_t>>& allowed, int start2, int start1,
+                       double temperature, UniformT&& uniform, std::vector<int>& out)
 {
     const int A = model.alphabet();
     const int n = static_cast<int>(allowed.size());

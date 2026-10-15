@@ -51,7 +51,7 @@
 namespace phos {
 
 /** @brief Rows per panel on the path this translation unit was built for. */
-constexpr int kPanelRows = kVecWidth;
+constexpr int PanelRows = VecWidth;
 
 /** @brief @p n rounded up to a whole number of panels of @p w rows. */
 constexpr int roundUpTo(int n, int w) { return ((n + w - 1) / w) * w; }
@@ -70,23 +70,23 @@ constexpr int roundUpTo(int n, int w) { return ((n + w - 1) / w) * w; }
  * @param k integer-valued lanes; anything outside [-127, 127] gives a wrong answer, so laneExp()
  *          clamps its argument before it gets here.
  */
-template <class V>
-inline V lanePow2i(V k)
+template <class VT>
+inline VT lanePow2i(VT k)
 {
     // c[i] = 2^-(2^i), all exactly representable.
     static constexpr float c[7] = { 0.5f, 0.25f, 0.0625f, 3.90625e-3f,
                                     1.52587890625e-5f, 2.3283064365386963e-10f, 5.42101086242752217e-20f };
-    const V zero = lanes<V>(0.0f), one = lanes<V>(1.0f), half = lanes<V>(0.5f);
+    const VT zero = lanes<VT>(0.0f), one = lanes<VT>(1.0f), half = lanes<VT>(0.5f);
     const auto negative = vlt(k, zero);
-    V m = vselect(negative, -k, k);
-    V bit[7];
+    VT m = vselect(negative, -k, k);
+    VT bit[7];
     for (int i = 0; i < 7; ++i) {
-        const V h = vfloor(m * half);
+        const VT h = vfloor(m * half);
         bit[i] = m - (h + h);   // m mod 2, exact for integer-valued m
         m = h;
     }
-    V f = one;
-    for (int i = 6; i >= 0; --i) f = vselect(vgt(bit[i], half), f * lanes<V>(c[i]), f);
+    VT f = one;
+    for (int i = 6; i >= 0; --i) f = vselect(vgt(bit[i], half), f * lanes<VT>(c[i]), f);
     return vselect(negative, f, one / f);
 }
 
@@ -103,21 +103,21 @@ inline V lanePow2i(V k)
  * so the clamp is never active in practice. Measured against std::exp in double: 8.3e-8 relative,
  * seven tenths of an ulp (Tests/selftest.cpp, testModelKernel).
  */
-template <class V>
-inline V laneExp(V x)
+template <class VT>
+inline VT laneExp(VT x)
 {
-    x = vmin(vmax(x, lanes<V>(-87.0f)), lanes<V>(87.0f));
-    const V k = vfloor(vfmadd(x, lanes<V>(1.44269504088896341f), lanes<V>(0.5f)));
-    V r = vfnmadd(k, lanes<V>(0.693359375f), x);
-    r = vfnmadd(k, lanes<V>(-2.12194440e-4f), r);
-    V p = lanes<V>(1.9875691500e-4f);
-    p = vfmadd(p, r, lanes<V>(1.3981999507e-3f));
-    p = vfmadd(p, r, lanes<V>(8.3334519073e-3f));
-    p = vfmadd(p, r, lanes<V>(4.1665795894e-2f));
-    p = vfmadd(p, r, lanes<V>(1.6666665459e-1f));
-    p = vfmadd(p, r, lanes<V>(5.0000001201e-1f));
+    x = vmin(vmax(x, lanes<VT>(-87.0f)), lanes<VT>(87.0f));
+    const VT k = vfloor(vfmadd(x, lanes<VT>(1.44269504088896341f), lanes<VT>(0.5f)));
+    VT r = vfnmadd(k, lanes<VT>(0.693359375f), x);
+    r = vfnmadd(k, lanes<VT>(-2.12194440e-4f), r);
+    VT p = lanes<VT>(1.9875691500e-4f);
+    p = vfmadd(p, r, lanes<VT>(1.3981999507e-3f));
+    p = vfmadd(p, r, lanes<VT>(8.3334519073e-3f));
+    p = vfmadd(p, r, lanes<VT>(4.1665795894e-2f));
+    p = vfmadd(p, r, lanes<VT>(1.6666665459e-1f));
+    p = vfmadd(p, r, lanes<VT>(5.0000001201e-1f));
     p = vfmadd(p * r, r, r);
-    p = p + lanes<V>(1.0f);
+    p = p + lanes<VT>(1.0f);
     return p * lanePow2i(k);
 }
 
@@ -127,31 +127,31 @@ inline V laneExp(V x)
  * Clamped to +-9, where tanh is within 3e-8 of +-1 -- half an ulp of 1.0f -- so the clamp changes no
  * float that a float could tell apart.
  */
-template <class V>
-inline V laneTanh(V x)
+template <class VT>
+inline VT laneTanh(VT x)
 {
-    const V c = vmin(vmax(x, lanes<V>(-9.0f)), lanes<V>(9.0f));
-    const V e = laneExp(c + c);
-    return (e - lanes<V>(1.0f)) / (e + lanes<V>(1.0f));
+    const VT c = vmin(vmax(x, lanes<VT>(-9.0f)), lanes<VT>(9.0f));
+    const VT e = laneExp(c + c);
+    return (e - lanes<VT>(1.0f)) / (e + lanes<VT>(1.0f));
 }
 
 /** @brief GELU in the tanh form (Hendrycks and Gimpel 2016): 0.5 x (1 + tanh(sqrt(2/pi)(x + 0.044715 x^3))). */
-template <class V>
-inline V laneGelu(V x)
+template <class VT>
+inline VT laneGelu(VT x)
 {
-    const V inner = lanes<V>(0.797884560802865355f) * vfmadd(lanes<V>(0.044715f) * x * x, x, x);
-    return lanes<V>(0.5f) * x * (lanes<V>(1.0f) + laneTanh(inner));
+    const VT inner = lanes<VT>(0.797884560802865355f) * vfmadd(lanes<VT>(0.044715f) * x * x, x, x);
+    return lanes<VT>(0.5f) * x * (lanes<VT>(1.0f) + laneTanh(inner));
 }
 
 /** @brief The activations a model header may ask for (key @c act). */
-enum class ModelAct : int { GeluTanh = 0, Relu, Silu };
+enum class ModelActE : int { GELU_TANH = 0, RELU, SILU };
 
 /** @brief Applies @p act to lanes. */
-template <class V>
-inline V laneAct(V x, ModelAct act)
+template <class VT>
+inline VT laneAct(VT x, ModelActE act)
 {
-    if (act == ModelAct::Relu) return vmax(x, lanes<V>(0.0f));
-    if (act == ModelAct::Silu) return x / (lanes<V>(1.0f) + laneExp(-x));
+    if (act == ModelActE::RELU) return vmax(x, lanes<VT>(0.0f));
+    if (act == ModelActE::SILU) return x / (lanes<VT>(1.0f) + laneExp(-x));
     return laneGelu(x);
 }
 
@@ -170,17 +170,17 @@ inline V laneAct(V x, ModelAct act)
  * sequence, in the same order, as the scalar instantiation performs for that row. That is why the
  * three paths agree bit for bit.
  */
-template <class V>
+template <class VT>
 inline void matvecPanel(const float* panels, const float* bias, const float* x, int rows, int cols, float* out)
 {
-    constexpr int kW = laneWidth<V>();   // lanes of this instantiation
-    const int groups = (rows + kW - 1) / kW;
+    constexpr int W = laneWidth<VT>();   // lanes of this instantiation
+    const int groups = (rows + W - 1) / W;
     for (int g = 0; g < groups; ++g) {
-        const float* p = panels + static_cast<size_t>(g) * static_cast<size_t>(cols) * kW;
-        V acc = bias != nullptr ? loadLanes<V>(bias + static_cast<size_t>(g) * kW) : lanes<V>(0.0f);
+        const float* p = panels + static_cast<size_t>(g) * static_cast<size_t>(cols) * W;
+        VT acc = bias != nullptr ? loadLanes<VT>(bias + static_cast<size_t>(g) * W) : lanes<VT>(0.0f);
         for (int c = 0; c < cols; ++c)
-            acc = vfmadd(loadLanes<V>(p + static_cast<size_t>(c) * kW), lanes<V>(x[c]), acc);
-        vstore(out + static_cast<size_t>(g) * kW, acc);
+            acc = vfmadd(loadLanes<VT>(p + static_cast<size_t>(c) * W), lanes<VT>(x[c]), acc);
+        vstore(out + static_cast<size_t>(g) * W, acc);
     }
 }
 
@@ -196,21 +196,21 @@ inline void matvecPanel(const float* panels, const float* bias, const float* x, 
  * @param rows rows of the matrix
  * @param cols columns of the matrix
  */
-template <class V, class Src>
-inline void packPanels(const Src* src, const float* scale, int rows, int cols, float* dst)
+template <class VT, class SrcT>
+inline void packPanels(const SrcT* src, const float* scale, int rows, int cols, float* dst)
 {
-    constexpr int kW = laneWidth<V>();   // lanes of this instantiation
-    const int groups = (rows + kW - 1) / kW;
+    constexpr int W = laneWidth<VT>();   // lanes of this instantiation
+    const int groups = (rows + W - 1) / W;
     for (int g = 0; g < groups; ++g)
         for (int c = 0; c < cols; ++c)
-            for (int l = 0; l < kW; ++l) {
-                const int row = g * kW + l;
+            for (int l = 0; l < W; ++l) {
+                const int row = g * W + l;
                 float v = 0.0f;
                 if (row < rows) {
                     v = static_cast<float>(src[static_cast<size_t>(row) * static_cast<size_t>(cols) + static_cast<size_t>(c)]);
                     if (scale != nullptr) v *= scale[row];
                 }
-                dst[(static_cast<size_t>(g) * static_cast<size_t>(cols) + static_cast<size_t>(c)) * kW + static_cast<size_t>(l)] = v;
+                dst[(static_cast<size_t>(g) * static_cast<size_t>(cols) + static_cast<size_t>(c)) * W + static_cast<size_t>(l)] = v;
             }
 }
 
@@ -228,20 +228,20 @@ inline void packPanels(const Src* src, const float* scale, int rows, int cols, f
  * @param eps added to the variance
  * @param out receives the @p n outputs (may be @p x)
  */
-template <class V>
+template <class VT>
 inline void laneLayerNorm(const float* x, const float* w, const float* b, float eps, int n, float* out)
 {
-    constexpr int kW = laneWidth<V>();   // lanes of this instantiation
+    constexpr int W = laneWidth<VT>();   // lanes of this instantiation
     float sum = 0.0f;
     for (int i = 0; i < n; ++i) sum += x[i];
     const float mean = sum / static_cast<float>(n);
     float sq = 0.0f;
     for (int i = 0; i < n; ++i) { const float d = x[i] - mean; sq += d * d; }
     const float inv = 1.0f / vsqrt(sq / static_cast<float>(n) + eps);
-    const V vm = lanes<V>(mean), vi = lanes<V>(inv);
-    for (int i = 0; i < n; i += kW) {
-        const V t = (loadLanes<V>(x + i) - vm) * vi;
-        vstore(out + i, vfmadd(t, loadLanes<V>(w + i), loadLanes<V>(b + i)));
+    const VT vm = lanes<VT>(mean), vi = lanes<VT>(inv);
+    for (int i = 0; i < n; i += W) {
+        const VT t = (loadLanes<VT>(x + i) - vm) * vi;
+        vstore(out + i, vfmadd(t, loadLanes<VT>(w + i), loadLanes<VT>(b + i)));
     }
 }
 
@@ -256,56 +256,56 @@ inline void laneLayerNorm(const float* x, const float* w, const float* b, float 
  *            first so that it cannot contribute
  * @param n   how many entries count
  */
-template <class V>
+template <class VT>
 inline void laneSoftmax(float* x, int n)
 {
-    constexpr int kW = laneWidth<V>();   // lanes of this instantiation
+    constexpr int W = laneWidth<VT>();   // lanes of this instantiation
     float mx = x[0];
     for (int i = 1; i < n; ++i) if (x[i] > mx) mx = x[i];
-    const int padded = roundUpTo(n, kW);
+    const int padded = roundUpTo(n, W);
     // The padding is pushed so far below the maximum that its exponential is the smallest normal
     // float; it is never summed and never read, but this keeps whatever stood there out of sight.
     for (int i = n; i < padded; ++i) x[i] = mx - 1000.0f;
-    const V vm = lanes<V>(mx);
-    for (int i = 0; i < padded; i += kW) vstore(x + i, laneExp(loadLanes<V>(x + i) - vm));
+    const VT vm = lanes<VT>(mx);
+    for (int i = 0; i < padded; i += W) vstore(x + i, laneExp(loadLanes<VT>(x + i) - vm));
     float total = 0.0f;
     for (int i = 0; i < n; ++i) total += x[i];
-    const V vt = lanes<V>(1.0f / total);
-    for (int i = 0; i < padded; i += kW) vstore(x + i, loadLanes<V>(x + i) * vt);
+    const VT vt = lanes<VT>(1.0f / total);
+    for (int i = 0; i < padded; i += W) vstore(x + i, loadLanes<VT>(x + i) * vt);
 }
 
 /** @brief dst += a * src over @p n lanes-worth of values (@p n a multiple of the lane width). */
-template <class V>
+template <class VT>
 inline void laneAccumulate(float* dst, const float* src, float a, int n)
 {
-    constexpr int kW = laneWidth<V>();   // lanes of this instantiation
-    const V va = lanes<V>(a);
-    for (int i = 0; i < n; i += kW) vstore(dst + i, vfmadd(va, loadLanes<V>(src + i), loadLanes<V>(dst + i)));
+    constexpr int W = laneWidth<VT>();   // lanes of this instantiation
+    const VT va = lanes<VT>(a);
+    for (int i = 0; i < n; i += W) vstore(dst + i, vfmadd(va, loadLanes<VT>(src + i), loadLanes<VT>(dst + i)));
 }
 
 /** @brief x *= a over @p n values (@p n a multiple of the lane width). */
-template <class V>
+template <class VT>
 inline void laneScale(float* x, float a, int n)
 {
-    constexpr int kW = laneWidth<V>();   // lanes of this instantiation
-    const V va = lanes<V>(a);
-    for (int i = 0; i < n; i += kW) vstore(x + i, loadLanes<V>(x + i) * va);
+    constexpr int W = laneWidth<VT>();   // lanes of this instantiation
+    const VT va = lanes<VT>(a);
+    for (int i = 0; i < n; i += W) vstore(x + i, loadLanes<VT>(x + i) * va);
 }
 
 /** @brief dst += src over @p n values (@p n a multiple of the lane width). */
-template <class V>
+template <class VT>
 inline void laneAdd(float* dst, const float* src, int n)
 {
-    constexpr int kW = laneWidth<V>();   // lanes of this instantiation
-    for (int i = 0; i < n; i += kW) vstore(dst + i, loadLanes<V>(dst + i) + loadLanes<V>(src + i));
+    constexpr int W = laneWidth<VT>();   // lanes of this instantiation
+    for (int i = 0; i < n; i += W) vstore(dst + i, loadLanes<VT>(dst + i) + loadLanes<VT>(src + i));
 }
 
 /** @brief Applies @p act to @p n values in place (@p n a multiple of the lane width). */
-template <class V>
-inline void laneActivate(float* x, int n, ModelAct act)
+template <class VT>
+inline void laneActivate(float* x, int n, ModelActE act)
 {
-    constexpr int kW = laneWidth<V>();   // lanes of this instantiation
-    for (int i = 0; i < n; i += kW) vstore(x + i, laneAct(loadLanes<V>(x + i), act));
+    constexpr int W = laneWidth<VT>();   // lanes of this instantiation
+    for (int i = 0; i < n; i += W) vstore(x + i, laneAct(loadLanes<VT>(x + i), act));
 }
 
 /**
@@ -318,13 +318,13 @@ inline void laneActivate(float* x, int n, ModelAct act)
  * keys is exactly matvecPanel() with the time steps as output rows.
  * @param headDim dimensions of one head's key
  */
-template <class V>
+template <class VT>
 inline void storeKey(float* cache, int t, const float* k, int headDim)
 {
-    constexpr int kW = laneWidth<V>();   // lanes of this instantiation
-    const int g = t / kW, l = t % kW;
-    float* p = cache + static_cast<size_t>(g) * static_cast<size_t>(headDim) * kW + static_cast<size_t>(l);
-    for (int d = 0; d < headDim; ++d) p[static_cast<size_t>(d) * kW] = k[d];
+    constexpr int W = laneWidth<VT>();   // lanes of this instantiation
+    const int g = t / W, l = t % W;
+    float* p = cache + static_cast<size_t>(g) * static_cast<size_t>(headDim) * W + static_cast<size_t>(l);
+    for (int d = 0; d < headDim; ++d) p[static_cast<size_t>(d) * W] = k[d];
 }
 
 } // namespace phos

@@ -13,7 +13,7 @@ psytrance set needs four different things at once, and the four are measurable:
 * the **drone** (added 20.09.2026, round "wavetable-selection") wants what Noctuary's own tables
   were built for after all: an organ-like, clearly pitched fundamental that stays put rather than
   sweeping, an octave or more under the pad, moving only as far as its own slow cutoff/position
-  ramp (Composer.cpp, kSaltDroneRide) needs.
+  ramp (Composer.cpp, SaltDroneRide) needs.
 
 So this tool measures, per candidate table:
 
@@ -76,9 +76,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MEASURE_JSON = os.path.join(HERE, "wt_measure.json")
 SELECTION_JSON = os.path.join(HERE, "wt_selection.json")
 
-STORE_LEN = 4096          # WaveTable::kStoreLen
-LEVELS = 10               # WaveTable::kLevels
-MAX_FRAMES = 64           # WaveTable::kMaxFrames
+STORE_LEN = 4096          # WaveTable::StoreLen
+LEVELS = 10               # WaveTable::Levels
+MAX_FRAMES = 64           # WaveTable::MaxFrames
 TOP_HARMONICS = STORE_LEN // 8    # WaveTable::levelHarmonics(0) = 512
 
 SR = 48000.0
@@ -418,7 +418,7 @@ def feature_vector(m):
 # each lane's gate out of the full 2191 -- 496 pad, 124 lead, 175 arp -- while keeping the pack a
 # fraction of what the Quest APK can absorb (docs/rounds/2026-09.md, round block of 20.09.2026, has the bytes).
 # A fourth lane, ``drone``, is new: the tonic drone (Melody.cpp, ``makeDrone``) used to draw pad
-# lane tables (indices 6/7/9/10, "the organ and the measured, slow tables" of kVoicePalette's own
+# lane tables (indices 6/7/9/10, "the organ and the measured, slow tables" of VoicePalettes's own
 # comment) because there was no lane measured for its own character -- a held low fundamental under
 # a slow cutoff/position ramp (docs/rounds/2026-09.md, "Stimmen" round). That is not what a pad wants: a pad
 # glides *through* timbres (high ``travel``/``directness``), a drone wants to *stay* one, clearly
@@ -476,7 +476,7 @@ LANES = {
         # Organ-like and dark: a strong, clear fundamental (f1 well above the library's own median
         # of 0.47), a centroid under the pad lane's own floor, and a move that is bounded rather than
         # merely gated from below -- steady enough that the slow cutoff/position ramp of
-        # Composer.cpp's drone ride (kSaltDroneRide) does not turn into an audible sweep, which is
+        # Composer.cpp's drone ride (SaltDroneRide) does not turn into an audible sweep, which is
         # exactly the pad's job, not the drone's.
         gate=lambda m: (m["frames"] >= 16 and m["f1"] >= 0.55 and m["centroid"] <= 5.0
                         and m["move"] <= 0.12 and m["alias_c6"] <= -58.0),

@@ -25,24 +25,24 @@ public:
     /** @brief Allocates for a sample rate (up to two seconds of delay at any tempo the engine allows). */
     void prepare(double sampleRate)
     {
-        sr_ = sampleRate;
+        m_sr = sampleRate;
         size_t n = 1;
         while (static_cast<double>(n) < 2.5 * sampleRate) n <<= 1;
-        bufL_.assign(n, 0.0f);
-        bufR_.assign(n, 0.0f);
-        mask_ = n - 1;
-        glide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.05 * sampleRate)));
+        m_bufL.assign(n, 0.0f);
+        m_bufR.assign(n, 0.0f);
+        m_mask = n - 1;
+        m_glide = static_cast<float>(1.0 - std::exp(-1.0 / (0.05 * sampleRate)));
         reset();
     }
     /** @brief Clears the lines and filters. */
     void reset()
     {
-        std::fill(bufL_.begin(), bufL_.end(), 0.0f);
-        std::fill(bufR_.begin(), bufR_.end(), 0.0f);
-        write_ = 0;
-        hpL_.reset(); hpR_.reset(); lpL_.reset(); lpR_.reset();
-        timeL_ = targetL_;
-        timeR_ = targetR_;
+        std::fill(m_bufL.begin(), m_bufL.end(), 0.0f);
+        std::fill(m_bufR.begin(), m_bufR.end(), 0.0f);
+        m_write = 0;
+        m_hpL.reset(); m_hpR.reset(); m_lpL.reset(); m_lpR.reset();
+        m_timeL = m_targetL;
+        m_timeR = m_targetR;
     }
     /**
      * @brief Sets the delay.
@@ -53,16 +53,16 @@ public:
      */
     void set(float beatsLeft, float beatsRight, double bpm, float feedback, float hpHz, float lpHz)
     {
-        const double maxSamples = static_cast<double>(mask_) - 2.0;
-        targetL_ = static_cast<float>(std::min(maxSamples, beatsLeft * 60.0 / bpm * sr_));
-        targetR_ = static_cast<float>(std::min(maxSamples, beatsRight * 60.0 / bpm * sr_));
-        if (!primed_) { timeL_ = targetL_; timeR_ = targetR_; primed_ = true; }
-        feedback_ = clampv(feedback, 0.0f, 0.9f);
-        const float sr = static_cast<float>(sr_);
-        hpL_.setQ(std::max(hpHz, 150.0f), 0.70710678f, sr);
-        hpR_.copyCoefficients(hpL_);
-        lpL_.setQ(lpHz, 0.70710678f, sr);
-        lpR_.copyCoefficients(lpL_);
+        const double maxSamples = static_cast<double>(m_mask) - 2.0;
+        m_targetL = static_cast<float>(std::min(maxSamples, beatsLeft * 60.0 / bpm * m_sr));
+        m_targetR = static_cast<float>(std::min(maxSamples, beatsRight * 60.0 / bpm * m_sr));
+        if (!m_primed) { m_timeL = m_targetL; m_timeR = m_targetR; m_primed = true; }
+        m_feedback = clampv(feedback, 0.0f, 0.9f);
+        const float sr = static_cast<float>(m_sr);
+        m_hpL.setQ(std::max(hpHz, 150.0f), 0.70710678f, sr);
+        m_hpR.copyCoefficients(m_hpL);
+        m_lpL.setQ(lpHz, 0.70710678f, sr);
+        m_lpR.copyCoefficients(m_lpL);
     }
     /**
      * @brief Adds the delayed signal of a mono send to a stereo output.
@@ -75,19 +75,19 @@ public:
         // No idle shortcut: when a delay stops depending on where the host cuts its blocks, the output
         // would no longer be the same for every block size. Two lines and four filters are cheap.
         for (int i = 0; i < n; ++i) {
-            timeL_ += (targetL_ - timeL_) * glide_;
-            timeR_ += (targetR_ - timeR_) * glide_;
-            const float yl = read(bufL_, timeL_), yr = read(bufR_, timeR_);
+            m_timeL += (m_targetL - m_timeL) * m_glide;
+            m_timeR += (m_targetR - m_timeR) * m_glide;
+            const float yl = read(m_bufL, m_timeL), yr = read(m_bufR, m_timeR);
             float lp, bp, hp;
             // Loop filters: high pass, then low pass, then the cross-feed.
-            hpL_.tick(yl, lp, bp, hp);
-            const float fl = lpL_.lp(hp);
-            hpR_.tick(yr, lp, bp, hp);
-            const float fr = lpR_.lp(hp);
+            m_hpL.tick(yl, lp, bp, hp);
+            const float fl = m_lpL.lp(hp);
+            m_hpR.tick(yr, lp, bp, hp);
+            const float fr = m_lpR.lp(hp);
             const float x = send[i];
-            bufL_[write_] = x + feedback_ * (0.85f * fl + 0.15f * fr);
-            bufR_[write_] = x + feedback_ * (0.85f * fr + 0.15f * fl);
-            write_ = (write_ + 1) & mask_;
+            m_bufL[m_write] = x + m_feedback * (0.85f * fl + 0.15f * fr);
+            m_bufR[m_write] = x + m_feedback * (0.85f * fr + 0.15f * fl);
+            m_write = (m_write + 1) & m_mask;
             L[i] += fl;
             R[i] += fr;
         }
@@ -99,30 +99,30 @@ private:
     float read(const std::vector<float>& buf, float delay) const
     {
         // In double: at a write index of 2^17 a float resolves only 1/64 of a sample.
-        const double pos = static_cast<double>(write_) - static_cast<double>(delay);
+        const double pos = static_cast<double>(m_write) - static_cast<double>(delay);
         const double fl = std::floor(pos);
         const float frac = static_cast<float>(pos - fl);
-        const size_t i0 = static_cast<size_t>(static_cast<long long>(fl)) & mask_;
-        const size_t i1 = (i0 + 1) & mask_;
+        const size_t i0 = static_cast<size_t>(static_cast<long long>(fl)) & m_mask;
+        const size_t i1 = (i0 + 1) & m_mask;
         return buf[i0] + frac * (buf[i1] - buf[i0]);
     }
 
-    double sr_ = 48000.0;   ///< sample rate
-    std::vector<float> bufL_;   ///< the left delay line, a power of two long
-    std::vector<float> bufR_;   ///< the right delay line
-    size_t mask_ = 0;   ///< the index mask
-    size_t write_ = 0;   ///< the write position
-    float timeL_ = 1000.0f;   ///< the left delay time now, samples
-    float timeR_ = 1000.0f;   ///< the right delay time now, samples
-    float targetL_ = 1000.0f;   ///< where the left one glides to
-    float targetR_ = 1000.0f;   ///< where the right one glides to
-    float glide_ = 0.001f;   ///< the glide coefficient
-    float feedback_ = 0.4f;   ///< feedback
-    bool primed_ = false;   ///< the times have been set once (the first set() jumps, later ones glide)
-    Svf hpL_;   ///< the feedback path's high pass, left
-    Svf hpR_;   ///< ... right
-    Svf lpL_;   ///< the feedback path's low pass, left
-    Svf lpR_;   ///< ... right
+    double m_sr = 48000.0;   ///< sample rate
+    std::vector<float> m_bufL;   ///< the left delay line, a power of two long
+    std::vector<float> m_bufR;   ///< the right delay line
+    size_t m_mask = 0;   ///< the index mask
+    size_t m_write = 0;   ///< the write position
+    float m_timeL = 1000.0f;   ///< the left delay time now, samples
+    float m_timeR = 1000.0f;   ///< the right delay time now, samples
+    float m_targetL = 1000.0f;   ///< where the left one glides to
+    float m_targetR = 1000.0f;   ///< where the right one glides to
+    float m_glide = 0.001f;   ///< the glide coefficient
+    float m_feedback = 0.4f;   ///< feedback
+    bool m_primed = false;   ///< the times have been set once (the first set() jumps, later ones glide)
+    Svf m_hpL;   ///< the feedback path's high pass, left
+    Svf m_hpR;   ///< ... right
+    Svf m_lpL;   ///< the feedback path's low pass, left
+    Svf m_lpR;   ///< ... right
 };
 
 } // namespace phos

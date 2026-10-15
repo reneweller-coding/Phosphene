@@ -10,7 +10,7 @@
  * the table saw leaves 30 dB less aliasing at C5 and C6 and 20 dB less at A6 (docs/rounds/2026-09.md). PolyBLEP
  * remains the VA oscillator, where one saw per voice is blended into a pulse and a table cannot give
  * the pulse width. The table frame is normalised to a different RMS than the ramp, so the slot gains
- * carry kSawTableGain and the lead keeps its calibrated level.
+ * carry SawTableGain and the lead keeps its calibrated level.
  *  - *Detune.* The side oscillators sit at 1 + a_i y(x) times the centre frequency with
  *    a = (-0.11002313, -0.06288439, -0.01952356, 0, 0.01991221, 0.06216538, 0.10745242) (table 1),
  *    where the detune knob x goes through the eleventh-degree polynomial y(x) fitted to the
@@ -51,10 +51,10 @@
  * exponential converter and which Pirkle ("Designing Software Synthesizer Plug-Ins in C++", 2nd ed.
  * 2019, chapter on analogue modelling) models exactly this way: a very low-frequency noise source per
  * oscillator. Phosphene runs one first-order low-pass filtered noise source per unison slot and per
- * voice (kDriftHz, so a correlation time of about 0.8 s), normalised so that its standing deviation
+ * voice (DriftHz, so a correlation time of about 0.8 s), normalised so that its standing deviation
  * is poly.drift cents, and:
  *
- *  - the walks advance on the **absolute sample grid** -- once per kPolyBlock samples, in
+ *  - the walks advance on the **absolute sample grid** -- once per PolyBlock samples, in
  *    renderSegment(), for every slot and voice whether it sounds or not. They are therefore a
  *    function of the sample index and of the seed alone, and nothing about them changes when the host
  *    hands over its samples in different blocks;
@@ -75,7 +75,7 @@
  * mechanism. `poly.glide` is the time constant of a one-pole slew on the voice's pitch, in
  * milliseconds:
  *
- *  - the slew runs **on the same absolute kPolyBlock grid the drift walks on**, so where the host cuts
+ *  - the slew runs **on the same absolute PolyBlock grid the drift walks on**, so where the host cuts
  *    its blocks never decides when a pitch changes, and the scalar side alone computes it: the kernels
  *    see the same slot phase steps they always saw and the AVX2, NEON and scalar paths stay
  *    bit-identical;
@@ -120,14 +120,14 @@
 namespace phos {
 
 /** @brief Szabo's detune offsets of the seven supersaw oscillators (thesis, table 1). */
-inline constexpr double kSupersawOffsets[kPolyUnison] = { -0.11002313, -0.06288439, -0.01952356, 0.0, 0.01991221, 0.06216538, 0.10745242 };
+inline constexpr double SupersawOffsets[PolyUnison] = { -0.11002313, -0.06288439, -0.01952356, 0.0, 0.01991221, 0.06216538, 0.10745242 };
 
 /** @brief Corner frequency of the thermal drift walks, Hz (a correlation time of about 0.8 s). */
-inline constexpr double kDriftHz = 0.2;
+inline constexpr double DriftHz = 0.2;
 /** @brief Filter drift in cents per cent of pitch drift (design ratio, see Poly.h). */
-inline constexpr double kDriftCutoffRatio = 0.25;
+inline constexpr double DriftCutoffRatio = 0.25;
 /** @brief Attack drift, relative, per cent of pitch drift (design ratio, see Poly.h). */
-inline constexpr double kDriftAttackRatio = 0.01;
+inline constexpr double DriftAttackRatio = 0.01;
 
 /** @brief Polyphonic engine. */
 class Poly {
@@ -154,7 +154,7 @@ public:
      * update() made it last the whole note, which changed the render; this keeps the render as it was, and the
      * question whether the drift should really be held is left to a listening decision.
      */
-    void refreshEnvelopeTimes() { for (Envelope& e : amp_) e.copyTimes(ampTimes_); }
+    void refreshEnvelopeTimes() { for (Envelope& e : m_amp) e.copyTimes(m_ampTimes); }
     /**
      * @brief Starts a note.
      * @param pitch       MIDI note
@@ -165,49 +165,49 @@ public:
      * @param accent      22.09.2026: the note is accented -- its filter envelope opens 1.5 times as far
      *                    (the 303's accent logic on a poly voice; velocity carries the level as before)
      * @param slide       22.09.2026: the note may glide in from the pitch before it. True lets every
-     *                    note glide; the lead passes its kNoteSlide flag (Score.h)
+     *                    note glide; the lead passes its NOTE_SLIDE flag (Score.h)
      */
     void noteOn(int pitch, float velocity, double lengthBeats, int gateSamples, double late, bool accent = false, bool slide = true);
     /**
      * @brief The free slow movement's two sines at this moment (Engine.cpp, 25.09.2026): the first moves the cutoff by
      *        up to an octave, the second the wavetable position by up to 0.15, both scaled by poly.slow_mod.
      */
-    void setSlow(float cutoffSine, float colourSine) { slowCut_ = cutoffSine; slowColour_ = colourSine; }
+    void setSlow(float cutoffSine, float colourSine) { m_slowCut = cutoffSine; m_slowColour = colourSine; }
     /**
      * @brief The set's beat at the next sample and the beats per sample (Engine.cpp, per chunk; 26.09.2026): the
      *        clock the tempo-synced LFOs of the modulation (Modulation.h) read.
      */
-    void setClock(double beat, double beatsPerSample) { beat_ = beat; beatsPerSample_ = beatsPerSample; }
+    void setClock(double beat, double beatsPerSample) { m_beat = beat; m_beatsPerSample = beatsPerSample; }
     /** @brief A voice's modulation sums per destination, as the last grid step evaluated them (tests, the live ring). */
-    const float* modulation(int voice) const { return modSum_[voice]; }
+    const float* modulation(int voice) const { return m_modSum[voice]; }
     /**
      * @brief Closes the gate of every voice holding @p pitch (23.09.2026, live keyboard): a played note starts with a
      *        gate that never runs out on its own, and the key's release ends it -- the voice then releases as any.
      */
     void noteOff(int pitch)
     {
-        for (int v = 0; v < kPolyVoices; ++v) if (gate_[v] > 0 && pitch_[v] == pitch) gate_[v] = 1;
+        for (int v = 0; v < PolyVoices; ++v) if (m_gate[v] > 0 && m_pitch[v] == pitch) m_gate[v] = 1;
     }
 
     /**
      * @brief Sets the quality limits of this instance (Quality.h).
-     * @param unison oscillators per voice, 1 .. kPolyUnison
-     * @param voices voices that may sound at once, 1 .. kPolyVoices
+     * @param unison oscillators per voice, 1 .. PolyUnison
+     * @param voices voices that may sound at once, 1 .. PolyVoices
      *
-     * The defaults (kPolyUnison, kPolyVoices) are "no limit", so a default engine runs exactly the
+     * The defaults (PolyUnison, PolyVoices) are "no limit", so a default engine runs exactly the
      * code it ran before this existed. Set once before the first note (Engine::prepare): the unison
      * limit decides which slots a note sets up, so changing it while notes sound would leave the
      * running notes with slots the render loop no longer sums.
      */
     void setQuality(int unison, int voices)
     {
-        unisonLimit_ = unison < 1 ? 1 : (unison > kPolyUnison ? kPolyUnison : unison);
-        voiceLimit_ = voices < 1 ? 1 : (voices > kPolyVoices ? kPolyVoices : voices);
+        m_unisonLimit = unison < 1 ? 1 : (unison > PolyUnison ? PolyUnison : unison);
+        m_voiceLimit = voices < 1 ? 1 : (voices > PolyVoices ? PolyVoices : voices);
     }
     /** @brief Oscillators per voice this instance plays. */
-    int unisonLimit() const { return unisonLimit_; }
+    int unisonLimit() const { return m_unisonLimit; }
     /** @brief Voices this instance may sound at once. */
-    int voiceLimit() const { return voiceLimit_; }
+    int voiceLimit() const { return m_voiceLimit; }
 
     /**
      * @brief noteOn() with the voice limit applied around it.
@@ -220,7 +220,7 @@ public:
      *    (Poly.cpp, renderSegment) -- so four of eight pad voices really do halve the pad's filters
      *    and leave 28 of 56 oscillator slots unrendered. The limit is enforced from here rather than
      *    inside noteOn() so that the allocator stays exactly as it is.
-     *  - *Unison.* noteOn() itself sets up only the middle unisonLimit_ oscillators of a voice and
+     *  - *Unison.* noteOn() itself sets up only the middle m_unisonLimit oscillators of a voice and
      *    leaves the rest at gain 0 with no phase step and no source weight, and renderSegment() then
      *    reads no wavetable for them, keeps no slot group alive for them and leaves them out of the
      *    voice's sum (Poly.cpp). The centre and the innermost detuned pair survive, which is the
@@ -229,14 +229,14 @@ public:
      */
     void noteOnLimited(int pitch, float velocity, double lengthBeats, int gateSamples, double late, bool accent = false, bool slide = true)
     {
-        if (voiceLimit_ < kPolyVoices) freeVoiceWithinLimit();
+        if (m_voiceLimit < PolyVoices) freeVoiceWithinLimit();
         noteOn(pitch, velocity, lengthBeats, gateSamples, late, accent, slide);
     }
 
     /** @brief Renders @p n stereo samples, replacing @p L and @p R. */
     void process(float* L, float* R, int n);
     /** @brief Renders with a chosen lane type (float = scalar reference), for the vector tests. */
-    template <class V> void processWith(float* L, float* R, int n);
+    template <class VT> void processWith(float* L, float* R, int n);
     /** @brief Voices whose envelope is open. */
     int activeVoices() const;
     /**
@@ -248,24 +248,24 @@ public:
      */
     void seedPhases(uint64_t seed)
     {
-        phaseRng_.seed(seed);
-        driftRng_.seed(seed ^ 0x44524946'54574C4Bull);   // "DRIFTWLK"
+        m_phaseRng.seed(seed);
+        m_driftRng.seed(seed ^ 0x44524946'54574C4Bull);   // "DRIFTWLK"
         // The modulation's streams (26.09.2026), salted against both, so nothing above moves.
-        modRng_.seed(seed ^ 0x4D4F4452'414E4430ull);      // "MODRAND0"
-        for (int v = 0; v < kPolyVoices; ++v) mod_[v].prepare(sr_, mixSeed(seed, 0x4D4F4456'4F494345ull + static_cast<uint64_t>(v)));
+        m_modRng.seed(seed ^ 0x4D4F4452'414E4430ull);      // "MODRAND0"
+        for (int v = 0; v < PolyVoices; ++v) m_mod[v].prepare(m_sr, mixSeed(seed, 0x4D4F4456'4F494345ull + static_cast<uint64_t>(v)));
     }
     /** @brief The drift walk of one unison slot, in cents (tests). */
-    float slotDrift(int slot) const { return driftSlot_[slot] * driftNorm_; }
+    float slotDrift(int slot) const { return m_driftSlot[slot] * m_driftNorm; }
     /** @brief The drift walk of one voice, in cents (tests). */
-    float voiceDrift(int voice) const { return driftVoice_[voice] * driftNorm_; }
+    float voiceDrift(int voice) const { return m_driftVoice[voice] * m_driftNorm; }
     /**
      * @brief The pitch a voice's oscillators are sounding at right now, in MIDI notes (tests).
      *
      * Equal to the note's own pitch except while a glide is running (Poly.h), which is what makes the
-     * portamento measurable without a spectrum: the self test reads this on the kPolyBlock grid and
+     * portamento measurable without a spectrum: the self test reads this on the PolyBlock grid and
      * checks the trajectory against the time constant the parameter asks for.
      */
-    double soundingPitch(int voice) const { return glidePitch_[voice]; }
+    double soundingPitch(int voice) const { return m_glidePitch[voice]; }
     /**
      * @brief Wavetable reads the scalar pre-pass has done since prepare(), for the tests.
      *
@@ -276,7 +276,7 @@ public:
      * real unison limit from one that merely zeroes the outer gains: the sound is the same, the work
      * is not.
      */
-    uint64_t tableReads() const { return tableReads_; }
+    uint64_t tableReads() const { return m_tableReads; }
 
     /** @brief Szabo's detune curve y(x), x in [0, 1]. */
     static double detuneCurve(double x);
@@ -291,30 +291,30 @@ public:
      */
     const float* displayModulation() const
     {
-        return modOn_ && lastVoice_ >= 0 && mod_[lastVoice_].active() ? modSum_[lastVoice_] : nullptr;
+        return m_modOn && m_lastVoice >= 0 && m_mod[m_lastVoice].active() ? m_modSum[m_lastVoice] : nullptr;
     }
 private:
-    float slowCut_ = 0.0f;   ///< setSlow()'s sine on the cutoff
-    float slowColour_ = 0.0f;   ///< ... and on the colour
+    float m_slowCut = 0.0f;   ///< setSlow()'s sine on the cutoff
+    float m_slowColour = 0.0f;   ///< ... and on the colour
     /** @name The voice's own modulation (26.09.2026, Modulation.h)
      *  @{ */
-    int   lastVoice_ = -1;                        ///< the voice of the latest note (displayModulation)
-    Modulator mod_[kPolyVoices];                  ///< envelope, LFOs and matrix, per voice
-    float modSum_[kPolyVoices][kModDests] = {};   ///< the sums per destination, per voice, on the 16-sample grid
-    bool  modOn_ = false;                         ///< some slot of the matrix reaches something
-    Envelope fAdsr_[kPolyVoices];                 ///< the filter envelope as an ADSR (filt_attack, filt_sustain, filt_release)
-    bool  fAdsrOn_ = false;                       ///< the ADSR runs; off (attack at its minimum, sustain 0) the exponential decay does
-    float noteRand_[kPolyVoices] = {};            ///< the Random source, drawn per note
-    Rng   modRng_;                                ///< its stream, salted against the phases and the drift
-    bool  slotOsc2_[kPolySlots] = {};             ///< the slot is the second oscillator (its own pitch destination)
-    float idxFloor0_[kPolySlots] = {};            ///< the FM index floor the note set, before the modulation
-    float modGainL_[kPolyVoices] = {}, modGainR_[kPolyVoices] = {};   ///< the level and pan destinations as channel gains
-    double beat_ = 0.0, beatsPerSample_ = 0.0;    ///< setClock()
+    int   m_lastVoice = -1;                        ///< the voice of the latest note (displayModulation)
+    Modulator m_mod[PolyVoices];                  ///< envelope, LFOs and matrix, per voice
+    float m_modSum[PolyVoices][ModDests] = {};   ///< the sums per destination, per voice, on the 16-sample grid
+    bool  m_modOn = false;                         ///< some slot of the matrix reaches something
+    Envelope m_fAdsr[PolyVoices];                 ///< the filter envelope as an ADSR (filt_attack, filt_sustain, filt_release)
+    bool  m_fAdsrOn = false;                       ///< the ADSR runs; off (attack at its minimum, sustain 0) the exponential decay does
+    float m_noteRand[PolyVoices] = {};            ///< the Random source, drawn per note
+    Rng   m_modRng;                                ///< its stream, salted against the phases and the drift
+    bool  m_slotOsc2[PolySlotCount] = {};             ///< the slot is the second oscillator (its own pitch destination)
+    float m_idxFloor0[PolySlotCount] = {};            ///< the FM index floor the note set, before the modulation
+    float m_modGainL[PolyVoices] = {}, m_modGainR[PolyVoices] = {};   ///< the level and pan destinations as channel gains
+    double m_beat = 0.0, m_beatsPerSample = 0.0;    ///< setClock()
     /** @brief Evaluates voice @p voice's modulation at this grid step and writes what it moves (renderSegment). */
     void applyModulation(int voice, double beat);
     /** @} */
     /**
-     * @brief Makes sure a voice below voiceLimit_ is free before noteOn() allocates.
+     * @brief Makes sure a voice below m_voiceLimit is free before noteOn() allocates.
      *
      * When one is already free, nothing happens and the note is allocated as always. Otherwise the
      * oldest voice below the limit is killed, which is the steal noteOn() would have done anyway --
@@ -324,12 +324,12 @@ private:
     void freeVoiceWithinLimit()
     {
         int oldest = 0;
-        for (int i = 0; i < voiceLimit_; ++i) {
-            if (!amp_[i].isActive()) return;
-            if (age_[i] < age_[oldest]) oldest = i;
+        for (int i = 0; i < m_voiceLimit; ++i) {
+            if (!m_amp[i].isActive()) return;
+            if (m_age[i] < m_age[oldest]) oldest = i;
         }
-        amp_[oldest].kill();
-        gate_[oldest] = 0;
+        m_amp[oldest].kill();
+        m_gate[oldest] = 0;
     }
 
     /** @brief Sets a voice's high-pass coefficients for its note. */
@@ -344,76 +344,76 @@ private:
      * the same numbers twice and one that does moves continuously between them.
      */
     void writeSlotPitch(int voice);
-    /** @brief Advances every gliding voice by one kPolyBlock grid step (Poly.h). */
+    /** @brief Advances every gliding voice by one PolyBlock grid step (Poly.h). */
     void advanceGlide();
     /**
-     * @brief Advances every drift walk by one kPolyBlock grid step.
+     * @brief Advances every drift walk by one PolyBlock grid step.
      *
      * One first-order low pass per walk, x += (w - x) * kDriftAlpha with w uniform in [-1, 1]. The
      * standing variance of that process is alpha / (2 - alpha) times the variance of w, which is
-     * 1/3; driftNorm_ divides it out and multiplies the drift depth back in, so the walk's standing
+     * 1/3; m_driftNorm divides it out and multiplies the drift depth back in, so the walk's standing
      * deviation is exactly the drift parameter in cents whatever the sample rate.
      */
     void advanceDrift();
     /** @brief Renders @p n samples with the lane type @p V (scalar, AVX2 or NEON). */
-    template <class V> void renderSegment(float* L, float* R, int n);
+    template <class VT> void renderSegment(float* L, float* R, int n);
 
-    double sr_ = 48000.0;   ///< sample rate
-    int unisonLimit_ = kPolyUnison;   ///< oscillators per voice (Quality.h)
-    int voiceLimit_ = kPolyVoices;    ///< voices that may sound at once (Quality.h)
+    double m_sr = 48000.0;   ///< sample rate
+    int m_unisonLimit = PolyUnison;   ///< oscillators per voice (Quality.h)
+    int m_voiceLimit = PolyVoices;    ///< voices that may sound at once (Quality.h)
     /** @brief The instance's parameters as update() read them. Sized by the table itself: a fixed 64 held until the
      *         mix guide's appends of 25.09.2026 took poly::Count to 68, and update()'s copy ran past its end. */
-    float values_[poly::Count] = {};
-    PolySlots slots_;   ///< every unison slot's oscillator state (PolyKernel.h)
-    PolyChannels ch_;   ///< every voice's filter and output state (PolyKernel.h)
-    Envelope amp_[kPolyVoices];   ///< amplitude envelope per voice
-    Envelope ampTimes_;   ///< the written times, computed once per update() and copied into every voice
-    float fenv_[kPolyVoices] = {};   ///< per voice: its filter envelope
-    float fDecay_ = 0.999f;   ///< the filter envelope's per-sample decay
-    float accent_[kPolyVoices] = {};          ///< the note's factor on the filter envelope amount: 1, or 1.5 for an accent (22.09.2026)
-    int   pitch_[kPolyVoices] = {};   ///< each voice's MIDI pitch
-    float vel_[kPolyVoices] = {};   ///< each voice's velocity, 0..1
-    int   gate_[kPolyVoices] = {};   ///< samples until each voice is released
-    uint64_t age_[kPolyVoices] = {};   ///< note-on order, for voice stealing
-    float hpHz_[kPolyVoices] = {};   ///< each voice's high-pass frequency (the depth rule)
-    float posEnv_[kPolyVoices] = {};          ///< table-position envelope per voice
-    double lfoPh_[kPolyVoices] = {};          ///< table-position LFO phase per voice
-    double wtPh_[kPolySlots] = {};            ///< wavetable phase per slot (double: long pads)
-    double wtDt_[kPolySlots] = {};            ///< wavetable phase step per slot
-    int wtLevel_[kPolySlots] = {};            ///< table level per slot
-    bool  sawVoice_[kPolyVoices] = {};        ///< every slot of the voice is the supersaw: the fast path
-    bool  slotSaw_[kPolySlots] = {};          ///< this slot reads the Classic saw frame rather than the table
-    double slotHzMul_[kPolySlots] = {};       ///< the slot's pitch against the note (the second oscillator's interval)
-    double slotSpread_[kPolySlots] = {};      ///< the share of the unison detune the slot plays (Poly.cpp, kOsc2Spread)
-    double lfo2Ph_ = 0.0;                     ///< the voice LFO's phase: one per instance, free-running
-    float lfo2Inc_ = 0.0f;                    ///< its step per sample, from poly::LfoBeats and the tempo
-    float lfo2Cut_ = 0.0f;   ///< the voice LFO's depth on the cutoff
-    float lfo2Pitch_ = 0.0f;   ///< ... on the pitch
-    float lfo2Amp_ = 0.0f;   ///< ... on the level
-    float lfo2Value_ = 0.0f;                  ///< its last value, read by lowPassCoefs on the 16-sample grid
-    const WaveTable* table_ = nullptr;   ///< the table poly.table names
-    const WaveTable* sawTable_ = nullptr;     ///< the Classic table, whose frame kClassicSawFrame is the saw
-    float posDecay_ = 0.999f;   ///< the position envelope's per-sample decay
-    float lfoInc_ = 0.0f;   ///< the position LFO's step
-    double bpm_ = 145.0;   ///< the tempo the LFO periods were computed for
-    uint64_t counter_ = 0;   ///< notes so far (the voices' age)
-    uint64_t pos_ = 0;          ///< samples rendered since reset (the coefficient grid)
-    uint64_t tableReads_ = 0;   ///< wavetable reads of the scalar pre-pass (tests, see tableReads())
-    Rng phaseRng_;   ///< the oscillators' random start phases
-    Rng driftRng_;                            ///< the thermal drift walks, salted against phaseRng_
-    float driftSlot_[kPolySlots] = {};        ///< drift walk per unison slot, before driftNorm_
-    float driftVoice_[kPolyVoices] = {};      ///< drift walk per voice, before driftNorm_
-    float driftOct_[kPolyVoices] = {};         ///< the voice's cutoff drift in octaves, held for the note
-    float driftAlpha_ = 0.0f;                 ///< one-pole coefficient of a walk, per grid step
-    float driftNorm_ = 0.0f;                  ///< walk -> cents, so the standing deviation is drift_
-    float drift_ = 0.0f;                      ///< poly.drift in cents (standing deviation)
+    float m_values[poly::COUNT] = {};
+    PolySlots m_slots;   ///< every unison slot's oscillator state (PolyKernel.h)
+    PolyChannels m_ch;   ///< every voice's filter and output state (PolyKernel.h)
+    Envelope m_amp[PolyVoices];   ///< amplitude envelope per voice
+    Envelope m_ampTimes;   ///< the written times, computed once per update() and copied into every voice
+    float m_fenv[PolyVoices] = {};   ///< per voice: its filter envelope
+    float m_fDecay = 0.999f;   ///< the filter envelope's per-sample decay
+    float m_accent[PolyVoices] = {};          ///< the note's factor on the filter envelope amount: 1, or 1.5 for an accent (22.09.2026)
+    int   m_pitch[PolyVoices] = {};   ///< each voice's MIDI pitch
+    float m_vel[PolyVoices] = {};   ///< each voice's velocity, 0..1
+    int   m_gate[PolyVoices] = {};   ///< samples until each voice is released
+    uint64_t m_age[PolyVoices] = {};   ///< note-on order, for voice stealing
+    float m_hpHz[PolyVoices] = {};   ///< each voice's high-pass frequency (the depth rule)
+    float m_posEnv[PolyVoices] = {};          ///< table-position envelope per voice
+    double m_lfoPh[PolyVoices] = {};          ///< table-position LFO phase per voice
+    double m_wtPh[PolySlotCount] = {};            ///< wavetable phase per slot (double: long pads)
+    double m_wtDt[PolySlotCount] = {};            ///< wavetable phase step per slot
+    int m_wtLevel[PolySlotCount] = {};            ///< table level per slot
+    bool  m_sawVoice[PolyVoices] = {};        ///< every slot of the voice is the supersaw: the fast path
+    bool  m_slotSaw[PolySlotCount] = {};          ///< this slot reads the Classic saw frame rather than the table
+    double m_slotHzMul[PolySlotCount] = {};       ///< the slot's pitch against the note (the second oscillator's interval)
+    double m_slotSpread[PolySlotCount] = {};      ///< the share of the unison detune the slot plays (Poly.cpp, Osc2Spread)
+    double m_lfo2Ph = 0.0;                     ///< the voice LFO's phase: one per instance, free-running
+    float m_lfo2Inc = 0.0f;                    ///< its step per sample, from poly::LfoBeats and the tempo
+    float m_lfo2Cut = 0.0f;   ///< the voice LFO's depth on the cutoff
+    float m_lfo2Pitch = 0.0f;   ///< ... on the pitch
+    float m_lfo2Amp = 0.0f;   ///< ... on the level
+    float m_lfo2Value = 0.0f;                  ///< its last value, read by lowPassCoefs on the 16-sample grid
+    const WaveTable* m_table = nullptr;   ///< the table poly.table names
+    const WaveTable* m_sawTable = nullptr;     ///< the Classic table, whose frame ClassicSawFrame is the saw
+    float m_posDecay = 0.999f;   ///< the position envelope's per-sample decay
+    float m_lfoInc = 0.0f;   ///< the position LFO's step
+    double m_bpm = 145.0;   ///< the tempo the LFO periods were computed for
+    uint64_t m_counter = 0;   ///< notes so far (the voices' age)
+    uint64_t m_pos = 0;          ///< samples rendered since reset (the coefficient grid)
+    uint64_t m_tableReads = 0;   ///< wavetable reads of the scalar pre-pass (tests, see tableReads())
+    Rng m_phaseRng;   ///< the oscillators' random start phases
+    Rng m_driftRng;                            ///< the thermal drift walks, salted against m_phaseRng
+    float m_driftSlot[PolySlotCount] = {};        ///< drift walk per unison slot, before m_driftNorm
+    float m_driftVoice[PolyVoices] = {};      ///< drift walk per voice, before m_driftNorm
+    float m_driftOct[PolyVoices] = {};         ///< the voice's cutoff drift in octaves, held for the note
+    float m_driftAlpha = 0.0f;                 ///< one-pole coefficient of a walk, per grid step
+    float m_driftNorm = 0.0f;                  ///< walk -> cents, so the standing deviation is m_drift
+    float m_drift = 0.0f;                      ///< poly.drift in cents (standing deviation)
     /** @name Portamento (20.09.2026, round "dialogue"; Poly.h)
      *  @{ */
-    double glidePitch_[kPolyVoices] = {};     ///< the pitch each voice sounds at now, in MIDI notes
-    double glideTarget_[kPolyVoices] = {};    ///< the note's own pitch: where the slew is going
-    double glideY_[kPolyVoices] = {};         ///< the note's detune curve value, held for the note
-    double glideScale_[kPolyVoices] = {};     ///< the note's detune scale (FM halves it), held
-    double glideFmRatio_[kPolyVoices] = {};   ///< the note's FM ratio, held
+    double m_glidePitch[PolyVoices] = {};     ///< the pitch each voice sounds at now, in MIDI notes
+    double m_glideTarget[PolyVoices] = {};    ///< the note's own pitch: where the slew is going
+    double m_glideY[PolyVoices] = {};         ///< the note's detune curve value, held for the note
+    double m_glideScale[PolyVoices] = {};     ///< the note's detune scale (FM halves it), held
+    double m_glideFmRatio[PolyVoices] = {};   ///< the note's FM ratio, held
     /**
      * @brief Each slot's thermal drift factor, read at note on and held for the note.
      *
@@ -421,26 +421,26 @@ private:
      * value the note started with -- otherwise the portamento would drag the drift into the note and
      * break the statement that a sounding oscillator's pitch is constant apart from the bend.
      */
-    double driftFactorHeld_[kPolySlots] = {};
-    double lastPitch_ = -1.0;                 ///< the instance's last sounding pitch, < 0 before the first note
-    int    newest_ = 0;                       ///< the voice that started last: the one lastPitch_ follows
-    float  glideAlpha_ = 0.0f;                ///< one-pole coefficient of the slew, per kPolyBlock step
-    float  glideMs_ = 0.0f;                   ///< poly.glide: 0 switches the whole mechanism off
-    float  panL_ = 1.0f, panR_ = 1.0f;        ///< constant-power gains of poly.pan (both exactly 1 at centre)
+    double m_driftFactorHeld[PolySlotCount] = {};
+    double m_lastPitch = -1.0;                 ///< the instance's last sounding pitch, < 0 before the first note
+    int    m_newest = 0;                       ///< the voice that started last: the one m_lastPitch follows
+    float  m_glideAlpha = 0.0f;                ///< one-pole coefficient of the slew, per PolyBlock step
+    float  m_glideMs = 0.0f;                   ///< poly.glide: 0 switches the whole mechanism off
+    float  m_panL = 1.0f, m_panR = 1.0f;        ///< constant-power gains of poly.pan (both exactly 1 at centre)
     /** @} */
-    Disperser disperse_;                      ///< all-pass chain coefficients (Disperser.h)
-    DisperserChannel dispL_;   ///< the disperser's state, left
-    DisperserChannel dispR_;   ///< ... right
-    TempoDelay delay_;   ///< the voice's tempo delay
-    float send_ = 0.0f;   ///< poly.delay_send, linear
-    float level_ = 1.0f;   ///< poly.level, linear
-    std::vector<float> slotL_;   ///< a block's slot outputs, left
-    std::vector<float> slotR_;   ///< ... right
-    std::vector<float> chanIn_;   ///< the channels' input
-    std::vector<float> chanAmp_;   ///< the channels' amplitude
-    std::vector<float> chanOut_;   ///< the channels' output
-    std::vector<float> sendBuf_;   ///< the delay send
-    std::vector<float> wtRow_;   ///< the wavetable rows
+    Disperser m_disperse;                      ///< all-pass chain coefficients (Disperser.h)
+    DisperserChannel m_dispL;   ///< the disperser's state, left
+    DisperserChannel m_dispR;   ///< ... right
+    TempoDelay m_delay;   ///< the voice's tempo delay
+    float m_send = 0.0f;   ///< poly.delay_send, linear
+    float m_level = 1.0f;   ///< poly.level, linear
+    std::vector<float> m_slotL;   ///< a block's slot outputs, left
+    std::vector<float> m_slotR;   ///< ... right
+    std::vector<float> m_chanIn;   ///< the channels' input
+    std::vector<float> m_chanAmp;   ///< the channels' amplitude
+    std::vector<float> m_chanOut;   ///< the channels' output
+    std::vector<float> m_sendBuf;   ///< the delay send
+    std::vector<float> m_wtRow;   ///< the wavetable rows
 };
 
 } // namespace phos

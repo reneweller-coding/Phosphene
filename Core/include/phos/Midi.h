@@ -19,10 +19,10 @@
 
 namespace phos {
 
-constexpr int kMidiPpq = 960;   ///< ticks per quarter note in exported files
+constexpr int MidiPpq = 960;   ///< ticks per quarter note in exported files
 
 /** @brief MIDI channel (0-based) a part is written to. */
-int midiChannelOf(Part part);
+int midiChannelOf(PartE part);
 
 /**
  * @brief Encodes a score as a Standard MIDI File (format 1).
@@ -39,21 +39,21 @@ bool writeMidiFile(const Score& score, const char* path);
 
 /** @brief One track of a decoded file. */
 struct MidiTrackData {
-    std::string name;                 ///< track name meta event, may be empty
-    std::vector<NoteEvent> notes;     ///< notes; part is taken from the track name if it matches kPartNames
-    int channel = -1;                 ///< channel of the first note, -1 if none
+    std::string m_name;                 ///< track name meta event, may be empty
+    std::vector<NoteEvent> m_notes;     ///< notes; part is taken from the track name if it matches PartNames
+    int m_channel = -1;                 ///< channel of the first note, -1 if none
 };
 
 /** @brief Contents of a decoded file. */
 struct MidiFileData {
-    int format = 1;                                    ///< SMF format 0 or 1
-    int ppq = 480;                                     ///< ticks per quarter note
-    std::vector<TempoPoint> tempos;                    ///< tempo events (beat, bpm), held steps
-    std::vector<std::pair<double, std::string>> markers; ///< marker meta events (beat, text)
-    int keySharps = 0;                                 ///< first key signature: sharps (+) or flats (-)
-    bool keyMinor = false;                             ///< first key signature's mode
-    std::vector<std::pair<double, int>> keys;          ///< every key signature (beat, sharps)
-    std::vector<MidiTrackData> tracks;                 ///< all tracks in file order
+    int m_format = 1;                                    ///< SMF format 0 or 1
+    int m_ppq = 480;                                     ///< ticks per quarter note
+    std::vector<TempoPoint> m_tempos;                    ///< tempo events (beat, bpm), held steps
+    std::vector<std::pair<double, std::string>> m_markers; ///< marker meta events (beat, text)
+    int m_keySharps = 0;                                 ///< first key signature: sharps (+) or flats (-)
+    bool m_keyMinor = false;                             ///< first key signature's mode
+    std::vector<std::pair<double, int>> m_keys;          ///< every key signature (beat, sharps)
+    std::vector<MidiTrackData> m_tracks;                 ///< all tracks in file order
 };
 
 /**
