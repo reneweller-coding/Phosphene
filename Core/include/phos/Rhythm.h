@@ -34,7 +34,8 @@
 #include <cstdint>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 constexpr int StepsPerBar = 16;   ///< the sixteenth grid of a 4/4 bar
 
@@ -55,36 +56,46 @@ constexpr int RollSemitones = 12;
  * @param[in] rotation  the rotation in steps
  * @return an onset flag per step
  */
-std::vector<bool> euclid(int pulses, int steps, int rotation);
+std::vector<bool> euclid( int pulses, int steps, int rotation );
 
 /**
  * @brief Longuet-Higgins and Lee metrical weight of a sixteenth step in a 4/4 bar.
  * @param[in] step  the sixteenth
  * @return the weight
  */
-int lhlWeight(int step);
+int lhlWeight( int step );
 
 /**
  * @brief Longuet-Higgins and Lee syncopation of a cyclic one-bar pattern of 16 steps.
  * @param[in] steps  the sixteen onset flags
  * @return the syncopation
  */
-int lhlSyncopation(const bool* steps);
+int lhlSyncopation( const bool *steps );
 
 /** @brief Kinds of fill in the last bar of a phrase. */
-enum class FillTypeE : int { NONE = 0, SNARE_ROLL, TOM_RUN, ZAP_BURST, CLAP_TRIPLET, HAT_DROP, COUNT };
+enum class FillTypeE : int
+{
+    NONE = 0,
+    SNARE_ROLL,
+    TOM_RUN,
+    ZAP_BURST,
+    CLAP_TRIPLET,
+    HAT_DROP,
+    COUNT
+};
 
 /** @brief Percussion decisions that hold for a whole track. */
-struct PercPlan {
-    int  m_layerOrder[PercLanes] = {};   ///< lanes in the order they enter the groove
-    int  m_layers = 0;                    ///< how many of them take part at most
-    int  m_hatMode = 0;                   ///< 0 closed offbeat, 1 open offbeat + closed sixteenths, 2 closed offbeat + shaker
-    bool m_clapBackbeat = true;           ///< clap on 2 and 4
-    int  m_pulses[PercLanes] = {};       ///< Euclidean onsets per bar for the Euclidean roles
-    int  m_rotation[PercLanes] = {};     ///< and their rotation
-    float m_macro[3] = {};                ///< sound recipe: brightness, tightness, grit (-1..1)
-    int  m_engineOverride[PercLanes] = {};   ///< -1 = the knob
-    int  m_modeSetOverride[PercLanes] = {};  ///< -1 = the knob
+struct PercPlan
+{
+    int   m_layerOrder[PercLanes] = {};   ///< lanes in the order they enter the groove
+    int   m_layers = 0;                   ///< how many of them take part at most
+    int   m_hatMode = 0;           ///< 0 closed offbeat, 1 open offbeat + closed sixteenths, 2 closed offbeat + shaker
+    bool  m_clapBackbeat = true;   ///< clap on 2 and 4
+    int   m_pulses[PercLanes] = {};            ///< Euclidean onsets per bar for the Euclidean roles
+    int   m_rotation[PercLanes] = {};          ///< and their rotation
+    float m_macro[3] = {};                     ///< sound recipe: brightness, tightness, grit (-1..1)
+    int   m_engineOverride[PercLanes] = {};    ///< -1 = the knob
+    int   m_modeSetOverride[PercLanes] = {};   ///< -1 = the knob
     /**
      * @brief How many lanes at the head of layerOrder are hats (the closed hat, and the open hat or the
      *        shaker its hat mode leans on) -- 19.09.2026, round "arrangement".
@@ -93,7 +104,7 @@ struct PercPlan {
      * on 2 and 4, then congas, then ride)", then the rest by weight. The groove adds one layer per group
      * on top of the hats (Form.cpp).
      */
-    int  m_hatLayers = 1;
+    int m_hatLayers = 1;
 };
 
 /**
@@ -105,7 +116,7 @@ struct PercPlan {
  *                        lane is a lockable unit (PLAN 6.8), so its pattern hangs off its own seed
  * @return the percussion plan
  */
-PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack, const uint64_t* laneSeeds = nullptr);
+PercPlan makePercPlan( const ParamStore &p, uint64_t seed, bool firstTrack, const uint64_t *laneSeeds = nullptr );
 
 /**
  * @brief What the form asks of the percussion in one bar (Form.h, the instrumentation matrix).
@@ -114,24 +125,25 @@ PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack, const
  * not from the bar number: percussion layers grow through an intro, return one per four bars in a
  * buildup and leave again through an outro.
  */
-struct PercBarSpec {
-    int   m_layers = 4;        ///< how many layers of the plan play
-    bool  m_fills = true;      ///< fills allowed in this bar
-    bool  m_hatsDense = false; ///< the closed hat plays every sixteenth (buildup)
-    int   m_rollBar = -1;      ///< 0..rollBars-1: which bar of the buildup's snare roll this is
-    bool  m_pdb = false;       ///< the pre-drop break: the roll ends on beat 3, beat 4 stays empty
-    bool  m_crash = false;     ///< open the bar with a crash (a drop's downbeat)
-    float m_cutBeats = 0.0f;   ///< beats of silence at the start of the bar (the cut)
+struct PercBarSpec
+{
+    int   m_layers = 4;          ///< how many layers of the plan play
+    bool  m_fills = true;        ///< fills allowed in this bar
+    bool  m_hatsDense = false;   ///< the closed hat plays every sixteenth (buildup)
+    int   m_rollBar = -1;        ///< 0..rollBars-1: which bar of the buildup's snare roll this is
+    bool  m_pdb = false;         ///< the pre-drop break: the roll ends on beat 3, beat 4 stays empty
+    bool  m_crash = false;       ///< open the bar with a crash (a drop's downbeat)
+    float m_cutBeats = 0.0f;     ///< beats of silence at the start of the bar (the cut)
     /** @name 19.09.2026, round "arrangement" (Form.h, BarPlan has the same fields)
      *  @{ */
-    int   m_rollBars = 4;      ///< length of the roll: its quarters play 1/4, 1/8, 1/16 and 1/32 notes
-    bool  m_quietHats = false; ///< a quiet closed hat on every sixteenth but the downbeat (the intro's first half)
-    bool  m_shaker = false;    ///< the shaker plays whether or not it is a layer
-    bool  m_offbeatHat = false;///< the closed hat plays its eighth offbeat whether or not it is a layer
-    float m_hatLevel = 1.0f;   ///< velocity factor of what quietHats, shaker and offbeatHat add
-    bool  m_openHats = false;  ///< the open hat on every offbeat (drop 2)
-    bool  m_ride = false;      ///< the ride plays whether or not it is a layer (drop 2)
-    int   m_cycleBar = -1;     ///< bar within the section's 32-bar cycle, -1 = unknown (the fill falls back on barInTrack)
+    int   m_rollBars = 4;         ///< length of the roll: its quarters play 1/4, 1/8, 1/16 and 1/32 notes
+    bool  m_quietHats = false;    ///< a quiet closed hat on every sixteenth but the downbeat (the intro's first half)
+    bool  m_shaker = false;       ///< the shaker plays whether or not it is a layer
+    bool  m_offbeatHat = false;   ///< the closed hat plays its eighth offbeat whether or not it is a layer
+    float m_hatLevel = 1.0f;      ///< velocity factor of what quietHats, shaker and offbeatHat add
+    bool  m_openHats = false;     ///< the open hat on every offbeat (drop 2)
+    bool  m_ride = false;         ///< the ride plays whether or not it is a layer (drop 2)
+    int m_cycleBar = -1;   ///< bar within the section's 32-bar cycle, -1 = unknown (the fill falls back on barInTrack)
     /** @} */
 };
 
@@ -148,8 +160,8 @@ struct PercBarSpec {
  * @param[in]  spec        what the form asks for in this bar
  * @param[out] out         receives the notes (Part::Perc, lane, GM pitch plus any shift)
  */
-void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSeed, int bar, int barInTrack,
-                    double bpm, int keyRoot, int scale, const PercBarSpec& spec, std::vector<NoteEvent>& out);
+void composePercBar( const ParamStore &p, const PercPlan &plan, uint64_t trackSeed, int bar, int barInTrack, double bpm,
+                     int keyRoot, int scale, const PercBarSpec &spec, std::vector<NoteEvent> &out );
 
 /**
  * @brief The fill a phrase ends with (exposed for tests).
@@ -164,7 +176,7 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
  * @param[in] cycleBar    the bar within the section's cycle, -1 when unknown
  * @return the fill
  */
-FillTypeE chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack, int cycleBar = -1);
+FillTypeE chooseFill( const ParamStore &p, uint64_t trackSeed, int barInTrack, int cycleBar = -1 );
 
 /**
  * @brief Normalised offsets of the percussion recipe for one lane, indexed by perc::.
@@ -172,6 +184,6 @@ FillTypeE chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack, in
  * @param[in]     amount  Sound Variation
  * @param[in,out] out     perc::Count entries
  */
-void percRecipeOffsets(const float* macro, float amount, float* out);
+void percRecipeOffsets( const float *macro, float amount, float *out );
 
-} // namespace phos
+}   // namespace phos

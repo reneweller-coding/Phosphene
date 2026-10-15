@@ -21,20 +21,23 @@
 #include <juce_events/juce_events.h>
 #include <mutex>
 
-namespace phosui {
+namespace phosui
+{
 
 /** @brief The update check: one per process (juce::SharedResourcePointer), its own thread for the request. */
-class UpdateCheck : private juce::Thread {
+class UpdateCheck : private juce::Thread
+{
 public:
     /** @brief What the last check found. */
-    struct Result {
-        bool m_asked = false;        ///< a check has run (now or from the cache)
-        bool m_ok = false;           ///< the answer arrived and was understood
-        bool m_newer = false;        ///< the latest release is newer than this build
-        juce::String m_latest;       ///< the latest release's tag ("v1.1.0")
-        juce::String m_url;          ///< its page
-        juce::String m_message;      ///< one line for the help page: what happened
-        juce::Time m_when;           ///< when GitHub was last asked
+    struct Result
+    {
+        bool         m_asked = false;   ///< a check has run (now or from the cache)
+        bool         m_ok = false;      ///< the answer arrived and was understood
+        bool         m_newer = false;   ///< the latest release is newer than this build
+        juce::String m_latest;          ///< the latest release's tag ("v1.1.0")
+        juce::String m_url;             ///< its page
+        juce::String m_message;         ///< one line for the help page: what happened
+        juce::Time   m_when;            ///< when GitHub was last asked
     };
 
     /** @brief Creates the (not yet running) check thread; nothing is fetched until startIfDue(). */
@@ -46,7 +49,7 @@ public:
      * @param[in] stateFile  `update.txt` in the user folder
      * @param[in] force      check now, even if the last check was less than a day ago
      */
-    void startIfDue(const juce::File& stateFile, bool force = false);
+    void startIfDue( const juce::File &stateFile, bool force = false );
     /**
      * @brief The last result (thread-safe).
      * @return the result
@@ -57,22 +60,23 @@ public:
      * @param[in] stateFile  the state file
      * @return true when the check is on
      */
-    static bool enabled(const juce::File& stateFile);
+    static bool enabled( const juce::File &stateFile );
     /**
      * @brief Switches the automatic check on or off.
      * @param[in] stateFile  the state file
      * @param[in] on         true to switch it on
      */
-    static void setEnabled(const juce::File& stateFile, bool on);
+    static void setEnabled( const juce::File &stateFile, bool on );
     /**
      * @brief Whether @p candidate ("v1.2.0", "1.10") is a later version than @p current, number by number.
      * @param[in] candidate  the candidate version
      * @param[in] current    the current version
      * @return true when the candidate is later
      */
-    static bool isNewer(const juce::String& candidate, const juce::String& current);
+    static bool isNewer( const juce::String &candidate, const juce::String &current );
     /** @brief The address asked. */
-    static constexpr const char* LatestReleaseApi = "https://api.github.com/repos/reneweller-coding/Phosphene/releases/latest";
+    static constexpr const char *LatestReleaseApi =
+        "https://api.github.com/repos/reneweller-coding/Phosphene/releases/latest";
 
 private:
     /** @brief The thread: asks GitHub for the latest release and keeps what it says. */
@@ -81,10 +85,10 @@ private:
      * @brief Reads the cached answer out of the state file.
      * @param[in] stateFile  the state file
      */
-    void loadCache(const juce::File& stateFile);
-    mutable std::mutex m_lock;   ///< guards m_result
-    Result m_result;   ///< what the last check found
-    juce::File m_stateFile;   ///< update.txt in the user folder
+    void loadCache( const juce::File &stateFile );
+    mutable std::mutex m_lock;        ///< guards m_result
+    Result             m_result;      ///< what the last check found
+    juce::File         m_stateFile;   ///< update.txt in the user folder
 };
 
-} // namespace phosui
+}   // namespace phosui

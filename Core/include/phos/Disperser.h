@@ -50,7 +50,8 @@
 #pragma once
 #include <cmath>
 
-namespace phos {
+namespace phos
+{
 
 /** @brief Sections the disperser can run. */
 constexpr int DisperseStages = 8;
@@ -66,7 +67,8 @@ constexpr double DisperseHalfSpan = 1.6609640474436813;   // log2(sqrt(10)): a d
  * state is not, so a Disperser instance is one channel and a stereo effect holds two of them and one
  * coefficient set.
  */
-struct DisperserChannel {
+struct DisperserChannel
+{
     float m_x1[DisperseStages] = {};   ///< per section: the last input
     float m_x2[DisperseStages] = {};   ///< per section: the input before
     float m_y1[DisperseStages] = {};   ///< per section: the last output
@@ -75,7 +77,11 @@ struct DisperserChannel {
     /** @brief Clears the state of every section. */
     void reset()
     {
-        for (int i = 0; i < DisperseStages; ++i) { m_x1[i] = m_x2[i] = 0.0f; m_y1[i] = m_y2[i] = 0.0f; }
+        for ( int i = 0; i < DisperseStages; ++i )
+        {
+            m_x1[i] = m_x2[i] = 0.0f;
+            m_y1[i] = m_y2[i] = 0.0f;
+        }
     }
 
     /**
@@ -86,9 +92,10 @@ struct DisperserChannel {
      * @param[in] stages  sections to run (0 = bypass)
      * @return the output sample
      */
-    inline float tick(float x, const float* c, const float* d, int stages)
+    inline float tick( float x, const float *c, const float *d, int stages )
     {
-        for (int i = 0; i < stages; ++i) {
+        for ( int i = 0; i < stages; ++i )
+        {
             const float y = c[i] * x + d[i] * m_x1[i] + m_x2[i] - d[i] * m_y1[i] - c[i] * m_y2[i];
             m_x2[i] = m_x1[i];
             m_x1[i] = x;
@@ -101,10 +108,11 @@ struct DisperserChannel {
 };
 
 /** @brief The coefficients of a disperser chain, computed once per update(). */
-struct Disperser {
+struct Disperser
+{
     float m_c[DisperseStages] = {};   ///< per section: the all-pass's first coefficient
     float m_d[DisperseStages] = {};   ///< per section: the all-pass's second coefficient
-    int m_stages = 0;   ///< sections in use
+    int   m_stages = 0;               ///< sections in use
 
     /**
      * @brief Places @p n sections logarithmically over a decade around @p centreHz.
@@ -114,21 +122,22 @@ struct Disperser {
      *                      sqrt(10); with one section it sits at the centre. Every centre is kept under 0.45 fs so that
      *                      no section degenerates at the top of the band.
      */
-    void set(int n, double centreHz, double sr)
+    void set( int n, double centreHz, double sr )
     {
-        m_stages = n < 0 ? 0 : (n > DisperseStages ? DisperseStages : n);
-        const double lo = centreHz * std::pow(2.0, -DisperseHalfSpan);
-        const double hi = centreHz * std::pow(2.0, DisperseHalfSpan);
-        for (int i = 0; i < m_stages; ++i) {
-            const double t = m_stages > 1 ? static_cast<double>(i) / (m_stages - 1) : 0.5;
-            double f0 = lo * std::pow(hi / lo, t);
-            f0 = f0 < 20.0 ? 20.0 : (f0 > 0.45 * sr ? 0.45 * sr : f0);
+        m_stages = n < 0 ? 0 : ( n > DisperseStages ? DisperseStages : n );
+        const double lo = centreHz * std::pow( 2.0, -DisperseHalfSpan );
+        const double hi = centreHz * std::pow( 2.0, DisperseHalfSpan );
+        for ( int i = 0; i < m_stages; ++i )
+        {
+            const double t = m_stages > 1 ? static_cast<double>( i ) / ( m_stages - 1 ) : 0.5;
+            double       f0 = lo * std::pow( hi / lo, t );
+            f0 = f0 < 20.0 ? 20.0 : ( f0 > 0.45 * sr ? 0.45 * sr : f0 );
             const double w0 = 2.0 * 3.141592653589793 * f0 / sr;
-            const double alpha = std::sin(w0) / (2.0 * DisperseQ);
-            m_c[i] = static_cast<float>((1.0 - alpha) / (1.0 + alpha));
-            m_d[i] = static_cast<float>(-2.0 * std::cos(w0) / (1.0 + alpha));
+            const double alpha = std::sin( w0 ) / ( 2.0 * DisperseQ );
+            m_c[i] = static_cast<float>( ( 1.0 - alpha ) / ( 1.0 + alpha ) );
+            m_d[i] = static_cast<float>( -2.0 * std::cos( w0 ) / ( 1.0 + alpha ) );
         }
     }
 };
 
-} // namespace phos
+}   // namespace phos

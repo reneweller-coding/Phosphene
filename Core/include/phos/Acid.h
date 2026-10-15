@@ -50,7 +50,8 @@
 #include "phos/TempoDelay.h"
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 /**
  * @brief The four weights of a third-order Lagrange fractional delay, for the fraction @p x in [0, 1).
@@ -90,23 +91,24 @@ namespace phos {
  * @param[out] w1   the weight at offset +1
  * @param[out] w2   the weight at offset +2
  */
-inline void combTaps(float x, float& wm1, float& w0, float& w1, float& w2)
+inline void combTaps( float x, float &wm1, float &w0, float &w1, float &w2 )
 {
     const float xm1 = x - 1.0f, xm2 = x - 2.0f, xp1 = x + 1.0f;
-    wm1 = -x * xm1 * xm2 * (1.0f / 6.0f);
+    wm1 = -x * xm1 * xm2 * ( 1.0f / 6.0f );
     w0 = xp1 * xm1 * xm2 * 0.5f;
     w1 = -xp1 * x * xm2 * 0.5f;
-    w2 = xp1 * x * xm1 * (1.0f / 6.0f);
+    w2 = xp1 * x * xm1 * ( 1.0f / 6.0f );
 }
 
 /** @brief Monophonic acid synthesizer. */
-class Acid {
+class Acid
+{
 public:
     /**
      * @brief Prepares for a sample rate.
      * @param[in] sampleRate  the sample rate
      */
-    void prepare(double sampleRate);
+    void prepare( double sampleRate );
     /**
      * @brief Chooses the rate the oscillator and the diode ladder run at (Quality.h).
      *
@@ -116,7 +118,7 @@ public:
      * limit, so the sound keeps its range. Call it after prepare() and before the first update().
      * @param[in] factor  1 or 2; anything else is clamped into that range
      */
-    void setOversampling(int factor);
+    void setOversampling( int factor );
     /**
      * @brief The factor set by setOversampling().
      * @return the oversampling factor
@@ -129,14 +131,18 @@ public:
      * @param[in] v    the effective parameter values
      * @param[in] bpm  the tempo
      */
-    void update(const float* v, double bpm);
+    void update( const float *v, double bpm );
     /**
      * @brief The set's beat at the next sample and the beats per sample (Engine.cpp, per chunk): the synced LFOs'
      *        clock.
      * @param[in] beat            the beat at the next sample
      * @param[in] beatsPerSample  the beats per sample
      */
-    void setClock(double beat, double beatsPerSample) { m_beat = beat; m_beatsPerSample = beatsPerSample; }
+    void setClock( double beat, double beatsPerSample )
+    {
+        m_beat = beat;
+        m_beatsPerSample = beatsPerSample;
+    }
     /**
      * @brief Starts a note.
      * @param[in] pitch        MIDI note
@@ -146,20 +152,23 @@ public:
      * @param[in] gateSamples  samples until the gate closes
      * @param[in] late         how many samples ago the note ideally started (0 <= late < 1)
      */
-    void noteOn(int pitch, float velocity, bool accent, bool slide, int gateSamples, double late);
+    void noteOn( int pitch, float velocity, bool accent, bool slide, int gateSamples, double late );
     /**
      * @brief Closes the gate of the note at @p pitch, if it is the one sounding (23.09.2026, live keyboard): a
      *        played note starts with a gate that never runs out on its own, and the key's release ends it.
      * @param[in] pitch  the MIDI note
      */
-    void noteOff(int pitch) { if (m_gate > 0 && static_cast<int>(m_pitchTarget + 0.5) == pitch) m_gate = 1; }
+    void noteOff( int pitch )
+    {
+        if ( m_gate > 0 && static_cast<int>( m_pitchTarget + 0.5 ) == pitch ) m_gate = 1;
+    }
     /**
      * @brief Renders @p n stereo samples, replacing @p L and @p R.
      * @param[out] L  the left channel
      * @param[out] R  the right channel
      * @param[in]  n  the block's samples
      */
-    void process(float* L, float* R, int n);
+    void process( float *L, float *R, int n );
     /**
      * @brief Whether the amplitude envelope is open.
      * @return true while the envelope is open
@@ -186,79 +195,81 @@ public:
      *        modulator, or null where nothing moves. Rendering thread.
      * @return the sums per destination, or null
      */
-    const float* displayModulation() const { return m_modOn && m_mod.active() ? m_modSum : nullptr; }
+    const float *displayModulation() const { return m_modOn && m_mod.active() ? m_modSum : nullptr; }
+
 private:
-    double m_sr = 48000.0;   ///< output sample rate
-    int    m_os = 2;                  ///< oscillator/ladder rate as a multiple of m_sr (1 or 2)
-    double m_osRate = 96000.0;        ///< m_sr * m_os, the rate the voice runs at
-    double m_nyqFactor = 0.2;         ///< cutoff ceiling as a fraction of m_osRate: decimator passband at 2x, stability at 1x
-    VaOscillator m_osc;   ///< saw-to-square oscillator
-    DiodeLadderT<float> m_ladder;   ///< the 303's diode ladder
-    HalfbandDown<float> m_down;   ///< back from the oversampled rate
-    Envelope m_amp;   ///< amplitude envelope
-    TanhAdaa m_shaper;   ///< the drive stage
-    Svf m_lc1;   ///< the low cut (acid.low_cut): its first section
-    Svf m_lc2;   ///< ... its second
-    Disperser m_disperse;             ///< all-pass chain coefficients (Disperser.h)
-    DisperserChannel m_dispState;     ///< its state; the acid is mono until the delay
-    TempoDelay m_delay;   ///< the acid's own tempo delay
-    std::vector<float> m_comb;   ///< the squelch's feedback comb, tuned to the note
-    size_t m_combPos = 0;   ///< its write position
-    std::vector<float> m_mono;   ///< a block's dry signal
-    std::vector<float> m_send;   ///< a block's delay send
+    double m_sr = 48000.0;       ///< output sample rate
+    int    m_os = 2;             ///< oscillator/ladder rate as a multiple of m_sr (1 or 2)
+    double m_osRate = 96000.0;   ///< m_sr * m_os, the rate the voice runs at
+    double m_nyqFactor = 0.2;   ///< cutoff ceiling as a fraction of m_osRate: decimator passband at 2x, stability at 1x
+    VaOscillator        m_osc;           ///< saw-to-square oscillator
+    DiodeLadderT<float> m_ladder;        ///< the 303's diode ladder
+    HalfbandDown<float> m_down;          ///< back from the oversampled rate
+    Envelope            m_amp;           ///< amplitude envelope
+    TanhAdaa            m_shaper;        ///< the drive stage
+    Svf                 m_lc1;           ///< the low cut (acid.low_cut): its first section
+    Svf                 m_lc2;           ///< ... its second
+    Disperser           m_disperse;      ///< all-pass chain coefficients (Disperser.h)
+    DisperserChannel    m_dispState;     ///< its state; the acid is mono until the delay
+    TempoDelay          m_delay;         ///< the acid's own tempo delay
+    std::vector<float>  m_comb;          ///< the squelch's feedback comb, tuned to the note
+    size_t              m_combPos = 0;   ///< its write position
+    std::vector<float>  m_mono;          ///< a block's dry signal
+    std::vector<float>  m_send;          ///< a block's delay send
 
     /// Note state.
     double m_pitchNow = 57.0, m_pitchTarget = 57.0;   ///< MIDI pitch now and where a slide goes
-    float  m_velocity = 1.0f;   ///< the note's velocity, 0..1
-    bool   m_accent = false;   ///< the note's accent
-    bool   m_slidePending = false;   ///< the note slides into the next
-    bool   m_legato = false;   ///< a slid (legato) note
-    int    m_gate = 0;   ///< samples until the note is released
-    float  m_fenv = 0.0f;   ///< the filter envelope
-    float  m_fDecayNote = 0.999f;   ///< its per-sample decay for this note
-    float  m_sq = 0.0f;   ///< the squelch envelope
-    float  m_pulse = 0.0f;   ///< the accent pulse
-    float  m_sweep = 0.0f;   ///< the accent sweep capacitor it charges
-    float  m_accentGain = 1.0f;   ///< the accent's level
-    float  m_accentGainTarget = 1.0f;   ///< ... its target
+    float  m_velocity = 1.0f;                         ///< the note's velocity, 0..1
+    bool   m_accent = false;                          ///< the note's accent
+    bool   m_slidePending = false;                    ///< the note slides into the next
+    bool   m_legato = false;                          ///< a slid (legato) note
+    int    m_gate = 0;                                ///< samples until the note is released
+    float  m_fenv = 0.0f;                             ///< the filter envelope
+    float  m_fDecayNote = 0.999f;                     ///< its per-sample decay for this note
+    float  m_sq = 0.0f;                               ///< the squelch envelope
+    float  m_pulse = 0.0f;                            ///< the accent pulse
+    float  m_sweep = 0.0f;                            ///< the accent sweep capacitor it charges
+    float  m_accentGain = 1.0f;                       ///< the accent's level
+    float  m_accentGainTarget = 1.0f;                 ///< ... its target
 
     // Settings from update().
-    float m_wave = 0.0f;   ///< the waveform
-    float m_cutoff = 420.0f;   ///< the cutoff, Hz
-    float m_k = 10.0f;   ///< the ladder's feedback
-    float m_envOct = 2.6f;   ///< the envelope's depth, octaves
-    float m_accentAmt = 0.6f;   ///< the accent's amount
-    float m_keyTrack = 0.5f;   ///< the key tracking
-    float m_fDecay = 0.999f;   ///< the filter's per-sample decay
+    float m_wave = 0.0f;             ///< the waveform
+    float m_cutoff = 420.0f;         ///< the cutoff, Hz
+    float m_k = 10.0f;               ///< the ladder's feedback
+    float m_envOct = 2.6f;           ///< the envelope's depth, octaves
+    float m_accentAmt = 0.6f;        ///< the accent's amount
+    float m_keyTrack = 0.5f;         ///< the key tracking
+    float m_fDecay = 0.999f;         ///< the filter's per-sample decay
     float m_fDecayAccent = 0.999f;   ///< ... on an accented note
-    float m_glide = 0.001f;   ///< the slide's coefficient
-    float m_driveIn = 1.0f;   ///< the drive into the filter
-    float m_driveOut = 1.0f;   ///< ... and the gain after it
-    bool  m_squelch = false;   ///< acid.squelch
-    float m_sqOct = 3.5f;   ///< the squelch's start, octaves
-    float m_sqDecay = 0.999f;   ///< the squelch's per-sample decay
-    float m_combMix = 0.5f;   ///< the comb's mix
-    float m_combFb = 0.8f;   ///< the comb's feedback
-    float m_pulseDecay = 0.999f;   ///< the accent pulse's decay
-    float m_sweepCharge = 0.001f;   ///< the sweep's charge rate
-    float m_level = 0.3f;   ///< the level
-    float m_sendAmt = 0.25f;   ///< the delay send
-    float m_resonance = 0.7f;   ///< the resonance
-    float m_ampDecay = 0.9f;   ///< the amplitude's decay
-    float m_hz = 220.0f;   ///< the frequency sounding
-    float m_accentSmooth = 0.01f;   ///< the accent gain's smoothing
+    float m_glide = 0.001f;          ///< the slide's coefficient
+    float m_driveIn = 1.0f;          ///< the drive into the filter
+    float m_driveOut = 1.0f;         ///< ... and the gain after it
+    bool  m_squelch = false;         ///< acid.squelch
+    float m_sqOct = 3.5f;            ///< the squelch's start, octaves
+    float m_sqDecay = 0.999f;        ///< the squelch's per-sample decay
+    float m_combMix = 0.5f;          ///< the comb's mix
+    float m_combFb = 0.8f;           ///< the comb's feedback
+    float m_pulseDecay = 0.999f;     ///< the accent pulse's decay
+    float m_sweepCharge = 0.001f;    ///< the sweep's charge rate
+    float m_level = 0.3f;            ///< the level
+    float m_sendAmt = 0.25f;         ///< the delay send
+    float m_resonance = 0.7f;        ///< the resonance
+    float m_ampDecay = 0.9f;         ///< the amplitude's decay
+    float m_hz = 220.0f;             ///< the frequency sounding
+    float m_accentSmooth = 0.01f;    ///< the accent gain's smoothing
     /** @name The acid's own modulation (26.09.2026, Modulation.h), every 16 samples on the absolute count
      *  @{ */
-    Modulator m_mod;                       ///< envelope, LFOs, matrix
-    float m_modSum[ModDests] = {};        ///< the sums per destination
-    bool  m_modOn = false;                 ///< some slot reaches something
-    float m_noteRand = 0.0f;               ///< the Random source, per note
-    Rng   m_modRng;                        ///< its stream
-    uint64_t m_modPos = 0;                 ///< samples since reset (the evaluation grid)
-    double m_beat = 0.0, m_beatsPerSample = 0.0;   ///< setClock()
-    float m_cutMod = 0.0f, m_pitchMod = 0.0f, m_kMod = 0.0f;   ///< cutoff octaves, pitch semitones, feedback as modulated
-    float m_gainL = 1.0f, m_gainR = 1.0f;   ///< the level and pan destinations
+    Modulator m_mod;                                  ///< envelope, LFOs, matrix
+    float     m_modSum[ModDests] = {};                ///< the sums per destination
+    bool      m_modOn = false;                        ///< some slot reaches something
+    float     m_noteRand = 0.0f;                      ///< the Random source, per note
+    Rng       m_modRng;                               ///< its stream
+    uint64_t  m_modPos = 0;                           ///< samples since reset (the evaluation grid)
+    double    m_beat = 0.0, m_beatsPerSample = 0.0;   ///< setClock()
+    float     m_cutMod = 0.0f, m_pitchMod = 0.0f,
+              m_kMod = 0.0f;                    ///< cutoff octaves, pitch semitones, feedback as modulated
+    float     m_gainL = 1.0f, m_gainR = 1.0f;   ///< the level and pan destinations
     /** @} */
 };
 
-} // namespace phos
+}   // namespace phos

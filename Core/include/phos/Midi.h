@@ -18,7 +18,8 @@
 #include <string>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 constexpr int MidiPpq = 960;   ///< ticks per quarter note in exported files
 
@@ -27,14 +28,14 @@ constexpr int MidiPpq = 960;   ///< ticks per quarter note in exported files
  * @param[in] part  the part
  * @return its MIDI channel, 0 .. 15
  */
-int midiChannelOf(PartE part);
+int midiChannelOf( PartE part );
 
 /**
  * @brief Encodes a score as a Standard MIDI File (format 1).
  * @param[in] score  the score; notes need not be sorted
  * @return the file's bytes
  */
-std::vector<uint8_t> encodeMidi(const Score& score);
+std::vector<uint8_t> encodeMidi( const Score &score );
 
 /**
  * @brief Writes encodeMidi() to a file.
@@ -42,25 +43,27 @@ std::vector<uint8_t> encodeMidi(const Score& score);
  * @param[in] path   the file's path
  * @return false if the file cannot be written
  */
-bool writeMidiFile(const Score& score, const char* path);
+bool writeMidiFile( const Score &score, const char *path );
 
 /** @brief One track of a decoded file. */
-struct MidiTrackData {
-    std::string m_name;                 ///< track name meta event, may be empty
-    std::vector<NoteEvent> m_notes;     ///< notes; part is taken from the track name if it matches PartNames
-    int m_channel = -1;                 ///< channel of the first note, -1 if none
+struct MidiTrackData
+{
+    std::string            m_name;           ///< track name meta event, may be empty
+    std::vector<NoteEvent> m_notes;          ///< notes; part is taken from the track name if it matches PartNames
+    int                    m_channel = -1;   ///< channel of the first note, -1 if none
 };
 
 /** @brief Contents of a decoded file. */
-struct MidiFileData {
-    int m_format = 1;                                    ///< SMF format 0 or 1
-    int m_ppq = 480;                                     ///< ticks per quarter note
-    std::vector<TempoPoint> m_tempos;                    ///< tempo events (beat, bpm), held steps
-    std::vector<std::pair<double, std::string>> m_markers; ///< marker meta events (beat, text)
-    int m_keySharps = 0;                                 ///< first key signature: sharps (+) or flats (-)
-    bool m_keyMinor = false;                             ///< first key signature's mode
-    std::vector<std::pair<double, int>> m_keys;          ///< every key signature (beat, sharps)
-    std::vector<MidiTrackData> m_tracks;                 ///< all tracks in file order
+struct MidiFileData
+{
+    int                                         m_format = 1;         ///< SMF format 0 or 1
+    int                                         m_ppq = 480;          ///< ticks per quarter note
+    std::vector<TempoPoint>                     m_tempos;             ///< tempo events (beat, bpm), held steps
+    std::vector<std::pair<double, std::string>> m_markers;            ///< marker meta events (beat, text)
+    int                                         m_keySharps = 0;      ///< first key signature: sharps (+) or flats (-)
+    bool                                        m_keyMinor = false;   ///< first key signature's mode
+    std::vector<std::pair<double, int>>         m_keys;               ///< every key signature (beat, sharps)
+    std::vector<MidiTrackData>                  m_tracks;             ///< all tracks in file order
 };
 
 /**
@@ -71,7 +74,7 @@ struct MidiFileData {
  * @param[out] error  receives a message on failure, may be null
  * @return false on malformed or unsupported data
  */
-bool decodeMidi(const uint8_t* data, size_t size, MidiFileData& out, std::string* error = nullptr);
+bool decodeMidi( const uint8_t *data, size_t size, MidiFileData &out, std::string *error = nullptr );
 
 /**
  * @brief Reads and decodes a file.
@@ -80,13 +83,13 @@ bool decodeMidi(const uint8_t* data, size_t size, MidiFileData& out, std::string
  * @param[out] error  receives the failure, or null
  * @return false if it cannot be read
  */
-bool readMidiFile(const char* path, MidiFileData& out, std::string* error = nullptr);
+bool readMidiFile( const char *path, MidiFileData &out, std::string *error = nullptr );
 
 /**
  * @brief Key signature sharps/flats for a minor key with root pitch class @p root (A minor = 0).
  * @param[in] root  the root's pitch class
  * @return the sharps, negative for flats
  */
-int minorKeySharps(int root);
+int minorKeySharps( int root );
 
-} // namespace phos
+}   // namespace phos

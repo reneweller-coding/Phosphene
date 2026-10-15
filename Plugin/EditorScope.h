@@ -23,19 +23,25 @@
 #include "PluginProcessor.h"
 #include <vector>
 
-namespace phosui {
+namespace phosui
+{
 
 /** @brief One synth's scope. */
-class SynthScope final : public juce::Component, private juce::Timer {
+class SynthScope final : public juce::Component, private juce::Timer
+{
 public:
     /** @brief Which synth it shows. */
-    enum class KindE { KICK, BASS };
+    enum class KindE
+    {
+        KICK,
+        BASS
+    };
     /**
      * @brief A scope of the kick or the bass of @p proc.
      * @param[in,out] proc  the processor
      * @param[in]     kind  the kick or the bass
      */
-    SynthScope(PhospheneProcessor& proc, KindE kind);
+    SynthScope( PhospheneProcessor &proc, KindE kind );
     ~SynthScope() override;
 
     /** @brief Renders again now if anything changed (the timer does this ten times a second). */
@@ -55,31 +61,34 @@ public:
      * @brief The wave, the pitch or cutoff curve, the spectrum and the figures.
      * @param[in,out] g  the graphics context
      */
-    void paint(juce::Graphics&) override;
+    void paint( juce::Graphics & ) override;
 
 private:
     /** @brief Renders again while it is shown (ten times a second). */
-    void timerCallback() override { if (isShowing()) refresh(); }
+    void timerCallback() override
+    {
+        if ( isShowing() ) refresh();
+    }
     /**
      * @brief Renders one hit or note with the synth values @p v, the key and the tempo, and derives the curves.
      * @param[in] v    the synth's values
      * @param[in] key  the key's root
      * @param[in] bpm  the tempo
      */
-    void render(const std::vector<float>& v, int key, double bpm);
+    void render( const std::vector<float> &v, int key, double bpm );
 
-    PhospheneProcessor& m_proc;   ///< the processor whose values it reads
-    KindE m_kind;   ///< kick or bass
-    std::vector<float> m_seen;          ///< the values (and key, tempo) the picture was made from
-    std::vector<float> m_wave;          ///< the rendered sound
-    std::vector<float> m_curveHz;       ///< pitch (kick) or cutoff (bass) per display column's time
-    std::vector<float> m_spectrumDb;    ///< per log-frequency column
-    double m_seconds = 0.6;   ///< the length rendered
-    float m_peak = 0.0f;   ///< its peak, linear
-    double m_startHz = 0.0;   ///< where the curve starts, Hz
-    double m_landHz = 0.0;   ///< where it lands, Hz
-    double m_lengthMs = 0.0;   ///< the length to -60 dB, ms
-    int m_note = -1;   ///< the bass note, MIDI (-1 for the kick)
+    PhospheneProcessor &m_proc;             ///< the processor whose values it reads
+    KindE               m_kind;             ///< kick or bass
+    std::vector<float>  m_seen;             ///< the values (and key, tempo) the picture was made from
+    std::vector<float>  m_wave;             ///< the rendered sound
+    std::vector<float>  m_curveHz;          ///< pitch (kick) or cutoff (bass) per display column's time
+    std::vector<float>  m_spectrumDb;       ///< per log-frequency column
+    double              m_seconds = 0.6;    ///< the length rendered
+    float               m_peak = 0.0f;      ///< its peak, linear
+    double              m_startHz = 0.0;    ///< where the curve starts, Hz
+    double              m_landHz = 0.0;     ///< where it lands, Hz
+    double              m_lengthMs = 0.0;   ///< the length to -60 dB, ms
+    int                 m_note = -1;        ///< the bass note, MIDI (-1 for the kick)
 };
 
-} // namespace phosui
+}   // namespace phosui

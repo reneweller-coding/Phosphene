@@ -92,7 +92,8 @@
 #include <cstdint>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 /**
  * @brief The melodic parts: the acid and the six polyphonic voices, in the order of PolyInstance.
@@ -102,46 +103,84 @@ namespace phos {
  * the bits of BarPlan::parts follow this order, and nothing may address them by a bare number: use
  * mpIndex() and partBit().
  */
-enum class MelodyPartE : int { ACID = 0, LEAD, COUNTER, ARP, STAB, PAD, DRONE, COUNT };
-constexpr int MelodyParts = static_cast<int>(MelodyPartE::COUNT);   ///< number of melodic parts
+enum class MelodyPartE : int
+{
+    ACID = 0,
+    LEAD,
+    COUNTER,
+    ARP,
+    STAB,
+    PAD,
+    DRONE,
+    COUNT
+};
+constexpr int MelodyParts = static_cast<int>( MelodyPartE::COUNT );   ///< number of melodic parts
 /**
  * @brief The index of a melodic part in the arrays kept per part.
  * @param[in] p  the melodic part
  * @return its index
  */
-constexpr int mpIndex(MelodyPartE p) { return static_cast<int>(p); }
+constexpr int mpIndex( MelodyPartE p )
+{
+    return static_cast<int>( p );
+}
 /**
  * @brief The bit of a melodic part in BarPlan::parts and BarPlan::partsNext.
  * @param[in] p  the melodic part
  * @return its bit
  */
-constexpr uint8_t partBit(MelodyPartE p) { return static_cast<uint8_t>(1u << static_cast<int>(p)); }
+constexpr uint8_t partBit( MelodyPartE p )
+{
+    return static_cast<uint8_t>( 1u << static_cast<int>( p ) );
+}
 /**
  * @brief The polyphonic instance that plays a melodic part (not for the acid, which is no Poly).
  * @param[in] p  the melodic part
  * @return its polyphonic instance
  */
-constexpr PolyInstanceE melodyPoly(MelodyPartE p) { return static_cast<PolyInstanceE>(static_cast<int>(p) - 1); }
+constexpr PolyInstanceE melodyPoly( MelodyPartE p )
+{
+    return static_cast<PolyInstanceE>( static_cast<int>( p ) - 1 );
+}
 /**
  * @brief The score part of a melodic part.
  * @param[in] p  the melodic part
  * @return its score part
  */
-constexpr PartE melodyScorePart(MelodyPartE p) { return p == MelodyPartE::ACID ? PartE::ACID : polyPart(melodyPoly(p)); }
-static_assert(melodyScorePart(MelodyPartE::DRONE) == PartE::DRONE && melodyScorePart(MelodyPartE::COUNTER) == PartE::COUNTER
-                  && MelodyParts == PolyInstances + 1,
-              "the melodic parts are the acid followed by the polyphonic instances in their order");
-static_assert(MelodyParts <= 8, "BarPlan::parts holds one bit per melodic part");
+constexpr PartE melodyScorePart( MelodyPartE p )
+{
+    return p == MelodyPartE::ACID ? PartE::ACID : polyPart( melodyPoly( p ) );
+}
+static_assert( melodyScorePart( MelodyPartE::DRONE ) == PartE::DRONE &&
+                   melodyScorePart( MelodyPartE::COUNTER ) == PartE::COUNTER && MelodyParts == PolyInstances + 1,
+               "the melodic parts are the acid followed by the polyphonic instances in their order" );
+static_assert( MelodyParts <= 8, "BarPlan::parts holds one bit per melodic part" );
 
 /** @brief The style profiles (compose.style). */
-enum class StyleIdE : int { GOA = 0, FULL_ON, PROGRESSIVE, DARK_FOREST, HI_TECH, COUNT };
-constexpr int NumStyles = static_cast<int>(StyleIdE::COUNT);   ///< number of style profiles
-extern const char* const StyleNames[NumStyles];              ///< display names
+enum class StyleIdE : int
+{
+    GOA = 0,
+    FULL_ON,
+    PROGRESSIVE,
+    DARK_FOREST,
+    HI_TECH,
+    COUNT
+};
+constexpr int            NumStyles = static_cast<int>( StyleIdE::COUNT );   ///< number of style profiles
+extern const char *const StyleNames[NumStyles];                             ///< display names
 
 /** @brief The dramaturgy presets of the energy arc (compose.arc). */
-enum class ArcIdE : int { WARM_UP = 0, PEAK_TIME, MORNING, CLOSING, FLAT, COUNT };
-constexpr int NumArcs = static_cast<int>(ArcIdE::COUNT);   ///< number of arcs
-extern const char* const ArcNames[NumArcs];              ///< display names
+enum class ArcIdE : int
+{
+    WARM_UP = 0,
+    PEAK_TIME,
+    MORNING,
+    CLOSING,
+    FLAT,
+    COUNT
+};
+constexpr int            NumArcs = static_cast<int>( ArcIdE::COUNT );   ///< number of arcs
+extern const char *const ArcNames[NumArcs];                             ///< display names
 
 /**
  * @brief The form templates of the two-drop architecture (19.09.2026, round "arrangement"), one per
@@ -152,7 +191,8 @@ extern const char* const ArcNames[NumArcs];              ///< display names
  * keep their meaning: which template a track was built from.
  */
 constexpr int NumBodies = 4;
-constexpr int NumPdbVariants = 4;   ///< whole bar, half bar, beat 4 only, kick alone on beat 4 (the last is never drawn since 19.09.2026: beat 4 stays empty)
+constexpr int NumPdbVariants =
+    4;   ///< whole bar, half bar, beat 4 only, kick alone on beat 4 (the last is never drawn since 19.09.2026: beat 4 stays empty)
 
 /**
  * @name The DJ intro and outro inside a continuous set (19.09.2026, round "arrangement")
@@ -166,10 +206,11 @@ constexpr int NumPdbVariants = 4;   ///< whole bar, half bar, beat 4 only, kick 
  * both halves of the user's rule hold literally; with 32 either N's last 16 bars or N+1's kick entry would
  * have to give way (Composer.cpp, transitionBar).
  * @{ */
-constexpr int DjOverlap = 16;       ///< the shortest blend: Hi-Tech's, and the last track's outro tail when no track follows
-constexpr int DjOverlapMax = 32;    ///< the longest blend (23.09.2026, round "DJ")
-constexpr int IntroKickBar = 16;    ///< bar of the intro (0-based) on which kick and bass enter in the set's first track
-constexpr int OutroBareBars = 8;    ///< the outro's last bars: kick, bass and one hat only (16 until 23.09.2026)
+constexpr int DjOverlap =
+    16;   ///< the shortest blend: Hi-Tech's, and the last track's outro tail when no track follows
+constexpr int DjOverlapMax = 32;   ///< the longest blend (23.09.2026, round "DJ")
+constexpr int IntroKickBar = 16;   ///< bar of the intro (0-based) on which kick and bass enter in the set's first track
+constexpr int OutroBareBars = 8;   ///< the outro's last bars: kick, bass and one hat only (16 until 23.09.2026)
 /** @} */
 
 /**
@@ -188,10 +229,13 @@ constexpr int OutroBareBars = 8;    ///< the outro's last bars: kick, bass and o
  * @param[in] incoming  the incoming track's style
  * @return the bars
  */
-inline int djOverlapBars(StyleIdE incoming) { return incoming == StyleIdE::HI_TECH ? DjOverlap : DjOverlapMax; }
-extern const char* const PdbVariantNames[NumPdbVariants];   ///< display names
-constexpr int BassSlots = 3;        ///< bass notes per beat at most; the slot envelope of PLAN 6.6
-constexpr int MaxSections = 16;     ///< sections a track can have (the templates need eight)
+inline int djOverlapBars( StyleIdE incoming )
+{
+    return incoming == StyleIdE::HI_TECH ? DjOverlap : DjOverlapMax;
+}
+extern const char *const PdbVariantNames[NumPdbVariants];   ///< display names
+constexpr int            BassSlots = 3;      ///< bass notes per beat at most; the slot envelope of PLAN 6.6
+constexpr int            MaxSections = 16;   ///< sections a track can have (the templates need eight)
 /**
  * @name The track lengths the templates can build exactly
  * Every template must be able to hit every requested length, because the template is a track's own
@@ -213,15 +257,16 @@ constexpr int TrackBarStep = 16;    ///< track lengths are multiples of this
  * where Margulis (*On Repeat*, Oxford 2014) puts the hook of riff music, and the cell itself stays
  * what it is -- the repetition is the point.
  */
-enum class LeadArchetypeE : int {
+enum class LeadArchetypeE : int
+{
     PHRYGIAN_SURGE = 0,   ///< flat, then rising to the seventh bar, back under it in the eighth
-    ARCH_AND_DROP,         ///< up over the first half, down over the second
-    PEDAL_AND_BOUNCE,      ///< the cell held home; the operators alone move it
+    ARCH_AND_DROP,        ///< up over the first half, down over the second
+    PEDAL_AND_BOUNCE,     ///< the cell held home; the operators alone move it
     DESCENDING_CASCADE,   ///< starts high and steps down over the phrase
     TENSION_CALL,         ///< rises in calls that do not resolve until the last bar
     COUNT
 };
-constexpr int NumLeadArchetypes = static_cast<int>(LeadArchetypeE::COUNT);   ///< number of archetypes
+constexpr int NumLeadArchetypes = static_cast<int>( LeadArchetypeE::COUNT );   ///< number of archetypes
 
 /**
  * @brief The operators a lead bar may apply to the cell (22.09.2026; applied in MelodyLead.cpp, makeLead).
@@ -230,17 +275,18 @@ constexpr int NumLeadArchetypes = static_cast<int>(LeadArchetypeE::COUNT);   ///
  * Operatoren". Eight bars are one cell and one operator per bar; the operators are what makes A2
  * recognisably A1's answer rather than another draw.
  */
-enum class CellOpE : int {
-    KEEP = 0,        ///< the cell as it is
+enum class CellOpE : int
+{
+    KEEP = 0,         ///< the cell as it is
     END_CADENCE,      ///< the last beat bent onto the tonic, the note before it a step off it
     TRANSPOSE_UP,     ///< the cell one scale step up (on top of the archetype's offset)
     TRANSPOSE_DOWN,   ///< one scale step down
     INVERT_END,       ///< the last beat's contour mirrored round its first note
-    SHIFT16,         ///< the cell rotated by one sixteenth: every beat note lands just after its beat
-    THIN,            ///< two or three weak sixteenths dropped -- the question's open end
+    SHIFT16,          ///< the cell rotated by one sixteenth: every beat note lands just after its beat
+    THIN,             ///< two or three weak sixteenths dropped -- the question's open end
     COUNT
 };
-constexpr int NumCellOps = static_cast<int>(CellOpE::COUNT);   ///< number of cell operators
+constexpr int NumCellOps = static_cast<int>( CellOpE::COUNT );   ///< number of cell operators
 
 /**
  * @brief How the counter-lead answers the lead (23.09.2026, round "Counter"; MelodyLead.cpp, makeCounter).
@@ -249,14 +295,15 @@ constexpr int NumCellOps = static_cast<int>(CellOpE::COUNT);   ///< number of ce
  * micro-hocketing, Goa polyphonic; and his supplement's "MOTIF_ECHO" as the cheapest authentic counter.
  * Drawn per track from the style's weights (LeadStyle::counterMode), or set by compose.counter_mode.
  */
-enum class CounterModeE : int {
-    ECHO = 0,    ///< the lead's own beat notes and accents, delayed a dotted eighth or a beat, a fifth/octave/fourth up
-    ANSWER,      ///< answers in fixed rhythmic templates after each statement, a line of its own over B
-    TIMBRAL,     ///< a texture: one long note per two-bar unit, sustained envelope and portamento
-    HOCKET,      ///< short notes on the off sixteenths the lead leaves open
+enum class CounterModeE : int
+{
+    ECHO = 0,   ///< the lead's own beat notes and accents, delayed a dotted eighth or a beat, a fifth/octave/fourth up
+    ANSWER,     ///< answers in fixed rhythmic templates after each statement, a line of its own over B
+    TIMBRAL,    ///< a texture: one long note per two-bar unit, sustained envelope and portamento
+    HOCKET,     ///< short notes on the off sixteenths the lead leaves open
     COUNT
 };
-constexpr int NumCounterModes = static_cast<int>(CounterModeE::COUNT);   ///< number of counter modes
+constexpr int NumCounterModes = static_cast<int>( CounterModeE::COUNT );   ///< number of counter modes
 
 /**
  * @brief A style's lead vector (22.09.2026, round "Lead").
@@ -267,18 +314,23 @@ constexpr int NumCounterModes = static_cast<int>(CounterModeE::COUNT);   ///< nu
  * two vectors and the engine stays one testable pipeline. The knobs compose.lead_density and
  * compose.pitch_entropy override `density` and `entropy` when they are not "Auto".
  */
-struct LeadStyle {
-    float  m_density = 0.5f;       ///< 0..1: onsets per bar, 8..10 at 0, 10..12 at 0.5, 12..16 at 1 (never under eight: rule 16)
-    float  m_homing = 1.0f;        ///< regression to the register centre (von Hippel and Huron 2000): tightens the register prior
-    float  m_stability = 1.0f;     ///< how hard metric weight pulls a note to the stable degrees (1 and 5, then b3)
-    float  m_proximity = 1.0f;     ///< the critic's weight on the corpus interval histogram: 1 smooth, 0 free leaps
-    float  m_entropy = 1.0f;       ///< multiplier on compose.melody_temperature
-    float  m_slideChance = 0.3f;   ///< chance that a tension-to-resolution step slides (portamento)
-    float  m_accentChance = 0.3f;  ///< chance that an onset after a rest is accented
-    float  m_interlock = 0.5f;     ///< how much the bass pattern's holes attract the lead's onsets
-    float  m_arcDepth = 0.05f;     ///< depth of the phrase's cutoff arc, normalised
+struct LeadStyle
+{
+    float m_density =
+        0.5f;   ///< 0..1: onsets per bar, 8..10 at 0, 10..12 at 0.5, 12..16 at 1 (never under eight: rule 16)
+    float m_homing =
+        1.0f;   ///< regression to the register centre (von Hippel and Huron 2000): tightens the register prior
+    float  m_stability = 1.0f;      ///< how hard metric weight pulls a note to the stable degrees (1 and 5, then b3)
+    float  m_proximity = 1.0f;      ///< the critic's weight on the corpus interval histogram: 1 smooth, 0 free leaps
+    float  m_entropy = 1.0f;        ///< multiplier on compose.melody_temperature
+    float  m_slideChance = 0.3f;    ///< chance that a tension-to-resolution step slides (portamento)
+    float  m_accentChance = 0.3f;   ///< chance that an onset after a rest is accented
+    float  m_interlock = 0.5f;      ///< how much the bass pattern's holes attract the lead's onsets
+    float  m_arcDepth = 0.05f;      ///< depth of the phrase's cutoff arc, normalised
     double m_archetype[NumLeadArchetypes] = { 0.2, 0.2, 0.2, 0.2, 0.2 };   ///< weight of each LeadArchetype
-    double m_cellOp[NumCellOps] = { 0.0, 0.2, 0.2, 0.1, 0.15, 0.15, 0.2 };  ///< weight of each CellOp for a variation bar (Keep is never drawn)
+    double m_cellOp[NumCellOps] = {
+        0.0, 0.2, 0.2, 0.1, 0.15, 0.15, 0.2
+    };   ///< weight of each CellOp for a variation bar (Keep is never drawn)
     /** @name 23.09.2026, round "Counter": the register and the counter's mode
      *  The literature puts psytrance leads at 250 Hz .. 2 kHz with the weight around 500 Hz .. 1 kHz
      *  (Psychedelic Island, "The science of frequency in psytrance"; Dance Midi Samples, "Making a
@@ -286,8 +338,9 @@ struct LeadStyle {
      *  the user heard it as "teils zu tief". The window moves up by `registerShift` semitones (plus a
      *  semitone of per-track jitter), the counter an octave above it.
      *  @{ */
-    int    m_registerShift = 5;                    ///< semitones the lead window (and with it the counter's) stands above C4
-    double m_counterMode[NumCounterModes] = { 0.4, 0.5, 0.1, 0.0 };   ///< weight of each CounterMode (echo, answer, timbral, hocket)
+    int    m_registerShift = 5;   ///< semitones the lead window (and with it the counter's) stands above C4
+    double m_counterMode[NumCounterModes] = { 0.4, 0.5, 0.1,
+                                              0.0 };   ///< weight of each CounterMode (echo, answer, timbral, hocket)
     /** @} */
 };
 
@@ -297,31 +350,34 @@ struct LeadStyle {
  * Everything is either an absolute musical quantity (tempo) or a multiplier on a knob, so that the
  * default profile (Full-On, every multiplier 1) plays the knobs exactly as they are set.
  */
-struct StyleProfile {
-    const char* m_name = "";                  ///< the profile's name
-    double m_bpmCentre = 145.0;               ///< tempo the tracks settle around
-    double m_bpmRange = 4.0;                  ///< how far a track may wander from the centre
-    double m_scaleWeight[NumScales] = {};    ///< weight of each mode in the key journey
-    double m_bodyWeight[NumBodies] = {};     ///< weight of each grammar body
-    double m_chordExtra[12] = {};             ///< extra weight on a chord-root move of n semitones
-    float  m_partAmount[MelodyParts] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };   ///< multipliers on each melodic part's amount (MelodyPart order)
-    float  m_squelchChance = 1.0f;            ///< multiplier on compose.squelch_chance
-    float  m_hatDensity = 1.0f;               ///< multiplier on compose.perc_density
-    double m_pdbWeight[NumPdbVariants] = {}; ///< weights of the pre-drop break variants
+struct StyleProfile
+{
+    const char *m_name = "";                     ///< the profile's name
+    double      m_bpmCentre = 145.0;             ///< tempo the tracks settle around
+    double      m_bpmRange = 4.0;                ///< how far a track may wander from the centre
+    double      m_scaleWeight[NumScales] = {};   ///< weight of each mode in the key journey
+    double      m_bodyWeight[NumBodies] = {};    ///< weight of each grammar body
+    double      m_chordExtra[12] = {};           ///< extra weight on a chord-root move of n semitones
+    float       m_partAmount[MelodyParts] = {
+        1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f
+    };   ///< multipliers on each melodic part's amount (MelodyPart order)
+    float  m_squelchChance = 1.0f;                         ///< multiplier on compose.squelch_chance
+    float  m_hatDensity = 1.0f;                            ///< multiplier on compose.perc_density
+    double m_pdbWeight[NumPdbVariants] = {};               ///< weights of the pre-drop break variants
     float  m_slotGate[BassSlots] = { 1.0f, 1.0f, 1.0f };   ///< gate multiplier per bass slot in a beat
     float  m_slotVel[BassSlots] = { 1.0f, 1.0f, 1.0f };    ///< velocity multiplier per bass slot
-    float  m_breakShare = 0.22f;              ///< share of the body the breakdowns should take (0.15..0.30)
-    float  m_colour = 1.0f;                   ///< how much weight the flat second and augmented second may get
-    float  m_introBars = 16.0f;               ///< preferred intro length in bars (8 or 16)
+    float  m_breakShare = 0.22f;   ///< share of the body the breakdowns should take (0.15..0.30)
+    float  m_colour = 1.0f;        ///< how much weight the flat second and augmented second may get
+    float  m_introBars = 16.0f;    ///< preferred intro length in bars (8 or 16)
     /**
      * @name Modal interchange (16.09.2026)
      * Which modes a section of this style may borrow over the tonic pedal, and how often it does.
      * @{ */
     double m_interchangeWeight[NumScales] = {};   ///< weight of each mode as a section's borrowed mode
-    float  m_interchangeChance = 0.0f;             ///< 0..1: how often a section borrows a mode at all
+    float  m_interchangeChance = 0.0f;            ///< 0..1: how often a section borrows a mode at all
     /** @} */
-    StyleIdE m_id = StyleIdE::FULL_ON;                ///< which style this is (22.09.2026: the harmony tables are indexed by it)
-    LeadStyle m_lead;                              ///< the lead vector (22.09.2026, round "Lead")
+    StyleIdE  m_id = StyleIdE::FULL_ON;   ///< which style this is (22.09.2026: the harmony tables are indexed by it)
+    LeadStyle m_lead;                     ///< the lead vector (22.09.2026, round "Lead")
 };
 
 /** @brief How much a section's energy lifts the colourful modes when a mode is borrowed. */
@@ -332,19 +388,19 @@ constexpr double InterchangeEnergy = 1.6;
  * @param[in] id  the style
  * @return its profile
  */
-const StyleProfile& styleProfile(StyleIdE id);
+const StyleProfile &styleProfile( StyleIdE id );
 /**
  * @brief The style the knobs select.
  * @param[in] p  the knobs
  * @return the style
  */
-StyleIdE styleOf(const ParamStore& p);
+StyleIdE styleOf( const ParamStore &p );
 /**
  * @brief The arc the knobs select.
  * @param[in] p  the knobs
  * @return the arc
  */
-ArcIdE arcOf(const ParamStore& p);
+ArcIdE arcOf( const ParamStore &p );
 
 /**
  * @brief The energy arc E(t) of a dramaturgy preset, @p t in [0, 1] over the whole set.
@@ -355,14 +411,14 @@ ArcIdE arcOf(const ParamStore& p);
  * @param[in] t    the place in the set, 0..1
  * @return the energy
  */
-double arcEnergy(ArcIdE arc, double t);
+double arcEnergy( ArcIdE arc, double t );
 
 /**
  * @brief Nominal energy of a section type, before the arc scales it.
  * @param[in] type  the section type
  * @return its energy
  */
-float typeEnergy(SectionTypeE type);
+float typeEnergy( SectionTypeE type );
 
 /**
  * @name Drop 2 as the climax (19.09.2026, round "arrangement")
@@ -374,7 +430,7 @@ float typeEnergy(SectionTypeE type);
  * +0.17 dB at the master's output over drop 1 on the listening seed); the audible rest of the climax is
  * density -- open hats, ride, the second lead, the arp an octave up, squelches in the gaps.
  * @{ */
-constexpr float Drop1Share = 0.88f;   ///< drop 1's energy as a share of drop 2's
+constexpr float Drop1Share = 0.88f;     ///< drop 1's energy as a share of drop 2's
 constexpr float ClimaxMargin = 0.20f;   ///< how far drop 2 stands above every other section
 /** @} */
 
@@ -418,31 +474,33 @@ constexpr float BreakTrimDb = 7.0f;
 /** @} */
 
 /** @brief One section of a track's form. */
-struct Section {
+struct Section
+{
     SectionTypeE m_type = SectionTypeE::GROOVE;   ///< what kind of section it is
-    int   m_startBar = 0;      ///< bars from the start of the track (always a multiple of 8)
-    int   m_bars = 16;         ///< length in bars (8, 16, 32 or 64)
-    float m_energy = 0.5f;     ///< 0..1: the type's energy scaled by the set arc at this point
-    float m_energyTo = 0.5f;   ///< energy at the end of the section (buildups rise towards the drop)
-    int   m_pdbVariant = 0;    ///< buildups: which pre-drop break the last bar plays
-    float m_cutBeats = 0.0f;   ///< breakdowns: beats of silence at the start (the cut of Grosz et al.)
-    int   m_scale = 0;         ///< the mode the *melodic* layer takes here; the bass ignores it entirely
+    int          m_startBar = 0;                  ///< bars from the start of the track (always a multiple of 8)
+    int          m_bars = 16;                     ///< length in bars (8, 16, 32 or 64)
+    float        m_energy = 0.5f;                 ///< 0..1: the type's energy scaled by the set arc at this point
+    float        m_energyTo = 0.5f;               ///< energy at the end of the section (buildups rise towards the drop)
+    int          m_pdbVariant = 0;                ///< buildups: which pre-drop break the last bar plays
+    float        m_cutBeats = 0.0f;   ///< breakdowns: beats of silence at the start (the cut of Grosz et al.)
+    int          m_scale = 0;         ///< the mode the *melodic* layer takes here; the bass ignores it entirely
     /** @name The two-drop form (19.09.2026, round "arrangement")
      *  @{ */
-    bool  m_climax = false;    ///< drops: this is drop 2, the most energetic part of the track
-    int   m_rollBars = 0;      ///< buildups: bars of the snare roll at its end (quarters -> ... -> thirty-seconds)
-    int   m_pdbBars = 0;       ///< buildups: bars of the pre-drop break at its end (kick and bass out; 0 = none)
-    int   m_breakPerc = 0;     ///< breakdowns: percussion layers that keep playing (Dark Forest's modular percussion)
-    bool  m_spiral = false;    ///< breakdowns: the arp spirals through the whole of it (Goa: no total silence)
-    bool  m_dry = false;       ///< drops: no impact and no sweep into it, the stab carries it (Progressive)
+    bool m_climax = false;   ///< drops: this is drop 2, the most energetic part of the track
+    int  m_rollBars = 0;     ///< buildups: bars of the snare roll at its end (quarters -> ... -> thirty-seconds)
+    int  m_pdbBars = 0;      ///< buildups: bars of the pre-drop break at its end (kick and bass out; 0 = none)
+    int  m_breakPerc = 0;    ///< breakdowns: percussion layers that keep playing (Dark Forest's modular percussion)
+    bool m_spiral = false;   ///< breakdowns: the arp spirals through the whole of it (Goa: no total silence)
+    bool m_dry = false;      ///< drops: no impact and no sweep into it, the stab carries it (Progressive)
     /** @} */
 };
 
 /** @brief An effect placed in a track: start and length in beats from the track's first bar. */
-struct SfxEvent {
-    double m_beat = 0.0;     ///< start, beats after the track starts
-    float  m_length = 4.0f;  ///< beats
-    int    m_type = 0;       ///< SfxType
+struct SfxEvent
+{
+    double m_beat = 0.0;      ///< start, beats after the track starts
+    float  m_length = 4.0f;   ///< beats
+    int    m_type = 0;        ///< SfxType
     /**
      * @brief Which variant a voice or a bed event plays (0 = let the engine derive it from the event's beat,
      *        as it did before 19.09.2026), and since 23.09.2026 the bank preset of an effects-strip event
@@ -454,12 +512,13 @@ struct SfxEvent {
 };
 
 /** @brief The form of one track. */
-struct FormPlan {
-    Section m_section[MaxSections];    ///< the sections, in order
-    int     m_count = 0;                ///< how many
-    int     m_bars = 0;                 ///< total length (a multiple of 32)
-    int     m_body = 0;                 ///< which template the form was built from (Form.cpp, Templates)
-    std::vector<SfxEvent> m_sfx;        ///< effects at the section boundaries, sorted by start
+struct FormPlan
+{
+    Section               m_section[MaxSections];   ///< the sections, in order
+    int                   m_count = 0;              ///< how many
+    int                   m_bars = 0;               ///< total length (a multiple of 32)
+    int                   m_body = 0;               ///< which template the form was built from (Form.cpp, Templates)
+    std::vector<SfxEvent> m_sfx;                    ///< effects at the section boundaries, sorted by start
     /**
      * @brief The Field track's events (27.09.2026; placeField), sorted by start: a place under an intro, a breakdown,
      *        an outro, in Dark Forest under a groove. `type` is unused; `variant` carries the velocity (1 .. 127).
@@ -496,8 +555,8 @@ struct FormPlan {
  *                         instrumentation does
  * @return the form
  */
-FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double arcIn, double arcOut,
-                      int trackScale = 0, const uint64_t* sectionSeed = nullptr);
+FormPlan makeFormPlan( const StyleProfile &s, uint64_t seed, int target, double arcIn, double arcOut,
+                       int trackScale = 0, const uint64_t *sectionSeed = nullptr );
 
 /**
  * @brief Index of the section that contains @p barInTrack (the last one if the bar is past the end).
@@ -505,7 +564,7 @@ FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double a
  * @param[in] barInTrack  the bar within the track
  * @return the section's index
  */
-int sectionOfBar(const FormPlan& f, int barInTrack);
+int sectionOfBar( const FormPlan &f, int barInTrack );
 
 /**
  * @brief The climax trim of section @p index at the fraction @p u (0 = its first bar, 1 = its end), in dB on
@@ -517,7 +576,7 @@ int sectionOfBar(const FormPlan& f, int barInTrack);
  * @param[in] u      the place in it, 0..1
  * @return the trim in dB
  */
-float sectionTrimDb(const FormPlan& f, int index, double u);
+float sectionTrimDb( const FormPlan &f, int index, double u );
 
 /**
  * @brief Whether every hard constraint holds (19.09.2026): every length and every start a multiple of
@@ -528,62 +587,66 @@ float sectionTrimDb(const FormPlan& f, int index, double u);
  * @param[in] f  the form
  * @return true when every constraint holds
  */
-bool formConstraintsHold(const FormPlan& f);
+bool formConstraintsHold( const FormPlan &f );
 
 /** @brief What a track can play at all, and where its parts sit, for the instrumentation matrix. */
-struct PartAvailability {
-    bool m_part[MelodyParts] = {};   ///< which melodic parts exist in this track (MelodyPart order)
-    float m_amount[MelodyParts] = {};  ///< how much each part should play, 0..1 (MelodyPlan::amount)
-    int  m_leadLo = 59;   ///< the lead's lowest pitch (the masking rule)
-    int  m_leadHi = 79;   ///< ... its highest
-    int  m_arpLo = 55;   ///< the arp's lowest pitch
-    int  m_arpHi = 74;   ///< ... its highest
-    int  m_percLayers = 4;     ///< percussion layers the track's kit offers
-    int  m_hatLayers = 1;      ///< how many of them are the hats at the head of the layer order (PercPlan::hatLayers)
+struct PartAvailability
+{
+    bool  m_part[MelodyParts] = {};     ///< which melodic parts exist in this track (MelodyPart order)
+    float m_amount[MelodyParts] = {};   ///< how much each part should play, 0..1 (MelodyPlan::amount)
+    int   m_leadLo = 59;                ///< the lead's lowest pitch (the masking rule)
+    int   m_leadHi = 79;                ///< ... its highest
+    int   m_arpLo = 55;                 ///< the arp's lowest pitch
+    int   m_arpHi = 74;                 ///< ... its highest
+    int   m_percLayers = 4;             ///< percussion layers the track's kit offers
+    int   m_hatLayers = 1;   ///< how many of them are the hats at the head of the layer order (PercPlan::hatLayers)
 };
 
 /** @brief What plays in one bar: the instrumentation matrix evaluated. */
-struct BarPlan {
-    int         m_index = 0;              ///< index of the section in the form
+struct BarPlan
+{
+    int          m_index = 0;                     ///< index of the section in the form
     SectionTypeE m_type = SectionTypeE::GROOVE;   ///< its type
-    int         m_barInSection = 0;       ///< bar within the section
-    int         m_sectionBars = 16;       ///< length of the section (22.09.2026: a pad chord never rings past its section)
-    float       m_energy = 0.5f;          ///< the section's energy at this bar (buildups rise)
-    uint8_t     m_kickBeats = 0xF;        ///< bit per beat: does the kick play
-    uint8_t     m_bassBeats = 0xF;        ///< bit per beat: does the bass play
-    int         m_percLayers = 0;         ///< how many percussion layers play
-    uint8_t     m_parts = 0;              ///< bit per melodic part (partBit)
-    int8_t      m_arpOctave = 0;          ///< octave shift of the arp (masking rule and register)
-    int8_t      m_leadOctave = 0;         ///< octave shift of the lead (register)
-    bool        m_padGate = false;        ///< the pad plays through the trance gate
-    bool        m_fills = true;           ///< percussion fills allowed in this bar
-    bool        m_hatsDense = false;      ///< buildup: the closed hat plays every sixteenth
-    int         m_rollBar = -1;           ///< 0..3 = which of the last four bars of a buildup this is
-    bool        m_pdb = false;            ///< this bar is the pre-drop break
-    int         m_pdbVariant = 0;         ///< which variant
-    float       m_cutBeats = 0.0f;        ///< beats of silence at the start of the bar
-    int         m_groupFigure = -1;       ///< bass figure at beat 1 of the group's last bar, -1 = none
-    int         m_group = 0;              ///< eight-bar group within the track
-    uint8_t     m_partsNext = 0;          ///< the parts of the following bar (an acid slide needs a note to slide into)
-    int8_t      m_scale = -1;             ///< the section's mode for the melodic layer, -1 = the track's
+    int          m_barInSection = 0;              ///< bar within the section
+    int          m_sectionBars = 16;   ///< length of the section (22.09.2026: a pad chord never rings past its section)
+    float        m_energy = 0.5f;      ///< the section's energy at this bar (buildups rise)
+    uint8_t      m_kickBeats = 0xF;    ///< bit per beat: does the kick play
+    uint8_t      m_bassBeats = 0xF;    ///< bit per beat: does the bass play
+    int          m_percLayers = 0;     ///< how many percussion layers play
+    uint8_t      m_parts = 0;          ///< bit per melodic part (partBit)
+    int8_t       m_arpOctave = 0;      ///< octave shift of the arp (masking rule and register)
+    int8_t       m_leadOctave = 0;     ///< octave shift of the lead (register)
+    bool         m_padGate = false;    ///< the pad plays through the trance gate
+    bool         m_fills = true;       ///< percussion fills allowed in this bar
+    bool         m_hatsDense = false;   ///< buildup: the closed hat plays every sixteenth
+    int          m_rollBar = -1;        ///< 0..3 = which of the last four bars of a buildup this is
+    bool         m_pdb = false;         ///< this bar is the pre-drop break
+    int          m_pdbVariant = 0;      ///< which variant
+    float        m_cutBeats = 0.0f;     ///< beats of silence at the start of the bar
+    int          m_groupFigure = -1;    ///< bass figure at beat 1 of the group's last bar, -1 = none
+    int          m_group = 0;           ///< eight-bar group within the track
+    uint8_t      m_partsNext = 0;       ///< the parts of the following bar (an acid slide needs a note to slide into)
+    int8_t       m_scale = -1;          ///< the section's mode for the melodic layer, -1 = the track's
     /** @brief Kick and bass rest for the whole bar (and it is no pre-drop break): the floor under 140 Hz
      *         belongs to the pad's sub foundation or the drone's low octave (19.09.2026). */
-    bool        m_floorSilent = false;
+    bool m_floorSilent = false;
     /** @name The two-drop form's percussion and markers (19.09.2026, round "arrangement")
      *  @{ */
-    bool        m_climax = false;         ///< drop 2
-    bool        m_mainBreak = false;      ///< the breakdown before drop 2: the pad's own harmony (22.09.2026, Melody.h)
-    bool        m_afterMainBreak = false; ///< a bar behind the main breakdown: the pad's second progression, where the track has one (23.09.2026)
-    int         m_rollBars = 4;           ///< length of the snare roll rollBar counts in
-    int8_t      m_kickRoll = 0;           ///< 0 none; 1 the kick rolls in eighths; 2 in eighths, then sixteenths over beats 3 and 4 (the bar before the big buildup's pre-drop break; 23.09.2026)
-    bool        m_quietHats = false;      ///< the intro's first half: a quiet closed hat on every sixteenth but the downbeat
-    bool        m_shaker = false;         ///< the shaker plays whether or not it is one of the layers
-    bool        m_offbeatHat = false;     ///< the closed hat plays its eighth offbeat whether or not it is a layer
-    float       m_hatLevel = 1.0f;        ///< velocity factor of the hats that offbeatHat and quietHats add
-    bool        m_openHats = false;       ///< drop 2: the open hat on every offbeat
-    bool        m_ride = false;           ///< drop 2: the ride plays whether or not it is one of the layers
-    bool        m_crash = false;          ///< a crash on the one (a drop's downbeat, every sixteenth bar of a drop)
-    int         m_cycleBar = 0;           ///< bar within the section's 32-bar cycle (the micro rules: 8, 16, 24, 32)
+    bool m_climax = false;      ///< drop 2
+    bool m_mainBreak = false;   ///< the breakdown before drop 2: the pad's own harmony (22.09.2026, Melody.h)
+    bool m_afterMainBreak =
+        false;   ///< a bar behind the main breakdown: the pad's second progression, where the track has one (23.09.2026)
+    int    m_rollBars = 4;   ///< length of the snare roll rollBar counts in
+    int8_t m_kickRoll =
+        0;   ///< 0 none; 1 the kick rolls in eighths; 2 in eighths, then sixteenths over beats 3 and 4 (the bar before the big buildup's pre-drop break; 23.09.2026)
+    bool  m_quietHats = false;    ///< the intro's first half: a quiet closed hat on every sixteenth but the downbeat
+    bool  m_shaker = false;       ///< the shaker plays whether or not it is one of the layers
+    bool  m_offbeatHat = false;   ///< the closed hat plays its eighth offbeat whether or not it is a layer
+    float m_hatLevel = 1.0f;      ///< velocity factor of the hats that offbeatHat and quietHats add
+    bool  m_openHats = false;     ///< drop 2: the open hat on every offbeat
+    bool  m_ride = false;         ///< drop 2: the ride plays whether or not it is one of the layers
+    bool  m_crash = false;        ///< a crash on the one (a drop's downbeat, every sixteenth bar of a drop)
+    int   m_cycleBar = 0;         ///< bar within the section's 32-bar cycle (the micro rules: 8, 16, 24, 32)
     /** @} */
 };
 
@@ -596,7 +659,7 @@ struct BarPlan {
  * @param[in] barInTrack   bar within the track
  * @return the bar's plan
  */
-BarPlan planBar(const FormPlan& f, const PartAvailability& a, const uint64_t* sectionSeed, int barInTrack);
+BarPlan planBar( const FormPlan &f, const PartAvailability &a, const uint64_t *sectionSeed, int barInTrack );
 
 /**
  * @brief Places the effects: a marker at every section transition and ear candy inside the long
@@ -615,7 +678,7 @@ BarPlan planBar(const FormPlan& f, const PartAvailability& a, const uint64_t* se
  *               chant and chatter the psychedelic layer places; 1 is the calibrated density, 0 none
  * @param[in] bedDensity compose.bed_density: the same for the shamanic bed (bowls, didgeridoo, jaw harp)
  */
-void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity = 1.0f, float bedDensity = 1.0f);
+void makeFormSfx( FormPlan &f, uint64_t seed, float amount, float voiceDensity = 1.0f, float bedDensity = 1.0f );
 
 /**
  * @brief The Field track's events and the NASA shots of a track (27.09.2026; FieldPlayer.h), after makeFormSfx.
@@ -632,14 +695,17 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity = 
  * @param[in]     density  compose.field_density
  * @param[in]     amount   compose.sfx_amount (the shots)
  */
-void placeField(FormPlan& f, uint64_t seed, int style, float density, float amount);
+void placeField( FormPlan &f, uint64_t seed, int style, float density, float amount );
 
 /**
  * @brief Whether a section is part of a track's core, a groove or a drop (the form's rules and the effects' placement).
  * @param[in] t  the section type
  * @return true for a groove or a drop
  */
-inline bool isCore(SectionTypeE t) { return t == SectionTypeE::GROOVE || t == SectionTypeE::DROP; }
+inline bool isCore( SectionTypeE t )
+{
+    return t == SectionTypeE::GROOVE || t == SectionTypeE::DROP;
+}
 
 /**
  * @name The macro automation of a section (16.09.2026)
@@ -656,16 +722,17 @@ inline bool isCore(SectionTypeE t) { return t == SectionTypeE::GROOVE || t == Se
  * between them, so the energy arc of Phase 5 still decides where a section sits and the ride only
  * decides how it moves inside that.
  * @{ */
-constexpr float RideCutoff = 0.60f;    ///< peak-to-peak cutoff excursion of the acid ride, normalised (4.0 octaves)
-constexpr float RideReso   = 0.07f;    ///< how far a breakdown's dive lowers the resonance
-constexpr float RideResoMedium  = 0.55f;   ///< the ride's resonance in stages 1 and 2 ("medium"; at most the knob)
-constexpr float RideResoSquelch = 0.85f;   ///< the ride's resonance from stage 3 on (the rule's 80 .. 90 %; at least the knob)
-constexpr float RideDecayShort  = 1.0f / 3.0f;   ///< stage 1 filter decay as a ratio of the knob (dry, percussive)
-constexpr float RideDecayLong   = 1.7f;    ///< stages 3 and 4 filter decay as a ratio of the knob
-constexpr float RideDive   = 0.22f;    ///< how far a breakdown dives, normalised
-constexpr float RollSend   = 0.30f;    ///< hall send the buildup's snare roll rises to
-constexpr int   RollBars   = 4;        ///< bars of a buildup the roll and its send ramp run over (where the section names none)
-constexpr float RideSweep  = 0.8f;     ///< the bar-24 sweep of the acid (19.09.2026), in half-excursions above the ride
+constexpr float RideCutoff = 0.60f;       ///< peak-to-peak cutoff excursion of the acid ride, normalised (4.0 octaves)
+constexpr float RideReso = 0.07f;         ///< how far a breakdown's dive lowers the resonance
+constexpr float RideResoMedium = 0.55f;   ///< the ride's resonance in stages 1 and 2 ("medium"; at most the knob)
+constexpr float RideResoSquelch =
+    0.85f;   ///< the ride's resonance from stage 3 on (the rule's 80 .. 90 %; at least the knob)
+constexpr float RideDecayShort = 1.0f / 3.0f;   ///< stage 1 filter decay as a ratio of the knob (dry, percussive)
+constexpr float RideDecayLong = 1.7f;           ///< stages 3 and 4 filter decay as a ratio of the knob
+constexpr float RideDive = 0.22f;               ///< how far a breakdown dives, normalised
+constexpr float RollSend = 0.30f;               ///< hall send the buildup's snare roll rises to
+constexpr int RollBars = 4;   ///< bars of a buildup the roll and its send ramp run over (where the section names none)
+constexpr float RideSweep = 0.8f;   ///< the bar-24 sweep of the acid (19.09.2026), in half-excursions above the ride
 
 /**
  * @brief The four-stage acid ride of the user's rule text of 18.09.2026, as key points in time.
@@ -682,14 +749,15 @@ constexpr float RideSweep  = 0.8f;     ///< the bar-24 sweep of the acid (19.09.
  * (meanRaw, -0.175 for 32 bars) is subtracted, so the ride swings around the section's own line. That
  * is what keeps Composer's level match honest, which measures the knobs and not the automation.
  */
-struct RideShape {
-    static constexpr int Points = 7;   ///< points of the shape
-    double m_length = 32.0;       ///< bars of one cycle
-    double m_stage[4] = {};       ///< first bar of each stage within the cycle
-    double m_bar[Points] = {};   ///< when each cutoff key point is reached, bars into the cycle
-    double m_hold[Points] = {};  ///< bars after reaching point k before the ramp to point k+1 starts
-    float  m_cutoff[Points] = {};///< cutoff at each point, in half-excursions, centred on the line
-    float  m_meanRaw = 0.0f;      ///< the mean of the uncentred shape that was subtracted
+struct RideShape
+{
+    static constexpr int Points = 7;              ///< points of the shape
+    double               m_length = 32.0;         ///< bars of one cycle
+    double               m_stage[4] = {};         ///< first bar of each stage within the cycle
+    double               m_bar[Points] = {};      ///< when each cutoff key point is reached, bars into the cycle
+    double               m_hold[Points] = {};     ///< bars after reaching point k before the ramp to point k+1 starts
+    float                m_cutoff[Points] = {};   ///< cutoff at each point, in half-excursions, centred on the line
+    float                m_meanRaw = 0.0f;        ///< the mean of the uncentred shape that was subtracted
 };
 
 /**
@@ -697,7 +765,7 @@ struct RideShape {
  * @param[in] sectionBars  the section's bars
  * @return the ride's shape
  */
-RideShape acidRideShape(double sectionBars);
+RideShape acidRideShape( double sectionBars );
 /** @} */
 
 /**
@@ -718,11 +786,10 @@ RideShape acidRideShape(double sectionBars);
  *                  medium and squelch stages are measured from the voiced resonance, not from the knob
  * @param[in] decayBase the same for the filter decay
  */
-void sectionAutomation(const ParamStore& p, const Section& s, uint64_t seed, double beat,
-                       float base0, float base1, bool knobs, std::vector<ControlEvent>& out,
-                       float resoBase = 0.0f, float decayBase = 0.0f);
+void sectionAutomation( const ParamStore &p, const Section &s, uint64_t seed, double beat, float base0, float base1,
+                        bool knobs, std::vector<ControlEvent> &out, float resoBase = 0.0f, float decayBase = 0.0f );
 
 /** @brief Weights of the bass figures that a group may end on; they differ in their last note. */
 extern const int GroupFigures[4];
 
-} // namespace phos
+}   // namespace phos

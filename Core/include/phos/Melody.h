@@ -120,16 +120,17 @@
 #include <cstdint>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 class PitchModel;
 enum class CorpusRoleIdE : int;
 
 // MelodyPart, MelodyParts, mpIndex() and partBit() live in Form.h, because the instrumentation
 // matrix needs them as well.
-constexpr int AcidLowest = 50;                                     ///< D3: lowest acid note
-constexpr int AcidHighest = 62;                                    ///< D4: top of the acid's own register
-constexpr int AcidJumpHighest = 74;                                ///< D5: highest octave jump of the acid
+constexpr int AcidLowest = 50;        ///< D3: lowest acid note
+constexpr int AcidHighest = 62;       ///< D4: top of the acid's own register
+constexpr int AcidJumpHighest = 74;   ///< D5: highest octave jump of the acid
 /** @name The two leads' registers (20.09.2026, round "dialogue")
  *  The user's rule, after listening to the standalone on 19.09.2026: "beide Leads klingen zu hoch".
  *  The lead speaks from **C4** and the counter-lead answers exactly one octave above it, from **C5**.
@@ -153,32 +154,34 @@ constexpr int AcidJumpHighest = 74;                                ///< D5: high
  *  octave jump, so MotifOperator::OctaveJump -- the Goa lead idiom of PLAN 6.5 -- can no longer place
  *  a note and is no longer drawn for the lead (MelodyLead.cpp, makeLead). docs/rounds/2026-09.md carries the number.
  *  @{ */
-constexpr int LeadLowest = 60;                                     ///< C4 (262 Hz): the lead window's lowest bottom (MelodyPlan::leadWindowLo moves it up by the style's registerShift)
-constexpr int LeadHighest = 71;                                    ///< B4 (494 Hz): highest lead note
+constexpr int LeadLowest =
+    60;   ///< C4 (262 Hz): the lead window's lowest bottom (MelodyPlan::leadWindowLo moves it up by the style's registerShift)
+constexpr int LeadHighest = 71;   ///< B4 (494 Hz): highest lead note
 /** @} */
-constexpr int ArpLowest = 55;                                      ///< G3: lowest arp note
-constexpr int ArpHighest = 79;                                     ///< G5: highest arp note
-constexpr int PadLowest = 50;                                      ///< D3: lowest pad note while kick and bass play
-constexpr int PadHighest = 79;                                     ///< G5: highest pad note
-constexpr int PadFoundationLowest = 30;                            ///< F#1: lowest note of the sub foundation (22.09.2026; was D2 -- the brief wants octave 1 or 2)
-constexpr int AcidVariants = 3;                                    ///< A, A', A'' of one acid cell
-constexpr int MaterialSets = 2;                                    ///< cell sets: before and after the first breakdown
-constexpr int AcidCells = MaterialSets * AcidVariants;           ///< entries of MelodyPlan::acid
-constexpr int ArpCells = MaterialSets * AcidVariants * 4;        ///< entries of MelodyPlan::arp (set, variant, chord)
-constexpr double ArpGate = 0.2;                                    ///< arp note length, in sixteenths (rule: 15-35 %)
+constexpr int ArpLowest = 55;    ///< G3: lowest arp note
+constexpr int ArpHighest = 79;   ///< G5: highest arp note
+constexpr int PadLowest = 50;    ///< D3: lowest pad note while kick and bass play
+constexpr int PadHighest = 79;   ///< G5: highest pad note
+constexpr int PadFoundationLowest =
+    30;   ///< F#1: lowest note of the sub foundation (22.09.2026; was D2 -- the brief wants octave 1 or 2)
+constexpr int    AcidVariants = 3;                             ///< A, A', A'' of one acid cell
+constexpr int    MaterialSets = 2;                             ///< cell sets: before and after the first breakdown
+constexpr int    AcidCells = MaterialSets * AcidVariants;      ///< entries of MelodyPlan::acid
+constexpr int    ArpCells = MaterialSets * AcidVariants * 4;   ///< entries of MelodyPlan::arp (set, variant, chord)
+constexpr double ArpGate = 0.2;                                ///< arp note length, in sixteenths (rule: 15-35 %)
 /** @name The new voices' registers (19.09.2026, round "voices")
  *  The counter-lead answers exactly an octave above the lead (CounterLowest above); the arp
  *  may leave G3..G5 upwards only to clear a lead it shares a bar with (composeMelodyBar); the stab's chord
  *  is rooted where the arp's anchor is and moves by octaves between D3 and C7 to clear the lead; the drone's root lies an octave under the pad's where kick and
  *  bass rest, and on the pad's own octave where they play.
  *  @{ */
-constexpr int CounterLowest = 72;                                  ///< C5 (523 Hz): lowest counter-lead note
-constexpr int CounterHighest = 83;                                 ///< B5 (988 Hz): highest counter-lead note at the lowest window
-constexpr int LeadWindow = 12;                                     ///< the lead's window is one octave (23.09.2026)
-constexpr int ArpOverHighest = 91;                                 ///< G6: the arp's ceiling when it clears a lead from above
-constexpr int StabLowest = 50;                                     ///< D3: lowest stab note (the depth rule's floor, like the acid's)
-constexpr int StabHighest = 96;                                    ///< C7: highest stab note (2.1 kHz, the top of the leads' pocket)
-constexpr int DroneLowest = 38;                                    ///< D2: the drone's root where the floor is silent
+constexpr int CounterLowest = 72;    ///< C5 (523 Hz): lowest counter-lead note
+constexpr int CounterHighest = 83;   ///< B5 (988 Hz): highest counter-lead note at the lowest window
+constexpr int LeadWindow = 12;       ///< the lead's window is one octave (23.09.2026)
+constexpr int ArpOverHighest = 91;   ///< G6: the arp's ceiling when it clears a lead from above
+constexpr int StabLowest = 50;       ///< D3: lowest stab note (the depth rule's floor, like the acid's)
+constexpr int StabHighest = 96;      ///< C7: highest stab note (2.1 kHz, the top of the leads' pocket)
+constexpr int DroneLowest = 38;      ///< D2: the drone's root where the floor is silent
 /** @} */
 /**
  * @brief The minimum distance in semitones between two line voices that sound at the same instant.
@@ -195,7 +198,10 @@ constexpr int RegisterGap = 3;
  * @param[in] variant  the variant, 0..2
  * @return the cell's index
  */
-constexpr int acidCell(int set, int variant) { return set * AcidVariants + variant; }
+constexpr int acidCell( int set, int variant )
+{
+    return set * AcidVariants + variant;
+}
 /**
  * @brief Index of an arp cell: material set, variant (A, A', A'') and chord (0..3).
  * @param[in] set      the material set, 0..1
@@ -203,7 +209,10 @@ constexpr int acidCell(int set, int variant) { return set * AcidVariants + varia
  * @param[in] chord    the chord, 0..3
  * @return the cell's index
  */
-constexpr int arpCell(int set, int variant, int chord) { return (set * AcidVariants + variant) * 4 + chord; }
+constexpr int arpCell( int set, int variant, int chord )
+{
+    return ( set * AcidVariants + variant ) * 4 + chord;
+}
 
 /**
  * @brief Which variant of a cell a bar plays: A A A' A'' over a phrase of four cell lengths.
@@ -211,10 +220,10 @@ constexpr int arpCell(int set, int variant, int chord) { return (set * AcidVaria
  * @param[in] cellBars     the cell's length in bars (1 or 2)
  * @return the variant, 0..2
  */
-constexpr int variantOfBar(int barInPhrase, int cellBars)
+constexpr int variantOfBar( int barInPhrase, int cellBars )
 {
-    const int cell = barInPhrase / (cellBars < 1 ? 1 : cellBars);
-    return cell <= 1 ? 0 : (cell == 2 ? 1 : 2);
+    const int cell = barInPhrase / ( cellBars < 1 ? 1 : cellBars );
+    return cell <= 1 ? 0 : ( cell == 2 ? 1 : 2 );
 }
 
 /**
@@ -223,11 +232,12 @@ constexpr int variantOfBar(int barInPhrase, int cellBars)
  * Both fields are functions of the track's plan and the bar's place in it, never of what was played
  * before, so a bar composed alone is the bar composed in sequence.
  */
-struct MelodyContext {
+struct MelodyContext
+{
     int m_material = 0;         ///< 0 before the track's first breakdown, 1 after it (new cells at a boundary)
     int m_foundationBars = 0;   ///< > 0 where a pad chord starts in a bar without kick and bass: how many
-                              ///< consecutive bars from here on keep kick and bass silent (0 where the
-                              ///< drone lays the floor instead: the two never double it)
+                                ///< consecutive bars from here on keep kick and bass silent (0 where the
+                                ///< drone lays the floor instead: the two never double it)
     /**
      * @brief > 0 where a drone note starts in this bar: how many bars it holds (19.09.2026).
      *
@@ -236,9 +246,9 @@ struct MelodyContext {
      * starts, like the pad's sub foundation. The composer counts it from the form (Composer.cpp,
      * melodyContext); a probe sets it by hand.
      */
-    int m_droneBars = 0;
-    bool m_droneLow = false;    ///< the drone run lies on a silent floor: its low octave (D2..C#3)
-    int m_droneTail = 0;        ///< bars before the run's end in which the low root stops (the kick returns after it)
+    int  m_droneBars = 0;
+    bool m_droneLow = false;   ///< the drone run lies on a silent floor: its low octave (D2..C#3)
+    int  m_droneTail = 0;      ///< bars before the run's end in which the low root stops (the kick returns after it)
     /**
      * @brief Pad or acid sound somewhere in this drone run (20.09.2026, round "dialogue").
      *
@@ -260,16 +270,26 @@ struct MelodyContext {
  * Polymeter runs a three-sixteenth cell against the 4/4 bar, so the cell starts one sixteenth later
  * in every bar and comes home every three bars.
  */
-enum class ArpStyleE : int { CORPUS = 0, UP, DOWN, UP_DOWN, EUCLID, POLYMETER, COUNT };
-constexpr int NumArpStyles = static_cast<int>(ArpStyleE::COUNT);   ///< number of arp styles
+enum class ArpStyleE : int
+{
+    CORPUS = 0,
+    UP,
+    DOWN,
+    UP_DOWN,
+    EUCLID,
+    POLYMETER,
+    COUNT
+};
+constexpr int NumArpStyles = static_cast<int>( ArpStyleE::COUNT );   ///< number of arp styles
 
 /** @brief One note of a pattern: position and length in sixteenths, pitch relative to the part's root. */
-struct MelodyNote {
-    int16_t m_step = 0;        ///< sixteenths from the pattern start
-    int16_t m_len = 1;         ///< sixteenths (to the next note when sliding)
-    int8_t  m_rel = 0;         ///< semitones above the part's root
-    uint8_t m_velocity = 100;  ///< MIDI velocity
-    uint8_t m_flags = 0;       ///< NoteFlag bits
+struct MelodyNote
+{
+    int16_t m_step = 0;         ///< sixteenths from the pattern start
+    int16_t m_len = 1;          ///< sixteenths (to the next note when sliding)
+    int8_t  m_rel = 0;          ///< semitones above the part's root
+    uint8_t m_velocity = 100;   ///< MIDI velocity
+    uint8_t m_flags = 0;        ///< NoteFlag bits
 };
 
 /**
@@ -283,15 +303,16 @@ struct MelodyNote {
  * falls back, or a masked draw that retries; both are rare, both stay deterministic, and both affect
  * only the mode they happen in.)
  */
-struct ModeMaterial {
+struct ModeMaterial
+{
     std::vector<MelodyNote> m_acid[AcidCells];   ///< acid cells in this mode (acidCell)
-    std::vector<MelodyNote> m_lead[2];    ///< the two eight-bar lead phrases
-    std::vector<MelodyNote> m_counter[2]; ///< the counter-lead's answers to them (19.09.2026)
+    std::vector<MelodyNote> m_lead[2];           ///< the two eight-bar lead phrases
+    std::vector<MelodyNote> m_counter[2];        ///< the counter-lead's answers to them (19.09.2026)
     std::vector<MelodyNote> m_arp[ArpCells];     ///< arp cells (arpCell)
-    std::vector<int> m_padVoicing[4];     ///< the pad voicings of the core chords
-    std::vector<int> m_breakVoicing[4];   ///< and of the main breakdown's (22.09.2026)
-    std::vector<int> m_padVoicing2[4];    ///< and of the second half's (23.09.2026)
-    bool m_built = false;                 ///< false: this mode is not used by the track's form
+    std::vector<int>        m_padVoicing[4];     ///< the pad voicings of the core chords
+    std::vector<int>        m_breakVoicing[4];   ///< and of the main breakdown's (22.09.2026)
+    std::vector<int>        m_padVoicing2[4];    ///< and of the second half's (23.09.2026)
+    bool                    m_built = false;     ///< false: this mode is not used by the track's form
 };
 
 /**
@@ -301,7 +322,8 @@ struct ModeMaterial {
  * outro play, whatever the track drew: there the pad *is* the music, and an articulated pad under
  * nothing sounds like a mistake. The other three are for the sections that have a kick under them.
  */
-enum class PadFigureE : int {
+enum class PadFigureE : int
+{
     HELD = 0,   ///< one chord for the whole block, struck on its first bar
     PULSE,      ///< struck again every bar, each note a bar long
     OFFBEAT,    ///< two hits a bar, on the "and" of two and of four, an eighth and a half long
@@ -310,7 +332,7 @@ enum class PadFigureE : int {
     COUNT
 };
 /** @brief Display names of PadFigure, in its order. */
-extern const char* const PadFigureNames[static_cast<int>(PadFigureE::COUNT)];
+extern const char *const PadFigureNames[static_cast<int>( PadFigureE::COUNT )];
 
 /**
  * @brief The set's motif (23.09.2026, round "Set-Kurve"): one lead cell the first track states and a later
@@ -322,7 +344,8 @@ extern const char* const PadFigureNames[static_cast<int>(PadFigureE::COUNT)];
  * (PLAN 6.8). `phrase` says which of the two lead phrases plays it in this track: 0 in the first track, 1 in
  * the track that recalls it, -1 in every other.
  */
-struct SetMotif {
+struct SetMotif
+{
     uint16_t m_cell = 0;        ///< the cell's onset mask, 0 = no motif
     int8_t   m_archetype = 0;   ///< LeadArchetype (Form.h)
     int8_t   m_band = 1;        ///< the density band the cell was drawn in
@@ -336,11 +359,12 @@ struct SetMotif {
  * @param[in] band  the density band, 0..2
  * @return the onset mask
  */
-uint16_t drawMotifCell(uint64_t seed, int band);
+uint16_t drawMotifCell( uint64_t seed, int band );
 
 /** @brief Everything melodic that is decided once per track. */
-struct MelodyPlan {
-    bool m_present[MelodyParts] = {};         ///< which parts the track uses at all (MelodyPart order)
+struct MelodyPlan
+{
+    bool m_present[MelodyParts] = {};   ///< which parts the track uses at all (MelodyPart order)
     /// The knobs behind `present`, kept so that a section can ask how *much* a part should play
     /// rather than only whether it exists at all (21.09.2026; makeMelodyPlan, Form.cpp drawLead).
     float m_amount[MelodyParts] = {};
@@ -359,9 +383,9 @@ struct MelodyPlan {
      * sections that exist to be a carpet (intro, breakdown, outro) hold whatever it drew, because
      * that is what those sections are for.
      * @{ */
-    int  m_padFigure = 0;                       ///< PadFigure: how the pad states the chord in a drop
-    int  m_padFigureGroove = 0;                 ///< PadFigure: and in a groove, never the same one
-    int  m_padGateAlt = 0;                      ///< a second gate pattern, for the sections that do not use padGatePattern
+    int m_padFigure = 0;         ///< PadFigure: how the pad states the chord in a drop
+    int m_padFigureGroove = 0;   ///< PadFigure: and in a groove, never the same one
+    int m_padGateAlt = 0;        ///< a second gate pattern, for the sections that do not use padGatePattern
     /** @} */
     /**
      * @name Harmony (rebuilt 22.09.2026, round "Harmonik")
@@ -375,13 +399,13 @@ struct MelodyPlan {
      * before the last drop, has harmony of its own: the aeolian three (i - bVI - bVII) where the mode
      * has both, else the tonic held for the whole of it. Any other breakdown holds the tonic.
      * @{ */
-    int  m_chordBars = 8;                       ///< bars per chord in the cores (4, 8 or 16)
-    int  m_chordDegree[4] = {};                 ///< scale degree of each core chord (the pendulum over four slots)
-    int  m_chordType[4] = {};                   ///< ChordType of each core chord (the pad's; the lines take the triad's tones)
-    int  m_breakDegree[4] = {};                 ///< the main breakdown's chords
-    int  m_breakType[4] = {};                   ///< and their types
-    int  m_breakChordBars = 8;                  ///< bars per chord in the main breakdown
-    bool m_breakHolds = true;                   ///< the main breakdown holds one chord (the mode has no aeolian three)
+    int  m_chordBars = 8;         ///< bars per chord in the cores (4, 8 or 16)
+    int  m_chordDegree[4] = {};   ///< scale degree of each core chord (the pendulum over four slots)
+    int  m_chordType[4] = {};     ///< ChordType of each core chord (the pad's; the lines take the triad's tones)
+    int  m_breakDegree[4] = {};   ///< the main breakdown's chords
+    int  m_breakType[4] = {};     ///< and their types
+    int  m_breakChordBars = 8;    ///< bars per chord in the main breakdown
+    bool m_breakHolds = true;     ///< the main breakdown holds one chord (the mode has no aeolian three)
     /** @name Harmony's fuzziness (23.09.2026, round "Harmonie")
      *  The user: "das absolute Verbot klassischer Harmonien scheint mir etwas zuuuu streng ausgelegt [...]
      *  Auch Harmonie-Wechsel innerhalb eines Stueckes koennten wir erlauben". Beside the pendulum a track
@@ -390,69 +414,76 @@ struct MelodyPlan {
      *  and behind the main breakdown a second progression. The Bordun stays: bass and lines anchor the
      *  tonic (round "Harmonik"), so the change is the pad's and the stab's colour, not a modulation.
      *  @{ */
-    int  m_progression = 0;                     ///< 0 pendulum, 1 loop (Loops in Melody.cpp)
-    int  m_loop = -1;                           ///< which loop, or -1
-    bool m_secondHalf = false;                  ///< the bars behind the main breakdown take chordDegree2 / chordType2
-    int  m_progression2 = 0;                    ///< the second half's family
-    int  m_loop2 = -1;                          ///< and its loop
-    int  m_chordDegree2[4] = {};                ///< the second half's core chords
-    int  m_chordType2[4] = {};                  ///< and their types
+    int  m_progression = 0;        ///< 0 pendulum, 1 loop (Loops in Melody.cpp)
+    int  m_loop = -1;              ///< which loop, or -1
+    bool m_secondHalf = false;     ///< the bars behind the main breakdown take chordDegree2 / chordType2
+    int  m_progression2 = 0;       ///< the second half's family
+    int  m_loop2 = -1;             ///< and its loop
+    int  m_chordDegree2[4] = {};   ///< the second half's core chords
+    int  m_chordType2[4] = {};     ///< and their types
     /** @} */
     /** @} */
-    int  m_root[MelodyParts] = { 50, 64, 76, 57, 57, 55, 38 }; ///< MIDI root of each part (the pad's, the stab's and the drone's are unused)
-    int  m_acidSteps = 16;                      ///< acid pattern length (16 or 32)
-    std::vector<MelodyNote> m_acid[AcidCells]; ///< acid cells: set 0/1 x A, A', A'' (acidCell); [0] is A
-    std::vector<MelodyNote> m_lead[2];          ///< two eight-bar lead phrases (128 steps)
-    std::vector<MelodyNote> m_arp[ArpCells];   ///< one bar per chord, per set and variant (arpCell); [0..3] are A
-    int  m_arpTones = 0;                        ///< the arp's tone material: 0 sus2, 1 sus4, 2 add9
-    uint16_t m_arpHigh = 0;                     ///< bit per sixteenth: the step belongs to the high stream
-    int  m_arpStyle = 0;                        ///< ArpStyle: corpus, up, down, up-down, Euclid, polymeter
-    bool m_arpOctaveJump = false;               ///< every other two bars an octave up
-    int  m_leadLo = 127;   ///< the lead's lowest pitch (the masking rule)
-    int  m_leadHi = 0;   ///< ... its highest
-    int  m_arpLo = 127;   ///< the arp's lowest pitch
-    int  m_arpHi = 0;   ///< ... its highest
-    int  m_acidSquelch = -1;                    ///< override of acid.squelch, -1 = the knob
-    int  m_leadOsc = -1;                        ///< override of lead.osc, -1 = the knob (superseded by the voice recipes, kept for the report)
-    int  m_delay[MelodyParts][2] = { { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 } };   ///< overrides of the delay times
-    std::vector<int> m_padVoicing[4];           ///< MIDI notes of each core chord's pad voicing
-    std::vector<int> m_breakVoicing[4];         ///< and of the main breakdown's chords (22.09.2026)
-    std::vector<int> m_padVoicing2[4];          ///< and of the second half's chords (23.09.2026; empty when secondHalf is false)
-    int  m_padGatePattern = 0;                  ///< the track's gate pattern
-    float m_recipe[MelodyParts] = {};          ///< one sound direction per part, -1..1 (brightness)
+    int m_root[MelodyParts] = {
+        50, 64, 76, 57, 57, 55, 38
+    };   ///< MIDI root of each part (the pad's, the stab's and the drone's are unused)
+    int                     m_acidSteps = 16;    ///< acid pattern length (16 or 32)
+    std::vector<MelodyNote> m_acid[AcidCells];   ///< acid cells: set 0/1 x A, A', A'' (acidCell); [0] is A
+    std::vector<MelodyNote> m_lead[2];           ///< two eight-bar lead phrases (128 steps)
+    std::vector<MelodyNote> m_arp[ArpCells];     ///< one bar per chord, per set and variant (arpCell); [0..3] are A
+    int                     m_arpTones = 0;      ///< the arp's tone material: 0 sus2, 1 sus4, 2 add9
+    uint16_t                m_arpHigh = 0;       ///< bit per sixteenth: the step belongs to the high stream
+    int                     m_arpStyle = 0;      ///< ArpStyle: corpus, up, down, up-down, Euclid, polymeter
+    bool                    m_arpOctaveJump = false;   ///< every other two bars an octave up
+    int                     m_leadLo = 127;            ///< the lead's lowest pitch (the masking rule)
+    int                     m_leadHi = 0;              ///< ... its highest
+    int                     m_arpLo = 127;             ///< the arp's lowest pitch
+    int                     m_arpHi = 0;               ///< ... its highest
+    int                     m_acidSquelch = -1;        ///< override of acid.squelch, -1 = the knob
+    int                     m_leadOsc =
+        -1;   ///< override of lead.osc, -1 = the knob (superseded by the voice recipes, kept for the report)
+    int m_delay[MelodyParts][2] = {
+        { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }, { -1, -1 }
+    };                                    ///< overrides of the delay times
+    std::vector<int> m_padVoicing[4];     ///< MIDI notes of each core chord's pad voicing
+    std::vector<int> m_breakVoicing[4];   ///< and of the main breakdown's chords (22.09.2026)
+    std::vector<int>
+          m_padVoicing2[4];       ///< and of the second half's chords (23.09.2026; empty when secondHalf is false)
+    int   m_padGatePattern = 0;   ///< the track's gate pattern
+    float m_recipe[MelodyParts] = {};   ///< one sound direction per part, -1..1 (brightness)
     /** @name The new voices (19.09.2026, round "voices"; MelodyLead.cpp, makeCounter, makeStab, makeDrone)
      *  @{ */
-    std::vector<MelodyNote> m_counter[2];       ///< the counter-lead's two eight-bar phrases, one per lead phrase
-    uint16_t m_stabMask[2] = { 0, 0 };          ///< the stab's onsets over two bars, a bit per sixteenth (never a beat)
-    uint8_t m_stabBars = 0;                     ///< bit per bar of a four-bar phrase: which bars the stab plays
-    int  m_stabTones = 0;                       ///< the stab chord's material: 0 sus2, 1 sus4, 2 add9 (root position)
-    bool m_droneOctave = false;                 ///< the drone adds the octave above its root where the pad is silent
-    int  m_droneEvolveBars = 16;                ///< period of the drone's slow timbral evolution, 8, 16 or 32 bars
+    std::vector<MelodyNote> m_counter[2];   ///< the counter-lead's two eight-bar phrases, one per lead phrase
+    uint16_t m_stabMask[2] = { 0, 0 };      ///< the stab's onsets over two bars, a bit per sixteenth (never a beat)
+    uint8_t  m_stabBars = 0;                ///< bit per bar of a four-bar phrase: which bars the stab plays
+    int      m_stabTones = 0;               ///< the stab chord's material: 0 sus2, 1 sus4, 2 add9 (root position)
+    bool     m_droneOctave = false;         ///< the drone adds the octave above its root where the pad is silent
+    int      m_droneEvolveBars = 16;        ///< period of the drone's slow timbral evolution, 8, 16 or 32 bars
     /** @} */
-    float m_colour = 0.0f;                      ///< the arc's colour (0..1): scales the target colour share
-    int  m_scale = 0;                           ///< the track's own mode; the arrays above are its material
-    int  m_key = 6;                             ///< the track's key (pitch class of the tonic)
-    ModeMaterial m_mode[NumScales];            ///< material of every *borrowed* mode the form uses
+    float        m_colour = 0.0f;     ///< the arc's colour (0..1): scales the target colour share
+    int          m_scale = 0;         ///< the track's own mode; the arrays above are its material
+    int          m_key = 6;           ///< the track's key (pitch class of the tonic)
+    ModeMaterial m_mode[NumScales];   ///< material of every *borrowed* mode the form uses
     /** @name The lead's design (22.09.2026, round "Lead"; MelodyLead.cpp, makeLead)
      *  One cell, one archetype and one operator per bar, per phrase -- what the renderer's `--tracks`
      *  prints and what the self test reads the phrase against.
      *  @{ */
-    int      m_leadArchetype[2] = { 0, 0 };     ///< LeadArchetype of each phrase
-    int8_t   m_leadOps[2][8] = {};              ///< CellOp of each bar of each phrase
-    int8_t   m_leadShift[2][8] = {};            ///< the transposition each bar really got, in scale steps
-    uint16_t m_leadCell[2] = { 0, 0 };          ///< the cell's onset mask, a bit per sixteenth
-    int      m_leadDensityBand = 1;             ///< 0 sparse (8..10 onsets), 1 medium (10..12), 2 dense (12..16)
+    int      m_leadArchetype[2] = { 0, 0 };   ///< LeadArchetype of each phrase
+    int8_t   m_leadOps[2][8] = {};            ///< CellOp of each bar of each phrase
+    int8_t   m_leadShift[2][8] = {};          ///< the transposition each bar really got, in scale steps
+    uint16_t m_leadCell[2] = { 0, 0 };        ///< the cell's onset mask, a bit per sixteenth
+    int      m_leadDensityBand = 1;           ///< 0 sparse (8..10 onsets), 1 medium (10..12), 2 dense (12..16)
     bool     m_leadCellFromCorpus[2] = { false, false };   ///< the cell's rhythm came from the corpus templates
     bool     m_leadQuotesSet[2] = { false, false };        ///< the phrase plays the set's motif (SetMotif; 23.09.2026)
     /** @} */
     /** @name Register and counter mode (23.09.2026, round "Counter")
      *  @{ */
-    int      m_leadWindowLo = LeadLowest;      ///< MIDI note of the lead window's bottom (one octave wide; the counter's an octave above)
-    int      m_counterMode = 1;                 ///< CounterMode of the track (Form.h)
+    int m_leadWindowLo =
+        LeadLowest;          ///< MIDI note of the lead window's bottom (one octave wide; the counter's an octave above)
+    int m_counterMode = 1;   ///< CounterMode of the track (Form.h)
     /** @} */
-    bool m_arpPolymeter = false;                ///< the arp runs a 3/16 cell against the 4/4 bar
-    int  m_arpPulses = 0;                       ///< Euclidean arps: onsets per bar (E(pulses, 16))
-    int  m_arpRotation = 0;                     ///< and the rotation Bjorklund's pattern is turned by
+    bool m_arpPolymeter = false;   ///< the arp runs a 3/16 cell against the 4/4 bar
+    int  m_arpPulses = 0;          ///< Euclidean arps: onsets per bar (E(pulses, 16))
+    int  m_arpRotation = 0;        ///< and the rotation Bjorklund's pattern is turned by
 };
 
 /**
@@ -462,21 +493,22 @@ struct MelodyPlan {
  * operators the plan names, in Schoenberg's sense of developing variation (Frisch, "Brahms and the
  * Principle of Developing Variation", University of California Press 1984).
  */
-enum class MotifOperatorE : int {
-    NONE = 0,     ///< A'' as it always was: the motif with its last notes redrawn to a chord tone
+enum class MotifOperatorE : int
+{
+    NONE = 0,      ///< A'' as it always was: the motif with its last notes redrawn to a chord tone
     PHASE_SHIFT,   ///< the whole two-bar motif displaced by one sixteenth (syncopation)
-    EXPAND,       ///< the up/down contour kept sign for sign while the intervals widen
+    EXPAND,        ///< the up/down contour kept sign for sign while the intervals widen
     OCTAVE_JUMP,   ///< single offbeat sixteenths thrown an octave up -- the Goa lead idiom
     COUNT
 };
-constexpr int NumMotifOperators = static_cast<int>(MotifOperatorE::COUNT);   ///< number of operators
+constexpr int NumMotifOperators = static_cast<int>( MotifOperatorE::COUNT );   ///< number of operators
 
 /**
  * @brief The sign of each successive interval of a line: -1, 0 or +1, one entry less than notes.
  * @param[in] notes  the line
  * @return the signs
  */
-std::vector<int> melodyContour(const std::vector<MelodyNote>& notes);
+std::vector<int> melodyContour( const std::vector<MelodyNote> &notes );
 
 /**
  * @brief Widens every interval of a line while keeping its contour sign for sign (MotifOperator::Expand).
@@ -491,15 +523,15 @@ std::vector<int> melodyContour(const std::vector<MelodyNote>& notes);
  * @param[out] out     receives the expanded line
  * @return false when the expansion would leave the ambitus or could widen nothing at all
  */
-bool expandContour(const std::vector<int>& parent, const std::vector<std::vector<uint8_t>>& allowed,
-                   int lo, int hi, std::vector<int>& out);
+bool expandContour( const std::vector<int> &parent, const std::vector<std::vector<uint8_t>> &allowed, int lo, int hi,
+                    std::vector<int> &out );
 
 /**
  * @brief The shared pitch model of a corpus role (built on first use).
  * @param[in] role  the role
  * @return its pitch model
  */
-const PitchModel& corpusPitchModel(CorpusRoleIdE role);
+const PitchModel &corpusPitchModel( CorpusRoleIdE role );
 
 /**
  * @brief Pitch classes (semitones above the key root) of the triad on @p degree of @p scale.
@@ -507,7 +539,7 @@ const PitchModel& corpusPitchModel(CorpusRoleIdE role);
  * @param[in]  degree  the degree
  * @param[out] out     the pitch classes
  */
-void chordTones(int scale, int degree, int out[3]);
+void chordTones( int scale, int degree, int out[3] );
 
 /**
  * @brief Index of the chord that sounds in bar @p barInTrack.
@@ -515,7 +547,10 @@ void chordTones(int scale, int degree, int out[3]);
  * @param[in] barInTrack  the bar within the track
  * @return the chord's index
  */
-inline int chordIndexAt(const MelodyPlan& m, int barInTrack) { return (barInTrack / m.m_chordBars) % 4; }
+inline int chordIndexAt( const MelodyPlan &m, int barInTrack )
+{
+    return ( barInTrack / m.m_chordBars ) % 4;
+}
 
 /**
  * @brief Makes the melodic plan of a track.
@@ -534,30 +569,39 @@ inline int chordIndexAt(const MelodyPlan& m, int barInTrack) { return (barInTrac
  *                   the default plays none, which is every track's behaviour before that date
  * @return the track's melodic plan
  */
-MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64_t seed, int key, int scale,
-                          bool firstTrack, float colour, uint32_t scaleMask = 0, unsigned bassMask = 0,
-                          const SetMotif& motif = SetMotif{});
+MelodyPlan makeMelodyPlan( const ParamStore &p, const StyleProfile &style, uint64_t seed, int key, int scale,
+                           bool firstTrack, float colour, uint32_t scaleMask = 0, unsigned bassMask = 0,
+                           const SetMotif &motif = SetMotif{} );
 
-extern const char* const LeadArchetypeNames[NumLeadArchetypes];   ///< names of LeadArchetype (Form.h)
-extern const char* const CellOpNames[NumCellOps];                 ///< names of CellOp (Form.h)
+extern const char *const LeadArchetypeNames[NumLeadArchetypes];   ///< names of LeadArchetype (Form.h)
+extern const char *const CellOpNames[NumCellOps];                 ///< names of CellOp (Form.h)
 /**
  * @brief The lead's and the counter's windows of a track (23.09.2026): one octave each, the counter an octave up.
  * @param[in] m  the melody's plan
  * @return the lead's highest note
  */
-inline int leadWindowHi(const MelodyPlan& m) { return m.m_leadWindowLo + LeadWindow - 1; }
+inline int leadWindowHi( const MelodyPlan &m )
+{
+    return m.m_leadWindowLo + LeadWindow - 1;
+}
 /**
  * @brief The counter's window: its lowest note, an octave over the lead's.
  * @param[in] m  the melody's plan
  * @return the counter's lowest note
  */
-inline int counterWindowLo(const MelodyPlan& m) { return m.m_leadWindowLo + 12; }
+inline int counterWindowLo( const MelodyPlan &m )
+{
+    return m.m_leadWindowLo + 12;
+}
 /**
  * @brief ... its highest.
  * @param[in] m  the melody's plan
  * @return the counter's highest note
  */
-inline int counterWindowHi(const MelodyPlan& m) { return m.m_leadWindowLo + 12 + LeadWindow - 1; }
+inline int counterWindowHi( const MelodyPlan &m )
+{
+    return m.m_leadWindowLo + 12 + LeadWindow - 1;
+}
 /**
  * @brief The cutoff arc of an archetype at a bar of the phrase, mean-free (ComposerControls.cpp, leadArcControls,
  *        writes depth x this).
@@ -565,7 +609,7 @@ inline int counterWindowHi(const MelodyPlan& m) { return m.m_leadWindowLo + 12 +
  * @param[in] barInPhrase  the bar within the phrase
  * @return the arc, mean-free
  */
-double leadArc(int archetype, int barInPhrase);
+double leadArc( int archetype, int barInPhrase );
 
 /**
  * @brief Composes one bar of the melodic parts.
@@ -580,8 +624,8 @@ double leadArc(int archetype, int barInPhrase);
  *                   default is the first cell set without a foundation, which is what every caller
  *                   that plays material outside the form (probes, the transition's pads) wants
  */
-void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int barInTrack, int scale,
-                      const BarPlan& bp, std::vector<NoteEvent>& out, const MelodyContext& ctx = {});
+void composeMelodyBar( const ParamStore &p, const MelodyPlan &m, int bar, int barInTrack, int scale, const BarPlan &bp,
+                       std::vector<NoteEvent> &out, const MelodyContext &ctx = {} );
 
 /**
  * @brief The pad voicing of a bar without kick and bass: the root an octave under the voicing's
@@ -590,7 +634,7 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
  * @param[in] voicing  a root-position voicing of voiceChord (root, fifth, two upper voices)
  * @return the MIDI notes
  */
-std::vector<int> foundationVoicing(const std::vector<int>& voicing);
+std::vector<int> foundationVoicing( const std::vector<int> &voicing );
 
 /**
  * @brief The tones an arp cell may use over a chord: the anchor (the chord root in the low
@@ -602,7 +646,7 @@ std::vector<int> foundationVoicing(const std::vector<int>& voicing);
  * @param[out] anchor  receives the anchor as a MIDI note
  * @return the high stream's MIDI notes, ascending, all in [ArpLowest, ArpHighest]
  */
-std::vector<int> arpHighTones(int scale, int degree, int key, int tones, int& anchor);
+std::vector<int> arpHighTones( int scale, int degree, int key, int tones, int &anchor );
 
 /**
  * @brief The stab's chord over a chord of the track, in root position (19.09.2026): the arp's anchor
@@ -614,14 +658,14 @@ std::vector<int> arpHighTones(int scale, int degree, int key, int tones, int& an
  * @param[in] tones   0 sus2, 1 sus4, 2 add9 (MelodyPlan::stabTones)
  * @return ascending MIDI notes, the root first
  */
-std::vector<int> stabChord(int scale, int degree, int key, int tones);
+std::vector<int> stabChord( int scale, int degree, int key, int tones );
 
 /**
  * @brief A bar plan that plays every part the track has (the level-match probe).
  * @param[in] m  the melody's plan
  * @return the bar plan
  */
-BarPlan allPartsBar(const MelodyPlan& m);
+BarPlan allPartsBar( const MelodyPlan &m );
 
 /**
  * @brief Voices a chord of @p type on scale degree @p degree for the pad (rewritten 22.09.2026).
@@ -639,17 +683,18 @@ BarPlan allPartsBar(const MelodyPlan& m);
  * @param[in] previous  the voicing before, or null
  * @return the voicing's MIDI notes
  */
-std::vector<int> voiceChord(int scale, int key, int degree, int type, const std::vector<int>* previous);
+std::vector<int> voiceChord( int scale, int key, int degree, int type, const std::vector<int> *previous );
 
 /** @brief The pad's chord in one bar: which, of which type, and where in its block the bar lies. */
-struct PadChord {
-    int  m_degree = 0;       ///< scale degree
-    int  m_type = 0;         ///< ChordType
-    int  m_slot = 0;         ///< 0 .. 3: index into padVoicing / breakVoicing
-    int  m_blockBars = 8;    ///< bars the chord holds
-    int  m_barInBlock = 0;   ///< 0 = the bar the chord starts on
-    bool m_inBreak = false;  ///< from the main breakdown's own harmony
-    bool m_secondSet = false; ///< from the second half's progression (23.09.2026): padVoicing2
+struct PadChord
+{
+    int  m_degree = 0;          ///< scale degree
+    int  m_type = 0;            ///< ChordType
+    int  m_slot = 0;            ///< 0 .. 3: index into padVoicing / breakVoicing
+    int  m_blockBars = 8;       ///< bars the chord holds
+    int  m_barInBlock = 0;      ///< 0 = the bar the chord starts on
+    bool m_inBreak = false;     ///< from the main breakdown's own harmony
+    bool m_secondSet = false;   ///< from the second half's progression (23.09.2026): padVoicing2
 };
 /**
  * @brief The pad's chord for a bar (22.09.2026). The cores follow the pendulum on track-absolute
@@ -660,7 +705,7 @@ struct PadChord {
  * @param[in] barInTrack  the bar within the track
  * @return the pad's chord
  */
-PadChord padChordAt(const MelodyPlan& m, const BarPlan& bp, int barInTrack);
+PadChord padChordAt( const MelodyPlan &m, const BarPlan &bp, int barInTrack );
 /**
  * @brief The same, from the form alone (for tests and tools without a BarPlan).
  * @param[in] m           the melody's plan
@@ -668,7 +713,7 @@ PadChord padChordAt(const MelodyPlan& m, const BarPlan& bp, int barInTrack);
  * @param[in] barInTrack  the bar within the track
  * @return the pad's chord
  */
-PadChord padChordAt(const MelodyPlan& m, const FormPlan& f, int barInTrack);
+PadChord padChordAt( const MelodyPlan &m, const FormPlan &f, int barInTrack );
 
 /**
  * @brief Total movement of the voices between two sorted voicings of equal size, in semitones.
@@ -676,7 +721,7 @@ PadChord padChordAt(const MelodyPlan& m, const FormPlan& f, int barInTrack);
  * @param[in] b  the second voicing
  * @return the movement in semitones
  */
-int voicingMovement(const std::vector<int>& a, const std::vector<int>& b);
+int voicingMovement( const std::vector<int> &a, const std::vector<int> &b );
 
 /**
  * @brief Composes the effects that start in one bar.
@@ -686,7 +731,7 @@ int voicingMovement(const std::vector<int>& a, const std::vector<int>& b);
  * @param[out] out         receives the effect notes (pitch SfxBaseNote + type) on the part that plays them -- Sfx,
  *                         Texture or Vocal (19.09.2026) -- with a voice's or the bed's variant in the lane
  */
-void composeSfxBar(const FormPlan& f, double trackBeat, int barInTrack, std::vector<NoteEvent>& out);
+void composeSfxBar( const FormPlan &f, double trackBeat, int barInTrack, std::vector<NoteEvent> &out );
 
 /**
  * @brief Semitones the bass moves under @p chord when it follows the chords (0 on the tonic).
@@ -701,6 +746,6 @@ void composeSfxBar(const FormPlan& f, double trackBeat, int barInTrack, std::vec
  * @param[in] bassRoot  the bass's root note on the tonic, MIDI
  * @return the shift in semitones
  */
-int bassChordShift(const PadChord& chord, int scale, int bassRoot);
+int bassChordShift( const PadChord &chord, int scale, int bassRoot );
 
-} // namespace phos
+}   // namespace phos

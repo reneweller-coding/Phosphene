@@ -107,15 +107,23 @@
 #include <map>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 class Engine;
 class ParamStore;
 
 /** @brief The units that can be locked and rerolled (PLAN 6.8). */
-enum class LockUnitE : int { SET = 0, TRACK, SECTION, PATTERN_LANE, COUNT };
-constexpr int NumLockUnits = static_cast<int>(LockUnitE::COUNT);   ///< number of lockable unit kinds
-extern const char* const LockUnitNames[NumLockUnits];            ///< "set", "track", "section", "lane"
+enum class LockUnitE : int
+{
+    SET = 0,
+    TRACK,
+    SECTION,
+    PATTERN_LANE,
+    COUNT
+};
+constexpr int            NumLockUnits = static_cast<int>( LockUnitE::COUNT );   ///< number of lockable unit kinds
+extern const char *const LockUnitNames[NumLockUnits];                           ///< "set", "track", "section", "lane"
 
 /**
  * @brief Index of a section unit: the section @p si of track @p track.
@@ -123,14 +131,20 @@ extern const char* const LockUnitNames[NumLockUnits];            ///< "set", "tr
  * @param[in] si     the section
  * @return the unit's index
  */
-constexpr int sectionUnitIndex(int track, int si) { return track * MaxSections + si; }
+constexpr int sectionUnitIndex( int track, int si )
+{
+    return track * MaxSections + si;
+}
 /**
  * @brief Index of a pattern-lane unit: percussion lane @p lane of track @p track.
  * @param[in] track  the track
  * @param[in] lane   the percussion lane
  * @return the unit's index
  */
-constexpr int laneUnitIndex(int track, int lane) { return track * PercLanes + lane; }
+constexpr int laneUnitIndex( int track, int lane )
+{
+    return track * PercLanes + lane;
+}
 
 constexpr int NumKickMacros = 5;   ///< length, punch, body, grit, click
 constexpr int NumBassMacros = 5;   ///< brightness, pluck, squelch, grit, weight
@@ -150,9 +164,9 @@ constexpr int NumBassMacros = 5;   ///< brightness, pluck, squelch, grit, weight
  */
 constexpr int BassPhraseBars = 8;
 /** @brief Slots of a bass phrase: eight bars, four beats, at most three notes a beat (Patterns.h). */
-constexpr int BassPhraseSlots = BassPhraseBars * 4 * 3;
-extern const char* const KickMacroNames[NumKickMacros];   ///< display names
-extern const char* const BassMacroNames[NumBassMacros];   ///< display names
+constexpr int            BassPhraseSlots = BassPhraseBars * 4 * 3;
+extern const char *const KickMacroNames[NumKickMacros];   ///< display names
+extern const char *const BassMacroNames[NumBassMacros];   ///< display names
 
 /**
  * @brief The acid voicings a track's acid sound is interpolated between (19.09.2026).
@@ -163,8 +177,8 @@ extern const char* const BassMacroNames[NumBassMacros];   ///< display names
  * barycentric weights, one per voicing, summing to 1 -- so that tracks differ by more than three
  * presets and any blend is a legal sound. Driven is the knobs; the first track is driven exactly.
  */
-constexpr int NumAcidVoicings = 3;
-extern const char* const AcidVoicingNames[NumAcidVoicings];   ///< "clean", "driven", "liquid"
+constexpr int            NumAcidVoicings = 3;
+extern const char *const AcidVoicingNames[NumAcidVoicings];   ///< "clean", "driven", "liquid"
 
 /**
  * @brief The sound of one polyphonic voice in one track (19.09.2026, round "voices").
@@ -180,25 +194,26 @@ extern const char* const AcidVoicingNames[NumAcidVoicings];   ///< "clean", "dri
  * al. 1995): brightness, softness, thickness, space and motion. Like the kick and bass recipes they are
  * offsets from the knobs, and the first track plays the knobs exactly.
  */
-constexpr int NumVoiceMacros = 5;   ///< brightness, softness, thickness, space, motion
-extern const char* const VoiceMacroNames[NumVoiceMacros];   ///< display names
+constexpr int            NumVoiceMacros = 5;                ///< brightness, softness, thickness, space, motion
+extern const char *const VoiceMacroNames[NumVoiceMacros];   ///< display names
 /** @brief One polyphonic voice's sound for one track: discrete choices and the five perceptual directions (see above). */
-struct VoiceRecipe {
-    int   m_osc = -1;                    ///< override of poly.osc, -1 = the knob
-    int   m_table = -1;                  ///< override of poly.table, -1 = the knob
-    int   m_filter = -1;                 ///< override of poly.filter_type, -1 = the knob
-    int   m_delayL = -1;   ///< override of the left delay time, -1 = the knob
-    int   m_delayR = -1;   ///< ... of the right one
+struct VoiceRecipe
+{
+    int m_osc = -1;      ///< override of poly.osc, -1 = the knob
+    int m_table = -1;    ///< override of poly.table, -1 = the knob
+    int m_filter = -1;   ///< override of poly.filter_type, -1 = the knob
+    int m_delayL = -1;   ///< override of the left delay time, -1 = the knob
+    int m_delayR = -1;   ///< ... of the right one
     /** @name The second oscillator (22.09.2026, round "Klangfarben"; Params.h, poly::Osc2)
      *  Two discrete choices, because that is what they are: *which* oscillator answers the first one
      *  and *at which interval*. The mix between them is continuous and rides on the thickness
      *  direction like everything else that is a matter of degree (VoiceLoadings).
      *  @{ */
-    int   m_osc2 = -1;                   ///< override of poly.osc2 (PolyOsc2, 0 = off), -1 = the knob
-    int   m_osc2Semis = 0;               ///< override of poly.osc2_interval (PolyOsc2Interval)
-    bool  m_hasOsc2 = false;             ///< whether the two above were drawn at all
+    int  m_osc2 = -1;         ///< override of poly.osc2 (PolyOsc2, 0 = off), -1 = the knob
+    int  m_osc2Semis = 0;     ///< override of poly.osc2_interval (PolyOsc2Interval)
+    bool m_hasOsc2 = false;   ///< whether the two above were drawn at all
     /** @} */
-    float m_macro[NumVoiceMacros] = {}; ///< the five directions, each -1..1
+    float m_macro[NumVoiceMacros] = {};   ///< the five directions, each -1..1
 };
 
 struct SoundPreset;   // SoundPresets.h
@@ -206,40 +221,46 @@ struct SoundPreset;   // SoundPresets.h
 constexpr int SoundSynths = 9;
 
 /** @brief What the set walk decides for a track: the journey through the night. */
-struct TrackWalk {
-    int    m_bars = 256;              ///< length in bars (a multiple of 32)
+struct TrackWalk
+{
+    int m_bars = 256;   ///< length in bars (a multiple of 32)
     /** @brief The set's motif and this track's part in it (Melody.h, SetMotif; 23.09.2026): the first track
      *         states it in its first lead phrase, the track that carries the set's end recalls it in its
      *         second, a few tracks in between recall it too. */
-    SetMotif m_motif;
-    int    m_key = 6;                 ///< pitch class of the key
-    int    m_scale = 1;               ///< index into ScaleNames
-    double m_bpm = 145.0;             ///< tempo the track settles on
-    int    m_style = 1;               ///< StyleId of the track (22.09.2026: the style walks when compose.style_mix is on)
-    float  m_kickMacro[5] = {};       ///< kick recipe, each -1..1
-    float  m_bassMacro[5] = {};       ///< bass recipe, each -1..1
-    float  m_acidVoicing[NumAcidVoicings] = { 0.0f, 1.0f, 0.0f };   ///< barycentric weights of the acid voicings
+    SetMotif    m_motif;
+    int         m_key = 6;       ///< pitch class of the key
+    int         m_scale = 1;     ///< index into ScaleNames
+    double      m_bpm = 145.0;   ///< tempo the track settles on
+    int         m_style = 1;     ///< StyleId of the track (22.09.2026: the style walks when compose.style_mix is on)
+    float       m_kickMacro[5] = {};                                     ///< kick recipe, each -1..1
+    float       m_bassMacro[5] = {};                                     ///< bass recipe, each -1..1
+    float       m_acidVoicing[NumAcidVoicings] = { 0.0f, 1.0f, 0.0f };   ///< barycentric weights of the acid voicings
     VoiceRecipe m_voice[PolyInstances];   ///< the sound of each polyphonic voice (PolyInstance order)
-    int    m_soundPreset[SoundSynths] = { -1, -1, -1, -1, -1, -1, -1, -1, -1 };   ///< the track's preset of each synth (SoundSynths order)
+    int         m_soundPreset[SoundSynths] = {
+                -1, -1, -1, -1, -1, -1, -1, -1, -1
+    };   ///< the track's preset of each synth (SoundSynths order)
 };
 
 /** @brief Everything that is decided once per track. */
-struct TrackPlan {
-    int    m_index = 0;               ///< track number in the set
-    int    m_firstBar = 0;            ///< bar the track starts on
-    int    m_bars = 256;              ///< length in bars (a multiple of 32)
-    int    m_key = 6;                 ///< pitch class of the key
-    int    m_scale = 1;               ///< index into ScaleNames
-    double m_bpm = 145.0;             ///< tempo the track settles on
-    int    m_style = 1;               ///< StyleId the track plays in (from the walk)
-    int    m_primaryPattern = 0;      ///< bass pattern most of the time
-    int    m_secondaryPattern = 1;    ///< bass pattern for variations
-    float  m_gate = 0.7f;             ///< bass note length as a fraction of the slot
-    int    m_kickEngine = -1;         ///< override of kick.engine, -1 = the knob
-    int    m_kickClip = -1;           ///< override of kick.clip, -1 = the knob
+struct TrackPlan
+{
+    int    m_index = 0;                       ///< track number in the set
+    int    m_firstBar = 0;                    ///< bar the track starts on
+    int    m_bars = 256;                      ///< length in bars (a multiple of 32)
+    int    m_key = 6;                         ///< pitch class of the key
+    int    m_scale = 1;                       ///< index into ScaleNames
+    double m_bpm = 145.0;                     ///< tempo the track settles on
+    int    m_style = 1;                       ///< StyleId the track plays in (from the walk)
+    int    m_primaryPattern = 0;              ///< bass pattern most of the time
+    int    m_secondaryPattern = 1;            ///< bass pattern for variations
+    float  m_gate = 0.7f;                     ///< bass note length as a fraction of the slot
+    int    m_kickEngine = -1;                 ///< override of kick.engine, -1 = the knob
+    int    m_kickClip = -1;                   ///< override of kick.clip, -1 = the knob
     float  m_kickMacro[NumKickMacros] = {};   ///< recipe, each -1..1
     float  m_bassMacro[NumBassMacros] = {};   ///< recipe, each -1..1
-    float  m_acidVoicing[NumAcidVoicings] = { 0.0f, 1.0f, 0.0f };   ///< barycentric weights of the acid voicings (clean, driven, liquid)
+    float  m_acidVoicing[NumAcidVoicings] = {
+        0.0f, 1.0f, 0.0f
+    };   ///< barycentric weights of the acid voicings (clean, driven, liquid)
     VoiceRecipe m_voice[PolyInstances];   ///< the sound of each polyphonic voice (PolyInstance order; 19.09.2026)
     /**
      * @brief The track's sound of each synth as a preset of the bank (26.09.2026; SoundPresets.h): an index into
@@ -250,19 +271,19 @@ struct TrackPlan {
      * die Preset-Werte auf Absolutwerte ... ein?" A preset replaces the recipe of its synth (the recipe's offsets are
      * zero where one plays) and arrives absolute (ControlEvent::Kind::Base); the section rides stay offsets on it.
      */
-    int    m_soundPreset[SoundSynths] = { -1, -1, -1, -1, -1, -1, -1, -1, -1 };
-    double m_loudness = 0.0;         ///< probe loudness of the track's sound, LUFS (0 when Level Match is off)
-    float  m_gainDb = 0.0f;           ///< level correction against the first track
-    uint64_t m_percSeed = 0;          ///< seed of the track's percussion decisions
-    PercPlan m_perc;                  ///< the track's percussion plan (Rhythm.h)
-    uint64_t m_melodySeed = 0;        ///< seed of the track's melodic decisions
-    MelodyPlan m_melody;              ///< chords, acid, lead, arp and pad material (Melody.h)
-    uint64_t m_formSeed = 0;          ///< seed of the track's form
-    FormPlan m_form;                  ///< sections, their energies and the effects on their boundaries
-    uint64_t m_sectionSeed[MaxSections] = {};   ///< seed of each section (lockable, rerollable)
-    float  m_arcIn = 0.7f;   ///< the set's energy arc where the track starts
-    float  m_arcOut = 0.7f;   ///< ... and where it ends
-    double m_partLoudness[MelodyParts] = {};   ///< probe loudness of each melodic part alone, LUFS
+    int        m_soundPreset[SoundSynths] = { -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+    double     m_loudness = 0.0;   ///< probe loudness of the track's sound, LUFS (0 when Level Match is off)
+    float      m_gainDb = 0.0f;    ///< level correction against the first track
+    uint64_t   m_percSeed = 0;     ///< seed of the track's percussion decisions
+    PercPlan   m_perc;             ///< the track's percussion plan (Rhythm.h)
+    uint64_t   m_melodySeed = 0;   ///< seed of the track's melodic decisions
+    MelodyPlan m_melody;           ///< chords, acid, lead, arp and pad material (Melody.h)
+    uint64_t   m_formSeed = 0;     ///< seed of the track's form
+    FormPlan   m_form;             ///< sections, their energies and the effects on their boundaries
+    uint64_t   m_sectionSeed[MaxSections] = {};    ///< seed of each section (lockable, rerollable)
+    float      m_arcIn = 0.7f;                     ///< the set's energy arc where the track starts
+    float      m_arcOut = 0.7f;                    ///< ... and where it ends
+    double     m_partLoudness[MelodyParts] = {};   ///< probe loudness of each melodic part alone, LUFS
     /**
      * @name The level match's reference (26.09.2026)
      * What every track is matched against: the first track's loudness and its parts' *with the composer's presets off*
@@ -270,10 +291,10 @@ struct TrackPlan {
      * (it used to be the reference as it stood, and with presets a reference drawn by chance: the Full-On breakdown's
      * counter came out 7 dB under the calibrated one). Equal to loudness and partLoudness where it plays none.
      * @{ */
-    double m_refLoudness = 0.0;   ///< the first track's loudness with the presets off, LUFS
+    double m_refLoudness = 0.0;                   ///< the first track's loudness with the presets off, LUFS
     double m_refPartLoudness[MelodyParts] = {};   ///< ... and its parts', LUFS
     /** @} */
-    float  m_partGainDb[MelodyParts] = {};     ///< level correction of each melodic part against the first track's
+    float m_partGainDb[MelodyParts] = {};   ///< level correction of each melodic part against the first track's
     /**
      * @brief The master offset has not been measured yet; it arrives later (22.09.2026).
      *
@@ -283,7 +304,7 @@ struct TrackPlan {
      * track can play as soon as the level match is done, about two, and the offset is measured
      * behind it and rides in over a ramp while the intro plays.
      */
-    bool   m_masterDeferred = false;
+    bool m_masterDeferred = false;
     /**
      * @brief The level, presence and audibility measurements of this plan are still to come (23.09.2026).
      *
@@ -293,20 +314,22 @@ struct TrackPlan {
      * for the first track the right value everywhere but on the lines (presence, audibility) and the master,
      * because it is the level match's reference; a later track measured in time never plays without its own.
      */
-    bool   m_measureDeferred = false;
+    bool m_measureDeferred = false;
     /** @brief completeMeasurement() changed the lines' corrections, and the host has not sent them yet. */
     bool   m_correctionsPending = false;
-    double m_mixLoudness = 0.0;       ///< probe loudness of the whole mix after the master, before the loudness offset
-    float  m_masterGainDb = 0.0f;     ///< the offset that brings the mix to master.target_lufs (Auto Gain)
+    double m_mixLoudness = 0.0;     ///< probe loudness of the whole mix after the master, before the loudness offset
+    float  m_masterGainDb = 0.0f;   ///< the offset that brings the mix to master.target_lufs (Auto Gain)
     /** @name The presence match (19.09.2026, round "polish"; ComposerLevels.cpp, matchPresence)
      *  @{ */
-    double m_presenceDb = 0.0;        ///< the drops' presence estimate before the match, dB against the reference median
-    double m_presenceAfterDb = 0.0;   ///< the same estimate with presenceGainDb on the lines (the match's own prediction)
-    float  m_presenceGainDb = 0.0f;   ///< the gain the match puts on the lines (lead, counter, arp, stab), dB
+    double m_presenceDb = 0.0;   ///< the drops' presence estimate before the match, dB against the reference median
+    double m_presenceAfterDb =
+        0.0;   ///< the same estimate with presenceGainDb on the lines (the match's own prediction)
+    float m_presenceGainDb = 0.0f;   ///< the gain the match puts on the lines (lead, counter, arp, stab), dB
     /** @name The audibility match (23.09.2026; ComposerLevels.cpp, matchAudibility)
      *  @{ */
-    double m_audibleInMix[MelodyParts] = {};    ///< each part's partial loudness in the drops' mix (Audibility.h), before the lift
-    float  m_audibilityLiftDb[MelodyParts] = {}; ///< what the match added to partGainDb
+    double m_audibleInMix
+        [MelodyParts] = {};   ///< each part's partial loudness in the drops' mix (Audibility.h), before the lift
+    float m_audibilityLiftDb[MelodyParts] = {};   ///< what the match added to partGainDb
     /** @} */
     /** @} */
     /** @name The learned bass phrase (compose.bass_model = Neural; PLAN 6.9, stage B, role 3)
@@ -316,8 +339,8 @@ struct TrackPlan {
      *  `(barInPhrase * 4 + beat) * 3 + s`. `bassNeural` is false whenever the knob says Pattern or no
      *  weight file was found, and then nothing here is read and the bass is what it always was.
      *  @{ */
-    bool   m_bassNeural = false;                       ///< whether the phrases below were drawn
-    int8_t m_bassRel[2][BassPhraseSlots] = {};        ///< [primary, secondary][slot] semitones from the root
+    bool   m_bassNeural = false;                 ///< whether the phrases below were drawn
+    int8_t m_bassRel[2][BassPhraseSlots] = {};   ///< [primary, secondary][slot] semitones from the root
     /** @} */
     /** @name The drawn bass rhythm (compose.bass_rhythm = Corpus; Corpus.h, BassRhythm)
      *  Two rhythm phrases of BassPhraseBars bars, one for the track's primary and one for its
@@ -327,9 +350,9 @@ struct TrackPlan {
      *  pattern families of Patterns.h exactly as it always did -- bit for bit, which the self test
      *  section `bassRhythm` measures against a render made with the knob off.
      *  @{ */
-    bool     m_bassRhythm = false;                       ///< whether the masks below are used
-    uint16_t m_bassMask[2][BassPhraseBars] = {};        ///< [primary, secondary][bar in phrase] onset mask
-    float    m_bassShortestSlot = 0.25f;                 ///< tightest note span in the two phrases, in beats
+    bool     m_bassRhythm = false;                 ///< whether the masks below are used
+    uint16_t m_bassMask[2][BassPhraseBars] = {};   ///< [primary, secondary][bar in phrase] onset mask
+    float    m_bassShortestSlot = 0.25f;           ///< tightest note span in the two phrases, in beats
     /** @} */
 };
 
@@ -341,28 +364,43 @@ struct TrackPlan {
  * track and master gain, the section rides -- only from the hand-over, where its kick and bass take over
  * from the outgoing track's. A track that starts the set writes both at once (All).
  */
-enum class ControlScopeE : int { ALL = 0, VOICES, FLOOR };
+enum class ControlScopeE : int
+{
+    ALL = 0,
+    VOICES,
+    FLOOR
+};
 
 /**
  * @brief The bar on which a track's own kick and bass take over the floor (its first bar in a set's first track).
  * @param[in] t  the track's plan
  * @return the bar
  */
-inline int handoverBar(const TrackPlan& t) { return t.m_firstBar + t.m_form.m_handover; }
+inline int handoverBar( const TrackPlan &t )
+{
+    return t.m_firstBar + t.m_form.m_handover;
+}
 
 /** @brief Composes the set from a seed and the knobs. */
-class Composer {
+class Composer
+{
 public:
     /**
      * @brief @p seed identifies the set.
      * @param[in] seed  the set's seed
      */
-    explicit Composer(uint64_t seed = 1) : m_seed(seed) {}
+    explicit Composer( uint64_t seed = 1 ) : m_seed( seed ) {}
     /**
      * @brief Changes the set seed (forgets cached plans).
      * @param[in] seed  the set's seed
      */
-    void setSeed(uint64_t seed) { m_seed = seed; m_plans.clear(); m_walk.clear(); ++m_planGeneration; }
+    void setSeed( uint64_t seed )
+    {
+        m_seed = seed;
+        m_plans.clear();
+        m_walk.clear();
+        ++m_planGeneration;
+    }
     /**
      * @brief The family jam (02.10.2026, the plugin's Jam.h), composer thread: while @p hold the tracks walked from now
      *        on keep the key of the track before them -- a follower's engine moves the whole set to the leader's root,
@@ -371,7 +409,11 @@ public:
      * @param[in] hold   true to keep the key
      * @param[in] scale  the scale to keep to, -1 for the walk's
      */
-    void setJam(bool hold, int scale) { m_jamHold = hold; m_jamScale = scale; }
+    void setJam( bool hold, int scale )
+    {
+        m_jamHold = hold;
+        m_jamScale = scale;
+    }
     /**
      * @brief Counts the times the cached plans were thrown away (a seed, a lock, a reroll, a knob the plans depend
      *        on). A measurement made on a copy of this composer belongs to the generation it was started in.
@@ -388,13 +430,13 @@ public:
      * @param[in] generation  the generation the measurement was started in
      * @return true when taken over (then correctionsPending is set)
      */
-    bool adoptMeasurement(int index, const TrackPlan& measured, uint64_t generation) const;
+    bool adoptMeasurement( int index, const TrackPlan &measured, uint64_t generation ) const;
     /**
      * @brief A flag that stops probe renders early (their readings are then worthless and are not cached). For a
      *        copy measuring in the background, so that a host can end it at once when it is torn down.
      * @param[in] flag  the flag, or null
      */
-    void setAbortFlag(const std::atomic<bool>* flag) { m_abort = flag; }
+    void setAbortFlag( const std::atomic<bool> *flag ) { m_abort = flag; }
     /**
      * @brief Plan tracks without their Auto Gain offset; a host measures it afterwards.
      *
@@ -403,7 +445,7 @@ public:
      * program that does not ask is exactly where it was.
      * @param[in] on  true to defer
      */
-    void setDeferMasterGain(bool on) { m_deferMaster = on; }
+    void setDeferMasterGain( bool on ) { m_deferMaster = on; }
     /**
      * @brief Measures a plan planned without its probes: the level match, the presence and the audibility match
      *        (TrackPlan::measureDeferred). Auto Gain stays deferred (completeMasterGain).
@@ -422,24 +464,26 @@ public:
      * @param[in] index  the track
      * @return true when it measured something; false when the plan was not deferred
      */
-    bool completeMeasurement(const ParamStore& p, int index) const;
+    bool completeMeasurement( const ParamStore &p, int index ) const;
     /**
      * @brief Whether completeMeasurement() changed corrections the host has not yet sent
      *        (TrackPlan::correctionsPending).
      * @param[in] index  the track
      * @return true when corrections wait to be sent
      */
-    bool correctionsPending(int index) const
+    bool correctionsPending( int index ) const
     {
-        return index >= 0 && index < static_cast<int>(m_plans.size()) && m_plans[static_cast<size_t>(index)].m_correctionsPending;
+        return index >= 0 && index < static_cast<int>( m_plans.size() ) &&
+               m_plans[static_cast<size_t>( index )].m_correctionsPending;
     }
     /**
      * @brief The host sent them.
      * @param[in] index  the track
      */
-    void clearCorrectionsPending(int index) const
+    void clearCorrectionsPending( int index ) const
     {
-        if (index >= 0 && index < static_cast<int>(m_plans.size())) m_plans[static_cast<size_t>(index)].m_correctionsPending = false;
+        if ( index >= 0 && index < static_cast<int>( m_plans.size() ) )
+            m_plans[static_cast<size_t>( index )].m_correctionsPending = false;
     }
     /**
      * @brief The melodic parts' level corrections of @p plan as control events at @p beat, ramped over @p rampBeats
@@ -451,7 +495,8 @@ public:
      * @param[in]     rampBeats  the ramp in beats
      * @param[in,out] out        the events, added to
      */
-    void levelControls(const ParamStore& p, const TrackPlan& plan, double beat, float rampBeats, std::vector<ControlEvent>& out) const;
+    void levelControls( const ParamStore &p, const TrackPlan &plan, double beat, float rampBeats,
+                        std::vector<ControlEvent> &out ) const;
     /**
      * @brief The preset @p plan plays on synth @p synth (SoundSynths order), or null: none drawn, or Sound Variation at
      *        0.
@@ -460,7 +505,7 @@ public:
      * @param[in] synth  the synth (SoundSynths order)
      * @return the preset, or null
      */
-    static const SoundPreset* presetOf(const ParamStore& p, const TrackPlan& plan, int synth);
+    static const SoundPreset *presetOf( const ParamStore &p, const TrackPlan &plan, int synth );
     /**
      * @brief Whether the master offset is being deferred.
      * @return true while deferred
@@ -476,7 +521,7 @@ public:
      * @param[in] index  the track
      * @return the gain in dB
      */
-    float completeMasterGain(const ParamStore& p, int index) const;
+    float completeMasterGain( const ParamStore &p, int index ) const;
     /**
      * @brief The set seed.
      * @return the set's seed
@@ -493,7 +538,7 @@ public:
      * @param[in] index   the track
      * @return its plan
      */
-    const TrackPlan& track(const ParamStore& params, int index) const;
+    const TrackPlan &track( const ParamStore &params, int index ) const;
     /**
      * @brief The parameter ids the plans depend on (25.09.2026): every compose knob, the kick's engine and clip,
      *        the bass's release and each percussion lane's Active, Role, Density and Engine. The preferences'
@@ -501,7 +546,7 @@ public:
      * @param[in] params  the knobs
      * @return the parameter ids
      */
-    static std::vector<int> planKnobIds(const ParamStore& params);
+    static std::vector<int> planKnobIds( const ParamStore &params );
     /**
      * @brief Index of the track that owns @p bar: the one whose kick and bass sound there. Over the DJ
      *        overlap that is the outgoing track, until its last bar.
@@ -509,7 +554,7 @@ public:
      * @param[in] bar     the bar
      * @return the track's index
      */
-    int trackOfBar(const ParamStore& params, int bar) const;
+    int trackOfBar( const ParamStore &params, int bar ) const;
     /**
      * @brief Index of the track whose intro sounds over the outgoing track's outro in @p bar (the DJ
      *        overlap, Form.h), or -1 where only one track sounds. Plans the next track when asked about
@@ -518,7 +563,7 @@ public:
      * @param[in] bar     the bar
      * @return the incoming track's index, or -1
      */
-    int incomingOfBar(const ParamStore& params, int bar) const;
+    int incomingOfBar( const ParamStore &params, int bar ) const;
     /**
      * @brief The tempo map of the first @p bars bars: held per track, ramped over the DJ overlap (the last 16 bars of a
      *        track) into the next.
@@ -526,14 +571,14 @@ public:
      * @param[in] bars    the bars
      * @return the tempo map
      */
-    TempoMap tempoMap(const ParamStore& params, int bars) const;
+    TempoMap tempoMap( const ParamStore &params, int bars ) const;
     /**
      * @brief Every section mark of the first @p bars bars, for the MIDI export and the arrange view.
      * @param[in] params  the knobs
      * @param[in] bars    the bars
      * @return the section marks
      */
-    std::vector<SectionMark> sections(const ParamStore& params, int bars) const;
+    std::vector<SectionMark> sections( const ParamStore &params, int bars ) const;
 
     /** @name Locks and rerolls (PLAN 6.8)
      *  A locked unit keeps the seed it had before any reroll; rerolling a unit advances its own
@@ -545,34 +590,34 @@ public:
      * @param[in] index   the unit
      * @param[in] locked  true to lock
      */
-    void setLock(LockUnitE unit, int index, bool locked);
+    void setLock( LockUnitE unit, int index, bool locked );
     /**
      * @brief Whether a unit is locked.
      * @param[in] unit   the kind of unit
      * @param[in] index  the unit
      * @return true when locked
      */
-    bool isLocked(LockUnitE unit, int index) const;
+    bool isLocked( LockUnitE unit, int index ) const;
     /**
      * @brief Advances the variation counter of an unlocked unit (a locked one does not move).
      * @param[in] unit   the kind of unit
      * @param[in] index  the unit
      */
-    void reroll(LockUnitE unit, int index);
+    void reroll( LockUnitE unit, int index );
     /**
      * @brief The variation counter of a unit (0 = never rerolled).
      * @param[in] unit   the kind of unit
      * @param[in] index  the unit
      * @return the counter
      */
-    uint32_t variation(LockUnitE unit, int index) const;
+    uint32_t variation( LockUnitE unit, int index ) const;
     /**
      * @brief Sets a variation counter directly (used when a .phosset is read).
      * @param[in] unit   the kind of unit
      * @param[in] index  the unit
      * @param[in] value  the counter
      */
-    void setVariation(LockUnitE unit, int index, uint32_t value);
+    void setVariation( LockUnitE unit, int index, uint32_t value );
     /** @brief Forgets every lock and every reroll. */
     void clearLocks();
     /**
@@ -580,13 +625,13 @@ public:
      * @param[in] unit  the kind of unit
      * @return the locked indices
      */
-    const std::map<int, uint8_t>& locks(LockUnitE unit) const { return m_locked[static_cast<int>(unit)]; }
+    const std::map<int, uint8_t> &locks( LockUnitE unit ) const { return m_locked[static_cast<int>( unit )]; }
     /**
      * @brief The variation counters, for serialisation.
      * @param[in] unit  the kind of unit
      * @return the counters by index
      */
-    const std::map<int, uint32_t>& variations(LockUnitE unit) const { return m_variation[static_cast<int>(unit)]; }
+    const std::map<int, uint32_t> &variations( LockUnitE unit ) const { return m_variation[static_cast<int>( unit )]; }
     /** @} */
 
     /**
@@ -597,8 +642,8 @@ public:
      * @param[out]    notes     receives the notes, sorted
      * @param[in,out] controls  if not null, receives the sound changes, sorted
      */
-    void composeBars(const ParamStore& params, int firstBar, int count, std::vector<NoteEvent>& notes,
-                     std::vector<ControlEvent>* controls = nullptr) const;
+    void composeBars( const ParamStore &params, int firstBar, int count, std::vector<NoteEvent> &notes,
+                      std::vector<ControlEvent> *controls = nullptr ) const;
 
     /**
      * @brief One track alone (23.09.2026, round "DJ-Export"): composeBars then sends only what track @p index
@@ -612,7 +657,7 @@ public:
      * are the set's, so the file is the track the set plays.
      * @param[in] index  the track, -1 for the set
      */
-    void setSoloTrack(int index) { m_soloTrack = index; }
+    void setSoloTrack( int index ) { m_soloTrack = index; }
     /**
      * @brief The track composeBars is limited to, or -1.
      * @return the track, or -1
@@ -627,7 +672,7 @@ public:
      * @param[out] out         receives the offset per parameter of the module, indexed like its table (must hold
      *                         ParamStore::moduleCount entries)
      */
-    static void recipeOffsets(bool kickModule, const float* macros, float amount, float* out);
+    static void recipeOffsets( bool kickModule, const float *macros, float amount, float *out );
 
     /**
      * @brief Normalised acid offsets of a point in the voicing triangle (NumAcidVoicings).
@@ -643,7 +688,8 @@ public:
      * @param[out] out       receives acid::Count offsets, indexed like the acid table
      * @param[out] disperse  receives the Disperse override (a discrete parameter), or -1 for the knob
      */
-    static void acidVoicingOffsets(const ParamStore& p, const float* weights, float amount, float* out, int& disperse);
+    static void acidVoicingOffsets( const ParamStore &p, const float *weights, float amount, float *out,
+                                    int &disperse );
 
     /**
      * @brief Normalised offsets of a polyphonic voice's recipe (19.09.2026).
@@ -652,15 +698,16 @@ public:
      * @param[in]  amount  Sound Variation
      * @param[out] out     receives poly::Count offsets, indexed like the poly table
      */
-    static void voiceRecipeOffsets(PolyInstanceE voice, const VoiceRecipe& r, float amount, float* out);
+    static void voiceRecipeOffsets( PolyInstanceE voice, const VoiceRecipe &r, float amount, float *out );
     /** @brief A voice's palette, read-only (23.09.2026: the factory presets lay it out, SoundPresets.h). */
-    struct VoicePaletteView {
-        const double* m_osc;        ///< weight per PolyOsc
-        const int* m_builtin;       ///< built-in wavetables, six slots, -1 ends
-        const int8_t* m_lane;       ///< wavetable lanes, three slots, -1 ends
-        const double* m_filter;     ///< weight per PolyFilter
-        const double* m_osc2;       ///< weight per PolyOsc2 (index 0 = none)
-        const double* m_interval;   ///< weight per PolyOsc2Interval
+    struct VoicePaletteView
+    {
+        const double *m_osc;        ///< weight per PolyOsc
+        const int    *m_builtin;    ///< built-in wavetables, six slots, -1 ends
+        const int8_t *m_lane;       ///< wavetable lanes, three slots, -1 ends
+        const double *m_filter;     ///< weight per PolyFilter
+        const double *m_osc2;       ///< weight per PolyOsc2 (index 0 = none)
+        const double *m_interval;   ///< weight per PolyOsc2Interval
     };
     /**
      * @brief The palette a voice's recipes are drawn from (ComposerInternal.h, VoicePalettes), for the presets and the
@@ -668,7 +715,7 @@ public:
      * @param[in] voice  the voice
      * @return its palette
      */
-    static VoicePaletteView voicePalette(PolyInstanceE voice);
+    static VoicePaletteView voicePalette( PolyInstanceE voice );
 
     /**
      * @brief How many real wavetable candidates a voice's palette offers (ComposerInternal.h, VoicePalettes).
@@ -682,29 +729,33 @@ public:
      * @param[in] voice  which polyphonic instance
      * @return the count of `tables[]` entries before the first -1 (or the array's end)
      */
-    static int voicePaletteTableCount(PolyInstanceE voice);
+    static int voicePaletteTableCount( PolyInstanceE voice );
 
 private:
     /**
      * @brief Drops the cached plans when a parameter that shapes them has changed since they were made.
      * @param[in] params  the knobs
      */
-    void validate(const ParamStore& params) const;
+    void validate( const ParamStore &params ) const;
     /**
      * @brief One call of a member that reads the plans: validates the knobs when it is the outermost one
      *        (25.09.2026; see the file comment), and counts the depth so the calls it makes do not.
      */
-    struct Entry {
+    struct Entry
+    {
         /**
          * @brief Enters: validates @p params when no other call is running on @p c.
          * @param[in] c       the composer
          * @param[in] params  the knobs
          */
-        Entry(const Composer& c, const ParamStore& params) : m_composer(c) { if (m_composer.m_depth++ == 0) m_composer.validate(params); }
-        ~Entry() { --m_composer.m_depth; }   ///< leaves
-        Entry(const Entry&) = delete;              ///< one entry, one leave
-        Entry& operator=(const Entry&) = delete;   ///< one entry, one leave
-        const Composer& m_composer;   ///< the composer entered
+        Entry( const Composer &c, const ParamStore &params ) : m_composer( c )
+        {
+            if ( m_composer.m_depth++ == 0 ) m_composer.validate( params );
+        }
+        ~Entry() { --m_composer.m_depth; }            ///< leaves
+        Entry( const Entry & ) = delete;              ///< one entry, one leave
+        Entry &operator=( const Entry & ) = delete;   ///< one entry, one leave
+        const Composer &m_composer;                   ///< the composer entered
     };
     /**
      * @brief Plans track @p index from its walk, its seeds and the knobs: key, tempo, form, melody, recipes and levels.
@@ -712,26 +763,26 @@ private:
      * @param[in] index   the track
      * @return its plan
      */
-    TrackPlan makeTrack(const ParamStore& params, int index) const;
+    TrackPlan makeTrack( const ParamStore &params, int index ) const;
     /**
      * @brief Draws the track's two learned bass phrases, or leaves the plan on the pattern families.
      * @param[in]     params  the knobs
      * @param[in,out] plan    the track's plan
      */
-    void makeBassPhrases(const ParamStore& params, TrackPlan& plan) const;
+    void makeBassPhrases( const ParamStore &params, TrackPlan &plan ) const;
     /**
      * @brief Draws the track's two bass *rhythm* phrases, or leaves the plan on the pattern families.
      * @param[in]     params  the knobs
      * @param[in,out] plan    the track's plan
      */
-    void makeBassRhythm(const ParamStore& params, TrackPlan& plan) const;
+    void makeBassRhythm( const ParamStore &params, TrackPlan &plan ) const;
     /**
      * @brief The style, key and tempo walk of the set up to track @p index (made and cached on demand).
      * @param[in] params  the knobs
      * @param[in] index   the track
      * @return the walk
      */
-    const TrackWalk& walkAt(const ParamStore& params, int index) const;
+    const TrackWalk &walkAt( const ParamStore &params, int index ) const;
     /**
      * @brief The control events that set a track's sound at its start: recipes, voice levels, track gain and part
      *        levels.
@@ -741,8 +792,8 @@ private:
      * @param[in,out] out     the events, added to
      * @param[in]     scope   which events
      */
-    void trackStartControls(const ParamStore& params, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out,
-                            ControlScopeE scope = ControlScopeE::ALL) const;
+    void trackStartControls( const ParamStore &params, const TrackPlan &plan, double beat,
+                             std::vector<ControlEvent> &out, ControlScopeE scope = ControlScopeE::ALL ) const;
     /**
      * @brief The bass's slow filter arcs within a track, at @p beat (ramped, or set at once).
      * @param[in]     params   the knobs
@@ -752,10 +803,11 @@ private:
      * @param[in]     ramp     true to ramp, false to set at once
      * @param[in,out] out      the events, added to
      */
-    void arcControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, bool ramp, std::vector<ControlEvent>& out) const;
-    static constexpr int ProbeLines = -3;   ///< probeLoudness: lead, counter, arp and stab in the drops
-    static constexpr int ProbeRest = -4;    ///< probeLoudness: everything but the lines in the drops
-    static constexpr int ProbeAudible = -5; ///< probeLoudness: the drops with every part, for the audibility meter
+    void arcControls( const ParamStore &params, const TrackPlan &plan, int inTrack, double beat, bool ramp,
+                      std::vector<ControlEvent> &out ) const;
+    static constexpr int ProbeLines = -3;     ///< probeLoudness: lead, counter, arp and stab in the drops
+    static constexpr int ProbeRest = -4;      ///< probeLoudness: everything but the lines in the drops
+    static constexpr int ProbeAudible = -5;   ///< probeLoudness: the drops with every part, for the audibility meter
     /**
      * @brief A probe render of the track: its loudness (LUFS), and with @p bands its band powers.
      * @param[in]     params        the knobs
@@ -769,22 +821,22 @@ private:
      * @param[out]    audible       receives the audibility readings, or null
      * @return the loudness in LUFS
      */
-    double probeLoudness(const ParamStore& params, const TrackPlan& plan, int part = -1, float masterGainDb = 0.0f,
-                         double* bands = nullptr, double* audible = nullptr) const;
+    double probeLoudness( const ParamStore &params, const TrackPlan &plan, int part = -1, float masterGainDb = 0.0f,
+                          double *bands = nullptr, double *audible = nullptr ) const;
     /**
      * @brief The audibility match (23.09.2026, compose.audibility_match): the counter, the arp and the stab lifted
      *        until each is heard with a share of the lead's partial loudness in the drops (Composer.cpp).
      * @param[in]     params  the knobs
      * @param[in,out] plan    the track's plan
      */
-    void matchAudibility(const ParamStore& params, TrackPlan& plan) const;
+    void matchAudibility( const ParamStore &params, TrackPlan &plan ) const;
     /**
      * @brief Auto Gain: two readings of the whole mix and a secant step to master.target_lufs.
      * @param[in]     params        the knobs
      * @param[in,out] plan          the track's plan
      * @param[in]     firstReading  the first reading, when measureTrack has rendered it already; null renders it here
      */
-    void matchMaster(const ParamStore& params, TrackPlan& plan, const double* firstReading = nullptr) const;
+    void matchMaster( const ParamStore &params, TrackPlan &plan, const double *firstReading = nullptr ) const;
     /**
      * @brief Measures the drops' presence and sets presenceDb and presenceGainDb (compose.presence_match).
      * @param[in]     params        the knobs
@@ -794,15 +846,15 @@ private:
      * @param[in]     restReading   the band powers of the two presence probes, when measureTrack has rendered them
      *                              already (both or neither); null renders them here, one after the other
      */
-    void matchPresence(const ParamStore& params, TrackPlan& plan, const double* linesReading = nullptr,
-                       const double* restReading = nullptr) const;
+    void matchPresence( const ParamStore &params, TrackPlan &plan, const double *linesReading = nullptr,
+                        const double *restReading = nullptr ) const;
     /**
      * @brief Runs every probe of a plan and the three matches that read them, serially or in dependency
      *        stages (round "speed", 20.09.2026; Probe.h). The plan comes out the same either way.
      * @param[in]     params  the knobs
      * @param[in,out] plan    the track's plan
      */
-    void measureTrack(const ParamStore& params, TrackPlan& plan) const;
+    void measureTrack( const ParamStore &params, TrackPlan &plan ) const;
     /**
      * @brief measureTrack() without Auto Gain: the level match, the presence and the audibility match.
      * @param[in]     params  the knobs
@@ -810,7 +862,7 @@ private:
      * @param[out]    mix0    receives Auto Gain's first reading where it could run beside the presence probes
      * @return whether it did (then *mix0 holds it)
      */
-    bool measureLevels(const ParamStore& params, TrackPlan& plan, double* mix0) const;
+    bool measureLevels( const ParamStore &params, TrackPlan &plan, double *mix0 ) const;
     /**
      * @brief The part-level events of trackStartControls and levelControls, one formula for both.
      * @param[in]     params  the knobs
@@ -821,8 +873,8 @@ private:
      * @param[in]     voices  true for the voices
      * @param[in,out] out     the events, added to
      */
-    void pushPartLevels(const ParamStore& params, const TrackPlan& plan, double beat, float length, bool floor, bool voices,
-                        std::vector<ControlEvent>& out) const;
+    void pushPartLevels( const ParamStore &params, const TrackPlan &plan, double beat, float length, bool floor,
+                         bool voices, std::vector<ControlEvent> &out ) const;
     /**
      * @brief The control events of bar @p bar of @p plan at @p beat into @p out: the section's rides and the voicing (@p
      *        scope: which of them).
@@ -833,8 +885,8 @@ private:
      * @param[in,out] out     the events, added to
      * @param[in]     scope   which events
      */
-    void sectionControls(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar, double beat,
-                         std::vector<ControlEvent>& out, ControlScopeE scope = ControlScopeE::ALL) const;
+    void sectionControls( const ParamStore &params, const TrackPlan &plan, const BarPlan &bar, double beat,
+                          std::vector<ControlEvent> &out, ControlScopeE scope = ControlScopeE::ALL ) const;
     /**
      * @brief The lead's cutoff offset at a bar, as sectionControls ramps it (22.09.2026).
      * @param[in] params  the knobs
@@ -842,7 +894,7 @@ private:
      * @param[in] bar     the bar's plan
      * @return the cutoff offset
      */
-    float leadCutoffValue(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar) const;
+    float leadCutoffValue( const ParamStore &params, const TrackPlan &plan, const BarPlan &bar ) const;
     /**
      * @brief The lead phrase's filter arc at a bar: a one-bar ramp on the lead's cutoff (22.09.2026, round "Lead").
      * @param[in]     params   the knobs
@@ -852,8 +904,8 @@ private:
      * @param[in]     beat     the bar's beat
      * @param[in,out] out      the events, added to
      */
-    void leadArcControls(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar, int inTrack, double beat,
-                         std::vector<ControlEvent>& out) const;
+    void leadArcControls( const ParamStore &params, const TrackPlan &plan, const BarPlan &bar, int inTrack, double beat,
+                          std::vector<ControlEvent> &out ) const;
     /**
      * @brief The incoming track's share of an overlap bar (19.09.2026): its intro's percussion, voices and
      *        effects, and the controls of its voices. Nothing of its kick or bass: there is none yet.
@@ -863,8 +915,8 @@ private:
      * @param[in,out] out       the notes, added to
      * @param[in,out] controls  the controls, added to, or null
      */
-    void transitionBar(const ParamStore& params, int track, int bar, std::vector<NoteEvent>& out,
-                       std::vector<ControlEvent>* controls) const;
+    void transitionBar( const ParamStore &params, int track, int bar, std::vector<NoteEvent> &out,
+                        std::vector<ControlEvent> *controls ) const;
     /**
      * @brief The tonic drone's slow evolution (19.09.2026): every MelodyPlan::droneEvolveBars bars a new
      *        target for its cutoff, table position and detune, ramped over the whole period, around the
@@ -875,7 +927,8 @@ private:
      * @param[in]     beat     the bar's beat
      * @param[in,out] out      the events, added to
      */
-    void droneControls(const ParamStore& params, const TrackPlan& plan, int inTrack, double beat, std::vector<ControlEvent>& out) const;
+    void droneControls( const ParamStore &params, const TrackPlan &plan, int inTrack, double beat,
+                        std::vector<ControlEvent> &out ) const;
     /**
      * @brief The set seed after the set unit's rerolls.
      * @return the seed
@@ -886,36 +939,37 @@ private:
      * @param[in] index  the track
      * @return its seed
      */
-    uint64_t trackSeed(int index) const;
+    uint64_t trackSeed( int index ) const;
     /**
      * @brief The seed of one section of a track.
      * @param[in] track  the track
      * @param[in] si     the section
      * @return its seed
      */
-    uint64_t sectionSeedOf(int track, int si) const;
+    uint64_t sectionSeedOf( int track, int si ) const;
     /**
      * @brief The seed of one percussion lane of a track.
      * @param[in] track  the track
      * @param[in] lane   the percussion lane
      * @return its seed
      */
-    uint64_t laneSeedOf(int track, int lane) const;
+    uint64_t laneSeedOf( int track, int lane ) const;
 
-    uint64_t m_seed;   ///< the set seed
-    bool m_deferMaster = false;      ///< setDeferMasterGain: the plugin measures Auto Gain after the start
-    mutable uint64_t m_planGeneration = 0;         ///< planGeneration()
-    const std::atomic<bool>* m_abort = nullptr;    ///< setAbortFlag()
-    mutable std::deque<TrackPlan> m_plans;   ///< the tracks planned so far, made on demand (a deque: growing never moves one)
+    uint64_t         m_seed;                      ///< the set seed
+    bool             m_deferMaster = false;       ///< setDeferMasterGain: the plugin measures Auto Gain after the start
+    mutable uint64_t m_planGeneration = 0;        ///< planGeneration()
+    const std::atomic<bool> *m_abort = nullptr;   ///< setAbortFlag()
+    mutable std::deque<TrackPlan>
+        m_plans;            ///< the tracks planned so far, made on demand (a deque: growing never moves one)
     int m_soloTrack = -1;   ///< setSoloTrack: the one track composeBars sends, -1 = the set
-    mutable std::deque<TrackWalk> m_walk;   ///< the style, key and tempo walk, made on demand
-    bool m_jamHold = false;                 ///< setJam: the walk holds its key
-    int m_jamScale = -1;                    ///< setJam: the scale the walk takes, -1 its own
-    mutable std::vector<float> m_planKnobs;   ///< the knobs the plans were made with (validate)
+    mutable std::deque<TrackWalk> m_walk;              ///< the style, key and tempo walk, made on demand
+    bool                          m_jamHold = false;   ///< setJam: the walk holds its key
+    int                           m_jamScale = -1;     ///< setJam: the scale the walk takes, -1 its own
+    mutable std::vector<float>    m_planKnobs;         ///< the knobs the plans were made with (validate)
     mutable int m_depth = 0;   ///< Entry: how many calls that read the plans are running (only the outermost validates)
-    mutable bool m_bassModelReported = false;           ///< the missing-weight-file line is printed once
-    std::map<int, uint8_t> m_locked[NumLockUnits];     ///< unit index -> locked
-    std::map<int, uint32_t> m_variation[NumLockUnits]; ///< unit index -> reroll counter
+    mutable bool            m_bassModelReported = false;   ///< the missing-weight-file line is printed once
+    std::map<int, uint8_t>  m_locked[NumLockUnits];        ///< unit index -> locked
+    std::map<int, uint32_t> m_variation[NumLockUnits];     ///< unit index -> reroll counter
 };
 
 /**
@@ -924,14 +978,15 @@ private:
  * In the plugin this runs on the composer thread; the offline renderer calls pump() before every
  * block. Bars are pushed whole and in order; what does not fit waits for the next call.
  */
-class Conductor {
+class Conductor
+{
 public:
     /**
      * @brief Binds an engine and a composer.
      * @param[in,out] engine    the engine
      * @param[in]     composer  the composer
      */
-    Conductor(Engine& engine, const Composer& composer);
+    Conductor( Engine &engine, const Composer &composer );
     /** @brief Starts again from bar 0. */
     void rewind();
     /**
@@ -940,7 +995,7 @@ public:
      * @param[in]     horizonBeats  how far ahead to keep the rings filled
      * @param[in,out] record        if not null, every pushed note is appended here as well (for MIDI export)
      */
-    void pump(const ParamStore& params, double horizonBeats, std::vector<NoteEvent>* record = nullptr);
+    void pump( const ParamStore &params, double horizonBeats, std::vector<NoteEvent> *record = nullptr );
     /**
      * @brief Index of the next bar to be composed.
      * @return the bar's index
@@ -948,13 +1003,13 @@ public:
     int nextBar() const { return m_nextBar; }
 
 private:
-    Engine& m_engine;   ///< where the events go
-    const Composer& m_composer;   ///< where they come from
-    int m_nextBar = 0;   ///< the next bar to compose
-    std::vector<NoteEvent> m_notes;   ///< the last composed bar's notes
-    std::vector<ControlEvent> m_controls;   ///< and its control events
-    size_t m_notePos = 0;   ///< how many of the notes are in the engine's rings
-    size_t m_controlPos = 0;   ///< ... and of the control events
+    Engine                   &m_engine;           ///< where the events go
+    const Composer           &m_composer;         ///< where they come from
+    int                       m_nextBar = 0;      ///< the next bar to compose
+    std::vector<NoteEvent>    m_notes;            ///< the last composed bar's notes
+    std::vector<ControlEvent> m_controls;         ///< and its control events
+    size_t                    m_notePos = 0;      ///< how many of the notes are in the engine's rings
+    size_t                    m_controlPos = 0;   ///< ... and of the control events
 };
 
-} // namespace phos
+}   // namespace phos

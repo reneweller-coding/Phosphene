@@ -21,10 +21,12 @@
 #include <memory>
 #include <vector>
 
-namespace phosui {
+namespace phosui
+{
 
 /** @brief One strip: name, knobs, mute, fader and meter of one part. */
-class MixerStrip final : public juce::Component {
+class MixerStrip final : public juce::Component
+{
 public:
     /**
      * @param[in,out] proc      the processor whose parameters the strip edits;
@@ -34,8 +36,8 @@ public:
      * @param[in]     muteKey   the mute;
      * @param[in]     knobKeys  the knobs, top to bottom
      */
-    MixerStrip(PhospheneProcessor& proc, const juce::String& name, juce::Colour colour, const char* levelKey,
-               const char* muteKey, const std::vector<std::pair<const char*, const char*>>& knobKeys);
+    MixerStrip( PhospheneProcessor &proc, const juce::String &name, juce::Colour colour, const char *levelKey,
+                const char *muteKey, const std::vector<std::pair<const char *, const char *>> &knobKeys );
 
     /**
      * @brief A new meter reading (linear peak and RMS since the last one) and the time it covers.
@@ -43,7 +45,7 @@ public:
      * @param[in] rms      the linear RMS
      * @param[in] seconds  the time it covers
      */
-    void meter(float peak, float rms, double seconds);
+    void meter( float peak, float rms, double seconds );
     /**
      * @brief The meter as it stands, in dB: the RMS bar and the held peak.
      * @return the RMS in dB
@@ -58,24 +60,24 @@ public:
      * @brief The global ids of the parameters on this strip.
      * @return the parameter ids
      */
-    const std::vector<int>& params() const { return m_params; }
+    const std::vector<int> &params() const { return m_params; }
     /**
      * @brief The strip's controls with the parameter each drives, for MIDI learn.
      * @return (control, parameter id) pairs
      */
-    const std::vector<std::pair<juce::Component*, int>>& controls() const { return m_controls; }
+    const std::vector<std::pair<juce::Component *, int>> &controls() const { return m_controls; }
     /**
      * @brief Rows of knobs this strip's own knobs fill (two to a row).
      * @return the rows
      */
-    int knobRows() const { return (static_cast<int>(m_knobs.size()) + 1) / 2; }
+    int knobRows() const { return ( static_cast<int>( m_knobs.size() ) + 1 ) / 2; }
     /**
      * @brief Rows of knobs to make room for, at least knobRows() (26.09.2026, the user: "dass alle Meter die gleiche
      *        Höhe haben"). The console gives every strip the rows of its fullest, so that mute, fader and meter
      *        start at the same height in every strip; a strip with fewer knobs leaves the rest of its rows empty.
      * @param[in] rows  the rows
      */
-    void setKnobRows(int rows) { m_knobRowsShown = rows; }
+    void setKnobRows( int rows ) { m_knobRowsShown = rows; }
     /**
      * @brief Where the meter is drawn, in the strip's coordinates (the host test compares them).
      * @return the meter's rectangle
@@ -86,50 +88,51 @@ public:
      * @brief The name, the meter (RMS, the held peak) and its scale.
      * @param[in,out] g  the graphics context
      */
-    void paint(juce::Graphics&) override;
+    void paint( juce::Graphics & ) override;
     /** @brief The knobs, the mute, the fader and the meter. */
     void resized() override;
 
 private:
-    juce::String m_name;   ///< the part's name
-    juce::Colour m_colour;   ///< its page's colour
-    std::unique_ptr<juce::Slider> m_fader;   ///< the level fader
-    std::unique_ptr<juce::SliderParameterAttachment> m_faderLink;   ///< its host link
-    std::unique_ptr<juce::TextButton> m_mute;   ///< the mute
-    std::unique_ptr<juce::ButtonParameterAttachment> m_muteLink;   ///< its host link
-    std::vector<std::unique_ptr<juce::Slider>> m_knobs;   ///< pan, sends and duck
-    std::vector<std::unique_ptr<juce::Label>> m_knobNames;   ///< their names
-    std::vector<std::unique_ptr<juce::SliderParameterAttachment>> m_knobLinks;   ///< their host links
-    std::vector<int> m_params;   ///< params()
-    std::vector<std::pair<juce::Component*, int>> m_controls;   ///< controls()
-    juce::Rectangle<int> m_meterArea;   ///< where the meter is drawn
-    int m_knobRowsShown = 0;   ///< setKnobRows()
-    float m_rmsDb = -100.0f;   ///< the RMS bar, dB
-    float m_holdDb = -100.0f;   ///< the held peak, dB
-    double m_holdAge = 0.0;   ///< seconds the peak has been held
+    juce::String                                                  m_name;                ///< the part's name
+    juce::Colour                                                  m_colour;              ///< its page's colour
+    std::unique_ptr<juce::Slider>                                 m_fader;               ///< the level fader
+    std::unique_ptr<juce::SliderParameterAttachment>              m_faderLink;           ///< its host link
+    std::unique_ptr<juce::TextButton>                             m_mute;                ///< the mute
+    std::unique_ptr<juce::ButtonParameterAttachment>              m_muteLink;            ///< its host link
+    std::vector<std::unique_ptr<juce::Slider>>                    m_knobs;               ///< pan, sends and duck
+    std::vector<std::unique_ptr<juce::Label>>                     m_knobNames;           ///< their names
+    std::vector<std::unique_ptr<juce::SliderParameterAttachment>> m_knobLinks;           ///< their host links
+    std::vector<int>                                              m_params;              ///< params()
+    std::vector<std::pair<juce::Component *, int>>                m_controls;            ///< controls()
+    juce::Rectangle<int>                                          m_meterArea;           ///< where the meter is drawn
+    int                                                           m_knobRowsShown = 0;   ///< setKnobRows()
+    float                                                         m_rmsDb = -100.0f;     ///< the RMS bar, dB
+    float                                                         m_holdDb = -100.0f;    ///< the held peak, dB
+    double                                                        m_holdAge = 0.0;   ///< seconds the peak has been held
 };
 
 /** @brief The console: one MixerStrip per part, in the parts' order, fed by a 30 Hz timer. */
-class MixerConsole final : public juce::Component, private juce::Timer {
+class MixerConsole final : public juce::Component, private juce::Timer
+{
 public:
     /**
      * @brief Builds a strip per part and starts the meter timer.
      * @param[in,out] proc  the processor
      */
-    explicit MixerConsole(PhospheneProcessor& proc);
+    explicit MixerConsole( PhospheneProcessor &proc );
     ~MixerConsole() override;
 
     /**
      * @brief The strips, phos::Part order.
      * @return the number of strips
      */
-    int stripCount() const { return static_cast<int>(m_strips.size()); }
+    int stripCount() const { return static_cast<int>( m_strips.size() ); }
     /**
      * @copybrief stripCount
      * @param[in] i  the strip's index
      * @return the strip
      */
-    MixerStrip& strip(int i) { return *m_strips[static_cast<size_t>(i)]; }
+    MixerStrip &strip( int i ) { return *m_strips[static_cast<size_t>( i )]; }
     /**
      * @brief Every parameter the console binds.
      * @return the parameter ids
@@ -139,16 +142,16 @@ public:
     void pollMeters() { timerCallback(); }
 
     /** @brief The console's background. */
-    void paint(juce::Graphics&) override;
+    void paint( juce::Graphics & ) override;
     /** @brief The strips side by side. */
     void resized() override;
 
 private:
     /** @brief Takes the processor's readings and hands them to the strips. */
     void timerCallback() override;
-    PhospheneProcessor& m_proc;   ///< the processor whose meters it reads
-    std::vector<std::unique_ptr<MixerStrip>> m_strips;   ///< one strip per part
-    double m_lastPoll = 0.0;   ///< when the meters were last read, seconds
+    PhospheneProcessor                      &m_proc;             ///< the processor whose meters it reads
+    std::vector<std::unique_ptr<MixerStrip>> m_strips;           ///< one strip per part
+    double                                   m_lastPoll = 0.0;   ///< when the meters were last read, seconds
 };
 
-} // namespace phosui
+}   // namespace phosui

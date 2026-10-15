@@ -29,19 +29,22 @@
 #include <string>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 /** @brief One binding, as the message thread lists them. */
-struct MidiBinding {
+struct MidiBinding
+{
     int m_channel = 0;   ///< 0..15
     int m_cc = 0;        ///< 0..127
     int m_target = -1;   ///< the owner's target index
 };
 
 /** @brief Controller-to-target table with learning (see the file comment). */
-class MidiMap {
+class MidiMap
+{
 public:
-    static constexpr int Channels = 16;   ///< MIDI channels
+    static constexpr int Channels = 16;       ///< MIDI channels
     static constexpr int Controllers = 128;   ///< controllers per channel
 
     /** @brief An empty map: no controller bound. */
@@ -52,12 +55,12 @@ public:
      * @param[in] target  the target, -1 to disarm
      * @pre called on the message thread
      */
-    void arm(int target) { m_armed.store(target, std::memory_order_release); }
+    void arm( int target ) { m_armed.store( target, std::memory_order_release ); }
     /**
      * @brief The target waiting for a controller, or -1.
      * @return the target, or -1
      */
-    int armed() const { return m_armed.load(std::memory_order_acquire); }
+    int armed() const { return m_armed.load( std::memory_order_acquire ); }
 
     /**
      * @brief A controller message arrived (audio thread).
@@ -68,7 +71,7 @@ public:
      * @return the target it drives (just learned, or bound before), or -1 for an unbound controller
      * @pre called on the audio thread
      */
-    int handleCc(int channel, int cc, int value, float& normalised);
+    int handleCc( int channel, int cc, int value, float &normalised );
 
     /**
      * @brief Binds a controller to a target, releasing both from any earlier binding (message thread).
@@ -77,12 +80,12 @@ public:
      * @param[in] target   the target
      * @pre called on the message thread
      */
-    void bind(int channel, int cc, int target);
+    void bind( int channel, int cc, int target );
     /**
      * @brief Releases whatever controller drives @p target.
      * @param[in] target  the target
      */
-    void unbind(int target);
+    void unbind( int target );
     /** @brief Forgets every binding and disarms. */
     void clear();
     /**
@@ -92,7 +95,7 @@ public:
      * @param[out] cc       the controller number
      * @return false when none drives it
      */
-    bool controllerOf(int target, int& channel, int& cc) const;
+    bool controllerOf( int target, int &channel, int &cc ) const;
     /**
      * @brief Every binding, by channel and number.
      * @return the bindings
@@ -102,14 +105,14 @@ public:
      * @brief A counter that moves on every change of the table (so a display knows when to redraw).
      * @return the counter
      */
-    uint32_t revision() const { return m_revision.load(std::memory_order_acquire); }
+    uint32_t revision() const { return m_revision.load( std::memory_order_acquire ); }
 
     /**
      * @brief The bindings as text, one `cc <channel> <number> <name>` line each; @p name gives a target's key.
      * @param[in] name  gives a target's key
      * @return the lines
      */
-    std::string toText(const std::function<std::string(int)>& name) const;
+    std::string toText( const std::function<std::string( int )> &name ) const;
     /**
      * @brief Replaces the bindings with the ones in @p text; lines whose key @p find does not know (returns -1)
      *        are skipped.
@@ -117,7 +120,7 @@ public:
      * @param[in] find  gives a key's target, -1 for none
      * @return how many bindings were read
      */
-    int fromText(const std::string& text, const std::function<int(const std::string&)>& find);
+    int fromText( const std::string &text, const std::function<int( const std::string & )> &find );
 
 private:
     /**
@@ -126,10 +129,10 @@ private:
      * @param[in] cc       the controller number
      * @param[in] target   the target
      */
-    void bindLocked(int channel, int cc, int target);
-    std::atomic<int32_t> m_table[Channels * Controllers];   ///< target + 1, 0 = unbound
-    std::atomic<int32_t> m_armed{ -1 };   ///< the target MIDI learn waits for, -1 none
-    std::atomic<uint32_t> m_revision{ 0 };   ///< bumped on every change (the editor redraws)
+    void bindLocked( int channel, int cc, int target );
+    std::atomic<int32_t>  m_table[Channels * Controllers];   ///< target + 1, 0 = unbound
+    std::atomic<int32_t>  m_armed{ -1 };                     ///< the target MIDI learn waits for, -1 none
+    std::atomic<uint32_t> m_revision{ 0 };                   ///< bumped on every change (the editor redraws)
 };
 
-} // namespace phos
+}   // namespace phos

@@ -42,29 +42,33 @@
 #include <memory>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 class Fft;
 
 /** @brief What the meter says about one stem. */
-struct AudibilityReading {
+struct AudibilityReading
+{
     double m_alone = 0.0;   ///< mean loudness of the stem on its own (sone-like)
     double m_inMix = 0.0;   ///< mean partial loudness in the mix of all stems
     double m_ratio = 0.0;   ///< inMix / alone, 0 when the stem was silent
-    int    m_frames = 0;    ///< frames in which the stem alone was heard (at least a quarter unit; release tails do not count)
+    int    m_frames =
+        0;   ///< frames in which the stem alone was heard (at least a quarter unit; release tails do not count)
 };
 
 /** @brief Partial loudness of each of a set of stems against the sum of the others. */
-class AudibilityMeter {
+class AudibilityMeter
+{
 public:
     /**
      * @param[in] stems       how many stems every add() call carries
      * @param[in] sampleRate  their rate
      */
-    AudibilityMeter(int stems, double sampleRate);
+    AudibilityMeter( int stems, double sampleRate );
     ~AudibilityMeter();
-    AudibilityMeter(const AudibilityMeter&) = delete;
-    AudibilityMeter& operator=(const AudibilityMeter&) = delete;
+    AudibilityMeter( const AudibilityMeter & ) = delete;
+    AudibilityMeter &operator=( const AudibilityMeter & ) = delete;
 
     /**
      * @brief Appends @p n samples of every stem; @p L[k] and @p R[k] are stem k's channels (R may be null for
@@ -73,13 +77,13 @@ public:
      * @param[in] R  the stems' right channels, null for mono
      * @param[in] n  the samples
      */
-    void add(const float* const* L, const float* const* R, int n);
+    void add( const float *const *L, const float *const *R, int n );
     /**
      * @brief The reading of stem @p k over everything added since the last reset().
      * @param[in] k  the stem
      * @return its reading
      */
-    AudibilityReading read(int k) const;
+    AudibilityReading read( int k ) const;
     /** @brief Forgets the readings (and the partial frame). */
     void reset();
 
@@ -92,14 +96,15 @@ private:
      * @param[in,out] out  the band intensities, added to
      * @param[in,out] x    scratch for the transform
      */
-    void bandIntensity(const std::vector<float>& buf, std::vector<double>& out, std::vector<std::complex<double>>& x) const;
+    void bandIntensity( const std::vector<float> &buf, std::vector<double> &out,
+                        std::vector<std::complex<double>> &x ) const;
     /**
      * @brief Spreads band intensities into an excitation pattern; false when everything was silent.
      * @param[in]  in   the band intensities
      * @param[out] out  the excitation pattern
      * @return false when everything was silent
      */
-    bool excite(const std::vector<double>& in, std::vector<double>& out) const;
+    bool excite( const std::vector<double> &in, std::vector<double> &out ) const;
     /**
      * @brief Loudness of excitation @p es alone and in the masker @p em (null: in quiet), unscaled.
      * @param[in]  es     the excitation
@@ -107,24 +112,24 @@ private:
      * @param[out] alone  the loudness alone
      * @param[out] inMix  the loudness in the masker
      */
-    void loudness(const std::vector<double>& es, const std::vector<double>* em, double& alone, double& inMix) const;
-    int m_stems;   ///< stems per add()
-    double m_sr;   ///< their sample rate
-    std::unique_ptr<Fft> m_fft;   ///< one frame's transform
-    std::vector<double> m_window;   ///< the analysis window
-    std::vector<int> m_bandOfBin;                 ///< -1 for bins outside 50 Hz .. 15 kHz
-    std::vector<double> m_binGain;                ///< ear weighting and level reference per bin
-    std::vector<double> m_spread;                 ///< bands x bands, Bark distance of receiver above source
-    std::vector<double> m_centre;                 ///< centre frequency of each band, Hz
-    std::vector<double> m_threshold;              ///< threshold excitation per band
-    int m_bands = 0;   ///< critical bands in use
-    double m_scale = 1.0;                         ///< makes a 1 kHz tone at 40 dB SPL one unit
-    std::vector<std::vector<float>> m_bufL;   ///< the current frame of each stem, left
-    std::vector<std::vector<float>> m_bufR;   ///< ... right
-    int m_fill = 0;   ///< samples in the current frame
-    std::vector<double> m_sumAlone;   ///< per stem: the loudness alone, summed over frames
-    std::vector<double> m_sumMix;   ///< ... and its partial loudness in the mix
-    std::vector<int> m_frames;   ///< per stem: the frames it sounded in
+    void loudness( const std::vector<double> &es, const std::vector<double> *em, double &alone, double &inMix ) const;
+    int                             m_stems;         ///< stems per add()
+    double                          m_sr;            ///< their sample rate
+    std::unique_ptr<Fft>            m_fft;           ///< one frame's transform
+    std::vector<double>             m_window;        ///< the analysis window
+    std::vector<int>                m_bandOfBin;     ///< -1 for bins outside 50 Hz .. 15 kHz
+    std::vector<double>             m_binGain;       ///< ear weighting and level reference per bin
+    std::vector<double>             m_spread;        ///< bands x bands, Bark distance of receiver above source
+    std::vector<double>             m_centre;        ///< centre frequency of each band, Hz
+    std::vector<double>             m_threshold;     ///< threshold excitation per band
+    int                             m_bands = 0;     ///< critical bands in use
+    double                          m_scale = 1.0;   ///< makes a 1 kHz tone at 40 dB SPL one unit
+    std::vector<std::vector<float>> m_bufL;          ///< the current frame of each stem, left
+    std::vector<std::vector<float>> m_bufR;          ///< ... right
+    int                             m_fill = 0;      ///< samples in the current frame
+    std::vector<double>             m_sumAlone;      ///< per stem: the loudness alone, summed over frames
+    std::vector<double>             m_sumMix;        ///< ... and its partial loudness in the mix
+    std::vector<int>                m_frames;        ///< per stem: the frames it sounded in
 };
 
-} // namespace phos
+}   // namespace phos

@@ -30,51 +30,61 @@
 
 #include "phos/Patterns.h"
 
-namespace phos {
+namespace phos
+{
 
-constexpr int CorpusRelMin = -12;   ///< lowest interval to the tonic in the alphabet
-constexpr int CorpusRelMax = 24;    ///< highest
+constexpr int CorpusRelMin = -12;                                 ///< lowest interval to the tonic in the alphabet
+constexpr int CorpusRelMax = 24;                                  ///< highest
 constexpr int CorpusAlphabet = CorpusRelMax - CorpusRelMin + 1;   ///< 37 symbols
 
 /** @brief One n-gram count: key = symbols in base CorpusAlphabet, most significant first. */
-struct CorpusGram {
+struct CorpusGram
+{
     uint32_t m_key;     ///< the succession, packed
     uint32_t m_count;   ///< how often it occurs
 };
 
 /** @brief The tables of one role. */
-struct CorpusRole {
-    const char* m_name;                   ///< "acid", "lead", "arp"
-    int m_files;                          ///< melodic loops that contributed
-    const uint32_t* m_uni;                ///< order-0 counts, CorpusAlphabet entries
-    const CorpusGram* m_bi;               ///< order-1 counts, sorted by key
-    int m_numBi;   ///< entries of bi
-    const CorpusGram* m_tri;              ///< order-2 counts, sorted by key
-    int m_numTri;   ///< entries of tri
-    const uint32_t (*m_onset)[2][2];      ///< [step][previous step had onset][this step has onset]
-    const uint32_t (*m_accent)[2];        ///< [step][accented]
-    const uint32_t (*m_slide)[2];         ///< [step][slides into the next]
-    const uint32_t (*m_length)[9];        ///< [step][length in steps, 8 = eight or more]
-    const uint32_t* m_ambitus;            ///< [semitones 0..36]
+struct CorpusRole
+{
+    const char       *m_name;            ///< "acid", "lead", "arp"
+    int               m_files;           ///< melodic loops that contributed
+    const uint32_t   *m_uni;             ///< order-0 counts, CorpusAlphabet entries
+    const CorpusGram *m_bi;              ///< order-1 counts, sorted by key
+    int               m_numBi;           ///< entries of bi
+    const CorpusGram *m_tri;             ///< order-2 counts, sorted by key
+    int               m_numTri;          ///< entries of tri
+    const uint32_t ( *m_onset )[2][2];   ///< [step][previous step had onset][this step has onset]
+    const uint32_t ( *m_accent )[2];     ///< [step][accented]
+    const uint32_t ( *m_slide )[2];      ///< [step][slides into the next]
+    const uint32_t ( *m_length )[9];     ///< [step][length in steps, 8 = eight or more]
+    const uint32_t *m_ambitus;           ///< [semitones 0..36]
 };
 
 /** @brief Roles in the tables. */
-enum class CorpusRoleIdE : int { ACID = 0, LEAD, ARP, COUNT };
-constexpr int NumCorpusRoles = static_cast<int>(CorpusRoleIdE::COUNT);   ///< how many roles the tables have
+enum class CorpusRoleIdE : int
+{
+    ACID = 0,
+    LEAD,
+    ARP,
+    COUNT
+};
+constexpr int           NumCorpusRoles = static_cast<int>( CorpusRoleIdE::COUNT );   ///< how many roles the tables have
 extern const CorpusRole CorpusRoles[NumCorpusRoles];
 
 extern const uint32_t CorpusChordTransitions[12][12];   ///< bar-to-bar chord roots, interval to the tonic
 extern const uint32_t CorpusChordFirst[12];             ///< first chord root of a loop
-extern const int CorpusChordFiles;                      ///< arp loops that contributed
+extern const int      CorpusChordFiles;                 ///< arp loops that contributed
 
 /** @brief Witten-Bell interpolated variable-order pitch model of one role. */
-class PitchModel {
+class PitchModel
+{
 public:
     /**
      * @brief Builds the dense probability tables of @p role (once, at start-up).
      * @param[in] role  the role
      */
-    explicit PitchModel(CorpusRoleIdE role);
+    explicit PitchModel( CorpusRoleIdE role );
     /**
      * @brief P(next | prev2, prev1), symbols 0..kCorpusAlphabet-1.
      * @param[in] prev2  the symbol two before
@@ -82,22 +92,22 @@ public:
      * @param[in] next   the symbol
      * @return the probability
      */
-    double prob(int prev2, int prev1, int next) const
+    double prob( int prev2, int prev1, int next ) const
     {
-        return m_p[static_cast<size_t>((prev2 * CorpusAlphabet + prev1) * CorpusAlphabet + next)];
+        return m_p[static_cast<size_t>( ( prev2 * CorpusAlphabet + prev1 ) * CorpusAlphabet + next )];
     }
     /**
      * @brief Symbol of an interval to the tonic.
      * @param[in] rel  the interval to the tonic
      * @return its symbol
      */
-    static int symbol(int rel) { return rel - CorpusRelMin; }
+    static int symbol( int rel ) { return rel - CorpusRelMin; }
     /**
      * @brief Interval to the tonic of a symbol.
      * @param[in] symbol  the symbol
      * @return its interval to the tonic
      */
-    static int rel(int symbol) { return symbol + CorpusRelMin; }
+    static int rel( int symbol ) { return symbol + CorpusRelMin; }
     /**
      * @brief Number of symbols.
      * @return the number of symbols
@@ -123,8 +133,8 @@ private:
  * @tparam Model  anything with int alphabet() and double prob(a, b, c) (PitchModel, or a toy model in the tests)
  */
 template <class ModelT, class UniformT>
-bool sampleConstrained(const ModelT& model, const std::vector<std::vector<uint8_t>>& allowed, int start2, int start1,
-                       double temperature, UniformT&& uniform, std::vector<int>& out);
+bool sampleConstrained( const ModelT &model, const std::vector<std::vector<uint8_t>> &allowed, int start2, int start1,
+                        double temperature, UniformT &&uniform, std::vector<int> &out );
 
 /**
  * @brief Chord-root succession probabilities (with add-one smoothing over the roots seen at all).
@@ -132,7 +142,7 @@ bool sampleConstrained(const ModelT& model, const std::vector<std::vector<uint8_
  * @param[in] toRel    the root moved to
  * @return the probability
  */
-double chordTransition(int fromRel, int toRel);
+double chordTransition( int fromRel, int toRel );
 
 // --------------------------------------------------------------------------------- lead templates
 
@@ -144,46 +154,50 @@ double chordTransition(int fromRel, int toRel);
  * skeletons -- the corpus fills what the rules leave open, never the other way round.
  * @{ */
 /** @brief One bar pattern: a 16-bit onset mask (bit s = sixteenth s) and how many bars played it. */
-struct CorpusBarMask {
+struct CorpusBarMask
+{
     uint16_t m_mask;    ///< the bar's onsets, bit s for sixteenth s
     uint32_t m_count;   ///< how often it occurs
 };
 /** @brief One skeleton: the pitch at the start of beats 2, 3 and 4 relative to beat 1, semitones, and its count. */
-struct CorpusSkeleton {
-    int8_t m_d[3];      ///< the pitch at the start of beats 2, 3 and 4 relative to beat 1, semitones
+struct CorpusSkeleton
+{
+    int8_t   m_d[3];    ///< the pitch at the start of beats 2, 3 and 4 relative to beat 1, semitones
     uint32_t m_count;   ///< how often it occurs
 };
-extern const CorpusBarMask* const CorpusRoleBars[NumCorpusRoles];     ///< per role, sorted by count
-extern const int NumCorpusRoleBars[NumCorpusRoles];                   ///< entries per role
-extern const CorpusSkeleton* const CorpusRoleSkeletons[NumCorpusRoles];
-extern const int NumCorpusRoleSkeletons[NumCorpusRoles];
-extern const int CorpusTemplateLines[NumCorpusRoles];                 ///< deduplicated lines counted per role
+extern const CorpusBarMask *const  CorpusRoleBars[NumCorpusRoles];      ///< per role, sorted by count
+extern const int                   NumCorpusRoleBars[NumCorpusRoles];   ///< entries per role
+extern const CorpusSkeleton *const CorpusRoleSkeletons[NumCorpusRoles];
+extern const int                   NumCorpusRoleSkeletons[NumCorpusRoles];
+extern const int                   CorpusTemplateLines[NumCorpusRoles];   ///< deduplicated lines counted per role
 /** @} */
 
 // ------------------------------------------------------------------------------------ bass rhythm
 
 /** @brief One entry of the bass bar-pattern lookup: a 16-bit onset mask and its count. */
-struct CorpusBassBar {
+struct CorpusBassBar
+{
     uint16_t m_mask;    ///< the bar's onsets, bit s for sixteenth s
     uint32_t m_count;   ///< how often it occurs
 };
 /** @brief One context of the parametric bass onset chain: a packed key and its two outcomes. */
-struct CorpusBassStep {
+struct CorpusBassStep
+{
     uint16_t m_key;    ///< the context, packed
     uint32_t m_miss;   ///< how often no onset followed
     uint32_t m_hit;    ///< how often one did
 };
 
-extern const CorpusBassBar* const CorpusBassBars;   ///< bar patterns, sorted by mask
-extern const int NumCorpusBassBars;                 ///< entries of CorpusBassBars
-extern const uint32_t CorpusBassBarTotal;           ///< bars the lookup was counted on
-extern const CorpusBassStep* const CorpusBassSteps; ///< chain contexts, sorted by key
-extern const int NumCorpusBassSteps;                ///< entries of CorpusBassSteps
-extern const int CorpusBassMixPerMille;             ///< weight of the lookup in the mixture, per mille
-extern const int CorpusBassHomePerMille;            ///< share of corpus bars equal to their line's most common bar
-extern const int CorpusBassRepeatPerMille;          ///< share of corpus bars equal to the bar before them
-extern const int CorpusBassLines;                   ///< bass lines the tables were counted on
-extern const int CorpusBassTrainBars;               ///< bars the tables were counted on
+extern const CorpusBassBar *const  CorpusBassBars;          ///< bar patterns, sorted by mask
+extern const int                   NumCorpusBassBars;       ///< entries of CorpusBassBars
+extern const uint32_t              CorpusBassBarTotal;      ///< bars the lookup was counted on
+extern const CorpusBassStep *const CorpusBassSteps;         ///< chain contexts, sorted by key
+extern const int                   NumCorpusBassSteps;      ///< entries of CorpusBassSteps
+extern const int                   CorpusBassMixPerMille;   ///< weight of the lookup in the mixture, per mille
+extern const int CorpusBassHomePerMille;     ///< share of corpus bars equal to their line's most common bar
+extern const int CorpusBassRepeatPerMille;   ///< share of corpus bars equal to the bar before them
+extern const int CorpusBassLines;            ///< bass lines the tables were counted on
+extern const int CorpusBassTrainBars;        ///< bars the tables were counted on
 
 /**
  * @brief The learned bass onset model: a bar-pattern lookup mixed with a parametric chain.
@@ -217,10 +231,11 @@ extern const int CorpusBassTrainBars;               ///< bars the tables were co
  * the 11 507 corpus bars are already in that subspace, and inside it the held-out cross-entropy of
  * this mixture is 4.993 bit/bar against 5.458 for the lookup alone and 5.201 for the chain alone.
  */
-class BassRhythm {
+class BassRhythm
+{
 public:
-    static constexpr int Steps = 16;          ///< sixteenths in a bar
-    static constexpr int Context = 5;         ///< neighbours in a chain context
+    static constexpr int Steps = 16;    ///< sixteenths in a bar
+    static constexpr int Context = 5;   ///< neighbours in a chain context
     /** @brief Step offsets of a chain context: three sixteenths back, one beat back, two beats back. */
     static constexpr int ContextDelta[Context] = { 1, 2, 3, 4, 8 };
 
@@ -229,7 +244,7 @@ public:
      * @param[in] mask  the onset mask
      * @return true when no onset sits on a kick step
      */
-    static bool clean(unsigned mask) { return (mask & 0x1111u) == 0; }
+    static bool clean( unsigned mask ) { return ( mask & 0x1111u ) == 0; }
 
     /**
      * @brief The onset mask of one of the five pattern families of Patterns.h.
@@ -246,7 +261,7 @@ public:
      * @param[in] pattern  the pattern family
      * @return its onset mask
      */
-    static unsigned familyMask(int pattern);
+    static unsigned familyMask( int pattern );
 
     /**
      * @brief Sixteenth of the first onset of @p mask at or after @p step, or -1.
@@ -254,9 +269,10 @@ public:
      * @param[in] step  the first sixteenth looked at
      * @return the sixteenth, or -1
      */
-    static int firstOnsetFrom(unsigned mask, int step)
+    static int firstOnsetFrom( unsigned mask, int step )
     {
-        for (int s = step; s < Steps; ++s) if ((mask >> s) & 1u) return s;
+        for ( int s = step; s < Steps; ++s )
+            if ( ( mask >> s ) & 1u ) return s;
         return -1;
     }
 
@@ -273,11 +289,11 @@ public:
      * @param[in] step  the onset's sixteenth
      * @return the span in sixteenths
      */
-    static int noteSpan(unsigned mask, int step)
+    static int noteSpan( unsigned mask, int step )
     {
-        const int kick = (step / 4 + 1) * 4;
-        const int next = firstOnsetFrom(mask, step + 1);
-        return (next >= 0 && next < kick ? next : kick) - step;
+        const int kick = ( step / 4 + 1 ) * 4;
+        const int next = firstOnsetFrom( mask, step + 1 );
+        return ( next >= 0 && next < kick ? next : kick ) - step;
     }
 
     /**
@@ -286,10 +302,11 @@ public:
      * @param[in] none  the span of a bar without onsets
      * @return the span in sixteenths
      */
-    static int shortestSpan(unsigned mask, int none = 4)
+    static int shortestSpan( unsigned mask, int none = 4 )
     {
         int best = none;
-        for (int s = 0; s < Steps; ++s) if ((mask >> s) & 1u) best = std::min(best, noteSpan(mask, s));
+        for ( int s = 0; s < Steps; ++s )
+            if ( ( mask >> s ) & 1u ) best = std::min( best, noteSpan( mask, s ) );
         return best;
     }
     /**
@@ -298,26 +315,26 @@ public:
      * @param[in] step  the sixteenth
      * @return the packed key
      */
-    static int contextKey(unsigned mask, int step);
+    static int contextKey( unsigned mask, int step );
     /**
      * @brief P(onset at @p step | the earlier steps of @p mask) under the smoothed chain.
      * @param[in] mask  the onset mask
      * @param[in] step  the sixteenth
      * @return the probability
      */
-    static double stepProbability(unsigned mask, int step);
+    static double stepProbability( unsigned mask, int step );
     /**
      * @brief log2 P(bar) under the chain alone.
      * @param[in] mask  the onset mask
      * @return the log2 probability
      */
-    static double chainLogProbability(unsigned mask);
+    static double chainLogProbability( unsigned mask );
     /**
      * @brief P(bar) under the mixture; zero for a bar with an onset on a kick step.
      * @param[in] mask  the onset mask
      * @return the probability
      */
-    static double barProbability(unsigned mask);
+    static double barProbability( unsigned mask );
     /**
      * @brief The mixture weight of the lookup.
      * @return the weight
@@ -340,30 +357,40 @@ public:
      * @tparam Uniform anything callable returning a double in [0, 1)
      */
     template <class UniformT>
-    static unsigned draw(UniformT&& uniform)
+    static unsigned draw( UniformT &&uniform )
     {
         constexpr int EmptyRetries = 8;
-        for (int attempt = 0; attempt < EmptyRetries; ++attempt) {
+        for ( int attempt = 0; attempt < EmptyRetries; ++attempt )
+        {
             unsigned mask = 0;
-            if (uniform() < mixWeight() && NumCorpusBassBars > 0) {
-                double x = uniform() * static_cast<double>(CorpusBassBarTotal);
+            if ( uniform() < mixWeight() && NumCorpusBassBars > 0 )
+            {
+                double x = uniform() * static_cast<double>( CorpusBassBarTotal );
                 mask = CorpusBassBars[NumCorpusBassBars - 1].m_mask;
-                for (int i = 0; i < NumCorpusBassBars; ++i) {
-                    if (x < CorpusBassBars[i].m_count) { mask = CorpusBassBars[i].m_mask; break; }
+                for ( int i = 0; i < NumCorpusBassBars; ++i )
+                {
+                    if ( x < CorpusBassBars[i].m_count )
+                    {
+                        mask = CorpusBassBars[i].m_mask;
+                        break;
+                    }
                     x -= CorpusBassBars[i].m_count;
                 }
-            } else {
-                for (int s = 0; s < Steps; ++s) {
-                    if (s % 4 == 0) continue;               // never on the kick
-                    if (uniform() < stepProbability(mask, s)) mask |= 1u << s;
+            }
+            else
+            {
+                for ( int s = 0; s < Steps; ++s )
+                {
+                    if ( s % 4 == 0 ) continue;   // never on the kick
+                    if ( uniform() < stepProbability( mask, s ) ) mask |= 1u << s;
                 }
             }
-            if (mask != 0) return mask;
+            if ( mask != 0 ) return mask;
         }
         return 0xEEEEu;   // .xxx.xxx.xxx.xxx -- the rolling family, see Patterns.h
     }
 };
 
-} // namespace phos
+}   // namespace phos
 
 #include "phos/CorpusSample.inl"

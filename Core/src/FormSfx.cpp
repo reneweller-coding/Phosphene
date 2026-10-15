@@ -15,7 +15,8 @@
 #include "Salts.h"
 using namespace phos::salts::form;   // the form's seed salts (Salts.h)
 
-namespace phos {
+namespace phos
+{
 
 /**
  * @brief The psychedelic layer's placement (19.09.2026, round "fx-psychedelia"), appended to what
@@ -53,86 +54,108 @@ namespace phos {
  * @param[in]     voiceDensity  the voices' density
  * @param[in]     bedDensity    the bed's density
  */
-static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voiceDensity, float bedDensity)
+static void placePsychedelia( FormPlan &f, uint64_t seed, float amount, float voiceDensity, float bedDensity )
 {
-    if (amount <= 0.0f) return;
+    if ( amount <= 0.0f ) return;
     // 19.09.2026: the densities of the voices and of the bed (compose.voice_density, bed_density) scale
     // the probabilities below; every draw still happens, so at 1 every event is where it was before.
-    const float dv = std::max(0.0f, voiceDensity), db = std::max(0.0f, bedDensity);
+    const float  dv = std::max( 0.0f, voiceDensity ), db = std::max( 0.0f, bedDensity );
     const double bar = BeatsPerBar;
-    auto add = [&](double beat, float length, SfxTypeE type) {
+    auto         add = [&]( double beat, float length, SfxTypeE type )
+    {
         SfxEvent e;
-        e.m_beat = std::max(0.0, beat);
+        e.m_beat = std::max( 0.0, beat );
         e.m_length = length;
-        e.m_type = static_cast<int>(type);
-        f.m_sfx.push_back(e);
+        e.m_type = static_cast<int>( type );
+        f.m_sfx.push_back( e );
     };
-    const float pMark = std::min(1.0f, 2.0f * amount);
+    const float pMark = std::min( 1.0f, 2.0f * amount );
 
     // Around the transitions.
     Rng m;
-    m.seed(mixSeed(seed ^ SaltPsy, 0));
+    m.seed( mixSeed( seed ^ SaltPsy, 0 ) );
     const size_t placed = f.m_sfx.size();
-    for (size_t k = 0; k < placed; ++k)
-        if (f.m_sfx[k].m_type == static_cast<int>(SfxTypeE::IMPACT)) add(f.m_sfx[k].m_beat, 4.0f, SfxTypeE::SUB_DROP);
-    for (int i = 0; i < f.m_count; ++i) {
-        const Section& s = f.m_section[i];
-        const double start = static_cast<double>(s.m_startBar) * bar;
+    for ( size_t k = 0; k < placed; ++k )
+        if ( f.m_sfx[k].m_type == static_cast<int>( SfxTypeE::IMPACT ) )
+            add( f.m_sfx[k].m_beat, 4.0f, SfxTypeE::SUB_DROP );
+    for ( int i = 0; i < f.m_count; ++i )
+    {
+        const Section     &s = f.m_section[i];
+        const double       start = static_cast<double>( s.m_startBar ) * bar;
         const SectionTypeE prev = i > 0 ? f.m_section[i - 1].m_type : SectionTypeE::INTRO;
-        if (s.m_type == SectionTypeE::BREAK && i > 0 && m.uniform() < pMark) add(start, static_cast<float>(2.0 * bar), SfxTypeE::SUB_DROP);
+        if ( s.m_type == SectionTypeE::BREAK && i > 0 && m.uniform() < pMark )
+            add( start, static_cast<float>( 2.0 * bar ), SfxTypeE::SUB_DROP );
         // The bass swap of the blend (23.09.2026, round "DJ"): the incoming kick's first bar gets an impact,
         // and a reverse crash runs into it -- the DJ's slam at the phrase boundary. Only inside a set
         // (handover > 0); the set's first track keeps its quiet kick entry.
-        if (s.m_type == SectionTypeE::INTRO && f.m_handover > 0 && f.m_handover < s.m_bars) {
+        if ( s.m_type == SectionTypeE::INTRO && f.m_handover > 0 && f.m_handover < s.m_bars )
+        {
             const double swap = start + f.m_handover * bar;
             // With its sub drop, as every impact has one (the pass above ran before this impact existed); the kick's
             // ducker keeps it off the incoming kick's transient (Engine.h).
-            if (m.uniform() < pMark) { add(swap, 4.0f, SfxTypeE::IMPACT); add(swap, 4.0f, SfxTypeE::SUB_DROP); }
-            if (m.uniform() < 0.7f * pMark) add(swap - bar, static_cast<float>(bar), SfxTypeE::REVERSE_CRASH);
+            if ( m.uniform() < pMark )
+            {
+                add( swap, 4.0f, SfxTypeE::IMPACT );
+                add( swap, 4.0f, SfxTypeE::SUB_DROP );
+            }
+            if ( m.uniform() < 0.7f * pMark ) add( swap - bar, static_cast<float>( bar ), SfxTypeE::REVERSE_CRASH );
         }
-        if (s.m_type == SectionTypeE::DROP && i > 0 && prev != SectionTypeE::BUILD && m.uniform() < pMark)
-            add(start - bar, static_cast<float>(bar), SfxTypeE::REVERSE_CRASH);
-        if (s.m_type == SectionTypeE::DROP)
-            for (int b = 16; b < s.m_bars; b += 16)
-                if (m.uniform() < 0.5f * amount) add(start + b * bar - 2.0, 2.0f, SfxTypeE::REVERSE_CRASH);
+        if ( s.m_type == SectionTypeE::DROP && i > 0 && prev != SectionTypeE::BUILD && m.uniform() < pMark )
+            add( start - bar, static_cast<float>( bar ), SfxTypeE::REVERSE_CRASH );
+        if ( s.m_type == SectionTypeE::DROP )
+            for ( int b = 16; b < s.m_bars; b += 16 )
+                if ( m.uniform() < 0.5f * amount ) add( start + b * bar - 2.0, 2.0f, SfxTypeE::REVERSE_CRASH );
     }
 
     // Voices first, so that the chatter of the ear candy can keep its distance from them -- and from the
     // vocal makeFormSfx put on beat 4 of a pre-drop break (19.09.2026).
     std::vector<double> vocalAt;
-    for (size_t k = 0; k < placed; ++k)
-        if (sfxTypePart(static_cast<SfxTypeE>(f.m_sfx[k].m_type)) == PartE::VOCAL) vocalAt.push_back(f.m_sfx[k].m_beat);
-    auto voiceFree = [&](double beat) {
-        for (double b : vocalAt) if (std::fabs(b - beat) < 4.0 * bar - 1e-9) return false;
+    for ( size_t k = 0; k < placed; ++k )
+        if ( sfxTypePart( static_cast<SfxTypeE>( f.m_sfx[k].m_type ) ) == PartE::VOCAL )
+            vocalAt.push_back( f.m_sfx[k].m_beat );
+    auto voiceFree = [&]( double beat )
+    {
+        for ( double b : vocalAt )
+            if ( std::fabs( b - beat ) < 4.0 * bar - 1e-9 ) return false;
         return true;
     };
-    auto addVoice = [&](double beat, float length, SfxTypeE type) {
-        if (!voiceFree(beat)) return;
-        add(beat, length, type);
-        vocalAt.push_back(beat);
+    auto addVoice = [&]( double beat, float length, SfxTypeE type )
+    {
+        if ( !voiceFree( beat ) ) return;
+        add( beat, length, type );
+        vocalAt.push_back( beat );
     };
     // A voice slot whose probability was p before the density knob: taken with min(1, p x density).
-    auto voiceOdds = [&](float p) { return std::min(1.0f, p * dv); };
-    Rng v;
-    v.seed(mixSeed(seed ^ SaltVoice, 0));
-    for (int i = 0; i < f.m_count; ++i) {
-        const Section& s = f.m_section[i];
-        const double start = static_cast<double>(s.m_startBar) * bar;
-        const float u0 = v.uniform(), u1 = v.uniform(), u2 = v.uniform();
-        switch (s.m_type) {
+    auto voiceOdds = [&]( float p ) { return std::min( 1.0f, p * dv ); };
+    Rng  v;
+    v.seed( mixSeed( seed ^ SaltVoice, 0 ) );
+    for ( int i = 0; i < f.m_count; ++i )
+    {
+        const Section &s = f.m_section[i];
+        const double   start = static_cast<double>( s.m_startBar ) * bar;
+        const float    u0 = v.uniform(), u1 = v.uniform(), u2 = v.uniform();
+        switch ( s.m_type )
+        {
         case SectionTypeE::INTRO:
-            if (u0 < voiceOdds(0.9f * pMark)) addVoice(start + (s.m_bars >= 16 ? 4.0 : 2.0) * bar, 8.0f, SfxTypeE::SPOKEN_WORD);
-            if (s.m_bars >= 16 && u1 < voiceOdds(0.7f * amount))
-                addVoice(start + 10.0 * bar, 8.0f, u2 < 0.5f ? SfxTypeE::FORMANT_VOICE : SfxTypeE::SPOKEN_WORD);
+            if ( u0 < voiceOdds( 0.9f * pMark ) )
+                addVoice( start + ( s.m_bars >= 16 ? 4.0 : 2.0 ) * bar, 8.0f, SfxTypeE::SPOKEN_WORD );
+            if ( s.m_bars >= 16 && u1 < voiceOdds( 0.7f * amount ) )
+                addVoice( start + 10.0 * bar, 8.0f, u2 < 0.5f ? SfxTypeE::FORMANT_VOICE : SfxTypeE::SPOKEN_WORD );
             break;
-        case SectionTypeE::BREAK: {
-            if (u0 < voiceOdds(pMark)) addVoice(start + bar, 8.0f, u1 < 0.7f ? SfxTypeE::SPOKEN_WORD : SfxTypeE::FORMANT_VOICE);
-            for (int b = 9; b + 4 <= s.m_bars; b += 8) {
+        case SectionTypeE::BREAK:
+        {
+            if ( u0 < voiceOdds( pMark ) )
+                addVoice( start + bar, 8.0f, u1 < 0.7f ? SfxTypeE::SPOKEN_WORD : SfxTypeE::FORMANT_VOICE );
+            for ( int b = 9; b + 4 <= s.m_bars; b += 8 )
+            {
                 const float x = v.uniform(), y = v.uniform();
-                if (x >= voiceOdds(0.8f * amount)) continue;
-                if (y < 0.45f) addVoice(start + b * bar, 8.0f, SfxTypeE::FORMANT_VOICE);
-                else if (y < 0.8f) addVoice(start + b * bar, 8.0f, SfxTypeE::SPOKEN_WORD);
-                else addVoice(start + b * bar + 0.5, 4.0f, SfxTypeE::ALIEN_CHATTER);
+                if ( x >= voiceOdds( 0.8f * amount ) ) continue;
+                if ( y < 0.45f )
+                    addVoice( start + b * bar, 8.0f, SfxTypeE::FORMANT_VOICE );
+                else if ( y < 0.8f )
+                    addVoice( start + b * bar, 8.0f, SfxTypeE::SPOKEN_WORD );
+                else
+                    addVoice( start + b * bar + 0.5, 4.0f, SfxTypeE::ALIEN_CHATTER );
             }
             break;
         }
@@ -141,10 +164,12 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
             // pre-drop break instead (makeFormSfx, beat 4 of its last bar); the draws above stay.
             break;
         case SectionTypeE::DROP:
-            if (u0 < voiceOdds(0.35f * pMark) && s.m_bars >= 16) {
+            if ( u0 < voiceOdds( 0.35f * pMark ) && s.m_bars >= 16 )
+            {
                 const int groups = s.m_bars / 8 - 1;   // interior eight-bar ends
-                const int g = 1 + static_cast<int>(u1 * static_cast<float>(std::max(1, groups))) % std::max(1, groups);
-                addVoice(start + 8.0 * g * bar - 2.0, 2.0f, SfxTypeE::VOICE_CHOP);
+                const int g =
+                    1 + static_cast<int>( u1 * static_cast<float>( std::max( 1, groups ) ) ) % std::max( 1, groups );
+                addVoice( start + 8.0 * g * bar - 2.0, 2.0f, SfxTypeE::VOICE_CHOP );
             }
             break;
         default: break;
@@ -153,54 +178,85 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
 
     // Ear candy on free sixteenths.
     Rng c;
-    c.seed(mixSeed(seed ^ SaltPsy, 1));
+    c.seed( mixSeed( seed ^ SaltPsy, 1 ) );
     const float trackDensity = 0.7f + 0.6f * c.uniform();
-    double wShort[4], wLong[4];   // squelch, bubble, chatter, zap / stutter, bubble burst, squelch pair, chatter
-    for (double& x : wShort) x = c.uniform() < 0.8f ? 1.0 : 0.0;
-    wShort[c.below(4)] = 2.5;
-    for (double& x : wLong) x = c.uniform() < 0.8f ? 1.0 : 0.0;
-    wLong[c.below(4)] = 2.5;
+    double      wShort[4], wLong[4];   // squelch, bubble, chatter, zap / stutter, bubble burst, squelch pair, chatter
+    for ( double &x : wShort ) x = c.uniform() < 0.8f ? 1.0 : 0.0;
+    wShort[c.below( 4 )] = 2.5;
+    for ( double &x : wLong ) x = c.uniform() < 0.8f ? 1.0 : 0.0;
+    wLong[c.below( 4 )] = 2.5;
     static const double Free[4] = { 2.75, 3.25, 3.5, 3.75 };
-    for (int i = 0; i < f.m_count; ++i) {
-        const Section& s = f.m_section[i];
-        if (s.m_type == SectionTypeE::BUILD) continue;
-        const double start = static_cast<double>(s.m_startBar) * bar;
-        const bool groove = s.m_type == SectionTypeE::GROOVE || s.m_type == SectionTypeE::DROP;
-        const float density = s.m_type == SectionTypeE::DROP ? 0.8f : s.m_type == SectionTypeE::GROOVE ? 0.6f
-                            : s.m_type == SectionTypeE::INTRO ? 0.25f : 0.3f;
+    for ( int i = 0; i < f.m_count; ++i )
+    {
+        const Section &s = f.m_section[i];
+        if ( s.m_type == SectionTypeE::BUILD ) continue;
+        const double start = static_cast<double>( s.m_startBar ) * bar;
+        const bool   groove = s.m_type == SectionTypeE::GROOVE || s.m_type == SectionTypeE::DROP;
+        const float  density = s.m_type == SectionTypeE::DROP     ? 0.8f
+                               : s.m_type == SectionTypeE::GROOVE ? 0.6f
+                               : s.m_type == SectionTypeE::INTRO  ? 0.25f
+                                                                  : 0.3f;
         // None of this track's candy over the blend (23.09.2026: the incoming track's candy plays there)
         // nor over the bare end (19.09.2026).
-        const int bareFrom = s.m_type == SectionTypeE::OUTRO ? s.m_bars - std::clamp(f.m_overlapTail, OutroBareBars, s.m_bars) : s.m_bars;
-        for (int b = 2; b < s.m_bars; b += 2) {
-            if (b % 8 == 0) continue;   // the eight-bar ends keep their own candy (makeFormSfx)
+        const int bareFrom = s.m_type == SectionTypeE::OUTRO
+                                 ? s.m_bars - std::clamp( f.m_overlapTail, OutroBareBars, s.m_bars )
+                                 : s.m_bars;
+        for ( int b = 2; b < s.m_bars; b += 2 )
+        {
+            if ( b % 8 == 0 ) continue;   // the eight-bar ends keep their own candy (makeFormSfx)
             const bool four = b % 4 == 0;
             // 23.09.2026, round "SFX": the short candy at half its old chance -- the user: "die kurzen Zips und
             // Zaps [...] wiederholen sich viel zu oft und nerven" -- the four-bar gestures as they were.
             // 24.09.2026, the user again: "Die Zips und Zaps kommen nach wie vor viel zu oft". Counted over twelve
             // seeds of three tracks: 1.7 short one-shots per eight bars of groove, 1.9 in a drop, 5.7 in drop 2.
             // The two-bar candy 0.5 -> 0.15, the four-bar gesture 1.2 -> 0.8: the candy lives at the phrase ends.
-            const float p = amount * density * trackDensity * (four ? 0.8f : 0.15f);
+            const float p = amount * density * trackDensity * ( four ? 0.8f : 0.15f );
             const float roll = c.uniform();
-            const int kind = drawIndex(c, four ? wLong : wShort, 4);
-            const int where = c.below(4);
-            if (roll >= p || b - 1 >= bareFrom) continue;
-            const double last = start + (b - 1) * bar;   // the group's last bar
-            if (!four) {
-                switch (kind) {
-                case 0: add(last + Free[where], 0.5f, SfxTypeE::SQUELCH); break;
-                case 1: add(last + Free[where], 1.0f, SfxTypeE::BUBBLE); break;
-                case 2: if (dv > 0.0f && voiceFree(last + 3.25)) { add(last + 3.25, 0.75f, SfxTypeE::ALIEN_CHATTER); vocalAt.push_back(last + 3.25); } break;
-                default: add(last + Free[where], 0.5f, SfxTypeE::ZAP); break;
-                }
-            } else {
-                switch (kind) {
-                case 0:
-                    if (groove) add(last + 3.5, 0.5f, SfxTypeE::STUTTER);
-                    else add(last + 2.75, 1.0f, SfxTypeE::BUBBLE);
+            const int   kind = drawIndex( c, four ? wLong : wShort, 4 );
+            const int   where = c.below( 4 );
+            if ( roll >= p || b - 1 >= bareFrom ) continue;
+            const double last = start + ( b - 1 ) * bar;   // the group's last bar
+            if ( !four )
+            {
+                switch ( kind )
+                {
+                case 0: add( last + Free[where], 0.5f, SfxTypeE::SQUELCH ); break;
+                case 1: add( last + Free[where], 1.0f, SfxTypeE::BUBBLE ); break;
+                case 2:
+                    if ( dv > 0.0f && voiceFree( last + 3.25 ) )
+                    {
+                        add( last + 3.25, 0.75f, SfxTypeE::ALIEN_CHATTER );
+                        vocalAt.push_back( last + 3.25 );
+                    }
                     break;
-                case 1: add(last + 2.75, 1.0f, SfxTypeE::BUBBLE); add(last + 3.5, 0.5f, SfxTypeE::BUBBLE); break;
-                case 2: add(last + 3.25, 0.25f, SfxTypeE::SQUELCH); add(last + 3.75, 0.25f, SfxTypeE::SQUELCH); break;
-                default: if (dv > 0.0f && voiceFree(last + 2.75)) { add(last + 2.75, 1.25f, SfxTypeE::ALIEN_CHATTER); vocalAt.push_back(last + 2.75); } break;
+                default: add( last + Free[where], 0.5f, SfxTypeE::ZAP ); break;
+                }
+            }
+            else
+            {
+                switch ( kind )
+                {
+                case 0:
+                    if ( groove )
+                        add( last + 3.5, 0.5f, SfxTypeE::STUTTER );
+                    else
+                        add( last + 2.75, 1.0f, SfxTypeE::BUBBLE );
+                    break;
+                case 1:
+                    add( last + 2.75, 1.0f, SfxTypeE::BUBBLE );
+                    add( last + 3.5, 0.5f, SfxTypeE::BUBBLE );
+                    break;
+                case 2:
+                    add( last + 3.25, 0.25f, SfxTypeE::SQUELCH );
+                    add( last + 3.75, 0.25f, SfxTypeE::SQUELCH );
+                    break;
+                default:
+                    if ( dv > 0.0f && voiceFree( last + 2.75 ) )
+                    {
+                        add( last + 2.75, 1.25f, SfxTypeE::ALIEN_CHATTER );
+                        vocalAt.push_back( last + 2.75 );
+                    }
+                    break;
                 }
             }
         }
@@ -208,53 +264,77 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
 
     // The shamanic bed.
     Rng t;
-    t.seed(mixSeed(seed ^ SaltBed, 0));
+    t.seed( mixSeed( seed ^ SaltBed, 0 ) );
     bool bowl = t.uniform() < 0.65f, didge = t.uniform() < 0.55f, jaw = t.uniform() < 0.5f;
-    auto bedOdds = [&](float p) { return std::min(1.0f, p * db); };
-    if (!bowl && !didge && !jaw) {
-        const int k = t.below(3);
-        bowl = k == 0; didge = k == 1; jaw = k == 2;
+    auto bedOdds = [&]( float p ) { return std::min( 1.0f, p * db ); };
+    if ( !bowl && !didge && !jaw )
+    {
+        const int k = t.below( 3 );
+        bowl = k == 0;
+        didge = k == 1;
+        jaw = k == 2;
     }
-    for (int i = 0; i < f.m_count; ++i) {
-        const Section& s = f.m_section[i];
-        const double start = static_cast<double>(s.m_startBar) * bar;
-        switch (s.m_type) {
-        case SectionTypeE::INTRO: {
+    for ( int i = 0; i < f.m_count; ++i )
+    {
+        const Section &s = f.m_section[i];
+        const double   start = static_cast<double>( s.m_startBar ) * bar;
+        switch ( s.m_type )
+        {
+        case SectionTypeE::INTRO:
+        {
             // The drone of the bed is tuned to the key the engine plays in, and over the DJ overlap that is
             // still the previous track's (its kick and bass hold the floor until the hand-over): it starts
             // at the hand-over, so that it never holds one key into the other (19.09.2026).
             const SfxTypeE drone = didge ? SfxTypeE::DIDGERIDOO : SfxTypeE::JAW_HARP;
-            const int from = std::clamp(f.m_handover, 0, s.m_bars - 2);
-            if ((didge || jaw) && t.uniform() < bedOdds(pMark)) add(start + from * bar, static_cast<float>((s.m_bars - 1 - from) * bar), drone);
-            if (bowl) for (int b = 0; b < s.m_bars; b += 4) if (b == 0 ? db > 0.0f : t.uniform() < bedOdds(0.7f * pMark)) add(start + b * bar, static_cast<float>(4.0 * bar), SfxTypeE::BOWL);
+            const int      from = std::clamp( f.m_handover, 0, s.m_bars - 2 );
+            if ( ( didge || jaw ) && t.uniform() < bedOdds( pMark ) )
+                add( start + from * bar, static_cast<float>( ( s.m_bars - 1 - from ) * bar ), drone );
+            if ( bowl )
+                for ( int b = 0; b < s.m_bars; b += 4 )
+                    if ( b == 0 ? db > 0.0f : t.uniform() < bedOdds( 0.7f * pMark ) )
+                        add( start + b * bar, static_cast<float>( 4.0 * bar ), SfxTypeE::BOWL );
             break;
         }
-        case SectionTypeE::BREAK: {
+        case SectionTypeE::BREAK:
+        {
             // A bowl after the cut, then now and then on a four-bar line: a strike every four bars for
             // sixty-four bars was one sound too regular to stay in the background.
-            if (bowl) for (int b = 1; b < s.m_bars - 1; b += 4) if (t.uniform() < bedOdds(b == 1 ? pMark : 0.55f * pMark)) add(start + b * bar, static_cast<float>(4.0 * bar), SfxTypeE::BOWL);
+            if ( bowl )
+                for ( int b = 1; b < s.m_bars - 1; b += 4 )
+                    if ( t.uniform() < bedOdds( b == 1 ? pMark : 0.55f * pMark ) )
+                        add( start + b * bar, static_cast<float>( 4.0 * bar ), SfxTypeE::BOWL );
             // Drones of up to twelve bars from the bar after the cut, one per sixteen bars, alternating
             // between the track's two drones when it has both: a bed that comes and goes rather than
             // one sound held for a minute and a half.
-            if (didge || jaw) {
+            if ( didge || jaw )
+            {
                 bool useDidge = didge;
-                for (int b = 1; b + 5 <= s.m_bars - 1; b += 16) {
-                    const int len = std::min(12, s.m_bars - 1 - b);
-                    if (t.uniform() < bedOdds(pMark)) add(start + b * bar, static_cast<float>(len * bar), useDidge ? SfxTypeE::DIDGERIDOO : SfxTypeE::JAW_HARP);
-                    if (didge && jaw) useDidge = !useDidge;
+                for ( int b = 1; b + 5 <= s.m_bars - 1; b += 16 )
+                {
+                    const int len = std::min( 12, s.m_bars - 1 - b );
+                    if ( t.uniform() < bedOdds( pMark ) )
+                        add( start + b * bar, static_cast<float>( len * bar ),
+                             useDidge ? SfxTypeE::DIDGERIDOO : SfxTypeE::JAW_HARP );
+                    if ( didge && jaw ) useDidge = !useDidge;
                 }
             }
             break;
         }
-        case SectionTypeE::OUTRO: {
+        case SectionTypeE::OUTRO:
+        {
             // Only before the blend and the bare bars (19.09.2026; the blend since 23.09.2026).
-            const int live = s.m_bars - std::clamp(f.m_overlapTail, OutroBareBars, s.m_bars);
-            if (bowl) for (int b = 0; b < s.m_bars; b += 8) if (t.uniform() < bedOdds(pMark) && b < live) add(start + b * bar, static_cast<float>(4.0 * bar), SfxTypeE::BOWL);
-            if (didge && t.uniform() < bedOdds(pMark) && live > 0) add(start, static_cast<float>(live * bar), SfxTypeE::DIDGERIDOO);
+            const int live = s.m_bars - std::clamp( f.m_overlapTail, OutroBareBars, s.m_bars );
+            if ( bowl )
+                for ( int b = 0; b < s.m_bars; b += 8 )
+                    if ( t.uniform() < bedOdds( pMark ) && b < live )
+                        add( start + b * bar, static_cast<float>( 4.0 * bar ), SfxTypeE::BOWL );
+            if ( didge && t.uniform() < bedOdds( pMark ) && live > 0 )
+                add( start, static_cast<float>( live * bar ), SfxTypeE::DIDGERIDOO );
             break;
         }
         case SectionTypeE::GROOVE:
-            if (jaw && s.m_bars >= 24 && t.uniform() < bedOdds(0.3f * amount)) add(start + 8.0 * bar, static_cast<float>(8.0 * bar), SfxTypeE::JAW_HARP);
+            if ( jaw && s.m_bars >= 24 && t.uniform() < bedOdds( 0.3f * amount ) )
+                add( start + 8.0 * bar, static_cast<float>( 8.0 * bar ), SfxTypeE::JAW_HARP );
             break;
         default: break;
         }
@@ -265,15 +345,17 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
     // off-beat sixteenth (never on a beat, where the kick is; never on the eighth off-beat, where the hat
     // is), and in every other bar a second one. From a stream of its own: nothing above moves.
     Rng q;
-    q.seed(mixSeed(seed ^ SaltClimax, 0));
+    q.seed( mixSeed( seed ^ SaltClimax, 0 ) );
     static const double Gaps[6] = { 0.25, 0.75, 1.25, 1.75, 2.25, 3.25 };
-    for (int i = 0; i < f.m_count; ++i) {
-        const Section& s = f.m_section[i];
-        if (!s.m_climax) continue;
-        const double start = static_cast<double>(s.m_startBar) * bar;
-        for (int b = 0; b < s.m_bars; ++b) {
+    for ( int i = 0; i < f.m_count; ++i )
+    {
+        const Section &s = f.m_section[i];
+        if ( !s.m_climax ) continue;
+        const double start = static_cast<double>( s.m_startBar ) * bar;
+        for ( int b = 0; b < s.m_bars; ++b )
+        {
             const float roll = q.uniform();
-            const int k0 = q.below(6), k1 = q.below(6);
+            const int   k0 = q.below( 6 ), k1 = q.below( 6 );
             // 23.09.2026, round "SFX": 0.6 of sfx_amount per bar, the pair in one odd bar of three -- one and a
             // half squelches a bar (72 in a drop of 48) were the "Zips und Zaps [...] viiiel zu oft" the user
             // heard, and the same synthesis every time; now about 0.7 a bar, each from its own bank preset.
@@ -281,8 +363,8 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
             // squelch in the last bar of a four-bar group, at 0.7 of sfx_amount, and no pair: about one per eight
             // bars at the default. The three draws stay per bar, so the stream below keeps its shape.
             (void)k1;
-            if (b % 4 != 3 || roll >= 0.7f * amount) continue;
-            add(start + b * bar + Gaps[k0], 0.25f, SfxTypeE::SQUELCH);
+            if ( b % 4 != 3 || roll >= 0.7f * amount ) continue;
+            add( start + b * bar + Gaps[k0], 0.25f, SfxTypeE::SQUELCH );
         }
     }
 
@@ -299,13 +381,14 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
     // it only appends, so nothing placed above moves -- and where the draws above already filled the
     // bars it adds nothing at all.
     Rng gapRng;
-    gapRng.seed(mixSeed(seed ^ SaltPsy, 7));
+    gapRng.seed( mixSeed( seed ^ SaltPsy, 7 ) );
     const int lastBar = f.m_count > 0 ? f.m_section[f.m_count - 1].m_startBar + f.m_section[f.m_count - 1].m_bars : 0;
-    std::vector<uint8_t> carries(static_cast<size_t>(std::max(0, lastBar)), 0);
-    for (const SfxEvent& e : f.m_sfx) {
-        if (!isDensityEvent(static_cast<SfxTypeE>(e.m_type))) continue;
-        const int at = static_cast<int>(e.m_beat / bar);
-        if (at >= 0 && at < lastBar) carries[static_cast<size_t>(at)] = 1;
+    std::vector<uint8_t> carries( static_cast<size_t>( std::max( 0, lastBar ) ), 0 );
+    for ( const SfxEvent &e : f.m_sfx )
+    {
+        if ( !isDensityEvent( static_cast<SfxTypeE>( e.m_type ) ) ) continue;
+        const int at = static_cast<int>( e.m_beat / bar );
+        if ( at >= 0 && at < lastBar ) carries[static_cast<size_t>( at )] = 1;
     }
     static const double Fill[4] = { 2.75, 3.25, 3.5, 3.75 };   // the free sixteenths: never on a beat
     // 23.09.2026, round "SFX": the literature describes the effects as a layering at section boundaries and
@@ -314,25 +397,30 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
     // pass without an event and fills the fourth -- leaning long: a sweep or a swell before a zap.
     // 24.09.2026 ("nach wie vor viel zu oft"): a phrase -- seven bars may pass, the eighth is filled -- and
     // never with a short one-shot: the floor is there so a groove does not go dry, not to add zips.
-    static const double FillWeights[4] = { 0.55, 0.45, 0.0, 0.0 };   // sweep, reverse swell, zap, squelch
+    static const double   FillWeights[4] = { 0.55, 0.45, 0.0, 0.0 };   // sweep, reverse swell, zap, squelch
     static const SfxTypeE FillTypes[4] = { SfxTypeE::SWEEP, SfxTypeE::REVERSE_SWELL, SfxTypeE::ZAP, SfxTypeE::SQUELCH };
-    for (int i = 0; i < f.m_count; ++i) {
-        const Section& s = f.m_section[i];
-        if (s.m_type != SectionTypeE::GROOVE && s.m_type != SectionTypeE::DROP) continue;
-        for (int b = 0; b < s.m_bars; ++b) {
+    for ( int i = 0; i < f.m_count; ++i )
+    {
+        const Section &s = f.m_section[i];
+        if ( s.m_type != SectionTypeE::GROOVE && s.m_type != SectionTypeE::DROP ) continue;
+        for ( int b = 0; b < s.m_bars; ++b )
+        {
             const int at = s.m_startBar + b;
-            if (at <= 2 || at >= lastBar) continue;
+            if ( at <= 2 || at >= lastBar ) continue;
             bool any = false;
-            for (int k = 0; k <= 7 && k <= at; ++k) any = any || carries[static_cast<size_t>(at - k)] != 0;
-            if (any) continue;
-            const int kind = drawIndex(gapRng, FillWeights, 4);
-            const int where = gapRng.below(4);
+            for ( int k = 0; k <= 7 && k <= at; ++k ) any = any || carries[static_cast<size_t>( at - k )] != 0;
+            if ( any ) continue;
+            const int      kind = drawIndex( gapRng, FillWeights, 4 );
+            const int      where = gapRng.below( 4 );
             const SfxTypeE type = FillTypes[kind];
-            const double when = static_cast<double>(at) * bar + Fill[where];
-            if (type == SfxTypeE::SWEEP) add(when, 2.0f, type);
-            else if (type == SfxTypeE::REVERSE_SWELL) add(when, static_cast<float>(bar + 4.0 - Fill[where]), type);   // ends on the next bar's downbeat
-            else add(when, 0.25f, type);
-            carries[static_cast<size_t>(at)] = 1;
+            const double   when = static_cast<double>( at ) * bar + Fill[where];
+            if ( type == SfxTypeE::SWEEP )
+                add( when, 2.0f, type );
+            else if ( type == SfxTypeE::REVERSE_SWELL )
+                add( when, static_cast<float>( bar + 4.0 - Fill[where] ), type );   // ends on the next bar's downbeat
+            else
+                add( when, 0.25f, type );
+            carries[static_cast<size_t>( at )] = 1;
         }
     }
 }
@@ -369,27 +457,30 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
  * @param[in,out] f            the form the events are added to (FormPlan::sfx)
  * @param[in] seed         the track's form seed; every placement draws from a salted stream of it
  */
-void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity, float bedDensity)
+void makeFormSfx( FormPlan &f, uint64_t seed, float amount, float voiceDensity, float bedDensity )
 {
     Rng r;
-    r.seed(mixSeed(seed ^ SaltSfx, 0));
+    r.seed( mixSeed( seed ^ SaltSfx, 0 ) );
     f.m_sfx.clear();
-    auto add = [&](double beat, float length, SfxTypeE type) {
+    auto add = [&]( double beat, float length, SfxTypeE type )
+    {
         SfxEvent e;
-        e.m_beat = std::max(0.0, beat);
+        e.m_beat = std::max( 0.0, beat );
         e.m_length = length;
-        e.m_type = static_cast<int>(type);
-        f.m_sfx.push_back(e);
+        e.m_type = static_cast<int>( type );
+        f.m_sfx.push_back( e );
     };
-    const float pMark = std::min(1.0f, 2.0f * amount);   ///< probability of a transition marker
-    auto mark = [&]() { return r.uniform() < pMark; };
+    const float  pMark = std::min( 1.0f, 2.0f * amount );   ///< probability of a transition marker
+    auto         mark = [&]() { return r.uniform() < pMark; };
     const double bar = BeatsPerBar;
-    for (int i = 0; i < f.m_count; ++i) {
-        const Section& s = f.m_section[i];
-        const double start = static_cast<double>(s.m_startBar) * bar;
-        const double end = static_cast<double>(s.m_startBar + s.m_bars) * bar;
+    for ( int i = 0; i < f.m_count; ++i )
+    {
+        const Section     &s = f.m_section[i];
+        const double       start = static_cast<double>( s.m_startBar ) * bar;
+        const double       end = static_cast<double>( s.m_startBar + s.m_bars ) * bar;
         const SectionTypeE prev = i > 0 ? f.m_section[i - 1].m_type : SectionTypeE::INTRO;
-        if (s.m_type == SectionTypeE::BUILD) {
+        if ( s.m_type == SectionTypeE::BUILD )
+        {
             // The riser climbs over the last eight bars; the sweep falls into the drop, which Solberg and
             // Dibben found to be the marker listeners react to. Since 19.09.2026 (the user's rule: "on
             // beat 4 of the last bar before the drop everything stops") both end on beat 4 of that bar,
@@ -397,79 +488,96 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity, f
             // buildup. The big buildup's riser climbs over sixteen bars and a second one over the last
             // four stacks on it -- "risers pitch up to the extreme". A buildup without a pre-drop break
             // (Dark Forest's first) runs its riser into the drop and leaves beat 4 alone.
-            const bool stop = s.m_pdbBars > 0;
+            const bool   stop = s.m_pdbBars > 0;
             const double arrive = stop ? end - 1.0 : end;
-            const double rise = std::min(s.m_bars >= 32 ? 16.0 : 8.0, static_cast<double>(s.m_bars)) * bar;
-            const bool dry = i + 1 < f.m_count && f.m_section[i + 1].m_dry;
-            if (i > 0 && mark()) add(start - bar, static_cast<float>(bar), SfxTypeE::REVERSE_SWELL);
-            if (mark()) add(arrive - rise, static_cast<float>(rise), SfxTypeE::RISER);
+            const double rise = std::min( s.m_bars >= 32 ? 16.0 : 8.0, static_cast<double>( s.m_bars ) ) * bar;
+            const bool   dry = i + 1 < f.m_count && f.m_section[i + 1].m_dry;
+            if ( i > 0 && mark() ) add( start - bar, static_cast<float>( bar ), SfxTypeE::REVERSE_SWELL );
+            if ( mark() ) add( arrive - rise, static_cast<float>( rise ), SfxTypeE::RISER );
             const bool voice = r.uniform() < 0.5f;
-            if (mark() && stop) add(end - 1.0, 1.0f, voice ? SfxTypeE::VOICE_CHOP : SfxTypeE::ZAP);
-            if (mark() && !dry) add(arrive - 2.0 * bar, static_cast<float>(2.0 * bar), SfxTypeE::SWEEP);
-            if (mark() && !dry) add(end, 4.0f, SfxTypeE::IMPACT);
-            if (s.m_bars >= 32 && mark()) add(arrive - 4.0 * bar, static_cast<float>(4.0 * bar), SfxTypeE::RISER);
-        } else if (s.m_type == SectionTypeE::BREAK) {
-            if (i > 0 && mark()) add(start - bar, static_cast<float>(bar), SfxTypeE::REVERSE_SWELL);
-            if (mark()) add(start, static_cast<float>(4.0 * bar), SfxTypeE::DOWNLIFTER);
-        } else if (s.m_type == SectionTypeE::DROP && i > 0 && prev != SectionTypeE::BUILD) {
+            if ( mark() && stop ) add( end - 1.0, 1.0f, voice ? SfxTypeE::VOICE_CHOP : SfxTypeE::ZAP );
+            if ( mark() && !dry ) add( arrive - 2.0 * bar, static_cast<float>( 2.0 * bar ), SfxTypeE::SWEEP );
+            if ( mark() && !dry ) add( end, 4.0f, SfxTypeE::IMPACT );
+            if ( s.m_bars >= 32 && mark() ) add( arrive - 4.0 * bar, static_cast<float>( 4.0 * bar ), SfxTypeE::RISER );
+        }
+        else if ( s.m_type == SectionTypeE::BREAK )
+        {
+            if ( i > 0 && mark() ) add( start - bar, static_cast<float>( bar ), SfxTypeE::REVERSE_SWELL );
+            if ( mark() ) add( start, static_cast<float>( 4.0 * bar ), SfxTypeE::DOWNLIFTER );
+        }
+        else if ( s.m_type == SectionTypeE::DROP && i > 0 && prev != SectionTypeE::BUILD )
+        {
             // A drop that no buildup announced (a groove straight into it).
-            if (mark()) add(start - 2.0 * bar, static_cast<float>(2.0 * bar), SfxTypeE::SWEEP);
-            if (mark() && !s.m_dry) add(start, 4.0f, SfxTypeE::IMPACT);
-        } else if (s.m_type == SectionTypeE::OUTRO) {
+            if ( mark() ) add( start - 2.0 * bar, static_cast<float>( 2.0 * bar ), SfxTypeE::SWEEP );
+            if ( mark() && !s.m_dry ) add( start, 4.0f, SfxTypeE::IMPACT );
+        }
+        else if ( s.m_type == SectionTypeE::OUTRO )
+        {
             // Into the outro a downlifter. Until 19.09.2026 an eight-bar sweep closed the track to mask the
             // key change; the outro's last sixteen bars are now kick, bass and a hat only, the key changes
             // with the next track's kick and bass at the hand-over, and nothing is left there to mask.
-            if (i > 0 && mark()) add(start, static_cast<float>(4.0 * bar), SfxTypeE::DOWNLIFTER);
-        } else if (s.m_type == SectionTypeE::INTRO && s.m_bars > IntroKickBar && mark()) {
+            if ( i > 0 && mark() ) add( start, static_cast<float>( 4.0 * bar ), SfxTypeE::DOWNLIFTER );
+        }
+        else if ( s.m_type == SectionTypeE::INTRO && s.m_bars > IntroKickBar && mark() )
+        {
             // The inhale before the kick enters on bar 17 of the intro.
-            add(start + (IntroKickBar - 1) * bar, static_cast<float>(bar), SfxTypeE::REVERSE_SWELL);
+            add( start + ( IntroKickBar - 1 ) * bar, static_cast<float>( bar ), SfxTypeE::REVERSE_SWELL );
         }
         // Out of the intro into whatever comes next, unless that is a buildup or drop, which mark
         // their own entry above.
-        if (s.m_type == SectionTypeE::INTRO && i + 1 < f.m_count && f.m_section[i + 1].m_type != SectionTypeE::BUILD
-            && f.m_section[i + 1].m_type != SectionTypeE::DROP && mark())
-            add(end - 2.0 * bar, static_cast<float>(2.0 * bar), SfxTypeE::SWEEP);
+        if ( s.m_type == SectionTypeE::INTRO && i + 1 < f.m_count && f.m_section[i + 1].m_type != SectionTypeE::BUILD &&
+             f.m_section[i + 1].m_type != SectionTypeE::DROP && mark() )
+            add( end - 2.0 * bar, static_cast<float>( 2.0 * bar ), SfxTypeE::SWEEP );
     }
 
     // Ear candy. The track's palette and period come first, from their own generator, so that the
     // transition draws above do not shift when the palette changes and vice versa.
     Rng c;
-    c.seed(mixSeed(seed ^ SaltSfx, 1));
-    const double period = (c.uniform() < 0.55f ? 8.0 : 16.0) * bar;
+    c.seed( mixSeed( seed ^ SaltSfx, 1 ) );
+    const double period = ( c.uniform() < 0.55f ? 8.0 : 16.0 ) * bar;
     // Four kinds, weighted per track: one favourite at 2.5, each of the others 1 or (one time in five)
     // 0 -- a track that never zaps is as legitimate as one that zaps at every phrase.
     double w[4];
-    for (double& x : w) x = c.uniform() < 0.8f ? 1.0 : 0.0;
-    w[c.below(4)] = 2.5;
-    for (int i = 0; i < f.m_count; ++i) {
-        const Section& s = f.m_section[i];
-        if (s.m_type == SectionTypeE::BUILD) continue;
-        const double start = static_cast<double>(s.m_startBar) * bar;
+    for ( double &x : w ) x = c.uniform() < 0.8f ? 1.0 : 0.0;
+    w[c.below( 4 )] = 2.5;
+    for ( int i = 0; i < f.m_count; ++i )
+    {
+        const Section &s = f.m_section[i];
+        if ( s.m_type == SectionTypeE::BUILD ) continue;
+        const double start = static_cast<double>( s.m_startBar ) * bar;
         // The outro's bare bars (kick, bass, a hat) carry nothing else.
-        const double end = static_cast<double>(s.m_startBar + s.m_bars - (s.m_type == SectionTypeE::OUTRO ? std::min(OutroBareBars, s.m_bars) : 0)) * bar;
+        const double end =
+            static_cast<double>( s.m_startBar + s.m_bars -
+                                 ( s.m_type == SectionTypeE::OUTRO ? std::min( OutroBareBars, s.m_bars ) : 0 ) ) *
+            bar;
         // Interior group boundaries only: the section's own ends belong to the transition markers.
-        for (double g = start + period; g < end - 1e-9; g += period) {
-            const bool cycleEnd = std::fmod(g - start, 32.0 * bar) < 1e-9;
+        for ( double g = start + period; g < end - 1e-9; g += period )
+        {
+            const bool  cycleEnd = std::fmod( g - start, 32.0 * bar ) < 1e-9;
             const float roll = c.uniform();
             // The micro rule's bar 32 (19.09.2026): the end of every 32-bar cycle inside a section carries
             // a marker for certain (as the transitions do, from sfx_amount 0.5 up): a one-bar downlifter
             // or, in a core, a glitch -- the stutter of the melodic bus on the last half beat.
-            if (cycleEnd && roll < pMark) {
-                if (isCore(s.m_type) && roll < 0.5f * pMark) add(g - 0.5, 0.5f, SfxTypeE::STUTTER);
-                else add(g - bar, static_cast<float>(bar), SfxTypeE::DOWNLIFTER);
+            if ( cycleEnd && roll < pMark )
+            {
+                if ( isCore( s.m_type ) && roll < 0.5f * pMark )
+                    add( g - 0.5, 0.5f, SfxTypeE::STUTTER );
+                else
+                    add( g - bar, static_cast<float>( bar ), SfxTypeE::DOWNLIFTER );
                 continue;
             }
-            if (roll >= amount) continue;
-            switch (drawIndex(c, w, 4)) {
-            case 0: add(g - 1.0, 0.5f, SfxTypeE::ZAP); break;                                        // beat 4
-            case 1: add(g - bar, static_cast<float>(bar), SfxTypeE::SWEEP); break;                   // filtered noise, up and down
-            case 2: add(g - bar, static_cast<float>(bar), SfxTypeE::REVERSE_SWELL); break;            // into the downbeat
-            default: add(g - 2.0 * bar, static_cast<float>(2.0 * bar), SfxTypeE::SWEEP); break;      // a longer wash
+            if ( roll >= amount ) continue;
+            switch ( drawIndex( c, w, 4 ) )
+            {
+            case 0: add( g - 1.0, 0.5f, SfxTypeE::ZAP ); break;                          // beat 4
+            case 1: add( g - bar, static_cast<float>( bar ), SfxTypeE::SWEEP ); break;   // filtered noise, up and down
+            case 2: add( g - bar, static_cast<float>( bar ), SfxTypeE::REVERSE_SWELL ); break;   // into the downbeat
+            default: add( g - 2.0 * bar, static_cast<float>( 2.0 * bar ), SfxTypeE::SWEEP ); break;   // a longer wash
             }
         }
     }
     // The psychedelic layer of 19.09.2026, from streams of its own (placePsychedelia above).
-    placePsychedelia(f, seed, amount, voiceDensity, bedDensity);
+    placePsychedelia( f, seed, amount, voiceDensity, bedDensity );
 
     // Atmospheres (23.09.2026, round "SFX"; Sfx.h, SfxType::Atmosphere): the background layer the literature
     // names beside risers and impacts -- pads and atmospheres that take over in breakdowns and sit under an
@@ -479,23 +587,32 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity, f
     // (composeSfxBar cuts this track's events there; the incoming track's atmospheres take the room).
     {
         Rng at;
-        at.seed(mixSeed(seed ^ SaltSfx, 0x41544Dull));
-        const float pAtmo = std::min(1.0f, 1.5f * amount);
-        for (int i = 0; i < f.m_count; ++i) {
-            const Section& s = f.m_section[i];
-            const double start = static_cast<double>(s.m_startBar) * bar;
-            if (s.m_type == SectionTypeE::INTRO || s.m_type == SectionTypeE::OUTRO || s.m_type == SectionTypeE::BREAK) {
+        at.seed( mixSeed( seed ^ SaltSfx, 0x41544Dull ) );
+        const float pAtmo = std::min( 1.0f, 1.5f * amount );
+        for ( int i = 0; i < f.m_count; ++i )
+        {
+            const Section &s = f.m_section[i];
+            const double   start = static_cast<double>( s.m_startBar ) * bar;
+            if ( s.m_type == SectionTypeE::INTRO || s.m_type == SectionTypeE::OUTRO || s.m_type == SectionTypeE::BREAK )
+            {
                 // The outro's last DjOverlapMax bars are the next track's (the blend, whatever length it turns
                 // out to have): no atmosphere of this track starts there.
                 const int until = s.m_type == SectionTypeE::OUTRO ? s.m_bars - DjOverlapMax : s.m_bars;
-                for (int b = 0; b < until; b += 8) {
-                    const int len = std::min(8, until - b);
-                    if (at.uniform() < (s.m_type == SectionTypeE::BREAK ? 0.9f : 0.75f) * pAtmo) add(start + b * bar, static_cast<float>(len * bar), SfxTypeE::ATMOSPHERE);
+                for ( int b = 0; b < until; b += 8 )
+                {
+                    const int len = std::min( 8, until - b );
+                    if ( at.uniform() < ( s.m_type == SectionTypeE::BREAK ? 0.9f : 0.75f ) * pAtmo )
+                        add( start + b * bar, static_cast<float>( len * bar ), SfxTypeE::ATMOSPHERE );
                 }
-            } else if (s.m_type == SectionTypeE::GROOVE || s.m_type == SectionTypeE::DROP) {
-                for (int b = 8; b + 4 <= s.m_bars; b += 16) {
-                    const int len = 4 + 4 * at.below(2);
-                    if (at.uniform() < 0.5f * pAtmo) add(start + b * bar, static_cast<float>(std::min(len, s.m_bars - b) * bar), SfxTypeE::ATMOSPHERE);
+            }
+            else if ( s.m_type == SectionTypeE::GROOVE || s.m_type == SectionTypeE::DROP )
+            {
+                for ( int b = 8; b + 4 <= s.m_bars; b += 16 )
+                {
+                    const int len = 4 + 4 * at.below( 2 );
+                    if ( at.uniform() < 0.5f * pAtmo )
+                        add( start + b * bar, static_cast<float>( std::min( len, s.m_bars - b ) * bar ),
+                             SfxTypeE::ATMOSPHERE );
                 }
             }
         }
@@ -508,96 +625,113 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity, f
     // lane carries to the engine (Engine.cpp, Sfx::trigger).
     {
         Rng pr;
-        pr.seed(mixSeed(seed ^ SaltSfx, 0x505245ull));
-        std::vector<std::vector<int>> used(static_cast<size_t>(NumSfxTypes));
-        for (SfxEvent& e : f.m_sfx) {
-            const int t = std::clamp(e.m_type, 0, NumSfxTypes - 1);
-            if (sfxTypePart(static_cast<SfxTypeE>(t)) != PartE::SFX) continue;
+        pr.seed( mixSeed( seed ^ SaltSfx, 0x505245ull ) );
+        std::vector<std::vector<int>> used( static_cast<size_t>( NumSfxTypes ) );
+        for ( SfxEvent &e : f.m_sfx )
+        {
+            const int t = std::clamp( e.m_type, 0, NumSfxTypes - 1 );
+            if ( sfxTypePart( static_cast<SfxTypeE>( t ) ) != PartE::SFX ) continue;
             const int n = SfxBankCount[t];
-            if (n <= 0) continue;
-            std::vector<int>& u = used[static_cast<size_t>(t)];
-            if (static_cast<int>(u.size()) >= n) u.clear();
-            int pick = pr.below(n);
-            while (std::find(u.begin(), u.end(), pick) != u.end()) pick = (pick + 1) % n;
-            u.push_back(pick);
-            e.m_variant = static_cast<uint16_t>(pick + 1);
+            if ( n <= 0 ) continue;
+            std::vector<int> &u = used[static_cast<size_t>( t )];
+            if ( static_cast<int>( u.size() ) >= n ) u.clear();
+            int pick = pr.below( n );
+            while ( std::find( u.begin(), u.end(), pick ) != u.end() ) pick = ( pick + 1 ) % n;
+            u.push_back( pick );
+            e.m_variant = static_cast<uint16_t>( pick + 1 );
         }
     }
-    std::stable_sort(f.m_sfx.begin(), f.m_sfx.end(), [](const SfxEvent& a, const SfxEvent& b) { return a.m_beat < b.m_beat; });
+    std::stable_sort( f.m_sfx.begin(), f.m_sfx.end(),
+                      []( const SfxEvent &a, const SfxEvent &b ) { return a.m_beat < b.m_beat; } );
     // Which phrase or bed variant each voice and bed event plays (19.09.2026): from the form seed, in the
     // order of the events, from a generator of its own -- nothing placed above moves. Until then the
     // engine derived it from the event's beat, so a phrase was a function of where it fell.
     Rng vr;
-    vr.seed(mixSeed(seed ^ SaltVariant, 0));
-    for (SfxEvent& e : f.m_sfx)
-        if (sfxTypePart(static_cast<SfxTypeE>(e.m_type)) != PartE::SFX) e.m_variant = static_cast<uint8_t>(1 + vr.below(255));
+    vr.seed( mixSeed( seed ^ SaltVariant, 0 ) );
+    for ( SfxEvent &e : f.m_sfx )
+        if ( sfxTypePart( static_cast<SfxTypeE>( e.m_type ) ) != PartE::SFX )
+            e.m_variant = static_cast<uint8_t>( 1 + vr.below( 255 ) );
 }
 
-void placeField(FormPlan& f, uint64_t seed, int style, float density, float amount)
+void placeField( FormPlan &f, uint64_t seed, int style, float density, float amount )
 {
     // How often a style has its place (StyleId order: Goa, Full-On, Progressive, Dark Forest, Hi-Tech): the forest
     // styles live in one (the user: "insbesondere für Forest"), the machine styles only visit.
     static const float Place[NumStyles] = { 0.7f, 0.55f, 0.8f, 1.0f, 0.5f };
     static const float Groove[NumStyles] = { 0.0f, 0.0f, 0.3f, 0.8f, 0.0f };
     static const float Shot[NumStyles] = { 0.4f, 0.6f, 0.25f, 0.15f, 0.5f };
-    const int st = std::clamp(style, 0, NumStyles - 1);
-    const double bar = BeatsPerBar;
-    const float d = std::max(0.0f, density);
-    Rng r;
-    r.seed(mixSeed(seed ^ SaltBed, 0x4649454C44ull));
-    auto place = [&](double beat, int bars, int velocity) {
-        if (bars <= 0) return;
+    const int          st = std::clamp( style, 0, NumStyles - 1 );
+    const double       bar = BeatsPerBar;
+    const float        d = std::max( 0.0f, density );
+    Rng                r;
+    r.seed( mixSeed( seed ^ SaltBed, 0x4649454C44ull ) );
+    auto place = [&]( double beat, int bars, int velocity )
+    {
+        if ( bars <= 0 ) return;
         SfxEvent e;
-        e.m_beat = std::max(0.0, beat);
-        e.m_length = static_cast<float>(bars * bar);
-        e.m_variant = static_cast<uint16_t>(std::clamp(velocity, 1, 127));
-        f.m_field.push_back(e);
+        e.m_beat = std::max( 0.0, beat );
+        e.m_length = static_cast<float>( bars * bar );
+        e.m_variant = static_cast<uint16_t>( std::clamp( velocity, 1, 127 ) );
+        f.m_field.push_back( e );
     };
-    for (int i = 0; i < f.m_count; ++i) {
-        const Section& s = f.m_section[i];
-        const double start = static_cast<double>(s.m_startBar) * bar;
-        const float u = r.uniform();
-        switch (s.m_type) {
-        case SectionTypeE::INTRO: if (u < std::min(1.0f, 0.95f * Place[st] * d)) place(start, s.m_bars, 100); break;
-        case SectionTypeE::BREAK: if (u < std::min(1.0f, 0.9f * Place[st] * d)) place(start, s.m_bars, 105); break;
-        case SectionTypeE::OUTRO: {
+    for ( int i = 0; i < f.m_count; ++i )
+    {
+        const Section &s = f.m_section[i];
+        const double   start = static_cast<double>( s.m_startBar ) * bar;
+        const float    u = r.uniform();
+        switch ( s.m_type )
+        {
+        case SectionTypeE::INTRO:
+            if ( u < std::min( 1.0f, 0.95f * Place[st] * d ) ) place( start, s.m_bars, 100 );
+            break;
+        case SectionTypeE::BREAK:
+            if ( u < std::min( 1.0f, 0.9f * Place[st] * d ) ) place( start, s.m_bars, 105 );
+            break;
+        case SectionTypeE::OUTRO:
+        {
             const int live = s.m_bars - DjOverlapMax;   // up to the blend: the next track's place takes over there
-            if (live >= 8 && u < std::min(1.0f, 0.75f * Place[st] * d)) place(start, live, 95);
+            if ( live >= 8 && u < std::min( 1.0f, 0.75f * Place[st] * d ) ) place( start, live, 95 );
             break;
         }
         case SectionTypeE::GROOVE:
-            for (int b = 8; b + 16 <= s.m_bars; b += 32)
-                if (r.uniform() < std::min(1.0f, Groove[st] * d)) place(start + b * bar, 16, 50);   // under a groove: 6 dB under an intro's
+            for ( int b = 8; b + 16 <= s.m_bars; b += 32 )
+                if ( r.uniform() < std::min( 1.0f, Groove[st] * d ) )
+                    place( start + b * bar, 16, 50 );   // under a groove: 6 dB under an intro's
             break;
         default: break;
         }
     }
     // The NASA shots, away from the voices.
     std::vector<double> voices;
-    for (const SfxEvent& e : f.m_sfx)
-        if (sfxTypePart(static_cast<SfxTypeE>(std::clamp(e.m_type, 0, NumSfxTypes - 1))) == PartE::VOCAL) voices.push_back(e.m_beat);
-    auto free = [&](double beat) {
-        for (double v : voices) if (std::fabs(v - beat) < 2.0 * bar) return false;
+    for ( const SfxEvent &e : f.m_sfx )
+        if ( sfxTypePart( static_cast<SfxTypeE>( std::clamp( e.m_type, 0, NumSfxTypes - 1 ) ) ) == PartE::VOCAL )
+            voices.push_back( e.m_beat );
+    auto free = [&]( double beat )
+    {
+        for ( double v : voices )
+            if ( std::fabs( v - beat ) < 2.0 * bar ) return false;
         return true;
     };
-    const float pShot = Shot[st] * std::min(1.0f, 2.0f * std::max(0.0f, amount));
-    for (int i = 0; i < f.m_count; ++i) {
-        const Section& s = f.m_section[i];
-        const double start = static_cast<double>(s.m_startBar) * bar;
-        const float u = r.uniform();
-        int at = -1;
-        if (s.m_type == SectionTypeE::BREAK && s.m_bars >= 8 && u < pShot) at = 2;
-        if (s.m_type == SectionTypeE::INTRO && s.m_bars >= 16 && u < 0.5f * pShot) at = 8;
-        if (at < 0) continue;
-        for (int tries = 0; tries < 3 && !free(start + at * bar); ++tries) at += 4;
-        if (at + 2 > s.m_bars || !free(start + at * bar)) continue;
+    const float pShot = Shot[st] * std::min( 1.0f, 2.0f * std::max( 0.0f, amount ) );
+    for ( int i = 0; i < f.m_count; ++i )
+    {
+        const Section &s = f.m_section[i];
+        const double   start = static_cast<double>( s.m_startBar ) * bar;
+        const float    u = r.uniform();
+        int            at = -1;
+        if ( s.m_type == SectionTypeE::BREAK && s.m_bars >= 8 && u < pShot ) at = 2;
+        if ( s.m_type == SectionTypeE::INTRO && s.m_bars >= 16 && u < 0.5f * pShot ) at = 8;
+        if ( at < 0 ) continue;
+        for ( int tries = 0; tries < 3 && !free( start + at * bar ); ++tries ) at += 4;
+        if ( at + 2 > s.m_bars || !free( start + at * bar ) ) continue;
         SfxEvent e;
         e.m_beat = start + at * bar;
-        e.m_length = static_cast<float>(4.0 * bar);
-        e.m_type = static_cast<int>(SfxTypeE::SPACE_SHOT);
-        f.m_sfx.push_back(e);
+        e.m_length = static_cast<float>( 4.0 * bar );
+        e.m_type = static_cast<int>( SfxTypeE::SPACE_SHOT );
+        f.m_sfx.push_back( e );
     }
-    std::stable_sort(f.m_sfx.begin(), f.m_sfx.end(), [](const SfxEvent& a, const SfxEvent& b) { return a.m_beat < b.m_beat; });
+    std::stable_sort( f.m_sfx.begin(), f.m_sfx.end(),
+                      []( const SfxEvent &a, const SfxEvent &b ) { return a.m_beat < b.m_beat; } );
 }
 
-} // namespace phos
+}   // namespace phos

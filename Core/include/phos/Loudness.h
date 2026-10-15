@@ -17,17 +17,19 @@
 #include <cstddef>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 /** @brief One reading of the meter. */
-struct LoudnessReading {
-    float m_momentary  = -120.0f;   ///< LUFS over the last 400 ms
-    float m_shortTerm  = -120.0f;   ///< LUFS over the last 3 s
+struct LoudnessReading
+{
+    float m_momentary = -120.0f;    ///< LUFS over the last 400 ms
+    float m_shortTerm = -120.0f;    ///< LUFS over the last 3 s
     float m_integrated = -120.0f;   ///< LUFS, gated (absolute -70, relative -10), since reset
-    float m_range      = 0.0f;      ///< LU: 10th to 95th centile of the short-term values
-    float m_truePeak   = -120.0f;   ///< dBTP, 8x interpolated (TruePeakInterpolator), since reset
-    float m_crest      = 0.0f;      ///< dB: true peak over short-term loudness
-    float m_seconds    = 0.0f;      ///< time measured
+    float m_range = 0.0f;           ///< LU: 10th to 95th centile of the short-term values
+    float m_truePeak = -120.0f;     ///< dBTP, 8x interpolated (TruePeakInterpolator), since reset
+    float m_crest = 0.0f;           ///< dB: true peak over short-term loudness
+    float m_seconds = 0.0f;         ///< time measured
 };
 
 /**
@@ -36,13 +38,14 @@ struct LoudnessReading {
  * Derived from the analogue prototypes the standard names, so the coefficients are right at any
  * sample rate; at 48 kHz they reproduce the published table to sixteen digits.
  */
-class KFilter {
+class KFilter
+{
 public:
     /**
      * @brief Computes the coefficients for @p sampleRate.
      * @param[in] sampleRate  the sample rate
      */
-    void prepare(double sampleRate);
+    void prepare( double sampleRate );
     /** @brief Clears the states. */
     void reset();
     /**
@@ -50,10 +53,12 @@ public:
      * @param[in] x  the input sample
      * @return the output sample
      */
-    float process(float x);
+    float process( float x );
+
 private:
     /** @brief One second-order section of the K-weighting filter. */
-    struct Biquad {
+    struct Biquad
+    {
         float m_b0 = 1;   ///< the coefficient of x[n]
         float m_b1 = 0;   ///< ... of x[n-1]
         float m_b2 = 0;   ///< ... of x[n-2]
@@ -66,7 +71,7 @@ private:
          * @param[in] x  the input sample
          * @return the output sample
          */
-        float process(float x)
+        float process( float x )
         {
             const float y = m_b0 * x + m_z1;
             m_z1 = m_b1 * x - m_a1 * y + m_z2;
@@ -77,7 +82,7 @@ private:
         void reset() { m_z1 = m_z2 = 0.0f; }
     };
     Biquad m_shelf;   ///< the K-weighting's high shelf
-    Biquad m_hp;   ///< the K-weighting's high pass
+    Biquad m_hp;      ///< the K-weighting's high pass
 };
 
 /**
@@ -85,66 +90,78 @@ private:
  *
  * It never grows, so the audio thread never allocates; what is kept is a window of the recent past.
  */
-struct LoudnessLog {
+struct LoudnessLog
+{
     /**
      * @brief Allocates the ring (not on the audio thread).
      * @param[in] capacity  the values held
      * @pre not called on the audio thread
      */
-    void prepare(size_t capacity) { m_buf.assign(capacity, 0.0f); m_pos.store(0); m_count.store(0); }
+    void prepare( size_t capacity )
+    {
+        m_buf.assign( capacity, 0.0f );
+        m_pos.store( 0 );
+        m_count.store( 0 );
+    }
     /** @brief Forgets the contents. */
-    void clear() { m_pos.store(0); m_count.store(0); }
+    void clear()
+    {
+        m_pos.store( 0 );
+        m_count.store( 0 );
+    }
     /**
      * @brief Appends a value; never allocates.
      * @param[in] v  the value
      */
-    void push(float v)
+    void push( float v )
     {
-        if (m_buf.empty()) return;
-        const size_t p = m_pos.load(std::memory_order_relaxed);
+        if ( m_buf.empty() ) return;
+        const size_t p = m_pos.load( std::memory_order_relaxed );
         m_buf[p] = v;
-        m_pos.store((p + 1) % m_buf.size(), std::memory_order_release);
-        const size_t c = m_count.load(std::memory_order_relaxed);
-        if (c < m_buf.size()) m_count.store(c + 1, std::memory_order_release);
+        m_pos.store( ( p + 1 ) % m_buf.size(), std::memory_order_release );
+        const size_t c = m_count.load( std::memory_order_relaxed );
+        if ( c < m_buf.size() ) m_count.store( c + 1, std::memory_order_release );
     }
     /**
      * values held
      * @return the values held
      */
-    size_t size() const { return m_count.load(std::memory_order_acquire); }
+    size_t size() const { return m_count.load( std::memory_order_acquire ); }
     /**
      * nothing held
      * @return true when nothing is held
      */
-    bool  empty() const { return size() == 0; }
+    bool empty() const { return size() == 0; }
     /**
      * @brief The window in order, oldest first.
      * @return the values, oldest first
      */
     std::vector<float> snapshot() const
     {
-        const size_t n = m_count.load(std::memory_order_acquire);
-        const size_t p = m_pos.load(std::memory_order_acquire);
+        const size_t       n = m_count.load( std::memory_order_acquire );
+        const size_t       p = m_pos.load( std::memory_order_acquire );
         std::vector<float> out;
-        out.reserve(n);
-        const size_t from = (n < m_buf.size()) ? 0 : p;
-        for (size_t k = 0; k < n; ++k) out.push_back(m_buf[(from + k) % m_buf.size()]);
+        out.reserve( n );
+        const size_t from = ( n < m_buf.size() ) ? 0 : p;
+        for ( size_t k = 0; k < n; ++k ) out.push_back( m_buf[( from + k ) % m_buf.size()] );
         return out;
     }
+
 private:
-    std::vector<float> m_buf;   ///< the ring of values
-    std::atomic<size_t> m_pos{ 0 };   ///< the write position
+    std::vector<float>  m_buf;          ///< the ring of values
+    std::atomic<size_t> m_pos{ 0 };     ///< the write position
     std::atomic<size_t> m_count{ 0 };   ///< how many were written
 };
 
 /** @brief The BS.1770 meter with gating, range and true peak. */
-class LoudnessMeter {
+class LoudnessMeter
+{
 public:
     /**
      * @brief Allocates and computes filters for @p sampleRate.
      * @param[in] sampleRate  the sample rate in Hz
      */
-    void prepare(double sampleRate);
+    void prepare( double sampleRate );
     /** @brief Starts a new measurement. */
     void reset();
     /**
@@ -153,43 +170,45 @@ public:
      * @param[in] R  the right channel
      * @param[in] n  how many samples
      */
-    void process(const float* L, const float* R, int n);
+    void process( const float *L, const float *R, int n );
     /**
      * @brief The current figures.
      * @return the figures
      */
     LoudnessReading read() const;
+
 private:
     /** @brief Closes a 100 ms hop: stores its mean square and updates the gated readings. */
     void pushBlock();
 
-    double m_sr = 48000.0;   ///< sample rate
-    KFilter m_kL;   ///< the K-weighting, left
-    KFilter m_kR;   ///< ... right
-    int    m_blockLen = 19200;   ///< the 400 ms block, samples
-    int    m_hopLen = 4800;   ///< the 100 ms hop, samples
-    int    m_hopPos = 0;   ///< samples into the hop
-    std::vector<double> m_sumL;   ///< the last HopsPerShort hops' mean squares, left
-    std::vector<double> m_sumR;   ///< ... right
-    int    m_ringPos = 0;   ///< their ring's position
-    int    m_ringFilled = 0;   ///< ... and fill
-    static constexpr int HopsPerBlock = 4;       ///< 400 ms blocks with 75 % overlap
-    static constexpr int HopsPerShort = 30;      ///< 3 s
-    double m_hopL = 0.0;   ///< the running hop's sum of squares, left
-    double m_hopR = 0.0;   ///< ... right
-    long   m_hopSamples = 0;   ///< its samples so far
-    static constexpr size_t BlockLog = 1u << 17; ///< about 3.6 hours of blocks at ten a second
-    LoudnessLog m_blocks;   ///< every 400 ms block's loudness, for the gated integral
-    LoudnessLog m_shortBlocks;   ///< every 3 s window's loudness, for the range
-    double m_truePeak = 0.0;   ///< the highest true peak seen, linear
-    double m_seconds = 0.0;   ///< seconds measured
-    float  m_lastShort = -120.0f;   ///< the last short-term loudness, LUFS
+    double                  m_sr = 48000.0;          ///< sample rate
+    KFilter                 m_kL;                    ///< the K-weighting, left
+    KFilter                 m_kR;                    ///< ... right
+    int                     m_blockLen = 19200;      ///< the 400 ms block, samples
+    int                     m_hopLen = 4800;         ///< the 100 ms hop, samples
+    int                     m_hopPos = 0;            ///< samples into the hop
+    std::vector<double>     m_sumL;                  ///< the last HopsPerShort hops' mean squares, left
+    std::vector<double>     m_sumR;                  ///< ... right
+    int                     m_ringPos = 0;           ///< their ring's position
+    int                     m_ringFilled = 0;        ///< ... and fill
+    static constexpr int    HopsPerBlock = 4;        ///< 400 ms blocks with 75 % overlap
+    static constexpr int    HopsPerShort = 30;       ///< 3 s
+    double                  m_hopL = 0.0;            ///< the running hop's sum of squares, left
+    double                  m_hopR = 0.0;            ///< ... right
+    long                    m_hopSamples = 0;        ///< its samples so far
+    static constexpr size_t BlockLog = 1u << 17;     ///< about 3.6 hours of blocks at ten a second
+    LoudnessLog             m_blocks;                ///< every 400 ms block's loudness, for the gated integral
+    LoudnessLog             m_shortBlocks;           ///< every 3 s window's loudness, for the range
+    double                  m_truePeak = 0.0;        ///< the highest true peak seen, linear
+    double                  m_seconds = 0.0;         ///< seconds measured
+    float                   m_lastShort = -120.0f;   ///< the last short-term loudness, LUFS
     /// The last TruePeakInterpolator::History samples of each channel. Every sample is written into
     /// both halves of the buffer, so the window the interpolator reads is contiguous and the meter
     /// needs neither a shift nor a modulo per sample (the same arrangement as TruePeakLimiter).
-    float  m_tpHistL[2 * TruePeakInterpolator::History] = {}, m_tpHistR[2 * TruePeakInterpolator::History] = {};   ///< ... right
-    int    m_tpPos = 0;   ///< position in the true-peak history
-    TruePeakInterpolator m_tpInterp;   ///< reads the peaks between the samples
+    float                m_tpHistL[2 * TruePeakInterpolator::History] = {},
+                                       m_tpHistR[2 * TruePeakInterpolator::History] = {};   ///< ... right
+    int                  m_tpPos = 0;   ///< position in the true-peak history
+    TruePeakInterpolator m_tpInterp;    ///< reads the peaks between the samples
 };
 
-} // namespace phos
+}   // namespace phos

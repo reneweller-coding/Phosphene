@@ -56,18 +56,28 @@
  * @brief The fitTemplate shape of the arrangement round (Full-On's template, target 272 bars): the lambda sum in
  *        both conditions, with a table-driven slot to grow. Expected 272.
  */
-__declspec(noinline) int fit(int target)
+__declspec( noinline ) int fit( int target )
 {
     static const int Bars[8] = { 32, 32, 16, 32, 32, 32, 48, 32 };
     static const int kGrow[8] = { 6, 3, 4, 1, 3, 4, 1, -1 };
     static const int kCap[8] = { 64, 48, 48, 48, 64, 64, 64, 0 };
-    int bars[8];
-    for (int k = 0; k < 8; ++k) bars[k] = Bars[k];
-    auto total = [&]() { int s = 0; for (int k = 0; k < 8; ++k) s += bars[k]; return s; };
-    for (bool moved = true; total() < target && moved;) {
+    int              bars[8];
+    for ( int k = 0; k < 8; ++k ) bars[k] = Bars[k];
+    auto total = [&]()
+    {
+        int s = 0;
+        for ( int k = 0; k < 8; ++k ) s += bars[k];
+        return s;
+    };
+    for ( bool moved = true; total() < target && moved; )
+    {
         moved = false;
-        for (int g = 0; g < 8 && kGrow[g] >= 0 && total() < target; ++g)
-            if (bars[kGrow[g]] + 16 <= kCap[g]) { bars[kGrow[g]] += 16; moved = true; }
+        for ( int g = 0; g < 8 && kGrow[g] >= 0 && total() < target; ++g )
+            if ( bars[kGrow[g]] + 16 <= kCap[g] )
+            {
+                bars[kGrow[g]] += 16;
+                moved = true;
+            }
     }
     return total();
 }
@@ -78,7 +88,7 @@ __declspec(noinline) int fit(int target)
  */
 int main()
 {
-    const int f = fit(272);
-    std::printf("fit: %d (expected 272)\n", f);
+    const int f = fit( 272 );
+    std::printf( "fit: %d (expected 272)\n", f );
     return f == 272 ? 0 : 1;
 }

@@ -23,36 +23,37 @@
  * acid green, the space (pad, drone, effects) electric violet, and the pages about the whole set a quiet lavender.
  * Neighbours within a family differ by a small step, so a tab is still recognised by its colour.
  */
-namespace phosui {
-const juce::Colour Bg0     { 0xff0b0a12 };   ///< window background
-const juce::Colour Card    { 0xff12101b };   ///< a page's background
-const juce::Colour GroupColour   { 0xff191625 };   ///< a group box
-const juce::Colour Edge    { 0xff2b2641 };   ///< hairlines
-const juce::Colour Text    { 0xffeceaf6 };   ///< body text
-const juce::Colour Dim     { 0xffa39dc2 };   ///< labels
-const juce::Colour Faint   { 0xff5f5982 };   ///< axes, disabled
-const juce::Colour Accent  { 0xffa46bff };   ///< the plugin's colour: UV violet
-const juce::Colour Warm    { 0xffff2e97 };   ///< kick and bass: hot magenta
-const juce::Colour Green   { 0xff8dff5a };   ///< meters in range
-const juce::Colour Red     { 0xffff4d6d };   ///< meters over
+namespace phosui
+{
+const juce::Colour Bg0{ 0xff0b0a12 };           ///< window background
+const juce::Colour Card{ 0xff12101b };          ///< a page's background
+const juce::Colour GroupColour{ 0xff191625 };   ///< a group box
+const juce::Colour Edge{ 0xff2b2641 };          ///< hairlines
+const juce::Colour Text{ 0xffeceaf6 };          ///< body text
+const juce::Colour Dim{ 0xffa39dc2 };           ///< labels
+const juce::Colour Faint{ 0xff5f5982 };         ///< axes, disabled
+const juce::Colour Accent{ 0xffa46bff };        ///< the plugin's colour: UV violet
+const juce::Colour Warm{ 0xffff2e97 };          ///< kick and bass: hot magenta
+const juce::Colour Green{ 0xff8dff5a };         ///< meters in range
+const juce::Colour Red{ 0xffff4d6d };           ///< meters over
 /**
  * @brief The colour of the tab @p index (PluginEditor.h, Tab): its family's, stepped a little per tab.
  * @param[in] index  the tab
  * @return its colour
  */
-juce::Colour partColour(int index);
+juce::Colour partColour( int index );
 /**
  * @brief The colour of the tab that shows @p part (Score.h, Part).
  * @param[in] part  the part
  * @return the colour
  */
-juce::Colour partColourOf(int part);
+juce::Colour partColourOf( int part );
 /**
  * @brief A colour for the @p i-th of several equal things (the tracks of the Arrange tab): the families in turn.
  * @param[in] i  the index
  * @return the colour
  */
-juce::Colour cycleColour(int i);
+juce::Colour cycleColour( int i );
 /**
  * @brief The colour of a group by what its controls do (01.10.2026, the frame's families -- the same in every generator,
  *        in Phosphene's fluorescent tones): sources gold, filters orange, envelopes acid green, what moves by itself cyan,
@@ -61,27 +62,28 @@ juce::Colour cycleColour(int i);
  * @param[in] page   the page's colour
  * @return the group's colour
  */
-juce::Colour groupColour(const juce::String& title, juce::Colour page);
+juce::Colour groupColour( const juce::String &title, juce::Colour page );
 /**
  * @brief Phosphene's skin of the frame: the UV palette, the glow, the phosphenes behind the panel, the logo.
  * @return the skin
  */
-const frame::Skin& skin();
+const frame::Skin &skin();
 /**
  * @brief The editor's fonts.
  * @param[in] height  the font's height
  * @return the title font
  */
-juce::Font title(float height);
-juce::Font body(float height);   ///< @copydoc title
-} // namespace phosui
+juce::Font title( float height );
+juce::Font body( float height );   ///< @copydoc title
+}   // namespace phosui
 
 /**
  * @brief Look and feel of the Phosphene editor (01.10.2026): the shared frame's (Frame.h) -- the same knob, fader,
  *        switch, menu and button as in every generator, drawn from Phosphene's skin (phosui::skin: the UV palette, the
  *        glow, the value inside the knob) --, with Phosphene's fonts and its tabs' family stripes.
  */
-class PhospheneLookAndFeel final : public frame::LookAndFeel {
+class PhospheneLookAndFeel final : public frame::LookAndFeel
+{
 public:
     /** @brief The frame's look in Phosphene's skin. */
     PhospheneLookAndFeel();
@@ -93,25 +95,26 @@ public:
      * @param[in]     highlighted  true under the mouse
      * @param[in]     down         true while pressed
      */
-    void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour& background, bool highlighted, bool down) override;
+    void drawButtonBackground( juce::Graphics &, juce::Button &, const juce::Colour &background, bool highlighted,
+                               bool down ) override;
     /**
      * @brief Phosphene's text font for a label.
      * @param[in,out] l  the label
      * @return the font
      */
-    juce::Font getLabelFont(juce::Label&) override;
+    juce::Font getLabelFont( juce::Label & ) override;
     /**
      * @brief ... for a chooser.
      * @param[in,out] b  the chooser
      * @return the font
      */
-    juce::Font getComboBoxFont(juce::ComboBox&) override;
+    juce::Font getComboBoxFont( juce::ComboBox & ) override;
     /**
      * @brief ... for a button.
      * @param[in] buttonHeight  the button's height in pixels
      * @return the font
      */
-    juce::Font getTextButtonFont(juce::TextButton&, int buttonHeight) override;
+    juce::Font getTextButtonFont( juce::TextButton &, int buttonHeight ) override;
     /**
      * @brief ... for the menus.
      * @return the font

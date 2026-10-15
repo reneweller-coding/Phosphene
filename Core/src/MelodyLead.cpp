@@ -22,11 +22,13 @@
 #include "Salts.h"
 using namespace phos::salts::melody;   // the melody's seed salts (Salts.h)
 
-namespace phos {
+namespace phos
+{
 
 using namespace mel;
 
-namespace mel {
+namespace mel
+{
 
 /** @name The lead's register (rule 17): a soft centre in the window C4 .. G4 (Melody.h)
  *  A sigma of 5 semitones would be flat across a window of seven and leave the register weight with
@@ -53,64 +55,83 @@ constexpr double LeadSigma = 2.5;     ///< semitones: the register weight falls 
  * @param[in]     family  the rhythm family
  * @return the onset steps
  */
-std::vector<int> leadRhythm(Rng& r, const CorpusRole& role, int family)
+std::vector<int> leadRhythm( Rng &r, const CorpusRole &role, int family )
 {
-    auto pOn = [&](int s) {
-        const auto& c = role.m_onset[s];
-        const double total = static_cast<double>(c[0][0]) + c[0][1] + c[1][0] + c[1][1];
-        return total > 0.0 ? (static_cast<double>(c[0][1]) + c[1][1]) / total : 0.5;
+    auto pOn = [&]( int s )
+    {
+        const auto  &c = role.m_onset[s];
+        const double total = static_cast<double>( c[0][0] ) + c[0][1] + c[1][0] + c[1][1];
+        return total > 0.0 ? ( static_cast<double>( c[0][1] ) + c[1][1] ) / total : 0.5;
     };
-    static const bool Gallop[3][4] = { { true, false, true, true }, { true, true, false, true }, { true, true, true, false } };
-    const int cell = r.below(3);
-    bool on[32] = {};
+    static const bool Gallop[3][4] = { { true, false, true, true },
+                                       { true, true, false, true },
+                                       { true, true, true, false } };
+    const int         cell = r.below( 3 );
+    bool              on[32] = {};
     // Fills steps [from, 16) of the first bar with the family's figure.
-    auto fill = [&](int from) {
+    auto fill = [&]( int from )
+    {
         const int span = 16 - from;
-        if (family == 0) {
-            for (int s = from; s < 16; ++s) on[s] = true;
-            int ties = span >= 8 ? 2 + r.below(3) : r.below(2);
+        if ( family == 0 )
+        {
+            for ( int s = from; s < 16; ++s ) on[s] = true;
+            int    ties = span >= 8 ? 2 + r.below( 3 ) : r.below( 2 );
             double w[16] = {};
-            for (int s = std::max(from, 1); s < 16; ++s) w[s] = s % 8 == 0 ? 0.0 : 1.05 - pOn(s);
-            while (ties-- > 0) {
+            for ( int s = std::max( from, 1 ); s < 16; ++s ) w[s] = s % 8 == 0 ? 0.0 : 1.05 - pOn( s );
+            while ( ties-- > 0 )
+            {
                 double any = 0.0;
-                for (double v : w) any += v;
-                if (any <= 0.0) break;
-                const int s = drawIndex(r, w, 16);
+                for ( double v : w ) any += v;
+                if ( any <= 0.0 ) break;
+                const int s = drawIndex( r, w, 16 );
                 on[s] = false;
                 w[s] = 0.0;
-                if (s > 0) w[s - 1] = 0.0;
-                if (s < 15) w[s + 1] = 0.0;
+                if ( s > 0 ) w[s - 1] = 0.0;
+                if ( s < 15 ) w[s + 1] = 0.0;
             }
-        } else if (family == 1) {
-            for (int s = from; s < 16; ++s) on[s] = s % 2 == 0;
-            int picks = span >= 8 ? 2 + r.below(3) : 1 + r.below(2);
+        }
+        else if ( family == 1 )
+        {
+            for ( int s = from; s < 16; ++s ) on[s] = s % 2 == 0;
+            int    picks = span >= 8 ? 2 + r.below( 3 ) : 1 + r.below( 2 );
             double w[16] = {};
-            for (int s = from; s < 16; ++s) w[s] = s % 2 == 1 ? 0.05 + pOn(s) : 0.0;
-            while (picks-- > 0) {
+            for ( int s = from; s < 16; ++s ) w[s] = s % 2 == 1 ? 0.05 + pOn( s ) : 0.0;
+            while ( picks-- > 0 )
+            {
                 double any = 0.0;
-                for (double v : w) any += v;
-                if (any <= 0.0) break;
-                const int s = drawIndex(r, w, 16);
+                for ( double v : w ) any += v;
+                if ( any <= 0.0 ) break;
+                const int s = drawIndex( r, w, 16 );
                 on[s] = true;
                 w[s] = 0.0;
             }
-        } else {
-            for (int s = from; s < 16; ++s) on[s] = Gallop[cell][s % 4];
+        }
+        else
+        {
+            for ( int s = from; s < 16; ++s ) on[s] = Gallop[cell][s % 4];
             const int firstBeat = from / 4;
-            if (firstBeat < 4) {
-                const int open = firstBeat == 0 ? 1 + r.below(3) : firstBeat + r.below(4 - firstBeat);
-                for (int s = open * 4; s < open * 4 + 4; ++s) if (s >= from) on[s] = true;
+            if ( firstBeat < 4 )
+            {
+                const int open = firstBeat == 0 ? 1 + r.below( 3 ) : firstBeat + r.below( 4 - firstBeat );
+                for ( int s = open * 4; s < open * 4 + 4; ++s )
+                    if ( s >= from ) on[s] = true;
             }
         }
     };
-    fill(0);
-    for (int s = 0; s < 16; ++s) on[16 + s] = on[s];
+    fill( 0 );
+    for ( int s = 0; s < 16; ++s ) on[16 + s] = on[s];
     // The second bar's last beat, redrawn with the same family: the turn of the motif.
-    const bool keep[16] = { on[0], on[1], on[2], on[3], on[4], on[5], on[6], on[7], on[8], on[9], on[10], on[11], on[12], on[13], on[14], on[15] };
-    fill(12);
-    for (int s = 12; s < 16; ++s) { on[16 + s] = on[s]; on[s] = keep[s]; }
+    const bool keep[16] = { on[0], on[1], on[2],  on[3],  on[4],  on[5],  on[6],  on[7],
+                            on[8], on[9], on[10], on[11], on[12], on[13], on[14], on[15] };
+    fill( 12 );
+    for ( int s = 12; s < 16; ++s )
+    {
+        on[16 + s] = on[s];
+        on[s] = keep[s];
+    }
     std::vector<int> out;
-    for (int s = 0; s < 32; ++s) if (on[s]) out.push_back(s);
+    for ( int s = 0; s < 32; ++s )
+        if ( on[s] ) out.push_back( s );
     return out;
 }
 
@@ -125,9 +146,10 @@ std::vector<int> leadRhythm(Rng& r, const CorpusRole& role, int family)
  * @{ */
 
 /** @brief An archetype: the cell's transposition per bar in scale steps, and the phrase's filter arc. */
-struct LeadArchetypeDef {
+struct LeadArchetypeDef
+{
     int8_t m_step[8];   ///< the cell's transposition per bar, scale steps
-    float m_arc[8];     ///< the phrase's filter arc per bar
+    float  m_arc[8];    ///< the phrase's filter arc per bar
 };
 
 /**
@@ -142,11 +164,18 @@ struct LeadArchetypeDef {
  * bar, around the section's own value (leadArc).
  */
 const LeadArchetypeDef LeadArchetypes[NumLeadArchetypes] = {
-    { { -1, -1, 0, 0, 0, 1, 2, -1 },  { 0.10f, 0.15f, 0.20f, 0.30f, 0.45f, 0.60f, 0.85f, 0.30f } },   // Phrygian Surge: flat, a slow rise to the peak in bar 7
-    { { -1, 0, 0, 1, 1, 0, 0, -1 },   { 0.20f, 0.35f, 0.55f, 0.75f, 0.75f, 0.55f, 0.35f, 0.20f } },   // Arch & Drop: up over the first half, down over the second
-    { { 0, 0, 0, 0, 0, 0, 0, 0 },     { 0.30f, 0.30f, 0.30f, 0.45f, 0.30f, 0.30f, 0.30f, 0.55f } },   // Pedal & Bounce
-    { { 1, 1, 1, 0, 0, -1, -1, -1 },  { 0.80f, 0.70f, 0.60f, 0.50f, 0.40f, 0.30f, 0.20f, 0.30f } },   // Descending Cascade
-    { { -1, 0, -1, 0, 0, 1, 1, 0 },   { 0.30f, 0.50f, 0.30f, 0.50f, 0.50f, 0.70f, 0.85f, 0.30f } },   // Tension Call: calls that rise and do not resolve until the end
+    { { -1, -1, 0, 0, 0, 1, 2, -1 },
+      { 0.10f, 0.15f, 0.20f, 0.30f, 0.45f, 0.60f, 0.85f,
+        0.30f } },   // Phrygian Surge: flat, a slow rise to the peak in bar 7
+    { { -1, 0, 0, 1, 1, 0, 0, -1 },
+      { 0.20f, 0.35f, 0.55f, 0.75f, 0.75f, 0.55f, 0.35f,
+        0.20f } },   // Arch & Drop: up over the first half, down over the second
+    { { 0, 0, 0, 0, 0, 0, 0, 0 }, { 0.30f, 0.30f, 0.30f, 0.45f, 0.30f, 0.30f, 0.30f, 0.55f } },   // Pedal & Bounce
+    { { 1, 1, 1, 0, 0, -1, -1, -1 },
+      { 0.80f, 0.70f, 0.60f, 0.50f, 0.40f, 0.30f, 0.20f, 0.30f } },   // Descending Cascade
+    { { -1, 0, -1, 0, 0, 1, 1, 0 },
+      { 0.30f, 0.50f, 0.30f, 0.50f, 0.50f, 0.70f, 0.85f,
+        0.30f } },   // Tension Call: calls that rise and do not resolve until the end
 };
 
 /**
@@ -155,11 +184,11 @@ const LeadArchetypeDef LeadArchetypes[NumLeadArchetypes] = {
  * @param[in] d      the degree, any integer
  * @return the semitones over the tonic
  */
-int degreeRel(int scale, int d)
+int degreeRel( int scale, int d )
 {
-    if (d >= 0) return scaleDegree(scale, d);
-    const int k = (-d + 6) / 7;
-    return scaleDegree(scale, d + 7 * k) - 12 * k;
+    if ( d >= 0 ) return scaleDegree( scale, d );
+    const int k = ( -d + 6 ) / 7;
+    return scaleDegree( scale, d + 7 * k ) - 12 * k;
 }
 
 /**
@@ -168,9 +197,10 @@ int degreeRel(int scale, int d)
  * @param[in] pc     the pitch class
  * @return the degree, -1 for a chromatic class
  */
-int degreeOfPc(int scale, int pc)
+int degreeOfPc( int scale, int pc )
 {
-    for (int d = 0; d < 7; ++d) if (scaleDegree(scale, d) % 12 == ((pc % 12) + 12) % 12) return d;
+    for ( int d = 0; d < 7; ++d )
+        if ( scaleDegree( scale, d ) % 12 == ( ( pc % 12 ) + 12 ) % 12 ) return d;
     return -1;
 }
 
@@ -185,20 +215,22 @@ int degreeOfPc(int scale, int pc)
  * @param[in] steps       the scale degrees
  * @return the interval moved
  */
-int transposeRel(int scale, int rootOffset, int rel, int steps)
+int transposeRel( int scale, int rootOffset, int rel, int steps )
 {
-    if (steps == 0) return rel;
-    const int t = rel + rootOffset;                      // semitones over the tonic
-    const int pc = ((t % 12) + 12) % 12;
-    int d = degreeOfPc(scale, pc);
-    int chroma = 0;
-    if (d < 0) {
+    if ( steps == 0 ) return rel;
+    const int t = rel + rootOffset;   // semitones over the tonic
+    const int pc = ( ( t % 12 ) + 12 ) % 12;
+    int       d = degreeOfPc( scale, pc );
+    int       chroma = 0;
+    if ( d < 0 )
+    {
         d = 0;
-        for (int k = 0; k < 7; ++k) if (scaleDegree(scale, k) % 12 < pc) d = k;
-        chroma = pc - scaleDegree(scale, d) % 12;
+        for ( int k = 0; k < 7; ++k )
+            if ( scaleDegree( scale, k ) % 12 < pc ) d = k;
+        chroma = pc - scaleDegree( scale, d ) % 12;
     }
-    const int oct = (t - pc) / 12;                       // exact: t - pc is a multiple of 12
-    return degreeRel(scale, 7 * oct + d + steps) + chroma - rootOffset;
+    const int oct = ( t - pc ) / 12;   // exact: t - pc is a multiple of 12
+    return degreeRel( scale, 7 * oct + d + steps ) + chroma - rootOffset;
 }
 
 /**
@@ -208,13 +240,13 @@ int transposeRel(int scale, int rootOffset, int rel, int steps)
  * @param[in] step  the sixteenth
  * @return the weight
  */
-double metricWeight(int step)
+double metricWeight( int step )
 {
-    const int s = ((step % 16) + 16) % 16;
-    if (s == 0) return 1.0;
-    if (s == 8) return 0.8;
-    if (s % 4 == 0) return 0.5;
-    if (s % 2 == 0) return 0.2;
+    const int s = ( ( step % 16 ) + 16 ) % 16;
+    if ( s == 0 ) return 1.0;
+    if ( s == 8 ) return 0.8;
+    if ( s % 4 == 0 ) return 0.5;
+    if ( s % 2 == 0 ) return 0.2;
     return -0.15;
 }
 
@@ -228,29 +260,33 @@ double metricWeight(int step)
  * @param[in] role  the role
  * @return the distribution
  */
-const std::vector<double>& corpusIntervalHistogram(CorpusRoleIdE role)
+const std::vector<double> &corpusIntervalHistogram( CorpusRoleIdE role )
 {
-    struct Table {
+    struct Table
+    {
         std::vector<double> m_h[NumCorpusRoles];
         Table()
         {
-            for (int k = 0; k < NumCorpusRoles; ++k) {
-                std::vector<double>& v = m_h[k];
-                v.assign(13, 0.0);
-                const CorpusRole& r = CorpusRoles[k];
-                double total = 0.0;
-                for (int i = 0; i < r.m_numBi; ++i) {
-                    const int key = static_cast<int>(r.m_bi[i].m_key);
+            for ( int k = 0; k < NumCorpusRoles; ++k )
+            {
+                std::vector<double> &v = m_h[k];
+                v.assign( 13, 0.0 );
+                const CorpusRole &r = CorpusRoles[k];
+                double            total = 0.0;
+                for ( int i = 0; i < r.m_numBi; ++i )
+                {
+                    const int key = static_cast<int>( r.m_bi[i].m_key );
                     const int b = key / CorpusAlphabet, c = key % CorpusAlphabet;
-                    v[static_cast<size_t>(std::min(12, std::abs(c - b)))] += r.m_bi[i].m_count;
+                    v[static_cast<size_t>( std::min( 12, std::abs( c - b ) ) )] += r.m_bi[i].m_count;
                     total += r.m_bi[i].m_count;
                 }
-                if (total > 0.0) for (double& x : v) x /= total;
+                if ( total > 0.0 )
+                    for ( double &x : v ) x /= total;
             }
         }
     };
     static const Table table;
-    return table.m_h[std::clamp(static_cast<int>(role), 0, NumCorpusRoles - 1)];
+    return table.m_h[std::clamp( static_cast<int>( role ), 0, NumCorpusRoles - 1 )];
 }
 
 /**
@@ -260,12 +296,13 @@ const std::vector<double>& corpusIntervalHistogram(CorpusRoleIdE role)
  * @param[in]     family  the rhythm family
  * @return the onset mask
  */
-uint16_t familyCellMask(Rng& r, const CorpusRole& role, int family)
+uint16_t familyCellMask( Rng &r, const CorpusRole &role, int family )
 {
-    const std::vector<int> steps = leadRhythm(r, role, family);
-    unsigned m = 0;
-    for (int s : steps) if (s < 16) m |= 1u << s;
-    return static_cast<uint16_t>(m);
+    const std::vector<int> steps = leadRhythm( r, role, family );
+    unsigned               m = 0;
+    for ( int s : steps )
+        if ( s < 16 ) m |= 1u << s;
+    return static_cast<uint16_t>( m );
 }
 
 /**
@@ -277,16 +314,21 @@ uint16_t familyCellMask(Rng& r, const CorpusRole& role, int family)
  * @param[in] mask  the onset mask
  * @return true when it may be a lead cell
  */
-bool cellLegal(unsigned mask)
+bool cellLegal( unsigned mask )
 {
     int on = 0;
-    for (int s = 0; s < 16; ++s) on += (mask >> s) & 1u;
-    if (on < 8 || on > 15 || (mask & 1u) == 0) return false;
+    for ( int s = 0; s < 16; ++s ) on += ( mask >> s ) & 1u;
+    if ( on < 8 || on > 15 || ( mask & 1u ) == 0 ) return false;
     int longest = 0, cur = 0;
-    for (int s = 0; s < 32; ++s) { cur = ((mask >> (s % 16)) & 1u) ? 0 : cur + 1; longest = std::max(longest, cur); }
-    if (longest >= 6) return false;
+    for ( int s = 0; s < 32; ++s )
+    {
+        cur = ( ( mask >> ( s % 16 ) ) & 1u ) ? 0 : cur + 1;
+        longest = std::max( longest, cur );
+    }
+    if ( longest >= 6 ) return false;
     bool held = false;
-    for (int s = 0; s < 16; ++s) held = held || (((mask >> s) & 1u) && !((mask >> ((s + 1) % 16)) & 1u));
+    for ( int s = 0; s < 16; ++s )
+        held = held || ( ( ( mask >> s ) & 1u ) && !( ( mask >> ( ( s + 1 ) % 16 ) ) & 1u ) );
     return held;
 }
 
@@ -296,12 +338,12 @@ bool cellLegal(unsigned mask)
  * @param[in] band  the density band, 0..2
  * @return true when it may be a lead cell in the band
  */
-bool cellAdmits(unsigned mask, int band)
+bool cellAdmits( unsigned mask, int band )
 {
     static const int Lo[3] = { 8, 10, 12 }, Hi[3] = { 10, 12, 15 };
-    int on = 0;
-    for (int s = 0; s < 16; ++s) on += (mask >> s) & 1u;
-    return on >= Lo[band] && on <= Hi[band] && cellLegal(mask);
+    int              on = 0;
+    for ( int s = 0; s < 16; ++s ) on += ( mask >> s ) & 1u;
+    return on >= Lo[band] && on <= Hi[band] && cellLegal( mask );
 }
 
 /**
@@ -313,17 +355,21 @@ bool cellAdmits(unsigned mask, int band)
  * @param[in] interlock  how much the interlock counts, 0..1
  * @return the factor
  */
-double interlockFactor(unsigned mask, unsigned bassMask, float interlock)
+double interlockFactor( unsigned mask, unsigned bassMask, float interlock )
 {
-    if (bassMask == 0 || interlock <= 0.0f) return 1.0;
+    if ( bassMask == 0 || interlock <= 0.0f ) return 1.0;
     int off = 0, holes = 0, hits = 0;
-    for (int s = 0; s < 16; ++s) {
-        if (s % 4 == 0 || ((mask >> s) & 1u) == 0) continue;
+    for ( int s = 0; s < 16; ++s )
+    {
+        if ( s % 4 == 0 || ( ( mask >> s ) & 1u ) == 0 ) continue;
         ++off;
-        if ((bassMask >> s) & 1u) ++hits; else ++holes;
+        if ( ( bassMask >> s ) & 1u )
+            ++hits;
+        else
+            ++holes;
     }
-    if (off == 0) return 1.0;
-    return std::exp(interlock * (0.6 * holes - 0.4 * hits) / off);
+    if ( off == 0 ) return 1.0;
+    return std::exp( interlock * ( 0.6 * holes - 0.4 * hits ) / off );
 }
 
 /**
@@ -346,45 +392,64 @@ double interlockFactor(unsigned mask, unsigned bassMask, float interlock)
  * @param[out]    fromCorpus  true when the mask came from the corpus
  * @return the onset mask
  */
-uint16_t drawCellMask(Rng& r, const CorpusRole& role, int band, unsigned bassMask, float interlock, bool& fromCorpus)
+uint16_t drawCellMask( Rng &r, const CorpusRole &role, int band, unsigned bassMask, float interlock, bool &fromCorpus )
 {
-    const int family = r.below(3);   // drawn whatever happens below: the fallback and the draws after keep their place
-    const CorpusBarMask* bars = CorpusRoleBars[static_cast<int>(CorpusRoleIdE::LEAD)];
-    const int n = NumCorpusRoleBars[static_cast<int>(CorpusRoleIdE::LEAD)];
-    std::vector<double> w;
+    const int family =
+        r.below( 3 );   // drawn whatever happens below: the fallback and the draws after keep their place
+    const CorpusBarMask  *bars = CorpusRoleBars[static_cast<int>( CorpusRoleIdE::LEAD )];
+    const int             n = NumCorpusRoleBars[static_cast<int>( CorpusRoleIdE::LEAD )];
+    std::vector<double>   w;
     std::vector<unsigned> cand;
-    auto offer = [&](unsigned mask, double weight) {
-        for (size_t k = 0; k < cand.size(); ++k) if (cand[k] == mask) { w[k] = std::max(w[k], weight); return; }
-        cand.push_back(mask);
-        w.push_back(weight * interlockFactor(mask, bassMask, interlock));
+    auto                  offer = [&]( unsigned mask, double weight )
+    {
+        for ( size_t k = 0; k < cand.size(); ++k )
+            if ( cand[k] == mask )
+            {
+                w[k] = std::max( w[k], weight );
+                return;
+            }
+        cand.push_back( mask );
+        w.push_back( weight * interlockFactor( mask, bassMask, interlock ) );
     };
-    for (int i = 0; i < n; ++i) {
-        if (!cellAdmits(bars[i].m_mask, band)) continue;
-        offer(bars[i].m_mask, std::sqrt(static_cast<double>(bars[i].m_count)));
+    for ( int i = 0; i < n; ++i )
+    {
+        if ( !cellAdmits( bars[i].m_mask, band ) ) continue;
+        offer( bars[i].m_mask, std::sqrt( static_cast<double>( bars[i].m_count ) ) );
     }
     const size_t templates = cand.size();
-    for (size_t k = 0; k < templates; ++k) {
+    for ( size_t k = 0; k < templates; ++k )
+    {
         const unsigned base = cand[k];
-        const double weight = w[k] / std::max(1e-9, interlockFactor(base, bassMask, interlock)) / 3.0;
-        for (int st = 1; st < 16; ++st) {
-            if (st % 4 == 0) continue;   // the beats stay as the template has them
-            const unsigned variant = base ^ (1u << st);
-            if (cellAdmits(variant, band)) offer(variant, weight);
+        const double   weight = w[k] / std::max( 1e-9, interlockFactor( base, bassMask, interlock ) ) / 3.0;
+        for ( int st = 1; st < 16; ++st )
+        {
+            if ( st % 4 == 0 ) continue;   // the beats stay as the template has them
+            const unsigned variant = base ^ ( 1u << st );
+            if ( cellAdmits( variant, band ) ) offer( variant, weight );
         }
     }
     const double u = r.uniform();
     fromCorpus = !cand.empty();
-    if (!fromCorpus) {
+    if ( !fromCorpus )
+    {
         // The family figure, tried up to eight times for a bar the rules admit; the last one stands.
         uint16_t m = 0;
-        for (int t = 0; t < 8; ++t) { m = familyCellMask(r, role, family); if (cellAdmits(m, band)) break; }
+        for ( int t = 0; t < 8; ++t )
+        {
+            m = familyCellMask( r, role, family );
+            if ( cellAdmits( m, band ) ) break;
+        }
         return m;
     }
     double total = 0.0;
-    for (double v : w) total += v;
+    for ( double v : w ) total += v;
     double x = u * total;
-    for (size_t i = 0; i < cand.size(); ++i) { if (x < w[i]) return static_cast<uint16_t>(cand[i]); x -= w[i]; }
-    return static_cast<uint16_t>(cand.back());
+    for ( size_t i = 0; i < cand.size(); ++i )
+    {
+        if ( x < w[i] ) return static_cast<uint16_t>( cand[i] );
+        x -= w[i];
+    }
+    return static_cast<uint16_t>( cand.back() );
 }
 
 /**
@@ -393,17 +458,19 @@ uint16_t drawCellMask(Rng& r, const CorpusRole& role, int band, unsigned bassMas
  * @param[in]  rels     their intervals
  * @param[out] anchors  the pitch at each beat
  */
-void beatAnchors(const std::vector<int>& steps, const std::vector<int>& rels, int anchors[4])
+void beatAnchors( const std::vector<int> &steps, const std::vector<int> &rels, int anchors[4] )
 {
     int last = rels.empty() ? 0 : rels[0];
-    for (int beat = 0; beat < 4; ++beat) {
+    for ( int beat = 0; beat < 4; ++beat )
+    {
         int hit = 1 << 20;
-        for (size_t i = 0; i < steps.size(); ++i) {
-            const int s = ((steps[i] % 16) + 16) % 16;
-            if (s >= beat * 4 && s < beat * 4 + 4 && hit == (1 << 20)) hit = rels[i];
-            if (s < beat * 4 + 4) last = rels[i];
+        for ( size_t i = 0; i < steps.size(); ++i )
+        {
+            const int s = ( ( steps[i] % 16 ) + 16 ) % 16;
+            if ( s >= beat * 4 && s < beat * 4 + 4 && hit == ( 1 << 20 ) ) hit = rels[i];
+            if ( s < beat * 4 + 4 ) last = rels[i];
         }
-        anchors[beat] = hit != (1 << 20) ? hit : last;
+        anchors[beat] = hit != ( 1 << 20 ) ? hit : last;
         last = anchors[beat];
     }
 }
@@ -423,82 +490,93 @@ void beatAnchors(const std::vector<int>& steps, const std::vector<int>& rels, in
  * @param[in] ls          the lead's style
  * @return the score, higher is better
  */
-double criticScore(const std::vector<int>& steps, const std::vector<int>& rels, int rootOffset, const LeadStyle& ls)
+double criticScore( const std::vector<int> &steps, const std::vector<int> &rels, int rootOffset, const LeadStyle &ls )
 {
     const size_t n = rels.size();
-    if (n == 0) return -1e9;
-    auto pcOf = [&](int rel) { return ((rel + rootOffset) % 12 + 12) % 12; };
+    if ( n == 0 ) return -1e9;
+    auto   pcOf = [&]( int rel ) { return ( ( rel + rootOffset ) % 12 + 12 ) % 12; };
     double score = 0.0;
     // Stable degrees where the metre is heavy.
     double stable = 0.0;
-    int heavy = 0;
-    for (size_t i = 0; i < n; ++i) {
-        if (steps[i] % 4 != 0) continue;
+    int    heavy = 0;
+    for ( size_t i = 0; i < n; ++i )
+    {
+        if ( steps[i] % 4 != 0 ) continue;
         ++heavy;
-        const int inst = lerdahlInstability(pcOf(rels[i]));
-        stable += inst == 0 ? 1.0 : (inst == 1 ? 0.8 : (inst == 2 ? 0.4 : 0.0));
+        const int inst = lerdahlInstability( pcOf( rels[i] ) );
+        stable += inst == 0 ? 1.0 : ( inst == 1 ? 0.8 : ( inst == 2 ? 0.4 : 0.0 ) );
     }
-    if (heavy > 0) score += ls.m_stability * stable / heavy;
+    if ( heavy > 0 ) score += ls.m_stability * stable / heavy;
     // Zigzag: the share of direction reversals among the moving intervals.
     int moves = 0, reversals = 0, lastSign = 0;
-    for (size_t i = 1; i < n; ++i) {
+    for ( size_t i = 1; i < n; ++i )
+    {
         const int d = rels[i] - rels[i - 1];
-        if (d == 0) continue;
+        if ( d == 0 ) continue;
         const int sign = d > 0 ? 1 : -1;
-        if (lastSign != 0 && sign != lastSign) ++reversals;
-        if (lastSign != 0) ++moves;
+        if ( lastSign != 0 && sign != lastSign ) ++reversals;
+        if ( lastSign != 0 ) ++moves;
         lastSign = sign;
     }
-    if (moves > 0) score -= 0.8 * std::max(0.0, static_cast<double>(reversals) / moves - 0.5);
+    if ( moves > 0 ) score -= 0.8 * std::max( 0.0, static_cast<double>( reversals ) / moves - 0.5 );
     // The interval histogram against the corpus's.
     {
-        const std::vector<double>& h = corpusIntervalHistogram(CorpusRoleIdE::LEAD);
-        std::vector<double> mine(13, 0.0);
-        for (size_t i = 1; i < n; ++i) mine[static_cast<size_t>(std::min(12, std::abs(rels[i] - rels[i - 1])))] += 1.0 / static_cast<double>(n - 1);
+        const std::vector<double> &h = corpusIntervalHistogram( CorpusRoleIdE::LEAD );
+        std::vector<double>        mine( 13, 0.0 );
+        for ( size_t i = 1; i < n; ++i )
+            mine[static_cast<size_t>( std::min( 12, std::abs( rels[i] - rels[i - 1] ) ) )] +=
+                1.0 / static_cast<double>( n - 1 );
         double l1 = 0.0;
-        for (size_t k = 0; k < 13; ++k) l1 += std::abs(mine[k] - h[k]);
+        for ( size_t k = 0; k < 13; ++k ) l1 += std::abs( mine[k] - h[k] );
         score -= 0.6 * ls.m_proximity * l1;
     }
     // The corpus skeletons as a prior on the beat anchors.
     {
         int a[4];
-        beatAnchors(steps, rels, a);
-        const CorpusSkeleton* sk = CorpusRoleSkeletons[static_cast<int>(CorpusRoleIdE::LEAD)];
-        const int nk = NumCorpusRoleSkeletons[static_cast<int>(CorpusRoleIdE::LEAD)];
-        uint32_t best = 0, count = 0;
-        for (int k = 0; k < nk; ++k) {
-            best = std::max(best, sk[k].m_count);
-            if (sk[k].m_d[0] == std::clamp(a[1] - a[0], -12, 12) && sk[k].m_d[1] == std::clamp(a[2] - a[0], -12, 12) && sk[k].m_d[2] == std::clamp(a[3] - a[0], -12, 12)) count = sk[k].m_count;
+        beatAnchors( steps, rels, a );
+        const CorpusSkeleton *sk = CorpusRoleSkeletons[static_cast<int>( CorpusRoleIdE::LEAD )];
+        const int             nk = NumCorpusRoleSkeletons[static_cast<int>( CorpusRoleIdE::LEAD )];
+        uint32_t              best = 0, count = 0;
+        for ( int k = 0; k < nk; ++k )
+        {
+            best = std::max( best, sk[k].m_count );
+            if ( sk[k].m_d[0] == std::clamp( a[1] - a[0], -12, 12 ) &&
+                 sk[k].m_d[1] == std::clamp( a[2] - a[0], -12, 12 ) &&
+                 sk[k].m_d[2] == std::clamp( a[3] - a[0], -12, 12 ) )
+                count = sk[k].m_count;
         }
-        if (best > 0 && count > 0) score += 0.3 * std::log1p(static_cast<double>(count)) / std::log1p(static_cast<double>(best));
+        if ( best > 0 && count > 0 )
+            score += 0.3 * std::log1p( static_cast<double>( count ) ) / std::log1p( static_cast<double>( best ) );
     }
     // A tonic in the bar, and the fifth; three to five pitch classes; a riff's ambitus; no runs.
     bool tonic = false, fifth = false;
-    int classes[12] = {};
-    int lo = 1 << 20, hi = -(1 << 20), runs = 0;
-    for (size_t i = 0; i < n; ++i) {
-        const int pc = pcOf(rels[i]);
+    int  classes[12] = {};
+    int  lo = 1 << 20, hi = -( 1 << 20 ), runs = 0;
+    for ( size_t i = 0; i < n; ++i )
+    {
+        const int pc = pcOf( rels[i] );
         tonic = tonic || pc == 0;
         fifth = fifth || pc == 7;
         classes[pc] = 1;
-        lo = std::min(lo, rels[i]);
-        hi = std::max(hi, rels[i]);
-        if (i >= 2 && rels[i] == rels[i - 1] && rels[i - 1] == rels[i - 2]) ++runs;
+        lo = std::min( lo, rels[i] );
+        hi = std::max( hi, rels[i] );
+        if ( i >= 2 && rels[i] == rels[i - 1] && rels[i - 1] == rels[i - 2] ) ++runs;
     }
     int distinct = 0;
-    for (int c : classes) distinct += c;
-    score += (tonic ? 0.5 : 0.0) + (fifth ? 0.2 : 0.0);
-    score += distinct >= 3 && distinct <= 5 ? 0.3 : (distinct < 3 ? -0.3 : 0.0);
-    score += hi - lo <= 7 ? 0.2 : (hi - lo > 10 ? -0.4 : 0.0);
+    for ( int c : classes ) distinct += c;
+    score += ( tonic ? 0.5 : 0.0 ) + ( fifth ? 0.2 : 0.0 );
+    score += distinct >= 3 && distinct <= 5 ? 0.3 : ( distinct < 3 ? -0.3 : 0.0 );
+    score += hi - lo <= 7 ? 0.2 : ( hi - lo > 10 ? -0.4 : 0.0 );
     score -= 0.3 * runs;
     return score;
 }
 
 /** @brief One bar of the phrase as it is being built. */
-struct LeadBar {
+struct LeadBar
+{
     std::vector<int> m_steps;   ///< the notes' sixteenths
-    std::vector<int> m_rels;   ///< their intervals to the tonic
-    std::vector<int> m_lens;   ///< their lengths, sixteenths
+    std::vector<int> m_rels;    ///< their intervals to the tonic
+    std::vector<int> m_lens;    ///< their lengths, sixteenths
     std::vector<int> m_src;     ///< the cell note each note derives from, -1 for none
 };
 
@@ -534,218 +612,306 @@ struct LeadBar {
  */
 constexpr int LeadCandidates = 24;   ///< cells drawn per phrase for the critic to choose from
 
-void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour, DrawSource src,
-              const LeadStyle& ls, int densityKnob, int entropyKnob, unsigned bassMask, const SetMotif& motif)
+void makeLead( MelodyPlan &m, int key, int scale, uint64_t seed, double temperature, float colour, DrawSource src,
+               const LeadStyle &ls, int densityKnob, int entropyKnob, unsigned bassMask, const SetMotif &motif )
 {
-    src.m_mode = std::clamp(scale, 0, NumScales - 1);
+    src.m_mode = std::clamp( scale, 0, NumScales - 1 );
     Rng r;
-    r.seed(seed ^ SaltLead);
+    r.seed( seed ^ SaltLead );
     Rng cr;
-    cr.seed(seed ^ SaltColour ^ 2u);
-    const CorpusRole& role = CorpusRoles[static_cast<int>(CorpusRoleIdE::LEAD)];
-    const PitchModel& model = corpusPitchModel(CorpusRoleIdE::LEAD);
-    const int root = m.m_root[LeadI];
-    const int rootOffset = ((root - key) % 12 + 12) % 12;
-    const int lo = std::max(m.m_leadWindowLo - root, CorpusRelMin), hi = std::min(leadWindowHi(m) - root, CorpusRelMax);
-    const double baseCentre = (m.m_leadWindowLo + 3.5) - root;   // the window's lower half, as LeadCentre was for C4 .. B4
+    cr.seed( seed ^ SaltColour ^ 2u );
+    const CorpusRole &role = CorpusRoles[static_cast<int>( CorpusRoleIdE::LEAD )];
+    const PitchModel &model = corpusPitchModel( CorpusRoleIdE::LEAD );
+    const int         root = m.m_root[LeadI];
+    const int         rootOffset = ( ( root - key ) % 12 + 12 ) % 12;
+    const int         lo = std::max( m.m_leadWindowLo - root, CorpusRelMin ),
+                      hi = std::min( leadWindowHi( m ) - root, CorpusRelMax );
+    const double      baseCentre =
+        ( m.m_leadWindowLo + 3.5 ) - root;   // the window's lower half, as LeadCentre was for C4 .. B4
     m.m_colour = colour;
     // The knobs over the style: density band and entropy.
     {
-        const double x = densityKnob > 0 ? static_cast<double>(densityKnob - 1) : ls.m_density * 2.0 + (static_cast<double>(r.uniform()) - 0.5);
-        m.m_leadDensityBand = std::clamp(static_cast<int>(std::lround(x)), 0, 2);
+        const double x = densityKnob > 0 ? static_cast<double>( densityKnob - 1 )
+                                         : ls.m_density * 2.0 + ( static_cast<double>( r.uniform() ) - 0.5 );
+        m.m_leadDensityBand = std::clamp( static_cast<int>( std::lround( x ) ), 0, 2 );
         // A track that states or recalls the set's motif takes the motif's band (SetMotif), unless the
         // user holds the density knob -- then the motif plays only where the knob's band admits it. The
         // draw above is made whatever happens, so the draws after it keep their place.
-        if (motif.m_phrase >= 0 && motif.m_cell != 0 && densityKnob == 0) m.m_leadDensityBand = std::clamp<int>(motif.m_band, 0, 2);
+        if ( motif.m_phrase >= 0 && motif.m_cell != 0 && densityKnob == 0 )
+            m.m_leadDensityBand = std::clamp<int>( motif.m_band, 0, 2 );
     }
     static const double Entropy[4] = { 1.0, 0.7, 1.0, 1.4 };
-    const double temp = temperature * (entropyKnob > 0 ? Entropy[std::clamp(entropyKnob, 1, 3)] : ls.m_entropy);
-    auto pcOf = [&](int rel) { return ((rel + rootOffset) % 12 + 12) % 12; };
-    const double sigma = LeadSigma / std::max(0.25f, ls.m_homing);
+    const double temp = temperature * ( entropyKnob > 0 ? Entropy[std::clamp( entropyKnob, 1, 3 )] : ls.m_entropy );
+    auto         pcOf = [&]( int rel ) { return ( ( rel + rootOffset ) % 12 + 12 ) % 12; };
+    const double sigma = LeadSigma / std::max( 0.25f, ls.m_homing );
     // The register centre the cell is drawn around: the lead's (LeadCentre). The archetypes are
     // centred on the cell (LeadArchetypes), so the phrase keeps the cell's register.
     const double centre = baseCentre;
-    auto registerW = [&](int rel) { const double z = (rel - centre) / sigma; return std::exp(-0.5 * z * z); };
+    auto         registerW = [&]( int rel )
+    {
+        const double z = ( rel - centre ) / sigma;
+        return std::exp( -0.5 * z * z );
+    };
     double scaleW[12] = {};
-    for (int d = 0; d < 7; ++d) {
-        const int pc = scaleDegree(scale, d) % 12;
+    for ( int d = 0; d < 7; ++d )
+    {
+        const int pc = scaleDegree( scale, d ) % 12;
         // The Phrygian family's b2 is a degree of the lead's own (Harmony.h, isLineColourTone), a little rarer than
         // the others; beats 1 and 3 still take a chord tone (constraintAt).
-        scaleW[pc] = isLineColourTone(scale, pc) ? 0.0 : (pc == 0 || pc == 7 ? 1.3 : (pc == 1 ? 0.8 : 1.0));
+        scaleW[pc] = isLineColourTone( scale, pc ) ? 0.0 : ( pc == 0 || pc == 7 ? 1.3 : ( pc == 1 ? 0.8 : 1.0 ) );
     }
     int tonicPcs[3];
-    chordTones(scale, 0, tonicPcs);   // the tonic chord, whatever the pad plays (the Bordun; round "Harmonik")
-    auto isChord = [&](int pc) { return pc == tonicPcs[0] || pc == tonicPcs[1] || pc == tonicPcs[2]; };
+    chordTones( scale, 0, tonicPcs );   // the tonic chord, whatever the pad plays (the Bordun; round "Harmonik")
+    auto isChord = [&]( int pc ) { return pc == tonicPcs[0] || pc == tonicPcs[1] || pc == tonicPcs[2]; };
     // The weight table: scale tone x register x stability-by-metre, tilted by the measured tension curve.
-    auto constraintAt = [&](int step) {
-        const double t = tensionAt(CorpusRoleIdE::LEAD, step, 1);
-        auto stab = [&](int rel) { return std::exp(-ls.m_stability * metricWeight(step) * lerdahlInstability(pcOf(rel))); };
-        if (step % 8 == 0) {
-            const std::vector<uint8_t> s = weightedSet(rootOffset, lo, hi, [&](int rel) {
-                const int pc = pcOf(rel);
-                return isChord(pc) ? scaleW[pc] * registerW(rel) * stab(rel) : 0.0;
-            }, t);
-            if (!emptySet(s)) return s;
+    auto constraintAt = [&]( int step )
+    {
+        const double t = tensionAt( CorpusRoleIdE::LEAD, step, 1 );
+        auto         stab = [&]( int rel )
+        { return std::exp( -ls.m_stability * metricWeight( step ) * lerdahlInstability( pcOf( rel ) ) ); };
+        if ( step % 8 == 0 )
+        {
+            const std::vector<uint8_t> s = weightedSet(
+                rootOffset, lo, hi,
+                [&]( int rel )
+                {
+                    const int pc = pcOf( rel );
+                    return isChord( pc ) ? scaleW[pc] * registerW( rel ) * stab( rel ) : 0.0;
+                },
+                t );
+            if ( !emptySet( s ) ) return s;
         }
-        return weightedSet(rootOffset, lo, hi, [&](int rel) { return scaleW[pcOf(rel)] * registerW(rel) * stab(rel); }, t);
+        return weightedSet(
+            rootOffset, lo, hi, [&]( int rel ) { return scaleW[pcOf( rel )] * registerW( rel ) * stab( rel ); }, t );
     };
-    auto fits = [&](int step, int rel) {
-        return rel >= lo && rel <= hi && constraintAt(step)[static_cast<size_t>(sym(rel))] != 0;
-    };
+    auto fits = [&]( int step, int rel )
+    { return rel >= lo && rel <= hi && constraintAt( step )[static_cast<size_t>( sym( rel ) )] != 0; };
     // The nearest legal pitch to `rel` at `step`: a scale tone, no colour tone (the structural b2 is none,
     // isLineColourTone), a chord tone on a strong step.
     // `dir` (the bar's shift) breaks ties towards the transposition, so a snapped strong step does not undo it.
-    auto legal = [&](int step, int rel, int dir) {
-        if (fits(step, rel) && !isLineColourTone(scale, pcOf(rel))) return rel;
+    auto legal = [&]( int step, int rel, int dir )
+    {
+        if ( fits( step, rel ) && !isLineColourTone( scale, pcOf( rel ) ) ) return rel;
         const int first = dir >= 0 ? 1 : -1;
-        for (int d = 1; d <= 12; ++d) {
-            for (int c : { rel + first * d, rel - first * d })
-                if (c >= lo && c <= hi && inScale(scale, pcOf(c)) && !isLineColourTone(scale, pcOf(c)) && (step % 8 != 0 || isChord(pcOf(c)))) return c;
+        for ( int d = 1; d <= 12; ++d )
+        {
+            for ( int c : { rel + first * d, rel - first * d } )
+                if ( c >= lo && c <= hi && inScale( scale, pcOf( c ) ) && !isLineColourTone( scale, pcOf( c ) ) &&
+                     ( step % 8 != 0 || isChord( pcOf( c ) ) ) )
+                    return c;
         }
-        return std::clamp(rel, lo, hi);
+        return std::clamp( rel, lo, hi );
     };
     const LineRules rules;
-    LineRules cellRules;
+    LineRules       cellRules;
     cellRules.m_loop = true;   // the cell repeats bar after bar: a run across its seam would return in every bar
-    const double target = colourTarget(CorpusRoleIdE::LEAD, colour);
-    std::vector<int> srcOfW[2];       ///< per phrase: the cell note each note derives from (for the slide coins)
-    std::vector<float> slideCoinW[2]; ///< per phrase: the cell notes' slide coins
+    const double       target = colourTarget( CorpusRoleIdE::LEAD, colour );
+    std::vector<int>   srcOfW[2];       ///< per phrase: the cell note each note derives from (for the slide coins)
+    std::vector<float> slideCoinW[2];   ///< per phrase: the cell notes' slide coins
 
-    for (int w = 0; w < 2; ++w) {
-        std::vector<MelodyNote>& ph = m.m_lead[w];
+    for ( int w = 0; w < 2; ++w )
+    {
+        std::vector<MelodyNote> &ph = m.m_lead[w];
         ph.clear();
         // ---- 1. the design, before any pitch: the cell's rhythm, the archetype, the operators, the coins
-        bool fromCorpus = false;
-        uint16_t mask = drawCellMask(r, role, m.m_leadDensityBand, bassMask, ls.m_interlock, fromCorpus);
+        bool     fromCorpus = false;
+        uint16_t mask = drawCellMask( r, role, m.m_leadDensityBand, bassMask, ls.m_interlock, fromCorpus );
         // The set's motif (SetMotif, 23.09.2026): this phrase plays the set's cell and archetype instead of its
         // own draw -- the first track states it, the recalling track answers it in its own key and mode. The
         // draws are still made, so the coins and pitches after them keep their place; the cell stands only
         // where the band admits it (it always does when the band is the motif's own).
-        const bool quote = motif.m_phrase == w && motif.m_cell != 0 && cellAdmits(motif.m_cell, m.m_leadDensityBand);
-        if (quote) { mask = motif.m_cell; fromCorpus = false; }
+        const bool quote = motif.m_phrase == w && motif.m_cell != 0 && cellAdmits( motif.m_cell, m.m_leadDensityBand );
+        if ( quote )
+        {
+            mask = motif.m_cell;
+            fromCorpus = false;
+        }
         m.m_leadQuotesSet[w] = quote;
         m.m_leadCell[w] = mask;
         m.m_leadCellFromCorpus[w] = fromCorpus;
         double archWeight[NumLeadArchetypes];   // the style's weights times the listener's preferences (Preferences.h)
-        for (int a = 0; a < NumLeadArchetypes; ++a) archWeight[a] = ls.m_archetype[a] * preferenceFactor("lead.archetype", LeadArchetypeNames[a]);
-        m.m_leadArchetype[w] = drawIndex(r, archWeight, NumLeadArchetypes);
-        if (quote) m.m_leadArchetype[w] = std::clamp<int>(motif.m_archetype, 0, NumLeadArchetypes - 1);
-        const LeadArchetypeDef& arche = LeadArchetypes[std::clamp(m.m_leadArchetype[w], 0, NumLeadArchetypes - 1)];
-        for (int b = 0; b < 8; ++b) {
-            int op = static_cast<int>(CellOpE::KEEP);
-            if (b == 7) op = static_cast<int>(CellOpE::END_CADENCE);
-            else if (b % 2 == 1) op = drawIndex(r, ls.m_cellOp, NumCellOps);
-            m.m_leadOps[w][b] = static_cast<int8_t>(op);
+        for ( int a = 0; a < NumLeadArchetypes; ++a )
+            archWeight[a] = ls.m_archetype[a] * preferenceFactor( "lead.archetype", LeadArchetypeNames[a] );
+        m.m_leadArchetype[w] = drawIndex( r, archWeight, NumLeadArchetypes );
+        if ( quote ) m.m_leadArchetype[w] = std::clamp<int>( motif.m_archetype, 0, NumLeadArchetypes - 1 );
+        const LeadArchetypeDef &arche = LeadArchetypes[std::clamp( m.m_leadArchetype[w], 0, NumLeadArchetypes - 1 )];
+        for ( int b = 0; b < 8; ++b )
+        {
+            int op = static_cast<int>( CellOpE::KEEP );
+            if ( b == 7 )
+                op = static_cast<int>( CellOpE::END_CADENCE );
+            else if ( b % 2 == 1 )
+                op = drawIndex( r, ls.m_cellOp, NumCellOps );
+            m.m_leadOps[w][b] = static_cast<int8_t>( op );
         }
         std::vector<int> cSteps;
-        for (int s = 0; s < 16; ++s) if ((mask >> s) & 1u) cSteps.push_back(s);
-        const size_t cn = cSteps.size();
-        std::vector<int> cLens(cn);
-        for (size_t i = 0; i < cn; ++i) cLens[i] = (i + 1 < cn ? cSteps[i + 1] : 16) - cSteps[i];
-        std::vector<uint8_t> cFlags(cn, 0);
-        std::vector<float> slideCoin(cn);
-        for (size_t i = 0; i < cn; ++i) {
-            const int s = cSteps[i];
-            const bool afterRest = s > 0 && ((mask >> (s - 1)) & 1u) == 0;
-            if (s % 4 != 0 && afterRest && r.uniform() < ls.m_accentChance) cFlags[i] |= NOTE_ACCENT;
-            if (cLens[i] == 1 && s % 2 == 1 && r.uniform() < 0.2f) cFlags[i] |= NOTE_SHORT;
+        for ( int s = 0; s < 16; ++s )
+            if ( ( mask >> s ) & 1u ) cSteps.push_back( s );
+        const size_t     cn = cSteps.size();
+        std::vector<int> cLens( cn );
+        for ( size_t i = 0; i < cn; ++i ) cLens[i] = ( i + 1 < cn ? cSteps[i + 1] : 16 ) - cSteps[i];
+        std::vector<uint8_t> cFlags( cn, 0 );
+        std::vector<float>   slideCoin( cn );
+        for ( size_t i = 0; i < cn; ++i )
+        {
+            const int  s = cSteps[i];
+            const bool afterRest = s > 0 && ( ( mask >> ( s - 1 ) ) & 1u ) == 0;
+            if ( s % 4 != 0 && afterRest && r.uniform() < ls.m_accentChance ) cFlags[i] |= NOTE_ACCENT;
+            if ( cLens[i] == 1 && s % 2 == 1 && r.uniform() < 0.2f ) cFlags[i] |= NOTE_SHORT;
             slideCoin[i] = r.uniform();
         }
-        const int thinCount = 2 + r.below(2);
+        const int thinCount = 2 + r.below( 2 );
         // ---- 2. the cell's pitches: the best of LeadCandidates draws
         AllowedT al;
-        for (int s : cSteps) al.push_back(constraintAt(s));
+        for ( int s : cSteps ) al.push_back( constraintAt( s ) );
         std::vector<int> cell;
-        double bestScore = -1e18;
-        for (int c = 0; c < LeadCandidates; ++c) {
-            const std::vector<int> cand = drawPitches(model, CorpusRoleIdE::LEAD, src, al, cSteps, 1, 0, 0, temp, r);
-            const double sc = criticScore(cSteps, cand, rootOffset, ls);
-            if (sc > bestScore) { bestScore = sc; cell = cand; }
+        double           bestScore = -1e18;
+        for ( int c = 0; c < LeadCandidates; ++c )
+        {
+            const std::vector<int> cand = drawPitches( model, CorpusRoleIdE::LEAD, src, al, cSteps, 1, 0, 0, temp, r );
+            const double           sc = criticScore( cSteps, cand, rootOffset, ls );
+            if ( sc > bestScore )
+            {
+                bestScore = sc;
+                cell = cand;
+            }
         }
-        std::vector<uint8_t> cFixed(cn, 0);
+        std::vector<uint8_t> cFixed( cn, 0 );
         // Rule 18: the fifth rests on the cell's longest note (the latest of the longest).
         {
             size_t best = cn;
-            int bestLen = 1;
-            for (size_t k = 0; k < cn; ++k) if (cLens[k] >= bestLen && cLens[k] >= 2) { bestLen = cLens[k]; best = k; }
+            int    bestLen = 1;
+            for ( size_t k = 0; k < cn; ++k )
+                if ( cLens[k] >= bestLen && cLens[k] >= 2 )
+                {
+                    bestLen = cLens[k];
+                    best = k;
+                }
             int fifth = 1 << 20;
-            for (int rel = lo; rel <= hi; ++rel)
-                if (pcOf(rel) == 7 && std::fabs(rel - centre) < std::fabs(fifth - centre)) fifth = rel;
-            if (best < cn && fifth != (1 << 20) && fits(cSteps[best], fifth)) { cell[best] = fifth; cFixed[best] = 1; }
+            for ( int rel = lo; rel <= hi; ++rel )
+                if ( pcOf( rel ) == 7 && std::fabs( rel - centre ) < std::fabs( fifth - centre ) ) fifth = rel;
+            if ( best < cn && fifth != ( 1 << 20 ) && fits( cSteps[best], fifth ) )
+            {
+                cell[best] = fifth;
+                cFixed[best] = 1;
+            }
         }
-        enforceLine(model, CorpusRoleIdE::LEAD, src, al, cSteps, 1, cFixed, cellRules, 0, 0, temp, r, cell);
+        enforceLine( model, CorpusRoleIdE::LEAD, src, al, cSteps, 1, cFixed, cellRules, 0, 0, temp, r, cell );
         // Rule 1: the colour slots of the cell, the same slots in every bar that keeps those notes.
         std::vector<int> slots;
         {
-            const std::vector<int> cand = colourSlots(cSteps, cLens, cFixed, true, 16, target, cr, [&](int nx) {
-                int t = 1 << 20;
-                for (int rel = lo; rel <= hi; ++rel) if (pcOf(rel) == 0 && std::abs(rel - cell[static_cast<size_t>(nx)]) < std::abs(t - cell[static_cast<size_t>(nx)])) t = rel;
-                return t != (1 << 20) && fits(cSteps[static_cast<size_t>(nx)], t);
-            });
-            for (int k : cand) if (static_cast<size_t>(k) + 1 < cn) slots.push_back(k);   // a slot's resolution is inside the bar
+            const std::vector<int> cand =
+                colourSlots( cSteps, cLens, cFixed, true, 16, target, cr,
+                             [&]( int nx )
+                             {
+                                 int t = 1 << 20;
+                                 for ( int rel = lo; rel <= hi; ++rel )
+                                     if ( pcOf( rel ) == 0 && std::abs( rel - cell[static_cast<size_t>( nx )] ) <
+                                                                  std::abs( t - cell[static_cast<size_t>( nx )] ) )
+                                         t = rel;
+                                 return t != ( 1 << 20 ) && fits( cSteps[static_cast<size_t>( nx )], t );
+                             } );
+            for ( int k : cand )
+                if ( static_cast<size_t>( k ) + 1 < cn )
+                    slots.push_back( k );   // a slot's resolution is inside the bar
         }
         // ---- 3. the eight bars: archetype, operator, legality, colour, slides
-        std::vector<int> steps, rels, lens, srcOf;
+        std::vector<int>     steps, rels, lens, srcOf;
         std::vector<uint8_t> flags, fixed;
-        for (int b = 0; b < 8; ++b) {
-            const CellOpE op = static_cast<CellOpE>(m.m_leadOps[w][b]);
-            LeadBar bar;
-            for (size_t i = 0; i < cn; ++i) { bar.m_steps.push_back(cSteps[i]); bar.m_rels.push_back(cell[i]); bar.m_src.push_back(static_cast<int>(i)); }
-            std::vector<uint8_t> bFlags(cFlags);
+        for ( int b = 0; b < 8; ++b )
+        {
+            const CellOpE op = static_cast<CellOpE>( m.m_leadOps[w][b] );
+            LeadBar       bar;
+            for ( size_t i = 0; i < cn; ++i )
+            {
+                bar.m_steps.push_back( cSteps[i] );
+                bar.m_rels.push_back( cell[i] );
+                bar.m_src.push_back( static_cast<int>( i ) );
+            }
+            std::vector<uint8_t> bFlags( cFlags );
             // Rhythm operators.
-            if (op == CellOpE::SHIFT16) {
-                for (int& s : bar.m_steps) s = (s + 1) % 16;
-                std::vector<size_t> order(cn);
-                for (size_t i = 0; i < cn; ++i) order[i] = i;
-                std::sort(order.begin(), order.end(), [&](size_t a, size_t c) { return bar.m_steps[a] < bar.m_steps[c]; });
-                LeadBar t;
+            if ( op == CellOpE::SHIFT16 )
+            {
+                for ( int &s : bar.m_steps ) s = ( s + 1 ) % 16;
+                std::vector<size_t> order( cn );
+                for ( size_t i = 0; i < cn; ++i ) order[i] = i;
+                std::sort( order.begin(), order.end(),
+                           [&]( size_t a, size_t c ) { return bar.m_steps[a] < bar.m_steps[c]; } );
+                LeadBar              t;
                 std::vector<uint8_t> f;
-                for (size_t i : order) { t.m_steps.push_back(bar.m_steps[i]); t.m_rels.push_back(bar.m_rels[i]); t.m_src.push_back(bar.m_src[i]); f.push_back(bFlags[i]); }
+                for ( size_t i : order )
+                {
+                    t.m_steps.push_back( bar.m_steps[i] );
+                    t.m_rels.push_back( bar.m_rels[i] );
+                    t.m_src.push_back( bar.m_src[i] );
+                    f.push_back( bFlags[i] );
+                }
                 bar = t;
                 bFlags = f;
-            } else if (op == CellOpE::THIN) {
+            }
+            else if ( op == CellOpE::THIN )
+            {
                 // The weakest notes go: odd sixteenths, one long, not the held fifth and not a slot.
                 int dropped = 0;
-                for (size_t i = cn; i-- > 0 && dropped < thinCount;) {
-                    const bool slot = std::find(slots.begin(), slots.end(), static_cast<int>(i)) != slots.end() || (i > 0 && std::find(slots.begin(), slots.end(), static_cast<int>(i) - 1) != slots.end());
-                    if (cSteps[i] % 2 == 0 || cLens[i] != 1 || cFixed[i] || slot || i == 0) continue;
+                for ( size_t i = cn; i-- > 0 && dropped < thinCount; )
+                {
+                    const bool slot =
+                        std::find( slots.begin(), slots.end(), static_cast<int>( i ) ) != slots.end() ||
+                        ( i > 0 && std::find( slots.begin(), slots.end(), static_cast<int>( i ) - 1 ) != slots.end() );
+                    if ( cSteps[i] % 2 == 0 || cLens[i] != 1 || cFixed[i] || slot || i == 0 ) continue;
                     unsigned left = 0;
-                    for (size_t k = 0; k < bar.m_steps.size(); ++k) left |= 1u << bar.m_steps[k];
-                    left &= ~(1u << cSteps[i]);
-                    if (!cellLegal(left)) continue;   // at least eight onsets, no hole, the held note stay
-                    const size_t at = static_cast<size_t>(std::find(bar.m_src.begin(), bar.m_src.end(), static_cast<int>(i)) - bar.m_src.begin());
-                    bar.m_steps.erase(bar.m_steps.begin() + static_cast<long>(at));
-                    bar.m_rels.erase(bar.m_rels.begin() + static_cast<long>(at));
-                    bar.m_src.erase(bar.m_src.begin() + static_cast<long>(at));
-                    bFlags.erase(bFlags.begin() + static_cast<long>(at));
+                    for ( size_t k = 0; k < bar.m_steps.size(); ++k ) left |= 1u << bar.m_steps[k];
+                    left &= ~( 1u << cSteps[i] );
+                    if ( !cellLegal( left ) ) continue;   // at least eight onsets, no hole, the held note stay
+                    const size_t at = static_cast<size_t>(
+                        std::find( bar.m_src.begin(), bar.m_src.end(), static_cast<int>( i ) ) - bar.m_src.begin() );
+                    bar.m_steps.erase( bar.m_steps.begin() + static_cast<long>( at ) );
+                    bar.m_rels.erase( bar.m_rels.begin() + static_cast<long>( at ) );
+                    bar.m_src.erase( bar.m_src.begin() + static_cast<long>( at ) );
+                    bFlags.erase( bFlags.begin() + static_cast<long>( at ) );
                     ++dropped;
                 }
-                if (dropped == 0) m.m_leadOps[w][b] = static_cast<int8_t>(CellOpE::KEEP);   // nothing could go: the report says so
+                if ( dropped == 0 )
+                    m.m_leadOps[w][b] = static_cast<int8_t>( CellOpE::KEEP );   // nothing could go: the report says so
             }
             const size_t bn = bar.m_steps.size();
-            bar.m_lens.assign(bn, 1);
-            for (size_t i = 0; i < bn; ++i) bar.m_lens[i] = (i + 1 < bn ? bar.m_steps[i + 1] : 16) - bar.m_steps[i];
+            bar.m_lens.assign( bn, 1 );
+            for ( size_t i = 0; i < bn; ++i ) bar.m_lens[i] = ( i + 1 < bn ? bar.m_steps[i + 1] : 16 ) - bar.m_steps[i];
             // The transposition: the archetype's offset plus the operator's, reduced until the window holds it.
-            int shift = arche.m_step[b] + (op == CellOpE::TRANSPOSE_UP ? 1 : (op == CellOpE::TRANSPOSE_DOWN ? -1 : 0));
-            for (;;) {
+            int shift =
+                arche.m_step[b] + ( op == CellOpE::TRANSPOSE_UP ? 1 : ( op == CellOpE::TRANSPOSE_DOWN ? -1 : 0 ) );
+            for ( ;; )
+            {
                 bool ok = true;
-                for (int rel : bar.m_rels) { const int t = transposeRel(scale, rootOffset, rel, shift); ok = ok && t >= lo && t <= hi; }
-                if (ok || shift == 0) break;
+                for ( int rel : bar.m_rels )
+                {
+                    const int t = transposeRel( scale, rootOffset, rel, shift );
+                    ok = ok && t >= lo && t <= hi;
+                }
+                if ( ok || shift == 0 ) break;
                 shift += shift > 0 ? -1 : 1;
             }
-            m.m_leadShift[w][b] = static_cast<int8_t>(shift);
-            for (int& rel : bar.m_rels) rel = transposeRel(scale, rootOffset, rel, shift);
+            m.m_leadShift[w][b] = static_cast<int8_t>( shift );
+            for ( int &rel : bar.m_rels ) rel = transposeRel( scale, rootOffset, rel, shift );
             // Pitch operators on the last beat.
-            if (bn >= 2 && (op == CellOpE::END_CADENCE || op == CellOpE::INVERT_END)) {
+            if ( bn >= 2 && ( op == CellOpE::END_CADENCE || op == CellOpE::INVERT_END ) )
+            {
                 size_t first = bn;
-                for (size_t i = 0; i < bn; ++i) if (bar.m_steps[i] >= 12 && first == bn) first = i;
-                if (first == bn) first = bn - 1;
-                if (op == CellOpE::END_CADENCE) {
+                for ( size_t i = 0; i < bn; ++i )
+                    if ( bar.m_steps[i] >= 12 && first == bn ) first = i;
+                if ( first == bn ) first = bn - 1;
+                if ( op == CellOpE::END_CADENCE )
+                {
                     int tonic = 1 << 20;
-                    for (int rel = lo; rel <= hi; ++rel) if (pcOf(rel) == 0 && std::abs(rel - bar.m_rels[bn - 1]) < std::abs(tonic - bar.m_rels[bn - 1])) tonic = rel;
-                    if (tonic != (1 << 20)) {
+                    for ( int rel = lo; rel <= hi; ++rel )
+                        if ( pcOf( rel ) == 0 &&
+                             std::abs( rel - bar.m_rels[bn - 1] ) < std::abs( tonic - bar.m_rels[bn - 1] ) )
+                            tonic = rel;
+                    if ( tonic != ( 1 << 20 ) )
+                    {
                         bar.m_rels[bn - 1] = tonic;
-                        if (bn >= 3 && first < bn - 1) {
+                        if ( bn >= 3 && first < bn - 1 )
+                        {
                             // The approach note: a scale step off the tonic, on the side the note before it comes
                             // from -- but never a colour tone (legal() would snap it straight back onto the tonic:
                             // three tonics in a row, measured), so the other side or a farther step where the nearer
@@ -754,67 +920,86 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
                             // legal tone above. The Phrygian family's b2 is no colour tone for the lead
                             // (isLineColourTone): F - E is the Phrygian cadence itself.
                             const int side = bar.m_rels[bn - 3] >= tonic ? 1 : -1;
-                            int approach = tonic;
-                            for (int cand : { side, -side, 2 * side, -2 * side, 3 * side, -3 * side }) {
-                                const int c = transposeRel(scale, rootOffset, tonic, cand);
-                                if (c >= lo && c <= hi && !isLineColourTone(scale, pcOf(c))) { approach = c; break; }
+                            int       approach = tonic;
+                            for ( int cand : { side, -side, 2 * side, -2 * side, 3 * side, -3 * side } )
+                            {
+                                const int c = transposeRel( scale, rootOffset, tonic, cand );
+                                if ( c >= lo && c <= hi && !isLineColourTone( scale, pcOf( c ) ) )
+                                {
+                                    approach = c;
+                                    break;
+                                }
                             }
-                            if (approach == tonic) {
-                                for (int d = 1; d <= 12 && approach == tonic; ++d)
-                                    for (int c : { tonic + d, tonic - d })
-                                        if (approach == tonic && c >= lo && c <= hi && inScale(scale, pcOf(c)) && !isLineColourTone(scale, pcOf(c))) approach = c;
+                            if ( approach == tonic )
+                            {
+                                for ( int d = 1; d <= 12 && approach == tonic; ++d )
+                                    for ( int c : { tonic + d, tonic - d } )
+                                        if ( approach == tonic && c >= lo && c <= hi && inScale( scale, pcOf( c ) ) &&
+                                             !isLineColourTone( scale, pcOf( c ) ) )
+                                            approach = c;
                             }
-                            if (approach != tonic) bar.m_rels[bn - 2] = approach;
+                            if ( approach != tonic ) bar.m_rels[bn - 2] = approach;
                         }
                     }
-                } else {
+                }
+                else
+                {
                     const int anchor = bar.m_rels[first];
-                    for (size_t i = first + 1; i < bn; ++i) bar.m_rels[i] = 2 * anchor - bar.m_rels[i];
+                    for ( size_t i = first + 1; i < bn; ++i ) bar.m_rels[i] = 2 * anchor - bar.m_rels[i];
                 }
             }
             // Legality: every note a scale tone, no colour tone yet, chord tones on the strong steps, inside the window.
-            for (size_t i = 0; i < bn; ++i) bar.m_rels[i] = legal(bar.m_steps[i], bar.m_rels[i], shift);
+            for ( size_t i = 0; i < bn; ++i ) bar.m_rels[i] = legal( bar.m_steps[i], bar.m_rels[i], shift );
             // The colour slots: the cell's, wherever the bar kept both the slot's note and its resolution side by side.
-            std::vector<uint8_t> bFixed(bn, 0);
-            for (size_t i = 0; i < bn; ++i) if (bar.m_src[i] >= 0 && cFixed[static_cast<size_t>(bar.m_src[i])] && shift == 0) bFixed[i] = 1;
-            for (int k : slots) {
+            std::vector<uint8_t> bFixed( bn, 0 );
+            for ( size_t i = 0; i < bn; ++i )
+                if ( bar.m_src[i] >= 0 && cFixed[static_cast<size_t>( bar.m_src[i] )] && shift == 0 ) bFixed[i] = 1;
+            for ( int k : slots )
+            {
                 size_t i = bn;
-                for (size_t j = 0; j + 1 < bn; ++j) if (bar.m_src[j] == k && bar.m_src[j + 1] == k + 1 && bar.m_steps[j + 1] == bar.m_steps[j] + 1 && bar.m_steps[j] % 2 == 1) i = j;
-                if (i == bn || bFixed[i] || bFixed[i + 1]) continue;
+                for ( size_t j = 0; j + 1 < bn; ++j )
+                    if ( bar.m_src[j] == k && bar.m_src[j + 1] == k + 1 && bar.m_steps[j + 1] == bar.m_steps[j] + 1 &&
+                         bar.m_steps[j] % 2 == 1 )
+                        i = j;
+                if ( i == bn || bFixed[i] || bFixed[i + 1] ) continue;
                 int c = 0, t = 0;
-                if (!placeColour(scale, rootOffset, lo, hi, hi, bar.m_rels[i], cr, c, t, true)) continue;
-                if (!fits(bar.m_steps[i + 1], t)) continue;
+                if ( !placeColour( scale, rootOffset, lo, hi, hi, bar.m_rels[i], cr, c, t, true ) ) continue;
+                if ( !fits( bar.m_steps[i + 1], t ) ) continue;
                 bar.m_rels[i] = c;
                 bar.m_rels[i + 1] = t;
                 bFixed[i] = bFixed[i + 1] = 1;
             }
-            for (size_t i = 0; i < bn; ++i) {
-                steps.push_back(bar.m_steps[i] + 16 * b);
-                rels.push_back(bar.m_rels[i]);
-                lens.push_back(bar.m_lens[i]);
-                srcOf.push_back(bar.m_src[i]);
-                flags.push_back(bFlags[i]);
-                fixed.push_back(bFixed[i]);
+            for ( size_t i = 0; i < bn; ++i )
+            {
+                steps.push_back( bar.m_steps[i] + 16 * b );
+                rels.push_back( bar.m_rels[i] );
+                lens.push_back( bar.m_lens[i] );
+                srcOf.push_back( bar.m_src[i] );
+                flags.push_back( bFlags[i] );
+                fixed.push_back( bFixed[i] );
             }
         }
         // ---- 4. no pitch three times in a row, anywhere in the phrase (the cadences and the colour stay)
         {
             const size_t n = steps.size();
-            AllowedT all;
-            for (size_t i = 0; i < n; ++i) all.push_back(constraintAt(steps[i]));
-            for (size_t i = n - std::min<size_t>(n, 2); i < n; ++i) fixed[i] = 1;   // the phrase's cadence: its last two notes
-            enforceLine(model, CorpusRoleIdE::LEAD, src, all, steps, 8, fixed, rules, 0, 0, temp, r, rels);
+            AllowedT     all;
+            for ( size_t i = 0; i < n; ++i ) all.push_back( constraintAt( steps[i] ) );
+            for ( size_t i = n - std::min<size_t>( n, 2 ); i < n; ++i )
+                fixed[i] = 1;   // the phrase's cadence: its last two notes
+            enforceLine( model, CorpusRoleIdE::LEAD, src, all, steps, 8, fixed, rules, 0, 0, temp, r, rels );
         }
         srcOfW[w] = srcOf;
         slideCoinW[w] = slideCoin;
-        for (size_t i = 0; i < steps.size(); ++i) {
+        for ( size_t i = 0; i < steps.size(); ++i )
+        {
             MelodyNote note;
-            note.m_step = static_cast<int16_t>(steps[i]);
-            note.m_len = static_cast<int16_t>(lens[i]);
-            note.m_rel = static_cast<int8_t>(rels[i]);
+            note.m_step = static_cast<int16_t>( steps[i] );
+            note.m_len = static_cast<int16_t>( lens[i] );
+            note.m_rel = static_cast<int8_t>( rels[i] );
             note.m_flags = flags[i];
-            note.m_velocity = static_cast<uint8_t>((flags[i] & NOTE_ACCENT) ? 112 : (steps[i] % 8 == 0 ? 104 : 92));
-            ph.push_back(note);
+            note.m_velocity =
+                static_cast<uint8_t>( ( flags[i] & NOTE_ACCENT ) ? 112 : ( steps[i] % 8 == 0 ? 104 : 92 ) );
+            ph.push_back( note );
         }
     }
     // Across the phrase boundaries: the lead plays phrase 0, 1, 0, 1, ..., so the end of each runs on
@@ -822,35 +1007,47 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     // the *following* phrase's opening moves (22.09.2026: the cadence on the tonic stays -- it is the
     // arrival; before, the last note moved and 93 of 128 cadences landed off the tonic, measured):
     // its second note where the phrase opens with two of the cadence's pitch, else its first.
-    for (int w = 0; w < 2; ++w) {
-        const std::vector<MelodyNote>& a = m.m_lead[w];
-        std::vector<MelodyNote>& b = m.m_lead[1 - w];
-        const size_t n = a.size();
-        if (n < 2 || b.size() < 2) continue;
-        const int x1 = a[n - 2].m_rel, x2 = a[n - 1].m_rel, y1 = b[0].m_rel, y2 = b[1].m_rel;
+    for ( int w = 0; w < 2; ++w )
+    {
+        const std::vector<MelodyNote> &a = m.m_lead[w];
+        std::vector<MelodyNote>       &b = m.m_lead[1 - w];
+        const size_t                   n = a.size();
+        if ( n < 2 || b.size() < 2 ) continue;
+        const int  x1 = a[n - 2].m_rel, x2 = a[n - 1].m_rel, y1 = b[0].m_rel, y2 = b[1].m_rel;
         const bool two = x2 == y1 && y1 == y2, one = x1 == x2 && x2 == y1;
-        if (!two && !one) continue;
-        MelodyNote& move = two ? b[1] : b[0];
-        const int step = move.m_step, from = move.m_rel;
-        const int after = b.size() > (two ? 2u : 1u) ? b[two ? 2 : 1].m_rel : (1 << 20);   // never onto the note after it: no new run
-        int best = from, bestD = 1 << 20;
-        for (int rel = lo; rel <= hi; ++rel) {
-            if (!inScale(scale, pcOf(rel)) || isLineColourTone(scale, pcOf(rel)) || rel == from || rel == after) continue;
-            if (step % 8 == 0 && !isChord(pcOf(rel))) continue;
-            if (std::abs(rel - from) < bestD) { bestD = std::abs(rel - from); best = rel; }
+        if ( !two && !one ) continue;
+        MelodyNote &move = two ? b[1] : b[0];
+        const int   step = move.m_step, from = move.m_rel;
+        const int   after = b.size() > ( two ? 2u : 1u ) ? b[two ? 2 : 1].m_rel
+                                                         : ( 1 << 20 );   // never onto the note after it: no new run
+        int         best = from, bestD = 1 << 20;
+        for ( int rel = lo; rel <= hi; ++rel )
+        {
+            if ( !inScale( scale, pcOf( rel ) ) || isLineColourTone( scale, pcOf( rel ) ) || rel == from ||
+                 rel == after )
+                continue;
+            if ( step % 8 == 0 && !isChord( pcOf( rel ) ) ) continue;
+            if ( std::abs( rel - from ) < bestD )
+            {
+                bestD = std::abs( rel - from );
+                best = rel;
+            }
         }
-        move.m_rel = static_cast<int8_t>(best);
+        move.m_rel = static_cast<int8_t>( best );
     }
     // ---- 5. slides, on the final pitches: a tension degree stepping onto a stable one, adjacent
     // notes no more than a whole tone apart, by the cell note's coin (so the modes agree).
-    for (int w = 0; w < 2; ++w) {
-        std::vector<MelodyNote>& ph = m.m_lead[w];
-        for (size_t i = 0; i + 1 < ph.size(); ++i) {
+    for ( int w = 0; w < 2; ++w )
+    {
+        std::vector<MelodyNote> &ph = m.m_lead[w];
+        for ( size_t i = 0; i + 1 < ph.size(); ++i )
+        {
             const int srcNote = i < srcOfW[w].size() ? srcOfW[w][i] : -1;
-            if (srcNote < 0 || ph[i].m_len != 1 || ph[i + 1].m_step != ph[i].m_step + 1) continue;
-            const int a = lerdahlInstability(pcOf(ph[i].m_rel)), z = lerdahlInstability(pcOf(ph[i + 1].m_rel));
-            if (a >= 2 && z <= 1 && std::abs(ph[i + 1].m_rel - ph[i].m_rel) <= 2 && slideCoinW[w][static_cast<size_t>(srcNote)] < ls.m_slideChance)
-                ph[i].m_flags = static_cast<uint8_t>(ph[i].m_flags | NOTE_SLIDE);
+            if ( srcNote < 0 || ph[i].m_len != 1 || ph[i + 1].m_step != ph[i].m_step + 1 ) continue;
+            const int a = lerdahlInstability( pcOf( ph[i].m_rel ) ), z = lerdahlInstability( pcOf( ph[i + 1].m_rel ) );
+            if ( a >= 2 && z <= 1 && std::abs( ph[i + 1].m_rel - ph[i].m_rel ) <= 2 &&
+                 slideCoinW[w][static_cast<size_t>( srcNote )] < ls.m_slideChance )
+                ph[i].m_flags = static_cast<uint8_t>( ph[i].m_flags | NOTE_SLIDE );
         }
     }
 }
@@ -893,113 +1090,151 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
  * @param[in]     scale  the mode
  * @param[in]     seed   the seed
  */
-void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
+void makeCounter( MelodyPlan &m, int key, int scale, uint64_t seed )
 {
     const int root = m.m_root[CounterI];
-    const int lo = counterWindowLo(m) - root, hi = counterWindowHi(m) - root;
+    const int lo = counterWindowLo( m ) - root, hi = counterWindowHi( m ) - root;
     // The lead's register centre an octave up, as an interval to this key's counter root (20.09.2026):
     // the counter answers in the lead's register, so it has to be weighted like the lead's.
-    const double centre = (m.m_leadWindowLo + 3.5) + 12.0 - root;
-    auto pcOf = [&](int rel) { return (((root - key) + rel) % 12 + 12) % 12; };
-    int tonicPcs[3];
-    chordTones(scale, 0, tonicPcs);   // the tonic chord: the counter stays home like the lead (22.09.2026)
-    auto isChord = [&](int pc) { return pc == tonicPcs[0] || pc == tonicPcs[1] || pc == tonicPcs[2]; };
+    const double centre = ( m.m_leadWindowLo + 3.5 ) + 12.0 - root;
+    auto         pcOf = [&]( int rel ) { return ( ( ( root - key ) + rel ) % 12 + 12 ) % 12; };
+    int          tonicPcs[3];
+    chordTones( scale, 0, tonicPcs );   // the tonic chord: the counter stays home like the lead (22.09.2026)
+    auto isChord = [&]( int pc ) { return pc == tonicPcs[0] || pc == tonicPcs[1] || pc == tonicPcs[2]; };
     // The nearest legal pitch: inside the window, a scale tone, no colour tone, a chord tone where `strong`.
-    auto legal = [&](int rel, bool strong) {
-        while (rel < lo) rel += 12;
-        while (rel > hi) rel -= 12;
-        auto ok = [&](int c) { return c >= lo && c <= hi && inScale(scale, pcOf(c)) && !isColourTone(scale, pcOf(c)) && (!strong || isChord(pcOf(c))); };
-        if (ok(rel)) return rel;
-        for (int d = 1; d <= 12; ++d) { if (ok(rel - d)) return rel - d; if (ok(rel + d)) return rel + d; }
-        return std::clamp(rel, lo, hi);
+    auto legal = [&]( int rel, bool strong )
+    {
+        while ( rel < lo ) rel += 12;
+        while ( rel > hi ) rel -= 12;
+        auto ok = [&]( int c )
+        {
+            return c >= lo && c <= hi && inScale( scale, pcOf( c ) ) && !isColourTone( scale, pcOf( c ) ) &&
+                   ( !strong || isChord( pcOf( c ) ) );
+        };
+        if ( ok( rel ) ) return rel;
+        for ( int d = 1; d <= 12; ++d )
+        {
+            if ( ok( rel - d ) ) return rel - d;
+            if ( ok( rel + d ) ) return rel + d;
+        }
+        return std::clamp( rel, lo, hi );
     };
     // The pitch of `pc` nearest to `near` inside the window.
-    auto nearestPc = [&](int pc, double near) {
-        int best = lo;
+    auto nearestPc = [&]( int pc, double near )
+    {
+        int    best = lo;
         double bestD = 1e9;
-        for (int c = lo; c <= hi; ++c)
-            if (pcOf(c) == pc && std::fabs(c - near) < bestD) { bestD = std::fabs(c - near); best = c; }
+        for ( int c = lo; c <= hi; ++c )
+            if ( pcOf( c ) == pc && std::fabs( c - near ) < bestD )
+            {
+                bestD = std::fabs( c - near );
+                best = c;
+            }
         return best;
     };
-    const CounterModeE mode = static_cast<CounterModeE>(std::clamp(m.m_counterMode, 0, NumCounterModes - 1));
+    const CounterModeE mode = static_cast<CounterModeE>( std::clamp( m.m_counterMode, 0, NumCounterModes - 1 ) );
 
-    for (int w = 0; w < 2; ++w) {
+    for ( int w = 0; w < 2; ++w )
+    {
         Rng r;
-        r.seed(mixSeed(seed ^ SaltCounter, static_cast<uint64_t>(w)));
-        const std::vector<MelodyNote>& lead = m.m_lead[w];
-        bool attack[128] = {}, sounding[128] = {};
-        int leadRel[128];
-        for (int& x : leadRel) x = 1 << 20;
-        for (const MelodyNote& n : lead) {
-            if (n.m_step < 0 || n.m_step >= 128) continue;
+        r.seed( mixSeed( seed ^ SaltCounter, static_cast<uint64_t>( w ) ) );
+        const std::vector<MelodyNote> &lead = m.m_lead[w];
+        bool                           attack[128] = {}, sounding[128] = {};
+        int                            leadRel[128];
+        for ( int &x : leadRel ) x = 1 << 20;
+        for ( const MelodyNote &n : lead )
+        {
+            if ( n.m_step < 0 || n.m_step >= 128 ) continue;
             attack[n.m_step] = true;
-            for (int s = n.m_step; s < std::min(128, n.m_step + n.m_len); ++s) { sounding[s] = true; leadRel[s] = n.m_rel; }
+            for ( int s = n.m_step; s < std::min( 128, n.m_step + n.m_len ); ++s )
+            {
+                sounding[s] = true;
+                leadRel[s] = n.m_rel;
+            }
         }
-        std::vector<MelodyNote>& out = m.m_counter[w];
+        std::vector<MelodyNote> &out = m.m_counter[w];
         out.clear();
-        auto emitNote = [&](int step, int len, int rel, int velocity) {
+        auto emitNote = [&]( int step, int len, int rel, int velocity )
+        {
             MelodyNote note;
-            note.m_step = static_cast<int16_t>(step);
-            note.m_len = static_cast<int16_t>(std::max(1, len));
-            note.m_rel = static_cast<int8_t>(rel);
-            note.m_velocity = static_cast<uint8_t>(velocity);
-            out.push_back(note);
+            note.m_step = static_cast<int16_t>( step );
+            note.m_len = static_cast<int16_t>( std::max( 1, len ) );
+            note.m_rel = static_cast<int8_t>( rel );
+            note.m_velocity = static_cast<uint8_t>( velocity );
+            out.push_back( note );
         };
 
-        if (mode == CounterModeE::ECHO) {
+        if ( mode == CounterModeE::ECHO )
+        {
             // The lead's beat notes and accents, delayed and transposed, where the lead does not strike.
-            const int delay = r.uniform() < 0.5f ? 3 : 4;
+            const int        delay = r.uniform() < 0.5f ? 3 : 4;
             static const int Intervals[3] = { 7, 12, 5 };
-            const int interval = Intervals[r.below(3)];
+            const int        interval = Intervals[r.below( 3 )];
             std::vector<int> st, rl, ln;
             // First on the steps the lead does not strike; where a dense lead leaves fewer than six of them
             // in the phrase, the echo may double the lead's attacks (an octave or a fifth above, in its own
             // timbre -- the doubled echo of the brief's "exakte Kopie, transponiert").
-            for (int pass = 0; pass < 2 && st.size() < 6; ++pass) {
-                st.clear(); rl.clear(); ln.clear();
+            for ( int pass = 0; pass < 2 && st.size() < 6; ++pass )
+            {
+                st.clear();
+                rl.clear();
+                ln.clear();
                 int lastEnd = -1;
-                for (const MelodyNote& n : lead) {
-                    const bool strong = n.m_step % 4 == 0 || (n.m_flags & NOTE_ACCENT) != 0;
-                    if (!strong) continue;
+                for ( const MelodyNote &n : lead )
+                {
+                    const bool strong = n.m_step % 4 == 0 || ( n.m_flags & NOTE_ACCENT ) != 0;
+                    if ( !strong ) continue;
                     const int s = n.m_step + delay;
-                    if (s >= 128 || (pass == 0 && attack[s]) || s < lastEnd) continue;
+                    if ( s >= 128 || ( pass == 0 && attack[s] ) || s < lastEnd ) continue;
                     // The lead's pitch in the counter's frame: the counter root is the lead root an octave up.
-                    const int rel = legal(n.m_rel + interval - 12, s % 8 == 0);
-                    st.push_back(s);
-                    rl.push_back(rel);
-                    ln.push_back(std::max(1, std::min<int>(n.m_len, 4)));
+                    const int rel = legal( n.m_rel + interval - 12, s % 8 == 0 );
+                    st.push_back( s );
+                    rl.push_back( rel );
+                    ln.push_back( std::max( 1, std::min<int>( n.m_len, 4 ) ) );
                     lastEnd = s + ln.back();
                 }
             }
-            for (size_t i = 0; i < st.size(); ++i) {
-                if (i + 1 < st.size()) ln[i] = std::min(ln[i], st[i + 1] - st[i]);
-                emitNote(st[i], ln[i], rl[i], 90);
+            for ( size_t i = 0; i < st.size(); ++i )
+            {
+                if ( i + 1 < st.size() ) ln[i] = std::min( ln[i], st[i + 1] - st[i] );
+                emitNote( st[i], ln[i], rl[i], 90 );
             }
             continue;
         }
-        if (mode == CounterModeE::TIMBRAL) {
+        if ( mode == CounterModeE::TIMBRAL )
+        {
             // One long note per two-bar unit -- tonic, fifth, third, fifth -- and now and then a second.
             const int cycle[4] = { 0, 7, tonicPcs[1], 7 };
-            for (int u = 0; u < 4; ++u) {
-                const int rel = nearestPc(cycle[u], centre);
-                emitNote(32 * u, 16, rel, 84);
-                if (r.uniform() < 0.5f) emitNote(32 * u + 16, 12, nearestPc(u % 2 == 0 ? 7 : 0, rel), 80);
+            for ( int u = 0; u < 4; ++u )
+            {
+                const int rel = nearestPc( cycle[u], centre );
+                emitNote( 32 * u, 16, rel, 84 );
+                if ( r.uniform() < 0.5f ) emitNote( 32 * u + 16, 12, nearestPc( u % 2 == 0 ? 7 : 0, rel ), 80 );
             }
             continue;
         }
-        if (mode == CounterModeE::HOCKET) {
+        if ( mode == CounterModeE::HOCKET )
+        {
             // The off sixteenths the lead does not strike (it may hold: the hocket sits an octave above),
             // stepping up and down from its last pitch. Measured with "neither strikes nor holds": a dense
             // cell with a held note left no free sixteenth and the hocket fell silent in 5 of 26 drops.
-            int last = nearestPc(0, centre), dir = 1, perBar = 0;
-            for (int s = 0; s < 128; ++s) {
-                if (s % 16 == 0) perBar = 0;
+            int last = nearestPc( 0, centre ), dir = 1, perBar = 0;
+            for ( int s = 0; s < 128; ++s )
+            {
+                if ( s % 16 == 0 ) perBar = 0;
                 const float coin = r.uniform();   // drawn for every step: the modes stay in step
-                if (attack[s] || s % 2 == 0 || perBar >= 6 || coin >= 0.7f) continue;
+                if ( attack[s] || s % 2 == 0 || perBar >= 6 || coin >= 0.7f ) continue;
                 int base = last;
-                for (int k = s - 1; k >= 0 && k >= s - 4; --k) if (leadRel[k] != (1 << 20)) { base = leadRel[k]; break; }   // the lead's rel, an octave up in this frame
-                const int rel = legal(transposeRel(scale, ((root - key) % 12 + 12) % 12, legal(base, false), dir * (1 + (s / 16) % 2)), false);
-                emitNote(s, 1, rel, 96);
+                for ( int k = s - 1; k >= 0 && k >= s - 4; --k )
+                    if ( leadRel[k] != ( 1 << 20 ) )
+                    {
+                        base = leadRel[k];
+                        break;
+                    }   // the lead's rel, an octave up in this frame
+                const int rel = legal( transposeRel( scale, ( ( root - key ) % 12 + 12 ) % 12, legal( base, false ),
+                                                     dir * ( 1 + ( s / 16 ) % 2 ) ),
+                                       false );
+                emitNote( s, 1, rel, 96 );
                 last = rel;
                 dir = -dir;
                 ++perBar;
@@ -1011,102 +1246,142 @@ void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
         std::vector<int> steps;
         std::vector<int> blockEnd;   // the step each note's answer block ends at
         static const int Templates[4][4] = { { 1, 3, 5, -1 }, { 0, 1, 2, 3 }, { 0, 3, 6, -1 }, { 0, 3, 4, 7 } };
-        const int tpl = r.below(4);
+        const int        tpl = r.below( 4 );
         // The answers after A, A' and A'': the second bar of each two-bar statement, in the template's
         // rhythm from the bar's second beat, onto steps where the lead holds -- a step the lead strikes is
         // moved on by one, or dropped; a window the lead fills entirely takes one note above its attack.
-        for (int bar : { 1, 3, 7 }) {
-            const int first = bar * 16 + 4;
+        for ( int bar : { 1, 3, 7 } )
+        {
+            const int        first = bar * 16 + 4;
             std::vector<int> picked;
-            for (int k : Templates[tpl]) {
-                if (k < 0) continue;
+            for ( int k : Templates[tpl] )
+            {
+                if ( k < 0 ) continue;
                 int s = first + k;
-                if (attack[s] && s + 1 < first + 12 && !attack[s + 1]) ++s;
-                if (attack[s]) continue;
-                if (!picked.empty() && picked.back() == s) continue;
-                picked.push_back(s);
+                if ( attack[s] && s + 1 < first + 12 && !attack[s + 1] ) ++s;
+                if ( attack[s] ) continue;
+                if ( !picked.empty() && picked.back() == s ) continue;
+                picked.push_back( s );
             }
-            if (picked.empty()) picked.push_back(first);
-            for (int s : picked) { steps.push_back(s); blockEnd.push_back(bar * 16 + 16); }
+            if ( picked.empty() ) picked.push_back( first );
+            for ( int s : picked )
+            {
+                steps.push_back( s );
+                blockEnd.push_back( bar * 16 + 16 );
+            }
         }
         // The line over B: eighths with two or three sixteenth pickups onto the lead's held steps.
         {
             std::vector<int> b;
-            for (int s = 64; s < 96; s += 2) b.push_back(s);
+            for ( int s = 64; s < 96; s += 2 ) b.push_back( s );
             double wgt[16];
-            for (int k = 0; k < 16; ++k) wgt[k] = attack[65 + 2 * k] ? 0.25 : 1.0;
-            const int picks = 2 + r.below(2);
-            for (int c = 0; c < picks; ++c) {
-                const int k = drawIndex(r, wgt, 16);
-                b.push_back(65 + 2 * k);
+            for ( int k = 0; k < 16; ++k ) wgt[k] = attack[65 + 2 * k] ? 0.25 : 1.0;
+            const int picks = 2 + r.below( 2 );
+            for ( int c = 0; c < picks; ++c )
+            {
+                const int k = drawIndex( r, wgt, 16 );
+                b.push_back( 65 + 2 * k );
                 wgt[k] = 0.0;
             }
-            std::sort(b.begin(), b.end());
-            for (int s : b) { steps.push_back(s); blockEnd.push_back(96); }
+            std::sort( b.begin(), b.end() );
+            for ( int s : b )
+            {
+                steps.push_back( s );
+                blockEnd.push_back( 96 );
+            }
         }
-        std::vector<size_t> order(steps.size());
-        for (size_t i = 0; i < order.size(); ++i) order[i] = i;
-        std::sort(order.begin(), order.end(), [&](size_t a, size_t b) { return steps[a] < steps[b]; });
+        std::vector<size_t> order( steps.size() );
+        for ( size_t i = 0; i < order.size(); ++i ) order[i] = i;
+        std::sort( order.begin(), order.end(), [&]( size_t a, size_t b ) { return steps[a] < steps[b]; } );
         std::vector<int> st, be;
-        for (size_t i : order) { st.push_back(steps[i]); be.push_back(blockEnd[i]); }
-        const size_t n = st.size();
-        std::vector<int> lens(n);
-        for (size_t i = 0; i < n; ++i) {
-            const int next = i + 1 < n ? std::min(st[i + 1], be[i]) : be[i];
-            lens[i] = std::max(1, next - st[i]);
+        for ( size_t i : order )
+        {
+            st.push_back( steps[i] );
+            be.push_back( blockEnd[i] );
+        }
+        const size_t     n = st.size();
+        std::vector<int> lens( n );
+        for ( size_t i = 0; i < n; ++i )
+        {
+            const int next = i + 1 < n ? std::min( st[i + 1], be[i] ) : be[i];
+            lens[i] = std::max( 1, next - st[i] );
         }
         // The lead's contour in the bar before each answer: where it rose, the answer leans down (the
         // brief's complementary contour), and the other way round.
-        auto leadDirection = [&](int bar) {
+        auto leadDirection = [&]( int bar )
+        {
             double first = 0.0, second = 0.0;
-            int n1 = 0, n2 = 0;
-            for (const MelodyNote& x : lead) {
-                if (x.m_step / 16 != bar) continue;
-                if (x.m_step % 16 < 8) { first += x.m_rel; ++n1; } else { second += x.m_rel; ++n2; }
+            int    n1 = 0, n2 = 0;
+            for ( const MelodyNote &x : lead )
+            {
+                if ( x.m_step / 16 != bar ) continue;
+                if ( x.m_step % 16 < 8 )
+                {
+                    first += x.m_rel;
+                    ++n1;
+                }
+                else
+                {
+                    second += x.m_rel;
+                    ++n2;
+                }
             }
-            if (n1 == 0 || n2 == 0) return 0;
+            if ( n1 == 0 || n2 == 0 ) return 0;
             const double d = second / n2 - first / n1;
-            return d > 0.5 ? 1 : (d < -0.5 ? -1 : 0);
+            return d > 0.5 ? 1 : ( d < -0.5 ? -1 : 0 );
         };
         // Pitches: one weighted draw per note.
-        std::vector<int> rels(n, 0);
-        int prev = 0, prev2 = 1000;
-        int block = 0;   // which answer this note belongs to (the resting tones alternate by it)
-        for (size_t i = 0; i < n; ++i) {
-            const int s = st[i];
+        std::vector<int> rels( n, 0 );
+        int              prev = 0, prev2 = 1000;
+        int              block = 0;   // which answer this note belongs to (the resting tones alternate by it)
+        for ( size_t i = 0; i < n; ++i )
+        {
+            const int  s = st[i];
             const bool strong = s % 8 == 0;
-            const bool last = i + 1 == n || be[i + 1] != be[i];   // the answer's last note
-            if (i > 0 && be[i] != be[i - 1]) ++block;              // a new answer begins
-            const int lean = -leadDirection(s / 16 - 1);          // against the lead's bar before
+            const bool last = i + 1 == n || be[i + 1] != be[i];        // the answer's last note
+            if ( i > 0 && be[i] != be[i - 1] ) ++block;                // a new answer begins
+            const int           lean = -leadDirection( s / 16 - 1 );   // against the lead's bar before
             std::vector<double> wgt;
-            std::vector<int> cand;
-            for (int rel = lo; rel <= hi; ++rel) {
-                const int pc = pcOf(rel);
-                if (!inScale(scale, pc) || isColourTone(scale, pc)) continue;
-                if (strong && !isChord(pc)) continue;
-                if (rel == prev && prev == prev2) continue;   // never one pitch three times in a row
+            std::vector<int>    cand;
+            for ( int rel = lo; rel <= hi; ++rel )
+            {
+                const int pc = pcOf( rel );
+                if ( !inScale( scale, pc ) || isColourTone( scale, pc ) ) continue;
+                if ( strong && !isChord( pc ) ) continue;
+                if ( rel == prev && prev == prev2 ) continue;   // never one pitch three times in a row
                 // The tonic as the line's centre: 3.0 against 1.4 for the fifth and 1 for the rest (2.0 until
                 // 22.09.2026; with the resting tones no longer leaning on the bar's chord the tonic fell to
                 // 19 % of the notes, measured, and the fifth sat where the register prior favoured it; the
                 // lead's new cells (round "Lead") hold other steps, and 2.5 left the tonic at the bound).
-                double v = pc == 0 ? 3.0 : (pc == 7 ? 1.4 : 1.0);
-                v *= std::exp(-std::abs(rel - prev) / 2.5);
-                if (i > 0 && be[i] == be[i - 1] && lean != 0) v *= std::exp(0.35 * lean * (rel - prev));   // the complementary contour
-                const double z = (rel - centre) / 4.0;   // the lead's sigma, on the lead's window an octave up
-                v *= std::exp(-0.5 * z * z);
-                cand.push_back(rel);
-                wgt.push_back(v);
+                double v = pc == 0 ? 3.0 : ( pc == 7 ? 1.4 : 1.0 );
+                v *= std::exp( -std::abs( rel - prev ) / 2.5 );
+                if ( i > 0 && be[i] == be[i - 1] && lean != 0 )
+                    v *= std::exp( 0.35 * lean * ( rel - prev ) );   // the complementary contour
+                const double z = ( rel - centre ) / 4.0;   // the lead's sigma, on the lead's window an octave up
+                v *= std::exp( -0.5 * z * z );
+                cand.push_back( rel );
+                wgt.push_back( v );
             }
             const double u = r.uniform();   // the one draw of this note, whatever the mode
-            int rel = prev;
-            if (!cand.empty()) {
+            int          rel = prev;
+            if ( !cand.empty() )
+            {
                 double total = 0.0;
-                for (double v : wgt) total += v;
+                for ( double v : wgt ) total += v;
                 double x = u * total;
                 rel = cand.back();
-                for (size_t k = 0; k < cand.size(); ++k) { if (x < wgt[k]) { rel = cand[k]; break; } x -= wgt[k]; }
+                for ( size_t k = 0; k < cand.size(); ++k )
+                {
+                    if ( x < wgt[k] )
+                    {
+                        rel = cand[k];
+                        break;
+                    }
+                    x -= wgt[k];
+                }
             }
-            if (last) {
+            if ( last )
+            {
                 // The resting tone. Until 22.09.2026 "the fifth where the bar's chord takes it, else the
                 // tonic" -- but the lines anchor the tonic now (round "Harmonik"; the pendulum is the pad's,
                 // the Bordun holds), and against the tonic chord alone every answer rested on the fifth.
@@ -1115,21 +1390,25 @@ void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
                 // last note the tonic. The octave nearest the drawn note.
                 const bool phraseEnd = i + 1 == n;
                 const bool fifthFits = !phraseEnd && block % 2 == 0;
-                const int want = fifthFits ? 7 : 0;
-                int best = rel, bestD = 1 << 20;
-                for (int c = lo; c <= hi; ++c)
-                    if (pcOf(c) == want && std::abs(c - rel) < bestD && !(c == prev && prev == prev2)) { bestD = std::abs(c - rel); best = c; }
+                const int  want = fifthFits ? 7 : 0;
+                int        best = rel, bestD = 1 << 20;
+                for ( int c = lo; c <= hi; ++c )
+                    if ( pcOf( c ) == want && std::abs( c - rel ) < bestD && !( c == prev && prev == prev2 ) )
+                    {
+                        bestD = std::abs( c - rel );
+                        best = c;
+                    }
                 rel = best;
             }
             rels[i] = rel;
             prev2 = prev;
             prev = rel;
         }
-        for (size_t i = 0; i < n; ++i) emitNote(st[i], lens[i], rels[i], st[i] % 4 == 0 ? 100 : 88);
+        for ( size_t i = 0; i < n; ++i ) emitNote( st[i], lens[i], rels[i], st[i] % 4 == 0 ? 100 : 88 );
     }
 }
 
-} // namespace mel
+}   // namespace mel
 
 /**
  * @brief Widens every interval of a line while keeping its contour sign for sign.
@@ -1143,66 +1422,90 @@ void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
  * next allowed symbol in the same direction is taken, which keeps the sign but not the widening.
  * Where even that does not exist the whole expansion is refused, and the caller keeps the parent.
  */
-bool expandContour(const std::vector<int>& parent, const std::vector<std::vector<uint8_t>>& allowed,
-                   int lo, int hi, std::vector<int>& out)
+bool expandContour( const std::vector<int> &parent, const std::vector<std::vector<uint8_t>> &allowed, int lo, int hi,
+                    std::vector<int> &out )
 {
-    if (parent.size() < 2 || parent.size() != allowed.size()) return false;
-    auto ok = [&](size_t i, int rel) {
-        return rel >= lo && rel <= hi && rel >= CorpusRelMin && rel <= CorpusRelMax
-            && allowed[i][static_cast<size_t>(sym(rel))] != 0;
+    if ( parent.size() < 2 || parent.size() != allowed.size() ) return false;
+    auto ok = [&]( size_t i, int rel )
+    {
+        return rel >= lo && rel <= hi && rel >= CorpusRelMin && rel <= CorpusRelMax &&
+               allowed[i][static_cast<size_t>( sym( rel ) )] != 0;
     };
-    out.assign(1, parent[0]);
+    out.assign( 1, parent[0] );
     bool widened = false;
-    for (size_t i = 1; i < parent.size(); ++i) {
+    for ( size_t i = 1; i < parent.size(); ++i )
+    {
         const int d = parent[i] - parent[i - 1];
-        if (d == 0) {
-            if (!ok(i, out.back())) { out.clear(); return false; }
-            out.push_back(out.back());
+        if ( d == 0 )
+        {
+            if ( !ok( i, out.back() ) )
+            {
+                out.clear();
+                return false;
+            }
+            out.push_back( out.back() );
             continue;
         }
         const int dir = d > 0 ? 1 : -1;
-        int got = 0;
-        bool found = false;
-        for (int c = out.back() + d + dir; c >= lo && c <= hi; c += dir)
-            if (ok(i, c)) { got = c; found = true; widened = true; break; }
+        int       got = 0;
+        bool      found = false;
+        for ( int c = out.back() + d + dir; c >= lo && c <= hi; c += dir )
+            if ( ok( i, c ) )
+            {
+                got = c;
+                found = true;
+                widened = true;
+                break;
+            }
         // No room to widen: the parent's own interval, if the position allows it. Anything nearer
         // would *narrow* the step, and an expansion that narrows is not an expansion, so the whole
         // variant is refused instead and the caller keeps the parent.
-        if (!found && ok(i, out.back() + d)) { got = out.back() + d; found = true; }
-        if (!found) { out.clear(); return false; }
-        out.push_back(got);
+        if ( !found && ok( i, out.back() + d ) )
+        {
+            got = out.back() + d;
+            found = true;
+        }
+        if ( !found )
+        {
+            out.clear();
+            return false;
+        }
+        out.push_back( got );
     }
     return widened && out.size() == parent.size();
 }
 
-const char* const LeadArchetypeNames[NumLeadArchetypes] = { "Phrygian Surge", "Arch & Drop", "Pedal & Bounce", "Descending Cascade", "Tension Call" };
-const char* const CellOpNames[NumCellOps] = { "keep", "cadence", "up", "down", "invert", "shift", "thin" };
+const char *const LeadArchetypeNames[NumLeadArchetypes] = { "Phrygian Surge", "Arch & Drop", "Pedal & Bounce",
+                                                            "Descending Cascade", "Tension Call" };
+const char *const CellOpNames[NumCellOps] = { "keep", "cadence", "up", "down", "invert", "shift", "thin" };
 
-double leadArc(int archetype, int barInPhrase)
+double leadArc( int archetype, int barInPhrase )
 {
-    const LeadArchetypeDef& a = LeadArchetypes[std::clamp(archetype, 0, NumLeadArchetypes - 1)];
-    double mean = 0.0;
-    for (float v : a.m_arc) mean += v;
+    const LeadArchetypeDef &a = LeadArchetypes[std::clamp( archetype, 0, NumLeadArchetypes - 1 )];
+    double                  mean = 0.0;
+    for ( float v : a.m_arc ) mean += v;
     mean /= 8.0;
-    return a.m_arc[((barInPhrase % 8) + 8) % 8] - mean;
+    return a.m_arc[( ( barInPhrase % 8 ) + 8 ) % 8] - mean;
 }
 
-std::vector<int> melodyContour(const std::vector<MelodyNote>& notes)
+std::vector<int> melodyContour( const std::vector<MelodyNote> &notes )
 {
     std::vector<int> out;
-    for (size_t i = 1; i < notes.size(); ++i) {
+    for ( size_t i = 1; i < notes.size(); ++i )
+    {
         const int d = notes[i].m_rel - notes[i - 1].m_rel;
-        out.push_back(d > 0 ? 1 : (d < 0 ? -1 : 0));
+        out.push_back( d > 0 ? 1 : ( d < 0 ? -1 : 0 ) );
     }
     return out;
 }
 
-uint16_t drawMotifCell(uint64_t seed, int band)
+uint16_t drawMotifCell( uint64_t seed, int band )
 {
     Rng r;
-    r.seed(seed);
+    r.seed( seed );
     bool fromCorpus = false;
-    return drawCellMask(r, CorpusRoles[static_cast<int>(CorpusRoleIdE::LEAD)], std::clamp(band, 0, 2), 0u, 0.0f, fromCorpus);
+    return drawCellMask( r, CorpusRoles[static_cast<int>( CorpusRoleIdE::LEAD )], std::clamp( band, 0, 2 ), 0u, 0.0f,
+                         fromCorpus );
 }
 
-} // namespace phos
+}   // namespace phos

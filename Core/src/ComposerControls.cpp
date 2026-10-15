@@ -33,14 +33,17 @@
 #include "Salts.h"
 using namespace phos::salts::composer;   // the Composer's seed salts (Salts.h)
 
-namespace phos {
+namespace phos
+{
 
-namespace {
+namespace
+{
 
 /** @brief One move of a perceptual direction: parameter (module table index), direction, weight. */
-struct Loading {
-    int m_param;      ///< the parameter (module table index)
-    int m_macro;      ///< the direction
+struct Loading
+{
+    int   m_param;    ///< the parameter (module table index)
+    int   m_macro;    ///< the direction
     float m_weight;   ///< its weight
 };
 
@@ -55,11 +58,12 @@ struct Loading {
 /// pitch, whose reference quartiles are 54 .. 71 Hz -- with Tune = Key the end pitch still lands on the
 /// key's root or fifth, so a recipe changes *which* of the two, never the tuning.
 const Loading KickLoadings[] = {
-    { kick::AMP_HOLD,    0,  0.10f }, { kick::AMP_DECAY,   0,  0.15f }, { kick::PITCH_DECAY, 0,  0.10f },
-    { kick::PUNCH,      1,  0.40f }, { kick::PUNCH_DECAY, 1, -0.25f }, { kick::PITCH_START, 1,  0.25f },
-    { kick::PITCH_DECAY, 2,  0.30f }, { kick::TONE,       2,  0.15f }, { kick::PITCH_START, 2, -0.10f }, { kick::PITCH_END, 2, 0.25f },
-    { kick::DRIVE,      3,  0.45f }, { kick::CLICK_LEVEL, 3,  0.10f }, { kick::LEVEL,      3, -0.05f },
-    { kick::CLICK_LEVEL, 4,  0.75f }, { kick::CLICK_TONE,  4,  0.40f }, { kick::CLICK_DECAY, 4,  0.20f },
+    { kick::AMP_HOLD, 0, 0.10f },    { kick::AMP_DECAY, 0, 0.15f },    { kick::PITCH_DECAY, 0, 0.10f },
+    { kick::PUNCH, 1, 0.40f },       { kick::PUNCH_DECAY, 1, -0.25f }, { kick::PITCH_START, 1, 0.25f },
+    { kick::PITCH_DECAY, 2, 0.30f }, { kick::TONE, 2, 0.15f },         { kick::PITCH_START, 2, -0.10f },
+    { kick::PITCH_END, 2, 0.25f },   { kick::DRIVE, 3, 0.45f },        { kick::CLICK_LEVEL, 3, 0.10f },
+    { kick::LEVEL, 3, -0.05f },      { kick::CLICK_LEVEL, 4, 0.75f },  { kick::CLICK_TONE, 4, 0.40f },
+    { kick::CLICK_DECAY, 4, 0.20f },
 };
 /// Bass: brightness, pluck, squelch, grit, weight -- since 19.09.2026 the four bass characters of the
 /// round's brief as directions of one space rather than four presets: "clean sub + bite" is the centre
@@ -69,13 +73,14 @@ const Loading KickLoadings[] = {
 /// Variation of 0.5 and a typical draw of 0.4 the old table moved no knob by more than 0.06 of its range,
 /// which renders a different number and the same sound.
 const Loading BassLoadings[] = {
-    { bass::CUTOFF,      0,  0.25f }, { bass::ENV_AMOUNT,   0,  0.20f }, { bass::BITE_CUTOFF, 0,  0.60f }, { bass::BITE_ENV, 0, 0.35f },
-    { bass::FILTER_DECAY, 1, -0.40f }, { bass::AMP_DECAY,    1, -0.50f }, { bass::AMP_SUSTAIN, 1, -0.60f }, { bass::BITE_DECAY, 1, -0.70f },
-    { bass::RESONANCE,   2,  0.70f }, { bass::BITE_RESONANCE, 2, 0.90f }, { bass::FILTER_DECAY, 2, 0.15f },
-    { bass::DRIVE,       3,  0.60f }, { bass::BITE_DRIVE,   3,  0.80f }, { bass::WAVE,       3,  0.40f }, { bass::PULSE_WIDTH, 3, 0.10f },
-    { bass::BITE,        3,  0.30f }, { bass::LEVEL,       3, -0.03f },
-    { bass::SUB,         4,  0.30f }, { bass::SUB_OCTAVE,   4,  0.25f }, { bass::BITE,       4, -0.40f }, { bass::SPLIT_RATIO, 4, 0.15f },
-    { bass::KEY_TRACK,    4, -0.10f },
+    { bass::CUTOFF, 0, 0.25f },         { bass::ENV_AMOUNT, 0, 0.20f },    { bass::BITE_CUTOFF, 0, 0.60f },
+    { bass::BITE_ENV, 0, 0.35f },       { bass::FILTER_DECAY, 1, -0.40f }, { bass::AMP_DECAY, 1, -0.50f },
+    { bass::AMP_SUSTAIN, 1, -0.60f },   { bass::BITE_DECAY, 1, -0.70f },   { bass::RESONANCE, 2, 0.70f },
+    { bass::BITE_RESONANCE, 2, 0.90f }, { bass::FILTER_DECAY, 2, 0.15f },  { bass::DRIVE, 3, 0.60f },
+    { bass::BITE_DRIVE, 3, 0.80f },     { bass::WAVE, 3, 0.40f },          { bass::PULSE_WIDTH, 3, 0.10f },
+    { bass::BITE, 3, 0.30f },           { bass::LEVEL, 3, -0.03f },        { bass::SUB, 4, 0.30f },
+    { bass::SUB_OCTAVE, 4, 0.25f },     { bass::BITE, 4, -0.40f },         { bass::SPLIT_RATIO, 4, 0.15f },
+    { bass::KEY_TRACK, 4, -0.10f },
 };
 
 /**
@@ -94,25 +99,26 @@ const Loading BassLoadings[] = {
  * added to the section's own base, so it survives.
  */
 /** @brief One parameter of the acid voicing and its offsets. */
-struct AcidVoicingParam {
-    int m_param;      ///< the parameter (acid::)
+struct AcidVoicingParam
+{
+    int   m_param;    ///< the parameter (acid::)
     float m_clean;    ///< its offset towards clean
     float m_liquid;   ///< its offset towards liquid
 };
 /** @brief The acid voicing: per parameter its offset towards clean and towards liquid. */
 const AcidVoicingParam AcidVoicingTable[] = {
-    { acid::WAVE,          0.0f,   0.5f },
-    { acid::CUTOFF,      600.0f, 450.0f },
+    { acid::WAVE, 0.0f, 0.5f },
+    { acid::CUTOFF, 600.0f, 450.0f },
     // 19.09.2026 (round "voices"): resonance and decay joined, now that the section ride swings around
     // the voiced value instead of the knob (Form.cpp, sectionAutomation). clean303 was rendered at a
     // resonance of 0.8, liquid at 0.88 with a 500 ms decay (docs/rounds/2026-09.md, "Fundament und Mix").
-    { acid::RESONANCE,     0.80f,  0.88f },
-    { acid::DECAY,       220.0f, 500.0f },
-    { acid::ENV_AMOUNT,     4.0f,   5.0f },
-    { acid::ACCENT,        0.8f,   0.6f },
-    { acid::DRIVE,         0.1f,   0.4f },
-    { acid::LOW_CUT,      150.0f, 150.0f },
-    { acid::DELAY_SEND,     0.3f,  0.35f },
+    { acid::RESONANCE, 0.80f, 0.88f },
+    { acid::DECAY, 220.0f, 500.0f },
+    { acid::ENV_AMOUNT, 4.0f, 5.0f },
+    { acid::ACCENT, 0.8f, 0.6f },
+    { acid::DRIVE, 0.1f, 0.4f },
+    { acid::LOW_CUT, 150.0f, 150.0f },
+    { acid::DELAY_SEND, 0.3f, 0.35f },
     { acid::DELAY_FEEDBACK, 0.45f, 0.55f },
     { acid::DISPERSE_FREQ, 1250.0f, 1500.0f },
 };
@@ -139,20 +145,34 @@ constexpr float LiquidDisperse = 4.0f;
 // filter's key tracking, and every FM parameter -- so a voice that drew the FM oscillator sounded
 // the same in every track whatever else it drew. They cost no table, no memory and no load time.
 const Loading VoiceLoadings[] = {
-    { poly::CUTOFF,      0, 0.18f }, { poly::ENV_AMOUNT,   0, 0.10f }, { poly::RESONANCE, 0, 0.08f }, { poly::POSITION, 0, 0.20f },
-    { poly::KEY_TRACK,    0, 0.12f },
-    { poly::AMP_ATTACK,   1, 0.15f }, { poly::FILTER_DECAY, 1, 0.15f }, { poly::AMP_RELEASE, 1, 0.10f },
-    { poly::AMP_DECAY,    1, 0.18f }, { poly::AMP_SUSTAIN,  1, 0.14f },
+    { poly::CUTOFF, 0, 0.18f },
+    { poly::ENV_AMOUNT, 0, 0.10f },
+    { poly::RESONANCE, 0, 0.08f },
+    { poly::POSITION, 0, 0.20f },
+    { poly::KEY_TRACK, 0, 0.12f },
+    { poly::AMP_ATTACK, 1, 0.15f },
+    { poly::FILTER_DECAY, 1, 0.15f },
+    { poly::AMP_RELEASE, 1, 0.10f },
+    { poly::AMP_DECAY, 1, 0.18f },
+    { poly::AMP_SUSTAIN, 1, 0.14f },
     // Detune 0.25 -> 0.15 (24.09.2026, the user: "untersuche, ob es zu solchen Verstimmungen auch in den anderen
     // Stimmen kommen kann"). Szabo's curve is steep at the top: the lead's 0.55 put its outer saws 22 cents off, and a
     // thick recipe at full sound variation pushed it to 0.80 -- 54 cents, past a quarter tone, the pad's fault again.
     // At 0.15 the lead stays under 40 cents and every other voice under 25.
-    { poly::DETUNE,      2, 0.15f }, { poly::MIX,         2, 0.15f }, { poly::WIDTH,    2, 0.20f },
-    { poly::DYNAMIC_DETUNE, 2, 0.15f }, { poly::FM_RATIO,   2, 0.12f },
-    { poly::DELAY_SEND,   3, 0.20f }, { poly::DELAY_FEEDBACK, 3, 0.10f },
-    { poly::POS_LFO_DEPTH, 4, 0.30f }, { poly::POS_ENV,      4, 0.20f }, { poly::DRIFT,    4, 0.15f },
-    { poly::POS_LFO_BEATS, 4, 0.25f }, { poly::POS_DECAY,    4, 0.20f }, { poly::FM_INDEX,  4, 0.18f },
-    { poly::FM_DECAY,     1, 0.15f },
+    { poly::DETUNE, 2, 0.15f },
+    { poly::MIX, 2, 0.15f },
+    { poly::WIDTH, 2, 0.20f },
+    { poly::DYNAMIC_DETUNE, 2, 0.15f },
+    { poly::FM_RATIO, 2, 0.12f },
+    { poly::DELAY_SEND, 3, 0.20f },
+    { poly::DELAY_FEEDBACK, 3, 0.10f },
+    { poly::POS_LFO_DEPTH, 4, 0.30f },
+    { poly::POS_ENV, 4, 0.20f },
+    { poly::DRIFT, 4, 0.15f },
+    { poly::POS_LFO_BEATS, 4, 0.25f },
+    { poly::POS_DECAY, 4, 0.20f },
+    { poly::FM_INDEX, 4, 0.18f },
+    { poly::FM_DECAY, 1, 0.15f },
     // 22.09.2026, round "Klangfarben". The second oscillator's balance is thickness by definition,
     // and its detune belongs there too -- a few cents between two oscillators is the width of an
     // analogue pad. The LFO's three depths and its period are the motion direction: that is what the
@@ -161,80 +181,94 @@ const Loading VoiceLoadings[] = {
     // Osc2Detune 0.25 -> 0.06 (24.09.2026): a quarter of the knob's 100 cents put the partner up to 25 cents
     // from the pad's own 9, and seed 5's first pad played every chord tone twice, 31 cents apart and equally
     // loud -- the honky-tonk piano, not the width of an analogue pad (3 to 15 cents, where 9 +- 6 now lies).
-    { poly::OSC2_MIX,     2, 0.30f }, { poly::OSC2_DETUNE,  2, 0.06f },
-    { poly::LFO_CUTOFF,   4, 0.35f }, { poly::LFO_AMP,      4, 0.25f },
-    { poly::LFO_PITCH,    4, 0.20f }, { poly::LFO_BEATS,    4, 0.30f },
+    { poly::OSC2_MIX, 2, 0.30f },
+    { poly::OSC2_DETUNE, 2, 0.06f },
+    { poly::LFO_CUTOFF, 4, 0.35f },
+    { poly::LFO_AMP, 4, 0.25f },
+    { poly::LFO_PITCH, 4, 0.20f },
+    { poly::LFO_BEATS, 4, 0.30f },
 };
 /** @brief The hall-send share of the space direction, folded into the section's hall ride (sectionControls). */
 constexpr float VoiceHallWeight = 0.12f;
 
 /** @brief Bass parameters that move in slow arcs within a track, with their arc size at full variation. */
-struct Arc {
-    int m_param;    ///< the parameter (bass::)
-    float m_size;   ///< its arc at full variation
+struct Arc
+{
+    int   m_param;   ///< the parameter (bass::)
+    float m_size;    ///< its arc at full variation
 };
 /** @brief The bass parameters that move in slow arcs. */
 const Arc BassArcs[] = { { bass::CUTOFF, 0.08f }, { bass::ENV_AMOUNT, 0.06f }, { bass::RESONANCE, 0.06f } };
 
-} // namespace
+}   // namespace
 
-void Composer::recipeOffsets(bool kickModule, const float* macros, float amount, float* out)
+void Composer::recipeOffsets( bool kickModule, const float *macros, float amount, float *out )
 {
-    const int n = ParamStore::moduleCount(kickModule ? ModuleE::KICK : ModuleE::BASS);
-    std::fill(out, out + n, 0.0f);
-    const Loading* table = kickModule ? KickLoadings : BassLoadings;
-    const size_t count = kickModule ? sizeof(KickLoadings) / sizeof(Loading) : sizeof(BassLoadings) / sizeof(Loading);
-    for (size_t i = 0; i < count; ++i) out[table[i].m_param] += amount * table[i].m_weight * macros[table[i].m_macro];
+    const int n = ParamStore::moduleCount( kickModule ? ModuleE::KICK : ModuleE::BASS );
+    std::fill( out, out + n, 0.0f );
+    const Loading *table = kickModule ? KickLoadings : BassLoadings;
+    const size_t   count =
+        kickModule ? sizeof( KickLoadings ) / sizeof( Loading ) : sizeof( BassLoadings ) / sizeof( Loading );
+    for ( size_t i = 0; i < count; ++i ) out[table[i].m_param] += amount * table[i].m_weight * macros[table[i].m_macro];
 }
 
-void Composer::acidVoicingOffsets(const ParamStore& p, const float* weights, float amount, float* out, int& disperse)
+void Composer::acidVoicingOffsets( const ParamStore &p, const float *weights, float amount, float *out, int &disperse )
 {
-    const int ab = p.base(ModuleE::ACID);
-    std::fill(out, out + acid::COUNT, 0.0f);
+    const int ab = p.base( ModuleE::ACID );
+    std::fill( out, out + acid::COUNT, 0.0f );
     disperse = -1;
-    const float reach = std::clamp(2.0f * amount, 0.0f, 1.0f);
-    if (reach <= 0.0f) return;
-    for (const AcidVoicingParam& v : AcidVoicingTable) {
-        const int id = ab + v.m_param;
-        const float d = p.toNormalised(id, p.defaultValue(id));
-        out[v.m_param] = reach * (weights[0] * (p.toNormalised(id, v.m_clean) - d) + weights[2] * (p.toNormalised(id, v.m_liquid) - d));
+    const float reach = std::clamp( 2.0f * amount, 0.0f, 1.0f );
+    if ( reach <= 0.0f ) return;
+    for ( const AcidVoicingParam &v : AcidVoicingTable )
+    {
+        const int   id = ab + v.m_param;
+        const float d = p.toNormalised( id, p.defaultValue( id ) );
+        out[v.m_param] = reach * ( weights[0] * ( p.toNormalised( id, v.m_clean ) - d ) +
+                                   weights[2] * ( p.toNormalised( id, v.m_liquid ) - d ) );
     }
     // The disperser is a number of stages: the liquid share of the stages, rounded, on top of the knob.
-    const int knob = static_cast<int>(std::lround(p.get(ab + acid::DISPERSE)));
-    const int stages = std::min(static_cast<int>(DisperseStages), knob + static_cast<int>(std::lround(reach * weights[2] * LiquidDisperse)));
+    const int knob = static_cast<int>( std::lround( p.get( ab + acid::DISPERSE ) ) );
+    const int stages = std::min( static_cast<int>( DisperseStages ),
+                                 knob + static_cast<int>( std::lround( reach * weights[2] * LiquidDisperse ) ) );
     disperse = stages == knob ? -1 : stages;   // no liquid share: the knob, as an override of -1 says
 }
 
-Composer::VoicePaletteView Composer::voicePalette(PolyInstanceE voice)
+Composer::VoicePaletteView Composer::voicePalette( PolyInstanceE voice )
 {
-    const VoicePalette& p = VoicePalettes[std::clamp(polyIndex(voice), 0, PolyInstances - 1)];
+    const VoicePalette &p = VoicePalettes[std::clamp( polyIndex( voice ), 0, PolyInstances - 1 )];
     return { p.m_osc, p.m_builtin, p.m_lane, p.m_filter, p.m_osc2, p.m_interval };
 }
 
-void Composer::voiceRecipeOffsets(PolyInstanceE voice, const VoiceRecipe& r, float amount, float* out)
+void Composer::voiceRecipeOffsets( PolyInstanceE voice, const VoiceRecipe &r, float amount, float *out )
 {
-    std::fill(out, out + poly::COUNT, 0.0f);
-    const VoicePalette& pal = VoicePalettes[polyIndex(voice)];
-    for (const Loading& l : VoiceLoadings) out[l.m_param] += amount * l.m_weight * pal.m_scale[l.m_macro] * r.m_macro[l.m_macro];
+    std::fill( out, out + poly::COUNT, 0.0f );
+    const VoicePalette &pal = VoicePalettes[polyIndex( voice )];
+    for ( const Loading &l : VoiceLoadings )
+        out[l.m_param] += amount * l.m_weight * pal.m_scale[l.m_macro] * r.m_macro[l.m_macro];
 }
 
-int Composer::voicePaletteTableCount(PolyInstanceE voice)
+int Composer::voicePaletteTableCount( PolyInstanceE voice )
 {
-    return paletteTableCount(VoicePalettes[polyIndex(voice)]);
+    return paletteTableCount( VoicePalettes[polyIndex( voice )] );
 }
 
-const SoundPreset* Composer::presetOf(const ParamStore& p, const TrackPlan& plan, int synth)
+const SoundPreset *Composer::presetOf( const ParamStore &p, const TrackPlan &plan, int synth )
 {
-    if (synth < 0 || synth >= SoundSynths || plan.m_soundPreset[synth] < 0) return nullptr;
-    if (p.get(p.base(ModuleE::COMPOSE) + compose::SOUND_VARIATION) <= 0.0f) return nullptr;   // Sound Variation 0: the knobs
-    if (!p.getBool(p.base(ModuleE::COMPOSE) + compose::SOUND_PRESETS)) return nullptr;       // the recipes instead
-    const ModuleE m = synth == 0 ? ModuleE::KICK : synth == 1 ? ModuleE::BASS : synth == 2 ? ModuleE::ACID : ModuleE::POLY;
-    const std::vector<SoundPreset>& bank = factoryPresets(m, synth >= 3 ? synth - 3 : 0);
-    const size_t i = static_cast<size_t>(plan.m_soundPreset[synth]);
+    if ( synth < 0 || synth >= SoundSynths || plan.m_soundPreset[synth] < 0 ) return nullptr;
+    if ( p.get( p.base( ModuleE::COMPOSE ) + compose::SOUND_VARIATION ) <= 0.0f )
+        return nullptr;   // Sound Variation 0: the knobs
+    if ( !p.getBool( p.base( ModuleE::COMPOSE ) + compose::SOUND_PRESETS ) ) return nullptr;   // the recipes instead
+    const ModuleE                   m = synth == 0   ? ModuleE::KICK
+                                        : synth == 1 ? ModuleE::BASS
+                                        : synth == 2 ? ModuleE::ACID
+                                                     : ModuleE::POLY;
+    const std::vector<SoundPreset> &bank = factoryPresets( m, synth >= 3 ? synth - 3 : 0 );
+    const size_t                    i = static_cast<size_t>( plan.m_soundPreset[synth] );
     return i < bank.size() ? &bank[i] : nullptr;
 }
 
-namespace {
+namespace
+{
 
 /**
  * @brief The share of a synth's recipe: none where the synth plays a preset (26.09.2026), Sound Variation otherwise.
@@ -244,9 +278,9 @@ namespace {
  * @param[in] sv     Sound Variation
  * @return the share, 0..1
  */
-float recipeAmount(const ParamStore& p, const TrackPlan& plan, int synth, float sv)
+float recipeAmount( const ParamStore &p, const TrackPlan &plan, int synth, float sv )
 {
-    return Composer::presetOf(p, plan, synth) != nullptr ? 0.0f : sv;
+    return Composer::presetOf( p, plan, synth ) != nullptr ? 0.0f : sv;
 }
 
 /**
@@ -259,12 +293,12 @@ float recipeAmount(const ParamStore& p, const TrackPlan& plan, int synth, float 
  * @param[in] levelId  its Level knob
  * @return the offset, normalised
  */
-float presetTrim(const ParamStore& p, const TrackPlan& plan, int synth, int levelId)
+float presetTrim( const ParamStore &p, const TrackPlan &plan, int synth, int levelId )
 {
-    const SoundPreset* sp = Composer::presetOf(p, plan, synth);
-    if (sp == nullptr) return 0.0f;
-    const ParamDesc& d = p.desc(levelId);
-    return sp->m_trimDb / (d.m_maxValue - d.m_minValue);
+    const SoundPreset *sp = Composer::presetOf( p, plan, synth );
+    if ( sp == nullptr ) return 0.0f;
+    const ParamDesc &d = p.desc( levelId );
+    return sp->m_trimDb / ( d.m_maxValue - d.m_minValue );
 }
 
 /**
@@ -272,222 +306,291 @@ float presetTrim(const ParamStore& p, const TrackPlan& plan, int synth, int leve
  * @param[in] c  the curve
  * @return true for choices, steps or a switch
  */
-bool isDiscreteCurve(CurveE c) { return c == CurveE::CHOICE || c == CurveE::INT || c == CurveE::TOGGLE; }
-
-
-} // namespace
-
-void Composer::trackStartControls(const ParamStore& p, const TrackPlan& plan, double beat, std::vector<ControlEvent>& out,
-                                  ControlScopeE scope) const
+bool isDiscreteCurve( CurveE c )
 {
-    const int cb = p.base(ModuleE::COMPOSE), kb = p.base(ModuleE::KICK), bb = p.base(ModuleE::BASS), mb = p.base(ModuleE::MIX);
-    const float sv = p.get(cb + compose::SOUND_VARIATION);
-    const bool floor = scope != ControlScopeE::VOICES, voices = scope != ControlScopeE::FLOOR;
-    auto push = [&](int id, ControlEvent::KindE kind, float value) {
+    return c == CurveE::CHOICE || c == CurveE::INT || c == CurveE::TOGGLE;
+}
+
+}   // namespace
+
+void Composer::trackStartControls( const ParamStore &p, const TrackPlan &plan, double beat,
+                                   std::vector<ControlEvent> &out, ControlScopeE scope ) const
+{
+    const int   cb = p.base( ModuleE::COMPOSE ), kb = p.base( ModuleE::KICK ), bb = p.base( ModuleE::BASS ),
+                mb = p.base( ModuleE::MIX );
+    const float sv = p.get( cb + compose::SOUND_VARIATION );
+    const bool  floor = scope != ControlScopeE::VOICES, voices = scope != ControlScopeE::FLOOR;
+    auto        push = [&]( int id, ControlEvent::KindE kind, float value )
+    {
         ControlEvent c;
         c.m_beat = beat;
-        c.m_param = static_cast<int16_t>(id);
+        c.m_param = static_cast<int16_t>( id );
         c.m_kind = kind;
         c.m_value = value;
-        out.push_back(c);
+        out.push_back( c );
     };
     // The sound presets (26.09.2026): first every value a preset of the track before may have left -- a base
     // cleared, an override lifted -- for the synths this scope starts; the recipe of a synth without a preset and
     // the preset of one with it follow, and win, because the events of one instant apply in their order.
-    auto presetSynths = [&](auto&& each) {
-        if (floor) for (int k = 0; k < 3; ++k) each(k);
-        if (voices) for (int k = 3; k < SoundSynths; ++k) each(k);
+    auto presetSynths = [&]( auto &&each )
+    {
+        if ( floor )
+            for ( int k = 0; k < 3; ++k ) each( k );
+        if ( voices )
+            for ( int k = 3; k < SoundSynths; ++k ) each( k );
     };
-    presetSynths([&](int k) {
-        const ModuleE m = k == 0 ? ModuleE::KICK : k == 1 ? ModuleE::BASS : k == 2 ? ModuleE::ACID : ModuleE::POLY;
-        const int b = p.base(m, k >= 3 ? k - 3 : 0);
-        for (int i = 0; i < ParamStore::moduleCount(m); ++i) {
-            if (presetLeaves(m, i)) continue;
-            if (isDiscreteCurve(p.desc(b + i).m_curve)) {
-                push(b + i, ControlEvent::KindE::OVERRIDE, -1.0f);
-            } else {
-                push(b + i, ControlEvent::KindE::BASE, 0.0f);
-                out.back().m_length = -1.0f;   // clears the base (Score.h)
+    presetSynths(
+        [&]( int k )
+        {
+            const ModuleE m = k == 0 ? ModuleE::KICK : k == 1 ? ModuleE::BASS : k == 2 ? ModuleE::ACID : ModuleE::POLY;
+            const int     b = p.base( m, k >= 3 ? k - 3 : 0 );
+            for ( int i = 0; i < ParamStore::moduleCount( m ); ++i )
+            {
+                if ( presetLeaves( m, i ) ) continue;
+                if ( isDiscreteCurve( p.desc( b + i ).m_curve ) )
+                {
+                    push( b + i, ControlEvent::KindE::OVERRIDE, -1.0f );
+                }
+                else
+                {
+                    push( b + i, ControlEvent::KindE::BASE, 0.0f );
+                    out.back().m_length = -1.0f;   // clears the base (Score.h)
+                }
             }
-        }
-    });
-    const float svKick = recipeAmount(p, plan, 0, sv);
+        } );
+    const float svKick = recipeAmount( p, plan, 0, sv );
     // The DJ overlap (19.09.2026): a track's voices sound from its first bar, over the previous track's
     // bare outro, but its key, kick, bass, kit, acid and gains take over only at the hand-over, with its
     // kick and bass (ControlScope). A track that starts a set writes both at once.
-    if (floor) {
-    push(cb + compose::KEY, ControlEvent::KindE::OVERRIDE, static_cast<float>(plan.m_key));
-    push(cb + compose::SCALE, ControlEvent::KindE::OVERRIDE, static_cast<float>(plan.m_scale));
-    push(cb + compose::BASS_PATTERN, ControlEvent::KindE::OVERRIDE, static_cast<float>(plan.m_primaryPattern));
-    if (svKick > 0.0f || presetOf(p, plan, 0) == nullptr) {
-        push(kb + kick::ENGINE, ControlEvent::KindE::OVERRIDE, static_cast<float>(plan.m_kickEngine));
-        push(kb + kick::CLIP, ControlEvent::KindE::OVERRIDE, static_cast<float>(plan.m_kickClip));
-    }
-    float kickOff[kick::COUNT] = {};   // sized by the table (26.09.2026: a fixed 64 is the Poly::m_values trap)
-    recipeOffsets(true, plan.m_kickMacro, svKick, kickOff);
-    kickOff[kick::LEVEL] += presetTrim(p, plan, 0, kb + kick::LEVEL);
-    for (const Loading& l : KickLoadings) push(kb + l.m_param, ControlEvent::KindE::OFFSET, kickOff[l.m_param]);
-    // The track's level correction, in the normalised domain of a linear 24 dB range.
-    const ParamDesc& g = p.desc(mb + mix::TRACK_GAIN);
-    push(mb + mix::TRACK_GAIN, ControlEvent::KindE::OFFSET, plan.m_gainDb / (g.m_maxValue - g.m_minValue));
-    // Percussion: one recipe for the whole kit, so the lanes keep sounding like one kit, and the
-    // track's engine and mode-set switches.
-    float percOff[perc::COUNT] = {};
-    percRecipeOffsets(plan.m_perc.m_macro, sv, percOff);
-    for (int l = 0; l < PercLanes; ++l) {
-        const int pb = p.base(ModuleE::PERC, l);
-        for (int k : { static_cast<int>(perc::CUTOFF), static_cast<int>(perc::METAL_SCALE), static_cast<int>(perc::DECAY),
-                       static_cast<int>(perc::NOISE_DECAY), static_cast<int>(perc::BURST_SPACING), static_cast<int>(perc::DRIVE),
-                       static_cast<int>(perc::RESONANCE) })
-            push(pb + k, ControlEvent::KindE::OFFSET, percOff[k]);
-        push(pb + perc::ENGINE, ControlEvent::KindE::OVERRIDE, static_cast<float>(plan.m_perc.m_engineOverride[l]));
-        push(pb + perc::MODE_SET, ControlEvent::KindE::OVERRIDE, static_cast<float>(plan.m_perc.m_modeSetOverride[l]));
-    }
+    if ( floor )
+    {
+        push( cb + compose::KEY, ControlEvent::KindE::OVERRIDE, static_cast<float>( plan.m_key ) );
+        push( cb + compose::SCALE, ControlEvent::KindE::OVERRIDE, static_cast<float>( plan.m_scale ) );
+        push( cb + compose::BASS_PATTERN, ControlEvent::KindE::OVERRIDE, static_cast<float>( plan.m_primaryPattern ) );
+        if ( svKick > 0.0f || presetOf( p, plan, 0 ) == nullptr )
+        {
+            push( kb + kick::ENGINE, ControlEvent::KindE::OVERRIDE, static_cast<float>( plan.m_kickEngine ) );
+            push( kb + kick::CLIP, ControlEvent::KindE::OVERRIDE, static_cast<float>( plan.m_kickClip ) );
+        }
+        float kickOff[kick::COUNT] = {};   // sized by the table (26.09.2026: a fixed 64 is the Poly::m_values trap)
+        recipeOffsets( true, plan.m_kickMacro, svKick, kickOff );
+        kickOff[kick::LEVEL] += presetTrim( p, plan, 0, kb + kick::LEVEL );
+        for ( const Loading &l : KickLoadings ) push( kb + l.m_param, ControlEvent::KindE::OFFSET, kickOff[l.m_param] );
+        // The track's level correction, in the normalised domain of a linear 24 dB range.
+        const ParamDesc &g = p.desc( mb + mix::TRACK_GAIN );
+        push( mb + mix::TRACK_GAIN, ControlEvent::KindE::OFFSET, plan.m_gainDb / ( g.m_maxValue - g.m_minValue ) );
+        // Percussion: one recipe for the whole kit, so the lanes keep sounding like one kit, and the
+        // track's engine and mode-set switches.
+        float percOff[perc::COUNT] = {};
+        percRecipeOffsets( plan.m_perc.m_macro, sv, percOff );
+        for ( int l = 0; l < PercLanes; ++l )
+        {
+            const int pb = p.base( ModuleE::PERC, l );
+            for ( int k : { static_cast<int>( perc::CUTOFF ), static_cast<int>( perc::METAL_SCALE ),
+                            static_cast<int>( perc::DECAY ), static_cast<int>( perc::NOISE_DECAY ),
+                            static_cast<int>( perc::BURST_SPACING ), static_cast<int>( perc::DRIVE ),
+                            static_cast<int>( perc::RESONANCE ) } )
+                push( pb + k, ControlEvent::KindE::OFFSET, percOff[k] );
+            push( pb + perc::ENGINE, ControlEvent::KindE::OVERRIDE,
+                  static_cast<float>( plan.m_perc.m_engineOverride[l] ) );
+            push( pb + perc::MODE_SET, ControlEvent::KindE::OVERRIDE,
+                  static_cast<float>( plan.m_perc.m_modeSetOverride[l] ) );
+        }
     }   // floor
     (void)bb;
 
     // Melodic parts: switches of the track, delay times, level corrections and sound directions.
-    const MelodyPlan& m = plan.m_melody;
-    const int ab = p.base(ModuleE::ACID);
-    if (floor) {
-    push(ab + acid::SQUELCH, ControlEvent::KindE::OVERRIDE, static_cast<float>(m.m_acidSquelch));
-    push(ab + acid::DELAY_LEFT, ControlEvent::KindE::OVERRIDE, static_cast<float>(m.m_delay[mpIndex(MelodyPartE::ACID)][0]));
-    push(ab + acid::DELAY_RIGHT, ControlEvent::KindE::OVERRIDE, static_cast<float>(m.m_delay[mpIndex(MelodyPartE::ACID)][1]));
+    const MelodyPlan &m = plan.m_melody;
+    const int         ab = p.base( ModuleE::ACID );
+    if ( floor )
+    {
+        push( ab + acid::SQUELCH, ControlEvent::KindE::OVERRIDE, static_cast<float>( m.m_acidSquelch ) );
+        push( ab + acid::DELAY_LEFT, ControlEvent::KindE::OVERRIDE,
+              static_cast<float>( m.m_delay[mpIndex( MelodyPartE::ACID )][0] ) );
+        push( ab + acid::DELAY_RIGHT, ControlEvent::KindE::OVERRIDE,
+              static_cast<float>( m.m_delay[mpIndex( MelodyPartE::ACID )][1] ) );
     }
-    pushPartLevels(p, plan, beat, 0.0f, floor, voices, out);
+    pushPartLevels( p, plan, beat, 0.0f, floor, voices, out );
     // The track's acid voicing (Composer.h, NumAcidVoicings). Cutoff and Env Amount are written again
     // by every section with the voicing folded into the section's base (sectionControls); they are
     // written here as well so that the level match's part probe, which plays the track start alone,
     // hears the voicing it has to match.
-    const float svAcid = recipeAmount(p, plan, 2, sv);
-    if (floor) {
+    const float svAcid = recipeAmount( p, plan, 2, sv );
+    if ( floor )
+    {
         float acidOff[acid::COUNT] = {};
-        int disperse = -1;
-        acidVoicingOffsets(p, plan.m_acidVoicing, svAcid, acidOff, disperse);
-        for (const AcidVoicingParam& v : AcidVoicingTable) push(ab + v.m_param, ControlEvent::KindE::OFFSET, acidOff[v.m_param]);
-        push(ab + acid::LEVEL, ControlEvent::KindE::OFFSET, presetTrim(p, plan, 2, ab + acid::LEVEL));
-        push(ab + acid::DISPERSE, ControlEvent::KindE::OVERRIDE, static_cast<float>(disperse));
+        int   disperse = -1;
+        acidVoicingOffsets( p, plan.m_acidVoicing, svAcid, acidOff, disperse );
+        for ( const AcidVoicingParam &v : AcidVoicingTable )
+            push( ab + v.m_param, ControlEvent::KindE::OFFSET, acidOff[v.m_param] );
+        push( ab + acid::LEVEL, ControlEvent::KindE::OFFSET, presetTrim( p, plan, 2, ab + acid::LEVEL ) );
+        push( ab + acid::DISPERSE, ControlEvent::KindE::OVERRIDE, static_cast<float>( disperse ) );
     }
     // Decay and resonance: the voicing's offset (pushed above) plus the old per-track direction, as one
     // value -- a strand holds an offset, it does not add one; the section ride swings around this sum.
-    if (floor) {
+    if ( floor )
+    {
         float acidOff[acid::COUNT] = {};
-        int unused = -1;
-        acidVoicingOffsets(p, plan.m_acidVoicing, svAcid, acidOff, unused);
-        push(ab + acid::DECAY, ControlEvent::KindE::OFFSET, acidOff[acid::DECAY] + 0.12f * svAcid * m.m_recipe[mpIndex(MelodyPartE::ACID)]);
-        push(ab + acid::RESONANCE, ControlEvent::KindE::OFFSET, acidOff[acid::RESONANCE] + 0.08f * svAcid * m.m_recipe[mpIndex(MelodyPartE::ACID)]);
+        int   unused = -1;
+        acidVoicingOffsets( p, plan.m_acidVoicing, svAcid, acidOff, unused );
+        push( ab + acid::DECAY, ControlEvent::KindE::OFFSET,
+              acidOff[acid::DECAY] + 0.12f * svAcid * m.m_recipe[mpIndex( MelodyPartE::ACID )] );
+        push( ab + acid::RESONANCE, ControlEvent::KindE::OFFSET,
+              acidOff[acid::RESONANCE] + 0.08f * svAcid * m.m_recipe[mpIndex( MelodyPartE::ACID )] );
     }
     // Every polyphonic voice's own sound (Composer.h, VoiceRecipe; 19.09.2026). The discrete choices
     // only where Sound Variation is on at all; the directions scaled by it. Three of the parameters are
     // ridden again later with this offset as their base -- the lead's cutoff and the pad's table
     // position by every section (sectionControls), the drone's cutoff, position and detune by its slow
     // evolution (droneControls) -- because a ride replaces an offset rather than adding to it.
-    for (int v = 0; v < PolyInstances && voices; ++v) {
-        const PolyInstanceE inst = static_cast<PolyInstanceE>(v);
-        const VoiceRecipe& rc = plan.m_voice[v];
-        const int vb = p.base(inst);
-        const float svVoice = recipeAmount(p, plan, 3 + v, sv);
-        const bool vary = svVoice > 0.0f;
-        push(vb + poly::OSC, ControlEvent::KindE::OVERRIDE, static_cast<float>(vary ? rc.m_osc : -1));
-        push(vb + poly::TABLE, ControlEvent::KindE::OVERRIDE, static_cast<float>(vary ? rc.m_table : -1));
-        push(vb + poly::FILTER_TYPE, ControlEvent::KindE::OVERRIDE, static_cast<float>(vary ? rc.m_filter : -1));
-        push(vb + poly::DELAY_LEFT, ControlEvent::KindE::OVERRIDE, static_cast<float>(vary ? rc.m_delayL : -1));
-        push(vb + poly::DELAY_RIGHT, ControlEvent::KindE::OVERRIDE, static_cast<float>(vary ? rc.m_delayR : -1));
+    for ( int v = 0; v < PolyInstances && voices; ++v )
+    {
+        const PolyInstanceE inst = static_cast<PolyInstanceE>( v );
+        const VoiceRecipe  &rc = plan.m_voice[v];
+        const int           vb = p.base( inst );
+        const float         svVoice = recipeAmount( p, plan, 3 + v, sv );
+        const bool          vary = svVoice > 0.0f;
+        push( vb + poly::OSC, ControlEvent::KindE::OVERRIDE, static_cast<float>( vary ? rc.m_osc : -1 ) );
+        push( vb + poly::TABLE, ControlEvent::KindE::OVERRIDE, static_cast<float>( vary ? rc.m_table : -1 ) );
+        push( vb + poly::FILTER_TYPE, ControlEvent::KindE::OVERRIDE, static_cast<float>( vary ? rc.m_filter : -1 ) );
+        push( vb + poly::DELAY_LEFT, ControlEvent::KindE::OVERRIDE, static_cast<float>( vary ? rc.m_delayL : -1 ) );
+        push( vb + poly::DELAY_RIGHT, ControlEvent::KindE::OVERRIDE, static_cast<float>( vary ? rc.m_delayR : -1 ) );
         // The second oscillator (22.09.2026). Like every other discrete choice it is an override, so
         // Sound Variation at 0 leaves the knobs exactly as they stand.
-        push(vb + poly::OSC2, ControlEvent::KindE::OVERRIDE, static_cast<float>(vary && rc.m_hasOsc2 ? rc.m_osc2 : -1));
-        push(vb + poly::OSC2_INTERVAL, ControlEvent::KindE::OVERRIDE,
-             static_cast<float>(vary && rc.m_hasOsc2 ? rc.m_osc2Semis : -1));
+        push( vb + poly::OSC2, ControlEvent::KindE::OVERRIDE,
+              static_cast<float>( vary && rc.m_hasOsc2 ? rc.m_osc2 : -1 ) );
+        push( vb + poly::OSC2_INTERVAL, ControlEvent::KindE::OVERRIDE,
+              static_cast<float>( vary && rc.m_hasOsc2 ? rc.m_osc2Semis : -1 ) );
         float off[poly::COUNT] = {};
-        voiceRecipeOffsets(inst, rc, svVoice, off);
-        for (const Loading& l : VoiceLoadings) push(vb + l.m_param, ControlEvent::KindE::OFFSET, off[l.m_param]);
-        push(vb + poly::LEVEL, ControlEvent::KindE::OFFSET, presetTrim(p, plan, 3 + v, vb + poly::LEVEL));
+        voiceRecipeOffsets( inst, rc, svVoice, off );
+        for ( const Loading &l : VoiceLoadings ) push( vb + l.m_param, ControlEvent::KindE::OFFSET, off[l.m_param] );
+        push( vb + poly::LEVEL, ControlEvent::KindE::OFFSET, presetTrim( p, plan, 3 + v, vb + poly::LEVEL ) );
     }
-    if (voices) push(p.base(PolyInstanceE::PAD) + poly::GATE_PATTERN, ControlEvent::KindE::OVERRIDE, static_cast<float>(m.m_padGatePattern));
+    if ( voices )
+        push( p.base( PolyInstanceE::PAD ) + poly::GATE_PATTERN, ControlEvent::KindE::OVERRIDE,
+              static_cast<float>( m.m_padGatePattern ) );
     // The timbral counter (23.09.2026, round "Counter"; Form.h, CounterMode): a texture needs a sustained
     // envelope and a portamento, which the counter's recipe -- the whip of the dialogue round -- does not
     // have. Written as offsets from the knobs' values, so a track in another mode plays the knobs exactly.
-    if (voices) {
-        const int nb = p.base(PolyInstanceE::COUNTER);
-        const bool timbral = m.m_counterMode == static_cast<int>(CounterModeE::TIMBRAL);
-        const SoundPreset* counterPreset = presetOf(p, plan, 3 + polyIndex(PolyInstanceE::COUNTER));
-        auto towards = [&](int local, float target) {
+    if ( voices )
+    {
+        const int          nb = p.base( PolyInstanceE::COUNTER );
+        const bool         timbral = m.m_counterMode == static_cast<int>( CounterModeE::TIMBRAL );
+        const SoundPreset *counterPreset = presetOf( p, plan, 3 + polyIndex( PolyInstanceE::COUNTER ) );
+        auto               towards = [&]( int local, float target )
+        {
             const int id = nb + local;
             // From the value that plays: the preset's where one does (26.09.2026), the knob's otherwise.
-            float from = p.get(id);
-            if (counterPreset != nullptr)
-                for (const auto& kv : counterPreset->m_values) if (kv.first == local) { from = kv.second; break; }
-            push(id, ControlEvent::KindE::OFFSET, timbral ? p.toNormalised(id, target) - p.toNormalised(id, from) : 0.0f);
+            float from = p.get( id );
+            if ( counterPreset != nullptr )
+                for ( const auto &kv : counterPreset->m_values )
+                    if ( kv.first == local )
+                    {
+                        from = kv.second;
+                        break;
+                    }
+            push( id, ControlEvent::KindE::OFFSET,
+                  timbral ? p.toNormalised( id, target ) - p.toNormalised( id, from ) : 0.0f );
         };
-        towards(poly::AMP_SUSTAIN, 0.75f);
-        towards(poly::AMP_DECAY, 400.0f);
-        towards(poly::AMP_RELEASE, 220.0f);
-        towards(poly::FILTER_DECAY, 400.0f);
-        towards(poly::GLIDE, 60.0f);
+        towards( poly::AMP_SUSTAIN, 0.75f );
+        towards( poly::AMP_DECAY, 400.0f );
+        towards( poly::AMP_RELEASE, 220.0f );
+        towards( poly::FILTER_DECAY, 400.0f );
+        towards( poly::GLIDE, 60.0f );
     }
     // The loudness offset of Auto Gain, in the normalised domain of master.gain's 36 dB range.
-    const ParamDesc& mg = p.desc(p.base(ModuleE::MASTER) + master::GAIN);
-    if (floor) push(p.base(ModuleE::MASTER) + master::GAIN, ControlEvent::KindE::OFFSET, plan.m_masterGainDb / (mg.m_maxValue - mg.m_minValue));
+    const ParamDesc &mg = p.desc( p.base( ModuleE::MASTER ) + master::GAIN );
+    if ( floor )
+        push( p.base( ModuleE::MASTER ) + master::GAIN, ControlEvent::KindE::OFFSET,
+              plan.m_masterGainDb / ( mg.m_maxValue - mg.m_minValue ) );
     // The Field track's place (27.09.2026; FieldPresets.h), with the voices: with layer A's category on Auto the
     // composer plays a preset drawn by the track's style -- every knob of the module as a base or an override, so the
     // knobs stay as the user left them -- and asks the library for its recordings now, a track ahead of their first
     // note. A category the user chose is theirs: whatever a track before set is cleared, and the knobs play.
-    if (voices) {
-        const int fb = p.base(ModuleE::FIELD);
-        for (int i = 0; i < field::COUNT; ++i) {
-            if (isDiscreteCurve(p.desc(fb + i).m_curve)) push(fb + i, ControlEvent::KindE::OVERRIDE, -1.0f);
-            else { push(fb + i, ControlEvent::KindE::BASE, 0.0f); out.back().m_length = -1.0f; }
-        }
-        const int fp = p.getInt(fb + field::A_CATEGORY) == 0 ? fieldPresetFor(plan.m_style, mixSeed(plan.m_formSeed, 0x4649454C44ull)) : -1;
-        if (fp >= 0) {
-            const FieldPreset& preset = fieldPresets()[static_cast<size_t>(fp)];
-            for (const auto& kv : fieldPresetValues(p, preset)) {
-                const int id = fb + kv.first;
-                push(id, isDiscreteCurve(p.desc(id).m_curve) ? ControlEvent::KindE::OVERRIDE : ControlEvent::KindE::BASE, kv.second);
+    if ( voices )
+    {
+        const int fb = p.base( ModuleE::FIELD );
+        for ( int i = 0; i < field::COUNT; ++i )
+        {
+            if ( isDiscreteCurve( p.desc( fb + i ).m_curve ) )
+                push( fb + i, ControlEvent::KindE::OVERRIDE, -1.0f );
+            else
+            {
+                push( fb + i, ControlEvent::KindE::BASE, 0.0f );
+                out.back().m_length = -1.0f;
             }
-            preloadFieldClip(fieldClipIndex(preset.m_categoryA, fieldPresetVariation(preset.m_categoryA, preset.m_fileA, preset.m_variationA)));
-            if (preset.m_categoryB >= 0)
-                preloadFieldClip(fieldClipIndex(preset.m_categoryB, fieldPresetVariation(preset.m_categoryB, preset.m_fileB, preset.m_variationB)));
+        }
+        const int fp = p.getInt( fb + field::A_CATEGORY ) == 0
+                           ? fieldPresetFor( plan.m_style, mixSeed( plan.m_formSeed, 0x4649454C44ull ) )
+                           : -1;
+        if ( fp >= 0 )
+        {
+            const FieldPreset &preset = fieldPresets()[static_cast<size_t>( fp )];
+            for ( const auto &kv : fieldPresetValues( p, preset ) )
+            {
+                const int id = fb + kv.first;
+                push( id,
+                      isDiscreteCurve( p.desc( id ).m_curve ) ? ControlEvent::KindE::OVERRIDE
+                                                              : ControlEvent::KindE::BASE,
+                      kv.second );
+            }
+            preloadFieldClip( fieldClipIndex(
+                preset.m_categoryA, fieldPresetVariation( preset.m_categoryA, preset.m_fileA, preset.m_variationA ) ) );
+            if ( preset.m_categoryB >= 0 )
+                preloadFieldClip(
+                    fieldClipIndex( preset.m_categoryB,
+                                    fieldPresetVariation( preset.m_categoryB, preset.m_fileB, preset.m_variationB ) ) );
         }
     }
     // The track's presets (26.09.2026), last, so they win over what the clearing and the recipes wrote at this beat:
     // every value a preset sets, the continuous ones as bases, the discrete ones as overrides.
-    presetSynths([&](int k) {
-        const SoundPreset* sp = presetOf(p, plan, k);
-        if (sp == nullptr) return;
-        const ModuleE m = k == 0 ? ModuleE::KICK : k == 1 ? ModuleE::BASS : k == 2 ? ModuleE::ACID : ModuleE::POLY;
-        const int b = p.base(m, k >= 3 ? k - 3 : 0);
-        for (const auto& kv : sp->m_values) {
-            const int id = b + kv.first;
-            push(id, isDiscreteCurve(p.desc(id).m_curve) ? ControlEvent::KindE::OVERRIDE : ControlEvent::KindE::BASE, kv.second);
-        }
-    });
+    presetSynths(
+        [&]( int k )
+        {
+            const SoundPreset *sp = presetOf( p, plan, k );
+            if ( sp == nullptr ) return;
+            const ModuleE m = k == 0 ? ModuleE::KICK : k == 1 ? ModuleE::BASS : k == 2 ? ModuleE::ACID : ModuleE::POLY;
+            const int     b = p.base( m, k >= 3 ? k - 3 : 0 );
+            for ( const auto &kv : sp->m_values )
+            {
+                const int id = b + kv.first;
+                push( id,
+                      isDiscreteCurve( p.desc( id ).m_curve ) ? ControlEvent::KindE::OVERRIDE
+                                                              : ControlEvent::KindE::BASE,
+                      kv.second );
+            }
+        } );
 }
 
-void Composer::pushPartLevels(const ParamStore& p, const TrackPlan& plan, double beat, float length, bool floor, bool voices,
-                              std::vector<ControlEvent>& out) const
+void Composer::pushPartLevels( const ParamStore &p, const TrackPlan &plan, double beat, float length, bool floor,
+                               bool voices, std::vector<ControlEvent> &out ) const
 {
-    const int mb = p.base(ModuleE::MIX);
-    for (int k = 0; k < MelodyParts; ++k) {
-        const MelodyPartE part = static_cast<MelodyPartE>(k);
-        if (part == MelodyPartE::ACID ? !floor : !voices) continue;
-        const int level = mb + (part == MelodyPartE::ACID ? static_cast<int>(mix::ACID_LEVEL) : mix::polyLevel(melodyPoly(part)));
-        const ParamDesc& d = p.desc(level);
+    const int mb = p.base( ModuleE::MIX );
+    for ( int k = 0; k < MelodyParts; ++k )
+    {
+        const MelodyPartE part = static_cast<MelodyPartE>( k );
+        if ( part == MelodyPartE::ACID ? !floor : !voices ) continue;
+        const int        level = mb + ( part == MelodyPartE::ACID ? static_cast<int>( mix::ACID_LEVEL )
+                                                                  : mix::polyLevel( melodyPoly( part ) ) );
+        const ParamDesc &d = p.desc( level );
         // The lines carry the presence match on top of their level match (matchPresence).
-        const bool line = part == MelodyPartE::LEAD || part == MelodyPartE::COUNTER || part == MelodyPartE::ARP || part == MelodyPartE::STAB;
+        const bool   line = part == MelodyPartE::LEAD || part == MelodyPartE::COUNTER || part == MelodyPartE::ARP ||
+                            part == MelodyPartE::STAB;
         ControlEvent c;
         c.m_beat = beat;
-        c.m_param = static_cast<int16_t>(level);
+        c.m_param = static_cast<int16_t>( level );
         c.m_kind = ControlEvent::KindE::OFFSET;
-        c.m_value = (plan.m_partGainDb[k] + (line ? plan.m_presenceGainDb : 0.0f)) / (d.m_maxValue - d.m_minValue);
+        c.m_value =
+            ( plan.m_partGainDb[k] + ( line ? plan.m_presenceGainDb : 0.0f ) ) / ( d.m_maxValue - d.m_minValue );
         c.m_length = length;
-        out.push_back(c);
+        out.push_back( c );
     }
 }
 
-void Composer::levelControls(const ParamStore& p, const TrackPlan& plan, double beat, float rampBeats, std::vector<ControlEvent>& out) const
+void Composer::levelControls( const ParamStore &p, const TrackPlan &plan, double beat, float rampBeats,
+                              std::vector<ControlEvent> &out ) const
 {
-    pushPartLevels(p, plan, beat, rampBeats, true, true, out);
+    pushPartLevels( p, plan, beat, rampBeats, true, true, out );
 }
 
 /**
@@ -511,7 +614,8 @@ void Composer::levelControls(const ParamStore& p, const TrackPlan& plan, double 
  *  - **rampBars**: how long the change takes -- one bar into a drop, four into a breakdown (the guide: 1 .. 2
  *    and 4 .. 8), the buildup its whole length.
  */
-struct PhaseMix {
+struct PhaseMix
+{
     float m_padWidth;       ///< the pad's width
     float m_leadDistance;   ///< the lead's distance (poly.distance)
     float m_padLevelDb;     ///< the pad's level, dB
@@ -524,16 +628,17 @@ struct PhaseMix {
  * @param[in] t  the section type
  * @return its phase values
  */
-PhaseMix phaseMix(SectionTypeE t)
+PhaseMix phaseMix( SectionTypeE t )
 {
-    switch (t) {
-    case SectionTypeE::INTRO:  return { -0.40f, 0.0f, 0.0f, -0.10f, 4.0f };
-    case SectionTypeE::GROOVE: return { -0.30f, 0.0f, 0.0f,  0.00f, 2.0f };
-    case SectionTypeE::BUILD:  return { -0.40f, 0.0f, 0.0f,  0.00f, 0.0f };   // ramp: the build's length
-    case SectionTypeE::DROP:   return {  0.00f, 0.0f, 0.0f,  0.10f, 1.0f };
-    case SectionTypeE::BREAK:  return {  0.00f, 0.6f, 1.5f,  0.00f, 4.0f };
-    case SectionTypeE::OUTRO:  return { -0.50f, 0.0f, 0.0f, -0.10f, 8.0f };
-    default:                  return {  0.00f, 0.0f, 0.0f,  0.00f, 2.0f };
+    switch ( t )
+    {
+    case SectionTypeE::INTRO: return { -0.40f, 0.0f, 0.0f, -0.10f, 4.0f };
+    case SectionTypeE::GROOVE: return { -0.30f, 0.0f, 0.0f, 0.00f, 2.0f };
+    case SectionTypeE::BUILD: return { -0.40f, 0.0f, 0.0f, 0.00f, 0.0f };   // ramp: the build's length
+    case SectionTypeE::DROP: return { 0.00f, 0.0f, 0.0f, 0.10f, 1.0f };
+    case SectionTypeE::BREAK: return { 0.00f, 0.6f, 1.5f, 0.00f, 4.0f };
+    case SectionTypeE::OUTRO: return { -0.50f, 0.0f, 0.0f, -0.10f, 8.0f };
+    default: return { 0.00f, 0.0f, 0.0f, 0.00f, 2.0f };
     }
 }
 
@@ -549,151 +654,169 @@ PhaseMix phaseMix(SectionTypeE t)
  * The energy of a buildup runs from its own value to the drop's, which is exactly the "filter arcs
  * opening" the plan asks for; a breakdown opens the hall and closes the filters.
  */
-float Composer::leadCutoffValue(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar) const
+float Composer::leadCutoffValue( const ParamStore &params, const TrackPlan &plan, const BarPlan &bar ) const
 {
     // Mirrors the lead's cutoff in sectionControls below -- base, energy, wobble, drop 2's lift -- at the
     // energy of *this bar* (BarPlan::energy is the section's ramp at the bar), so a per-bar event can
     // stand in for the section's ramp without a step. The two must stay the same formula.
-    const int cb = params.base(ModuleE::COMPOSE);
-    const float sv = params.get(cb + compose::SOUND_VARIATION), mv = params.get(cb + compose::MELODY_VARIATION);
-    if (plan.m_index == 0 && bar.m_index == 0) return 0.0f;   // the knobs, exactly
-    const Section& s = plan.m_form.m_section[std::clamp(bar.m_index, 0, MaxSections - 1)];
-    Rng r;
-    r.seed(mixSeed(plan.m_sectionSeed[std::clamp(bar.m_index, 0, MaxSections - 1)] ^ SaltArc, 0));
-    const float wobble = (2.0f * r.uniform() - 1.0f);
-    float leadOff[poly::COUNT] = {};
-    const float svLead = recipeAmount(params, plan, 3 + polyIndex(PolyInstanceE::LEAD), sv);
-    voiceRecipeOffsets(PolyInstanceE::LEAD, plan.m_voice[polyIndex(PolyInstanceE::LEAD)], svLead, leadOff);
-    const float leadBase = 0.10f * svLead * plan.m_melody.m_recipe[mpIndex(MelodyPartE::LEAD)] + leadOff[poly::CUTOFF];
+    const int   cb = params.base( ModuleE::COMPOSE );
+    const float sv = params.get( cb + compose::SOUND_VARIATION ), mv = params.get( cb + compose::MELODY_VARIATION );
+    if ( plan.m_index == 0 && bar.m_index == 0 ) return 0.0f;   // the knobs, exactly
+    const Section &s = plan.m_form.m_section[std::clamp( bar.m_index, 0, MaxSections - 1 )];
+    Rng            r;
+    r.seed( mixSeed( plan.m_sectionSeed[std::clamp( bar.m_index, 0, MaxSections - 1 )] ^ SaltArc, 0 ) );
+    const float wobble = ( 2.0f * r.uniform() - 1.0f );
+    float       leadOff[poly::COUNT] = {};
+    const float svLead = recipeAmount( params, plan, 3 + polyIndex( PolyInstanceE::LEAD ), sv );
+    voiceRecipeOffsets( PolyInstanceE::LEAD, plan.m_voice[polyIndex( PolyInstanceE::LEAD )], svLead, leadOff );
+    const float leadBase =
+        0.10f * svLead * plan.m_melody.m_recipe[mpIndex( MelodyPartE::LEAD )] + leadOff[poly::CUTOFF];
     const float open = s.m_climax ? ClimaxOpen : 0.0f;
-    return leadBase + 0.8f * (0.35f * (bar.m_energy - 0.7f) + 0.12f * mv * wobble) + open;
+    return leadBase + 0.8f * ( 0.35f * ( bar.m_energy - 0.7f ) + 0.12f * mv * wobble ) + open;
 }
 
-void Composer::leadArcControls(const ParamStore& p, const TrackPlan& plan, const BarPlan& bar, int inTrack, double beat,
-                               std::vector<ControlEvent>& out) const
+void Composer::leadArcControls( const ParamStore &p, const TrackPlan &plan, const BarPlan &bar, int inTrack,
+                                double beat, std::vector<ControlEvent> &out ) const
 {
     // The phrase's filter arc (22.09.2026, round "Lead"; MelodyLead.cpp, LeadArchetypes). The brief: "die
     // halbe Melodie ist Modulation" -- the archetype's contour gets a timbral carrier, a cutoff curve
     // over the eight bars of the phrase, written as one-bar ramps around the section's own value, so
     // the arc rides on the energy arc instead of replacing it. Only where the lead plays; the first
     // section of the first track keeps the knobs.
-    if (plan.m_index == 0 && bar.m_index == 0) return;
-    const MelodyPlan& m = plan.m_melody;
-    if (!m.m_present[mpIndex(MelodyPartE::LEAD)] || (bar.m_parts & partBit(MelodyPartE::LEAD)) == 0) return;
-    const int window = (inTrack / 8) % 2;
-    const float depth = styleProfile(static_cast<StyleIdE>(plan.m_style)).m_lead.m_arcDepth;
+    if ( plan.m_index == 0 && bar.m_index == 0 ) return;
+    const MelodyPlan &m = plan.m_melody;
+    if ( !m.m_present[mpIndex( MelodyPartE::LEAD )] || ( bar.m_parts & partBit( MelodyPartE::LEAD ) ) == 0 ) return;
+    const int    window = ( inTrack / 8 ) % 2;
+    const float  depth = styleProfile( static_cast<StyleIdE>( plan.m_style ) ).m_lead.m_arcDepth;
     ControlEvent c;
     c.m_beat = beat;
-    c.m_param = static_cast<int16_t>(p.base(PolyInstanceE::LEAD) + poly::CUTOFF);
+    c.m_param = static_cast<int16_t>( p.base( PolyInstanceE::LEAD ) + poly::CUTOFF );
     c.m_kind = ControlEvent::KindE::OFFSET;
-    c.m_value = leadCutoffValue(p, plan, bar) + depth * static_cast<float>(leadArc(m.m_leadArchetype[window], inTrack % 8));
-    c.m_length = static_cast<float>(BeatsPerBar);
-    out.push_back(c);
+    c.m_value = leadCutoffValue( p, plan, bar ) +
+                depth * static_cast<float>( leadArc( m.m_leadArchetype[window], inTrack % 8 ) );
+    c.m_length = static_cast<float>( BeatsPerBar );
+    out.push_back( c );
 }
 
-void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const BarPlan& bar, double beat,
-                               std::vector<ControlEvent>& out, ControlScopeE scope) const
+void Composer::sectionControls( const ParamStore &p, const TrackPlan &plan, const BarPlan &bar, double beat,
+                                std::vector<ControlEvent> &out, ControlScopeE scope ) const
 {
-    const int cb = p.base(ModuleE::COMPOSE), ab = p.base(ModuleE::ACID), mb = p.base(ModuleE::MIX);
-    const int lb = p.base(PolyInstanceE::LEAD), pb = p.base(PolyInstanceE::PAD);
-    const float sv = p.get(cb + compose::SOUND_VARIATION), mv = p.get(cb + compose::MELODY_VARIATION);
-    const MelodyPlan& m = plan.m_melody;
+    const int         cb = p.base( ModuleE::COMPOSE ), ab = p.base( ModuleE::ACID ), mb = p.base( ModuleE::MIX );
+    const int         lb = p.base( PolyInstanceE::LEAD ), pb = p.base( PolyInstanceE::PAD );
+    const float       sv = p.get( cb + compose::SOUND_VARIATION ), mv = p.get( cb + compose::MELODY_VARIATION );
+    const MelodyPlan &m = plan.m_melody;
     // The DJ overlap (19.09.2026): the incoming track's first section (its intro) writes its voices from
     // its first bar and its floor -- acid, gain, rides -- at the hand-over, as a section that starts there
     // and runs to the intro's end, so that no event is ever dated behind the bar it is written in.
     Section s = plan.m_form.m_section[bar.m_index];
-    if (scope == ControlScopeE::FLOOR && bar.m_barInSection > 0) {
+    if ( scope == ControlScopeE::FLOOR && bar.m_barInSection > 0 )
+    {
         s.m_startBar += bar.m_barInSection;
-        s.m_bars = std::max(1, s.m_bars - bar.m_barInSection);
+        s.m_bars = std::max( 1, s.m_bars - bar.m_barInSection );
         s.m_energy = bar.m_energy;
     }
-    const bool floor = scope != ControlScopeE::VOICES, voices = scope != ControlScopeE::FLOOR;
-    const float length = static_cast<float>(s.m_bars) * BeatsPerBar;
-    auto push = [&](int id, float value, float len) {
+    const bool  floor = scope != ControlScopeE::VOICES, voices = scope != ControlScopeE::FLOOR;
+    const float length = static_cast<float>( s.m_bars ) * BeatsPerBar;
+    auto        push = [&]( int id, float value, float len )
+    {
         ControlEvent c;
         c.m_beat = beat;
-        c.m_param = static_cast<int16_t>(id);
+        c.m_param = static_cast<int16_t>( id );
         c.m_kind = ControlEvent::KindE::OFFSET;
         c.m_value = value;
         c.m_length = len;
-        out.push_back(c);
+        out.push_back( c );
     };
-    auto pushNow = [&](int id, ControlEvent::KindE kind, float value) {
+    auto pushNow = [&]( int id, ControlEvent::KindE kind, float value )
+    {
         ControlEvent c;
         c.m_beat = beat;
-        c.m_param = static_cast<int16_t>(id);
+        c.m_param = static_cast<int16_t>( id );
         c.m_kind = kind;
         c.m_value = value;
-        out.push_back(c);
+        out.push_back( c );
     };
 
     // A cutoff arc per section: the recipe's base plus a target drawn from the section's own seed and
     // lifted by the energy. The first section of the first track starts from the knobs exactly.
     Rng r;
-    r.seed(mixSeed(plan.m_sectionSeed[std::clamp(bar.m_index, 0, MaxSections - 1)] ^ SaltArc, 0));
-    const float wobble = (2.0f * r.uniform() - 1.0f);
+    r.seed( mixSeed( plan.m_sectionSeed[std::clamp( bar.m_index, 0, MaxSections - 1 )] ^ SaltArc, 0 ) );
+    const float wobble = ( 2.0f * r.uniform() - 1.0f );
     // The track's acid voicing moves the cutoff and the envelope depth the section's arc and ride are
     // centred on (19.09.2026): as a base, not as a separate event, because the arc and the ride write
     // the same parameters and each event replaces the offset before it.
-    float voicing[acid::COUNT] = {};
-    int disperseUnused = -1;
-    const float svAcid = recipeAmount(p, plan, 2, sv);
-    acidVoicingOffsets(p, plan.m_acidVoicing, svAcid, voicing, disperseUnused);
-    const float acidBase = 0.10f * svAcid * m.m_recipe[mpIndex(MelodyPartE::ACID)] + voicing[acid::CUTOFF];
+    float       voicing[acid::COUNT] = {};
+    int         disperseUnused = -1;
+    const float svAcid = recipeAmount( p, plan, 2, sv );
+    acidVoicingOffsets( p, plan.m_acidVoicing, svAcid, voicing, disperseUnused );
+    const float acidBase = 0.10f * svAcid * m.m_recipe[mpIndex( MelodyPartE::ACID )] + voicing[acid::CUTOFF];
     // The lead's cutoff and the pad's table position ride on their voice recipe's offset (19.09.2026).
     float leadOff[poly::COUNT] = {}, padOff[poly::COUNT] = {};
-    voiceRecipeOffsets(PolyInstanceE::LEAD, plan.m_voice[polyIndex(PolyInstanceE::LEAD)], sv, leadOff);
-    voiceRecipeOffsets(PolyInstanceE::PAD, plan.m_voice[polyIndex(PolyInstanceE::PAD)], sv, padOff);
-    const bool knobs = plan.m_index == 0 && bar.m_index == 0;
-    const PhaseMix phase = phaseMix(s.m_type);
-    const float phaseRamp = s.m_type == SectionTypeE::BUILD ? length : phase.m_rampBars * static_cast<float>(BeatsPerBar);
-    const float leadBase = 0.10f * sv * m.m_recipe[mpIndex(MelodyPartE::LEAD)] + leadOff[poly::CUTOFF];
-    const float padBase = 0.25f * sv * m.m_recipe[mpIndex(MelodyPartE::PAD)] + padOff[poly::POSITION];
+    voiceRecipeOffsets( PolyInstanceE::LEAD, plan.m_voice[polyIndex( PolyInstanceE::LEAD )], sv, leadOff );
+    voiceRecipeOffsets( PolyInstanceE::PAD, plan.m_voice[polyIndex( PolyInstanceE::PAD )], sv, padOff );
+    const bool     knobs = plan.m_index == 0 && bar.m_index == 0;
+    const PhaseMix phase = phaseMix( s.m_type );
+    const float    phaseRamp =
+        s.m_type == SectionTypeE::BUILD ? length : phase.m_rampBars * static_cast<float>( BeatsPerBar );
+    const float leadBase = 0.10f * sv * m.m_recipe[mpIndex( MelodyPartE::LEAD )] + leadOff[poly::CUTOFF];
+    const float padBase = 0.25f * sv * m.m_recipe[mpIndex( MelodyPartE::PAD )] + padOff[poly::POSITION];
     const float e0 = s.m_energy, e1 = s.m_energyTo;
-    auto cutoffAt = [&](float base, float scale, float energy) {
-        return knobs ? 0.0f : base + scale * (0.35f * (energy - 0.7f) + 0.12f * mv * wobble);
-    };
-    if (bar.m_index == 0) {
-        if (floor) push(ab + acid::CUTOFF, cutoffAt(acidBase, 1.0f, e0), 0.0f);
-        if (voices) push(lb + poly::CUTOFF, cutoffAt(leadBase, 0.8f, e0), 0.0f);
-        if (voices) push(pb + poly::POSITION, cutoffAt(padBase, 0.6f, e0), 0.0f);
+    auto        cutoffAt = [&]( float base, float scale, float energy )
+    { return knobs ? 0.0f : base + scale * ( 0.35f * ( energy - 0.7f ) + 0.12f * mv * wobble ); };
+    if ( bar.m_index == 0 )
+    {
+        if ( floor ) push( ab + acid::CUTOFF, cutoffAt( acidBase, 1.0f, e0 ), 0.0f );
+        if ( voices ) push( lb + poly::CUTOFF, cutoffAt( leadBase, 0.8f, e0 ), 0.0f );
+        if ( voices ) push( pb + poly::POSITION, cutoffAt( padBase, 0.6f, e0 ), 0.0f );
     }
     // Drop 2 opens the acid's and the lead's filters by ClimaxOpen (Form.h), at its first bar rather than
     // over its length: the lift is the arrival, not another ramp (19.09.2026, round "polish").
     const float open = s.m_climax && !knobs ? ClimaxOpen : 0.0f;
-    if (open > 0.0f) {
-        if (floor) push(ab + acid::CUTOFF, cutoffAt(acidBase, 1.0f, e0) + open, 0.0f);
-        if (voices) push(lb + poly::CUTOFF, cutoffAt(leadBase, 0.8f, e0) + open, 0.0f);
+    if ( open > 0.0f )
+    {
+        if ( floor ) push( ab + acid::CUTOFF, cutoffAt( acidBase, 1.0f, e0 ) + open, 0.0f );
+        if ( voices ) push( lb + poly::CUTOFF, cutoffAt( leadBase, 0.8f, e0 ) + open, 0.0f );
     }
-    if (floor) push(ab + acid::CUTOFF, cutoffAt(acidBase, 1.0f, e1) + open, length);
-    if (floor) push(ab + acid::ENV_AMOUNT, 0.5f * (cutoffAt(acidBase, 1.0f, e1) - acidBase) + voicing[acid::ENV_AMOUNT], length);
-    if (voices) push(lb + poly::CUTOFF, cutoffAt(leadBase, 0.8f, e1) + open, length);
-    if (voices) push(pb + poly::POSITION, cutoffAt(padBase, 0.6f, e1), length);
+    if ( floor ) push( ab + acid::CUTOFF, cutoffAt( acidBase, 1.0f, e1 ) + open, length );
+    if ( floor )
+        push( ab + acid::ENV_AMOUNT, 0.5f * ( cutoffAt( acidBase, 1.0f, e1 ) - acidBase ) + voicing[acid::ENV_AMOUNT],
+              length );
+    if ( voices ) push( lb + poly::CUTOFF, cutoffAt( leadBase, 0.8f, e1 ) + open, length );
+    if ( voices ) push( pb + poly::POSITION, cutoffAt( padBase, 0.6f, e1 ), length );
     // Drop 2 is wider: the lead, the counter, the arp and the pad by ClimaxWidth over their recipe's width,
     // which every other section writes back (the offset replaces the one before it). The pad's width follows
     // the phase besides (PhaseMix), over the phase's ramp.
-    if (voices && !knobs) {
-        for (PolyInstanceE v : { PolyInstanceE::LEAD, PolyInstanceE::COUNTER, PolyInstanceE::ARP, PolyInstanceE::PAD }) {
+    if ( voices && !knobs )
+    {
+        for ( PolyInstanceE v :
+              { PolyInstanceE::LEAD, PolyInstanceE::COUNTER, PolyInstanceE::ARP, PolyInstanceE::PAD } )
+        {
             float off[poly::COUNT] = {};
-            voiceRecipeOffsets(v, plan.m_voice[polyIndex(v)], recipeAmount(p, plan, 3 + polyIndex(v), sv), off);
+            voiceRecipeOffsets( v, plan.m_voice[polyIndex( v )], recipeAmount( p, plan, 3 + polyIndex( v ), sv ), off );
             const bool pad = v == PolyInstanceE::PAD;
-            push(p.base(v) + poly::WIDTH, off[poly::WIDTH] + (s.m_climax ? ClimaxWidth : 0.0f) + (pad ? phase.m_padWidth : 0.0f),
-                 pad ? phaseRamp : 0.0f);
+            push( p.base( v ) + poly::WIDTH,
+                  off[poly::WIDTH] + ( s.m_climax ? ClimaxWidth : 0.0f ) + ( pad ? phase.m_padWidth : 0.0f ),
+                  pad ? phaseRamp : 0.0f );
         }
         // The pad forward in a breakdown, on top of its level match; the pad's and the drone's duck by phase.
-        const int k = mpIndex(MelodyPartE::PAD);
-        const ParamDesc& lv = p.desc(mb + mix::polyLevel(PolyInstanceE::PAD));
-        push(mb + mix::polyLevel(PolyInstanceE::PAD), (plan.m_partGainDb[k] + phase.m_padLevelDb) / (lv.m_maxValue - lv.m_minValue), phaseRamp);
-        push(pb + poly::DUCK, phase.m_padDuck, phaseRamp);
-        push(p.base(PolyInstanceE::DRONE) + poly::DUCK, phase.m_padDuck, phaseRamp);
+        const int        k = mpIndex( MelodyPartE::PAD );
+        const ParamDesc &lv = p.desc( mb + mix::polyLevel( PolyInstanceE::PAD ) );
+        push( mb + mix::polyLevel( PolyInstanceE::PAD ),
+              ( plan.m_partGainDb[k] + phase.m_padLevelDb ) / ( lv.m_maxValue - lv.m_minValue ), phaseRamp );
+        push( pb + poly::DUCK, phase.m_padDuck, phaseRamp );
+        push( p.base( PolyInstanceE::DRONE ) + poly::DUCK, phase.m_padDuck, phaseRamp );
         // The buildup pulls the lines up from the bottom (the guide: the melodic sum's high pass climbs to
         // 150 .. 250 Hz, "Sub" gone before the drop): 180 Hz over their own floor by its last bar, back at once
         // wherever else a section starts. The pad and the drone keep theirs -- the sub foundation rides it.
-        for (PolyInstanceE v : { PolyInstanceE::LEAD, PolyInstanceE::COUNTER, PolyInstanceE::ARP, PolyInstanceE::STAB }) {
-            const int id = p.base(v) + poly::HP_FLOOR;
-            const float cur = p.get(id);
-            const float target = s.m_type == SectionTypeE::BUILD ? std::min(cur + 180.0f, p.desc(id).m_maxValue) : cur;
-            push(id, p.toNormalised(id, target) - p.toNormalised(id, cur), s.m_type == SectionTypeE::BUILD ? length : 0.0f);
+        for ( PolyInstanceE v :
+              { PolyInstanceE::LEAD, PolyInstanceE::COUNTER, PolyInstanceE::ARP, PolyInstanceE::STAB } )
+        {
+            const int   id = p.base( v ) + poly::HP_FLOOR;
+            const float cur = p.get( id );
+            const float target =
+                s.m_type == SectionTypeE::BUILD ? std::min( cur + 180.0f, p.desc( id ).m_maxValue ) : cur;
+            push( id, p.toNormalised( id, target ) - p.toNormalised( id, cur ),
+                  s.m_type == SectionTypeE::BUILD ? length : 0.0f );
         }
     }
     // The rooms by phase (25.09.2026, the Dark-Ambient addon's architecture). The plate (B) is the main room:
@@ -701,159 +824,186 @@ void Composer::sectionControls(const ParamStore& p, const TrackPlan& plan, const
     // guide's "Fallhoehe"). The hall (C) is the far room, fed from the plate (fx.plate_to_hall) and the bed: open in a
     // breakdown, a quarter of it (-12 dB) in the intro, faded out over a buildup and muted everywhere else -- "im
     // Drop existieren nur A und B". Both over the phase's ramp, a buildup over its length.
-    if (floor && !knobs) {
-        const int fb = p.base(ModuleE::FX);
-        const int decay = fb + fx::PLATE_DECAY, ret = fb + fx::HALL_RETURN;
-        const float curD = p.get(decay), curR = p.get(ret), rMin = p.desc(ret).m_minValue;
-        const bool brk = s.m_type == SectionTypeE::BREAK, build = s.m_type == SectionTypeE::BUILD;
+    if ( floor && !knobs )
+    {
+        const int   fb = p.base( ModuleE::FX );
+        const int   decay = fb + fx::PLATE_DECAY, ret = fb + fx::HALL_RETURN;
+        const float curD = p.get( decay ), curR = p.get( ret ), rMin = p.desc( ret ).m_minValue;
+        const bool  brk = s.m_type == SectionTypeE::BREAK, build = s.m_type == SectionTypeE::BUILD;
         const float ramp = build ? length : phaseRamp;
-        const float dTarget = brk ? std::max(curD, 4.0f) : (build ? std::min(curD, 1.2f) : curD);
-        push(decay, p.toNormalised(decay, dTarget) - p.toNormalised(decay, curD), ramp);
-        const float rTarget = brk ? curR : (s.m_type == SectionTypeE::INTRO ? std::max(rMin, curR - 12.0f) : rMin);
-        push(ret, p.toNormalised(ret, rTarget) - p.toNormalised(ret, curR), ramp);
+        const float dTarget = brk ? std::max( curD, 4.0f ) : ( build ? std::min( curD, 1.2f ) : curD );
+        push( decay, p.toNormalised( decay, dTarget ) - p.toNormalised( decay, curD ), ramp );
+        const float rTarget = brk ? curR : ( s.m_type == SectionTypeE::INTRO ? std::max( rMin, curR - 12.0f ) : rMin );
+        push( ret, p.toNormalised( ret, rTarget ) - p.toNormalised( ret, curR ), ramp );
     }
 
     // The plate opens where the floor empties: a breakdown is the wettest part of a track (pads 30 .. 50 %, the
     // middle plane more than its drop's 15 .. 25 %). The lead is not in this list: its wet share is its distance's.
-    const float wet = s.m_type == SectionTypeE::BREAK ? 0.15f : (s.m_type == SectionTypeE::INTRO || s.m_type == SectionTypeE::OUTRO ? 0.05f : 0.0f);
-    if (floor) push(ab + acid::PLATE_SEND, knobs ? 0.0f : wet, phaseRamp);
+    const float wet = s.m_type == SectionTypeE::BREAK
+                          ? 0.15f
+                          : ( s.m_type == SectionTypeE::INTRO || s.m_type == SectionTypeE::OUTRO ? 0.05f : 0.0f );
+    if ( floor ) push( ab + acid::PLATE_SEND, knobs ? 0.0f : wet, phaseRamp );
     // Every other polyphonic voice, with the share of its recipe's space direction folded in (19.09.2026; into the
     // plate since the addon, where the hall was the one room).
-    for (int v = 0; v < PolyInstances && voices; ++v) {
-        if (static_cast<PolyInstanceE>(v) == PolyInstanceE::LEAD) continue;
-        const float space = VoiceHallWeight * recipeAmount(p, plan, 3 + v, sv) * VoicePalettes[v].m_scale[3] * plan.m_voice[v].m_macro[3];
-        push(p.base(static_cast<PolyInstanceE>(v)) + poly::PLATE_SEND, knobs ? 0.0f : wet + space, phaseRamp);
+    for ( int v = 0; v < PolyInstances && voices; ++v )
+    {
+        if ( static_cast<PolyInstanceE>( v ) == PolyInstanceE::LEAD ) continue;
+        const float space = VoiceHallWeight * recipeAmount( p, plan, 3 + v, sv ) * VoicePalettes[v].m_scale[3] *
+                            plan.m_voice[v].m_macro[3];
+        push( p.base( static_cast<PolyInstanceE>( v ) ) + poly::PLATE_SEND, knobs ? 0.0f : wet + space, phaseRamp );
     }
-    if (voices && !knobs) {
+    if ( voices && !knobs )
+    {
         // The lead's distance by phase (PhaseMix), and the counter's approach: in the main breakdown, where the
         // user's Model 3 introduces it alone, it starts far and comes to its own plane over sixteen bars with every
         // cue at once -- the addon's "Annaeherung ueber 8 .. 16 Takte im Break".
-        push(lb + poly::DISTANCE, phase.m_leadDistance, phaseRamp);
-        const int cd = p.base(PolyInstanceE::COUNTER) + poly::DISTANCE;
-        if (s.m_type == SectionTypeE::BREAK && bar.m_mainBreak && m.m_present[mpIndex(MelodyPartE::COUNTER)]) {
-            push(cd, 0.5f, 0.0f);
-            push(cd, 0.0f, std::min(length, 16.0f * static_cast<float>(BeatsPerBar)));
-        } else {
-            push(cd, 0.0f, 0.0f);
+        push( lb + poly::DISTANCE, phase.m_leadDistance, phaseRamp );
+        const int cd = p.base( PolyInstanceE::COUNTER ) + poly::DISTANCE;
+        if ( s.m_type == SectionTypeE::BREAK && bar.m_mainBreak && m.m_present[mpIndex( MelodyPartE::COUNTER )] )
+        {
+            push( cd, 0.5f, 0.0f );
+            push( cd, 0.0f, std::min( length, 16.0f * static_cast<float>( BeatsPerBar ) ) );
+        }
+        else
+        {
+            push( cd, 0.0f, 0.0f );
         }
         // Held pads without a beating cloud (the addon): in the intro and the breakdown, where the pad and the drone
         // are often the only tonal voices for 16 .. 32 bars, their unison stays within about 6 cents (Szabo's curve
         // at 0.15) and the second oscillator within 3 -- two voices 15 cents apart beat at 4 Hz at 440 Hz, and a
         // stack of them flickers in a way no EQ reaches. Everywhere else the recipe's own detune.
         const bool held = s.m_type == SectionTypeE::INTRO || s.m_type == SectionTypeE::BREAK;
-        for (PolyInstanceE v : { PolyInstanceE::PAD, PolyInstanceE::DRONE }) {
+        for ( PolyInstanceE v : { PolyInstanceE::PAD, PolyInstanceE::DRONE } )
+        {
             float off[poly::COUNT] = {};
-            voiceRecipeOffsets(v, plan.m_voice[polyIndex(v)], recipeAmount(p, plan, 3 + polyIndex(v), sv), off);
-            const int det = p.base(v) + poly::DETUNE, o2 = p.base(v) + poly::OSC2_DETUNE;
-            float dOff = off[poly::DETUNE], oOff = off[poly::OSC2_DETUNE];
-            if (held) {
-                dOff = std::min(dOff, 0.15f - p.get(det));
-                const float span = p.desc(o2).m_maxValue - p.desc(o2).m_minValue;
-                const float cents = p.get(o2) + oOff * span;
-                oOff += (std::clamp(cents, -3.0f, 3.0f) - cents) / span;
+            voiceRecipeOffsets( v, plan.m_voice[polyIndex( v )], recipeAmount( p, plan, 3 + polyIndex( v ), sv ), off );
+            const int det = p.base( v ) + poly::DETUNE, o2 = p.base( v ) + poly::OSC2_DETUNE;
+            float     dOff = off[poly::DETUNE], oOff = off[poly::OSC2_DETUNE];
+            if ( held )
+            {
+                dOff = std::min( dOff, 0.15f - p.get( det ) );
+                const float span = p.desc( o2 ).m_maxValue - p.desc( o2 ).m_minValue;
+                const float cents = p.get( o2 ) + oOff * span;
+                oOff += ( std::clamp( cents, -3.0f, 3.0f ) - cents ) / span;
             }
-            push(det, dOff, phaseRamp);
-            push(o2, oOff, phaseRamp);
+            push( det, dOff, phaseRamp );
+            push( o2, oOff, phaseRamp );
         }
     }
 
     // Loudness (Farbood): at most +-2 dB around the section's energy, on top of the track's level match.
-    const ParamDesc& g = p.desc(mb + mix::TRACK_GAIN);
-    const float span = g.m_maxValue - g.m_minValue;
+    const ParamDesc &g = p.desc( mb + mix::TRACK_GAIN );
+    const float      span = g.m_maxValue - g.m_minValue;
     // The climax trims (Form.h, Drop1HoldDb): drop 1 held under drop 2, the buildup into drop 2 ramping
     // down to leave it headroom. Read at the bar this call writes from (the incoming track's floor starts at
     // its hand-over, inside its intro) and at the section's end.
-    const Section& whole = plan.m_form.m_section[bar.m_index];
-    const double u0 = whole.m_bars > 1 ? static_cast<double>(s.m_startBar - whole.m_startBar) / whole.m_bars : 0.0;
-    const float t0 = knobs ? 0.0f : sectionTrimDb(plan.m_form, bar.m_index, u0);
-    const float t1 = knobs ? 0.0f : sectionTrimDb(plan.m_form, bar.m_index, 1.0);
-    if (floor) push(mb + mix::TRACK_GAIN, (plan.m_gainDb + (knobs ? 0.0f : energyGainDb(e0)) + t0) / span, 0.0f);
+    const Section &whole = plan.m_form.m_section[bar.m_index];
+    const double   u0 = whole.m_bars > 1 ? static_cast<double>( s.m_startBar - whole.m_startBar ) / whole.m_bars : 0.0;
+    const float    t0 = knobs ? 0.0f : sectionTrimDb( plan.m_form, bar.m_index, u0 );
+    const float    t1 = knobs ? 0.0f : sectionTrimDb( plan.m_form, bar.m_index, 1.0 );
+    if ( floor )
+        push( mb + mix::TRACK_GAIN, ( plan.m_gainDb + ( knobs ? 0.0f : energyGainDb( e0 ) ) + t0 ) / span, 0.0f );
     // A buildup's energy runs from the section before it to the drop, so the gain ramps with it; every
     // other section holds one value (e0 == e1 there).
-    if (floor && (e1 != e0 || t1 != t0))
-        push(mb + mix::TRACK_GAIN, (plan.m_gainDb + (knobs ? 0.0f : energyGainDb(e1)) + t1) / span, length);
+    if ( floor && ( e1 != e0 || t1 != t0 ) )
+        push( mb + mix::TRACK_GAIN, ( plan.m_gainDb + ( knobs ? 0.0f : energyGainDb( e1 ) ) + t1 ) / span, length );
 
     // The macro ride of this section and the buildup's hall send (Form.h, 16.09.2026). The only line
     // of this file the arrangement-dynamics round of 16.09.2026 added: everything it writes is made
     // in Form.cpp out of the section, its seed and the arc values computed just above.
     // Since 19.09.2026 the ride of resonance and decay swings around the track's voiced values (Form.cpp):
     // the voicing's offset and the old per-track direction, the same sum trackStartControls writes.
-    const float acidRecipe = m.m_recipe[mpIndex(MelodyPartE::ACID)];
-    if (floor)
-        sectionAutomation(p, s, plan.m_sectionSeed[std::clamp(bar.m_index, 0, MaxSections - 1)], beat,
-                          cutoffAt(acidBase, 1.0f, e0), cutoffAt(acidBase, 1.0f, e1), knobs, out,
-                          voicing[acid::RESONANCE] + 0.08f * sv * acidRecipe, voicing[acid::DECAY] + 0.12f * sv * acidRecipe);
+    const float acidRecipe = m.m_recipe[mpIndex( MelodyPartE::ACID )];
+    if ( floor )
+        sectionAutomation( p, s, plan.m_sectionSeed[std::clamp( bar.m_index, 0, MaxSections - 1 )], beat,
+                           cutoffAt( acidBase, 1.0f, e0 ), cutoffAt( acidBase, 1.0f, e1 ), knobs, out,
+                           voicing[acid::RESONANCE] + 0.08f * sv * acidRecipe,
+                           voicing[acid::DECAY] + 0.12f * sv * acidRecipe );
 
     // The pad's trance gate is a property of the section, not of a 16-bar block.
-    if (voices) pushNow(pb + poly::GATE, ControlEvent::KindE::OVERRIDE, bar.m_padGate ? 1.0f : 0.0f);
+    if ( voices ) pushNow( pb + poly::GATE, ControlEvent::KindE::OVERRIDE, bar.m_padGate ? 1.0f : 0.0f );
     // The gate *pattern* is the section's since 22.09.2026, not the track's. One pattern for 256 bars
     // was the other half of "das Pad hat immer dasselbe gespielt": the pad's only movement under a
     // drop is the gate, and it ran the same sixteen steps for seven minutes. The track still draws
     // the two patterns (MelodyParts.cpp, makeRangesAndPad: padGatePattern and a padGateAlt that is never the same
     // one); which of them a section takes is the section's own seed, so a set is still a function of
     // its seed and a locked section keeps its pattern.
-    if (voices) {
+    if ( voices )
+    {
         Rng gr;
-        gr.seed(mixSeed(plan.m_sectionSeed[std::clamp(bar.m_index, 0, MaxSections - 1)] ^ SaltPadGate, 0));
+        gr.seed( mixSeed( plan.m_sectionSeed[std::clamp( bar.m_index, 0, MaxSections - 1 )] ^ SaltPadGate, 0 ) );
         const bool alt = gr.uniform() < 0.4f;
-        pushNow(pb + poly::GATE_PATTERN, ControlEvent::KindE::OVERRIDE,
-                static_cast<float>(alt ? m.m_padGateAlt : m.m_padGatePattern));
+        pushNow( pb + poly::GATE_PATTERN, ControlEvent::KindE::OVERRIDE,
+                 static_cast<float>( alt ? m.m_padGateAlt : m.m_padGatePattern ) );
     }
 }
 
-void Composer::droneControls(const ParamStore& p, const TrackPlan& plan, int inTrack, double beat, std::vector<ControlEvent>& out) const
+void Composer::droneControls( const ParamStore &p, const TrackPlan &plan, int inTrack, double beat,
+                              std::vector<ControlEvent> &out ) const
 {
-    const int period = std::max(1, plan.m_melody.m_droneEvolveBars);
-    if (inTrack % period != 0) return;
-    const float sv = p.get(p.base(ModuleE::COMPOSE) + compose::SOUND_VARIATION);
-    float base[poly::COUNT] = {};
-    voiceRecipeOffsets(PolyInstanceE::DRONE, plan.m_voice[polyIndex(PolyInstanceE::DRONE)],
-                       recipeAmount(p, plan, 3 + polyIndex(PolyInstanceE::DRONE), sv), base);
+    const int period = std::max( 1, plan.m_melody.m_droneEvolveBars );
+    if ( inTrack % period != 0 ) return;
+    const float sv = p.get( p.base( ModuleE::COMPOSE ) + compose::SOUND_VARIATION );
+    float       base[poly::COUNT] = {};
+    voiceRecipeOffsets( PolyInstanceE::DRONE, plan.m_voice[polyIndex( PolyInstanceE::DRONE )],
+                        recipeAmount( p, plan, 3 + polyIndex( PolyInstanceE::DRONE ), sv ), base );
     Rng r;
-    r.seed(mixSeed(plan.m_melodySeed ^ SaltDroneRide, static_cast<uint64_t>(inTrack / period)));
-    const int db = p.base(PolyInstanceE::DRONE);
+    r.seed( mixSeed( plan.m_melodySeed ^ SaltDroneRide, static_cast<uint64_t>( inTrack / period ) ) );
+    const int db = p.base( PolyInstanceE::DRONE );
     // How far the drone wanders, in normalised knob units: the filter by up to 1.4 octaves of its
     // 6.5-octave range, the table position by a quarter, the unison detune by a fifth -- the "slow
     // evolution (filter, wavetable position, detune drift)" of the brief, one target per period.
-    struct Move { int m_param; float m_reach; };
+    struct Move
+    {
+        int   m_param;
+        float m_reach;
+    };
     static const Move Moves[3] = { { poly::CUTOFF, 0.22f }, { poly::POSITION, 0.25f }, { poly::DETUNE, 0.20f } };
-    for (const Move& m : Moves) {
+    for ( const Move &m : Moves )
+    {
         ControlEvent c;
         c.m_beat = beat;
         c.m_kind = ControlEvent::KindE::OFFSET;
-        c.m_param = static_cast<int16_t>(db + m.m_param);
-        c.m_value = base[m.m_param] + m.m_reach * (2.0f * r.uniform() - 1.0f);
-        c.m_length = static_cast<float>(period * BeatsPerBar);
-        out.push_back(c);
+        c.m_param = static_cast<int16_t>( db + m.m_param );
+        c.m_value = base[m.m_param] + m.m_reach * ( 2.0f * r.uniform() - 1.0f );
+        c.m_length = static_cast<float>( period * BeatsPerBar );
+        out.push_back( c );
     }
 }
 
-void Composer::arcControls(const ParamStore& p, const TrackPlan& plan, int inTrack, double beat, bool ramp, std::vector<ControlEvent>& out) const
+void Composer::arcControls( const ParamStore &p, const TrackPlan &plan, int inTrack, double beat, bool ramp,
+                            std::vector<ControlEvent> &out ) const
 {
-    const int cb = p.base(ModuleE::COMPOSE), bb = p.base(ModuleE::BASS);
-    const float sv = p.get(cb + compose::SOUND_VARIATION);
-    float bassOff[bass::COUNT] = {};   // sized by the table, see kickOff
-    recipeOffsets(false, plan.m_bassMacro, recipeAmount(p, plan, 1, sv), bassOff);
-    bassOff[bass::LEVEL] += presetTrim(p, plan, 1, bb + bass::LEVEL);
+    const int   cb = p.base( ModuleE::COMPOSE ), bb = p.base( ModuleE::BASS );
+    const float sv = p.get( cb + compose::SOUND_VARIATION );
+    float       bassOff[bass::COUNT] = {};   // sized by the table, see kickOff
+    recipeOffsets( false, plan.m_bassMacro, recipeAmount( p, plan, 1, sv ), bassOff );
+    bassOff[bass::LEVEL] += presetTrim( p, plan, 1, bb + bass::LEVEL );
     Rng arc;
-    arc.seed(mixSeed(m_seed ^ SaltArc, (static_cast<uint64_t>(plan.m_index) << 32) | static_cast<uint64_t>(inTrack / 32)));
+    arc.seed( mixSeed( m_seed ^ SaltArc,
+                       ( static_cast<uint64_t>( plan.m_index ) << 32 ) | static_cast<uint64_t>( inTrack / 32 ) ) );
     const bool arcsOn = plan.m_index > 0 || inTrack > 0;
-    for (const Arc& a : BassArcs) bassOff[a.m_param] += arcsOn ? (2.0f * arc.uniform() - 1.0f) * a.m_size * sv : 0.0f;
-    auto push = [&](int local, float length) {
+    for ( const Arc &a : BassArcs )
+        bassOff[a.m_param] += arcsOn ? ( 2.0f * arc.uniform() - 1.0f ) * a.m_size * sv : 0.0f;
+    auto push = [&]( int local, float length )
+    {
         ControlEvent c;
         c.m_beat = beat;
-        c.m_param = static_cast<int16_t>(bb + local);
+        c.m_param = static_cast<int16_t>( bb + local );
         c.m_kind = ControlEvent::KindE::OFFSET;
         c.m_value = bassOff[local];
         c.m_length = length;
-        out.push_back(c);
+        out.push_back( c );
     };
-    if (!ramp) {
-        for (const Loading& l : BassLoadings) push(l.m_param, 0.0f);
-    } else {
+    if ( !ramp )
+    {
+        for ( const Loading &l : BassLoadings ) push( l.m_param, 0.0f );
+    }
+    else
+    {
         // A slow arc: the bass's brightness and squelch travel over the next 32 bars.
-        for (const Arc& a : BassArcs) push(a.m_param, 32.0f * BeatsPerBar);
+        for ( const Arc &a : BassArcs ) push( a.m_param, 32.0f * BeatsPerBar );
     }
 }
 
-} // namespace phos
+}   // namespace phos

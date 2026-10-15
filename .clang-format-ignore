@@ -1,0 +1,12 @@
+# Files clang-format leaves alone: the generated ones (their layout is their generator's, Tools/...).
+# Third-party code is not formatted either (ThirdParty/, Tests/neonshim).
+Core/include/phos/WaveTableList.inl
+Core/src/CorpusTables.cpp
+Core/src/FieldPresetData.inl
+Core/src/PresetBankData.inl
+Core/src/PresetTrims.inl
+Core/src/SfxBankTables.cpp
+Tests/WaveTableRef.inl
+ThirdParty/**
+Tests/neonshim/**
+Tests/neonbench/**

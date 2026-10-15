@@ -59,28 +59,29 @@
 #include <string>
 #include <thread>
 
-#if defined(_WIN32)
-#  ifndef WIN32_LEAN_AND_MEAN
-#    define WIN32_LEAN_AND_MEAN
-#  endif
-#  ifndef NOMINMAX
-#    define NOMINMAX
-#  endif
-#  include <winsock2.h>
-#  include <ws2tcpip.h>
+#if defined( _WIN32 )
+  #ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN
+  #endif
+  #ifndef NOMINMAX
+    #define NOMINMAX
+  #endif
+  #include <winsock2.h>
+  #include <ws2tcpip.h>
 #else
-#  include <arpa/inet.h>
-#  include <netdb.h>
-#  include <netinet/in.h>
-#  include <sys/socket.h>
-#  include <unistd.h>
+  #include <arpa/inet.h>
+  #include <netdb.h>
+  #include <netinet/in.h>
+  #include <sys/socket.h>
+  #include <unistd.h>
 #endif
 
-namespace phos {
+namespace phos
+{
 
 /** @brief Default destination of the cue bridge (PLAN 8.3). */
-constexpr const char* CueDefaultHost = "127.0.0.1";
-constexpr int CueDefaultPort = 9000;   ///< default destination port of the cue bridge
+constexpr const char *CueDefaultHost = "127.0.0.1";
+constexpr int         CueDefaultPort = 9000;   ///< default destination port of the cue bridge
 
 // ---------------------------------------------------------------------------- OSC encoding
 
@@ -92,7 +93,8 @@ constexpr int CueDefaultPort = 9000;   ///< default destination port of the cue 
  * padded to four bytes, which is the whole of the specification that five messages need. An
  * overlong message sets #ok to false instead of writing past the buffer.
  */
-class OscWriter {
+class OscWriter
+{
 public:
     static constexpr int Capacity = 128;   ///< longest message this can build
 
@@ -102,47 +104,55 @@ public:
      * @param[in] tags     the type tags without the leading comma, e.g. "sf"; "" for a message with no arguments (which
      *                     still carries the tag string "," -- receivers rely on it)
      */
-    OscWriter(const char* address, const char* tags)
+    OscWriter( const char *address, const char *tags )
     {
-        putString(address);
-        char t[16] = { ',' };
-        const size_t n = std::strlen(tags);
-        if (n + 2 > sizeof(t)) { m_ok = false; return; }
-        std::memcpy(t + 1, tags, n + 1);
-        putString(t);
+        putString( address );
+        char         t[16] = { ',' };
+        const size_t n = std::strlen( tags );
+        if ( n + 2 > sizeof( t ) )
+        {
+            m_ok = false;
+            return;
+        }
+        std::memcpy( t + 1, tags, n + 1 );
+        putString( t );
     }
 
     /**
      * @brief Appends a 32-bit integer (tag 'i').
      * @param[in] v  the integer
      */
-    void putInt(int32_t v)
+    void putInt( int32_t v )
     {
         uint32_t u;
-        std::memcpy(&u, &v, 4);
-        putWord(u);
+        std::memcpy( &u, &v, 4 );
+        putWord( u );
     }
     /**
      * @brief Appends a 32-bit float (tag 'f').
      * @param[in] v  the float
      */
-    void putFloat(float v)
+    void putFloat( float v )
     {
         uint32_t u;
-        std::memcpy(&u, &v, 4);
-        putWord(u);
+        std::memcpy( &u, &v, 4 );
+        putWord( u );
     }
     /**
      * @brief Appends an OSC string (tag 's'): terminated and padded to a multiple of four.
      * @param[in] s  the string
      */
-    void putString(const char* s)
+    void putString( const char *s )
     {
-        const size_t n = std::strlen(s) + 1;
-        if (!m_ok || m_pos + static_cast<int>(n) + 3 > Capacity) { m_ok = false; return; }
-        std::memcpy(m_buf + m_pos, s, n);
-        m_pos += static_cast<int>(n);
-        while (m_pos & 3) m_buf[m_pos++] = 0;
+        const size_t n = std::strlen( s ) + 1;
+        if ( !m_ok || m_pos + static_cast<int>( n ) + 3 > Capacity )
+        {
+            m_ok = false;
+            return;
+        }
+        std::memcpy( m_buf + m_pos, s, n );
+        m_pos += static_cast<int>( n );
+        while ( m_pos & 3 ) m_buf[m_pos++] = 0;
     }
 
     /**
@@ -154,7 +164,7 @@ public:
      * @brief The bytes of the message.
      * @return the bytes
      */
-    const char* data() const { return m_buf; }
+    const char *data() const { return m_buf; }
     /**
      * @brief Their number (always a multiple of four).
      * @return the number of bytes
@@ -166,17 +176,21 @@ private:
      * @brief Appends @p u big-endian, as OSC wants every word.
      * @param[in] u  the word
      */
-    void putWord(uint32_t u)
+    void putWord( uint32_t u )
     {
-        if (!m_ok || m_pos + 4 > Capacity) { m_ok = false; return; }
-        m_buf[m_pos++] = static_cast<char>((u >> 24) & 0xFF);
-        m_buf[m_pos++] = static_cast<char>((u >> 16) & 0xFF);
-        m_buf[m_pos++] = static_cast<char>((u >> 8) & 0xFF);
-        m_buf[m_pos++] = static_cast<char>(u & 0xFF);
+        if ( !m_ok || m_pos + 4 > Capacity )
+        {
+            m_ok = false;
+            return;
+        }
+        m_buf[m_pos++] = static_cast<char>( ( u >> 24 ) & 0xFF );
+        m_buf[m_pos++] = static_cast<char>( ( u >> 16 ) & 0xFF );
+        m_buf[m_pos++] = static_cast<char>( ( u >> 8 ) & 0xFF );
+        m_buf[m_pos++] = static_cast<char>( u & 0xFF );
     }
     char m_buf[Capacity] = {};   ///< the message being built
-    int  m_pos = 0;   ///< bytes written
-    bool m_ok = true;   ///< false once the message would have overflowed
+    int  m_pos = 0;              ///< bytes written
+    bool m_ok = true;            ///< false once the message would have overflowed
 };
 
 // ---------------------------------------------------------------------------- the cues
@@ -188,17 +202,26 @@ private:
  * allocates. Everything a message needs is a number here; the strings are looked up from the tables
  * (phos::SectionNames, phos::KeyNames, phos::ScaleNames) on the sender thread.
  */
-struct Cue {
+struct Cue
+{
     /** @brief Which of the five messages of PLAN 8.3 this is. */
-    enum class KindE : uint8_t { BEAT = 0, BAR, SECTION, KEY, DROP, COUNT };
+    enum class KindE : uint8_t
+    {
+        BEAT = 0,
+        BAR,
+        SECTION,
+        KEY,
+        DROP,
+        COUNT
+    };
 
-    KindE    m_kind = KindE::BEAT;   ///< what to send
-    uint8_t m_section = 0;         ///< SectionType, for Kind::Section
-    uint8_t m_key = 0;             ///< pitch class 0..11, for Kind::Key
-    uint8_t m_scale = 0;           ///< index into ScaleNames, for Kind::Key
-    int32_t m_index = 0;           ///< beat or bar number from the start of the set
-    float   m_energy = 0.0f;       ///< 0..1 on the energy arc, for Kind::Section
-    int64_t m_dueNanos = 0;        ///< steady_clock nanoseconds at which the listener hears it; 0 = at once
+    KindE   m_kind = KindE::BEAT;   ///< what to send
+    uint8_t m_section = 0;          ///< SectionType, for Kind::Section
+    uint8_t m_key = 0;              ///< pitch class 0..11, for Kind::Key
+    uint8_t m_scale = 0;            ///< index into ScaleNames, for Kind::Key
+    int32_t m_index = 0;            ///< beat or bar number from the start of the set
+    float   m_energy = 0.0f;        ///< 0..1 on the energy arc, for Kind::Section
+    int64_t m_dueNanos = 0;         ///< steady_clock nanoseconds at which the listener hears it; 0 = at once
 };
 
 /**
@@ -207,8 +230,8 @@ struct Cue {
  */
 inline int64_t cueNowNanos()
 {
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(
-               std::chrono::steady_clock::now().time_since_epoch()).count();
+    return std::chrono::duration_cast<std::chrono::nanoseconds>( std::chrono::steady_clock::now().time_since_epoch() )
+        .count();
 }
 
 /**
@@ -217,11 +240,11 @@ inline int64_t cueNowNanos()
  * @param[out] out  receives the text, at least 32 bytes
  * @param[in]  cap  size of @p out in bytes, the terminating zero included
  */
-inline void cueKeyText(const Cue& c, char* out, size_t cap)
+inline void cueKeyText( const Cue &c, char *out, size_t cap )
 {
-    const char* root = KeyNames[c.m_key % 12];
-    const char* mode = ScaleNames[c.m_scale < 6 ? c.m_scale : 0];
-    std::snprintf(out, cap, "%s %s", root, mode);
+    const char *root = KeyNames[c.m_key % 12];
+    const char *mode = ScaleNames[c.m_scale < 6 ? c.m_scale : 0];
+    std::snprintf( out, cap, "%s %s", root, mode );
 }
 
 /**
@@ -231,45 +254,51 @@ inline void cueKeyText(const Cue& c, char* out, size_t cap)
  * @param[in]  cap  size of @p buf
  * @return the number of bytes written, or 0 if the cue does not fit or its kind is unknown
  */
-inline int cueToOsc(const Cue& c, char* buf, int cap)
+inline int cueToOsc( const Cue &c, char *buf, int cap )
 {
-    switch (c.m_kind) {
-    case Cue::KindE::BEAT: {
-        OscWriter w("/phos/beat", "i");
-        w.putInt(c.m_index);
-        if (!w.ok() || w.size() > cap) return 0;
-        std::memcpy(buf, w.data(), static_cast<size_t>(w.size()));
+    switch ( c.m_kind )
+    {
+    case Cue::KindE::BEAT:
+    {
+        OscWriter w( "/phos/beat", "i" );
+        w.putInt( c.m_index );
+        if ( !w.ok() || w.size() > cap ) return 0;
+        std::memcpy( buf, w.data(), static_cast<size_t>( w.size() ) );
         return w.size();
     }
-    case Cue::KindE::BAR: {
-        OscWriter w("/phos/bar", "i");
-        w.putInt(c.m_index);
-        if (!w.ok() || w.size() > cap) return 0;
-        std::memcpy(buf, w.data(), static_cast<size_t>(w.size()));
+    case Cue::KindE::BAR:
+    {
+        OscWriter w( "/phos/bar", "i" );
+        w.putInt( c.m_index );
+        if ( !w.ok() || w.size() > cap ) return 0;
+        std::memcpy( buf, w.data(), static_cast<size_t>( w.size() ) );
         return w.size();
     }
-    case Cue::KindE::SECTION: {
-        OscWriter w("/phos/section", "sf");
-        const int t = c.m_section < static_cast<int>(SectionTypeE::COUNT) ? c.m_section : 0;
-        w.putString(SectionNames[t]);
-        w.putFloat(c.m_energy);
-        if (!w.ok() || w.size() > cap) return 0;
-        std::memcpy(buf, w.data(), static_cast<size_t>(w.size()));
+    case Cue::KindE::SECTION:
+    {
+        OscWriter w( "/phos/section", "sf" );
+        const int t = c.m_section < static_cast<int>( SectionTypeE::COUNT ) ? c.m_section : 0;
+        w.putString( SectionNames[t] );
+        w.putFloat( c.m_energy );
+        if ( !w.ok() || w.size() > cap ) return 0;
+        std::memcpy( buf, w.data(), static_cast<size_t>( w.size() ) );
         return w.size();
     }
-    case Cue::KindE::KEY: {
+    case Cue::KindE::KEY:
+    {
         char text[32];
-        cueKeyText(c, text, sizeof(text));
-        OscWriter w("/phos/key", "s");
-        w.putString(text);
-        if (!w.ok() || w.size() > cap) return 0;
-        std::memcpy(buf, w.data(), static_cast<size_t>(w.size()));
+        cueKeyText( c, text, sizeof( text ) );
+        OscWriter w( "/phos/key", "s" );
+        w.putString( text );
+        if ( !w.ok() || w.size() > cap ) return 0;
+        std::memcpy( buf, w.data(), static_cast<size_t>( w.size() ) );
         return w.size();
     }
-    case Cue::KindE::DROP: {
-        OscWriter w("/phos/drop", "");
-        if (!w.ok() || w.size() > cap) return 0;
-        std::memcpy(buf, w.data(), static_cast<size_t>(w.size()));
+    case Cue::KindE::DROP:
+    {
+        OscWriter w( "/phos/drop", "" );
+        if ( !w.ok() || w.size() > cap ) return 0;
+        std::memcpy( buf, w.data(), static_cast<size_t>( w.size() ) );
         return w.size();
     }
     default: return 0;
@@ -286,13 +315,14 @@ inline int cueToOsc(const Cue& c, char* buf, int cap)
  * pops them as the play position reaches them -- so the *knowledge* travels ahead of the sound, as
  * it must, and the *cue* does not.
  */
-struct CueMark {
-    double  m_beat = 0.0;      ///< musical beat from the start of the set on which the section starts
-    uint8_t m_type = 0;        ///< SectionType
-    float   m_energy = 0.5f;   ///< 0..1 on the energy arc
-    uint8_t m_key = 0;         ///< pitch class of the key from here
-    uint8_t m_scale = 0;       ///< index into ScaleNames
-    uint8_t m_keyChanged = 0;  ///< 1: the key changes here, so `/phos/key` is sent as well
+struct CueMark
+{
+    double  m_beat = 0.0;       ///< musical beat from the start of the set on which the section starts
+    uint8_t m_type = 0;         ///< SectionType
+    float   m_energy = 0.5f;    ///< 0..1 on the energy arc
+    uint8_t m_key = 0;          ///< pitch class of the key from here
+    uint8_t m_scale = 0;        ///< index into ScaleNames
+    uint8_t m_keyChanged = 0;   ///< 1: the key changes here, so `/phos/key` is sent as well
 };
 
 /** @brief The ring the composing thread fills and phos::CueTap drains. */
@@ -314,40 +344,44 @@ using CueMarkRingT = EventRing<CueMark>;
  * @param[in,out] lastKey   the key the caller last announced (-1 = none); updated when a mark goes out
  * @param[out]    out       receives the marks
  */
-inline void cueMarksForBar(const FormPlan& form, int firstBar, int key, int scale, int bar,
-                           int& lastKey, CueMarkRingT& out)
+inline void cueMarksForBar( const FormPlan &form, int firstBar, int key, int scale, int bar, int &lastKey,
+                            CueMarkRingT &out )
 {
     const int barInTrack = bar - firstBar;
-    CueMark base;
-    base.m_beat = static_cast<double>(bar) * BeatsPerBar;
-    base.m_key = static_cast<uint8_t>(((key % 12) + 12) % 12);
-    base.m_scale = static_cast<uint8_t>(scale);
+    CueMark   base;
+    base.m_beat = static_cast<double>( bar ) * BeatsPerBar;
+    base.m_key = static_cast<uint8_t>( ( ( key % 12 ) + 12 ) % 12 );
+    base.m_scale = static_cast<uint8_t>( scale );
     base.m_keyChanged = key != lastKey ? 1 : 0;
 
-    for (int s = 0; s < form.m_count; ++s) {
-        const Section& sec = form.m_section[s];
-        if (sec.m_startBar == barInTrack) {
+    for ( int s = 0; s < form.m_count; ++s )
+    {
+        const Section &sec = form.m_section[s];
+        if ( sec.m_startBar == barInTrack )
+        {
             base.m_energy = sec.m_energy;
-            if (sec.m_type == SectionTypeE::BREAK && sec.m_cutBeats > 0.0f) {
+            if ( sec.m_type == SectionTypeE::BREAK && sec.m_cutBeats > 0.0f )
+            {
                 CueMark c = base;
-                c.m_type = static_cast<uint8_t>(SectionTypeE::CUT);
-                out.push(c);
+                c.m_type = static_cast<uint8_t>( SectionTypeE::CUT );
+                out.push( c );
                 base.m_keyChanged = 0;   // the key travels with the first mark of the bar, once
             }
             CueMark m = base;
-            m.m_type = static_cast<uint8_t>(sec.m_type);
-            out.push(m);
+            m.m_type = static_cast<uint8_t>( sec.m_type );
+            out.push( m );
             base.m_keyChanged = 0;
             lastKey = key;
         }
-        if (sec.m_type == SectionTypeE::BUILD && sec.m_startBar + sec.m_bars - 1 == barInTrack) {
+        if ( sec.m_type == SectionTypeE::BUILD && sec.m_startBar + sec.m_bars - 1 == barInTrack )
+        {
             CueMark d = base;
-            d.m_type = static_cast<uint8_t>(SectionTypeE::PDB);
+            d.m_type = static_cast<uint8_t>( SectionTypeE::PDB );
             // The buildup's own energy, not the energy it climbs to: phos::Composer::sections()
             // gives the pre-drop break the mark of the buildup it belongs to, and the two lists have
             // to be the same list.
             d.m_energy = sec.m_energy;
-            out.push(d);
+            out.push( d );
             base.m_keyChanged = 0;
             lastKey = key;
         }
@@ -367,18 +401,18 @@ inline void cueMarksForBar(const FormPlan& form, int firstBar, int key, int scal
  * @param[in,out] lastKey   the key sent last, updated
  * @param[in,out] out       the marks, pushed to
  */
-inline void cueLandingMark(const FormPlan& form, int firstBar, int key, int scale, int bar,
-                           int& lastKey, CueMarkRingT& out)
+inline void cueLandingMark( const FormPlan &form, int firstBar, int key, int scale, int bar, int &lastKey,
+                            CueMarkRingT &out )
 {
-    const int si = sectionOfBar(form, bar - firstBar);
-    CueMark m;
-    m.m_beat = static_cast<double>(bar) * BeatsPerBar;
-    m.m_type = static_cast<uint8_t>(form.m_section[si].m_type);
+    const int si = sectionOfBar( form, bar - firstBar );
+    CueMark   m;
+    m.m_beat = static_cast<double>( bar ) * BeatsPerBar;
+    m.m_type = static_cast<uint8_t>( form.m_section[si].m_type );
     m.m_energy = form.m_section[si].m_energy;
-    m.m_key = static_cast<uint8_t>(((key % 12) + 12) % 12);
-    m.m_scale = static_cast<uint8_t>(scale);
+    m.m_key = static_cast<uint8_t>( ( ( key % 12 ) + 12 ) % 12 );
+    m.m_scale = static_cast<uint8_t>( scale );
     m.m_keyChanged = 1;
-    out.push(m);
+    out.push( m );
     lastKey = key;
 }
 /** @brief The ring phos::CueTap fills and phos::CueSender drains. */
@@ -392,13 +426,14 @@ using CueRingT = EventRing<Cue>;
  * seek the range jumps, which costs at most the cues of the bar that was jumped over -- and never a
  * duplicate, because the boundaries are read off the beat numbers themselves rather than counted.
  */
-class CueTap {
+class CueTap
+{
 public:
     /**
      * @brief Whether `/phos/beat` is sent at all (the busiest message; a visualiser may not want it).
      * @param[in] on  true to send the beats
      */
-    void setSendBeats(bool on) { m_sendBeats = on; }
+    void setSendBeats( bool on ) { m_sendBeats = on; }
 
     /**
      * @brief Emits every cue whose musical instant falls in `[beatFrom, beatTo)`.
@@ -412,51 +447,61 @@ public:
      * @param[out]    out         receives the cues
      * @return how many cues were dropped because @p out was full
      */
-    int scan(double beatFrom, double beatTo, int64_t nowNanos, int64_t leadNanos, int64_t blockNanos,
-             CueMarkRingT& marks, CueRingT& out)
+    int scan( double beatFrom, double beatTo, int64_t nowNanos, int64_t leadNanos, int64_t blockNanos,
+              CueMarkRingT &marks, CueRingT &out )
     {
         int lost = 0;
-        if (!(beatTo > beatFrom)) return lost;
+        if ( !( beatTo > beatFrom ) ) return lost;
         const double span = beatTo - beatFrom;
-        auto dueOf = [&](double beat) {
-            const double frac = (beat - beatFrom) / span;
-            return nowNanos + leadNanos + static_cast<int64_t>(frac * static_cast<double>(blockNanos));
+        auto         dueOf = [&]( double beat )
+        {
+            const double frac = ( beat - beatFrom ) / span;
+            return nowNanos + leadNanos + static_cast<int64_t>( frac * static_cast<double>( blockNanos ) );
         };
-        auto emit = [&](const Cue& c) { if (!out.push(c)) ++lost; };
+        auto emit = [&]( const Cue &c )
+        {
+            if ( !out.push( c ) ) ++lost;
+        };
 
         // A mark that is already behind the block start is one the tap could not reach -- a seek
         // landed past it. It is not sent late; it is sent now, because a visualiser that never hears
         // "Drop" is worse off than one that hears it a block late.
         CueMark m;
-        while (marks.peek(m) && m.m_beat < beatFrom) {
-            marks.pop(m);
-            emitMark(m, nowNanos + leadNanos, emit);
+        while ( marks.peek( m ) && m.m_beat < beatFrom )
+        {
+            marks.pop( m );
+            emitMark( m, nowNanos + leadNanos, emit );
         }
 
         const double eps = 1.0e-9;
-        for (int64_t b = static_cast<int64_t>(std::ceil(beatFrom - eps)); static_cast<double>(b) < beatTo - eps; ++b) {
-            const double beat = static_cast<double>(b);
-            const int64_t due = dueOf(beat);
+        for ( int64_t b = static_cast<int64_t>( std::ceil( beatFrom - eps ) ); static_cast<double>( b ) < beatTo - eps;
+              ++b )
+        {
+            const double  beat = static_cast<double>( b );
+            const int64_t due = dueOf( beat );
             // The bar goes first, then what that bar *is*, then the beat. A receiver that keeps a
             // bar counter can then say which bar a section started on without having to look ahead,
             // which is exactly what the offline demo checks.
-            if (b % BeatsPerBar == 0) {
+            if ( b % BeatsPerBar == 0 )
+            {
                 Cue c;
                 c.m_kind = Cue::KindE::BAR;
-                c.m_index = static_cast<int32_t>(b / BeatsPerBar);
+                c.m_index = static_cast<int32_t>( b / BeatsPerBar );
                 c.m_dueNanos = due;
-                emit(c);
+                emit( c );
             }
-            while (marks.peek(m) && m.m_beat <= beat + eps) {
-                marks.pop(m);
-                emitMark(m, due, emit);
+            while ( marks.peek( m ) && m.m_beat <= beat + eps )
+            {
+                marks.pop( m );
+                emitMark( m, due, emit );
             }
-            if (m_sendBeats) {
+            if ( m_sendBeats )
+            {
                 Cue c;
                 c.m_kind = Cue::KindE::BEAT;
-                c.m_index = static_cast<int32_t>(b);
+                c.m_index = static_cast<int32_t>( b );
                 c.m_dueNanos = due;
-                emit(c);
+                emit( c );
             }
         }
         return lost;
@@ -473,25 +518,26 @@ public:
      * @param[out] out  receives them
      * @return false if nothing has been seen yet
      */
-    bool announce(int64_t due, CueRingT& out) const
+    bool announce( int64_t due, CueRingT &out ) const
     {
-        if (!m_haveLast) return false;
+        if ( !m_haveLast ) return false;
         CueMark m = m_last;
         m.m_keyChanged = 1;
-        if (m.m_keyChanged) {
+        if ( m.m_keyChanged )
+        {
             Cue c;
             c.m_kind = Cue::KindE::KEY;
             c.m_key = m.m_key;
             c.m_scale = m.m_scale;
             c.m_dueNanos = due;
-            out.push(c);
+            out.push( c );
         }
         Cue s;
         s.m_kind = Cue::KindE::SECTION;
         s.m_section = m.m_type;
         s.m_energy = m.m_energy;
         s.m_dueNanos = due;
-        out.push(s);
+        out.push( s );
         return true;
     }
 
@@ -501,7 +547,7 @@ public:
      * @brief The last section mark that went out, or null before the first (the family jam's leader reads it).
      * @return the mark, or null
      */
-    const CueMark* lastMark() const { return m_haveLast ? &m_last : nullptr; }
+    const CueMark *lastMark() const { return m_haveLast ? &m_last : nullptr; }
     /**
      * @brief How many section marks have gone out so far (the family jam's leader sends each once).
      * @return the number of marks
@@ -516,37 +562,39 @@ private:
      * @param[in] emit  called with every cue
      */
     template <class EmitT>
-    void emitMark(const CueMark& m, int64_t due, EmitT&& emit)
+    void emitMark( const CueMark &m, int64_t due, EmitT &&emit )
     {
         m_last = m;
         m_haveLast = true;
         ++m_marksPassed;
-        if (m.m_keyChanged) {
+        if ( m.m_keyChanged )
+        {
             Cue c;
             c.m_kind = Cue::KindE::KEY;
             c.m_key = m.m_key;
             c.m_scale = m.m_scale;
             c.m_dueNanos = due;
-            emit(c);
+            emit( c );
         }
         Cue s;
         s.m_kind = Cue::KindE::SECTION;
         s.m_section = m.m_type;
         s.m_energy = m.m_energy;
         s.m_dueNanos = due;
-        emit(s);
-        if (static_cast<SectionTypeE>(m.m_type) == SectionTypeE::DROP) {
+        emit( s );
+        if ( static_cast<SectionTypeE>( m.m_type ) == SectionTypeE::DROP )
+        {
             Cue d;
             d.m_kind = Cue::KindE::DROP;
             d.m_dueNanos = due;
-            emit(d);
+            emit( d );
         }
     }
 
-    bool m_sendBeats = true;   ///< cue.beats: a beat cue on every beat, not only the marks
-    CueMark m_last;              ///< the last section mark that went out, for #announce
-    bool m_haveLast = false;     ///< @copydoc m_last
-    uint32_t m_marksPassed = 0;  ///< marksPassed()
+    bool     m_sendBeats = true;   ///< cue.beats: a beat cue on every beat, not only the marks
+    CueMark  m_last;               ///< the last section mark that went out, for #announce
+    bool     m_haveLast = false;   ///< @copydoc m_last
+    uint32_t m_marksPassed = 0;    ///< marksPassed()
 };
 
 // ---------------------------------------------------------------------------- the sender
@@ -561,23 +609,25 @@ private:
  * a generator's business. Elsewhere `nanosleep` is already accurate enough.
  * @param[in] nanos  how long to wait; <= 0 returns at once
  */
-inline void cueSleepNanos(int64_t nanos)
+inline void cueSleepNanos( int64_t nanos )
 {
-    if (nanos <= 0) return;
-#if defined(_WIN32)
-    static thread_local HANDLE timer = CreateWaitableTimerExW(
-        nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
-    if (timer != nullptr) {
+    if ( nanos <= 0 ) return;
+#if defined( _WIN32 )
+    static thread_local HANDLE timer =
+        CreateWaitableTimerExW( nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS );
+    if ( timer != nullptr )
+    {
         LARGE_INTEGER due;
-        due.QuadPart = -(nanos / 100);   // negative = relative, in 100 ns units
-        if (due.QuadPart == 0) due.QuadPart = -1;
-        if (SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE)) {
-            WaitForSingleObject(timer, INFINITE);
+        due.QuadPart = -( nanos / 100 );   // negative = relative, in 100 ns units
+        if ( due.QuadPart == 0 ) due.QuadPart = -1;
+        if ( SetWaitableTimer( timer, &due, 0, nullptr, nullptr, FALSE ) )
+        {
+            WaitForSingleObject( timer, INFINITE );
             return;
         }
     }
 #endif
-    std::this_thread::sleep_for(std::chrono::nanoseconds(nanos));
+    std::this_thread::sleep_for( std::chrono::nanoseconds( nanos ) );
 }
 
 /**
@@ -592,14 +642,15 @@ inline void cueSleepNanos(int64_t nanos)
  * start() return false and the generator plays on; a datagram to a port with no listener is dropped
  * by the operating system without an error, which is the whole reason UDP was chosen.
  */
-class CueSender {
+class CueSender
+{
 public:
     static constexpr int64_t PollNanos = 1000000;   ///< 1 ms: the longest the thread sleeps when idle
 
     /** @brief A sender with no destination; start() opens it. */
     CueSender() = default;
-    CueSender(const CueSender&) = delete;
-    CueSender& operator=(const CueSender&) = delete;
+    CueSender( const CueSender & ) = delete;
+    CueSender &operator=( const CueSender & ) = delete;
     ~CueSender() { stop(); }
 
     /**
@@ -612,39 +663,39 @@ public:
      * @return false if the host cannot be resolved or the socket cannot be opened; nothing is started and nothing is
      *         logged, because a visualiser that is not running is not an error
      */
-    bool start(const std::string& host, int port, bool scheduled = true)
+    bool start( const std::string &host, int port, bool scheduled = true )
     {
         stop();
-        if (port <= 0 || port > 65535) return false;
-#if defined(_WIN32)
-        if (!winsockUp()) return false;
+        if ( port <= 0 || port > 65535 ) return false;
+#if defined( _WIN32 )
+        if ( !winsockUp() ) return false;
 #endif
         addrinfo hints{};
         hints.ai_family = AF_INET;
         hints.ai_socktype = SOCK_DGRAM;
         hints.ai_protocol = IPPROTO_UDP;
-        addrinfo* res = nullptr;
-        const std::string service = std::to_string(port);
-        if (getaddrinfo(host.c_str(), service.c_str(), &hints, &res) != 0 || res == nullptr) return false;
-        std::memcpy(&m_to, res->ai_addr, sizeof(sockaddr_in));
-        freeaddrinfo(res);
+        addrinfo         *res = nullptr;
+        const std::string service = std::to_string( port );
+        if ( getaddrinfo( host.c_str(), service.c_str(), &hints, &res ) != 0 || res == nullptr ) return false;
+        std::memcpy( &m_to, res->ai_addr, sizeof( sockaddr_in ) );
+        freeaddrinfo( res );
 
-        m_sock = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (!validSocket(m_sock)) return false;
+        m_sock = ::socket( AF_INET, SOCK_DGRAM, IPPROTO_UDP );
+        if ( !validSocket( m_sock ) ) return false;
         m_scheduled = scheduled;
-        m_sent.store(0, std::memory_order_relaxed);
-        m_dropped.store(0, std::memory_order_relaxed);
+        m_sent.store( 0, std::memory_order_relaxed );
+        m_dropped.store( 0, std::memory_order_relaxed );
         m_queue.clear();
-        m_run.store(true, std::memory_order_release);
-        m_thread = std::thread([this] { loop(); });
+        m_run.store( true, std::memory_order_release );
+        m_thread = std::thread( [this] { loop(); } );
         return true;
     }
 
     /** @brief Stops the thread and closes the socket; safe to call when nothing is running. */
     void stop()
     {
-        m_run.store(false, std::memory_order_release);
-        if (m_thread.joinable()) m_thread.join();
+        m_run.store( false, std::memory_order_release );
+        if ( m_thread.joinable() ) m_thread.join();
         closeSocket();
     }
 
@@ -652,7 +703,7 @@ public:
      * @brief Whether the thread is running.
      * @return true while the sending thread runs
      */
-    bool running() const { return m_run.load(std::memory_order_acquire); }
+    bool running() const { return m_run.load( std::memory_order_acquire ); }
 
     /**
      * @brief Queues a cue. Audio thread: wait-free, no allocation, no socket.
@@ -660,11 +711,11 @@ public:
      * @return false if the queue is full (the cue is counted as dropped and forgotten)
      * @pre called on the audio thread
      */
-    bool push(const Cue& c)
+    bool push( const Cue &c )
     {
-        if (!m_run.load(std::memory_order_relaxed)) return false;
-        if (m_queue.push(c)) return true;
-        m_dropped.fetch_add(1, std::memory_order_relaxed);
+        if ( !m_run.load( std::memory_order_relaxed ) ) return false;
+        if ( m_queue.push( c ) ) return true;
+        m_dropped.fetch_add( 1, std::memory_order_relaxed );
         return false;
     }
 
@@ -672,75 +723,91 @@ public:
      * @brief The queue, for the tap to push into directly.
      * @return the queue
      */
-    CueRingT& queue() { return m_queue; }
+    CueRingT &queue() { return m_queue; }
 
     /**
      * @brief Datagrams sent since start().
      * @return the datagrams sent
      */
-    uint64_t sent() const { return m_sent.load(std::memory_order_relaxed); }
+    uint64_t sent() const { return m_sent.load( std::memory_order_relaxed ); }
     /**
      * @brief Cues lost to a full queue or an unencodable kind.
      * @return how many cues could not be sent
      */
-    uint64_t dropped() const { return m_dropped.load(std::memory_order_relaxed); }
+    uint64_t dropped() const { return m_dropped.load( std::memory_order_relaxed ); }
     /**
      * @brief Largest lateness measured against a due time, in nanoseconds (0 when nothing was late).
      *
      * The sender thread's own contribution to the end-to-end delay, and the number the demo prints.
      * @return the lateness in nanoseconds
      */
-    int64_t worstLateNanos() const { return m_worstLate.load(std::memory_order_relaxed); }
+    int64_t worstLateNanos() const { return m_worstLate.load( std::memory_order_relaxed ); }
 
     /**
      * @brief Sends one cue straight away, off the queue (tests and the offline demo).
      * @param[in] c  the cue
      */
-    void sendNow(const Cue& c)
+    void sendNow( const Cue &c )
     {
-        char buf[OscWriter::Capacity];
-        const int n = cueToOsc(c, buf, sizeof(buf));
-        if (n <= 0) { m_dropped.fetch_add(1, std::memory_order_relaxed); return; }
-        if (!validSocket(m_sock)) return;
-        ::sendto(m_sock, buf, n, 0, reinterpret_cast<const sockaddr*>(&m_to), sizeof(m_to));
-        m_sent.fetch_add(1, std::memory_order_relaxed);
+        char      buf[OscWriter::Capacity];
+        const int n = cueToOsc( c, buf, sizeof( buf ) );
+        if ( n <= 0 )
+        {
+            m_dropped.fetch_add( 1, std::memory_order_relaxed );
+            return;
+        }
+        if ( !validSocket( m_sock ) ) return;
+        ::sendto( m_sock, buf, n, 0, reinterpret_cast<const sockaddr *>( &m_to ), sizeof( m_to ) );
+        m_sent.fetch_add( 1, std::memory_order_relaxed );
     }
 
 private:
     /** @brief The sender thread: sends what is due, sleeps at most PollNanos when idle. */
     void loop()
     {
-        while (m_run.load(std::memory_order_acquire)) {
+        while ( m_run.load( std::memory_order_acquire ) )
+        {
             int64_t wait = PollNanos;
-            Cue c;
-            while (m_queue.peek(c)) {
+            Cue     c;
+            while ( m_queue.peek( c ) )
+            {
                 const int64_t now = cueNowNanos();
-                if (m_scheduled && c.m_dueNanos > now) {
+                if ( m_scheduled && c.m_dueNanos > now )
+                {
                     wait = c.m_dueNanos - now;
                     break;
                 }
-                m_queue.pop(c);
-                if (m_scheduled && c.m_dueNanos > 0) {
+                m_queue.pop( c );
+                if ( m_scheduled && c.m_dueNanos > 0 )
+                {
                     const int64_t late = now - c.m_dueNanos;
-                    if (late > m_worstLate.load(std::memory_order_relaxed))
-                        m_worstLate.store(late, std::memory_order_relaxed);
+                    if ( late > m_worstLate.load( std::memory_order_relaxed ) )
+                        m_worstLate.store( late, std::memory_order_relaxed );
                 }
-                sendNow(c);
+                sendNow( c );
             }
-            cueSleepNanos(wait < PollNanos ? wait : PollNanos);
+            cueSleepNanos( wait < PollNanos ? wait : PollNanos );
         }
     }
 
-#if defined(_WIN32)
+#if defined( _WIN32 )
     using SocketHandleT = SOCKET;
-    static bool validSocket(SocketHandleT s) { return s != INVALID_SOCKET; }
-    void closeSocket() { if (validSocket(m_sock)) { ::closesocket(m_sock); m_sock = INVALID_SOCKET; } }
+    static bool validSocket( SocketHandleT s ) { return s != INVALID_SOCKET; }
+    void closeSocket()
+    {
+        if ( validSocket( m_sock ) )
+        {
+            ::closesocket( m_sock );
+            m_sock = INVALID_SOCKET;
+        }
+    }
     /** @brief Winsock is started once per process and never stopped; the sockets outlive nothing. */
     static bool winsockUp()
     {
-        static const bool up = [] {
+        static const bool up = []
+        {
             WSADATA d;
-            return WSAStartup(MAKEWORD(2, 2), &d) == 0;
+            return WSAStartup( MAKEWORD( 2, 2 ), &d ) == 0;
         }();
         return up;
     }
@@ -752,20 +819,27 @@ private:
      * @param[in] s  the socket
      * @return true when it is open
      */
-    static bool validSocket(SocketHandleT s) { return s >= 0; }
+    static bool validSocket( SocketHandleT s ) { return s >= 0; }
     /** @brief Closes the socket. */
-    void closeSocket() { if (validSocket(m_sock)) { ::close(m_sock); m_sock = -1; } }
+    void closeSocket()
+    {
+        if ( validSocket( m_sock ) )
+        {
+            ::close( m_sock );
+            m_sock = -1;
+        }
+    }
     SocketHandleT m_sock = -1;   ///< the UDP socket
 #endif
 
-    sockaddr_in m_to{};   ///< the destination
-    bool m_scheduled = true;   ///< hold each cue until its due time (false: send at once, the tests)
-    std::atomic<bool> m_run{ false };   ///< the thread runs
-    std::thread m_thread;   ///< the sender thread
-    CueRingT m_queue{ 1024 };   ///< cues waiting to go out
-    std::atomic<uint64_t> m_sent{ 0 };   ///< cues sent
-    std::atomic<uint64_t> m_dropped{ 0 };   ///< cues that could not be sent
-    std::atomic<int64_t> m_worstLate{ 0 };   ///< the latest a cue went out after its due time, ns
+    sockaddr_in           m_to{};               ///< the destination
+    bool                  m_scheduled = true;   ///< hold each cue until its due time (false: send at once, the tests)
+    std::atomic<bool>     m_run{ false };       ///< the thread runs
+    std::thread           m_thread;             ///< the sender thread
+    CueRingT              m_queue{ 1024 };      ///< cues waiting to go out
+    std::atomic<uint64_t> m_sent{ 0 };          ///< cues sent
+    std::atomic<uint64_t> m_dropped{ 0 };       ///< cues that could not be sent
+    std::atomic<int64_t>  m_worstLate{ 0 };     ///< the latest a cue went out after its due time, ns
 };
 
-} // namespace phos
+}   // namespace phos

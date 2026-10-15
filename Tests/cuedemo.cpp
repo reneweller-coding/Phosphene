@@ -29,27 +29,29 @@
 #include <thread>
 #include <vector>
 
-#if defined(_WIN32)
-#  ifndef WIN32_LEAN_AND_MEAN
-#    define WIN32_LEAN_AND_MEAN
-#  endif
-#  include <winsock2.h>
-#  include <ws2tcpip.h>
+#if defined( _WIN32 )
+  #ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN
+  #endif
+  #include <winsock2.h>
+  #include <ws2tcpip.h>
 #else
-#  include <arpa/inet.h>
-#  include <netinet/in.h>
-#  include <sys/socket.h>
-#  include <unistd.h>
+  #include <arpa/inet.h>
+  #include <netinet/in.h>
+  #include <sys/socket.h>
+  #include <unistd.h>
 #endif
 
 using namespace phos;
 
-namespace {
+namespace
+{
 
 /** @brief One received datagram: when it arrived and which address it carried. */
-struct Arrival {
-    int64_t m_nanos = 0;      ///< steady_clock, the same clock the due times are on
-    std::string m_address;    ///< the OSC address pattern
+struct Arrival
+{
+    int64_t     m_nanos = 0;   ///< steady_clock, the same clock the due times are on
+    std::string m_address;     ///< the OSC address pattern
 };
 
 /**
@@ -59,72 +61,76 @@ struct Arrival {
  * go through the operating system's loopback, so the receiving end must be a socket and not a
  * function call.
  */
-class UdpIn {
+class UdpIn
+{
 public:
     /**
      * @brief Opens a UDP socket on @p port of the loopback and starts recording; false if it cannot.
      * @param[in] port  the port
      * @return false if it cannot be opened
      */
-    bool open(int port)
+    bool open( int port )
     {
-#if defined(_WIN32)
+#if defined( _WIN32 )
         WSADATA d;
-        WSAStartup(MAKEWORD(2, 2), &d);
-        m_sock = static_cast<intptr_t>(::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP));
-        if (m_sock == static_cast<intptr_t>(INVALID_SOCKET)) return false;
+        WSAStartup( MAKEWORD( 2, 2 ), &d );
+        m_sock = static_cast<intptr_t>( ::socket( AF_INET, SOCK_DGRAM, IPPROTO_UDP ) );
+        if ( m_sock == static_cast<intptr_t>( INVALID_SOCKET ) ) return false;
 #else
-        m_sock = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (m_sock < 0) return false;
+        m_sock = ::socket( AF_INET, SOCK_DGRAM, IPPROTO_UDP );
+        if ( m_sock < 0 ) return false;
 #endif
         sockaddr_in a{};
         a.sin_family = AF_INET;
-        a.sin_port = htons(static_cast<uint16_t>(port));
-        a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        a.sin_port = htons( static_cast<uint16_t>( port ) );
+        a.sin_addr.s_addr = htonl( INADDR_LOOPBACK );
         int rcv = 4 * 1024 * 1024;
-        ::setsockopt(static_cast<int>(m_sock), SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&rcv), sizeof(rcv));
-        if (::bind(static_cast<int>(m_sock), reinterpret_cast<sockaddr*>(&a), sizeof(a)) != 0) return false;
+        ::setsockopt( static_cast<int>( m_sock ), SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char *>( &rcv ),
+                      sizeof( rcv ) );
+        if ( ::bind( static_cast<int>( m_sock ), reinterpret_cast<sockaddr *>( &a ), sizeof( a ) ) != 0 ) return false;
         m_run = true;
-        m_thread = std::thread([this] { loop(); });
+        m_thread = std::thread( [this] { loop(); } );
         return true;
     }
     /** @brief Stops recording and closes the socket. */
     void close()
     {
         m_run = false;
-#if defined(_WIN32)
-        if (m_sock != static_cast<intptr_t>(INVALID_SOCKET)) ::closesocket(static_cast<SOCKET>(m_sock));
+#if defined( _WIN32 )
+        if ( m_sock != static_cast<intptr_t>( INVALID_SOCKET ) ) ::closesocket( static_cast<SOCKET>( m_sock ) );
 #else
-        if (m_sock >= 0) ::close(static_cast<int>(m_sock));
+        if ( m_sock >= 0 ) ::close( static_cast<int>( m_sock ) );
 #endif
-        if (m_thread.joinable()) m_thread.join();
+        if ( m_thread.joinable() ) m_thread.join();
     }
     /**
      * @brief What has arrived so far (read after close()).
      * @return the arrivals
      */
-    const std::vector<Arrival>& arrivals() const { return m_arrivals; }
+    const std::vector<Arrival> &arrivals() const { return m_arrivals; }
 
 private:
     /** @brief The thread: records every datagram that arrives, with its time and its address. */
     void loop()
     {
         char buf[512];
-        while (m_run) {
-            const int n = static_cast<int>(::recv(static_cast<int>(m_sock), buf, sizeof(buf), 0));
-            if (n <= 0) break;
+        while ( m_run )
+        {
+            const int n = static_cast<int>( ::recv( static_cast<int>( m_sock ), buf, sizeof( buf ), 0 ) );
+            if ( n <= 0 ) break;
             Arrival a;
             a.m_nanos = cueNowNanos();
             // The address pattern is the first null-terminated string of the message; that is all
             // this needs to tell the five kinds apart.
-            a.m_address.assign(buf, static_cast<size_t>(std::min<size_t>(static_cast<size_t>(n), std::strlen(buf))));
-            m_arrivals.push_back(a);
+            a.m_address.assign(
+                buf, static_cast<size_t>( std::min<size_t>( static_cast<size_t>( n ), std::strlen( buf ) ) ) );
+            m_arrivals.push_back( a );
         }
     }
-    intptr_t m_sock = -1;   ///< the socket, -1 closed
-    bool m_run = false;   ///< the thread runs
-    std::thread m_thread;   ///< the recording thread
-    std::vector<Arrival> m_arrivals;   ///< what arrived
+    intptr_t             m_sock = -1;     ///< the socket, -1 closed
+    bool                 m_run = false;   ///< the thread runs
+    std::thread          m_thread;        ///< the recording thread
+    std::vector<Arrival> m_arrivals;      ///< what arrived
 };
 
 /**
@@ -132,9 +138,10 @@ private:
  * @param[in] k  the cue's kind
  * @return its OSC address
  */
-const char* addressOf(Cue::KindE k)
+const char *addressOf( Cue::KindE k )
 {
-    switch (k) {
+    switch ( k )
+    {
     case Cue::KindE::BEAT: return "/phos/beat";
     case Cue::KindE::BAR: return "/phos/bar";
     case Cue::KindE::SECTION: return "/phos/section";
@@ -149,11 +156,11 @@ const char* addressOf(Cue::KindE k)
  */
 int usage()
 {
-    std::printf("phos_cuedemo [--bars N] [--seed S] [--host H] [--port P] [--sections] [--realtime] [--nobeats]\n");
+    std::printf( "phos_cuedemo [--bars N] [--seed S] [--host H] [--port P] [--sections] [--realtime] [--nobeats]\n" );
     return 2;
 }
 
-} // namespace
+}   // namespace
 
 /**
  * @brief Sends a demonstration set's cues to a listener (see the file comment).
@@ -161,165 +168,199 @@ int usage()
  * @param[in,out] argv  the arguments: sections to run
  * @return the number of failures
  */
-int main(int argc, char** argv)
+int main( int argc, char **argv )
 {
     // Parallel probes, and the probe cache when ctest names one (phos/Probe.h; round "speed", 20.09.2026).
     phos::probe::configureFromEnvironment();
-    int bars = 96, port = CueDefaultPort;
-    uint64_t seed = 1;
+    int         bars = 96, port = CueDefaultPort;
+    uint64_t    seed = 1;
     std::string host = CueDefaultHost;
-    bool sectionsOnly = false, realtime = false, beats = true;
-    for (int i = 1; i < argc; ++i) {
+    bool        sectionsOnly = false, realtime = false, beats = true;
+    for ( int i = 1; i < argc; ++i )
+    {
         const std::string a = argv[i];
-        auto next = [&]() { return i + 1 < argc ? argv[++i] : ""; };
-        if (a == "--bars") bars = std::atoi(next());
-        else if (a == "--seed") seed = std::strtoull(next(), nullptr, 10);
-        else if (a == "--host") host = next();
-        else if (a == "--port") port = std::atoi(next());
-        else if (a == "--sections") sectionsOnly = true;
-        else if (a == "--realtime") realtime = true;
-        else if (a == "--nobeats") beats = false;
-        else return usage();
+        auto              next = [&]() { return i + 1 < argc ? argv[++i] : ""; };
+        if ( a == "--bars" )
+            bars = std::atoi( next() );
+        else if ( a == "--seed" )
+            seed = std::strtoull( next(), nullptr, 10 );
+        else if ( a == "--host" )
+            host = next();
+        else if ( a == "--port" )
+            port = std::atoi( next() );
+        else if ( a == "--sections" )
+            sectionsOnly = true;
+        else if ( a == "--realtime" )
+            realtime = true;
+        else if ( a == "--nobeats" )
+            beats = false;
+        else
+            return usage();
     }
-    if (bars < 1) return usage();
+    if ( bars < 1 ) return usage();
 
     // The knobs of the demo: a short track so a whole form fits in the run, and the two expensive
     // probe renders off, because what is being demonstrated is the timing of the cues and not the
     // loudness of the mix.
-    ParamStore params;
+    ParamStore  params;
     std::string err;
-    if (!params.parseText("compose.track_bars=128 compose.level_match=Off master.auto_gain=Off", &err)) {
-        std::fprintf(stderr, "knobs: %s\n", err.c_str());
+    if ( !params.parseText( "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off", &err ) )
+    {
+        std::fprintf( stderr, "knobs: %s\n", err.c_str() );
         return 1;
     }
-    Composer composer(seed);
+    Composer composer( seed );
 
-    if (sectionsOnly) {
+    if ( sectionsOnly )
+    {
         // The oracle, printed the way the checker reads it: one line per section mark of the score.
-        for (const SectionMark& m : composer.sections(params, bars)) {
-            const int bar = static_cast<int>(m.m_beat / BeatsPerBar);
-            if (bar >= bars) continue;
-            std::printf("section %d %s %.4f\n", bar, SectionNames[static_cast<int>(m.m_type)], m.m_energy);
+        for ( const SectionMark &m : composer.sections( params, bars ) )
+        {
+            const int bar = static_cast<int>( m.m_beat / BeatsPerBar );
+            if ( bar >= bars ) continue;
+            std::printf( "section %d %s %.4f\n", bar, SectionNames[static_cast<int>( m.m_type )], m.m_energy );
         }
         // The key of every track, in the same form, so the checker can count them.
-        for (int i = 0;; ++i) {
-            const TrackPlan t = composer.track(params, i);
-            if (t.m_firstBar >= bars) break;
-            std::printf("key %d %s %s\n", t.m_firstBar, KeyNames[((t.m_key % 12) + 12) % 12], ScaleNames[t.m_scale]);
-            if (t.m_firstBar + t.m_bars >= bars) break;
+        for ( int i = 0;; ++i )
+        {
+            const TrackPlan t = composer.track( params, i );
+            if ( t.m_firstBar >= bars ) break;
+            std::printf( "key %d %s %s\n", t.m_firstBar, KeyNames[( ( t.m_key % 12 ) + 12 ) % 12],
+                         ScaleNames[t.m_scale] );
+            if ( t.m_firstBar + t.m_bars >= bars ) break;
         }
-        std::printf("bars %d\n", bars);
-        std::fflush(stdout);
+        std::printf( "bars %d\n", bars );
+        std::fflush( stdout );
         return 0;
     }
 
     const double sr = 48000.0;
-    const int block = 256;
-    Engine engine;
-    engine.prepare(sr, block);
-    engine.params().copyValuesFrom(params);
-    Conductor conductor(engine, composer);
+    const int    block = 256;
+    Engine       engine;
+    engine.prepare( sr, block );
+    engine.params().copyValuesFrom( params );
+    Conductor conductor( engine, composer );
 
     CueSender sender;
-    CueTap tap;
-    tap.setSendBeats(beats);
-    CueMarkRingT marks(1024);
-    CueRingT staged(4096);
-    if (!sender.start(host, port, realtime)) {
-        std::fprintf(stderr, "cue bridge: cannot reach %s:%d\n", host.c_str(), port);
+    CueTap    tap;
+    tap.setSendBeats( beats );
+    CueMarkRingT marks( 1024 );
+    CueRingT     staged( 4096 );
+    if ( !sender.start( host, port, realtime ) )
+    {
+        std::fprintf( stderr, "cue bridge: cannot reach %s:%d\n", host.c_str(), port );
         return 1;
     }
 
-    UdpIn in;
-    const bool listening = realtime && in.open(port);
-    if (realtime && !listening) {
-        std::fprintf(stderr, "cannot listen on port %d; the delay cannot be measured\n", port);
+    UdpIn      in;
+    const bool listening = realtime && in.open( port );
+    if ( realtime && !listening )
+    {
+        std::fprintf( stderr, "cannot listen on port %d; the delay cannot be measured\n", port );
         return 1;
     }
 
     // What was staged, with the instant the tap said the listener would hear it. The arrivals are
     // matched against this list in order, which loopback preserves.
-    struct Staged { int64_t m_due; const char* m_address; };
+    struct Staged
+    {
+        int64_t     m_due;
+        const char *m_address;
+    };
     std::vector<Staged> staging;
 
-    const double lead = static_cast<double>(block + engine.latencySamples()) / sr;
-    const int64_t leadNanos = static_cast<int64_t>(lead * 1.0e9);
-    const int64_t blockNanos = static_cast<int64_t>(static_cast<double>(block) / sr * 1.0e9);
-    int lastKey = -1, nextBar = 0;
-    std::vector<float> L(static_cast<size_t>(block)), R(static_cast<size_t>(block));
-    const double endBeat = static_cast<double>(bars) * BeatsPerBar;
-    int64_t playhead = cueNowNanos();
+    const double       lead = static_cast<double>( block + engine.latencySamples() ) / sr;
+    const int64_t      leadNanos = static_cast<int64_t>( lead * 1.0e9 );
+    const int64_t      blockNanos = static_cast<int64_t>( static_cast<double>( block ) / sr * 1.0e9 );
+    int                lastKey = -1, nextBar = 0;
+    std::vector<float> L( static_cast<size_t>( block ) ), R( static_cast<size_t>( block ) );
+    const double       endBeat = static_cast<double>( bars ) * BeatsPerBar;
+    int64_t            playhead = cueNowNanos();
 
-    while (engine.beatPosition() < endBeat) {
-        conductor.pump(engine.params(), 8 * BeatsPerBar);
-        while (nextBar < conductor.nextBar() && nextBar < bars) {
-            const TrackPlan plan = composer.track(params, composer.trackOfBar(params, nextBar));
-            cueMarksForBar(plan.m_form, plan.m_firstBar, plan.m_key, plan.m_scale, nextBar, lastKey, marks);
+    while ( engine.beatPosition() < endBeat )
+    {
+        conductor.pump( engine.params(), 8 * BeatsPerBar );
+        while ( nextBar < conductor.nextBar() && nextBar < bars )
+        {
+            const TrackPlan plan = composer.track( params, composer.trackOfBar( params, nextBar ) );
+            cueMarksForBar( plan.m_form, plan.m_firstBar, plan.m_key, plan.m_scale, nextBar, lastKey, marks );
             // The next track's intro over this one's outro (the DJ overlap, Form.h): its marks too.
-            const int incoming = composer.incomingOfBar(params, nextBar);
-            if (incoming >= 0) {
-                const TrackPlan next = composer.track(params, incoming);
-                cueMarksForBar(next.m_form, next.m_firstBar, next.m_key, next.m_scale, nextBar, lastKey, marks);
+            const int incoming = composer.incomingOfBar( params, nextBar );
+            if ( incoming >= 0 )
+            {
+                const TrackPlan next = composer.track( params, incoming );
+                cueMarksForBar( next.m_form, next.m_firstBar, next.m_key, next.m_scale, nextBar, lastKey, marks );
             }
             ++nextBar;
         }
         const double from = engine.beatPosition();
-        engine.process(L.data(), R.data(), block);
+        engine.process( L.data(), R.data(), block );
         const int64_t now = cueNowNanos();
         // Clamped to the end of the run: the last block overshoots the bar count, and a demo that
         // announced a bar it did not render would be comparing two different things.
-        tap.scan(from, std::min(engine.beatPosition(), endBeat), now, leadNanos, blockNanos, marks, staged);
+        tap.scan( from, std::min( engine.beatPosition(), endBeat ), now, leadNanos, blockNanos, marks, staged );
         Cue c;
-        while (staged.pop(c)) {
-            staging.push_back({ c.m_dueNanos, addressOf(c.m_kind) });
-            sender.push(c);
+        while ( staged.pop( c ) )
+        {
+            staging.push_back( { c.m_dueNanos, addressOf( c.m_kind ) } );
+            sender.push( c );
         }
-        if (realtime) {
+        if ( realtime )
+        {
             // A device consumes one block every block. Waiting here is what makes the wall clock and
             // the musical clock the same clock, which is the only condition under which a due time
             // means anything.
             playhead += blockNanos;
-            cueSleepNanos(playhead - cueNowNanos());
+            cueSleepNanos( playhead - cueNowNanos() );
         }
     }
 
     // Let the queue empty: in the scheduled mode the last cues are still waiting for their instant.
-    cueSleepNanos(realtime ? 400000000 : 200000000);
+    cueSleepNanos( realtime ? 400000000 : 200000000 );
     sender.stop();
-    if (listening) {
-        cueSleepNanos(50000000);
+    if ( listening )
+    {
+        cueSleepNanos( 50000000 );
         in.close();
     }
 
-    std::printf("staged %d\n", static_cast<int>(staging.size()));
-    std::printf("sent %llu\n", static_cast<unsigned long long>(sender.sent()));
-    std::printf("dropped %llu\n", static_cast<unsigned long long>(sender.dropped()));
+    std::printf( "staged %d\n", static_cast<int>( staging.size() ) );
+    std::printf( "sent %llu\n", static_cast<unsigned long long>( sender.sent() ) );
+    std::printf( "dropped %llu\n", static_cast<unsigned long long>( sender.dropped() ) );
 
-    if (listening) {
-        const std::vector<Arrival>& got = in.arrivals();
-        std::vector<double> delay;
-        size_t matched = 0, mismatched = 0;
-        for (size_t i = 0; i < got.size(); ++i) {
-            if (i >= staging.size()) break;
-            if (got[i].m_address != staging[i].m_address) { ++mismatched; continue; }
+    if ( listening )
+    {
+        const std::vector<Arrival> &got = in.arrivals();
+        std::vector<double>         delay;
+        size_t                      matched = 0, mismatched = 0;
+        for ( size_t i = 0; i < got.size(); ++i )
+        {
+            if ( i >= staging.size() ) break;
+            if ( got[i].m_address != staging[i].m_address )
+            {
+                ++mismatched;
+                continue;
+            }
             ++matched;
-            delay.push_back(static_cast<double>(got[i].m_nanos - staging[i].m_due) * 1.0e-6);
+            delay.push_back( static_cast<double>( got[i].m_nanos - staging[i].m_due ) * 1.0e-6 );
         }
-        std::printf("received %d\n", static_cast<int>(got.size()));
-        std::printf("matched %d\n", static_cast<int>(matched));
-        std::printf("mismatched %d\n", static_cast<int>(mismatched));
-        if (!delay.empty()) {
+        std::printf( "received %d\n", static_cast<int>( got.size() ) );
+        std::printf( "matched %d\n", static_cast<int>( matched ) );
+        std::printf( "mismatched %d\n", static_cast<int>( mismatched ) );
+        if ( !delay.empty() )
+        {
             std::vector<double> sorted = delay;
-            std::sort(sorted.begin(), sorted.end());
+            std::sort( sorted.begin(), sorted.end() );
             double sum = 0.0;
-            for (double d : delay) sum += d;
-            std::printf("delay_ms_mean %.3f\n", sum / static_cast<double>(delay.size()));
-            std::printf("delay_ms_median %.3f\n", sorted[sorted.size() / 2]);
-            std::printf("delay_ms_min %.3f\n", sorted.front());
-            std::printf("delay_ms_p95 %.3f\n", sorted[static_cast<size_t>(0.95 * static_cast<double>(sorted.size() - 1))]);
-            std::printf("delay_ms_max %.3f\n", sorted.back());
+            for ( double d : delay ) sum += d;
+            std::printf( "delay_ms_mean %.3f\n", sum / static_cast<double>( delay.size() ) );
+            std::printf( "delay_ms_median %.3f\n", sorted[sorted.size() / 2] );
+            std::printf( "delay_ms_min %.3f\n", sorted.front() );
+            std::printf( "delay_ms_p95 %.3f\n",
+                         sorted[static_cast<size_t>( 0.95 * static_cast<double>( sorted.size() - 1 ) )] );
+            std::printf( "delay_ms_max %.3f\n", sorted.back() );
         }
     }
-    std::fflush(stdout);
+    std::fflush( stdout );
     return 0;
 }

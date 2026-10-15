@@ -21,19 +21,23 @@
 #include <utility>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 /** @brief One preset: where it is listed and what it sets. */
-struct SoundPreset {
+struct SoundPreset
+{
     std::string m_group;   ///< the submenu ("FM", "Wavetables: Ambient", "Resonant", "Liquid", ...)
     std::string m_name;    ///< the entry
     std::string m_text;    ///< `key=value` lines of the module's knobs that differ from their defaults
     /** @name A bank preset's place and sound (26.09.2026; empty for a user preset)
      *  @{ */
-    int m_groupIndex = -1;                             ///< its group within the synth's sixteen
+    int   m_groupIndex = -1;                               ///< its group within the synth's sixteen
     float m_style[5] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };   ///< its group's weight in each style (StyleId order)
-    std::vector<std::pair<int, float>> m_values;       ///< every knob the preset sets (all but presetLeaves), by index in the module
-    float m_trimDb = 0.0f;   ///< what brings it to the loudness of the synth's default knobs (PresetTrims.inl), the composer's offset on Level
+    std::vector<std::pair<int, float>>
+          m_values;   ///< every knob the preset sets (all but presetLeaves), by index in the module
+    float m_trimDb =
+        0.0f;   ///< what brings it to the loudness of the synth's default knobs (PresetTrims.inl), the composer's offset on Level
     /** @} */
 };
 
@@ -44,7 +48,7 @@ struct SoundPreset {
  * @param[in] instance  its instance
  * @return the presets, empty without a bank
  */
-const std::vector<SoundPreset>& factoryPresets(ModuleE module, int instance = 0);
+const std::vector<SoundPreset> &factoryPresets( ModuleE module, int instance = 0 );
 
 /**
  * @brief The bank's presets of a synth, built afresh (PresetBank.cpp; 26.09.2026): 16 groups x 64, the names adjective +
@@ -53,13 +57,13 @@ const std::vector<SoundPreset>& factoryPresets(ModuleE module, int instance = 0)
  * @param[in] instance  its instance
  * @return the presets, empty without a bank
  */
-std::vector<SoundPreset> bankPresets(ModuleE module, int instance = 0);
+std::vector<SoundPreset> bankPresets( ModuleE module, int instance = 0 );
 /**
  * @brief How many keys the bank's table names that no module has (tests); @p first gets the first.
  * @param[out] first  receives the first unknown key, or null
  * @return the number of unknown keys
  */
-int bankUnknownKeys(std::string* first = nullptr);
+int bankUnknownKeys( std::string *first = nullptr );
 
 /**
  * @brief Whether a preset leaves knob @p k of @p module alone: the level, the ducking and, on a polyphonic voice,
@@ -68,7 +72,7 @@ int bankUnknownKeys(std::string* first = nullptr);
  * @param[in] k       the knob's index within the module
  * @return true when presets leave it alone
  */
-bool presetLeaves(ModuleE module, int k);
+bool presetLeaves( ModuleE module, int k );
 
 /**
  * @brief Puts the module's knobs to their defaults and applies @p text (a preset's); presetLeaves() knobs stay.
@@ -78,7 +82,7 @@ bool presetLeaves(ModuleE module, int k);
  * @param[in]     text      the preset's text
  * @return false when a line of the text cannot be read
  */
-bool applySoundPreset(ParamStore& params, ModuleE module, int instance, const std::string& text);
+bool applySoundPreset( ParamStore &params, ModuleE module, int instance, const std::string &text );
 
 /**
  * @brief The module's knobs that differ from their defaults, as `key=value` lines (a user preset); presetLeaves() knobs
@@ -88,6 +92,6 @@ bool applySoundPreset(ParamStore& params, ModuleE module, int instance, const st
  * @param[in] instance  its instance
  * @return the key=value lines
  */
-std::string moduleText(const ParamStore& params, ModuleE module, int instance = 0);
+std::string moduleText( const ParamStore &params, ModuleE module, int instance = 0 );
 
-} // namespace phos
+}   // namespace phos

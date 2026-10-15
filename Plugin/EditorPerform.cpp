@@ -22,102 +22,119 @@
 using namespace phos;
 using namespace phosui;
 
-namespace {
+namespace
+{
 /** @brief The headset's box (01.10.2026, the frame's): the hands as they stand and what they do, live. */
-class HeadsetBox final : public juce::Component, private juce::Timer {
+class HeadsetBox final : public juce::Component, private juce::Timer
+{
 public:
     /**
      * @brief The box for @p p.
      * @param[in,out] p  the processor
      */
-    explicit HeadsetBox(PhospheneProcessor& p) : m_proc(p) { startTimerHz(15); }
+    explicit HeadsetBox( PhospheneProcessor &p ) : m_proc( p ) { startTimerHz( 15 ); }
     /**
      * @brief The frame's headset box with the hands and the macros they play.
      * @param[in,out] g  the graphics context
      */
-    void paint(juce::Graphics& g) override
+    void paint( juce::Graphics &g ) override
     {
-        frame::drawHeadsetBox(g, getLocalBounds(), phosui::skin(), m_proc.headset(), "drop-out", "stutter while held",
-                              "filter sweep", "gate depth", false);
+        frame::drawHeadsetBox( g, getLocalBounds(), phosui::skin(), m_proc.headset(), "drop-out", "stutter while held",
+                               "filter sweep", "gate depth", false );
     }
 
 private:
     /** @brief Repaints while it is shown (15 times a second). */
-    void timerCallback() override { if (isShowing()) repaint(); }
-    PhospheneProcessor& m_proc;   ///< the processor: its headset
+    void timerCallback() override
+    {
+        if ( isShowing() ) repaint();
+    }
+    PhospheneProcessor &m_proc;   ///< the processor: its headset
 };
-} // namespace
+}   // namespace
 
 void PhospheneEditor::buildPerformPage()
 {
-    auto page = std::make_unique<phosui::ControlPage>();
-    const juce::Colour tint = partColour(TAB_PERFORM);
+    auto               page = std::make_unique<phosui::ControlPage>();
+    const juce::Colour tint = partColour( TAB_PERFORM );
 
-    const int gm = page->addGroup("Macros", tint, 16);
-    for (int i = 0; i < NumMacros; ++i) {
-        const MacroE m = static_cast<MacroE>(i);
-        if (macroIsMomentary(m)) {
-            auto b = std::make_unique<juce::TextButton>(MacroNames[i]);
-            b->setTooltip(MacroHelp[i]);
-            if (m == MacroE::STUTTER) {
+    const int gm = page->addGroup( "Macros", tint, 16 );
+    for ( int i = 0; i < NumMacros; ++i )
+    {
+        const MacroE m = static_cast<MacroE>( i );
+        if ( macroIsMomentary( m ) )
+        {
+            auto b = std::make_unique<juce::TextButton>( MacroNames[i] );
+            b->setTooltip( MacroHelp[i] );
+            if ( m == MacroE::STUTTER )
+            {
                 // Held: it starts when the mouse goes down and ends when it comes up.
-                b->setTriggeredOnMouseDown(true);
-                juce::TextButton* raw = b.get();
-                b->onStateChange = [this, raw] { m_proc.setMacro(MacroE::STUTTER, raw->isDown() ? 1.0f : 0.0f); };
-            } else {
-                b->onClick = [this, m] { m_proc.setMacro(m, 1.0f); };
+                b->setTriggeredOnMouseDown( true );
+                juce::TextButton *raw = b.get();
+                b->onStateChange = [this, raw] { m_proc.setMacro( MacroE::STUTTER, raw->isDown() ? 1.0f : 0.0f ); };
+            }
+            else
+            {
+                b->onClick = [this, m] { m_proc.setMacro( m, 1.0f ); };
             }
             m_macroButton[i] = b.get();
-            page->enableMidiLearn(m_proc, *b, m_proc.params().count() + i);   // a macro is a MIDI target like any knob
-            page->addControl(gm, std::move(b), "", 4, true);
-        } else {
-            auto s = std::make_unique<juce::Slider>(juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox);
+            page->enableMidiLearn( m_proc, *b,
+                                   m_proc.params().count() + i );   // a macro is a MIDI target like any knob
+            page->addControl( gm, std::move( b ), "", 4, true );
+        }
+        else
+        {
+            auto s =
+                std::make_unique<juce::Slider>( juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox );
             const bool bipolar = m == MacroE::FILTER_SWEEP;
-            s->setRange(bipolar ? -1.0 : 0.0, 1.0, 0.0);
-            s->setNumDecimalPlacesToDisplay(2);   // the ring holds a number, not a float's every digit
-            s->setValue(0.0, juce::dontSendNotification);
-            s->setDoubleClickReturnValue(true, 0.0);   // back to neutral, which is what a macro needs most
-            if (bipolar) s->getProperties().set("bipolar", true);
-            s->setTooltip(MacroHelp[i]);
-            juce::Slider* raw = s.get();
-            s->onValueChange = [this, m, raw] { m_proc.setMacro(m, static_cast<float>(raw->getValue())); };
+            s->setRange( bipolar ? -1.0 : 0.0, 1.0, 0.0 );
+            s->setNumDecimalPlacesToDisplay( 2 );   // the ring holds a number, not a float's every digit
+            s->setValue( 0.0, juce::dontSendNotification );
+            s->setDoubleClickReturnValue( true, 0.0 );   // back to neutral, which is what a macro needs most
+            if ( bipolar ) s->getProperties().set( "bipolar", true );
+            s->setTooltip( MacroHelp[i] );
+            juce::Slider *raw = s.get();
+            s->onValueChange = [this, m, raw] { m_proc.setMacro( m, static_cast<float>( raw->getValue() ) ); };
             m_macroSlider[i] = s.get();
-            page->enableMidiLearn(m_proc, *s, m_proc.params().count() + i);
-            page->addControl(gm, std::move(s), MacroNames[i], 4);
+            page->enableMidiLearn( m_proc, *s, m_proc.params().count() + i );
+            page->addControl( gm, std::move( s ), MacroNames[i], 4 );
         }
     }
 
     // What each macro moves, generated from the same table the manual prints: four lines, one per
     // macro, so the page cannot drift from what the processor does.
-    const int gw = page->addGroup("What they move", tint, 16);
+    const int gw = page->addGroup( "What they move", tint, 16 );
     {
         juce::String all;
-        for (int i = 0; i < NumMacros; ++i) {
+        for ( int i = 0; i < NumMacros; ++i )
+        {
             PhospheneProcessor::MacroTarget t[PhospheneProcessor::MaxMacroTargets];
-            const int n = m_proc.macroTargets(static_cast<MacroE>(i), 1.0f, t);
-            if (i > 0) all << "\n";
+            const int                       n = m_proc.macroTargets( static_cast<MacroE>( i ), 1.0f, t );
+            if ( i > 0 ) all << "\n";
             all << MacroNames[i] << ":  ";
-            for (int k = 0; k < n; ++k) {
-                if (k > 0) all << ", ";
-                all << juce::String(m_proc.params().key(t[k].m_param));
-                if (!t[k].m_absolute) all << " " << (t[k].m_value >= 0 ? "+" : "") << juce::String(t[k].m_value, 2);
+            for ( int k = 0; k < n; ++k )
+            {
+                if ( k > 0 ) all << ", ";
+                all << juce::String( m_proc.params().key( t[k].m_param ) );
+                if ( !t[k].m_absolute )
+                    all << " " << ( t[k].m_value >= 0 ? "+" : "" ) << juce::String( t[k].m_value, 2 );
             }
-            if (n == 0) all << "nothing";
+            if ( n == 0 ) all << "nothing";
         }
-        auto label = std::make_unique<juce::Label>(juce::String(), all);
-        label->setJustificationType(juce::Justification::topLeft);
-        label->setColour(juce::Label::textColourId, Dim);
-        label->setMinimumHorizontalScale(0.7f);
-        page->addControl(gw, std::move(label), "", 16, true);
+        auto label = std::make_unique<juce::Label>( juce::String(), all );
+        label->setJustificationType( juce::Justification::topLeft );
+        label->setColour( juce::Label::textColourId, Dim );
+        label->setMinimumHorizontalScale( 0.7f );
+        page->addControl( gw, std::move( label ), "", 16, true );
     }
 
-    const int gs = page->addGroup("State", tint, 16);
+    const int gs = page->addGroup( "State", tint, 16 );
     {
-        auto note = std::make_unique<juce::Label>(juce::String(), "neutral");
-        note->setJustificationType(juce::Justification::centredLeft);
-        note->setColour(juce::Label::textColourId, Dim);
+        auto note = std::make_unique<juce::Label>( juce::String(), "neutral" );
+        note->setJustificationType( juce::Justification::centredLeft );
+        note->setColour( juce::Label::textColourId, Dim );
         m_macroNote = note.get();
-        page->addControl(gs, std::move(note), "", 16, true);
+        page->addControl( gs, std::move( note ), "", 16, true );
     }
 
     // MIDI (23.09.2026, phos/MidiMap.h): every knob, switch and chooser in the plugin -- and the four macros above --
@@ -127,117 +144,151 @@ void PhospheneEditor::buildPerformPage()
     // has it. Replace leaves out the generator's notes of that voice, Layer plays over them.
     // With the composer switch and, since 02.10.2026, the options appended to the mix module: the voice under a split,
     // the split key, Scale Lock, the velocity curve -- all off by default.
-    const int mb = m_proc.params().base(ModuleE::MIX);
-    const int gk = page->addParamsGroup(m_proc, "Keyboard", tint, 16,
-                                        { mb + mix::KEYBOARD_PART, mb + mix::KEYBOARD_MODE, mb + mix::COMPOSER, mb + mix::KEYBOARD_LOWER,
-                                          mb + mix::KEYBOARD_SPLIT, mb + mix::KEYBOARD_SCALE, mb + mix::KEYBOARD_VELOCITY });
+    const int mb = m_proc.params().base( ModuleE::MIX );
+    const int gk = page->addParamsGroup( m_proc, "Keyboard", tint, 16,
+                                         { mb + mix::KEYBOARD_PART, mb + mix::KEYBOARD_MODE, mb + mix::COMPOSER,
+                                           mb + mix::KEYBOARD_LOWER, mb + mix::KEYBOARD_SPLIT, mb + mix::KEYBOARD_SCALE,
+                                           mb + mix::KEYBOARD_VELOCITY } );
     {
-        auto note = std::make_unique<juce::Label>(juce::String(),
+        auto note = std::make_unique<juce::Label>(
+            juce::String(),
             "Notes from a MIDI keyboard play this voice, with the sound its page has. By channel: 1 acid, 2 lead, "
             "3 counter, 4 arp, 5 stab, 6 pad, 7 drone, 8 bass, 10 the kit (C1 the kick, C#1 .. C2 the twelve lanes). "
-            "Plays while the set runs.");
-        note->setJustificationType(juce::Justification::topLeft);
-        note->setColour(juce::Label::textColourId, Dim);
-        note->setMinimumHorizontalScale(0.7f);
-        page->addControl(gk, std::move(note), "", 12, true);
+            "Plays while the set runs." );
+        note->setJustificationType( juce::Justification::topLeft );
+        note->setColour( juce::Label::textColourId, Dim );
+        note->setMinimumHorizontalScale( 0.7f );
+        page->addControl( gk, std::move( note ), "", 12, true );
     }
-    const int gx = page->addGroup("MIDI", tint, 16);
+    const int gx = page->addGroup( "MIDI", tint, 16 );
     {
-        auto note = std::make_unique<juce::Label>(juce::String(), "no controller learned");
-        note->setJustificationType(juce::Justification::topLeft);
-        note->setColour(juce::Label::textColourId, Dim);
-        note->setMinimumHorizontalScale(0.7f);
+        auto note = std::make_unique<juce::Label>( juce::String(), "no controller learned" );
+        note->setJustificationType( juce::Justification::topLeft );
+        note->setColour( juce::Label::textColourId, Dim );
+        note->setMinimumHorizontalScale( 0.7f );
         m_midiNote = note.get();
-        page->addControl(gx, std::move(note), "", 12, true);
-        auto clear = std::make_unique<juce::TextButton>("Forget all");
-        clear->setTooltip("Releases every controller from every parameter");
+        page->addControl( gx, std::move( note ), "", 12, true );
+        auto clear = std::make_unique<juce::TextButton>( "Forget all" );
+        clear->setTooltip( "Releases every controller from every parameter" );
         clear->onClick = [this] { m_proc.midiMap().clear(); };
-        page->addControl(gx, std::move(clear), "", 4, true);
+        page->addControl( gx, std::move( clear ), "", 4, true );
     }
 
     // The headset (01.10.2026, the frame): shown while a Quest in bridge mode sends its hands, or always if the settings
     // say so (refreshHeader).
-    m_headsetGroup = page->addGroup("Headset", tint, 8);
-    page->addControl(m_headsetGroup, std::make_unique<HeadsetBox>(m_proc), "", 8, true, 2);
-    page->setGroupVisible(m_headsetGroup, m_proc.headset().shown(frame::Settings::of("Phosphene").headset()));
+    m_headsetGroup = page->addGroup( "Headset", tint, 8 );
+    page->addControl( m_headsetGroup, std::make_unique<HeadsetBox>( m_proc ), "", 8, true, 2 );
+    page->setGroupVisible( m_headsetGroup, m_proc.headset().shown( frame::Settings::of( "Phosphene" ).headset() ) );
 
     // Rating what is playing (23.09.2026, phos/Rating.h): "good here" and "bad here" write one line each --
     // seed, track, bar, section, style, the note -- into ratings.tsv in the user's application data folder,
     // so that a listening session ends in bars instead of in prose. Tools/ratings.py reads the file back.
-    const int gr = page->addGroup("Rate what you hear", tint, 16);
+    const int gr = page->addGroup( "Rate what you hear", tint, 16 );
     {
         auto note = std::make_unique<juce::TextEditor>();
-        note->setTextToShowWhenEmpty("note (optional): what is good or wrong here", Dim);
-        note->setTooltip("Written with the next verdict and then cleared.");
+        note->setTextToShowWhenEmpty( "note (optional): what is good or wrong here", Dim );
+        note->setTooltip( "Written with the next verdict and then cleared." );
         m_ratingNote = note.get();
-        page->addControl(gr, std::move(note), "", 8, true);
-        static const char* const Labels[2] = { "Good here", "Bad here" };
-        static const char* const Help[2] = { "Writes 'good' for the bar that is playing now into ratings.tsv",
-                                              "Writes 'bad' for the bar that is playing now into ratings.tsv" };
-        for (int i = 0; i < 2; ++i) {
-            auto b = std::make_unique<juce::TextButton>(Labels[i]);
-            b->setTooltip(Help[i]);
+        page->addControl( gr, std::move( note ), "", 8, true );
+        static const char *const Labels[2] = { "Good here", "Bad here" };
+        static const char *const Help[2] = { "Writes 'good' for the bar that is playing now into ratings.tsv",
+                                             "Writes 'bad' for the bar that is playing now into ratings.tsv" };
+        for ( int i = 0; i < 2; ++i )
+        {
+            auto b = std::make_unique<juce::TextButton>( Labels[i] );
+            b->setTooltip( Help[i] );
             const int verdict = i == 0 ? 1 : -1;
-            b->onClick = [this, verdict] { rateNow(verdict); };
+            b->onClick = [this, verdict] { rateNow( verdict ); };
             m_ratingButton[i] = b.get();
-            page->addControl(gr, std::move(b), "", 4, true);
+            page->addControl( gr, std::move( b ), "", 4, true );
         }
-        auto last = std::make_unique<juce::Label>(juce::String(), "nothing rated yet");
-        last->setJustificationType(juce::Justification::centredLeft);
-        last->setColour(juce::Label::textColourId, Dim);
-        last->setMinimumHorizontalScale(0.7f);
+        auto last = std::make_unique<juce::Label>( juce::String(), "nothing rated yet" );
+        last->setJustificationType( juce::Justification::centredLeft );
+        last->setColour( juce::Label::textColourId, Dim );
+        last->setMinimumHorizontalScale( 0.7f );
         m_ratingLast = last.get();
-        page->addControl(gr, std::move(last), "", 16, true);
+        page->addControl( gr, std::move( last ), "", 16, true );
 
         // Learning from the verdicts (23.09.2026, phos/Preferences.h): the fit is shown before it is applied.
-        auto learn = std::make_unique<juce::TextButton>("Learn from my ratings...");
-        learn->setTooltip("Counts your good and bad verdicts per decision (style, form, lead archetype, arp, counter, harmony) "
-                          "and lets the composer choose what you liked more often");
-        learn->onClick = [this] {
-            int verdicts = 0;
-            const Preferences prefs = m_proc.fitFromRatings(&verdicts);
-            juce::String summary;
-            if (prefs.empty()) summary << "Nothing to learn yet: " << verdicts << " verdicts with their decisions. Rate a few bars first (Good here / Bad here).";
-            else summary << verdicts << " verdicts give " << static_cast<int>(prefs.size()) << " weights (positive: chosen more often):\n\n" << juce::String(prefs.toText()).fromFirstOccurrenceOf("\n", false, false);
-            m_galleryAsk = std::make_unique<juce::AlertWindow>("Learn from my ratings", summary, juce::MessageBoxIconType::NoIcon);
-            if (!prefs.empty()) m_galleryAsk->addButton("Apply", 1, juce::KeyPress(juce::KeyPress::returnKey));
-            m_galleryAsk->addButton(prefs.empty() ? "OK" : "Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
-            m_galleryAsk->enterModalState(true, juce::ModalCallbackFunction::create([this, prefs](int result) {
-                if (result == 1) m_proc.applyPreferences(prefs);
-                if (m_prefsNote != nullptr) m_prefsNote->setText(m_proc.preferencesSummary(), juce::dontSendNotification);
-                juce::MessageManager::callAsync([safe = juce::Component::SafePointer<PhospheneEditor>(this)] { if (safe != nullptr) safe->m_galleryAsk.reset(); });
-            }), false);
+        auto learn = std::make_unique<juce::TextButton>( "Learn from my ratings..." );
+        learn->setTooltip(
+            "Counts your good and bad verdicts per decision (style, form, lead archetype, arp, counter, harmony) "
+            "and lets the composer choose what you liked more often" );
+        learn->onClick = [this]
+        {
+            int               verdicts = 0;
+            const Preferences prefs = m_proc.fitFromRatings( &verdicts );
+            juce::String      summary;
+            if ( prefs.empty() )
+                summary << "Nothing to learn yet: " << verdicts
+                        << " verdicts with their decisions. Rate a few bars first (Good here / Bad here).";
+            else
+                summary << verdicts << " verdicts give " << static_cast<int>( prefs.size() )
+                        << " weights (positive: chosen more often):\n\n"
+                        << juce::String( prefs.toText() ).fromFirstOccurrenceOf( "\n", false, false );
+            m_galleryAsk = std::make_unique<juce::AlertWindow>( "Learn from my ratings", summary,
+                                                                juce::MessageBoxIconType::NoIcon );
+            if ( !prefs.empty() ) m_galleryAsk->addButton( "Apply", 1, juce::KeyPress( juce::KeyPress::returnKey ) );
+            m_galleryAsk->addButton( prefs.empty() ? "OK" : "Cancel", 0, juce::KeyPress( juce::KeyPress::escapeKey ) );
+            m_galleryAsk->enterModalState( true,
+                                           juce::ModalCallbackFunction::create(
+                                               [this, prefs]( int result )
+                                               {
+                                                   if ( result == 1 ) m_proc.applyPreferences( prefs );
+                                                   if ( m_prefsNote != nullptr )
+                                                       m_prefsNote->setText( m_proc.preferencesSummary(),
+                                                                             juce::dontSendNotification );
+                                                   juce::MessageManager::callAsync(
+                                                       [safe = juce::Component::SafePointer<PhospheneEditor>( this )]
+                                                       {
+                                                           if ( safe != nullptr ) safe->m_galleryAsk.reset();
+                                                       } );
+                                               } ),
+                                           false );
         };
-        page->addControl(gr, std::move(learn), "", 4, true);
-        auto forget = std::make_unique<juce::TextButton>("Forget learned preferences...");
-        forget->setTooltip("Puts preferences.txt aside (as preferences.txt.old) and lets the styles choose on their own again");
-        forget->onClick = [this] {
-            m_galleryAsk = std::make_unique<juce::AlertWindow>("Forget learned preferences",
-                                                              "The composer goes back to the styles' own choices. The file is kept as preferences.txt.old.",
-                                                              juce::MessageBoxIconType::NoIcon);
-            m_galleryAsk->addButton("Forget", 1, juce::KeyPress(juce::KeyPress::returnKey));
-            m_galleryAsk->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
-            m_galleryAsk->enterModalState(true, juce::ModalCallbackFunction::create([this](int result) {
-                if (result == 1) m_proc.forgetPreferences();
-                if (m_prefsNote != nullptr) m_prefsNote->setText(m_proc.preferencesSummary(), juce::dontSendNotification);
-                juce::MessageManager::callAsync([safe = juce::Component::SafePointer<PhospheneEditor>(this)] { if (safe != nullptr) safe->m_galleryAsk.reset(); });
-            }), false);
+        page->addControl( gr, std::move( learn ), "", 4, true );
+        auto forget = std::make_unique<juce::TextButton>( "Forget learned preferences..." );
+        forget->setTooltip(
+            "Puts preferences.txt aside (as preferences.txt.old) and lets the styles choose on their own again" );
+        forget->onClick = [this]
+        {
+            m_galleryAsk = std::make_unique<juce::AlertWindow>(
+                "Forget learned preferences",
+                "The composer goes back to the styles' own choices. The file is kept as preferences.txt.old.",
+                juce::MessageBoxIconType::NoIcon );
+            m_galleryAsk->addButton( "Forget", 1, juce::KeyPress( juce::KeyPress::returnKey ) );
+            m_galleryAsk->addButton( "Cancel", 0, juce::KeyPress( juce::KeyPress::escapeKey ) );
+            m_galleryAsk->enterModalState( true,
+                                           juce::ModalCallbackFunction::create(
+                                               [this]( int result )
+                                               {
+                                                   if ( result == 1 ) m_proc.forgetPreferences();
+                                                   if ( m_prefsNote != nullptr )
+                                                       m_prefsNote->setText( m_proc.preferencesSummary(),
+                                                                             juce::dontSendNotification );
+                                                   juce::MessageManager::callAsync(
+                                                       [safe = juce::Component::SafePointer<PhospheneEditor>( this )]
+                                                       {
+                                                           if ( safe != nullptr ) safe->m_galleryAsk.reset();
+                                                       } );
+                                               } ),
+                                           false );
         };
-        page->addControl(gr, std::move(forget), "", 4, true);
-        auto pn = std::make_unique<juce::Label>(juce::String(), m_proc.preferencesSummary());
-        pn->setJustificationType(juce::Justification::centredLeft);
-        pn->setColour(juce::Label::textColourId, Dim);
-        pn->setMinimumHorizontalScale(0.6f);
+        page->addControl( gr, std::move( forget ), "", 4, true );
+        auto pn = std::make_unique<juce::Label>( juce::String(), m_proc.preferencesSummary() );
+        pn->setJustificationType( juce::Justification::centredLeft );
+        pn->setColour( juce::Label::textColourId, Dim );
+        pn->setMinimumHorizontalScale( 0.6f );
         m_prefsNote = pn.get();
-        page->addControl(gr, std::move(pn), "", 8, true);
+        page->addControl( gr, std::move( pn ), "", 8, true );
     }
-    m_pages[static_cast<size_t>(TAB_PERFORM)] = std::move(page);
+    m_pages[static_cast<size_t>( TAB_PERFORM )] = std::move( page );
 }
 
-void PhospheneEditor::rateNow(int verdict)
+void PhospheneEditor::rateNow( int verdict )
 {
     const TransportView tv = m_proc.transport();
-    RatingEntry e;
+    RatingEntry         e;
     e.m_seed = m_proc.seed();
     e.m_track = tv.m_track + 1;
     e.m_bar = tv.m_bar + 1;
@@ -245,82 +296,95 @@ void PhospheneEditor::rateNow(int verdict)
     e.m_verdict = verdict;
     e.m_source = "plugin";
     TrackPlan plan;
-    if (m_proc.tryReadTrack(tv.m_track, plan) && plan.m_form.m_count > 0) {
-        const int si = sectionOfBar(plan.m_form, tv.m_barInTrack);
-        e.m_section = SectionNames[static_cast<int>(plan.m_form.m_section[si].m_type)];
-        e.m_style = StyleNames[std::clamp(plan.m_style, 0, NumStyles - 1)];
-    }
-    if (m_ratingNote != nullptr) e.m_note = m_ratingNote->getText().toStdString();
-    // What this verdict teaches: the composer's decisions at the bar (phos/Preferences.h, decisionFeatures).
-    if (plan.m_form.m_count > 0) e.m_features = decisionFeatures(plan, tv.m_barInTrack);
+    if ( m_proc.tryReadTrack( tv.m_track, plan ) && plan.m_form.m_count > 0 )
     {
-        const std::time_t now = std::time(nullptr);
-        std::tm local{};
-#if defined(_WIN32)
-        localtime_s(&local, &now);
+        const int si = sectionOfBar( plan.m_form, tv.m_barInTrack );
+        e.m_section = SectionNames[static_cast<int>( plan.m_form.m_section[si].m_type )];
+        e.m_style = StyleNames[std::clamp( plan.m_style, 0, NumStyles - 1 )];
+    }
+    if ( m_ratingNote != nullptr ) e.m_note = m_ratingNote->getText().toStdString();
+    // What this verdict teaches: the composer's decisions at the bar (phos/Preferences.h, decisionFeatures).
+    if ( plan.m_form.m_count > 0 ) e.m_features = decisionFeatures( plan, tv.m_barInTrack );
+    {
+        const std::time_t now = std::time( nullptr );
+        std::tm           local{};
+#if defined( _WIN32 )
+        localtime_s( &local, &now );
 #else
-        localtime_r(&now, &local);
+        localtime_r( &now, &local );
 #endif
         char buf[32];
-        std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &local);
+        std::strftime( buf, sizeof( buf ), "%Y-%m-%dT%H:%M:%S", &local );
         e.m_time = buf;
     }
     const juce::File file = m_proc.ratingsFile();
-    const bool ok = appendRating(file.getFullPathName().toRawUTF8(), e);
-    if (m_ratingNote != nullptr && ok) m_ratingNote->clear();
-    if (m_ratingLast != nullptr) {
+    const bool       ok = appendRating( file.getFullPathName().toRawUTF8(), e );
+    if ( m_ratingNote != nullptr && ok ) m_ratingNote->clear();
+    if ( m_ratingLast != nullptr )
+    {
         juce::String s;
-        if (ok) s << (verdict > 0 ? "good" : "bad") << ": track " << e.m_track << ", bar " << e.m_barInTrack << " (" << e.m_section << ", " << e.m_style
-                  << ")  ->  " << file.getFullPathName();
-        else s << "could not write " << file.getFullPathName();
-        m_ratingLast->setText(s, juce::dontSendNotification);
+        if ( ok )
+            s << ( verdict > 0 ? "good" : "bad" ) << ": track " << e.m_track << ", bar " << e.m_barInTrack << " ("
+              << e.m_section << ", " << e.m_style << ")  ->  " << file.getFullPathName();
+        else
+            s << "could not write " << file.getFullPathName();
+        m_ratingLast->setText( s, juce::dontSendNotification );
     }
 }
 
 void PhospheneEditor::refreshPerformPage()
 {
-    if (m_macroNote == nullptr) return;
+    if ( m_macroNote == nullptr ) return;
     // A momentary macro lets go by itself (a drop-out on the next bar line), so the page reports
     // what the processor holds rather than what the mouse last did.
     juce::String s;
-    for (int i = 0; i < NumMacros; ++i) {
-        const float v = m_proc.macroValue(static_cast<MacroE>(i));
-        if (m_macroSlider[i] != nullptr && std::fabs(static_cast<float>(m_macroSlider[i]->getValue()) - v) > 1.0e-4f)
-            m_macroSlider[i]->setValue(v, juce::dontSendNotification);
-        if (m_macroButton[i] != nullptr) {
-            m_macroButton[i]->setToggleState(v > 0.0f, juce::dontSendNotification);
+    for ( int i = 0; i < NumMacros; ++i )
+    {
+        const float v = m_proc.macroValue( static_cast<MacroE>( i ) );
+        if ( m_macroSlider[i] != nullptr &&
+             std::fabs( static_cast<float>( m_macroSlider[i]->getValue() ) - v ) > 1.0e-4f )
+            m_macroSlider[i]->setValue( v, juce::dontSendNotification );
+        if ( m_macroButton[i] != nullptr )
+        {
+            m_macroButton[i]->setToggleState( v > 0.0f, juce::dontSendNotification );
             // 22.09.2026: a drop-out means "one bar, from here", so with the transport standing
             // still there is no bar line to let go on and the processor clears the macro in the same
             // call that sets it (PluginProcessor.cpp, serviceMacros). Pressing it then did exactly
             // nothing and said nothing -- a button that looks alive and is not. It now greys out
             // while nothing is playing, so the page says why instead of swallowing the press.
-            if (static_cast<MacroE>(i) == MacroE::DROP_OUT)
-                m_macroButton[i]->setEnabled(m_proc.transport().m_playing);
+            if ( static_cast<MacroE>( i ) == MacroE::DROP_OUT )
+                m_macroButton[i]->setEnabled( m_proc.transport().m_playing );
         }
-        if (v == 0.0f) continue;
-        if (s.isNotEmpty()) s << "   -   ";
-        s << MacroNames[i] << " " << juce::String(v, 2);
+        if ( v == 0.0f ) continue;
+        if ( s.isNotEmpty() ) s << "   -   ";
+        s << MacroNames[i] << " " << juce::String( v, 2 );
     }
-    m_macroNote->setText(s.isEmpty() ? juce::String("neutral: every knob is where you left it") : s,
-                        juce::dontSendNotification);
+    m_macroNote->setText( s.isEmpty() ? juce::String( "neutral: every knob is where you left it" ) : s,
+                          juce::dontSendNotification );
 
     // MIDI learn: what is armed, and the bindings (redrawn only when the table changed).
-    if (m_midiNote != nullptr) {
-        const phos::MidiMap& map = m_proc.midiMap();
-        const int armed = map.armed();
-        const uint32_t rev = map.revision() * 2u + (armed >= 0 ? 1u : 0u);
-        if (rev != m_midiShown || armed != m_midiArmedShown) {
+    if ( m_midiNote != nullptr )
+    {
+        const phos::MidiMap &map = m_proc.midiMap();
+        const int            armed = map.armed();
+        const uint32_t       rev = map.revision() * 2u + ( armed >= 0 ? 1u : 0u );
+        if ( rev != m_midiShown || armed != m_midiArmedShown )
+        {
             m_midiShown = rev;
             m_midiArmedShown = armed;
             juce::String t;
-            if (armed >= 0) t << "Learning " << m_proc.midiTargetName(armed) << ": move a knob or fader on your controller.\n";
+            if ( armed >= 0 )
+                t << "Learning " << m_proc.midiTargetName( armed ) << ": move a knob or fader on your controller.\n";
             const std::vector<phos::MidiBinding> b = map.bindings();
-            if (b.empty() && armed < 0) t << "No controller learned. Right-click any knob, switch or chooser and choose MIDI Learn.";
-            for (size_t k = 0; k < b.size(); ++k) {
-                if (k > 0) t << ",  ";
-                t << "CC " << b[k].m_cc << "/" << (b[k].m_channel + 1) << " " << m_proc.midiTargetName(b[k].m_target);
+            if ( b.empty() && armed < 0 )
+                t << "No controller learned. Right-click any knob, switch or chooser and choose MIDI Learn.";
+            for ( size_t k = 0; k < b.size(); ++k )
+            {
+                if ( k > 0 ) t << ",  ";
+                t << "CC " << b[k].m_cc << "/" << ( b[k].m_channel + 1 ) << " "
+                  << m_proc.midiTargetName( b[k].m_target );
             }
-            m_midiNote->setText(t, juce::dontSendNotification);
+            m_midiNote->setText( t, juce::dontSendNotification );
         }
     }
 }

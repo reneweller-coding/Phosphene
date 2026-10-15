@@ -26,51 +26,54 @@
 #include "phos/Filters.h"
 #include "phos/Vec.h"
 
-namespace phos {
+namespace phos
+{
 
-constexpr int PolyVoices = 8;                              ///< voices per engine
-constexpr int PolyUnison = 7;                              ///< oscillators per voice
-constexpr int PolySlotCount = PolyVoices * PolyUnison;       ///< 56 oscillator slots
-constexpr int PolyLanes = PolyVoices * 2;                 ///< 16 filter channels
-constexpr int PolyBlock = 16;                              ///< longest segment with constant coefficients
+constexpr int PolyVoices = 8;                            ///< voices per engine
+constexpr int PolyUnison = 7;                            ///< oscillators per voice
+constexpr int PolySlotCount = PolyVoices * PolyUnison;   ///< 56 oscillator slots
+constexpr int PolyLanes = PolyVoices * 2;                ///< 16 filter channels
+constexpr int PolyBlock = 16;                            ///< longest segment with constant coefficients
 
 /** @brief Oscillator slot state and coefficients (structure of arrays). */
-struct PolySlots {
-    alignas(32) float m_ph[PolySlotCount] = {};       ///< carrier phase [0, 1)
-    alignas(32) float m_mph[PolySlotCount] = {};      ///< modulator phase [0, 1)
-    alignas(32) float m_idx[PolySlotCount] = {};      ///< decaying part of the FM index
-    alignas(32) float m_dt[PolySlotCount] = {};       ///< carrier phase step
-    alignas(32) float m_inv[PolySlotCount] = {};      ///< 1 / dt
-    alignas(32) float m_mdt[PolySlotCount] = {};      ///< modulator phase step
-    alignas(32) float m_idxDecay[PolySlotCount] = {}; ///< FM index factor per sample
-    alignas(32) float m_idxFloor[PolySlotCount] = {}; ///< FM index that remains
-    alignas(32) float m_pw[PolySlotCount] = {};       ///< pulse width
-    alignas(32) float m_wSaw[PolySlotCount] = {};   ///< the saw's weight in the source
-    alignas(32) float m_wPulse[PolySlotCount] = {};   ///< the pulse's weight
-    alignas(32) float m_wFm[PolySlotCount] = {};   ///< the FM's weight
-    alignas(32) float m_wWt[PolySlotCount] = {};   ///< the wavetable's weight
-    alignas(32) float m_gL[PolySlotCount] = {};   ///< the slot's gain and pan, left
-    alignas(32) float m_gR[PolySlotCount] = {};   ///< ... right
+struct PolySlots
+{
+    alignas( 32 ) float m_ph[PolySlotCount] = {};         ///< carrier phase [0, 1)
+    alignas( 32 ) float m_mph[PolySlotCount] = {};        ///< modulator phase [0, 1)
+    alignas( 32 ) float m_idx[PolySlotCount] = {};        ///< decaying part of the FM index
+    alignas( 32 ) float m_dt[PolySlotCount] = {};         ///< carrier phase step
+    alignas( 32 ) float m_inv[PolySlotCount] = {};        ///< 1 / dt
+    alignas( 32 ) float m_mdt[PolySlotCount] = {};        ///< modulator phase step
+    alignas( 32 ) float m_idxDecay[PolySlotCount] = {};   ///< FM index factor per sample
+    alignas( 32 ) float m_idxFloor[PolySlotCount] = {};   ///< FM index that remains
+    alignas( 32 ) float m_pw[PolySlotCount] = {};         ///< pulse width
+    alignas( 32 ) float m_wSaw[PolySlotCount] = {};       ///< the saw's weight in the source
+    alignas( 32 ) float m_wPulse[PolySlotCount] = {};     ///< the pulse's weight
+    alignas( 32 ) float m_wFm[PolySlotCount] = {};        ///< the FM's weight
+    alignas( 32 ) float m_wWt[PolySlotCount] = {};        ///< the wavetable's weight
+    alignas( 32 ) float m_gL[PolySlotCount] = {};         ///< the slot's gain and pan, left
+    alignas( 32 ) float m_gR[PolySlotCount] = {};         ///< ... right
 };
 
 /** @brief Voice channel state and coefficients. */
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4324)   // padded to its 32-byte lanes on purpose
+#if defined( _MSC_VER )
+  #pragma warning( push )
+  #pragma warning( disable : 4324 )   // padded to its 32-byte lanes on purpose
 #endif
-struct PolyChannels {
-    alignas(32) float m_ic1[PolyLanes] = {};   ///< the low pass's first state
-    alignas(32) float m_ic2[PolyLanes] = {};   ///< ... its second
-    alignas(32) float m_ha1[PolyLanes] = {};   ///< the high pass's first section: first state
-    alignas(32) float m_ha2[PolyLanes] = {};   ///< ... second state
-    alignas(32) float m_hb1[PolyLanes] = {};   ///< the high pass's second section: first state
-    alignas(32) float m_hb2[PolyLanes] = {};   ///< ... second state
-    alignas(32) float m_a1[PolyLanes] = {};   ///< the low pass's coefficient a1
-    alignas(32) float m_a2[PolyLanes] = {};   ///< ... a2
-    alignas(32) float m_a3[PolyLanes] = {};   ///< ... a3
-    alignas(32) float m_c1[PolyLanes] = {};   ///< the high pass's coefficient c1
-    alignas(32) float m_c2[PolyLanes] = {};   ///< ... c2
-    alignas(32) float m_c3[PolyLanes] = {};   ///< ... c3 (damping sqrt 2)
+struct PolyChannels
+{
+    alignas( 32 ) float m_ic1[PolyLanes] = {};   ///< the low pass's first state
+    alignas( 32 ) float m_ic2[PolyLanes] = {};   ///< ... its second
+    alignas( 32 ) float m_ha1[PolyLanes] = {};   ///< the high pass's first section: first state
+    alignas( 32 ) float m_ha2[PolyLanes] = {};   ///< ... second state
+    alignas( 32 ) float m_hb1[PolyLanes] = {};   ///< the high pass's second section: first state
+    alignas( 32 ) float m_hb2[PolyLanes] = {};   ///< ... second state
+    alignas( 32 ) float m_a1[PolyLanes] = {};    ///< the low pass's coefficient a1
+    alignas( 32 ) float m_a2[PolyLanes] = {};    ///< ... a2
+    alignas( 32 ) float m_a3[PolyLanes] = {};    ///< ... a3
+    alignas( 32 ) float m_c1[PolyLanes] = {};    ///< the high pass's coefficient c1
+    alignas( 32 ) float m_c2[PolyLanes] = {};    ///< ... c2
+    alignas( 32 ) float m_c3[PolyLanes] = {};    ///< ... c3 (damping sqrt 2)
     /**
      * @name The filter's response (poly.filter_type, 19.09.2026)
      * The output is v2 + (m0 x + m1 v1 + m2 v2), the textbook mixing of a state-variable filter's
@@ -78,9 +81,9 @@ struct PolyChannels {
      * band pass normalised to unity at the centre (0, k, -1), high pass (1, -k, -2), notch (1, -k, -1),
      * with k the damping. Zero is the low pass the kernel always had: v2 + 0 is v2.
      * @{ */
-    alignas(32) float m_m0[PolyLanes] = {};   ///< the response: the weight of x
-    alignas(32) float m_m1[PolyLanes] = {};   ///< ... of v1
-    alignas(32) float m_m2[PolyLanes] = {};   ///< ... of v2
+    alignas( 32 ) float m_m0[PolyLanes] = {};   ///< the response: the weight of x
+    alignas( 32 ) float m_m1[PolyLanes] = {};   ///< ... of v1
+    alignas( 32 ) float m_m2[PolyLanes] = {};   ///< ... of v2
     /** @} */
     /**
      * @name The filter models (poly.filter_model, 26.09.2026; Filters.h)
@@ -88,16 +91,18 @@ struct PolyChannels {
      * same lanes: four node voltages and four trapezoidal states per lane, the cutoff as g = tan(pi fc / fs), the
      * resonance as the model's feedback k, and the pass band's makeup gain, all written per voice on the 16-sample grid.
      * @{ */
-    int m_model = 0;                                                     ///< poly.filter_model
-    alignas(32) float m_fmd[PolyLanes] = {};                            ///< poly.filter_mode per lane (SEM morph, Polivoks), modulated per voice
-    alignas(32) float m_xw[5][PolyLanes] = {};                          ///< the Xpander's pole mix per lane (poleMix of the mode)
-    alignas(32) float m_fv[4][PolyLanes] = {}, m_fs[4][PolyLanes] = {};  ///< node voltages and trapezoidal states
-    alignas(32) float m_fg[PolyLanes] = {}, m_fk[PolyLanes] = {}, m_fmk[PolyLanes] = {};   ///< g (at twice the rate), feedback, makeup
-    alignas(32) float m_fxp[PolyLanes] = {};                                               ///< the last input sample (the half-way point of 2x)
+    int m_model = 0;   ///< poly.filter_model
+    alignas(
+        32 ) float m_fmd[PolyLanes] = {};   ///< poly.filter_mode per lane (SEM morph, Polivoks), modulated per voice
+    alignas( 32 ) float m_xw[5][PolyLanes] = {};   ///< the Xpander's pole mix per lane (poleMix of the mode)
+    alignas( 32 ) float m_fv[4][PolyLanes] = {}, m_fs[4][PolyLanes] = {};   ///< node voltages and trapezoidal states
+    alignas( 32 ) float m_fg[PolyLanes] = {}, m_fk[PolyLanes] = {},
+                        m_fmk[PolyLanes] = {};   ///< g (at twice the rate), feedback, makeup
+    alignas( 32 ) float m_fxp[PolyLanes] = {};   ///< the last input sample (the half-way point of 2x)
     /** @} */
 };
-#if defined(_MSC_VER)
-#pragma warning(pop)
+#if defined( _MSC_VER )
+  #pragma warning( pop )
 #endif
 
 /**
@@ -106,19 +111,19 @@ struct PolyChannels {
  * @return the sine
  */
 template <class VT>
-inline VT laneSin01(VT p)
+inline VT laneSin01( VT p )
 {
-    const VT half = lanes<VT>(0.5f), quarter = lanes<VT>(0.25f);
-    VT q = p - vfloor(p + half);                                 // [-0.5, 0.5)
-    q = vselect(vgt(q, quarter), half - q, q);                  // sin(pi - x) = sin x
-    q = vselect(vlt(q, -quarter), -half - q, q);
-    const VT th = lanes<VT>(6.28318530717958648f) * q;
-    const VT t2 = th * th, one = lanes<VT>(1.0f);
-    VT s = one - t2 * lanes<VT>(1.0f / 110.0f);
-    s = one - t2 * lanes<VT>(1.0f / 72.0f) * s;
-    s = one - t2 * lanes<VT>(1.0f / 42.0f) * s;
-    s = one - t2 * lanes<VT>(1.0f / 20.0f) * s;
-    s = one - t2 * lanes<VT>(1.0f / 6.0f) * s;
+    const VT half = lanes<VT>( 0.5f ), quarter = lanes<VT>( 0.25f );
+    VT       q = p - vfloor( p + half );             // [-0.5, 0.5)
+    q = vselect( vgt( q, quarter ), half - q, q );   // sin(pi - x) = sin x
+    q = vselect( vlt( q, -quarter ), -half - q, q );
+    const VT th = lanes<VT>( 6.28318530717958648f ) * q;
+    const VT t2 = th * th, one = lanes<VT>( 1.0f );
+    VT       s = one - t2 * lanes<VT>( 1.0f / 110.0f );
+    s = one - t2 * lanes<VT>( 1.0f / 72.0f ) * s;
+    s = one - t2 * lanes<VT>( 1.0f / 42.0f ) * s;
+    s = one - t2 * lanes<VT>( 1.0f / 20.0f ) * s;
+    s = one - t2 * lanes<VT>( 1.0f / 6.0f ) * s;
     return th * s;
 }
 
@@ -148,48 +153,55 @@ inline VT laneSin01(VT p)
  * @param[in,out] outR   per sample and slot (index i * PolySlotCount + slot)
  */
 template <class VT>
-void polySlotKernel(PolySlots& s, int slot, int n, const float* wt, bool blep, bool fm, bool useWt, float* outL, float* outR)
+void polySlotKernel( PolySlots &s, int slot, int n, const float *wt, bool blep, bool fm, bool useWt, float *outL,
+                     float *outR )
 {
-    auto at = [slot](const float* a) { return loadLanes<VT>(a + slot); };
-    const VT zero = lanes<VT>(0.0f), one = lanes<VT>(1.0f), two = lanes<VT>(2.0f);
-    const VT invTwoPi = lanes<VT>(0.159154943f);
-    VT ph = at(s.m_ph), mph = at(s.m_mph), idx = at(s.m_idx);
-    const VT dt = at(s.m_dt), inv = at(s.m_inv), mdt = at(s.m_mdt), idxDecay = at(s.m_idxDecay), idxFloor = at(s.m_idxFloor);
-    const VT pw = at(s.m_pw), wSaw = at(s.m_wSaw), wPulse = at(s.m_wPulse), wFm = at(s.m_wFm), wWt = at(s.m_wWt), gL = at(s.m_gL), gR = at(s.m_gR);
-    auto blepAt = [&](VT t) {
+    auto     at = [slot]( const float *a ) { return loadLanes<VT>( a + slot ); };
+    const VT zero = lanes<VT>( 0.0f ), one = lanes<VT>( 1.0f ), two = lanes<VT>( 2.0f );
+    const VT invTwoPi = lanes<VT>( 0.159154943f );
+    VT       ph = at( s.m_ph ), mph = at( s.m_mph ), idx = at( s.m_idx );
+    const VT dt = at( s.m_dt ), inv = at( s.m_inv ), mdt = at( s.m_mdt ), idxDecay = at( s.m_idxDecay ),
+             idxFloor = at( s.m_idxFloor );
+    const VT pw = at( s.m_pw ), wSaw = at( s.m_wSaw ), wPulse = at( s.m_wPulse ), wFm = at( s.m_wFm ),
+             wWt = at( s.m_wWt ), gL = at( s.m_gL ), gR = at( s.m_gR );
+    auto     blepAt = [&]( VT t )
+    {
         const VT x1 = t * inv;
-        VT r = vselect(vlt(t, dt), x1 + x1 - x1 * x1 - one, zero);
-        const VT x2 = (t - one) * inv;
-        return r + vselect(vgt(t, one - dt), x2 * x2 + x2 + x2 + one, zero);
+        VT       r = vselect( vlt( t, dt ), x1 + x1 - x1 * x1 - one, zero );
+        const VT x2 = ( t - one ) * inv;
+        return r + vselect( vgt( t, one - dt ), x2 * x2 + x2 + x2 + one, zero );
     };
-    for (int i = 0; i < n; ++i) {
-        const VT t = ph;
+    for ( int i = 0; i < n; ++i )
+    {
+        const VT  t = ph;
         const int row = i * PolySlotCount + slot;
-        VT sawTerm = zero, pulseTerm = zero, fmTerm = zero, wtTerm = zero;
-        if (blep) {
-            const VT bt = blepAt(t);
-            sawTerm = wSaw * (two * t - one - bt);
+        VT        sawTerm = zero, pulseTerm = zero, fmTerm = zero, wtTerm = zero;
+        if ( blep )
+        {
+            const VT bt = blepAt( t );
+            sawTerm = wSaw * ( two * t - one - bt );
             VT t2 = t + one - pw;
-            t2 = vselect(vge(t2, one), t2 - one, t2);
-            pulseTerm = wPulse * -(vselect(vlt(t, pw), one, -one) + bt - blepAt(t2));
+            t2 = vselect( vge( t2, one ), t2 - one, t2 );
+            pulseTerm = wPulse * -( vselect( vlt( t, pw ), one, -one ) + bt - blepAt( t2 ) );
         }
-        if (fm) {
-            const VT m = laneSin01(mph);
-            fmTerm = wFm * laneSin01(t + (idxFloor + idx) * m * invTwoPi);
+        if ( fm )
+        {
+            const VT m = laneSin01( mph );
+            fmTerm = wFm * laneSin01( t + ( idxFloor + idx ) * m * invTwoPi );
         }
-        if (useWt) wtTerm = wWt * loadLanes<VT>(wt + row);
+        if ( useWt ) wtTerm = wWt * loadLanes<VT>( wt + row );
         const VT out = sawTerm + pulseTerm + fmTerm + wtTerm;
-        vstore(outL + row, out * gL);
-        vstore(outR + row, out * gR);
+        vstore( outL + row, out * gL );
+        vstore( outR + row, out * gR );
         VT np = t + dt;
-        ph = vselect(vge(np, one), np - one, np);
+        ph = vselect( vge( np, one ), np - one, np );
         np = mph + mdt;
-        mph = vselect(vge(np, one), np - one, np);
+        mph = vselect( vge( np, one ), np - one, np );
         idx = idx * idxDecay;
     }
-    vstore(s.m_ph + slot, ph);
-    vstore(s.m_mph + slot, mph);
-    vstore(s.m_idx + slot, idx);
+    vstore( s.m_ph + slot, ph );
+    vstore( s.m_mph + slot, mph );
+    vstore( s.m_idx + slot, idx );
 }
 
 /**
@@ -202,7 +214,7 @@ void polySlotKernel(PolySlots& s, int slot, int n, const float* wt, bool blep, b
  * @param[in] n    samples to render
  */
 template <class VT>
-void polyModelKernel(PolyChannels& c, int lane, int n, const float* in, const float* amp, float* out);
+void polyModelKernel( PolyChannels &c, int lane, int n, const float *in, const float *amp, float *out );
 
 template <class VT>
 /**
@@ -215,23 +227,30 @@ template <class VT>
  * @param[in]     amp   the gains
  * @param[out]    out   the output samples
  */
-void polyChannelKernel(PolyChannels& c, int lane, int n, const float* in, const float* amp, float* out)
+void polyChannelKernel( PolyChannels &c, int lane, int n, const float *in, const float *amp, float *out )
 {
-    if (c.m_model != 0) { polyModelKernel<VT>(c, lane, n, in, amp, out); return; }
-    auto at = [lane](const float* a) { return loadLanes<VT>(a + lane); };
-    const VT two = lanes<VT>(2.0f), sqrt2 = lanes<VT>(1.41421356f);
-    VT ic1 = at(c.m_ic1), ic2 = at(c.m_ic2), ha1 = at(c.m_ha1), ha2 = at(c.m_ha2), hb1 = at(c.m_hb1), hb2 = at(c.m_hb2);
-    const VT a1 = at(c.m_a1), a2 = at(c.m_a2), a3 = at(c.m_a3), c1 = at(c.m_c1), c2 = at(c.m_c2), c3 = at(c.m_c3);
-    const VT m0 = at(c.m_m0), m1 = at(c.m_m1), m2 = at(c.m_m2);
-    for (int i = 0; i < n; ++i) {
+    if ( c.m_model != 0 )
+    {
+        polyModelKernel<VT>( c, lane, n, in, amp, out );
+        return;
+    }
+    auto     at = [lane]( const float *a ) { return loadLanes<VT>( a + lane ); };
+    const VT two = lanes<VT>( 2.0f ), sqrt2 = lanes<VT>( 1.41421356f );
+    VT       ic1 = at( c.m_ic1 ), ic2 = at( c.m_ic2 ), ha1 = at( c.m_ha1 ), ha2 = at( c.m_ha2 ), hb1 = at( c.m_hb1 ),
+             hb2 = at( c.m_hb2 );
+    const VT a1 = at( c.m_a1 ), a2 = at( c.m_a2 ), a3 = at( c.m_a3 ), c1 = at( c.m_c1 ), c2 = at( c.m_c2 ),
+             c3 = at( c.m_c3 );
+    const VT m0 = at( c.m_m0 ), m1 = at( c.m_m1 ), m2 = at( c.m_m2 );
+    for ( int i = 0; i < n; ++i )
+    {
         const int row = i * PolyLanes + lane;
-        const VT x = loadLanes<VT>(in + row);
-        VT v3 = x - ic2;
-        VT v1 = a1 * ic1 + a2 * v3;
-        VT v2 = ic2 + a2 * ic1 + a3 * v3;
+        const VT  x = loadLanes<VT>( in + row );
+        VT        v3 = x - ic2;
+        VT        v1 = a1 * ic1 + a2 * v3;
+        VT        v2 = ic2 + a2 * ic1 + a3 * v3;
         ic1 = two * v1 - ic1;
         ic2 = two * v2 - ic2;
-        VT y = v2 + (m0 * x + m1 * v1 + m2 * v2);   // the response (see PolyChannels::m0)
+        VT y = v2 + ( m0 * x + m1 * v1 + m2 * v2 );   // the response (see PolyChannels::m0)
         v3 = y - ha2;
         v1 = c1 * ha1 + c2 * v3;
         v2 = ha2 + c2 * ha1 + c3 * v3;
@@ -244,10 +263,15 @@ void polyChannelKernel(PolyChannels& c, int lane, int n, const float* in, const 
         hb1 = two * v1 - hb1;
         hb2 = two * v2 - hb2;
         y = y - sqrt2 * v1 - v2;
-        vstore(out + row, y * loadLanes<VT>(amp + row));
+        vstore( out + row, y * loadLanes<VT>( amp + row ) );
     }
-    auto put = [lane](float* a, VT v) { vstore(a + lane, v); };
-    put(c.m_ic1, ic1); put(c.m_ic2, ic2); put(c.m_ha1, ha1); put(c.m_ha2, ha2); put(c.m_hb1, hb1); put(c.m_hb2, hb2);
+    auto put = [lane]( float *a, VT v ) { vstore( a + lane, v ); };
+    put( c.m_ic1, ic1 );
+    put( c.m_ic2, ic2 );
+    put( c.m_ha1, ha1 );
+    put( c.m_ha2, ha2 );
+    put( c.m_hb1, hb1 );
+    put( c.m_hb2, hb2 );
 }
 
 /**
@@ -256,30 +280,36 @@ void polyChannelKernel(PolyChannels& c, int lane, int n, const float* in, const 
  *        once per call and every lane of every vector path runs the same arithmetic.
  */
 template <class VT>
-void polyModelKernel(PolyChannels& c, int lane, int n, const float* in, const float* amp, float* out)
+void polyModelKernel( PolyChannels &c, int lane, int n, const float *in, const float *amp, float *out )
 {
-    auto at = [lane](const float* a) { return loadLanes<VT>(a + lane); };
-    const VT two = lanes<VT>(2.0f), sqrt2 = lanes<VT>(1.41421356f);
-    VT v[4], s[4];
-    for (int j = 0; j < 4; ++j) { v[j] = at(c.m_fv[j]); s[j] = at(c.m_fs[j]); }
-    VT ha1 = at(c.m_ha1), ha2 = at(c.m_ha2), hb1 = at(c.m_hb1), hb2 = at(c.m_hb2);
-    const VT c1 = at(c.m_c1), c2 = at(c.m_c2), c3 = at(c.m_c3);
-    const VT g = at(c.m_fg), k = at(c.m_fk), mk = at(c.m_fmk);
-    VT xp = at(c.m_fxp);
-    const FilterModelE m = static_cast<FilterModelE>(c.m_model - 1);
-    const VT morph = at(c.m_fmd);
+    auto     at = [lane]( const float *a ) { return loadLanes<VT>( a + lane ); };
+    const VT two = lanes<VT>( 2.0f ), sqrt2 = lanes<VT>( 1.41421356f );
+    VT       v[4], s[4];
+    for ( int j = 0; j < 4; ++j )
+    {
+        v[j] = at( c.m_fv[j] );
+        s[j] = at( c.m_fs[j] );
+    }
+    VT                 ha1 = at( c.m_ha1 ), ha2 = at( c.m_ha2 ), hb1 = at( c.m_hb1 ), hb2 = at( c.m_hb2 );
+    const VT           c1 = at( c.m_c1 ), c2 = at( c.m_c2 ), c3 = at( c.m_c3 );
+    const VT           g = at( c.m_fg ), k = at( c.m_fk ), mk = at( c.m_fmk );
+    VT                 xp = at( c.m_fxp );
+    const FilterModelE m = static_cast<FilterModelE>( c.m_model - 1 );
+    const VT           morph = at( c.m_fmd );
     // Twice the rate, as in the BerlinSchoolGenerator whose tuning the models carry (26.09.2026): at the plain rate
     // the Polivoks' slew-limited integrators and the Wasp's inverters screamed (a centroid of 9 kHz on the lead) and
     // the nonlinear stages folded their harmonics back. The input is interpolated half-way, the two outputs averaged.
-    const VT half = lanes<VT>(0.5f);
-    auto run = [&](auto&& filt) {
-        for (int i = 0; i < n; ++i) {
+    const VT half = lanes<VT>( 0.5f );
+    auto     run = [&]( auto &&filt )
+    {
+        for ( int i = 0; i < n; ++i )
+        {
             const int row = i * PolyLanes + lane;
-            const VT x = loadLanes<VT>(in + row);
-            const VT y1 = filt(half * (xp + x));
-            const VT y2 = filt(x);
+            const VT  x = loadLanes<VT>( in + row );
+            const VT  y1 = filt( half * ( xp + x ) );
+            const VT  y2 = filt( x );
             xp = x;
-            VT y = half * (y1 + y2) * mk;
+            VT y = half * ( y1 + y2 ) * mk;
             VT v3 = y - ha2;
             VT v1 = c1 * ha1 + c2 * v3;
             VT v2 = ha2 + c2 * ha1 + c3 * v3;
@@ -292,49 +322,67 @@ void polyModelKernel(PolyChannels& c, int lane, int n, const float* in, const fl
             hb1 = two * v1 - hb1;
             hb2 = two * v2 - hb2;
             y = y - sqrt2 * v1 - v2;
-            vstore(out + row, y * loadLanes<VT>(amp + row));
+            vstore( out + row, y * loadLanes<VT>( amp + row ) );
         }
     };
-    switch (m) {
-    case FilterModelE::MOOG: run([&](VT x) { return ladderMoog<VT>(v, s, x, g, k); }); break;
-    case FilterModelE::PROPHET: case FilterModelE::JUNO: {
-        const float d = FilterVoicing::otaDrive(m), r = FilterVoicing::otaRes(m);
-        run([&](VT x) { return otaCascade<VT>(v, s, x, g, k, d, r); });
+    switch ( m )
+    {
+    case FilterModelE::MOOG: run( [&]( VT x ) { return ladderMoog<VT>( v, s, x, g, k ); } ); break;
+    case FilterModelE::PROPHET:
+    case FilterModelE::JUNO:
+    {
+        const float d = FilterVoicing::otaDrive( m ), r = FilterVoicing::otaRes( m );
+        run( [&]( VT x ) { return otaCascade<VT>( v, s, x, g, k, d, r ); } );
         break;
     }
-    case FilterModelE::XPANDER: {
-        const float d = FilterVoicing::otaDrive(m), r = FilterVoicing::otaRes(m);
-        const VT w0 = at(c.m_xw[0]), w1 = at(c.m_xw[1]), w2 = at(c.m_xw[2]), w3 = at(c.m_xw[3]), w4 = at(c.m_xw[4]);
-        const VT rv = lanes<VT>(r), invR = lanes<VT>(1.0f / r);
-        run([&](VT x) {
-            otaCascade<VT>(v, s, x, g, k, d, r);
-            const VT a0 = x - k * ftanh<VT>(rv * v[3]) * invR;
-            return w0 * a0 + w1 * v[0] + w2 * v[1] + w3 * v[2] + w4 * v[3];
-        });
+    case FilterModelE::XPANDER:
+    {
+        const float d = FilterVoicing::otaDrive( m ), r = FilterVoicing::otaRes( m );
+        const VT    w0 = at( c.m_xw[0] ), w1 = at( c.m_xw[1] ), w2 = at( c.m_xw[2] ), w3 = at( c.m_xw[3] ),
+                    w4 = at( c.m_xw[4] );
+        const VT    rv = lanes<VT>( r ), invR = lanes<VT>( 1.0f / r );
+        run(
+            [&]( VT x )
+            {
+                otaCascade<VT>( v, s, x, g, k, d, r );
+                const VT a0 = x - k * ftanh<VT>( rv * v[3] ) * invR;
+                return w0 * a0 + w1 * v[0] + w2 * v[1] + w3 * v[2] + w4 * v[3];
+            } );
         break;
     }
-    case FilterModelE::SEM: case FilterModelE::WASP: {
-        const float L = FilterVoicing::svfRange(m), a = FilterVoicing::svfAsym(m);
-        run([&](VT x) { return svfNonlinear<VT>(v, s, x, g, k, L, a, morph); });
+    case FilterModelE::SEM:
+    case FilterModelE::WASP:
+    {
+        const float L = FilterVoicing::svfRange( m ), a = FilterVoicing::svfAsym( m );
+        run( [&]( VT x ) { return svfNonlinear<VT>( v, s, x, g, k, L, a, morph ); } );
         break;
     }
-    case FilterModelE::POLIVOKS: {
-        const float L = FilterVoicing::svfRange(m);
-        run([&](VT x) { return svfNonlinear<VT>(v, s, x, g, k, L, 0.0f, morph, true); });
+    case FilterModelE::POLIVOKS:
+    {
+        const float L = FilterVoicing::svfRange( m );
+        run( [&]( VT x ) { return svfNonlinear<VT>( v, s, x, g, k, L, 0.0f, morph, true ); } );
         break;
     }
-    case FilterModelE::DIODE: {
-        const VT gd = g * lanes<VT>(0.70710678f);
-        run([&](VT x) { return diodeLadder<VT>(v, s, x, gd, k); });
+    case FilterModelE::DIODE:
+    {
+        const VT gd = g * lanes<VT>( 0.70710678f );
+        run( [&]( VT x ) { return diodeLadder<VT>( v, s, x, gd, k ); } );
         break;
     }
-    case FilterModelE::KORG35: run([&](VT x) { return korg35<VT>(v, s, x, g, k); }); break;
-    default: run([&](VT x) { return x; }); break;
+    case FilterModelE::KORG35: run( [&]( VT x ) { return korg35<VT>( v, s, x, g, k ); } ); break;
+    default: run( [&]( VT x ) { return x; } ); break;
     }
-    for (int j = 0; j < 4; ++j) { vstore(c.m_fv[j] + lane, v[j]); vstore(c.m_fs[j] + lane, s[j]); }
-    vstore(c.m_fxp + lane, xp);
-    auto put = [lane](float* a, VT x) { vstore(a + lane, x); };
-    put(c.m_ha1, ha1); put(c.m_ha2, ha2); put(c.m_hb1, hb1); put(c.m_hb2, hb2);
+    for ( int j = 0; j < 4; ++j )
+    {
+        vstore( c.m_fv[j] + lane, v[j] );
+        vstore( c.m_fs[j] + lane, s[j] );
+    }
+    vstore( c.m_fxp + lane, xp );
+    auto put = [lane]( float *a, VT x ) { vstore( a + lane, x ); };
+    put( c.m_ha1, ha1 );
+    put( c.m_ha2, ha2 );
+    put( c.m_hb1, hb1 );
+    put( c.m_hb2, hb2 );
 }
 
-} // namespace phos
+}   // namespace phos

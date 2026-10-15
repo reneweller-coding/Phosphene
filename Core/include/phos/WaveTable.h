@@ -37,36 +37,46 @@
 #include <cstddef>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 constexpr int NumBuiltinWaveTables = 6;   ///< tables written as spectra in code (names in Params.cpp)
-constexpr int ClassicTable  = 0;   ///< built-in table 0: sine, triangle, saw, square, narrow pulse
-constexpr int ClassicSawFrame = 2; ///< the sawtooth frame of the Classic table (the supersaw reads it)
+constexpr int ClassicTable = 0;           ///< built-in table 0: sine, triangle, saw, square, narrow pulse
+constexpr int ClassicSawFrame = 2;        ///< the sawtooth frame of the Classic table (the supersaw reads it)
 
 /** @brief One table: frames at ten levels. */
-struct WaveTable {
-    static constexpr int StoreLen  = 4096;   ///< samples per stored cycle at the finest level
-    static constexpr int MaxFrames = 64;     ///< frames per table
-    static constexpr int Levels    = 10;     ///< 4096 .. 32 samples, 512 .. 1 harmonics
-    static constexpr int Guard     = 3;      ///< one sample before each cycle, two after it
+struct WaveTable
+{
+    static constexpr int   StoreLen = 4096;           ///< samples per stored cycle at the finest level
+    static constexpr int   MaxFrames = 64;            ///< frames per table
+    static constexpr int   Levels = 10;               ///< 4096 .. 32 samples, 512 .. 1 harmonics
+    static constexpr int   Guard = 3;                 ///< one sample before each cycle, two after it
     static constexpr float TargetRms = 0.35355339f;   ///< RMS of the loudest frame
 
-    int m_frames = 0;                   ///< frames in the table
-    int m_offset[Levels] = {};         ///< start of each level in data
-    std::vector<float> m_data;          ///< all levels, all frames
+    int                m_frames = 0;            ///< frames in the table
+    int                m_offset[Levels] = {};   ///< start of each level in data
+    std::vector<float> m_data;                  ///< all levels, all frames
 
     /**
      * @brief Samples per cycle at a level.
      * @param[in] level  the mip level
      * @return the samples per cycle
      */
-    static int levelLength(int level)    { const int n = StoreLen >> level; return n < 32 ? 32 : n; }
+    static int levelLength( int level )
+    {
+        const int n = StoreLen >> level;
+        return n < 32 ? 32 : n;
+    }
     /**
      * @brief Harmonics kept at a level.
      * @param[in] level  the mip level
      * @return the harmonics kept
      */
-    static int levelHarmonics(int level) { const int h = (StoreLen / 8) >> level; return h < 1 ? 1 : h; }
+    static int levelHarmonics( int level )
+    {
+        const int h = ( StoreLen / 8 ) >> level;
+        return h < 1 ? 1 : h;
+    }
 
     /**
      * @brief The stored cycle of frame @p f at a level; readable from index -1 to levelLength + 1.
@@ -74,10 +84,10 @@ struct WaveTable {
      * @param[in] f      the frame
      * @return the cycle's samples
      */
-    const float* cycle(int level, int f) const
+    const float *cycle( int level, int f ) const
     {
-        return m_data.data() + static_cast<size_t>(m_offset[level])
-             + static_cast<size_t>(f) * static_cast<size_t>(levelLength(level) + Guard) + 1;
+        return m_data.data() + static_cast<size_t>( m_offset[level] ) +
+               static_cast<size_t>( f ) * static_cast<size_t>( levelLength( level ) + Guard ) + 1;
     }
     /**
      * @brief One sample of frame @p f at a level and a phase in [0, 1): Catmull-Rom through four samples.
@@ -86,20 +96,20 @@ struct WaveTable {
      * @param[in] phase  the phase, 0..1
      * @return the sample
      */
-    float sample(int level, int f, double phase) const
+    float sample( int level, int f, double phase ) const
     {
-        const int len = levelLength(level);
-        const double x = phase * static_cast<double>(len);
-        int i = static_cast<int>(x);
-        if (i >= len) i = len - 1;
-        if (i < 0) i = 0;
-        const float t = static_cast<float>(x - static_cast<double>(i));
-        const float* c = cycle(level, f);
-        const float y0 = c[i - 1], y1 = c[i], y2 = c[i + 1], y3 = c[i + 2];
-        const float a = 0.5f * (y2 - y0);
-        const float b = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3;
-        const float d = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
-        return ((d * t + b) * t + a) * t + y1;
+        const int    len = levelLength( level );
+        const double x = phase * static_cast<double>( len );
+        int          i = static_cast<int>( x );
+        if ( i >= len ) i = len - 1;
+        if ( i < 0 ) i = 0;
+        const float  t = static_cast<float>( x - static_cast<double>( i ) );
+        const float *c = cycle( level, f );
+        const float  y0 = c[i - 1], y1 = c[i], y2 = c[i + 1], y3 = c[i + 2];
+        const float  a = 0.5f * ( y2 - y0 );
+        const float  b = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3;
+        const float  d = 0.5f * ( y3 - y0 ) + 1.5f * ( y1 - y2 );
+        return ( ( d * t + b ) * t + a ) * t + y1;
     }
     /**
      * @brief A position between frames: frame floor(p (frames-1)) blended into the next.
@@ -108,14 +118,15 @@ struct WaveTable {
      * @param[in] phase     0..1 within the cycle
      * @return the sample
      */
-    float sampleAt(int level, float position, double phase) const
+    float sampleAt( int level, float position, double phase ) const
     {
-        const float p = (position < 0.0f ? 0.0f : (position > 1.0f ? 1.0f : position)) * static_cast<float>(m_frames - 1);
-        int f = static_cast<int>(p);
-        if (f >= m_frames - 1) f = m_frames - 2 < 0 ? 0 : m_frames - 2;
-        const float t = m_frames > 1 ? p - static_cast<float>(f) : 0.0f;
-        const float a = sample(level, f, phase);
-        return m_frames > 1 ? a + t * (sample(level, f + 1, phase) - a) : a;
+        const float p =
+            ( position < 0.0f ? 0.0f : ( position > 1.0f ? 1.0f : position ) ) * static_cast<float>( m_frames - 1 );
+        int f = static_cast<int>( p );
+        if ( f >= m_frames - 1 ) f = m_frames - 2 < 0 ? 0 : m_frames - 2;
+        const float t = m_frames > 1 ? p - static_cast<float>( f ) : 0.0f;
+        const float a = sample( level, f, phase );
+        return m_frames > 1 ? a + t * ( sample( level, f + 1, phase ) - a ) : a;
     }
     /**
      * @brief Builds from Fourier coefficients, one vector per frame: element h-1 is harmonic h as the
@@ -123,7 +134,7 @@ struct WaveTable {
      * @param[in] frameCoefficients  the Fourier coefficients per frame
      * @return false when the coefficients are unusable
      */
-    bool buildFromHarmonics(const std::vector<std::vector<std::complex<double>>>& frameCoefficients);
+    bool buildFromHarmonics( const std::vector<std::vector<std::complex<double>>> &frameCoefficients );
 };
 
 /**
@@ -145,13 +156,13 @@ inline constexpr float SawTableGain = 1.63299316f;
  * @param[in] current     the level read so far, negative for none
  * @return the level to read
  */
-int waveLevelFor(double hz, double sampleRate, int current);
+int waveLevelFor( double hz, double sampleRate, int current );
 
 /**
  * @brief A built-in table (0 .. NumBuiltinWaveTables-1), built on first use -- in prepare(), never on the audio thread.
  * @param[in] index  the table's index
  * @return the table
  */
-const WaveTable& builtinWaveTable(int index);
+const WaveTable &builtinWaveTable( int index );
 
-} // namespace phos
+}   // namespace phos

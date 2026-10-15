@@ -67,13 +67,15 @@
 #include "phos/PercKernel.h"
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 /** @brief General MIDI drum note of each role (closed hat 42, open hat 46, ride 51, ...). */
 inline constexpr int PercRoleNote[NumPercRoles] = { 42, 46, 51, 49, 39, 38, 37, 70, 45, 63, 76, 75 };
 
 /** @brief The percussion kit. */
-class PercKit {
+class PercKit
+{
 public:
     static constexpr int MaxBlock = 64;   ///< longest block process() renders at once (longer ones are split)
 
@@ -81,7 +83,7 @@ public:
      * @brief Prepares for a sample rate.
      * @param[in] sampleRate  the sample rate in Hz
      */
-    void prepare(double sampleRate);
+    void prepare( double sampleRate );
     /** @brief Silences every lane and clears all state. */
     void reset();
     /**
@@ -91,7 +93,7 @@ public:
      * @param[in] keyRoot  pitch class of the key, for Tune to Key
      * @param[in] scale    index into ScaleNames, for Tune to Key
      */
-    void update(int lane, const float* v, int keyRoot, int scale);
+    void update( int lane, const float *v, int keyRoot, int scale );
     /**
      * @brief Tells the kit the tempo, which is the time base of the auto-pan.
      *
@@ -106,7 +108,7 @@ public:
      * 145 BPM the "three sixteenths" of the swing were not three sixteenths any more.
      * @param[in] bpm  beats per minute (4/4, so a bar is four beats)
      */
-    void setTempo(double bpm);
+    void setTempo( double bpm );
     /** @brief The tempo the auto-pan assumes until setTempo() says otherwise. */
     static constexpr double DefaultBpm = 145.0;
     /**
@@ -121,34 +123,35 @@ public:
      * @param[in] shift     pitch shift in semitones for tonal and modal engines
      * @param[in] late      how many samples ago the hit ideally started (0 <= late < 1)
      */
-    void trigger(int lane, float velocity, int shift, double late);
+    void trigger( int lane, float velocity, int shift, double late );
     /**
      * @brief Renders @p n stereo samples, replacing @p L and @p R.
      * @param[out] L  receives the left sum (replaced)
      * @param[out] R  receives the right sum (replaced)
      * @param[in]  n  how many samples
      */
-    void process(float* L, float* R, int n);
+    void process( float *L, float *R, int n );
     /**
      * @brief Renders with a chosen lane type (float = scalar reference), for the vector tests.
      * @param[out] L  the left channel
      * @param[out] R  the right channel
      * @param[in]  n  the block's samples
      */
-    template <class VT> void processWith(float* L, float* R, int n);
+    template <class VT>
+    void processWith( float *L, float *R, int n );
 
     /**
      * @brief Role of a lane as last updated.
      * @param[in] lane  the lane
      * @return its role as last updated
      */
-    PercRoleE role(int lane) const { return static_cast<PercRoleE>(m_role[lane]); }
+    PercRoleE role( int lane ) const { return static_cast<PercRoleE>( m_role[lane] ); }
     /**
      * @brief Frequency a lane's tone and modes are tuned to (after Tune to Key, before a hit's shift).
      * @param[in] lane  the lane
      * @return the frequency its tone and modes are tuned to, in Hz
      */
-    double laneHz(int lane) const { return m_tunedHz[lane]; }
+    double laneHz( int lane ) const { return m_tunedHz[lane]; }
     /**
      * @brief Nearest note of the key and scale to @p hz, as a frequency.
      * @param[in] hz       the frequency in Hz
@@ -156,77 +159,77 @@ public:
      * @param[in] scale    the scale
      * @return the nearest note of the key and scale, in Hz
      */
-    static double tuneToScale(double hz, int keyRoot, int scale);
+    static double tuneToScale( double hz, int keyRoot, int scale );
     /**
      * @brief The pan angle a lane is rotated by right now, in radians (for the tests).
      * @param[in] lane  the lane
      * @return the angle in radians
      */
-    double panAngle(int lane) const;
+    double panAngle( int lane ) const;
     /**
      * @brief The position a lane's panner stands at right now, in -1..1 (for the tests).
      * @param[in] lane  the lane
      * @return the position, -1..1
      */
-    double panPosition(int lane) const;
+    double panPosition( int lane ) const;
     /**
      * @brief Sign of a lane's swing: +1 and -1 are the two phase groups (for the tests).
      * @param[in] lane  the lane
      * @return +1 or -1
      */
-    int panGroup(int lane) const;
+    int panGroup( int lane ) const;
     /**
      * @brief Signed swing of a lane's auto-pan, in radians of rotation (for the tests).
      * @param[in] lane  the lane
      * @return the swing in radians
      */
-    double panSwing(int lane) const;
+    double panSwing( int lane ) const;
 
 private:
     /**
      * @brief Recomputes lane @p lane's synthesis coefficients from its parameters.
      * @param[in] lane  the lane
      */
-    void computeCoefs(int lane);
+    void computeCoefs( int lane );
     /**
      * @brief The auto-pan phasor's step for @p lane from its period and the tempo (all setTempo() changes).
      * @param[in] lane  the lane
      */
-    void updatePanRate(int lane);
+    void updatePanRate( int lane );
     /** @brief Gives each lane its auto-pan direction from its role's pan group. */
     void assignPanGroups();
 
-    double m_sr = 48000.0;   ///< sample rate
-    PercState m_s;   ///< every lane's synthesis state (PercKernel.h)
-    PercCoefs m_c;   ///< every lane's coefficients (PercKernel.h)
-    float m_values[PercLanes][perc::COUNT] = {};   ///< each lane's parameters as update() read them
-    bool  m_valid[PercLanes] = {};   ///< the lane has been updated at least once
-    int   m_keyRoot[PercLanes] = {};   ///< per lane: the key it was tuned to
-    int   m_scale[PercLanes] = {};   ///< per lane: the scale it was tuned to
-    int   m_role[PercLanes] = {};   ///< perc.role per lane (PercRole)
-    int   m_engine[PercLanes] = {};   ///< perc.engine per lane
-    int   m_choke[PercLanes] = {};   ///< perc.choke group per lane (0 = none)
-    double m_tunedHz[PercLanes] = {};   ///< each lane's pitch after tuning to the key
-    double m_shiftMul[PercLanes] = {};   ///< the pitch factor of the last hit's semitone shift
-    double m_bpm = DefaultBpm;   ///< time base of the auto-pan
-    bool   m_panning = false;     ///< any lane moves: one decision for the whole kit (PercKernel.h)
-    float m_modeAmp[PercModes][PercLanes] = {};   ///< the modal engine's mode amplitudes
-    double m_modeW[PercModes][PercLanes] = {};   ///< their angular frequencies per sample
-    double m_modeR[PercModes][PercLanes] = {};   ///< their per-sample radii (the decays)
+    double    m_sr = 48000.0;                          ///< sample rate
+    PercState m_s;                                     ///< every lane's synthesis state (PercKernel.h)
+    PercCoefs m_c;                                     ///< every lane's coefficients (PercKernel.h)
+    float     m_values[PercLanes][perc::COUNT] = {};   ///< each lane's parameters as update() read them
+    bool      m_valid[PercLanes] = {};                 ///< the lane has been updated at least once
+    int       m_keyRoot[PercLanes] = {};               ///< per lane: the key it was tuned to
+    int       m_scale[PercLanes] = {};                 ///< per lane: the scale it was tuned to
+    int       m_role[PercLanes] = {};                  ///< perc.role per lane (PercRole)
+    int       m_engine[PercLanes] = {};                ///< perc.engine per lane
+    int       m_choke[PercLanes] = {};                 ///< perc.choke group per lane (0 = none)
+    double    m_tunedHz[PercLanes] = {};               ///< each lane's pitch after tuning to the key
+    double    m_shiftMul[PercLanes] = {};              ///< the pitch factor of the last hit's semitone shift
+    double    m_bpm = DefaultBpm;                      ///< time base of the auto-pan
+    bool      m_panning = false;                      ///< any lane moves: one decision for the whole kit (PercKernel.h)
+    float     m_modeAmp[PercModes][PercLanes] = {};   ///< the modal engine's mode amplitudes
+    double    m_modeW[PercModes][PercLanes] = {};     ///< their angular frequencies per sample
+    double    m_modeR[PercModes][PercLanes] = {};     ///< their per-sample radii (the decays)
     // Noise and bursts.
-    Rng   m_noiseRng[PercLanes];   ///< each lane's noise source
-    float m_noiseTail[PercLanes] = {};   ///< per lane: the noise's per-sample decay after the hit
-    float m_noiseFast[PercLanes] = {};   ///< ... and between the bursts of a clap
-    int   m_burstsLeft[PercLanes] = {};   ///< a clap's bursts still to come
-    double m_burstTimer[PercLanes] = {};   ///< per lane: samples to the next burst
-    double m_burstSpacing[PercLanes] = {};   ///< ... and between bursts
-    float m_burstVel[PercLanes] = {};   ///< the bursts' level
-    float m_chokeFactor = 0.999f;   ///< the per-sample decay of a choked lane (8 ms)
-    std::vector<float> m_noise;   ///< a block's noise, per sample and lane
-    std::vector<float> m_reset;   ///< a block's burst restarts
-    std::vector<float> m_dNoise;   ///< a block's noise decays
-    std::vector<float> m_outL;   ///< the kit's output, left
-    std::vector<float> m_outR;   ///< ... right
+    Rng                m_noiseRng[PercLanes];            ///< each lane's noise source
+    float              m_noiseTail[PercLanes] = {};      ///< per lane: the noise's per-sample decay after the hit
+    float              m_noiseFast[PercLanes] = {};      ///< ... and between the bursts of a clap
+    int                m_burstsLeft[PercLanes] = {};     ///< a clap's bursts still to come
+    double             m_burstTimer[PercLanes] = {};     ///< per lane: samples to the next burst
+    double             m_burstSpacing[PercLanes] = {};   ///< ... and between bursts
+    float              m_burstVel[PercLanes] = {};       ///< the bursts' level
+    float              m_chokeFactor = 0.999f;           ///< the per-sample decay of a choked lane (8 ms)
+    std::vector<float> m_noise;                          ///< a block's noise, per sample and lane
+    std::vector<float> m_reset;                          ///< a block's burst restarts
+    std::vector<float> m_dNoise;                         ///< a block's noise decays
+    std::vector<float> m_outL;                           ///< the kit's output, left
+    std::vector<float> m_outR;                           ///< ... right
 };
 
-} // namespace phos
+}   // namespace phos

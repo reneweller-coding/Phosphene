@@ -28,13 +28,15 @@
 #include <string_view>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 struct RatingEntry;
 struct TrackPlan;
 
 /** @brief The learned weights: one per "name=value" feature. */
-class Preferences {
+class Preferences
+{
 public:
     /**
      * @brief Reads `name=value weight` lines ('#' starts a comment); false on a malformed line.
@@ -42,7 +44,7 @@ public:
      * @param[out] error  receives the failure, or null
      * @return false on a malformed line
      */
-    bool parse(std::string_view text, std::string* error = nullptr);
+    bool parse( std::string_view text, std::string *error = nullptr );
     /**
      * @brief The lines parse() reads, sorted by feature.
      * @return the lines
@@ -54,13 +56,13 @@ public:
      * @param[in] value  its value
      * @return the factor
      */
-    double factor(const std::string& name, const std::string& value) const;
+    double factor( const std::string &name, const std::string &value ) const;
     /**
      * @brief The weight itself (0 when absent).
      * @param[in] feature  the feature
      * @return its weight
      */
-    double weight(const std::string& feature) const;
+    double weight( const std::string &feature ) const;
     /**
      * @brief Whether no weight is set.
      * @return true when no weight is set
@@ -76,7 +78,7 @@ public:
      * @param[in] feature  the feature
      * @param[in] weight   its weight
      */
-    void set(const std::string& feature, double weight) { m_w[feature] = weight; }
+    void set( const std::string &feature, double weight ) { m_w[feature] = weight; }
 
 private:
     std::map<std::string, double> m_w;   ///< "name=value" -> weight
@@ -88,7 +90,7 @@ private:
  * @param[in] ratings  the verdicts
  * @return the weights
  */
-Preferences fitPreferences(const std::vector<RatingEntry>& ratings);
+Preferences fitPreferences( const std::vector<RatingEntry> &ratings );
 
 /**
  * @brief The composer's decisions at bar @p barInTrack of a track, as `name=value` pairs joined by ';'.
@@ -96,13 +98,13 @@ Preferences fitPreferences(const std::vector<RatingEntry>& ratings);
  * @param[in] barInTrack  the bar within the track
  * @return the name=value pairs
  */
-std::string decisionFeatures(const TrackPlan& plan, int barInTrack);
+std::string decisionFeatures( const TrackPlan &plan, int barInTrack );
 
 /**
  * @brief Sets the process-wide preferences (nullptr: none); moves preferencesRevision().
  * @param[in] prefs  the preferences, or null
  */
-void setPreferences(std::shared_ptr<const Preferences> prefs);
+void setPreferences( std::shared_ptr<const Preferences> prefs );
 /**
  * @brief The process-wide preferences, or nullptr.
  * @return the preferences, or null
@@ -119,13 +121,13 @@ unsigned preferencesRevision();
  * @param[in] value  its value
  * @return the factor
  */
-double preferenceFactor(const char* name, const std::string& value);
+double preferenceFactor( const char *name, const std::string &value );
 
 /** @name The feature values' names at the draw sites (so the features and the factors spell them alike)
  *  @{ */
-extern const char* const FormTemplateFeatureNames[4];   ///< "Full-On", "Progressive", "Goa", "Dark Forest"
-extern const char* const ArpStyleFeatureNames[6];       ///< "corpus", "up", "down", "up-down", "Euclid", "polymeter"
-extern const char* const CounterModeFeatureNames[4];    ///< "Echo", "Answer", "Timbral", "Hocket"
+extern const char *const FormTemplateFeatureNames[4];   ///< "Full-On", "Progressive", "Goa", "Dark Forest"
+extern const char *const ArpStyleFeatureNames[6];       ///< "corpus", "up", "down", "up-down", "Euclid", "polymeter"
+extern const char *const CounterModeFeatureNames[4];    ///< "Echo", "Answer", "Timbral", "Hocket"
 /** @} */
 
-} // namespace phos
+}   // namespace phos

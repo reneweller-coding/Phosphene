@@ -20,18 +20,19 @@
 #include <string_view>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 /**
  * @brief A standard normal draw from @p r (Box-Muller: two uniforms per draw, the cosine branch).
  * @param[in,out] r  the random stream
  * @return the draw
  */
-inline double gaussian(Rng& r)
+inline double gaussian( Rng &r )
 {
-    const double u1 = 1.0 - static_cast<double>(r.uniform());
-    const double u2 = static_cast<double>(r.uniform());
-    return std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * 3.141592653589793 * u2);
+    const double u1 = 1.0 - static_cast<double>( r.uniform() );
+    const double u2 = static_cast<double>( r.uniform() );
+    return std::sqrt( -2.0 * std::log( u1 ) ) * std::cos( 2.0 * 3.141592653589793 * u2 );
 }
 
 /**
@@ -41,13 +42,17 @@ inline double gaussian(Rng& r)
  * @param[in]     n  their count
  * @return the index drawn
  */
-inline int drawIndex(Rng& r, const double* w, int n)
+inline int drawIndex( Rng &r, const double *w, int n )
 {
     double total = 0.0;
-    for (int i = 0; i < n; ++i) total += w[i];
-    if (total <= 0.0) return r.below(n);
-    double x = static_cast<double>(r.uniform()) * total;
-    for (int i = 0; i < n; ++i) { if (x < w[i]) return i; x -= w[i]; }
+    for ( int i = 0; i < n; ++i ) total += w[i];
+    if ( total <= 0.0 ) return r.below( n );
+    double x = static_cast<double>( r.uniform() ) * total;
+    for ( int i = 0; i < n; ++i )
+    {
+        if ( x < w[i] ) return i;
+        x -= w[i];
+    }
     return n - 1;
 }
 
@@ -61,14 +66,14 @@ inline int drawIndex(Rng& r, const double* w, int n)
  * @param[out] a2       the second coefficient
  * @param[out] a3       the third coefficient
  */
-inline void svfCoefs(double fc, double damping, double sr, float& a1, float& a2, float& a3)
+inline void svfCoefs( double fc, double damping, double sr, float &a1, float &a2, float &a3 )
 {
     constexpr double PiD = 3.141592653589793;
-    const double g = std::tan(PiD * std::clamp(fc, 10.0, 0.45 * sr) / sr);
-    const double d1 = 1.0 / (1.0 + g * (g + damping));
-    a1 = static_cast<float>(d1);
-    a2 = static_cast<float>(g * d1);
-    a3 = static_cast<float>(g * g * d1);
+    const double     g = std::tan( PiD * std::clamp( fc, 10.0, 0.45 * sr ) / sr );
+    const double     d1 = 1.0 / ( 1.0 + g * ( g + damping ) );
+    a1 = static_cast<float>( d1 );
+    a2 = static_cast<float>( g * d1 );
+    a3 = static_cast<float>( g * g * d1 );
 }
 
 /**
@@ -77,17 +82,21 @@ inline void svfCoefs(double fc, double damping, double sr, float& a1, float& a2,
  * @param[out] out   its bytes
  * @return false if it cannot be read
  */
-inline bool readFile(const char* path, std::vector<uint8_t>& out)
+inline bool readFile( const char *path, std::vector<uint8_t> &out )
 {
-    std::FILE* f = std::fopen(path, "rb");
-    if (f == nullptr) return false;
-    std::fseek(f, 0, SEEK_END);
-    const long n = std::ftell(f);
-    std::fseek(f, 0, SEEK_SET);
-    if (n <= 0) { std::fclose(f); return false; }
-    out.resize(static_cast<size_t>(n));
-    const size_t got = std::fread(out.data(), 1, out.size(), f);
-    std::fclose(f);
+    std::FILE *f = std::fopen( path, "rb" );
+    if ( f == nullptr ) return false;
+    std::fseek( f, 0, SEEK_END );
+    const long n = std::ftell( f );
+    std::fseek( f, 0, SEEK_SET );
+    if ( n <= 0 )
+    {
+        std::fclose( f );
+        return false;
+    }
+    out.resize( static_cast<size_t>( n ) );
+    const size_t got = std::fread( out.data(), 1, out.size(), f );
+    std::fclose( f );
     return got == out.size();
 }
 /**
@@ -96,7 +105,10 @@ inline bool readFile(const char* path, std::vector<uint8_t>& out)
  * @param[out] out   its bytes
  * @return false if it cannot be read
  */
-inline bool readFile(const std::string& path, std::vector<uint8_t>& out) { return readFile(path.c_str(), out); }
+inline bool readFile( const std::string &path, std::vector<uint8_t> &out )
+{
+    return readFile( path.c_str(), out );
+}
 
 /**
  * @brief Writes "@p what (at byte @p at)" into @p error (when it is not null) and returns false: the one-line
@@ -106,11 +118,12 @@ inline bool readFile(const std::string& path, std::vector<uint8_t>& out) { retur
  * @param[in]  at     the byte it went wrong at
  * @return false
  */
-inline bool fileError(std::string* error, const char* what, size_t at)
+inline bool fileError( std::string *error, const char *what, size_t at )
 {
-    if (error != nullptr) {
+    if ( error != nullptr )
+    {
         char buf[256];
-        std::snprintf(buf, sizeof(buf), "%s (at byte %llu)", what, static_cast<unsigned long long>(at));
+        std::snprintf( buf, sizeof( buf ), "%s (at byte %llu)", what, static_cast<unsigned long long>( at ) );
         *error = buf;
     }
     return false;
@@ -121,11 +134,11 @@ inline bool fileError(std::string* error, const char* what, size_t at)
  * @param[in] s  the text
  * @return the text trimmed
  */
-inline std::string_view trimView(std::string_view s)
+inline std::string_view trimView( std::string_view s )
 {
-    while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\r')) s.remove_prefix(1);
-    while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r')) s.remove_suffix(1);
+    while ( !s.empty() && ( s.front() == ' ' || s.front() == '\t' || s.front() == '\r' ) ) s.remove_prefix( 1 );
+    while ( !s.empty() && ( s.back() == ' ' || s.back() == '\t' || s.back() == '\r' ) ) s.remove_suffix( 1 );
     return s;
 }
 
-} // namespace phos
+}   // namespace phos

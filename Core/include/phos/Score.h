@@ -15,7 +15,8 @@
 #include <memory>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 /**
  * @brief The generators a note can belong to.
@@ -30,44 +31,65 @@ namespace phos {
  * so nothing saved depends on these values; the sort order of notes at equal beats does, and with it
  * every render, which the round accepted.
  */
-enum class PartE : uint8_t { KICK = 0, BASS, PERC, ACID, LEAD, COUNTER, ARP, STAB, PAD, DRONE, SFX, TEXTURE, VOCAL,
-                            FIELD,   ///< 27.09.2026: the field recordings' sampler (FieldPlayer.h). Appended.
-                            COUNT };
-constexpr int NumParts = static_cast<int>(PartE::COUNT);   ///< number of parts
-extern const char* const PartNames[NumParts];              ///< "Kick", "Bass", ...
+enum class PartE : uint8_t
+{
+    KICK = 0,
+    BASS,
+    PERC,
+    ACID,
+    LEAD,
+    COUNTER,
+    ARP,
+    STAB,
+    PAD,
+    DRONE,
+    SFX,
+    TEXTURE,
+    VOCAL,
+    FIELD,   ///< 27.09.2026: the field recordings' sampler (FieldPlayer.h). Appended.
+    COUNT
+};
+constexpr int            NumParts = static_cast<int>( PartE::COUNT );   ///< number of parts
+extern const char *const PartNames[NumParts];                           ///< "Kick", "Bass", ...
 
 /**
  * @brief The part a polyphonic instance plays (the two enums run side by side from Lead).
  * @param[in] i  the instance
  * @return its part
  */
-constexpr PartE polyPart(PolyInstanceE i) { return static_cast<PartE>(static_cast<int>(PartE::LEAD) + polyIndex(i)); }
+constexpr PartE polyPart( PolyInstanceE i )
+{
+    return static_cast<PartE>( static_cast<int>( PartE::LEAD ) + polyIndex( i ) );
+}
 /**
  * @brief The polyphonic instance of a part, or -1 when the part is not played by a Poly.
  * @param[in] p  the part
  * @return its instance, or -1
  */
-constexpr int polyOfPart(PartE p)
+constexpr int polyOfPart( PartE p )
 {
-    const int k = static_cast<int>(p) - static_cast<int>(PartE::LEAD);
+    const int k = static_cast<int>( p ) - static_cast<int>( PartE::LEAD );
     return k >= 0 && k < PolyInstances ? k : -1;
 }
-static_assert(polyPart(PolyInstanceE::DRONE) == PartE::DRONE && polyPart(PolyInstanceE::COUNTER) == PartE::COUNTER,
-              "Part and PolyInstance must list the polyphonic voices in the same order");
+static_assert( polyPart( PolyInstanceE::DRONE ) == PartE::DRONE && polyPart( PolyInstanceE::COUNTER ) == PartE::COUNTER,
+               "Part and PolyInstance must list the polyphonic voices in the same order" );
 
 /** @brief Flags of a note event. */
-enum NoteFlagE : uint8_t {
+enum NoteFlagE : uint8_t
+{
     NOTE_ACCENT = 1,   ///< accented step (acid, percussion)
-    NOTE_SLIDE  = 2,   ///< glide into the next note (acid; the lead since 22.09.2026, on flagged notes only)
-    NOTE_SHORT  = 4,   ///< played at half its written length: the lead's staccato gate (22.09.2026)
+    NOTE_SLIDE = 2,    ///< glide into the next note (acid; the lead since 22.09.2026, on flagged notes only)
+    NOTE_SHORT = 4,    ///< played at half its written length: the lead's staccato gate (22.09.2026)
 };
 
 /** @brief One note of the score. */
-struct NoteEvent {
-    double  m_beat = 0.0;       ///< start in beats from the start of the set
-    float   m_length = 0.25f;   ///< duration in beats
-    PartE    m_part = PartE::KICK; ///< generator
-    uint16_t m_lane = 0;        ///< lane within the part (percussion lane, layer; an effect's bank preset since 23.09.2026, up to 512)
+struct NoteEvent
+{
+    double   m_beat = 0.0;           ///< start in beats from the start of the set
+    float    m_length = 0.25f;       ///< duration in beats
+    PartE    m_part = PartE::KICK;   ///< generator
+    uint16_t m_lane =
+        0;   ///< lane within the part (percussion lane, layer; an effect's bank preset since 23.09.2026, up to 512)
     uint8_t m_pitch = 36;       ///< MIDI note number
     uint8_t m_velocity = 100;   ///< 1..127
     uint8_t m_flags = 0;        ///< NoteFlag bits
@@ -79,7 +101,7 @@ struct NoteEvent {
  * @param[in] b  the second event
  * @return true when a comes first
  */
-bool noteLess(const NoteEvent& a, const NoteEvent& b);
+bool noteLess( const NoteEvent &a, const NoteEvent &b );
 
 /**
  * @brief A change of the sound, written by the composer: how a track or a passage departs from the
@@ -91,11 +113,13 @@ bool noteLess(const NoteEvent& a, const NoteEvent& b);
  * (a choice, a switch) plays the override while one is set. With every offset at zero and no
  * override, the instrument sounds exactly as the knobs say.
  */
-struct ControlEvent {
+struct ControlEvent
+{
     /** @brief What a control event does to its parameter. */
-    enum class KindE : uint8_t {
-        OFFSET,        ///< ramp the normalised offset to `value` over `length` beats (raised cosine)
-        OVERRIDE,      ///< play `value` instead of the knob (discrete parameters); value < 0 clears it
+    enum class KindE : uint8_t
+    {
+        OFFSET,     ///< ramp the normalised offset to `value` over `length` beats (raised cosine)
+        OVERRIDE,   ///< play `value` instead of the knob (discrete parameters); value < 0 clears it
         /**
          * @brief The first sounding bass slot of the coming beat, in beats after that beat's kick
          *        (`param` is not read; a value <= 0 hands the engine back its own derivation).
@@ -124,15 +148,16 @@ struct ControlEvent {
          */
         BASE,
     };
-    double  m_beat = 0.0;       ///< when the change starts
-    float   m_length = 0.0f;    ///< ramp length in beats; 0 = immediately
-    float   m_value = 0.0f;     ///< target offset or override value
-    int16_t m_param = 0;        ///< global parameter id
-    KindE    m_kind = KindE::OFFSET; ///< what `value` means
+    double  m_beat = 0.0;             ///< when the change starts
+    float   m_length = 0.0f;          ///< ramp length in beats; 0 = immediately
+    float   m_value = 0.0f;           ///< target offset or override value
+    int16_t m_param = 0;              ///< global parameter id
+    KindE   m_kind = KindE::OFFSET;   ///< what `value` means
 };
 
 /** @brief Key signature change (for the MIDI export). */
-struct KeyChange {
+struct KeyChange
+{
     double m_beat = 0.0;   ///< position in beats
     int    m_root = 6;     ///< pitch class of the minor key
 };
@@ -145,25 +170,38 @@ struct KeyChange {
  * and the cut (the first beats of a breakdown) -- so that the indices of the older types, and with them
  * the MIDI markers, did not move.
  */
-enum class SectionTypeE : uint8_t { INTRO = 0, GROOVE, BUILD, DROP, BREAK, OUTRO, PDB, CUT, COUNT };
-extern const char* const SectionNames[static_cast<int>(SectionTypeE::COUNT)];   ///< display names
+enum class SectionTypeE : uint8_t
+{
+    INTRO = 0,
+    GROOVE,
+    BUILD,
+    DROP,
+    BREAK,
+    OUTRO,
+    PDB,
+    CUT,
+    COUNT
+};
+extern const char *const SectionNames[static_cast<int>( SectionTypeE::COUNT )];   ///< display names
 
 /** @brief Start of a section. */
-struct SectionMark {
-    double      m_beat = 0.0;                ///< start in beats
-    SectionTypeE m_type = SectionTypeE::GROOVE; ///< kind of section
-    float       m_energy = 0.5f;             ///< 0..1 on the energy arc
-    int         m_track = 0;                 ///< index of the track within the set
+struct SectionMark
+{
+    double       m_beat = 0.0;                    ///< start in beats
+    SectionTypeE m_type = SectionTypeE::GROOVE;   ///< kind of section
+    float        m_energy = 0.5f;                 ///< 0..1 on the energy arc
+    int          m_track = 0;                     ///< index of the track within the set
 };
 
 /** @brief A complete or partial score. */
-struct Score {
-    TempoMap m_tempo;                        ///< tempo over beats
-    int m_keyRoot = 6;                       ///< pitch class of the key, 0 = C
-    int m_scale = 1;                         ///< index into ScaleNames
-    std::vector<NoteEvent> m_notes;          ///< all notes, kept sorted by sort()
-    std::vector<SectionMark> m_sections;     ///< section starts, sorted by beat
-    std::vector<KeyChange> m_keyChanges;     ///< key changes after the start (keyRoot holds at beat 0)
+struct Score
+{
+    TempoMap                 m_tempo;         ///< tempo over beats
+    int                      m_keyRoot = 6;   ///< pitch class of the key, 0 = C
+    int                      m_scale = 1;     ///< index into ScaleNames
+    std::vector<NoteEvent>   m_notes;         ///< all notes, kept sorted by sort()
+    std::vector<SectionMark> m_sections;      ///< section starts, sorted by beat
+    std::vector<KeyChange>   m_keyChanges;    ///< key changes after the start (keyRoot holds at beat 0)
 
     /** @brief Sorts notes and sections. */
     void sort();
@@ -181,26 +219,29 @@ struct Score {
  * @tparam T trivially copyable event type
  */
 template <class T>
-class EventRing {
+class EventRing
+{
 public:
     /**
      * @brief @p capacityPow2 must be a power of two; one slot stays empty.
      * @param[in] capacityPow2  the slots, a power of two
      */
-    explicit EventRing(int capacityPow2 = 8192)
-        : m_size(capacityPow2), m_buf(std::make_unique<T[]>(static_cast<size_t>(capacityPow2))) {}
+    explicit EventRing( int capacityPow2 = 8192 )
+        : m_size( capacityPow2 ), m_buf( std::make_unique<T[]>( static_cast<size_t>( capacityPow2 ) ) )
+    {
+    }
     /**
      * @brief Producer side; false if full.
      * @param[in] e  the event
      * @return false if full
      */
-    bool push(const T& e)
+    bool push( const T &e )
     {
-        const int w = m_write.load(std::memory_order_relaxed);
-        const int next = (w + 1) & (m_size - 1);
-        if (next == m_read.load(std::memory_order_acquire)) return false;
-        m_buf[static_cast<size_t>(w)] = e;
-        m_write.store(next, std::memory_order_release);
+        const int w = m_write.load( std::memory_order_relaxed );
+        const int next = ( w + 1 ) & ( m_size - 1 );
+        if ( next == m_read.load( std::memory_order_acquire ) ) return false;
+        m_buf[static_cast<size_t>( w )] = e;
+        m_write.store( next, std::memory_order_release );
         return true;
     }
     /**
@@ -208,11 +249,11 @@ public:
      * @param[out] e  the oldest event
      * @return false if empty
      */
-    bool peek(T& e) const
+    bool peek( T &e ) const
     {
-        const int r = m_read.load(std::memory_order_relaxed);
-        if (r == m_write.load(std::memory_order_acquire)) return false;
-        e = m_buf[static_cast<size_t>(r)];
+        const int r = m_read.load( std::memory_order_relaxed );
+        if ( r == m_write.load( std::memory_order_acquire ) ) return false;
+        e = m_buf[static_cast<size_t>( r )];
         return true;
     }
     /**
@@ -220,10 +261,10 @@ public:
      * @param[out] e  the oldest event
      * @return false if empty
      */
-    bool pop(T& e)
+    bool pop( T &e )
     {
-        if (!peek(e)) return false;
-        m_read.store((m_read.load(std::memory_order_relaxed) + 1) & (m_size - 1), std::memory_order_release);
+        if ( !peek( e ) ) return false;
+        m_read.store( ( m_read.load( std::memory_order_relaxed ) + 1 ) & ( m_size - 1 ), std::memory_order_release );
         return true;
     }
     /**
@@ -232,16 +273,17 @@ public:
      */
     int space() const
     {
-        const int w = m_write.load(std::memory_order_acquire), r = m_read.load(std::memory_order_acquire);
-        return (r - w - 1 + m_size) & (m_size - 1);
+        const int w = m_write.load( std::memory_order_acquire ), r = m_read.load( std::memory_order_acquire );
+        return ( r - w - 1 + m_size ) & ( m_size - 1 );
     }
     /** @brief Consumer side: drops everything. */
-    void clear() { m_read.store(m_write.load(std::memory_order_acquire), std::memory_order_release); }
+    void clear() { m_read.store( m_write.load( std::memory_order_acquire ), std::memory_order_release ); }
+
 private:
-    int m_size;   ///< capacity
-    std::unique_ptr<T[]> m_buf;   ///< the ring
-    std::atomic<int> m_read{ 0 };   ///< the consumer's position
-    std::atomic<int> m_write{ 0 };   ///< the producer's position
+    int                  m_size;         ///< capacity
+    std::unique_ptr<T[]> m_buf;          ///< the ring
+    std::atomic<int>     m_read{ 0 };    ///< the consumer's position
+    std::atomic<int>     m_write{ 0 };   ///< the producer's position
 };
 
-} // namespace phos
+}   // namespace phos

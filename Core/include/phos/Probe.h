@@ -55,7 +55,8 @@
 #include <type_traits>
 #include <vector>
 
-namespace phos::probe {
+namespace phos::probe
+{
 
 /** @brief The most probe renders that ever run at once, whatever is asked for. */
 constexpr int MaxThreads = 8;
@@ -65,7 +66,7 @@ constexpr int MaxThreads = 8;
  * @param[in] n  1 = serial, one probe after the other (the library's default); 0 = the hardware's threads, at most
  *               MaxThreads; anything else is clamped to 1..kMaxThreads. Ignored on Android.
  */
-void setThreads(int n);
+void setThreads( int n );
 
 /**
  * @brief The resolved number of threads (always >= 1).
@@ -79,7 +80,7 @@ int threads();
  * The directory is created when the first entry is stored. Ignored on Android.
  * @param[in] directory  the directory, empty to turn the cache off
  */
-void setCacheDir(const std::string& directory);
+void setCacheDir( const std::string &directory );
 
 /**
  * @brief The cache directory, empty when the cache is off.
@@ -94,7 +95,8 @@ std::string cacheDir();
 void configureFromEnvironment();
 
 /** @brief What the cache did in this process since the last resetCacheStats(). */
-struct CacheStats {
+struct CacheStats
+{
     uint64_t m_hits = 0;     ///< probes answered from a file
     uint64_t m_misses = 0;   ///< probes rendered because no valid file was there
     uint64_t m_stores = 0;   ///< files written
@@ -119,10 +121,11 @@ std::string buildId();
  * stale value, without rebuilding the core in the middle of a test.
  * @param[in] id  the build id, or null
  */
-void setBuildIdForTest(const char* id);
+void setBuildIdForTest( const char *id );
 
 /** @brief A 128-bit cache key. */
-struct Key {
+struct Key
+{
     uint64_t m_a = 0;   ///< the first half
     uint64_t m_b = 0;   ///< the second half
     /**
@@ -130,7 +133,7 @@ struct Key {
      * @param[in] o  the other key
      * @return true when they are the same
      */
-    bool operator==(const Key& o) const { return m_a == o.m_a && m_b == o.m_b; }
+    bool operator==( const Key &o ) const { return m_a == o.m_a && m_b == o.m_b; }
 };
 
 /**
@@ -141,28 +144,34 @@ struct Key {
  * out of reach: a test suite stores some thousands of entries. Values are added field by field, never as
  * whole structs, so padding bytes cannot make equal inputs hash differently.
  */
-class Hasher {
+class Hasher
+{
 public:
     /**
      * @brief Adds raw bytes.
      * @param[in] data  the bytes
      * @param[in] n     their count
      */
-    void bytes(const void* data, size_t n);
+    void bytes( const void *data, size_t n );
     /**
      * @brief Adds one trivially copyable value (an arithmetic type or an enum).
      * @param[in] v  the value
      */
-    template <typename T> void add(const T& v)
+    template <typename T>
+    void add( const T &v )
     {
-        static_assert(std::is_arithmetic_v<T> || std::is_enum_v<T>, "field by field: no structs, no padding");
-        bytes(&v, sizeof(T));
+        static_assert( std::is_arithmetic_v<T> || std::is_enum_v<T>, "field by field: no structs, no padding" );
+        bytes( &v, sizeof( T ) );
     }
     /**
      * @brief Adds a string with its length, so that "ab","c" and "a","bc" differ.
      * @param[in] s  the string
      */
-    void text(const std::string& s) { add(static_cast<uint64_t>(s.size())); bytes(s.data(), s.size()); }
+    void text( const std::string &s )
+    {
+        add( static_cast<uint64_t>( s.size() ) );
+        bytes( s.data(), s.size() );
+    }
     /**
      * @brief The key of everything added so far.
      * @return the key
@@ -218,7 +227,7 @@ bool cacheEnabled();
  * @return false when there is no file or it is not a complete, intact entry for this key -- a truncated or foreign file
  *         is a miss, never an error
  */
-bool cacheLookup(const Key& key, double values[3]);
+bool cacheLookup( const Key &key, double values[3] );
 
 /**
  * @brief Stores @p values under @p key: written to a temporary name beside the target and renamed, so that
@@ -227,7 +236,7 @@ bool cacheLookup(const Key& key, double values[3]);
  * @param[in] key     the key
  * @param[in] values  the three values
  */
-void cacheStore(const Key& key, const double values[3]);
+void cacheStore( const Key &key, const double values[3] );
 
 /**
  * @brief Runs every task, at most threads() at a time, and returns when all have finished.
@@ -237,6 +246,6 @@ void cacheStore(const Key& key, const double values[3]);
  * and builds an Engine on its way). Tasks must not throw.
  * @param[in] tasks  the tasks
  */
-void runAll(const std::vector<std::function<void()>>& tasks);
+void runAll( const std::vector<std::function<void()>> &tasks );
 
-} // namespace phos::probe
+}   // namespace phos::probe

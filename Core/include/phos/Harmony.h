@@ -19,7 +19,8 @@
  */
 #pragma once
 
-namespace phos {
+namespace phos
+{
 
 constexpr int NumScales = 6;   ///< entries of ScaleNames (Params.h)
 
@@ -39,12 +40,20 @@ inline constexpr int ScaleSteps[NumScales][7] = {
  * @param[in] degree  0 = root, 7 = root an octave up, -1 = the seventh below
  * @return the semitones above the root
  */
-inline int scaleDegree(int scale, int degree)
+inline int scaleDegree( int scale, int degree )
 {
-    const int s = scale < 0 ? 0 : (scale >= NumScales ? NumScales - 1 : scale);
-    int oct = 0;
-    while (degree < 0) { degree += 7; --oct; }
-    while (degree >= 7) { degree -= 7; ++oct; }
+    const int s = scale < 0 ? 0 : ( scale >= NumScales ? NumScales - 1 : scale );
+    int       oct = 0;
+    while ( degree < 0 )
+    {
+        degree += 7;
+        --oct;
+    }
+    while ( degree >= 7 )
+    {
+        degree -= 7;
+        ++oct;
+    }
     return ScaleSteps[s][degree] + 12 * oct;
 }
 
@@ -54,10 +63,11 @@ inline int scaleDegree(int scale, int degree)
  * @param[in] semitonesFromRoot  the pitch class above the root
  * @return true when it is in the scale
  */
-inline bool inScale(int scale, int semitonesFromRoot)
+inline bool inScale( int scale, int semitonesFromRoot )
 {
-    const int pc = ((semitonesFromRoot % 12) + 12) % 12;
-    for (int i = 0; i < 7; ++i) if (scaleDegree(scale, i) == pc) return true;
+    const int pc = ( ( semitonesFromRoot % 12 ) + 12 ) % 12;
+    for ( int i = 0; i < 7; ++i )
+        if ( scaleDegree( scale, i ) == pc ) return true;
     return false;
 }
 
@@ -74,12 +84,13 @@ inline bool inScale(int scale, int semitonesFromRoot)
  * @param[in] pcFromRoot  the pitch class above the root
  * @return true for a colour tone
  */
-inline bool isColourTone(int scale, int pcFromRoot)
+inline bool isColourTone( int scale, int pcFromRoot )
 {
-    const int pc = ((pcFromRoot % 12) + 12) % 12;
-    if (pc == 1) return true;
-    for (int d = 1; d < 7; ++d)
-        if (scaleDegree(scale, d) - scaleDegree(scale, d - 1) == 3 && scaleDegree(scale, d) % 12 == pc) return true;
+    const int pc = ( ( pcFromRoot % 12 ) + 12 ) % 12;
+    if ( pc == 1 ) return true;
+    for ( int d = 1; d < 7; ++d )
+        if ( scaleDegree( scale, d ) - scaleDegree( scale, d - 1 ) == 3 && scaleDegree( scale, d ) % 12 == pc )
+            return true;
     return false;
 }
 
@@ -96,10 +107,10 @@ inline bool isColourTone(int scale, int pcFromRoot)
  * @param[in] pcFromRoot  the pitch class above the root
  * @return true for a colour tone of the lines
  */
-inline bool isLineColourTone(int scale, int pcFromRoot)
+inline bool isLineColourTone( int scale, int pcFromRoot )
 {
-    const int pc = ((pcFromRoot % 12) + 12) % 12;
-    return isColourTone(scale, pc) && !(pc == 1 && inScale(scale, 1));
+    const int pc = ( ( pcFromRoot % 12 ) + 12 ) % 12;
+    return isColourTone( scale, pc ) && !( pc == 1 && inScale( scale, 1 ) );
 }
 
 /**
@@ -111,10 +122,11 @@ inline bool isLineColourTone(int scale, int pcFromRoot)
  * @param[in] scale  the scale's index
  * @return the number of colour tones
  */
-inline int scaleColourTones(int scale)
+inline int scaleColourTones( int scale )
 {
     int n = 0;
-    for (int d = 0; d < 7; ++d) if (isColourTone(scale, scaleDegree(scale, d))) ++n;
+    for ( int d = 0; d < 7; ++d )
+        if ( isColourTone( scale, scaleDegree( scale, d ) ) ) ++n;
     return n;
 }
 
@@ -128,14 +140,14 @@ inline int scaleColourTones(int scale)
  * @param[in] pcFromRoot  the pitch class above the tonic
  * @return the instability, 0..4
  */
-inline int lerdahlInstability(int pcFromRoot)
+inline int lerdahlInstability( int pcFromRoot )
 {
-    const int pc = ((pcFromRoot % 12) + 12) % 12;
-    int depth = 1;                                                // chromatic level: every pitch class
-    if (pc == 0 || pc == 2 || pc == 3 || pc == 5 || pc == 7 || pc == 8 || pc == 10) ++depth;   // diatonic
-    if (pc == 0 || pc == 3 || pc == 7) ++depth;                   // triadic
-    if (pc == 0 || pc == 7) ++depth;                              // fifth
-    if (pc == 0) ++depth;                                         // octave
+    const int pc = ( ( pcFromRoot % 12 ) + 12 ) % 12;
+    int       depth = 1;   // chromatic level: every pitch class
+    if ( pc == 0 || pc == 2 || pc == 3 || pc == 5 || pc == 7 || pc == 8 || pc == 10 ) ++depth;   // diatonic
+    if ( pc == 0 || pc == 3 || pc == 7 ) ++depth;                                                // triadic
+    if ( pc == 0 || pc == 7 ) ++depth;                                                           // fifth
+    if ( pc == 0 ) ++depth;                                                                      // octave
     return 5 - depth;
 }
 
@@ -152,10 +164,10 @@ inline int lerdahlInstability(int pcFromRoot)
  * @param[in] registerOffset  semitones the window is moved by
  * @return the MIDI note
  */
-inline int bassRootNote(int keyRoot, int registerOffset)
+inline int bassRootNote( int keyRoot, int registerOffset )
 {
     const int low = 28 + registerOffset;   // the window's bottom note
-    return low + ((((keyRoot - low) % 12) + 12) % 12);
+    return low + ( ( ( ( keyRoot - low ) % 12 ) + 12 ) % 12 );
 }
 
 /**
@@ -182,7 +194,8 @@ inline int bassRootNote(int keyRoot, int registerOffset)
  * octave is the same semitone rub a b9 is. A major seventh stays where its seventh is not the leading
  * tone (bVI and bIII as maj7), rarely.
  * @{ */
-enum class ChordTypeE : int {
+enum class ChordTypeE : int
+{
     TRIAD = 0,   ///< root, third, fifth -- the scale's own
     SUS2,        ///< 1 - 2 - 5: open, weightless
     SUS4,        ///< 1 - 4 - 5
@@ -192,10 +205,8 @@ enum class ChordTypeE : int {
     QUARTAL,     ///< stacked fourths from the fifth: modern, cool, blurred
     COUNT
 };
-constexpr int NumChordTypes = static_cast<int>(ChordTypeE::COUNT);
-inline constexpr const char* ChordTypeNames[NumChordTypes] = {
-    "triad", "sus2", "sus4", "m7", "m9", "maj7", "quartal"
-};
+constexpr int                NumChordTypes = static_cast<int>( ChordTypeE::COUNT );
+inline constexpr const char *ChordTypeNames[NumChordTypes] = { "triad", "sus2", "sus4", "m7", "m9", "maj7", "quartal" };
 
 /**
  * @brief The intervals of a chord type over its root, in semitones, in the order they are voiced.
@@ -211,20 +222,51 @@ inline constexpr const char* ChordTypeNames[NumChordTypes] = {
  * @param[out] out     the intervals in semitones
  * @return how many intervals were written (2 .. 4)
  */
-inline int chordIntervals(ChordTypeE type, int scale, int degree, int out[4])
+inline int chordIntervals( ChordTypeE type, int scale, int degree, int out[4] )
 {
-    const int third = scaleDegree(scale, degree + 2) - scaleDegree(scale, degree);   // 3 or 4
-    int n = 0;
-    auto put = [&](int iv) { if (n < 4) out[n++] = iv; };
-    switch (type) {
-    case ChordTypeE::SUS2:     put(7);  put(14); break;
-    case ChordTypeE::SUS4:     put(7);  put(17); break;
-    case ChordTypeE::MIN7:     put(7);  put(third + 12); put(10); break;
-    case ChordTypeE::MIN9:     put(7);  put(third + 12); put(10); put(14); break;
-    case ChordTypeE::MAJ7:     put(7);  put(third + 12); put(11); break;
-    case ChordTypeE::QUARTAL:  put(7);  put(12); put(17); put(22); break;
+    const int third = scaleDegree( scale, degree + 2 ) - scaleDegree( scale, degree );   // 3 or 4
+    int       n = 0;
+    auto      put = [&]( int iv )
+    {
+        if ( n < 4 ) out[n++] = iv;
+    };
+    switch ( type )
+    {
+    case ChordTypeE::SUS2:
+        put( 7 );
+        put( 14 );
+        break;
+    case ChordTypeE::SUS4:
+        put( 7 );
+        put( 17 );
+        break;
+    case ChordTypeE::MIN7:
+        put( 7 );
+        put( third + 12 );
+        put( 10 );
+        break;
+    case ChordTypeE::MIN9:
+        put( 7 );
+        put( third + 12 );
+        put( 10 );
+        put( 14 );
+        break;
+    case ChordTypeE::MAJ7:
+        put( 7 );
+        put( third + 12 );
+        put( 11 );
+        break;
+    case ChordTypeE::QUARTAL:
+        put( 7 );
+        put( 12 );
+        put( 17 );
+        put( 22 );
+        break;
     case ChordTypeE::TRIAD:
-    default:                  put(7);  put(third + 12); break;
+    default:
+        put( 7 );
+        put( third + 12 );
+        break;
     }
     return n;
 }
@@ -240,12 +282,13 @@ inline int chordIntervals(ChordTypeE type, int scale, int degree, int out[4])
  * @param[in] type    the chord type
  * @return true when every tone lies in the mode
  */
-inline bool chordTypeFits(int scale, int degree, ChordTypeE type)
+inline bool chordTypeFits( int scale, int degree, ChordTypeE type )
 {
-    int iv[4];
-    const int n = chordIntervals(type, scale, degree, iv);
-    const int root = scaleDegree(scale, degree);
-    for (int i = 0; i < n; ++i) if (!inScale(scale, root + iv[i])) return false;
+    int       iv[4];
+    const int n = chordIntervals( type, scale, degree, iv );
+    const int root = scaleDegree( scale, degree );
+    for ( int i = 0; i < n; ++i )
+        if ( !inScale( scale, root + iv[i] ) ) return false;
     return true;
 }
 
@@ -255,7 +298,11 @@ inline bool chordTypeFits(int scale, int degree, ChordTypeE type)
  * @param[in] pcFromKey  the pitch class above the key
  * @return true for the b2 or the leading tone
  */
-inline bool rubsTonic(int pcFromKey) { const int pc = ((pcFromKey % 12) + 12) % 12; return pc == 1 || pc == 11; }
+inline bool rubsTonic( int pcFromKey )
+{
+    const int pc = ( ( pcFromKey % 12 ) + 12 ) % 12;
+    return pc == 1 || pc == 11;
+}
 
 /**
  * @brief Whether a pad may hold the chord: neither its root nor any of its tones rubs against the tonic
@@ -266,14 +313,14 @@ inline bool rubsTonic(int pcFromKey) { const int pc = ((pcFromKey % 12) + 12) % 
  * @param[in] type    the chord type
  * @return true when a pad may hold it
  */
-inline bool padAvoidsRubs(int scale, int degree, ChordTypeE type)
+inline bool padAvoidsRubs( int scale, int degree, ChordTypeE type )
 {
-    int iv[4];
-    const int n = chordIntervals(type, scale, degree, iv);
-    const int root = scaleDegree(scale, degree) % 12;
-    if (rubsTonic(root)) return false;
-    for (int i = 0; i < n; ++i)
-        if (rubsTonic(root + iv[i]) || iv[i] % 12 == 1 || iv[i] % 12 == 6) return false;
+    int       iv[4];
+    const int n = chordIntervals( type, scale, degree, iv );
+    const int root = scaleDegree( scale, degree ) % 12;
+    if ( rubsTonic( root ) ) return false;
+    for ( int i = 0; i < n; ++i )
+        if ( rubsTonic( root + iv[i] ) || iv[i] % 12 == 1 || iv[i] % 12 == 6 ) return false;
     return true;
 }
 
@@ -294,25 +341,27 @@ inline bool padAvoidsRubs(int scale, int degree, ChordTypeE type)
  * @param[in]  out     receives the intervals over that root, the fifth first
  * @return how many intervals were written (2 .. 4)
  */
-inline int padChordIntervals(ChordTypeE type, int scale, int degree, int& root, int out[4])
+inline int padChordIntervals( ChordTypeE type, int scale, int degree, int &root, int out[4] )
 {
-    int iv[4];
-    const int m = chordIntervals(type, scale, degree, iv);
-    root = scaleDegree(scale, degree) % 12;
-    if (rubsTonic(root) || rubsTonic(root + iv[0]) || iv[0] % 12 == 6) {
+    int       iv[4];
+    const int m = chordIntervals( type, scale, degree, iv );
+    root = scaleDegree( scale, degree ) % 12;
+    if ( rubsTonic( root ) || rubsTonic( root + iv[0] ) || iv[0] % 12 == 6 )
+    {
         root = 0;
         out[0] = 7;
         out[1] = 12;
-        out[2] = inScale(scale, 8) ? 20 : scaleDegree(scale, 2) + 12;
+        out[2] = inScale( scale, 8 ) ? 20 : scaleDegree( scale, 2 ) + 12;
         return 3;
     }
     int n = 0;
-    for (int i = 0; i < m; ++i) {
-        const bool rub = rubsTonic(root + iv[i]) || iv[i] % 12 == 1 || iv[i] % 12 == 6;
-        if (!rub) out[n++] = iv[i];
+    for ( int i = 0; i < m; ++i )
+    {
+        const bool rub = rubsTonic( root + iv[i] ) || iv[i] % 12 == 1 || iv[i] % 12 == 6;
+        if ( !rub ) out[n++] = iv[i];
     }
     return n;
 }
 /** @} */
 
-} // namespace phos
+}   // namespace phos

@@ -57,43 +57,49 @@
 #include <string>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 /** @brief The architectures docs/MODEL_FORMAT.md allows. */
-enum class ModelArchE : int { TRANSFORMER = 0, SSM };
+enum class ModelArchE : int
+{
+    TRANSFORMER = 0,
+    SSM
+};
 
 /** @brief What the text header of a weight file says (docs/MODEL_FORMAT.md, section 2). */
-struct ModelInfo {
-    ModelArchE m_arch = ModelArchE::TRANSFORMER;   ///< @c arch
-    int m_layers = 0;          ///< @c layers: blocks
-    int m_dim = 0;             ///< @c dim: width of the residual stream
-    int m_heads = 0;           ///< @c heads (0 for an SSM)
-    int m_ffn = 0;             ///< @c ffn: feed-forward hidden width (0 for an SSM)
-    int m_state = 0;           ///< @c state: SSM state size per inner channel
-    int m_vocab = 0;           ///< @c vocab: must be CorpusAlphabet
-    int m_ctx = 0;             ///< @c ctx: rows of pos.emb; later positions clamp to the last row
-    int m_roles = 0;           ///< @c roles: 3
-    int m_styles = 0;          ///< @c styles: 6 (0 = unknown, then StyleId + 1)
-    int m_tokenVersion = 0;    ///< @c tokenVersion: 1 is the stage-A alphabet
-    int m_relMin = 0;          ///< @c relMin: must be CorpusRelMin
-    int m_relMax = 0;          ///< @c relMax: must be CorpusRelMax
-    int m_condStep = 0;        ///< @c condStep: rows of step.emb (16)
-    int m_condBar = 0;         ///< @c condBar: rows of bar.emb (8)
-    int m_condGap = 0;         ///< @c condGap: rows of gap.emb (10)
-    int m_condIdx = 0;         ///< @c condIdx: rows of idx.emb (8)
-    int m_condBars = 0;        ///< @c condBars: rows of bars.emb (8)
-    int m_condKick = 0;        ///< @c condKick: rows of kick.emb (3), or 0 in a file without the bass role
-    int m_condMode = 0;        ///< @c condMode: rows of mode.emb (6), or 0 in a file trained mode-blind
-    int m_expand = 0;          ///< @c expand: SSM inner expansion factor
-    int m_dtRank = 0;          ///< @c dtRank: SSM rank of the delta projection
-    int m_convK = 0;           ///< @c convK: SSM depthwise kernel width
-    bool m_int8 = false;       ///< @c quant=int8 (per tensor the dtype byte still decides)
-    ModelActE m_act = ModelActE::GELU_TANH;   ///< @c act
-    float m_eps = 1e-5f;       ///< @c eps: the norm's epsilon
-    double m_nll = 0.0;        ///< @c nll: held-out negative log likelihood per token, in nats
-    std::string m_text;        ///< the header as it stood in the file
-    size_t m_parameters = 0;   ///< weights read from the file
-    size_t m_bytes = 0;        ///< memory the packed weights and the caches take
+struct ModelInfo
+{
+    ModelArchE  m_arch = ModelArchE::TRANSFORMER;   ///< @c arch
+    int         m_layers = 0;                       ///< @c layers: blocks
+    int         m_dim = 0;                          ///< @c dim: width of the residual stream
+    int         m_heads = 0;                        ///< @c heads (0 for an SSM)
+    int         m_ffn = 0;                          ///< @c ffn: feed-forward hidden width (0 for an SSM)
+    int         m_state = 0;                        ///< @c state: SSM state size per inner channel
+    int         m_vocab = 0;                        ///< @c vocab: must be CorpusAlphabet
+    int         m_ctx = 0;                          ///< @c ctx: rows of pos.emb; later positions clamp to the last row
+    int         m_roles = 0;                        ///< @c roles: 3
+    int         m_styles = 0;                       ///< @c styles: 6 (0 = unknown, then StyleId + 1)
+    int         m_tokenVersion = 0;                 ///< @c tokenVersion: 1 is the stage-A alphabet
+    int         m_relMin = 0;                       ///< @c relMin: must be CorpusRelMin
+    int         m_relMax = 0;                       ///< @c relMax: must be CorpusRelMax
+    int         m_condStep = 0;                     ///< @c condStep: rows of step.emb (16)
+    int         m_condBar = 0;                      ///< @c condBar: rows of bar.emb (8)
+    int         m_condGap = 0;                      ///< @c condGap: rows of gap.emb (10)
+    int         m_condIdx = 0;                      ///< @c condIdx: rows of idx.emb (8)
+    int         m_condBars = 0;                     ///< @c condBars: rows of bars.emb (8)
+    int         m_condKick = 0;   ///< @c condKick: rows of kick.emb (3), or 0 in a file without the bass role
+    int         m_condMode = 0;   ///< @c condMode: rows of mode.emb (6), or 0 in a file trained mode-blind
+    int         m_expand = 0;     ///< @c expand: SSM inner expansion factor
+    int         m_dtRank = 0;     ///< @c dtRank: SSM rank of the delta projection
+    int         m_convK = 0;      ///< @c convK: SSM depthwise kernel width
+    bool        m_int8 = false;   ///< @c quant=int8 (per tensor the dtype byte still decides)
+    ModelActE   m_act = ModelActE::GELU_TANH;   ///< @c act
+    float       m_eps = 1e-5f;                  ///< @c eps: the norm's epsilon
+    double      m_nll = 0.0;                    ///< @c nll: held-out negative log likelihood per token, in nats
+    std::string m_text;                         ///< the header as it stood in the file
+    size_t      m_parameters = 0;               ///< weights read from the file
+    size_t      m_bytes = 0;                    ///< memory the packed weights and the caches take
 };
 
 /**
@@ -101,7 +107,8 @@ struct ModelInfo {
  *
  * All four come out of the onset list the maker has already drawn, before any pitch exists.
  */
-struct NoteCond {
+struct NoteCond
+{
     int m_step = 0;   ///< step in the bar, 0..15
     int m_bar = 0;    ///< bar in the pattern, 0..7
     int m_gap = 0;    ///< 0 for the last note, else the distance to the next capped at 8, 9 above that
@@ -133,11 +140,11 @@ struct NoteCond {
  * @param[in] step  the sixteenth
  * @return 0 on the kick, 1 the sixteenth after, 2 the rest
  */
-inline int kickClass(int step)
+inline int kickClass( int step )
 {
-    const int s = ((step % 16) + 16) % 16;
-    if (s % 4 == 0) return 0;
-    if (s % 4 == 1) return 1;
+    const int s = ( ( step % 16 ) + 16 ) % 16;
+    if ( s % 4 == 0 ) return 0;
+    if ( s % 4 == 1 ) return 1;
     return 2;
 }
 
@@ -146,12 +153,12 @@ inline int kickClass(int step)
  * @param[in] t  the note number
  * @return its bucket
  */
-inline int noteIndexBucket(int t)
+inline int noteIndexBucket( int t )
 {
-    if (t < 4) return t;
-    if (t < 6) return 4;
-    if (t < 10) return 5;
-    if (t < 16) return 6;
+    if ( t < 4 ) return t;
+    if ( t < 6 ) return 4;
+    if ( t < 10 ) return 5;
+    if ( t < 16 ) return 6;
     return 7;
 }
 
@@ -162,11 +169,11 @@ inline int noteIndexBucket(int t)
  * @param[in] hasNext   true when there is a next onset
  * @return the gap code
  */
-inline int noteGapCode(int step, int nextStep, bool hasNext)
+inline int noteGapCode( int step, int nextStep, bool hasNext )
 {
-    if (!hasNext) return 0;
+    if ( !hasNext ) return 0;
     const int d = nextStep - step;
-    if (d > 8) return 9;
+    if ( d > 8 ) return 9;
     return d < 1 ? 1 : d;
 }
 
@@ -176,7 +183,8 @@ inline int noteGapCode(int step, int nextStep, bool hasNext)
  * Bit-identical between AVX2, NEON and the scalar path: every matrix-vector product runs with the
  * output rows in the lanes, every reduction in a scalar loop (ModelKernel.h).
  */
-class NeuralModel {
+class NeuralModel
+{
 public:
     /**
      * @brief Reads a weight file and packs it for this machine's lane width.
@@ -185,7 +193,7 @@ public:
      *                    be
      * @return false on any failure; the model is then unusable and loaded() stays false
      */
-    bool load(const char* path, std::string& error);
+    bool load( const char *path, std::string &error );
 
     /**
      * @brief Whether a model is loaded.
@@ -196,7 +204,7 @@ public:
      * @brief What the header said, plus the measured sizes.
      * @return the model's facts
      */
-    const ModelInfo& info() const { return m_info; }
+    const ModelInfo &info() const { return m_info; }
     /**
      * @brief Symbols in the alphabet (CorpusAlphabet for tokenVersion 1).
      * @return the number of symbols
@@ -218,7 +226,7 @@ public:
      *                   carries @c condMode, ignored (and harmless) by every older file Every argument is clamped into
      *                   the range the file declares.
      */
-    void begin(int role, int style, int bars, int mode = 0);
+    void begin( int role, int style, int bars, int mode = 0 );
 
     /**
      * @brief Computes the distribution of the next note.
@@ -228,7 +236,7 @@ public:
      *         @c ctx positions -- see Model.cpp for why a longer line is refused instead of guessed at. The longest
      *         line the composer draws is 32 notes and the trained model's ctx is 256, so it does not arise.
      */
-    bool step(int token, const NoteCond& cond);
+    bool step( int token, const NoteCond &cond );
 
     /**
      * @brief How many notes have been predicted since begin().
@@ -239,80 +247,81 @@ public:
      * @brief Logits of the next symbol; valid after a step().
      * @return the logits
      */
-    const float* logits() const { return m_logits.data(); }
+    const float *logits() const { return m_logits.data(); }
     /**
      * @brief The softmax of logits(), as a probability of symbol @p c.
      * @param[in] c  the symbol
      * @return its probability
      */
-    double prob(int c) const { return m_probs[static_cast<size_t>(c)]; }
+    double prob( int c ) const { return m_probs[static_cast<size_t>( c )]; }
 
 private:
     /**
      * @brief Runs the transformer's forward pass for position @p t and fills the logits.
      * @param[in] t  the position
      */
-    void forwardTransformer(int t);
+    void forwardTransformer( int t );
 
-    ModelInfo m_info;   ///< the file's header: architecture and sizes
-    bool m_loaded = false;   ///< a model file was read
-    int m_role = 0;   ///< the line's role (a conditioning row)
-    int m_style = 0;   ///< its style
-    int m_bars = 0;   ///< its bars
-    int m_mode = 0;   ///< its mode
-    int m_pos = 0;   ///< the position in the line
-    int m_headDim = 0;   ///< dimensions per attention head
-    int m_dimP = 0;   ///< the residual width, padded to the lane width
-    int m_ffnP = 0;   ///< the feed-forward width, padded
-    int m_vocabP = 0;   ///< the alphabet, padded
-    int m_headDimP = 0;   ///< a head's width, padded
-    int m_ctxP = 0;   ///< the context, padded
-    int m_qkvP = 0;   ///< the qkv width, padded
+    ModelInfo m_info;             ///< the file's header: architecture and sizes
+    bool      m_loaded = false;   ///< a model file was read
+    int       m_role = 0;         ///< the line's role (a conditioning row)
+    int       m_style = 0;        ///< its style
+    int       m_bars = 0;         ///< its bars
+    int       m_mode = 0;         ///< its mode
+    int       m_pos = 0;          ///< the position in the line
+    int       m_headDim = 0;      ///< dimensions per attention head
+    int       m_dimP = 0;         ///< the residual width, padded to the lane width
+    int       m_ffnP = 0;         ///< the feed-forward width, padded
+    int       m_vocabP = 0;       ///< the alphabet, padded
+    int       m_headDimP = 0;     ///< a head's width, padded
+    int       m_ctxP = 0;         ///< the context, padded
+    int       m_qkvP = 0;         ///< the qkv width, padded
 
     /** @brief Weights of one block, already packed into panels (empty for the other architecture). */
-    struct Block {
-        std::vector<float> m_n1w;   ///< the first norm's weights
-        std::vector<float> m_n1b;   ///< ... its biases
-        std::vector<float> m_n2w;   ///< the second norm's weights
-        std::vector<float> m_n2b;   ///< ... its biases
-        std::vector<float> m_qkv;   ///< the query, key and value projection
-        std::vector<float> m_qkvB;   ///< ... its biases
-        std::vector<float> m_out;   ///< the attention's output projection
-        std::vector<float> m_outB;   ///< ... its biases
-        std::vector<float> m_up;   ///< the feed-forward's up projection
-        std::vector<float> m_upB;   ///< ... its biases
-        std::vector<float> m_down;   ///< the feed-forward's down projection
-        std::vector<float> m_downB;   ///< ... its biases
+    struct Block
+    {
+        std::vector<float> m_n1w;      ///< the first norm's weights
+        std::vector<float> m_n1b;      ///< ... its biases
+        std::vector<float> m_n2w;      ///< the second norm's weights
+        std::vector<float> m_n2b;      ///< ... its biases
+        std::vector<float> m_qkv;      ///< the query, key and value projection
+        std::vector<float> m_qkvB;     ///< ... its biases
+        std::vector<float> m_out;      ///< the attention's output projection
+        std::vector<float> m_outB;     ///< ... its biases
+        std::vector<float> m_up;       ///< the feed-forward's up projection
+        std::vector<float> m_upB;      ///< ... its biases
+        std::vector<float> m_down;     ///< the feed-forward's down projection
+        std::vector<float> m_downB;    ///< ... its biases
         std::vector<float> m_kCache;   ///< the keys so far, in time panels
         std::vector<float> m_vCache;   ///< the values so far, row major
     };
     std::vector<Block> m_blocks;   ///< the layers
     /** @brief The nine embedding tables, in the order of MODEL_FORMAT.md section 4, plus the two
      *         optional ones (kick.emb, mode.emb) that are empty in a file that does not carry them. */
-    std::vector<float> m_tok;   ///< the token embedding
-    std::vector<float> m_posE;   ///< the position embedding
-    std::vector<float> m_roleE;   ///< the role embedding
-    std::vector<float> m_styleE;   ///< the style embedding
-    std::vector<float> m_barsE;   ///< the bars embedding
-    std::vector<float> m_stepE;   ///< the step embedding
-    std::vector<float> m_barE;   ///< the bar embedding
-    std::vector<float> m_gapE;   ///< the gap embedding
-    std::vector<float> m_idxE;   ///< the index embedding
-    std::vector<float> m_kickE;   ///< the kick embedding (empty without condKick)
-    std::vector<float> m_modeE;   ///< the mode embedding (empty without condMode)
-    std::vector<float> m_normW;   ///< the final norm's weights
-    std::vector<float> m_normB;   ///< ... its biases
-    std::vector<float> m_head;   ///< the output head
-    std::vector<float> m_headB;   ///< the head's biases
-    std::vector<float> m_x;   ///< the residual stream
-    std::vector<float> m_nx;   ///< the normed stream
-    std::vector<float> m_qkvBuf;   ///< the queries, keys and values of the position
-    std::vector<float> m_att;   ///< the attention's output
-    std::vector<float> m_ff;   ///< the feed-forward's hidden layer
-    std::vector<float> m_accum;   ///< the accumulators of a product
-    std::vector<float> m_scores;   ///< the attention scores
-    std::vector<float> m_logits;   ///< the logits
-    std::vector<double> m_probs;   ///< softmax of the logits
+    std::vector<float>  m_tok;      ///< the token embedding
+    std::vector<float>  m_posE;     ///< the position embedding
+    std::vector<float>  m_roleE;    ///< the role embedding
+    std::vector<float>  m_styleE;   ///< the style embedding
+    std::vector<float>  m_barsE;    ///< the bars embedding
+    std::vector<float>  m_stepE;    ///< the step embedding
+    std::vector<float>  m_barE;     ///< the bar embedding
+    std::vector<float>  m_gapE;     ///< the gap embedding
+    std::vector<float>  m_idxE;     ///< the index embedding
+    std::vector<float>  m_kickE;    ///< the kick embedding (empty without condKick)
+    std::vector<float>  m_modeE;    ///< the mode embedding (empty without condMode)
+    std::vector<float>  m_normW;    ///< the final norm's weights
+    std::vector<float>  m_normB;    ///< ... its biases
+    std::vector<float>  m_head;     ///< the output head
+    std::vector<float>  m_headB;    ///< the head's biases
+    std::vector<float>  m_x;        ///< the residual stream
+    std::vector<float>  m_nx;       ///< the normed stream
+    std::vector<float>  m_qkvBuf;   ///< the queries, keys and values of the position
+    std::vector<float>  m_att;      ///< the attention's output
+    std::vector<float>  m_ff;       ///< the feed-forward's hidden layer
+    std::vector<float>  m_accum;    ///< the accumulators of a product
+    std::vector<float>  m_scores;   ///< the attention scores
+    std::vector<float>  m_logits;   ///< the logits
+    std::vector<double> m_probs;    ///< softmax of the logits
 };
 
 /**
@@ -322,13 +331,13 @@ private:
  * default, in which case the working directory and the compiled-in source data directory are tried.
  * @param[in] directory  the directory
  */
-void setModelSearchPath(const std::string& directory);
+void setModelSearchPath( const std::string &directory );
 
 /** @brief The file name of the melody model inside the search path. */
-constexpr const char* MelodyModelFile = "melody.phosmdl";
+constexpr const char *MelodyModelFile = "melody.phosmdl";
 
 /** @brief The file name of the bass model inside the search path. */
-constexpr const char* BassModelFile = "bass.phosmdl";
+constexpr const char *BassModelFile = "bass.phosmdl";
 
 /** @brief The role index of the bass in a four-role file (acid, lead, arp, bass). */
 constexpr int BassRole = 3;
@@ -341,7 +350,7 @@ constexpr int BassRole = 3;
  *         plugin that is the composer thread, never the audio thread. Never unloaded, because a set may start a new
  *         track at any time.
  */
-NeuralModel* sharedMelodyModel(std::string* note = nullptr);
+NeuralModel *sharedMelodyModel( std::string *note = nullptr );
 
 /**
  * @brief The bass model, loaded once on first use (Core/data/bass.phosmdl).
@@ -352,20 +361,21 @@ NeuralModel* sharedMelodyModel(std::string* note = nullptr);
  *         whichever thread composes first -- the composer thread in the plugin, never the audio thread -- and never
  *         unloaded.
  */
-NeuralModel* sharedBassModel(std::string* note = nullptr);
+NeuralModel *sharedBassModel( std::string *note = nullptr );
 
 /** @brief Drives one model over one line; what sampleMasked() talks to. */
-struct NeuralStepper {
-    NeuralModel* m_model = nullptr;             ///< the model (mutable: the cache is per line)
-    int m_role = 0;                             ///< 0 acid, 1 lead, 2 arp, 3 bass
-    int m_style = 0;                            ///< 0 unknown (the trained corpus has no style label)
-    int m_bars = 1;                             ///< the pattern's length in bars
-    const std::vector<NoteCond>* m_cond = nullptr;   ///< one entry per position, from the onset list
-    int m_previous = 0;                         ///< the symbol drawn last
-    int m_mode = 0;                             ///< the section's mode (ScaleSteps); ignored by a file
-                                              ///< without @c condMode. **Last on purpose**: the bass
-                                              ///< draw in Composer.cpp initialises this aggregate
-                                              ///< positionally and does not name the mode.
+struct NeuralStepper
+{
+    NeuralModel                 *m_model = nullptr;   ///< the model (mutable: the cache is per line)
+    int                          m_role = 0;          ///< 0 acid, 1 lead, 2 arp, 3 bass
+    int                          m_style = 0;         ///< 0 unknown (the trained corpus has no style label)
+    int                          m_bars = 1;          ///< the pattern's length in bars
+    const std::vector<NoteCond> *m_cond = nullptr;    ///< one entry per position, from the onset list
+    int                          m_previous = 0;      ///< the symbol drawn last
+    int                          m_mode = 0;          ///< the section's mode (ScaleSteps); ignored by a file
+                                                      ///< without @c condMode. **Last on purpose**: the bass
+                                                      ///< draw in Composer.cpp initialises this aggregate
+                                                      ///< positionally and does not name the mode.
 
     /**
      * @brief The model's alphabet.
@@ -376,30 +386,35 @@ struct NeuralStepper {
      * @brief Resets; an order-2 context's older symbol means nothing to a long-context model.
      * @param[in] start1  the line's first symbol
      */
-    void begin(int, int start1) { m_model->begin(m_role, m_style, m_bars, m_mode); m_previous = start1; }
+    void begin( int, int start1 )
+    {
+        m_model->begin( m_role, m_style, m_bars, m_mode );
+        m_previous = start1;
+    }
     /**
      * @brief Computes the distribution at position @p i of the line; false where the model cannot.
      * @param[in] i  the position in the line
      * @return false where the model cannot
      */
-    bool advance(int i) { return m_model->step(m_previous, (*m_cond)[static_cast<size_t>(i)]); }
+    bool advance( int i ) { return m_model->step( m_previous, ( *m_cond )[static_cast<size_t>( i )] ); }
     /**
      * @brief Takes @p symbol as drawn.
      * @param[in] symbol  the symbol drawn
      */
-    void observe(int symbol) { m_previous = symbol; }
+    void observe( int symbol ) { m_previous = symbol; }
     /**
      * @brief The probability of symbol @p c.
      * @param[in] c  the symbol
      * @return its probability
      */
-    double prob(int c) const { return m_model->prob(c); }
+    double prob( int c ) const { return m_model->prob( c ); }
 };
 
 /** @brief What one masked draw had to do to succeed. */
-struct MaskedDrawStats {
-    int m_retries = 0;        ///< draws thrown away because a position had no probability mass left
-    bool m_fellBack = false;  ///< every retry failed; the symbols came from the constraint weights alone
+struct MaskedDrawStats
+{
+    int  m_retries = 0;        ///< draws thrown away because a position had no probability mass left
+    bool m_fellBack = false;   ///< every retry failed; the symbols came from the constraint weights alone
 };
 
 /** @brief A position counts as dead when the model gives its whole allowed set less than this. */
@@ -441,75 +456,84 @@ constexpr int MaskedRetries = 4;
  *         symbol); double prob(int) const
  */
 template <class StepperT, class UniformT>
-bool sampleMasked(StepperT& m, const std::vector<std::vector<uint8_t>>& allowed, int start2, int start1,
-                  double temperature, UniformT&& uniform, std::vector<int>& out, MaskedDrawStats* stats = nullptr)
+bool sampleMasked( StepperT &m, const std::vector<std::vector<uint8_t>> &allowed, int start2, int start1,
+                   double temperature, UniformT &&uniform, std::vector<int> &out, MaskedDrawStats *stats = nullptr )
 {
     const int A = m.alphabet();
-    const int n = static_cast<int>(allowed.size());
+    const int n = static_cast<int>( allowed.size() );
     out.clear();
-    if (stats != nullptr) *stats = MaskedDrawStats{};
-    if (n == 0) return true;
-    for (int i = 0; i < n; ++i) {
+    if ( stats != nullptr ) *stats = MaskedDrawStats{};
+    if ( n == 0 ) return true;
+    for ( int i = 0; i < n; ++i )
+    {
         bool any = false;
-        for (int c = 0; c < A; ++c) if (allowed[static_cast<size_t>(i)][static_cast<size_t>(c)]) any = true;
-        if (!any) return false;
+        for ( int c = 0; c < A; ++c )
+            if ( allowed[static_cast<size_t>( i )][static_cast<size_t>( c )] ) any = true;
+        if ( !any ) return false;
     }
-    const double expo = temperature > 0.0 ? 1.0 / temperature : 1.0;
-    std::vector<double> w(static_cast<size_t>(A));
-    for (int attempt = 0; attempt <= MaskedRetries; ++attempt) {
-        m.begin(start2, start1);
+    const double        expo = temperature > 0.0 ? 1.0 / temperature : 1.0;
+    std::vector<double> w( static_cast<size_t>( A ) );
+    for ( int attempt = 0; attempt <= MaskedRetries; ++attempt )
+    {
+        m.begin( start2, start1 );
         out.clear();
         bool ok = true;
-        for (int i = 0; i < n && ok; ++i) {
-            if (!m.advance(i)) return false;
-            const std::vector<uint8_t>& mask = allowed[static_cast<size_t>(i)];
-            double total = 0.0, mass = 0.0;
-            for (int c = 0; c < A; ++c) {
-                w[static_cast<size_t>(c)] = 0.0;
-                if (mask[static_cast<size_t>(c)] == 0) continue;
-                const double p = m.prob(c);
+        for ( int i = 0; i < n && ok; ++i )
+        {
+            if ( !m.advance( i ) ) return false;
+            const std::vector<uint8_t> &mask = allowed[static_cast<size_t>( i )];
+            double                      total = 0.0, mass = 0.0;
+            for ( int c = 0; c < A; ++c )
+            {
+                w[static_cast<size_t>( c )] = 0.0;
+                if ( mask[static_cast<size_t>( c )] == 0 ) continue;
+                const double p = m.prob( c );
                 mass += p;
-                const double v = (expo == 1.0 ? p : std::pow(p, expo)) * mask[static_cast<size_t>(c)];
-                w[static_cast<size_t>(c)] = v;
+                const double v = ( expo == 1.0 ? p : std::pow( p, expo ) ) * mask[static_cast<size_t>( c )];
+                w[static_cast<size_t>( c )] = v;
                 total += v;
             }
-            if (mass < MaskedMassFloor || total <= 0.0) {
+            if ( mass < MaskedMassFloor || total <= 0.0 )
+            {
                 ok = false;
-                if (stats != nullptr) ++stats->m_retries;
+                if ( stats != nullptr ) ++stats->m_retries;
                 break;
             }
             double r = uniform() * total;
-            int chosen = -1;
-            for (int c = 0; c < A; ++c) {
-                if (w[static_cast<size_t>(c)] <= 0.0) continue;
+            int    chosen = -1;
+            for ( int c = 0; c < A; ++c )
+            {
+                if ( w[static_cast<size_t>( c )] <= 0.0 ) continue;
                 chosen = c;   // the last symbol with weight takes what rounding leaves over
-                if (r < w[static_cast<size_t>(c)]) break;
-                r -= w[static_cast<size_t>(c)];
+                if ( r < w[static_cast<size_t>( c )] ) break;
+                r -= w[static_cast<size_t>( c )];
             }
-            out.push_back(chosen);
-            m.observe(chosen);
+            out.push_back( chosen );
+            m.observe( chosen );
         }
-        if (ok) return true;
+        if ( ok ) return true;
     }
     // Every attempt died: draw from the constraint weights alone, which is still inside the
     // constraints and still deterministic, and say so.
     out.clear();
-    for (int i = 0; i < n; ++i) {
-        const std::vector<uint8_t>& mask = allowed[static_cast<size_t>(i)];
-        double total = 0.0;
-        for (int c = 0; c < A; ++c) total += mask[static_cast<size_t>(c)];
+    for ( int i = 0; i < n; ++i )
+    {
+        const std::vector<uint8_t> &mask = allowed[static_cast<size_t>( i )];
+        double                      total = 0.0;
+        for ( int c = 0; c < A; ++c ) total += mask[static_cast<size_t>( c )];
         double r = uniform() * total;
-        int chosen = -1;
-        for (int c = 0; c < A; ++c) {
-            if (mask[static_cast<size_t>(c)] == 0) continue;
+        int    chosen = -1;
+        for ( int c = 0; c < A; ++c )
+        {
+            if ( mask[static_cast<size_t>( c )] == 0 ) continue;
             chosen = c;
-            if (r < mask[static_cast<size_t>(c)]) break;
-            r -= mask[static_cast<size_t>(c)];
+            if ( r < mask[static_cast<size_t>( c )] ) break;
+            r -= mask[static_cast<size_t>( c )];
         }
-        out.push_back(chosen);
+        out.push_back( chosen );
     }
-    if (stats != nullptr) stats->m_fellBack = true;
+    if ( stats != nullptr ) stats->m_fellBack = true;
     return true;
 }
 
-} // namespace phos
+}   // namespace phos

@@ -39,37 +39,41 @@
 #include <vector>
 
 /** @brief The planned set, drawn. */
-class ArrangeDisplay final : public juce::Component {
+class ArrangeDisplay final : public juce::Component
+{
 public:
     /** @brief One section of a track as the editor copied it out of the plan. */
-    struct Sec {
-        int   m_index = 0;      ///< section number within the track (the lockable unit)
-        int   m_bar = 0;        ///< first bar, from the start of the set
-        int   m_bars = 0;       ///< length
+    struct Sec
+    {
+        int                m_index = 0;   ///< section number within the track (the lockable unit)
+        int                m_bar = 0;     ///< first bar, from the start of the set
+        int                m_bars = 0;    ///< length
         phos::SectionTypeE m_type = phos::SectionTypeE::GROOVE;   ///< what kind it is
-        float m_energy = 0.5f;  ///< energy at its start
-        float m_energyTo = 0.5f;   ///< energy at its end (a buildup rises)
-        bool  m_locked = false; ///< the curation lock
-        uint32_t m_variation = 0;   ///< how often it has been rerolled
+        float              m_energy = 0.5f;                       ///< energy at its start
+        float              m_energyTo = 0.5f;                     ///< energy at its end (a buildup rises)
+        bool               m_locked = false;                      ///< the curation lock
+        uint32_t           m_variation = 0;                       ///< how often it has been rerolled
     };
     /** @brief One track of the set. */
-    struct Trk {
-        int    m_index = 0;        ///< track number
-        int    m_firstBar = 0;     ///< where it starts in the set
-        int    m_bars = 0;         ///< how long it is
-        int    m_key = 6;          ///< pitch class
-        int    m_scale = 1;        ///< index into ScaleNames
-        double m_bpm = 145.0;      ///< tempo
-        float  m_gainDb = 0.0f;    ///< level match
-        bool   m_locked = false;   ///< the curation lock
-        uint32_t m_variation = 0;  ///< how often it has been rerolled
-        std::vector<Sec> m_sections;   ///< its form
+    struct Trk
+    {
+        int              m_index = 0;        ///< track number
+        int              m_firstBar = 0;     ///< where it starts in the set
+        int              m_bars = 0;         ///< how long it is
+        int              m_key = 6;          ///< pitch class
+        int              m_scale = 1;        ///< index into ScaleNames
+        double           m_bpm = 145.0;      ///< tempo
+        float            m_gainDb = 0.0f;    ///< level match
+        bool             m_locked = false;   ///< the curation lock
+        uint32_t         m_variation = 0;    ///< how often it has been rerolled
+        std::vector<Sec> m_sections;         ///< its form
     };
     /** @brief What the editor read out of the published plans. */
-    struct Snapshot {
-        std::vector<Trk> m_tracks;   ///< the tracks that have been planned so far
-        int m_bars = 0;              ///< bars they cover
-        int m_minutes = 0;           ///< the set length the knobs ask for, for the caption
+    struct Snapshot
+    {
+        std::vector<Trk> m_tracks;        ///< the tracks that have been planned so far
+        int              m_bars = 0;      ///< bars they cover
+        int              m_minutes = 0;   ///< the set length the knobs ask for, for the caption
     };
 
     /** @brief An empty timeline; update() fills it. */
@@ -79,64 +83,68 @@ public:
      *        track rows, no legend; a click jumps.
      * @param[in] on  true for the strip alone
      */
-    void setStripOnly(bool on) { m_stripOnly = on; }
+    void setStripOnly( bool on ) { m_stripOnly = on; }
 
     /**
      * @brief Replaces what is drawn (message thread); the picture is redrawn, not the play head.
      * @param[in] s  the snapshot
      * @pre called on the message thread
      */
-    void setSnapshot(Snapshot s);
+    void setSnapshot( Snapshot s );
     /**
      * @brief Moves the play head. Returns true when it moved far enough to be worth a repaint.
      * @param[in] musicalBeat  the beat
      * @return true when worth a repaint
      */
-    bool setPosition(double musicalBeat);
+    bool setPosition( double musicalBeat );
     /**
      * @brief The snapshot that is on screen, so the editor can compare before replacing it.
      * @return the snapshot
      */
-    const Snapshot& snapshot() const { return m_snap; }
+    const Snapshot &snapshot() const { return m_snap; }
     /**
      * @brief Where track @p i sits in the set strip (empty before the first measure); for the host test.
      * @param[in] i  the track
      * @return its rectangle
      */
-    juce::Rectangle<int> trackBlock(size_t i) const { return i < m_blocks.size() ? m_blocks[i] : juce::Rectangle<int>(); }
+    juce::Rectangle<int> trackBlock( size_t i ) const
+    {
+        return i < m_blocks.size() ? m_blocks[i] : juce::Rectangle<int>();
+    }
     /**
      * @brief Bars track @p i shares with the one before (first) and the one after it (second); 0 = none.
      * @param[in] i  the track
      * @return (bars before, bars after)
      */
-    std::pair<int, int> overlapOf(size_t i) const;
+    std::pair<int, int> overlapOf( size_t i ) const;
 
     /**
      * @brief The set strip, the tracks and their sections, the play head.
      * @param[in,out] g  the graphics context
      */
-    void paint(juce::Graphics&) override;
+    void paint( juce::Graphics & ) override;
     /** @brief Measures the blocks for the size. */
     void resized() override;
     /**
      * @brief A click jumps to the bar clicked.
      * @param[in] e  the mouse event
      */
-    void mouseDown(const juce::MouseEvent&) override;
+    void mouseDown( const juce::MouseEvent & ) override;
 
-    std::function<void(int)> m_onSeek;                                  ///< called with a bar to jump to
-    std::function<void(phos::LockUnitE, int, bool)> m_onLock;            ///< unit, index, the new state
-    std::function<void(phos::LockUnitE, int)> m_onReroll;                ///< unit, index
+    std::function<void( int )>                        m_onSeek;     ///< called with a bar to jump to
+    std::function<void( phos::LockUnitE, int, bool )> m_onLock;     ///< unit, index, the new state
+    std::function<void( phos::LockUnitE, int )>       m_onReroll;   ///< unit, index
 
 private:
     /** @brief A rectangle that can be clicked, and what clicking it means. */
-    struct Hit {
-        juce::Rectangle<int> m_area;   ///< where it is
-        int  m_bar = -1;               ///< seek target, -1 = none
-        phos::LockUnitE m_unit = phos::LockUnitE::TRACK;   ///< which unit the two buttons act on
-        int  m_index = 0;              ///< its index
-        int  m_action = 0;             ///< 0 seek, 1 toggle the lock, 2 reroll
-        bool m_locked = false;         ///< state of the lock, for the toggle
+    struct Hit
+    {
+        juce::Rectangle<int> m_area;                            ///< where it is
+        int                  m_bar = -1;                        ///< seek target, -1 = none
+        phos::LockUnitE      m_unit = phos::LockUnitE::TRACK;   ///< which unit the two buttons act on
+        int                  m_index = 0;                       ///< its index
+        int                  m_action = 0;                      ///< 0 seek, 1 toggle the lock, 2 reroll
+        bool                 m_locked = false;                  ///< state of the lock, for the toggle
     };
 
     /** @brief Measures the strip, the rows and every clickable rectangle from the snapshot. */
@@ -148,16 +156,16 @@ private:
      * @param[in] bar  the bar
      * @return its x in pixels
      */
-    float stripX(double bar) const;
+    float stripX( double bar ) const;
 
-    Snapshot m_snap;                  ///< what is drawn
-    std::vector<Hit> m_hits;          ///< filled by measure(), scanned by mouseDown()
-    juce::Rectangle<int> m_strip;     ///< the set-wide bar at the top
-    std::vector<juce::Rectangle<int>> m_blocks;    ///< each track's block in the strip, in its lane
-    std::vector<juce::Rectangle<int>> m_rowArea;   ///< the part of each row the sections live in
-    juce::Image m_cache;              ///< the static picture at the current size
-    double m_beat = 0.0;              ///< the play head, in beats from the start of the set
-    int m_headPixel = -1;             ///< where it was last drawn, so a repaint is worth it
-    int m_totalBars = 1;              ///< bars the strip spans
-    bool m_stripOnly = false;         ///< setStripOnly
+    Snapshot                          m_snap;                ///< what is drawn
+    std::vector<Hit>                  m_hits;                ///< filled by measure(), scanned by mouseDown()
+    juce::Rectangle<int>              m_strip;               ///< the set-wide bar at the top
+    std::vector<juce::Rectangle<int>> m_blocks;              ///< each track's block in the strip, in its lane
+    std::vector<juce::Rectangle<int>> m_rowArea;             ///< the part of each row the sections live in
+    juce::Image                       m_cache;               ///< the static picture at the current size
+    double                            m_beat = 0.0;          ///< the play head, in beats from the start of the set
+    int                               m_headPixel = -1;      ///< where it was last drawn, so a repaint is worth it
+    int                               m_totalBars = 1;       ///< bars the strip spans
+    bool                              m_stripOnly = false;   ///< setStripOnly
 };

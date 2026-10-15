@@ -48,17 +48,19 @@
 #include <string>
 #include <vector>
 
-namespace phos {
+namespace phos
+{
 
 /** @brief One phrase of the voice pack, decoded. */
-struct VoicePhrase {
-    std::string m_name;             ///< the source file's stem (CREDITS-voices.md lists every one)
-    int m_category = 0;             ///< 0 = space (NASA), 1 = spoken (Library of Congress)
-    int m_sampleRate = 16000;       ///< rate of @c samples
-    std::vector<float> m_samples;   ///< decoded, -1..1
-    uint32_t m_throwAt = 0;         ///< first sample of the last word
-    uint32_t m_chopStart = 0;   ///< the first word: its first sample
-    uint32_t m_chopLength = 0;   ///< ... its length, samples
+struct VoicePhrase
+{
+    std::string        m_name;                 ///< the source file's stem (CREDITS-voices.md lists every one)
+    int                m_category = 0;         ///< 0 = space (NASA), 1 = spoken (Library of Congress)
+    int                m_sampleRate = 16000;   ///< rate of @c samples
+    std::vector<float> m_samples;              ///< decoded, -1..1
+    uint32_t           m_throwAt = 0;          ///< first sample of the last word
+    uint32_t           m_chopStart = 0;        ///< the first word: its first sample
+    uint32_t           m_chopLength = 0;       ///< ... its length, samples
 };
 
 /**
@@ -68,7 +70,7 @@ struct VoicePhrase {
  * @param[in] directory  the directory
  * @pre called before the first Engine::prepare()
  */
-void setVoicePackSearchPath(const std::string& directory);
+void setVoicePackSearchPath( const std::string &directory );
 
 /**
  * @brief Loads the voice pack once (idempotent, genuinely thread-safe -- see loadWaveTableLibrary()'s
@@ -81,7 +83,7 @@ void setVoicePackSearchPath(const std::string& directory);
  *         play)
  * @warning Never on the audio thread.
  */
-int loadVoicePack(const char* path = nullptr, std::string* error = nullptr);
+int loadVoicePack( const char *path = nullptr, std::string *error = nullptr );
 /** @brief Forgets the pack (tests). */
 void resetVoicePack();
 /**
@@ -94,7 +96,7 @@ int voicePhraseCount();
  * @param[in] index  the phrase's index
  * @return the phrase
  */
-const VoicePhrase& voicePhrase(int index);
+const VoicePhrase &voicePhrase( int index );
 /**
  * @brief Decodes 4-bit IMA ADPCM (low nibble first), exposed for the self test.
  * @param[in]  data       the nibbles
@@ -103,16 +105,17 @@ const VoicePhrase& voicePhrase(int index);
  * @param[in]  stepIndex  initial step index (0..88)
  * @param[out] out        receives @p samples values in -32768..32767
  */
-void decodeImaAdpcm(const uint8_t* data, size_t samples, int predictor, int stepIndex, std::vector<int16_t>& out);
+void decodeImaAdpcm( const uint8_t *data, size_t samples, int predictor, int stepIndex, std::vector<int16_t> &out );
 
 /** @brief The voice generator (part Vocal). */
-class Vocal {
+class Vocal
+{
 public:
     /**
      * @brief Prepares for @p sampleRate (loads the voice pack on the first call).
      * @param[in] sampleRate  the sample rate
      */
-    void prepare(double sampleRate);
+    void prepare( double sampleRate );
     /** @brief Silences every voice. */
     void reset();
     /**
@@ -120,7 +123,7 @@ public:
      * @param[in] v        the effective parameter values
      * @param[in] keyRoot  the key's root
      */
-    void update(const float* v, int keyRoot);
+    void update( const float *v, int keyRoot );
     /**
      * @brief Starts a voice; the one sounding fades out.
      * @param[in] type            FormantVoice, AlienChatter, SpokenWord or VoiceChop
@@ -130,7 +133,7 @@ public:
      * @param[in] samplesPerBeat  the tempo (the chop's sixteenths)
      * @param[in] pick            the event's own seed: which phrase, which vowels, which pitch
      */
-    void trigger(SfxTypeE type, int samples, float velocity, double late, double samplesPerBeat, uint64_t pick);
+    void trigger( SfxTypeE type, int samples, float velocity, double late, double samplesPerBeat, uint64_t pick );
     /**
      * @brief Renders @p n samples into @p L, @p R (replaced) and the throw weight into @p throwOut
      *        (replaced; 0..1 times the voice's own level, for the engine's delay throw).
@@ -139,7 +142,7 @@ public:
      * @param[out] throwOut  the throw weight per sample
      * @param[in]  n         the block's samples
      */
-    void process(float* L, float* R, float* throwOut, int n);
+    void process( float *L, float *R, float *throwOut, int n );
     /**
      * @brief Voices sounding (0, 1, or 2 during a handover).
      * @return the voices sounding
@@ -148,37 +151,38 @@ public:
 
 private:
     /** @brief One sounding voice. */
-    struct Voice {
-        SfxTypeE m_type = SfxTypeE::SPOKEN_WORD;   ///< which kind of voice
-        bool m_on = false;   ///< sounding
-        long long m_pos = 0;   ///< samples played
-        long long m_length = 1;   ///< the event's length, samples
-        double m_late = 0.0;   ///< the sub-sample onset
-        double m_spb = 20000.0;   ///< samples per beat
-        float m_velocity = 1.0f;   ///< the level
-        float m_fade = 1.0f;   ///< the handover's fade
-        float m_pan = 0.0f;   ///< the place, -1 .. 1
-        bool m_fading = false;   ///< fading out under a new voice
-        int m_phrase = -1;   ///< the voice pack phrase it plays (spoken word, chop)
-        double m_read = 0.0;   ///< the read position in the phrase
-        double m_rate = 1.0 / 3.0;   ///< its step per sample
-        Rng m_rng;   ///< the event's own random stream
-        VaOscillator m_osc;   ///< the sung and chattered voices' source
-        Svf m_formant[3];   ///< three formants
-        Svf m_hp1;   ///< the high pass: first section
-        Svf m_hp2;   ///< ... second
-        Svf m_lp;   ///< the low pass
-        float m_tilt = 0.0f;   ///< the source's spectral tilt state
-        float m_throwW = 0.0f;   ///< the weight for the delay throw
-        double m_vibPh = 0.0;   ///< the vibrato's phase
-        double m_ringPh = 0.0;   ///< the ring modulator's phase
-        double m_ringHz = 700.0;   ///< the ring modulator's frequency, Hz
-        double m_pitchHz = 150.0;   ///< the sung frequency, Hz
-        double m_glide = 0.0;   ///< the glide, semitones
-        int m_vowel[3] = { 0, 4, 7 };   ///< the vowels a sung phrase moves through
-        long long m_sylEnd = 0;   ///< the chatter's syllable: where it ends
-        long long m_sylLen = 1;   ///< ... how long it is
-        float m_sylF[3] = { 700, 1100, 2400 };   ///< its formant frequencies
+    struct Voice
+    {
+        SfxTypeE     m_type = SfxTypeE::SPOKEN_WORD;    ///< which kind of voice
+        bool         m_on = false;                      ///< sounding
+        long long    m_pos = 0;                         ///< samples played
+        long long    m_length = 1;                      ///< the event's length, samples
+        double       m_late = 0.0;                      ///< the sub-sample onset
+        double       m_spb = 20000.0;                   ///< samples per beat
+        float        m_velocity = 1.0f;                 ///< the level
+        float        m_fade = 1.0f;                     ///< the handover's fade
+        float        m_pan = 0.0f;                      ///< the place, -1 .. 1
+        bool         m_fading = false;                  ///< fading out under a new voice
+        int          m_phrase = -1;                     ///< the voice pack phrase it plays (spoken word, chop)
+        double       m_read = 0.0;                      ///< the read position in the phrase
+        double       m_rate = 1.0 / 3.0;                ///< its step per sample
+        Rng          m_rng;                             ///< the event's own random stream
+        VaOscillator m_osc;                             ///< the sung and chattered voices' source
+        Svf          m_formant[3];                      ///< three formants
+        Svf          m_hp1;                             ///< the high pass: first section
+        Svf          m_hp2;                             ///< ... second
+        Svf          m_lp;                              ///< the low pass
+        float        m_tilt = 0.0f;                     ///< the source's spectral tilt state
+        float        m_throwW = 0.0f;                   ///< the weight for the delay throw
+        double       m_vibPh = 0.0;                     ///< the vibrato's phase
+        double       m_ringPh = 0.0;                    ///< the ring modulator's phase
+        double       m_ringHz = 700.0;                  ///< the ring modulator's frequency, Hz
+        double       m_pitchHz = 150.0;                 ///< the sung frequency, Hz
+        double       m_glide = 0.0;                     ///< the glide, semitones
+        int          m_vowel[3] = { 0, 4, 7 };          ///< the vowels a sung phrase moves through
+        long long    m_sylEnd = 0;                      ///< the chatter's syllable: where it ends
+        long long    m_sylLen = 1;                      ///< ... how long it is
+        float        m_sylF[3] = { 700, 1100, 2400 };   ///< its formant frequencies
     };
     /**
      * @brief One sample of voice @p v; its weight for the delay throw goes to @p throwW.
@@ -186,14 +190,14 @@ private:
      * @param[out]    throwW  its weight for the delay throw
      * @return the sample
      */
-    float voiceSample(Voice& v, float& throwW);
+    float voiceSample( Voice &v, float &throwW );
 
-    double m_sr = 48000.0;   ///< sample rate
-    Voice m_voice[2];   ///< the voice and the one fading out
-    int m_keyRoot = 6;   ///< the key's pitch class, for the sung voice
-    float m_pitch = 3.0f;   ///< vocal.pitch
-    float m_drive = 0.35f;   ///< vocal.drive
-    float m_width = 0.5f;   ///< vocal.width
+    double m_sr = 48000.0;    ///< sample rate
+    Voice  m_voice[2];        ///< the voice and the one fading out
+    int    m_keyRoot = 6;     ///< the key's pitch class, for the sung voice
+    float  m_pitch = 3.0f;    ///< vocal.pitch
+    float  m_drive = 0.35f;   ///< vocal.drive
+    float  m_width = 0.5f;    ///< vocal.width
 };
 
-} // namespace phos
+}   // namespace phos

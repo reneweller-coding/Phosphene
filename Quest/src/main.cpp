@@ -98,22 +98,25 @@
 #include "phos/WaveTableFile.h"
 
 /** @brief An info line in the Android log, tag "Phosphene" (printf style). */
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "Phosphene", __VA_ARGS__)
+#define LOGI( ... ) __android_log_print( ANDROID_LOG_INFO, "Phosphene", __VA_ARGS__ )
 /** @brief An error line in the Android log, tag "Phosphene" (printf style). */
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "Phosphene", __VA_ARGS__)
+#define LOGE( ... ) __android_log_print( ANDROID_LOG_ERROR, "Phosphene", __VA_ARGS__ )
 
 using namespace phos;
 
-namespace {
+namespace
+{
 
 // ---------------------------------------------------------------- small math
 
 /** @brief Column-major 4x4 matrix, the layout GL wants. */
-struct Mat4 {
+struct Mat4
+{
     float m_m[16];   ///< the sixteen values, column by column
 };
 /** @brief A point or direction. */
-struct Vec3 {
+struct Vec3
+{
     float m_x;   ///< right
     float m_y;   ///< up
     float m_z;   ///< back (towards the viewer)
@@ -123,7 +126,12 @@ struct Vec3 {
  * @brief The identity matrix.
  * @return the identity matrix
  */
-Mat4 identity() { Mat4 r{}; r.m_m[0] = r.m_m[5] = r.m_m[10] = r.m_m[15] = 1.0f; return r; }
+Mat4 identity()
+{
+    Mat4 r{};
+    r.m_m[0] = r.m_m[5] = r.m_m[10] = r.m_m[15] = 1.0f;
+    return r;
+}
 
 /**
  * @brief The product @p a times @p b (b applied first).
@@ -131,13 +139,13 @@ Mat4 identity() { Mat4 r{}; r.m_m[0] = r.m_m[5] = r.m_m[10] = r.m_m[15] = 1.0f; 
  * @param[in] b  the right factor, applied first
  * @return the product
  */
-Mat4 multiply(const Mat4& a, const Mat4& b)
+Mat4 multiply( const Mat4 &a, const Mat4 &b )
 {
     Mat4 r{};
-    for (int c = 0; c < 4; ++c)
-        for (int rr = 0; rr < 4; ++rr)
-            r.m_m[c * 4 + rr] = a.m_m[0 * 4 + rr] * b.m_m[c * 4 + 0] + a.m_m[1 * 4 + rr] * b.m_m[c * 4 + 1]
-                            + a.m_m[2 * 4 + rr] * b.m_m[c * 4 + 2] + a.m_m[3 * 4 + rr] * b.m_m[c * 4 + 3];
+    for ( int c = 0; c < 4; ++c )
+        for ( int rr = 0; rr < 4; ++rr )
+            r.m_m[c * 4 + rr] = a.m_m[0 * 4 + rr] * b.m_m[c * 4 + 0] + a.m_m[1 * 4 + rr] * b.m_m[c * 4 + 1] +
+                                a.m_m[2 * 4 + rr] * b.m_m[c * 4 + 2] + a.m_m[3 * 4 + rr] * b.m_m[c * 4 + 3];
     return r;
 }
 
@@ -148,17 +156,19 @@ Mat4 multiply(const Mat4& a, const Mat4& b)
  * @param[in] farZ   the far plane's distance
  * @return the projection matrix
  */
-Mat4 projectionFromFov(const XrFovf& fov, float nearZ, float farZ)
+Mat4 projectionFromFov( const XrFovf &fov, float nearZ, float farZ )
 {
-    const float l = std::tan(fov.angleLeft), r = std::tan(fov.angleRight);
-    const float u = std::tan(fov.angleUp), d = std::tan(fov.angleDown);
+    const float l = std::tan( fov.angleLeft ), r = std::tan( fov.angleRight );
+    const float u = std::tan( fov.angleUp ), d = std::tan( fov.angleDown );
     const float w = r - l, h = u - d;
-    Mat4 p{};
-    p.m_m[0] = 2.0f / w;  p.m_m[8] = (r + l) / w;
-    p.m_m[5] = 2.0f / h;  p.m_m[9] = (u + d) / h;
-    p.m_m[10] = -(farZ + nearZ) / (farZ - nearZ);
+    Mat4        p{};
+    p.m_m[0] = 2.0f / w;
+    p.m_m[8] = ( r + l ) / w;
+    p.m_m[5] = 2.0f / h;
+    p.m_m[9] = ( u + d ) / h;
+    p.m_m[10] = -( farZ + nearZ ) / ( farZ - nearZ );
     p.m_m[11] = -1.0f;
-    p.m_m[14] = -(2.0f * farZ * nearZ) / (farZ - nearZ);
+    p.m_m[14] = -( 2.0f * farZ * nearZ ) / ( farZ - nearZ );
     return p;
 }
 
@@ -167,13 +177,19 @@ Mat4 projectionFromFov(const XrFovf& fov, float nearZ, float farZ)
  * @param[in] q  the unit quaternion
  * @return the rotation matrix
  */
-Mat4 rotationFromQuat(const XrQuaternionf& q)
+Mat4 rotationFromQuat( const XrQuaternionf &q )
 {
     const float x = q.x, y = q.y, z = q.z, w = q.w;
-    Mat4 r = identity();
-    r.m_m[0] = 1 - 2 * (y * y + z * z); r.m_m[4] = 2 * (x * y - z * w);     r.m_m[8] = 2 * (x * z + y * w);
-    r.m_m[1] = 2 * (x * y + z * w);     r.m_m[5] = 1 - 2 * (x * x + z * z); r.m_m[9] = 2 * (y * z - x * w);
-    r.m_m[2] = 2 * (x * z - y * w);     r.m_m[6] = 2 * (y * z + x * w);     r.m_m[10] = 1 - 2 * (x * x + y * y);
+    Mat4        r = identity();
+    r.m_m[0] = 1 - 2 * ( y * y + z * z );
+    r.m_m[4] = 2 * ( x * y - z * w );
+    r.m_m[8] = 2 * ( x * z + y * w );
+    r.m_m[1] = 2 * ( x * y + z * w );
+    r.m_m[5] = 1 - 2 * ( x * x + z * z );
+    r.m_m[9] = 2 * ( y * z - x * w );
+    r.m_m[2] = 2 * ( x * z - y * w );
+    r.m_m[6] = 2 * ( y * z + x * w );
+    r.m_m[10] = 1 - 2 * ( x * x + y * y );
     return r;
 }
 
@@ -183,9 +199,9 @@ Mat4 rotationFromQuat(const XrQuaternionf& q)
  * @param[in] v  the vector
  * @return the rotated vector
  */
-Vec3 rotate(const XrQuaternionf& q, Vec3 v)
+Vec3 rotate( const XrQuaternionf &q, Vec3 v )
 {
-    const Mat4 r = rotationFromQuat(q);
+    const Mat4 r = rotationFromQuat( q );
     return { r.m_m[0] * v.m_x + r.m_m[4] * v.m_y + r.m_m[8] * v.m_z,
              r.m_m[1] * v.m_x + r.m_m[5] * v.m_y + r.m_m[9] * v.m_z,
              r.m_m[2] * v.m_x + r.m_m[6] * v.m_y + r.m_m[10] * v.m_z };
@@ -196,14 +212,17 @@ Vec3 rotate(const XrQuaternionf& q, Vec3 v)
  * @param[in] pose  the eye's pose
  * @return the view matrix
  */
-Mat4 viewFromPose(const XrPosef& pose)
+Mat4 viewFromPose( const XrPosef &pose )
 {
-    const Mat4 r = rotationFromQuat(pose.orientation);
-    Mat4 rt = identity();
-    for (int c = 0; c < 3; ++c) for (int rr = 0; rr < 3; ++rr) rt.m_m[c * 4 + rr] = r.m_m[rr * 4 + c];
+    const Mat4 r = rotationFromQuat( pose.orientation );
+    Mat4       rt = identity();
+    for ( int c = 0; c < 3; ++c )
+        for ( int rr = 0; rr < 3; ++rr ) rt.m_m[c * 4 + rr] = r.m_m[rr * 4 + c];
     Mat4 t = identity();
-    t.m_m[12] = -pose.position.x; t.m_m[13] = -pose.position.y; t.m_m[14] = -pose.position.z;
-    return multiply(rt, t);
+    t.m_m[12] = -pose.position.x;
+    t.m_m[13] = -pose.position.y;
+    t.m_m[14] = -pose.position.z;
+    return multiply( rt, t );
 }
 
 /**
@@ -211,7 +230,10 @@ Mat4 viewFromPose(const XrPosef& pose)
  * @param[in] x  the value
  * @return the value limited to 0 .. 1
  */
-float clamp01(float x) { return x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x); }
+float clamp01( float x )
+{
+    return x < 0.0f ? 0.0f : ( x > 1.0f ? 1.0f : x );
+}
 
 // ---------------------------------------------------------------- 5x7 point font
 
@@ -224,36 +246,60 @@ float clamp01(float x) { return x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x); }
  * @param[in] c  the character
  * @return its seven rows
  */
-const unsigned char* glyph(char c)
+const unsigned char *glyph( char c )
 {
     static const unsigned char Font[][7] = {
-        {0x0E,0x11,0x11,0x1F,0x11,0x11,0x11}, {0x1E,0x11,0x11,0x1E,0x11,0x11,0x1E}, {0x0E,0x11,0x10,0x10,0x10,0x11,0x0E}, // A B C
-        {0x1E,0x11,0x11,0x11,0x11,0x11,0x1E}, {0x1F,0x10,0x10,0x1E,0x10,0x10,0x1F}, {0x1F,0x10,0x10,0x1E,0x10,0x10,0x10}, // D E F
-        {0x0E,0x11,0x10,0x17,0x11,0x11,0x0F}, {0x11,0x11,0x11,0x1F,0x11,0x11,0x11}, {0x0E,0x04,0x04,0x04,0x04,0x04,0x0E}, // G H I
-        {0x01,0x01,0x01,0x01,0x11,0x11,0x0E}, {0x11,0x12,0x14,0x18,0x14,0x12,0x11}, {0x10,0x10,0x10,0x10,0x10,0x10,0x1F}, // J K L
-        {0x11,0x1B,0x15,0x15,0x11,0x11,0x11}, {0x11,0x19,0x15,0x13,0x11,0x11,0x11}, {0x0E,0x11,0x11,0x11,0x11,0x11,0x0E}, // M N O
-        {0x1E,0x11,0x11,0x1E,0x10,0x10,0x10}, {0x0E,0x11,0x11,0x11,0x15,0x12,0x0D}, {0x1E,0x11,0x11,0x1E,0x14,0x12,0x11}, // P Q R
-        {0x0F,0x10,0x10,0x0E,0x01,0x01,0x1E}, {0x1F,0x04,0x04,0x04,0x04,0x04,0x04}, {0x11,0x11,0x11,0x11,0x11,0x11,0x0E}, // S T U
-        {0x11,0x11,0x11,0x11,0x11,0x0A,0x04}, {0x11,0x11,0x11,0x15,0x15,0x15,0x0A}, {0x11,0x11,0x0A,0x04,0x0A,0x11,0x11}, // V W X
-        {0x11,0x11,0x0A,0x04,0x04,0x04,0x04}, {0x1F,0x01,0x02,0x04,0x08,0x10,0x1F},                                        // Y Z
-        {0x0E,0x11,0x13,0x15,0x19,0x11,0x0E}, {0x04,0x0C,0x04,0x04,0x04,0x04,0x0E}, {0x0E,0x11,0x01,0x02,0x04,0x08,0x1F}, // 0 1 2
-        {0x1F,0x02,0x04,0x02,0x01,0x11,0x0E}, {0x02,0x06,0x0A,0x12,0x1F,0x02,0x02}, {0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E}, // 3 4 5
-        {0x06,0x08,0x10,0x1E,0x11,0x11,0x0E}, {0x1F,0x01,0x02,0x04,0x08,0x08,0x08}, {0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E}, // 6 7 8
-        {0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C},                                                                              // 9
-        {0x00,0x00,0x00,0x00,0x00,0x00,0x00}, {0x00,0x00,0x00,0x1F,0x00,0x00,0x00}, {0x00,0x00,0x00,0x00,0x00,0x0C,0x0C}, // space - .
-        {0x00,0x0C,0x0C,0x00,0x0C,0x0C,0x00}, {0x01,0x02,0x04,0x08,0x10,0x00,0x00}, {0x02,0x04,0x08,0x04,0x02,0x00,0x00}, // : / <
-        {0x08,0x04,0x02,0x04,0x08,0x00,0x00}, {0x00,0x04,0x04,0x1F,0x04,0x04,0x00}, {0x00,0x00,0x1F,0x00,0x1F,0x00,0x00}, // > + =
-        {0x18,0x19,0x02,0x04,0x08,0x13,0x03}, {0x0A,0x1F,0x0A,0x0A,0x0A,0x1F,0x0A}, {0x00,0x15,0x0E,0x1F,0x0E,0x15,0x00}, // % # *
-        {0x00,0x00,0x00,0x00,0x00,0x00,0x00},                                                                              // unknown
+        { 0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 }, { 0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E },
+        { 0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E },   // A B C
+        { 0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E }, { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F },
+        { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10 },   // D E F
+        { 0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F }, { 0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 },
+        { 0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E },   // G H I
+        { 0x01, 0x01, 0x01, 0x01, 0x11, 0x11, 0x0E }, { 0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11 },
+        { 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F },   // J K L
+        { 0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11 }, { 0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11 },
+        { 0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E },   // M N O
+        { 0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10 }, { 0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D },
+        { 0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11 },   // P Q R
+        { 0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E }, { 0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04 },
+        { 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E },   // S T U
+        { 0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04 }, { 0x11, 0x11, 0x11, 0x15, 0x15, 0x15, 0x0A },
+        { 0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11 },                                                 // V W X
+        { 0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04 }, { 0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F },   // Y Z
+        { 0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E }, { 0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E },
+        { 0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F },   // 0 1 2
+        { 0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E }, { 0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02 },
+        { 0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E },   // 3 4 5
+        { 0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E }, { 0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08 },
+        { 0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E },   // 6 7 8
+        { 0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C },   // 9
+        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, { 0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00 },
+        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C },   // space - .
+        { 0x00, 0x0C, 0x0C, 0x00, 0x0C, 0x0C, 0x00 }, { 0x01, 0x02, 0x04, 0x08, 0x10, 0x00, 0x00 },
+        { 0x02, 0x04, 0x08, 0x04, 0x02, 0x00, 0x00 },   // : / <
+        { 0x08, 0x04, 0x02, 0x04, 0x08, 0x00, 0x00 }, { 0x00, 0x04, 0x04, 0x1F, 0x04, 0x04, 0x00 },
+        { 0x00, 0x00, 0x1F, 0x00, 0x1F, 0x00, 0x00 },   // > + =
+        { 0x18, 0x19, 0x02, 0x04, 0x08, 0x13, 0x03 }, { 0x0A, 0x1F, 0x0A, 0x0A, 0x0A, 0x1F, 0x0A },
+        { 0x00, 0x15, 0x0E, 0x1F, 0x0E, 0x15, 0x00 },   // % # *
+        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },   // unknown
     };
-    if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
-    if (c >= 'A' && c <= 'Z') return Font[c - 'A'];
-    if (c >= '0' && c <= '9') return Font[26 + (c - '0')];
-    switch (c) {
-    case ' ': return Font[36]; case '-': return Font[37]; case '.': return Font[38];
-    case ':': return Font[39]; case '/': return Font[40]; case '<': return Font[41];
-    case '>': return Font[42]; case '+': return Font[43]; case '=': return Font[44];
-    case '%': return Font[45]; case '#': return Font[46]; case '*': return Font[47];
+    if ( c >= 'a' && c <= 'z' ) c = static_cast<char>( c - 'a' + 'A' );
+    if ( c >= 'A' && c <= 'Z' ) return Font[c - 'A'];
+    if ( c >= '0' && c <= '9' ) return Font[26 + ( c - '0' )];
+    switch ( c )
+    {
+    case ' ': return Font[36];
+    case '-': return Font[37];
+    case '.': return Font[38];
+    case ':': return Font[39];
+    case '/': return Font[40];
+    case '<': return Font[41];
+    case '>': return Font[42];
+    case '+': return Font[43];
+    case '=': return Font[44];
+    case '%': return Font[45];
+    case '#': return Font[46];
+    case '*': return Font[47];
     default: break;
     }
     return Font[48];
@@ -262,9 +308,9 @@ const unsigned char* glyph(char c)
 // ---------------------------------------------------------------- shipped resources
 
 /** @brief The shipped wavetable pack: an APK asset here, a file beside the sources on a desktop. */
-constexpr const char* WaveTablePack = "library.phoswt";
+constexpr const char *WaveTablePack = "library.phoswt";
 /** @brief The shipped voice pack (Vocal.h; 19.09.2026): an APK asset like the wavetables. */
-constexpr const char* VoicePack = "voices.phosvx";
+constexpr const char *VoicePack = "voices.phosvx";
 
 /**
  * @brief Puts one shipped resource where the core can open it, and returns that directory.
@@ -289,54 +335,81 @@ constexpr const char* VoicePack = "voices.phosvx";
  * @param[in]     what         what to call it in the log
  * @return the directory to hand the core, or empty when there is no such file anywhere
  */
-std::string prepareAsset(AAssetManager* assets, const char* internalDir, const std::string& externalDir,
-                         const char* name, const char* what)
+std::string prepareAsset( AAssetManager *assets, const char *internalDir, const std::string &externalDir,
+                          const char *name, const char *what )
 {
-    if (!externalDir.empty()) {
+    if ( !externalDir.empty() )
+    {
         const std::string p = externalDir + "/" + name;
-        if (FILE* f = std::fopen(p.c_str(), "rb")) {
-            std::fclose(f);
-            LOGI("%s: %s (pushed to the device)", what, p.c_str());
+        if ( FILE *f = std::fopen( p.c_str(), "rb" ) )
+        {
+            std::fclose( f );
+            LOGI( "%s: %s (pushed to the device)", what, p.c_str() );
             return externalDir;
         }
     }
-    if (assets == nullptr || internalDir == nullptr) { LOGE("%s: no asset manager", what); return {}; }
-    AAsset* a = AAssetManager_open(assets, name, AASSET_MODE_STREAMING);
-    if (a == nullptr) { LOGE("%s: the APK carries no %s", what, name); return {}; }
-    const off64_t want = AAsset_getLength64(a);
-    const std::string out = std::string(internalDir) + "/" + name;
+    if ( assets == nullptr || internalDir == nullptr )
+    {
+        LOGE( "%s: no asset manager", what );
+        return {};
+    }
+    AAsset *a = AAssetManager_open( assets, name, AASSET_MODE_STREAMING );
+    if ( a == nullptr )
+    {
+        LOGE( "%s: the APK carries no %s", what, name );
+        return {};
+    }
+    const off64_t     want = AAsset_getLength64( a );
+    const std::string out = std::string( internalDir ) + "/" + name;
     // An unpacked copy of the same length is taken as it is. The length is the whole check on
     // purpose: both readers refuse a broken file and say why (a truncated one is what a first start
     // that was killed halfway leaves behind), and the unpacking below writes a `.part` and renames
     // it, so a half-written file never carries the final name in the first place.
     long have = -1;
-    if (FILE* f = std::fopen(out.c_str(), "rb")) {
-        std::fseek(f, 0, SEEK_END);
-        have = std::ftell(f);
-        std::fclose(f);
+    if ( FILE *f = std::fopen( out.c_str(), "rb" ) )
+    {
+        std::fseek( f, 0, SEEK_END );
+        have = std::ftell( f );
+        std::fclose( f );
     }
-    if (have != static_cast<long>(want)) {
+    if ( have != static_cast<long>( want ) )
+    {
         const std::string tmp = out + ".part";
-        FILE* f = std::fopen(tmp.c_str(), "wb");
-        if (f == nullptr) { AAsset_close(a); LOGE("%s: cannot write %s", what, tmp.c_str()); return {}; }
-        std::vector<char> buf(64 * 1024);
-        bool ok = true;
-        for (;;) {
-            const int n = AAsset_read(a, buf.data(), buf.size());
-            if (n < 0) { ok = false; break; }
-            if (n == 0) break;
-            if (std::fwrite(buf.data(), 1, static_cast<size_t>(n), f) != static_cast<size_t>(n)) { ok = false; break; }
-        }
-        std::fclose(f);
-        if (!ok || std::rename(tmp.c_str(), out.c_str()) != 0) {
-            std::remove(tmp.c_str());
-            AAsset_close(a);
-            LOGE("%s: unpacking %s failed", what, name);
+        FILE             *f = std::fopen( tmp.c_str(), "wb" );
+        if ( f == nullptr )
+        {
+            AAsset_close( a );
+            LOGE( "%s: cannot write %s", what, tmp.c_str() );
             return {};
         }
-        LOGI("%s: unpacked %lld bytes to %s", what, static_cast<long long>(want), out.c_str());
+        std::vector<char> buf( 64 * 1024 );
+        bool              ok = true;
+        for ( ;; )
+        {
+            const int n = AAsset_read( a, buf.data(), buf.size() );
+            if ( n < 0 )
+            {
+                ok = false;
+                break;
+            }
+            if ( n == 0 ) break;
+            if ( std::fwrite( buf.data(), 1, static_cast<size_t>( n ), f ) != static_cast<size_t>( n ) )
+            {
+                ok = false;
+                break;
+            }
+        }
+        std::fclose( f );
+        if ( !ok || std::rename( tmp.c_str(), out.c_str() ) != 0 )
+        {
+            std::remove( tmp.c_str() );
+            AAsset_close( a );
+            LOGE( "%s: unpacking %s failed", what, name );
+            return {};
+        }
+        LOGI( "%s: unpacked %lld bytes to %s", what, static_cast<long long>( want ), out.c_str() );
     }
-    AAsset_close(a);
+    AAsset_close( a );
     return internalDir;
 }
 
@@ -354,34 +427,37 @@ std::string prepareAsset(AAssetManager* assets, const char* internalDir, const s
  * @param[in]     internalDir  the app's internal directory
  * @param[in]     externalDir  the app's external directory
  */
-void prepareModels(AAssetManager* assets, const char* internalDir, const std::string& externalDir)
+void prepareModels( AAssetManager *assets, const char *internalDir, const std::string &externalDir )
 {
-    const std::string melody = prepareAsset(assets, internalDir, externalDir, MelodyModelFile, "melody model");
-    const std::string bass = prepareAsset(assets, internalDir, externalDir, BassModelFile, "bass model");
+    const std::string melody = prepareAsset( assets, internalDir, externalDir, MelodyModelFile, "melody model" );
+    const std::string bass = prepareAsset( assets, internalDir, externalDir, BassModelFile, "bass model" );
     const std::string dir = !melody.empty() ? melody : bass;
-    if (dir.empty()) {
-        LOGE("models: neither %s nor %s is on this device; the composer keeps the Markov model and "
-             "the pattern families", MelodyModelFile, BassModelFile);
+    if ( dir.empty() )
+    {
+        LOGE( "models: neither %s nor %s is on this device; the composer keeps the Markov model and "
+              "the pattern families",
+              MelodyModelFile, BassModelFile );
         return;
     }
-    setModelSearchPath(dir);
-    LOGI("models: %s", dir.c_str());
+    setModelSearchPath( dir );
+    LOGI( "models: %s", dir.c_str() );
 }
 
 // ---------------------------------------------------------------- config
 
 /** @brief What `phos.cfg` can say. */
-struct Config {
-    bool m_mute = false;              ///< start silent (test rule); the engine still runs
-    uint64_t m_seed = 1;              ///< set seed
-    Quality m_quality = Quality::quest();   ///< quality level, `quest` unless the file says otherwise
-    std::string m_oscHost;            ///< cue bridge target, empty = off
-    int m_oscPort = CueDefaultPort;  ///< cue bridge port
-    std::string m_bridgeHost;         ///< the bridge (01.10.2026): the hands to the desktop's Phosphene there; empty = off
-    int m_bridgePort = 9101;          ///< its headset port (the desktop's settings, Headset)
-    bool m_oscBeats = true;           ///< send /phos/beat as well as /phos/bar
-    float m_oscLeadMs = 0.0f;         ///< trim on the lead the tap computes from the block (Cue.h)
-    std::string m_sets;               ///< knob assignments, "key=value" separated by ';' or newlines
+struct Config
+{
+    bool        m_mute = false;                 ///< start silent (test rule); the engine still runs
+    uint64_t    m_seed = 1;                     ///< set seed
+    Quality     m_quality = Quality::quest();   ///< quality level, `quest` unless the file says otherwise
+    std::string m_oscHost;                      ///< cue bridge target, empty = off
+    int         m_oscPort = CueDefaultPort;     ///< cue bridge port
+    std::string m_bridgeHost;   ///< the bridge (01.10.2026): the hands to the desktop's Phosphene there; empty = off
+    int         m_bridgePort = 9101;   ///< its headset port (the desktop's settings, Headset)
+    bool        m_oscBeats = true;     ///< send /phos/beat as well as /phos/bar
+    float       m_oscLeadMs = 0.0f;    ///< trim on the lead the tap computes from the block (Cue.h)
+    std::string m_sets;                ///< knob assignments, "key=value" separated by ';' or newlines
 };
 
 /**
@@ -389,55 +465,81 @@ struct Config {
  * @param[in] dir  the folder of tot.cfg
  * @return the configuration
  */
-Config readConfig(const char* dir)
+Config readConfig( const char *dir )
 {
     Config c;
-    if (dir == nullptr) return c;
-    const std::string path = std::string(dir) + "/phos.cfg";
-    FILE* f = std::fopen(path.c_str(), "r");
-    if (f == nullptr) { LOGI("no config at %s", path.c_str()); return c; }
-    char line[512];
-    while (std::fgets(line, sizeof(line), f)) {
-        std::string s(line);
-        while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' ')) s.pop_back();
-        if (s.empty() || s[0] == '#') continue;
-        const size_t eq = s.find('=');
-        if (eq == std::string::npos) continue;
-        const std::string k = s.substr(0, eq), v = s.substr(eq + 1);
-        if (k == "mute") c.m_mute = v != "0";
-        else if (k == "seed") c.m_seed = std::strtoull(v.c_str(), nullptr, 10);
-        else if (k == "quality") { if (!Quality::fromName(v.c_str(), c.m_quality)) LOGE("quality: %s?", v.c_str()); }
-        else if (k == "osc_host") c.m_oscHost = v;
-        else if (k == "osc_port") c.m_oscPort = std::atoi(v.c_str());
-        else if (k == "bridge_host") c.m_bridgeHost = v;
-        else if (k == "bridge_port") c.m_bridgePort = std::atoi(v.c_str());
-        else if (k == "audio") { if (v == "0") c.m_mute = true; }   // no sound here: the desktop plays (the bridge)
-        else if (k == "osc_beats") c.m_oscBeats = v != "0";
-        else if (k == "osc_lead_ms") c.m_oscLeadMs = static_cast<float>(std::atof(v.c_str()));
-        else if (k == "set") { c.m_sets += v; c.m_sets += ";"; }
-        else LOGE("phos.cfg: unknown key %s", k.c_str());
+    if ( dir == nullptr ) return c;
+    const std::string path = std::string( dir ) + "/phos.cfg";
+    FILE             *f = std::fopen( path.c_str(), "r" );
+    if ( f == nullptr )
+    {
+        LOGI( "no config at %s", path.c_str() );
+        return c;
     }
-    std::fclose(f);
-    LOGI("config: mute %d, seed %llu, quality %s", c.m_mute ? 1 : 0, static_cast<unsigned long long>(c.m_seed), c.m_quality.name());
+    char line[512];
+    while ( std::fgets( line, sizeof( line ), f ) )
+    {
+        std::string s( line );
+        while ( !s.empty() && ( s.back() == '\n' || s.back() == '\r' || s.back() == ' ' ) ) s.pop_back();
+        if ( s.empty() || s[0] == '#' ) continue;
+        const size_t eq = s.find( '=' );
+        if ( eq == std::string::npos ) continue;
+        const std::string k = s.substr( 0, eq ), v = s.substr( eq + 1 );
+        if ( k == "mute" )
+            c.m_mute = v != "0";
+        else if ( k == "seed" )
+            c.m_seed = std::strtoull( v.c_str(), nullptr, 10 );
+        else if ( k == "quality" )
+        {
+            if ( !Quality::fromName( v.c_str(), c.m_quality ) ) LOGE( "quality: %s?", v.c_str() );
+        }
+        else if ( k == "osc_host" )
+            c.m_oscHost = v;
+        else if ( k == "osc_port" )
+            c.m_oscPort = std::atoi( v.c_str() );
+        else if ( k == "bridge_host" )
+            c.m_bridgeHost = v;
+        else if ( k == "bridge_port" )
+            c.m_bridgePort = std::atoi( v.c_str() );
+        else if ( k == "audio" )
+        {
+            if ( v == "0" ) c.m_mute = true;
+        }   // no sound here: the desktop plays (the bridge)
+        else if ( k == "osc_beats" )
+            c.m_oscBeats = v != "0";
+        else if ( k == "osc_lead_ms" )
+            c.m_oscLeadMs = static_cast<float>( std::atof( v.c_str() ) );
+        else if ( k == "set" )
+        {
+            c.m_sets += v;
+            c.m_sets += ";";
+        }
+        else
+            LOGE( "phos.cfg: unknown key %s", k.c_str() );
+    }
+    std::fclose( f );
+    LOGI( "config: mute %d, seed %llu, quality %s", c.m_mute ? 1 : 0, static_cast<unsigned long long>( c.m_seed ),
+          c.m_quality.name() );
     return c;
 }
 
 // ---------------------------------------------------------------- the set player
 
 /** @brief What the panel draws, published by the composer thread. */
-struct DisplayState {
-    bool m_planning = true;       ///< the composer is still planning the first tracks
-    int  m_track = 0;             ///< index of the track that is playing
-    int  m_trackBars = 256;       ///< its length
-    int  m_firstBar = 0;          ///< its first bar in the set
-    int  m_key = 6;               ///< pitch class
-    int  m_scale = 1;             ///< index into ScaleNames
-    double m_bpm = 145.0;         ///< the track's tempo
-    int  m_blockParts = 0;        ///< one bit per melodic part in the bar now playing (Form.h, partBit)
-    bool m_padGate = false;       ///< trance gate on the pad in that bar
-    int  m_bar = 0;               ///< absolute bar now playing
-    int  m_incoming = -1;         ///< the track whose intro mixes in over this one's outro (DJ overlap), -1 = none
-    int  m_handover = -1;         ///< the bar where that track's kick and bass take over, -1 = none
+struct DisplayState
+{
+    bool   m_planning = true;   ///< the composer is still planning the first tracks
+    int    m_track = 0;         ///< index of the track that is playing
+    int    m_trackBars = 256;   ///< its length
+    int    m_firstBar = 0;      ///< its first bar in the set
+    int    m_key = 6;           ///< pitch class
+    int    m_scale = 1;         ///< index into ScaleNames
+    double m_bpm = 145.0;       ///< the track's tempo
+    int    m_blockParts = 0;    ///< one bit per melodic part in the bar now playing (Form.h, partBit)
+    bool   m_padGate = false;   ///< trance gate on the pad in that bar
+    int    m_bar = 0;           ///< absolute bar now playing
+    int    m_incoming = -1;     ///< the track whose intro mixes in over this one's outro (DJ overlap), -1 = none
+    int    m_handover = -1;     ///< the bar where that track's kick and bass take over, -1 = none
 };
 
 /**
@@ -455,7 +557,8 @@ struct DisplayState {
  * composer waits for Idle and takes it to Blocked. The audio thread therefore never blocks and
  * never allocates.
  */
-class SetPlayer {
+class SetPlayer
+{
 public:
     /**
      * @brief Builds the engine and plans the first stretch of the set. Composer thread.
@@ -464,23 +567,24 @@ public:
      * @param[in] cfg         the configuration
      * @pre called on the composer thread
      */
-    void prepare(int sampleRate, int block, const Config& cfg)
+    void prepare( int sampleRate, int block, const Config &cfg )
     {
         m_muted = cfg.m_mute;
-        m_engine.prepare(sampleRate, block, cfg.m_quality);
-        m_composer.setSeed(cfg.m_seed);
-        if (!cfg.m_sets.empty()) {
+        m_engine.prepare( sampleRate, block, cfg.m_quality );
+        m_composer.setSeed( cfg.m_seed );
+        if ( !cfg.m_sets.empty() )
+        {
             std::string err;
-            if (!m_engine.params().parseText(cfg.m_sets, &err)) LOGE("phos.cfg set: %s", err.c_str());
+            if ( !m_engine.params().parseText( cfg.m_sets, &err ) ) LOGE( "phos.cfg set: %s", err.c_str() );
         }
-        m_gainCoef = static_cast<float>(1.0 - std::exp(-1.0 / (0.015 * sampleRate)));   // 15 ms
-        m_sr = static_cast<double>(sampleRate);
-        m_cueTap.setSendBeats(cfg.m_oscBeats);
+        m_gainCoef = static_cast<float>( 1.0 - std::exp( -1.0 / ( 0.015 * sampleRate ) ) );   // 15 ms
+        m_sr = static_cast<double>( sampleRate );
+        m_cueTap.setSendBeats( cfg.m_oscBeats );
         m_cueLeadMs = cfg.m_oscLeadMs;
-        rebase(0);
+        rebase( 0 );
         m_display.m_planning = false;
-        m_ready.store(true, std::memory_order_release);
-        LOGI("set ready: seed %llu, %s", static_cast<unsigned long long>(m_composer.seed()), cfg.m_quality.name());
+        m_ready.store( true, std::memory_order_release );
+        LOGI( "set ready: seed %llu, %s", static_cast<unsigned long long>( m_composer.seed() ), cfg.m_quality.name() );
     }
 
     /**
@@ -490,32 +594,37 @@ public:
      * @param[in]  n  the block's samples
      * @pre called on the audio thread
      */
-    void process(float* L, float* R, int n)
+    void process( float *L, float *R, int n )
     {
         int expected = IDLE;
-        if (!m_ready.load(std::memory_order_acquire) || !m_state.compare_exchange_strong(expected, PROCESSING)) {
-            std::fill(L, L + n, 0.0f);
-            std::fill(R, R + n, 0.0f);
+        if ( !m_ready.load( std::memory_order_acquire ) || !m_state.compare_exchange_strong( expected, PROCESSING ) )
+        {
+            std::fill( L, L + n, 0.0f );
+            std::fill( R, R + n, 0.0f );
             return;
         }
-        const float target = m_playing.load(std::memory_order_relaxed) ? 1.0f : 0.0f;
-        if (target <= 0.0f && m_gain < 1.0e-4f) {
+        const float target = m_playing.load( std::memory_order_relaxed ) ? 1.0f : 0.0f;
+        if ( target <= 0.0f && m_gain < 1.0e-4f )
+        {
             // Faded out: the music waits where it is instead of running on silently.
             m_gain = 0.0f;
-            std::fill(L, L + n, 0.0f);
-            std::fill(R, R + n, 0.0f);
-        } else {
+            std::fill( L, L + n, 0.0f );
+            std::fill( R, R + n, 0.0f );
+        }
+        else
+        {
             const double from = m_engine.beatPosition();
-            m_engine.process(L, R, n);
+            m_engine.process( L, R, n );
             const float out = m_muted ? 0.0f : 1.0f;
-            for (int i = 0; i < n; ++i) {
-                m_gain += (target - m_gain) * m_gainCoef;   // one pole: no step, no click
+            for ( int i = 0; i < n; ++i )
+            {
+                m_gain += ( target - m_gain ) * m_gainCoef;   // one pole: no step, no click
                 L[i] *= m_gain * out;
                 R[i] *= m_gain * out;
             }
-            sendCues(from, m_engine.beatPosition(), n);
+            sendCues( from, m_engine.beatPosition(), n );
         }
-        m_state.store(IDLE, std::memory_order_release);
+        m_state.store( IDLE, std::memory_order_release );
     }
 
     /**
@@ -523,61 +632,70 @@ public:
      * @param[in,out] sender  the cue sender, or null
      * @pre called before the
      */
-    void setCueSender(CueSender* sender) { m_cues = sender; }
+    void setCueSender( CueSender *sender ) { m_cues = sender; }
 
     /**
      * @brief Play or stop (any thread; takes effect over the fade).
      * @param[in] on  true to play
      */
-    void setPlaying(bool on) { m_playing.store(on, std::memory_order_relaxed); }
+    void setPlaying( bool on ) { m_playing.store( on, std::memory_order_relaxed ); }
     /**
      * @brief Whether play is on.
      * @return true while play is on
      */
-    bool playing() const { return m_playing.load(std::memory_order_relaxed); }
+    bool playing() const { return m_playing.load( std::memory_order_relaxed ); }
     /** @brief Asks for a jump to the start of the next track (any thread). */
-    void requestNextTrack() { m_jumpRequest.store(true, std::memory_order_relaxed); }
+    void requestNextTrack() { m_jumpRequest.store( true, std::memory_order_relaxed ); }
 
     /**
      * @brief One round of composer work: a pending jump, then bars up to the horizon.
      * @param[in] horizonBeats  how far ahead of the play position the rings are kept filled
      */
-    void pump(double horizonBeats)
+    void pump( double horizonBeats )
     {
-        if (m_jumpRequest.exchange(false, std::memory_order_relaxed)) jumpToNextTrack();
-        const ParamStore& p = m_engine.params();
-        const double target = m_engine.beatPosition() + horizonBeats;
-        for (;;) {
-            while (m_ctlPos < m_controls.size()) {
-                if (!m_engine.pushControl(m_controls[m_ctlPos])) return;
+        if ( m_jumpRequest.exchange( false, std::memory_order_relaxed ) ) jumpToNextTrack();
+        const ParamStore &p = m_engine.params();
+        const double      target = m_engine.beatPosition() + horizonBeats;
+        for ( ;; )
+        {
+            while ( m_ctlPos < m_controls.size() )
+            {
+                if ( !m_engine.pushControl( m_controls[m_ctlPos] ) ) return;
                 ++m_ctlPos;
             }
-            while (m_notePos < m_notes.size()) {
-                if (!m_engine.pushEvent(m_notes[m_notePos])) return;
+            while ( m_notePos < m_notes.size() )
+            {
+                if ( !m_engine.pushEvent( m_notes[m_notePos] ) ) return;
                 ++m_notePos;
             }
-            if (localBeatOfBar(m_nextBar) >= target) break;
+            if ( localBeatOfBar( m_nextBar ) >= target ) break;
             m_notes.clear();
             m_controls.clear();
             m_notePos = m_ctlPos = 0;
-            m_composer.composeBars(p, m_nextBar, 1, m_notes, &m_controls);
-            const double shift = -static_cast<double>(m_barOffset) * BeatsPerBar;
-            for (NoteEvent& e : m_notes) e.m_beat += shift;
-            for (ControlEvent& e : m_controls) e.m_beat += shift;
+            m_composer.composeBars( p, m_nextBar, 1, m_notes, &m_controls );
+            const double shift = -static_cast<double>( m_barOffset ) * BeatsPerBar;
+            for ( NoteEvent &e : m_notes ) e.m_beat += shift;
+            for ( ControlEvent &e : m_controls ) e.m_beat += shift;
             // The cue marks of this bar, in musical beats (PLAN 8.3). They are written here, bars
             // ahead of the sound, and read by the audio thread when the play position reaches them.
             // rebase() has already described the bar it landed on; describing it twice would be two
             // scene changes where the music has one.
-            if (m_nextBar == m_cueLandingBar) {
+            if ( m_nextBar == m_cueLandingBar )
+            {
                 m_cueLandingBar = -1;
-            } else {
-                const TrackPlan& plan = m_composer.track(p, m_composer.trackOfBar(p, m_nextBar));
-                cueMarksForBar(plan.m_form, plan.m_firstBar, plan.m_key, plan.m_scale, m_nextBar, m_cueKey, m_cueMarks);
+            }
+            else
+            {
+                const TrackPlan &plan = m_composer.track( p, m_composer.trackOfBar( p, m_nextBar ) );
+                cueMarksForBar( plan.m_form, plan.m_firstBar, plan.m_key, plan.m_scale, m_nextBar, m_cueKey,
+                                m_cueMarks );
                 // The next track's intro over this one's outro (the DJ overlap, Form.h): its marks too.
-                const int incoming = m_composer.incomingOfBar(p, m_nextBar);
-                if (incoming >= 0) {
-                    const TrackPlan& next = m_composer.track(p, incoming);
-                    cueMarksForBar(next.m_form, next.m_firstBar, next.m_key, next.m_scale, m_nextBar, m_cueKey, m_cueMarks);
+                const int incoming = m_composer.incomingOfBar( p, m_nextBar );
+                if ( incoming >= 0 )
+                {
+                    const TrackPlan &next = m_composer.track( p, incoming );
+                    cueMarksForBar( next.m_form, next.m_firstBar, next.m_key, next.m_scale, m_nextBar, m_cueKey,
+                                    m_cueMarks );
                 }
             }
             ++m_nextBar;
@@ -591,8 +709,8 @@ public:
      */
     int currentBar() const
     {
-        return m_barOffset.load(std::memory_order_relaxed)
-             + static_cast<int>(m_engine.beatPosition() / BeatsPerBar);
+        return m_barOffset.load( std::memory_order_relaxed ) +
+               static_cast<int>( m_engine.beatPosition() / BeatsPerBar );
     }
     /**
      * @brief Position within the bar, 0..1 (render thread).
@@ -602,7 +720,7 @@ public:
     float barPhase() const
     {
         const double b = m_engine.beatPosition() / BeatsPerBar;
-        return static_cast<float>(b - std::floor(b));
+        return static_cast<float>( b - std::floor( b ) );
     }
     /**
      * @brief Short-term loudness of the master, LUFS (a torn read at worst; a display only).
@@ -613,20 +731,29 @@ public:
      * @brief The knobs, for the hand macros.
      * @return the knobs
      */
-    ParamStore& params() { return m_engine.params(); }
+    ParamStore &params() { return m_engine.params(); }
     /**
      * @brief The panel's data.
      * @return the panel's data
      */
-    DisplayState display() const { std::lock_guard<std::mutex> lock(m_displayMutex); return m_display; }
+    DisplayState display() const
+    {
+        std::lock_guard<std::mutex> lock( m_displayMutex );
+        return m_display;
+    }
     /**
      * @brief Whether prepare() has finished.
      * @return true when prepared
      */
-    bool ready() const { return m_ready.load(std::memory_order_acquire); }
+    bool ready() const { return m_ready.load( std::memory_order_acquire ); }
 
 private:
-    enum : int { IDLE = 0, PROCESSING, BLOCKED };
+    enum : int
+    {
+        IDLE = 0,
+        PROCESSING,
+        BLOCKED
+    };
     /** @brief How many bars of the set are planned ahead: about half an hour at 145 BPM. */
     static constexpr int PlanBars = 1024;
 
@@ -644,15 +771,13 @@ private:
      * @param[in] n     samples in the block
      * @pre called on the audio thread
      */
-    void sendCues(double from, double to, int n)
+    void sendCues( double from, double to, int n )
     {
-        if (m_cues == nullptr || !m_cues->running()) return;
-        const double shift = static_cast<double>(m_barOffset.load(std::memory_order_relaxed)) * BeatsPerBar;
-        const double lead = static_cast<double>(n + m_engine.latencySamples()) / m_sr + 0.001 * m_cueLeadMs;
-        m_cueTap.scan(from + shift, to + shift, cueNowNanos(),
-                     static_cast<int64_t>(lead * 1.0e9),
-                     static_cast<int64_t>(static_cast<double>(n) / m_sr * 1.0e9),
-                     m_cueMarks, m_cues->queue());
+        if ( m_cues == nullptr || !m_cues->running() ) return;
+        const double shift = static_cast<double>( m_barOffset.load( std::memory_order_relaxed ) ) * BeatsPerBar;
+        const double lead = static_cast<double>( n + m_engine.latencySamples() ) / m_sr + 0.001 * m_cueLeadMs;
+        m_cueTap.scan( from + shift, to + shift, cueNowNanos(), static_cast<int64_t>( lead * 1.0e9 ),
+                       static_cast<int64_t>( static_cast<double>( n ) / m_sr * 1.0e9 ), m_cueMarks, m_cues->queue() );
     }
 
     /**
@@ -660,9 +785,9 @@ private:
      * @param[in] bar  the set's bar
      * @return the engine's beat
      */
-    double localBeatOfBar(int bar) const
+    double localBeatOfBar( int bar ) const
     {
-        return static_cast<double>(bar - m_barOffset.load(std::memory_order_relaxed)) * BeatsPerBar;
+        return static_cast<double>( bar - m_barOffset.load( std::memory_order_relaxed ) ) * BeatsPerBar;
     }
 
     /**
@@ -675,12 +800,12 @@ private:
      * @param[in] offsetBeat  the beat that becomes 0
      * @return the map moved
      */
-    static TempoMap rebasedTempo(const TempoMap& src, double offsetBeat)
+    static TempoMap rebasedTempo( const TempoMap &src, double offsetBeat )
     {
         TempoMap t;
-        t.setConstant(src.bpmAt(offsetBeat));
-        for (const TempoPoint& p : src.points())
-            if (p.m_beat >= offsetBeat - 1.0e-9) t.add(p.m_beat - offsetBeat, p.m_bpm, p.m_rampToNext);
+        t.setConstant( src.bpmAt( offsetBeat ) );
+        for ( const TempoPoint &p : src.points() )
+            if ( p.m_beat >= offsetBeat - 1.0e-9 ) t.add( p.m_beat - offsetBeat, p.m_bpm, p.m_rampToNext );
         return t;
     }
 
@@ -688,31 +813,32 @@ private:
      * @brief Stops the engine, moves the play position to @p bar and refills from there.
      * @param[in] bar  the bar
      */
-    void rebase(int bar)
+    void rebase( int bar )
     {
-        const ParamStore& p = m_engine.params();
-        const TempoMap full = m_composer.tempoMap(p, bar + PlanBars);
-        const TempoMap map = rebasedTempo(full, static_cast<double>(bar) * BeatsPerBar);
+        const ParamStore &p = m_engine.params();
+        const TempoMap    full = m_composer.tempoMap( p, bar + PlanBars );
+        const TempoMap    map = rebasedTempo( full, static_cast<double>( bar ) * BeatsPerBar );
         // Take the player away from the audio thread for the reset. It writes silence meanwhile.
         int expected = IDLE;
-        while (!m_state.compare_exchange_weak(expected, BLOCKED)) {
+        while ( !m_state.compare_exchange_weak( expected, BLOCKED ) )
+        {
             expected = IDLE;
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
         }
-        m_engine.reset();            // clears both event rings, all offsets and all sound
-        m_engine.setTempoMap(map);
-        m_gain = 0.0f;               // fade in again wherever we land
-        m_barOffset.store(bar, std::memory_order_relaxed);
+        m_engine.reset();   // clears both event rings, all offsets and all sound
+        m_engine.setTempoMap( map );
+        m_gain = 0.0f;   // fade in again wherever we land
+        m_barOffset.store( bar, std::memory_order_relaxed );
         // The marks in the ring describe beats that are behind us now; the tap would send them all
         // at once, a burst of sections that are over. Clearing is the consumer's end of the ring,
         // and this is the composer thread -- safe only here, while the audio thread is still held
         // at BLOCKED and writing silence.
         m_cueMarks.clear();
-        m_state.store(IDLE, std::memory_order_release);
+        m_state.store( IDLE, std::memory_order_release );
         m_cueKey = -1;
         // Where we landed, so a visualiser is not left without a section until the next boundary.
-        const TrackPlan& landing = m_composer.track(p, m_composer.trackOfBar(p, bar));
-        cueLandingMark(landing.m_form, landing.m_firstBar, landing.m_key, landing.m_scale, bar, m_cueKey, m_cueMarks);
+        const TrackPlan &landing = m_composer.track( p, m_composer.trackOfBar( p, bar ) );
+        cueLandingMark( landing.m_form, landing.m_firstBar, landing.m_key, landing.m_scale, bar, m_cueKey, m_cueMarks );
         m_cueLandingBar = bar;
         m_nextBar = bar;
         m_notes.clear();
@@ -723,37 +849,38 @@ private:
     /** @brief Jumps to the first bar of the track after the one that is playing. */
     void jumpToNextTrack()
     {
-        const ParamStore& p = m_engine.params();
-        const int here = currentBar();
-        const int ti = m_composer.trackOfBar(p, here);
+        const ParamStore &p = m_engine.params();
+        const int         here = currentBar();
+        const int         ti = m_composer.trackOfBar( p, here );
         // The next track's first bar, where its intro starts over this one's outro (the DJ overlap); from
         // inside that overlap, its hand-over, so that the jump never goes backwards.
-        const int nextFirst = [&] {
-            const TrackPlan next = m_composer.track(p, ti + 1);
-            return next.m_firstBar > here ? next.m_firstBar : handoverBar(next);
+        const int nextFirst = [&]
+        {
+            const TrackPlan next = m_composer.track( p, ti + 1 );
+            return next.m_firstBar > here ? next.m_firstBar : handoverBar( next );
         }();
         // A fade first, so the jump is not a cut in the middle of a note; the fade is 15 ms and the
         // planning of the next stretch takes far longer than that anyway.
         const bool wasPlaying = playing();
-        setPlaying(false);
-        std::this_thread::sleep_for(std::chrono::milliseconds(60));
-        rebase(nextFirst);
-        setPlaying(wasPlaying);
-        LOGI("jump: bar %d -> track %d at bar %d", here, ti + 1, nextFirst);
+        setPlaying( false );
+        std::this_thread::sleep_for( std::chrono::milliseconds( 60 ) );
+        rebase( nextFirst );
+        setPlaying( wasPlaying );
+        LOGI( "jump: bar %d -> track %d at bar %d", here, ti + 1, nextFirst );
     }
 
     /** @brief Copies the plan of the bar now playing into the panel's snapshot. */
     void publish()
     {
-        const ParamStore& p = m_engine.params();
-        const int bar = currentBar();
-        const int ti = m_composer.trackOfBar(p, bar);
+        const ParamStore &p = m_engine.params();
+        const int         bar = currentBar();
+        const int         ti = m_composer.trackOfBar( p, bar );
         // The incoming track of the DJ overlap, asked for *before* the reference below is taken:
         // incomingOfBar may plan the next track, and that may move the cached plans.
-        const int incoming = m_composer.incomingOfBar(p, bar);
-        const int incomingHandover = incoming >= 0 ? handoverBar(m_composer.track(p, incoming)) : -1;
-        const TrackPlan& plan = m_composer.track(p, ti);
-        const int inTrack = std::clamp(bar - plan.m_firstBar, 0, std::max(0, plan.m_bars - 1));
+        const int        incoming = m_composer.incomingOfBar( p, bar );
+        const int        incomingHandover = incoming >= 0 ? handoverBar( m_composer.track( p, incoming ) ) : -1;
+        const TrackPlan &plan = m_composer.track( p, ti );
+        const int        inTrack = std::clamp( bar - plan.m_firstBar, 0, std::max( 0, plan.m_bars - 1 ) );
         // What plays now comes from the instrumentation matrix (Form.h), evaluated for this bar.
         // It used to be read out of a per-16-bar table in MelodyPlan; the form grammar of Phase 5
         // replaced that table with planBar(), which is a bar at a time and knows about buildups,
@@ -761,72 +888,76 @@ private:
         // block it is in. PartAvailability is assembled here exactly as Composer.cpp assembles it
         // (availabilityOf); it is four lines of a track's own plan, not a decision.
         PartAvailability avail;
-        for (int k = 0; k < MelodyParts; ++k) avail.m_part[k] = plan.m_melody.m_present[k];
+        for ( int k = 0; k < MelodyParts; ++k ) avail.m_part[k] = plan.m_melody.m_present[k];
         avail.m_leadLo = plan.m_melody.m_leadLo;
         avail.m_leadHi = plan.m_melody.m_leadHi;
         avail.m_arpLo = plan.m_melody.m_arpLo;
         avail.m_arpHi = plan.m_melody.m_arpHi;
         avail.m_percLayers = plan.m_perc.m_layers;
         avail.m_hatLayers = plan.m_perc.m_hatLayers;
-        const BarPlan bp = planBar(plan.m_form, avail, plan.m_sectionSeed, inTrack);
-        DisplayState d;
+        const BarPlan bp = planBar( plan.m_form, avail, plan.m_sectionSeed, inTrack );
+        DisplayState  d;
         d.m_planning = false;
         d.m_track = ti;
         d.m_trackBars = plan.m_bars;
         d.m_firstBar = plan.m_firstBar;
-        d.m_key = std::clamp(plan.m_key, 0, 11);
+        d.m_key = std::clamp( plan.m_key, 0, 11 );
         // Clamped against the parameter's own range rather than a hard-coded count, so a new scale
         // in the table cannot turn this display into an out-of-bounds read.
-        d.m_scale = std::clamp(plan.m_scale, 0, static_cast<int>(p.desc(p.base(ModuleE::COMPOSE) + compose::SCALE).m_maxValue));
+        d.m_scale = std::clamp( plan.m_scale, 0,
+                                static_cast<int>( p.desc( p.base( ModuleE::COMPOSE ) + compose::SCALE ).m_maxValue ) );
         d.m_bpm = plan.m_bpm;
         d.m_blockParts = bp.m_parts;
         d.m_padGate = bp.m_padGate;
         d.m_bar = bar;
         d.m_incoming = incoming;
         d.m_handover = incomingHandover;
-        std::lock_guard<std::mutex> lock(m_displayMutex);
+        std::lock_guard<std::mutex> lock( m_displayMutex );
         m_display = d;
     }
 
-    Engine m_engine;   ///< the engine: the voices, the kit, the rooms, the perform controls
-    Composer m_composer{ 1 };   ///< the composer: the set, bar by bar
-    std::vector<NoteEvent> m_notes;   ///< the last composed bar's notes
-    std::vector<ControlEvent> m_controls;   ///< ... and its control events
-    size_t m_notePos = 0;   ///< how many of the notes are in the engine
-    size_t m_ctlPos = 0;   ///< ... and of the control events
-    int m_nextBar = 0;   ///< the next bar to compose
-    std::atomic<int> m_barOffset{ 0 };   ///< the bar the engine counts from (a jump rebases it)
-    std::atomic<int> m_state{ IDLE };   ///< the handover between the audio thread and the composer thread (IDLE, PROCESSING, BLOCKED)
-    std::atomic<bool> m_ready{ false };   ///< prepare() has finished
-    std::atomic<bool> m_playing{ false };   ///< play is on (the fade follows it)
+    Engine                    m_engine;           ///< the engine: the voices, the kit, the rooms, the perform controls
+    Composer                  m_composer{ 1 };    ///< the composer: the set, bar by bar
+    std::vector<NoteEvent>    m_notes;            ///< the last composed bar's notes
+    std::vector<ControlEvent> m_controls;         ///< ... and its control events
+    size_t                    m_notePos = 0;      ///< how many of the notes are in the engine
+    size_t                    m_ctlPos = 0;       ///< ... and of the control events
+    int                       m_nextBar = 0;      ///< the next bar to compose
+    std::atomic<int>          m_barOffset{ 0 };   ///< the bar the engine counts from (a jump rebases it)
+    std::atomic<int>          m_state{
+        IDLE
+    };   ///< the handover between the audio thread and the composer thread (IDLE, PROCESSING, BLOCKED)
+    std::atomic<bool> m_ready{ false };         ///< prepare() has finished
+    std::atomic<bool> m_playing{ false };       ///< play is on (the fade follows it)
     std::atomic<bool> m_jumpRequest{ false };   ///< the next track is asked for
-    bool m_muted = false;   ///< the config mutes the output (the engine still runs)
-    double m_sr = 48000.0;                 ///< the rate the stream really gave (for the cue lead)
+    bool              m_muted = false;          ///< the config mutes the output (the engine still runs)
+    double            m_sr = 48000.0;           ///< the rate the stream really gave (for the cue lead)
     /** @name The cue bridge (PLAN 8.3, Cue.h): marks written by the composer, sent from the play position
      *  @{ */
-    CueSender* m_cues = nullptr;           ///< the socket and its thread, owned by the app; null = off
-    CueTap m_cueTap;                       ///< audio thread: beat range -> cues
-    CueMarkRingT m_cueMarks{ 512 };         ///< composer thread -> audio thread
-    int m_cueKey = -1;                     ///< the key the last mark carried, -1 = none sent yet
-    int m_cueLandingBar = -1;              ///< rebase() already described this bar
-    float m_cueLeadMs = 0.0f;              ///< `osc_lead_ms`
+    CueSender   *m_cues = nullptr;       ///< the socket and its thread, owned by the app; null = off
+    CueTap       m_cueTap;               ///< audio thread: beat range -> cues
+    CueMarkRingT m_cueMarks{ 512 };      ///< composer thread -> audio thread
+    int          m_cueKey = -1;          ///< the key the last mark carried, -1 = none sent yet
+    int          m_cueLandingBar = -1;   ///< rebase() already described this bar
+    float        m_cueLeadMs = 0.0f;     ///< `osc_lead_ms`
     /** @} */
-    float m_gain = 0.0f;   ///< the play/stop fade, 0 .. 1
-    float m_gainCoef = 0.002f;   ///< the fade's one-pole coefficient (15 ms)
-    mutable std::mutex m_displayMutex;   ///< guards m_display
-    DisplayState m_display;   ///< what the panel shows
+    float              m_gain = 0.0f;         ///< the play/stop fade, 0 .. 1
+    float              m_gainCoef = 0.002f;   ///< the fade's one-pole coefficient (15 ms)
+    mutable std::mutex m_displayMutex;        ///< guards m_display
+    DisplayState       m_display;             ///< what the panel shows
 };
 
 // ---------------------------------------------------------------- audio
 
 /** @brief Oboe output stream: a low-latency float stream straight into SetPlayer::process. */
-class Audio : public oboe::AudioStreamDataCallback {
+class Audio : public oboe::AudioStreamDataCallback
+{
 public:
     /**
      * @brief A stream that will play @p p (open() and start() it).
      * @param[in,out] p  the player
      */
-    explicit Audio(SetPlayer& p) : m_player(p) {}
+    explicit Audio( SetPlayer &p ) : m_player( p ) {}
 
     /**
      * @brief Opens a low-latency stereo float stream at 48 kHz (or what the device gives); false if it cannot.
@@ -835,20 +966,24 @@ public:
     bool open()
     {
         oboe::AudioStreamBuilder b;
-        b.setDirection(oboe::Direction::Output)
-         ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
-         ->setSharingMode(oboe::SharingMode::Exclusive)
-         ->setFormat(oboe::AudioFormat::Float)
-         ->setChannelCount(2)
-         ->setSampleRate(48000)
-         ->setDataCallback(this);
-        if (b.openStream(m_stream) != oboe::Result::OK) { LOGE("Oboe: cannot open stream"); return false; }
+        b.setDirection( oboe::Direction::Output )
+            ->setPerformanceMode( oboe::PerformanceMode::LowLatency )
+            ->setSharingMode( oboe::SharingMode::Exclusive )
+            ->setFormat( oboe::AudioFormat::Float )
+            ->setChannelCount( 2 )
+            ->setSampleRate( 48000 )
+            ->setDataCallback( this );
+        if ( b.openStream( m_stream ) != oboe::Result::OK )
+        {
+            LOGE( "Oboe: cannot open stream" );
+            return false;
+        }
         m_sampleRate = m_stream->getSampleRate();
         m_burst = m_stream->getFramesPerBurst();
-        m_stream->setBufferSizeInFrames(m_burst * 2);
-        m_bufL.assign(4096, 0.0f);
-        m_bufR.assign(4096, 0.0f);
-        LOGI("Oboe: %d Hz, burst %d", m_sampleRate, m_burst);
+        m_stream->setBufferSizeInFrames( m_burst * 2 );
+        m_bufL.assign( 4096, 0.0f );
+        m_bufR.assign( 4096, 0.0f );
+        LOGI( "Oboe: %d Hz, burst %d", m_sampleRate, m_burst );
         return true;
     }
     /**
@@ -857,7 +992,15 @@ public:
      */
     bool start() { return m_stream && m_stream->requestStart() == oboe::Result::OK; }
     /** @brief Stops and closes the stream. */
-    void stop() { if (m_stream) { m_stream->requestStop(); m_stream->close(); m_stream.reset(); } }
+    void stop()
+    {
+        if ( m_stream )
+        {
+            m_stream->requestStop();
+            m_stream->close();
+            m_stream.reset();
+        }
+    }
     /**
      * @brief The rate the device gave, Hz.
      * @return the sample rate in Hz
@@ -876,16 +1019,18 @@ public:
      * @param[in]  frames  how many frames
      * @return Continue
      */
-    oboe::DataCallbackResult onAudioReady(oboe::AudioStream*, void* data, int32_t frames) override
+    oboe::DataCallbackResult onAudioReady( oboe::AudioStream *, void *data, int32_t frames ) override
     {
-        float* out = static_cast<float*>(data);
-        int done = 0;
-        while (done < frames) {
-            const int n = std::min(frames - done, static_cast<int32_t>(m_bufL.size()));
-            m_player.process(m_bufL.data(), m_bufR.data(), n);
-            for (int i = 0; i < n; ++i) {
-                out[(done + i) * 2] = m_bufL[static_cast<size_t>(i)];
-                out[(done + i) * 2 + 1] = m_bufR[static_cast<size_t>(i)];
+        float *out = static_cast<float *>( data );
+        int    done = 0;
+        while ( done < frames )
+        {
+            const int n = std::min( frames - done, static_cast<int32_t>( m_bufL.size() ) );
+            m_player.process( m_bufL.data(), m_bufR.data(), n );
+            for ( int i = 0; i < n; ++i )
+            {
+                out[( done + i ) * 2] = m_bufL[static_cast<size_t>( i )];
+                out[( done + i ) * 2 + 1] = m_bufR[static_cast<size_t>( i )];
             }
             done += n;
         }
@@ -893,18 +1038,18 @@ public:
     }
 
 private:
-    SetPlayer& m_player;   ///< what renders the audio
-    std::shared_ptr<oboe::AudioStream> m_stream;   ///< the open stream, or null
-    std::vector<float> m_bufL;   ///< the left channel of one piece
-    std::vector<float> m_bufR;   ///< the right channel of one piece
-    int m_sampleRate = 48000;   ///< the rate the device gave, Hz
-    int m_burst = 256;   ///< the device's burst, frames
+    SetPlayer                         &m_player;               ///< what renders the audio
+    std::shared_ptr<oboe::AudioStream> m_stream;               ///< the open stream, or null
+    std::vector<float>                 m_bufL;                 ///< the left channel of one piece
+    std::vector<float>                 m_bufR;                 ///< the right channel of one piece
+    int                                m_sampleRate = 48000;   ///< the rate the device gave, Hz
+    int                                m_burst = 256;          ///< the device's burst, frames
 };
 
 // ---------------------------------------------------------------- GL scene
 
 /** @brief The vertex shader: a point at its position, sized by its distance. */
-const char* kVertexShader = R"(#version 300 es
+const char *kVertexShader = R"(#version 300 es
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec4 aCol;
 layout(location = 2) in float aSize;
@@ -918,7 +1063,7 @@ void main() {
 })";
 
 /** @brief The fragment shader: a soft round dot, added to what is there. */
-const char* kFragmentShader = R"(#version 300 es
+const char *kFragmentShader = R"(#version 300 es
 precision mediump float;
 in vec4 vCol;
 out vec4 o;
@@ -930,7 +1075,8 @@ void main() {
 })";
 
 /** @brief One soft round point: the only primitive the scene has. */
-struct Point {
+struct Point
+{
     float m_x;      ///< position in the room, metres
     float m_y;      ///< height in the room, metres
     float m_z;      ///< depth in the room, metres
@@ -942,7 +1088,8 @@ struct Point {
 };
 
 /** @brief A head-locked plane to lay text out on: origin plus a right and an up axis. */
-struct Panel {
+struct Panel
+{
     Vec3 m_origin;   ///< the top left of the text, in the room
     Vec3 m_right;    ///< one metre to the right along the panel
     Vec3 m_up;       ///< one metre up along the panel
@@ -954,14 +1101,19 @@ struct Panel {
  * @param[in] src   its source
  * @return the shader, 0 on failure
  */
-GLuint compile(GLenum type, const char* src)
+GLuint compile( GLenum type, const char *src )
 {
-    const GLuint s = glCreateShader(type);
-    glShaderSource(s, 1, &src, nullptr);
-    glCompileShader(s);
+    const GLuint s = glCreateShader( type );
+    glShaderSource( s, 1, &src, nullptr );
+    glCompileShader( s );
     GLint ok = 0;
-    glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
-    if (!ok) { char log[1024]; glGetShaderInfoLog(s, sizeof(log), nullptr, log); LOGE("shader: %s", log); }
+    glGetShaderiv( s, GL_COMPILE_STATUS, &ok );
+    if ( !ok )
+    {
+        char log[1024];
+        glGetShaderInfoLog( s, sizeof( log ), nullptr, log );
+        LOGE( "shader: %s", log );
+    }
     return s;
 }
 
@@ -971,7 +1123,8 @@ GLuint compile(GLenum type, const char* src)
  * The Kaleidoscope rules apply (docs/PLAN.md 8.2): nothing about the camera moves with the audio,
  * and every brightness is a continuous function of the bar position -- no step, no flash.
  */
-class Scene {
+class Scene
+{
 public:
     /** @brief Display pixels per radian on the Quest 2's render target (about 1830 px over 90 deg). */
     static constexpr float PixelsPerRadian = 1150.0f;
@@ -983,21 +1136,28 @@ public:
     bool init()
     {
         m_program = glCreateProgram();
-        glAttachShader(m_program, compile(GL_VERTEX_SHADER, kVertexShader));
-        glAttachShader(m_program, compile(GL_FRAGMENT_SHADER, kFragmentShader));
-        glLinkProgram(m_program);
+        glAttachShader( m_program, compile( GL_VERTEX_SHADER, kVertexShader ) );
+        glAttachShader( m_program, compile( GL_FRAGMENT_SHADER, kFragmentShader ) );
+        glLinkProgram( m_program );
         GLint ok = 0;
-        glGetProgramiv(m_program, GL_LINK_STATUS, &ok);
-        if (!ok) { LOGE("program link failed"); return false; }
-        m_uVP = glGetUniformLocation(m_program, "uVP");
-        glGenBuffers(1, &m_vbo);
-        glGenVertexArrays(1, &m_vao);
-        glBindVertexArray(m_vao);
-        glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-        glEnableVertexAttribArray(0); glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Point), reinterpret_cast<void*>(0));
-        glEnableVertexAttribArray(1); glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Point), reinterpret_cast<void*>(12));
-        glEnableVertexAttribArray(2); glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(Point), reinterpret_cast<void*>(28));
-        glBindVertexArray(0);
+        glGetProgramiv( m_program, GL_LINK_STATUS, &ok );
+        if ( !ok )
+        {
+            LOGE( "program link failed" );
+            return false;
+        }
+        m_uVP = glGetUniformLocation( m_program, "uVP" );
+        glGenBuffers( 1, &m_vbo );
+        glGenVertexArrays( 1, &m_vao );
+        glBindVertexArray( m_vao );
+        glBindBuffer( GL_ARRAY_BUFFER, m_vbo );
+        glEnableVertexAttribArray( 0 );
+        glVertexAttribPointer( 0, 3, GL_FLOAT, GL_FALSE, sizeof( Point ), reinterpret_cast<void *>( 0 ) );
+        glEnableVertexAttribArray( 1 );
+        glVertexAttribPointer( 1, 4, GL_FLOAT, GL_FALSE, sizeof( Point ), reinterpret_cast<void *>( 12 ) );
+        glEnableVertexAttribArray( 2 );
+        glVertexAttribPointer( 2, 1, GL_FLOAT, GL_FALSE, sizeof( Point ), reinterpret_cast<void *>( 28 ) );
+        glBindVertexArray( 0 );
         return true;
     }
 
@@ -1015,9 +1175,9 @@ public:
      * @param[in] a     brightness, 0..1
      * @param[in] size  the diameter in pixels at one metre
      */
-    void add(float x, float y, float z, float r, float g, float b, float a, float size)
+    void add( float x, float y, float z, float r, float g, float b, float a, float size )
     {
-        m_points.push_back({ x, y, z, r, g, b, a, size });
+        m_points.push_back( { x, y, z, r, g, b, a, size } );
     }
 
     /**
@@ -1031,11 +1191,10 @@ public:
      * @param[in] a     brightness, 0..1
      * @param[in] size  the diameter in pixels at one metre
      */
-    void addOn(const Panel& p, float u, float v, float r, float g, float b, float a, float size)
+    void addOn( const Panel &p, float u, float v, float r, float g, float b, float a, float size )
     {
-        add(p.m_origin.m_x + p.m_right.m_x * u + p.m_up.m_x * v,
-            p.m_origin.m_y + p.m_right.m_y * u + p.m_up.m_y * v,
-            p.m_origin.m_z + p.m_right.m_z * u + p.m_up.m_z * v, r, g, b, a, size);
+        add( p.m_origin.m_x + p.m_right.m_x * u + p.m_up.m_x * v, p.m_origin.m_y + p.m_right.m_y * u + p.m_up.m_y * v,
+             p.m_origin.m_z + p.m_right.m_z * u + p.m_up.m_z * v, r, g, b, a, size );
     }
 
     /**
@@ -1054,16 +1213,16 @@ public:
      * @param[in] b     blue, 0..1
      * @param[in] a     brightness, 0..1
      */
-    void addText(const Panel& p, float u, float v, float cell, const char* text,
-                 float r, float g, float b, float a)
+    void addText( const Panel &p, float u, float v, float cell, const char *text, float r, float g, float b, float a )
     {
-        for (const char* c = text; *c; ++c) {
-            const unsigned char* gl = glyph(*c);
-            for (int row = 0; row < 7; ++row)
-                for (int col = 0; col < 5; ++col)
-                    if (gl[row] & (0x10 >> col))
-                        addOn(p, u + static_cast<float>(col) * cell, v - static_cast<float>(row) * cell,
-                              r, g, b, a, cell * PixelsPerRadian);
+        for ( const char *c = text; *c; ++c )
+        {
+            const unsigned char *gl = glyph( *c );
+            for ( int row = 0; row < 7; ++row )
+                for ( int col = 0; col < 5; ++col )
+                    if ( gl[row] & ( 0x10 >> col ) )
+                        addOn( p, u + static_cast<float>( col ) * cell, v - static_cast<float>( row ) * cell, r, g, b,
+                               a, cell * PixelsPerRadian );
             u += 6.0f * cell;
         }
     }
@@ -1071,8 +1230,9 @@ public:
     /** @brief Sends this frame's points to the GPU. */
     void upload()
     {
-        glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-        glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(m_points.size() * sizeof(Point)), m_points.data(), GL_DYNAMIC_DRAW);
+        glBindBuffer( GL_ARRAY_BUFFER, m_vbo );
+        glBufferData( GL_ARRAY_BUFFER, static_cast<GLsizeiptr>( m_points.size() * sizeof( Point ) ), m_points.data(),
+                      GL_DYNAMIC_DRAW );
     }
 
     /**
@@ -1081,27 +1241,27 @@ public:
      * @param[in] width   the target's width
      * @param[in] height  the target's height
      */
-    void draw(const Mat4& vp, int width, int height)
+    void draw( const Mat4 &vp, int width, int height )
     {
-        glViewport(0, 0, width, height);
-        glClearColor(0.015f, 0.012f, 0.03f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glDisable(GL_DEPTH_TEST);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_ONE, GL_ONE);            // additive: points add light, they never occlude
-        glUseProgram(m_program);
-        glUniformMatrix4fv(m_uVP, 1, GL_FALSE, vp.m_m);
-        glBindVertexArray(m_vao);
-        glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(m_points.size()));
-        glBindVertexArray(0);
+        glViewport( 0, 0, width, height );
+        glClearColor( 0.015f, 0.012f, 0.03f, 1.0f );
+        glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+        glDisable( GL_DEPTH_TEST );
+        glEnable( GL_BLEND );
+        glBlendFunc( GL_ONE, GL_ONE );   // additive: points add light, they never occlude
+        glUseProgram( m_program );
+        glUniformMatrix4fv( m_uVP, 1, GL_FALSE, vp.m_m );
+        glBindVertexArray( m_vao );
+        glDrawArrays( GL_POINTS, 0, static_cast<GLsizei>( m_points.size() ) );
+        glBindVertexArray( 0 );
     }
 
 private:
-    GLuint m_program = 0;   ///< the shader program
-    GLuint m_vbo = 0;   ///< the points' buffer
-    GLuint m_vao = 0;   ///< the points' vertex layout
-    GLint m_uVP = -1;   ///< the location of the view-projection uniform
-    std::vector<Point> m_points;   ///< this frame's points
+    GLuint             m_program = 0;   ///< the shader program
+    GLuint             m_vbo = 0;       ///< the points' buffer
+    GLuint             m_vao = 0;       ///< the points' vertex layout
+    GLint              m_uVP = -1;      ///< the location of the view-projection uniform
+    std::vector<Point> m_points;        ///< this frame's points
 };
 
 // ---------------------------------------------------------------- hands
@@ -1116,17 +1276,19 @@ private:
  * The pinch is the thumb tip to index tip distance with a Schmitt trigger (closed under 22 mm, open
  * over 38 mm), so a hand held near the threshold does not rattle between the two states.
  */
-class Hands {
+class Hands
+{
 public:
     /** @brief One hand's measurement of this frame. */
-    struct Hand {
-        bool m_valid = false;   ///< tracked this frame
-        XrVector3f m_palm{};   ///< the palm's position in the room
-        float m_pinch = 0.0f;     ///< 0 open .. 1 closed
-        bool m_closed = false;    ///< after the Schmitt trigger
-        float m_height = 0.5f;    ///< 0..1 against the head
-        float m_macro = 0.5f;     ///< the smoothed value the macro follows
-        bool m_everSeen = false;  ///< this hand has been tracked at least once
+    struct Hand
+    {
+        bool       m_valid = false;      ///< tracked this frame
+        XrVector3f m_palm{};             ///< the palm's position in the room
+        float      m_pinch = 0.0f;       ///< 0 open .. 1 closed
+        bool       m_closed = false;     ///< after the Schmitt trigger
+        float      m_height = 0.5f;      ///< 0..1 against the head
+        float      m_macro = 0.5f;       ///< the smoothed value the macro follows
+        bool       m_everSeen = false;   ///< this hand has been tracked at least once
     };
 
     /**
@@ -1136,22 +1298,28 @@ public:
      * @param[in] thumbToIndex  the distance of thumb and index tips
      * @param[in] headY         the head's height
      */
-    void setHand(int h, const XrVector3f& palm, float thumbToIndex, float headY)
+    void setHand( int h, const XrVector3f &palm, float thumbToIndex, float headY )
     {
-        Hand& s = m_hand[h];
+        Hand &s = m_hand[h];
         s.m_valid = true;
         s.m_everSeen = true;
         s.m_palm = palm;
-        s.m_pinch = clamp01(1.0f - (thumbToIndex - 0.015f) / 0.035f);
-        if (thumbToIndex < 0.022f) s.m_closed = true;
-        else if (thumbToIndex > 0.038f) s.m_closed = false;
-        s.m_height = clamp01((palm.y - (headY - 1.0f)) / 0.8f);
+        s.m_pinch = clamp01( 1.0f - ( thumbToIndex - 0.015f ) / 0.035f );
+        if ( thumbToIndex < 0.022f )
+            s.m_closed = true;
+        else if ( thumbToIndex > 0.038f )
+            s.m_closed = false;
+        s.m_height = clamp01( ( palm.y - ( headY - 1.0f ) ) / 0.8f );
     }
     /**
      * @brief Marks a hand as not tracked this frame (its macro then holds its value).
      * @param[in] h  the hand, 0 left, 1 right
      */
-    void lost(int h) { m_hand[h].m_valid = false; m_hand[h].m_closed = false; }
+    void lost( int h )
+    {
+        m_hand[h].m_valid = false;
+        m_hand[h].m_closed = false;
+    }
 
     /**
      * @brief Advances the smoothing and reports the two rising pinch edges.
@@ -1160,14 +1328,15 @@ public:
      * @param[out] rightPinch  receives true on the frame the right hand closes A macro follows its hand only while that
      *                         hand is open: the pinch that starts a track must not also drag the gain with it.
      */
-    void update(double dt, bool& leftPinch, bool& rightPinch)
+    void update( double dt, bool &leftPinch, bool &rightPinch )
     {
         // 0.15 s one pole. dt is capped at 0.1 s so that a long frame -- the first one after the
         // session resumes, say -- cannot make the coefficient 1 and snap the macro to the hand.
-        const float k = 1.0f - std::exp(-static_cast<float>(std::min(dt, 0.1)) / 0.15f);
-        for (int h = 0; h < 2; ++h) {
-            Hand& s = m_hand[h];
-            if (s.m_valid && !s.m_closed) s.m_macro += (s.m_height - s.m_macro) * k;
+        const float k = 1.0f - std::exp( -static_cast<float>( std::min( dt, 0.1 ) ) / 0.15f );
+        for ( int h = 0; h < 2; ++h )
+        {
+            Hand &s = m_hand[h];
+            if ( s.m_valid && !s.m_closed ) s.m_macro += ( s.m_height - s.m_macro ) * k;
         }
         leftPinch = m_hand[0].m_closed && !m_wasClosed[0];
         rightPinch = m_hand[1].m_closed && !m_wasClosed[1];
@@ -1180,22 +1349,30 @@ public:
      * @param[in] h  the hand, 0 left, 1 right
      * @return the hand
      */
-    const Hand& hand(int h) const { return m_hand[h]; }
+    const Hand &hand( int h ) const { return m_hand[h]; }
 
 private:
-    Hand m_hand[2];   ///< left, right
+    Hand m_hand[2];                           ///< left, right
     bool m_wasClosed[2] = { false, false };   ///< left, right: closed in the last update (the rising edges)
 };
 
 // ---------------------------------------------------------------- the perform macros
 
 /** @brief The desktop's perform macros (Plugin/PluginProcessor.h, Macro): the hands' controls (01.10.2026). */
-enum class HandMacroE : int { FILTER_SWEEP = 0, GATE_DEPTH, DROP_OUT, STUTTER, COUNT };
-constexpr int HandMacroCount = static_cast<int>(HandMacroE::COUNT);   ///< how many macros the hands play
+enum class HandMacroE : int
+{
+    FILTER_SWEEP = 0,
+    GATE_DEPTH,
+    DROP_OUT,
+    STUTTER,
+    COUNT
+};
+constexpr int HandMacroCount = static_cast<int>( HandMacroE::COUNT );   ///< how many macros the hands play
 constexpr int MaxMacroTargets = 24;   ///< most knobs one macro touches (Stutter: four each on five voices)
 
 /** @brief One knob a macro moves: by a normalised offset, or to a normalised value. */
-struct MacroTarget {
+struct MacroTarget
+{
     int   m_param = -1;         ///< global parameter id
     float m_value = 0.0f;       ///< normalised delta, or the absolute normalised value
     bool  m_absolute = false;   ///< true: set the knob to @ref m_value instead of adding it
@@ -1210,43 +1387,50 @@ struct MacroTarget {
  * @param[out] out    the knobs it moves
  * @return the number of knobs
  */
-int macroTargets(const ParamStore& p, HandMacroE m, float value, MacroTarget* out)
+int macroTargets( const ParamStore &p, HandMacroE m, float value, MacroTarget *out )
 {
-    const int acidBase = p.base(ModuleE::ACID);
-    const int lead = p.base(PolyInstanceE::LEAD), counter = p.base(PolyInstanceE::COUNTER);
-    const int arp = p.base(PolyInstanceE::ARP), stab = p.base(PolyInstanceE::STAB);
-    const int pad = p.base(PolyInstanceE::PAD);
-    const int mixBase = p.base(ModuleE::MIX);
-    int n = 0;
-    auto add = [&](int id, float v, bool absolute) {
-        if (id >= 0 && n < MaxMacroTargets) out[n++] = MacroTarget{ id, v, absolute };
+    const int acidBase = p.base( ModuleE::ACID );
+    const int lead = p.base( PolyInstanceE::LEAD ), counter = p.base( PolyInstanceE::COUNTER );
+    const int arp = p.base( PolyInstanceE::ARP ), stab = p.base( PolyInstanceE::STAB );
+    const int pad = p.base( PolyInstanceE::PAD );
+    const int mixBase = p.base( ModuleE::MIX );
+    int       n = 0;
+    auto      add = [&]( int id, float v, bool absolute )
+    {
+        if ( id >= 0 && n < MaxMacroTargets ) out[n++] = MacroTarget{ id, v, absolute };
     };
-    if (value == 0.0f) return 0;
-    switch (m) {
-    case HandMacroE::FILTER_SWEEP: {
-        const float d = std::clamp(value, -1.0f, 1.0f) * 0.35f;   // a third of the normalised range each way
-        for (int id : { acidBase + acid::CUTOFF, lead + poly::CUTOFF, arp + poly::CUTOFF, counter + poly::CUTOFF, stab + poly::CUTOFF })
-            add(id, d, false);
+    if ( value == 0.0f ) return 0;
+    switch ( m )
+    {
+    case HandMacroE::FILTER_SWEEP:
+    {
+        const float d = std::clamp( value, -1.0f, 1.0f ) * 0.35f;   // a third of the normalised range each way
+        for ( int id : { acidBase + acid::CUTOFF, lead + poly::CUTOFF, arp + poly::CUTOFF, counter + poly::CUTOFF,
+                         stab + poly::CUTOFF } )
+            add( id, d, false );
         break;
     }
-    case HandMacroE::GATE_DEPTH: {
-        const float v = std::clamp(value, 0.0f, 1.0f);
-        for (int base : { lead, counter, arp, stab, pad }) {
-            add(base + poly::GATE, 1.0f, true);
-            add(base + poly::GATE_DEPTH, v, true);
+    case HandMacroE::GATE_DEPTH:
+    {
+        const float v = std::clamp( value, 0.0f, 1.0f );
+        for ( int base : { lead, counter, arp, stab, pad } )
+        {
+            add( base + poly::GATE, 1.0f, true );
+            add( base + poly::GATE_DEPTH, v, true );
         }
         break;
     }
     case HandMacroE::DROP_OUT:
-        add(mixBase + mix::KICK_MUTE, 1.0f, true);
-        add(mixBase + mix::BASS_MUTE, 1.0f, true);
+        add( mixBase + mix::KICK_MUTE, 1.0f, true );
+        add( mixBase + mix::BASS_MUTE, 1.0f, true );
         break;
     case HandMacroE::STUTTER:
-        for (int base : { lead, counter, arp, stab, pad }) {
-            add(base + poly::GATE, 1.0f, true);
-            add(base + poly::GATE_PATTERN, 0.0f, true);   // Sixteenths
-            add(base + poly::GATE_DEPTH, 1.0f, true);
-            add(base + poly::GATE_DUTY, 0.0f, true);      // the shortest opening the knob allows
+        for ( int base : { lead, counter, arp, stab, pad } )
+        {
+            add( base + poly::GATE, 1.0f, true );
+            add( base + poly::GATE_PATTERN, 0.0f, true );   // Sixteenths
+            add( base + poly::GATE_DEPTH, 1.0f, true );
+            add( base + poly::GATE_DUTY, 0.0f, true );   // the shortest opening the knob allows
         }
         break;
     default: break;
@@ -1259,63 +1443,102 @@ int macroTargets(const ParamStore& p, HandMacroE m, float value, MacroTarget* ou
  *        parameters): what two macros ask of the same knob is summed, the stronger absolute wish winning, and a knob no
  *        macro wants any more goes back to the value it had before. Render thread.
  */
-class HandMacros {
+class HandMacros
+{
 public:
     /**
      * @brief Sets macro @p m to @p v (the filter sweep -1 .. 1, the others 0 .. 1).
      * @param[in] m  the macro
      * @param[in] v  its value
      */
-    void set(HandMacroE m, float v)
+    void set( HandMacroE m, float v )
     {
-        m_value[static_cast<int>(m)] = m == HandMacroE::FILTER_SWEEP ? std::clamp(v, -1.0f, 1.0f) : std::clamp(v, 0.0f, 1.0f);
+        m_value[static_cast<int>( m )] =
+            m == HandMacroE::FILTER_SWEEP ? std::clamp( v, -1.0f, 1.0f ) : std::clamp( v, 0.0f, 1.0f );
     }
     /**
      * @brief Macro @p m as it stands.
      * @param[in] m  the macro
      * @return its value
      */
-    float get(HandMacroE m) const { return m_value[static_cast<int>(m)]; }
+    float get( HandMacroE m ) const { return m_value[static_cast<int>( m )]; }
     /**
      * @brief Puts the macros onto their knobs (every frame).
      * @param[in,out] p  the knobs
      */
-    void apply(ParamStore& p)
+    void apply( ParamStore &p )
     {
         MacroTarget want[HandMacroCount * MaxMacroTargets];
-        int n = 0;
-        for (int i = 0; i < HandMacroCount; ++i) {
+        int         n = 0;
+        for ( int i = 0; i < HandMacroCount; ++i )
+        {
             MacroTarget t[MaxMacroTargets];
-            const int c = macroTargets(p, static_cast<HandMacroE>(i), m_value[i], t);
-            for (int k = 0; k < c; ++k) {
+            const int   c = macroTargets( p, static_cast<HandMacroE>( i ), m_value[i], t );
+            for ( int k = 0; k < c; ++k )
+            {
                 int found = -1;
-                for (int j = 0; j < n; ++j) if (want[j].m_param == t[k].m_param) { found = j; break; }
-                if (found < 0) { want[n++] = t[k]; continue; }
-                if (t[k].m_absolute && want[found].m_absolute) want[found].m_value = std::max(want[found].m_value, t[k].m_value);
-                else if (t[k].m_absolute) want[found] = t[k];
-                else want[found].m_value += t[k].m_value;
+                for ( int j = 0; j < n; ++j )
+                    if ( want[j].m_param == t[k].m_param )
+                    {
+                        found = j;
+                        break;
+                    }
+                if ( found < 0 )
+                {
+                    want[n++] = t[k];
+                    continue;
+                }
+                if ( t[k].m_absolute && want[found].m_absolute )
+                    want[found].m_value = std::max( want[found].m_value, t[k].m_value );
+                else if ( t[k].m_absolute )
+                    want[found] = t[k];
+                else
+                    want[found].m_value += t[k].m_value;
             }
         }
-        for (int i = 0; i < n; ++i) {
+        for ( int i = 0; i < n; ++i )
+        {
             const int id = want[i].m_param;
             // The value as the store keeps it, not as a normalised position: putting a knob back must be exact.
             float base = 0.0f;
-            bool known = false;
-            for (const auto& b : m_base) if (b.first == id) { base = b.second; known = true; break; }
-            if (!known) { base = p.get(id); m_base.emplace_back(id, base); }
-            p.setNormalised(id, std::clamp(want[i].m_absolute ? want[i].m_value : p.toNormalised(id, base) + want[i].m_value, 0.0f, 1.0f));
+            bool  known = false;
+            for ( const auto &b : m_base )
+                if ( b.first == id )
+                {
+                    base = b.second;
+                    known = true;
+                    break;
+                }
+            if ( !known )
+            {
+                base = p.get( id );
+                m_base.emplace_back( id, base );
+            }
+            p.setNormalised(
+                id, std::clamp( want[i].m_absolute ? want[i].m_value : p.toNormalised( id, base ) + want[i].m_value,
+                                0.0f, 1.0f ) );
         }
-        for (size_t b = 0; b < m_base.size();) {
+        for ( size_t b = 0; b < m_base.size(); )
+        {
             bool wanted = false;
-            for (int i = 0; i < n; ++i) if (want[i].m_param == m_base[b].first) { wanted = true; break; }
-            if (wanted) { ++b; continue; }
-            p.set(m_base[b].first, m_base[b].second);
-            m_base.erase(m_base.begin() + static_cast<std::ptrdiff_t>(b));
+            for ( int i = 0; i < n; ++i )
+                if ( want[i].m_param == m_base[b].first )
+                {
+                    wanted = true;
+                    break;
+                }
+            if ( wanted )
+            {
+                ++b;
+                continue;
+            }
+            p.set( m_base[b].first, m_base[b].second );
+            m_base.erase( m_base.begin() + static_cast<std::ptrdiff_t>( b ) );
         }
     }
 
 private:
-    float m_value[HandMacroCount] = {};   ///< every macro's value
+    float                              m_value[HandMacroCount] = {};   ///< every macro's value
     std::vector<std::pair<int, float>> m_base;   ///< the knobs held, with the values they had before
 };
 
@@ -1329,11 +1552,12 @@ private:
  * 0..1 against the head and unsmoothed, the desktop smooths them; the others 0 or 1), about 30 times a second. Fire and
  * forget: a desktop that is not there changes nothing. After Noctuary's bridge (AmbientSynth's Quest/src/main.cpp, OscOut).
  */
-class HandBridge {
+class HandBridge
+{
 public:
     HandBridge() = default;
-    HandBridge(const HandBridge&) = delete;
-    HandBridge& operator=(const HandBridge&) = delete;
+    HandBridge( const HandBridge & ) = delete;
+    HandBridge &operator=( const HandBridge & ) = delete;
     ~HandBridge() { close(); }
     /**
      * @brief Opens the UDP socket to @p host (a dotted IPv4 address, no names) and @p port; false if it cannot.
@@ -1341,19 +1565,27 @@ public:
      * @param[in] port  the UDP port
      * @return false when the socket cannot be opened
      */
-    bool open(const std::string& host, int port)
+    bool open( const std::string &host, int port )
     {
         close();
-        m_sock = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (m_sock < 0) return false;
-        std::memset(&m_to, 0, sizeof(m_to));
+        m_sock = ::socket( AF_INET, SOCK_DGRAM, IPPROTO_UDP );
+        if ( m_sock < 0 ) return false;
+        std::memset( &m_to, 0, sizeof( m_to ) );
         m_to.sin_family = AF_INET;
-        m_to.sin_port = htons(static_cast<uint16_t>(port));
-        if (inet_pton(AF_INET, host.c_str(), &m_to.sin_addr) != 1) { close(); return false; }
+        m_to.sin_port = htons( static_cast<uint16_t>( port ) );
+        if ( inet_pton( AF_INET, host.c_str(), &m_to.sin_addr ) != 1 )
+        {
+            close();
+            return false;
+        }
         return true;
     }
     /** @brief Closes the socket; send() then does nothing. */
-    void close() { if (m_sock >= 0) ::close(m_sock); m_sock = -1; }
+    void close()
+    {
+        if ( m_sock >= 0 ) ::close( m_sock );
+        m_sock = -1;
+    }
     /**
      * @brief Whether the bridge is on.
      * @return true while the bridge is on
@@ -1365,66 +1597,71 @@ public:
      * @param[in] dt     the seconds since the last frame
      * @pre called on the render thread
      */
-    void send(const Hands& hands, double dt)
+    void send( const Hands &hands, double dt )
     {
-        if (m_sock < 0) return;
+        if ( m_sock < 0 ) return;
         m_since += dt;
-        if (m_since < 1.0 / 30.0) return;
+        if ( m_since < 1.0 / 30.0 ) return;
         m_since = 0.0;
         float a[6];
-        for (int h = 0; h < 2; ++h) {
-            const Hands::Hand& s = hands.hand(h);
+        for ( int h = 0; h < 2; ++h )
+        {
+            const Hands::Hand &s = hands.hand( h );
             a[h] = s.m_height;
             a[2 + h] = s.m_valid && s.m_closed ? 1.0f : 0.0f;
             a[4 + h] = s.m_valid ? 1.0f : 0.0f;
         }
-        char buf[64];
+        char   buf[64];
         size_t pos = 0;
-        auto putStr = [&](const char* t) {
-            const size_t l = std::strlen(t) + 1;
-            std::memcpy(buf + pos, t, l);
+        auto   putStr = [&]( const char *t )
+        {
+            const size_t l = std::strlen( t ) + 1;
+            std::memcpy( buf + pos, t, l );
             pos += l;
-            while (pos & 3) buf[pos++] = 0;
+            while ( pos & 3 ) buf[pos++] = 0;
         };
-        putStr("/hands");
-        putStr(",ffffff");
-        for (const float f : a) {   // big-endian 32-bit words
+        putStr( "/hands" );
+        putStr( ",ffffff" );
+        for ( const float f : a )
+        {   // big-endian 32-bit words
             uint32_t u;
-            std::memcpy(&u, &f, 4);
-            buf[pos++] = static_cast<char>(u >> 24);
-            buf[pos++] = static_cast<char>(u >> 16);
-            buf[pos++] = static_cast<char>(u >> 8);
-            buf[pos++] = static_cast<char>(u);
+            std::memcpy( &u, &f, 4 );
+            buf[pos++] = static_cast<char>( u >> 24 );
+            buf[pos++] = static_cast<char>( u >> 16 );
+            buf[pos++] = static_cast<char>( u >> 8 );
+            buf[pos++] = static_cast<char>( u );
         }
-        ::sendto(m_sock, buf, pos, 0, reinterpret_cast<const sockaddr*>(&m_to), sizeof(m_to));
+        ::sendto( m_sock, buf, pos, 0, reinterpret_cast<const sockaddr *>( &m_to ), sizeof( m_to ) );
     }
 
 private:
-    int m_sock = -1;        ///< the UDP socket, or -1 while closed
-    sockaddr_in m_to{};     ///< the desktop's address and port
-    double m_since = 0.0;   ///< seconds since the last datagram
+    int         m_sock = -1;     ///< the UDP socket, or -1 while closed
+    sockaddr_in m_to{};          ///< the desktop's address and port
+    double      m_since = 0.0;   ///< seconds since the last datagram
 };
 
 // ---------------------------------------------------------------- the app
 
 /** @brief One eye's swapchain and the framebuffer it is rendered through. */
-struct SwapchainTarget {
-    XrSwapchain m_swapchain = XR_NULL_HANDLE;   ///< the eye's swapchain
-    int m_width = 0;   ///< its width, pixels
-    int m_height = 0;   ///< its height, pixels
-    std::vector<XrSwapchainImageOpenGLESKHR> m_images;   ///< the swapchain's images
-    GLuint m_fbo = 0;   ///< the framebuffer drawn through
-    GLuint m_depth = 0;   ///< its depth buffer
+struct SwapchainTarget
+{
+    XrSwapchain                              m_swapchain = XR_NULL_HANDLE;   ///< the eye's swapchain
+    int                                      m_width = 0;                    ///< its width, pixels
+    int                                      m_height = 0;                   ///< its height, pixels
+    std::vector<XrSwapchainImageOpenGLESKHR> m_images;                       ///< the swapchain's images
+    GLuint                                   m_fbo = 0;                      ///< the framebuffer drawn through
+    GLuint                                   m_depth = 0;                    ///< its depth buffer
 };
 
 /** @brief The Quest app: OpenXR session, hands, panel, and the track player with its composer thread and audio stream. */
-class App {
+class App
+{
 public:
     /**
      * @brief The app on the native activity @p app.
      * @param[in,out] app  the native activity
      */
-    explicit App(android_app* app) : m_app(app) {}
+    explicit App( android_app *app ) : m_app( app ) {}
 
     /**
      * @brief Reads phos.cfg, opens the cue sender and the bridge, sets up OpenXR, EGL, the hands, the scene and the audio
@@ -1434,81 +1671,89 @@ public:
     bool init()
     {
         m_dataDir = m_app->activity->externalDataPath ? m_app->activity->externalDataPath : "";
-        m_config = readConfig(m_dataDir.c_str());
+        m_config = readConfig( m_dataDir.c_str() );
         // Before the composer thread exists: it is the thread that prepares the engine, and the
         // wavetable library is loaded by the first Engine::prepare() in the process, while the two
         // learned models are loaded by the first compose pass on that same thread.
-        const std::string tables = prepareAsset(m_app->activity->assetManager, m_app->activity->internalDataPath,
-                                                m_dataDir, WaveTablePack, "wavetables");
-        if (!tables.empty()) setWaveTableSearchPath(tables);
+        const std::string tables = prepareAsset( m_app->activity->assetManager, m_app->activity->internalDataPath,
+                                                 m_dataDir, WaveTablePack, "wavetables" );
+        if ( !tables.empty() ) setWaveTableSearchPath( tables );
         // The voice pack of 19.09.2026 (Vocal.h): the spoken phrases. Unpacked on its own, because the
         // wavetables may come from a pushed file in another directory; without it only the spoken
         // types fall silent.
-        const std::string voices = prepareAsset(m_app->activity->assetManager, m_app->activity->internalDataPath,
-                                                m_dataDir, VoicePack, "voices");
-        if (!voices.empty()) setVoicePackSearchPath(voices);
+        const std::string voices = prepareAsset( m_app->activity->assetManager, m_app->activity->internalDataPath,
+                                                 m_dataDir, VoicePack, "voices" );
+        if ( !voices.empty() ) setVoicePackSearchPath( voices );
         // The Field track's recordings (27.09.2026, FieldLibrary.h): a folder `field` pushed beside phos.cfg with adb --
         // 2 GB of FLAC are not unpacked from an APK into a second copy. The cache stays under a third of the headset's
         // memory. Without the folder the Field track and the NASA shots are silent and everything else plays.
-        setFieldSearchPath(m_dataDir);
-        setFieldCacheBytes(size_t(512) * 1024 * 1024);
-        prepareModels(m_app->activity->assetManager, m_app->activity->internalDataPath, m_dataDir);
+        setFieldSearchPath( m_dataDir );
+        setFieldCacheBytes( size_t( 512 ) * 1024 * 1024 );
+        prepareModels( m_app->activity->assetManager, m_app->activity->internalDataPath, m_dataDir );
         // The cue bridge of PLAN 8.3, off unless phos.cfg names a host. A visualiser that is not
         // there changes nothing here: the datagrams go to a port nobody reads and the set plays on.
-        if (!m_config.m_oscHost.empty()) {
-            if (m_cues.start(m_config.m_oscHost, m_config.m_oscPort))
-                LOGI("cue bridge: OSC to %s:%d", m_config.m_oscHost.c_str(), m_config.m_oscPort);
-            else LOGE("cue bridge: cannot reach %s:%d", m_config.m_oscHost.c_str(), m_config.m_oscPort);
-            m_player.setCueSender(&m_cues);
+        if ( !m_config.m_oscHost.empty() )
+        {
+            if ( m_cues.start( m_config.m_oscHost, m_config.m_oscPort ) )
+                LOGI( "cue bridge: OSC to %s:%d", m_config.m_oscHost.c_str(), m_config.m_oscPort );
+            else
+                LOGE( "cue bridge: cannot reach %s:%d", m_config.m_oscHost.c_str(), m_config.m_oscPort );
+            m_player.setCueSender( &m_cues );
         }
         // The bridge (01.10.2026): the hands to the desktop's Phosphene, off unless phos.cfg names a host.
-        if (!m_config.m_bridgeHost.empty()) {
-            if (m_bridge.open(m_config.m_bridgeHost, m_config.m_bridgePort))
-                LOGI("bridge: the hands to %s:%d", m_config.m_bridgeHost.c_str(), m_config.m_bridgePort);
-            else LOGE("bridge: bad host %s (a dotted IPv4 address)", m_config.m_bridgeHost.c_str());
+        if ( !m_config.m_bridgeHost.empty() )
+        {
+            if ( m_bridge.open( m_config.m_bridgeHost, m_config.m_bridgePort ) )
+                LOGI( "bridge: the hands to %s:%d", m_config.m_bridgeHost.c_str(), m_config.m_bridgePort );
+            else
+                LOGE( "bridge: bad host %s (a dotted IPv4 address)", m_config.m_bridgeHost.c_str() );
         }
-        if (!initLoader()) return false;
-        if (!initInstance()) return false;
-        if (!initEgl()) return false;
-        if (!initSession()) return false;
-        if (!initHands()) LOGE("hand tracking unavailable: the macros will not move");
-        if (!m_scene.init()) return false;
+        if ( !initLoader() ) return false;
+        if ( !initInstance() ) return false;
+        if ( !initEgl() ) return false;
+        if ( !initSession() ) return false;
+        if ( !initHands() ) LOGE( "hand tracking unavailable: the macros will not move" );
+        if ( !m_scene.init() ) return false;
         // The stream is opened first so the engine is prepared for the rate the device really gives.
-        if (!m_audio.open()) return false;
-        m_composerThread = std::thread([this] { composerLoop(); });
+        if ( !m_audio.open() ) return false;
+        m_composerThread = std::thread( [this] { composerLoop(); } );
         return true;
     }
 
     /** @brief The main loop: Android's events, OpenXR's events, a frame while the session runs; until the app is closed. */
     void run()
     {
-        while (!m_app->destroyRequested) {
-            int events;
-            android_poll_source* source;
-            const int timeout = (m_sessionRunning || m_app->window == nullptr) ? 0 : -1;
-            while (ALooper_pollOnce(timeout, nullptr, &events, reinterpret_cast<void**>(&source)) >= 0) {
-                if (source) source->process(m_app, source);
-                if (m_app->destroyRequested) break;
+        while ( !m_app->destroyRequested )
+        {
+            int                  events;
+            android_poll_source *source;
+            const int            timeout = ( m_sessionRunning || m_app->window == nullptr ) ? 0 : -1;
+            while ( ALooper_pollOnce( timeout, nullptr, &events, reinterpret_cast<void **>( &source ) ) >= 0 )
+            {
+                if ( source ) source->process( m_app, source );
+                if ( m_app->destroyRequested ) break;
             }
             pollXrEvents();
-            if (m_quit) break;
-            if (m_sessionRunning) frame();
+            if ( m_quit ) break;
+            if ( m_sessionRunning ) frame();
         }
     }
 
     /** @brief Stops the composer thread and the stream, then destroys what OpenXR made. */
     void shutdown()
     {
-        m_stopComposer.store(true);
-        if (m_composerThread.joinable()) m_composerThread.join();
+        m_stopComposer.store( true );
+        if ( m_composerThread.joinable() ) m_composerThread.join();
         m_audio.stop();
-        for (SwapchainTarget& t : m_targets) if (t.m_swapchain != XR_NULL_HANDLE) xrDestroySwapchain(t.m_swapchain);
-        for (int h = 0; h < 2; ++h)
-            if (m_handTracker[h] != XR_NULL_HANDLE && m_pfnDestroyHandTracker) m_pfnDestroyHandTracker(m_handTracker[h]);
-        if (m_viewSpace != XR_NULL_HANDLE) xrDestroySpace(m_viewSpace);
-        if (m_stageSpace != XR_NULL_HANDLE) xrDestroySpace(m_stageSpace);
-        if (m_session != XR_NULL_HANDLE) xrDestroySession(m_session);
-        if (m_instance != XR_NULL_HANDLE) xrDestroyInstance(m_instance);
+        for ( SwapchainTarget &t : m_targets )
+            if ( t.m_swapchain != XR_NULL_HANDLE ) xrDestroySwapchain( t.m_swapchain );
+        for ( int h = 0; h < 2; ++h )
+            if ( m_handTracker[h] != XR_NULL_HANDLE && m_pfnDestroyHandTracker )
+                m_pfnDestroyHandTracker( m_handTracker[h] );
+        if ( m_viewSpace != XR_NULL_HANDLE ) xrDestroySpace( m_viewSpace );
+        if ( m_stageSpace != XR_NULL_HANDLE ) xrDestroySpace( m_stageSpace );
+        if ( m_session != XR_NULL_HANDLE ) xrDestroySession( m_session );
+        if ( m_instance != XR_NULL_HANDLE ) xrDestroyInstance( m_instance );
         // After the audio stream has stopped: the sender's thread reads a queue the audio thread fills.
         m_cues.stop();
     }
@@ -1525,12 +1770,15 @@ private:
      */
     void composerLoop()
     {
-        m_player.prepare(m_audio.sampleRate(), m_audio.burst() * 2, m_config);
-        if (!m_audio.start()) LOGE("Oboe: cannot start");
-        else LOGI("audio started%s", m_config.m_mute ? " (muted)" : "");
-        while (!m_stopComposer.load()) {
-            m_player.pump(8.0 * BeatsPerBar);
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        m_player.prepare( m_audio.sampleRate(), m_audio.burst() * 2, m_config );
+        if ( !m_audio.start() )
+            LOGE( "Oboe: cannot start" );
+        else
+            LOGI( "audio started%s", m_config.m_mute ? " (muted)" : "" );
+        while ( !m_stopComposer.load() )
+        {
+            m_player.pump( 8.0 * BeatsPerBar );
+            std::this_thread::sleep_for( std::chrono::milliseconds( 20 ) );
         }
     }
 
@@ -1543,12 +1791,17 @@ private:
     bool initLoader()
     {
         PFN_xrInitializeLoaderKHR initLoader = nullptr;
-        xrGetInstanceProcAddr(XR_NULL_HANDLE, "xrInitializeLoaderKHR", reinterpret_cast<PFN_xrVoidFunction*>(&initLoader));
-        if (initLoader == nullptr) { LOGE("no xrInitializeLoaderKHR"); return false; }
+        xrGetInstanceProcAddr( XR_NULL_HANDLE, "xrInitializeLoaderKHR",
+                               reinterpret_cast<PFN_xrVoidFunction *>( &initLoader ) );
+        if ( initLoader == nullptr )
+        {
+            LOGE( "no xrInitializeLoaderKHR" );
+            return false;
+        }
         XrLoaderInitInfoAndroidKHR li{ XR_TYPE_LOADER_INIT_INFO_ANDROID_KHR };
         li.applicationVM = m_app->activity->vm;
         li.applicationContext = m_app->activity->clazz;
-        return XR_SUCCEEDED(initLoader(reinterpret_cast<const XrLoaderInitInfoBaseHeaderKHR*>(&li)));
+        return XR_SUCCEEDED( initLoader( reinterpret_cast<const XrLoaderInitInfoBaseHeaderKHR *>( &li ) ) );
     }
 
     /**
@@ -1558,29 +1811,36 @@ private:
      */
     bool initInstance()
     {
-        const char* exts[] = { XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
-                               XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME,
+        const char *exts[] = { XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME, XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME,
                                XR_EXT_HAND_TRACKING_EXTENSION_NAME };
         XrInstanceCreateInfoAndroidKHR android{ XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR };
         android.applicationVM = m_app->activity->vm;
         android.applicationActivity = m_app->activity->clazz;
         XrInstanceCreateInfo ci{ XR_TYPE_INSTANCE_CREATE_INFO, &android };
-        std::strncpy(ci.applicationInfo.applicationName, "Phosphene", XR_MAX_APPLICATION_NAME_SIZE - 1);
+        std::strncpy( ci.applicationInfo.applicationName, "Phosphene", XR_MAX_APPLICATION_NAME_SIZE - 1 );
         ci.applicationInfo.applicationVersion = 1;
-        std::strncpy(ci.applicationInfo.engineName, "PhospheneCore", XR_MAX_ENGINE_NAME_SIZE - 1);
+        std::strncpy( ci.applicationInfo.engineName, "PhospheneCore", XR_MAX_ENGINE_NAME_SIZE - 1 );
         ci.applicationInfo.apiVersion = XR_API_VERSION_1_0;
         ci.enabledExtensionCount = 3;
         ci.enabledExtensionNames = exts;
-        if (XR_FAILED(xrCreateInstance(&ci, &m_instance))) { LOGE("xrCreateInstance failed"); return false; }
+        if ( XR_FAILED( xrCreateInstance( &ci, &m_instance ) ) )
+        {
+            LOGE( "xrCreateInstance failed" );
+            return false;
+        }
 
         XrSystemGetInfo sgi{ XR_TYPE_SYSTEM_GET_INFO };
         sgi.formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
-        if (XR_FAILED(xrGetSystem(m_instance, &sgi, &m_system))) { LOGE("xrGetSystem failed"); return false; }
+        if ( XR_FAILED( xrGetSystem( m_instance, &sgi, &m_system ) ) )
+        {
+            LOGE( "xrGetSystem failed" );
+            return false;
+        }
         XrSystemHandTrackingPropertiesEXT ht{ XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT };
-        XrSystemProperties sp{ XR_TYPE_SYSTEM_PROPERTIES, &ht };
-        xrGetSystemProperties(m_instance, m_system, &sp);
+        XrSystemProperties                sp{ XR_TYPE_SYSTEM_PROPERTIES, &ht };
+        xrGetSystemProperties( m_instance, m_system, &sp );
         m_handsSupported = ht.supportsHandTracking == XR_TRUE;
-        LOGI("system: %s, hand tracking %d", sp.systemName, m_handsSupported ? 1 : 0);
+        LOGI( "system: %s, hand tracking %d", sp.systemName, m_handsSupported ? 1 : 0 );
         return true;
     }
 
@@ -1591,24 +1851,53 @@ private:
     bool initEgl()
     {
         PFN_xrGetOpenGLESGraphicsRequirementsKHR getReq = nullptr;
-        xrGetInstanceProcAddr(m_instance, "xrGetOpenGLESGraphicsRequirementsKHR", reinterpret_cast<PFN_xrVoidFunction*>(&getReq));
+        xrGetInstanceProcAddr( m_instance, "xrGetOpenGLESGraphicsRequirementsKHR",
+                               reinterpret_cast<PFN_xrVoidFunction *>( &getReq ) );
         XrGraphicsRequirementsOpenGLESKHR req{ XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_ES_KHR };
-        if (getReq == nullptr || XR_FAILED(getReq(m_instance, m_system, &req))) { LOGE("GLES requirements failed"); return false; }
+        if ( getReq == nullptr || XR_FAILED( getReq( m_instance, m_system, &req ) ) )
+        {
+            LOGE( "GLES requirements failed" );
+            return false;
+        }
 
-        m_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+        m_display = eglGetDisplay( EGL_DEFAULT_DISPLAY );
         EGLint major = 0, minor = 0;
-        if (!eglInitialize(m_display, &major, &minor)) { LOGE("eglInitialize failed"); return false; }
-        const EGLint attribs[] = { EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT, EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
-                                   EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8,
-                                   EGL_DEPTH_SIZE, 0, EGL_NONE };
-        EGLint count = 0;
-        if (!eglChooseConfig(m_display, attribs, &m_eglConfig, 1, &count) || count == 0) { LOGE("eglChooseConfig failed"); return false; }
+        if ( !eglInitialize( m_display, &major, &minor ) )
+        {
+            LOGE( "eglInitialize failed" );
+            return false;
+        }
+        const EGLint attribs[] = { EGL_RENDERABLE_TYPE,
+                                   EGL_OPENGL_ES3_BIT,
+                                   EGL_SURFACE_TYPE,
+                                   EGL_PBUFFER_BIT,
+                                   EGL_RED_SIZE,
+                                   8,
+                                   EGL_GREEN_SIZE,
+                                   8,
+                                   EGL_BLUE_SIZE,
+                                   8,
+                                   EGL_ALPHA_SIZE,
+                                   8,
+                                   EGL_DEPTH_SIZE,
+                                   0,
+                                   EGL_NONE };
+        EGLint       count = 0;
+        if ( !eglChooseConfig( m_display, attribs, &m_eglConfig, 1, &count ) || count == 0 )
+        {
+            LOGE( "eglChooseConfig failed" );
+            return false;
+        }
         const EGLint pbuf[] = { EGL_WIDTH, 16, EGL_HEIGHT, 16, EGL_NONE };
-        m_surface = eglCreatePbufferSurface(m_display, m_eglConfig, pbuf);
+        m_surface = eglCreatePbufferSurface( m_display, m_eglConfig, pbuf );
         const EGLint ctx[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
-        m_context = eglCreateContext(m_display, m_eglConfig, EGL_NO_CONTEXT, ctx);
-        if (m_context == EGL_NO_CONTEXT || !eglMakeCurrent(m_display, m_surface, m_surface, m_context)) { LOGE("EGL context failed"); return false; }
-        LOGI("EGL %d.%d, GL %s", major, minor, glGetString(GL_VERSION));
+        m_context = eglCreateContext( m_display, m_eglConfig, EGL_NO_CONTEXT, ctx );
+        if ( m_context == EGL_NO_CONTEXT || !eglMakeCurrent( m_display, m_surface, m_surface, m_context ) )
+        {
+            LOGE( "EGL context failed" );
+            return false;
+        }
+        LOGI( "EGL %d.%d, GL %s", major, minor, glGetString( GL_VERSION ) );
         return true;
     }
 
@@ -1620,56 +1909,82 @@ private:
     bool initSession()
     {
         XrGraphicsBindingOpenGLESAndroidKHR gb{ XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR };
-        gb.display = m_display; gb.config = m_eglConfig; gb.context = m_context;
+        gb.display = m_display;
+        gb.config = m_eglConfig;
+        gb.context = m_context;
         XrSessionCreateInfo sci{ XR_TYPE_SESSION_CREATE_INFO, &gb };
         sci.systemId = m_system;
-        if (XR_FAILED(xrCreateSession(m_instance, &sci, &m_session))) { LOGE("xrCreateSession failed"); return false; }
+        if ( XR_FAILED( xrCreateSession( m_instance, &sci, &m_session ) ) )
+        {
+            LOGE( "xrCreateSession failed" );
+            return false;
+        }
 
         XrReferenceSpaceCreateInfo rs{ XR_TYPE_REFERENCE_SPACE_CREATE_INFO };
         rs.poseInReferenceSpace.orientation.w = 1.0f;
         rs.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_STAGE;
-        if (XR_FAILED(xrCreateReferenceSpace(m_session, &rs, &m_stageSpace))) {
+        if ( XR_FAILED( xrCreateReferenceSpace( m_session, &rs, &m_stageSpace ) ) )
+        {
             rs.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
-            if (XR_FAILED(xrCreateReferenceSpace(m_session, &rs, &m_stageSpace))) { LOGE("no reference space"); return false; }
+            if ( XR_FAILED( xrCreateReferenceSpace( m_session, &rs, &m_stageSpace ) ) )
+            {
+                LOGE( "no reference space" );
+                return false;
+            }
         }
         rs.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
-        xrCreateReferenceSpace(m_session, &rs, &m_viewSpace);
+        xrCreateReferenceSpace( m_session, &rs, &m_viewSpace );
 
         uint32_t viewCount = 0;
-        xrEnumerateViewConfigurationViews(m_instance, m_system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0, &viewCount, nullptr);
-        std::vector<XrViewConfigurationView> cfg(viewCount, { XR_TYPE_VIEW_CONFIGURATION_VIEW });
-        xrEnumerateViewConfigurationViews(m_instance, m_system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, viewCount, &viewCount, cfg.data());
-        m_views.assign(viewCount, { XR_TYPE_VIEW });
+        xrEnumerateViewConfigurationViews( m_instance, m_system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0,
+                                           &viewCount, nullptr );
+        std::vector<XrViewConfigurationView> cfg( viewCount, { XR_TYPE_VIEW_CONFIGURATION_VIEW } );
+        xrEnumerateViewConfigurationViews( m_instance, m_system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, viewCount,
+                                           &viewCount, cfg.data() );
+        m_views.assign( viewCount, { XR_TYPE_VIEW } );
 
         uint32_t fmtCount = 0;
-        xrEnumerateSwapchainFormats(m_session, 0, &fmtCount, nullptr);
-        std::vector<int64_t> formats(fmtCount);
-        xrEnumerateSwapchainFormats(m_session, fmtCount, &fmtCount, formats.data());
+        xrEnumerateSwapchainFormats( m_session, 0, &fmtCount, nullptr );
+        std::vector<int64_t> formats( fmtCount );
+        xrEnumerateSwapchainFormats( m_session, fmtCount, &fmtCount, formats.data() );
         int64_t format = formats.empty() ? GL_RGBA8 : formats[0];
-        for (int64_t f : formats) if (f == GL_SRGB8_ALPHA8) { format = f; break; }
+        for ( int64_t f : formats )
+            if ( f == GL_SRGB8_ALPHA8 )
+            {
+                format = f;
+                break;
+            }
 
-        m_targets.resize(viewCount);
-        for (uint32_t v = 0; v < viewCount; ++v) {
-            SwapchainTarget& t = m_targets[v];
+        m_targets.resize( viewCount );
+        for ( uint32_t v = 0; v < viewCount; ++v )
+        {
+            SwapchainTarget      &t = m_targets[v];
             XrSwapchainCreateInfo sc{ XR_TYPE_SWAPCHAIN_CREATE_INFO };
             sc.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
             sc.format = format;
             sc.sampleCount = 1;
             sc.width = cfg[v].recommendedImageRectWidth;
             sc.height = cfg[v].recommendedImageRectHeight;
-            sc.faceCount = 1; sc.arraySize = 1; sc.mipCount = 1;
-            if (XR_FAILED(xrCreateSwapchain(m_session, &sc, &t.m_swapchain))) { LOGE("xrCreateSwapchain failed"); return false; }
-            t.m_width = static_cast<int>(sc.width);
-            t.m_height = static_cast<int>(sc.height);
+            sc.faceCount = 1;
+            sc.arraySize = 1;
+            sc.mipCount = 1;
+            if ( XR_FAILED( xrCreateSwapchain( m_session, &sc, &t.m_swapchain ) ) )
+            {
+                LOGE( "xrCreateSwapchain failed" );
+                return false;
+            }
+            t.m_width = static_cast<int>( sc.width );
+            t.m_height = static_cast<int>( sc.height );
             uint32_t imgCount = 0;
-            xrEnumerateSwapchainImages(t.m_swapchain, 0, &imgCount, nullptr);
-            t.m_images.assign(imgCount, { XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR });
-            xrEnumerateSwapchainImages(t.m_swapchain, imgCount, &imgCount, reinterpret_cast<XrSwapchainImageBaseHeader*>(t.m_images.data()));
-            glGenFramebuffers(1, &t.m_fbo);
-            glGenRenderbuffers(1, &t.m_depth);
-            glBindRenderbuffer(GL_RENDERBUFFER, t.m_depth);
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, t.m_width, t.m_height);
-            LOGI("view %u: %dx%d, %u images", v, t.m_width, t.m_height, imgCount);
+            xrEnumerateSwapchainImages( t.m_swapchain, 0, &imgCount, nullptr );
+            t.m_images.assign( imgCount, { XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR } );
+            xrEnumerateSwapchainImages( t.m_swapchain, imgCount, &imgCount,
+                                        reinterpret_cast<XrSwapchainImageBaseHeader *>( t.m_images.data() ) );
+            glGenFramebuffers( 1, &t.m_fbo );
+            glGenRenderbuffers( 1, &t.m_depth );
+            glBindRenderbuffer( GL_RENDERBUFFER, t.m_depth );
+            glRenderbufferStorage( GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, t.m_width, t.m_height );
+            LOGI( "view %u: %dx%d, %u images", v, t.m_width, t.m_height, imgCount );
         }
         return true;
     }
@@ -1680,16 +1995,20 @@ private:
      */
     bool initHands()
     {
-        if (!m_handsSupported) return false;
-        xrGetInstanceProcAddr(m_instance, "xrCreateHandTrackerEXT", reinterpret_cast<PFN_xrVoidFunction*>(&m_pfnCreateHandTracker));
-        xrGetInstanceProcAddr(m_instance, "xrLocateHandJointsEXT", reinterpret_cast<PFN_xrVoidFunction*>(&m_pfnLocateHandJoints));
-        xrGetInstanceProcAddr(m_instance, "xrDestroyHandTrackerEXT", reinterpret_cast<PFN_xrVoidFunction*>(&m_pfnDestroyHandTracker));
-        if (!m_pfnCreateHandTracker || !m_pfnLocateHandJoints) return false;
-        for (int h = 0; h < 2; ++h) {
+        if ( !m_handsSupported ) return false;
+        xrGetInstanceProcAddr( m_instance, "xrCreateHandTrackerEXT",
+                               reinterpret_cast<PFN_xrVoidFunction *>( &m_pfnCreateHandTracker ) );
+        xrGetInstanceProcAddr( m_instance, "xrLocateHandJointsEXT",
+                               reinterpret_cast<PFN_xrVoidFunction *>( &m_pfnLocateHandJoints ) );
+        xrGetInstanceProcAddr( m_instance, "xrDestroyHandTrackerEXT",
+                               reinterpret_cast<PFN_xrVoidFunction *>( &m_pfnDestroyHandTracker ) );
+        if ( !m_pfnCreateHandTracker || !m_pfnLocateHandJoints ) return false;
+        for ( int h = 0; h < 2; ++h )
+        {
             XrHandTrackerCreateInfoEXT hci{ XR_TYPE_HAND_TRACKER_CREATE_INFO_EXT };
-            hci.hand = (h == 0) ? XR_HAND_LEFT_EXT : XR_HAND_RIGHT_EXT;
+            hci.hand = ( h == 0 ) ? XR_HAND_LEFT_EXT : XR_HAND_RIGHT_EXT;
             hci.handJointSet = XR_HAND_JOINT_SET_DEFAULT_EXT;
-            if (XR_FAILED(m_pfnCreateHandTracker(m_session, &hci, &m_handTracker[h]))) return false;
+            if ( XR_FAILED( m_pfnCreateHandTracker( m_session, &hci, &m_handTracker[h] ) ) ) return false;
         }
         return true;
     }
@@ -1698,28 +2017,32 @@ private:
     void pollXrEvents()
     {
         XrEventDataBuffer ev{ XR_TYPE_EVENT_DATA_BUFFER };
-        while (xrPollEvent(m_instance, &ev) == XR_SUCCESS) {
-            if (ev.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
-                const auto* sc = reinterpret_cast<const XrEventDataSessionStateChanged*>(&ev);
+        while ( xrPollEvent( m_instance, &ev ) == XR_SUCCESS )
+        {
+            if ( ev.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED )
+            {
+                const auto *sc = reinterpret_cast<const XrEventDataSessionStateChanged *>( &ev );
                 m_sessionState = sc->state;
-                switch (m_sessionState) {
-                case XR_SESSION_STATE_READY: {
+                switch ( m_sessionState )
+                {
+                case XR_SESSION_STATE_READY:
+                {
                     XrSessionBeginInfo bi{ XR_TYPE_SESSION_BEGIN_INFO };
                     bi.primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
-                    if (XR_SUCCEEDED(xrBeginSession(m_session, &bi))) m_sessionRunning = true;
+                    if ( XR_SUCCEEDED( xrBeginSession( m_session, &bi ) ) ) m_sessionRunning = true;
                     break;
                 }
                 case XR_SESSION_STATE_STOPPING:
-                    xrEndSession(m_session);
+                    xrEndSession( m_session );
                     m_sessionRunning = false;
                     break;
                 case XR_SESSION_STATE_EXITING:
-                case XR_SESSION_STATE_LOSS_PENDING:
-                    m_quit = true;
-                    break;
+                case XR_SESSION_STATE_LOSS_PENDING: m_quit = true; break;
                 default: break;
                 }
-            } else if (ev.type == XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING) {
+            }
+            else if ( ev.type == XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING )
+            {
                 m_quit = true;
             }
             ev = { XR_TYPE_EVENT_DATA_BUFFER };
@@ -1732,14 +2055,15 @@ private:
      * @brief The head pose at @p time (m_headPose, m_headValid).
      * @param[in] time  the predicted display time
      */
-    void updateHead(XrTime time)
+    void updateHead( XrTime time )
     {
         m_headValid = false;
-        if (m_viewSpace == XR_NULL_HANDLE) return;
+        if ( m_viewSpace == XR_NULL_HANDLE ) return;
         XrSpaceLocation loc{ XR_TYPE_SPACE_LOCATION };
-        if (XR_FAILED(xrLocateSpace(m_viewSpace, m_stageSpace, time, &loc))) return;
-        const XrSpaceLocationFlags need = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
-        if ((loc.locationFlags & need) != need) return;
+        if ( XR_FAILED( xrLocateSpace( m_viewSpace, m_stageSpace, time, &loc ) ) ) return;
+        const XrSpaceLocationFlags need =
+            XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+        if ( ( loc.locationFlags & need ) != need ) return;
         m_headPose = loc.pose;
         m_headValid = true;
     }
@@ -1748,28 +2072,42 @@ private:
      * @brief Locates both hands at @p time and feeds their palms and pinches to m_hands.
      * @param[in] time  the predicted display time
      */
-    void updateHands(XrTime time)
+    void updateHands( XrTime time )
     {
-        for (int h = 0; h < 2; ++h) {
-            if (m_handTracker[h] == XR_NULL_HANDLE) { m_hands.lost(h); continue; }
-            XrHandJointLocationEXT joints[XR_HAND_JOINT_COUNT_EXT];
+        for ( int h = 0; h < 2; ++h )
+        {
+            if ( m_handTracker[h] == XR_NULL_HANDLE )
+            {
+                m_hands.lost( h );
+                continue;
+            }
+            XrHandJointLocationEXT  joints[XR_HAND_JOINT_COUNT_EXT];
             XrHandJointLocationsEXT locs{ XR_TYPE_HAND_JOINT_LOCATIONS_EXT };
             locs.jointCount = XR_HAND_JOINT_COUNT_EXT;
             locs.jointLocations = joints;
             XrHandJointsLocateInfoEXT li{ XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT };
             li.baseSpace = m_stageSpace;
             li.time = time;
-            if (XR_FAILED(m_pfnLocateHandJoints(m_handTracker[h], &li, &locs)) || !locs.isActive) { m_hands.lost(h); continue; }
-            const XrHandJointLocationEXT& palm = joints[XR_HAND_JOINT_PALM_EXT];
-            const XrHandJointLocationEXT& thumb = joints[XR_HAND_JOINT_THUMB_TIP_EXT];
-            const XrHandJointLocationEXT& index = joints[XR_HAND_JOINT_INDEX_TIP_EXT];
-            const XrSpaceLocationFlags need = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
-            if ((palm.locationFlags & need) != need) { m_hands.lost(h); continue; }
+            if ( XR_FAILED( m_pfnLocateHandJoints( m_handTracker[h], &li, &locs ) ) || !locs.isActive )
+            {
+                m_hands.lost( h );
+                continue;
+            }
+            const XrHandJointLocationEXT &palm = joints[XR_HAND_JOINT_PALM_EXT];
+            const XrHandJointLocationEXT &thumb = joints[XR_HAND_JOINT_THUMB_TIP_EXT];
+            const XrHandJointLocationEXT &index = joints[XR_HAND_JOINT_INDEX_TIP_EXT];
+            const XrSpaceLocationFlags    need =
+                XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+            if ( ( palm.locationFlags & need ) != need )
+            {
+                m_hands.lost( h );
+                continue;
+            }
             const float dx = thumb.pose.position.x - index.pose.position.x;
             const float dy = thumb.pose.position.y - index.pose.position.y;
             const float dz = thumb.pose.position.z - index.pose.position.z;
-            m_hands.setHand(h, palm.pose.position, std::sqrt(dx * dx + dy * dy + dz * dz),
-                           m_headValid ? m_headPose.position.y : 1.6f);
+            m_hands.setHand( h, palm.pose.position, std::sqrt( dx * dx + dy * dy + dz * dz ),
+                             m_headValid ? m_headPose.position.y : 1.6f );
         }
     }
 
@@ -1783,20 +2121,23 @@ private:
      */
     void applyMacros()
     {
-        if (!m_player.ready()) return;
+        if ( !m_player.ready() ) return;
         // A hand that has never been tracked writes nothing: on a headset without hand tracking the
         // knobs keep whatever phos.cfg set them to.
-        const Hands::Hand& left = m_hands.hand(0);
-        const Hands::Hand& right = m_hands.hand(1);
-        if (left.m_everSeen) {
-            const float x = 2.0f * (left.m_macro - 0.5f);
-            m_macros.set(HandMacroE::FILTER_SWEEP, std::fabs(x) < 0.1f ? 0.0f : (x - (x > 0.0f ? 0.1f : -0.1f)) / 0.9f);
+        const Hands::Hand &left = m_hands.hand( 0 );
+        const Hands::Hand &right = m_hands.hand( 1 );
+        if ( left.m_everSeen )
+        {
+            const float x = 2.0f * ( left.m_macro - 0.5f );
+            m_macros.set( HandMacroE::FILTER_SWEEP,
+                          std::fabs( x ) < 0.1f ? 0.0f : ( x - ( x > 0.0f ? 0.1f : -0.1f ) ) / 0.9f );
         }
-        if (right.m_everSeen) m_macros.set(HandMacroE::GATE_DEPTH, clamp01(2.0f * (right.m_macro - 0.5f)));
+        if ( right.m_everSeen ) m_macros.set( HandMacroE::GATE_DEPTH, clamp01( 2.0f * ( right.m_macro - 0.5f ) ) );
         // The drop-out lets go on the next bar line, as the desktop's does; a stopped set has none to wait for.
-        if (m_macros.get(HandMacroE::DROP_OUT) > 0.0f && (!m_player.playing() || m_player.currentBar() != m_dropBar))
-            m_macros.set(HandMacroE::DROP_OUT, 0.0f);
-        m_macros.apply(m_player.params());
+        if ( m_macros.get( HandMacroE::DROP_OUT ) > 0.0f &&
+             ( !m_player.playing() || m_player.currentBar() != m_dropBar ) )
+            m_macros.set( HandMacroE::DROP_OUT, 0.0f );
+        m_macros.apply( m_player.params() );
     }
 
     /**
@@ -1806,33 +2147,53 @@ private:
      *        held LongPinch: the stutter, until it opens.
      * @param[in] dt  the seconds since the last frame
      */
-    void gestures(double dt)
+    void gestures( double dt )
     {
-        const bool closed[2] = { m_hands.hand(0).m_closed, m_hands.hand(1).m_closed };
-        if (closed[0] && closed[1]) {
+        const bool closed[2] = { m_hands.hand( 0 ).m_closed, m_hands.hand( 1 ).m_closed };
+        if ( closed[0] && closed[1] )
+        {
             m_spoiled[0] = m_spoiled[1] = true;
-            if (!m_bothFired) { m_player.requestNextTrack(); m_bothFired = true; }
+            if ( !m_bothFired )
+            {
+                m_player.requestNextTrack();
+                m_bothFired = true;
+            }
         }
-        for (int h = 0; h < 2; ++h) {
-            if (closed[h] && !m_handWas[h] && !closed[1 - h]) { m_spoiled[h] = false; m_held[h] = 0.0; }
-            if (closed[h]) m_held[h] += std::min(dt, 0.1);
-            else m_held[h] = 0.0;
-            if (h == 1 && closed[1] && !m_spoiled[1] && m_held[1] >= LongPinch) {
+        for ( int h = 0; h < 2; ++h )
+        {
+            if ( closed[h] && !m_handWas[h] && !closed[1 - h] )
+            {
+                m_spoiled[h] = false;
+                m_held[h] = 0.0;
+            }
+            if ( closed[h] )
+                m_held[h] += std::min( dt, 0.1 );
+            else
+                m_held[h] = 0.0;
+            if ( h == 1 && closed[1] && !m_spoiled[1] && m_held[1] >= LongPinch )
+            {
                 m_spoiled[1] = true;
                 m_stuttering = true;
-                m_macros.set(HandMacroE::STUTTER, 1.0f);
+                m_macros.set( HandMacroE::STUTTER, 1.0f );
             }
-            if (h == 1 && !closed[1] && m_stuttering) {
+            if ( h == 1 && !closed[1] && m_stuttering )
+            {
                 m_stuttering = false;
-                m_macros.set(HandMacroE::STUTTER, 0.0f);
+                m_macros.set( HandMacroE::STUTTER, 0.0f );
             }
-            if (!closed[h] && m_handWas[h] && !m_spoiled[h]) {
-                if (h == 0) m_player.setPlaying(!m_player.playing());
-                else { m_macros.set(HandMacroE::DROP_OUT, 1.0f); m_dropBar = m_player.currentBar(); }
+            if ( !closed[h] && m_handWas[h] && !m_spoiled[h] )
+            {
+                if ( h == 0 )
+                    m_player.setPlaying( !m_player.playing() );
+                else
+                {
+                    m_macros.set( HandMacroE::DROP_OUT, 1.0f );
+                    m_dropBar = m_player.currentBar();
+                }
             }
             m_handWas[h] = closed[h];
         }
-        if (!closed[0] && !closed[1]) m_bothFired = false;
+        if ( !closed[0] && !closed[1] ) m_bothFired = false;
     }
 
     /**
@@ -1853,18 +2214,18 @@ private:
      */
     Panel headPanel() const
     {
-        Panel p;
-        const Vec3 fwd = rotate(m_headPose.orientation, { 0.0f, 0.0f, -1.0f });
-        const float len = std::fmax(std::sqrt(fwd.m_x * fwd.m_x + fwd.m_z * fwd.m_z), 1.0e-3f);
-        const Vec3 f{ fwd.m_x / len, 0.0f, fwd.m_z / len };
+        Panel       p;
+        const Vec3  fwd = rotate( m_headPose.orientation, { 0.0f, 0.0f, -1.0f } );
+        const float len = std::fmax( std::sqrt( fwd.m_x * fwd.m_x + fwd.m_z * fwd.m_z ), 1.0e-3f );
+        const Vec3  f{ fwd.m_x / len, 0.0f, fwd.m_z / len };
         p.m_right = { -f.m_z, 0.0f, f.m_x };
         p.m_up = { 0.0f, 1.0f, 0.0f };
         // Shifted half a 16-character line to the left (the lines are left aligned and 13 to 20
         // characters long), so the block of text sits roughly centred in front of the eyes.
         const float half = 0.5f * 16.0f * 6.0f * Cell;
         p.m_origin = { m_headPose.position.x + f.m_x * PanelDistance - p.m_right.m_x * half,
-                     m_headPose.position.y + 0.12f,
-                     m_headPose.position.z + f.m_z * PanelDistance - p.m_right.m_z * half };
+                       m_headPose.position.y + 0.12f,
+                       m_headPose.position.z + f.m_z * PanelDistance - p.m_right.m_z * half };
         return p;
     }
 
@@ -1872,86 +2233,97 @@ private:
     void buildScene()
     {
         // The floor ring: a fixed horizon, never moved by the audio (the Kaleidoscope rule).
-        for (int i = 0; i < 72; ++i) {
-            const float a = static_cast<float>(i) / 72.0f * 6.2831853f;
-            m_scene.add(2.5f * std::sin(a), 0.02f, -2.5f * std::cos(a), 0.18f, 0.20f, 0.34f, 0.5f, 40.0f);
+        for ( int i = 0; i < 72; ++i )
+        {
+            const float a = static_cast<float>( i ) / 72.0f * 6.2831853f;
+            m_scene.add( 2.5f * std::sin( a ), 0.02f, -2.5f * std::cos( a ), 0.18f, 0.20f, 0.34f, 0.5f, 40.0f );
         }
-        for (int h = 0; h < 2; ++h) {
-            const Hands::Hand& s = m_hands.hand(h);
-            if (!s.m_valid) continue;
+        for ( int h = 0; h < 2; ++h )
+        {
+            const Hands::Hand &s = m_hands.hand( h );
+            if ( !s.m_valid ) continue;
             const float t = s.m_pinch;
-            m_scene.add(s.m_palm.x, s.m_palm.y, s.m_palm.z, 0.25f + 0.75f * t, 0.95f - 0.6f * t, 0.45f, 1.0f, 130.0f);
+            m_scene.add( s.m_palm.x, s.m_palm.y, s.m_palm.z, 0.25f + 0.75f * t, 0.95f - 0.6f * t, 0.45f, 1.0f, 130.0f );
         }
-        if (!m_headValid) return;
+        if ( !m_headValid ) return;
 
-        const Panel p = headPanel();
+        const Panel        p = headPanel();
         const DisplayState d = m_player.display();
-        char line[64];
+        char               line[64];
 
-        if (!m_player.ready()) {
-            m_scene.addText(p, 0.0f, 0.0f, Cell * 1.8f, "PHOSPHENE", 0.95f, 0.75f, 0.45f, 1.0f);
-            m_scene.addText(p, 0.0f, -0.08f, Cell, "PLANNING THE SET", 0.6f, 0.7f, 0.9f, 0.8f);
+        if ( !m_player.ready() )
+        {
+            m_scene.addText( p, 0.0f, 0.0f, Cell * 1.8f, "PHOSPHENE", 0.95f, 0.75f, 0.45f, 1.0f );
+            m_scene.addText( p, 0.0f, -0.08f, Cell, "PLANNING THE SET", 0.6f, 0.7f, 0.9f, 0.8f );
             return;
         }
 
         const int bar = m_player.currentBar();
-        const int inTrack = std::max(0, bar - d.m_firstBar);
-        float row = 0.0f;
-        auto text = [&](const char* s, float r, float g, float b, float a) {
-            m_scene.addText(p, 0.0f, row, Cell, s, r, g, b, a);
+        const int inTrack = std::max( 0, bar - d.m_firstBar );
+        float     row = 0.0f;
+        auto      text = [&]( const char *s, float r, float g, float b, float a )
+        {
+            m_scene.addText( p, 0.0f, row, Cell, s, r, g, b, a );
             row -= Row;
         };
 
-        std::snprintf(line, sizeof(line), "TRACK %02d  %.1f BPM", d.m_track + 1, d.m_bpm);
-        text(line, 0.95f, 0.80f, 0.50f, 1.0f);
-        std::snprintf(line, sizeof(line), "BAR %04d/%04d", inTrack + 1, d.m_trackBars);
-        text(line, 0.95f, 0.80f, 0.50f, 0.9f);
+        std::snprintf( line, sizeof( line ), "TRACK %02d  %.1f BPM", d.m_track + 1, d.m_bpm );
+        text( line, 0.95f, 0.80f, 0.50f, 1.0f );
+        std::snprintf( line, sizeof( line ), "BAR %04d/%04d", inTrack + 1, d.m_trackBars );
+        text( line, 0.95f, 0.80f, 0.50f, 0.9f );
         // Over the DJ overlap the next track's intro already sounds: which one, and how many bars until its
         // kick and bass take over. The panel's other lines stay with the outgoing track, which owns the bar.
-        if (d.m_incoming >= 0) {
-            std::snprintf(line, sizeof(line), "MIX IN %02d  %02d BARS", d.m_incoming + 1, std::max(0, d.m_handover - bar));
-            text(line, 0.55f, 0.95f, 0.75f, 0.9f);
+        if ( d.m_incoming >= 0 )
+        {
+            std::snprintf( line, sizeof( line ), "MIX IN %02d  %02d BARS", d.m_incoming + 1,
+                           std::max( 0, d.m_handover - bar ) );
+            text( line, 0.55f, 0.95f, 0.75f, 0.9f );
         }
-        std::snprintf(line, sizeof(line), "%s %s", KeyNames[d.m_key], ScaleNames[d.m_scale]);
-        text(line, 0.70f, 0.85f, 1.00f, 0.9f);
+        std::snprintf( line, sizeof( line ), "%s %s", KeyNames[d.m_key], ScaleNames[d.m_scale] );
+        text( line, 0.70f, 0.85f, 1.00f, 0.9f );
         // The 16-bar block stands in for the section until the form grammar of Phase 5 is there:
         // one letter per melodic part, a dash where it is silent.
         // One letter per melodic part in the order of the voices' groups (Form.h, MelodyPart; 19.09.2026):
         // Acid, Lead, Counter, aRp, Stab, Pad, Drone.
         static const char Letters[MelodyParts + 1] = "ALCRSPD";
-        char parts[MelodyParts + 1] = {};
-        for (int k = 0; k < MelodyParts; ++k) parts[k] = (d.m_blockParts & partBit(static_cast<MelodyPartE>(k))) ? Letters[k] : '-';
-        std::snprintf(line, sizeof(line), "BLK %02d  %s%s", inTrack / 16 + 1, parts, d.m_padGate ? " GATE" : "");
-        text(line, 0.80f, 0.70f, 1.00f, 0.9f);
+        char              parts[MelodyParts + 1] = {};
+        for ( int k = 0; k < MelodyParts; ++k )
+            parts[k] = ( d.m_blockParts & partBit( static_cast<MelodyPartE>( k ) ) ) ? Letters[k] : '-';
+        std::snprintf( line, sizeof( line ), "BLK %02d  %s%s", inTrack / 16 + 1, parts, d.m_padGate ? " GATE" : "" );
+        text( line, 0.80f, 0.70f, 1.00f, 0.9f );
         const float lufs = m_player.loudness();
-        std::snprintf(line, sizeof(line), "%+.1f LUFS  %s", static_cast<double>(lufs),
-                      m_config.m_mute ? "MUTED" : (m_player.playing() ? "PLAY" : "STOP"));
-        text(line, 0.95f, 0.85f, 0.60f, 0.9f);
-        std::snprintf(line, sizeof(line), "SWEEP %+.2f%s", static_cast<double>(m_macros.get(HandMacroE::FILTER_SWEEP)),
-                      m_macros.get(HandMacroE::DROP_OUT) > 0.0f ? "  DROP" : "");
-        text(line, 0.60f, 0.75f, 0.95f, 0.75f);
-        std::snprintf(line, sizeof(line), "GATE %.2f%s", static_cast<double>(m_macros.get(HandMacroE::GATE_DEPTH)),
-                      m_macros.get(HandMacroE::STUTTER) > 0.0f ? "  STUTTER" : "");
-        text(line, 0.60f, 0.75f, 0.95f, 0.75f);
+        std::snprintf( line, sizeof( line ), "%+.1f LUFS  %s", static_cast<double>( lufs ),
+                       m_config.m_mute ? "MUTED" : ( m_player.playing() ? "PLAY" : "STOP" ) );
+        text( line, 0.95f, 0.85f, 0.60f, 0.9f );
+        std::snprintf( line, sizeof( line ), "SWEEP %+.2f%s",
+                       static_cast<double>( m_macros.get( HandMacroE::FILTER_SWEEP ) ),
+                       m_macros.get( HandMacroE::DROP_OUT ) > 0.0f ? "  DROP" : "" );
+        text( line, 0.60f, 0.75f, 0.95f, 0.75f );
+        std::snprintf( line, sizeof( line ), "GATE %.2f%s",
+                       static_cast<double>( m_macros.get( HandMacroE::GATE_DEPTH ) ),
+                       m_macros.get( HandMacroE::STUTTER ) > 0.0f ? "  STUTTER" : "" );
+        text( line, 0.60f, 0.75f, 0.95f, 0.75f );
 
         row -= Row * 0.3f;
         // Four beat lamps. Their brightness is a raised cosine of the distance to the beat, so the
         // pulse is continuous -- no flash, no step (the continuity rule of the scene catalogue).
         const float phase = m_player.barPhase() * 4.0f;
-        for (int b = 0; b < 4; ++b) {
-            float dist = phase - static_cast<float>(b);
-            if (dist < 0.0f) dist += 4.0f;
-            const float x = dist < 1.0f ? 0.5f + 0.5f * std::cos(3.14159265f * dist) : 0.0f;
+        for ( int b = 0; b < 4; ++b )
+        {
+            float dist = phase - static_cast<float>( b );
+            if ( dist < 0.0f ) dist += 4.0f;
+            const float x = dist < 1.0f ? 0.5f + 0.5f * std::cos( 3.14159265f * dist ) : 0.0f;
             const float level = m_player.playing() ? 0.22f + 0.78f * x : 0.18f;
-            m_scene.addOn(p, 0.026f * static_cast<float>(b), row, 1.0f, 0.55f + 0.35f * x, 0.25f, level, 150.0f);
+            m_scene.addOn( p, 0.026f * static_cast<float>( b ), row, 1.0f, 0.55f + 0.35f * x, 0.25f, level, 150.0f );
         }
         // Loudness as a row of dots, -30 LUFS to 0; the leading dot fades in continuously.
-        const float lu = clamp01((lufs + 30.0f) / 30.0f);
-        for (int i = 0; i < 20; ++i) {
-            const float t = static_cast<float>(i) / 19.0f;
-            const float on = clamp01((lu - t) * 20.0f);
-            m_scene.addOn(p, 0.18f + 0.016f * static_cast<float>(i), row,
-                         0.4f + 0.6f * t, 0.9f - 0.5f * t, 0.5f, 0.12f + 0.75f * on, 90.0f);
+        const float lu = clamp01( ( lufs + 30.0f ) / 30.0f );
+        for ( int i = 0; i < 20; ++i )
+        {
+            const float t = static_cast<float>( i ) / 19.0f;
+            const float on = clamp01( ( lu - t ) * 20.0f );
+            m_scene.addOn( p, 0.18f + 0.016f * static_cast<float>( i ), row, 0.4f + 0.6f * t, 0.9f - 0.5f * t, 0.5f,
+                           0.12f + 0.75f * on, 90.0f );
         }
     }
 
@@ -1962,58 +2334,67 @@ private:
     void frame()
     {
         XrFrameWaitInfo wi{ XR_TYPE_FRAME_WAIT_INFO };
-        XrFrameState fs{ XR_TYPE_FRAME_STATE };
-        if (XR_FAILED(xrWaitFrame(m_session, &wi, &fs))) return;
+        XrFrameState    fs{ XR_TYPE_FRAME_STATE };
+        if ( XR_FAILED( xrWaitFrame( m_session, &wi, &fs ) ) ) return;
         XrFrameBeginInfo bi{ XR_TYPE_FRAME_BEGIN_INFO };
-        xrBeginFrame(m_session, &bi);
+        xrBeginFrame( m_session, &bi );
 
-        const double dt = m_lastTime == 0 ? 1.0 / 72.0 : static_cast<double>(fs.predictedDisplayTime - m_lastTime) * 1.0e-9;
+        const double dt =
+            m_lastTime == 0 ? 1.0 / 72.0 : static_cast<double>( fs.predictedDisplayTime - m_lastTime ) * 1.0e-9;
         m_lastTime = fs.predictedDisplayTime;
-        updateHead(fs.predictedDisplayTime);
-        updateHands(fs.predictedDisplayTime);
+        updateHead( fs.predictedDisplayTime );
+        updateHands( fs.predictedDisplayTime );
         bool leftPinch = false, rightPinch = false;
-        m_hands.update(dt, leftPinch, rightPinch);
-        m_bridge.send(m_hands, dt);   // the bridge: the hands to the desktop (01.10.2026)
-        if (m_player.ready()) {
-            gestures(dt);
+        m_hands.update( dt, leftPinch, rightPinch );
+        m_bridge.send( m_hands, dt );   // the bridge: the hands to the desktop (01.10.2026)
+        if ( m_player.ready() )
+        {
+            gestures( dt );
             applyMacros();
         }
 
         std::vector<XrCompositionLayerProjectionView> projViews;
-        XrCompositionLayerProjection layer{ XR_TYPE_COMPOSITION_LAYER_PROJECTION };
-        const XrCompositionLayerBaseHeader* layers[1] = { reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer) };
-        uint32_t layerCount = 0;
+        XrCompositionLayerProjection                  layer{ XR_TYPE_COMPOSITION_LAYER_PROJECTION };
+        const XrCompositionLayerBaseHeader *layers[1] = { reinterpret_cast<XrCompositionLayerBaseHeader *>( &layer ) };
+        uint32_t                            layerCount = 0;
 
-        if (fs.shouldRender) {
+        if ( fs.shouldRender )
+        {
             XrViewLocateInfo vli{ XR_TYPE_VIEW_LOCATE_INFO };
             vli.viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
             vli.displayTime = fs.predictedDisplayTime;
             vli.space = m_stageSpace;
             XrViewState vs{ XR_TYPE_VIEW_STATE };
-            uint32_t viewCount = 0;
-            xrLocateViews(m_session, &vli, &vs, static_cast<uint32_t>(m_views.size()), &viewCount, m_views.data());
-            if ((vs.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) && (vs.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT)) {
+            uint32_t    viewCount = 0;
+            xrLocateViews( m_session, &vli, &vs, static_cast<uint32_t>( m_views.size() ), &viewCount, m_views.data() );
+            if ( ( vs.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT ) &&
+                 ( vs.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT ) )
+            {
                 m_scene.begin();
                 buildScene();
                 m_scene.upload();
-                projViews.resize(viewCount, { XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW });
-                for (uint32_t v = 0; v < viewCount; ++v) {
-                    SwapchainTarget& t = m_targets[v];
+                projViews.resize( viewCount, { XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW } );
+                for ( uint32_t v = 0; v < viewCount; ++v )
+                {
+                    SwapchainTarget            &t = m_targets[v];
                     XrSwapchainImageAcquireInfo ai{ XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
-                    uint32_t index = 0;
-                    xrAcquireSwapchainImage(t.m_swapchain, &ai, &index);
+                    uint32_t                    index = 0;
+                    xrAcquireSwapchainImage( t.m_swapchain, &ai, &index );
                     XrSwapchainImageWaitInfo swi{ XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
                     swi.timeout = XR_INFINITE_DURATION;
-                    xrWaitSwapchainImage(t.m_swapchain, &swi);
+                    xrWaitSwapchainImage( t.m_swapchain, &swi );
 
-                    glBindFramebuffer(GL_FRAMEBUFFER, t.m_fbo);
-                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t.m_images[index].image, 0);
-                    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, t.m_depth);
-                    m_scene.draw(multiply(projectionFromFov(m_views[v].fov, 0.05f, 100.0f), viewFromPose(m_views[v].pose)), t.m_width, t.m_height);
-                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    glBindFramebuffer( GL_FRAMEBUFFER, t.m_fbo );
+                    glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                                            t.m_images[index].image, 0 );
+                    glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, t.m_depth );
+                    m_scene.draw(
+                        multiply( projectionFromFov( m_views[v].fov, 0.05f, 100.0f ), viewFromPose( m_views[v].pose ) ),
+                        t.m_width, t.m_height );
+                    glBindFramebuffer( GL_FRAMEBUFFER, 0 );
 
                     XrSwapchainImageReleaseInfo ri{ XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
-                    xrReleaseSwapchainImage(t.m_swapchain, &ri);
+                    xrReleaseSwapchainImage( t.m_swapchain, &ri );
 
                     projViews[v].pose = m_views[v].pose;
                     projViews[v].fov = m_views[v].fov;
@@ -2033,19 +2414,19 @@ private:
         ei.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
         ei.layerCount = layerCount;
         ei.layers = layers;
-        xrEndFrame(m_session, &ei);
+        xrEndFrame( m_session, &ei );
     }
 
-    android_app* m_app;   ///< the native activity
-    std::string m_dataDir;   ///< the app's external data folder (phos.cfg)
-    Config m_config;   ///< what phos.cfg says
-    SetPlayer m_player;   ///< the engine and the composer
-    Audio m_audio{ m_player };   ///< the audio stream
-    std::thread m_composerThread;   ///< composes and loads tracks, measures their loudness
+    android_app      *m_app;                     ///< the native activity
+    std::string       m_dataDir;                 ///< the app's external data folder (phos.cfg)
+    Config            m_config;                  ///< what phos.cfg says
+    SetPlayer         m_player;                  ///< the engine and the composer
+    Audio             m_audio{ m_player };       ///< the audio stream
+    std::thread       m_composerThread;          ///< composes and loads tracks, measures their loudness
     std::atomic<bool> m_stopComposer{ false };   ///< ends the composer thread
-    Scene m_scene;   ///< what is drawn
-    Hands m_hands;   ///< the hands as tracked
-    HandBridge m_bridge;                  ///< the bridge mode: the hands to the desktop's Phosphene (01.10.2026)
+    Scene             m_scene;                   ///< what is drawn
+    Hands             m_hands;                   ///< the hands as tracked
+    HandBridge        m_bridge;                  ///< the bridge mode: the hands to the desktop's Phosphene (01.10.2026)
     /**
      * @brief The cue bridge's socket and thread (PLAN 8.3, Cue.h).
      *
@@ -2054,61 +2435,64 @@ private:
      * The cues now come off the play position on the audio thread, stamped with the instant the
      * listener hears them, which is the only stamp a visualiser can act on.
      */
-    CueSender m_cues;
-    HandMacros m_macros;                  ///< the desktop's perform macros, the hands' controls (01.10.2026)
-    int m_dropBar = -1;                   ///< the bar the drop-out was pressed in: it lets go when that bar is over
-    bool m_handWas[2] = {};   ///< gestures(): the pinches as they were
-    bool m_spoiled[2] = {};   ///< gestures(): per hand, the pinch was part of a two-hand gesture and does not count alone
-    bool m_bothFired = false;   ///< gestures(): both hands closed and asked for the next track; once until both open
-    double m_held[2] = {};                ///< how long each pinch has been closed, seconds
-    bool m_stuttering = false;            ///< the right pinch was held into the stutter
+    CueSender  m_cues;
+    HandMacros m_macros;            ///< the desktop's perform macros, the hands' controls (01.10.2026)
+    int        m_dropBar = -1;      ///< the bar the drop-out was pressed in: it lets go when that bar is over
+    bool       m_handWas[2] = {};   ///< gestures(): the pinches as they were
+    bool       m_spoiled
+        [2] = {};   ///< gestures(): per hand, the pinch was part of a two-hand gesture and does not count alone
+    bool   m_bothFired = false;    ///< gestures(): both hands closed and asked for the next track; once until both open
+    double m_held[2] = {};         ///< how long each pinch has been closed, seconds
+    bool   m_stuttering = false;   ///< the right pinch was held into the stutter
     static constexpr double LongPinch = 0.6;   ///< seconds the right pinch is held for the stutter
 
     EGLDisplay m_display = EGL_NO_DISPLAY;   ///< the EGL display
-    EGLConfig m_eglConfig = nullptr;   ///< the EGL configuration
+    EGLConfig  m_eglConfig = nullptr;        ///< the EGL configuration
     EGLSurface m_surface = EGL_NO_SURFACE;   ///< the small pbuffer surface the context is current on
     EGLContext m_context = EGL_NO_CONTEXT;   ///< the GLES context
 
-    XrInstance m_instance = XR_NULL_HANDLE;   ///< the OpenXR instance
-    XrSystemId m_system = XR_NULL_SYSTEM_ID;   ///< the headset
-    XrSession m_session = XR_NULL_HANDLE;   ///< the OpenXR session
-    XrSpace m_stageSpace = XR_NULL_HANDLE;   ///< the room: stage, else local
-    XrSpace m_viewSpace = XR_NULL_HANDLE;   ///< the head
-    XrSessionState m_sessionState = XR_SESSION_STATE_UNKNOWN;   ///< the session's last state
-    bool m_sessionRunning = false;   ///< the session runs: frames are drawn
-    bool m_quit = false;   ///< the runtime asks the app to end
-    bool m_handsSupported = false;   ///< the headset tracks hands
-    bool m_headValid = false;   ///< m_headPose is valid this frame
-    std::vector<XrView> m_views;   ///< the eyes' poses and fields of view this frame
+    XrInstance                   m_instance = XR_NULL_HANDLE;                 ///< the OpenXR instance
+    XrSystemId                   m_system = XR_NULL_SYSTEM_ID;                ///< the headset
+    XrSession                    m_session = XR_NULL_HANDLE;                  ///< the OpenXR session
+    XrSpace                      m_stageSpace = XR_NULL_HANDLE;               ///< the room: stage, else local
+    XrSpace                      m_viewSpace = XR_NULL_HANDLE;                ///< the head
+    XrSessionState               m_sessionState = XR_SESSION_STATE_UNKNOWN;   ///< the session's last state
+    bool                         m_sessionRunning = false;                    ///< the session runs: frames are drawn
+    bool                         m_quit = false;                              ///< the runtime asks the app to end
+    bool                         m_handsSupported = false;                    ///< the headset tracks hands
+    bool                         m_headValid = false;                         ///< m_headPose is valid this frame
+    std::vector<XrView>          m_views;     ///< the eyes' poses and fields of view this frame
     std::vector<SwapchainTarget> m_targets;   ///< per eye: its swapchain and framebuffer
-    XrPosef m_headPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };   ///< the head in the room
-    XrTime m_lastTime = 0;   ///< the last frame's display time (0 before the first)
+    XrPosef                      m_headPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };   ///< the head in the room
+    XrTime                       m_lastTime = 0;   ///< the last frame's display time (0 before the first)
 
-    PFN_xrCreateHandTrackerEXT m_pfnCreateHandTracker = nullptr;   ///< xrCreateHandTrackerEXT
-    PFN_xrLocateHandJointsEXT m_pfnLocateHandJoints = nullptr;   ///< xrLocateHandJointsEXT
-    PFN_xrDestroyHandTrackerEXT m_pfnDestroyHandTracker = nullptr;   ///< xrDestroyHandTrackerEXT
-    XrHandTrackerEXT m_handTracker[2] = { XR_NULL_HANDLE, XR_NULL_HANDLE };   ///< left, right
+    PFN_xrCreateHandTrackerEXT  m_pfnCreateHandTracker = nullptr;                        ///< xrCreateHandTrackerEXT
+    PFN_xrLocateHandJointsEXT   m_pfnLocateHandJoints = nullptr;                         ///< xrLocateHandJointsEXT
+    PFN_xrDestroyHandTrackerEXT m_pfnDestroyHandTracker = nullptr;                       ///< xrDestroyHandTrackerEXT
+    XrHandTrackerEXT            m_handTracker[2] = { XR_NULL_HANDLE, XR_NULL_HANDLE };   ///< left, right
 };
 
 /** @brief The native app glue's command callback: nothing to do, OpenXR's events drive the app. */
-void handleCmd(android_app*, int32_t) {}
+void handleCmd( android_app *, int32_t ) {}
 
-} // namespace
+}   // namespace
 
 /**
  * @brief NativeActivity entry point (android_native_app_glue).
  * @param[in,out] app  the native activity
  */
-void android_main(android_app* app)
+void android_main( android_app *app )
 {
     app->onAppCmd = handleCmd;
-    JNIEnv* env = nullptr;
-    app->activity->vm->AttachCurrentThread(&env, nullptr);
+    JNIEnv *env = nullptr;
+    app->activity->vm->AttachCurrentThread( &env, nullptr );
     {
         // On the heap: the engine and the composer's plans are far more than the glue thread's stack.
-        auto a = std::make_unique<App>(app);
-        if (a->init()) a->run();
-        else LOGE("init failed");
+        auto a = std::make_unique<App>( app );
+        if ( a->init() )
+            a->run();
+        else
+            LOGE( "init failed" );
         a->shutdown();
     }
     app->activity->vm->DetachCurrentThread();

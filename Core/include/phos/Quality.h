@@ -43,24 +43,34 @@
 #include "phos/PolyKernel.h"
 #include <cstring>
 
-namespace phos {
+namespace phos
+{
 
 /** @brief What the engine may spend per part. */
-struct Quality {
+struct Quality
+{
     /** @brief The two levels. */
-    enum class LevelE : int { DESKTOP = 0, QUEST };
+    enum class LevelE : int
+    {
+        DESKTOP = 0,
+        QUEST
+    };
 
-    LevelE m_level = LevelE::DESKTOP;   ///< which level this is (for displays and reports)
-    int m_bassOversampling = 2;       ///< ladder rate of the bass, 1 or 2 times the sample rate
-    int m_acidOversampling = 2;       ///< ladder rate of the acid, 1 or 2 times the sample rate
-    int m_polyUnison[PolyInstances] = {};   ///< oscillators per voice, per Poly instance (set by the constructor)
-    int m_polyVoices[PolyInstances] = {};   ///< voices that may sound, per Poly instance (set by the constructor)
-    int m_waveTableFrames = 0;        ///< frames a library table is built with; 0 = every frame (setWaveTableFrameLimit)
+    LevelE m_level = LevelE::DESKTOP;          ///< which level this is (for displays and reports)
+    int    m_bassOversampling = 2;             ///< ladder rate of the bass, 1 or 2 times the sample rate
+    int    m_acidOversampling = 2;             ///< ladder rate of the acid, 1 or 2 times the sample rate
+    int    m_polyUnison[PolyInstances] = {};   ///< oscillators per voice, per Poly instance (set by the constructor)
+    int    m_polyVoices[PolyInstances] = {};   ///< voices that may sound, per Poly instance (set by the constructor)
+    int    m_waveTableFrames = 0;   ///< frames a library table is built with; 0 = every frame (setWaveTableFrameLimit)
 
     /** @brief The desktop level: every instance at full unison and every voice (a loop, so a new instance cannot be missed). */
     Quality()
     {
-        for (int i = 0; i < PolyInstances; ++i) { m_polyUnison[i] = PolyUnison; m_polyVoices[i] = PolyVoices; }
+        for ( int i = 0; i < PolyInstances; ++i )
+        {
+            m_polyUnison[i] = PolyUnison;
+            m_polyVoices[i] = PolyVoices;
+        }
     }
 
     /**
@@ -79,12 +89,12 @@ struct Quality {
         q.m_level = LevelE::QUEST;
         q.m_bassOversampling = 2;
         q.m_acidOversampling = 1;
-        for (int i = 0; i < PolyInstances; ++i) q.m_polyUnison[i] = 3;
-        q.m_polyVoices[polyIndex(PolyInstanceE::PAD)] = 4;
+        for ( int i = 0; i < PolyInstances; ++i ) q.m_polyUnison[i] = 3;
+        q.m_polyVoices[polyIndex( PolyInstanceE::PAD )] = 4;
         // 19.09.2026: the drone holds at most three notes (root, fifth, octave) and cross-fades into the
         // next held chord at a boundary (Melody.h), so six voices cover the overlap; the stab keeps all
         // eight, because its short chords of four overlap their own releases on close hits.
-        q.m_polyVoices[polyIndex(PolyInstanceE::DRONE)] = 6;
+        q.m_polyVoices[polyIndex( PolyInstanceE::DRONE )] = 6;
         q.m_waveTableFrames = 32;
         return q;
     }
@@ -93,7 +103,7 @@ struct Quality {
      * @brief Display name of the level.
      * @return the name
      */
-    const char* name() const { return m_level == LevelE::QUEST ? "quest" : "desktop"; }
+    const char *name() const { return m_level == LevelE::QUEST ? "quest" : "desktop"; }
 
     /**
      * @brief Looks a level up by name ("desktop" or "quest").
@@ -101,13 +111,21 @@ struct Quality {
      * @param[out] out   receives the level when the name is known
      * @return false when the name is neither of the two
      */
-    static bool fromName(const char* text, Quality& out)
+    static bool fromName( const char *text, Quality &out )
     {
-        if (text == nullptr) return false;
-        if (std::strcmp(text, "desktop") == 0) { out = desktop(); return true; }
-        if (std::strcmp(text, "quest") == 0) { out = quest(); return true; }
+        if ( text == nullptr ) return false;
+        if ( std::strcmp( text, "desktop" ) == 0 )
+        {
+            out = desktop();
+            return true;
+        }
+        if ( std::strcmp( text, "quest" ) == 0 )
+        {
+            out = quest();
+            return true;
+        }
         return false;
     }
 };
 
-} // namespace phos
+}   // namespace phos

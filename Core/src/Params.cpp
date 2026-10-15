@@ -5,34 +5,36 @@
  */
 #include "phos/Params.h"
 #include "phos/Util.h"
-#include "phos/Disperser.h"        // DisperseStages: the upper end of the disperse parameters
+#include "phos/Disperser.h"       // DisperseStages: the upper end of the disperse parameters
 #include "phos/WaveTableFile.h"   // NumWaveTables and the names of the shipped library tables
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 
-namespace phos {
+namespace phos
+{
 
-const char* const KeyNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-const char* const ScaleNames[] = { "Aeolian", "Phrygian", "Harmonic Minor", "Phrygian Dominant", "Double Harmonic", "Dorian" };
-const char* const KickPatternNames[] = { "Four", "Four + Fills", "Off" };
+const char *const KeyNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+const char *const ScaleNames[] = { "Aeolian",           "Phrygian",        "Harmonic Minor",
+                                   "Phrygian Dominant", "Double Harmonic", "Dorian" };
+const char *const KickPatternNames[] = { "Four", "Four + Fills", "Off" };
 // The names of the style profiles and the dramaturgy presets (Form.h). They live here, with the other
 // choice tables, because the parameter registry is built from them.
-const char* const StyleNames[] = { "Goa", "Full-On", "Progressive", "Dark Forest", "Hi-Tech" };
-const char* const ArcNames[] = { "Warm-up", "Peak-Time", "Morning", "Closing", "Flat" };
-const char* const BassPatternNames[] = { "Rolling", "Gallop", "Skip", "Offbeat", "Triplet" };
+const char *const StyleNames[] = { "Goa", "Full-On", "Progressive", "Dark Forest", "Hi-Tech" };
+const char *const ArcNames[] = { "Warm-up", "Peak-Time", "Morning", "Closing", "Flat" };
+const char *const BassPatternNames[] = { "Rolling", "Gallop", "Skip", "Offbeat", "Triplet" };
 // Phase 8: the predictive model behind the melodic lines. "Markov" is the measured order-2 model of
 // the corpus (Corpus.h), "Neural" the trained transformer (Model.h). Markov stays the default until
 // the trained model has been measured to be better -- and Neural falls back to it when no weight
 // file is there.
-const char* const MelodyModelNames[] = { "Markov", "Neural" };
+const char *const MelodyModelNames[] = { "Markov", "Neural" };
 // Phase 8, bass round: where a bass note's pitch comes from. "Pattern" is the root plus the phrase
 // figures of Composer.cpp, which is what the program has always played; "Neural" is the learned
 // fourth role of Model.h, drawn under the same register and scale constraints. Pattern stays the
 // default until a listening comparison exists -- the held-out measurement says the learned bass
 // predicts real basslines far better, which is not the same as saying it sounds better -- and
 // Neural falls back to Pattern when no weight file is there.
-const char* const BassModelNames[] = { "Pattern", "Neural" };
+const char *const BassModelNames[] = { "Pattern", "Neural" };
 // 16.09.2026, bass rhythm round: where the onset pattern of a bar comes from. "Pattern" is the five
 // hard-wired families of Patterns.h, which is what the program has always played and what every
 // earlier render stays bit-identical to; "Corpus" draws the bar from the onset model of Corpus.h --
@@ -43,82 +45,85 @@ const char* const BassModelNames[] = { "Pattern", "Neural" };
 // sixteenth grid, so a Triplet track plays the Skip mask under "Corpus".
 // Pattern stays the default for the reason bass_model does: the held-out measurement says the
 // corpus model predicts real bass bars far better, which is not the same as saying it sounds better.
-const char* const BassRhythmNames[] = { "Pattern", "Corpus" };
+const char *const BassRhythmNames[] = { "Pattern", "Corpus" };
 // 22.09.2026, round "Lead": "Auto (Style)" hands the choice to the style profile's lead vector (Form.h).
-const char* const LeadDensityNames[] = { "Auto (Style)", "Sparse", "Medium", "Dense" };
-const char* const PitchEntropyNames[] = { "Auto (Style)", "Low", "Medium", "High" };
-const char* const CounterModeNames[] = { "Auto (Style)", "Echo", "Answer", "Timbral", "Hocket" };
-const char* const PercRoleNames[NumPercRoles] = { "Closed Hat", "Open Hat", "Ride", "Crash", "Clap", "Snare", "Rim",
-                                                    "Shaker", "Tom", "Conga", "Zap", "Blip" };
+const char *const LeadDensityNames[] = { "Auto (Style)", "Sparse", "Medium", "Dense" };
+const char *const PitchEntropyNames[] = { "Auto (Style)", "Low", "Medium", "High" };
+const char *const CounterModeNames[] = { "Auto (Style)", "Echo", "Answer", "Timbral", "Hocket" };
+const char *const PercRoleNames[NumPercRoles] = { "Closed Hat", "Open Hat", "Ride", "Crash", "Clap", "Snare",
+                                                  "Rim",        "Shaker",   "Tom",  "Conga", "Zap",  "Blip" };
 // The prefixes of the polyphonic instances, in the order of PolyInstance (Params.h): the voices' groups.
-const char* const PolyInstanceNames[PolyInstances] = { "lead", "counter", "arp", "stab", "pad", "drone" };
+const char *const PolyInstanceNames[PolyInstances] = { "lead", "counter", "arp", "stab", "pad", "drone" };
 
-namespace {
+namespace
+{
 
-const char* const KickEngineNames[] = { "Sweep", "Resonant" };   ///< kick.engine
-const char* const KickTuneNames[] = { "Free", "Key" };   ///< kick.tune
-const char* const KickClipNames[] = { "Tanh", "Hard" };   ///< kick.clip
-const char* const SubModeNames[] = { "Mixed", "Split" };   ///< bass.sub_mode: the sub mixed into the bass or split from it
-const char* const KickLockNames[] = { "Off", "Bass follows kick", "Kick follows bass" };   ///< bass.kick_lock (KickLock)
+const char *const KickEngineNames[] = { "Sweep", "Resonant" };   ///< kick.engine
+const char *const KickTuneNames[] = { "Free", "Key" };           ///< kick.tune
+const char *const KickClipNames[] = { "Tanh", "Hard" };          ///< kick.clip
+const char *const SubModeNames[] = { "Mixed",
+                                     "Split" };   ///< bass.sub_mode: the sub mixed into the bass or split from it
+const char *const KickLockNames[] = { "Off", "Bass follows kick",
+                                      "Kick follows bass" };   ///< bass.kick_lock (KickLock)
 
 /** @brief The compose module: what the composer is asked for. */
 const ParamDesc ComposeParams[compose::COUNT] = {
-    { "bpm",             "Tempo",           "BPM", 100.0f, 190.0f, 145.0f, CurveE::LINEAR },
-    { "key",             "Start Key",       "",      0.0f,  11.0f,   6.0f, CurveE::CHOICE, KeyNames },
-    { "scale",           "Start Scale",     "",      0.0f,   5.0f,   1.0f, CurveE::CHOICE, ScaleNames },
-    { "kick_pattern",    "Kick Pattern",    "",      0.0f,   2.0f,   1.0f, CurveE::CHOICE, KickPatternNames },
-    { "bass_pattern",    "Bass Pattern",    "",      0.0f,   4.0f,   0.0f, CurveE::CHOICE, BassPatternNames },
-    { "bass_gate",       "Bass Gate",       "",      0.2f,   1.0f,   0.7f, CurveE::LINEAR },
-    { "bass_variation",  "Bass Variation",  "",      0.0f,   1.0f,   0.4f, CurveE::LINEAR },
+    { "bpm", "Tempo", "BPM", 100.0f, 190.0f, 145.0f, CurveE::LINEAR },
+    { "key", "Start Key", "", 0.0f, 11.0f, 6.0f, CurveE::CHOICE, KeyNames },
+    { "scale", "Start Scale", "", 0.0f, 5.0f, 1.0f, CurveE::CHOICE, ScaleNames },
+    { "kick_pattern", "Kick Pattern", "", 0.0f, 2.0f, 1.0f, CurveE::CHOICE, KickPatternNames },
+    { "bass_pattern", "Bass Pattern", "", 0.0f, 4.0f, 0.0f, CurveE::CHOICE, BassPatternNames },
+    { "bass_gate", "Bass Gate", "", 0.2f, 1.0f, 0.7f, CurveE::LINEAR },
+    { "bass_variation", "Bass Variation", "", 0.0f, 1.0f, 0.4f, CurveE::LINEAR },
     // The bass's octave window in semitones (Harmony.h, bassRootNote): it moves where the root sits, never which note it is.
-    { "bass_register",   "Bass Register",   "st",  -12.0f,  12.0f,   0.0f, CurveE::INT },
-    { "track_bars",      "Track Length",    "bars", 32.0f, 512.0f, 256.0f, CurveE::INT },
-    { "track_variation", "Track Variation", "",      0.0f,   1.0f,   0.5f, CurveE::LINEAR },
-    { "sound_variation", "Sound Variation", "",      0.0f,   1.0f,   0.5f, CurveE::LINEAR },
+    { "bass_register", "Bass Register", "st", -12.0f, 12.0f, 0.0f, CurveE::INT },
+    { "track_bars", "Track Length", "bars", 32.0f, 512.0f, 256.0f, CurveE::INT },
+    { "track_variation", "Track Variation", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "sound_variation", "Sound Variation", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
     // 19.09.2026, round "arrangement": 1 instead of 3, so that the default set (Full-On, 145 BPM) wanders
     // inside the user's Full-On window of 142 .. 146 BPM (144 .. 146) rather than up to 148.
-    { "tempo_range",     "Tempo Range",     "BPM",   0.0f,  10.0f,   1.0f, CurveE::LINEAR },
-    { "level_match",     "Level Match",     "",      0.0f,   1.0f,   1.0f, CurveE::TOGGLE },
-    { "perc_density",    "Perc Density",    "",      0.0f,   1.0f,   0.6f, CurveE::LINEAR },
-    { "perc_variation",  "Perc Variation",  "",      0.0f,   1.0f,   0.5f, CurveE::LINEAR },
-    { "swing",           "Swing",           "",      0.0f,   0.3f,   0.0f, CurveE::LINEAR },
-    { "acid_amount",     "Acid Amount",     "",      0.0f,   1.0f,   0.6f, CurveE::LINEAR },
-    { "lead_amount",     "Lead Amount",     "",      0.0f,   1.0f,   0.5f, CurveE::LINEAR },
-    { "arp_amount",      "Arp Amount",      "",      0.0f,   1.0f,   0.5f, CurveE::LINEAR },
-    { "melody_variation","Melody Variation","",      0.0f,   1.0f,   0.5f, CurveE::LINEAR },
-    { "melody_temperature","Melody Temperature","",  0.5f,   2.0f,   1.0f, CurveE::LOG },
-    { "squelch_chance",  "Squelch Chance",  "",      0.0f,   1.0f,   0.3f, CurveE::LINEAR },
-    { "bass_follows_chords","Bass Follows Chords","", 0.0f,  1.0f,   0.0f, CurveE::TOGGLE },
-    { "pad_amount",      "Pad Amount",      "",      0.0f,   1.0f,   0.7f, CurveE::LINEAR },
-    { "sfx_amount",      "SFX Amount",      "",      0.0f,   1.0f,   0.7f, CurveE::LINEAR },
-    { "gate_chance",     "Gate Chance",     "",      0.0f,   1.0f,  0.35f, CurveE::LINEAR },
+    { "tempo_range", "Tempo Range", "BPM", 0.0f, 10.0f, 1.0f, CurveE::LINEAR },
+    { "level_match", "Level Match", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
+    { "perc_density", "Perc Density", "", 0.0f, 1.0f, 0.6f, CurveE::LINEAR },
+    { "perc_variation", "Perc Variation", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "swing", "Swing", "", 0.0f, 0.3f, 0.0f, CurveE::LINEAR },
+    { "acid_amount", "Acid Amount", "", 0.0f, 1.0f, 0.6f, CurveE::LINEAR },
+    { "lead_amount", "Lead Amount", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "arp_amount", "Arp Amount", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "melody_variation", "Melody Variation", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "melody_temperature", "Melody Temperature", "", 0.5f, 2.0f, 1.0f, CurveE::LOG },
+    { "squelch_chance", "Squelch Chance", "", 0.0f, 1.0f, 0.3f, CurveE::LINEAR },
+    { "bass_follows_chords", "Bass Follows Chords", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "pad_amount", "Pad Amount", "", 0.0f, 1.0f, 0.7f, CurveE::LINEAR },
+    { "sfx_amount", "SFX Amount", "", 0.0f, 1.0f, 0.7f, CurveE::LINEAR },
+    { "gate_chance", "Gate Chance", "", 0.0f, 1.0f, 0.35f, CurveE::LINEAR },
     // Phase 5: the style profile, the dramaturgy of the set and the time base of its energy arc.
-    { "style",           "Start Style",     "",      0.0f,   4.0f,   1.0f, CurveE::CHOICE, StyleNames },
-    { "arc",             "Energy Arc",      "",      0.0f,   4.0f,   4.0f, CurveE::CHOICE, ArcNames },
-    { "style_tempo",     "Style Tempo",     "",      0.0f,   1.0f,   0.0f, CurveE::TOGGLE },
-    { "set_minutes",     "Set Length",      "min",  10.0f, 300.0f,  60.0f, CurveE::INT },
+    { "style", "Start Style", "", 0.0f, 4.0f, 1.0f, CurveE::CHOICE, StyleNames },
+    { "arc", "Energy Arc", "", 0.0f, 4.0f, 4.0f, CurveE::CHOICE, ArcNames },
+    { "style_tempo", "Style Tempo", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "set_minutes", "Set Length", "min", 10.0f, 300.0f, 60.0f, CurveE::INT },
     // Phase 8: stage A or stage B behind the melodic lines.
-    { "melody_model",    "Melody Model",    "",      0.0f,   1.0f,   0.0f, CurveE::CHOICE, MelodyModelNames },
+    { "melody_model", "Melody Model", "", 0.0f, 1.0f, 0.0f, CurveE::CHOICE, MelodyModelNames },
     // Phase 8, bass round: the pattern families or the learned fourth role behind the bass pitches.
-    { "bass_model",      "Bass Model",      "",      0.0f,   1.0f,   0.0f, CurveE::CHOICE, BassModelNames },
+    { "bass_model", "Bass Model", "", 0.0f, 1.0f, 0.0f, CurveE::CHOICE, BassModelNames },
     // 16.09.2026: modal interchange. A section may borrow another mode over the track's tonic pedal
     // -- Dorian in the groove, Phrygian in the drive, Phrygian dominant at the peak (Form.h). On by
     // default because that is what the genre does; the bass does not move with it either way.
-    { "modal_interchange","Modal Interchange","",     0.0f,   1.0f,   1.0f, CurveE::TOGGLE },
+    { "modal_interchange", "Modal Interchange", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
     // 16.09.2026, bass rhythm round: the pattern families or the corpus onset model behind the bass
     // *rhythm*. Appended, so no parameter above it moves; Pattern is the default.
-    { "bass_rhythm",     "Bass Rhythm",     "",      0.0f,   1.0f,   0.0f, CurveE::CHOICE, BassRhythmNames },
+    { "bass_rhythm", "Bass Rhythm", "", 0.0f, 1.0f, 0.0f, CurveE::CHOICE, BassRhythmNames },
     // 19.09.2026, round "voices": the three new voices' share of the tracks (like lead_amount), and two
     // density knobs of the psychedelic layer the round of the same day could not add (it did not own the
     // composer): 1 is the density that round calibrated, 0 removes the voices or the bed, 2 doubles them.
     // 1.0 since 19.09.2026 (round "arrangement"): the user's drop 2 has "lead 1 and lead 2 in call and
     // response", so every track that has a lead has its counter; it plays in drop 2 only (Form.cpp). At 0.6
     // four tracks in seventeen of the listening seed had both.
-    { "counter_amount",  "Counter Amount",  "",      0.0f,   1.0f,   1.0f, CurveE::LINEAR },
-    { "stab_amount",     "Stab Amount",     "",      0.0f,   1.0f,   0.5f, CurveE::LINEAR },
-    { "drone_amount",    "Drone Amount",    "",      0.0f,   1.0f,   0.6f, CurveE::LINEAR },
-    { "voice_density",   "Voice Density",   "x",     0.0f,   2.0f,   1.0f, CurveE::LINEAR },
-    { "bed_density",     "Bed Density",     "x",     0.0f,   2.0f,   1.0f, CurveE::LINEAR },
+    { "counter_amount", "Counter Amount", "", 0.0f, 1.0f, 1.0f, CurveE::LINEAR },
+    { "stab_amount", "Stab Amount", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "drone_amount", "Drone Amount", "", 0.0f, 1.0f, 0.6f, CurveE::LINEAR },
+    { "voice_density", "Voice Density", "x", 0.0f, 2.0f, 1.0f, CurveE::LINEAR },
+    { "bed_density", "Bed Density", "x", 0.0f, 2.0f, 1.0f, CurveE::LINEAR },
     // The rows below stand in the order of the compose enum (Params.h), which is what indexes them. On
     // 22.09.2026 style_mix was appended *behind* presence_match while the enum put StyleMix before it, so
     // compose::PresenceMatch read the style_mix row (two toggles at 1: unnoticed) and, when two choice rows
@@ -126,59 +131,60 @@ const ParamDesc ComposeParams[compose::COUNT] = {
     // (testPresence: 8 of 8 tracks outside the band left alone). testParams now checks key against index.
     // 22.09.2026: one style for a whole night was the user's first complaint about the sets ("langweilig,
     // wenn immer alles im selben Stil ist"). On, the style walks from track to track (Composer.cpp).
-    { "style_mix",       "Style Mix",       "",      0.0f,   1.0f,   1.0f, CurveE::TOGGLE },
+    { "style_mix", "Style Mix", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
     // 19.09.2026, round "polish" (ComposerLevels.cpp, matchPresence): On brings each track's presence band into
     // a band around the reference recordings' median by the level of its lines; Off plays them as matched.
-    { "presence_match",  "Presence Match",  "",      0.0f,   1.0f,   1.0f, CurveE::TOGGLE },
+    { "presence_match", "Presence Match", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
     // 22.09.2026, round "Lead" (the user: lead_density and pitch_entropy as knobs, "Auto" = the style):
     // how many onsets a lead bar carries, and how far the pitch draws may stray from the model's
     // and the rules' favourites (MelodyLead.cpp, makeLead).
-    { "lead_density",    "Lead Density",    "",      0.0f,   3.0f,   0.0f, CurveE::CHOICE, LeadDensityNames },
-    { "pitch_entropy",   "Pitch Entropy",   "",      0.0f,   3.0f,   0.0f, CurveE::CHOICE, PitchEntropyNames },
+    { "lead_density", "Lead Density", "", 0.0f, 3.0f, 0.0f, CurveE::CHOICE, LeadDensityNames },
+    { "pitch_entropy", "Pitch Entropy", "", 0.0f, 3.0f, 0.0f, CurveE::CHOICE, PitchEntropyNames },
     // 23.09.2026, round "Counter": the counter-lead's mode (Form.h, CounterMode; MelodyLead.cpp, makeCounter). At the end,
     // in the enum's order (see the note above the style_mix row).
-    { "counter_mode",    "Counter Mode",    "",      0.0f,   4.0f,   0.0f, CurveE::CHOICE, CounterModeNames },
+    { "counter_mode", "Counter Mode", "", 0.0f, 4.0f, 0.0f, CurveE::CHOICE, CounterModeNames },
     // 23.09.2026, round "Hoerbarkeit" (ComposerLevels.cpp, matchAudibility): at the end, in the enum's order.
-    { "audibility_match", "Audibility Match", "",    0.0f,   1.0f,   1.0f, CurveE::TOGGLE },
-    { "sound_presets", "Sound Presets", "",  0.0f,  1.0f,  1.0f, CurveE::TOGGLE },
+    { "audibility_match", "Audibility Match", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
+    { "sound_presets", "Sound Presets", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
     // 27.09.2026 (FormSfx.cpp, placeField): at the end, in the enum's order.
-    { "field_density", "Field Density", "x",  0.0f,  2.0f,  1.0f, CurveE::LINEAR },
+    { "field_density", "Field Density", "x", 0.0f, 2.0f, 1.0f, CurveE::LINEAR },
 };
 
-const char* const PercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };   ///< perc.engine (PercEngine)
-const char* const ModeSetNames[] = { "Membrane", "Bar", "Harmonic" };   ///< perc.modes: the modal engine's mode sets
-const char* const PercFilterNames[] = { "Low Pass", "Band Pass", "High Pass" };   ///< perc.filter: the lane filter's output
+const char *const PercEngineNames[] = { "Noise", "Metal", "Modal", "Tone", "FM" };   ///< perc.engine (PercEngine)
+const char *const ModeSetNames[] = { "Membrane", "Bar", "Harmonic" };   ///< perc.modes: the modal engine's mode sets
+const char *const PercFilterNames[] = { "Low Pass", "Band Pass",
+                                        "High Pass" };   ///< perc.filter: the lane filter's output
 
 /** @brief A lane of the kit. */
 const ParamDesc PercParams[perc::COUNT] = {
-    { "active",        "Active",        "",      0.0f,     1.0f,    1.0f, CurveE::TOGGLE },
-    { "role",          "Role",          "",      0.0f,    11.0f,    0.0f, CurveE::CHOICE, PercRoleNames },
-    { "engine",        "Engine",        "",      0.0f,     4.0f,    0.0f, CurveE::CHOICE, PercEngineNames },
-    { "pitch",         "Pitch",         "Hz",   40.0f, 12000.0f,  400.0f, CurveE::LOG },
-    { "pitch_amount",  "Pitch Amount",  "x",     1.0f,    16.0f,    1.0f, CurveE::LOG },
-    { "pitch_decay",   "Pitch Decay",   "ms",    0.5f,   300.0f,   10.0f, CurveE::LOG },
-    { "fm_ratio",      "FM Ratio",      "",     0.25f,     8.0f,   1.41f, CurveE::LINEAR },
-    { "fm_index",      "FM Index",      "",      0.0f,     8.0f,    0.0f, CurveE::LINEAR },
-    { "mode_set",      "Modes",         "",      0.0f,     2.0f,    0.0f, CurveE::CHOICE, ModeSetNames },
-    { "mode_damp",     "Mode Damping",  "",      0.0f,     1.0f,    0.5f, CurveE::LINEAR },
-    { "metal_scale",   "Metal Scale",   "x",    0.25f,     4.0f,    1.0f, CurveE::LOG },
-    { "noise",         "Noise",         "",      0.0f,     1.0f,    0.0f, CurveE::LINEAR },
-    { "noise_decay",   "Noise Decay",   "ms",    2.0f,  3000.0f,   60.0f, CurveE::LOG },
-    { "bursts",        "Bursts",        "",      1.0f,     6.0f,    1.0f, CurveE::INT },
-    { "burst_spacing", "Burst Spacing", "ms",    2.0f,    40.0f,   10.0f, CurveE::LINEAR },
-    { "decay",         "Decay",         "ms",    2.0f,  3000.0f,  120.0f, CurveE::LOG },
-    { "filter",        "Filter",        "",      0.0f,     2.0f,    2.0f, CurveE::CHOICE, PercFilterNames },
-    { "cutoff",        "Cutoff",        "Hz",  100.0f, 18000.0f, 8000.0f, CurveE::LOG },
-    { "resonance",     "Resonance",     "",      0.0f,     1.0f,    0.2f, CurveE::LINEAR },
+    { "active", "Active", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
+    { "role", "Role", "", 0.0f, 11.0f, 0.0f, CurveE::CHOICE, PercRoleNames },
+    { "engine", "Engine", "", 0.0f, 4.0f, 0.0f, CurveE::CHOICE, PercEngineNames },
+    { "pitch", "Pitch", "Hz", 40.0f, 12000.0f, 400.0f, CurveE::LOG },
+    { "pitch_amount", "Pitch Amount", "x", 1.0f, 16.0f, 1.0f, CurveE::LOG },
+    { "pitch_decay", "Pitch Decay", "ms", 0.5f, 300.0f, 10.0f, CurveE::LOG },
+    { "fm_ratio", "FM Ratio", "", 0.25f, 8.0f, 1.41f, CurveE::LINEAR },
+    { "fm_index", "FM Index", "", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "mode_set", "Modes", "", 0.0f, 2.0f, 0.0f, CurveE::CHOICE, ModeSetNames },
+    { "mode_damp", "Mode Damping", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "metal_scale", "Metal Scale", "x", 0.25f, 4.0f, 1.0f, CurveE::LOG },
+    { "noise", "Noise", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "noise_decay", "Noise Decay", "ms", 2.0f, 3000.0f, 60.0f, CurveE::LOG },
+    { "bursts", "Bursts", "", 1.0f, 6.0f, 1.0f, CurveE::INT },
+    { "burst_spacing", "Burst Spacing", "ms", 2.0f, 40.0f, 10.0f, CurveE::LINEAR },
+    { "decay", "Decay", "ms", 2.0f, 3000.0f, 120.0f, CurveE::LOG },
+    { "filter", "Filter", "", 0.0f, 2.0f, 2.0f, CurveE::CHOICE, PercFilterNames },
+    { "cutoff", "Cutoff", "Hz", 100.0f, 18000.0f, 8000.0f, CurveE::LOG },
+    { "resonance", "Resonance", "", 0.0f, 1.0f, 0.2f, CurveE::LINEAR },
     // Up to 8 kHz since 25.09.2026: a closed hat's low cut belongs at 5 kHz (the kit above), and the range stopped at 4.
-    { "low_cut",       "Low Cut",       "Hz",  150.0f,  8000.0f,  150.0f, CurveE::LOG },
-    { "drive",         "Drive",         "",      0.0f,     1.0f,    0.0f, CurveE::LINEAR },
-    { "level",         "Level",         "dB",  -36.0f,     6.0f,  -12.0f, CurveE::LINEAR },
-    { "pan",           "Pan",           "",     -1.0f,     1.0f,    0.0f, CurveE::LINEAR },
-    { "choke",         "Choke Group",   "",      0.0f,     4.0f,    0.0f, CurveE::INT },
-    { "shift",         "Shift",         "ms",  -10.0f,    10.0f,    0.0f, CurveE::LINEAR },
-    { "density",       "Density",       "",      0.0f,     1.0f,    0.5f, CurveE::LINEAR },
-    { "tune",          "Tune to Key",   "",      0.0f,     1.0f,    0.0f, CurveE::TOGGLE },
+    { "low_cut", "Low Cut", "Hz", 150.0f, 8000.0f, 150.0f, CurveE::LOG },
+    { "drive", "Drive", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "level", "Level", "dB", -36.0f, 6.0f, -12.0f, CurveE::LINEAR },
+    { "pan", "Pan", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "choke", "Choke Group", "", 0.0f, 4.0f, 0.0f, CurveE::INT },
+    { "shift", "Shift", "ms", -10.0f, 10.0f, 0.0f, CurveE::LINEAR },
+    { "density", "Density", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "tune", "Tune to Key", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     // 16.09.2026, arrangement dynamics. Appended in the order of the perc:: enum, nothing reordered:
     // the indices above sit in saved presets and in the plugin's state.
     // pan_depth defaults to 0 in the table and is set per lane in DefaultKit below, so that a lane
@@ -186,9 +192,9 @@ const ParamDesc PercParams[perc::COUNT] = {
     // sixteenths of a bar, and the reason is arithmetic rather than taste (Perc.h): a lane on the
     // sixteenth grid then samples its own swing at three phases 120 degrees apart, which carry the
     // first and the second moment of the sinusoid exactly, so the kit's measured width does not move.
-    { "pan_depth",     "Pan Depth",     "",      0.0f,     1.0f,    0.0f, CurveE::LINEAR },
-    { "pan_bars",      "Pan Period",    "bars",  0.0625f, 16.0f,  0.1875f, CurveE::LOG },
-    { "cut_track",     "Cut Tracks Pitch","",    0.0f,     2.0f,    0.0f, CurveE::LINEAR },
+    { "pan_depth", "Pan Depth", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "pan_bars", "Pan Period", "bars", 0.0625f, 16.0f, 0.1875f, CurveE::LOG },
+    { "cut_track", "Cut Tracks Pitch", "", 0.0f, 2.0f, 0.0f, CurveE::LINEAR },
 };
 
 /**
@@ -255,7 +261,7 @@ const ParamDesc PercParams[perc::COUNT] = {
 // recordings' median, testPresence, 2.5), and the shaker 2 dB -- the auto-pan swings the hats against shaker, ride
 // and rim (RolePanGroup, Perc.cpp), and with the ride down that side had lost the weight to hold them once the
 // shaker was corrected down (testArrangeDynamics: 0.78 dB of reduction left, 1 wanted; 1.07 now).
-const char* const DefaultKit =
+const char *const DefaultKit =
     "perc1.role=Closed Hat;perc1.engine=Metal;perc1.decay=45;perc1.noise=1;perc1.noise_decay=35;perc1.filter=Low Pass;"
     "perc1.cutoff=12000;perc1.low_cut=3000;perc1.resonance=0.05;perc1.level=1.5;perc1.pan=0.45;perc1.pan_depth=1;perc1.choke=1;perc1.density=0.6\n"
     "perc2.role=Open Hat;perc2.engine=Metal;perc2.decay=260;perc2.noise=0.9;perc2.noise_decay=220;perc2.filter=Low Pass;"
@@ -287,24 +293,24 @@ const char* const DefaultKit =
 /// heavier bass now shares the 40 .. 140 Hz band the mix is calibrated against (testMixBalance), and the
 /// bass-to-kick ratio lands on the references' (Tools/ref_bass.py, "b/k": -4.2 against a median -4.7).
 const ParamDesc KickParams[kick::COUNT] = {
-    { "engine",      "Engine",       "",     0.0f,     1.0f,    0.0f, CurveE::CHOICE, KickEngineNames },
-    { "tune",        "Tune",         "",     0.0f,     1.0f,    1.0f, CurveE::CHOICE, KickTuneNames },
-    { "pitch_end",   "Pitch End",    "Hz",  30.0f,   120.0f,   50.0f, CurveE::LOG },
-    { "pitch_start", "Pitch Start",  "Hz",  60.0f,  1500.0f,  330.0f, CurveE::LOG },
-    { "pitch_decay", "Body Decay",   "ms",   5.0f,   150.0f,   13.0f, CurveE::LOG },
-    { "punch_decay", "Punch Decay",  "ms",   0.5f,    20.0f,    4.0f, CurveE::LOG },
-    { "punch",       "Punch",        "",     0.0f,     1.0f,    0.5f, CurveE::LINEAR },
-    { "amp_attack",  "Attack",       "ms",   0.0f,    10.0f,    0.2f, CurveE::LINEAR },
-    { "amp_hold",    "Hold",         "ms",   0.0f,   150.0f,   12.0f, CurveE::LINEAR },
-    { "amp_decay",   "Decay",        "ms",  20.0f,  1500.0f,  240.0f, CurveE::LOG },
-    { "drive",       "Drive",        "",     0.0f,     1.0f,   0.30f, CurveE::LINEAR },
-    { "clip",        "Clip",         "",     0.0f,     1.0f,    0.0f, CurveE::CHOICE, KickClipNames },
-    { "click_level", "Click",        "",     0.0f,     1.0f,    0.5f, CurveE::LINEAR },
-    { "click_tone",  "Click Tone",   "Hz", 500.0f, 12000.0f, 4000.0f, CurveE::LOG },
-    { "click_decay", "Click Decay",  "ms",   0.5f,    30.0f,    3.0f, CurveE::LOG },
-    { "tone",        "Tone",         "Hz", 200.0f, 20000.0f, 9000.0f, CurveE::LOG },
-    { "level",       "Level",        "dB", -36.0f,     6.0f,   -6.0f, CurveE::LINEAR },
-    { "tail_limit",  "Tail Limit",   "dB", -60.0f,     0.0f,  -15.0f, CurveE::LINEAR },
+    { "engine", "Engine", "", 0.0f, 1.0f, 0.0f, CurveE::CHOICE, KickEngineNames },
+    { "tune", "Tune", "", 0.0f, 1.0f, 1.0f, CurveE::CHOICE, KickTuneNames },
+    { "pitch_end", "Pitch End", "Hz", 30.0f, 120.0f, 50.0f, CurveE::LOG },
+    { "pitch_start", "Pitch Start", "Hz", 60.0f, 1500.0f, 330.0f, CurveE::LOG },
+    { "pitch_decay", "Body Decay", "ms", 5.0f, 150.0f, 13.0f, CurveE::LOG },
+    { "punch_decay", "Punch Decay", "ms", 0.5f, 20.0f, 4.0f, CurveE::LOG },
+    { "punch", "Punch", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "amp_attack", "Attack", "ms", 0.0f, 10.0f, 0.2f, CurveE::LINEAR },
+    { "amp_hold", "Hold", "ms", 0.0f, 150.0f, 12.0f, CurveE::LINEAR },
+    { "amp_decay", "Decay", "ms", 20.0f, 1500.0f, 240.0f, CurveE::LOG },
+    { "drive", "Drive", "", 0.0f, 1.0f, 0.30f, CurveE::LINEAR },
+    { "clip", "Clip", "", 0.0f, 1.0f, 0.0f, CurveE::CHOICE, KickClipNames },
+    { "click_level", "Click", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "click_tone", "Click Tone", "Hz", 500.0f, 12000.0f, 4000.0f, CurveE::LOG },
+    { "click_decay", "Click Decay", "ms", 0.5f, 30.0f, 3.0f, CurveE::LOG },
+    { "tone", "Tone", "Hz", 200.0f, 20000.0f, 9000.0f, CurveE::LOG },
+    { "level", "Level", "dB", -36.0f, 6.0f, -6.0f, CurveE::LINEAR },
+    { "tail_limit", "Tail Limit", "dB", -60.0f, 0.0f, -15.0f, CurveE::LINEAR },
 };
 
 /// 19.09.2026 (round "lowend-acid"): calibrated against Tools/ref_bass.py (24 reference recordings, the
@@ -314,125 +320,139 @@ const ParamDesc KickParams[kick::COUNT] = {
 /// -9.8; the bass before read -21.6). Level -5 -> -3 dB: bass against kick, see the kick table. Split
 /// stays 2 x f0 with a steeper filter (Bass.h).
 /// 26.09.2026: the filter models' names (Params.h, VoiceFilterModels), before the first table that uses them.
-const char* const PolyFilterModelNames[VoiceFilterModels] = { "State Variable", "Moog Ladder", "Prophet (SSM2040)", "Juno (IR3109)",
-                                                                "Oberheim SEM", "Xpander", "Diode Ladder", "Korg35 (MS-20)",
-                                                                "Polivoks", "Wasp" };
+const char *const PolyFilterModelNames[VoiceFilterModels] = {
+    "State Variable", "Moog Ladder",  "Prophet (SSM2040)", "Juno (IR3109)", "Oberheim SEM",
+    "Xpander",        "Diode Ladder", "Korg35 (MS-20)",    "Polivoks",      "Wasp"
+};
 /** @brief bass.filter_model: the bass ladder, then the filter models */
-const char* const BassFilterModelNames[VoiceFilterModels] = { "Bass Ladder", "Moog Ladder", "Prophet (SSM2040)", "Juno (IR3109)",
-                                                                "Oberheim SEM", "Xpander", "Diode Ladder", "Korg35 (MS-20)",
-                                                                "Polivoks", "Wasp" };
+const char *const BassFilterModelNames[VoiceFilterModels] = { "Bass Ladder",   "Moog Ladder",    "Prophet (SSM2040)",
+                                                              "Juno (IR3109)", "Oberheim SEM",   "Xpander",
+                                                              "Diode Ladder",  "Korg35 (MS-20)", "Polivoks",
+                                                              "Wasp" };
 // 26.09.2026: the modulation block's choices (Modulation.h), defined outside the anonymous namespace: Params.h names them.
-}  // namespace
-const char* const LfoShapeNames[] = { "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Sample & Hold", "Smooth Random" };
-const char* const LfoSyncNames[] = { "Free", "4 Bars", "2 Bars", "1 Bar", "1/2", "1/4", "1/8", "1/16", "1/4 T", "1/8 T" };
-const char* const ModSourceNames[] = { "Off", "LFO 1", "LFO 2", "LFO 3", "LFO 4", "Mod Env", "Filter Env", "Velocity", "Key", "Random" };
-const char* const ModDestNames[] = { "Off", "Pitch", "Osc 2 Pitch", "Pulse Width", "Table Position", "FM Index", "Cutoff",
-                                      "Resonance", "Filter Mode", "Level", "Pan" };
-const char* const BassModDestNames[] = { "Off", "Pulse Width", "Cutoff", "Resonance", "Filter Mode", "Level" };
-const int BassModDestMap[BassModDests] = { 0, 3, 6, 7, 8, 9 };   // ModDest: Off, PulseWidth, Cutoff, Resonance, FilterMode, Level
-const char* const AcidModDestNames[] = { "Off", "Pitch", "Cutoff", "Resonance", "Level", "Pan" };
+}   // namespace
+const char *const LfoShapeNames[] = { "Sine",   "Triangle",      "Saw Up",       "Saw Down",
+                                      "Square", "Sample & Hold", "Smooth Random" };
+const char *const LfoSyncNames[] = {
+    "Free", "4 Bars", "2 Bars", "1 Bar", "1/2", "1/4", "1/8", "1/16", "1/4 T", "1/8 T"
+};
+const char *const ModSourceNames[] = { "Off",     "LFO 1",      "LFO 2",    "LFO 3", "LFO 4",
+                                       "Mod Env", "Filter Env", "Velocity", "Key",   "Random" };
+const char *const ModDestNames[] = { "Off",      "Pitch",  "Osc 2 Pitch", "Pulse Width", "Table Position",
+                                     "FM Index", "Cutoff", "Resonance",   "Filter Mode", "Level",
+                                     "Pan" };
+const char *const BassModDestNames[] = { "Off", "Pulse Width", "Cutoff", "Resonance", "Filter Mode", "Level" };
+const int         BassModDestMap[BassModDests] = {
+    0, 3, 6, 7, 8, 9
+};   // ModDest: Off, PulseWidth, Cutoff, Resonance, FilterMode, Level
+const char *const AcidModDestNames[] = { "Off", "Pitch", "Cutoff", "Resonance", "Level", "Pan" };
 const int AcidModDestMap[AcidModDests] = { 0, 1, 6, 7, 9, 10 };   // ModDest: Off, Pitch, Cutoff, Resonance, Level, Pan
-namespace {
+namespace
+{
 /** @brief The bass. */
 const ParamDesc BassParams[bass::COUNT] = {
-    { "wave",          "Wave",          "",      0.0f,     1.0f,  0.15f, CurveE::LINEAR },
-    { "pulse_width",   "Pulse Width",   "",     0.05f,    0.95f,   0.5f, CurveE::LINEAR },
-    { "sub",           "Sub",           "",      0.0f,     1.0f,   0.3f, CurveE::LINEAR },
-    { "sub_mode",      "Sub Mode",      "",      0.0f,     1.0f,   1.0f, CurveE::CHOICE, SubModeNames },
-    { "split_ratio",   "Split",         "x f0",  1.2f,     3.0f,   2.0f, CurveE::LINEAR },
-    { "kick_lock",     "Kick Lock",     "",      0.0f,     2.0f,   2.0f, CurveE::CHOICE, KickLockNames },
-    { "retrigger",     "Retrigger",     "",      0.0f,     1.0f,   1.0f, CurveE::TOGGLE },
-    { "start_phase",   "Start Phase",   "",      0.0f,     1.0f,   0.5f, CurveE::LINEAR },
-    { "cutoff",        "Cutoff",        "Hz",   20.0f, 10000.0f, 240.0f, CurveE::LOG },
-    { "resonance",     "Resonance",     "",      0.0f,     1.0f,   0.3f, CurveE::LINEAR },
-    { "env_amount",    "Env Amount",    "oct",   0.0f,     8.0f,   4.0f, CurveE::LINEAR },
-    { "filter_decay",  "Filter Decay",  "ms",    3.0f,  1000.0f,  75.0f, CurveE::LOG },
-    { "key_track",     "Key Track",     "",      0.0f,     1.0f,   0.6f, CurveE::LINEAR },
-    { "vel_to_cutoff", "Vel > Cutoff",  "",      0.0f,     1.0f,  0.25f, CurveE::LINEAR },
-    { "drive",         "Drive",         "",      0.0f,     1.0f,   0.3f, CurveE::LINEAR },
-    { "amp_attack",    "Attack",        "ms",    0.1f,    50.0f,   0.8f, CurveE::LOG },
-    { "amp_decay",     "Decay",         "ms",    5.0f,  2000.0f, 180.0f, CurveE::LOG },
-    { "amp_sustain",   "Sustain",       "",      0.0f,     1.0f,  0.55f, CurveE::LINEAR },
-    { "amp_release",   "Release",       "ms",    1.0f,   500.0f,  10.0f, CurveE::LOG },
+    { "wave", "Wave", "", 0.0f, 1.0f, 0.15f, CurveE::LINEAR },
+    { "pulse_width", "Pulse Width", "", 0.05f, 0.95f, 0.5f, CurveE::LINEAR },
+    { "sub", "Sub", "", 0.0f, 1.0f, 0.3f, CurveE::LINEAR },
+    { "sub_mode", "Sub Mode", "", 0.0f, 1.0f, 1.0f, CurveE::CHOICE, SubModeNames },
+    { "split_ratio", "Split", "x f0", 1.2f, 3.0f, 2.0f, CurveE::LINEAR },
+    { "kick_lock", "Kick Lock", "", 0.0f, 2.0f, 2.0f, CurveE::CHOICE, KickLockNames },
+    { "retrigger", "Retrigger", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
+    { "start_phase", "Start Phase", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "cutoff", "Cutoff", "Hz", 20.0f, 10000.0f, 240.0f, CurveE::LOG },
+    { "resonance", "Resonance", "", 0.0f, 1.0f, 0.3f, CurveE::LINEAR },
+    { "env_amount", "Env Amount", "oct", 0.0f, 8.0f, 4.0f, CurveE::LINEAR },
+    { "filter_decay", "Filter Decay", "ms", 3.0f, 1000.0f, 75.0f, CurveE::LOG },
+    { "key_track", "Key Track", "", 0.0f, 1.0f, 0.6f, CurveE::LINEAR },
+    { "vel_to_cutoff", "Vel > Cutoff", "", 0.0f, 1.0f, 0.25f, CurveE::LINEAR },
+    { "drive", "Drive", "", 0.0f, 1.0f, 0.3f, CurveE::LINEAR },
+    { "amp_attack", "Attack", "ms", 0.1f, 50.0f, 0.8f, CurveE::LOG },
+    { "amp_decay", "Decay", "ms", 5.0f, 2000.0f, 180.0f, CurveE::LOG },
+    { "amp_sustain", "Sustain", "", 0.0f, 1.0f, 0.55f, CurveE::LINEAR },
+    { "amp_release", "Release", "ms", 1.0f, 500.0f, 10.0f, CurveE::LOG },
     // 25.09.2026, the mix guide: the bass gives way to the kick by 2 .. 4 dB (0.37 is -4 dB; it was -6).
-    { "duck_depth",    "Duck Depth",    "",      0.0f,     1.0f,   0.37f, CurveE::LINEAR },
-    { "duck_hold",     "Duck Hold",     "ms",    0.0f,   200.0f,  25.0f, CurveE::LINEAR },
-    { "duck_release",  "Duck Release",  "ms",    5.0f,   500.0f,  60.0f, CurveE::LOG },
-    { "level",         "Level",         "dB",  -36.0f,     6.0f,  -3.0f, CurveE::LINEAR },
+    { "duck_depth", "Duck Depth", "", 0.0f, 1.0f, 0.37f, CurveE::LINEAR },
+    { "duck_hold", "Duck Hold", "ms", 0.0f, 200.0f, 25.0f, CurveE::LINEAR },
+    { "duck_release", "Duck Release", "ms", 5.0f, 500.0f, 60.0f, CurveE::LOG },
+    { "level", "Level", "dB", -36.0f, 6.0f, -3.0f, CurveE::LINEAR },
     // Appended 19.09.2026 (round "lowend-acid"): the bite layer, a saturated copy of the oscillator
     // low-passed around 400 .. 800 Hz with its own envelope (Bass.h, "Bite"). The envelope opens the
     // cutoff three octaves at the onset and closes it within 90 ms: the pluck of the roll.
-    { "bite",           "Bite",          "",      0.0f,     1.0f,   0.5f, CurveE::LINEAR },
-    { "bite_cutoff",    "Bite Cutoff",   "Hz",  100.0f,  4000.0f, 500.0f, CurveE::LOG },
-    { "bite_env",       "Bite Env",      "oct",   0.0f,     5.0f,   3.0f, CurveE::LINEAR },
-    { "bite_decay",     "Bite Decay",    "ms",    5.0f,  1000.0f,  90.0f, CurveE::LOG },
-    { "bite_drive",     "Bite Drive",    "",      0.0f,     1.0f,   0.5f, CurveE::LINEAR },
-    { "bite_resonance", "Bite Reso",     "",      0.0f,     1.0f,   0.2f, CurveE::LINEAR },
+    { "bite", "Bite", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "bite_cutoff", "Bite Cutoff", "Hz", 100.0f, 4000.0f, 500.0f, CurveE::LOG },
+    { "bite_env", "Bite Env", "oct", 0.0f, 5.0f, 3.0f, CurveE::LINEAR },
+    { "bite_decay", "Bite Decay", "ms", 5.0f, 1000.0f, 90.0f, CurveE::LOG },
+    { "bite_drive", "Bite Drive", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "bite_resonance", "Bite Reso", "", 0.0f, 1.0f, 0.2f, CurveE::LINEAR },
     // The octave of the sub: a sine at twice the fundamental, phase-locked to it, in the sub's level
     // units. It carries the 60 .. 120 Hz weight the references have without a filter near the
     // fundamental (Bass.h, "Sub octave").
-    { "sub_octave",     "Sub Octave",    "",      0.0f,     1.0f,   0.5f, CurveE::LINEAR },
-    { "filter_model",   "Filter Model",  "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, BassFilterModelNames },
-    { "filter_mode",    "Filter Mode",   "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
+    { "sub_octave", "Sub Octave", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "filter_model", "Filter Model", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, BassFilterModelNames },
+    { "filter_mode", "Filter Mode", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
     // 26.09.2026, the modulation block (Params.h, Modulation.h).
-    { "filt_attack",    "Filter Attack",  "ms",    0.1f,  4000.0f,   0.1f, CurveE::LOG },
-    { "filt_sustain",   "Filter Sustain", "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "filt_release",   "Filter Release", "ms",    5.0f,  8000.0f, 300.0f, CurveE::LOG },
-    { "menv_attack",    "Mod Attack",     "ms",    0.1f,  8000.0f,  10.0f, CurveE::LOG },
-    { "menv_decay",     "Mod Decay",      "ms",    5.0f, 12000.0f, 800.0f, CurveE::LOG },
-    { "menv_sustain",   "Mod Sustain",    "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "menv_release",   "Mod Release",    "ms",    5.0f, 12000.0f, 400.0f, CurveE::LOG },
-    { "lfo1_rate",     "LFO 1 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo1_shape",    "LFO 1 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo1_sync",     "LFO 1 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo1_retrig",   "LFO 1 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo1_fade",     "LFO 1 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "lfo2_rate",     "LFO 2 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo2_shape",    "LFO 2 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo2_sync",     "LFO 2 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo2_retrig",   "LFO 2 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo2_fade",     "LFO 2 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "lfo3_rate",     "LFO 3 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo3_shape",    "LFO 3 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo3_sync",     "LFO 3 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo3_retrig",   "LFO 3 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo3_fade",     "LFO 3 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "lfo4_rate",     "LFO 4 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo4_shape",    "LFO 4 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo4_sync",     "LFO 4 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo4_retrig",   "LFO 4 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo4_fade",     "LFO 4 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "mx1_src",       "Mod 1 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx1_dst",       "Mod 1 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx1_amount",    "Mod 1 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx2_src",       "Mod 2 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx2_dst",       "Mod 2 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx2_amount",    "Mod 2 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx3_src",       "Mod 3 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx3_dst",       "Mod 3 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx3_amount",    "Mod 3 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx4_src",       "Mod 4 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx4_dst",       "Mod 4 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx4_amount",    "Mod 4 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx5_src",       "Mod 5 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx5_dst",       "Mod 5 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx5_amount",    "Mod 5 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx6_src",       "Mod 6 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx6_dst",       "Mod 6 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx6_amount",    "Mod 6 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx7_src",       "Mod 7 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx7_dst",       "Mod 7 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx7_amount",    "Mod 7 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx8_src",       "Mod 8 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx8_dst",       "Mod 8 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx8_amount",    "Mod 8 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
+    { "filt_attack", "Filter Attack", "ms", 0.1f, 4000.0f, 0.1f, CurveE::LOG },
+    { "filt_sustain", "Filter Sustain", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "filt_release", "Filter Release", "ms", 5.0f, 8000.0f, 300.0f, CurveE::LOG },
+    { "menv_attack", "Mod Attack", "ms", 0.1f, 8000.0f, 10.0f, CurveE::LOG },
+    { "menv_decay", "Mod Decay", "ms", 5.0f, 12000.0f, 800.0f, CurveE::LOG },
+    { "menv_sustain", "Mod Sustain", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "menv_release", "Mod Release", "ms", 5.0f, 12000.0f, 400.0f, CurveE::LOG },
+    { "lfo1_rate", "LFO 1 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo1_shape", "LFO 1 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo1_sync", "LFO 1 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo1_retrig", "LFO 1 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo1_fade", "LFO 1 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "lfo2_rate", "LFO 2 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo2_shape", "LFO 2 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo2_sync", "LFO 2 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo2_retrig", "LFO 2 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo2_fade", "LFO 2 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "lfo3_rate", "LFO 3 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo3_shape", "LFO 3 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo3_sync", "LFO 3 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo3_retrig", "LFO 3 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo3_fade", "LFO 3 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "lfo4_rate", "LFO 4 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo4_shape", "LFO 4 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo4_sync", "LFO 4 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo4_retrig", "LFO 4 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo4_fade", "LFO 4 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "mx1_src", "Mod 1 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx1_dst", "Mod 1 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx1_amount", "Mod 1 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx2_src", "Mod 2 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx2_dst", "Mod 2 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx2_amount", "Mod 2 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx3_src", "Mod 3 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx3_dst", "Mod 3 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx3_amount", "Mod 3 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx4_src", "Mod 4 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx4_dst", "Mod 4 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx4_amount", "Mod 4 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx5_src", "Mod 5 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx5_dst", "Mod 5 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx5_amount", "Mod 5 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx6_src", "Mod 6 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx6_dst", "Mod 6 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx6_amount", "Mod 6 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx7_src", "Mod 7 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx7_dst", "Mod 7 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx7_amount", "Mod 7 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx8_src", "Mod 8 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx8_dst", "Mod 8 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx8_amount", "Mod 8 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
 };
 
-const char* const DelayTimeNames[] = { "1/16", "1/8", "3/16", "1/4", "3/8", "1/2" };   ///< the tempo delay's times, in notes
-const char* const PolyOscNames[] = { "Supersaw", "VA", "FM", "Wavetable" };   ///< poly.osc: the first oscillator's engine
-const char* const PolyOsc2Names[] = { "Off", "Supersaw", "VA", "FM", "Wavetable" };   ///< poly.osc2: the second oscillator's engine, or none
+const char *const DelayTimeNames[] = {
+    "1/16", "1/8", "3/16", "1/4", "3/8", "1/2"
+};   ///< the tempo delay's times, in notes
+const char *const PolyOscNames[] = { "Supersaw", "VA", "FM",
+                                     "Wavetable" };   ///< poly.osc: the first oscillator's engine
+const char *const PolyOsc2Names[] = { "Off", "Supersaw", "VA", "FM",
+                                      "Wavetable" };   ///< poly.osc2: the second oscillator's engine, or none
 /** @brief poly.osc2_interval: the second oscillator's interval */
-const char* const PolyOsc2IntervalNames[] = { "-2 Oct", "-1 Oct", "-5th", "Unison", "+5th", "+1 Oct" };
+const char *const PolyOsc2IntervalNames[] = { "-2 Oct", "-1 Oct", "-5th", "Unison", "+5th", "+1 Oct" };
 /**
  * The `table` choice: the six tables written as spectra in code, then whatever library tables this
  * build ships (Core/include/phos/WaveTableList.inl, generated by Tools/wt_pack.py). The six come
@@ -444,22 +464,25 @@ const char* const PolyOsc2IntervalNames[] = { "-2 Oct", "-1 Oct", "-5th", "Uniso
  * @param[in] lane      the lane it suits
  * @param[in] fallback  the built-in table standing in
  */
-#define PHOS_WT(index, name, id, lane, fallback) name,
+#define PHOS_WT( index, name, id, lane, fallback ) name,
 /** @brief poly.table: the wavetables. */
-const char* const WaveTableNames[] = { "Classic", "Vocal", "Glass", "PWM", "Sync", "Formant Saw",
+const char *const WaveTableNames[] = {
+    "Classic", "Vocal", "Glass", "PWM", "Sync", "Formant Saw",
 #include "phos/WaveTableList.inl"
 };
 #undef PHOS_WT
-static_assert(sizeof(WaveTableNames) / sizeof(WaveTableNames[0]) == NumWaveTables,
-              "the table choice list and NumWaveTables have come apart");
+static_assert( sizeof( WaveTableNames ) / sizeof( WaveTableNames[0] ) == NumWaveTables,
+               "the table choice list and NumWaveTables have come apart" );
 /** @brief poly.gate_pattern: the trance gate's patterns */
-const char* const GatePatternNames[] = { "Sixteenths", "Eighths", "Rolling", "Gallop", "3-3-2", "Triplets" };
-const char* const PolyModNames[] = { "Off", "Flanger", "Phaser", "Comb" };   ///< poly.mod: the voice's modulation insert
-static_assert(sizeof(PolyModNames) / sizeof(PolyModNames[0]) == static_cast<int>(PolyModE::COUNT),
-              "one name per PolyMod");
-const char* const PolyFilterNames[] = { "Low Pass", "Band Pass", "High Pass", "Notch" };   ///< poly.filter_type: the filter's response
-static_assert(sizeof(PolyFilterNames) / sizeof(PolyFilterNames[0]) == static_cast<int>(PolyFilterE::COUNT),
-              "one name per PolyFilter");
+const char *const GatePatternNames[] = { "Sixteenths", "Eighths", "Rolling", "Gallop", "3-3-2", "Triplets" };
+const char *const PolyModNames[] = { "Off", "Flanger", "Phaser",
+                                     "Comb" };   ///< poly.mod: the voice's modulation insert
+static_assert( sizeof( PolyModNames ) / sizeof( PolyModNames[0] ) == static_cast<int>( PolyModE::COUNT ),
+               "one name per PolyMod" );
+const char *const PolyFilterNames[] = { "Low Pass", "Band Pass", "High Pass",
+                                        "Notch" };   ///< poly.filter_type: the filter's response
+static_assert( sizeof( PolyFilterNames ) / sizeof( PolyFilterNames[0] ) == static_cast<int>( PolyFilterE::COUNT ),
+               "one name per PolyFilter" );
 
 /// 18.09.2026 (round "mix-foundation"): the default voicing is the "driven" one of three candidates
 /// rendered for the user -- a 303 into a distortion pedal. Cutoff 650 -> 900 Hz, env 4 -> 3.5 oct,
@@ -468,242 +491,242 @@ static_assert(sizeof(PolyFilterNames) / sizeof(PolyFilterNames[0]) == static_cas
 /// distortion does not thicken the low mids, delay feedback 0.45 -> 0.5, hall 0.05 -> 0.08, and the
 /// level -9 -> -2.3 dB, which puts the acid alone at -20 LUFS in the first drop, level with the arp.
 const ParamDesc AcidParams[acid::COUNT] = {
-    { "wave",           "Wave",           "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "cutoff",         "Cutoff",         "Hz",   80.0f,  8000.0f, 900.0f, CurveE::LOG },
-    { "resonance",      "Resonance",      "",      0.0f,     1.0f,  0.72f, CurveE::LINEAR },
-    { "env_amount",     "Env Amount",     "oct",   0.0f,     6.0f,   3.5f, CurveE::LINEAR },
-    { "decay",          "Decay",          "ms",   30.0f,  2000.0f, 220.0f, CurveE::LOG },
-    { "accent",         "Accent",         "",      0.0f,     1.0f,   0.7f, CurveE::LINEAR },
-    { "slide_time",     "Slide Time",     "ms",    5.0f,   200.0f,  70.0f, CurveE::LOG },
-    { "amp_decay",      "Amp Decay",      "ms",   50.0f,  4000.0f, 900.0f, CurveE::LOG },
-    { "key_track",      "Key Track",      "",      0.0f,     1.0f,   0.5f, CurveE::LINEAR },
-    { "drive",          "Drive",          "",      0.0f,     1.0f,  0.85f, CurveE::LINEAR },
-    { "squelch",        "Squelch",        "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "squelch_start",  "Squelch Start",  "x",     2.0f,    32.0f,  12.0f, CurveE::LOG },
-    { "squelch_time",   "Squelch Time",   "ms",    5.0f,   150.0f,  28.0f, CurveE::LOG },
-    { "comb_mix",       "Comb Mix",       "",      0.0f,     1.0f,  0.55f, CurveE::LINEAR },
-    { "comb_feedback",  "Comb Feedback",  "",      0.0f,    0.97f,  0.82f, CurveE::LINEAR },
-    { "low_cut",        "Low Cut",        "Hz",  150.0f,  1000.0f, 250.0f, CurveE::LOG },
-    { "delay_send",     "Delay Send",     "",      0.0f,     1.0f,  0.25f, CurveE::LINEAR },
-    { "delay_left",     "Delay Left",     "",      0.0f,     5.0f,   2.0f, CurveE::CHOICE, DelayTimeNames },
-    { "delay_right",    "Delay Right",    "",      0.0f,     5.0f,   3.0f, CurveE::CHOICE, DelayTimeNames },
-    { "delay_feedback", "Delay Feedback", "",      0.0f,     0.9f,  0.50f, CurveE::LINEAR },
-    { "delay_high_pass","Delay High Pass","Hz",  150.0f,  2000.0f, 400.0f, CurveE::LOG },
-    { "delay_low_pass", "Delay Low Pass", "Hz",  800.0f, 16000.0f,4500.0f, CurveE::LOG },
-    { "room_send",      "Room Send",      "",      0.0f,     1.0f,   0.1f, CurveE::LINEAR },
-    { "hall_send",      "Hall Send",      "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },   // 25.09.2026: the plate, not the far room
-    { "duck",           "Duck",           "",      0.0f,     1.0f,  0.15f, CurveE::LINEAR },
-    { "level",          "Level",          "dB",  -36.0f,     6.0f,  -2.3f, CurveE::LINEAR },
+    { "wave", "Wave", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "cutoff", "Cutoff", "Hz", 80.0f, 8000.0f, 900.0f, CurveE::LOG },
+    { "resonance", "Resonance", "", 0.0f, 1.0f, 0.72f, CurveE::LINEAR },
+    { "env_amount", "Env Amount", "oct", 0.0f, 6.0f, 3.5f, CurveE::LINEAR },
+    { "decay", "Decay", "ms", 30.0f, 2000.0f, 220.0f, CurveE::LOG },
+    { "accent", "Accent", "", 0.0f, 1.0f, 0.7f, CurveE::LINEAR },
+    { "slide_time", "Slide Time", "ms", 5.0f, 200.0f, 70.0f, CurveE::LOG },
+    { "amp_decay", "Amp Decay", "ms", 50.0f, 4000.0f, 900.0f, CurveE::LOG },
+    { "key_track", "Key Track", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "drive", "Drive", "", 0.0f, 1.0f, 0.85f, CurveE::LINEAR },
+    { "squelch", "Squelch", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "squelch_start", "Squelch Start", "x", 2.0f, 32.0f, 12.0f, CurveE::LOG },
+    { "squelch_time", "Squelch Time", "ms", 5.0f, 150.0f, 28.0f, CurveE::LOG },
+    { "comb_mix", "Comb Mix", "", 0.0f, 1.0f, 0.55f, CurveE::LINEAR },
+    { "comb_feedback", "Comb Feedback", "", 0.0f, 0.97f, 0.82f, CurveE::LINEAR },
+    { "low_cut", "Low Cut", "Hz", 150.0f, 1000.0f, 250.0f, CurveE::LOG },
+    { "delay_send", "Delay Send", "", 0.0f, 1.0f, 0.25f, CurveE::LINEAR },
+    { "delay_left", "Delay Left", "", 0.0f, 5.0f, 2.0f, CurveE::CHOICE, DelayTimeNames },
+    { "delay_right", "Delay Right", "", 0.0f, 5.0f, 3.0f, CurveE::CHOICE, DelayTimeNames },
+    { "delay_feedback", "Delay Feedback", "", 0.0f, 0.9f, 0.50f, CurveE::LINEAR },
+    { "delay_high_pass", "Delay High Pass", "Hz", 150.0f, 2000.0f, 400.0f, CurveE::LOG },
+    { "delay_low_pass", "Delay Low Pass", "Hz", 800.0f, 16000.0f, 4500.0f, CurveE::LOG },
+    { "room_send", "Room Send", "", 0.0f, 1.0f, 0.1f, CurveE::LINEAR },
+    { "hall_send", "Hall Send", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },   // 25.09.2026: the plate, not the far room
+    { "duck", "Duck", "", 0.0f, 1.0f, 0.15f, CurveE::LINEAR },
+    { "level", "Level", "dB", -36.0f, 6.0f, -2.3f, CurveE::LINEAR },
     // Appended 16.09.2026 (acid colour round). Off by default: an all-pass chain changes no band's
     // power, but it does smear the attack, and no measurement asks for that to be the default sound.
-    { "disperse",       "Disperse",       "x",     0.0f, static_cast<float>(DisperseStages), 0.0f, CurveE::INT },
-    { "disperse_freq",  "Disperse Freq",  "Hz",  200.0f,  8000.0f, 1250.0f, CurveE::LOG },
+    { "disperse", "Disperse", "x", 0.0f, static_cast<float>( DisperseStages ), 0.0f, CurveE::INT },
+    { "disperse_freq", "Disperse Freq", "Hz", 200.0f, 8000.0f, 1250.0f, CurveE::LOG },
     // Appended 20.09.2026 (round "reverb"). Off by default: hall_send keeps feeding the plain hall
     // exactly as before.
-    { "hall_gate",      "Hall Gate",      "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
+    { "hall_gate", "Hall Gate", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     // 25.09.2026, the mix guide: the acid is the middle plane -- 15 to 25 % into a short plate (Engine.h).
-    { "plate_send",     "Plate Send",     "",      0.0f,     1.0f,  0.15f, CurveE::LINEAR },
+    { "plate_send", "Plate Send", "", 0.0f, 1.0f, 0.15f, CurveE::LINEAR },
     // 26.09.2026, the modulation block without the filter envelope (Params.h).
-    { "menv_attack",    "Mod Attack",     "ms",    0.1f,  8000.0f,  10.0f, CurveE::LOG },
-    { "menv_decay",     "Mod Decay",      "ms",    5.0f, 12000.0f, 800.0f, CurveE::LOG },
-    { "menv_sustain",   "Mod Sustain",    "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "menv_release",   "Mod Release",    "ms",    5.0f, 12000.0f, 400.0f, CurveE::LOG },
-    { "lfo1_rate",     "LFO 1 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo1_shape",    "LFO 1 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo1_sync",     "LFO 1 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo1_retrig",   "LFO 1 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo1_fade",     "LFO 1 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "lfo2_rate",     "LFO 2 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo2_shape",    "LFO 2 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo2_sync",     "LFO 2 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo2_retrig",   "LFO 2 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo2_fade",     "LFO 2 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "lfo3_rate",     "LFO 3 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo3_shape",    "LFO 3 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo3_sync",     "LFO 3 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo3_retrig",   "LFO 3 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo3_fade",     "LFO 3 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "lfo4_rate",     "LFO 4 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo4_shape",    "LFO 4 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo4_sync",     "LFO 4 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo4_retrig",   "LFO 4 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo4_fade",     "LFO 4 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "mx1_src",       "Mod 1 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx1_dst",       "Mod 1 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, AcidModDestNames },
-    { "mx1_amount",    "Mod 1 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx2_src",       "Mod 2 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx2_dst",       "Mod 2 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, AcidModDestNames },
-    { "mx2_amount",    "Mod 2 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx3_src",       "Mod 3 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx3_dst",       "Mod 3 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, AcidModDestNames },
-    { "mx3_amount",    "Mod 3 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx4_src",       "Mod 4 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx4_dst",       "Mod 4 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, AcidModDestNames },
-    { "mx4_amount",    "Mod 4 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx5_src",       "Mod 5 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx5_dst",       "Mod 5 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, AcidModDestNames },
-    { "mx5_amount",    "Mod 5 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx6_src",       "Mod 6 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx6_dst",       "Mod 6 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, AcidModDestNames },
-    { "mx6_amount",    "Mod 6 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx7_src",       "Mod 7 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx7_dst",       "Mod 7 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, AcidModDestNames },
-    { "mx7_amount",    "Mod 7 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx8_src",       "Mod 8 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx8_dst",       "Mod 8 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, AcidModDestNames },
-    { "mx8_amount",    "Mod 8 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
+    { "menv_attack", "Mod Attack", "ms", 0.1f, 8000.0f, 10.0f, CurveE::LOG },
+    { "menv_decay", "Mod Decay", "ms", 5.0f, 12000.0f, 800.0f, CurveE::LOG },
+    { "menv_sustain", "Mod Sustain", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "menv_release", "Mod Release", "ms", 5.0f, 12000.0f, 400.0f, CurveE::LOG },
+    { "lfo1_rate", "LFO 1 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo1_shape", "LFO 1 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo1_sync", "LFO 1 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo1_retrig", "LFO 1 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo1_fade", "LFO 1 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "lfo2_rate", "LFO 2 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo2_shape", "LFO 2 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo2_sync", "LFO 2 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo2_retrig", "LFO 2 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo2_fade", "LFO 2 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "lfo3_rate", "LFO 3 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo3_shape", "LFO 3 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo3_sync", "LFO 3 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo3_retrig", "LFO 3 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo3_fade", "LFO 3 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "lfo4_rate", "LFO 4 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo4_shape", "LFO 4 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo4_sync", "LFO 4 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo4_retrig", "LFO 4 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo4_fade", "LFO 4 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "mx1_src", "Mod 1 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx1_dst", "Mod 1 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, AcidModDestNames },
+    { "mx1_amount", "Mod 1 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx2_src", "Mod 2 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx2_dst", "Mod 2 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, AcidModDestNames },
+    { "mx2_amount", "Mod 2 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx3_src", "Mod 3 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx3_dst", "Mod 3 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, AcidModDestNames },
+    { "mx3_amount", "Mod 3 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx4_src", "Mod 4 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx4_dst", "Mod 4 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, AcidModDestNames },
+    { "mx4_amount", "Mod 4 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx5_src", "Mod 5 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx5_dst", "Mod 5 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, AcidModDestNames },
+    { "mx5_amount", "Mod 5 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx6_src", "Mod 6 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx6_dst", "Mod 6 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, AcidModDestNames },
+    { "mx6_amount", "Mod 6 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx7_src", "Mod 7 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx7_dst", "Mod 7 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, AcidModDestNames },
+    { "mx7_amount", "Mod 7 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx8_src", "Mod 8 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx8_dst", "Mod 8 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, AcidModDestNames },
+    { "mx8_amount", "Mod 8 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
 };
 
 /** @brief A polyphonic voice (lead, counter, arp, stab, pad, drone). */
 const ParamDesc PolyParams[poly::COUNT] = {
-    { "osc",            "Oscillator",     "",      0.0f,     3.0f,   0.0f, CurveE::CHOICE, PolyOscNames },
-    { "detune",         "Detune",         "",      0.0f,     1.0f,  0.55f, CurveE::LINEAR },
-    { "mix",            "Mix",            "",      0.0f,     1.0f,  0.75f, CurveE::LINEAR },
-    { "dynamic_detune", "Dynamic Detune", "",      0.0f,     1.0f,   0.6f, CurveE::LINEAR },
-    { "wave",           "Wave",           "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "pulse_width",    "Pulse Width",    "",     0.05f,    0.95f,   0.5f, CurveE::LINEAR },
-    { "fm_ratio",       "FM Ratio",       "",      0.5f,     8.0f,   2.0f, CurveE::LINEAR },
-    { "fm_index",       "FM Index",       "",      0.0f,    10.0f,   2.5f, CurveE::LINEAR },
-    { "fm_decay",       "FM Decay",       "ms",    5.0f,  2000.0f, 250.0f, CurveE::LOG },
-    { "table",          "Table",          "",      0.0f, static_cast<float>(NumWaveTables - 1), 1.0f, CurveE::CHOICE, WaveTableNames },
-    { "position",       "Position",       "",      0.0f,     1.0f,   0.3f, CurveE::LINEAR },
-    { "pos_env",        "Position Env",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "pos_decay",      "Position Decay", "ms",   10.0f,  8000.0f, 1500.0f, CurveE::LOG },
-    { "pos_lfo_depth",  "Position LFO",   "",      0.0f,     0.5f,  0.15f, CurveE::LINEAR },
-    { "pos_lfo_beats",  "LFO Period",     "beats", 0.25f,   64.0f,  16.0f, CurveE::LOG },
-    { "cutoff",         "Cutoff",         "Hz",  200.0f, 18000.0f,10000.0f, CurveE::LOG },
-    { "resonance",      "Resonance",      "",      0.0f,     1.0f,  0.15f, CurveE::LINEAR },
-    { "env_amount",     "Env Amount",     "oct",   0.0f,     6.0f,   2.0f, CurveE::LINEAR },
-    { "filter_decay",   "Filter Decay",   "ms",    5.0f,  3000.0f, 400.0f, CurveE::LOG },
-    { "key_track",      "Key Track",      "",      0.0f,     1.0f,   0.5f, CurveE::LINEAR },
+    { "osc", "Oscillator", "", 0.0f, 3.0f, 0.0f, CurveE::CHOICE, PolyOscNames },
+    { "detune", "Detune", "", 0.0f, 1.0f, 0.55f, CurveE::LINEAR },
+    { "mix", "Mix", "", 0.0f, 1.0f, 0.75f, CurveE::LINEAR },
+    { "dynamic_detune", "Dynamic Detune", "", 0.0f, 1.0f, 0.6f, CurveE::LINEAR },
+    { "wave", "Wave", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "pulse_width", "Pulse Width", "", 0.05f, 0.95f, 0.5f, CurveE::LINEAR },
+    { "fm_ratio", "FM Ratio", "", 0.5f, 8.0f, 2.0f, CurveE::LINEAR },
+    { "fm_index", "FM Index", "", 0.0f, 10.0f, 2.5f, CurveE::LINEAR },
+    { "fm_decay", "FM Decay", "ms", 5.0f, 2000.0f, 250.0f, CurveE::LOG },
+    { "table", "Table", "", 0.0f, static_cast<float>( NumWaveTables - 1 ), 1.0f, CurveE::CHOICE, WaveTableNames },
+    { "position", "Position", "", 0.0f, 1.0f, 0.3f, CurveE::LINEAR },
+    { "pos_env", "Position Env", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "pos_decay", "Position Decay", "ms", 10.0f, 8000.0f, 1500.0f, CurveE::LOG },
+    { "pos_lfo_depth", "Position LFO", "", 0.0f, 0.5f, 0.15f, CurveE::LINEAR },
+    { "pos_lfo_beats", "LFO Period", "beats", 0.25f, 64.0f, 16.0f, CurveE::LOG },
+    { "cutoff", "Cutoff", "Hz", 200.0f, 18000.0f, 10000.0f, CurveE::LOG },
+    { "resonance", "Resonance", "", 0.0f, 1.0f, 0.15f, CurveE::LINEAR },
+    { "env_amount", "Env Amount", "oct", 0.0f, 6.0f, 2.0f, CurveE::LINEAR },
+    { "filter_decay", "Filter Decay", "ms", 5.0f, 3000.0f, 400.0f, CurveE::LOG },
+    { "key_track", "Key Track", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
     // The floor reaches down to 40 Hz since 18.09.2026: the pad's sub foundation (Melody.h, rule 20)
     // needs its high pass under 73 Hz where kick and bass rest, and a range that stopped at 150 Hz
     // could not be reached by a control event. The defaults of lead and arp (220 Hz) keep the depth
     // rule where they always did; a text or a state that stores 150..400 Hz reads back unchanged.
-    { "hp_floor",       "HP Floor",       "Hz",   40.0f,   400.0f, 220.0f, CurveE::LOG },
-    { "hp_track",       "HP Track",       "x f0",  0.0f,     1.0f,   1.0f, CurveE::LINEAR },
-    { "amp_attack",     "Attack",         "ms",    0.3f,  2000.0f,   4.0f, CurveE::LOG },
-    { "amp_decay",      "Decay",          "ms",    5.0f,  4000.0f, 500.0f, CurveE::LOG },
-    { "amp_sustain",    "Sustain",        "",      0.0f,     1.0f,  0.75f, CurveE::LINEAR },
-    { "amp_release",    "Release",        "ms",    5.0f,  4000.0f, 180.0f, CurveE::LOG },
-    { "width",          "Width",          "",      0.0f,     1.0f,   0.8f, CurveE::LINEAR },
-    { "vel_sens",       "Velocity",       "",      0.0f,     1.0f,   0.4f, CurveE::LINEAR },
-    { "delay_send",     "Delay Send",     "",      0.0f,     1.0f,   0.3f, CurveE::LINEAR },
-    { "delay_left",     "Delay Left",     "",      0.0f,     5.0f,   2.0f, CurveE::CHOICE, DelayTimeNames },
-    { "delay_right",    "Delay Right",    "",      0.0f,     5.0f,   3.0f, CurveE::CHOICE, DelayTimeNames },
-    { "delay_feedback", "Delay Feedback", "",      0.0f,     0.9f,   0.4f, CurveE::LINEAR },
-    { "delay_high_pass","Delay High Pass","Hz",  150.0f,  2000.0f, 350.0f, CurveE::LOG },
-    { "delay_low_pass", "Delay Low Pass", "Hz",  800.0f, 16000.0f,6000.0f, CurveE::LOG },
-    { "room_send",      "Room Send",      "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "hall_send",      "Hall Send",      "",      0.0f,     1.0f,  0.25f, CurveE::LINEAR },
-    { "duck",           "Duck",           "",      0.0f,     1.0f,   0.2f, CurveE::LINEAR },
-    { "gate",           "Trance Gate",    "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "gate_pattern",   "Gate Pattern",   "",      0.0f,     5.0f,   0.0f, CurveE::CHOICE, GatePatternNames },
-    { "gate_depth",     "Gate Depth",     "",      0.0f,     1.0f,  0.85f, CurveE::LINEAR },
-    { "gate_duty",      "Gate Duty",      "",     0.05f,     1.0f,   0.5f, CurveE::LINEAR },
-    { "gate_attack",    "Gate Attack",    "ms",    0.5f,    60.0f,   3.0f, CurveE::LOG },
-    { "gate_release",   "Gate Release",   "ms",    0.5f,   120.0f,  12.0f, CurveE::LOG },
-    { "gate_tone",      "Gate Tone",      "",      0.0f,     1.0f,   0.4f, CurveE::LINEAR },
-    { "level",          "Level",          "dB",  -36.0f,     6.0f,  -4.0f, CurveE::LINEAR },
+    { "hp_floor", "HP Floor", "Hz", 40.0f, 400.0f, 220.0f, CurveE::LOG },
+    { "hp_track", "HP Track", "x f0", 0.0f, 1.0f, 1.0f, CurveE::LINEAR },
+    { "amp_attack", "Attack", "ms", 0.3f, 2000.0f, 4.0f, CurveE::LOG },
+    { "amp_decay", "Decay", "ms", 5.0f, 4000.0f, 500.0f, CurveE::LOG },
+    { "amp_sustain", "Sustain", "", 0.0f, 1.0f, 0.75f, CurveE::LINEAR },
+    { "amp_release", "Release", "ms", 5.0f, 4000.0f, 180.0f, CurveE::LOG },
+    { "width", "Width", "", 0.0f, 1.0f, 0.8f, CurveE::LINEAR },
+    { "vel_sens", "Velocity", "", 0.0f, 1.0f, 0.4f, CurveE::LINEAR },
+    { "delay_send", "Delay Send", "", 0.0f, 1.0f, 0.3f, CurveE::LINEAR },
+    { "delay_left", "Delay Left", "", 0.0f, 5.0f, 2.0f, CurveE::CHOICE, DelayTimeNames },
+    { "delay_right", "Delay Right", "", 0.0f, 5.0f, 3.0f, CurveE::CHOICE, DelayTimeNames },
+    { "delay_feedback", "Delay Feedback", "", 0.0f, 0.9f, 0.4f, CurveE::LINEAR },
+    { "delay_high_pass", "Delay High Pass", "Hz", 150.0f, 2000.0f, 350.0f, CurveE::LOG },
+    { "delay_low_pass", "Delay Low Pass", "Hz", 800.0f, 16000.0f, 6000.0f, CurveE::LOG },
+    { "room_send", "Room Send", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "hall_send", "Hall Send", "", 0.0f, 1.0f, 0.25f, CurveE::LINEAR },
+    { "duck", "Duck", "", 0.0f, 1.0f, 0.2f, CurveE::LINEAR },
+    { "gate", "Trance Gate", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "gate_pattern", "Gate Pattern", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, GatePatternNames },
+    { "gate_depth", "Gate Depth", "", 0.0f, 1.0f, 0.85f, CurveE::LINEAR },
+    { "gate_duty", "Gate Duty", "", 0.05f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "gate_attack", "Gate Attack", "ms", 0.5f, 60.0f, 3.0f, CurveE::LOG },
+    { "gate_release", "Gate Release", "ms", 0.5f, 120.0f, 12.0f, CurveE::LOG },
+    { "gate_tone", "Gate Tone", "", 0.0f, 1.0f, 0.4f, CurveE::LINEAR },
+    { "level", "Level", "dB", -36.0f, 6.0f, -4.0f, CurveE::LINEAR },
     // Appended 16.09.2026 (acid colour round).
-    { "disperse",       "Disperse",       "x",     0.0f, static_cast<float>(DisperseStages), 0.0f, CurveE::INT },
-    { "disperse_freq",  "Disperse Freq",  "Hz",  200.0f,  8000.0f, 1250.0f, CurveE::LOG },
+    { "disperse", "Disperse", "x", 0.0f, static_cast<float>( DisperseStages ), 0.0f, CurveE::INT },
+    { "disperse_freq", "Disperse Freq", "Hz", 200.0f, 8000.0f, 1250.0f, CurveE::LOG },
     // Thermal drift: the standard deviation of the slow random walk, in cents (Poly.h). 1 cent is
     // +-2 cents at two sigma, the range the analogue literature gives for a warmed-up VCO.
-    { "drift",          "Drift",          "ct",    0.0f,     8.0f,   1.0f, CurveE::LINEAR },
+    { "drift", "Drift", "ct", 0.0f, 8.0f, 1.0f, CurveE::LINEAR },
     // 19.09.2026 (round "voices"): which output of the voice's state-variable filter is heard (PolyKernel.h).
     // Low pass is what every voice played before; the per-track recipes (Composer.cpp) may pick the others.
-    { "filter_type",    "Filter Type",    "",      0.0f,     3.0f,   0.0f, CurveE::CHOICE, PolyFilterNames },
+    { "filter_type", "Filter Type", "", 0.0f, 3.0f, 0.0f, CurveE::CHOICE, PolyFilterNames },
     // 20.09.2026 (round "dialogue"). Glide: the time constant of the pitch slew between two notes of
     // the voice (Poly.h); 0 is the instantaneous jump, so a voice
     // that does not set it renders bit for bit as it did. Pan: the dry signal's place in the image, the
     // role property the user's rule asks for ("Lead leicht links, Counter leicht rechts"); the delay
     // behind the voice keeps its own left/right times and is not panned with it.
-    { "glide",          "Glide",          "ms",    0.0f,   400.0f,   0.0f, CurveE::LINEAR },
-    { "pan",            "Pan",            "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
+    { "glide", "Glide", "ms", 0.0f, 400.0f, 0.0f, CurveE::LINEAR },
+    { "pan", "Pan", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
     // The voice's own modulation insert (Engine.cpp; PsyFx.h). Off is the plain voice,
     // sample for sample -- the insert is not even ticked.
-    { "mod",            "Modulation",     "",      0.0f,     3.0f,   0.0f, CurveE::CHOICE, PolyModNames },
-    { "mod_beats",      "Mod Period",     "beats", 0.5f,    64.0f,  16.0f, CurveE::LOG },
-    { "mod_depth",      "Mod Depth",      "",      0.0f,     1.0f,   0.7f, CurveE::LINEAR },
-    { "mod_feedback",   "Mod Feedback",   "",     -0.9f,     0.9f,   0.5f, CurveE::LINEAR },
-    { "mod_mix",        "Mod Mix",        "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
+    { "mod", "Modulation", "", 0.0f, 3.0f, 0.0f, CurveE::CHOICE, PolyModNames },
+    { "mod_beats", "Mod Period", "beats", 0.5f, 64.0f, 16.0f, CurveE::LOG },
+    { "mod_depth", "Mod Depth", "", 0.0f, 1.0f, 0.7f, CurveE::LINEAR },
+    { "mod_feedback", "Mod Feedback", "", -0.9f, 0.9f, 0.5f, CurveE::LINEAR },
+    { "mod_mix", "Mod Mix", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
     // Appended 20.09.2026 (round "reverb"). Off by default: hall_send keeps feeding the plain hall
     // exactly as before.
-    { "hall_gate",      "Hall Gate",      "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
+    { "hall_gate", "Hall Gate", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     // Appended 22.09.2026 (round "Klangfarben"). Both groups are off at their defaults -- osc2 "Off"
     // and every LFO depth 0 -- so an older set renders the same samples it did.
-    { "osc2",           "Oscillator 2",   "",      0.0f,     4.0f,   0.0f, CurveE::CHOICE, PolyOsc2Names },
-    { "osc2_mix",       "Osc 2 Mix",      "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "osc2_interval",  "Osc 2 Interval", "",      0.0f,     5.0f,   1.0f, CurveE::CHOICE, PolyOsc2IntervalNames },
-    { "osc2_detune",    "Osc 2 Detune",   "ct",  -50.0f,    50.0f,   0.0f, CurveE::LINEAR },
-    { "lfo_beats",      "Voice LFO",      "beats", 0.25f,   64.0f,   8.0f, CurveE::LOG },
-    { "lfo_cutoff",     "LFO to Cutoff",  "oct",   0.0f,     4.0f,   0.0f, CurveE::LINEAR },
-    { "lfo_pitch",      "LFO to Pitch",   "ct",    0.0f,    50.0f,   0.0f, CurveE::LINEAR },
-    { "lfo_amp",        "LFO to Level",   "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
+    { "osc2", "Oscillator 2", "", 0.0f, 4.0f, 0.0f, CurveE::CHOICE, PolyOsc2Names },
+    { "osc2_mix", "Osc 2 Mix", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "osc2_interval", "Osc 2 Interval", "", 0.0f, 5.0f, 1.0f, CurveE::CHOICE, PolyOsc2IntervalNames },
+    { "osc2_detune", "Osc 2 Detune", "ct", -50.0f, 50.0f, 0.0f, CurveE::LINEAR },
+    { "lfo_beats", "Voice LFO", "beats", 0.25f, 64.0f, 8.0f, CurveE::LOG },
+    { "lfo_cutoff", "LFO to Cutoff", "oct", 0.0f, 4.0f, 0.0f, CurveE::LINEAR },
+    { "lfo_pitch", "LFO to Pitch", "ct", 0.0f, 50.0f, 0.0f, CurveE::LINEAR },
+    { "lfo_amp", "LFO to Level", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
     // 25.09.2026, the mix guide: the plate, the middle plane. Off by default; the counter, the arp and the stab
     // take it per instance (DefaultPoly).
-    { "plate_send",     "Plate Send",     "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
+    { "plate_send", "Plate Send", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
     // 25.09.2026, the Dark-Ambient addon. Distance: one cue for all five of distance (Engine.h, distanceCue) --
     // 0 the front plane, 0.5 the middle, 1 the back; each instance's default is its own plane (DefaultPoly), so
     // the knob at its default changes nothing and a ride moves the voice with every cue at once. Slow movement:
     // free periods of 13, 21 and 34 s (ratios of the golden mean), so no pattern is heard to come round.
-    { "distance",       "Distance",       "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "slow_mod",       "Slow Movement",  "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "filter_model",   "Filter Model",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, PolyFilterModelNames },
-    { "filter_mode",    "Filter Mode",    "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
+    { "distance", "Distance", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "slow_mod", "Slow Movement", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "filter_model", "Filter Model", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, PolyFilterModelNames },
+    { "filter_mode", "Filter Mode", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
     // 26.09.2026, the modulation block (Params.h, Modulation.h).
-    { "filt_attack",    "Filter Attack",  "ms",    0.1f,  4000.0f,   0.1f, CurveE::LOG },
-    { "filt_sustain",   "Filter Sustain", "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "filt_release",   "Filter Release", "ms",    5.0f,  8000.0f, 300.0f, CurveE::LOG },
-    { "menv_attack",    "Mod Attack",     "ms",    0.1f,  8000.0f,  10.0f, CurveE::LOG },
-    { "menv_decay",     "Mod Decay",      "ms",    5.0f, 12000.0f, 800.0f, CurveE::LOG },
-    { "menv_sustain",   "Mod Sustain",    "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "menv_release",   "Mod Release",    "ms",    5.0f, 12000.0f, 400.0f, CurveE::LOG },
-    { "lfo1_rate",     "LFO 1 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo1_shape",    "LFO 1 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo1_sync",     "LFO 1 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo1_retrig",   "LFO 1 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo1_fade",     "LFO 1 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "lfo2_rate",     "LFO 2 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo2_shape",    "LFO 2 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo2_sync",     "LFO 2 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo2_retrig",   "LFO 2 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo2_fade",     "LFO 2 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "lfo3_rate",     "LFO 3 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo3_shape",    "LFO 3 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo3_sync",     "LFO 3 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo3_retrig",   "LFO 3 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo3_fade",     "LFO 3 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "lfo4_rate",     "LFO 4 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo4_shape",    "LFO 4 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo4_sync",     "LFO 4 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo4_retrig",   "LFO 4 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo4_fade",     "LFO 4 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "mx1_src",       "Mod 1 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx1_dst",       "Mod 1 Target",   "",      0.0f,    10.0f,   0.0f, CurveE::CHOICE, ModDestNames },
-    { "mx1_amount",    "Mod 1 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx2_src",       "Mod 2 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx2_dst",       "Mod 2 Target",   "",      0.0f,    10.0f,   0.0f, CurveE::CHOICE, ModDestNames },
-    { "mx2_amount",    "Mod 2 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx3_src",       "Mod 3 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx3_dst",       "Mod 3 Target",   "",      0.0f,    10.0f,   0.0f, CurveE::CHOICE, ModDestNames },
-    { "mx3_amount",    "Mod 3 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx4_src",       "Mod 4 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx4_dst",       "Mod 4 Target",   "",      0.0f,    10.0f,   0.0f, CurveE::CHOICE, ModDestNames },
-    { "mx4_amount",    "Mod 4 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx5_src",       "Mod 5 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx5_dst",       "Mod 5 Target",   "",      0.0f,    10.0f,   0.0f, CurveE::CHOICE, ModDestNames },
-    { "mx5_amount",    "Mod 5 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx6_src",       "Mod 6 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx6_dst",       "Mod 6 Target",   "",      0.0f,    10.0f,   0.0f, CurveE::CHOICE, ModDestNames },
-    { "mx6_amount",    "Mod 6 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx7_src",       "Mod 7 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx7_dst",       "Mod 7 Target",   "",      0.0f,    10.0f,   0.0f, CurveE::CHOICE, ModDestNames },
-    { "mx7_amount",    "Mod 7 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx8_src",       "Mod 8 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx8_dst",       "Mod 8 Target",   "",      0.0f,    10.0f,   0.0f, CurveE::CHOICE, ModDestNames },
-    { "mx8_amount",    "Mod 8 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
+    { "filt_attack", "Filter Attack", "ms", 0.1f, 4000.0f, 0.1f, CurveE::LOG },
+    { "filt_sustain", "Filter Sustain", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "filt_release", "Filter Release", "ms", 5.0f, 8000.0f, 300.0f, CurveE::LOG },
+    { "menv_attack", "Mod Attack", "ms", 0.1f, 8000.0f, 10.0f, CurveE::LOG },
+    { "menv_decay", "Mod Decay", "ms", 5.0f, 12000.0f, 800.0f, CurveE::LOG },
+    { "menv_sustain", "Mod Sustain", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "menv_release", "Mod Release", "ms", 5.0f, 12000.0f, 400.0f, CurveE::LOG },
+    { "lfo1_rate", "LFO 1 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo1_shape", "LFO 1 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo1_sync", "LFO 1 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo1_retrig", "LFO 1 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo1_fade", "LFO 1 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "lfo2_rate", "LFO 2 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo2_shape", "LFO 2 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo2_sync", "LFO 2 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo2_retrig", "LFO 2 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo2_fade", "LFO 2 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "lfo3_rate", "LFO 3 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo3_shape", "LFO 3 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo3_sync", "LFO 3 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo3_retrig", "LFO 3 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo3_fade", "LFO 3 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "lfo4_rate", "LFO 4 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo4_shape", "LFO 4 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo4_sync", "LFO 4 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo4_retrig", "LFO 4 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo4_fade", "LFO 4 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "mx1_src", "Mod 1 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx1_dst", "Mod 1 Target", "", 0.0f, 10.0f, 0.0f, CurveE::CHOICE, ModDestNames },
+    { "mx1_amount", "Mod 1 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx2_src", "Mod 2 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx2_dst", "Mod 2 Target", "", 0.0f, 10.0f, 0.0f, CurveE::CHOICE, ModDestNames },
+    { "mx2_amount", "Mod 2 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx3_src", "Mod 3 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx3_dst", "Mod 3 Target", "", 0.0f, 10.0f, 0.0f, CurveE::CHOICE, ModDestNames },
+    { "mx3_amount", "Mod 3 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx4_src", "Mod 4 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx4_dst", "Mod 4 Target", "", 0.0f, 10.0f, 0.0f, CurveE::CHOICE, ModDestNames },
+    { "mx4_amount", "Mod 4 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx5_src", "Mod 5 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx5_dst", "Mod 5 Target", "", 0.0f, 10.0f, 0.0f, CurveE::CHOICE, ModDestNames },
+    { "mx5_amount", "Mod 5 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx6_src", "Mod 6 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx6_dst", "Mod 6 Target", "", 0.0f, 10.0f, 0.0f, CurveE::CHOICE, ModDestNames },
+    { "mx6_amount", "Mod 6 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx7_src", "Mod 7 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx7_dst", "Mod 7 Target", "", 0.0f, 10.0f, 0.0f, CurveE::CHOICE, ModDestNames },
+    { "mx7_amount", "Mod 7 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx8_src", "Mod 8 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx8_dst", "Mod 8 Target", "", 0.0f, 10.0f, 0.0f, CurveE::CHOICE, ModDestNames },
+    { "mx8_amount", "Mod 8 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
 };
 
 /**
@@ -717,7 +740,7 @@ const ParamDesc PolyParams[poly::COUNT] = {
  * start at D3 (147 Hz) in root position (rule 19), and at 200 Hz the root lost 11 dB; with the floor
  * under it the tracking high pass at f0 treats the root like every other voice.
  */
-const char* const DefaultPoly =
+const char *const DefaultPoly =
     // 20.09.2026, round "dialogue". The user's four separations between the two leads, as far as they
     // are knob values: the lead flows (a 45 ms portamento -- 0.44 of a sixteenth at 145 BPM, so a step
     // has arrived within one note and a listener hears the bend, not a slur), stands slightly left and
@@ -776,139 +799,141 @@ const char* const DefaultPoly =
 /// sfx.level -12 -> -3 dB (18.09.2026): the SFX strip measured -27.6 LUFS over the first drop and its
 /// events 5 to 15 dB under the mix at their loudest; the per-type balance is in Sfx.cpp (TypeGainDb).
 const ParamDesc SfxParams[sfx::COUNT] = {
-    { "level",        "Level",         "dB", -36.0f,   6.0f,  -3.0f, CurveE::LINEAR },
-    { "noise",        "Noise",         "",     0.0f,   1.0f,   0.6f, CurveE::LINEAR },
-    { "resonance",    "Resonance",     "",     0.0f,   1.0f,   0.5f, CurveE::LINEAR },
-    { "brightness",   "Brightness",    "",     0.0f,   1.0f,   0.5f, CurveE::LINEAR },
-    { "impact_decay", "Impact Decay",  "ms",  200.0f, 4000.0f, 1400.0f, CurveE::LOG },
-    { "vowel",        "Vowel",         "",     0.0f,   1.0f,   0.3f, CurveE::LINEAR },
-    { "swell_decay",  "Swell Decay",   "ms",  200.0f, 6000.0f, 1500.0f, CurveE::LOG },
-    { "width",        "Width",         "",     0.0f,   1.0f,   0.7f, CurveE::LINEAR },
-    { "room_send",    "Room Send",     "",     0.0f,   1.0f,   0.0f, CurveE::LINEAR },
-    { "hall_send",    "Hall Send",     "",     0.0f,   1.0f,   0.5f, CurveE::LINEAR },
-    { "duck",         "Duck",          "",     0.0f,   1.0f,   0.0f, CurveE::LINEAR },
+    { "level", "Level", "dB", -36.0f, 6.0f, -3.0f, CurveE::LINEAR },
+    { "noise", "Noise", "", 0.0f, 1.0f, 0.6f, CurveE::LINEAR },
+    { "resonance", "Resonance", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "brightness", "Brightness", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "impact_decay", "Impact Decay", "ms", 200.0f, 4000.0f, 1400.0f, CurveE::LOG },
+    { "vowel", "Vowel", "", 0.0f, 1.0f, 0.3f, CurveE::LINEAR },
+    { "swell_decay", "Swell Decay", "ms", 200.0f, 6000.0f, 1500.0f, CurveE::LOG },
+    { "width", "Width", "", 0.0f, 1.0f, 0.7f, CurveE::LINEAR },
+    { "room_send", "Room Send", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "hall_send", "Hall Send", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "duck", "Duck", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
     // 19.09.2026, round "fx-psychedelia" (Sfx.h): the sub drop, mono and under the kick's sidechain.
-    { "sub_level",    "Sub Drop",      "dB", -36.0f,   6.0f, -14.0f, CurveE::LINEAR },
-    { "sub_duck",     "Sub Duck",      "",     0.0f,   1.0f,   1.0f, CurveE::LINEAR },
+    { "sub_level", "Sub Drop", "dB", -36.0f, 6.0f, -14.0f, CurveE::LINEAR },
+    { "sub_duck", "Sub Duck", "", 0.0f, 1.0f, 1.0f, CurveE::LINEAR },
     // 20.09.2026, round "wandering-fx" (Sfx.h): a directed pan trajectory and a growing reverb-send
     // trajectory over an event's own length. Off by default, so older sets render unchanged.
-    { "wander",       "Wander",        "",     0.0f,   1.0f,   0.0f, CurveE::TOGGLE },
-    { "wander_send",  "Wander Send",   "",     0.0f,   1.0f,   0.85f, CurveE::LINEAR },
+    { "wander", "Wander", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "wander_send", "Wander Send", "", 0.0f, 1.0f, 0.85f, CurveE::LINEAR },
     // 24.09.2026: the bank preset each family plays, 0 = Auto (Params.h, sfx::PresetRiser). The ranges are the
     // families' sizes (SfxBankTables.cpp, SfxBankCount); the self test holds the two together.
-    { "preset_riser",         "Riser",         "", 0.0f, 256.0f, 0.0f, CurveE::INT },
-    { "preset_downlifter",    "Downlifter",    "", 0.0f, 128.0f, 0.0f, CurveE::INT },
-    { "preset_impact",        "Impact",        "", 0.0f, 128.0f, 0.0f, CurveE::INT },
-    { "preset_sweep",         "Sweep",         "", 0.0f, 256.0f, 0.0f, CurveE::INT },
-    { "preset_formant_shot",  "Formant Shot",  "", 0.0f,  96.0f, 0.0f, CurveE::INT },
+    { "preset_riser", "Riser", "", 0.0f, 256.0f, 0.0f, CurveE::INT },
+    { "preset_downlifter", "Downlifter", "", 0.0f, 128.0f, 0.0f, CurveE::INT },
+    { "preset_impact", "Impact", "", 0.0f, 128.0f, 0.0f, CurveE::INT },
+    { "preset_sweep", "Sweep", "", 0.0f, 256.0f, 0.0f, CurveE::INT },
+    { "preset_formant_shot", "Formant Shot", "", 0.0f, 96.0f, 0.0f, CurveE::INT },
     { "preset_reverse_swell", "Reverse Swell", "", 0.0f, 256.0f, 0.0f, CurveE::INT },
-    { "preset_zap",           "Zap",           "", 0.0f,  96.0f, 0.0f, CurveE::INT },
-    { "preset_squelch",       "Squelch",       "", 0.0f, 128.0f, 0.0f, CurveE::INT },
-    { "preset_bubble",        "Bubble",        "", 0.0f,  64.0f, 0.0f, CurveE::INT },
+    { "preset_zap", "Zap", "", 0.0f, 96.0f, 0.0f, CurveE::INT },
+    { "preset_squelch", "Squelch", "", 0.0f, 128.0f, 0.0f, CurveE::INT },
+    { "preset_bubble", "Bubble", "", 0.0f, 64.0f, 0.0f, CurveE::INT },
     { "preset_reverse_crash", "Reverse Crash", "", 0.0f, 128.0f, 0.0f, CurveE::INT },
-    { "preset_atmosphere",    "Atmosphere",    "", 0.0f, 512.0f, 0.0f, CurveE::INT },
+    { "preset_atmosphere", "Atmosphere", "", 0.0f, 512.0f, 0.0f, CurveE::INT },
     // 25.09.2026: the effects in the plate (the main room); the throw before an eight-bar change rides it.
-    { "plate_send",           "Plate Send",    "", 0.0f, 1.0f, 0.1f, CurveE::LINEAR },
+    { "plate_send", "Plate Send", "", 0.0f, 1.0f, 0.1f, CurveE::LINEAR },
 };
 
 /// The shamanic bed (Texture.h), the voices (Vocal.h) and the modulation effects (PsyFx.h), 19.09.2026.
 /// Their levels are the calibration of that round (docs/rounds/2026-09.md): a bed that is felt rather than heard,
 /// voices that stand in a breakdown without covering the pad.
 const ParamDesc TextureParams[texture::COUNT] = {
-    { "width",         "Width",          "",     0.0f,   1.0f,   0.8f, CurveE::LINEAR },
-    { "bowl_decay",    "Bowl Decay",     "s",    1.0f,  20.0f,   7.0f, CurveE::LOG },
-    { "bowl_bright",   "Bowl Brightness","",     0.0f,   1.0f,   0.4f, CurveE::LINEAR },
-    { "didge_formant", "Didge Formant",  "",     0.0f,   1.0f,   0.5f, CurveE::LINEAR },
-    { "didge_breath",  "Didge Breath",   "",     0.0f,   1.0f,   0.5f, CurveE::LINEAR },
-    { "jaw_sweep",     "Jaw Harp Sweep", "",     0.0f,   1.0f,   0.6f, CurveE::LINEAR },
-    { "room_send",     "Room Send",      "",     0.0f,   1.0f,   0.1f, CurveE::LINEAR },
-    { "hall_send",     "Hall Send",      "",     0.0f,   1.0f,   0.35f, CurveE::LINEAR },
-    { "fx_send",       "FX Send",        "",     0.0f,   1.0f,   0.3f, CurveE::LINEAR },
-    { "duck",          "Duck",           "",     0.0f,   1.0f,   0.45f, CurveE::LINEAR },   // 25.09.2026: the back plane, 4 .. 8 dB
+    { "width", "Width", "", 0.0f, 1.0f, 0.8f, CurveE::LINEAR },
+    { "bowl_decay", "Bowl Decay", "s", 1.0f, 20.0f, 7.0f, CurveE::LOG },
+    { "bowl_bright", "Bowl Brightness", "", 0.0f, 1.0f, 0.4f, CurveE::LINEAR },
+    { "didge_formant", "Didge Formant", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "didge_breath", "Didge Breath", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "jaw_sweep", "Jaw Harp Sweep", "", 0.0f, 1.0f, 0.6f, CurveE::LINEAR },
+    { "room_send", "Room Send", "", 0.0f, 1.0f, 0.1f, CurveE::LINEAR },
+    { "hall_send", "Hall Send", "", 0.0f, 1.0f, 0.35f, CurveE::LINEAR },
+    { "fx_send", "FX Send", "", 0.0f, 1.0f, 0.3f, CurveE::LINEAR },
+    { "duck", "Duck", "", 0.0f, 1.0f, 0.45f, CurveE::LINEAR },   // 25.09.2026: the back plane, 4 .. 8 dB
 };
 
 /** @brief The voices. */
 const ParamDesc VocalParams[vocal::COUNT] = {
-    { "pitch",          "Pitch Spread",   "st",   0.0f,  12.0f,   3.0f, CurveE::LINEAR },
-    { "drive",          "Drive",          "",     0.0f,   1.0f,   0.35f, CurveE::LINEAR },
-    { "throw_send",     "Delay Throw",    "",     0.0f,   1.0f,   0.6f, CurveE::LINEAR },
-    { "throw_beats",    "Throw Time",     "",     0.0f,   5.0f,   4.0f, CurveE::CHOICE, DelayTimeNames },
-    { "throw_feedback", "Throw Feedback", "",     0.0f,   0.9f,   0.55f, CurveE::LINEAR },
-    { "fx_send",        "FX Send",        "",     0.0f,   1.0f,   0.45f, CurveE::LINEAR },
-    { "hall_send",      "Hall Send",      "",     0.0f,   1.0f,   0.3f, CurveE::LINEAR },
-    { "duck",           "Duck",           "",     0.0f,   1.0f,   0.4f, CurveE::LINEAR },   // 25.09.2026: the back plane
-    { "width",          "Width",          "",     0.0f,   1.0f,   0.5f, CurveE::LINEAR },
+    { "pitch", "Pitch Spread", "st", 0.0f, 12.0f, 3.0f, CurveE::LINEAR },
+    { "drive", "Drive", "", 0.0f, 1.0f, 0.35f, CurveE::LINEAR },
+    { "throw_send", "Delay Throw", "", 0.0f, 1.0f, 0.6f, CurveE::LINEAR },
+    { "throw_beats", "Throw Time", "", 0.0f, 5.0f, 4.0f, CurveE::CHOICE, DelayTimeNames },
+    { "throw_feedback", "Throw Feedback", "", 0.0f, 0.9f, 0.55f, CurveE::LINEAR },
+    { "fx_send", "FX Send", "", 0.0f, 1.0f, 0.45f, CurveE::LINEAR },
+    { "hall_send", "Hall Send", "", 0.0f, 1.0f, 0.3f, CurveE::LINEAR },
+    { "duck", "Duck", "", 0.0f, 1.0f, 0.4f, CurveE::LINEAR },   // 25.09.2026: the back plane
+    { "width", "Width", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
 };
 
 /** @brief The modulation effects: the SFX insert and the send chain. */
 const ParamDesc PsyFxParams[psyfx::COUNT] = {
-    { "flanger_beats",    "Flanger Period",   "beats", 0.5f, 32.0f,  8.0f, CurveE::LOG },
-    { "flanger_depth",    "Flanger Depth",    "",      0.0f,  1.0f,  0.7f, CurveE::LINEAR },
-    { "flanger_feedback", "Flanger Feedback", "",     -0.9f,  0.9f,  0.6f, CurveE::LINEAR },
-    { "flanger_mix",      "Flanger Mix",      "",      0.0f,  1.0f,  0.35f, CurveE::LINEAR },
-    { "phaser_beats",     "Phaser Period",    "beats", 0.5f, 32.0f, 16.0f, CurveE::LOG },
-    { "phaser_depth",     "Phaser Depth",     "",      0.0f,  1.0f,  0.8f, CurveE::LINEAR },
-    { "phaser_feedback",  "Phaser Feedback",  "",      0.0f,  0.9f,  0.5f, CurveE::LINEAR },
-    { "phaser_mix",       "Phaser Mix",       "",      0.0f,  1.0f,  0.3f, CurveE::LINEAR },
-    { "shift_hz",         "Frequency Shift",  "Hz", -500.0f, 500.0f, 0.0f, CurveE::LINEAR },
-    { "shift_mix",        "Shifter Mix",      "",      0.0f,  1.0f,  0.5f, CurveE::LINEAR },
-    { "return",           "Send Return",      "dB",  -36.0f,  6.0f, -3.0f, CurveE::LINEAR },
-    { "motion",           "Motion",           "",      0.0f,  1.0f,  0.7f, CurveE::LINEAR },
+    { "flanger_beats", "Flanger Period", "beats", 0.5f, 32.0f, 8.0f, CurveE::LOG },
+    { "flanger_depth", "Flanger Depth", "", 0.0f, 1.0f, 0.7f, CurveE::LINEAR },
+    { "flanger_feedback", "Flanger Feedback", "", -0.9f, 0.9f, 0.6f, CurveE::LINEAR },
+    { "flanger_mix", "Flanger Mix", "", 0.0f, 1.0f, 0.35f, CurveE::LINEAR },
+    { "phaser_beats", "Phaser Period", "beats", 0.5f, 32.0f, 16.0f, CurveE::LOG },
+    { "phaser_depth", "Phaser Depth", "", 0.0f, 1.0f, 0.8f, CurveE::LINEAR },
+    { "phaser_feedback", "Phaser Feedback", "", 0.0f, 0.9f, 0.5f, CurveE::LINEAR },
+    { "phaser_mix", "Phaser Mix", "", 0.0f, 1.0f, 0.3f, CurveE::LINEAR },
+    { "shift_hz", "Frequency Shift", "Hz", -500.0f, 500.0f, 0.0f, CurveE::LINEAR },
+    { "shift_mix", "Shifter Mix", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "return", "Send Return", "dB", -36.0f, 6.0f, -3.0f, CurveE::LINEAR },
+    { "motion", "Motion", "", 0.0f, 1.0f, 0.7f, CurveE::LINEAR },
 };
 
 /** @brief The rooms: the room, the hall, the plate, the delay. */
 const ParamDesc FxParams[fx::COUNT] = {
-    { "room_size",      "Room Size",      "",      0.3f,    3.0f,   0.5f, CurveE::LINEAR },
-    { "room_decay",     "Room Decay",     "s",     0.1f,    4.0f,   0.7f, CurveE::LOG },
-    { "room_damping",   "Room Damping",   "",      0.0f,    1.0f,   0.5f, CurveE::LINEAR },
-    { "hall_size",      "Hall Size",      "",      0.3f,    3.0f,   1.6f, CurveE::LINEAR },
+    { "room_size", "Room Size", "", 0.3f, 3.0f, 0.5f, CurveE::LINEAR },
+    { "room_decay", "Room Decay", "s", 0.1f, 4.0f, 0.7f, CurveE::LOG },
+    { "room_damping", "Room Damping", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
+    { "hall_size", "Hall Size", "", 0.3f, 3.0f, 1.6f, CurveE::LINEAR },
     // 25.09.2026, the Dark-Ambient addon: the hall is the far room C, 8 .. 20 s, heard only in intros and breakdowns
     // (ComposerControls.cpp rides its return), its pre-delay almost none (the back plane's 0 .. 10 ms, 5 ms at 145 BPM).
-    { "hall_decay",     "Hall Decay",     "s",     0.3f,   20.0f,  10.0f, CurveE::LOG },
-    { "hall_damping",   "Hall Damping",   "",      0.0f,    1.0f,  0.45f, CurveE::LINEAR },
-    { "hall_pre_delay", "Hall Pre-Delay", "beats", 0.0f,    0.5f, 0.0125f, CurveE::LINEAR },
+    { "hall_decay", "Hall Decay", "s", 0.3f, 20.0f, 10.0f, CurveE::LOG },
+    { "hall_damping", "Hall Damping", "", 0.0f, 1.0f, 0.45f, CurveE::LINEAR },
+    { "hall_pre_delay", "Hall Pre-Delay", "beats", 0.0f, 0.5f, 0.0125f, CurveE::LINEAR },
     // The hall's send filter since 25.09.2026 (room and plate have their own): the far room's 400 Hz .. 3 kHz.
-    { "low_cut",        "Hall Low Cut",   "Hz",  150.0f, 1000.0f, 400.0f, CurveE::LOG },
-    { "high_cut",       "Hall High Cut",  "Hz",  1000.0f,20000.0f,3000.0f, CurveE::LOG },
-    { "room_return",    "Room Return",    "dB",  -36.0f,    6.0f,  -6.0f, CurveE::LINEAR },
-    { "hall_return",    "Hall Return",    "dB",  -36.0f,    6.0f,  -6.0f, CurveE::LINEAR },
+    { "low_cut", "Hall Low Cut", "Hz", 150.0f, 1000.0f, 400.0f, CurveE::LOG },
+    { "high_cut", "Hall High Cut", "Hz", 1000.0f, 20000.0f, 3000.0f, CurveE::LOG },
+    { "room_return", "Room Return", "dB", -36.0f, 6.0f, -6.0f, CurveE::LINEAR },
+    { "hall_return", "Hall Return", "dB", -36.0f, 6.0f, -6.0f, CurveE::LINEAR },
     // 25.09.2026, the mix guide: returns 3 .. 6 dB under the kick (0.45 is -5.2 dB), back within 80 .. 120 ms.
-    { "return_duck",    "Return Duck",    "",      0.0f,    1.0f,  0.45f, CurveE::LINEAR },
+    { "return_duck", "Return Duck", "", 0.0f, 1.0f, 0.45f, CurveE::LINEAR },
     { "return_duck_release", "Return Duck Release", "ms", 10.0f, 800.0f, 100.0f, CurveE::LOG },
     // The plate: the main room B (the addon) -- the middle plane in a drop (1 .. 2 s), pads and lead in a
     // breakdown (3 .. 6 s, a ride). Its pre-delay is a distance cue, not a tempo value (the addon's correction:
     // near sources long, far ones short -- front 40 .. 60, middle 20 .. 30, back 0 .. 10 ms).
-    { "plate_size",      "Plate Size",      "",      0.3f,    3.0f,   0.8f, CurveE::LINEAR },
-    { "plate_decay",     "Plate Decay",     "s",     0.2f,    8.0f,   1.5f, CurveE::LOG },
-    { "plate_damping",   "Plate Damping",   "",      0.0f,    1.0f,   0.35f, CurveE::LINEAR },
-    { "plate_pre_delay", "Plate Pre-Delay", "ms",    0.0f,  100.0f,  25.0f, CurveE::LINEAR },
-    { "plate_return",    "Plate Return",    "dB",  -36.0f,    6.0f,  -6.0f, CurveE::LINEAR },
+    { "plate_size", "Plate Size", "", 0.3f, 3.0f, 0.8f, CurveE::LINEAR },
+    { "plate_decay", "Plate Decay", "s", 0.2f, 8.0f, 1.5f, CurveE::LOG },
+    { "plate_damping", "Plate Damping", "", 0.0f, 1.0f, 0.35f, CurveE::LINEAR },
+    { "plate_pre_delay", "Plate Pre-Delay", "ms", 0.0f, 100.0f, 25.0f, CurveE::LINEAR },
+    { "plate_return", "Plate Return", "dB", -36.0f, 6.0f, -6.0f, CurveE::LINEAR },
     // 25.09.2026, the Dark-Ambient addon: the near room A (lead, snare, zaps) with the front's long pre-delay and
     // its own send filter; the plate's filter; and the plate's share that feeds the far room C (the hall) -- the
     // serial feed that makes a breakdown's room endless without a second, foreign place.
-    { "room_pre_delay",  "Room Pre-Delay",  "ms",    0.0f,  100.0f,  50.0f, CurveE::LINEAR },
-    { "room_low_cut",    "Room Low Cut",    "Hz",  100.0f, 1000.0f, 200.0f, CurveE::LOG },
-    { "room_high_cut",   "Room High Cut",   "Hz", 1000.0f,20000.0f,10000.0f, CurveE::LOG },
-    { "plate_low_cut",   "Plate Low Cut",   "Hz",  100.0f, 1000.0f, 300.0f, CurveE::LOG },
-    { "plate_high_cut",  "Plate High Cut",  "Hz", 1000.0f,20000.0f, 6000.0f, CurveE::LOG },
-    { "plate_to_hall",   "Plate to Hall",   "",      0.0f,    1.0f,  0.15f, CurveE::LINEAR },
+    { "room_pre_delay", "Room Pre-Delay", "ms", 0.0f, 100.0f, 50.0f, CurveE::LINEAR },
+    { "room_low_cut", "Room Low Cut", "Hz", 100.0f, 1000.0f, 200.0f, CurveE::LOG },
+    { "room_high_cut", "Room High Cut", "Hz", 1000.0f, 20000.0f, 10000.0f, CurveE::LOG },
+    { "plate_low_cut", "Plate Low Cut", "Hz", 100.0f, 1000.0f, 300.0f, CurveE::LOG },
+    { "plate_high_cut", "Plate High Cut", "Hz", 1000.0f, 20000.0f, 6000.0f, CurveE::LOG },
+    { "plate_to_hall", "Plate to Hall", "", 0.0f, 1.0f, 0.15f, CurveE::LINEAR },
 };
 
 /// 23.09.2026, round "Keyboard": "By channel" plays the acid on channel 1, the lead on 2 ... the drone on 7.
 /// 01.10.2026: the bass and the kit appended (the values before them stay what they were in a saved set).
-const char* const KeyboardPartNames[] = { "Off", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "By channel", "Bass", "Kit" };
-const char* const KeyboardModeNames[] = { "Replace", "Layer" };   ///< perform.keyboard_mode
+const char *const KeyboardPartNames[] = { "Off", "Acid",  "Lead",       "Counter", "Arp", "Stab",
+                                          "Pad", "Drone", "By channel", "Bass",    "Kit" };
+const char *const KeyboardModeNames[] = { "Replace", "Layer" };   ///< perform.keyboard_mode
 /// mix.keyboard_lower (02.10.2026): the voices of KeyboardPartNames without "By channel" (the plugin maps them back).
-const char* const KeyboardLowerNames[] = { "Off", "Acid", "Lead", "Counter", "Arp", "Stab", "Pad", "Drone", "Bass", "Kit" };
-const char* const KeyboardSplitNames[] = { "C1", "C2", "C3", "C4", "C5" };   ///< mix.keyboard_split: 36 .. 84
-const char* const KeyboardVelocityNames[] = { "As Played", "Soft", "Hard", "Fixed" };   ///< mix.keyboard_velocity
-const char* const MonitorNames[] = { "Normal", "Mono", "Sub", "Side" };   ///< master.monitor: what the output plays
+const char *const KeyboardLowerNames[] = { "Off",  "Acid", "Lead",  "Counter", "Arp",
+                                           "Stab", "Pad",  "Drone", "Bass",    "Kit" };
+const char *const KeyboardSplitNames[] = { "C1", "C2", "C3", "C4", "C5" };   ///< mix.keyboard_split: 36 .. 84
+const char *const KeyboardVelocityNames[] = { "As Played", "Soft", "Hard", "Fixed" };   ///< mix.keyboard_velocity
+const char *const MonitorNames[] = { "Normal", "Mono", "Sub", "Side" };   ///< master.monitor: what the output plays
 /** @brief The mix: the strips' levels, mutes and sends, the ducks. */
 const ParamDesc MixParams[mix::COUNT] = {
     { "kick_mute", "Kick Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     { "bass_mute", "Bass Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     { "track_gain", "Track Gain", "dB", -12.0f, 12.0f, 0.0f, CurveE::LINEAR },
-    { "perc_mute",  "Perc Mute",  "",     0.0f,  1.0f, 0.0f, CurveE::TOGGLE },
+    { "perc_mute", "Perc Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     // +3 dB instead of +1 (16.09.2026, Phase 9): with the band-limited hats the kit no longer spends
     // its level above 12 kHz, and the presence and air bands land on the reference median.
     // +1.2 since 26.09.2026: the hats came up by 2.5 .. 3 dB after the user heard them no more ("Jetzt höre ich
@@ -916,10 +941,10 @@ const ParamDesc MixParams[mix::COUNT] = {
     // the effects (testDialogue.levels, 4 dB) and the air band at the top of its window; 0.8 dB off the whole kit
     // puts both back, the air band on the reference median, and leaves the hats 1.2 .. 2.2 dB louder than before.
     { "perc_level", "Perc Level", "dB", -24.0f, 12.0f, 1.2f, CurveE::LINEAR },
-    { "acid_mute",  "Acid Mute",  "",     0.0f,  1.0f, 0.0f, CurveE::TOGGLE },
+    { "acid_mute", "Acid Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     { "acid_level", "Acid Level", "dB", -24.0f, 12.0f, 0.0f, CurveE::LINEAR },
     // 19.09.2026, round "voices": the strips in the order of the voices' groups (Params.h, mix::).
-    { "lead_mute",  "Lead Mute",  "",     0.0f,  1.0f, 0.0f, CurveE::TOGGLE },
+    { "lead_mute", "Lead Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     // -3 dB (19.09.2026, round "voices"): excerpt B of the listening seed (track 2's drop) sat +9.8 dB over
     // the reference median in presence once its foundation was no longer over-matched (Composer.cpp,
     // probeLoudness); with the lead muted it read +1.8, so the lead carried most of it. -3 dB: +7.6.
@@ -928,24 +953,24 @@ const ParamDesc MixParams[mix::COUNT] = {
     // well so that they stay under the lead. 4 dB each took the presence band of testMixBalance 2.2 dB
     // under the reference median; docs/rounds/2026-09.md has the band balance before and after.
     { "lead_level", "Lead Level", "dB", -24.0f, 12.0f, -6.0f, CurveE::LINEAR },
-    { "counter_mute",  "Counter Mute",  "",     0.0f,  1.0f, 0.0f, CurveE::TOGGLE },
+    { "counter_mute", "Counter Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     // 21.09.2026: measured at -3 dB the counter-lead sounded 11.6 dB under the lead it answers
     // (seed 1, 173 notes against 1080, median MIDI 78 against 66, same velocity, same note length,
     // identical synth parameters) -- a dialogue partner nobody can hear. Why an octave up costs
     // that much through the same voice is not explained and wants its own round; this is the
     // mixer doing what a mixer is for, set to the number the measurement asks for.
     { "counter_level", "Counter Level", "dB", -24.0f, 12.0f, 5.0f, CurveE::LINEAR },
-    { "arp_mute",   "Arp Mute",   "",     0.0f,  1.0f, 0.0f, CurveE::TOGGLE },
+    { "arp_mute", "Arp Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     // -2 dB (18.09.2026): the arp was the loudest melodic part and owned 300 Hz .. 2 kHz, where the
     // congas, toms and the clap have to be heard (DefaultKit).
-    { "arp_level",  "Arp Level",  "dB", -24.0f, 12.0f, -5.0f, CurveE::LINEAR },
-    { "stab_mute",  "Stab Mute",  "",     0.0f,  1.0f, 0.0f, CurveE::TOGGLE },
+    { "arp_level", "Arp Level", "dB", -24.0f, 12.0f, -5.0f, CurveE::LINEAR },
+    { "stab_mute", "Stab Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     { "stab_level", "Stab Level", "dB", -24.0f, 12.0f, -3.0f, CurveE::LINEAR },
-    { "pad_mute",   "Pad Mute",   "",     0.0f,  1.0f, 0.0f, CurveE::TOGGLE },
-    { "pad_level",  "Pad Level",  "dB", -24.0f, 12.0f, 0.0f, CurveE::LINEAR },
-    { "drone_mute", "Drone Mute", "",     0.0f,  1.0f, 0.0f, CurveE::TOGGLE },
-    { "drone_level","Drone Level","dB", -24.0f, 12.0f, 0.0f, CurveE::LINEAR },
-    { "sfx_mute",   "SFX Mute",   "",     0.0f,  1.0f, 0.0f, CurveE::TOGGLE },
+    { "pad_mute", "Pad Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "pad_level", "Pad Level", "dB", -24.0f, 12.0f, 0.0f, CurveE::LINEAR },
+    { "drone_mute", "Drone Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "drone_level", "Drone Level", "dB", -24.0f, 12.0f, 0.0f, CurveE::LINEAR },
+    { "sfx_mute", "SFX Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     // 20.09.2026, round "dialogue". The user hears the effects and the voices as too quiet, and their
     // rule is that in psytrance the effects *are* the composition. Measured on the listening seed's first
     // drop (32 bars), solo renders against the full mix, counting only the 40 ms frames in which the part
@@ -961,16 +986,16 @@ const ParamDesc MixParams[mix::COUNT] = {
     // +4.5 since 26.09.2026: the kit came up for the hats the user no longer heard (clap +1.5, shaker +2 dB), and a
     // percussion hit then stood 4.56 dB over an effect event (testDialogue.levels, 4). The rule is that the two are
     // alike, so the effects follow; 1.5 dB on the strip is about 1 dB in the mix (the two thirds above).
-    { "sfx_level",  "SFX Level",  "dB", -24.0f, 12.0f, 4.5f, CurveE::LINEAR },
-    { "perc_room",  "Perc Room",  "",     0.0f,  1.0f, 0.12f, CurveE::LINEAR },
-    { "perc_hall",  "Perc Hall",  "",     0.0f,  1.0f, 0.0f, CurveE::LINEAR },
-    { "duck_attack","Duck Attack","ms",   0.5f, 30.0f, 2.0f, CurveE::LOG },
-    { "duck_hold",  "Duck Hold",  "ms",   0.0f, 200.0f, 20.0f, CurveE::LINEAR },
+    { "sfx_level", "SFX Level", "dB", -24.0f, 12.0f, 4.5f, CurveE::LINEAR },
+    { "perc_room", "Perc Room", "", 0.0f, 1.0f, 0.12f, CurveE::LINEAR },
+    { "perc_hall", "Perc Hall", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "duck_attack", "Duck Attack", "ms", 0.5f, 30.0f, 2.0f, CurveE::LOG },
+    { "duck_hold", "Duck Hold", "ms", 0.0f, 200.0f, 20.0f, CurveE::LINEAR },
     // 25.09.2026, the mix guide: the pads and the bed come back within 100 .. 150 ms (it was 180); the lines have
     // their own release (duck_release_lines), the returns theirs (fx.return_duck_release).
-    { "duck_release","Duck Release","ms", 10.0f, 800.0f, 125.0f, CurveE::LOG },
+    { "duck_release", "Duck Release", "ms", 10.0f, 800.0f, 125.0f, CurveE::LOG },
     // 19.09.2026, round "fx-psychedelia": the shamanic bed and the voices get their own strips.
-    { "texture_mute",  "Texture Mute",  "",     0.0f,  1.0f, 0.0f, CurveE::TOGGLE },
+    { "texture_mute", "Texture Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     // 22.09.2026, the user: "das Didgeridoo und die Klangschalen hab ich ueberhaupt noch nie
     // gehoert". They were not missing -- measured over 128 bars of seed 7, the bed sounds in 72 of
     // 211 seconds (a difference render against mix.texture_mute) -- they were 25.5 dB under the mix
@@ -980,216 +1005,256 @@ const ParamDesc MixParams[mix::COUNT] = {
     // number and testBedAudible close together. +9 dB puts the median at about -16 dB under the
     // mix -- still a bed, under the voices, but there.
     { "texture_level", "Texture Level", "dB", -24.0f, 12.0f, 9.0f, CurveE::LINEAR },
-    { "vocal_mute",    "Vocal Mute",    "",     0.0f,  1.0f, 0.0f, CurveE::TOGGLE },
-    { "vocal_level",   "Vocal Level",   "dB", -24.0f, 12.0f, 7.0f, CurveE::LINEAR },   // 20.09.2026, see sfx_level
+    { "vocal_mute", "Vocal Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "vocal_level", "Vocal Level", "dB", -24.0f, 12.0f, 7.0f, CurveE::LINEAR },   // 20.09.2026, see sfx_level
     // 23.09.2026, round "Presets": the synth keeps the sound on its page; the composer's recipes leave it alone.
-    { "kick_own",      "Kick Own Sound",    "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
-    { "bass_own",      "Bass Own Sound",    "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
-    { "acid_own",      "Acid Own Sound",    "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
-    { "lead_own",      "Lead Own Sound",    "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
-    { "counter_own",   "Counter Own Sound", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
-    { "arp_own",       "Arp Own Sound",     "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
-    { "stab_own",      "Stab Own Sound",    "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
-    { "pad_own",       "Pad Own Sound",     "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
-    { "drone_own",     "Drone Own Sound",   "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "kick_own", "Kick Own Sound", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "bass_own", "Bass Own Sound", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "acid_own", "Acid Own Sound", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lead_own", "Lead Own Sound", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "counter_own", "Counter Own Sound", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "arp_own", "Arp Own Sound", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "stab_own", "Stab Own Sound", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "pad_own", "Pad Own Sound", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "drone_own", "Drone Own Sound", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     // 23.09.2026, round "Keyboard": what a MIDI keyboard plays (Engine.h, liveNoteOn).
-    { "keyboard_part", "Keyboard Plays",    "", 0.0f, 10.0f, 0.0f, CurveE::CHOICE, KeyboardPartNames },
-    { "keyboard_mode", "Keyboard Mode",     "", 0.0f, 1.0f, 0.0f, CurveE::CHOICE, KeyboardModeNames },
-    { "composer",      "Composer",          "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },   // 01.10.2026, live play only
+    { "keyboard_part", "Keyboard Plays", "", 0.0f, 10.0f, 0.0f, CurveE::CHOICE, KeyboardPartNames },
+    { "keyboard_mode", "Keyboard Mode", "", 0.0f, 1.0f, 0.0f, CurveE::CHOICE, KeyboardModeNames },
+    { "composer", "Composer", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },   // 01.10.2026, live play only
     // 25.09.2026, the mix guide's ducking matrix. The lines (acid, lead, counter, arp, stab) come back within
     // 50 .. 80 ms, the pads and the bed within 100 .. 150 (duck_release, 125 now); the counter gives way to the
     // lead by 1 .. 3 dB, the pad's band of 500 Hz .. 3 kHz by 2 .. 4 dB while the lead plays (Engine.h).
     { "duck_release_lines", "Duck Release (Lines)", "ms", 10.0f, 800.0f, 65.0f, CurveE::LOG },
-    { "counter_duck",  "Counter under Lead", "",   0.0f, 1.0f, 0.2f, CurveE::LINEAR },
+    { "counter_duck", "Counter under Lead", "", 0.0f, 1.0f, 0.2f, CurveE::LINEAR },
     { "pad_lead_duck", "Pad Band under Lead", "dB", 0.0f, 12.0f, 3.0f, CurveE::LINEAR },
     // 27.09.2026: the Field track's strip (FieldPlayer.h).
-    { "field_mute",    "Field Mute",    "",     0.0f,  1.0f, 0.0f, CurveE::TOGGLE },
+    { "field_mute", "Field Mute", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     // -14 dB (27.09.2026): measured on a Dark Forest intro (seed 7) at 0 dB the place had the highest partial loudness
     // of all parts (69.7 against the voices' 57.7), at -10 still 48; at -14 it sits by the shamanic bed (33), a
     // background, as a place should.
-    { "field_level",   "Field Level",   "dB", -24.0f, 12.0f, -14.0f, CurveE::LINEAR },
+    { "field_level", "Field Level", "dB", -24.0f, 12.0f, -14.0f, CurveE::LINEAR },
     // 02.10.2026: the keyboard's options, all off by default.
-    { "keyboard_lower",    "Lower Keys Play", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, KeyboardLowerNames },
-    { "keyboard_split",    "Split At",        "", 0.0f, 4.0f, 2.0f, CurveE::CHOICE, KeyboardSplitNames },
-    { "keyboard_scale",    "Scale Lock",      "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
-    { "keyboard_velocity", "Velocity Curve",  "", 0.0f, 3.0f, 0.0f, CurveE::CHOICE, KeyboardVelocityNames },
+    { "keyboard_lower", "Lower Keys Play", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, KeyboardLowerNames },
+    { "keyboard_split", "Split At", "", 0.0f, 4.0f, 2.0f, CurveE::CHOICE, KeyboardSplitNames },
+    { "keyboard_scale", "Scale Lock", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "keyboard_velocity", "Velocity Curve", "", 0.0f, 3.0f, 0.0f, CurveE::CHOICE, KeyboardVelocityNames },
 };
 
 /** @brief The master: the bus compressor, the clipper, the limiter, the loudness. */
 const ParamDesc MasterParams[master::COUNT] = {
-    { "gain",    "Gain",    "dB", -24.0f, 24.0f,  0.0f, CurveE::LINEAR },
-    { "ceiling", "Ceiling", "dBTP", -12.0f,  0.0f, -1.0f, CurveE::LINEAR },
-    { "clip",    "Clip",    "",     0.0f,  1.0f,  1.0f, CurveE::TOGGLE },
+    { "gain", "Gain", "dB", -24.0f, 24.0f, 0.0f, CurveE::LINEAR },
+    { "ceiling", "Ceiling", "dBTP", -12.0f, 0.0f, -1.0f, CurveE::LINEAR },
+    { "clip", "Clip", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
     { "comp_threshold", "Comp Threshold", "dB", -40.0f, 0.0f, -8.0f, CurveE::LINEAR },
-    { "comp_ratio",     "Comp Ratio",     ":1",   1.0f, 10.0f,  1.5f, CurveE::LOG },
-    { "comp_knee",      "Comp Knee",      "dB",   0.0f, 24.0f,  6.0f, CurveE::LINEAR },
-    { "comp_attack",    "Comp Attack",    "ms",   0.1f, 100.0f, 30.0f, CurveE::LOG },
-    { "comp_release",   "Comp Release",   "ms",   10.0f, 2000.0f, 200.0f, CurveE::LOG },
-    { "mono_bass",      "Mono Bass",      "Hz",   40.0f, 300.0f, 120.0f, CurveE::LOG },
-    { "limiter",        "Limiter",        "",     0.0f,  1.0f,  1.0f, CurveE::TOGGLE },
-    { "limiter_release","Limiter Release","ms",   2.0f, 1000.0f, 20.0f, CurveE::LOG },
-    { "target_lufs",    "Target Loudness","LUFS", -20.0f, -4.0f, -9.0f, CurveE::LINEAR },
-    { "auto_gain",      "Auto Gain",      "",     0.0f,  1.0f,  1.0f, CurveE::TOGGLE },
-    { "clipper",        "Clipper",        "",     0.0f,  1.0f,  1.0f, CurveE::TOGGLE },
-    { "clipper_threshold","Clipper Threshold","dB", -6.0f, 6.0f, 0.0f, CurveE::LINEAR },
+    { "comp_ratio", "Comp Ratio", ":1", 1.0f, 10.0f, 1.5f, CurveE::LOG },
+    { "comp_knee", "Comp Knee", "dB", 0.0f, 24.0f, 6.0f, CurveE::LINEAR },
+    { "comp_attack", "Comp Attack", "ms", 0.1f, 100.0f, 30.0f, CurveE::LOG },
+    { "comp_release", "Comp Release", "ms", 10.0f, 2000.0f, 200.0f, CurveE::LOG },
+    { "mono_bass", "Mono Bass", "Hz", 40.0f, 300.0f, 120.0f, CurveE::LOG },
+    { "limiter", "Limiter", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
+    { "limiter_release", "Limiter Release", "ms", 2.0f, 1000.0f, 20.0f, CurveE::LOG },
+    { "target_lufs", "Target Loudness", "LUFS", -20.0f, -4.0f, -9.0f, CurveE::LINEAR },
+    { "auto_gain", "Auto Gain", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
+    { "clipper", "Clipper", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
+    { "clipper_threshold", "Clipper Threshold", "dB", -6.0f, 6.0f, 0.0f, CurveE::LINEAR },
     // 25.09.2026, the addon's monitoring: listen in mono, to the sub alone (the kick-bass gap and the tuning are
     // judged there), or to the side signal. After the meter, so Auto Gain and the loudness readings are the mix's.
-    { "monitor",        "Monitor",        "",     0.0f,  3.0f,  0.0f, CurveE::CHOICE, MonitorNames },
+    { "monitor", "Monitor", "", 0.0f, 3.0f, 0.0f, CurveE::CHOICE, MonitorNames },
 };
 
 /// The cue bridge of PLAN 8.3. Appended after the master block, so no parameter that existed before
 /// changed its id, its default or its place in the host's list.
 const ParamDesc CueParams[cue::COUNT] = {
-    { "send",    "Send Cues", "",      0.0f,     1.0f,    0.0f, CurveE::TOGGLE },
-    { "port",    "Port",      "",   1024.0f, 65535.0f, 9000.0f, CurveE::INT },
-    { "beats",   "Beat Cues", "",      0.0f,     1.0f,    1.0f, CurveE::TOGGLE },
+    { "send", "Send Cues", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "port", "Port", "", 1024.0f, 65535.0f, 9000.0f, CurveE::INT },
+    { "beats", "Beat Cues", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
     // A trim on the lead the sender already computes from the block size and the limiter's lookahead
     // (Cue.h). Positive moves the cue later. It exists because the one part of the chain the plugin
     // cannot ask about is how deep the driver's own buffering is; zero is right for the common case
     // of a single buffer in flight.
-    { "lead_ms", "Lead Trim", "ms",  -50.0f,    50.0f,    0.0f, CurveE::LINEAR },
+    { "lead_ms", "Lead Trim", "ms", -50.0f, 50.0f, 0.0f, CurveE::LINEAR },
 };
 
 /** @brief One module: its prefix, table, how many instances exist, and optionally their names. */
-struct ModuleSpec {
-    const char* m_prefix;   ///< the key prefix ("kick", "perc" ...)
-    const ParamDesc* m_descs;   ///< its parameters
-    int m_count;   ///< how many
-    int m_instances;   ///< how many instances
-    const char* const* m_instanceNames = nullptr;   ///< prefixes of the instances instead of prefix + number
+struct ModuleSpec
+{
+    const char        *m_prefix;                    ///< the key prefix ("kick", "perc" ...)
+    const ParamDesc   *m_descs;                     ///< its parameters
+    int                m_count;                     ///< how many
+    int                m_instances;                 ///< how many instances
+    const char *const *m_instanceNames = nullptr;   ///< prefixes of the instances instead of prefix + number
 };
 
-} // namespace
+}   // namespace
 
 // 27.09.2026: the Field track's sampler (Params.h, namespace field; FieldPlayer.h).
-const char* const FieldCategoryNames[field::Categories + 1] = { "Auto", "Rainforest", "Night Country", "Insects", "Foliage", "Wetland", "Mud Bubbles", "Cave", "River", "Sea", "Rain on Land", "Rain on Roof", "Wind", "Underwater", "Ice and Snow", "Desert", "Fire", "Geothermal", "Seismic", "Ritual Objects", "Abandoned", "Tunnel", "Metal Creak", "Dark Drone", "Electric", "Ventilation", "Factory", "Polar Station", "Radio Space", "Empty Space", "Grain Texture", "NASA" };
-const char* const FieldCategorySlugs[field::Categories] = { "rainforest", "night-country", "insects", "foliage", "wetland", "mud-bubbles", "cave", "river", "sea", "rain-land", "rain-roof", "wind", "underwater", "ice-snow", "desert", "fire", "geothermal", "seismic", "ritual-objects", "abandoned", "tunnel", "metal-creak", "dark-drone-noise", "electric", "ventilation", "factory", "polar-station", "radio-space", "empty-space", "grain-texture", "nasa" };
-const char* const FieldModDestNames[7] = { "Off", "Pitch", "Cutoff", "Resonance", "Filter Mode", "Level", "Pan" };
-const int FieldModDestMap[7] = { 0, 1, 6, 7, 8, 9, 10 };   // ModDest: Off, Pitch, Cutoff, Resonance, FilterMode, Level, Pan
+const char *const FieldCategoryNames[field::Categories + 1] = {
+    "Auto",         "Rainforest",  "Night Country", "Insects",      "Foliage",      "Wetland",        "Mud Bubbles",
+    "Cave",         "River",       "Sea",           "Rain on Land", "Rain on Roof", "Wind",           "Underwater",
+    "Ice and Snow", "Desert",      "Fire",          "Geothermal",   "Seismic",      "Ritual Objects", "Abandoned",
+    "Tunnel",       "Metal Creak", "Dark Drone",    "Electric",     "Ventilation",  "Factory",        "Polar Station",
+    "Radio Space",  "Empty Space", "Grain Texture", "NASA"
+};
+const char *const FieldCategorySlugs[field::Categories] = { "rainforest",
+                                                            "night-country",
+                                                            "insects",
+                                                            "foliage",
+                                                            "wetland",
+                                                            "mud-bubbles",
+                                                            "cave",
+                                                            "river",
+                                                            "sea",
+                                                            "rain-land",
+                                                            "rain-roof",
+                                                            "wind",
+                                                            "underwater",
+                                                            "ice-snow",
+                                                            "desert",
+                                                            "fire",
+                                                            "geothermal",
+                                                            "seismic",
+                                                            "ritual-objects",
+                                                            "abandoned",
+                                                            "tunnel",
+                                                            "metal-creak",
+                                                            "dark-drone-noise",
+                                                            "electric",
+                                                            "ventilation",
+                                                            "factory",
+                                                            "polar-station",
+                                                            "radio-space",
+                                                            "empty-space",
+                                                            "grain-texture",
+                                                            "nasa" };
+const char *const FieldModDestNames[7] = { "Off", "Pitch", "Cutoff", "Resonance", "Filter Mode", "Level", "Pan" };
+const int         FieldModDestMap[7] = {
+    0, 1, 6, 7, 8, 9, 10
+};   // ModDest: Off, Pitch, Cutoff, Resonance, FilterMode, Level, Pan
 /** @brief field.filter_type: the state-variable filter's response */
-const char* const FieldFilterTypeNames[4] = { "Low Pass", "Band Pass", "High Pass", "Notch" };
-namespace {
+const char *const FieldFilterTypeNames[4] = { "Low Pass", "Band Pass", "High Pass", "Notch" };
+namespace
+{
 /** @brief The Field track: the field recordings' sampler. */
 const ParamDesc FieldParams[field::COUNT] = {
     // Layer A: a recording of the library -- the category, a variation within it (Auto: the composer's choice), its level,
     // its pitch (resampled), where it starts (and how far that start may wander), and its direction.
-    { "a_category",     "A Category",     "",      0.0f,    31.0f,   0.0f, CurveE::CHOICE, FieldCategoryNames },
-    { "a_variation",    "A Variation",    "",      0.0f,    63.0f,   0.0f, CurveE::INT },
-    { "a_level",        "A Level",        "dB",  -36.0f,     6.0f,   0.0f, CurveE::LINEAR },
-    { "a_pitch",        "A Pitch",        "st",  -24.0f,    24.0f,   0.0f, CurveE::INT },
-    { "a_fine",         "A Fine",         "ct", -100.0f,   100.0f,   0.0f, CurveE::LINEAR },
-    { "a_start",        "A Start",        "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "a_start_random", "A Start Random", "",      0.0f,     1.0f,   1.0f, CurveE::LINEAR },
-    { "a_reverse",      "A Reverse",      "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
+    { "a_category", "A Category", "", 0.0f, 31.0f, 0.0f, CurveE::CHOICE, FieldCategoryNames },
+    { "a_variation", "A Variation", "", 0.0f, 63.0f, 0.0f, CurveE::INT },
+    { "a_level", "A Level", "dB", -36.0f, 6.0f, 0.0f, CurveE::LINEAR },
+    { "a_pitch", "A Pitch", "st", -24.0f, 24.0f, 0.0f, CurveE::INT },
+    { "a_fine", "A Fine", "ct", -100.0f, 100.0f, 0.0f, CurveE::LINEAR },
+    { "a_start", "A Start", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "a_start_random", "A Start Random", "", 0.0f, 1.0f, 1.0f, CurveE::LINEAR },
+    { "a_reverse", "A Reverse", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
     // Layer B: the same, off by default.
-    { "b_on",           "B On",           "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "b_category",     "B Category",     "",      0.0f,    31.0f,   0.0f, CurveE::CHOICE, FieldCategoryNames },
-    { "b_variation",    "B Variation",    "",      0.0f,    63.0f,   1.0f, CurveE::INT },
-    { "b_level",        "B Level",        "dB",  -36.0f,     6.0f,  -6.0f, CurveE::LINEAR },
-    { "b_pitch",        "B Pitch",        "st",  -24.0f,    24.0f,   0.0f, CurveE::INT },
-    { "b_fine",         "B Fine",         "ct", -100.0f,   100.0f,   0.0f, CurveE::LINEAR },
-    { "b_start",        "B Start",        "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "b_start_random", "B Start Random", "",      0.0f,     1.0f,   1.0f, CurveE::LINEAR },
-    { "b_reverse",      "B Reverse",      "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "layer_mix",      "Layer Mix",      "",      0.0f,     1.0f,   0.5f, CurveE::LINEAR },
+    { "b_on", "B On", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "b_category", "B Category", "", 0.0f, 31.0f, 0.0f, CurveE::CHOICE, FieldCategoryNames },
+    { "b_variation", "B Variation", "", 0.0f, 63.0f, 1.0f, CurveE::INT },
+    { "b_level", "B Level", "dB", -36.0f, 6.0f, -6.0f, CurveE::LINEAR },
+    { "b_pitch", "B Pitch", "st", -24.0f, 24.0f, 0.0f, CurveE::INT },
+    { "b_fine", "B Fine", "ct", -100.0f, 100.0f, 0.0f, CurveE::LINEAR },
+    { "b_start", "B Start", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "b_start_random", "B Start Random", "", 0.0f, 1.0f, 1.0f, CurveE::LINEAR },
+    { "b_reverse", "B Reverse", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "layer_mix", "Layer Mix", "", 0.0f, 1.0f, 0.5f, CurveE::LINEAR },
     // The loop: over [loop_start, loop_end] of the recording, joined by an equal-power crossfade of loop_xfade.
-    { "loop",           "Loop",           "",      0.0f,     1.0f,   1.0f, CurveE::TOGGLE },
-    { "loop_start",     "Loop Start",     "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "loop_end",       "Loop End",       "",      0.0f,     1.0f,   1.0f, CurveE::LINEAR },
-    { "loop_xfade",     "Loop Crossfade", "ms",   10.0f, 10000.0f, 1500.0f, CurveE::LOG },
+    { "loop", "Loop", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
+    { "loop_start", "Loop Start", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "loop_end", "Loop End", "", 0.0f, 1.0f, 1.0f, CurveE::LINEAR },
+    { "loop_xfade", "Loop Crossfade", "ms", 10.0f, 10000.0f, 1500.0f, CurveE::LOG },
     // The amp envelope: long by default, the way a recording enters under an intro and leaves a breakdown.
-    { "amp_attack",     "Attack",         "ms",    1.0f, 30000.0f, 2000.0f, CurveE::LOG },
-    { "amp_decay",      "Decay",          "ms",    5.0f, 30000.0f, 1000.0f, CurveE::LOG },
-    { "amp_sustain",    "Sustain",        "",      0.0f,     1.0f,   1.0f, CurveE::LINEAR },
-    { "amp_release",    "Release",        "ms",    5.0f, 30000.0f, 4000.0f, CurveE::LOG },
+    { "amp_attack", "Attack", "ms", 1.0f, 30000.0f, 2000.0f, CurveE::LOG },
+    { "amp_decay", "Decay", "ms", 5.0f, 30000.0f, 1000.0f, CurveE::LOG },
+    { "amp_sustain", "Sustain", "", 0.0f, 1.0f, 1.0f, CurveE::LINEAR },
+    { "amp_release", "Release", "ms", 5.0f, 30000.0f, 4000.0f, CurveE::LOG },
     // The filter: the state-variable filter (its type) or one of the nine circuit models (Filters.h), the filter
     // envelope's depth in octaves and its decay (attack, sustain and release are in the block below), and the low cut
     // the depth rule wants under everything but kick and bass.
-    { "filter_model",   "Filter Model",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, PolyFilterModelNames },
-    { "filter_type",    "Filter Type",    "",      0.0f,     3.0f,   0.0f, CurveE::CHOICE, FieldFilterTypeNames },
-    { "cutoff",         "Cutoff",         "Hz",   40.0f, 20000.0f, 20000.0f, CurveE::LOG },
-    { "resonance",      "Resonance",      "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "filter_mode",    "Filter Mode",    "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "env_amount",     "Env Amount",     "oct",  -8.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "filter_decay",   "Filter Decay",   "ms",    5.0f, 30000.0f, 2000.0f, CurveE::LOG },
-    { "low_cut",        "Low Cut",        "Hz",   20.0f,  1000.0f, 150.0f, CurveE::LOG },
-    { "filt_attack",    "Filter Attack",  "ms",    0.1f,  4000.0f,   0.1f, CurveE::LOG },
-    { "filt_sustain",   "Filter Sustain", "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "filt_release",   "Filter Release", "ms",    5.0f,  8000.0f, 300.0f, CurveE::LOG },
-    { "menv_attack",    "Mod Attack",     "ms",    0.1f,  8000.0f,  10.0f, CurveE::LOG },
-    { "menv_decay",     "Mod Decay",      "ms",    5.0f, 12000.0f, 800.0f, CurveE::LOG },
-    { "menv_sustain",   "Mod Sustain",    "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "menv_release",   "Mod Release",    "ms",    5.0f, 12000.0f, 400.0f, CurveE::LOG },
-    { "lfo1_rate",     "LFO 1 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo1_shape",    "LFO 1 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo1_sync",     "LFO 1 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo1_retrig",   "LFO 1 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo1_fade",     "LFO 1 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "lfo2_rate",     "LFO 2 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo2_shape",    "LFO 2 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo2_sync",     "LFO 2 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo2_retrig",   "LFO 2 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo2_fade",     "LFO 2 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "lfo3_rate",     "LFO 3 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo3_shape",    "LFO 3 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo3_sync",     "LFO 3 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo3_retrig",   "LFO 3 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo3_fade",     "LFO 3 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "lfo4_rate",     "LFO 4 Rate",     "Hz",    0.01f,   40.0f,   1.0f, CurveE::LOG },
-    { "lfo4_shape",    "LFO 4 Shape",    "",      0.0f,     6.0f,   0.0f, CurveE::CHOICE, LfoShapeNames },
-    { "lfo4_sync",     "LFO 4 Sync",     "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, LfoSyncNames },
-    { "lfo4_retrig",   "LFO 4 Retrig",   "",      0.0f,     1.0f,   0.0f, CurveE::TOGGLE },
-    { "lfo4_fade",     "LFO 4 Fade",     "s",     0.0f,     8.0f,   0.0f, CurveE::LINEAR },
-    { "mx1_src",       "Mod 1 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx1_dst",       "Mod 1 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx1_amount",    "Mod 1 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx2_src",       "Mod 2 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx2_dst",       "Mod 2 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx2_amount",    "Mod 2 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx3_src",       "Mod 3 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx3_dst",       "Mod 3 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx3_amount",    "Mod 3 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx4_src",       "Mod 4 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx4_dst",       "Mod 4 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx4_amount",    "Mod 4 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx5_src",       "Mod 5 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx5_dst",       "Mod 5 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx5_amount",    "Mod 5 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx6_src",       "Mod 6 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx6_dst",       "Mod 6 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx6_amount",    "Mod 6 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx7_src",       "Mod 7 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx7_dst",       "Mod 7 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx7_amount",    "Mod 7 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "mx8_src",       "Mod 8 Source",   "",      0.0f,     9.0f,   0.0f, CurveE::CHOICE, ModSourceNames },
-    { "mx8_dst",       "Mod 8 Target",   "",      0.0f,    5.0f,   0.0f, CurveE::CHOICE, BassModDestNames },
-    { "mx8_amount",    "Mod 8 Amount",   "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
+    { "filter_model", "Filter Model", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, PolyFilterModelNames },
+    { "filter_type", "Filter Type", "", 0.0f, 3.0f, 0.0f, CurveE::CHOICE, FieldFilterTypeNames },
+    { "cutoff", "Cutoff", "Hz", 40.0f, 20000.0f, 20000.0f, CurveE::LOG },
+    { "resonance", "Resonance", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "filter_mode", "Filter Mode", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "env_amount", "Env Amount", "oct", -8.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "filter_decay", "Filter Decay", "ms", 5.0f, 30000.0f, 2000.0f, CurveE::LOG },
+    { "low_cut", "Low Cut", "Hz", 20.0f, 1000.0f, 150.0f, CurveE::LOG },
+    { "filt_attack", "Filter Attack", "ms", 0.1f, 4000.0f, 0.1f, CurveE::LOG },
+    { "filt_sustain", "Filter Sustain", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "filt_release", "Filter Release", "ms", 5.0f, 8000.0f, 300.0f, CurveE::LOG },
+    { "menv_attack", "Mod Attack", "ms", 0.1f, 8000.0f, 10.0f, CurveE::LOG },
+    { "menv_decay", "Mod Decay", "ms", 5.0f, 12000.0f, 800.0f, CurveE::LOG },
+    { "menv_sustain", "Mod Sustain", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "menv_release", "Mod Release", "ms", 5.0f, 12000.0f, 400.0f, CurveE::LOG },
+    { "lfo1_rate", "LFO 1 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo1_shape", "LFO 1 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo1_sync", "LFO 1 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo1_retrig", "LFO 1 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo1_fade", "LFO 1 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "lfo2_rate", "LFO 2 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo2_shape", "LFO 2 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo2_sync", "LFO 2 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo2_retrig", "LFO 2 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo2_fade", "LFO 2 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "lfo3_rate", "LFO 3 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo3_shape", "LFO 3 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo3_sync", "LFO 3 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo3_retrig", "LFO 3 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo3_fade", "LFO 3 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "lfo4_rate", "LFO 4 Rate", "Hz", 0.01f, 40.0f, 1.0f, CurveE::LOG },
+    { "lfo4_shape", "LFO 4 Shape", "", 0.0f, 6.0f, 0.0f, CurveE::CHOICE, LfoShapeNames },
+    { "lfo4_sync", "LFO 4 Sync", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, LfoSyncNames },
+    { "lfo4_retrig", "LFO 4 Retrig", "", 0.0f, 1.0f, 0.0f, CurveE::TOGGLE },
+    { "lfo4_fade", "LFO 4 Fade", "s", 0.0f, 8.0f, 0.0f, CurveE::LINEAR },
+    { "mx1_src", "Mod 1 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx1_dst", "Mod 1 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx1_amount", "Mod 1 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx2_src", "Mod 2 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx2_dst", "Mod 2 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx2_amount", "Mod 2 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx3_src", "Mod 3 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx3_dst", "Mod 3 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx3_amount", "Mod 3 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx4_src", "Mod 4 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx4_dst", "Mod 4 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx4_amount", "Mod 4 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx5_src", "Mod 5 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx5_dst", "Mod 5 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx5_amount", "Mod 5 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx6_src", "Mod 6 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx6_dst", "Mod 6 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx6_amount", "Mod 6 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx7_src", "Mod 7 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx7_dst", "Mod 7 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx7_amount", "Mod 7 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "mx8_src", "Mod 8 Source", "", 0.0f, 9.0f, 0.0f, CurveE::CHOICE, ModSourceNames },
+    { "mx8_dst", "Mod 8 Target", "", 0.0f, 5.0f, 0.0f, CurveE::CHOICE, BassModDestNames },
+    { "mx8_amount", "Mod 8 Amount", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
     // Output: width of the stereo image, pan, the sends and the duck under the kick.
-    { "width",          "Width",          "",      0.0f,     2.0f,   1.0f, CurveE::LINEAR },
-    { "pan",            "Pan",            "",     -1.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "room_send",      "Room Send",      "",      0.0f,     1.0f,   0.1f, CurveE::LINEAR },
-    { "plate_send",     "Plate Send",     "",      0.0f,     1.0f,   0.0f, CurveE::LINEAR },
-    { "hall_send",      "Hall Send",      "",      0.0f,     1.0f,   0.2f, CurveE::LINEAR },
-    { "duck",           "Duck",           "",      0.0f,     1.0f,   0.4f, CurveE::LINEAR },
+    { "width", "Width", "", 0.0f, 2.0f, 1.0f, CurveE::LINEAR },
+    { "pan", "Pan", "", -1.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "room_send", "Room Send", "", 0.0f, 1.0f, 0.1f, CurveE::LINEAR },
+    { "plate_send", "Plate Send", "", 0.0f, 1.0f, 0.0f, CurveE::LINEAR },
+    { "hall_send", "Hall Send", "", 0.0f, 1.0f, 0.2f, CurveE::LINEAR },
+    { "duck", "Duck", "", 0.0f, 1.0f, 0.4f, CurveE::LINEAR },
 };
 
 /** @brief The modules, in the order of Module. */
-const ModuleSpec Modules[static_cast<int>(ModuleE::COUNT)] = {
+const ModuleSpec Modules[static_cast<int>( ModuleE::COUNT )] = {
     { "compose", ComposeParams, compose::COUNT, 1 },
-    { "kick",    KickParams,    kick::COUNT,    1 },
-    { "bass",    BassParams,    bass::COUNT,    1 },
-    { "perc",    PercParams,    perc::COUNT,    PercLanes },
-    { "acid",    AcidParams,    acid::COUNT,    1 },
-    { "poly",    PolyParams,    poly::COUNT,    PolyInstances, PolyInstanceNames },
-    { "sfx",     SfxParams,     sfx::COUNT,     1 },
-    { "fx",      FxParams,      fx::COUNT,      1 },
-    { "mix",     MixParams,     mix::COUNT,     1 },
-    { "master",  MasterParams,  master::COUNT,  1 },
-    { "cue",     CueParams,     cue::COUNT,     1 },
+    { "kick", KickParams, kick::COUNT, 1 },
+    { "bass", BassParams, bass::COUNT, 1 },
+    { "perc", PercParams, perc::COUNT, PercLanes },
+    { "acid", AcidParams, acid::COUNT, 1 },
+    { "poly", PolyParams, poly::COUNT, PolyInstances, PolyInstanceNames },
+    { "sfx", SfxParams, sfx::COUNT, 1 },
+    { "fx", FxParams, fx::COUNT, 1 },
+    { "mix", MixParams, mix::COUNT, 1 },
+    { "master", MasterParams, master::COUNT, 1 },
+    { "cue", CueParams, cue::COUNT, 1 },
     { "texture", TextureParams, texture::COUNT, 1 },
-    { "vocal",   VocalParams,   vocal::COUNT,   1 },
-    { "psyfx",   PsyFxParams,   psyfx::COUNT,   1 },
-    { "field",   FieldParams,   field::COUNT,   1 },
+    { "vocal", VocalParams, vocal::COUNT, 1 },
+    { "psyfx", PsyFxParams, psyfx::COUNT, 1 },
+    { "field", FieldParams, field::COUNT, 1 },
 };
 
 /**
@@ -1197,204 +1262,258 @@ const ModuleSpec Modules[static_cast<int>(ModuleE::COUNT)] = {
  * @param[in] c  the curve
  * @return true when it takes whole steps
  */
-bool isDiscrete(CurveE c) { return c == CurveE::INT || c == CurveE::CHOICE || c == CurveE::TOGGLE; }
+bool isDiscrete( CurveE c )
+{
+    return c == CurveE::INT || c == CurveE::CHOICE || c == CurveE::TOGGLE;
+}
 
-} // namespace
+}   // namespace
 
 ParamStore::ParamStore()
 {
-    for (auto& row : m_bases) for (int& b : row) b = -1;
+    for ( auto &row : m_bases )
+        for ( int &b : row ) b = -1;
     int total = 0;
-    for (const ModuleSpec& m : Modules) total += m.m_count * m.m_instances;
-    m_entries.reserve(static_cast<size_t>(total));
-    for (int mi = 0; mi < static_cast<int>(ModuleE::COUNT); ++mi) {
-        const ModuleSpec& m = Modules[mi];
-        for (int inst = 0; inst < m.m_instances && inst < MaxInstances; ++inst) {
-            m_bases[mi][inst] = static_cast<int>(m_entries.size());
-            std::string prefix = m.m_instanceNames != nullptr ? std::string(m.m_instanceNames[inst]) : std::string(m.m_prefix);
-            if (m.m_instances > 1 && m.m_instanceNames == nullptr) prefix += std::to_string(inst + 1);
-            for (int p = 0; p < m.m_count; ++p) {
-                Entry e{ &m.m_descs[p], prefix + "." + m.m_descs[p].m_key, static_cast<ModuleE>(mi), inst };
-                m_index.emplace(e.m_key, static_cast<int>(m_entries.size()));
-                m_entries.push_back(std::move(e));
+    for ( const ModuleSpec &m : Modules ) total += m.m_count * m.m_instances;
+    m_entries.reserve( static_cast<size_t>( total ) );
+    for ( int mi = 0; mi < static_cast<int>( ModuleE::COUNT ); ++mi )
+    {
+        const ModuleSpec &m = Modules[mi];
+        for ( int inst = 0; inst < m.m_instances && inst < MaxInstances; ++inst )
+        {
+            m_bases[mi][inst] = static_cast<int>( m_entries.size() );
+            std::string prefix =
+                m.m_instanceNames != nullptr ? std::string( m.m_instanceNames[inst] ) : std::string( m.m_prefix );
+            if ( m.m_instances > 1 && m.m_instanceNames == nullptr ) prefix += std::to_string( inst + 1 );
+            for ( int p = 0; p < m.m_count; ++p )
+            {
+                Entry e{ &m.m_descs[p], prefix + "." + m.m_descs[p].m_key, static_cast<ModuleE>( mi ), inst };
+                m_index.emplace( e.m_key, static_cast<int>( m_entries.size() ) );
+                m_entries.push_back( std::move( e ) );
             }
         }
     }
-    m_values = std::make_unique<std::atomic<float>[]>(m_entries.size());
+    m_values = std::make_unique<std::atomic<float>[]>( m_entries.size() );
     // Defaults: the descriptors', then the instance-specific ones of the default kit on top.
-    m_defaults.resize(m_entries.size());
-    for (int i = 0; i < count(); ++i) {
-        m_defaults[static_cast<size_t>(i)] = desc(i).m_defValue;
-        m_values[static_cast<size_t>(i)].store(desc(i).m_defValue, std::memory_order_relaxed);
+    m_defaults.resize( m_entries.size() );
+    for ( int i = 0; i < count(); ++i )
+    {
+        m_defaults[static_cast<size_t>( i )] = desc( i ).m_defValue;
+        m_values[static_cast<size_t>( i )].store( desc( i ).m_defValue, std::memory_order_relaxed );
     }
-    parseText(DefaultKit);
-    parseText(DefaultPoly);
-    for (int i = 0; i < count(); ++i) m_defaults[static_cast<size_t>(i)] = get(i);
+    parseText( DefaultKit );
+    parseText( DefaultPoly );
+    for ( int i = 0; i < count(); ++i ) m_defaults[static_cast<size_t>( i )] = get( i );
 }
 
-int ParamStore::base(ModuleE m, int instance) const
+int ParamStore::base( ModuleE m, int instance ) const
 {
-    const int mi = static_cast<int>(m);
-    if (mi < 0 || mi >= static_cast<int>(ModuleE::COUNT) || instance < 0 || instance >= MaxInstances) return -1;
+    const int mi = static_cast<int>( m );
+    if ( mi < 0 || mi >= static_cast<int>( ModuleE::COUNT ) || instance < 0 || instance >= MaxInstances ) return -1;
     return m_bases[mi][instance];
 }
 
-int ParamStore::find(std::string_view key) const
+int ParamStore::find( std::string_view key ) const
 {
-    const auto it = m_index.find(std::string(key));
+    const auto it = m_index.find( std::string( key ) );
     return it == m_index.end() ? -1 : it->second;
 }
 
-int ParamStore::getInt(int id) const
+int ParamStore::getInt( int id ) const
 {
-    return static_cast<int>(std::lround(get(id)));
+    return static_cast<int>( std::lround( get( id ) ) );
 }
 
-void ParamStore::set(int id, float value)
+void ParamStore::set( int id, float value )
 {
-    if (id < 0 || id >= count()) return;
-    const ParamDesc& d = desc(id);
-    if (!(value == value)) value = m_defaults.empty() ? d.m_defValue : m_defaults[static_cast<size_t>(id)];   // NaN
-    float v = value < d.m_minValue ? d.m_minValue : (value > d.m_maxValue ? d.m_maxValue : value);
-    if (isDiscrete(d.m_curve)) v = std::round(v);
-    m_values[static_cast<size_t>(id)].store(v, std::memory_order_relaxed);
+    if ( id < 0 || id >= count() ) return;
+    const ParamDesc &d = desc( id );
+    if ( !( value == value ) )
+        value = m_defaults.empty() ? d.m_defValue : m_defaults[static_cast<size_t>( id )];   // NaN
+    float v = value < d.m_minValue ? d.m_minValue : ( value > d.m_maxValue ? d.m_maxValue : value );
+    if ( isDiscrete( d.m_curve ) ) v = std::round( v );
+    m_values[static_cast<size_t>( id )].store( v, std::memory_order_relaxed );
 }
 
-float ParamStore::toNormalised(int id, float value) const
+float ParamStore::toNormalised( int id, float value ) const
 {
-    const ParamDesc& d = desc(id);
-    if (d.m_maxValue <= d.m_minValue) return 0.0f;
+    const ParamDesc &d = desc( id );
+    if ( d.m_maxValue <= d.m_minValue ) return 0.0f;
     float n;
-    if (d.m_curve == CurveE::LOG) n = std::log(value / d.m_minValue) / std::log(d.m_maxValue / d.m_minValue);
-    else n = (value - d.m_minValue) / (d.m_maxValue - d.m_minValue);
-    return n < 0.0f ? 0.0f : (n > 1.0f ? 1.0f : n);
+    if ( d.m_curve == CurveE::LOG )
+        n = std::log( value / d.m_minValue ) / std::log( d.m_maxValue / d.m_minValue );
+    else
+        n = ( value - d.m_minValue ) / ( d.m_maxValue - d.m_minValue );
+    return n < 0.0f ? 0.0f : ( n > 1.0f ? 1.0f : n );
 }
 
-float ParamStore::fromNormalised(int id, float norm) const
+float ParamStore::fromNormalised( int id, float norm ) const
 {
-    const ParamDesc& d = desc(id);
-    const float n = norm < 0.0f ? 0.0f : (norm > 1.0f ? 1.0f : norm);
-    float v;
-    if (d.m_curve == CurveE::LOG) v = d.m_minValue * std::pow(d.m_maxValue / d.m_minValue, n);
-    else v = d.m_minValue + n * (d.m_maxValue - d.m_minValue);
-    if (isDiscrete(d.m_curve)) v = std::round(v);
+    const ParamDesc &d = desc( id );
+    const float      n = norm < 0.0f ? 0.0f : ( norm > 1.0f ? 1.0f : norm );
+    float            v;
+    if ( d.m_curve == CurveE::LOG )
+        v = d.m_minValue * std::pow( d.m_maxValue / d.m_minValue, n );
+    else
+        v = d.m_minValue + n * ( d.m_maxValue - d.m_minValue );
+    if ( isDiscrete( d.m_curve ) ) v = std::round( v );
     return v;
 }
 
 void ParamStore::resetDefaults()
 {
-    for (int i = 0; i < count(); ++i) m_values[static_cast<size_t>(i)].store(m_defaults[static_cast<size_t>(i)], std::memory_order_relaxed);
+    for ( int i = 0; i < count(); ++i )
+        m_values[static_cast<size_t>( i )].store( m_defaults[static_cast<size_t>( i )], std::memory_order_relaxed );
 }
 
-int ParamStore::moduleCount(ModuleE m)
+int ParamStore::moduleCount( ModuleE m )
 {
-    const int mi = static_cast<int>(m);
-    return mi >= 0 && mi < static_cast<int>(ModuleE::COUNT) ? Modules[mi].m_count : 0;
+    const int mi = static_cast<int>( m );
+    return mi >= 0 && mi < static_cast<int>( ModuleE::COUNT ) ? Modules[mi].m_count : 0;
 }
 
-void ParamStore::readModule(ModuleE m, int instance, float* out) const
+void ParamStore::readModule( ModuleE m, int instance, float *out ) const
 {
-    const int b = base(m, instance);
-    if (b < 0) return;
-    const int n = moduleCount(m);
-    for (int i = 0; i < n; ++i) out[i] = get(b + i);
+    const int b = base( m, instance );
+    if ( b < 0 ) return;
+    const int n = moduleCount( m );
+    for ( int i = 0; i < n; ++i ) out[i] = get( b + i );
 }
 
-void ParamStore::copyValuesFrom(const ParamStore& other)
+void ParamStore::copyValuesFrom( const ParamStore &other )
 {
     const int n = count() < other.count() ? count() : other.count();
-    for (int i = 0; i < n; ++i) m_values[static_cast<size_t>(i)].store(other.get(i), std::memory_order_relaxed);
+    for ( int i = 0; i < n; ++i ) m_values[static_cast<size_t>( i )].store( other.get( i ), std::memory_order_relaxed );
 }
 
-namespace {
+namespace
+{
 /**
  * @brief Lower case without spaces, for matching choice names ("Double Harmonic" = "doubleharmonic").
  * @param[in] s  the name
  * @return the name folded
  */
-std::string foldName(std::string_view s)
+std::string foldName( std::string_view s )
 {
     std::string out;
-    for (char ch : s) {
-        if (ch == ' ' || ch == '_' || ch == '-') continue;
-        out += (ch >= 'A' && ch <= 'Z') ? static_cast<char>(ch - 'A' + 'a') : ch;
+    for ( char ch : s )
+    {
+        if ( ch == ' ' || ch == '_' || ch == '-' ) continue;
+        out += ( ch >= 'A' && ch <= 'Z' ) ? static_cast<char>( ch - 'A' + 'a' ) : ch;
     }
     return out;
 }
-} // namespace
+}   // namespace
 
-bool ParamStore::parseText(std::string_view text, std::string* error)
+bool ParamStore::parseText( std::string_view text, std::string *error )
 {
     // Split into assignments. Newlines and ';' always separate; whitespace separates only where the
     // next word contains '=' -- so a choice name with a space ("compose.scale=Double Harmonic") stays
     // one value while "a=1 b=2" is still two assignments. '#' starts a comment to the end of the line.
     std::vector<std::string> items;
-    size_t pos = 0;
-    bool newItem = true;
-    while (pos < text.size()) {
+    size_t                   pos = 0;
+    bool                     newItem = true;
+    while ( pos < text.size() )
+    {
         const char ch = text[pos];
-        if (ch == '\n' || ch == ';' || ch == '\r') { newItem = true; ++pos; continue; }
-        if (ch == ' ' || ch == '\t') { ++pos; continue; }
-        if (ch == '#') { while (pos < text.size() && text[pos] != '\n') ++pos; continue; }
+        if ( ch == '\n' || ch == ';' || ch == '\r' )
+        {
+            newItem = true;
+            ++pos;
+            continue;
+        }
+        if ( ch == ' ' || ch == '\t' )
+        {
+            ++pos;
+            continue;
+        }
+        if ( ch == '#' )
+        {
+            while ( pos < text.size() && text[pos] != '\n' ) ++pos;
+            continue;
+        }
         size_t end = pos;
-        while (end < text.size() && text[end] != '\n' && text[end] != ';' && text[end] != '\r' && text[end] != ' ' && text[end] != '\t') ++end;
-        const std::string_view word = text.substr(pos, end - pos);
+        while ( end < text.size() && text[end] != '\n' && text[end] != ';' && text[end] != '\r' && text[end] != ' ' &&
+                text[end] != '\t' )
+            ++end;
+        const std::string_view word = text.substr( pos, end - pos );
         pos = end;
-        if (newItem || word.find('=') != std::string_view::npos || items.empty()) items.emplace_back(word);
-        else { items.back() += ' '; items.back() += word; }
+        if ( newItem || word.find( '=' ) != std::string_view::npos || items.empty() )
+            items.emplace_back( word );
+        else
+        {
+            items.back() += ' ';
+            items.back() += word;
+        }
         newItem = false;
     }
 
     bool ok = true;
-    for (const std::string& item : items) {
-        const std::string_view tok = trimView(item);
-        const size_t eq = tok.find('=');
-        if (eq == std::string_view::npos) {
-            if (error && ok) *error = "missing '=' in \"" + std::string(tok) + "\"";
+    for ( const std::string &item : items )
+    {
+        const std::string_view tok = trimView( item );
+        const size_t           eq = tok.find( '=' );
+        if ( eq == std::string_view::npos )
+        {
+            if ( error && ok ) *error = "missing '=' in \"" + std::string( tok ) + "\"";
             ok = false;
             continue;
         }
-        const std::string_view k = trimView(tok.substr(0, eq)), v = trimView(tok.substr(eq + 1));
-        const int id = find(k);
-        if (id < 0) {
-            if (error && ok) *error = "unknown parameter \"" + std::string(k) + "\"";
+        const std::string_view k = trimView( tok.substr( 0, eq ) ), v = trimView( tok.substr( eq + 1 ) );
+        const int              id = find( k );
+        if ( id < 0 )
+        {
+            if ( error && ok ) *error = "unknown parameter \"" + std::string( k ) + "\"";
             ok = false;
             continue;
         }
-        const ParamDesc& d = desc(id);
-        bool matched = false;
-        if ((d.m_curve == CurveE::CHOICE && d.m_choices != nullptr) || d.m_curve == CurveE::TOGGLE) {
-            const std::string fv = foldName(v);
-            if (d.m_curve == CurveE::TOGGLE && (fv == "on" || fv == "off")) { set(id, fv == "on" ? 1.0f : 0.0f); matched = true; }
-            for (int c = 0; !matched && d.m_choices != nullptr && c <= static_cast<int>(d.m_maxValue); ++c) {
-                if (fv == foldName(d.m_choices[c])) { set(id, static_cast<float>(c)); matched = true; }
+        const ParamDesc &d = desc( id );
+        bool             matched = false;
+        if ( ( d.m_curve == CurveE::CHOICE && d.m_choices != nullptr ) || d.m_curve == CurveE::TOGGLE )
+        {
+            const std::string fv = foldName( v );
+            if ( d.m_curve == CurveE::TOGGLE && ( fv == "on" || fv == "off" ) )
+            {
+                set( id, fv == "on" ? 1.0f : 0.0f );
+                matched = true;
+            }
+            for ( int c = 0; !matched && d.m_choices != nullptr && c <= static_cast<int>( d.m_maxValue ); ++c )
+            {
+                if ( fv == foldName( d.m_choices[c] ) )
+                {
+                    set( id, static_cast<float>( c ) );
+                    matched = true;
+                }
             }
         }
-        if (!matched) {
-            const std::string vs(v);
-            char* stop = nullptr;
-            const double x = std::strtod(vs.c_str(), &stop);
-            if (vs.empty() || stop == nullptr || *stop != 0) {
-                if (error && ok) *error = "bad value \"" + vs + "\" for " + std::string(k);
+        if ( !matched )
+        {
+            const std::string vs( v );
+            char             *stop = nullptr;
+            const double      x = std::strtod( vs.c_str(), &stop );
+            if ( vs.empty() || stop == nullptr || *stop != 0 )
+            {
+                if ( error && ok ) *error = "bad value \"" + vs + "\" for " + std::string( k );
                 ok = false;
                 continue;
             }
-            set(id, static_cast<float>(x));
+            set( id, static_cast<float>( x ) );
         }
     }
     return ok;
 }
 
-std::string ParamStore::toText(bool onlyChanged) const
+std::string ParamStore::toText( bool onlyChanged ) const
 {
     std::string out;
-    char buf[64];
-    for (int i = 0; i < count(); ++i) {
-        const float v = get(i);
-        if (onlyChanged && v == m_defaults[static_cast<size_t>(i)]) continue;
+    char        buf[64];
+    for ( int i = 0; i < count(); ++i )
+    {
+        const float v = get( i );
+        if ( onlyChanged && v == m_defaults[static_cast<size_t>( i )] ) continue;
         // %.9g round-trips every float exactly.
-        std::snprintf(buf, sizeof(buf), "%.9g", static_cast<double>(v));
-        out += key(i);
+        std::snprintf( buf, sizeof( buf ), "%.9g", static_cast<double>( v ) );
+        out += key( i );
         out += '=';
         out += buf;
         out += '\n';
@@ -1402,20 +1521,28 @@ std::string ParamStore::toText(bool onlyChanged) const
     return out;
 }
 
-std::string ParamStore::format(int id) const
+std::string ParamStore::format( int id ) const
 {
-    const ParamDesc& d = desc(id);
-    const float v = get(id);
-    if (d.m_curve == CurveE::CHOICE && d.m_choices != nullptr) return d.m_choices[getInt(id)];
-    if (d.m_curve == CurveE::TOGGLE) return v >= 0.5f ? "On" : "Off";
+    const ParamDesc &d = desc( id );
+    const float      v = get( id );
+    if ( d.m_curve == CurveE::CHOICE && d.m_choices != nullptr ) return d.m_choices[getInt( id )];
+    if ( d.m_curve == CurveE::TOGGLE ) return v >= 0.5f ? "On" : "Off";
     char buf[64];
-    if (d.m_curve == CurveE::INT) std::snprintf(buf, sizeof(buf), "%d", getInt(id));
-    else if (std::fabs(v) >= 100.0f) std::snprintf(buf, sizeof(buf), "%.0f", static_cast<double>(v));
-    else if (std::fabs(v) >= 10.0f) std::snprintf(buf, sizeof(buf), "%.1f", static_cast<double>(v));
-    else std::snprintf(buf, sizeof(buf), "%.2f", static_cast<double>(v));
+    if ( d.m_curve == CurveE::INT )
+        std::snprintf( buf, sizeof( buf ), "%d", getInt( id ) );
+    else if ( std::fabs( v ) >= 100.0f )
+        std::snprintf( buf, sizeof( buf ), "%.0f", static_cast<double>( v ) );
+    else if ( std::fabs( v ) >= 10.0f )
+        std::snprintf( buf, sizeof( buf ), "%.1f", static_cast<double>( v ) );
+    else
+        std::snprintf( buf, sizeof( buf ), "%.2f", static_cast<double>( v ) );
     std::string s = buf;
-    if (d.m_unit != nullptr && d.m_unit[0] != 0) { s += ' '; s += d.m_unit; }
+    if ( d.m_unit != nullptr && d.m_unit[0] != 0 )
+    {
+        s += ' ';
+        s += d.m_unit;
+    }
     return s;
 }
 
-} // namespace phos
+}   // namespace phos

@@ -75,18 +75,20 @@
 #include "phos/Adaa.h"
 #include "phos/Dsp.h"
 
-namespace phos {
+namespace phos
+{
 
 class ParamStore;
 
 /** @brief The kick drum synthesizer (one voice plus a fade slot). */
-class Kick {
+class Kick
+{
 public:
     /**
      * @brief Prepares for a sample rate.
      * @param[in] sampleRate  the sample rate in Hz
      */
-    void prepare(double sampleRate);
+    void prepare( double sampleRate );
     /** @brief Silences and clears all state. */
     void reset();
     /**
@@ -94,19 +96,19 @@ public:
      * @param[in] v        values indexed by kick:: (after offsets, overrides and constraints)
      * @param[in] keyRoot  pitch class of the key (0 = C), used when Tune = Key
      */
-    void update(const float* v, int keyRoot);
+    void update( const float *v, int keyRoot );
     /**
      * @brief Starts a kick.
      * @param[in] velocity  0..1
      * @param[in] late      how many samples ago the kick ideally started (0 <= late < 1)
      */
-    void trigger(float velocity, double late = 0.0);
+    void trigger( float velocity, double late = 0.0 );
     /**
      * @brief Renders @p n samples, replacing @p out.
      * @param[out] out  the samples
      * @param[in]  n    the block's samples
      */
-    void process(float* out, int n);
+    void process( float *out, int n );
 
     /**
      * @brief The end pitch actually used, after tuning.
@@ -129,19 +131,19 @@ public:
      * @param[in] t  seconds after the kick's ideal start
      * @return phase in cycles (not wrapped)
      */
-    double outputPhaseAt(double t) const;
+    double outputPhaseAt( double t ) const;
     /**
      * @brief Instantaneous frequency of the current settings at @p t seconds.
      * @param[in] t  seconds after the kick's start
      * @return the frequency in Hz
      */
-    double frequencyAt(double t) const;
+    double frequencyAt( double t ) const;
     /**
      * @brief Trims tau_2 so the output phase at @p t is @p targetCycles modulo whole cycles.
      * @param[in] t             seconds after the trigger (the first bass slot); <= 0 disables the trim
      * @param[in] targetCycles  wanted phase in cycles
      */
-    void setPhaseTarget(double t, double targetCycles);
+    void setPhaseTarget( double t, double targetCycles );
 
     /**
      * @brief Applies both amplitude constraints: the body floor, then the tail limit (which wins).
@@ -153,13 +155,13 @@ public:
      * @param[in]     slotSeconds  time from the kick to the first bass note
      * @param[in]     keyRoot      pitch class of the key, for the tuned end pitch
      */
-    static void constrain(float* v, double slotSeconds, int keyRoot);
+    static void constrain( float *v, double slotSeconds, int keyRoot );
     /**
      * @brief Shortens hold and decay of a parameter set so the tail at @p slotSeconds stays under the limit.
      * @param[in,out] v            kick values indexed by kick:: (modified in place)
      * @param[in]     slotSeconds  time from the kick to the first bass note
      */
-    static void constrainTail(float* v, double slotSeconds);
+    static void constrainTail( float *v, double slotSeconds );
 
     /**
      * @brief The octave-equivalent of the root or fifth nearest to @p targetHz.
@@ -167,36 +169,38 @@ public:
      * @param[in] targetHz  the frequency aimed at
      * @return the frequency in Hz
      */
-    static float tuneToKey(int keyRoot, float targetHz);
+    static float tuneToKey( int keyRoot, float targetHz );
 
 private:
     /** @brief Everything a kick needs, frozen at its trigger. */
-    struct Shape {
-        int    m_engine = 0;   ///< kick.engine
-        double m_fe = 50.0;   ///< end pitch, Hz
-        double m_fs = 330.0;   ///< start pitch, Hz
-        double m_tau1 = 0.004;   ///< the punch's sweep time constant, s
-        double m_tau2 = 0.022;   ///< the body's sweep time constant, s
-        double m_punch = 0.5;   ///< the punch's share
-        double m_attack = 10.0;   ///< the attack, samples
-        double m_hold = 576.0;   ///< the hold, samples
-        double m_decayRate = -1e-4;               ///< ln(amplitude) per sample after the hold
-        double m_damping = 0.9999;                ///< resonant engine radius per sample
+    struct Shape
+    {
+        int    m_engine = 0;          ///< kick.engine
+        double m_fe = 50.0;           ///< end pitch, Hz
+        double m_fs = 330.0;          ///< start pitch, Hz
+        double m_tau1 = 0.004;        ///< the punch's sweep time constant, s
+        double m_tau2 = 0.022;        ///< the body's sweep time constant, s
+        double m_punch = 0.5;         ///< the punch's share
+        double m_attack = 10.0;       ///< the attack, samples
+        double m_hold = 576.0;        ///< the hold, samples
+        double m_decayRate = -1e-4;   ///< ln(amplitude) per sample after the hold
+        double m_damping = 0.9999;    ///< resonant engine radius per sample
     };
     /** @brief One sounding kick: its shape, its envelopes and where it stands. */
-    struct Voice {
-        bool   m_active = false;   ///< sounding
-        Shape  m_s;   ///< the shape it was triggered with
-        double m_late = 0.0;                      ///< sub-sample start offset
-        int    m_n = 0;                           ///< samples since the trigger
-        double m_e1 = 1.0;   ///< e^(-t/tau_1)
-        double m_e2 = 1.0;   ///< e^(-t/tau_2)
-        double m_d1 = 1.0;   ///< e1's per-sample factor
-        double m_d2 = 1.0;   ///< e2's per-sample factor
-        float  m_click = 0.0f;   ///< the click layer's envelope
+    struct Voice
+    {
+        bool   m_active = false;    ///< sounding
+        Shape  m_s;                 ///< the shape it was triggered with
+        double m_late = 0.0;        ///< sub-sample start offset
+        int    m_n = 0;             ///< samples since the trigger
+        double m_e1 = 1.0;          ///< e^(-t/tau_1)
+        double m_e2 = 1.0;          ///< e^(-t/tau_2)
+        double m_d1 = 1.0;          ///< e1's per-sample factor
+        double m_d2 = 1.0;          ///< e2's per-sample factor
+        float  m_click = 0.0f;      ///< the click layer's envelope
         float  m_velocity = 1.0f;   ///< 0..1
-        double m_zRe = 0.0;   ///< the resonant phasor's real part
-        double m_zIm = 0.0;   ///< the resonant phasor's imaginary part
+        double m_zRe = 0.0;         ///< the resonant phasor's real part
+        double m_zIm = 0.0;         ///< the resonant phasor's imaginary part
     };
 
     /**
@@ -205,7 +209,7 @@ private:
      * @param[out]    click  receives the click layer's sample
      * @return the body's sample
      */
-    float voiceSample(Voice& v, float& click);
+    float voiceSample( Voice &v, float &click );
     /**
      * @brief The shape a kick triggered now would get, from the current parameters.
      * @return the shape a kick triggered now would get
@@ -217,48 +221,48 @@ private:
      * @param[in] tau2  the body time constant in seconds
      * @return the sweep's phase in cycles
      */
-    double phaseWith(double t, double tau2) const;
+    double phaseWith( double t, double tau2 ) const;
     /**
      * @brief The phase the output chain (ADAA, tone filter) adds at @p hz, in cycles.
      * @param[in] hz  the frequency in Hz
      * @return the phase the chain adds there, in cycles
      */
-    double chainPhase(double hz) const;
+    double chainPhase( double hz ) const;
 
-    double m_sr = 48000.0;   ///< sample rate
-    Voice  m_voice;   ///< the sounding kick
-    Voice  m_fade;   ///< the kick fading out under it
+    double m_sr = 48000.0;      ///< sample rate
+    Voice  m_voice;             ///< the sounding kick
+    Voice  m_fade;              ///< the kick fading out under it
     float  m_fadeGain = 0.0f;   ///< the fading kick's gain
     float  m_fadeStep = 0.0f;   ///< its per-sample step
 
     // Settings from update().
-    int    m_engine = 0;   ///< kick.engine
-    float  m_endHz = 50.0f;   ///< end pitch (tuned), Hz
-    float  m_startHz = 330.0f;   ///< start pitch, Hz
-    float  m_punch = 0.5f;   ///< the punch's share
-    double m_tau1 = 0.004;   ///< the punch's time constant, s
-    double m_tau2 = 0.022;   ///< the body's time constant, s
-    double m_tau2Trimmed = 0.022;   ///< the body's time constant after the phase trim, s
-    double m_attackSamples = 10.0;   ///< the amplitude envelope's attack, samples
-    double m_holdSamples = 576.0;   ///< its hold, samples
-    double m_decaySeconds = 0.15;   ///< its decay, seconds
-    float  m_drive = 2.0f;   ///< drive into the clip
-    float  m_driveNorm = 1.0f;   ///< the gain that keeps the level after the clip
-    int    m_clip = 0;   ///< kick.clip: soft (tanh) or hard
-    float  m_clickLevel = 0.2f;   ///< the click layer's level
-    float  m_clickDecay = 0.99f;   ///< the click layer's per-sample decay
-    float  m_toneHz = 9000.0f;   ///< the tone low pass
-    float  m_level = 1.0f;   ///< kick.level, linear
-    double m_lockT = 0.0;   ///< the phase lock: seconds from the trigger to the slot
-    double m_lockTarget = 0.0;   ///< the phase lock: the phase wanted at the slot, cycles
-    double m_trimKey[10] = { -1.0 };           ///< inputs of the last trim solve
+    int    m_engine = 0;               ///< kick.engine
+    float  m_endHz = 50.0f;            ///< end pitch (tuned), Hz
+    float  m_startHz = 330.0f;         ///< start pitch, Hz
+    float  m_punch = 0.5f;             ///< the punch's share
+    double m_tau1 = 0.004;             ///< the punch's time constant, s
+    double m_tau2 = 0.022;             ///< the body's time constant, s
+    double m_tau2Trimmed = 0.022;      ///< the body's time constant after the phase trim, s
+    double m_attackSamples = 10.0;     ///< the amplitude envelope's attack, samples
+    double m_holdSamples = 576.0;      ///< its hold, samples
+    double m_decaySeconds = 0.15;      ///< its decay, seconds
+    float  m_drive = 2.0f;             ///< drive into the clip
+    float  m_driveNorm = 1.0f;         ///< the gain that keeps the level after the clip
+    int    m_clip = 0;                 ///< kick.clip: soft (tanh) or hard
+    float  m_clickLevel = 0.2f;        ///< the click layer's level
+    float  m_clickDecay = 0.99f;       ///< the click layer's per-sample decay
+    float  m_toneHz = 9000.0f;         ///< the tone low pass
+    float  m_level = 1.0f;             ///< kick.level, linear
+    double m_lockT = 0.0;              ///< the phase lock: seconds from the trigger to the slot
+    double m_lockTarget = 0.0;         ///< the phase lock: the phase wanted at the slot, cycles
+    double m_trimKey[10] = { -1.0 };   ///< inputs of the last trim solve
 
-    Rng          m_noise;   ///< the click's noise
+    Rng          m_noise;         ///< the click's noise
     Svf          m_clickFilter;   ///< the click's band
-    Svf          m_toneFilter;   ///< the tone low pass
-    TanhAdaa     m_tanh;   ///< the soft clip
-    HardClipAdaa m_hard;   ///< the hard clip
-    DcBlocker    m_dc;   ///< after the clip
+    Svf          m_toneFilter;    ///< the tone low pass
+    TanhAdaa     m_tanh;          ///< the soft clip
+    HardClipAdaa m_hard;          ///< the hard clip
+    DcBlocker    m_dc;            ///< after the clip
 };
 
-} // namespace phos
+}   // namespace phos

@@ -37,7 +37,8 @@
 #include <string>
 #include <string_view>
 
-namespace phos {
+namespace phos
+{
 
 class Composer;
 class ParamStore;
@@ -48,7 +49,7 @@ class ParamStore;
  * @param[in] params    the knobs
  * @return the text
  */
-std::string writeSetText(const Composer& composer, const ParamStore& params);
+std::string writeSetText( const Composer &composer, const ParamStore &params );
 
 /**
  * @brief Reads a `.phosset` text into a composer and a parameter store.
@@ -58,7 +59,7 @@ std::string writeSetText(const Composer& composer, const ParamStore& params);
  * @param[out] error     receives a message for the first bad line, may be null
  * @return false when the header is missing or a line could not be applied
  */
-bool readSetText(std::string_view text, Composer& composer, ParamStore& params, std::string* error = nullptr);
+bool readSetText( std::string_view text, Composer &composer, ParamStore &params, std::string *error = nullptr );
 
 /**
  * @brief Writes a `.phosset` file.
@@ -67,7 +68,7 @@ bool readSetText(std::string_view text, Composer& composer, ParamStore& params, 
  * @param[in] params    the knobs
  * @return false if it cannot be written
  */
-bool writeSetFile(const char* path, const Composer& composer, const ParamStore& params);
+bool writeSetFile( const char *path, const Composer &composer, const ParamStore &params );
 /**
  * @brief Reads a `.phosset` file.
  * @param[in]     path      the file's path
@@ -76,6 +77,6 @@ bool writeSetFile(const char* path, const Composer& composer, const ParamStore& 
  * @param[out]    error     receives the failure, or null
  * @return false if it cannot be read
  */
-bool readSetFile(const char* path, Composer& composer, ParamStore& params, std::string* error = nullptr);
+bool readSetFile( const char *path, Composer &composer, ParamStore &params, std::string *error = nullptr );
 
-} // namespace phos
+}   // namespace phos

@@ -39,10 +39,12 @@
 #include "phos/Sfx.h"
 #include <cstdint>
 
-namespace phos {
+namespace phos
+{
 
 /** @brief The shamanic bed's generator (part Texture). */
-class Texture {
+class Texture
+{
 public:
     static constexpr int Voices = 3;   ///< simultaneous instruments
     static constexpr int Modes = 4;    ///< bowl modes (each a doublet)
@@ -51,7 +53,7 @@ public:
      * @brief Prepares for @p sampleRate.
      * @param[in] sampleRate  the sample rate in Hz
      */
-    void prepare(double sampleRate);
+    void prepare( double sampleRate );
     /** @brief Silences every instrument. */
     void reset();
     /**
@@ -59,7 +61,7 @@ public:
      * @param[in] v        the effective parameter values
      * @param[in] keyRoot  the key's root
      */
-    void update(const float* v, int keyRoot);
+    void update( const float *v, int keyRoot );
     /**
      * @brief Starts an instrument.
      * @param[in] type            SfxType::Bowl, Didgeridoo or JawHarp (anything else is ignored)
@@ -69,14 +71,14 @@ public:
      * @param[in] samplesPerBeat  the tempo, for the rhythm of breath, accents and plucks
      * @param[in] pick            the event's own seed (Engine.cpp derives it from the event's beat)
      */
-    void trigger(SfxTypeE type, int samples, float velocity, double late, double samplesPerBeat, uint64_t pick);
+    void trigger( SfxTypeE type, int samples, float velocity, double late, double samplesPerBeat, uint64_t pick );
     /**
      * @brief Renders @p n stereo samples, replacing @p L and @p R.
      * @param[out] L  receives the left channel (replaced)
      * @param[out] R  receives the right channel (replaced)
      * @param[in]  n  how many samples
      */
-    void process(float* L, float* R, int n);
+    void process( float *L, float *R, int n );
     /**
      * @brief Instruments sounding.
      * @return the instruments sounding
@@ -87,46 +89,47 @@ public:
      * @param[in] mode  the mode
      * @return its frequency ratio
      */
-    static double bowlRatio(int mode);
+    static double bowlRatio( int mode );
 
 private:
     /** @brief One sounding instrument of the bed. */
-    struct Voice {
-        SfxTypeE m_type = SfxTypeE::BOWL;   ///< which instrument
-        bool m_on = false;   ///< sounding
-        long long m_pos = 0;   ///< samples played
-        long long m_length = 1;   ///< the event's length, samples
-        double m_late = 0.0;   ///< the sub-sample onset
-        double m_spb = 20000.0;   ///< samples per beat
-        float m_velocity = 1.0f;   ///< 0..1
-        uint64_t m_age = 0;   ///< trigger order, for voice stealing
-        Rng m_rng;   ///< the event's own random stream
+    struct Voice
+    {
+        SfxTypeE  m_type = SfxTypeE::BOWL;   ///< which instrument
+        bool      m_on = false;              ///< sounding
+        long long m_pos = 0;                 ///< samples played
+        long long m_length = 1;              ///< the event's length, samples
+        double    m_late = 0.0;              ///< the sub-sample onset
+        double    m_spb = 20000.0;           ///< samples per beat
+        float     m_velocity = 1.0f;         ///< 0..1
+        uint64_t  m_age = 0;                 ///< trigger order, for voice stealing
+        Rng       m_rng;                     ///< the event's own random stream
         // Bowl: two partials per mode as rotating phasors (re, im) with their per-sample rotation.
-        double m_re[2 * Modes] = {};   ///< the partials' phasors: real part
-        double m_im[2 * Modes] = {};   ///< ... imaginary part
-        double m_c[2 * Modes] = {};   ///< their rotation per sample: cosine
-        double m_s[2 * Modes] = {};   ///< ... sine
+        double m_re[2 * Modes] = {};    ///< the partials' phasors: real part
+        double m_im[2 * Modes] = {};    ///< ... imaginary part
+        double m_c[2 * Modes] = {};     ///< their rotation per sample: cosine
+        double m_s[2 * Modes] = {};     ///< ... sine
         double m_amp[2 * Modes] = {};   ///< each partial's amplitude
         // Didgeridoo and jaw harp.
-        double m_f0 = 100.0;   ///< the drone's fundamental, Hz
-        double m_ph = 0.0;   ///< ... and its phase, cycles
-        static constexpr int MaxHarmonics = 96;   ///< 6 kHz over the lowest root (65 Hz)
-        float m_hw[MaxHarmonics] = {};               ///< harmonic weights, computed at the trigger
-        int m_harmonics = 0;   ///< harmonics in use
-        uint8_t m_pattern = 0;   ///< eighth notes of a bar that carry an accent or a pluck
-        int m_lastEighth = -1;   ///< the eighth note last looked at
-        float m_accent = 0.0f;   ///< the accent's level
-        float m_pluck = 0.0f;   ///< the pluck's envelope
-        float m_formant = 0.0f;   ///< the formant's position
-        float m_target = 0.0f;   ///< where it goes
-        bool m_up = false;   ///< the jaw harp's sweep goes up on this pluck (it alternates)
-        Svf m_f1;   ///< the first formant
-        Svf m_f2;   ///< the second formant
-        Svf m_hp1;   ///< the high pass: first section
-        Svf m_hp2;   ///< ... second
-        Svf m_hp3;   ///< ... third
-        Svf m_breathBp;   ///< the breath's band pass
-        double m_panPh = 0.0;   ///< the slow pan's phase
+        double               m_f0 = 100.0;              ///< the drone's fundamental, Hz
+        double               m_ph = 0.0;                ///< ... and its phase, cycles
+        static constexpr int MaxHarmonics = 96;         ///< 6 kHz over the lowest root (65 Hz)
+        float                m_hw[MaxHarmonics] = {};   ///< harmonic weights, computed at the trigger
+        int                  m_harmonics = 0;           ///< harmonics in use
+        uint8_t              m_pattern = 0;             ///< eighth notes of a bar that carry an accent or a pluck
+        int                  m_lastEighth = -1;         ///< the eighth note last looked at
+        float                m_accent = 0.0f;           ///< the accent's level
+        float                m_pluck = 0.0f;            ///< the pluck's envelope
+        float                m_formant = 0.0f;          ///< the formant's position
+        float                m_target = 0.0f;           ///< where it goes
+        bool                 m_up = false;              ///< the jaw harp's sweep goes up on this pluck (it alternates)
+        Svf                  m_f1;                      ///< the first formant
+        Svf                  m_f2;                      ///< the second formant
+        Svf                  m_hp1;                     ///< the high pass: first section
+        Svf                  m_hp2;                     ///< ... second
+        Svf                  m_hp3;                     ///< ... third
+        Svf                  m_breathBp;                ///< the breath's band pass
+        double               m_panPh = 0.0;             ///< the slow pan's phase
     };
     /**
      * @brief One sample of a voice, already placed in the stereo field.
@@ -134,18 +137,18 @@ private:
      * @param[out]    l  the left sample
      * @param[out]    r  the right sample
      */
-    void voiceSample(Voice& v, float& l, float& r);
+    void voiceSample( Voice &v, float &l, float &r );
 
-    double m_sr = 48000.0;   ///< sample rate
-    Voice m_voice[Voices];   ///< the instruments
-    uint64_t m_counter = 0;   ///< triggers so far (the voices' age)
-    int m_keyRoot = 6;   ///< the key's pitch class, for the tuning
-    float m_width = 0.8f;   ///< the width
-    float m_bowlDecay = 7.0f;   ///< the bowl's decay, s
-    float m_bowlBright = 0.4f;   ///< the bowl's brightness
-    float m_didgeFormant = 0.5f;   ///< the didgeridoo's formant
-    float m_didgeBreath = 0.5f;   ///< the didgeridoo's breath
-    float m_jawSweep = 0.6f;   ///< the jaw harp's sweep
+    double   m_sr = 48000.0;          ///< sample rate
+    Voice    m_voice[Voices];         ///< the instruments
+    uint64_t m_counter = 0;           ///< triggers so far (the voices' age)
+    int      m_keyRoot = 6;           ///< the key's pitch class, for the tuning
+    float    m_width = 0.8f;          ///< the width
+    float    m_bowlDecay = 7.0f;      ///< the bowl's decay, s
+    float    m_bowlBright = 0.4f;     ///< the bowl's brightness
+    float    m_didgeFormant = 0.5f;   ///< the didgeridoo's formant
+    float    m_didgeBreath = 0.5f;    ///< the didgeridoo's breath
+    float    m_jawSweep = 0.6f;       ///< the jaw harp's sweep
 };
 
-} // namespace phos
+}   // namespace phos
