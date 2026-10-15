@@ -102,7 +102,7 @@ struct Group {
  * Cell::bounds from the width it is given and returns the height that arrangement needs, so the
  * editor can ask a page how tall it wants to be before deciding on the window's design size.
  */
-class ControlPage : public juce::Component {
+class ControlPage : public juce::Component, public frame::Revealer {
 public:
     /** @brief An empty page; the add* calls fill it. */
     ControlPage() = default;
@@ -217,6 +217,12 @@ public:
     void showPlayed(const PhospheneProcessor& proc);
     /** @brief The right click of enableMidiLearn (the page listens to its controls' mouse). */
     void mouseDown(const juce::MouseEvent& e) override;
+    /** @brief Shows the section holding @p part (the search found it there; 15.10.2026). */
+    void reveal(juce::Component& part) override;
+    /** @brief The name under cell @p cell anew (the preset chooser's star). */
+    void setCellName(int cell, const juce::String& name);
+    /** @brief The modulation at the knob (15.10.2026; the editor's): the right-click menu's rows and the arcs. */
+    frame::ModulationAtKnob* modulation = nullptr;
 
 private:
     /** @brief Packs every group's cells and places the groups on the page (one pass of layout()); returns the bottom. */

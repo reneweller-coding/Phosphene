@@ -27,6 +27,8 @@ vector glyphs now, sharp at every window size, their words in the tooltips; ever
 **Behind the panel.** A test of the follower's engine (`testJam`): the transposition note for note, the drums as
 written, the break without its foundation. The jam's bus (Plugin/Jam.h) is the same file in all five repositories.
 
+**The ways around the panel** (15.10.2026, the family's Frame.h, from Empyrean): the search (Ctrl+K or the magnifier) finds any knob -- its page, section or lane opens and it lights up; "cutoff 800" sets it --, any preset, page or action; an info line along the bottom says what the control under the mouse is, its value, range, what moves it and its controller; every synth's presets in a browser (search, groups, favourites, recently played, hold to listen), a star under the chooser while the sound has moved, A|B held for the presets as chosen; modulation at the knob (an arc per matrix row, its depth and Modulate with in the right-click menu); the first steps on the first start; the standalone's window comes back where it was left (place, size, maximised); ASIO in the standalone's audio settings (Windows).
+
 ## 1.4.0 (02.10.2026): with a DAW, on a Mac, and heard
 
 **MIDI out, written down.** The plugin has always sent its score as MIDI in a DAW, a channel per part; the manual

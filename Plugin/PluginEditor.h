@@ -331,7 +331,15 @@ private:
         phos::Module synth = phos::Module::Kick;    ///< the synth it sets (named so: doxygen reads a member `module` as a C++20 module)
         int instance = 0;   ///< its instance
         std::vector<phos::SoundPreset> presets;   ///< factory and user presets, item id = index + 1
+        phosui::ControlPage* page = nullptr;   ///< the page it stands on (15.10.2026: the star under the chooser)
+        int nameCell = -1;   ///< the chooser's cell on that page
+        std::vector<std::pair<int, float>> loaded;   ///< the knobs the preset chosen put (store id, real value): the star compares
     };
+    /** @brief The knobs preset @p preset puts on instance @p instance of synth @p synth (store id, real value; 15.10.2026). */
+    std::vector<std::pair<int, float>> presetTargets(phos::Module synth, int instance, const phos::SoundPreset& preset);
+    std::unique_ptr<phos::ParamStore> scratch_;   ///< a store to work out what a preset would set (presetTargets)
+    /** @brief The page of a synth's chooser. */
+    static int tabOfSynth(phos::Module synth, int instance);
     /** @brief Fills a chooser from the factory presets and the user's, grouped (after a save, again). */
     void fillPresetBox(PresetBox& pb);
     /**
@@ -482,6 +490,33 @@ private:
     juce::TextButton* ratingButton_[2] = {};           ///< good, bad
     /** @brief Writes a verdict for the bar that is playing (+1 good, -1 bad) into the ratings file. */
     void rateNow(int verdict);
+    /** @} */
+
+    /** @name The family's ways around the panel (15.10.2026, Frame.h, from Empyrean)
+     *  @{ */
+    /** @brief The command palette's button (Ctrl+K). */
+    frame::IconButton search_{ frame::IconButton::Icon::Search, "Search (Ctrl+K): any control, preset or action by a few letters" };
+    /** @brief Held: the synths play their presets as they were chosen; let go, your sound again. */
+    frame::IconButton compare_{ frame::IconButton::Icon::Compare, "Hold to hear the presets as they were chosen; let go for your sound" };
+    std::unique_ptr<frame::InfoLine> info_;            ///< the info line at the bottom: what the control under the mouse is
+    std::unique_ptr<frame::CommandPalette> palette_;   ///< the command palette, over everything while open
+    std::unique_ptr<frame::PresetBrowser> browser_;    ///< the preset browser, over everything while open
+    std::unique_ptr<frame::Tour> tour_;                ///< the first steps
+    frame::WindowKeeper window_;                       ///< the standalone's window back where it was left
+    std::unique_ptr<frame::ModulationAtKnob> modulation_;   ///< the voices' matrix rows on their knobs (every page's)
+    int tourTicks_ = 0;                                ///< ticks until the first start's tour (-1: considered)
+    bool comparing_ = false;                           ///< A|B is held
+    void openPalette();                                ///< the command palette (Ctrl+K)
+    std::vector<frame::CommandPalette::Command> paletteCommands();   ///< what the palette can do: actions, pages, controls, presets
+    void startTour();                                  ///< the first steps, from the first
+    /** @brief The info line's words for store id @p id: its name, its value, its range, what moves it, its key. */
+    bool describeControl(int id, juce::String& name, juce::String& text);
+    /** @brief Shows the control of store id @p id (its tab, lane, section) and lights it; false when no page has it. */
+    bool revealId(int id);
+    /** @brief Opens the preset browser on a synth's chooser. */
+    void browsePresets(PresetBox& pb);
+    /** @brief A|B pressed (the presets as chosen) or let go (the sound as it is). */
+    void compare(bool on);
     /** @} */
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PhospheneEditor)

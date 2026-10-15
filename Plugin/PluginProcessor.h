@@ -422,6 +422,23 @@ public:
      *        per-track recipes leave the sound as the preset has it.
      */
     void applyPreset(phos::Module module, int instance, const phos::SoundPreset& preset);
+    /**
+     * @brief Opens one undo step of several changes (15.10.2026: a modulation added, a depth dragged, a value typed into
+     *        the command palette); endStep() records it. Steps nest, and a knob's gesture inside one joins it.
+     */
+    void beginStep(const juce::String& what);
+    void endStep();   ///< closes beginStep's step
+    /** @brief The synth knob @p id belongs to takes the composer's preset over (Own Sound on) where it plays one -- before a knob of it is set by hand. */
+    void takeOver(int id);
+    /** @brief Sets the knobs @p values (store id, real value) through the host as one undo step named @p what. */
+    void applyKnobs(const juce::String& what, const std::vector<std::pair<int, float>>& values);
+    /**
+     * @brief Plays @p values (store id, real value) while a preset is listened to (the browser, A|B held) -- in the store
+     *        only: no undo step, nothing to the host --; endPreview() takes them back.
+     */
+    void previewKnobs(const std::vector<std::pair<int, float>>& values);
+    /** @brief Back to the knobs as they were before previewKnobs (nothing when no preview plays). */
+    void endPreview();
 
     /** @name The Field track's presets and library (27.09.2026; phos/FieldPresets.h, phos/FieldLibrary.h)
      *  @{ */
@@ -999,6 +1016,7 @@ private:
     void recordUndo(const juce::String& name, const UndoState& before);
     mutable juce::UndoManager undo_{ 32 * 1024 * 1024, 100 };   ///< undo and redo of whole states (UndoState)
     bool restoringUndo_ = false;   ///< applyUndoState is running: record nothing
+    std::vector<std::pair<int, float>> previewSaved_;   ///< the knobs a preview replaced (store id, real value)
     int gestureDepth_ = 0;         ///< gestures open at once (a two-knob drag is one step)
     UndoState gestureBefore_;      ///< the state when the first open gesture began
     juce::String gestureName_;     ///< the knob it began on

@@ -253,5 +253,7 @@ void PhospheneEditor::parentHierarchyChanged()
         if (window != nullptr)
             window->setTitleBarButtonsRequired(juce::DocumentWindow::minimiseButton | juce::DocumentWindow::maximiseButton
                                                    | juce::DocumentWindow::closeButton, false);
+        // The standalone's window back where it was left (15.10.2026; not while it photographs itself).
+        if (!safe->shooting_) safe->window_.attach(*safe, "Phosphene");
     });
 }

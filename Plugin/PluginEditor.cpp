@@ -571,7 +571,9 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
     headsetIcon_.onClick = [this] { setTab(TabPerform); };
     likeIcon_.onClick = [this] { rateNow(1); };
     dislikeIcon_.onClick = [this] { rateNow(-1); };
-    for (auto* b : { &undoIcon_, &redoIcon_, &helpIcon_, &settingsIcon_, &likeIcon_, &dislikeIcon_ }) content_.addAndMakeVisible(b);
+    search_.onClick = [this] { openPalette(); };
+    compare_.onStateChange = [this] { if (compare_.isDown() != comparing_) compare(compare_.isDown()); };
+    for (auto* b : { &undoIcon_, &redoIcon_, &helpIcon_, &settingsIcon_, &likeIcon_, &dislikeIcon_, &search_, &compare_ }) content_.addAndMakeVisible(b);
     content_.addChildComponent(headsetIcon_);
     // The set as a strip under the header (the Arrange tab's top, to scale): a click on a track jumps to it.
     overview_.setStripOnly(true);
@@ -586,6 +588,27 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
     content_.addChildComponent(updateButton_);
     help_ = std::make_unique<HelpView>(proc_);
     content_.addChildComponent(*help_);
+    // The family's ways around the panel (15.10.2026, Frame.h): the info line at the bottom, and over everything while
+    // open the command palette, the preset browser and the first steps.
+    info_ = std::make_unique<frame::InfoLine>(phosui::skin(), content_);
+    info_->describe = [this](int id, juce::String& name, juce::String& text) { return describeControl(id, name, text); };
+    content_.addAndMakeVisible(*info_);
+    palette_ = std::make_unique<frame::CommandPalette>(phosui::skin());
+    browser_ = std::make_unique<frame::PresetBrowser>(phosui::skin(), "Phosphene");
+    tour_ = std::make_unique<frame::Tour>(phosui::skin());
+    tour_->onDone = [] { frame::Settings::of("Phosphene").setValue("tourDone", "1"); };
+    for (juce::Component* c : { static_cast<juce::Component*>(palette_.get()), static_cast<juce::Component*>(browser_.get()), static_cast<juce::Component*>(tour_.get()) })
+        content_.addChildComponent(c);
+    {
+        frame::ModAccess a = frame::slotMatrix(proc_.params(),
+                                               [this](int id, float v) {
+                                                   proc_.takeOver(id);
+                                                   if (StoreParameter* p = proc_.parameterFor(id)) p->setValueNotifyingHost(proc_.params().toNormalised(id, v));
+                                               },
+                                               [this](const juce::String& what) { proc_.beginStep(what); }, [this] { proc_.endStep(); }, phosui::skin());
+        a.say = [this](const juce::String& t) { if (info_ != nullptr) info_->showText(t); };
+        modulation_ = std::make_unique<frame::ModulationAtKnob>(std::move(a));
+    }
     // Not while the editor is photographing itself for the manual: that run asks nobody anything.
     const bool shooting = juce::SystemStats::getEnvironmentVariable("PHOS_SHOT", "").isNotEmpty()
                        || juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_ALL", "").isNotEmpty()
@@ -600,6 +623,9 @@ PhospheneEditor::PhospheneEditor(PhospheneProcessor& p) : juce::AudioProcessorEd
         content_.addChildComponent(b);
     }
     buildPages();
+    // The modulation at the knob on every page (15.10.2026): the voices' matrix rows on their knobs.
+    for (auto& page : pages_) if (page != nullptr) page->modulation = modulation_.get();
+    for (auto& page : percPages_) if (page != nullptr) page->modulation = modulation_.get();
 
     // The design size is the size at which no page has to scroll; the window opens scaled to fit
     // the screen, and dragging its corner only zooms (the aspect ratio is fixed).
@@ -816,7 +842,11 @@ void PhospheneEditor::addSoundGroup(ControlPage& page, Module module, int instan
     box->onChange = [this, raw] {
         const int id = raw->box->getSelectedId();
         if (id <= 0 || id > static_cast<int>(raw->presets.size())) return;
-        proc_.applyPreset(raw->synth, raw->instance, raw->presets[static_cast<size_t>(id - 1)]);
+        const SoundPreset& preset = raw->presets[static_cast<size_t>(id - 1)];
+        proc_.applyPreset(raw->synth, raw->instance, preset);
+        raw->loaded = presetTargets(raw->synth, raw->instance, preset);
+        frame::PresetBrowser::played("Phosphene", juce::String(proc_.params().key(proc_.params().base(raw->synth, raw->instance))).upToFirstOccurrenceOf(".", false, false)
+                                                      .trimCharactersAtEnd("0123456789"), juce::String(preset.name));
     };
     fillPresetBox(*pb);
 
@@ -837,8 +867,31 @@ void PhospheneEditor::addSoundGroup(ControlPage& page, Module module, int instan
         }), false);
     };
     page.addControl(g, std::move(save), "", 2, true);
-    page.addControl(g, std::move(box), "Preset", 3);
+    auto browse = std::make_unique<frame::IconButton>(frame::IconButton::Icon::Search,
+                                                      "Browse the presets: by name, group, favourites, recently played; hold a row's triangle to listen");
+    browse->onClick = [this, raw] { browsePresets(*raw); };
+    page.addControl(g, std::move(browse), "", 2, true);
+    raw->page = &page;
+    raw->nameCell = page.addControl(g, std::move(box), "Preset", 3);
     presetBoxes_.push_back(std::move(pb));
+}
+
+int PhospheneEditor::tabOfSynth(Module synth, int instance)
+{
+    return synth == Module::Kick ? TabKick : synth == Module::Bass ? TabBass : synth == Module::Acid ? TabAcid : TabLead + instance;
+}
+
+std::vector<std::pair<int, float>> PhospheneEditor::presetTargets(Module synth, int instance, const SoundPreset& preset)
+{
+    // What the preset would make of the synth's knobs: worked out on a copy of the store.
+    if (scratch_ == nullptr) scratch_ = std::make_unique<ParamStore>();
+    scratch_->copyValuesFrom(proc_.params());
+    applySoundPreset(*scratch_, synth, instance, preset.text);
+    std::vector<std::pair<int, float>> out;
+    const int b = proc_.params().base(synth, instance);
+    for (int k = 0; k < ParamStore::moduleCount(synth); ++k)
+        if (!presetLeaves(synth, k)) out.emplace_back(b + k, scratch_->get(b + k));
+    return out;
 }
 
 void PhospheneEditor::addSfxPresetGroup(ControlPage& page, juce::Colour tint)
@@ -1038,9 +1091,16 @@ void PhospheneEditor::layoutContent()
     h.status = &status_;
     h.curation = &where_;
     h.update = &updateButton_;
-    h.tools = { &headsetIcon_, nullptr, &undoIcon_, &redoIcon_, nullptr, &helpIcon_, &settingsIcon_ };
+    h.tools = { &headsetIcon_, nullptr, &compare_, nullptr, &undoIcon_, &redoIcon_, nullptr, &search_, &helpIcon_, &settingsIcon_ };
     frame::layoutHeader(r, h);
     headerBottom_ = r.getY();
+    // The info line along the bottom (15.10.2026); the overlays over the whole body.
+    if (info_ != nullptr) {
+        info_->setBounds(r.removeFromBottom(frame::InfoLine::kHeight));
+        r.removeFromBottom(2);
+    }
+    for (juce::Component* c : { static_cast<juce::Component*>(palette_.get()), static_cast<juce::Component*>(browser_.get()), static_cast<juce::Component*>(tour_.get()) })
+        if (c != nullptr) c->setBounds(content_.getLocalBounds());
     // The overview, unless the settings fold it away (01.10.2026): then the pages get its height.
     const bool overview = frame::Settings::of("Phosphene").overview();
     overview_.setVisible(overview);
@@ -1119,6 +1179,10 @@ void PhospheneEditor::showSettings()
         m.linkStatus = [this] { return proc_.linkStatus(); };
     m.jamStatus = [this] { return proc_.jamStatus(); };   // the family jam (02.10.2026), plugin and standalone
     m.about = [] { return juce::String("Whole psytrance sets, composed and synthesised.\ngithub.com/reneweller-coding/Phosphene"); };
+    m.moreItems = [this](juce::PopupMenu& pm) {
+        pm.addItem("Search: any control, preset or action (Ctrl+K) ...", [this] { openPalette(); });
+        pm.addItem("First steps (the tour) ...", [this] { startTour(); });
+    };
     m.show(settingsIcon_);
 }
 
@@ -1186,11 +1250,30 @@ bool PhospheneEditor::keyPressed(const juce::KeyPress& key)
     k.save = [this] { setTab(TabExport); if (exportSet_ != nullptr) exportSet_->triggerClick(); };
     k.open = [this] { setTab(TabExport); if (loadSet_ != nullptr) loadSet_->triggerClick(); };
     k.exportFile = [this] { setTab(TabExport); if (exportMidi_ != nullptr) exportMidi_->triggerClick(); };
+    k.palette = [this] { openPalette(); };
     return frame::handleKey(key, k);
 }
 
 void PhospheneEditor::timerCallback()
 {
+    // The first steps on the first start (not in an automated run: the pictures, the manual, the report, PHOS_MUTE).
+    if (tourTicks_ >= 0 && ++tourTicks_ > 25) {
+        tourTicks_ = -1;
+        if (!shooting_ && !proc_.muteForced() && frame::Settings::of("Phosphene").value("tourDone").isEmpty()) startTour();
+    }
+    // The stars under the choosers: the knobs have moved from the preset chosen.
+    for (auto& pb : presetBoxes_)
+        if (pb->page != nullptr) {
+            const bool moved = !pb->loaded.empty() && !comparing_ && [&] {
+                const ParamStore& st = proc_.params();
+                for (const auto& [id, v] : pb->loaded) {
+                    const ParamDesc& d = st.desc(id);
+                    if (std::abs(st.get(id) - v) > 0.001f * std::max(1.0e-6f, d.maxValue - d.minValue)) return true;
+                }
+                return false;
+            }();
+            pb->page->setCellName(pb->nameCell, moved ? "Preset  *" : "Preset");
+        }
     // The live ring of the page on screen (26.09.2026).
     if (tab_ >= 0 && tab_ < static_cast<int>(pages_.size()) && pages_[static_cast<size_t>(tab_)] != nullptr)
         pages_[static_cast<size_t>(tab_)]->showPlayed(proc_);
@@ -1455,4 +1538,196 @@ void PhospheneEditor::runScreenshotMode()
         if (one.isNotEmpty()) safe->writeScreenshot(juce::File(one));
         juce::JUCEApplicationBase::quit();
     });
+}
+
+// ---------------------------------------------------------------- ways around the panel (15.10.2026)
+
+namespace {
+
+/** @brief "perc3.decay" -> "Perc 3", "kick.tune" -> "Kick": the module instance a store id belongs to. */
+juce::String moduleLabelOf(const ParamStore& s, int id)
+{
+    const std::string& k = s.key(id);
+    const juce::String p(k.substr(0, k.find('.')));
+    const juce::String name = p.trimCharactersAtEnd("0123456789");
+    const juce::String digits = p.substring(name.length());
+    const juce::String nice = name.substring(0, 1).toUpperCase() + name.substring(1);
+    return digits.isEmpty() ? nice : nice + " " + digits;
+}
+
+} // namespace
+
+void PhospheneEditor::openPalette()
+{
+    if (browser_->isVisible()) browser_->close();
+    palette_->open(paletteCommands());
+}
+
+bool PhospheneEditor::revealId(int id)
+{
+    // The pages of the tabs (the percussion tab's stand-in left out), then a page per lane.
+    std::vector<juce::Component*> pages;
+    for (size_t t = 0; t < pages_.size(); ++t) pages.push_back(static_cast<int>(t) == TabPerc ? nullptr : pages_[t].get());
+    const size_t lanes = pages.size();
+    for (auto& p : percPages_) pages.push_back(p.get());
+    return frame::revealControl(pages, [this, lanes](int i) {
+        if (i < static_cast<int>(lanes)) setTab(i);
+        else {
+            setTab(TabPerc);
+            setPercLane(i - static_cast<int>(lanes));
+        }
+    }, id, phosui::skin().accent);
+}
+
+std::vector<frame::CommandPalette::Command> PhospheneEditor::paletteCommands()
+{
+    using Command = frame::CommandPalette::Command;
+    std::vector<Command> out;
+    auto action = [&out](const juce::String& title, const juce::String& detail, std::function<void()> f) {
+        out.push_back({ title, detail, "Action", false, [f](const juce::String&) { f(); } });
+    };
+    action("Play / stop", "Space", [this] { if (proc_.isPlaying()) proc_.stop(); else proc_.play(); });
+    action("Compose set", "plans the set again with the knobs as they stand", [this] { proc_.composeSet(); arrangeDirty_ = true; });
+    action("New seed", "another night from the same knobs", [this] { newSeed_.triggerClick(); });
+    action("Undo", "Ctrl+Z", [this] { proc_.undo(); });
+    action("Redo", "Ctrl+Y", [this] { proc_.redo(); });
+    action("Mute / unmute the output", "the speaker", [this] { mute_.triggerClick(); });
+    action("Good here", "rates the bar that plays", [this] { rateNow(1); });
+    action("Bad here", "rates the bar that plays", [this] { rateNow(-1); });
+    action("Save the set", "Ctrl+S", [this] { setTab(TabExport); if (exportSet_ != nullptr) exportSet_->triggerClick(); });
+    action("Open a set", "Ctrl+O", [this] { setTab(TabExport); if (loadSet_ != nullptr) loadSet_->triggerClick(); });
+    action("Export MIDI", "Ctrl+E", [this] { setTab(TabExport); if (exportMidi_ != nullptr) exportMidi_->triggerClick(); });
+    action("Help", "F1: the manual by topic", [this] { showHelp(true); });
+    action("Settings", "the window, the headset, the jam, Link", [this] { showSettings(); });
+    action("First steps", "the tour of the panel", [this] { startTour(); });
+    action("Overview above the tabs", "show it or fold it away", [] {
+        auto& s = frame::Settings::of("Phosphene");
+        s.setOverview(!s.overview());
+    });
+    if (standalone()) action("Full screen", "F11", [this] { toggleFullScreen(); });
+    // The pages, and the lanes of the kit.
+    for (int t = 0; t < tabNames().size(); ++t)
+        out.push_back({ tabNames()[t], "page", "Page", false, [this, t](const juce::String&) { setTab(t); } });
+    for (int l = 0; l < kPercLanes; ++l)
+        out.push_back({ "Percussion: lane " + juce::String(l + 1), "page", "Page", false, [this, l](const juce::String&) {
+                           setTab(TabPerc);
+                           setPercLane(l);
+                       } });
+    // Every control: its page opens and it lights up; a number after its name sets it.
+    const ParamStore& s = proc_.params();
+    for (int id = 0; id < s.count(); ++id) {
+        if (proc_.parameterFor(id) == nullptr) continue;
+        const ParamDesc& d = s.desc(id);
+        const bool number = d.curve != Curve::Choice && d.curve != Curve::Toggle;
+        out.push_back({ d.name, moduleLabelOf(s, id), "Control", number, [this, id](const juce::String& n) {
+                           if (n.isNotEmpty()) proc_.applyKnobs(juce::String(proc_.params().desc(id).name), { { id, n.getFloatValue() } });
+                           revealId(id);
+                           if (info_ != nullptr) info_->showControl(id);
+                       } });
+    }
+    // Every preset of every synth, the player's own ("User") as yours.
+    for (size_t b = 0; b < presetBoxes_.size(); ++b) {
+        PresetBox& pb = *presetBoxes_[b];
+        const juce::String where = moduleLabelOf(s, s.base(pb.synth, pb.instance));
+        for (size_t i = 0; i < pb.presets.size(); ++i) {
+            const bool yours = pb.presets[i].group == "User";
+            out.push_back({ pb.presets[i].name, where + " preset, " + juce::String(pb.presets[i].group), yours ? "Yours" : "Preset", false,
+                            [this, b, i](const juce::String&) {
+                                PresetBox& box = *presetBoxes_[b];
+                                if (i >= box.presets.size()) return;
+                                setTab(tabOfSynth(box.synth, box.instance));
+                                box.box->setSelectedId(static_cast<int>(i) + 1, juce::sendNotificationSync);   // applies it (an undo step)
+                            } });
+        }
+    }
+    return out;
+}
+
+bool PhospheneEditor::describeControl(int id, juce::String& name, juce::String& text)
+{
+    const ParamStore& s = proc_.params();
+    if (id < 0 || id >= s.count()) return false;
+    const ParamDesc& d = s.desc(id);
+    auto fmt = [&d](float v) {
+        return juce::String(v, std::abs(v) >= 100.0f ? 0 : std::abs(v) >= 10.0f ? 1 : 2) + (d.unit[0] != 0 ? juce::String(" ") + d.unit : juce::String());
+    };
+    name = d.name;
+    text = moduleLabelOf(s, id) + "    now " + juce::String(s.format(id));
+    if (d.curve != Curve::Choice && d.curve != Curve::Toggle) {
+        text << "    " << fmt(d.minValue) << " .. " << fmt(d.maxValue) << ", default " << fmt(s.defaultValue(id));
+        const float played = proc_.playedValue(id);
+        if (std::isfinite(played) && std::abs(played - s.get(id)) > 0.004f * std::max(1.0e-6f, d.maxValue - d.minValue))
+            text << "    plays at " << fmt(played) << " (the arrangement moves it)";
+    }
+    // What moves it: the voice's matrix rows on it.
+    if (modulation_ != nullptr && modulation_->access().rowsOn) {
+        juce::String by;
+        for (const frame::ModAccess::Row& r : modulation_->access().rowsOn(id))
+            by << (by.isEmpty() ? "" : ", ") << r.name << " (" << (r.depth >= 0.0f ? "+" : "") << juce::String(r.depth, 2) << ")";
+        if (by.isNotEmpty()) text << "    moved by " << by;
+    }
+    int ch = 0, cc = 0;
+    if (proc_.midiMap().controllerOf(id, ch, cc)) text << "    MIDI CC " << cc << " (ch " << (ch + 1) << ")";
+    text << "    [" << juce::String(s.key(id)) << "]";
+    return true;
+}
+
+void PhospheneEditor::browsePresets(PresetBox& pb)
+{
+    if (palette_->isVisible()) palette_->close();
+    const ParamStore& s = proc_.params();
+    frame::PresetBrowser::Bank bank;
+    bank.key = juce::String(s.key(s.base(pb.synth, pb.instance))).upToFirstOccurrenceOf(".", false, false).trimCharactersAtEnd("0123456789");
+    bank.title = moduleLabelOf(s, s.base(pb.synth, pb.instance)) + " presets";
+    for (size_t i = 0; i < pb.presets.size(); ++i) {
+        const bool yours = pb.presets[i].group == "User";
+        bank.entries.push_back({ pb.presets[i].name, yours ? juce::String("Yours") : juce::String(pb.presets[i].group), {}, static_cast<int>(i) + 1, yours, {} });
+    }
+    PresetBox* raw = &pb;
+    bank.preview = [this, raw](const frame::PresetBrowser::Entry& e) {
+        if (e.index < 1 || e.index > static_cast<int>(raw->presets.size())) return;
+        auto values = presetTargets(raw->synth, raw->instance, raw->presets[static_cast<size_t>(e.index - 1)]);
+        const int k = raw->synth == Module::Kick ? 0 : raw->synth == Module::Bass ? 1 : raw->synth == Module::Acid ? 2 : 3 + raw->instance;
+        values.emplace_back(proc_.params().base(Module::Mix) + mix::KickOwn + k, 1.0f);   // heard: the synth's own sound, not the composer's
+        proc_.previewKnobs(values);
+    };
+    bank.endPreview = [this] { proc_.endPreview(); };
+    bank.choose = [raw](const frame::PresetBrowser::Entry& e) { raw->box->setSelectedId(e.index, juce::sendNotificationSync); };
+    browser_->open(std::move(bank));
+}
+
+void PhospheneEditor::compare(bool on)
+{
+    comparing_ = on;
+    if (!on) {
+        proc_.endPreview();
+        return;
+    }
+    // Every synth whose knobs have moved from the preset chosen: that preset again, while A|B is held.
+    std::vector<std::pair<int, float>> values;
+    for (auto& pb : presetBoxes_) values.insert(values.end(), pb->loaded.begin(), pb->loaded.end());
+    if (!values.empty()) proc_.previewKnobs(values);
+}
+
+void PhospheneEditor::startTour()
+{
+    if (helpShown()) showHelp(false);
+    std::vector<frame::Tour::Step> steps;
+    steps.push_back({ &style_, "The style", "Where the set starts -- the style, its key and scale; the set wanders from there through the night." });
+    steps.push_back({ &compose_, "Compose", "Plans the set again with the knobs as they stand. The die beside it: a new seed, another night from the same knobs." });
+    steps.push_back({ &play_, "Play", "Plays and stops (Space). The speaker beside it silences the output." });
+    if (overview_.isVisible())
+        steps.push_back({ &overview_, "The overview", "The set as a strip: its tracks, where it plays. A click on a track jumps to it." });
+    if (!groupTabs_.isEmpty())
+        steps.push_back({ groupTabs_[0], "The pages", "Every part of the instrument: the set, the arrangement, the kick and the bass, the percussion, the "
+                                                      "acid, the synths (each with its presets and your own, and its modulation), the effects, the mixer, "
+                                                      "Perform for playing live, Export, the gallery of saved sets." });
+    steps.push_back({ &search_, "Search", "Ctrl+K: any knob, preset or action by a few letters -- its page opens and it lights up. A number after a "
+                                          "knob's name sets it (\"cutoff 800\")." });
+    steps.push_back({ &compare_, "A|B", "Hold it to hear the presets as you chose them; let go for the sound as you have turned it since." });
+    if (info_ != nullptr)
+        steps.push_back({ info_.get(), "The info line", "What the control under the mouse is: its value, its range, what moves it, its MIDI controller." });
+    steps.push_back({ &helpIcon_, "Help", "F1: the manual by topic, and the knobs of the page in front." });
+    steps.push_back({ &settingsIcon_, "Settings", "The window's size, the headset, the family jam, Ableton Link -- and these first steps again." });
+    tour_->start(std::move(steps));
 }

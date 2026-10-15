@@ -1917,6 +1917,59 @@ void PhospheneProcessor::applyPreset(Module module, int instance, const SoundPre
     });
 }
 
+void PhospheneProcessor::beginStep(const juce::String& what)
+{
+    if (gestureDepth_++ == 0) {
+        gestureBefore_ = captureUndoState();
+        gestureName_ = what;
+    }
+}
+
+void PhospheneProcessor::endStep()
+{
+    if (gestureDepth_ > 0 && --gestureDepth_ == 0) recordUndo(gestureName_, gestureBefore_);
+}
+
+void PhospheneProcessor::takeOver(int id)
+{
+    int local = -1;
+    const int k = soundSynthOfId(id, local);
+    if (k < 0) return;
+    const Module m = k == 0 ? Module::Kick : k == 1 ? Module::Bass : k == 2 ? Module::Acid : Module::Poly;
+    const int own = params().base(Module::Mix) + mix::KickOwn + k;
+    if (!presetLeaves(m, local) && !params().getBool(own) && shownPreset_[k] >= 0) {
+        takeOverPreset(k);
+        if (StoreParameter* o = parameterFor(own)) o->setValueNotifyingHost(1.0f);
+    }
+}
+
+void PhospheneProcessor::applyKnobs(const juce::String& what, const std::vector<std::pair<int, float>>& values)
+{
+    endPreview();
+    beginStep(what);
+    for (const auto& [id, v] : values) {
+        takeOver(id);
+        if (StoreParameter* p = parameterFor(id)) p->setValueNotifyingHost(params().toNormalised(id, v));
+    }
+    endStep();
+}
+
+void PhospheneProcessor::previewKnobs(const std::vector<std::pair<int, float>>& values)
+{
+    endPreview();
+    for (const auto& [id, v] : values) {
+        if (id < 0 || id >= params().count()) continue;
+        previewSaved_.emplace_back(id, params().get(id));
+        params().set(id, v);
+    }
+}
+
+void PhospheneProcessor::endPreview()
+{
+    for (const auto& [id, v] : previewSaved_) params().set(id, v);
+    previewSaved_.clear();
+}
+
 void PhospheneProcessor::applyFieldPreset(int index)
 {
     const std::vector<FieldPreset>& all = fieldPresets();

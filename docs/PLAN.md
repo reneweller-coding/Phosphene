@@ -5,6 +5,20 @@ gebaut wurde, steht im Journal (`docs/rounds/`). Name **Phosphene**, Repo
 `G:\Tools\VRAudio\PsytranceGenerator`, Namensraum `phos::`, Präfix `PHOS_`, Werkzeuge `phos_render`,
 `phos_selftest`. Code-Kommentare im Doxygen-Format (`docs/Doxyfile`).
 
+
+## Die Wege durchs Panel (15.10.2026, aus Empyrean, Frame.h)
+
+Nutzer: „Bitte baue alles ein, die Tests erst am Ende.“ -- die GUI-Verbesserungen und ASIO in allen fünf Instrumenten:
+- **Frame.h** (Vorlage hier, in alle sechs kopiert): WindowKeeper (Fensterzustand in <App>.frame "window"), Settings::value,
+  IconButton Search/Night/Compare, Keys::palette (Strg+K), CommandPalette, InfoLine (frameId-Eigenschaft für eigene
+  Regler), Tour, PresetBrowser (Favoriten/zuletzt in den Settings), revealControl (Tabs, SubTabs, Abschnitte, Instanzen
+  über Revealer), ModArc + LiveRings-Bögen, ModAccess/ModulationAtKnob, Vorlage slotMatrix (mx/mod-Slots).
+- **ASIO**: JUCE_ASIO=1, das SDK aus _Sources/ASIO-SDK (sonst JUCEs Kopie), nur Windows.
+- **Zoom** gab es schon: der Inhalt skaliert mit dem Fenster ("Window size" 75-200 %).
+- Prozessor: applyKnobs (ein Undo-Schritt), previewKnobs/endPreview (Vorhören im Browser).
+- Eigene Regler (kein frame::Knob): frameId-Eigenschaft, Bögen über showModArcs in showPlayed, Menü in ControlPage::mouseDown.
+- beginStep/endStep über die Gesten-Tiefe, takeOver (Own Sound) vor jedem Setzen; Stern als Zellname unter dem Chooser; A|B halten.
+
 ## Stand der Umsetzung
 
 Phasen 0 bis 9 sind gebaut (Abschnitt 12), dazu Plugin, Quest-App, Release-Weg und die Runden danach.

@@ -113,7 +113,10 @@ void ControlPage::addParamCell(PhospheneProcessor& proc, int groupIndex, int par
         break;
     }
     }
-    if (c.comp != nullptr) enableMidiLearn(proc, *c.comp, paramId);
+    if (c.comp != nullptr) {
+        enableMidiLearn(proc, *c.comp, paramId);
+        c.comp->getProperties().set("frameId", paramId);   // the family's search and info line find it (Frame.h, findControl)
+    }
     groups_[static_cast<size_t>(groupIndex)].cells.push_back(static_cast<int>(cells_.size()));
     cells_.push_back(std::move(c));
 }
@@ -138,9 +141,35 @@ void ControlPage::showValues(const phos::ParamStore& store, int first, int count
 
 void ControlPage::showPlayed(const PhospheneProcessor& proc)
 {
+    const bool arcs = modulation != nullptr && modulation->access().arcs;
     for (Cell& c : cells_)
         if (c.param >= 0 && c.comp != nullptr)
-            if (auto* s = dynamic_cast<juce::Slider*>(c.comp.get())) showLive(*s, proc.playedValue(c.param));
+            if (auto* s = dynamic_cast<juce::Slider*>(c.comp.get())) {
+                showLive(*s, proc.playedValue(c.param));
+                if (arcs) frame::showModArcs(*s, modulation->access().arcs(c.param));   // the voice's matrix rows on it
+            }
+}
+
+void ControlPage::reveal(juce::Component& part)
+{
+    if (!split()) return;
+    for (size_t g = 0; g < groups_.size(); ++g)
+        for (int i : groups_[g].cells) {
+            juce::Component* comp = cells_[static_cast<size_t>(i)].comp.get();
+            if (comp == nullptr || (comp != &part && !comp->isParentOf(&part))) continue;
+            if (g < sectionOf_.size() && sectionOf_[g] != sections_->current()) {
+                sections_->setCurrent(sectionOf_[g]);
+                applySections();
+                if (sectionChanged_) sectionChanged_();
+            }
+            return;
+        }
+}
+
+void ControlPage::setCellName(int cell, const juce::String& name)
+{
+    if (cell < 0 || cell >= static_cast<int>(cells_.size())) return;
+    if (auto& label = cells_[static_cast<size_t>(cell)].label; label != nullptr && label->getText() != name) label->setText(name, juce::dontSendNotification);
 }
 
 void ControlPage::enableMidiLearn(PhospheneProcessor& proc, juce::Component& comp, int target)
@@ -170,6 +199,7 @@ void ControlPage::mouseDown(const juce::MouseEvent& e)
     // The frame's third item (01.10.2026, as in every generator): back to the default, an undo step.
     const bool param = target >= 0 && target < proc->params().count();
     m.addItem(3, "Default value", param);
+    if (param && modulation != nullptr) modulation->addMenuItems(m, target);   // the modulation at the knob (15.10.2026)
     m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(e.originalComponent), [proc, target, armed](int r) {
         if (r == 1) proc->midiMap().arm(armed ? -1 : target);
         if (r == 2) proc->midiMap().unbind(target);

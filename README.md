@@ -117,6 +117,8 @@ The design and the literature behind each building block are in [docs/PLAN.md](h
 (German); what each development round built, measured and decided is in the journal,
 [docs/rounds/](docs/rounds/) (German, one file per month).
 
+**Around the panel** (15.10.2026): Ctrl+K searches any knob, preset, page or action; an info line says what the control under the mouse is; every synth's presets in a browser, a star while the sound has moved, A|B held for the presets as chosen; modulation at the knob; the first steps on the first start; the standalone's window comes back where it was left, and its audio settings offer ASIO (Windows).
+
 ## With a DAW and other apps
 
 In a DAW Phosphene sends what it plays as MIDI — every part on a channel of its own, as in the MIDI export — and has a
