@@ -1,6 +1,6 @@
 # Phosphene release notes
 
-## 1.5.0 (03.10.2026): the family plays together
+## 1.5.0 (15.10.2026): the family plays together
 
 **The family jam** (Settings > Family jam: Off, Lead or Follow; in the plugin and in the standalone). The five
 instruments -- Totality, Parhelion, Ephemeris, Phosphene and Noctuary -- play as one band on the local network. The
@@ -28,6 +28,12 @@ vector glyphs now, sharp at every window size, their words in the tooltips; ever
 written, the break without its foundation. The jam's bus (Plugin/Jam.h) is the same file in all five repositories.
 
 **The ways around the panel** (15.10.2026, the family's Frame.h, from Empyrean): the search (Ctrl+K or the magnifier) finds any knob -- its page, section or lane opens and it lights up; "cutoff 800" sets it --, any preset, page or action; an info line along the bottom says what the control under the mouse is, its value, range, what moves it and its controller; every synth's presets in a browser (search, groups, favourites, recently played, hold to listen), a star under the chooser while the sound has moved, A|B held for the presets as chosen; modulation at the knob (an arc per matrix row, its depth and Modulate with in the right-click menu); the first steps on the first start; the standalone's window comes back where it was left (place, size, maximised); ASIO in the standalone's audio settings (Windows).
+
+**The code** (15.10.2026) follows the programming guideline of the CGVR group of the Universität Bremen: its names
+(`m_` for members, constants without `k`, enum types with `E`), its comment template for Doxygen (every parameter with
+its direction, every return value; the test `doccheck` holds it) and its layout, kept by clang-format; docs/STYLE.md
+says where the code deviates and why. Nothing of it changes what is heard: parameter keys, saved sets and presets are
+as they were.
 
 ## 1.4.0 (02.10.2026): with a DAW, on a Mac, and heard
 
