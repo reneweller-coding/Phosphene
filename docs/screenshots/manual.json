@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0",
+  "version": "1.5.0",
   "name": "Phosphene",
   "designWidth": 1288,
   "designHeight": 860,
@@ -20060,6 +20060,71 @@
       "curve": "linear"
     },
     {
+      "key": "mix.keyboard_lower",
+      "module": "mix",
+      "name": "Lower Keys Play",
+      "unit": "",
+      "min": 0.0,
+      "max": 9.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "Acid",
+        "Lead",
+        "Counter",
+        "Arp",
+        "Stab",
+        "Pad",
+        "Drone",
+        "Bass",
+        "Kit"
+      ]
+    },
+    {
+      "key": "mix.keyboard_split",
+      "module": "mix",
+      "name": "Split At",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 2.0,
+      "curve": "choice",
+      "choices": [
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "C5"
+      ]
+    },
+    {
+      "key": "mix.keyboard_scale",
+      "module": "mix",
+      "name": "Scale Lock",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "mix.keyboard_velocity",
+      "module": "mix",
+      "name": "Velocity Curve",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 0.0,
+      "curve": "choice",
+      "choices": [
+        "As Played",
+        "Soft",
+        "Hard",
+        "Fixed"
+      ]
+    },
+    {
       "key": "master.gain",
       "module": "master",
       "name": "Gain",
@@ -24262,7 +24327,11 @@
           "params": [
             "mix.keyboard_part",
             "mix.keyboard_mode",
-            "mix.composer"
+            "mix.composer",
+            "mix.keyboard_lower",
+            "mix.keyboard_split",
+            "mix.keyboard_scale",
+            "mix.keyboard_velocity"
           ]
         },
         {
@@ -25508,6 +25577,10 @@
     "mix.keyboard_part",
     "mix.keyboard_mode",
     "mix.composer",
+    "mix.keyboard_lower",
+    "mix.keyboard_split",
+    "mix.keyboard_scale",
+    "mix.keyboard_velocity",
     "cue.send",
     "cue.port",
     "cue.beats",
