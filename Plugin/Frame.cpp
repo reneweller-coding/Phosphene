@@ -886,11 +886,11 @@ void SettingsMenu::show(juce::Component& target) const
         // The family jam (02.10.2026, Jam.h): one instrument leads -- its key, its sections, its breaks and drops go out
         // to the others on the network --, the ones that follow take them up; tempo and bars come from Ableton Link.
         juce::PopupMenu j;
-        using R = Settings::JamRoleE;
-        const R role = s.jamRole();
-        j.addItem("Off", true, role == R::OFF, [&s] { s.setJamRole(R::OFF); });
-        j.addItem("Lead: the others follow this one's key, sections, breaks and drops", true, role == R::LEAD, [&s] { s.setJamRole(R::LEAD); });
-        j.addItem("Follow: take up the leader's key, energy, breaks and drops", true, role == R::FOLLOW, [&s] { s.setJamRole(R::FOLLOW); });
+        using RT = Settings::JamRoleE;
+        const RT role = s.jamRole();
+        j.addItem("Off", true, role == RT::OFF, [&s] { s.setJamRole(RT::OFF); });
+        j.addItem("Lead: the others follow this one's key, sections, breaks and drops", true, role == RT::LEAD, [&s] { s.setJamRole(RT::LEAD); });
+        j.addItem("Follow: take up the leader's key, energy, breaks and drops", true, role == RT::FOLLOW, [&s] { s.setJamRole(RT::FOLLOW); });
         j.addSeparator();
         j.addItem(m_jamStatus(), false, false, nullptr);
         m.addSubMenu("Family jam", j);
