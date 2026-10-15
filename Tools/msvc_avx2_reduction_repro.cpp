@@ -72,6 +72,10 @@ __declspec(noinline) int fit(int target)
     return total();
 }
 
+/**
+ * @brief Fits the template to 272 bars and says whether the compiler got it right.
+ * @return 0 when the fit is 272, 1 when the fault struck
+ */
 int main()
 {
     const int f = fit(272);
