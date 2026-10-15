@@ -229,12 +229,13 @@ endif()
 # The binary's list against the source's run(...) lines: the same table read twice, once compiled and
 # once as text. They differ when --list is broken (it would silently drop sections from ctest) or
 # when the binary is older than the source -- in both cases ctest would not be testing what the
-# source says, and that has to be a red test, not a quiet one.
+# source says, and that has to be a red test, not a quiet one. Spaces inside the parentheses or not:
+# clang-format writes run( "name", fn ) (docs/STYLE.md).
 if(EXISTS "${PHOS_SELFTEST_SOURCE}")
-    file(STRINGS "${PHOS_SELFTEST_SOURCE}" _phos_src_lines REGEX "^[ \t]+run\\(\"[A-Za-z0-9_.]+\",")
+    file(STRINGS "${PHOS_SELFTEST_SOURCE}" _phos_src_lines REGEX "^[ \t]+run\\([ \t]*\"[A-Za-z0-9_.]+\"[ \t]*,")
     set(_phos_src_names)
     foreach(_l IN LISTS _phos_src_lines)
-        string(REGEX REPLACE "^[ \t]+run\\(\"([A-Za-z0-9_.]+)\",.*$" "\\1" _l "${_l}")
+        string(REGEX REPLACE "^[ \t]+run\\([ \t]*\"([A-Za-z0-9_.]+)\"[ \t]*,.*$" "\\1" _l "${_l}")
         list(APPEND _phos_src_names "${_l}")
     endforeach()
     if(NOT "${_phos_src_names}" STREQUAL "${_phos_names}")
