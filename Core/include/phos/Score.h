@@ -5,6 +5,7 @@
  * The composer writes a score; the audio thread only plays events from it; the MIDI export and the
  * offline render read the same data. Positions are in beats (quarter notes) from the start of the
  * set, so a score is independent of tempo and sample rate -- the tempo map turns beats into time.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Clock.h"
@@ -35,9 +36,17 @@ enum class PartE : uint8_t { KICK = 0, BASS, PERC, ACID, LEAD, COUNTER, ARP, STA
 constexpr int NumParts = static_cast<int>(PartE::COUNT);   ///< number of parts
 extern const char* const PartNames[NumParts];              ///< "Kick", "Bass", ...
 
-/** @brief The part a polyphonic instance plays (the two enums run side by side from Lead). */
+/**
+ * @brief The part a polyphonic instance plays (the two enums run side by side from Lead).
+ * @param[in] i  the instance
+ * @return its part
+ */
 constexpr PartE polyPart(PolyInstanceE i) { return static_cast<PartE>(static_cast<int>(PartE::LEAD) + polyIndex(i)); }
-/** @brief The polyphonic instance of a part, or -1 when the part is not played by a Poly. */
+/**
+ * @brief The polyphonic instance of a part, or -1 when the part is not played by a Poly.
+ * @param[in] p  the part
+ * @return its instance, or -1
+ */
 constexpr int polyOfPart(PartE p)
 {
     const int k = static_cast<int>(p) - static_cast<int>(PartE::LEAD);
@@ -64,7 +73,12 @@ struct NoteEvent {
     uint8_t m_flags = 0;        ///< NoteFlag bits
 };
 
-/** @brief Sort order of events: beat, then part, then lane, then pitch. */
+/**
+ * @brief Sort order of events: beat, then part, then lane, then pitch.
+ * @param[in] a  the first event
+ * @param[in] b  the second event
+ * @return true when a comes first
+ */
 bool noteLess(const NoteEvent& a, const NoteEvent& b);
 
 /**
@@ -153,7 +167,10 @@ struct Score {
 
     /** @brief Sorts notes and sections. */
     void sort();
-    /** @brief Beat after the last note ends. */
+    /**
+     * @brief Beat after the last note ends.
+     * @return the beat
+     */
     double endBeat() const;
 };
 
@@ -166,10 +183,17 @@ struct Score {
 template <class T>
 class EventRing {
 public:
-    /** @brief @p capacityPow2 must be a power of two; one slot stays empty. */
+    /**
+     * @brief @p capacityPow2 must be a power of two; one slot stays empty.
+     * @param[in] capacityPow2  the slots, a power of two
+     */
     explicit EventRing(int capacityPow2 = 8192)
         : m_size(capacityPow2), m_buf(std::make_unique<T[]>(static_cast<size_t>(capacityPow2))) {}
-    /** @brief Producer side; false if full. */
+    /**
+     * @brief Producer side; false if full.
+     * @param[in] e  the event
+     * @return false if full
+     */
     bool push(const T& e)
     {
         const int w = m_write.load(std::memory_order_relaxed);
@@ -179,7 +203,11 @@ public:
         m_write.store(next, std::memory_order_release);
         return true;
     }
-    /** @brief Consumer side: the oldest event without removing it; false if empty. */
+    /**
+     * @brief Consumer side: the oldest event without removing it; false if empty.
+     * @param[out] e  the oldest event
+     * @return false if empty
+     */
     bool peek(T& e) const
     {
         const int r = m_read.load(std::memory_order_relaxed);
@@ -187,14 +215,21 @@ public:
         e = m_buf[static_cast<size_t>(r)];
         return true;
     }
-    /** @brief Consumer side: removes the oldest event; false if empty. */
+    /**
+     * @brief Consumer side: removes the oldest event; false if empty.
+     * @param[out] e  the oldest event
+     * @return false if empty
+     */
     bool pop(T& e)
     {
         if (!peek(e)) return false;
         m_read.store((m_read.load(std::memory_order_relaxed) + 1) & (m_size - 1), std::memory_order_release);
         return true;
     }
-    /** @brief Free slots as seen from the producer. */
+    /**
+     * @brief Free slots as seen from the producer.
+     * @return the free slots
+     */
     int space() const
     {
         const int w = m_write.load(std::memory_order_acquire), r = m_read.load(std::memory_order_acquire);

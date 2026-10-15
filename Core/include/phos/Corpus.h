@@ -21,6 +21,7 @@
  * forward draw is weighted by it, which samples exactly from the model conditioned on the
  * constraints (Pachet and Roy, "Markov constraints: steerable generation of Markov sequences",
  * Constraints 16(2), 2011). With an order-2 model the state is the pair of the last two pitches.
+ * @author Rene Weller
  */
 #pragma once
 #include <algorithm>
@@ -69,18 +70,38 @@ extern const int CorpusChordFiles;                      ///< arp loops that cont
 /** @brief Witten-Bell interpolated variable-order pitch model of one role. */
 class PitchModel {
 public:
-    /** @brief Builds the dense probability tables of @p role (once, at start-up). */
+    /**
+     * @brief Builds the dense probability tables of @p role (once, at start-up).
+     * @param[in] role  the role
+     */
     explicit PitchModel(CorpusRoleIdE role);
-    /** @brief P(next | prev2, prev1), symbols 0..kCorpusAlphabet-1. */
+    /**
+     * @brief P(next | prev2, prev1), symbols 0..kCorpusAlphabet-1.
+     * @param[in] prev2  the symbol two before
+     * @param[in] prev1  the symbol before
+     * @param[in] next   the symbol
+     * @return the probability
+     */
     double prob(int prev2, int prev1, int next) const
     {
         return m_p[static_cast<size_t>((prev2 * CorpusAlphabet + prev1) * CorpusAlphabet + next)];
     }
-    /** @brief Symbol of an interval to the tonic. */
+    /**
+     * @brief Symbol of an interval to the tonic.
+     * @param[in] rel  the interval to the tonic
+     * @return its symbol
+     */
     static int symbol(int rel) { return rel - CorpusRelMin; }
-    /** @brief Interval to the tonic of a symbol. */
+    /**
+     * @brief Interval to the tonic of a symbol.
+     * @param[in] symbol  the symbol
+     * @return its interval to the tonic
+     */
     static int rel(int symbol) { return symbol + CorpusRelMin; }
-    /** @brief Number of symbols. */
+    /**
+     * @brief Number of symbols.
+     * @return the number of symbols
+     */
     int alphabet() const { return CorpusAlphabet; }
 
 private:
@@ -89,22 +110,28 @@ private:
 
 /**
  * @brief Draws a sequence from an order-2 model under per-position allowed sets (Pachet and Roy).
- * @tparam Model  anything with int alphabet() and double prob(a, b, c) (PitchModel, or a toy model in the tests)
- * @param model   the model
- * @param allowed allowed[i][s] != 0 when symbol s may stand at position i; the value is a relative
- *                weight, so that one symbol may be preferred over another at the same position (all
- *                entries equal = the plain constraint, which is what a set of ones gives)
- * @param start2,start1 context before the first position (symbols)
- * @param temperature exponent 1/T applied to the model's probabilities (1 = the model as it is)
- * @param uniform source of uniform numbers in [0, 1)
- * @param out     receives the symbols
+ * @param[in]  model        the model
+ * @param[in]  allowed      allowed[i][s] != 0 when symbol s may stand at position i; the value is a relative weight, so
+ *                          that one symbol may be preferred over another at the same position (all entries equal = the
+ *                          plain constraint, which is what a set of ones gives)
+ * @param[in]  start2       context before the first position (symbols)
+ * @param[in]  start1       context before the first position (symbols)
+ * @param[in]  temperature  exponent 1/T applied to the model's probabilities (1 = the model as it is)
+ * @param[in]  uniform      source of uniform numbers in [0, 1)
+ * @param[out] out          receives the symbols
  * @return false if no sequence satisfies the constraints
+ * @tparam Model  anything with int alphabet() and double prob(a, b, c) (PitchModel, or a toy model in the tests)
  */
 template <class ModelT, class UniformT>
 bool sampleConstrained(const ModelT& model, const std::vector<std::vector<uint8_t>>& allowed, int start2, int start1,
                        double temperature, UniformT&& uniform, std::vector<int>& out);
 
-/** @brief Chord-root succession probabilities (with add-one smoothing over the roots seen at all). */
+/**
+ * @brief Chord-root succession probabilities (with add-one smoothing over the roots seen at all).
+ * @param[in] fromRel  the root moved from, semitones over the tonic
+ * @param[in] toRel    the root moved to
+ * @return the probability
+ */
 double chordTransition(int fromRel, int toRel);
 
 // --------------------------------------------------------------------------------- lead templates
@@ -197,7 +224,11 @@ public:
     /** @brief Step offsets of a chain context: three sixteenths back, one beat back, two beats back. */
     static constexpr int ContextDelta[Context] = { 1, 2, 3, 4, 8 };
 
-    /** @brief True when no onset sits on a kick step -- the subspace the model lives in. */
+    /**
+     * @brief True when no onset sits on a kick step -- the subspace the model lives in.
+     * @param[in] mask  the onset mask
+     * @return true when no onset sits on a kick step
+     */
     static bool clean(unsigned mask) { return (mask & 0x1111u) == 0; }
 
     /**
@@ -212,10 +243,17 @@ public:
      * onset model, its corpus and the control event of Score.h all live on sixteenths. A track whose
      * knob says Triplet and whose rhythm knob says Corpus therefore plays Skip, not triplets, which
      * `BassRhythmNames` (Params.cpp) says in as many words.
+     * @param[in] pattern  the pattern family
+     * @return its onset mask
      */
     static unsigned familyMask(int pattern);
 
-    /** @brief Sixteenth of the first onset of @p mask at or after @p step, or -1. */
+    /**
+     * @brief Sixteenth of the first onset of @p mask at or after @p step, or -1.
+     * @param[in] mask  the onset mask
+     * @param[in] step  the first sixteenth looked at
+     * @return the sixteenth, or -1
+     */
     static int firstOnsetFrom(unsigned mask, int step)
     {
         for (int s = step; s < Steps; ++s) if ((mask >> s) & 1u) return s;
@@ -231,6 +269,9 @@ public:
      * slot's successor), and the depth rule of PLAN 5.2 -- below 140 Hz only kick and bass -- is a
      * statement about a band that two overlapping sources share badly. A drawn rhythm keeps it, so
      * the shortest gap on a sixteenth grid is one sixteenth, exactly the Rolling family's.
+     * @param[in] mask  the onset mask
+     * @param[in] step  the onset's sixteenth
+     * @return the span in sixteenths
      */
     static int noteSpan(unsigned mask, int step)
     {
@@ -239,36 +280,64 @@ public:
         return (next >= 0 && next < kick ? next : kick) - step;
     }
 
-    /** @brief Shortest note span of a bar in sixteenths, or @p none for a bar without onsets. */
+    /**
+     * @brief Shortest note span of a bar in sixteenths, or @p none for a bar without onsets.
+     * @param[in] mask  the onset mask
+     * @param[in] none  the span of a bar without onsets
+     * @return the span in sixteenths
+     */
     static int shortestSpan(unsigned mask, int none = 4)
     {
         int best = none;
         for (int s = 0; s < Steps; ++s) if ((mask >> s) & 1u) best = std::min(best, noteSpan(mask, s));
         return best;
     }
-    /** @brief Packed key of the chain context of @p step in @p mask (see Tools/corpus/bass_rhythm.py). */
+    /**
+     * @brief Packed key of the chain context of @p step in @p mask (see Tools/corpus/bass_rhythm.py).
+     * @param[in] mask  the onset mask
+     * @param[in] step  the sixteenth
+     * @return the packed key
+     */
     static int contextKey(unsigned mask, int step);
-    /** @brief P(onset at @p step | the earlier steps of @p mask) under the smoothed chain. */
+    /**
+     * @brief P(onset at @p step | the earlier steps of @p mask) under the smoothed chain.
+     * @param[in] mask  the onset mask
+     * @param[in] step  the sixteenth
+     * @return the probability
+     */
     static double stepProbability(unsigned mask, int step);
-    /** @brief log2 P(bar) under the chain alone. */
+    /**
+     * @brief log2 P(bar) under the chain alone.
+     * @param[in] mask  the onset mask
+     * @return the log2 probability
+     */
     static double chainLogProbability(unsigned mask);
-    /** @brief P(bar) under the mixture; zero for a bar with an onset on a kick step. */
+    /**
+     * @brief P(bar) under the mixture; zero for a bar with an onset on a kick step.
+     * @param[in] mask  the onset mask
+     * @return the probability
+     */
     static double barProbability(unsigned mask);
-    /** @brief The mixture weight of the lookup. */
+    /**
+     * @brief The mixture weight of the lookup.
+     * @return the weight
+     */
     static double mixWeight() { return CorpusBassMixPerMille / 1000.0; }
-    /** @brief The share of a line's bars that repeat its most common bar (corpus, for the phrase). */
+    /**
+     * @brief The share of a line's bars that repeat its most common bar (corpus, for the phrase).
+     * @return the share, 0..1
+     */
     static double homeShare() { return CorpusBassHomePerMille / 1000.0; }
 
     /**
      * @brief Draws one bar from the mixture.
+     * @param[in] uniform  the uniform source
+     * @return a 16-bit onset mask with no onset on a kick step and at least one onset A bar with no onset at all is
+     *         redrawn up to @p EmptyRetries times and then replaced by the rolling family, because an empty bar drawn
+     *         as a track's home figure would silence the bass for the whole track. The corpus does play empty bars --
+     *         3.2 % of all its bars, 5.4 % of the clean ones, and they are the second commonest entry of the lookup --
+     *         but it plays them inside a line, which is what the form's per-beat mask already does here.
      * @tparam Uniform anything callable returning a double in [0, 1)
-     * @return a 16-bit onset mask with no onset on a kick step and at least one onset
-     *
-     * A bar with no onset at all is redrawn up to @p EmptyRetries times and then replaced by the
-     * rolling family, because an empty bar drawn as a track's home figure would silence the bass for
-     * the whole track. The corpus does play empty bars -- 3.2 % of all its bars, 5.4 % of the clean
-     * ones, and they are the second commonest entry of the lookup -- but it plays them inside a
-     * line, which is what the form's per-beat mask already does here.
      */
     template <class UniformT>
     static unsigned draw(UniformT&& uniform)

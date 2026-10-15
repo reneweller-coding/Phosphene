@@ -1,6 +1,7 @@
 /**
  * @file ComposerLevels.cpp
  * @brief Measuring a track: the level match, presence, audibility and Auto Gain, and the probe renders they read.
+ * @author Rene Weller
  */
 #include "phos/Composer.h"
 #include "ComposerInternal.h"
@@ -101,11 +102,11 @@ void Composer::matchMaster(const ParamStore& p, TrackPlan& t, const double* firs
  * different, larger change -- it touches the acid and the kit's own recipes, not a level on top of them --
  * and the voices round's own diversity is deliberately outside matchPresence's reach (see above).
  */
-void Composer::matchPresence(const ParamStore& p, TrackPlan& t, const double* linesReading, const double* restReading) const
+void Composer::matchPresence(const ParamStore& params, TrackPlan& plan, const double* linesReading, const double* restReading) const
 {
-    t.m_presenceDb = 0.0;
-    t.m_presenceAfterDb = 0.0;
-    t.m_presenceGainDb = 0.0f;
+    plan.m_presenceDb = 0.0;
+    plan.m_presenceAfterDb = 0.0;
+    plan.m_presenceGainDb = 0.0f;
     // Measured whenever the level match runs, so that a render with the match off still reports where each
     // track stands (phos_render --tracks); corrected only with compose.presence_match on.
     // The two readings may have been rendered already, side by side (measureTrack).
@@ -113,24 +114,24 @@ void Composer::matchPresence(const ParamStore& p, TrackPlan& t, const double* li
     if (linesReading != nullptr && restReading != nullptr) {
         for (int i = 0; i < 2; ++i) { lines[i] = linesReading[i]; rest[i] = restReading[i]; }
     } else {
-        probeLoudness(p, t, ProbeLines, 0.0f, lines);
-        probeLoudness(p, t, ProbeRest, 0.0f, rest);
+        probeLoudness(params, plan, ProbeLines, 0.0f, lines);
+        probeLoudness(params, plan, ProbeRest, 0.0f, rest);
     }
     const double pl = lines[0], ll = lines[1], pr = rest[0], lr = rest[1];
     if (pl + pr <= 0.0 || ll + lr <= 0.0) return;
-    t.m_presenceDb = t.m_presenceAfterDb = 10.0 * std::log10((pl + pr) / (ll + lr)) - PresenceRefDb;
-    if (!p.getBool(p.base(ModuleE::COMPOSE) + compose::PRESENCE_MATCH)) return;
-    if (std::fabs(t.m_presenceDb) <= PresenceBandDb || pl <= 0.0) return;
+    plan.m_presenceDb = plan.m_presenceAfterDb = 10.0 * std::log10((pl + pr) / (ll + lr)) - PresenceRefDb;
+    if (!params.getBool(params.base(ModuleE::COMPOSE) + compose::PRESENCE_MATCH)) return;
+    if (std::fabs(plan.m_presenceDb) <= PresenceBandDb || pl <= 0.0) return;
     // The band's edge on the side the track is on, as a ratio of the two bands' powers.
-    const double want = std::pow(10.0, (PresenceRefDb + (t.m_presenceDb > 0.0 ? PresenceBandDb : -PresenceBandDb)) / 10.0);
+    const double want = std::pow(10.0, (PresenceRefDb + (plan.m_presenceDb > 0.0 ? PresenceBandDb : -PresenceBandDb)) / 10.0);
     const double num = want * lr - pr, den = pl - want * ll;
-    double g = (num > 0.0 && den > 0.0) ? num / den : (t.m_presenceDb > 0.0 ? 0.0 : 1e9);
+    double g = (num > 0.0 && den > 0.0) ? num / den : (plan.m_presenceDb > 0.0 ? 0.0 : 1e9);
     const double db = g > 0.0 ? 10.0 * std::log10(g) : -PresenceCutDb;
-    t.m_presenceGainDb = static_cast<float>(std::clamp(db, -PresenceCutDb, PresenceLiftDb));
+    plan.m_presenceGainDb = static_cast<float>(std::clamp(db, -PresenceCutDb, PresenceLiftDb));
     // Where the correction lands, by the same linear model: the band's edge unless a cap stopped it. The
     // plans carry it so that a check (testPresence) can see the match's own prediction, not only its gain.
-    const double gain = std::pow(10.0, static_cast<double>(t.m_presenceGainDb) / 10.0);
-    t.m_presenceAfterDb = 10.0 * std::log10((gain * pl + pr) / (gain * ll + lr)) - PresenceRefDb;
+    const double gain = std::pow(10.0, static_cast<double>(plan.m_presenceGainDb) / 10.0);
+    plan.m_presenceAfterDb = 10.0 * std::log10((gain * pl + pr) / (gain * ll + lr)) - PresenceRefDb;
 }
 
 /**
@@ -147,24 +148,24 @@ void Composer::matchPresence(const ParamStore& p, TrackPlan& t, const double* li
  * (Stevens' law for loudness), is capped at AudibleLiftDb and only ever lifts; a track without a lead in its
  * drops has nothing to measure against and is left alone. Before Auto Gain, whose probes then hear the lift.
  */
-void Composer::matchAudibility(const ParamStore& p, TrackPlan& t) const
+void Composer::matchAudibility(const ParamStore& params, TrackPlan& plan) const
 {
-    for (float& v : t.m_audibilityLiftDb) v = 0.0f;
-    for (double& v : t.m_audibleInMix) v = 0.0;
-    if (!p.getBool(p.base(ModuleE::COMPOSE) + compose::AUDIBILITY_MATCH)) return;
+    for (float& v : plan.m_audibilityLiftDb) v = 0.0f;
+    for (double& v : plan.m_audibleInMix) v = 0.0;
+    if (!params.getBool(params.base(ModuleE::COMPOSE) + compose::AUDIBILITY_MATCH)) return;
     double inMix[MelodyParts] = {};
-    probeLoudness(p, t, ProbeAudible, 0.0f, nullptr, inMix);
-    for (int k = 0; k < MelodyParts; ++k) t.m_audibleInMix[k] = inMix[k];
+    probeLoudness(params, plan, ProbeAudible, 0.0f, nullptr, inMix);
+    for (int k = 0; k < MelodyParts; ++k) plan.m_audibleInMix[k] = inMix[k];
     const double lead = inMix[mpIndex(MelodyPartE::LEAD)];
     if (!(lead > 0.5)) return;
     for (const AudibleWant& w : AudibleWants) {
         const int k = mpIndex(w.m_part);
-        if (!t.m_melody.m_present[k] || inMix[k] <= 0.05) continue;   // not in the probe's drop bars
+        if (!plan.m_melody.m_present[k] || inMix[k] <= 0.05) continue;   // not in the probe's drop bars
         const double f = w.m_share * lead / inMix[k];
         if (f <= 1.0) continue;
         const float lift = static_cast<float>(std::min(AudibleLiftDb, 10.0 / 0.3 * std::log10(f)));
-        t.m_partGainDb[k] += lift;
-        t.m_audibilityLiftDb[k] = lift;
+        plan.m_partGainDb[k] += lift;
+        plan.m_audibilityLiftDb[k] = lift;
     }
 }
 
@@ -196,7 +197,7 @@ void Composer::matchAudibility(const ParamStore& p, TrackPlan& t) const
  * plan and another task writing one of its fields meanwhile would be a data race even where the value is
  * not used.
  */
-void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
+void Composer::measureTrack(const ParamStore& params, TrackPlan& plan) const
 {
     // Live, every track is played before it is measured (completeMeasurement, Composer.h). Until 26.09.2026 only the
     // first one was: a later track measured itself here, on the composer thread, after measuring the first one if
@@ -204,15 +205,15 @@ void Composer::measureTrack(const ParamStore& p, TrackPlan& t) const
     // The user heard it as the playback stalling ("die Engine scheint manchmal nicht mit dem Generieren der Noten
     // hinterherzukommen"): after a jump close to a track's end the transport stood for 29.6 s (hosttest --part live).
     if (m_deferMaster) {
-        t.m_measureDeferred = true;
-        t.m_masterDeferred = true;
-        t.m_masterGainDb = 0.0f;
+        plan.m_measureDeferred = true;
+        plan.m_masterDeferred = true;
+        plan.m_masterGainDb = 0.0f;
         return;
     }
     double mix0 = 0.0;
-    const bool mixEarly = measureLevels(p, t, &mix0);
+    const bool mixEarly = measureLevels(params, plan, &mix0);
     // Auto Gain's two readings, the second after the first. `mixEarly` means the first ran beside the presence probes.
-    matchMaster(p, t, mixEarly ? &mix0 : nullptr);
+    matchMaster(params, plan, mixEarly ? &mix0 : nullptr);
 }
 
 bool Composer::completeMeasurement(const ParamStore& p, int index) const

@@ -1,6 +1,7 @@
 /**
  * @file PluginProcessor.cpp
  * @brief Implementation of the Phosphene processor: parameters, threads, transport and MIDI out.
+ * @author Rene Weller
  */
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
@@ -50,8 +51,7 @@ constexpr const char* WaveTablePack = "library.phoswt";
  *
  * Nothing is loaded here and nothing fails here: an absent file is not an error -- it is the
  * built-in tables (WaveTableFile.h) or the Markov composer (Model.h) -- and the editor says so.
- *
- * @param file the bare name to look for, e.g. `library.phoswt` or `melody.phosmdl`
+ * @param[in] file  the bare name to look for, e.g. `library.phoswt` or `melody.phosmdl`
  * @return the directory holding it, or an empty string
  */
 juce::String resolveResourceDirectory(const char* file)
@@ -63,7 +63,7 @@ juce::String resolveResourceDirectory(const char* file)
         if (f == juce::File()) continue;
         const juce::File dir = f.isDirectory() ? f : f.getParentDirectory();
         dirs.addIfNotAlreadyThere(dir);                                        // beside the binary
-        dirs.addIfNotAlreadyThere(dir.getParentDirectory().getChildFile("Resources"));   // .../Contents/<arch>/..
+        dirs.addIfNotAlreadyThere(dir.getParentDirectory().getChildFile("Resources"));   // .../Contents/\<arch\>/..
         dirs.addIfNotAlreadyThere(dir.getChildFile("Contents").getChildFile("Resources"));   // the bundle itself
     }
     for (const juce::File& d : dirs)
@@ -130,6 +130,8 @@ void installSearchPaths()
  *
  * The host's parameter list is flat, so every name has to say which module it belongs to. The
  * prefix of the text key is the only source for that, which keeps the naming generated.
+ * @param[in] key  the parameter's key
+ * @return the module's name
  */
 juce::String prettyPrefix(const std::string& key)
 {
@@ -918,19 +920,33 @@ namespace {
  *         already happened when the step is recorded. */
 class UndoStep final : public juce::UndoableAction {
 public:
-    /** @brief A step of @p p from @p before to @p after. */
+    /**
+     * @brief A step of @p p from @p before to @p after.
+     * @param[in,out] p       the processor
+     * @param[in]     before  the state before
+     * @param[in]     after   the state after
+     */
     UndoStep(PhospheneProcessor& p, PhospheneProcessor::UndoState before, PhospheneProcessor::UndoState after)
         : m_p(p), m_before(std::move(before)), m_after(std::move(after)) {}
-    /** @brief Applies after (the first time: it is applied already, so nothing happens). */
+    /**
+     * @brief Applies after (the first time: it is applied already, so nothing happens).
+     * @return true
+     */
     bool perform() override
     {
         if (m_first) { m_first = false; return true; }
         m_p.applyUndoState(m_after);
         return true;
     }
-    /** @brief Puts before back. */
+    /**
+     * @brief Puts before back.
+     * @return true
+     */
     bool undo() override { m_p.applyUndoState(m_before); return true; }
-    /** @brief The memory the step takes, roughly (the history's limit). */
+    /**
+     * @brief The memory the step takes, roughly (the history's limit).
+     * @return the size in bytes
+     */
     int getSizeInUnits() override { return static_cast<int>(m_before.m_knobs.size() + m_after.m_knobs.size()) + 64; }
 
 private:
@@ -2151,5 +2167,8 @@ void PhospheneProcessor::stopRecording()
 
 juce::AudioProcessorEditor* PhospheneProcessor::createEditor() { return new PhospheneEditor(*this); }
 
-/** @brief JUCE's entry point: one processor per instance. */
+/**
+ * @brief JUCE's entry point: one processor per instance.
+ * @return a new processor
+ */
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new PhospheneProcessor(); }

@@ -1,6 +1,7 @@
 /**
  * @file Engine.cpp
  * @brief Engine implementation.
+ * @author Rene Weller
  */
 #include "phos/Engine.h"
 #include "phos/Patterns.h"
@@ -16,7 +17,11 @@ const char* const StemNames[NumStems] = { "Kick", "Bass", "Perc", "Acid", "Lead"
 
 namespace {
 constexpr double PiD = 3.141592653589793;   ///< pi
-/** @brief Whether a curve takes whole steps (Int, Choice, Toggle). */
+/**
+ * @brief Whether a curve takes whole steps (Int, Choice, Toggle).
+ * @param[in] c  the curve
+ * @return true for whole steps
+ */
 bool isDiscreteCurve(CurveE c) { return c == CurveE::INT || c == CurveE::CHOICE || c == CurveE::TOGGLE; }
 
 // The gated hall's bar-line window (20.09.2026, round "reverb"; Reverb::barGate()). Fixed, not exposed
@@ -32,6 +37,9 @@ constexpr float HallGateOpenMs = 15.0f;   ///< ... its reopening, ms
  * @brief Clip with a quadratic knee: unity below 0.7 T, flat at T beyond 1.3 T, and a parabola in
  *        between that meets both with matching slope. Unlike tanh it leaves everything under the knee
  *        untouched, so it rounds the kick's transients without compressing the body of the mix.
+ * @param[in] x  the input sample
+ * @param[in] T  the ceiling
+ * @return the output sample
  */
 inline float kneeClip(float x, float T)
 {
@@ -163,7 +171,11 @@ struct DistanceCue {
     float m_width;       ///< the width
 };
 
-/** @brief The cues at distance @p d (0 near .. 1 far): dB linear, Hz logarithmic, the rest linear between 0, 0.5, 1. */
+/**
+ * @brief The cues at distance @p d (0 near .. 1 far): dB linear, Hz logarithmic, the rest linear between 0, 0.5, 1.
+ * @param[in] d  the distance, 0..1
+ * @return the cues
+ */
 DistanceCue distanceCue(float d)
 {
     static const DistanceCue k[3] = { { 0.0f, 20000.0f, 0.05f, 0.15f }, { -6.0f, 12000.0f, 0.20f, 0.50f }, { -15.0f, 6000.0f, 0.60f, 1.0f } };

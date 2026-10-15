@@ -25,6 +25,7 @@
  * u = (x - k Q) / (1 + k P). The integrator states update as s_i <- 2 y_i - s_i.
  *
  * @tparam V lane type (float or VecF)
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Vec.h"
@@ -47,6 +48,8 @@ struct LadderT {
 
     /**
      * @brief Local gain of the algebraic sigmoid: sigma(v)/v = 1/sqrt(1 + v^2).
+     * @param[in] v  the stage's input
+     * @return sigma(v)/v
      */
     static inline VT gainOf(VT v)
     {
@@ -56,10 +59,10 @@ struct LadderT {
 
     /**
      * @brief One sample.
-     * @param x    input (already scaled by the drive)
-     * @param g    prewarped integrator gain tan(pi fc / fs), per lane
-     * @param k    feedback amount; the linear filter self-oscillates at 4
-     * @param comp input gain (1 + comp k) that restores the passband level lost to resonance
+     * @param[in] x     input (already scaled by the drive)
+     * @param[in] g     prewarped integrator gain tan(pi fc / fs), per lane
+     * @param[in] k     feedback amount; the linear filter self-oscillates at 4
+     * @param[in] comp  input gain (1 + comp k) that restores the passband level lost to resonance
      * @return the four-pole low-pass output
      */
     inline VT tick(VT x, VT g, VT k, VT comp)

@@ -36,6 +36,7 @@
  * Engine::prepare() takes it as its default argument, so every existing caller, the self test and the
  * vector tests render exactly what they rendered before. The lane kernels are untouched by all of
  * this: bit-identity between the scalar path and NEON does not depend on the level.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Params.h"
@@ -62,10 +63,16 @@ struct Quality {
         for (int i = 0; i < PolyInstances; ++i) { m_polyUnison[i] = PolyUnison; m_polyVoices[i] = PolyVoices; }
     }
 
-    /** @brief Everything at full: what the engine did before quality levels existed. */
+    /**
+     * @brief Everything at full: what the engine did before quality levels existed.
+     * @return the desktop level
+     */
     static Quality desktop() { return Quality{}; }
 
-    /** @brief The Quest level of the table in the file comment. */
+    /**
+     * @brief The Quest level of the table in the file comment.
+     * @return the Quest level
+     */
     static Quality quest()
     {
         Quality q;
@@ -82,13 +89,16 @@ struct Quality {
         return q;
     }
 
-    /** @brief Display name of the level. */
+    /**
+     * @brief Display name of the level.
+     * @return the name
+     */
     const char* name() const { return m_level == LevelE::QUEST ? "quest" : "desktop"; }
 
     /**
      * @brief Looks a level up by name ("desktop" or "quest").
-     * @param text name, case-sensitive
-     * @param out  receives the level when the name is known
+     * @param[in]  text  name, case-sensitive
+     * @param[out] out   receives the level when the name is known
      * @return false when the name is neither of the two
      */
     static bool fromName(const char* text, Quality& out)

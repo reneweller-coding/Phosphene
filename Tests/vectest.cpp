@@ -6,6 +6,12 @@
  * Every lane of every vector operation, and of the ladder and the half-band filters run as lane
  * templates, must equal the float instantiation exactly -- not within a tolerance. If this ever
  * needs a tolerance, an operation has crept in that is not a single IEEE operation per lane.
+ * @author Rene Weller
+ *
+ * @par Compile Flags:
+ *   @arg @c PHOS_FORCE_SCALAR - the scalar build of the test (no comparison against itself)
+ *   @arg @c PHOS_NEON_SHIM - the NEON build on x86 (no comparison against itself)
+ *   @arg @c PHOS_EXPECT_PATH - the vector path the build expects; the test fails when Vec.h chose another
  */
 #include "phos/Acid.h"
 #include "phos/Bass.h"
@@ -34,7 +40,11 @@ namespace {
 
 constexpr int W = VecWidth;   ///< the lanes of the vector type compiled here
 
-/** @brief Deterministic test values covering signs, tiny and large magnitudes. */
+/**
+ * @brief Deterministic test values covering signs, tiny and large magnitudes.
+ * @param[in] i  the index
+ * @return the float
+ */
 float testValue(uint32_t i)
 {
     uint32_t h = i * 2654435761u ^ 0x9E3779B9u;
@@ -49,7 +59,12 @@ float testValue(uint32_t i)
     }
 }
 
-/** @brief Whether @p a and @p b are the same float, bit for bit. */
+/**
+ * @brief Whether @p a and @p b are the same float, bit for bit.
+ * @param[in] a  a float
+ * @param[in] b  another float
+ * @return true when they are the same bit for bit
+ */
 bool sameBits(float a, float b) { return std::memcmp(&a, &b, sizeof(float)) == 0; }
 
 /** @brief Vector test: vector operations, lane by lane. */
@@ -433,6 +448,9 @@ void testModelKernels()
  * reference instead, and prints its logits as bits so that the three outputs can also be diffed.
  * The cost line is the other half of what this is for: the scalar number is what the Quest's NEON
  * path will resemble. PHOS_MODEL_BENCH points at a larger model than the one in the repository.
+ * @param[in] file   the model file
+ * @param[in] label  the test's label
+ * @param[in] bench  true to time it too
  */
 void testModelForwardFile(const std::string& file, const char* label, bool bench)
 {
@@ -689,7 +707,10 @@ void testPolyModels()
     check(std::isfinite(maxAbs) && maxAbs < 20.0f, "the models stay bounded under modulated resonance and mode", fmt("max |y| = %.3f", static_cast<double>(maxAbs)));
 }
 
-/** @brief Runs the tests; the exit code is the number of failures. */
+/**
+ * @brief Runs the tests; the exit code is the number of failures.
+ * @return the number of failures
+ */
 int main()
 {
     std::printf("phos_vectest: path %s, %d lanes\n", VecPathName, W);

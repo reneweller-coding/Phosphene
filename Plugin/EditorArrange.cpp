@@ -1,6 +1,7 @@
 /**
  * @file EditorArrange.cpp
  * @brief The arrange timeline (EditorArrange.h) and the Arrange tab that carries it.
+ * @author Rene Weller
  */
 #include "EditorArrange.h"
 #include "PhospheneLookAndFeel.h"
@@ -18,7 +19,11 @@ constexpr int LegendH = 15;     ///< the line at the bottom that says what a cli
 constexpr int Glyph = 13;       ///< side of the lock and reroll buttons
 constexpr int LaneGap = 3;      ///< between the strip's two lanes (odd and even tracks)
 
-/** @brief The colour of a section type: warm where the energy is, cold where it is taken away. */
+/**
+ * @brief The colour of a section type: warm where the energy is, cold where it is taken away.
+ * @param[in] t  the section type
+ * @return its colour
+ */
 juce::Colour sectionColour(SectionTypeE t)
 {
     switch (t) {
@@ -34,7 +39,12 @@ juce::Colour sectionColour(SectionTypeE t)
     }
 }
 
-/** @brief A padlock, open or shut, in the box it is given. */
+/**
+ * @brief A padlock, open or shut, in the box it is given.
+ * @param[in,out] g       the graphics context
+ * @param[in]     r       the box
+ * @param[in]     locked  true for a shut lock
+ */
 void drawLock(juce::Graphics& g, juce::Rectangle<int> r, bool locked)
 {
     const juce::Rectangle<float> box = r.toFloat().reduced(1.5f);
@@ -52,7 +62,12 @@ void drawLock(juce::Graphics& g, juce::Rectangle<int> r, bool locked)
     else g.drawRoundedRectangle(body, 1.6f, 1.1f);
 }
 
-/** @brief A die: the reroll button. */
+/**
+ * @brief A die: the reroll button.
+ * @param[in,out] g     the graphics context
+ * @param[in]     r     the box
+ * @param[in]     used  true when the unit was rerolled
+ */
 void drawDie(juce::Graphics& g, juce::Rectangle<int> r, bool used)
 {
     const juce::Rectangle<float> box = r.toFloat().reduced(1.5f);
@@ -500,7 +515,11 @@ ArrangeDisplay::Snapshot PhospheneEditor::planSnapshot() const
 }
 
 namespace {
-/** @brief A hash over everything the timeline's picture shows. */
+/**
+ * @brief A hash over everything the timeline's picture shows.
+ * @param[in] s  the snapshot
+ * @return the hash
+ */
 uint64_t snapshotHash(const ArrangeDisplay::Snapshot& s)
 {
     uint64_t hash = 1469598103934665603ull;

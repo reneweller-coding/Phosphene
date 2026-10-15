@@ -1,6 +1,7 @@
 /**
  * @file Acid.cpp
  * @brief Acid voice implementation.
+ * @author Rene Weller
  */
 #include "phos/Acid.h"
 #include "phos/Params.h"
@@ -33,7 +34,10 @@ constexpr float SweepOctaves = 2.0f;        ///< sweep depth at full accent, res
  */
 constexpr float DriveMaxDb = 30.0f;
 
-/** @brief The half-band decimator of the acid's 2x oversampling (96 dB stop band, 0.1 transition), designed once. */
+/**
+ * @brief The half-band decimator of the acid's 2x oversampling (96 dB stop band, 0.1 transition), designed once.
+ * @return the decimator's design
+ */
 const HalfbandDesign& acidHalfband()
 {
     static const HalfbandDesign d = designHalfband(96.0, 0.1);

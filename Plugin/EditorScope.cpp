@@ -1,6 +1,7 @@
 /**
  * @file EditorScope.cpp
  * @brief The kick's and the bass's scope (EditorScope.h).
+ * @author Rene Weller
  */
 #include "EditorScope.h"
 #include "PhospheneLookAndFeel.h"
@@ -22,13 +23,26 @@ constexpr int Columns = 400;       ///< time and frequency resolution of the cur
 constexpr double LoHz = 20.0;   ///< the spectrum's lowest frequency, Hz
 constexpr double HiHz = 20000.0;   ///< ... its highest
 
-/** @brief A whole number: juce::String(x, 0) prints every digit, not none. */
+/**
+ * @brief A whole number: juce::String(x, 0) prints every digit, not none.
+ * @param[in] x  the number
+ * @return it as text without decimals
+ */
 juce::String whole(double x) { return juce::String(juce::roundToInt(x)); }
 
-/** @brief The name of MIDI note @p midi ("A3"). */
+/**
+ * @brief The name of MIDI note @p midi ("A3").
+ * @param[in] midi  the MIDI note
+ * @return its name
+ */
 juce::String noteName(int midi) { return juce::String(KeyNames[((midi % 12) + 12) % 12]) + juce::String(midi / 12 - 1); }
 
-/** @brief The nearest MIDI note of @p hz and how many cents it lies off it. */
+/**
+ * @brief The nearest MIDI note of @p hz and how many cents it lies off it.
+ * @param[in]  hz     the frequency
+ * @param[out] cents  how far it lies off the note
+ * @return the MIDI note
+ */
 int nearestNote(double hz, double& cents)
 {
     const double m = 69.0 + 12.0 * std::log2(std::max(hz, 1.0) / 440.0);

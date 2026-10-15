@@ -1,6 +1,7 @@
 /**
  * @file Rating.cpp
  * @brief The ratings file (Rating.h).
+ * @author Rene Weller
  */
 #include "phos/Rating.h"
 
@@ -12,7 +13,11 @@ namespace phos {
 
 namespace {
 
-/** @brief A field as the file holds it: tabs and line breaks would break the columns, so they become spaces. */
+/**
+ * @brief A field as the file holds it: tabs and line breaks would break the columns, so they become spaces.
+ * @param[in] s  the field
+ * @return the field cleaned
+ */
 std::string clean(const std::string& s)
 {
     std::string out = s;

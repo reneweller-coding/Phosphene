@@ -6,6 +6,7 @@
  * topic, plus two topics made on the spot: the parameters of the tab the help was opened from -- name, range,
  * default and the value it has now, read from the same descriptors that built the tab -- and the update
  * check. Noctuary's help page was the model: a topic list on the left, the text beside it, F1 to open it.
+ * @author Rene Weller
  */
 #include "PluginEditor.h"
 #include "PhospheneHelpData.h"
@@ -15,7 +16,10 @@ using namespace phos;
 using namespace phosui;
 
 namespace {
-/** @brief chapters.txt as (name, text) pairs: paragraphs joined, indented lines kept as they stand. */
+/**
+ * @brief chapters.txt as (name, text) pairs: paragraphs joined, indented lines kept as they stand.
+ * @return (name, text) pairs
+ */
 std::vector<std::pair<juce::String, juce::String>> readChapters()
 {
     std::vector<std::pair<juce::String, juce::String>> out;
@@ -38,7 +42,11 @@ std::vector<std::pair<juce::String, juce::String>> readChapters()
     return out;
 }
 
-/** @brief A parameter's range in words, for the parameter topic. */
+/**
+ * @brief A parameter's range in words, for the parameter topic.
+ * @param[in] d  the parameter's description
+ * @return its range in words
+ */
 juce::String rangeOf(const ParamDesc& d)
 {
     if (d.m_curve == CurveE::TOGGLE) return "on / off";

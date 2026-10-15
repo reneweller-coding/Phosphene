@@ -1,6 +1,7 @@
 /**
  * @file selftest_mix.cpp
  * @brief The self test's effects and mix: gate and duck, reverbs, dynamics, effects, psychedelia, the master, the mix balance and the stereo image.
+ * @author Rene Weller
  */
 #include "SelfTestHelpers.h"
 

@@ -105,6 +105,7 @@
  * envelope's attack (one per cent per cent of drift, likewise a design ratio -- the walk is a pitch
  * measure and the other two are scaled from it rather than given their own depths, so one knob moves
  * the whole ageing of the instrument).
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Disperser.h"
@@ -132,16 +133,24 @@ inline constexpr double DriftAttackRatio = 0.01;
 /** @brief Polyphonic engine. */
 class Poly {
 public:
-    /** @brief Prepares for a sample rate. */
+    /**
+     * @brief Prepares for a sample rate.
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate);
     /** @brief Silences every voice and clears all state. */
     void reset();
-    /** @brief Reads the effective parameters (indexed by poly::) and the tempo (for the delay). */
+    /**
+     * @brief Reads the effective parameters (indexed by poly::) and the tempo (for the delay).
+     * @param[in] v    the effective parameter values
+     * @param[in] bpm  the tempo
+     */
     void update(const float* v, double bpm);
     /**
      * @brief Whether the table update() chose is no longer the one its index resolves to -- a library table that
      *        was still being expanded then (a built-in stood in) and is published now. Engine::applyParams skips an
      *        update whose inputs did not move, and this is the one input that can move without a parameter.
+     * @return true when the table is stale
      */
     bool tableStale() const;
     /**
@@ -157,32 +166,41 @@ public:
     void refreshEnvelopeTimes() { for (Envelope& e : m_amp) e.copyTimes(m_ampTimes); }
     /**
      * @brief Starts a note.
-     * @param pitch       MIDI note
-     * @param velocity    0..1
-     * @param lengthBeats written length of the note (for the dynamic detune)
-     * @param gateSamples samples until release
-     * @param late        how many samples ago the note ideally started (0 <= late < 1)
-     * @param accent      22.09.2026: the note is accented -- its filter envelope opens 1.5 times as far
-     *                    (the 303's accent logic on a poly voice; velocity carries the level as before)
-     * @param slide       22.09.2026: the note may glide in from the pitch before it. True lets every
-     *                    note glide; the lead passes its NOTE_SLIDE flag (Score.h)
+     * @param[in] pitch        MIDI note
+     * @param[in] velocity     0..1
+     * @param[in] lengthBeats  written length of the note (for the dynamic detune)
+     * @param[in] gateSamples  samples until release
+     * @param[in] late         how many samples ago the note ideally started (0 <= late < 1)
+     * @param[in] accent       22.09.2026: the note is accented -- its filter envelope opens 1.5 times as far (the 303's
+     *                         accent logic on a poly voice; velocity carries the level as before)
+     * @param[in] slide        22.09.2026: the note may glide in from the pitch before it. True lets every note glide;
+     *                         the lead passes its NOTE_SLIDE flag (Score.h)
      */
     void noteOn(int pitch, float velocity, double lengthBeats, int gateSamples, double late, bool accent = false, bool slide = true);
     /**
      * @brief The free slow movement's two sines at this moment (Engine.cpp, 25.09.2026): the first moves the cutoff by
      *        up to an octave, the second the wavetable position by up to 0.15, both scaled by poly.slow_mod.
+     * @param[in] cutoffSine  the first sine, -1..1
+     * @param[in] colourSine  the second sine, -1..1
      */
     void setSlow(float cutoffSine, float colourSine) { m_slowCut = cutoffSine; m_slowColour = colourSine; }
     /**
      * @brief The set's beat at the next sample and the beats per sample (Engine.cpp, per chunk; 26.09.2026): the
      *        clock the tempo-synced LFOs of the modulation (Modulation.h) read.
+     * @param[in] beat            the beat now
+     * @param[in] beatsPerSample  the beats per sample
      */
     void setClock(double beat, double beatsPerSample) { m_beat = beat; m_beatsPerSample = beatsPerSample; }
-    /** @brief A voice's modulation sums per destination, as the last grid step evaluated them (tests, the live ring). */
+    /**
+     * @brief A voice's modulation sums per destination, as the last grid step evaluated them (tests, the live ring).
+     * @param[in] voice  the voice
+     * @return its sums per destination
+     */
     const float* modulation(int voice) const { return m_modSum[voice]; }
     /**
      * @brief Closes the gate of every voice holding @p pitch (23.09.2026, live keyboard): a played note starts with a
      *        gate that never runs out on its own, and the key's release ends it -- the voice then releases as any.
+     * @param[in] pitch  the MIDI note
      */
     void noteOff(int pitch)
     {
@@ -191,22 +209,27 @@ public:
 
     /**
      * @brief Sets the quality limits of this instance (Quality.h).
-     * @param unison oscillators per voice, 1 .. PolyUnison
-     * @param voices voices that may sound at once, 1 .. PolyVoices
-     *
-     * The defaults (PolyUnison, PolyVoices) are "no limit", so a default engine runs exactly the
-     * code it ran before this existed. Set once before the first note (Engine::prepare): the unison
-     * limit decides which slots a note sets up, so changing it while notes sound would leave the
-     * running notes with slots the render loop no longer sums.
+     * @param[in] unison  oscillators per voice, 1 .. PolyUnison
+     * @param[in] voices  voices that may sound at once, 1 .. PolyVoices The defaults (PolyUnison, PolyVoices) are "no
+     *                    limit", so a default engine runs exactly the code it ran before this existed. Set once before
+     *                    the first note (Engine::prepare): the unison limit decides which slots a note sets up, so
+     *                    changing it while notes sound would leave the running notes with slots the render loop no
+     *                    longer sums.
      */
     void setQuality(int unison, int voices)
     {
         m_unisonLimit = unison < 1 ? 1 : (unison > PolyUnison ? PolyUnison : unison);
         m_voiceLimit = voices < 1 ? 1 : (voices > PolyVoices ? PolyVoices : voices);
     }
-    /** @brief Oscillators per voice this instance plays. */
+    /**
+     * @brief Oscillators per voice this instance plays.
+     * @return the oscillators per voice
+     */
     int unisonLimit() const { return m_unisonLimit; }
-    /** @brief Voices this instance may sound at once. */
+    /**
+     * @brief Voices this instance may sound at once.
+     * @return the voices
+     */
     int voiceLimit() const { return m_voiceLimit; }
 
     /**
@@ -226,6 +249,13 @@ public:
      *    voice's sum (Poly.cpp). The centre and the innermost detuned pair survive, which is the
      *    narrow beating the supersaw's body comes from, and the kept gains are normalised by their
      *    own incoherent power, so the level does not jump.
+     * @param[in] pitch        the MIDI note
+     * @param[in] velocity     the velocity, 0..1
+     * @param[in] lengthBeats  the note's length in beats
+     * @param[in] gateSamples  the gate's length in samples
+     * @param[in] late         samples after the ideal start
+     * @param[in] accent       true for an accent
+     * @param[in] slide        true for a slide
      */
     void noteOnLimited(int pitch, float velocity, double lengthBeats, int gateSamples, double late, bool accent = false, bool slide = true)
     {
@@ -233,11 +263,24 @@ public:
         noteOn(pitch, velocity, lengthBeats, gateSamples, late, accent, slide);
     }
 
-    /** @brief Renders @p n stereo samples, replacing @p L and @p R. */
+    /**
+     * @brief Renders @p n stereo samples, replacing @p L and @p R.
+     * @param[out] L  the left channel
+     * @param[out] R  the right channel
+     * @param[in]  n  the block's samples
+     */
     void process(float* L, float* R, int n);
-    /** @brief Renders with a chosen lane type (float = scalar reference), for the vector tests. */
+    /**
+     * @brief Renders with a chosen lane type (float = scalar reference), for the vector tests.
+     * @param[out] L  the left channel
+     * @param[out] R  the right channel
+     * @param[in]  n  the block's samples
+     */
     template <class VT> void processWith(float* L, float* R, int n);
-    /** @brief Voices whose envelope is open. */
+    /**
+     * @brief Voices whose envelope is open.
+     * @return the voices sounding
+     */
     int activeVoices() const;
     /**
      * @brief Seeds the random start phases and the thermal drift walks (deterministic renders).
@@ -245,6 +288,7 @@ public:
      * The drift gets its own generator, salted against the phase one, so that switching the drift on
      * or off does not move the start phases -- a render with drift 0 is bit-identical to a render
      * from before the drift existed.
+     * @param[in] seed  the seed
      */
     void seedPhases(uint64_t seed)
     {
@@ -254,9 +298,17 @@ public:
         m_modRng.seed(seed ^ 0x4D4F4452'414E4430ull);      // "MODRAND0"
         for (int v = 0; v < PolyVoices; ++v) m_mod[v].prepare(m_sr, mixSeed(seed, 0x4D4F4456'4F494345ull + static_cast<uint64_t>(v)));
     }
-    /** @brief The drift walk of one unison slot, in cents (tests). */
+    /**
+     * @brief The drift walk of one unison slot, in cents (tests).
+     * @param[in] slot  the unison slot
+     * @return its drift in cents
+     */
     float slotDrift(int slot) const { return m_driftSlot[slot] * m_driftNorm; }
-    /** @brief The drift walk of one voice, in cents (tests). */
+    /**
+     * @brief The drift walk of one voice, in cents (tests).
+     * @param[in] voice  the voice
+     * @return its drift in cents
+     */
     float voiceDrift(int voice) const { return m_driftVoice[voice] * m_driftNorm; }
     /**
      * @brief The pitch a voice's oscillators are sounding at right now, in MIDI notes (tests).
@@ -264,6 +316,8 @@ public:
      * Equal to the note's own pitch except while a glide is running (Poly.h), which is what makes the
      * portamento measurable without a spectrum: the self test reads this on the PolyBlock grid and
      * checks the trajectory against the time constant the parameter asks for.
+     * @param[in] voice  the voice
+     * @return its pitch in MIDI notes
      */
     double soundingPitch(int voice) const { return m_glidePitch[voice]; }
     /**
@@ -275,19 +329,36 @@ public:
      * inside the sample loop, so it costs nothing measurable. It is the only property that tells a
      * real unison limit from one that merely zeroes the outer gains: the sound is the same, the work
      * is not.
+     * @return the reads
      */
     uint64_t tableReads() const { return m_tableReads; }
 
-    /** @brief Szabo's detune curve y(x), x in [0, 1]. */
+    /**
+     * @brief Szabo's detune curve y(x), x in [0, 1].
+     * @param[in] x  the knob, 0..1
+     * @return the detune
+     */
     static double detuneCurve(double x);
-    /** @brief Szabo's centre and side gains for the mix knob x in [0, 1]. */
+    /**
+     * @brief Szabo's centre and side gains for the mix knob x in [0, 1].
+     * @param[in]  x       the mix knob, 0..1
+     * @param[out] center  the centre gain
+     * @param[out] side    the side gain
+     */
     static void mixGains(double x, double& center, double& side);
-    /** @brief The detune knob value a note of @p lengthBeats plays with. */
+    /**
+     * @brief The detune knob value a note of @p lengthBeats plays with.
+     * @param[in] knob         the detune knob
+     * @param[in] amount       how much the length moves it
+     * @param[in] lengthBeats  the note's length in beats
+     * @return the knob value played
+     */
     static double dynamicDetune(double knob, double amount, double lengthBeats);
 
     /**
      * @brief The modulation to show on the knobs (26.09.2026, the live ring): the sums per destination (ModDest) of the
      *        latest note's voice (after it ends, the last it played), or null where nothing moves. Rendering thread.
+     * @return the sums per destination, or null
      */
     const float* displayModulation() const
     {
@@ -310,7 +381,11 @@ private:
     float m_idxFloor0[PolySlotCount] = {};            ///< the FM index floor the note set, before the modulation
     float m_modGainL[PolyVoices] = {}, m_modGainR[PolyVoices] = {};   ///< the level and pan destinations as channel gains
     double m_beat = 0.0, m_beatsPerSample = 0.0;    ///< setClock()
-    /** @brief Evaluates voice @p voice's modulation at this grid step and writes what it moves (renderSegment). */
+    /**
+     * @brief Evaluates voice @p voice's modulation at this grid step and writes what it moves (renderSegment).
+     * @param[in] voice  the voice
+     * @param[in] beat   the beat now
+     */
     void applyModulation(int voice, double beat);
     /** @} */
     /**
@@ -332,9 +407,16 @@ private:
         m_gate[oldest] = 0;
     }
 
-    /** @brief Sets a voice's high-pass coefficients for its note. */
+    /**
+     * @brief Sets a voice's high-pass coefficients for its note.
+     * @param[in] voice  the voice
+     */
     void voiceCoefs(int voice);
-    /** @brief Sets a voice's low-pass coefficients from its envelope, key tracking, drift and LFO. */
+    /**
+     * @brief Sets a voice's low-pass coefficients from its envelope, key tracking, drift and LFO.
+     * @param[in] voice    the voice
+     * @param[in] damping  the damping
+     */
     void lowPassCoefs(int voice, double damping);
     /**
      * @brief Writes a voice's slot frequencies for the pitch it is sounding at (Poly.h, glide).
@@ -342,6 +424,7 @@ private:
      * Exactly the arithmetic noteOn() does for dt, inv, mdt and the wavetable read, with the note's own
      * detune curve, detune scale and FM ratio held from note on, so that a voice that never glides gets
      * the same numbers twice and one that does moves continuously between them.
+     * @param[in] voice  the voice
      */
     void writeSlotPitch(int voice);
     /** @brief Advances every gliding voice by one PolyBlock grid step (Poly.h). */
@@ -355,7 +438,12 @@ private:
      * deviation is exactly the drift parameter in cents whatever the sample rate.
      */
     void advanceDrift();
-    /** @brief Renders @p n samples with the lane type @p V (scalar, AVX2 or NEON). */
+    /**
+     * @brief Renders @p n samples with the lane type @p V (scalar, AVX2 or NEON).
+     * @param[in,out] L  the left channel, added to
+     * @param[in,out] R  the right channel, added to
+     * @param[in]     n  the samples
+     */
     template <class VT> void renderSegment(float* L, float* R, int n);
 
     double m_sr = 48000.0;   ///< sample rate

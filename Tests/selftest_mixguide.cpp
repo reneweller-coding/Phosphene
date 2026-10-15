@@ -5,6 +5,7 @@
  *
  * The render-level measurements of the guide -- correlation, mono loss, tilt, the kick-bass gap, the contrast
  * of drop and break -- are Tools/mix_audit.py's (ctest `mixaudit`); these are the mechanisms behind them.
+ * @author Rene Weller
  */
 #include "SelfTestHelpers.h"
 
@@ -49,7 +50,15 @@ void testMixGuideMatrix()
           fmt("bass %.0f, lines %.0f, back %.0f, returns %.0f ms", rBass, rLines, rBack, rRet));
 }
 
-/** @brief Renders @p seconds of an engine with @p settings and the notes @p notes: the left channel, the right into @p right if given. */
+/**
+ * @brief Renders @p seconds of an engine with @p settings and the notes @p notes: the left channel, the right into @p
+ *        right if given.
+ * @param[in]  settings  the key=value lines
+ * @param[in]  notes     the notes
+ * @param[in]  seconds   the seconds rendered
+ * @param[out] right     receives the right channel, or null
+ * @return the left channel
+ */
 static std::vector<float> renderNotes(const std::string& settings, const std::vector<NoteEvent>& notes, double seconds,
                                       std::vector<float>* right = nullptr)
 {

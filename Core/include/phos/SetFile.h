@@ -31,6 +31,7 @@
  * The score itself is not written: seed plus knobs plus locks reproduce it exactly (the determinism
  * rule of PLAN 3). Writing the rolled-out score for sets that must survive a change of the rules is
  * left for later, as the plan allows.
+ * @author Rene Weller
  */
 #pragma once
 #include <string>
@@ -41,22 +42,40 @@ namespace phos {
 class Composer;
 class ParamStore;
 
-/** @brief The text form of a set: header, seed, style, arc, changed knobs, locks and rerolls. */
+/**
+ * @brief The text form of a set: header, seed, style, arc, changed knobs, locks and rerolls.
+ * @param[in] composer  the composer
+ * @param[in] params    the knobs
+ * @return the text
+ */
 std::string writeSetText(const Composer& composer, const ParamStore& params);
 
 /**
  * @brief Reads a `.phosset` text into a composer and a parameter store.
- * @param text     the file's contents
- * @param composer receives the seed, the locks and the reroll counters (its old ones are cleared)
- * @param params   receives the knobs: every knob the file does not name goes back to its default
- * @param error    receives a message for the first bad line, may be null
+ * @param[in]  text      the file's contents
+ * @param[out] composer  receives the seed, the locks and the reroll counters (its old ones are cleared)
+ * @param[out] params    receives the knobs: every knob the file does not name goes back to its default
+ * @param[out] error     receives a message for the first bad line, may be null
  * @return false when the header is missing or a line could not be applied
  */
 bool readSetText(std::string_view text, Composer& composer, ParamStore& params, std::string* error = nullptr);
 
-/** @brief Writes a `.phosset` file. */
+/**
+ * @brief Writes a `.phosset` file.
+ * @param[in] path      the file's path
+ * @param[in] composer  the composer
+ * @param[in] params    the knobs
+ * @return false if it cannot be written
+ */
 bool writeSetFile(const char* path, const Composer& composer, const ParamStore& params);
-/** @brief Reads a `.phosset` file. */
+/**
+ * @brief Reads a `.phosset` file.
+ * @param[in]     path      the file's path
+ * @param[in,out] composer  the composer, set up from the file
+ * @param[in,out] params    the knobs, set from the file
+ * @param[out]    error     receives the failure, or null
+ * @return false if it cannot be read
+ */
 bool readSetFile(const char* path, Composer& composer, ParamStore& params, std::string* error = nullptr);
 
 } // namespace phos

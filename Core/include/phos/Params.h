@@ -6,13 +6,14 @@
  * percussion lanes, several polyphonic engines -- so parameters are declared once per module as a
  * table of descriptors, and a module may be instantiated more than once. A parameter's id is the
  * base index of its module instance plus its index in the table; its text key is
- * "<prefix>.<key>" or "<prefix><instance>.<key>" ("kick.pitch_start", "perc3.decay").
+ * "\<prefix\>.\<key\>" or "\<prefix\>\<instance\>.\<key\>" ("kick.pitch_start", "perc3.decay").
  *
  * From the same tables come the host parameters, OSC addresses, the preset text form, the manual and
  * the `--list` output of phos_render. The composer never writes parameters; it reads a snapshot.
  *
- * Values are stored as std::atomic<float> in their real range (Hz, ms, dB), so the audio thread can
+ * Values are stored as std::atomic\<float\> in their real range (Hz, ms, dB), so the audio thread can
  * read what another thread wrote without a lock.
+ * @author Rene Weller
  */
 #pragma once
 #include <atomic>
@@ -74,7 +75,11 @@ constexpr int PercLanes = 12;   ///< instances of the percussion lane module
  */
 enum class PolyInstanceE : int { LEAD = 0, COUNTER, ARP, STAB, PAD, DRONE, COUNT };
 constexpr int PolyInstances = static_cast<int>(PolyInstanceE::COUNT); ///< instances of the polyphonic engine module
-/** @brief The index of an instance, for arrays kept per instance. */
+/**
+ * @brief The index of an instance, for arrays kept per instance.
+ * @param[in] i  the instance
+ * @return its index
+ */
 constexpr int polyIndex(PolyInstanceE i) { return static_cast<int>(i); }
 extern const char* const PolyInstanceNames[PolyInstances];   ///< "lead", "counter", "arp", "stab", "pad", "drone"
 
@@ -434,12 +439,24 @@ enum : int { KICK_MUTE, BASS_MUTE, TRACK_GAIN, PERC_MUTE, PERC_LEVEL, ACID_MUTE,
              KEYBOARD_LOWER, KEYBOARD_SPLIT, KEYBOARD_SCALE, KEYBOARD_VELOCITY,
              /** @} */
              COUNT };
-/** @brief The "own sound" switch of a polyphonic instance. */
+/**
+ * @brief The "own sound" switch of a polyphonic instance.
+ * @param[in] i  the instance
+ * @return the switch's parameter id
+ */
 constexpr int polyOwn(PolyInstanceE i) { return LEAD_OWN + static_cast<int>(i); }
 static_assert(polyOwn(PolyInstanceE::DRONE) == DRONE_OWN, "the own-sound switches follow PolyInstance");
-/** @brief The mute of a polyphonic instance's strip. */
+/**
+ * @brief The mute of a polyphonic instance's strip.
+ * @param[in] i  the instance
+ * @return the mute's parameter id
+ */
 constexpr int polyMute(PolyInstanceE i) { return LEAD_MUTE + 2 * static_cast<int>(i); }
-/** @brief The level of a polyphonic instance's strip. */
+/**
+ * @brief The level of a polyphonic instance's strip.
+ * @param[in] i  the instance
+ * @return the level's parameter id
+ */
 constexpr int polyLevel(PolyInstanceE i) { return LEAD_LEVEL + 2 * static_cast<int>(i); }
 static_assert(polyMute(PolyInstanceE::DRONE) == DRONE_MUTE && polyLevel(PolyInstanceE::STAB) == STAB_LEVEL,
               "the mix strips of the polyphonic instances must follow PolyInstance pair by pair");
@@ -489,33 +506,87 @@ public:
     ParamStore(const ParamStore&) = delete;
     ParamStore& operator=(const ParamStore&) = delete;
 
-    /** @brief Number of parameters. */
+    /**
+     * @brief Number of parameters.
+     * @return the number of parameters
+     */
     int count() const { return static_cast<int>(m_entries.size()); }
-    /** @brief First id of a module instance; -1 if it does not exist. */
+    /**
+     * @brief First id of a module instance; -1 if it does not exist.
+     * @param[in] m         the module
+     * @param[in] instance  its instance
+     * @return the first id of the module instance, -1 if it does not exist
+     */
     int base(ModuleE m, int instance = 0) const;
-    /** @brief First id of a polyphonic instance: the one way to address a voice's parameters by name. */
+    /**
+     * @brief First id of a polyphonic instance: the one way to address a voice's parameters by name.
+     * @param[in] i  the instance
+     * @return its first id
+     */
     int base(PolyInstanceE i) const { return base(ModuleE::POLY, polyIndex(i)); }
-    /** @brief Descriptor of @p id. */
+    /**
+     * @brief Descriptor of @p id.
+     * @param[in] id  the parameter
+     * @return its descriptor
+     */
     const ParamDesc& desc(int id) const { return *m_entries[static_cast<size_t>(id)].m_desc; }
-    /** @brief Full text key of @p id ("kick.pitch_start"). */
+    /**
+     * @brief Full text key of @p id ("kick.pitch_start").
+     * @param[in] id  the parameter
+     * @return its full text key
+     */
     const std::string& key(int id) const { return m_entries[static_cast<size_t>(id)].m_key; }
-    /** @brief Id for a text key, or -1. */
+    /**
+     * @brief Id for a text key, or -1.
+     * @param[in] key  the text key
+     * @return its id, -1 when there is none
+     */
     int find(std::string_view key) const;
 
-    /** @brief Current real value. */
+    /**
+     * @brief Current real value.
+     * @param[in] id  the parameter
+     * @return its current real value
+     */
     float get(int id) const { return m_values[static_cast<size_t>(id)].load(std::memory_order_relaxed); }
-    /** @brief Current value rounded to an integer (Int, Choice, Toggle). */
+    /**
+     * @brief Current value rounded to an integer (Int, Choice, Toggle).
+     * @param[in] id  the parameter
+     * @return its current value rounded to an integer
+     */
     int getInt(int id) const;
-    /** @brief Current value as a switch. */
+    /**
+     * @brief Current value as a switch.
+     * @param[in] id  the parameter
+     * @return its current value as a switch
+     */
     bool getBool(int id) const { return get(id) >= 0.5f; }
-    /** @brief Sets a real value, clamped to the range (and rounded for discrete curves). */
+    /**
+     * @brief Sets a real value, clamped to the range (and rounded for discrete curves).
+     * @param[in] id     the parameter
+     * @param[in] value  the real value
+     */
     void set(int id, float value);
-    /** @brief Sets from a normalised 0..1 position. */
+    /**
+     * @brief Sets from a normalised 0..1 position.
+     * @param[in] id    the parameter
+     * @param[in] norm  the position, 0..1
+     */
     void setNormalised(int id, float norm) { set(id, fromNormalised(id, norm)); }
 
-    /** @brief Real value to normalised 0..1. */
+    /**
+     * @brief Real value to normalised 0..1.
+     * @param[in] id     the parameter
+     * @param[in] value  a real value
+     * @return its normalised position, 0..1
+     */
     float toNormalised(int id, float value) const;
-    /** @brief Normalised 0..1 to real value. */
+    /**
+     * @brief Normalised 0..1 to real value.
+     * @param[in] id    the parameter
+     * @param[in] norm  a normalised position, 0..1
+     * @return the real value there
+     */
     float fromNormalised(int id, float norm) const;
 
     /** @brief All parameters back to their defaults. */
@@ -523,18 +594,27 @@ public:
     /**
      * @brief Default of @p id: the descriptor's default, or the instance's own where a module's
      *        instances start from different values (the twelve lanes of the percussion kit).
+     * @param[in] id  the parameter
+     * @return its default value
      */
     float defaultValue(int id) const { return m_defaults[static_cast<size_t>(id)]; }
-    /** @brief Copies every value from another store (for snapshots on another thread). */
+    /**
+     * @brief Copies every value from another store (for snapshots on another thread).
+     * @param[in] other  the store whose values are copied
+     */
     void copyValuesFrom(const ParamStore& other);
     /**
      * @brief Copies the current values of one module instance into @p out, indexed like its table.
-     * @param m        module
-     * @param instance instance index
-     * @param out      at least as many floats as the module has parameters
+     * @param[in]     m         module
+     * @param[in]     instance  instance index
+     * @param[in,out] out       at least as many floats as the module has parameters
      */
     void readModule(ModuleE m, int instance, float* out) const;
-    /** @brief Number of parameters of a module. */
+    /**
+     * @brief Number of parameters of a module.
+     * @param[in] m  the module
+     * @return how many parameters an instance of it has
+     */
     static int moduleCount(ModuleE m);
 
     /**
@@ -542,17 +622,22 @@ public:
      *
      * Choice parameters accept their name ("compose.key=F#") or index. Lines starting with '#' are
      * comments.
-     * @param text  the assignments
-     * @param error receives a message for the first bad assignment, may be null
+     * @param[in]  text   the assignments
+     * @param[out] error  receives a message for the first bad assignment, may be null
      * @return false if any assignment failed (the good ones are still applied)
      */
     bool parseText(std::string_view text, std::string* error = nullptr);
     /**
      * @brief The text form, one "key=value" per line.
-     * @param onlyChanged leave out parameters at their default
+     * @param[in] onlyChanged  leave out parameters at their default
+     * @return the text form
      */
     std::string toText(bool onlyChanged) const;
-    /** @brief A value formatted for display ("330 Hz", "F#"). */
+    /**
+     * @brief A value formatted for display ("330 Hz", "F#").
+     * @param[in] id  the parameter
+     * @return its value formatted for display
+     */
     std::string format(int id) const;
 
 private:

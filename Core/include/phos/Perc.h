@@ -59,6 +59,7 @@
  * band balance and no loudness figure of the mix round can move; that is algebra, not a measurement.
  * The phasor turns once per sample, so the movement is bit-identical whatever block size the host
  * renders in, and at D = 0 the rotation is the exact identity in every bit.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Dsp.h"
@@ -76,16 +77,19 @@ class PercKit {
 public:
     static constexpr int MaxBlock = 64;   ///< longest block process() renders at once (longer ones are split)
 
-    /** @brief Prepares for a sample rate. */
+    /**
+     * @brief Prepares for a sample rate.
+     * @param[in] sampleRate  the sample rate in Hz
+     */
     void prepare(double sampleRate);
     /** @brief Silences every lane and clears all state. */
     void reset();
     /**
      * @brief Reads one lane's effective parameters.
-     * @param lane    0..11
-     * @param v       values indexed by perc::
-     * @param keyRoot pitch class of the key, for Tune to Key
-     * @param scale   index into ScaleNames, for Tune to Key
+     * @param[in] lane     0..11
+     * @param[in] v        values indexed by perc::
+     * @param[in] keyRoot  pitch class of the key, for Tune to Key
+     * @param[in] scale    index into ScaleNames, for Tune to Key
      */
     void update(int lane, const float* v, int keyRoot, int scale);
     /**
@@ -100,45 +104,94 @@ public:
      * ramp between tracks, and never changes inside a chunk. Before that the kit ran at DefaultBpm
      * whatever the tempo; at +-4 BPM around 145 that was a 2.8 % error, and for a set driven far from
      * 145 BPM the "three sixteenths" of the swing were not three sixteenths any more.
-     * @param bpm beats per minute (4/4, so a bar is four beats)
+     * @param[in] bpm  beats per minute (4/4, so a bar is four beats)
      */
     void setTempo(double bpm);
     /** @brief The tempo the auto-pan assumes until setTempo() says otherwise. */
     static constexpr double DefaultBpm = 145.0;
-    /** @brief The tempo the auto-pan currently runs at, in BPM. */
+    /**
+     * @brief The tempo the auto-pan currently runs at, in BPM.
+     * @return the tempo in BPM
+     */
     double tempo() const { return m_bpm; }
     /**
      * @brief Starts a hit.
-     * @param lane     0..11
-     * @param velocity 0..1
-     * @param shift    pitch shift in semitones for tonal and modal engines
-     * @param late     how many samples ago the hit ideally started (0 <= late < 1)
+     * @param[in] lane      0..11
+     * @param[in] velocity  0..1
+     * @param[in] shift     pitch shift in semitones for tonal and modal engines
+     * @param[in] late      how many samples ago the hit ideally started (0 <= late < 1)
      */
     void trigger(int lane, float velocity, int shift, double late);
-    /** @brief Renders @p n stereo samples, replacing @p L and @p R. */
+    /**
+     * @brief Renders @p n stereo samples, replacing @p L and @p R.
+     * @param[out] L  receives the left sum (replaced)
+     * @param[out] R  receives the right sum (replaced)
+     * @param[in]  n  how many samples
+     */
     void process(float* L, float* R, int n);
-    /** @brief Renders with a chosen lane type (float = scalar reference), for the vector tests. */
+    /**
+     * @brief Renders with a chosen lane type (float = scalar reference), for the vector tests.
+     * @param[out] L  the left channel
+     * @param[out] R  the right channel
+     * @param[in]  n  the block's samples
+     */
     template <class VT> void processWith(float* L, float* R, int n);
 
-    /** @brief Role of a lane as last updated. */
+    /**
+     * @brief Role of a lane as last updated.
+     * @param[in] lane  the lane
+     * @return its role as last updated
+     */
     PercRoleE role(int lane) const { return static_cast<PercRoleE>(m_role[lane]); }
-    /** @brief Frequency a lane's tone and modes are tuned to (after Tune to Key, before a hit's shift). */
+    /**
+     * @brief Frequency a lane's tone and modes are tuned to (after Tune to Key, before a hit's shift).
+     * @param[in] lane  the lane
+     * @return the frequency its tone and modes are tuned to, in Hz
+     */
     double laneHz(int lane) const { return m_tunedHz[lane]; }
-    /** @brief Nearest note of the key and scale to @p hz, as a frequency. */
+    /**
+     * @brief Nearest note of the key and scale to @p hz, as a frequency.
+     * @param[in] hz       the frequency in Hz
+     * @param[in] keyRoot  the key's root, 0 .. 11
+     * @param[in] scale    the scale
+     * @return the nearest note of the key and scale, in Hz
+     */
     static double tuneToScale(double hz, int keyRoot, int scale);
-    /** @brief The pan angle a lane is rotated by right now, in radians (for the tests). */
+    /**
+     * @brief The pan angle a lane is rotated by right now, in radians (for the tests).
+     * @param[in] lane  the lane
+     * @return the angle in radians
+     */
     double panAngle(int lane) const;
-    /** @brief The position a lane's panner stands at right now, in -1..1 (for the tests). */
+    /**
+     * @brief The position a lane's panner stands at right now, in -1..1 (for the tests).
+     * @param[in] lane  the lane
+     * @return the position, -1..1
+     */
     double panPosition(int lane) const;
-    /** @brief Sign of a lane's swing: +1 and -1 are the two phase groups (for the tests). */
+    /**
+     * @brief Sign of a lane's swing: +1 and -1 are the two phase groups (for the tests).
+     * @param[in] lane  the lane
+     * @return +1 or -1
+     */
     int panGroup(int lane) const;
-    /** @brief Signed swing of a lane's auto-pan, in radians of rotation (for the tests). */
+    /**
+     * @brief Signed swing of a lane's auto-pan, in radians of rotation (for the tests).
+     * @param[in] lane  the lane
+     * @return the swing in radians
+     */
     double panSwing(int lane) const;
 
 private:
-    /** @brief Recomputes lane @p lane's synthesis coefficients from its parameters. */
+    /**
+     * @brief Recomputes lane @p lane's synthesis coefficients from its parameters.
+     * @param[in] lane  the lane
+     */
     void computeCoefs(int lane);
-    /** @brief The auto-pan phasor's step for @p lane from its period and the tempo (all setTempo() changes). */
+    /**
+     * @brief The auto-pan phasor's step for @p lane from its period and the tempo (all setTempo() changes).
+     * @param[in] lane  the lane
+     */
     void updatePanRate(int lane);
     /** @brief Gives each lane its auto-pan direction from its role's pan group. */
     void assignPanGroups();

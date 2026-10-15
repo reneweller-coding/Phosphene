@@ -1,6 +1,7 @@
 /**
  * @file Bass.cpp
  * @brief Bass implementation.
+ * @author Rene Weller
  */
 #include "phos/Bass.h"
 #include "phos/Params.h"
@@ -9,7 +10,10 @@
 namespace phos {
 
 namespace {
-/** @brief The decimator for every 2x stage in the core: 96 dB stopband, passband to 0.2 of the high rate. */
+/**
+ * @brief The decimator for every 2x stage in the core: 96 dB stopband, passband to 0.2 of the high rate.
+ * @return the decimator's design
+ */
 const HalfbandDesign& bassHalfband()
 {
     static const HalfbandDesign d = designHalfband(96.0, 0.1);

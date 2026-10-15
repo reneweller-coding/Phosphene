@@ -4,6 +4,7 @@
  *
  * Not part of the core's interface. The line machinery -- symbols, allowed sets, the constrained draw and the
  * repair of a drawn line -- is Melody.cpp's; the makers of the parts are the other three files'.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Melody.h"
@@ -38,7 +39,11 @@ constexpr int DroneI = mpIndex(MelodyPartE::DRONE);       ///< the drone
 
 using AllowedT = std::vector<std::vector<uint8_t>>;   ///< Per position: the symbols allowed (1) or not (0).
 
-/** @brief The symbol of interval @p rel, clamped into the alphabet. */
+/**
+ * @brief The symbol of interval @p rel, clamped into the alphabet.
+ * @param[in] rel  the interval
+ * @return its symbol
+ */
 inline int sym(int rel) { return PitchModel::symbol(std::clamp(rel, CorpusRelMin, CorpusRelMax)); }
 
 /**
@@ -50,6 +55,8 @@ inline int sym(int rel) { return PitchModel::symbol(std::clamp(rel, CorpusRelMin
  * leaves room above for nothing at all -- 255 would only cost resolution to no purpose. A weight
  * more than 200 times smaller than the position's largest lands on 1 rather than on 0, so the tilt
  * can never forbid a tone the constraint allows.
+ * @param[in]  w    the weights
+ * @param[out] out  the sampler's entries
  */
 inline void quantise(const std::vector<double>& w, std::vector<uint8_t>& out)
 {
@@ -62,14 +69,15 @@ inline void quantise(const std::vector<double>& w, std::vector<uint8_t>& out)
 
 /**
  * @brief Allowed symbols with a weight per interval to the part root: @p weight(rel) > 0 admits it.
- * @param tension the measured tension curve's tilt at this position (tensionAt): each weight is
- *                multiplied by exp(tension * instability), so unstable tones gain where tension rises
- *
- * Every weight goes through `quantise`, so no admitted tone can be quantised away. An empty set is
- * returned only when @p weight admits nothing, which the callers never ask for.
- * @param rootOffset the part root's distance from the key, in semitones
- * @param lo,hi      the interval range to the part root
- * @param weight     weight(rel), the weight of an interval to the part root
+ * @param[in] rootOffset  the part root's distance from the key, in semitones
+ * @param[in] lo          the interval range to the part root
+ * @param[in] hi          the interval range to the part root
+ * @param[in] weight      weight(rel), the weight of an interval to the part root
+ * @param[in] tension     the measured tension curve's tilt at this position (tensionAt): each weight is multiplied by
+ *                        exp(tension * instability), so unstable tones gain where tension rises Every weight goes
+ *                        through `quantise`, so no admitted tone can be quantised away. An empty set is returned only
+ *                        when @p weight admits nothing, which the callers never ask for.
+ * @return the allowed symbols
  */
 template <class FT>
 std::vector<uint8_t> weightedSet(int rootOffset, int lo, int hi, FT weight, double tension)
@@ -92,15 +100,16 @@ std::vector<uint8_t> weightedSet(int rootOffset, int lo, int hi, FT weight, doub
  * on the next sixteenth -- the next note will be the tonic, so the colour tone is heard on the way
  * to it and never held, never on a strong step. Two slots never share a note. The number is the
  * role's target share of the line's notes, rounded at random so that the share holds on average.
- *
- * @param steps  onset of each note; @param lens its length in sixteenths
- * @param taken  positions that are already fixed (and may be neither slot nor resolution)
- * @param loop   the line repeats, so its last note resolves into its first
- * @param cellSteps the loop's length in sixteenths
- * @param resolves  resolves(i) says whether the tonic may stand at position i (a lead's strong step
- *                  must be a chord tone, and not every chord has the tonic)
- * @param target the role's target share of notes on colour slots
- * @param cr     the stream the rounding of the slot count draws from
+ * @param[in]     steps      onset of each note;
+ * @param[in]     lens       its length in sixteenths
+ * @param[in]     taken      positions that are already fixed (and may be neither slot nor resolution)
+ * @param[in]     loop       the line repeats, so its last note resolves into its first
+ * @param[in]     cellSteps  the loop's length in sixteenths
+ * @param[in]     target     the role's target share of notes on colour slots
+ * @param[in,out] cr         the stream the rounding of the slot count draws from
+ * @param[in]     resolves   resolves(i) says whether the tonic may stand at position i (a lead's strong step must be a
+ *                           chord tone, and not every chord has the tonic)
+ * @return the slots' positions
  */
 template <class RT>
 std::vector<int> colourSlots(const std::vector<int>& steps, const std::vector<int>& lens, const std::vector<uint8_t>& taken,
@@ -188,7 +197,21 @@ bool lineKeeps(const std::vector<int>& rels, const std::vector<int>& steps, cons
 void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, const StyleProfile& style);
 /** @brief The stab's chord over one of the track's chords: root position, the arp's material (Melody.h). Defined in MelodyHarmony.cpp. */
 std::vector<int> stabChordImpl(int scale, int degree, int key, int tones);
-/** @brief The lead: one cell, one archetype, one operator per bar. Defined in MelodyLead.cpp. */
+/**
+ * @brief The lead: one cell, one archetype, one operator per bar. Defined in MelodyLead.cpp.
+ * @param[in,out] m            the melody's plan
+ * @param[in]     key          the key's root
+ * @param[in]     scale        the mode
+ * @param[in]     seed         the seed
+ * @param[in]     temperature  the draw's temperature
+ * @param[in]     colour       the arc's colour, 0..1
+ * @param[in]     src          the pitch source
+ * @param[in]     ls           the lead's style
+ * @param[in]     densityKnob  the density knob, 0 for automatic
+ * @param[in]     entropyKnob  the entropy knob, 0 for automatic
+ * @param[in]     bassMask     the bass's onset mask
+ * @param[in]     motif        the set's motif
+ */
 void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour, DrawSource src, const LeadStyle& ls, int densityKnob, int entropyKnob, unsigned bassMask, const SetMotif& motif);
 /** @brief The counter-lead: a second lead that answers the first. Defined in MelodyLead.cpp. */
 void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed);

@@ -1,6 +1,7 @@
 /**
  * @file MelodyLead.cpp
  * @brief The lead and the counter-lead: rhythm cells, archetypes, the critic, and the answer.
+ * @author Rene Weller
  */
 #include "phos/Melody.h"
 #include "phos/Preferences.h"
@@ -47,6 +48,10 @@ constexpr double LeadSigma = 2.5;     ///< semitones: the register weight falls 
  * The second bar repeats the first and redraws only its last beat: the figure is clear because it
  * repeats (rule 4), and the last beat turns the motif round. Which steps get ties or pickups is
  * weighted by the corpus's onset counts, so the learned rhythm chooses inside the density.
+ * @param[in,out] r       the random stream
+ * @param[in]     role    the role's counts
+ * @param[in]     family  the rhythm family
+ * @return the onset steps
  */
 std::vector<int> leadRhythm(Rng& r, const CorpusRole& role, int family)
 {
@@ -144,7 +149,12 @@ const LeadArchetypeDef LeadArchetypes[NumLeadArchetypes] = {
     { { -1, 0, -1, 0, 0, 1, 1, 0 },   { 0.30f, 0.50f, 0.30f, 0.50f, 0.50f, 0.70f, 0.85f, 0.30f } },   // Tension Call: calls that rise and do not resolve until the end
 };
 
-/** @brief Semitones over the tonic of scale degree @p d of @p scale, for any integer @p d. */
+/**
+ * @brief Semitones over the tonic of scale degree @p d of @p scale, for any integer @p d.
+ * @param[in] scale  the mode
+ * @param[in] d      the degree, any integer
+ * @return the semitones over the tonic
+ */
 int degreeRel(int scale, int d)
 {
     if (d >= 0) return scaleDegree(scale, d);
@@ -152,7 +162,12 @@ int degreeRel(int scale, int d)
     return scaleDegree(scale, d + 7 * k) - 12 * k;
 }
 
-/** @brief The degree (0..6) whose pitch class is @p pc in @p scale, -1 for a chromatic class. */
+/**
+ * @brief The degree (0..6) whose pitch class is @p pc in @p scale, -1 for a chromatic class.
+ * @param[in] scale  the mode
+ * @param[in] pc     the pitch class
+ * @return the degree, -1 for a chromatic class
+ */
 int degreeOfPc(int scale, int pc)
 {
     for (int d = 0; d < 7; ++d) if (scaleDegree(scale, d) % 12 == ((pc % 12) + 12) % 12) return d;
@@ -164,6 +179,11 @@ int degreeOfPc(int scale, int pc)
  *
  * A chromatic pitch -- none should reach here, the cell keeps colour tones out -- moves with the
  * degree just under it.
+ * @param[in] scale       the mode
+ * @param[in] rootOffset  the part root over the tonic
+ * @param[in] rel         the interval
+ * @param[in] steps       the scale degrees
+ * @return the interval moved
  */
 int transposeRel(int scale, int rootOffset, int rel, int steps)
 {
@@ -185,6 +205,8 @@ int transposeRel(int scale, int rootOffset, int rel, int steps)
  * @brief The metric weight of a sixteenth for the stability table: how hard the position pulls a
  *        note to the stable degrees. Negative on the odd sixteenths, where the brief *wants* the
  *        tension degrees ("Synkopen dürfen (sollen!) Spannungsstufen tragen").
+ * @param[in] step  the sixteenth
+ * @return the weight
  */
 double metricWeight(int step)
 {
@@ -203,6 +225,8 @@ double metricWeight(int step)
  * plan tracks on several threads at once (Probe.h), and a lazily filled per-role cache raced between
  * them -- one thread read a half-filled histogram, the critic chose another cell, and the plan came
  * out different from the serial one (testProbeSchedule, 22.09.2026).
+ * @param[in] role  the role
+ * @return the distribution
  */
 const std::vector<double>& corpusIntervalHistogram(CorpusRoleIdE role)
 {
@@ -229,7 +253,13 @@ const std::vector<double>& corpusIntervalHistogram(CorpusRoleIdE role)
     return table.m_h[std::clamp(static_cast<int>(role), 0, NumCorpusRoles - 1)];
 }
 
-/** @brief The onset mask of the first bar of a family figure (leadRhythm), the fallback cell. */
+/**
+ * @brief The onset mask of the first bar of a family figure (leadRhythm), the fallback cell.
+ * @param[in,out] r       the random stream
+ * @param[in]     role    the role's counts
+ * @param[in]     family  the rhythm family
+ * @return the onset mask
+ */
 uint16_t familyCellMask(Rng& r, const CorpusRole& role, int family)
 {
     const std::vector<int> steps = leadRhythm(r, role, family);
@@ -244,6 +274,8 @@ uint16_t familyCellMask(Rng& r, const CorpusRole& role, int family)
  * At least eight onsets (rule 16), inside the density band, no hole of six sixteenths (cyclic:
  * the cell repeats), the downbeat sounding, and one held note -- a step followed by a rest -- so
  * that the fifth has somewhere to rest (rule 18).
+ * @param[in] mask  the onset mask
+ * @return true when it may be a lead cell
  */
 bool cellLegal(unsigned mask)
 {
@@ -258,7 +290,12 @@ bool cellLegal(unsigned mask)
     return held;
 }
 
-/** @brief cellLegal, and inside the density band (8..10, 10..12 or 12..15 onsets). */
+/**
+ * @brief cellLegal, and inside the density band (8..10, 10..12 or 12..15 onsets).
+ * @param[in] mask  the onset mask
+ * @param[in] band  the density band, 0..2
+ * @return true when it may be a lead cell in the band
+ */
 bool cellAdmits(unsigned mask, int band)
 {
     static const int Lo[3] = { 8, 10, 12 }, Hi[3] = { 10, 12, 15 };
@@ -271,6 +308,10 @@ bool cellAdmits(unsigned mask, int band)
  * @brief How well a lead mask interlocks with the bass: onsets in the bass's off-beat holes count
  *        for it, onsets on the bass's own off-beat transients against it -- as *shares*, so that
  *        under a rolling bass (every off-beat a transient) every mask is treated alike.
+ * @param[in] mask       the lead's onset mask
+ * @param[in] bassMask   the bass's onset mask
+ * @param[in] interlock  how much the interlock counts, 0..1
+ * @return the factor
  */
 double interlockFactor(unsigned mask, unsigned bassMask, float interlock)
 {
@@ -297,6 +338,13 @@ double interlockFactor(unsigned mask, unsigned bassMask, float interlock)
  * the band, at a third of the template's weight. That is corpus-shaped rhythm with the variety a set
  * needs; and the root of the count rather than the count itself, because weighted by count three of
  * the first four seeds looked at shared one cell.
+ * @param[in,out] r           the random stream
+ * @param[in]     role        the role's counts
+ * @param[in]     band        the density band, 0..2
+ * @param[in]     bassMask    the bass's onset mask
+ * @param[in]     interlock   how much the interlock counts, 0..1
+ * @param[out]    fromCorpus  true when the mask came from the corpus
+ * @return the onset mask
  */
 uint16_t drawCellMask(Rng& r, const CorpusRole& role, int band, unsigned bassMask, float interlock, bool& fromCorpus)
 {
@@ -339,7 +387,12 @@ uint16_t drawCellMask(Rng& r, const CorpusRole& role, int band, unsigned bassMas
     return static_cast<uint16_t>(cand.back());
 }
 
-/** @brief The four beat anchors of a bar: the pitch at (or, failing an onset, sounding into) each beat. */
+/**
+ * @brief The four beat anchors of a bar: the pitch at (or, failing an onset, sounding into) each beat.
+ * @param[in]  steps    the bar's onset steps
+ * @param[in]  rels     their intervals
+ * @param[out] anchors  the pitch at each beat
+ */
 void beatAnchors(const std::vector<int>& steps, const std::vector<int>& rels, int anchors[4])
 {
     int last = rels.empty() ? 0 : rels[0];
@@ -364,6 +417,11 @@ void beatAnchors(const std::vector<int>& steps, const std::vector<int>& rels, in
  * five pitch classes (the acid's rule 6, which holds for a riff), a riff's ambitus, and no pitch
  * three times running. The weights are the ones that made the seeds of docs/rounds/2026-09.md sound as the
  * brief describes; they are not fitted.
+ * @param[in] steps       the cell's onset steps
+ * @param[in] rels        their intervals
+ * @param[in] rootOffset  the part root over the tonic
+ * @param[in] ls          the lead's style
+ * @return the score, higher is better
  */
 double criticScore(const std::vector<int>& steps, const std::vector<int>& rels, int rootOffset, const LeadStyle& ls)
 {
@@ -830,6 +888,10 @@ void makeLead(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
  *
  * **Modal interchange.** The rhythm and every coin are drawn before any pitch, so a borrowed mode gets
  * the same design with other pitches (Melody.h, ModeMaterial).
+ * @param[in,out] m      the melody's plan
+ * @param[in]     key    the key's root
+ * @param[in]     scale  the mode
+ * @param[in]     seed   the seed
  */
 void makeCounter(MelodyPlan& m, int key, int scale, uint64_t seed)
 {

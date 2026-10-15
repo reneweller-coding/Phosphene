@@ -45,6 +45,7 @@
  *
  * The chain is scalar and runs per channel, outside every lane kernel, so it takes no part in the
  * bit-identity of the vector paths. With @p stages 0 it is a bypass that copies its input.
+ * @author Rene Weller
  */
 #pragma once
 #include <cmath>
@@ -79,9 +80,11 @@ struct DisperserChannel {
 
     /**
      * @brief One sample through @p stages sections.
-     * @param x      input sample
-     * @param c,d    per-section coefficients from Disperser::set()
-     * @param stages sections to run (0 = bypass)
+     * @param[in] x       input sample
+     * @param[in] c       per-section coefficients from Disperser::set()
+     * @param[in] d       per-section coefficients from Disperser::set()
+     * @param[in] stages  sections to run (0 = bypass)
+     * @return the output sample
      */
     inline float tick(float x, const float* c, const float* d, int stages)
     {
@@ -105,13 +108,11 @@ struct Disperser {
 
     /**
      * @brief Places @p n sections logarithmically over a decade around @p centreHz.
-     * @param n         sections, clamped to 0 .. DisperseStages
-     * @param centreHz  geometric centre of the band
-     * @param sr        sample rate
-     *
-     * The lowest section sits at centreHz / sqrt(10) and the highest at centreHz * sqrt(10); with one
-     * section it sits at the centre. Every centre is kept under 0.45 fs so that no section degenerates
-     * at the top of the band.
+     * @param[in] n         sections, clamped to 0 .. DisperseStages
+     * @param[in] centreHz  geometric centre of the band
+     * @param[in] sr        sample rate The lowest section sits at centreHz / sqrt(10) and the highest at centreHz *
+     *                      sqrt(10); with one section it sits at the centre. Every centre is kept under 0.45 fs so that
+     *                      no section degenerates at the top of the band.
      */
     void set(int n, double centreHz, double sr)
     {

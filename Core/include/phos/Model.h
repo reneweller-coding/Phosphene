@@ -47,6 +47,7 @@
  * **int8** weights are dequantized to float32 when they are packed, so the file is small and the
  * arithmetic is float. That costs four bytes per weight in memory instead of one; the trained model
  * of 16.09.2026 is 1.5 MB on disk and 6.4 MB packed.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Corpus.h"
@@ -129,6 +130,8 @@ struct NoteCond {
  * a bass note on the beat at all. It is kept
  * because it costs 576 parameters, because the self test proves it reaches the output, and because a
  * corpus that really contains a kick could fill it without a format change (docs/MODEL_FORMAT.md 7).
+ * @param[in] step  the sixteenth
+ * @return 0 on the kick, 1 the sixteenth after, 2 the rest
  */
 inline int kickClass(int step)
 {
@@ -138,7 +141,11 @@ inline int kickClass(int step)
     return 2;
 }
 
-/** @brief The index bucket of note number @p t (MODEL_FORMAT.md, section 3). */
+/**
+ * @brief The index bucket of note number @p t (MODEL_FORMAT.md, section 3).
+ * @param[in] t  the note number
+ * @return its bucket
+ */
 inline int noteIndexBucket(int t)
 {
     if (t < 4) return t;
@@ -148,7 +155,13 @@ inline int noteIndexBucket(int t)
     return 7;
 }
 
-/** @brief The gap code between a note at @p step and the next onset (or none). */
+/**
+ * @brief The gap code between a note at @p step and the next onset (or none).
+ * @param[in] step      the note's sixteenth
+ * @param[in] nextStep  the next onset's sixteenth
+ * @param[in] hasNext   true when there is a next onset
+ * @return the gap code
+ */
 inline int noteGapCode(int step, int nextStep, bool hasNext)
 {
     if (!hasNext) return 0;
@@ -167,54 +180,78 @@ class NeuralModel {
 public:
     /**
      * @brief Reads a weight file and packs it for this machine's lane width.
-     * @param path  the `.phosmdl` file; a bare name is also looked for in setModelSearchPath()
-     * @param error receives a message naming the field and the byte offset when the file is not
-     *              what it claims to be
+     * @param[in]  path   the `.phosmdl` file; a bare name is also looked for in setModelSearchPath()
+     * @param[out] error  receives a message naming the field and the byte offset when the file is not what it claims to
+     *                    be
      * @return false on any failure; the model is then unusable and loaded() stays false
      */
     bool load(const char* path, std::string& error);
 
-    /** @brief Whether a model is loaded. */
+    /**
+     * @brief Whether a model is loaded.
+     * @return true when a model is loaded
+     */
     bool loaded() const { return m_loaded; }
-    /** @brief What the header said, plus the measured sizes. */
+    /**
+     * @brief What the header said, plus the measured sizes.
+     * @return the model's facts
+     */
     const ModelInfo& info() const { return m_info; }
-    /** @brief Symbols in the alphabet (CorpusAlphabet for tokenVersion 1). */
+    /**
+     * @brief Symbols in the alphabet (CorpusAlphabet for tokenVersion 1).
+     * @return the number of symbols
+     */
     int alphabet() const { return m_info.m_vocab; }
-    /** @brief The symbol that starts a line: the interval 0, as MODEL_FORMAT.md section 3 defines it. */
+    /**
+     * @brief The symbol that starts a line: the interval 0, as MODEL_FORMAT.md section 3 defines it.
+     * @return the start symbol
+     */
     static int startToken() { return -CorpusRelMin; }
 
     /**
      * @brief Starts a line.
-     * @param role  0 acid, 1 lead, 2 arp, 3 bass (only in a file whose header says @c roles=4)
-     * @param style 0 unknown, else StyleId + 1 -- the trained corpus carries no style label, so the
-     *              composer passes 0 (MODEL_FORMAT.md, the warning in section 3)
-     * @param bars  the pattern's length in bars, 1..8 (stored as bars - 1)
-     * @param mode  the line's mode, 0..5 in the order of @c phos::ScaleSteps; read only by a file
-     *              whose header carries @c condMode, ignored (and harmless) by every older file
-     * Every argument is clamped into the range the file declares.
+     * @param[in] role   0 acid, 1 lead, 2 arp, 3 bass (only in a file whose header says @c roles=4)
+     * @param[in] style  0 unknown, else StyleId + 1 -- the trained corpus carries no style label, so the composer
+     *                   passes 0 (MODEL_FORMAT.md, the warning in section 3)
+     * @param[in] bars   the pattern's length in bars, 1..8 (stored as bars - 1)
+     * @param[in] mode   the line's mode, 0..5 in the order of @c phos::ScaleSteps; read only by a file whose header
+     *                   carries @c condMode, ignored (and harmless) by every older file Every argument is clamped into
+     *                   the range the file declares.
      */
     void begin(int role, int style, int bars, int mode = 0);
 
     /**
      * @brief Computes the distribution of the next note.
-     * @param token the previous note's symbol, startToken() before the first
-     * @param cond  what is known about the note being predicted
-     * @return false when the model is not loaded, the token is not a symbol, or the line has
-     *         already reached the file's @c ctx positions -- see Model.cpp for why a longer line is
-     *         refused instead of guessed at. The longest line the composer draws is 32 notes and
-     *         the trained model's ctx is 256, so it does not arise.
+     * @param[in] token  the previous note's symbol, startToken() before the first
+     * @param[in] cond   what is known about the note being predicted
+     * @return false when the model is not loaded, the token is not a symbol, or the line has already reached the file's
+     *         @c ctx positions -- see Model.cpp for why a longer line is refused instead of guessed at. The longest
+     *         line the composer draws is 32 notes and the trained model's ctx is 256, so it does not arise.
      */
     bool step(int token, const NoteCond& cond);
 
-    /** @brief How many notes have been predicted since begin(). */
+    /**
+     * @brief How many notes have been predicted since begin().
+     * @return the notes predicted
+     */
     int length() const { return m_pos; }
-    /** @brief Logits of the next symbol; valid after a step(). */
+    /**
+     * @brief Logits of the next symbol; valid after a step().
+     * @return the logits
+     */
     const float* logits() const { return m_logits.data(); }
-    /** @brief The softmax of logits(), as a probability of symbol @p c. */
+    /**
+     * @brief The softmax of logits(), as a probability of symbol @p c.
+     * @param[in] c  the symbol
+     * @return its probability
+     */
     double prob(int c) const { return m_probs[static_cast<size_t>(c)]; }
 
 private:
-    /** @brief Runs the transformer's forward pass for position @p t and fills the logits. */
+    /**
+     * @brief Runs the transformer's forward pass for position @p t and fills the logits.
+     * @param[in] t  the position
+     */
     void forwardTransformer(int t);
 
     ModelInfo m_info;   ///< the file's header: architecture and sizes
@@ -283,6 +320,7 @@ private:
  *
  * The plugin and the Quest app set this to their own resource directory once at start-up. Empty by
  * default, in which case the working directory and the compiled-in source data directory are tried.
+ * @param[in] directory  the directory
  */
 void setModelSearchPath(const std::string& directory);
 
@@ -297,24 +335,22 @@ constexpr int BassRole = 3;
 
 /**
  * @brief The melody model, loaded once on first use.
- * @param note receives a line for the log when the model could not be loaded (empty otherwise)
- * @return the model, or null when there is none -- the composer then stays on the Markov model.
- *         Not const: a draw writes the model's cache. One instance, one thread.
- *
- * Loaded lazily, on whichever thread composes first; in the plugin that is the composer thread,
- * never the audio thread. Never unloaded, because a set may start a new track at any time.
+ * @param[out] note  receives a line for the log when the model could not be loaded (empty otherwise)
+ * @return the model, or null when there is none -- the composer then stays on the Markov model. Not const: a draw
+ *         writes the model's cache. One instance, one thread. Loaded lazily, on whichever thread composes first; in the
+ *         plugin that is the composer thread, never the audio thread. Never unloaded, because a set may start a new
+ *         track at any time.
  */
 NeuralModel* sharedMelodyModel(std::string* note = nullptr);
 
 /**
  * @brief The bass model, loaded once on first use (Core/data/bass.phosmdl).
- * @param note receives a line for the log when the model could not be loaded (empty otherwise)
- * @return the model, or null when there is none -- the composer then keeps the pattern families.
- *
- * A second instance and not the melody model's, although both files may carry all four roles: one
- * NeuralModel holds one line's key/value cache, and the bass and the melodic parts are drawn in the
- * same composing pass. Loaded lazily on whichever thread composes first -- the composer thread in the
- * plugin, never the audio thread -- and never unloaded.
+ * @param[out] note  receives a line for the log when the model could not be loaded (empty otherwise)
+ * @return the model, or null when there is none -- the composer then keeps the pattern families. A second instance and
+ *         not the melody model's, although both files may carry all four roles: one NeuralModel holds one line's
+ *         key/value cache, and the bass and the melodic parts are drawn in the same composing pass. Loaded lazily on
+ *         whichever thread composes first -- the composer thread in the plugin, never the audio thread -- and never
+ *         unloaded.
  */
 NeuralModel* sharedBassModel(std::string* note = nullptr);
 
@@ -331,15 +367,32 @@ struct NeuralStepper {
                                               ///< draw in Composer.cpp initialises this aggregate
                                               ///< positionally and does not name the mode.
 
-    /** @brief The model's alphabet. */
+    /**
+     * @brief The model's alphabet.
+     * @return the number of symbols
+     */
     int alphabet() const { return m_model->alphabet(); }
-    /** @brief Resets; an order-2 context's older symbol means nothing to a long-context model. */
+    /**
+     * @brief Resets; an order-2 context's older symbol means nothing to a long-context model.
+     * @param[in] start1  the line's first symbol
+     */
     void begin(int, int start1) { m_model->begin(m_role, m_style, m_bars, m_mode); m_previous = start1; }
-    /** @brief Computes the distribution at position @p i of the line; false where the model cannot. */
+    /**
+     * @brief Computes the distribution at position @p i of the line; false where the model cannot.
+     * @param[in] i  the position in the line
+     * @return false where the model cannot
+     */
     bool advance(int i) { return m_model->step(m_previous, (*m_cond)[static_cast<size_t>(i)]); }
-    /** @brief Takes @p symbol as drawn. */
+    /**
+     * @brief Takes @p symbol as drawn.
+     * @param[in] symbol  the symbol drawn
+     */
     void observe(int symbol) { m_previous = symbol; }
-    /** @brief The probability of symbol @p c. */
+    /**
+     * @brief The probability of symbol @p c.
+     * @param[in] c  the symbol
+     * @return its probability
+     */
     double prob(int c) const { return m_model->prob(c); }
 };
 
@@ -374,18 +427,18 @@ constexpr int MaskedRetries = 4;
  * The one failure it can have is numerical: a model confident enough that its whole allowed set
  * underflows. Then the draw is restarted -- the random stream has moved on, so a restart is not a
  * repeat -- up to MaskedRetries times, and after that the constraint weights alone decide.
- *
- * @tparam Stepper  int alphabet() const; void begin(int start2, int start1); bool advance(int i);
- *                  void observe(int symbol); double prob(int) const
- * @param  m        the model, conditioned and ready
- * @param  allowed  allowed[i][s] = 0 forbids symbol s at position i, any other value is its relative
- *                  weight (the energy arc's colour weights; Melody.h), exactly as in stage A
- * @param  start2,start1 the context before the first position; a stage-B model uses only start1
- * @param  temperature   the model's probabilities are raised to 1/temperature, as in stage A
- * @param  uniform  source of uniform numbers in [0, 1)
- * @param  out      receives the symbols
- * @param  stats    receives what the draw cost, or null
+ * @param[in,out] m            the model, conditioned and ready
+ * @param[in]     allowed      allowed[i][s] = 0 forbids symbol s at position i, any other value is its relative weight
+ *                             (the energy arc's colour weights; Melody.h), exactly as in stage A
+ * @param[in]     start2       the context before the first position; a stage-B model uses only start1
+ * @param[in]     start1       the context before the first position; a stage-B model uses only start1
+ * @param[in]     temperature  the model's probabilities are raised to 1/temperature, as in stage A
+ * @param[in]     uniform      source of uniform numbers in [0, 1)
+ * @param[out]    out          receives the symbols
+ * @param[out]    stats        receives what the draw cost, or null
  * @return false only when a position has an empty allowed set or the model refuses a step
+ * @tparam Stepper  int alphabet() const; void begin(int start2, int start1); bool advance(int i); void observe(int
+ *         symbol); double prob(int) const
  */
 template <class StepperT, class UniformT>
 bool sampleMasked(StepperT& m, const std::vector<std::vector<uint8_t>>& allowed, int start2, int start1,

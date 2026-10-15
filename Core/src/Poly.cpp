@@ -1,6 +1,7 @@
 /**
  * @file Poly.cpp
  * @brief Polyphonic engine: voice allocation, supersaw coefficients, rendering.
+ * @author Rene Weller
  */
 #include "phos/Poly.h"
 #include "phos/Params.h"
@@ -28,6 +29,8 @@ constexpr double UnisonPan[PolyUnison] = { -1.0, 0.67, -0.33, 0.0, 0.33, -0.67, 
  * anyone hears. A pow() per slot per note would be correct to the last bit and would also be fine
  * here; the expansion is kept because it is the same arithmetic on every platform and no library's
  * pow() is.
+ * @param[in] cents  the drift in cents
+ * @return the frequency factor
  */
 inline double driftFactor(double cents) { return 1.0 + cents * (0.6931471805599453 / 1200.0); }
 
@@ -60,6 +63,8 @@ constexpr double Osc2Spread = 0.25;
  * each chord tone carried partials at 0.91 and 2.91 times itself, a quarter tone off every note of
  * the key, 7 dB under the chord. Every pitched voice plays chords or lines in a key; the metallic FM
  * of the set lives in the percussion (the rim, the zap: perc.fm_ratio is not rounded).
+ * @param[in] knob  poly.fm_ratio
+ * @return the ratio played
  */
 inline double harmonicFmRatio(double knob) { return std::max(0.5, std::round(knob * 2.0) * 0.5); }
 

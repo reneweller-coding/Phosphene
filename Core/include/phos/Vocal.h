@@ -38,6 +38,7 @@
  * 400 Hz .. 2 kHz; the edges keep the consonants), saturation, a pitch shift by resampling (the pick
  * chooses 0, down by vocal.pitch, down by half of it, or up by half), and a *throw weight* per sample
  * that the engine feeds into a tempo delay: 0 while the phrase speaks, 1 from its last word on.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Dsp.h"
@@ -64,6 +65,8 @@ struct VoicePhrase {
  * @brief Where a bare pack name is looked for before waveTableSearchPath(): for a host that unpacks
  *        its resources one by one (the Quest app, which may take a pushed wavetable pack from one
  *        directory and the shipped voice pack from another). Call it before the first Engine::prepare().
+ * @param[in] directory  the directory
+ * @pre called before the first Engine::prepare()
  */
 void setVoicePackSearchPath(const std::string& directory);
 
@@ -72,54 +75,75 @@ void setVoicePackSearchPath(const std::string& directory);
  *        note, same call-once gate). Looks for the bare name in the working directory, then in
  *        setVoicePackSearchPath()'s directory, then in waveTableSearchPath() (a host that set that
  *        one ships the voice pack beside the wavetables), then in PHOS_SOURCE_DATA_DIR.
- * @param path  the file; nullptr means "voices.phosvx"
- * @param error receives why nothing was loaded, may be null
- * @return phrases loaded (0 when the pack is missing: the spoken types then fall silent, the synthetic
- *         voices still play)
+ * @param[in]  path   the file; nullptr means "voices.phosvx"
+ * @param[out] error  receives why nothing was loaded, may be null
+ * @return phrases loaded (0 when the pack is missing: the spoken types then fall silent, the synthetic voices still
+ *         play)
  * @warning Never on the audio thread.
  */
 int loadVoicePack(const char* path = nullptr, std::string* error = nullptr);
 /** @brief Forgets the pack (tests). */
 void resetVoicePack();
-/** @brief Phrases loaded. */
+/**
+ * @brief Phrases loaded.
+ * @return the phrases loaded
+ */
 int voicePhraseCount();
-/** @brief A loaded phrase (index < voicePhraseCount()). */
+/**
+ * @brief A loaded phrase (index < voicePhraseCount()).
+ * @param[in] index  the phrase's index
+ * @return the phrase
+ */
 const VoicePhrase& voicePhrase(int index);
 /**
  * @brief Decodes 4-bit IMA ADPCM (low nibble first), exposed for the self test.
- * @param data      the nibbles
- * @param samples   how many samples to decode
- * @param predictor initial predictor
- * @param stepIndex initial step index (0..88)
- * @param out       receives @p samples values in -32768..32767
+ * @param[in]  data       the nibbles
+ * @param[in]  samples    how many samples to decode
+ * @param[in]  predictor  initial predictor
+ * @param[in]  stepIndex  initial step index (0..88)
+ * @param[out] out        receives @p samples values in -32768..32767
  */
 void decodeImaAdpcm(const uint8_t* data, size_t samples, int predictor, int stepIndex, std::vector<int16_t>& out);
 
 /** @brief The voice generator (part Vocal). */
 class Vocal {
 public:
-    /** @brief Prepares for @p sampleRate (loads the voice pack on the first call). */
+    /**
+     * @brief Prepares for @p sampleRate (loads the voice pack on the first call).
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate);
     /** @brief Silences every voice. */
     void reset();
-    /** @brief Reads the effective parameters (indexed by vocal::) and the key. */
+    /**
+     * @brief Reads the effective parameters (indexed by vocal::) and the key.
+     * @param[in] v        the effective parameter values
+     * @param[in] keyRoot  the key's root
+     */
     void update(const float* v, int keyRoot);
     /**
      * @brief Starts a voice; the one sounding fades out.
-     * @param type           FormantVoice, AlienChatter, SpokenWord or VoiceChop
-     * @param samples        the event's length
-     * @param velocity       0..1
-     * @param late           sub-sample onset
-     * @param samplesPerBeat the tempo (the chop's sixteenths)
-     * @param pick           the event's own seed: which phrase, which vowels, which pitch
+     * @param[in] type            FormantVoice, AlienChatter, SpokenWord or VoiceChop
+     * @param[in] samples         the event's length
+     * @param[in] velocity        0..1
+     * @param[in] late            sub-sample onset
+     * @param[in] samplesPerBeat  the tempo (the chop's sixteenths)
+     * @param[in] pick            the event's own seed: which phrase, which vowels, which pitch
      */
     void trigger(SfxTypeE type, int samples, float velocity, double late, double samplesPerBeat, uint64_t pick);
     /**
      * @brief Renders @p n samples into @p L, @p R (replaced) and the throw weight into @p throwOut
      *        (replaced; 0..1 times the voice's own level, for the engine's delay throw).
+     * @param[out] L         the left channel
+     * @param[out] R         the right channel
+     * @param[out] throwOut  the throw weight per sample
+     * @param[in]  n         the block's samples
      */
     void process(float* L, float* R, float* throwOut, int n);
-    /** @brief Voices sounding (0, 1, or 2 during a handover). */
+    /**
+     * @brief Voices sounding (0, 1, or 2 during a handover).
+     * @return the voices sounding
+     */
     int active() const;
 
 private:
@@ -156,7 +180,12 @@ private:
         long long m_sylLen = 1;   ///< ... how long it is
         float m_sylF[3] = { 700, 1100, 2400 };   ///< its formant frequencies
     };
-    /** @brief One sample of voice @p v; its weight for the delay throw goes to @p throwW. */
+    /**
+     * @brief One sample of voice @p v; its weight for the delay throw goes to @p throwW.
+     * @param[in,out] v       the voice
+     * @param[out]    throwW  its weight for the delay throw
+     * @return the sample
+     */
     float voiceSample(Voice& v, float& throwW);
 
     double m_sr = 48000.0;   ///< sample rate

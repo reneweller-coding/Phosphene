@@ -48,6 +48,7 @@
  * the return statement's sum is reduced four more times as well (16 x 256). A smaller loop of the same shape
  * without the table-driven slot does not trip the vectoriser at /O2 /arch:AVX2 (it computed 20 of 20), so the
  * fault depends on the loop nest the optimiser sees, not only on the lambda.
+ * @author Rene Weller
  */
 #include <cstdio>
 

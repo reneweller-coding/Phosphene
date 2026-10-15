@@ -23,6 +23,7 @@
  * decisions that moved, which is the review question "was this meant?" asked of every commit. Continuous
  * values are printed at the resolution a decision has (energies to two places, recipe directions to three),
  * so the dump says *what* was decided and not how the floating point unit rounded it.
+ * @author Rene Weller
  */
 #include "phos/Composer.h"
 #include "phos/Engine.h"
@@ -49,24 +50,48 @@
 using namespace phos;
 
 namespace {
-/** @brief The bit pattern of a double. */
+/**
+ * @brief The bit pattern of a double.
+ * @param[in] v  the value
+ * @return its bits
+ */
 uint64_t bits(double v) { uint64_t u; std::memcpy(&u, &v, sizeof(u)); return u; }
-/** @brief The bit pattern of a float. */
+/**
+ * @brief The bit pattern of a float.
+ * @param[in] v  the value
+ * @return its bits
+ */
 uint32_t bits(float v) { uint32_t u; std::memcpy(&u, &v, sizeof(u)); return u; }
 
 /** @brief FNV-1a over 64-bit words. */
 struct Fnv {
     uint64_t m_h = 1469598103934665603ull;   ///< the hash
-    /** @brief Adds the eight bytes of @p v. */
+    /**
+     * @brief Adds the eight bytes of @p v.
+     * @param[in] v  the value
+     */
     void add(int64_t v) { for (int i = 0; i < 8; ++i) { m_h ^= static_cast<uint64_t>(v >> (8 * i)) & 0xFFu; m_h *= 1099511628211ull; } }
-    /** @brief Adds the bytes of @p s and its length. */
+    /**
+     * @brief Adds the bytes of @p s and its length.
+     * @param[in] s  the string
+     */
     void add(const std::string& s) { for (unsigned char c : s) { m_h ^= c; m_h *= 1099511628211ull; } add(static_cast<int64_t>(s.size())); }
 };
 
-/** @brief A beat position or length on a grid far finer than any the composer uses (1/3840 beat). */
+/**
+ * @brief A beat position or length on a grid far finer than any the composer uses (1/3840 beat).
+ * @param[in] beats  the beats
+ * @return the ticks
+ */
 int64_t tick(double beats) { return static_cast<int64_t>(std::llround(beats * 3840.0)); }
 
-/** @brief Everything the composer decides for tracks 0 .. tracks-1, and a checksum per 16 bars of what it sends. */
+/**
+ * @brief Everything the composer decides for tracks 0 .. tracks-1, and a checksum per 16 bars of what it sends.
+ * @param[in,out] composer  the composer
+ * @param[in]     params    the knobs
+ * @param[in]     seed      the set's seed
+ * @param[in]     tracks    the tracks
+ */
 void dumpDecisions(Composer& composer, const ParamStore& params, uint64_t seed, int tracks)
 {
     static const char* const Roman[7] = { "i", "ii", "iii", "iv", "v", "vi", "vii" };
@@ -156,7 +181,12 @@ void dumpDecisions(Composer& composer, const ParamStore& params, uint64_t seed, 
 }
 } // namespace
 
-/** @brief Renders what the command line asks for; the exit code is 0 on success. */
+/**
+ * @brief Renders what the command line asks for; the exit code is 0 on success.
+ * @param[in]     argc  the number of arguments
+ * @param[in,out] argv  the arguments: sections to run
+ * @return the number of failures
+ */
 int main(int argc, char** argv)
 {
     uint64_t seed = 1;

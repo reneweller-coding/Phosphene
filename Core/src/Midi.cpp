@@ -1,6 +1,7 @@
 /**
  * @file Midi.cpp
  * @brief Standard MIDI File encoder and decoder.
+ * @author Rene Weller
  */
 #include "phos/Midi.h"
 #include "phos/Sfx.h"
@@ -20,7 +21,11 @@ struct RawEvent {
     std::vector<uint8_t> m_bytes;   ///< status and data, or FF type len data for meta
 };
 
-/** @brief Appends @p v as a MIDI variable-length quantity. */
+/**
+ * @brief Appends @p v as a MIDI variable-length quantity.
+ * @param[in,out] out  the bytes, appended to
+ * @param[in]     v    the value
+ */
 void putVlq(std::vector<uint8_t>& out, uint32_t v)
 {
     uint8_t tmp[5];
@@ -30,20 +35,34 @@ void putVlq(std::vector<uint8_t>& out, uint32_t v)
     while (n > 0) out.push_back(tmp[--n]);
 }
 
-/** @brief Appends @p v big-endian, four bytes. */
+/**
+ * @brief Appends @p v big-endian, four bytes.
+ * @param[in,out] out  the bytes, appended to
+ * @param[in]     v    the value
+ */
 void put32(std::vector<uint8_t>& out, uint32_t v)
 {
     out.push_back(static_cast<uint8_t>(v >> 24)); out.push_back(static_cast<uint8_t>(v >> 16));
     out.push_back(static_cast<uint8_t>(v >> 8));  out.push_back(static_cast<uint8_t>(v));
 }
 
-/** @brief Appends @p v big-endian, two bytes. */
+/**
+ * @brief Appends @p v big-endian, two bytes.
+ * @param[in,out] out  the bytes, appended to
+ * @param[in]     v    the value
+ */
 void put16(std::vector<uint8_t>& out, uint16_t v)
 {
     out.push_back(static_cast<uint8_t>(v >> 8)); out.push_back(static_cast<uint8_t>(v));
 }
 
-/** @brief A meta event of @p type with @p payload at @p tick. */
+/**
+ * @brief A meta event of @p type with @p payload at @p tick.
+ * @param[in] tick     the tick
+ * @param[in] type     the meta type
+ * @param[in] payload  the payload
+ * @return the event
+ */
 RawEvent meta(int64_t tick, uint8_t type, const std::vector<uint8_t>& payload)
 {
     RawEvent e{ tick, 0, {} };
@@ -54,23 +73,42 @@ RawEvent meta(int64_t tick, uint8_t type, const std::vector<uint8_t>& payload)
     return e;
 }
 
-/** @brief A text meta event (track name, marker, ...) at @p tick. */
+/**
+ * @brief A text meta event (track name, marker, ...) at @p tick.
+ * @param[in] tick  the tick
+ * @param[in] type  the meta type
+ * @param[in] s     the text
+ * @return the event
+ */
 RawEvent textMeta(int64_t tick, uint8_t type, const std::string& s)
 {
     return meta(tick, type, std::vector<uint8_t>(s.begin(), s.end()));
 }
 
-/** @brief A set-tempo meta event for @p bpm at @p tick. */
+/**
+ * @brief A set-tempo meta event for @p bpm at @p tick.
+ * @param[in] tick  the tick
+ * @param[in] bpm   the tempo
+ * @return the event
+ */
 RawEvent tempoMeta(int64_t tick, double bpm)
 {
     const uint32_t mpq = static_cast<uint32_t>(std::lround(60000000.0 / bpm));
     return meta(tick, 0x51, { static_cast<uint8_t>(mpq >> 16), static_cast<uint8_t>(mpq >> 8), static_cast<uint8_t>(mpq) });
 }
 
-/** @brief Beat @p beat in ticks (MidiPpq per beat). */
+/**
+ * @brief Beat @p beat in ticks (MidiPpq per beat).
+ * @param[in] beat  the position in beats
+ * @return the position in ticks
+ */
 int64_t toTick(double beat) { return static_cast<int64_t>(std::llround(beat * MidiPpq)); }
 
-/** @brief Sorts and delta-encodes events into an MTrk chunk. */
+/**
+ * @brief Sorts and delta-encodes events into an MTrk chunk.
+ * @param[in,out] file    the file's bytes, appended to
+ * @param[in,out] events  the events, sorted in place
+ */
 void emitTrack(std::vector<uint8_t>& file, std::vector<RawEvent>& events)
 {
     std::stable_sort(events.begin(), events.end(), [](const RawEvent& a, const RawEvent& b) {

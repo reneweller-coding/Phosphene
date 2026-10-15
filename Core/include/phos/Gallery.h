@@ -9,6 +9,7 @@
  * draw a thumbnail of the whole set without planning it. Because the lines are comments, every gallery file
  * loads anywhere a set loads (`phos_render --set-file`), and a set saved by hand can be put into the gallery
  * folder and simply has no thumbnail.
+ * @author Rene Weller
  */
 #pragma once
 
@@ -40,15 +41,33 @@ struct GalleryEntry {
     std::vector<GalleryTrack> m_tracks; ///< the tracks planned when it was saved
 };
 
-/** @brief A track's gallery line from its plan. */
+/**
+ * @brief A track's gallery line from its plan.
+ * @param[in] plan  the track's plan
+ * @return its gallery line
+ */
 GalleryTrack galleryTrackOf(const TrackPlan& plan);
 
-/** @brief The comment lines that make a `.phosset` a gallery entry. */
+/**
+ * @brief The comment lines that make a `.phosset` a gallery entry.
+ * @param[in] e  the entry
+ * @return the comment lines
+ */
 std::string galleryComment(const GalleryEntry& e);
-/** @brief A set's text (writeSetText) with the gallery lines after its header line -- the header has to stay first. */
+/**
+ * @brief A set's text (writeSetText) with the gallery lines after its header line -- the header has to stay first.
+ * @param[in] setText  the set's text
+ * @param[in] e        the entry
+ * @return the text with the gallery lines
+ */
 std::string withGalleryComment(const std::string& setText, const GalleryEntry& e);
 
-/** @brief Reads a gallery entry out of a `.phosset`'s text; false when the text has no seed line at all. */
+/**
+ * @brief Reads a gallery entry out of a `.phosset`'s text; false when the text has no seed line at all.
+ * @param[in]  text  the set's text
+ * @param[out] out   the entry
+ * @return false when there is no seed line
+ */
 bool readGalleryEntry(std::string_view text, GalleryEntry& out);
 
 /** @brief The listener's verdicts per set seed (Rating.h). */
@@ -57,7 +76,11 @@ struct RatingCount {
     int m_bad = 0;   ///< the bad verdicts
     int m_notes = 0;   ///< the written notes
 };
-/** @brief Counts the verdicts of a ratings file by seed; an unreadable file gives an empty map. */
+/**
+ * @brief Counts the verdicts of a ratings file by seed; an unreadable file gives an empty map.
+ * @param[in] path  the ratings file
+ * @return the verdicts by seed
+ */
 std::map<uint64_t, RatingCount> ratingsBySeed(const char* path);
 
 } // namespace phos

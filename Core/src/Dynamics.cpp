@@ -1,6 +1,7 @@
 /**
  * @file Dynamics.cpp
  * @brief True-peak interpolator and lookahead limiter.
+ * @author Rene Weller
  */
 #include "phos/Dynamics.h"
 #include <algorithm>
@@ -11,7 +12,11 @@ namespace phos {
 namespace {
 constexpr double PiD = 3.141592653589793;   ///< pi
 
-/** @brief Modified Bessel function of the first kind, order zero (power series). */
+/**
+ * @brief Modified Bessel function of the first kind, order zero (power series).
+ * @param[in] x  the argument
+ * @return I0(x)
+ */
 double besselI0(double x)
 {
     double sum = 1.0, term = 1.0;

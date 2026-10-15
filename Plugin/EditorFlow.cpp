@@ -5,6 +5,7 @@
  *
  * The boxes say what the engine does, in the order it does it (Engine.h, the file comment: "Signal flow"; Composer.h
  * for the plans). A fixed canvas, scaled to fit: the manual renders it at twice its size (writeManual, flow.png).
+ * @author Rene Weller
  */
 #include "PluginEditor.h"
 

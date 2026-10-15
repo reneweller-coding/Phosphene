@@ -60,6 +60,10 @@
  *     --list              print every parameter with range and default
  *     --version           print the version, the vector path and the wavetable pack, then exit
  * @endcode
+ * @author Rene Weller
+ *
+ * @par Compile Flags:
+ *   @arg @c PHOS_VERSION - the project's version (the top CMakeLists.txt), which --version prints
  */
 #include "phos/SoundPresets.h"
 #include "phos/Audibility.h"
@@ -102,7 +106,10 @@ using namespace phos;
 
 namespace {
 
-/** @brief --list: every parameter with its range and default. */
+/**
+ * @brief --list: every parameter with its range and default.
+ * @param[in] p  the parameters
+ */
 void printList(const ParamStore& p)
 {
     for (int i = 0; i < p.count(); ++i) {
@@ -122,6 +129,7 @@ void printList(const ParamStore& p)
  *
  * Not `argv[0]`: that is whatever the caller typed, and on a shell that resolved the name through
  * PATH it is a bare name with no directory in it at all.
+ * @return the directory, or empty
  */
 std::string executableDirectory()
 {
@@ -209,7 +217,11 @@ struct Excerpt {
     bool m_closed = false;   ///< the writer is closed
 };
 
-/** @brief A style name as a file name part: "Dark Forest" -> "Dark-Forest". */
+/**
+ * @brief A style name as a file name part: "Dark Forest" -> "Dark-Forest".
+ * @param[in] name  the style's name
+ * @return the file name part
+ */
 std::string fileToken(const char* name)
 {
     std::string s(name);
@@ -217,7 +229,11 @@ std::string fileToken(const char* name)
     return s;
 }
 
-/** @brief A path as a rekordbox Location: file://localhost/ and the path with forward slashes, percent-encoded. */
+/**
+ * @brief A path as a rekordbox Location: file://localhost/ and the path with forward slashes, percent-encoded.
+ * @param[in] path  the path
+ * @return the URL
+ */
 std::string fileUrl(const std::filesystem::path& path)
 {
     const std::u8string u8 = std::filesystem::absolute(path).generic_u8string();   // UTF-8 bytes, percent-encoded below
@@ -230,7 +246,11 @@ std::string fileUrl(const std::filesystem::path& path)
     return out;
 }
 
-/** @brief Text for an XML attribute. */
+/**
+ * @brief Text for an XML attribute.
+ * @param[in] in  the text
+ * @return the text escaped
+ */
 std::string xmlEscape(const std::string& in)
 {
     std::string out;
@@ -257,6 +277,16 @@ std::string xmlEscape(const std::string& in)
  * a memory cue and -- the form has eight sections -- a hot cue A to H. The key goes to rekordbox as its tonic with
  * "m" for the modes with a minor third over it (all but Phrygian Dominant and Double Harmonic). set.m3u8 lists the
  * files in set order, cues.tsv the markers as a table.
+ * @param[in]     dir        the output directory
+ * @param[in,out] composer   the composer
+ * @param[in]     params     the knobs
+ * @param[in]     totalBars  the set's bars
+ * @param[in]     sr         the sample rate
+ * @param[in]     block      the block size
+ * @param[in]     quality    the quality level
+ * @param[in]     pcm24      true for 24-bit PCM, false for float
+ * @param[in]     seed       the set's seed
+ * @return the exit code
  */
 int djExport(const std::string& dir, Composer& composer, const ParamStore& params, int totalBars, int sr, int block,
              const Quality& quality, bool pcm24, uint64_t seed)
@@ -404,7 +434,12 @@ int djExport(const std::string& dir, Composer& composer, const ParamStore& param
     return 0;
 }
 
-/** @brief Reads a whole text file into @p out; false if it cannot be opened. */
+/**
+ * @brief Reads a whole text file into @p out; false if it cannot be opened.
+ * @param[in]  path  the file's path
+ * @param[out] out   its text
+ * @return false if it cannot be opened
+ */
 bool readFile(const char* path, std::string& out)
 {
     FILE* f = std::fopen(path, "rb");
@@ -418,7 +453,12 @@ bool readFile(const char* path, std::string& out)
 
 } // namespace
 
-/** @brief Renders what the command line asks for; the exit code is 0 on success. */
+/**
+ * @brief Renders what the command line asks for; the exit code is 0 on success.
+ * @param[in]     argc  the number of arguments
+ * @param[in,out] argv  the arguments: sections to run
+ * @return the number of failures
+ */
 int main(int argc, char** argv)
 {
     // An offline render waits for the Field track's recordings (FieldLibrary.h): the same seed, the same audio.
@@ -725,7 +765,7 @@ int main(int argc, char** argv)
     // entry are all at the start. A buildup is the exception: what a listener judges there is its *end*,
     // the roll, the pre-drop break and the drop it lands in, so its excerpt is its last bars plus the first
     // four of the section after it. The file name says everything the index says, so a folder listing is
-    // already the bench: s<seed>_t<track>_<style>_<section index>-<section>_b<first bar>.wav.
+    // already the bench: s\<seed\>_t\<track\>_\<style\>_<section index>-\<section\>_b<first bar>.wav.
     std::vector<std::unique_ptr<Excerpt>> excerptList;
     if (!excerpts.empty() && !bench && !scoreOnly) {
         std::error_code ec;

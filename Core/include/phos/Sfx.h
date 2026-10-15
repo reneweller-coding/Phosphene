@@ -67,6 +67,7 @@
  *    -- both fight a trajectory built to grow loud towards a long tail; docs/rounds/2026-09.md has the reasoning).
  *    The dry buffer's own share of `sfx.hall_send`/`sfx.room_send` shrinks together with it, so the two
  *    paths are complementary rather than double-counted.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Dsp.h"
@@ -119,7 +120,12 @@ extern const SfxPreset SfxBank[];                 ///< every preset, family by f
 extern const int SfxBankSize;                     ///< 2048
 extern const int SfxBankOffset[NumSfxTypes];     ///< first preset of each type's family in SfxBank
 extern const int SfxBankCount[NumSfxTypes];      ///< presets per type (0 for the types without a family)
-/** @brief The preset @p index (1-based, as the event's lane carries it) of @p type, or null for 0 / out of range. */
+/**
+ * @brief The preset @p index (1-based, as the event's lane carries it) of @p type, or null for 0 / out of range.
+ * @param[in] type   the effect type
+ * @param[in] index  the preset, 1-based
+ * @return the preset, or null
+ */
 inline const SfxPreset* sfxPreset(SfxTypeE type, int index)
 {
     const int t = static_cast<int>(type);
@@ -137,7 +143,11 @@ inline constexpr SfxTypeE PresetChoiceType[sfx::NumPresetChoices] = {
     SfxTypeE::RISER, SfxTypeE::DOWNLIFTER, SfxTypeE::IMPACT, SfxTypeE::SWEEP, SfxTypeE::FORMANT_SHOT, SfxTypeE::REVERSE_SWELL,
     SfxTypeE::ZAP, SfxTypeE::SQUELCH, SfxTypeE::BUBBLE, SfxTypeE::REVERSE_CRASH, SfxTypeE::ATMOSPHERE,
 };
-/** @brief The preset choice (0 .. sfx::NumPresetChoices - 1) of a type, or -1 for a type without a family. */
+/**
+ * @brief The preset choice (0 .. sfx::NumPresetChoices - 1) of a type, or -1 for a type without a family.
+ * @param[in] t  the effect type
+ * @return the preset choice, or -1
+ */
 constexpr int sfxPresetChoice(SfxTypeE t)
 {
     for (int i = 0; i < sfx::NumPresetChoices; ++i) if (PresetChoiceType[i] == t) return i;
@@ -155,6 +165,8 @@ inline constexpr float PresetPreviewBeats[sfx::NumPresetChoices] = { 16.0f, 8.0f
  * The composer writes every effect as a Part::Sfx note (Melody.cpp, composeSfxBar); the engine and the
  * MIDI export route it by its type, so the shamanic bed and the voices get their own strips and their
  * own MIDI tracks without the composer knowing either exists.
+ * @param[in] t  the effect type
+ * @return the part that plays it
  */
 constexpr PartE sfxTypePart(SfxTypeE t)
 {
@@ -172,10 +184,16 @@ constexpr PartE sfxTypePart(SfxTypeE t)
  * exactly as "an event of the effects strip". The voices and the shamanic bed do not count: they are
  * another layer with another job, and a groove carried by chant alone would otherwise satisfy a rule
  * that is about the candy. FormSfx.cpp's density floor keeps it.
+ * @param[in] t  the effect type
+ * @return true when it counts towards the density rule
  */
 constexpr bool isDensityEvent(SfxTypeE t) { return sfxTypePart(t) == PartE::SFX && t != SfxTypeE::SPACE_SHOT; }
 
-/** @brief The part a note is played by: its own, or for an effect note the part of its type. */
+/**
+ * @brief The part a note is played by: its own, or for an effect note the part of its type.
+ * @param[in] e  the note
+ * @return the part that plays it
+ */
 inline PartE routedPart(const NoteEvent& e)
 {
     if (e.m_part != PartE::SFX && e.m_part != PartE::TEXTURE && e.m_part != PartE::VOCAL) return e.m_part;
@@ -186,8 +204,8 @@ inline PartE routedPart(const NoteEvent& e)
 /** @brief The effect generator. */
 /**
  * @brief The tonal layer's interval over the key's root in mode @p scale, for a preset that asks for @p iv semitones.
- * @param scale index into ScaleSteps, or -1 for no mapping
- * @param iv    the preset's interval in semitones
+ * @param[in] scale  index into ScaleSteps, or -1 for no mapping
+ * @param[in] iv     the preset's interval in semitones
  * @return the interval the effect plays
  */
 double sfxToneInterval(int scale, double iv);
@@ -197,26 +215,36 @@ class Sfx {
 public:
     static constexpr int Voices = 4;   ///< simultaneous effects
 
-    /** @brief Prepares for a sample rate. */
+    /**
+     * @brief Prepares for a sample rate.
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate);
     /** @brief Silences every voice. */
     void reset();
-    /** @brief Reads the effective parameters (indexed by sfx::) and the key. */
+    /**
+     * @brief Reads the effective parameters (indexed by sfx::) and the key.
+     * @param[in] v        the effective parameter values
+     * @param[in] keyRoot  the key's root
+     */
     void update(const float* v, int keyRoot);
     /**
      * @brief Starts an effect.
-     * @param type     the effect
-     * @param samples  its length
-     * @param velocity 0..1
-     * @param late     how many samples ago it ideally started (0 <= late < 1)
-     * @param preset   1-based index into the type's family of the bank (SfxPreset), 0 = the type as before;
-     *                 the family's sfx.preset_* choice replaces it when that is not Auto
+     * @param[in] type      the effect
+     * @param[in] samples   its length
+     * @param[in] velocity  0..1
+     * @param[in] late      how many samples ago it ideally started (0 <= late < 1)
+     * @param[in] preset    1-based index into the type's family of the bank (SfxPreset), 0 = the type as before; the
+     *                      family's sfx.preset_* choice replaces it when that is not Auto
      */
     void trigger(SfxTypeE type, int samples, float velocity, double late, int preset = 0);
     /**
      * @brief Renders @p n stereo samples, replacing @p L and @p R; a sub drop is added to both, centred.
      *        A wandering event's growing reverb-send trajectory (sfx.wander) is folded back in here too
      *        -- this call has no reverb to hand it to -- so it stays audible for direct callers/tests.
+     * @param[out] L  the left channel
+     * @param[out] R  the right channel
+     * @param[in]  n  the block's samples
      */
     void process(float* L, float* R, int n);
     /**
@@ -225,9 +253,18 @@ public:
      *        sfx.wander) -- energy the dry @p L/@p R lose as it grows towards the event's tail -- into
      *        @p wetL/@p wetR. All five are replaced. @p wetL/@p wetR are silent whenever sfx.wander is
      *        off (every existing caller is unaffected).
+     * @param[out] L     the left channel
+     * @param[out] R     the right channel
+     * @param[out] sub   the sub drop, mono
+     * @param[out] wetL  the reverb send's left channel
+     * @param[out] wetR  the reverb send's right channel
+     * @param[in]  n     the block's samples
      */
     void processSplit(float* L, float* R, float* sub, float* wetL, float* wetR, int n);
-    /** @brief Voices sounding. */
+    /**
+     * @brief Voices sounding.
+     * @return the voices sounding
+     */
     int active() const;
     /**
      * @brief The scale the tonal layers keep to (index into ScaleSteps), -1 for none (24.09.2026).
@@ -236,6 +273,7 @@ public:
      * them -- and a long atmosphere held the minor seventh over harmonic minor's leading tone for eight bars. With a
      * scale, an interval the mode does not have takes its neighbour that it does (interval()). The engine sets it;
      * a direct caller that does not keeps the intervals as the bank has them.
+     * @param[in] scale  the scale's index, -1 for none
      */
     void setScale(int scale) { m_scale = scale; }
 
@@ -283,7 +321,13 @@ private:
         const SfxPreset* m_preset = nullptr;    ///< the bank preset this event plays, or null (23.09.2026)
         double m_lfoPh = 0.0;                    ///< the atmosphere's slow motion
     };
-    /** @brief One sample of voice @p v; its pan and its share for the reverb go to @p pan and @p wetFrac. */
+    /**
+     * @brief One sample of voice @p v; its pan and its share for the reverb go to @p pan and @p wetFrac.
+     * @param[in,out] v        the voice
+     * @param[out]    pan      its pan
+     * @param[out]    wetFrac  its share for the reverb
+     * @return the sample
+     */
     float voiceSample(Voice& v, float& pan, float& wetFrac);
 
     double m_sr = 48000.0;   ///< sample rate
@@ -302,7 +346,12 @@ private:
     bool m_wander = false;          ///< sfx.wander
     float m_wanderSend = 0.85f;     ///< sfx.wander_send
     int m_scale = -1;                           ///< setScale()
-    /** @brief The preset's tonal interval (or @p fallback without one), kept to the scale. */
+    /**
+     * @brief The preset's tonal interval (or @p fallback without one), kept to the scale.
+     * @param[in] P         the preset
+     * @param[in] fallback  the interval without one
+     * @return the interval in semitones
+     */
     double interval(const SfxPreset* P, double fallback) const;
     int m_fixed[sfx::NumPresetChoices] = {};   ///< sfx.preset_*: the bank preset a family always plays, 0 = the event's own
 };

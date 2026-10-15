@@ -56,6 +56,7 @@
  * app's private directory, because the core opens its resources by name and an asset has none. At
  * the Quest quality level it is built with 32 of its 64 frames (Quality.h), which takes the
  * expanded mip levels from 23.3 MB to 12.1 MB and the load from 110 ms to 71 ms.
+ * @author Rene Weller
  */
 
 #include <android/asset_manager.h>
@@ -118,10 +119,18 @@ struct Vec3 {
     float m_z;   ///< back (towards the viewer)
 };
 
-/** @brief The identity matrix. */
+/**
+ * @brief The identity matrix.
+ * @return the identity matrix
+ */
 Mat4 identity() { Mat4 r{}; r.m_m[0] = r.m_m[5] = r.m_m[10] = r.m_m[15] = 1.0f; return r; }
 
-/** @brief The product @p a times @p b (b applied first). */
+/**
+ * @brief The product @p a times @p b (b applied first).
+ * @param[in] a  the left factor
+ * @param[in] b  the right factor, applied first
+ * @return the product
+ */
 Mat4 multiply(const Mat4& a, const Mat4& b)
 {
     Mat4 r{};
@@ -132,7 +141,13 @@ Mat4 multiply(const Mat4& a, const Mat4& b)
     return r;
 }
 
-/** @brief Asymmetric projection from OpenXR's four half-angles. */
+/**
+ * @brief Asymmetric projection from OpenXR's four half-angles.
+ * @param[in] fov    the four half-angles
+ * @param[in] nearZ  the near plane's distance
+ * @param[in] farZ   the far plane's distance
+ * @return the projection matrix
+ */
 Mat4 projectionFromFov(const XrFovf& fov, float nearZ, float farZ)
 {
     const float l = std::tan(fov.angleLeft), r = std::tan(fov.angleRight);
@@ -147,7 +162,11 @@ Mat4 projectionFromFov(const XrFovf& fov, float nearZ, float farZ)
     return p;
 }
 
-/** @brief The rotation of unit quaternion @p q as a matrix. */
+/**
+ * @brief The rotation of unit quaternion @p q as a matrix.
+ * @param[in] q  the unit quaternion
+ * @return the rotation matrix
+ */
 Mat4 rotationFromQuat(const XrQuaternionf& q)
 {
     const float x = q.x, y = q.y, z = q.z, w = q.w;
@@ -158,7 +177,12 @@ Mat4 rotationFromQuat(const XrQuaternionf& q)
     return r;
 }
 
-/** @brief Vector @p v rotated by @p q. */
+/**
+ * @brief Vector @p v rotated by @p q.
+ * @param[in] q  the unit quaternion
+ * @param[in] v  the vector
+ * @return the rotated vector
+ */
 Vec3 rotate(const XrQuaternionf& q, Vec3 v)
 {
     const Mat4 r = rotationFromQuat(q);
@@ -167,7 +191,11 @@ Vec3 rotate(const XrQuaternionf& q, Vec3 v)
              r.m_m[2] * v.m_x + r.m_m[6] * v.m_y + r.m_m[10] * v.m_z };
 }
 
-/** @brief The view matrix of an eye pose: the inverse of the pose. */
+/**
+ * @brief The view matrix of an eye pose: the inverse of the pose.
+ * @param[in] pose  the eye's pose
+ * @return the view matrix
+ */
 Mat4 viewFromPose(const XrPosef& pose)
 {
     const Mat4 r = rotationFromQuat(pose.orientation);
@@ -178,7 +206,11 @@ Mat4 viewFromPose(const XrPosef& pose)
     return multiply(rt, t);
 }
 
-/** @brief @p x limited to 0 .. 1. */
+/**
+ * @brief @p x limited to 0 .. 1.
+ * @param[in] x  the value
+ * @return the value limited to 0 .. 1
+ */
 float clamp01(float x) { return x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x); }
 
 // ---------------------------------------------------------------- 5x7 point font
@@ -189,6 +221,8 @@ float clamp01(float x) { return x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x); }
  * Text on the panel is drawn as points, like everything else: no texture, no atlas, one draw call
  * for the whole picture. (Table taken from Noctuary's Quest app, where it was measured legible at
  * arm's length; extended by '%', '#' and '*'.)
+ * @param[in] c  the character
+ * @return its seven rows
  */
 const unsigned char* glyph(char c)
 {
@@ -248,12 +282,11 @@ constexpr const char* VoicePack = "voices.phosvx";
  * A missing file is not an error -- the engine has its six built-in tables (WaveTableFile.h) and the
  * composer has the Markov model and the pattern families (Model.h) -- but it is logged, because
  * silence about it is exactly how a shipped app ends up quietly playing something else.
- *
- * @param assets      the APK's asset manager, or null
- * @param internalDir `internalDataPath`, where an unpacked copy is kept
- * @param externalDir `externalDataPath`, searched first
- * @param name        the bare file name, e.g. `library.phoswt` or `melody.phosmdl`
- * @param what        what to call it in the log
+ * @param[in,out] assets       the APK's asset manager, or null
+ * @param[in]     internalDir  `internalDataPath`, where an unpacked copy is kept
+ * @param[in]     externalDir  `externalDataPath`, searched first
+ * @param[in]     name         the bare file name, e.g. `library.phoswt` or `melody.phosmdl`
+ * @param[in]     what         what to call it in the log
  * @return the directory to hand the core, or empty when there is no such file anywhere
  */
 std::string prepareAsset(AAssetManager* assets, const char* internalDir, const std::string& externalDir,
@@ -317,6 +350,9 @@ std::string prepareAsset(AAssetManager* assets, const char* internalDir, const s
  *
  * Costs 3.0 MB of internal storage, once, on the first start. Logged either way, because an absent
  * model is silent in exactly the way a wrong sound is not.
+ * @param[in,out] assets       the APK's assets
+ * @param[in]     internalDir  the app's internal directory
+ * @param[in]     externalDir  the app's external directory
  */
 void prepareModels(AAssetManager* assets, const char* internalDir, const std::string& externalDir)
 {
@@ -348,7 +384,11 @@ struct Config {
     std::string m_sets;               ///< knob assignments, "key=value" separated by ';' or newlines
 };
 
-/** @brief Reads `<dir>/phos.cfg`; every key is optional. */
+/**
+ * @brief Reads `<dir>/phos.cfg`; every key is optional.
+ * @param[in] dir  the folder of tot.cfg
+ * @return the configuration
+ */
 Config readConfig(const char* dir)
 {
     Config c;
@@ -417,7 +457,13 @@ struct DisplayState {
  */
 class SetPlayer {
 public:
-    /** @brief Builds the engine and plans the first stretch of the set. Composer thread. */
+    /**
+     * @brief Builds the engine and plans the first stretch of the set. Composer thread.
+     * @param[in] sampleRate  the sample rate
+     * @param[in] block       the block size
+     * @param[in] cfg         the configuration
+     * @pre called on the composer thread
+     */
     void prepare(int sampleRate, int block, const Config& cfg)
     {
         m_muted = cfg.m_mute;
@@ -437,7 +483,13 @@ public:
         LOGI("set ready: seed %llu, %s", static_cast<unsigned long long>(m_composer.seed()), cfg.m_quality.name());
     }
 
-    /** @brief Renders one block. Audio thread only. */
+    /**
+     * @brief Renders one block. Audio thread only.
+     * @param[out] L  the left channel
+     * @param[out] R  the right channel
+     * @param[in]  n  the block's samples
+     * @pre called on the audio thread
+     */
     void process(float* L, float* R, int n)
     {
         int expected = IDLE;
@@ -466,19 +518,29 @@ public:
         m_state.store(IDLE, std::memory_order_release);
     }
 
-    /** @brief Binds the cue bridge; null leaves it off. Call before the audio stream starts. */
+    /**
+     * @brief Binds the cue bridge; null leaves it off. Call before the audio stream starts.
+     * @param[in,out] sender  the cue sender, or null
+     * @pre called before the
+     */
     void setCueSender(CueSender* sender) { m_cues = sender; }
 
-    /** @brief Play or stop (any thread; takes effect over the fade). */
+    /**
+     * @brief Play or stop (any thread; takes effect over the fade).
+     * @param[in] on  true to play
+     */
     void setPlaying(bool on) { m_playing.store(on, std::memory_order_relaxed); }
-    /** @brief Whether play is on. */
+    /**
+     * @brief Whether play is on.
+     * @return true while play is on
+     */
     bool playing() const { return m_playing.load(std::memory_order_relaxed); }
     /** @brief Asks for a jump to the start of the next track (any thread). */
     void requestNextTrack() { m_jumpRequest.store(true, std::memory_order_relaxed); }
 
     /**
      * @brief One round of composer work: a pending jump, then bars up to the horizon.
-     * @param horizonBeats how far ahead of the play position the rings are kept filled
+     * @param[in] horizonBeats  how far ahead of the play position the rings are kept filled
      */
     void pump(double horizonBeats)
     {
@@ -523,25 +585,44 @@ public:
         publish();
     }
 
-    /** @brief The bar now playing (render thread: m_barOffset is only written while blocked). */
+    /**
+     * @brief The bar now playing (render thread: m_barOffset is only written while blocked).
+     * @return the bar
+     */
     int currentBar() const
     {
         return m_barOffset.load(std::memory_order_relaxed)
              + static_cast<int>(m_engine.beatPosition() / BeatsPerBar);
     }
-    /** @brief Position within the bar, 0..1 (render thread). */
+    /**
+     * @brief Position within the bar, 0..1 (render thread).
+     * @return the position, 0..1
+     * @pre called on the render thread
+     */
     float barPhase() const
     {
         const double b = m_engine.beatPosition() / BeatsPerBar;
         return static_cast<float>(b - std::floor(b));
     }
-    /** @brief Short-term loudness of the master, LUFS (a torn read at worst; a display only). */
+    /**
+     * @brief Short-term loudness of the master, LUFS (a torn read at worst; a display only).
+     * @return the loudness in LUFS
+     */
     float loudness() const { return m_engine.meter().m_shortTerm; }
-    /** @brief The knobs, for the hand macros. */
+    /**
+     * @brief The knobs, for the hand macros.
+     * @return the knobs
+     */
     ParamStore& params() { return m_engine.params(); }
-    /** @brief The panel's data. */
+    /**
+     * @brief The panel's data.
+     * @return the panel's data
+     */
     DisplayState display() const { std::lock_guard<std::mutex> lock(m_displayMutex); return m_display; }
-    /** @brief Whether prepare() has finished. */
+    /**
+     * @brief Whether prepare() has finished.
+     * @return true when prepared
+     */
     bool ready() const { return m_ready.load(std::memory_order_acquire); }
 
 private:
@@ -558,9 +639,10 @@ private:
      * that by the limiter's lookahead and by the device's own buffering, so the tap stamps each cue
      * with `now + lead` and the sender's thread waits for it. On Oboe the buffering is deeper than
      * one burst, which is what `osc_lead_ms` is for.
-     * @param from musical beat at sample 0 of the block
-     * @param to   musical beat just past its last sample
-     * @param n    samples in the block
+     * @param[in] from  musical beat at sample 0 of the block
+     * @param[in] to    musical beat just past its last sample
+     * @param[in] n     samples in the block
+     * @pre called on the audio thread
      */
     void sendCues(double from, double to, int n)
     {
@@ -573,7 +655,11 @@ private:
                      m_cueMarks, m_cues->queue());
     }
 
-    /** @brief Beat of a set bar in the engine's own, rebased time. */
+    /**
+     * @brief Beat of a set bar in the engine's own, rebased time.
+     * @param[in] bar  the set's bar
+     * @return the engine's beat
+     */
     double localBeatOfBar(int bar) const
     {
         return static_cast<double>(bar - m_barOffset.load(std::memory_order_relaxed)) * BeatsPerBar;
@@ -585,6 +671,9 @@ private:
      * At a track boundary -- the only place a jump lands -- the source map holds the new track's
      * tempo there, so the rebased map starts on exactly the right value; a jump into the middle of
      * a ramp would lose that ramp's slope for its first segment.
+     * @param[in] src         the tempo map
+     * @param[in] offsetBeat  the beat that becomes 0
+     * @return the map moved
      */
     static TempoMap rebasedTempo(const TempoMap& src, double offsetBeat)
     {
@@ -595,7 +684,10 @@ private:
         return t;
     }
 
-    /** @brief Stops the engine, moves the play position to @p bar and refills from there. */
+    /**
+     * @brief Stops the engine, moves the play position to @p bar and refills from there.
+     * @param[in] bar  the bar
+     */
     void rebase(int bar)
     {
         const ParamStore& p = m_engine.params();
@@ -710,7 +802,8 @@ private:
     std::atomic<bool> m_jumpRequest{ false };   ///< the next track is asked for
     bool m_muted = false;   ///< the config mutes the output (the engine still runs)
     double m_sr = 48000.0;                 ///< the rate the stream really gave (for the cue lead)
-    /** @name The cue bridge (PLAN 8.3, Cue.h): marks written by the composer, sent from the play position @{ */
+    /** @name The cue bridge (PLAN 8.3, Cue.h): marks written by the composer, sent from the play position
+     *  @{ */
     CueSender* m_cues = nullptr;           ///< the socket and its thread, owned by the app; null = off
     CueTap m_cueTap;                       ///< audio thread: beat range -> cues
     CueMarkRingT m_cueMarks{ 512 };         ///< composer thread -> audio thread
@@ -729,10 +822,16 @@ private:
 /** @brief Oboe output stream: a low-latency float stream straight into SetPlayer::process. */
 class Audio : public oboe::AudioStreamDataCallback {
 public:
-    /** @brief A stream that will play @p p (open() and start() it). */
+    /**
+     * @brief A stream that will play @p p (open() and start() it).
+     * @param[in,out] p  the player
+     */
     explicit Audio(SetPlayer& p) : m_player(p) {}
 
-    /** @brief Opens a low-latency stereo float stream at 48 kHz (or what the device gives); false if it cannot. */
+    /**
+     * @brief Opens a low-latency stereo float stream at 48 kHz (or what the device gives); false if it cannot.
+     * @return false when the stream cannot be opened
+     */
     bool open()
     {
         oboe::AudioStreamBuilder b;
@@ -752,18 +851,30 @@ public:
         LOGI("Oboe: %d Hz, burst %d", m_sampleRate, m_burst);
         return true;
     }
-    /** @brief Starts the stream; false if it does not. */
+    /**
+     * @brief Starts the stream; false if it does not.
+     * @return false when the stream does not start
+     */
     bool start() { return m_stream && m_stream->requestStart() == oboe::Result::OK; }
     /** @brief Stops and closes the stream. */
     void stop() { if (m_stream) { m_stream->requestStop(); m_stream->close(); m_stream.reset(); } }
-    /** @brief The rate the device gave, Hz. */
+    /**
+     * @brief The rate the device gave, Hz.
+     * @return the sample rate in Hz
+     */
     int sampleRate() const { return m_sampleRate; }
-    /** @brief The device's burst, frames. */
+    /**
+     * @brief The device's burst, frames.
+     * @return the burst in frames
+     */
     int burst() const { return m_burst; }
 
     /**
      * @brief Oboe's callback: renders @p frames through the player in pieces of at most 4096 and interleaves them into @p
      *        data.
+     * @param[out] data    receives the interleaved stereo frames
+     * @param[in]  frames  how many frames
+     * @return Continue
      */
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream*, void* data, int32_t frames) override
     {
@@ -821,8 +932,8 @@ void main() {
 /** @brief One soft round point: the only primitive the scene has. */
 struct Point {
     float m_x;      ///< position in the room, metres
-    float m_y;      ///< @copydoc x
-    float m_z;      ///< @copydoc x
+    float m_y;      ///< height in the room, metres
+    float m_z;      ///< depth in the room, metres
     float m_r;      ///< red 0..1
     float m_g;      ///< green 0..1
     float m_b;      ///< blue 0..1
@@ -837,7 +948,12 @@ struct Panel {
     Vec3 m_up;       ///< one metre up along the panel
 };
 
-/** @brief A shader of @p type compiled from @p src; a failure is logged. */
+/**
+ * @brief A shader of @p type compiled from @p src; a failure is logged.
+ * @param[in] type  the shader's type
+ * @param[in] src   its source
+ * @return the shader, 0 on failure
+ */
 GLuint compile(GLenum type, const char* src)
 {
     const GLuint s = glCreateShader(type);
@@ -860,7 +976,10 @@ public:
     /** @brief Display pixels per radian on the Quest 2's render target (about 1830 px over 90 deg). */
     static constexpr float PixelsPerRadian = 1150.0f;
 
-    /** @brief Links the shaders and sets up the point buffer; false if the program does not link. */
+    /**
+     * @brief Links the shaders and sets up the point buffer; false if the program does not link.
+     * @return false when the program does not link
+     */
     bool init()
     {
         m_program = glCreateProgram();
@@ -885,13 +1004,33 @@ public:
     /** @brief Starts a new picture: forgets the points of the last frame. */
     void begin() { m_points.clear(); }
 
-    /** @brief One point in world space. */
+    /**
+     * @brief One point in world space.
+     * @param[in] x     x in metres
+     * @param[in] y     y in metres
+     * @param[in] z     z in metres
+     * @param[in] r     red, 0..1
+     * @param[in] g     green, 0..1
+     * @param[in] b     blue, 0..1
+     * @param[in] a     brightness, 0..1
+     * @param[in] size  the diameter in pixels at one metre
+     */
     void add(float x, float y, float z, float r, float g, float b, float a, float size)
     {
         m_points.push_back({ x, y, z, r, g, b, a, size });
     }
 
-    /** @brief One point on a panel, at panel coordinates @p u (right) and @p v (up). */
+    /**
+     * @brief One point on a panel, at panel coordinates @p u (right) and @p v (up).
+     * @param[in] p     the panel
+     * @param[in] u     metres to the right
+     * @param[in] v     metres up
+     * @param[in] r     red, 0..1
+     * @param[in] g     green, 0..1
+     * @param[in] b     blue, 0..1
+     * @param[in] a     brightness, 0..1
+     * @param[in] size  the diameter in pixels at one metre
+     */
     void addOn(const Panel& p, float u, float v, float r, float g, float b, float a, float size)
     {
         add(p.m_origin.m_x + p.m_right.m_x * u + p.m_up.m_x * v,
@@ -905,6 +1044,15 @@ public:
      * The point size is `cell * PixelsPerRadian / w`: a cell of `cell` metres at `w` metres
      * subtends `cell / w` radians, and the Quest 2 renders about 1150 pixels per radian (roughly
      * 1830 pixels over 90 degrees per eye), so the dots of a glyph just touch at any distance.
+     * @param[in] p     the panel
+     * @param[in] u     metres to the right
+     * @param[in] v     metres up
+     * @param[in] cell  the pitch of one font pixel in metres
+     * @param[in] text  the text
+     * @param[in] r     red, 0..1
+     * @param[in] g     green, 0..1
+     * @param[in] b     blue, 0..1
+     * @param[in] a     brightness, 0..1
      */
     void addText(const Panel& p, float u, float v, float cell, const char* text,
                  float r, float g, float b, float a)
@@ -927,7 +1075,12 @@ public:
         glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(m_points.size() * sizeof(Point)), m_points.data(), GL_DYNAMIC_DRAW);
     }
 
-    /** @brief Draws the points for one eye with view-projection @p vp into a @p width by @p height target. */
+    /**
+     * @brief Draws the points for one eye with view-projection @p vp into a @p width by @p height target.
+     * @param[in] vp      the view-projection matrix
+     * @param[in] width   the target's width
+     * @param[in] height  the target's height
+     */
     void draw(const Mat4& vp, int width, int height)
     {
         glViewport(0, 0, width, height);
@@ -976,7 +1129,13 @@ public:
         bool m_everSeen = false;  ///< this hand has been tracked at least once
     };
 
-    /** @brief Feeds one hand; @p headY is the head's height in the same space. */
+    /**
+     * @brief Feeds one hand; @p headY is the head's height in the same space.
+     * @param[in] h             the hand, 0 left, 1 right
+     * @param[in] palm          the palm's position
+     * @param[in] thumbToIndex  the distance of thumb and index tips
+     * @param[in] headY         the head's height
+     */
     void setHand(int h, const XrVector3f& palm, float thumbToIndex, float headY)
     {
         Hand& s = m_hand[h];
@@ -988,17 +1147,18 @@ public:
         else if (thumbToIndex > 0.038f) s.m_closed = false;
         s.m_height = clamp01((palm.y - (headY - 1.0f)) / 0.8f);
     }
-    /** @brief Marks a hand as not tracked this frame (its macro then holds its value). */
+    /**
+     * @brief Marks a hand as not tracked this frame (its macro then holds its value).
+     * @param[in] h  the hand, 0 left, 1 right
+     */
     void lost(int h) { m_hand[h].m_valid = false; m_hand[h].m_closed = false; }
 
     /**
      * @brief Advances the smoothing and reports the two rising pinch edges.
-     * @param dt         seconds since the last frame
-     * @param leftPinch  receives true on the frame the left hand closes
-     * @param rightPinch receives true on the frame the right hand closes
-     *
-     * A macro follows its hand only while that hand is open: the pinch that starts a track must not
-     * also drag the gain with it.
+     * @param[in]  dt          seconds since the last frame
+     * @param[out] leftPinch   receives true on the frame the left hand closes
+     * @param[out] rightPinch  receives true on the frame the right hand closes A macro follows its hand only while that
+     *                         hand is open: the pinch that starts a track must not also drag the gain with it.
      */
     void update(double dt, bool& leftPinch, bool& rightPinch)
     {
@@ -1015,7 +1175,11 @@ public:
         m_wasClosed[1] = m_hand[1].m_closed;
     }
 
-    /** @brief Hand @p h: 0 left, 1 right. */
+    /**
+     * @brief Hand @p h: 0 left, 1 right.
+     * @param[in] h  the hand, 0 left, 1 right
+     * @return the hand
+     */
     const Hand& hand(int h) const { return m_hand[h]; }
 
 private:
@@ -1034,12 +1198,17 @@ constexpr int MaxMacroTargets = 24;   ///< most knobs one macro touches (Stutter
 struct MacroTarget {
     int   m_param = -1;         ///< global parameter id
     float m_value = 0.0f;       ///< normalised delta, or the absolute normalised value
-    bool  m_absolute = false;   ///< true: set the knob to @ref value instead of adding it
+    bool  m_absolute = false;   ///< true: set the knob to @ref m_value instead of adding it
 };
 
 /**
  * @brief The knobs macro @p m moves at @p value (0: none -- its knobs go back). A copy of the desktop's
  *        PhospheneProcessor::macroTargets (Plugin/PluginProcessor.cpp, 01.10.2026): a hand does here what it does there.
+ * @param[in]  p      the knobs
+ * @param[in]  m      the macro
+ * @param[in]  value  its value
+ * @param[out] out    the knobs it moves
+ * @return the number of knobs
  */
 int macroTargets(const ParamStore& p, HandMacroE m, float value, MacroTarget* out)
 {
@@ -1092,14 +1261,25 @@ int macroTargets(const ParamStore& p, HandMacroE m, float value, MacroTarget* ou
  */
 class HandMacros {
 public:
-    /** @brief Sets macro @p m to @p v (the filter sweep -1 .. 1, the others 0 .. 1). */
+    /**
+     * @brief Sets macro @p m to @p v (the filter sweep -1 .. 1, the others 0 .. 1).
+     * @param[in] m  the macro
+     * @param[in] v  its value
+     */
     void set(HandMacroE m, float v)
     {
         m_value[static_cast<int>(m)] = m == HandMacroE::FILTER_SWEEP ? std::clamp(v, -1.0f, 1.0f) : std::clamp(v, 0.0f, 1.0f);
     }
-    /** @brief Macro @p m as it stands. */
+    /**
+     * @brief Macro @p m as it stands.
+     * @param[in] m  the macro
+     * @return its value
+     */
     float get(HandMacroE m) const { return m_value[static_cast<int>(m)]; }
-    /** @brief Puts the macros onto their knobs (every frame). */
+    /**
+     * @brief Puts the macros onto their knobs (every frame).
+     * @param[in,out] p  the knobs
+     */
     void apply(ParamStore& p)
     {
         MacroTarget want[HandMacroCount * MaxMacroTargets];
@@ -1155,7 +1335,12 @@ public:
     HandBridge(const HandBridge&) = delete;
     HandBridge& operator=(const HandBridge&) = delete;
     ~HandBridge() { close(); }
-    /** @brief Opens the UDP socket to @p host (a dotted IPv4 address, no names) and @p port; false if it cannot. */
+    /**
+     * @brief Opens the UDP socket to @p host (a dotted IPv4 address, no names) and @p port; false if it cannot.
+     * @param[in] host  the dotted IPv4 address
+     * @param[in] port  the UDP port
+     * @return false when the socket cannot be opened
+     */
     bool open(const std::string& host, int port)
     {
         close();
@@ -1169,9 +1354,17 @@ public:
     }
     /** @brief Closes the socket; send() then does nothing. */
     void close() { if (m_sock >= 0) ::close(m_sock); m_sock = -1; }
-    /** @brief Whether the bridge is on. */
+    /**
+     * @brief Whether the bridge is on.
+     * @return true while the bridge is on
+     */
     bool ok() const { return m_sock >= 0; }
-    /** @brief Sends the hands, at most 30 times a second; @p dt the seconds since the last frame (render thread). */
+    /**
+     * @brief Sends the hands, at most 30 times a second; @p dt the seconds since the last frame (render thread).
+     * @param[in] hands  the hands
+     * @param[in] dt     the seconds since the last frame
+     * @pre called on the render thread
+     */
     void send(const Hands& hands, double dt)
     {
         if (m_sock < 0) return;
@@ -1227,12 +1420,16 @@ struct SwapchainTarget {
 /** @brief The Quest app: OpenXR session, hands, panel, and the track player with its composer thread and audio stream. */
 class App {
 public:
-    /** @brief The app on the native activity @p app. */
+    /**
+     * @brief The app on the native activity @p app.
+     * @param[in,out] app  the native activity
+     */
     explicit App(android_app* app) : m_app(app) {}
 
     /**
      * @brief Reads phos.cfg, opens the cue sender and the bridge, sets up OpenXR, EGL, the hands, the scene and the audio
      *        stream, and starts the composer thread; false where something essential failed.
+     * @return false where something essential failed
      */
     bool init()
     {
@@ -1339,7 +1536,10 @@ private:
 
     // ------------------------------------------------ OpenXR setup
 
-    /** @brief Initialises Android's OpenXR loader. */
+    /**
+     * @brief Initialises Android's OpenXR loader.
+     * @return false when the loader fails
+     */
     bool initLoader()
     {
         PFN_xrInitializeLoaderKHR initLoader = nullptr;
@@ -1351,7 +1551,11 @@ private:
         return XR_SUCCEEDED(initLoader(reinterpret_cast<const XrLoaderInitInfoBaseHeaderKHR*>(&li)));
     }
 
-    /** @brief Creates the OpenXR instance with GLES and hand tracking and finds the headset; notes whether it tracks hands. */
+    /**
+     * @brief Creates the OpenXR instance with GLES and hand tracking and finds the headset; notes whether it tracks
+     *        hands.
+     * @return false when there is no instance or no headset
+     */
     bool initInstance()
     {
         const char* exts[] = { XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
@@ -1380,7 +1584,10 @@ private:
         return true;
     }
 
-    /** @brief An EGL context for GLES 3 on a small pbuffer, as OpenXR's GLES binding needs. */
+    /**
+     * @brief An EGL context for GLES 3 on a small pbuffer, as OpenXR's GLES binding needs.
+     * @return false when there is no context
+     */
     bool initEgl()
     {
         PFN_xrGetOpenGLESGraphicsRequirementsKHR getReq = nullptr;
@@ -1405,7 +1612,11 @@ private:
         return true;
     }
 
-    /** @brief The session, the room (stage, else local) and head spaces, and a swapchain with framebuffer and depth per eye. */
+    /**
+     * @brief The session, the room (stage, else local) and head spaces, and a swapchain with framebuffer and depth per
+     *        eye.
+     * @return false when the session or the swapchains fail
+     */
     bool initSession()
     {
         XrGraphicsBindingOpenGLESAndroidKHR gb{ XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR };
@@ -1463,7 +1674,10 @@ private:
         return true;
     }
 
-    /** @brief A hand tracker per hand; false where the headset or runtime does not track hands. */
+    /**
+     * @brief A hand tracker per hand; false where the headset or runtime does not track hands.
+     * @return false where the hands are not tracked
+     */
     bool initHands()
     {
         if (!m_handsSupported) return false;
@@ -1514,7 +1728,10 @@ private:
 
     // ------------------------------------------------ per frame
 
-    /** @brief The head pose at @p time (m_headPose, m_headValid). */
+    /**
+     * @brief The head pose at @p time (m_headPose, m_headValid).
+     * @param[in] time  the predicted display time
+     */
     void updateHead(XrTime time)
     {
         m_headValid = false;
@@ -1527,7 +1744,10 @@ private:
         m_headValid = true;
     }
 
-    /** @brief Locates both hands at @p time and feeds their palms and pinches to m_hands. */
+    /**
+     * @brief Locates both hands at @p time and feeds their palms and pinches to m_hands.
+     * @param[in] time  the predicted display time
+     */
     void updateHands(XrTime time)
     {
         for (int h = 0; h < 2; ++h) {
@@ -1584,6 +1804,7 @@ private:
      *        acts when it opens again, so both hands closed together can mean something else -- the next track, once,
      *        while neither then counts as a single pinch. Left alone: play / stop; right alone: the drop-out; right
      *        held LongPinch: the stutter, until it opens.
+     * @param[in] dt  the seconds since the last frame
      */
     void gestures(double dt)
     {
@@ -1626,7 +1847,10 @@ private:
     static constexpr float Row = 0.040f;           ///< distance between text rows, metres
     static constexpr float PanelDistance = 1.0f;   ///< how far in front of the eyes the panel sits
 
-    /** @brief The head-locked panel: in front of the eyes, following the yaw only. */
+    /**
+     * @brief The head-locked panel: in front of the eyes, following the yaw only.
+     * @return the panel
+     */
     Panel headPanel() const
     {
         Panel p;
@@ -1871,7 +2095,10 @@ void handleCmd(android_app*, int32_t) {}
 
 } // namespace
 
-/** @brief NativeActivity entry point (android_native_app_glue). */
+/**
+ * @brief NativeActivity entry point (android_native_app_glue).
+ * @param[in,out] app  the native activity
+ */
 void android_main(android_app* app)
 {
     app->onAppCmd = handleCmd;

@@ -30,6 +30,7 @@
  *       scheme, the guards, the Catmull-Rom read, the level hysteresis and buildFromHarmonics() are
  *       unchanged; file reading and cycle-length detection are left behind, the frame count is capped
  *       at 64 and the built-in tables are new.
+ * @author Rene Weller
  */
 #pragma once
 #include <complex>
@@ -54,18 +55,37 @@ struct WaveTable {
     int m_offset[Levels] = {};         ///< start of each level in data
     std::vector<float> m_data;          ///< all levels, all frames
 
-    /** @brief Samples per cycle at a level. */
+    /**
+     * @brief Samples per cycle at a level.
+     * @param[in] level  the mip level
+     * @return the samples per cycle
+     */
     static int levelLength(int level)    { const int n = StoreLen >> level; return n < 32 ? 32 : n; }
-    /** @brief Harmonics kept at a level. */
+    /**
+     * @brief Harmonics kept at a level.
+     * @param[in] level  the mip level
+     * @return the harmonics kept
+     */
     static int levelHarmonics(int level) { const int h = (StoreLen / 8) >> level; return h < 1 ? 1 : h; }
 
-    /** @brief The stored cycle of frame @p f at a level; readable from index -1 to levelLength + 1. */
+    /**
+     * @brief The stored cycle of frame @p f at a level; readable from index -1 to levelLength + 1.
+     * @param[in] level  the mip level
+     * @param[in] f      the frame
+     * @return the cycle's samples
+     */
     const float* cycle(int level, int f) const
     {
         return m_data.data() + static_cast<size_t>(m_offset[level])
              + static_cast<size_t>(f) * static_cast<size_t>(levelLength(level) + Guard) + 1;
     }
-    /** @brief One sample of frame @p f at a level and a phase in [0, 1): Catmull-Rom through four samples. */
+    /**
+     * @brief One sample of frame @p f at a level and a phase in [0, 1): Catmull-Rom through four samples.
+     * @param[in] level  the mip level
+     * @param[in] f      the frame
+     * @param[in] phase  the phase, 0..1
+     * @return the sample
+     */
     float sample(int level, int f, double phase) const
     {
         const int len = levelLength(level);
@@ -83,9 +103,10 @@ struct WaveTable {
     }
     /**
      * @brief A position between frames: frame floor(p (frames-1)) blended into the next.
-     * @param position 0..1 across the table
-     * @param level the mip level (bandLimitLevel())
-     * @param phase 0..1 within the cycle
+     * @param[in] level     the mip level (bandLimitLevel())
+     * @param[in] position  0..1 across the table
+     * @param[in] phase     0..1 within the cycle
+     * @return the sample
      */
     float sampleAt(int level, float position, double phase) const
     {
@@ -99,6 +120,8 @@ struct WaveTable {
     /**
      * @brief Builds from Fourier coefficients, one vector per frame: element h-1 is harmonic h as the
      *        complex amplitude of a cosine, |c| cos(2 pi h t + arg c).
+     * @param[in] frameCoefficients  the Fourier coefficients per frame
+     * @return false when the coefficients are unusable
      */
     bool buildFromHarmonics(const std::vector<std::vector<std::complex<double>>>& frameCoefficients);
 };
@@ -117,10 +140,18 @@ inline constexpr float SawTableGain = 1.63299316f;
  *
  * It moves to a richer level only with ten per cent to spare, so a pitch hovering on a boundary does
  * not flip between two levels. @p current < 0 means there is no previous level.
+ * @param[in] hz          the frequency
+ * @param[in] sampleRate  the sample rate
+ * @param[in] current     the level read so far, negative for none
+ * @return the level to read
  */
 int waveLevelFor(double hz, double sampleRate, int current);
 
-/** @brief A built-in table (0 .. NumBuiltinWaveTables-1), built on first use -- in prepare(), never on the audio thread. */
+/**
+ * @brief A built-in table (0 .. NumBuiltinWaveTables-1), built on first use -- in prepare(), never on the audio thread.
+ * @param[in] index  the table's index
+ * @return the table
+ */
 const WaveTable& builtinWaveTable(int index);
 
 } // namespace phos

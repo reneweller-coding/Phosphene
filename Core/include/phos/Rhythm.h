@@ -25,6 +25,7 @@
  * which keeps a groove a groove. The last bar of every eighth bar carries a fill; after a sixteen-bar
  * fill a crash may open the next phrase. Within a track the percussion enters layer by layer, one lane
  * per sixteen-bar block, and now and then a block breathes with a layer less.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Params.h"
@@ -47,13 +48,27 @@ constexpr int StepsPerBar = 16;   ///< the sixteenth grid of a 4/4 bar
  */
 constexpr int RollSemitones = 12;
 
-/** @brief Bjorklund's Euclidean rhythm E(pulses, steps), rotated right by @p rotation steps. */
+/**
+ * @brief Bjorklund's Euclidean rhythm E(pulses, steps), rotated right by @p rotation steps.
+ * @param[in] pulses    the onsets
+ * @param[in] steps     the steps
+ * @param[in] rotation  the rotation in steps
+ * @return an onset flag per step
+ */
 std::vector<bool> euclid(int pulses, int steps, int rotation);
 
-/** @brief Longuet-Higgins and Lee metrical weight of a sixteenth step in a 4/4 bar. */
+/**
+ * @brief Longuet-Higgins and Lee metrical weight of a sixteenth step in a 4/4 bar.
+ * @param[in] step  the sixteenth
+ * @return the weight
+ */
 int lhlWeight(int step);
 
-/** @brief Longuet-Higgins and Lee syncopation of a cyclic one-bar pattern of 16 steps. */
+/**
+ * @brief Longuet-Higgins and Lee syncopation of a cyclic one-bar pattern of 16 steps.
+ * @param[in] steps  the sixteen onset flags
+ * @return the syncopation
+ */
 int lhlSyncopation(const bool* steps);
 
 /** @brief Kinds of fill in the last bar of a phrase. */
@@ -83,11 +98,12 @@ struct PercPlan {
 
 /**
  * @brief Makes the percussion plan of a track.
- * @param p         knob values (compose.* and the lanes' role, active and density)
- * @param seed      seed of this track's percussion decisions
- * @param firstTrack the first track keeps the kit's sound exactly (no recipe, no overrides)
- * @param laneSeeds one seed per lane for its Euclidean pattern, or null to derive them from @p seed;
- *                  a pattern lane is a lockable unit (PLAN 6.8), so its pattern hangs off its own seed
+ * @param[in] p           knob values (compose.* and the lanes' role, active and density)
+ * @param[in] seed        seed of this track's percussion decisions
+ * @param[in] firstTrack  the first track keeps the kit's sound exactly (no recipe, no overrides)
+ * @param[in] laneSeeds   one seed per lane for its Euclidean pattern, or null to derive them from @p seed; a pattern
+ *                        lane is a lockable unit (PLAN 6.8), so its pattern hangs off its own seed
+ * @return the percussion plan
  */
 PercPlan makePercPlan(const ParamStore& p, uint64_t seed, bool firstTrack, const uint64_t* laneSeeds = nullptr);
 
@@ -121,15 +137,16 @@ struct PercBarSpec {
 
 /**
  * @brief Composes one bar of percussion.
- * @param p          knob values
- * @param plan       the track's percussion plan
- * @param trackSeed  seed of the track
- * @param bar        absolute bar index
- * @param barInTrack bar index within the track
- * @param bpm        the track's tempo (for per-lane shifts in milliseconds)
- * @param keyRoot,scale the track's key, for tom runs in the mode
- * @param spec       what the form asks for in this bar
- * @param out        receives the notes (Part::Perc, lane, GM pitch plus any shift)
+ * @param[in]  p           knob values
+ * @param[in]  plan        the track's percussion plan
+ * @param[in]  trackSeed   seed of the track
+ * @param[in]  bar         absolute bar index
+ * @param[in]  barInTrack  bar index within the track
+ * @param[in]  bpm         the track's tempo (for per-lane shifts in milliseconds)
+ * @param[in]  keyRoot     the track's key, for tom runs in the mode
+ * @param[in]  scale       the track's key, for tom runs in the mode
+ * @param[in]  spec        what the form asks for in this bar
+ * @param[out] out         receives the notes (Part::Perc, lane, GM pitch plus any shift)
  */
 void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSeed, int bar, int barInTrack,
                     double bpm, int keyRoot, int scale, const PercBarSpec& spec, std::vector<NoteEvent>& out);
@@ -141,14 +158,19 @@ void composePercBar(const ParamStore& p, const PercPlan& plan, uint64_t trackSee
  * eighth bar of it, the eighth bar itself always with a snare fill or a tom run (the user's micro rule,
  * "bar 8 a snare fill or tom run"), the sixteenth and the thirty-second with the snare roll. With
  * @p cycleBar -1 the bar of the track decides, as before.
+ * @param[in] p           the knobs
+ * @param[in] trackSeed   the track's seed
+ * @param[in] barInTrack  the bar within the track
+ * @param[in] cycleBar    the bar within the section's cycle, -1 when unknown
+ * @return the fill
  */
 FillTypeE chooseFill(const ParamStore& p, uint64_t trackSeed, int barInTrack, int cycleBar = -1);
 
 /**
  * @brief Normalised offsets of the percussion recipe for one lane, indexed by perc::.
- * @param macro  brightness, tightness, grit
- * @param amount Sound Variation
- * @param out    perc::Count entries
+ * @param[in]     macro   brightness, tightness, grit
+ * @param[in]     amount  Sound Variation
+ * @param[in,out] out     perc::Count entries
  */
 void percRecipeOffsets(const float* macro, float amount, float* out);
 

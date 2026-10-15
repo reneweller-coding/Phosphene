@@ -42,6 +42,7 @@
  * bit, which is why a kit with the auto-pan off renders bit-identically to the state before it.
  *
  * Subnormal floats are prevented by the caller's DenormalGuard, not by clamps in the loop.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Vec.h"
@@ -122,21 +123,26 @@ struct PercCoefs {
 };
 
 /**
- * @brief Renders @p n samples of the lanes [lane, lane + laneWidth<V>()).
- * @param s      states (updated)
- * @param c      coefficients
- * @param lane   first lane of the register
- * @param n      samples
- * @param noise  per sample and lane (index i * 16 + lane): white noise
- * @param reset  per sample and lane: value the noise envelope restarts at, 0 = none
- * @param dNoise per sample and lane: noise envelope factor
- * @param tone,modal,metal whether this lane group uses the source at all (decided per group of 8
- *               lanes so every vector width runs the same arithmetic on every lane)
- * @param pan    whether *any* lane of the kit moves in the panorama. It is one decision for the whole
- *               kit rather than per group of eight, so that every lane's pan phasor advances in step
- *               whatever the other lanes are set to: a phasor that stopped while its group had no
- *               moving lane would make the phase depend on the history of the knobs.
- * @param outL,outR per sample and lane outputs
+ * @brief Renders @p n samples of the lanes [lane, lane + laneWidth\<V\>()).
+ * @param[in,out] s       states (updated)
+ * @param[in]     c       coefficients
+ * @param[in]     lane    first lane of the register
+ * @param[in]     n       samples
+ * @param[in]     noise   per sample and lane (index i * 16 + lane): white noise
+ * @param[in]     reset   per sample and lane: value the noise envelope restarts at, 0 = none
+ * @param[in]     dNoise  per sample and lane: noise envelope factor
+ * @param[in]     tone    whether this lane group uses the source at all (decided per group of 8 lanes so every vector
+ *                        width runs the same arithmetic on every lane)
+ * @param[in]     modal   whether this lane group uses the source at all (decided per group of 8 lanes so every vector
+ *                        width runs the same arithmetic on every lane)
+ * @param[in]     metal   whether this lane group uses the source at all (decided per group of 8 lanes so every vector
+ *                        width runs the same arithmetic on every lane)
+ * @param[in]     pan     whether *any* lane of the kit moves in the panorama. It is one decision for the whole kit
+ *                        rather than per group of eight, so that every lane's pan phasor advances in step whatever the
+ *                        other lanes are set to: a phasor that stopped while its group had no moving lane would make
+ *                        the phase depend on the history of the knobs.
+ * @param[in,out] outL    per sample and lane outputs
+ * @param[in,out] outR    per sample and lane outputs
  */
 template <class VT>
 void percKernel(PercState& s, const PercCoefs& c, int lane, int n, const float* noise, const float* reset,

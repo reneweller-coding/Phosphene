@@ -1,6 +1,7 @@
 /**
  * @file Texture.cpp
  * @brief The shamanic bed (Texture.h).
+ * @author Rene Weller
  */
 #include "phos/Texture.h"
 #include "phos/Params.h"
@@ -24,14 +25,24 @@ constexpr float BowlGain  = 0.08f;   ///< -22 dB
 constexpr float DroneGain = 0.064f;  ///< -24 dB
 /** @} */
 
-/** @brief Rayleigh's thin-ring bending frequency for circumferential order n (unnormalised). */
+/**
+ * @brief Rayleigh's thin-ring bending frequency for circumferential order n (unnormalised).
+ * @param[in] n  the order
+ * @return the frequency, unnormalised
+ */
 double ringMode(int n)
 {
     const double nn = static_cast<double>(n);
     return nn * (nn * nn - 1.0) / std::sqrt(nn * nn + 1.0);
 }
 
-/** @brief Additive harmonic source: sum_k w[k-1] sin(2 pi k phase). */
+/**
+ * @brief Additive harmonic source: sum_k w[k-1] sin(2 pi k phase).
+ * @param[in] phase  the phase in turns
+ * @param[in] w      the harmonics' weights
+ * @param[in] count  their count
+ * @return the sample
+ */
 float harmonics(double phase, const float* w, int count)
 {
     float s = 0.0f;

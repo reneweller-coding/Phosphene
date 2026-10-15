@@ -33,6 +33,7 @@
  *
  * **SpaceShot.** The NASA recordings up to 25 s are effect shots: FieldShot plays one whole, once, at the effect's
  * velocity, on the SFX strip.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Dsp.h"
@@ -50,31 +51,63 @@ public:
     static constexpr int Voices = 3;     ///< events sounding at once (one entering while one releases, and one spare)
     static constexpr int Control = 16;   ///< samples between two evaluations of modulation and filter
 
-    /** @brief Prepares for @p sampleRate; @p seed seeds the LFOs' random shapes. */
+    /**
+     * @brief Prepares for @p sampleRate; @p seed seeds the LFOs' random shapes.
+     * @param[in] sampleRate  the sample rate
+     * @param[in] seed        the seed of the LFOs' random shapes
+     */
     void prepare(double sampleRate, uint64_t seed = 0x46494Cull);
     /** @brief Silences every voice and gives its recordings back. */
     void reset();
-    /** @brief Reads the effective parameters (indexed by field::). */
+    /**
+     * @brief Reads the effective parameters (indexed by field::).
+     * @param[in] v  the effective parameter values
+     */
     void update(const float* v);
     /**
      * @brief Starts an event.
-     * @param samples  its length: the amp envelope releases after it
-     * @param velocity 0..1
-     * @param late     sub-sample onset (0 <= late < 1)
-     * @param semis    transposition in semitones (the note's pitch against middle C)
-     * @param beat     the set's beat at the onset
-     * @param pick     the event's own seed
+     * @param[in] samples   its length: the amp envelope releases after it
+     * @param[in] velocity  0..1
+     * @param[in] late      sub-sample onset (0 <= late < 1)
+     * @param[in] semis     transposition in semitones (the note's pitch against middle C)
+     * @param[in] beat      the set's beat at the onset
+     * @param[in] pick      the event's own seed
      */
     void trigger(int samples, float velocity, double late, int semis, double beat, uint64_t pick);
-    /** @brief Renders @p n samples whose first is at beat @p beat, replacing @p L and @p R. */
+    /**
+     * @brief Renders @p n samples whose first is at beat @p beat, replacing @p L and @p R.
+     * @param[out] L               the left channel
+     * @param[out] R               the right channel
+     * @param[in]  n               the block's samples
+     * @param[in]  beat            the beat of the first sample
+     * @param[in]  beatsPerSample  the beats per sample
+     */
     void process(float* L, float* R, int n, double beat, double beatsPerSample);
-    /** @brief Voices sounding. */
+    /**
+     * @brief Voices sounding.
+     * @return the voices sounding
+     */
     int active() const;
-    /** @brief The recording layer @p layer (0 A, 1 B) plays for category value @p categoryParam and @p variation (-1 none). */
+    /**
+     * @brief The recording layer @p layer (0 A, 1 B) plays for category value @p categoryParam and @p variation (-1
+     *        none).
+     * @param[in] categoryParam  the category's value
+     * @param[in] variation      the variation, -1 for none
+     * @param[in] pick           the draw
+     * @return the library index, -1 for none
+     */
     static int clipFor(int categoryParam, int variation, uint64_t pick);
-    /** @brief The library indices the current settings name for layers A and B (-1: none), for a preload. */
+    /**
+     * @brief The library indices the current settings name for layers A and B (-1: none), for a preload.
+     * @param[out] a  layer A's library index, -1 for none
+     * @param[out] b  layer B's library index, -1 for none
+     */
     void wantedClips(int& a, int& b) const;
-    /** @brief The latest voice's modulation sum per ModDest (the editor's live ring), zero when nothing sounds. */
+    /**
+     * @brief The latest voice's modulation sum per ModDest (the editor's live ring), zero when nothing sounds.
+     * @param[in] d  the destination
+     * @return the sum
+     */
     float displayModulation(ModDestE d) const;
 
 private:
@@ -127,13 +160,34 @@ private:
         float m_mode = 0.0f;   ///< ... its mode
         float m_trim = 1.0f;   ///< ... its makeup
     };
-    /** @brief Sets a layer up for an event (its recording held or asked for). */
+    /**
+     * @brief Sets a layer up for an event (its recording held or asked for).
+     * @param[in,out] l        the layer
+     * @param[in]     index    the recording's library index
+     * @param[in]     gain     the gain
+     * @param[in]     semis    the transposition in semitones
+     * @param[in]     reverse  true to play it backwards
+     * @param[in]     start    the start, a share of the recording
+     */
     void startLayer(Layer& l, int index, float gain, float semis, bool reverse, double start);
-    /** @brief Silences a voice and gives its recordings back. */
+    /**
+     * @brief Silences a voice and gives its recordings back.
+     * @param[in,out] v  the voice
+     */
     void freeVoice(Voice& v);
-    /** @brief A layer's next stereo frame (interpolated, looped with the crossfade), advancing it by its ratio. */
+    /**
+     * @brief A layer's next stereo frame (interpolated, looped with the crossfade), advancing it by its ratio.
+     * @param[in,out] l     the layer
+     * @param[out]    outL  the left sample
+     * @param[out]    outR  the right sample
+     */
     void readLayer(Layer& l, float& outL, float& outR);
-    /** @brief A voice's control step: the modulation, the filter's coefficients, the layers' loops and ratios. */
+    /**
+     * @brief A voice's control step: the modulation, the filter's coefficients, the layers' loops and ratios.
+     * @param[in,out] v     the voice
+     * @param[in]     at    the engine's sample
+     * @param[in]     beat  the beat there
+     */
     void control(Voice& v, int64_t at, double beat);
 
     double m_sr = 48000.0;            ///< sample rate
@@ -150,13 +204,26 @@ class FieldShot {
 public:
     static constexpr int Voices = 2;   ///< shots at once
     static constexpr double MaxSeconds = 25.0;   ///< longer NASA recordings are atmospheres, for the Field track
-    /** @brief Prepares for @p sampleRate. */
+    /**
+     * @brief Prepares for @p sampleRate.
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate) { m_sr = sampleRate; reset(); }
     /** @brief Silences every shot and gives its recordings back. */
     void reset();
-    /** @brief Starts a shot drawn by @p pick at @p velocity. */
+    /**
+     * @brief Starts a shot drawn by @p pick at @p velocity.
+     * @param[in] velocity  the velocity, 0..1
+     * @param[in] late      samples after the ideal start
+     * @param[in] pick      the draw
+     */
     void trigger(float velocity, double late, uint64_t pick);
-    /** @brief Adds @p n samples into @p L and @p R. */
+    /**
+     * @brief Adds @p n samples into @p L and @p R.
+     * @param[in,out] L  the left channel, added to
+     * @param[in,out] R  the right channel, added to
+     * @param[in]     n  the samples
+     */
     void process(float* L, float* R, int n);
 private:
     /** @brief One shot: its recording (held while it plays, or asked for until it is there) and its playhead. */

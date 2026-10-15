@@ -1,6 +1,7 @@
 /**
  * @file Perc.cpp
  * @brief Percussion kit: coefficients, hits and rendering.
+ * @author Rene Weller
  */
 #include "phos/Perc.h"
 #include "phos/Harmony.h"
@@ -32,7 +33,12 @@ constexpr double MetalHz[PercMetalOsc] = { 205.3, 304.4, 369.6, 522.7, 540.0, 80
 /** @brief How far a metal lane's noise pulls its squares down: at noise 1 they keep 1 - 0.8 = 0.2 (-14 dB). */
 constexpr float MetalNoiseTrade = 0.8f;
 
-/** @brief The per-sample factor of a decay of 60 dB in @p seconds at rate @p sr. */
+/**
+ * @brief The per-sample factor of a decay of 60 dB in @p seconds at rate @p sr.
+ * @param[in] seconds  the time to fall by 60 dB
+ * @param[in] sr       the sample rate in Hz
+ * @return the per-sample factor
+ */
 double decayFactor(double seconds, double sr) { return std::exp(-Ln1000 / (std::max(seconds, 1.0e-4) * sr)); }
 
 /**

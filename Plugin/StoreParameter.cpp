@@ -1,6 +1,7 @@
 /**
  * @file StoreParameter.cpp
  * @brief The host's view of one engine parameter (PluginProcessor.h, StoreParameter).
+ * @author Rene Weller
  */
 #include "PluginProcessor.h"
 #include <cmath>
@@ -9,7 +10,12 @@ using namespace phos;
 
 namespace {
 
-/** @brief A value formatted the way phos::ParamStore::format would, but for an arbitrary value. */
+/**
+ * @brief A value formatted the way phos::ParamStore::format would, but for an arbitrary value.
+ * @param[in] d  the parameter's description
+ * @param[in] v  the value
+ * @return the value as text
+ */
 juce::String formatValue(const ParamDesc& d, float v)
 {
     if (d.m_curve == CurveE::CHOICE && d.m_choices != nullptr) {

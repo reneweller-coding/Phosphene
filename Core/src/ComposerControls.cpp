@@ -1,6 +1,7 @@
 /**
  * @file ComposerControls.cpp
  * @brief The control events of a plan: a track's sound at its start, the sections' rides, the arcs, the drone's evolution, and the recipe offsets behind them.
+ * @author Rene Weller
  */
 #include "phos/FieldLibrary.h"
 #include "phos/FieldPresets.h"
@@ -235,7 +236,14 @@ const SoundPreset* Composer::presetOf(const ParamStore& p, const TrackPlan& plan
 
 namespace {
 
-/** @brief The share of a synth's recipe: none where the synth plays a preset (26.09.2026), Sound Variation otherwise. */
+/**
+ * @brief The share of a synth's recipe: none where the synth plays a preset (26.09.2026), Sound Variation otherwise.
+ * @param[in] p      the knobs
+ * @param[in] plan   the track's plan
+ * @param[in] synth  the synth
+ * @param[in] sv     Sound Variation
+ * @return the share, 0..1
+ */
 float recipeAmount(const ParamStore& p, const TrackPlan& plan, int synth, float sv)
 {
     return Composer::presetOf(p, plan, synth) != nullptr ? 0.0f : sv;
@@ -245,6 +253,11 @@ float recipeAmount(const ParamStore& p, const TrackPlan& plan, int synth, float 
  * @brief The level correction of the preset synth @p synth plays (SoundPreset::trimDb), as an offset on its Level knob in
  *        the normalised domain; 0 without a preset. It rides in every offset the composer writes on that knob, since an
  *        offset replaces the one before it (26.09.2026: the presets' loudness spread 7 to 10 dB within a synth).
+ * @param[in] p        the knobs
+ * @param[in] plan     the track's plan
+ * @param[in] synth    the synth
+ * @param[in] levelId  its Level knob
+ * @return the offset, normalised
  */
 float presetTrim(const ParamStore& p, const TrackPlan& plan, int synth, int levelId)
 {
@@ -254,7 +267,11 @@ float presetTrim(const ParamStore& p, const TrackPlan& plan, int synth, int leve
     return sp->m_trimDb / (d.m_maxValue - d.m_minValue);
 }
 
-/** @brief A knob of choices, steps or a switch: a preset's value reaches it as an override, not a base. */
+/**
+ * @brief A knob of choices, steps or a switch: a preset's value reaches it as an override, not a base.
+ * @param[in] c  the curve
+ * @return true for choices, steps or a switch
+ */
 bool isDiscreteCurve(CurveE c) { return c == CurveE::CHOICE || c == CurveE::INT || c == CurveE::TOGGLE; }
 
 
@@ -502,7 +519,11 @@ struct PhaseMix {
     float m_rampBars;       ///< how long the change takes, bars
 };
 
-/** @brief The phase values of a section type (see PhaseMix). */
+/**
+ * @brief The phase values of a section type (see PhaseMix).
+ * @param[in] t  the section type
+ * @return its phase values
+ */
 PhaseMix phaseMix(SectionTypeE t)
 {
     switch (t) {
@@ -528,20 +549,20 @@ PhaseMix phaseMix(SectionTypeE t)
  * The energy of a buildup runs from its own value to the drop's, which is exactly the "filter arcs
  * opening" the plan asks for; a breakdown opens the hall and closes the filters.
  */
-float Composer::leadCutoffValue(const ParamStore& p, const TrackPlan& plan, const BarPlan& bar) const
+float Composer::leadCutoffValue(const ParamStore& params, const TrackPlan& plan, const BarPlan& bar) const
 {
     // Mirrors the lead's cutoff in sectionControls below -- base, energy, wobble, drop 2's lift -- at the
     // energy of *this bar* (BarPlan::energy is the section's ramp at the bar), so a per-bar event can
     // stand in for the section's ramp without a step. The two must stay the same formula.
-    const int cb = p.base(ModuleE::COMPOSE);
-    const float sv = p.get(cb + compose::SOUND_VARIATION), mv = p.get(cb + compose::MELODY_VARIATION);
+    const int cb = params.base(ModuleE::COMPOSE);
+    const float sv = params.get(cb + compose::SOUND_VARIATION), mv = params.get(cb + compose::MELODY_VARIATION);
     if (plan.m_index == 0 && bar.m_index == 0) return 0.0f;   // the knobs, exactly
     const Section& s = plan.m_form.m_section[std::clamp(bar.m_index, 0, MaxSections - 1)];
     Rng r;
     r.seed(mixSeed(plan.m_sectionSeed[std::clamp(bar.m_index, 0, MaxSections - 1)] ^ SaltArc, 0));
     const float wobble = (2.0f * r.uniform() - 1.0f);
     float leadOff[poly::COUNT] = {};
-    const float svLead = recipeAmount(p, plan, 3 + polyIndex(PolyInstanceE::LEAD), sv);
+    const float svLead = recipeAmount(params, plan, 3 + polyIndex(PolyInstanceE::LEAD), sv);
     voiceRecipeOffsets(PolyInstanceE::LEAD, plan.m_voice[polyIndex(PolyInstanceE::LEAD)], svLead, leadOff);
     const float leadBase = 0.10f * svLead * plan.m_melody.m_recipe[mpIndex(MelodyPartE::LEAD)] + leadOff[poly::CUTOFF];
     const float open = s.m_climax ? ClimaxOpen : 0.0f;

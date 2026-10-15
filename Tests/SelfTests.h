@@ -1,6 +1,7 @@
 /**
  * @file SelfTests.h
  * @brief Every self test, for the run table in selftest.cpp's main() (the definitions are in selftest_*.cpp).
+ * @author Rene Weller
  */
 #pragma once
 

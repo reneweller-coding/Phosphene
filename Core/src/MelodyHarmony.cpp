@@ -1,6 +1,7 @@
 /**
  * @file MelodyHarmony.cpp
  * @brief The harmony of a track: its progression, the pad's chords and voicings, the stab's chords.
+ * @author Rene Weller
  */
 #include "phos/Melody.h"
 #include "phos/Preferences.h"
@@ -96,6 +97,12 @@ const double ClassicalWeight[NumChordTypes] = {
  * @brief Draws a chord type for @p degree in @p scale from the style's taste, among the types that fit the mode
  *        and rub against nothing (padAvoidsRubs). On the bII nothing does, and the triad stands for the chord
  *        the pad replaces (padChordIntervals).
+ * @param[in,out] r          the random stream
+ * @param[in]     scale      the mode
+ * @param[in]     degree     the chord's degree
+ * @param[in]     styleIdx   the style
+ * @param[in]     classical  true for the classical types
+ * @return the chord type
  */
 int drawChordType(Rng& r, int scale, int degree, int styleIdx, bool classical = false)
 {
@@ -145,7 +152,12 @@ constexpr int NumLoops = 4;   ///< how many loops there are
 const float LoopChance[NumStyles] = { 0.20f, 0.35f, 0.45f, 0.15f, 0.10f };      // Goa, Full-On, Progressive, Dark, Hi-Tech
 const float SecondHalfChance[NumStyles] = { 0.30f, 0.30f, 0.40f, 0.25f, 0.20f };   ///< how often the second half of a loop changes, per style
 
-/** @brief Whether every degree of @p loop exists in @p scale with the loop's pitch class and a perfect fifth over it. */
+/**
+ * @brief Whether every degree of @p loop exists in @p scale with the loop's pitch class and a perfect fifth over it.
+ * @param[in] scale  the mode
+ * @param[in] loop   the loop
+ * @return true when every degree fits
+ */
 bool loopFits(int scale, const Loop& loop)
 {
     for (int c = 0; c < 4; ++c) {
@@ -160,6 +172,14 @@ bool loopFits(int scale, const Loop& loop)
  * @brief Draws one progression -- a pendulum or a loop -- into @p deg / @p type; returns 1 for a loop, 0 for
  *        a pendulum. The loop's coin and its choice come from @p lr, the pendulum from @p r as before, so a
  *        track that draws the pendulum plays exactly what it played before loops existed.
+ * @param[in,out] r      the pendulum's random stream
+ * @param[in,out] lr     the loop's random stream
+ * @param[in]     scale  the mode
+ * @param[in]     si     the style
+ * @param[out]    deg    the degrees
+ * @param[out]    type   the chord types
+ * @param[out]    which  the progression drawn
+ * @return 1 for a loop, 0 for a pendulum
  */
 int drawProgression(Rng& r, Rng& lr, int scale, int si, int* deg, int* type, int& which)
 {
@@ -200,7 +220,15 @@ int drawProgression(Rng& r, Rng& lr, int scale, int si, int* deg, int* type, int
     return 0;
 }
 
-/** @brief Draws the track's harmony: its progression (pendulum or loop), the chord length, a second half and the breakdown's chords. */
+/**
+ * @brief Draws the track's harmony: its progression (pendulum or loop), the chord length, a second half and the
+ *        breakdown's chords.
+ * @param[in,out] m            the melody's plan
+ * @param[in]     scale        the mode
+ * @param[in]     seed         the seed
+ * @param[in]     temperature  the draw's temperature
+ * @param[in]     style        the style profile
+ */
 void makeChords(MelodyPlan& m, int scale, uint64_t seed, double temperature, const StyleProfile& style)
 {
     (void)temperature;   // the corpus successions this used to temper are no longer the rule (22.09.2026)
@@ -322,6 +350,11 @@ namespace mel {
  * itself a colour tone); above it sus2 (1 2 5 8), sus4 (1 4 5 8) or add9 (1 3 5 9) -- "sus2/sus4/add9
  * material like the arp, root position" in the brief's words. A fifth that is not perfect is left out,
  * and no note is a colour tone.
+ * @param[in] scale   the mode
+ * @param[in] degree  the chord's degree
+ * @param[in] key     the key's root
+ * @param[in] tones   the tones
+ * @return the MIDI notes
  */
 std::vector<int> stabChordImpl(int scale, int degree, int key, int tones)
 {
@@ -369,7 +402,6 @@ void chordTones(int scale, int degree, int out[3])
  * Before 22.09.2026 the pad started at G3 and took any inversion, and the seed the user heard had
  * the root at the bottom of 24 of 96 chords in its first track. The chord is the one the pad may hold
  * (padChordIntervals): no b9, and on the bII the tonic with its minor sixth.
- * @param type the chord type (Harmony.h, kChordTypes)
  */
 std::vector<int> voiceChord(int scale, int key, int degree, int type, const std::vector<int>* previous)
 {

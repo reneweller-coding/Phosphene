@@ -19,6 +19,7 @@
  *
  * **The text form** names targets through callbacks (the plugin passes parameter keys), so a saved map
  * survives parameters being added to the store: `cc <channel 1..16> <number 0..127> <key>` per line.
+ * @author Rene Weller
  */
 #pragma once
 
@@ -46,44 +47,85 @@ public:
     /** @brief An empty map: no controller bound. */
     MidiMap();
 
-    /** @brief The next controller message binds to @p target (message thread); -1 disarms. */
+    /**
+     * @brief The next controller message binds to @p target (message thread); -1 disarms.
+     * @param[in] target  the target, -1 to disarm
+     * @pre called on the message thread
+     */
     void arm(int target) { m_armed.store(target, std::memory_order_release); }
-    /** @brief The target waiting for a controller, or -1. */
+    /**
+     * @brief The target waiting for a controller, or -1.
+     * @return the target, or -1
+     */
     int armed() const { return m_armed.load(std::memory_order_acquire); }
 
     /**
      * @brief A controller message arrived (audio thread).
-     * @param channel 0..15
-     * @param cc      0..127
-     * @param value   0..127
-     * @param normalised receives value / 127
+     * @param[in]  channel     0..15
+     * @param[in]  cc          0..127
+     * @param[in]  value       0..127
+     * @param[out] normalised  receives value / 127
      * @return the target it drives (just learned, or bound before), or -1 for an unbound controller
+     * @pre called on the audio thread
      */
     int handleCc(int channel, int cc, int value, float& normalised);
 
-    /** @brief Binds a controller to a target, releasing both from any earlier binding (message thread). */
+    /**
+     * @brief Binds a controller to a target, releasing both from any earlier binding (message thread).
+     * @param[in] channel  the MIDI channel
+     * @param[in] cc       the controller number
+     * @param[in] target   the target
+     * @pre called on the message thread
+     */
     void bind(int channel, int cc, int target);
-    /** @brief Releases whatever controller drives @p target. */
+    /**
+     * @brief Releases whatever controller drives @p target.
+     * @param[in] target  the target
+     */
     void unbind(int target);
     /** @brief Forgets every binding and disarms. */
     void clear();
-    /** @brief The controller driving @p target, or false. */
+    /**
+     * @brief The controller driving @p target, or false.
+     * @param[in]  target   the target
+     * @param[out] channel  the MIDI channel
+     * @param[out] cc       the controller number
+     * @return false when none drives it
+     */
     bool controllerOf(int target, int& channel, int& cc) const;
-    /** @brief Every binding, by channel and number. */
+    /**
+     * @brief Every binding, by channel and number.
+     * @return the bindings
+     */
     std::vector<MidiBinding> bindings() const;
-    /** @brief A counter that moves on every change of the table (so a display knows when to redraw). */
+    /**
+     * @brief A counter that moves on every change of the table (so a display knows when to redraw).
+     * @return the counter
+     */
     uint32_t revision() const { return m_revision.load(std::memory_order_acquire); }
 
-    /** @brief The bindings as text, one `cc <channel> <number> <name>` line each; @p name gives a target's key. */
+    /**
+     * @brief The bindings as text, one `cc <channel> <number> <name>` line each; @p name gives a target's key.
+     * @param[in] name  gives a target's key
+     * @return the lines
+     */
     std::string toText(const std::function<std::string(int)>& name) const;
     /**
      * @brief Replaces the bindings with the ones in @p text; lines whose key @p find does not know (returns -1)
-     *        are skipped. @return how many bindings were read
+     *        are skipped.
+     * @param[in] text  the lines
+     * @param[in] find  gives a key's target, -1 for none
+     * @return how many bindings were read
      */
     int fromText(const std::string& text, const std::function<int(const std::string&)>& find);
 
 private:
-    /** @brief Binds a controller to a target, releasing both from any other binding. */
+    /**
+     * @brief Binds a controller to a target, releasing both from any other binding.
+     * @param[in] channel  the MIDI channel
+     * @param[in] cc       the controller number
+     * @param[in] target   the target
+     */
     void bindLocked(int channel, int cc, int target);
     std::atomic<int32_t> m_table[Channels * Controllers];   ///< target + 1, 0 = unbound
     std::atomic<int32_t> m_armed{ -1 };   ///< the target MIDI learn waits for, -1 none

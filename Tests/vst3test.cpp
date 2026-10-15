@@ -10,6 +10,7 @@
  * itself is not on this machine (see docs/rounds/2026-09.md, Phase 6).
  *
  * The path of the plugin comes from the command line, which CMake fills in with the built artefact.
+ * @author Rene Weller
  */
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -25,7 +26,11 @@ namespace {
 int failures = 0;   ///< checks that failed
 int checks = 0;   ///< checks made
 
-/** @brief Records one check's result and prints it. */
+/**
+ * @brief Records one check's result and prints it.
+ * @param[in] ok    the check's result
+ * @param[in] what  what it checked
+ */
 void check(bool ok, const juce::String& what)
 {
     ++checks;
@@ -35,7 +40,10 @@ void check(bool ok, const juce::String& what)
 /** @brief A transport a host would offer: playing, at a tempo, from a position. */
 class TestPlayHead final : public juce::AudioPlayHead {
 public:
-    /** @brief The transport as it stands: playing, at bpm, at ppq and samples. */
+    /**
+     * @brief The transport as it stands: playing, at bpm, at ppq and samples.
+     * @return the transport's position
+     */
     juce::Optional<PositionInfo> getPosition() const override
     {
         PositionInfo info;
@@ -46,7 +54,11 @@ public:
         info.setIsPlaying(true);
         return info;
     }
-    void advance(int n) { m_samples += n; m_ppq += n * m_bpm / (60.0 * m_sampleRate); }   ///< moves on by @p n samples
+    /**
+     * moves on by @p n samples
+     * @param[in] n  how many samples
+     */
+    void advance(int n) { m_samples += n; m_ppq += n * m_bpm / (60.0 * m_sampleRate); }
     double m_bpm = 145.0;   ///< the tempo
     double m_ppq = 0.0;   ///< the position, quarter notes
     double m_sampleRate = 48000.0;   ///< the sample rate, Hz
@@ -55,7 +67,12 @@ public:
 
 } // namespace
 
-/** @brief Loads the built VST3 as a host would and runs the checks. */
+/**
+ * @brief Loads the built VST3 as a host would and runs the checks.
+ * @param[in]     argc  the number of arguments
+ * @param[in,out] argv  the arguments: sections to run
+ * @return the number of failures
+ */
 int main(int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
@@ -88,7 +105,7 @@ int main(int argc, char** argv)
     // and of the two places the plugin looks this is the one that survives a host copying the bundle
     // somewhere of its own.
     //
-    // `plugin` is the module inside the bundle (Contents/<arch>/Phosphene.vst3), so Resources is one
+    // `plugin` is the module inside the bundle (Contents/\<arch\>/Phosphene.vst3), so Resources is one
     // level up from the architecture directory.
     {
         const juce::File resources = plugin.getParentDirectory().getParentDirectory().getChildFile("Resources");

@@ -4,6 +4,7 @@
  *
  * Never used on the audio thread. Iterative Cox-de Boor bit reversal and in-place butterflies with
  * the trigonometry precomputed per size.
+ * @author Rene Weller
  */
 #pragma once
 #include <cmath>
@@ -15,7 +16,10 @@ namespace phos {
 /** @brief FFT of one power-of-two size. */
 class Fft {
 public:
-    /** @brief Prepares for @p n samples (a power of two). */
+    /**
+     * @brief Prepares for @p n samples (a power of two).
+     * @param[in] n  the transform length, a power of two
+     */
     explicit Fft(int n) : m_n(n)
     {
         m_cosT.resize(static_cast<size_t>(n / 2));
@@ -25,12 +29,15 @@ public:
             m_sinT[static_cast<size_t>(i)] = std::sin(2.0 * 3.141592653589793 * i / n);
         }
     }
-    /** @brief The size. */
+    /**
+     * @brief The size.
+     * @return the transform length
+     */
     int size() const { return m_n; }
     /**
      * @brief Transforms in place.
-     * @param a       n complex values
-     * @param inverse false: X(k) = sum x(t) e^{-j 2 pi k t / n}; true: the inverse including 1/n
+     * @param[in,out] a        n complex values
+     * @param[in]     inverse  false: X(k) = sum x(t) e^{-j 2 pi k t / n}; true: the inverse including 1/n
      */
     void transform(std::vector<std::complex<double>>& a, bool inverse) const
     {

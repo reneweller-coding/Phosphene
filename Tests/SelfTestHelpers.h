@@ -4,6 +4,7 @@
  *
  * Header-only, and only for the self test's sources (selftest_*.cpp). Until 25.09.2026 they were one 15 000-line
  * file; the helpers were its anonymous namespace and are these inline functions now, word for word.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Acid.h"
@@ -70,6 +71,10 @@ constexpr double PiD = 3.141592653589793;   ///< pi
  * @brief Amplitude of the component with exactly @p cycles periods in @p n samples.
  *
  * With an integer number of cycles the rectangular projection is exact for a steady sine.
+ * @param[in] x       the samples
+ * @param[in] n       their count
+ * @param[in] cycles  the component's periods in the window
+ * @return the amplitude
  */
 inline double toneAmplitude(const float* x, size_t n, double cycles)
 {
@@ -82,7 +87,16 @@ inline double toneAmplitude(const float* x, size_t n, double cycles)
     return 2.0 * std::sqrt(re * re + im * im) / static_cast<double>(n);
 }
 
-/** @brief Renders an engine for @p beats with a given block size, pumping a conductor. */
+/**
+ * @brief Renders an engine for @p beats with a given block size, pumping a conductor.
+ * @param[in,out] engine    the engine
+ * @param[in]     composer  the composer
+ * @param[in]     beats     the beats rendered
+ * @param[in]     block     the block size
+ * @param[in]     sr        the sample rate
+ * @param[out]    right     receives the right channel, or null
+ * @return the left channel
+ */
 inline std::vector<float> renderEngine(Engine& engine, const Composer& composer, double beats, int block, double sr, std::vector<float>* right = nullptr)
 {
     Conductor conductor(engine, composer);
@@ -103,7 +117,12 @@ inline std::vector<float> renderEngine(Engine& engine, const Composer& composer,
 
 // ---------------------------------------------------------------------------------------------
 
-/** @brief Bar on which the first core of track 0 begins (since Phase 5 bar 0 is the intro). */
+/**
+ * @brief Bar on which the first core of track 0 begins (since Phase 5 bar 0 is the intro).
+ * @param[in] p  the knobs
+ * @param[in] c  the composer
+ * @return the bar
+ */
 inline int firstCoreBar(const ParamStore& p, const Composer& c)
 {
     const TrackPlan t = c.track(p, 0);
@@ -119,9 +138,19 @@ inline int firstCoreBar(const ParamStore& p, const Composer& c)
  * of every three-semitone step between neighbouring degrees; a chord is the degrees d, d+2, d+4.
  */
 struct RuleRef {
-    /** @brief Semitones of degree @p d of @p scale above the tonic, octaves folded in. */
+    /**
+     * @brief Semitones of degree @p d of @p scale above the tonic, octaves folded in.
+     * @param[in] scale  the scale
+     * @param[in] d      the degree
+     * @return the semitones above the tonic
+     */
     static int deg(int scale, int d) { return ScaleSteps[scale][d % 7] + 12 * (d / 7); }   // d >= 0
-    /** @brief Whether pitch class @p pc (above the tonic) is a colour tone of @p scale. */
+    /**
+     * @brief Whether pitch class @p pc (above the tonic) is a colour tone of @p scale.
+     * @param[in] scale  the scale
+     * @param[in] pc     the pitch class above the tonic
+     * @return true for a colour tone
+     */
     static bool colour(int scale, int pc)
     {
         pc = ((pc % 12) + 12) % 12;
@@ -133,7 +162,12 @@ struct RuleRef {
             if (ScaleSteps[scale][d] - ScaleSteps[scale][d - 1] == 3 && ScaleSteps[scale][d] == pc) return true;
         return false;
     }
-    /** @brief Pitch class (above the tonic) of the root of the chord on degree @p d. */
+    /**
+     * @brief Pitch class (above the tonic) of the root of the chord on degree @p d.
+     * @param[in] scale  the scale
+     * @param[in] d      the degree
+     * @return the root's pitch class above the tonic
+     */
     static int chordRoot(int scale, int d) { return ((deg(scale, d) % 12) + 12) % 12; }
     /**
      * @brief The register rule of 19.09.2026, read off a score: at how many sixteenths of bars
@@ -142,6 +176,10 @@ struct RuleRef {
      *
      * Independent of Melody.cpp's guard: a note sounds at a sixteenth when its onset is at or before the
      * sixteenth and its written length reaches past it -- nothing about spans in steps or priorities.
+     * @param[in] ev    the score's notes
+     * @param[in] from  the first bar
+     * @param[in] to    the end bar
+     * @return the sixteenths with a clash
      */
     static int registerClashes(const std::vector<NoteEvent>& ev, int from, int to)
     {
@@ -177,7 +215,12 @@ struct RuleRef {
     }
 };
 
-/** @brief Longest run of identical consecutive values, the sequence read as a loop when @p cyclic. */
+/**
+ * @brief Longest run of identical consecutive values, the sequence read as a loop when @p cyclic.
+ * @param[in] v       the values
+ * @param[in] cyclic  true to read them as a loop
+ * @return the longest run
+ */
 inline int longestRun(const std::vector<int>& v, bool cyclic)
 {
     if (v.empty()) return 0;
@@ -198,6 +241,11 @@ inline int longestRun(const std::vector<int>& v, bool cyclic)
  *
  * Measured in the audible band only: a decimator's transition band lets partials between 24 and
  * 29 kHz fold into 19..24 kHz, which is aliasing nobody hears and would otherwise dominate the figure.
+ * @param[in] x            the samples
+ * @param[in] n            the transform's length
+ * @param[in] harmonicBin  the fundamental's bin
+ * @param[in] maxBin       the highest bin counted
+ * @return the aliasing in dB
  */
 inline double aliasDb(const std::vector<float>& x, size_t n, size_t harmonicBin, size_t maxBin)
 {
@@ -212,7 +260,13 @@ inline double aliasDb(const std::vector<float>& x, size_t n, size_t harmonicBin,
     return powDb(rest / harm);
 }
 
-/** @brief Current values of one module as an array indexed like its table. */
+/**
+ * @brief Current values of one module as an array indexed like its table.
+ * @param[in] p         the knobs
+ * @param[in] m         the module
+ * @param[in] instance  its instance
+ * @return the values
+ */
 inline std::vector<float> moduleValues(const ParamStore& p, ModuleE m, int instance = 0)
 {
     std::vector<float> v(static_cast<size_t>(ParamStore::moduleCount(m)));
@@ -229,6 +283,10 @@ inline std::vector<float> moduleValues(const ParamStore& p, ModuleE m, int insta
  * fitted by least squares to (a + b u) sin(2 pi ref) + (c + d u) cos(2 pi ref), u the position in the
  * window from -1/2 to 1/2: an amplitude that varies linearly no longer leaks into the phase, which is
  * atan2(c, a) at the centre.
+ * @param[in] y    the samples
+ * @param[in] n    their count
+ * @param[in] ref  the reference's phase in turns per sample index
+ * @return the phase in degrees
  */
 template <class RefFnT>
 double phaseAgainst(const float* y, size_t n, RefFnT&& ref)
@@ -274,6 +332,10 @@ double phaseAgainst(const float* y, size_t n, RefFnT&& ref)
  * measured a "drift" of 10 degrees. Each harmonic k therefore gets its own four columns
  * (a_k + b_k u) sin(2 pi k ref) + (c_k + d_k u) cos(2 pi k ref); the fundamental's phase is read as
  * before. With H = 1 this is exactly phaseAgainst().
+ * @param[in] y    the samples
+ * @param[in] n    their count
+ * @param[in] ref  the reference's phase in turns per sample index
+ * @return the phase in degrees
  */
 template <int H, class RefFnT>
 double phaseAgainstH(const float* y, size_t n, RefFnT&& ref)
@@ -311,10 +373,23 @@ double phaseAgainstH(const float* y, size_t n, RefFnT&& ref)
     return std::atan2(c, a) * 180.0 / PiD;
 }
 
-/** @brief Wraps degrees into (-180, 180]. */
+/**
+ * @brief Wraps degrees into (-180, 180].
+ * @param[in] d  the angle in degrees
+ * @return the angle wrapped
+ */
 inline double wrapDeg(double d) { d = std::fmod(d + 180.0, 360.0); if (d < 0.0) d += 360.0; return d - 180.0; }
 
-/** @brief Renders one bass note from silence and returns the samples. */
+/**
+ * @brief Renders one bass note from silence and returns the samples.
+ * @param[in] settings  the bass's key=value lines
+ * @param[in] pitch     the MIDI note
+ * @param[in] gate      the gate in samples
+ * @param[in] length    the samples rendered
+ * @param[in] late      samples after the ideal start
+ * @param[in] phase     the start phase
+ * @return the samples
+ */
 inline std::vector<float> bassNote(const char* settings, int pitch, int gate, size_t length, double late, double phase)
 {
     ParamStore q;
@@ -339,9 +414,12 @@ inline std::vector<float> bassNote(const char* settings, int pitch, int gate, si
  * therefore measured against its own phase course -- the bass against its fundamental, the kick
  * against its closed-form output phase, which the kick test confirms to 0.1 degree -- and both
  * deviations are carried back to the onset instant, where the condition is defined.
- *
- * @return mean kick-minus-bass phase at the onset in degrees; @p spread receives the largest
- *         beat-to-beat change of the bass onset phase against the ideal grid
+ * @param[in]  settings    the key=value lines
+ * @param[in]  bpm         the tempo
+ * @param[out] spread      the phase's spread in degrees
+ * @param[out] coherentDb  the coherent sum in dB
+ * @return mean kick-minus-bass phase at the onset in degrees; @p spread receives the largest beat-to-beat change of the
+ *         bass onset phase against the ideal grid
  */
 inline double measureLock(const char* settings, double bpm, double& spread, double& coherentDb)
 {
@@ -421,6 +499,13 @@ inline double measureLock(const char* settings, double bpm, double& spread, doub
  * have its attack weighted down), zero-padded to a power of two of at least 2^16, the squared FFT
  * magnitudes summed over the band. Written out here rather than shared with the tools, so that the self
  * test and the Python measurement are two implementations of one definition.
+ * @param[in] x   the samples
+ * @param[in] a   the first sample
+ * @param[in] b   the end sample
+ * @param[in] lo  the band's low edge in Hz
+ * @param[in] hi  its high edge in Hz
+ * @param[in] sr  the sample rate
+ * @return the power
  */
 inline double lowendBandPower(const std::vector<float>& x, size_t a, size_t b, double lo, double hi, double sr)
 {
@@ -446,6 +531,10 @@ inline double lowendBandPower(const std::vector<float>& x, size_t a, size_t b, d
 /**
  * @brief The default bass voice, rolling sixteenths on F#1 at 145 BPM with a duck on every beat, as
  *        the engine plays it (gate 0.7 of the slot, velocity 110), for @p beats beats.
+ * @param[in] bv     the bass's values
+ * @param[in] beats  the beats
+ * @param[in] pitch  the MIDI note
+ * @return the samples
  */
 inline std::vector<float> lowendRollingBass(const std::vector<float>& bv, int beats, int pitch = 30)
 {
@@ -487,7 +576,10 @@ struct ListeningPlanner {
     std::unique_ptr<Composer> m_c;     ///< the composer, asked only for track()
 };
 
-/** @brief The shared ListeningPlanner, made on first use. */
+/**
+ * @brief The shared ListeningPlanner, made on first use.
+ * @return the planner
+ */
 inline ListeningPlanner& listeningPlanner()
 {
     static std::unique_ptr<ListeningPlanner> s;
@@ -501,6 +593,10 @@ inline ListeningPlanner& listeningPlanner()
 /**
  * @brief The value an acid parameter takes at the default knobs plus a voicing offset (normalised domain,
  *        as the engine applies it). Shared by testAcidVoicing's parts `.corners` and `.engine`.
+ * @param[in] p      the knobs
+ * @param[in] param  the acid parameter
+ * @param[in] off    the voicing offsets
+ * @return the value
  */
 inline float acidValueAt(const ParamStore& p, int param, const float* off)
 {
@@ -525,11 +621,10 @@ inline float acidValueAt(const ParamStore& p, int param, const float* off)
  * for every note. The caller therefore runs the same function over the **pattern families** as well
  * and compares the two, instead of holding the free rhythm against an absolute bound that would be
  * measuring the envelope as much as the lock.
- *
- * @param bpm           tempo
- * @param rhythm        "Pattern" or "Corpus" for compose.bass_rhythm
- * @param onsets        receives how many onsets were measured
- * @param distinctSlots receives how many different sixteenths carried the first onset of a beat
+ * @param[in]  bpm            tempo
+ * @param[in]  rhythm         "Pattern" or "Corpus" for compose.bass_rhythm
+ * @param[out] onsets         receives how many onsets were measured
+ * @param[out] distinctSlots  receives how many different sixteenths carried the first onset of a beat
  * @return the mean of kick phase minus bass phase at the onsets, degrees
  */
 inline double measureFreeLock(double bpm, const char* rhythm, int& onsets, int& distinctSlots)
@@ -611,7 +706,11 @@ inline double measureFreeLock(double bpm, const char* rhythm, int& onsets, int& 
     return n > 0 ? sumD / n : 1e9;
 }
 
-/** @brief The bass notes of a composed stretch. */
+/**
+ * @brief The bass notes of a composed stretch.
+ * @param[in] all  the notes
+ * @return the bass notes
+ */
 inline std::vector<NoteEvent> bassNotesOf(const std::vector<NoteEvent>& all)
 {
     std::vector<NoteEvent> out;
@@ -619,7 +718,11 @@ inline std::vector<NoteEvent> bassNotesOf(const std::vector<NoteEvent>& all)
     return out;
 }
 
-/** @brief Onset mask per bar of a composed stretch, from the note beats alone. */
+/**
+ * @brief Onset mask per bar of a composed stretch, from the note beats alone.
+ * @param[in] all  the notes
+ * @return the onset mask per bar
+ */
 inline std::map<int, unsigned> barMasksOf(const std::vector<NoteEvent>& all)
 {
     std::map<int, unsigned> bars;
@@ -632,7 +735,13 @@ inline std::map<int, unsigned> barMasksOf(const std::vector<NoteEvent>& all)
     return bars;
 }
 
-/** @brief A kit prepared from a parameter store (all lanes updated). */
+/**
+ * @brief A kit prepared from a parameter store (all lanes updated).
+ * @param[in] p      the knobs
+ * @param[in] key    the key's root
+ * @param[in] scale  the scale
+ * @return the kit
+ */
 inline std::unique_ptr<PercKit> makeKit(const ParamStore& p, int key = 6, int scale = 1)
 {
     auto kit = std::make_unique<PercKit>();
@@ -644,7 +753,12 @@ inline std::unique_ptr<PercKit> makeKit(const ParamStore& p, int key = 6, int sc
     return kit;
 }
 
-/** @brief Renders @p n samples of a kit into mono (L + R) / 2. */
+/**
+ * @brief Renders @p n samples of a kit into mono (L + R) / 2.
+ * @param[in,out] kit  the kit
+ * @param[in]     n    the samples
+ * @return the mono samples
+ */
 inline std::vector<float> renderKit(PercKit& kit, size_t n)
 {
     const DenormalGuard guard;
@@ -658,7 +772,13 @@ inline std::vector<float> renderKit(PercKit& kit, size_t n)
     return m;
 }
 
-/** @brief Share of power below @p hz, in dB relative to the total. */
+/**
+ * @brief Share of power below @p hz, in dB relative to the total.
+ * @param[in] x         the samples
+ * @param[in] hz        the frequency
+ * @param[in] windowed  true for a Hann window
+ * @return the share in dB
+ */
 inline double lowShareDb(const std::vector<float>& x, double hz, bool windowed = false)
 {
     size_t n = 1;
@@ -689,7 +809,10 @@ inline double lowShareDb(const std::vector<float>& x, double hz, bool windowed =
 struct ToyModel {
     int m_n = 4;   ///< the alphabet
     std::vector<double> m_p;   ///< the table: P(c | a, b) at (a n + b) n + c
-    /** @brief A table drawn from @p seed, every row normalised. */
+    /**
+     * @brief A table drawn from @p seed, every row normalised.
+     * @param[in] seed  the seed
+     */
     explicit ToyModel(uint64_t seed)
     {
         Rng r;
@@ -701,9 +824,18 @@ struct ToyModel {
             for (int c = 0; c < m_n; ++c) m_p[static_cast<size_t>(ab * m_n + c)] /= sum;
         }
     }
-    /** @brief The alphabet's size. */
+    /**
+     * @brief The alphabet's size.
+     * @return the alphabet's size
+     */
     int alphabet() const { return m_n; }
-    /** @brief P(@p c | @p a, @p b). */
+    /**
+     * @brief P(@p c | @p a, @p b).
+     * @param[in] a  the symbol two before
+     * @param[in] b  the symbol before
+     * @param[in] c  the symbol
+     * @return the probability
+     */
     double prob(int a, int b, int c) const { return m_p[static_cast<size_t>((a * m_n + b) * m_n + c)]; }
 };
 
@@ -729,6 +861,8 @@ struct RefCase {
  * Deliberately forgiving about everything it does not know, because the file is written by another
  * program on the other side of the contract: unknown keys are skipped and fields inside a case may
  * come in any order.
+ * @param[in] path  the file's path
+ * @return the cases
  */
 inline std::vector<RefCase> readRefCases(const std::string& path)
 {
@@ -762,10 +896,19 @@ inline std::vector<RefCase> readRefCases(const std::string& path)
     return cases;
 }
 
-/** @brief The directory the models live in (Core/data, compiled in by Core/CMakeLists.txt). */
+/**
+ * @brief The directory the models live in (Core/data, compiled in by Core/CMakeLists.txt).
+ * @param[in] name  the model's file name
+ * @return the path
+ */
 inline std::string modelPath(const char* name) { return std::string(PHOS_SOURCE_DATA_DIR) + "/" + name; }
 
-/** @brief Feeds one reference case into a model; false when the file and the case disagree. */
+/**
+ * @brief Feeds one reference case into a model; false when the file and the case disagree.
+ * @param[in,out] model  the model
+ * @param[in]     c      the case
+ * @return false when they disagree
+ */
 inline bool feedRefCase(NeuralModel& model, const RefCase& c)
 {
     const size_t n = c.m_tok.size();
@@ -796,15 +939,32 @@ struct ToyStepper {
     const ToyModel* m_model = nullptr;   ///< the model
     int m_a = 0;   ///< the symbol before the last
     int m_b = 0;   ///< the last symbol
-    /** @brief The model's alphabet. */
+    /**
+     * @brief The model's alphabet.
+     * @return the alphabet's size
+     */
     int alphabet() const { return m_model->alphabet(); }
-    /** @brief Starts from @p start2, @p start1. */
+    /**
+     * @brief Starts from @p start2, @p start1.
+     * @param[in] start2  the symbol two before
+     * @param[in] start1  the symbol before
+     */
     void begin(int start2, int start1) { m_a = start2; m_b = start1; }
-    /** @brief Moves on (always possible). */
+    /**
+     * @brief Moves on (always possible).
+     * @return true
+     */
     bool advance(int) { return true; }
-    /** @brief Takes symbol @p s as drawn. */
+    /**
+     * @brief Takes symbol @p s as drawn.
+     * @param[in] s  the symbol
+     */
     void observe(int s) { m_a = m_b; m_b = s; }
-    /** @brief P(@p c | a, b). */
+    /**
+     * @brief P(@p c | a, b).
+     * @param[in] c  the symbol
+     * @return the probability
+     */
     double prob(int c) const { return m_model->prob(m_a, m_b, c); }
 };
 
@@ -812,19 +972,36 @@ struct ToyStepper {
 struct PeakedStepper {
     int m_n = 4;   ///< the alphabet
     int m_peak = 0;   ///< the symbol that has it all
-    /** @brief The alphabet's size. */
+    /**
+     * @brief The alphabet's size.
+     * @return the alphabet's size
+     */
     int alphabet() const { return m_n; }
     /** @brief Nothing to start from. */
     void begin(int, int) {}
-    /** @brief Moves on (always possible). */
+    /**
+     * @brief Moves on (always possible).
+     * @return true
+     */
     bool advance(int) { return true; }
     /** @brief Nothing to remember. */
     void observe(int) {}
-    /** @brief Almost 1 for the peak, 1e-9 for the rest. */
+    /**
+     * @brief Almost 1 for the peak, 1e-9 for the rest.
+     * @param[in] c  the symbol
+     * @return the probability
+     */
     double prob(int c) const { return c == m_peak ? 1.0 - 3e-9 : 1e-9; }
 };
 
-/** @brief Scale tones in [lo, hi] semitones above the root, with the colour weight on the flat second. */
+/**
+ * @brief Scale tones in [lo, hi] semitones above the root, with the colour weight on the flat second.
+ * @param[in] scale   the scale
+ * @param[in] lo      the lowest interval
+ * @param[in] hi      the highest interval
+ * @param[in] colour  the flat second's weight
+ * @return the allowed symbols
+ */
 inline std::vector<uint8_t> scaleAllowed(int scale, int lo, int hi, int colour)
 {
     std::vector<uint8_t> a(static_cast<size_t>(CorpusAlphabet), 0);
@@ -835,7 +1012,14 @@ inline std::vector<uint8_t> scaleAllowed(int scale, int lo, int hi, int colour)
     return a;
 }
 
-/** @brief The tones of the chord on @p degree of @p scale, in [lo, hi]. */
+/**
+ * @brief The tones of the chord on @p degree of @p scale, in [lo, hi].
+ * @param[in] scale   the scale
+ * @param[in] degree  the chord's degree
+ * @param[in] lo      the lowest interval
+ * @param[in] hi      the highest interval
+ * @return the allowed symbols
+ */
 inline std::vector<uint8_t> chordAllowed(int scale, int degree, int lo, int hi)
 {
     int pcs[3];
@@ -849,7 +1033,16 @@ inline std::vector<uint8_t> chordAllowed(int scale, int degree, int lo, int hi)
     return a;
 }
 
-/** @brief Steady-state amplitude of a filter's response to a sine (amplitude @p amp) after @p settle samples. */
+/**
+ * @brief Steady-state amplitude of a filter's response to a sine (amplitude @p amp) after @p settle samples.
+ * @param[in] tick    the filter, one sample in and out
+ * @param[in] hz      the sine's frequency
+ * @param[in] sr      the sample rate
+ * @param[in] amp     the sine's amplitude
+ * @param[in] settle  the samples before measuring
+ * @param[in] window  the samples measured
+ * @return the amplitude
+ */
 template <class TickT>
 double sineGain(TickT&& tick, double hz, double sr, double amp, size_t settle, size_t window)
 {
@@ -862,7 +1055,12 @@ double sineGain(TickT&& tick, double hz, double sr, double amp, size_t settle, s
     return toneAmplitude(y.data(), window, hz * static_cast<double>(window) / sr) / amp;
 }
 
-/** @brief An acid voice with the given settings. */
+/**
+ * @brief An acid voice with the given settings.
+ * @param[in]     settings  the key=value lines
+ * @param[in,out] p         the knobs, set from them
+ * @return the acid voice
+ */
 inline std::unique_ptr<Acid> makeAcid(const char* settings, ParamStore& p)
 {
     p.parseText(settings);
@@ -873,7 +1071,12 @@ inline std::unique_ptr<Acid> makeAcid(const char* settings, ParamStore& p)
     return a;
 }
 
-/** @brief Renders @p n samples with @p proc and returns their mono mix. */
+/**
+ * @brief Renders @p n samples with @p proc and returns their mono mix.
+ * @param[in] proc  renders a block
+ * @param[in] n     the samples
+ * @return the mono samples
+ */
 inline std::vector<float> renderMono(const std::function<void(float*, float*, int)>& proc, size_t n)
 {
     const DenormalGuard guard;
@@ -887,7 +1090,13 @@ inline std::vector<float> renderMono(const std::function<void(float*, float*, in
     return m;
 }
 
-/** @brief Power-weighted spectral centroid of @p n samples (Blackman-Harris). */
+/**
+ * @brief Power-weighted spectral centroid of @p n samples (Blackman-Harris).
+ * @param[in] x   the samples
+ * @param[in] sr  the sample rate
+ * @param[in] n   their count
+ * @return the centroid in Hz
+ */
 inline double centroid(const float* x, double sr, size_t n)
 {
     const std::vector<double> pw = powerSpectrum(x, n);
@@ -905,6 +1114,13 @@ inline double centroid(const float* x, double sr, size_t n)
  * {h (1 + a_u y) f0}; everything else between 100 Hz and 18 kHz is aliasing. The bands around the
  * legitimate lines cover a part of the spectrum (@p coverage), and that part of the aliasing is not
  * counted; at the notes measured here it is 4 to 25 per cent, less than a dB of bias.
+ * @param[in]  y         the samples
+ * @param[in]  offset    the first sample
+ * @param[in]  f0        the fundamental
+ * @param[in]  detuneY   the detune curve's value
+ * @param[in]  sr        the sample rate
+ * @param[out] coverage  receives the share of bins on a line, or null
+ * @return the aliasing in dB
  */
 inline double supersawAliasDb(const std::vector<float>& y, size_t offset, double f0, double detuneY, double sr, double* coverage = nullptr)
 {
@@ -939,6 +1155,13 @@ inline double supersawAliasDb(const std::vector<float>& y, size_t offset, double
  * a non-integer ratio those are not harmonics of f_c, so a harmonic mask would count the instrument's
  * own sidebands as aliasing. Only the sidebands whose *unfolded* frequency lies above Nyquist come
  * back as aliasing, and they land where no legitimate line is.
+ * @param[in] y       the samples
+ * @param[in] offset  the first sample
+ * @param[in] lines   the lines' frequencies
+ * @param[in] fundHz  the fundamental
+ * @param[in] sr      the sample rate
+ * @param[in] fromHz  the lowest frequency counted
+ * @return the aliasing in dB
  */
 inline double lineAliasDb(const std::vector<float>& y, size_t offset, const std::vector<double>& lines, double fundHz, double sr, double fromHz)
 {
@@ -961,7 +1184,13 @@ inline double lineAliasDb(const std::vector<float>& y, size_t offset, const std:
     return powDb(rest / fund);
 }
 
-/** @brief The lines a two-operator voice at @p f0 with modulator ratio @p ratio may legitimately show. */
+/**
+ * @brief The lines a two-operator voice at @p f0 with modulator ratio @p ratio may legitimately show.
+ * @param[in] f0     the carrier's frequency
+ * @param[in] ratio  the modulator's ratio
+ * @param[in] sr     the sample rate
+ * @return the lines' frequencies
+ */
 inline std::vector<double> fmLines(double f0, double ratio, double sr)
 {
     std::vector<double> v;
@@ -972,7 +1201,12 @@ inline std::vector<double> fmLines(double f0, double ratio, double sr)
     return v;
 }
 
-/** @brief The harmonics of @p f0 below Nyquist. */
+/**
+ * @brief The harmonics of @p f0 below Nyquist.
+ * @param[in] f0  the fundamental
+ * @param[in] sr  the sample rate
+ * @return the harmonics' frequencies
+ */
 inline std::vector<double> harmonicLines(double f0, double sr)
 {
     std::vector<double> v;
@@ -980,7 +1214,13 @@ inline std::vector<double> harmonicLines(double f0, double sr)
     return v;
 }
 
-/** @brief A polyphonic engine instance with the given settings. */
+/**
+ * @brief A polyphonic engine instance with the given settings.
+ * @param[in]     settings  the key=value lines
+ * @param[in,out] p         the knobs, set from them
+ * @param[in]     inst      the instance
+ * @return the engine
+ */
 inline std::unique_ptr<Poly> makePoly(const char* settings, ParamStore& p, PolyInstanceE inst)
 {
     p.parseText(settings);
@@ -998,6 +1238,11 @@ inline std::unique_ptr<Poly> makePoly(const char* settings, ParamStore& p, PolyI
  * is eight bins wide and a partial almost never sits on a bin centre, so the largest single bin
  * underestimates it by a frequency-dependent amount that would go straight into a ratio of two
  * partials.
+ * @param[in] pw  the power spectrum
+ * @param[in] hz  the partial's frequency
+ * @param[in] sr  the sample rate
+ * @param[in] n   the transform's length
+ * @return the magnitude
  */
 inline double partialMag(const std::vector<double>& pw, double hz, double sr, size_t n)
 {
@@ -1018,6 +1263,12 @@ inline double partialMag(const std::vector<double>& pw, double hz, double sr, si
  * (a_n = 1/n) the value is 10 log10(1 - 1/n^2): -1.249 dB at n = 2, -0.280 dB at n = 4; for a square
  * wave it is minus infinity. It is the measure of Tools/ref_harmonics.py, so our renders and the
  * reference recordings produce the same kind of number.
+ * @param[in] y       the samples
+ * @param[in] offset  the first sample
+ * @param[in] f0      the fundamental
+ * @param[in] sr      the sample rate
+ * @param[in] n       the even harmonic
+ * @return the evenness in dB
  */
 inline double evennessDb(const std::vector<float>& y, size_t offset, double f0, double sr, int n)
 {
@@ -1029,7 +1280,14 @@ inline double evennessDb(const std::vector<float>& y, size_t offset, double f0, 
     return 20.0 * std::log10(b / (std::sqrt(a * c) + 1e-30) + 1e-30);
 }
 
-/** @brief |H| in dB and the group delay in ms of a disperser chain at @p hz, from its coefficients. */
+/**
+ * @brief |H| in dB and the group delay in ms of a disperser chain at @p hz, from its coefficients.
+ * @param[in]  d      the disperser
+ * @param[in]  hz     the frequency
+ * @param[in]  sr     the sample rate
+ * @param[out] magDb  the magnitude in dB
+ * @param[out] gdMs   the group delay in ms
+ */
 inline void disperserResponse(const Disperser& d, double hz, double sr, double& magDb, double& gdMs)
 {
     auto at = [&](double f) {
@@ -1053,6 +1311,11 @@ inline void disperserResponse(const Disperser& d, double hz, double sr, double& 
  * The same rule as supersawAliasDb() -- +-6 bins of a 65536-point spectrum around every legitimate
  * line -- but with the line set handed in rather than reconstructed from f0 and the detune, so that
  * a drifted oscillator can be measured against the lines it actually makes.
+ * @param[in] y       the samples
+ * @param[in] offset  the first sample
+ * @param[in] lines   the legitimate lines' frequencies
+ * @param[in] sr      the sample rate
+ * @return the aliasing in dB
  */
 inline double maskedAliasDb(const std::vector<float>& y, size_t offset, const std::vector<double>& lines, double sr)
 {
@@ -1075,15 +1338,14 @@ inline double maskedAliasDb(const std::vector<float>& y, size_t offset, const st
 
 /**
  * @brief Resonance peak of a feedback comb read with four interpolation weights, in the time domain.
- * @param taps  weights of the samples at offsets -1, 0, +1, +2 from the integer read position
- * @param delay integer part of the delay in samples
- * @param fb    feedback
- * @param nearHz the comb peak nearest this frequency is the one reported
- * @return the peak's gain in dB over the direct path
- *
- * The comb is excited with a unit impulse and its response transformed without a window, so the
- * measured spectrum is the transfer function itself and the reference is the unit input.
- * @param sr     sample rate, Hz
+ * @param[in] taps    weights of the samples at offsets -1, 0, +1, +2 from the integer read position
+ * @param[in] delay   integer part of the delay in samples
+ * @param[in] fb      feedback
+ * @param[in] nearHz  the comb peak nearest this frequency is the one reported
+ * @param[in] sr      sample rate, Hz
+ * @return the peak's gain in dB over the direct path The comb is excited with a unit impulse and its response
+ *         transformed without a window, so the measured spectrum is the transfer function itself and the reference is
+ *         the unit input.
  */
 inline double combPeakDb(const float taps[4], int delay, float fb, double nearHz, double sr)
 {
@@ -1116,6 +1378,12 @@ inline double combPeakDb(const float taps[4], int delay, float fb, double nearHz
  *
  * Six bins, not three: the Blackman-Harris window's main lobe is four bins either side, and at three the
  * leakage of the fundamental counted as aliasing (-39 dB where the signal had -80).
+ * @param[in] y             the samples
+ * @param[in] offset        the first sample
+ * @param[in] f0            the fundamental
+ * @param[in] sr            the sample rate
+ * @param[in] relTolerance  a relative tolerance on the harmonics' places
+ * @return the share in dB
  */
 inline double inharmonicDb(const std::vector<float>& y, size_t offset, double f0, double sr, double relTolerance = 0.0)
 {
@@ -1132,7 +1400,15 @@ inline double inharmonicDb(const std::vector<float>& y, size_t offset, double f0
     return powDb(rest / harm);
 }
 
-/** @brief Renders one sustained note of a Poly at @p rate; 96 kHz is decimated to 48 kHz. */
+/**
+ * @brief Renders one sustained note of a Poly at @p rate; 96 kHz is decimated to 48 kHz.
+ * @param[in] settings  the key=value lines
+ * @param[in] inst      the instance
+ * @param[in] pitch     the MIDI note
+ * @param[in] n         the samples
+ * @param[in] rate      the sample rate
+ * @return the samples at 48 kHz
+ */
 inline std::vector<float> renderPolyNote(const std::string& settings, PolyInstanceE inst, int pitch, size_t n, double rate)
 {
     ParamStore p;
@@ -1151,7 +1427,12 @@ inline std::vector<float> renderPolyNote(const std::string& settings, PolyInstan
     return out;
 }
 
-/** @brief The settings both paths share, with an instance prefix. */
+/**
+ * @brief The settings both paths share, with an instance prefix.
+ * @param[in] pfx     the instance's key prefix
+ * @param[in] detune  the detune
+ * @return the key=value lines
+ */
 inline std::string commonPoly(const char* pfx, double detune)
 {
     std::string s;
@@ -1174,6 +1455,11 @@ inline std::string commonPoly(const char* pfx, double detune)
  * The phase is `fmod(i * step, 1)` rather than an accumulator: over 65536 samples an accumulator
  * drifts by its own rounding, and the drift would show up here as a broadening of every line. The
  * engine accumulates (Poly.cpp) because it has to; a measurement need not.
+ * @param[in] t       the table
+ * @param[in] frame   the frame
+ * @param[in] noteHz  the note's frequency
+ * @param[in] sr      the sample rate
+ * @return the aliasing in dB
  */
 inline double tableFrameAliasDb(const WaveTable& t, int frame, double noteHz, double sr)
 {
@@ -1193,7 +1479,13 @@ inline double tableFrameAliasDb(const WaveTable& t, int frame, double noteHz, do
     return powDb(noise / sig);
 }
 
-/** @brief RMS of the stored cycle of one frame at a level. */
+/**
+ * @brief RMS of the stored cycle of one frame at a level.
+ * @param[in] t      the table
+ * @param[in] level  the level
+ * @param[in] frame  the frame
+ * @return the RMS
+ */
 inline double tableFrameRms(const WaveTable& t, int level, int frame)
 {
     const int len = WaveTable::levelLength(level);
@@ -1209,6 +1501,8 @@ inline double tableFrameRms(const WaveTable& t, int level, int frame)
  * the same waveform after buildFromHarmonics(). The absolute numbers therefore need not equal the
  * table in docs/rounds/2026-09.md to the last digit -- what is compared here is one frame limit against
  * another *inside this one measurement*, and for that both sides go through the same code.
+ * @param[in] t      the table
+ * @param[in] frame  the frame
  * @return bins 1 .. 512 (harmonic h in element h-1), summing to 1; empty for a silent frame
  */
 inline std::vector<double> framePowerSpectrum(const WaveTable& t, int frame)
@@ -1236,7 +1530,11 @@ struct MorphMeasure {
     double m_directness = 0.0;  ///< travel / path, at most 1 by the triangle inequality
 };
 
-/** @brief measure_table()'s `move`, `travel`, `path` and `directness` for a built table. */
+/**
+ * @brief measure_table()'s `move`, `travel`, `path` and `directness` for a built table.
+ * @param[in] t  the table
+ * @return the measures
+ */
 inline MorphMeasure measureMorph(const WaveTable& t)
 {
     MorphMeasure m;
@@ -1264,7 +1562,14 @@ inline MorphMeasure measureMorph(const WaveTable& t)
     return m;
 }
 
-/** @brief Share of a signal's power in [lo, hi) Hz: one unwindowed FFT over the zero-padded signal. */
+/**
+ * @brief Share of a signal's power in [lo, hi) Hz: one unwindowed FFT over the zero-padded signal.
+ * @param[in] x   the samples
+ * @param[in] sr  the sample rate
+ * @param[in] lo  the band's low edge in Hz
+ * @param[in] hi  its high edge in Hz
+ * @return the share, 0..1
+ */
 inline double bandShare(const std::vector<float>& x, double sr, double lo, double hi)
 {
     size_t n = 1;
@@ -1295,7 +1600,11 @@ struct BandAccumulator {
     size_t m_fill = 0;   ///< samples in buf
     int m_windows = 0;   ///< windows summed
 
-    /** @brief Adds @p n samples of @p x; complete windows are transformed as they fill. */
+    /**
+     * @brief Adds @p n samples of @p x; complete windows are transformed as they fill.
+     * @param[in] x  the samples
+     * @param[in] n  their count
+     */
     void push(const float* x, int n)
     {
         while (n > 0) {
@@ -1313,7 +1622,12 @@ struct BandAccumulator {
         }
     }
 
-    /** @brief The summed power from @p lo to @p hi Hz. */
+    /**
+     * @brief The summed power from @p lo to @p hi Hz.
+     * @param[in] lo  the band's low edge in Hz
+     * @param[in] hi  its high edge in Hz
+     * @return the power
+     */
     double band(double lo, double hi) const
     {
         double s = 0.0;
@@ -1344,7 +1658,12 @@ struct StereoBandAccumulator {
     size_t m_fill = 0;   ///< samples in the buffers
     int m_windows = 0;   ///< windows summed
 
-    /** @brief Adds @p n samples of both channels; complete windows are transformed as they fill. */
+    /**
+     * @brief Adds @p n samples of both channels; complete windows are transformed as they fill.
+     * @param[in] l  the left samples
+     * @param[in] r  the right samples
+     * @param[in] n  their count
+     */
     void push(const float* l, const float* r, int n)
     {
         while (n > 0) {
@@ -1376,7 +1695,14 @@ struct StereoBandAccumulator {
         }
     }
 
-    /** @brief The three sums inside one band. */
+    /**
+     * @brief The three sums inside one band.
+     * @param[in]  lo  the band's low edge in Hz
+     * @param[in]  hi  its high edge in Hz
+     * @param[out] a   the left power
+     * @param[out] b   the right power
+     * @param[out] c   the cross power
+     */
     void sums(double lo, double hi, double& a, double& b, double& c) const
     {
         a = b = c = 0.0;
@@ -1385,21 +1711,36 @@ struct StereoBandAccumulator {
             if (f >= lo && f < hi) { a += m_pl[k]; b += m_pr[k]; c += m_cc[k]; }
         }
     }
-    /** @brief Side-over-mid power in a band, in dB. Mono reads far below zero, a pure side signal 0. */
+    /**
+     * @brief Side-over-mid power in a band, in dB. Mono reads far below zero, a pure side signal 0.
+     * @param[in] lo  the band's low edge in Hz
+     * @param[in] hi  its high edge in Hz
+     * @return the width in dB
+     */
     double width(double lo, double hi) const
     {
         double a, b, c;
         sums(lo, hi, a, b, c);
         return powDb(((a + b - 2.0 * c) / 4.0) / std::max((a + b + 2.0 * c) / 4.0, 1e-300));
     }
-    /** @brief Zero-lag inter-channel correlation in a band. */
+    /**
+     * @brief Zero-lag inter-channel correlation in a band.
+     * @param[in] lo  the band's low edge in Hz
+     * @param[in] hi  its high edge in Hz
+     * @return the correlation, -1..1
+     */
     double rho(double lo, double hi) const
     {
         double a, b, c;
         sums(lo, hi, a, b, c);
         return c / std::max(std::sqrt(a * b), 1e-300);
     }
-    /** @brief Channel imbalance in a band, in dB: L over R. */
+    /**
+     * @brief Channel imbalance in a band, in dB: L over R.
+     * @param[in] lo  the band's low edge in Hz
+     * @param[in] hi  its high edge in Hz
+     * @return the imbalance in dB
+     */
     double balance(double lo, double hi) const
     {
         double a, b, c;
@@ -1417,6 +1758,9 @@ struct StereoBandAccumulator {
  * carries into the answer. The same computation stands in testDynamics and in
  * `Tools/metrics.py --selftest` (`true_peak_exact`), where it is held against four signals whose
  * peak between the samples is known in closed form.
+ * @param[in] x     the samples
+ * @param[in] from  the first sample
+ * @return the peak
  */
 inline double exactPeak(const std::vector<float>& x, size_t from)
 {
@@ -1435,7 +1779,15 @@ inline double exactPeak(const std::vector<float>& x, size_t from)
     return peak;
 }
 
-/** @brief Power in a band, in dB, over the largest power of two that fits in @p n samples. */
+/**
+ * @brief Power in a band, in dB, over the largest power of two that fits in @p n samples.
+ * @param[in] x     the samples
+ * @param[in] from  the first sample
+ * @param[in] n     the samples available
+ * @param[in] lo    the band's low edge in Hz
+ * @param[in] hi    its high edge in Hz
+ * @return the power in dB
+ */
 inline double bandPowerDb(const std::vector<float>& x, size_t from, size_t n, double lo, double hi)
 {
     if (from >= x.size()) return -200.0;
@@ -1452,7 +1804,13 @@ inline double bandPowerDb(const std::vector<float>& x, size_t from, size_t n, do
     return 10.0 * std::log10(p / static_cast<double>(m) + 1e-30);
 }
 
-/** @brief Root mean square of a stretch, in dB. */
+/**
+ * @brief Root mean square of a stretch, in dB.
+ * @param[in] x     the samples
+ * @param[in] from  the first sample
+ * @param[in] n     the samples
+ * @return the RMS in dB
+ */
 inline double rmsDb(const std::vector<float>& x, size_t from, size_t n)
 {
     if (from >= x.size()) return -200.0;
@@ -1462,7 +1820,12 @@ inline double rmsDb(const std::vector<float>& x, size_t from, size_t n)
     return 10.0 * std::log10(s / static_cast<double>(std::max<size_t>(n, 1)) + 1e-30);
 }
 
-/** @brief Lerdahl instability of a MIDI note against a key root, as measure_tension.py counts it. */
+/**
+ * @brief Lerdahl instability of a MIDI note against a key root, as measure_tension.py counts it.
+ * @param[in] pitch  the MIDI note
+ * @param[in] key    the key's root
+ * @return the instability
+ */
 inline int instabilityOf(int pitch, int key) { return lerdahlInstability(pitch - key); }
 
 /// Seed slices per mode of testModalInterchange's presence measurement (12 tracks at most per mode).
@@ -1487,9 +1850,8 @@ static_assert(PresenceSlices * PresencePerSlice == 12, "the slices must cover ex
  * seed (plans only, cheap: level match is off), numbers the qualifying ones, and renders only those
  * whose number falls in its own slice. `count` is the full number of qualifying seeds, the same in
  * every slice of a mode -- the number the old check held against 8.
- *
- * @param mode  0 = compose.modal_interchange On, 1 = Off
- * @param slice 0 .. PresenceSlices - 1
+ * @param[in] mode   0 = compose.modal_interchange On, 1 = Off
+ * @param[in] slice  0 .. PresenceSlices - 1
  */
 inline void modalPresence(int mode, int slice)
 {
@@ -1658,9 +2020,8 @@ inline void modalPresence(int mode, int slice)
  * Not a replacement: `modalPresence` above is kept exactly as it was (same code, same numbers) -- it
  * may still be the one to catch some other, unrelated fault local to track 0 -- and this function adds
  * coverage beside it rather than subsuming it (different track, different bound, different rationale).
- *
- * @param mode  0 = compose.modal_interchange On, 1 = Off
- * @param slice 0 .. PresenceSlices - 1
+ * @param[in] mode   0 = compose.modal_interchange On, 1 = Off
+ * @param[in] slice  0 .. PresenceSlices - 1
  */
 inline void modalPresenceArc(int mode, int slice)
 {
@@ -1798,7 +2159,11 @@ struct BorrowedScore {
     std::vector<NoteEvent> m_ev;       ///< the 1536 bars' notes
 };
 
-/** @brief BorrowedScore for @p which (0 Markov, 1 neural), composed on first use. */
+/**
+ * @brief BorrowedScore for @p which (0 Markov, 1 neural), composed on first use.
+ * @param[in] which  0 Markov, 1 neural
+ * @return the score
+ */
 inline BorrowedScore& borrowedScore(int which)
 {
     static std::unique_ptr<BorrowedScore> cache[2];
@@ -1816,6 +2181,8 @@ inline BorrowedScore& borrowedScore(int which)
 
 /**
  * @brief Drains a cue ring into a vector, so a test can look at what a block produced.
+ * @param[in,out] ring  the ring, drained
+ * @return the cues
  */
 inline std::vector<Cue> drainCues(CueRingT& ring)
 {
@@ -1825,7 +2192,12 @@ inline std::vector<Cue> drainCues(CueRingT& ring)
     return out;
 }
 
-/** @brief The lane that plays @p role in the knobs' kit, or -1 (test side: read from the knobs, not from Rhythm.cpp). */
+/**
+ * @brief The lane that plays @p role in the knobs' kit, or -1 (test side: read from the knobs, not from Rhythm.cpp).
+ * @param[in] p     the knobs
+ * @param[in] role  the role
+ * @return the lane, or -1
+ */
 inline int testLaneOfRole(const ParamStore& p, PercRoleE role)
 {
     for (int l = 0; l < PercLanes; ++l) {
@@ -1841,6 +2213,10 @@ inline int testLaneOfRole(const ParamStore& p, PercRoleE role)
  * Every event ramps from wherever the parameter stands at its own beat to its value over its length, by a
  * raised cosine (Score.h, ControlEvent::Kind::Offset); a later event replaces a ramp in flight. Replayed in
  * order, independently of the engine's dispatcher.
+ * @param[in] controls  the control events
+ * @param[in] param     the parameter
+ * @param[in] beat      the beat
+ * @return the value
  */
 inline double offsetAt(const std::vector<ControlEvent>& controls, int param, double beat)
 {
@@ -1885,7 +2261,10 @@ struct ListeningScore {
     std::vector<NoteEvent> m_ev;       ///< 768 bars of notes
 };
 
-/** @brief The ListeningScore, composed on first use. */
+/**
+ * @brief The ListeningScore, composed on first use.
+ * @return the score
+ */
 inline ListeningScore& listeningScore()
 {
     static std::unique_ptr<ListeningScore> s;
@@ -1900,7 +2279,7 @@ inline ListeningScore& listeningScore()
 /**
  * @brief Voices, parts `.counterSound*` (h2): the counter-lead never plays the lead's sound, over the 24
  *        tracks of one of the three seeds.
- * @param seed 864566672 (the listening seed), 77 or 2026
+ * @param[in] seed  864566672 (the listening seed), 77 or 2026
  */
 inline void voicesCounterSound(uint64_t seed)
 {

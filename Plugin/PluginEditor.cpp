@@ -1,6 +1,7 @@
 /**
  * @file PluginEditor.cpp
  * @brief The editor's frame: header, tab bar, lane bar, pages and the screenshot mode.
+ * @author Rene Weller
  */
 #include "PluginEditor.h"
 #include "phos/Composer.h"
@@ -31,7 +32,15 @@ const Slice MasterSlices[] = {
 };
 
 template <size_t N>
-/** @brief Adds one group per slice of a module's parameter table to @p page. */
+/**
+ * @brief Adds one group per slice of a module's parameter table to @p page.
+ * @param[in,out] page      the page
+ * @param[in,out] proc      the processor
+ * @param[in]     m         the module
+ * @param[in]     instance  its instance
+ * @param[in]     slices    the slices of its table
+ * @param[in]     tint      the groups' colour
+ */
 void addSlices(ControlPage& page, PhospheneProcessor& proc, ModuleE m, int instance, const Slice (&slices)[N], juce::Colour tint)
 {
     for (const Slice& s : slices) page.addModuleGroup(proc, m, instance, s.m_title, tint, s.m_columns, s.m_first, s.m_count);
@@ -74,7 +83,12 @@ const std::vector<Section> ModSections = {
                           { "mx5_src", N }, { "mx5_dst", N }, { "mx5_amount", S }, { "mx6_src", N }, { "mx6_dst", N }, { "mx6_amount", S },
                           { "mx7_src", N }, { "mx7_dst", N }, { "mx7_amount", S }, { "mx8_src", N }, { "mx8_dst", N }, { "mx8_amount", S } } },
 };
-/** @brief @p own with the modulation groups after its first @p at groups (the source and the filter come first). */
+/**
+ * @brief @p own with the modulation groups after its first @p at groups (the source and the filter come first).
+ * @param[in] own  the module's own sections
+ * @param[in] at   the groups before the modulation
+ * @return the sections
+ */
 std::vector<Section> withModulation(const std::vector<Section>& own, size_t at)
 {
     std::vector<Section> out(own.begin(), own.begin() + static_cast<std::ptrdiff_t>(std::min(at, own.size())));
@@ -178,8 +192,15 @@ const std::vector<Section> PercSections = {
 
 /**
  * @brief Adds @p sections of a module instance to @p page, and whatever they leave out as a group "More".
- * @param restFrom first table index a leftover may come from; @param restTo one past the last, -1 = the table's end
- *        (the effect presets of the SFX table have a group of their own, addSfxPresetGroup)
+ * @param[in,out] page      the page
+ * @param[in,out] proc      the processor
+ * @param[in]     m         the module
+ * @param[in]     instance  its instance
+ * @param[in]     sections  the sections
+ * @param[in]     tint      the groups' colour
+ * @param[in]     restFrom  first table index a leftover may come from;
+ * @param[in]     restTo    one past the last, -1 = the table's end (the effect presets of the SFX table have a group of
+ *                          their own, addSfxPresetGroup)
  */
 void addSections(ControlPage& page, PhospheneProcessor& proc, ModuleE m, int instance, const std::vector<Section>& sections,
                  juce::Colour tint, int restFrom = 0, int restTo = -1)
@@ -437,7 +458,10 @@ const juce::StringArray& PhospheneEditor::tabNames()
 }
 
 namespace {
-/** @brief The groups of tabs (01.10.2026): the row on top, as short as every generator's. */
+/**
+ * @brief The groups of tabs (01.10.2026): the row on top, as short as every generator's.
+ * @return (group name, tabs) pairs
+ */
 const std::vector<std::pair<juce::String, std::vector<int>>>& tabGroups()
 {
     static const std::vector<std::pair<juce::String, std::vector<int>>> groups = {
@@ -678,7 +702,11 @@ PhospheneEditor::~PhospheneEditor()
 }
 
 namespace {
-/** @brief Which part a generator tab shows in its pattern preview; Count = none. */
+/**
+ * @brief Which part a generator tab shows in its pattern preview; Count = none.
+ * @param[in] tab  the tab
+ * @return its part, Count for none
+ */
 PartE partOfTab(int tab)
 {
     switch (tab) {
@@ -1353,13 +1381,21 @@ bool PhospheneEditor::writeFullPage(const juce::File& file)
 }
 
 namespace {
-/** @brief The file name a tab's picture gets, from the tab's own name. */
+/**
+ * @brief The file name a tab's picture gets, from the tab's own name.
+ * @param[in] index  the tab
+ * @return the file name
+ */
 juce::String shotName(int index)
 {
     return "tab-" + juce::String(index) + "-"
          + PhospheneEditor::tabNames()[index].toLowerCase().replace(" / ", "-").replace(" ", "-") + ".png";
 }
-/** @brief The name of a curve, for the manual. */
+/**
+ * @brief The name of a curve, for the manual.
+ * @param[in] c  the curve
+ * @return its name
+ */
 const char* curveName(CurveE c)
 {
     switch (c) {
@@ -1483,7 +1519,7 @@ bool PhospheneEditor::writeManual(const juce::File& dir)
 
 void PhospheneEditor::runScreenshotMode()
 {
-    // PHOS_PLAY=<seconds> [+ PHOS_RECORD=<file.wav>]: start the standalone, play for a while,
+    // PHOS_PLAY=\<seconds\> [+ PHOS_RECORD=\<file.wav\>]: start the standalone, play for a while,
     // optionally record what it played, and quit. The dev aid for hearing the live path -- the
     // composer on its own thread, blocks arriving from a real device -- without a hand on the mouse.
     const double playFor = juce::SystemStats::getEnvironmentVariable("PHOS_PLAY", "0").getDoubleValue();
@@ -1501,7 +1537,7 @@ void PhospheneEditor::runScreenshotMode()
     const juce::String one = juce::SystemStats::getEnvironmentVariable("PHOS_SHOT", "");
     const juce::String all = juce::SystemStats::getEnvironmentVariable("PHOS_SHOT_ALL", "");
     const juce::String man = juce::SystemStats::getEnvironmentVariable("PHOS_MANUAL", "");
-    // PHOS_PAGE_REPORT=<file> (01.10.2026): how far every page reaches past the window at the design size, a line each
+    // PHOS_PAGE_REPORT=\<file\> (01.10.2026): how far every page reaches past the window at the design size, a line each
     // and one per section (Frame.h, pageLines) -- which page still scrolls.
     const juce::String rep = juce::SystemStats::getEnvironmentVariable("PHOS_PAGE_REPORT", "");
     if (one.isEmpty() && all.isEmpty() && man.isEmpty() && rep.isEmpty()) return;
@@ -1544,7 +1580,12 @@ void PhospheneEditor::runScreenshotMode()
 
 namespace {
 
-/** @brief "perc3.decay" -> "Perc 3", "kick.tune" -> "Kick": the module instance a store id belongs to. */
+/**
+ * @brief "perc3.decay" -> "Perc 3", "kick.tune" -> "Kick": the module instance a store id belongs to.
+ * @param[in] s   the parameters
+ * @param[in] id  the store id
+ * @return the module instance's label
+ */
 juce::String moduleLabelOf(const ParamStore& s, int id)
 {
     const std::string& k = s.key(id);

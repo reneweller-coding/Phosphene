@@ -15,6 +15,7 @@
  * tritone and the raised second among them). That ordering is what Tools/corpus/measure_tension.py
  * counts against position in the phrase, and what the lead's and the acid's per-position weights
  * tilt towards (Melody.cpp, the measured tension curve of 16.09.2026).
+ * @author Rene Weller
  */
 #pragma once
 
@@ -34,8 +35,9 @@ inline constexpr int ScaleSteps[NumScales][7] = {
 
 /**
  * @brief Semitones of a scale degree, extended over octaves.
- * @param scale  index into ScaleSteps
- * @param degree 0 = root, 7 = root an octave up, -1 = the seventh below
+ * @param[in] scale   index into ScaleSteps
+ * @param[in] degree  0 = root, 7 = root an octave up, -1 = the seventh below
+ * @return the semitones above the root
  */
 inline int scaleDegree(int scale, int degree)
 {
@@ -46,7 +48,12 @@ inline int scaleDegree(int scale, int degree)
     return ScaleSteps[s][degree] + 12 * oct;
 }
 
-/** @brief Whether a pitch class (relative to the root) belongs to the scale. */
+/**
+ * @brief Whether a pitch class (relative to the root) belongs to the scale.
+ * @param[in] scale              the scale's index
+ * @param[in] semitonesFromRoot  the pitch class above the root
+ * @return true when it is in the scale
+ */
 inline bool inScale(int scale, int semitonesFromRoot)
 {
     const int pc = ((semitonesFromRoot % 12) + 12) % 12;
@@ -63,6 +70,9 @@ inline bool inScale(int scale, int semitonesFromRoot)
  * melody sound like one; Farbood's tension model ("A parametric, temporal model of musical tension",
  * Music Perception 2012) counts them as dissonance, which is one of the four quantities the energy
  * arc moves.
+ * @param[in] scale       the scale's index
+ * @param[in] pcFromRoot  the pitch class above the root
+ * @return true for a colour tone
  */
 inline bool isColourTone(int scale, int pcFromRoot)
 {
@@ -82,6 +92,9 @@ inline bool isColourTone(int scale, int pcFromRoot)
  * lead ("the defining interval for maximum psychedelic tension"). For those two lines it is drawn like any scale
  * tone (with a weight of its own); the other colour tones, and the b2 of every other voice, stay neighbours at
  * the colour slots.
+ * @param[in] scale       the scale's index
+ * @param[in] pcFromRoot  the pitch class above the root
+ * @return true for a colour tone of the lines
  */
 inline bool isLineColourTone(int scale, int pcFromRoot)
 {
@@ -95,6 +108,8 @@ inline bool isLineColourTone(int scale, int pcFromRoot)
  * Aeolian and Dorian have none, Phrygian and harmonic minor one, Phrygian dominant two, double
  * harmonic three. That is the ranking the literature gives (Easwaran 2004), computed rather than
  * tabulated, and it is what decides which mode a high-energy section may borrow (Form.cpp).
+ * @param[in] scale  the scale's index
+ * @return the number of colour tones
  */
 inline int scaleColourTones(int scale)
 {
@@ -110,6 +125,8 @@ inline int scaleColourTones(int scale)
  * Five minus the depth of the pitch class in the basic space of a minor tonic (Lerdahl 2001); see
  * the file comment. Mirrored exactly by ``instability()`` in Tools/corpus/measure_tension.py, so the
  * curve the composer tilts towards is the curve that was measured.
+ * @param[in] pcFromRoot  the pitch class above the tonic
+ * @return the instability, 0..4
  */
 inline int lerdahlInstability(int pcFromRoot)
 {
@@ -131,6 +148,9 @@ inline int lerdahlInstability(int pcFromRoot)
  * a note the mode does not have, under a pad playing its A. The user: "Das Pad an fuer sich geht ja
  * jetzt, aber wenn der Bass einsetzt wird es absolut schief." At 0 and at +-12 the note is the one it
  * always was; in between the bass stays on the root and only changes octave where the window says so.
+ * @param[in] keyRoot         the key's pitch class
+ * @param[in] registerOffset  semitones the window is moved by
+ * @return the MIDI note
  */
 inline int bassRootNote(int keyRoot, int registerOffset)
 {
@@ -185,6 +205,10 @@ inline constexpr const char* ChordTypeNames[NumChordTypes] = {
  * *open* -- root, fifth, and the colour an octave up -- rather than the close triads in the low mids
  * the brief calls mud. The third, where a type has one, is the scale's own (3 or 4 semitones), so
  * "Triad" on the bII of Phrygian is the major chord the pendulum wants.
+ * @param[in]  type    the chord type
+ * @param[in]  scale   the scale's index
+ * @param[in]  degree  the chord's degree
+ * @param[out] out     the intervals in semitones
  * @return how many intervals were written (2 .. 4)
  */
 inline int chordIntervals(ChordTypeE type, int scale, int degree, int out[4])
@@ -211,6 +235,10 @@ inline int chordIntervals(ChordTypeE type, int scale, int degree, int out[4])
  *
  * The style says which types it likes, the mode says which of them exist: m9 needs the major ninth,
  * so it lives in Aeolian and Dorian and not in Phrygian.
+ * @param[in] scale   the scale's index
+ * @param[in] degree  the chord's degree
+ * @param[in] type    the chord type
+ * @return true when every tone lies in the mode
  */
 inline bool chordTypeFits(int scale, int degree, ChordTypeE type)
 {
@@ -221,13 +249,22 @@ inline bool chordTypeFits(int scale, int degree, ChordTypeE type)
     return true;
 }
 
-/** @brief Whether a pitch class (semitones over the key) rubs against the tonic of bass and drone: its b2, or its leading tone. */
+/**
+ * @brief Whether a pitch class (semitones over the key) rubs against the tonic of bass and drone: its b2, or its
+ *        leading tone.
+ * @param[in] pcFromKey  the pitch class above the key
+ * @return true for the b2 or the leading tone
+ */
 inline bool rubsTonic(int pcFromKey) { const int pc = ((pcFromKey % 12) + 12) % 12; return pc == 1 || pc == 11; }
 
 /**
  * @brief Whether a pad may hold the chord: neither its root nor any of its tones rubs against the tonic
  *        (rubsTonic: the b2, a minor ninth over it, or the leading tone under its octave), and no tone is a
  *        minor ninth or a tritone over the chord's own root.
+ * @param[in] scale   the scale's index
+ * @param[in] degree  the chord's degree
+ * @param[in] type    the chord type
+ * @return true when a pad may hold it
  */
 inline bool padAvoidsRubs(int scale, int degree, ChordTypeE type)
 {
@@ -250,11 +287,11 @@ inline bool padAvoidsRubs(int scale, int degree, ChordTypeE type)
  * the leading tone, and for a chord whose fifth would be one (a bIII of Aeolian borrowed into double harmonic
  * stands on the major third, and its fifth is the leading tone). Any other tone that would rub against the tonic
  * or the root (only a type chosen when nothing else fitted can have one) is left out.
- * @param type   the chord's type
- * @param scale  index into ScaleSteps
- * @param degree the chord's scale degree
- * @param root   receives the pad's root in semitones over the key, 0..11
- * @param out    receives the intervals over that root, the fifth first
+ * @param[in]  type    the chord's type
+ * @param[in]  scale   index into ScaleSteps
+ * @param[in]  degree  the chord's scale degree
+ * @param[out] root    receives the pad's root in semitones over the key, 0..11
+ * @param[in]  out     receives the intervals over that root, the fifth first
  * @return how many intervals were written (2 .. 4)
  */
 inline int padChordIntervals(ChordTypeE type, int scale, int degree, int& root, int out[4])

@@ -10,6 +10,7 @@
  *
  * @note SyncDiv copied from Noctuary `Core/include/ambient/Clock.h` at b60a2fe (15.09.2026); the
  *       tempo map is new.
+ * @author Rene Weller
  */
 #pragma once
 #include <vector>
@@ -46,29 +47,51 @@ class TempoMap {
 public:
     TempoMap() { setConstant(145.0); }
 
-    /** @brief One tempo for everything. */
+    /**
+     * @brief One tempo for everything.
+     * @param[in] bpm  the tempo in beats per minute
+     */
     void setConstant(double bpm);
     /**
      * @brief Adds or replaces a point.
-     * @param beat       position (>= 0); a point at the same beat is replaced
-     * @param bpm        tempo, clamped to 20..400
-     * @param rampToNext whether the tempo ramps from here to the next point
+     * @param[in] beat        position (>= 0); a point at the same beat is replaced
+     * @param[in] bpm         tempo, clamped to 20..400
+     * @param[in] rampToNext  whether the tempo ramps from here to the next point
      */
     void add(double beat, double bpm, bool rampToNext);
-    /** @brief The points, sorted by beat. */
+    /**
+     * @brief The points, sorted by beat.
+     * @return the tempo points, sorted by beat
+     */
     const std::vector<TempoPoint>& points() const { return m_points; }
 
-    /** @brief Tempo at @p beat. */
+    /**
+     * @brief Tempo at @p beat.
+     * @param[in] beat  the position in beats
+     * @return the tempo there, in beats per minute
+     */
     double bpmAt(double beat) const;
-    /** @brief Seconds from beat 0 to @p beat. */
+    /**
+     * @brief Seconds from beat 0 to @p beat.
+     * @param[in] beat  the position in beats
+     * @return the seconds from beat 0 to it
+     */
     double secondsAt(double beat) const;
-    /** @brief Beat reached after @p seconds (inverse of secondsAt). */
+    /**
+     * @brief Beat reached after @p seconds (inverse of secondsAt).
+     * @param[in] seconds  the time from the start
+     * @return the beat reached by then
+     */
     double beatAt(double seconds) const;
 
 private:
     /** @brief Recomputes the seconds at every tempo point after the points changed. */
     void rebuild();
-    /** @brief The index of the tempo segment @p beat falls in (0 before the first point). */
+    /**
+     * @brief The index of the tempo segment @p beat falls in (0 before the first point).
+     * @param[in] beat  the position in beats
+     * @return the index of the tempo point whose segment holds it
+     */
     int segmentFor(double beat) const;
     std::vector<TempoPoint> m_points;   ///< the tempo points, by beat
     std::vector<double> m_seconds;   ///< seconds at each point

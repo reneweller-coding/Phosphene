@@ -5,6 +5,7 @@
  * Each check measures a property against a value derived independently of the code under test --
  * the analytic response of a filter, the closed-form tempo integral, the pattern definition --
  * rather than against a recording of what the code once produced.
+ * @author Rene Weller
  */
 #include "phos/Acid.h"
 #include "phos/Audibility.h"
@@ -96,8 +97,8 @@ void testProbeCache();
  * Each section that runs ends with a line `== <name>: <seconds> s`, the wall time of that section
  * alone, which is what the ctest costs and the quick/slow labels are measured from.
  *
- * @param argc argument count
- * @param argv `--list`, `--only <names>`
+ * @param[in] argc argument count
+ * @param[in,out] argv `--list`, `--only <names>`
  * @return 0 when every check passed, 1 when one failed, 2 on a bad command line
  */
 

@@ -1,6 +1,7 @@
 /**
  * @file Audibility.cpp
  * @brief Partial loudness of stems in a mix (Audibility.h has the model and its sources).
+ * @author Rene Weller
  */
 #include "phos/Audibility.h"
 #include "phos/Fft.h"
@@ -22,20 +23,36 @@ constexpr double LowerSlope = 27.0;    ///< dB per Bark on the low side of a sou
 constexpr double MinUpperSlope = 5.0;  ///< the upper slope never flattens below this (dB per Bark)
 constexpr double AudibleFrame = 0.25;  ///< a frame counts when the part alone is this loud (units; 1 = 1 kHz at 40 dB SPL)
 
-/** @brief Critical-band rate in Bark (Traunmueller 1990). */
+/**
+ * @brief Critical-band rate in Bark (Traunmueller 1990).
+ * @param[in] hz  the frequency
+ * @return the critical-band rate in Bark
+ */
 double bark(double hz) { return 26.81 * hz / (1960.0 + hz) - 0.53; }
 
-/** @brief ERB-number (Cam) of @p hz (Glasberg & Moore 1990). */
+/**
+ * @brief ERB-number (Cam) of @p hz (Glasberg & Moore 1990).
+ * @param[in] hz  the frequency
+ * @return the ERB-number
+ */
 double cam(double hz) { return 21.4 * std::log10(4.37e-3 * hz + 1.0); }
 
-/** @brief Outer and middle ear weighting of ITU-R BS.1387 (PEAQ), dB. */
+/**
+ * @brief Outer and middle ear weighting of ITU-R BS.1387 (PEAQ), dB.
+ * @param[in] hz  the frequency
+ * @return the weighting in dB
+ */
 double earWeightDb(double hz)
 {
     const double f = std::max(hz, 20.0) / 1000.0;
     return -0.6 * 3.64 * std::pow(f, -0.8) + 6.5 * std::exp(-0.6 * (f - 3.3) * (f - 3.3)) - 1e-3 * std::pow(f, 3.6);
 }
 
-/** @brief The threshold's excitation after the ear weighting, dB SPL (the internal noise of PEAQ, raised by 3 dB). */
+/**
+ * @brief The threshold's excitation after the ear weighting, dB SPL (the internal noise of PEAQ, raised by 3 dB).
+ * @param[in] hz  the frequency
+ * @return the threshold in dB SPL
+ */
 double thresholdDb(double hz)
 {
     const double f = std::max(hz, 20.0) / 1000.0;

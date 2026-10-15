@@ -22,6 +22,11 @@
  *
  * This is not a replacement for pluginval, which exercises the VST3 wrapper itself; it is the part
  * that lives in the repository and runs on every build.
+ * @author Rene Weller
+ *
+ * @par Compile Flags:
+ *   @arg @c PHOS_SOURCE_DATA_DIR - the source tree's data directory (Core/CMakeLists.txt sets it), where the models are
+ *                                  looked for
  */
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
@@ -44,14 +49,23 @@ namespace {
 int failures = 0;   ///< checks that failed
 int checks = 0;   ///< checks made
 
-/** @brief Records one check's result and prints it. */
+/**
+ * @brief Records one check's result and prints it.
+ * @param[in] ok    the check's result
+ * @param[in] what  what it checked
+ */
 void check(bool ok, const juce::String& what)
 {
     ++checks;
     if (!ok) { std::printf("FAIL: %s\n", what.toRawUTF8()); ++failures; }
 }
 
-/** @brief Whether the first @p n samples of every channel of @p b are finite. */
+/**
+ * @brief Whether the first @p n samples of every channel of @p b are finite.
+ * @param[in] b  the buffer
+ * @param[in] n  the samples
+ * @return true when all are finite
+ */
 bool finite(const juce::AudioBuffer<float>& b, int n)
 {
     for (int c = 0; c < b.getNumChannels(); ++c)
@@ -63,7 +77,10 @@ bool finite(const juce::AudioBuffer<float>& b, int n)
 /** @brief A play head a host would give: a transport at a tempo, running from a position. */
 class TestPlayHead final : public juce::AudioPlayHead {
 public:
-    /** @brief The transport as it stands: at bpm, at ppq and samples, playing or not. */
+    /**
+     * @brief The transport as it stands: at bpm, at ppq and samples, playing or not.
+     * @return the transport's position
+     */
     juce::Optional<PositionInfo> getPosition() const override
     {
         PositionInfo info;
@@ -75,7 +92,10 @@ public:
         info.setIsRecording(false);
         return info;
     }
-    /** @brief Advances the transport by a block. */
+    /**
+     * @brief Advances the transport by a block.
+     * @param[in] n  how many samples
+     */
     void advance(int n)
     {
         if (!m_playing) return;
@@ -89,7 +109,13 @@ public:
     bool m_playing = true;   ///< the transport runs
 };
 
-/** @brief Runs @p blocks blocks through the processor, collecting the MIDI it produces. */
+/**
+ * @brief Runs @p blocks blocks through the processor, collecting the MIDI it produces.
+ * @param[in,out] p        the processor
+ * @param[in,out] buf      the buffer
+ * @param[in]     blocks   the blocks
+ * @param[out]    midiOut  receives the MIDI produced, or null
+ */
 void feed(PhospheneProcessor& p, juce::AudioBuffer<float>& buf, int blocks, std::vector<juce::MidiMessage>* midiOut = nullptr)
 {
     juce::MidiBuffer midi;
@@ -104,11 +130,12 @@ void feed(PhospheneProcessor& p, juce::AudioBuffer<float>& buf, int blocks, std:
 
 /**
  * @brief The inner loop of phos_render: the oracle the plugin has to equal.
- * @param seed    the set
- * @param sr      sample rate
- * @param block   block size handed to the engine
- * @param samples how many samples to render
- * @param bars    bars planned for the tempo map, as phos_render's `--bars` does it
+ * @param[in] seed     the set
+ * @param[in] sr       sample rate
+ * @param[in] block    block size handed to the engine
+ * @param[in] samples  how many samples to render
+ * @param[in] bars     bars planned for the tempo map, as phos_render's `--bars` does it
+ * @return the samples
  */
 std::vector<float> referenceRender(uint64_t seed, double sr, int block, int samples, int bars)
 {
@@ -130,7 +157,14 @@ std::vector<float> referenceRender(uint64_t seed, double sr, int block, int samp
     return out;
 }
 
-/** @brief The plugin rendering the same thing: own clock, offline, from the top. */
+/**
+ * @brief The plugin rendering the same thing: own clock, offline, from the top.
+ * @param[in] seed     the set
+ * @param[in] sr       the sample rate
+ * @param[in] block    the block size
+ * @param[in] samples  the samples rendered
+ * @return the samples
+ */
 std::vector<float> pluginRender(uint64_t seed, double sr, int block, int samples)
 {
     auto p = std::make_unique<PhospheneProcessor>();
@@ -157,7 +191,14 @@ std::vector<float> pluginRender(uint64_t seed, double sr, int block, int samples
     return out;
 }
 
-/** @brief Feeds blocks until the composer has published @p want tracks, or the time runs out. */
+/**
+ * @brief Feeds blocks until the composer has published @p want tracks, or the time runs out.
+ * @param[in,out] p        the processor
+ * @param[in,out] buf      the buffer
+ * @param[in]     want     the tracks wanted
+ * @param[in]     seconds  the time allowed
+ * @return false when the time ran out
+ */
 bool waitForPlans(PhospheneProcessor& p, juce::AudioBuffer<float>& buf, int want, double seconds)
 {
     const auto t0 = std::chrono::steady_clock::now();
@@ -170,7 +211,13 @@ bool waitForPlans(PhospheneProcessor& p, juce::AudioBuffer<float>& buf, int want
     return false;
 }
 
-/** @brief Root mean square of what the processor renders over @p samples samples. */
+/**
+ * @brief Root mean square of what the processor renders over @p samples samples.
+ * @param[in,out] p        the processor
+ * @param[in]     block    the block size
+ * @param[in]     samples  the samples rendered
+ * @return the RMS
+ */
 double renderRms(PhospheneProcessor& p, int block, int samples)
 {
     juce::AudioBuffer<float> buf(2, block);
@@ -190,7 +237,12 @@ double renderRms(PhospheneProcessor& p, int block, int samples)
     return std::sqrt(sum / juce::jmax(1, done));
 }
 
-/** @brief The first combo box in a component tree whose tooltip is the parameter key @p key. */
+/**
+ * @brief The first combo box in a component tree whose tooltip is the parameter key @p key.
+ * @param[in,out] root  the tree's root
+ * @param[in]     key   the parameter key
+ * @return the combo box, or null
+ */
 juce::ComboBox* findCombo(juce::Component& root, const juce::String& key)
 {
     if (auto* cb = dynamic_cast<juce::ComboBox*>(&root))
@@ -201,7 +253,12 @@ juce::ComboBox* findCombo(juce::Component& root, const juce::String& key)
     return nullptr;
 }
 
-/** @brief The first label in a component tree whose text starts with @p prefix. */
+/**
+ * @brief The first label in a component tree whose text starts with @p prefix.
+ * @param[in,out] root    the tree's root
+ * @param[in]     prefix  the text's start
+ * @return the label, or null
+ */
 juce::Label* findLabel(juce::Component& root, const juce::String& prefix)
 {
     if (auto* l = dynamic_cast<juce::Label*>(&root))
@@ -220,6 +277,7 @@ juce::Label* findLabel(juce::Component& root, const juce::String& prefix)
  * models are not there" cannot both be staged inside one run -- unlike the wavetable library, which
  * has resetWaveTableLibrary(). The absence is therefore staged the only way it can be: a copy of
  * this executable in an empty directory, started as a child, reporting back through its stdout.
+ * @return the exit code
  */
 int probeModels()
 {
@@ -247,7 +305,12 @@ int probeModels()
     return 0;
 }
 
-/** @brief A mouse click on a component that has no peer, as the editor's own would arrive. */
+/**
+ * @brief A mouse click on a component that has no peer, as the editor's own would arrive.
+ * @param[in,out] c  the component
+ * @param[in]     x  the x in pixels
+ * @param[in]     y  the y in pixels
+ */
 void clickAt(juce::Component& c, int x, int y)
 {
     const juce::Point<float> at(static_cast<float>(x), static_cast<float>(y));
@@ -263,6 +326,7 @@ void clickAt(juce::Component& c, int x, int y)
  * Every track starts DjOverlap bars before the previous one ends, as the composer plans them since the
  * arrangement round (19.09.2026); until then this set was back to back and the view was never shown two
  * tracks sharing bars.
+ * @return the snapshot
  */
 ArrangeDisplay::Snapshot bigSet()
 {
@@ -379,7 +443,12 @@ int liveDiagnosis()
 
 } // namespace
 
-/** @brief Runs the host test's parts (all, or the one named on the command line). */
+/**
+ * @brief Runs the host test's parts (all, or the one named on the command line).
+ * @param[in]     argc  the number of arguments
+ * @param[in,out] argv  the arguments: sections to run
+ * @return the number of failures
+ */
 int main(int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

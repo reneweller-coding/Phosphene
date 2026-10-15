@@ -2,6 +2,7 @@
  * @file SoundPresets.cpp
  * @brief The factory presets (SoundPresets.h): since 26.09.2026 the bank of PresetBank.cpp -- sixteen groups of
  *        sixty-four for each of nine synths -- in place of the recipe points of 24.09.2026, and the preset text itself.
+ * @author Rene Weller
  */
 #include "phos/SoundPresets.h"
 
@@ -37,7 +38,12 @@ bool presetLeaves(ModuleE m, int k)
 
 namespace {
 
-/** @brief Puts every knob of a module instance to its default. */
+/**
+ * @brief Puts every knob of a module instance to its default.
+ * @param[in,out] p         the parameters
+ * @param[in]     m         the module
+ * @param[in]     instance  its instance
+ */
 void moduleToDefaults(ParamStore& p, ModuleE m, int instance)
 {
     const int b = p.base(m, instance);

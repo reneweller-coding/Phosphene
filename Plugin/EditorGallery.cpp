@@ -8,6 +8,7 @@
  * stands -- seed, knobs, locks and rerolls -- together with the tracks the editor has seen planned, which is what
  * the strip draws. Loading goes through the processor's undo (a loaded set is one step back), and the verdicts
  * next to each set are counted from the ratings file of the Perform tab, by seed.
+ * @author Rene Weller
  */
 #include "PluginEditor.h"
 #include <algorithm>
@@ -17,7 +18,11 @@ using namespace phosui;
 
 namespace {
 
-/** @brief The colour of a section letter in the form strip. */
+/**
+ * @brief The colour of a section letter in the form strip.
+ * @param[in] c  the section letter
+ * @return its colour
+ */
 juce::Colour sectionColour(char c)
 {
     switch (c) {

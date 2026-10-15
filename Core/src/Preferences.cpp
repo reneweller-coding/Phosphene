@@ -1,6 +1,7 @@
 /**
  * @file Preferences.cpp
  * @brief Learned preferences (Preferences.h).
+ * @author Rene Weller
  */
 #include "phos/Preferences.h"
 #include "phos/Composer.h"

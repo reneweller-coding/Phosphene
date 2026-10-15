@@ -37,6 +37,7 @@
  *
  * **Depth rule.** The low cut never goes below 150 Hz, and the composer keeps acid lines at or above
  * D3 (147 Hz): under 140 Hz only kick and bass may play.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Modulation.h"
@@ -83,6 +84,11 @@ namespace phos {
  *    version is at -184 dB. That residue is far too quiet to hear; what it shows is that the state
  *    would have to be reset or crossfaded at every note, and a stateless interpolator that already
  *    removes 91 % of the linear error at 5 kHz makes that machinery pointless.
+ * @param[in]  x    the fraction, 0..1
+ * @param[out] wm1  the weight of the sample at offset -1
+ * @param[out] w0   the weight at offset 0
+ * @param[out] w1   the weight at offset +1
+ * @param[out] w2   the weight at offset +2
  */
 inline void combTaps(float x, float& wm1, float& w0, float& w1, float& w2)
 {
@@ -96,7 +102,10 @@ inline void combTaps(float x, float& wm1, float& w0, float& w1, float& w2)
 /** @brief Monophonic acid synthesizer. */
 class Acid {
 public:
-    /** @brief Prepares for a sample rate. */
+    /**
+     * @brief Prepares for a sample rate.
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate);
     /**
      * @brief Chooses the rate the oscillator and the diode ladder run at (Quality.h).
@@ -105,46 +114,77 @@ public:
      * brings the result back. 1 skips both and costs about half; the cutoff ceiling then comes from
      * stability (0.45 fs) instead of the decimator's passband, which at 48 kHz is the same 18 kHz
      * limit, so the sound keeps its range. Call it after prepare() and before the first update().
-     * @param factor 1 or 2; anything else is clamped into that range
+     * @param[in] factor  1 or 2; anything else is clamped into that range
      */
     void setOversampling(int factor);
-    /** @brief The factor set by setOversampling(). */
+    /**
+     * @brief The factor set by setOversampling().
+     * @return the oversampling factor
+     */
     int oversampling() const { return m_os; }
     /** @brief Silences and clears all state. */
     void reset();
-    /** @brief Reads the effective parameters (indexed by acid::) and the tempo (for the delay). */
+    /**
+     * @brief Reads the effective parameters (indexed by acid::) and the tempo (for the delay).
+     * @param[in] v    the effective parameter values
+     * @param[in] bpm  the tempo
+     */
     void update(const float* v, double bpm);
-    /** @brief The set's beat at the next sample and the beats per sample (Engine.cpp, per chunk): the synced LFOs' clock. */
+    /**
+     * @brief The set's beat at the next sample and the beats per sample (Engine.cpp, per chunk): the synced LFOs'
+     *        clock.
+     * @param[in] beat            the beat at the next sample
+     * @param[in] beatsPerSample  the beats per sample
+     */
     void setClock(double beat, double beatsPerSample) { m_beat = beat; m_beatsPerSample = beatsPerSample; }
     /**
      * @brief Starts a note.
-     * @param pitch       MIDI note
-     * @param velocity    0..1
-     * @param accent      accented step
-     * @param slide       this note glides into the next one
-     * @param gateSamples samples until the gate closes
-     * @param late        how many samples ago the note ideally started (0 <= late < 1)
+     * @param[in] pitch        MIDI note
+     * @param[in] velocity     0..1
+     * @param[in] accent       accented step
+     * @param[in] slide        this note glides into the next one
+     * @param[in] gateSamples  samples until the gate closes
+     * @param[in] late         how many samples ago the note ideally started (0 <= late < 1)
      */
     void noteOn(int pitch, float velocity, bool accent, bool slide, int gateSamples, double late);
     /**
      * @brief Closes the gate of the note at @p pitch, if it is the one sounding (23.09.2026, live keyboard): a
      *        played note starts with a gate that never runs out on its own, and the key's release ends it.
+     * @param[in] pitch  the MIDI note
      */
     void noteOff(int pitch) { if (m_gate > 0 && static_cast<int>(m_pitchTarget + 0.5) == pitch) m_gate = 1; }
-    /** @brief Renders @p n stereo samples, replacing @p L and @p R. */
+    /**
+     * @brief Renders @p n stereo samples, replacing @p L and @p R.
+     * @param[out] L  the left channel
+     * @param[out] R  the right channel
+     * @param[in]  n  the block's samples
+     */
     void process(float* L, float* R, int n);
-    /** @brief Whether the amplitude envelope is open. */
+    /**
+     * @brief Whether the amplitude envelope is open.
+     * @return true while the envelope is open
+     */
     bool active() const { return m_amp.isActive(); }
-    /** @brief Pitch the oscillator plays now, in MIDI note numbers (fractional while gliding). */
+    /**
+     * @brief Pitch the oscillator plays now, in MIDI note numbers (fractional while gliding).
+     * @return the pitch in MIDI notes
+     */
     double currentPitch() const { return m_pitchNow; }
-    /** @brief Charge of the accent sweep capacitor, 0..1. */
+    /**
+     * @brief Charge of the accent sweep capacitor, 0..1.
+     * @return the charge, 0..1
+     */
     float accentSweep() const { return m_sweep; }
-    /** @brief Whether the last note started legato (slid into). */
+    /**
+     * @brief Whether the last note started legato (slid into).
+     * @return true when the last note slid in
+     */
     bool lastLegato() const { return m_legato; }
 
     /**
      * @brief The modulation to show on the knobs (26.09.2026, the live ring): the sums per destination (ModDest) of the
      *        modulator, or null where nothing moves. Rendering thread.
+     * @return the sums per destination, or null
      */
     const float* displayModulation() const { return m_modOn && m_mod.active() ? m_modSum : nullptr; }
 private:

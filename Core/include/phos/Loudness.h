@@ -9,6 +9,7 @@
  *
  * @note Copied from Noctuary `Core/include/ambient/Loudness.h` at b60a2fe (15.09.2026) without the
  *       Zwicker sone model (and therefore without its FFT). Comments in Doxygen form.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Dynamics.h"
@@ -37,11 +38,18 @@ struct LoudnessReading {
  */
 class KFilter {
 public:
-    /** @brief Computes the coefficients for @p sampleRate. */
+    /**
+     * @brief Computes the coefficients for @p sampleRate.
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate);
     /** @brief Clears the states. */
     void reset();
-    /** @brief One sample. */
+    /**
+     * @brief One sample.
+     * @param[in] x  the input sample
+     * @return the output sample
+     */
     float process(float x);
 private:
     /** @brief One second-order section of the K-weighting filter. */
@@ -53,7 +61,11 @@ private:
         float m_a2 = 0;   ///< ... of y[n-2]
         float m_z1 = 0;   ///< the first state
         float m_z2 = 0;   ///< the second state
-        /** @brief One sample @p x through the section. */
+        /**
+         * @brief One sample @p x through the section.
+         * @param[in] x  the input sample
+         * @return the output sample
+         */
         float process(float x)
         {
             const float y = m_b0 * x + m_z1;
@@ -74,11 +86,18 @@ private:
  * It never grows, so the audio thread never allocates; what is kept is a window of the recent past.
  */
 struct LoudnessLog {
-    /** @brief Allocates the ring (not on the audio thread). */
+    /**
+     * @brief Allocates the ring (not on the audio thread).
+     * @param[in] capacity  the values held
+     * @pre not called on the audio thread
+     */
     void prepare(size_t capacity) { m_buf.assign(capacity, 0.0f); m_pos.store(0); m_count.store(0); }
     /** @brief Forgets the contents. */
     void clear() { m_pos.store(0); m_count.store(0); }
-    /** @brief Appends a value; never allocates. */
+    /**
+     * @brief Appends a value; never allocates.
+     * @param[in] v  the value
+     */
     void push(float v)
     {
         if (m_buf.empty()) return;
@@ -88,9 +107,20 @@ struct LoudnessLog {
         const size_t c = m_count.load(std::memory_order_relaxed);
         if (c < m_buf.size()) m_count.store(c + 1, std::memory_order_release);
     }
-    size_t size() const { return m_count.load(std::memory_order_acquire); }   ///< values held
-    bool  empty() const { return size() == 0; }                             ///< nothing held
-    /** @brief The window in order, oldest first. */
+    /**
+     * values held
+     * @return the values held
+     */
+    size_t size() const { return m_count.load(std::memory_order_acquire); }
+    /**
+     * nothing held
+     * @return true when nothing is held
+     */
+    bool  empty() const { return size() == 0; }
+    /**
+     * @brief The window in order, oldest first.
+     * @return the values, oldest first
+     */
     std::vector<float> snapshot() const
     {
         const size_t n = m_count.load(std::memory_order_acquire);
@@ -110,13 +140,24 @@ private:
 /** @brief The BS.1770 meter with gating, range and true peak. */
 class LoudnessMeter {
 public:
-    /** @brief Allocates and computes filters for @p sampleRate. */
+    /**
+     * @brief Allocates and computes filters for @p sampleRate.
+     * @param[in] sampleRate  the sample rate in Hz
+     */
     void prepare(double sampleRate);
     /** @brief Starts a new measurement. */
     void reset();
-    /** @brief Feeds the finished stereo output. */
+    /**
+     * @brief Feeds the finished stereo output.
+     * @param[in] L  the left channel
+     * @param[in] R  the right channel
+     * @param[in] n  how many samples
+     */
     void process(const float* L, const float* R, int n);
-    /** @brief The current figures. */
+    /**
+     * @brief The current figures.
+     * @return the figures
+     */
     LoudnessReading read() const;
 private:
     /** @brief Closes a 100 ms hop: stores its mean square and updates the gated readings. */

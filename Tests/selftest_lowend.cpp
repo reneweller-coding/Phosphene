@@ -1,6 +1,7 @@
 /**
  * @file selftest_lowend.cpp
  * @brief The self test's low end and models: acid voicings, the phase lock, the bass rhythm, percussion, rhythm, the constrained sampler and the learned models.
+ * @author Rene Weller
  */
 #include "SelfTestHelpers.h"
 

@@ -2,6 +2,7 @@
  * @file Composer.cpp
  * @brief Track plans and their walk, bass phrases, curation, the bars of a set, and the conductor
  *        (the control events are in ComposerControls.cpp, the measurements in ComposerLevels.cpp).
+ * @author Rene Weller
  */
 #include "phos/SoundPresets.h"
 #include "phos/Composer.h"
@@ -82,7 +83,12 @@ const VoiceDelayFamily VoiceDelay[PolyInstances] = {
 };
 static_assert(sizeof(VoiceDelay) / sizeof(VoiceDelay[0]) == PolyInstances, "one delay family per polyphonic instance");
 
-/** @brief Draws a recipe: each direction from a normal distribution with sigma 0.5, truncated to [-1, 1]. */
+/**
+ * @brief Draws a recipe: each direction from a normal distribution with sigma 0.5, truncated to [-1, 1].
+ * @param[in,out] r  the random stream
+ * @param[out]    m  the recipe's directions
+ * @param[in]     n  their count
+ */
 void drawRecipe(Rng& r, float* m, int n)
 {
     for (int i = 0; i < n; ++i) {
@@ -92,7 +98,13 @@ void drawRecipe(Rng& r, float* m, int n)
     }
 }
 
-/** @brief Index from cumulative weights. */
+/**
+ * @brief Index from cumulative weights.
+ * @param[in,out] r        the random stream
+ * @param[in]     weights  the cumulative weights
+ * @param[in]     n        their count
+ * @return the index drawn
+ */
 int pick(Rng& r, const double* weights, int n)
 {
     double total = 0.0;
@@ -104,7 +116,11 @@ int pick(Rng& r, const double* weights, int n)
 
 /**
  * @brief Longest gate that still lets the lowest note's release finish before the next slot.
- * @param slotBeats the shortest gap from a note to whatever ends it, in beats
+ * @param[in] slotBeats      the shortest gap from a note to whatever ends it, in beats
+ * @param[in] bpm            the tempo
+ * @param[in] lowestNote     the lowest MIDI note
+ * @param[in] releaseKnobMs  the release knob in milliseconds
+ * @return the longest gate
  */
 float gateLimitSlot(double slotBeats, double bpm, int lowestNote, float releaseKnobMs)
 {
@@ -114,13 +130,24 @@ float gateLimitSlot(double slotBeats, double bpm, int lowestNote, float releaseK
     return static_cast<float>(1.0 - (release + 0.004) / slot);
 }
 
-/** @brief The same limit for a pattern family. */
+/**
+ * @brief The same limit for a pattern family.
+ * @param[in] pattern        the pattern family
+ * @param[in] bpm            the tempo
+ * @param[in] lowestNote     the lowest MIDI note
+ * @param[in] releaseKnobMs  the release knob in milliseconds
+ * @return the longest gate
+ */
 float gateLimit(int pattern, double bpm, int lowestNote, float releaseKnobMs)
 {
     return gateLimitSlot(shortestBassSlot(pattern), bpm, lowestNote, releaseKnobMs);
 }
 
-/** @brief Length of the whole set in bars, from compose.set_minutes and the tempo: the arc's time base. */
+/**
+ * @brief Length of the whole set in bars, from compose.set_minutes and the tempo: the arc's time base.
+ * @param[in] p  the knobs
+ * @return the length in bars
+ */
 double setLengthBars(const ParamStore& p)
 {
     const int cb = p.base(ModuleE::COMPOSE);
@@ -133,7 +160,10 @@ double setLengthBars(const ParamStore& p)
 /** @brief The uniform source sampleMasked() draws from. */
 struct BassUniform {
     Rng* m_r;   ///< the stream
-    /** @brief A uniform draw in [0, 1). */
+    /**
+     * @brief A uniform draw in [0, 1).
+     * @return the draw
+     */
     double operator()() const { return static_cast<double>(m_r->uniform()); }
 };
 
@@ -146,6 +176,10 @@ struct BassUniform {
  * approximation and it is the only one available: the whole conditioning of docs/MODEL_FORMAT.md
  * section 3, and the corpus it was counted on, live on a sixteenth grid. It affects the `step`,
  * `bar`, `gap` and `kick` the model sees, never where the note is actually played.
+ * @param[in] pat   the pattern
+ * @param[in] beat  the beat in the bar
+ * @param[in] s     the slot
+ * @return the sixteenth
  */
 int bassSlotStep(const BassPatternDef& pat, int beat, int s)
 {
@@ -166,15 +200,15 @@ int bassSlotStep(const BassPatternDef& pat, int beat, int s)
  * bass notes (`Tools/train/bass_stats.py`); the 7.4 % below it and the 2.3 % above are given up on
  * purpose, because a lower note would invalidate the release floor the gate limit is computed from
  * and the bass would start cutting its own tail.
- *
- * @param steps the sixteenths of the phrase that carry a note, ascending, `bar * 16 + step`; with a
- *              pattern family those are its slots, with a drawn rhythm the onsets of its masks
- * @param slots one entry per step: where in `out` that note's interval goes
- * @param scale the track's mode
- * @param seed  the track's bass-line seed
- * @param out   BassPhraseSlots entries; slots the phrase does not use are left at 0
- * @return false when the model refuses a step or the masked draw fails; the caller then stays on the
- *         pattern generator for the whole track rather than mixing two sources within one phrase.
+ * @param[in,out] model  the learned model
+ * @param[in]     steps  the sixteenths of the phrase that carry a note, ascending, `bar * 16 + step`; with a pattern
+ *                       family those are its slots, with a drawn rhythm the onsets of its masks
+ * @param[in]     slots  one entry per step: where in `out` that note's interval goes
+ * @param[in]     scale  the track's mode
+ * @param[in]     seed   the track's bass-line seed
+ * @param[in,out] out    BassPhraseSlots entries; slots the phrase does not use are left at 0
+ * @return false when the model refuses a step or the masked draw fails; the caller then stays on the pattern generator
+ *         for the whole track rather than mixing two sources within one phrase.
  */
 bool drawBassPhrase(NeuralModel& model, const std::vector<int>& steps, const std::vector<int>& slots,
                     int scale, uint64_t seed, int8_t* out)
@@ -219,8 +253,10 @@ bool drawBassPhrase(NeuralModel& model, const std::vector<int>& steps, const std
  * the Triplet family has no sixteenth at all. The ordinal is also what the style profile's slot
  * envelope (PLAN 6.6) and the phrase figures are indexed by, so a drawn bar of three notes is the
  * same three slots a rolling bar is.
- *
- * @param masks BassPhraseBars onset masks, or null for the pattern family @p pat
+ * @param[in]  pat    the pattern family
+ * @param[in]  masks  BassPhraseBars onset masks, or null for the pattern family @p pat
+ * @param[out] steps  the steps the model is asked about
+ * @param[out] slots  the slots they land in
  */
 void phraseSlots(const BassPatternDef& pat, const uint16_t* masks, std::vector<int>& steps, std::vector<int>& slots)
 {
@@ -255,29 +291,29 @@ void phraseSlots(const BassPatternDef& pat, const uint16_t* masks, std::vector<i
  * prints one line and leaves `bassNeural` false, which is exactly the behaviour the melodic side
  * has when `melody.phosmdl` is not there.
  */
-void Composer::makeBassPhrases(const ParamStore& p, TrackPlan& t) const
+void Composer::makeBassPhrases(const ParamStore& params, TrackPlan& plan) const
 {
-    t.m_bassNeural = false;
-    if (p.getInt(p.base(ModuleE::COMPOSE) + compose::BASS_MODEL) != 1) return;
+    plan.m_bassNeural = false;
+    if (params.getInt(params.base(ModuleE::COMPOSE) + compose::BASS_MODEL) != 1) return;
     std::string note;
     NeuralModel* model = sharedBassModel(&note);
     if (model == nullptr) {
         if (!note.empty() && !m_bassModelReported) { std::fprintf(stderr, "%s\n", note.c_str()); m_bassModelReported = true; }
         return;
     }
-    const uint64_t seed = mixSeed(trackSeed(t.m_index) ^ SaltBassLine, 0);
-    const int patterns[2] = { t.m_primaryPattern, t.m_secondaryPattern };
+    const uint64_t seed = mixSeed(trackSeed(plan.m_index) ^ SaltBassLine, 0);
+    const int patterns[2] = { plan.m_primaryPattern, plan.m_secondaryPattern };
     std::vector<int> steps, slots;
     for (int k = 0; k < 2; ++k) {
         // With a drawn rhythm the model is asked about the steps that will really sound, not about the
         // family's: `step`, `gap` and `kick` are three of its five conditioning inputs
         // (docs/MODEL_FORMAT.md 3), so telling it the family's slots and then playing other ones would
         // throw away exactly the part of the conditioning the rhythm round is about.
-        phraseSlots(BassPatterns[patterns[k]], t.m_bassRhythm ? t.m_bassMask[k] : nullptr, steps, slots);
-        if (!drawBassPhrase(*model, steps, slots, t.m_scale, mixSeed(seed, static_cast<uint64_t>(k)), t.m_bassRel[k]))
+        phraseSlots(BassPatterns[patterns[k]], plan.m_bassRhythm ? plan.m_bassMask[k] : nullptr, steps, slots);
+        if (!drawBassPhrase(*model, steps, slots, plan.m_scale, mixSeed(seed, static_cast<uint64_t>(k)), plan.m_bassRel[k]))
             return;
     }
-    t.m_bassNeural = true;
+    plan.m_bassNeural = true;
 }
 
 /**
@@ -307,34 +343,34 @@ void Composer::makeBassPhrases(const ParamStore& p, TrackPlan& t) const
  * The phrase is a function of the track's seed and of nothing else, under a salt of its own, so
  * turning the knob on moves no other draw and bar N is bar N however the set is rendered.
  */
-void Composer::makeBassRhythm(const ParamStore& p, TrackPlan& t) const
+void Composer::makeBassRhythm(const ParamStore& params, TrackPlan& plan) const
 {
-    t.m_bassRhythm = false;
-    t.m_bassShortestSlot = 0.25f;
-    const int cb = p.base(ModuleE::COMPOSE);
-    if (p.getInt(cb + compose::BASS_RHYTHM) != 1) return;
-    const StyleProfile& style = styleProfile(static_cast<StyleIdE>(t.m_style));
-    const float amount = std::clamp(p.get(cb + compose::BASS_VARIATION) * style.m_hatDensity, 0.0f, 1.0f);
+    plan.m_bassRhythm = false;
+    plan.m_bassShortestSlot = 0.25f;
+    const int cb = params.base(ModuleE::COMPOSE);
+    if (params.getInt(cb + compose::BASS_RHYTHM) != 1) return;
+    const StyleProfile& style = styleProfile(static_cast<StyleIdE>(plan.m_style));
+    const float amount = std::clamp(params.get(cb + compose::BASS_VARIATION) * style.m_hatDensity, 0.0f, 1.0f);
     const double stray = amount;
     const double depart = (1.0 - BassRhythm::homeShare()) * amount;
-    const int patterns[2] = { t.m_primaryPattern, t.m_secondaryPattern };
+    const int patterns[2] = { plan.m_primaryPattern, plan.m_secondaryPattern };
     int shortest = 4;
     for (int k = 0; k < 2; ++k) {
         Rng r;
-        r.seed(mixSeed(trackSeed(t.m_index) ^ SaltBassRhythm, static_cast<uint64_t>(k)));
+        r.seed(mixSeed(trackSeed(plan.m_index) ^ SaltBassRhythm, static_cast<uint64_t>(k)));
         BassUniform u{ &r };
         const unsigned home = u() < stray ? BassRhythm::draw(u) : BassRhythm::familyMask(patterns[k]);
         for (int bar = 0; bar < BassPhraseBars; ++bar) {
             const unsigned mask = u() < depart ? BassRhythm::draw(u) : home;
-            t.m_bassMask[k][bar] = static_cast<uint16_t>(mask);
+            plan.m_bassMask[k][bar] = static_cast<uint16_t>(mask);
             shortest = std::min(shortest, BassRhythm::shortestSpan(mask));
         }
     }
     // Every span is a whole number of sixteenths and at least one, so the shortest slot a drawn rhythm
     // can produce is a quarter beat -- exactly the Rolling family's. The gate limit and the release
     // floor of gateLimitSlot() can therefore only relax against the default, never tighten.
-    t.m_bassShortestSlot = static_cast<float>(shortest) * 0.25f;
-    t.m_bassRhythm = true;
+    plan.m_bassShortestSlot = static_cast<float>(shortest) * 0.25f;
+    plan.m_bassRhythm = true;
 }
 
 /**
@@ -343,6 +379,8 @@ void Composer::makeBassRhythm(const ParamStore& p, TrackPlan& t) const
  * Since 19.09.2026 this is BarPlan::floorSilent rather than "this track's kick and bass rest": over the DJ
  * overlap the previous track's kick and bass still hold the floor, and a buildup's pre-drop break is a held
  * breath rather than a floor (Form.cpp).
+ * @param[in] bp  the bar's plan
+ * @return true when the floor is free
  */
 static bool foundationBar(const BarPlan& bp) { return bp.m_floorSilent; }
 
@@ -377,6 +415,10 @@ struct DroneBar {
 /**
  * @brief The drone's state in bar @p inTrack: on where the form sets its bit, low where the floor is
  *        silent for this bar and the DroneLowTail bars after it (inside the track).
+ * @param[in] plan     the track's plan
+ * @param[in] a        what the track offers
+ * @param[in] inTrack  the bar within the track
+ * @return the drone's state
  */
 static DroneBar droneBarAt(const TrackPlan& plan, const PartAvailability& a, int inTrack)
 {
@@ -412,6 +454,10 @@ static DroneBar droneBarAt(const TrackPlan& plan, const PartAvailability& a, int
  *
  * Every field is a function of the plan and the bar's place in it, so a bar composed alone is the
  * bar composed in sequence.
+ * @param[in] plan     the track's plan
+ * @param[in] bp       the bar's plan
+ * @param[in] inTrack  the bar within the track
+ * @return the bar's context
  */
 MelodyContext melodyContext(const TrackPlan& plan, const BarPlan& bp, int inTrack)
 {
@@ -475,7 +521,12 @@ MelodyContext melodyContext(const TrackPlan& plan, const BarPlan& bp, int inTrac
     return c;
 }
 
-/** @brief Whether the drone plays bar @p inTrack in its low octave (the high pass is opened for it). */
+/**
+ * @brief Whether the drone plays bar @p inTrack in its low octave (the high pass is opened for it).
+ * @param[in] plan     the track's plan
+ * @param[in] inTrack  the bar within the track
+ * @return true in the low octave
+ */
 bool droneLowAt(const TrackPlan& plan, int inTrack)
 {
     if (!plan.m_melody.m_present[mpIndex(MelodyPartE::DRONE)]) return false;
@@ -615,28 +666,28 @@ void Composer::validate(const ParamStore& p) const
  * track's own seed. Rerolling one track therefore leaves the walk -- and with it every other track --
  * untouched (PLAN 6.8); rerolling the set moves the whole walk.
  */
-const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
+const TrackWalk& Composer::walkAt(const ParamStore& params, int index) const
 {
-    const int cb = p.base(ModuleE::COMPOSE);
-    const float tv = p.get(cb + compose::TRACK_VARIATION);
-    const StyleProfile& style = styleProfile(styleOf(p));
-    const bool styleTempo = p.getBool(cb + compose::STYLE_TEMPO);
-    const double baseBpm = styleTempo ? style.m_bpmCentre : p.get(cb + compose::BPM);
-    const double range = styleTempo ? style.m_bpmRange : p.get(cb + compose::TEMPO_RANGE);
+    const int cb = params.base(ModuleE::COMPOSE);
+    const float tv = params.get(cb + compose::TRACK_VARIATION);
+    const StyleProfile& style = styleProfile(styleOf(params));
+    const bool styleTempo = params.getBool(cb + compose::STYLE_TEMPO);
+    const double baseBpm = styleTempo ? style.m_bpmCentre : params.get(cb + compose::BPM);
+    const double range = styleTempo ? style.m_bpmRange : params.get(cb + compose::TEMPO_RANGE);
     // Track lengths are multiples of 16 bars (19.09.2026; until then 32, so that every track boundary fell
     // on a 32-bar grid of the set -- the DJ overlap of the arrangement round moves every later track by
     // sixteen bars against that grid anyway, and a track's own form is what its phrases count from).
-    const int baseBars = std::clamp((p.getInt(cb + compose::TRACK_BARS) / TrackBarStep) * TrackBarStep, MinTrackBars, MaxTrackBars);
+    const int baseBars = std::clamp((params.getInt(cb + compose::TRACK_BARS) / TrackBarStep) * TrackBarStep, MinTrackBars, MaxTrackBars);
 
     while (static_cast<int>(m_walk.size()) <= index) {
         const int i = static_cast<int>(m_walk.size());
         TrackWalk w;
         if (i == 0) {
             w.m_bars = baseBars;
-            w.m_key = p.getInt(cb + compose::KEY);
-            w.m_scale = p.getInt(cb + compose::SCALE);
+            w.m_key = params.getInt(cb + compose::KEY);
+            w.m_scale = params.getInt(cb + compose::SCALE);
             w.m_bpm = styleTempo ? std::round(style.m_bpmCentre * 2.0) * 0.5 : baseBpm;
-            w.m_style = static_cast<int>(styleOf(p));
+            w.m_style = static_cast<int>(styleOf(params));
             // 21.09.2026, at the user's decision: the knobs still decide the first track's key,
             // mode, tempo and length -- those are musical settings somebody typed in -- but its
             // *sound* is now drawn like every other track's. Until today the branch ended in a
@@ -660,7 +711,7 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
             // nothing the older draws below decide moves because of it.
             w.m_style = prev.m_style;
             // Track Variation at 0 means every track plays the knobs, the style among them (testVariety.plans).
-            if (p.getBool(cb + compose::STYLE_MIX) && tv > 0.0f) {
+            if (params.getBool(cb + compose::STYLE_MIX) && tv > 0.0f) {
                 static const StyleIdE ByTempo[NumStyles] = { StyleIdE::PROGRESSIVE, StyleIdE::FULL_ON, StyleIdE::GOA, StyleIdE::DARK_FOREST, StyleIdE::HI_TECH };
                 Rng rs;
                 rs.seed(mixSeed(setSeed() ^ SaltStyle, static_cast<uint64_t>(i)));
@@ -670,8 +721,8 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
                 for (int k = i - 2; k >= 0 && m_walk[static_cast<size_t>(k)].m_style == prev.m_style; --k) ++run;
                 double startBar = 0.0, prevStart = 0.0;
                 for (int k = 0; k < i; ++k) { if (k == i - 1) prevStart = startBar; startBar += m_walk[static_cast<size_t>(k)].m_bars; }
-                const double setBars = setLengthBars(p);
-                const bool rising = arcEnergy(arcOf(p), startBar / setBars) >= arcEnergy(arcOf(p), prevStart / setBars);
+                const double setBars = setLengthBars(params);
+                const bool rising = arcEnergy(arcOf(params), startBar / setBars) >= arcEnergy(arcOf(params), prevStart / setBars);
                 const bool move = rs.uniform() < 0.4f || run >= 3;
                 const bool against = rs.uniform() < 0.25f;
                 if (move) {
@@ -719,8 +770,8 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
             {
                 double startBar = 0.0;
                 for (int k = 0; k < i; ++k) startBar += m_walk[static_cast<size_t>(k)].m_bars;
-                const ArcIdE arc = arcOf(p);
-                arcCentre += ArcTempoPerUnit * (arcEnergy(arc, startBar / setLengthBars(p)) - arcEnergy(arc, 0.0));
+                const ArcIdE arc = arcOf(params);
+                arcCentre += ArcTempoPerUnit * (arcEnergy(arc, startBar / setLengthBars(params)) - arcEnergy(arc, 0.0));
             }
             const double walk = arcCentre + 0.6 * (prev.m_bpm - arcCentre) + (2.0 * r.uniform() - 1.0) * trackRange * tv;
             w.m_bpm = std::round(std::clamp(walk, arcCentre - trackRange, arcCentre + trackRange) * 2.0) * 0.5;
@@ -747,7 +798,7 @@ const TrackWalk& Composer::walkAt(const ParamStore& p, int index) const
                 w.m_motif = m_walk[0].m_motif;
                 double startBar = 0.0;
                 for (int k = 0; k < i; ++k) startBar += m_walk[static_cast<size_t>(k)].m_bars;
-                const double setBars = setLengthBars(p);
+                const double setBars = setLengthBars(params);
                 const bool carriesEnd = startBar < setBars && startBar + w.m_bars >= setBars;
                 const bool recall = rm.uniform() < 0.15f;   // drawn whatever i is, so the stream is one per track
                 w.m_motif.m_phrase = (carriesEnd || (i >= 2 && recall)) ? 1 : -1;
@@ -1240,11 +1291,11 @@ std::vector<SectionMark> Composer::sections(const ParamStore& p, int bars) const
  * The percussion shares the kit's lanes: where both tracks put a hit on the same lane at the same moment,
  * the outgoing track's stands and the incoming one is dropped.
  */
-void Composer::transitionBar(const ParamStore& p, int gi, int bar, std::vector<NoteEvent>& out,
+void Composer::transitionBar(const ParamStore& params, int track, int bar, std::vector<NoteEvent>& out,
                              std::vector<ControlEvent>* controls) const
 {
-    const TrackPlan& guest = m_plans[static_cast<size_t>(gi)];
-    const TrackPlan& owner = m_plans[static_cast<size_t>(gi - 1)];
+    const TrackPlan& guest = m_plans[static_cast<size_t>(track)];
+    const TrackPlan& owner = m_plans[static_cast<size_t>(track - 1)];
     const int inTrack = bar - guest.m_firstBar;
     const double barBeat = static_cast<double>(bar) * BeatsPerBar;
     const BarPlan bp = planBar(guest.m_form, availabilityOf(guest), guest.m_sectionSeed, inTrack);
@@ -1252,20 +1303,20 @@ void Composer::transitionBar(const ParamStore& p, int gi, int bar, std::vector<N
     const bool consonant = move == 0 || move == 5 || move == 7;
 
     if (controls != nullptr) {
-        if (inTrack == 0) trackStartControls(p, guest, barBeat, *controls, ControlScopeE::VOICES);
-        if (bp.m_barInSection == 0) sectionControls(p, guest, bp, barBeat, *controls, ControlScopeE::VOICES);
-        leadArcControls(p, guest, bp, inTrack, barBeat, *controls);
+        if (inTrack == 0) trackStartControls(params, guest, barBeat, *controls, ControlScopeE::VOICES);
+        if (bp.m_barInSection == 0) sectionControls(params, guest, bp, barBeat, *controls, ControlScopeE::VOICES);
+        leadArcControls(params, guest, bp, inTrack, barBeat, *controls);
         // The fader ride into the swap (23.09.2026, round "DJ"): eight bars before the hand-over the track
         // gain and the master offset start ramping from the outgoing track's values to the ones the incoming
         // floor will write at the hand-over -- the same numbers trackStartControls and sectionControls push
         // there, so the swap itself moves nothing. Without the ramp both jump at the hand-over, which is
         // heard as "ploetzlich wieder lauter".
         if (guest.m_form.m_handover >= 8 && inTrack == guest.m_form.m_handover - 8) {
-            const int mb = p.base(ModuleE::MIX);
+            const int mb = params.base(ModuleE::MIX);
             const BarPlan at = planBar(guest.m_form, availabilityOf(guest), guest.m_sectionSeed, guest.m_form.m_handover);
             const Section& sec = guest.m_form.m_section[std::clamp(at.m_index, 0, MaxSections - 1)];
             const double u = sec.m_bars > 1 ? static_cast<double>(at.m_barInSection) / sec.m_bars : 0.0;
-            const ParamDesc& g = p.desc(mb + mix::TRACK_GAIN);
+            const ParamDesc& g = params.desc(mb + mix::TRACK_GAIN);
             ControlEvent c;
             c.m_beat = barBeat;
             c.m_kind = ControlEvent::KindE::OFFSET;
@@ -1274,13 +1325,13 @@ void Composer::transitionBar(const ParamStore& p, int gi, int bar, std::vector<N
             c.m_value = (guest.m_gainDb + energyGainDb(at.m_energy) + sectionTrimDb(guest.m_form, at.m_index, u)) / (g.m_maxValue - g.m_minValue);
             controls->push_back(c);
             if (!guest.m_masterDeferred) {
-                const ParamDesc& mg = p.desc(p.base(ModuleE::MASTER) + master::GAIN);
-                c.m_param = static_cast<int16_t>(p.base(ModuleE::MASTER) + master::GAIN);
+                const ParamDesc& mg = params.desc(params.base(ModuleE::MASTER) + master::GAIN);
+                c.m_param = static_cast<int16_t>(params.base(ModuleE::MASTER) + master::GAIN);
                 c.m_value = guest.m_masterGainDb / (mg.m_maxValue - mg.m_minValue);
                 controls->push_back(c);
             }
         }
-        const int pb = p.base(PolyInstanceE::PAD), db = p.base(PolyInstanceE::DRONE);
+        const int pb = params.base(PolyInstanceE::PAD), db = params.base(PolyInstanceE::DRONE);
         auto closeHighPass = [&](int base) {
             // The floor is the outgoing track's here: the incoming pad and drone keep their knobs' high pass.
             ControlEvent h;
@@ -1295,7 +1346,7 @@ void Composer::transitionBar(const ParamStore& p, int gi, int bar, std::vector<N
         if (guest.m_melody.m_present[mpIndex(MelodyPartE::PAD)]) closeHighPass(pb);
         if (guest.m_melody.m_present[mpIndex(MelodyPartE::DRONE)]) {
             closeHighPass(db);
-            droneControls(p, guest, inTrack, barBeat, *controls);
+            droneControls(params, guest, inTrack, barBeat, *controls);
         }
     }
 
@@ -1307,10 +1358,10 @@ void Composer::transitionBar(const ParamStore& p, int gi, int bar, std::vector<N
     spec.m_offbeatHat = bp.m_offbeatHat;
     spec.m_hatLevel = bp.m_hatLevel;
     spec.m_cycleBar = bp.m_cycleBar;
-    composePercBar(p, guest.m_perc, guest.m_percSeed, bar, inTrack, owner.m_bpm, guest.m_key, guest.m_scale, spec, out);
+    composePercBar(params, guest.m_perc, guest.m_percSeed, bar, inTrack, owner.m_bpm, guest.m_key, guest.m_scale, spec, out);
     if (consonant) {
         const size_t from = out.size();
-        composeMelodyBar(p, guest.m_melody, bar, inTrack, guest.m_scale, bp, out, melodyContext(guest, bp, inTrack));
+        composeMelodyBar(params, guest.m_melody, bar, inTrack, guest.m_scale, bp, out, melodyContext(guest, bp, inTrack));
         const int flat9 = (owner.m_key + 1) % 12;
         out.erase(std::remove_if(out.begin() + static_cast<std::ptrdiff_t>(from), out.end(), [&](const NoteEvent& e) {
                       return (e.m_part == PartE::PAD || e.m_part == PartE::DRONE) && e.m_pitch % 12 == flat9;
@@ -1319,7 +1370,12 @@ void Composer::transitionBar(const ParamStore& p, int gi, int bar, std::vector<N
     composeSfxBar(guest.m_form, static_cast<double>(guest.m_firstBar) * BeatsPerBar, inTrack, out);
 }
 
-/** @brief Whether the bass follows the chords in bar @p inTrack: where the track's own pad sounds (25.09.2026). */
+/**
+ * @brief Whether the bass follows the chords in bar @p inTrack: where the track's own pad sounds (25.09.2026).
+ * @param[in] plan     the track's plan
+ * @param[in] inTrack  the bar within the track
+ * @return true when the bass follows the chords
+ */
 static bool followsHere(const TrackPlan& plan, int inTrack)
 {
     if (inTrack < 0 || inTrack >= plan.m_bars) return false;
@@ -1335,10 +1391,10 @@ static bool followsHere(const TrackPlan& plan, int inTrack)
  * composeMelodyBar placed from @p from on is cut at the chord blocks it spans (and where the bass stops or starts
  * following, followsHere), and every piece moves by the bass's shift there (bassChordShift), to the nearer octave
  * so the drone keeps its register. Pieces that would repeat the pitch before them are joined back.
- * @param plan     the track
- * @param baseRoot the bass's root note on the tonic, MIDI
- * @param out      the bar's notes; the drone's are replaced by their pieces
- * @param from     the first note composeMelodyBar added
+ * @param[in]     plan      the track
+ * @param[in]     baseRoot  the bass's root note on the tonic, MIDI
+ * @param[in,out] out       the bar's notes; the drone's are replaced by their pieces
+ * @param[in]     from      the first note composeMelodyBar added
  */
 static void followWithDrone(const TrackPlan& plan, int baseRoot, std::vector<NoteEvent>& out, size_t from)
 {

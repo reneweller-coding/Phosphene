@@ -5,6 +5,7 @@
  * The composer places notes by these slots; the engine needs the first slot of the current pattern
  * for two computations that must agree with the composer exactly: how long the kick may ring before
  * the first bass note (the tail constraint), and the kick's phase at that moment (the phase lock).
+ * @author Rene Weller
  */
 #pragma once
 
@@ -27,7 +28,11 @@ inline constexpr BassPatternDef BassPatterns[NumBassPatterns] = {
     { 2, { 1.0 / 3.0, 2.0 / 3.0, 0.0 } },     // Triplet
 };
 
-/** @brief Beats from the kick to the first bass note of a pattern. */
+/**
+ * @brief Beats from the kick to the first bass note of a pattern.
+ * @param[in] pattern  the pattern
+ * @return the beats
+ */
 inline double firstBassSlot(int pattern)
 {
     const int p = pattern < 0 ? 0 : (pattern >= NumBassPatterns ? NumBassPatterns - 1 : pattern);
@@ -37,6 +42,8 @@ inline double firstBassSlot(int pattern)
 /**
  * @brief Shortest slot of a pattern in beats: the distance from a note to the next note, or from the
  *        last note of the beat to the next kick. A note's length is Gate times its slot.
+ * @param[in] pattern  the pattern
+ * @return the slot in beats
  */
 inline double shortestBassSlot(int pattern)
 {

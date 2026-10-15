@@ -1,6 +1,7 @@
 /**
  * @file PlugConductor.cpp
  * @brief Keeps the engine's rings filled from the composer, at an offset, from any bar (PluginProcessor.h, PlugConductor).
+ * @author Rene Weller
  */
 #include "PluginProcessor.h"
 #include "phos/Clock.h"

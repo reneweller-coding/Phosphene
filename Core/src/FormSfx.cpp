@@ -2,6 +2,7 @@
  * @file FormSfx.cpp
  * @brief Where a track's effects go: the transition markers, the ear candy, the psychedelic layer, the voices and
  *        the shamanic bed (the form itself is Form.cpp's).
+ * @author Rene Weller
  */
 #include "phos/Form.h"
 #include "phos/Preferences.h"
@@ -46,6 +47,11 @@ namespace phos {
  * a bowl after the cut and then on about half of the four-bar lines, and drones of up to twelve bars,
  * one per sixteen, alternating between the track's two when it has both; outros a bowl every eight bars
  * and the didgeridoo; a long groove now and then eight bars of jaw harp. Drops never.
+ * @param[in,out] f             the form
+ * @param[in]     seed          the seed
+ * @param[in]     amount        how much, 0..1
+ * @param[in]     voiceDensity  the voices' density
+ * @param[in]     bedDensity    the bed's density
  */
 static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voiceDensity, float bedDensity)
 {
@@ -360,8 +366,8 @@ static void placePsychedelia(FormPlan& f, uint64_t seed, float amount, float voi
  *
  * Only the effect types the engine already has are used, and Impact and Riser stay reserved for the
  * drop: the self test checks that they sit nowhere else.
- * @param f            the form the events are added to (FormPlan::sfx)
- * @param seed         the track's form seed; every placement draws from a salted stream of it
+ * @param[in,out] f            the form the events are added to (FormPlan::sfx)
+ * @param[in] seed         the track's form seed; every placement draws from a salted stream of it
  */
 void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity, float bedDensity)
 {

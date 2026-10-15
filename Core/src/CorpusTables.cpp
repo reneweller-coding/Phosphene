@@ -5,6 +5,7 @@
  * Statistics of the local psytrance MIDI corpus: counts of pitch successions (interval to the
  * tonic, -12..+24 semitones) of order 0..2, onset/accent/slide/length counts per sixteenth step.
  * Counts only; no loop can be reconstructed from them. The MIDI files stay on the build machine.
+ * @author Rene Weller
  */
 #include "phos/Corpus.h"
 

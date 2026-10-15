@@ -5,6 +5,7 @@
  * Not part of the core's interface: the voices' palette (which a track's recipe is drawn from and which the presets
  * and the control events read), the energy's gain, and the three views of a plan the bars and the level probes both
  * need.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Composer.h"
@@ -117,6 +118,8 @@ inline const VoicePalette VoicePalettes[PolyInstances] = {
  * The one place this is counted -- the per-track recipe draw below calls it too, so
  * `Composer::voicePaletteTableCount()` (the test-facing wrapper, Composer.h) can never drift from what
  * a track actually draws from.
+ * @param[in] pal  the palette
+ * @return the candidates
  */
 inline int paletteTableCount(const VoicePalette& pal)
 {
@@ -126,7 +129,12 @@ inline int paletteTableCount(const VoicePalette& pal)
     return n;
 }
 
-/** @brief Candidate @p k of a palette: the built-ins first, then each lane in turn. */
+/**
+ * @brief Candidate @p k of a palette: the built-ins first, then each lane in turn.
+ * @param[in] pal  the palette
+ * @param[in] k    the candidate
+ * @return the table's parameter index
+ */
 inline int paletteTableAt(const VoicePalette& pal, int k)
 {
     for (int b : pal.m_builtin) {
@@ -147,13 +155,19 @@ inline int paletteTableAt(const VoicePalette& pal, int k)
  *
  * At most +-2 dB around the level the track was matched to, so that the energy is audible without
  * undoing the level match between tracks.
+ * @param[in] energy  the section's energy
+ * @return the gain in dB
  */
 inline float energyGainDb(float energy)
 {
     return std::clamp((energy - 0.7f) * 5.0f, -2.0f, 2.0f);
 }
 
-/** @brief Which melodic parts a track plays, how much, and its lead's range: what a transition bar needs of it. */
+/**
+ * @brief Which melodic parts a track plays, how much, and its lead's range: what a transition bar needs of it.
+ * @param[in] plan  the track's plan
+ * @return what the track offers
+ */
 PartAvailability availabilityOf(const TrackPlan& plan);
 /** @brief Whether the drone plays bar @p inTrack in its low octave (the high pass is opened for it). */
 bool droneLowAt(const TrackPlan& plan, int inTrack);

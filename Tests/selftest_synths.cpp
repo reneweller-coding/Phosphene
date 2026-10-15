@@ -1,6 +1,7 @@
 /**
  * @file selftest_synths.cpp
  * @brief The self test's synths: the diode ladder, the acid, the polyphonic engine, the melody, the wavetables and the pads.
+ * @author Rene Weller
  */
 #include "SelfTestHelpers.h"
 

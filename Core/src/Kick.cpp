@@ -1,6 +1,7 @@
 /**
  * @file Kick.cpp
  * @brief Kick drum implementation.
+ * @author Rene Weller
  */
 #include "phos/Kick.h"
 #include "phos/Params.h"
@@ -23,10 +24,19 @@ constexpr double DcHz = 3.0;                 ///< DC blocker corner
  */
 constexpr float ClickGain = 4.0f;
 
-/** @brief Drive knob to saturator gain. */
+/**
+ * @brief Drive knob to saturator gain.
+ * @param[in] drive  the drive knob, 0..1
+ * @return the saturator's gain
+ */
 float driveGain(float drive) { return 0.2f + 7.8f * drive; }
 
-/** @brief Small-signal gain of the normalised saturator relative to full scale, in dB. */
+/**
+ * @brief Small-signal gain of the normalised saturator relative to full scale, in dB.
+ * @param[in] drive  the drive knob, 0..1
+ * @param[in] clip   the clip type
+ * @return the small-signal gain against full scale, in dB
+ */
 double saturationLiftDb(float drive, int clip)
 {
     const double g = driveGain(drive);

@@ -6,6 +6,7 @@
  *
  * The lanes of the models and the matrix are compared bit for bit against the scalar engine in phos_vectest
  * (testPolyModels); these are the behaviours on top.
+ * @author Rene Weller
  */
 #include "SelfTestHelpers.h"
 #include "phos/SoundPresets.h"
@@ -23,7 +24,14 @@ namespace phostest {
 
 namespace {
 
-/** @brief Renders @p notes through a whole engine with @p settings, in blocks of @p block samples; left channel. */
+/**
+ * @brief Renders @p notes through a whole engine with @p settings, in blocks of @p block samples; left channel.
+ * @param[in] settings  the key=value lines
+ * @param[in] notes     the notes
+ * @param[in] seconds   the seconds rendered
+ * @param[in] block     the block size
+ * @return the left channel
+ */
 std::vector<float> renderBlocks(const std::string& settings, const std::vector<NoteEvent>& notes, double seconds, int block)
 {
     auto e = std::make_unique<Engine>();
@@ -42,7 +50,13 @@ std::vector<float> renderBlocks(const std::string& settings, const std::vector<N
     return L;
 }
 
-/** @brief RMS of @p y over samples [a, b), dB. */
+/**
+ * @brief RMS of @p y over samples [a, b), dB.
+ * @param[in] y  the samples
+ * @param[in] a  the first sample
+ * @param[in] b  the end sample
+ * @return the RMS in dB
+ */
 double rmsDb(const std::vector<float>& y, double a, double b)
 {
     double s = 0.0;
@@ -51,7 +65,14 @@ double rmsDb(const std::vector<float>& y, double a, double b)
     return 10.0 * std::log10(std::max(s / static_cast<double>(std::max<size_t>(n, 1)), 1e-30));
 }
 
-/** @brief One note of @p part. */
+/**
+ * @brief One note of @p part.
+ * @param[in] part    the part
+ * @param[in] beat    the start in beats
+ * @param[in] length  the length in beats
+ * @param[in] pitch   the MIDI note
+ * @return the note
+ */
 NoteEvent note(PartE part, double beat, float length, int pitch)
 {
     NoteEvent n;

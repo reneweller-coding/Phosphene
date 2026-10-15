@@ -111,6 +111,7 @@
  *    rule replaces the earlier "median around A4 to C5, never above A5").
  *  - *Pad:* root position with the fifth above the root at the bottom, from D3; where the form
  *    silences kick and bass the root an octave lower as well (the sub foundation).
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Form.h"
@@ -188,15 +189,27 @@ constexpr int DroneLowest = 38;                                    ///< D2: the 
  */
 constexpr int RegisterGap = 3;
 
-/** @brief Index of an acid cell: material set @p set (0, 1), variant @p variant (0 = A, 1 = A', 2 = A''). */
+/**
+ * @brief Index of an acid cell: material set @p set (0, 1), variant @p variant (0 = A, 1 = A', 2 = A'').
+ * @param[in] set      the material set, 0..1
+ * @param[in] variant  the variant, 0..2
+ * @return the cell's index
+ */
 constexpr int acidCell(int set, int variant) { return set * AcidVariants + variant; }
-/** @brief Index of an arp cell: material set, variant (A, A', A'') and chord (0..3). */
+/**
+ * @brief Index of an arp cell: material set, variant (A, A', A'') and chord (0..3).
+ * @param[in] set      the material set, 0..1
+ * @param[in] variant  the variant, 0..2
+ * @param[in] chord    the chord, 0..3
+ * @return the cell's index
+ */
 constexpr int arpCell(int set, int variant, int chord) { return (set * AcidVariants + variant) * 4 + chord; }
 
 /**
  * @brief Which variant of a cell a bar plays: A A A' A'' over a phrase of four cell lengths.
- * @param barInPhrase bar within the part's phrase
- * @param cellBars    the cell's length in bars (1 or 2)
+ * @param[in] barInPhrase  bar within the part's phrase
+ * @param[in] cellBars     the cell's length in bars (1 or 2)
+ * @return the variant, 0..2
  */
 constexpr int variantOfBar(int barInPhrase, int cellBars)
 {
@@ -319,6 +332,9 @@ struct SetMotif {
 /**
  * @brief Draws the set's motif cell: a lead cell the rules admit in @p band, with no bass to interlock with
  *        (the set has no one bass), from @p seed alone.
+ * @param[in] seed  the seed
+ * @param[in] band  the density band, 0..2
+ * @return the onset mask
  */
 uint16_t drawMotifCell(uint64_t seed, int band);
 
@@ -455,7 +471,11 @@ enum class MotifOperatorE : int {
 };
 constexpr int NumMotifOperators = static_cast<int>(MotifOperatorE::COUNT);   ///< number of operators
 
-/** @brief The sign of each successive interval of a line: -1, 0 or +1, one entry less than notes. */
+/**
+ * @brief The sign of each successive interval of a line: -1, 0 or +1, one entry less than notes.
+ * @param[in] notes  the line
+ * @return the signs
+ */
 std::vector<int> melodyContour(const std::vector<MelodyNote>& notes);
 
 /**
@@ -465,39 +485,54 @@ std::vector<int> melodyContour(const std::vector<MelodyNote>& notes);
  * parent line and the constraint set of each position, the result must have the same contour, sign
  * for sign, and no interval narrower than the parent's.
  *
- * @param parent  the line to expand, as intervals to the part's root
- * @param allowed one entry per position, @c allowed[i][symbol] != 0 where the symbol may stand
- * @param lo,hi   the ambitus, in the same intervals
- * @param out     receives the expanded line
+ * @param[in] parent  the line to expand, as intervals to the part's root
+ * @param[in] allowed one entry per position, @c allowed[i][symbol] != 0 where the symbol may stand
+ * @param[in] lo,hi   the ambitus, in the same intervals
+ * @param[out] out     receives the expanded line
  * @return false when the expansion would leave the ambitus or could widen nothing at all
  */
 bool expandContour(const std::vector<int>& parent, const std::vector<std::vector<uint8_t>>& allowed,
                    int lo, int hi, std::vector<int>& out);
 
-/** @brief The shared pitch model of a corpus role (built on first use). */
+/**
+ * @brief The shared pitch model of a corpus role (built on first use).
+ * @param[in] role  the role
+ * @return its pitch model
+ */
 const PitchModel& corpusPitchModel(CorpusRoleIdE role);
 
-/** @brief Pitch classes (semitones above the key root) of the triad on @p degree of @p scale. */
+/**
+ * @brief Pitch classes (semitones above the key root) of the triad on @p degree of @p scale.
+ * @param[in]  scale   the mode
+ * @param[in]  degree  the degree
+ * @param[out] out     the pitch classes
+ */
 void chordTones(int scale, int degree, int out[3]);
 
-/** @brief Index of the chord that sounds in bar @p barInTrack. */
+/**
+ * @brief Index of the chord that sounds in bar @p barInTrack.
+ * @param[in] m           the melody's plan
+ * @param[in] barInTrack  the bar within the track
+ * @return the chord's index
+ */
 inline int chordIndexAt(const MelodyPlan& m, int barInTrack) { return (barInTrack / m.m_chordBars) % 4; }
 
 /**
  * @brief Makes the melodic plan of a track.
- * @param p          knob values (compose.* amounts and variation)
- * @param style      the style profile (part amounts, squelch chance, chord moves, colour)
- * @param seed       the track's melody seed
- * @param key,scale  the track's key and mode
- * @param firstTrack the first track plays the knobs' sounds (no overrides)
- * @param colour     0..1: scales the target share of colour tones in acid, lead and arp (0.6..1.0 of it)
- * @param scaleMask  bit per mode: the modes the form's sections borrow (FormPlan::scaleMask). Every
+ * @param[in] p          knob values (compose.* amounts and variation)
+ * @param[in] style      the style profile (part amounts, squelch chance, chord moves, colour)
+ * @param[in] seed       the track's melody seed
+ * @param[in] key,scale  the track's key and mode
+ * @param[in] firstTrack the first track plays the knobs' sounds (no overrides)
+ * @param[in] colour     0..1: scales the target share of colour tones in acid, lead and arp (0.6..1.0 of it)
+ * @param[in] scaleMask  bit per mode: the modes the form's sections borrow (FormPlan::scaleMask). Every
  *                   bit other than @p scale gets its own recoloured material; 0 means the track
  *                   stays in one mode, which is exactly the behaviour before 16.09.2026.
- * @param bassMask   the track's bass onsets over a bar, a bit per sixteenth (22.09.2026: the lead's
+ * @param[in] bassMask   the track's bass onsets over a bar, a bit per sixteenth (22.09.2026: the lead's
  *                   rhythm interlocks with it; 0 = no bass to interlock with)
- * @param motif      the set's motif and which lead phrase of this track plays it (SetMotif; 23.09.2026);
+ * @param[in] motif      the set's motif and which lead phrase of this track plays it (SetMotif; 23.09.2026);
  *                   the default plays none, which is every track's behaviour before that date
+ * @return the track's melodic plan
  */
 MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64_t seed, int key, int scale,
                           bool firstTrack, float colour, uint32_t scaleMask = 0, unsigned bassMask = 0,
@@ -505,25 +540,43 @@ MelodyPlan makeMelodyPlan(const ParamStore& p, const StyleProfile& style, uint64
 
 extern const char* const LeadArchetypeNames[NumLeadArchetypes];   ///< names of LeadArchetype (Form.h)
 extern const char* const CellOpNames[NumCellOps];                 ///< names of CellOp (Form.h)
-/** @brief The lead's and the counter's windows of a track (23.09.2026): one octave each, the counter an octave up. */
+/**
+ * @brief The lead's and the counter's windows of a track (23.09.2026): one octave each, the counter an octave up.
+ * @param[in] m  the melody's plan
+ * @return the lead's highest note
+ */
 inline int leadWindowHi(const MelodyPlan& m) { return m.m_leadWindowLo + LeadWindow - 1; }
-/** @brief The counter's window: its lowest note, an octave over the lead's. */
+/**
+ * @brief The counter's window: its lowest note, an octave over the lead's.
+ * @param[in] m  the melody's plan
+ * @return the counter's lowest note
+ */
 inline int counterWindowLo(const MelodyPlan& m) { return m.m_leadWindowLo + 12; }
-/** @brief ... its highest. */
+/**
+ * @brief ... its highest.
+ * @param[in] m  the melody's plan
+ * @return the counter's highest note
+ */
 inline int counterWindowHi(const MelodyPlan& m) { return m.m_leadWindowLo + 12 + LeadWindow - 1; }
-/** @brief The cutoff arc of an archetype at a bar of the phrase, mean-free (ComposerControls.cpp, leadArcControls, writes depth x this). */
+/**
+ * @brief The cutoff arc of an archetype at a bar of the phrase, mean-free (ComposerControls.cpp, leadArcControls,
+ *        writes depth x this).
+ * @param[in] archetype    the archetype
+ * @param[in] barInPhrase  the bar within the phrase
+ * @return the arc, mean-free
+ */
 double leadArc(int archetype, int barInPhrase);
 
 /**
  * @brief Composes one bar of the melodic parts.
- * @param p          knob values (swing)
- * @param m          the track's plan
- * @param bar        absolute bar
- * @param barInTrack bar within the track
- * @param scale      the track's scale (for the lead's and arp's chords)
- * @param bp         what the instrumentation matrix says plays in this bar
- * @param out        receives the notes
- * @param ctx        the cell set and the pad foundation of this bar (Composer::melodyContext); the
+ * @param[in] p          knob values (swing)
+ * @param[in] m          the track's plan
+ * @param[in] bar        absolute bar
+ * @param[in] barInTrack bar within the track
+ * @param[in] scale      the track's scale (for the lead's and arp's chords)
+ * @param[in] bp         what the instrumentation matrix says plays in this bar
+ * @param[out] out        receives the notes
+ * @param[in] ctx        the cell set and the pad foundation of this bar (Composer::melodyContext); the
  *                   default is the first cell set without a foundation, which is what every caller
  *                   that plays material outside the form (probes, the transition's pads) wants
  */
@@ -534,19 +587,20 @@ void composeMelodyBar(const ParamStore& p, const MelodyPlan& m, int bar, int bar
  * @brief The pad voicing of a bar without kick and bass: the root an octave under the voicing's
  *        root, then the root, the fifth and the voicing's third (the other upper voice is dropped,
  *        so the pad never needs more than four voices per chord and a chord change never steals).
- * @param voicing a root-position voicing of voiceChord (root, fifth, two upper voices)
+ * @param[in] voicing  a root-position voicing of voiceChord (root, fifth, two upper voices)
+ * @return the MIDI notes
  */
 std::vector<int> foundationVoicing(const std::vector<int>& voicing);
 
 /**
  * @brief The tones an arp cell may use over a chord: the anchor (the chord root in the low
  *        octave) and the sus2 / sus4 / add9 material an octave above it (Melody.h, rule 13).
- * @param tones  0 sus2 (1 2 5), 1 sus4 (1 4 5), 2 add9 (1 3 5 9)
- * @param anchor receives the anchor as a MIDI note
+ * @param[in]  scale   index into ScaleSteps
+ * @param[in]  degree  the chord's scale degree
+ * @param[in]  key     pitch class of the track's key
+ * @param[in]  tones   0 sus2 (1 2 5), 1 sus4 (1 4 5), 2 add9 (1 3 5 9)
+ * @param[out] anchor  receives the anchor as a MIDI note
  * @return the high stream's MIDI notes, ascending, all in [ArpLowest, ArpHighest]
- * @param scale  index into ScaleSteps
- * @param degree the chord's scale degree
- * @param key    pitch class of the track's key
  */
 std::vector<int> arpHighTones(int scale, int degree, int key, int tones, int& anchor);
 
@@ -554,25 +608,21 @@ std::vector<int> arpHighTones(int scale, int degree, int key, int tones, int& an
  * @brief The stab's chord over a chord of the track, in root position (19.09.2026): the arp's anchor
  *        as the root, then sus2 (1 2 5 8), sus4 (1 4 5 8) or add9 (1 3 5 9) -- no colour tone, no
  *        imperfect fifth.
- * @param tones 0 sus2, 1 sus4, 2 add9 (MelodyPlan::stabTones)
+ * @param[in] scale   index into ScaleSteps
+ * @param[in] degree  the chord's scale degree
+ * @param[in] key     pitch class of the track's key
+ * @param[in] tones   0 sus2, 1 sus4, 2 add9 (MelodyPlan::stabTones)
  * @return ascending MIDI notes, the root first
- * @param scale  index into ScaleSteps
- * @param degree the chord's scale degree
- * @param key    pitch class of the track's key
  */
 std::vector<int> stabChord(int scale, int degree, int key, int tones);
 
-/** @brief A bar plan that plays every part the track has (the level-match probe). */
+/**
+ * @brief A bar plan that plays every part the track has (the level-match probe).
+ * @param[in] m  the melody's plan
+ * @return the bar plan
+ */
 BarPlan allPartsBar(const MelodyPlan& m);
 
-/**
- * @brief The pad voicing of a chord in root position: the root in [PadLowest, PadLowest + 11], the
- *        fifth above it, then two chord tones up to PadHighest that complete the triad, with the least
- *        total movement from @p previous (or from a centred reference).
- * @param scale,degree the chord
- * @param key          the key's pitch class
- * @param previous     the voicing before, or null
- */
 /**
  * @brief Voices a chord of @p type on scale degree @p degree for the pad (rewritten 22.09.2026).
  *
@@ -582,6 +632,12 @@ BarPlan allPartsBar(const MelodyPlan& m);
  * upper voices stand at least a minor third and at most an octave apart, nothing above G5, at most
  * five voices. Among the placements that satisfy that, the one that moves least from @p previous
  * (or from a centred reference without one): the same voice leading rule as before.
+ * @param[in] scale     the track's mode
+ * @param[in] key       the key's pitch class
+ * @param[in] degree    the chord's scale degree
+ * @param[in] type      the chord type (Harmony.h, ChordTypeE)
+ * @param[in] previous  the voicing before, or null
+ * @return the voicing's MIDI notes
  */
 std::vector<int> voiceChord(int scale, int key, int degree, int type, const std::vector<int>* previous);
 
@@ -599,21 +655,36 @@ struct PadChord {
  * @brief The pad's chord for a bar (22.09.2026). The cores follow the pendulum on track-absolute
  *        blocks; a main breakdown its own progression from its first bar; any other breakdown holds
  *        the tonic.
+ * @param[in] m           the melody's plan
+ * @param[in] bp          the bar's plan
+ * @param[in] barInTrack  the bar within the track
+ * @return the pad's chord
  */
 PadChord padChordAt(const MelodyPlan& m, const BarPlan& bp, int barInTrack);
-/** @brief The same, from the form alone (for tests and tools without a BarPlan). */
+/**
+ * @brief The same, from the form alone (for tests and tools without a BarPlan).
+ * @param[in] m           the melody's plan
+ * @param[in] f           the form
+ * @param[in] barInTrack  the bar within the track
+ * @return the pad's chord
+ */
 PadChord padChordAt(const MelodyPlan& m, const FormPlan& f, int barInTrack);
 
-/** @brief Total movement of the voices between two sorted voicings of equal size, in semitones. */
+/**
+ * @brief Total movement of the voices between two sorted voicings of equal size, in semitones.
+ * @param[in] a  the first voicing
+ * @param[in] b  the second voicing
+ * @return the movement in semitones
+ */
 int voicingMovement(const std::vector<int>& a, const std::vector<int>& b);
 
 /**
  * @brief Composes the effects that start in one bar.
- * @param f          the track's form (its effects sit at the section boundaries)
- * @param trackBeat  beat at which the track starts
- * @param barInTrack bar within the track
- * @param out        receives the effect notes (pitch SfxBaseNote + type) on the part that plays them --
- *                   Sfx, Texture or Vocal (19.09.2026) -- with a voice's or the bed's variant in the lane
+ * @param[in]  f           the track's form (its effects sit at the section boundaries)
+ * @param[in]  trackBeat   beat at which the track starts
+ * @param[in]  barInTrack  bar within the track
+ * @param[out] out         receives the effect notes (pitch SfxBaseNote + type) on the part that plays them -- Sfx,
+ *                         Texture or Vocal (19.09.2026) -- with a voice's or the bed's variant in the lane
  */
 void composeSfxBar(const FormPlan& f, double trackBeat, int barInTrack, std::vector<NoteEvent>& out);
 
@@ -625,9 +696,10 @@ void composeSfxBar(const FormPlan& f, double trackBeat, int barInTrack, std::vec
  * under another chord than the pad behind the main breakdown. The mode is the track's own, not a borrowing
  * section's: modal interchange recolours the melody over an unchanged floor (the self test holds kick and bass
  * bit-identical with it on and off).
- * @param chord    the bar's pad chord (padChordAt)
- * @param scale    the track's mode
- * @param bassRoot the bass's root note on the tonic, MIDI
+ * @param[in] chord     the bar's pad chord (padChordAt)
+ * @param[in] scale     the track's mode
+ * @param[in] bassRoot  the bass's root note on the tonic, MIDI
+ * @return the shift in semitones
  */
 int bassChordShift(const PadChord& chord, int scale, int bassRoot);
 

@@ -12,6 +12,7 @@
  * logarithmic range (a cutoff, a decay) spreads its eight steps evenly to the ear. A group also names the filter
  * models that suit it (one is drawn) and its modulation recipes (each with a chance; '@' becomes the next free LFO,
  * '#' the next free slot of the matrix, a source of -1 that LFO). The same index is always the same sound.
+ * @author Rene Weller
  */
 #include "phos/SoundPresets.h"
 #include "phos/Dsp.h"
@@ -35,7 +36,7 @@ struct Knob {
     float m_lo;   ///< the low end of the range (the constant for an axis of C)
     float m_hi;   ///< the high end of the range
     char m_axis;           ///< 'A' the row, 'B' the column, 'R' drawn, 'C' constant
-    const char* m_table;   ///< for "table": "lane:<WaveTableLane>" or "list:<index>,<index>..."; else null
+    const char* m_table;   ///< for "table": "lane:\<WaveTableLane\>" or "list:\<index\>,\<index\>..."; else null
 };
 /** @brief A filter model a group allows, with the range of its mode. */
 struct Filter {
@@ -71,7 +72,13 @@ struct Synth {
 
 namespace {
 
-/** @brief Replaces every @p from in @p s with @p to. */
+/**
+ * @brief Replaces every @p from in @p s with @p to.
+ * @param[in] s     the text
+ * @param[in] from  the character replaced
+ * @param[in] to    the number
+ * @return the text replaced
+ */
 std::string replaceAll(std::string s, char from, int to)
 {
     std::string out;
@@ -82,7 +89,11 @@ std::string replaceAll(std::string s, char from, int to)
     return out;
 }
 
-/** @brief The tables a "table" spec names (a library lane's or a list of indices). */
+/**
+ * @brief The tables a "table" spec names (a library lane's or a list of indices).
+ * @param[in] spec  the spec
+ * @return the tables' parameter indices
+ */
 std::vector<int> tablesOf(const char* spec)
 {
     std::vector<int> out;
@@ -103,7 +114,19 @@ std::vector<int> tablesOf(const char* spec)
     return out;
 }
 
-/** @brief Sets knob @p key of the synth to the value its range and axis give at row @p row, column @p col. */
+/**
+ * @brief Sets knob @p key of the synth to the value its range and axis give at row @p row, column @p col.
+ * @param[in,out] p     the parameters written to
+ * @param[in]     s     the synth
+ * @param[in]     key   the knob's key
+ * @param[in]     lo    the range's low end
+ * @param[in]     hi    its high end
+ * @param[in]     axis  the axis
+ * @param[in]     row   the grid's row
+ * @param[in]     col   the grid's column
+ * @param[in,out] rng   the random stream
+ * @return false when the key is unknown
+ */
 bool setKnob(ParamStore& p, const Synth& s, const std::string& key, float lo, float hi, char axis, int row, int col, Rng& rng)
 {
     const std::string full = (s.m_module == ModuleE::POLY ? std::string(PolyInstanceNames[s.m_instance]) : std::string(s.m_label)) + "." + key;
@@ -130,7 +153,11 @@ bool setKnob(ParamStore& p, const Synth& s, const std::string& key, float lo, fl
 
 } // namespace
 
-/** @brief The presets of one synth of the bank. */
+/**
+ * @brief The presets of one synth of the bank.
+ * @param[in] s  the synth
+ * @return its presets
+ */
 std::vector<SoundPreset> build(const Synth& s)
 {
     std::vector<SoundPreset> out;

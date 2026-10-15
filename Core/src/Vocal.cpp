@@ -1,6 +1,11 @@
 /**
  * @file Vocal.cpp
  * @brief The voice pack and the voice generator (Vocal.h).
+ * @author Rene Weller
+ *
+ * @par Compile Flags:
+ *   @arg @c PHOS_SOURCE_DATA_DIR - the source tree's data directory (Core/CMakeLists.txt sets it), searched after the
+ *                                  search path
  */
 #include "phos/Vocal.h"
 #include "phos/Util.h"
@@ -45,6 +50,8 @@ constexpr int NumVowels = 10;   ///< how many vowels the table has
  * in it. 8.5 dB off puts it about 3 dB under the rest. A chop sits in a drop, where the rest is a full
  * mix, and keeps its level to stay a word rather than a click (-7.8 dB against the rest). The
  * synthetic voices were set by the same measure to sit with the phrases.
+ * @param[in] t  the vocal type
+ * @return the level in dB
  */
 float vocalTypeGain(SfxTypeE t)
 {
@@ -69,15 +76,31 @@ struct Pack {
     std::mutex m_mutex;   ///< serialises the threads that find it false
     std::vector<VoicePhrase> m_phrases;   ///< the phrases of the pack
 };
-/** @brief The pack, created on first use. */
+/**
+ * @brief The pack, created on first use.
+ * @return the pack
+ */
 Pack& pack() { static Pack p; return p; }
-/** @brief Where the voice pack is looked for. */
+/**
+ * @brief Where the voice pack is looked for.
+ * @return the directory
+ */
 std::string& voiceSearchPath() { static std::string s; return s; }
 
-/** @brief A little-endian 32-bit word at @p p. */
+/**
+ * @brief A little-endian 32-bit word at @p p.
+ * @param[in] p  the bytes
+ * @return the word
+ */
 uint32_t rd32(const uint8_t* p) { return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24); }
 
-/** @brief Parses a voice pack (PHOSVX01) into its phrases; false, with a reason in @p error, if it is not one. */
+/**
+ * @brief Parses a voice pack (PHOSVX01) into its phrases; false, with a reason in @p error, if it is not one.
+ * @param[in]  f      the pack's bytes
+ * @param[out] out    the phrases
+ * @param[out] error  receives the reason, or null
+ * @return false if it is not a voice pack
+ */
 bool parse(const std::vector<uint8_t>& f, std::vector<VoicePhrase>& out, std::string* error)
 {
     auto fail = [&](const char* why) { if (error) *error = why; return false; };
@@ -119,7 +142,11 @@ bool parse(const std::vector<uint8_t>& f, std::vector<VoicePhrase>& out, std::st
     return true;
 }
 
-/** @brief Raised-cosine ramp. */
+/**
+ * @brief Raised-cosine ramp.
+ * @param[in] u  the place, 0..1
+ * @return the ramp, 0..1
+ */
 inline float ramp(double u) { return u >= 1.0 ? 1.0f : (u <= 0.0 ? 0.0f : static_cast<float>(0.5 - 0.5 * std::cos(PiD * u))); }
 } // namespace
 

@@ -11,6 +11,7 @@
  *
  * Two of them are values that are held (a knob), two are pressed (a button). A drop-out is a press
  * because it means "one bar, from here"; a stutter is held because it means "while I hold this".
+ * @author Rene Weller
  */
 #include "PluginEditor.h"
 #include "phos/Rating.h"
@@ -25,9 +26,15 @@ namespace {
 /** @brief The headset's box (01.10.2026, the frame's): the hands as they stand and what they do, live. */
 class HeadsetBox final : public juce::Component, private juce::Timer {
 public:
-    /** @brief The box for @p p. */
+    /**
+     * @brief The box for @p p.
+     * @param[in,out] p  the processor
+     */
     explicit HeadsetBox(PhospheneProcessor& p) : m_proc(p) { startTimerHz(15); }
-    /** @brief The frame's headset box with the hands and the macros they play. */
+    /**
+     * @brief The frame's headset box with the hands and the macros they play.
+     * @param[in,out] g  the graphics context
+     */
     void paint(juce::Graphics& g) override
     {
         frame::drawHeadsetBox(g, getLocalBounds(), phosui::skin(), m_proc.headset(), "drop-out", "stutter while held",

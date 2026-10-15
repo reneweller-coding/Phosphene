@@ -23,6 +23,11 @@
  * already here. The recurrence itself is one first-order scalar scan per channel, run with the
  * lanes over channels and the state index walked in order, which is the same bit-identity shape as
  * the attention.
+ * @author Rene Weller
+ *
+ * @par Compile Flags:
+ *   @arg @c PHOS_SOURCE_DATA_DIR - the source tree's data directory (Core/CMakeLists.txt sets it), searched after the
+ *                                  working directory
  */
 #include "phos/Model.h"
 #include "phos/Harmony.h"   // NumScales: the rows mode.emb is allowed to have
@@ -43,7 +48,10 @@ constexpr size_t NameBytes = 48;   ///< a tensor's name in the file, bytes
 constexpr size_t TensorFixed = NameBytes + 1 + 1 + 2 + 16;   ///< name, dtype, ndim, reserved, dim[4]
 constexpr size_t Align = 32;                                   ///< payloads start on this boundary
 
-/** @brief Where the model files are looked for (setModelSearchPath). */
+/**
+ * @brief Where the model files are looked for (setModelSearchPath).
+ * @return the directory
+ */
 std::string& searchPath()
 {
     static std::string p;
@@ -60,12 +68,25 @@ struct Tensor {
     size_t m_count = 0;   ///< its elements
 };
 
-/** @brief A little-endian 32-bit word at @p p. */
+/**
+ * @brief A little-endian 32-bit word at @p p.
+ * @param[in] p  the bytes
+ * @return the word
+ */
 uint32_t readU32(const uint8_t* p) { uint32_t v; std::memcpy(&v, p, 4); return v; }
-/** @brief A little-endian 16-bit word at @p p. */
+/**
+ * @brief A little-endian 16-bit word at @p p.
+ * @param[in] p  the bytes
+ * @return the word
+ */
 uint16_t readU16(const uint8_t* p) { uint16_t v; std::memcpy(&v, p, 2); return v; }
 
-/** @brief The value of @p key in a "key=value\n" header, or an empty string. */
+/**
+ * @brief The value of @p key in a "key=value\n" header, or an empty string.
+ * @param[in] header  the header
+ * @param[in] key     the key
+ * @return the value, or an empty string
+ */
 std::string headerValue(const std::string& header, const char* key)
 {
     const std::string pattern = std::string(key) + "=";
@@ -80,28 +101,51 @@ std::string headerValue(const std::string& header, const char* key)
     return std::string();
 }
 
-/** @brief The integer value of @p key in a model file's header, or @p fallback. */
+/**
+ * @brief The integer value of @p key in a model file's header, or @p fallback.
+ * @param[in] header    the header
+ * @param[in] key       the key
+ * @param[in] fallback  the value without one
+ * @return the value
+ */
 int headerInt(const std::string& header, const char* key, int fallback)
 {
     const std::string v = headerValue(header, key);
     return v.empty() ? fallback : std::atoi(v.c_str());
 }
 
-/** @brief One value of a tensor, dequantized when it is int8 (one scale per row of dim[0]). */
+/**
+ * @brief One value of a tensor, dequantized when it is int8 (one scale per row of dim[0]).
+ * @param[in] t      the tensor
+ * @param[in] index  the value's index
+ * @param[in] row    its row
+ * @return the value
+ */
 float value(const Tensor& t, size_t index, int row)
 {
     if (t.m_dtype == 1) return static_cast<float>(static_cast<const int8_t*>(t.m_data)[index]) * t.m_scale[row];
     return static_cast<const float*>(t.m_data)[index];
 }
 
-/** @brief Copies @p n values of a one-dimensional tensor into a buffer padded to the lane width. */
+/**
+ * @brief Copies @p n values of a one-dimensional tensor into a buffer padded to the lane width.
+ * @param[in]  t    the tensor
+ * @param[in]  n    the values
+ * @param[out] dst  the buffer
+ */
 void copyPadded(const Tensor& t, int n, std::vector<float>& dst)
 {
     dst.assign(static_cast<size_t>(roundUpTo(n, Lanes)), 0.0f);
     for (int i = 0; i < n; ++i) dst[static_cast<size_t>(i)] = value(t, static_cast<size_t>(i), i);
 }
 
-/** @brief Packs a rows x cols tensor into panels, dequantizing an int8 tensor on the way. */
+/**
+ * @brief Packs a rows x cols tensor into panels, dequantizing an int8 tensor on the way.
+ * @param[in]  t     the tensor
+ * @param[in]  rows  its rows
+ * @param[in]  cols  its columns
+ * @param[out] dst   the panels
+ */
 void packMatrix(const Tensor& t, int rows, int cols, std::vector<float>& dst)
 {
     dst.assign(static_cast<size_t>(roundUpTo(rows, Lanes)) * static_cast<size_t>(cols), 0.0f);
@@ -109,7 +153,14 @@ void packMatrix(const Tensor& t, int rows, int cols, std::vector<float>& dst)
     else packPanels<V>(static_cast<const float*>(t.m_data), nullptr, rows, cols, dst.data());
 }
 
-/** @brief Copies an embedding table into rows padded to the lane width. */
+/**
+ * @brief Copies an embedding table into rows padded to the lane width.
+ * @param[in]  t       the tensor
+ * @param[in]  rows    its rows
+ * @param[in]  cols    its columns
+ * @param[in]  stride  the padded row's length
+ * @param[out] dst     the rows
+ */
 void copyRows(const Tensor& t, int rows, int cols, int stride, std::vector<float>& dst)
 {
     dst.assign(static_cast<size_t>(rows) * static_cast<size_t>(stride), 0.0f);
@@ -120,7 +171,12 @@ void copyRows(const Tensor& t, int rows, int cols, int stride, std::vector<float
         }
 }
 
-/** @brief @p v clamped into [0, @p n - 1]. */
+/**
+ * @brief @p v clamped into [0, @p n - 1].
+ * @param[in] v  the value
+ * @param[in] n  the rows
+ * @return the value clamped
+ */
 int clampRow(int v, int n) { return v < 0 ? 0 : (v >= n ? n - 1 : v); }
 
 } // namespace

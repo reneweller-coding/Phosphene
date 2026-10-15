@@ -44,6 +44,7 @@
  *       three argument types, forty lines. Tests/selftest.cpp checks it against the byte layout of
  *       the OSC 1.0 specification, and Tools/cue_check.py decodes the same bytes with an independent
  *       decoder.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Form.h"
@@ -97,9 +98,9 @@ public:
 
     /**
      * @brief Starts a message.
-     * @param address the address pattern, e.g. "/phos/section"
-     * @param tags    the type tags without the leading comma, e.g. "sf"; "" for a message with no
-     *                arguments (which still carries the tag string "," -- receivers rely on it)
+     * @param[in] address  the address pattern, e.g. "/phos/section"
+     * @param[in] tags     the type tags without the leading comma, e.g. "sf"; "" for a message with no arguments (which
+     *                     still carries the tag string "," -- receivers rely on it)
      */
     OscWriter(const char* address, const char* tags)
     {
@@ -111,21 +112,30 @@ public:
         putString(t);
     }
 
-    /** @brief Appends a 32-bit integer (tag 'i'). */
+    /**
+     * @brief Appends a 32-bit integer (tag 'i').
+     * @param[in] v  the integer
+     */
     void putInt(int32_t v)
     {
         uint32_t u;
         std::memcpy(&u, &v, 4);
         putWord(u);
     }
-    /** @brief Appends a 32-bit float (tag 'f'). */
+    /**
+     * @brief Appends a 32-bit float (tag 'f').
+     * @param[in] v  the float
+     */
     void putFloat(float v)
     {
         uint32_t u;
         std::memcpy(&u, &v, 4);
         putWord(u);
     }
-    /** @brief Appends an OSC string (tag 's'): terminated and padded to a multiple of four. */
+    /**
+     * @brief Appends an OSC string (tag 's'): terminated and padded to a multiple of four.
+     * @param[in] s  the string
+     */
     void putString(const char* s)
     {
         const size_t n = std::strlen(s) + 1;
@@ -135,15 +145,27 @@ public:
         while (m_pos & 3) m_buf[m_pos++] = 0;
     }
 
-    /** @brief Whether everything fitted. */
+    /**
+     * @brief Whether everything fitted.
+     * @return true when everything fitted
+     */
     bool ok() const { return m_ok; }
-    /** @brief The bytes of the message. */
+    /**
+     * @brief The bytes of the message.
+     * @return the bytes
+     */
     const char* data() const { return m_buf; }
-    /** @brief Their number (always a multiple of four). */
+    /**
+     * @brief Their number (always a multiple of four).
+     * @return the number of bytes
+     */
     int size() const { return m_ok ? m_pos : 0; }
 
 private:
-    /** @brief Appends @p u big-endian, as OSC wants every word. */
+    /**
+     * @brief Appends @p u big-endian, as OSC wants every word.
+     * @param[in] u  the word
+     */
     void putWord(uint32_t u)
     {
         if (!m_ok || m_pos + 4 > Capacity) { m_ok = false; return; }
@@ -179,7 +201,10 @@ struct Cue {
     int64_t m_dueNanos = 0;        ///< steady_clock nanoseconds at which the listener hears it; 0 = at once
 };
 
-/** @brief steady_clock nanoseconds; the one clock every due time is measured on. */
+/**
+ * @brief steady_clock nanoseconds; the one clock every due time is measured on.
+ * @return the nanoseconds
+ */
 inline int64_t cueNowNanos()
 {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -188,9 +213,9 @@ inline int64_t cueNowNanos()
 
 /**
  * @brief Writes the key of a cue as the string `/phos/key` carries, e.g. "F# Phrygian".
- * @param c   the cue
- * @param out receives the text, at least 32 bytes
- * @param cap size of @p out in bytes, the terminating zero included
+ * @param[in]  c    the cue
+ * @param[out] out  receives the text, at least 32 bytes
+ * @param[in]  cap  size of @p out in bytes, the terminating zero included
  */
 inline void cueKeyText(const Cue& c, char* out, size_t cap)
 {
@@ -201,9 +226,9 @@ inline void cueKeyText(const Cue& c, char* out, size_t cap)
 
 /**
  * @brief Encodes a cue as its OSC message.
- * @param c   the cue
- * @param buf receives the bytes
- * @param cap size of @p buf
+ * @param[in]  c    the cue
+ * @param[out] buf  receives the bytes
+ * @param[in]  cap  size of @p buf
  * @return the number of bytes written, or 0 if the cue does not fit or its kind is unknown
  */
 inline int cueToOsc(const Cue& c, char* buf, int cap)
@@ -281,14 +306,13 @@ using CueMarkRingT = EventRing<CueMark>;
  * exactly is what the offline demo checks -- what a listener receives and what the composer wrote
  * have to be the same list of boundaries, bar for bar. Whoever composes calls this, bars ahead of
  * the sound; only the *sending* waits for the play position.
- *
- * @param form      the track's form
- * @param firstBar  the bar the track starts on
- * @param key       pitch class of the track's key
- * @param scale     index into phos::ScaleNames
- * @param bar       the bar being composed
- * @param lastKey   the key the caller last announced (-1 = none); updated when a mark goes out
- * @param out       receives the marks
+ * @param[in]     form      the track's form
+ * @param[in]     firstBar  the bar the track starts on
+ * @param[in]     key       pitch class of the track's key
+ * @param[in]     scale     index into phos::ScaleNames
+ * @param[in]     bar       the bar being composed
+ * @param[in,out] lastKey   the key the caller last announced (-1 = none); updated when a mark goes out
+ * @param[out]    out       receives the marks
  */
 inline void cueMarksForBar(const FormPlan& form, int firstBar, int key, int scale, int bar,
                            int& lastKey, CueMarkRingT& out)
@@ -335,6 +359,13 @@ inline void cueMarksForBar(const FormPlan& form, int firstBar, int key, int scal
  *
  * A listener that joins in the middle of a track would otherwise know nothing until the next
  * boundary. The key always travels with it, because after a jump nothing is known.
+ * @param[in]     form      the track's form
+ * @param[in]     firstBar  the track's first bar
+ * @param[in]     key       the key's root
+ * @param[in]     scale     the scale
+ * @param[in]     bar       the bar landed on
+ * @param[in,out] lastKey   the key sent last, updated
+ * @param[in,out] out       the marks, pushed to
  */
 inline void cueLandingMark(const FormPlan& form, int firstBar, int key, int scale, int bar,
                            int& lastKey, CueMarkRingT& out)
@@ -363,19 +394,22 @@ using CueRingT = EventRing<Cue>;
  */
 class CueTap {
 public:
-    /** @brief Whether `/phos/beat` is sent at all (the busiest message; a visualiser may not want it). */
+    /**
+     * @brief Whether `/phos/beat` is sent at all (the busiest message; a visualiser may not want it).
+     * @param[in] on  true to send the beats
+     */
     void setSendBeats(bool on) { m_sendBeats = on; }
 
     /**
      * @brief Emits every cue whose musical instant falls in `[beatFrom, beatTo)`.
-     * @param beatFrom   musical beat of sample 0 of the block
-     * @param beatTo     musical beat just past its last sample
-     * @param nowNanos   steady_clock time at which the block was handed to the engine
-     * @param leadNanos  how long after @p nowNanos sample 0 of this block reaches the listener
-     *                   (output buffering + the limiter's lookahead + the user's trim)
-     * @param blockNanos how long the block lasts, so a cue inside it can be placed within it
-     * @param marks      the section and key marks, in beat order
-     * @param out        receives the cues
+     * @param[in]     beatFrom    musical beat of sample 0 of the block
+     * @param[in]     beatTo      musical beat just past its last sample
+     * @param[in]     nowNanos    steady_clock time at which the block was handed to the engine
+     * @param[in]     leadNanos   how long after @p nowNanos sample 0 of this block reaches the listener (output
+     *                            buffering + the limiter's lookahead + the user's trim)
+     * @param[in]     blockNanos  how long the block lasts, so a cue inside it can be placed within it
+     * @param[in,out] marks       the section and key marks, in beat order
+     * @param[out]    out         receives the cues
      * @return how many cues were dropped because @p out was full
      */
     int scan(double beatFrom, double beatTo, int64_t nowNanos, int64_t leadNanos, int64_t blockNanos,
@@ -435,8 +469,8 @@ public:
      * until the next boundary, which can be a minute away. The drop is deliberately left out: it is
      * an event, not a state, and re-announcing one would cut the picture for a drop that happened
      * bars ago.
-     * @param due what to stamp the cues with
-     * @param out receives them
+     * @param[in]  due  what to stamp the cues with
+     * @param[out] out  receives them
      * @return false if nothing has been seen yet
      */
     bool announce(int64_t due, CueRingT& out) const
@@ -463,13 +497,24 @@ public:
 
     /** @brief Forgets the last mark (a new set, a new seed). */
     void forget() { m_haveLast = false; }
-    /** @brief The last section mark that went out, or null before the first (the family jam's leader reads it). */
+    /**
+     * @brief The last section mark that went out, or null before the first (the family jam's leader reads it).
+     * @return the mark, or null
+     */
     const CueMark* lastMark() const { return m_haveLast ? &m_last : nullptr; }
-    /** @brief How many section marks have gone out so far (the family jam's leader sends each once). */
+    /**
+     * @brief How many section marks have gone out so far (the family jam's leader sends each once).
+     * @return the number of marks
+     */
     uint32_t marksPassed() const { return m_marksPassed; }
 
 private:
-    /** @brief A section mark becomes a key cue (if the key moved), a section cue and, on a core, a drop. */
+    /**
+     * @brief A section mark becomes a key cue (if the key moved), a section cue and, on a core, a drop.
+     * @param[in] m     the mark
+     * @param[in] due   its due time in nanoseconds
+     * @param[in] emit  called with every cue
+     */
     template <class EmitT>
     void emitMark(const CueMark& m, int64_t due, EmitT&& emit)
     {
@@ -514,7 +559,7 @@ private:
  * make the due times meaningless. A high-resolution waitable timer (Windows 10 1803 and later) gives
  * the accuracy without raising the global timer resolution, which is a system-wide change and not
  * a generator's business. Elsewhere `nanosleep` is already accurate enough.
- * @param nanos how long to wait; <= 0 returns at once
+ * @param[in] nanos  how long to wait; <= 0 returns at once
  */
 inline void cueSleepNanos(int64_t nanos)
 {
@@ -559,13 +604,13 @@ public:
 
     /**
      * @brief Opens the socket and starts the thread.
-     * @param host      destination, a name or a dotted address
-     * @param port      destination port
-     * @param scheduled true: hold every cue back until its due time (live playback). false: send at
-     *                  once, which is what an offline render wants -- there the due times describe a
-     *                  timeline that is not being lived through.
-     * @return false if the host cannot be resolved or the socket cannot be opened; nothing is started
-     *         and nothing is logged, because a visualiser that is not running is not an error
+     * @param[in] host       destination, a name or a dotted address
+     * @param[in] port       destination port
+     * @param[in] scheduled  true: hold every cue back until its due time (live playback). false: send at once, which is
+     *                       what an offline render wants -- there the due times describe a timeline that is not being
+     *                       lived through.
+     * @return false if the host cannot be resolved or the socket cannot be opened; nothing is started and nothing is
+     *         logged, because a visualiser that is not running is not an error
      */
     bool start(const std::string& host, int port, bool scheduled = true)
     {
@@ -603,12 +648,17 @@ public:
         closeSocket();
     }
 
-    /** @brief Whether the thread is running. */
+    /**
+     * @brief Whether the thread is running.
+     * @return true while the sending thread runs
+     */
     bool running() const { return m_run.load(std::memory_order_acquire); }
 
     /**
      * @brief Queues a cue. Audio thread: wait-free, no allocation, no socket.
+     * @param[in] c  the cue
      * @return false if the queue is full (the cue is counted as dropped and forgotten)
+     * @pre called on the audio thread
      */
     bool push(const Cue& c)
     {
@@ -618,21 +668,34 @@ public:
         return false;
     }
 
-    /** @brief The queue, for the tap to push into directly. */
+    /**
+     * @brief The queue, for the tap to push into directly.
+     * @return the queue
+     */
     CueRingT& queue() { return m_queue; }
 
-    /** @brief Datagrams sent since start(). */
+    /**
+     * @brief Datagrams sent since start().
+     * @return the datagrams sent
+     */
     uint64_t sent() const { return m_sent.load(std::memory_order_relaxed); }
-    /** @brief Cues lost to a full queue or an unencodable kind. */
+    /**
+     * @brief Cues lost to a full queue or an unencodable kind.
+     * @return how many cues could not be sent
+     */
     uint64_t dropped() const { return m_dropped.load(std::memory_order_relaxed); }
     /**
      * @brief Largest lateness measured against a due time, in nanoseconds (0 when nothing was late).
      *
      * The sender thread's own contribution to the end-to-end delay, and the number the demo prints.
+     * @return the lateness in nanoseconds
      */
     int64_t worstLateNanos() const { return m_worstLate.load(std::memory_order_relaxed); }
 
-    /** @brief Sends one cue straight away, off the queue (tests and the offline demo). */
+    /**
+     * @brief Sends one cue straight away, off the queue (tests and the offline demo).
+     * @param[in] c  the cue
+     */
     void sendNow(const Cue& c)
     {
         char buf[OscWriter::Capacity];
@@ -684,7 +747,11 @@ private:
     SocketHandleT m_sock = INVALID_SOCKET;   ///< the UDP socket
 #else
     using SocketHandleT = int;   ///< A socket.
-    /** @brief Whether @p s is an open socket. */
+    /**
+     * @brief Whether @p s is an open socket.
+     * @param[in] s  the socket
+     * @return true when it is open
+     */
     static bool validSocket(SocketHandleT s) { return s >= 0; }
     /** @brief Closes the socket. */
     void closeSocket() { if (validSocket(m_sock)) { ::close(m_sock); m_sock = -1; } }

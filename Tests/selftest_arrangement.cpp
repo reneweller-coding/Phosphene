@@ -1,6 +1,7 @@
 /**
  * @file selftest_arrangement.cpp
  * @brief The self test's arrangement: the section rules on the render, the climax, presence, the genre rules, the foundation, the voices and the dialogue.
+ * @author Rene Weller
  */
 #include "SelfTestHelpers.h"
 

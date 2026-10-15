@@ -11,6 +11,7 @@
  *
  * A preset is the text of the module's knobs that differ from their defaults (ParamStore::parseText form), so a
  * user preset is the same thing saved from the knobs as they stand (moduleText).
+ * @author Rene Weller
  */
 #pragma once
 
@@ -39,27 +40,54 @@ struct SoundPreset {
 /**
  * @brief The factory presets of a synth: Module::Kick, Module::Bass, Module::Acid, or Module::Poly with the
  *        instance (PolyInstance order). Built once per synth, thread-safe; empty for any other module.
+ * @param[in] module    the module
+ * @param[in] instance  its instance
+ * @return the presets, empty without a bank
  */
 const std::vector<SoundPreset>& factoryPresets(ModuleE module, int instance = 0);
 
 /**
  * @brief The bank's presets of a synth, built afresh (PresetBank.cpp; 26.09.2026): 16 groups x 64, the names adjective +
  *        noun. factoryPresets() caches them; empty for a module without a bank.
+ * @param[in] module    the module
+ * @param[in] instance  its instance
+ * @return the presets, empty without a bank
  */
 std::vector<SoundPreset> bankPresets(ModuleE module, int instance = 0);
-/** @brief How many keys the bank's table names that no module has (tests); @p first gets the first. */
+/**
+ * @brief How many keys the bank's table names that no module has (tests); @p first gets the first.
+ * @param[out] first  receives the first unknown key, or null
+ * @return the number of unknown keys
+ */
 int bankUnknownKeys(std::string* first = nullptr);
 
 /**
  * @brief Whether a preset leaves knob @p k of @p module alone: the level, the ducking and, on a polyphonic voice,
  *        the high pass and the trance gate -- where the mix and the form put the synth, not what it sounds like.
+ * @param[in] module  the module
+ * @param[in] k       the knob's index within the module
+ * @return true when presets leave it alone
  */
 bool presetLeaves(ModuleE module, int k);
 
-/** @brief Puts the module's knobs to their defaults and applies @p text (a preset's); presetLeaves() knobs stay. */
+/**
+ * @brief Puts the module's knobs to their defaults and applies @p text (a preset's); presetLeaves() knobs stay.
+ * @param[in,out] params    the parameters
+ * @param[in]     module    the module
+ * @param[in]     instance  its instance
+ * @param[in]     text      the preset's text
+ * @return false when a line of the text cannot be read
+ */
 bool applySoundPreset(ParamStore& params, ModuleE module, int instance, const std::string& text);
 
-/** @brief The module's knobs that differ from their defaults, as `key=value` lines (a user preset); presetLeaves() knobs are left out. */
+/**
+ * @brief The module's knobs that differ from their defaults, as `key=value` lines (a user preset); presetLeaves() knobs
+ *        are left out.
+ * @param[in] params    the parameters
+ * @param[in] module    the module
+ * @param[in] instance  its instance
+ * @return the key=value lines
+ */
 std::string moduleText(const ParamStore& params, ModuleE module, int instance = 0);
 
 } // namespace phos

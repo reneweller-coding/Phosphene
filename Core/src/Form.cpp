@@ -2,6 +2,7 @@
  * @file Form.cpp
  * @brief Style profiles, the energy arc, the form grammar and the instrumentation matrix
  *        (where the effects go is FormSfx.cpp's).
+ * @author Rene Weller
  */
 #include "phos/Form.h"
 #include "phos/Preferences.h"
@@ -196,7 +197,11 @@ const Template Templates[NumBodies] = {
 const int Shrink[9][2] = { { SLOT_DROP2, 32 }, { SLOT_GROOVE, 16 }, { SLOT_BREAK, 16 }, { SLOT_DROP1, 16 },
                             { SLOT_BUILD2, 16 }, { SLOT_INTRO, 16 }, { SLOT_OUTRO, 16 }, { SLOT_DROP2, 16 }, { SLOT_GROOVE, 16 } };
 
-/** @brief True while every hard constraint holds (exposed as formConstraintsHold; Form.h says which). */
+/**
+ * @brief True while every hard constraint holds (exposed as formConstraintsHold; Form.h says which).
+ * @param[in] f  the form
+ * @return true while every constraint holds
+ */
 bool constraintsHoldImpl(const FormPlan& f)
 {
     int climaxes = 0, lastDrop = -1;
@@ -214,7 +219,10 @@ bool constraintsHoldImpl(const FormPlan& f)
     return climaxes == 1 && lastDrop >= 0 && f.m_section[lastDrop].m_climax;
 }
 
-/** @brief Recomputes the start bars and the total after a length changed. */
+/**
+ * @brief Recomputes the start bars and the total after a length changed.
+ * @param[in,out] f  the form
+ */
 void relayout(FormPlan& f)
 {
     int at = 0;
@@ -229,6 +237,9 @@ void relayout(FormPlan& f)
  * breakdown and the groove (each up to its cap); a shorter one gives up drop 2's extra half, then the
  * groove, the breakdown, drop 1, the big buildup, and last the intro and the outro (never under the DJ
  * overlap). The walk is deterministic, so a length always maps to the same form.
+ * @param[in]  t       the template
+ * @param[in]  target  the track's bars
+ * @param[out] bars    the slot lengths
  */
 void fitTemplate(const Template& t, int target, int* bars)
 {
@@ -264,6 +275,9 @@ void fitTemplate(const Template& t, int target, int* bars)
  * the main breakdown to drop 2 -- the climax grows where the floor wants it; in the warm-up or the closing
  * (0.35 and below) half the tracks do the reverse, a longer breakdown and a shorter climax. Drawn after the
  * fuzz moves from the same stream, so those stay what they were; the Flat arc (0.70) draws nothing.
+ * @param[in,out] bars  the slot lengths, moved
+ * @param[in]     seed  the form's seed
+ * @param[in]     arc   the arc's energy
  */
 void jitterForm(int* bars, uint64_t seed, double arc)
 {
@@ -355,6 +369,11 @@ float typeEnergy(SectionTypeE type)
  * literature puts it -- at the peak (Easwaran 2004) -- rather than at random.
  *
  * Everything hangs off the section's own seed, because a section is a lockable unit (PLAN 6.8).
+ * @param[in] s            the style profile
+ * @param[in] sectionSeed  the section's seed
+ * @param[in] trackScale   the track's mode
+ * @param[in] energy       the section's energy
+ * @return the mode
  */
 static int borrowedMode(const StyleProfile& s, uint64_t sectionSeed, int trackScale, float energy)
 {
@@ -505,7 +524,15 @@ float sectionTrimDb(const FormPlan& f, int index, double u)
     return 0.0f;
 }
 
-/** @brief planBar, with one level of look-ahead for the parts of the following bar. */
+/**
+ * @brief planBar, with one level of look-ahead for the parts of the following bar.
+ * @param[in] f            the form
+ * @param[in] a            what the track offers
+ * @param[in] sectionSeed  one seed per section
+ * @param[in] barInTrack   the bar within the track
+ * @param[in] lookAhead    true to look at the next bar
+ * @return the bar's plan
+ */
 static BarPlan planBarImpl(const FormPlan& f, const PartAvailability& a, const uint64_t* sectionSeed, int barInTrack, bool lookAhead)
 {
     BarPlan bp;

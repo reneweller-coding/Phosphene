@@ -86,6 +86,7 @@
  *       file-name convention and the WaveEdit ambiguity of `detectCycleLength` are left behind
  *       because no file of this library needs them. It exists so the self test can prove the pack
  *       against the source files it was made from, and so a user can drop a table in.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/WaveTable.h"
@@ -131,6 +132,7 @@ extern const LibraryTableDesc LibraryTables[NumLibraryWaveTables];
  * The same idea as `setModelSearchPath()` (Model.h): a host tells the core where it put its
  * resources. A build that never calls it still finds the file beside the sources through
  * `PHOS_SOURCE_DATA_DIR`, and a build that finds nothing at all falls back to the built-in tables.
+ * @param[in] directory  the directory
  */
 void setWaveTableSearchPath(const std::string& directory);
 /**
@@ -138,6 +140,7 @@ void setWaveTableSearchPath(const std::string& directory);
  *
  * Added 19.09.2026 so the voice pack (Vocal.h), which ships beside the wavetable pack, is found
  * wherever a host told the core its resources are, without every host learning a second call.
+ * @return the directory, empty when none
  */
 const std::string& waveTableSearchPath();
 
@@ -151,7 +154,7 @@ const std::string& waveTableSearchPath();
  * Noctuary's `CycleTable::build` thins a file with more than its maximum.
  *
  * Must be called before `loadWaveTableLibrary()`; afterwards it does nothing.
- * @param frames 1 .. WaveTable::MaxFrames; 0 or more than MaxFrames means "every frame".
+ * @param[in] frames  1 .. WaveTable::MaxFrames; 0 or more than MaxFrames means "every frame".
  */
 void setWaveTableFrameLimit(int frames);
 
@@ -161,11 +164,11 @@ void setWaveTableFrameLimit(int frames);
  *        lock once it is set, a mutex around the one real load for whichever calls arrive first --
  *        replaces a bare flag that let a second thread see "already attempted" while the first thread's
  *        parse was still in flight and come away thinking the library was empty).
- * @param path  the `.phoswt` file; nullptr means the shipped name "library.phoswt"
- * @param error receives why nothing was loaded, may be null (only the thread that ends up doing the
- *               load writes into it; a thread that finds the load already done does not touch it)
- * @return how many tables are loaded (0 when the file is missing -- not an error for the caller,
- *         the built-in tables are the fallback)
+ * @param[in]  path   the `.phoswt` file; nullptr means the shipped name "library.phoswt"
+ * @param[out] error  receives why nothing was loaded, may be null (only the thread that ends up doing the load writes
+ *                    into it; a thread that finds the load already done does not touch it)
+ * @return how many tables are loaded (0 when the file is missing -- not an error for the caller, the built-in tables
+ *         are the fallback)
  * @warning Never on the audio thread: it builds ten mip levels per frame per table.
  */
 int loadWaveTableLibrary(const char* path = nullptr, std::string* error = nullptr);
@@ -185,13 +188,23 @@ void resetWaveTableLibrary();
  * A library table whose file is missing falls back to the built-in its descriptor names, so the
  * parameter always addresses *something* and a set saved on a machine with the library still plays
  * on one without it.
+ * @param[in] index  the parameter index
+ * @return the table
  */
 const WaveTable& waveTable(int index);
 
-/** @brief True when @p index addresses the library rather than a built-in table. */
+/**
+ * @brief True when @p index addresses the library rather than a built-in table.
+ * @param[in] index  the parameter index
+ * @return true for a library table
+ */
 bool waveTableIsLibrary(int index);
 
-/** @brief True when @p index addresses a library table whose data is actually loaded. */
+/**
+ * @brief True when @p index addresses a library table whose data is actually loaded.
+ * @param[in] index  the parameter index
+ * @return true when its data is loaded
+ */
 bool waveTableLoaded(int index);
 
 /**
@@ -200,10 +213,15 @@ bool waveTableLoaded(int index);
  * Call it from the thread that plans a track, never from the audio thread: it decodes and allocates.
  * Tables already built are skipped without taking a lock. A table that is never asked for costs
  * nothing but its packed bytes -- the pack itself is 32 times smaller than the expansion.
+ * @param[in] indices  the parameter indices
+ * @param[in] count    their count
  */
 void ensureWaveTables(const int* indices, int count);
 
-/** @brief How many library tables are expanded in memory right now. */
+/**
+ * @brief How many library tables are expanded in memory right now.
+ * @return the tables expanded
+ */
 int waveTablesBuilt();
 
 /**
@@ -212,10 +230,14 @@ int waveTablesBuilt();
  * Since the library is only indexed at load (22.09.2026) this is the number that answers
  * "is the pack there and complete"; waveTablesBuilt() answers "how much of it is in memory",
  * which is a property of what has been played, not of the installation.
+ * @return the tables indexed
  */
 int waveTablesIndexed();
 
-/** @brief Bytes the expanded tables occupy (the packed file itself is not counted). */
+/**
+ * @brief Bytes the expanded tables occupy (the packed file itself is not counted).
+ * @return the bytes
+ */
 size_t waveTableLibraryBytes();
 
 /**
@@ -233,7 +255,7 @@ size_t waveTableLibraryBytes();
  * The default (192 MB) is about a hundred tables, which is a set of sixteen or so tracks with every
  * voice drawing a different table every time. The Quest sets its own, smaller one, and pairs it with
  * setWaveTableFrameLimit(), which makes each table cheaper rather than rarer.
- * @param bytes the ceiling; 0 means no ceiling
+ * @param[in] bytes  the ceiling; 0 means no ceiling
  */
 void setWaveTableBudgetBytes(size_t bytes);
 
@@ -243,15 +265,17 @@ void setWaveTableBudgetBytes(size_t bytes);
  * The voice palettes (ComposerInternal.h, VoicePalettes) name lanes, not tables, so that widening the
  * pack widens what a voice can sound like without a line of C++ changing. Built once, from
  * LibraryTables, and safe to call from several threads.
+ * @param[in] lane  the lane
+ * @return the parameter indices
  */
 const std::vector<int>& waveTableLaneTables(WaveTableLaneE lane);
 
 /**
  * @brief Reads a wavetable `.wav` into one frame's-worth-per-row coefficients (tests, user files).
- * @param path      a 16-bit PCM or 32-bit float WAV, mono or folded to mono
- * @param out       receives one coefficient vector per frame, ready for buildFromHarmonics()
- * @param cycleLen  receives the frame length that was used
- * @param maxFrames frames to keep; more are thinned evenly
+ * @param[in]  path       a 16-bit PCM or 32-bit float WAV, mono or folded to mono
+ * @param[out] out        receives one coefficient vector per frame, ready for buildFromHarmonics()
+ * @param[out] cycleLen   receives the frame length that was used
+ * @param[in]  maxFrames  frames to keep; more are thinned evenly
  * @return false when the file cannot be read or holds no whole frame
  */
 bool readWaveTableWav(const char* path, std::vector<std::vector<std::complex<double>>>& out,

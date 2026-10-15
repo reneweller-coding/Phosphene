@@ -1,6 +1,7 @@
 /**
  * @file PsyFx.cpp
  * @brief Flanger, phaser, frequency shifter, their chain, and the stutter (PsyFx.h).
+ * @author Rene Weller
  */
 #include "phos/PsyFx.h"
 #include "phos/Params.h"
@@ -12,7 +13,11 @@ namespace phos {
 namespace {
 constexpr double PiD = 3.141592653589793;   ///< pi
 
-/** @brief Raised-cosine ramp 0..1 for u in [0, 1], clamped outside. */
+/**
+ * @brief Raised-cosine ramp 0..1 for u in [0, 1], clamped outside.
+ * @param[in] u  the place, 0..1
+ * @return the ramp, 0..1
+ */
 inline float smoothRamp(double u)
 {
     if (u >= 1.0) return 1.0f;
@@ -20,7 +25,12 @@ inline float smoothRamp(double u)
     return static_cast<float>(0.5 - 0.5 * std::cos(PiD * u));
 }
 
-/** @brief The fractional part of a beat position divided by a period: an LFO phase in [0, 1). */
+/**
+ * @brief The fractional part of a beat position divided by a period: an LFO phase in [0, 1).
+ * @param[in] beat    the beat
+ * @param[in] period  the period in beats
+ * @return the phase, 0..1
+ */
 inline double lfoPhase(double beat, double period)
 {
     const double p = beat / std::max(1e-6, period);

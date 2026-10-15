@@ -1,6 +1,7 @@
 /**
  * @file EditorLayout.cpp
  * @brief Implementation of the layout engine (see EditorLayout.h).
+ * @author Rene Weller
  */
 #include "EditorLayout.h"
 #include "PhospheneLookAndFeel.h"

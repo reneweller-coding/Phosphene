@@ -9,6 +9,7 @@
  * Both sections switch the process-wide probe settings and put back what they found. They always turn the
  * cache *off* for their reference plans: under ctest every self-test process has PHOS_PROBE_CACHE set, and a
  * reference that came out of the cache would prove nothing about the cache.
+ * @author Rene Weller
  */
 #include "phos/Composer.h"
 #include "phos/Params.h"
@@ -43,6 +44,10 @@ constexpr uint64_t ListeningSeed = 864566672ull;
  * memcmp and not ==: -0.0 and 0.0, or two NaNs, must not pass for each other. The fields are those of
  * Composer::measureTrack, matchPresence and matchMaster; everything else in a plan is made before the first
  * probe and cannot depend on the schedule.
+ * @param[in]  a      the first plan
+ * @param[in]  b      the second plan
+ * @param[out] where  the first field that differs
+ * @return true when they agree
  */
 bool sameNumbers(const TrackPlan& a, const TrackPlan& b, std::string& where)
 {
@@ -64,7 +69,13 @@ bool sameNumbers(const TrackPlan& a, const TrackPlan& b, std::string& where)
     return ok;
 }
 
-/** @brief The first @p count plans of @p seed with the knobs of @p params, from a fresh composer. */
+/**
+ * @brief The first @p count plans of @p seed with the knobs of @p params, from a fresh composer.
+ * @param[in] params  the knobs
+ * @param[in] seed    the seed
+ * @param[in] count   the plans
+ * @return the plans
+ */
 std::vector<TrackPlan> planTracks(const ParamStore& params, uint64_t seed, int count)
 {
     Composer composer(seed);
@@ -73,7 +84,12 @@ std::vector<TrackPlan> planTracks(const ParamStore& params, uint64_t seed, int c
     return out;
 }
 
-/** @brief Compares two runs plan by plan and records one check. */
+/**
+ * @brief Compares two runs plan by plan and records one check.
+ * @param[in] got   the plans got
+ * @param[in] want  the plans wanted
+ * @param[in] what  the check's name
+ */
 void checkSame(const std::vector<TrackPlan>& got, const std::vector<TrackPlan>& want, const char* what)
 {
     std::string where;

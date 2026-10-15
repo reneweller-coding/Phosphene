@@ -36,6 +36,7 @@
  * above still applies. At small levels the gains are 1 and the filter is exactly the linear model.
  *
  * @tparam V lane type (float or VecF)
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Vec.h"
@@ -59,7 +60,11 @@ struct DiodeLadderT {
         m_u = lanes<VT>(0.0f);
     }
 
-    /** @brief Local gain of the algebraic sigmoid: sigma(v)/v = 1/sqrt(1 + v^2). */
+    /**
+     * @brief Local gain of the algebraic sigmoid: sigma(v)/v = 1/sqrt(1 + v^2).
+     * @param[in] v  the voltage
+     * @return the local gain
+     */
     static inline VT gainOf(VT v)
     {
         const VT one = lanes<VT>(1.0f);
@@ -68,10 +73,10 @@ struct DiodeLadderT {
 
     /**
      * @brief One sample.
-     * @param x    input (already scaled by the drive)
-     * @param g    integrator gain sqrt(2) tan(pi fc / fs), fc being the resonance peak, per lane
-     * @param k    feedback; the linear filter self-oscillates at 17
-     * @param comp input gain (1 + comp k), which restores part of the passband lost to the feedback
+     * @param[in] x     input (already scaled by the drive)
+     * @param[in] g     integrator gain sqrt(2) tan(pi fc / fs), fc being the resonance peak, per lane
+     * @param[in] k     feedback; the linear filter self-oscillates at 17
+     * @param[in] comp  input gain (1 + comp k), which restores part of the passband lost to the feedback
      * @return the low-pass output y4
      */
     inline VT tick(VT x, VT g, VT k, VT comp)

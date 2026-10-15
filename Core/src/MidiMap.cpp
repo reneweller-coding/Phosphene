@@ -1,6 +1,7 @@
 /**
  * @file MidiMap.cpp
  * @brief MIDI controllers on any parameter (MidiMap.h).
+ * @author Rene Weller
  */
 #include "phos/MidiMap.h"
 

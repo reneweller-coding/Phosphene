@@ -1,13 +1,18 @@
 /**
  * @file UpdateCheck.cpp
  * @brief The update check (UpdateCheck.h).
+ * @author Rene Weller
  */
 #include "UpdateCheck.h"
 
 namespace phosui {
 
 namespace {
-/** @brief The `key=value` lines of the state file. */
+/**
+ * @brief The `key=value` lines of the state file.
+ * @param[in] f  the state file
+ * @return the key=value pairs
+ */
 juce::StringPairArray readState(const juce::File& f)
 {
     juce::StringPairArray kv;
@@ -18,7 +23,11 @@ juce::StringPairArray readState(const juce::File& f)
     return kv;
 }
 
-/** @brief Writes the check's state as key=value lines. */
+/**
+ * @brief Writes the check's state as key=value lines.
+ * @param[in] f   the state file
+ * @param[in] kv  the key=value pairs
+ */
 void writeState(const juce::File& f, const juce::StringPairArray& kv)
 {
     juce::String s;
@@ -27,7 +36,10 @@ void writeState(const juce::File& f, const juce::StringPairArray& kv)
     f.replaceWithText(s, false, false, "\n");
 }
 
-/** @brief Whether PHOS_NO_UPDATE_CHECK switches the check off for this process (the tests). */
+/**
+ * @brief Whether PHOS_NO_UPDATE_CHECK switches the check off for this process (the tests).
+ * @return true when switched off
+ */
 bool switchedOffForProcess()
 {
     return juce::SystemStats::getEnvironmentVariable("PHOS_NO_UPDATE_CHECK", "").isNotEmpty();

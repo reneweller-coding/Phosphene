@@ -11,6 +11,11 @@
  *       analysis are the same in substance. What is left behind: FLAC, Surge's `.wt` container, the
  *       `-WT512` file-name convention and the WaveEdit 64x256 ambiguity of `detectCycleLength()`,
  *       none of which any file of this library needs.
+ * @author Rene Weller
+ *
+ * @par Compile Flags:
+ *   @arg @c PHOS_SOURCE_DATA_DIR - the source tree's data directory (Core/CMakeLists.txt sets it), searched after the
+ *                                  search path
  */
 #include "phos/WaveTableFile.h"
 #include "phos/Util.h"
@@ -34,30 +39,56 @@ constexpr size_t IdBytes = 64;   ///< a table's id in the pack, bytes
 constexpr size_t Align = 32;   ///< the alignment of the pack's records, bytes
 constexpr int TopHarmonics = WaveTable::StoreLen / 8;   ///< levelHarmonics(0)
 
-/** @brief Where a bare library file name is looked for, after the working directory. */
+/**
+ * @brief Where a bare library file name is looked for, after the working directory.
+ * @return the directory
+ */
 std::string& searchPath()
 {
     static std::string p;
     return p;
 }
 
-/** @brief Frames a library table is built with; 0 means every frame the file holds. */
+/**
+ * @brief Frames a library table is built with; 0 means every frame the file holds.
+ * @return the frames, 0 for all
+ */
 int& frameLimit()
 {
     static int n = 0;
     return n;
 }
 
-/** @brief Little-endian reads that do not care how the host aligns. */
+/**
+ * @brief Little-endian reads that do not care how the host aligns.
+ * @param[in] p  the bytes
+ * @return the word
+ */
 uint32_t readU32(const uint8_t* p) { uint32_t v = 0; std::memcpy(&v, p, 4); return v; }
-/** @brief A little-endian 16-bit word at @p p. */
+/**
+ * @brief A little-endian 16-bit word at @p p.
+ * @param[in] p  the bytes
+ * @return the word
+ */
 uint16_t readU16(const uint8_t* p) { uint16_t v = 0; std::memcpy(&v, p, 2); return v; }
-/** @brief A little-endian float at @p p. */
+/**
+ * @brief A little-endian float at @p p.
+ * @param[in] p  the bytes
+ * @return the float
+ */
 float readF32(const uint8_t* p) { float v = 0.0f; std::memcpy(&v, p, 4); return v; }
-/** @brief A little-endian signed 16-bit word at @p p. */
+/**
+ * @brief A little-endian signed 16-bit word at @p p.
+ * @param[in] p  the bytes
+ * @return the word
+ */
 int16_t readI16(const uint8_t* p) { int16_t v = 0; std::memcpy(&v, p, 2); return v; }
 
-/** @brief The octave band a 1-based harmonic belongs to: 1 | 2,3 | 4..7 | 8..15 | ... */
+/**
+ * @brief The octave band a 1-based harmonic belongs to: 1 | 2,3 | 4..7 | 8..15 | ...
+ * @param[in] h  the harmonic, 1-based
+ * @return its octave band
+ */
 int bandOf(int h)
 {
     int b = 0;
@@ -71,6 +102,9 @@ int bandOf(int h)
  * Thinned evenly, `src = k * (total - 1) / (keep - 1)`, which is what Noctuary's
  * `CycleTable::build` does with a file of more frames than it stores. The first and the last frame
  * are always kept, so the ends of the position knob stay where they were.
+ * @param[in] total  the frames in the file
+ * @param[in] limit  the frames kept, 0 for all
+ * @return the indices kept
  */
 std::vector<int> frameIndices(int total, int limit)
 {
@@ -121,7 +155,10 @@ struct Library {
     size_t m_bytes = 0;            ///< memory the built tables occupy; written under `mutex`
 };
 
-/** @brief The process's one wavetable library. */
+/**
+ * @brief The process's one wavetable library.
+ * @return the library
+ */
 Library& library()
 {
     static Library lib;
@@ -134,6 +171,14 @@ Library& library()
  * One function for both passes, so that indexing and expanding can never disagree about where a
  * record ends: the load walks with @p out null to find the next table, ensureWaveTables() walks the
  * same bytes again with a buffer to fill.
+ * @param[in]     file        the pack's bytes
+ * @param[in,out] at          the read position, moved past the table
+ * @param[in]     frameCount  the table's frames
+ * @param[in]     dtype       the data type
+ * @param[in]     keep        the frames kept
+ * @param[out]    out         the kept frames' harmonics, or null to walk only
+ * @param[out]    error       receives the failure, or null
+ * @return false if the records are broken
  */
 bool walkTableFrames(const std::vector<uint8_t>& file, size_t& at, int frameCount, int dtype,
                      const std::vector<int>& keep, std::vector<CoeffsT>* out, std::string* error)
@@ -170,14 +215,20 @@ bool walkTableFrames(const std::vector<uint8_t>& file, size_t& at, int frameCoun
     return out == nullptr || next == keep.size();
 }
 
-/** @brief The memory ceiling on expanded tables (setWaveTableBudgetBytes); 0 = none. */
+/**
+ * @brief The memory ceiling on expanded tables (setWaveTableBudgetBytes); 0 = none.
+ * @return the ceiling in bytes, 0 for none
+ */
 std::atomic<size_t>& budgetBytes()
 {
     static std::atomic<size_t> b{ 192u * 1024u * 1024u };
     return b;
 }
 
-/** @brief Empties an entry. Not an assignment: LibraryEntry holds an atomic and is not copyable. */
+/**
+ * @brief Empties an entry. Not an assignment: LibraryEntry holds an atomic and is not copyable.
+ * @param[in,out] e  the entry
+ */
 void clearEntry(LibraryEntry& e)
 {
     e.m_table = WaveTable{};
@@ -188,7 +239,12 @@ void clearEntry(LibraryEntry& e)
     e.m_ready.store(false, std::memory_order_release);
 }
 
-/** @brief Expands one indexed table into its mip levels and publishes it. Caller holds the mutex. */
+/**
+ * @brief Expands one indexed table into its mip levels and publishes it. Caller holds the mutex.
+ * @param[in,out] lib   the library
+ * @param[in]     slot  the table's slot
+ * @return false if it cannot be built
+ */
 bool buildSlot(Library& lib, int slot)
 {
     LibraryEntry& e = lib.m_entry[slot];
@@ -217,6 +273,10 @@ bool buildSlot(Library& lib, int slot)
  * A table the file holds but this build does not ship is skipped, and a table this build ships but
  * the file does not hold stays unloaded -- both so that a newer pack and an older binary, or the
  * other way round, degrade to the built-in fallback instead of misaddressing a table.
+ * @param[in]  file   the pack's bytes
+ * @param[out] out    the library
+ * @param[out] error  receives the failure, or null
+ * @return false if the pack is broken
  */
 bool parsePack(const std::vector<uint8_t>& file, Library& out, std::string* error)
 {
@@ -261,7 +321,14 @@ bool parsePack(const std::vector<uint8_t>& file, Library& out, std::string* erro
 
 } // namespace
 
-/// The generated list, once as data.
+/**
+ * The generated list, once as data.
+ * @param[in] index     the table's index
+ * @param[in] name      its name
+ * @param[in] id        its library id
+ * @param[in] lane      the lane it suits
+ * @param[in] fallback  the built-in table standing in
+ */
 #define PHOS_WT(index, name, id, lane, fallback) { name, id, lane, fallback },
 const LibraryTableDesc LibraryTables[NumLibraryWaveTables] = {
 #include "phos/WaveTableList.inl"
@@ -425,6 +492,11 @@ const WaveTable& waveTable(int index)
 /**
  * @brief Reads a single-cycle wavetable WAV at @p path into @p out (a frame's harmonics each, at most @p maxFrames) and its
  *        cycle length into @p cycleLen; false if it cannot.
+ * @param[in]  path       the file's path
+ * @param[out] out        a frame's harmonics each
+ * @param[out] cycleLen   the cycle's length in samples
+ * @param[in]  maxFrames  the most frames read
+ * @return false if it cannot be read
  */
 bool readWaveTableWav(const char* path, std::vector<CoeffsT>& out, int& cycleLen, int maxFrames)
 {

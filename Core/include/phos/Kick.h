@@ -69,6 +69,7 @@
  * stays 15.8 dB under the bass in 30 .. 150 Hz (median over the first drop of the listening seed), and
  * with the lock the two meet in phase there. Neither the lock nor the trim range is touched: tau_2 is
  * the same, so one cycle still costs 7.1 ms of it.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Adaa.h"
@@ -81,43 +82,64 @@ class ParamStore;
 /** @brief The kick drum synthesizer (one voice plus a fade slot). */
 class Kick {
 public:
-    /** @brief Prepares for a sample rate. */
+    /**
+     * @brief Prepares for a sample rate.
+     * @param[in] sampleRate  the sample rate in Hz
+     */
     void prepare(double sampleRate);
     /** @brief Silences and clears all state. */
     void reset();
     /**
      * @brief Reads the effective parameter values.
-     * @param v       values indexed by kick:: (after offsets, overrides and constraints)
-     * @param keyRoot pitch class of the key (0 = C), used when Tune = Key
+     * @param[in] v        values indexed by kick:: (after offsets, overrides and constraints)
+     * @param[in] keyRoot  pitch class of the key (0 = C), used when Tune = Key
      */
     void update(const float* v, int keyRoot);
     /**
      * @brief Starts a kick.
-     * @param velocity 0..1
-     * @param late     how many samples ago the kick ideally started (0 <= late < 1)
+     * @param[in] velocity  0..1
+     * @param[in] late      how many samples ago the kick ideally started (0 <= late < 1)
      */
     void trigger(float velocity, double late = 0.0);
-    /** @brief Renders @p n samples, replacing @p out. */
+    /**
+     * @brief Renders @p n samples, replacing @p out.
+     * @param[out] out  the samples
+     * @param[in]  n    the block's samples
+     */
     void process(float* out, int n);
 
-    /** @brief The end pitch actually used, after tuning. */
+    /**
+     * @brief The end pitch actually used, after tuning.
+     * @return the end pitch in Hz after tuning
+     */
     float tunedEndHz() const { return m_endHz; }
-    /** @brief The body time constant the next kick uses, after the phase trim, in seconds. */
+    /**
+     * @brief The body time constant the next kick uses, after the phase trim, in seconds.
+     * @return the body time constant in seconds
+     */
     double bodyTau() const { return m_tau2Trimmed; }
-    /** @brief Whether anything is sounding. */
+    /**
+     * @brief Whether anything is sounding.
+     * @return true while anything sounds
+     */
     bool active() const { return m_voice.m_active || m_fade.m_active; }
 
     /**
      * @brief Output phase of a kick triggered with the current settings, @p t seconds after its start.
+     * @param[in] t  seconds after the kick's ideal start
      * @return phase in cycles (not wrapped)
      */
     double outputPhaseAt(double t) const;
-    /** @brief Instantaneous frequency of the current settings at @p t seconds. */
+    /**
+     * @brief Instantaneous frequency of the current settings at @p t seconds.
+     * @param[in] t  seconds after the kick's start
+     * @return the frequency in Hz
+     */
     double frequencyAt(double t) const;
     /**
      * @brief Trims tau_2 so the output phase at @p t is @p targetCycles modulo whole cycles.
-     * @param t            seconds after the trigger (the first bass slot); <= 0 disables the trim
-     * @param targetCycles wanted phase in cycles
+     * @param[in] t             seconds after the trigger (the first bass slot); <= 0 disables the trim
+     * @param[in] targetCycles  wanted phase in cycles
      */
     void setPhaseTarget(double t, double targetCycles);
 
@@ -127,19 +149,24 @@ public:
      * Body floor: at least two periods of the end pitch lie above -20 dB, so a short recipe cannot
      * turn the kick into a click. The envelope falls 20 dB in a third of its decay, which gives
      * hold + decay/3 >= 2/f_end for the sweep engine and decay/3 >= 2/f_end for the resonator.
-     * @param v           kick values indexed by kick:: (modified in place)
-     * @param slotSeconds time from the kick to the first bass note
-     * @param keyRoot     pitch class of the key, for the tuned end pitch
+     * @param[in,out] v            kick values indexed by kick:: (modified in place)
+     * @param[in]     slotSeconds  time from the kick to the first bass note
+     * @param[in]     keyRoot      pitch class of the key, for the tuned end pitch
      */
     static void constrain(float* v, double slotSeconds, int keyRoot);
     /**
      * @brief Shortens hold and decay of a parameter set so the tail at @p slotSeconds stays under the limit.
-     * @param v           kick values indexed by kick:: (modified in place)
-     * @param slotSeconds time from the kick to the first bass note
+     * @param[in,out] v            kick values indexed by kick:: (modified in place)
+     * @param[in]     slotSeconds  time from the kick to the first bass note
      */
     static void constrainTail(float* v, double slotSeconds);
 
-    /** @brief The octave-equivalent of the root or fifth nearest to @p targetHz. */
+    /**
+     * @brief The octave-equivalent of the root or fifth nearest to @p targetHz.
+     * @param[in] keyRoot   the key's pitch class
+     * @param[in] targetHz  the frequency aimed at
+     * @return the frequency in Hz
+     */
     static float tuneToKey(int keyRoot, float targetHz);
 
 private:
@@ -172,13 +199,30 @@ private:
         double m_zIm = 0.0;   ///< the resonant phasor's imaginary part
     };
 
-    /** @brief The body of one voice for one sample; the click layer's sample goes to @p click. */
+    /**
+     * @brief The body of one voice for one sample; the click layer's sample goes to @p click.
+     * @param[in,out] v      the voice
+     * @param[out]    click  receives the click layer's sample
+     * @return the body's sample
+     */
     float voiceSample(Voice& v, float& click);
-    /** @brief The shape a kick triggered now would get, from the current parameters. */
+    /**
+     * @brief The shape a kick triggered now would get, from the current parameters.
+     * @return the shape a kick triggered now would get
+     */
     Shape currentShape() const;
-    /** @brief The sweep's phase at @p t seconds with body time constant @p tau2, in cycles. */
+    /**
+     * @brief The sweep's phase at @p t seconds with body time constant @p tau2, in cycles.
+     * @param[in] t     seconds after the kick's start
+     * @param[in] tau2  the body time constant in seconds
+     * @return the sweep's phase in cycles
+     */
     double phaseWith(double t, double tau2) const;
-    /** @brief The phase the output chain (ADAA, tone filter) adds at @p hz, in cycles. */
+    /**
+     * @brief The phase the output chain (ADAA, tone filter) adds at @p hz, in cycles.
+     * @param[in] hz  the frequency in Hz
+     * @return the phase the chain adds there, in cycles
+     */
     double chainPhase(double hz) const;
 
     double m_sr = 48000.0;   ///< sample rate

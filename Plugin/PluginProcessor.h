@@ -44,10 +44,11 @@
  * event already queued -- about thirteen seconds at 145 BPM. A macro instead writes the *knob*, in
  * the knob's normalised domain and as an offset from the value it had (`m_macroBase`), which is the
  * language a phos::ControlEvent speaks; the composer's own offsets keep riding on top, and letting
- * go puts every knob back exactly where it was. See #Macro.
+ * go puts every knob back exactly where it was. See #MacroE.
  *
  * **Environment.** `PHOS_MUTE=1` starts the output muted and the plugin never unmutes itself, so
  * tests and the screenshot export are silent. `PHOS_SHOT` is read by the editor (PluginEditor.h).
+ * @author Rene Weller
  */
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -91,7 +92,11 @@ enum class MacroE : int {
 constexpr int NumMacros = static_cast<int>(MacroE::COUNT);   ///< number of macros
 extern const char* const MacroNames[NumMacros];            ///< display names
 extern const char* const MacroHelp[NumMacros];             ///< one line each, for the manual and the tooltip
-/** @brief Whether a macro is a momentary press (as opposed to a value that is held). */
+/**
+ * @brief Whether a macro is a momentary press (as opposed to a value that is held).
+ * @param[in] m  the macro
+ * @return true for a momentary press
+ */
 bool macroIsMomentary(MacroE m);
 
 /**
@@ -107,27 +112,81 @@ class StoreParameter final : public juce::RangedAudioParameter {
 public:
     /**
      * @brief Binds a parameter.
-     * @param store the engine's parameter store (outlives this object)
-     * @param id    global parameter id
-     * @param name  display name shown by the host
+     * @param[in,out] store  the engine's parameter store (outlives this object)
+     * @param[in]     id     global parameter id
+     * @param[in]     name   display name shown by the host
      */
     StoreParameter(phos::ParamStore& store, int id, const juce::String& name);
-    /** @brief The global id of the store's parameter this one is. */
+    /**
+     * @brief The global id of the store's parameter this one is.
+     * @return the store id
+     */
     int storeId() const { return m_id; }
 
-    float getValue() const override;   ///< the store's value, normalised
-    void  setValue(float newValue) override;   ///< writes the store (relaxed atomic)
-    float getDefaultValue() const override;   ///< the descriptor's default, normalised
-    juce::String getName(int maximumStringLength) const override;   ///< the display name (0: no limit)
-    juce::String getLabel() const override;   ///< the unit
-    int  getNumSteps() const override;   ///< steps of a discrete parameter
-    bool isDiscrete() const override;   ///< Int, Choice and Toggle are discrete
-    bool isBoolean() const override;   ///< a Toggle is boolean
-    juce::String getText(float normalisedValue, int maximumStringLength) const override;   ///< the value as the panel shows it
-    float getValueForText(const juce::String& text) const override;   ///< parses a choice name, On/Off or a number
-    const juce::NormalisableRange<float>& getNormalisableRange() const override { return m_range; }   ///< the store's own mapping
+    /**
+     * the store's value, normalised
+     * @return the store's value, normalised
+     */
+    float getValue() const override;
+    /**
+     * writes the store (relaxed atomic)
+     * @param[in] newValue  the value, normalised
+     */
+    void  setValue(float newValue) override;
+    /**
+     * the descriptor's default, normalised
+     * @return the default, normalised
+     */
+    float getDefaultValue() const override;
+    /**
+     * the display name (0: no limit)
+     * @param[in] maximumStringLength  the longest name the host takes, 0 for no limit
+     * @return the display name
+     */
+    juce::String getName(int maximumStringLength) const override;
+    /**
+     * the unit
+     * @return the unit
+     */
+    juce::String getLabel() const override;
+    /**
+     * steps of a discrete parameter
+     * @return the steps of a discrete parameter
+     */
+    int  getNumSteps() const override;
+    /**
+     * Int, Choice and Toggle are discrete
+     * @return true for Int, Choice and Toggle
+     */
+    bool isDiscrete() const override;
+    /**
+     * a Toggle is boolean
+     * @return true for a Toggle
+     */
+    bool isBoolean() const override;
+    /**
+     * the value as the panel shows it
+     * @param[in] normalisedValue      the value, normalised
+     * @param[in] maximumStringLength  the longest text the host takes
+     * @return the value as the panel shows it
+     */
+    juce::String getText(float normalisedValue, int maximumStringLength) const override;
+    /**
+     * parses a choice name, On/Off or a number
+     * @param[in] text  a choice name, On/Off or a number
+     * @return the value, normalised
+     */
+    float getValueForText(const juce::String& text) const override;
+    /**
+     * the store's own mapping
+     * @return the store's mapping
+     */
+    const juce::NormalisableRange<float>& getNormalisableRange() const override { return m_range; }
 
-    /** @brief The global id in the store. */
+    /**
+     * @brief The global id in the store.
+     * @return the id in the store
+     */
     int paramId() const { return m_id; }
 
 private:
@@ -152,7 +211,11 @@ extern bool gPlugTrace;
  */
 class PlugConductor {
 public:
-    /** @brief Binds an engine and a composer (both outlive this object). */
+    /**
+     * @brief Binds an engine and a composer (both outlive this object).
+     * @param[in,out] engine    the engine
+     * @param[in]     composer  the composer
+     */
     PlugConductor(phos::Engine& engine, const phos::Composer& composer) : m_engine(engine), m_composer(composer) {}
 
     /**
@@ -164,15 +227,20 @@ public:
      * landing point are composed for their control events only; the last value of each parameter is
      * pushed as an immediate change. A ramp that was in flight lands at its target, which is where
      * it was heading.
+     * @param[in]     params      the knobs
+     * @param[in]     startBar    the next bar to compose
+     * @param[in]     beatOffset  the musical beat of engine beat 0
+     * @param[in]     writeTempo  true to write the tempo too
+     * @param[in,out] engineLock  the engine's lock
      */
     void seek(const phos::ParamStore& params, int startBar, double beatOffset, bool writeTempo,
               std::mutex& engineLock);
     /**
      * @brief Composes and pushes until @p horizonBeats beyond the engine's position are covered.
-     * @param params       knob values to compose with
-     * @param horizonBeats how far ahead to keep the rings filled
-     * @param midiOut      if not null, every pushed note is also written here (engine beats)
-     * @param engineLock   held while events are pushed, released while bars are composed
+     * @param[in]     params        knob values to compose with
+     * @param[in]     horizonBeats  how far ahead to keep the rings filled
+     * @param[in,out] midiOut       if not null, every pushed note is also written here (engine beats)
+     * @param[in,out] engineLock    held while events are pushed, released while bars are composed
      */
     void pump(const phos::ParamStore& params, double horizonBeats, phos::EventRing<phos::NoteEvent>* midiOut,
               std::mutex& engineLock);
@@ -183,14 +251,24 @@ public:
      * them out for itself -- but they must not be *sent* from here either, because this runs bars
      * ahead of the sound. The conductor therefore writes what it knows into a ring in beat order,
      * and phos::CueTap pops a mark when the play position reaches it (Cue.h).
+     * @param[in,out] marks  the ring, or null
      */
     void setCueMarks(phos::CueMarkRingT* marks) { m_marks = marks; }
 
-    /** @brief Index of the next bar to be composed. */
+    /**
+     * @brief Index of the next bar to be composed.
+     * @return the bar's index
+     */
     int nextBar() const { return m_nextBar; }
-    /** @brief The musical beat that engine beat 0 stands for. */
+    /**
+     * @brief The musical beat that engine beat 0 stands for.
+     * @return the musical beat
+     */
     double beatOffset() const { return m_beatOffset; }
-    /** @brief Nudges the offset by a fraction of a beat (host drift correction). */
+    /**
+     * @brief Nudges the offset by a fraction of a beat (host drift correction).
+     * @param[in] delta  the fraction of a beat
+     */
     void nudgeOffset(double delta) { m_beatOffset += delta; }
 
     /**
@@ -200,9 +278,9 @@ public:
      * there, in musical beats. Reading them
      * is a copy under a short lock -- the editor never asks the composer itself, which would mean
      * waiting for a probe render.
-     * @param firstBar first bar wanted
-     * @param bars     how many
-     * @param out      receives the notes that sound in that range, held ones struck before it included
+     * @param[in]  firstBar  first bar wanted
+     * @param[in]  bars      how many
+     * @param[out] out       receives the notes that sound in that range, held ones struck before it included
      * @return false if nothing of that range has been composed yet
      */
     bool readPreview(int firstBar, int bars, std::vector<phos::NoteEvent>& out) const;
@@ -211,7 +289,11 @@ public:
     static constexpr int PreviewBars = 24;    ///< bars kept for the editor's pattern preview
 
 private:
-    /** @brief Pushes what the last composed bar left over into the engine's rings; false while they are full. */
+    /**
+     * @brief Pushes what the last composed bar left over into the engine's rings; false while they are full.
+     * @param[in,out] midiOut  the MIDI out's ring, or null
+     * @return false while the rings are full
+     */
     bool flush(phos::EventRing<phos::NoteEvent>* midiOut);
     /**
      * @brief The sound state seek() replayed, waiting for the first pump() after the engine's reset.
@@ -224,7 +306,12 @@ private:
      */
     std::vector<phos::ControlEvent> m_landing;
 
-    /** @brief The tempo of the track that @p bar belongs to, as control events on compose.bpm. */
+    /**
+     * @brief The tempo of the track that @p bar belongs to, as control events on compose.bpm.
+     * @param[in]     params  the knobs
+     * @param[in]     bar     the bar
+     * @param[in,out] out     the events, added to
+     */
     void tempoControls(const phos::ParamStore& params, int bar, std::vector<phos::ControlEvent>& out) const;
 
     /**
@@ -234,9 +321,9 @@ private:
      * section itself, and the pre-drop break in the last bar of a buildup. Matching that function
      * exactly is what the offline demo checks -- the cues a listener receives and the score the
      * composer wrote have to be the same list of boundaries, bar for bar.
-     * @param params knob values to plan with
-     * @param bar    musical bar
-     * @param first  true: also send the key, whatever the bar is (after a seek nothing is known yet)
+     * @param[in] params  knob values to plan with
+     * @param[in] bar     musical bar
+     * @param[in] first   true: also send the key, whatever the bar is (after a seek nothing is known yet)
      */
     void cueMarks(const phos::ParamStore& params, int bar, bool first);
 
@@ -284,83 +371,208 @@ public:
         uint64_t m_seed = 1;                                            ///< the set seed
         std::map<int, uint8_t> m_locks[phos::NumLockUnits];            ///< the lock mirror
         std::map<int, uint32_t> m_variations[phos::NumLockUnits];      ///< the reroll counters
-        /** @brief Whether two states are the same (a step that changes nothing is not recorded). */
+        /**
+         * @brief Whether two states are the same (a step that changes nothing is not recorded).
+         * @param[in] o  the other state
+         * @return true when they are the same
+         */
         bool operator==(const UndoState& o) const;
     };
-    /** @brief The state an undo step records (message thread). */
+    /**
+     * @brief The state an undo step records (message thread).
+     * @return the state
+     * @pre called on the message thread
+     */
     UndoState captureUndoState() const;
-    /** @brief Puts a recorded state back (message thread); records nothing itself. */
+    /**
+     * @brief Puts a recorded state back (message thread); records nothing itself.
+     * @param[in] s  the state
+     * @pre called on the message thread
+     */
     void applyUndoState(const UndoState& s);
     /**
      * @brief Runs an editing action from the editor as one undo step named @p name: seed, locks, rerolls, a
      *        loaded set, the factory reset. Knob gestures are recorded without this (parameterGestureChanged).
+     * @param[in] name    the step's name
+     * @param[in] action  the action
      */
     void undoable(const juce::String& name, const std::function<void()>& action);
     // ------------------------------------------------------------------ gallery and ratings (23.09.2026)
-    /** @brief Where saved sets live: `PHOS_GALLERY_DIR`, else `<application data>/Phosphene/Sets` (created). */
+    /**
+     * @brief Where saved sets live: `PHOS_GALLERY_DIR`, else `<application data>/Phosphene/Sets` (created).
+     * @return the folder
+     */
     juce::File galleryFolder() const;
-    /** @brief The listener's verdicts (phos/Rating.h): `<application data>/Phosphene/ratings.tsv`. */
+    /**
+     * @brief The listener's verdicts (phos/Rating.h): `<application data>/Phosphene/ratings.tsv`.
+     * @return the ratings file
+     */
     juce::File ratingsFile() const;
-    /** @brief The user folder: %APPDATA%/Phosphene, or PHOS_USER_DIR when that is set (the tests). Created on demand. */
+    /**
+     * @brief The user folder: %APPDATA%/Phosphene, or PHOS_USER_DIR when that is set (the tests). Created on demand.
+     * @return the folder
+     */
     juce::File userFolder() const;
     /**
      * @brief Saves the set as it stands into the gallery: the `.phosset` with the gallery lines (phos/Gallery.h)
      *        -- name, time, and every published track's style, tempo and form.
+     * @param[in] name  the set's name
      * @return the file written, or a non-existent File when it could not be written
      */
     juce::File saveToGallery(const juce::String& name);
 
     // ------------------------------------------------------------------ learned preferences (23.09.2026)
-    /** @brief `<application data>/Phosphene/preferences.txt`, loaded at start when it exists (phos/Preferences.h). */
+    /**
+     * @brief `<application data>/Phosphene/preferences.txt`, loaded at start when it exists (phos/Preferences.h).
+     * @return the file
+     */
     juce::File preferencesFile() const;
-    /** @brief The preferences fitted from ratingsFile(), and how many verdicts with features went in. */
+    /**
+     * @brief The preferences fitted from ratingsFile(), and how many verdicts with features went in.
+     * @param[out] verdicts  receives the verdicts used, or null
+     * @return the preferences
+     */
     phos::Preferences fitFromRatings(int* verdicts = nullptr) const;
-    /** @brief Writes @p prefs to preferencesFile(), makes them the process's, and plans the set again from here. */
+    /**
+     * @brief Writes @p prefs to preferencesFile(), makes them the process's, and plans the set again from here.
+     * @param[in] prefs  the preferences
+     * @return false if the file cannot be written
+     */
     bool applyPreferences(const phos::Preferences& prefs);
     /** @brief Renames preferencesFile() to preferences.txt.old, drops the preferences, plans again from here. */
     void forgetPreferences();
-    /** @brief One line on what is in force: "none", or the number of weights and the strongest of them. */
+    /**
+     * @brief One line on what is in force: "none", or the number of weights and the strongest of them.
+     * @return the line
+     */
     juce::String preferencesSummary() const;
 
-    bool undo();                       ///< one step back; false when there is none
-    bool redo();                       ///< one step forward
-    bool canUndo() const { return m_undo.canUndo(); }   ///< for the editor's buttons
-    bool canRedo() const { return m_undo.canRedo(); }   ///< @copydoc canUndo
-    juce::String undoName() const { return m_undo.getUndoDescription(); }   ///< what undo() would take back
-    juce::String redoName() const { return m_undo.getRedoDescription(); }   ///< what redo() would do again
+    /**
+     * one step back; false when there is none
+     * @return false if there was no step
+     */
+    bool undo();
+    /**
+     * one step forward
+     * @return false if there was no step
+     */
+    bool redo();
+    /**
+     * for the editor's buttons
+     * @return true when there is a step to undo
+     */
+    bool canUndo() const { return m_undo.canUndo(); }
+    /**
+     * @copybrief canUndo
+     * @return true when there is a step to redo
+     */
+    bool canRedo() const { return m_undo.canRedo(); }
+    /**
+     * what undo() would take back
+     * @return the step's name, empty for none
+     */
+    juce::String undoName() const { return m_undo.getUndoDescription(); }
+    /**
+     * what redo() would do again
+     * @return the step's name, empty for none
+     */
+    juce::String redoName() const { return m_undo.getRedoDescription(); }
 
     /** @brief Creates the engine, the composer and its thread, and binds every parameter. */
     PhospheneProcessor();
     ~PhospheneProcessor() override;
 
-    void prepareToPlay(double sampleRate, int samplesPerBlock) override;   ///< prepares the engine and reloads the score
+    /**
+     * prepares the engine and reloads the score
+     * @param[in] sampleRate       the sample rate
+     * @param[in] samplesPerBlock  the largest block
+     */
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}   ///< nothing to release
-    /** @brief Offline: the audio thread takes the composer's work over, so a render is reproducible. */
+    /**
+     * @brief Offline: the audio thread takes the composer's work over, so a render is reproducible.
+     * @param[in] offline  true for an offline render
+     */
     void setNonRealtime(bool offline) noexcept override;
-    bool isBusesLayoutSupported(const BusesLayout& layouts) const override;   ///< stereo out only
-    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;   ///< plays, following the host's playhead
+    /**
+     * stereo out only
+     * @param[in] layouts  the layout asked for
+     * @return true for a stereo output
+     */
+    bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
+    /**
+     * plays, following the host's playhead
+     * @param[out]    buffer        the block's audio
+     * @param[in,out] midiMessages  the block's MIDI in, then the parts' notes out
+     */
+    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
-    juce::AudioProcessorEditor* createEditor() override;   ///< the panel
-    bool hasEditor() const override { return true; }   ///< it has one
+    /**
+     * the panel
+     * @return a new panel
+     */
+    juce::AudioProcessorEditor* createEditor() override;
+    /**
+     * it has one
+     * @return true
+     */
+    bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return JucePlugin_Name; }   ///< "Phosphene"
-    /** @brief Since 23.09.2026 the plugin reads MIDI controllers (MIDI learn, phos/MidiMap.h); notes it ignores. */
+    /**
+     * "Phosphene"
+     * @return the plugin's name
+     */
+    const juce::String getName() const override { return JucePlugin_Name; }
+    /**
+     * @brief Since 23.09.2026 the plugin reads MIDI controllers (MIDI learn, phos/MidiMap.h); notes it ignores.
+     * @return true
+     */
     bool acceptsMidi() const override { return true; }
-    /** @brief Yes: the parts go out as MIDI. */
+    /**
+     * @brief Yes: the parts go out as MIDI.
+     * @return true
+     */
     bool producesMidi() const override { return true; }
-    /** @brief No: it makes sound. */
+    /**
+     * @brief No: it makes sound.
+     * @return false
+     */
     bool isMidiEffect() const override { return false; }
-    /** @brief Four seconds: the rooms ring on. */
+    /**
+     * @brief Four seconds: the rooms ring on.
+     * @return the tail in seconds
+     */
     double getTailLengthSeconds() const override { return 4.0; }
 
-    int getNumPrograms() override { return 1; }   ///< one program
-    int getCurrentProgram() override { return 0; }   ///< always the one
+    /**
+     * one program
+     * @return 1
+     */
+    int getNumPrograms() override { return 1; }
+    /**
+     * always the one
+     * @return 0
+     */
+    int getCurrentProgram() override { return 0; }
     void setCurrentProgram(int) override {}   ///< nothing to switch
-    const juce::String getProgramName(int) override { return "Set"; }   ///< "Set"
+    /**
+     * "Set"
+     * @return the program's name
+     */
+    const juce::String getProgramName(int) override { return "Set"; }
     void changeProgramName(int, const juce::String&) override {}   ///< not renameable
 
-    void getStateInformation(juce::MemoryBlock& destData) override;   ///< seed, rerolls, parameters, controllers as XML
-    void setStateInformation(const void* data, int sizeInBytes) override;   ///< restores them, lets go of the macros, composes
+    /**
+     * seed, rerolls, parameters, controllers as XML
+     * @param[out] destData  the state
+     */
+    void getStateInformation(juce::MemoryBlock& destData) override;
+    /**
+     * restores them, lets go of the macros, composes
+     * @param[in] data         the state
+     * @param[in] sizeInBytes  its size in bytes
+     */
+    void setStateInformation(const void* data, int sizeInBytes) override;
     /**
      * @brief The version of the state this build writes.
      *
@@ -383,7 +595,10 @@ public:
      * What happens to older states is in setStateInformation().
      */
     static constexpr int StateVersion = 3;
-    /** @brief The version of the last state read by setStateInformation (1 for a state older than the voices round). */
+    /**
+     * @brief The version of the last state read by setStateInformation (1 for a state older than the voices round).
+     * @return the version
+     */
     int lastStateVersion() const { return m_lastStateVersion; }
     /**
      * @brief The knob text of a state older than StateVersion that was **not** applied, or empty.
@@ -392,6 +607,7 @@ public:
      * chose, so loading it would silently undo the defaults of later calibrations. Such a state therefore does
      * not set a single knob: the engine starts at today's factory defaults and the text is kept here so
      * that the editor can offer it (PhospheneEditor's banner, adoptLegacyState()).
+     * @return the knob text, or empty
      */
     const juce::String& pendingLegacyState() const { return m_legacyKnobs; }
     /** @brief Applies the knobs of the held older state after all, at the user's word. */
@@ -413,28 +629,51 @@ public:
      * factory ones (phos::factoryPresets) and the user's, which live as `<name>.txt` in a folder per synth under the
      * user folder (PHOS_USER_DIR in the tests, so a test never writes into the real one).
      * @{ */
-    /** @brief The folder of the user's presets for one synth ("<user folder>/Presets/lead"). */
+    /**
+     * @brief The folder of the user's presets for one synth ("<user folder>/Presets/lead").
+     * @param[in] module    the synth
+     * @param[in] instance  its instance
+     * @return the folder
+     */
     juce::File userPresetFolder(phos::ModuleE module, int instance) const;
-    /** @brief The user's presets of one synth, in the group "User", sorted by name. */
+    /**
+     * @brief The user's presets of one synth, in the group "User", sorted by name.
+     * @param[in] module    the synth
+     * @param[in] instance  its instance
+     * @return the presets
+     */
     std::vector<phos::SoundPreset> userPresets(phos::ModuleE module, int instance) const;
     /**
      * @brief Applies a preset as one undo step and switches the synth's own sound on (mix.*_own), so the composer's
      *        per-track recipes leave the sound as the preset has it.
+     * @param[in] module    the synth
+     * @param[in] instance  its instance
+     * @param[in] preset    the preset
      */
     void applyPreset(phos::ModuleE module, int instance, const phos::SoundPreset& preset);
     /**
      * @brief Opens one undo step of several changes (15.10.2026: a modulation added, a depth dragged, a value typed into
      *        the command palette); endStep() records it. Steps nest, and a knob's gesture inside one joins it.
+     * @param[in] what  the step's name
      */
     void beginStep(const juce::String& what);
     void endStep();   ///< closes beginStep's step
-    /** @brief The synth knob @p id belongs to takes the composer's preset over (Own Sound on) where it plays one -- before a knob of it is set by hand. */
+    /**
+     * @brief The synth knob @p id belongs to takes the composer's preset over (Own Sound on) where it plays one --
+     *        before a knob of it is set by hand.
+     * @param[in] id  the knob's store id
+     */
     void takeOver(int id);
-    /** @brief Sets the knobs @p values (store id, real value) through the host as one undo step named @p what. */
+    /**
+     * @brief Sets the knobs @p values (store id, real value) through the host as one undo step named @p what.
+     * @param[in] what    the undo step's name
+     * @param[in] values  (store id, real value) of the knobs
+     */
     void applyKnobs(const juce::String& what, const std::vector<std::pair<int, float>>& values);
     /**
      * @brief Plays @p values (store id, real value) while a preset is listened to (the browser, A|B held) -- in the store
      *        only: no undo step, nothing to the host --; endPreview() takes them back.
+     * @param[in] values  (store id, real value) of the knobs
      */
     void previewKnobs(const std::vector<std::pair<int, float>>& values);
     /** @brief Back to the knobs as they were before previewKnobs (nothing when no preview plays). */
@@ -442,11 +681,22 @@ public:
 
     /** @name The Field track's presets and library (27.09.2026; phos/FieldPresets.h, phos/FieldLibrary.h)
      *  @{ */
-    /** @brief Puts the Field knobs where factory preset @p index has them, as one undo step (message thread). */
+    /**
+     * @brief Puts the Field knobs where factory preset @p index has them, as one undo step (message thread).
+     * @param[in] index  the factory preset
+     * @pre called on the message thread
+     */
     void applyFieldPreset(int index);
-    /** @brief The user's own folder of field recordings, scanned beside the shipped one ("" none). */
+    /**
+     * @brief The user's own folder of field recordings, scanned beside the shipped one ("" none).
+     * @return the folder, empty for none
+     */
     juce::String fieldFolder() const { return m_fieldFolder; }
-    /** @brief Sets that folder and scans the library again; it is saved with the plugin's state (message thread). */
+    /**
+     * @brief Sets that folder and scans the library again; it is saved with the plugin's state (message thread).
+     * @param[in] folder  the folder, empty for none
+     * @pre called on the message thread
+     */
     void setFieldFolder(const juce::String& folder);
     /** @} */
 
@@ -454,37 +704,67 @@ public:
      * @brief Auditions bank preset @p preset of effect family @p choice (sfx::PresetRiser order) in the running set:
      *        the audio thread plays it at its next block (phos::Engine::previewSfx). Nothing sounds while the
      *        transport stands -- the engine renders silence then. Message thread.
+     * @param[in] choice  the effect family
+     * @param[in] preset  the bank preset
+     * @pre called on the message thread
      */
     void previewSfx(int choice, int preset);
-    /** @brief The audition waiting for the audio thread (choice << 12 | preset), -1 none -- for the tests. */
+    /**
+     * @brief The audition waiting for the audio thread (choice << 12 | preset), -1 none -- for the tests.
+     * @return choice << 12 | preset, or -1
+     */
     int pendingSfxPreview() const { return m_sfxPreview.load(std::memory_order_acquire); }
 
     /**
      * @brief The channel meters (24.09.2026): per part (phos::Part order), the peak and the RMS of what it put into
      *        the mix since the last call, as linear amplitudes; both 0 where nothing was rendered. Message thread
      *        (the mixer page's timer).
+     * @param[out] peak  the peak per part
+     * @param[out] rms   the RMS per part
+     * @pre called on the message thread
      */
     void takeChannelMeters(float* peak, float* rms);
     /**
      * @brief The value parameter @p id plays at (26.09.2026, the live ring): the knob with the composer's preset base,
      *        its rides and the level match's corrections on it, as the engine applied them in the last block. Any thread.
+     * @param[in] id  the parameter
+     * @return the value played
      */
     float playedValue(int id) const
     {
         return id >= 0 && id < m_playedCount ? m_played[static_cast<size_t>(id)].load(std::memory_order_relaxed) : 0.0f;
     }
-    /** @brief Saves the synth's knobs as the user preset @p name; returns the file, or File() when it failed. */
+    /**
+     * @brief Saves the synth's knobs as the user preset @p name; returns the file, or File() when it failed.
+     * @param[in] module    the synth
+     * @param[in] instance  its instance
+     * @param[in] name      the preset's name
+     * @return the file, or File() when it failed
+     */
     juce::File saveUserPreset(phos::ModuleE module, int instance, const juce::String& name);
     /** @} */
 
     // ------------------------------------------------------------------ the set
-    /** @brief The engine's parameters -- the single copy of every value. */
+    /**
+     * @brief The engine's parameters -- the single copy of every value.
+     * @return the parameters
+     */
     phos::ParamStore& params() { return m_engine->params(); }
-    /** @brief The engine's parameters (read only). */
+    /**
+     * @brief The engine's parameters (read only).
+     * @return the parameters
+     */
     const phos::ParamStore& params() const { return m_engine->params(); }
-    /** @brief The engine, for the editor's meters. */
+    /**
+     * @brief The engine, for the editor's meters.
+     * @return the engine
+     */
     const phos::Engine& engine() const { return *m_engine; }
-    /** @brief The host parameter for a global id. */
+    /**
+     * @brief The host parameter for a global id.
+     * @param[in] id  the global id
+     * @return the host parameter, or null
+     */
     StoreParameter* parameterFor(int id) const { return id >= 0 && id < static_cast<int>(m_byId.size()) ? m_byId[static_cast<size_t>(id)] : nullptr; }
 
     // ------------------------------------------------------------------ MIDI learn (23.09.2026, phos/MidiMap.h)
@@ -494,18 +774,41 @@ public:
      * (params().count() + Macro). Every one of them can take a controller, and every one of them is a host
      * parameter a DAW can automate.
      * @{ */
-    /** @brief The controller table (arm/bind/unbind on the message thread). */
+    /**
+     * @brief The controller table (arm/bind/unbind on the message thread).
+     * @return the controller table
+     * @pre called on the message thread
+     */
     phos::MidiMap& midiMap() { return m_midiMap; }
     const phos::MidiMap& midiMap() const { return m_midiMap; }
-    /** @brief How many targets there are. */
+    /**
+     * @brief How many targets there are.
+     * @return the number of targets
+     */
     int midiTargetCount() const { return params().count() + NumMacros; }
-    /** @brief The host parameter behind a target, or null. */
+    /**
+     * @brief The host parameter behind a target, or null.
+     * @param[in] target  the target
+     * @return the host parameter, or null
+     */
     juce::RangedAudioParameter* hostParameter(int target) const;
-    /** @brief A target's display name ("Lead Cutoff", "Macro Filter Sweep"). */
+    /**
+     * @brief A target's display name ("Lead Cutoff", "Macro Filter Sweep").
+     * @param[in] target  the target
+     * @return its display name
+     */
     juce::String midiTargetName(int target) const;
-    /** @brief A target's stable key for the saved map ("lead.cutoff", "macro.filter_sweep"). */
+    /**
+     * @brief A target's stable key for the saved map ("lead.cutoff", "macro.filter_sweep").
+     * @param[in] target  the target
+     * @return its key
+     */
     std::string midiTargetKey(int target) const;
-    /** @brief The target with key @p key, or -1. */
+    /**
+     * @brief The target with key @p key, or -1.
+     * @param[in] key  the key
+     * @return the target, or -1
+     */
     int midiTargetFind(const std::string& key) const;
     /** @} */
 
@@ -531,7 +834,10 @@ public:
          */
         int m_built = 0;
     };
-    /** @brief The state of the library now; counted freshly, so it is valid after prepareToPlay(). */
+    /**
+     * @brief The state of the library now; counted freshly, so it is valid after prepareToPlay().
+     * @return the library's state
+     */
     WaveTableLibrary waveTableLibrary() const;
 
     /**
@@ -564,23 +870,38 @@ public:
          */
         bool m_fromSourceTree = false;
     };
-    /** @brief What the two models are in this process; settled once, before the first engine. */
+    /**
+     * @brief What the two models are in this process; settled once, before the first engine.
+     * @return the models' state
+     */
     LearnedModels learnedModels() const;
 
-    /** @brief The set seed. */
+    /**
+     * @brief The set seed.
+     * @return the set's seed
+     */
     uint64_t seed() const { return m_seed.load(std::memory_order_relaxed); }
-    /** @brief Chooses another set (message thread); restarts playback from the top. */
+    /**
+     * @brief Chooses another set (message thread); restarts playback from the top.
+     * @param[in] s  the set's seed
+     * @pre called on the message thread
+     */
     void setSeed(uint64_t s);
     /** @brief A new seed from the clock. */
     void randomiseSeed();
 
     /**
      * @brief Copies out the plan of track @p index as the composer thread last published it.
+     * @param[in]  index  the track
+     * @param[out] out    its plan
      * @return false if that track has not been planned yet (the editor then shows what it has)
      */
     bool tryReadTrack(int index, phos::TrackPlan& out) const;
     /**
      * @brief The notes of @p bars bars from @p firstBar, for the editor's pattern preview.
+     * @param[in]  firstBar  the first bar
+     * @param[in]  bars      the bars
+     * @param[out] out       the notes
      * @return false if the conductor has not composed that range (the display then keeps its own)
      */
     bool readPattern(int firstBar, int bars, std::vector<phos::NoteEvent>& out) const
@@ -596,13 +917,31 @@ public:
      * from the mirror this keeps, so a lock toggles under the mouse even while a track is being
      * planned. A locked unit is frozen on the seed it had, so rerolling anything around it leaves
      * it bit-identical.
+     * @param[in] unit    the kind of unit
+     * @param[in] index   the unit
+     * @param[in] locked  true to lock
+     * @pre called on the message thread
      */
     void setLock(phos::LockUnitE unit, int index, bool locked);
-    /** @brief Whether a unit is locked, from the editor's mirror. */
+    /**
+     * @brief Whether a unit is locked, from the editor's mirror.
+     * @param[in] unit   the kind of unit
+     * @param[in] index  the unit
+     * @return true when locked
+     */
     bool isLocked(phos::LockUnitE unit, int index) const;
-    /** @brief Draws that unit again from a fresh seed; a locked unit does not move. */
+    /**
+     * @brief Draws that unit again from a fresh seed; a locked unit does not move.
+     * @param[in] unit   the kind of unit
+     * @param[in] index  the unit
+     */
     void reroll(phos::LockUnitE unit, int index);
-    /** @brief How often a unit has been rerolled (0 = never), from the mirror. */
+    /**
+     * @brief How often a unit has been rerolled (0 = never), from the mirror.
+     * @param[in] unit   the kind of unit
+     * @param[in] index  the unit
+     * @return the rerolls
+     */
     uint32_t variation(phos::LockUnitE unit, int index) const;
     /** @brief Forgets every lock and every reroll. */
     void clearCuration();
@@ -610,30 +949,36 @@ public:
     // ------------------------------------------------------------------ perform macros
     /**
      * @brief Moves a macro (message thread).
-     * @param m     which macro
-     * @param value 0 is neutral for all of them; #Macro::FilterSweep runs -1..+1, the rest 0..1
+     * @param[in] m      which macro
+     * @param[in] value  0 is neutral for all of them; #MacroE::FILTER_SWEEP runs -1..+1, the rest 0..1
+     * @pre called on the message thread
      */
     void setMacro(MacroE m, float value);
-    /** @brief Where a macro stands. */
+    /**
+     * @brief Where a macro stands.
+     * @param[in] m  the macro
+     * @return its value
+     */
     float macroValue(MacroE m) const { return m_macro[static_cast<size_t>(m)].m_value; }
     /**
      * @brief The macro tick (message thread): applies what is held and releases what has run out.
      *
      * Called by `timerCallback` at about 30 Hz. It is public because a test has no message loop and
      * has to turn the crank itself.
+     * @pre called on the message thread
      */
     void serviceMacros();
     /** @brief The parameters one macro moves and how far, for the editor and the manual generator. */
     struct MacroTarget {
         int   m_param = -1;      ///< global parameter id
         float m_value = 0.0f;    ///< normalised delta, or the absolute normalised value
-        bool  m_absolute = false;   ///< true: set the knob to @ref value instead of adding it
+        bool  m_absolute = false;   ///< true: set the knob to @ref m_value instead of adding it
     };
     /**
      * @brief What macro @p m at @p value wants of the parameters.
-     * @param m     the macro
-     * @param value its position
-     * @param out   receives at most #MaxMacroTargets entries
+     * @param[in]  m      the macro
+     * @param[in]  value  its position
+     * @param[out] out    receives at most #MaxMacroTargets entries
      * @return how many were written
      */
     int macroTargets(MacroE m, float value, MacroTarget* out) const;
@@ -647,31 +992,59 @@ public:
      *        the locks and the rerolls kept -- and the set started from its beginning.
      */
     void composeSet();
-    /** @brief How often the transport was asked to start again (the host test sees Compose set by it). */
+    /**
+     * @brief How often the transport was asked to start again (the host test sees Compose set by it).
+     * @return the restarts
+     */
     int restartCount() const { return m_restarts.load(std::memory_order_relaxed); }
-    /** @brief Parameter @p id back to its default, an undo step (the controls' right-click menu). */
+    /**
+     * @brief Parameter @p id back to its default, an undo step (the controls' right-click menu).
+     * @param[in] id  the parameter
+     */
     void resetToDefault(int id);
     /**
      * @brief The headset (01.10.2026, the frame): the hands of the Quest app in bridge mode, as OSC, while the settings do
      *        not say Off -- left pinch play and stop, both hands the next track, right pinch the drop-out, held the
      *        stutter, the left hand's height the filter sweep, the right hand's the gate depth.
+     * @return the headset
      */
     frame::Headset& headset() { return m_headset; }
     /** @brief Standalone: stops and rewinds to bar 0. */
     void stop();
-    /** @brief Standalone: jumps to a bar. */
+    /**
+     * @brief Standalone: jumps to a bar.
+     * @param[in] bar  the bar
+     */
     void seekToBar(int bar);
-    /** @brief Whether the standalone clock is running. */
+    /**
+     * @brief Whether the standalone clock is running.
+     * @return true while the clock runs
+     */
     bool isPlaying() const { return m_playRequest.load(std::memory_order_relaxed); }
-    /** @brief The standalone's Ableton Link, as the settings menu says it: off, alone, or how many apps are with it. */
+    /**
+     * @brief The standalone's Ableton Link, as the settings menu says it: off, alone, or how many apps are with it.
+     * @return the Link's state as text
+     */
     juce::String linkStatus() const;
-    /** @brief The family jam, as the settings menu says it (Jam.h): off, leading, or whom it follows. */
+    /**
+     * @brief The family jam, as the settings menu says it (Jam.h): off, leading, or whom it follows.
+     * @return the jam's state as text
+     */
     juce::String jamStatus() const { return m_jam.status(); }
-    /** @brief A snapshot of where we are, for the editor. */
+    /**
+     * @brief A snapshot of where we are, for the editor.
+     * @return the snapshot
+     */
     TransportView transport() const;
-    /** @brief Whether the plugin takes tempo and position from the host. */
+    /**
+     * @brief Whether the plugin takes tempo and position from the host.
+     * @return true when the host rules
+     */
     bool followsHost() const { return m_followHost; }
-    /** @brief Turns host sync off (then the standalone clock runs even inside a host). */
+    /**
+     * @brief Turns host sync off (then the standalone clock runs even inside a host).
+     * @param[in] on  true to follow the host
+     */
     void setFollowHost(bool on);
 
     // ------------------------------------------------------------------ the cue bridge (PLAN 8.3)
@@ -680,49 +1053,98 @@ public:
      *
      * Not a parameter, because a parameter is a float and an address is not. It is saved with the
      * state, and `PHOS_CUE_HOST` overrides it for an automated run.
+     * @return the host name or address
      */
     juce::String cueHost() const;
-    /** @brief Sets the destination; takes effect at the next timer tick. @param host name or address */
+    /**
+     * @brief Sets the destination; takes effect at the next timer tick.
+     * @param[in] host  name or address
+     */
     void setCueHost(const juce::String& host);
-    /** @brief Whether the sender thread is running (the switch is `cue.send`). */
+    /**
+     * @brief Whether the sender thread is running (the switch is `cue.send`).
+     * @return true while it runs
+     */
     bool cueRunning() const { return m_cues.running(); }
-    /** @brief Datagrams sent since the bridge was switched on, for the editor and the tests. */
+    /**
+     * @brief Datagrams sent since the bridge was switched on, for the editor and the tests.
+     * @return the datagrams sent
+     */
     juce::uint64 cuesSent() const { return static_cast<juce::uint64>(m_cues.sent()); }
-    /** @brief Cues lost to a full queue, which is the only way one can be lost. */
+    /**
+     * @brief Cues lost to a full queue, which is the only way one can be lost.
+     * @return the cues lost
+     */
     juce::uint64 cuesDropped() const { return static_cast<juce::uint64>(m_cues.dropped()); }
-    /** @brief The sender, for the offline demo and the tests. */
+    /**
+     * @brief The sender, for the offline demo and the tests.
+     * @return the sender
+     */
     phos::CueSender& cueSender() { return m_cues; }
     /**
      * @brief Opens or closes the bridge to match `cue.send` and `cue.port` (message thread).
      *
      * Called from the timer; public because a test has no message loop and has to turn the crank
      * itself, the same reason #serviceMacros is public.
+     * @pre called on the message thread
      */
     void serviceCueBridge();
 
-    /** @brief Output muted; forced on by `PHOS_MUTE=1`. */
+    /**
+     * @brief Output muted; forced on by `PHOS_MUTE=1`.
+     * @return true while muted
+     */
     bool muted() const { return m_mute.load(std::memory_order_relaxed); }
-    /** @brief Mutes or unmutes; does nothing while `PHOS_MUTE` forces it. */
+    /**
+     * @brief Mutes or unmutes; does nothing while `PHOS_MUTE` forces it.
+     * @param[in] on  true to mute
+     */
     void setMuted(bool on) { if (!m_forceMute) m_mute.store(on, std::memory_order_relaxed); }
-    /** @brief True when `PHOS_MUTE=1` was set, so the editor can say so and disable the switch. */
+    /**
+     * @brief True when `PHOS_MUTE=1` was set, so the editor can say so and disable the switch.
+     * @return true when the environment forces the mute
+     */
     bool muteForced() const { return m_forceMute; }
 
     // ------------------------------------------------------------------ export
     /**
      * @brief Writes the score of the first @p bars bars as a Standard MIDI File (message thread).
+     * @param[in] file  the MIDI file
+     * @param[in] bars  the bars
      * @return false if the file cannot be written
+     * @pre called on the message thread
      */
     bool exportMidi(const juce::File& file, int bars);
-    /** @brief Writes every parameter and the seed as text (`.phosset`, message thread). */
+    /**
+     * @brief Writes every parameter and the seed as text (`.phosset`, message thread).
+     * @param[in] file  the file
+     * @return false if it cannot be written
+     */
     bool exportSet(const juce::File& file);
-    /** @brief Reads such a file back. */
+    /**
+     * @brief Reads such a file back.
+     * @param[in] file  the file
+     * @return false if it cannot be read
+     */
     bool importSet(const juce::File& file);
 
-    /** @brief Standalone: records the output to a 32-bit float WAV. */
+    /**
+     * @brief Standalone: records the output to a 32-bit float WAV.
+     * @param[in] file  the WAV file
+     * @return false if it cannot be opened
+     */
     bool startRecording(const juce::File& file);
-    void stopRecording();                                         ///< @copydoc startRecording
-    bool isRecording() const { return m_recording.load(std::memory_order_relaxed); }   ///< @copydoc startRecording
-    /** @brief Seconds recorded so far. */
+    /** @brief Standalone: stops the recording and closes the file. */
+    void stopRecording();
+    /**
+     * @brief Standalone: whether the output is being recorded.
+     * @return true while recording
+     */
+    bool isRecording() const { return m_recording.load(std::memory_order_relaxed); }
+    /**
+     * @brief Seconds recorded so far.
+     * @return the seconds
+     */
     double recordedSeconds() const { return static_cast<double>(m_recordedSamples.load(std::memory_order_relaxed)) / juce::jmax(1.0, m_sampleRate); }
 
 private:
@@ -732,38 +1154,63 @@ private:
     void composerLoop();
     /**
      * @brief One step of the composer's side of the handshake.
-     * @param warmUp also plan a track ahead for the editor's list; only the composer thread does that
-     *               (the audio thread calls this offline, where a probe render would stall the block)
+     * @param[in] warmUp  also plan a track ahead for the editor's list; only the composer thread does that (the audio
+     *                    thread calls this offline, where a probe render would stall the block)
      */
     void serviceComposer(bool warmUp);
     /**
      * @brief Takes the live knobs over into m_composeParams, the plan knobs by their own rule (under
      *        m_composeLock: the composer thread and the MIDI export; 25.09.2026).
-     * @param restart a restart is being positioned, or a user action wants the knobs as they stand: every knob is
-     *                taken over at once
+     * @param[in] restart  a restart is being positioned, or a user action wants the knobs as they stand: every knob is
+     *                     taken over at once
      */
     void refreshComposeParams(bool restart);
-    /** @brief Asks for a restart at @p bar with engine beat 0 meaning bar @p bar (audio thread). */
+    /**
+     * @brief Asks for a restart at @p bar with engine beat 0 meaning bar @p bar (audio thread).
+     * @param[in] bar         the bar
+     * @param[in] beatOffset  the musical beat of engine beat 0
+     * @pre called on the audio thread
+     */
     void requestSeek(int bar, double beatOffset);
     /**
-      * @brief Writes the notes of this block into the host's MIDI buffer, with their note-offs.
-      * @param midi          the host's buffer
-      * @param beatAtStart   engine beat at sample 0 of the block
-      * @param beatsPerSample how fast the block runs
-      * @param n             samples in the block
-      */
+     * @brief Writes the notes of this block into the host's MIDI buffer, with their note-offs.
+     * @param[in,out] midi            the host's buffer
+     * @param[in]     beatAtStart     engine beat at sample 0 of the block
+     * @param[in]     beatsPerSample  how fast the block runs
+     * @param[in]     n               samples in the block
+     */
     void emitMidi(juce::MidiBuffer& midi, double beatAtStart, double beatsPerSample, int n);
-    /** @brief The seed, the host-sync switch and every parameter value, as XML. */
+    /**
+     * @brief The seed, the host-sync switch and every parameter value, as XML.
+     * @param[out] dest  the state
+     */
     void writeStateTo(juce::MemoryBlock& dest) const;
-    /** @brief Composer thread: applies whatever the editor has asked for since the last turn. */
+    /**
+     * @brief Composer thread: applies whatever the editor has asked for since the last turn.
+     * @return true when anything was applied
+     * @pre called on the composer thread
+     */
     bool drainCuration();
-    /** @brief Message thread: copies the composer's locks into the mirror (after reading a file). */
+    /**
+     * @brief Message thread: copies the composer's locks into the mirror (after reading a file).
+     * @pre called on the message thread
+     */
     void syncCurationMirror();
-    /** @brief Message thread: remembers where the play head is, so a restart lands there again. */
+    /**
+     * @brief Message thread: remembers where the play head is, so a restart lands there again.
+     * @pre called on the message thread
+     */
     void markCurrentPosition();
-    /** @brief Message thread: the limiter's lookahead is a switchable latency; tell the host when it moves. */
+    /**
+     * @brief Message thread: the limiter's lookahead is a switchable latency; tell the host when it moves.
+     * @pre called on the message thread
+     */
     void timerCallback() override;
-    void pollHeadset();                     ///< the hands' events (message thread, the timer)
+    /**
+     * the hands' events (message thread, the timer)
+     * @pre called on the message thread
+     */
+    void pollHeadset();
     void bindDefaultControllers();          ///< CC 74, 11 and 64 on the macros, as every generator has them
     frame::Headset m_headset;                ///< the Quest's hands
     std::atomic<int> m_restarts{ 0 };        ///< restartCount
@@ -843,14 +1290,26 @@ private:
     bool m_linkPlayed = false;                     ///< audio thread: the transport last told to or taken from the session
     double m_linkBeat = 0.0;                       ///< audio thread: the session's beat at this block (its bar phase)
     // The family jam (02.10.2026, Jam.h; Settings > Family jam).
-    /** @brief Audio thread: as a follower, the engine takes the leader's root (on a bar line) and its breaks. */
+    /**
+     * @brief Audio thread: as a follower, the engine takes the leader's root (on a bar line) and its breaks.
+     * @param[in] musicalBefore  the block's first musical beat
+     * @param[in] shared         the shared clock's beat
+     * @pre called on the audio thread
+     */
     void jamFollow(double musicalBefore, double shared);
-    /** @brief Audio thread: as the leader, the section marks the cue tap has passed go out, stamped with their bar. */
+    /**
+     * @brief Audio thread: as the leader, the section marks the cue tap has passed go out, stamped with their bar.
+     * @param[in] musicalBefore  the block's first musical beat
+     * @param[in] shared         the shared clock's beat
+     * @pre called on the audio thread
+     */
     void jamLead(double musicalBefore, double shared);
     /**
      * @brief The scale of compose.scale a leader's mode names (Jam.h): its own name, or the family's other names for
      *        it (a minor is an Aeolian, so is a minor pentatonic or a hexachord); -1 for a mode Phosphene has not (a
      *        major one) -- the walk keeps its own.
+     * @param[in] mode  the mode's name
+     * @return the scale's value, -1 for none
      */
     static int scaleOfMode(const juce::String& mode);
     frame::JamBus m_jam { "Phosphene" };           ///< the family jam's bus
@@ -883,7 +1342,10 @@ private:
     };
     std::unique_ptr<MeasureJob> m_measureJob;        ///< composer thread only
     std::thread m_measureThread;                     ///< the job's thread
-    /** @brief Starts the job for track @p index (composer thread, under m_composeLock). */
+    /**
+     * @brief Starts the job for track @p index (composer thread, under m_composeLock).
+     * @param[in] index  the track
+     */
     void startMeasureJob(int index);
     /** @brief Aborts a running job and waits for it (a few milliseconds: the probes stop at their next block). */
     void stopMeasureJob();
@@ -932,7 +1394,10 @@ private:
     phos::StemTap m_stemTap;                                   ///< the engine's view of them, moved to each render's start
     int m_stemBlock = 0;                                       ///< the block the stems' buffers hold
     bool m_stemsOn = false;                                    ///< audio thread: the engine writes the stems now
-    /** @brief The buses: the main output, then one stereo output per part and one for the returns, those off. */
+    /**
+     * @brief The buses: the main output, then one stereo output per part and one for the returns, those off.
+     * @return the buses
+     */
     static BusesProperties busLayout();
 
     // ---- the effects page's audition and the mixer's meters (24.09.2026)
@@ -989,7 +1454,11 @@ private:
     // ---- undo (message thread)
     /** @brief Nothing: a value alone is no step (the gestures are). */
     void parameterValueChanged(int, float) override {}
-    /** @brief A knob gesture from the editor: its start takes the before-state, its end records the step. */
+    /**
+     * @brief A knob gesture from the editor: its start takes the before-state, its end records the step.
+     * @param[in] parameterIndex     the host parameter's index
+     * @param[in] gestureIsStarting  true when the gesture begins
+     */
     void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override;
     /**
      * @name The composer's presets on the knobs (26.09.2026)
@@ -1001,18 +1470,35 @@ private:
      * plans away) and Own Sound goes on, all in the gesture's undo step (parameterGestureChanged).
      * @{ */
     void refreshPresetDisplay();
-    /** @brief Writes the shown preset of synth @p k into its knobs (a take-over; message thread). */
+    /**
+     * @brief Writes the shown preset of synth @p k into its knobs (a take-over; message thread).
+     * @param[in] k  the synth (SoundSynths order)
+     */
     void takeOverPreset(int k);
     int m_shownPreset[phos::SoundSynths] = { -2, -2, -2, -2, -2, -2, -2, -2, -2 };   ///< the preset each synth's knobs show, -1 none, -2 not yet
     std::atomic<int> m_shownIndex[phos::SoundSynths];   ///< the same, for the editor (any thread)
-    /** @brief The synth (SoundSynths order) a global parameter id belongs to, and its index in the module; -1 for none. */
+    /**
+     * @brief The synth (SoundSynths order) a global parameter id belongs to, and its index in the module; -1 for none.
+     * @param[in]  id     the global id
+     * @param[out] local  its index in the module
+     * @return the synth, or -1
+     */
     int soundSynthOfId(int id, int& local) const;
     /** @} */
 public:
-    /** @brief The preset the composer plays on synth @p synth (SoundSynths order) and its knobs show; -1 none (the editor). */
+    /**
+     * @brief The preset the composer plays on synth @p synth (SoundSynths order) and its knobs show; -1 none (the
+     *        editor).
+     * @param[in] synth  the synth (SoundSynths order)
+     * @return the preset, or -1
+     */
     int composerPreset(int synth) const { return synth >= 0 && synth < phos::SoundSynths ? m_shownIndex[synth].load(std::memory_order_relaxed) : -1; }
 private:
-    /** @brief Records the step from @p before to now, unless nothing changed. */
+    /**
+     * @brief Records the step from @p before to now, unless nothing changed.
+     * @param[in] name    the step's name
+     * @param[in] before  the state before
+     */
     void recordUndo(const juce::String& name, const UndoState& before);
     mutable juce::UndoManager m_undo{ 32 * 1024 * 1024, 100 };   ///< undo and redo of whole states (UndoState)
     bool m_restoringUndo = false;   ///< applyUndoState is running: record nothing

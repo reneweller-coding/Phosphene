@@ -12,6 +12,7 @@
  * The meter reads what the part puts into the mix (phos::Engine::takeMeters: the stem tap's signal, after fader,
  * trance gate and duck, before the master), as an RMS bar with a 300 ms release and a peak line that holds for a
  * second and a half and then falls at 20 dB a second: the body of the level and its peaks, as a console shows them.
+ * @author Rene Weller
  */
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -25,33 +26,66 @@ namespace phosui {
 /** @brief One strip: name, knobs, mute, fader and meter of one part. */
 class MixerStrip final : public juce::Component {
 public:
-    /** @param proc the processor whose parameters the strip edits; @param name the strip's caption;
-     *  @param colour its accent colour; @param levelKey the fader's parameter; @param muteKey the mute;
-     *  @param knobKeys the knobs, top to bottom */
+    /**
+     * @param[in,out] proc      the processor whose parameters the strip edits;
+     * @param[in]     name      the strip's caption;
+     * @param[in]     colour    its accent colour;
+     * @param[in]     levelKey  the fader's parameter;
+     * @param[in]     muteKey   the mute;
+     * @param[in]     knobKeys  the knobs, top to bottom
+     */
     MixerStrip(PhospheneProcessor& proc, const juce::String& name, juce::Colour colour, const char* levelKey,
                const char* muteKey, const std::vector<std::pair<const char*, const char*>>& knobKeys);
 
-    /** @brief A new meter reading (linear peak and RMS since the last one) and the time it covers. */
+    /**
+     * @brief A new meter reading (linear peak and RMS since the last one) and the time it covers.
+     * @param[in] peak     the linear peak
+     * @param[in] rms      the linear RMS
+     * @param[in] seconds  the time it covers
+     */
     void meter(float peak, float rms, double seconds);
-    /** @brief The meter as it stands, in dB: the RMS bar and the held peak. */
+    /**
+     * @brief The meter as it stands, in dB: the RMS bar and the held peak.
+     * @return the RMS in dB
+     */
     float rmsDb() const { return m_rmsDb; }
-    float peakDb() const { return m_holdDb; }   ///< @copydoc rmsDb
-    /** @brief The global ids of the parameters on this strip. */
+    /**
+     * @copybrief rmsDb
+     * @return the held peak in dB
+     */
+    float peakDb() const { return m_holdDb; }
+    /**
+     * @brief The global ids of the parameters on this strip.
+     * @return the parameter ids
+     */
     const std::vector<int>& params() const { return m_params; }
-    /** @brief The strip's controls with the parameter each drives, for MIDI learn. */
+    /**
+     * @brief The strip's controls with the parameter each drives, for MIDI learn.
+     * @return (control, parameter id) pairs
+     */
     const std::vector<std::pair<juce::Component*, int>>& controls() const { return m_controls; }
-    /** @brief Rows of knobs this strip's own knobs fill (two to a row). */
+    /**
+     * @brief Rows of knobs this strip's own knobs fill (two to a row).
+     * @return the rows
+     */
     int knobRows() const { return (static_cast<int>(m_knobs.size()) + 1) / 2; }
     /**
      * @brief Rows of knobs to make room for, at least knobRows() (26.09.2026, the user: "dass alle Meter die gleiche
      *        Höhe haben"). The console gives every strip the rows of its fullest, so that mute, fader and meter
      *        start at the same height in every strip; a strip with fewer knobs leaves the rest of its rows empty.
+     * @param[in] rows  the rows
      */
     void setKnobRows(int rows) { m_knobRowsShown = rows; }
-    /** @brief Where the meter is drawn, in the strip's coordinates (the host test compares them). */
+    /**
+     * @brief Where the meter is drawn, in the strip's coordinates (the host test compares them).
+     * @return the meter's rectangle
+     */
     juce::Rectangle<int> meterArea() const { return m_meterArea; }
 
-    /** @brief The name, the meter (RMS, the held peak) and its scale. */
+    /**
+     * @brief The name, the meter (RMS, the held peak) and its scale.
+     * @param[in,out] g  the graphics context
+     */
     void paint(juce::Graphics&) override;
     /** @brief The knobs, the mute, the fader and the meter. */
     void resized() override;
@@ -78,14 +112,28 @@ private:
 /** @brief The console: one MixerStrip per part, in the parts' order, fed by a 30 Hz timer. */
 class MixerConsole final : public juce::Component, private juce::Timer {
 public:
-    /** @brief Builds a strip per part and starts the meter timer. */
+    /**
+     * @brief Builds a strip per part and starts the meter timer.
+     * @param[in,out] proc  the processor
+     */
     explicit MixerConsole(PhospheneProcessor& proc);
     ~MixerConsole() override;
 
-    /** @brief The strips, phos::Part order. */
+    /**
+     * @brief The strips, phos::Part order.
+     * @return the number of strips
+     */
     int stripCount() const { return static_cast<int>(m_strips.size()); }
-    MixerStrip& strip(int i) { return *m_strips[static_cast<size_t>(i)]; }   ///< @copydoc stripCount
-    /** @brief Every parameter the console binds. */
+    /**
+     * @copybrief stripCount
+     * @param[in] i  the strip's index
+     * @return the strip
+     */
+    MixerStrip& strip(int i) { return *m_strips[static_cast<size_t>(i)]; }
+    /**
+     * @brief Every parameter the console binds.
+     * @return the parameter ids
+     */
     std::vector<int> params() const;
     /** @brief Reads the meters now instead of waiting for the timer (the host test). */
     void pollMeters() { timerCallback(); }

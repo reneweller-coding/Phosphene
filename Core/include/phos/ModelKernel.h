@@ -44,6 +44,7 @@
  *       multitask learners" (2019); the musical framing is Music Transformer (Huang et al., ICLR
  *       2019) and Compound Word Transformer (Hsiao et al., AAAI 2021). GELU is the tanh form of
  *       Hendrycks and Gimpel, "Gaussian error linear units", arXiv:1606.08415 (2016).
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Vec.h"
@@ -53,7 +54,12 @@ namespace phos {
 /** @brief Rows per panel on the path this translation unit was built for. */
 constexpr int PanelRows = VecWidth;
 
-/** @brief @p n rounded up to a whole number of panels of @p w rows. */
+/**
+ * @brief @p n rounded up to a whole number of panels of @p w rows.
+ * @param[in] n  the rows
+ * @param[in] w  the panel's rows
+ * @return the rows rounded up
+ */
 constexpr int roundUpTo(int n, int w) { return ((n + w - 1) / w) * w; }
 
 /**
@@ -66,9 +72,9 @@ constexpr int roundUpTo(int n, int w) { return ((n + w - 1) / w) * w; }
  * and 1, so no multiplication rounds and none can underflow; the positive side is one exact division
  * by that product. The self test checks all 255 values of k against ldexp bit for bit, because
  * "exact" is the only reason this is worth writing out rather than calling a library.
- *
- * @param k integer-valued lanes; anything outside [-127, 127] gives a wrong answer, so laneExp()
- *          clamps its argument before it gets here.
+ * @param[in] k  integer-valued lanes; anything outside [-127, 127] gives a wrong answer, so laneExp() clamps its
+ *               argument before it gets here.
+ * @return 2^k per lane
  */
 template <class VT>
 inline VT lanePow2i(VT k)
@@ -102,6 +108,8 @@ inline VT lanePow2i(VT k)
  * +-87, where the result is still a normal float; the softmaxes here subtract their maximum first,
  * so the clamp is never active in practice. Measured against std::exp in double: 8.3e-8 relative,
  * seven tenths of an ulp (Tests/selftest.cpp, testModelKernel).
+ * @param[in] x  the arguments
+ * @return exp(x) per lane
  */
 template <class VT>
 inline VT laneExp(VT x)
@@ -126,6 +134,8 @@ inline VT laneExp(VT x)
  *
  * Clamped to +-9, where tanh is within 3e-8 of +-1 -- half an ulp of 1.0f -- so the clamp changes no
  * float that a float could tell apart.
+ * @param[in] x  the arguments
+ * @return tanh(x) per lane
  */
 template <class VT>
 inline VT laneTanh(VT x)
@@ -135,7 +145,11 @@ inline VT laneTanh(VT x)
     return (e - lanes<VT>(1.0f)) / (e + lanes<VT>(1.0f));
 }
 
-/** @brief GELU in the tanh form (Hendrycks and Gimpel 2016): 0.5 x (1 + tanh(sqrt(2/pi)(x + 0.044715 x^3))). */
+/**
+ * @brief GELU in the tanh form (Hendrycks and Gimpel 2016): 0.5 x (1 + tanh(sqrt(2/pi)(x + 0.044715 x^3))).
+ * @param[in] x  the arguments
+ * @return GELU(x) per lane
+ */
 template <class VT>
 inline VT laneGelu(VT x)
 {
@@ -146,7 +160,12 @@ inline VT laneGelu(VT x)
 /** @brief The activations a model header may ask for (key @c act). */
 enum class ModelActE : int { GELU_TANH = 0, RELU, SILU };
 
-/** @brief Applies @p act to lanes. */
+/**
+ * @brief Applies @p act to lanes.
+ * @param[in] x    the arguments
+ * @param[in] act  the activation
+ * @return the activation per lane
+ */
 template <class VT>
 inline VT laneAct(VT x, ModelActE act)
 {
@@ -157,18 +176,16 @@ inline VT laneAct(VT x, ModelActE act)
 
 /**
  * @brief out = bias + W x, with the lanes holding W output rows at a time.
- *
- * @param panels weights in panel layout: element (g * cols + c) * W + l is row g*W+l, column c.
- *               Rows beyond @p rows must be present (zero) so the last panel is whole.
- * @param bias   one value per row, padded to a whole number of panels; may be null for no bias
- * @param x      @p cols inputs
- * @param rows   output rows actually wanted
- * @param cols   input dimension
- * @param out    receives roundUpTo(rows, W) values; the padding entries are meaningless
- *
- * Lane l of panel g executes bias[g*W+l], then cols fused multiply-adds in column order -- the same
- * sequence, in the same order, as the scalar instantiation performs for that row. That is why the
- * three paths agree bit for bit.
+ * @param[in]  panels  weights in panel layout: element (g * cols + c) * W + l is row g*W+l, column c. Rows beyond @p
+ *                     rows must be present (zero) so the last panel is whole.
+ * @param[in]  bias    one value per row, padded to a whole number of panels; may be null for no bias
+ * @param[in]  x       @p cols inputs
+ * @param[in]  rows    output rows actually wanted
+ * @param[in]  cols    input dimension
+ * @param[out] out     receives roundUpTo(rows, W) values; the padding entries are meaningless Lane l of panel g
+ *                     executes bias[g*W+l], then cols fused multiply-adds in column order -- the same sequence, in the
+ *                     same order, as the scalar instantiation performs for that row. That is why the three paths agree
+ *                     bit for bit.
  */
 template <class VT>
 inline void matvecPanel(const float* panels, const float* bias, const float* x, int rows, int cols, float* out)
@@ -186,15 +203,14 @@ inline void matvecPanel(const float* panels, const float* bias, const float* x, 
 
 /**
  * @brief Packs a row-major matrix into the panel layout matvecPanel() reads, folding in row scales.
- * @param src    @p rows x @p cols, row major
- * @param scale  one factor per row (the int8 quantisation scale), or null for 1
- * @param dst    roundUpTo(rows, W) * cols floats, zeroed for the padding rows
- *
- * Called once per matrix when the model is loaded. The scale is folded into the weight rather than
- * applied to the finished sum, which is one multiply fewer per row and -- because the reference
- * vectors are computed from the dequantized weights as well -- the same arithmetic the oracle does.
- * @param rows rows of the matrix
- * @param cols columns of the matrix
+ * @param[in]     src    @p rows x @p cols, row major
+ * @param[in]     scale  one factor per row (the int8 quantisation scale), or null for 1
+ * @param[in]     rows   rows of the matrix
+ * @param[in]     cols   columns of the matrix
+ * @param[in,out] dst    roundUpTo(rows, W) * cols floats, zeroed for the padding rows Called once per matrix when the
+ *                       model is loaded. The scale is folded into the weight rather than applied to the finished sum,
+ *                       which is one multiply fewer per row and -- because the reference vectors are computed from the
+ *                       dequantized weights as well -- the same arithmetic the oracle does.
  */
 template <class VT, class SrcT>
 inline void packPanels(const SrcT* src, const float* scale, int rows, int cols, float* dst)
@@ -220,13 +236,12 @@ inline void packPanels(const SrcT* src, const float* scale, int rows, int cols, 
  * Mean and variance are summed in a scalar loop over @p n -- the reduction that must not be
  * reordered -- and the affine part runs in lanes. Ba, Kiros and Hinton, "Layer normalization",
  * arXiv:1607.06450 (2016); the variance is the biased one (divided by n), as in PyTorch.
- *
- * @param n  the width; @p x, @p w, @p b and @p out are padded to a whole number of lanes
- * @param x   the @p n inputs
- * @param w   the @p n gains
- * @param b   the @p n biases
- * @param eps added to the variance
- * @param out receives the @p n outputs (may be @p x)
+ * @param[in]  x    the @p n inputs
+ * @param[in]  w    the @p n gains
+ * @param[in]  b    the @p n biases
+ * @param[in]  eps  added to the variance
+ * @param[in]  n    the width; @p x, @p w, @p b and @p out are padded to a whole number of lanes
+ * @param[out] out  receives the @p n outputs (may be @p x)
  */
 template <class VT>
 inline void laneLayerNorm(const float* x, const float* w, const float* b, float eps, int n, float* out)
@@ -251,10 +266,9 @@ inline void laneLayerNorm(const float* x, const float* w, const float* b, float 
  * The maximum and the total are scalar reductions (exact and order-free for the maximum, order-fixed
  * for the total); the exponentials run in lanes. Subtracting the maximum first is the standard guard
  * against overflow and is what the reference implementation does, so the two agree term by term.
- *
- * @param x   @p n values, padded to a whole number of lanes; the padding is set to the lowest value
- *            first so that it cannot contribute
- * @param n   how many entries count
+ * @param[in,out] x  @p n values, padded to a whole number of lanes; the padding is set to the lowest value first so
+ *                   that it cannot contribute
+ * @param[in]     n  how many entries count
  */
 template <class VT>
 inline void laneSoftmax(float* x, int n)
@@ -274,7 +288,13 @@ inline void laneSoftmax(float* x, int n)
     for (int i = 0; i < padded; i += W) vstore(x + i, loadLanes<VT>(x + i) * vt);
 }
 
-/** @brief dst += a * src over @p n lanes-worth of values (@p n a multiple of the lane width). */
+/**
+ * @brief dst += a * src over @p n lanes-worth of values (@p n a multiple of the lane width).
+ * @param[in,out] dst  the values added to
+ * @param[in]     src  the values added
+ * @param[in]     a    the factor
+ * @param[in]     n    the count
+ */
 template <class VT>
 inline void laneAccumulate(float* dst, const float* src, float a, int n)
 {
@@ -283,7 +303,12 @@ inline void laneAccumulate(float* dst, const float* src, float a, int n)
     for (int i = 0; i < n; i += W) vstore(dst + i, vfmadd(va, loadLanes<VT>(src + i), loadLanes<VT>(dst + i)));
 }
 
-/** @brief x *= a over @p n values (@p n a multiple of the lane width). */
+/**
+ * @brief x *= a over @p n values (@p n a multiple of the lane width).
+ * @param[in,out] x  the values, scaled in place
+ * @param[in]     a  the factor
+ * @param[in]     n  the count
+ */
 template <class VT>
 inline void laneScale(float* x, float a, int n)
 {
@@ -292,7 +317,12 @@ inline void laneScale(float* x, float a, int n)
     for (int i = 0; i < n; i += W) vstore(x + i, loadLanes<VT>(x + i) * va);
 }
 
-/** @brief dst += src over @p n values (@p n a multiple of the lane width). */
+/**
+ * @brief dst += src over @p n values (@p n a multiple of the lane width).
+ * @param[in,out] dst  the values added to
+ * @param[in]     src  the values added
+ * @param[in]     n    the count
+ */
 template <class VT>
 inline void laneAdd(float* dst, const float* src, int n)
 {
@@ -300,7 +330,12 @@ inline void laneAdd(float* dst, const float* src, int n)
     for (int i = 0; i < n; i += W) vstore(dst + i, loadLanes<VT>(dst + i) + loadLanes<VT>(src + i));
 }
 
-/** @brief Applies @p act to @p n values in place (@p n a multiple of the lane width). */
+/**
+ * @brief Applies @p act to @p n values in place (@p n a multiple of the lane width).
+ * @param[in,out] x    the values, activated in place
+ * @param[in]     n    the count
+ * @param[in]     act  the activation
+ */
 template <class VT>
 inline void laneActivate(float* x, int n, ModelActE act)
 {
@@ -310,13 +345,11 @@ inline void laneActivate(float* x, int n, ModelActE act)
 
 /**
  * @brief Writes one key vector into the time-panelled key cache.
- * @param cache  panels over time: element (g * headDim + d) * W + l is time g*W+l, dimension d
- * @param t      the time step
- * @param k      @p headDim values
- *
- * W scalar stores per dimension. The cache is laid out this way so that scoring a query against all
- * keys is exactly matvecPanel() with the time steps as output rows.
- * @param headDim dimensions of one head's key
+ * @param[in,out] cache    panels over time: element (g * headDim + d) * W + l is time g*W+l, dimension d
+ * @param[in]     t        the time step
+ * @param[in]     k        @p headDim values W scalar stores per dimension. The cache is laid out this way so that
+ *                         scoring a query against all keys is exactly matvecPanel() with the time steps as output rows.
+ * @param[in]     headDim  dimensions of one head's key
  */
 template <class VT>
 inline void storeKey(float* cache, int t, const float* k, int headDim)

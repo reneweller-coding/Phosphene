@@ -1,6 +1,11 @@
 /**
  * @file FieldLibrary.cpp
  * @brief The Field track's recordings: the scan, the loads, the loader thread and the cache (FieldLibrary.h).
+ * @author Rene Weller
+ *
+ * @par Compile Flags:
+ *   @arg @c PHOS_SOURCE_DATA_DIR - the source tree's data directory (Core/CMakeLists.txt sets it), searched after the
+ *                                  search path
  */
 #include "phos/FieldLibrary.h"
 #include "phos/Params.h"
@@ -97,14 +102,20 @@ struct Library {
     }
 };
 
-/** @brief The library, created on first use. */
+/**
+ * @brief The library, created on first use.
+ * @return the library
+ */
 Library& lib()
 {
     static Library l;
     return l;
 }
 
-/** @brief The steady clock, ms. */
+/**
+ * @brief The steady clock, ms.
+ * @return the milliseconds
+ */
 int64_t nowMs()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -113,7 +124,13 @@ int64_t nowMs()
 /** @brief The hidden category of the NASA shots, after the visible ones. */
 constexpr int ShotCategory = field::Categories;
 
-/** @brief The category of @p file by its name ("fr-<slug>-..."), the NASA ones by their folder; -1 none. */
+/**
+ * @brief The category of @p file by its name ("fr-\<slug\>-..."), the NASA ones by their folder; -1 none.
+ * @param[in] file     the file
+ * @param[in] inNasa   true below the NASA folder
+ * @param[in] inShots  true below its shots
+ * @return the category, -1 for none
+ */
 int categoryOf(const fs::path& file, bool inNasa, bool inShots)
 {
     if (inNasa) return inShots ? ShotCategory : field::Categories - 1;   // the last visible category is "nasa"
@@ -126,7 +143,12 @@ int categoryOf(const fs::path& file, bool inNasa, bool inShots)
     return -1;
 }
 
-/** @brief Adds the .flac files under @p root to @p cat (new ones to the pool of @p l). */
+/**
+ * @brief Adds the .flac files under @p root to @p cat (new ones to the pool of @p l).
+ * @param[in,out] l     the library
+ * @param[in,out] cat   the catalogue, added to
+ * @param[in]     root  the folder
+ */
 void scanFolder(Library& l, Catalogue& cat, const fs::path& root)
 {
     std::error_code ec;
@@ -156,7 +178,10 @@ void scanFolder(Library& l, Catalogue& cat, const fs::path& root)
     }
 }
 
-/** @brief Scans every root and publishes a new catalogue (the mutex held). */
+/**
+ * @brief Scans every root and publishes a new catalogue (the mutex held).
+ * @param[in,out] l  the library
+ */
 void scanLocked(Library& l)
 {
     auto cat = std::make_unique<Catalogue>();
@@ -208,7 +233,11 @@ void scanLocked(Library& l)
     l.m_stale = false;
 }
 
-/** @brief Entry @p index of the current catalogue, null where there is none. */
+/**
+ * @brief Entry @p index of the current catalogue, null where there is none.
+ * @param[in] index  the index
+ * @return the entry, or null
+ */
 Entry* entryAt(int index)
 {
     const Catalogue* c = lib().m_current.load(std::memory_order_acquire);
@@ -218,7 +247,11 @@ Entry* entryAt(int index)
 
 void normalise(FieldClip& clip);
 
-/** @brief Decodes one file (outside every lock: a long recording takes a second). */
+/**
+ * @brief Decodes one file (outside every lock: a long recording takes a second).
+ * @param[in] e  the entry
+ * @return the recording, or null
+ */
 FieldClip* decodeFile(const Entry& e)
 {
     unsigned int channels = 0, rate = 0;
@@ -242,7 +275,10 @@ FieldClip* decodeFile(const Entry& e)
     return c;
 }
 
-/** @brief Sets the clip's norm (FieldClip::norm): RMS to -20 dBFS, the peak held at -1 dBFS. */
+/**
+ * @brief Sets the clip's norm (FieldClip::norm): RMS to -20 dBFS, the peak held at -1 dBFS.
+ * @param[in,out] clip  the recording
+ */
 void normalise(FieldClip& clip)
 {
     FieldClip* c = &clip;
@@ -258,10 +294,18 @@ void normalise(FieldClip& clip)
     c->m_norm = static_cast<float>(std::min(0.1 / rms, 0.891 / (static_cast<double>(peak) + 1e-9)));
 }
 
-/** @brief The bytes recording @p c takes. */
+/**
+ * @brief The bytes recording @p c takes.
+ * @param[in] c  the recording
+ * @return the bytes
+ */
 size_t clipBytes(const FieldClip* c) { return (c->m_left.size() + c->m_right.size()) * sizeof(float); }
 
-/** @brief Frees what has served its grace, then evicts idle recordings until @p need more bytes fit. Under the lock. */
+/**
+ * @brief Frees what has served its grace, then evicts idle recordings until @p need more bytes fit. Under the lock.
+ * @param[in,out] l     the library
+ * @param[in]     need  the bytes wanted
+ */
 void makeRoom(Library& l, size_t need)
 {
     const int64_t now = nowMs();
@@ -284,7 +328,12 @@ void makeRoom(Library& l, size_t need)
     }
 }
 
-/** @brief Loads @p e unless it is loaded (making room in the cache); false if it cannot be read. */
+/**
+ * @brief Loads @p e unless it is loaded (making room in the cache); false if it cannot be read.
+ * @param[in,out] l  the library
+ * @param[in,out] e  the entry
+ * @return false if it cannot be read
+ */
 bool loadEntry(Library& l, Entry* e)
 {
     if (e == nullptr) return false;
@@ -370,7 +419,12 @@ int fieldClipCount(int category)
 }
 
 namespace {
-/** @brief The index of variation @p variation (wrapped) of category @p category, -1 none. */
+/**
+ * @brief The index of variation @p variation (wrapped) of category @p category, -1 none.
+ * @param[in] category   the category
+ * @param[in] variation  the variation
+ * @return the index, -1 for none
+ */
 int indexIn(int category, int variation)
 {
     const Catalogue* c = lib().m_current.load(std::memory_order_acquire);

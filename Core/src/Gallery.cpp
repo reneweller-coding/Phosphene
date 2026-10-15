@@ -1,6 +1,7 @@
 /**
  * @file Gallery.cpp
  * @brief The set gallery's comment lines (Gallery.h).
+ * @author Rene Weller
  */
 #include "phos/Gallery.h"
 #include "phos/Composer.h"
@@ -18,7 +19,11 @@ namespace phos {
 
 namespace {
 
-/** @brief The letter of a section in the form string. */
+/**
+ * @brief The letter of a section in the form string.
+ * @param[in] s  the section
+ * @return its letter
+ */
 char sectionLetter(const Section& s)
 {
     switch (s.m_type) {
@@ -32,7 +37,11 @@ char sectionLetter(const Section& s)
     }
 }
 
-/** @brief Tabs and line breaks out of a field, and the separator of the track line. */
+/**
+ * @brief Tabs and line breaks out of a field, and the separator of the track line.
+ * @param[in] s  the field
+ * @return the field cleaned
+ */
 std::string clean(const std::string& s)
 {
     std::string out = s;

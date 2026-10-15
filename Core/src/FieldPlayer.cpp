@@ -1,6 +1,7 @@
 /**
  * @file FieldPlayer.cpp
  * @brief The Field track's sampler and the NASA shots (FieldPlayer.h).
+ * @author Rene Weller
  */
 #include "phos/FieldPlayer.h"
 #include <algorithm>
@@ -12,7 +13,13 @@ namespace {
 
 constexpr double Pi2 = 1.5707963267948966;   ///< pi / 2
 
-/** @brief The 4-point Hermite interpolation of @p s at @p p (indices clamped to the recording). */
+/**
+ * @brief The 4-point Hermite interpolation of @p s at @p p (indices clamped to the recording).
+ * @param[in] s  the samples
+ * @param[in] n  their count
+ * @param[in] p  the position
+ * @return the sample
+ */
 inline float hermite(const float* s, int n, double p)
 {
     const int i = static_cast<int>(std::floor(p));

@@ -28,6 +28,7 @@
  * over and over for the event's length -- the "buffer repeat" of a glitch. The slice halves once over
  * the last quarter of the event (a sixteenth rolls into a thirty-second), and every slice boundary is
  * a 1 ms raised-cosine crossfade, so the repeat clicks only where the material itself does.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Dsp.h"
@@ -39,21 +40,34 @@ namespace phos {
 /** @brief Tempo-synchronised stereo flanger (the right channel's LFO a quarter period ahead). */
 class Flanger {
 public:
-    /** @brief Prepares for @p sampleRate (allocates the delay lines, where there are any). */
+    /**
+     * @brief Prepares for @p sampleRate (allocates the delay lines, where there are any).
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate);
     /** @brief Clears every state: silence in, silence out. */
     void reset();
     /**
-     * @param periodBeats LFO period in beats
-     * @param depth       0..1: sweep range as a share of 0.3 .. 6 ms
-     * @param feedback    -0.9 .. 0.9
-     * @param mix         0..1: dry to the comb (0.5 dry + 0.5 delayed)
+     * @param[in] periodBeats  LFO period in beats
+     * @param[in] depth        0..1: sweep range as a share of 0.3 .. 6 ms
+     * @param[in] feedback     -0.9 .. 0.9
+     * @param[in] mix          0..1: dry to the comb (0.5 dry + 0.5 delayed)
      */
     void set(float periodBeats, float depth, float feedback, float mix);
-    /** @brief One stereo sample in place; @p beat is the absolute beat of the sample. */
+    /**
+     * @brief One stereo sample in place; @p beat is the absolute beat of the sample.
+     * @param[in,out] l     the left sample, in place
+     * @param[in,out] r     the right sample, in place
+     * @param[in]     beat  the sample's beat
+     */
     void tick(float& l, float& r, double beat);
 private:
-    /** @brief Reads buffer @p b @p delay samples back, linearly interpolated. */
+    /**
+     * @brief Reads buffer @p b @p delay samples back, linearly interpolated.
+     * @param[in] b      the buffer
+     * @param[in] delay  the delay in samples
+     * @return the sample read
+     */
     float read(const std::vector<float>& b, double delay) const;
     double m_sr = 48000.0;   ///< sample rate
     std::vector<float> m_bufL;   ///< the left delay line, a power of two long
@@ -70,17 +84,36 @@ private:
 class Phaser {
 public:
     static constexpr int Stages = 6;   ///< all-pass stages per channel
-    /** @brief Prepares for @p sampleRate (allocates the delay lines, where there are any). */
+    /**
+     * @brief Prepares for @p sampleRate (allocates the delay lines, where there are any).
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate);
     /** @brief Clears every state: silence in, silence out. */
     void reset();
-    /** @param periodBeats LFO period; @param depth 0..1 sweep over 200 Hz .. 200 * 2^(5 depth) Hz;
-     *  @param feedback 0..1; @param mix dry/wet, 0..1 */
+    /**
+     * @param[in] periodBeats  LFO period;
+     * @param[in] depth        0..1 sweep over 200 Hz .. 200 * 2^(5 depth) Hz;
+     * @param[in] feedback     0..1;
+     * @param[in] mix          dry/wet, 0..1
+     */
     void set(float periodBeats, float depth, float feedback, float mix);
-    /** @brief One stereo sample in place; @p beat is the absolute beat of the sample. */
+    /**
+     * @brief One stereo sample in place; @p beat is the absolute beat of the sample.
+     * @param[in,out] l     the left sample, in place
+     * @param[in,out] r     the right sample, in place
+     * @param[in]     beat  the sample's beat
+     */
     void tick(float& l, float& r, double beat);
 private:
-    /** @brief The six all-pass stages with feedback for one channel and one sample. */
+    /**
+     * @brief The six all-pass stages with feedback for one channel and one sample.
+     * @param[in]     x        the input sample
+     * @param[in]     a        the all-pass coefficient
+     * @param[in,out] z        the stages' states
+     * @param[in,out] fbState  the feedback's state
+     * @return the output sample
+     */
     float stage(float x, float a, float* z, float& fbState);
     double m_sr = 48000.0;   ///< sample rate
     float m_zL[Stages] = {};   ///< the all-passes' states, left
@@ -104,7 +137,12 @@ struct HilbertPair {
     double m_xb[4][2] = {};   ///< chain b's: inputs
     double m_yb[4][2] = {};   ///< ... outputs
     double m_delayA = 0.0;   ///< chain A's output one sample late (the 90 degrees against chain B)
-    /** @brief One sample in; @p i and @p q receive the in-phase and the quadrature output. */
+    /**
+     * @brief One sample in; @p i and @p q receive the in-phase and the quadrature output.
+     * @param[in]  x  the input sample
+     * @param[out] i  the in-phase output
+     * @param[out] q  the quadrature output
+     */
     void tick(double x, double& i, double& q);
     /** @brief Clears every state: silence in, silence out. */
     void reset();
@@ -113,13 +151,23 @@ struct HilbertPair {
 /** @brief Single-sideband frequency shifter, stereo (the right channel's carrier 90 degrees ahead). */
 class FreqShifter {
 public:
-    /** @brief Prepares for @p sampleRate (allocates the delay lines, where there are any). */
+    /**
+     * @brief Prepares for @p sampleRate (allocates the delay lines, where there are any).
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate);
     /** @brief Clears every state: silence in, silence out. */
     void reset();
-    /** @param hz shift in Hz (negative = down); @param mix 0..1 */
+    /**
+     * @param[in] hz   shift in Hz (negative = down);
+     * @param[in] mix  0..1
+     */
     void set(float hz, float mix);
-    /** @brief One stereo sample in place. */
+    /**
+     * @brief One stereo sample in place.
+     * @param[in,out] l  the left sample, in place
+     * @param[in,out] r  the right sample, in place
+     */
     void tick(float& l, float& r);
 private:
     double m_sr = 48000.0;   ///< sample rate
@@ -141,24 +189,41 @@ private:
  */
 class PsyFxChain {
 public:
-    /** @brief Prepares for @p sampleRate (allocates the delay lines, where there are any). */
+    /**
+     * @brief Prepares for @p sampleRate (allocates the delay lines, where there are any).
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate);
     /** @brief Clears every state: silence in, silence out. */
     void reset();
-    /** @brief Reads the effective psyfx parameters (indexed by psyfx::). */
+    /**
+     * @brief Reads the effective psyfx parameters (indexed by psyfx::).
+     * @param[in] v  the effective parameter values
+     */
     void update(const float* v);
-    /** @brief Extra shift in Hz and extra flanger mix added on top of the parameters (per event). */
+    /**
+     * @brief Extra shift in Hz and extra flanger mix added on top of the parameters (per event).
+     * @param[in] shiftHz     the extra shift in Hz
+     * @param[in] flangerMix  the extra flanger mix
+     */
     void setMotion(float shiftHz, float flangerMix);
-    /** @brief The event motion's shift in force (tests). */
+    /**
+     * @brief The event motion's shift in force (tests).
+     * @return the shift in Hz
+     */
     float motionHz() const { return m_motionHz; }
-    /** @brief The event motion's extra flanger mix in force (tests). */
+    /**
+     * @brief The event motion's extra flanger mix in force (tests).
+     * @return the extra mix
+     */
     float motionFlange() const { return m_motionFlange; }
     /**
      * @brief Processes @p n stereo samples in place.
-     * @param beat0 absolute beat of the first sample
-     * @param bps   beats per sample
-     * @param L,R the stereo signal, processed in place
-     * @param n   samples
+     * @param[in,out] L      the stereo signal, processed in place
+     * @param[in,out] R      the stereo signal, processed in place
+     * @param[in]     n      samples
+     * @param[in]     beat0  absolute beat of the first sample
+     * @param[in]     bps    beats per sample
      */
     void process(float* L, float* R, int n, double beat0, double bps);
 private:
@@ -175,19 +240,29 @@ private:
 /** @brief Buffer repeat of a stereo bus for the length of an event (the glitch of the psychedelic layer). */
 class Stutter {
 public:
-    /** @brief Prepares for @p sampleRate (allocates the delay lines, where there are any). */
+    /**
+     * @brief Prepares for @p sampleRate (allocates the delay lines, where there are any).
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate);
     /** @brief Clears every state: silence in, silence out. */
     void reset();
     /**
      * @brief Starts a repeat.
-     * @param lengthSamples how long the repeat replaces the live signal
-     * @param sliceSamples  the slice that is repeated (it halves over the last quarter)
+     * @param[in] lengthSamples  how long the repeat replaces the live signal
+     * @param[in] sliceSamples   the slice that is repeated (it halves over the last quarter)
      */
     void trigger(int lengthSamples, int sliceSamples);
-    /** @brief True while a repeat is running. */
+    /**
+     * @brief True while a repeat is running.
+     * @return true while a repeat runs
+     */
     bool active() const { return m_on; }
-    /** @brief One stereo sample: records it and returns the live sample or the repeat in its place. */
+    /**
+     * @brief One stereo sample: records it and returns the live sample or the repeat in its place.
+     * @param[in,out] l  the left sample, in place
+     * @param[in,out] r  the right sample, in place
+     */
     void tick(float& l, float& r);
 private:
     std::vector<float> m_recL;   ///< the recorded live signal, left

@@ -63,6 +63,7 @@
  *
  * **Threads.** process() runs on the audio thread and never allocates. The push functions may be
  * called from one other thread. Parameters may be written from any thread.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Acid.h"
@@ -128,12 +129,14 @@ public:
      * Costs a store per part and sample while it is set and nothing when it is not; the mix is the same
      * bit for bit either way (the self test measures that). Not for the audio thread of a host: set it
      * before rendering, from the thread that renders.
+     * @param[in,out] tap  the tap, or null to stop
      */
     void setStemTap(StemTap* tap) { m_tap = tap; }
     /**
      * @brief Live play (01.10.2026; the plugin's engine): the keyboard's Replace and the composer switch (mix.composer)
      *        act. Off (phos_render, the exports, the probes, the default): the set plays as it was composed, whatever its
      *        keyboard knobs say.
+     * @param[in] on  true for live play
      */
     void setLive(bool on) { m_live = on; }
 
@@ -148,25 +151,50 @@ public:
      * ends it. Called on the rendering thread between process() calls -- the plugin splits a block at every MIDI
      * event, so a note starts on its sample.
      * @{ */
-    /** @brief Starts a note played live.
-     *  @param pitch MIDI note; @param velocity 1..127; @param channel 0..15; @param part the voice it names
-     *  (mix.keyboard_part's values; the keyboard split, 02.10.2026), -1 for the keyboard's own */
+    /**
+     * @brief Starts a note played live.
+     * @param[in] pitch     MIDI note;
+     * @param[in] velocity  1..127;
+     * @param[in] channel   0..15;
+     * @param[in] part      the voice it names (mix.keyboard_part's values; the keyboard split, 02.10.2026), -1 for the
+     *                      keyboard's own
+     */
     void liveNoteOn(int pitch, int velocity, int channel, int part = -1);
-    /** @brief Releases the note @p pitch on whichever voice its note-on went to. */
+    /**
+     * @brief Releases the note @p pitch on whichever voice its note-on went to.
+     * @param[in] pitch    the MIDI note
+     * @param[in] channel  the MIDI channel
+     */
     void liveNoteOff(int pitch, int channel);
     /** @brief Releases every played note (transport stop, a changed keyboard part). */
     void liveAllOff();
-    /** @brief Whether the composer's notes of @p part are replaced by the keyboard (the plugin's MIDI out skips them too). */
+    /**
+     * @brief Whether the composer's notes of @p part are replaced by the keyboard (the plugin's MIDI out skips them
+     *        too).
+     * @param[in] part  the part
+     * @return true when the keyboard replaces its notes
+     */
     bool generatedSilenced(PartE part) const;
     /**
      * @brief The family jam (02.10.2026, the plugin's Jam.h), live only: the melodic voices' notes (the acid, the bass,
      *        the lead and the others) @p transpose semitones from where they were written, and with @p rhythmOut the
      *        kick and the bass out for the leader's break.
+     * @param[in] transpose  the transposition in semitones
+     * @param[in] rhythmOut  true for the kick and the bass out
      */
     void setJam(int transpose, bool rhythmOut) { m_jamTranspose = transpose; m_jamRhythmOut = rhythmOut; }
-    /** @brief Whether the family jam leaves @p part's notes out now (the kick and the bass in the leader's break). */
+    /**
+     * @brief Whether the family jam leaves @p part's notes out now (the kick and the bass in the leader's break).
+     * @param[in] part  the part
+     * @return true when its notes are left out
+     */
     bool jamSilenced(PartE part) const { return m_jamRhythmOut && (part == PartE::KICK || part == PartE::BASS); }
-    /** @brief @p pitch as the family jam plays @p part's notes now (moved by its transposition, or as it is). */
+    /**
+     * @brief @p pitch as the family jam plays @p part's notes now (moved by its transposition, or as it is).
+     * @param[in] part   the part
+     * @param[in] pitch  the MIDI note
+     * @return the note played
+     */
     int jamPitch(PartE part, int pitch) const;
     /** @} */
 
@@ -174,6 +202,8 @@ public:
      * @brief Plays bank preset @p preset of the family behind preset choice @p choice now, for the effects page's
      *        audition (24.09.2026; Sfx.h, PresetChoiceType). Rendering thread, between process() calls. The
      *        family's sfx.preset_* choice still wins inside Sfx::trigger, so the page passes the preset it shows.
+     * @param[in] choice  the preset choice
+     * @param[in] preset  the bank preset
      */
     void previewSfx(int choice, int preset);
 
@@ -184,12 +214,15 @@ public:
      * channels) per part since the last takeMeters(). Off unless switched on, and reading only: the mix is the
      * same to the bit either way.
      * @{ */
-    /** @brief Switches the gathering on or off (rendering thread). */
+    /**
+     * @brief Switches the gathering on or off (rendering thread).
+     * @param[in] on  true to gather the meters
+     */
     void setMetering(bool on) { m_metering = on; }
     /**
      * @brief Hands over what was gathered since the last call and starts again (rendering thread).
-     * @param peak  NumParts peaks (absolute sample values)
-     * @param sumSq NumParts sums of squares
+     * @param[in,out] peak   NumParts peaks (absolute sample values)
+     * @param[in,out] sumSq  NumParts sums of squares
      * @return the number of samples they cover
      */
     int takeMeters(float* peak, double* sumSq);
@@ -203,10 +236,10 @@ public:
 
     /**
      * @brief Prepares for playback.
-     * @param sampleRate   output rate
-     * @param maxBlockSize largest block the host will use (any size works; larger ones are split)
-     * @param quality      what the engine may spend per part (Quality.h); the default is the desktop
-     *                     level, which is what the engine did before quality levels existed
+     * @param[in] sampleRate    output rate
+     * @param[in] maxBlockSize  largest block the host will use (any size works; larger ones are split)
+     * @param[in] quality       what the engine may spend per part (Quality.h); the default is the desktop level, which
+     *                          is what the engine did before quality levels existed
      */
     void prepare(double sampleRate, int maxBlockSize, const Quality& quality = Quality::desktop());
 
@@ -225,24 +258,44 @@ public:
      * once for whatever the parameters hold at that point.
      */
     void ensureVoiceTables();
-    /** @brief The level prepare() was called with. */
+    /**
+     * @brief The level prepare() was called with.
+     * @return the quality
+     */
     const Quality& quality() const { return m_quality; }
     /** @brief Back to beat 0; clears events, offsets, overrides and all sound. */
     void reset();
 
-    /** @brief The parameters (the knobs). */
+    /**
+     * @brief The parameters (the knobs).
+     * @return the parameters
+     */
     ParamStore& params() { return m_params; }
-    /** @brief The parameters, read-only. */
+    /**
+     * @brief The parameters, read-only.
+     * @return the parameters
+     */
     const ParamStore& params() const { return m_params; }
 
-    /** @brief Uses a tempo map instead of compose.bpm (call while stopped). */
+    /**
+     * @brief Uses a tempo map instead of compose.bpm (call while stopped).
+     * @param[in] map  the tempo map
+     */
     void setTempoMap(const TempoMap& map) { m_tempo = map; m_useTempoMap = true; }
     /** @brief Goes back to compose.bpm. */
     void clearTempoMap() { m_useTempoMap = false; }
 
-    /** @brief Queues a note (producer thread); false if the ring is full. */
+    /**
+     * @brief Queues a note (producer thread); false if the ring is full.
+     * @param[in] e  the note
+     * @return false if the ring is full
+     */
     bool pushEvent(const NoteEvent& e) { return m_notes.push(e); }
-    /** @brief Queues a control event (producer thread); false if the ring is full. */
+    /**
+     * @brief Queues a control event (producer thread); false if the ring is full.
+     * @param[in] e  the control event
+     * @return false if the ring is full
+     */
     bool pushControl(const ControlEvent& e) { return m_controls.push(e); }
     /**
      * @brief Queues a control event that takes effect at the next chunk, ahead of everything queued (producer
@@ -253,57 +306,124 @@ public:
      * (23.09.2026: the measured line levels and Auto Gain's offset arrived that late, and the host test's ramp
      * was still short of its target when it looked). This ring is read at every chunk start before anything
      * else; an event whose beat has passed starts there, so a ramp runs its full length from now.
+     * @param[in] e  the control event
+     * @return false if the ring is full
      */
     bool pushImmediate(const ControlEvent& e) { return m_immediate.push(e); }
-    /** @brief Beat position of the next sample to be rendered (any thread). */
+    /**
+     * @brief Beat position of the next sample to be rendered (any thread).
+     * @return the beat position
+     */
     double beatPosition() const { return m_beatNow.load(std::memory_order_relaxed); }
-    /** @brief Samples rendered since reset. */
+    /**
+     * @brief Samples rendered since reset.
+     * @return the current position in samples
+     */
     uint64_t samplePosition() const { return m_samples; }
 
-    /** @brief Renders @p n stereo samples. */
+    /**
+     * @brief Renders @p n stereo samples.
+     * @param[out] L  receives the left channel (overwritten)
+     * @param[out] R  receives the right channel (overwritten)
+     * @param[in]  n  how many samples
+     */
     void process(float* L, float* R, int n);
 
-    /** @brief The kick, for tests and displays. */
+    /**
+     * @brief The kick, for tests and displays.
+     * @return deck A's kick
+     */
     const Kick& kick() const { return m_kick; }
-    /** @brief The bass, for tests and displays. */
+    /**
+     * @brief The bass, for tests and displays.
+     * @return the bass
+     */
     const Bass& bass() const { return m_bass; }
-    /** @brief The percussion kit, for tests and displays. */
+    /**
+     * @brief The percussion kit, for tests and displays.
+     * @return the percussion kit
+     */
     const PercKit& percKit() const { return m_perc; }
-    /** @brief The acid voice, for tests and displays. */
+    /**
+     * @brief The acid voice, for tests and displays.
+     * @return the acid voice
+     */
     const Acid& acid() const { return m_acid; }
-    /** @brief A polyphonic engine (lead or arp), for tests and displays. */
+    /**
+     * @brief A polyphonic engine (lead or arp), for tests and displays.
+     * @param[in] i  the instance
+     * @return the engine
+     */
     const Poly& poly(PolyInstanceE i) const { return m_poly[static_cast<int>(i)]; }
-    /** @brief The effect generator, for tests and displays. */
+    /**
+     * @brief The effect generator, for tests and displays.
+     * @return the effect generator
+     */
     const Sfx& sfx() const { return m_sfx; }
-    /** @brief The shamanic bed, for tests and displays. */
+    /**
+     * @brief The shamanic bed, for tests and displays.
+     * @return the shamanic bed
+     */
     const Texture& texture() const { return m_texture; }
-    /** @brief The voices, for tests and displays. */
+    /**
+     * @brief The voices, for tests and displays.
+     * @return the voices
+     */
     const Vocal& vocal() const { return m_vocal; }
-    /** @brief True while a stutter replaces the melodic bus (tests). */
+    /**
+     * @brief True while a stutter replaces the melodic bus (tests).
+     * @return true while a stutter plays
+     */
     bool stuttering() const { return m_stutter.active(); }
-    /** @brief The SFX strip's modulation chain (tests: the event motion in force). */
+    /**
+     * @brief The SFX strip's modulation chain (tests: the event motion in force).
+     * @return the chain
+     */
     const PsyFxChain& sfxChain() const { return m_sfxFx; }
-    /** @brief Samples by which the output lags the events (the limiter's lookahead; 0 when it is off). */
+    /**
+     * @brief Samples by which the output lags the events (the limiter's lookahead; 0 when it is off).
+     * @return the latency in samples
+     */
     int latencySamples() const { return m_limiterOn ? m_limiter.latency() : 0; }
-    /** @brief The meter on the master output (audio thread; read it when not processing). */
+    /**
+     * @brief The meter on the master output (audio thread; read it when not processing).
+     * @return the reading
+     */
     LoudnessReading meter() const { return m_meter.read(); }
     /** @brief Restarts the meter. */
     void resetMeter() { m_meter.reset(); }
-    /** @brief Gain reduction of the bus compressor and the limiter at the end of the last block, dB. */
+    /**
+     * @brief Gain reduction of the bus compressor and the limiter at the end of the last block, dB.
+     * @return the compressor's reduction in dB
+     */
     float compReduction() const { return m_comp.reduction(); }
-    float limiterReduction() const { return m_limiter.reduction(); }   ///< @copydoc compReduction
-    /** @brief Effective value of a parameter as last applied (audio thread view). */
+    /**
+     * @copybrief compReduction
+     * @return the limiter's reduction in dB
+     */
+    float limiterReduction() const { return m_limiter.reduction(); }
+    /**
+     * @brief Effective value of a parameter as last applied (audio thread view).
+     * @param[in] id  the parameter
+     * @return its effective value
+     */
     float effective(int id) const;
     /**
      * @brief Every parameter's effective value, with the modulation of the voice a player hears on the knobs it moves
      *        (26.09.2026, the live ring): cutoff, resonance, filter mode, pulse width, FM index, table position, level
      *        and pan of the six voices, the bass and the acid, the way each synth applies its sums. Rendering thread.
-     * @param out params().count() values
+     * @param[in,out] out  params().count() values
      */
     void playedValues(float* out) const;
-    /** @brief The key's pitch class the engine plays in (0 = C), as last applied (audio thread view; the scopes). */
+    /**
+     * @brief The key's pitch class the engine plays in (0 = C), as last applied (audio thread view; the scopes).
+     * @return the key's pitch class
+     */
     int keyRoot() const { return m_keyRoot; }
-    /** @brief The scale the engine plays in (index into ScaleSteps / ScaleNames), as last applied. */
+    /**
+     * @brief The scale the engine plays in (index into ScaleSteps / ScaleNames), as last applied.
+     * @return the scale's index
+     */
     int scale() const { return m_scale; }
 
 private:
@@ -313,13 +433,29 @@ private:
     void advanceRamps();
     /** @brief Recomputes the effective values that moved and hands them to every generator (Engine.h, m_raw). */
     void applyParams();
-    /** @brief Renders @p count samples at @p offset: every generator, the strips, the sends and the master. */
+    /**
+     * @brief Renders @p count samples at @p offset: every generator, the strips, the sends and the master.
+     * @param[out] L       the left channel
+     * @param[out] R       the right channel
+     * @param[in]  offset  the first sample in the block
+     * @param[in]  count   the samples
+     */
     void renderSegment(float* L, float* R, int offset, int count);
-    /** @brief Starts note @p e on its generator, @p late samples after its ideal onset. */
+    /**
+     * @brief Starts note @p e on its generator, @p late samples after its ideal onset.
+     * @param[in] e     the note
+     * @param[in] late  samples after its ideal onset
+     */
     void dispatch(const NoteEvent& e, double late);
-    /** @brief Applies control event @p e: a parameter's offset ramp or override, or the bass slot of the beat. */
+    /**
+     * @brief Applies control event @p e: a parameter's offset ramp or override, or the bass slot of the beat.
+     * @param[in] e  the control event
+     */
     void dispatchControl(const ControlEvent& e);
-    /** @brief Seconds from the kick to the bass's first slot of the beat (the phase lock's target). */
+    /**
+     * @brief Seconds from the kick to the bass's first slot of the beat (the phase lock's target).
+     * @return the seconds
+     */
     double firstSlotSeconds() const;
 
     ParamStore m_params;   ///< the knobs (the host's and the command line's)
@@ -402,7 +538,12 @@ private:
     float m_meterPeak[NumParts] = {};      ///< takeMeters(): peak per part
     double m_meterSum[NumParts] = {};      ///< takeMeters(): sum of squares per part
     int m_meterCount = 0;                   ///< takeMeters(): samples gathered
-    /** @brief Adds one stereo sample of part @p part to the meters. */
+    /**
+     * @brief Adds one stereo sample of part @p part to the meters.
+     * @param[in] part  the part
+     * @param[in] l     the left sample
+     * @param[in] r     the right sample
+     */
     void meterAdd(int part, float l, float r)
     {
         const float a = std::max(std::fabs(l), std::fabs(r));
@@ -413,7 +554,11 @@ private:
     int m_liveTarget[128];                  ///< per pitch: the voice a played note went to (0 acid, 1.. poly, 7 bass), -1 none
     bool m_live = false;                    ///< setLive: the keyboard's Replace and the composer switch act
     unsigned m_livePlayed = 0;              ///< voices the keyboard has played ("By channel" replaces from the first note)
-    /** @brief The voice the keyboard plays on @p channel (0 acid, 1 .. 6 poly, 7 bass, 8 kit), -1 none. */
+    /**
+     * @brief The voice the keyboard plays on @p channel (0 acid, 1 .. 6 poly, 7 bass, 8 kit), -1 none.
+     * @param[in] channel  the MIDI channel
+     * @return the target a key there plays (perform::keys), Off for none
+     */
     int keyboardTarget(int channel) const;
     bool m_clip = true;   ///< master.clip: the safety clip after the limiter
     TanhAdaa m_clipL;   ///< the safety clip, left (antiderivative anti-aliased)

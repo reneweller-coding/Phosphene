@@ -27,6 +27,7 @@
  * thread publishes as it goes) into a Snapshot on the message thread, and the component draws that.
  * The static picture is drawn once into an image and kept; a repaint moves the play head over it. A
  * timeline that redrew a hundred blocks and three hundred glyphs at every tick would be a bug.
+ * @author Rene Weller
  */
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -76,25 +77,51 @@ public:
     /**
      * @brief The set strip alone (01.10.2026, the frame's overview under the header, as every generator has one): no
      *        track rows, no legend; a click jumps.
+     * @param[in] on  true for the strip alone
      */
     void setStripOnly(bool on) { m_stripOnly = on; }
 
-    /** @brief Replaces what is drawn (message thread); the picture is redrawn, not the play head. */
+    /**
+     * @brief Replaces what is drawn (message thread); the picture is redrawn, not the play head.
+     * @param[in] s  the snapshot
+     * @pre called on the message thread
+     */
     void setSnapshot(Snapshot s);
-    /** @brief Moves the play head. Returns true when it moved far enough to be worth a repaint. */
+    /**
+     * @brief Moves the play head. Returns true when it moved far enough to be worth a repaint.
+     * @param[in] musicalBeat  the beat
+     * @return true when worth a repaint
+     */
     bool setPosition(double musicalBeat);
-    /** @brief The snapshot that is on screen, so the editor can compare before replacing it. */
+    /**
+     * @brief The snapshot that is on screen, so the editor can compare before replacing it.
+     * @return the snapshot
+     */
     const Snapshot& snapshot() const { return m_snap; }
-    /** @brief Where track @p i sits in the set strip (empty before the first measure); for the host test. */
+    /**
+     * @brief Where track @p i sits in the set strip (empty before the first measure); for the host test.
+     * @param[in] i  the track
+     * @return its rectangle
+     */
     juce::Rectangle<int> trackBlock(size_t i) const { return i < m_blocks.size() ? m_blocks[i] : juce::Rectangle<int>(); }
-    /** @brief Bars track @p i shares with the one before (first) and the one after it (second); 0 = none. */
+    /**
+     * @brief Bars track @p i shares with the one before (first) and the one after it (second); 0 = none.
+     * @param[in] i  the track
+     * @return (bars before, bars after)
+     */
     std::pair<int, int> overlapOf(size_t i) const;
 
-    /** @brief The set strip, the tracks and their sections, the play head. */
+    /**
+     * @brief The set strip, the tracks and their sections, the play head.
+     * @param[in,out] g  the graphics context
+     */
     void paint(juce::Graphics&) override;
     /** @brief Measures the blocks for the size. */
     void resized() override;
-    /** @brief A click jumps to the bar clicked. */
+    /**
+     * @brief A click jumps to the bar clicked.
+     * @param[in] e  the mouse event
+     */
     void mouseDown(const juce::MouseEvent&) override;
 
     std::function<void(int)> m_onSeek;                                  ///< called with a bar to jump to
@@ -116,7 +143,11 @@ private:
     void measure();
     /** @brief Draws everything that does not move into #m_cache. */
     void render();
-    /** @brief x of a bar inside the set strip. */
+    /**
+     * @brief x of a bar inside the set strip.
+     * @param[in] bar  the bar
+     * @return its x in pixels
+     */
     float stripX(double bar) const;
 
     Snapshot m_snap;                  ///< what is drawn

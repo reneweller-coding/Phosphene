@@ -1,6 +1,7 @@
 /**
  * @file PhospheneLookAndFeel.cpp
  * @brief Implementation of the editor's palette, knob, toggle and combo box.
+ * @author Rene Weller
  */
 #include "PhospheneLookAndFeel.h"
 #include "PhospheneHelpData.h"
@@ -49,7 +50,11 @@ juce::Font body(float height)
 }
 
 namespace {
-/** @brief The frame's families in Phosphene's fluorescent tones (the same hues as in every generator). */
+/**
+ * @brief The frame's families in Phosphene's fluorescent tones (the same hues as in every generator).
+ * @param[in] f  the family
+ * @return its tone
+ */
 juce::Colour familyTone(frame::FamilyE f)
 {
     switch (f) {

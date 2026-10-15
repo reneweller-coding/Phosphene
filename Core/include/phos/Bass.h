@@ -63,6 +63,7 @@
  * resonance. The pulse part of the wave has its edge at the fundamental's zero crossing; the bite's
  * saturator lifts that edge into a band-limited attack under the bite's cutoff, which is part of the
  * point, not a step.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Ducker.h"
@@ -78,7 +79,10 @@ namespace phos {
 /** @brief Monophonic bass synthesizer. */
 class Bass {
 public:
-    /** @brief Prepares for a sample rate. */
+    /**
+     * @brief Prepares for a sample rate.
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate);
     /**
      * @brief Chooses the rate the oscillator and the ladder run at (Quality.h).
@@ -87,42 +91,70 @@ public:
      * back. 1 skips both -- one oscillator and one ladder step per output sample, no decimator -- and
      * costs about half. Call it after prepare() and before the first update(); the update() that
      * follows recomputes every coefficient that depends on the rate.
-     * @param factor 1 or 2; anything else is clamped into that range
+     * @param[in] factor  1 or 2; anything else is clamped into that range
      */
     void setOversampling(int factor);
-    /** @brief The factor set by setOversampling(). */
+    /**
+     * @brief The factor set by setOversampling().
+     * @return the oversampling factor
+     */
     int oversampling() const { return m_os; }
     /** @brief Silences and clears all state. */
     void reset();
-    /** @brief Reads the effective parameter values, indexed by bass::. */
+    /**
+     * @brief Reads the effective parameter values, indexed by bass::.
+     * @param[in] v  the effective parameter values
+     */
     void update(const float* v);
-    /** @brief The set's beat at the next sample and the beats per sample (Engine.cpp, per chunk): the synced LFOs' clock. */
+    /**
+     * @brief The set's beat at the next sample and the beats per sample (Engine.cpp, per chunk): the synced LFOs'
+     *        clock.
+     * @param[in] beat            the beat at the next sample
+     * @param[in] beatsPerSample  the beats per sample
+     */
     void setClock(double beat, double beatsPerSample) { m_beat = beat; m_beatsPerSample = beatsPerSample; }
     /**
      * @brief Starts a note.
-     * @param pitch            MIDI note number
-     * @param velocity         0..1
-     * @param gateSamples      samples until the note is released
-     * @param late             how many samples ago the note ideally started (0 <= late < 1)
-     * @param fundamentalPhase sine phase of the fundamental at the ideal start, in cycles
+     * @param[in] pitch             MIDI note number
+     * @param[in] velocity          0..1
+     * @param[in] gateSamples       samples until the note is released
+     * @param[in] late              how many samples ago the note ideally started (0 <= late < 1)
+     * @param[in] fundamentalPhase  sine phase of the fundamental at the ideal start, in cycles
      */
     void noteOn(int pitch, float velocity, int gateSamples, double late, double fundamentalPhase);
     /** @brief Ends the note's gate at the next sample (a played key's release, 01.10.2026; Engine::liveNoteOff). */
     void release() { if (m_gate > 1) m_gate = 1; }
-    /** @brief Starts a sidechain duck (called on every kick); @p late as for noteOn. */
+    /**
+     * @brief Starts a sidechain duck (called on every kick); @p late as for noteOn.
+     * @param[in] late  samples after the ideal start
+     */
     void duck(double late = 0.0) { m_ducker.trigger(late); }
-    /** @brief Renders @p n samples, replacing @p out. */
+    /**
+     * @brief Renders @p n samples, replacing @p out.
+     * @param[out] out  the samples
+     * @param[in]  n    the block's samples
+     */
     void process(float* out, int n);
-    /** @brief Whether the amplitude envelope is open. */
+    /**
+     * @brief Whether the amplitude envelope is open.
+     * @return true while the envelope is open
+     */
     bool active() const { return m_amp.isActive(); }
-    /** @brief The release actually used for the current note, in seconds (after the floor). */
+    /**
+     * @brief The release actually used for the current note, in seconds (after the floor).
+     * @return the release in seconds
+     */
     float effectiveRelease() const { return m_releaseUsed; }
-    /** @brief Fundamental phase the Start Phase knob stands for. */
+    /**
+     * @brief Fundamental phase the Start Phase knob stands for.
+     * @return the phase in turns
+     */
     double knobPhase() const { return static_cast<double>(m_startPhase) - 0.5; }
 
     /**
      * @brief The modulation to show on the knobs (26.09.2026, the live ring): the sums per destination (ModDest) of the
      *        modulator, or null where nothing moves. Rendering thread.
+     * @return the sums per destination, or null
      */
     const float* displayModulation() const { return m_modOn && m_mod.active() ? m_modSum : nullptr; }
 private:

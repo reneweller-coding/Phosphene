@@ -7,6 +7,7 @@
  * text box under it, and the name goes under the knob (EditorLayout.cpp lays that out). Parameters
  * that span zero get an arc growing out of the top centre, which reads as "how far from neutral"
  * instead of "how full".
+ * @author Rene Weller
  */
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -34,21 +35,43 @@ const juce::Colour Accent  { 0xffa46bff };   ///< the plugin's colour: UV violet
 const juce::Colour Warm    { 0xffff2e97 };   ///< kick and bass: hot magenta
 const juce::Colour Green   { 0xff8dff5a };   ///< meters in range
 const juce::Colour Red     { 0xffff4d6d };   ///< meters over
-/** @brief The colour of the tab @p index (PluginEditor.h, Tab): its family's, stepped a little per tab. */
+/**
+ * @brief The colour of the tab @p index (PluginEditor.h, Tab): its family's, stepped a little per tab.
+ * @param[in] index  the tab
+ * @return its colour
+ */
 juce::Colour partColour(int index);
-/** @brief The colour of the tab that shows @p part (Score.h, Part). */
+/**
+ * @brief The colour of the tab that shows @p part (Score.h, Part).
+ * @param[in] part  the part
+ * @return the colour
+ */
 juce::Colour partColourOf(int part);
-/** @brief A colour for the @p i-th of several equal things (the tracks of the Arrange tab): the families in turn. */
+/**
+ * @brief A colour for the @p i-th of several equal things (the tracks of the Arrange tab): the families in turn.
+ * @param[in] i  the index
+ * @return the colour
+ */
 juce::Colour cycleColour(int i);
 /**
  * @brief The colour of a group by what its controls do (01.10.2026, the frame's families -- the same in every generator,
  *        in Phosphene's fluorescent tones): sources gold, filters orange, envelopes acid green, what moves by itself cyan,
  *        space and mix UV blue; a group that is none of these keeps the page's colour @p page.
+ * @param[in] title  the group's title
+ * @param[in] page   the page's colour
+ * @return the group's colour
  */
 juce::Colour groupColour(const juce::String& title, juce::Colour page);
-/** @brief Phosphene's skin of the frame: the UV palette, the glow, the phosphenes behind the panel, the logo. */
+/**
+ * @brief Phosphene's skin of the frame: the UV palette, the glow, the phosphenes behind the panel, the logo.
+ * @return the skin
+ */
 const frame::Skin& skin();
-/** @brief The editor's fonts. */
+/**
+ * @brief The editor's fonts.
+ * @param[in] height  the font's height
+ * @return the title font
+ */
 juce::Font title(float height);
 juce::Font body(float height);   ///< @copydoc title
 } // namespace phosui
@@ -62,14 +85,36 @@ class PhospheneLookAndFeel final : public frame::LookAndFeel {
 public:
     /** @brief The frame's look in Phosphene's skin. */
     PhospheneLookAndFeel();
-    /** @brief A button in Phosphene's skin: a flat rounded box, its glow when it is on. */
+    /**
+     * @brief A button in Phosphene's skin: a flat rounded box, its glow when it is on.
+     * @param[in,out] g            the graphics context
+     * @param[in,out] b            the button
+     * @param[in]     background   its background colour
+     * @param[in]     highlighted  true under the mouse
+     * @param[in]     down         true while pressed
+     */
     void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour& background, bool highlighted, bool down) override;
-    /** @brief Phosphene's text font for a label. */
+    /**
+     * @brief Phosphene's text font for a label.
+     * @param[in,out] l  the label
+     * @return the font
+     */
     juce::Font getLabelFont(juce::Label&) override;
-    /** @brief ... for a chooser. */
+    /**
+     * @brief ... for a chooser.
+     * @param[in,out] b  the chooser
+     * @return the font
+     */
     juce::Font getComboBoxFont(juce::ComboBox&) override;
-    /** @brief ... for a button. */
+    /**
+     * @brief ... for a button.
+     * @param[in] buttonHeight  the button's height in pixels
+     * @return the font
+     */
     juce::Font getTextButtonFont(juce::TextButton&, int buttonHeight) override;
-    /** @brief ... for the menus. */
+    /**
+     * @brief ... for the menus.
+     * @return the font
+     */
     juce::Font getPopupMenuFont() override;
 };

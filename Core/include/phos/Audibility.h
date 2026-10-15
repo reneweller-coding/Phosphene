@@ -34,6 +34,7 @@
  * measure and meant to be compared between parts, sections and versions of the program, not read as an
  * absolute sone value; the model's constants are the published ones where it has them and stated where it
  * simplifies.
+ * @author Rene Weller
  */
 #pragma once
 
@@ -57,8 +58,8 @@ struct AudibilityReading {
 class AudibilityMeter {
 public:
     /**
-     * @param stems      how many stems every add() call carries
-     * @param sampleRate their rate
+     * @param[in] stems       how many stems every add() call carries
+     * @param[in] sampleRate  their rate
      */
     AudibilityMeter(int stems, double sampleRate);
     ~AudibilityMeter();
@@ -68,9 +69,16 @@ public:
     /**
      * @brief Appends @p n samples of every stem; @p L[k] and @p R[k] are stem k's channels (R may be null for
      *        mono). Stems whose pointer is null count as silent.
+     * @param[in] L  the stems' left channels, null for a silent stem
+     * @param[in] R  the stems' right channels, null for mono
+     * @param[in] n  the samples
      */
     void add(const float* const* L, const float* const* R, int n);
-    /** @brief The reading of stem @p k over everything added since the last reset(). */
+    /**
+     * @brief The reading of stem @p k over everything added since the last reset().
+     * @param[in] k  the stem
+     * @return its reading
+     */
     AudibilityReading read(int k) const;
     /** @brief Forgets the readings (and the partial frame). */
     void reset();
@@ -78,11 +86,27 @@ public:
 private:
     /** @brief Analyses the completed frame of every stem and adds it to the readings. */
     void frame();
-    /** @brief Adds the band intensities of one channel's frame to @p out (half weight: two channels are averaged). */
+    /**
+     * @brief Adds the band intensities of one channel's frame to @p out (half weight: two channels are averaged).
+     * @param[in]     buf  the channel's frame
+     * @param[in,out] out  the band intensities, added to
+     * @param[in,out] x    scratch for the transform
+     */
     void bandIntensity(const std::vector<float>& buf, std::vector<double>& out, std::vector<std::complex<double>>& x) const;
-    /** @brief Spreads band intensities into an excitation pattern; false when everything was silent. */
+    /**
+     * @brief Spreads band intensities into an excitation pattern; false when everything was silent.
+     * @param[in]  in   the band intensities
+     * @param[out] out  the excitation pattern
+     * @return false when everything was silent
+     */
     bool excite(const std::vector<double>& in, std::vector<double>& out) const;
-    /** @brief Loudness of excitation @p es alone and in the masker @p em (null: in quiet), unscaled. */
+    /**
+     * @brief Loudness of excitation @p es alone and in the masker @p em (null: in quiet), unscaled.
+     * @param[in]  es     the excitation
+     * @param[in]  em     the masker's excitation, or null for quiet
+     * @param[out] alone  the loudness alone
+     * @param[out] inMix  the loudness in the masker
+     */
     void loudness(const std::vector<double>& es, const std::vector<double>* em, double& alone, double& inMix) const;
     int m_stems;   ///< stems per add()
     double m_sr;   ///< their sample rate

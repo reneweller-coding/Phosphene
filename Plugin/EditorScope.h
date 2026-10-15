@@ -16,6 +16,7 @@
  *
  * It renders only when a value changed (a comparison of the synth's effective values every tick), which is a few
  * hundred microseconds for a kick; nothing of it touches the audio thread.
+ * @author Rene Weller
  */
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -29,23 +30,42 @@ class SynthScope final : public juce::Component, private juce::Timer {
 public:
     /** @brief Which synth it shows. */
     enum class KindE { KICK, BASS };
-    /** @brief A scope of the kick or the bass of @p proc. */
+    /**
+     * @brief A scope of the kick or the bass of @p proc.
+     * @param[in,out] proc  the processor
+     * @param[in]     kind  the kick or the bass
+     */
     SynthScope(PhospheneProcessor& proc, KindE kind);
     ~SynthScope() override;
 
     /** @brief Renders again now if anything changed (the timer does this ten times a second). */
     void refresh();
-    /** @brief The peak of the rendered sound, and the frequency the kick ends on / the bass note's (tests). */
+    /**
+     * @brief The peak of the rendered sound, and the frequency the kick ends on / the bass note's (tests).
+     * @return the peak
+     */
     float renderedPeak() const { return m_peak; }
-    double landingHz() const { return m_landHz; }   ///< @copydoc renderedPeak
+    /**
+     * @copybrief renderedPeak
+     * @return the frequency in Hz
+     */
+    double landingHz() const { return m_landHz; }
 
-    /** @brief The wave, the pitch or cutoff curve, the spectrum and the figures. */
+    /**
+     * @brief The wave, the pitch or cutoff curve, the spectrum and the figures.
+     * @param[in,out] g  the graphics context
+     */
     void paint(juce::Graphics&) override;
 
 private:
     /** @brief Renders again while it is shown (ten times a second). */
     void timerCallback() override { if (isShowing()) refresh(); }
-    /** @brief Renders one hit or note with the synth values @p v, the key and the tempo, and derives the curves. */
+    /**
+     * @brief Renders one hit or note with the synth values @p v, the key and the tempo, and derives the curves.
+     * @param[in] v    the synth's values
+     * @param[in] key  the key's root
+     * @param[in] bpm  the tempo
+     */
     void render(const std::vector<float>& v, int key, double bpm);
 
     PhospheneProcessor& m_proc;   ///< the processor whose values it reads

@@ -1,6 +1,7 @@
 /**
  * @file Score.cpp
  * @brief Score helpers.
+ * @author Rene Weller
  */
 #include "phos/Score.h"
 #include <algorithm>

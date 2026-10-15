@@ -1,6 +1,7 @@
 /**
  * @file SetFile.cpp
  * @brief Reading and writing `.phosset`.
+ * @author Rene Weller
  */
 #include "phos/SetFile.h"
 #include "phos/Util.h"
@@ -15,14 +16,25 @@ namespace phos {
 
 namespace {
 
-/** @brief The unit a name stands for, or -1. */
+/**
+ * @brief The unit a name stands for, or -1.
+ * @param[in] name  the name
+ * @return the unit, or -1
+ */
 int unitOfName(std::string_view name)
 {
     for (int u = 0; u < NumLockUnits; ++u) if (name == LockUnitNames[u]) return u;
     return -1;
 }
 
-/** @brief Splits "lock.track.3" into its three parts; false when it is not of that shape. */
+/**
+ * @brief Splits "lock.track.3" into its three parts; false when it is not of that shape.
+ * @param[in]  key    the key
+ * @param[out] head   its first part
+ * @param[out] unit   the unit
+ * @param[out] index  the index
+ * @return false when it is not of that shape
+ */
 bool splitUnitKey(std::string_view key, std::string_view& head, int& unit, int& index)
 {
     const size_t a = key.find('.');
@@ -39,7 +51,13 @@ bool splitUnitKey(std::string_view key, std::string_view& head, int& unit, int& 
     return end != nullptr && *end == '\0';
 }
 
-/** @brief Index of a choice name in a table, compared without case, or -1. */
+/**
+ * @brief Index of a choice name in a table, compared without case, or -1.
+ * @param[in] name   the name
+ * @param[in] names  the table
+ * @param[in] count  its size
+ * @return the index, or -1
+ */
 int choiceIndex(std::string_view name, const char* const* names, int count)
 {
     auto lower = [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; };

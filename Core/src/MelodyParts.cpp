@@ -1,6 +1,7 @@
 /**
  * @file MelodyParts.cpp
  * @brief The acid, the arp, the pad's figure, the stab's hits and the drone.
+ * @author Rene Weller
  */
 #include "phos/Melody.h"
 #include "phos/Preferences.h"
@@ -52,6 +53,13 @@ namespace mel {
  * **Variation** (rule 4): A' redraws one or two notes of A, A'' one or two of A' in its last beat;
  * the second set (after the first breakdown) redraws a third of A's free notes and varies that the
  * same way. The first two notes are never redrawn, so a run cannot form across a cell boundary.
+ * @param[in,out] m            the melody's plan
+ * @param[in]     key          the key's root
+ * @param[in]     scale        the mode
+ * @param[in]     seed         the seed
+ * @param[in]     temperature  the draw's temperature
+ * @param[in]     colour       the arc's colour, 0..1
+ * @param[in]     src          the pitch source
  */
 void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour, DrawSource src)
 {
@@ -291,7 +299,13 @@ void makeAcid(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatu
     }
 }
 
-/** @brief The chord degree at a phrase step of lead window @p w. */
+/**
+ * @brief The chord degree at a phrase step of lead window @p w.
+ * @param[in] m       the melody's plan
+ * @param[in] window  the lead window
+ * @param[in] step    the phrase step
+ * @return the chord's degree
+ */
 int chordAtStep(const MelodyPlan& m, int window, int step)
 {
     return m.m_chordDegree[chordIndexAt(m, window * 8 + step / 16)];
@@ -315,6 +329,13 @@ int chordAtStep(const MelodyPlan& m, int window, int step)
  * (arpHighTones), never above G5. A colour tone appears only as a glint: one weak sixteenth, over the
  * tonic chord, straight back to the anchor. A' moves the last beat's high notes one tone up, A''
  * also takes the bar's last high note to the top; the second set reverses the high stream.
+ * @param[in,out] m            the melody's plan
+ * @param[in]     key          the key's root
+ * @param[in]     scale        the mode
+ * @param[in]     seed         the seed
+ * @param[in]     temperature  the draw's temperature
+ * @param[in]     colour       the arc's colour, 0..1
+ * @param[in]     src          the pitch source
  */
 void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperature, float colour, DrawSource src)
 {
@@ -479,11 +500,12 @@ void makeArp(MelodyPlan& m, int key, int scale, uint64_t seed, double temperatur
 
 /**
  * @brief Widens [lo, hi] to hold every note of @p notes over @p root.
- * @param relCeiling notes whose interval to the root is above this are left out; that is how the
- *                   lead's octave jumps stay out of the range the masking rule works with.
- * @param notes the notes, as intervals over @p root
- * @param root  the part root, a MIDI note
- * @param lo,hi the range, widened in place
+ * @param[in]     notes       the notes, as intervals over @p root
+ * @param[in]     root        the part root, a MIDI note
+ * @param[in,out] lo          the range, widened in place
+ * @param[in,out] hi          the range, widened in place
+ * @param[in]     relCeiling  notes whose interval to the root is above this are left out; that is how the lead's octave
+ *                            jumps stay out of the range the masking rule works with.
  */
 void pitchRange(const std::vector<MelodyNote>& notes, int root, int& lo, int& hi, int relCeiling = 127)
 {
@@ -494,7 +516,11 @@ void pitchRange(const std::vector<MelodyNote>& notes, int root, int& lo, int& hi
     }
 }
 
-/** @brief The pad's gate pattern and the pitch ranges the masking rule works on. */
+/**
+ * @brief The pad's gate pattern and the pitch ranges the masking rule works on.
+ * @param[in,out] m     the melody's plan
+ * @param[in]     seed  the seed
+ */
 void makeRangesAndPad(MelodyPlan& m, uint64_t seed)
 {
     // The ranges exist for one thing: the masking rule that keeps the arp out of the lead's register
@@ -545,9 +571,9 @@ const char* const PadFigureNames[static_cast<int>(PadFigureE::COUNT)] = { "held"
  * The block is `chordBars` bars long. A figure that names more onsets than fit is cut by the caller;
  * every length is shortened by a sixty-fourth there as well, so a repeated pitch always takes a fresh
  * voice rather than retriggering one that is still sounding.
- * @param figure   PadFigure
- * @param chordBars bars in the block (2 or 4)
- * @param out      receives the onsets
+ * @param[in]  figure     PadFigure
+ * @param[in]  chordBars  bars in the block (2 or 4)
+ * @param[out] out        receives the onsets
  */
 void padOnsets(int figure, int chordBars, std::vector<std::pair<int, double>>& out)
 {
@@ -595,6 +621,8 @@ void padOnsets(int figure, int chordBars, std::vector<std::pair<int, double>>& o
  * four-bar phrase carry the cell is the track's: the second and the fourth, the fourth alone, the first
  * and the third, or all four -- sparse enough that the stab stays a surprise, which the form thins
  * further by giving it only every other eight-bar group (Form.cpp).
+ * @param[in,out] m     the melody's plan
+ * @param[in]     seed  the seed
  */
 void makeStab(MelodyPlan& m, uint64_t seed)
 {
@@ -636,6 +664,8 @@ void makeStab(MelodyPlan& m, uint64_t seed)
  * @brief The tonic drone's own decisions (19.09.2026): whether it adds the octave, and the period of
  *        its slow evolution (8, 16 or 32 bars, the range of the brief). The notes themselves are the
  *        root and the fifth, placed by composeMelodyBar where the form's runs say.
+ * @param[in,out] m     the melody's plan
+ * @param[in]     seed  the seed
  */
 void makeDrone(MelodyPlan& m, uint64_t seed)
 {

@@ -32,6 +32,7 @@
  * Everything that is drawn (bowl octave, doublet splits, accent and pluck patterns) comes from the
  * @c pick the engine derives from the event's own position, so a bar rendered alone sounds like the
  * same bar inside the set.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Dsp.h"
@@ -46,27 +47,46 @@ public:
     static constexpr int Voices = 3;   ///< simultaneous instruments
     static constexpr int Modes = 4;    ///< bowl modes (each a doublet)
 
-    /** @brief Prepares for @p sampleRate. */
+    /**
+     * @brief Prepares for @p sampleRate.
+     * @param[in] sampleRate  the sample rate in Hz
+     */
     void prepare(double sampleRate);
     /** @brief Silences every instrument. */
     void reset();
-    /** @brief Reads the effective parameters (indexed by texture::) and the key. */
+    /**
+     * @brief Reads the effective parameters (indexed by texture::) and the key.
+     * @param[in] v        the effective parameter values
+     * @param[in] keyRoot  the key's root
+     */
     void update(const float* v, int keyRoot);
     /**
      * @brief Starts an instrument.
-     * @param type          SfxType::Bowl, Didgeridoo or JawHarp (anything else is ignored)
-     * @param samples       the event's length (a drone plays that long; a bowl rings out its decay)
-     * @param velocity      0..1
-     * @param late          sub-sample onset (0 <= late < 1)
-     * @param samplesPerBeat the tempo, for the rhythm of breath, accents and plucks
-     * @param pick          the event's own seed (Engine.cpp derives it from the event's beat)
+     * @param[in] type            SfxType::Bowl, Didgeridoo or JawHarp (anything else is ignored)
+     * @param[in] samples         the event's length (a drone plays that long; a bowl rings out its decay)
+     * @param[in] velocity        0..1
+     * @param[in] late            sub-sample onset (0 <= late < 1)
+     * @param[in] samplesPerBeat  the tempo, for the rhythm of breath, accents and plucks
+     * @param[in] pick            the event's own seed (Engine.cpp derives it from the event's beat)
      */
     void trigger(SfxTypeE type, int samples, float velocity, double late, double samplesPerBeat, uint64_t pick);
-    /** @brief Renders @p n stereo samples, replacing @p L and @p R. */
+    /**
+     * @brief Renders @p n stereo samples, replacing @p L and @p R.
+     * @param[out] L  receives the left channel (replaced)
+     * @param[out] R  receives the right channel (replaced)
+     * @param[in]  n  how many samples
+     */
     void process(float* L, float* R, int n);
-    /** @brief Instruments sounding. */
+    /**
+     * @brief Instruments sounding.
+     * @return the instruments sounding
+     */
     int active() const;
-    /** @brief The bowl's mode ratios (Rayleigh's ring), for the self test. */
+    /**
+     * @brief The bowl's mode ratios (Rayleigh's ring), for the self test.
+     * @param[in] mode  the mode
+     * @return its frequency ratio
+     */
     static double bowlRatio(int mode);
 
 private:
@@ -108,7 +128,12 @@ private:
         Svf m_breathBp;   ///< the breath's band pass
         double m_panPh = 0.0;   ///< the slow pan's phase
     };
-    /** @brief One sample of a voice, already placed in the stereo field. */
+    /**
+     * @brief One sample of a voice, already placed in the stereo field.
+     * @param[in,out] v  the voice
+     * @param[out]    l  the left sample
+     * @param[out]    r  the right sample
+     */
     void voiceSample(Voice& v, float& l, float& r);
 
     double m_sr = 48000.0;   ///< sample rate

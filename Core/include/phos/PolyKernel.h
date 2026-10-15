@@ -20,6 +20,7 @@
  * filter with resonance -- a low pass unless poly.filter_type chooses its band-pass, high-pass or notch
  * output (19.09.2026) -- then two Butterworth high-pass sections (24 dB/octave) at the voice's
  * key-tracked high-pass frequency, then the amplitude envelope.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Filters.h"
@@ -99,7 +100,11 @@ struct PolyChannels {
 #pragma warning(pop)
 #endif
 
-/** @brief sin(2 pi p) for any p, from the Taylor series on the folded phase (see the file comment). */
+/**
+ * @brief sin(2 pi p) for any p, from the Taylor series on the folded phase (see the file comment).
+ * @param[in] p  the phase in turns
+ * @return the sine
+ */
 template <class VT>
 inline VT laneSin01(VT p)
 {
@@ -118,19 +123,29 @@ inline VT laneSin01(VT p)
 }
 
 /**
- * @brief Renders @p n samples of the slots [slot, slot + laneWidth<V>()).
- * @param wt        per sample and slot: the wavetable oscillator's sample, read on the scalar side
- *                  (a table read is a gather, which NEON does not have; see Poly.cpp)
- * @param blep,fm,useWt whether this group of slots weighs the source in at all. Decided per group of
- *                  eight slots, so every vector width runs the same arithmetic on every lane (as in
- *                  the percussion kernel). A source weighed in with zero contributes exactly zero, so
- *                  leaving it out changes nothing but the time it takes -- and it takes a lot: the two
- *                  folded Taylor sines of the frequency modulation are the most expensive part of a
- *                  slot, and a supersaw, a VA voice and a pad never use them.
- * @param outL,outR per sample and slot (index i * PolySlotCount + slot)
- * @param s    the slots' oscillator state
- * @param slot the first slot of this call
- * @param n    samples to render
+ * @brief Renders @p n samples of the slots [slot, slot + laneWidth\<V\>()).
+ * @param[in,out] s      the slots' oscillator state
+ * @param[in]     slot   the first slot of this call
+ * @param[in]     n      samples to render
+ * @param[in]     wt     per sample and slot: the wavetable oscillator's sample, read on the scalar side (a table read
+ *                       is a gather, which NEON does not have; see Poly.cpp)
+ * @param[in]     blep   whether this group of slots weighs the source in at all. Decided per group of eight slots, so
+ *                       every vector width runs the same arithmetic on every lane (as in the percussion kernel). A
+ *                       source weighed in with zero contributes exactly zero, so leaving it out changes nothing but the
+ *                       time it takes -- and it takes a lot: the two folded Taylor sines of the frequency modulation
+ *                       are the most expensive part of a slot, and a supersaw, a VA voice and a pad never use them.
+ * @param[in]     fm     whether this group of slots weighs the source in at all. Decided per group of eight slots, so
+ *                       every vector width runs the same arithmetic on every lane (as in the percussion kernel). A
+ *                       source weighed in with zero contributes exactly zero, so leaving it out changes nothing but the
+ *                       time it takes -- and it takes a lot: the two folded Taylor sines of the frequency modulation
+ *                       are the most expensive part of a slot, and a supersaw, a VA voice and a pad never use them.
+ * @param[in]     useWt  whether this group of slots weighs the source in at all. Decided per group of eight slots, so
+ *                       every vector width runs the same arithmetic on every lane (as in the percussion kernel). A
+ *                       source weighed in with zero contributes exactly zero, so leaving it out changes nothing but the
+ *                       time it takes -- and it takes a lot: the two folded Taylor sines of the frequency modulation
+ *                       are the most expensive part of a slot, and a supersaw, a VA voice and a pad never use them.
+ * @param[in,out] outL   per sample and slot (index i * PolySlotCount + slot)
+ * @param[in,out] outR   per sample and slot (index i * PolySlotCount + slot)
  */
 template <class VT>
 void polySlotKernel(PolySlots& s, int slot, int n, const float* wt, bool blep, bool fm, bool useWt, float* outL, float* outR)
@@ -178,13 +193,13 @@ void polySlotKernel(PolySlots& s, int slot, int n, const float* wt, bool blep, b
 }
 
 /**
- * @brief Filters @p n samples of the channels [lane, lane + laneWidth<V>()).
- * @param in   per sample and lane (index i * PolyLanes + lane): summed oscillators
- * @param amp  per sample and lane: amplitude envelope
- * @param out  per sample and lane
- * @param c    the channels' filter and gain state
- * @param lane the first channel of this call
- * @param n    samples to render
+ * @brief Filters @p n samples of the channels [lane, lane + laneWidth\<V\>()).
+ * @param[in] in   per sample and lane (index i * PolyLanes + lane): summed oscillators
+ * @param[in] amp  per sample and lane: amplitude envelope
+ * @param[in,out] out  per sample and lane
+ * @param[in,out] c    the channels' filter and gain state
+ * @param[in] lane the first channel of this call
+ * @param[in] n    samples to render
  */
 template <class VT>
 void polyModelKernel(PolyChannels& c, int lane, int n, const float* in, const float* amp, float* out);
@@ -193,6 +208,12 @@ template <class VT>
 /**
  * @brief The voices' channels [lane, lane + width): @p in through the high and low pass (or the model) times @p amp into @p
  *        out, @p n samples.
+ * @param[in,out] c     the channels' state
+ * @param[in]     lane  the first lane
+ * @param[in]     n     the samples
+ * @param[in]     in    the input samples
+ * @param[in]     amp   the gains
+ * @param[out]    out   the output samples
  */
 void polyChannelKernel(PolyChannels& c, int lane, int n, const float* in, const float* amp, float* out)
 {

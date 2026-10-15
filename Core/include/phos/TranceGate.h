@@ -12,6 +12,7 @@
  * **Tone duck.** A gate that only turns the level down sounds like a volume knob; the classic hardware
  * gates also closed a filter. Here the closed part of each step crossfades towards a one-pole low pass
  * at 700 Hz by Tone, so the pad goes dark as well as quiet between the pulses.
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Dsp.h"
@@ -23,7 +24,10 @@ constexpr int NumGatePatterns = 6;   ///< entries of GatePatternNames (Params.cp
 /** @brief Gate state of one stereo channel. */
 class TranceGate {
 public:
-    /** @brief Sets the sample rate (for the tone filter). */
+    /**
+     * @brief Sets the sample rate (for the tone filter).
+     * @param[in] sampleRate  the sample rate
+     */
     void prepare(double sampleRate)
     {
         m_lpCoef = static_cast<float>(1.0 - std::exp(-2.0 * 3.141592653589793 * 700.0 / sampleRate));
@@ -34,11 +38,12 @@ public:
 
     /**
      * @brief How open the gate is at a beat position, 0..1.
-     * @param beat         beats from the start of the set
-     * @param pattern      0 sixteenths, 1 eighths, 2 rolling (.xxx), 3 gallop (x.xx), 4 3-3-2, 5 eighth triplets
-     * @param duty         open share of a step, 0.05..1
-     * @param attackBeats  rise time
-     * @param releaseBeats fall time
+     * @param[in] beat          beats from the start of the set
+     * @param[in] pattern       0 sixteenths, 1 eighths, 2 rolling (.xxx), 3 gallop (x.xx), 4 3-3-2, 5 eighth triplets
+     * @param[in] duty          open share of a step, 0.05..1
+     * @param[in] attackBeats   rise time
+     * @param[in] releaseBeats  fall time
+     * @return how open the gate is, 0..1
      */
     static float open(double beat, int pattern, float duty, double attackBeats, double releaseBeats)
     {
@@ -74,10 +79,11 @@ public:
 
     /**
      * @brief Applies the gate to one stereo sample.
-     * @param o     opening from open()
-     * @param depth 0..1, how far a closed gate lowers the level
-     * @param tone  0..1, how far a closed gate darkens
-     * @param l,r   the stereo sample, gated in place
+     * @param[in,out] l      the stereo sample, gated in place
+     * @param[in,out] r      the stereo sample, gated in place
+     * @param[in]     o      opening from open()
+     * @param[in]     depth  0..1, how far a closed gate lowers the level
+     * @param[in]     tone   0..1, how far a closed gate darkens
      */
     inline void apply(float& l, float& r, float o, float depth, float tone)
     {

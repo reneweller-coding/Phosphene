@@ -1,6 +1,7 @@
 /**
  * @file Corpus.cpp
  * @brief Pitch model and chord successions from the corpus tables.
+ * @author Rene Weller
  */
 #include "phos/Corpus.h"
 #include <algorithm>
@@ -10,7 +11,11 @@ namespace phos {
 
 namespace {
 
-/** @brief The chain context of a key, or null (binary search over the sorted table). */
+/**
+ * @brief The chain context of a key, or null (binary search over the sorted table).
+ * @param[in] key  the packed key
+ * @return the context, or null
+ */
 const CorpusBassStep* stepOf(int key)
 {
     int lo = 0, hi = NumCorpusBassSteps - 1;
@@ -23,7 +28,11 @@ const CorpusBassStep* stepOf(int key)
     return nullptr;
 }
 
-/** @brief The stored count of a bar pattern, or zero (binary search over the sorted table). */
+/**
+ * @brief The stored count of a bar pattern, or zero (binary search over the sorted table).
+ * @param[in] mask  the bar's onset mask
+ * @return its count
+ */
 uint32_t barCountOf(unsigned mask)
 {
     int lo = 0, hi = NumCorpusBassBars - 1;
@@ -36,7 +45,13 @@ uint32_t barCountOf(unsigned mask)
     return 0;
 }
 
-/** @brief Count of a key in a sorted gram list (binary search). */
+/**
+ * @brief Count of a key in a sorted gram list (binary search).
+ * @param[in] grams  the sorted grams
+ * @param[in] n      their count
+ * @param[in] key    the key
+ * @return its count
+ */
 uint32_t countOf(const CorpusGram* grams, int n, uint32_t key)
 {
     int lo = 0, hi = n - 1;

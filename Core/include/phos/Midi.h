@@ -10,6 +10,7 @@
  *
  * Channel layout (0-based): Kick 9 (GM drums, note 36), Bass 0, Acid 1, Lead 2, Arp 3, Pad 4,
  * Sfx 5, Perc 9 (shares the drum channel).
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Score.h"
@@ -21,18 +22,24 @@ namespace phos {
 
 constexpr int MidiPpq = 960;   ///< ticks per quarter note in exported files
 
-/** @brief MIDI channel (0-based) a part is written to. */
+/**
+ * @brief MIDI channel (0-based) a part is written to.
+ * @param[in] part  the part
+ * @return its MIDI channel, 0 .. 15
+ */
 int midiChannelOf(PartE part);
 
 /**
  * @brief Encodes a score as a Standard MIDI File (format 1).
- * @param score the score; notes need not be sorted
+ * @param[in] score  the score; notes need not be sorted
  * @return the file's bytes
  */
 std::vector<uint8_t> encodeMidi(const Score& score);
 
 /**
  * @brief Writes encodeMidi() to a file.
+ * @param[in] score  the score
+ * @param[in] path   the file's path
  * @return false if the file cannot be written
  */
 bool writeMidiFile(const Score& score, const char* path);
@@ -58,18 +65,28 @@ struct MidiFileData {
 
 /**
  * @brief Decodes a Standard MIDI File (format 0 or 1, metrical time).
- * @param data  file bytes
- * @param size  number of bytes
- * @param out   receives the contents
- * @param error receives a message on failure, may be null
+ * @param[in]  data   file bytes
+ * @param[in]  size   number of bytes
+ * @param[out] out    receives the contents
+ * @param[out] error  receives a message on failure, may be null
  * @return false on malformed or unsupported data
  */
 bool decodeMidi(const uint8_t* data, size_t size, MidiFileData& out, std::string* error = nullptr);
 
-/** @brief Reads and decodes a file. */
+/**
+ * @brief Reads and decodes a file.
+ * @param[in]  path   the file's path
+ * @param[out] out    the decoded file
+ * @param[out] error  receives the failure, or null
+ * @return false if it cannot be read
+ */
 bool readMidiFile(const char* path, MidiFileData& out, std::string* error = nullptr);
 
-/** @brief Key signature sharps/flats for a minor key with root pitch class @p root (A minor = 0). */
+/**
+ * @brief Key signature sharps/flats for a minor key with root pitch class @p root (A minor = 0).
+ * @param[in] root  the root's pitch class
+ * @return the sharps, negative for flats
+ */
 int minorKeySharps(int root);
 
 } // namespace phos

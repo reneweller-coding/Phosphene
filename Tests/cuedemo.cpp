@@ -15,6 +15,7 @@
  *
  * Nothing here is a plugin: the chain is the same one PluginProcessor builds, assembled by hand, so
  * that the demonstration does not need a host, a device or a sound card.
+ * @author Rene Weller
  */
 #include "phos/Composer.h"
 #include "phos/Cue.h"
@@ -60,7 +61,11 @@ struct Arrival {
  */
 class UdpIn {
 public:
-    /** @brief Opens a UDP socket on @p port of the loopback and starts recording; false if it cannot. */
+    /**
+     * @brief Opens a UDP socket on @p port of the loopback and starts recording; false if it cannot.
+     * @param[in] port  the port
+     * @return false if it cannot be opened
+     */
     bool open(int port)
     {
 #if defined(_WIN32)
@@ -94,7 +99,10 @@ public:
 #endif
         if (m_thread.joinable()) m_thread.join();
     }
-    /** @brief What has arrived so far (read after close()). */
+    /**
+     * @brief What has arrived so far (read after close()).
+     * @return the arrivals
+     */
     const std::vector<Arrival>& arrivals() const { return m_arrivals; }
 
 private:
@@ -119,7 +127,11 @@ private:
     std::vector<Arrival> m_arrivals;   ///< what arrived
 };
 
-/** @brief The address a cue will carry, for matching an arrival to its due time. */
+/**
+ * @brief The address a cue will carry, for matching an arrival to its due time.
+ * @param[in] k  the cue's kind
+ * @return its OSC address
+ */
 const char* addressOf(Cue::KindE k)
 {
     switch (k) {
@@ -131,7 +143,10 @@ const char* addressOf(Cue::KindE k)
     }
 }
 
-/** @brief Prints the command line and returns the exit code for a wrong one. */
+/**
+ * @brief Prints the command line and returns the exit code for a wrong one.
+ * @return the exit code
+ */
 int usage()
 {
     std::printf("phos_cuedemo [--bars N] [--seed S] [--host H] [--port P] [--sections] [--realtime] [--nobeats]\n");
@@ -140,7 +155,12 @@ int usage()
 
 } // namespace
 
-/** @brief Sends a demonstration set's cues to a listener (see the file comment). */
+/**
+ * @brief Sends a demonstration set's cues to a listener (see the file comment).
+ * @param[in]     argc  the number of arguments
+ * @param[in,out] argv  the arguments: sections to run
+ * @return the number of failures
+ */
 int main(int argc, char** argv)
 {
     // Parallel probes, and the probe cache when ctest names one (phos/Probe.h; round "speed", 20.09.2026).

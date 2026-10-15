@@ -6,6 +6,7 @@
  * filter order needed for the attenuation, and evaluates the all-pass coefficients from truncated
  * theta-function series. Correctness is not taken on trust: Tests/selftest.cpp measures the
  * passband and the image rejection of the designed filters.
+ * @author Rene Weller
  */
 #include "phos/Halfband.h"
 #include <cmath>
@@ -16,7 +17,12 @@ namespace {
 
 constexpr double PiD = 3.14159265358979323846;   ///< pi
 
-/** @brief The elliptic modulus @p k and nome @p q of a half-band design with the given transition width. */
+/**
+ * @brief The elliptic modulus @p k and nome @p q of a half-band design with the given transition width.
+ * @param[in]  transition  the transition band's width, normalised
+ * @param[out] k           receives the elliptic modulus
+ * @param[out] q           receives the nome
+ */
 void transitionParams(double transition, double& k, double& q)
 {
     k = std::tan((1.0 - transition * 2.0) * PiD / 4.0);
@@ -28,7 +34,13 @@ void transitionParams(double transition, double& k, double& q)
     q = e * (1.0 + e4 * (2.0 + e4 * (15.0 + 150.0 * e4)));
 }
 
-/** @brief The numerator series of coefficient @p c of the elliptic half-band design. */
+/**
+ * @brief The numerator series of coefficient @p c of the elliptic half-band design.
+ * @param[in] q      the nome
+ * @param[in] order  the filter's order
+ * @param[in] c      the coefficient
+ * @return the numerator's series
+ */
 double accNum(double q, int order, int c)
 {
     double acc = 0.0, term = 0.0;
@@ -42,7 +54,13 @@ double accNum(double q, int order, int c)
     return acc;
 }
 
-/** @brief The denominator series of coefficient @p c of the elliptic half-band design. */
+/**
+ * @brief The denominator series of coefficient @p c of the elliptic half-band design.
+ * @param[in] q      the nome
+ * @param[in] order  the filter's order
+ * @param[in] c      the coefficient
+ * @return the denominator's series
+ */
 double accDen(double q, int order, int c)
 {
     double acc = 0.0, term = 0.0;

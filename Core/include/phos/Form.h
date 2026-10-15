@@ -83,6 +83,7 @@
  * bass register, its gate limit, the learned bass phrase and the chord shift of
  * compose.bass_follows_chords all read the *track's* mode, never a section's, so the bass part of a
  * render with interchange on is bit-identical to one with it off (self test, "modal interchange").
+ * @author Rene Weller
  */
 #pragma once
 #include "phos/Harmony.h"
@@ -103,13 +104,29 @@ namespace phos {
  */
 enum class MelodyPartE : int { ACID = 0, LEAD, COUNTER, ARP, STAB, PAD, DRONE, COUNT };
 constexpr int MelodyParts = static_cast<int>(MelodyPartE::COUNT);   ///< number of melodic parts
-/** @brief The index of a melodic part in the arrays kept per part. */
+/**
+ * @brief The index of a melodic part in the arrays kept per part.
+ * @param[in] p  the melodic part
+ * @return its index
+ */
 constexpr int mpIndex(MelodyPartE p) { return static_cast<int>(p); }
-/** @brief The bit of a melodic part in BarPlan::parts and BarPlan::partsNext. */
+/**
+ * @brief The bit of a melodic part in BarPlan::parts and BarPlan::partsNext.
+ * @param[in] p  the melodic part
+ * @return its bit
+ */
 constexpr uint8_t partBit(MelodyPartE p) { return static_cast<uint8_t>(1u << static_cast<int>(p)); }
-/** @brief The polyphonic instance that plays a melodic part (not for the acid, which is no Poly). */
+/**
+ * @brief The polyphonic instance that plays a melodic part (not for the acid, which is no Poly).
+ * @param[in] p  the melodic part
+ * @return its polyphonic instance
+ */
 constexpr PolyInstanceE melodyPoly(MelodyPartE p) { return static_cast<PolyInstanceE>(static_cast<int>(p) - 1); }
-/** @brief The score part of a melodic part. */
+/**
+ * @brief The score part of a melodic part.
+ * @param[in] p  the melodic part
+ * @return its score part
+ */
 constexpr PartE melodyScorePart(MelodyPartE p) { return p == MelodyPartE::ACID ? PartE::ACID : polyPart(melodyPoly(p)); }
 static_assert(melodyScorePart(MelodyPartE::DRONE) == PartE::DRONE && melodyScorePart(MelodyPartE::COUNTER) == PartE::COUNTER
                   && MelodyParts == PolyInstances + 1,
@@ -168,6 +185,8 @@ constexpr int OutroBareBars = 8;    ///< the outro's last bars: kick, bass and o
  * has no kick before the hand-over) -- and the gains ramp over the last eight bars into the swap
  * (Composer.cpp, transitionBar). Hi-Tech, fast and hard, keeps the short sixteen. The blend can never be
  * longer than the incoming intro or the outgoing outro (Composer.cpp, makeTrack).
+ * @param[in] incoming  the incoming track's style
+ * @return the bars
  */
 inline int djOverlapBars(StyleIdE incoming) { return incoming == StyleIdE::HI_TECH ? DjOverlap : DjOverlapMax; }
 extern const char* const PdbVariantNames[NumPdbVariants];   ///< display names
@@ -308,11 +327,23 @@ struct StyleProfile {
 /** @brief How much a section's energy lifts the colourful modes when a mode is borrowed. */
 constexpr double InterchangeEnergy = 1.6;
 
-/** @brief The profile of a style (a static table). */
+/**
+ * @brief The profile of a style (a static table).
+ * @param[in] id  the style
+ * @return its profile
+ */
 const StyleProfile& styleProfile(StyleIdE id);
-/** @brief The style the knobs select. */
+/**
+ * @brief The style the knobs select.
+ * @param[in] p  the knobs
+ * @return the style
+ */
 StyleIdE styleOf(const ParamStore& p);
-/** @brief The arc the knobs select. */
+/**
+ * @brief The arc the knobs select.
+ * @param[in] p  the knobs
+ * @return the arc
+ */
 ArcIdE arcOf(const ParamStore& p);
 
 /**
@@ -320,10 +351,17 @@ ArcIdE arcOf(const ParamStore& p);
  *
  * Raised-cosine segments between the preset's control points: a curve without corners, so that
  * neighbouring tracks never jump in energy.
+ * @param[in] arc  the arc
+ * @param[in] t    the place in the set, 0..1
+ * @return the energy
  */
 double arcEnergy(ArcIdE arc, double t);
 
-/** @brief Nominal energy of a section type, before the arc scales it. */
+/**
+ * @brief Nominal energy of a section type, before the arc scales it.
+ * @param[in] type  the section type
+ * @return its energy
+ */
 float typeEnergy(SectionTypeE type);
 
 /**
@@ -447,20 +485,26 @@ struct FormPlan {
 
 /**
  * @brief Draws a track's form.
- * @param s          the style profile (body weights, PDB weights, break share, interchange weights)
- * @param seed       the track's form seed
- * @param target     preferred length in bars; the result is the nearest length the grammar can build
- * @param arcIn      the set's energy arc where the track starts
- * @param arcOut     the set's energy arc where the track ends
- * @param trackScale the track's own mode: what a section keeps when it does not borrow
- * @param sectionSeed one seed per section (MaxSections entries), or null to derive the borrowed
- *                   modes from @p seed; a section is a lockable unit, so its mode hangs off its own
- *                   seed exactly as its instrumentation does
+ * @param[in] s            the style profile (body weights, PDB weights, break share, interchange weights)
+ * @param[in] seed         the track's form seed
+ * @param[in] target       preferred length in bars; the result is the nearest length the grammar can build
+ * @param[in] arcIn        the set's energy arc where the track starts
+ * @param[in] arcOut       the set's energy arc where the track ends
+ * @param[in] trackScale   the track's own mode: what a section keeps when it does not borrow
+ * @param[in] sectionSeed  one seed per section (MaxSections entries), or null to derive the borrowed modes from @p
+ *                         seed; a section is a lockable unit, so its mode hangs off its own seed exactly as its
+ *                         instrumentation does
+ * @return the form
  */
 FormPlan makeFormPlan(const StyleProfile& s, uint64_t seed, int target, double arcIn, double arcOut,
                       int trackScale = 0, const uint64_t* sectionSeed = nullptr);
 
-/** @brief Index of the section that contains @p barInTrack (the last one if the bar is past the end). */
+/**
+ * @brief Index of the section that contains @p barInTrack (the last one if the bar is past the end).
+ * @param[in] f           the form
+ * @param[in] barInTrack  the bar within the track
+ * @return the section's index
+ */
 int sectionOfBar(const FormPlan& f, int barInTrack);
 
 /**
@@ -468,6 +512,10 @@ int sectionOfBar(const FormPlan& f, int barInTrack);
  *        top of the energy's gain: -Drop1HoldDb over every drop that is not the climax, a ramp from 0 to
  *        -BuildHeadroomDb over the buildup that leads into the climax, -IntroTrimDb over the intro, 0 elsewhere
  *        (see Drop1HoldDb).
+ * @param[in] f      the form
+ * @param[in] index  the section
+ * @param[in] u      the place in it, 0..1
+ * @return the trim in dB
  */
 float sectionTrimDb(const FormPlan& f, int index, double u);
 
@@ -477,6 +525,8 @@ float sectionTrimDb(const FormPlan& f, int index, double u);
  *        of at least DjOverlap bars (the DJ overlap needs them), exactly one climax and it is the last
  *        drop. The breakdown share of PLAN 6.2 (15 .. 30 %) is gone: the user's form gives the breakdown
  *        32 of 256 bars, 12.5 %.
+ * @param[in] f  the form
+ * @return true when every constraint holds
  */
 bool formConstraintsHold(const FormPlan& f);
 
@@ -539,11 +589,12 @@ struct BarPlan {
 
 /**
  * @brief The instrumentation matrix: what plays in bar @p barInTrack.
- * @param f           the track's form
- * @param a           what the track has to offer
- * @param sectionSeed one seed per section (MaxSections entries); a section is a lockable unit, so its
- *                    decisions hang off its own seed rather than off the track's
- * @param barInTrack  bar within the track
+ * @param[in] f            the track's form
+ * @param[in] a            what the track has to offer
+ * @param[in] sectionSeed  one seed per section (MaxSections entries); a section is a lockable unit, so its decisions
+ *                         hang off its own seed rather than off the track's
+ * @param[in] barInTrack   bar within the track
+ * @return the bar's plan
  */
 BarPlan planBar(const FormPlan& f, const PartAvailability& a, const uint64_t* sectionSeed, int barInTrack);
 
@@ -558,11 +609,11 @@ BarPlan planBar(const FormPlan& f, const PartAvailability& a, const uint64_t* se
  * bars of the track carry the sweep that masks the key change into the next track. Inside every
  * section but the buildup, a zap, a short sweep, a reverse swell or a noise wash closes eight- or
  * sixteen-bar groups; the palette and the period are the track's own. Form.cpp has the details.
- * @param amount compose.sfx_amount: transition markers are certain from 0.5 up and thin out below it;
+ * @param[in] amount compose.sfx_amount: transition markers are certain from 0.5 up and thin out below it;
  *               each group boundary carries ear candy with this probability
- * @param voiceDensity compose.voice_density (19.09.2026): scales the probability of every spoken phrase,
+ * @param[in] voiceDensity compose.voice_density (19.09.2026): scales the probability of every spoken phrase,
  *               chant and chatter the psychedelic layer places; 1 is the calibrated density, 0 none
- * @param bedDensity compose.bed_density: the same for the shamanic bed (bowls, didgeridoo, jaw harp)
+ * @param[in] bedDensity compose.bed_density: the same for the shamanic bed (bowls, didgeridoo, jaw harp)
  */
 void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity = 1.0f, float bedDensity = 1.0f);
 
@@ -575,15 +626,19 @@ void makeFormSfx(FormPlan& f, uint64_t seed, float amount, float voiceDensity = 
  * build-up or a drop. How often follows the style (Dark Forest always, Hi-Tech least) times compose.field_density.
  * The NASA shots are effects: one after the cut of a breakdown and one in a long intro, now and then -- most in
  * Full-On and Hi-Tech -- and never within two bars of a voice. From streams of their own: nothing placed before moves.
- * @param f       the track's form, after makeFormSfx (its field events and effects are appended)
- * @param seed    the track's form seed
- * @param style   the track's StyleId
- * @param density compose.field_density
- * @param amount  compose.sfx_amount (the shots)
+ * @param[in,out] f        the track's form, after makeFormSfx (its field events and effects are appended)
+ * @param[in]     seed     the track's form seed
+ * @param[in]     style    the track's StyleId
+ * @param[in]     density  compose.field_density
+ * @param[in]     amount   compose.sfx_amount (the shots)
  */
 void placeField(FormPlan& f, uint64_t seed, int style, float density, float amount);
 
-/** @brief Whether a section is part of a track's core, a groove or a drop (the form's rules and the effects' placement). */
+/**
+ * @brief Whether a section is part of a track's core, a groove or a drop (the form's rules and the effects' placement).
+ * @param[in] t  the section type
+ * @return true for a groove or a drop
+ */
 inline bool isCore(SectionTypeE t) { return t == SectionTypeE::GROOVE || t == SectionTypeE::DROP; }
 
 /**
@@ -637,7 +692,11 @@ struct RideShape {
     float  m_meanRaw = 0.0f;      ///< the mean of the uncentred shape that was subtracted
 };
 
-/** @brief The ride's shape for a section of @p sectionBars bars (32-bar cycles, or one shorter one). */
+/**
+ * @brief The ride's shape for a section of @p sectionBars bars (32-bar cycles, or one shorter one).
+ * @param[in] sectionBars  the section's bars
+ * @return the ride's shape
+ */
 RideShape acidRideShape(double sectionBars);
 /** @} */
 
@@ -647,17 +706,17 @@ RideShape acidRideShape(double sectionBars);
  * Called once at the first bar of a section, after the section's own controls. Everything it writes
  * is a @c ControlEvent::Kind::Offset with a ramp length, so nothing steps.
  *
- * @param p        the knobs (only to look parameter ids up)
- * @param s        the section
- * @param seed     the section's own seed: the ride is a lockable section's property
- * @param beat     the beat the section starts on
- * @param base0    the acid cutoff offset the section starts at (normalised), as the caller computed it
- * @param base1    the same at the end of the section
- * @param knobs    true for the first section of the first track, which plays the knobs exactly
- * @param out      receives the events
- * @param resoBase  the track's acid resonance offset (its voicing; normalised, 19.09.2026): the ride's
+ * @param[in] p        the knobs (only to look parameter ids up)
+ * @param[in] s        the section
+ * @param[in] seed     the section's own seed: the ride is a lockable section's property
+ * @param[in] beat     the beat the section starts on
+ * @param[in] base0    the acid cutoff offset the section starts at (normalised), as the caller computed it
+ * @param[in] base1    the same at the end of the section
+ * @param[in] knobs    true for the first section of the first track, which plays the knobs exactly
+ * @param[out] out      receives the events
+ * @param[in] resoBase  the track's acid resonance offset (its voicing; normalised, 19.09.2026): the ride's
  *                  medium and squelch stages are measured from the voiced resonance, not from the knob
- * @param decayBase the same for the filter decay
+ * @param[in] decayBase the same for the filter decay
  */
 void sectionAutomation(const ParamStore& p, const Section& s, uint64_t seed, double beat,
                        float base0, float base1, bool knobs, std::vector<ControlEvent>& out,

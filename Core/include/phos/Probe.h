@@ -44,6 +44,7 @@
  * after the probe's setup, the tempo, the sample rate, block size and length, and every control and note
  * event pushed, in order. The value is the three numbers a probe returns. `testProbeCache` checks that a hit
  * returns exactly what the render returns, and that a changed parameter, event or build id misses.
+ * @author Rene Weller
  */
 #pragma once
 #include <cstddef>
@@ -61,22 +62,29 @@ constexpr int MaxThreads = 8;
 
 /**
  * @brief How many probes of one stage may render at once.
- * @param n 1 = serial, one probe after the other (the library's default); 0 = the hardware's
- *          threads, at most MaxThreads; anything else is clamped to 1..kMaxThreads. Ignored on Android.
+ * @param[in] n  1 = serial, one probe after the other (the library's default); 0 = the hardware's threads, at most
+ *               MaxThreads; anything else is clamped to 1..kMaxThreads. Ignored on Android.
  */
 void setThreads(int n);
 
-/** @brief The resolved number of threads (always >= 1). */
+/**
+ * @brief The resolved number of threads (always >= 1).
+ * @return the threads
+ */
 int threads();
 
 /**
  * @brief Where the cross-process probe cache lives; empty turns it off (the library's default).
  *
  * The directory is created when the first entry is stored. Ignored on Android.
+ * @param[in] directory  the directory, empty to turn the cache off
  */
 void setCacheDir(const std::string& directory);
 
-/** @brief The cache directory, empty when the cache is off. */
+/**
+ * @brief The cache directory, empty when the cache is off.
+ * @return the directory
+ */
 std::string cacheDir();
 
 /**
@@ -91,18 +99,25 @@ struct CacheStats {
     uint64_t m_misses = 0;   ///< probes rendered because no valid file was there
     uint64_t m_stores = 0;   ///< files written
 };
-/** @brief The counters (any thread). */
+/**
+ * @brief The counters (any thread).
+ * @return the counters
+ */
 CacheStats cacheStats();
 /** @brief Sets the counters to zero. */
 void resetCacheStats();
 
-/** @brief The build id compiled into this core (Core/cmake/build_id.cmake), or the override below. */
+/**
+ * @brief The build id compiled into this core (Core/cmake/build_id.cmake), or the override below.
+ * @return the build id
+ */
 std::string buildId();
 /**
  * @brief Replaces the build id in the cache key; null restores the compiled one.
  *
  * For `testProbeCache` only: it is how the test shows that a changed core misses instead of being served a
  * stale value, without rebuilding the core in the middle of a test.
+ * @param[in] id  the build id, or null
  */
 void setBuildIdForTest(const char* id);
 
@@ -110,7 +125,11 @@ void setBuildIdForTest(const char* id);
 struct Key {
     uint64_t m_a = 0;   ///< the first half
     uint64_t m_b = 0;   ///< the second half
-    /** @brief Whether two keys are the same. */
+    /**
+     * @brief Whether two keys are the same.
+     * @param[in] o  the other key
+     * @return true when they are the same
+     */
     bool operator==(const Key& o) const { return m_a == o.m_a && m_b == o.m_b; }
 };
 
@@ -124,17 +143,30 @@ struct Key {
  */
 class Hasher {
 public:
-    /** @brief Adds raw bytes. */
+    /**
+     * @brief Adds raw bytes.
+     * @param[in] data  the bytes
+     * @param[in] n     their count
+     */
     void bytes(const void* data, size_t n);
-    /** @brief Adds one trivially copyable value (an arithmetic type or an enum). */
+    /**
+     * @brief Adds one trivially copyable value (an arithmetic type or an enum).
+     * @param[in] v  the value
+     */
     template <typename T> void add(const T& v)
     {
         static_assert(std::is_arithmetic_v<T> || std::is_enum_v<T>, "field by field: no structs, no padding");
         bytes(&v, sizeof(T));
     }
-    /** @brief Adds a string with its length, so that "ab","c" and "a","bc" differ. */
+    /**
+     * @brief Adds a string with its length, so that "ab","c" and "a","bc" differ.
+     * @param[in] s  the string
+     */
     void text(const std::string& s) { add(static_cast<uint64_t>(s.size())); bytes(s.data(), s.size()); }
-    /** @brief The key of everything added so far. */
+    /**
+     * @brief The key of everything added so far.
+     * @return the key
+     */
     Key finish() const;
 
 private:
@@ -150,19 +182,18 @@ private:
  * Called before every parallel stage. Each load is idempotent and costs a flag test once it has happened;
  * deliberately not a std::call_once, because the tests reset the library (resetWaveTableLibrary()) and the
  * next stage then has to load it again before its workers start.
- *
- * @note 20.09.2026 (round "threadsafe-loaders"): loadWaveTableLibrary() and loadVoicePack() are now
- *       genuinely thread-safe on their own (a mutex around the one real load, an atomic flag for the
- *       already-loaded case), so this call is no longer needed *for correctness* -- a stage could skip
- *       it and let its first workers race the loaders themselves. It is kept anyway, purely as a
- *       scheduling choice: without it, up to `threads() - 1` workers of a stage's first use would start,
- *       immediately block on the loader's mutex behind whichever one got there first, and sit idle for
- *       the load's ~0.1-0.2 s (testLoaderThreadSafety measures ~140 ms for the wavetable library) before
- *       any of them can render -- the same total work, done less concurrently. One call on the thread
- *       that is about to hand out the work anyway costs nothing a stage was not going to pay, and keeps
- *       every worker free to render the moment it starts. `testProbeSchedule`'s mutation 4
- *       (docs/rounds/2026-09.md, round "speed") still covers this call existing; nothing here re-tests the
- *       loaders' own thread safety, which is `testLoaderThreadSafety`'s job (Tests/selftest.cpp).
+ * @pre called before every
+ * @note 20.09.2026 (round "threadsafe-loaders"): loadWaveTableLibrary() and loadVoicePack() are now genuinely
+ *       thread-safe on their own (a mutex around the one real load, an atomic flag for the already-loaded case), so
+ *       this call is no longer needed *for correctness* -- a stage could skip it and let its first workers race the
+ *       loaders themselves. It is kept anyway, purely as a scheduling choice: without it, up to `threads() - 1` workers
+ *       of a stage's first use would start, immediately block on the loader's mutex behind whichever one got there
+ *       first, and sit idle for the load's ~0.1-0.2 s (testLoaderThreadSafety measures ~140 ms for the wavetable
+ *       library) before any of them can render -- the same total work, done less concurrently. One call on the thread
+ *       that is about to hand out the work anyway costs nothing a stage was not going to pay, and keeps every worker
+ *       free to render the moment it starts. `testProbeSchedule`'s mutation 4 (docs/rounds/2026-09.md, round "speed")
+ *       still covers this call existing; nothing here re-tests the loaders' own thread safety, which is
+ *       `testLoaderThreadSafety`'s job (Tests/selftest.cpp).
  */
 void warmSharedData();
 
@@ -170,18 +201,22 @@ void warmSharedData();
  * @brief A hash of the *contents* of the shared data as it is loaded right now (every wavetable the engine
  *        can address, every phrase of the voice pack). Part of every cache key: a probe rendered with
  *        another library, or with the built-in fallback because the file was missing, is another probe.
+ * @return the hash
  */
 uint64_t sharedDataId();
 
-/** @brief Whether lookups and stores do anything (a directory is set, and this is not Android). */
+/**
+ * @brief Whether lookups and stores do anything (a directory is set, and this is not Android).
+ * @return true when the cache works
+ */
 bool cacheEnabled();
 
 /**
  * @brief Reads the values stored under @p key.
- * @param values receives the three numbers of a probe (loudness, presence-band power, low-band power)
- * @return false when there is no file or it is not a complete, intact entry for this key -- a truncated or
- *         foreign file is a miss, never an error
- * @param key the probe's key (Hasher)
+ * @param[in] key     the probe's key (Hasher)
+ * @param[in] values  receives the three numbers of a probe (loudness, presence-band power, low-band power)
+ * @return false when there is no file or it is not a complete, intact entry for this key -- a truncated or foreign file
+ *         is a miss, never an error
  */
 bool cacheLookup(const Key& key, double values[3]);
 
@@ -189,6 +224,8 @@ bool cacheLookup(const Key& key, double values[3]);
  * @brief Stores @p values under @p key: written to a temporary name beside the target and renamed, so that
  *        a concurrent reader sees either no file or a whole one, and two writers of the same key (who by
  *        construction write the same bytes) cannot interleave.
+ * @param[in] key     the key
+ * @param[in] values  the three values
  */
 void cacheStore(const Key& key, const double values[3]);
 
@@ -198,6 +235,7 @@ void cacheStore(const Key& key, const double values[3]);
  * The calling thread works too, so `threads() == 1` runs the tasks in order on the caller without creating
  * a thread. Workers get a 16 MB stack like the JUCE-linked programs' main threads (a probe composes bars
  * and builds an Engine on its way). Tasks must not throw.
+ * @param[in] tasks  the tasks
  */
 void runAll(const std::vector<std::function<void()>>& tasks);
 

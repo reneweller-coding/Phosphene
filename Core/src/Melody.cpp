@@ -2,6 +2,7 @@
  * @file Melody.cpp
  * @brief The line machinery (symbols, allowed sets, the constrained draw and its repair), the melody plan, and the
  *        bars of the melodic parts. The parts' makers are in MelodyHarmony.cpp, MelodyLead.cpp and MelodyParts.cpp.
+ * @author Rene Weller
  */
 #include "phos/Melody.h"
 #include "phos/Preferences.h"
@@ -109,13 +110,13 @@ constexpr double ParityGain = 0.5;
 
 /**
  * @brief The curve's tilt at one step of a pattern: the measured deviation times the role's tilt.
- * @param role  which role's measured curve
- * @param step  sixteenths from the start of the pattern
- * @param bars  the pattern's length in bars; under two the bar-parity term has nowhere to live and
- *              is dropped, because a one-bar cell is replayed in every bar and would otherwise be
- *              biased to the stable side of a contrast that is about the *pair* of bars.
- * @return 0 where the curve is not implemented (the arp), which leaves the allowed sets exactly as
- *         they were before 16.09.2026.
+ * @param[in] role  which role's measured curve
+ * @param[in] step  sixteenths from the start of the pattern
+ * @param[in] bars  the pattern's length in bars; under two the bar-parity term has nowhere to live and is dropped,
+ *                  because a one-bar cell is replayed in every bar and would otherwise be biased to the stable side of
+ *                  a contrast that is about the *pair* of bars.
+ * @return 0 where the curve is not implemented (the arp), which leaves the allowed sets exactly as they were before
+ *         16.09.2026.
  */
 double tensionAt(CorpusRoleIdE role, int step, int bars)
 {
@@ -147,7 +148,12 @@ double tensionAt(CorpusRoleIdE role, int step, int bars)
  */
 constexpr double ColourShare[NumCorpusRoles] = { 0.11, 0.13, 0.055 };
 
-/** @brief The target colour share of a role at the arc's colour @p colour (0..1). */
+/**
+ * @brief The target colour share of a role at the arc's colour @p colour (0..1).
+ * @param[in] role    the role
+ * @param[in] colour  the arc's colour, 0..1
+ * @return the target share
+ */
 double colourTarget(CorpusRoleIdE role, float colour)
 {
     return ColourShare[static_cast<int>(role)] * (0.6 + 0.4 * std::clamp(static_cast<double>(colour), 0.0, 1.0));
@@ -156,6 +162,9 @@ double colourTarget(CorpusRoleIdE role, float colour)
 /**
  * @brief The colour tones of a mode as pitch classes above the tonic (Harmony.h, isColourTone) -- for the acid and
  *        the lead (@p line) without the Phrygian family's b2, which is a degree of theirs (isLineColourTone).
+ * @param[in] scale  the mode
+ * @param[in] line   true for the acid and the lead
+ * @return the pitch classes
  */
 std::vector<int> colourPcs(int scale, bool line)
 {
@@ -167,7 +176,11 @@ std::vector<int> colourPcs(int scale, bool line)
     return out;
 }
 
-/** @brief Whether a set admits nothing at all. */
+/**
+ * @brief Whether a set admits nothing at all.
+ * @param[in] a  the set
+ * @return true when it admits nothing
+ */
 bool emptySet(const std::vector<uint8_t>& a)
 {
     for (uint8_t v : a) if (v != 0) return false;
@@ -176,13 +189,15 @@ bool emptySet(const std::vector<uint8_t>& a)
 
 /**
  * @brief Allowed symbols: the chord's tones in [lo, hi], optionally tilted by the tension curve.
- * @param noColour leave out the chord tones that are colour tones of the mode (rule 1: those are
- *                 neighbour tones and are placed only at colour slots)
- * @param scale      index into ScaleSteps
- * @param degree     the chord's scale degree
- * @param rootOffset the part root's distance from the key, in semitones
- * @param lo,hi      the interval range to the part root
- * @param tension    the tension curve's tilt at this position (tensionAt); 0 leaves the set flat
+ * @param[in] scale       index into ScaleSteps
+ * @param[in] degree      the chord's scale degree
+ * @param[in] rootOffset  the part root's distance from the key, in semitones
+ * @param[in] lo          the interval range to the part root
+ * @param[in] hi          the interval range to the part root
+ * @param[in] tension     the tension curve's tilt at this position (tensionAt); 0 leaves the set flat
+ * @param[in] noColour    leave out the chord tones that are colour tones of the mode (rule 1: those are neighbour tones
+ *                        and are placed only at colour slots)
+ * @return the allowed symbols
  */
 std::vector<uint8_t> chordSet(int scale, int degree, int rootOffset, int lo, int hi, double tension = 0.0,
                               bool noColour = false)
@@ -203,7 +218,11 @@ std::vector<uint8_t> chordSet(int scale, int degree, int rootOffset, int lo, int
     return a;
 }
 
-/** @brief An allowed-symbol set that admits the one interval @p rel. */
+/**
+ * @brief An allowed-symbol set that admits the one interval @p rel.
+ * @param[in] rel  the interval
+ * @return the set
+ */
 std::vector<uint8_t> single(int rel)
 {
     std::vector<uint8_t> a(static_cast<size_t>(CorpusAlphabet), 0);
@@ -217,6 +236,16 @@ std::vector<uint8_t> single(int rel)
  *
  * With @p line set (the acid's or the lead's slot) the Phrygian family's b2 is a degree there, not a colour
  * (25.09.2026), so a slot of theirs in plain Phrygian has nothing to place.
+ * @param[in]     scale       the mode
+ * @param[in]     rootOffset  the part root over the tonic
+ * @param[in]     lo          the lowest interval
+ * @param[in]     hi          the highest interval
+ * @param[in]     resHi       the resolution's highest interval
+ * @param[in]     near        the interval to stay near
+ * @param[in,out] cr          the random stream
+ * @param[out]    colourRel   the colour tone's interval
+ * @param[out]    tonicRel    the resolution's interval
+ * @param[in]     line        true for the acid's or the lead's slot
  * @return false where the mode has no colour tone or neither fits the window
  */
 bool placeColour(int scale, int rootOffset, int lo, int hi, int resHi, int near, Rng& cr, int& colourRel, int& tonicRel, bool line)
@@ -246,7 +275,13 @@ bool placeColour(int scale, int rootOffset, int lo, int hi, int resHi, int near,
     return true;
 }
 
-/** @brief Onsets over @p steps sixteenths from the role's corpus counts; the first step always sounds. */
+/**
+ * @brief Onsets over @p steps sixteenths from the role's corpus counts; the first step always sounds.
+ * @param[in,out] r      the random stream
+ * @param[in]     role   the role's counts
+ * @param[in]     steps  the sixteenths
+ * @return the onset steps
+ */
 std::vector<int> drawOnsets(Rng& r, const CorpusRole& role, int steps)
 {
     std::vector<int> on;
@@ -262,7 +297,14 @@ std::vector<int> drawOnsets(Rng& r, const CorpusRole& role, int steps)
     return on;
 }
 
-/** @brief A length in sixteenths from the role's counts at @p step, capped by @p gap. */
+/**
+ * @brief A length in sixteenths from the role's counts at @p step, capped by @p gap.
+ * @param[in,out] r     the random stream
+ * @param[in]     role  the role's counts
+ * @param[in]     step  the onset's sixteenth
+ * @param[in]     gap   the sixteenths to the next onset
+ * @return the length in sixteenths
+ */
 int drawLength(Rng& r, const CorpusRole& role, int step, int gap)
 {
     double w[8];
@@ -273,7 +315,10 @@ int drawLength(Rng& r, const CorpusRole& role, int step, int gap)
 /** @brief The uniform source the sampler draws from. */
 struct Uniform {
     Rng* m_r;   ///< the stream
-    /** @brief A uniform draw in [0, 1). */
+    /**
+     * @brief A uniform draw in [0, 1).
+     * @return the draw
+     */
     double operator()() const { return static_cast<double>(m_r->uniform()); }
 };
 
@@ -285,6 +330,8 @@ struct Uniform {
  * how far into the line it stands. All four are known before any pitch exists, because all three
  * makers here draw the rhythm first. The steps are relative to the pattern the line belongs to --
  * one acid pattern, one two-bar lead window, one arp cell -- not to the track.
+ * @param[in] steps  the onset steps
+ * @return the conditioning per note
  */
 std::vector<NoteCond> noteConds(const std::vector<int>& steps)
 {
@@ -302,15 +349,17 @@ std::vector<NoteCond> noteConds(const std::vector<int>& steps)
 
 /**
  * @brief Draws pitches for a sequence of allowed sets; falls back to the lowest allowed symbol of each.
- * @param steps the onset step of each position inside its pattern (the conditioning of stage B)
- * @param bars  the pattern's length in bars
- * @param model   the corpus Markov model (when @p src has no neural model)
- * @param role    the corpus role whose statistics are drawn
- * @param src     the neural model and its conditioning, if any
- * @param allowed the allowed symbols per position
- * @param ctx2,ctx1 the two symbols before the first position
- * @param temperature the sampler's temperature
- * @param r       the stream the draw consumes
+ * @param[in]     model        the corpus Markov model (when @p src has no neural model)
+ * @param[in]     role         the corpus role whose statistics are drawn
+ * @param[in]     src          the neural model and its conditioning, if any
+ * @param[in]     allowed      the allowed symbols per position
+ * @param[in]     steps        the onset step of each position inside its pattern (the conditioning of stage B)
+ * @param[in]     bars         the pattern's length in bars
+ * @param[in]     ctx2         the two symbols before the first position
+ * @param[in]     ctx1         the two symbols before the first position
+ * @param[in]     temperature  the sampler's temperature
+ * @param[in,out] r            the stream the draw consumes
+ * @return the intervals drawn
  */
 std::vector<int> drawPitches(const PitchModel& model, CorpusRoleIdE role, const DrawSource& src,
                              const AllowedT& allowed, const std::vector<int>& steps, int bars,
@@ -350,13 +399,20 @@ std::vector<int> drawPitches(const PitchModel& model, CorpusRoleIdE role, const 
  * many or too few of), so the learned model still chooses; it only chooses inside the rule. The
  * rules win where the model disagrees: the acid corpus plays two pitch classes a bar and repeats
  * 59 % of its notes (docs/rounds/2026-09.md, 18.09.2026), and that is exactly what the brake is there for.
- *
- * @param fixed positions no repair may touch (the tonic that opens a cell, colour slots and their
- *              resolutions, the fifth a lead rests on, the notes a variation keeps)
- * @param model,role,src,allowed,steps,bars,ctx2,ctx1,temperature as for drawPitches()
- * @param rules the line's rules (LineRules)
- * @param r     the stream the repairs consume
- * @param rels  the line, intervals to the part root, repaired in place
+ * @param[in]     model        as for drawPitches()
+ * @param[in]     role         as for drawPitches()
+ * @param[in]     src          as for drawPitches()
+ * @param[in]     allowed      as for drawPitches()
+ * @param[in]     steps        as for drawPitches()
+ * @param[in]     bars         as for drawPitches()
+ * @param[in]     fixed        positions no repair may touch (the tonic that opens a cell, colour slots and their
+ *                             resolutions, the fifth a lead rests on, the notes a variation keeps)
+ * @param[in]     rules        the line's rules (LineRules)
+ * @param[in]     ctx2         as for drawPitches()
+ * @param[in]     ctx1         as for drawPitches()
+ * @param[in]     temperature  as for drawPitches()
+ * @param[in,out] r            the stream the repairs consume
+ * @param[in,out] rels         the line, intervals to the part root, repaired in place
  */
 void enforceLine(const PitchModel& model, CorpusRoleIdE role, const DrawSource& src, const AllowedT& allowed,
                  const std::vector<int>& steps, int bars, std::vector<uint8_t> fixed, const LineRules& rules,
@@ -426,7 +482,13 @@ void enforceLine(const PitchModel& model, CorpusRoleIdE role, const DrawSource& 
     }
 }
 
-/** @brief Whether a line keeps @p rules (the check enforceLine works towards). */
+/**
+ * @brief Whether a line keeps @p rules (the check enforceLine works towards).
+ * @param[in] rels   the line's intervals
+ * @param[in] steps  its onset steps
+ * @param[in] rules  the rules
+ * @return true when the line keeps them
+ */
 bool lineKeeps(const std::vector<int>& rels, const std::vector<int>& steps, const LineRules& rules)
 {
     const size_t n = rels.size();
@@ -455,7 +517,12 @@ bool lineKeeps(const std::vector<int>& rels, const std::vector<int>& steps, cons
     return true;
 }
 
-/** @brief The median index of a histogram of @p n bins (12 when it is empty). */
+/**
+ * @brief The median index of a histogram of @p n bins (12 when it is empty).
+ * @param[in] counts  the histogram
+ * @param[in] n       its bins
+ * @return the median index
+ */
 int median(const uint32_t* counts, int n)
 {
     uint64_t total = 0;
@@ -666,6 +733,9 @@ BarPlan allPartsBar(const MelodyPlan& m)
  * (-1: the transition's pad bar, the level-match probe of a single part) or names a mode the track
  * never built falls back to the track's own material, which is what every caller before 16.09.2026
  * got.
+ * @param[in] m      the melody's plan
+ * @param[in] scale  the bar's mode, -1 for the track's
+ * @return the material
  */
 static const ModeMaterial* materialOf(const MelodyPlan& m, int scale)
 {
@@ -687,7 +757,12 @@ struct RegisterMap {
     int m_lo[StepsPerBar];   ///< per sixteenth: the lowest note sounding
     int m_hi[StepsPerBar];   ///< per sixteenth: the highest note sounding
     RegisterMap() { for (int s = 0; s < StepsPerBar; ++s) { m_lo[s] = 1000; m_hi[s] = -1000; } }
-    /** @brief Marks @p pitch as sounding from @p first for @p span sixteenths (clipped to the bar). */
+    /**
+     * @brief Marks @p pitch as sounding from @p first for @p span sixteenths (clipped to the bar).
+     * @param[in] first  the first sixteenth
+     * @param[in] span   the sixteenths
+     * @param[in] pitch  the MIDI note
+     */
     void add(int first, int span, int pitch)
     {
         for (int s = std::max(0, first); s < std::min(StepsPerBar, first + std::max(1, span)); ++s) {
@@ -695,7 +770,13 @@ struct RegisterMap {
             m_hi[s] = std::max(m_hi[s], pitch);
         }
     }
-    /** @brief Whether the span [a, b] at step @p s keeps RegisterGap semitones from everything marked. */
+    /**
+     * @brief Whether the span [a, b] at step @p s keeps RegisterGap semitones from everything marked.
+     * @param[in] s  the sixteenth
+     * @param[in] a  the span's lowest note
+     * @param[in] b  its highest
+     * @return true when the span keeps its distance
+     */
     bool clear(int s, int a, int b) const
     {
         if (s < 0 || s >= StepsPerBar || m_lo[s] > m_hi[s]) return true;
@@ -707,10 +788,12 @@ struct RegisterMap {
  * @brief The octave a line voice takes in a bar where others already sound: the shift among
  *        @p shifts (tried in order, so the first is preferred on a tie) that leaves the fewest of its
  *        events colliding, within [lo, hi].
- * @param events (step, lowest pitch, highest pitch) of each event before any shift
- * @param taken  the pitches the other voices already hold, per step
- * @param shifts the octave shifts to try, in semitones
- * @param lo,hi  the lowest and highest pitch the shifted events may reach
+ * @param[in] events  (step, lowest pitch, highest pitch) of each event before any shift
+ * @param[in] taken   the pitches the other voices already hold, per step
+ * @param[in] shifts  the octave shifts to try, in semitones
+ * @param[in] lo      the lowest and highest pitch the shifted events may reach
+ * @param[in] hi      the lowest and highest pitch the shifted events may reach
+ * @return the shift in semitones
  */
 int bestShift(const std::vector<std::array<int, 3>>& events, const RegisterMap& taken, std::initializer_list<int> shifts, int lo, int hi)
 {

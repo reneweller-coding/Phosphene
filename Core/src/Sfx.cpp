@@ -1,6 +1,7 @@
 /**
  * @file Sfx.cpp
  * @brief Effect voices.
+ * @author Rene Weller
  */
 #include "phos/Sfx.h"
 #include "phos/Harmony.h"
@@ -53,7 +54,12 @@ constexpr float TypeGainDb[] = {
      0.0f,    // Space shot (27.09.2026): played by the Field track's FieldShot, not by this generator
 };
 static_assert(sizeof(TypeGainDb) / sizeof(TypeGainDb[0]) == NumSfxTypes, "one gain per effect type");
-/** @brief Band-pass output of an SVF at unity gain in the centre. */
+/**
+ * @brief Band-pass output of an SVF at unity gain in the centre.
+ * @param[in,out] f  the filter
+ * @param[in]     x  the input sample
+ * @return the band-pass sample
+ */
 inline float bandPass(Svf& f, float x)
 {
     float lp, bp, hp;

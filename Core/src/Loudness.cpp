@@ -2,6 +2,7 @@
  * @file Loudness.cpp
  * @brief BS.1770 meter implementation.
  * @note Copied from Noctuary `Core/src/Loudness.cpp` at b60a2fe (15.09.2026), sone model removed.
+ * @author Rene Weller
  */
 #include "phos/Loudness.h"
 #include "phos/Dynamics.h"
@@ -71,7 +72,12 @@ void LoudnessMeter::reset()
 
 namespace {
 
-/** @brief Loudness of a mean-square pair, both channel weights one. */
+/**
+ * @brief Loudness of a mean-square pair, both channel weights one.
+ * @param[in] msL  the left mean square
+ * @param[in] msR  the right mean square
+ * @return the loudness in LUFS
+ */
 inline float lufs(double msL, double msR)
 {
     const double s = msL + msR;

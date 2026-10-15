@@ -1,6 +1,7 @@
 /**
  * @file selftest_basics.cpp
  * @brief The self test's building blocks: parameters, tempo, filters, MIDI and WAV files, loudness, kick, bass, the composer's plans and the engine.
+ * @author Rene Weller
  */
 #include "SelfTestHelpers.h"
 

@@ -6,6 +6,7 @@
  *        where the floor leaves room, and every preset names only knobs that exist.
  *
  * The recordings here are made in memory (addFieldClip), so the checks run on a machine without the field folder.
+ * @author Rene Weller
  */
 #include "SelfTestHelpers.h"
 #include "phos/FieldLibrary.h"
@@ -24,7 +25,11 @@ namespace {
 
 constexpr double Sr = 48000.0;   ///< the sample rate, Hz
 
-/** @brief A second of stereo white noise at 44.1 kHz whose end does NOT meet its start: only the crossfade joins it. */
+/**
+ * @brief A second of stereo white noise at 44.1 kHz whose end does NOT meet its start: only the crossfade joins it.
+ * @param[in] category  the category
+ * @param[in] name      the recording's name
+ */
 void addNoiseClip(int category, const char* name)
 {
     Rng r;
@@ -35,7 +40,12 @@ void addNoiseClip(int category, const char* name)
     scanFieldLibrary();
 }
 
-/** @brief The Field module's defaults with @p changes (`key=value`, keys without "field."). */
+/**
+ * @brief The Field module's defaults with @p changes (`key=value`, keys without "field.").
+ * @param[in] p        the knobs
+ * @param[in] changes  (key, value) pairs
+ * @return the values
+ */
 std::vector<float> fieldValues(const ParamStore& p, std::initializer_list<std::pair<const char*, float>> changes)
 {
     const int b = p.base(ModuleE::FIELD);
@@ -45,7 +55,13 @@ std::vector<float> fieldValues(const ParamStore& p, std::initializer_list<std::p
     return v;
 }
 
-/** @brief The largest and smallest 10 ms RMS (dB) of @p y from sample @p from on. */
+/**
+ * @brief The largest and smallest 10 ms RMS (dB) of @p y from sample @p from on.
+ * @param[in]  y     the samples
+ * @param[in]  from  the first sample
+ * @param[out] lo    the smallest RMS in dB
+ * @param[out] hi    the largest RMS in dB
+ */
 void rmsRange(const std::vector<float>& y, size_t from, double& lo, double& hi)
 {
     lo = 1e9;

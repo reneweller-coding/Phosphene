@@ -1,6 +1,7 @@
 /**
  * @file FieldPresets.cpp
  * @brief The Field track's factory presets (FieldPresets.h).
+ * @author Rene Weller
  */
 #include "phos/FieldPresets.h"
 #include "phos/Dsp.h"

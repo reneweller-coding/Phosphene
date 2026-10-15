@@ -1,6 +1,7 @@
 /**
  * @file EditorMixer.cpp
  * @brief The mixer page's console (EditorMixer.h).
+ * @author Rene Weller
  */
 #include "EditorMixer.h"
 #include "PhospheneLookAndFeel.h"
@@ -19,7 +20,11 @@ constexpr double HoldSeconds = 1.5;   ///< how long the held peak stays, s
 constexpr double FallDbPerSecond = 20.0;   ///< how fast it falls then, dB per second
 constexpr double RmsRelease = 0.3;  ///< seconds for the RMS bar to fall by 1/e of its distance
 
-/** @brief A linear level in dB, -100 for silence. */
+/**
+ * @brief A linear level in dB, -100 for silence.
+ * @param[in] linear  the linear level
+ * @return the level in dB
+ */
 float toDb(float linear) { return linear > 1.0e-5f ? 20.0f * std::log10(linear) : -100.0f; }
 
 /** @brief What one strip binds: its fader, its mute and its knobs (key, name under the knob). */
@@ -31,12 +36,16 @@ struct StripSpec {
     std::vector<std::pair<const char*, const char*>> m_knobs;   ///< its knobs: key, name under the knob
 };
 
-/** @brief The strips in phos::Part order. The kick and the bass have no strip level of their own: their fader is the synth's. */
+/**
+ * @brief The strips in phos::Part order. The kick and the bass have no strip level of their own: their fader is the
+ *        synth's.
+ * @return the strips
+ */
 std::vector<StripSpec> stripSpecs()
 {
     static const char* const Poly[] = { "lead", "counter", "arp", "stab", "pad", "drone" };
     static const char* const PolyName[] = { "Lead", "Counter", "Arp", "Stab", "Pad", "Drone" };
-    // mix.<v>_level, mix.<v>_mute, <v>.pan, <v>.room_send, <v>.hall_send, <v>.delay_send, <v>.duck for the six
+    // mix.\<v\>_level, mix.\<v\>_mute, \<v\>.pan, \<v\>.room_send, \<v\>.hall_send, \<v\>.delay_send, \<v\>.duck for the six
     // voices; built once and never touched again, so the specs may point into it.
     static std::vector<std::string> keys;
     if (keys.empty()) {

@@ -18,6 +18,7 @@
  * window happens to be in front (the lesson from Noctuary's GUI round 8). `PHOS_PLAY=<seconds>`,
  * with `PHOS_RECORD=<file.wav>`, plays for a while and quits -- the way to hear the live path
  * without a hand on the mouse.
+ * @author Rene Weller
  */
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -61,7 +62,10 @@ class EditorContent final : public juce::Component {
 public:
     std::function<void(juce::Graphics&)> m_onPaint;   ///< the editor draws the frame
     std::function<void()> m_onResized;                ///< the editor places its children
-    /** @brief Draws through onPaint. */
+    /**
+     * @brief Draws through onPaint.
+     * @param[in,out] g  the graphics context
+     */
     void paint(juce::Graphics& g) override { if (m_onPaint) m_onPaint(g); }
     /** @brief Lays out through onResized. */
     void resized() override { if (m_onResized) m_onResized(); }
@@ -70,9 +74,19 @@ public:
 /** @brief The bar meters of the master output, fed from phos::Engine::meter(). */
 class LoudnessDisplay final : public juce::Component {
 public:
-    /** @brief Draws the reading it was last given. */
+    /**
+     * @brief Draws the reading it was last given.
+     * @param[in,out] g  the graphics context
+     */
     void paint(juce::Graphics&) override;
-    /** @brief New numbers from the audio thread's meter (message thread). */
+    /**
+     * @brief New numbers from the audio thread's meter (message thread).
+     * @param[in] r        the reading
+     * @param[in] compDb   the compressor's reduction in dB
+     * @param[in] limitDb  the limiter's reduction in dB
+     * @param[in] target   the target loudness in LUFS
+     * @pre called on the message thread
+     */
     void update(const phos::LoudnessReading& r, float compDb, float limitDb, float target);
 
 private:
@@ -93,15 +107,28 @@ public:
         double m_bpm = 145.0;   ///< its tempo
         juce::String m_text;   ///< the line as drawn
     };
-    /** @brief The lines, the play head marker on the track that plays. */
+    /**
+     * @brief The lines, the play head marker on the track that plays.
+     * @param[in,out] g  the graphics context
+     */
     void paint(juce::Graphics&) override;
     /** @brief Nothing to lay out. */
     void resized() override {}
-    /** @brief A click jumps to the track clicked (onJump). */
+    /**
+     * @brief A click jumps to the track clicked (onJump).
+     * @param[in] e  the mouse event
+     */
     void mouseDown(const juce::MouseEvent&) override;
-    /** @brief Replaces the list (message thread). */
+    /**
+     * @brief Replaces the list (message thread).
+     * @param[in] rows  the rows
+     * @pre called on the message thread
+     */
     void setRows(std::vector<Row> rows) { m_rows = std::move(rows); repaint(); }
-    /** @brief Moves the play head marker. */
+    /**
+     * @brief Moves the play head marker.
+     * @param[in] bar  the bar
+     */
     void setPosition(int bar) { if (bar != m_bar) { m_bar = bar; repaint(); } }
     /** @brief Called with the first bar of the track that was clicked. */
     std::function<void(int)> m_onJump;
@@ -121,11 +148,25 @@ private:
  */
 class PatternDisplay final : public juce::Component {
 public:
-    /** @brief Which part to draw; percussion draws its twelve lanes instead of pitches. */
+    /**
+     * @brief Which part to draw; percussion draws its twelve lanes instead of pitches.
+     * @param[in] part           the part
+     * @param[in] highlightLane  the percussion lane lit, -1 for none
+     */
     void setPart(phos::PartE part, int highlightLane = -1) { m_part = part; m_lane = highlightLane; }
-    /** @brief New notes and where the play head stands, in bars and beats (message thread). */
+    /**
+     * @brief New notes and where the play head stands, in bars and beats (message thread).
+     * @param[in] notes     the notes
+     * @param[in] firstBar  the window's first bar
+     * @param[in] bars      its bars
+     * @param[in] beat      the play head's beat
+     * @pre called on the message thread
+     */
     void update(std::vector<phos::NoteEvent> notes, int firstBar, int bars, double beat);
-    /** @brief The notes of the window as a piano roll (the lanes for the percussion), the play head. */
+    /**
+     * @brief The notes of the window as a piano roll (the lanes for the percussion), the play head.
+     * @param[in,out] g  the graphics context
+     */
     void paint(juce::Graphics&) override;
 
 private:
@@ -151,19 +192,34 @@ public:
         phos::RatingCount m_rating;     ///< the listener's verdicts for its seed
     };
     static constexpr int RowH = 60;  ///< pixels per row
-    /** @brief Replaces the list and sizes the component to it. */
+    /**
+     * @brief Replaces the list and sizes the component to it.
+     * @param[in] rows  the rows
+     */
     void setRows(std::vector<Row> rows);
-    /** @brief The rows: name, seed, tracks, verdicts and the strip of sections. */
+    /**
+     * @brief The rows: name, seed, tracks, verdicts and the strip of sections.
+     * @param[in,out] g  the graphics context
+     */
     void paint(juce::Graphics&) override;
-    /** @brief A click opens the set clicked (onOpen). */
+    /**
+     * @brief A click opens the set clicked (onOpen).
+     * @param[in] e  the mouse event
+     */
     void mouseDown(const juce::MouseEvent&) override;
-    /** @brief Follows the row under the mouse. */
+    /**
+     * @brief Follows the row under the mouse.
+     * @param[in] e  the mouse event
+     */
     void mouseMove(const juce::MouseEvent&) override;
     /** @brief No row under the mouse. */
     void mouseExit(const juce::MouseEvent&) override;
     /** @brief Called with the file of the row that was clicked. */
     std::function<void(const juce::File&)> m_onOpen;
-    /** @brief How many sets the list has. */
+    /**
+     * @brief How many sets the list has.
+     * @return the number of sets
+     */
     int rowCount() const { return static_cast<int>(m_rows.size()); }
 
 private:
@@ -180,9 +236,15 @@ public:
     SignalFlow() { setInterceptsMouseClicks(false, false); }
     static constexpr float CanvasW = 1000.0f;   ///< the canvas's width in drawing units
     static constexpr float CanvasH = 486.0f;    ///< its height
-    /** @brief Every unit a box in its family's colour, the buses as arrows. */
+    /**
+     * @brief Every unit a box in its family's colour, the buses as arrows.
+     * @param[in,out] g  the graphics context
+     */
     void paint(juce::Graphics&) override;
-    /** @brief The part of the component the drawing covers (the canvas keeps its proportions). */
+    /**
+     * @brief The part of the component the drawing covers (the canvas keeps its proportions).
+     * @return the rectangle
+     */
     juce::Rectangle<int> drawn() const;
 };
 
@@ -196,20 +258,39 @@ public:
  */
 class HelpView final : public juce::Component, private juce::ListBoxModel {
 public:
-    /** @brief Builds the topics from the manual's chapters. */
+    /**
+     * @brief Builds the topics from the manual's chapters.
+     * @param[in,out] proc  the processor
+     */
     explicit HelpView(PhospheneProcessor& proc);
     /**
      * @brief Shows the topic @p name (a tab's name or a chapter's), with the parameters of @p paramIds listed
      *        under "Parameters on this tab" (the tab the help was opened from).
+     * @param[in] name      the topic
+     * @param[in] tabName   the tab the help was opened from
+     * @param[in] paramIds  the tab's parameters
      */
     void open(const juce::String& name, const juce::String& tabName, std::vector<int> paramIds);
-    /** @brief The topics, in list order. */
+    /**
+     * @brief The topics, in list order.
+     * @return the topics
+     */
     const juce::StringArray& topicNames() const { return m_names; }
-    /** @brief The text a topic shows (for the tests and the manual). */
+    /**
+     * @brief The text a topic shows (for the tests and the manual).
+     * @param[in] index  the topic
+     * @return its text
+     */
     juce::String topicText(int index) const;
-    /** @brief The topic on screen. */
+    /**
+     * @brief The topic on screen.
+     * @return the topic's index
+     */
     int selectedTopic() const { return m_list.getSelectedRow(); }
-    /** @brief The panel's background. */
+    /**
+     * @brief The panel's background.
+     * @param[in,out] g  the graphics context
+     */
     void paint(juce::Graphics&) override;
     /** @brief The topics left, the text right, the update controls under them. */
     void resized() override;
@@ -217,11 +298,24 @@ public:
     void refreshUpdate();
 
 private:
-    /** @brief How many topics there are. */
+    /**
+     * @brief How many topics there are.
+     * @return the number of topics
+     */
     int getNumRows() override { return m_names.size(); }
-    /** @brief A topic's name in the list, the chosen one in the accent. */
+    /**
+     * @brief A topic's name in the list, the chosen one in the accent.
+     * @param[in]     row       the row
+     * @param[in,out] g         the graphics context
+     * @param[in]     w         the width in pixels
+     * @param[in]     h         the height in pixels
+     * @param[in]     selected  true for the chosen topic
+     */
     void paintListBoxItem(int row, juce::Graphics&, int w, int h, bool selected) override;
-    /** @brief Shows the topic chosen. */
+    /**
+     * @brief Shows the topic chosen.
+     * @param[in] row  the row chosen
+     */
     void selectedRowsChanged(int row) override;
     PhospheneProcessor& m_proc;   ///< the processor the help reads (parameters, update state)
     juce::StringArray m_names;           ///< topic names
@@ -242,30 +336,60 @@ private:
 /** @brief The Phosphene editor. */
 class PhospheneEditor final : public juce::AudioProcessorEditor, private juce::Timer, private juce::ChangeListener {
 public:
-    /** @brief Builds every page from the parameter tables and sizes the window. */
+    /**
+     * @brief Builds every page from the parameter tables and sizes the window.
+     * @param[in,out] p  the processor
+     */
     explicit PhospheneEditor(PhospheneProcessor&);
     ~PhospheneEditor() override;
 
-    /** @brief The background behind the scaled body. */
+    /**
+     * @brief The background behind the scaled body.
+     * @param[in,out] g  the graphics context
+     */
     void paint(juce::Graphics&) override;
     void resized() override;   ///< scales the body to the window
 
-    /** @brief Names of the tabs, in order. */
+    /**
+     * @brief Names of the tabs, in order.
+     * @return the names
+     */
     static const juce::StringArray& tabNames();
-    /** @brief Names of the groups of tabs, the row on top (01.10.2026), in order. */
+    /**
+     * @brief Names of the groups of tabs, the row on top (01.10.2026), in order.
+     * @return the names
+     */
     static const juce::StringArray& groupNames();
-    /** @brief The group tab @p tab belongs to. */
+    /**
+     * @brief The group tab @p tab belongs to.
+     * @param[in] tab  the tab
+     * @return its group
+     */
     static int groupOf(int tab);
-    /** @brief The tabs of group @p g, in order. */
+    /**
+     * @brief The tabs of group @p g, in order.
+     * @param[in] g  the group
+     * @return its tabs
+     */
     static const std::vector<int>& tabsOf(int g);
-    /** @brief Opens a tab. */
+    /**
+     * @brief Opens a tab.
+     * @param[in] index  the tab
+     */
     void setTab(int index);
-    /** @brief The tab that is open. */
+    /**
+     * @brief The tab that is open.
+     * @return the tab's index
+     */
     int tab() const { return m_tab; }
-    /** @brief Shows one of the twelve percussion lanes. */
+    /**
+     * @brief Shows one of the twelve percussion lanes.
+     * @param[in] lane  the lane
+     */
     void setPercLane(int lane);
     /**
      * @brief Renders the editor at design size into a PNG (never a screen grab).
+     * @param[in] file  the PNG file
      * @return false if the file cannot be written
      */
     bool writeScreenshot(const juce::File& file);
@@ -277,25 +401,47 @@ public:
      * turns that into the manual and refuses to print one in which a parameter appears on no tab.
      * That makes a parameter that no group claims (it happened on 23.09.2026 with four of them)
      * impossible to miss.
+     * @param[in] dir  the directory
      * @return false if the folder cannot be written
      */
     bool writeManual(const juce::File& dir);
     /**
      * @brief The open tab in full (26.09.2026, for the manual): the header and the whole page, however tall -- a page
      *        taller than the window is cut by the viewport in writeScreenshot().
+     * @param[in] file  the PNG file
+     * @return false if it cannot be written
      */
     bool writeFullPage(const juce::File& file);
-    /** @brief The keys of every parameter that stands in a group on some page, percussion lanes included. */
+    /**
+     * @brief The keys of every parameter that stands in a group on some page, percussion lanes included.
+     * @return the keys
+     */
     juce::StringArray parametersOnPages() const;
-    /** @brief The help page (tests): null until the editor has built it. */
+    /**
+     * @brief The help page (tests): null until the editor has built it.
+     * @return the help page, or null
+     */
     HelpView* helpView() const { return m_help.get(); }
-    /** @brief Opens or closes the help page (the Help button, F1). */
+    /**
+     * @brief Opens or closes the help page (the Help button, F1).
+     * @param[in] show  true to open it
+     */
     void setHelpVisible(bool show) { showHelp(show); }
-    /** @brief The mixer page's console (tests). */
+    /**
+     * @brief The mixer page's console (tests).
+     * @return the console, or null
+     */
     phosui::MixerConsole* mixerConsole() const { return m_mixer; }
-    /** @brief The kick's and the bass's scopes (tests). */
+    /**
+     * @brief The kick's and the bass's scopes (tests).
+     * @return the kick's scope, or null
+     */
     phosui::SynthScope* kickScope() const { return m_kickScope; }
-    phosui::SynthScope* bassScope() const { return m_bassScope; }   ///< @copydoc kickScope
+    /**
+     * @copybrief kickScope
+     * @return the bass's scope, or null
+     */
+    phosui::SynthScope* bassScope() const { return m_bassScope; }
 
 private:
     /** @brief Builds the synth, effect and mixer pages (the others have their own files). */
@@ -310,19 +456,34 @@ private:
     void refreshGalleryPage();   ///< EditorGallery.cpp: rescans the folder
     void buildExportPage();   ///< EditorSetTab.cpp (01.10.2026)
     void refreshExportPage();   ///< EditorSetTab.cpp: the recording's state
-    /** @brief The set's plan as the arrange views draw it, copied out of the published plans (EditorArrange.cpp). */
+    /**
+     * @brief The set's plan as the arrange views draw it, copied out of the published plans (EditorArrange.cpp).
+     * @return the snapshot
+     */
     ArrangeDisplay::Snapshot planSnapshot() const;
     void refreshOverview();   ///< EditorArrange.cpp: the strip under the header
     void refreshHeader();   ///< the header's transport, status and tools
     void showSettings();   ///< the frame's settings menu
     void changeListenerCallback(juce::ChangeBroadcaster*) override;   ///< the settings changed (the backdrop)
-    bool standalone() const;      ///< the editor sits in the standalone's window
-    bool fullScreen() const;      ///< and that window fills the screen
+    /**
+     * the editor sits in the standalone's window
+     * @return true in the standalone's window
+     */
+    bool standalone() const;
+    /**
+     * and that window fills the screen
+     * @return true in full screen
+     */
+    bool fullScreen() const;
     void refreshPattern();   ///< the pattern roll of the tab that is open
     /**
      * @brief The "Sound" group at the head of a synth's page (23.09.2026): the synth's presets in a chooser with a
      *        submenu per group, "Save..." for a user preset, and the own-sound switch (mix.*_own).
-     * @param owner the synth's own-sound number: 0 kick, 1 bass, 2 acid, 3 + instance the voices
+     * @param[in,out] page      the page
+     * @param[in]     module    the synth
+     * @param[in]     instance  its instance
+     * @param[in]     owner     the synth's own-sound number: 0 kick, 1 bass, 2 acid, 3 + instance the voices
+     * @param[in]     tint      the group's colour
      */
     void addSoundGroup(phosui::ControlPage& page, phos::ModuleE module, int instance, int owner, juce::Colour tint);
     /** @brief One synth's preset chooser and the presets behind its item ids (id = index + 1). */
@@ -335,20 +496,41 @@ private:
         int m_nameCell = -1;   ///< the chooser's cell on that page
         std::vector<std::pair<int, float>> m_loaded;   ///< the knobs the preset chosen put (store id, real value): the star compares
     };
-    /** @brief The knobs preset @p preset puts on instance @p instance of synth @p synth (store id, real value; 15.10.2026). */
+    /**
+     * @brief The knobs preset @p preset puts on instance @p instance of synth @p synth (store id, real value;
+     *        15.10.2026).
+     * @param[in] synth     the synth
+     * @param[in] instance  its instance
+     * @param[in] preset    the preset
+     * @return (store id, real value) of the knobs
+     */
     std::vector<std::pair<int, float>> presetTargets(phos::ModuleE synth, int instance, const phos::SoundPreset& preset);
     std::unique_ptr<phos::ParamStore> m_scratch;   ///< a store to work out what a preset would set (presetTargets)
-    /** @brief The page of a synth's chooser. */
+    /**
+     * @brief The page of a synth's chooser.
+     * @param[in] synth     the synth
+     * @param[in] instance  its instance
+     * @return the tab
+     */
     static int tabOfSynth(phos::ModuleE synth, int instance);
-    /** @brief Fills a chooser from the factory presets and the user's, grouped (after a save, again). */
+    /**
+     * @brief Fills a chooser from the factory presets and the user's, grouped (after a save, again).
+     * @param[in,out] pb  the chooser
+     */
     void fillPresetBox(PresetBox& pb);
     /**
      * @brief The effects page's "Effect Presets" group (24.09.2026): per family of the effect bank a chooser --
      *        Auto, or one of the family's presets in submenus of 32 -- bound to sfx.preset_*, and a button that
      *        auditions it in the running set.
+     * @param[in,out] page  the page
+     * @param[in]     tint  the group's colour
      */
     void addSfxPresetGroup(phosui::ControlPage& page, juce::Colour tint);
-    /** @brief The Field tab's preset menu and library line (27.09.2026; phos/FieldPresets.h). */
+    /**
+     * @brief The Field tab's preset menu and library line (27.09.2026; phos/FieldPresets.h).
+     * @param[in,out] page  the page
+     * @param[in]     tint  the group's colour
+     */
     void addFieldPresetGroup(phosui::ControlPage& page, juce::Colour tint);
     /** @brief Writes what the field library holds into m_fieldStatus (after a scan or a new folder). */
     void refreshFieldStatus();
@@ -358,7 +540,11 @@ private:
     std::unique_ptr<juce::AlertWindow> m_presetNameDialog;   ///< "Save preset" asks for a name
     /** @brief Follows the processor: the status, the play button, the rerolls, the update link; the screenshots. */
     void timerCallback() override;
-    /** @brief Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo (23.09.2026); F1 help, Esc closes it, F11 full screen. */
+    /**
+     * @brief Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo (23.09.2026); F1 help, Esc closes it, F11 full screen.
+     * @param[in] key  the key
+     * @return true when the key was used
+     */
     bool keyPressed(const juce::KeyPress& key) override;
     /** @name The frame's header (01.10.2026): undo, redo, help, the settings, the headset's sign, the ratings
      *  @{ */
@@ -397,19 +583,32 @@ private:
     juce::TextButton m_updateButton{ "" };
     std::unique_ptr<HelpView> m_help;   ///< the help page, made on first use
     juce::SharedResourcePointer<phosui::UpdateCheck> m_updates;   ///< the process's one update check
-    /** @brief Opens or closes the help page, at the chapter of the tab that is open. */
+    /**
+     * @brief Opens or closes the help page, at the chapter of the tab that is open.
+     * @param[in] show  true to open it
+     */
     void showHelp(bool show);
+    /**
+     * @brief Whether the help page is open.
+     * @return true while it is shown
+     */
     bool helpShown() const { return m_help != nullptr && m_help->isVisible(); }
     /** @brief The standalone's window fills the screen, or stops filling it (a host owns its own window). */
     void toggleFullScreen();
     /** @brief The standalone's title bar gets a maximise button (as Noctuary's). */
     void parentHierarchyChanged() override;
     /** @} */
-    /** @brief The control page on screen, null for a page without knobs. */
+    /**
+     * @brief The control page on screen, null for a page without knobs.
+     * @return the page, or null
+     */
     phosui::ControlPage* activePage() const;
     /** @brief Places the header, the tab bar and the page for the current size. */
     void layoutContent();
-    /** @brief Paints the header and the page's background. */
+    /**
+     * @brief Paints the header and the page's background.
+     * @param[in,out] g  the graphics context
+     */
     void paintContent(juce::Graphics&);
     /** @brief PHOS_SHOT, PHOS_SHOT_ALL, PHOS_MANUAL: plays, waits, writes the pictures (and the manual) and quits. */
     void runScreenshotMode();
@@ -488,7 +687,10 @@ private:
     juce::Label*      m_ratingLast = nullptr;           ///< what the last press wrote, and where
     juce::Label*      m_prefsNote = nullptr;            ///< the learned preferences in force (23.09.2026)
     juce::TextButton* m_ratingButton[2] = {};           ///< good, bad
-    /** @brief Writes a verdict for the bar that is playing (+1 good, -1 bad) into the ratings file. */
+    /**
+     * @brief Writes a verdict for the bar that is playing (+1 good, -1 bad) into the ratings file.
+     * @param[in] verdict  +1 good, -1 bad
+     */
     void rateNow(int verdict);
     /** @} */
 
@@ -507,15 +709,35 @@ private:
     int m_tourTicks = 0;                                ///< ticks until the first start's tour (-1: considered)
     bool m_comparing = false;                           ///< A|B is held
     void openPalette();                                ///< the command palette (Ctrl+K)
-    std::vector<frame::CommandPalette::Command> paletteCommands();   ///< what the palette can do: actions, pages, controls, presets
+    /**
+     * what the palette can do: actions, pages, controls, presets
+     * @return the palette's commands
+     */
+    std::vector<frame::CommandPalette::Command> paletteCommands();
     void startTour();                                  ///< the first steps, from the first
-    /** @brief The info line's words for store id @p id: its name, its value, its range, what moves it, its key. */
+    /**
+     * @brief The info line's words for store id @p id: its name, its value, its range, what moves it, its key.
+     * @param[in]  id    the store id
+     * @param[out] name  the control's name
+     * @param[out] text  its value, range, mover and key
+     * @return false when no page has the control
+     */
     bool describeControl(int id, juce::String& name, juce::String& text);
-    /** @brief Shows the control of store id @p id (its tab, lane, section) and lights it; false when no page has it. */
+    /**
+     * @brief Shows the control of store id @p id (its tab, lane, section) and lights it; false when no page has it.
+     * @param[in] id  the store id
+     * @return false when no page has the control
+     */
     bool revealId(int id);
-    /** @brief Opens the preset browser on a synth's chooser. */
+    /**
+     * @brief Opens the preset browser on a synth's chooser.
+     * @param[in,out] pb  the chooser
+     */
     void browsePresets(PresetBox& pb);
-    /** @brief A|B pressed (the presets as chosen) or let go (the sound as it is). */
+    /**
+     * @brief A|B pressed (the presets as chosen) or let go (the sound as it is).
+     * @param[in] on  true while pressed
+     */
     void compare(bool on);
     /** @} */
 

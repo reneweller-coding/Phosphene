@@ -14,6 +14,7 @@
  *
  * **A new salt goes here**, in its file's namespace, with a value no other salt has (the check says so),
  * and into All below.
+ * @author Rene Weller
  */
 #pragma once
 
@@ -144,7 +145,10 @@ inline constexpr uint64_t All[] = {
     rhythm::SaltLane,
 };
 
-/** @brief True when no two entries of All are equal. */
+/**
+ * @brief True when no two entries of All are equal.
+ * @return true when every salt differs
+ */
 constexpr bool allDistinct()
 {
     constexpr std::size_t n = sizeof(All) / sizeof(All[0]);

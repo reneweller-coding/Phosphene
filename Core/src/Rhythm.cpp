@@ -1,6 +1,7 @@
 /**
  * @file Rhythm.cpp
  * @brief Euclidean rhythms, syncopation, percussion plans and bars.
+ * @author Rene Weller
  */
 #include "phos/Rhythm.h"
 #include "phos/Dsp.h"
@@ -17,7 +18,12 @@ namespace phos {
 
 namespace {
 
-/** @brief First active lane with a role, or -1. */
+/**
+ * @brief First active lane with a role, or -1.
+ * @param[in] p     the knobs
+ * @param[in] role  the role
+ * @return the lane, or -1
+ */
 int laneOfRole(const ParamStore& p, PercRoleE role)
 {
     for (int l = 0; l < PercLanes; ++l) {
@@ -27,13 +33,21 @@ int laneOfRole(const ParamStore& p, PercRoleE role)
     return -1;
 }
 
-/** @brief Whether a role plays a Euclidean rhythm rather than a written pattern. */
+/**
+ * @brief Whether a role plays a Euclidean rhythm rather than a written pattern.
+ * @param[in] r  the role
+ * @return true for a Euclidean rhythm
+ */
 bool isEuclidRole(PercRoleE r)
 {
     return r == PercRoleE::RIM || r == PercRoleE::TOM || r == PercRoleE::CONGA || r == PercRoleE::ZAP || r == PercRoleE::BLIP;
 }
 
-/** @brief How likely a role is to join a track's groove early (hats and clap are placed separately). */
+/**
+ * @brief How likely a role is to join a track's groove early (hats and clap are placed separately).
+ * @param[in] r  the role
+ * @return the weight
+ */
 double layerWeight(PercRoleE r)
 {
     switch (r) {

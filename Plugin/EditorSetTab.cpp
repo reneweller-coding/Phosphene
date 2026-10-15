@@ -8,6 +8,7 @@
  * out as MIDI or as text. The knobs themselves are the ordinary generated groups -- the Set tab is
  * the only page that adds controls of its own, and it adds them through the same layout engine, in
  * cell units, rather than by placing them.
+ * @author Rene Weller
  */
 #include "PluginEditor.h"
 #include "phos/Composer.h"
@@ -17,7 +18,11 @@ using namespace phos;
 using namespace phosui;
 
 namespace {
-/** @brief A button that is really a switch (Follow host, Mute). */
+/**
+ * @brief A button that is really a switch (Follow host, Mute).
+ * @param[in] caption  the button's caption
+ * @return the button
+ */
 std::unique_ptr<juce::TextButton> makeToggle(const juce::String& caption)
 {
     auto b = std::make_unique<juce::TextButton>(caption);
@@ -27,12 +32,12 @@ std::unique_ptr<juce::TextButton> makeToggle(const juce::String& caption)
 
 /**
  * @brief One line about one part's pitch source: what is really loaded, not what the knob asks for.
- *
- * @param part      "Melody" or "Bass", as the two knobs above are named
- * @param fallback  what the part plays without a weight file ("Markov", "Pattern")
- * @param learned   whether the model really loaded in this process
- * @param nll       the held-out nats per token the file declares, for a loaded model
- * @param source    true when it loaded from somewhere this build was not installed into
+ * @param[in] part      "Melody" or "Bass", as the two knobs above are named
+ * @param[in] fallback  what the part plays without a weight file ("Markov", "Pattern")
+ * @param[in] learned   whether the model really loaded in this process
+ * @param[in] nll       the held-out nats per token the file declares, for a loaded model
+ * @param[in] source    true when it loaded from somewhere this build was not installed into
+ * @return the line
  */
 juce::String modelLine(const char* part, const char* fallback, bool learned, double nll, bool source)
 {
@@ -44,7 +49,11 @@ juce::String modelLine(const char* part, const char* fallback, bool learned, dou
     return s;
 }
 
-/** @brief The melodic parts a track has, by name, in the order of the voices' groups (Form.h, MelodyPart). */
+/**
+ * @brief The melodic parts a track has, by name, in the order of the voices' groups (Form.h, MelodyPart).
+ * @param[in] plan  the track's plan
+ * @return the parts' names
+ */
 juce::String melodicParts(const TrackPlan& plan)
 {
     static const char* const Names[MelodyParts] = { "acid", "lead", "counter", "arp", "stab", "pad", "drone" };
