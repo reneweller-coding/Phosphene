@@ -16,9 +16,11 @@
 #include "phos/Clock.h"
 #include "phos/Composer.h"
 #include "phos/Engine.h"
+#include "phos/FieldLibrary.h"
 #include "phos/Form.h"
 #include "phos/Model.h"
 #include "phos/Params.h"
+#include "phos/Preferences.h"
 #include "phos/Quality.h"
 #include "phos/SetFile.h"
 #include "phos/WaveTableFile.h"
@@ -229,23 +231,41 @@ public:
         const int         endBar = m_plan.m_firstBar + m_plan.m_bars;
         while ( static_cast<int>( m_left.size() ) < frames )
         {
-            // eight bars composed ahead of the engine, their beats moved to the file's own 0 (phos_render)
-            while ( m_nextBar < endBar && static_cast<double>( m_nextBar ) * BeatsPerBar - m_offset <
-                                              m_engine->beatPosition() + 8.0 * BeatsPerBar )
+            // Eight bars composed ahead of the engine, their beats moved to the file's own 0, fed as Conductor::pump
+            // feeds it: a section's first bar dates its rides bars ahead, and the engine drains its queue in order, so
+            // only what lies before the next bar still to compose may go in (phos_render's --dj-export pushed each
+            // bar's events at once, and every control after a ride waited behind it).
+            const double target = m_engine->beatPosition() + 8.0 * BeatsPerBar;
+            for ( ;; )
             {
-                m_notes.clear();
-                m_controls.clear();
-                m_composer.composeBars( params, m_nextBar, 1, m_notes, &m_controls );
-                for ( ControlEvent c : m_controls )
+                const double safe = static_cast<double>( m_nextBar ) * BeatsPerBar;
+                bool         full = false;
+                while ( !full && m_controlPos < m_controls.size() && m_controls[m_controlPos].m_beat < safe )
                 {
+                    ControlEvent c = m_controls[m_controlPos];
                     c.m_beat -= m_offset;
-                    m_engine->pushControl( c );
+                    full = !m_engine->pushControl( c );
+                    m_controlPos += full ? 0 : 1;
                 }
-                for ( NoteEvent n : m_notes )
+                while ( !full && m_notePos < m_notes.size() && m_notes[m_notePos].m_beat < safe )
                 {
+                    NoteEvent n = m_notes[m_notePos];
                     n.m_beat -= m_offset;
-                    m_engine->pushEvent( n );
+                    full = !m_engine->pushEvent( n );
+                    m_notePos += full ? 0 : 1;
                 }
+                if ( m_controlPos > 256 )
+                {   // the drained prefix let go, so a long track does not grow the buffers without bound
+                    m_controls.erase( m_controls.begin(), m_controls.begin() + static_cast<long>( m_controlPos ) );
+                    m_controlPos = 0;
+                }
+                if ( m_notePos > 256 )
+                {
+                    m_notes.erase( m_notes.begin(), m_notes.begin() + static_cast<long>( m_notePos ) );
+                    m_notePos = 0;
+                }
+                if ( full || m_nextBar >= endBar || safe - m_offset >= target ) break;
+                m_composer.composeBars( params, m_nextBar, 1, m_notes, &m_controls );
                 ++m_nextBar;
             }
             float L[EngineBlock], R[EngineBlock];
@@ -272,19 +292,21 @@ public:
     juce::String now() const override { return m_now; }
 
 private:
-    phos::Composer                  m_composer;        ///< the set's composer
-    std::unique_ptr<phos::Engine>   m_engine;          ///< the instrument offline, at the track's tempo
-    phos::TrackPlan                 m_plan;            ///< the track
-    double                          m_offset = 0.0;    ///< its first beat in the set
-    int                             m_nextBar = 0;     ///< the next bar to compose
-    int                             m_latency = 0;     ///< the limiter's lookahead, samples
-    int                             m_dropped = 0;     ///< lookahead samples dropped so far
-    double                          m_seconds = 0.0;   ///< the length
-    std::vector<phos::NoteEvent>    m_notes;           ///< a bar's notes on their way
-    std::vector<phos::ControlEvent> m_controls;        ///< a bar's controls on their way
-    std::deque<float>               m_left;            ///< samples rendered and not yet handed out, left
-    std::deque<float>               m_right;           ///< ... right
-    juce::String                    m_now;             ///< what plays (set up once)
+    phos::Composer                  m_composer;         ///< the set's composer
+    std::unique_ptr<phos::Engine>   m_engine;           ///< the instrument offline, at the track's tempo
+    phos::TrackPlan                 m_plan;             ///< the track
+    double                          m_offset = 0.0;     ///< its first beat in the set
+    int                             m_nextBar = 0;      ///< the next bar to compose
+    int                             m_latency = 0;      ///< the limiter's lookahead, samples
+    int                             m_dropped = 0;      ///< lookahead samples dropped so far
+    double                          m_seconds = 0.0;    ///< the length
+    std::vector<phos::NoteEvent>    m_notes;            ///< the notes composed so far (composeBars keeps them sorted)
+    std::vector<phos::ControlEvent> m_controls;         ///< the controls composed so far, likewise
+    size_t                          m_notePos = 0;      ///< the first note not yet handed to the engine
+    size_t                          m_controlPos = 0;   ///< the first control not yet handed to the engine
+    std::deque<float>               m_left;             ///< samples rendered and not yet handed out, left
+    std::deque<float>               m_right;            ///< ... right
+    juce::String                    m_now;              ///< what plays (set up once)
 };
 
 /** @brief Phosphene's start styles and saved sets for the render app. */
@@ -294,7 +316,8 @@ public:
     /**
      * @brief Points the core at the data files installed beside this program (the wavetable pack, the melody and bass
      *        models, the field recordings), as phos_render does (installDataSearchPath): without it an installed copy
-     *        would play the six built-in wavetables and the Markov model.
+     *        would play the six built-in wavetables and the Markov model. Waits for the field recordings as
+     *        phos_render does, and plans with the player's learned preferences as the plugin does.
      */
     PhospheneSource()
     {
@@ -304,6 +327,22 @@ public:
                                      .toStdString();
         phos::setWaveTableSearchPath( home );
         phos::setModelSearchPath( home );
+        // An offline render waits for the Field track's recordings (FieldLibrary.h): faster than real time, a clip
+        // still decoding would come late or not at all -- the same seed, the same audio, as phos_render.
+        phos::setFieldPreloadBlocking( true );
+        // The player's learned preferences, as the plugin plans with them (process-wide, read before any plan; the
+        // gallery's sets were planned with them): Phosphene's folder in the application data, preferences.txt.
+        const juce::String env = juce::SystemStats::getEnvironmentVariable( "PHOS_USER_DIR", "" );
+        const juce::File   prefs =
+            ( env.isNotEmpty() ? juce::File( env )
+                               : juce::File::getSpecialLocation( juce::File::userApplicationDataDirectory )
+                                     .getChildFile( "Phosphene" ) )
+                .getChildFile( "preferences.txt" );
+        if ( prefs.existsAsFile() )
+        {
+            auto p = std::make_shared<phos::Preferences>();
+            if ( p->parse( prefs.loadFileAsString().toStdString() ) ) phos::setPreferences( p );
+        }
     }
     juce::String product() const override { return "Phosphene"; }
     juce::String title() const override { return "Phosphene Sets"; }

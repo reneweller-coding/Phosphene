@@ -8,8 +8,9 @@ with the dice of the moment, and the sets you saved (the gallery's and those in 
 saved: seed, style, arc, knobs, locks, rerolls, length); or a set's first track alone, at its own tempo, as the DJ export
 writes it. Every row shows the length of its rendering; several chosen are rendered one after another, with
 progress, speed and time left. WAV or FLAC at 24 bits, Ogg Vorbis or MP3 at 320 kbit/s (MP3 through Windows' own
-encoder). The same samples as phos_render (a set's last twenty seconds faded out); it finds the wavetables, the
-models and the voices beside it, as phos_render does. The family's render app (Tools/renderapp, the same in all six
+encoder). The same samples as phos_render (a set's last twenty seconds faded out): it finds the wavetables, the
+models and the voices beside it and waits for the field recordings, as phos_render does, and plans with what the
+instrument has learned of your taste (preferences.txt). The family's render app (Tools/renderapp, the same in all six
 instruments); `--list`, `--render`, and a self-test of every format and the queue (ctest `renderapp`).
 
 ## 1.5.0 (15.10.2026): the family plays together
