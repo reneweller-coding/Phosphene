@@ -373,6 +373,10 @@ Step "stage" {
 
     Copy-Item $exe $stage
     Copy-Item $render $stage
+    # Phosphene Sets, the render app beside the instrument (Tools/renderapp); it finds the data beside it.
+    $sets = Get-ChildItem -Recurse (Join-Path $buildDir "Tools\renderapp") -Filter PhospheneSets.exe | Select-Object -First 1
+    if (-not $sets) { throw "no PhospheneSets.exe in the build" }
+    Copy-Item $sets.FullName $stage
     Copy-Item $vst (Join-Path $stage "Phosphene.vst3") -Recurse
     Copy-Item (Join-Path $root "Deploy\phosphene.ico") $stage
     Copy-Item (Join-Path $root "LICENSE") (Join-Path $stage "LICENSE.txt")
@@ -409,6 +413,8 @@ WHAT IS HERE
   Phosphene.exe        the standalone. Nothing else needs to be installed.
   Phosphene.vst3       the plug-in. Copy the whole FOLDER to
                        C:\Program Files\Common Files\VST3\ and rescan in your DAW.
+  PhospheneSets.exe    Phosphene Sets: sets and tracks rendered into WAV, FLAC, Ogg Vorbis or MP3 with a
+                       window of its own, faster than real time (it finds the data files beside it, too).
   phos_render.exe      the offline renderer:
                          phos_render --minutes 60 --seed 2026 --out night.wav --midi night.mid
                        --list prints every parameter, --version says which build this is.
@@ -511,7 +517,7 @@ function Invoke-Sign([string]$path) {
 }
 # The executable is signed before it goes into the installer and the installer after it is built:
 # Windows checks both, and a signed setup that unpacks an unsigned exe warns about the exe instead.
-if ($SignWith) { Invoke-Sign (Join-Path $stage "Phosphene.exe"); Invoke-Sign (Join-Path $stage "phos_render.exe") }
+if ($SignWith) { Invoke-Sign (Join-Path $stage "Phosphene.exe"); Invoke-Sign (Join-Path $stage "phos_render.exe"); Invoke-Sign (Join-Path $stage "PhospheneSets.exe") }
 else { Write-Warning "no -SignWith: the setup will be unsigned and Windows will call the publisher unknown. The manifest's hashes are what can be checked instead." }
 
 # ---------------------------------------------------------------- 9. the portable archive

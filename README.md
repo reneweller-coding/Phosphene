@@ -262,6 +262,12 @@ bin/msvc/phos_render.exe --minutes 60 --seed 2026 --tracks --sections --report \
     --out work/renders/night.wav --midi work/renders/night.mid --save-set work/renders/night.phosset
 ```
 
+**Phosphene Sets** (`PhospheneSets.exe`, in the Start menu) renders with a small window of its own: the five start
+styles (a set of ten minutes to three hours, its arc shaped over it) and the sets you saved (the gallery, and
+`.phosset` files in Documents/Phosphene), each listed with the length of its rendering -- or a set's first track alone,
+as the DJ export writes it --, as WAV or FLAC (24 bit), Ogg Vorbis or MP3 (320 kbit/s), faster than real time;
+`PhospheneSets --render Goa --length "1 hour" --format flac` without the window.
+
 `--tracks` prints each track's key, tempo, patterns, sound recipe, chords, form, effects, level
 corrections and, after the render, the loudness it really played; `--sections` lists every section of
 the set. `--set-file night.phosset` plays a saved set again, `--lock track:3` and `--reroll track:5`

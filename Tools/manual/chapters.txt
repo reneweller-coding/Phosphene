@@ -454,6 +454,8 @@ Your saved sets, each with a picture of its form. Save to gallery keeps the set 
 style, arc, knobs, locks and rerolls -- and a click on an entry loads it back. The files are ordinary
 .phosset files in your Sets folder; Open folder shows it.
 
+Phosphene Sets, a small program beside the instrument (in the Start menu, or PhospheneSets.exe in its folder), renders without the instrument: a set from each start style -- ten minutes to three hours, its arc shaped over that length -- and every set you saved (the gallery's and those in Documents/Phosphene), each with the length of its rendering; or a set's first track alone, at its own tempo, as the DJ export writes it. Choose one or several (Ctrl, Shift), the format (WAV or FLAC at 24 bits, Ogg Vorbis or MP3 at 320 kbit/s) and the folder (Documents/Phosphene/Renders at first), and Render: one after another, faster than real time, with the progress, the speed and the time left. A set never ends by itself, so its last twenty seconds are faded out. New dice composes everything anew; a saved set plays as it was saved.
+
 == Filters and modulation ==
 
 The melodic voices and the bass choose their filter's circuit with Filter Model. The first entry is

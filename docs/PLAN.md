@@ -6,6 +6,18 @@ gebaut wurde, steht im Journal (`docs/rounds/`). Name **Phosphene**, Repo
 `phos_selftest`. Code-Kommentare im Doxygen-Format (`docs/Doxyfile`).
 
 
+## Phosphene Sets, die Render-App der Familie (16.10.2026, 1.6.0)
+
+Nutzer (in Empyrean, nach Empyrean Journeys): „Können wir solche ein Zusatz-Progrämmchen auch für die anderen
+Synthesizer bauen? (Dort die Parameter eben angepasst, wenn diese keine Journeys haben).“
+- **Tools/renderapp:** der Baukasten der Familie (RenderKit, RenderWindow, Mp3Writer; kanonisch in Empyrean, unverändert
+  kopiert) und Phosphenes `Source.cpp`: die fünf Startstile und die gespeicherten Sets (die Galerie in
+  %APPDATA%/Phosphene/Sets und Documents/Phosphene, rekursiv; readSetFile). Wahl „What“ (ein Set; sein erster Track
+  allein wie --dj-export: setSoloTrack, konstantes Tempo, Lookahead vorn abgeschnitten, 10 ms Ausblende), „Length“ (10
+  min .. 3 h = compose.set_minutes, über die der Bogen gespannt wird; ein gespeichertes Set behält seine) und „Arc“.
+  Ein Set wie phos_render: Tempokarte über die Länge (schnellstes erlaubtes Tempo), prepare 48 kHz/256, der Conductor
+  komponiert acht Takte voraus; es endet nie von selbst, darum 20 s Ausblende. Datenpfad wie installDataSearchPath.
+
 ## Die Wege durchs Panel (15.10.2026, aus Empyrean, Frame.h)
 
 Nutzer: „Bitte baue alles ein, die Tests erst am Ende.“ -- die GUI-Verbesserungen und ASIO in allen fünf Instrumenten:

@@ -105,6 +105,7 @@ Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 en.CompStandalone=Standalone application
 en.CompVst3=VST3 plug-in (for a DAW)
 en.CompRender=Offline renderer (phos_render, command line)
+en.CompSets=Phosphene Sets (sets and tracks into WAV, FLAC, Ogg Vorbis or MP3)
 en.CompManual=Manual (PDF)
 en.CompQuest=Meta Quest app (APK, installed with adb)
 en.TaskDesktop=Create a desktop shortcut
@@ -116,6 +117,7 @@ en.NoAvx2=This processor reports no AVX2 support.%n%nPhosphene is built for AVX2
 de.CompStandalone=Eigenstaendiges Programm
 de.CompVst3=VST3-Plugin (fuer eine DAW)
 de.CompRender=Offline-Renderer (phos_render, Kommandozeile)
+de.CompSets=Phosphene Sets (Sets und Tracks als WAV, FLAC, Ogg Vorbis oder MP3)
 de.CompManual=Handbuch (PDF)
 de.CompQuest=Meta-Quest-App (APK, wird mit adb installiert)
 de.TaskDesktop=Verknuepfung auf dem Desktop anlegen
@@ -133,6 +135,7 @@ Name: "custom"; Description: "{code:CustomTypeName}"; Flags: iscustom
 Name: "standalone"; Description: "{cm:CompStandalone}"; Types: full custom; Flags: fixed
 Name: "vst3";       Description: "{cm:CompVst3}";       Types: full custom
 Name: "render";     Description: "{cm:CompRender}";     Types: full custom
+Name: "sets";       Description: "{cm:CompSets}";       Types: full custom
 Name: "manual";     Description: "{cm:CompManual}";     Types: full custom
 Name: "quest";      Description: "{cm:CompQuest}";      Types: full custom
 Name: "data";       Description: "{cm:CompData}";       Types: full custom
@@ -184,6 +187,8 @@ Source: "{app}\voices.phosvx";  DestDir: "{autocf}\VST3\Phosphene.vst3\Contents\
 ; search path (Tools/render/main.cpp, installDataSearchPath) -- so it works from any shell, not only
 ; from the install folder.
 Source: "{#Stage}\phos_render.exe"; DestDir: "{app}"; Components: render; Flags: ignoreversion
+; Phosphene Sets, the render app: beside the data files, which it finds as phos_render does.
+Source: "{#Stage}\PhospheneSets.exe"; DestDir: "{app}"; Components: sets; Flags: ignoreversion
 ; The VST3 is a bundle: a folder the host reads as one plug-in. It is staged complete, data files
 ; and all, so this is a single recursive line.
 Source: "{#Stage}\Phosphene.vst3\*"; DestDir: "{autocf}\VST3\Phosphene.vst3"; \
@@ -199,6 +204,7 @@ Source: "{#Stage}\PhospheneQuest.apk"; DestDir: "{app}"; Components: quest; Flag
 Name: "{group}\{#AppName}"; Filename: "{app}\Phosphene.exe"; Components: standalone
 Name: "{group}\Manual"; Filename: "{app}\Phosphene-Manual.pdf"; Components: manual; \
     Check: FileExists(ExpandConstant('{app}\Phosphene-Manual.pdf'))
+Name: "{group}\Phosphene Sets"; Filename: "{app}\PhospheneSets.exe"; Components: sets
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Phosphene.exe"; Tasks: desktopicon
 

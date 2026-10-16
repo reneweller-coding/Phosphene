@@ -7,7 +7,7 @@
 #   Plugin/       JUCE VST3 + Standalone (Phase 6)
 #   Quest/        native OpenXR app (Phase 7)
 cmake_minimum_required(VERSION 3.22)
-project(Phosphene VERSION 1.5.0 LANGUAGES C CXX)
+project(Phosphene VERSION 1.6.0 LANGUAGES C CXX)
 
 # The family's layout (01.10.2026): build/<preset>, bin/<preset>, dist/, work/ -- cmake/Family.cmake,
 # CMakePresets.json and build.ps1, the same in every repository of the family.
@@ -117,6 +117,9 @@ endif()
 if(PHOS_BUILD_PLUGIN)
     family_juce(${PHOS_JUCE_TAG})   # ThirdParty/JUCE, the sibling Phosphene's, or fetched (cmake/Family.cmake)
     add_subdirectory(Plugin)
+    # Phosphene Sets: sets and tracks rendered into WAV, FLAC, Ogg Vorbis or MP3, faster than real time
+    # (16.10.2026), on the family's render app (Tools/renderapp/RenderKit.h).
+    add_subdirectory(Tools/renderapp)
 endif()
 
 # After the plugin, so the host test can link the plugin's shared code.

@@ -1,5 +1,17 @@
 # Phosphene release notes
 
+## 1.6.0 (16.10.2026, not released)
+
+**Phosphene Sets.** A small program beside the instrument (Start menu, PhospheneSets.exe) that renders into files: a
+set from each of the five start styles -- ten minutes to three hours, its energy arc shaped over that length --
+with the dice of the moment, and the sets you saved (the gallery's and those in Documents/Phosphene, each as it was
+saved: seed, style, arc, knobs, locks, rerolls, length); or a set's first track alone, at its own tempo, as the DJ export
+writes it. Every row shows the length of its rendering; several chosen are rendered one after another, with
+progress, speed and time left. WAV or FLAC at 24 bits, Ogg Vorbis or MP3 at 320 kbit/s (MP3 through Windows' own
+encoder). The same samples as phos_render (a set's last twenty seconds faded out); it finds the wavetables, the
+models and the voices beside it, as phos_render does. The family's render app (Tools/renderapp, the same in all six
+instruments); `--list`, `--render`, and a self-test of every format and the queue (ctest `renderapp`).
+
 ## 1.5.0 (15.10.2026): the family plays together
 
 **The family jam** (Settings > Family jam: Off, Lead or Follow; in the plugin and in the standalone). The five
