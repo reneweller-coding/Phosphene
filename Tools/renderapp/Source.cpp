@@ -29,6 +29,8 @@
 #include <algorithm>
 #include <cmath>
 #include <deque>
+#include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 
@@ -117,6 +119,44 @@ double trackSeconds( const phos::TrackPlan &t )
     return static_cast<double>( t.m_bars ) * phos::BeatsPerBar * 60.0 / t.m_bpm;
 }
 
+/**
+ * @brief A track's sections on the time line (renderkit::CueSheet): its form's sections as they are -- Phosphene's
+ *        words are Kaleidoscope's own --, a drop landing as one; only those from @p fromBar to @p toBar (a set's track
+ *        before its handover still belongs to the one before).
+ * @param[in,out] sheet         the time line
+ * @param[in]     t             the track's plan
+ * @param[in]     secondsAtBar  where a bar of the set begins, s
+ * @param[in]     fromBar       the first bar that is the track's
+ * @param[in]     toBar         the bar it hands over on
+ * @param[in]     chapters      each section a chapter as well (a track alone)
+ */
+void trackTimeline( renderkit::CueSheet &sheet, const phos::TrackPlan &t,
+                    const std::function<double( int )> &secondsAtBar, int fromBar, int toBar, bool chapters )
+{
+    std::map<int, int> seen;   // a section's kind -> how often so far, for the chapters' names
+    for ( int i = 0; i < t.m_form.m_count; ++i )
+    {
+        const phos::Section &sec = t.m_form.m_section[i];
+        const int            bar = t.m_firstBar + sec.m_startBar;
+        if ( bar < fromBar || bar >= toBar ) continue;
+        const double       at = secondsAtBar( bar );
+        const juce::String name = phos::SectionNames[static_cast<int>( sec.m_type )];
+        sheet.section( at, name, sec.m_energy, sec.m_type == phos::SectionTypeE::DROP );
+        const int n = ++seen[static_cast<int>( sec.m_type )];
+        if ( chapters ) sheet.chapter( at, n > 1 ? name + " " + juce::String( n ) : name );
+    }
+}
+
+/**
+ * @brief A track's key as the cues name it.
+ * @param[in] t  the track's plan
+ * @return "F# Phrygian"
+ */
+juce::String keyName( const phos::TrackPlan &t )
+{
+    return juce::String( phos::KeyNames[t.m_key] ) + " " + phos::ScaleNames[t.m_scale];
+}
+
 /** @brief A set being rendered: the engine offline, the conductor composing ahead of it. */
 class SetRendering : public renderkit::Rendering
 {
@@ -151,6 +191,8 @@ public:
         const double   planSeconds = r.m_limit > 0.0 ? std::min( r.m_limit, seconds ) : seconds;
         const int      planBars = static_cast<int>( planSeconds * planBpm / 240.0 ) + 64;
         const TempoMap tempo = m_composer.tempoMap( params, planBars );
+        m_tempo = tempo;
+        m_planSeconds = planSeconds;
         m_engine->prepare( Rate, EngineBlock, Quality::desktop() );
         m_engine->setTempoMap( tempo );
         m_conductor = std::make_unique<Conductor>( *m_engine, m_composer );
@@ -181,14 +223,45 @@ public:
         const std::lock_guard<std::mutex> hold( m_lock );
         return m_now;
     }
+    /**
+     * @brief The set's time line: every track from its handover with its key, its sections and a chapter, and the
+     *        beats -- the tracks planned as far as the rendering goes (the conductor finds them planned then).
+     * @param[out] sheet  receives it
+     */
+    void timeline( renderkit::CueSheet &sheet ) const override
+    {
+        const phos::ParamStore &params = m_engine->params();
+        const auto              secondsAtBar = [this]( int bar )
+        { return m_tempo.secondsAt( static_cast<double>( bar ) * phos::BeatsPerBar ); };
+        std::vector<phos::TrackPlan> plans;
+        for ( int t = 0; t < 1000; ++t )
+        {
+            const phos::TrackPlan &p = m_composer.track( params, t );
+            if ( t > 0 && secondsAtBar( phos::handoverBar( p ) ) >= m_planSeconds ) break;
+            plans.push_back( p );
+        }
+        for ( size_t i = 0; i < plans.size(); ++i )
+        {
+            const int    from = i == 0 ? 0 : phos::handoverBar( plans[i] );
+            const int    to = i + 1 < plans.size() ? phos::handoverBar( plans[i + 1] ) : 1 << 30;
+            const double at = secondsAtBar( from );
+            sheet.key( at, keyName( plans[i] ) );
+            sheet.chapter( at, "Track " + juce::String( static_cast<int>( i + 1 ) ) + ": " +
+                                   trackText( plans[i] ).fromFirstOccurrenceOf( ": ", false, false ) );
+            trackTimeline( sheet, plans[i], secondsAtBar, from, to, false );
+        }
+        sheet.grid( [this]( double b ) { return m_tempo.secondsAt( b ); }, m_tempo.beatAt( m_planSeconds ) );
+    }
 
 private:
-    phos::Composer                   m_composer;        ///< the set's composer (before the conductor that reads it)
-    std::unique_ptr<phos::Engine>    m_engine;          ///< the instrument offline
-    std::unique_ptr<phos::Conductor> m_conductor;       ///< keeps the score ahead of the engine
-    double                           m_seconds = 0.0;   ///< the length
-    mutable std::mutex               m_lock;            ///< guards m_now
-    juce::String                     m_now;             ///< the track that plays
+    phos::TempoMap                   m_tempo;               ///< the set's tempo over what is rendered
+    double                           m_planSeconds = 0.0;   ///< s planned: what is rendered
+    phos::Composer                   m_composer;            ///< the set's composer (before the conductor that reads it)
+    std::unique_ptr<phos::Engine>    m_engine;              ///< the instrument offline
+    std::unique_ptr<phos::Conductor> m_conductor;           ///< keeps the score ahead of the engine
+    double                           m_seconds = 0.0;       ///< the length
+    mutable std::mutex               m_lock;                ///< guards m_now
+    juce::String                     m_now;                 ///< the track that plays
 };
 
 /** @brief A set's first track alone, as the DJ export renders it. */
@@ -224,6 +297,14 @@ public:
         m_latency = std::max( 0, m_engine->latencySamples() );
         m_seconds = trackSeconds( m_plan );
         m_now = trackText( m_plan ) + ", alone";
+        // its time line: its sections as chapters too, from the track's own start, at its tempo
+        const double bpm = m_plan.m_bpm;
+        const int    first = m_plan.m_firstBar;
+        m_sheet.key( 0.0, keyName( m_plan ) );
+        trackTimeline(
+            m_sheet, m_plan, [bpm, first]( int bar ) { return ( bar - first ) * phos::BeatsPerBar * 60.0 / bpm; },
+            first, 1 << 30, true );
+        m_sheet.grid( [bpm]( double b ) { return b * 60.0 / bpm; }, m_seconds * bpm / 60.0 );
     }
     /** @brief Whether it could be set up. @return true when it renders */
     bool ok() const { return m_engine != nullptr; }
@@ -295,8 +376,10 @@ public:
         }
     }
     juce::String now() const override { return m_now; }
+    void timeline( renderkit::CueSheet &sheet ) const override { sheet = m_sheet; }
 
 private:
+    renderkit::CueSheet             m_sheet;            ///< its time line
     phos::Composer                  m_composer;         ///< the set's composer
     std::unique_ptr<phos::Engine>   m_engine;           ///< the instrument offline, at the track's tempo
     phos::TrackPlan                 m_plan;             ///< the track
