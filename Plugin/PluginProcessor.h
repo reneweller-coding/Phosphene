@@ -1154,6 +1154,18 @@ public:
      * @return false if it cannot be read
      */
     bool importSet( const juce::File &file );
+    /**
+     * @brief Reads a set from its text (a file's, a factory set's), as importSet does.
+     * @param[in] text  the set's text
+     * @return false if it is no set
+     */
+    bool importSetText( const std::string &text );
+    /**
+     * @brief Loads one of the factory's sets (phos/FactorySets.h), as importSet does.
+     * @param[in] index  the set
+     * @return false when there is none of that index
+     */
+    bool loadFactorySet( int index );
 
     /**
      * @brief Standalone: records the output to a 32-bit float WAV.

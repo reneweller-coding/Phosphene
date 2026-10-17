@@ -38,6 +38,7 @@ add_library(PhospheneCore STATIC
     src/ComposerLevels.cpp
     src/Probe.cpp
     src/SetFile.cpp
+    src/FactorySets.cpp
     src/Rating.cpp
     src/Audibility.cpp
     src/MidiMap.cpp

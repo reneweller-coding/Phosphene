@@ -4,6 +4,7 @@
  * @author Rene Weller
  */
 #include "SelfTestHelpers.h"
+#include "phos/FactorySets.h"
 
 using namespace phos;
 
@@ -2046,6 +2047,53 @@ void testSoloTrack()
         fmt(
             "kicks before the hand-over: %d in the set, %d alone; %zu notes of its own bars compared; %zu notes outside; %d guest pads",
             kicksBeforeFull, kicksBeforeSolo, a.size(), outside.size(), guestPads ) );
+}
+
+/**
+ * @brief The factory's sets (FactorySets.h, 17.10.2026): 256, every name unique, every one a set that reads, starts in
+ *        its style, runs its arc (a long night any) and lasts what the table says; every 128th planned, its second
+ *        track beginning inside the first (they hand over as a DJ mixes; a plan runs the probes, which take their time
+ *        without the cache).
+ */
+void testFactorySets()
+{
+    section( "the factory's sets" );
+    std::set<std::string> names;
+    int                   unread = 0, unknown = 0, planned = 0, unplanned = 0;
+    std::string           firstError;
+    for ( int i = 0; i < numFactorySets(); ++i )
+    {
+        const FactorySet &f = factorySet( i );
+        names.insert( f.m_name );
+        ParamStore  q;
+        Composer    c;
+        std::string error;
+        if ( !readSetText( f.m_text, c, q, &error ) )
+        {
+            if ( unread++ == 0 ) firstError = std::string( f.m_name ) + ": " + error;
+            continue;
+        }
+        const bool longNight = std::string( f.m_group ) == "Long night";
+        const bool style = std::string( StyleNames[static_cast<int>( styleOf( q ) )] ) == f.m_section;
+        const bool arc = longNight || std::string( ArcNames[static_cast<int>( arcOf( q ) )] ) == f.m_group;
+        const bool length =
+            q.get( q.base( ModuleE::COMPOSE ) + compose::SET_MINUTES ) * 60.0f == static_cast<float>( f.m_seconds );
+        if ( !style || !arc || !length ) ++unknown;
+        if ( i % 128 == 0 )
+        {
+            const TrackPlan &a = c.track( q, 0 );
+            const TrackPlan &b = c.track( q, 1 );
+            ++planned;
+            if ( a.m_bars <= 0 || b.m_bars <= 0 || b.m_firstBar <= a.m_firstBar ||
+                 b.m_firstBar > a.m_firstBar + a.m_bars )
+                ++unplanned;
+        }
+    }
+    check( numFactorySets() == 256 && static_cast<int>( names.size() ) == numFactorySets() && unread == 0 &&
+               unknown == 0 && planned == 2 && unplanned == 0,
+           "256 factory sets, every name its own, every one a set of its style, arc and length; every 128th planned",
+           fmt( "%d sets, %zu names, %d unread, %d not what the table says, %d of %d planned badly %s",
+                numFactorySets(), names.size(), unread, unknown, unplanned, planned, firstError.c_str() ) );
 }
 
 /**

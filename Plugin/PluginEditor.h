@@ -612,8 +612,9 @@ private:
     juce::Slider                                     m_length;   ///< compose.set_minutes: the time the arc spans
     std::unique_ptr<juce::SliderParameterAttachment> m_lengthLink;
     juce::Label                                      m_lengthLabel;
-    juce::TextButton                                 m_compose{ "Compose set" };   ///< plans the set again
-    frame::IconButton m_newSeed{ frame::IconButton::IconE::DICE, "New seed" };     ///< a new seed: a die
+    juce::TextButton  m_sets{ "Sets" };             ///< the sets: the factory's and the player's own
+    juce::TextButton  m_compose{ "Compose set" };   ///< plans the set again
+    frame::IconButton m_newSeed{ frame::IconButton::IconE::DICE, "New seed" };   ///< a new seed: a die
     frame::IconButton m_play{ frame::IconButton::IconE::PLAY,
                               "Play (Space)" };   ///< play and stop: a triangle, a square
     frame::IconButton m_mute{ frame::IconButton::IconE::SPEAKER,
@@ -792,6 +793,12 @@ private:
      * @param[in,out] pb  the chooser
      */
     void browsePresets( PresetBox &pb );
+    /**
+     * @brief Opens the preset browser on the sets: the factory's 256 (phos/FactorySets.h, by their start style and
+     *        arc) and the player's own (the gallery's and Documents/Phosphene's .phosset). The one taken is planned
+     *        and plays from its start.
+     */
+    void browseSets();
     /**
      * @brief A|B pressed (the presets as chosen) or let go (the sound as it is).
      * @param[in] on  true while pressed

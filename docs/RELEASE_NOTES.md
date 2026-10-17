@@ -2,6 +2,14 @@
 
 ## 1.6.0 (16.10.2026, not released)
 
+**256 sets to begin with.** The Sets button in the header opens the browser on the factory's sets and on your own
+(the gallery's, and the `.phosset` files in Documents/Phosphene); the one taken is planned and plays from its start.
+Every start style through the five energy arcs, ten sets an arc, from half an hour to three hours, and six long nights
+of five hours. Each is a set as you would save it: a seed, its style, its arc, its length and a few of the composer's
+knobs drawn near their defaults (the tempo's range, a track's length, acid, lead, arp, pad and effects, the percussion,
+the melodies' temperature). Phosphene Sets lists them too, and so Heliacal. In the browser a group under a section now
+shows that section's alone.
+
 **Phosphene Sets.** A small program beside the instrument (Start menu, PhospheneSets.exe) that renders into files: a
 set from each of the five start styles -- ten minutes to three hours, its energy arc shaped over that length --
 with the dice of the moment, and the sets you saved (the gallery's and those in Documents/Phosphene, each as it was

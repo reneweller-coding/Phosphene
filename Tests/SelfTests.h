@@ -98,6 +98,7 @@ void testKnobFuzz();                          ///< selftest_composer.cpp
 void testPreferences();                       ///< selftest_composer.cpp
 void testSoloTrack();                         ///< selftest_composer.cpp
 void testGallery();                           ///< selftest_composer.cpp
+void testFactorySets();                       ///< selftest_composer.cpp
 void testMidiMap();                           ///< selftest_composer.cpp
 void testRatings();                           ///< selftest_composer.cpp
 void testSetArc();                            ///< selftest_composer.cpp

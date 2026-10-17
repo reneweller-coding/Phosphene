@@ -68,6 +68,8 @@ and the master. Along the bottom the modulation of every voice.
   loudness, density, register and tension. Five style profiles weight everything from tempo and
   kick pattern to chord moves. Melodies follow written genre rules first and a learned model
   (trained on statistics of a MIDI corpus) second; tracks overlap and hand over like a DJ mix.
+* **256 sets to begin with.** The Sets button opens the factory's sets -- every start style through the five energy
+  arcs, from half an hour to a night of five hours -- and your own; the one taken plays from its start.
 * **Nine synthesizers, 9216 sound presets.** Kick (sweep or resonator, tuned to the key and
   phase-locked to the bass), rolling bass (oscillator and sub), a 303 acid on a diode ladder with
   accent, slide, squelch comb and disperser, and six polyphonic voices — lead, counter, arp, stab,
@@ -263,7 +265,8 @@ bin/msvc/phos_render.exe --minutes 60 --seed 2026 --tracks --sections --report \
 ```
 
 **Phosphene Sets** (`PhospheneSets.exe`, in the Start menu) renders with a small window of its own: the five start
-styles (a set of ten minutes to three hours, its arc shaped over it) and the sets you saved (the gallery, and
+styles (a set of ten minutes to three hours, its arc shaped over it), the factory's 256 sets and the sets you saved
+(the gallery, and
 `.phosset` files in Documents/Phosphene), each listed with the length of its rendering -- or a set's first track alone,
 as the DJ export writes it --, as WAV or FLAC (24 bit), Ogg Vorbis or MP3 (320 kbit/s), faster than real time;
 `PhospheneSets --render Goa --length "1 hour" --format flac` without the window.

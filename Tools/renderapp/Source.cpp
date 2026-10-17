@@ -16,6 +16,7 @@
 #include "phos/Clock.h"
 #include "phos/Composer.h"
 #include "phos/Engine.h"
+#include "phos/FactorySets.h"
 #include "phos/FieldLibrary.h"
 #include "phos/Form.h"
 #include "phos/Model.h"
@@ -43,9 +44,10 @@ const double SetMinutes[] = { 10.0, 20.0, 30.0, 45.0, 60.0, 90.0, 120.0, 180.0 }
 /** @brief What a row is: a start style, or a saved set. */
 struct Row
 {
-    int        m_style = -1;      ///< the start style (StyleIdE), -1 for a saved set
+    int        m_style = -1;      ///< the start style (StyleIdE), -1 for a set
+    int        m_factory = -1;    ///< the factory set (phos/FactorySets.h), -1 for none
     juce::File m_file;            ///< the saved set's .phosset
-    double     m_minutes = 0.0;   ///< the saved set's own length (compose.set_minutes)
+    double     m_minutes = 0.0;   ///< the set's own length (compose.set_minutes)
 };
 
 /**
@@ -82,7 +84,10 @@ bool knobsOf( phos::ParamStore &params, phos::Composer &composer, const Row &row
         return true;
     }
     std::string error;
-    if ( !readSetFile( row.m_file.getFullPathName().toRawUTF8(), composer, params, &error ) )
+    const bool  read = row.m_factory >= 0
+                           ? readSetText( factorySet( row.m_factory ).m_text, composer, params, &error )
+                           : readSetFile( row.m_file.getFullPathName().toRawUTF8(), composer, params, &error );
+    if ( !read )
     {
         why = error;
         return false;
@@ -387,6 +392,22 @@ public:
             row.m_style = s;
             add( std::move( item ), std::move( row ) );
         }
+        // the factory's sets (phos/FactorySets.h): played as they are, the dice their own
+        for ( int i = 0; i < numFactorySets(); ++i )
+        {
+            const FactorySet &f = factorySet( i );
+            renderkit::Item   item;
+            item.m_name = f.m_name;
+            item.m_kind = "Factory set";
+            item.m_dice = false;
+            item.m_cells.add( juce::String( f.m_section ) + ", " + f.m_group );
+            item.m_keys = { std::nan( "" ) };
+            item.m_detail = juce::String( f.m_note ) + " " + f.m_group + " " + f.m_section;
+            Row row;
+            row.m_factory = i;
+            row.m_minutes = f.m_seconds / 60.0;
+            add( std::move( item ), std::move( row ) );
+        }
         // The gallery (the instrument's Sets folder) and the player's own folder in Documents.
         const juce::String env = juce::SystemStats::getEnvironmentVariable( "PHOS_GALLERY_DIR", "" );
         const juce::File   gallery = env.isNotEmpty()
@@ -466,7 +487,10 @@ public:
     {
         const std::shared_ptr<const Row> rw = row( item );
         juce::String                     s;
-        if ( rw->m_style < 0 )
+        if ( rw->m_factory >= 0 )
+            s << "A set of the factory: " << phos::factorySet( rw->m_factory ).m_group << ", "
+              << phos::factorySet( rw->m_factory ).m_note;
+        else if ( rw->m_style < 0 )
             s << "Your set (" << rw->m_file.getFileName() << "): its seed, style, arc, knobs and "
               << juce::String( rw->m_minutes, 0 ) << " minutes";
         else

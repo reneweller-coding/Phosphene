@@ -310,6 +310,7 @@ int main( int argc, char **argv )
     run( "testRatings", testRatings );
     run( "testMidiMap", testMidiMap );
     run( "testGallery", testGallery );
+    run( "testFactorySets", testFactorySets );
     run( "testSoloTrack", testSoloTrack );
     run( "testPreferences", testPreferences );
     run( "testKnobFuzz", testKnobFuzz );

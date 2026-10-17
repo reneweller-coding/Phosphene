@@ -150,6 +150,7 @@ set(PHOS_SELFTEST_SECONDS
     testRatings              0.1
     testMidiMap              0.1
     testGallery              0.2
+    testFactorySets        120.0
     testSoloTrack            0.5
     testPreferences          1.0
     testKnobFuzz            18.0

@@ -5,6 +5,7 @@
  */
 #include "PluginEditor.h"
 #include "phos/Composer.h"
+#include "phos/FactorySets.h"
 #include "phos/FieldLibrary.h"
 #include "phos/FieldPresets.h"
 #include <algorithm>
@@ -822,6 +823,11 @@ PhospheneEditor::PhospheneEditor( PhospheneProcessor &p ) : juce::AudioProcessor
         m_proc.composeSet();
         m_arrangeDirty = true;
     };
+    m_sets.onClick = [this] { browseSets(); };
+    m_sets.setTooltip( "The sets: the factory's 256 -- every start style through the five arcs, from half an hour to "
+                       "a night of five -- and yours (the gallery's and your own). The one taken plays from its "
+                       "start." );
+    m_content.addAndMakeVisible( m_sets );
     m_newSeed.setTooltip( "A new seed: another night from the same knobs" );
     m_newSeed.onClick = [this]
     {
@@ -990,6 +996,8 @@ PhospheneEditor::PhospheneEditor( PhospheneProcessor &p ) : juce::AudioProcessor
     setTab( juce::jlimit( 0, tabNames().size() - 1, startTab ) );
     // PHOS_HELP=1: open with the help page up (for its picture in the manual and for checking it by eye).
     if ( juce::SystemStats::getEnvironmentVariable( "PHOS_HELP", "" ).isNotEmpty() ) showHelp( true );
+    // PHOS_SETS=1 (17.10.2026): open with the sets' browser up.
+    if ( juce::SystemStats::getEnvironmentVariable( "PHOS_SETS", "" ).isNotEmpty() ) browseSets();
     // PHOS_SHOT_HEADSET=1: the headset's controls in the pictures, hands as if one sent them.
     if ( juce::SystemStats::getEnvironmentVariable( "PHOS_SHOT_HEADSET", "" ).isNotEmpty() )
     {
@@ -1503,7 +1511,7 @@ void PhospheneEditor::layoutContent()
     h.m_choices = { { &m_style, 124 }, { &m_key, 60 }, { &m_scale, 150 } };
     h.m_lengthLabel = &m_lengthLabel;
     h.m_length = &m_length;
-    h.m_actions = { { &m_compose, 112 }, { &m_newSeed, frame::IconWidth } };
+    h.m_actions = { { &m_sets, 56 }, { &m_compose, 112 }, { &m_newSeed, frame::IconWidth } };
     h.m_play = &m_play;
     h.m_mute = &m_mute;
     h.m_like = &m_likeIcon;
@@ -2326,6 +2334,46 @@ void PhospheneEditor::compare( bool on )
     std::vector<std::pair<int, float>> values;
     for ( auto &pb : m_presetBoxes ) values.insert( values.end(), pb->m_loaded.begin(), pb->m_loaded.end() );
     if ( !values.empty() ) m_proc.previewKnobs( values );
+}
+
+void PhospheneEditor::browseSets()
+{
+    if ( m_palette->isVisible() ) m_palette->close();
+    frame::PresetBrowser::Bank bank;
+    bank.m_key = "sets";
+    bank.m_title = "Sets";
+    // the player's own first -- the gallery's, then those in Documents -- numbered after the factory's
+    juce::Array<juce::File> yours = m_proc.galleryFolder().findChildFiles( juce::File::findFiles, true, "*.phosset" );
+    yours.sort();
+    juce::Array<juce::File> docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory )
+                                       .getChildFile( "Phosphene" )
+                                       .findChildFiles( juce::File::findFiles, true, "*.phosset" );
+    docs.sort();
+    yours.addArray( docs );
+    const int factory = numFactorySets();
+    for ( int k = 0; k < yours.size(); ++k )
+        bank.m_entries.push_back( { yours[k].getFileNameWithoutExtension(), "Yours", {}, factory + k, true, {} } );
+    for ( int i = 0; i < factory; ++i )
+    {
+        const FactorySet &f = factorySet( i );
+        bank.m_entries.push_back( { f.m_name, f.m_group, f.m_section, i, false, f.m_note } );
+    }
+    bank.m_choose = [this, yours, factory]( const frame::PresetBrowser::Entry &e )
+    {
+        bool ok = false;
+        m_proc.undoable( "Load set " + e.m_name,
+                         [this, &e, &ok, &yours, factory]
+                         {
+                             ok = e.m_index >= factory ? m_proc.importSet( yours[e.m_index - factory] )
+                                                       : m_proc.loadFactorySet( e.m_index );
+                         } );
+        if ( !ok ) return;
+        if ( m_seedEditor != nullptr ) m_seedEditor->setText( juce::String( m_proc.seed() ), false );
+        m_trackRows.clear();
+        m_rowsSeed = 0;
+        m_arrangeDirty = true;
+    };
+    m_browser->open( std::move( bank ) );
 }
 
 void PhospheneEditor::startTour()

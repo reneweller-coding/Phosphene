@@ -11,6 +11,7 @@
 #include <thread>
 #include "phos/Clock.h"
 #include "phos/Model.h"
+#include "phos/FactorySets.h"
 #include "phos/SetFile.h"
 #include "phos/Rating.h"
 #include "phos/WaveTableFile.h"
@@ -2476,12 +2477,24 @@ bool PhospheneProcessor::exportSet( const juce::File &file )
 
 bool PhospheneProcessor::importSet( const juce::File &file )
 {
+    if ( !file.existsAsFile() ) return false;
+    return importSetText( file.loadFileAsString().toStdString() );
+}
+
+bool PhospheneProcessor::loadFactorySet( int index )
+{
+    if ( index < 0 || index >= numFactorySets() ) return false;
+    return importSetText( factorySet( index ).m_text );
+}
+
+bool PhospheneProcessor::importSetText( const std::string &text )
+{
     bool ok = false;
     {
         // Blocks on the composer, which a user action with a file dialog in front of it may do.
         const std::lock_guard<std::mutex> lock( m_composeLock );
         std::string                       error;
-        ok = readSetFile( file.getFullPathName().toRawUTF8(), *m_composer, params(), &error );
+        ok = readSetText( text, *m_composer, params(), &error );
         if ( !ok && !error.empty() ) juce::Logger::writeToLog( "phosset: " + juce::String( error ) );
         m_seed.store( m_composer->seed(), std::memory_order_relaxed );
     }
