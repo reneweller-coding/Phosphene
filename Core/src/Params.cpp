@@ -1043,7 +1043,7 @@ const ParamDesc MixParams[mix::COUNT] = {
 /** @brief The master: the bus compressor, the clipper, the limiter, the loudness. */
 const ParamDesc MasterParams[master::COUNT] = {
     { "gain", "Gain", "dB", -24.0f, 24.0f, 0.0f, CurveE::LINEAR },
-    { "ceiling", "Ceiling", "dBTP", -12.0f, 0.0f, -1.0f, CurveE::LINEAR },
+    { "ceiling", "Ceiling", "dBTP", -12.0f, 0.0f, -2.0f, CurveE::LINEAR },   // -2: a loud master survives AAC and Opus
     { "clip", "Clip", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
     { "comp_threshold", "Comp Threshold", "dB", -40.0f, 0.0f, -8.0f, CurveE::LINEAR },
     { "comp_ratio", "Comp Ratio", ":1", 1.0f, 10.0f, 1.5f, CurveE::LOG },
