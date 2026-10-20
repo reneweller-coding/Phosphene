@@ -503,6 +503,14 @@ void Composer::trackStartControls( const ParamStore &p, const TrackPlan &plan, d
     if ( floor )
         push( p.base( ModuleE::MASTER ) + master::GAIN, ControlEvent::KindE::OFFSET,
               plan.m_masterGainDb / ( mg.m_maxValue - mg.m_minValue ) );
+    // The tone trims (20.10.2026, matchTone), as offsets on the master's tone knobs.
+    if ( floor )
+        for ( int b = 0; b < 4; ++b )
+        {
+            const int        id = p.base( ModuleE::MASTER ) + master::TONE_LOW_MID + b;
+            const ParamDesc &td = p.desc( id );
+            push( id, ControlEvent::KindE::OFFSET, plan.m_toneDb[b] / ( td.m_maxValue - td.m_minValue ) );
+        }
     // The Field track's place (27.09.2026; FieldPresets.h), with the voices: with layer A's category on Auto the
     // composer plays a preset drawn by the track's style -- every knob of the module as a base or an override, so the
     // knobs stay as the user left them -- and asks the library for its recordings now, a track ahead of their first

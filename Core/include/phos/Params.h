@@ -1139,6 +1139,15 @@ enum : int
     CLIPPER,
     CLIPPER_THRESHOLD,
     MONITOR,   ///< 25.09.2026, the addon's monitoring: Normal, Mono, Sub (80 Hz low pass) or Side, after the meter
+    // 20.10.2026: the resonance suppressor (Resonance.h) and the tone trims (ToneEq.h) -- four broad bands the
+    // composer sets per track toward the references (Composer::matchTone, an offset on these knobs) -- before the bus
+    // compressor.
+    RESONANCE,
+    AUTO_TONE,
+    TONE_LOW_MID,
+    TONE_MID,
+    TONE_PRESENCE,
+    TONE_AIR,
     COUNT
 };
 }

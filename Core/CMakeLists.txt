@@ -15,6 +15,7 @@ add_library(PhospheneCore STATIC
     src/WaveTableFile.cpp
     src/Reverb.cpp
     src/Dynamics.cpp
+    src/Resonance.cpp
     src/Sfx.cpp
     src/SfxBankTables.cpp
     src/PsyFx.cpp

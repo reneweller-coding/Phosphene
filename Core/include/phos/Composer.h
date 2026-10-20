@@ -319,6 +319,8 @@ struct TrackPlan
     bool   m_correctionsPending = false;
     double m_mixLoudness = 0.0;     ///< probe loudness of the whole mix after the master, before the loudness offset
     float  m_masterGainDb = 0.0f;   ///< the offset that brings the mix to master.target_lufs (Auto Gain)
+    float  m_toneBands[4] = {};     ///< 20.10.2026: the drops' tone bands against 40-140 Hz before the trims, dB
+    float  m_toneDb[4] = {};        ///< the tone trims (matchTone): low mids, mids, presence, air, dB
     /** @name The presence match (19.09.2026, round "polish"; ComposerLevels.cpp, matchPresence)
      *  @{ */
     double m_presenceDb = 0.0;   ///< the drops' presence estimate before the match, dB against the reference median
@@ -485,6 +487,16 @@ public:
         if ( index >= 0 && index < static_cast<int>( m_plans.size() ) )
             m_plans[static_cast<size_t>( index )].m_correctionsPending = false;
     }
+    /**
+     * @brief The tone trims of @p plan as offsets on master.tone_*, ramped over @p length beats from @p beat.
+     * @param[in]  params  the knobs
+     * @param[in]  plan    the track's plan
+     * @param[in]  beat    where they begin
+     * @param[in]  length  their ramp in beats
+     * @param[out] out     receives the four control events
+     */
+    void toneControls( const ParamStore &params, const TrackPlan &plan, double beat, float length,
+                       std::vector<ControlEvent> &out ) const;
     /**
      * @brief The melodic parts' level corrections of @p plan as control events at @p beat, ramped over @p rampBeats
      *        -- exactly what trackStartControls writes for them (it calls the same code), for a host that sends
@@ -819,17 +831,30 @@ private:
      * @param[in]     masterGainDb  the master gain in dB
      * @param[in,out] bands         if not null, receives the power in 1.5..6 kHz and in 40..140 Hz (linear, L plus R)
      * @param[out]    audible       receives the audibility readings, or null
+     * @param[out]    spectrum      receives the power spectrum of L and R (Welch, 32768 points), or null
      * @return the loudness in LUFS
      */
     double probeLoudness( const ParamStore &params, const TrackPlan &plan, int part = -1, float masterGainDb = 0.0f,
-                          double *bands = nullptr, double *audible = nullptr ) const;
+                          double *bands = nullptr, double *audible = nullptr,
+                          std::vector<double> *spectrum = nullptr ) const;
+    /**
+     * @brief The tone match (20.10.2026, master.auto_tone): the drops' spectrum (the audibility probe's bars, every
+     *        part), its bands against 40-140 Hz as Tools/metrics.py reads them, and the smallest tone trims that bring
+     *        each into the references' middle half (ref_profile.json: 39 records) -- fitted through the master's
+     *        bells' exact response, at most 3 dB each; set at the track's start as offsets on master.tone_*.
+     * @param[in]     params  the knobs
+     * @param[in,out] plan    the track's plan
+     * @param[in]     drops   the audibility probe's spectrum of the same bars, or null (then rendered here)
+     */
+    void matchTone( const ParamStore &params, TrackPlan &plan, const std::vector<double> *drops = nullptr ) const;
     /**
      * @brief The audibility match (23.09.2026, compose.audibility_match): the counter, the arp and the stab lifted
      *        until each is heard with a share of the lead's partial loudness in the drops (Composer.cpp).
-     * @param[in]     params  the knobs
-     * @param[in,out] plan    the track's plan
+     * @param[in]     params    the knobs
+     * @param[in,out] plan      the track's plan
+     * @param[out]    spectrum  receives its probe's spectrum (L and R, Welch) for matchTone, or null
      */
-    void matchAudibility( const ParamStore &params, TrackPlan &plan ) const;
+    void matchAudibility( const ParamStore &params, TrackPlan &plan, std::vector<double> *spectrum = nullptr ) const;
     /**
      * @brief Auto Gain: two readings of the whole mix and a secant step to master.target_lufs.
      * @param[in]     params        the knobs

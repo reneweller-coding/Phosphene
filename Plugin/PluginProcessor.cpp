@@ -742,6 +742,7 @@ void PhospheneProcessor::serviceComposer( bool warmUp )
                 c.m_length = phrase;
                 events.push_back( c );
             }
+            m_composer->toneControls( knobs, now, at, phrase, events );   // the tone trims found (20.10.2026)
             {
                 const std::lock_guard<std::mutex> eng( m_engineLock );
                 for ( const ControlEvent &c : events ) m_engine->pushImmediate( c );   // not behind eight queued bars

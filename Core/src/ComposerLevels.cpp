@@ -21,6 +21,7 @@
 #include "phos/Util.h"
 #include "phos/WaveTableFile.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <iterator>
@@ -41,6 +42,111 @@ constexpr double PresenceCutDb = 6.0;     ///< the most the lines are taken down
 constexpr double PresenceLiftDb = 3.0;    ///< the most they are brought up
 
 constexpr double AudibleLiftDb = 4.0;   ///< the most one line is lifted
+
+constexpr float ToneMost = 3.0f;    ///< 20.10.2026: the largest tone trim either way, dB
+constexpr int   ToneFft = 32768;    ///< the tone reading's Welch segment (Tools/metrics.py's)
+/** @brief The tone bands' edges in Hz: the kick-and-bass band first, then the four the trims move. */
+constexpr double ToneEdges[5][2] = { { 40, 140 }, { 140, 500 }, { 500, 1500 }, { 1500, 6000 }, { 6000, 16000 } };
+using Tone4 = std::array<float, 4>;   ///< a value per tone band
+
+/**
+ * @brief The tone bands of @p power through the master's bells at @p trims, dB against 40-140 Hz.
+ * @param[in]  power  the spectrum (ToneFft / 2 + 1 bins at 48 kHz)
+ * @param[in]  eq     the bells
+ * @param[in]  trims  their gains
+ * @param[out] out    receives the bands
+ */
+void toneLevels( const std::vector<double> &power, const ToneEq &eq, const Tone4 &trims, Tone4 &out )
+{
+    double e[5] = {};
+    for ( size_t k = 1; k < power.size(); ++k )
+    {
+        const double hz = static_cast<double>( k ) * 48000.0 / ToneFft;
+        if ( hz >= 16000.0 ) break;
+        const double p = power[k] * eq.powerGain( trims.data(), hz );
+        for ( int b = 0; b < 5; ++b )
+            if ( hz >= ToneEdges[b][0] && hz < ToneEdges[b][1] ) e[b] += p;
+    }
+    for ( int b = 0; b < 4; ++b )
+        out[static_cast<size_t>( b )] =
+            static_cast<float>( 10.0 * std::log10( std::max( e[b + 1], 1e-30 ) / std::max( e[0], 1e-30 ) ) );
+}
+
+/**
+ * @brief The smallest trims that bring the tone bands of @p power into [@p lo, @p hi] (Totality's Leveler::fitTone):
+ *        Gauss-Newton on the spectrum, a band costing only by how far it lies outside its range, a trim by its size.
+ * @param[in] power  the drops' spectrum
+ * @param[in] lo     the bands' lower edges, dB against 40-140 Hz
+ * @param[in] hi     their upper edges
+ * @return the trims, dB
+ */
+Tone4 fitTone( const std::vector<double> &power, const Tone4 &lo, const Tone4 &hi )
+{
+    ToneEq eq;
+    eq.prepare( 48000.0, MasterToneBands, 4 );
+    constexpr int N = 4;
+    Tone4         t{};
+    for ( int iter = 0; iter < 8; ++iter )
+    {
+        Tone4 now;
+        toneLevels( power, eq, t, now );
+        double J[N][N], r[N];
+        bool   out[N];
+        for ( int i = 0; i < N; ++i )
+        {
+            const size_t q = static_cast<size_t>( i );
+            r[i] = now[q] > hi[q] ? now[q] - hi[q] : ( now[q] < lo[q] ? now[q] - lo[q] : 0.0 );
+            out[i] = r[i] != 0.0;
+        }
+        for ( int j = 0; j < N; ++j )
+        {
+            Tone4 step = t, moved;
+            step[static_cast<size_t>( j )] += 0.5f;
+            toneLevels( power, eq, step, moved );
+            for ( int i = 0; i < N; ++i )
+                J[i][j] = out[i] ? ( moved[static_cast<size_t>( i )] - now[static_cast<size_t>( i )] ) / 0.5 : 0.0;
+        }
+        constexpr double Lambda = 0.15;   // a dB of trim weighs as much as 0.4 dB outside a band's range
+        double           M[N][N + 1];
+        for ( int a = 0; a < N; ++a )
+        {
+            for ( int b = 0; b < N; ++b )
+            {
+                double v = a == b ? Lambda : 0.0;
+                for ( int i = 0; i < N; ++i ) v += J[i][a] * J[i][b];
+                M[a][b] = v;
+            }
+            double v = -Lambda * t[static_cast<size_t>( a )];
+            for ( int i = 0; i < N; ++i ) v -= J[i][a] * r[i];
+            M[a][N] = v;
+        }
+        for ( int c = 0; c < N; ++c )
+        {
+            int piv = c;
+            for ( int q = c + 1; q < N; ++q )
+                if ( std::fabs( M[q][c] ) > std::fabs( M[piv][c] ) ) piv = q;
+            for ( int q = 0; q <= N; ++q ) std::swap( M[c][q], M[piv][q] );
+            if ( std::fabs( M[c][c] ) < 1e-12 ) continue;
+            for ( int q = c + 1; q < N; ++q )
+            {
+                const double f = M[q][c] / M[c][c];
+                for ( int z = c; z <= N; ++z ) M[q][z] -= f * M[c][z];
+            }
+        }
+        double d[N] = {};
+        for ( int c = N - 1; c >= 0; --c )
+        {
+            double v = M[c][N];
+            for ( int q = c + 1; q < N; ++q ) v -= M[c][q] * d[q];
+            d[c] = std::fabs( M[c][c] ) < 1e-12 ? 0.0 : v / M[c][c];
+        }
+        for ( int j = 0; j < N; ++j )
+            t[static_cast<size_t>( j )] =
+                std::clamp( t[static_cast<size_t>( j )] + static_cast<float>( d[j] ), -ToneMost, ToneMost );
+    }
+    for ( float &v : t ) v = std::round( v * 10.0f ) / 10.0f;
+    return t;
+}
 /** @brief A line that should be heard and the share of the time it wants to be. */
 struct AudibleWant
 {
@@ -162,13 +268,13 @@ void Composer::matchPresence( const ParamStore &params, TrackPlan &plan, const d
  * (Stevens' law for loudness), is capped at AudibleLiftDb and only ever lifts; a track without a lead in its
  * drops has nothing to measure against and is left alone. Before Auto Gain, whose probes then hear the lift.
  */
-void Composer::matchAudibility( const ParamStore &params, TrackPlan &plan ) const
+void Composer::matchAudibility( const ParamStore &params, TrackPlan &plan, std::vector<double> *spectrum ) const
 {
     for ( float &v : plan.m_audibilityLiftDb ) v = 0.0f;
     for ( double &v : plan.m_audibleInMix ) v = 0.0;
     if ( !params.getBool( params.base( ModuleE::COMPOSE ) + compose::AUDIBILITY_MATCH ) ) return;
     double inMix[MelodyParts] = {};
-    probeLoudness( params, plan, ProbeAudible, 0.0f, nullptr, inMix );
+    probeLoudness( params, plan, ProbeAudible, 0.0f, nullptr, inMix, spectrum );
     for ( int k = 0; k < MelodyParts; ++k ) plan.m_audibleInMix[k] = inMix[k];
     const double lead = inMix[mpIndex( MelodyPartE::LEAD )];
     if ( !( lead > 0.5 ) ) return;
@@ -265,6 +371,11 @@ bool Composer::adoptMeasurement( int index, const TrackPlan &m, uint64_t generat
     t.m_presenceGainDb = m.m_presenceGainDb;
     t.m_mixLoudness = m.m_mixLoudness;
     t.m_masterGainDb = m.m_masterGainDb;
+    for ( int b = 0; b < 4; ++b )
+    {
+        t.m_toneBands[b] = m.m_toneBands[b];
+        t.m_toneDb[b] = m.m_toneDb[b];
+    }
     t.m_measureDeferred = m.m_measureDeferred;
     t.m_masterDeferred = m.m_masterDeferred;
     t.m_correctionsPending = true;
@@ -286,7 +397,8 @@ bool Composer::measureLevels( const ParamStore &p, TrackPlan &t, double *mix0Out
         recipes.copyValuesFrom( p );
         recipes.set( cb + compose::SOUND_PRESETS, 0.0f );
     }
-    const TrackPlan &ref = first ? t : m_plans[0];
+    const TrackPlan    &ref = first ? t : m_plans[0];
+    std::vector<double> drops;   // the audibility probe's spectrum, for the tone match
     // The level match's arithmetic, once for both orders. Every track against the reference -- the first one too,
     // where it plays presets.
     auto trackGain = [&]
@@ -330,8 +442,9 @@ bool Composer::measureLevels( const ParamStore &p, TrackPlan &t, double *mix0Out
                 partGain( k );
             }
             matchPresence( p, t );
-            matchAudibility( p, t );
+            matchAudibility( p, t, &drops );
         }
+        matchTone( p, t, &drops );
         return false;
     }
 
@@ -368,7 +481,8 @@ bool Composer::measureLevels( const ParamStore &p, TrackPlan &t, double *mix0Out
     // cannot move the lines, because it is off (the mix probe first in the list: it is the longest).
     const bool mixEarly = mix0Out != nullptr && autoGain && level && !m_deferMaster &&
                           !p.getBool( cb + compose::PRESENCE_MATCH ) &&
-                          !p.getBool( cb + compose::AUDIBILITY_MATCH );   // both move the lines Auto Gain has to hear
+                          !p.getBool( cb + compose::AUDIBILITY_MATCH ) &&   // both move the lines Auto Gain has to hear
+                          !p.getBool( p.base( ModuleE::MASTER ) + master::AUTO_TONE );   // and the tone, the mix
     double     lines[2] = {}, rest[2] = {}, mix0 = 0.0;
     if ( level )
     {
@@ -380,8 +494,9 @@ bool Composer::measureLevels( const ParamStore &p, TrackPlan &t, double *mix0Out
         tasks.push_back( [&] { probeLoudness( p, snap, ProbeRest, 0.0f, rest ); } );
         probe::runAll( tasks );
         matchPresence( p, t, lines, rest );
-        matchAudibility( p, t );   // after the presence gain, before Auto Gain (23.09.2026)
+        matchAudibility( p, t, &drops );   // after the presence gain, before Auto Gain (23.09.2026)
     }
+    matchTone( p, t, &drops );   // with the lines' corrections in, before Auto Gain (20.10.2026)
     // Stages 3 and 4 (Auto Gain) are measureTrack's. `mixEarly` puts the first of its two readings beside the
     // presence probes where the presence match cannot move the lines; a deferred track does not want it there
     // either, so it is not started.
@@ -402,8 +517,54 @@ float Composer::completeMasterGain( const ParamStore &p, int index ) const
     return t.m_masterGainDb;
 }
 
+void Composer::matchTone( const ParamStore &p, TrackPlan &t, const std::vector<double> *drops ) const
+{
+    for ( int b = 0; b < 4; ++b ) t.m_toneDb[b] = t.m_toneBands[b] = 0.0f;
+    if ( !p.getBool( p.base( ModuleE::MASTER ) + master::AUTO_TONE ) ) return;
+    // The references' bands (Tools/ref_profile.json, 39 records, the middle minute; Tools/metrics.py): the first and
+    // the third quartile of 140-500 Hz, 500-1500, 1.5-6 kHz and 6-16 kHz against 40-140 Hz. One pool, not a style each:
+    // the user's recordings carry no style.
+    static const Tone4 Lo = { -8.76f, -9.47f, -10.97f, -14.55f }, Hi = { -5.24f, -6.21f, -7.78f, -10.77f };
+    // The audibility probe's render where it ran (the same bars; the lines it lifts after are the quiet ones), else
+    // its bars rendered here.
+    std::vector<double> power;
+    if ( drops != nullptr && !drops->empty() )
+        power = *drops;
+    else
+        probeLoudness( p, t, ProbeAudible, 0.0f, nullptr, nullptr, &power );
+    if ( power.empty() ) return;
+    ToneEq flat;
+    flat.prepare( 48000.0, MasterToneBands, 4 );
+    Tone4 now;
+    toneLevels( power, flat, Tone4{}, now );
+    if ( !std::isfinite( now[0] ) || now[0] > 30.0f ) return;   // (no kick-and-bass band to read against)
+    const Tone4 trims = fitTone( power, Lo, Hi );
+    for ( size_t b = 0; b < 4; ++b )
+    {
+        t.m_toneBands[b] = now[b];
+        t.m_toneDb[b] = trims[b];
+    }
+}
+
+void Composer::toneControls( const ParamStore &p, const TrackPlan &plan, double beat, float length,
+                             std::vector<ControlEvent> &out ) const
+{
+    const int ms = p.base( ModuleE::MASTER );
+    for ( int b = 0; b < 4; ++b )
+    {
+        const ParamDesc &d = p.desc( ms + master::TONE_LOW_MID + b );
+        ControlEvent     c;
+        c.m_beat = beat;
+        c.m_param = static_cast<int16_t>( ms + master::TONE_LOW_MID + b );
+        c.m_kind = ControlEvent::KindE::OFFSET;
+        c.m_value = plan.m_toneDb[b] / ( d.m_maxValue - d.m_minValue );
+        c.m_length = length;
+        out.push_back( c );
+    }
+}
+
 double Composer::probeLoudness( const ParamStore &p, const TrackPlan &plan, int part, float masterGainDb, double *bands,
-                                double *audible ) const
+                                double *audible, std::vector<double> *spectrum ) const
 {
     // The presence probe (19.09.2026, round "polish"; matchPresence): the drops as the form plays them, split
     // into the lines and the rest, so that the balance can be solved for the lines' gain without another render.
@@ -695,7 +856,7 @@ double Composer::probeLoudness( const ParamStore &p, const TrackPlan &plan, int 
     // The cache key: everything the render below depends on (Probe.h). Field by field, so that padding
     // bytes never enter it; with the counts, so that a note cannot pass for a control.
     // The audibility probe returns a reading per part, more than the cache's three values: never cached.
-    const bool cached = probe::cacheEnabled() && audible == nullptr;
+    const bool cached = probe::cacheEnabled() && audible == nullptr && spectrum == nullptr;
     probe::Key key;
     if ( cached )
     {
@@ -755,7 +916,12 @@ double Composer::probeLoudness( const ParamStore &p, const TrackPlan &plan, int 
     for ( const NoteEvent &n : notes ) engine->pushEvent( n );
     LoudnessMeter meter;
     meter.prepare( sr );
-    std::vector<float> L( 512 ), R( 512 );
+    std::vector<float> L( 512 ), R( 512 ), allL, allR;
+    if ( spectrum != nullptr )
+    {   // the tone match's spectrum: the whole probe kept, read after
+        allL.reserve( static_cast<size_t>( total ) );
+        allR.reserve( static_cast<size_t>( total ) );
+    }
     // Band powers for the presence match: 1.5..6 kHz and 40..140 Hz, each a fourth-order band (two
     // second-order high passes and two low passes, Butterworth Q), the bands of Tools/metrics.py.
     Svf bandFilter[2][2][4];
@@ -791,6 +957,11 @@ double Composer::probeLoudness( const ParamStore &p, const TrackPlan &plan, int 
         const int n = std::min( 512, total - done );
         engine->process( L.data(), R.data(), n );
         meter.process( L.data(), R.data(), n );
+        if ( spectrum != nullptr )
+        {
+            allL.insert( allL.end(), L.begin(), L.begin() + n );
+            allR.insert( allR.end(), R.begin(), R.begin() + n );
+        }
         if ( aud != nullptr )
         {
             const float *sl[NumStems];
@@ -830,6 +1001,24 @@ double Composer::probeLoudness( const ParamStore &p, const TrackPlan &plan, int 
         engine->setStemTap( nullptr );
         for ( int k = 0; k < MelodyParts; ++k )
             audible[k] = aud->read( static_cast<int>( melodyScorePart( static_cast<MelodyPartE>( k ) ) ) ).m_inMix;
+    }
+    if ( spectrum != nullptr )
+    {   // Welch over L and R, summed (Tools/metrics.py: Hann, 32768 points, half overlap)
+        std::vector<float> re( ToneFft ), im( ToneFft );
+        spectrum->assign( ToneFft / 2 + 1, 0.0 );
+        for ( const std::vector<float> *ch : { &allL, &allR } )
+            for ( size_t a = 0; a + ToneFft <= ch->size(); a += ToneFft / 2 )
+            {
+                for ( int j = 0; j < ToneFft; ++j )
+                {
+                    const double w = 0.5 - 0.5 * std::cos( 2.0 * 3.14159265358979 * j / ToneFft );
+                    re[static_cast<size_t>( j )] = static_cast<float>( ( *ch )[a + static_cast<size_t>( j )] * w );
+                    im[static_cast<size_t>( j )] = 0.0f;
+                }
+                ResonanceSuppressor::transform( re, im );
+                for ( size_t k = 0; k < spectrum->size(); ++k )
+                    ( *spectrum )[k] += static_cast<double>( re[k] ) * re[k] + static_cast<double>( im[k] ) * im[k];
+            }
     }
     const double integrated = meter.read().m_integrated;
     if ( cached )

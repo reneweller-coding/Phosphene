@@ -90,8 +90,11 @@ and the master. Along the bottom the modulation of every voice.
   2 GB download; without them everything else plays.
 * **Mixed and mastered as it plays.** A channel strip per part with the kick's sidechain duck, trance
   gate and distance; a room, a plate and a hall for near, middle and far; a level, presence and
-  audibility match measured by rendering parts of each track ahead of time; bus compressor, mono
-  bass, soft clipper, a true-peak limiter on a loudness target, and BS.1770 metering.
+  audibility match measured by rendering parts of each track ahead of time; a tone match that fits
+  the smallest broad equaliser bringing each track's drops into the range of the reference recordings
+  (least squares through the bells' exact response, set for the whole track); a resonance suppressor
+  with moving bells and no latency; bus compressor, mono bass, soft clipper, a true-peak limiter at
+  -2 dBTP on a loudness target (a loud master that survives AAC and Opus), and BS.1770 metering.
 * **The panel is yours.** Seventeen tabs generated from the engine's own parameter tables. The tab of a
   synth shows the preset the composer plays; a thin bright **live ring** on every knob and fader shows
   where a value plays away from where it stands — a section opening a filter, the level match, an

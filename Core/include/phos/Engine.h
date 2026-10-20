@@ -69,6 +69,8 @@
 #include "phos/Acid.h"
 #include "phos/Bass.h"
 #include "phos/Dynamics.h"
+#include "phos/Resonance.h"
+#include "phos/ToneEq.h"
 #include "phos/FieldPlayer.h"
 #include "phos/Loudness.h"
 #include "phos/Reverb.h"
@@ -94,6 +96,10 @@
 
 namespace phos
 {
+
+/** @brief 20.10.2026: the tone trims' bells and shelf in the master, a band each (master.tone_*; Composer::matchTone):
+ *         140-500 Hz, 500-1500, 1.5-6 kHz, 6-16 kHz. */
+extern const ToneBand MasterToneBands[4];
 
 /**
  * @name Stems (23.09.2026, round "Stems")
@@ -779,6 +785,10 @@ private:
     /** @} */
 
     BusCompressor       m_comp;               ///< the master's bus compressor
+    ResonanceSuppressor m_resonance;          ///< the resonance suppressor (master.resonance)
+    ToneEq              m_toneEq;             ///< the tone trims (master.tone_*)
+    ToneEq::State       m_toneState;          ///< their filter memory
+    float               m_toneDb[4] = {};     ///< the tone trims as set, dB
     Svf                 m_sideHp1;            ///< mono below (master.mono_below): the side's high pass, first stage
     Svf                 m_sideHp2;            ///< ... and the second (fourth-order Butterworth together)
     HalfbandUp<float>   m_clipUpL;            ///< the clipper's 2x upsampling, left

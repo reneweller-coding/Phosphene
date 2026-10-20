@@ -1497,6 +1497,7 @@ void Composer::transitionBar( const ParamStore &params, int track, int bar, std:
                 c.m_value = guest.m_masterGainDb / ( mg.m_maxValue - mg.m_minValue );
                 controls->push_back( c );
             }
+            toneControls( params, guest, c.m_beat, c.m_length, *controls );   // the guest's tone (20.10.2026)
         }
         const int pb = params.base( PolyInstanceE::PAD ), db = params.base( PolyInstanceE::DRONE );
         auto      closeHighPass = [&]( int base )

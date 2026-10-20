@@ -984,6 +984,11 @@ int main( int argc, char **argv )
             for ( int k = 0; k < MelodyParts; ++k ) std::printf( " %+.1f", static_cast<double>( p.m_partGainDb[k] ) );
             std::printf( " dB, mix %.1f LUFS before the master offset %+.1f dB\n", p.m_mixLoudness,
                          static_cast<double>( p.m_masterGainDb ) );
+            std::printf( "          tone against 40-140 Hz (low mids, mids, presence, air; trim)" );
+            for ( int b = 0; b < 4; ++b )
+                std::printf( " %.1f (%+.1f)", static_cast<double>( p.m_toneBands[b] ),
+                             static_cast<double>( p.m_toneDb[b] ) );
+            std::printf( "\n" );
         }
     }
     if ( listSections )

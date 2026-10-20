@@ -1060,6 +1060,14 @@ const ParamDesc MasterParams[master::COUNT] = {
     // 25.09.2026, the addon's monitoring: listen in mono, to the sub alone (the kick-bass gap and the tuning are
     // judged there), or to the side signal. After the meter, so Auto Gain and the loudness readings are the mix's.
     { "monitor", "Monitor", "", 0.0f, 3.0f, 0.0f, CurveE::CHOICE, MonitorNames },
+    // 20.10.2026: the resonance suppressor; the tone trims the composer sets per track (Auto Tone) on four knobs,
+    // 140-500 Hz, 500-1500, 1.5-6 kHz and above 6 kHz.
+    { "resonance", "Resonance", "", 0.0f, 1.0f, 0.4f, CurveE::LINEAR },   // moderate: a dense mix's own peaks
+    { "auto_tone", "Auto Tone", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
+    { "tone_low_mid", "Tone Low Mid", "dB", -6.0f, 6.0f, 0.0f, CurveE::LINEAR },
+    { "tone_mid", "Tone Mid", "dB", -6.0f, 6.0f, 0.0f, CurveE::LINEAR },
+    { "tone_presence", "Tone Presence", "dB", -6.0f, 6.0f, 0.0f, CurveE::LINEAR },
+    { "tone_air", "Tone Air", "dB", -6.0f, 6.0f, 0.0f, CurveE::LINEAR },
 };
 
 /// The cue bridge of PLAN 8.3. Appended after the master block, so no parameter that existed before

@@ -13,6 +13,13 @@
 namespace phos
 {
 
+// The tone trims' bands (20.10.2026), one per band of Tools/metrics.py the composer reads: broad bells on the low mids,
+// the mids and the presence, a shelf for the air.
+const ToneBand MasterToneBands[4] = { { ToneBandE::BELL, 265.0f, 0.75f },
+                                      { ToneBandE::BELL, 866.0f, 0.88f },
+                                      { ToneBandE::BELL, 3000.0f, 0.67f },
+                                      { ToneBandE::HIGH_SHELF, 7000.0f, 0.7071f } };
+
 const char *const StemNames[NumStems] = { "Kick", "Bass",  "Perc", "Acid",    "Lead",  "Counter", "Arp",    "Stab",
                                           "Pad",  "Drone", "Sfx",  "Texture", "Vocal", "Field",   "Returns" };
 
@@ -334,6 +341,9 @@ void Engine::prepare( double sampleRate, int /*maxBlockSize*/, const Quality &qu
     m_hallGate.set( 1.8f, 4.0f, 0.35f, 0.0f, 200.0f, 9000.0f );
     m_hallGate.setDuck( 0.7f, -50.0f, 0.015f, 0.30f );
     m_comp.prepare( m_sr );
+    m_resonance.prepare( m_sr );
+    m_toneEq.prepare( m_sr, MasterToneBands, 4 );
+    for ( float &t : m_toneDb ) t = 0.0f;
     m_bandLimitL.prepare( m_sr );
     m_bandLimitR.prepare( m_sr );
     m_limiter.prepare( m_sr, 1.5f );
@@ -433,6 +443,8 @@ void Engine::reset()
     m_monLp1.m_ic1 = m_monLp1.m_ic2 = m_monLp2.m_ic1 = m_monLp2.m_ic2 = 0.0f;
     m_hallGate.reset();
     m_comp.reset();
+    m_resonance.reset();
+    m_toneState.reset();
     m_sideHp1.reset();
     m_sideHp2.reset();
     m_bandLimitL.reset();
@@ -845,6 +857,16 @@ void Engine::applyParams()
     m_clip = e( ms + master::CLIP ) >= 0.5f;
     m_comp.set( e( ms + master::COMP_THRESHOLD ), e( ms + master::COMP_RATIO ), e( ms + master::COMP_KNEE ),
                 e( ms + master::COMP_ATTACK ), e( ms + master::COMP_RELEASE ) );
+    m_resonance.set( e( ms + master::RESONANCE ) );
+    // The tone trims: the knobs with the composer's offsets (they ramp over a phrase at a track's start).
+    bool toneMoved = false;
+    for ( int b = 0; b < 4; ++b )
+    {
+        const float db = e( ms + master::TONE_LOW_MID + b );
+        toneMoved = toneMoved || db != m_toneDb[b];
+        m_toneDb[b] = db;
+    }
+    if ( toneMoved ) m_toneEq.setGains( m_toneDb );
     m_sideHp1.setQ( e( ms + master::MONO_BASS ), 0.70710678f, static_cast<float>( m_sr ) );
     m_sideHp2.copyCoefficients( m_sideHp1 );
     const bool lim = e( ms + master::LIMITER ) >= 0.5f;
@@ -1345,7 +1367,10 @@ void Engine::renderSegment( float *L, float *R, int offset, int count )
             m_tap->m_R[NumParts][oi] = outR[i] - m_masterGain * m_tap->m_R[NumParts][oi];
         }
     }
-    // Master: bus compressor, mono bass, limiter, safety clip, meter.
+    // Master: the tone trims and the resonance suppressor (20.10.2026), bus compressor, mono bass, limiter, safety
+    // clip, meter.
+    m_toneEq.process( m_toneState, outL, outR, count );
+    m_resonance.process( outL, outR, count );
     m_comp.process( outL, outR, count );
     for ( int i = 0; i < count; ++i )
     {
