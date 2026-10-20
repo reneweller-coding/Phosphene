@@ -215,7 +215,7 @@ seed 303 track 2: bars 224..479, 145.5 BPM, D# Phrygian, Goa, bass Gallop/Rollin
   field (2):
     beat       0 length   128 velocity 100
     beat     480 length    96 velocity 105
-bars    0..  15:   280 notes 6e190c9e96b7f09a,  2275 controls a89ad123fb9f8873
+bars    0..  15:   280 notes 6e190c9e96b7f09a,  2275 controls b5c01bde1d428a23
 bars   16..  31:   573 notes 708110851076af40,   102 controls 2bf2c80dae5dad37
 bars   32..  47:   753 notes bae4f6d277e55717,   149 controls a051ebbe47ebe698
 bars   48..  63:  1100 notes 5368449ff1ccfcf0,   112 controls f960ad644d92198b
@@ -244,4 +244,4 @@ bars  400.. 415:  1495 notes 92e5c9c0d3168aea,   160 controls 3588bc57d262728d
 bars  416.. 431:  1496 notes 0f1182bbd7a46aa6,   130 controls f67f7ca568f7ff04
 bars  432.. 447:  1502 notes 43cca6749a65aeeb,   116 controls 2810b4f6789678d2
 bars  448.. 463:   677 notes 65262acc24271055,  1833 controls be2972c3cf386c08
-bars  464.. 479:   605 notes 64deb2ab3ac56d1a,   116 controls 99d06e59ba8da39a
+bars  464.. 479:   605 notes 64deb2ab3ac56d1a,   116 controls f1e96fb48d19b6a7

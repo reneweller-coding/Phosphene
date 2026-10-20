@@ -1068,6 +1068,7 @@ const ParamDesc MasterParams[master::COUNT] = {
     { "tone_mid", "Tone Mid", "dB", -6.0f, 6.0f, 0.0f, CurveE::LINEAR },
     { "tone_presence", "Tone Presence", "dB", -6.0f, 6.0f, 0.0f, CurveE::LINEAR },
     { "tone_air", "Tone Air", "dB", -6.0f, 6.0f, 0.0f, CurveE::LINEAR },
+    { "image", "Image", "", 0.0f, 1.0f, 1.0f, CurveE::LINEAR },   // the width per band toward the references
 };
 
 /// The cue bridge of PLAN 8.3. Appended after the master block, so no parameter that existed before

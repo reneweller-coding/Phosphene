@@ -69,6 +69,7 @@
 #include "phos/Acid.h"
 #include "phos/Bass.h"
 #include "phos/Dynamics.h"
+#include "phos/Image.h"
 #include "phos/Resonance.h"
 #include "phos/ToneEq.h"
 #include "phos/FieldPlayer.h"
@@ -786,6 +787,7 @@ private:
 
     BusCompressor       m_comp;               ///< the master's bus compressor
     ResonanceSuppressor m_resonance;          ///< the resonance suppressor (master.resonance)
+    ImageMatch          m_image;              ///< the width per band (master.image)
     ToneEq              m_toneEq;             ///< the tone trims (master.tone_*)
     ToneEq::State       m_toneState;          ///< their filter memory
     float               m_toneDb[4] = {};     ///< the tone trims as set, dB

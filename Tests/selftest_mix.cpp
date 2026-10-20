@@ -283,6 +283,7 @@ void testGatedReverb()
             e->prepare( 48000.0, 256 );
             e->params().parseText(
                 fmt( "master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 master.resonance=0 "
+                     "master.image=0 "
                      "mix.kick_mute=1 mix.bass_mute=1 mix.perc_mute=1 "
                      "fx.room_return=-36 fx.hall_return=6 pad.room_send=0 pad.hall_send=%.2f pad.duck=0 pad.level=-36 "
                      "pad.amp_attack=1 pad.amp_decay=1 pad.amp_sustain=1 pad.amp_release=2000 pad.hall_gate=%d",
@@ -1012,6 +1013,7 @@ void testWanderingFx()
             e->prepare( 48000.0, 256 );
             e->params().parseText(
                 fmt( "master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 master.resonance=0 "
+                     "master.image=0 "
                      "mix.kick_mute=1 mix.bass_mute=1 mix.perc_mute=1 "
                      "fx.room_return=-96 fx.hall_return=%.2f fx.hall_decay=3 "
                      "sfx.room_send=0 sfx.hall_send=0 sfx.duck=0 sfx.level=0 sfx.wander=%d sfx.wander_send=0.9",

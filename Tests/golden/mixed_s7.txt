@@ -330,8 +330,8 @@ bars  176.. 191:  1520 notes ed1e9afee1b86efc,   126 controls 36ddc0f661a23c84
 bars  192.. 207:  1508 notes e310d185a648a774,   125 controls 42afb65f90b395aa
 bars  208.. 223:  1533 notes b3708554650d65d7,   119 controls a43fda960223fbaa
 bars  224.. 239:   617 notes c4b71308b49a364f,  1833 controls 7d531d92133f2b22
-bars  240.. 255:   685 notes bb84ce882e9ce0ab,   116 controls b632655d33d141ca
-bars  256.. 271:   870 notes d11f25180f60983e,   649 controls 344e372725fa609e
+bars  240.. 255:   685 notes bb84ce882e9ce0ab,   116 controls 60307fd100914f7a
+bars  256.. 271:   870 notes d11f25180f60983e,   649 controls 3a61fd4fa037250e
 bars  272.. 287:   767 notes 71140c980dec3c20,   151 controls 2b56499a6fc8389e
 bars  288.. 303:   831 notes 42df65ad950cd05c,   112 controls 1364eab9c5eb8fc6
 bars  304.. 319:  1253 notes d5b0b77551e1a364,   164 controls c2e8027a0431f826
@@ -343,8 +343,8 @@ bars  384.. 399:  1182 notes 7d684610f65bbda2,   114 controls 5d2e3b0f36dcdb7e
 bars  400.. 415:  1592 notes 3d3368b80d65b755,   166 controls 80be6d993113634f
 bars  416.. 431:  1596 notes 89b9428f881787af,   133 controls b106eb9f203c3327
 bars  432.. 447:   845 notes 06e8cf349420a03a,  1830 controls f5ee0a1efe5a75da
-bars  448.. 463:   627 notes 3b41c8383ad938e1,   119 controls f47f11625385a50d
-bars  464.. 479:   829 notes 343b75dddaa10622,   649 controls 97a495e73c2f4cf0
+bars  448.. 463:   627 notes 3b41c8383ad938e1,   119 controls 25fbb415a539c5d5
+bars  464.. 479:   829 notes 343b75dddaa10622,   649 controls 731a947fef217908
 bars  480.. 495:  1010 notes 6862738a8bc6ead8,   114 controls b1427a59b574539f
 bars  496.. 511:   872 notes 9815cba1f3506a69,   151 controls a6c79cf9d8cc1332
 bars  512.. 527:  1016 notes 6c1ad479e9634911,   159 controls c2ee466599f23914
@@ -359,4 +359,4 @@ bars  640.. 655:  1554 notes 2d8cf40554338e5e,   129 controls e57945dc2965fb22
 bars  656.. 671:  1541 notes 8a4d0deea3c52a7e,   132 controls e275fffb45fc0ad1
 bars  672.. 687:  1065 notes 57aa36db23cc1b0b,  1841 controls be3e7be7077ac744
 bars  688.. 703:   624 notes 06a290901a823f3c,   109 controls a9a3e50344732708
-bars  704.. 719:   286 notes 1b191eb380400b6d,    57 controls 7978b2ac6e2e5566
+bars  704.. 719:   286 notes 1b191eb380400b6d,    57 controls cedcda9cf7d6a9d7

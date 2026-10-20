@@ -324,7 +324,7 @@ seed 1 track 3: bars 448..687, 144.5 BPM, D# Phrygian, Goa, bass Rolling/Skip ga
     Sweep          beat     892 length     4 preset 81
   field (1):
     beat       0 length   128 velocity 100
-bars    0..  15:   273 notes 7f330760c9e894d3,  2272 controls b3f654a4e1e68b7c
+bars    0..  15:   273 notes 7f330760c9e894d3,  2272 controls 027d26e979fa3646
 bars   16..  31:   588 notes c77abf35f78aec30,    99 controls 528c5816407c20df
 bars   32..  47:   952 notes cfe5df44298fab9b,   148 controls b08d787f516bc32f
 bars   48..  63:   989 notes ce3104ecc4b2bf00,   111 controls cc212edcc9b12345

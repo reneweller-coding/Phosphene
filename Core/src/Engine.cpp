@@ -342,6 +342,12 @@ void Engine::prepare( double sampleRate, int /*maxBlockSize*/, const Quality &qu
     m_hallGate.setDuck( 0.7f, -50.0f, 0.015f, 0.30f );
     m_comp.prepare( m_sr );
     m_resonance.prepare( m_sr );
+    // The image's ranges (20.10.2026): the psytrance references' width per band, first and third quartile -- side
+    // over mid in dB, 40 records (Family/tools/mix_audit.py --image-ranges psytrance).
+    static const float ImageLo[ImageMatch::Bands] = { -26.9f, -12.5f, -8.4f, -8.0f, -10.7f };
+    static const float ImageHi[ImageMatch::Bands] = { -16.9f, -8.0f, -4.5f, -4.7f, -6.0f };
+    m_image.prepare( m_sr );
+    m_image.setRanges( ImageLo, ImageHi );
     m_toneEq.prepare( m_sr, MasterToneBands, 4 );
     for ( float &t : m_toneDb ) t = 0.0f;
     m_bandLimitL.prepare( m_sr );
@@ -444,6 +450,7 @@ void Engine::reset()
     m_hallGate.reset();
     m_comp.reset();
     m_resonance.reset();
+    m_image.reset();
     m_toneState.reset();
     m_sideHp1.reset();
     m_sideHp2.reset();
@@ -858,6 +865,7 @@ void Engine::applyParams()
     m_comp.set( e( ms + master::COMP_THRESHOLD ), e( ms + master::COMP_RATIO ), e( ms + master::COMP_KNEE ),
                 e( ms + master::COMP_ATTACK ), e( ms + master::COMP_RELEASE ) );
     m_resonance.set( e( ms + master::RESONANCE ) );
+    m_image.set( e( ms + master::IMAGE ) );
     // The tone trims: the knobs with the composer's offsets (they ramp over a phrase at a track's start).
     bool toneMoved = false;
     for ( int b = 0; b < 4; ++b )
@@ -1371,6 +1379,7 @@ void Engine::renderSegment( float *L, float *R, int offset, int count )
     // clip, meter.
     m_toneEq.process( m_toneState, outL, outR, count );
     m_resonance.process( outL, outR, count );
+    m_image.process( outL, outR, count );   // the width per band (Image.h)
     m_comp.process( outL, outR, count );
     for ( int i = 0; i < count; ++i )
     {

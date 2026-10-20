@@ -440,8 +440,8 @@ bars  384.. 399:  1384 notes d4aa3a3911655da3,   160 controls 016e4c2147bab3a9
 bars  400.. 415:  1510 notes 94c53c4916fa9ec5,   129 controls 609fa9df18c986e7
 bars  416.. 431:  1516 notes 8fe50998e4bcd540,   128 controls 0c46366fd972d9b2
 bars  432.. 447:   804 notes 555be6721d9a3eb1,  1828 controls b115dd799c68b821
-bars  448.. 463:   671 notes f1bf3a247d752b79,   113 controls f6f5cb3ea6ebb959
-bars  464.. 479:   856 notes 725950b8c6624668,   644 controls b7caf6ea19decf9c
+bars  448.. 463:   671 notes f1bf3a247d752b79,   113 controls 3524dd94f9a605e1
+bars  464.. 479:   856 notes 725950b8c6624668,   644 controls 96328749dfe53cc4
 bars  480.. 495:   865 notes 5009c5912916e97d,   108 controls 52b750b707f3b737
 bars  496.. 511:   686 notes c4613a9228a59d52,   153 controls dedd599321fc6ada
 bars  512.. 527:  1374 notes 15a688b8ac4d9163,   161 controls 02a784f13b3691aa
@@ -469,4 +469,4 @@ bars  848.. 863:  1488 notes c7313807c1e5dd7e,   130 controls 9b7523299aaa8eb1
 bars  864.. 879:  1484 notes 8635f3c2eb367559,   125 controls e5d41cefb896148c
 bars  880.. 895:  1505 notes 83126799d1fa3db3,   130 controls 05610adc0864ce79
 bars  896.. 911:   701 notes a5a98bbd41d45b00,  1828 controls 3bce09f4a5439ee2
-bars  912.. 927:   502 notes b08d5742e807508f,   113 controls 3ff140ac264d5c6c
+bars  912.. 927:   502 notes b08d5742e807508f,   113 controls 7a033623deae8a24
