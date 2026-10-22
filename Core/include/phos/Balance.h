@@ -67,6 +67,16 @@ class BalanceMatch
 public:
     static constexpr int Bands = 6;   ///< under 56 Hz, 56-141, 141-449, 449-1425, 1425-5700, over 5700
 
+    /** @brief What it has learnt (22.10.2026): enough to begin a piece where a pass over the whole of it ended. */
+    struct Learnt
+    {
+        std::array<double, Bands> m_avg{};       ///< the gated averages
+        std::array<float, Bands>  m_trim{};      ///< the trims, dB
+        double                    m_loudest = 0.0;   ///< the loudest the gate compares with
+        double                    m_short = 0.0;     ///< the loudness over the gate's seconds
+        bool                      m_heard = false;   ///< anything was averaged at all
+    };
+
     /**
      * @brief Sets the rate and clears everything.
      * @param[in] sampleRate  the sample rate in Hz
@@ -123,6 +133,19 @@ public:
      * @param[in] neutral  true: a common offset after every round of the aims holds the whole's power
      */
     void setNeutral( bool neutral ) { m_neutral = neutral; }
+
+    /**
+     * @return what it has learnt so far
+     */
+    Learnt learnt() const;
+
+    /**
+     * @brief Begins where @p learnt left off (22.10.2026): a composed piece rendered once ahead -- its levelling --
+     *        plays with its balance from the first bar, as the other generators' tone trims measured before the
+     *        track; without it the trims start flat and take a minute to arrive. Nothing that was not heard is taken.
+     * @param[in] learnt  learnt() at the end of the pass
+     */
+    void prime( const Learnt &learnt );
 
     /**
      * @brief Processes @p n samples in place.

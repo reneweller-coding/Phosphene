@@ -1157,6 +1157,7 @@ enum : int
 extern const char *const KeyNames[12];          ///< C, C#, ... B
 extern const char *const ScaleNames[];          ///< names of compose.scale
 extern const char *const StyleNames[];          ///< names of compose.style (Form.h)
+extern const char *const StyleMixNames[];       ///< names of compose.style_mix: "Off", "Walk", "All"
 extern const char *const ArcNames[];            ///< names of compose.arc (Form.h)
 extern const char *const KickPatternNames[];    ///< names of compose.kick_pattern
 extern const char *const BassPatternNames[];    ///< names of compose.bass_pattern

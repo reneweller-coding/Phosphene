@@ -21,6 +21,7 @@ const char *const KickPatternNames[] = { "Four", "Four + Fills", "Off" };
 // The names of the style profiles and the dramaturgy presets (Form.h). They live here, with the other
 // choice tables, because the parameter registry is built from them.
 const char *const StyleNames[] = { "Goa", "Full-On", "Progressive", "Dark Forest", "Hi-Tech" };
+const char *const StyleMixNames[] = { "Off", "Walk", "All" };   ///< compose.style_mix (22.10.2026: All)
 const char *const ArcNames[] = { "Warm-up", "Peak-Time", "Morning", "Closing", "Flat" };
 const char *const BassPatternNames[] = { "Rolling", "Gallop", "Skip", "Offbeat", "Triplet" };
 // Phase 8: the predictive model behind the melodic lines. "Markov" is the measured order-2 model of
@@ -131,7 +132,8 @@ const ParamDesc ComposeParams[compose::COUNT] = {
     // (testPresence: 8 of 8 tracks outside the band left alone). testParams now checks key against index.
     // 22.09.2026: one style for a whole night was the user's first complaint about the sets ("langweilig,
     // wenn immer alles im selben Stil ist"). On, the style walks from track to track (Composer.cpp).
-    { "style_mix", "Style Mix", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
+    // 22.10.2026: a choice -- Walk is the old On (a neighbour at a time), All a mix of all five styles.
+    { "style_mix", "Style Mix", "", 0.0f, 2.0f, 1.0f, CurveE::CHOICE, StyleMixNames },
     // 19.09.2026, round "polish" (ComposerLevels.cpp, matchPresence): On brings each track's presence band into
     // a band around the reference recordings' median by the level of its lines; Off plays them as matched.
     { "presence_match", "Presence Match", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },

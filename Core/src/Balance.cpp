@@ -119,6 +119,28 @@ void BalanceMatch::reset()
     m_state.reset();
 }
 
+BalanceMatch::Learnt BalanceMatch::learnt() const
+{
+    Learnt l;
+    l.m_avg = m_avg;
+    l.m_trim = m_trim;
+    l.m_loudest = m_loudest;
+    l.m_short = m_short;
+    l.m_heard = m_heard;
+    return l;
+}
+
+void BalanceMatch::prime( const Learnt &learnt )
+{
+    if ( !learnt.m_heard ) return;
+    m_avg = learnt.m_avg;
+    m_trim = learnt.m_trim;
+    m_loudest = learnt.m_loudest;
+    m_short = learnt.m_short;
+    m_heard = true;
+    m_eq.setGains( m_trim.data() );
+}
+
 void BalanceMatch::setRanges( const float *lo, const float *hi )
 {
     for ( int b = 0; b < Bands; ++b )

@@ -47,6 +47,7 @@ const double SetMinutes[] = { 10.0, 20.0, 30.0, 45.0, 60.0, 90.0, 120.0, 180.0 }
 struct Row
 {
     int        m_style = -1;      ///< the start style (StyleIdE), -1 for a set
+    bool       m_mix = false;     ///< a mix of all five styles (compose.style_mix All, 22.10.2026)
     int        m_factory = -1;    ///< the factory set (phos/FactorySets.h), -1 for none
     juce::File m_file;            ///< the saved set's .phosset
     double     m_minutes = 0.0;   ///< the set's own length (compose.set_minutes)
@@ -83,6 +84,8 @@ bool knobsOf( phos::ParamStore &params, phos::Composer &composer, const Row &row
         params.set( cb + compose::ARC, static_cast<float>( std::clamp( r.option( "arc", 4 ), 0, NumArcs - 1 ) ) );
         // the arc is shaped over the set's length
         params.set( cb + compose::SET_MINUTES, static_cast<float>( setMinutes( row, r ) ) );
+        // A mix of the styles: the night's energy places every track on the whole tempo ladder (Composer.cpp).
+        if ( row.m_mix ) params.set( cb + compose::STYLE_MIX, 2.0f );
         return true;
     }
     std::string error;
@@ -475,6 +478,19 @@ public:
             row.m_style = s;
             add( std::move( item ), std::move( row ) );
         }
+        {
+            // A mix of the styles (22.10.2026): from Progressive, the night's energy over all five.
+            renderkit::Item item;
+            item.m_name = "All five styles";
+            item.m_kind = "Mix";
+            item.m_cells.add( "Mix" );
+            item.m_keys = { std::nan( "" ) };
+            item.m_detail = "Progressive .. Hi-Tech, mix all styles";
+            Row row;
+            row.m_style = static_cast<int>( StyleIdE::PROGRESSIVE );
+            row.m_mix = true;
+            add( std::move( item ), std::move( row ) );
+        }
         // the factory's sets (phos/FactorySets.h): played as they are, the dice their own
         for ( int i = 0; i < numFactorySets(); ++i )
         {
@@ -576,6 +592,10 @@ public:
         else if ( rw->m_style < 0 )
             s << "Your set (" << rw->m_file.getFileName() << "): its seed, style, arc, knobs and "
               << juce::String( rw->m_minutes, 0 ) << " minutes";
+        else if ( rw->m_mix )
+            s << "A mix of all five styles: the night's energy over the arc "
+              << phos::ArcNames[std::clamp( r.option( "arc", 4 ), 0, phos::NumArcs - 1 )]
+              << " places every track on Progressive, Full-On, Goa, Dark Forest, Hi-Tech (Style Mix All)";
         else
             s << "From " << phos::StyleNames[rw->m_style] << ", the arc "
               << phos::ArcNames[std::clamp( r.option( "arc", 4 ), 0, phos::NumArcs - 1 )];

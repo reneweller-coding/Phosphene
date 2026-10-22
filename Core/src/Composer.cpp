@@ -799,7 +799,29 @@ const TrackWalk &Composer::walkAt( const ParamStore &params, int index ) const
                                       arcEnergy( arcOf( params ), prevStart / setBars );
                 const bool   move = rs.uniform() < 0.4f || run >= 3;
                 const bool   against = rs.uniform() < 0.25f;
-                if ( move )
+                if ( params.getInt( cb + compose::STYLE_MIX ) >= 2 )
+                {
+                    // All (22.10.2026, a mix of all five rather than a walk from the knob's): the night's energy,
+                    // stretched over its arc's own range, places the track on the tempo ladder -- Progressive where
+                    // the night is quietest, Hi-Tech where it is loudest; a flat arc climbs it by time. The draws above
+                    // are taken all the same, so the stream stays where it was.
+                    const ArcIdE a = arcOf( params );
+                    float        eLow = 1.0f, eHigh = 0.0f;
+                    for ( int k = 0; k <= 100; ++k )
+                    {
+                        const float ek = static_cast<float>( arcEnergy( a, 0.01 * k ) );
+                        eLow = std::min( eLow, ek );
+                        eHigh = std::max( eHigh, ek );
+                    }
+                    const float e = static_cast<float>( arcEnergy( a, startBar / setBars ) );
+                    const float en = eHigh - eLow > 0.05f ? ( e - eLow ) / ( eHigh - eLow )
+                                                          : static_cast<float>( startBar / setBars );
+                    int at = std::clamp( static_cast<int>( 4.0f * en + 0.5f ), 0, 4 );
+                    // As the walk: a style holds three tracks at the most, then the neighbour towards the middle.
+                    if ( run >= 3 && static_cast<int>( ByTempo[at] ) == prev.m_style ) at += at >= 2 ? -1 : 1;
+                    w.m_style = static_cast<int>( ByTempo[at] );
+                }
+                else if ( move )
                 {
                     int dir = ( rising != against ) ? 1 : -1;
                     if ( pos + dir < 0 || pos + dir >= NumStyles ) dir = -dir;
