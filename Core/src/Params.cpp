@@ -1043,7 +1043,7 @@ const ParamDesc MixParams[mix::COUNT] = {
 /** @brief The master: the bus compressor, the clipper, the limiter, the loudness. */
 const ParamDesc MasterParams[master::COUNT] = {
     { "gain", "Gain", "dB", -24.0f, 24.0f, 0.0f, CurveE::LINEAR },
-    { "ceiling", "Ceiling", "dBTP", -12.0f, 0.0f, -2.0f, CurveE::LINEAR },   // -2: a loud master survives AAC and Opus
+    { "ceiling", "Ceiling", "dBTP", -12.0f, 0.0f, -3.0f, CurveE::LINEAR },   // -3: Opus lifted -2 by up to 1.8 dB
     { "clip", "Clip", "", 0.0f, 1.0f, 1.0f, CurveE::TOGGLE },
     { "comp_threshold", "Comp Threshold", "dB", -40.0f, 0.0f, -8.0f, CurveE::LINEAR },
     { "comp_ratio", "Comp Ratio", ":1", 1.0f, 10.0f, 1.5f, CurveE::LOG },
@@ -1069,6 +1069,7 @@ const ParamDesc MasterParams[master::COUNT] = {
     { "tone_presence", "Tone Presence", "dB", -6.0f, 6.0f, 0.0f, CurveE::LINEAR },
     { "tone_air", "Tone Air", "dB", -6.0f, 6.0f, 0.0f, CurveE::LINEAR },
     { "image", "Image", "", 0.0f, 1.0f, 1.0f, CurveE::LINEAR },   // the width per band toward the references
+    { "balance", "Balance", "", 0.0f, 1.0f, 1.0f, CurveE::LINEAR },   // 21.10.2026: the tonal balance toward them
 };
 
 /// The cue bridge of PLAN 8.3. Appended after the master block, so no parameter that existed before

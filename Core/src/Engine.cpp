@@ -329,8 +329,7 @@ void Engine::prepare( double sampleRate, int /*maxBlockSize*/, const Quality &qu
         v->assign( static_cast<size_t>( Chunk ), 0.0f );
     m_leadDuck.prepare( m_sr );
     m_padBandDuck.prepare( m_sr );
-    m_padBandL.setQ( 1200.0f, 0.7f, static_cast<float>( m_sr ) );
-    m_padBandR.setQ( 1200.0f, 0.7f, static_cast<float>( m_sr ) );
+    m_padBand.setQ( 1200.0f, 0.7f, static_cast<float>( m_sr ) );
     m_hallGate.prepare( m_sr );
     // The gated hall's fixed recipe (20.09.2026, round "reverb"; docs/rounds/2026-09.md has the measurements).
     // Big hall, 4 s decay (the brief's "3-5 s"), no pre-delay so the gate's timing is exact from the
@@ -348,6 +347,15 @@ void Engine::prepare( double sampleRate, int /*maxBlockSize*/, const Quality &qu
     static const float ImageHi[ImageMatch::Bands] = { -16.9f, -8.0f, -4.5f, -4.7f, -6.0f };
     m_image.prepare( m_sr );
     m_image.setRanges( ImageLo, ImageHi );
+    // The tonal balance's range (21.10.2026): each band's share of the whole in dB, the first and third quartile of
+    // 40 psytrance records (Family/tools/mix_audit.py, their third-octave curves folded).
+    static const float BalanceLo[BalanceMatch::Bands] = { -29.6f, -4.2f, -8.0f, -11.6f, -11.0f, -12.9f };
+    static const float BalanceHi[BalanceMatch::Bands] = { -23.3f, -2.9f, -5.6f, -8.6f, -8.3f, -10.4f };
+    m_balance.prepare( m_sr );
+    m_balance.setRanges( BalanceLo, BalanceHi );
+    m_balance.setTiming( 30.0f, 0.1f, 3.0f, 1.0f, 3.0f );   // a composed piece: learnt on its loudest passages and held
+    m_balance.setNeutral( true );                   // and the whole's power kept: the stems keep their place
+    m_balance.setLowEdge( 35.6f );                  // the sub as the references measure it (from 35.6 Hz)
     m_toneEq.prepare( m_sr, MasterToneBands, 4 );
     for ( float &t : m_toneDb ) t = 0.0f;
     m_bandLimitL.prepare( m_sr );
@@ -442,8 +450,7 @@ void Engine::reset()
     m_plate.reset();
     m_leadDuck.reset();
     m_padBandDuck.reset();
-    m_padBandL.m_ic1 = m_padBandL.m_ic2 = 0.0f;
-    m_padBandR.m_ic1 = m_padBandR.m_ic2 = 0.0f;
+    m_padBand.m_ic1 = m_padBand.m_ic2 = 0.0f;
     for ( int k = 0; k < PolyInstances; ++k )
         m_distLpL[k].m_ic1 = m_distLpL[k].m_ic2 = m_distLpR[k].m_ic1 = m_distLpR[k].m_ic2 = 0.0f;
     m_monLp1.m_ic1 = m_monLp1.m_ic2 = m_monLp2.m_ic1 = m_monLp2.m_ic2 = 0.0f;
@@ -866,6 +873,7 @@ void Engine::applyParams()
                 e( ms + master::COMP_ATTACK ), e( ms + master::COMP_RELEASE ) );
     m_resonance.set( e( ms + master::RESONANCE ) );
     m_image.set( e( ms + master::IMAGE ) );
+    m_balance.set( e( ms + master::BALANCE ) );
     // The tone trims: the knobs with the composer's offsets (they ramp over a phrase at a track's start).
     bool toneMoved = false;
     for ( int b = 0; b < 4; ++b )
@@ -1231,14 +1239,15 @@ void Engine::renderSegment( float *L, float *R, int offset, int count )
             if ( s == STRIP_PAD )
             {
                 // The pad's presence band under the lead: the bandpass share, scaled towards m_padBandCut as far as
-                // the lead's duck has opened, taken out of the signal (a bell cut of up to pad_lead_duck dB).
-                float lp, bp, hp;
-                m_padBandL.tick( sl, lp, bp, hp );
-                const float cutL = ( 1.0f - m_padBandCut ) * band * ( bp / 0.7f );
-                m_padBandR.tick( sr, lp, bp, hp );
-                const float cutR = ( 1.0f - m_padBandCut ) * band * ( bp / 0.7f );
-                sl -= cutL;
-                sr -= cutR;
+                // the lead's duck has opened, taken out of the signal (a bell cut of up to pad_lead_duck dB) -- out of
+                // the pad's mid only (21.10.2026, as Ultimae's engineers duck a pad under a melody): the lead stands in
+                // a gap in the centre, and the pad keeps its width.
+                float       lp, bp, hp;
+                const float pm = 0.5f * ( sl + sr ), ps = 0.5f * ( sl - sr );
+                m_padBand.tick( pm, lp, bp, hp );
+                const float cut = ( 1.0f - m_padBandCut ) * band * ( bp / 0.7f );
+                sl = pm - cut + ps;
+                sr = pm - cut - ps;
             }
             if ( m_tap != nullptr )
             {
@@ -1379,7 +1388,8 @@ void Engine::renderSegment( float *L, float *R, int offset, int count )
     // clip, meter.
     m_toneEq.process( m_toneState, outL, outR, count );
     m_resonance.process( outL, outR, count );
-    m_image.process( outL, outR, count );   // the width per band (Image.h)
+    m_image.process( outL, outR, count );     // the width per band (Image.h)
+    m_balance.process( outL, outR, count );   // the tonal balance (Balance.h, 21.10.2026)
     m_comp.process( outL, outR, count );
     for ( int i = 0; i < count; ++i )
     {

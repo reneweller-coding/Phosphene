@@ -1149,6 +1149,7 @@ enum : int
     TONE_PRESENCE,
     TONE_AIR,
     IMAGE,   ///< 20.10.2026: the width per band into the psytrance references' range (Image.h), the mono guard
+    BALANCE,   ///< 21.10.2026: the tonal balance, six bands' shares into the psytrance references' range (Balance.h)
     COUNT
 };
 }

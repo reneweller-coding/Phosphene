@@ -69,6 +69,7 @@
 #include "phos/Acid.h"
 #include "phos/Bass.h"
 #include "phos/Dynamics.h"
+#include "phos/Balance.h"
 #include "phos/Image.h"
 #include "phos/Resonance.h"
 #include "phos/ToneEq.h"
@@ -714,7 +715,7 @@ private:
      *  @{ */
     Ducker m_leadDuck;               ///< the counter's gain under the lead
     Ducker m_padBandDuck;            ///< the pad's presence band under the lead
-    Svf    m_padBandL, m_padBandR;   ///< the band's filters (a bandpass whose share is subtracted)
+    Svf    m_padBand;                ///< the band's filter on the pad's mid (a bandpass whose share is subtracted)
     float  m_counterDuck = 0.0f;     ///< mix.counter_duck
     float  m_padBandCut = 1.0f;      ///< linear gain of the band at full depth (mix.pad_lead_duck)
     /** @} */
@@ -788,6 +789,7 @@ private:
     BusCompressor       m_comp;               ///< the master's bus compressor
     ResonanceSuppressor m_resonance;          ///< the resonance suppressor (master.resonance)
     ImageMatch          m_image;              ///< the width per band (master.image)
+    BalanceMatch        m_balance;            ///< the tonal balance (master.balance)
     ToneEq              m_toneEq;             ///< the tone trims (master.tone_*)
     ToneEq::State       m_toneState;          ///< their filter memory
     float               m_toneDb[4] = {};     ///< the tone trims as set, dB
