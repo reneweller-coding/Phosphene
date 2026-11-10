@@ -1,6 +1,6 @@
 # Phosphene release notes
 
-## 1.6.0 (16.10.2026, not released)
+## 1.6.0 (10.11.2026): sets to begin with, a master by reference, in tune
 
 **256 sets to begin with.** The Sets button in the header opens the browser on the factory's sets and on your own
 (the gallery's, and the `.phosset` files in Documents/Phosphene); the one taken is planned and plays from its start.
@@ -21,6 +21,19 @@ models and the voices beside it and waits for the field recordings, as phos_rend
 instrument has learned of your taste (preferences.txt). The family's render app (Tools/renderapp, the same in all six
 instruments); `--list`, `--render`, and a self-test of every format and the queue (ctest `renderapp`).
 
+**A master by reference** (20. to 22.10.2026). Before the bus compressor the master now carries four tone trims
+(bells at 265, 866 and 3000 Hz, a shelf at 7 kHz) and a resonance suppressor (Resonance, 0.4). Auto Tone (on) reads the
+spectrum of a track's drops before the track plays -- from the render the audibility match makes anyway -- and sets the
+smallest trims, at most 3 dB each, that bring every band into the middle half of 39 psytrance recordings; the low mids
+of the drops lay 2.5 to 4 dB over it. Image (on) brings the width of five bands into the range of 40 references, on the
+side signal only, and Balance (on) the six bands' shares, learnt at a track's loudest part and held. The pad's band
+under the lead is taken from the pad's middle only, so the pad keeps its width. The ceiling is -3 dBTP: a dense master
+at -1 came out of AAC and Opus up to 1.8 dB over.
+
+**Style Mix** is a choice now: Off, Walk (the old On: one neighbour after the other) or All, which places every track
+on the whole tempo ladder from Progressive to Hi-Tech by the energy of the night, at most three tracks a style.
+Phosphene Sets has the row "All five styles".
+
 **In tune** (10.11.2026). The score has always kept every line in its scale; this is about what the sounds do with
 those notes, measured over all 8192 presets of the bass, the acid and the six voices, 80 tracks and every field
 recording. A voice's FM ratio is a whole number now (a half put a major third and a major ninth beside every note:
@@ -34,6 +47,15 @@ is a D5 half a semitone sharp -- is played in the key, and the few that are musi
 singing bowl's second mode was a tritone over the key's root and is a fourth now; the jaw harp's drone is the root and
 its resonance rests on the root's octaves and fifths. Sets sound different where these played -- most of all in intros
 and breakdowns. `Tools/tuning_audit.py` measures every preset against its note.
+
+**The places of the Field track are equally loud.** A recording's level is measured where the track plays it -- above
+its low cut, K-weighted -- instead of over the whole file: a place that rumbles (wind, a machine hall) lost most of
+itself to the low cut and played up to 30 LU under a bright one. The middle half of the 120 places now lies within
+2.7 LU (9 before).
+
+**Lighter on the processor**: a set takes 14 % less (6.5 times faster than real time where it was 5.6, on one core of an
+i9-12900K) -- the phasers' and flangers' sweeps from tables, the shifter and the three rooms at rest when nothing plays
+through them, the master's band meters without their divisions.
 
 ## 1.5.0 (15.10.2026): the family plays together
 
