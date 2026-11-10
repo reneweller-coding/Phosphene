@@ -34,6 +34,11 @@ const Slice MasterSlices[] = {
     { "Compressor", master::COMP_THRESHOLD, 5, 5 },
     { "Output", master::MONO_BASS, 7, 4 },
     { "Monitor", master::MONITOR, 1, 2 },   // 25.09.2026, the addon's monitoring
+    // 20. to 22.10.2026, the master by reference: the resonance suppressor and the tone trims (Auto Tone sets them per
+    // track), the width and the balance toward the references. Until 10.11.2026 the eight were on no page -- the
+    // manual refused to print (Tools/manual/make_manual.py: an unreachable control is a bug).
+    { "Tone", master::RESONANCE, 6, 3 },
+    { "Reference", master::IMAGE, 2, 2 },
 };
 
 template <size_t N>

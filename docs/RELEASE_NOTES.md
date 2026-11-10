@@ -28,7 +28,7 @@ smallest trims, at most 3 dB each, that bring every band into the middle half of
 of the drops lay 2.5 to 4 dB over it. Image (on) brings the width of five bands into the range of 40 references, on the
 side signal only, and Balance (on) the six bands' shares, learnt at a track's loudest part and held. The pad's band
 under the lead is taken from the pad's middle only, so the pad keeps its width. The ceiling is -3 dBTP: a dense master
-at -1 came out of AAC and Opus up to 1.8 dB over.
+at -1 came out of AAC and Opus up to 1.8 dB over. The knobs are on the Mixer page, in the groups Tone and Reference.
 
 **Style Mix** is a choice now: Off, Walk (the old On: one neighbour after the other) or All, which places every track
 on the whole tempo ladder from Progressive to Hi-Tech by the energy of the night, at most three tracks a style.
