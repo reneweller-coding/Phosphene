@@ -435,7 +435,7 @@ Forest", und die Aufnahmen im Original ("Nimm doch die originalen Aufnahmen?").
 | Baustein | Verfahren | Warum |
 |---|---|---|
 | Bibliothek (`FieldLibrary.h`) | Original-FLAC, mit dr_flac beim Bedarf dekodiert; Katalog-Schnappschüsse, Nachlade-Thread, LRU-Cache 1,5 GB (Quest 512 MB) mit Schonfrist | nie Plattenzugriff im Audio-Thread; eine Aufnahme, die eine Stimme hält, wird nie freigegeben |
-| Pegel | Faktor je Aufnahme: RMS −20 dBFS, Spitze ≤ −1 dBFS; Datei bleibt unverändert | leise Nacht und lauter Fluss unter demselben Regler an derselben Stelle |
+| Pegel | Faktor je Aufnahme (10.11.2026): was über dem Low Cut der Spur bleibt (Hochpass 24 dB/Okt. bei 150 Hz), K-gewichtet, auf −22 LUFS; höchstens 12 dB über RMS −20 dBFS, gefilterte Spitze ≤ −1 dBFS; Datei bleibt unverändert | leise Nacht und lauter Fluss unter demselben Regler an derselben Stelle. Mit RMS −20 dBFS allein lag ein grollender Ort nach dem Low Cut 30 LU unter einem hellen (120 Orte: −50 bis −14 LUFS) |
 | Player (`FieldPlayer.h`) | zwei Ebenen A/B, Hermite-Interpolation, Tonhöhe durch Resampling, Start mit Zufallsstreuung, rückwärts | Kontakt-artige Grundfunktionen |
 | Loop | beliebiger Bereich, geschlossen mit Equal-Power-Überblendung (zweiter Lesekopf ab Loop-Start, cos/sin) | zwei Abschnitte einer Feldaufnahme sind unkorreliert; nur gleiche Leistung hält den Pegel (Test: ±0,5 dB, linear −3,6 dB) |
 | Klang | Amp- und Filter-ADSR, SVF oder neun Schaltungsmodelle mit den Pegel-Trims der Stimmen, Low Cut 24 dB/Okt, Modulationsblock | Tiefenregel: unter 100 Hz nur Kick und Bass |

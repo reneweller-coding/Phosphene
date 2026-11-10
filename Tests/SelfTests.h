@@ -134,6 +134,7 @@ void testModulationSync();                    ///< selftest_modulation.cpp
 void testModulationFilterAdsr();              ///< selftest_modulation.cpp
 void testModulationDisplay();                 ///< selftest_modulation.cpp
 void testPresetBank();                        ///< selftest_modulation.cpp
+void testFieldLevel();                        ///< selftest_field.cpp
 void testFieldLoop();                         ///< selftest_field.cpp
 void testFieldEngine();                       ///< selftest_field.cpp
 void testFieldForm();                         ///< selftest_field.cpp

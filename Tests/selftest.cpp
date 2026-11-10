@@ -290,6 +290,7 @@ int main( int argc, char **argv )
     run( "testModulation.filterAdsr", testModulationFilterAdsr );
     run( "testModulation.display", testModulationDisplay );
     run( "testPresetBank", testPresetBank );
+    run( "testField.level", testFieldLevel );
     run( "testField.loop", testFieldLoop );
     run( "testField.engine", testFieldEngine );
     run( "testField.form", testFieldForm );

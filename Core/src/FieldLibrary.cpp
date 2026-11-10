@@ -8,6 +8,8 @@
  *                                  search path
  */
 #include "phos/FieldLibrary.h"
+#include "phos/Dsp.h"
+#include "phos/Loudness.h"
 #include "phos/Params.h"
 #include "phos/WaveTableFile.h"
 
@@ -307,23 +309,65 @@ FieldClip *decodeFile( const Entry &e )
 }
 
 /**
- * @brief Sets the clip's norm (FieldClip::norm): RMS to -20 dBFS, the peak held at -1 dBFS.
+ * @brief Sets the clip's norm (FieldClip::m_norm): what remains of it above the Field track's low cut, at FieldLoudness.
+ *
+ * Until 10.11.2026 the norm brought the file's RMS to -20 dBFS. But the Field track plays nothing under 150 Hz (the
+ * depth rule: under 100 Hz only kick and bass; every preset's low cut is 130 .. 220 Hz at 24 dB/octave), and a place
+ * that rumbles -- wind, a machine hall, a quake -- has most of its power there. Measured as the presets play them,
+ * K-weighted, the 120 places lay between -50 and -14 LUFS (the middle half 9 LU apart), and in the sound check the Field
+ * stem stood 17 to 42 LU under the mix depending on which place a track had drawn.
+ *
+ * So the measure is the one the ear and the track share: the recording through a 24 dB/octave high pass at 150 Hz and
+ * the K-weighting of BS.1770, both channels, ungated (a place is a steady thing), brought to FieldLoudness -- the
+ * median the old norm gave, so the places keep their level in the mix and only stop differing. Two limits:
+ *
+ *  - at most FieldNormLift over the old RMS norm: a recording that is *only* rumble (a mains hum, a seismic trace)
+ *    would otherwise be raised by 28 dB to play its noise floor;
+ *  - the filtered peak stays under -1 dBFS, as the file's peak did: a crackling fire cannot be as loud on average as
+ *    rain without clipping at its sparks.
+ *
+ * With them the middle half of the places lies within 2.7 LU and all within 18.5 (36.6 before).
  * @param[in,out] clip  the recording
  */
 void normalise( FieldClip &clip )
 {
+    constexpr double FieldLoudness = -22.0;   // LUFS, of the two channels together
+    constexpr double FieldNormLift = 3.981;   // +12 dB
     FieldClip   *c = &clip;
-    double       sum = 0.0;
-    float        peak = 0.0f;
-    const float *l = c->dataL();
-    const float *r = c->dataR();
-    for ( size_t i = 0; i < c->m_left.size(); ++i )
+    const size_t n = c->m_left.size();
+    if ( n == 0 ) return;
+    const float sr = static_cast<float>( std::max( 8000, c->m_sampleRate ) );
+    double      sum = 0.0, sumK = 0.0;
+    float       peak = 0.0f;
+    // A mono file plays on both sides (dataR reads the left channel): its one channel counts twice.
+    const int channels = c->m_right.empty() ? 1 : 2;
+    for ( int ch = 0; ch < channels; ++ch )
     {
-        sum += static_cast<double>( l[i] ) * l[i] + static_cast<double>( r[i] ) * r[i];
-        peak = std::max( peak, std::max( std::fabs( l[i] ), std::fabs( r[i] ) ) );
+        const float *x = ch == 0 ? c->dataL() : c->dataR();
+        Svf          h1, h2;   // Butterworth, fourth order
+        h1.setQ( 150.0f, 0.54119610f, sr );
+        h2.setQ( 150.0f, 1.30656296f, sr );
+        KFilter k;
+        k.prepare( static_cast<double>( sr ) );
+        for ( size_t i = 0; i < n; ++i )
+        {
+            float lp, bp, hp;
+            h1.tick( x[i], lp, bp, hp );
+            h2.tick( hp, lp, bp, hp );
+            peak = std::max( peak, std::fabs( hp ) );
+            const double w = static_cast<double>( k.process( hp ) );
+            sumK += w * w;
+            sum += static_cast<double>( x[i] ) * x[i];
+        }
     }
-    const double rms = std::sqrt( sum / ( 2.0 * static_cast<double>( c->m_left.size() ) ) ) + 1e-9;
-    c->m_norm = static_cast<float>( std::min( 0.1 / rms, 0.891 / ( static_cast<double>( peak ) + 1e-9 ) ) );
+    const double both = channels == 1 ? 2.0 : 1.0;
+    const double rms = std::sqrt( both * sum / ( 2.0 * static_cast<double>( n ) ) ) + 1e-9;
+    const double meanSquareK = both * sumK / static_cast<double>( n );
+    const double lift = FieldNormLift * 0.1 / rms;
+    const double level = meanSquareK > 1e-18
+                             ? std::pow( 10.0, ( FieldLoudness + 0.691 - 10.0 * std::log10( meanSquareK ) ) / 20.0 )
+                             : lift;
+    c->m_norm = static_cast<float>( std::min( { level, lift, 0.891 / ( static_cast<double>( peak ) + 1e-9 ) } ) );
 }
 
 /**

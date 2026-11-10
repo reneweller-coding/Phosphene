@@ -46,7 +46,9 @@ struct FieldClip
     std::vector<float> m_right;                ///< the right one; empty for a mono file (right() reads left)
     std::atomic<int>   m_users{ 0 };           ///< voices playing it now (eviction skips it)
     /**
-     * @brief The gain that brings it to the library's level: RMS -20 dBFS, the peak held at -1 dBFS.
+     * @brief The gain that brings it to the library's level: what remains above the Field track's low cut (150 Hz),
+     *        K-weighted, at -22 LUFS -- at most 12 dB over an RMS of -20 dBFS, the filtered peak held at -1 dBFS
+     *        (10.11.2026; until then the file's RMS at -20 dBFS, which left a rumbling place 30 LU under a bright one).
      *
      * The files stay as they are; the sampler plays them at this gain, so that a quiet night recording and a loud river
      * sit at the same place under the same knob.

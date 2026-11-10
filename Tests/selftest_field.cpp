@@ -86,6 +86,80 @@ void rmsRange( const std::vector<float> &y, size_t from, double &lo, double &hi 
 
 }   // namespace
 
+/**
+ * @brief Field track, part `.level`: a recording's level is what remains of it above the low cut, K-weighted -- a place
+ *        that rumbles is as loud as one that does not, as far as 12 dB over its RMS level and its peak allow.
+ *
+ * Until 10.11.2026 the library brought every file's RMS to -20 dBFS and the preset's low cut took the rumble away
+ * afterwards: as the presets play them the 120 places lay between -50 and -14 LUFS.
+ */
+void testFieldLevel()
+{
+    section( "field track: a place's level is measured above the low cut, so a rumbling one is as loud as a bright one" );
+    // Three places: noise from 300 Hz up; the same under a 60 Hz rumble 10 dB over it; and under one 34 dB over it.
+    auto make = [&]( const char *name, float rumble )
+    {
+        Rng r;
+        r.seed( 0x4C4556454Cull );
+        Svf hp;
+        hp.setQ( 300.0f, 0.7071f, 44100.0f );
+        std::vector<float> L( 4 * 44100 ), R( 4 * 44100 );
+        for ( size_t i = 0; i < L.size(); ++i )
+        {
+            float lp, bp, a, b;
+            hp.tick( r.bipolar(), lp, bp, a );
+            b = a;
+            const float low = rumble * std::sin( 2.0f * 3.14159265f * 60.0f * static_cast<float>( i ) / 44100.0f );
+            L[i] = 0.05f * a + low;
+            R[i] = 0.05f * b + low;
+        }
+        addFieldClip( 5, name, std::move( L ), std::move( R ), 44100 );
+    };
+    make( "level-bright", 0.0f );
+    make( "level-rumble", 0.12f );
+    make( "level-quake", 2.0f );
+    scanFieldLibrary();
+    // Each as it plays: its norm, a 24 dB/octave high pass at 150 Hz, K-weighted, both channels.
+    auto played = [&]( const char *name, double &norm, double &rmsDb )
+    {
+        const int  index = fieldClipIndex( 5, fieldVariationOf( 5, name ) );
+        FieldClip *c = acquireFieldClip( index );
+        if ( c == nullptr ) return -200.0;
+        Svf h1, h2;
+        h1.setQ( 150.0f, 0.54119610f, 44100.0f );
+        h2.setQ( 150.0f, 1.30656296f, 44100.0f );
+        KFilter k;
+        k.prepare( 44100.0 );
+        double sum = 0.0, raw = 0.0;
+        for ( int i = 0; i < c->frames(); ++i )
+        {
+            float lp, bp, hp;
+            h1.tick( c->dataL()[i], lp, bp, hp );
+            h2.tick( hp, lp, bp, hp );
+            const double w = k.process( hp );
+            sum += w * w;
+            raw += static_cast<double>( c->dataL()[i] ) * c->dataL()[i];
+        }
+        norm = c->m_norm;
+        rmsDb = 10.0 * std::log10( raw / c->frames() );
+        const double lufs = -0.691 + 10.0 * std::log10( 2.0 * sum / c->frames() ) + 20.0 * std::log10( norm );
+        releaseFieldClip( c );
+        return lufs;
+    };
+    double       nb = 0, nr = 0, nq = 0, rb = 0, rr = 0, rq = 0;
+    const double bright = played( "level-bright", nb, rb ), rumble = played( "level-rumble", nr, rr ),
+                 quake = played( "level-quake", nq, rq );
+    // The quake is all rumble: its norm stops 12 dB over the one an RMS of -20 dBFS gives.
+    const double liftDb = 20.0 * std::log10( nq ) - ( -20.0 - rq );
+    check( std::fabs( bright + 22.0 ) < 0.5 && std::fabs( rumble + 22.0 ) < 0.5 && std::fabs( liftDb - 12.0 ) < 0.2 &&
+               quake < bright - 6.0,
+           "a bright place and one under a rumble 10 dB louder both play at -22 LUFS above the low cut; one that is all "
+           "rumble is lifted 12 dB over its RMS level and no further",
+           fmt( "bright %.1f LUFS, under a rumble %.1f LUFS (its file's RMS %.1f dB over the bright one's), all rumble "
+                "%.1f LUFS at %+.1f dB over the RMS norm",
+                bright, rumble, rr - rb, quake, liftDb ) );
+}
+
 void testFieldLoop()
 {
     section(

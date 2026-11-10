@@ -45,6 +45,7 @@ set(PHOS_SELFTEST_SECONDS
     # the four at 60 were stopped at 40 s (their true time is longer), testClimax and testPresence from ctest -R runs today.
     testMixGuide.matrix                   0.1
     # 27.09.2026: the Field track (selftest_field.cpp), estimated until measured below.
+    testField.level                       0.3
     testField.loop                        0.5
     testField.engine                      0.5
     testField.form                        2.0
