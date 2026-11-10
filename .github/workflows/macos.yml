@@ -23,7 +23,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14
+    # macos-15 since 11.11.2026: GitHub retired its macOS 14 images on 02.11.2026, and the tag v1.6.0 was refused with
+    # "The configuration 'macos-14-arm64-us-default' is not supported". Apple Silicon; the deployment target stays 12.0.
+    runs-on: macos-15
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
