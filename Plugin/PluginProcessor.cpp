@@ -1904,14 +1904,14 @@ void PhospheneProcessor::processBlock( juce::AudioBuffer<float> &buffer, juce::M
                         ? buffer.getWritePointer( 1 )
                         : nullptr;
     {   // The stems' outputs (02.10.2026): the engine writes its StemTap while the host has one of their buses on.
-        bool want = false;
-        for ( int b = 1; b < getBusCount( false ) && !want; ++b )
-            if ( const auto *bus = getBus( false, b ) ) want = bus->isEnabled();
-        want = want && n <= m_stemBlock;   // the stems' buffers hold the prepared block
-        if ( want != m_stemsOn )
+        bool stems = false;
+        for ( int b = 1; b < getBusCount( false ) && !stems; ++b )
+            if ( const auto *bus = getBus( false, b ) ) stems = bus->isEnabled();
+        stems = stems && n <= m_stemBlock;   // the stems' buffers hold the prepared block
+        if ( stems != m_stemsOn )
         {
-            m_engine->setStemTap( want ? &m_stemTap : nullptr );
-            m_stemsOn = want;
+            m_engine->setStemTap( stems ? &m_stemTap : nullptr );
+            m_stemsOn = stems;
         }
     }
     auto render = [&]( int from, int count )

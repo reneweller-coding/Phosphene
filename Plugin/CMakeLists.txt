@@ -63,6 +63,11 @@ target_compile_definitions(Phosphene PUBLIC
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_REPORT_APP_USAGE=0)
+# The test switches are read with std::getenv (FAMILY_JAM_LOG, FAMILY_CUES, FAMILY_LINK ...), as in the core and in the
+# tests: MSVC's C4996 on it is off here as it is there (10.11.2026; the build had come to nine warnings).
+if(MSVC)
+    target_compile_definitions(Phosphene PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
 # ASIO in the standalone's audio dialog (Windows, 15.10.2026, as Empyrean): the Steinberg ASIO SDK under its GPLv3 option
 # (since 29.10.2025), which goes with this program's AGPLv3. The SDK Steinberg publishes, where it lies beside the
 # repositories (_Sources/ASIO-SDK/ASIOSDK, from https://www.steinberg.net/asiosdk); else the same headers JUCE carries.

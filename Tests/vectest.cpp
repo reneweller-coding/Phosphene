@@ -39,7 +39,7 @@ using namespace phostest;
 namespace
 {
 
-constexpr int W = VecWidth;   ///< the lanes of the vector type compiled here
+constexpr int Lanes = VecWidth;   ///< the lanes of the vector type compiled here
 
 /**
  * @brief Deterministic test values covering signs, tiny and large magnitudes.
@@ -103,7 +103,7 @@ void testOps()
             vfloor( va ),
             vselect( vlt( va, vb ), vc, va ),
         };
-        for ( int l = 0; l < W; ++l )
+        for ( int l = 0; l < Lanes; ++l )
         {
             const float x = a[l], y = b[l], z = c[l];
             const float s[] = {
@@ -155,7 +155,7 @@ void testLadder()
         }
         const VecF y =
             vl.tick( loadLanes<VecF>( x ), loadLanes<VecF>( g ), loadLanes<VecF>( k ), loadLanes<VecF>( comp ) );
-        for ( int l = 0; l < W; ++l )
+        for ( int l = 0; l < Lanes; ++l )
         {
             const float ys = sl[l].tick( x[l], g[l], k[l], comp[l] );
             if ( !sameBits( laneOf( y, l ), ys ) ) ++bad;
@@ -192,7 +192,7 @@ void testHalfband()
         const VecF yd = vd.process( loadLanes<VecF>( a ), loadLanes<VecF>( b ) );
         VecF       u0, u1;
         vu.process( loadLanes<VecF>( a ), u0, u1 );
-        for ( int l = 0; l < W; ++l )
+        for ( int l = 0; l < Lanes; ++l )
         {
             float s0, s1;
             su[l].process( a[l], s0, s1 );
@@ -304,7 +304,7 @@ void testDiodeLadder()
         }
         const VecF y =
             vl.tick( loadLanes<VecF>( x ), loadLanes<VecF>( g ), loadLanes<VecF>( k ), loadLanes<VecF>( comp ) );
-        for ( int l = 0; l < W; ++l )
+        for ( int l = 0; l < Lanes; ++l )
         {
             const float ys = sl[l].tick( x[l], g[l], k[l], comp[l] );
             if ( !sameBits( laneOf( y, l ), ys ) ) ++bad;
@@ -447,7 +447,7 @@ void testModelKernels()
                            lanePow2i( vfloor( v ) ),
                            laneAct( v, ModelActE::RELU ),
                            laneAct( v, ModelActE::SILU ) };
-        for ( int l = 0; l < W; ++l )
+        for ( int l = 0; l < Lanes; ++l )
         {
             const float x = in[l];
             const float s[] = { laneExp( x ),
@@ -473,9 +473,9 @@ void testModelKernels()
     for ( size_t i = 0; i < w.size(); ++i ) w[i] = testValue( static_cast<uint32_t>( i ) + 7 );
     for ( size_t i = 0; i < b.size(); ++i ) b[i] = testValue( static_cast<uint32_t>( i ) + 101 );
     for ( size_t i = 0; i < x.size(); ++i ) x[i] = testValue( static_cast<uint32_t>( i ) + 303 );
-    std::vector<float> panelV( static_cast<size_t>( roundUpTo( Rows, W ) ) * Cols, 0.0f ),
+    std::vector<float> panelV( static_cast<size_t>( roundUpTo( Rows, Lanes ) ) * Cols, 0.0f ),
         panelS( static_cast<size_t>( Rows ) * Cols, 0.0f );
-    std::vector<float> yv( static_cast<size_t>( roundUpTo( Rows, W ) ), 0.0f ), ys( static_cast<size_t>( Rows ), 0.0f );
+    std::vector<float> yv( static_cast<size_t>( roundUpTo( Rows, Lanes ) ), 0.0f ), ys( static_cast<size_t>( Rows ), 0.0f );
     packPanels<VecF>( w.data(), nullptr, Rows, Cols, panelV.data() );
     packPanels<float>( w.data(), nullptr, Rows, Cols, panelS.data() );
     matvecPanel<VecF>( panelV.data(), b.data(), x.data(), Rows, Cols, yv.data() );
@@ -540,7 +540,7 @@ void testModelKernels()
 
     // Attention: the key cache written in time panels, then scored by the same matmul kernel.
     const int          headDim = 24, steps = 37;
-    std::vector<float> kv( static_cast<size_t>( roundUpTo( steps, W ) ) * headDim, 0.0f ),
+    std::vector<float> kv( static_cast<size_t>( roundUpTo( steps, Lanes ) ) * headDim, 0.0f ),
         ksc( static_cast<size_t>( steps ) * headDim, 0.0f );
     std::vector<float> key( static_cast<size_t>( headDim ) ), qq( static_cast<size_t>( headDim ) );
     for ( int i = 0; i < headDim; ++i ) qq[static_cast<size_t>( i )] = testValue( static_cast<uint32_t>( i ) + 91 );
@@ -551,7 +551,7 @@ void testModelKernels()
         storeKey<VecF>( kv.data(), t, key.data(), headDim );
         storeKey<float>( ksc.data(), t, key.data(), headDim );
     }
-    std::vector<float> scv( static_cast<size_t>( roundUpTo( steps, W ) ), 0.0f ),
+    std::vector<float> scv( static_cast<size_t>( roundUpTo( steps, Lanes ) ), 0.0f ),
         scs( static_cast<size_t>( steps ), 0.0f );
     matvecPanel<VecF>( kv.data(), nullptr, qq.data(), steps, headDim, scv.data() );
     matvecPanel<float>( ksc.data(), nullptr, qq.data(), steps, headDim, scs.data() );
@@ -893,7 +893,7 @@ void testPolyModels()
  */
 int main()
 {
-    std::printf( "phos_vectest: path %s, %d lanes\n", VecPathName, W );
+    std::printf( "phos_vectest: path %s, %d lanes\n", VecPathName, Lanes );
 #if defined( PHOS_EXPECT_PATH )
     check( std::strcmp( VecPathName, PHOS_EXPECT_PATH ) == 0, "built for the expected path",
            fmt( "expected %s, got %s", PHOS_EXPECT_PATH, VecPathName ) );
