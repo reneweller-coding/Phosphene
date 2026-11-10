@@ -448,14 +448,20 @@ void FieldShot::reset()
     }
 }
 
-void FieldShot::trigger( float velocity, double late, uint64_t pick )
+void FieldShot::trigger( float velocity, double late, uint64_t pick, int keyRoot )
 {
     (void)late;
     const int count = fieldShotCount();
     if ( count == 0 ) return;
     Rng r;
     r.seed( pick ^ 0x53484F54ull );
-    const int  index = fieldShotIndex( r.below( count ) );
+    // A shot with tones of its own that no shift puts into a key is passed over for the next one (10.11.2026,
+    // FieldLibrary.h, fieldToneOf); one that carries a single tone plays it on the key's root, fourth or fifth.
+    int index = fieldShotIndex( r.below( count ) );
+    for ( int tries = 1; tries < count && fieldClipTone( index ) == FieldToneMusic; ++tries )
+        index = fieldShotIndex( ( index + 1 ) % count );
+    if ( fieldClipTone( index ) == FieldToneMusic ) return;
+    const float tone = fieldClipTone( index );
     FieldClip *c = acquireFieldClip( index );
     if ( c == nullptr )
     {
@@ -470,6 +476,7 @@ void FieldShot::trigger( float velocity, double late, uint64_t pick )
     v.m_clip = c;
     v.m_index = index;
     v.m_p = 0.0;
+    v.m_speed = tone > 0.0f ? std::pow( 2.0, fieldToneShift( tone, keyRoot ) / 12.0 ) : 1.0;
     v.m_gain = std::clamp( velocity, 0.0f, 1.0f ) * c->m_norm;
     v.m_pan = 0.35f * r.bipolar();
     v.m_on = true;
@@ -482,7 +489,7 @@ void FieldShot::process( float *L, float *R, int n )
         if ( !v.m_on ) continue;
         const FieldClip &c = *v.m_clip;
         const int        frames = c.frames();
-        const double     ratio = static_cast<double>( c.m_sampleRate ) / m_sr;
+        const double     ratio = v.m_speed * static_cast<double>( c.m_sampleRate ) / m_sr;
         const double     a = ( static_cast<double>( v.m_pan ) + 1.0 ) * 0.5 * Pi2;
         const float      gl = v.m_gain * static_cast<float>( std::cos( a ) * 1.4142135623730951 );
         const float      gr = v.m_gain * static_cast<float>( std::sin( a ) * 1.4142135623730951 );

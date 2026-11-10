@@ -62,6 +62,28 @@ bool fieldPresetAvailable( const FieldPreset &preset );
  */
 std::vector<std::pair<int, float>> fieldPresetValues( const ParamStore &p, const FieldPreset &preset );
 /**
+ * @brief How a preset is played in a key so that a tone its recordings carry is in it (10.11.2026; FieldLibrary.h,
+ *        fieldToneOf).
+ *
+ * The whole semitones go into the note (FieldPlayer transposes both layers by the note's distance from middle C), the
+ * rest into each layer's fine tune -- not into the layers' pitch knobs: those are steps, a step reaches the engine as
+ * an override, and an override under zero means "none" (Engine.cpp), so a transposition downwards never arrived.
+ */
+struct FieldTuning
+{
+    int   m_semis = 0;      ///< the note's distance from middle C, semitones
+    float m_fineA = 0.0f;   ///< layer A's fine tune on top of the preset's, cents
+    float m_fineB = 0.0f;   ///< layer B's
+};
+/**
+ * @brief The tuning of @p preset in the key @p keyRoot: the tone of layer A (else of layer B) on the key's root, fourth
+ *        or fifth, whichever is nearest; where both layers carry one, B takes the target its fine tune reaches best.
+ * @param[in] preset   the preset
+ * @param[in] keyRoot  the key (its pitch class is taken)
+ * @return the tuning; all zero for recordings without a tone
+ */
+FieldTuning fieldPresetTuning( const FieldPreset &preset, int keyRoot );
+/**
  * @brief The variation a preset's layer plays: the file's in the library if it is there, else the shipped one.
  * @param[in] category  the category
  * @param[in] file      the file

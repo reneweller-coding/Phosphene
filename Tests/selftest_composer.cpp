@@ -191,7 +191,7 @@ void testModeColour()
                 ParamStore p;
                 p.parseText( "compose.track_bars=128 compose.lead_amount=1 compose.acid_amount=1 "
                              "compose.arp_amount=1 compose.modal_interchange=On compose.level_match=Off "
-                             "master.auto_gain=Off" );
+                             "master.auto_gain=Off master.auto_tone=Off" );
                 p.parseText( std::string( "compose.style=" ) + Styles[s] );
                 p.parseText( which == 0 ? "compose.melody_model=Markov" : "compose.melody_model=Neural" );
                 Composer               c( 4711 + s );
@@ -449,7 +449,7 @@ void testTensionCurve()
     section( "the measured tension curve" );
     ParamStore p;
     p.parseText( "compose.track_bars=128 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
-                 "compose.level_match=Off master.auto_gain=Off" );
+                 "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     Composer c( 8123 );
     // One measurement per role, over the plans of many tracks: the plan is the line, and a rendered
     // bar is only a window on it.
@@ -617,7 +617,7 @@ void testMotifOperators()
     // has to sit where a slide can (an adjacent note no more than a whole tone away).
     {
         ParamStore p;
-        p.parseText( "compose.track_bars=128 compose.lead_amount=1 compose.level_match=Off master.auto_gain=Off" );
+        p.parseText( "compose.track_bars=128 compose.lead_amount=1 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         int phrases = 0, archetypes[NumLeadArchetypes] = {}, ops[NumCellOps] = {};
         int firstNotKeep = 0, lastNotCadence = 0, cadenceOff = 0, shiftBars = 0, shiftWrong = 0, thinBars = 0,
             thinWrong = 0;
@@ -789,7 +789,7 @@ void testArpPatterns()
     section( "Euclidean and polymetric arps" );
     ParamStore p;
     p.parseText( "compose.track_bars=128 compose.arp_amount=1 compose.lead_amount=1 compose.acid_amount=0.3 "
-                 "compose.level_match=Off master.auto_gain=Off" );
+                 "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     Composer c( 5150 );
 
     int styles[NumArpStyles] = {}, euclidWrong = 0, rotationWrong = 0, euclidSeen = 0, polySeen = 0;
@@ -1056,7 +1056,7 @@ void testAudibility()
     {
         auto        engine = std::make_unique<Engine>();
         ParamStore &p = engine->params();
-        p.parseText( "compose.level_match=Off master.auto_gain=Off compose.presence_match=Off" );
+        p.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.presence_match=Off" );
         Composer  composer( 1 );
         const int block = 256;
         engine->prepare( sr, block );
@@ -1133,7 +1133,7 @@ void testStems()
     {
         auto        engine = std::make_unique<Engine>();
         ParamStore &p = engine->params();
-        p.parseText( "compose.level_match=Off master.auto_gain=Off compose.presence_match=Off" );
+        p.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.presence_match=Off" );
         if ( mutePad ) p.parseText( "mix.pad_mute=1" );
         Composer composer( 1 );
         engine->prepare( sr, block );
@@ -1220,7 +1220,7 @@ void testPlanCacheLive()
     section( "plan cache: a knob that moves during composeBars never frees a plan in use" );
     ParamStore p;
     p.parseText(
-        "compose.level_match=Off compose.presence_match=Off compose.audibility_match=Off master.auto_gain=Off" );
+        "compose.level_match=Off compose.presence_match=Off compose.audibility_match=Off master.auto_gain=Off master.auto_tone=Off" );
     const int       sv = p.base( ModuleE::COMPOSE ) + compose::SOUND_VARIATION;
     Composer        c( 7 );
     const TrackPlan second = c.track( p, 1 );   // by value: the cache is about to be thrown away many times
@@ -1481,7 +1481,7 @@ void testSoundPresets()
         auto        engine = std::make_unique<Engine>();
         ParamStore &p = engine->params();
         p.parseText(
-            "compose.level_match=Off master.auto_gain=Off compose.presence_match=Off compose.audibility_match=Off" );
+            "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.presence_match=Off compose.audibility_match=Off" );
         if ( own ) p.parseText( "mix.lead_own=1" );
         Composer composer( 7 );
         engine->prepare( 48000.0, 512 );
@@ -1588,7 +1588,7 @@ void testJam()
         engine->setLive( true );
         ParamStore &p = engine->params();
         p.parseText(
-            "compose.level_match=Off master.auto_gain=Off compose.presence_match=Off compose.audibility_match=Off" );
+            "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.presence_match=Off compose.audibility_match=Off" );
         const size_t total = static_cast<size_t>(
             std::llround( 24 * BeatsPerBar * 60.0 / p.get( p.base( ModuleE::COMPOSE ) + compose::BPM ) * sr ) );
         Composer composer( 1 );
@@ -1663,7 +1663,7 @@ void testKeyboard()
         engine->setLive( live );
         ParamStore &p = engine->params();
         p.parseText(
-            "compose.level_match=Off master.auto_gain=Off compose.presence_match=Off compose.audibility_match=Off" );
+            "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.presence_match=Off compose.audibility_match=Off" );
         p.set( p.base( ModuleE::MIX ) + mix::KEYBOARD_PART, static_cast<float>( part ) );
         p.set( p.base( ModuleE::MIX ) + mix::KEYBOARD_MODE, static_cast<float>( mode ) );
         p.set( p.base( ModuleE::MIX ) + mix::COMPOSER, composerOn ? 1.0f : 0.0f );
@@ -1844,7 +1844,7 @@ void testKnobFuzz()
                             static_cast<int>( perc::DENSITY ), static_cast<int>( perc::ENGINE ) } )
                 randomise( b + k );
         }
-        q.parseText( "compose.level_match=Off compose.presence_match=Off master.auto_gain=Off" );
+        q.parseText( "compose.level_match=Off compose.presence_match=Off master.auto_gain=Off master.auto_tone=Off" );
         const uint64_t           seed = 1 + static_cast<uint64_t>( r.below( 1 << 30 ) );
         Composer                 comp( seed );
         std::vector<std::string> why;
@@ -1963,7 +1963,7 @@ void testPreferences()
         }
         ParamStore q;
         q.parseText(
-            "compose.level_match=Off master.auto_gain=Off compose.presence_match=Off compose.style=Full-On compose.style_mix=0" );
+            "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.presence_match=Off compose.style=Full-On compose.style_mix=0" );
         Composer c( 2026 );
         pedal = hocket = total = 0;
         for ( int t = 0; t < 24; ++t )
@@ -2003,7 +2003,7 @@ void testSoloTrack()
 {
     section( "solo track: one track of the set, alone" );
     ParamStore q;
-    q.parseText( "compose.level_match=Off master.auto_gain=Off compose.presence_match=Off" );
+    q.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.presence_match=Off" );
     Composer               c( 7 );
     const TrackPlan        t1 = c.track( q, 1 ), t2 = c.track( q, 2 );
     const int              from = t1.m_firstBar, to = t1.m_firstBar + t1.m_bars;
@@ -2104,7 +2104,7 @@ void testGallery()
 {
     section( "gallery: saved sets with their form" );
     ParamStore q;
-    q.parseText( "compose.level_match=Off master.auto_gain=Off compose.presence_match=Off" );
+    q.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.presence_match=Off" );
     Composer     c( 7 );
     GalleryEntry e;
     e.m_name = "night | one\ntest";
@@ -2259,7 +2259,7 @@ void testSetArc()
         ParamStore q;
         q.parseText(
             fmt(
-                "compose.arc=%s compose.set_minutes=60 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off",
+                "compose.arc=%s compose.set_minutes=60 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off",
                 arc )
                 .c_str() );
         Composer               c( 2026 );
@@ -2313,7 +2313,7 @@ void testSetArc()
     //    is the exception, and the second track never recalls.
     {
         ParamStore q;
-        q.parseText( "compose.set_minutes=60 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off" );
+        q.parseText( "compose.set_minutes=60 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer               c( 2026 );
         std::vector<TrackPlan> v;
         for ( int t = 0; t < 10; ++t ) v.push_back( c.track( q, t ) );
@@ -2494,7 +2494,7 @@ void testForm()
             ParamStore q;
             q.parseText(
                 fmt(
-                    "compose.arc=%s compose.set_minutes=60 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off",
+                    "compose.arc=%s compose.set_minutes=60 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off",
                     arc )
                     .c_str() );
             Composer c( 2026 );
@@ -2532,7 +2532,7 @@ void testForm()
     for ( const char *bassModel : { "Pattern", "Neural" } )
     {
         ParamStore q;
-        q.parseText( "compose.track_bars=256 compose.bass_variation=0 compose.level_match=Off master.auto_gain=Off" );
+        q.parseText( "compose.track_bars=256 compose.bass_variation=0 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         q.parseText( fmt( "compose.bass_model=%s", bassModel ).c_str() );
         Composer c( 1234 );
         int      groups = 0, identical = 0, sameBass = 0;
@@ -2587,7 +2587,7 @@ void testForm()
     {
         ParamStore q;
         q.parseText(
-            "compose.track_bars=256 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 compose.pad_amount=1 compose.level_match=Off master.auto_gain=Off" );
+            "compose.track_bars=256 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 compose.pad_amount=1 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer c( 55 );
         int      breakKicks = 0, breakBass = 0, introKickBars = 0, introBars = 0, dropBars = 0, dropAllParts = 0,
                  pdbBars = 0, pdbBeat4 = 0;
@@ -2672,7 +2672,7 @@ void testForm()
         }
         ParamStore q;
         q.parseText(
-            "compose.bass_variation=0 compose.bass_pattern=Rolling compose.level_match=Off master.auto_gain=Off" );
+            "compose.bass_variation=0 compose.bass_pattern=Rolling compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer         cb( 19 );
         const TrackPlan &tb = cb.track( q, 0 );
         int              core = 0;
@@ -2704,7 +2704,7 @@ void testForm()
         auto colourShare = []( float colour )
         {
             ParamStore q;
-            q.parseText( "compose.lead_amount=1 compose.level_match=Off master.auto_gain=Off" );
+            q.parseText( "compose.lead_amount=1 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
             int total = 0, coloured = 0;
             for ( uint64_t seed = 1; seed <= 60; ++seed )
             {
@@ -3422,7 +3422,7 @@ void testSectionRules()
     // (testVoices.sound, testRecipeSpread, testVariety).
     p.parseText( "compose.track_bars=256 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
                  "compose.pad_amount=1 compose.sfx_amount=1 compose.drone_amount=0 compose.sound_variation=0 "
-                 "compose.level_match=Off master.auto_gain=Off" );
+                 "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     // A seed whose first track carries the whole break routine: core, breakdown, buildup, drop, and a
     // pre-drop break that does not keep the kick on beat 4 (the "Kick on 4" variant is allowed to).
     int                       coreA = -1, brk = -1, build = -1, drop = -1;
@@ -3608,7 +3608,7 @@ void testCuration()
     };
 
     ParamStore p;
-    p.parseText( "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off" );
+    p.parseText( "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     std::vector<uint64_t> before;
     {
         Composer c( 4242 );
@@ -3669,7 +3669,7 @@ void testCuration()
     {
         ParamStore q;
         q.parseText(
-            "compose.track_bars=160 compose.style=Goa compose.arc=Peak-Time compose.bpm=141 kick.pitch_start=260 compose.level_match=Off master.auto_gain=Off" );
+            "compose.track_bars=160 compose.style=Goa compose.arc=Peak-Time compose.bpm=141 kick.pitch_start=260 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer c( 987654321ull );
         c.setLock( LockUnitE::TRACK, 2, true );
         c.reroll( LockUnitE::TRACK, 1 );
@@ -3856,7 +3856,7 @@ void testCues()
     // it: the last /phos/bar that arrived.
     {
         ParamStore p;
-        p.parseText( "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off" );
+        p.parseText( "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer                       comp( 4711 );
         const int                      bars = 160;
         const std::vector<SectionMark> score = comp.sections( p, bars );
@@ -3974,7 +3974,7 @@ void testCues()
     // same render. Bit for bit, because "nearly the same" is how a silent dependency hides.
     {
         ParamStore p;
-        p.parseText( "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off" );
+        p.parseText( "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         auto render = [&]( bool withCues, std::vector<float> &outL )
         {
             Engine e;
@@ -4032,7 +4032,7 @@ void testTransitions()
     // pitched line at all.
     ParamStore p;
     p.parseText( "compose.pad_amount=1 compose.sfx_amount=1 compose.track_variation=1 "
-                 "compose.level_match=Off master.auto_gain=Off" );
+                 "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     Composer c( 31337 );
     int      consonant = 0, consonantWithPads = 0, dissonant = 0, dissonantPads = 0;
     for ( int ti = 0; ti + 1 < 10; ++ti )

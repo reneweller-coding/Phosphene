@@ -53,12 +53,11 @@ inline double driftFactor( double cents )
 constexpr double Osc2Spread = 0.25;
 
 /**
- * @brief The FM ratio a voice plays: poly.fm_ratio to the nearest half, never under 0.5.
+ * @brief The FM ratio a voice plays: poly.fm_ratio to the nearest whole number, and 0.5 under 0.75.
  *
  * A two-operator pair puts its sidebands at f_c (1 +- k r). With r = p/q in lowest terms every one of
  * them is a multiple of f_c / q, so the spectrum is harmonic; with any other r it is not, and that is
- * the bell and the struck metal (Chowning, JAES 21(7), 1973 -- his bell is 1 : 1.4). A half keeps q at 1 or 2:
- * the note's own harmonic series, or the one an octave under it.
+ * the bell and the struck metal (Chowning, JAES 21(7), 1973 -- his bell is 1 : 1.4).
  *
  * 24.09.2026, the user on the first track's pad: "klingen einfach nur schraeg und nicht, wie irgend
  * etwas, was ich jemals in einem Psytrance-Song gehoert habe". Measured over the first track of seeds
@@ -68,12 +67,20 @@ constexpr double Osc2Spread = 0.25;
  * each chord tone carried partials at 0.91 and 2.91 times itself, a quarter tone off every note of
  * the key, 7 dB under the chord. Every pitched voice plays chords or lines in a key; the metallic FM
  * of the set lives in the percussion (the rim, the zap: perc.fm_ratio is not rounded).
+ *
+ * Until 10.11.2026 the ratio went to the nearest half, on the argument that q = 2 is still a harmonic series (the
+ * one an octave under the note). It is -- but its odd members lie beside the *note's* harmonics, and in a key that
+ * is what counts: at 3.5 the strongest sidebands are 2.5 and 4.5 times the note, a major third and a major ninth
+ * over every tone of a minor scale. The harmony audit (Tools/tuning_audit.py) found 341 factory presets on a half,
+ * 155 of them with more than 30 % of their low partials' energy beside the note's harmonics (median 37 .. 65 % for the
+ * lead, the counter, the arp and the stab), and none among the whole-number ones. Only 0.5 stays: its series is the
+ * octave under the note and the fifth over it, the sub-oscillator of an organ.
  * @param[in] knob  poly.fm_ratio
  * @return the ratio played
  */
 inline double harmonicFmRatio( double knob )
 {
-    return std::max( 0.5, std::round( knob * 2.0 ) * 0.5 );
+    return knob < 0.75 ? 0.5 : std::max( 1.0, std::round( knob ) );
 }
 
 }   // namespace
@@ -456,10 +463,21 @@ void Poly::noteOn( int pitch, float velocity, double lengthBeats, int gateSample
     const int    oscB = two ? osc2 - 1 : 0;   // PolyOsc2 counts Off first; PolyOsc does not
     const int    interval = std::clamp( static_cast<int>( std::lround( v[poly::OSC2_INTERVAL] ) ), 0,
                                         static_cast<int>( PolyOsc2IntervalE::COUNT ) - 1 );
-    const double hzMul2 = two ? std::pow( 2.0, ( static_cast<double>( Osc2IntervalSemis[interval] ) +
-                                                 static_cast<double>( v[poly::OSC2_DETUNE] ) / 100.0 ) /
-                                                   12.0 )
-                              : 1.0;
+    // In unison the two share the note (10.11.2026): osc2_detune is the distance between them, and each moves by the
+    // other's share of the power, so the centre of the pair stays on the note whatever the mix. Until then the first
+    // oscillator stood on the note and the second above it: every voice with a unison partner played 4 .. 9 cents
+    // sharp of the bass and the acid (448 factory presets, a median of +4.3 cents; Tools/tuning_audit.py). At any
+    // other interval the detune is the partner's alone, as it was. The share is the slots' own -- what the first
+    // oscillator's kept slots carry depends on its kind and on the mix knob, not on osc2_mix alone.
+    const double semis2 = static_cast<double>( Osc2IntervalSemis[interval] );
+    const double cents2 = static_cast<double>( v[poly::OSC2_DETUNE] );
+    const bool   shared = two && Osc2IntervalSemis[interval] == 0;
+    double       power1 = 0.0, power2 = 0.0;
+    for ( int u = uFirst; u < uLast; ++u ) ( bSlot[u] ? power2 : power1 ) += gains[u] * gains[u];
+    const double share2 = power1 + power2 > 0.0 ? power2 / ( power1 + power2 ) : 0.0;
+    const double hzMul1 = shared ? std::pow( 2.0, -share2 * cents2 / 1200.0 ) : 1.0;
+    const double hzMul2 =
+        two ? std::pow( 2.0, ( semis2 + ( shared ? ( 1.0 - share2 ) * cents2 : cents2 ) / 100.0 ) / 12.0 ) : 1.0;
 
     double power = 0.0;
     for ( int u = uFirst; u < uLast; ++u ) power += gains[u] * gains[u];
@@ -511,7 +529,7 @@ void Poly::noteOn( int pitch, float velocity, double lengthBeats, int gateSample
         m_driftFactorHeld[s] = driftFactor( slotDrift( s ) );
         // Which of the two oscillators this slot is, and at which pitch (22.09.2026).
         const int slotOsc = bSlot[u] ? oscB : osc;
-        m_slotHzMul[s] = bSlot[u] ? hzMul2 : 1.0;
+        m_slotHzMul[s] = bSlot[u] ? hzMul2 : hzMul1;
         m_slotOsc2[s] = bSlot[u];
         m_slotSpread[s] = bSlot[u] ? Osc2Spread : 1.0;
         const double hz = f0 * m_slotHzMul[s] * ( 1.0 + SupersawOffsets[u] * m_slotSpread[s] * y * detuneScale ) *

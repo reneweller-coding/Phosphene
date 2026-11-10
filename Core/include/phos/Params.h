@@ -560,7 +560,7 @@ enum : int
     OSC2,            ///< PolyOsc2: off, or one of the four oscillators, on the outer unison pair
     OSC2_MIX,        ///< 0 .. 1: the share of the voice's power the second oscillator carries
     OSC2_INTERVAL,   ///< PolyOsc2Interval: its interval against the note, a *choice* so a recipe can override it
-    OSC2_DETUNE,     ///< -50 .. +50 cents on top, for the slow beating of two nearly equal pitches
+    OSC2_DETUNE,     ///< -50 .. +50 cents on top, for the slow beating of two nearly equal pitches (in unison: between the two, centred on the note)
     /** @} */
     /** @name The voice LFO (22.09.2026, round "Klangfarben")
               *  A second, tempo-synced LFO beside the position one, free-running for the whole instance

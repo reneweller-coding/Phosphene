@@ -109,6 +109,8 @@ if(PHOS_BUILD_TOOLS)
     family_soundcheck(phos_render)   # the sound regression check (Tools/soundcheck.py, 02.10.2026)
     # The probe-written plan fields as bit patterns, and the planning benchmark (round "speed", 20.09.2026).
     add_subdirectory(Tools/plandump)
+    # Every preset against the pitch of its note (the harmony audit of 10.11.2026, Tools/tuning_audit.py).
+    add_subdirectory(Tools/tunebench)
 endif()
 
 # The plugin (Phase 6). JUCE is taken from ThirdParty/JUCE when it is there -- that directory is

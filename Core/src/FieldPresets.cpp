@@ -7,6 +7,7 @@
 #include "phos/Dsp.h"
 #include "phos/FieldLibrary.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <sstream>
 
@@ -72,6 +73,35 @@ std::vector<std::pair<int, float>> fieldPresetValues( const ParamStore &p, const
     return out;
 }
 
+FieldTuning fieldPresetTuning( const FieldPreset &preset, int keyRoot )
+{
+    FieldTuning t;
+    const float hzA = fieldToneOf( preset.m_fileA );
+    const float hzB = preset.m_categoryB >= 0 ? fieldToneOf( preset.m_fileB ) : 0.0f;
+    if ( hzA > 0.0f )
+    {
+        const double shift = fieldToneShift( hzA, keyRoot );
+        t.m_semis = static_cast<int>( std::lround( shift ) );
+        t.m_fineA = static_cast<float>( 100.0 * ( shift - t.m_semis ) );
+    }
+    if ( hzB > 0.0f )
+    {
+        if ( hzA <= 0.0f ) t.m_semis = static_cast<int>( std::lround( fieldToneShift( hzB, keyRoot ) ) );
+        // Transposed with the note already: of root, fourth and fifth the one B's fine tune comes nearest to.
+        const double note = 69.0 + 12.0 * std::log2( static_cast<double>( hzB ) / 440.0 );
+        double       best = 1e9;
+        for ( const int degree : { 0, 5, 7 } )
+        {
+            double d = std::fmod( static_cast<double>( keyRoot + degree ) - note, 12.0 );
+            if ( d < -6.0 ) d += 12.0;
+            if ( d >= 6.0 ) d -= 12.0;
+            if ( std::fabs( d - t.m_semis ) < std::fabs( best ) ) best = d - t.m_semis;
+        }
+        t.m_fineB = static_cast<float>( std::clamp( 100.0 * best, -100.0, 100.0 ) );
+    }
+    return t;
+}
+
 int fieldPresetVariation( int category, const char *file, int shipped )
 {
     const int v = fieldVariationOf( category, file );
@@ -88,6 +118,11 @@ int fieldPresetFor( int style, uint64_t seed )
     {
         // Squared: a style's own places come up far more often than the ones that only fit it.
         w[i] = static_cast<double>( all[i].m_style[s] ) * all[i].m_style[s];
+        // A recording with tones of its own that no shift puts into a key is not the composer's to draw (10.11.2026,
+        // FieldLibrary.h, fieldToneOf): a Webb sonification is a piece in a key of its own. The menu keeps it.
+        if ( fieldToneOf( all[i].m_fileA ) == FieldToneMusic ||
+             ( all[i].m_categoryB >= 0 && fieldToneOf( all[i].m_fileB ) == FieldToneMusic ) )
+            w[i] = 0.0;
         total += w[i];
     }
     if ( total <= 0.0 ) return -1;

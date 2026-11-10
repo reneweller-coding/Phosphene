@@ -666,7 +666,7 @@ void testSfx()
     // pre-drop "Abriss" on the last beat of the buildup, the impact marks the drop's downbeat.
     {
         ParamStore q;
-        q.parseText( "compose.sfx_amount=1 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off" );
+        q.parseText( "compose.sfx_amount=1 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer c( 303 );
         int      impacts = 0, misplaced = 0, shots = 0, risers = 0, sweeps = 0;
         for ( int ti = 0; ti < 8; ++ti )
@@ -817,7 +817,7 @@ void testSfx()
         {
             ParamStore q;
             q.parseText(
-                fmt( "compose.sfx_amount=%.2f compose.track_bars=256 compose.level_match=Off master.auto_gain=Off",
+                fmt( "compose.sfx_amount=%.2f compose.track_bars=256 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off",
                      amount ) );
             Composer c( 303 );
             for ( int ti = 0; ti < 8; ++ti )
@@ -1385,8 +1385,9 @@ void testPsychedelia()
             "every new sound sits in its pocket, and all but the sub drop keep out of the kick's and the bass's band",
             pockets );
     }
-    // (g) The bowl rings in Rayleigh's ring modes: n (n^2 - 1) / sqrt(n^2 + 1) for n = 2..5, relative
-    //     to n = 2 -- computed here from the formula, looked for in the spectrum.
+    // (g) The bowl rings in its four modes -- Rayleigh's ring modes n (n^2 - 1) / sqrt(n^2 + 1) for n = 2..5 until
+    //     10.11.2026, since then tuned to the key at 1 : 8/3 : 16/3 : 8 (Texture.h) -- looked for in the spectrum,
+    //     and none of them is the tritone over the root that the ring's second mode was.
     {
         Texture x;
         x.prepare( sr );
@@ -1406,22 +1407,33 @@ void testPsychedelia()
             return s;
         };
         const double f0 = band( 261.63, 0.01 ) > band( 523.25, 0.01 ) ? 261.63 : 523.25;
-        auto         ring = []( int n ) { return n * ( n * n - 1.0 ) / std::sqrt( n * n + 1.0 ); };
         double       worst = 1e9;
         std::string  d;
-        for ( int n = 2; n <= 5; ++n )
+        for ( int m = 0; m < Texture::Modes; ++m )
         {
-            const double f = f0 * ring( n ) / ring( 2 );
-            const double between =
-                f0 * ( ring( n ) + ( n < 5 ? ring( n + 1 ) : ring( n ) * 1.3 ) ) / ( 2.0 * ring( 2 ) );
+            const double r = Texture::bowlRatio( m );
+            const double f = f0 * r;
+            const double between = f0 * ( r + ( m + 1 < Texture::Modes ? Texture::bowlRatio( m + 1 ) : r * 1.3 ) ) / 2.0;
             const double over = powDb( band( f, 0.01 ) / band( between, 0.01 ) );
             worst = std::min( worst, over );
             d += fmt( "%.0f Hz %+.0f dB  ", f, over );
         }
-        check(
-            worst > 20.0,
-            "the singing bowl rings in the bending modes of a ring (Rayleigh), each at least 20 dB over the spectrum between them",
-            d + fmt( "(fundamental %.2f Hz)", f0 ) );
+        check( worst > 20.0,
+               "the singing bowl rings in its four modes, each at least 20 dB over the spectrum between them",
+               d + fmt( "(fundamental %.2f Hz)", f0 ) );
+        // In the key: every mode an octave of the root or of the fourth, within 2 cents.
+        double off = 0.0;
+        for ( int m = 0; m < Texture::Modes; ++m )
+        {
+            const double st = 12.0 * std::log2( Texture::bowlRatio( m ) );
+            const double pc = st - 12.0 * std::floor( st / 12.0 );
+            off = std::max( off, std::min( { std::fabs( pc ), std::fabs( pc - 12.0 ), std::fabs( pc - 4.98045 ) } ) );
+        }
+        const double tritone = powDb( band( f0 * 2.0 * std::sqrt( 2.0 ), 0.01 ) / band( f0, 0.01 ) );
+        check( off < 0.02 && tritone < -30.0,
+               "the bowl's modes are octaves of the key's root and fourth, and nothing rings a tritone over the root",
+               fmt( "furthest mode %.3f semitones off, the band at 2.83 f0 %+.0f dB against the fundamental", off,
+                    tritone ) );
     }
     // (h) The sub drop is mono and the kick ducks it: 5 .. 45 ms after every kick at least 30 dB under
     //     its level between the kicks (sfx.sub_duck = 1: the gain is zero through the hold).
@@ -1595,7 +1607,7 @@ void testPsychedelia()
         {
             ParamStore q;
             q.parseText(
-                fmt( "compose.sfx_amount=%.2f compose.track_bars=256 compose.level_match=Off master.auto_gain=Off",
+                fmt( "compose.sfx_amount=%.2f compose.track_bars=256 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off",
                      amount ) );
             Composer c( 303 );
             for ( int ti = 0; ti < 8; ++ti )
@@ -1690,7 +1702,7 @@ void testPsychedelia()
     //     texture and vocal notes route to their own parts (MIDI export) and play as the same notes.
     {
         ParamStore q;
-        q.parseText( "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off" );
+        q.parseText( "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer               cc( 864566672ull );
         std::vector<NoteEvent> seq;
         cc.composeBars( q, 0, 136, seq, nullptr );
@@ -1955,7 +1967,7 @@ void testSfxLevel()
         auto e = std::make_unique<Engine>();
         e->prepare( sr, 512 );
         e->params().parseText(
-            "master.auto_gain=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.clip=Off" );
+            "master.auto_gain=Off master.auto_tone=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.clip=Off" );
         // The SFX strip alone: since 19.09.2026 that means the shamanic bed and the voices muted too.
         if ( solo )
             e->params().parseText(
@@ -2592,7 +2604,7 @@ void testModalInterchangeBass()
     {
         const char            *kKnobs = "compose.track_bars=128 compose.acid_amount=0.9 compose.lead_amount=0.9 "
                                         "compose.arp_amount=0.9 compose.pad_amount=0.9 compose.bass_follows_chords=On "
-                                        "compose.level_match=Off master.auto_gain=Off compose.style=Goa";
+                                        "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.style=Goa";
         std::vector<NoteEvent> on, off;
         for ( int pass = 0; pass < 2; ++pass )
         {

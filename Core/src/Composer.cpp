@@ -551,6 +551,11 @@ MelodyContext melodyContext( const TrackPlan &plan, const BarPlan &bp, int inTra
                 shaded = shaded || next.m_shaded;
                 ++k;
             }
+            // Whether the pad holds the key's minor sixth in one of the run's bars (Melody.h, droneBare): the tone a
+            // semitone over the drone's fifth. Read from the voicings the pad really plays.
+            for ( int j = 0; j < k && !c.m_droneBare; ++j )
+                c.m_droneBare = padHoldsMinorSixth(
+                    plan.m_melody, planBar( plan.m_form, a, plan.m_sectionSeed, inTrack + j ), inTrack + j );
             c.m_droneBars = k;
             c.m_droneLow = here.m_low;
             c.m_droneTail = 0;
@@ -1563,7 +1568,8 @@ void Composer::transitionBar( const ParamStore &params, int track, int bar, std:
                        { return ( e.m_part == PartE::PAD || e.m_part == PartE::DRONE ) && e.m_pitch % 12 == flat9; } ),
                    out.end() );
     }
-    composeSfxBar( guest.m_form, static_cast<double>( guest.m_firstBar ) * BeatsPerBar, inTrack, out );
+    composeSfxBar( guest.m_form, static_cast<double>( guest.m_firstBar ) * BeatsPerBar, inTrack, out,
+                   fieldNoteSemis( params, guest ) );
 }
 
 /**
@@ -1968,7 +1974,8 @@ void Composer::composeBars( const ParamStore &p, int firstBar, int count, std::v
         const size_t melodyFrom = out.size();
         composeMelodyBar( p, plan.m_melody, bar, inTrack, plan.m_scale, bp, out, melodyContext( plan, bp, inTrack ) );
         if ( follow ) followWithDrone( plan, baseRoot, out, melodyFrom );
-        composeSfxBar( plan.m_form, static_cast<double>( plan.m_firstBar ) * BeatsPerBar, inTrack, out );
+        composeSfxBar( plan.m_form, static_cast<double>( plan.m_firstBar ) * BeatsPerBar, inTrack, out,
+                       fieldNoteSemis( p, plan ) );
         if ( incoming >= 0 )
         {
             // The percussion shares the kit's lanes: where both tracks hit one lane at the same moment the

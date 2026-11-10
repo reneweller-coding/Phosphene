@@ -476,7 +476,7 @@ void testPresetBank()
     // The composer's draw keeps the counter off the lead's oscillator (26.09.2026, Composer.cpp walkAt), as the recipes do.
     {
         ParamStore ps;
-        ps.parseText( "compose.level_match=Off master.auto_gain=Off" );   // the plans only, no probe renders
+        ps.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );   // the plans only, no probe renders
         auto oscOf = []( const SoundPreset &sp )
         {
             for ( const auto &kv : sp.m_values )

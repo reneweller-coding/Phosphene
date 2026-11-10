@@ -66,7 +66,7 @@ void testAcidVoicingNight()
     // (b) Over a night the tracks spread over the triangle, and consecutive tracks differ.
     {
         ParamStore q;
-        q.parseText( "compose.level_match=Off master.auto_gain=Off" );
+        q.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer c( 2026 );
         int      dominant[3] = {}, blends = 0;
         double   closest = 1e9;
@@ -108,7 +108,7 @@ void testAcidVoicingEngine()
         auto e = std::make_unique<Engine>();
         e->prepare( 48000.0, 256 );
         e->params().parseText(
-            "compose.track_bars=32 compose.level_match=Off master.auto_gain=Off compose.sound_presets=0" );   // the recipe path
+            "compose.track_bars=32 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.sound_presets=0" );   // the recipe path
         Composer        c( 77 );
         const TrackPlan t1 = c.track( e->params(), 1 );
         float           off[acid::COUNT];
@@ -174,7 +174,7 @@ void testRecipeSpread()
     section( "kick and bass recipes spread over a night" );
     const double sr = 48000.0, slot = 0.25 * 60.0 / 145.0;
     ParamStore   p;
-    p.parseText( "compose.level_match=Off master.auto_gain=Off" );
+    p.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     const int           cb = p.base( ModuleE::COMPOSE );
     const float         sv = p.get( cb + compose::SOUND_VARIATION );
     Composer            c( 864566672ull );
@@ -497,7 +497,7 @@ void testBassRhythm()
                fmt( "%zu distinct bars in 10000 draws, %d dirty, %d empty", seen.size(), dirty, empty ) );
     }
 
-    const char *kBase = "compose.level_match=Off master.auto_gain=Off compose.track_bars=64";
+    const char *kBase = "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.track_bars=64";
     auto        composeSet = [&]( const char *extra, uint64_t seed, int bars, std::vector<NoteEvent> &notes,
                                   std::vector<ControlEvent> *controls = nullptr )
     {
@@ -653,7 +653,7 @@ void testBassRhythm()
     {
         const double sr = 48000.0;
         const char  *kSet = "compose.bass_rhythm=Corpus compose.bass_variation=1 compose.level_match=Off "
-                            "master.auto_gain=Off compose.track_bars=64";
+                            "master.auto_gain=Off master.auto_tone=Off compose.track_bars=64";
         auto         renderAt = [&]( int block )
         {
             auto e = std::make_unique<Engine>();
@@ -1094,7 +1094,7 @@ void testRhythm()
     // Over a night: hat modes, backbeat claps, layer counts and recipes all vary.
     {
         ParamStore q;
-        q.parseText( "compose.level_match=Off master.auto_gain=Off" );
+        q.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer c( 4242 );
         int      modes[3] = {}, backbeat = 0, minLayers = 99, maxLayers = 0, overrides = 0;
         double   macroSpread = 0.0;

@@ -922,6 +922,20 @@ int bestShift( const std::vector<std::array<int, 3>> &events, const RegisterMap 
 
 }   // namespace mel
 
+bool padHoldsMinorSixth( const MelodyPlan &m, const BarPlan &bp, int barInTrack )
+{
+    if ( !m.m_present[mpIndex( MelodyPartE::PAD )] || ( bp.m_parts & partBit( MelodyPartE::PAD ) ) == 0 ) return false;
+    // The voicing composeMelodyBar plays in this bar: the section's mode has its own material.
+    const ModeMaterial     *mat = materialOf( m, bp.m_scale );
+    const PadChord          chord = padChordAt( m, bp, barInTrack );
+    const std::vector<int> *set = chord.m_inBreak ? ( mat != nullptr ? mat->m_breakVoicing : m.m_breakVoicing )
+                                  : chord.m_secondSet ? ( mat != nullptr ? mat->m_padVoicing2 : m.m_padVoicing2 )
+                                                      : ( mat != nullptr ? mat->m_padVoicing : m.m_padVoicing );
+    for ( const int pitch : set[std::clamp( chord.m_slot, 0, 3 )] )
+        if ( ( ( pitch - m.m_key ) % 12 + 12 ) % 12 == 8 ) return true;
+    return false;
+}
+
 void composeMelodyBar( const ParamStore &p, const MelodyPlan &m, int bar, int barInTrack, int scale, const BarPlan &bp,
                        std::vector<NoteEvent> &out, const MelodyContext &ctx )
 {
@@ -1302,9 +1316,12 @@ void composeMelodyBar( const ParamStore &p, const MelodyPlan &m, int bar, int ba
         MelodyNote held;
         held.m_velocity = ctx.m_droneLow ? 110 : ( ctx.m_droneShaded ? 48 : 64 );
         const int        root = m.m_root[DroneI] + ( ctx.m_droneLow ? 0 : 12 );
+        // 10.11.2026: where the pad holds the key's minor sixth during the run, the fifth would lie a semitone under
+        // it (a minor ninth across the octaves; Melody.h, droneBare), and the drone holds the octave in its place.
         std::vector<int> pitches = { root };
-        if ( !ctx.m_droneShaded ) pitches.push_back( root + 7 );
-        if ( m.m_droneOctave && !ctx.m_droneShaded && !has( MelodyPartE::PAD ) ) pitches.push_back( root + 12 );
+        if ( !ctx.m_droneShaded ) pitches.push_back( ctx.m_droneBare ? root + 12 : root + 7 );
+        if ( m.m_droneOctave && !ctx.m_droneShaded && !ctx.m_droneBare && !has( MelodyPartE::PAD ) )
+            pitches.push_back( root + 12 );
         const double run = ctx.m_droneBars * static_cast<double>( BeatsPerBar );
         const double tail =
             ctx.m_droneLow ? std::min( run - 0.5 * BeatsPerBar, ctx.m_droneTail * static_cast<double>( BeatsPerBar ) )
@@ -1315,7 +1332,7 @@ void composeMelodyBar( const ParamStore &p, const MelodyPlan &m, int bar, int ba
     }
 }
 
-void composeSfxBar( const FormPlan &f, double trackBeat, int barInTrack, std::vector<NoteEvent> &out )
+void composeSfxBar( const FormPlan &f, double trackBeat, int barInTrack, std::vector<NoteEvent> &out, int fieldSemis )
 {
     // Over the blend (Form.h, FormPlan::overlapTail; 23.09.2026, round "DJ") the next track's intro owns the
     // effects: nothing of this track's is played over its last overlapTail bars. The events were placed when
@@ -1339,7 +1356,7 @@ void composeSfxBar( const FormPlan &f, double trackBeat, int barInTrack, std::ve
         out.push_back( e );
     }
     // The Field track (27.09.2026, Form.h FormPlan::field): a place, at middle C (no transposition), its velocity in
-    // the variant.
+    // the variant. Since 10.11.2026 a place that carries a tone is transposed into the key (fieldSemis).
     for ( const SfxEvent &s : f.m_field )
     {
         if ( static_cast<int>( std::floor( s.m_beat / BeatsPerBar ) ) != barInTrack ) continue;
@@ -1348,7 +1365,7 @@ void composeSfxBar( const FormPlan &f, double trackBeat, int barInTrack, std::ve
         e.m_length = s.m_length;
         e.m_part = PartE::FIELD;
         e.m_lane = 0;
-        e.m_pitch = 60;
+        e.m_pitch = static_cast<uint8_t>( 60 + std::clamp( fieldSemis, -12, 12 ) );
         e.m_velocity = static_cast<uint8_t>( std::clamp( static_cast<int>( s.m_variant ), 1, 127 ) );
         out.push_back( e );
     }

@@ -1,0 +1,119 @@
+{
+ "InSight robotic arm": {
+  "kind": "tone",
+  "hz": 508.8,
+  "note": "C5-49",
+  "tonal": 0.553,
+  "share": 0.539,
+  "held": 0.97,
+  "shot": false
+ },
+ "Kepler - Star KIC12268220C light curve": {
+  "kind": "music",
+  "hz": 513.9,
+  "note": "C5-31",
+  "tonal": 0.784,
+  "share": 0.546,
+  "held": 1.0,
+  "shot": true
+ },
+ "Kepler - Star KIC7671081B light curve": {
+  "kind": "music",
+  "hz": 129.6,
+  "note": "C3-16",
+  "tonal": 0.711,
+  "share": 0.444,
+  "held": 1.0,
+  "shot": true
+ },
+ "Sputnik beep": {
+  "kind": "tone",
+  "hz": 1060.7,
+  "note": "C6+23",
+  "tonal": 0.921,
+  "share": 0.835,
+  "held": 1.0,
+  "shot": true
+ },
+ "Webb - Cosmic Cliffs": {
+  "kind": "music",
+  "hz": 293.7,
+  "note": "D4+0",
+  "tonal": 0.725,
+  "share": 0.111,
+  "held": 0.96,
+  "shot": false
+ },
+ "Webb - Cosmic Cliffs mountains": {
+  "kind": "music",
+  "hz": 698.4,
+  "note": "F5+0",
+  "tonal": 0.747,
+  "share": 0.081,
+  "held": 0.94,
+  "shot": false
+ },
+ "Webb - Cosmic Cliffs stars": {
+  "kind": "music",
+  "hz": 1766.1,
+  "note": "A6+6",
+  "tonal": 0.795,
+  "share": 0.112,
+  "held": 0.96,
+  "shot": false
+ },
+ "Webb - WASP-96 b": {
+  "kind": "music",
+  "hz": 792.4,
+  "note": "G5+19",
+  "tonal": 0.492,
+  "share": 0.124,
+  "held": 0.22,
+  "shot": false
+ },
+ "fr-electric-0706_loop": {
+  "kind": "tone",
+  "hz": 172.3,
+  "note": "F3-23",
+  "tonal": 0.753,
+  "share": 0.586,
+  "held": 1.0,
+  "shot": false
+ },
+ "fr-fire-1896_loop": {
+  "kind": "tone",
+  "hz": 261.5,
+  "note": "C4-1",
+  "tonal": 0.665,
+  "share": 0.407,
+  "held": 0.99,
+  "shot": false
+ },
+ "fr-insects-0378_loop": {
+  "kind": "music",
+  "hz": 739.8,
+  "note": "F#5+0",
+  "tonal": 0.756,
+  "share": 0.367,
+  "held": 1.0,
+  "shot": false
+ },
+ "fr-insects-0534_loop": {
+  "kind": "tone",
+  "hz": 218.9,
+  "note": "A3-9",
+  "tonal": 0.675,
+  "share": 0.394,
+  "held": 1.0,
+  "shot": false
+ },
+ "fr-rain-roof-0158_loop": {
+  "kind": "tone",
+  "hz": 604.5,
+  "note": "D5+50",
+  "tonal": 0.994,
+  "share": 0.993,
+  "held": 1.0,
+  "shot": false
+ }
+}

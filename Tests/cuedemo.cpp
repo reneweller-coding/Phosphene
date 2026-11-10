@@ -204,7 +204,7 @@ int main( int argc, char **argv )
     // loudness of the mix.
     ParamStore  params;
     std::string err;
-    if ( !params.parseText( "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off", &err ) )
+    if ( !params.parseText( "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off", &err ) )
     {
         std::fprintf( stderr, "knobs: %s\n", err.c_str() );
         return 1;

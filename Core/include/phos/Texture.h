@@ -13,6 +13,13 @@
  *    1 : 2.83 : 5.42 : 8.77. A real bowl is never perfectly round, so each mode splits into two close
  *    frequencies, and the two beat -- the slow "wah-wah" that makes a bowl sing. Four modes, each a
  *    doublet split by 0.2 to 0.4 %, the higher ones dying faster. Struck, not rubbed.
+ *
+ *    **Tuned to the key (10.11.2026).** The ring's second mode is 2 sqrt(2) times the first: an octave and a
+ *    tritone over the key's root, 6 dB under it, in a bed that plays where little else does -- and no scale of
+ *    the set has that tone. A bowl is not a thin ring either (its wall thickens to the rim, and makers tune it):
+ *    the modes are played at 1 : 8/3 : 16/3 : 8, each the nearest octave of the root or the fourth, the tones
+ *    every scale of the set shares with the fifth. The second mode moves a semitone, the third 28 cents, the
+ *    fourth a tone and a half; inharmonic it stays (8/3 is no harmonic of the root), and so does the beating.
  *  - **Didgeridoo: a buzzing drone under a moving formant.** Lips buzzing into a tube give a harmonic
  *    source with the odd harmonics strong (a tube closed at the lips); the player's vocal tract moves a
  *    formant over it -- the "wow" -- in a rhythm, and circular breathing leaves a short dip and an
@@ -21,9 +28,12 @@
  *  - **Jaw harp: a buzzing reed through a sweeping mouth resonance.** A plucked lamella rich in
  *    harmonics, the mouth a narrow resonance that picks out one harmonic after another as it moves --
  *    the "boing". Plucked on an eighth-note pattern; every pluck swings the resonance the other way.
+ *    The drone is the key's root, and the resonance comes to rest on a harmonic that is an octave of the
+ *    root or of the fifth (10.11.2026) -- a player's melody is made of the drone's harmonics, and those two
+ *    are in every scale of the set; on the way between them it passes the others, as a real one does.
  *
  * **The depth rule.** Below 100 Hz only kick and sub may play, and 140 .. 350 Hz belongs to acid and
- * snare body. The didgeridoo's and jaw harp's fundamentals sit at 65 .. 185 Hz, so both end in a
+ * snare body. The didgeridoo's and jaw harp's fundamentals sit at 65 .. 208 Hz, so both end in a
  * 36 dB/octave high pass, the didgeridoo at 200 Hz and the jaw harp at 300 Hz: what remains is their
  * harmonics and formants, and the ear supplies the missing fundamental. (A 24 dB/octave slope at
  * 150 Hz left 0.5 % of their power under 140 Hz -- -23 dB, where the depth rule asks for -30.) The
@@ -85,7 +95,7 @@ public:
      */
     int active() const;
     /**
-     * @brief The bowl's mode ratios (Rayleigh's ring), for the self test.
+     * @brief The bowl's mode ratios (Rayleigh's ring, tuned to the key), for the self test.
      * @param[in] mode  the mode
      * @return its frequency ratio
      */
@@ -123,6 +133,9 @@ private:
         float                m_formant = 0.0f;          ///< the formant's position
         float                m_target = 0.0f;           ///< where it goes
         bool                 m_up = false;              ///< the jaw harp's sweep goes up on this pluck (it alternates)
+        float                m_restLo = 900.0f;         ///< the jaw harp's resonance at rest: the lower end, Hz
+        float                m_restHi = 900.0f;         ///< ... the upper end, Hz
+        float                m_sweepSeen = -1.0f;       ///< the Jaw Harp Sweep the two ends were worked out for
         Svf                  m_f1;                      ///< the first formant
         Svf                  m_f2;                      ///< the second formant
         Svf                  m_hp1;                     ///< the high pass: first section

@@ -221,12 +221,13 @@ public:
     /** @brief Silences every shot and gives its recordings back. */
     void reset();
     /**
-     * @brief Starts a shot drawn by @p pick at @p velocity.
+     * @brief Starts a shot drawn by @p pick at @p velocity; one that carries a tone is transposed onto the key.
      * @param[in] velocity  the velocity, 0..1
      * @param[in] late      samples after the ideal start
      * @param[in] pick      the draw
+     * @param[in] keyRoot   the key (its pitch class is taken)
      */
-    void trigger( float velocity, double late, uint64_t pick );
+    void trigger( float velocity, double late, uint64_t pick, int keyRoot );
     /**
      * @brief Adds @p n samples into @p L and @p R.
      * @param[in,out] L  the left channel, added to
@@ -242,6 +243,7 @@ private:
         FieldClip *m_clip = nullptr;   ///< the recording, null while it is asked for
         int        m_index = -1;       ///< its index in the library
         double     m_p = 0.0;          ///< the playhead, frames
+        double     m_speed = 1.0;      ///< its transposition as a factor on the playhead's step (a tone, onto the key)
         float      m_gain = 0.0f;      ///< its level
         bool       m_on = false;       ///< it sounds
         float      m_pan = 0.0f;       ///< its place, -1 .. 1

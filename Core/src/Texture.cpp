@@ -28,14 +28,32 @@ constexpr float DroneGain = 0.064f;   ///< -24 dB
 /** @} */
 
 /**
- * @brief Rayleigh's thin-ring bending frequency for circumferential order n (unnormalised).
- * @param[in] n  the order
- * @return the frequency, unnormalised
+ * @brief The harmonics of the jaw harp's drone its mouth resonance may rest on: octaves of the root and of the fifth,
+ *        the two tones over a root that every scale of the set has (Texture.h).
  */
-double ringMode( int n )
+constexpr int JawRests[] = { 4, 6, 8, 12, 16, 24, 32, 48 };
+
+/**
+ * @brief The resting frequency of the jaw harp's resonance nearest to @p hz: a harmonic of the drone out of JawRests.
+ * @param[in] f0     the drone's fundamental, Hz
+ * @param[in] hz     where the resonance would rest untuned
+ * @param[in] above  a harmonic the result must lie above (0: none) -- the upper rest stays over the lower one
+ * @return the frequency, Hz
+ */
+double jawRest( double f0, double hz, int above = 0 )
 {
-    const double nn = static_cast<double>( n );
-    return nn * ( nn * nn - 1.0 ) / std::sqrt( nn * nn + 1.0 );
+    double best = 0.0, bestDist = 1e9;
+    for ( const int h : JawRests )
+    {
+        if ( h <= above ) continue;
+        const double d = std::fabs( std::log2( h * f0 / hz ) );
+        if ( d < bestDist )
+        {
+            bestDist = d;
+            best = h * f0;
+        }
+    }
+    return best;
 }
 
 /**
@@ -59,7 +77,9 @@ float harmonics( double phase, const float *w, int count )
 
 double Texture::bowlRatio( int mode )
 {
-    return ringMode( mode + 2 ) / ringMode( 2 );
+    // Rayleigh's ring gives 1 : 2.83 : 5.42 : 8.77; each mode on the nearest of the key's root and fourth (Texture.h).
+    static constexpr double Ratio[Modes] = { 1.0, 8.0 / 3.0, 16.0 / 3.0, 8.0 };
+    return Ratio[std::clamp( mode, 0, Modes - 1 )];
 }
 
 void Texture::prepare( double sampleRate )
@@ -162,8 +182,12 @@ void Texture::trigger( SfxTypeE type, int samples, float velocity, double late, 
     else
     {
         v.m_length = std::max<long long>( 1, samples );
-        // Didgeridoo on the root from C2 (65 .. 123 Hz), jaw harp a fifth above that octave.
-        v.m_f0 = midiToHz( ( type == SfxTypeE::DIDGERIDOO ? 36 : 43 ) + pc );
+        // Didgeridoo on the root from C2 (65 .. 123 Hz). The jaw harp on the root as well since 10.11.2026, from A2
+        // (110 .. 208 Hz, the register it had): what its resonance picks out are harmonics of its drone, and on the
+        // fifth (where it stood) those are the key's major second and major seventh as soon as the resonance leaves
+        // the octaves. Not lower: at Q 10 the resonance is 90 .. 170 Hz wide, and under a drone of 82 Hz the two
+        // harmonics beside the one it rests on -- the eleventh and the thirteenth, in no scale -- came 6 dB under it.
+        v.m_f0 = midiToHz( type == SfxTypeE::DIDGERIDOO ? 36 + pc : ( pc >= 9 ? 36 : 48 ) + pc );
         // The harmonic weights: the didgeridoo's odd harmonics strong (a tube closed at the lips) and
         // the whole falling as k^-0.7 up to 5 kHz; the jaw harp's buzz brighter, k^-0.4 up to 6 kHz.
         const bool didge = type == SfxTypeE::DIDGERIDOO;
@@ -277,9 +301,21 @@ void Texture::voiceSample( Voice &v, float &outL, float &outR )
             // Jaw harp: a bright buzz, re-plucked on the pattern and never quite silent in between.
             const float src = harmonics( v.m_ph, v.m_hw, v.m_harmonics );
             v.m_pluck *= static_cast<float>( std::exp( -1.0 / ( 0.35 * m_sr ) ) );
-            // The mouth resonance swings to the other end of its range with every pluck, over 60 ms.
-            const float hi = static_cast<float>( 900.0 * std::pow( 2.0, 1.5 * m_jawSweep ) );
-            const float goal = v.m_up ? hi : 900.0f;
+            // The mouth resonance swings to the other end of its range with every pluck, over 60 ms. Both ends are
+            // harmonics of the drone on the key's root or fifth (jawRest; 10.11.2026): at Q 10 the resonance sounds
+            // one harmonic, and resting on 900 Hz and 900 Hz times the sweep it held whichever lay there -- in F#
+            // the key's major second and a third between minor and major.
+            if ( v.m_sweepSeen != m_jawSweep )
+            {
+                v.m_sweepSeen = m_jawSweep;
+                const double wide = 900.0 * std::pow( 2.0, 1.5 * m_jawSweep );
+                const double lo = jawRest( v.m_f0, 900.0 );
+                // A sweep that asks for a third or more moves at least one rest up; less than that stays put.
+                const int floorHarmonic = wide > 900.0 * 1.25 ? static_cast<int>( std::lround( lo / v.m_f0 ) ) : 0;
+                v.m_restLo = static_cast<float>( lo );
+                v.m_restHi = static_cast<float>( jawRest( v.m_f0, wide, floorHarmonic ) );
+            }
+            const float goal = v.m_up ? v.m_restHi : v.m_restLo;
             v.m_formant += ( goal - v.m_formant ) * static_cast<float>( 1.0 - std::exp( -1.0 / ( 0.06 * m_sr ) ) );
             if ( v.m_formant < 100.0f ) v.m_formant = goal;
             v.m_f2.setQ( v.m_formant, 10.0f, sr );

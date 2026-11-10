@@ -30,6 +30,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
@@ -52,6 +53,7 @@ struct Entry
     std::string              m_path;              ///< the file
     std::string              m_name;              ///< its name (the file name without extension)
     int                      m_category = -1;     ///< its category (field::), the hidden shot category, or -1
+    float                    m_tone = 0.0f;       ///< its held tone (fieldToneOf)
     std::atomic<FieldClip *> m_clip{ nullptr };   ///< the recording once loaded, else null
     std::atomic<bool>        m_wanted{ false };   ///< the loader is asked to load it
     std::atomic<int64_t>     m_lastUse{ 0 };      ///< when it was last asked for, ms
@@ -186,6 +188,7 @@ void scanFolder( Library &l, Catalogue &cat, const fs::path &root )
             slot->m_path = p.string();
             slot->m_name = p.stem().string();
             slot->m_category = c;
+            slot->m_tone = fieldToneOf( slot->m_name.c_str() );
         }
         cat.m_entries.push_back( slot.get() );
     }
@@ -515,6 +518,48 @@ std::string fieldClipName( int index )
 {
     const Entry *e = entryAt( index );
     return e != nullptr ? e->m_name : std::string();
+}
+
+float fieldToneOf( const char *stem )
+{
+    /** @brief A recording and its tone (FieldToneData.inl). */
+    struct Tone
+    {
+        const char *m_stem;   ///< the file's stem
+        float       m_hz;     ///< its tone, or FieldToneMusic
+    };
+    static const Tone Tones[] = {
+#include "FieldToneData.inl"
+    };
+    if ( stem == nullptr ) return 0.0f;
+    for ( const Tone &t : Tones )
+        if ( std::strcmp( t.m_stem, stem ) == 0 ) return t.m_hz;
+    return 0.0f;
+}
+
+float fieldClipTone( int index )
+{
+    const Entry *e = entryAt( index );
+    return e != nullptr ? e->m_tone : 0.0f;
+}
+
+double fieldToneShift( double hz, int keyRoot )
+{
+    if ( hz <= 0.0 ) return 0.0;
+    const double note = 69.0 + 12.0 * std::log2( hz / 440.0 );
+    double       best = 0.0, bestAbs = 1e9;
+    for ( const int degree : { 0, 5, 7 } )
+    {
+        double d = std::fmod( static_cast<double>( keyRoot + degree ) - note, 12.0 );
+        if ( d < -6.0 ) d += 12.0;
+        if ( d >= 6.0 ) d -= 12.0;
+        if ( std::fabs( d ) < bestAbs )
+        {
+            bestAbs = std::fabs( d );
+            best = d;
+        }
+    }
+    return best;
 }
 
 FieldClip *acquireFieldClip( int index )

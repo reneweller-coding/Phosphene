@@ -221,4 +221,21 @@ bool droneLowAt( const TrackPlan &plan, int inTrack );
 /** @brief The melody context of bar @p bp, bar @p inTrack of @p plan (see its definition in Composer.cpp). */
 MelodyContext melodyContext( const TrackPlan &plan, const BarPlan &bp, int inTrack );
 
+/**
+ * @brief The Field preset a track plays (FieldPresets.h): drawn by its style and its form's seed while layer A's
+ *        category stands on Auto, none (-1) where the user chose the place.
+ * @param[in] p     the knobs
+ * @param[in] plan  the track's plan
+ * @return the preset's index, -1 for none
+ */
+int fieldPresetOfTrack( const ParamStore &p, const TrackPlan &plan );
+/**
+ * @brief The semitones a track's Field notes are transposed by so that a tone its place carries is in the key
+ *        (10.11.2026; FieldPresets.h, fieldPresetTuning) -- 0 for nearly every place.
+ * @param[in] p     the knobs
+ * @param[in] plan  the track's plan
+ * @return the semitones, -3 .. 3
+ */
+int fieldNoteSemis( const ParamStore &p, const TrackPlan &plan );
+
 }   // namespace phos

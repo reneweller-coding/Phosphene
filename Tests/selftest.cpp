@@ -278,6 +278,12 @@ int main( int argc, char **argv )
     run( "testMixGuide.planes", testMixGuidePlanes );
     run( "testMixGuide.distance", testMixGuideDistance );
     run( "testMixGuide.phase", testMixGuidePhase );
+    run( "testHarmonyAudit.heldUnison", testHarmonyAuditHeldUnison );
+    run( "testHarmonyAudit.droneFifth", testHarmonyAuditDroneFifth );
+    run( "testHarmonyAudit.fieldTones", testHarmonyAuditFieldTones );
+    run( "testHarmonyAudit.unisonCentre", testHarmonyAuditUnisonCentre );
+    run( "testHarmonyAudit.bank", testHarmonyAuditBank );
+    run( "testHarmonyAudit.jawHarp", testHarmonyAuditJawHarp );
     run( "testFilterModels.levels", testFilterModelsLevels );
     run( "testModulation.blockSize", testModulationBlockSize );
     run( "testModulation.sync", testModulationSync );

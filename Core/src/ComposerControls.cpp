@@ -302,6 +302,47 @@ float presetTrim( const ParamStore &p, const TrackPlan &plan, int synth, int lev
 }
 
 /**
+ * @brief The value knob @p local of synth @p synth plays under the composer's offsets: the track's preset's where one
+ *        plays (it reaches the engine as the knob's base, ControlEvent::KindE::BASE), the knob's own otherwise.
+ * @param[in] p      the knobs
+ * @param[in] plan   the track's plan
+ * @param[in] synth  the synth (3 + the voice for the six voices)
+ * @param[in] id     the knob's id in the store
+ * @param[in] local  the knob's index in its module
+ * @return the value, in the knob's unit
+ */
+float playedValue( const ParamStore &p, const TrackPlan &plan, int synth, int id, int local )
+{
+    if ( const SoundPreset *sp = Composer::presetOf( p, plan, synth ) )
+        for ( const auto &kv : sp->m_values )
+            if ( kv.first == local ) return kv.second;
+    return p.get( id );
+}
+
+/** @brief The unison detune a held pad or drone may play: about 6 cents either side (Szabo's curve at 0.15). */
+constexpr float HeldDetune = 0.15f;
+/** @brief The cents a held pad's or drone's second oscillator may stand off the first. */
+constexpr float HeldOsc2Cents = 3.0f;
+
+/**
+ * @brief Whether the pad and the drone are held at bar @p inTrack: in the intro and in a breakdown they are often the
+ *        only tonal voices for 16 .. 32 bars (sectionControls, "Held pads").
+ * @param[in] plan     the track's plan
+ * @param[in] inTrack  the bar within the track
+ * @return true in an intro or a breakdown
+ */
+bool heldAt( const TrackPlan &plan, int inTrack )
+{
+    for ( int k = 0; k < plan.m_form.m_count; ++k )
+    {
+        const Section &s = plan.m_form.m_section[k];
+        if ( inTrack >= s.m_startBar && inTrack < s.m_startBar + s.m_bars )
+            return s.m_type == SectionTypeE::INTRO || s.m_type == SectionTypeE::BREAK;
+    }
+    return false;
+}
+
+/**
  * @brief A knob of choices, steps or a switch: a preset's value reaches it as an override, not a base.
  * @param[in] c  the curve
  * @return true for choices, steps or a switch
@@ -312,6 +353,19 @@ bool isDiscreteCurve( CurveE c )
 }
 
 }   // namespace
+
+int fieldPresetOfTrack( const ParamStore &p, const TrackPlan &plan )
+{
+    return p.getInt( p.base( ModuleE::FIELD ) + field::A_CATEGORY ) == 0
+               ? fieldPresetFor( plan.m_style, mixSeed( plan.m_formSeed, 0x4649454C44ull ) )
+               : -1;
+}
+
+int fieldNoteSemis( const ParamStore &p, const TrackPlan &plan )
+{
+    const int fp = fieldPresetOfTrack( p, plan );
+    return fp >= 0 ? fieldPresetTuning( fieldPresets()[static_cast<size_t>( fp )], plan.m_key ).m_semis : 0;
+}
 
 void Composer::trackStartControls( const ParamStore &p, const TrackPlan &plan, double beat,
                                    std::vector<ControlEvent> &out, ControlScopeE scope ) const
@@ -528,13 +582,20 @@ void Composer::trackStartControls( const ParamStore &p, const TrackPlan &plan, d
                 out.back().m_length = -1.0f;
             }
         }
-        const int fp = p.getInt( fb + field::A_CATEGORY ) == 0
-                           ? fieldPresetFor( plan.m_style, mixSeed( plan.m_formSeed, 0x4649454C44ull ) )
-                           : -1;
+        const int fp = fieldPresetOfTrack( p, plan );
         if ( fp >= 0 )
         {
             const FieldPreset &preset = fieldPresets()[static_cast<size_t>( fp )];
-            for ( const auto &kv : fieldPresetValues( p, preset ) )
+            std::vector<std::pair<int, float>> values = fieldPresetValues( p, preset );
+            // A recording that carries a tone plays it in the key (10.11.2026; FieldLibrary.h, fieldToneOf): a rain on
+            // a roof that is a tone at D5 +50 cents sounded under an F# minor intro 32 dB over the pad in its band.
+            // Transposed so the tone falls on the key's root, fourth or fifth, at most 2.5 semitones -- a recording is
+            // resampled, and a rain a tone lower is still that rain. The cents here; the semitones are the note's
+            // (fieldNoteSemis, composeSfxBar).
+            const FieldTuning tuning = fieldPresetTuning( preset, plan.m_key );
+            values[static_cast<size_t>( field::A_FINE )].second += tuning.m_fineA;
+            values[static_cast<size_t>( field::B_FINE )].second += tuning.m_fineB;
+            for ( const auto &kv : values )
             {
                 const int id = fb + kv.first;
                 push( id,
@@ -876,26 +937,37 @@ void Composer::sectionControls( const ParamStore &p, const TrackPlan &plan, cons
         {
             push( cd, 0.0f, 0.0f );
         }
-        // Held pads without a beating cloud (the addon): in the intro and the breakdown, where the pad and the drone
-        // are often the only tonal voices for 16 .. 32 bars, their unison stays within about 6 cents (Szabo's curve
-        // at 0.15) and the second oscillator within 3 -- two voices 15 cents apart beat at 4 Hz at 440 Hz, and a
-        // stack of them flickers in a way no EQ reaches. Everywhere else the recipe's own detune.
+    }
+    // Held pads without a beating cloud (the addon): in the intro and the breakdown, where the pad and the drone
+    // are often the only tonal voices for 16 .. 32 bars, their unison stays within about 6 cents (Szabo's curve
+    // at 0.15) and the second oscillator within 3 -- two voices 15 cents apart beat at 4 Hz at 440 Hz, and a
+    // stack of them flickers in a way no EQ reaches. Everywhere else the recipe's own detune.
+    //
+    // Since 10.11.2026 the limit is measured against what plays, not against the knob: a track's preset reaches
+    // the engine as the knob's base, and the offset rides on that (seed 13, track 1: a pad preset at 0.44 under a
+    // knob at 0.35 played its breakdown at 0.24 where the rule says 0.15). It holds in a set's first intro too,
+    // wherever a preset plays -- "the first section starts from the knobs exactly" is a promise about the user's
+    // own sound, and there it still stands -- and the drone's slow ride keeps to it (droneControls).
+    if ( voices )
+    {
         const bool held = s.m_type == SectionTypeE::INTRO || s.m_type == SectionTypeE::BREAK;
         for ( PolyInstanceE v : { PolyInstanceE::PAD, PolyInstanceE::DRONE } )
         {
+            const int synth = 3 + polyIndex( v );
+            if ( knobs && presetOf( p, plan, synth ) == nullptr ) continue;
             float off[poly::COUNT] = {};
-            voiceRecipeOffsets( v, plan.m_voice[polyIndex( v )], recipeAmount( p, plan, 3 + polyIndex( v ), sv ), off );
+            voiceRecipeOffsets( v, plan.m_voice[polyIndex( v )], recipeAmount( p, plan, synth, sv ), off );
             const int det = p.base( v ) + poly::DETUNE, o2 = p.base( v ) + poly::OSC2_DETUNE;
             float     dOff = off[poly::DETUNE], oOff = off[poly::OSC2_DETUNE];
             if ( held )
             {
-                dOff = std::min( dOff, 0.15f - p.get( det ) );
+                dOff = std::min( dOff, HeldDetune - playedValue( p, plan, synth, det, poly::DETUNE ) );
                 const float span = p.desc( o2 ).m_maxValue - p.desc( o2 ).m_minValue;
-                const float cents = p.get( o2 ) + oOff * span;
-                oOff += ( std::clamp( cents, -3.0f, 3.0f ) - cents ) / span;
+                const float cents = playedValue( p, plan, synth, o2, poly::OSC2_DETUNE ) + oOff * span;
+                oOff += ( std::clamp( cents, -HeldOsc2Cents, HeldOsc2Cents ) - cents ) / span;
             }
-            push( det, dOff, phaseRamp );
-            push( o2, oOff, phaseRamp );
+            push( det, dOff, knobs ? 0.0f : phaseRamp );
+            push( o2, oOff, knobs ? 0.0f : phaseRamp );
         }
     }
 
@@ -974,6 +1046,11 @@ void Composer::droneControls( const ParamStore &p, const TrackPlan &plan, int in
         c.m_kind = ControlEvent::KindE::OFFSET;
         c.m_param = static_cast<int16_t>( db + m.m_param );
         c.m_value = base[m.m_param] + m.m_reach * ( 2.0f * r.uniform() - 1.0f );
+        // A held drone keeps its unison narrow (sectionControls, "Held pads"; 10.11.2026): this ride replaces the
+        // section's offset, and a target of up to +0.2 on the detune undid the limit eight bars into an intro.
+        if ( m.m_param == poly::DETUNE && heldAt( plan, inTrack ) )
+            c.m_value = std::min( c.m_value, HeldDetune - playedValue( p, plan, 3 + polyIndex( PolyInstanceE::DRONE ),
+                                                                       db + poly::DETUNE, poly::DETUNE ) );
         c.m_length = static_cast<float>( period * BeatsPerBar );
         out.push_back( c );
     }

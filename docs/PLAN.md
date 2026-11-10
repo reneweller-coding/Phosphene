@@ -35,7 +35,7 @@ Nutzer: „Bitte baue alles ein, die Tests erst am Ende.“ -- die GUI-Verbesser
 
 Phasen 0 bis 9 sind gebaut (Abschnitt 12), dazu Plugin, Quest-App, Release-Weg und die Runden danach.
 Was jede Runde gebaut, gemessen und entschieden hat, steht im Journal
-[docs/rounds/2026-09.md](rounds/2026-09.md), ein Block pro Runde mit Datum und Namen. Dieses Dokument ist
+[docs/rounds/2026-09.md](rounds/2026-09.md) und ab November in [2026-11.md](rounds/2026-11.md), ein Block pro Runde mit Datum und Namen. Dieses Dokument ist
 die Spezifikation: es beschreibt den Zielzustand und die Gründe, das Journal den Weg.
 
 ## 0. Kurzfassung
@@ -130,7 +130,9 @@ Sektionslängen, Bass-Onsets, Kick-Spektrum), nicht nur behauptet. Werkzeug: `To
   über dem Grundton, den Bass und Drone halten, und keiner über dem eigenen Akkordgrundton -- auch nicht im
   DJ-Übergang über dem Bass des alten Tracks. Ebenso kein gehaltener Leitton unter der Tonika und kein
   Tritonus über dem Pad-Grundton; Dissonanz in Flächen entsteht über den Klang (Cluster, Rauschen, Drones),
-  nicht über Voicings. maj7 nur selten und nur auf bVI/bIII.
+  nicht über Voicings. maj7 nur selten und nur auf bVI/bIII. Dieselbe Regel zwischen den beiden Flächen
+  (10.11.2026): hält das Pad in einem Drone-Abschnitt die kleine Sexte (iv, bVI, das phrygische Pad auf der
+  Tonika), lässt die Drone ihre Quinte weg und hält die Oktave -- die Sexte läge einen Halbton darüber.
 - **Bass ist Orgelpunkt:** b2 und Leitton im Bass nur als Auftakt (höchstens zwei Sechzehntel am Taktende).
   "Bass Follows Chords" folgt dem Grundton, den das Pad hält, nur wo das Pad spielt, und die Drone geht mit.
 - **Die b2 ist in Phrygisch eine Stufe** für Acid und Lead (E–F–E), auch betont (Lead: Zählzeit 2 und 4) und
@@ -272,6 +274,7 @@ Literatur pro Baustein steht dabei, wie in der Feedback-Regel "Literatur statt K
   - Jede Gruppe wählt ihr Filtermodell und Modulationsrezepte (LFO auf Cutoff, Wavetable-Position über LFO/Mod-Hüllkurve, Pitch-Dive, einblendendes Vibrato).
   - Jede Gruppe trägt Gewichte je Stil (Goa, Full-On, Progressive, Dark Forest, Hi-Tech).
   - Was ein Preset nicht setzt (`presetLeaves`): Pegel, Ducking, Sends, Pan/Distanz, bei den Stimmen Hochpass und Gate; Kick-Tuning, End-Tonhöhe und Schwanz; Kick-Lock, Retrigger und Startphase des Basses.
+  - **Auf der Note (10.11.2026, 5.8b):** Fährt die Mod-Hüllkurve die Tonhöhe, folgt ihr Release dem Decay (5/3 davon) und der Sweep endet in höchstens 140 ms; kein Supersaw-Preset steht über Detune 0,9. `Tools/tuning_audit.py` misst jedes Preset gegen seine Note.
 - **Pegelkorrektur (`PresetTrims.inl`):** jedes Preset gegen die Standardknöpfe seines Synths gemessen, so wie es spielt (`PHOS_BANK_TRIMS`, `testPresetBank`), höchstens ±20 dB, als Offset auf den Level des Synths.
   - Kick und Bass über das Tiefband unter 140 Hz, das Pad unbewertet am gehaltenen Dreiklang, der Drone an Grundton und Quinte.
   - Lead und Counter K-gewichtet an einer gemischten Phrase, Arp, Stab und Acid K-gewichtet an Sechzehnteln.
@@ -438,7 +441,34 @@ Forest", und die Aufnahmen im Original ("Nimm doch die originalen Aufnahmen?").
 | Klang | Amp- und Filter-ADSR, SVF oder neun Schaltungsmodelle mit den Pegel-Trims der Stimmen, Low Cut 24 dB/Okt, Modulationsblock | Tiefenregel: unter 100 Hz nur Kick und Bass |
 | Komponist | Orte unter Intro, Breakdown, Outro bis zum Blend, in Dark Forest leise unter langen Grooves; nie in Build/Drop; Preset je Track nach Stil, als Base/Override | die Regler bleiben beim Nutzer; die Partitur hängt nicht davon ab, ob Aufnahmen installiert sind |
 | NASA-Shots | `SfxType::SpaceShot`: NASA-Aufnahme ≤ 25 s ganz, auf dem SFX-Strip, zwei Takte Abstand zu Stimmen | Full-On/Hi-Tech-Farbe |
+| Töne in Aufnahmen (10.11.2026) | `Tools/field_tones.py` misst je Aufnahme den Anteil der Leistung in gehaltenen Tönen (`FieldToneData.inl`, `fieldToneOf`). Trägt *ein* Ton die Aufnahme, transponiert der Komponist sie so, dass er auf Grundton, Quarte oder Quinte der Tonart fällt (höchstens 2,5 Halbtöne; Shots ebenso in der Engine). Aufnahmen mit eigener Musik (Webb-Sonifikationen, Insektenchor) zieht der Komponist nicht; im Menü bleiben sie | 13 von 157 Aufnahmen tragen ≥ 20 % ihrer Leistung in Tönen; ein Regen auf dem Dach ist ein reiner Ton auf D5 +50 Cent und lag im Intro 32 dB über dem Pad |
 | Auslieferung | eigene Setup-Komponente (Standard an), zwei Archive in eigenem Release `field-data-<n>`, installiert nach `%PROGRAMDATA%` bzw. `%APPDATA%\Phosphene\field`; Quest per `adb push` | ohne Aufnahmen läuft alles, nur Field-Spur und Shots schweigen |
+
+### 5.8b Stimmung: was den Klang auf der Note hält (10.11.2026)
+
+Die Partitur hält jede Linie in ihrer Tonleiter (6.x, `testGenreRules`). Die Harmonie-Untersuchung vom 10.11.2026 hat
+gemessen, was die *Klänge* mit diesen Noten tun -- alle 8192 Presets von Bass, Acid und den sechs Stimmen an einer kurzen
+und einer langen Note, 80 Tracks als Partitur, alle 157 Aufnahmen der Field-Spur -- und sechs Stellen gefunden, an denen
+der Klang die Tonart verließ, die die Noten hielten. Seitdem gilt:
+
+| Regel | Wo | Was vorher war |
+|---|---|---|
+| FM-Verhältnis der Stimmen: ganze Zahlen, darunter nur 0,5 | `Poly.cpp`, `harmonicFmRatio` | auf halbe gerundet: bei 3,5 liegen die stärksten Seitenbänder auf dem 2,5- und 4,5-Fachen der Note (große Terz und große None über jedem Ton einer Molltonart); 341 Presets, 155 davon mit > 30 % der Energie der unteren Teiltöne neben den Obertönen der Note |
+| Tonhöhen-Sweeps der Bank landen in der Sechzehntel | `bank_spec.py`, `menv`: Release = 5/3 Decay, Decay ≤ 140 ms | Release 400 ms (Vorgabe): eine Arp-Note von 20 ms ließ den Sweep 2,7 Halbtöne über der Note stehen; 483 Presets klangen > 25 Cent neben ihrer Note |
+| Kein Supersaw-Preset über Detune 0,9 | `bank_spec.py`, Hoover | Szabos Kurve springt zwischen 0,9 und 1,0 von ±66 auf ±181 Cent; 32 Hoover-Presets mit bis zu 42 % der Grundton-Energie mehr als einen Halbton daneben |
+| Zwei Oszillatoren im Unisono teilen sich die Note | `Poly.cpp`: `osc2_detune` ist der Abstand, jeder rückt um den Leistungsanteil des anderen | der erste stand auf der Note, der zweite darüber: 448 Presets im Mittel 4,3 Cent zu hoch gegen Bass und Acid |
+| Gehaltene Flächen eng, gegen das Preset gemessen | `ComposerControls.cpp`, `sectionControls` und `droneControls` | gegen den Knopf gerechnet, im ersten Intro nicht, von der Drone-Fahrt überschrieben |
+| Drone ohne Quinte unter der kleinen Sexte des Pads | `Melody.h`, `MelodyContext::m_droneBare` | 10,2 % der gemeinsamen Zeit von Pad und Drone, in Intro und Break |
+| Aufnahmen mit Dauerton in der Tonart | 5.8a, `fieldToneOf` | 6 bis 15 % der Tracks (je Stil) bekamen einen Ort mit eigenem Ton in fremder Stimmung |
+| Singschale: Moden 1 : 8/3 : 16/3 : 8 | `Texture.cpp`, `bowlRatio` | Rayleighs Ring: die zweite Mode ist das 2√2-Fache, Oktave + Tritonus über dem Grundton, 6 dB darunter |
+| Maultrommel auf dem Grundton, Resonanz ruht auf dessen Oktaven und Quinten | `Texture.cpp`, `jawRest` | Bordun auf der Quinte, Resonanz (Q 10) auf festen 900 Hz und 900 Hz × Sweep: in F# die große Sekunde und eine neutrale Terz |
+
+**Werkzeuge.** `Tools/tuning_audit.py` (mit `phos_tunebench`) spielt jedes Preset an einer kurzen und einer langen
+Note und misst: gehörte Tonhöhe der kurzen Note (Momentanfrequenz, nach Energie gewichtet), Mitte und Streuung um den
+Grundton, Anteil der unteren Teiltöne neben den Obertönen der Note und ihres zweiten Oszillators. `Tools/field_tones.py`
+misst die Aufnahmen. Zwei Messfallen: die spektrale Streuung um den Grundton hält Filter-Wobbeln und Gates
+(Amplitudenmodulation, Seitenbänder) für Verstimmung -- erst die Momentanfrequenz trennt beides; und eine Bassnote von
+70 ms bei 52 Hz ist für beide Maße zu kurz (der Bass wird an der langen Note beurteilt).
 
 ### 5.9 Mixer und Master
 - Kanalzug je Erzeuger (Percussion: je Lane + Gruppe): Gain, Pan, 3-Band-EQ (SVF), Hochpass,
@@ -468,6 +498,9 @@ Forest", und die Aufnahmen im Original ("Nimm doch die originalen Aufnahmen?").
     und Breite; der Lead geht im Break nach hinten, der Counter nähert sich im Haupt-Break über 16 Takte.
     Pads und Drone bewegen sich zusätzlich frei (13/21/34 s, Verhältnisse des Goldenen Schnitts).
   - *Gehaltene Pads:* in Intro und Break Unison ≤ 6 Cent; solange der Bass läuft, keine Terz im Pad.
+    Gemessen wird gegen den Klang, der spielt (das Preset des Tracks, nicht der Knopf), auch im ersten Intro
+    eines Sets, wenn ein Preset spielt, und auch in der langsamen Fahrt der Drone (10.11.2026,
+    `testHarmonyAudit.heldUnison`).
   - *Ducking-Matrix* von der Kick: Bass 2–4 dB (Release 40–70 ms), Linien 1–2 dB (50–80 ms), hintere
     Ebene 4–8 dB (100–150 ms), Returns 3–6 dB (80–120 ms); Effekte nicht (ein Impact fällt auf die Kick).
     Vom Lead: der Counter 1–3 dB, das Präsenzband des Pads (500 Hz–3 kHz) 2–4 dB, solange eine Lead-Note
@@ -798,6 +831,10 @@ Grober CPU-Rahmen (Desktop, ein Kern, 48 kHz, zu verifizieren in Phase 1/2):
   bitgleich nach Neuwürfeln).
 - MIDI: Schreiben → Lesen → gleiche Partitur; Marker und Tempo-Karte.
 - Master: True Peak ≤ −1 dBTP, LUFS im Zielfenster des Profils.
+- Stimmung (10.11.2026, `testHarmonyAudit`, 5.8b): gehaltene Flächen eng gegen das spielende Preset, keine
+  Drone-Quinte unter der kleinen Sexte des Pads, Aufnahmen mit Ton in der Tonart, Unisono zweier Oszillatoren auf der
+  Note, die Sweeps der Bank, die Maultrommel; dazu die ganzen FM-Verhältnisse (`testPoly`) und die Moden der
+  Singschale (`testPsychedelia`).
 
 ### 11.2 Vektor-Varianten
 Wie Noctuarys `convtest`/`banktest`: dieselben Prüfungen dreimal gebaut (AVX2, NEON-Shim auf

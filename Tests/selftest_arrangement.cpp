@@ -129,7 +129,7 @@ void testArrangement()
     for ( int st = 0; st < NumStyles; ++st )
     {
         ParamStore q;
-        q.parseText( "compose.level_match=Off master.auto_gain=Off" );
+        q.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         q.parseText( fmt( "compose.style=%s", StyleNames[st] ).c_str() );
         Composer               c( 4242 + static_cast<uint64_t>( st ) );
         constexpr int          Tracks = 6;
@@ -564,7 +564,7 @@ void testArrangement()
     // incoming one from the hand-over.
     {
         ParamStore q;
-        q.parseText( "compose.level_match=Off master.auto_gain=Off compose.track_variation=1 compose.tempo_range=6" );
+        q.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.track_variation=1 compose.tempo_range=6" );
         Composer       c( 99 );
         const TempoMap m = c.tempoMap( q, 2000 );
         int            ramps = 0, bad = 0;
@@ -612,7 +612,7 @@ void testClimax()
         for ( int st = 0; st < NumStyles; ++st )
         {
             ParamStore q;
-            q.parseText( "compose.level_match=Off master.auto_gain=Off" );
+            q.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
             q.parseText( fmt( "compose.style=%d", st ).c_str() );
             Composer                  c( 5150 + static_cast<uint64_t>( st ) );
             const int                 gain = q.base( ModuleE::MIX ) + mix::TRACK_GAIN;
@@ -975,7 +975,7 @@ void testPresence()
             for ( uint64_t seed = 1; seed <= 6; ++seed )
             {
                 ParamStore q;
-                q.parseText( "compose.level_match=Off master.auto_gain=Off" );
+                q.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
                 q.parseText( fmt( "compose.style=%d", st ).c_str() );
                 Composer c( seed );
                 for ( int t = 0; t < 5; ++t )
@@ -1472,7 +1472,7 @@ void testGenreRulesBassAndDrone()
         ParamStore p;
         p.parseText(
             fmt( "compose.track_bars=128 compose.pad_amount=1 compose.track_variation=1 compose.level_match=Off "
-                 "master.auto_gain=Off compose.style=%d compose.bass_follows_chords=%d",
+                 "master.auto_gain=Off master.auto_tone=Off compose.style=%d compose.bass_follows_chords=%d",
                  run % 5, follow ? 1 : 0 )
                 .c_str() );
         Composer               c( 0xBA55ull + static_cast<uint64_t>( run ) * 104729ull );
@@ -1621,7 +1621,7 @@ void testGenreRulesHeldNoFlat9()
         ParamStore p;
         p.parseText(
             fmt( "compose.track_bars=128 compose.pad_amount=1 compose.track_variation=1 compose.level_match=Off "
-                 "master.auto_gain=Off compose.style=%d",
+                 "master.auto_gain=Off master.auto_tone=Off compose.style=%d",
                  run % 5 )
                 .c_str() );
         Composer               c( 0xB9D0ull + static_cast<uint64_t>( run ) * 7919ull );
@@ -1981,7 +1981,7 @@ void testFoundationRender()
         // track has a drawn sound too, the level under 140 Hz a beat after the drop moved from within
         // the bound to 0.7 dB outside it purely because of which pad came up.
         p.parseText( "compose.pad_amount=1 compose.drone_amount=0 compose.sound_variation=0 "
-                     "compose.level_match=Off master.auto_gain=Off" );
+                     "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         uint64_t seed = 0;
         int      breakStart = -1, breakEnd = -1;
         for ( uint64_t s = 1; s < 400 && breakStart < 0; ++s )
@@ -2200,7 +2200,7 @@ void testVoicesScore()
     ParamStore q;
     q.parseText(
         "compose.counter_amount=1 compose.stab_amount=1 compose.drone_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
-        "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off" );
+        "compose.track_bars=128 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     Composer                  c( 20260919ull );
     std::vector<NoteEvent>    ev;
     std::vector<ControlEvent> ctl;
@@ -2491,7 +2491,7 @@ void testVoicesDroneRender()
     {
         ParamStore p;
         p.parseText(
-            "compose.drone_amount=1 compose.pad_amount=0 compose.level_match=Off master.auto_gain=Off master.limiter=Off master.clipper=Off "
+            "compose.drone_amount=1 compose.pad_amount=0 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off master.limiter=Off master.clipper=Off "
             "master.clip=Off master.comp_ratio=1" );
         uint64_t seed = 0;
         int      breakStart = -1, breakEnd = -1;
@@ -2588,7 +2588,7 @@ void testBedAudible()
     {
         auto e = std::make_unique<Engine>();
         e->prepare( sr, 512 );
-        e->params().parseText( "compose.seed=7 compose.track_bars=128 compose.level_match=Off master.auto_gain=Off" );
+        e->params().parseText( "compose.seed=7 compose.track_bars=128 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         if ( muted[0] != 0 ) e->params().parseText( muted );
         Composer           c( 7 );
         std::vector<float> R;
@@ -2857,7 +2857,7 @@ void testVoicesAcidRide()
     {
         ParamStore ap;
         ap.parseText(
-            "compose.level_match=Off master.auto_gain=Off compose.sound_presets=0" );   // the recipe path, not a preset
+            "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.sound_presets=0" );   // the recipe path, not a preset
         Composer    ac( 864566672ull );
         const int   decayId = ap.base( ModuleE::ACID ) + acid::DECAY;
         int         tracksSeen = 0, tracksOk = 0, longDecay = 0;
@@ -2915,7 +2915,7 @@ void testDialogueScore()
     // The three probes are off: nothing here is about levels, and they cost 12 s per track.
     ParamStore q;
     q.parseText( "compose.counter_amount=1 compose.stab_amount=1 compose.drone_amount=1 compose.lead_amount=1 "
-                 "compose.arp_amount=1 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off "
+                 "compose.arp_amount=1 compose.track_bars=256 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off "
                  "compose.presence_match=Off" );
     Composer               c( 20260920ull );
     std::vector<NoteEvent> ev;
@@ -3517,7 +3517,7 @@ void testDialogueLevels()
 {
     section( "dialogue: the effects and the voices against the percussion" );
     ParamStore p;
-    p.parseText( "compose.level_match=Off master.auto_gain=Off compose.presence_match=Off" );
+    p.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.presence_match=Off" );
     const uint64_t seed = 864566672ull;
     Composer       probe( seed );
     // The first drop of the first track: where the mix is fullest and the brief took its numbers.

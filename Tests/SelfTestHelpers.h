@@ -491,7 +491,7 @@ inline double measureLock( const char *settings, double bpm, double &spread, dou
         const std::string cfg =
             fmt( "compose.bpm=%g ", bpm ) +
             "compose.bass_variation=0 compose.kick_pattern=Four master.clip=Off master.limiter=Off master.clipper=Off "
-            "master.comp_ratio=1 master.auto_gain=Off compose.level_match=Off compose.presence_match=Off "
+            "master.comp_ratio=1 master.auto_gain=Off master.auto_tone=Off compose.level_match=Off compose.presence_match=Off "
             "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 "
             "compose.sound_presets=0 "   // the settings' timbre (bite, sub octave, cutoff), not a preset's (26.09.2026)
             + std::string( settings ) + " " + solo;
@@ -720,7 +720,7 @@ inline double measureFreeLock( double bpm, const char *rhythm, int &onsets, int 
     const std::string      base =
         fmt( "compose.bpm=%g compose.bass_rhythm=%s compose.bass_variation=1 bass.kick_lock=Bass follows kick "
              "compose.kick_pattern=Four master.clip=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 "
-             "master.auto_gain=Off compose.level_match=Off compose.acid_amount=0 compose.lead_amount=0 "
+             "master.auto_gain=Off master.auto_tone=Off compose.level_match=Off compose.acid_amount=0 compose.lead_amount=0 "
              "compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 compose.sound_presets=0",
              bpm, rhythm );   // the knobs' timbre, not a preset's (26.09.2026)
     auto render = [&]( const char *solo, bool keepKick )
@@ -2099,7 +2099,7 @@ inline void modalPresence( int mode, int slice )
     {
         ParamStore p;
         p.parseText( "compose.track_bars=128 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
-                     "compose.pad_amount=1 compose.sfx_amount=1 compose.level_match=Off master.auto_gain=Off" );
+                     "compose.pad_amount=1 compose.sfx_amount=1 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         // Before the split the Off pass parsed "On" first and then "Off" into the same store; the
         // store's values are the same either way, since both lines set the one key.
         p.parseText( mode == 0 ? "compose.modal_interchange=On" : "compose.modal_interchange=Off" );
@@ -2294,7 +2294,7 @@ inline void modalPresenceArc( int mode, int slice )
     {
         ParamStore p;
         p.parseText( "compose.track_bars=128 compose.acid_amount=1 compose.lead_amount=1 compose.arp_amount=1 "
-                     "compose.pad_amount=1 compose.sfx_amount=1 compose.level_match=Off master.auto_gain=Off" );
+                     "compose.pad_amount=1 compose.sfx_amount=1 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         p.parseText( mode == 0 ? "compose.modal_interchange=On" : "compose.modal_interchange=Off" );
         double    worst = 1e9, sum = 0.0, changedSum = 0.0;
         int       count = 0, rendered = 0, changed = 0;
@@ -2465,7 +2465,7 @@ inline BorrowedScore &borrowedScore( int which )
         s = std::make_unique<BorrowedScore>();
         s->m_p.parseText(
             "compose.track_bars=128 compose.lead_amount=1 compose.acid_amount=1 compose.arp_amount=1 "
-            "compose.style=Goa compose.modal_interchange=On compose.level_match=Off master.auto_gain=Off" );
+            "compose.style=Goa compose.modal_interchange=On compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         s->m_p.parseText( which == 0 ? "compose.melody_model=Markov" : "compose.melody_model=Neural" );
         s->m_c = std::make_unique<Composer>( 31337 );
         s->m_c->composeBars( s->m_p, 0, 12 * 128, s->m_ev );

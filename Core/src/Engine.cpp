@@ -1009,7 +1009,7 @@ void Engine::dispatch( const NoteEvent &in, double late )
         default:
             if ( t == SfxTypeE::SPACE_SHOT )
             {
-                m_shot.trigger( vel, late, pick );   // a NASA recording, whole (FieldPlayer.h)
+                m_shot.trigger( vel, late, pick, m_keyRoot );   // a NASA recording, whole (FieldPlayer.h)
                 break;
             }
             if ( t == SfxTypeE::STUTTER )

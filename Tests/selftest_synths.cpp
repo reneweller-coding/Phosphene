@@ -267,7 +267,7 @@ void testPoly()
         ParamStore p;
         // The key-tracked high pass out of the way: at 0.7 f0 it takes 1.9 dB off the carrier alone.
         auto e = makePoly(
-            "lead.osc=FM lead.fm_ratio=3.5 lead.fm_index=4 lead.fm_decay=5 lead.detune=0 lead.mix=0 lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.hp_track=0 lead.hp_floor=150 "
+            "lead.osc=FM lead.fm_ratio=3 lead.fm_index=4 lead.fm_decay=5 lead.detune=0 lead.mix=0 lead.osc2=Off lead.lfo_cutoff=0 lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.hp_track=0 lead.hp_floor=150 "
             "lead.key_track=0 lead.resonance=0 lead.width=0 lead.delay_send=0 lead.amp_sustain=1 lead.amp_attack=0.3",
             p, PolyInstanceE::LEAD );
         e->noteOn( 69, 1.0f, 4.0, 200000, 0.0 );
@@ -282,7 +282,8 @@ void testPoly()
             return std::sqrt( best );
         };
         // Index 0.3 x 4 = 1.2 after the decay: J0 = 0.6711, J1 = 0.4983, J2 = 0.1593.
-        const double c0 = amp( 440.0 ), up1 = amp( 1980.0 ), lo1 = amp( 1100.0 ), up2 = amp( 3520.0 );
+        // Ratio 3 (a whole number since 10.11.2026, Poly.cpp, harmonicFmRatio): the carrier, 4 f, the mirrored 2 f, 7 f.
+        const double c0 = amp( 440.0 ), up1 = amp( 1760.0 ), lo1 = amp( 880.0 ), up2 = amp( 3080.0 );
         const double e1 = 20.0 * std::log10( up1 / c0 ) - 20.0 * std::log10( 0.4983 / 0.6711 );
         const double e1l = 20.0 * std::log10( lo1 / c0 ) - 20.0 * std::log10( 0.4983 / 0.6711 );
         const double e2 = 20.0 * std::log10( up2 / c0 ) - 20.0 * std::log10( 0.1593 / 0.6711 );
@@ -403,8 +404,8 @@ void testPoly()
         double      worst = -1e9;
         std::string detail;
         for ( const Case &c :
-              { Case{ 7.5, 84, "C6 r=7.5" }, Case{ 7.5, 93, "A6 r=7.5" }, Case{ 3.5, 84, "C6 r=3.5" } } )
-        {   // 7.3 until 24.09.2026: a voice plays the ratio to the nearest half (Poly.cpp, harmonicFmRatio)
+              { Case{ 8.0, 84, "C6 r=8" }, Case{ 8.0, 93, "A6 r=8" }, Case{ 3.0, 84, "C6 r=3" } } )
+        {   // 7.3 until 24.09.2026, 7.5 and 3.5 until 10.11.2026: a voice plays whole ratios (Poly.cpp, harmonicFmRatio)
             ParamStore p;
             auto       e = makePoly(
                 fmt(
@@ -429,15 +430,20 @@ void testPoly()
     }
     // 24.09.2026, the user on the first track's pad: "klingen einfach nur schraeg". Its FM ratio was 1.91 -- the knob's
     // 2 plus the recipe's offset -- and every chord tone carried sidebands a quarter tone off the key. A voice plays
-    // the ratio to the nearest half (Poly.cpp, harmonicFmRatio), so at 1.91 everything it sounds is a harmonic of its
-    // note (the pad stem of seed 1 had carried those sidebands 7 dB under the chord).
+    // the ratio to the nearest whole number (Poly.cpp, harmonicFmRatio; to the nearest half until 10.11.2026), so at
+    // 1.91 and at 3.5 everything it sounds is a harmonic of its note (the pad stem of seed 1 had carried those
+    // sidebands 7 dB under the chord; at 3.5 the sidebands at 2.5 and 4.5 times the note were a major third and a
+    // major ninth over every tone of a minor key).
+    for ( const double ratio : { 1.91, 3.5 } )
     {
         ParamStore p;
         auto       e = makePoly(
-            "lead.osc=FM lead.fm_ratio=1.91 lead.fm_index=3 lead.fm_decay=2000 lead.detune=0 lead.mix=0 lead.osc2=Off lead.lfo_cutoff=0 "
-            "lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 "
-            "lead.hp_floor=40 lead.width=0 lead.delay_send=0 lead.dynamic_detune=0 lead.drift=0 lead.amp_attack=1 lead.amp_sustain=1 "
-            "lead.amp_decay=4000 lead.vel_sens=0",
+            fmt( "lead.osc=FM lead.fm_ratio=%g lead.fm_index=3 lead.fm_decay=2000 lead.detune=0 lead.mix=0 lead.osc2=Off lead.lfo_cutoff=0 "
+                 "lead.lfo_pitch=0 lead.lfo_amp=0 lead.cutoff=18000 lead.env_amount=0 lead.key_track=0 lead.resonance=0 lead.hp_track=0 "
+                 "lead.hp_floor=40 lead.width=0 lead.delay_send=0 lead.dynamic_detune=0 lead.drift=0 lead.amp_attack=1 lead.amp_sustain=1 "
+                 "lead.amp_decay=4000 lead.vel_sens=0",
+                 ratio )
+                .c_str(),
             p, PolyInstanceE::LEAD );
         e->noteOn( 57, 1.0f, 8.0, 1 << 24, 0.0 );
         const std::vector<float> y =
@@ -445,8 +451,8 @@ void testPoly()
         const double off = lineAliasDb( y, 9600, harmonicLines( midiToHz( 57 ), sr ), midiToHz( 57 ), sr, 20.0 );
         check(
             off < -50.0,
-            "FM: a ratio between the halves plays the nearest half, so the voice stays harmonic (no bell in a chord)",
-            fmt( "power off the harmonics of A3 at fm_ratio 1.91: %.1f dB", off ) );
+            "FM: a ratio between the whole numbers plays the nearest one, so the voice stays harmonic (no bell in a chord)",
+            fmt( "power off the harmonics of A3 at fm_ratio %g: %.1f dB", ratio, off ) );
     }
     // The supersaw reads the saw frame, not the instance's table and position: two engines whose
     // table, position, position envelope and LFO stand at opposite ends must give the same samples.
@@ -612,7 +618,7 @@ void testAcidColour()
         long long  runAfterAcc = 0, nAfterAcc = 0, runAfterPlain = 0, nAfterPlain = 0, accents = 0, onsets = 0;
         double     wantMarginal = 0.0;
         ParamStore q;
-        q.parseText( "compose.level_match=Off master.auto_gain=Off" );
+        q.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         for ( uint64_t s = 0; s < 8; ++s )
         {
             Composer c( 1000 + s );
@@ -679,7 +685,7 @@ void testAcidColour()
         // because that is what lifts their cutoff: SweepOctaves x Accent x Resonance x charge.
         {
             ParamStore plain;
-            plain.parseText( "compose.level_match=Off master.auto_gain=Off" );
+            plain.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
             const size_t       sixteenth = static_cast<size_t>( 0.25 * 60.0 / 145.0 * sr );
             std::vector<float> L( sixteenth ), R( sixteenth );
             double             peak = 0.0, sumAcc = 0.0;
@@ -1199,7 +1205,7 @@ void testMelodyScore()
     section( "melody: chords, acid, lead, arp -- the score" );
     ParamStore p;
     p.parseText(
-        "compose.track_bars=128 compose.acid_amount=0.8 compose.lead_amount=0.8 compose.arp_amount=0.8 compose.level_match=Off master.auto_gain=Off" );
+        "compose.track_bars=128 compose.acid_amount=0.8 compose.lead_amount=0.8 compose.arp_amount=0.8 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     Composer               c( 606 );
     std::vector<NoteEvent> ev;
     const int              tracks = 16;
@@ -1315,7 +1321,7 @@ void testMelodyVariety()
     // Variety over a night.
     {
         ParamStore q;
-        q.parseText( "compose.level_match=Off master.auto_gain=Off" );
+        q.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer              cv( 4711 );
         std::vector<uint64_t> acids;
         int                   progressions = 0, styles[NumArpStyles] = {}, oscs[4] = {}, squelch = 0, silent = 0;
@@ -1559,7 +1565,7 @@ void testProbeAudit()
         const char       *lv = levelSweep ? levelsOne[c] : "3";
         const int         tracksN = levelSweep ? 4 : 6;
         const std::string knobs = fmt(
-            "compose.track_bars=128 compose.sound_variation=1 compose.track_variation=1 master.auto_gain=Off master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 "
+            "compose.track_bars=128 compose.sound_variation=1 compose.track_variation=1 master.auto_gain=Off master.auto_tone=Off master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 "
             "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 "
             "mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1 mix.perc_level=%s ",
             lv );
@@ -1720,9 +1726,9 @@ void testMeasure()
         { "VA pulse 25 %", "lead.osc=VA lead.wave=1 lead.pulse_width=0.25", 0.0 },
         { "FM I=2.5 r=2", "lead.osc=FM lead.fm_index=2.5 lead.fm_ratio=2 lead.fm_decay=2000", 2.0 },
         { "FM I=10 r=2", "lead.osc=FM lead.fm_index=10 lead.fm_ratio=2 lead.fm_decay=2000", 2.0 },
-        { "FM I=2.5 r=3.5", "lead.osc=FM lead.fm_index=2.5 lead.fm_ratio=3.5 lead.fm_decay=2000", 3.5 },
-        { "FM I=10 r=3.5", "lead.osc=FM lead.fm_index=10 lead.fm_ratio=3.5 lead.fm_decay=2000", 3.5 },
-        { "FM I=10 r=7.5", "lead.osc=FM lead.fm_index=10 lead.fm_ratio=7.5 lead.fm_decay=2000", 7.5 },
+        { "FM I=2.5 r=3", "lead.osc=FM lead.fm_index=2.5 lead.fm_ratio=3 lead.fm_decay=2000", 3.0 },
+        { "FM I=10 r=3", "lead.osc=FM lead.fm_index=10 lead.fm_ratio=3 lead.fm_decay=2000", 3.0 },
+        { "FM I=10 r=8", "lead.osc=FM lead.fm_index=10 lead.fm_ratio=8 lead.fm_decay=2000", 8.0 },
     };
     for ( const Case &c : Cases )
     {
@@ -2462,7 +2468,7 @@ void testPads()
     // In the score: pad notes are chord tones of their bar, held to the next chord. Over the DJ overlap
     // (19.09.2026) the pads that sound are the incoming track's, on its own chords.
     ParamStore p;
-    p.parseText( "compose.track_bars=128 compose.pad_amount=1 compose.level_match=Off master.auto_gain=Off" );
+    p.parseText( "compose.track_bars=128 compose.pad_amount=1 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     Composer               c( 515 );
     std::vector<NoteEvent> ev;
     c.composeBars( p, 0, 4 * 128, ev );

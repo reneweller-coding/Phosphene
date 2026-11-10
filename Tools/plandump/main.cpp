@@ -27,6 +27,7 @@
  */
 #include "phos/Composer.h"
 #include "phos/Engine.h"
+#include "phos/FieldPresets.h"
 #include "phos/Form.h"
 #include "phos/Melody.h"
 #include "phos/Sfx.h"
@@ -205,6 +206,20 @@ void dumpDecisions( Composer &composer, const ParamStore &params, uint64_t seed,
         for ( const SfxEvent &e : p.m_form.m_field )
             std::printf( "    beat %7g length %5g velocity %d\n", e.m_beat, static_cast<double>( e.m_length ),
                          e.m_variant );
+        // The place itself (10.11.2026): the preset the composer draws for the track (ComposerControls.cpp,
+        // fieldPresetOfTrack) and how it is tuned into the key where its recordings carry a tone (FieldPresets.h).
+        if ( params.getInt( params.base( ModuleE::FIELD ) + field::A_CATEGORY ) == 0 )
+        {
+            const int k = fieldPresetFor( p.m_style, mixSeed( p.m_formSeed, 0x4649454C44ull ) );
+            if ( k >= 0 )
+            {
+                const FieldPreset &f = fieldPresets()[static_cast<size_t>( k )];
+                const FieldTuning  tuning = fieldPresetTuning( f, p.m_key );
+                std::printf( "    place %s / %s, tuned %+d semitones, fine %+.0f / %+.0f cents\n", f.m_group, f.m_name,
+                             tuning.m_semis, static_cast<double>( tuning.m_fineA ),
+                             static_cast<double>( tuning.m_fineB ) );
+            }
+        }
     }
     // What the composer sends, sixteen bars at a time: a checksum over every note and every control event.
     std::vector<NoteEvent>    notes;

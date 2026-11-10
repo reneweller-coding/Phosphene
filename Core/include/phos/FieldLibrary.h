@@ -135,6 +135,32 @@ int fieldShotIndex( int i );
  * @return the file's name
  */
 std::string fieldClipName( int index );
+/** @brief What fieldToneOf() and fieldClipTone() say of a recording with tones of its own that no shift puts into a key. */
+constexpr float FieldToneMusic = -1.0f;
+/**
+ * @brief The held tone of the recording whose file's stem is @p stem (Tools/field_tones.py, 10.11.2026): its frequency
+ *        in Hz where one tone carries the recording, FieldToneMusic where it has several and none is its own (a
+ *        sonification that is a piece of music, an insect chorus), 0 for a recording without tones -- nearly all.
+ *
+ *        By name, not by index, so the composer's decisions do not depend on which recordings a machine has.
+ * @param[in] stem  the file's name without its extension
+ * @return the tone in Hz, FieldToneMusic, or 0
+ */
+float fieldToneOf( const char *stem );
+/**
+ * @brief fieldToneOf() of the recording behind @p index. Lock-free.
+ * @param[in] index  the index
+ * @return the tone in Hz, FieldToneMusic, or 0 (also for no recording)
+ */
+float fieldClipTone( int index );
+/**
+ * @brief The transposition that puts a tone of @p hz on the nearest of the key's root, fourth and fifth -- the three
+ *        tones every scale of the set has: at most 2.5 semitones either way.
+ * @param[in] hz       the tone, Hz
+ * @param[in] keyRoot  the key (its pitch class is taken)
+ * @return the shift in semitones, -2.5 .. 2.5
+ */
+double fieldToneShift( double hz, int keyRoot );
 /**
  * @brief The recording behind @p index if it is loaded, held for the caller (its users count raised); else null.
  *        Lock-free.

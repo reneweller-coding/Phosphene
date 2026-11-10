@@ -44,10 +44,18 @@ def lfo(chance, dst, lo, hi, shape=SINE, sync=FREE, rate=(0.2, 1.0), retrig=0, f
 
 
 def menv(chance, dst, lo, hi, decay=(100, 600), attack=(0.1, 5), sustain=0.0):
-    """A recipe: the modulation envelope on one target."""
-    return (chance, [("menv_attack", attack[0], attack[1], "R"), ("menv_decay", decay[0], decay[1], "B"),
-                     ("menv_sustain", sustain, sustain, "C"),
-                     ("mx#_src", MENV, MENV, "C"), ("mx#_dst", dst, dst, "C"), ("mx#_amount", lo, hi, "R")])
+    """A recipe: the modulation envelope on one target.
+
+    On the pitch the envelope's release follows its decay (10.11.2026): at the default release of 400 ms a note let go
+    after 20 ms kept the pitch where the sweep stood and let it down over the note's whole tail -- every Laser Arp
+    sounded 2.7 semitones over its note (Tools/tuning_audit.py). Decay settles in a third of its time, release in a
+    fifth (Dsp.h, Envelope::setTimes), so 5/3 of the decay continues the sweep at the speed it had.
+    """
+    knobs = [("menv_attack", attack[0], attack[1], "R"), ("menv_decay", decay[0], decay[1], "B"),
+             ("menv_sustain", sustain, sustain, "C")]
+    if dst in (P, A_P):
+        knobs.append(("menv_release", decay[0] * 5.0 / 3.0, decay[1] * 5.0 / 3.0, "B"))
+    return (chance, knobs + [("mx#_src", MENV, MENV, "C"), ("mx#_dst", dst, dst, "C"), ("mx#_amount", lo, hi, "R")])
 
 
 def src(chance, source, dst, lo, hi):
@@ -69,12 +77,12 @@ ARCH = {
                             ("filter_decay", 150, 900, "B"), ("glide", 0, 40, "R"), ("drift", 0.5, 2, "R")] + LEAD_AMP,
                      filters=[(OWN, 0, 0), (PROPHET, 0, 0), (JUNO, 0, 0), (MOOG, 0, 0)],
                      mods=[lfo(0.6, CUT, 0.04, 0.12, rate=(0.05, 0.3)), src(0.3, VEL, CUT, 0.1, 0.25)]),
-    "hoover": dict(knobs=[("osc", SUPERSAW, SUPERSAW, "C"), ("detune", 0.7, 1.0, "B"), ("mix", 0.8, 1.0, "R"),
+    "hoover": dict(knobs=[("osc", SUPERSAW, SUPERSAW, "C"), ("detune", 0.7, 0.9, "B"), ("mix", 0.8, 1.0, "R"),
                           ("osc2", 1, 1, "C"), ("osc2_interval", 1, 1, "C"), ("osc2_mix", 0.3, 0.6, "R"),
                           ("cutoff", 1500, 9000, "A"), ("resonance", 0.1, 0.35, "R"), ("env_amount", 1, 3, "B"),
                           ("filter_decay", 200, 800, "B"), ("glide", 40, 160, "B")] + LEAD_AMP,
                    filters=[(JUNO, 0, 0), (PROPHET, 0, 0), (MOOG, 0, 0)],
-                   mods=[menv(1.0, P, -0.35, -0.2, decay=(150, 600)), lfo(0.5, CUT, 0.05, 0.12, sync=QUARTER)]),
+                   mods=[menv(1.0, P, -0.3, -0.15, decay=(40, 140)), lfo(0.5, CUT, 0.05, 0.12, sync=QUARTER)]),
     "acidlead": dict(knobs=[("osc", VA, VA, "C"), ("wave", 0, 0.3, "R"), ("cutoff", 400, 3000, "A"), ("resonance", 0.55, 0.85, "B"),
                             ("env_amount", 2.5, 5, "B"), ("filter_decay", 80, 350, "B"), ("glide", 20, 80, "R")] + LEAD_AMP,
                      filters=[(DIODE, 0, 0), (MOOG, 0, 0), (KORG, 0, 0)],
@@ -100,7 +108,7 @@ ARCH = {
     "laser": dict(knobs=[("osc", VA, VA, "C"), ("wave", 0.5, 1, "R"), ("pulse_width", 0.2, 0.5, "R"), ("cutoff", 3000, 12000, "A"),
                          ("resonance", 0.2, 0.5, "R"), ("amp_decay", 150, 600, "B"), ("amp_sustain", 0.4, 0.8, "R"), ("amp_release", 60, 300, "R")],
                   filters=[(OWN, 0, 0), (JUNO, 0, 0), (PROPHET, 0, 0)],
-                  mods=[menv(1.0, P, 0.5, 0.8, decay=(30, 150), attack=(0.1, 0.5)), lfo(0.5, CUT, 0.1, 0.25, shape=SH, sync=SIXTEENTH)]),
+                  mods=[menv(1.0, P, 0.4, 0.6, decay=(8, 24), attack=(0.1, 0.5)), lfo(0.5, CUT, 0.1, 0.25, shape=SH, sync=SIXTEENTH)]),
     "wtmorph": dict(knobs=[("osc", WT, WT, "C"), ("table", "lane:1", None, "R"), ("position", 0, 0.6, "R"), ("pos_env", 0.2, 0.7, "B"),
                            ("pos_decay", 200, 2000, "B"), ("cutoff", 3000, 16000, "A"), ("resonance", 0.05, 0.3, "R")] + LEAD_AMP,
                     filters=[(OWN, 0, 0), (JUNO, 0, 0), (SEM, 0, 0.2)],
@@ -152,7 +160,7 @@ ARCH = {
                    mods=[lfo(0.6, PW, 0.2, 0.4, sync=QUARTER, shape=TRI)]),
     "chirp": dict(knobs=[("osc", VA, VA, "C"), ("wave", 0.4, 0.9, "R"), ("cutoff", 2500, 11000, "A"), ("resonance", 0.3, 0.6, "R")] + SHORT_AMP,
                   filters=[(OWN, 0, 0), (KORG, 0, 0), (SEM, 0, 0.1)],
-                  mods=[menv(1.0, P, 0.3, 0.55, decay=(15, 80), attack=(0.1, 0.3))]),
+                  mods=[menv(1.0, P, 0.25, 0.42, decay=(8, 26), attack=(0.1, 0.3))]),
     "metaltick": dict(knobs=[("osc", FM, FM, "C"), ("fm_ratio", 3.5, 7, "R"), ("fm_index", 2, 6, "B"), ("fm_decay", 20, 150, "B"),
                              ("cutoff", 4000, 16000, "A")] + SHORT_AMP,
                       filters=[(OWN, 0, 0), (SEM, 0, 0.1)],
@@ -258,6 +266,13 @@ ARCH = {
                   mods=[lfo(1.0, CUT, 0.15, 0.35, sync=EIGHTH, shape=SINE), lfo(0.5, FMODE, 0.1, 0.2, sync=BAR1)]),
 }
 
+# The arp's notes are 20 ms long (10.11.2026, Tools/tuning_audit.py): a sweep a sixteenth has time for is the whole of
+# such a note -- the Laser Arps were heard 2.7 semitones over their notes, and with the release following the decay
+# still 0.8. So the arp's lasers and chirps sweep less far and faster: a blip on the attack, and the note after it.
+ARCH["laserarp"] = dict(ARCH["laser"], mods=[menv(1.0, P, 0.25, 0.4, decay=(6, 18), attack=(0.1, 0.5)),
+                                              lfo(0.5, CUT, 0.1, 0.25, shape=SH, sync=SIXTEENTH)])
+ARCH["chirparp"] = dict(ARCH["chirp"], mods=[menv(1.0, P, 0.2, 0.35, decay=(6, 18), attack=(0.1, 0.3))])
+
 VOICE_SYNTHS = {
     "lead": dict(instance=0, adj=["Umbral", "Nocturne", "Obsidian", "Twilight", "Lunar", "Solar", "Prismatic", "Supernova"], groups=[
         ("Supersaw Anthem", "supersaw", ["Anthem", "Horizon", "Eclipse", "Zenith", "Beacon", "Summit", "Pinnacle", "Crown"]),
@@ -307,9 +322,9 @@ VOICE_SYNTHS = {
         ("FM Pluck", "fmpluck", ["Raindrop", "Hailstone", "Pearl", "Bead", "Marble", "Sequin", "Glint", "Twinkle"]),
         ("Psy Pluck", "pluck", ["Firefly", "Ember", "Cinder", "Sparkler", "Glowworm", "Lantern", "Candle", "Wisp"]),
         ("Hollow Square", "hollow", ["Flute Loop", "Pan Pipe", "Whistle", "Recorder", "Fife", "Piccolo", "Kazoo", "Calliope"]),
-        ("Digital Chirp", "chirp", ["Morse", "Signal", "Telegraph", "Beacon Code", "Radar", "Sonar", "Transmission", "Frequency"]),
+        ("Digital Chirp", "chirparp", ["Morse", "Signal", "Telegraph", "Beacon Code", "Radar", "Sonar", "Transmission", "Frequency"]),
         ("Metal Tick", "metaltick", ["Clockwork", "Gear", "Cog", "Sprocket", "Escapement", "Pinion", "Balance Wheel", "Mainspring"]),
-        ("Laser Arp", "laser", ["Tracer", "Streak", "Comet Tail", "Meteor", "Shooting Star", "Starlight", "Nova", "Corona"]),
+        ("Laser Arp", "laserarp", ["Tracer", "Streak", "Comet Tail", "Meteor", "Shooting Star", "Starlight", "Nova", "Corona"]),
         ("Vocal Arp", "vocal", ["Syllabic", "Stammer", "Babble", "Chatterbox", "Echolalia", "Gibberish", "Scat", "Yodel"]),
         ("Echo Arp", "echo", ["Delay Line", "Feedback", "Repeat", "Recursion", "Loopback", "Iteration", "Multiply", "Infinity"]),
     ]),
@@ -502,11 +517,11 @@ KICK_SYNTH = dict(adj=["Subterranean", "Deep", "Heavy", "Solid", "Tight", "Punch
 # named here; a group named after a style belongs to it.
 ARCH_STYLE = {
     "supersaw": (1, 3, 2, 0.5, 1), "hoover": (0.5, 3, 0.5, 0.5, 2), "acidlead": (3, 1, 0.5, 2, 1), "fmbell": (2, 1, 2, 1, 1),
-    "vocal": (2, 1, 2, 1, 0.5), "screamer": (1, 2, 0.3, 2, 2), "pluck": (1, 1, 3, 1, 1), "laser": (1, 2, 0.5, 1, 3),
+    "vocal": (2, 1, 2, 1, 0.5), "screamer": (1, 2, 0.3, 2, 2), "pluck": (1, 1, 3, 1, 1), "laser": (1, 2, 0.5, 1, 3), "laserarp": (1, 2, 0.5, 1, 3),
     "wtmorph": (1, 1, 2, 1, 2), "pwm": (2, 1, 1, 1, 1), "sync": (1, 2, 1, 1, 2), "growl": (0.5, 1, 0.3, 3, 2),
     "glass": (1, 1, 3, 0.5, 1), "flute": (3, 0.5, 1, 1, 0.3), "octaves": (1, 3, 2, 0.3, 1), "echo": (2, 1, 2, 1, 1),
     "drysaw": (1, 2, 1, 1, 2), "rubber": (2, 1, 1, 2, 1), "fmpluck": (2, 1, 2, 1, 1), "hollow": (2, 1, 1, 1, 1),
-    "chirp": (1, 1, 1, 1, 3), "metaltick": (1, 1, 1, 2, 2), "sequence": (2, 2, 2, 1, 1), "glassarp": (1, 1, 3, 0.5, 1),
+    "chirp": (1, 1, 1, 1, 3), "chirparp": (1, 1, 1, 1, 3), "metaltick": (1, 1, 1, 2, 2), "sequence": (2, 2, 2, 1, 1), "glassarp": (1, 1, 3, 0.5, 1),
     "wtarp": (1, 1, 2, 1, 2), "ratchet": (1, 2, 1, 1, 3), "bubble": (2, 1, 1, 2, 1), "gatedsaw": (1, 3, 1, 0.5, 1), "rhythmpad": (1, 3, 1, 0.5, 1),
     "panarp": (2, 1, 2, 1, 1), "chordstab": (1, 3, 2, 0.5, 1), "organstab": (2, 1, 2, 1, 0.5), "brassstab": (1, 2, 1, 0.5, 1),
     "dubstab": (2, 1, 2, 1, 0.5), "warmpad": (2, 1, 3, 1, 1), "wtpad": (1, 1, 2, 2, 1), "choirpad": (2, 1, 2, 1, 0.5),

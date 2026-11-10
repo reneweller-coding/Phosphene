@@ -303,7 +303,7 @@ void testFieldNoLibrary()
     // Without the level, presence and audibility matches: they plan by probe renders of the track (45 s here), and
     // what this test compares -- the notes and the controls with and without the library -- does not need them.
     q.parseText( "compose.style=3 compose.style_mix=Off compose.level_match=Off compose.presence_match=Off "
-                 "compose.audibility_match=Off master.auto_gain=Off" );
+                 "compose.audibility_match=Off master.auto_gain=Off master.auto_tone=Off" );
     auto compose = [&]( std::vector<NoteEvent> &notes, std::vector<ControlEvent> &ctl )
     {
         Composer        c( 4711 );

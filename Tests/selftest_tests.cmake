@@ -62,6 +62,13 @@ set(PHOS_SELFTEST_SECONDS
     testPresetBank                        1.7
     testModulation.filterAdsr             1.9
     testModulation.display                1.0
+    # 10.11.2026: the harmony audit (selftest_harmony.cpp), measured alone with the probes off.
+    testHarmonyAudit.heldUnison           1.6
+    testHarmonyAudit.droneFifth           1.9
+    testHarmonyAudit.fieldTones           2.3
+    testHarmonyAudit.unisonCentre         0.3
+    testHarmonyAudit.bank                 0.1
+    testHarmonyAudit.jawHarp              1.3
     testGenreRules.bassAndDrone           2.0
     testGenreRules.heldNoFlat9            2.2
     testWanderingFx                       4.0

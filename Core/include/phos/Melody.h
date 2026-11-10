@@ -258,6 +258,16 @@ struct MelodyContext
      * where the track takes it). Decided once per run -- the drone's attack is 1.5 s.
      */
     bool m_droneShaded = false;
+    /**
+     * @brief The pad holds the key's minor sixth somewhere in this drone run (10.11.2026, the harmony audit).
+     *
+     * A minor sixth over the key is a semitone over the drone's fifth -- across the octaves the minor ninth the user
+     * ruled out of pad and drone (25.09.2026, Harmony.h) -- and it is in the pad whenever the chord is the iv, the bVI
+     * or the Phrygian pad on the tonic. It met the drone's fifth where the drone has the band to itself and so holds
+     * root and fifth: on the silent floor of an intro or a breakdown, the most exposed bars of a track (10.2 % of the
+     * beats the two share, over 80 tracks). In such a run the drone holds its root and the octave over it.
+     */
+    bool m_droneBare = false;
 };
 
 /**
@@ -612,6 +622,15 @@ inline int counterWindowHi( const MelodyPlan &m )
 double leadArc( int archetype, int barInPhrase );
 
 /**
+ * @brief Whether the pad holds the key's minor sixth in a bar (10.11.2026; MelodyContext::m_droneBare): the tone a
+ *        semitone over the drone's fifth, read from the voicing the bar really plays.
+ * @param[in] m           the melody's plan
+ * @param[in] bp          the bar's plan
+ * @param[in] barInTrack  the bar within the track
+ * @return true when a pad tone of the bar is the minor sixth over the key
+ */
+bool padHoldsMinorSixth( const MelodyPlan &m, const BarPlan &bp, int barInTrack );
+/**
  * @brief Composes one bar of the melodic parts.
  * @param[in] p          knob values (swing)
  * @param[in] m          the track's plan
@@ -730,8 +749,10 @@ int voicingMovement( const std::vector<int> &a, const std::vector<int> &b );
  * @param[in]  barInTrack  bar within the track
  * @param[out] out         receives the effect notes (pitch SfxBaseNote + type) on the part that plays them -- Sfx,
  *                         Texture or Vocal (19.09.2026) -- with a voice's or the bed's variant in the lane
+ * @param[in]  fieldSemis  the Field notes' distance from middle C (10.11.2026: a place that carries a tone is
+ *                         transposed into the key; 0 otherwise)
  */
-void composeSfxBar( const FormPlan &f, double trackBeat, int barInTrack, std::vector<NoteEvent> &out );
+void composeSfxBar( const FormPlan &f, double trackBeat, int barInTrack, std::vector<NoteEvent> &out, int fieldSemis = 0 );
 
 /**
  * @brief Semitones the bass moves under @p chord when it follows the chords (0 on the tonic).

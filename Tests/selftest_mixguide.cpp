@@ -429,7 +429,7 @@ void testMixGuidePhase()
 {
     section( "mix guide: the mix by phase in the control events" );
     ParamStore p;
-    p.parseText( "compose.level_match=Off master.auto_gain=Off" );
+    p.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     Composer                  c( 4242 );
     const TrackPlan           t = c.track( p, 1 );
     std::vector<NoteEvent>    ev;

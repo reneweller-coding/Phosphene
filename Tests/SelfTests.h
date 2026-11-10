@@ -122,6 +122,12 @@ void testMixGuideLeadDucks();                 ///< selftest_mixguide.cpp
 void testMixGuidePlanes();                    ///< selftest_mixguide.cpp
 void testMixGuideDistance();                  ///< selftest_mixguide.cpp
 void testMixGuidePhase();                     ///< selftest_mixguide.cpp
+void testHarmonyAuditHeldUnison();            ///< selftest_harmony.cpp
+void testHarmonyAuditDroneFifth();            ///< selftest_harmony.cpp
+void testHarmonyAuditFieldTones();            ///< selftest_harmony.cpp
+void testHarmonyAuditUnisonCentre();          ///< selftest_harmony.cpp
+void testHarmonyAuditBank();                  ///< selftest_harmony.cpp
+void testHarmonyAuditJawHarp();               ///< selftest_harmony.cpp
 void testFilterModelsLevels();                ///< selftest_modulation.cpp
 void testModulationBlockSize();               ///< selftest_modulation.cpp
 void testModulationSync();                    ///< selftest_modulation.cpp

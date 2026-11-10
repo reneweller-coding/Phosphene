@@ -21,6 +21,20 @@ models and the voices beside it and waits for the field recordings, as phos_rend
 instrument has learned of your taste (preferences.txt). The family's render app (Tools/renderapp, the same in all six
 instruments); `--list`, `--render`, and a self-test of every format and the queue (ctest `renderapp`).
 
+**In tune** (10.11.2026). The score has always kept every line in its scale; this is about what the sounds do with
+those notes, measured over all 8192 presets of the bass, the acid and the six voices, 80 tracks and every field
+recording. A voice's FM ratio is a whole number now (a half put a major third and a major ninth beside every note:
+341 presets). The bank's pitch sweeps -- Laser Zap, Laser Arp, Digital Chirp, Zap Stab, the Hoover's scoop -- land on
+their note inside a sixteenth (483 presets were heard more than a quarter of a semitone beside it, the Laser Arps 2.7
+semitones), and no Hoover's unison is wider than a semitone any more. Two oscillators in unison are centred on the
+note instead of sitting a few cents above it. In an intro and in a breakdown a held pad's and drone's unison really
+stays narrow (the rule counted against the knob, not against the preset that plays), and the drone leaves its fifth out
+where the pad holds the minor sixth above it. A field recording that carries a tone of its own -- a rain on a roof that
+is a D5 half a semitone sharp -- is played in the key, and the few that are music of their own are no longer drawn. The
+singing bowl's second mode was a tritone over the key's root and is a fourth now; the jaw harp's drone is the root and
+its resonance rests on the root's octaves and fifths. Sets sound different where these played -- most of all in intros
+and breakdowns. `Tools/tuning_audit.py` measures every preset against its note.
+
 ## 1.5.0 (15.10.2026): the family plays together
 
 **The family jam** (Settings > Family jam: Off, Lead or Follow; in the plugin and in the standalone). The five

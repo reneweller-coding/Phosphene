@@ -251,7 +251,7 @@ void testMidi()
 {
     section( "MIDI export" );
     ParamStore p;
-    p.parseText( "compose.level_match=Off master.auto_gain=Off" );
+    p.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     Composer c( 5 );
     Score    s;
     s.m_tempo.add( 0.0, 140.0, true );
@@ -974,7 +974,7 @@ void testComposer()
 {
     section( "composer" );
     ParamStore p;
-    p.parseText( "compose.bass_variation=0 compose.level_match=Off master.auto_gain=Off" );
+    p.parseText( "compose.bass_variation=0 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     Composer c( 7 );
     // Sixteen bars of the first core: since Phase 5 bar 0 is the intro, where the kick has not
     // started yet (Form.h). The core's first sixteen bars are where "four on the floor" must hold.
@@ -1009,7 +1009,7 @@ void testComposer()
     {
         ParamStore q;
         q.parseText(
-            "compose.bass_variation=1 compose.track_variation=1 compose.track_bars=32 compose.level_match=Off master.auto_gain=Off" );
+            "compose.bass_variation=1 compose.track_variation=1 compose.track_bars=32 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer               cc( 9 );
         std::vector<NoteEvent> e;
         cc.composeBars( q, 0, 320, e );
@@ -1028,7 +1028,7 @@ void testComposer()
     // Bars and their control events are the same composed alone or in sequence.
     {
         ParamStore q;
-        q.parseText( "compose.track_bars=32 compose.level_match=Off master.auto_gain=Off" );
+        q.parseText( "compose.track_bars=32 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer                  cc( 13 );
         std::vector<NoteEvent>    seqN, oneN;
         std::vector<ControlEvent> seqC, oneC;
@@ -1057,7 +1057,7 @@ void testComposer()
     for ( int pat = 0; pat < 5; ++pat )
     {
         ParamStore q;
-        q.parseText( "compose.level_match=Off master.auto_gain=Off" );
+        q.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         q.set( q.base( ModuleE::COMPOSE ) + compose::BASS_PATTERN, static_cast<float>( pat ) );
         Composer cp( 3 );
         // A bar of the first core: the intro has no bass yet.
@@ -1123,7 +1123,7 @@ void testBassModel()
     const bool  haveModel = sharedBassModel( &note ) != nullptr;
     check( haveModel, "the shared bass model loads (Core/data/bass.phosmdl)", note );
 
-    const char *kBase = "compose.level_match=Off master.auto_gain=Off compose.track_bars=64";
+    const char *kBase = "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off compose.track_bars=64";
     auto        composeWith = [&]( const char *extra, uint64_t seed, int bars, std::vector<NoteEvent> &out )
     {
         ParamStore q;
@@ -1340,7 +1340,7 @@ void testVarietyPlans()
     section( "variety over a night: the plans" );
     // The probes of the level match are not what this looks at (they have their own check below).
     ParamStore p;
-    p.parseText( "compose.level_match=Off master.auto_gain=Off" );
+    p.parseText( "compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
     const int        cb = p.base( ModuleE::COMPOSE );
     Composer         c( 2026 );
     const int        tracks = 60;
@@ -1404,7 +1404,7 @@ void testVarietyPlans()
     {
         ParamStore q;
         q.parseText(
-            "compose.track_variation=0 compose.sound_variation=0 compose.level_match=Off master.auto_gain=Off" );
+            "compose.track_variation=0 compose.sound_variation=0 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer cz( 2026 );
         bool     allKnobs = true;
         for ( int i = 0; i < 20; ++i )
@@ -1464,7 +1464,7 @@ void testVarietyLevelMatch()
             e->prepare( 48000.0, 512 );
             e->params().parseText(
                 fmt(
-                    "compose.track_bars=128 compose.sound_variation=1 compose.track_variation=1 master.auto_gain=Off master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 "
+                    "compose.track_bars=128 compose.sound_variation=1 compose.track_variation=1 master.auto_gain=Off master.auto_tone=Off master.limiter=Off master.clipper=Off master.clip=Off master.comp_ratio=1 "
                     "compose.acid_amount=0 compose.lead_amount=0 compose.arp_amount=0 compose.pad_amount=0 compose.sfx_amount=0 "
                     "mix.acid_mute=1 mix.lead_mute=1 mix.arp_mute=1 mix.pad_mute=1 mix.counter_mute=1 mix.stab_mute=1 mix.drone_mute=1 mix.sfx_mute=1 compose.level_match=%s",
                     match ? "On" : "Off" )
@@ -1546,7 +1546,7 @@ void testVarietyRecipes()
         auto e = std::make_unique<Engine>();
         e->prepare( 48000.0, 256 );
         e->params().parseText(
-            "compose.track_bars=32 compose.sound_variation=1 compose.level_match=Off master.auto_gain=Off" );
+            "compose.track_bars=32 compose.sound_variation=1 compose.level_match=Off master.auto_gain=Off master.auto_tone=Off" );
         Composer       ce( 77 );
         const TempoMap tm = ce.tempoMap( e->params(), 64 );
         e->setTempoMap( tm );
@@ -1997,7 +1997,7 @@ void testKickBody()
         auto e = std::make_unique<Engine>();
         e->prepare( sr, 512 );
         e->params().parseText(
-            "master.auto_gain=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.clip=Off" );
+            "master.auto_gain=Off master.auto_tone=Off master.limiter=Off master.clipper=Off master.comp_ratio=1 master.clip=Off" );
         e->params().parseText( solo );
         Composer       c( 864566672ull );
         const TempoMap tm = c.tempoMap( e->params(), 72 );
