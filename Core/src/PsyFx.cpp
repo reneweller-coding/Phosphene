@@ -93,10 +93,12 @@ float Flanger::read( const std::vector<float> &b, double delay ) const
 void Flanger::tick( float &l, float &r, double beat )
 {
     const double ph = lfoPhase( beat, m_period );
-    // 0.3 ms to 6 ms: the whole audible comb range, from a metallic sheen to a jet sweep.
+    // 0.3 ms to 6 ms: the whole audible comb range, from a metallic sheen to a jet sweep. The LFO's cosine is read
+    // from the shared sine table (cos01; 10.11.2026): the two std::cos a sample were a per cent of a set's render,
+    // and the table's 3e-7 moves the delay by a ten-thousandth of a sample.
     const double spanMs = 5.7 * m_depth;
-    const double dl = ( 0.3 + spanMs * ( 0.5 - 0.5 * std::cos( 2.0 * PiD * ph ) ) ) * 0.001 * m_sr;
-    const double dr = ( 0.3 + spanMs * ( 0.5 - 0.5 * std::cos( 2.0 * PiD * ( ph + 0.25 ) ) ) ) * 0.001 * m_sr;
+    const double dl = ( 0.3 + spanMs * ( 0.5 - 0.5 * static_cast<double>( cos01( ph ) ) ) ) * 0.001 * m_sr;
+    const double dr = ( 0.3 + spanMs * ( 0.5 - 0.5 * static_cast<double>( cos01( ph + 0.25 ) ) ) ) * 0.001 * m_sr;
     const float  yl = read( m_bufL, dl ), yr = read( m_bufR, dr );
     m_bufL[m_write] = l + m_fb * yl;
     m_bufR[m_write] = r + m_fb * yr;
@@ -111,6 +113,15 @@ void Flanger::tick( float &l, float &r, double beat )
 void Phaser::prepare( double sampleRate )
 {
     m_sr = sampleRate;
+    // The all-pass coefficient over the sweep's exponent (Phaser.h, m_coef): what tick() worked out with a power, a
+    // cosine and a tangent for each channel of every sample.
+    for ( int i = 0; i <= CoefSteps + 1; ++i )
+    {
+        const double x = CoefSpan * static_cast<double>( i ) / CoefSteps;
+        const double f = std::min( 200.0 * std::pow( 2.0, x ), 0.45 * m_sr );
+        const double t = std::tan( PiD * f / m_sr );
+        m_coef[i] = static_cast<float>( ( t - 1.0 ) / ( t + 1.0 ) );
+    }
     reset();
 }
 
@@ -146,12 +157,15 @@ float Phaser::stage( float x, float a, float *z, float &fbState )
 void Phaser::tick( float &l, float &r, double beat )
 {
     const double ph = lfoPhase( beat, m_period );
-    auto         coef = [&]( double phase )
+    // The coefficient (t - 1) / (t + 1), t = tan(pi f / sr), f = 200 Hz * 2^(5 depth lfo): read from the table over
+    // the exponent, the LFO from the shared sine table (10.11.2026). Six library calls a sample -- two each of pow,
+    // cos and tan -- made the phasers 6 % of a set's render; the table is within 1e-6 of them.
+    auto coef = [&]( double phase )
     {
-        const double lfo = 0.5 - 0.5 * std::cos( 2.0 * PiD * phase );
-        const double f = std::min( 200.0 * std::pow( 2.0, 5.0 * m_depth * lfo ), 0.45 * m_sr );
-        const double t = std::tan( PiD * f / m_sr );
-        return static_cast<float>( ( t - 1.0 ) / ( t + 1.0 ) );
+        const float lfo = 0.5f - 0.5f * cos01( phase );
+        const float x = 5.0f * m_depth * lfo * ( static_cast<float>( CoefSteps ) / static_cast<float>( CoefSpan ) );
+        const int   i = std::clamp( static_cast<int>( x ), 0, CoefSteps );
+        return m_coef[i] + ( x - static_cast<float>( i ) ) * ( m_coef[i + 1] - m_coef[i] );
     };
     const float yl = stage( l, coef( ph ), m_zL, m_fbL );
     const float yr = stage( r, coef( ph + 0.25 ), m_zR, m_fbR );
@@ -206,6 +220,7 @@ void FreqShifter::reset()
     m_hl.reset();
     m_hr.reset();
     m_phase = 0.0;
+    m_resting = true;
 }
 
 void FreqShifter::set( float hz, float mix )
@@ -216,12 +231,28 @@ void FreqShifter::set( float hz, float mix )
 
 void FreqShifter::tick( float &l, float &r )
 {
+    m_phase += static_cast<double>( m_hz ) / m_sr;
+    m_phase -= std::floor( m_phase );
+    // At no shift or no mix the wet share is zero and the sample leaves as it came (10.11.2026): the quadrature
+    // networks -- sixteen second-order sections in double a sample -- and the carrier then rest. That is the state of
+    // three chains for nearly all of a set (the shift is an effect event's motion). The networks start from silence
+    // when the shift comes: their memory is a few milliseconds, and the wet share fades in over the first 5 Hz.
+    if ( m_mix * std::min( 1.0f, std::fabs( m_hz ) / 5.0f ) == 0.0f )
+    {
+        if ( !m_resting )
+        {
+            m_hl.reset();
+            m_hr.reset();
+            m_resting = true;
+        }
+        return;
+    }
+    m_resting = false;
     double il, ql, ir, qr;
     m_hl.tick( l, il, ql );
     m_hr.tick( r, ir, qr );
-    m_phase += static_cast<double>( m_hz ) / m_sr;
-    m_phase -= std::floor( m_phase );
-    const double c = std::cos( 2.0 * PiD * m_phase ), s = std::sin( 2.0 * PiD * m_phase );
+    // The carrier from the shared sine table: its 3e-7 are sidebands 130 dB under the shifted signal.
+    const double c = static_cast<double>( cos01( m_phase ) ), s = static_cast<double>( sin01( m_phase ) );
     // cos(psi + theta) = I cos(theta) - Q sin(theta): every partial moves up by m_hz. The right channel's
     // carrier runs 90 degrees ahead (cos -> -sin, sin -> cos), which decorrelates the two sides without
     // putting them in antiphase.

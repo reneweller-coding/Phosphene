@@ -102,11 +102,32 @@ void Reverb::reset()
     m_dcX[0] = m_dcX[1] = m_dcY[0] = m_dcY[1] = 0.0f;
     m_hcL = m_hcR = m_lcL1 = m_lcR1 = m_lcL2 = m_lcR2 = m_lcL3 = m_lcR3 = m_lcL4 = m_lcR4 = 0.0f;
     m_duckEnv = 0.0f;
+    m_setSeen[0] = -1.0f;   // set() works its values out again (it also starts the glides this cleared)
+    m_resting = true;       // nothing in the lines
+    m_quiet = 0;
+}
+
+void Reverb::clearMemory()
+{
+    for ( auto &l : m_line ) std::fill( l.begin(), l.end(), 0.0f );
+    for ( auto &a : m_ap ) std::fill( a.begin(), a.end(), 0.0f );
+    for ( auto &a : m_apR ) std::fill( a.begin(), a.end(), 0.0f );
+    for ( auto &s : m_sc ) std::fill( s.begin(), s.end(), 0.0f );
+    std::fill( m_pre.begin(), m_pre.end(), 0.0f );
+    std::fill( m_preR.begin(), m_preR.end(), 0.0f );
+    for ( int l = 0; l < Lines; ++l ) m_lp[l] = 0.0f;
+    m_dcX[0] = m_dcX[1] = m_dcY[0] = m_dcY[1] = 0.0f;
+    m_hcL = m_hcR = m_lcL1 = m_lcR1 = m_lcL2 = m_lcR2 = m_lcL3 = m_lcR3 = m_lcL4 = m_lcR4 = 0.0f;
 }
 
 void Reverb::set( float size, float decaySeconds, float damping, float preDelaySamples, float lowCutHz,
                   float highCutHz )
 {
+    // The engine sets every room at every chunk of 32 samples, nearly always to what it is (10.11.2026): the eight
+    // powers and two exponentials below are then the numbers they were. reset() asks for them anew.
+    const float asked[6] = { size, decaySeconds, damping, preDelaySamples, lowCutHz, highCutHz };
+    if ( std::equal( asked, asked + 6, m_setSeen ) ) return;
+    std::copy( asked, asked + 6, m_setSeen );
     // Noctuary's colourless line set (Tools/optimise_fdn.py, 0.314 dB third-octave spread).
     static const float FlatMs[Lines] = { 29.7f, 31.4f, 39.3f, 46.6f, 55.1f, 58.6f, 68.4f, 89.0f };
     const float        s = clampv( size, 0.3f, 3.0f );
@@ -136,6 +157,27 @@ void Reverb::process( const float *inL, const float *inR, float *outL, float *ou
     constexpr float inGain = 0.5f, glide = 0.0005f;
     for ( int i = 0; i < n; ++i )
     {
+        // At rest (Reverb.h, m_resting): nothing in the lines and nothing coming in is nothing going out. Only what
+        // moves without a signal moves on -- the glides, the lines' modulation, the write index -- with the very
+        // steps the full pass takes, so a room wakes exactly as if it had run through the silence.
+        if ( m_resting )
+        {
+            if ( inL[i] == 0.0f && inR[i] == 0.0f )
+            {
+                m_preCur += ( m_preTarget - m_preCur ) * glide;
+                for ( int l = 0; l < Lines; ++l )
+                {
+                    m_lenCur[l] += ( m_lenTarget[l] - m_lenCur[l] ) * glide;
+                    m_modPh[l] += m_modRate[l] / m_sr;
+                    if ( m_modPh[l] >= 1.0 ) m_modPh[l] -= 1.0;
+                }
+                outL[i] = outR[i] = 0.0f;
+                m_w = ( m_w + 1 ) & m_mask;
+                continue;
+            }
+            m_resting = false;
+            m_quiet = 0;
+        }
         const float xl0 = inL[i] - m_dcX[0] + m_dcR * m_dcY[0];
         m_dcX[0] = inL[i];
         m_dcY[0] = xl0;
@@ -212,6 +254,22 @@ void Reverb::process( const float *inL, const float *inR, float *outL, float *ou
         outL[i] = cL - m_lcL4;
         outR[i] = cR - m_lcR4;
         m_w = ( m_w + 1 ) & m_mask;
+        // Going to rest: a quarter of a second without input in which the tail stayed under -180 dBFS. What is left
+        // in the lines then is cleared, and the room waits (above). Counted in samples, so the same audio comes to
+        // rest at the same sample however the host cuts its blocks.
+        if ( inL[i] == 0.0f && inR[i] == 0.0f && std::fabs( outL[i] ) < RestLevel && std::fabs( outR[i] ) < RestLevel )
+        {
+            if ( ++m_quiet >= static_cast<int>( 0.25 * m_sr ) )
+            {
+                clearMemory();
+                m_resting = true;
+                m_quiet = 0;
+            }
+        }
+        else
+        {
+            m_quiet = 0;
+        }
     }
 }
 

@@ -162,6 +162,10 @@ private:
     float    m_didgeFormant = 0.5f;   ///< the didgeridoo's formant
     float    m_didgeBreath = 0.5f;    ///< the didgeridoo's breath
     float    m_jawSweep = 0.6f;       ///< the jaw harp's sweep
+    float    m_step40 = 0.0f;         ///< a sample's share of a 40 ms lag (the didgeridoo's formant)
+    float    m_step30 = 0.0f;         ///< ... of 30 ms (its accent)
+    float    m_step60 = 0.0f;         ///< ... of 60 ms (the jaw harp's resonance)
+    float    m_pluckDecay = 1.0f;     ///< a sample of the jaw harp's pluck decay (350 ms)
 };
 
 }   // namespace phos

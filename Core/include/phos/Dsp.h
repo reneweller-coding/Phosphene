@@ -179,6 +179,17 @@ inline float sin01( double phase01 )
 }
 
 /**
+ * @brief cos(2 pi phase) from the table: sin01 a quarter turn on.
+ * @param[in] phase01  phase in [0, 1); values outside are wrapped.
+ * @return cos(2 pi phase01)
+ */
+inline float cos01( double phase01 )
+{
+    const double p = phase01 + 0.25;
+    return sin01( p >= 1.0 && p < 2.0 ? p - 1.0 : p );
+}
+
+/**
  * @brief ADSR with exponential segments, as in an analogue envelope generator.
  *
  * The attack is a one-pole towards 1.3 that stops at 1.0, which gives the convex attack of a

@@ -4,6 +4,7 @@
  * @author Rene Weller
  */
 #include "SelfTestHelpers.h"
+#include <cstring>
 
 using namespace phos;
 
@@ -101,6 +102,47 @@ void testReverb()
 {
     section( "send reverbs" );
     const double sr = 48000.0;
+    // 10.11.2026: a room comes to rest when nothing is left in it and wakes with the next sample (Reverb.h, m_resting).
+    // Two bursts thirty seconds apart through a short room: the silence between them is exactly zero once the tail is
+    // gone, the second burst sounds, and the same audio in blocks of 64 and of 17 samples is the same samples.
+    {
+        const size_t       n = static_cast<size_t>( sr * 34.0 ), second = static_cast<size_t>( sr * 30.0 );
+        std::vector<float> inL( n, 0.0f ), inR( n, 0.0f );
+        Rng                r;
+        for ( size_t i = 0; i < 480; ++i )
+        {
+            inL[i] = inL[second + i] = r.bipolar();
+            inR[i] = inR[second + i] = r.bipolar();
+        }
+        auto run = [&]( int block, std::vector<float> &oL, std::vector<float> &oR )
+        {
+            Reverb rv;
+            rv.prepare( sr );
+            rv.set( 1.0f, 0.5f, 0.3f, 0.0f, 150.0f, 9000.0f );
+            oL.assign( n, 0.0f );
+            oR.assign( n, 0.0f );
+            for ( size_t at = 0; at < n; at += static_cast<size_t>( block ) )
+            {
+                const int m = static_cast<int>( std::min<size_t>( static_cast<size_t>( block ), n - at ) );
+                rv.process( inL.data() + at, inR.data() + at, oL.data() + at, oR.data() + at, m );
+            }
+        };
+        std::vector<float> aL, aR, bL, bR;
+        run( 64, aL, aR );
+        run( 17, bL, bR );
+        const bool same = std::memcmp( aL.data(), bL.data(), n * sizeof( float ) ) == 0 &&
+                          std::memcmp( aR.data(), bR.data(), n * sizeof( float ) ) == 0;
+        // The last second before the second burst, and the second after it.
+        float rest = 0.0f, woke = 0.0f, first = 0.0f;
+        for ( size_t i = second - static_cast<size_t>( sr ); i < second; ++i ) rest = std::max( rest, std::fabs( aL[i] ) );
+        for ( size_t i = second; i < second + static_cast<size_t>( sr ); ++i ) woke = std::max( woke, std::fabs( aL[i] ) );
+        for ( size_t i = 0; i < static_cast<size_t>( sr ); ++i ) first = std::max( first, std::fabs( aL[i] ) );
+        check( same && rest == 0.0f && woke > 0.5f * first && first > 1e-3f,
+               "a room rests once its tail is gone and wakes with the next sound, the same samples in any block size",
+               fmt( "blocks of 64 and 17 %s; peak before the second burst %g, after it %.4f (the first burst's %.4f)",
+                    same ? "bit-identical" : "DIFFER", static_cast<double>( rest ), static_cast<double>( woke ),
+                    static_cast<double>( first ) ) );
+    }
     Reverb       rv;
     rv.prepare( sr );
     rv.set( 1.6f, 2.0f, 0.2f, 0.0f, 150.0f, 20000.0f );

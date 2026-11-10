@@ -42,6 +42,9 @@ void BandMeter::prepare( float lowHz, float highHz, double sampleRate )
         const float  hz = s < 2 ? lowHz : highHz;
         const double f = std::min( static_cast<double>( hz ), 0.45 * sampleRate );
         m_g[s] = hz > 0.0f ? static_cast<float>( std::tan( Pi * f / sampleRate ) ) : 0.0f;
+        m_a1[s] = 1.0f / ( 1.0f + m_g[s] * ( m_g[s] + m_k ) );
+        m_a2[s] = m_g[s] * m_a1[s];
+        m_a3[s] = m_g[s] * m_a2[s];
     }
 }
 
@@ -56,7 +59,7 @@ float BandMeter::run( float x )
     for ( int s = 0; s < 4; ++s )
     {
         if ( ( s < 2 && !m_high ) || ( s >= 2 && !m_low ) ) continue;
-        const float a1 = 1.0f / ( 1.0f + m_g[s] * ( m_g[s] + m_k ) ), a2 = m_g[s] * a1, a3 = m_g[s] * a2;
+        const float a1 = m_a1[s], a2 = m_a2[s], a3 = m_a3[s];
         const float v3 = x - m_s2[s];
         const float v1 = a1 * m_s1[s] + a2 * v3;
         const float v2 = m_s2[s] + a2 * m_s1[s] + a3 * v3;

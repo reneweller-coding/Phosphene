@@ -170,6 +170,14 @@ public:
      * @return the frequency in Hz
      */
     static float tuneToKey( int keyRoot, float targetHz );
+    /**
+     * @brief The work of tuneToKey(), which keeps the last answer: the octave-equivalent of the root or fifth nearest
+     *        to @p targetHz.
+     * @param[in] keyRoot   the key's pitch class
+     * @param[in] targetHz  the frequency aimed at
+     * @return the frequency in Hz
+     */
+    static float tuneToKeyNow( int keyRoot, float targetHz );
 
 private:
     /** @brief Everything a kick needs, frozen at its trigger. */

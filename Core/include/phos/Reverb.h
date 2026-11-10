@@ -157,6 +157,20 @@ private:
     float m_duckAttackC = 1.0f;      ///< the follower's attack coefficient
     float m_duckReleaseC = 1.0f;     ///< the follower's release coefficient
     float m_duckEnv = 0.0f;          ///< the follower's envelope
+    /** @name Rest (10.11.2026)
+     *  A room with nothing in its lines and nothing coming in puts out nothing, and three rooms that ran regardless
+     *  were a tenth of a set's render -- the hall is fed in intros and breakdowns only. After a quarter of a second
+     *  without input in which the tail stayed under -180 dBFS the lines are cleared and process() only keeps what
+     *  moves without a signal (the glides, the modulation, the write index); the first sample that is not zero wakes
+     *  it. The same test at every sample, so it does not depend on how the audio is cut into blocks.
+     *  @{ */
+    static constexpr float RestLevel = 1e-9f;   ///< the tail's level that counts as gone (-180 dBFS)
+    bool  m_resting = true;                     ///< the lines are clear and the input is silent
+    int   m_quiet = 0;                          ///< samples without input and without a tail, in a row
+    float m_setSeen[6] = { -1.0f };             ///< what set() was last asked (it works nothing out twice)
+    /** @brief Clears the lines, the diffusers and the filters, and leaves the glides and the modulation where they are. */
+    void clearMemory();
+    /** @} */
 };
 
 }   // namespace phos

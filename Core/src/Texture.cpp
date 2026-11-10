@@ -85,6 +85,11 @@ double Texture::bowlRatio( int mode )
 void Texture::prepare( double sampleRate )
 {
     m_sr = sampleRate;
+    // The smoothing steps voiceSample used to work out with an exponential for every sample (10.11.2026).
+    m_step40 = static_cast<float>( 1.0 - std::exp( -1.0 / ( 0.04 * m_sr ) ) );
+    m_step30 = static_cast<float>( 1.0 - std::exp( -1.0 / ( 0.03 * m_sr ) ) );
+    m_step60 = static_cast<float>( 1.0 - std::exp( -1.0 / ( 0.06 * m_sr ) ) );
+    m_pluckDecay = static_cast<float>( std::exp( -1.0 / ( 0.35 * m_sr ) ) );
     reset();
 }
 
@@ -274,11 +279,15 @@ void Texture::voiceSample( Voice &v, float &outL, float &outR )
         {
             const float src = harmonics( v.m_ph, v.m_hw, v.m_harmonics );
             // The vocal tract's formant follows the accents with a 40 ms lag: "doo-da-da-doo".
-            v.m_formant +=
-                ( v.m_target - v.m_formant ) * static_cast<float>( 1.0 - std::exp( -1.0 / ( 0.04 * m_sr ) ) );
-            const float fc =
-                static_cast<float>( 350.0 * std::pow( 2.0, 2.3 * ( 0.6 * m_didgeFormant + 0.4 * v.m_formant ) ) );
-            v.m_f2.setQ( fc, 4.0f, sr );
+            v.m_formant += ( v.m_target - v.m_formant ) * m_step40;
+            // The formant filter follows every sixteenth sample of the voice (10.11.2026): its centre moves with a
+            // 40 ms lag, and a power and a tangent a sample were most of what the bed cost.
+            if ( ( v.m_pos & 15 ) == 0 )
+            {
+                const float fc =
+                    static_cast<float>( 350.0 * std::pow( 2.0, 2.3 * ( 0.6 * m_didgeFormant + 0.4 * v.m_formant ) ) );
+                v.m_f2.setQ( fc, 4.0f, sr );
+            }
             float lp, bp, hp;
             v.m_f2.tick( src, lp, bp, hp );
             const float formantOut = bp * v.m_f2.m_k;
@@ -291,8 +300,7 @@ void Texture::voiceSample( Voice &v, float &outL, float &outR )
             const float inhale = breath ? breathAmt * 0.6f * bp * v.m_breathBp.m_k *
                                               static_cast<float>( std::sin( PiD * ( inBar2 - 7.5 ) / 0.5 ) )
                                         : 0.0f;
-            v.m_accent += ( ( v.m_target > 0.5f ? 1.0f : 0.0f ) - v.m_accent ) *
-                          static_cast<float>( 1.0 - std::exp( -1.0 / ( 0.03 * m_sr ) ) );
+            v.m_accent += ( ( v.m_target > 0.5f ? 1.0f : 0.0f ) - v.m_accent ) * m_step30;
             s = ( 0.25f * src + formantOut ) * dip * ( 0.75f + 0.25f * v.m_accent ) * 0.35f + inhale;
             amp = fadeIn * fadeOut;
         }
@@ -300,7 +308,7 @@ void Texture::voiceSample( Voice &v, float &outL, float &outR )
         {
             // Jaw harp: a bright buzz, re-plucked on the pattern and never quite silent in between.
             const float src = harmonics( v.m_ph, v.m_hw, v.m_harmonics );
-            v.m_pluck *= static_cast<float>( std::exp( -1.0 / ( 0.35 * m_sr ) ) );
+            v.m_pluck *= m_pluckDecay;
             // The mouth resonance swings to the other end of its range with every pluck, over 60 ms. Both ends are
             // harmonics of the drone on the key's root or fifth (jawRest; 10.11.2026): at Q 10 the resonance sounds
             // one harmonic, and resting on 900 Hz and 900 Hz times the sweep it held whichever lay there -- in F#
@@ -316,9 +324,9 @@ void Texture::voiceSample( Voice &v, float &outL, float &outR )
                 v.m_restHi = static_cast<float>( jawRest( v.m_f0, wide, floorHarmonic ) );
             }
             const float goal = v.m_up ? v.m_restHi : v.m_restLo;
-            v.m_formant += ( goal - v.m_formant ) * static_cast<float>( 1.0 - std::exp( -1.0 / ( 0.06 * m_sr ) ) );
+            v.m_formant += ( goal - v.m_formant ) * m_step60;
             if ( v.m_formant < 100.0f ) v.m_formant = goal;
-            v.m_f2.setQ( v.m_formant, 10.0f, sr );
+            if ( ( v.m_pos & 15 ) == 0 ) v.m_f2.setQ( v.m_formant, 10.0f, sr );   // every sixteenth sample, as above
             float lp, bp, hp;
             v.m_f1.tick( src, lp, bp, hp );
             const float a1 = bp * v.m_f1.m_k;

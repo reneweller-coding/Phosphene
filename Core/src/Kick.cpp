@@ -73,6 +73,18 @@ void Kick::reset()
 
 float Kick::tuneToKey( int keyRoot, float targetHz )
 {
+    // The engine asks twice every 32 samples (constrain and update, Engine::applyParams), nearly always for what it
+    // asked last: the answer is kept per thread (10.11.2026; 32 powers and logarithms a chunk were 0.7 % of a render).
+    thread_local int   lastKey = -1;
+    thread_local float lastTarget = -1.0f, lastHz = 0.0f;
+    if ( keyRoot == lastKey && targetHz == lastTarget ) return lastHz;
+    lastKey = keyRoot;
+    lastTarget = targetHz;
+    return lastHz = tuneToKeyNow( keyRoot, targetHz );
+}
+
+float Kick::tuneToKeyNow( int keyRoot, float targetHz )
+{
     const double rootHz = midiToHz( 12.0 + ( ( keyRoot % 12 ) + 12 ) % 12 );
     const double candidates[2] = { rootHz, rootHz * std::pow( 2.0, 7.0 / 12.0 ) };
     double       best = targetHz, bestDist = 1e9;

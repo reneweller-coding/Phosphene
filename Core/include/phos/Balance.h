@@ -36,6 +36,14 @@ namespace phos
 struct BandMeter
 {
     float m_g[4] = {};     ///< the four stages' g
+    /** @name The stages' factors, worked out by prepare() (Phosphene, 10.11.2026)
+     *  run() divided for each of them in every stage of every sample: 48 divisions a sample through the six bands of
+     *  two channels, 3.7 % of a set's render. The same numbers, once. (Not yet in Noctuary's canonical copy.)
+     *  @{ */
+    float m_a1[4] = {};    ///< 1 / (1 + g (g + k))
+    float m_a2[4] = {};    ///< g a1
+    float m_a3[4] = {};    ///< g a2
+    /** @} */
     float m_k = 1.414f;    ///< their damping (Butterworth)
     float m_s1[4] = {};    ///< their first integrators
     float m_s2[4] = {};    ///< their second

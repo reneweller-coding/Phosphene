@@ -1476,9 +1476,9 @@ void Engine::process( float *L, float *R, int n )
             applyMotion();
             // The free slow movement of the voices' cutoff and colour (poly.slow_mod, the addon): two sines on the
             // absolute beat, periods of 31 and 51 beats (13 and 21 s at 145 BPM).
-            for ( int k = 0; k < PolyInstances; ++k )
-                m_poly[k].setSlow( static_cast<float>( std::sin( 2.0 * PiD * m_chunkBeat / SlowBeats[0] ) ),
-                                   static_cast<float>( std::sin( 2.0 * PiD * m_chunkBeat / SlowBeats[1] + 2.1 ) ) );
+            const float slow0 = static_cast<float>( std::sin( 2.0 * PiD * m_chunkBeat / SlowBeats[0] ) ),
+                        slow1 = static_cast<float>( std::sin( 2.0 * PiD * m_chunkBeat / SlowBeats[1] + 2.1 ) );
+            for ( int k = 0; k < PolyInstances; ++k ) m_poly[k].setSlow( slow0, slow1 );
             // The voices' own modulation reads the set's beat (26.09.2026, Modulation.h: the synced LFOs).
             for ( int k = 0; k < PolyInstances; ++k ) m_poly[k].setClock( m_chunkBeat, m_beatsPerSample );
             m_bass.setClock( m_chunkBeat, m_beatsPerSample );

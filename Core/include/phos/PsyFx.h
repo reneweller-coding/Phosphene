@@ -125,6 +125,13 @@ private:
     float  m_zR[Stages] = {};   ///< ... right
     float  m_fbL = 0.0f;        ///< the last stage's output, fed back, left
     float  m_fbR = 0.0f;        ///< ... right
+    /** @name The all-pass coefficient over the sweep's exponent x = 5 depth lfo, 0 .. 5 (10.11.2026)
+     *  (t - 1) / (t + 1) with t = tan(pi f / sr), f = min(200 Hz 2^x, 0.45 sr), filled by prepare(); two guard entries.
+     *  @{ */
+    static constexpr int    CoefSteps = 1024;   ///< steps of the table
+    static constexpr double CoefSpan = 5.0;     ///< the exponent the table reaches
+    float                   m_coef[CoefSteps + 2] = {};   ///< the coefficients
+    /** @} */
     float  m_period = 16.0f;    ///< set(): the period, beats
     float  m_depth = 0.8f;      ///< set(): the depth
     float  m_fb = 0.5f;         ///< set(): the feedback
@@ -182,6 +189,7 @@ private:
     HilbertPair m_hl;             ///< the quadrature network, left
     HilbertPair m_hr;             ///< ... right
     double      m_phase = 0.0;    ///< the carrier's phase, in cycles
+    bool        m_resting = true; ///< no shift or no mix: the networks are cleared and wait (tick)
     float       m_hz = 0.0f;      ///< set(): the shift, Hz
     float       m_mix = 0.0f;     ///< set(): the mix
 };
