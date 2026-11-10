@@ -61,6 +61,7 @@ function Ok([string]$m)   { Write-Host "  ok    $m" -ForegroundColor DarkGray }
 $payload = @(
     @{ Path = "Phosphene.exe";                       Min = 2MB;   What = "the standalone" }
     @{ Path = "phos_render.exe";                     Min = 200KB; What = "the offline renderer" }
+    @{ Path = "PhospheneSets.exe";                   Min = 2MB;   What = "Phosphene Sets, the render app (1.6.0)" }
     @{ Path = "library.phoswt";                      Min = 100KB; What = "wavetable pack (beside the binaries)";  From = "library.phoswt" }
     @{ Path = "melody.phosmdl";                      Min = 100KB; What = "melody model (beside the binaries)";     From = "melody.phosmdl" }
     @{ Path = "bass.phosmdl";                        Min = 100KB; What = "bass model (beside the binaries)";       From = "bass.phosmdl" }
@@ -155,7 +156,7 @@ if (Test-Path -LiteralPath $render) {
 # project's version and does not notice later that the version changed -- so it is read back rather
 # than trusted (Deploy/build_release.ps1 deletes the generated .rc before a release build for the
 # same reason).
-foreach ($rel in @("Phosphene.exe", "Phosphene.vst3\Contents\x86_64-win\Phosphene.vst3")) {
+foreach ($rel in @("Phosphene.exe", "PhospheneSets.exe", "Phosphene.vst3\Contents\x86_64-win\Phosphene.vst3")) {
     $p = Join-Path $Stage $rel
     if (-not (Test-Path -LiteralPath $p)) { continue }
     $vi = (Get-Item -LiteralPath $p).VersionInfo
@@ -171,7 +172,7 @@ $dumpbin = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\*\*\VC\Tools\
 if (-not $dumpbin) {
     Write-Warning "  dumpbin not found -- the runtime check did not run. A binary that still wants the Visual C++ runtime fails on a clean machine as 'it just does not start'."
 } else {
-    foreach ($rel in @("Phosphene.exe", "phos_render.exe", "Phosphene.vst3\Contents\x86_64-win\Phosphene.vst3")) {
+    foreach ($rel in @("Phosphene.exe", "phos_render.exe", "PhospheneSets.exe", "Phosphene.vst3\Contents\x86_64-win\Phosphene.vst3")) {
         $p = Join-Path $Stage $rel
         if (-not (Test-Path -LiteralPath $p)) { continue }
         $deps = & $dumpbin /dependents $p | Select-String -Pattern '^\s+\S+\.dll' | ForEach-Object { $_.Line.Trim() }
@@ -257,7 +258,7 @@ Write-Host "F2   whether the binaries still carry the build machine's source pat
 # first version of this check looked for the backslash spelling only and cheerfully reported that
 # nothing was embedded. A check that cannot fail is worse than no check, so it is spelled out here.
 $needles = @((Join-Path $Root "Core\data"), ((Join-Path $Root "Core\data") -replace '\\', '/'))
-foreach ($rel in @("Phosphene.exe", "phos_render.exe", "Phosphene.vst3\Contents\x86_64-win\Phosphene.vst3")) {
+foreach ($rel in @("Phosphene.exe", "phos_render.exe", "PhospheneSets.exe", "Phosphene.vst3\Contents\x86_64-win\Phosphene.vst3")) {
     $p = Join-Path $Stage $rel
     if (-not (Test-Path -LiteralPath $p)) { continue }
     $bytes = [IO.File]::ReadAllBytes($p)

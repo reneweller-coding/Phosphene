@@ -1,5 +1,5 @@
 {
-  "version": "1.5.0",
+  "version": "1.6.0",
   "name": "Phosphene",
   "designWidth": 1288,
   "designHeight": 860,
@@ -460,9 +460,14 @@
       "name": "Style Mix",
       "unit": "",
       "min": 0.0,
-      "max": 1.0,
+      "max": 2.0,
       "default": 1.0,
-      "curve": "toggle"
+      "curve": "choice",
+      "choices": [
+        "Off",
+        "Walk",
+        "All"
+      ]
     },
     {
       "key": "compose.presence_match",
@@ -20141,7 +20146,7 @@
       "unit": "dBTP",
       "min": -12.0,
       "max": 0.0,
-      "default": -1.0,
+      "default": -3.0,
       "curve": "linear"
     },
     {
@@ -20289,6 +20294,86 @@
         "Sub",
         "Side"
       ]
+    },
+    {
+      "key": "master.resonance",
+      "module": "master",
+      "name": "Resonance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.400000005960464,
+      "curve": "linear"
+    },
+    {
+      "key": "master.auto_tone",
+      "module": "master",
+      "name": "Auto Tone",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "toggle"
+    },
+    {
+      "key": "master.tone_low_mid",
+      "module": "master",
+      "name": "Tone Low Mid",
+      "unit": "dB",
+      "min": -6.0,
+      "max": 6.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "master.tone_mid",
+      "module": "master",
+      "name": "Tone Mid",
+      "unit": "dB",
+      "min": -6.0,
+      "max": 6.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "master.tone_presence",
+      "module": "master",
+      "name": "Tone Presence",
+      "unit": "dB",
+      "min": -6.0,
+      "max": 6.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "master.tone_air",
+      "module": "master",
+      "name": "Tone Air",
+      "unit": "dB",
+      "min": -6.0,
+      "max": 6.0,
+      "default": 0.0,
+      "curve": "linear"
+    },
+    {
+      "key": "master.image",
+      "module": "master",
+      "name": "Image",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
+    },
+    {
+      "key": "master.balance",
+      "module": "master",
+      "name": "Balance",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "curve": "linear"
     },
     {
       "key": "cue.send",
@@ -24302,6 +24387,24 @@
           "params": [
             "master.monitor"
           ]
+        },
+        {
+          "title": "Tone",
+          "params": [
+            "master.resonance",
+            "master.auto_tone",
+            "master.tone_low_mid",
+            "master.tone_mid",
+            "master.tone_presence",
+            "master.tone_air"
+          ]
+        },
+        {
+          "title": "Reference",
+          "params": [
+            "master.image",
+            "master.balance"
+          ]
         }
       ]
     },
@@ -25574,6 +25677,14 @@
     "master.clipper",
     "master.clipper_threshold",
     "master.monitor",
+    "master.resonance",
+    "master.auto_tone",
+    "master.tone_low_mid",
+    "master.tone_mid",
+    "master.tone_presence",
+    "master.tone_air",
+    "master.image",
+    "master.balance",
     "mix.keyboard_part",
     "mix.keyboard_mode",
     "mix.composer",

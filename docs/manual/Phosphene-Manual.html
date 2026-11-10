@@ -39,9 +39,9 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 </style></head><body>
 <div class="cover">
 <h1>Phosphene</h1>
-<p class="sub">Manual &middot; version 1.5.0</p>
+<p class="sub">Manual &middot; version 1.6.0</p>
 <img src="tab-0-set.png" alt="">
-<p class="facts">1556 parameters &middot; 18 tabs &middot; 4 perform macros &middot; every picture in this manual is the plugin drawing itself at design size</p>
+<p class="facts">1564 parameters &middot; 18 tabs &middot; 4 perform macros &middot; every picture in this manual is the plugin drawing itself at design size</p>
 </div>
 <div class="toc"><h2>Contents</h2><ol>
 <li>About</li>
@@ -93,7 +93,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <h3>Start &amp; Style</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Start Style</td><td class="key">compose.style</td><td class="rng">Goa | Full-On | Progressive | Dark Forest | Hi-Tech</td><td class="rng">Full-On</td></tr>
-<tr><td>Style Mix</td><td class="key">compose.style_mix</td><td class="rng">off / on</td><td class="rng">on</td></tr>
+<tr><td>Style Mix</td><td class="key">compose.style_mix</td><td class="rng">Off | Walk | All</td><td class="rng">Walk</td></tr>
 <tr><td>Style Tempo</td><td class="key">compose.style_tempo</td><td class="rng">off / on</td><td class="rng">off</td></tr>
 <tr><td>Tempo</td><td class="key">compose.bpm</td><td class="rng">100 .. 190 BPM</td><td class="rng">145</td></tr>
 <tr><td>Tempo Range</td><td class="key">compose.tempo_range</td><td class="rng">0 .. 10 BPM</td><td class="rng">1</td></tr>
@@ -2011,7 +2011,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <h3>Gain</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Gain</td><td class="key">master.gain</td><td class="rng">-24 .. 24 dB</td><td class="rng">0</td></tr>
-<tr><td>Ceiling</td><td class="key">master.ceiling</td><td class="rng">-12 .. 0 dBTP</td><td class="rng">-1</td></tr>
+<tr><td>Ceiling</td><td class="key">master.ceiling</td><td class="rng">-12 .. 0 dBTP</td><td class="rng">-3</td></tr>
 <tr><td>Clip</td><td class="key">master.clip</td><td class="rng">off / on</td><td class="rng">on</td></tr>
 </table>
 <h3>Compressor</h3>
@@ -2035,6 +2035,20 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <h3>Monitor</h3>
 <table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
 <tr><td>Monitor</td><td class="key">master.monitor</td><td class="rng">Normal | Mono | Sub | Side</td><td class="rng">Normal</td></tr>
+</table>
+<h3>Tone</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Resonance</td><td class="key">master.resonance</td><td class="rng">0 .. 1</td><td class="rng">0.4</td></tr>
+<tr><td>Auto Tone</td><td class="key">master.auto_tone</td><td class="rng">off / on</td><td class="rng">on</td></tr>
+<tr><td>Tone Low Mid</td><td class="key">master.tone_low_mid</td><td class="rng">-6 .. 6 dB</td><td class="rng">0</td></tr>
+<tr><td>Tone Mid</td><td class="key">master.tone_mid</td><td class="rng">-6 .. 6 dB</td><td class="rng">0</td></tr>
+<tr><td>Tone Presence</td><td class="key">master.tone_presence</td><td class="rng">-6 .. 6 dB</td><td class="rng">0</td></tr>
+<tr><td>Tone Air</td><td class="key">master.tone_air</td><td class="rng">-6 .. 6 dB</td><td class="rng">0</td></tr>
+</table>
+<h3>Reference</h3>
+<table><tr><th style="width:26%">Control</th><th style="width:24%">Key</th><th style="width:34%">Range</th><th style="width:16%">Default</th></tr>
+<tr><td>Image</td><td class="key">master.image</td><td class="rng">0 .. 1</td><td class="rng">1</td></tr>
+<tr><td>Balance</td><td class="key">master.balance</td><td class="rng">0 .. 1</td><td class="rng">1</td></tr>
 </table>
 </div>
 <div class="topic">
@@ -2096,6 +2110,7 @@ footer { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid #ccd2dc; colo
 <div class="topic">
 <h2>20. Gallery</h2>
 <p>Your saved sets, each with a picture of its form. Save to gallery keeps the set as it stands -- seed, style, arc, knobs, locks and rerolls -- and a click on an entry loads it back. The files are ordinary .phosset files in your Sets folder; Open folder shows it.</p>
+<p>Phosphene Sets, a small program beside the instrument (in the Start menu, or PhospheneSets.exe in its folder), renders without the instrument: a set from each start style -- ten minutes to three hours, its arc shaped over that length -- and every set you saved (the gallery&#x27;s and those in Documents/Phosphene), each with the length of its rendering; or a set&#x27;s first track alone, at its own tempo, as the DJ export writes it. Choose one or several (Ctrl, Shift), the format (WAV or FLAC at 24 bits, Ogg Vorbis or MP3 at 320 kbit/s) and the folder (Documents/Phosphene/Renders at first), and Render: one after another, faster than real time, with the progress, the speed and the time left. A set never ends by itself, so its last twenty seconds are faded out. New dice composes everything anew; a saved set plays as it was saved.</p>
 <figure><img src="tab-17-gallery.png" alt=""><figcaption>The Gallery tab.</figcaption></figure>
 </div>
 <div class="topic">
@@ -2157,5 +2172,5 @@ double click     a knob back to its default</pre>
 <h2>25. Updates</h2>
 <p>Phosphene looks for a newer release at most once a day, when its window opens, by asking GitHub for the latest release of the project -- nothing else is sent, and nothing is installed by itself. When there is one, the header says so and a click opens the release page. The check can be switched off here on the help page or in the settings, and Check now asks at once.</p>
 </div>
-<footer>Phosphene 1.5.0 &middot; generated from the plugin: the parameter tables and the pictures come out of the running editor (Tools/manual/make_manual.py).</footer>
+<footer>Phosphene 1.6.0 &middot; generated from the plugin: the parameter tables and the pictures come out of the running editor (Tools/manual/make_manual.py).</footer>
 </body></html>
